@@ -1,19 +1,24 @@
+use chrono::prelude::*;
+
 pub struct AssetTokenCode {
     val: [u8; 16],
 }
 
-// TODO(Kevin): define Digest and Memo
-pub struct Digest {}
+// TODO: Define Memo
+pub struct Proof{}
 pub struct Memo {}
+pub struct ConfidentialMemo {}
+pub type Commitment = [u8; 32];
 
 pub struct AssetToken {
     code: AssetTokenCode,
     digest: [u8; 32],
     issuer: Address,
     memo: Memo,
+    confidential_memo: ConfidentialMemo,
     updatable: bool,
     units: u128,
-    //TODO(Kevin): Determine confidential memo and confidential_units types
+    confidential_units: Commitment,
 }
 
 pub struct AssetPolicyKey {
@@ -44,6 +49,10 @@ pub struct Address {
     key: [u8; 32],
 }
 
+//TODO(Kevin): define types
+pub struct Variable{}
+pub type Signature = [u8; 32];
+
 pub struct TxSequenceNumber {
     val: u64,
 }
@@ -55,17 +64,17 @@ pub struct UtxoAddress {
 }
 
 pub struct Asset {
-    type: String,
+    typey: String,
     amount: u64,
 }
 
 pub struct PrivateAsset {
-    hidden: [u8, 32],
+    hidden: [u8; 32],
 }
 
 pub enum AssetType {
-    normal: Asset,
-    private: PrivateAsset,
+    Asset,
+    PrivateAsset,
 }
 
 pub struct Utxo {
@@ -79,8 +88,21 @@ pub struct TransactionKey {
     val: [u8; 32],
 }
 
-pub struct AssetTransfer {
+pub struct TransferOutput {
+    address : Address,
+    token_type : AssetTokenCode,
+    amount : u64,
+}
 
+
+pub struct AssetTransfer {
+    nonce : u128,
+    variables : Vec<Variable>,
+    confidential_asset_flag : bool,
+    confidential_amount_flag : bool,
+    utxo_input_references : Vec<Utxo>,
+    outputs : Vec<TransferOutput>,
+    signatures : Vec<Signature>,
 }
 
 pub struct AssetIssuance {
@@ -93,14 +115,23 @@ pub struct CreateAssetToken {
 }
 
 pub enum Operation {
-    asset_transfer: AssetTransfer,
-    asset_issuance: AssetIssuance,
-    create_asset_token: CreateAssetToken,
+    AssetTransfer,
+    AssetIssuance,
+    CreateAssetToken,
     // ... etc...
+}
+
+pub struct TimeBounds {
+    start : DateTime<Utc>,
+    end : DateTime<Utc>,
 }
 
 pub struct Transaction {
     key: TransactionKey,
     operations: Vec<Operation>,
+    utxos: Vec<Utxo>,
+    time_bounds: TimeBounds,
+    proofs: Vec<Proof>,
+    memos: Vec<Memo>,
     // ... etc...
 }
