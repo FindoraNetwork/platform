@@ -2,10 +2,18 @@ pub struct AssetTokenCode {
     val: [u8; 16],
 }
 
+// TODO(Kevin): define Digest and Memo
+pub struct Digest {}
+pub struct Memo {}
+
 pub struct AssetToken {
     code: AssetTokenCode,
-    // TODO: Kevin: add fields here ...
-
+    digest: [u8; 32],
+    issuer: Address,
+    memo: Memo,
+    updatable: bool,
+    units: u128,
+    //TODO(Kevin): Determine confidential memo and confidential_units types
 }
 
 pub struct AssetPolicyKey {
@@ -33,7 +41,7 @@ pub struct SmartContract {
 }
 
 pub struct Address {
-    key: [u8, 32],
+    key: [u8; 32],
 }
 
 pub struct TxSequenceNumber {
@@ -48,7 +56,7 @@ pub struct UtxoAddress {
 
 pub struct Asset {
     type: String,
-    amount u64,
+    amount: u64,
 }
 
 pub struct PrivateAsset {
