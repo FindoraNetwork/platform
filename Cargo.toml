@@ -1,0 +1,8 @@
+[package]
+name = "ledger_module"
+version = "0.1.0"
+authors = ["Nathan Yospe <nathan@eian.io>, Kevin Foley <kevin@eian.io>"]
+edition = "2018"
+
+[dependencies]
+abci = "0.4.3"
