@@ -6,7 +6,7 @@ pub struct AssetTokenCode {
 }
 
 // TODO: Define Memo
-#[derive(Hash, Eq, PartialEq, Debug)]
+#[derive(Hash, Eq, PartialEq, Clone, Debug)]
 pub struct Proof {}
 #[derive(Hash, Eq, PartialEq, Clone, Debug)]
 pub struct Memo {}
@@ -58,6 +58,7 @@ pub struct Address {
 }
 
 //TODO(Kevin): define types
+#[derive(Clone)]
 pub struct Variable {}
 pub type Signature = [u8; 32];
 
@@ -99,34 +100,38 @@ pub struct TransactionKey {
     pub val: [u8; 32],
 }
 
+#[derive(Clone)]
 pub struct TxOutput {
     pub address: Address,
     pub asset_type: AssetType,
 }
 
+#[derive(Clone)]
 pub struct AssetTransfer {
-    pub nonce : u128,
-    pub variables : Vec<Variable>,
-    pub confidential_asset_flag : bool,
-    pub confidential_amount_flag : bool,
+    pub nonce: u128,
+    pub variables: Vec<Variable>,
+    pub confidential_asset_flag: bool,
+    pub confidential_amount_flag: bool,
     pub input_utxos: Vec<Utxo>,
-    pub outputs : Vec<TxOutput>,
-    pub signatures : Vec<Signature>,
+    pub outputs: Vec<TxOutput>,
+    pub signatures: Vec<Signature>,
 }
 
+#[derive(Clone)]
 pub struct AssetIssuance {
-    pub nonce: u128,
-    pub asset: Asset,
+    pub code: AssetTokenCode,
+    pub outputs: Vec<TxOutput>,
+    pub signature: Signature,
 }
 
 // ... etc...
-pub struct CreateAssetToken {}
-
-pub struct OperationReference {
-    pub tx_index: TxSequenceNumber,
-    pub op_index: u16,
+#[derive(Clone)]
+pub struct CreateAssetToken {
+    pub asset_token: AssetToken,
+    pub signature: Signature,
 }
 
+#[derive(Clone)]
 pub enum Operation {
     asset_transfer(AssetTransfer),
     asset_issuance(AssetIssuance),
@@ -134,11 +139,13 @@ pub enum Operation {
     // ... etc...
 }
 
+#[derive(Clone)]
 pub struct TimeBounds {
     pub start: DateTime<Utc>,
     pub end: DateTime<Utc>,
 }
 
+#[derive(Clone)]
 pub struct Transaction {
     pub operations: Vec<Operation>,
     pub utxos: Vec<Utxo>,
