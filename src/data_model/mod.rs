@@ -1,137 +1,149 @@
 use chrono::prelude::*;
 
+#[derive(Hash, Eq, PartialEq, Clone, Debug)]
 pub struct AssetTokenCode {
     val: [u8; 16],
 }
 
 // TODO: Define Memo
-pub struct Proof{}
+#[derive(Hash, Eq, PartialEq, Debug)]
+pub struct Proof {}
+#[derive(Hash, Eq, PartialEq, Clone, Debug)]
 pub struct Memo {}
+#[derive(Hash, Eq, PartialEq, Clone, Debug)]
 pub struct ConfidentialMemo {}
 pub type Commitment = [u8; 32];
 
+#[derive(Hash, Eq, PartialEq, Clone, Debug)]
 pub struct AssetToken {
-    code: AssetTokenCode,
-    digest: [u8; 32],
-    issuer: Address,
-    memo: Memo,
-    confidential_memo: ConfidentialMemo,
-    updatable: bool,
-    units: u128,
-    confidential_units: Commitment,
+    pub code: AssetTokenCode,
+    pub digest: [u8; 32],
+    pub issuer: Address,
+    pub memo: Memo,
+    pub confidential_memo: ConfidentialMemo,
+    pub updatable: bool,
+    pub units: u128,
+    pub confidential_units: Commitment,
 }
 
+#[derive(Hash, Eq, PartialEq, Debug)]
 pub struct AssetPolicyKey {
-    val: [u8; 16],
+    pub val: [u8; 16],
 }
 
-pub struct CustomAssetPolicy {
-    key: AssetPolicyKey,
-}
+#[derive(Hash, Eq, PartialEq, Clone, Debug)]
+pub struct CustomAssetPolicy {}
 
+#[derive(Hash, Eq, PartialEq, Debug)]
 pub struct CredentialKey {
-    val: [u8; 16],
+    pub val: [u8; 16],
 }
 
+#[derive(Hash, Eq, PartialEq, Debug)]
 pub struct Credential {
-    key: CredentialKey,
+    pub key: CredentialKey,
 }
 
+#[derive(Hash, Eq, PartialEq, Debug)]
 pub struct SmartContractKey {
-    val: [u8; 16],
+    pub val: [u8; 16],
 }
 
-pub struct SmartContract {
-    key: SmartContractKey,
-}
+#[derive(Hash, Eq, PartialEq, Clone, Debug)]
+pub struct SmartContract {}
 
+#[derive(Hash, Eq, PartialEq, Clone, Copy, Debug)]
 pub struct Address {
-    key: [u8; 32],
+    pub key: [u8; 32],
 }
 
 //TODO(Kevin): define types
-pub struct Variable{}
+pub struct Variable {}
 pub type Signature = [u8; 32];
 
-pub struct TxSequenceNumber {
-    val: u64,
-}
+pub type TxSequenceNumber = u64;
 
+#[derive(Hash, Eq, PartialEq, Clone, Copy, Debug)]
 pub struct UtxoAddress {
-    transaction_id: TxSequenceNumber,
-    operation_index: u16,
-    output_index: u16,
+    pub transaction_id: TxSequenceNumber,
+    pub operation_index: u16,
+    pub output_index: u16,
 }
 
+#[derive(Hash, Eq, PartialEq, Clone, Debug)]
 pub struct Asset {
-    typey: String,
-    amount: u64,
+    pub name: String,
+    pub amount: u64,
 }
 
+#[derive(Hash, Eq, PartialEq, Clone, Debug)]
 pub struct PrivateAsset {
-    hidden: [u8; 32],
+    pub hidden: [u8; 32],
 }
 
+#[derive(Hash, Eq, PartialEq, Clone, Debug)]
 pub enum AssetType {
-    Asset,
-    PrivateAsset,
+    Normal(Asset),
+    Private(PrivateAsset),
 }
 
+#[derive(Hash, Eq, PartialEq, Clone, Debug)]
 pub struct Utxo {
-    key: UtxoAddress,
-    digest: [u8; 32],
-    address: Address,
-    asset_type: AssetType,
+    pub key: UtxoAddress,
+    pub digest: [u8; 32],
+    pub address: Address,
+    pub asset_type: AssetType,
 }
 
 pub struct TransactionKey {
-    val: [u8; 32],
+    pub val: [u8; 32],
 }
 
-pub struct TransferOutput {
-    address : Address,
-    token_type : AssetTokenCode,
-    amount : u64,
+pub struct TxOutput {
+    pub address: Address,
+    pub asset_type: AssetType,
 }
-
 
 pub struct AssetTransfer {
-    nonce : u128,
-    variables : Vec<Variable>,
-    confidential_asset_flag : bool,
-    confidential_amount_flag : bool,
-    utxo_input_references : Vec<Utxo>,
-    outputs : Vec<TransferOutput>,
-    signatures : Vec<Signature>,
+    pub nonce : u128,
+    pub variables : Vec<Variable>,
+    pub confidential_asset_flag : bool,
+    pub confidential_amount_flag : bool,
+    pub input_utxos: Vec<Utxo>,
+    pub outputs : Vec<TxOutput>,
+    pub signatures : Vec<Signature>,
 }
 
 pub struct AssetIssuance {
-
+    pub nonce: u128,
+    pub asset: Asset,
 }
 
 // ... etc...
-pub struct CreateAssetToken {
+pub struct CreateAssetToken {}
 
+pub struct OperationReference {
+    pub tx_index: TxSequenceNumber,
+    pub op_index: u16,
 }
 
 pub enum Operation {
-    AssetTransfer,
-    AssetIssuance,
-    CreateAssetToken,
+    asset_transfer(AssetTransfer),
+    asset_issuance(AssetIssuance),
+    create_token(CreateAssetToken),
     // ... etc...
 }
 
 pub struct TimeBounds {
-    start : DateTime<Utc>,
-    end : DateTime<Utc>,
+    pub start: DateTime<Utc>,
+    pub end: DateTime<Utc>,
 }
 
 pub struct Transaction {
-    key: TransactionKey,
-    operations: Vec<Operation>,
-    utxos: Vec<Utxo>,
-    time_bounds: TimeBounds,
-    proofs: Vec<Proof>,
-    memos: Vec<Memo>,
+    pub operations: Vec<Operation>,
+    pub utxos: Vec<Utxo>,
+    pub time_bounds: TimeBounds,
+    pub proofs: Vec<Proof>,
+    pub memos: Vec<Memo>,
     // ... etc...
 }
