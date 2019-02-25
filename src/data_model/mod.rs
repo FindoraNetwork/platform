@@ -62,7 +62,10 @@ pub struct Address {
 pub struct Variable {}
 pub type Signature = [u8; 32];
 
-pub type TxSequenceNumber = u64;
+#[derive(Hash, Eq, PartialEq, Clone, Copy, Debug)]
+pub struct TxSequenceNumber {
+    pub val: u64,
+}
 
 #[derive(Hash, Eq, PartialEq, Clone, Copy, Debug)]
 pub struct UtxoAddress {
@@ -73,7 +76,7 @@ pub struct UtxoAddress {
 
 #[derive(Hash, Eq, PartialEq, Clone, Debug)]
 pub struct Asset {
-    pub name: String,
+    pub code: AssetTokenCode,
     pub amount: u64,
 }
 
@@ -93,7 +96,7 @@ pub struct Utxo {
     pub key: UtxoAddress,
     pub digest: [u8; 32],
     pub address: Address,
-    pub asset_type: AssetType,
+    pub asset: AssetType,
 }
 
 pub struct TransactionKey {
@@ -103,7 +106,7 @@ pub struct TransactionKey {
 #[derive(Clone)]
 pub struct TxOutput {
     pub address: Address,
-    pub asset_type: AssetType,
+    pub asset: AssetType,
 }
 
 #[derive(Clone)]

@@ -1,12 +1,13 @@
 use crate::data_model;
+use crate::data_model::CreateAssetToken;
+use crate::data_model::TxOutput;
+use chrono::format::Pad;
 use data_model::{
-    AssetIssuance, AssetPolicyKey, AssetToken, AssetTokenCode, AssetTransfer, CustomAssetPolicy,
-    Operation, SmartContract, SmartContractKey, Transaction, TxSequenceNumber, Utxo, UtxoAddress,
+    Asset, AssetIssuance, AssetPolicyKey, AssetToken, AssetTokenCode, AssetTransfer, AssetType,
+    CustomAssetPolicy, Operation, PrivateAsset, SmartContract, SmartContractKey, Transaction,
+    TxSequenceNumber, Utxo, UtxoAddress,
 };
 use std::collections::HashMap;
-use crate::data_model::CreateAssetToken;
-use chrono::format::Pad;
-use crate::data_model::TxOutput;
 
 pub trait LedgerAccess {
     fn check_utxo(&self, addr: &UtxoAddress) -> Option<Utxo>;
@@ -19,8 +20,6 @@ pub trait LedgerUpdate {
     fn apply_transaction(&mut self, txn: &Transaction) -> ();
 }
 
-// TODO(Kevin): implement LedgerAccess and LedgerUpdate for a new struct that can be added to the main App struct
-
 pub struct NextIndex {
     tx_index: TxSequenceNumber,
     op_index: u16,
@@ -30,7 +29,7 @@ pub struct NextIndex {
 impl NextIndex {
     pub fn new() -> NextIndex {
         NextIndex {
-            tx_index: 0,
+            tx_index: TxSequenceNumber { val: 0 },
             op_index: 0,
             utxo_index: 0,
         }
@@ -60,7 +59,9 @@ impl LedgerState {
 
     fn add_txo(&mut self, txo: &TxOutput) {
         let utxo_addr = UtxoAddress {
-            transaction_id: self.next_index.tx_index,
+            transaction_id: TxSequenceNumber {
+                val: self.next_index.tx_index.val,
+            },
             operation_index: self.next_index.op_index,
             output_index: self.next_index.utxo_index,
         };
@@ -68,7 +69,7 @@ impl LedgerState {
             key: utxo_addr,
             digest: [0; 32], // TODO(Kevin): determine hash
             address: txo.address,
-            asset_type: txo.asset_type.clone(),
+            asset: txo.asset.clone(),
         };
         self.utxos.insert(utxo_addr, utxo_ref);
         self.next_index.utxo_index += 1;
@@ -84,13 +85,26 @@ impl LedgerState {
     }
 
     fn apply_asset_issuance(&mut self, asset_issuance: &AssetIssuance) -> () {
-       for out in &asset_issuance.outputs {
-           self.add_txo(out);
-       }
+        let sum: u128 = 0;
+        for out in &asset_issuance.outputs {
+            self.add_txo(out);
+            match &out.asset {
+                AssetType::Normal(a) => {
+                    if let Some(token) = self.tokens.get_mut(&a.code) {
+                        token.units += a.amount as u128; //TODO: Are we defining amounts as u64 or u128?
+                    }
+                }
+                //TODO: (Kevin) Implement Private Asset Issuance
+                AssetType::Private(p) => println!("Private Issuance Not Implemented!"),
+            }
+        }
     }
 
     fn apply_asset_creation(&mut self, create_asset_token: &CreateAssetToken) -> () {
-        self.tokens.insert(create_asset_token.asset_token.code.clone(), create_asset_token.asset_token.clone());
+        self.tokens.insert(
+            create_asset_token.asset_token.code.clone(),
+            create_asset_token.asset_token.clone(),
+        );
     }
 
     fn apply_operation(&mut self, op: &Operation) -> () {
@@ -112,8 +126,7 @@ impl LedgerUpdate for LedgerState {
         for op in &txn.operations {
             self.apply_operation(op);
         }
-        self.next_index.tx_index += 1;
-        //TODO: (Kevin) Determine where to add tx to the tx_log
+        self.next_index.tx_index.val += 1;
         self.txs.push(txn.clone());
     }
 }
