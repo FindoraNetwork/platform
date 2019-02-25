@@ -4,7 +4,6 @@ mod data_model;
 mod store;
 use store::{LedgerState};
 
-// TODO: add state
 struct LedgerApp {
     state: LedgerState,
 }

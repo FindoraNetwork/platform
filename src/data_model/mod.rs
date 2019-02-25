@@ -1,20 +1,20 @@
 use chrono::prelude::*;
 
-#[derive(Hash, Eq, PartialEq, Clone, Debug)]
+#[derive(Hash, Eq, PartialEq, Copy, Clone, Debug)]
 pub struct AssetTokenCode {
-    val: [u8; 16],
+    pub val: [u8; 16],
 }
 
 // TODO: Define Memo
-#[derive(Hash, Eq, PartialEq, Clone, Debug)]
+#[derive(Hash, Eq, PartialEq, Copy, Clone, Debug)]
 pub struct Proof {}
-#[derive(Hash, Eq, PartialEq, Clone, Debug)]
+#[derive(Hash, Eq, PartialEq, Copy, Clone, Debug)]
 pub struct Memo {}
-#[derive(Hash, Eq, PartialEq, Clone, Debug)]
+#[derive(Hash, Eq, PartialEq, Copy, Clone, Debug)]
 pub struct ConfidentialMemo {}
 pub type Commitment = [u8; 32];
 
-#[derive(Hash, Eq, PartialEq, Clone, Debug)]
+#[derive(Hash, Eq, PartialEq, Copy, Clone, Debug)]
 pub struct AssetToken {
     pub code: AssetTokenCode,
     pub digest: [u8; 32],
@@ -24,6 +24,21 @@ pub struct AssetToken {
     pub updatable: bool,
     pub units: u128,
     pub confidential_units: Commitment,
+}
+
+impl AssetToken {
+    pub fn create_empty() -> AssetToken {
+        AssetToken {
+            code: AssetTokenCode{val:[0;16]},
+            digest: [0;32],
+            issuer: Address{key:[0;32]},
+            memo: Memo{},
+            confidential_memo: ConfidentialMemo{},
+            updatable: false,
+            units: 0,
+            confidential_units: [0;32],
+        }
+    }
 }
 
 #[derive(Hash, Eq, PartialEq, Debug)]
@@ -122,6 +137,7 @@ pub struct AssetTransfer {
 
 #[derive(Clone)]
 pub struct AssetIssuance {
+    pub nonce: u128,
     pub code: AssetTokenCode,
     pub outputs: Vec<TxOutput>,
     pub signature: Signature,
@@ -152,8 +168,20 @@ pub struct TimeBounds {
 pub struct Transaction {
     pub operations: Vec<Operation>,
     pub utxos: Vec<Utxo>,
-    pub time_bounds: TimeBounds,
     pub proofs: Vec<Proof>,
     pub memos: Vec<Memo>,
+    //pub time_bounds: TimeBounds,
     // ... etc...
+}
+
+impl Transaction {
+    pub fn create_empty() -> Transaction {
+        Transaction {
+            operations: Vec::new(),
+            utxos: Vec::new(),
+            proofs: Vec::new(),
+            memos: Vec::new(),
+        }
+    }
+
 }

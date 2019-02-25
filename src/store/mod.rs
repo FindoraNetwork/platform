@@ -93,6 +93,7 @@ impl LedgerState {
                     if let Some(token) = self.tokens.get_mut(&a.code) {
                         token.units += a.amount as u128; //TODO: Are we defining amounts as u64 or u128?
                     }
+                    //TODO: We should never have the if statement above fail, but should we write something if it does
                 }
                 //TODO: (Kevin) Implement Private Asset Issuance
                 AssetType::Private(p) => println!("Private Issuance Not Implemented!"),
@@ -158,5 +159,154 @@ impl LedgerAccess for LedgerState {
             Some(contract) => Some(contract.clone()),
             None => None,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::data_model::Address;
+
+    #[test]
+    fn asset_creation() {
+        let mut state = LedgerState::new();
+        let token_code1 = AssetTokenCode { val: [1; 16] };
+        assert_eq!(true, state.get_asset_token(&token_code1).is_none());
+        // Using empty token because we aren't testing the validation step
+        let mut token = AssetToken::create_empty();
+        token.code = token_code1;
+
+        let mut tx = Transaction::create_empty();
+        let create_asset = CreateAssetToken {
+            asset_token: token,
+            signature: [0; 32],
+        };
+        let create_op = Operation::create_token(create_asset);
+        tx.operations.push(create_op);
+        state.apply_transaction(&tx);
+        assert_eq!(Some(token), state.get_asset_token(&token_code1));
+    }
+
+    #[test]
+    fn asset_issued() {
+        let mut state = LedgerState::new();
+        let token_code1 = AssetTokenCode { val: [1; 16] };
+        let mut token = AssetToken::create_empty();
+        token.code = token_code1;
+
+        let mut tx = Transaction::create_empty();
+        let create_asset = CreateAssetToken {
+            asset_token: token,
+            signature: [0; 32],
+        };
+
+        let create_op = Operation::create_token(create_asset);
+        tx.operations.push(create_op);
+        let issued = TxOutput {
+            address: Address { key: [0; 32] },
+            asset: AssetType::Normal(Asset {
+                code: AssetTokenCode { val: [1; 16] },
+                amount: 100,
+            }),
+        };
+        let issue_op = Operation::asset_issuance(AssetIssuance {
+            nonce: 0,
+            code: token_code1,
+            outputs: vec![issued.clone()],
+            signature: [0; 32], //Empty signature
+        });
+        tx.operations.push(issue_op);
+        //let issue_op = O
+        state.apply_transaction(&tx);
+        // Update units as would be done once asset is issued
+        token.units = 100;
+        assert_eq!(Some(token), state.get_asset_token(&token_code1));
+        let utxo_loc = UtxoAddress {
+            transaction_id: TxSequenceNumber { val: 0 },
+            operation_index: 1,
+            output_index: 0,
+        };
+        assert_eq!(true, state.check_utxo(&utxo_loc).is_some());
+        assert_eq!(issued.address, state.check_utxo(&utxo_loc).unwrap().address);
+        assert_eq!(issued.asset, state.check_utxo(&utxo_loc).unwrap().asset);
+    }
+
+    #[test]
+    fn asset_transferred() {
+        let mut state = LedgerState::new();
+        let token_code1 = AssetTokenCode { val: [1; 16] };
+        let mut token = AssetToken::create_empty();
+        token.code = token_code1;
+
+        let mut tx = Transaction::create_empty();
+        let create_asset = CreateAssetToken {
+            asset_token: token,
+            signature: [0; 32],
+        };
+
+        let create_op = Operation::create_token(create_asset);
+        tx.operations.push(create_op);
+        let issued = TxOutput {
+            address: Address { key: [5; 32] },
+            asset: AssetType::Normal(Asset {
+                code: AssetTokenCode { val: [1; 16] },
+                amount: 100,
+            }),
+        };
+        let issue_op = Operation::asset_issuance(AssetIssuance {
+            nonce: 0,
+            code: token_code1,
+            outputs: vec![issued.clone()],
+            signature: [0; 32], //Empty signature
+        });
+        tx.operations.push(issue_op);
+        //let issue_op = O
+        state.apply_transaction(&tx);
+        // Update units as would be done once asset is issued
+        token.units = 100;
+        assert_eq!(Some(token), state.get_asset_token(&token_code1));
+        let utxo_loc = UtxoAddress {
+            transaction_id: TxSequenceNumber { val: 0 },
+            operation_index: 1,
+            output_index: 0,
+        };
+        assert_eq!(true, state.check_utxo(&utxo_loc).is_some());
+        assert_eq!(issued.address, state.check_utxo(&utxo_loc).unwrap().address);
+        assert_eq!(issued.asset, state.check_utxo(&utxo_loc).unwrap().asset);
+
+        let mut tx2 = Transaction::create_empty();
+        let transfer_to = TxOutput {
+            address: Address { key: [7; 32] },
+            asset: AssetType::Normal(Asset {
+                code: AssetTokenCode { val: [1; 16] },
+                amount: 100,
+            }),
+        };
+        let transfer_op = Operation::asset_transfer(AssetTransfer {
+            nonce: 0,
+            variables: Vec::new(),
+            confidential_asset_flag: false,
+            confidential_amount_flag: false,
+            input_utxos: vec![state.check_utxo(&utxo_loc).unwrap()],
+            outputs: vec![transfer_to.clone()],
+            signatures: vec![[0; 32]],
+        });
+        tx2.operations.push(transfer_op);
+        state.apply_transaction(&tx2);
+        assert_eq!(true, state.check_utxo(&utxo_loc).is_none());
+        let utxo_loc = UtxoAddress {
+            transaction_id: TxSequenceNumber { val: 1 },
+            operation_index: 0,
+            output_index: 0,
+        };
+        assert_eq!(true, state.check_utxo(&utxo_loc).is_some());
+        assert_eq!(
+            transfer_to.address,
+            state.check_utxo(&utxo_loc).unwrap().address
+        );
+        assert_eq!(
+            transfer_to.asset,
+            state.check_utxo(&utxo_loc).unwrap().asset
+        );
     }
 }
