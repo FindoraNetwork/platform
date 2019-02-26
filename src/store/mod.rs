@@ -1,5 +1,7 @@
 use crate::data_model;
+use crate::data_model::AssetTokenProperties;
 use crate::data_model::CreateAssetToken;
+use crate::data_model::Operation::create_token;
 use crate::data_model::TxOutput;
 use chrono::format::Pad;
 use data_model::{
@@ -18,6 +20,10 @@ pub trait LedgerAccess {
 
 pub trait LedgerUpdate {
     fn apply_transaction(&mut self, txn: &Transaction) -> ();
+}
+
+pub trait LedgerValidate {
+    fn validate_transaction(&mut self, txn: &Transaction) -> bool;
 }
 
 pub struct NextIndex {
@@ -85,27 +91,27 @@ impl LedgerState {
     }
 
     fn apply_asset_issuance(&mut self, asset_issuance: &AssetIssuance) -> () {
-        let sum: u128 = 0;
         for out in &asset_issuance.outputs {
             self.add_txo(out);
             match &out.asset {
                 AssetType::Normal(a) => {
                     if let Some(token) = self.tokens.get_mut(&a.code) {
-                        token.units += a.amount as u128; //TODO: Are we defining amounts as u64 or u128?
+                        token.units += a.amount;
                     }
                     //TODO: We should never have the if statement above fail, but should we write something if it does
                 }
                 //TODO: (Kevin) Implement Private Asset Issuance
-                AssetType::Private(p) => println!("Private Issuance Not Implemented!"),
+                AssetType::Private(_) => println!("Private Issuance Not Implemented!"),
             }
         }
     }
 
     fn apply_asset_creation(&mut self, create_asset_token: &CreateAssetToken) -> () {
-        self.tokens.insert(
-            create_asset_token.asset_token.code.clone(),
-            create_asset_token.asset_token.clone(),
-        );
+        let token: AssetToken = AssetToken {
+            properties: create_asset_token.properties.clone(),
+            ..Default::default()
+        };
+        self.tokens.insert(token.properties.code.clone(), token);
     }
 
     fn apply_operation(&mut self, op: &Operation) -> () {
@@ -114,7 +120,6 @@ impl LedgerState {
             Operation::asset_transfer(transfer) => self.apply_asset_transfer(transfer),
             Operation::asset_issuance(issuance) => self.apply_asset_issuance(issuance),
             Operation::create_token(token) => self.apply_asset_creation(token),
-            _ => println!("Warning: operation not valid!"), // etc ...
         }
         self.next_index.op_index += 1;
     }
@@ -129,6 +134,12 @@ impl LedgerUpdate for LedgerState {
         }
         self.next_index.tx_index.val += 1;
         self.txs.push(txn.clone());
+    }
+}
+
+impl LedgerValidate for LedgerState {
+    fn validate_transaction(&mut self, txn: &Transaction) -> bool {
+        true
     }
 }
 
@@ -171,35 +182,37 @@ mod tests {
     fn asset_creation() {
         let mut state = LedgerState::new();
         let token_code1 = AssetTokenCode { val: [1; 16] };
-        assert_eq!(true, state.get_asset_token(&token_code1).is_none());
-        // Using empty token because we aren't testing the validation step
-        let mut token = AssetToken::create_empty();
-        token.code = token_code1;
+        let mut token_properties: AssetTokenProperties = Default::default();
+        token_properties.code = token_code1;
 
         let mut tx = Transaction::create_empty();
         let create_asset = CreateAssetToken {
-            asset_token: token,
+            properties: token_properties,
             signature: [0; 32],
         };
         let create_op = Operation::create_token(create_asset);
         tx.operations.push(create_op);
         state.apply_transaction(&tx);
-        assert_eq!(Some(token), state.get_asset_token(&token_code1));
+        assert_eq!(true, state.get_asset_token(&token_code1).is_some());
+        assert_eq!(
+            token_properties,
+            state.get_asset_token(&token_code1).unwrap().properties
+        );
+        assert_eq!(0, state.get_asset_token(&token_code1).unwrap().units);
     }
 
     #[test]
     fn asset_issued() {
         let mut state = LedgerState::new();
         let token_code1 = AssetTokenCode { val: [1; 16] };
-        let mut token = AssetToken::create_empty();
-        token.code = token_code1;
+        let mut token_properties: AssetTokenProperties = Default::default();
+        token_properties.code = token_code1;
 
         let mut tx = Transaction::create_empty();
         let create_asset = CreateAssetToken {
-            asset_token: token,
+            properties: token_properties,
             signature: [0; 32],
         };
-
         let create_op = Operation::create_token(create_asset);
         tx.operations.push(create_op);
         let issued = TxOutput {
@@ -219,8 +232,7 @@ mod tests {
         //let issue_op = O
         state.apply_transaction(&tx);
         // Update units as would be done once asset is issued
-        token.units = 100;
-        assert_eq!(Some(token), state.get_asset_token(&token_code1));
+        assert_eq!(100, state.get_asset_token(&token_code1).unwrap().units);
         let utxo_loc = UtxoAddress {
             transaction_id: TxSequenceNumber { val: 0 },
             operation_index: 1,
@@ -235,12 +247,12 @@ mod tests {
     fn asset_transferred() {
         let mut state = LedgerState::new();
         let token_code1 = AssetTokenCode { val: [1; 16] };
-        let mut token = AssetToken::create_empty();
-        token.code = token_code1;
+        let mut token_properties: AssetTokenProperties = Default::default();
+        token_properties.code = token_code1;
 
         let mut tx = Transaction::create_empty();
         let create_asset = CreateAssetToken {
-            asset_token: token,
+            properties: token_properties,
             signature: [0; 32],
         };
 
@@ -263,8 +275,6 @@ mod tests {
         //let issue_op = O
         state.apply_transaction(&tx);
         // Update units as would be done once asset is issued
-        token.units = 100;
-        assert_eq!(Some(token), state.get_asset_token(&token_code1));
         let utxo_loc = UtxoAddress {
             transaction_id: TxSequenceNumber { val: 0 },
             operation_index: 1,

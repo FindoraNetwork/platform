@@ -1,45 +1,51 @@
 use chrono::prelude::*;
 
-#[derive(Hash, Eq, PartialEq, Copy, Clone, Debug)]
+#[derive(Default, Hash, Eq, PartialEq, Copy, Clone, Debug)]
 pub struct AssetTokenCode {
     pub val: [u8; 16],
 }
 
 // TODO: Define Memo
-#[derive(Hash, Eq, PartialEq, Copy, Clone, Debug)]
+#[derive(Default, Hash, Eq, PartialEq, Copy, Clone, Debug)]
 pub struct Proof {}
-#[derive(Hash, Eq, PartialEq, Copy, Clone, Debug)]
+#[derive(Default, Hash, Eq, PartialEq, Copy, Clone, Debug)]
 pub struct Memo {}
-#[derive(Hash, Eq, PartialEq, Copy, Clone, Debug)]
+#[derive(Default, Hash, Eq, PartialEq, Copy, Clone, Debug)]
 pub struct ConfidentialMemo {}
 pub type Commitment = [u8; 32];
 
-#[derive(Hash, Eq, PartialEq, Copy, Clone, Debug)]
-pub struct AssetToken {
+
+#[derive(Default, Hash, Eq, PartialEq, Copy, Clone, Debug)]
+pub struct AssetTokenProperties {
     pub code: AssetTokenCode,
-    pub digest: [u8; 32],
     pub issuer: Address,
     pub memo: Memo,
     pub confidential_memo: ConfidentialMemo,
     pub updatable: bool,
-    pub units: u128,
+}
+
+#[derive(Default, Hash, Eq, PartialEq, Copy, Clone, Debug)]
+pub struct AssetToken {
+    pub properties: AssetTokenProperties,
+    pub digest: [u8; 32],
+    pub units: u64,
     pub confidential_units: Commitment,
 }
 
-impl AssetToken {
-    pub fn create_empty() -> AssetToken {
-        AssetToken {
-            code: AssetTokenCode{val:[0;16]},
-            digest: [0;32],
-            issuer: Address{key:[0;32]},
-            memo: Memo{},
-            confidential_memo: ConfidentialMemo{},
-            updatable: false,
-            units: 0,
-            confidential_units: [0;32],
-        }
-    }
-}
+//impl AssetToken {
+//    pub fn create_empty() -> AssetToken {
+//        AssetToken {
+//            code: AssetTokenCode{val:[0;16]},
+//            digest: [0;32],
+//            issuer: Address{key:[0;32]},
+//            memo: Memo{},
+//            confidential_memo: ConfidentialMemo{},
+//            updatable: false,
+//            units: 0,
+//            confidential_units: [0;32],
+//        }
+//    }
+//}
 
 #[derive(Hash, Eq, PartialEq, Debug)]
 pub struct AssetPolicyKey {
@@ -67,7 +73,7 @@ pub struct SmartContractKey {
 #[derive(Hash, Eq, PartialEq, Clone, Debug)]
 pub struct SmartContract {}
 
-#[derive(Hash, Eq, PartialEq, Clone, Copy, Debug)]
+#[derive(Default, Hash, Eq, PartialEq, Clone, Copy, Debug)]
 pub struct Address {
     pub key: [u8; 32],
 }
@@ -146,7 +152,7 @@ pub struct AssetIssuance {
 // ... etc...
 #[derive(Clone)]
 pub struct CreateAssetToken {
-    pub asset_token: AssetToken,
+    pub properties: AssetTokenProperties,
     pub signature: Signature,
 }
 
@@ -183,5 +189,4 @@ impl Transaction {
             memos: Vec::new(),
         }
     }
-
 }

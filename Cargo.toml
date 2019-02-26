@@ -7,3 +7,4 @@ edition = "2018"
 [dependencies]
 abci = "0.4.3"
 chrono = "0.4"
+zei = {git = "ssh://github.com/eianio/zei"}
