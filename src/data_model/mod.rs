@@ -1,98 +1,187 @@
+use chrono::prelude::*;
+
+#[derive(Hash, Eq, PartialEq, Copy, Clone, Debug)]
 pub struct AssetTokenCode {
-    val: [u8; 16],
+    pub val: [u8; 16],
 }
 
+// TODO: Define Memo
+#[derive(Hash, Eq, PartialEq, Copy, Clone, Debug)]
+pub struct Proof {}
+#[derive(Hash, Eq, PartialEq, Copy, Clone, Debug)]
+pub struct Memo {}
+#[derive(Hash, Eq, PartialEq, Copy, Clone, Debug)]
+pub struct ConfidentialMemo {}
+pub type Commitment = [u8; 32];
+
+#[derive(Hash, Eq, PartialEq, Copy, Clone, Debug)]
 pub struct AssetToken {
-    code: AssetTokenCode,
-    // TODO: Kevin: add fields here ...
-
+    pub code: AssetTokenCode,
+    pub digest: [u8; 32],
+    pub issuer: Address,
+    pub memo: Memo,
+    pub confidential_memo: ConfidentialMemo,
+    pub updatable: bool,
+    pub units: u128,
+    pub confidential_units: Commitment,
 }
 
+impl AssetToken {
+    pub fn create_empty() -> AssetToken {
+        AssetToken {
+            code: AssetTokenCode{val:[0;16]},
+            digest: [0;32],
+            issuer: Address{key:[0;32]},
+            memo: Memo{},
+            confidential_memo: ConfidentialMemo{},
+            updatable: false,
+            units: 0,
+            confidential_units: [0;32],
+        }
+    }
+}
+
+#[derive(Hash, Eq, PartialEq, Debug)]
 pub struct AssetPolicyKey {
-    val: [u8; 16],
+    pub val: [u8; 16],
 }
 
-pub struct CustomAssetPolicy {
-    key: AssetPolicyKey,
-}
+#[derive(Hash, Eq, PartialEq, Clone, Debug)]
+pub struct CustomAssetPolicy {}
 
+#[derive(Hash, Eq, PartialEq, Debug)]
 pub struct CredentialKey {
-    val: [u8; 16],
+    pub val: [u8; 16],
 }
 
+#[derive(Hash, Eq, PartialEq, Debug)]
 pub struct Credential {
-    key: CredentialKey,
+    pub key: CredentialKey,
 }
 
+#[derive(Hash, Eq, PartialEq, Debug)]
 pub struct SmartContractKey {
-    val: [u8; 16],
+    pub val: [u8; 16],
 }
 
-pub struct SmartContract {
-    key: SmartContractKey,
-}
+#[derive(Hash, Eq, PartialEq, Clone, Debug)]
+pub struct SmartContract {}
 
+#[derive(Hash, Eq, PartialEq, Clone, Copy, Debug)]
 pub struct Address {
-    key: [u8, 32],
+    pub key: [u8; 32],
 }
 
+//TODO(Kevin): define types
+#[derive(Clone)]
+pub struct Variable {}
+pub type Signature = [u8; 32];
+
+#[derive(Hash, Eq, PartialEq, Clone, Copy, Debug)]
 pub struct TxSequenceNumber {
-    val: u64,
+    pub val: u64,
 }
 
+#[derive(Hash, Eq, PartialEq, Clone, Copy, Debug)]
 pub struct UtxoAddress {
-    transaction_id: TxSequenceNumber,
-    operation_index: u16,
-    output_index: u16,
+    pub transaction_id: TxSequenceNumber,
+    pub operation_index: u16,
+    pub output_index: u16,
 }
 
+#[derive(Hash, Eq, PartialEq, Clone, Debug)]
 pub struct Asset {
-    type: String,
-    amount u64,
+    pub code: AssetTokenCode,
+    pub amount: u64,
 }
 
+#[derive(Hash, Eq, PartialEq, Clone, Debug)]
 pub struct PrivateAsset {
-    hidden: [u8, 32],
+    pub hidden: [u8; 32],
 }
 
+#[derive(Hash, Eq, PartialEq, Clone, Debug)]
 pub enum AssetType {
-    normal: Asset,
-    private: PrivateAsset,
+    Normal(Asset),
+    Private(PrivateAsset),
 }
 
+#[derive(Hash, Eq, PartialEq, Clone, Debug)]
 pub struct Utxo {
-    key: UtxoAddress,
-    digest: [u8; 32],
-    address: Address,
-    asset_type: AssetType,
+    pub key: UtxoAddress,
+    pub digest: [u8; 32],
+    pub address: Address,
+    pub asset: AssetType,
 }
 
 pub struct TransactionKey {
-    val: [u8; 32],
+    pub val: [u8; 32],
 }
 
+#[derive(Clone)]
+pub struct TxOutput {
+    pub address: Address,
+    pub asset: AssetType,
+}
+
+#[derive(Clone)]
 pub struct AssetTransfer {
-
+    pub nonce: u128,
+    pub variables: Vec<Variable>,
+    pub confidential_asset_flag: bool,
+    pub confidential_amount_flag: bool,
+    pub input_utxos: Vec<Utxo>,
+    pub outputs: Vec<TxOutput>,
+    pub signatures: Vec<Signature>,
 }
 
+#[derive(Clone)]
 pub struct AssetIssuance {
-
+    pub nonce: u128,
+    pub code: AssetTokenCode,
+    pub outputs: Vec<TxOutput>,
+    pub signature: Signature,
 }
 
 // ... etc...
+#[derive(Clone)]
 pub struct CreateAssetToken {
-
+    pub asset_token: AssetToken,
+    pub signature: Signature,
 }
 
+#[derive(Clone)]
 pub enum Operation {
-    asset_transfer: AssetTransfer,
-    asset_issuance: AssetIssuance,
-    create_asset_token: CreateAssetToken,
+    asset_transfer(AssetTransfer),
+    asset_issuance(AssetIssuance),
+    create_token(CreateAssetToken),
     // ... etc...
 }
 
+#[derive(Clone)]
+pub struct TimeBounds {
+    pub start: DateTime<Utc>,
+    pub end: DateTime<Utc>,
+}
+
+#[derive(Clone)]
 pub struct Transaction {
-    key: TransactionKey,
-    operations: Vec<Operation>,
+    pub operations: Vec<Operation>,
+    pub utxos: Vec<Utxo>,
+    pub proofs: Vec<Proof>,
+    pub memos: Vec<Memo>,
+    //pub time_bounds: TimeBounds,
     // ... etc...
+}
+
+impl Transaction {
+    pub fn create_empty() -> Transaction {
+        Transaction {
+            operations: Vec::new(),
+            utxos: Vec::new(),
+            proofs: Vec::new(),
+            memos: Vec::new(),
+        }
+    }
+
 }
