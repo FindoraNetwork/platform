@@ -1,21 +1,51 @@
-use chrono::prelude::*;
 
-#[derive(Default, Hash, Eq, PartialEq, Copy, Clone, Debug)]
+use chrono::prelude::*;
+use zei::utxo_transaction::{Tx, TxOutput, ZeiSignature};
+use schnorr::{PublicKey, SecretKey, Signature};
+use serde::{Serialize, Deserialize};
+use serde::{Serializer, Deserializer};
+use blake2::{Blake2b,Digest};
+
+// Unique Identifier for AssetTokens
+#[derive(Default, Serialize, Deserialize, Hash, Eq, PartialEq, Copy, Clone, Debug)]
 pub struct AssetTokenCode {
     pub val: [u8; 16],
 }
 
 // TODO: Define Memo
-#[derive(Default, Hash, Eq, PartialEq, Copy, Clone, Debug)]
+#[derive(Default, Serialize, Deserialize, Hash, Eq, PartialEq, Copy, Clone, Debug)]
 pub struct Proof {}
-#[derive(Default, Hash, Eq, PartialEq, Copy, Clone, Debug)]
+#[derive(Default, Serialize, Deserialize, Hash, Eq, PartialEq, Copy, Clone, Debug)]
 pub struct Memo {}
-#[derive(Default, Hash, Eq, PartialEq, Copy, Clone, Debug)]
+#[derive(Default, Serialize, Deserialize, Hash, Eq, PartialEq, Copy, Clone, Debug)]
 pub struct ConfidentialMemo {}
 pub type Commitment = [u8; 32];
 
+#[derive(Default, Serialize, Deserialize, Hash, Eq, PartialEq, Clone, Copy, Debug)]
+pub struct Address {
+    pub key: [u8; 32],
+}
 
-#[derive(Default, Hash, Eq, PartialEq, Copy, Clone, Debug)]
+#[derive(Serialize, Deserialize, Eq, PartialEq, Clone, Copy, Debug)]
+pub struct LedgerSignature {
+    signature: Signature,
+}
+
+impl LedgerSignature {
+    pub fn verify(&self, message: &[u8], address: &Address) -> bool {
+        let pk = PublicKey::from_bytes(&address.key);
+        if pk.is_err() {
+            return false;
+        }
+        let pk = pk.unwrap();
+        if pk.verify::<blake2::Blake2b>(message, &self.signature).is_err(){
+            return false;
+        }
+        true
+    }
+}
+
+#[derive(Default, Serialize, Deserialize, Hash, Eq, PartialEq, Copy, Clone, Debug)]
 pub struct AssetTokenProperties {
     pub code: AssetTokenCode,
     pub issuer: Address,
@@ -73,18 +103,16 @@ pub struct SmartContractKey {
 #[derive(Hash, Eq, PartialEq, Clone, Debug)]
 pub struct SmartContract {}
 
-#[derive(Default, Hash, Eq, PartialEq, Clone, Copy, Debug)]
-pub struct Address {
-    pub key: [u8; 32],
-}
-
 //TODO(Kevin): define types
 #[derive(Clone)]
 pub struct Variable {}
-pub type Signature = [u8; 32];
 
 #[derive(Hash, Eq, PartialEq, Clone, Copy, Debug)]
 pub struct TxSequenceNumber {
+    pub val: u64,
+}
+
+pub struct UtxoIndex{
     pub val: u64,
 }
 
@@ -112,12 +140,11 @@ pub enum AssetType {
     Private(PrivateAsset),
 }
 
-#[derive(Hash, Eq, PartialEq, Clone, Debug)]
+#[derive(Eq, PartialEq, Clone, Debug)]
 pub struct Utxo {
     pub key: UtxoAddress,
     pub digest: [u8; 32],
-    pub address: Address,
-    pub asset: AssetType,
+    pub output: TxOutput,
 }
 
 pub struct TransactionKey {
@@ -125,35 +152,40 @@ pub struct TransactionKey {
 }
 
 #[derive(Clone)]
-pub struct TxOutput {
-    pub address: Address,
-    pub asset: AssetType,
+pub struct AssetTransferBody {
+    //pub nonce: u128,
+    pub utxo_addresses: Vec<UtxoAddress>,
+    pub transfer: Tx,
+    pub signatures: Vec<LedgerSignature>,
 }
 
+// TODO: UTXO Addresses must be included in Transfer Signature
 #[derive(Clone)]
 pub struct AssetTransfer {
-    pub nonce: u128,
-    pub variables: Vec<Variable>,
-    pub confidential_asset_flag: bool,
-    pub confidential_amount_flag: bool,
-    pub input_utxos: Vec<Utxo>,
-    pub outputs: Vec<TxOutput>,
-    pub signatures: Vec<Signature>,
+    //pub nonce: u128,
+    pub body: AssetTransferBody,
+    pub signatures: Vec<LedgerSignature>,
 }
 
 #[derive(Clone)]
-pub struct AssetIssuance {
-    pub nonce: u128,
+pub struct AssetIssuanceBody {
+    pub seq_num: u128,
     pub code: AssetTokenCode,
     pub outputs: Vec<TxOutput>,
-    pub signature: Signature,
+}
+
+// TODO: Include mechanism for replay attacks
+#[derive(Clone)]
+pub struct AssetIssuance {
+    pub body: AssetIssuanceBody,
+    pub signature: LedgerSignature,
 }
 
 // ... etc...
 #[derive(Clone)]
 pub struct CreateAssetToken {
     pub properties: AssetTokenProperties,
-    pub signature: Signature,
+    pub signature: LedgerSignature,
 }
 
 #[derive(Clone)]
