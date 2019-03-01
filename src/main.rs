@@ -2,7 +2,7 @@ extern crate abci;
 
 mod data_model;
 mod store;
-use store::{LedgerState};
+use crate::store::{LedgerState};
 
 struct LedgerApp {
     state: LedgerState,

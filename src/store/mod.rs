@@ -2,7 +2,7 @@ use crate::data_model;
 use crate::data_model::CreateAssetToken;
 use crate::data_model::TxOutput;
 use chrono::format::Pad;
-use data_model::{
+use crate::data_model::{
     Asset, AssetIssuance, AssetPolicyKey, AssetToken, AssetTokenCode, AssetTransfer, AssetType,
     CustomAssetPolicy, Operation, PrivateAsset, SmartContract, SmartContractKey, Transaction,
     TxSequenceNumber, Utxo, UtxoAddress,
