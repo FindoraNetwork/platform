@@ -5,6 +5,7 @@ authors = ["Nathan Yospe <nathan@eian.io>, Kevin Foley <kevin@eian.io>"]
 edition = "2018"
 
 [dependencies]
+rand_chacha = "0.1.1"
 abci = "0.4.3"
 chrono = "0.4"
 schnorr = "0.0.4"
@@ -12,4 +13,6 @@ serde = "1.0"
 serde_derive = "1.0"
 serde_json = "1.0"
 blake2 = "0.8.0"
+rand = "0.6"
 zei = {git = "ssh://github.com/eianio/zei", branch = "ledger"}
+curve25519-dalek = { version =  "1.0", features = ["serde"] }

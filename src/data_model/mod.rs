@@ -21,31 +21,31 @@ pub struct Memo {}
 pub struct ConfidentialMemo {}
 pub type Commitment = [u8; 32];
 
-#[derive(Default, Serialize, Deserialize, Hash, Eq, PartialEq, Clone, Copy, Debug)]
+#[derive(Default, Serialize, Deserialize, Eq, PartialEq, Clone, Copy, Debug)]
 pub struct Address {
-    pub key: [u8; 32],
+    pub key: PublicKey
 }
 
 #[derive(Serialize, Deserialize, Eq, PartialEq, Clone, Copy, Debug)]
 pub struct LedgerSignature {
-    signature: Signature,
+    pub signature: Signature,
 }
 
 impl LedgerSignature {
     pub fn verify(&self, message: &[u8], address: &Address) -> bool {
-        let pk = PublicKey::from_bytes(&address.key);
-        if pk.is_err() {
-            return false;
-        }
-        let pk = pk.unwrap();
-        if pk.verify::<blake2::Blake2b>(message, &self.signature).is_err(){
-            return false;
-        }
+        // let pk = address.key;
+        // if pk.is_err() {
+        //     return false;
+        // }
+        // let pk = pk.unwrap();
+        // if pk.verify::<blake2::Blake2b>(message, &self.signature).is_err(){
+        //     return false;
+        // }
         true
     }
 }
 
-#[derive(Default, Serialize, Deserialize, Hash, Eq, PartialEq, Copy, Clone, Debug)]
+#[derive(Default, Serialize, Deserialize, Eq, PartialEq, Copy, Clone, Debug)]
 pub struct AssetTokenProperties {
     pub code: AssetTokenCode,
     pub issuer: Address,
@@ -54,7 +54,7 @@ pub struct AssetTokenProperties {
     pub updatable: bool,
 }
 
-#[derive(Default, Hash, Eq, PartialEq, Copy, Clone, Debug)]
+#[derive(Default, Eq, PartialEq, Copy, Clone, Debug)]
 pub struct AssetToken {
     pub properties: AssetTokenProperties,
     pub digest: [u8; 32],
@@ -151,7 +151,7 @@ pub struct TransactionKey {
     pub val: [u8; 32],
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct AssetTransferBody {
     //pub nonce: u128,
     pub utxo_addresses: Vec<UtxoAddress>,
@@ -160,14 +160,14 @@ pub struct AssetTransferBody {
 }
 
 // TODO: UTXO Addresses must be included in Transfer Signature
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct AssetTransfer {
     //pub nonce: u128,
     pub body: AssetTransferBody,
     pub signatures: Vec<LedgerSignature>,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct AssetIssuanceBody {
     pub seq_num: u128,
     pub code: AssetTokenCode,
@@ -175,20 +175,20 @@ pub struct AssetIssuanceBody {
 }
 
 // TODO: Include mechanism for replay attacks
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct AssetIssuance {
     pub body: AssetIssuanceBody,
     pub signature: LedgerSignature,
 }
 
 // ... etc...
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct CreateAssetToken {
     pub properties: AssetTokenProperties,
     pub signature: LedgerSignature,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum Operation {
     asset_transfer(AssetTransfer),
     asset_issuance(AssetIssuance),
@@ -196,13 +196,13 @@ pub enum Operation {
     // ... etc...
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct TimeBounds {
     pub start: DateTime<Utc>,
     pub end: DateTime<Utc>,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Transaction {
     pub operations: Vec<Operation>,
     pub utxos: Vec<Utxo>,

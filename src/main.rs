@@ -3,10 +3,9 @@ extern crate serde;
 #[macro_use] extern crate serde_derive;
 extern crate serde_json;
 
-
 mod data_model;
 mod store;
-use store::{LedgerState};
+use crate::store::{LedgerState};
 
 struct LedgerApp {
     state: LedgerState,
