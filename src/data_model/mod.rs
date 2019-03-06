@@ -1,7 +1,7 @@
 
 use chrono::prelude::*;
 use zei::utxo_transaction::{Tx, TxOutput, ZeiSignature};
-use schnorr::{PublicKey, SecretKey, Signature};
+use schnorr::{PublicKey, SecretKey};
 use serde::{Serialize, Deserialize};
 use serde::{Serializer, Deserializer};
 use blake2::{Blake2b,Digest};
@@ -26,22 +26,16 @@ pub struct Address {
     pub key: PublicKey
 }
 
-#[derive(Serialize, Deserialize, Eq, PartialEq, Clone, Copy, Debug)]
+#[derive(Serialize, Deserialize, Eq, PartialEq, Clone, Debug)]
 pub struct LedgerSignature {
-    pub signature: Signature,
+    pub address: Address,
+    pub signature: ZeiSignature,
 }
 
 impl LedgerSignature {
-    pub fn verify(&self, message: &[u8], address: &Address) -> bool {
-        // let pk = address.key;
-        // if pk.is_err() {
-        //     return false;
-        // }
-        // let pk = pk.unwrap();
-        // if pk.verify::<blake2::Blake2b>(message, &self.signature).is_err(){
-        //     return false;
-        // }
-        true
+    pub fn verify(&self, message: &[u8]) -> bool {
+        let msg = serde_json::to_vec(message).unwrap();
+        !self.address.key.verify::<blake2::Blake2b>(msg.as_slice(),&self.signature.signature).is_err()
     }
 }
 
@@ -145,6 +139,7 @@ pub struct Utxo {
     pub key: UtxoAddress,
     pub digest: [u8; 32],
     pub output: TxOutput,
+    pub address: Address
 }
 
 pub struct TransactionKey {

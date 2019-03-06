@@ -2,14 +2,14 @@ use crate::data_model;
 use crate::data_model::AssetTokenProperties;
 use crate::data_model::CreateAssetToken;
 use crate::data_model::Operation::create_token;
-use zei::utxo_transaction::{TxOutput};
+use zei::utxo_transaction::{TxOutput, TxPublicFields};
 use chrono::format::Pad;
 use crate::data_model::{
     Asset, AssetIssuance, AssetPolicyKey, AssetToken, AssetTokenCode, AssetTransfer, AssetType,
     CustomAssetPolicy, Operation, PrivateAsset, SmartContract, SmartContractKey, Transaction,
-    TxSequenceNumber, Utxo, UtxoAddress,
+    TxSequenceNumber, Utxo, UtxoAddress, Address
 };
-use std::collections::HashMap;
+use std::collections::{HashMap};
 use std::io::{self, Write};
 
 pub trait LedgerAccess {
@@ -78,7 +78,9 @@ impl LedgerState {
             key: utxo_addr,
             digest: [0; 32], // TODO(Kevin): add code to calculate hash
             output: txo.clone(),
+            address: Address {key: txo.public.public_key }
         };
+
         self.utxos.insert(utxo_addr, utxo_ref);
         self.next_index.utxo_index += 1;
     }
@@ -103,16 +105,16 @@ impl LedgerState {
         for out in &asset_issuance.body.outputs {
             self.add_txo(out);
             //TODO Change updating AssetToken to work with Zei Output types
-//            match &out.asset {
-//                AssetType::Normal(a) => {
-//                    if let Some(token) = self.tokens.get_mut(&a.code) {
-//                        token.units += a.amount;
-//                    }
-//                    //TODO: We should never have the if statement above fail, but should we write something if it does
-//                }
-//                //TODO: (Kevin) Implement Private Asset Issuance
-//                AssetType::Private(_) => println!("Private Issuance Not Implemented!"),
-//            }
+           // match &out.asset {
+           //     AssetType::Normal(a) => {
+           //         if let Some(token) = self.tokens.get_mut(&a.code) {
+           //             token.units += a.amount;
+           //         }
+           //         //TODO: We should never have the if statement above fail, but should we write something if it does
+           //     }
+           //     //TODO: (Kevin) Implement Private Asset Issuance
+           //     AssetType::Private(_) => println!("Private Issuance Not Implemented!"),
+           // }
         }
     }
 
@@ -137,34 +139,43 @@ impl LedgerState {
 
     // Asset Transfer is valid if UTXOs exist on ledger and match zei transaction, zei transaction is valid, and if LedgerSignature is valid
     fn validate_asset_transfer(&mut self, asset_transfer: &AssetTransfer) -> bool {
-        // TODO: Implement
-        // for signature in &asset_transfer.signatures {
-        //     //check if signature is valide
-        //     if !signature.verify(....) {
-        //         false
-        //     }
-        // }
+        // signatures are valid
+        for signature in &asset_transfer.signatures {
+            if !signature.verify(&asset_transfer.body) {
+                return false;
+            }
+        }
 
-        //need to check if utxos exist on ledger and match zei transaction
-        //utxos exist on ledger && asset_transfer.body.transfer.verify() && //ledger signature
+         //zei transaction is valid
+        let zeiTxn = &asset_transfer.body.transfer;
+        if !zeiTxn.verify() {
+            return false;
+        }
+
+        //utxos exist on ledger - need to match zei transaction
+        for utxo in &asset_transfer.body.utxo_addresses {
+            if !self.utxos.contains_key(utxo) {
+                return false
+            }
+        }
+
         true
     }
 
     // Asset Issuance is Valid if Signature is valid, the operation is unique, and the assets in the TxOutputs are owned by the signatory
     fn validate_asset_issuance(&mut self, asset_issuance: &AssetIssuance) -> bool {
-        // if (!self.tokens.contains_key(&asset_issuance.body.code)) {
-        //     return false;
-        // }
+        if (self.issuance_num.contains_key(&asset_issuance.body.code)) {
+            return false;
+        }
 
-        // let token = self.tokens.get(&asset_issuance.body.code);
-        // asset_issuance.signature.verify(serde_json:to_vec(&asset_issuance.body)).unwrap.as_slice(),
-        //                                    &token.properties.issuer);
-
+        if !asset_issuance.signature.verify(&asset_issuance.body)
+        {
+            return false;
+        }]
     
-        // for output in &asset_issuance.body.outputs {
-        //     //output.public.public_key
-        //     //NEED TO VERIFY TXOUTPUTS OWNED BY SIGNATORY
-        // }
+        for output in &asset_issuance.body.outputs {
+            //NEED TO VERIFY TXOUTPUTS OWNED BY SIGNATORY
+        }
 
         true
     }
@@ -249,6 +260,8 @@ mod tests {
     use schnorr::{Keypair, PublicKey, SecretKey,Signature};
     use curve25519_dalek::scalar::Scalar;
     use blake2::{Blake2b,Digest};
+    use zei::utxo_transaction::ZeiSignature;
+
 
     fn build_keys<R: CryptoRng + Rng>(prng: &mut R) -> (PublicKey, SecretKey) {
         let key = Keypair::generate(prng);
@@ -257,12 +270,11 @@ mod tests {
         (key.public, key.secret)
     }
 
-
-    fn compute_signature<R: CryptoRng + Rng>(prng: &mut R, body: &AssetTokenProperties, pk: &PublicKey, sk: &SecretKey) -> Signature{
+    fn compute_signature<R: CryptoRng + Rng>(prng: &mut R, body: &AssetTokenProperties, pk: &PublicKey, sk: &SecretKey) -> ZeiSignature{
         let msg = serde_json::to_vec(body).unwrap();
         let sign = sk.sign::<blake2::Blake2b, R>(prng, msg.as_slice(), pk);
         
-        sign
+        ZeiSignature{ signature: sign }
     }
 
     // TODO: Fix tests. Need to include validation
@@ -284,7 +296,7 @@ mod tests {
        let sign = compute_signature(&mut prng, &token_properties, &public_key, &secret_key);
        let create_asset = CreateAssetToken {
             properties: token_properties,
-            signature: LedgerSignature{ signature: sign },
+            signature: LedgerSignature{ address: Address { key: public_key }, signature: sign },
         };
 
         let create_op = Operation::create_token(create_asset);
