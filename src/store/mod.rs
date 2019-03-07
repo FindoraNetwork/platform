@@ -8,7 +8,7 @@ use chrono::format::Pad;
 use crate::data_model::{
     Asset, AssetIssuance, AssetPolicyKey, AssetToken, AssetTokenCode, AssetTransfer, AssetType,
     CustomAssetPolicy, Operation, PrivateAsset, SmartContract, SmartContractKey, Transaction,
-    TxSequenceNumber, Utxo, UtxoAddress, Address, LedgerSignature, Digest, AssetCreationBody
+    TxSequenceNumber, Utxo, UtxoAddress, Address, LedgerSignature, AssetCreationBody, Memo, ConfidentialMemo
 };
 use std::collections::{HashMap};
 use std::io::{self, Write};
@@ -27,6 +27,8 @@ pub trait LedgerUpdate {
 pub trait LedgerValidate {
     fn validate_transaction(&mut self, txn: &Transaction) -> bool;
 }
+
+
 
 pub struct NextIndex {
     tx_index: TxSequenceNumber,
@@ -136,7 +138,7 @@ impl LedgerState {
     fn validate_asset_transfer(&mut self, transfer: &AssetTransfer) -> bool {
         // [1] signatures are valid
         for signature in &transfer.body_signatures {
-            if !signature.verify(&transfer.body.digest) {
+            if !signature.verify(&serde_json::to_vec(&transfer.body).unwrap()) {
                 return false;
             }
         }
@@ -146,17 +148,17 @@ impl LedgerState {
             if !self.check_utxo(utxo_addr).is_some() {
                 return false;
             }
-            let v = &transfer.body.operation_signatures;
-            let v = v.into_iter().filter(|&x| x.address.key == self.utxos.get(utxo_addr).as_ref().unwrap().output.get_pk()).collect::<Vec<_>>();
+            let signatures = &transfer.body.operation_signatures;
+            let filtered_signatures = signatures.into_iter().filter(|&x| x.address.key == self.utxos.get(utxo_addr).as_ref().unwrap().output.get_pk()).collect::<Vec<_>>();
             
-            if v.len() == 0 {
+            if filtered_signatures.len() == 0 {
                 return false;
             }
         }
 
         // [3] zei transaction is valid
-        let zeiTxn = &transfer.body.transfer;
-        if !zeiTxn.verify() {
+        let zei_txn = &transfer.body.transfer;
+        if !zei_txn.verify() {
             return false;
         }
 
@@ -169,7 +171,7 @@ impl LedgerState {
             return false;
         }
 
-        if !issue.signature.verify(&issue.body.digest)
+        if !issue.body_signature.verify(&serde_json::to_vec(&issue.body).unwrap())
         {
             return false;
         }
@@ -184,7 +186,7 @@ impl LedgerState {
     // Asset Creation is invalid if the signature is not valid or the code is already used by a different asset
     fn validate_asset_creation(&mut self, create: &AssetCreation) -> bool {
         !self.tokens.contains_key(&create.body.properties.code) &&
-            create.signature.verify(&create.body.digest)
+            create.body_signature.verify(&serde_json::to_vec(&create.body).unwrap())
     }
 
     fn validate_operation(&mut self, op: &Operation) -> bool {
@@ -261,55 +263,102 @@ mod tests {
     use curve25519_dalek::scalar::Scalar;
     use blake2::{Blake2b};
     use zei::keys::{ZeiPublicKey, ZeiSecretKey, ZeiSignature, ZeiKeyPair};
+    use std::collections::hash_map::DefaultHasher;
+    use std::hash::{Hash, Hasher};
 
     fn build_keys<R: CryptoRng + Rng>(prng: &mut R) -> (ZeiPublicKey, ZeiSecretKey) {
-        let key = ZeiKeyPair::generate(prng);
-        (key.get_pk_ref().clone(), key.get_sk())
+        let keypair = ZeiKeyPair::generate(prng);
+
+        (keypair.get_pk_ref().clone(), keypair.get_sk())
     }
 
-    // fn compute_digest(msg: &[u8]) {
+    fn compute_signature<T>(secret_key: &ZeiSecretKey, public_key: &ZeiPublicKey, asset_body: &T) -> ZeiSignature
+    where T: serde::Serialize {
+      secret_key.sign::<blake2::Blake2b>(&serde_json::to_vec(&asset_body).unwrap(), &public_key)
+    }
 
-    // }
+    fn asset_creation_body (token_code: &AssetTokenCode, issuer_key: &ZeiPublicKey, updatable: bool,
+      memo: &Option<Memo>, confidential_memo: &Option<ConfidentialMemo>) -> AssetCreationBody
+    {
+      let mut token_properties: AssetTokenProperties = Default::default();
+      token_properties.code = token_code.clone();
+      token_properties.issuer = Address { key: issuer_key.clone() };
+      token_properties.updatable = updatable;
+
+      if memo.is_some() {
+        token_properties.memo = memo.as_ref().unwrap().clone();
+      }
+      else {
+        token_properties.memo = Memo{};
+      }
+
+      if confidential_memo.is_some() {
+        token_properties.confidential_memo = confidential_memo.as_ref().unwrap().clone();
+      }
+      else {
+        token_properties.confidential_memo = ConfidentialMemo{};
+      }
+
+      AssetCreationBody { properties: token_properties }
+    }
+
+    fn asset_creation_operation (asset_body: &AssetCreationBody, public_key: &ZeiPublicKey, secret_key: &ZeiSecretKey) -> AssetCreation
+    {
+      let sign = compute_signature(&secret_key, &public_key, &asset_body);
+      AssetCreation {
+            body: asset_body.clone(),
+            body_signature: LedgerSignature{ address: Address { key: public_key.clone() }, signature: sign },
+      }
+    }
 
    #[test]
-   fn asset_creation() {
-       let mut prng = ChaChaRng::from_seed([0u8; 32]);
-       let (public_key, secret_key) = build_keys(&mut prng);
+   fn test_asset_creation_valid() {
+      let mut prng = ChaChaRng::from_seed([0u8; 32]);
+      let mut state = LedgerState::new();
+      let mut tx = Transaction::create_empty();
 
-       let mut state = LedgerState::new();
-       let mut token_properties: AssetTokenProperties = Default::default();
-       let token_code1 = AssetTokenCode { val: [1; 16] };
+      let token_code1 = AssetTokenCode { val: [1; 16] };
+      let (public_key, secret_key) = build_keys(&mut prng);
 
-       token_properties.code = token_code1;
-       token_properties.issuer = Address { key : public_key};
-       token_properties.updatable = true;
+      let asset_body = asset_creation_body(&token_code1, &public_key, true, &None, &None);
+      let asset_create = asset_creation_operation(&asset_body, &public_key, &secret_key);
+      tx.operations.push(Operation::asset_creation(asset_create));
 
-       let asset_body = AssetCreationBody { properties: token_properties, digest: [0; 32]};
-
-       let mut tx = Transaction::create_empty();
-
-       let sign = secret_key.sign::<blake2::Blake2b>(&asset_body.digest, &public_key);
-
-       let create_asset = AssetCreation {
-            body: asset_body,
-            signature: LedgerSignature{ address: Address { key: public_key }, signature: sign },
-        };
-
-        let create_op = Operation::asset_creation(create_asset);
-        tx.operations.push(create_op);
-
-        assert_eq!(true, state.validate_transaction(&tx));
+      assert_eq!(true, state.validate_transaction(&tx));
         
-        state.apply_transaction(tx);
-        assert_eq!(true, state.get_asset_token(&token_code1).is_some());
+      state.apply_transaction(tx);
+      assert_eq!(true, state.get_asset_token(&token_code1).is_some());
 
-        assert_eq!(
-           token_properties,
-           state.get_asset_token(&token_code1).unwrap().properties
-        );
+      assert_eq!(
+          asset_body.properties,
+          state.get_asset_token(&token_code1).unwrap().properties
+      );
 
-        assert_eq!(0, state.get_asset_token(&token_code1).unwrap().units);
-    }   
+      assert_eq!(0, state.get_asset_token(&token_code1).unwrap().units);
+    } 
+
+   #[test]
+   fn test_asset_creation_invalid_signature() {
+      let mut prng = ChaChaRng::from_seed([0u8; 32]);
+      let mut state = LedgerState::new();
+      let mut tx = Transaction::create_empty();
+
+      let token_code1 = AssetTokenCode { val: [1; 16] };
+      let (public_key1, secret_key1) = build_keys(&mut prng);
+
+      let asset_body = asset_creation_body(&token_code1, &public_key1, true, &None, &None);
+      let mut asset_create = asset_creation_operation(&asset_body, &public_key1, &secret_key1);
+
+      //update signature to have wrong public key]
+      let mut prng = ChaChaRng::from_seed([1u8; 32]);
+      let (public_key2, secret_key2) = build_keys(&mut prng);
+      asset_create.body_signature.address.key = public_key2;
+
+      tx.operations.push(Operation::asset_creation(asset_create));
+
+      assert_eq!(false, state.validate_transaction(&tx));
+    } 
+
 
 
    // // #[test]
