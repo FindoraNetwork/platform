@@ -12,6 +12,7 @@ use crate::data_model::{
 };
 use std::collections::{HashMap};
 use std::io::{self, Write};
+use sha2::{Sha256, Digest};
 
 pub trait LedgerAccess {
     fn check_utxo(&self, addr: &UtxoAddress) -> Option<Utxo>;
@@ -28,7 +29,15 @@ pub trait LedgerValidate {
     fn validate_transaction(&mut self, txn: &Transaction) -> bool;
 }
 
+pub fn compute_sha256_hash<T>(msg: &T) -> [u8; 32]
+  where T: std::convert::AsRef<[u8]> {
+    let mut hasher = Sha256::new();
+    hasher.input(msg);
+    let result = hasher.result();
+    let hash = array_ref![&result, 0, 32];
 
+    hash.clone()
+}
 
 pub struct NextIndex {
     tx_index: TxSequenceNumber,
@@ -52,7 +61,7 @@ pub struct LedgerState {
     contracts: HashMap<SmartContractKey, SmartContract>,
     policies: HashMap<AssetPolicyKey, CustomAssetPolicy>,
     tokens: HashMap<AssetTokenCode, AssetToken>,
-    issuance_num: HashMap<AssetTokenCode, u64>,
+    issuance_num: HashMap<AssetTokenCode, u128>,
     next_index: NextIndex,
 }
 
@@ -79,7 +88,7 @@ impl LedgerState {
         };
         let utxo_ref = Utxo {
             key: utxo_addr,
-            digest: [0; 32], // TODO(Kevin): add code to calculate hash
+            digest: compute_sha256_hash(&serde_json::to_vec(&txo).unwrap()), // TODO(Kevin): add code to calculate hash
             output: txo.clone(),
         };
 
@@ -98,7 +107,6 @@ impl LedgerState {
     }
 
     fn apply_asset_issuance(&mut self, issue: &AssetIssuance) -> () {
-        // TODO Add checking mechanism that seq_num has not already been applied
         for out in &issue.body.outputs {
             self.add_txo(out);
             //TODO Change updating AssetToken to work with Zei Output types
@@ -167,17 +175,28 @@ impl LedgerState {
 
     // Asset Issuance is Valid if Signature is valid, the operation is unique, and the assets in the TxOutputs are owned by the signatory
     fn validate_asset_issuance(&mut self, issue: &AssetIssuance) -> bool {
-        if (self.issuance_num.contains_key(&issue.body.code)) {
-            return false;
+        //[1] token has been created
+        if !self.tokens.contains_key(&issue.body.code) || !self.issuance_num.contains_key(&issue.body.code) {
+          return false;
         }
 
+        let token = self.tokens.get(&issue.body.code).unwrap().clone();
+        let last_issuance_num = self.issuance_num.get(&issue.body.code).unwrap().clone();
+
+        //[2] replay attack - not issued before
+        if issue.body.seq_num <= last_issuance_num {
+          return false;
+        }
+
+        //[3] signature is correct on body
         if !issue.body_signature.verify(&serde_json::to_vec(&issue.body).unwrap())
         {
             return false;
         }
-    
-        for output in &issue.body.outputs {
-            //NEED TO VERIFY TXOUTPUTS OWNED BY SIGNATORY
+
+        //[4] signature belongs to anchor??
+        if !(token.properties.issuer == issue.body_signature.address) {
+          return false;
         }
 
         true
@@ -185,6 +204,7 @@ impl LedgerState {
 
     // Asset Creation is invalid if the signature is not valid or the code is already used by a different asset
     fn validate_asset_creation(&mut self, create: &AssetCreation) -> bool {
+        //[1] the token is not already created, [2] the signature is correct. 
         !self.tokens.contains_key(&create.body.properties.code) &&
             create.body_signature.verify(&serde_json::to_vec(&create.body).unwrap())
     }
@@ -263,8 +283,6 @@ mod tests {
     use curve25519_dalek::scalar::Scalar;
     use blake2::{Blake2b};
     use zei::keys::{ZeiPublicKey, ZeiSecretKey, ZeiSignature, ZeiKeyPair};
-    use std::collections::hash_map::DefaultHasher;
-    use std::hash::{Hash, Hasher};
 
     fn build_keys<R: CryptoRng + Rng>(prng: &mut R) -> (ZeiPublicKey, ZeiSecretKey) {
         let keypair = ZeiKeyPair::generate(prng);
@@ -335,8 +353,31 @@ mod tests {
       );
 
       assert_eq!(0, state.get_asset_token(&token_code1).unwrap().units);
-    } 
+    }
 
+   //update signature to have wrong public key
+   #[test]
+   fn test_asset_creation_invalid_public_key() {
+      let mut prng = ChaChaRng::from_seed([0u8; 32]);
+      let mut state = LedgerState::new();
+      let mut tx = Transaction::create_empty();
+
+      let token_code1 = AssetTokenCode { val: [1; 16] };
+      let (public_key1, secret_key1) = build_keys(&mut prng);
+
+      let asset_body = asset_creation_body(&token_code1, &public_key1, true, &None, &None);
+      let mut asset_create = asset_creation_operation(&asset_body, &public_key1, &secret_key1);
+
+      let mut prng = ChaChaRng::from_seed([1u8; 32]);
+      let (public_key2, secret_key2) = build_keys(&mut prng);
+      asset_create.body_signature.address.key = public_key2;
+
+      tx.operations.push(Operation::asset_creation(asset_create));
+
+      assert_eq!(false, state.validate_transaction(&tx));
+    }
+
+   //update signature to sign with different key
    #[test]
    fn test_asset_creation_invalid_signature() {
       let mut prng = ChaChaRng::from_seed([0u8; 32]);
@@ -357,7 +398,7 @@ mod tests {
       tx.operations.push(Operation::asset_creation(asset_create));
 
       assert_eq!(false, state.validate_transaction(&tx));
-    } 
+  } 
 
 
 
