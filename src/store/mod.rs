@@ -8,7 +8,7 @@ use chrono::format::Pad;
 use crate::data_model::{
     Asset, AssetIssuance, AssetPolicyKey, AssetToken, AssetTokenCode, AssetTransfer, AssetType,
     CustomAssetPolicy, Operation, PrivateAsset, SmartContract, SmartContractKey, Transaction,
-    TxSequenceNumber, Utxo, UtxoAddress, Address, LedgerSignature
+    TxSequenceNumber, Utxo, UtxoAddress, Address, LedgerSignature, Digest, AssetCreationBody
 };
 use std::collections::{HashMap};
 use std::io::{self, Write};
@@ -116,7 +116,7 @@ impl LedgerState {
     fn apply_asset_creation(&mut self, create: &AssetCreation) -> () {
         // TODO: check to make sure that another asset token with the same key has not been created
         let token: AssetToken = AssetToken {
-            properties: create.properties.clone(),
+            properties: create.body.properties.clone(),
             ..Default::default()
         };
         self.tokens.insert(token.properties.code.clone(), token);
@@ -136,7 +136,7 @@ impl LedgerState {
     fn validate_asset_transfer(&mut self, transfer: &AssetTransfer) -> bool {
         // [1] signatures are valid
         for signature in &transfer.body_signatures {
-            if !signature.verify(&transfer.digest) {
+            if !signature.verify(&transfer.body.digest) {
                 return false;
             }
         }
@@ -169,7 +169,7 @@ impl LedgerState {
             return false;
         }
 
-        if !issue.signature.verify(&issue.digest)
+        if !issue.signature.verify(&issue.body.digest)
         {
             return false;
         }
@@ -183,8 +183,8 @@ impl LedgerState {
 
     // Asset Creation is invalid if the signature is not valid or the code is already used by a different asset
     fn validate_asset_creation(&mut self, create: &AssetCreation) -> bool {
-        !self.tokens.contains_key(&create.properties.code) &&
-            create.signature.verify(&create.digest)
+        !self.tokens.contains_key(&create.body.properties.code) &&
+            create.signature.verify(&create.body.digest)
     }
 
     fn validate_operation(&mut self, op: &Operation) -> bool {
@@ -258,24 +258,13 @@ mod tests {
     use crate::data_model::{Address, LedgerSignature};
     use rand_chacha::ChaChaRng;
     use rand::{SeedableRng, Rng, CryptoRng};
-    use schnorr::{Keypair, PublicKey, SecretKey,Signature};
     use curve25519_dalek::scalar::Scalar;
-    use blake2::{Blake2b,Digest};
-    use zei::utxo_transaction::ZeiSignature;
+    use blake2::{Blake2b};
+    use zei::keys::{ZeiPublicKey, ZeiSecretKey, ZeiSignature, ZeiKeyPair};
 
-
-    fn build_keys<R: CryptoRng + Rng>(prng: &mut R) -> (PublicKey, SecretKey) {
-        let key = Keypair::generate(prng);
-        let secret_key_bytes = key.secret.to_bytes();
-
-        (key.public, key.secret)
-    }
-
-    fn compute_signature<R: CryptoRng + Rng>(prng: &mut R, body: &AssetTokenProperties, pk: &PublicKey, sk: &SecretKey) -> ZeiSignature{
-        let msg = serde_json::to_vec(body).unwrap();
-        let sign = sk.sign::<blake2::Blake2b, R>(prng, msg.as_slice(), pk);
-        
-        ZeiSignature{ signature: sign }
+    fn build_keys<R: CryptoRng + Rng>(prng: &mut R) -> (ZeiPublicKey, ZeiSecretKey) {
+        let key = ZeiKeyPair::generate(prng);
+        (key.get_pk_ref().clone(), key.get_sk())
     }
 
     // fn compute_digest(msg: &[u8]) {
@@ -293,13 +282,16 @@ mod tests {
 
        token_properties.code = token_code1;
        token_properties.issuer = Address { key : public_key};
-       token_properties.updatable = true;     
+       token_properties.updatable = true;
+
+       let asset_body = AssetCreationBody { properties: token_properties, digest: [0; 32]};
 
        let mut tx = Transaction::create_empty();
 
-       let sign = compute_signature(&mut prng, &token_properties, &public_key, &secret_key);
+       let sign = secret_key.sign::<blake2::Blake2b>(&asset_body.digest, &public_key);
+
        let create_asset = AssetCreation {
-            properties: token_properties,
+            body: asset_body,
             signature: LedgerSignature{ address: Address { key: public_key }, signature: sign },
         };
 

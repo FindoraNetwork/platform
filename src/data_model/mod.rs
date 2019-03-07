@@ -147,6 +147,7 @@ pub struct AssetTransferBody {
     pub inputs: Vec<UtxoAddress>,
     pub transfer: Tx,
     pub operation_signatures: Vec<LedgerSignature>,
+    pub digest: Digest,
 }
 
 // TODO: UTXO Addresses must be included in Transfer Signature
@@ -154,7 +155,6 @@ pub struct AssetTransferBody {
 pub struct AssetTransfer {
     //pub nonce: u128,
     pub body: AssetTransferBody,
-    pub digest: Digest,
     pub body_signatures: Vec<LedgerSignature>,
 }
 
@@ -163,21 +163,26 @@ pub struct AssetIssuanceBody {
     pub seq_num: u128,
     pub code: AssetTokenCode,
     pub outputs: Vec<TxOutput>,
+    pub digest: Digest,
 }
 
 // TODO: Include mechanism for replay attacks
 #[derive(Debug)]
 pub struct AssetIssuance {
     pub body: AssetIssuanceBody,
-    pub digest: Digest,
     pub signature: LedgerSignature,
+}
+
+#[derive(Debug)]
+pub struct AssetCreationBody {
+    pub properties: AssetTokenProperties,
+    pub digest: Digest,
 }
 
 // ... etc...
 #[derive(Debug)]
 pub struct AssetCreation {
-    pub properties: AssetTokenProperties,
-        pub digest: Digest,
+    pub body: AssetCreationBody,
     pub signature: LedgerSignature,
 }
 
