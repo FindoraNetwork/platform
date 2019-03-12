@@ -8,7 +8,7 @@ use chrono::format::Pad;
 use crate::data_model::{
     Asset, AssetIssuance, AssetPolicyKey, AssetToken, AssetTokenCode, AssetTransfer, AssetType,
     CustomAssetPolicy, Operation, PrivateAsset, SmartContract, SmartContractKey, Transaction,
-    TxSequenceNumber, Utxo, UtxoAddress, Address, LedgerSignature, AssetCreationBody, Memo, ConfidentialMemo
+    TxSequenceNumber, Utxo, UtxoAddress, Address, LedgerSignature, AssetCreationBody, Memo, ConfidentialMemo, AssetIssuanceBody
 };
 use std::collections::{HashMap};
 use std::io::{self, Write};
@@ -56,7 +56,7 @@ impl NextIndex {
 }
 
 pub struct LedgerState {
-    txs: Vec<Transaction>,
+    txs: Vec<Transaction>, //will need to be replaced by merkle tree...
     utxos: HashMap<UtxoAddress, Utxo>,
     contracts: HashMap<SmartContractKey, SmartContract>,
     policies: HashMap<AssetPolicyKey, CustomAssetPolicy>,
@@ -88,7 +88,7 @@ impl LedgerState {
         };
         let utxo_ref = Utxo {
             key: utxo_addr,
-            digest: compute_sha256_hash(&serde_json::to_vec(&txo).unwrap()), // TODO(Kevin): add code to calculate hash
+            digest: compute_sha256_hash(&serde_json::to_vec(&txo).unwrap()),
             output: txo.clone(),
         };
 
@@ -108,23 +108,25 @@ impl LedgerState {
 
     fn apply_asset_issuance(&mut self, issue: &AssetIssuance) -> () {
         for out in &issue.body.outputs {
-            self.add_txo(out);
+            self.add_txo(&out);
             //TODO Change updating AssetToken to work with Zei Output types
-           // match &out.asset {
-           //     AssetType::Normal(a) => {
-           //         if let Some(token) = self.tokens.get_mut(&a.code) {
-           //             token.units += a.amount;
-           //         }
-           //         //TODO: We should never have the if statement above fail, but should we write something if it does
-           //     }
-           //     //TODO: (Kevin) Implement Private Asset Issuance
-           //     AssetType::Private(_) => println!("Private Issuance Not Implemented!"),
+            // match &out.asset_type {
+            //    AssetType::Normal(a) => {
+            //        if let Some(token) = self.tokens.get_mut(&a.code) {
+            //            token.units += a.amount;
+            //        }
+            //        else {
+            //         println!("Normal Asset Issuance has failed!")
+            //        }
+            //        //TODO: We should never have the if statement above fail, but should we write something if it does
+            //    }
+            //    //TODO: Implement Private Asset Issuance
+            //    AssetType::Private(_) => println!("Private Issuance Not Implemented!"),
            // }
         }
     }
 
     fn apply_asset_creation(&mut self, create: &AssetCreation) -> () {
-        // TODO: check to make sure that another asset token with the same key has not been created
         let token: AssetToken = AssetToken {
             properties: create.body.properties.clone(),
             ..Default::default()
@@ -273,7 +275,6 @@ impl LedgerAccess for LedgerState {
     }
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -295,13 +296,14 @@ mod tests {
       secret_key.sign::<blake2::Blake2b>(&serde_json::to_vec(&asset_body).unwrap(), &public_key)
     }
 
-    fn asset_creation_body (token_code: &AssetTokenCode, issuer_key: &ZeiPublicKey, updatable: bool,
+    fn asset_creation_body (token_code: &AssetTokenCode, asset_type: &String, issuer_key: &ZeiPublicKey, updatable: bool,
       memo: &Option<Memo>, confidential_memo: &Option<ConfidentialMemo>) -> AssetCreationBody
     {
       let mut token_properties: AssetTokenProperties = Default::default();
       token_properties.code = token_code.clone();
       token_properties.issuer = Address { key: issuer_key.clone() };
       token_properties.updatable = updatable;
+      token_properties.asset_type = asset_type.clone();
 
       if memo.is_some() {
         token_properties.memo = memo.as_ref().unwrap().clone();
@@ -337,8 +339,9 @@ mod tests {
 
       let token_code1 = AssetTokenCode { val: [1; 16] };
       let (public_key, secret_key) = build_keys(&mut prng);
+      let asset_type = String::from("token1");
 
-      let asset_body = asset_creation_body(&token_code1, &public_key, true, &None, &None);
+      let asset_body = asset_creation_body(&token_code1, &asset_type, &public_key, true, &None, &None);
       let asset_create = asset_creation_operation(&asset_body, &public_key, &secret_key);
       tx.operations.push(Operation::asset_creation(asset_create));
 
@@ -364,8 +367,10 @@ mod tests {
 
       let token_code1 = AssetTokenCode { val: [1; 16] };
       let (public_key1, secret_key1) = build_keys(&mut prng);
+      let asset_type = String::from("token1");;
 
-      let asset_body = asset_creation_body(&token_code1, &public_key1, true, &None, &None);
+
+      let asset_body = asset_creation_body(&token_code1, &asset_type, &public_key1, true, &None, &None);
       let mut asset_create = asset_creation_operation(&asset_body, &public_key1, &secret_key1);
 
       let mut prng = ChaChaRng::from_seed([1u8; 32]);
@@ -386,8 +391,9 @@ mod tests {
 
       let token_code1 = AssetTokenCode { val: [1; 16] };
       let (public_key1, secret_key1) = build_keys(&mut prng);
+      let asset_type = String::from("token1");;
 
-      let asset_body = asset_creation_body(&token_code1, &public_key1, true, &None, &None);
+      let asset_body = asset_creation_body(&token_code1, &asset_type, &public_key1, true, &None, &None);
       let mut asset_create = asset_creation_operation(&asset_body, &public_key1, &secret_key1);
 
       //update signature to have wrong public key]
@@ -401,48 +407,68 @@ mod tests {
   } 
 
 
+   // #[test]
+   fn asset_issued() {
+      let mut prng = ChaChaRng::from_seed([0u8; 32]);
+      let mut state = LedgerState::new();
+      let mut tx = Transaction::create_empty();
 
-   // // #[test]
-   // fn asset_issued() {
-   //     let mut state = LedgerState::new();
-   //     let token_code1 = AssetTokenCode { val: [1; 16] };
-   //     let mut token_properties: AssetTokenProperties = Default::default();
-   //     token_properties.code = token_code1;
+      let token_code1 = AssetTokenCode { val: [1; 16] };
+      let (public_key, secret_key) = build_keys(&mut prng);
+      let asset_type = String::from("token1");
 
-   //     let mut tx = Transaction::create_empty();
-   //     let create_asset = CreateAssetToken {
-   //         properties: token_properties,
-   //         signature: [0; 32],
-   //     };
-   //     let create_op = Operation::create_token(create_asset);
-   //     tx.operations.push(create_op);
-   //     let issued = TxOutput {
-   //         address: Address { key: [0; 32] },
-   //         asset: AssetType::Normal(Asset {
-   //             code: AssetTokenCode { val: [1; 16] },
-   //             amount: 100,
-   //         }),
-   //     };
-   //     let issue_op = Operation::asset_issuance(AssetIssuance {
-   //         nonce: 0,
-   //         code: token_code1,
-   //         outputs: vec![issued.clone()],
-   //         signature: [0; 32], //Empty signature
-   //     });
-   //     tx.operations.push(issue_op);
-   //     //let issue_op = O
-   //     state.apply_transaction(&tx);
-   //     // Update units as would be done once asset is issued
-   //     assert_eq!(100, state.get_asset_token(&token_code1).unwrap().units);
-   //     let utxo_loc = UtxoAddress {
-   //         transaction_id: TxSequenceNumber { val: 0 },
-   //         operation_index: 1,
-   //         output_index: 0,
-   //     };
-   //     assert_eq!(true, state.check_utxo(&utxo_loc).is_some());
-   //     assert_eq!(issued.address, state.check_utxo(&utxo_loc).unwrap().address);
-   //     assert_eq!(issued.asset, state.check_utxo(&utxo_loc).unwrap().asset);
-   // }
+      let asset_body = asset_creation_body(&token_code1, &asset_type, &public_key, true, &None, &None);
+      let asset_create = asset_creation_operation(&asset_body, &public_key, &secret_key);
+      tx.operations.push(Operation::asset_creation(asset_create));
+
+      assert_eq!(true, state.validate_transaction(&tx));
+        
+      state.apply_transaction(tx);
+
+      let issued = TxOutput {
+        public: 
+          TxPublicFields {
+            amount: serde::export::Some(100),
+            amount_commitment: None,
+            asset_type: serde::export::Some(asset_type.clone()),
+            asset_type_commitment: None,
+            public_key: public_key.clone(),
+        },
+        lock_box: None,
+      };
+
+      let asset_issuance_body = AssetIssuanceBody {
+        seq_num: 0,
+        code: token_code1,
+        outputs: vec![issued.clone()],
+      };
+
+      let sign = compute_signature(&secret_key, &public_key, &asset_issuance_body);
+
+      let asset_issuance_operation = AssetIssuance {
+        body: asset_issuance_body,
+        body_signature: LedgerSignature{ address: Address { key: public_key.clone() }, signature: sign },
+      };
+
+      let issue_op = Operation::asset_issuance(asset_issuance_operation);
+
+      tx.operations.push(issue_op);
+
+
+      assert_eq!(true, state.validate_transaction(&tx));
+      state.apply_transaction(tx);
+
+       // Update units as would be done once asset is issued
+       assert_eq!(100, state.get_asset_token(&token_code1).unwrap().units);
+       // let utxo_loc = UtxoAddress {
+       //     transaction_id: TxSequenceNumber { val: 0 },
+       //     operation_index: 1,
+       //     output_index: 0,
+       // };
+       // assert_eq!(true, state.check_utxo(&utxo_loc).is_some());
+       // assert_eq!(issued.address, state.check_utxo(&utxo_loc).unwrap().address);
+       // assert_eq!(issued.asset, state.check_utxo(&utxo_loc).unwrap().asset);
+   }
 
    // // #[test]
    // fn asset_transferred() {

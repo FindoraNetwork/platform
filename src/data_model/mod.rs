@@ -7,6 +7,9 @@ use serde::{Serialize, Deserialize};
 use serde::{Serializer, Deserializer};
 use std::hash::{Hash, Hasher};
 use std::collections::hash_map::DefaultHasher;
+use curve25519_dalek::ristretto::{CompressedRistretto};
+use std::collections::{HashMap};
+
 
 // Unique Identifier for AssetTokens
 #[derive(Default, Serialize, Deserialize, Hash, Eq, PartialEq, Copy, Clone, Debug)]
@@ -43,18 +46,19 @@ impl LedgerSignature {
     }}
 
 
-#[derive(Default, Eq, PartialEq, Copy, Clone, Debug, Serialize, Deserialize)]
+#[derive(Default, Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
 pub struct AssetTokenProperties {
     pub code: AssetTokenCode,
+    pub asset_type: String,
     pub issuer: Address,
     pub memo: Memo,
     pub confidential_memo: ConfidentialMemo,
     pub updatable: bool,
 }
 
-#[derive(Default, Eq, PartialEq, Copy, Clone, Debug, Serialize, Deserialize)]
+#[derive(Default, Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
 pub struct AssetToken {
-    pub properties: AssetTokenProperties,
+    pub properties: AssetTokenProperties, //TODO: ZEI. change to asset_record from zei...
     pub digest: [u8; 32],
     pub units: u64,
     pub confidential_units: Commitment,
@@ -123,13 +127,13 @@ pub struct Asset {
     pub amount: u64,
 }
 
-#[derive(Hash, Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
+#[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
 pub struct PrivateAsset {
-    pub hidden: [u8; 32],
-    //commitment values
+    amount_commitment: Option<CompressedRistretto>,
+    asset_type_commitment: Option<CompressedRistretto>,
 }
 
-#[derive(Hash, Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
+#[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
 pub enum AssetType {
     Normal(Asset),
     Private(PrivateAsset),
@@ -145,9 +149,9 @@ pub struct Utxo {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct AssetTransferBody {
     //pub nonce: u128,
-    pub inputs: Vec<UtxoAddress>,
-    pub transfer: Tx,
-    pub operation_signatures: Vec<LedgerSignature>,
+    pub inputs: Vec<UtxoAddress>, //ledger address of inputs
+    pub transfer: Tx, //TODO: ZEI. XfrNote, 
+    pub operation_signatures: Vec<LedgerSignature>, //signatures already in Tx. Not needed.
 }
 
 
@@ -162,28 +166,6 @@ pub struct AssetIssuanceBody {
 pub struct AssetCreationBody {
     pub properties: AssetTokenProperties,
 }
-
-
-//TODO: compute digests of each of these...
-// impl Hash for AssetIssuanceBody {
-//     fn hash<H: Hasher>(&self, state: &mut H) {
-//         self.seq_num.hash(state);
-//         self.code.hash(state);
-//     }
-// }
-
-// impl Hash for AssetTransferBody {
-//     fn hash<H: Hasher>(&self, state: &mut H) {
-//         self.inputs.hash(state);
-//     }
-// }
-
-// impl Hash for AssetCreationBody {
-//     fn hash<H: Hasher>(&self, state: &mut H) {
-//         self.properties.code.hash(state);
-//         self.properties.memo.hash(state);
-//     }
-// }
 
 // TODO: UTXO Addresses must be included in Transfer Signature
 #[derive(Debug, Serialize, Deserialize)]
@@ -240,4 +222,17 @@ impl Transaction {
             memos: Vec::new(),
         }
     }
+}
+
+#[derive(Default, Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
+pub struct AccountID {
+    pub val: String
+}
+
+
+#[derive(Default, Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
+pub struct Account {
+    pub id: AccountID,
+    pub access_control_list: Vec<Address>,
+    pub key_value: HashMap<String, String>, //key value storage...
 }
