@@ -20,7 +20,7 @@ impl LedgerApp {
     }
 }
 
-// Convert incoming tx data to the proper BigEndian size. txs.len() > 8 will return 0
+// Convert incoming tx data to the proper Transaction format
 fn convert_tx(tx: &[u8]) -> Transaction {
     let transaction: Transaction = serde_json::from_slice(tx).unwrap();
 
