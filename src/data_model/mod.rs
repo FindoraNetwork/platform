@@ -1,7 +1,7 @@
 
 use chrono::prelude::*;
 use zei::utxo_transaction::{Tx, TxOutput, TxAddressParams};
-use zei::keys::{ZeiSignature, ZeiPublicKey};
+use zei::keys::{XfrSignature, XfrPublicKey};
 use zei::serialization;
 use serde::{Serialize, Deserialize};
 use serde::{Serializer, Deserializer};
@@ -29,7 +29,7 @@ pub type Commitment = [u8; 32];
 #[derive(Default, Eq, PartialEq, Clone, Copy, Debug, Serialize, Deserialize)]
 pub struct Address {
     #[serde(with = "serialization::zei_obj_serde")]
-    pub key: ZeiPublicKey
+    pub key: XfrPublicKey
 }
 
 #[derive(Eq, PartialEq, Debug, Serialize, Deserialize)]
@@ -37,12 +37,12 @@ pub struct LedgerSignature {
     pub address: Address,
 
     #[serde(with = "serialization::zei_obj_serde")]
-    pub signature: ZeiSignature,
+    pub signature: XfrSignature,
 }
 
 impl LedgerSignature {
     pub fn verify<>(&self, message: &[u8]) -> bool {
-        !self.address.key.verify::<blake2::Blake2b>(message, &self.signature).is_err()
+        !self.address.key.verify(message, &self.signature).is_err()
     }}
 
 

@@ -3,7 +3,7 @@ use crate::data_model::AssetTokenProperties;
 use crate::data_model::AssetCreation;
 use crate::data_model::Operation::asset_creation;
 use zei::utxo_transaction::{TxOutput, TxPublicFields};
-use zei::keys::{ZeiPublicKey};
+use zei::keys::{XfrPublicKey};
 use chrono::format::Pad;
 use crate::data_model::{
     Asset, AssetIssuance, AssetPolicyKey, AssetToken, AssetTokenCode, AssetTransfer, AssetType,
@@ -283,20 +283,20 @@ mod tests {
     use rand::{SeedableRng, Rng, CryptoRng};
     use curve25519_dalek::scalar::Scalar;
     use blake2::{Blake2b};
-    use zei::keys::{ZeiPublicKey, ZeiSecretKey, ZeiSignature, ZeiKeyPair};
+    use zei::keys::{XfrPublicKey, XfrSecretKey, XfrSignature, XfrKeyPair};
 
-    fn build_keys<R: CryptoRng + Rng>(prng: &mut R) -> (ZeiPublicKey, ZeiSecretKey) {
-        let keypair = ZeiKeyPair::generate(prng);
+    fn build_keys<R: CryptoRng + Rng>(prng: &mut R) -> (XfrPublicKey, XfrSecretKey) {
+        let keypair = XfrKeyPair::generate(prng);
 
         (keypair.get_pk_ref().clone(), keypair.get_sk())
     }
 
-    fn compute_signature<T>(secret_key: &ZeiSecretKey, public_key: &ZeiPublicKey, asset_body: &T) -> ZeiSignature
+    fn compute_signature<T>(secret_key: &XfrSecretKey, public_key: &XfrPublicKey, asset_body: &T) -> XfrSignature
     where T: serde::Serialize {
-      secret_key.sign::<blake2::Blake2b>(&serde_json::to_vec(&asset_body).unwrap(), &public_key)
+      secret_key.sign(&serde_json::to_vec(&asset_body).unwrap(), &public_key)
     }
 
-    fn asset_creation_body (token_code: &AssetTokenCode, asset_type: &String, issuer_key: &ZeiPublicKey, updatable: bool,
+    fn asset_creation_body (token_code: &AssetTokenCode, asset_type: &String, issuer_key: &XfrPublicKey, updatable: bool,
       memo: &Option<Memo>, confidential_memo: &Option<ConfidentialMemo>) -> AssetCreationBody
     {
       let mut token_properties: AssetTokenProperties = Default::default();
@@ -322,7 +322,7 @@ mod tests {
       AssetCreationBody { properties: token_properties }
     }
 
-    fn asset_creation_operation (asset_body: &AssetCreationBody, public_key: &ZeiPublicKey, secret_key: &ZeiSecretKey) -> AssetCreation
+    fn asset_creation_operation (asset_body: &AssetCreationBody, public_key: &XfrPublicKey, secret_key: &XfrSecretKey) -> AssetCreation
     {
       let sign = compute_signature(&secret_key, &public_key, &asset_body);
       AssetCreation {
