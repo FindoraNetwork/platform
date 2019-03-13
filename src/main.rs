@@ -54,12 +54,6 @@ impl abci::Application for LedgerApp {
         ResponseDeliverTx::new()
     }
 
-    fn commit(&mut self, _req: &RequestCommit) -> ResponseCommit {
-        // Create the response
-        let mut resp = ResponseCommit::new();
-        resp
-    }
-
 }
 
 fn main() {
