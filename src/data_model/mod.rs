@@ -122,6 +122,7 @@ pub struct TransactionKey {
 pub struct TxOutput {
     pub address: Address,
     pub asset: AssetType,
+    //?? hidden amounts 
 }
 
 #[derive(Clone)]
@@ -134,6 +135,14 @@ pub struct AssetTransfer {
     pub outputs: Vec<TxOutput>,
     pub signatures: Vec<Signature>,
 }
+
+#[derive(Clone)]
+//Tells the storage layer what to do the list of active asset records (i.e. UTXO set)
+pub struct AssetTransferResult {  
+    pub outputs: Vec<TxOutput>,
+    pub success: bool,
+}
+
 
 #[derive(Clone)]
 pub struct AssetIssuance {
@@ -159,6 +168,17 @@ pub enum Operation {
 }
 
 #[derive(Clone)]
+pub enum OperationResult {
+    asset_transfer_result(AssetTransferResult),
+    asset_issuance_result(AssetIssuanceResult),
+    create_token_result(CreateAssetTokenResult),
+    // ... etc...
+}
+
+
+
+
+#[derive(Clone)]
 pub struct TimeBounds {
     pub start: DateTime<Utc>,
     pub end: DateTime<Utc>,
@@ -167,12 +187,18 @@ pub struct TimeBounds {
 #[derive(Clone)]
 pub struct Transaction {
     pub operations: Vec<Operation>,
-    pub utxos: Vec<Utxo>,
-    pub proofs: Vec<Proof>,
-    pub memos: Vec<Memo>,
+    //pub utxos: Vec<Utxo>, in the future needed for transactions with variables & preconditions 
+    //pub proofs: Vec<Proof>, credentials 
+    //pub memos: Vec<Memo>, additional info attached to transaction 
     //pub time_bounds: TimeBounds,
     // ... etc...
 }
+
+pub struct TransactionResult { 
+    pub op_results: Vec<OpResults>, 
+}
+
+
 
 impl Transaction {
     pub fn create_empty() -> Transaction {
