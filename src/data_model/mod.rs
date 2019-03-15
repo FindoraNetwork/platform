@@ -192,11 +192,22 @@ pub struct AssetIssuance {
     pub body_signature: LedgerSignature,
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+pub struct AssetIssuanceResult {  
+    pub outputs: Vec<TxOutput>,
+    pub success: bool,
+}
+
 // ... etc...
 #[derive(Debug, Serialize, Deserialize)]
 pub struct AssetCreation {
     pub body: AssetCreationBody,
     pub body_signature: LedgerSignature,
+}
+#[derive(Debug, Serialize, Deserialize)]
+pub struct AssetCreationResult {  
+    pub outputs: Vec<TxOutput>,
+    pub success: bool,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -207,11 +218,11 @@ pub enum Operation {
     // ... etc...
 }
 
-#[derive(Clone)]
+#[derive(Debug, Serialize, Deserialize)]
 pub enum OperationResult {
     asset_transfer_result(AssetTransferResult),
     asset_issuance_result(AssetIssuanceResult),
-    create_token_result(CreateAssetTokenResult),
+    create_token_result(AssetCreationResult),
     // ... etc...
 }
 
