@@ -167,6 +167,8 @@ pub struct AssetCreationBody {
     pub properties: AssetTokenProperties,
 }
 
+
+
 // TODO: UTXO Addresses must be included in Transfer Signature
 #[derive(Debug, Serialize, Deserialize)]
 pub struct AssetTransfer {
@@ -174,6 +176,14 @@ pub struct AssetTransfer {
     pub body: AssetTransferBody,
     pub body_signatures: Vec<LedgerSignature>,
 }
+
+//Tells the storage layer what to do the list of active asset records (i.e. UTXO set)
+#[derive(Debug, Serialize, Deserialize)]
+pub struct AssetTransferResult {  
+    pub outputs: Vec<TxOutput>,
+    pub success: bool,
+}
+
 
 // TODO: Include mechanism for replay attacks
 #[derive(Debug, Serialize, Deserialize)]
@@ -196,6 +206,17 @@ pub enum Operation {
     asset_creation(AssetCreation),
     // ... etc...
 }
+
+#[derive(Clone)]
+pub enum OperationResult {
+    asset_transfer_result(AssetTransferResult),
+    asset_issuance_result(AssetIssuanceResult),
+    create_token_result(CreateAssetTokenResult),
+    // ... etc...
+}
+
+
+
 
 #[derive(Debug)]
 pub struct TimeBounds {
@@ -222,6 +243,10 @@ impl Transaction {
             memos: Vec::new(),
         }
     }
+}
+
+pub struct TransactionResult { 
+    pub op_results: Vec<OperationResult>, 
 }
 
 #[derive(Default, Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
