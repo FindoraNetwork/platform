@@ -1,213 +1,274 @@
-use chrono::prelude::*;
 
-#[derive(Hash, Eq, PartialEq, Copy, Clone, Debug)]
+use chrono::prelude::*;
+use zei::utxo_transaction::{Tx, TxOutput, TxAddressParams};
+use zei::keys::{XfrSignature, XfrPublicKey};
+use zei::serialization;
+use serde::{Serialize, Deserialize};
+use serde::{Serializer, Deserializer};
+use std::hash::{Hash, Hasher};
+use std::collections::hash_map::DefaultHasher;
+use curve25519_dalek::ristretto::{CompressedRistretto};
+use std::collections::{HashMap};
+
+
+// Unique Identifier for AssetTokens
+#[derive(Default, Serialize, Deserialize, Hash, Eq, PartialEq, Copy, Clone, Debug)]
 pub struct AssetTokenCode {
     pub val: [u8; 16],
 }
 
 // TODO: Define Memo
-#[derive(Hash, Eq, PartialEq, Copy, Clone, Debug)]
+#[derive(Default, Serialize, Deserialize, Hash, Eq, PartialEq, Copy, Clone, Debug)]
 pub struct Proof {}
-#[derive(Hash, Eq, PartialEq, Copy, Clone, Debug)]
+#[derive(Default, Serialize, Deserialize, Hash, Eq, PartialEq, Copy, Clone, Debug)]
 pub struct Memo {}
-#[derive(Hash, Eq, PartialEq, Copy, Clone, Debug)]
+#[derive(Default, Serialize, Deserialize, Hash, Eq, PartialEq, Copy, Clone, Debug)]
 pub struct ConfidentialMemo {}
 pub type Commitment = [u8; 32];
 
-#[derive(Hash, Eq, PartialEq, Copy, Clone, Debug)]
-pub struct AssetToken {
+#[derive(Default, Eq, PartialEq, Clone, Copy, Debug, Serialize, Deserialize)]
+pub struct Address {
+    #[serde(with = "serialization::zei_obj_serde")]
+    pub key: XfrPublicKey
+}
+
+#[derive(Eq, PartialEq, Debug, Serialize, Deserialize)]
+pub struct LedgerSignature {
+    pub address: Address,
+
+    #[serde(with = "serialization::zei_obj_serde")]
+    pub signature: XfrSignature,
+}
+
+impl LedgerSignature {
+    pub fn verify<>(&self, message: &[u8]) -> bool {
+        !self.address.key.verify(message, &self.signature).is_err()
+    }}
+
+
+#[derive(Default, Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
+pub struct AssetTokenProperties {
     pub code: AssetTokenCode,
-    pub digest: [u8; 32],
+    pub asset_type: String,
     pub issuer: Address,
     pub memo: Memo,
     pub confidential_memo: ConfidentialMemo,
     pub updatable: bool,
-    pub units: u128,
+}
+
+#[derive(Default, Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
+pub struct AssetToken {
+    pub properties: AssetTokenProperties, //TODO: ZEI. change to asset_record from zei...
+    pub digest: [u8; 32],
+    pub units: u64,
     pub confidential_units: Commitment,
 }
 
-impl AssetToken {
-    pub fn create_empty() -> AssetToken {
-        AssetToken {
-            code: AssetTokenCode{val:[0;16]},
-            digest: [0;32],
-            issuer: Address{key:[0;32]},
-            memo: Memo{},
-            confidential_memo: ConfidentialMemo{},
-            updatable: false,
-            units: 0,
-            confidential_units: [0;32],
-        }
-    }
-}
+//impl AssetToken {
+//    pub fn create_empty() -> AssetToken {
+//        AssetToken {
+//            code: AssetTokenCode{val:[0;16]},
+//            digest: [0;32],
+//            issuer: Address{key:[0;32]},
+//            memo: Memo{},
+//            confidential_memo: ConfidentialMemo{},
+//            updatable: false,
+//            units: 0,
+//            confidential_units: [0;32],
+//        }
+//    }
+//}
 
-#[derive(Hash, Eq, PartialEq, Debug)]
+#[derive(Hash, Eq, PartialEq, Debug, Serialize, Deserialize)]
 pub struct AssetPolicyKey {
     pub val: [u8; 16],
 }
 
-#[derive(Hash, Eq, PartialEq, Clone, Debug)]
+#[derive(Hash, Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
 pub struct CustomAssetPolicy {}
 
-#[derive(Hash, Eq, PartialEq, Debug)]
+#[derive(Hash, Eq, PartialEq, Debug, Serialize, Deserialize)]
 pub struct CredentialKey {
     pub val: [u8; 16],
 }
 
-#[derive(Hash, Eq, PartialEq, Debug)]
+#[derive(Hash, Eq, PartialEq, Debug, Serialize, Deserialize)]
 pub struct Credential {
     pub key: CredentialKey,
 }
 
-#[derive(Hash, Eq, PartialEq, Debug)]
+#[derive(Hash, Eq, PartialEq, Debug, Serialize, Deserialize)]
 pub struct SmartContractKey {
     pub val: [u8; 16],
 }
 
-#[derive(Hash, Eq, PartialEq, Clone, Debug)]
+#[derive(Hash, Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
 pub struct SmartContract {}
 
-#[derive(Hash, Eq, PartialEq, Clone, Copy, Debug)]
-pub struct Address {
-    pub key: [u8; 32],
-}
-
 //TODO(Kevin): define types
-#[derive(Clone)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct Variable {}
-pub type Signature = [u8; 32];
 
-#[derive(Hash, Eq, PartialEq, Clone, Copy, Debug)]
+#[derive(Hash, Eq, PartialEq, Clone, Copy, Debug, Serialize, Deserialize)]
 pub struct TxSequenceNumber {
     pub val: u64,
 }
 
-#[derive(Hash, Eq, PartialEq, Clone, Copy, Debug)]
+#[derive(Hash, Eq, PartialEq, Clone, Copy, Debug, Serialize, Deserialize)]
 pub struct UtxoAddress {
     pub transaction_id: TxSequenceNumber,
     pub operation_index: u16,
     pub output_index: u16,
 }
 
-#[derive(Hash, Eq, PartialEq, Clone, Debug)]
+#[derive(Hash, Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
 pub struct Asset {
     pub code: AssetTokenCode,
     pub amount: u64,
 }
 
-#[derive(Hash, Eq, PartialEq, Clone, Debug)]
+#[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
 pub struct PrivateAsset {
-    pub hidden: [u8; 32],
+    amount_commitment: Option<CompressedRistretto>,
+    asset_type_commitment: Option<CompressedRistretto>,
 }
 
-#[derive(Hash, Eq, PartialEq, Clone, Debug)]
+#[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
 pub enum AssetType {
     Normal(Asset),
     Private(PrivateAsset),
 }
 
-#[derive(Hash, Eq, PartialEq, Clone, Debug)]
+#[derive(Eq, PartialEq, Debug, Clone, Serialize, Deserialize)]
 pub struct Utxo {
-    pub key: UtxoAddress,
+    pub key: UtxoAddress, //includes ledger address
+    pub output: TxOutput, //will include public key
     pub digest: [u8; 32],
-    pub address: Address,
-    pub asset: AssetType,
 }
 
-pub struct TransactionKey {
-    pub val: [u8; 32],
+#[derive(Debug, Serialize, Deserialize)]
+pub struct AssetTransferBody {
+    //pub nonce: u128,
+    pub inputs: Vec<UtxoAddress>, //ledger address of inputs
+    pub transfer: Tx, //TODO: ZEI. XfrNote, 
+    pub operation_signatures: Vec<LedgerSignature>, //signatures already in Tx. Not needed.
 }
 
-#[derive(Clone)]
-pub struct TxOutput {
-    pub address: Address,
-    pub asset: AssetType,
-    //?? hidden amounts 
-}
 
-#[derive(Clone)]
-pub struct AssetTransfer {
-    pub nonce: u128,
-    pub variables: Vec<Variable>,
-    pub confidential_asset_flag: bool,
-    pub confidential_amount_flag: bool,
-    pub input_utxos: Vec<Utxo>,
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct AssetIssuanceBody {
+    pub seq_num: u128,
+    pub code: AssetTokenCode,
     pub outputs: Vec<TxOutput>,
-    pub signatures: Vec<Signature>,
 }
 
-#[derive(Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct AssetCreationBody {
+    pub properties: AssetTokenProperties,
+}
+
+
+
+// TODO: UTXO Addresses must be included in Transfer Signature
+#[derive(Debug, Serialize, Deserialize)]
+pub struct AssetTransfer {
+    //pub nonce: u128,
+    pub body: AssetTransferBody,
+    pub body_signatures: Vec<LedgerSignature>,
+}
+
 //Tells the storage layer what to do the list of active asset records (i.e. UTXO set)
+#[derive(Debug, Serialize, Deserialize)]
 pub struct AssetTransferResult {  
     pub outputs: Vec<TxOutput>,
     pub success: bool,
 }
 
 
-#[derive(Clone)]
+// TODO: Include mechanism for replay attacks
+#[derive(Debug, Serialize, Deserialize)]
 pub struct AssetIssuance {
-    pub nonce: u128,
-    pub code: AssetTokenCode,
+    pub body: AssetIssuanceBody,
+    pub body_signature: LedgerSignature,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct AssetIssuanceResult {  
     pub outputs: Vec<TxOutput>,
-    pub signature: Signature,
+    pub success: bool,
 }
 
 // ... etc...
-#[derive(Clone)]
-pub struct CreateAssetToken {
-    pub asset_token: AssetToken,
-    pub signature: Signature,
+#[derive(Debug, Serialize, Deserialize)]
+pub struct AssetCreation {
+    pub body: AssetCreationBody,
+    pub body_signature: LedgerSignature,
+}
+#[derive(Debug, Serialize, Deserialize)]
+pub struct AssetCreationResult {  
+    pub outputs: Vec<TxOutput>,
+    pub success: bool,
 }
 
-#[derive(Clone)]
+#[derive(Debug, Serialize, Deserialize)]
 pub enum Operation {
     asset_transfer(AssetTransfer),
     asset_issuance(AssetIssuance),
-    create_token(CreateAssetToken),
+    asset_creation(AssetCreation),
     // ... etc...
 }
 
-#[derive(Clone)]
+#[derive(Debug, Serialize, Deserialize)]
 pub enum OperationResult {
     asset_transfer_result(AssetTransferResult),
     asset_issuance_result(AssetIssuanceResult),
-    create_token_result(CreateAssetTokenResult),
+    create_token_result(AssetCreationResult),
     // ... etc...
 }
 
 
 
 
-#[derive(Clone)]
+#[derive(Debug)]
 pub struct TimeBounds {
     pub start: DateTime<Utc>,
     pub end: DateTime<Utc>,
 }
 
-#[derive(Clone)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct Transaction {
     pub operations: Vec<Operation>,
-    //pub utxos: Vec<Utxo>, in the future needed for transactions with variables & preconditions 
-    //pub proofs: Vec<Proof>, credentials 
-    //pub memos: Vec<Memo>, additional info attached to transaction 
+    pub variable_utxos: Vec<UtxoAddress>,
+    pub proofs: Vec<Proof>,
+    pub memos: Vec<Memo>,
     //pub time_bounds: TimeBounds,
     // ... etc...
 }
-
-pub struct TransactionResult { 
-    pub op_results: Vec<OpResults>, 
-}
-
-
 
 impl Transaction {
     pub fn create_empty() -> Transaction {
         Transaction {
             operations: Vec::new(),
-            utxos: Vec::new(),
+            variable_utxos: Vec::new(),
             proofs: Vec::new(),
             memos: Vec::new(),
         }
     }
+}
 
+pub struct TransactionResult { 
+    pub op_results: Vec<OperationResult>, 
+}
+
+#[derive(Default, Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
+pub struct AccountID {
+    pub val: String
+}
+
+
+#[derive(Default, Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
+pub struct Account {
+    pub id: AccountID,
+    pub access_control_list: Vec<Address>,
+    pub key_value: HashMap<String, String>, //key value storage...
 }
