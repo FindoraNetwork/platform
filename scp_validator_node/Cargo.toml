@@ -1,0 +1,13 @@
+[package]
+name = "scp_validator_node"
+version = "0.1.0"
+authors = ["Nathan Yospe <nathan@eian.io>"]
+edition = "2018"
+
+[dependencies]
+eian_infrastructure = { path = "../" }
+# ledger_module = { path = "../components/ledger_module" }
+abci = "0.4.3"
+arrayref = "0.3.5"
+serde = "1.0"
+serde_derive = "1.0"
