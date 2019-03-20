@@ -1,7 +1,11 @@
 [package]
-name = "ledger_module"
+name = "eian_infrastructure"
 version = "0.1.0"
 authors = ["Nathan Yospe <nathan@eian.io>"]
 edition = "2018"
 
 [dependencies]
+
+core = {path = "core"}
+abci_validator_node = {path = "abci_validator_node"}
+scp_validator_node = {path = "scp_validator_node"}

@@ -1,7 +1,10 @@
+extern crate libc;
+
+mod ext_transaction;
+
 #[cfg(test)]
 mod tests {
     #[test]
-    fn it_works() {
-        assert_eq!(2 + 2, 4);
+    fn add_some_tests() {
     }
 }
