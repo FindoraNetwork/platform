@@ -6,207 +6,90 @@ include!(concat!(env!("OUT_DIR"), "/transaction_hooks.rs"));
 
 // use libc;
 
+use core::store::{LedgerAccess, LedgerState, LedgerUpdate, LedgerValidate};
+use core::data_model::{Transaction};
+use std::slice;
 
+use serde_json;
+
+struct LedgerApp {
+    state: LedgerState,
+}
+
+impl LedgerApp {
+    pub fn new() -> LedgerApp {
+        LedgerApp {state: LedgerState::new()}
+    }
+}
+
+// Convert incoming tx data to the proper Transaction format
+fn convert_tx(tx: &[u8]) -> Transaction {
+    let transaction: Transaction = serde_json::from_slice(tx).unwrap();
+
+    transaction
+}
+
+unsafe fn static_app_handle() -> &'static mut Option<LedgerApp> {
+    static mut app: Option<LedgerApp> = None;
+    &mut app
+}
+
+#[no_mangle]
+#[link_name = "\u{1}_InitApp"]
+pub extern "C" fn InitApp() -> *mut AppHandle {
+    unsafe {
+        let opt_app = static_app_handle();
+        if opt_app.is_none() {
+            *opt_app = Some(LedgerApp::new());
+        }
+        std::mem::transmute::<*mut LedgerApp, *mut AppHandle>(opt_app.as_mut().unwrap() as *mut LedgerApp)
+    }
+}
+
+#[no_mangle]
+#[link_name = "\u{1}_DestroyApp"]
+pub extern "C" fn DestroyApp(_app: *mut AppHandle) -> bool {
+    true
+}
 
 #[no_mangle]
 #[link_name = "\u{1}_DeliverTransaction"]
-pub extern "C" fn DeliverTransaction(txn: *const BlindTransaction, result: *mut BlindTransactionResult) -> bool {
+pub extern "C" fn DeliverTransaction(app: *mut AppHandle, txn: *const BlindTransaction, result: *mut BlindTransactionResult) -> bool {
+    unsafe {
+    let app = std::mem::transmute::<*mut AppHandle, *mut LedgerApp>(app);
+    let data = get_transaction_data(txn);
+    let slice = slice::from_raw_parts(data.bytes, data.length);
+    let tx = convert_tx(slice);
 
-    // ...  
+    //if !
+    (*app).state.apply_transaction(tx);
+    // {
+    //     set_transaction_result_status(result, TransactionResultStatus_txFAILED);
+    //     return false;
+    // }
+    set_transaction_result_status(result, TransactionResultStatus_txSUCCESS);
+    }
     true
 }
 #[no_mangle]
 #[link_name = "\u{1}_CommitTransaction"]
-pub extern "C" fn CommitTransaction(txn: *const BlindTransaction, result: *const BlindTransactionResult) -> bool {
+pub extern "C" fn CommitTransaction(app: *mut AppHandle, txn: *const BlindTransaction, result: *const BlindTransactionResult) -> bool {
     // ...  
     true
 }
 #[no_mangle]
 #[link_name = "\u{1}_CheckTransaction"]
-pub extern "C" fn CheckTransaction(txn: *const BlindTransaction) -> bool {
-    // ...  
-    true
-}
+pub extern "C" fn CheckTransaction(app: *mut AppHandle, txn: *const BlindTransaction) -> bool {
+    unsafe {
+    let app = unsafe { std::mem::transmute::<*mut AppHandle, *mut LedgerApp>(app) };
+    let data = get_transaction_data(txn);
+    let slice = unsafe { slice::from_raw_parts(data.bytes, data.length) };
+    let tx = convert_tx(slice);
 
-struct Txn {
-    txn: *const BlindTransaction,
-}
-
-impl Txn {
-    fn new(txn: *const BlindTransaction) -> Txn {
-        Txn { txn: txn }
+    if (*app).state.validate_transaction(&tx) {
+        return true;
     }
-    fn operations(&self) -> OperationIter {
-        unsafe {
-        OperationIter { on: begin_operations(self.txn), end: end_operations(self.txn) }
-        }
     }
-    fn signatures(&self) -> SignatureIter {
-        unsafe {
-        SignatureIter { on: begin_signatures(self.txn), end: end_signatures(self.txn) }
-        }
-    }
-}
-
-struct Operation {
-    op: *const BlindOperation,
-}
-
-impl Operation {
-    fn new(op: *const BlindOperation) -> Operation {
-        Operation { op: op }
-    }
-}
-
-struct Signature {
-    sig: *const BlindSignature,
-}
-
-impl Signature {
-    fn new(sig: *const BlindSignature) -> Signature {
-        Signature { sig: sig }
-    }
-}
-
-struct OperationIter {
-    on: *const BlindOperation,
-    end: *const BlindOperation,
-}
-impl OperationIter {
-    fn new(begin: *const BlindOperation, end: *const BlindOperation) -> OperationIter {
-        OperationIter { on: begin, end: end }
-    }
-}
-impl Iterator for OperationIter {
-    type Item = Operation;
-    fn next(&mut self) -> Option<Operation> {
-        unsafe {
-        if self.on == self.end {
-            return None;
-        }
-        let ret = Some(Operation::new(self.on));
-        self.on = next_operation(self.on);
-        ret
-        }
-    }
-}
-
-struct SignatureIter {
-    on: *const BlindSignature,
-    end: *const BlindSignature,
-}
-impl SignatureIter {
-    fn new(begin: *const BlindSignature, end: *const BlindSignature) -> SignatureIter {
-        SignatureIter { on: begin, end: end }
-    }
-}
-impl Iterator for SignatureIter {
-    type Item = Signature;
-    fn next(&mut self) -> Option<Signature> {
-        unsafe {
-        if self.on == self.end {
-            return None;
-        }
-        let ret = Some(Signature::new(self.on));
-        self.on = next_signature(self.on);
-        ret
-        }
-    }
-}
-
-struct Result {
-    res: *const BlindTransactionResult,
-}
-
-impl Result {
-    fn new(res: *const BlindTransactionResult) -> Result {
-        Result { res: res }
-    }
-    fn op_results(&self) -> OpResultIter {
-        unsafe {
-        OpResultIter { on: begin_op_results_const(self.res), end: end_op_results_const(self.res) }
-        }
-    }
-}
-
-struct ResOut {
-    res: *mut BlindTransactionResult,
-}
-
-impl ResOut {
-    fn new(res: *mut BlindTransactionResult) -> ResOut {
-        ResOut { res: res }
-    }
-    fn op_results(&self) -> OpResOutIter {
-        unsafe {
-        OpResOutIter { on: begin_op_results(self.res), end: end_op_results(self.res) }
-        }
-    }
-}
-
-struct OpResult {
-    res: *const BlindOperationResult,
-}
-
-impl OpResult {
-    fn new(res: *const BlindOperationResult) -> OpResult {
-        OpResult { res: res }
-    }
-}
-
-struct OpResOut {
-    res: *mut BlindOperationResult,
-}
-
-impl OpResOut {
-    fn new(res: *mut BlindOperationResult) -> OpResOut {
-        OpResOut { res: res }
-    }
-}
-
-struct OpResultIter {
-    on: *const BlindOperationResult,
-    end: *const BlindOperationResult,
-}
-impl OpResultIter {
-    fn new(begin: *const BlindOperationResult, end: *const BlindOperationResult) -> OpResultIter {
-        OpResultIter { on: begin, end: end }
-    }
-}
-impl Iterator for OpResultIter {
-    type Item = OpResult;
-    fn next(&mut self) -> Option<OpResult> {
-        unsafe {
-        if self.on == self.end {
-            return None;
-        }
-        let ret = Some(OpResult::new(self.on));
-        self.on = next_op_result_const(self.on);
-        ret
-        }
-    }
-}
-
-struct OpResOutIter {
-    on: *mut BlindOperationResult,
-    end: *mut BlindOperationResult,
-}
-impl OpResOutIter {
-    fn new(begin: *mut BlindOperationResult, end: *mut BlindOperationResult) -> OpResOutIter {
-        OpResOutIter { on: begin, end: end }
-    }
-}
-impl Iterator for OpResOutIter {
-    type Item = OpResOut;
-    fn next(&mut self) -> Option<OpResOut> {
-        unsafe {
-        if self.on == self.end {
-            return None;
-        }
-        let ret = Some(OpResOut::new(self.on));
-        self.on = next_op_result(self.on);
-        ret
-        }
-    }
+    false
 }
 

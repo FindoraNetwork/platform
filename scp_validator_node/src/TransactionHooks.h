@@ -13,46 +13,20 @@ extern "C" {
 
 struct BlindTransaction;
 struct BlindTransactionResult;
-struct BlindOperation;
-struct BlindOperationResult;
-struct BlindSignature;
+struct AppHandle;
 
 // application plug-in implements these
-extern bool DeliverTransaction(struct BlindTransaction const *txn,
+extern struct AppHandle *InitApp();
+extern bool DestroyApp(struct AppHandle *);
+extern bool DeliverTransaction(struct AppHandle *,
+                               struct BlindTransaction const *txn,
                                struct BlindTransactionResult *result);
-extern bool CommitTransaction(struct BlindTransaction const *txn,
+extern bool CommitTransaction(struct AppHandle *,
+                              struct BlindTransaction const *txn,
                               struct BlindTransactionResult const *result);
-extern bool CheckTransaction(struct BlindTransaction const *txn);
+extern bool CheckTransaction(struct AppHandle *,
+                             struct BlindTransaction const *txn);
 
-struct BlindOperation const *
-begin_operations(struct BlindTransaction const *txn);
-struct BlindOperation const *next_operation(struct BlindOperation const *op);
-struct BlindOperation const *end_operations(struct BlindTransaction const *txn);
-
-struct BlindSignature const *
-begin_signatures(struct BlindTransaction const *txn);
-struct BlindSignature const *next_signature(struct BlindSignature const *sig);
-struct BlindSignature const *end_signatures(struct BlindTransaction const *txn);
-
-// TODO(NFY): expose other properties of the transaction?
-
-struct BlindOperationResult *
-begin_op_results(struct BlindTransactionResult *result);
-struct BlindOperationResult *
-next_op_result(struct BlindOperationResult *result);
-struct BlindOperationResult *
-end_op_results(struct BlindTransactionResult *result);
-
-struct BlindOperationResult const *
-begin_op_results_const(struct BlindTransactionResult const *result);
-struct BlindOperationResult const *
-next_op_result_const(struct BlindOperationResult const *result);
-struct BlindOperationResult const *
-end_op_results_const(struct BlindTransactionResult const *result);
-
-uint8_t *
-allocate_operation_result_buffer(struct BlindOperationResult *into_result,
-                                 size_t data_size);
 enum TransactionResultStatus {
   txSUCCESS = 0, // all operations succeeded
 
@@ -70,8 +44,21 @@ enum TransactionResultStatus {
   txBAD_AUTH_EXTRA = -10,      // unused signatures attached to transaction
   txINTERNAL_ERROR = -11       // an unknown error occured
 };
+
+struct ConstBytes {
+  uint8_t const *bytes;
+  size_t length;
+};
+
+struct ConstBytes get_transaction_data(struct BlindTransaction const *txn);
+struct ConstBytes
+get_transaction_result_data(struct BlindTransactionResult const *res);
+
 void set_transaction_result_status(struct BlindTransactionResult *for_txn,
                                    enum TransactionResultStatus status);
+uint8_t *
+allocate_transaction_result_buffer(struct BlindTransactionResult *for_txn,
+                                   size_t length);
 
 #ifdef __cplusplus
 
@@ -80,11 +67,14 @@ namespace stellar {
 struct TransactionEnvelope;
 struct TransactionResult;
 } // namespace stellar
-void ExternCallDeliverTransaction(stellar::TransactionEnvelope const &,
+void ExternCallDeliverTransaction(AppHandle *,
+                                  stellar::TransactionEnvelope const &,
                                   stellar::TransactionResult &);
-void ExternCallCommitTransaction(stellar::TransactionEnvelope const &,
+void ExternCallCommitTransaction(AppHandle *,
+                                 stellar::TransactionEnvelope const &,
                                  stellar::TransactionResult const &);
-bool ExternCallCheckTransaction(stellar::TransactionEnvelope const &);
+bool ExternCallCheckTransaction(AppHandle *,
+                                stellar::TransactionEnvelope const &);
 #endif
 
 #endif // TRANSACTION_HOOKS_H_

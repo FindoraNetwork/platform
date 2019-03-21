@@ -3,11 +3,11 @@ extern crate serde;
 #[macro_use] extern crate serde_derive;
 #[macro_use] extern crate arrayref;
 extern crate serde_json;
-extern crate eian_infrastructure;
+extern crate core;
 
 use abci::*;
-use eian_infrastructure::store::*;
-use eian_infrastructure::data_model::{Transaction};
+use core::store::*;
+use core::data_model::{Transaction};
 
 struct LedgerApp {
     state: LedgerState,
