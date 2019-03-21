@@ -1,17 +1,10 @@
-use crate::data_model;
-use crate::data_model::AssetTokenProperties;
-use crate::data_model::AssetCreation;
-use crate::data_model::Operation::asset_creation;
-use zei::utxo_transaction::{TxOutput, TxPublicFields};
-use zei::keys::{XfrPublicKey};
-use chrono::format::Pad;
+use zei::utxo_transaction::{TxOutput};
 use crate::data_model::{
-    Asset, AssetIssuance, AssetPolicyKey, AssetToken, AssetTokenCode, AssetTransfer, AssetType,
-    CustomAssetPolicy, Operation, PrivateAsset, SmartContract, SmartContractKey, Transaction,
-    TxSequenceNumber, Utxo, UtxoAddress, Address, LedgerSignature, AssetCreationBody, Memo, ConfidentialMemo, AssetIssuanceBody
+    AssetCreation, AssetIssuance, AssetPolicyKey, AssetToken, AssetTokenCode, AssetTransfer,
+    CustomAssetPolicy, Operation, SmartContract, SmartContractKey, Transaction,
+    TxSequenceNumber, Utxo, UtxoAddress
 };
 use std::collections::{HashMap};
-use std::io::{self, Write};
 use sha2::{Sha256, Digest};
 
 pub trait LedgerAccess {
@@ -36,25 +29,17 @@ pub fn compute_sha256_hash<T>(msg: &T) -> [u8; 32]
     let result = hasher.result();
     let hash = array_ref![&result, 0, 32];
 
-    hash.clone()
+    *hash
 }
 
+#[derive(Default)]
 pub struct NextIndex {
     tx_index: TxSequenceNumber,
     op_index: u16,
     utxo_index: u16,
 }
 
-impl NextIndex {
-    pub fn new() -> NextIndex {
-        NextIndex {
-            tx_index: TxSequenceNumber { val: 0 },
-            op_index: 0,
-            utxo_index: 0,
-        }
-    }
-}
-
+#[derive(Default)]
 pub struct LedgerState {
     txs: Vec<Transaction>, //will need to be replaced by merkle tree...
     utxos: HashMap<UtxoAddress, Utxo>,
@@ -66,18 +51,6 @@ pub struct LedgerState {
 }
 
 impl LedgerState {
-    pub fn new() -> LedgerState {
-        LedgerState {
-            txs: Vec::new(),
-            utxos: HashMap::new(),
-            contracts: HashMap::new(),
-            policies: HashMap::new(),
-            tokens: HashMap::new(),
-            issuance_num: HashMap::new(),
-            next_index: NextIndex::new(),
-        }
-    }
-
     fn add_txo(&mut self, txo: &TxOutput) {
         let utxo_addr = UtxoAddress {
             transaction_id: TxSequenceNumber {
@@ -96,7 +69,7 @@ impl LedgerState {
         self.next_index.utxo_index += 1;
     }
 
-    fn apply_asset_transfer(&mut self, transfer: &AssetTransfer) -> () {
+    fn apply_asset_transfer(&mut self, transfer: &AssetTransfer) {
         for utxo in &transfer.body.inputs {
             self.utxos.remove(&utxo);
         }
@@ -106,7 +79,7 @@ impl LedgerState {
         }
     }
 
-    fn apply_asset_issuance(&mut self, issue: &AssetIssuance) -> () {
+    fn apply_asset_issuance(&mut self, issue: &AssetIssuance) {
         for out in &issue.body.outputs {
             self.add_txo(&out);
             //TODO Change updating AssetToken to work with Zei Output types
@@ -126,7 +99,7 @@ impl LedgerState {
         }
     }
 
-    fn apply_asset_creation(&mut self, create: &AssetCreation) -> () {
+    fn apply_asset_creation(&mut self, create: &AssetCreation) {
         let token: AssetToken = AssetToken {
             properties: create.body.properties.clone(),
             ..Default::default()
@@ -134,12 +107,12 @@ impl LedgerState {
         self.tokens.insert(token.properties.code.clone(), token);
     }
 
-    fn apply_operation(&mut self, op: &Operation) -> () {
+    fn apply_operation(&mut self, op: &Operation) {
         self.next_index.utxo_index = 0;
         match op {
-            Operation::asset_transfer(transfer) => self.apply_asset_transfer(transfer),
-            Operation::asset_issuance(issuance) => self.apply_asset_issuance(issuance),
-            Operation::asset_creation(creation) => self.apply_asset_creation(creation),
+            Operation::AssetTransfer(transfer) => self.apply_asset_transfer(transfer),
+            Operation::AssetIssuance(issuance) => self.apply_asset_issuance(issuance),
+            Operation::AssetCreation(creation) => self.apply_asset_creation(creation),
         }
         self.next_index.op_index += 1;
     }
@@ -213,16 +186,16 @@ impl LedgerState {
 
     fn validate_operation(&mut self, op: &Operation) -> bool {
         match op {
-            Operation::asset_transfer(transfer) => self.validate_asset_transfer(transfer),
-            Operation::asset_issuance(issuance) => self.validate_asset_issuance(issuance),
-            Operation::asset_creation(creation) => self.validate_asset_creation(creation),
+            Operation::AssetTransfer(transfer) => self.validate_asset_transfer(transfer),
+            Operation::AssetIssuance(issuance) => self.validate_asset_issuance(issuance),
+            Operation::AssetCreation(creation) => self.validate_asset_creation(creation),
         }
     }
 
 }
 
 impl LedgerUpdate for LedgerState {
-    fn apply_transaction(&mut self, txn: Transaction) -> () {
+    fn apply_transaction(&mut self, txn: Transaction) {
         self.next_index.op_index = 0;
 
         // Apply the operations
@@ -343,7 +316,7 @@ mod tests {
 
       let asset_body = asset_creation_body(&token_code1, &asset_type, &public_key, true, &None, &None);
       let asset_create = asset_creation_operation(&asset_body, &public_key, &secret_key);
-      tx.operations.push(Operation::asset_creation(asset_create));
+      tx.operations.push(Operation::AssetCreation(asset_create));
 
       assert_eq!(true, state.validate_transaction(&tx));
         
@@ -377,7 +350,7 @@ mod tests {
       let (public_key2, secret_key2) = build_keys(&mut prng);
       asset_create.body_signature.address.key = public_key2;
 
-      tx.operations.push(Operation::asset_creation(asset_create));
+      tx.operations.push(Operation::AssetCreation(asset_create));
 
       assert_eq!(false, state.validate_transaction(&tx));
     }
@@ -401,7 +374,7 @@ mod tests {
       let (public_key2, secret_key2) = build_keys(&mut prng);
       asset_create.body_signature.address.key = public_key2;
 
-      tx.operations.push(Operation::asset_creation(asset_create));
+      tx.operations.push(Operation::AssetCreation(asset_create));
 
       assert_eq!(false, state.validate_transaction(&tx));
   } 
@@ -450,7 +423,7 @@ mod tests {
         body_signature: LedgerSignature{ address: Address { key: public_key.clone() }, signature: sign },
       };
 
-      let issue_op = Operation::asset_issuance(asset_issuance_operation);
+      let issue_op = Operation::AssetIssuance(asset_issuance_operation);
 
       tx.operations.push(issue_op);
 
@@ -478,12 +451,12 @@ mod tests {
    //     token_properties.code = token_code1;
 
    //     let mut tx = Transaction::create_empty();
-   //     let create_asset = CreateAssetToken {
+   //     let create_asset = AssetCreation {
    //         properties: token_properties,
    //         signature: [0; 32],
    //     };
 
-   //     let create_op = Operation::create_token(create_asset);
+   //     let create_op = Operation::AssetCreation(create_asset);
    //     tx.operations.push(create_op);
    //     let issued = TxOutput {
    //         address: Address { key: [5; 32] },
@@ -492,7 +465,7 @@ mod tests {
    //             amount: 100,
    //         }),
    //     };
-   //     let issue_op = Operation::asset_issuance(AssetIssuance {
+   //     let issue_op = Operation::AssetIssuance(AssetIssuance {
    //         nonce: 0,
    //         code: token_code1,
    //         outputs: vec![issued.clone()],
@@ -519,7 +492,7 @@ mod tests {
    //             amount: 100,
    //         }),
    //     };
-   //     let transfer_op = Operation::asset_transfer(AssetTransfer {
+   //     let transfer_op = Operation::AssetTransfer(AssetTransfer {
    //         nonce: 0,
    //         variables: Vec::new(),
    //         confidential_asset_flag: false,

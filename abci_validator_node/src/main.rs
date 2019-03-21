@@ -4,30 +4,17 @@ extern crate serde;
 #[macro_use] extern crate arrayref;
 extern crate serde_json;
 extern crate core;
+extern crate ledger_app;
 
 use abci::*;
 use core::store::*;
 use core::data_model::{Transaction};
+use ledger_app::{ LedgerApp, convert_tx };
 
-struct LedgerApp {
-    state: LedgerState,
-}
-
-impl LedgerApp {
-    pub fn new() -> LedgerApp {
-        LedgerApp {state: LedgerState::new()}
-    }
-}
-
-// Convert incoming tx data to the proper Transaction format
-fn convert_tx(tx: &[u8]) -> Transaction {
-    let transaction: Transaction = serde_json::from_slice(tx).unwrap();
-
-    transaction
-}
+struct ABCILedgerApp(LedgerApp);
 
 // TODO: implement abci hooks
-impl abci::Application for LedgerApp {
+impl abci::Application for ABCILedgerApp {
 
 	fn check_tx(&mut self, req: &RequestCheckTx) -> ResponseCheckTx {
         // Get the Tx [u8] and convert to u64
@@ -59,5 +46,5 @@ fn main() {
     // Tendermint ABCI port
     let addr = "127.0.0.1:26658".parse().unwrap();
 
-    abci::run(addr, LedgerApp::new());
+    abci::run(addr, LedgerApp::default());
 }

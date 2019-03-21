@@ -1,0 +1,11 @@
+[package]
+name = "ledger_app"
+version = "0.1.0"
+authors = ["Nathan Yospe <nathan@eian.io>"]
+edition = "2018"
+
+[dependencies]
+core = { path = "../../core" }
+serde = "1.0"
+serde_derive = "1.0"
+serde_json = "1.0"

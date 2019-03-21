@@ -6,6 +6,7 @@ edition = "2018"
 
 [dependencies]
 core = { path = "../core" }
+ledger_app = { path = "../components/ledger_app" }
 libc = "0.2.0"
 arrayref = "0.3.5"
 serde = "1.0"

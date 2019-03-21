@@ -1,12 +1,8 @@
 
 use chrono::prelude::*;
-use zei::utxo_transaction::{Tx, TxOutput, TxAddressParams};
+use zei::utxo_transaction::{Tx, TxOutput};
 use zei::keys::{XfrSignature, XfrPublicKey};
 use zei::serialization;
-use serde::{Serialize, Deserialize};
-use serde::{Serializer, Deserializer};
-use std::hash::{Hash, Hasher};
-use std::collections::hash_map::DefaultHasher;
 use curve25519_dalek::ristretto::{CompressedRistretto};
 use std::collections::{HashMap};
 
@@ -109,7 +105,7 @@ pub struct SmartContract {}
 #[derive(Clone, Serialize, Deserialize)]
 pub struct Variable {}
 
-#[derive(Hash, Eq, PartialEq, Clone, Copy, Debug, Serialize, Deserialize)]
+#[derive(Default, Hash, Eq, PartialEq, Clone, Copy, Debug, Serialize, Deserialize)]
 pub struct TxSequenceNumber {
     pub val: u64,
 }
@@ -212,17 +208,17 @@ pub struct AssetCreationResult {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub enum Operation {
-    asset_transfer(AssetTransfer),
-    asset_issuance(AssetIssuance),
-    asset_creation(AssetCreation),
+    AssetTransfer(AssetTransfer),
+    AssetIssuance(AssetIssuance),
+    AssetCreation(AssetCreation),
     // ... etc...
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 pub enum OperationResult {
-    asset_transfer_result(AssetTransferResult),
-    asset_issuance_result(AssetIssuanceResult),
-    create_token_result(AssetCreationResult),
+    AssetTransferResult(AssetTransferResult),
+    AssetIssuanceResult(AssetIssuanceResult),
+    AssetCreationResult(AssetCreationResult),
     // ... etc...
 }
 
