@@ -1,11 +1,9 @@
-
 use chrono::prelude::*;
-use zei::utxo_transaction::{Tx, TxOutput};
-use zei::keys::{XfrSignature, XfrPublicKey};
+use curve25519_dalek::ristretto::CompressedRistretto;
+use std::collections::HashMap;
+use zei::keys::{XfrPublicKey, XfrSignature};
 use zei::serialization;
-use curve25519_dalek::ristretto::{CompressedRistretto};
-use std::collections::{HashMap};
-
+use zei::utxo_transaction::{Tx, TxOutput};
 
 // Unique Identifier for AssetTokens
 #[derive(Default, Serialize, Deserialize, Hash, Eq, PartialEq, Copy, Clone, Debug)]
@@ -25,7 +23,7 @@ pub type Commitment = [u8; 32];
 #[derive(Default, Eq, PartialEq, Clone, Copy, Debug, Serialize, Deserialize)]
 pub struct Address {
     #[serde(with = "serialization::zei_obj_serde")]
-    pub key: XfrPublicKey
+    pub key: XfrPublicKey,
 }
 
 #[derive(Eq, PartialEq, Debug, Serialize, Deserialize)]
@@ -37,10 +35,10 @@ pub struct LedgerSignature {
 }
 
 impl LedgerSignature {
-    pub fn verify<>(&self, message: &[u8]) -> bool {
+    pub fn verify(&self, message: &[u8]) -> bool {
         !self.address.key.verify(message, &self.signature).is_err()
-    }}
-
+    }
+}
 
 #[derive(Default, Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
 pub struct AssetTokenProperties {
@@ -146,10 +144,9 @@ pub struct Utxo {
 pub struct AssetTransferBody {
     //pub nonce: u128,
     pub inputs: Vec<UtxoAddress>, //ledger address of inputs
-    pub transfer: Tx, //TODO: ZEI. XfrNote, 
+    pub transfer: Tx,             //TODO: ZEI. XfrNote,
     pub operation_signatures: Vec<LedgerSignature>, //signatures already in Tx. Not needed.
 }
-
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct AssetIssuanceBody {
@@ -163,8 +160,6 @@ pub struct AssetCreationBody {
     pub properties: AssetTokenProperties,
 }
 
-
-
 // TODO: UTXO Addresses must be included in Transfer Signature
 #[derive(Debug, Serialize, Deserialize)]
 pub struct AssetTransfer {
@@ -175,11 +170,10 @@ pub struct AssetTransfer {
 
 //Tells the storage layer what to do the list of active asset records (i.e. UTXO set)
 #[derive(Debug, Serialize, Deserialize)]
-pub struct AssetTransferResult {  
+pub struct AssetTransferResult {
     pub outputs: Vec<TxOutput>,
     pub success: bool,
 }
-
 
 // TODO: Include mechanism for replay attacks
 #[derive(Debug, Serialize, Deserialize)]
@@ -189,7 +183,7 @@ pub struct AssetIssuance {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-pub struct AssetIssuanceResult {  
+pub struct AssetIssuanceResult {
     pub outputs: Vec<TxOutput>,
     pub success: bool,
 }
@@ -201,7 +195,7 @@ pub struct AssetCreation {
     pub body_signature: LedgerSignature,
 }
 #[derive(Debug, Serialize, Deserialize)]
-pub struct AssetCreationResult {  
+pub struct AssetCreationResult {
     pub outputs: Vec<TxOutput>,
     pub success: bool,
 }
@@ -222,9 +216,6 @@ pub enum OperationResult {
     // ... etc...
 }
 
-
-
-
 #[derive(Debug)]
 pub struct TimeBounds {
     pub start: DateTime<Utc>,
@@ -243,24 +234,21 @@ pub struct Transaction {
 
 impl Transaction {
     pub fn create_empty() -> Transaction {
-        Transaction {
-            operations: Vec::new(),
-            variable_utxos: Vec::new(),
-            proofs: Vec::new(),
-            memos: Vec::new(),
-        }
+        Transaction { operations: Vec::new(),
+                      variable_utxos: Vec::new(),
+                      proofs: Vec::new(),
+                      memos: Vec::new() }
     }
 }
 
-pub struct TransactionResult { 
-    pub op_results: Vec<OperationResult>, 
+pub struct TransactionResult {
+    pub op_results: Vec<OperationResult>,
 }
 
 #[derive(Default, Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
 pub struct AccountID {
-    pub val: String
+    pub val: String,
 }
-
 
 #[derive(Default, Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
 pub struct Account {

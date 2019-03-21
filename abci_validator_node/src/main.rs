@@ -1,29 +1,29 @@
 extern crate abci;
 extern crate serde;
-#[macro_use] extern crate serde_derive;
-#[macro_use] extern crate arrayref;
-extern crate serde_json;
+#[macro_use]
+extern crate serde_derive;
+#[macro_use]
+extern crate arrayref;
 extern crate core;
 extern crate ledger_app;
+extern crate serde_json;
 
 use abci::*;
+use core::data_model::Transaction;
 use core::store::*;
-use core::data_model::{Transaction};
-use ledger_app::{ LedgerApp, convert_tx };
+use ledger_app::{convert_tx, LedgerApp};
 
 struct ABCILedgerApp(LedgerApp);
 
 // TODO: implement abci hooks
 impl abci::Application for ABCILedgerApp {
-
-	fn check_tx(&mut self, req: &RequestCheckTx) -> ResponseCheckTx {
+    fn check_tx(&mut self, req: &RequestCheckTx) -> ResponseCheckTx {
         // Get the Tx [u8] and convert to u64
         let tx = convert_tx(req.get_tx());
         let mut resp = ResponseCheckTx::new();
 
-        if !self.state.validate_transaction(&tx)
-        {
-        	resp.set_code(1);
+        if !self.state.validate_transaction(&tx) {
+            resp.set_code(1);
             resp.set_log(String::from("Validation failed"));
             return resp;
         }
@@ -39,7 +39,6 @@ impl abci::Application for ABCILedgerApp {
         // Return default code 0 == bueno
         ResponseDeliverTx::new()
     }
-
 }
 
 fn main() {
