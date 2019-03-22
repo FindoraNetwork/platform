@@ -99,7 +99,7 @@ impl LedgerState {
     fn apply_asset_creation(&mut self, create: &AssetCreation) {
         let token: AssetToken = AssetToken { properties: create.body.properties.clone(),
                                              ..Default::default() };
-        self.tokens.insert(token.properties.code.clone(), token);
+        self.tokens.insert(token.properties.code, token);
     }
 
     fn apply_operation(&mut self, op: &Operation) {
@@ -123,19 +123,19 @@ impl LedgerState {
 
         // [2] utxos exist on ledger - need to match zei transaction
         for utxo_addr in &transfer.body.inputs {
-            if !self.check_utxo(utxo_addr).is_some() {
+            if self.check_utxo(utxo_addr).is_none() {
                 return false;
             }
             let signatures = &transfer.body.operation_signatures;
             let filtered_signatures =
-                signatures.into_iter()
+                signatures.iter()
                           .filter(|&x| {
                               x.address.key
                               == self.utxos.get(utxo_addr).as_ref().unwrap().output.get_pk()
                           })
                           .collect::<Vec<_>>();
 
-            if filtered_signatures.len() == 0 {
+            if filtered_signatures.is_empty() {
                 return false;
             }
         }
@@ -158,11 +158,11 @@ impl LedgerState {
             return false;
         }
 
-        let token = self.tokens.get(&issue.body.code).unwrap().clone();
-        let last_issuance_num = self.issuance_num.get(&issue.body.code).unwrap().clone();
+        let token = &self.tokens[&issue.body.code];
+        let last_issuance_num = &self.issuance_num[&issue.body.code];
 
         //[2] replay attack - not issued before
-        if issue.body.seq_num <= last_issuance_num {
+        if issue.body.seq_num <= *last_issuance_num {
             return false;
         }
 

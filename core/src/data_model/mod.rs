@@ -36,7 +36,7 @@ pub struct LedgerSignature {
 
 impl LedgerSignature {
     pub fn verify(&self, message: &[u8]) -> bool {
-        !self.address.key.verify(message, &self.signature).is_err()
+        self.address.key.verify(message, &self.signature).is_ok()
     }
 }
 
@@ -144,7 +144,7 @@ pub struct Utxo {
 pub struct AssetTransferBody {
     //pub nonce: u128,
     pub inputs: Vec<UtxoAddress>, //ledger address of inputs
-    pub transfer: Tx,             //TODO: ZEI. XfrNote,
+    pub transfer: Box<Tx>,        //TODO: ZEI. XfrNote,
     pub operation_signatures: Vec<LedgerSignature>, //signatures already in Tx. Not needed.
 }
 
