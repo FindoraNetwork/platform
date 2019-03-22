@@ -15,3 +15,8 @@ serde_json = "1.0"
 
 [build-dependencies]
 bindgen = "0.48.1"
+
+[lib]
+name = "ledger_plugin"
+path = "src/lib.rs"
+crate-type = ["cdylib"]
