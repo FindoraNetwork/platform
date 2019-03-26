@@ -13,12 +13,13 @@ pub struct AssetTokenCode {
 
 // TODO: Define Memo
 #[derive(Default, Serialize, Deserialize, Hash, Eq, PartialEq, Copy, Clone, Debug)]
-pub struct Proof {}
+pub struct Proof;
 #[derive(Default, Serialize, Deserialize, Hash, Eq, PartialEq, Copy, Clone, Debug)]
-pub struct Memo {}
+pub struct Memo;
 #[derive(Default, Serialize, Deserialize, Hash, Eq, PartialEq, Copy, Clone, Debug)]
-pub struct ConfidentialMemo {}
-pub type Commitment = [u8; 32];
+pub struct ConfidentialMemo;
+#[derive(Default, Serialize, Deserialize, Hash, Eq, PartialEq, Copy, Clone, Debug)]
+pub struct Commitment([u8; 32]);
 
 #[derive(Default, Eq, PartialEq, Clone, Copy, Debug, Serialize, Deserialize)]
 pub struct Address {
@@ -74,17 +75,13 @@ pub struct AssetToken {
 //}
 
 #[derive(Hash, Eq, PartialEq, Debug, Serialize, Deserialize)]
-pub struct AssetPolicyKey {
-    pub val: [u8; 16],
-}
+pub struct AssetPolicyKey([u8; 16]);
 
 #[derive(Hash, Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
-pub struct CustomAssetPolicy {}
+pub struct CustomAssetPolicy;
 
 #[derive(Hash, Eq, PartialEq, Debug, Serialize, Deserialize)]
-pub struct CredentialKey {
-    pub val: [u8; 16],
-}
+pub struct CredentialKey([u8; 16]);
 
 #[derive(Hash, Eq, PartialEq, Debug, Serialize, Deserialize)]
 pub struct Credential {
@@ -92,28 +89,26 @@ pub struct Credential {
 }
 
 #[derive(Hash, Eq, PartialEq, Debug, Serialize, Deserialize)]
-pub struct SmartContractKey {
-    pub val: [u8; 16],
-}
+pub struct SmartContractKey([u8; 16]);
 
 #[derive(Hash, Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
-pub struct SmartContract {}
+pub struct SmartContract;
 
 //TODO(Kevin): define types
 #[derive(Clone, Serialize, Deserialize)]
-pub struct Variable {}
+pub struct Variable;
+
+// #[derive(Default, Hash, Eq, PartialEq, Clone, Copy, Debug, Serialize, Deserialize)]
+// pub struct TxSequenceNumber {
+//     pub val: u64,
+// }
 
 #[derive(Default, Hash, Eq, PartialEq, Clone, Copy, Debug, Serialize, Deserialize)]
-pub struct TxSequenceNumber {
-    pub val: u64,
+pub struct UtxoAddress {
+    pub(crate) index: u64,
 }
 
-#[derive(Hash, Eq, PartialEq, Clone, Copy, Debug, Serialize, Deserialize)]
-pub struct UtxoAddress {
-    pub transaction_id: TxSequenceNumber,
-    pub operation_index: u16,
-    pub output_index: u16,
-}
+
 
 #[derive(Hash, Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
 pub struct Asset {

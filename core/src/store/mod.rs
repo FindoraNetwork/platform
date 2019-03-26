@@ -1,6 +1,6 @@
 use crate::data_model::{
     AssetCreation, AssetIssuance, AssetPolicyKey, AssetToken, AssetTokenCode, AssetTransfer,
-    CustomAssetPolicy, Operation, SmartContract, SmartContractKey, Transaction, TxSequenceNumber,
+    CustomAssetPolicy, Operation, SmartContract, SmartContractKey, Transaction,
     Utxo, UtxoAddress,
 };
 use sha2::{Digest, Sha256};
@@ -34,13 +34,6 @@ pub fn compute_sha256_hash<T>(msg: &T) -> [u8; 32]
 }
 
 #[derive(Default)]
-pub struct NextIndex {
-    tx_index: TxSequenceNumber,
-    op_index: u16,
-    utxo_index: u16,
-}
-
-#[derive(Default)]
 pub struct LedgerState {
     txs: Vec<Transaction>, //will need to be replaced by merkle tree...
     utxos: HashMap<UtxoAddress, Utxo>,
@@ -48,22 +41,18 @@ pub struct LedgerState {
     policies: HashMap<AssetPolicyKey, CustomAssetPolicy>,
     tokens: HashMap<AssetTokenCode, AssetToken>,
     issuance_num: HashMap<AssetTokenCode, u128>,
-    next_index: NextIndex,
+    next_index: UtxoAddress,
 }
 
 impl LedgerState {
     fn add_txo(&mut self, txo: &TxOutput) {
-        let utxo_addr = UtxoAddress { transaction_id: TxSequenceNumber { val: self.next_index
-                                                                                  .tx_index
-                                                                                  .val },
-                                      operation_index: self.next_index.op_index,
-                                      output_index: self.next_index.utxo_index };
+        let utxo_addr = self.next_index;
         let utxo_ref = Utxo { key: utxo_addr,
                               digest: compute_sha256_hash(&serde_json::to_vec(&txo).unwrap()),
                               output: txo.clone() };
 
         self.utxos.insert(utxo_addr, utxo_ref);
-        self.next_index.utxo_index += 1;
+        self.next_index.index += 1;
     }
 
     fn apply_asset_transfer(&mut self, transfer: &AssetTransfer) {
@@ -103,13 +92,11 @@ impl LedgerState {
     }
 
     fn apply_operation(&mut self, op: &Operation) {
-        self.next_index.utxo_index = 0;
         match op {
             Operation::AssetTransfer(transfer) => self.apply_asset_transfer(transfer),
             Operation::AssetIssuance(issuance) => self.apply_asset_issuance(issuance),
             Operation::AssetCreation(creation) => self.apply_asset_creation(creation),
         }
-        self.next_index.op_index += 1;
     }
 
     // Asset Transfer is valid if UTXOs exist on ledger and match zei transaction, zei transaction is valid, and if LedgerSignature is valid
@@ -200,13 +187,10 @@ impl LedgerState {
 
 impl LedgerUpdate for LedgerState {
     fn apply_transaction(&mut self, txn: Transaction) {
-        self.next_index.op_index = 0;
-
         // Apply the operations
         for op in &txn.operations {
             self.apply_operation(op);
         }
-        self.next_index.tx_index.val += 1;
         self.txs.push(txn);
     }
 }
