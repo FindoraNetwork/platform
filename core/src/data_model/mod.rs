@@ -1,9 +1,8 @@
 use chrono::prelude::*;
 use curve25519_dalek::ristretto::CompressedRistretto;
 use std::collections::HashMap;
-use zei::keys::{XfrPublicKey, XfrSignature};
-use zei::serialization;
-use zei::utxo_transaction::{Tx, TxOutput};
+use zei::basic_crypto::signatures::{XfrPublicKey, XfrSignature};
+use zei::transfers::{BlindAssetRecord, XfrNote};
 
 // Unique Identifier for AssetTokens
 #[derive(Default, Serialize, Deserialize, Hash, Eq, PartialEq, Copy, Clone, Debug)]
@@ -13,8 +12,6 @@ pub struct AssetTokenCode {
 
 // TODO: Define Memo
 #[derive(Default, Serialize, Deserialize, Hash, Eq, PartialEq, Copy, Clone, Debug)]
-pub struct Proof;
-#[derive(Default, Serialize, Deserialize, Hash, Eq, PartialEq, Copy, Clone, Debug)]
 pub struct Memo;
 #[derive(Default, Serialize, Deserialize, Hash, Eq, PartialEq, Copy, Clone, Debug)]
 pub struct ConfidentialMemo;
@@ -22,30 +19,37 @@ pub struct ConfidentialMemo;
 pub struct Commitment([u8; 32]);
 
 #[derive(Default, Eq, PartialEq, Clone, Copy, Debug, Serialize, Deserialize)]
-pub struct Address {
-    #[serde(with = "serialization::zei_obj_serde")]
+pub struct XfrAddress {
+    pub key: XfrPublicKey,
+}
+
+#[derive(Default, Eq, PartialEq, Clone, Copy, Debug, Serialize, Deserialize)]
+pub struct IssuerPublicKey {
+    pub key: XfrPublicKey,
+}
+
+#[derive(Default, Eq, PartialEq, Clone, Copy, Debug, Serialize, Deserialize)]
+pub struct AccountAddress {
     pub key: XfrPublicKey,
 }
 
 #[derive(Eq, PartialEq, Debug, Serialize, Deserialize)]
-pub struct LedgerSignature {
-    pub address: Address,
-
-    #[serde(with = "serialization::zei_obj_serde")]
+pub struct SignedAddress {
+    pub address: XfrAddress,
     pub signature: XfrSignature,
 }
 
-impl LedgerSignature {
+impl SignedAddress {
     pub fn verify(&self, message: &[u8]) -> bool {
         self.address.key.verify(message, &self.signature).is_ok()
     }
 }
 
 #[derive(Default, Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
-pub struct AssetTokenProperties {
+pub struct Asset {
     pub code: AssetTokenCode,
     pub asset_type: String,
-    pub issuer: Address,
+    pub issuer: IssuerPublicKey,
     pub memo: Memo,
     pub confidential_memo: ConfidentialMemo,
     pub updatable: bool,
@@ -53,7 +57,7 @@ pub struct AssetTokenProperties {
 
 #[derive(Default, Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
 pub struct AssetToken {
-    pub properties: AssetTokenProperties, //TODO: ZEI. change to asset_record from zei...
+    pub properties: Asset, //TODO: ZEI. change to asset_record from zei...
     pub digest: [u8; 32],
     pub units: u64,
     pub confidential_units: Commitment,
@@ -81,11 +85,11 @@ pub struct AssetPolicyKey([u8; 16]);
 pub struct CustomAssetPolicy;
 
 #[derive(Hash, Eq, PartialEq, Debug, Serialize, Deserialize)]
-pub struct CredentialKey([u8; 16]);
+pub struct CredentialProofKey([u8; 16]);
 
 #[derive(Hash, Eq, PartialEq, Debug, Serialize, Deserialize)]
-pub struct Credential {
-    pub key: CredentialKey,
+pub struct CredentialProof {
+    pub key: CredentialProofKey,
 }
 
 #[derive(Hash, Eq, PartialEq, Debug, Serialize, Deserialize)]
@@ -104,55 +108,65 @@ pub struct Variable;
 // }
 
 #[derive(Default, Hash, Eq, PartialEq, Clone, Copy, Debug, Serialize, Deserialize)]
-pub struct UtxoAddress {
+pub struct TxoSID {
     pub(crate) index: u64,
 }
 
 
 
 #[derive(Hash, Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
-pub struct Asset {
+pub struct AssetSpecification {
     pub code: AssetTokenCode,
     pub amount: u64,
 }
 
 #[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
-pub struct PrivateAsset {
+pub struct PrivateAssetSpecification {
     amount_commitment: Option<CompressedRistretto>,
     asset_type_commitment: Option<CompressedRistretto>,
 }
 
 #[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
 pub enum AssetType {
-    Normal(Asset),
-    Private(PrivateAsset),
+    Normal(AssetSpecification),
+    Private(PrivateAssetSpecification),
 }
+
+
+
+#[derive(Eq, PartialEq, Debug, Clone, Serialize, Deserialize)]
+pub enum TxOutput {
+    BlindAssetRecord(BlindAssetRecord),
+} // needs to be a generic view on an Operation, specifying one output record of a specific type...
 
 #[derive(Eq, PartialEq, Debug, Clone, Serialize, Deserialize)]
 pub struct Utxo {
-    pub key: UtxoAddress, //includes ledger address
-    pub output: TxOutput, //will include public key
+    // digest is a hash of the TxoSID and the operation output
     pub digest: [u8; 32],
+    pub output: TxOutput,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct AssetTransferBody {
     //pub nonce: u128,
-    pub inputs: Vec<UtxoAddress>, //ledger address of inputs
-    pub transfer: Box<Tx>,        //TODO: ZEI. XfrNote,
-    pub operation_signatures: Vec<LedgerSignature>, //signatures already in Tx. Not needed.
+    pub inputs: Vec<TxoSID>, // ledger address of inputs
+    pub outputs: Vec<TxoSID>, // computed in check?
+    pub transfer: Box<XfrNote>,        //TODO: ZEI. XfrNote,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct AssetIssuanceBody {
-    pub seq_num: u128,
     pub code: AssetTokenCode,
-    pub outputs: Vec<TxOutput>,
+    pub seq_num: u64,
+    pub outputs: Vec<TxoSID>,
+    pub records: Vec<TxOutput>,
+    // pub outputs: Vec<TxoSID>, // computed in check?
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct AssetCreationBody {
-    pub properties: AssetTokenProperties,
+    pub asset: Asset,
+    pub outputs: Vec<TxoSID>, // computed in check?
 }
 
 // TODO: UTXO Addresses must be included in Transfer Signature
@@ -160,13 +174,12 @@ pub struct AssetCreationBody {
 pub struct AssetTransfer {
     //pub nonce: u128,
     pub body: AssetTransferBody,
-    pub body_signatures: Vec<LedgerSignature>,
+    pub body_signatures: Vec<SignedAddress>,
 }
 
 //Tells the storage layer what to do the list of active asset records (i.e. UTXO set)
 #[derive(Debug, Serialize, Deserialize)]
 pub struct AssetTransferResult {
-    pub outputs: Vec<TxOutput>,
     pub success: bool,
 }
 
@@ -174,12 +187,12 @@ pub struct AssetTransferResult {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct AssetIssuance {
     pub body: AssetIssuanceBody,
-    pub body_signature: LedgerSignature,
+    pub pubkey: IssuerPublicKey,
+    pub signature: XfrSignature,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct AssetIssuanceResult {
-    pub outputs: Vec<TxOutput>,
     pub success: bool,
 }
 
@@ -187,11 +200,11 @@ pub struct AssetIssuanceResult {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct AssetCreation {
     pub body: AssetCreationBody,
-    pub body_signature: LedgerSignature,
+    pub pubkey: IssuerPublicKey,
+    pub signature: XfrSignature,
 }
 #[derive(Debug, Serialize, Deserialize)]
 pub struct AssetCreationResult {
-    pub outputs: Vec<TxOutput>,
     pub success: bool,
 }
 
@@ -220,8 +233,8 @@ pub struct TimeBounds {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Transaction {
     pub operations: Vec<Operation>,
-    pub variable_utxos: Vec<UtxoAddress>,
-    pub proofs: Vec<Proof>,
+    pub variable_utxos: Vec<TxoSID>,
+    pub credentials: Vec<CredentialProof>,
     pub memos: Vec<Memo>,
     //pub time_bounds: TimeBounds,
     // ... etc...
@@ -231,7 +244,7 @@ impl Transaction {
     pub fn create_empty() -> Transaction {
         Transaction { operations: Vec::new(),
                       variable_utxos: Vec::new(),
-                      proofs: Vec::new(),
+                      credentials: Vec::new(),
                       memos: Vec::new() }
     }
 }
@@ -248,6 +261,6 @@ pub struct AccountID {
 #[derive(Default, Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
 pub struct Account {
     pub id: AccountID,
-    pub access_control_list: Vec<Address>,
+    pub access_control_list: Vec<AccountAddress>,
     pub key_value: HashMap<String, String>, //key value storage...
 }
