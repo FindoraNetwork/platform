@@ -17,5 +17,5 @@ rand = "0.6"
 ed25519-dalek = "0.9.1"
 sha2 = "0.8.0"
 rust-crypto = "0.2.36"
-zei = {git = "ssh://github.com/eianio/zei", branch="feature/expose_transfer_outputs"}
+zei = {git = "ssh://github.com/eianio/zei"}
 curve25519-dalek = { version =  "1.0", features = ["serde"] }
