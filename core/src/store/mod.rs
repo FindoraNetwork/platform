@@ -1,14 +1,14 @@
 use crate::data_model::{
     AssetCreation, AssetIssuance, AssetPolicyKey, AssetToken, AssetTokenCode, AssetTransfer,
-    CustomAssetPolicy, Operation, SmartContract, SmartContractKey, Transaction,
-    Utxo, TxoSID, TxOutput,
+    CustomAssetPolicy, Operation, SmartContract, SmartContractKey, Transaction, TxOutput, TxoSID,
+    Utxo,
 };
-use zei::transfers::verify_xfr_note;
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
+use zei::transfers::verify_xfr_note;
 
 pub trait LedgerAccess {
-    fn check_utxo(&self, addr: &TxoSID) -> Option<Utxo>;
+    fn check_utxo(&self, addr: TxoSID) -> Option<Utxo>;
     fn get_asset_token(&self, code: &AssetTokenCode) -> Option<AssetToken>;
     fn get_asset_policy(&self, key: &AssetPolicyKey) -> Option<CustomAssetPolicy>;
     fn get_smart_contract(&self, key: &SmartContractKey) -> Option<SmartContract>;
@@ -46,7 +46,7 @@ pub struct LedgerState {
 
 impl LedgerState {
     fn add_txo(&mut self, txo: (&TxoSID, TxOutput)) {
-        let utxo_addr = txo.0.clone();
+        let utxo_addr = *txo.0;
         let utxo_ref = Utxo { digest: compute_sha256_hash(&serde_json::to_vec(&txo.1).unwrap()),
                               output: txo.1 };
 
@@ -59,29 +59,40 @@ impl LedgerState {
             self.utxos.remove(&utxo);
         }
 
-        for out in transfer.body.outputs.iter().zip(transfer.body.transfer.outputs_iter().map(|o| TxOutput::BlindAssetRecord(o.clone()))) {
+        for out in transfer.body
+                           .outputs
+                           .iter()
+                           .zip(transfer.body
+                                        .transfer
+                                        .outputs_iter()
+                                        .map(|o| TxOutput::BlindAssetRecord(o.clone())))
+        {
             self.add_txo(out);
         }
     }
 
     fn apply_asset_issuance(&mut self, issue: &AssetIssuance) {
-        for out in issue.body.outputs.iter().zip(issue.body.records.iter().map(|ref o| (*o).clone())) {
+        for out in issue.body
+                        .outputs
+                        .iter()
+                        .zip(issue.body.records.iter().map(|ref o| (*o).clone()))
+        {
             self.add_txo(out);
         }
-            //TODO Change updating AssetToken to work with Zei Output types
-            // match &out.asset_type {
-            //    AssetType::Normal(a) => {
-            //        if let Some(token) = self.tokens.get_mut(&a.code) {
-            //            token.units += a.amount;
-            //        }
-            //        else {
-            //         println!("Normal Asset Issuance has failed!")
-            //        }
-            //        //TODO: We should never have the if statement above fail, but should we write something if it does
-            //    }
-            //    //TODO: Implement Private Asset Issuance
-            //    AssetType::Private(_) => println!("Private Issuance Not Implemented!"),
-            // }
+        //TODO Change updating AssetToken to work with Zei Output types
+        // match &out.asset_type {
+        //    AssetType::Normal(a) => {
+        //        if let Some(token) = self.tokens.get_mut(&a.code) {
+        //            token.units += a.amount;
+        //        }
+        //        else {
+        //         println!("Normal Asset Issuance has failed!")
+        //        }
+        //        //TODO: We should never have the if statement above fail, but should we write something if it does
+        //    }
+        //    //TODO: Implement Private Asset Issuance
+        //    AssetType::Private(_) => println!("Private Issuance Not Implemented!"),
+        // }
     }
 
     fn apply_asset_creation(&mut self, create: &AssetCreation) {
@@ -109,7 +120,7 @@ impl LedgerState {
 
         // [2] utxos exist on ledger - need to match zei transaction
         for utxo_addr in &transfer.body.inputs {
-            if self.check_utxo(utxo_addr).is_none() {
+            if self.check_utxo(*utxo_addr).is_none() {
                 return false;
             }
 
@@ -139,7 +150,10 @@ impl LedgerState {
         }
 
         //[3] signature is correct on body
-        if issue.pubkey.key.verify(&serde_json::to_vec(&issue.body).unwrap(), &issue.signature).is_err()
+        if issue.pubkey
+                .key
+                .verify(&serde_json::to_vec(&issue.body).unwrap(), &issue.signature)
+                .is_err()
         {
             return false;
         }
@@ -157,7 +171,10 @@ impl LedgerState {
         //[1] the token is not already created, [2] the signature is correct.
         !self.tokens.contains_key(&create.body.asset.code)
         && create.pubkey
-                 .key.verify(&serde_json::to_vec(&create.body).unwrap(), &create.signature).is_ok()
+                 .key
+                 .verify(&serde_json::to_vec(&create.body).unwrap(),
+                         &create.signature)
+                 .is_ok()
     }
 
     fn validate_operation(&mut self, op: &Operation) -> bool {
@@ -171,7 +188,6 @@ impl LedgerState {
 
 impl LedgerUpdate for LedgerState {
     fn apply_transaction(&mut self, txn: Transaction) {
-
         // Apply the operations
         for op in &txn.operations {
             self.apply_operation(op);
@@ -192,8 +208,8 @@ impl LedgerValidate for LedgerState {
 }
 
 impl LedgerAccess for LedgerState {
-    fn check_utxo(&self, addr: &TxoSID) -> Option<Utxo> {
-        match self.utxos.get(addr) {
+    fn check_utxo(&self, addr: TxoSID) -> Option<Utxo> {
+        match self.utxos.get(&addr) {
             Some(utxo) => Some(utxo.clone()),
             None => None,
         }
@@ -281,8 +297,8 @@ mod tests {
         let sign = compute_signature(&secret_key, &public_key, &asset_body);
         AssetCreation { body: asset_body.clone(),
                         body_signature: SignedAddress { address: Address { key:
-                                                                                 public_key.clone() },
-                                                          signature: sign } }
+                                                                               public_key.clone() },
+                                                        signature: sign } }
     }
 
     #[test]
@@ -397,9 +413,8 @@ mod tests {
         let asset_issuance_operation =
             AssetIssuance { body: asset_issuance_body,
                             body_signature: SignedAddress { address:
-                                                                  Address { key:
-                                                                                public_key.clone() },
-                                                              signature: sign } };
+                                                                Address { key: public_key.clone() },
+                                                            signature: sign } };
 
         let issue_op = Operation::AssetIssuance(asset_issuance_operation);
 

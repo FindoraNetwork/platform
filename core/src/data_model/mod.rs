@@ -112,8 +112,6 @@ pub struct TxoSID {
     pub(crate) index: u64,
 }
 
-
-
 #[derive(Hash, Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
 pub struct AssetSpecification {
     pub code: AssetTokenCode,
@@ -132,8 +130,6 @@ pub enum AssetType {
     Private(PrivateAssetSpecification),
 }
 
-
-
 #[derive(Eq, PartialEq, Debug, Clone, Serialize, Deserialize)]
 pub enum TxOutput {
     BlindAssetRecord(BlindAssetRecord),
@@ -149,9 +145,9 @@ pub struct Utxo {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct AssetTransferBody {
     //pub nonce: u128,
-    pub inputs: Vec<TxoSID>, // ledger address of inputs
-    pub outputs: Vec<TxoSID>, // computed in check?
-    pub transfer: Box<XfrNote>,        //TODO: ZEI. XfrNote,
+    pub inputs: Vec<TxoSID>,    // ledger address of inputs
+    pub outputs: Vec<TxoSID>,   // computed in check?
+    pub transfer: Box<XfrNote>, //TODO: ZEI. XfrNote,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
