@@ -1,0 +1,3 @@
+[submodule "scp_validator_node/src/scp_interface"]
+	path = scp_validator_node/src/scp_interface
+	url = git@github.com:eianio/scp_plugin_interface.git
