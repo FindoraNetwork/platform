@@ -5,15 +5,16 @@
 #[allow(non_camel_case_types)]
 #[allow(non_snake_case)]
 mod cpp {
-    include!(concat!(env!("OUT_DIR"), "/transaction_hooks.rs"));
+    include!(concat!(env!("OUT_DIR"), "/scp_interface.rs"));
 }
 
 // use libc;
 use crate::ext_transaction::cpp::{
     AllocateTransactionResultBuffer, AppHandle, BlindTransaction, BlindTransactionResult,
     CheckTransaction, CommitTransaction, ConstBytes, DeliverTransaction, DestroyApp,
-    GetTransactionData, GetTransactionResultData, InitApp, RegisterCallbacks,
-    SetTransactionResultStatus, TransactionResultStatus, TransactionResultStatus_txSUCCESS,
+    GetTransactionData, GetTransactionResultData, InitApp, ModifyTransactionData, MutBytes, PostTxnBlock, PreTxnBlock,
+    RegisterCallbacks, SetTransactionResultStatus, TransactionResultStatus,
+    TransactionResultStatus_txSUCCESS,
 };
 use core::store::{LedgerUpdate, LedgerValidate};
 use ledger_app::{convert_tx, LedgerApp};
@@ -28,6 +29,11 @@ unsafe fn register_callbacks_handle() -> &'static mut RegisterCallbacks {
 unsafe fn get_transaction_data_handle() -> &'static mut GetTransactionData {
     static mut GET_TRANSACTION_DATA: GetTransactionData = None;
     &mut GET_TRANSACTION_DATA
+}
+
+unsafe fn modify_transaction_data_handle() -> &'static mut ModifyTransactionData {
+    static mut MODIFY_TRANSACTION_DATA: ModifyTransactionData = None;
+    &mut MODIFY_TRANSACTION_DATA
 }
 
 unsafe fn get_transaction_result_data_handle() -> &'static mut GetTransactionResultData {
@@ -58,6 +64,11 @@ fn set_get_transaction_data(ext_get_transaction_data: GetTransactionData) {
         *get_transaction_data_handle() = ext_get_transaction_data;
     }
 }
+fn set_modify_transaction_data(ext_modify_transaction_data: ModifyTransactionData) {
+    unsafe {
+        *modify_transaction_data_handle() = ext_modify_transaction_data;
+    }
+}
 fn set_get_transaction_result_data(ext_get_transaction_result_data: GetTransactionResultData) {
     unsafe {
         *get_transaction_result_data_handle() = ext_get_transaction_result_data;
@@ -78,12 +89,16 @@ fn set_allocate_transaction_result_buffer(ext_allocate_transaction_result_buffer
 
 fn register_callbacks(init_app_fn: InitApp,
                       destroy_app_fn: DestroyApp,
+                      pre_txn_block_fn: PreTxnBlock,
+                      post_txn_block_fn: PostTxnBlock,
                       deliver_transaction_fn: DeliverTransaction,
                       commit_transaction_fn: CommitTransaction,
                       check_transaction_fn: CheckTransaction) {
     unsafe {
         register_callbacks_handle().as_ref().unwrap()(init_app_fn,
                                                       destroy_app_fn,
+                                                      pre_txn_block_fn,
+                                                      post_txn_block_fn,
                                                       deliver_transaction_fn,
                                                       commit_transaction_fn,
                                                       check_transaction_fn)
@@ -92,6 +107,10 @@ fn register_callbacks(init_app_fn: InitApp,
 
 fn get_transaction_data(txn: *const BlindTransaction) -> ConstBytes {
     unsafe { get_transaction_data_handle().as_ref().unwrap()(txn) }
+}
+
+fn modify_transaction_data(txn: *mut BlindTransaction) -> MutBytes {
+    unsafe { modify_transaction_data_handle().as_ref().unwrap()(txn) }
 }
 
 fn get_transaction_result_data(res: *const BlindTransactionResult) -> ConstBytes {
@@ -114,18 +133,22 @@ fn allocate_transaction_result_buffer(res: *mut BlindTransactionResult, length: 
 #[link_name = "\u{1}_LoadPlugin"]
 pub extern "C" fn load_plugin(ext_register_callbacks: RegisterCallbacks,
                               ext_get_transaction_data: GetTransactionData,
+                              ext_modify_transaction_data: ModifyTransactionData,
                               ext_get_transaction_result_data: GetTransactionResultData,
                               ext_set_transaction_result_status: SetTransactionResultStatus,
                               ext_allocate_transaction_result_buffer:  AllocateTransactionResultBuffer)
 {
     set_register_callbacks(ext_register_callbacks);
     set_get_transaction_data(ext_get_transaction_data);
+    set_modify_transaction_data(ext_modify_transaction_data);
     set_get_transaction_result_data(ext_get_transaction_result_data);
     set_set_transaction_result_status(ext_set_transaction_result_status);
     set_allocate_transaction_result_buffer(ext_allocate_transaction_result_buffer);
 
     register_callbacks(Some(init_app),
                        Some(destroy_app),
+                       Some(pre_txn_block),
+                       Some(post_txn_block),
                        Some(deliver_transaction),
                        Some(commit_transaction),
                        Some(check_transaction));
@@ -151,13 +174,21 @@ extern "C" fn destroy_app(_app: *mut AppHandle) -> bool {
     true
 }
 
+extern "C" fn pre_txn_block(_app: *mut AppHandle) {
+
+}
+
+extern "C" fn post_txn_block(_app: *mut AppHandle) {
+    
+}
+
 extern "C" fn deliver_transaction(app: *mut AppHandle,
-                                  txn: *const BlindTransaction,
+                                  txn: *mut BlindTransaction,
                                   result: *mut BlindTransactionResult)
                                   -> bool {
     unsafe {
         let app = app as *mut LedgerApp; // std::mem::transmute::<*mut AppHandle, *mut LedgerApp>(app);
-        let data = get_transaction_data(txn);
+        let data = modify_transaction_data(txn);
         let slice = slice::from_raw_parts(data.bytes, data.length);
         let tx = convert_tx(slice);
 

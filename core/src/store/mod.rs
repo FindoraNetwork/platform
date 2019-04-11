@@ -240,12 +240,10 @@ impl LedgerAccess for LedgerState {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::data_model::{Address, SignedAddress};
-    use blake2::Blake2b;
-    use curve25519_dalek::scalar::Scalar;
+    use crate::data_model::{Memo, ConfidentialMemo, AssetCreationBody, Asset, AssetIssuanceBody, IssuerPublicKey};
     use rand::{CryptoRng, Rng, SeedableRng};
     use rand_chacha::ChaChaRng;
-    use zei::keys::{XfrKeyPair, XfrPublicKey, XfrSecretKey, XfrSignature};
+    use zei::basic_crypto::signatures::{XfrKeyPair, XfrPublicKey, XfrSecretKey, XfrSignature};
 
     fn build_keys<R: CryptoRng + Rng>(prng: &mut R) -> (XfrPublicKey, XfrSecretKey) {
         let keypair = XfrKeyPair::generate(prng);
@@ -269,9 +267,9 @@ mod tests {
                            memo: &Option<Memo>,
                            confidential_memo: &Option<ConfidentialMemo>)
                            -> AssetCreationBody {
-        let mut token_properties: AssetTokenProperties = Default::default();
+        let mut token_properties: Asset = Default::default();
         token_properties.code = token_code.clone();
-        token_properties.issuer = Address { key: issuer_key.clone() };
+        token_properties.issuer = IssuerPublicKey { key: issuer_key.clone() };
         token_properties.updatable = updatable;
         token_properties.asset_type = asset_type.clone();
 
@@ -287,7 +285,7 @@ mod tests {
             token_properties.confidential_memo = ConfidentialMemo {};
         }
 
-        AssetCreationBody { properties: token_properties }
+        AssetCreationBody { asset: token_properties, outputs: Vec::new() }
     }
 
     fn asset_creation_operation(asset_body: &AssetCreationBody,
@@ -296,15 +294,14 @@ mod tests {
                                 -> AssetCreation {
         let sign = compute_signature(&secret_key, &public_key, &asset_body);
         AssetCreation { body: asset_body.clone(),
-                        body_signature: SignedAddress { address: Address { key:
-                                                                               public_key.clone() },
-                                                        signature: sign } }
+                        pubkey: IssuerPublicKey { key: public_key.clone() },
+                        signature: sign }
     }
 
     #[test]
     fn test_asset_creation_valid() {
         let mut prng = ChaChaRng::from_seed([0u8; 32]);
-        let mut state = LedgerState::new();
+        let mut state = LedgerState::default();
         let mut tx = Transaction::create_empty();
 
         let token_code1 = AssetTokenCode { val: [1; 16] };
@@ -321,7 +318,7 @@ mod tests {
         state.apply_transaction(tx);
         assert_eq!(true, state.get_asset_token(&token_code1).is_some());
 
-        assert_eq!(asset_body.properties,
+        assert_eq!(asset_body.asset,
                    state.get_asset_token(&token_code1).unwrap().properties);
 
         assert_eq!(0, state.get_asset_token(&token_code1).unwrap().units);
@@ -331,7 +328,7 @@ mod tests {
     #[test]
     fn test_asset_creation_invalid_public_key() {
         let mut prng = ChaChaRng::from_seed([0u8; 32]);
-        let mut state = LedgerState::new();
+        let mut state = LedgerState::default();
         let mut tx = Transaction::create_empty();
 
         let token_code1 = AssetTokenCode { val: [1; 16] };
@@ -344,8 +341,8 @@ mod tests {
         let mut asset_create = asset_creation_operation(&asset_body, &public_key1, &secret_key1);
 
         let mut prng = ChaChaRng::from_seed([1u8; 32]);
-        let (public_key2, secret_key2) = build_keys(&mut prng);
-        asset_create.body_signature.address.key = public_key2;
+        let (public_key2, _secret_key2) = build_keys(&mut prng);
+        asset_create.pubkey.key = public_key2;
 
         tx.operations.push(Operation::AssetCreation(asset_create));
 
@@ -356,7 +353,7 @@ mod tests {
     #[test]
     fn test_asset_creation_invalid_signature() {
         let mut prng = ChaChaRng::from_seed([0u8; 32]);
-        let mut state = LedgerState::new();
+        let mut state = LedgerState::default();
         let mut tx = Transaction::create_empty();
 
         let token_code1 = AssetTokenCode { val: [1; 16] };
@@ -369,8 +366,8 @@ mod tests {
 
         //update signature to have wrong public key]
         let mut prng = ChaChaRng::from_seed([1u8; 32]);
-        let (public_key2, secret_key2) = build_keys(&mut prng);
-        asset_create.body_signature.address.key = public_key2;
+        let (public_key2, _secret_key2) = build_keys(&mut prng);
+        asset_create.pubkey.key = public_key2;
 
         tx.operations.push(Operation::AssetCreation(asset_create));
 
@@ -380,7 +377,7 @@ mod tests {
     #[test]
     fn asset_issued() {
         let mut prng = ChaChaRng::from_seed([0u8; 32]);
-        let mut state = LedgerState::new();
+        let mut state = LedgerState::default();
         let mut tx = Transaction::create_empty();
 
         let token_code1 = AssetTokenCode { val: [1; 16] };
@@ -390,31 +387,25 @@ mod tests {
         let asset_body =
             asset_creation_body(&token_code1, &asset_type, &public_key, true, &None, &None);
         let asset_create = asset_creation_operation(&asset_body, &public_key, &secret_key);
-        tx.operations.push(Operation::asset_creation(asset_create));
+        tx.operations.push(Operation::AssetCreation(asset_create));
 
         assert_eq!(true, state.validate_transaction(&tx));
 
         state.apply_transaction(tx);
 
-        let issued = TxOutput { public: TxPublicFields { amount: serde::export::Some(100),
-                                                         amount_commitment: None,
-                                                         asset_type:
-                                                             serde::export::Some(asset_type.clone()),
-                                                         asset_type_commitment: None,
-                                                         public_key: public_key.clone() },
-                                lock_box: None };
+        let mut tx = Transaction::create_empty();
 
         let asset_issuance_body = AssetIssuanceBody { seq_num: 0,
                                                       code: token_code1,
-                                                      outputs: vec![issued.clone()] };
+                                                      outputs: Vec::new(),
+                                                      records: Vec::new() };
 
         let sign = compute_signature(&secret_key, &public_key, &asset_issuance_body);
 
         let asset_issuance_operation =
             AssetIssuance { body: asset_issuance_body,
-                            body_signature: SignedAddress { address:
-                                                                Address { key: public_key.clone() },
-                                                            signature: sign } };
+            pubkey: IssuerPublicKey { key: public_key.clone() },
+            signature: sign };
 
         let issue_op = Operation::AssetIssuance(asset_issuance_operation);
 
