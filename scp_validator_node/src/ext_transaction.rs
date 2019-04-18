@@ -16,7 +16,7 @@ use crate::ext_transaction::cpp::{
     RegisterCallbacks, SetTransactionResultStatus, TransactionResultStatus,
     TransactionResultStatus_txSUCCESS,
 };
-use core::store::{LedgerUpdate, LedgerValidate};
+use core::store::{LedgerUpdate, LedgerValidate, ArchiveUpdate};
 use ledger_app::{convert_tx, LedgerApp};
 
 use std::slice;
@@ -193,7 +193,8 @@ extern "C" fn deliver_transaction(app: *mut AppHandle,
         let tx = convert_tx(slice);
 
         //if !
-        (*app).state.apply_transaction(tx);
+        (*app).state.apply_transaction(&tx);
+        (*app).state.append_transaction(tx);
         // {
         //     set_transaction_result_status(result, TransactionResultStatus_txFAILED);
         //     return false;

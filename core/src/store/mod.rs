@@ -15,11 +15,19 @@ pub trait LedgerAccess {
 }
 
 pub trait LedgerUpdate {
-    fn apply_transaction(&mut self, txn: Transaction) -> ();
+    fn apply_transaction(&mut self, txn: &Transaction) -> ();
 }
 
 pub trait LedgerValidate {
     fn validate_transaction(&mut self, txn: &Transaction) -> bool;
+}
+
+pub trait ArchiveUpdate {
+    fn append_transaction(&mut self, txn: Transaction) -> ();
+}
+
+pub trait ArchiveAccess {
+    fn get_transaction(&self, addr: TxoSID) -> Option<Transaction>;
 }
 
 pub fn compute_sha256_hash<T>(msg: &T) -> [u8; 32]
@@ -59,6 +67,7 @@ impl LedgerState {
             self.utxos.remove(&utxo);
         }
 
+        // 
         for out in transfer.body
                            .outputs
                            .iter()
@@ -144,7 +153,7 @@ impl LedgerState {
         let token = &self.tokens[&issue.body.code];
         let last_issuance_num = &self.issuance_num[&issue.body.code];
 
-        //[2] replay attack - not issued before
+        //[2] replay attack - not issued before=====
         if issue.body.seq_num <= *last_issuance_num {
             return false;
         }
@@ -187,11 +196,16 @@ impl LedgerState {
 }
 
 impl LedgerUpdate for LedgerState {
-    fn apply_transaction(&mut self, txn: Transaction) {
+    fn apply_transaction(&mut self, txn: &Transaction) {
         // Apply the operations
         for op in &txn.operations {
             self.apply_operation(op);
         }
+    }
+}
+
+impl ArchiveUpdate for LedgerState {
+    fn append_transaction(&mut self, txn: Transaction) {
         self.txs.push(txn);
     }
 }
@@ -315,7 +329,8 @@ mod tests {
 
         assert_eq!(true, state.validate_transaction(&tx));
 
-        state.apply_transaction(tx);
+        state.apply_transaction(&tx);
+        state.append_transaction(tx);
         assert_eq!(true, state.get_asset_token(&token_code1).is_some());
 
         assert_eq!(asset_body.asset,
@@ -412,7 +427,8 @@ mod tests {
         tx.operations.push(issue_op);
 
         assert_eq!(true, state.validate_transaction(&tx));
-        state.apply_transaction(tx);
+        state.apply_transaction(&tx);
+        state.append_transaction(tx);
 
         // Update units as would be done once asset is issued
         assert_eq!(100, state.get_asset_token(&token_code1).unwrap().units);

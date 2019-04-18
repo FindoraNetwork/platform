@@ -1,7 +1,21 @@
 extern crate core;
 
-use core::store::*;
 use core::data_model::{Transaction};
+use core::data_model::errors::PlatformError;
+use core::store::{LedgerAccess, ArchiveAccess};
+
+pub trait TransactionBuilder {
+    fn add_operation_create_asset(&mut self);
+    fn add_operation_issue_asset(&mut self);
+    fn add_operation_transfer_asset(&mut self);
+    fn serialize(&self) -> Result<[u8], PlatformError>;
+}
+
+pub struct LedgerTransactionBuilder {
+    txn: Transaction,
+    ledger: &LedgerAccess,
+    archive: &ArchiveAccess,
+}
 
 
 

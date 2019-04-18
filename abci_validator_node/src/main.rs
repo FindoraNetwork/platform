@@ -36,6 +36,7 @@ impl abci::Application for ABCILedgerApp {
         let tx = convert_tx(req.get_tx());
         // Update state
         self.state.apply_transaction(tx);
+        self.state.append_transaction(tx);
         // Return default code 0 == bueno
         ResponseDeliverTx::new()
     }
