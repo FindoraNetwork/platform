@@ -142,6 +142,7 @@ pub enum AssetType {
 #[derive(Eq, PartialEq, Debug, Clone, Serialize, Deserialize)]
 pub enum TxOutput {
   BlindAssetRecord(BlindAssetRecord),
+  AssetDefinition(Asset),
 } // needs to be a generic view on an Operation, specifying one output record of a specific type...
 
 #[derive(Eq, PartialEq, Debug, Clone, Serialize, Deserialize)]

@@ -28,7 +28,7 @@ pub trait ArchiveUpdate {
 }
 
 pub trait ArchiveAccess {
-  fn get_transaction(&self, addr: TxoSID) -> Option<Transaction>;
+  fn get_transaction(&self, addr: TxoSID) -> Option<&Transaction>;
 }
 
 pub fn compute_sha256_hash<T>(msg: &T) -> [u8; 32]
@@ -45,6 +45,7 @@ pub fn compute_sha256_hash<T>(msg: &T) -> [u8; 32]
 #[derive(Default)]
 pub struct LedgerState {
   txs: Vec<Transaction>, //will need to be replaced by merkle tree...
+  txaddrs: HashMap<TxoSID, usize>,
   utxos: HashMap<TxoSID, Utxo>,
   contracts: HashMap<SmartContractKey, SmartContract>,
   policies: HashMap<AssetPolicyKey, CustomAssetPolicy>,
@@ -107,6 +108,8 @@ impl LedgerState {
     let token: AssetToken = AssetToken { properties: create.body.asset.clone(),
                                          ..Default::default() };
     self.tokens.insert(token.properties.code, token);
+    self.add_txo((&create.body.outputs[0],
+                 TxOutput::AssetDefinition(create.body.asset.clone())));
   }
 
   fn apply_operation(&mut self, op: &Operation) {
@@ -245,6 +248,15 @@ impl LedgerAccess for LedgerState {
   fn get_smart_contract(&self, key: &SmartContractKey) -> Option<SmartContract> {
     match self.contracts.get(key) {
       Some(contract) => Some(contract.clone()),
+      None => None,
+    }
+  }
+}
+
+impl ArchiveAccess for LedgerState {
+  fn get_transaction(&self, addr: TxoSID) -> Option<&Transaction> {
+    match self.txaddrs.get(&addr) {
+      Some(idx) => Some(&self.txs[*idx]),
       None => None,
     }
   }
