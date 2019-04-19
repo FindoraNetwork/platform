@@ -6,6 +6,7 @@ use crate::data_model::{
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use zei::transfers::verify_xfr_note;
+pub mod errors;
 
 pub trait LedgerAccess {
   fn check_utxo(&self, addr: TxoSID) -> Option<Utxo>;
