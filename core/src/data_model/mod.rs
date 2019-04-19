@@ -1,23 +1,23 @@
 use chrono::prelude::*;
 use curve25519_dalek::ristretto::CompressedRistretto;
-use std::collections::HashMap;
-use std::boxed::Box;
-use zei::basic_crypto::signatures::{XfrKeyPair, XfrPublicKey, XfrSecretKey, XfrSignature};
-use zei::transfers::{AssetRecord, BlindAssetRecord, OpenAssetRecord, XfrNote, gen_xfr_note};
 use rand::{CryptoRng, Rng};
+use std::boxed::Box;
+use std::collections::HashMap;
+use zei::basic_crypto::signatures::{XfrKeyPair, XfrPublicKey, XfrSecretKey, XfrSignature};
+use zei::transfers::{gen_xfr_note, AssetRecord, BlindAssetRecord, OpenAssetRecord, XfrNote};
 pub mod errors;
 
 // Unique Identifier for AssetTokens
 #[derive(Default, Serialize, Deserialize, Hash, Eq, PartialEq, Copy, Clone, Debug)]
 pub struct AssetTokenCode {
-    // User-supplied code, system guarantees uniqueness
-    pub val: [u8; 16],
+  // User-supplied code, system guarantees uniqueness
+  pub val: [u8; 16],
 }
 
 #[derive(Default, Serialize, Deserialize, Hash, Eq, PartialEq, Copy, Clone, Debug)]
 pub struct AssetDigest {
-    // Generated from the asset definition, also unique
-    pub val: [u8; 32],
+  // Generated from the asset definition, also unique
+  pub val: [u8; 32],
 }
 
 // TODO: Define Memo
@@ -30,46 +30,46 @@ pub struct Commitment([u8; 32]);
 
 #[derive(Default, Eq, PartialEq, Clone, Copy, Debug, Serialize, Deserialize)]
 pub struct XfrAddress {
-    pub key: XfrPublicKey,
+  pub key: XfrPublicKey,
 }
 
 #[derive(Default, Eq, PartialEq, Clone, Copy, Debug, Serialize, Deserialize)]
 pub struct IssuerPublicKey {
-    pub key: XfrPublicKey,
+  pub key: XfrPublicKey,
 }
 
 #[derive(Default, Eq, PartialEq, Clone, Copy, Debug, Serialize, Deserialize)]
 pub struct AccountAddress {
-    pub key: XfrPublicKey,
+  pub key: XfrPublicKey,
 }
 
 #[derive(Eq, PartialEq, Debug, Serialize, Deserialize)]
 pub struct SignedAddress {
-    pub address: XfrAddress,
-    pub signature: XfrSignature,
+  pub address: XfrAddress,
+  pub signature: XfrSignature,
 }
 
 impl SignedAddress {
-    pub fn verify(&self, message: &[u8]) -> bool {
-        self.address.key.verify(message, &self.signature).is_ok()
-    }
+  pub fn verify(&self, message: &[u8]) -> bool {
+    self.address.key.verify(message, &self.signature).is_ok()
+  }
 }
 
 #[derive(Default, Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
 pub struct Asset {
-    pub code: AssetTokenCode,
-    pub issuer: IssuerPublicKey,
-    pub memo: Memo,
-    pub confidential_memo: ConfidentialMemo,
-    pub updatable: bool,
+  pub code: AssetTokenCode,
+  pub issuer: IssuerPublicKey,
+  pub memo: Memo,
+  pub confidential_memo: ConfidentialMemo,
+  pub updatable: bool,
 }
 
 #[derive(Default, Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
 pub struct AssetToken {
-    pub properties: Asset, //TODO: ZEI. change to asset_record from zei...
-    pub digest: [u8; 32],
-    pub units: u64,
-    pub confidential_units: Commitment,
+  pub properties: Asset, //TODO: ZEI. change to asset_record from zei...
+  pub digest: [u8; 32],
+  pub units: u64,
+  pub confidential_units: Commitment,
 }
 
 //impl AssetToken {
@@ -98,7 +98,7 @@ pub struct CredentialProofKey([u8; 16]);
 
 #[derive(Hash, Eq, PartialEq, Debug, Serialize, Deserialize)]
 pub struct CredentialProof {
-    pub key: CredentialProofKey,
+  pub key: CredentialProofKey,
 }
 
 #[derive(Hash, Eq, PartialEq, Debug, Serialize, Deserialize)]
@@ -118,233 +118,239 @@ pub struct Variable;
 
 #[derive(Default, Hash, Eq, PartialEq, Clone, Copy, Debug, Serialize, Deserialize)]
 pub struct TxoSID {
-    pub(crate) index: u64,
+  pub(crate) index: u64,
 }
 
 #[derive(Hash, Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
 pub struct AssetSpecification {
-    pub code: AssetTokenCode,
-    pub amount: u64,
+  pub code: AssetTokenCode,
+  pub amount: u64,
 }
 
 #[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
 pub struct PrivateAssetSpecification {
-    amount_commitment: Option<CompressedRistretto>,
-    asset_type_commitment: Option<CompressedRistretto>,
+  amount_commitment: Option<CompressedRistretto>,
+  asset_type_commitment: Option<CompressedRistretto>,
 }
 
 #[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
 pub enum AssetType {
-    Normal(AssetSpecification),
-    Private(PrivateAssetSpecification),
+  Normal(AssetSpecification),
+  Private(PrivateAssetSpecification),
 }
 
 #[derive(Eq, PartialEq, Debug, Clone, Serialize, Deserialize)]
 pub enum TxOutput {
-    BlindAssetRecord(BlindAssetRecord),
+  BlindAssetRecord(BlindAssetRecord),
 } // needs to be a generic view on an Operation, specifying one output record of a specific type...
 
 #[derive(Eq, PartialEq, Debug, Clone, Serialize, Deserialize)]
 pub struct Utxo {
-    // digest is a hash of the TxoSID and the operation output
-    pub digest: [u8; 32],
-    pub output: TxOutput,
+  // digest is a hash of the TxoSID and the operation output
+  pub digest: [u8; 32],
+  pub output: TxOutput,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct AssetTransferBody {
-    //pub nonce: u128,
-    pub inputs: Vec<TxoSID>,    // ledger address of inputs
-    pub outputs: Vec<TxoSID>,   // computed in check?
-    pub transfer: Box<XfrNote>, //TODO: ZEI. XfrNote,
+  //pub nonce: u128,
+  pub inputs: Vec<TxoSID>,    // ledger address of inputs
+  pub outputs: Vec<TxoSID>,   // computed in check?
+  pub transfer: Box<XfrNote>, //TODO: ZEI. XfrNote,
 }
 
 impl AssetTransferBody {
-    pub fn new<R: CryptoRng + Rng>(
-        prng: &mut R,
-        input_sids: Vec<TxoSID>,
-        input_records: &[OpenAssetRecord],
-        output_records: &[AssetRecord],
-        input_keys: &[XfrKeyPair],
-           offset: &mut u64,
-    ) -> Result<AssetTransferBody, errors::PlatformError> {
-        let note = Box::new(gen_xfr_note(prng, input_records, output_records, input_keys).or_else(|_| Err(errors::PlatformError::ZeiError))?);
-        let mut txos = Vec::new();
-        txos.resize_with(output_records.len(), || { let tmp = offset.clone(); *offset += 1; TxoSID{ index: tmp } } );
-        Ok(AssetTransferBody { inputs: input_sids, outputs: txos, transfer: note })
-    }
+  pub fn new<R: CryptoRng + Rng>(prng: &mut R,
+                                 input_sids: Vec<TxoSID>,
+                                 input_records: &[OpenAssetRecord],
+                                 output_records: &[AssetRecord],
+                                 input_keys: &[XfrKeyPair],
+                                 offset: &mut u64)
+                                 -> Result<AssetTransferBody, errors::PlatformError> {
+    let note = Box::new(gen_xfr_note(prng, input_records, output_records, input_keys).or_else(|_| Err(errors::PlatformError::ZeiError))?);
+    let mut txos = Vec::new();
+    txos.resize_with(output_records.len(), || {
+          let tmp = offset.clone();
+          *offset += 1;
+          TxoSID { index: tmp }
+        });
+    Ok(AssetTransferBody { inputs: input_sids,
+                           outputs: txos,
+                           transfer: note })
+  }
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct AssetIssuanceBody {
-    pub code: AssetTokenCode,
-    pub seq_num: u64,
-    pub outputs: Vec<TxoSID>,
-    pub records: Vec<TxOutput>,
-    // pub outputs: Vec<TxoSID>, // computed in check?
+  pub code: AssetTokenCode,
+  pub seq_num: u64,
+  pub outputs: Vec<TxoSID>,
+  pub records: Vec<TxOutput>,
+  // pub outputs: Vec<TxoSID>, // computed in check?
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct AssetCreationBody {
-    pub asset: Asset,
-    pub outputs: Vec<TxoSID>, // offset from base of transaction
+  pub asset: Asset,
+  pub outputs: Vec<TxoSID>, // offset from base of transaction
 }
 
 impl AssetCreationBody {
-    pub fn new(token_code: &AssetTokenCode,
-           issuer_key: &IssuerPublicKey, // TODO: require private key check somehow?
-           updatable: bool,
-           memo: &Option<Memo>,
-           confidential_memo: &Option<ConfidentialMemo>,
-           offset: &mut u64,
-            ) -> Result<AssetCreationBody, errors::PlatformError> {
-        let mut asset_def: Asset = Default::default();
-        asset_def.code = token_code.clone();
-        asset_def.issuer = issuer_key.clone();
-        asset_def.updatable = updatable;
+  pub fn new(token_code: &AssetTokenCode,
+             issuer_key: &IssuerPublicKey, // TODO: require private key check somehow?
+             updatable: bool,
+             memo: &Option<Memo>,
+             confidential_memo: &Option<ConfidentialMemo>,
+             offset: &mut u64)
+             -> Result<AssetCreationBody, errors::PlatformError> {
+    let mut asset_def: Asset = Default::default();
+    asset_def.code = token_code.clone();
+    asset_def.issuer = issuer_key.clone();
+    asset_def.updatable = updatable;
 
-        if memo.is_some() {
-            asset_def.memo = memo.as_ref().unwrap().clone();
-        } else {
-            asset_def.memo = Memo {};
-        }
-
-        if confidential_memo.is_some() {
-            asset_def.confidential_memo = confidential_memo.as_ref().unwrap().clone();
-        } else {
-            asset_def.confidential_memo = ConfidentialMemo {};
-        }
-        let txo = TxoSID { index: offset.clone() };
-        *offset += 1;
-        Ok(AssetCreationBody { asset: asset_def, outputs: vec![txo] })
+    if memo.is_some() {
+      asset_def.memo = memo.as_ref().unwrap().clone();
+    } else {
+      asset_def.memo = Memo {};
     }
+
+    if confidential_memo.is_some() {
+      asset_def.confidential_memo = confidential_memo.as_ref().unwrap().clone();
+    } else {
+      asset_def.confidential_memo = ConfidentialMemo {};
+    }
+    let txo = TxoSID { index: offset.clone() };
+    *offset += 1;
+    Ok(AssetCreationBody { asset: asset_def,
+                           outputs: vec![txo] })
+  }
 }
 
-
 fn compute_signature<T>(secret_key: &XfrSecretKey,
-                    public_key: &XfrPublicKey,
-                    operation_body: &T)
-                    -> XfrSignature
-    where T: serde::Serialize
+                        public_key: &XfrPublicKey,
+                        operation_body: &T)
+                        -> XfrSignature
+  where T: serde::Serialize
 {
-    secret_key.sign(&serde_json::to_vec(&operation_body).unwrap(), &public_key)
+  secret_key.sign(&serde_json::to_vec(&operation_body).unwrap(), &public_key)
 }
 
 // TODO: UTXO Addresses must be included in Transfer Signature
 #[derive(Debug, Serialize, Deserialize)]
 pub struct AssetTransfer {
-    //pub nonce: u128,
-    pub body: AssetTransferBody,
-    pub body_signatures: Vec<SignedAddress>, // not yet supported
+  //pub nonce: u128,
+  pub body: AssetTransferBody,
+  pub body_signatures: Vec<SignedAddress>, // not yet supported
 }
 
 impl AssetTransfer {
-    pub fn new(transfer_body: AssetTransferBody) -> Result<AssetTransfer, errors::PlatformError> {
-        Ok(AssetTransfer { body: transfer_body, body_signatures: Vec::new() })
-    }
+  pub fn new(transfer_body: AssetTransferBody) -> Result<AssetTransfer, errors::PlatformError> {
+    Ok(AssetTransfer { body: transfer_body,
+                       body_signatures: Vec::new() })
+  }
 }
 
 //Tells the storage layer what to do the list of active asset records (i.e. UTXO set)
 #[derive(Debug, Serialize, Deserialize)]
 pub struct AssetTransferResult {
-    pub success: bool,
+  pub success: bool,
 }
 
 // TODO: Include mechanism for replay attacks
 #[derive(Debug, Serialize, Deserialize)]
 pub struct AssetIssuance {
-    pub body: AssetIssuanceBody,
-    pub pubkey: IssuerPublicKey,
-    pub signature: XfrSignature,
+  pub body: AssetIssuanceBody,
+  pub pubkey: IssuerPublicKey,
+  pub signature: XfrSignature,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct AssetIssuanceResult {
-    pub success: bool,
+  pub success: bool,
 }
 
 // ... etc...
 #[derive(Debug, Serialize, Deserialize)]
 pub struct AssetCreation {
-    pub body: AssetCreationBody,
-    pub pubkey: IssuerPublicKey,
-    pub signature: XfrSignature,
+  pub body: AssetCreationBody,
+  pub pubkey: IssuerPublicKey,
+  pub signature: XfrSignature,
 }
 
 impl AssetCreation {
-    pub fn new(creation_body: AssetCreationBody,
-           public_key: &XfrPublicKey,
-           secret_key: &XfrSecretKey
-     ) -> Result<AssetCreation, errors::PlatformError> {
-        let sign = compute_signature(&secret_key, &public_key, &creation_body);
-        Ok(AssetCreation { body: creation_body,
-                        pubkey: IssuerPublicKey { key: public_key.clone() },
-                        signature: sign })
-    }
+  pub fn new(creation_body: AssetCreationBody,
+             public_key: &XfrPublicKey,
+             secret_key: &XfrSecretKey)
+             -> Result<AssetCreation, errors::PlatformError> {
+    let sign = compute_signature(&secret_key, &public_key, &creation_body);
+    Ok(AssetCreation { body: creation_body,
+                       pubkey: IssuerPublicKey { key: public_key.clone() },
+                       signature: sign })
+  }
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct AssetCreationResult {
-    pub success: bool,
+  pub success: bool,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 pub enum Operation {
-    AssetTransfer(AssetTransfer),
-    AssetIssuance(AssetIssuance),
-    AssetCreation(AssetCreation),
-    // ... etc...
+  AssetTransfer(AssetTransfer),
+  AssetIssuance(AssetIssuance),
+  AssetCreation(AssetCreation),
+  // ... etc...
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 pub enum OperationResult {
-    AssetTransferResult(AssetTransferResult),
-    AssetIssuanceResult(AssetIssuanceResult),
-    AssetCreationResult(AssetCreationResult),
-    // ... etc...
+  AssetTransferResult(AssetTransferResult),
+  AssetIssuanceResult(AssetIssuanceResult),
+  AssetCreationResult(AssetCreationResult),
+  // ... etc...
 }
 
 #[derive(Debug)]
 pub struct TimeBounds {
-    pub start: DateTime<Utc>,
-    pub end: DateTime<Utc>,
+  pub start: DateTime<Utc>,
+  pub end: DateTime<Utc>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Transaction {
-    pub operations: Vec<Operation>,
-    pub variable_utxos: Vec<TxoSID>, // TODO: precondition support
-    pub credentials: Vec<CredentialProof>,
-    pub memos: Vec<Memo>,
-    //pub time_bounds: TimeBounds,
-    // ... etc...
+  pub operations: Vec<Operation>,
+  pub variable_utxos: Vec<TxoSID>, // TODO: precondition support
+  pub credentials: Vec<CredentialProof>,
+  pub memos: Vec<Memo>,
+  //pub time_bounds: TimeBounds,
+  // ... etc...
 }
 
 impl Transaction {
-    pub fn create_empty() -> Transaction {
-        Transaction { operations: Vec::new(),
-                      variable_utxos: Vec::new(),
-                      credentials: Vec::new(),
-                      memos: Vec::new() }
-    }
+  pub fn create_empty() -> Transaction {
+    Transaction { operations: Vec::new(),
+                  variable_utxos: Vec::new(),
+                  credentials: Vec::new(),
+                  memos: Vec::new() }
+  }
 
-    pub fn add_operation(&mut self, op: Operation) {
-        self.operations.push(op);
-    }
+  pub fn add_operation(&mut self, op: Operation) {
+    self.operations.push(op);
+  }
 }
 
 pub struct TransactionResult {
-    pub op_results: Vec<OperationResult>,
+  pub op_results: Vec<OperationResult>,
 }
 
 #[derive(Default, Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
 pub struct AccountID {
-    pub val: String,
+  pub val: String,
 }
 
 #[derive(Default, Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
 pub struct Account {
-    pub id: AccountID,
-    pub access_control_list: Vec<AccountAddress>,
-    pub key_value: HashMap<String, String>, //key value storage...
+  pub id: AccountID,
+  pub access_control_list: Vec<AccountAddress>,
+  pub key_value: HashMap<String, String>, //key value storage...
 }
