@@ -1,14 +1,17 @@
 [package]
-name = "txn_builder"
+name = "eian_txn_builder"
 version = "0.1.0"
 authors = ["Nathan Yospe <nathan@eian.io>"]
 edition = "2018"
 
 [dependencies]
-core = { path = "../../core" }
+clap = "2.33.0"
 serde = "1.0"
 serde_derive = "1.0"
 serde_json = "1.0"
+core = { path = "../core" }
+txn_builder = { path = "../components/txn_builder" }
 zei = {git = "ssh://github.com/eianio/zei", branch="feature/more_things_public"}
 rand_chacha = "0.1.1"
 rand = "0.6"
+

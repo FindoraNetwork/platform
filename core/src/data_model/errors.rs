@@ -4,6 +4,7 @@ use std::{error, fmt};
 pub enum PlatformError {
   DeserializationError,
   SerializationError,
+  InputsError,
   ZeiError,
 }
 
@@ -12,6 +13,7 @@ impl fmt::Display for PlatformError {
     f.write_str(match self {
                   PlatformError::DeserializationError => "Could not deserialize object",
                   PlatformError::SerializationError => "Could not serialize object",
+                  PlatformError::InputsError => "Invalid parameters",
                   PlatformError::ZeiError => "Unaccessible error from Zei",
                 })
   }
@@ -22,6 +24,7 @@ impl error::Error for PlatformError {
     match self {
       PlatformError::DeserializationError => "Could not deserialize object",
       PlatformError::SerializationError => "Could not serialize object",
+      PlatformError::InputsError => "Parameters were not consistent",
       PlatformError::ZeiError => "Unaccessible error from Zei",
     }
   }

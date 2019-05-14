@@ -7,5 +7,8 @@ edition = "2018"
 [dependencies]
 
 core = {path = "core"}
+txn_builder = {path = "components/txn_builder"}
+ledger_app = {path = "components/ledger_app"}
 abci_validator_node = {path = "abci_validator_node"}
 scp_validator_node = {path = "scp_validator_node"}
+eian_txn_builder = {path = "eian_txn_builder"}
