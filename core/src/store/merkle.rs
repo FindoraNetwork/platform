@@ -204,11 +204,11 @@ pub mod append_only_merkle  {
         // Return the hash that is the top level of the subtree
         // of this block.
         fn top_hash(&self) -> Option<&HashValue> {
-            if !self.full() {
-                return None;
+            if self.full() {
+                Some(&self.hashes[HASHES_IN_BLOCK - 1])
+            } else {
+                None
             }
-
-            Some(&self.hashes[HASHES_IN_BLOCK - 1])
         }
 
         // Return a slice representing the part of the block that is
@@ -490,11 +490,12 @@ pub mod append_only_merkle  {
                 }
 
                 let block_count = file_size / BLOCK_SIZE as u64;
+                let expected    = covered(leaves_at_this_level, LEAVES_IN_BLOCK as u64);
 
-                if level != 0 && block_count != leaves_at_this_level {
+                if level != 0 && block_count != expected {
                     return sem!(
                         "Level {} has {} blocks, but should have {}, last {}",
-                        level, block_count, leaves_at_this_level,
+                        level, block_count, expected,
                         previous_level_size);
                 }
 
@@ -507,9 +508,17 @@ pub mod append_only_merkle  {
                         Ok(block) => {
                             last_block_full = block.full();
                             entries += block.valid_leaves();
-                            self.blocks[level].push(block);
 
-                            // TODO:  Check this block against the lower level.
+                            if level > 0 {
+                                let lower_index =  i as usize * LEAVES_IN_BLOCK * 2;
+
+                                if let Some(x) =
+                                    self.check_lower(&block, &self.blocks[level - 1], lower_index) {
+                                    return Some(x);
+                                }
+                            }
+
+                            self.blocks[level].push(block);
                         }
                         Err(x) => {
                             return Some(x);
@@ -625,7 +634,7 @@ pub mod append_only_merkle  {
 
                 // Okay, we have another hash to add to the tree.
                 let left   = &prev.unwrap();
-                let right  =  block.top_hash().unwrap();
+                let right  = block.top_hash().unwrap();
 
                 current_hash = hash_pair(left, right);
             }
@@ -780,6 +789,8 @@ pub mod append_only_merkle  {
         // Peform a consistency check of the disk representation of the tree.
         pub fn check_disk(&mut self, flushed: bool) -> Option<Error> {
             let mut entries_at_this_level = self.entry_count;
+            
+            let mut lower = Vec::new();
 
             // Check the blocks at each level.
             for level in 0..self.blocks.len() {
@@ -815,6 +826,7 @@ pub mod append_only_merkle  {
 
                 let mut entry_count     = 0_u64;
                 let mut last_block_full = true;
+                let mut current         = Vec::new();
 
                 // Check each block on disk.
                 for i in 0..blocks_on_disk {
@@ -824,15 +836,24 @@ pub mod append_only_merkle  {
                         Ok(block) => {
                             last_block_full = block.full();
                             entry_count += block.valid_leaves();
+                            
+                            if lower.len() > 0 {
+                                let lower_index =  i as usize * LEAVES_IN_BLOCK * 2;
 
-                            // TODO:  Check this block against the
-                            // lower level.
+                                if let Some(x) = self.check_lower(&block, &lower, lower_index) {
+                                    return Some(x);
+                                }
+                            }
+
+                            current.push(block);
                         },
                         Err(x) => {
                             return sem!("check_disk:  A read failed:  {}", x);
                         }
                     }
                 }
+
+                lower = current;
 
                 if flushed && entry_count != entries_at_this_level {
                     return sem!("check_disk:  The entry counts ({}, {}) \
@@ -864,9 +885,6 @@ pub mod append_only_merkle  {
 
         // Read a block from disk and return its memory representation.  Currently,
         // that is the same as the bytes on disk.
-        //
-        // TODO:  We should check that each leaf hash actually matches the hash of
-        // the lower-level hashes if we are at level 1 or above.
         fn read_block(&mut self, level: usize, id: u64, last: bool) -> Result<Block, Error> {
             let block = match self.read_struct(level) {
                 Ok(block) => { block },
@@ -1475,6 +1493,10 @@ pub mod append_only_merkle  {
                 check_disk_tree(&mut tree, false);
                 write_tree(&mut tree);
                 check_disk_tree(&mut tree, false);
+
+                if let Err(x) = AppendOnlyMerkle::open(&path) {
+                    panic!("Open failed:  {}", x);
+                }
             }
 
             if entry_id > 3 * leaves_per_next {
@@ -1522,6 +1544,10 @@ pub mod append_only_merkle  {
                     println!("Rechecking the disk.");
                     check_tree(&tree);
                     check_disk_tree(&mut tree, true);
+
+                    if let Err(x) = AppendOnlyMerkle::open(&path) {
+                        panic!("open failed:  {}", x);
+                    }
                 }
 
                 println!("Done with checking.");
@@ -1569,8 +1595,4 @@ pub mod append_only_merkle  {
 
         let _ = std::fs::remove_file(&path);
     }
-}
-
-pub fn main() {
-    append_only_merkle::test();
 }
