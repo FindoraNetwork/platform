@@ -48,15 +48,15 @@ pub trait BuildsTransactions {
                               transfer_to: &[(u64, &AccountAddress)])
                               -> Result<(), PlatformError> {
     let input_sids: Vec<TxoSID> = transfer_from.iter()
-                                               .map(|(ref txo_sid, _, _, _, _)| *txo_sid.clone())
+                                               .map(|(ref txo_sid, _, _, _, _)| *(*txo_sid))
                                                .collect();
     let input_amounts: Vec<u64> = transfer_from.iter()
                                                .map(|(_, _, amount, _, _)| *amount)
                                                .collect();
     let input_oars: Result<Vec<OpenAssetRecord>, _> =
       transfer_from.iter()
-                   .map(|(_, ref bar, _, _, ref sk)| {
-                     open_asset_record(&bar, &sk).or(Err(PlatformError::ZeiError))
+                   .map(|(_, ref ba, _, _, ref sk)| {
+                     open_asset_record(&ba, &sk).or(Err(PlatformError::ZeiError))
                    })
                    .collect();
     let input_oars = input_oars?;
@@ -67,8 +67,8 @@ pub trait BuildsTransactions {
         return Err(PlatformError::InputsError);
       } else if input_amount < oar.get_amount() {
         let ar = AssetRecord::new(oar.get_amount() - input_amount,
-                                  oar.get_asset_type().clone(),
-                                  oar.get_pub_key().clone()).or(Err(PlatformError::ZeiError))?;
+                                  *oar.get_asset_type(),
+                                  *oar.get_pub_key()).or(Err(PlatformError::ZeiError))?;
         partially_consumed_inputs.push(ar);
       }
     }
@@ -77,13 +77,12 @@ pub trait BuildsTransactions {
       return Err(PlatformError::InputsError);
     }
     let asset_type = input_oars[0].get_asset_type();
-    let output_ars: Result<Vec<AssetRecord>, _> = transfer_to.iter()
-                                                             .map(|(amount, ref addr)| {
-                                                                  AssetRecord::new(amount.clone(),
-                                                                                   asset_type.clone(),
-                                                                                   addr.key.clone())
-                                                                  .or(Err(PlatformError::ZeiError))
-                                                                }).collect();
+    let output_ars: Result<Vec<AssetRecord>, _> =
+      transfer_to.iter()
+                 .map(|(amount, ref addr)| {
+                   AssetRecord::new(*amount, *asset_type, addr.key).or(Err(PlatformError::ZeiError))
+                 })
+                 .collect();
     let mut output_ars = output_ars?;
     output_ars.append(&mut partially_consumed_inputs);
     self.add_operation_transfer_asset(input_sids, &input_oars, &output_ars)
@@ -109,16 +108,15 @@ impl BuildsTransactions for TransactionBuilder {
                                 make_confidential: bool)
                                 -> Result<(), PlatformError> {
     let memo;
-    let confidential_memo;
-    if make_confidential {
+    let confidential_memo = if make_confidential {
       memo = None;
-      confidential_memo = Some(ConfidentialMemo {});
+      Some(ConfidentialMemo {})
     } else {
       memo = Some(Memo {});
-      confidential_memo = None;
-    }
+      None
+    };
 
-    self.txn.add_operation(Operation::AssetCreation(AssetCreation::new(AssetCreationBody::new(&token_code.unwrap_or(AssetTokenCode::gen_random()), pub_key, updatable, &memo, &confidential_memo)?, pub_key, priv_key)?));
+    self.txn.add_operation(Operation::AssetCreation(AssetCreation::new(AssetCreationBody::new(&token_code.unwrap_or_else(AssetTokenCode::gen_random), pub_key, updatable, memo, confidential_memo)?, pub_key, priv_key)?));
     Ok(())
   }
   fn add_operation_issue_asset(&mut self,

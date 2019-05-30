@@ -25,7 +25,7 @@ impl AssetTokenCode {
     small_rng.fill(&mut buf);
     AssetTokenCode { val: buf }
   }
-  pub fn from_str(s: &str) -> AssetTokenCode {
+  pub fn new_from_str(s: &str) -> AssetTokenCode {
     let mut as_vec = s.to_string().into_bytes();
     as_vec.resize(16, 0u8);
     let buf = <[u8; 16]>::try_from(as_vec.as_slice()).unwrap();
@@ -193,7 +193,7 @@ impl AssetTransferBody {
     let note = Box::new(gen_xfr_note(prng, input_records, output_records, input_keys, &id_proofs).or_else(|_| Err(errors::PlatformError::ZeiError))?);
     let mut txos = Vec::new();
     txos.resize_with(output_records.len(), || {
-          let tmp = offset.clone();
+          let tmp = *offset;
           *offset += 1;
           TxoSID { index: tmp }
         });
@@ -219,11 +219,11 @@ impl AssetIssuanceBody {
              -> Result<AssetIssuanceBody, errors::PlatformError> {
     let mut txos = Vec::new();
     txos.resize_with(records.len(), || {
-          let tmp = offset.clone();
+          let tmp = *offset;
           *offset += 1;
           TxoSID { index: tmp }
         });
-    Ok(AssetIssuanceBody { code: token_code.clone(),
+    Ok(AssetIssuanceBody { code: *token_code,
                            seq_num,
                            outputs: txos,
                            records: records.to_vec() })
@@ -239,22 +239,22 @@ impl AssetCreationBody {
   pub fn new(token_code: &AssetTokenCode,
              issuer_key: &IssuerPublicKey, // TODO: require private key check somehow?
              updatable: bool,
-             memo: &Option<Memo>,
-             confidential_memo: &Option<ConfidentialMemo>)
+             memo: Option<Memo>,
+             confidential_memo: Option<ConfidentialMemo>)
              -> Result<AssetCreationBody, errors::PlatformError> {
     let mut asset_def: Asset = Default::default();
-    asset_def.code = token_code.clone();
-    asset_def.issuer = issuer_key.clone();
+    asset_def.code = *token_code;
+    asset_def.issuer = *issuer_key;
     asset_def.updatable = updatable;
 
     if memo.is_some() {
-      asset_def.memo = memo.as_ref().unwrap().clone();
+      asset_def.memo = *memo.as_ref().unwrap();
     } else {
       asset_def.memo = Memo {};
     }
 
     if confidential_memo.is_some() {
-      asset_def.confidential_memo = confidential_memo.as_ref().unwrap().clone();
+      asset_def.confidential_memo = *confidential_memo.as_ref().unwrap();
     } else {
       asset_def.confidential_memo = ConfidentialMemo {};
     }
@@ -307,7 +307,7 @@ impl AssetIssuance {
              -> Result<AssetIssuance, errors::PlatformError> {
     let sign = compute_signature(&secret_key, &public_key.key, &issuance_body);
     Ok(AssetIssuance { body: issuance_body,
-                       pubkey: public_key.clone(),
+                       pubkey: *public_key,
                        signature: sign })
   }
 }
@@ -332,7 +332,7 @@ impl AssetCreation {
              -> Result<AssetCreation, errors::PlatformError> {
     let sign = compute_signature(&secret_key, &public_key.key, &creation_body);
     Ok(AssetCreation { body: creation_body,
-                       pubkey: public_key.clone(),
+                       pubkey: *public_key,
                        signature: sign })
   }
 }

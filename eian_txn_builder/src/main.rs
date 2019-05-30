@@ -277,7 +277,7 @@ fn main() {
           if let Ok(mut txn_builder) = load_txn_builder_from_file(&transaction_file_name) {
             let asset_token: AssetTokenCode;
             if let Some(token_code) = token_code {
-              asset_token = AssetTokenCode::from_str(token_code);
+              asset_token = AssetTokenCode::new_from_str(token_code);
             } else {
               asset_token = AssetTokenCode::gen_random();
               println!("Creating asset with token code {:?}", asset_token.val);

@@ -81,19 +81,16 @@ impl LedgerState {
     }
     let utxo_ref = Utxo { digest: compute_sha256_hash(&serde_json::to_vec(&txo.1).unwrap()),
                           output: txo.1 };
-    self.utxos.insert(utxo_addr.clone(), utxo_ref);
+    self.utxos.insert(utxo_addr, utxo_ref);
     self.max_applied_sid = utxo_addr;
   }
 
   fn apply_asset_transfer(&mut self, transfer: &AssetTransfer) {
     for utxo in &transfer.body.inputs {
       let mut rectified_txo = *utxo;
-      match rectified_txo.index {
-        TXN_SEQ_ID_PLACEHOLDER..=u64::MAX => {
-          rectified_txo.index -= TXN_SEQ_ID_PLACEHOLDER;
-          rectified_txo.index += self.txn_base_sid.index;
-        }
-        _ => {}
+      if let TXN_SEQ_ID_PLACEHOLDER..=u64::MAX = rectified_txo.index {
+        rectified_txo.index -= TXN_SEQ_ID_PLACEHOLDER;
+        rectified_txo.index += self.txn_base_sid.index;
       }
       self.utxos.remove(&rectified_txo);
     }
@@ -156,9 +153,21 @@ impl<LA: LedgerAccess> BlockContext<LA> {
   }
   pub fn apply_operation(&mut self, op: &Operation) {
     match op {
-      Operation::AssetCreation(ac) => {}
-      Operation::AssetIssuance(ai) => {}
-      Operation::AssetTransfer(at) => {}
+      Operation::AssetCreation(ac) => {
+        let token: AssetToken = AssetToken { properties: ac.body.asset.clone(),
+                                             ..Default::default() };
+        self.tokens.insert(ac.body.asset.code, token);
+      }
+      Operation::AssetIssuance(ai) => {
+        self.issuance_num.insert(ai.body.code, ai.body.seq_num);
+      }
+      Operation::AssetTransfer(at) => {
+        for txo_sid in &at.body.inputs {
+          if txo_sid.index < TXN_SEQ_ID_PLACEHOLDER {
+            self.used_txos.insert(txo_sid.clone());
+          }
+        }
+      }
     }
   }
 }
@@ -168,12 +177,10 @@ impl<'la, LA> LedgerAccess for BlockContext<LA> where LA: LedgerAccess
   fn check_utxo(&self, addr: TxoSID) -> Option<Utxo> {
     if let Some(_used) = self.used_txos.get(&addr) {
       None
+    } else if let Ok(la_reader) = self.ledger.read() {
+      la_reader.check_utxo(addr)
     } else {
-      if let Ok(la_reader) = self.ledger.read() {
-        la_reader.check_utxo(addr)
-      } else {
-        None
-      }
+      None
     }
   }
 
@@ -218,7 +225,7 @@ impl<'la, LA> LedgerAccess for BlockContext<LA> where LA: LedgerAccess
 
   fn get_issuance_num(&self, code: &AssetTokenCode) -> Option<u64> {
     match self.issuance_num.get(code) {
-      Some(num) => Some(num.clone()),
+      Some(num) => Some(*num),
       None => {
         if let Ok(la_reader) = self.ledger.read() {
           la_reader.get_issuance_num(code)
@@ -237,7 +244,7 @@ pub struct TxnContext<'la, LA: LedgerAccess> {
 
 impl<'la, LA: LedgerAccess> TxnContext<'la, LA> {
   pub fn new(block_context: &'la mut BlockContext<LA>) -> Result<Self, PlatformError> {
-    Ok(TxnContext { block_context: block_context,
+    Ok(TxnContext { block_context,
                     utxos: HashMap::new() })
   }
   pub fn apply_operation(&mut self, op: &Operation) {
@@ -246,7 +253,7 @@ impl<'la, LA: LedgerAccess> TxnContext<'la, LA> {
         for (ref addr, out) in ai.body.outputs.iter().zip(ai.body.records.iter()) {
           let utxo_ref = Utxo { digest: compute_sha256_hash(&serde_json::to_vec(out).unwrap()),
                                 output: out.clone() };
-          self.utxos.insert(*addr.clone(), utxo_ref);
+          self.utxos.insert((*addr).clone(), utxo_ref);
         }
       }
       Operation::AssetTransfer(at) => {
@@ -258,7 +265,7 @@ impl<'la, LA: LedgerAccess> TxnContext<'la, LA> {
         for (ref addr, out) in at.body.outputs.iter().zip(at.body.transfer.outputs_iter()) {
           let utxo_ref = Utxo { digest: compute_sha256_hash(&serde_json::to_vec(out).unwrap()),
                                 output: TxOutput::BlindAssetRecord(out.clone()) };
-          self.utxos.insert(*addr.clone(), utxo_ref);
+          self.utxos.insert((*addr).clone(), utxo_ref);
         }
       }
       _ => {}
@@ -437,7 +444,7 @@ impl LedgerAccess for LedgerState {
 
   fn get_issuance_num(&self, code: &AssetTokenCode) -> Option<u64> {
     match self.issuance_num.get(code) {
-      Some(num) => Some(num.clone()),
+      Some(num) => Some(*num),
       None => None,
     }
   }

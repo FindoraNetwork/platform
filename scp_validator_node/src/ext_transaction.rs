@@ -14,7 +14,7 @@ use crate::ext_transaction::cpp::{
   CheckTransaction, CommitTransaction, ConstBytes, DeliverTransaction, DestroyApp,
   GetTransactionData, GetTransactionResultData, InitApp, ModifyTransactionData, MutBytes,
   PostTxnBlock, PreTxnBlock, RegisterCallbacks, SetTransactionResultStatus,
-  TransactionResultStatus, TransactionResultStatus_txFAILED, TransactionResultStatus_txSUCCESS,
+  TransactionResultStatus,
 };
 use core::data_model::errors::PlatformError;
 use core::store::{LedgerState, LedgerValidate, TxnContext};
@@ -189,7 +189,7 @@ extern "C" fn post_txn_block(_app: *mut AppHandle) {}
 
 extern "C" fn deliver_transaction(app: *mut AppHandle,
                                   txn: *mut BlindTransaction,
-                                  result: *mut BlindTransactionResult)
+                                  _result: *mut BlindTransactionResult)
                                   -> bool {
   unsafe {
     let app = app as *mut SCPLedgerApp; // std::mem::transmute::<*mut AppHandle, *mut LedgerApp>(app);
@@ -220,10 +220,10 @@ extern "C" fn commit_transaction(_app: *mut AppHandle,
 
 extern "C" fn check_transaction(app: *mut AppHandle, txn: *const BlindTransaction) -> bool {
   unsafe {
-    let app = app as *mut SCPLedgerApp; // std::mem::transmute::<*mut AppHandle, *mut LedgerApp>(app);
+    let _app = app as *mut SCPLedgerApp; // std::mem::transmute::<*mut AppHandle, *mut LedgerApp>(app);
     let data = get_transaction_data(txn);
     let slice = slice::from_raw_parts(data.bytes, data.length);
-    if let Some(tx) = convert_tx(slice) {
+    if let Some(_tx) = convert_tx(slice) {
       return true;
     }
   }
