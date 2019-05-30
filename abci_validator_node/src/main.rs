@@ -1,9 +1,9 @@
 extern crate abci;
-extern crate serde;
-extern crate serde_derive;
 extern crate arrayref;
 extern crate core;
 extern crate ledger_app;
+extern crate serde;
+extern crate serde_derive;
 extern crate serde_json;
 
 use abci::*;
@@ -17,9 +17,7 @@ struct ABCILedgerApp {
 
 impl ABCILedgerApp {
   fn new() -> Result<ABCILedgerApp, PlatformError> {
-    Ok(ABCILedgerApp {
-      la: LedgerApp::new(LedgerState::default())?,
-    })
+    Ok(ABCILedgerApp { la: LedgerApp::new(LedgerState::default())? })
   }
 }
 
