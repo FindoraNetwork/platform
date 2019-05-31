@@ -6,7 +6,8 @@ use std::boxed::Box;
 use std::collections::HashMap;
 use std::convert::TryFrom;
 use zei::basic_crypto::signatures::{XfrKeyPair, XfrPublicKey, XfrSecretKey, XfrSignature};
-use zei::transfers::{gen_xfr_note, AssetRecord, BlindAssetRecord, OpenAssetRecord, XfrNote};
+use zei::xfr::lib::gen_xfr_note;
+use zei::xfr::structs::{AssetRecord, BlindAssetRecord, OpenAssetRecord, XfrNote};
 pub mod errors;
 
 pub const TXN_SEQ_ID_PLACEHOLDER: u64 = 0xD000_0000_0000_0000u64;

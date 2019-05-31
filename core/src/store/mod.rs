@@ -4,12 +4,15 @@ use crate::data_model::{
   CustomAssetPolicy, Operation, SmartContract, SmartContractKey, Transaction, TxOutput, TxoSID,
   Utxo, TXN_SEQ_ID_PLACEHOLDER,
 };
+use rand::SeedableRng;
+use rand_chacha::ChaChaRng;
 use sha2::{Digest, Sha256};
 use std::collections::{HashMap, HashSet};
-use std::u64;
-use zei::transfers::verify_xfr_note;
-pub mod errors;
 use std::sync::{Arc, RwLock};
+use std::u64;
+use zei::xfr::lib::verify_xfr_note;
+
+pub mod errors;
 
 pub trait LedgerAccess {
   fn check_utxo(&self, addr: TxoSID) -> Option<Utxo>;
@@ -284,12 +287,14 @@ impl<'la, LA: LedgerAccess> TxnContext<'la, LA> {
 
     // [2] utxos exist on ledger - need to match zei transaction
     let null_policies = vec![];
+    let mut prng: ChaChaRng;
+    prng = ChaChaRng::from_seed([0u8; 32]);
     for utxo_addr in &transfer.body.inputs {
       if self.check_utxo(*utxo_addr).is_none() {
         return false;
       }
 
-      if verify_xfr_note(&transfer.body.transfer, &null_policies).is_err() {
+      if verify_xfr_note(&mut prng, &transfer.body.transfer, &null_policies).is_err() {
         return false;
       }
     }

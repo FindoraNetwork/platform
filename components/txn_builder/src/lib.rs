@@ -13,7 +13,9 @@ use core::data_model::{
 use rand::SeedableRng;
 use rand_chacha::ChaChaRng;
 use zei::basic_crypto::signatures::XfrSecretKey;
-use zei::transfers::{open_asset_record, AssetRecord, BlindAssetRecord, OpenAssetRecord};
+use zei::setup::PublicParams;
+use zei::xfr::asset_record::{build_blind_asset_record, open_asset_record};
+use zei::xfr::structs::{AssetRecord, BlindAssetRecord, OpenAssetRecord};
 
 pub trait BuildsTransactions {
   fn transaction(&self) -> &Transaction;
@@ -38,6 +40,25 @@ pub trait BuildsTransactions {
                                   output_records: &[AssetRecord])
                                   -> Result<(), PlatformError>;
   fn serialize(&self) -> Result<Vec<u8>, PlatformError>;
+
+  fn add_basic_issue_asset(&mut self,
+                           pub_key: &IssuerPublicKey,
+                           priv_key: &XfrSecretKey,
+                           token_code: &AssetTokenCode,
+                           seq_num: u64,
+                           amount: u64)
+                           -> Result<(), PlatformError> {
+    let mut prng = ChaChaRng::from_seed([0u8; 32]);
+    let params = PublicParams::new();
+    let asset_type = [0u8; 16];
+    let ar = AssetRecord::new(amount, asset_type, pub_key.key).or(Err(PlatformError::ZeiError))?;
+    let ba = build_blind_asset_record(&mut prng, &params.pc_gens, &ar, false, false, &None);
+    self.add_operation_issue_asset(pub_key,
+                                   priv_key,
+                                   token_code,
+                                   seq_num,
+                                   &[TxOutput::BlindAssetRecord(ba)])
+  }
 
   fn add_basic_transfer_asset(&mut self,
                               transfer_from: &[(&TxoSID,

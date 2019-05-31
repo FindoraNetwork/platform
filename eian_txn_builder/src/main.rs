@@ -1,5 +1,6 @@
 extern crate clap;
 extern crate core;
+extern crate dirs;
 extern crate serde;
 extern crate serde_json;
 extern crate txn_builder;
@@ -7,15 +8,15 @@ extern crate zei;
 
 use clap::{App, Arg, SubCommand};
 use core::data_model::errors::PlatformError;
-use core::data_model::{AssetTokenCode, IssuerPublicKey, Transaction};
+use core::data_model::{AssetTokenCode, IssuerPublicKey};
 use rand::SeedableRng;
 use rand_chacha::ChaChaRng;
 use std::env;
-use std::fs::{self, DirEntry, File};
+use std::fs::{self, File};
 use std::io::prelude::*;
 use std::path::Path;
 use txn_builder::{BuildsTransactions, TransactionBuilder};
-use zei::basic_crypto::signatures::{XfrKeyPair, XfrPublicKey, XfrSecretKey, XfrSignature};
+use zei::basic_crypto::signatures::{XfrKeyPair, XfrPublicKey, XfrSecretKey};
 use zei::serialization::ZeiFromToBytes;
 
 fn load_txn_builder_from_file(file_name: &str) -> Result<TransactionBuilder, PlatformError> {
@@ -61,13 +62,12 @@ fn load_key_pair_from_files(priv_file_name: &str)
     }
   }
 
-  let pub_file_name: String;
-  if priv_file_name.ends_with(".private") {
+  let pub_file_name = if priv_file_name.ends_with(".private") {
     let (begin, _) = priv_file_name.split_at(priv_file_name.len() - "private".len());
-    pub_file_name = begin.to_string() + "pub";
+    begin.to_string() + "pub"
   } else {
-    pub_file_name = priv_file_name.to_string() + "pub";
-  }
+    priv_file_name.to_string() + "pub"
+  };
 
   let mut pub_file = File::open(&pub_file_name).or_else(|_e| {
                                                  println!("Failed to open public key file {}",
@@ -94,13 +94,12 @@ fn create_key_files(priv_file_name: &str) {
   let mut prng: ChaChaRng;
   prng = ChaChaRng::from_seed([0u8; 32]);
   let keypair = XfrKeyPair::generate(&mut prng);
-  let pub_file_name: String;
-  if priv_file_name.ends_with(".private") {
+  let pub_file_name = if priv_file_name.ends_with(".private") {
     let (begin, _) = priv_file_name.split_at(priv_file_name.len() - "private".len());
-    pub_file_name = begin.to_string() + "pub";
+    begin.to_string() + "pub"
   } else {
-    pub_file_name = priv_file_name.to_string() + "pub";
-  }
+    priv_file_name.to_string() + "pub"
+  };
   rename_existing_file(&priv_file_name);
   rename_existing_file(&pub_file_name);
   let _skip_priv = fs::write(priv_file_name, keypair.get_sk_ref().zei_to_bytes()).or_else(|_e| {
@@ -127,7 +126,10 @@ fn create_directory_if_missing(path_to_file_in_dir: &str) {
   }
 }
 
-fn rename_existing_file(path_to_existing_file: &str) {}
+fn rename_existing_file(_path_to_existing_file: &str) {
+  // TODO: if path_to_existing_file ends in .<number>, find the next unused .<number+N> and rename;
+  // otherwise, start from .1 and do the same...
+}
 
 fn main() {
   let inputs = App::new("Transaction Builder")
@@ -210,7 +212,7 @@ fn main() {
     .get_matches();
 
   let eian_dir: String;
-  let config_file_path: String;
+  let _config_file_path: String;
   let keys_file_path: String;
   let transaction_file_name: String;
   if let Some(dir) = inputs.value_of("eian_dir") {
@@ -218,13 +220,14 @@ fn main() {
   } else if let Ok(dir) = env::var("EIAN_DIR") {
     eian_dir = dir;
   } else {
-    eian_dir = "~/.eian".to_string();
+    let home_dir = dirs::home_dir().unwrap_or_else(|| Path::new(".").to_path_buf());
+    eian_dir = format!("{}/.eian", home_dir.to_str().unwrap_or("./.eian"));
   }
 
   if let Some(cfg) = inputs.value_of("config") {
-    config_file_path = cfg.to_string();
+    _config_file_path = cfg.to_string();
   } else {
-    config_file_path = format!("{}/config.toml", eian_dir);
+    _config_file_path = format!("{}/config.toml", eian_dir);
   }
 
   if let Some(priv_key) = inputs.value_of("keys_path") {
@@ -255,7 +258,7 @@ fn main() {
       }
       let txn_builder = TransactionBuilder::default();
       store_txn_builder_to_file(&file_path, &txn_builder);
-    }
+    },
     ("add", Some(add_matches)) => {
       let pub_key: XfrPublicKey;
       let priv_key: XfrSecretKey;
@@ -295,14 +298,70 @@ fn main() {
               println!("Failed to add operation to transaction.");
             }
           }
-        }
-        ("issue_asset", Some(issue_asset_matches)) => {}
-        ("transfer_asset", Some(transfer_asset_matches)) => {}
+        },
+        ("issue_asset", Some(issue_asset_matches)) => {
+          let token_code = issue_asset_matches.value_of("token_code");
+          let seq_num;
+          if let Some(sequence_number_arg) = issue_asset_matches.value_of("sequence_number") {
+            if let Ok(seq_num_parsed) = sequence_number_arg.parse::<u64>() {
+              seq_num = seq_num_parsed;
+            } else {
+              println!("Improperly formatted sequence number.");
+              return;
+            }
+          } else {
+            println!("Sequence number is required to issue asset.");
+            return;
+          }
+          let amount;
+          if let Some(amount_arg) = issue_asset_matches.value_of("amount") {
+            if let Ok(amount_parsed) = amount_arg.parse::<u64>() {
+              amount = amount_parsed;
+            } else {
+              println!("Improperly formatted amount.");
+              return;
+            }
+          } else {
+            println!("Amount is required to issue asset.");
+            return;
+          }
+          if let Ok(mut txn_builder) = load_txn_builder_from_file(&transaction_file_name) {
+            let asset_token: AssetTokenCode;
+            if let Some(token_code) = token_code {
+              asset_token = AssetTokenCode::new_from_str(token_code);
+            } else {
+              println!("Token code is required to issue asset.");
+              return;
+            }
+
+          if let Ok(_res) = txn_builder.add_basic_issue_asset(&IssuerPublicKey { key: pub_key },
+          &priv_key,
+          &asset_token,
+          seq_num,
+          amount,
+          ) {
+              store_txn_builder_to_file(&transaction_file_name, &txn_builder);
+          } else {
+              println!("Failed to add operation to transaction.");
+          }
+          }
+        },
+        ("transfer_asset", Some(_transfer_asset_matches)) => {
+
+        },
         _ => unreachable!(),
       }
     }
-    ("serialize", Some(serialize_matches)) => {}
-    ("drop", Some(drop_matches)) => {}
+    ("serialize", Some(_serialize_matches)) => {
+      if let Ok(txn_builder) = load_txn_builder_from_file(&transaction_file_name) {
+        if let Ok(as_json) = serde_json::to_string(txn_builder.transaction()) {
+          println!("{}", as_json);
+        }
+      }
+    },
+    ("drop", Some(_drop_matches)) => {
+      // TODO: Delete the transaction file...
+    },
     ("keygen", Some(keygen_matches)) => {
       let new_keys_path_in = keygen_matches.value_of("create_keys_path");
       let new_keys_path: String;
@@ -313,7 +372,7 @@ fn main() {
       }
       create_directory_if_missing(&new_keys_path);
       create_key_files(&new_keys_path);
-    }
+    },
     _ => {}
   }
 }
