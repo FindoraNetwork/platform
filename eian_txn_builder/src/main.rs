@@ -258,7 +258,7 @@ fn main() {
       }
       let txn_builder = TransactionBuilder::default();
       store_txn_builder_to_file(&file_path, &txn_builder);
-    },
+    }
     ("add", Some(add_matches)) => {
       let pub_key: XfrPublicKey;
       let priv_key: XfrSecretKey;
@@ -298,7 +298,7 @@ fn main() {
               println!("Failed to add operation to transaction.");
             }
           }
-        },
+        }
         ("issue_asset", Some(issue_asset_matches)) => {
           let token_code = issue_asset_matches.value_of("token_code");
           let seq_num;
@@ -334,21 +334,19 @@ fn main() {
               return;
             }
 
-          if let Ok(_res) = txn_builder.add_basic_issue_asset(&IssuerPublicKey { key: pub_key },
-          &priv_key,
-          &asset_token,
-          seq_num,
-          amount,
-          ) {
+            if let Ok(_res) = txn_builder.add_basic_issue_asset(&IssuerPublicKey { key: pub_key },
+                                                                &priv_key,
+                                                                &asset_token,
+                                                                seq_num,
+                                                                amount)
+            {
               store_txn_builder_to_file(&transaction_file_name, &txn_builder);
-          } else {
+            } else {
               println!("Failed to add operation to transaction.");
+            }
           }
-          }
-        },
-        ("transfer_asset", Some(_transfer_asset_matches)) => {
-
-        },
+        }
+        ("transfer_asset", Some(_transfer_asset_matches)) => {}
         _ => unreachable!(),
       }
     }
@@ -358,10 +356,10 @@ fn main() {
           println!("{}", as_json);
         }
       }
-    },
+    }
     ("drop", Some(_drop_matches)) => {
       // TODO: Delete the transaction file...
-    },
+    }
     ("keygen", Some(keygen_matches)) => {
       let new_keys_path_in = keygen_matches.value_of("create_keys_path");
       let new_keys_path: String;
@@ -372,7 +370,7 @@ fn main() {
       }
       create_directory_if_missing(&new_keys_path);
       create_key_files(&new_keys_path);
-    },
+    }
     _ => {}
   }
 }
