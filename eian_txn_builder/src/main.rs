@@ -196,7 +196,21 @@ fn main() {
           .short("p")
           .help("TODO: add support for policies")))
       .subcommand(SubCommand::with_name("issue_asset")
-        .arg(Arg::with_name("")))
+        .arg(Arg::with_name("token_code")
+          .short("tc")
+          .long("token_code")
+          .takes_value(true)
+          .help("Specify the token code of the asset to be issued. The transaction will fail if no asset with the token code exists."))
+        .arg(Arg::with_name("sequence_number")
+          .short("seq")
+          .long("sequence_number")
+          .takes_value(true)
+          .help("Sequence number for the issue transaction. Used to prevent replay attacks."))
+        .arg(Arg::with_name("amount")
+          .short("amt")
+          .long("amount")
+          .takes_value(true)
+          .help("Amount of tokens to issue.")))
       .subcommand(SubCommand::with_name("transfer_asset")
         .arg(Arg::with_name(""))))
     .subcommand(SubCommand::with_name("serialize")
@@ -211,18 +225,17 @@ fn main() {
         .takes_value(true)))
     .get_matches();
 
-  let eian_dir: String;
   let _config_file_path: String;
   let keys_file_path: String;
   let transaction_file_name: String;
-  if let Some(dir) = inputs.value_of("eian_dir") {
-    eian_dir = dir.to_string();
+  let eian_dir = if let Some(dir) = inputs.value_of("eian_dir") {
+    dir.to_string()
   } else if let Ok(dir) = env::var("EIAN_DIR") {
-    eian_dir = dir;
+    dir
   } else {
     let home_dir = dirs::home_dir().unwrap_or_else(|| Path::new(".").to_path_buf());
-    eian_dir = format!("{}/.eian", home_dir.to_str().unwrap_or("./.eian"));
-  }
+    format!("{}/.eian", home_dir.to_str().unwrap_or("./.eian"))
+  };
 
   if let Some(cfg) = inputs.value_of("config") {
     _config_file_path = cfg.to_string();
@@ -233,7 +246,7 @@ fn main() {
   if let Some(priv_key) = inputs.value_of("keys_path") {
     keys_file_path = priv_key.to_string();
   } else {
-    keys_file_path = format!("{}/default_key.private", eian_dir);
+    keys_file_path = format!("{}/keys/default.private", eian_dir);
   }
 
   if let Some(txn_store) = inputs.value_of("txn") {
@@ -277,6 +290,9 @@ fn main() {
                                          .to_string();
           let allow_updates = define_asset_matches.is_present("allow_updates");
           let confidential = define_asset_matches.is_present("confidential");
+          if let Err(e) = load_txn_builder_from_file(&transaction_file_name) {
+            println!("{:?}", e);
+          }
           if let Ok(mut txn_builder) = load_txn_builder_from_file(&transaction_file_name) {
             let asset_token: AssetTokenCode;
             if let Some(token_code) = token_code {
@@ -357,9 +373,10 @@ fn main() {
         }
       }
     }
-    ("drop", Some(_drop_matches)) => {
-      // TODO: Delete the transaction file...
-    }
+    ("drop", Some(_drop_matches)) => match std::fs::remove_file(&transaction_file_name) {
+      Ok(_) => println!("Deleted transaction file {}", transaction_file_name),
+      Err(e) => println!("Error deleting file: {:?} ", e),
+    },
     ("keygen", Some(keygen_matches)) => {
       let new_keys_path_in = keygen_matches.value_of("create_keys_path");
       let new_keys_path: String;
