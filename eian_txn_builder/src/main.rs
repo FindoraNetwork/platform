@@ -126,20 +126,9 @@ fn create_directory_if_missing(path_to_file_in_dir: &str) {
   }
 }
 
-fn rename_existing_file(path_to_existing_file: &str) {
+fn rename_existing_file(_path_to_existing_file: &str) {
   // TODO: if path_to_existing_file ends in .<number>, find the next unused .<number+N> and rename;
   // otherwise, start from .1 and do the same...
-  // match Path::new(path_to_existing_file).extension() {
-  //   Some(ext) => {
-  //     if ext.to_str().unwrap().parse::<i64>().is_ok() {
-
-  //     }
-  //   }
-  //   None()
-
-  // }
-
-  // }
 }
 
 fn main() {
