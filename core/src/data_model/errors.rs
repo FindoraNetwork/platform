@@ -38,7 +38,7 @@ impl From<serde_json::Error> for PlatformError {
 }
 
 impl From<ZeiError> for PlatformError {
-    fn from(error: ZeiError) -> Self {
-      PlatformError::ZeiError(error)
-    }
+  fn from(error: ZeiError) -> Self {
+    PlatformError::ZeiError(error)
+  }
 }
