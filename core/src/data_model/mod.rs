@@ -191,7 +191,7 @@ impl AssetTransferBody {
                                  offset: &mut u64)
                                  -> Result<AssetTransferBody, errors::PlatformError> {
     let id_proofs = vec![];
-    let note = Box::new(gen_xfr_note(prng, input_records, output_records, input_keys, &id_proofs).or_else(|_| Err(errors::PlatformError::ZeiError))?);
+    let note = Box::new(gen_xfr_note(prng, input_records, output_records, input_keys, &id_proofs)?);
     let mut txos = Vec::new();
     txos.resize_with(output_records.len(), || {
           let tmp = *offset;

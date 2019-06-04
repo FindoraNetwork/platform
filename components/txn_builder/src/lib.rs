@@ -51,7 +51,7 @@ pub trait BuildsTransactions {
     let mut prng = ChaChaRng::from_seed([0u8; 32]);
     let params = PublicParams::new();
     let asset_type = [0u8; 16];
-    let ar = AssetRecord::new(amount, asset_type, pub_key.key).or(Err(PlatformError::ZeiError))?;
+    let ar = AssetRecord::new(amount, asset_type, pub_key.key)?;
     let ba = build_blind_asset_record(&mut prng, &params.pc_gens, &ar, false, false, &None);
     self.add_operation_issue_asset(pub_key,
                                    priv_key,
@@ -76,9 +76,7 @@ pub trait BuildsTransactions {
                                                .collect();
     let input_oars: Result<Vec<OpenAssetRecord>, _> =
       transfer_from.iter()
-                   .map(|(_, ref ba, _, _, ref sk)| {
-                     open_asset_record(&ba, &sk).or(Err(PlatformError::ZeiError))
-                   })
+                   .map(|(_, ref ba, _, _, ref sk)| open_asset_record(&ba, &sk))
                    .collect();
     let input_oars = input_oars?;
     let input_total: u64 = input_amounts.iter().sum();
@@ -89,7 +87,7 @@ pub trait BuildsTransactions {
       } else if input_amount < oar.get_amount() {
         let ar = AssetRecord::new(oar.get_amount() - input_amount,
                                   *oar.get_asset_type(),
-                                  *oar.get_pub_key()).or(Err(PlatformError::ZeiError))?;
+                                  *oar.get_pub_key())?;
         partially_consumed_inputs.push(ar);
       }
     }
@@ -100,9 +98,7 @@ pub trait BuildsTransactions {
     let asset_type = input_oars[0].get_asset_type();
     let output_ars: Result<Vec<AssetRecord>, _> =
       transfer_to.iter()
-                 .map(|(amount, ref addr)| {
-                   AssetRecord::new(*amount, *asset_type, addr.key).or(Err(PlatformError::ZeiError))
-                 })
+                 .map(|(amount, ref addr)| AssetRecord::new(*amount, *asset_type, addr.key))
                  .collect();
     let mut output_ars = output_ars?;
     output_ars.append(&mut partially_consumed_inputs);
