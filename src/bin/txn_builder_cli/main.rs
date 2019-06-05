@@ -411,7 +411,6 @@ fn main() {
           if let Some(blind_asset_record_arg) =
             transfer_asset_matches.value_of("blind_asset_record")
           {
-            println!("{}", blind_asset_record_arg);
             if let Ok(blind_asset_record_parsed) = serde_json::from_str(&blind_asset_record_arg) {
               blind_asset_record = blind_asset_record_parsed;
             } else {
