@@ -1,21 +1,22 @@
 use std::{error, fmt};
+use zei::errors::ZeiError;
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub enum PlatformError {
   DeserializationError,
   SerializationError,
   InputsError,
-  ZeiError,
+  ZeiError(ZeiError),
 }
 
 impl fmt::Display for PlatformError {
   fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-    f.write_str(match self {
-                  PlatformError::DeserializationError => "Could not deserialize object",
-                  PlatformError::SerializationError => "Could not serialize object",
-                  PlatformError::InputsError => "Invalid parameters",
-                  PlatformError::ZeiError => "Unaccessible error from Zei",
-                })
+    match self {
+      PlatformError::DeserializationError => f.write_str("Could not deserialize object"),
+      PlatformError::SerializationError => f.write_str("Could not serialize object"),
+      PlatformError::InputsError => f.write_str("Invalid parameters"),
+      PlatformError::ZeiError(ze) => ze.fmt(f),
+    }
   }
 }
 
@@ -25,7 +26,7 @@ impl error::Error for PlatformError {
       PlatformError::DeserializationError => "Could not deserialize object",
       PlatformError::SerializationError => "Could not serialize object",
       PlatformError::InputsError => "Parameters were not consistent",
-      PlatformError::ZeiError => "Unaccessible error from Zei",
+      PlatformError::ZeiError(ze) => ze.description(),
     }
   }
 }
@@ -36,8 +37,8 @@ impl From<serde_json::Error> for PlatformError {
   }
 }
 
-// impl From<zei::errors::ZeiError> for PlatformError {
-//     fn from(error: zei::errors::ZeiError) -> Self {
-//         PlatformError::ZeiError(error)
-//     }
-// }
+impl From<ZeiError> for PlatformError {
+  fn from(error: ZeiError) -> Self {
+    PlatformError::ZeiError(error)
+  }
+}
