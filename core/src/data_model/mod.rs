@@ -135,7 +135,7 @@ pub struct Variable;
 
 #[derive(Default, Hash, Eq, PartialEq, Clone, Copy, Debug, Serialize, Deserialize)]
 pub struct TxoSID {
-  pub(crate) index: u64,
+  pub index: u64,
 }
 
 #[derive(Default, Hash, Eq, PartialEq, Clone, Copy, Debug, Serialize, Deserialize)]

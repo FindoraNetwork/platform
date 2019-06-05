@@ -53,6 +53,7 @@ pub trait BuildsTransactions {
     let asset_type = [0u8; 16];
     let ar = AssetRecord::new(amount, asset_type, pub_key.key).or(Err(PlatformError::ZeiError))?;
     let ba = build_blind_asset_record(&mut prng, &params.pc_gens, &ar, false, false, &None);
+    println!("{:?}", ba);
     self.add_operation_issue_asset(pub_key,
                                    priv_key,
                                    token_code,
@@ -64,19 +65,18 @@ pub trait BuildsTransactions {
                               transfer_from: &[(&TxoSID,
                                  &BlindAssetRecord,
                                  u64,
-                                 &AccountAddress,
                                  &XfrSecretKey)],
                               transfer_to: &[(u64, &AccountAddress)])
                               -> Result<(), PlatformError> {
     let input_sids: Vec<TxoSID> = transfer_from.iter()
-                                               .map(|(ref txo_sid, _, _, _, _)| *(*txo_sid))
+                                               .map(|(ref txo_sid, _, _, _)| *(*txo_sid))
                                                .collect();
     let input_amounts: Vec<u64> = transfer_from.iter()
-                                               .map(|(_, _, amount, _, _)| *amount)
+                                               .map(|(_, _, amount, _)| *amount)
                                                .collect();
     let input_oars: Result<Vec<OpenAssetRecord>, _> =
       transfer_from.iter()
-                   .map(|(_, ref ba, _, _, ref sk)| {
+                   .map(|(_, ref ba, _, ref sk)| {
                      open_asset_record(&ba, &sk).or(Err(PlatformError::ZeiError))
                    })
                    .collect();
