@@ -64,19 +64,18 @@ pub trait BuildsTransactions {
                               transfer_from: &[(&TxoSID,
                                  &BlindAssetRecord,
                                  u64,
-                                 &AccountAddress,
                                  &XfrSecretKey)],
                               transfer_to: &[(u64, &AccountAddress)])
                               -> Result<(), PlatformError> {
     let input_sids: Vec<TxoSID> = transfer_from.iter()
-                                               .map(|(ref txo_sid, _, _, _, _)| *(*txo_sid))
+                                               .map(|(ref txo_sid, _, _, _)| *(*txo_sid))
                                                .collect();
     let input_amounts: Vec<u64> = transfer_from.iter()
-                                               .map(|(_, _, amount, _, _)| *amount)
+                                               .map(|(_, _, amount, _)| *amount)
                                                .collect();
     let input_oars: Result<Vec<OpenAssetRecord>, _> =
       transfer_from.iter()
-                   .map(|(_, ref ba, _, _, ref sk)| open_asset_record(&ba, &sk))
+                   .map(|(_, ref ba, _, ref sk)| open_asset_record(&ba, &sk))
                    .collect();
     let input_oars = input_oars?;
     let input_total: u64 = input_amounts.iter().sum();

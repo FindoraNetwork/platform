@@ -8,7 +8,7 @@ extern crate zei;
 
 use clap::{App, Arg, SubCommand};
 use core::data_model::errors::PlatformError;
-use core::data_model::{AssetTokenCode, IssuerPublicKey};
+use core::data_model::{AccountAddress, AssetTokenCode, IssuerPublicKey, TxoSID};
 use rand::SeedableRng;
 use rand_chacha::ChaChaRng;
 use std::env;
@@ -18,6 +18,7 @@ use std::path::Path;
 use txn_builder::{BuildsTransactions, TransactionBuilder};
 use zei::basic_crypto::signatures::{XfrKeyPair, XfrPublicKey, XfrSecretKey};
 use zei::serialization::ZeiFromToBytes;
+use zei::xfr::structs::BlindAssetRecord;
 
 fn load_txn_builder_from_file(file_name: &str) -> Result<TransactionBuilder, PlatformError> {
   let mut file = File::open(file_name).or_else(|_e| {
@@ -213,7 +214,26 @@ fn main() {
           .takes_value(true)
           .help("Amount of tokens to issue.")))
       .subcommand(SubCommand::with_name("transfer_asset")
-        .arg(Arg::with_name(""))))
+        .arg(Arg::with_name("blind_asset_record")
+          .short("bar")
+          .long("blind_asset_record")
+          .takes_value(true)
+          .help("Specify a string representing the JSON serialization of the blind asset record of the asset to be transferred."))
+        .arg(Arg::with_name("index")
+          .short("idx")
+          .long("index")
+          .takes_value(true)
+          .help("Specify TxoSID index."))
+        .arg(Arg::with_name("address")
+          .short("addr")
+          .long("address")
+          .takes_value(true)
+          .help("Specify address to send tokens to."))
+        .arg(Arg::with_name("transfer_amount")
+          .short("tfr_amt")
+          .long("transfer_amount")
+          .takes_value(true)
+          .help("Amount of tokens to transfer."))))
     .subcommand(SubCommand::with_name("serialize")
       .arg(Arg::with_name("")))
     .subcommand(SubCommand::with_name("drop")
@@ -363,7 +383,66 @@ fn main() {
             }
           }
         }
-        ("transfer_asset", Some(_transfer_asset_matches)) => {}
+        ("transfer_asset", Some(transfer_asset_matches)) => {
+          let index;
+          if let Some(index_arg) = transfer_asset_matches.value_of("index") {
+            if let Ok(index_num_parsed) = index_arg.parse::<u64>() {
+              index = index_num_parsed;
+            } else {
+              println!("Improperly formatted index.");
+              return;
+            }
+          } else {
+            println!("TxoSID index is required to transfer asset.");
+            return;
+          }
+          let amount;
+          if let Some(amount_arg) = transfer_asset_matches.value_of("transfer_amount") {
+            if let Ok(amount_arg_parsed) = amount_arg.parse::<u64>() {
+              amount = amount_arg_parsed;
+            } else {
+              println!("Improperly formatted amount.");
+              return;
+            }
+          } else {
+            println!("Amount is required to transfer asset.");
+            return;
+          }
+          let blind_asset_record: BlindAssetRecord;
+          if let Some(blind_asset_record_arg) =
+            transfer_asset_matches.value_of("blind_asset_record")
+          {
+            if let Ok(blind_asset_record_parsed) = serde_json::from_str(&blind_asset_record_arg) {
+              blind_asset_record = blind_asset_record_parsed;
+            } else {
+              println!("Improperly formatted blind asset record JSON.");
+              return;
+            }
+          } else {
+            println!("Blind asset record JSON is required to transfer asset.");
+            return;
+          }
+          let address: XfrPublicKey;
+          if let Some(address_arg) = transfer_asset_matches.value_of("address") {
+            address = XfrPublicKey::zei_from_bytes(address_arg.as_bytes());
+          } else {
+            println!("Address required for transfer.");
+            return;
+          }
+          if let Ok(mut txn_builder) = load_txn_builder_from_file(&transaction_file_name) {
+            if let Ok(_res) = txn_builder.add_basic_transfer_asset(&[(&TxoSID { index: index },
+                                                           &blind_asset_record,
+                                                           amount,
+                                                           &priv_key)],
+                                                        &[(amount,
+                                                           &AccountAddress { key: address })])
+            {
+              store_txn_builder_to_file(&transaction_file_name, &txn_builder);
+            } else {
+              println!("Failed to add operation to transaction.");
+            }
+          }
+        }
         _ => unreachable!(),
       }
     }
