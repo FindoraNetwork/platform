@@ -246,6 +246,10 @@ fn main() {
         .takes_value(true)))
     .get_matches();
 
+  process_inputs(inputs)
+}
+
+fn process_inputs(inputs: clap::ArgMatches) {
   let _config_file_path: String;
   let keys_file_path: String;
   let transaction_file_name: String;
@@ -278,173 +282,16 @@ fn main() {
 
   match inputs.subcommand() {
     ("create", Some(create_matches)) => {
-      let named = create_matches.value_of("named");
-      let overwrite = create_matches.is_present("overwrite");
-      let file_path: String;
-      if let Some(named) = named {
-        file_path = named.to_string();
-      } else {
-        file_path = transaction_file_name.clone();
-      }
-      create_directory_if_missing(&file_path);
-      if !overwrite {
-        rename_existing_file(&file_path);
-      }
-      let txn_builder = TransactionBuilder::default();
-      store_txn_builder_to_file(&file_path, &txn_builder);
+      process_create_cmd(create_matches,
+                         &keys_file_path,
+                         &transaction_file_name,
+                         &eian_dir);
     }
     ("add", Some(add_matches)) => {
-      let pub_key: XfrPublicKey;
-      let priv_key: XfrSecretKey;
-      if let Ok((pub_key_out, priv_key_out)) = load_key_pair_from_files(&keys_file_path) {
-        pub_key = pub_key_out;
-        priv_key = priv_key_out;
-      } else {
-        println!("Valid keyfile required for this command; if no keyfile currently exists, try running \"eian_txn_builder keygen\"");
-        return;
-      }
-      match add_matches.subcommand() {
-        ("define_asset", Some(define_asset_matches)) => {
-          let token_code = define_asset_matches.value_of("token_code");
-          let memo = define_asset_matches.value_of("memo")
-                                         .unwrap_or("{}")
-                                         .to_string();
-          let allow_updates = define_asset_matches.is_present("allow_updates");
-          let confidential = define_asset_matches.is_present("confidential");
-          if let Err(e) = load_txn_builder_from_file(&transaction_file_name) {
-            println!("{:?}", e);
-          }
-          if let Ok(mut txn_builder) = load_txn_builder_from_file(&transaction_file_name) {
-            let asset_token: AssetTokenCode;
-            if let Some(token_code) = token_code {
-              asset_token = AssetTokenCode::new_from_str(token_code);
-            } else {
-              asset_token = AssetTokenCode::gen_random();
-              println!("Creating asset with token code {:?}", asset_token.val);
-            }
-            if let Ok(_res) = txn_builder.add_operation_create_asset(&IssuerPublicKey { key:
-                                                                                          pub_key },
-                                                                     &priv_key,
-                                                                     Some(asset_token),
-                                                                     allow_updates,
-                                                                     &memo,
-                                                                     confidential)
-            {
-              store_txn_builder_to_file(&transaction_file_name, &txn_builder);
-            } else {
-              println!("Failed to add operation to transaction.");
-            }
-          }
-        }
-        ("issue_asset", Some(issue_asset_matches)) => {
-          let token_code = issue_asset_matches.value_of("token_code");
-          let seq_num;
-          if let Some(sequence_number_arg) = issue_asset_matches.value_of("sequence_number") {
-            if let Ok(seq_num_parsed) = sequence_number_arg.parse::<u64>() {
-              seq_num = seq_num_parsed;
-            } else {
-              println!("Improperly formatted sequence number.");
-              return;
-            }
-          } else {
-            println!("Sequence number is required to issue asset.");
-            return;
-          }
-          let amount;
-          if let Some(amount_arg) = issue_asset_matches.value_of("amount") {
-            if let Ok(amount_parsed) = amount_arg.parse::<u64>() {
-              amount = amount_parsed;
-            } else {
-              println!("Improperly formatted amount.");
-              return;
-            }
-          } else {
-            println!("Amount is required to issue asset.");
-            return;
-          }
-          if let Ok(mut txn_builder) = load_txn_builder_from_file(&transaction_file_name) {
-            let asset_token: AssetTokenCode;
-            if let Some(token_code) = token_code {
-              asset_token = AssetTokenCode::new_from_str(token_code);
-            } else {
-              println!("Token code is required to issue asset.");
-              return;
-            }
-
-            if let Ok(_res) = txn_builder.add_basic_issue_asset(&IssuerPublicKey { key: pub_key },
-                                                                &priv_key,
-                                                                &asset_token,
-                                                                seq_num,
-                                                                amount)
-            {
-              store_txn_builder_to_file(&transaction_file_name, &txn_builder);
-            } else {
-              println!("Failed to add operation to transaction.");
-            }
-          }
-        }
-        ("transfer_asset", Some(transfer_asset_matches)) => {
-          let index;
-          if let Some(index_arg) = transfer_asset_matches.value_of("index") {
-            if let Ok(index_num_parsed) = index_arg.parse::<u64>() {
-              index = index_num_parsed;
-            } else {
-              println!("Improperly formatted index.");
-              return;
-            }
-          } else {
-            println!("TxoSID index is required to transfer asset.");
-            return;
-          }
-          let amount;
-          if let Some(amount_arg) = transfer_asset_matches.value_of("transfer_amount") {
-            if let Ok(amount_arg_parsed) = amount_arg.parse::<u64>() {
-              amount = amount_arg_parsed;
-            } else {
-              println!("Improperly formatted amount.");
-              return;
-            }
-          } else {
-            println!("Amount is required to transfer asset.");
-            return;
-          }
-          let blind_asset_record: BlindAssetRecord;
-          if let Some(blind_asset_record_arg) =
-            transfer_asset_matches.value_of("blind_asset_record")
-          {
-            if let Ok(blind_asset_record_parsed) = serde_json::from_str(&blind_asset_record_arg) {
-              blind_asset_record = blind_asset_record_parsed;
-            } else {
-              println!("Improperly formatted blind asset record JSON.");
-              return;
-            }
-          } else {
-            println!("Blind asset record JSON is required to transfer asset.");
-            return;
-          }
-          let address: XfrPublicKey;
-          if let Some(address_arg) = transfer_asset_matches.value_of("address") {
-            address = XfrPublicKey::zei_from_bytes(address_arg.as_bytes());
-          } else {
-            println!("Address required for transfer.");
-            return;
-          }
-          if let Ok(mut txn_builder) = load_txn_builder_from_file(&transaction_file_name) {
-            if let Ok(_res) = txn_builder.add_basic_transfer_asset(&[(&TxoSID { index: index },
-                                                           &blind_asset_record,
-                                                           amount,
-                                                           &priv_key)],
-                                                        &[(amount,
-                                                           &AccountAddress { key: address })])
-            {
-              store_txn_builder_to_file(&transaction_file_name, &txn_builder);
-            } else {
-              println!("Failed to add operation to transaction.");
-            }
-          }
-        }
-        _ => unreachable!(),
-      }
+      process_add_cmd(add_matches,
+                      &keys_file_path,
+                      &transaction_file_name,
+                      &eian_dir);
     }
     ("serialize", Some(_serialize_matches)) => {
       if let Ok(txn_builder) = load_txn_builder_from_file(&transaction_file_name) {
@@ -469,5 +316,178 @@ fn main() {
       create_key_files(&new_keys_path);
     }
     _ => {}
+  }
+}
+
+fn process_create_cmd(create_matches: &clap::ArgMatches,
+                      _keys_file_path: &str,
+                      transaction_file_name: &str,
+                      _eian_dir: &str) {
+  let named = create_matches.value_of("named");
+  let overwrite = create_matches.is_present("overwrite");
+  let file_path: String;
+  if let Some(named) = named {
+    file_path = named.to_string();
+  } else {
+    file_path = transaction_file_name.to_string();
+  }
+  create_directory_if_missing(&file_path);
+  if !overwrite {
+    rename_existing_file(&file_path);
+  }
+  let txn_builder = TransactionBuilder::default();
+  store_txn_builder_to_file(&file_path, &txn_builder);
+}
+fn process_add_cmd(add_matches: &clap::ArgMatches,
+                   keys_file_path: &str,
+                   transaction_file_name: &str,
+                   _eian_dir: &str) {
+  let pub_key: XfrPublicKey;
+  let priv_key: XfrSecretKey;
+  if let Ok((pub_key_out, priv_key_out)) = load_key_pair_from_files(&keys_file_path) {
+    pub_key = pub_key_out;
+    priv_key = priv_key_out;
+  } else {
+    println!("Valid keyfile required for this command; if no keyfile currently exists, try running \"eian_txn_builder keygen\"");
+    return;
+  }
+  match add_matches.subcommand() {
+    ("define_asset", Some(define_asset_matches)) => {
+      let token_code = define_asset_matches.value_of("token_code");
+      let memo = define_asset_matches.value_of("memo")
+                                     .unwrap_or("{}")
+                                     .to_string();
+      let allow_updates = define_asset_matches.is_present("allow_updates");
+      let confidential = define_asset_matches.is_present("confidential");
+      if let Err(e) = load_txn_builder_from_file(&transaction_file_name) {
+        println!("{:?}", e);
+      }
+      if let Ok(mut txn_builder) = load_txn_builder_from_file(&transaction_file_name) {
+        let asset_token: AssetTokenCode;
+        if let Some(token_code) = token_code {
+          asset_token = AssetTokenCode::new_from_str(token_code);
+        } else {
+          asset_token = AssetTokenCode::gen_random();
+          println!("Creating asset with token code {:?}", asset_token.val);
+        }
+        if let Ok(_res) = txn_builder.add_operation_create_asset(&IssuerPublicKey { key: pub_key },
+                                                                 &priv_key,
+                                                                 Some(asset_token),
+                                                                 allow_updates,
+                                                                 &memo,
+                                                                 confidential)
+        {
+          store_txn_builder_to_file(&transaction_file_name, &txn_builder);
+        } else {
+          println!("Failed to add operation to transaction.");
+        }
+      }
+    }
+    ("issue_asset", Some(issue_asset_matches)) => {
+      let token_code = issue_asset_matches.value_of("token_code");
+      let seq_num;
+      if let Some(sequence_number_arg) = issue_asset_matches.value_of("sequence_number") {
+        if let Ok(seq_num_parsed) = sequence_number_arg.parse::<u64>() {
+          seq_num = seq_num_parsed;
+        } else {
+          println!("Improperly formatted sequence number.");
+          return;
+        }
+      } else {
+        println!("Sequence number is required to issue asset.");
+        return;
+      }
+      let amount;
+      if let Some(amount_arg) = issue_asset_matches.value_of("amount") {
+        if let Ok(amount_parsed) = amount_arg.parse::<u64>() {
+          amount = amount_parsed;
+        } else {
+          println!("Improperly formatted amount.");
+          return;
+        }
+      } else {
+        println!("Amount is required to issue asset.");
+        return;
+      }
+      if let Ok(mut txn_builder) = load_txn_builder_from_file(&transaction_file_name) {
+        let asset_token: AssetTokenCode;
+        if let Some(token_code) = token_code {
+          asset_token = AssetTokenCode::new_from_str(token_code);
+        } else {
+          println!("Token code is required to issue asset.");
+          return;
+        }
+
+        if let Ok(_res) = txn_builder.add_basic_issue_asset(&IssuerPublicKey { key: pub_key },
+                                                            &priv_key,
+                                                            &asset_token,
+                                                            seq_num,
+                                                            amount)
+        {
+          store_txn_builder_to_file(&transaction_file_name, &txn_builder);
+        } else {
+          println!("Failed to add operation to transaction.");
+        }
+      }
+    }
+    ("transfer_asset", Some(transfer_asset_matches)) => {
+      let index;
+      if let Some(index_arg) = transfer_asset_matches.value_of("index") {
+        if let Ok(index_num_parsed) = index_arg.parse::<u64>() {
+          index = index_num_parsed;
+        } else {
+          println!("Improperly formatted index.");
+          return;
+        }
+      } else {
+        println!("TxoSID index is required to transfer asset.");
+        return;
+      }
+      let amount;
+      if let Some(amount_arg) = transfer_asset_matches.value_of("transfer_amount") {
+        if let Ok(amount_arg_parsed) = amount_arg.parse::<u64>() {
+          amount = amount_arg_parsed;
+        } else {
+          println!("Improperly formatted amount.");
+          return;
+        }
+      } else {
+        println!("Amount is required to transfer asset.");
+        return;
+      }
+      let blind_asset_record: BlindAssetRecord;
+      if let Some(blind_asset_record_arg) = transfer_asset_matches.value_of("blind_asset_record") {
+        if let Ok(blind_asset_record_parsed) = serde_json::from_str(&blind_asset_record_arg) {
+          blind_asset_record = blind_asset_record_parsed;
+        } else {
+          println!("Improperly formatted blind asset record JSON.");
+          return;
+        }
+      } else {
+        println!("Blind asset record JSON is required to transfer asset.");
+        return;
+      }
+      let address: XfrPublicKey;
+      if let Some(address_arg) = transfer_asset_matches.value_of("address") {
+        address = XfrPublicKey::zei_from_bytes(address_arg.as_bytes());
+      } else {
+        println!("Address required for transfer.");
+        return;
+      }
+      if let Ok(mut txn_builder) = load_txn_builder_from_file(&transaction_file_name) {
+        if let Ok(_res) =
+          txn_builder.add_basic_transfer_asset(&[(&TxoSID { index },
+                                                  &blind_asset_record,
+                                                  amount,
+                                                  &priv_key)],
+                                               &[(amount, &AccountAddress { key: address })])
+        {
+          store_txn_builder_to_file(&transaction_file_name, &txn_builder);
+        } else {
+          println!("Failed to add operation to transaction.");
+        }
+      }
+    }
+    _ => unreachable!(),
   }
 }

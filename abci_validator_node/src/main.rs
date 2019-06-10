@@ -5,7 +5,6 @@ extern crate ledger_app;
 extern crate serde;
 extern crate serde_derive;
 extern crate serde_json;
-extern crate actix_web;
 
 use abci::*;
 use core::data_model::errors::PlatformError;
