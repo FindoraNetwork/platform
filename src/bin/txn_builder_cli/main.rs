@@ -29,6 +29,7 @@ fn load_txn_builder_from_file(file_name: &str) -> Result<TransactionBuilder, Pla
                                        println!("Failed to read transaction file {}", file_name);
                                        Err(PlatformError::DeserializationError)
                                      })?;
+  println!("Parsing builder from file contents: \"{}\"", &contents);
   let builder = serde_json::from_str(&contents)?;
   Ok(builder)
 }
