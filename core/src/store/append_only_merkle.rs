@@ -547,7 +547,7 @@ impl AppendOnlyMerkle {
     ///
     /// # Example
     ///````
-    /// use append_only_merkle::AppendOnlyMerkle;
+    /// use crate::core::store::append_only_merkle::AppendOnlyMerkle;
     ///
     /// let path = "public_ledger".to_string();
     ///
@@ -596,7 +596,7 @@ impl AppendOnlyMerkle {
     ///
     /// # Example
     ///````
-    /// use append_only_merkle::AppendOnlyMerkle;
+    /// use crate::core::store::append_only_merkle::AppendOnlyMerkle;
     ///
     /// let path = "new_ledger".to_string();
     /// # let _ = std::fs::remove_file(&path);
@@ -2251,7 +2251,7 @@ mod tests {
             }
         }
 
-        for _t in entry_id..2 * 1024 * 1024 {
+        for _t in entry_id..2 * 1024 * 1024 + 128 {
             if entry_id % (64 * 1024) == 0 {
                 check_tree(&tree);
                 println!("At entry {}", entry_id);
