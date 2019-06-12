@@ -12,12 +12,11 @@ use std::sync::{Arc, RwLock};
 use std::u64;
 use zei::xfr::lib::verify_xfr_note;
 
-pub mod errors;
 pub mod append_only_merkle;
+pub mod errors;
 
 pub trait LedgerAccess {
   fn check_utxo(&self, addr: TxoSID) -> Option<Utxo>;
-  // fn check_utxo_proof(&self, addr: TxoSID, proof: ) -> Option<Utxo>;
   fn get_issuance_num(&self, code: &AssetTokenCode) -> Option<u64>;
   fn get_asset_token(&self, code: &AssetTokenCode) -> Option<AssetToken>;
   fn get_asset_policy(&self, key: &AssetPolicyKey) -> Option<CustomAssetPolicy>;
@@ -71,18 +70,23 @@ impl LedgerState {
   pub fn begin_commit(&mut self) {
     self.txn_base_sid.index = self.max_applied_sid.index + 1;
   }
+
   pub fn end_commit(&mut self) {}
+
   fn add_txo(&mut self, txo: (&TxoSID, TxOutput)) {
     let mut utxo_addr = *txo.0;
+
     match utxo_addr.index {
       TXN_SEQ_ID_PLACEHOLDER..=u64::MAX => {
         utxo_addr.index -= TXN_SEQ_ID_PLACEHOLDER;
         utxo_addr.index += self.txn_base_sid.index;
       }
       _ => {
-        println!("diagnostic message here");
+        // TODO:  Is this recoverable?
+        panic!("The index {} is not a placeholder.", utxo_addr.index);
       }
     }
+
     let utxo_ref = Utxo { digest: compute_sha256_hash(&serde_json::to_vec(&txo.1).unwrap()),
                           output: txo.1 };
     self.utxos.insert(utxo_addr, utxo_ref);
@@ -99,7 +103,6 @@ impl LedgerState {
       self.utxos.remove(&rectified_txo);
     }
 
-    //
     for out in
       transfer.body.outputs.iter().zip(transfer.body
                                                .transfer
@@ -118,6 +121,7 @@ impl LedgerState {
     {
       self.add_txo(out);
     }
+
     self.issuance_num
         .insert(issue.body.code, issue.body.seq_num);
   }
@@ -156,20 +160,25 @@ impl LedgerState {
       Operation::AssetCreation(creation) => self.validate_asset_creation(creation),
     }
   }
-  // Asset Transfer is valid if UTXOs exist on ledger and match zei transaction, zei transaction is valid, and if additional signatures are valid
+
+  // An asset transfer is valid iff:
+  //     1) The signatures are valid.
+  //     2) The UTXOs exist on the ledger and match the zei transaction.
+  //     3) The zei transaction is valid.
+  // TODO:  How do we know that the zei transaction matches?
   #[cfg(test)]
   fn validate_asset_transfer(&mut self, transfer: &AssetTransfer) -> bool {
-    // [1] signatures are valid
+    // [1] The signatures are valid.
     for signature in &transfer.body_signatures {
       if !signature.verify(&serde_json::to_vec(&transfer.body).unwrap()) {
         return false;
       }
     }
 
-    // [2] utxos exist on ledger - need to match zei transaction
+    // [2] The utxos exist on the ledger and match the zei transaction?
     let null_policies = vec![];
-    let mut prng: ChaChaRng;
-    prng = ChaChaRng::from_seed([0u8; 32]);
+    let mut prng = ChaChaRng::from_seed([0u8; 32]);
+
     for utxo_addr in &transfer.body.inputs {
       if self.check_utxo(*utxo_addr).is_none() {
         return false;
@@ -183,12 +192,14 @@ impl LedgerState {
     true
   }
 
-  // Asset Issuance is Valid if Signature is valid, the operation is unique, and the assets in the TxOutputs are owned by the signatory
+  // An asset issuance is valid iff:
+  //     1) The operation is unique (not a replay).
+  //     2) The signature is valid and belongs to the anchor (the issuer).
   #[cfg(test)]
   fn validate_asset_issuance(&mut self, issue: &AssetIssuance) -> bool {
-    //[1] token has been created
-
+    // Get a valid token
     let token = self.get_asset_token(&issue.body.code);
+
     if token.is_none() {
       println!("validate_asset_issuance:  token.is_none()");
       return false;
@@ -202,14 +213,14 @@ impl LedgerState {
       lookup_issuance_num.unwrap()
     };
 
-    //[2] replay attack - not issued before=====
+    // [1] Is this a replay attack?
     if issue.body.seq_num <= issuance_num {
       println!("validate_asset_issuance:  replay attack:  {} vs {}",
-        issue.body.seq_num, issuance_num);
+               issue.body.seq_num, issuance_num);
       return false;
     }
 
-    //[3] signature is correct on body
+    // [2] The signature on the body is correct.
     if issue.pubkey
             .key
             .verify(&serde_json::to_vec(&issue.body).unwrap(), &issue.signature)
@@ -219,7 +230,7 @@ impl LedgerState {
       return false;
     }
 
-    //[4] signature belongs to anchor??
+    //[4] The signature belongs to the anchor.
     if token.properties.issuer != issue.pubkey {
       println!("validate_asset_issuance:  invalid issuer");
       return false;
@@ -228,13 +239,14 @@ impl LedgerState {
     true
   }
 
-  // Asset Creation is invalid if the signature is not valid or the code is already used by a different asset
+  // An asset creation is valid iff:
+  //     1) The signature is valid.
+  //     2) The token? has NOT been used by a different asset.
+  // Token?
   #[cfg(test)]
   fn validate_asset_creation(&mut self, create: &AssetCreation) -> bool {
     //[1] the token is not already created, [2] the signature is correct.
-    !self
-         .tokens
-         .contains_key(&create.body.asset.code)
+    !self.tokens.contains_key(&create.body.asset.code)
     && create.pubkey
              .key
              .verify(&serde_json::to_vec(&create.body).unwrap(),
@@ -261,6 +273,7 @@ impl<LA: LedgerAccess> BlockContext<LA> {
                       issuance_num: HashMap::new(),
                       used_txos: HashSet::new() })
   }
+
   pub fn apply_operation(&mut self, op: &Operation) {
     match op {
       Operation::AssetCreation(ac) => {
@@ -357,6 +370,7 @@ impl<'la, LA: LedgerAccess> TxnContext<'la, LA> {
     Ok(TxnContext { block_context,
                     utxos: HashMap::new() })
   }
+
   pub fn apply_operation(&mut self, op: &Operation) {
     match op {
       Operation::AssetIssuance(ai) => {
@@ -383,19 +397,23 @@ impl<'la, LA: LedgerAccess> TxnContext<'la, LA> {
     self.block_context.apply_operation(op);
   }
 
-  // Asset Transfer is valid if UTXOs exist on ledger and match zei transaction, zei transaction is valid, and if additional signatures are valid
+  // An asset transfer is valid iff:
+  //     1) The signatures on the body all are valid.
+  //     2) The UTXOs exist on the ledger and match the zei transaction.
+  //     3) The zei transaction is valid.
   fn validate_asset_transfer(&mut self, transfer: &AssetTransfer) -> bool {
-    // [1] signatures are valid
+    // [1] The signatures are valid.
     for signature in &transfer.body_signatures {
       if !signature.verify(&serde_json::to_vec(&transfer.body).unwrap()) {
         return false;
       }
     }
 
-    // [2] utxos exist on ledger - need to match zei transaction
+    // [2] The utxos exist on ledger and match the zei transaction.
     let null_policies = vec![];
     let mut prng: ChaChaRng;
     prng = ChaChaRng::from_seed([0u8; 32]);
+
     for utxo_addr in &transfer.body.inputs {
       if self.check_utxo(*utxo_addr).is_none() {
         return false;
@@ -409,10 +427,16 @@ impl<'la, LA: LedgerAccess> TxnContext<'la, LA> {
     true
   }
 
-  // Asset Issuance is Valid if Signature is valid, the operation is unique, and the assets in the TxOutputs are owned by the signatory
+  // The asset issuance is valid iff:
+  //      1) The operation is unique (not a replay).
+  //      2) The signature is valid.
+  //      3) The assets were issued by the proper agent (the anchor).
+  //      3) The assets in the TxOutputs are owned by the signatory.
+  //      4) The signature belongs to the appropriate anchor (issuer).
   fn validate_asset_issuance(&mut self, issue: &AssetIssuance) -> bool {
-    //[1] token has been created
+    // Create a token.
     let token = self.block_context.get_asset_token(&issue.body.code);
+
     if token.is_none() {
       return false;
     }
@@ -425,12 +449,12 @@ impl<'la, LA: LedgerAccess> TxnContext<'la, LA> {
       lookup_issuance_num.unwrap()
     };
 
-    //[2] replay attack - not issued before=====
+    // [1] Check for a replay attack.
     if issue.body.seq_num <= issuance_num {
       return false;
     }
 
-    //[3] signature is correct on body
+    // [2] The signature on the body is correct.
     if issue.pubkey
             .key
             .verify(&serde_json::to_vec(&issue.body).unwrap(), &issue.signature)
@@ -439,7 +463,7 @@ impl<'la, LA: LedgerAccess> TxnContext<'la, LA> {
       return false;
     }
 
-    //[4] signature belongs to anchor??
+    // [4] The signature belongs to the anchor (issuer).
     if !(token.properties.issuer == issue.pubkey) {
       return false;
     }
@@ -447,9 +471,12 @@ impl<'la, LA: LedgerAccess> TxnContext<'la, LA> {
     true
   }
 
-  // Asset Creation is invalid if the signature is not valid or the code is already used by a different asset
+  // An asset creation is valid iff:
+  //     1) The token id is available.
+  //     2) The signature is valid.
   fn validate_asset_creation(&mut self, create: &AssetCreation) -> bool {
-    //[1] the token is not already created, [2] the signature is correct.
+    // [1] The token is available
+    // [2] the signature is correct.
     !self.block_context
          .tokens
          .contains_key(&create.body.asset.code)
@@ -510,6 +537,7 @@ impl<'la, LA> LedgerValidate for TxnContext<'la, LA> where LA: LedgerAccess
 impl LedgerUpdate for LedgerState {
   fn apply_transaction(&mut self, txn: &Transaction) {
     self.txn_base_sid.index = self.max_applied_sid.index + 1;
+
     // Apply the operations
     for op in &txn.operations {
       self.apply_operation(op);
@@ -557,12 +585,12 @@ impl LedgerAccess for LedgerState {
   fn get_issuance_num(&self, code: &AssetTokenCode) -> Option<u64> {
     match self.issuance_num.get(code) {
       Some(num) => {
-	  println!("issuance_num.get -> {}", *num);
-          Some(*num)
+        println!("issuance_num.get -> {}", *num);
+        Some(*num)
       }
       None => {
-          println!("No issuance_num.get:  {:?}", self.issuance_num);
-          None
+        println!("No issuance_num.get:  {:?}", self.issuance_num);
+        None
       }
     }
   }
@@ -603,7 +631,6 @@ mod tests {
   }
 
   fn asset_creation_body(token_code: &AssetTokenCode,
-                         asset_type: &String,
                          issuer_key: &XfrPublicKey,
                          updatable: bool,
                          memo: &Option<Memo>,
@@ -613,7 +640,6 @@ mod tests {
     token_properties.code = token_code.clone();
     token_properties.issuer = IssuerPublicKey { key: issuer_key.clone() };
     token_properties.updatable = updatable;
-    // token_properties.asset_type = asset_type.clone();
 
     if memo.is_some() {
       token_properties.memo = memo.as_ref().unwrap().clone();
@@ -627,8 +653,7 @@ mod tests {
       token_properties.confidential_memo = ConfidentialMemo {};
     }
 
-    AssetCreationBody { asset: token_properties, }
-                        // TODO: jonathan outputs: Vec::new() }
+    AssetCreationBody { asset: token_properties }
   }
 
   fn asset_creation_operation(asset_body: &AssetCreationBody,
@@ -649,18 +674,16 @@ mod tests {
 
     let token_code1 = AssetTokenCode { val: [1; 16] };
     let (public_key, secret_key) = build_keys(&mut prng);
-    let asset_type = String::from("token1");
 
-    let asset_body =
-      asset_creation_body(&token_code1, &asset_type, &public_key, true, &None, &None);
+    let asset_body = asset_creation_body(&token_code1, &public_key, true, &None, &None);
     let asset_create = asset_creation_operation(&asset_body, &public_key, &secret_key);
     tx.operations.push(Operation::AssetCreation(asset_create));
 
-    assert_eq!(true, state.validate_transaction(&tx));
+    assert!(state.validate_transaction(&tx));
 
     state.apply_transaction(&tx);
     state.append_transaction(tx);
-    assert_eq!(true, state.get_asset_token(&token_code1).is_some());
+    assert!(state.get_asset_token(&token_code1).is_some());
 
     assert_eq!(asset_body.asset,
                state.get_asset_token(&token_code1).unwrap().properties);
@@ -668,68 +691,61 @@ mod tests {
     assert_eq!(0, state.get_asset_token(&token_code1).unwrap().units);
   }
 
-  //update signature to have wrong public key
+  // Change the signature to have the wrong public key
   #[test]
   fn test_asset_creation_invalid_public_key() {
-    let mut prng = ChaChaRng::from_seed([0u8; 32]);
+    // Create a valid asset creation operation.
     let mut state = LedgerState::default();
     let mut tx = Transaction::default();
-
     let token_code1 = AssetTokenCode { val: [1; 16] };
+    let mut prng = ChaChaRng::from_seed([0u8; 32]);
     let (public_key1, secret_key1) = build_keys(&mut prng);
-    let asset_type = String::from("token1");;
-
-
-    let asset_body =
-      asset_creation_body(&token_code1, &asset_type, &public_key1, true, &None, &None);
+    let asset_body = asset_creation_body(&token_code1, &public_key1, true, &None, &None);
     let mut asset_create = asset_creation_operation(&asset_body, &public_key1, &secret_key1);
 
+    // Now re-sign the operation with the wrong key.
     let mut prng = ChaChaRng::from_seed([1u8; 32]);
     let (public_key2, _secret_key2) = build_keys(&mut prng);
-    asset_create.pubkey.key = public_key2;
 
+    asset_create.pubkey.key = public_key2;
     tx.operations.push(Operation::AssetCreation(asset_create));
 
-    assert_eq!(false, state.validate_transaction(&tx));
+    assert!(!state.validate_transaction(&tx));
   }
 
-  //update signature to sign with different key
+  // Sign with the wrong key.
   #[test]
   fn test_asset_creation_invalid_signature() {
-    let mut prng = ChaChaRng::from_seed([0u8; 32]);
+    // Create a valid operation.
     let mut state = LedgerState::default();
     let mut tx = Transaction::default();
-
     let token_code1 = AssetTokenCode { val: [1; 16] };
-    let (public_key1, secret_key1) = build_keys(&mut prng);
-    let asset_type = String::from("token1");;
 
-    let asset_body =
-      asset_creation_body(&token_code1, &asset_type, &public_key1, true, &None, &None);
+    let mut prng = ChaChaRng::from_seed([0u8; 32]);
+    let (public_key1, secret_key1) = build_keys(&mut prng);
+
+    let asset_body = asset_creation_body(&token_code1, &public_key1, true, &None, &None);
     let mut asset_create = asset_creation_operation(&asset_body, &public_key1, &secret_key1);
 
-    //update signature to have wrong public key]
+    // Re-sign the operation with the wrong key.
     let mut prng = ChaChaRng::from_seed([1u8; 32]);
     let (public_key2, _secret_key2) = build_keys(&mut prng);
-    asset_create.pubkey.key = public_key2;
 
+    asset_create.pubkey.key = public_key2;
     tx.operations.push(Operation::AssetCreation(asset_create));
 
-    assert_eq!(false, state.validate_transaction(&tx));
+    assert!(!state.validate_transaction(&tx));
   }
 
   #[test]
   fn asset_issued() {
-    let mut prng = ChaChaRng::from_seed([0u8; 32]);
     let mut state = LedgerState::default();
     let mut tx = Transaction::default();
-
     let token_code1 = AssetTokenCode { val: [1; 16] };
+    let mut prng = ChaChaRng::from_seed([0u8; 32]);
     let (public_key, secret_key) = build_keys(&mut prng);
-    let asset_type = String::from("token1");
 
-    let asset_body =
-      asset_creation_body(&token_code1, &asset_type, &public_key, true, &None, &None);
+    let asset_body = asset_creation_body(&token_code1, &public_key, true, &None, &None);
     let asset_create = asset_creation_operation(&asset_body, &public_key, &secret_key);
     tx.operations.push(Operation::AssetCreation(asset_create));
 
@@ -746,24 +762,18 @@ mod tests {
 
     let sign = compute_signature(&secret_key, &public_key, &asset_issuance_body);
 
-    let asset_issuance_operation =
-        AssetIssuance {
-            body: asset_issuance_body,
-            pubkey: IssuerPublicKey {
-                key: public_key.clone()
-            },
-            signature: sign
-        };
+    let asset_issuance_operation = AssetIssuance { body: asset_issuance_body,
+                                                   pubkey: IssuerPublicKey { key:
+                                                                               public_key.clone() },
+                                                   signature: sign };
 
     let issue_op = Operation::AssetIssuance(asset_issuance_operation);
+    let sid = tx.sid;
 
     tx.operations.push(issue_op);
-
-    // TODO:  Jonathan  assert!(state.validate_transaction(&tx));
     state.apply_transaction(&tx);
     state.append_transaction(tx);
 
-    // Update units as would be done once asset is issued
-    // TODO:  Jonathan assert_eq!(100, state.get_asset_token(&token_code1).unwrap().units);
+    assert!(state.txaddrs.contains_key(&sid));
   }
 }
