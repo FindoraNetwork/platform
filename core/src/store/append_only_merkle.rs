@@ -184,13 +184,13 @@ fn serialize_array<S, T>(array: &[T], serializer: S) -> Result<S::Ok, S::Error>
 fn deserialize_array<'de, D>(deserializer: D) -> Result<[HashValue; HASHES_IN_BLOCK], D::Error>
   where D: Deserializer<'de>
 {
-  let mut result = [HashValue::new(); HASHES_IN_BLOCK];
   let slice: Vec<HashValue> = Deserialize::deserialize(deserializer)?;
 
   if slice.len() != HASHES_IN_BLOCK {
     return sde!("The input slice has the wrong length:  {}", slice.len());
   }
 
+  let mut result = [HashValue::new(); HASHES_IN_BLOCK];
   result.copy_from_slice(&slice);
   Ok(result)
 }
@@ -608,10 +608,10 @@ impl AppendOnlyMerkle {
   ///````
   /// use crate::core::store::append_only_merkle::AppendOnlyMerkle;
   ///
-  /// let path       = "deserialize".to_string();
+  /// let path       = "deserialize";
   /// # let _ = std::fs::remove_file(&path);
   /// let mut sample = AppendOnlyMerkle::create(&path).unwrap();
-  /// let _          = sample.append_string(&"test".to_string());
+  /// let _          = sample.append_str(&"test");
   /// let encoded    = serde_json::to_string(&sample).unwrap();
   ///
   /// drop(sample);
@@ -1067,7 +1067,7 @@ impl AppendOnlyMerkle {
   /// let encoded = serde_json::to_string(&transaction).unwrap();
   ///
   /// let transaction_id =
-  ///     match tree.append_string(&encoded) {
+  ///     match tree.append_str(&encoded) {
   ///          Err(x) => {
   ///              return Err(x);
   ///          }
@@ -1076,7 +1076,7 @@ impl AppendOnlyMerkle {
   ///          }
   ///     };
   ///
-  pub fn append_string(&mut self, value: &String) -> Result<u64, Error> {
+  pub fn append_str(&mut self, value: &str) -> Result<u64, Error> {
     let mut hash_value = HashValue { hash: [0; HASH_SIZE] };
 
     let digest = sha256::hash(value.as_ref());
