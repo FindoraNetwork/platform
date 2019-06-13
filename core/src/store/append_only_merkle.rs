@@ -190,7 +190,7 @@ fn deserialize_array<'de, D>(deserializer: D) -> Result<[HashValue; HASHES_IN_BL
     return sde!("The input slice has the wrong length:  {}", slice.len());
   }
 
-  let mut result = [HashValue::new(); HASHES_IN_BLOCK];
+  let mut result: [HashValue; HASHES_IN_BLOCK] = unsafe { std::mem::uninitialized() };
   result.copy_from_slice(&slice);
   Ok(result)
 }
