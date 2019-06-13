@@ -98,7 +98,7 @@ impl BlockHeader {
                   header_mark: HEADER_VALUE,
                   level: level as u16,
                   valid_leaves: 0,
-                  id: id }
+                  id }
   }
 
   // Do a simple consistency check on some fields in the header.
@@ -2073,11 +2073,9 @@ mod tests {
     let hash = create_test_hash(i, verbose);
     let result = tree.append_hash(hash);
 
-    if let Err(x) = result {
+    if let Some(x) = result {
       panic!("append_hash failed:  {}", x);
     }
-
-    result.unwrap()
   }
 
   // Test a larger tree.

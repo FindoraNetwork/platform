@@ -1,8 +1,8 @@
 use crate::data_model::errors::PlatformError;
 use crate::data_model::{
   AssetCreation, AssetIssuance, AssetPolicyKey, AssetToken, AssetTokenCode, AssetTransfer,
-  CustomAssetPolicy, Operation, SmartContract, SmartContractKey, Transaction, TxOutput, TxoSID,
-  Utxo, TXN_SEQ_ID_PLACEHOLDER,
+  CustomAssetPolicy, Operation, SmartContract, SmartContractKey, Transaction, TxOutput, TxnSID,
+  TxoSID, Utxo, TXN_SEQ_ID_PLACEHOLDER,
 };
 use rand::SeedableRng;
 use rand_chacha::ChaChaRng;
@@ -39,7 +39,7 @@ pub trait ArchiveUpdate {
 }
 
 pub trait ArchiveAccess {
-  fn get_transaction(&self, addr: TxoSID) -> Option<&Transaction>;
+  fn get_transaction(&self, addr: TxnSID) -> Option<&Transaction>;
 }
 
 pub fn compute_sha256_hash<T>(msg: &T) -> [u8; 32]
@@ -56,7 +56,6 @@ pub fn compute_sha256_hash<T>(msg: &T) -> [u8; 32]
 #[derive(Default)]
 pub struct LedgerState {
   txs: Vec<Transaction>, //will need to be replaced by merkle tree...
-  txaddrs: HashMap<TxoSID, usize>,
   utxos: HashMap<TxoSID, Utxo>,
   contracts: HashMap<SmartContractKey, SmartContract>,
   policies: HashMap<AssetPolicyKey, CustomAssetPolicy>,
@@ -547,9 +546,7 @@ impl LedgerUpdate for LedgerState {
 
 impl ArchiveUpdate for LedgerState {
   fn append_transaction(&mut self, txn: Transaction) {
-    let sid = txn.sid;
     self.txs.push(txn);
-    self.txaddrs.insert(sid, self.txs.len());
   }
 }
 
@@ -597,10 +594,11 @@ impl LedgerAccess for LedgerState {
 }
 
 impl ArchiveAccess for LedgerState {
-  fn get_transaction(&self, addr: TxoSID) -> Option<&Transaction> {
-    match self.txaddrs.get(&addr) {
-      Some(idx) => Some(&self.txs[*idx]),
-      None => None,
+  fn get_transaction(&self, addr: TxnSID) -> Option<&Transaction> {
+    if addr.index < self.txs.len() {
+      Some(&self.txs[addr.index])
+    } else {
+      None
     }
   }
 }

@@ -140,7 +140,7 @@ pub struct TxoSID {
 
 #[derive(Default, Hash, Eq, PartialEq, Clone, Copy, Debug, Serialize, Deserialize)]
 pub struct TxnSID {
-  pub(crate) index: u64,
+  pub index: usize,
 }
 
 #[derive(Hash, Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
