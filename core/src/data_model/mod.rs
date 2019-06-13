@@ -409,3 +409,73 @@ pub struct Account {
   pub access_control_list: Vec<AccountAddress>,
   pub key_value: HashMap<String, String>, //key value storage...
 }
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+  use std::cmp::min;
+
+  // TODO
+  // Tests need for:
+  //   AssetTransferBody::new
+  //   AssetIssuanceBody::new
+  //   AssetCreationBody::new
+  //   AssetCreationBody::compute_signature
+
+  #[test]
+  fn test_gen_random() {
+    let mut sum: u64 = 0;
+    let mut sample_size = 0;
+
+    for _ in 0..1000 {
+      let code = AssetTokenCode::gen_random();
+      let mut failed = true;
+
+      for byte in code.val.iter() {
+        if *byte != 0 {
+          failed = false;
+        }
+
+        sum += *byte as u64;
+        sample_size += 1;
+      }
+
+      assert!(!failed);
+    }
+
+    // Use the central limit theorem.  The standard deviation of the
+    // sample mean should be normal(127.5, uniform variance).  Work
+    // from the standard deviation of uniform(0, 1), sqrt(1/12).  The
+    // expected average (mu) is 127.5 if the random number generator
+    // is unbiased.
+    let uniform_stddev = 1.0 / (12.0 as f64).sqrt();
+    let average = sum as f64 / sample_size as f64;
+    let stddev = (uniform_stddev * 255.0) / (sample_size as f64).sqrt();
+    println!("Average {}, stddev {}", average, stddev);
+    assert!(average > 127.5 - 3.0 * stddev);
+    assert!(average < 127.5 + 3.0 * stddev);
+  }
+  #[test]
+  fn test_new_from_str() {
+    let value = "1";
+    let mut input = "".to_string();
+
+    for i in 0..64 {
+      let code = AssetTokenCode::new_from_str(&input);
+      let mut checked = 0;
+
+      for j in 0..min(i, code.val.len()) {
+        assert!(code.val[j] == value.as_bytes()[0]);
+        checked = checked + 1;
+      }
+
+      for j in i..code.val.len() {
+        assert!(code.val[j] == 0);
+        checked = checked + 1;
+      }
+
+      assert!(checked == code.val.len());
+      input = input + &value;
+    }
+  }
+}

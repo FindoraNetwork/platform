@@ -991,7 +991,7 @@ impl AppendOnlyMerkle {
         // be a left subtree, so the current index must be odd.
         let prev_top = if index & 1 != 0 {
           let top_hash = match block_list[index - 1].top_hash() {
-            Some(x) => x.clone(),
+            Some(x) => *x,
             None => {
               return ser!("No top hash for block {} at level {}", index - 1, level);
             }
