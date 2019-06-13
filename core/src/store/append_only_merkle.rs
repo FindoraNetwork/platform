@@ -1,7 +1,7 @@
 //! # The Append-Only Merkle Tree Library
 //!
 //!  This module implements an append-only binary Merkle tree using
-//!  SHA256 as the hash function.  The tree is kept in memory currently,
+//!  SHA256 as the hash function.  The tree currently is kept in memory,
 //!  but this module will write the contents to disk if requested, and
 //!  can initialize a tree using a disk image.  Eventually, it should
 //!  support a paged tree, i.e., one that is loaded on demand and paged
@@ -39,7 +39,7 @@ const BLOCK_SHIFT: u16 = 9;
 const HASHES_IN_BLOCK: usize = (1 << BLOCK_SHIFT) - 1;
 const LEAVES_IN_BLOCK: usize = (HASHES_IN_BLOCK + 1) / 2;
 const CHECK_SIZE: usize = 16;
-const HEADER_VALUE: u32 = 0xabcd0123;
+const HEADER_VALUE: u32 = 0xabcd_0123;
 const HASH_SIZE: usize = 32;
 const BLOCK_SIZE: usize = HASH_SIZE * (HASHES_IN_BLOCK + 1);
 const MAX_BLOCK_LEVELS: usize = 64;
@@ -140,7 +140,7 @@ impl BlockHeader {
 /// This structure must be HASH_SIZE bytes in size.  Each entry of this
 /// type corresponds to a node in the Merkle tree.
 #[repr(C)]
-#[derive(Copy, Clone, Debug, PartialEq, Deserialize, Serialize)]
+#[derive(Copy, Clone, Debug, Default, PartialEq, Deserialize, Serialize)]
 pub struct HashValue {
   pub hash: [u8; HASH_SIZE],
 }
@@ -184,14 +184,13 @@ fn serialize_array<S, T>(array: &[T], serializer: S) -> Result<S::Ok, S::Error>
 fn deserialize_array<'de, D>(deserializer: D) -> Result<[HashValue; HASHES_IN_BLOCK], D::Error>
   where D: Deserializer<'de>
 {
-  let mut result: [HashValue; HASHES_IN_BLOCK] = unsafe { std::mem::uninitialized() };
   let slice: Vec<HashValue> = Deserialize::deserialize(deserializer)?;
 
   if slice.len() != HASHES_IN_BLOCK {
-    std::mem::forget(result);
     return sde!("The input slice has the wrong length:  {}", slice.len());
   }
 
+  let mut result: [HashValue; HASHES_IN_BLOCK] = unsafe { std::mem::uninitialized() };
   result.copy_from_slice(&slice);
   Ok(result)
 }
@@ -224,8 +223,8 @@ impl fmt::Debug for Block {
 
 impl Block {
   fn new(level: u32, id: u64) -> Block {
-    return Block { header: BlockHeader::new(level, id),
-                   hashes: [HashValue::new(); HASHES_IN_BLOCK] };
+    Block { header: BlockHeader::new(level, id),
+            hashes: [HashValue::new(); HASHES_IN_BLOCK] }
   }
 
   // Set the hash value for a leaf for a block.  When the last
@@ -494,7 +493,7 @@ impl Drop for AppendOnlyMerkle {
 impl AppendOnlyMerkle {
   // This constructor is private.  Use open or create to get a
   // Merkle tree.
-  fn new(path: &String, file: File) -> AppendOnlyMerkle {
+  fn new(path: &str, file: File) -> AppendOnlyMerkle {
     AppendOnlyMerkle { entry_count: 0,
                        entries_on_disk: 0,
                        path: path.to_string(),
@@ -531,7 +530,7 @@ impl AppendOnlyMerkle {
   /// # drop(tree);
   /// # let _ = std::fs::remove_file(&path);
   ///````
-  pub fn open(path: &String) -> Result<AppendOnlyMerkle, Error> {
+  pub fn open(path: &str) -> Result<AppendOnlyMerkle, Error> {
     let check_path = OpenOptions::new().read(true).write(true).open(path);
 
     match check_path {
@@ -578,7 +577,7 @@ impl AppendOnlyMerkle {
   /// # drop(tree);
   /// # let _ = std::fs::remove_file(&path);
   ///````
-  pub fn create(path: &String) -> Result<AppendOnlyMerkle, Error> {
+  pub fn create(path: &str) -> Result<AppendOnlyMerkle, Error> {
     let check_path = OpenOptions::new().read(true)
                                        .write(true)
                                        .create_new(true)
@@ -606,8 +605,19 @@ impl AppendOnlyMerkle {
   /// if possible.
   ///
   /// # Example
+  ///````
+  /// use crate::core::store::append_only_merkle::AppendOnlyMerkle;
   ///
-  /// let mut tree =
+  /// let path       = "deserialize";
+  /// # let _ = std::fs::remove_file(&path);
+  /// let mut sample = AppendOnlyMerkle::create(&path).unwrap();
+  /// let _          = sample.append_str(&"test");
+  /// let encoded    = serde_json::to_string(&sample).unwrap();
+  ///
+  /// drop(sample);
+  /// let _ = std::fs::remove_file(&path);
+  ///
+  /// let mut tree: AppendOnlyMerkle =
   ///     match serde_json::from_str(&encoded) {
   ///         Ok(x) => {
   ///             x
@@ -621,6 +631,13 @@ impl AppendOnlyMerkle {
   ///     panic!("finish_deserialize failed:  {}", e);
   /// }
   ///
+  /// if let Some(e) = tree.check() {
+  ///     panic!("deserialize failed.");
+  /// }
+  ///
+  /// # drop(tree);
+  /// # let _ = std::fs::remove_file(&path);
+  ///````
   pub fn finish_deserialize(&mut self) -> Option<Error> {
     self.blocks_on_disk = Vec::new();
     self.files = Vec::new();
@@ -905,7 +922,8 @@ impl AppendOnlyMerkle {
   }
 
   /// Add a new level zero entry to the Merkle tree.  This leaf will represent
-  /// an actual transaction.
+  /// an actual transaction.  The transaction id that is returned is used when
+  /// generating a proof.
   ///
   /// # Arguments
   ///
@@ -913,21 +931,27 @@ impl AppendOnlyMerkle {
   ///
   /// # Example
   ///
-  /// if let Some(x) = tree.append_hash(hash_value) {
-  ///     return Some(x);
-  /// }
+  /// let transaction_id =
+  ///     match tree.append_hash(&hash_value) {
+  ///          Err(x) => {
+  ///              return Err(x);
+  ///          }
+  ///          Ok(n) = {
+  ///              n
+  ///          }
+  ///     };
   ///
-  pub fn append_hash(&mut self, hash_value: HashValue) -> Option<Error> {
+  pub fn append_hash(&mut self, hash_value: HashValue) -> Result<u64, Error> {
     if self.entry_count == 0 {
       if self.blocks[0].len() != 0 {
-        return sem!("Level zero should be empty, but it has {} blocks",
+        return ser!("Level zero should be empty, but it has {} blocks",
                     self.blocks[0].len());
       }
 
       self.blocks[0].push(Block::new(0, 0));
       self.blocks[0][0].set_hash(&hash_value);
       self.entry_count = 1;
-      return None;
+      return Ok(0);
     }
 
     // Loop up the levels of the tree, adding entries as needed.
@@ -943,7 +967,7 @@ impl AppendOnlyMerkle {
         let result = self.add_level();
 
         if let Some(x) = result {
-          return Some(x);
+          return Err(x);
         }
       }
 
@@ -969,7 +993,7 @@ impl AppendOnlyMerkle {
           let top_hash = match block_list[index - 1].top_hash() {
             Some(x) => x.clone(),
             None => {
-              return sem!("No top hash for block {} at level {}", index - 1, level);
+              return ser!("No top hash for block {} at level {}", index - 1, level);
             }
           };
 
@@ -984,7 +1008,7 @@ impl AppendOnlyMerkle {
       let (block, prev) = items;
 
       if let Some(x) = block.set_hash(&current_hash) {
-        return sem!("Tree corrupted:  set_hash:  {}", x);
+        return ser!("Tree corrupted:  set_hash:  {}", x);
       }
 
       // If this node of the tree is not full or doesn't
@@ -1003,7 +1027,7 @@ impl AppendOnlyMerkle {
     // The entry count is for level zero (transaction) entries
     // only.
     self.entry_count += 1;
-    None
+    Ok(self.entry_count - 1)
   }
 
   // Add a new level to the tree.  This routine is called only
@@ -1031,7 +1055,8 @@ impl AppendOnlyMerkle {
   }
 
   /// Append a transaction to the Merkle tree.  It is encoded
-  /// as a UTF-8 string.
+  /// as a UTF-8 string.  The returned transaction_id is required
+  /// when generating a proof.
   ///
   /// # Argument
   ///
@@ -1039,11 +1064,19 @@ impl AppendOnlyMerkle {
   ///
   /// # Example
   ///
-  /// if let Some(x) = tree.append_string(&transaction.serialize()) {
-  ///     return Some(x);
-  /// }
+  /// let encoded = serde_json::to_string(&transaction).unwrap();
   ///
-  pub fn append_string(&mut self, value: &String) -> Option<Error> {
+  /// let transaction_id =
+  ///     match tree.append_str(&encoded) {
+  ///          Err(x) => {
+  ///              return Err(x);
+  ///          }
+  ///          Ok(n) = {
+  ///              n
+  ///          }
+  ///     };
+  ///
+  pub fn append_str(&mut self, value: &str) -> Result<u64, Error> {
     let mut hash_value = HashValue { hash: [0; HASH_SIZE] };
 
     let digest = sha256::hash(value.as_ref());
@@ -1204,7 +1237,7 @@ impl AppendOnlyMerkle {
   /// let total_transactions = tree.total_size();
   ///
   pub fn total_size(&self) -> u64 {
-    return self.entry_count;
+    self.entry_count
   }
 
   /// Save the tree to disk.
@@ -1545,7 +1578,7 @@ impl AppendOnlyMerkle {
 
   // Check that a block contains the correct hashes based on the lower-level
   // blocks.
-  fn check_lower(&self, block: &Block, lower: &Vec<Block>, start_block: usize) -> Option<Error> {
+  fn check_lower(&self, block: &Block, lower: &[Block], start_block: usize) -> Option<Error> {
     let mut block_index = start_block;
 
     for i in 0..block.valid_leaves() as usize {
@@ -1970,7 +2003,7 @@ mod tests {
       }
     }
 
-    let level_path = path.clone() + ".1";
+    let level_path = tree.file_path(1);
 
     if let Err(x) = std::fs::remove_file(&level_path) {
       panic!("remove_file failed:  {}", x);
@@ -2036,7 +2069,7 @@ mod tests {
     }
   }
 
-  fn test_append(tree: &mut AppendOnlyMerkle, i: u64, verbose: bool) {
+  fn test_append(tree: &mut AppendOnlyMerkle, i: u64, verbose: bool) -> u64 {
     let hash = create_test_hash(i, verbose);
     let result = tree.append_hash(hash);
 
@@ -2174,7 +2207,7 @@ mod tests {
         write_tree(&mut tree);
 
         if thread_rng().gen::<u32>() % 4 == 0 {
-          println!("Rechecking the tree.");
+          println!("Rechecking the in-memory tree.");
           check_tree(&tree);
           println!("Rechecking the disk.");
           check_disk_tree(&mut tree, true);
@@ -2294,13 +2327,14 @@ mod tests {
     let transactions = (2 * LEAVES_IN_BLOCK * LEAVES_IN_BLOCK) as u64;
 
     for i in 0..transactions {
-      test_append(&mut tree, i, false);
+      let id = test_append(&mut tree, i, false);
 
-      match tree.generate_proof(i) {
+      match tree.generate_proof(id) {
         Err(x) => {
           panic!("Error on proof for transaction {}:  {}", i, x);
         }
         Ok(proof) => {
+          assert!(id == i);
           check_proof(&tree, &proof, i);
         }
       }
@@ -2464,6 +2498,8 @@ mod tests {
         }
       }
     }
+
+    drop(tree);
 
     let _ = std::fs::remove_file(&path);
 
