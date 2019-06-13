@@ -145,7 +145,7 @@ pub extern "C" fn load_plugin(ext_register_callbacks: RegisterCallbacks,
                               ext_modify_transaction_data: ModifyTransactionData,
                               ext_get_transaction_result_data: GetTransactionResultData,
                               ext_set_transaction_result_status: SetTransactionResultStatus,
-                              ext_allocate_transaction_result_buffer:  AllocateTransactionResultBuffer)
+                              ext_allocate_transaction_result_buffer: AllocateTransactionResultBuffer)
 {
   set_register_callbacks(ext_register_callbacks);
   set_get_transaction_data(ext_get_transaction_data);
