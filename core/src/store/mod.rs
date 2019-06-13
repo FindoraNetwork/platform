@@ -1,8 +1,8 @@
 use crate::data_model::errors::PlatformError;
 use crate::data_model::{
   AssetCreation, AssetIssuance, AssetPolicyKey, AssetToken, AssetTokenCode, AssetTransfer,
-  CustomAssetPolicy, Operation, SmartContract, SmartContractKey, Transaction, TxOutput, TxoSID,
-  Utxo, TXN_SEQ_ID_PLACEHOLDER,
+  CustomAssetPolicy, Operation, SmartContract, SmartContractKey, Transaction, TxOutput, TxnSID,
+  TxoSID, Utxo, TXN_SEQ_ID_PLACEHOLDER,
 };
 use rand::SeedableRng;
 use rand_chacha::ChaChaRng;
@@ -12,8 +12,8 @@ use std::sync::{Arc, RwLock};
 use std::u64;
 use zei::xfr::lib::verify_xfr_note;
 
-pub mod errors;
 pub mod append_only_merkle;
+pub mod errors;
 
 pub trait LedgerAccess {
   fn check_utxo(&self, addr: TxoSID) -> Option<Utxo>;
@@ -40,7 +40,7 @@ pub trait ArchiveUpdate {
 }
 
 pub trait ArchiveAccess {
-  fn get_transaction(&self, addr: TxoSID) -> Option<&Transaction>;
+  fn get_transaction(&self, addr: TxnSID) -> Option<&Transaction>;
 }
 
 pub fn compute_sha256_hash<T>(msg: &T) -> [u8; 32]
@@ -57,7 +57,6 @@ pub fn compute_sha256_hash<T>(msg: &T) -> [u8; 32]
 #[derive(Default)]
 pub struct LedgerState {
   txs: Vec<Transaction>, //will need to be replaced by merkle tree...
-  txaddrs: HashMap<TxoSID, usize>,
   utxos: HashMap<TxoSID, Utxo>,
   contracts: HashMap<SmartContractKey, SmartContract>,
   policies: HashMap<AssetPolicyKey, CustomAssetPolicy>,
@@ -205,7 +204,7 @@ impl LedgerState {
     //[2] replay attack - not issued before=====
     if issue.body.seq_num <= issuance_num {
       println!("validate_asset_issuance:  replay attack:  {} vs {}",
-        issue.body.seq_num, issuance_num);
+               issue.body.seq_num, issuance_num);
       return false;
     }
 
@@ -232,9 +231,7 @@ impl LedgerState {
   #[cfg(test)]
   fn validate_asset_creation(&mut self, create: &AssetCreation) -> bool {
     //[1] the token is not already created, [2] the signature is correct.
-    !self
-         .tokens
-         .contains_key(&create.body.asset.code)
+    !self.tokens.contains_key(&create.body.asset.code)
     && create.pubkey
              .key
              .verify(&serde_json::to_vec(&create.body).unwrap(),
@@ -519,9 +516,7 @@ impl LedgerUpdate for LedgerState {
 
 impl ArchiveUpdate for LedgerState {
   fn append_transaction(&mut self, txn: Transaction) {
-    let sid = txn.sid;
     self.txs.push(txn);
-    self.txaddrs.insert(sid, self.txs.len());
   }
 }
 
@@ -557,22 +552,23 @@ impl LedgerAccess for LedgerState {
   fn get_issuance_num(&self, code: &AssetTokenCode) -> Option<u64> {
     match self.issuance_num.get(code) {
       Some(num) => {
-	  println!("issuance_num.get -> {}", *num);
-          Some(*num)
+        println!("issuance_num.get -> {}", *num);
+        Some(*num)
       }
       None => {
-          println!("No issuance_num.get:  {:?}", self.issuance_num);
-          None
+        println!("No issuance_num.get:  {:?}", self.issuance_num);
+        None
       }
     }
   }
 }
 
 impl ArchiveAccess for LedgerState {
-  fn get_transaction(&self, addr: TxoSID) -> Option<&Transaction> {
-    match self.txaddrs.get(&addr) {
-      Some(idx) => Some(&self.txs[*idx]),
-      None => None,
+  fn get_transaction(&self, addr: TxnSID) -> Option<&Transaction> {
+    if addr.index < self.txs.len() {
+      Some(&self.txs[addr.index])
+    } else {
+      None
     }
   }
 }
@@ -627,8 +623,8 @@ mod tests {
       token_properties.confidential_memo = ConfidentialMemo {};
     }
 
-    AssetCreationBody { asset: token_properties, }
-                        // TODO: jonathan outputs: Vec::new() }
+    AssetCreationBody { asset: token_properties }
+    // TODO: jonathan outputs: Vec::new() }
   }
 
   fn asset_creation_operation(asset_body: &AssetCreationBody,
@@ -746,14 +742,10 @@ mod tests {
 
     let sign = compute_signature(&secret_key, &public_key, &asset_issuance_body);
 
-    let asset_issuance_operation =
-        AssetIssuance {
-            body: asset_issuance_body,
-            pubkey: IssuerPublicKey {
-                key: public_key.clone()
-            },
-            signature: sign
-        };
+    let asset_issuance_operation = AssetIssuance { body: asset_issuance_body,
+                                                   pubkey: IssuerPublicKey { key:
+                                                                               public_key.clone() },
+                                                   signature: sign };
 
     let issue_op = Operation::AssetIssuance(asset_issuance_operation);
 

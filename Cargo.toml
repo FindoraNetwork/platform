@@ -6,7 +6,7 @@ edition = "2018"
 
 [dependencies]
 abci = "0.4.3"
-actix = "0.8.3"
+actix-web = "1.0"
 arrayref = "0.3.5"
 clap = "2.33.0"
 dirs = "2.0.1"
