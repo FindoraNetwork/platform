@@ -98,7 +98,7 @@ impl BlockHeader {
                   header_mark: HEADER_VALUE,
                   level: level as u16,
                   valid_leaves: 0,
-                  id: id }
+                  id }
   }
 
   // Do a simple consistency check on some fields in the header.
@@ -190,7 +190,7 @@ fn deserialize_array<'de, D>(deserializer: D) -> Result<[HashValue; HASHES_IN_BL
     return sde!("The input slice has the wrong length:  {}", slice.len());
   }
 
-  let mut result = [HashValue::new(); HASHES_IN_BLOCK];
+  let mut result: [HashValue; HASHES_IN_BLOCK] = unsafe { std::mem::uninitialized() };
   result.copy_from_slice(&slice);
   Ok(result)
 }
@@ -2073,11 +2073,9 @@ mod tests {
     let hash = create_test_hash(i, verbose);
     let result = tree.append_hash(hash);
 
-    if let Err(x) = result {
+    if let Some(x) = result {
       panic!("append_hash failed:  {}", x);
     }
-
-    result.unwrap()
   }
 
   // Test a larger tree.
