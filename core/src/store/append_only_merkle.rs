@@ -511,7 +511,7 @@ impl AppendOnlyMerkle {
   ///
   /// # Example
   ///````
-  /// use AppendOnlyMT::AppendOnlyMerkle;
+  /// use crate::core::store::append_only_merkle::AppendOnlyMerkle;
   ///
   /// let path = "public_ledger".to_string();
   ///
@@ -560,7 +560,7 @@ impl AppendOnlyMerkle {
   ///
   /// # Example
   ///````
-  /// use AppendOnlyMT::AppendOnlyMerkle;
+  /// use crate::core::store::append_only_merkle::AppendOnlyMerkle;
   ///
   /// let path = "new_ledger".to_string();
   /// # let _ = std::fs::remove_file(&path);
@@ -606,7 +606,7 @@ impl AppendOnlyMerkle {
   ///
   /// # Example
   ///````
-  /// use AppendOnlyMT::AppendOnlyMerkle;
+  /// use crate::core::store::append_only_merkle::AppendOnlyMerkle;
   ///
   /// let path       = "deserialize";
   /// # let _ = std::fs::remove_file(&path);
@@ -1093,7 +1093,7 @@ impl AppendOnlyMerkle {
   ///
   /// # Argument
   ///
-  /// * `tx_id` - the transaction id for which a proof is required
+  /// * `transaction_id` - the transaction id for which a proof is required
   ///
   /// # Example
   ///
