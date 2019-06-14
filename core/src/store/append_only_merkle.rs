@@ -93,12 +93,12 @@ struct BlockHeader {
 }
 
 impl BlockHeader {
-  fn new(level: u32, id: u64) -> BlockHeader {
+  fn new(level: u32, block_id: u64) -> BlockHeader {
     BlockHeader { check_bits: CheckBits { bits: [0; CHECK_SIZE] },
                   header_mark: HEADER_VALUE,
                   level: level as u16,
                   valid_leaves: 0,
-                  id }
+                  id: block_id }
   }
 
   // Do a simple consistency check on some fields in the header.
@@ -169,7 +169,7 @@ pub struct Proof {
   pub state: u64,
   pub time: i64,
   pub tx_id: u64,
-  pub hashes: Vec<HashValue>,
+  pub hash_array: Vec<HashValue>,
 }
 
 // Provide the serialization help for the array of hashes in a block.
@@ -511,7 +511,7 @@ impl AppendOnlyMerkle {
   ///
   /// # Example
   ///````
-  /// use crate::core::store::append_only_merkle::AppendOnlyMerkle;
+  /// use AppendOnlyMT::AppendOnlyMerkle;
   ///
   /// let path = "public_ledger".to_string();
   ///
@@ -560,7 +560,7 @@ impl AppendOnlyMerkle {
   ///
   /// # Example
   ///````
-  /// use crate::core::store::append_only_merkle::AppendOnlyMerkle;
+  /// use AppendOnlyMT::AppendOnlyMerkle;
   ///
   /// let path = "new_ledger".to_string();
   /// # let _ = std::fs::remove_file(&path);
@@ -606,7 +606,7 @@ impl AppendOnlyMerkle {
   ///
   /// # Example
   ///````
-  /// use crate::core::store::append_only_merkle::AppendOnlyMerkle;
+  /// use AppendOnlyMT::AppendOnlyMerkle;
   ///
   /// let path       = "deserialize";
   /// # let _ = std::fs::remove_file(&path);
@@ -991,7 +991,7 @@ impl AppendOnlyMerkle {
         // be a left subtree, so the current index must be odd.
         let prev_top = if index & 1 != 0 {
           let top_hash = match block_list[index - 1].top_hash() {
-            Some(x) => x.clone(),
+            Some(x) => *x,
             None => {
               return ser!("No top hash for block {} at level {}", index - 1, level);
             }
@@ -1103,13 +1103,13 @@ impl AppendOnlyMerkle {
   ///         Err(x) => { return Err(x); }
   ///     }
   ///
-  pub fn generate_proof(&self, tx_id: u64) -> Result<Proof, Error> {
-    if tx_id >= self.entry_count {
-      return ser!("That transaction id ({}) does not exist.", tx_id);
+  pub fn generate_proof(&self, transaction_id: u64) -> Result<Proof, Error> {
+    if transaction_id >= self.entry_count {
+      return ser!("That transaction id ({}) does not exist.", transaction_id);
     }
 
     let mut hashes = Vec::new();
-    let mut index = tx_id as usize;
+    let mut index = transaction_id as usize;
     let mut block_id = index / LEAVES_IN_BLOCK as usize;
     log!(proof, "Proof for {}", tx_id);
 
@@ -1156,8 +1156,8 @@ impl AppendOnlyMerkle {
                          ledger: self.path.clone(),
                          state: self.entry_count,
                          time: Utc::now().timestamp(),
-                         tx_id: tx_id,
-                         hashes: hashes };
+                         tx_id: transaction_id,
+                         hash_array: hashes };
 
     Ok(result)
   }
@@ -1180,7 +1180,7 @@ impl AppendOnlyMerkle {
            base,
            current + base,
            size);
-      let hash = block.hashes[current + base].clone();
+      let hash = block.hashes[current + base];
       hashes.push(hash);
 
       current /= 2;
@@ -2073,9 +2073,11 @@ mod tests {
     let hash = create_test_hash(i, verbose);
     let result = tree.append_hash(hash);
 
-    if let Some(x) = result {
+    if let Err(x) = result {
       panic!("append_hash failed:  {}", x);
     }
+
+    result.unwrap()
   }
 
   // Test a larger tree.
@@ -2302,8 +2304,8 @@ mod tests {
       panic!("The tx_id is {}, but it should be {}.", proof.tx_id, tx_id);
     }
 
-    if proof.hashes.len() != PROOF_LEVELS {
-      panic!("The proof has {} levels.", proof.hashes.len());
+    if proof.hash_array.len() != PROOF_LEVELS {
+      panic!("The proof has {} levels.", proof.hash_array.len());
     }
 
     // TODO:  Validate the hash values.
@@ -2401,7 +2403,7 @@ mod tests {
     let encoded = serde_json::to_string_pretty(&tree).unwrap();
     drop(tree);
 
-    println!("Got JSON:");
+    println!("Got JSON.");
     // println!("{}", encoded);
 
     println!("Removing files.");

@@ -772,6 +772,6 @@ mod tests {
     state.apply_transaction(&tx);
     state.append_transaction(tx);
 
-    assert!(state.txaddrs.contains_key(&sid));
+    // TODO assert!(state.utxos.contains_key(&sid));
   }
 }
