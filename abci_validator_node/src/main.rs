@@ -10,6 +10,7 @@ use abci::*;
 use core::data_model::errors::PlatformError;
 use core::store::*;
 use ledger_app::{convert_tx, LedgerApp};
+use api_service::RestfulApiService;
 
 struct ABCILedgerApp {
   la: LedgerApp,
@@ -93,6 +94,12 @@ fn main() {
   // let addr = "127.0.0.1:26658".parse().unwrap();
 
   // abci::run(addr, ABCILedgerApp::default());
+  let app = ABCILedgerApp::new().unwrap();
+  let ledger_state = app.la.borrowable_ledger_state();
+  let _join = thread::spawn(move || {
+    let query_service = RestfulApiService::create(ledger_state)?;
+    query_service.run()
+  });
 
-  abci::run_local(ABCILedgerApp::new().unwrap());
+  abci::run_local();
 }
