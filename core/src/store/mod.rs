@@ -32,7 +32,7 @@ pub trait LedgerAccess {
 }
 
 pub trait LedgerUpdate {
-  fn apply_transaction(&mut self, txn: &Transaction) -> TxoSID;
+  fn apply_transaction(&mut self, txn: &mut Transaction) -> TxoSID;
 }
 
 pub trait LedgerValidate {
@@ -543,7 +543,7 @@ impl<'la, LA> LedgerValidate for TxnContext<'la, LA> where LA: LedgerAccess
 }
 
 impl LedgerUpdate for LedgerState {
-  fn apply_transaction(&mut self, txn: &Transaction) -> TxoSID {
+  fn apply_transaction(&mut self, txn: &mut Transaction) -> TxoSID {
     let sid = self.txn_base_sid;
     self.txn_base_sid.index = self.max_applied_sid.index + 1;
     log!(ledger, "apply {:?}", sid);
@@ -552,6 +552,7 @@ impl LedgerUpdate for LedgerState {
     for op in &txn.operations {
       self.apply_operation(op);
     }
+    txn.sid = sid;	// TODO(Jonathan):  confirm
     sid
   }
 }
@@ -691,7 +692,7 @@ mod tests {
 
     assert!(state.validate_transaction(&tx));
 
-    state.apply_transaction(&tx);
+    state.apply_transaction(&mut tx);
     state.append_transaction(tx);
     assert!(state.get_asset_token(&token_code1).is_some());
 
@@ -761,7 +762,7 @@ mod tests {
 
     assert!(state.validate_transaction(&tx));
 
-    state.apply_transaction(&tx);
+    state.apply_transaction(&mut tx);
 
     let mut tx = Transaction::default();
 
@@ -780,7 +781,7 @@ mod tests {
     let issue_op = Operation::AssetIssuance(asset_issuance_operation);
 
     tx.operations.push(issue_op);
-    let sid = state.apply_transaction(&tx);
+    let sid = state.apply_transaction(&mut tx);
     state.append_transaction(tx);
 
     println!("sid = {:?}, placeholder = {:?}, base = {:?}, applied = {:?}",
@@ -788,7 +789,10 @@ mod tests {
     assert!(sid.index < TXN_SEQ_ID_PLACEHOLDER);
     assert!(sid.index <= state.txn_base_sid.index);
     assert!(state.tokens.contains_key(&token_code1));
+    assert!(state.txs.len() == 1);
+    assert!(state.txs[0].sid == sid);
     // TODO assert!(state.utxos.contains_key(&sid));
     println!("utxos = {:?}", state.utxos);
+    println!("txs = {:#?}", state.txs);
   }
 }

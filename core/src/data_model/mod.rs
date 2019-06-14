@@ -455,6 +455,7 @@ mod tests {
     assert!(average > 127.5 - 3.0 * stddev);
     assert!(average < 127.5 + 3.0 * stddev);
   }
+
   #[test]
   fn test_new_from_str() {
     let value = "1";
