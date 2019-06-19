@@ -2115,7 +2115,7 @@ mod tests {
     let leaves_in_block = LEAVES_IN_BLOCK as u64;
     let mut leaves_per_next = leaves_in_block;
 
-    for _t in entry_id..1024 * 1024 {
+    for _t in entry_id..2 * leaves_in_block * leaves_in_block + 1 {
       if entry_id % (64 * 1024) == 0 {
         println!("At entry {}", entry_id);
       }
@@ -2188,7 +2188,7 @@ mod tests {
       }
     }
 
-    for _t in entry_id..2 * 1024 * 1024 + 128 {
+    for _t in entry_id..512 * 1024 + leaves_in_block {
       if entry_id % (64 * 1024) == 0 {
         check_tree(&tree);
         println!("At entry {}", entry_id);

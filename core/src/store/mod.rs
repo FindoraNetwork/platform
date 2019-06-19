@@ -118,7 +118,6 @@ impl LedgerState {
   }
 
   fn apply_asset_issuance(&mut self, issue: &AssetIssuance) {
-    log!(ledger, "apply asset issue {:?}", issue.body.seq_num);
     for out in issue.body
                     .outputs
                     .iter()
@@ -130,8 +129,10 @@ impl LedgerState {
 
     self.issuance_num
         .insert(issue.body.code, issue.body.seq_num);
-    log!(ledger, "insert asset issue code {:?} -> seq {:?}", issue.body.code,
-      issue.body.seq_num);
+    log!(ledger,
+         "insert asset issue code {:?} -> seq {:?}",
+         issue.body.code,
+         issue.body.seq_num);
   }
 
   fn apply_asset_creation(&mut self, create: &AssetCreation) {
@@ -552,7 +553,7 @@ impl LedgerUpdate for LedgerState {
     for op in &txn.operations {
       self.apply_operation(op);
     }
-    txn.sid = sid;	// TODO(Jonathan):  confirm
+    txn.sid = sid; // TODO(Jonathan):  confirm
     sid
   }
 }
@@ -768,7 +769,7 @@ mod tests {
 
     let asset_issuance_body = AssetIssuanceBody { seq_num: 0,
                                                   code: token_code1,
-                                                  outputs: Vec::new(),
+                                                  outputs: vec![TxoSID { index: 0 }],
                                                   records: Vec::new() };
 
     let sign = compute_signature(&secret_key, &public_key, &asset_issuance_body);
@@ -785,7 +786,7 @@ mod tests {
     state.append_transaction(tx);
 
     println!("sid = {:?}, placeholder = {:?}, base = {:?}, applied = {:?}",
-      sid, TXN_SEQ_ID_PLACEHOLDER, state.txn_base_sid, state.max_applied_sid);
+             sid, TXN_SEQ_ID_PLACEHOLDER, state.txn_base_sid, state.max_applied_sid);
     assert!(sid.index < TXN_SEQ_ID_PLACEHOLDER);
     assert!(sid.index <= state.txn_base_sid.index);
     assert!(state.tokens.contains_key(&token_code1));
@@ -794,5 +795,11 @@ mod tests {
     // TODO assert!(state.utxos.contains_key(&sid));
     println!("utxos = {:?}", state.utxos);
     println!("txs = {:#?}", state.txs);
+    asset_transfer(&mut state, &sid);
+  }
+
+  #[feature(new_test)]
+  fn asset_transfer(ledger: &mut LedgerState, sid: &TxoSID) {
+    // ledger.utxos[sid] is a valid utxo.
   }
 }
