@@ -511,7 +511,7 @@ impl AppendOnlyMerkle {
   ///
   /// # Example
   ///````
-  /// use AppendOnlyMT::AppendOnlyMerkle;
+  /// use crate::core::store::append_only_merkle::AppendOnlyMerkle;
   ///
   /// let path = "public_ledger".to_string();
   ///
@@ -560,7 +560,7 @@ impl AppendOnlyMerkle {
   ///
   /// # Example
   ///````
-  /// use AppendOnlyMT::AppendOnlyMerkle;
+  /// use crate::core::store::append_only_merkle::AppendOnlyMerkle;
   ///
   /// let path = "new_ledger".to_string();
   /// # let _ = std::fs::remove_file(&path);
@@ -606,7 +606,7 @@ impl AppendOnlyMerkle {
   ///
   /// # Example
   ///````
-  /// use AppendOnlyMT::AppendOnlyMerkle;
+  /// use crate::core::store::append_only_merkle::AppendOnlyMerkle;
   ///
   /// let path       = "deserialize";
   /// # let _ = std::fs::remove_file(&path);
@@ -904,7 +904,7 @@ impl AppendOnlyMerkle {
     let last_lower = self.blocks[level - 1].len();
 
     while lower_index < last_lower && block_index < LEAVES_IN_BLOCK {
-      let left = self.blocks[level - 1][lower_index + 0].top_hash();
+      let left = self.blocks[level - 1][lower_index].top_hash();
       let right = self.blocks[level - 1][lower_index + 1].top_hash();
 
       if let (Some(left), Some(right)) = (left, right) {
@@ -1093,24 +1093,30 @@ impl AppendOnlyMerkle {
   ///
   /// # Argument
   ///
-  /// * `tx_id` - the transaction id for which a proof is required
+  /// * `transaction_id` - the transaction id for which a proof is required
+  /// * `tree_version` - the version of the tree for which the proof is wanted
   ///
   /// # Example
   ///
   /// let proof =
-  ///     match tree.generate_proof(transaction_id as u64) {
+  ///     match tree.generate_proof(transaction_id as u64, tree_version) {
   ///         Ok(x) => { x }
   ///         Err(x) => { return Err(x); }
   ///     }
   ///
-  pub fn generate_proof(&self, transaction_id: u64) -> Result<Proof, Error> {
+  pub fn generate_proof(&self, transaction_id: u64, version: u64) -> Result<Proof, Error> {
     if transaction_id >= self.entry_count {
       return ser!("That transaction id ({}) does not exist.", transaction_id);
+    }
+
+    if version != self.entry_count {
+      return ser!("Versioning is not yet supported.");
     }
 
     let mut hashes = Vec::new();
     let mut index = transaction_id as usize;
     let mut block_id = index / LEAVES_IN_BLOCK as usize;
+
     log!(proof, "Proof for {}", tx_id);
 
     for level in 0..self.files.len() {
@@ -1218,7 +1224,7 @@ impl AppendOnlyMerkle {
            base,
            current + base,
            size);
-      let hash = table[current + base].clone();
+      let hash = table[current + base];
       assert!(hash != empty_hash);
       hashes.push(hash);
 
@@ -2331,7 +2337,7 @@ mod tests {
     for i in 0..transactions {
       let id = test_append(&mut tree, i, false);
 
-      match tree.generate_proof(id) {
+      match tree.generate_proof(id, tree.total_size()) {
         Err(x) => {
           panic!("Error on proof for transaction {}:  {}", i, x);
         }
@@ -2351,7 +2357,7 @@ mod tests {
     for i in 0..transactions {
       let proof;
 
-      match tree.generate_proof(i) {
+      match tree.generate_proof(i, tree.total_size()) {
         Ok(x) => {
           proof = x;
         }
@@ -2367,7 +2373,7 @@ mod tests {
       check_proof(&tree, &proof, i);
     }
 
-    if let Ok(_x) = tree.generate_proof(transactions) {
+    if let Ok(_x) = tree.generate_proof(transactions, tree.total_size()) {
       panic!("Transaction {} does not exist.", transactions);
     }
 
@@ -2376,6 +2382,17 @@ mod tests {
     for i in 1..MAX_BLOCK_LEVELS {
       let path = tree.file_path(i);
       let _ = std::fs::remove_file(&path);
+    }
+
+    match tree.generate_proof(0, tree.total_size() + 1) {
+      Err(e) => {
+        if e.to_string() != "Versioning is not yet supported." {
+          panic!("The error for an invalid generation was not valid.");
+        }
+      }
+      Ok(_x) => {
+        panic!("An invalid tree version passed.");
+      }
     }
 
     println!("Done with the proof test.");

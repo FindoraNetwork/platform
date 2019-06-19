@@ -87,6 +87,7 @@ impl RestfulApiService {
 
 #[cfg(test)]
 mod tests {
-  #[test]
-  fn query_get_blind_asset_record(_query: &str) {}
+  // TODO(Jonathan) This will not compile.
+  // #[test]
+  // fn query_get_blind_asset_record(_query: &str) {}
 }

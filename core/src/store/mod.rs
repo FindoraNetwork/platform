@@ -15,6 +15,11 @@ use zei::xfr::lib::verify_xfr_note;
 pub mod append_only_merkle;
 pub mod errors;
 
+macro_rules! log {
+  // ($c:tt, $($x:tt)+) => {};
+  ($c:tt, $($x:tt)+) => { println!($($x)+); }
+}
+
 pub trait LedgerAccess {
   fn check_utxo(&self, addr: TxoSID) -> Option<Utxo>;
   fn get_issuance_num(&self, code: &AssetTokenCode) -> Option<u64>;
@@ -27,7 +32,7 @@ pub trait LedgerAccess {
 }
 
 pub trait LedgerUpdate {
-  fn apply_transaction(&mut self, txn: &Transaction) -> ();
+  fn apply_transaction(&mut self, txn: &mut Transaction) -> TxoSID;
 }
 
 pub trait LedgerValidate {
@@ -113,16 +118,20 @@ impl LedgerState {
   }
 
   fn apply_asset_issuance(&mut self, issue: &AssetIssuance) {
+    log!(ledger, "apply asset issue {:?}", issue.body.seq_num);
     for out in issue.body
                     .outputs
                     .iter()
                     .zip(issue.body.records.iter().map(|ref o| (*o).clone()))
     {
+      log!(ledger, "add txo {:?}", out.1);
       self.add_txo(out);
     }
 
     self.issuance_num
         .insert(issue.body.code, issue.body.seq_num);
+    log!(ledger, "insert asset issue code {:?} -> seq {:?}", issue.body.code,
+      issue.body.seq_num);
   }
 
   fn apply_asset_creation(&mut self, create: &AssetCreation) {
@@ -534,13 +543,17 @@ impl<'la, LA> LedgerValidate for TxnContext<'la, LA> where LA: LedgerAccess
 }
 
 impl LedgerUpdate for LedgerState {
-  fn apply_transaction(&mut self, txn: &Transaction) {
+  fn apply_transaction(&mut self, txn: &mut Transaction) -> TxoSID {
+    let sid = self.txn_base_sid;
     self.txn_base_sid.index = self.max_applied_sid.index + 1;
+    log!(ledger, "apply {:?}", sid);
 
     // Apply the operations
     for op in &txn.operations {
       self.apply_operation(op);
     }
+    txn.sid = sid;	// TODO(Jonathan):  confirm
+    sid
   }
 }
 
@@ -679,7 +692,7 @@ mod tests {
 
     assert!(state.validate_transaction(&tx));
 
-    state.apply_transaction(&tx);
+    state.apply_transaction(&mut tx);
     state.append_transaction(tx);
     assert!(state.get_asset_token(&token_code1).is_some());
 
@@ -749,7 +762,7 @@ mod tests {
 
     assert!(state.validate_transaction(&tx));
 
-    state.apply_transaction(&tx);
+    state.apply_transaction(&mut tx);
 
     let mut tx = Transaction::default();
 
@@ -766,12 +779,20 @@ mod tests {
                                                    signature: sign };
 
     let issue_op = Operation::AssetIssuance(asset_issuance_operation);
-    let sid = tx.sid;
 
     tx.operations.push(issue_op);
-    state.apply_transaction(&tx);
+    let sid = state.apply_transaction(&mut tx);
     state.append_transaction(tx);
 
+    println!("sid = {:?}, placeholder = {:?}, base = {:?}, applied = {:?}",
+      sid, TXN_SEQ_ID_PLACEHOLDER, state.txn_base_sid, state.max_applied_sid);
+    assert!(sid.index < TXN_SEQ_ID_PLACEHOLDER);
+    assert!(sid.index <= state.txn_base_sid.index);
+    assert!(state.tokens.contains_key(&token_code1));
+    assert!(state.txs.len() == 1);
+    assert!(state.txs[0].sid == sid);
     // TODO assert!(state.utxos.contains_key(&sid));
+    println!("utxos = {:?}", state.utxos);
+    println!("txs = {:#?}", state.txs);
   }
 }
