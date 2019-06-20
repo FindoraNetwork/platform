@@ -853,8 +853,7 @@ mod tests {
     asset_transfer(&mut state, &sid);
   }
 
-  #[feature(new_test)]
-  fn asset_transfer(ledger: &mut LedgerState, sid: &TxoSID) {
+  fn asset_transfer(_ledger: &mut LedgerState, _sid: &TxoSID) {
     // ledger.utxos[sid] is a valid utxo.
   }
 }
