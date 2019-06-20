@@ -45,7 +45,7 @@ pub trait LedgerValidate {
 }
 
 pub trait ArchiveUpdate {
-  fn append_transaction(&mut self, txn: Transaction) -> TxnSID;
+  fn append_transaction(&mut self, txn: Transaction) -> Transaction;
 }
 
 pub trait ArchiveAccess {
@@ -601,13 +601,13 @@ impl LedgerUpdate for LedgerState {
 }
 
 impl ArchiveUpdate for LedgerState {
-  fn append_transaction(&mut self, mut txn: Transaction) -> TxnSID {
+  fn append_transaction(&mut self, mut txn: Transaction) -> Transaction {
     let index = self.txs.len();
     txn.tx_id = TxnSID { index };
-    let serial_txn = bincode::serialize(&txn).unwrap();
-    let digest = compute_sha256_hash(&serial_txn);
-    let mut hash = append_only_merkle::HashValue::new();
-    hash.hash.clone_from_slice(&digest);
+    txn.merkle_id = 0;
+    // The transaction now is complete and all the fields had better
+    // be ready, except for the Merkle tree id.
+    let hash = txn.compute_merkle_hash();
 
     match self.merkle.append_hash(&hash) {
       Ok(n) => {
@@ -618,8 +618,9 @@ impl ArchiveUpdate for LedgerState {
       }
     }
 
+    let result = txn.clone();
     self.txs.push(txn);
-    TxnSID { index }
+    result
   }
 }
 
@@ -857,7 +858,8 @@ mod tests {
 
     tx.operations.push(issue_op);
     let sid = ledger.apply_transaction(&mut tx);
-    let txn_id = ledger.append_transaction(tx.clone());
+    let transaction = ledger.append_transaction(tx);
+    let txn_id = transaction.tx_id;
 
     // TODO assert!(ledger.utxos.contains_key(&sid));
 
@@ -866,7 +868,8 @@ mod tests {
         assert!(proof.tx_id == ledger.txs[txn_id.index].merkle_id);
       }
       None => {
-        panic!("get_proof failed for tx_id {}, merkle_id {}", tx.tx_id.index, tx.merkle_id);
+        panic!("get_proof failed for tx_id {}, merkle_id {}",
+            transaction.tx_id.index, transaction.merkle_id);
       }
     }
 

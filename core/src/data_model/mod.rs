@@ -8,6 +8,8 @@ use std::convert::TryFrom;
 use zei::basic_crypto::signatures::{XfrKeyPair, XfrPublicKey, XfrSecretKey, XfrSignature};
 use zei::xfr::lib::gen_xfr_note;
 use zei::xfr::structs::{AssetRecord, BlindAssetRecord, OpenAssetRecord, XfrNote};
+use crate::store::append_only_merkle::HashValue;
+use crate::store::compute_sha256_hash;
 pub mod errors;
 
 pub const TXN_SEQ_ID_PLACEHOLDER: u64 = 0xD000_0000_0000_0000u64;
@@ -382,6 +384,22 @@ pub struct Transaction {
 impl Transaction {
   pub fn add_operation(&mut self, op: Operation) {
     self.operations.push(op);
+  }
+
+  pub fn compute_merkle_hash(&self) -> HashValue {
+    let serialized =
+      if self.merkle_id != 0 {
+        let mut copy = self.clone();
+        copy.merkle_id = 0;
+        bincode::serialize(&copy).unwrap()
+      } else {
+        bincode::serialize(&self).unwrap()
+      };
+
+    let digest = compute_sha256_hash(&serialized);
+    let mut result = HashValue::new();
+    result.hash.clone_from_slice(&digest);
+    result
   }
 }
 
