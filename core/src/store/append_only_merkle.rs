@@ -11,6 +11,7 @@ extern crate byteorder;
 extern crate chrono;
 extern crate rand;
 extern crate serde;
+extern crate serde_derive;
 extern crate sodiumoxide;
 
 use chrono::prelude::Utc;
@@ -860,6 +861,7 @@ impl AppendOnlyMerkle {
       Ok(n) => {
         if n != offset {
           // Log error.
+          let _ = self.files[level].seek(Start(save));
           println!("Seek failed at level {}, block {} for rewrite:  {} vs {}",
                    level,
                    block.id(),
@@ -868,10 +870,14 @@ impl AppendOnlyMerkle {
           return;
         }
       }
-      Err(x) => println!("Seek failed  at level {}, block {} for rewrite:  {}",
-                         level,
-                         block.id(),
-                         x),
+      Err(x) => {
+        let _ = self.files[level].seek(Start(save));
+        println!("Seek failed  at level {}, block {} for rewrite:  {}",
+                 level,
+                 block.id(),
+                 x);
+        return;
+      }
     }
 
     match self.files[level].write_all(block.as_bytes()) {
@@ -941,7 +947,7 @@ impl AppendOnlyMerkle {
   ///          }
   ///     };
   ///
-  pub fn append_hash(&mut self, hash_value: HashValue) -> Result<u64, Error> {
+  pub fn append_hash(&mut self, hash_value: &HashValue) -> Result<u64, Error> {
     if self.entry_count == 0 {
       if self.blocks[0].len() != 0 {
         return ser!("Level zero should be empty, but it has {} blocks",
@@ -960,7 +966,7 @@ impl AppendOnlyMerkle {
     // The loop will terminate via a break if there is no data for a new level.
     let levels = self.blocks.len() + 1;
 
-    let mut current_hash = hash_value;
+    let mut current_hash = hash_value.clone();
 
     for level in 0..levels {
       if level == levels - 1 {
@@ -1082,7 +1088,7 @@ impl AppendOnlyMerkle {
     let digest = sha256::hash(value.as_ref());
 
     hash_value.hash.clone_from_slice(digest.as_ref());
-    self.append_hash(hash_value)
+    self.append_hash(&hash_value)
   }
 
   /// Generate a proof given an index into the tree.
@@ -2077,7 +2083,7 @@ mod tests {
 
   fn test_append(tree: &mut AppendOnlyMerkle, i: u64, verbose: bool) -> u64 {
     let hash = create_test_hash(i, verbose);
-    let result = tree.append_hash(hash);
+    let result = tree.append_hash(&hash);
 
     if let Err(x) = result {
       panic!("append_hash failed:  {}", x);
@@ -2199,7 +2205,7 @@ mod tests {
       entry_id += 1;
       countdown -= 1;
 
-      if countdown <= 0 {
+      if countdown <= 1 {
         println!("Checking the tree and disk image at {}", entry_id);
         check_tree(&tree);
         check_disk_tree(&mut tree, false);

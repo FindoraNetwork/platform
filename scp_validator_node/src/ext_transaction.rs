@@ -27,7 +27,8 @@ struct SCPLedgerApp {
 }
 impl SCPLedgerApp {
   fn new() -> Result<SCPLedgerApp, PlatformError> {
-    Ok(SCPLedgerApp { la: LedgerApp::new(LedgerState::default())? })
+    let ledger = LedgerState::test_ledger();
+    Ok(SCPLedgerApp { la: LedgerApp::new(ledger)? })
   }
 }
 unsafe fn register_callbacks_handle() -> &'static mut RegisterCallbacks {

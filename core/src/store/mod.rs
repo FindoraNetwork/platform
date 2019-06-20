@@ -1,15 +1,20 @@
+extern crate bincode;
+extern crate tempdir;
+
 use crate::data_model::errors::PlatformError;
 use crate::data_model::{
   AssetCreation, AssetIssuance, AssetPolicyKey, AssetToken, AssetTokenCode, AssetTransfer,
   CustomAssetPolicy, Operation, SmartContract, SmartContractKey, Transaction, TxOutput, TxnSID,
   TxoSID, Utxo, TXN_SEQ_ID_PLACEHOLDER,
 };
+use append_only_merkle::AppendOnlyMerkle;
 use rand::SeedableRng;
 use rand_chacha::ChaChaRng;
 use sha2::{Digest, Sha256};
 use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, RwLock};
 use std::u64;
+use tempdir::TempDir;
 use zei::xfr::lib::verify_xfr_note;
 
 pub mod append_only_merkle;
@@ -58,8 +63,9 @@ pub fn compute_sha256_hash<T>(msg: &T) -> [u8; 32]
   *hash
 }
 
-#[derive(Default)]
+// #[derive(Default)]
 pub struct LedgerState {
+  merkle: AppendOnlyMerkle,
   txs: Vec<Transaction>, //will need to be replaced by merkle tree...
   utxos: HashMap<TxoSID, Utxo>,
   contracts: HashMap<SmartContractKey, SmartContract>,
@@ -71,6 +77,41 @@ pub struct LedgerState {
 }
 
 impl LedgerState {
+  pub fn test_ledger() -> LedgerState {
+    let tmp_dir = TempDir::new("test").unwrap();
+    let buf = tmp_dir.path().join("test_ledger");
+    let path = buf.to_str().unwrap();
+    let _ = std::fs::remove_file(&path);
+    LedgerState::new(&path, true).unwrap()
+  }
+
+  pub fn new(path: &str, create: bool) -> Result<LedgerState, std::io::Error> {
+    let result = if create {
+      AppendOnlyMerkle::create(path)
+    } else {
+      AppendOnlyMerkle::open(path)
+    };
+
+    let tree = match result {
+      Err(x) => {
+        return Err(x);
+      }
+      Ok(tree) => tree,
+    };
+
+    let ledger = LedgerState { merkle: tree,
+                               txs: Vec::new(),
+                               utxos: HashMap::new(),
+                               contracts: HashMap::new(),
+                               policies: HashMap::new(),
+                               tokens: HashMap::new(),
+                               issuance_num: HashMap::new(),
+                               txn_base_sid: TxoSID::default(),
+                               max_applied_sid: TxoSID::default() };
+
+    Ok(ledger)
+  }
+
   pub fn begin_commit(&mut self) {
     self.txn_base_sid.index = self.max_applied_sid.index + 1;
   }
@@ -559,7 +600,21 @@ impl LedgerUpdate for LedgerState {
 }
 
 impl ArchiveUpdate for LedgerState {
-  fn append_transaction(&mut self, txn: Transaction) {
+  fn append_transaction(&mut self, mut txn: Transaction) {
+    let serial_txn = bincode::serialize(&txn).unwrap();
+    let digest = compute_sha256_hash(&serial_txn);
+    let mut hash = append_only_merkle::HashValue::new();
+    hash.hash.clone_from_slice(&digest);
+
+    match self.merkle.append_hash(&hash) {
+      Ok(n) => {
+        txn.merkle_id = n;
+      }
+      Err(x) => {
+        panic!("append_hash failed:  {}", x);
+      }
+    }
+
     self.txs.push(txn);
   }
 }
@@ -681,7 +736,7 @@ mod tests {
   #[test]
   fn test_asset_creation_valid() {
     let mut prng = ChaChaRng::from_seed([0u8; 32]);
-    let mut state = LedgerState::default();
+    let mut state = LedgerState::test_ledger();
     let mut tx = Transaction::default();
 
     let token_code1 = AssetTokenCode { val: [1; 16] };
@@ -707,7 +762,7 @@ mod tests {
   #[test]
   fn test_asset_creation_invalid_public_key() {
     // Create a valid asset creation operation.
-    let mut state = LedgerState::default();
+    let mut state = LedgerState::test_ledger();
     let mut tx = Transaction::default();
     let token_code1 = AssetTokenCode { val: [1; 16] };
     let mut prng = ChaChaRng::from_seed([0u8; 32]);
@@ -729,7 +784,7 @@ mod tests {
   #[test]
   fn test_asset_creation_invalid_signature() {
     // Create a valid operation.
-    let mut state = LedgerState::default();
+    let mut state = LedgerState::test_ledger();
     let mut tx = Transaction::default();
     let token_code1 = AssetTokenCode { val: [1; 16] };
 
@@ -751,7 +806,7 @@ mod tests {
 
   #[test]
   fn asset_issued() {
-    let mut state = LedgerState::default();
+    let mut state = LedgerState::test_ledger();
     let mut tx = Transaction::default();
     let token_code1 = AssetTokenCode { val: [1; 16] };
     let mut prng = ChaChaRng::from_seed([0u8; 32]);
@@ -783,7 +838,7 @@ mod tests {
 
     tx.operations.push(issue_op);
     let sid = state.apply_transaction(&mut tx);
-    state.append_transaction(tx);
+    state.append_transaction(tx.clone());
 
     println!("sid = {:?}, placeholder = {:?}, base = {:?}, applied = {:?}",
              sid, TXN_SEQ_ID_PLACEHOLDER, state.txn_base_sid, state.max_applied_sid);
