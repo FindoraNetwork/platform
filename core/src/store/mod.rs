@@ -7,7 +7,7 @@ use crate::data_model::{
   CustomAssetPolicy, Operation, SmartContract, SmartContractKey, Transaction, TxOutput, TxnSID,
   TxoSID, Utxo, TXN_SEQ_ID_PLACEHOLDER,
 };
-use append_only_merkle::AppendOnlyMerkle;
+use append_only_merkle::{AppendOnlyMerkle, Proof};
 use rand::SeedableRng;
 use rand_chacha::ChaChaRng;
 use sha2::{Digest, Sha256};
@@ -45,11 +45,12 @@ pub trait LedgerValidate {
 }
 
 pub trait ArchiveUpdate {
-  fn append_transaction(&mut self, txn: Transaction) -> ();
+  fn append_transaction(&mut self, txn: Transaction) -> TxnSID;
 }
 
 pub trait ArchiveAccess {
   fn get_transaction(&self, addr: TxnSID) -> Option<&Transaction>;
+  fn get_proof(&self, addr:&TxnSID) -> Option<Proof>;
 }
 
 pub fn compute_sha256_hash<T>(msg: &T) -> [u8; 32]
@@ -600,7 +601,9 @@ impl LedgerUpdate for LedgerState {
 }
 
 impl ArchiveUpdate for LedgerState {
-  fn append_transaction(&mut self, mut txn: Transaction) {
+  fn append_transaction(&mut self, mut txn: Transaction) -> TxnSID {
+    let index = self.txs.len();
+    txn.tx_id = TxnSID { index };
     let serial_txn = bincode::serialize(&txn).unwrap();
     let digest = compute_sha256_hash(&serial_txn);
     let mut hash = append_only_merkle::HashValue::new();
@@ -616,6 +619,7 @@ impl ArchiveUpdate for LedgerState {
     }
 
     self.txs.push(txn);
+    TxnSID { index }
   }
 }
 
@@ -668,6 +672,21 @@ impl ArchiveAccess for LedgerState {
       Some(&self.txs[addr.index])
     } else {
       None
+    }
+  }
+
+  fn get_proof(&self, addr: &TxnSID) -> Option<Proof> {
+    match self.get_transaction(*addr) {
+      None => { None }
+      Some(txn) => {
+        match self.merkle.generate_proof(txn.merkle_id, self.merkle.total_size()) {
+          Ok(proof) => { Some(proof) }
+          Err(_x) => {
+            // TODO log error
+            None
+          }
+        }
+      }
     }
   }
 }
@@ -806,7 +825,7 @@ mod tests {
 
   #[test]
   fn asset_issued() {
-    let mut state = LedgerState::test_ledger();
+    let mut ledger = LedgerState::test_ledger();
     let mut tx = Transaction::default();
     let token_code1 = AssetTokenCode { val: [1; 16] };
     let mut prng = ChaChaRng::from_seed([0u8; 32]);
@@ -816,9 +835,9 @@ mod tests {
     let asset_create = asset_creation_operation(&asset_body, &public_key, &secret_key);
     tx.operations.push(Operation::AssetCreation(asset_create));
 
-    assert!(state.validate_transaction(&tx));
+    assert!(ledger.validate_transaction(&tx));
 
-    state.apply_transaction(&mut tx);
+    ledger.apply_transaction(&mut tx);
 
     let mut tx = Transaction::default();
 
@@ -837,20 +856,21 @@ mod tests {
     let issue_op = Operation::AssetIssuance(asset_issuance_operation);
 
     tx.operations.push(issue_op);
-    let sid = state.apply_transaction(&mut tx);
-    state.append_transaction(tx.clone());
+    let sid = ledger.apply_transaction(&mut tx);
+    let txn_id = ledger.append_transaction(tx.clone());
 
-    println!("sid = {:?}, placeholder = {:?}, base = {:?}, applied = {:?}",
-             sid, TXN_SEQ_ID_PLACEHOLDER, state.txn_base_sid, state.max_applied_sid);
-    assert!(sid.index < TXN_SEQ_ID_PLACEHOLDER);
-    assert!(sid.index <= state.txn_base_sid.index);
-    assert!(state.tokens.contains_key(&token_code1));
-    assert!(state.txs.len() == 1);
-    assert!(state.txs[0].sid == sid);
-    // TODO assert!(state.utxos.contains_key(&sid));
-    println!("utxos = {:?}", state.utxos);
-    println!("txs = {:#?}", state.txs);
-    asset_transfer(&mut state, &sid);
+    // TODO assert!(ledger.utxos.contains_key(&sid));
+
+    match ledger.get_proof(&txn_id) {
+      Some(proof) => {
+        assert!(proof.tx_id == ledger.txs[txn_id.index].merkle_id);
+      }
+      None => {
+        panic!("get_proof failed for tx_id {}, merkle_id {}", tx.tx_id.index, tx.merkle_id);
+      }
+    }
+
+    asset_transfer(&mut ledger, &sid);
   }
 
   fn asset_transfer(_ledger: &mut LedgerState, _sid: &TxoSID) {

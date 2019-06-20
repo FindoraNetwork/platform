@@ -372,6 +372,7 @@ pub struct Transaction {
   pub credentials: Vec<CredentialProof>,
   pub memos: Vec<Memo>,
   pub sid: TxoSID,
+  pub tx_id: TxnSID,
   pub outputs: u64,
   pub merkle_id: u64,
   //pub time_bounds: TimeBounds,
@@ -391,8 +392,9 @@ impl Default for Transaction {
                   credentials: Vec::new(),
                   memos: Vec::new(),
                   sid: TxoSID { index: TXN_SEQ_ID_PLACEHOLDER },
-                  outputs: 0,
-                  merkle_id: 0 }
+                  tx_id: TxnSID { index: TXN_SEQ_ID_PLACEHOLDER as usize },
+                  merkle_id: TXN_SEQ_ID_PLACEHOLDER,
+                  outputs: 0, }
   }
 }
 
