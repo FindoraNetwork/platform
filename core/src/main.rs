@@ -1,10 +1,15 @@
-extern crate AppendOnlyMT;
+//
+//  Runs a long test on the AppendOnlyMerkle tree implementation.
+//  It just inserts hashes and invokes consistency tests.
+//
+
 extern crate rand;
+extern crate core;
 
 use rand::prelude::thread_rng;
 use rand::Rng;
-use crate::core::store::append_only_merkle::AppendOnlyMerkle;
-use crate::core::store::append_only_merkle::HashValue;
+use core::store::append_only_merkle::AppendOnlyMerkle;
+use core::store::append_only_merkle::HashValue;
 
 fn main() -> Result<(), std::io::Error> {
   println!("Running the long test.");
@@ -68,6 +73,8 @@ fn main() -> Result<(), std::io::Error> {
       println!("Syncing the tree.");
       write_tree(&mut tree);
 
+      test_proof(&mut tree);
+
       // Test the reset function now and then, as well as double checks and
       // checks with a synchronized disk image.
       if thread_rng().gen::<u32>() % 4 == 0 {
@@ -117,5 +124,30 @@ fn write_tree(tree: &mut AppendOnlyMerkle) {
 fn reset_tree(tree: &mut AppendOnlyMerkle) {
   if let Some(x) = tree.reset_disk() {
     panic!("tree.reset_disk failed:  {}", x);
+  }
+}
+
+fn test_proof(tree: &mut AppendOnlyMerkle) {
+  let state = tree.total_size();
+  let rand  = thread_rng().gen::<u64>();
+
+  let id =
+    if state > 2 {
+      rand % (state + 1)
+    } else {
+      state
+    };
+
+  println!("Testing a proof for transaction {}", id);
+
+  match tree.generate_proof(id, state) {
+    Err(x) => {
+      panic!("Error on generating a proof for id {}:  {}",
+        id, x);
+    }
+    Ok(proof) => {
+      assert!(proof.tx_id == id);
+      assert!(proof.state == tree.total_size());
+    }
   }
 }
