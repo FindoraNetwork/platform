@@ -130,8 +130,10 @@ impl LedgerState {
 
     self.issuance_num
         .insert(issue.body.code, issue.body.seq_num);
-    log!(ledger, "insert asset issue code {:?} -> seq {:?}", issue.body.code,
-      issue.body.seq_num);
+    log!(ledger,
+         "insert asset issue code {:?} -> seq {:?}",
+         issue.body.code,
+         issue.body.seq_num);
   }
 
   fn apply_asset_creation(&mut self, create: &AssetCreation) {
@@ -552,7 +554,7 @@ impl LedgerUpdate for LedgerState {
     for op in &txn.operations {
       self.apply_operation(op);
     }
-    txn.sid = sid;	// TODO(Jonathan):  confirm
+    txn.sid = sid; // TODO(Jonathan):  confirm
     sid
   }
 }
@@ -785,7 +787,7 @@ mod tests {
     state.append_transaction(tx);
 
     println!("sid = {:?}, placeholder = {:?}, base = {:?}, applied = {:?}",
-      sid, TXN_SEQ_ID_PLACEHOLDER, state.txn_base_sid, state.max_applied_sid);
+             sid, TXN_SEQ_ID_PLACEHOLDER, state.txn_base_sid, state.max_applied_sid);
     assert!(sid.index < TXN_SEQ_ID_PLACEHOLDER);
     assert!(sid.index <= state.txn_base_sid.index);
     assert!(state.tokens.contains_key(&token_code1));

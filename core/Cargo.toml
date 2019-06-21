@@ -7,6 +7,7 @@ edition = "2018"
 [dependencies]
 rand_chacha = "0.1.1"
 arrayref = "0.3.5"
+base64 = "0.10"
 chrono = "0.4"
 schnorr = "0.0.4"
 serde = "1.0"

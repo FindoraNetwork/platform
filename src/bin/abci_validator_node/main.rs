@@ -7,10 +7,10 @@ extern crate serde_derive;
 extern crate serde_json;
 
 use abci::*;
+use api_service::RestfulApiService;
 use core::data_model::errors::PlatformError;
 use core::store::*;
 use ledger_app::{convert_tx, LedgerApp};
-use api_service::RestfulApiService;
 use std::thread;
 
 struct ABCILedgerApp {
