@@ -1,3 +1,5 @@
+use crate::store::append_only_merkle::HashValue;
+use crate::store::compute_sha256_hash;
 use chrono::prelude::*;
 use curve25519_dalek::ristretto::CompressedRistretto;
 use rand::rngs::SmallRng;
@@ -8,8 +10,6 @@ use std::convert::TryFrom;
 use zei::basic_crypto::signatures::{XfrKeyPair, XfrPublicKey, XfrSecretKey, XfrSignature};
 use zei::xfr::lib::gen_xfr_note;
 use zei::xfr::structs::{AssetRecord, BlindAssetRecord, OpenAssetRecord, XfrNote};
-use crate::store::append_only_merkle::HashValue;
-use crate::store::compute_sha256_hash;
 pub mod errors;
 
 pub const TXN_SEQ_ID_PLACEHOLDER: u64 = 0xD000_0000_0000_0000u64;
@@ -387,14 +387,13 @@ impl Transaction {
   }
 
   pub fn compute_merkle_hash(&self) -> HashValue {
-    let serialized =
-      if self.merkle_id != 0 {
-        let mut copy = self.clone();
-        copy.merkle_id = 0;
-        bincode::serialize(&copy).unwrap()
-      } else {
-        bincode::serialize(&self).unwrap()
-      };
+    let serialized = if self.merkle_id != 0 {
+      let mut copy = self.clone();
+      copy.merkle_id = 0;
+      bincode::serialize(&copy).unwrap()
+    } else {
+      bincode::serialize(&self).unwrap()
+    };
 
     let digest = compute_sha256_hash(&serialized);
     let mut result = HashValue::new();
@@ -412,7 +411,7 @@ impl Default for Transaction {
                   sid: TxoSID { index: TXN_SEQ_ID_PLACEHOLDER },
                   tx_id: TxnSID { index: TXN_SEQ_ID_PLACEHOLDER as usize },
                   merkle_id: TXN_SEQ_ID_PLACEHOLDER,
-                  outputs: 0, }
+                  outputs: 0 }
   }
 }
 

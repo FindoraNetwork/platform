@@ -3,13 +3,13 @@
 //  It just inserts hashes and invokes consistency tests.
 //
 
-extern crate rand;
 extern crate core;
+extern crate rand;
 
-use rand::prelude::thread_rng;
-use rand::Rng;
 use core::store::append_only_merkle::AppendOnlyMerkle;
 use core::store::append_only_merkle::HashValue;
+use rand::prelude::thread_rng;
+use rand::Rng;
 
 fn main() -> Result<(), std::io::Error> {
   println!("Running the long test.");
@@ -129,21 +129,15 @@ fn reset_tree(tree: &mut AppendOnlyMerkle) {
 
 fn test_proof(tree: &mut AppendOnlyMerkle) {
   let state = tree.total_size();
-  let rand  = thread_rng().gen::<u64>();
+  let rand = thread_rng().gen::<u64>();
 
-  let id =
-    if state > 2 {
-      rand % (state + 1)
-    } else {
-      state
-    };
+  let id = if state > 2 { rand % (state + 1) } else { state };
 
   println!("Testing a proof for transaction {}", id);
 
   match tree.generate_proof(id, state) {
     Err(x) => {
-      panic!("Error on generating a proof for id {}:  {}",
-        id, x);
+      panic!("Error on generating a proof for id {}:  {}", id, x);
     }
     Ok(proof) => {
       assert!(proof.tx_id == id);

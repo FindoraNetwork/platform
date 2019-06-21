@@ -50,7 +50,7 @@ pub trait ArchiveUpdate {
 
 pub trait ArchiveAccess {
   fn get_transaction(&self, addr: TxnSID) -> Option<&Transaction>;
-  fn get_proof(&self, addr:&TxnSID) -> Option<Proof>;
+  fn get_proof(&self, addr: &TxnSID) -> Option<Proof>;
 }
 
 pub fn compute_sha256_hash<T>(msg: &T) -> [u8; 32]
@@ -678,10 +678,12 @@ impl ArchiveAccess for LedgerState {
 
   fn get_proof(&self, addr: &TxnSID) -> Option<Proof> {
     match self.get_transaction(*addr) {
-      None => { None }
+      None => None,
       Some(txn) => {
-        match self.merkle.generate_proof(txn.merkle_id, self.merkle.total_size()) {
-          Ok(proof) => { Some(proof) }
+        match self.merkle
+                  .generate_proof(txn.merkle_id, self.merkle.total_size())
+        {
+          Ok(proof) => Some(proof),
           Err(_x) => {
             // TODO log error
             None
@@ -869,7 +871,7 @@ mod tests {
       }
       None => {
         panic!("get_proof failed for tx_id {}, merkle_id {}",
-            transaction.tx_id.index, transaction.merkle_id);
+               transaction.tx_id.index, transaction.merkle_id);
       }
     }
 
