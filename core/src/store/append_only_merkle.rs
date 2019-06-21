@@ -966,7 +966,7 @@ impl AppendOnlyMerkle {
     // The loop will terminate via a break if there is no data for a new level.
     let levels = self.blocks.len() + 1;
 
-    let mut current_hash = hash_value.clone();
+    let mut current_hash = *hash_value;
 
     for level in 0..levels {
       if level == levels - 1 {

@@ -23,7 +23,7 @@ use zei::xfr::lib::verify_xfr_note;
 
 pub mod append_only_merkle;
 pub mod errors;
-mod logged_merkle;
+pub mod logged_merkle;
 
 macro_rules! log {
   // ($c:tt, $($x:tt)+) => {};
