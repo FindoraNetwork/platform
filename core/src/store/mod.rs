@@ -1,23 +1,37 @@
+extern crate bincode;
+extern crate byteorder;
+extern crate tempdir;
+
 use crate::data_model::errors::PlatformError;
 use crate::data_model::{
   AssetCreation, AssetIssuance, AssetPolicyKey, AssetToken, AssetTokenCode, AssetTransfer,
   CustomAssetPolicy, Operation, SmartContract, SmartContractKey, Transaction, TxOutput, TxnSID,
   TxoSID, Utxo, TXN_SEQ_ID_PLACEHOLDER,
 };
+use append_only_merkle::{AppendOnlyMerkle, Proof};
+use logged_merkle::LoggedMerkle;
 use rand::SeedableRng;
 use rand_chacha::ChaChaRng;
 use sha2::{Digest, Sha256};
 use std::collections::{HashMap, HashSet};
+use std::fs::File;
+use std::fs::OpenOptions;
 use std::sync::{Arc, RwLock};
 use std::u64;
+use tempdir::TempDir;
 use zei::xfr::lib::verify_xfr_note;
 
 pub mod append_only_merkle;
 pub mod errors;
+mod logged_merkle;
 
 macro_rules! log {
   // ($c:tt, $($x:tt)+) => {};
   ($c:tt, $($x:tt)+) => { println!($($x)+); }
+}
+
+pub struct SnapshotId {
+  pub id: u64,
 }
 
 pub trait LedgerAccess {
@@ -40,11 +54,12 @@ pub trait LedgerValidate {
 }
 
 pub trait ArchiveUpdate {
-  fn append_transaction(&mut self, txn: Transaction) -> ();
+  fn append_transaction(&mut self, txn: Transaction) -> Transaction;
 }
 
 pub trait ArchiveAccess {
   fn get_transaction(&self, addr: TxnSID) -> Option<&Transaction>;
+  fn get_proof(&self, addr: TxnSID) -> Option<Proof>;
 }
 
 pub fn compute_sha256_hash<T>(msg: &T) -> [u8; 32]
@@ -58,8 +73,9 @@ pub fn compute_sha256_hash<T>(msg: &T) -> [u8; 32]
   *hash
 }
 
-#[derive(Default)]
 pub struct LedgerState {
+  merkle_path: String,
+  merkle: LoggedMerkle,
   txs: Vec<Transaction>, //will need to be replaced by merkle tree...
   utxos: HashMap<TxoSID, Utxo>,
   contracts: HashMap<SmartContractKey, SmartContract>,
@@ -71,6 +87,52 @@ pub struct LedgerState {
 }
 
 impl LedgerState {
+  pub fn test_ledger() -> LedgerState {
+    let tmp_dir = TempDir::new("test").unwrap();
+    let buf = tmp_dir.path().join("test_ledger");
+    let path = buf.to_str().unwrap();
+    LedgerState::new(&path, true).unwrap()
+  }
+
+  pub fn new(path: &str, create: bool) -> Result<LedgerState, std::io::Error> {
+    let result = if create {
+      AppendOnlyMerkle::create(path)
+    } else {
+      AppendOnlyMerkle::open(path)
+    };
+
+    let tree = match result {
+      Err(x) => {
+        return Err(x);
+      }
+      Ok(tree) => tree,
+    };
+
+    let next_id = tree.total_size();
+    let writer = LedgerState::create_merkle_log(path.to_owned(), next_id)?;
+
+    let ledger = LedgerState { merkle: LoggedMerkle::new(tree, writer),
+                               merkle_path: path.to_owned(),
+                               txs: Vec::new(),
+                               utxos: HashMap::new(),
+                               contracts: HashMap::new(),
+                               policies: HashMap::new(),
+                               tokens: HashMap::new(),
+                               issuance_num: HashMap::new(),
+                               txn_base_sid: TxoSID::default(),
+                               max_applied_sid: TxoSID::default() };
+
+    Ok(ledger)
+  }
+
+  pub fn snapshot(&mut self) -> Result<SnapshotId, std::io::Error> {
+    let state = self.merkle.state();
+    let writer = LedgerState::create_merkle_log(self.merkle_path.clone(), state)?;
+    self.merkle.snapshot(writer)?;
+
+    Ok(SnapshotId { id: self.merkle.state() })
+  }
+
   pub fn begin_commit(&mut self) {
     self.txn_base_sid.index = self.max_applied_sid.index + 1;
   }
@@ -118,7 +180,6 @@ impl LedgerState {
   }
 
   fn apply_asset_issuance(&mut self, issue: &AssetIssuance) {
-    log!(ledger, "apply asset issue {:?}", issue.body.seq_num);
     for out in issue.body
                     .outputs
                     .iter()
@@ -262,6 +323,25 @@ impl LedgerState {
              .verify(&serde_json::to_vec(&create.body).unwrap(),
                      &create.signature)
              .is_ok()
+  }
+
+  fn create_merkle_log(base_path: String, next_id: u64) -> Result<File, std::io::Error> {
+    let log_path = base_path.to_owned() + "-log-" + &next_id.to_string();
+    println!("merkle log:  {}", log_path);
+    let result = OpenOptions::new().write(true)
+                                   .create(true)
+                                   .truncate(true)
+                                   .open(&log_path);
+
+    let file = match result {
+      Ok(file) => file,
+      Err(error) => {
+        println!("File open failed for {}", log_path);
+        return Err(error);
+      }
+    };
+
+    Ok(file)
   }
 }
 
@@ -560,8 +640,26 @@ impl LedgerUpdate for LedgerState {
 }
 
 impl ArchiveUpdate for LedgerState {
-  fn append_transaction(&mut self, txn: Transaction) {
+  fn append_transaction(&mut self, mut txn: Transaction) -> Transaction {
+    let index = self.txs.len();
+    txn.tx_id = TxnSID { index };
+    txn.merkle_id = 0;
+    // The transaction now is complete and all the fields had better
+    // be ready, except for the Merkle tree id.
+    let hash = txn.compute_merkle_hash();
+
+    match self.merkle.append(&hash) {
+      Ok(n) => {
+        txn.merkle_id = n;
+      }
+      Err(x) => {
+        panic!("append_hash failed:  {}", x);
+      }
+    }
+
+    let result = txn.clone();
     self.txs.push(txn);
+    result
   }
 }
 
@@ -614,6 +712,21 @@ impl ArchiveAccess for LedgerState {
       Some(&self.txs[addr.index])
     } else {
       None
+    }
+  }
+
+  fn get_proof(&self, addr: TxnSID) -> Option<Proof> {
+    match self.get_transaction(addr) {
+      None => None,
+      Some(txn) => {
+        match self.merkle.get_proof(txn.merkle_id, 0) {
+          Ok(proof) => Some(proof),
+          Err(_x) => {
+            // TODO log error
+            None
+          }
+        }
+      }
     }
   }
 }
@@ -682,7 +795,7 @@ mod tests {
   #[test]
   fn test_asset_creation_valid() {
     let mut prng = ChaChaRng::from_seed([0u8; 32]);
-    let mut state = LedgerState::default();
+    let mut state = LedgerState::test_ledger();
     let mut tx = Transaction::default();
 
     let token_code1 = AssetTokenCode { val: [1; 16] };
@@ -708,7 +821,7 @@ mod tests {
   #[test]
   fn test_asset_creation_invalid_public_key() {
     // Create a valid asset creation operation.
-    let mut state = LedgerState::default();
+    let mut state = LedgerState::test_ledger();
     let mut tx = Transaction::default();
     let token_code1 = AssetTokenCode { val: [1; 16] };
     let mut prng = ChaChaRng::from_seed([0u8; 32]);
@@ -730,7 +843,7 @@ mod tests {
   #[test]
   fn test_asset_creation_invalid_signature() {
     // Create a valid operation.
-    let mut state = LedgerState::default();
+    let mut state = LedgerState::test_ledger();
     let mut tx = Transaction::default();
     let token_code1 = AssetTokenCode { val: [1; 16] };
 
@@ -752,7 +865,11 @@ mod tests {
 
   #[test]
   fn asset_issued() {
-    let mut state = LedgerState::default();
+    let tmp_dir = TempDir::new("test").unwrap();
+    let buf = tmp_dir.path().join("test_ledger");
+    let path = buf.to_str().unwrap();
+
+    let mut ledger = LedgerState::new(&path, true).unwrap();
     let mut tx = Transaction::default();
     let token_code1 = AssetTokenCode { val: [1; 16] };
     let mut prng = ChaChaRng::from_seed([0u8; 32]);
@@ -762,15 +879,15 @@ mod tests {
     let asset_create = asset_creation_operation(&asset_body, &public_key, &secret_key);
     tx.operations.push(Operation::AssetCreation(asset_create));
 
-    assert!(state.validate_transaction(&tx));
+    assert!(ledger.validate_transaction(&tx));
 
-    state.apply_transaction(&mut tx);
+    ledger.apply_transaction(&mut tx);
 
     let mut tx = Transaction::default();
 
     let asset_issuance_body = AssetIssuanceBody { seq_num: 0,
                                                   code: token_code1,
-                                                  outputs: Vec::new(),
+                                                  outputs: vec![TxoSID { index: 0 }],
                                                   records: Vec::new() };
 
     let sign = compute_signature(&secret_key, &public_key, &asset_issuance_body);
@@ -783,18 +900,35 @@ mod tests {
     let issue_op = Operation::AssetIssuance(asset_issuance_operation);
 
     tx.operations.push(issue_op);
-    let sid = state.apply_transaction(&mut tx);
-    state.append_transaction(tx);
+    let sid = ledger.apply_transaction(&mut tx);
+    let transaction = ledger.append_transaction(tx);
+    let txn_id = transaction.tx_id;
 
-    println!("sid = {:?}, placeholder = {:?}, base = {:?}, applied = {:?}",
-             sid, TXN_SEQ_ID_PLACEHOLDER, state.txn_base_sid, state.max_applied_sid);
-    assert!(sid.index < TXN_SEQ_ID_PLACEHOLDER);
-    assert!(sid.index <= state.txn_base_sid.index);
-    assert!(state.tokens.contains_key(&token_code1));
-    assert!(state.txs.len() == 1);
-    assert!(state.txs[0].sid == sid);
-    // TODO assert!(state.utxos.contains_key(&sid));
-    println!("utxos = {:?}", state.utxos);
-    println!("txs = {:#?}", state.txs);
+    // TODO assert!(ledger.utxos.contains_key(&sid));
+
+    match ledger.get_proof(txn_id) {
+      Some(proof) => {
+        assert!(proof.tx_id == ledger.txs[txn_id.index].merkle_id);
+      }
+      None => {
+        panic!("get_proof failed for tx_id {}, merkle_id {}",
+               transaction.tx_id.index, transaction.merkle_id);
+      }
+    }
+
+    match ledger.snapshot() {
+      Ok(n) => {
+        assert!(n.id == 1);
+      }
+      Err(x) => {
+        panic!("snapshot failed:  {}", x);
+      }
+    }
+
+    asset_transfer(&mut ledger, &sid);
+  }
+
+  fn asset_transfer(_ledger: &mut LedgerState, _sid: &TxoSID) {
+    // ledger.utxos[sid] is a valid utxo.
   }
 }
