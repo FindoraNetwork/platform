@@ -63,7 +63,7 @@ fn query_txn<AA>(data: web::Data<Arc<RwLock<AA>>>,
 fn query_proof<AA>(data: web::Data<Arc<RwLock<AA>>>, info: web::Path<TxnSID>) -> actix_web::Result<String>
 where AA: ArchiveAccess {
   let reader = data.read().unwrap();
-  if let Some(proof) = reader.get_proof(&*info) {
+  if let Some(proof) = reader.get_proof(*info) {
     Ok(serde_json::to_string(&proof)?)
   } else {
     Err(actix_web::error::ErrorNotFound("That transaction doesn't exist."))

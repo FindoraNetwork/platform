@@ -60,7 +60,7 @@ fn main() -> Result<(), std::io::Error> {
     countdown -= 1;
 
     // Do consistency checks on the tree from time to time.
-    if countdown <= 0 {
+    if countdown <= 1 {
       println!("Checking the tree and disk image at tid {}", tid);
       check_tree(&tree);
       check_disk_tree(&mut tree, false);
