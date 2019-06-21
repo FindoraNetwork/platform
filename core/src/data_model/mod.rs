@@ -1,5 +1,7 @@
 use crate::store::append_only_merkle::HashValue;
 use crate::store::compute_sha256_hash;
+use base64::decode as b64dec;
+use base64::encode as b64enc;
 use chrono::prelude::*;
 use curve25519_dalek::ristretto::CompressedRistretto;
 use rand::rngs::SmallRng;
@@ -33,6 +35,18 @@ impl AssetTokenCode {
     as_vec.resize(16, 0u8);
     let buf = <[u8; 16]>::try_from(as_vec.as_slice()).unwrap();
     AssetTokenCode { val: buf }
+  }
+  pub fn new_from_base64(b64: &str) -> Result<AssetTokenCode, errors::PlatformError> {
+    if let Ok(mut bin) = b64dec(b64) {
+      bin.resize(16, 0u8);
+      let buf = <[u8; 16]>::try_from(bin.as_slice()).unwrap();
+      Ok(AssetTokenCode { val: buf })
+    } else {
+      Err(errors::PlatformError::DeserializationError)
+    }
+  }
+  pub fn to_base64(&self) -> String {
+    b64enc(&self.val)
   }
 }
 
