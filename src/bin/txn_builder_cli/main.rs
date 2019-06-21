@@ -137,7 +137,7 @@ fn next_file(path: &str) -> String {
     return path.to_owned();
   }
 
-  let last = path.rfind(".").unwrap();
+  let last = path.rfind('.').unwrap();
   let mut next = path[0..last].to_owned();
   
   let current =
@@ -152,17 +152,14 @@ fn next_file(path: &str) -> String {
 
   next.push_str(&".");
   next.push_str(&(current + 1).to_string());
-  return next;
+  next
 }
 
 fn rename_existing_file(path: &str) {
   let next = next_file(path);
 
-  match std::fs::rename(path, &next) {
-    Err(x) => {
-      println!("Renaming {} returned an error:  {}", path, x);
-    }
-    Ok(_) => { }
+  if let Err(x) = std::fs::rename(path, &next) {
+    println!("Renaming {} returned an error:  {}", path, x);
   }
 }
 

@@ -140,3 +140,9 @@ impl LoggedMerkle {
     self.tree.total_size()
   }
 }
+
+impl Drop for LoggedMerkle {
+  fn drop(&mut self) {
+    let _ = self.flush();
+  }
+}
