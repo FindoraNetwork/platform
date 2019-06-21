@@ -2,7 +2,7 @@
 //!
 //!  This module implements an append-only binary Merkle tree using
 //!  SHA256 as the hash function.  The tree currently is kept in memory,
-//!  but this module will write the contents to disk if requested, and
+//!  but this module will write the contents to disk when requested, and
 //!  can initialize a tree using a disk image.  Eventually, it should
 //!  support a paged tree, i.e., one that is loaded on demand and paged
 //!  to disk as needed.
@@ -931,7 +931,7 @@ impl AppendOnlyMerkle {
   /// an actual transaction.  The transaction id that is returned is used when
   /// generating a proof.
   ///
-  /// # Arguments
+  /// # Argument
   ///
   /// * `hash_value` - a HashValue structure for the new transaction
   ///
@@ -1097,10 +1097,10 @@ impl AppendOnlyMerkle {
   /// an input so that verifiers don't need to keep a complete
   /// copy of the tree.
   ///
-  /// # Argument
+  /// # Arguments
   ///
-  /// * `transaction_id` - the transaction id for which a proof is required
-  /// * `tree_version` - the version of the tree for which the proof is wanted
+  /// * `transaction_id`  - the transaction id for which a proof is required
+  /// * `tree_version`    - the version of the tree for which the proof is wanted
   ///
   /// # Example
   ///

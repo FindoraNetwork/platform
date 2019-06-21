@@ -1,4 +1,5 @@
 extern crate bincode;
+extern crate byteorder;
 extern crate tempdir;
 
 use crate::data_model::errors::PlatformError;
@@ -7,11 +8,19 @@ use crate::data_model::{
   CustomAssetPolicy, Operation, SmartContract, SmartContractKey, Transaction, TxOutput, TxnSID,
   TxoSID, Utxo, TXN_SEQ_ID_PLACEHOLDER,
 };
-use append_only_merkle::{AppendOnlyMerkle, Proof};
+use append_only_merkle::{AppendOnlyMerkle, HashValue, Proof};
+use byteorder::BigEndian;
+use byteorder::WriteBytesExt;
 use rand::SeedableRng;
 use rand_chacha::ChaChaRng;
 use sha2::{Digest, Sha256};
 use std::collections::{HashMap, HashSet};
+use std::fs::File;
+use std::fs::OpenOptions;
+use std::io::BufWriter;
+use std::io::Error;
+use std::io::ErrorKind;
+use std::io::Write;
 use std::sync::{Arc, RwLock};
 use std::u64;
 use tempdir::TempDir;
@@ -23,6 +32,15 @@ pub mod errors;
 macro_rules! log {
   // ($c:tt, $($x:tt)+) => {};
   ($c:tt, $($x:tt)+) => { println!($($x)+); }
+}
+
+// Returns Err(Error::new...).
+macro_rules! ser {
+    ($($x:tt)+) => { Err(Error::new(ErrorKind::Other, format!($($x)+))) }
+}
+
+pub struct SnapshotId {
+  pub id: u64,
 }
 
 pub trait LedgerAccess {
@@ -64,8 +82,14 @@ pub fn compute_sha256_hash<T>(msg: &T) -> [u8; 32]
   *hash
 }
 
-// #[derive(Default)]
+struct SnapshotData {
+  merkle_buf: BufWriter<File>,
+  io_errors: u64,
+  merkle_id: u64,
+}
+
 pub struct LedgerState {
+  merkle_path: String,
   merkle: AppendOnlyMerkle,
   txs: Vec<Transaction>, //will need to be replaced by merkle tree...
   utxos: HashMap<TxoSID, Utxo>,
@@ -75,6 +99,7 @@ pub struct LedgerState {
   issuance_num: HashMap<AssetTokenCode, u64>,
   txn_base_sid: TxoSID,
   max_applied_sid: TxoSID,
+  snap: SnapshotData,
 }
 
 impl LedgerState {
@@ -82,7 +107,6 @@ impl LedgerState {
     let tmp_dir = TempDir::new("test").unwrap();
     let buf = tmp_dir.path().join("test_ledger");
     let path = buf.to_str().unwrap();
-    let _ = std::fs::remove_file(&path);
     LedgerState::new(&path, true).unwrap()
   }
 
@@ -100,17 +124,40 @@ impl LedgerState {
       Ok(tree) => tree,
     };
 
-    let ledger = LedgerState { merkle: tree,
-                               txs: Vec::new(),
-                               utxos: HashMap::new(),
-                               contracts: HashMap::new(),
-                               policies: HashMap::new(),
-                               tokens: HashMap::new(),
-                               issuance_num: HashMap::new(),
-                               txn_base_sid: TxoSID::default(),
-                               max_applied_sid: TxoSID::default() };
+    let writer = LedgerState::create_merkle_log(path.to_owned(), &tree)?;
 
+    let mut ledger = LedgerState { merkle: tree,
+                                   merkle_path: path.to_owned(),
+                                   txs: Vec::new(),
+                                   utxos: HashMap::new(),
+                                   contracts: HashMap::new(),
+                                   policies: HashMap::new(),
+                                   tokens: HashMap::new(),
+                                   issuance_num: HashMap::new(),
+                                   txn_base_sid: TxoSID::default(),
+                                   max_applied_sid: TxoSID::default(),
+                                   snap: SnapshotData { merkle_buf: writer,
+                                                        io_errors: 0,
+                                                        merkle_id: 0 } };
+
+    ledger.start_merkle_log()?;
     Ok(ledger)
+  }
+
+  pub fn snapshot(&mut self) -> Result<SnapshotId, std::io::Error> {
+    if let Some(error) = self.merkle.write() {
+      return ser!("AppendOnlyMerkle:  {}", error);
+    }
+
+    if let Err(x) = self.snap.merkle_buf.flush() {
+      return ser!("merkle log:  {}", x);
+    }
+
+    self.snap.merkle_buf = LedgerState::create_merkle_log(self.merkle_path.clone(), &self.merkle)?;
+    self.snap.io_errors = 0;
+    self.start_merkle_log()?;
+
+    Ok(SnapshotId { id: self.merkle.total_size() })
   }
 
   pub fn begin_commit(&mut self) {
@@ -303,6 +350,43 @@ impl LedgerState {
              .verify(&serde_json::to_vec(&create.body).unwrap(),
                      &create.signature)
              .is_ok()
+  }
+
+  fn create_merkle_log(base_path: String,
+                       tree: &AppendOnlyMerkle)
+                       -> Result<BufWriter<File>, std::io::Error> {
+    let extension = tree.total_size();
+    let log_path = base_path.to_owned() + "-" + &extension.to_string();
+    println!("merkle log:  {}", log_path);
+    let result = OpenOptions::new().write(true)
+                                   .create(true)
+                                   .truncate(true)
+                                   .open(&log_path);
+
+    let file = match result {
+      Ok(file) => file,
+      Err(error) => {
+        println!("File open failed");
+        return Err(error);
+      }
+    };
+
+    Ok(BufWriter::new(file))
+  }
+
+  fn start_merkle_log(&mut self) -> Result<(), std::io::Error> {
+    let mut buf = [0u8; std::mem::size_of::<i64>()];
+    buf.as_mut()
+       .write_u64::<BigEndian>(self.merkle.total_size())?;
+    self.snap.merkle_buf.write_all(&buf[0..])?;
+    Ok(())
+  }
+
+  fn append_merkle_log(&mut self, id: u64, hash: &HashValue) -> Result<(), std::io::Error> {
+    assert!(id == self.snap.merkle_id);
+    self.snap.merkle_buf.write_all(&hash.hash[0..])?;
+    self.snap.merkle_id += 1;
+    Ok(())
   }
 }
 
@@ -618,6 +702,11 @@ impl ArchiveUpdate for LedgerState {
       }
     }
 
+    if let Err(_x) = self.append_merkle_log(txn.merkle_id, &hash) {
+      // TODO:  Log or count the error.
+      self.snap.io_errors += 1;
+    }
+
     let result = txn.clone();
     self.txs.push(txn);
     result
@@ -828,7 +917,11 @@ mod tests {
 
   #[test]
   fn asset_issued() {
-    let mut ledger = LedgerState::test_ledger();
+    let tmp_dir = TempDir::new("test").unwrap();
+    let buf = tmp_dir.path().join("test_ledger");
+    let path = buf.to_str().unwrap();
+
+    let mut ledger = LedgerState::new(&path, true).unwrap();
     let mut tx = Transaction::default();
     let token_code1 = AssetTokenCode { val: [1; 16] };
     let mut prng = ChaChaRng::from_seed([0u8; 32]);
@@ -872,6 +965,15 @@ mod tests {
       None => {
         panic!("get_proof failed for tx_id {}, merkle_id {}",
                transaction.tx_id.index, transaction.merkle_id);
+      }
+    }
+
+    match ledger.snapshot() {
+      Ok(n) => {
+        assert!(n.id == 1);
+      }
+      Err(x) => {
+        panic!("snapshot failed:  {}", x);
       }
     }
 
