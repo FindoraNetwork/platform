@@ -130,7 +130,7 @@ impl LedgerState {
     let writer = LedgerState::create_merkle_log(self.merkle_path.clone(), state)?;
     self.merkle.snapshot(writer)?;
 
-    Ok(SnapshotId { id: self.merkle.state() })
+    Ok(SnapshotId { id: state })
   }
 
   pub fn begin_commit(&mut self) {

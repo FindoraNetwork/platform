@@ -20,8 +20,14 @@ use sodiumoxide::crypto::hash::sha256;
 use std::fs::File;
 use std::io::BufWriter;
 use std::io::Error;
+use std::io::ErrorKind;
 use std::io::Write;
 use std::slice::from_raw_parts;
+
+// Returns Err(Error::new...).
+macro_rules! ser {
+    ($($x:tt)+) => { Err(Error::new(ErrorKind::Other, format!($($x)+))) }
+}
 
 const BUFFER_SIZE: usize = 32 * 1024;
 const CHECK_SIZE: usize = 16;
@@ -95,6 +101,7 @@ pub struct LoggedMerkle {
   buffer: LogBuffer,
   next_id: u64,
   tree: AppendOnlyMerkle,
+  closed: bool,
 }
 
 impl LoggedMerkle {
@@ -131,7 +138,8 @@ impl LoggedMerkle {
                    writer: BufWriter::new(file),
                    buffer: LogBuffer::new(id),
                    next_id: id,
-                   tree: input_tree }
+                   tree: input_tree,
+                   closed: false }
   }
 
   /// Append a hash value to the Merkle tree, returning the id
@@ -149,6 +157,10 @@ impl LoggedMerkle {
   ///     Err(x) => { return Err(x); }
   ///   };
   pub fn append(&mut self, hash: &HashValue) -> Result<u64, Error> {
+    if self.closed {
+      return ser!("This LoggedMerkle object is closed.");
+    }
+
     let id = self.tree.append_hash(hash)?;
 
     assert!(id == self.next_id);
@@ -167,7 +179,9 @@ impl LoggedMerkle {
     Ok(id)
   }
 
-  /// Flush the current state to disk, generally for a snapshot.
+  /// Flush the current state to disk, generally for a snapshot.  It's
+  /// valid to call this at any time, though.  The log and the tree will
+  /// be preserved on disk with the state as of the current point in time.
   pub fn flush(&mut self) -> Result<(), Error> {
     if let Some(x) = self.tree.write() {
       return Err(x);
@@ -211,6 +225,13 @@ impl LoggedMerkle {
     Ok(())
   }
 
+  /// Close the LoggedMerkle object.
+  pub fn close(&mut self) -> Result<(), Error> {
+    self.flush()?;
+    self.closed = true;
+    Ok(())
+  }
+
   /// Return the current state of the underlying Merkle tree.
   /// This id currently is used to generate a log file name.
   pub fn state(&self) -> u64 {
@@ -235,5 +256,119 @@ impl LoggedMerkle {
 impl Drop for LoggedMerkle {
   fn drop(&mut self) {
     let _ = self.flush();
+  }
+}
+
+#[cfg(test)]
+mod tests {
+  extern crate core;
+
+  use crate::store::append_only_merkle::AppendOnlyMerkle;
+  use crate::store::append_only_merkle::HashValue;
+  use crate::store::logged_merkle::LoggedMerkle;
+  use std::fs::OpenOptions;
+
+  #[test]
+  fn test_basic() {
+    let tree_path = "logged_test_tree";
+    let log_path = tree_path.to_owned() + "-log-0";
+    let _ = std::fs::remove_file(&tree_path);
+    let _ = std::fs::remove_file(&log_path);
+    let mut logs = Vec::new();
+
+    let tree = AppendOnlyMerkle::create(tree_path).unwrap();
+    logs.push(log_path.clone());
+    let writer = OpenOptions::new().write(true)
+                                   .create(true)
+                                   .open(log_path)
+                                   .unwrap();
+    let mut logged = LoggedMerkle::new(tree, writer);
+
+    // Append some transactions and make sure that things work.
+    for tid in 0..2048 {
+      let hash = test_hash(tid);
+      let assigned = logged.append(&hash).unwrap();
+      assert!(assigned == tid);
+
+      // Create a few partial files as a test of snapshotting.
+      if tid % 37 == 0 && tid < 300 {
+        let log_path = tree_path.to_owned() + "-log-" + &logged.state().to_string();
+        logs.push(log_path.clone());
+        let writer = OpenOptions::new().write(true)
+                                       .create(true)
+                                       .open(log_path)
+                                       .unwrap();
+
+        if let Err(x) = logged.snapshot(writer) {
+          panic!("snapshot failed:  {}", x);
+        }
+      }
+
+      // Try a flush now and then.
+      if tid % 63 == 0 {
+        if let Err(x) = logged.flush() {
+          panic!("flush failed:  {}", x);
+        }
+      }
+    }
+
+    // Generate a couple of proofs.
+    let proof_id = logged.state() - 2;
+
+    match logged.get_proof(proof_id, logged.state()) {
+      Ok(proof) => {
+        assert!(proof.tx_id == proof_id);
+      }
+      Err(x) => {
+        panic!("get_proof failed:  {}", x);
+      }
+    }
+
+    // A state of zero should request a proof at the
+    // current tree state.
+    match logged.get_proof(proof_id, 0) {
+      Ok(proof) => {
+        assert!(proof.tx_id == proof_id);
+        assert!(proof.state == logged.state());
+      }
+      Err(x) => {
+        panic!("get_proof failed at state zero:  {}", x);
+      }
+    }
+
+    // Close the object, and then test that append fails.
+    if let Err(x) = logged.close() {
+      panic!("close failed:  {}", x);
+    }
+
+    if let Ok(_) = logged.append(&test_hash(1)) {
+      panic!("append after close worked");
+    }
+
+    drop(logged);
+
+    for path in logs.iter() {
+      let _ = std::fs::remove_file(&path);
+    }
+
+    let _ = std::fs::remove_file(&tree_path);
+    let _ = std::fs::remove_file(tree_path.to_owned() + ".1");
+  }
+
+  // Create an insertable test hash.  The hash value of
+  // all zeros is reserved, so add 1 to the tid before
+  // slapping it into the hash array.
+  fn test_hash(tid: u64) -> HashValue {
+    let mut result = HashValue::new();
+    let mut index = 0;
+    let mut id = tid + 1;
+
+    while id > 0 {
+      result.hash[index] = (id % 256) as u8;
+      index += 1;
+      id /= 256;
+    }
+
+    result
   }
 }
