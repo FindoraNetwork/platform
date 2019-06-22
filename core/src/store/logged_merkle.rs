@@ -3,18 +3,30 @@
 //! This module adds logging and snapshotting to the AppendOnlyMerkle
 //! data structure.  The caller creates the tree and generates File
 //! objects for the logs.  Thus, this module does not create or use
-//! filesystem paths.  They are entirely the responsibility of the caller.
+//! filesystem paths.  They are entirely the responsibility of the
+//! caller.
 //!
 //! This module writes a log file that can be replayed to update an
 //! AppendOnlyMerkle structure.  Each "append" invocation generates a
 //! log entry in the file provided by caller.
 //!
-//! When a snapshot is requested, the current log file is flushed to disk
-//! and the new file provided by the caller is used for all subsequent
-//! logging.  Managing the log files is the responsibility of the caller.
-//! In addition to flushing the log, the snapshot invocation flushes
-//! the AppendOnlyMerkle object, as well.
-
+//! When a snapshot is requested, the current log file is flushed to
+//! disk and the new file provided by the caller is used for all
+//! subsequent logging.  Managing the log files is the responsibility
+//! of the caller.  In addition to flushing the log, the snapshot
+//! invocation flushes the AppendOnlyMerkle object, as well.
+//!
+//! A log file contains a sequence of log buffers.  Each log buffer
+//! is a fixed size given by the constant BUFFER_SIZE, and contains
+//! a header describing the contents of the buffer.  The log files
+//! are append-only.  See the LogBuffer struct for the full details
+//! on the contents of a log buffer.
+//!
+//! A flush operation causes the writing of a block whether that
+//! block is full or not, so any block in the can be only partially
+//! full.  Partially full blocks are written as a full-size block with
+//! empty (zero) entries.
+//!
 use super::append_only_merkle::{AppendOnlyMerkle, HashValue, Proof};
 use sodiumoxide::crypto::hash::sha256;
 use std::fs::File;
@@ -36,16 +48,16 @@ const BUFFER_ENTRIES: u16 = ((BUFFER_SIZE / HASH_SIZE) - 1) as u16;
 const BUFFER_MARKER: u32 = 0xabab_efe0;
 
 /// This structure is used as the I/O buffer for the logs.  It consists
-/// of a header and a series of HashValues passed to the "append" procedure
-/// sequentially.  The header contains the transaction id for the first
-/// hash, as assigned by the AppendOnlyMerkle object.  It also contains
-/// a checksum and a valid count, so that each block is self-describing
-/// and can be checked for consistency.
+/// of a header and a series of HashValues passed to the "append"
+/// procedure sequentially.  The header contains the transaction id
+/// for the first hash, as assigned by the AppendOnlyMerkle object.
+/// It also contains a checksum and a valid count, so that each block
+/// is self-describing and can be checked for consistency.
 ///
 /// This structure is built as a C structure to allow zero-copy I/O and
 /// easier checksumming.  Currently, the checksum must be first to make
-/// the as_checksummed_region function valid.  Likewise, the marker field
-/// must be next.
+/// the as_checksummed_region function valid.  Likewise, the marker
+/// field must follow the checksum.
 #[derive(Copy, Clone)]
 #[repr(C)]
 struct LogBuffer {
@@ -191,6 +203,7 @@ impl LoggedMerkle {
       self.write()?;
     }
 
+    self.writer.flush()?;
     Ok(())
   }
 
