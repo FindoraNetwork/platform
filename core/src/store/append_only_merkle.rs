@@ -600,6 +600,158 @@ impl AppendOnlyMerkle {
     }
   }
 
+  /// Rebuild a tree using only the file containing the leaves.
+  ///
+  /// # Argument
+  ///
+  /// `path` - the path to the Merkle tree
+  ///
+  /// If a previous rebuild has been attempted and not cleaned
+  /// up by the upper levels, this rebuild will fail, whether or
+  /// not the previous rebuild was successful.  All files related
+  /// to the tree with the suffix "rebuild_ext()" must be removed.
+  /// The AppendOnlyMerkle code does not remove files.
+  ///
+  /// If the rebuild is successful, a valid tree structure is
+  /// returned, and this tree is fully synchronized to disk.
+  pub fn rebuild(path: &str) -> Result<AppendOnlyMerkle, Error> {
+    let input = OpenOptions::new().read(true).open(&path)?;
+    let ext = AppendOnlyMerkle::rebuild_ext();
+    let save = path.to_owned() + &ext;
+
+    if std::path::Path::new(&save).exists() {
+      return ser!("Rebuild path {} already exists.", save);
+    }
+
+    std::fs::rename(&path, &save)?;
+    let output = OpenOptions::new().read(true)
+                                   .write(true)
+                                   .create(true)
+                                   .open(&path)?;
+    let mut tree = AppendOnlyMerkle::new(&path, output);
+    tree.rebuild_internal(input)?;
+    Ok(tree)
+  }
+
+  pub fn rebuild_ext() -> String {
+    "-base".to_string()
+  }
+
+  pub fn rebuild_extension(&self) -> String {
+    AppendOnlyMerkle::rebuild_ext()
+  }
+
+  fn rebuild_internal(&mut self, mut input: File) -> Result<(), Error> {
+    // Compute the number of complete blocks there.
+    let file_size = input.seek(End(0))?;
+    let block_count = file_size / BLOCK_SIZE as u64;
+
+    input.seek(Start(0))?;
+    self.files[0] = input;
+
+    let mut entries = 0;
+    let mut last_block_full = false;
+
+    for block_id in 0..block_count {
+      let block;
+
+      match self.read_block(0, block_id, block_id == block_count - 1) {
+        Ok(b) => {
+          block = b;
+        }
+        Err(x) => {
+          println!("Error reading block {}:  {}", block_id, x);
+          println!("I will discard the following {} blocks.",
+                   block_count - block_id - 1);
+          break;
+        }
+      }
+
+      last_block_full = block.full();
+      entries += block.valid_leaves();
+      self.blocks[0].push(block);
+    }
+
+    if entries == 0 {
+      return ser!("No valid leaves were found.");
+    }
+
+    // Set the size of the tree.
+    self.entry_count = entries;
+
+    let mut leaves_at_this_level = next_leaves(block_count, last_block_full);
+    let mut level = 1;
+
+    while leaves_at_this_level > 0 {
+      entries = 0;
+
+      let path = self.file_path(level);
+      let ext = self.rebuild_extension();
+      let _ = std::fs::rename(&path, path.to_owned() + &ext);
+
+      let file = OpenOptions::new().read(true)
+                                   .write(true)
+                                   .create(true)
+                                   .truncate(true)
+                                   .open(&path)?;
+
+      self.push_file(file);
+      let block_count = covered(leaves_at_this_level, LEAVES_IN_BLOCK as u64);
+
+      for block_id in 0..block_count {
+        let block;
+
+        match self.reconstruct(level, block_id) {
+          Ok(b) => {
+            block = b;
+          }
+          Err(x) => {
+            return ser!("Reconstruction of block {} at level {} failed:  {}",
+                        block_id,
+                        level,
+                        x);
+          }
+        }
+
+        last_block_full = block.full();
+        entries += block.valid_leaves();
+        self.blocks[level].push(block);
+      }
+
+      leaves_at_this_level = next_leaves(block_count, last_block_full);
+      level += 1;
+    }
+
+    self.files[0] = OpenOptions::new().read(true)
+                                      .write(true)
+                                      .create(true)
+                                      .truncate(true)
+                                      .open(&self.path)?;
+
+    if let Some(x) = self.check() {
+      return Err(x);
+    }
+
+    if let Some(x) = self.write() {
+      return Err(x);
+    }
+
+    Ok(())
+  }
+
+  // This function is only for testing.
+  #[cfg(test)]
+  fn leaf(&self, index: usize) -> HashValue {
+    if index as u64 > self.entry_count {
+      return HashValue::new();
+    }
+
+    let block_id = index / LEAVES_IN_BLOCK;
+    let block_index = index % LEAVES_IN_BLOCK;
+
+    self.blocks[0][block_id].hashes[block_index].clone()
+  }
+
   /// Make a deserialized tree ready for use.  The derived
   /// deserializer doesn't open files or set up a correct
   /// vector for the blocks_on_disk field.  Do that here,
@@ -903,13 +1055,12 @@ impl AppendOnlyMerkle {
       return ser!("Level zero cannot be reconstructed.");
     }
 
-    let mut lower_index = block_id as usize * LEAVES_IN_BLOCK;
-    let mut block_index = 0;
+    let mut lower_index = block_id as usize * LEAVES_IN_BLOCK * 2;
     let mut block = Block::new(level as u32, block_id);
 
     let last_lower = self.blocks[level - 1].len();
 
-    while lower_index < last_lower && block_index < LEAVES_IN_BLOCK {
+    while lower_index < last_lower && !block.full() {
       let left = self.blocks[level - 1][lower_index].top_hash();
       let right = self.blocks[level - 1][lower_index + 1].top_hash();
 
@@ -919,7 +1070,6 @@ impl AppendOnlyMerkle {
         break;
       }
 
-      block_index += 1;
       lower_index += 2;
     }
 
@@ -2287,11 +2437,36 @@ mod tests {
     write_tree(&mut tree);
     check_disk_tree(&mut tree, true);
 
+    drop(tree);
+    println!("Trying a rebuild.");
+
+    let tree = match AppendOnlyMerkle::rebuild(&path) {
+      Err(x) => {
+        panic!("Rebuild failed:  {}", x);
+      }
+      Ok(tree) => tree,
+    };
+
+    if tree.total_size() != count {
+      panic!("The sizes did not match.");
+    }
+
+    println!("Checking the rebuilt tree.");
+
+    for i in 0..count {
+      if tree.leaf(i as usize) != create_test_hash(i, false) {
+        panic!("Leaf {} does not match.", i);
+      }
+    }
+
+    let ext = tree.rebuild_extension();
     let _ = std::fs::remove_file(&path);
+    let _ = std::fs::remove_file(path.to_owned() + &ext);
 
     for i in 1..MAX_BLOCK_LEVELS {
       let path = tree.file_path(i);
       let _ = std::fs::remove_file(&path);
+      let _ = std::fs::remove_file(path.to_owned() + &ext);
     }
   }
 
@@ -2532,5 +2707,69 @@ mod tests {
       let file = path.clone() + "." + &i.to_string();
       let _ = std::fs::remove_file(&file);
     }
+  }
+
+  #[test]
+  fn test_basic_rebuild() {
+    let path = "rebuild_tree";
+    let _ = std::fs::remove_file(&path);
+
+    let mut tree = match AppendOnlyMerkle::create(&path) {
+      Ok(tree) => tree,
+      Err(x) => {
+        panic!("create failed:  {}", x);
+      }
+    };
+
+    for tid in 0..4 * LEAVES_IN_BLOCK {
+      test_append(&mut tree, tid as u64, false);
+    }
+
+    if let Some(x) = tree.write() {
+      panic!("write for rebuild failed:  {}", x);
+    }
+
+    let final_size = tree.total_size();
+    drop(tree);
+
+    let tree = match AppendOnlyMerkle::rebuild(&path) {
+      Ok(tree) => tree,
+      Err(x) => {
+        panic!("rebuild failed:  {}", x);
+      }
+    };
+
+    if tree.total_size() != final_size {
+      panic!("The sizes ({}. {}) do not match.",
+             tree.total_size(),
+             final_size);
+    }
+
+    for i in 0..4 * LEAVES_IN_BLOCK {
+      if tree.leaf(i) != create_test_hash(i as u64, false) {
+        panic!("Leaf {} does not match.", i);
+      }
+    }
+
+    let ext = tree.rebuild_extension();
+    let expected = "Rebuild path ".to_owned() + path + &ext + " already exists.";
+
+    match AppendOnlyMerkle::rebuild(&path) {
+      Ok(_) => {
+        panic!("A double rebuild worked.");
+      }
+      Err(x) => {
+        if x.to_string() != expected {
+          panic!("Rebuild error mismatch:  {}", x);
+        }
+      }
+    }
+
+    drop(tree);
+
+    let _ = std::fs::remove_file(path);
+    let _ = std::fs::remove_file(path.to_owned() + &ext);
+    let _ = std::fs::remove_file(path.to_owned() + ".1");
+    let _ = std::fs::remove_file(path.to_owned() + ".1" + &ext);
   }
 }
