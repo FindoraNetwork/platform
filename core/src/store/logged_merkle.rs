@@ -14,18 +14,14 @@
 //! disk and the new file provided by the caller is used for all
 //! subsequent logging.  Managing the log files is the responsibility
 //! of the caller.  In addition to flushing the log, the snapshot
-//! invocation flushes the AppendOnlyMerkle object, as well.
+//! invocation flushes the AppendOnlyMerkle object, as well to create
+//! a complete, consistent state on disk.
 //!
 //! A log file contains a sequence of log buffers.  Each log buffer
 //! is a fixed size given by the constant BUFFER_SIZE, and contains
 //! a header describing the contents of the buffer.  The log files
 //! are append-only.  See the LogBuffer struct for the full details
 //! on the contents of a log buffer.
-//!
-//! A flush operation causes the writing of a block whether that
-//! block is full or not, so any block in the can be only partially
-//! full.  Partially full blocks are written as a full-size block with
-//! empty (zero) entries.
 //!
 use super::append_only_merkle::{AppendOnlyMerkle, HashValue, Proof};
 use sodiumoxide::crypto::hash::sha256;
@@ -60,6 +56,12 @@ const BUFFER_MARKER: u32 = 0xabab_efe0;
 /// easier checksumming.  Currently, the checksum must be first to make
 /// the as_checksummed_region function valid.  Likewise, the marker
 /// field must follow the checksum.
+///
+/// A flush operation causes the writing of a block whether that
+/// block is full or not, so any block in the can be only partially
+/// full.  Partially full blocks are written as a full-size block with
+/// empty (zero) entries.
+///
 #[derive(Copy, Clone)]
 #[repr(C)]
 struct LogBuffer {
@@ -255,7 +257,11 @@ impl LoggedMerkle {
   /// `file` - a file containing a log
   ///
   /// This procedure returns the number of records successfully processed,
-  /// which is useful mostly for statistics reporting.
+  /// which is useful mostly for statistics reporting.  Entries already
+  /// in the tree are ignored.  Logs must be applied in order, from the
+  /// oldest to the newest.  A log file that contains only transactions
+  /// too new to append (beyond the end of the tree + 1)  will cause an error.
+  ///
   pub fn apply_log(&mut self, mut file: File) -> Result<u64, Error> {
     let mut state = self.tree.total_size();
     let mut buffer = LogBuffer::new(0);
@@ -276,6 +282,10 @@ impl LoggedMerkle {
       if buffer.valid == 0 {
         // TODO:  report an error.
         continue;
+      }
+
+      if buffer.id > self.state() {
+        return ser!("This log file starts too far in the future.");
       }
 
       // If there are entries in the current buffer that are not in
@@ -494,6 +504,25 @@ mod tests {
     for i in 0..offset {
       if let Err(x) = new_logged.append(&test_hash(i as u64)) {
         panic!("append failed:  {}", x);
+      }
+    }
+
+    // Try a log file out of order, if there might be one in the future.
+    if offset < logged.state() as usize {
+      let index = logs.len() - 1;
+      let log_file = OpenOptions::new().read(true).open(&logs[index]).unwrap();
+
+      match new_logged.apply_log(log_file) {
+        Err(x) => {
+          if x.to_string() != "This log file starts too far in the future." {
+            panic!("apply_log failed:  {}", x);
+          }
+        }
+        Ok(_n) => {
+          if new_logged.state() > logged.state() {
+            panic!("apply_log didn't detect a log in the future.");
+          }
+        }
       }
     }
 
