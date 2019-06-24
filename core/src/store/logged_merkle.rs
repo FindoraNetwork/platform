@@ -33,8 +33,10 @@ use std::fs::File;
 use std::io::BufWriter;
 use std::io::Error;
 use std::io::ErrorKind;
+use std::io::Read;
 use std::io::Write;
 use std::slice::from_raw_parts;
+use std::slice::from_raw_parts_mut;
 
 // Returns Err(Error::new...).
 macro_rules! ser {
@@ -87,6 +89,14 @@ impl LogBuffer {
     unsafe {
       from_raw_parts((self as *const LogBuffer) as *const u8,
                      std::mem::size_of::<LogBuffer>())
+    }
+  }
+
+  // Convert "self" to a slice for I/O.
+  fn as_mut_bytes(&mut self) -> &mut [u8] {
+    unsafe {
+      from_raw_parts_mut((self as *mut LogBuffer) as *mut u8,
+                         std::mem::size_of::<LogBuffer>())
     }
   }
 
@@ -238,6 +248,71 @@ impl LoggedMerkle {
     Ok(())
   }
 
+  /// Apply a log file to the tree.
+  ///
+  /// Argument
+  ///
+  /// `file` - a file containing a log
+  ///
+  /// This procedure returns the number of records successfully processed,
+  /// which is useful mostly for statistics reporting.
+  pub fn apply_log(&mut self, mut file: File) -> Result<u64, Error> {
+    let mut state = self.tree.total_size();
+    let mut buffer = LogBuffer::new(0);
+    let mut processed = 0;
+
+    // Loop reading buffers.  Return on EOF.
+    loop {
+      if let Err(x) = file.read_exact(buffer.as_mut_bytes()) {
+        if x.kind() == ErrorKind::UnexpectedEof {
+          break;
+        }
+
+        return Err(x);
+      }
+
+      // A buffer always should have some valid entries, but let such
+      // errors pass for now.
+      if buffer.valid == 0 {
+        // TODO:  report an error.
+        continue;
+      }
+
+      // If there are entries in the current buffer that are not in
+      // the tree, process them.
+      // TODO:  Consider checking any hashes that allegedly are in
+      // the tree to see that they match...
+      let mut current = buffer.id;
+
+      if current <= state && current + buffer.valid as u64 > state {
+        let start_offset = (state - current) as usize;
+
+        current += start_offset as u64;
+
+        // Insert all the hashes in this buffer not already present
+        // in the tree.
+        for index in start_offset..buffer.valid as usize {
+          match self.tree.append_hash(&buffer.hashes[index]) {
+            Ok(n) => {
+              assert!(n == current);
+            }
+            Err(x) => {
+              return Err(x);
+            }
+          }
+
+          current += 1;
+          processed += 1;
+        }
+
+        state = self.tree.total_size();
+        assert!(state == current);
+      }
+    }
+
+    Ok(processed)
+  }
+
   /// Close the LoggedMerkle object.
   pub fn close(&mut self) -> Result<(), Error> {
     self.flush()?;
@@ -264,6 +339,11 @@ impl LoggedMerkle {
     self.buffer = LogBuffer::new(self.next_id);
     Ok(())
   }
+
+  #[cfg(test)]
+  fn leaf(&self, id: u64) -> HashValue {
+    self.tree.leaf(id as usize)
+  }
 }
 
 impl Drop for LoggedMerkle {
@@ -283,19 +363,8 @@ mod tests {
 
   #[test]
   fn test_basic() {
-    let tree_path = "logged_test_tree";
-    let log_path = tree_path.to_owned() + "-log-0";
-    let _ = std::fs::remove_file(&tree_path);
-    let _ = std::fs::remove_file(&log_path);
-    let mut logs = Vec::new();
-
-    let tree = AppendOnlyMerkle::create(tree_path).unwrap();
-    logs.push(log_path.clone());
-    let writer = OpenOptions::new().write(true)
-                                   .create(true)
-                                   .open(log_path)
-                                   .unwrap();
-    let mut logged = LoggedMerkle::new(tree, writer);
+    let tree_path = "logged_tree";
+    let (mut logged, mut logs) = create_test_tree(&tree_path);
 
     // Append some transactions and make sure that things work.
     for tid in 0..2048 {
@@ -366,6 +435,98 @@ mod tests {
 
     let _ = std::fs::remove_file(&tree_path);
     let _ = std::fs::remove_file(tree_path.to_owned() + ".1");
+  }
+
+  #[test]
+  fn test_apply_log() {
+    let tree_path = "apply_tree";
+    let (mut logged, mut logs) = create_test_tree(&tree_path);
+    let mut id = 1;
+    
+    for tid in 0..8192 {
+      let hash = test_hash(tid);
+      let assigned = logged.append(&hash).unwrap();
+      assert!(assigned == tid);
+
+      if tid % 465 == 0 && tid > 2048 {
+        let writer_path = tree_path.to_owned() + "-log-" + &id.to_string();
+        let writer = OpenOptions::new().write(true)
+                                   .create(true)
+                                   .truncate(true)
+                                   .open(&writer_path)
+                                   .unwrap();
+        logs.push(writer_path);
+        
+        if let Err(x) = logged.snapshot(writer) {
+          panic!("snapshot failed:  {}", x);
+        }
+
+        id += 1;
+      }
+    }
+
+    if let Err(x) = logged.flush() {
+      panic!("snapshot failed:  {}", x);
+    }
+
+    let new_tree_path = "logged_new_tree";
+    let _ = std::fs::remove_file(&new_tree_path);
+    let new_tree = AppendOnlyMerkle::create(&new_tree_path).unwrap();
+    let new_log_path = new_tree_path.to_owned() + "-log-0";
+    let writer = OpenOptions::new().write(true)
+                                   .create(true)
+                                   .truncate(true)
+                                   .open(&new_log_path)
+                                   .unwrap();
+
+    let mut new_logged = LoggedMerkle::new(new_tree, writer);
+
+    for path in logs.clone() {
+      println!("Processing {}", path);
+
+      let log_file = OpenOptions::new()
+                                   .read(true)
+                                   .open(&path)
+                                   .unwrap();
+
+      if let Err(x) = new_logged.apply_log(log_file) {
+        panic!("apply_log failed:  {}", x);
+      }
+    }
+
+    if new_logged.state() != logged.state() {
+      panic!("The sizes don't match:  {} vs {}", new_logged.state(), logged.state());
+    }
+
+    for i in 0..new_logged.state() {
+      assert!(new_logged.leaf(i) == logged.leaf(i));
+    }
+
+    let _ = std::fs::remove_file(&new_log_path);
+    let _ = std::fs::remove_file(&new_tree_path);
+    let _ = std::fs::remove_file(new_tree_path.to_owned() + ".1");
+    let _ = std::fs::remove_file(&tree_path);
+    let _ = std::fs::remove_file(tree_path.to_owned() + ".1");
+
+    for log in logs {
+      let _ = std::fs::remove_file(&log);
+    }
+  }
+
+  fn create_test_tree(tree_path: &str) -> (LoggedMerkle, Vec<String>) {
+    let log_path = tree_path.to_owned() + "-log-0";
+    let _ = std::fs::remove_file(&tree_path);
+    let _ = std::fs::remove_file(&log_path);
+    let mut logs = Vec::new();
+
+    let tree = AppendOnlyMerkle::create(tree_path).unwrap();
+    logs.push(log_path.clone());
+    let writer = OpenOptions::new().write(true)
+                                   .create(true)
+                                   .open(log_path)
+                                   .unwrap();
+    let logged = LoggedMerkle::new(tree, writer);
+    (logged, logs)
   }
 
   // Create an insertable test hash.  The hash value of

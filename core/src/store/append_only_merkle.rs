@@ -741,7 +741,7 @@ impl AppendOnlyMerkle {
 
   // This function is only for testing.
   #[cfg(test)]
-  fn leaf(&self, index: usize) -> HashValue {
+  pub fn leaf(&self, index: usize) -> HashValue {
     if index as u64 > self.entry_count {
       return HashValue::new();
     }
