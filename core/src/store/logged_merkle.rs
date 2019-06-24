@@ -359,7 +359,7 @@ mod tests {
   use crate::store::append_only_merkle::AppendOnlyMerkle;
   use crate::store::append_only_merkle::HashValue;
   use crate::store::logged_merkle::LoggedMerkle;
-  use std::cmp::min;
+  use std::cmp::max;
   use std::fs::OpenOptions;
 
   #[test]
@@ -491,7 +491,7 @@ mod tests {
 
     let mut new_logged = LoggedMerkle::new(new_tree, writer);
 
-    for i in 0..min(offset, logged.state() as usize) {
+    for i in 0..offset {
       if let Err(x) = new_logged.append(&test_hash(i as u64)) {
         panic!("append failed:  {}", x);
       }
@@ -517,14 +517,20 @@ mod tests {
 
     println!("Processed {} hashes from the log files.", total);
 
-    if new_logged.state() != logged.state() {
+    let expected = max(offset as u64, logged.state());
+
+    if new_logged.state() != expected {
       panic!("The sizes don't match:  got {} vs {} expected",
              new_logged.state(),
              logged.state());
     }
 
-    for i in 0..new_logged.state() {
+    for i in 0..logged.state() {
       assert!(new_logged.leaf(i) == logged.leaf(i));
+    }
+
+    for i in logged.state()..offset as u64 {
+      assert!(new_logged.leaf(i) == test_hash(i));
     }
 
     let _ = std::fs::remove_file(&new_log_path);
