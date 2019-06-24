@@ -359,6 +359,7 @@ mod tests {
   use crate::store::append_only_merkle::AppendOnlyMerkle;
   use crate::store::append_only_merkle::HashValue;
   use crate::store::logged_merkle::LoggedMerkle;
+  use std::cmp::min;
   use std::fs::OpenOptions;
 
   #[test]
@@ -439,10 +440,19 @@ mod tests {
 
   #[test]
   fn test_apply_log() {
+    let offsets = [0, 1, 217, 1023, 4817, 2048, 8190, 8191, 8192, 8193, 8194, 16322];
+
+    for offset in offsets.iter() {
+      println!("\n ==== Testing offset {}", offset);
+      generate_apply_log(*offset);
+    }
+  }
+
+  fn generate_apply_log(offset: usize) {
     let tree_path = "apply_tree";
     let (mut logged, mut logs) = create_test_tree(&tree_path);
     let mut id = 1;
-    
+
     for tid in 0..8192 {
       let hash = test_hash(tid);
       let assigned = logged.append(&hash).unwrap();
@@ -451,12 +461,12 @@ mod tests {
       if tid % 465 == 0 && tid > 2048 {
         let writer_path = tree_path.to_owned() + "-log-" + &id.to_string();
         let writer = OpenOptions::new().write(true)
-                                   .create(true)
-                                   .truncate(true)
-                                   .open(&writer_path)
-                                   .unwrap();
+                                       .create(true)
+                                       .truncate(true)
+                                       .open(&writer_path)
+                                       .unwrap();
         logs.push(writer_path);
-        
+
         if let Err(x) = logged.snapshot(writer) {
           panic!("snapshot failed:  {}", x);
         }
@@ -481,21 +491,36 @@ mod tests {
 
     let mut new_logged = LoggedMerkle::new(new_tree, writer);
 
-    for path in logs.clone() {
-      println!("Processing {}", path);
-
-      let log_file = OpenOptions::new()
-                                   .read(true)
-                                   .open(&path)
-                                   .unwrap();
-
-      if let Err(x) = new_logged.apply_log(log_file) {
-        panic!("apply_log failed:  {}", x);
+    for i in 0..min(offset, logged.state() as usize) {
+      if let Err(x) = new_logged.append(&test_hash(i as u64)) {
+        panic!("append failed:  {}", x);
       }
     }
 
+    let mut total = 0;
+
+    for path in logs.clone() {
+      println!("Processing {}", path);
+
+      let log_file = OpenOptions::new().read(true).open(&path).unwrap();
+
+      match new_logged.apply_log(log_file) {
+        Err(x) => {
+          panic!("apply_log failed:  {}", x);
+        }
+        Ok(n) => {
+          println!("    Processed {} entries.", n);
+          total += n;
+        }
+      }
+    }
+
+    println!("Processed {} hashes from the log files.", total);
+
     if new_logged.state() != logged.state() {
-      panic!("The sizes don't match:  {} vs {}", new_logged.state(), logged.state());
+      panic!("The sizes don't match:  got {} vs {} expected",
+             new_logged.state(),
+             logged.state());
     }
 
     for i in 0..new_logged.state() {
