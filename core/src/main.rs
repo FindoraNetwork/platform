@@ -3,7 +3,6 @@
 //  It just inserts hashes and invokes consistency tests.
 //
 
-extern crate core;
 extern crate rand;
 
 use core::store::append_only_merkle::AppendOnlyMerkle;
@@ -26,6 +25,7 @@ fn main() -> Result<(), std::io::Error> {
 
   let mut hash = HashValue { hash: Default::default() };
   let mut countdown = 256;
+  let mut range = 256 * 1024 as usize;
 
   // Append some hash values to the tree.
   for tid in 0..512 * 1024 * 1024 {
@@ -94,8 +94,13 @@ fn main() -> Result<(), std::io::Error> {
       println!("Done with checking.");
 
       // Restart the countdown.
-      countdown = thread_rng().gen::<u32>() % (256 * 1024);
+      countdown = thread_rng().gen::<usize>() % range;
       countdown += 1;
+
+      if tree.total_size() as usize > 4 * range {
+        range *= 4;
+        println!("Range extended to {}", range);
+      }
     }
   }
 

@@ -14,7 +14,7 @@
 //! disk and the new file provided by the caller is used for all
 //! subsequent logging.  Managing the log files is the responsibility
 //! of the caller.  In addition to flushing the log, the snapshot
-//! invocation flushes the AppendOnlyMerkle object, as well to create
+//! invocation flushes the AppendOnlyMerkle object as well, to create
 //! a complete, consistent state on disk.
 //!
 //! A log file contains a sequence of log buffers.  Each log buffer
@@ -60,7 +60,8 @@ const BUFFER_MARKER: u32 = 0xabab_efe0;
 /// A flush operation causes the writing of a block whether that
 /// block is full or not, so any block in the can be only partially
 /// full.  Partially full blocks are written as a full-size block with
-/// empty (zero) entries.
+/// some number of empty (zero) entries.  All blocks should have at
+/// least one valid entry.
 ///
 #[derive(Copy, Clone)]
 #[repr(C)]
@@ -166,8 +167,8 @@ impl LoggedMerkle {
                    closed: false }
   }
 
-  /// Append a hash value to the Merkle tree, returning the id
-  /// if successful, and an error otherwise.
+  /// Append a hash value to the Merkle tree, returning the id if
+  /// successful, and an error otherwise.
   ///
   /// # Argument
   ///
@@ -194,6 +195,7 @@ impl LoggedMerkle {
     self.buffer.hashes[self.buffer.valid as usize] = *hash;
     self.buffer.valid += 1;
 
+    // If this buffer is full, give it to the BufWriter code.
     if self.buffer.valid == self.buffer.entry_count {
       self.write()?;
       assert!(self.buffer.id == self.next_id);
@@ -450,7 +452,8 @@ mod tests {
 
   #[test]
   fn test_apply_log() {
-    let offsets = [0, 1, 217, 1023, 4817, 2048, 8190, 8191, 8192, 8193, 8194, 16322];
+    let offsets =
+      [0, 1, 217, 1021, 1022, 1023, 1024, 4817, 2048, 8190, 8191, 8192, 8193, 8194, 16322];
 
     for offset in offsets.iter() {
       println!("\n ==== Testing offset {}", offset);
@@ -463,6 +466,7 @@ mod tests {
     let (mut logged, mut logs) = create_test_tree(&tree_path);
     let mut id = 1;
 
+    // Generate the tree contents.
     for tid in 0..8192 {
       let hash = test_hash(tid);
       let assigned = logged.append(&hash).unwrap();
@@ -489,9 +493,19 @@ mod tests {
       panic!("snapshot failed:  {}", x);
     }
 
+    // Generate the tree to which we will apply the logs.
     let new_tree_path = "logged_new_tree";
     let _ = std::fs::remove_file(&new_tree_path);
-    let new_tree = AppendOnlyMerkle::create(&new_tree_path).unwrap();
+    let mut new_tree = AppendOnlyMerkle::create(&new_tree_path).unwrap();
+
+    // Insert some number of records to simulate a non-empty tree.
+    for i in 0..offset {
+      if let Err(x) = new_tree.append_hash(&test_hash(i as u64)) {
+        panic!("append failed:  {}", x);
+      }
+    }
+
+    // Create the new LoggedMerkle structure.
     let new_log_path = new_tree_path.to_owned() + "-log-0";
     let writer = OpenOptions::new().write(true)
                                    .create(true)
@@ -501,15 +515,10 @@ mod tests {
 
     let mut new_logged = LoggedMerkle::new(new_tree, writer);
 
-    for i in 0..offset {
-      if let Err(x) = new_logged.append(&test_hash(i as u64)) {
-        panic!("append failed:  {}", x);
-      }
-    }
-
     // Try a log file out of order, if there might be one in the future.
     if offset < logged.state() as usize {
-      let index = logs.len() - 1;
+      let index = if offset < 1023 { 1 } else { logs.len() - 1 };
+
       let log_file = OpenOptions::new().read(true).open(&logs[index]).unwrap();
 
       match new_logged.apply_log(log_file) {
@@ -526,6 +535,7 @@ mod tests {
       }
     }
 
+    // Now apply all the logs.
     let mut total = 0;
 
     for path in logs.clone() {
@@ -546,6 +556,7 @@ mod tests {
 
     println!("Processed {} hashes from the log files.", total);
 
+    // Check that the resulting tree is the correct size.
     let expected = max(offset as u64, logged.state());
 
     if new_logged.state() != expected {
@@ -558,6 +569,7 @@ mod tests {
       assert!(new_logged.leaf(i) == logged.leaf(i));
     }
 
+    // Check the contents of the reconstructed tree.
     for i in logged.state()..offset as u64 {
       assert!(new_logged.leaf(i) == test_hash(i));
     }
