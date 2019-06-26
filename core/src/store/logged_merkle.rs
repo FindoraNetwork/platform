@@ -30,6 +30,10 @@ use std::io::BufWriter;
 use std::io::Error;
 use std::io::ErrorKind;
 use std::io::Read;
+use std::io::Seek;
+use std::io::SeekFrom::Current;
+use std::io::SeekFrom::End;
+use std::io::SeekFrom::Start;
 use std::io::Write;
 use std::slice::from_raw_parts;
 use std::slice::from_raw_parts_mut;
@@ -37,6 +41,12 @@ use std::slice::from_raw_parts_mut;
 // Returns Err(Error::new...).
 macro_rules! ser {
     ($($x:tt)+) => { Err(Error::new(ErrorKind::Other, format!($($x)+))) }
+}
+
+// Writes a log entry when enabled.
+macro_rules! log {
+    ($c:tt, $($x:tt)+) => { }
+    // ($c:tt, $($x:tt)+) => { println!($($x)+); }
 }
 
 const BUFFER_SIZE: usize = 32 * 1024;
@@ -269,6 +279,8 @@ impl LoggedMerkle {
     let mut buffer = LogBuffer::new(0);
     let mut processed = 0;
 
+    self.find_block(&mut file)?;
+
     // Loop reading buffers.  Return on EOF.
     loop {
       if let Err(x) = file.read_exact(buffer.as_mut_bytes()) {
@@ -323,6 +335,73 @@ impl LoggedMerkle {
     }
 
     Ok(processed)
+  }
+
+  // Find a block in the log file that has records just
+  // past the end of the tree, if possible.
+  fn find_block(&mut self, mut file: &mut File) -> Result<(), Error> {
+    let state = self.tree.total_size();
+    let file_size = self.file_size(&mut file)?;
+    let buffer_count = file_size / BUFFER_SIZE as u64;
+
+    if buffer_count == 0 {
+      return Ok(());
+    }
+
+    let mut buffer = LogBuffer::new(0);
+    let mut base = 0;
+    let mut top = buffer_count;
+    let mut current = base;
+
+    log!(find_block, "find_block:  state {}, top {}", state, top);
+
+    loop {
+      file.read_exact(buffer.as_mut_bytes())?;
+
+      log!(find_block, "current: {}, id: {}, state {}", current, buffer.id, state);
+
+      if buffer.id > state {
+        // The buffer is in the future!  Move back, if possible.
+        let gap = current - base;
+
+        if gap <= 1 {
+          log!(find_block, "exit:  current {}, base {}", current, base);
+          break;
+        }
+
+        top = current;
+        current -= gap / 2;
+        log!(find_block, "move back {} to {}", gap / 2, current);
+      } else if buffer.id + buffer.valid as u64 <= state {
+        // The buffer is in the past.  Move forward!
+        let gap = top - current;
+
+        if gap <= 1 {
+          log!(find_block, "exit:  current {}, top {}", current, top);
+          break;
+        }
+
+        base = current;
+        current += gap / 2;
+        log!(find_block, "move forward {} to {}", gap / 2, current);
+      } else {
+        log!(find_block, "found id {}, valid {}", buffer.id, buffer.valid);
+        break;
+      }
+
+      file.seek(Start(current * BUFFER_SIZE as u64))?;
+    }
+
+    log!(find_block, "find_block:  return {}", current);
+    file.seek(Start(current * BUFFER_SIZE as u64))?;
+    Ok(())
+  }
+
+  fn file_size(&self, file: &mut File) -> Result<u64, Error> {
+    let start = file.seek(Current(0))?;
+    let size  = file.seek(End(0))?;
+    file.seek(Start(start))?;
+    Ok(size)
   }
 
   /// Close the LoggedMerkle object.
@@ -457,17 +536,25 @@ mod tests {
 
     for offset in offsets.iter() {
       println!("\n ==== Testing offset {}", offset);
-      generate_apply_log(*offset);
+      generate_apply_log(8192, *offset);
+    }
+
+    let offsets =
+      [0, 1024, 4817, 2048, 8190, 8191, 8192, 8193, 8194, 16322, 45600, 230000];
+
+    for offset in offsets.iter() {
+      println!("\n ==== Testing offset {}", offset);
+      generate_apply_log(64 * 1024, *offset);
     }
   }
 
-  fn generate_apply_log(offset: usize) {
+  fn generate_apply_log(tree_size: usize, offset: usize) {
     let tree_path = "apply_tree";
     let (mut logged, mut logs) = create_test_tree(&tree_path);
     let mut id = 1;
 
     // Generate the tree contents.
-    for tid in 0..8192 {
+    for tid in 0..tree_size as u64 {
       let hash = test_hash(tid);
       let assigned = logged.append(&hash).unwrap();
       assert!(assigned == tid);

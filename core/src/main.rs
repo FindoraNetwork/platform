@@ -28,7 +28,7 @@ fn main() -> Result<(), std::io::Error> {
   let mut range = 256 * 1024 as usize;
 
   // Append some hash values to the tree.
-  for tid in 0..512 * 1024 * 1024 {
+  for tid in 0..900 * 1024 * 1024 {
     // Create a unique, non-zero hash by treating the hash array as a
     // base-256 numeral.  Start at 1 and add 1 every iteration.
     let mut carry = 1;
@@ -104,6 +104,8 @@ fn main() -> Result<(), std::io::Error> {
     }
   }
 
+  tree.write();
+  println!("Done with {} entries.", tree.total_size());
   println!("The test passed.");
   Ok(())
 }

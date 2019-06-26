@@ -563,7 +563,7 @@ impl AppendOnlyMerkle {
   ///````
   /// use crate::core::store::append_only_merkle::AppendOnlyMerkle;
   ///
-  /// let path = "new_ledger".to_string();
+  /// let path = "new_ledger";
   /// # let _ = std::fs::remove_file(&path);
   ///
   /// let mut tree =
