@@ -458,6 +458,13 @@ fn hash_partial(left: &HashValue, right: &HashValue) -> HashValue {
   }
 }
 
+struct LevelState {
+  level: usize,
+  leaves_at_this_level: u64,
+  previous_leaves: u64,
+  previous_blocks: u64,
+}
+
 // Compute the expected number of leaves in the next layer of the
 // tree given the number of blocks at the current level, and whether
 // the last block at the current layer is full.
@@ -538,14 +545,8 @@ impl AppendOnlyMerkle {
       Ok(file) => {
         let mut result = AppendOnlyMerkle::new(path, file);
 
-        if let Some(x) = result.open_files() {
-          return Result::Err(x);
-        }
-
-        if let Some(x) = result.read_files() {
-          return Result::Err(x);
-        }
-
+        result.open_files()?;
+        result.read_files()?;
         Result::Ok(result)
       }
       Err(x) => Result::Err(x),
@@ -641,6 +642,8 @@ impl AppendOnlyMerkle {
     AppendOnlyMerkle::rebuild_ext()
   }
 
+  // The rebuild method creates a skeleton tree.  Now do the work of recreating
+  // all the files.
   fn rebuild_internal(&mut self, mut input: File) -> Result<(), Error> {
     // Compute the number of complete blocks there.
     let file_size = input.seek(End(0))?;
@@ -652,6 +655,8 @@ impl AppendOnlyMerkle {
     let mut entries = 0;
     let mut last_block_full = false;
 
+    // Read the level zero hashes if we can.  If any level zero block
+    // is corrupted, discard it and any following blocks.
     for block_id in 0..block_count {
       let block;
 
@@ -679,12 +684,11 @@ impl AppendOnlyMerkle {
     // Set the size of the tree.
     self.entry_count = entries;
 
+    // Now recover the upper level files.
     let mut leaves_at_this_level = next_leaves(block_count, last_block_full);
     let mut level = 1;
 
     while leaves_at_this_level > 0 {
-      entries = 0;
-
       let path = self.file_path(level);
       let ext = self.rebuild_extension();
       let _ = std::fs::rename(&path, path.to_owned() + &ext);
@@ -697,31 +701,13 @@ impl AppendOnlyMerkle {
 
       self.push_file(file);
       let block_count = covered(leaves_at_this_level, LEAVES_IN_BLOCK as u64);
-
-      for block_id in 0..block_count {
-        let block;
-
-        match self.reconstruct(level, block_id) {
-          Ok(b) => {
-            block = b;
-          }
-          Err(x) => {
-            return ser!("Reconstruction of block {} at level {} failed:  {}",
-                        block_id,
-                        level,
-                        x);
-          }
-        }
-
-        last_block_full = block.full();
-        entries += block.valid_leaves();
-        self.blocks[level].push(block);
-      }
-
+      last_block_full = self.rebuild_level(level, block_count)?;
       leaves_at_this_level = next_leaves(block_count, last_block_full);
       level += 1;
     }
 
+    // Okay, we have recovered all the upper level files.  Point the
+    // level zero file at the correct path.
     self.files[0] = OpenOptions::new().read(true)
                                       .write(true)
                                       .create(true)
@@ -737,6 +723,31 @@ impl AppendOnlyMerkle {
     }
 
     Ok(())
+  }
+
+  fn rebuild_level(&mut self, level: usize, block_count: u64) -> Result<bool, Error> {
+    let mut last_block_full = false;
+
+    for block_id in 0..block_count {
+      let block;
+
+      match self.reconstruct(level, block_id) {
+        Ok(b) => {
+          block = b;
+        }
+        Err(x) => {
+          return ser!("Reconstruction of block {} at level {} failed:  {}",
+                      block_id,
+                      level,
+                      x);
+        }
+      }
+
+      last_block_full = block.full();
+      self.blocks[level].push(block);
+    }
+
+    Ok(last_block_full)
   }
 
   // This function is only for testing.
@@ -816,7 +827,7 @@ impl AppendOnlyMerkle {
   }
 
   // Open the files for each level of the tree from 1 upward.
-  fn open_files(&mut self) -> Option<Error> {
+  fn open_files(&mut self) -> Result<(), Error> {
     let mut i = 1;
 
     loop {
@@ -826,9 +837,9 @@ impl AppendOnlyMerkle {
       match result {
         Err(x) => {
           if x.kind() == ErrorKind::NotFound {
-            return None;
+            return Ok(());
           } else {
-            return Some(x);
+            return Err(x);
           }
         }
         Ok(file) => {
@@ -840,7 +851,7 @@ impl AppendOnlyMerkle {
 
       // Enforce an arbitrary limit to the number of levels we can support.
       if i > MAX_BLOCK_LEVELS {
-        return sem!("The tree at {} has more than {} levels.", self.path, i - 1);
+        return ser!("The tree at {} has more than {} levels.", self.path, i - 1);
       }
     }
   }
@@ -867,119 +878,16 @@ impl AppendOnlyMerkle {
   }
 
   // Read the disk data into the Merkle tree.
-  fn read_files(&mut self) -> Option<Error> {
-    let mut leaves_at_this_level = 0;
-    let mut previous_leaves = 0;
-    let mut previous_blocks = 0;
+  fn read_files(&mut self) -> Result<(), Error> {
+    let mut state = LevelState { level: 0,
+                                 leaves_at_this_level: 0,
+                                 previous_leaves: 0,
+                                 previous_blocks: 0 };
 
     // Read the file for each level of the tree.
     for level in 0..self.files.len() {
-      let file_size = match self.files[level].seek(End(0)) {
-        Ok(n) => n,
-        Err(x) => {
-          return Some(x);
-        }
-      };
-
-      if file_size % BLOCK_SIZE as u64 != 0 {
-        return sem!("The file contains a partial block (size {}) at level {}",
-                    file_size,
-                    level);
-      }
-
-      if let Err(x) = self.files[level].seek(Start(0)) {
-        return Some(x);
-      }
-
-      let block_count = file_size / BLOCK_SIZE as u64;
-      let expected = covered(leaves_at_this_level, LEAVES_IN_BLOCK as u64);
-
-      if level != 0 && block_count != expected {
-        return sem!("Level {} has {} blocks on disk, but should have {}, \
-                     leaves {}, previous leaves {}, previous blocks {}",
-                    level,
-                    block_count,
-                    expected,
-                    leaves_at_this_level,
-                    previous_leaves,
-                    previous_blocks);
-      }
-
-      let mut last_block_full = true;
-      let mut entries = 0;
-
-      // Read each block, if possible.
-      for i in 0..block_count {
-        let last_block = i == block_count - 1;
-
-        // Read the block and do some basic integrity checks.
-        match self.read_block(level, i, last_block) {
-          Ok(block) => {
-            last_block_full = block.full();
-            entries += block.valid_leaves();
-
-            // If we are above level zero, check that the hashes we
-            // have read agree with what's in the lower level.
-            if level > 0 {
-              let lower_index = i as usize * LEAVES_IN_BLOCK * 2;
-              let lower_list = &self.blocks[level - 1];
-
-              if let Some(x) = self.check_lower(&block, lower_list, lower_index) {
-                return Some(x);
-              }
-            }
-
-            self.blocks[level].push(block);
-          }
-          Err(x) => {
-            if level == 0 {
-              return Some(x);
-            }
-
-            match self.reconstruct(level, i) {
-              Ok(block) => {
-                self.rewrite_block(&block);
-                last_block_full = block.full();
-                entries += block.valid_leaves();
-                self.blocks[level].push(block);
-              }
-              Err(x) => {
-                return Some(x);
-              }
-            }
-          }
-        }
-      }
-
-      if level > 0 && entries != leaves_at_this_level {
-        return sem!("Level {} has {} entries, but {} were expected.",
-                    level,
-                    entries,
-                    leaves_at_this_level);
-      }
-
-      // If this is level zero, set the tree size.
-      if level == 0 {
-        self.entry_count = entries;
-        self.entries_on_disk = entries;
-      }
-
-      self.blocks_on_disk[level] = block_count;
-
-      // Compute the number of entries to expect at the next level as a
-      // consistency check.
-      leaves_at_this_level = next_leaves(block_count, last_block_full);
-
-      previous_leaves = entries;
-      previous_blocks = block_count;
-
-      // So if there are leaves at the next level, and there's not a file,
-      // we have a problem...
-      let last_level = level == self.files.len() - 1;
-
-      if last_level && leaves_at_this_level > 0 {
-        return sem!("There is at least one missing file (level {}).", level);
-      }
+      state.level = level;
+      self.read_level(&mut state)?;
     }
 
     // Remove any leftover files.  open_files() stops at the first missing
@@ -989,7 +897,154 @@ impl AppendOnlyMerkle {
       let _ = std::fs::remove_file(&path);
     }
 
-    None
+    Ok(())
+  }
+
+  fn read_level(&mut self, state: &mut LevelState) -> Result<(), Error> {
+    let level = state.level;
+
+    let file_size = match self.files[level].seek(End(0)) {
+      Ok(n) => n,
+      Err(x) => {
+        println!("seek failed:  {}", x);
+        return self.recover_file(level);
+      }
+    };
+
+    if file_size % BLOCK_SIZE as u64 != 0 {
+      println!("The file contains a partial block (size {}) at level {}",
+               file_size, level);
+      return self.recover_file(level);
+    }
+
+    if let Err(x) = self.files[level].seek(Start(0)) {
+      println!("seek failed:  {}", x);
+      return self.recover_file(level);
+    }
+
+    let block_count = file_size / BLOCK_SIZE as u64;
+    let expected = covered(state.leaves_at_this_level, LEAVES_IN_BLOCK as u64);
+
+    if level != 0 && block_count != expected {
+      println!("Level {} has {} blocks on disk, but should have {}, \
+                leaves {}, previous leaves {}, previous blocks {}",
+               level,
+               block_count,
+               expected,
+               state.leaves_at_this_level,
+               state.previous_leaves,
+               state.previous_blocks);
+      return self.recover_file(level);
+    }
+
+    let mut last_block_full = true;
+    let mut entries = 0;
+
+    // Read each block, if possible.
+    for i in 0..block_count {
+      let last_block = i == block_count - 1;
+
+      // Read the block and do some basic integrity checks.
+      match self.read_block(level, i, last_block) {
+        Ok(block) => {
+          last_block_full = block.full();
+          entries += block.valid_leaves();
+
+          // If we are above level zero, check that the hashes we
+          // have read agree with what's in the lower level.
+          if level > 0 {
+            let lower_index = i as usize * LEAVES_IN_BLOCK * 2;
+            let lower_list = &self.blocks[level - 1];
+
+            if let Some(x) = self.check_lower(&block, lower_list, lower_index) {
+              return Err(x);
+            }
+          }
+
+          self.blocks[level].push(block);
+        }
+        Err(x) => {
+          if level == 0 {
+            return Err(x);
+          }
+
+          match self.reconstruct(level, i) {
+            Ok(block) => {
+              self.rewrite_block(&block);
+              last_block_full = block.full();
+              entries += block.valid_leaves();
+              self.blocks[level].push(block);
+            }
+            Err(x) => {
+              return Err(x);
+            }
+          }
+        }
+      }
+    }
+
+    if level > 0 && entries != state.leaves_at_this_level {
+      println!("Level {} has {} entries, but {} were expected.",
+               level, entries, state.leaves_at_this_level);
+      return self.recover_file(level);
+    }
+
+    // If this is level zero, set the tree size.
+    if level == 0 {
+      self.entry_count = entries;
+      self.entries_on_disk = entries;
+    }
+
+    self.blocks_on_disk[level] = block_count;
+
+    // Compute the number of entries to expect at the next level as a
+    // consistency check.
+    state.leaves_at_this_level = next_leaves(block_count, last_block_full);
+
+    state.previous_leaves = entries;
+    state.previous_blocks = block_count;
+
+    // So if there are leaves at the next level, and there's not a file,
+    // we have a problem...
+    let last_level = level == self.files.len() - 1;
+
+    if last_level && state.leaves_at_this_level > 0 {
+      println!("There is at least one missing file (missing level {}).",
+               level + 1);
+      return self.recover_file(level + 1);
+    }
+
+    Ok(())
+  }
+
+  fn recover_file(&mut self, level: usize) -> Result<(), Error> {
+    let path = self.file_path(level);
+
+    let _ = std::fs::remove_file(&path);
+
+    let result = OpenOptions::new().read(true)
+                                   .write(true)
+                                   .create(true)
+                                   .truncate(true)
+                                   .open(&path);
+
+    let file = match result {
+      Err(x) => {
+        return Err(x);
+      }
+      Ok(file) => file,
+    };
+
+    if level == self.files.len() {
+      self.push_file(file);
+    } else {
+      self.files[level] = file;
+    }
+
+    let entry_count = self.blocks[level - 1].len() / 2;
+    let block_count = covered(entry_count as u64, LEAVES_IN_BLOCK as u64);
+    self.rebuild_level(level, block_count)?;
+    Ok(())
   }
 
   // Rewrite the given block to disk.  This routine is called when a read
@@ -1060,7 +1115,7 @@ impl AppendOnlyMerkle {
 
     let last_lower = self.blocks[level - 1].len();
 
-    while lower_index < last_lower && !block.full() {
+    while lower_index < last_lower - 1 && !block.full() {
       let left = self.blocks[level - 1][lower_index].top_hash();
       let right = self.blocks[level - 1][lower_index + 1].top_hash();
 
@@ -1603,7 +1658,8 @@ impl AppendOnlyMerkle {
       let last_level = level == self.blocks.len() - 1;
 
       if last_level && entries_at_this_level > 0 {
-        return sem!("There is at least one missing file (for level {}).", level);
+        return sem!("There is at least one missing file (for level {}).",
+                    level + 1);
       }
     }
 
@@ -2171,20 +2227,12 @@ mod tests {
       panic!("remove_file failed:  {}", x);
     }
 
-    let expected = "There is at least one missing file (level 0).";
-
-    match AppendOnlyMerkle::open(&path) {
-      Err(x) => {
-        if x.to_string() != expected {
-          panic!("Unexpected error:  {}", x);
-        }
-      }
-      Ok(_x) => {
-        panic!("Open didn't fail.");
-      }
+    if let Err(x) = AppendOnlyMerkle::open(&path) {
+      panic!("Open failed to rebuild:  {}", x);
     }
 
     let _ = std::fs::remove_file(&path);
+    let _ = std::fs::remove_file(path.to_owned() + ".1");
   }
 
   fn create_test_hash(i: u64, verbose: bool) -> HashValue {

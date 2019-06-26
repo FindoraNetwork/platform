@@ -45,8 +45,7 @@ macro_rules! ser {
 
 // Writes a log entry when enabled.
 macro_rules! log {
-    ($c:tt, $($x:tt)+) => { }
-    // ($c:tt, $($x:tt)+) => { println!($($x)+); }
+  ($c:tt, $($x:tt)+) => {}; // ($c:tt, $($x:tt)+) => { println!($($x)+); }
 }
 
 const BUFFER_SIZE: usize = 32 * 1024;
@@ -358,7 +357,11 @@ impl LoggedMerkle {
     loop {
       file.read_exact(buffer.as_mut_bytes())?;
 
-      log!(find_block, "current: {}, id: {}, state {}", current, buffer.id, state);
+      log!(find_block,
+           "current: {}, id: {}, state {}",
+           current,
+           buffer.id,
+           state);
 
       if buffer.id > state {
         // The buffer is in the future!  Move back, if possible.
@@ -399,7 +402,7 @@ impl LoggedMerkle {
 
   fn file_size(&self, file: &mut File) -> Result<u64, Error> {
     let start = file.seek(Current(0))?;
-    let size  = file.seek(End(0))?;
+    let size = file.seek(End(0))?;
     file.seek(Start(start))?;
     Ok(size)
   }
@@ -539,8 +542,7 @@ mod tests {
       generate_apply_log(8192, *offset);
     }
 
-    let offsets =
-      [0, 1024, 4817, 2048, 8190, 8191, 8192, 8193, 8194, 16322, 45600, 230000];
+    let offsets = [0, 1024, 4817, 2048, 8190, 8191, 8192, 8193, 8194, 16322, 45600, 230000];
 
     for offset in offsets.iter() {
       println!("\n ==== Testing offset {}", offset);
