@@ -1039,6 +1039,8 @@ impl AppendOnlyMerkle {
       self.push_file(file);
     } else {
       self.files[level] = file;
+      self.blocks[level] = Vec::new();
+      self.blocks_on_disk[level] = 0;
     }
 
     let entry_count = self.blocks[level - 1].len() / 2;
