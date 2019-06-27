@@ -12,16 +12,15 @@
 //!
 //! When a snapshot is requested, the current log file is flushed to
 //! disk and the new file provided by the caller is used for all
-//! subsequent logging.  Managing the log files is the responsibility
-//! of the caller.  In addition to flushing the log, the snapshot
+//! subsequent logging.  In addition to flushing the log, the snapshot
 //! invocation flushes the AppendOnlyMerkle object as well, to create
-//! a complete, consistent state on disk.
+//! a complete, consistent state on disk.  Managing the resulting log
+//! files is the responsibility of the caller.
 //!
 //! A log file contains a sequence of log buffers.  Each log buffer
 //! is a fixed size given by the constant BUFFER_SIZE, and contains
 //! a header describing the contents of the buffer.  The log files
-//! are append-only.  See the LogBuffer struct for the full details
-//! on the contents of a log buffer.
+//! are append-only.  See the LogBuffer struct for the full details.
 //!
 use super::append_only_merkle::{AppendOnlyMerkle, HashValue, Proof};
 use sodiumoxide::crypto::hash::sha256;
@@ -58,7 +57,7 @@ const BUFFER_MARKER: u32 = 0xabab_efe0;
 /// of a header and a series of HashValues passed to the "append"
 /// procedure sequentially.  The header contains the transaction id
 /// for the first hash, as assigned by the AppendOnlyMerkle object.
-/// It also contains a checksum and a valid count, so that each block
+/// It also contains a checksum and a valid count, so that each buffer
 /// is self-describing and can be checked for consistency.
 ///
 /// This structure is built as a C structure to allow zero-copy I/O and
@@ -66,10 +65,10 @@ const BUFFER_MARKER: u32 = 0xabab_efe0;
 /// the as_checksummed_region function valid.  Likewise, the marker
 /// field must follow the checksum.
 ///
-/// A flush operation causes the writing of a block whether that
-/// block is full or not, so any block in the can be only partially
-/// full.  Partially full blocks are written as a full-size block with
-/// some number of empty (zero) entries.  All blocks should have at
+/// A flush operation causes the writing of a buffer whether that
+/// buffer is full or not, so any buffer in the can be only partially
+/// full.  Partially full buffers are written as a full-size buffer with
+/// some number of empty (zero) entries.  All buffers should have at
 /// least one valid entry.
 ///
 #[derive(Copy, Clone)]
@@ -84,7 +83,8 @@ struct LogBuffer {
 }
 
 impl LogBuffer {
-  // Create a new buffer.
+  // Create a new buffer that start with the given Merkle
+  // transaction id.
   fn new(next_id: u64) -> LogBuffer {
     assert!(std::mem::size_of::<LogBuffer>() == BUFFER_SIZE);
 
@@ -96,7 +96,7 @@ impl LogBuffer {
                 hashes: [HashValue::new(); BUFFER_ENTRIES as usize] }
   }
 
-  // Convert "self" to a slice for I/O.
+  // Convert "self" to a slice for write I/O.
   fn as_bytes(&self) -> &[u8] {
     unsafe {
       from_raw_parts((self as *const LogBuffer) as *const u8,
@@ -104,7 +104,7 @@ impl LogBuffer {
     }
   }
 
-  // Convert "self" to a slice for I/O.
+  // Convert "self" to a slice for read I/O.
   fn as_mut_bytes(&mut self) -> &mut [u8] {
     unsafe {
       from_raw_parts_mut((self as *mut LogBuffer) as *mut u8,
@@ -120,15 +120,49 @@ impl LogBuffer {
     }
   }
 
+  fn checksum(&self) -> [u8; CHECK_SIZE] {
+    let digest = sha256::hash(self.as_checksummed_region());
+    let mut result = [0_u8; CHECK_SIZE];
+    result.clone_from_slice(&digest[0..CHECK_SIZE]);
+    result
+  }
+
   // Generate and set the checksum for this buffer.
   fn set_checksum(&mut self) {
-    let digest = sha256::hash(self.as_checksummed_region());
-    self.check.clone_from_slice(&digest[0..CHECK_SIZE]);
+    let digest = &self.checksum();
+    self.check.clone_from_slice(digest);
+  }
+
+  // Check that a buffer has reasonable contents.  Return an
+  // error if it does not.
+  fn validate(&self) -> Result<(), Error> {
+    if self.marker != BUFFER_MARKER {
+      return ser!("The buffer marker ({:x} was invalid.", self.marker);
+    }
+
+    if self.entry_count != BUFFER_ENTRIES {
+      return ser!("The entry count ({}) in a log buffer was invalid.",
+                  self.entry_count);
+    }
+
+    if self.valid == 0 || self.valid > self.entry_count {
+      return ser!("The valid count ({}) in a log buffer was invalid.",
+                  self.valid);
+    }
+
+    let checksum = self.checksum();
+
+    if checksum != self.check {
+      return ser!("The checksum ({:?}) in a log buffer was invalid.",
+                  self.check);
+    }
+
+    Ok(())
   }
 }
 
-/// This structure provides a logging and snapshot interface for
-/// an underlying AppendOnlyMerkle tree.
+/// This structure provides an interface that supports logging
+/// and snapshots for an underlying AppendOnlyMerkle tree.
 pub struct LoggedMerkle {
   io_errors: u64,
   writer: BufWriter<File>,
@@ -144,7 +178,7 @@ impl LoggedMerkle {
   /// # Arguments
   ///
   /// * `tree` - an AppendOnlyMerkle object
-  /// * `file` - a File for the log
+  /// * `file` - a File pointing to an empty file for a log
   ///
   /// # Example
   ///````
@@ -181,7 +215,7 @@ impl LoggedMerkle {
   ///
   /// # Argument
   ///
-  /// `hash` - the hash value to append
+  /// * `hash` - the hash value to append
   ///
   /// # Example
   ///
@@ -235,17 +269,17 @@ impl LoggedMerkle {
   ///
   /// # Arguments
   ///
-  /// `transaction` - the Merkle tree id for the transaction
-  /// `state_in` - the Merkle tree state for which the proof is wanted,
+  /// * `transaction` - the Merkle tree id for the transaction
+  /// * `state` - the Merkle tree state for which the proof is wanted,
   ///              or zero, for the current state.
-  pub fn get_proof(&self, transaction: u64, state_in: u64) -> Result<Proof, Error> {
-    let state = if state_in != 0 {
-      state_in
+  pub fn get_proof(&self, transaction: u64, state: u64) -> Result<Proof, Error> {
+    let proof_state = if state != 0 {
+      state
     } else {
       self.tree.total_size()
     };
 
-    self.tree.generate_proof(transaction, state)
+    self.tree.generate_proof(transaction, proof_state)
   }
 
   /// Generate a snapshot by flushing the current state to disk,
@@ -253,7 +287,7 @@ impl LoggedMerkle {
   ///
   /// # Argument
   ///
-  /// `file` - a file to which to write the log
+  /// * `file` - a file to which to write the log
   pub fn snapshot(&mut self, file: File) -> Result<(), Error> {
     self.flush()?;
     self.buffer = LogBuffer::new(self.next_id);
@@ -265,30 +299,38 @@ impl LoggedMerkle {
   ///
   /// Argument
   ///
-  /// `file` - a file containing a log
+  /// * `file` - a file containing a log
   ///
-  /// This procedure returns the number of records successfully processed,
-  /// which is useful mostly for statistics reporting.  Entries already
-  /// in the tree are ignored.  Logs must be applied in order, from the
-  /// oldest to the newest.  A log file that contains only transactions
-  /// too new to append (beyond the end of the tree + 1)  will cause an error.
-  ///
+  /// This procedure returns the number of records successfully
+  /// processed, which is useful mostly for statistics reporting.
+  /// Entries already in the tree are ignored.  Logs must be
+  /// applied in order, from the oldest to the newest.  A log
+  /// file that contains only transactions too new to append
+  /// (beyond the end of the tree + 1)  will cause an error.
   pub fn apply_log(&mut self, mut file: File) -> Result<u64, Error> {
     let mut state = self.tree.total_size();
     let mut buffer = LogBuffer::new(0);
     let mut processed = 0;
 
-    self.find_block(&mut file)?;
+    // Try to seek to a relevant part of the log file.
+    self.find_relevant(&mut file)?;
 
-    // Loop reading buffers.  Return on EOF.
+    // Loop reading buffers.  Return on EOF.  This code will
+    // return an error on a partial buffer read, as well.  
+    // TODO:  Should we convert a partial buffer read into
+    // a warning of some sort?
     loop {
       if let Err(x) = file.read_exact(buffer.as_mut_bytes()) {
+        // Exit if we reach the end of the file.
         if x.kind() == ErrorKind::UnexpectedEof {
           break;
         }
 
         return Err(x);
       }
+
+      // Check that the buffer is well-formed.
+      buffer.validate()?;
 
       // A buffer always should have some valid entries, but let such
       // errors pass for now.
@@ -336,12 +378,18 @@ impl LoggedMerkle {
     Ok(processed)
   }
 
-  // Find a block in the log file that has records just
-  // past the end of the tree, if possible.
-  fn find_block(&mut self, mut file: &mut File) -> Result<(), Error> {
+  /// Close the LoggedMerkle object.
+  pub fn close(&mut self) -> Result<(), Error> {
+    self.flush()?;
+    self.closed = true;
+    Ok(())
+  }
+
+  // Find a buffer in the log file that has records just past
+  // the end of the tree, if possible.
+  fn find_relevant(&mut self, file: &mut File) -> Result<(), Error> {
     let state = self.tree.total_size();
-    let file_size = self.file_size(&mut file)?;
-    let buffer_count = file_size / BUFFER_SIZE as u64;
+    let buffer_count = self.buffer_count(file)?;
 
     if buffer_count == 0 {
       return Ok(());
@@ -352,12 +400,20 @@ impl LoggedMerkle {
     let mut top = buffer_count;
     let mut current = base;
 
-    log!(find_block, "find_block:  state {}, top {}", state, top);
+    log!(find_relevant,
+         "find_relevant:  state {}, top {}",
+         state,
+         top);
 
+    // Do a binary search to find the first relevant buffer, if
+    // any.  In theory, we could use a more sophisticated
+    // interpolation, but it doesn't seem worth the complexity.
     loop {
+      // Read the file and check that the buffer is well-formed.
       file.read_exact(buffer.as_mut_bytes())?;
+      buffer.validate()?;
 
-      log!(find_block,
+      log!(find_relevant,
            "current: {}, id: {}, state {}",
            current,
            buffer.id,
@@ -368,34 +424,37 @@ impl LoggedMerkle {
         let gap = current - base;
 
         if gap <= 1 {
-          log!(find_block, "exit:  current {}, base {}", current, base);
+          log!(find_relevant, "exit:  current {}, base {}", current, base);
           break;
         }
 
         top = current;
         current -= gap / 2;
-        log!(find_block, "move back {} to {}", gap / 2, current);
+        log!(find_relevant, "move back {} to {}", gap / 2, current);
       } else if buffer.id + buffer.valid as u64 <= state {
         // The buffer is in the past.  Move forward!
         let gap = top - current;
 
         if gap <= 1 {
-          log!(find_block, "exit:  current {}, top {}", current, top);
+          log!(find_relevant, "exit:  current {}, top {}", current, top);
           break;
         }
 
         base = current;
         current += gap / 2;
-        log!(find_block, "move forward {} to {}", gap / 2, current);
+        log!(find_relevant, "move forward {} to {}", gap / 2, current);
       } else {
-        log!(find_block, "found id {}, valid {}", buffer.id, buffer.valid);
+        log!(find_relevant,
+             "found id {}, valid {}",
+             buffer.id,
+             buffer.valid);
         break;
       }
 
       file.seek(Start(current * BUFFER_SIZE as u64))?;
     }
 
-    log!(find_block, "find_block:  return {}", current);
+    log!(find_relevant, "find_relevant:  return {}", current);
     file.seek(Start(current * BUFFER_SIZE as u64))?;
     Ok(())
   }
@@ -405,13 +464,6 @@ impl LoggedMerkle {
     let size = file.seek(End(0))?;
     file.seek(Start(start))?;
     Ok(size)
-  }
-
-  /// Close the LoggedMerkle object.
-  pub fn close(&mut self) -> Result<(), Error> {
-    self.flush()?;
-    self.closed = true;
-    Ok(())
   }
 
   /// Return the current state of the underlying Merkle tree.
@@ -434,6 +486,11 @@ impl LoggedMerkle {
     Ok(())
   }
 
+  fn buffer_count(&self, file: &mut File) -> Result<u64, Error> {
+    let file_size = self.file_size(file)?;
+    Ok(file_size / BUFFER_SIZE as u64)
+  }
+
   #[cfg(test)]
   fn leaf(&self, id: u64) -> HashValue {
     self.tree.leaf(id as usize)
@@ -452,6 +509,7 @@ mod tests {
 
   use crate::store::append_only_merkle::AppendOnlyMerkle;
   use crate::store::append_only_merkle::HashValue;
+  use crate::store::logged_merkle::LogBuffer;
   use crate::store::logged_merkle::LoggedMerkle;
   use std::cmp::max;
   use std::fs::OpenOptions;
@@ -705,5 +763,62 @@ mod tests {
     }
 
     result
+  }
+
+  #[test]
+  fn test_buffer() {
+    let mut buffer = LogBuffer::new(1);
+    let test_hashes = 4;
+
+    for i in 0..test_hashes {
+      buffer.hashes[i] = test_hash(i as u64);
+      buffer.valid += 1;
+    }
+
+    if let Ok(()) = buffer.validate() {
+      panic!("validate did not catch an invalid checksum.");
+    }
+
+    buffer.set_checksum();
+
+    if let Err(x) = buffer.validate() {
+      panic!("validate did not accept a valid checksum:  {}", x);
+    }
+
+    buffer.entry_count += 1;
+    buffer.set_checksum();
+
+    if let Ok(()) = buffer.validate() {
+      panic!("validate did not catch an invalid entry_count.");
+    }
+
+    buffer.entry_count -= 1;
+    buffer.valid = buffer.entry_count + 1;
+    buffer.set_checksum();
+
+    if let Ok(()) = buffer.validate() {
+      panic!("validate did not catch a large entry_count.");
+    }
+
+    buffer.valid = 0;
+    buffer.set_checksum();
+
+    if let Ok(()) = buffer.validate() {
+      panic!("validate did not catch a zero entry_count.");
+    }
+
+    buffer.valid = test_hashes as u16;
+    buffer.set_checksum();
+    buffer.check[0] ^= 1;
+
+    if let Ok(()) = buffer.validate() {
+      panic!("validate did not catch an invalid checksum.");
+    }
+
+    buffer.set_checksum();
+
+    if let Err(x) = buffer.validate() {
+      panic!("validate did not accept a valid buffer:  {}", x);
+    }
   }
 }
