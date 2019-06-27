@@ -279,6 +279,16 @@ impl LoggedMerkle {
       self.tree.total_size()
     };
 
+    if transaction >= proof_state {
+      return ser!("That id ({}) is not valid for state {}.",
+                  transaction,
+                  state);
+    }
+
+    if !self.tree.validate_transaction_id(transaction) {
+      return ser!("That id ({}) is not valid.", transaction);
+    }
+
     self.tree.generate_proof(transaction, proof_state)
   }
 
@@ -316,7 +326,7 @@ impl LoggedMerkle {
     self.find_relevant(&mut file)?;
 
     // Loop reading buffers.  Return on EOF.  This code will
-    // return an error on a partial buffer read, as well.  
+    // return an error on a partial buffer read, as well.
     // TODO:  Should we convert a partial buffer read into
     // a warning of some sort?
     loop {

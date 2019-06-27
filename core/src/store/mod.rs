@@ -95,6 +95,7 @@ impl LedgerState {
   }
 
   pub fn new(path: &str, create: bool) -> Result<LedgerState, std::io::Error> {
+    // Create a merkle tree or open an existing one.
     let result = if create {
       AppendOnlyMerkle::create(path)
     } else {
@@ -108,6 +109,8 @@ impl LedgerState {
       Ok(tree) => tree,
     };
 
+    // Create a log for the tree.  The tree size ("state") is appended to
+    // the end of the path.
     let next_id = tree.total_size();
     let writer = LedgerState::create_merkle_log(path.to_owned(), next_id)?;
 
@@ -325,6 +328,11 @@ impl LedgerState {
              .is_ok()
   }
 
+  // Create a file structure for a Merkle tree log.  Mostly
+  // just make a path of the form:
+  //
+  //     <tree_path>-log-<Merkle tree state>
+  //
   fn create_merkle_log(base_path: String, next_id: u64) -> Result<File, std::io::Error> {
     let log_path = base_path.to_owned() + "-log-" + &next_id.to_string();
     println!("merkle log:  {}", log_path);
@@ -639,6 +647,7 @@ impl LedgerUpdate for LedgerState {
   }
 }
 
+// TODO(jonathan) This routine should propagate errors.
 impl ArchiveUpdate for LedgerState {
   fn append_transaction(&mut self, mut txn: Transaction) -> Transaction {
     let index = self.txs.len();
@@ -653,7 +662,7 @@ impl ArchiveUpdate for LedgerState {
         txn.merkle_id = n;
       }
       Err(x) => {
-        panic!("append_hash failed:  {}", x);
+        panic!("append failed:  {}", x);
       }
     }
 
@@ -721,8 +730,9 @@ impl ArchiveAccess for LedgerState {
       Some(txn) => {
         match self.merkle.get_proof(txn.merkle_id, 0) {
           Ok(proof) => Some(proof),
-          Err(_x) => {
-            // TODO log error
+          Err(x) => {
+            // TODO log error and recover?
+            println!("get_proof failed:  {}", x);
             None
           }
         }
@@ -911,8 +921,9 @@ mod tests {
         assert!(proof.tx_id == ledger.txs[txn_id.index].merkle_id);
       }
       None => {
-        panic!("get_proof failed for tx_id {}, merkle_id {}",
-               transaction.tx_id.index, transaction.merkle_id);
+        panic!("get_proof failed for tx_id {}, merkle_id {}, state {}",
+               transaction.tx_id.index, transaction.merkle_id,
+               ledger.merkle.state());
       }
     }
 

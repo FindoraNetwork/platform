@@ -1381,6 +1381,10 @@ impl AppendOnlyMerkle {
     Ok(result)
   }
 
+  pub fn validate_transaction_id(&self, transaction_id: u64) -> bool {
+    transaction_id < self.entry_count
+  }
+
   // Add the subtree for the given block into the proof.  We might need
   // to compute some hashes if the block is not full.
   fn push_subtree(&self, block: &Block, partner: usize, hashes: &mut Vec<HashValue>) {
@@ -2575,6 +2579,7 @@ mod tests {
         Ok(proof) => {
           assert!(id == i);
           check_proof(&tree, &proof, i);
+          validate_id(&tree, i);
         }
       }
 
@@ -2591,6 +2596,7 @@ mod tests {
       match tree.generate_proof(i, tree.total_size()) {
         Ok(x) => {
           proof = x;
+          validate_id(&tree, i);
         }
         Err(x) => {
           panic!("Proof failed at {}:  {}", i, x);
@@ -2615,7 +2621,7 @@ mod tests {
       let _ = std::fs::remove_file(&path);
     }
 
-    match tree.generate_proof(0, tree.total_size() + 1) {
+    match tree.generate_proof(0, tree.total_size() - 1) {
       Err(e) => {
         if e.to_string() != "Versioning is not yet supported." {
           panic!("The error for an invalid generation was not valid.");
@@ -2626,7 +2632,14 @@ mod tests {
       }
     }
 
+    assert!(!tree.validate_transaction_id(tree.total_size()));
     println!("Done with the proof test.");
+  }
+
+  fn validate_id(tree: &AppendOnlyMerkle, id: u64) {
+    if !tree.validate_transaction_id(id) {
+      panic!("Id {} is not valid.", id);
+    }
   }
 
   extern crate serde_json;
