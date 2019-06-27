@@ -26,8 +26,7 @@ pub mod errors;
 pub mod logged_merkle;
 
 macro_rules! log {
-  ($c:tt, $($x:tt)+) => {};
-  // ($c:tt, $($x:tt)+) => { println!($($x)+); }
+  ($c:tt, $($x:tt)+) => {}; // ($c:tt, $($x:tt)+) => { println!($($x)+); }
 }
 
 pub struct SnapshotId {
@@ -922,7 +921,8 @@ mod tests {
       }
       None => {
         panic!("get_proof failed for tx_id {}, merkle_id {}, state {}",
-               transaction.tx_id.index, transaction.merkle_id,
+               transaction.tx_id.index,
+               transaction.merkle_id,
                ledger.merkle.state());
       }
     }
