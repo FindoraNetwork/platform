@@ -26,8 +26,8 @@ pub mod errors;
 pub mod logged_merkle;
 
 macro_rules! log {
-  // ($c:tt, $($x:tt)+) => {};
-  ($c:tt, $($x:tt)+) => { println!($($x)+); }
+  ($c:tt, $($x:tt)+) => {};
+  // ($c:tt, $($x:tt)+) => { println!($($x)+); }
 }
 
 pub struct SnapshotId {
