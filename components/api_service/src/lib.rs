@@ -18,12 +18,12 @@ pub struct RestfulApiService {
 }
 
 fn query_utxo<LA>(data: web::Data<Arc<RwLock<LA>>>,
-                  info: web::Path<TxoSID>)
+                  info: web::Path<u64>)
                   -> actix_web::Result<web::Json<Utxo>>
   where LA: LedgerAccess
 {
   let reader = data.read().unwrap();
-  if let Some(txo) = reader.check_utxo(*info) {
+  if let Some(txo) = reader.check_utxo(TxoSID{ index: *info }) {
     Ok(web::Json(txo))
   } else {
     Err(actix_web::error::ErrorNotFound("Specified txo does not currently exist."))
@@ -48,12 +48,12 @@ fn query_asset<LA>(data: web::Data<Arc<RwLock<LA>>>,
 }
 
 fn query_txn<AA>(data: web::Data<Arc<RwLock<AA>>>,
-                 info: web::Path<TxnSID>)
+                 info: web::Path<usize>)
                  -> actix_web::Result<String>
   where AA: ArchiveAccess
 {
   let reader = data.read().unwrap();
-  if let Some(txn) = reader.get_transaction(*info) {
+  if let Some(txn) = reader.get_transaction(TxnSID{ index: *info }) {
     Ok(serde_json::to_string(&*txn)?)
   } else {
     Err(actix_web::error::ErrorNotFound("Specified transaction does not exist."))

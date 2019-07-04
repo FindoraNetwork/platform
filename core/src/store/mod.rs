@@ -58,7 +58,7 @@ pub fn compute_sha256_hash<T>(msg: &T) -> [u8; 32]
   *hash
 }
 
-#[derive(Default)]
+#[derive(Default, Serialize, Deserialize)]
 pub struct LedgerState {
   txs: Vec<Transaction>, //will need to be replaced by merkle tree...
   utxos: HashMap<TxoSID, Utxo>,
