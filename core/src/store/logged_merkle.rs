@@ -360,6 +360,8 @@ impl LoggedMerkle {
       let mut current = buffer.id;
 
       if current <= state && current + buffer.valid as u64 > state {
+        // Compute the index of the first hash in the buffer that is
+        // not in the tree.  We skip over "start_offset" entries.
         let start_offset = (state - current) as usize;
 
         current += start_offset as u64;
@@ -398,6 +400,9 @@ impl LoggedMerkle {
   // Find a buffer in the log file that has records just past
   // the end of the tree, if possible.
   fn find_relevant(&mut self, file: &mut File) -> Result<(), Error> {
+    // Get the state of the tree and the number of complete
+    // buffers in the file.  Ignore any partial write at the
+    // end of the file.
     let state = self.tree.total_size();
     let buffer_count = self.buffer_count(file)?;
 
@@ -469,6 +474,7 @@ impl LoggedMerkle {
     Ok(())
   }
 
+  // Get the size of the given file.
   fn file_size(&self, file: &mut File) -> Result<u64, Error> {
     let start = file.seek(Current(0))?;
     let size = file.seek(End(0))?;
@@ -496,6 +502,7 @@ impl LoggedMerkle {
     Ok(())
   }
 
+  // Compute the number of complete log buffers in a file.
   fn buffer_count(&self, file: &mut File) -> Result<u64, Error> {
     let file_size = self.file_size(file)?;
     Ok(file_size / BUFFER_SIZE as u64)
