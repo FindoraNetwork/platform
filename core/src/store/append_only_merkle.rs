@@ -987,10 +987,12 @@ impl AppendOnlyMerkle {
           self.blocks[level].push(block);
         }
         Err(x) => {
+          // Loss of a level zero block is irrecoverable.
           if level == 0 {
             return Err(x);
           }
 
+          // Rebuild the block if we can.
           match self.reconstruct(level, i) {
             Ok(block) => {
               self.rewrite_block(&block);
@@ -1060,6 +1062,8 @@ impl AppendOnlyMerkle {
       Ok(file) => file,
     };
 
+    // Add this file to the vector.  We might need to
+    // push a new entry into all of the Vecs.
     if level == self.files.len() {
       self.push_file(file);
     } else {
@@ -1091,6 +1095,7 @@ impl AppendOnlyMerkle {
       }
     };
 
+    // Seek to the offset to which we will write.
     match self.files[level].seek(Start(offset)) {
       Ok(n) => {
         if n != offset {
@@ -1360,6 +1365,7 @@ impl AppendOnlyMerkle {
 
     log!(proof, "Proof for {}", tx_id);
 
+    // Go up the tree grabbing hashes.
     for level in 0..self.files.len() {
       log!(proof,
            "level {}, block_id {}, index {} into len {}",
@@ -1392,6 +1398,7 @@ impl AppendOnlyMerkle {
       block_id /= LEAVES_IN_BLOCK * 2;
     }
 
+    // Generate fake levels to match the proof format.
     while hashes.len() < PROOF_LEVELS {
       let lower = &hashes[hashes.len() - 1];
       let upper = hash_single(lower);
@@ -1575,6 +1582,7 @@ impl AppendOnlyMerkle {
           block.set_checksum();
         }
 
+        // Check consistency before writing the block to disk.
         if let Some(x) = block.check(level, i, true) {
           return Some(x);
         }
@@ -1694,6 +1702,8 @@ impl AppendOnlyMerkle {
 
       lower = current;
 
+      // Check that the disk contents match the in-memory
+      // contents if the memory has been flushed.
       if flushed && entry_count != entries_at_this_level {
         return sem!("check_disk:  The entry counts ({}, {}) \
                      at level {} didn't match.",

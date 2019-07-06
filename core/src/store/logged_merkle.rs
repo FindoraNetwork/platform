@@ -55,21 +55,21 @@ const BUFFER_MARKER: u32 = 0xabab_efe0;
 
 /// This structure is used as the I/O buffer for the logs.  It consists
 /// of a header and a series of HashValues passed to the "append"
-/// procedure sequentially.  The header contains the transaction id
-/// for the first hash, as assigned by the AppendOnlyMerkle object.
-/// It also contains a checksum and a valid count, so that each buffer
-/// is self-describing and can be checked for consistency.
+/// procedure sequentially.  The header contains the transaction id for
+/// the first hash, as assigned by the AppendOnlyMerkle object.  It
+/// also contains a checksum and a valid count, so that each buffer is
+/// self-describing and can be checked for consistency.
 ///
 /// This structure is built as a C structure to allow zero-copy I/O and
 /// easier checksumming.  Currently, the checksum must be first to make
 /// the as_checksummed_region function valid.  Likewise, the marker
 /// field must follow the checksum.
 ///
-/// A flush operation causes the writing of a buffer whether that
-/// buffer is full or not, so any buffer in the can be only partially
-/// full.  Partially full buffers are written as a full-size buffer with
-/// some number of empty (zero) entries.  All buffers should have at
-/// least one valid entry.
+/// A flush operation causes the writing of a buffer whether that buffer
+/// is full or not, so any buffer in the can be only partially full.
+/// Partially full buffers are written as a full-size buffer with some
+/// number of empty (zero) entries.  All buffers should have at least
+/// one valid entry.
 ///
 #[derive(Copy, Clone)]
 #[repr(C)]
