@@ -23,6 +23,11 @@
 //! are append-only.  See the LogBuffer struct for the full details.
 //!
 use super::append_only_merkle::{AppendOnlyMerkle, HashValue, Proof};
+
+use serde::Deserialize;
+use serde::Deserializer;
+use serde::Serialize;
+use serde::Serializer;
 use sodiumoxide::crypto::hash::sha256;
 use std::fs::File;
 use std::io::BufWriter;
@@ -40,6 +45,13 @@ use std::slice::from_raw_parts_mut;
 // Returns Err(Error::new...).
 macro_rules! ser {
     ($($x:tt)+) => { Err(Error::new(ErrorKind::Other, format!($($x)+))) }
+}
+
+// Returns a deserializer error:  Err(serder::de::Error::...)
+macro_rules! sde  {
+    ($($x:tt)+) => {
+        Err(serde::de::Error::custom(format!($($x)+)))
+    }
 }
 
 // Writes a log entry when enabled.
@@ -71,7 +83,7 @@ const BUFFER_MARKER: u32 = 0xabab_efe0;
 /// number of empty (zero) entries.  All buffers should have at least
 /// one valid entry.
 ///
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Serialize, Deserialize)]
 #[repr(C)]
 struct LogBuffer {
   check: [u8; CHECK_SIZE], // This entry must be first.
@@ -79,7 +91,34 @@ struct LogBuffer {
   entry_count: u16,
   valid: u16,
   id: u64,
+
+  #[serde(serialize_with = "serialize_array")]
+  #[serde(deserialize_with = "deserialize_array")]
   hashes: [HashValue; BUFFER_ENTRIES as usize],
+}
+
+// Provide the serialization help for the array of hashes in a buffer.
+fn serialize_array<S, T>(array: &[T], serializer: S) -> Result<S::Ok, S::Error>
+  where S: Serializer,
+        T: Serialize
+{
+  array.serialize(serializer)
+}
+
+// Provide the deserialization helper for the hash array in a buffer.
+fn deserialize_array<'de, D>(deserializer: D)
+                             -> Result<[HashValue; BUFFER_ENTRIES as usize], D::Error>
+  where D: Deserializer<'de>
+{
+  let slice: Vec<HashValue> = Deserialize::deserialize(deserializer)?;
+
+  if slice.len() != BUFFER_ENTRIES as usize {
+    return sde!("The input slice has the wrong length:  {}", slice.len());
+  }
+
+  let mut result: [HashValue; BUFFER_ENTRIES as usize] = unsafe { std::mem::uninitialized() };
+  result.copy_from_slice(&slice);
+  Ok(result)
 }
 
 impl LogBuffer {
