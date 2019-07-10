@@ -295,10 +295,7 @@ impl LoggedMerkle {
       return Err(x);
     }
 
-    if self.buffer.valid > 0 {
-      self.write()?;
-    }
-
+    self.write()?;
     self.writer.flush()?;
     Ok(())
   }
@@ -530,6 +527,10 @@ impl LoggedMerkle {
   // Write the log buffer to the file, returning errors as needed.
   // When the write is done, create a new buffer.
   fn write(&mut self) -> Result<(), Error> {
+    if self.buffer.valid == 0 {
+      return Ok(());
+    }
+
     self.buffer.set_checksum();
 
     if let Err(x) = self.writer.write_all(self.buffer.as_bytes()) {
