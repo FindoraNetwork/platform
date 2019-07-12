@@ -1251,7 +1251,7 @@ impl AppendOnlyMerkle {
       // of blocks on disk to the correct value.  If the block
       // already has been written by a tree.write operation, the
       // value in blocks_on_disk will remain the same.  If the
-      // tree.disk_reset method has been invoked, we can't write
+      // tree.reset_disk method has been invoked, we can't write
       // this block without adding a lot of logic, so just wait
       // for the next tree.write invocation.
       //
