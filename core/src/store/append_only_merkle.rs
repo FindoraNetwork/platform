@@ -519,7 +519,7 @@ impl AppendOnlyMerkle {
   ///
   /// # Example
   ///````
-  /// use  crate::core::store::append_only_merkle::AppendOnlyMerkle;
+  /// use crate::core::store::append_only_merkle::AppendOnlyMerkle;
   ///
   /// let path = "public_ledger".to_string();
   ///
@@ -562,7 +562,7 @@ impl AppendOnlyMerkle {
   ///
   /// # Example
   ///````
-  /// use  crate::core::store::append_only_merkle::AppendOnlyMerkle;
+  /// use crate::core::store::append_only_merkle::AppendOnlyMerkle;
   ///
   /// let path = "new_ledger";
   /// # let _ = std::fs::remove_file(&path);
@@ -792,7 +792,7 @@ impl AppendOnlyMerkle {
   ///
   /// # Example
   ///````
-  /// use  crate::core::store::append_only_merkle::AppendOnlyMerkle;
+  /// use crate::core::store::append_only_merkle::AppendOnlyMerkle;
   ///
   /// let path       = "deserialize";
   /// # let _ = std::fs::remove_file(&path);
@@ -1249,8 +1249,11 @@ impl AppendOnlyMerkle {
       // If the block is full, and all the previous blocks are
       // on disk, write this block to disk and set the number
       // of blocks on disk to the correct value.  If the block
-      // already has been written by a write() operation, the
-      // value in blocks_on_disk will remain the same.
+      // already has been written by a tree.write operation, the
+      // value in blocks_on_disk will remain the same.  If the
+      // tree.disk_reset method has been invoked, we can't write
+      // this block without adding a lot of logic, so just wait
+      // for the next tree.write invocation.
       //
       // TODO:  Record the errors?
       if block.full() && self.blocks_on_disk[level] >= block.id() as u64 {
