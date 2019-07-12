@@ -56,7 +56,7 @@ macro_rules! sde  {
 
 // Writes a log entry when enabled.
 macro_rules! log {
-  ($c:tt, $($x:tt)+) => {}; // ($c:tt, $($x:tt)+) => { println!($($x)+); }
+  ($c:ident, $($x:tt)+) => {}; // ($c:tt, $($x:tt)+) => { println!($($x)+); }
 }
 
 const BUFFER_SIZE: usize = 32 * 1024;

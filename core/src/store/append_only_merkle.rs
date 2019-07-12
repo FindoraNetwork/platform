@@ -27,7 +27,6 @@ use std::io::Error;
 use std::io::ErrorKind;
 use std::io::Read;
 use std::io::Seek;
-use std::io::SeekFrom::Current;
 use std::io::SeekFrom::End;
 use std::io::SeekFrom::Start;
 use std::io::Write;
@@ -68,7 +67,7 @@ macro_rules! sde  {
 // Do a println when configured.  The first field in the arguments
 // is reserved for a category identifier.
 macro_rules! log {
-  ($c:tt, $($x:tt)+) => {}; // ($c:tt, $($x:tt)+) => { println!($($x)+); }
+  ($c:ident, $($x:tt)+) => {}; // ($c:tt, $($x:tt)+) => { println!($($x)+); }
 }
 
 #[derive(PartialEq, Copy, Clone, Debug, Deserialize, Serialize)]
@@ -326,8 +325,9 @@ impl Block {
       let hash = self.compute_checksum();
 
       if hash != self.header.check_bits.bits {
-        return sem!("The header checksum for block {} at level {} is invalid.",
+        return sem!("The header checksum for block {} ({} entries) at level {} is invalid.",
                     id,
+                    self.valid_leaves(),
                     level);
       }
     }
@@ -519,7 +519,7 @@ impl AppendOnlyMerkle {
   ///
   /// # Example
   ///````
-  /// use crate::core::store::append_only_merkle::AppendOnlyMerkle;
+  /// use  crate::core::store::append_only_merkle::AppendOnlyMerkle;
   ///
   /// let path = "public_ledger".to_string();
   ///
@@ -562,7 +562,7 @@ impl AppendOnlyMerkle {
   ///
   /// # Example
   ///````
-  /// use crate::core::store::append_only_merkle::AppendOnlyMerkle;
+  /// use  crate::core::store::append_only_merkle::AppendOnlyMerkle;
   ///
   /// let path = "new_ledger";
   /// # let _ = std::fs::remove_file(&path);
@@ -792,7 +792,7 @@ impl AppendOnlyMerkle {
   ///
   /// # Example
   ///````
-  /// use crate::core::store::append_only_merkle::AppendOnlyMerkle;
+  /// use  crate::core::store::append_only_merkle::AppendOnlyMerkle;
   ///
   /// let path       = "deserialize";
   /// # let _ = std::fs::remove_file(&path);
@@ -1074,33 +1074,26 @@ impl AppendOnlyMerkle {
 
     let entry_count = self.blocks[level - 1].len() / 2;
     let block_count = covered(entry_count as u64, LEAVES_IN_BLOCK as u64);
+
     self.rebuild_level(level, block_count)?;
     Ok(())
   }
 
   // Rewrite the given block to disk.  This routine is called when a read
-  // operation fails and the block has been reconstructed.
+  // operation fails and the block has been reconstructed.  If this routine
+  // returns success, it leaves the file offset pointing at the next block
+  // in the file.
   fn rewrite_block(&mut self, block: &Block) {
     // TODO:  Log errors?  Either log the errors or return
     // them.  Doing a println! is nearly useless.
     let offset = block.id() as u64 * BLOCK_SIZE as u64;
     let level = block.level();
 
-    // Save the current file offset so that we can restore it.
-    let save = match self.files[level].seek(Current(0)) {
-      Ok(n) => n,
-      Err(x) => {
-        println!("The initial rewrite seek failed at level {}:  {}", level, x);
-        return;
-      }
-    };
-
     // Seek to the offset to which we will write.
     match self.files[level].seek(Start(offset)) {
       Ok(n) => {
         if n != offset {
           // Log error.
-          let _ = self.files[level].seek(Start(save));
           println!("Seek failed at level {}, block {} for rewrite:  {} vs {}",
                    level,
                    block.id(),
@@ -1110,7 +1103,6 @@ impl AppendOnlyMerkle {
         }
       }
       Err(x) => {
-        let _ = self.files[level].seek(Start(save));
         println!("Seek failed  at level {}, block {} for rewrite:  {}",
                  level,
                  block.id(),
@@ -1130,9 +1122,6 @@ impl AppendOnlyMerkle {
                  x);
       }
     }
-
-    // Restore the file offset.  TODO:  return the error?
-    let _ = self.files[level].seek(Start(save));
   }
 
   // Reconstruct a block.  Eventually, this routine might need to read
@@ -1255,6 +1244,27 @@ impl AppendOnlyMerkle {
 
       if let Some(x) = block.set_hash(&current_hash) {
         return ser!("Tree corrupted:  set_hash:  {}", x);
+      }
+
+      // If the block is full, and all the previous blocks are
+      // on disk, write this block to disk and set the number
+      // of blocks on disk to the correct value.  If the block
+      // already has been written by a write() operation, the
+      // value in blocks_on_disk will remain the same.
+      //
+      // TODO:  Record the errors?
+      if block.full() && self.blocks_on_disk[level] >= block.id() as u64 {
+        assert!(self.blocks_on_disk[level] <= block.id() as u64 + 1);
+
+        let se = self.files[level].seek(Start((block.id() * BLOCK_SIZE) as u64));
+
+        if se.is_ok() {
+          let we = self.files[level].write_all(block.as_bytes());
+
+          if we.is_ok() {
+            self.blocks_on_disk[level] = block.id() as u64 + 1;
+          }
+        }
       }
 
       // If this node of the tree is not full or doesn't
@@ -1648,8 +1658,9 @@ impl AppendOnlyMerkle {
       let expected_size = blocks_on_disk * BLOCK_SIZE as u64;
 
       if disk_bytes != expected_size {
-        return sem!("check_disk:  The file size ({}) should be {}.",
+        return sem!("check_disk:  The file size ({}) at level {} should be {}.",
                     disk_bytes,
+                    level,
                     expected_size);
       }
 
@@ -1731,7 +1742,8 @@ impl AppendOnlyMerkle {
   }
 
   // Read a block from disk and return its memory representation.  Currently,
-  // that is the same as the bytes on disk.
+  // that is the same as the bytes on disk.  This routine assumes that the
+  // file offset is pointing to the block to be read.
   fn read_block(&mut self, level: usize, id: u64, last: bool) -> Result<Block, Error> {
     let block = match self.read_struct(level) {
       Ok(block) => block,
@@ -2252,6 +2264,7 @@ mod tests {
     test_append(&mut tree, 1, false);
     write_tree(&mut tree);
     let count = tree.total_size();
+    let mut tid = 2;
 
     tree = match AppendOnlyMerkle::open(&path) {
       Err(x) => {
@@ -2269,8 +2282,9 @@ mod tests {
     // Now try deleting a file for an index level to see whether that
     // is detected.  First, we make the tree large enough to need a
     // level 1 index block.
-    for i in 0..2 * LEAVES_IN_BLOCK as u64 {
-      test_append(&mut tree, i + 2, false);
+    for _i in 0..2 * LEAVES_IN_BLOCK as u64 {
+      test_append(&mut tree, tid, false);
+      tid += 1;
     }
 
     write_tree(&mut tree);
@@ -2301,6 +2315,22 @@ mod tests {
     };
 
     check_tree(&tree);
+    write_tree(&mut tree);
+    check_disk_tree(&mut tree, true);
+
+    // Now make sure that the new write path deals well with
+    // disk reset operations.
+    if let Some(e) = tree.reset_disk() {
+      panic!("Unexpected error:  {}", e);
+    }
+
+    for _i in 0..2 * LEAVES_IN_BLOCK {
+      test_append(&mut tree, tid, false);
+      tid += 1;
+    }
+
+    check_tree(&tree);
+    check_disk_tree(&mut tree, false);
     write_tree(&mut tree);
     check_disk_tree(&mut tree, true);
 
