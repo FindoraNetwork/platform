@@ -28,7 +28,7 @@ fn main() -> Result<(), std::io::Error> {
   let mut range = 256 * 1024 as usize;
 
   // Append some hash values to the tree.
-  for tid in 0..900 * 1024 * 1024 {
+  for tid in 0..800 * 1024 * 1024 {
     // Create a unique, non-zero hash by treating the hash array as a
     // base-256 numeral.  Start at 1 and add 1 every iteration.
     let mut carry = 1;
@@ -140,11 +140,11 @@ fn test_proof(tree: &mut AppendOnlyMerkle) {
 
   let id = if state > 2 { rand % (state + 1) } else { state };
 
-  println!("Testing a proof for transaction {}", id);
+  println!("Testing a proof for tid {}", id);
 
   match tree.generate_proof(id, state) {
     Err(x) => {
-      panic!("Error on generating a proof for id {}:  {}", id, x);
+      panic!("Error on generating a proof for tid {}:  {}", id, x);
     }
     Ok(proof) => {
       assert!(proof.tx_id == id);

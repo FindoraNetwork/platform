@@ -182,6 +182,8 @@ impl LedgerState {
   }
 
   fn apply_asset_issuance(&mut self, issue: &AssetIssuance) {
+    log!(issue, "outputs {:?}", issue.body.outputs);
+    log!(issue, "records {:?}", issue.body.records);
     for out in issue.body
                     .outputs
                     .iter()
@@ -215,7 +217,6 @@ impl LedgerState {
 
   #[cfg(test)]
   fn validate_transaction(&mut self, txn: &Transaction) -> bool {
-    println!("Validating transaction");
     for op in &txn.operations {
       if !self.validate_operation(op) {
         return false;
@@ -226,7 +227,6 @@ impl LedgerState {
 
   #[cfg(test)]
   fn validate_operation(&mut self, op: &Operation) -> bool {
-    println!("Validating operation");
     match op {
       Operation::AssetTransfer(transfer) => self.validate_asset_transfer(transfer),
       Operation::AssetIssuance(issuance) => self.validate_asset_issuance(issuance),
@@ -639,6 +639,7 @@ impl LedgerUpdate for LedgerState {
 
     // Apply the operations
     for op in &txn.operations {
+      log!(ledger, "Applying op:  {:?}", op);
       self.apply_operation(op);
     }
     txn.sid = sid; // TODO(Jonathan):  confirm
@@ -913,6 +914,7 @@ mod tests {
     let transaction = ledger.append_transaction(tx);
     let txn_id = transaction.tx_id;
 
+    println!("utxos = {:?}", ledger.utxos);
     // TODO assert!(ledger.utxos.contains_key(&sid));
 
     match ledger.get_proof(txn_id) {
