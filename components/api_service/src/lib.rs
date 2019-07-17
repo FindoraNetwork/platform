@@ -5,7 +5,7 @@ extern crate serde_json;
 
 use actix_web::{web, App, HttpServer};
 use core::data_model::{
-  Code, AssetToken, CustomAssetPolicy, SmartContract,
+  AssetTokenCode, SmartContractKey, AssetPolicyKey, AssetToken, CustomAssetPolicy, SmartContract,
   TxnSID, TxoSID, Utxo,
 };
 use core::store::{ArchiveAccess, LedgerAccess};
@@ -91,7 +91,7 @@ fn query_policy<LA>(data: web::Data<Arc<RwLock<LA>>>,
   where LA: LedgerAccess
 {
   let reader = data.read().unwrap();
-  if let Ok(asset_policy_key) = Code::new_from_base64(&*info) {
+  if let Ok(asset_policy_key) = AssetPolicyKey::new_from_base64(&*info) {
     if let Some(policy) = reader.get_asset_policy(&asset_policy_key) {
       Ok(web::Json(policy))
     } else {
@@ -108,7 +108,7 @@ fn query_contract<LA>(data: web::Data<Arc<RwLock<LA>>>,
   where LA: LedgerAccess
 {
   let reader = data.read().unwrap();
-  if let Ok(smart_contract_key) = Code::new_from_base64(&*info) {
+  if let Ok(smart_contract_key) = SmartContractKey::new_from_base64(&*info) {
     if let Some(contract) = reader.get_smart_contract(&smart_contract_key) {
       Ok(web::Json(contract))
     } else {
