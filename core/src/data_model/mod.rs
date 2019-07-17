@@ -18,7 +18,9 @@ pub const TXN_SEQ_ID_PLACEHOLDER: u64 = 0xD000_0000_0000_0000u64;
 
 // Unique Identifier for ledger objects
 #[derive(Default, Serialize, Deserialize, Hash, Eq, PartialEq, Copy, Clone, Debug)]
-pub struct Code(pub [u8; 16]);
+pub struct Code {
+  pub val: [u8; 16],
+}
 
 pub type AssetTokenCode = Code;
 pub type AssetPolicyKey = Code;
@@ -29,25 +31,25 @@ impl Code {
     let mut small_rng = SmallRng::from_entropy();
     let mut buf: [u8; 16] = [0u8; 16];
     small_rng.fill(&mut buf);
-    Self(buf)
+    Self { val: buf }
   }
   pub fn new_from_str(s: &str) -> Self {
     let mut as_vec = s.to_string().into_bytes();
     as_vec.resize(16, 0u8);
     let buf = <[u8; 16]>::try_from(as_vec.as_slice()).unwrap();
-    Self(buf)
+    Self { val: buf }
   }
   pub fn new_from_base64(b64: &str) -> Result<Self, errors::PlatformError> {
     if let Ok(mut bin) = b64dec(b64) {
       bin.resize(16, 0u8);
       let buf = <[u8; 16]>::try_from(bin.as_slice()).unwrap();
-      Ok(Self(buf))
+      Ok(Self { val: buf })
     } else {
       Err(errors::PlatformError::DeserializationError)
     }
   }
   pub fn to_base64(&self) -> String {
-    b64enc(&self.0)
+    b64enc(&self.val)
   }
 }
 

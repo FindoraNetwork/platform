@@ -396,7 +396,7 @@ fn process_add_cmd(add_matches: &clap::ArgMatches,
           asset_token = AssetTokenCode::new_from_str(token_code);
         } else {
           asset_token = AssetTokenCode::gen_random();
-          println!("Creating asset with token code {:?}", asset_token.0);
+          println!("Creating asset with token code {:?}", asset_token.val);
         }
         if let Ok(_res) = txn_builder.add_operation_create_asset(&IssuerPublicKey { key: pub_key },
                                                                  &priv_key,
