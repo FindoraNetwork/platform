@@ -31,7 +31,7 @@ use std::io::SeekFrom::End;
 use std::io::SeekFrom::Start;
 use std::io::Write;
 use std::mem;
-use std::option::Option;
+// use std::mem::MaybeUninit;
 use std::slice::from_raw_parts;
 use std::slice::from_raw_parts_mut;
 
@@ -188,9 +188,12 @@ fn deserialize_array<'de, D>(deserializer: D) -> Result<[HashValue; HASHES_IN_BL
     return sde!("The input slice has the wrong length:  {}", slice.len());
   }
 
+  // let mut result: [HashValue; HASHES_IN_BLOCK] =
+  //     unsafe { MaybeUninit::<[HashValue; HASHES_IN_BLOCK]>::uninit().assume_init() };
   let mut result: [HashValue; HASHES_IN_BLOCK] = unsafe { std::mem::uninitialized() };
   result.copy_from_slice(&slice);
   Ok(result)
+  // Ok(unsafe { mem::transmute::<_, [HashValue; HASHES_IN_BLOCK]>(result) })
 }
 
 // A Merkle tree is represented by a collection of blocks.  Blocks
@@ -685,7 +688,8 @@ impl AppendOnlyMerkle {
     }
 
     if entries == 0 {
-      return ser!("No valid leaves were found.");
+      let _ = std::fs::remove_file(self.file_path(0));
+      return ser!("The level 0 file contains no valid leaves.");
     }
 
     // Set the size of the tree.
@@ -1045,6 +1049,10 @@ impl AppendOnlyMerkle {
   // Recover the contents of a file by rebuilding the level it
   // represents.  Open and truncate the file, as necessary.
   fn recover_file(&mut self, level: usize) -> Result<(), Error> {
+    if level == 0 {
+      return ser!("The level 0 file is corrupted.");
+    }
+
     let path = self.file_path(level);
 
     let _ = std::fs::remove_file(&path);
@@ -1243,7 +1251,7 @@ impl AppendOnlyMerkle {
       let (block, prev) = items;
 
       if let Some(x) = block.set_hash(&current_hash) {
-        return ser!("Tree corrupted:  set_hash:  {}", x);
+        return ser!("The tree is corrupted:  set_hash:  {}", x);
       }
 
       // If the block is full, and all the previous blocks are
@@ -1294,6 +1302,7 @@ impl AppendOnlyMerkle {
   fn add_level(&mut self) -> Option<Error> {
     let level = self.blocks.len();
     let path = self.file_path(level);
+
     let result = OpenOptions::new().read(true)
                                    .write(true)
                                    .create(true)
@@ -1358,8 +1367,8 @@ impl AppendOnlyMerkle {
   /// # Example
   ///
   /// let proof =
-  ///     match tree.generate_proof(transaction_id as u64, tree_version) {
-  ///         Ok(x) => { x }
+  ///     match tree.generate_proof(transaction_id, tree_version) {
+  ///         Ok(x)  => { x }
   ///         Err(x) => { return Err(x); }
   ///     }
   ///
@@ -1767,16 +1776,21 @@ impl AppendOnlyMerkle {
     Ok(block)
   }
 
-  // Read the disk block directly into the memory result, if the disk
-  // permits.
+  // Read the disk block directly into the memory result, if the
+  // storage is working.
   fn read_struct(&mut self, level: usize) -> Result<Block, Error> {
     unsafe {
+      // let mut s: MaybeUninit<Block> = MaybeUninit::uninit();
       let mut s = std::mem::uninitialized();
 
       let buffer = from_raw_parts_mut(&mut s as *mut Block as *mut u8, BLOCK_SIZE);
+      // from_raw_parts_mut(s.as_mut_ptr() as *mut u8, BLOCK_SIZE);
 
       match self.files[level].read_exact(buffer) {
-        Ok(()) => Ok(s),
+        Ok(()) => {
+          Ok(s)
+          //Ok(mem::transmute::<_, Block>(s))
+        }
         Err(e) => {
           std::mem::forget(s);
           Err(e)
@@ -2870,6 +2884,34 @@ mod tests {
       let file = path.clone() + "." + &i.to_string();
       let _ = std::fs::remove_file(&file);
     }
+  }
+
+  #[test]
+  fn test_corrupt_level0() {
+    let path = "test_corrupt_level0";
+    let base = path.to_owned() + &AppendOnlyMerkle::rebuild_ext();
+    let _ = std::fs::remove_file(&path);
+    let _ = std::fs::remove_file(&base);
+    let buffer = [1_u8; 4];
+
+    let mut file = OpenOptions::new().create(true)
+                                     .write(true)
+                                     .open(&path)
+                                     .unwrap();
+
+    let _ = file.write(&buffer);
+
+    if let Ok(_tree) = AppendOnlyMerkle::open(&path) {
+      println!("Open worked with a corrupt tree.");
+    }
+
+    if let Ok(_tree) = AppendOnlyMerkle::rebuild(&path) {
+      println!("Rebuild worked with a corrupt tree.");
+    }
+
+    let base = path.to_owned() + &AppendOnlyMerkle::rebuild_ext();
+    let _ = std::fs::remove_file(&path);
+    let _ = std::fs::remove_file(&base);
   }
 
   #[test]

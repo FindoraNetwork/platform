@@ -54,7 +54,7 @@ fn main() -> Result<(), std::io::Error> {
   }
 
   // Append some hash values to the tree.
-  for tid in 0..800 * 1024 * 1024 {
+  for tid in 0..400 * 1024 * 1024 {
     // Create a unique, non-zero hash by treating the hash array as a
     // base-256 numeral.  Start at 1 and add 1 every iteration.
     let mut carry = 1;
