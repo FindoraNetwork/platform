@@ -741,37 +741,33 @@ impl ArchiveAccess for LedgerState {
   }
 }
 
-#[cfg(test)]
-mod tests {
+pub mod helpers {
   use super::*;
-  use crate::data_model::{
-    Asset, AssetCreationBody, AssetIssuanceBody, ConfidentialMemo, IssuerPublicKey, Memo,
-  };
-  use rand::{CryptoRng, Rng, SeedableRng};
-  use rand_chacha::ChaChaRng;
+  use crate::data_model::{Asset, AssetCreationBody, ConfidentialMemo, IssuerPublicKey, Memo};
+  use rand::{CryptoRng, Rng};
   use zei::basic_crypto::signatures::{XfrKeyPair, XfrPublicKey, XfrSecretKey, XfrSignature};
 
-  fn build_keys<R: CryptoRng + Rng>(prng: &mut R) -> (XfrPublicKey, XfrSecretKey) {
+  pub fn build_keys<R: CryptoRng + Rng>(prng: &mut R) -> (XfrPublicKey, XfrSecretKey) {
     let keypair = XfrKeyPair::generate(prng);
 
     (keypair.get_pk_ref().clone(), keypair.get_sk())
   }
 
-  fn compute_signature<T>(secret_key: &XfrSecretKey,
-                          public_key: &XfrPublicKey,
-                          asset_body: &T)
-                          -> XfrSignature
+  pub fn compute_signature<T>(secret_key: &XfrSecretKey,
+                              public_key: &XfrPublicKey,
+                              asset_body: &T)
+                              -> XfrSignature
     where T: serde::Serialize
   {
     secret_key.sign(&serde_json::to_vec(&asset_body).unwrap(), &public_key)
   }
 
-  fn asset_creation_body(token_code: &AssetTokenCode,
-                         issuer_key: &XfrPublicKey,
-                         updatable: bool,
-                         memo: &Option<Memo>,
-                         confidential_memo: &Option<ConfidentialMemo>)
-                         -> AssetCreationBody {
+  pub fn asset_creation_body(token_code: &AssetTokenCode,
+                             issuer_key: &XfrPublicKey,
+                             updatable: bool,
+                             memo: &Option<Memo>,
+                             confidential_memo: &Option<ConfidentialMemo>)
+                             -> AssetCreationBody {
     let mut token_properties: Asset = Default::default();
     token_properties.code = token_code.clone();
     token_properties.issuer = IssuerPublicKey { key: issuer_key.clone() };
@@ -792,15 +788,24 @@ mod tests {
     AssetCreationBody { asset: token_properties }
   }
 
-  fn asset_creation_operation(asset_body: &AssetCreationBody,
-                              public_key: &XfrPublicKey,
-                              secret_key: &XfrSecretKey)
-                              -> AssetCreation {
+  pub fn asset_creation_operation(asset_body: &AssetCreationBody,
+                                  public_key: &XfrPublicKey,
+                                  secret_key: &XfrSecretKey)
+                                  -> AssetCreation {
     let sign = compute_signature(&secret_key, &public_key, &asset_body);
     AssetCreation { body: asset_body.clone(),
                     pubkey: IssuerPublicKey { key: public_key.clone() },
                     signature: sign }
   }
+}
+
+#[cfg(test)]
+mod tests {
+  use super::helpers::*;
+  use super::*;
+  use crate::data_model::{AssetIssuanceBody, IssuerPublicKey};
+  use rand::SeedableRng;
+  use rand_chacha::ChaChaRng;
 
   #[test]
   fn test_asset_creation_valid() {
