@@ -14,7 +14,9 @@ extern crate serde;
 extern crate serde_derive;
 extern crate sodiumoxide;
 
-use chrono::prelude::Utc;
+use chrono::Datelike;
+use chrono::Timelike;
+use chrono::Utc;
 use serde::Deserialize;
 use serde::Deserializer;
 use serde::Serialize;
@@ -31,7 +33,7 @@ use std::io::SeekFrom::End;
 use std::io::SeekFrom::Start;
 use std::io::Write;
 use std::mem;
-use std::option::Option;
+// use std::mem::MaybeUninit;
 use std::slice::from_raw_parts;
 use std::slice::from_raw_parts_mut;
 
@@ -64,10 +66,26 @@ macro_rules! sde  {
     }
 }
 
-// Do a println when configured.  The first field in the arguments
-// is reserved for a category identifier.
+// Writes a debug log entry when enabled.
+macro_rules! debug {
+  ($c:tt, $($x:tt)+) => {}; // ($c:tt, $($x:tt)+) => { print!("{}    ", timestamp()); println!($($x)+); }
+}
+
+// Writes a log entry when enabled.
 macro_rules! log {
-  ($c:ident, $($x:tt)+) => {}; // ($c:tt, $($x:tt)+) => { println!($($x)+); }
+  ($($x:tt)+) => { print!("{}    ", timestamp()); println!($($x)+); }
+}
+
+pub fn timestamp() -> String {
+  let now = Utc::now();
+
+  format!("{:04}/{:02}/{:02} {:02}:{:02}:{:02} UTC",
+          now.year(),
+          now.month(),
+          now.day(),
+          now.hour(),
+          now.minute(),
+          now.second())
 }
 
 #[derive(PartialEq, Copy, Clone, Debug, Deserialize, Serialize)]
@@ -188,9 +206,12 @@ fn deserialize_array<'de, D>(deserializer: D) -> Result<[HashValue; HASHES_IN_BL
     return sde!("The input slice has the wrong length:  {}", slice.len());
   }
 
+  // let mut result: [HashValue; HASHES_IN_BLOCK] =
+  //     unsafe { MaybeUninit::<[HashValue; HASHES_IN_BLOCK]>::uninit().assume_init() };
   let mut result: [HashValue; HASHES_IN_BLOCK] = unsafe { std::mem::uninitialized() };
   result.copy_from_slice(&slice);
   Ok(result)
+  // Ok(unsafe { mem::transmute::<_, [HashValue; HASHES_IN_BLOCK]>(result) })
 }
 
 // A Merkle tree is represented by a collection of blocks.  Blocks
@@ -463,6 +484,7 @@ struct LevelState {
   leaves_at_this_level: u64,
   previous_leaves: u64,
   previous_blocks: u64,
+  check_lower: bool,
 }
 
 // Compute the expected number of leaves in the next layer of the
@@ -546,7 +568,7 @@ impl AppendOnlyMerkle {
         let mut result = AppendOnlyMerkle::new(path, file);
 
         result.open_files()?;
-        result.read_files()?;
+        result.read_files(false)?;
         Result::Ok(result)
       }
       Err(x) => Result::Err(x),
@@ -672,9 +694,9 @@ impl AppendOnlyMerkle {
           block = b;
         }
         Err(x) => {
-          println!("Error reading block {}:  {}", block_id, x);
-          println!("I will discard the following {} blocks.",
-                   block_count - block_id - 1);
+          log!("Error reading block {}:  {}", block_id, x);
+          log!("I will discard the following {} blocks.",
+               block_count - block_id - 1);
           break;
         }
       }
@@ -685,7 +707,8 @@ impl AppendOnlyMerkle {
     }
 
     if entries == 0 {
-      return ser!("No valid leaves were found.");
+      let _ = std::fs::remove_file(self.file_path(0));
+      return ser!("The level 0 file contains no valid leaves.");
     }
 
     // Set the size of the tree.
@@ -900,14 +923,16 @@ impl AppendOnlyMerkle {
   }
 
   // Read the disk data into the Merkle tree.
-  fn read_files(&mut self) -> Result<(), Error> {
+  fn read_files(&mut self, check_lower: bool) -> Result<(), Error> {
     let mut state = LevelState { level: 0,
                                  leaves_at_this_level: 0,
                                  previous_leaves: 0,
-                                 previous_blocks: 0 };
+                                 previous_blocks: 0,
+                                 check_lower: check_lower };
 
     // Read the file for each level of the tree.
     for level in 0..self.files.len() {
+      log!("Reading level {}.", level);
       state.level = level;
       self.read_level(&mut state)?;
     }
@@ -929,19 +954,20 @@ impl AppendOnlyMerkle {
     let file_size = match self.files[level].seek(End(0)) {
       Ok(n) => n,
       Err(x) => {
-        println!("seek failed:  {}", x);
+        log!("seek failed:  {}", x);
         return self.recover_file(level);
       }
     };
 
     if file_size % BLOCK_SIZE as u64 != 0 {
-      println!("The file contains a partial block (size {}) at level {}",
-               file_size, level);
+      log!("The file contains a partial block (size {}) at level {}",
+           file_size,
+           level);
       return self.recover_file(level);
     }
 
     if let Err(x) = self.files[level].seek(Start(0)) {
-      println!("seek failed:  {}", x);
+      log!("Seek failed:  {}", x);
       return self.recover_file(level);
     }
 
@@ -949,19 +975,20 @@ impl AppendOnlyMerkle {
     let expected = covered(state.leaves_at_this_level, LEAVES_IN_BLOCK as u64);
 
     if level != 0 && block_count != expected {
-      println!("Level {} has {} blocks on disk, but should have {}, \
-                leaves {}, previous leaves {}, previous blocks {}",
-               level,
-               block_count,
-               expected,
-               state.leaves_at_this_level,
-               state.previous_leaves,
-               state.previous_blocks);
+      log!("Level {} has {} blocks on disk, but should have {}, \
+            leaves {}, previous leaves {}, previous blocks {}",
+           level,
+           block_count,
+           expected,
+           state.leaves_at_this_level,
+           state.previous_leaves,
+           state.previous_blocks);
       return self.recover_file(level);
     }
 
     let mut last_block_full = true;
     let mut entries = 0;
+    let mut rebuilds = 0;
 
     // Read each block, if possible.
     for i in 0..block_count {
@@ -975,7 +1002,7 @@ impl AppendOnlyMerkle {
 
           // If we are above level zero, check that the hashes we
           // have read agree with what's in the lower level.
-          if level > 0 {
+          if state.check_lower && level > 0 {
             let lower_index = i as usize * LEAVES_IN_BLOCK * 2;
             let lower_list = &self.blocks[level - 1];
 
@@ -995,6 +1022,7 @@ impl AppendOnlyMerkle {
           // Rebuild the block if we can.
           match self.reconstruct(level, i) {
             Ok(block) => {
+              rebuilds += 1;
               self.rewrite_block(&block);
               last_block_full = block.full();
               entries += block.valid_leaves();
@@ -1008,9 +1036,17 @@ impl AppendOnlyMerkle {
       }
     }
 
+    if rebuilds > 1 {
+      log!("Rebuilt {} blocks at level {}", rebuilds, level);
+    } else if rebuilds == 1 {
+      log!("Rebuilt 1 block at level {}", level);
+    }
+
     if level > 0 && entries != state.leaves_at_this_level {
-      println!("Level {} has {} entries, but {} were expected.",
-               level, entries, state.leaves_at_this_level);
+      log!("Level {} has {} entries, but {} were expected.",
+           level,
+           entries,
+           state.leaves_at_this_level);
       return self.recover_file(level);
     }
 
@@ -1034,8 +1070,8 @@ impl AppendOnlyMerkle {
     let last_level = level == self.files.len() - 1;
 
     if last_level && state.leaves_at_this_level > 0 {
-      println!("There is at least one missing file (missing level {}).",
-               level + 1);
+      log!("There is at least one missing file (missing level {}).",
+           level + 1);
       return self.recover_file(level + 1);
     }
 
@@ -1045,6 +1081,10 @@ impl AppendOnlyMerkle {
   // Recover the contents of a file by rebuilding the level it
   // represents.  Open and truncate the file, as necessary.
   fn recover_file(&mut self, level: usize) -> Result<(), Error> {
+    if level == 0 {
+      return ser!("The level 0 file is corrupted.");
+    }
+
     let path = self.file_path(level);
 
     let _ = std::fs::remove_file(&path);
@@ -1085,7 +1125,7 @@ impl AppendOnlyMerkle {
   // in the file.
   fn rewrite_block(&mut self, block: &Block) {
     // TODO:  Log errors?  Either log the errors or return
-    // them.  Doing a println! is nearly useless.
+    // them.  Doing a log! is nearly useless.
     let offset = block.id() as u64 * BLOCK_SIZE as u64;
     let level = block.level();
 
@@ -1094,19 +1134,19 @@ impl AppendOnlyMerkle {
       Ok(n) => {
         if n != offset {
           // Log error.
-          println!("Seek failed at level {}, block {} for rewrite:  {} vs {}",
-                   level,
-                   block.id(),
-                   n,
-                   offset);
+          log!("Seek failed at level {}, block {} for rewrite:  {} vs {}",
+               level,
+               block.id(),
+               n,
+               offset);
           return;
         }
       }
       Err(x) => {
-        println!("Seek failed  at level {}, block {} for rewrite:  {}",
-                 level,
-                 block.id(),
-                 x);
+        log!("Seek failed  at level {}, block {} for rewrite:  {}",
+             level,
+             block.id(),
+             x);
         return;
       }
     }
@@ -1116,10 +1156,10 @@ impl AppendOnlyMerkle {
         // TODO self.rewrites++;
       }
       Err(x) => {
-        println!("I/O failed for rewrite at level {}, block {}:  {}",
-                 level,
-                 block.id(),
-                 x);
+        log!("I/O failed for rewrite at level {}, block {}:  {}",
+             level,
+             block.id(),
+             x);
       }
     }
   }
@@ -1243,7 +1283,7 @@ impl AppendOnlyMerkle {
       let (block, prev) = items;
 
       if let Some(x) = block.set_hash(&current_hash) {
-        return ser!("Tree corrupted:  set_hash:  {}", x);
+        return ser!("The tree is corrupted:  set_hash:  {}", x);
       }
 
       // If the block is full, and all the previous blocks are
@@ -1294,6 +1334,7 @@ impl AppendOnlyMerkle {
   fn add_level(&mut self) -> Option<Error> {
     let level = self.blocks.len();
     let path = self.file_path(level);
+
     let result = OpenOptions::new().read(true)
                                    .write(true)
                                    .create(true)
@@ -1358,8 +1399,8 @@ impl AppendOnlyMerkle {
   /// # Example
   ///
   /// let proof =
-  ///     match tree.generate_proof(transaction_id as u64, tree_version) {
-  ///         Ok(x) => { x }
+  ///     match tree.generate_proof(transaction_id, tree_version) {
+  ///         Ok(x)  => { x }
   ///         Err(x) => { return Err(x); }
   ///     }
   ///
@@ -1376,16 +1417,16 @@ impl AppendOnlyMerkle {
     let mut index = transaction_id as usize;
     let mut block_id = index / LEAVES_IN_BLOCK as usize;
 
-    log!(proof, "Proof for {}", tx_id);
+    debug!(proof, "Proof for {}", transaction_id);
 
     // Go up the tree grabbing hashes.
     for level in 0..self.files.len() {
-      log!(proof,
-           "level {}, block_id {}, index {} into len {}",
-           level,
-           block_id,
-           index,
-           self.blocks[level].len());
+      debug!(proof,
+             "level {}, block_id {}, index {} into len {}",
+             level,
+             block_id,
+             index,
+             self.blocks[level].len());
 
       if block_id >= self.blocks[level].len() {
         break;
@@ -1395,11 +1436,8 @@ impl AppendOnlyMerkle {
       let block_index = index % LEAVES_IN_BLOCK;
       let partner = block_index ^ 1;
 
-      log!(proof,
-           "push block[{}].hashes[{}] at level {}",
-           block_id,
-           partner,
-           level);
+      debug!(proof,
+             "push block[{}].hashes[{}] at level {}", block_id, partner, level);
 
       if block.full() {
         self.push_subtree(block, partner, &mut hashes);
@@ -1440,7 +1478,7 @@ impl AppendOnlyMerkle {
     let mut base = LEAVES_IN_BLOCK;
     let mut size = base / 2;
 
-    log!(proof, "Subtree for partner {}", partner);
+    debug!(proof, "Subtree for partner {}", partner);
     hashes.push(block.hashes[partner]);
 
     // Nodes in the tree are stored by level, from the lowest level
@@ -1448,12 +1486,12 @@ impl AppendOnlyMerkle {
     // nodes exist at the level we are examining.
     while size > 1 {
       current ^= 1;
-      log!(proof,
-           "push {:3} + {:3} = {:3} {:3}",
-           current,
-           base,
-           current + base,
-           size);
+      debug!(proof,
+             "push {:3} + {:3} = {:3} {:3}",
+             current,
+             base,
+             current + base,
+             size);
       let hash = block.hashes[current + base];
       hashes.push(hash);
 
@@ -1462,7 +1500,7 @@ impl AppendOnlyMerkle {
       size /= 2;
     }
 
-    log!(proof, "hashes now has {} elements.", hashes.len());
+    debug!(proof, "hashes now has {} elements.", hashes.len());
   }
 
   // Push a subtree from a partially-filled block.
@@ -1496,19 +1534,19 @@ impl AppendOnlyMerkle {
       hashes.push(hash_single(&block.hashes[partner ^ 1]));
     }
 
-    log!(proof, "Subtree for partner {}", partner);
+    debug!(proof, "Subtree for partner {}", partner);
 
     // Similarly to push_subtree, the "size" variable refers to the
     // number of nodes that can exist on this level, if the block
     // were full.
     while size > 1 {
       current ^= 1;
-      log!(proof,
-           "push {:3} + {:3} = {:3} {:3}",
-           current,
-           base,
-           current + base,
-           size);
+      debug!(proof,
+             "push {:3} + {:3} = {:3} {:3}",
+             current,
+             base,
+             current + base,
+             size);
       let hash = table[current + base];
       assert!(hash != empty_hash);
       hashes.push(hash);
@@ -1518,7 +1556,7 @@ impl AppendOnlyMerkle {
       size /= 2;
     }
 
-    log!(proof, "hashes now has {} elements.", hashes.len());
+    debug!(proof, "hashes now has {} elements.", hashes.len());
   }
 
   /// Return the number of transaction entries in the tree.
@@ -1767,16 +1805,21 @@ impl AppendOnlyMerkle {
     Ok(block)
   }
 
-  // Read the disk block directly into the memory result, if the disk
-  // permits.
+  // Read the disk block directly into the memory result, if the
+  // storage is working.
   fn read_struct(&mut self, level: usize) -> Result<Block, Error> {
     unsafe {
+      // let mut s: MaybeUninit<Block> = MaybeUninit::uninit();
       let mut s = std::mem::uninitialized();
 
       let buffer = from_raw_parts_mut(&mut s as *mut Block as *mut u8, BLOCK_SIZE);
+      // from_raw_parts_mut(s.as_mut_ptr() as *mut u8, BLOCK_SIZE);
 
       match self.files[level].read_exact(buffer) {
-        Ok(()) => Ok(s),
+        Ok(()) => {
+          Ok(s)
+          //Ok(mem::transmute::<_, Block>(s))
+        }
         Err(e) => {
           std::mem::forget(s);
           Err(e)
@@ -2703,10 +2746,10 @@ mod tests {
         }
       }
 
-      log!(proof,
-           "Generated a proof for tx_id {} with {} hashes.",
-           i,
-           proof.hashes.len());
+      debug!(proof,
+             "Generated a proof for tx_id {} with {} hashes.",
+             i,
+             proof.hashes.len());
       check_proof(&tree, &proof, i);
     }
 
@@ -2870,6 +2913,34 @@ mod tests {
       let file = path.clone() + "." + &i.to_string();
       let _ = std::fs::remove_file(&file);
     }
+  }
+
+  #[test]
+  fn test_corrupt_level0() {
+    let path = "test_corrupt_level0";
+    let base = path.to_owned() + &AppendOnlyMerkle::rebuild_ext();
+    let _ = std::fs::remove_file(&path);
+    let _ = std::fs::remove_file(&base);
+    let buffer = [1_u8; 4];
+
+    let mut file = OpenOptions::new().create(true)
+                                     .write(true)
+                                     .open(&path)
+                                     .unwrap();
+
+    let _ = file.write(&buffer);
+
+    if let Ok(_tree) = AppendOnlyMerkle::open(&path) {
+      println!("Open worked with a corrupt tree.");
+    }
+
+    if let Ok(_tree) = AppendOnlyMerkle::rebuild(&path) {
+      println!("Rebuild worked with a corrupt tree.");
+    }
+
+    let base = path.to_owned() + &AppendOnlyMerkle::rebuild_ext();
+    let _ = std::fs::remove_file(&path);
+    let _ = std::fs::remove_file(&base);
   }
 
   #[test]
