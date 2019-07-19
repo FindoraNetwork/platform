@@ -139,16 +139,13 @@ fn next_file(path: &str) -> String {
 
   let last = path.rfind('.').unwrap();
   let mut next = path[0..last].to_owned();
-  
-  let current =
-    match path[last + 1..path.len()].parse::<i32>() {
-      Err(_) => {
-        return path.to_owned();
-      }
-      Ok(n) => {
-        n
-      }
-    };
+
+  let current = match path[last + 1..path.len()].parse::<i32>() {
+    Err(_) => {
+      return path.to_owned();
+    }
+    Ok(n) => n,
+  };
 
   next.push_str(&".");
   next.push_str(&(current + 1).to_string());
@@ -534,13 +531,13 @@ mod tests {
 
   #[test]
   fn test_next_file() {
-    check_one("1000",    "1000"   );
-    check_one("abc",     "abc"    );
+    check_one("1000", "1000");
+    check_one("abc", "abc");
     check_one("abc.def", "abc.def");
-    check_one("a.12",    "a.13"   );
-    check_one(".12",     ".13"    );
-    check_one(".",       "."      );
-    check_one("abc.12",  "abc.13" );
-    check_one("abc.0",   "abc.1"  );
+    check_one("a.12", "a.13");
+    check_one(".12", ".13");
+    check_one(".", ".");
+    check_one("abc.12", "abc.13");
+    check_one("abc.0", "abc.1");
   }
 }
