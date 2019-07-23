@@ -5,7 +5,7 @@ extern crate serde_json;
 
 use actix_web::{web, App, HttpServer};
 use core::data_model::{
-  AssetTokenCode, SmartContractKey, AssetPolicyKey, AssetToken, CustomAssetPolicy, SmartContract,
+  AssetPolicyKey, AssetToken, AssetTokenCode, CustomAssetPolicy, SmartContract, SmartContractKey,
   TxnSID, TxoSID, Utxo,
 };
 use core::store::{ArchiveAccess, LedgerAccess};
@@ -145,7 +145,54 @@ impl RestfulApiService {
 
 #[cfg(test)]
 mod tests {
-  // TODO(Jonathan) This will not compile.
-  // #[test]
-  // fn query_get_blind_asset_record(_query: &str) {}
+  use super::*;
+  use actix_web::dev::Service;
+  use actix_web::{test, web, App, HttpRequest};
+  use core::data_model::{Operation, Transaction};
+  use core::store::helpers::*;
+  use core::store::{ArchiveUpdate, LedgerState, LedgerUpdate};
+  use rand::SeedableRng;
+  use rand_chacha::ChaChaRng;
+
+  #[test]
+  fn test_query_utxo() {}
+
+  #[test]
+  fn test_query_txn() {}
+
+  #[test]
+  fn test_query_policy() {}
+
+  #[test]
+  fn test_query_proof() {}
+
+  #[test]
+  fn test_query_contract() {}
+
+  #[test]
+  fn test_query_asset() {
+    let mut prng = ChaChaRng::from_seed([0u8; 32]);
+    let mut state = LedgerState::test_ledger();
+    let mut tx = Transaction::default();
+
+    let token_code1 = AssetTokenCode { val: [1; 16] };
+    let (public_key, secret_key) = build_keys(&mut prng);
+
+    let asset_body = asset_creation_body(&token_code1, &public_key, true, &None, &None);
+    let asset_create = asset_creation_operation(&asset_body, &public_key, &secret_key);
+    tx.operations.push(Operation::AssetCreation(asset_create));
+
+    state.apply_transaction(&mut tx);
+    state.append_transaction(tx);
+
+    let mut app = test::init_service(App::new().data(Arc::new(RwLock::new(state)))
+                                               .route("/asset_token/{token}",
+                                                      web::get().to(query_asset::<LedgerState>)));
+
+    let req = test::TestRequest::get().uri(&format!("/asset_token/{}", token_code1.to_base64()))
+                                      .to_request();
+    let resp = test::block_on(app.call(req)).unwrap();
+
+    assert!(resp.status().is_success());
+  }
 }
