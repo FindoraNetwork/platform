@@ -1,3 +1,5 @@
+use crate::store::append_only_merkle::HashValue;
+use crate::store::compute_sha256_hash;
 use base64::decode as b64dec;
 use base64::encode as b64enc;
 use chrono::prelude::*;
@@ -77,7 +79,7 @@ pub struct AccountAddress {
   pub key: XfrPublicKey,
 }
 
-#[derive(Eq, PartialEq, Debug, Serialize, Deserialize)]
+#[derive(Clone, Eq, PartialEq, Debug, Serialize, Deserialize)]
 pub struct SignedAddress {
   pub address: XfrAddress,
   pub signature: XfrSignature,
@@ -129,10 +131,10 @@ pub struct CustomAssetPolicy {
   policy: Vec<u8>, // serialized policy, underlying form TBD.
 }
 
-#[derive(Hash, Eq, PartialEq, Debug, Serialize, Deserialize)]
+#[derive(Clone, Hash, Eq, PartialEq, Debug, Serialize, Deserialize)]
 pub struct CredentialProofKey([u8; 16]);
 
-#[derive(Hash, Eq, PartialEq, Debug, Serialize, Deserialize)]
+#[derive(Clone, Hash, Eq, PartialEq, Debug, Serialize, Deserialize)]
 pub struct CredentialProof {
   pub key: CredentialProofKey,
 }
@@ -188,7 +190,7 @@ pub struct Utxo {
   pub output: TxOutput,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct AssetTransferBody {
   //pub nonce: u128,
   pub inputs: Vec<TxoSID>,    // ledger address of inputs
@@ -287,7 +289,7 @@ fn compute_signature<T>(secret_key: &XfrSecretKey,
 }
 
 // TODO: UTXO Addresses must be included in Transfer Signature
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct AssetTransfer {
   //pub nonce: u128,
   pub body: AssetTransferBody,
@@ -302,13 +304,13 @@ impl AssetTransfer {
 }
 
 //Tells the storage layer what to do the list of active asset records (i.e. UTXO set)
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct AssetTransferResult {
   pub success: bool,
 }
 
 // TODO: Include mechanism for replay attacks
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct AssetIssuance {
   pub body: AssetIssuanceBody,
   pub pubkey: IssuerPublicKey,
@@ -327,13 +329,13 @@ impl AssetIssuance {
   }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct AssetIssuanceResult {
   pub success: bool,
 }
 
 // ... etc...
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct AssetCreation {
   pub body: AssetCreationBody,
   pub pubkey: IssuerPublicKey,
@@ -352,12 +354,12 @@ impl AssetCreation {
   }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct AssetCreationResult {
   pub success: bool,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum Operation {
   AssetTransfer(AssetTransfer),
   AssetIssuance(AssetIssuance),
@@ -365,7 +367,7 @@ pub enum Operation {
   // ... etc...
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum OperationResult {
   AssetTransferResult(AssetTransferResult),
   AssetIssuanceResult(AssetIssuanceResult),
@@ -373,20 +375,22 @@ pub enum OperationResult {
   // ... etc...
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct TimeBounds {
   pub start: DateTime<Utc>,
   pub end: DateTime<Utc>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Transaction {
   pub operations: Vec<Operation>,
   pub variable_utxos: Vec<TxoSID>, // TODO: precondition support
   pub credentials: Vec<CredentialProof>,
   pub memos: Vec<Memo>,
   pub sid: TxoSID,
+  pub tx_id: TxnSID,
   pub outputs: u64,
+  pub merkle_id: u64,
   //pub time_bounds: TimeBounds,
   // ... etc...
 }
@@ -394,6 +398,21 @@ pub struct Transaction {
 impl Transaction {
   pub fn add_operation(&mut self, op: Operation) {
     self.operations.push(op);
+  }
+
+  pub fn compute_merkle_hash(&self) -> HashValue {
+    let serialized = if self.merkle_id != 0 {
+      let mut copy = self.clone();
+      copy.merkle_id = 0;
+      bincode::serialize(&copy).unwrap()
+    } else {
+      bincode::serialize(&self).unwrap()
+    };
+
+    let digest = compute_sha256_hash(&serialized);
+    let mut result = HashValue::new();
+    result.hash.clone_from_slice(&digest);
+    result
   }
 }
 
@@ -404,6 +423,8 @@ impl Default for Transaction {
                   credentials: Vec::new(),
                   memos: Vec::new(),
                   sid: TxoSID { index: TXN_SEQ_ID_PLACEHOLDER },
+                  tx_id: TxnSID { index: TXN_SEQ_ID_PLACEHOLDER as usize },
+                  merkle_id: TXN_SEQ_ID_PLACEHOLDER,
                   outputs: 0 }
   }
 }

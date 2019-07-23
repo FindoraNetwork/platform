@@ -1,6 +1,7 @@
 extern crate clap;
 extern crate core;
 extern crate dirs;
+extern crate regex;
 extern crate serde;
 extern crate serde_json;
 extern crate txn_builder;
@@ -11,6 +12,7 @@ use core::data_model::errors::PlatformError;
 use core::data_model::{AccountAddress, AssetTokenCode, IssuerPublicKey, TxoSID};
 use rand::SeedableRng;
 use rand_chacha::ChaChaRng;
+use regex::Regex;
 use std::env;
 use std::fs::{self, File};
 use std::io::prelude::*;
@@ -128,9 +130,37 @@ fn create_directory_if_missing(path_to_file_in_dir: &str) {
   }
 }
 
-fn rename_existing_file(_path_to_existing_file: &str) {
-  // TODO: if path_to_existing_file ends in .<number>, find the next unused .<number+N> and rename;
-  // otherwise, start from .1 and do the same...
+fn next_file(path: &str) -> String {
+  let regex = Regex::new(".*\\.[0-9]+$").unwrap();
+
+  if !regex.is_match(path) {
+    return path.to_owned();
+  }
+
+  let last = path.rfind('.').unwrap();
+  let mut next = path[0..last].to_owned();
+  
+  let current =
+    match path[last + 1..path.len()].parse::<i32>() {
+      Err(_) => {
+        return path.to_owned();
+      }
+      Ok(n) => {
+        n
+      }
+    };
+
+  next.push_str(&".");
+  next.push_str(&(current + 1).to_string());
+  next
+}
+
+fn rename_existing_file(path: &str) {
+  let next = next_file(path);
+
+  if let Err(x) = std::fs::rename(path, &next) {
+    println!("Renaming {} returned an error:  {}", path, x);
+  }
 }
 
 fn main() {
@@ -487,5 +517,30 @@ fn process_add_cmd(add_matches: &clap::ArgMatches,
       }
     }
     _ => unreachable!(),
+  }
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+
+  fn check_one(input: &str, expected: &str) {
+    let result = next_file(input);
+
+    if result != expected.to_string() {
+      panic!("{} failed:  {}", input, result);
+    }
+  }
+
+  #[test]
+  fn test_next_file() {
+    check_one("1000",    "1000"   );
+    check_one("abc",     "abc"    );
+    check_one("abc.def", "abc.def");
+    check_one("a.12",    "a.13"   );
+    check_one(".12",     ".13"    );
+    check_one(".",       "."      );
+    check_one("abc.12",  "abc.13" );
+    check_one("abc.0",   "abc.1"  );
   }
 }

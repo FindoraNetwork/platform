@@ -19,7 +19,8 @@ struct ABCILedgerApp {
 
 impl ABCILedgerApp {
   fn new() -> Result<ABCILedgerApp, PlatformError> {
-    Ok(ABCILedgerApp { la: LedgerApp::new(LedgerState::default())? })
+    let ledger = LedgerState::test_ledger();
+    Ok(ABCILedgerApp { la: LedgerApp::new(ledger)? })
   }
 }
 
