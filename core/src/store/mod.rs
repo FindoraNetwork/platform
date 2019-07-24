@@ -833,7 +833,7 @@ pub mod helpers {
   pub fn build_keys<R: CryptoRng + Rng>(prng: &mut R) -> (XfrPublicKey, XfrSecretKey) {
     let keypair = XfrKeyPair::generate(prng);
 
-    (keypair.get_pk_ref().clone(), keypair.get_sk())
+    (*keypair.get_pk_ref(), keypair.get_sk())
   }
 
   pub fn compute_signature<T>(secret_key: &XfrSecretKey,
@@ -848,22 +848,22 @@ pub mod helpers {
   pub fn asset_creation_body(token_code: &AssetTokenCode,
                              issuer_key: &XfrPublicKey,
                              updatable: bool,
-                             memo: &Option<Memo>,
-                             confidential_memo: &Option<ConfidentialMemo>)
+                             memo: Option<Memo>,
+                             confidential_memo: Option<ConfidentialMemo>)
                              -> AssetCreationBody {
     let mut token_properties: Asset = Default::default();
-    token_properties.code = token_code.clone();
-    token_properties.issuer = IssuerPublicKey { key: issuer_key.clone() };
+    token_properties.code = *token_code;
+    token_properties.issuer = IssuerPublicKey { key: *issuer_key };
     token_properties.updatable = updatable;
 
     if memo.is_some() {
-      token_properties.memo = memo.as_ref().unwrap().clone();
+      token_properties.memo = memo.unwrap();
     } else {
       token_properties.memo = Memo {};
     }
 
     if confidential_memo.is_some() {
-      token_properties.confidential_memo = confidential_memo.as_ref().unwrap().clone();
+      token_properties.confidential_memo = confidential_memo.unwrap();
     } else {
       token_properties.confidential_memo = ConfidentialMemo {};
     }
@@ -877,7 +877,7 @@ pub mod helpers {
                                   -> AssetCreation {
     let sign = compute_signature(&secret_key, &public_key, &asset_body);
     AssetCreation { body: asset_body.clone(),
-                    pubkey: IssuerPublicKey { key: public_key.clone() },
+                    pubkey: IssuerPublicKey { key: *public_key },
                     signature: sign }
   }
 }

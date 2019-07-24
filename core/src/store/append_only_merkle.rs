@@ -302,7 +302,7 @@ impl Block {
   }
 
   fn valid_leaves(&self) -> u64 {
-    self.header.valid_leaves as u64
+    u64::from(self.header.valid_leaves)
   }
 
   // Return the hash that is the top level of the subtree
@@ -928,7 +928,7 @@ impl AppendOnlyMerkle {
                                  leaves_at_this_level: 0,
                                  previous_leaves: 0,
                                  previous_blocks: 0,
-                                 check_lower: check_lower };
+                                 check_lower };
 
     // Read the file for each level of the tree.
     for level in 0..self.files.len() {
@@ -1218,7 +1218,7 @@ impl AppendOnlyMerkle {
   ///
   pub fn append_hash(&mut self, hash_value: &HashValue) -> Result<u64, Error> {
     if self.entry_count == 0 {
-      if self.blocks[0].len() != 0 {
+      if self.blocks[0].is_empty() {
         return ser!("Level zero should be empty, but it has {} blocks",
                     self.blocks[0].len());
       }
@@ -1524,8 +1524,13 @@ impl AppendOnlyMerkle {
     // Just to simplify the code, we define nodes that have no
     // valid children as containing HashValue::new(), the "empty"
     // hash.  The hash_partial function handles this case.
-    for i in 0..LEAVES_IN_BLOCK / 2 {
-      table[i] = hash_partial(&block.hashes[i * 2], &block.hashes[i * 2 + 1]);
+    for (ref mut loc, (ref hash_1st, ref hash_2nd)) in
+      table.iter_mut().zip(block.hashes
+                                .iter()
+                                .step_by(2)
+                                .zip(block.hashes.iter().skip(1).step_by(2)))
+    {
+      *loc = &mut hash_partial(&hash_1st, &hash_2nd);
     }
 
     if partner < block.valid_leaves() as usize {
@@ -1736,7 +1741,7 @@ impl AppendOnlyMerkle {
 
             // If we have a lower level, check that the hashes in it
             // match the hashes we have in the current level.
-            if lower.len() > 0 {
+            if !lower.is_empty() {
               let lower_index = i as usize * LEAVES_IN_BLOCK * 2;
 
               if let Some(x) = self.check_lower(&block, &lower, lower_index) {
