@@ -25,8 +25,8 @@
 //!
 extern crate core;
 
-use core::store::append_only_merkle::timestamp;
 use core::store::append_only_merkle::AppendOnlyMerkle;
+use core::timestamp;
 use std::env;
 use std::path::Path;
 use std::process::exit;
