@@ -47,8 +47,8 @@ impl LedgerApp {
   pub fn end_commit(&mut self) {
     let txns = &mut self.txns;
     if let Ok(mut writer) = self.committed_state.write() {
-      for mut tx in txns.drain(..) {
-        writer.apply_transaction(&mut tx);
+      for tx in txns.drain(..) {
+        writer.apply_transaction(&tx);
         writer.append_transaction(tx);
       }
     }

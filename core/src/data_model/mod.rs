@@ -384,7 +384,6 @@ pub struct Transaction {
   pub variable_utxos: Vec<TxoSID>, // TODO: precondition support
   pub credentials: Vec<CredentialProof>,
   pub memos: Vec<Memo>,
-  pub sid: TxoSID,
   pub tx_id: TxnSID,
   pub outputs: u64,
   pub merkle_id: u64,
@@ -419,7 +418,6 @@ impl Default for Transaction {
                   variable_utxos: Vec::new(),
                   credentials: Vec::new(),
                   memos: Vec::new(),
-                  sid: TxoSID { index: TXN_SEQ_ID_PLACEHOLDER },
                   tx_id: TxnSID { index: TXN_SEQ_ID_PLACEHOLDER as usize },
                   merkle_id: TXN_SEQ_ID_PLACEHOLDER,
                   outputs: 0 }
