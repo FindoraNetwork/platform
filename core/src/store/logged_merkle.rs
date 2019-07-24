@@ -23,6 +23,11 @@
 //! are append-only.  See the LogBuffer struct for the full details.
 //!
 use super::append_only_merkle::{AppendOnlyMerkle, HashValue, Proof};
+
+use serde::Deserialize;
+use serde::Deserializer;
+use serde::Serialize;
+use serde::Serializer;
 use sodiumoxide::crypto::hash::sha256;
 use std::fs::File;
 use std::io::BufWriter;
@@ -42,9 +47,16 @@ macro_rules! ser {
     ($($x:tt)+) => { Err(Error::new(ErrorKind::Other, format!($($x)+))) }
 }
 
+// Returns a deserializer error:  Err(serder::de::Error::...)
+macro_rules! sde  {
+    ($($x:tt)+) => {
+        Err(serde::de::Error::custom(format!($($x)+)))
+    }
+}
+
 // Writes a log entry when enabled.
 macro_rules! log {
-  ($c:tt, $($x:tt)+) => {}; // ($c:tt, $($x:tt)+) => { println!($($x)+); }
+  ($c:ident, $($x:tt)+) => {}; // ($c:tt, $($x:tt)+) => { println!($($x)+); }
 }
 
 const BUFFER_SIZE: usize = 32 * 1024;
@@ -55,23 +67,23 @@ const BUFFER_MARKER: u32 = 0xabab_efe0;
 
 /// This structure is used as the I/O buffer for the logs.  It consists
 /// of a header and a series of HashValues passed to the "append"
-/// procedure sequentially.  The header contains the transaction id
-/// for the first hash, as assigned by the AppendOnlyMerkle object.
-/// It also contains a checksum and a valid count, so that each buffer
-/// is self-describing and can be checked for consistency.
+/// procedure sequentially.  The header contains the transaction id for
+/// the first hash, as assigned by the AppendOnlyMerkle object.  It
+/// also contains a checksum and a valid count, so that each buffer is
+/// self-describing and can be checked for consistency.
 ///
 /// This structure is built as a C structure to allow zero-copy I/O and
 /// easier checksumming.  Currently, the checksum must be first to make
 /// the as_checksummed_region function valid.  Likewise, the marker
 /// field must follow the checksum.
 ///
-/// A flush operation causes the writing of a buffer whether that
-/// buffer is full or not, so any buffer in the can be only partially
-/// full.  Partially full buffers are written as a full-size buffer with
-/// some number of empty (zero) entries.  All buffers should have at
-/// least one valid entry.
+/// A flush operation causes the writing of a buffer whether that buffer
+/// is full or not, so any buffer in the can be only partially full.
+/// Partially full buffers are written as a full-size buffer with some
+/// number of empty (zero) entries.  All buffers should have at least
+/// one valid entry.
 ///
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Serialize, Deserialize)]
 #[repr(C)]
 struct LogBuffer {
   check: [u8; CHECK_SIZE], // This entry must be first.
@@ -79,7 +91,34 @@ struct LogBuffer {
   entry_count: u16,
   valid: u16,
   id: u64,
+
+  #[serde(serialize_with = "serialize_array")]
+  #[serde(deserialize_with = "deserialize_array")]
   hashes: [HashValue; BUFFER_ENTRIES as usize],
+}
+
+// Provide the serialization help for the array of hashes in a buffer.
+fn serialize_array<S, T>(array: &[T], serializer: S) -> Result<S::Ok, S::Error>
+  where S: Serializer,
+        T: Serialize
+{
+  array.serialize(serializer)
+}
+
+// Provide the deserialization helper for the hash array in a buffer.
+fn deserialize_array<'de, D>(deserializer: D)
+                             -> Result<[HashValue; BUFFER_ENTRIES as usize], D::Error>
+  where D: Deserializer<'de>
+{
+  let slice: Vec<HashValue> = Deserialize::deserialize(deserializer)?;
+
+  if slice.len() != BUFFER_ENTRIES as usize {
+    return sde!("The input slice has the wrong length:  {}", slice.len());
+  }
+
+  let mut result: [HashValue; BUFFER_ENTRIES as usize] = unsafe { std::mem::uninitialized() };
+  result.copy_from_slice(&slice);
+  Ok(result)
 }
 
 impl LogBuffer {
@@ -256,10 +295,7 @@ impl LoggedMerkle {
       return Err(x);
     }
 
-    if self.buffer.valid > 0 {
-      self.write()?;
-    }
-
+    self.write()?;
     self.writer.flush()?;
     Ok(())
   }
@@ -360,6 +396,8 @@ impl LoggedMerkle {
       let mut current = buffer.id;
 
       if current <= state && current + buffer.valid as u64 > state {
+        // Compute the index of the first hash in the buffer that is
+        // not in the tree.  We skip over "start_offset" entries.
         let start_offset = (state - current) as usize;
 
         current += start_offset as u64;
@@ -398,6 +436,9 @@ impl LoggedMerkle {
   // Find a buffer in the log file that has records just past
   // the end of the tree, if possible.
   fn find_relevant(&mut self, file: &mut File) -> Result<(), Error> {
+    // Get the state of the tree and the number of complete
+    // buffers in the file.  Ignore any partial write at the
+    // end of the file.
     let state = self.tree.total_size();
     let buffer_count = self.buffer_count(file)?;
 
@@ -469,6 +510,7 @@ impl LoggedMerkle {
     Ok(())
   }
 
+  // Get the size of the given file.
   fn file_size(&self, file: &mut File) -> Result<u64, Error> {
     let start = file.seek(Current(0))?;
     let size = file.seek(End(0))?;
@@ -485,6 +527,10 @@ impl LoggedMerkle {
   // Write the log buffer to the file, returning errors as needed.
   // When the write is done, create a new buffer.
   fn write(&mut self) -> Result<(), Error> {
+    if self.buffer.valid == 0 {
+      return Ok(());
+    }
+
     self.buffer.set_checksum();
 
     if let Err(x) = self.writer.write_all(self.buffer.as_bytes()) {
@@ -496,6 +542,7 @@ impl LoggedMerkle {
     Ok(())
   }
 
+  // Compute the number of complete log buffers in a file.
   fn buffer_count(&self, file: &mut File) -> Result<u64, Error> {
     let file_size = self.file_size(file)?;
     Ok(file_size / BUFFER_SIZE as u64)

@@ -9,8 +9,30 @@ use core::store::append_only_merkle::AppendOnlyMerkle;
 use core::store::append_only_merkle::HashValue;
 use rand::prelude::thread_rng;
 use rand::Rng;
+use std::env;
+
+fn usage(arguments: Vec<String>, no_checks: &str) {
+  println!("Usage:  {} [ {} ]", arguments[0], no_checks);
+}
 
 fn main() -> Result<(), std::io::Error> {
+  let arguments: Vec<String> = env::args().collect();
+  let skip_checks_arg = "--no-checks";
+
+  if arguments.len() > 2 {
+    usage(arguments, skip_checks_arg);
+    return Ok(());
+  }
+
+  let mut skip_checks = false;
+
+  if arguments.len() == 2 && arguments[1] == skip_checks_arg {
+    skip_checks = true;
+  } else if arguments.len() == 2 {
+    usage(arguments, skip_checks_arg);
+    return Ok(());
+  }
+
   println!("Running the long test.");
 
   // Create a tree for testing.
@@ -25,10 +47,14 @@ fn main() -> Result<(), std::io::Error> {
 
   let mut hash = HashValue { hash: Default::default() };
   let mut countdown = 256;
-  let mut range = 256 * 1024 as usize;
+  let mut range = 256 * 1024 as u64;
+
+  if skip_checks {
+    countdown = std::u64::MAX;
+  }
 
   // Append some hash values to the tree.
-  for tid in 0..900 * 1024 * 1024 {
+  for tid in 0..400 * 1024 * 1024 {
     // Create a unique, non-zero hash by treating the hash array as a
     // base-256 numeral.  Start at 1 and add 1 every iteration.
     let mut carry = 1;
@@ -70,7 +96,7 @@ fn main() -> Result<(), std::io::Error> {
       }
 
       // Sync the tree to disk.
-      println!("Syncing the tree.");
+      println!("    Syncing the tree.");
       write_tree(&mut tree);
 
       test_proof(&mut tree);
@@ -78,9 +104,9 @@ fn main() -> Result<(), std::io::Error> {
       // Test the reset function now and then, as well as double checks and
       // checks with a synchronized disk image.
       if thread_rng().gen::<u32>() % 4 == 0 {
-        println!("Rechecking the in-memory tree.");
+        println!("    Rechecking the in-memory tree.");
         check_tree(&tree);
-        println!("Rechecking the disk.");
+        println!("    Rechecking the disk.");
         check_disk_tree(&mut tree, true);
 
         if let Err(x) = AppendOnlyMerkle::open(&path) {
@@ -91,15 +117,15 @@ fn main() -> Result<(), std::io::Error> {
         check_disk_tree(&mut tree, false);
       }
 
-      println!("Done with checking.");
+      println!("    Done with checking.");
 
       // Restart the countdown.
-      countdown = thread_rng().gen::<usize>() % range;
+      countdown = thread_rng().gen::<u64>() % range;
       countdown += 1;
 
-      if tree.total_size() as usize > 4 * range {
+      if tree.total_size() as u64 > 4 * range {
         range *= 4;
-        println!("Range extended to {}", range);
+        println!("    Range extended to {}", range);
       }
     }
   }
@@ -140,11 +166,11 @@ fn test_proof(tree: &mut AppendOnlyMerkle) {
 
   let id = if state > 2 { rand % (state + 1) } else { state };
 
-  println!("Testing a proof for transaction {}", id);
+  println!("    Testing a proof for tid {}", id);
 
   match tree.generate_proof(id, state) {
     Err(x) => {
-      panic!("Error on generating a proof for id {}:  {}", id, x);
+      panic!("Error on generating a proof for tid {}:  {}", id, x);
     }
     Ok(proof) => {
       assert!(proof.tx_id == id);

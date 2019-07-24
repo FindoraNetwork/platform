@@ -16,6 +16,7 @@ use sha2::{Digest, Sha256};
 use std::collections::{HashMap, HashSet};
 use std::fs::File;
 use std::fs::OpenOptions;
+use std::io::BufReader;
 use std::sync::{Arc, RwLock};
 use std::u64;
 use tempdir::TempDir;
@@ -45,7 +46,7 @@ pub trait LedgerAccess {
 }
 
 pub trait LedgerUpdate {
-  fn apply_transaction(&mut self, txn: &mut Transaction) -> TxoSID;
+  fn apply_transaction(&mut self, txn: &Transaction) -> TxoSID;
 }
 
 pub trait LedgerValidate {
@@ -75,27 +76,52 @@ pub fn compute_sha256_hash<T>(msg: &T) -> [u8; 32]
 #[derive(Serialize, Deserialize)]
 pub struct LedgerState {
   merkle_path: String,
+  txn_path: String,
+  snapshot_path: String,
   #[serde(skip)]
-  merkle: LoggedMerkle,
-  txs: Vec<Transaction>, //will need to be replaced by merkle tree...
+  merkle: Option<LoggedMerkle>,
+  #[serde(skip)]
+  txs: Vec<Transaction>,
   utxos: HashMap<TxoSID, Utxo>,
   contracts: HashMap<SmartContractKey, SmartContract>,
   policies: HashMap<AssetPolicyKey, CustomAssetPolicy>,
   tokens: HashMap<AssetTokenCode, AssetToken>,
   issuance_num: HashMap<AssetTokenCode, u64>,
+  txn_count: usize,
   txn_base_sid: TxoSID,
   max_applied_sid: TxoSID,
+  loading: bool,
+  #[serde(skip)]
+  txn_log: Option<File>,
 }
 
 impl LedgerState {
   pub fn test_ledger() -> LedgerState {
     let tmp_dir = TempDir::new("test").unwrap();
-    let buf = tmp_dir.path().join("test_ledger");
-    let path = buf.to_str().unwrap();
-    LedgerState::new(&path, true).unwrap()
+    let merkle_buf = tmp_dir.path().join("test_ledger_merkle");
+    let merkle_path = merkle_buf.to_str().unwrap();
+    let txn_buf = tmp_dir.path().join("test_ledger_txns");
+    let txn_path = txn_buf.to_str().unwrap();
+    let snap_buf = tmp_dir.path().join("test_ledger_snap");
+    let snap_path = snap_buf.to_str().unwrap();
+    LedgerState::new(&merkle_path, &txn_path, &snap_path, true).unwrap()
   }
 
-  pub fn new(path: &str, create: bool) -> Result<LedgerState, std::io::Error> {
+  fn load_transaction_log(path: &str) -> Result<Vec<Transaction>, std::io::Error> {
+    let file = File::open(path)?;
+    let mut reader = BufReader::new(file);
+    let mut v = Vec::new();
+    while let Ok(next_txn) =
+      bincode::deserialize_from::<&mut BufReader<File>, Transaction>(&mut reader)
+    {
+      v.push(next_txn);
+    }
+    Ok(v)
+  }
+
+  fn store_transaction(&self, _txn: &Transaction) {}
+
+  fn init_merkle_log(path: &str, create: bool) -> Result<LoggedMerkle, std::io::Error> {
     // Create a merkle tree or open an existing one.
     let result = if create {
       AppendOnlyMerkle::create(path)
@@ -114,25 +140,65 @@ impl LedgerState {
     // the end of the path.
     let next_id = tree.total_size();
     let writer = LedgerState::create_merkle_log(path.to_owned(), next_id)?;
+    Ok(LoggedMerkle::new(tree, writer))
+  }
 
-    let ledger = LedgerState { merkle: LoggedMerkle::new(tree, writer),
-                               merkle_path: path.to_owned(),
+  pub fn new(merkle_path: &str,
+             txn_path: &str,
+             snapshot_path: &str,
+             create: bool)
+             -> Result<LedgerState, std::io::Error> {
+    let ledger = LedgerState { merkle_path: merkle_path.to_owned(),
+                               txn_path: txn_path.to_owned(),
+                               snapshot_path: snapshot_path.to_owned(),
+                               merkle: Some(LedgerState::init_merkle_log(merkle_path, create)?),
                                txs: Vec::new(),
                                utxos: HashMap::new(),
                                contracts: HashMap::new(),
                                policies: HashMap::new(),
                                tokens: HashMap::new(),
                                issuance_num: HashMap::new(),
+                               txn_count: 0,
                                txn_base_sid: TxoSID::default(),
-                               max_applied_sid: TxoSID::default() };
+                               max_applied_sid: TxoSID::default(),
+                               loading: false,
+                               txn_log: Some(std::fs::OpenOptions::new().create(create)
+                                                                        .append(true)
+                                                                        .open(txn_path)?) };
 
     Ok(ledger)
   }
 
+  pub fn load(merkle_path: &str,
+              txn_path: &str,
+              snapshot_path: &str)
+              -> Result<LedgerState, std::io::Error> {
+    let merkle = LedgerState::init_merkle_log(merkle_path, false)?;
+    let txs = LedgerState::load_transaction_log(txn_path)?;
+    let ledger_file = File::open(snapshot_path)?;
+    let mut ledger = bincode::deserialize_from::<BufReader<File>, LedgerState>(BufReader::new(ledger_file))
+      .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
+    ledger.merkle = Some(merkle);
+    ledger.txn_log = Some(OpenOptions::new().append(true).open(txn_path)?);
+    ledger.loading = true;
+    for txn in &txs[ledger.txn_count..] {
+      ledger.apply_transaction(&txn);
+    }
+    ledger.txs = txs;
+    ledger.loading = false;
+    Ok(ledger)
+  }
+
   pub fn snapshot(&mut self) -> Result<SnapshotId, std::io::Error> {
-    let state = self.merkle.state();
+    let state = if let Some(merkle) = &self.merkle {
+      merkle.state()
+    } else {
+      0
+    };
     let writer = LedgerState::create_merkle_log(self.merkle_path.clone(), state)?;
-    self.merkle.snapshot(writer)?;
+    if let Some(merkle) = &mut self.merkle {
+      merkle.snapshot(writer)?
+    };
 
     Ok(SnapshotId { id: state })
   }
@@ -146,14 +212,16 @@ impl LedgerState {
   fn add_txo(&mut self, txo: (&TxoSID, TxOutput)) {
     let mut utxo_addr = *txo.0;
 
-    match utxo_addr.index {
-      TXN_SEQ_ID_PLACEHOLDER..=u64::MAX => {
-        utxo_addr.index -= TXN_SEQ_ID_PLACEHOLDER;
-        utxo_addr.index += self.txn_base_sid.index;
-      }
-      _ => {
-        // TODO:  Is this recoverable?
-        panic!("The index {} is not a placeholder.", utxo_addr.index);
+    if !self.loading {
+      match utxo_addr.index {
+        TXN_SEQ_ID_PLACEHOLDER..=u64::MAX => {
+          utxo_addr.index -= TXN_SEQ_ID_PLACEHOLDER;
+          utxo_addr.index += self.txn_base_sid.index;
+        }
+        _ => {
+          // TODO:  Is this recoverable?
+          panic!("The index {} is not a placeholder.", utxo_addr.index);
+        }
       }
     }
 
@@ -166,9 +234,11 @@ impl LedgerState {
   fn apply_asset_transfer(&mut self, transfer: &AssetTransfer) {
     for utxo in &transfer.body.inputs {
       let mut rectified_txo = *utxo;
-      if let TXN_SEQ_ID_PLACEHOLDER..=u64::MAX = rectified_txo.index {
-        rectified_txo.index -= TXN_SEQ_ID_PLACEHOLDER;
-        rectified_txo.index += self.txn_base_sid.index;
+      if !self.loading {
+        if let TXN_SEQ_ID_PLACEHOLDER..=u64::MAX = rectified_txo.index {
+          rectified_txo.index -= TXN_SEQ_ID_PLACEHOLDER;
+          rectified_txo.index += self.txn_base_sid.index;
+        }
       }
       self.utxos.remove(&rectified_txo);
     }
@@ -184,6 +254,8 @@ impl LedgerState {
   }
 
   fn apply_asset_issuance(&mut self, issue: &AssetIssuance) {
+    log!(issue, "outputs {:?}", issue.body.outputs);
+    log!(issue, "records {:?}", issue.body.records);
     for out in issue.body
                     .outputs
                     .iter()
@@ -217,7 +289,6 @@ impl LedgerState {
 
   #[cfg(test)]
   fn validate_transaction(&mut self, txn: &Transaction) -> bool {
-    println!("Validating transaction");
     for op in &txn.operations {
       if !self.validate_operation(op) {
         return false;
@@ -228,7 +299,6 @@ impl LedgerState {
 
   #[cfg(test)]
   fn validate_operation(&mut self, op: &Operation) -> bool {
-    println!("Validating operation");
     match op {
       Operation::AssetTransfer(transfer) => self.validate_asset_transfer(transfer),
       Operation::AssetIssuance(issuance) => self.validate_asset_issuance(issuance),
@@ -634,16 +704,16 @@ impl<'la, LA> LedgerValidate for TxnContext<'la, LA> where LA: LedgerAccess
 }
 
 impl LedgerUpdate for LedgerState {
-  fn apply_transaction(&mut self, txn: &mut Transaction) -> TxoSID {
+  fn apply_transaction(&mut self, txn: &Transaction) -> TxoSID {
     let sid = self.txn_base_sid;
     self.txn_base_sid.index = self.max_applied_sid.index + 1;
     log!(ledger, "apply {:?}", sid);
 
     // Apply the operations
     for op in &txn.operations {
+      log!(ledger, "Applying op:  {:?}", op);
       self.apply_operation(op);
     }
-    txn.sid = sid; // TODO(Jonathan):  confirm
     sid
   }
 }
@@ -658,17 +728,24 @@ impl ArchiveUpdate for LedgerState {
     // be ready, except for the Merkle tree id.
     let hash = txn.compute_merkle_hash();
 
-    match self.merkle.append(&hash) {
-      Ok(n) => {
-        txn.merkle_id = n;
-      }
-      Err(x) => {
-        panic!("append failed:  {}", x);
+    match &mut self.merkle {
+      Some(merkle) => match merkle.append(&hash) {
+        Ok(n) => {
+          txn.merkle_id = n;
+        }
+        Err(x) => {
+          panic!("append failed:  {}", x);
+        }
+      },
+      None => {
+        panic!("merkle tree not loaded!");
       }
     }
 
     let result = txn.clone();
+    self.store_transaction(&txn);
     self.txs.push(txn);
+    self.txn_count = self.txs.len();
     result
   }
 }
@@ -729,13 +806,18 @@ impl ArchiveAccess for LedgerState {
     match self.get_transaction(addr) {
       None => None,
       Some(txn) => {
-        match self.merkle.get_proof(txn.merkle_id, 0) {
-          Ok(proof) => Some(proof),
-          Err(x) => {
-            // TODO log error and recover?
-            println!("get_proof failed:  {}", x);
-            None
+        match &self.merkle {
+          Some(merkle) => {
+            match merkle.get_proof(txn.merkle_id, 0) {
+              Ok(proof) => Some(proof),
+              Err(x) => {
+                // TODO log error and recover?
+                println!("get_proof failed:  {}", x);
+                None
+              }
+            }
           }
+          None => None,
         }
       }
     }
@@ -818,7 +900,7 @@ mod tests {
 
     assert!(state.validate_transaction(&tx));
 
-    state.apply_transaction(&mut tx);
+    state.apply_transaction(&tx);
     state.append_transaction(tx);
     assert!(state.get_asset_token(&token_code1).is_some());
 
@@ -892,7 +974,7 @@ mod tests {
 
     assert!(ledger.validate_transaction(&tx));
 
-    ledger.apply_transaction(&mut tx);
+    ledger.apply_transaction(&tx);
 
     let mut tx = Transaction::default();
 
@@ -911,10 +993,11 @@ mod tests {
     let issue_op = Operation::AssetIssuance(asset_issuance_operation);
 
     tx.operations.push(issue_op);
-    let sid = ledger.apply_transaction(&mut tx);
+    let sid = ledger.apply_transaction(&tx);
     let transaction = ledger.append_transaction(tx);
     let txn_id = transaction.tx_id;
 
+    println!("utxos = {:?}", ledger.utxos);
     // TODO assert!(ledger.utxos.contains_key(&sid));
 
     match ledger.get_proof(txn_id) {
