@@ -17,10 +17,11 @@
 //! a complete, consistent state on disk.  Managing the resulting log
 //! files is the responsibility of the caller.
 //!
-//! A log file contains a sequence of log buffers.  Each log buffer
-//! is a fixed size given by the constant BUFFER_SIZE, and contains
-//! a header describing the contents of the buffer.  The log files
-//! are append-only.  See the LogBuffer struct for the full details.
+//! A log file itself consists of a sequence of log buffers.  Each log
+//! buffer is a fixed size given by the constant BUFFER_SIZE, and
+//! contains a header describing the contents of the buffer.  The log
+//! files are append-only.  See the LogBuffer struct for the full
+//! details.
 //!
 use super::append_only_merkle::{AppendOnlyMerkle, HashValue, Proof};
 
