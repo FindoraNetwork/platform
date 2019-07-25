@@ -5,6 +5,8 @@ extern crate serde_derive;
 extern crate arrayref;
 extern crate base64;
 
+#[macro_use]
+extern crate itertools;
 extern crate zei;
 
 pub mod data_model;

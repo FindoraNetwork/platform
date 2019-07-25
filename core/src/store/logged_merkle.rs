@@ -404,7 +404,7 @@ impl LoggedMerkle {
       // the tree to see that they match...
       let mut current = buffer.id;
 
-      if current <= state && current + buffer.valid as u64 > state {
+      if current <= state && current + u64::from(buffer.valid) > state {
         // Compute the index of the first hash in the buffer that is
         // not in the tree.  We skip over "start_offset" entries.
         let start_offset = (state - current) as usize;
@@ -491,7 +491,7 @@ impl LoggedMerkle {
         top = current;
         current -= gap / 2;
         debug!(find_relevant, "move back {} to {}", gap / 2, current);
-      } else if buffer.id + buffer.valid as u64 <= state {
+      } else if buffer.id + u64::from(buffer.valid) <= state {
         // The buffer is in the past.  Move forward!
         let gap = top - current;
 

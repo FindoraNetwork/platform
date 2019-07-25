@@ -16,31 +16,34 @@ pub mod errors;
 
 pub const TXN_SEQ_ID_PLACEHOLDER: u64 = 0xD000_0000_0000_0000u64;
 
-// Unique Identifier for AssetTokens
+// Unique Identifier for ledger objects
 #[derive(Default, Serialize, Deserialize, Hash, Eq, PartialEq, Copy, Clone, Debug)]
-pub struct AssetTokenCode {
-  // User-supplied code, system guarantees uniqueness
+pub struct Code {
   pub val: [u8; 16],
 }
 
-impl AssetTokenCode {
-  pub fn gen_random() -> AssetTokenCode {
+pub type AssetTokenCode = Code;
+pub type AssetPolicyKey = Code;
+pub type SmartContractKey = Code;
+
+impl Code {
+  pub fn gen_random() -> Self {
     let mut small_rng = SmallRng::from_entropy();
     let mut buf: [u8; 16] = [0u8; 16];
     small_rng.fill(&mut buf);
-    AssetTokenCode { val: buf }
+    Self { val: buf }
   }
-  pub fn new_from_str(s: &str) -> AssetTokenCode {
+  pub fn new_from_str(s: &str) -> Self {
     let mut as_vec = s.to_string().into_bytes();
     as_vec.resize(16, 0u8);
     let buf = <[u8; 16]>::try_from(as_vec.as_slice()).unwrap();
-    AssetTokenCode { val: buf }
+    Self { val: buf }
   }
-  pub fn new_from_base64(b64: &str) -> Result<AssetTokenCode, errors::PlatformError> {
+  pub fn new_from_base64(b64: &str) -> Result<Self, errors::PlatformError> {
     if let Ok(mut bin) = b64dec(b64) {
       bin.resize(16, 0u8);
       let buf = <[u8; 16]>::try_from(bin.as_slice()).unwrap();
-      Ok(AssetTokenCode { val: buf })
+      Ok(Self { val: buf })
     } else {
       Err(errors::PlatformError::DeserializationError)
     }
@@ -123,9 +126,6 @@ pub struct AssetToken {
 //    }
 //}
 
-#[derive(Hash, Eq, PartialEq, Debug, Serialize, Deserialize)]
-pub struct AssetPolicyKey([u8; 16]);
-
 #[derive(Hash, Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
 pub struct CustomAssetPolicy {
   policy: Vec<u8>, // serialized policy, underlying form TBD.
@@ -138,9 +138,6 @@ pub struct CredentialProofKey([u8; 16]);
 pub struct CredentialProof {
   pub key: CredentialProofKey,
 }
-
-#[derive(Hash, Eq, PartialEq, Debug, Serialize, Deserialize)]
-pub struct SmartContractKey([u8; 16]);
 
 #[derive(Hash, Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
 pub struct SmartContract;
@@ -387,7 +384,6 @@ pub struct Transaction {
   pub variable_utxos: Vec<TxoSID>, // TODO: precondition support
   pub credentials: Vec<CredentialProof>,
   pub memos: Vec<Memo>,
-  pub sid: TxoSID,
   pub tx_id: TxnSID,
   pub outputs: u64,
   pub merkle_id: u64,
@@ -422,7 +418,6 @@ impl Default for Transaction {
                   variable_utxos: Vec::new(),
                   credentials: Vec::new(),
                   memos: Vec::new(),
-                  sid: TxoSID { index: TXN_SEQ_ID_PLACEHOLDER },
                   tx_id: TxnSID { index: TXN_SEQ_ID_PLACEHOLDER as usize },
                   merkle_id: TXN_SEQ_ID_PLACEHOLDER,
                   outputs: 0 }

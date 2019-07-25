@@ -18,15 +18,19 @@ pub struct RestfulApiService {
 }
 
 fn query_utxo<LA>(data: web::Data<Arc<RwLock<LA>>>,
-                  info: web::Path<TxoSID>)
+                  info: web::Path<String>)
                   -> actix_web::Result<web::Json<Utxo>>
   where LA: LedgerAccess
 {
   let reader = data.read().unwrap();
-  if let Some(txo) = reader.check_utxo(*info) {
-    Ok(web::Json(txo))
+  if let Ok(txo_sid) = info.parse::<u64>() {
+    if let Some(txo) = reader.check_utxo(TxoSID { index: txo_sid }) {
+      Ok(web::Json(txo))
+    } else {
+      Err(actix_web::error::ErrorNotFound("Specified txo does not currently exist."))
+    }
   } else {
-    Err(actix_web::error::ErrorNotFound("Specified txo does not currently exist."))
+    Err(actix_web::error::ErrorNotFound("Invalid txo sid encoding"))
   }
 }
 
@@ -48,51 +52,70 @@ fn query_asset<LA>(data: web::Data<Arc<RwLock<LA>>>,
 }
 
 fn query_txn<AA>(data: web::Data<Arc<RwLock<AA>>>,
-                 info: web::Path<TxnSID>)
+                 info: web::Path<String>)
                  -> actix_web::Result<String>
   where AA: ArchiveAccess
 {
   let reader = data.read().unwrap();
-  if let Some(txn) = reader.get_transaction(*info) {
-    Ok(serde_json::to_string(&*txn)?)
+  if let Ok(txn_sid) = info.parse::<usize>() {
+    if let Some(txn) = reader.get_transaction(TxnSID { index: txn_sid }) {
+      Ok(serde_json::to_string(&*txn)?)
+    } else {
+      Err(actix_web::error::ErrorNotFound("Specified transaction does not exist."))
+    }
   } else {
-    Err(actix_web::error::ErrorNotFound("Specified transaction does not exist."))
+    Err(actix_web::error::ErrorNotFound("Invalid txn sid encoding."))
   }
 }
 
-fn query_proof<AA>(data: web::Data<Arc<RwLock<AA>>>, info: web::Path<TxnSID>) -> actix_web::Result<String>
-where AA: ArchiveAccess {
-  let reader = data.read().unwrap();
-  if let Some(proof) = reader.get_proof(*info) {
-    Ok(serde_json::to_string(&proof)?)
+fn query_proof<AA>(data: web::Data<Arc<RwLock<AA>>>,
+                   info: web::Path<String>)
+                   -> actix_web::Result<String>
+  where AA: ArchiveAccess
+{
+  if let Ok(txn_sid) = info.parse::<usize>() {
+    let reader = data.read().unwrap();
+    if let Some(proof) = reader.get_proof(TxnSID { index: txn_sid }) {
+      Ok(serde_json::to_string(&proof)?)
+    } else {
+      Err(actix_web::error::ErrorNotFound("That transaction doesn't exist."))
+    }
   } else {
-    Err(actix_web::error::ErrorNotFound("That transaction doesn't exist."))
+    Err(actix_web::error::ErrorNotFound("Invalid txn sid encoding."))
   }
 }
 
 fn query_policy<LA>(data: web::Data<Arc<RwLock<LA>>>,
-                    info: web::Path<AssetPolicyKey>)
+                    info: web::Path<String>)
                     -> actix_web::Result<web::Json<CustomAssetPolicy>>
   where LA: LedgerAccess
 {
   let reader = data.read().unwrap();
-  if let Some(policy) = reader.get_asset_policy(&*info) {
-    Ok(web::Json(policy))
+  if let Ok(asset_policy_key) = AssetPolicyKey::new_from_base64(&*info) {
+    if let Some(policy) = reader.get_asset_policy(&asset_policy_key) {
+      Ok(web::Json(policy))
+    } else {
+      Err(actix_web::error::ErrorNotFound("Specified asset policy does not currently exist."))
+    }
   } else {
-    Err(actix_web::error::ErrorNotFound("Specified asset policy does not currently exist."))
+    Err(actix_web::error::ErrorNotFound("Invalid asset policy encoding."))
   }
 }
 
 fn query_contract<LA>(data: web::Data<Arc<RwLock<LA>>>,
-                      info: web::Path<SmartContractKey>)
+                      info: web::Path<String>)
                       -> actix_web::Result<web::Json<SmartContract>>
   where LA: LedgerAccess
 {
   let reader = data.read().unwrap();
-  if let Some(contract) = reader.get_smart_contract(&*info) {
-    Ok(web::Json(contract))
+  if let Ok(smart_contract_key) = SmartContractKey::new_from_base64(&*info) {
+    if let Some(contract) = reader.get_smart_contract(&smart_contract_key) {
+      Ok(web::Json(contract))
+    } else {
+      Err(actix_web::error::ErrorNotFound("Specified smart contract does not currently exist."))
+    }
   } else {
-    Err(actix_web::error::ErrorNotFound("Specified smart contract definition does not currently exist."))
+    Err(actix_web::error::ErrorNotFound("Invalid smart contract encoding."))
   }
 }
 
@@ -122,7 +145,54 @@ impl RestfulApiService {
 
 #[cfg(test)]
 mod tests {
-  // TODO(Jonathan) This will not compile.
-  // #[test]
-  // fn query_get_blind_asset_record(_query: &str) {}
+  use super::*;
+  use actix_web::dev::Service;
+  use actix_web::{test, web, App, HttpRequest};
+  use core::data_model::{Operation, Transaction};
+  use core::store::helpers::*;
+  use core::store::{ArchiveUpdate, LedgerState, LedgerUpdate};
+  use rand::SeedableRng;
+  use rand_chacha::ChaChaRng;
+
+  #[test]
+  fn test_query_utxo() {}
+
+  #[test]
+  fn test_query_txn() {}
+
+  #[test]
+  fn test_query_policy() {}
+
+  #[test]
+  fn test_query_proof() {}
+
+  #[test]
+  fn test_query_contract() {}
+
+  #[test]
+  fn test_query_asset() {
+    let mut prng = ChaChaRng::from_seed([0u8; 32]);
+    let mut state = LedgerState::test_ledger();
+    let mut tx = Transaction::default();
+
+    let token_code1 = AssetTokenCode { val: [1; 16] };
+    let (public_key, secret_key) = build_keys(&mut prng);
+
+    let asset_body = asset_creation_body(&token_code1, &public_key, true, &None, &None);
+    let asset_create = asset_creation_operation(&asset_body, &public_key, &secret_key);
+    tx.operations.push(Operation::AssetCreation(asset_create));
+
+    state.apply_transaction(&mut tx);
+    state.append_transaction(tx);
+
+    let mut app = test::init_service(App::new().data(Arc::new(RwLock::new(state)))
+                                               .route("/asset_token/{token}",
+                                                      web::get().to(query_asset::<LedgerState>)));
+
+    let req = test::TestRequest::get().uri(&format!("/asset_token/{}", token_code1.to_base64()))
+                                      .to_request();
+    let resp = test::block_on(app.call(req)).unwrap();
+
+    assert!(resp.status().is_success());
+  }
 }
