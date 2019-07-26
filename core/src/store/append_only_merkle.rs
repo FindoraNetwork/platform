@@ -499,7 +499,7 @@ fn next_leaves(blocks: u64, last_full: bool) -> u64 {
 /// Defines an append-ony Merkle tree that eventually will support
 /// a sparse in-memory representation.  We will need to use Box
 /// for the blocks at that point.
-#[derive(Debug, Default, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct AppendOnlyMerkle {
   entry_count: u64, // total entries in the tree
   entries_on_disk: u64,
@@ -1524,13 +1524,11 @@ impl AppendOnlyMerkle {
     // Just to simplify the code, we define nodes that have no
     // valid children as containing HashValue::new(), the "empty"
     // hash.  The hash_partial function handles this case.
-    for (ref mut loc, (ref hash_1st, ref hash_2nd)) in
-      table.iter_mut().zip(block.hashes
-                                .iter()
-                                .step_by(2)
-                                .zip(block.hashes.iter().skip(1).step_by(2)))
+    for (loc, hash_1st, hash_2nd) in izip!(table.iter_mut(),
+                                           block.hashes.iter().step_by(2),
+                                           block.hashes.iter().skip(1).step_by(2))
     {
-      *loc = &mut hash_partial(&hash_1st, &hash_2nd);
+      *loc = hash_partial(hash_1st, hash_2nd);
     }
 
     if partner < block.valid_leaves() as usize {
