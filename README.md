@@ -1,7 +1,9 @@
-# EIAN Platform
-Top level targets: executable and plug-in components of the EIAN platform
-* Tendermint ABCI executable that adapts the layer for performing validation and maintaining a ledger
-* plug-in for Stellar-based scp_server that adapts the same layer
+# Findora Platform
+Top level targets: executable and plug-in components of the Findora platform
+* Application library for performing validation and maintaining a ledger
+* Binding executables/shared libraries for compatible consensus layers (e.x. Tendermint ABCI binding execuatable)
+* Command line executable for generating transactions, managing local cryptographic keys, etc.
+* WASM interface (exposes the same functionality as CLI, for single page browser apps).
 * any future executable and distributable components
 
 ```
