@@ -23,9 +23,9 @@ use tempdir::TempDir;
 use zei::xfr::lib::verify_xfr_note;
 
 pub mod append_only_merkle;
+pub mod bitmap;
 pub mod errors;
 pub mod logged_merkle;
-pub mod bitmap;
 
 macro_rules! log {
   ($c:tt, $($x:tt)+) => {}; // ($c:tt, $($x:tt)+) => { println!($($x)+); }

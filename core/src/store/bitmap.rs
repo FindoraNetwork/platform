@@ -14,6 +14,7 @@
 //! minor check of correctness.
 //!
 
+use super::append_only_merkle::timestamp;
 use sodiumoxide::crypto::hash::sha256;
 use std::fs::File;
 use std::io::Error;
@@ -27,7 +28,6 @@ use std::io::Write;
 use std::mem;
 use std::slice::from_raw_parts;
 use std::slice::from_raw_parts_mut;
-use super::append_only_merkle::timestamp;
 
 // Returns Err(Error::new...).
 macro_rules! se {
@@ -46,8 +46,7 @@ macro_rules! log {
 //
 
 macro_rules! verbose_log {
-  ($($x:tt)+) => { }
-  // ($($x:tt)+) => { print!("{}    ", timestamp()); println!($($x)+); }
+  ($($x:tt)+) => {}; // ($($x:tt)+) => { print!("{}    ", timestamp()); println!($($x)+); }
 }
 
 const CHECK_SIZE: usize = 16;
@@ -55,23 +54,21 @@ const CHECK_SIZE: usize = 16;
 #[repr(C)]
 #[derive(PartialEq)]
 struct CheckBlock {
-  bytes:  [u8; CHECK_SIZE],
+  bytes: [u8; CHECK_SIZE],
 }
 
 // A structure for a checksum on a block.
 impl CheckBlock {
   fn new() -> CheckBlock {
-    CheckBlock {
-      bytes:  [0_u8; CHECK_SIZE],
-    }
+    CheckBlock { bytes: [0_u8; CHECK_SIZE] }
   }
 }
 
-const HEADER_MAGIC:  u32    = 0x0204_0600;
-const BIT_INVALID:   u16    =  0;  // This value is used for testing.
-const BIT_ARRAY:     u16    =  1;
-const BIT_DESC:      u16    =  2;
-const HEADER_SIZE:   usize  = 40;
+const HEADER_MAGIC: u32 = 0x0204_0600;
+const BIT_INVALID: u16 = 0; // This value is used for testing.
+const BIT_ARRAY: u16 = 1;
+const BIT_DESC: u16 = 2;
+const HEADER_SIZE: usize = 40;
 
 // Define the layout for a block header.
 //
@@ -84,13 +81,13 @@ const HEADER_SIZE:   usize  = 40;
 
 #[repr(C)]
 struct BlockHeader {
-  checksum:  CheckBlock, // must be first
-  magic:     u32,        // must be second
-  count:     u32,
-  id:        u64,
-  contents:  u16,
-  pad_1:     u16,
-  pad_2:     u32,
+  checksum: CheckBlock, // must be first
+  magic: u32,           // must be second
+  count: u32,
+  id: u64,
+  contents: u16,
+  pad_1: u16,
+  pad_2: u32,
 }
 
 impl BlockHeader {
@@ -99,16 +96,13 @@ impl BlockHeader {
       return se!("That content type ({}) is invalid.", block_contents);
     }
 
-    let result =
-      BlockHeader {
-        checksum:  CheckBlock::new(),
-        magic:     HEADER_MAGIC,
-        count:     0,
-        id:        block_id,
-        contents:  block_contents,
-        pad_1:     0,
-        pad_2:     0,
-      };
+    let result = BlockHeader { checksum: CheckBlock::new(),
+                               magic: HEADER_MAGIC,
+                               count: 0,
+                               id: block_id,
+                               contents: block_contents,
+                               pad_1: 0,
+                               pad_2: 0 };
 
     Ok(result)
   }
@@ -119,7 +113,10 @@ impl BlockHeader {
     }
 
     if self.count > BLOCK_BITS as u32 {
-      return se!("Block {} has a bad count:  {} vs {}", id, self.count, BLOCK_BITS);
+      return se!("Block {} has a bad count:  {} vs {}",
+                 id,
+                 self.count,
+                 BLOCK_BITS);
     }
 
     if self.id != id {
@@ -142,26 +139,23 @@ impl BlockHeader {
   }
 }
 
-const BLOCK_SIZE:  usize  = 32 * 1024;
-const BITS_SIZE:   usize  = BLOCK_SIZE - HEADER_SIZE;
-const BLOCK_BITS:  usize  = BITS_SIZE * 8;
+const BLOCK_SIZE: usize = 32 * 1024;
+const BITS_SIZE: usize = BLOCK_SIZE - HEADER_SIZE;
+const BLOCK_BITS: usize = BITS_SIZE * 8;
 
 // Define the layout of a block of a bitmap.  The on-disk
 // and in-memory layouts are the same.
 #[repr(C)]
 struct BitBlock {
-  header:  BlockHeader,
-  bits:    [u8; BITS_SIZE],
+  header: BlockHeader,
+  bits: [u8; BITS_SIZE],
 }
 
 impl BitBlock {
   // Create a new block header structure.
   fn new(block_contents: u16, block_id: u64) -> Result<BitBlock> {
-    let result =
-      BitBlock {
-        header:  BlockHeader::new(block_contents, block_id)?,
-        bits:    [0_u8; BITS_SIZE],
-      };
+    let result = BitBlock { header: BlockHeader::new(block_contents, block_id)?,
+                            bits: [0_u8; BITS_SIZE] };
 
     Ok(result)
   }
@@ -178,13 +172,13 @@ impl BitBlock {
   // Set the block check bits with the current checksum for the block.
   fn set_checksum(&mut self) {
     self.header.checksum.bytes = self.compute_checksum();
-  }    
+  }
 
   // Create a slice for writing a block to disk.
   fn as_ref(&self) -> &[u8] {
     unsafe {
       from_raw_parts((self as *const BitBlock) as *const u8,
-                mem::size_of::<BitBlock>())
+                     mem::size_of::<BitBlock>())
     }
   }
 
@@ -192,7 +186,7 @@ impl BitBlock {
   fn as_mut(&mut self) -> &mut [u8] {
     unsafe {
       from_raw_parts_mut((self as *mut BitBlock) as *mut u8,
-                mem::size_of::<BitBlock>())
+                         mem::size_of::<BitBlock>())
     }
   }
 
@@ -200,9 +194,8 @@ impl BitBlock {
   // that is checksummed.
   fn as_checksummed_region(&self) -> &[u8] {
     unsafe {
-        from_raw_parts(
-            (&self.header.magic as *const u32) as *const u8,
-            mem::size_of::<BitBlock>() - mem::size_of::<CheckBlock>())
+      from_raw_parts((&self.header.magic as *const u32) as *const u8,
+                     mem::size_of::<BitBlock>() - mem::size_of::<CheckBlock>())
     }
   }
 
@@ -222,10 +215,10 @@ impl BitBlock {
 
 /// Define the structure for controlling a persistent bitmap.
 pub struct BitMap {
-  file:    File,
-  size:    usize,
-  blocks:  Vec<BitBlock>,
-  dirty:   Vec<bool>,
+  file: File,
+  size: usize,
+  blocks: Vec<BitBlock>,
+  dirty: Vec<bool>,
 }
 
 impl Drop for BitMap {
@@ -274,13 +267,10 @@ impl BitMap {
       return se!("The file contains data!");
     }
 
-    let result =
-      BitMap {
-        file:    data,
-        size:    0,
-        blocks:  Vec::new(),
-        dirty:   Vec::new(),
-      };
+    let result = BitMap { file: data,
+                          size: 0,
+                          blocks: Vec::new(),
+                          dirty: Vec::new() };
 
     Ok(result)
   }
@@ -328,13 +318,10 @@ impl BitMap {
   pub fn open(mut data: File) -> Result<BitMap> {
     let (count, block_vector, state_vector) = BitMap::read_file(&mut data)?;
 
-    let result =
-      BitMap {
-        file:    data,
-        size:    count,
-        blocks:  block_vector,
-        dirty:   state_vector,
-      };
+    let result = BitMap { file: data,
+                          size: count,
+                          blocks: block_vector,
+                          dirty: state_vector };
 
     Ok(result)
   }
@@ -343,8 +330,8 @@ impl BitMap {
   // validity as we go.
   fn read_file(file: &mut File) -> Result<(usize, Vec<BitBlock>, Vec<bool>)> {
     let mut blocks = Vec::new();
-    let mut dirty  = Vec::new();
-    let mut count  = 0;
+    let mut dirty = Vec::new();
+    let mut count = 0;
 
     // Compute the number of blocks in the file.
     let file_size = file.seek(End(0))?;
@@ -358,7 +345,7 @@ impl BitMap {
 
     // Reserve space in our vectors.
     blocks.reserve(total_blocks as usize);
-    dirty .reserve(total_blocks as usize);
+    dirty.reserve(total_blocks as usize);
 
     // Read each block.
     for index in 0..total_blocks {
@@ -393,13 +380,16 @@ impl BitMap {
       return se!("That index is out of range ({} vs {}).", bit, self.size);
     }
 
-    let block   = bit / BLOCK_BITS;
-    let bit_id  = bit % BLOCK_BITS;
-    let index   = bit_id / 8;
-    let mask    = 1 << (bit_id % 8);
+    let block = bit / BLOCK_BITS;
+    let bit_id = bit % BLOCK_BITS;
+    let index = bit_id / 8;
+    let mask = 1 << (bit_id % 8);
 
     verbose_log!("query({}) -> block {}, index {}, mask {}",
-      bit, block, index, mask);
+                 bit,
+                 block,
+                 index,
+                 mask);
     let value = self.blocks[block].bits[index] & mask;
     Ok(value != 0)
   }
@@ -416,7 +406,9 @@ impl BitMap {
   /// Clear the given bit.
   pub fn clear(&mut self, bit: usize) -> Result<()> {
     if bit >= self.size {
-      return se!("That index is too large to clear ({} vs {}).", bit, self.size);
+      return se!("That index is too large to clear ({} vs {}).",
+                 bit,
+                 self.size);
     }
 
     self.mutate(bit, 0, false)
@@ -428,10 +420,10 @@ impl BitMap {
       return se!("That index ({}) is out of range.", bit);
     }
 
-    let block   = bit / BLOCK_BITS;
-    let bit_id  = bit % BLOCK_BITS;
-    let index   = bit_id / 8;
-    let mask    = 1 << (bit_id % 8);
+    let block = bit / BLOCK_BITS;
+    let bit_id = bit % BLOCK_BITS;
+    let index = bit_id / 8;
+    let mask = 1 << (bit_id % 8);
 
     if block >= self.blocks.len() {
       self.blocks.push(BitBlock::new(BIT_ARRAY, block as u64)?);
@@ -441,12 +433,17 @@ impl BitMap {
     }
 
     verbose_log!("mutate({}, {}) -> block {}, index {}, mask {}, BLOCK_BITS {}",
-      bit, value, block, index, mask, BLOCK_BITS);
+                 bit,
+                 value,
+                 block,
+                 index,
+                 mask,
+                 BLOCK_BITS);
 
     if value == 0 {
       self.blocks[block].bits[index] &= !mask;
     } else {
-      self.blocks[block].bits[index] |=  mask;
+      self.blocks[block].bits[index] |= mask;
     }
 
     if bit >= self.size {
@@ -494,10 +491,10 @@ impl BitMap {
 
 #[cfg(test)]
 mod tests {
+  use super::*;
   use std::fs;
   use std::fs::OpenOptions;
   use std::mem;
-  use super::*;
 
   #[test]
   fn test_header() {
@@ -589,15 +586,13 @@ mod tests {
   #[test]
   fn test_basic_bitmap() {
     let path = "basic_bitmap";
-    let _    = fs::remove_file(&path);
+    let _ = fs::remove_file(&path);
 
-    let file =
-      OpenOptions::new()
-        .read      (true)
-        .write     (true)
-        .create_new(true)
-        .open      (&path)
-        .unwrap    ();
+    let file = OpenOptions::new().read(true)
+                                 .write(true)
+                                 .create_new(true)
+                                 .open(&path)
+                                 .unwrap();
 
     let mut bitmap = BitMap::create(file).unwrap();
 
@@ -605,12 +600,10 @@ mod tests {
       panic!("Write failed:  {}", e);
     }
 
-    let file =
-      OpenOptions::new()
-        .read      (true)
-        .write     (true)
-        .open      (&path)
-        .unwrap    ();
+    let file = OpenOptions::new().read(true)
+                                 .write(true)
+                                 .open(&path)
+                                 .unwrap();
 
     let mut bitmap = BitMap::open(file).unwrap();
 
@@ -645,12 +638,10 @@ mod tests {
       panic!("Write failed:  {}", e);
     }
 
-    let file =
-      OpenOptions::new()
-        .read      (true)
-        .write     (true)
-        .open      (&path)
-        .unwrap    ();
+    let file = OpenOptions::new().read(true)
+                                 .write(true)
+                                 .open(&path)
+                                 .unwrap();
 
     let bitmap = BitMap::open(file).unwrap();
 
