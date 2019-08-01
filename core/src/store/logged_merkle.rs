@@ -461,9 +461,7 @@ impl LoggedMerkle {
     let mut current = base;
 
     debug!(find_relevant,
-         "find_relevant:  state {}, top {}",
-         state,
-         top);
+           "find_relevant:  state {}, top {}", state, top);
 
     // Do a binary search to find the first relevant buffer, if
     // any.  In theory, we could use a more sophisticated
@@ -474,10 +472,7 @@ impl LoggedMerkle {
       buffer.validate()?;
 
       debug!(find_relevant,
-           "current: {}, id: {}, state {}",
-           current,
-           buffer.id,
-           state);
+             "current: {}, id: {}, state {}", current, buffer.id, state);
 
       if buffer.id > state {
         // The buffer is in the future!  Move back, if possible.
@@ -505,9 +500,7 @@ impl LoggedMerkle {
         debug!(find_relevant, "move forward {} to {}", gap / 2, current);
       } else {
         debug!(find_relevant,
-             "found id {}, valid {}",
-             buffer.id,
-             buffer.valid);
+               "found id {}, valid {}", buffer.id, buffer.valid);
         break;
       }
 
