@@ -4,10 +4,11 @@
 //! bitmap is maintained in a single file.  The caller is
 //! responsible for path management and file creation.
 //!
-//! The bit map is maintained in memory and on disk as a
+//! The bitmap is maintained in memory and on disk as a
 //! sequence of blocks.  Each block is self-identifying
 //! and checksummed to help handle problems with storage
-//! systems.
+//! systems.  See the BitBlock and BlockHeader structures
+//! for details.
 //!
 //! This bitmap is intended for the ledger, so it allows
 //! the caller to append set bits, but not zero bits, as a
@@ -72,6 +73,9 @@ const HEADER_SIZE: usize = 40;
 
 // Define the layout for a block header.
 //
+// This structure occupies the first bytes of each disk
+// block.  It also is maintained in memory.
+//
 // checksum  a checksum over the rest of the block
 // magic     a magic number
 // count     the count of valid bits in this block
@@ -91,6 +95,7 @@ struct BlockHeader {
 }
 
 impl BlockHeader {
+  // Create a new block header.
   fn new(block_contents: u16, block_id: u64) -> Result<BlockHeader> {
     if block_contents != BIT_ARRAY && block_contents != BIT_DESC {
       return se!("That content type ({}) is invalid.", block_contents);
@@ -107,9 +112,11 @@ impl BlockHeader {
     Ok(result)
   }
 
+  // Validate the contents of a block header, except for
+  // the checksum, which might not be valid yet.
   fn validate(&self, contents: u16, id: u64) -> Result<()> {
     if self.magic != HEADER_MAGIC {
-      return se!("Block {} has a bad header mark:  {:x}", id, self.magic);
+      return se!("Block {} has a bad magic number:  {:x}", id, self.magic);
     }
 
     if self.count > BLOCK_BITS as u32 {
@@ -199,7 +206,9 @@ impl BitBlock {
     }
   }
 
-  // Validate the contents of a block from the disk.
+  // Validate the contents of a block from the disk.  Here
+  // we validate the checksum, since it should be set when
+  // a block is sent to disk.
   fn validate(&self, contents: u16, id: u64) -> Result<()> {
     self.header.validate(contents, id)?;
 
@@ -275,7 +284,8 @@ impl BitMap {
     Ok(result)
   }
 
-  /// Open an existing bitmap.
+  /// Open an existing bitmap.  The caller is responsible
+  /// for opening the file.
   ///
   /// # Example
   ///````
@@ -395,7 +405,7 @@ impl BitMap {
     Ok(value != 0)
   }
 
-  /// Append a bit, and return the index on success.
+  /// Append a set bit, and return the index on success.
   pub fn append(&mut self) -> Result<u64> {
     let bit = self.size;
 
@@ -432,11 +442,14 @@ impl BitMap {
       return se!("That index ({}) is out of range.", bit);
     }
 
+    // Compute the various indices.
     let block = bit / BLOCK_BITS;
     let bit_id = bit % BLOCK_BITS;
     let index = bit_id / 8;
     let mask = 1 << (bit_id % 8);
 
+    // We might need to create a new block.  If so,
+    // push the new block and the dirty flag for it.
     if block >= self.blocks.len() {
       self.blocks.push(BitBlock::new(BIT_ARRAY, block as u64)?);
       self.dirty.push(true);
@@ -458,6 +471,10 @@ impl BitMap {
       self.blocks[block].bits[index] |= mask;
     }
 
+    // If we are extending the bit map, update all
+    // the various counters.  Also, write the block
+    // block if it is now full.  This heuristics might
+    // help prevent long pauses for write() operations.
     if bit >= self.size {
       self.size = bit + 1;
 
@@ -524,7 +541,7 @@ mod tests {
     header.magic ^= 1;
 
     if let Ok(_) = header.validate(BIT_ARRAY, id) {
-      panic!("Validation failed to detect a bad mark.");
+      panic!("Validation failed to detect a bad magic number.");
     }
 
     header.magic ^= 1;
@@ -592,6 +609,12 @@ mod tests {
 
     if let Err(_) = block.validate(BIT_DESC, 32) {
       panic!("Block validation failed.");
+    }
+
+    block.header.checksum.bytes[0] ^= 1;
+
+    if let Ok(_) = block.validate(BIT_DESC, 32) {
+      panic!("Block validation didn't detect a bad checksum.");
     }
   }
 
