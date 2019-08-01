@@ -1,4 +1,4 @@
-//! # The Append-Only Merkle Tree Library
+//! # An Append-Only Merkle Tree Implementation
 //!
 //!  This module implements an append-only binary Merkle tree using
 //!  SHA256 as the hash function.  The tree currently is kept in memory,
@@ -73,7 +73,7 @@ macro_rules! debug {
 
 // Writes a log entry when enabled.
 macro_rules! log {
-  ($($x:tt)+) => { print!("{}    ", timestamp()); println!($($x)+); }
+  ($($x:tt)+) => { println!("{}    {}", timestamp(), format!($($x)+)); }
 }
 
 pub fn timestamp() -> String {

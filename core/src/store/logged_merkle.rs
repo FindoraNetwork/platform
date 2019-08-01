@@ -1,4 +1,4 @@
-//! # Logged Merkle Tree
+//! # A Logged Merkle Tree Module
 //!
 //! This module adds logging and snapshotting to the AppendOnlyMerkle
 //! data structure.  The caller creates the tree and generates File
@@ -25,6 +25,7 @@
 //!
 use super::append_only_merkle::{AppendOnlyMerkle, HashValue, Proof};
 
+use crate::store::append_only_merkle::timestamp;
 use serde::Deserialize;
 use serde::Deserializer;
 use serde::Serialize;
@@ -62,7 +63,7 @@ macro_rules! debug {
 
 // Writes a log entry when enabled.
 macro_rules! log {
-  ($c:tt, $($x:tt)+) => { println!($($x)+); }
+  ($c:tt, $($x:tt)+) => { println!("{}    {}", timestamp(), format!($($x)+)); }
 }
 
 const BUFFER_SIZE: usize = 32 * 1024;

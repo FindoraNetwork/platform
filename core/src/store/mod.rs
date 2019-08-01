@@ -27,8 +27,17 @@ pub mod bitmap;
 pub mod errors;
 pub mod logged_merkle;
 
+// use append_only_merkle::timestamp;
+
 macro_rules! log {
-  ($c:tt, $($x:tt)+) => {}; // ($c:tt, $($x:tt)+) => { println!($($x)+); }
+  ($($x:tt)+) => {
+    use crate::store::append_only_merkle::timestamp;
+    println!("{}    {}", timestamp(), format!($($x)+));
+  }
+}
+
+macro_rules! debug {
+  ($c:tt, $($x:tt)+) => {}; // ($c:tt, $($x:tt)+) => { println!("{}    {}", timestamp(), format!($($x)+)); }
 }
 
 pub struct SnapshotId {
@@ -129,6 +138,8 @@ impl LedgerState {
     } else {
       AppendOnlyMerkle::open(path)
     };
+
+    log!("Using path {} for the Merkle tree.", path);
 
     let tree = match result {
       Err(x) => {
@@ -255,23 +266,21 @@ impl LedgerState {
   }
 
   fn apply_asset_issuance(&mut self, issue: &AssetIssuance) {
-    log!(issue, "outputs {:?}", issue.body.outputs);
-    log!(issue, "records {:?}", issue.body.records);
+    debug!(issue, "outputs {:?}", issue.body.outputs);
+    debug!(issue, "records {:?}", issue.body.records);
     for out in issue.body
                     .outputs
                     .iter()
                     .zip(issue.body.records.iter().map(|ref o| (*o).clone()))
     {
-      log!(ledger, "add txo {:?}", out.1);
+      debug!(ledger, "add txo {:?}", out.1);
       self.add_txo(out);
     }
 
     self.issuance_num
         .insert(issue.body.code, issue.body.seq_num);
-    log!(ledger,
-         "insert asset issue code {:?} -> seq {:?}",
-         issue.body.code,
-         issue.body.seq_num);
+    debug!(ledger,
+           "insert asset issue code {:?} -> seq {:?}", issue.body.code, issue.body.seq_num);
   }
 
   fn apply_asset_creation(&mut self, create: &AssetCreation) {
@@ -708,11 +717,11 @@ impl LedgerUpdate for LedgerState {
   fn apply_transaction(&mut self, txn: &Transaction) -> TxoSID {
     let sid = self.txn_base_sid;
     self.txn_base_sid.index = self.max_applied_sid.index + 1;
-    log!(ledger, "apply {:?}", sid);
+    debug!(ledger, "apply {:?}", sid);
 
     // Apply the operations
     for op in &txn.operations {
-      log!(ledger, "Applying op:  {:?}", op);
+      debug!(ledger, "Applying op:  {:?}", op);
       self.apply_operation(op);
     }
     sid

@@ -36,7 +36,7 @@ macro_rules! se {
 
 // Write a log entry to stdout.
 macro_rules! log {
-  ($($x:tt)+) => { print!("{}    ", timestamp()); println!($($x)+); }
+  ($($x:tt)+) => { println!("{}    {}", timestamp(), format!($($x)+)); }
 }
 
 // Write a log entry to stdout.
@@ -395,6 +395,17 @@ impl BitMap {
     Ok(value != 0)
   }
 
+  /// Append a bit, and return the index on success.
+  pub fn append(&mut self) -> Result<u64> {
+    let bit = self.size;
+
+    if let Err(e) = self.mutate(bit, 1, true) {
+      return Err(e);
+    }
+
+    Ok(bit as u64)
+  }
+
   /// Set the given bit.
   pub fn set(&mut self, bit: usize) -> Result<()> {
     if bit > self.size {
@@ -586,6 +597,7 @@ mod tests {
 
   #[test]
   fn test_basic_bitmap() {
+    log!("Run the basic bitmap test.");
     let path = "basic_bitmap";
     let _ = fs::remove_file(&path);
 
@@ -648,13 +660,19 @@ mod tests {
                                  .open(&path)
                                  .unwrap();
 
-    let bitmap = BitMap::open(file).unwrap();
+    let mut bitmap = BitMap::open(file).unwrap();
     assert!(bits_initialized == bitmap.size());
     assert!(bits_initialized % BLOCK_BITS != 0);
 
     for i in 0..bits_initialized {
       assert!(bitmap.query(i).unwrap() == !(i & 1 == 0));
     }
+
+    let bit = bitmap.append().unwrap();
+    assert!(bit == bits_initialized as u64);
+
+    let bit = bitmap.append().unwrap();
+    assert!(bit == bits_initialized as u64 + 1);
 
     let _ = fs::remove_file(&path);
   }
