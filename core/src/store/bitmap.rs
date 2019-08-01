@@ -314,6 +314,7 @@ impl BitMap {
   /// if let Err(e) = bitmap.write() {
   ///   panic!("Write failed:  {}", e);
   /// }
+  /// # let _ = std::fs::remove_file(&path);
   ///````
   pub fn open(mut data: File) -> Result<BitMap> {
     let (count, block_vector, state_vector) = BitMap::read_file(&mut data)?;
@@ -600,6 +601,10 @@ mod tests {
       panic!("Write failed:  {}", e);
     }
 
+    if let Ok(_) = bitmap.set(1) {
+      panic!("set worked with an invalid index.");
+    }
+
     let file = OpenOptions::new().read(true)
                                  .write(true)
                                  .open(&path)
@@ -644,6 +649,8 @@ mod tests {
                                  .unwrap();
 
     let bitmap = BitMap::open(file).unwrap();
+    assert!(bits_initialized == bitmap.size());
+    assert!(bits_initialized % BLOCK_BITS != 0);
 
     for i in 0..bits_initialized {
       assert!(bitmap.query(i).unwrap() == !(i & 1 == 0));
