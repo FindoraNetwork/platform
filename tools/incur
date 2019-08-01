@@ -1,0 +1,35 @@
+#! /bin/sh
+
+if [ "$1" == "" -o "$1" == "help" ]
+then
+  echo "Usage:  incur <cargo command> [ cargo options...]"
+  echo " "
+  echo "Example:"
+  echo " "
+  echo "    incur build"
+  echo " "
+  echo "This command should build all cargo setups in the current git repository."
+  echo "It may be invoked in any directory in the repository."
+  exit 1
+fi
+
+while [ ! -d .git ]
+do
+   cd ..
+
+   if [ "`pwd`" == "/" ]
+   then
+       echo "I didn't find .git."
+       exit 1
+   fi
+done
+
+. ~/bin/get_src
+
+echo "Repository "`pwd`":"
+
+for i in $directories
+do
+    echo " ===== "$i":"
+    (cd $i; cargo $*) || exit 1
+done

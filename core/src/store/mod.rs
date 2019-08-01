@@ -23,6 +23,7 @@ use tempdir::TempDir;
 use zei::xfr::lib::verify_xfr_note;
 
 pub mod append_only_merkle;
+pub mod bitmap;
 pub mod errors;
 pub mod logged_merkle;
 
@@ -899,7 +900,7 @@ mod tests {
     let token_code1 = AssetTokenCode { val: [1; 16] };
     let (public_key, secret_key) = build_keys(&mut prng);
 
-    let asset_body = asset_creation_body(&token_code1, &public_key, true, &None, &None);
+    let asset_body = asset_creation_body(&token_code1, &public_key, true, None, None);
     let asset_create = asset_creation_operation(&asset_body, &public_key, &secret_key);
     tx.operations.push(Operation::AssetCreation(asset_create));
 
@@ -924,7 +925,7 @@ mod tests {
     let token_code1 = AssetTokenCode { val: [1; 16] };
     let mut prng = ChaChaRng::from_seed([0u8; 32]);
     let (public_key1, secret_key1) = build_keys(&mut prng);
-    let asset_body = asset_creation_body(&token_code1, &public_key1, true, &None, &None);
+    let asset_body = asset_creation_body(&token_code1, &public_key1, true, None, None);
     let mut asset_create = asset_creation_operation(&asset_body, &public_key1, &secret_key1);
 
     // Now re-sign the operation with the wrong key.
@@ -948,7 +949,7 @@ mod tests {
     let mut prng = ChaChaRng::from_seed([0u8; 32]);
     let (public_key1, secret_key1) = build_keys(&mut prng);
 
-    let asset_body = asset_creation_body(&token_code1, &public_key1, true, &None, &None);
+    let asset_body = asset_creation_body(&token_code1, &public_key1, true, None, None);
     let mut asset_create = asset_creation_operation(&asset_body, &public_key1, &secret_key1);
 
     // Re-sign the operation with the wrong key.
@@ -964,16 +965,20 @@ mod tests {
   #[test]
   fn asset_issued() {
     let tmp_dir = TempDir::new("test").unwrap();
-    let buf = tmp_dir.path().join("test_ledger");
-    let path = buf.to_str().unwrap();
+    let merkle_buf = tmp_dir.path().join("test_merkle");
+    let merkle_path = merkle_buf.to_str().unwrap();
+    let txn_buf = tmp_dir.path().join("test_txnlog");
+    let txn_path = txn_buf.to_str().unwrap();
+    let ledger_buf = tmp_dir.path().join("test_ledger");
+    let ledger_path = ledger_buf.to_str().unwrap();
 
-    let mut ledger = LedgerState::new(&path, true).unwrap();
+    let mut ledger = LedgerState::new(&merkle_path, &txn_path, &ledger_path, true).unwrap();
     let mut tx = Transaction::default();
     let token_code1 = AssetTokenCode { val: [1; 16] };
     let mut prng = ChaChaRng::from_seed([0u8; 32]);
     let (public_key, secret_key) = build_keys(&mut prng);
 
-    let asset_body = asset_creation_body(&token_code1, &public_key, true, &None, &None);
+    let asset_body = asset_creation_body(&token_code1, &public_key, true, None, None);
     let asset_create = asset_creation_operation(&asset_body, &public_key, &secret_key);
     tx.operations.push(Operation::AssetCreation(asset_create));
 
@@ -1013,7 +1018,7 @@ mod tests {
         panic!("get_proof failed for tx_id {}, merkle_id {}, state {}",
                transaction.tx_id.index,
                transaction.merkle_id,
-               ledger.merkle.state());
+               ledger.merkle.unwrap().state());
       }
     }
 

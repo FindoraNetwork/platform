@@ -1218,7 +1218,7 @@ impl AppendOnlyMerkle {
   ///
   pub fn append_hash(&mut self, hash_value: &HashValue) -> Result<u64, Error> {
     if self.entry_count == 0 {
-      if self.blocks[0].is_empty() {
+      if !self.blocks[0].is_empty() {
         return ser!("Level zero should be empty, but it has {} blocks",
                     self.blocks[0].len());
       }
