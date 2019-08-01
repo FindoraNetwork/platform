@@ -11,3 +11,5 @@ extern crate zei;
 
 pub mod data_model;
 pub mod store;
+
+pub use self::store::append_only_merkle::timestamp;

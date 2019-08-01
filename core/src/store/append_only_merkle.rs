@@ -1524,6 +1524,11 @@ impl AppendOnlyMerkle {
     // Just to simplify the code, we define nodes that have no
     // valid children as containing HashValue::new(), the "empty"
     // hash.  The hash_partial function handles this case.
+    // Hopefully, this loop is equivalent to:
+    //   for i in 0..LEAVES_IN_BLOCK / 2 {
+    //     table[i] = hash_partial(&block.hashes[i * 2], &block.hashes[i * 2 + 1]);
+    //   }
+    // which clippy can't handle properly.
     for (loc, hash_1st, hash_2nd) in izip!(table.iter_mut(),
                                            block.hashes.iter().step_by(2),
                                            block.hashes.iter().skip(1).step_by(2))

@@ -147,7 +147,7 @@ impl RestfulApiService {
 mod tests {
   use super::*;
   use actix_web::dev::Service;
-  use actix_web::{test, web, App, HttpRequest};
+  use actix_web::{test, web, App};
   use core::data_model::{Operation, Transaction};
   use core::store::helpers::*;
   use core::store::{ArchiveUpdate, LedgerState, LedgerUpdate};
@@ -178,7 +178,7 @@ mod tests {
     let token_code1 = AssetTokenCode { val: [1; 16] };
     let (public_key, secret_key) = build_keys(&mut prng);
 
-    let asset_body = asset_creation_body(&token_code1, &public_key, true, &None, &None);
+    let asset_body = asset_creation_body(&token_code1, &public_key, true, None, None);
     let asset_create = asset_creation_operation(&asset_body, &public_key, &secret_key);
     tx.operations.push(Operation::AssetCreation(asset_create));
 

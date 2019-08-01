@@ -17,10 +17,11 @@
 //! a complete, consistent state on disk.  Managing the resulting log
 //! files is the responsibility of the caller.
 //!
-//! A log file contains a sequence of log buffers.  Each log buffer
-//! is a fixed size given by the constant BUFFER_SIZE, and contains
-//! a header describing the contents of the buffer.  The log files
-//! are append-only.  See the LogBuffer struct for the full details.
+//! A log file itself consists of a sequence of log buffers.  Each log
+//! buffer is a fixed size given by the constant BUFFER_SIZE, and
+//! contains a header describing the contents of the buffer.  The log
+//! files are append-only.  See the LogBuffer struct for the full
+//! details.
 //!
 use super::append_only_merkle::{AppendOnlyMerkle, HashValue, Proof};
 
@@ -55,8 +56,13 @@ macro_rules! sde  {
 }
 
 // Writes a log entry when enabled.
-macro_rules! log {
+macro_rules! debug {
   ($c:ident, $($x:tt)+) => {}; // ($c:tt, $($x:tt)+) => { println!($($x)+); }
+}
+
+// Writes a log entry when enabled.
+macro_rules! log {
+  ($c:tt, $($x:tt)+) => { println!($($x)+); }
 }
 
 const BUFFER_SIZE: usize = 32 * 1024;
@@ -359,7 +365,10 @@ impl LoggedMerkle {
     let mut processed = 0;
 
     // Try to seek to a relevant part of the log file.
-    self.find_relevant(&mut file)?;
+    if let Err(e) = self.find_relevant(&mut file) {
+      log!(apply_log, "Seek operations failed:  {}", e);
+      log!(apply_log, "Reverting to sequential I/O");
+    }
 
     // Loop reading buffers.  Return on EOF.  This code will
     // return an error on a partial buffer read, as well.
@@ -451,10 +460,8 @@ impl LoggedMerkle {
     let mut top = buffer_count;
     let mut current = base;
 
-    log!(find_relevant,
-         "find_relevant:  state {}, top {}",
-         state,
-         top);
+    debug!(find_relevant,
+           "find_relevant:  state {}, top {}", state, top);
 
     // Do a binary search to find the first relevant buffer, if
     // any.  In theory, we could use a more sophisticated
@@ -464,48 +471,43 @@ impl LoggedMerkle {
       file.read_exact(buffer.as_mut_bytes())?;
       buffer.validate()?;
 
-      log!(find_relevant,
-           "current: {}, id: {}, state {}",
-           current,
-           buffer.id,
-           state);
+      debug!(find_relevant,
+             "current: {}, id: {}, state {}", current, buffer.id, state);
 
       if buffer.id > state {
         // The buffer is in the future!  Move back, if possible.
         let gap = current - base;
 
         if gap <= 1 {
-          log!(find_relevant, "exit:  current {}, base {}", current, base);
+          debug!(find_relevant, "exit:  current {}, base {}", current, base);
           break;
         }
 
         top = current;
         current -= gap / 2;
-        log!(find_relevant, "move back {} to {}", gap / 2, current);
+        debug!(find_relevant, "move back {} to {}", gap / 2, current);
       } else if buffer.id + u64::from(buffer.valid) <= state {
         // The buffer is in the past.  Move forward!
         let gap = top - current;
 
         if gap <= 1 {
-          log!(find_relevant, "exit:  current {}, top {}", current, top);
+          debug!(find_relevant, "exit:  current {}, top {}", current, top);
           break;
         }
 
         base = current;
         current += gap / 2;
-        log!(find_relevant, "move forward {} to {}", gap / 2, current);
+        debug!(find_relevant, "move forward {} to {}", gap / 2, current);
       } else {
-        log!(find_relevant,
-             "found id {}, valid {}",
-             buffer.id,
-             buffer.valid);
+        debug!(find_relevant,
+               "found id {}, valid {}", buffer.id, buffer.valid);
         break;
       }
 
       file.seek(Start(current * BUFFER_SIZE as u64))?;
     }
 
-    log!(find_relevant, "find_relevant:  return {}", current);
+    debug!(find_relevant, "find_relevant:  return {}", current);
     file.seek(Start(current * BUFFER_SIZE as u64))?;
     Ok(())
   }
