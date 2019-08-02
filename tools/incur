@@ -20,6 +20,7 @@ do
    if [ "`pwd`" == "/" ]
    then
        echo "I didn't find .git."
+       echo "This directory doesn't seem to be part of a git repository."
        exit 1
    fi
 done
