@@ -251,7 +251,7 @@ impl BitMap {
   /// use std::fs::OpenOptions;
   /// use crate::core::store::bitmap::BitMap;
   ///
-  /// let path = "sample_name";
+  /// let path = "sample_create_name";
   ///
   /// # let _ = std::fs::remove_file(&path);
   /// let file =
@@ -298,7 +298,7 @@ impl BitMap {
   /// use std::fs::OpenOptions;
   /// use crate::core::store::bitmap::BitMap;
   ///
-  /// let path = "sample_name";
+  /// let path = "sample_open_name";
   ///
   /// # let _ = std::fs::remove_file(&path);
   /// # let file =
