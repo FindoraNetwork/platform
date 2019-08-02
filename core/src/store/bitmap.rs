@@ -15,6 +15,8 @@
 //! minor check of correctness.
 //!
 
+extern crate time;
+
 use super::append_only_merkle::timestamp;
 use sodiumoxide::crypto::hash::sha256;
 use std::fs::File;
@@ -227,13 +229,17 @@ pub struct BitMap {
   file: File,
   size: usize,
   blocks: Vec<BitBlock>,
-  dirty: Vec<bool>,
+  dirty: Vec<i64>,
 }
 
 impl Drop for BitMap {
   fn drop(&mut self) {
     let _ = self.write();
   }
+}
+
+fn time() -> i64 {
+  time::now().to_timespec().sec
 }
 
 impl BitMap {
@@ -339,7 +345,7 @@ impl BitMap {
 
   // Read the contents of a file into memory, checking the
   // validity as we go.
-  fn read_file(file: &mut File) -> Result<(usize, Vec<BitBlock>, Vec<bool>)> {
+  fn read_file(file: &mut File) -> Result<(usize, Vec<BitBlock>, Vec<i64>)> {
     let mut blocks = Vec::new();
     let mut dirty = Vec::new();
     let mut count = 0;
@@ -374,7 +380,7 @@ impl BitMap {
 
           count += block.header.count as usize;
           blocks.push(block);
-          dirty.push(false);
+          dirty.push(0 as i64);
         }
         Err(e) => {
           return Err(e);
@@ -452,9 +458,9 @@ impl BitMap {
     // push the new block and the dirty flag for it.
     if block >= self.blocks.len() {
       self.blocks.push(BitBlock::new(BIT_ARRAY, block as u64)?);
-      self.dirty.push(true);
+      self.dirty.push(time());
     } else {
-      self.dirty[block] = true;
+      self.dirty[block] = time();
     }
 
     verbose_log!("mutate({}, {}) -> block {}, index {}, mask {}, BLOCK_BITS {}",
@@ -498,12 +504,28 @@ impl BitMap {
   /// Write the bitmap to disk.
   pub fn write(&mut self) -> Result<()> {
     for i in 0..self.blocks.len() {
-      if self.dirty[i] {
+      if self.dirty[i] != 0 {
         self.write_block(i)?;
       }
     }
 
     self.file.sync_all()?;
+    Ok(())
+  }
+
+  /// Flush buffers that haven't been modified in "age" seconds
+  /// to the operating system.  The write() method must be invoked
+  /// if the caller wants a guarantee that the data has been moved
+  /// to persistent store.
+  pub fn flush_old(&mut self, age: i64) -> Result<()> {
+    let now = time();
+
+    for i in 0..self.blocks.len() {
+      if self.dirty[i] <= now - age {
+        self.write_block(i)?;
+      }
+    }
+
     Ok(())
   }
 
@@ -513,7 +535,7 @@ impl BitMap {
     self.file.seek(Start(offset))?;
     self.blocks[index].set_checksum();
     self.file.write_all(self.blocks[index].as_ref())?;
-    self.dirty[index] = false;
+    self.dirty[index] = 0;
     Ok(())
   }
 }
@@ -655,6 +677,13 @@ mod tests {
       if let Ok(_) = bitmap.query(i + 1) {
         panic!("Index {} should be out of range.", i + 1);
       }
+
+      // Try a flush now and then.
+      if i % (BLOCK_BITS / 2) == 0 {
+        if let Err(e) = bitmap.flush_old(0) {
+          panic!("flush_old failed:  {}", e);
+        }
+      }
     }
 
     for i in 0..bitmap.size() {
@@ -669,13 +698,17 @@ mod tests {
     }
 
     if let Err(_) = bitmap.write() {
-      panic!("Write failed.");
+      panic!("write failed.");
     }
 
     let bits_initialized = bitmap.size();
 
     if let Err(e) = bitmap.write() {
-      panic!("Write failed:  {}", e);
+      panic!("write failed:  {}", e);
+    }
+
+    if let Err(e) = bitmap.flush_old(0) {
+      panic!("flush_old failed:  {}", e);
     }
 
     let file = OpenOptions::new().read(true)
