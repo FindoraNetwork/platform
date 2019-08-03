@@ -46,8 +46,6 @@ macro_rules! log {
 //
 // This macro is used only for debugging simple problems
 // with the basic mapping logic.
-//
-
 macro_rules! verbose_log {
   ($($x:tt)+) => {}; // ($($x:tt)+) => { print!("{}    ", timestamp()); println!($($x)+); }
 }
@@ -445,7 +443,7 @@ impl BitMap {
   // Change the value of the given bit, as requested.
   fn mutate(&mut self, bit: usize, value: u8, extend: bool) -> Result<()> {
     if !extend && bit >= self.size {
-      return se!("That index ({}) is out of range.", bit);
+      return se!("That index ({}) is out of the range [0, {}).", bit, self.size);
     }
 
     // Compute the various indices.
