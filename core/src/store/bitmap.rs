@@ -1,18 +1,18 @@
 //! # A Simple BitMap Implementation
 //!
 //! This module implements a simple persistent bitmap.  The
-//! bitmap is maintained in a single file.  The caller is
-//! responsible for path management and file creation.
+//! bitmap currently is maintained in a single file.  The
+//! caller is responsible for file creation and open operations.
 //!
-//! The bitmap is maintained in memory and on disk as a
-//! sequence of blocks.  Each block is self-identifying
-//! and checksummed to help handle problems with storage
-//! systems.  See the BitBlock and BlockHeader structures
-//! for details.
+//! The bitmap is maintained in memory and on disk as a sequence
+//! of blocks.  Each block is self-identifying and checksummed
+//! to help handle problems with storage systems.  The BitBlock
+//! and BlockHeader structures implement the disk (and memory)
+//! structure of the bitmap.
 //!
-//! This bitmap is intended for the ledger, so it allows
-//! the caller to append set bits, but not zero bits, as a
-//! minor check of correctness.
+//! This bitmap is intended for the ledger, so it allows the
+//! caller to append set bits, but not zero bits, as a minor
+//! check of correctness.
 //!
 
 extern crate time;
@@ -42,11 +42,11 @@ macro_rules! log {
   ($($x:tt)+) => { println!("{}    {}", timestamp(), format!($($x)+)); }
 }
 
-// Write a log entry to stdout.
+// Write a debug entry to stdout.
 //
 // This macro is used only for debugging simple problems
 // with the basic mapping logic.
-macro_rules! verbose_log {
+macro_rules! debug {
   ($($x:tt)+) => {}; // ($($x:tt)+) => { print!("{}    ", timestamp()); println!($($x)+); }
 }
 
@@ -227,7 +227,7 @@ pub struct BitMap {
   file: File,
   size: usize,
   blocks: Vec<BitBlock>,
-  dirty: Vec<i64>,
+  dirty: Vec<i64>,        // the modification time for the block, or zero
 }
 
 impl Drop for BitMap {
@@ -400,11 +400,8 @@ impl BitMap {
     let index = bit_id / 8;
     let mask = 1 << (bit_id % 8);
 
-    verbose_log!("query({}) -> block {}, index {}, mask {}",
-                 bit,
-                 block,
-                 index,
-                 mask);
+    debug!("query({}) -> block {}, index {}, mask {}",
+           bit, block, index, mask);
     let value = self.blocks[block].bits[index] & mask;
     Ok(value != 0)
   }
@@ -443,7 +440,9 @@ impl BitMap {
   // Change the value of the given bit, as requested.
   fn mutate(&mut self, bit: usize, value: u8, extend: bool) -> Result<()> {
     if !extend && bit >= self.size {
-      return se!("That index ({}) is out of the range [0, {}).", bit, self.size);
+      return se!("That index ({}) is out of the range [0, {}).",
+                 bit,
+                 self.size);
     }
 
     // Compute the various indices.
@@ -461,13 +460,8 @@ impl BitMap {
       self.dirty[block] = time();
     }
 
-    verbose_log!("mutate({}, {}) -> block {}, index {}, mask {}, BLOCK_BITS {}",
-                 bit,
-                 value,
-                 block,
-                 index,
-                 mask,
-                 BLOCK_BITS);
+    debug!("mutate({}, {}) -> block {}, index {}, mask {}, BLOCK_BITS {}",
+           bit, value, block, index, mask, BLOCK_BITS);
 
     if value == 0 {
       self.blocks[block].bits[index] &= !mask;
