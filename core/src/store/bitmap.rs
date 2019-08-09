@@ -66,10 +66,13 @@ impl CheckBlock {
 }
 
 const HEADER_MAGIC: u32 = 0x0204_0600;
+const HEADER_SIZE: usize = 48;
+
+// Define the types of headers.
 const BIT_INVALID: u16 = 0; // This value is used for testing.
 const BIT_ARRAY: u16 = 1;
-const BIT_DESC: u16 = 2;
-const HEADER_SIZE: usize = 48;
+const BIT_DESC_SET: u16 = 2;
+const BIT_DESC_CLEAR: u16 = 3;
 
 // Define the layout for a block header.
 //
@@ -101,7 +104,10 @@ struct BlockHeader {
 impl BlockHeader {
   // Create a new block header.
   fn new(block_contents: u16, block_id: u64) -> Result<BlockHeader> {
-    if block_contents != BIT_ARRAY && block_contents != BIT_DESC {
+    if block_contents != BIT_ARRAY
+       && block_contents != BIT_DESC_SET
+       && block_contents != BIT_DESC_CLEAR
+    {
       return se!("That content type ({}) is invalid.", block_contents);
     }
 
@@ -149,11 +155,22 @@ impl BlockHeader {
 
     Ok(())
   }
+
+  // Create a slice for writing a block to disk.
+  fn as_ref(&self) -> &[u8] {
+    unsafe {
+      from_raw_parts((self as *const BlockHeader) as *const u8,
+                     mem::size_of::<BlockHeader>())
+    }
+  }
 }
 
 const BLOCK_SIZE: usize = 32 * 1024;
 const BITS_SIZE: usize = BLOCK_SIZE - HEADER_SIZE;
 const BLOCK_BITS: usize = BITS_SIZE * 8;
+
+const LOWER_LIMIT: u32 = BITS_SIZE as u32 / 8;
+const UPPER_LIMIT: u32 = (BLOCK_BITS - BITS_SIZE / 8) as u32;
 
 // Define the layout of a block of a bitmap.  The on-disk
 // and in-memory layouts are the same.
@@ -272,6 +289,25 @@ fn count_byte(mask: usize) -> u8 {
 
   for i in 0..8 {
     result += if mask & (1 << i) == 0 { 0 } else { 1 };
+  }
+
+  result
+}
+
+fn bit_set(bits: &[u8], bit_index: usize) -> bool {
+  let index = bit_index / 8;
+  let mask_shift = bit_index % 8;
+  let mask = 1 << mask_shift;
+
+  bits[index] & mask != 0
+}
+
+fn slice(mut value: usize) -> [u8; 8] {
+  let mut result = [0u8; 8];
+
+  for i in 0..8 {
+    result[i] = (value & 0xff) as u8;
+    value >>= 8;
   }
 
   result
@@ -573,6 +609,89 @@ impl BitMap {
     Ok(())
   }
 
+  /// Serialize the bit map to a compressed representation.
+  pub fn serialize(&self) -> Vec<u8> {
+    assert!(self.validate());
+    let mut bytes = 0;
+
+    for i in 0..self.blocks.len() {
+      bytes += self.serial_size(i);
+    }
+
+    let mut result = Vec::new();
+    result.reserve(bytes);
+
+    for i in 0..self.blocks.len() {
+      self.serialize_block(i, &mut result);
+    }
+
+    log!("serialize() -> {}, expected {}", result.len(), bytes);
+    assert!(result.len() == bytes);
+    result
+  }
+
+  fn serial_size(&self, index: usize) -> usize {
+    if self.set[index] > LOWER_LIMIT && self.set[index] < UPPER_LIMIT {
+      BLOCK_SIZE
+    } else if self.set[index] <= LOWER_LIMIT {
+      HEADER_SIZE + (self.set[index] as usize) * 8
+    } else {
+      HEADER_SIZE + (BLOCK_BITS - self.set[index] as usize) * 8
+    }
+  }
+
+  fn serialize_block(&self, index: usize, result: &mut Vec<u8>) {
+    if self.set[index] > LOWER_LIMIT && self.set[index] < UPPER_LIMIT {
+      self.append_block(index, result);
+    } else if self.set[index] <= LOWER_LIMIT {
+      self.append_set(index, result);
+    } else {
+      self.append_clear(index, result);
+    }
+  }
+
+  fn append_block(&self, index: usize, result: &mut Vec<u8>) {
+    result.extend_from_slice(self.blocks[index].as_ref());
+  }
+
+  fn append_set(&self, index: usize, result: &mut Vec<u8>) {
+    let mut header = BlockHeader::new(BIT_DESC_SET, index as u64).unwrap();
+
+    header.count = self.blocks[index].header.count;
+    result.extend_from_slice(header.as_ref());
+
+    let bits = &self.blocks[index].bits;
+
+    for i in 0..BLOCK_BITS {
+      if bit_set(bits, i) {
+        result.extend_from_slice(&slice(i));
+      }
+    }
+
+    log!("append_set: {} bits -> {} bytes",
+         self.set[index],
+         self.set[index] * 8 + HEADER_SIZE as u32);
+  }
+
+  fn append_clear(&self, index: usize, result: &mut Vec<u8>) {
+    let mut header = BlockHeader::new(BIT_DESC_CLEAR, index as u64).unwrap();
+
+    header.count = BLOCK_BITS as u32 - self.blocks[index].header.count;
+    result.extend_from_slice(header.as_ref());
+
+    let bits = &self.blocks[index].bits;
+
+    for i in 0..BLOCK_BITS {
+      if !bit_set(bits, i) {
+        result.extend_from_slice(&slice(i));
+      }
+    }
+
+    log!("append_clear: {} bits -> {} bytes",
+         self.set[index],
+         (BLOCK_BITS - self.set[index] as usize) * 8 + HEADER_SIZE as usize);
+  }
+
   /// Return the number of bits in the map.
   pub fn size(&self) -> usize {
     self.size
@@ -679,8 +798,8 @@ mod tests {
       panic!("Validation failed to detect a bad pad_2.");
     }
 
-    let header = BlockHeader::new(BIT_DESC, 0).unwrap();
-    assert!(header.contents == BIT_DESC);
+    let header = BlockHeader::new(BIT_DESC_SET, 0).unwrap();
+    assert!(header.contents == BIT_DESC_SET);
     assert!(header.bit_id == 0);
 
     assert!(header.count == 0);
@@ -700,19 +819,19 @@ mod tests {
     assert!(BLOCK_SIZE == BITS_SIZE + HEADER_SIZE);
     assert!(BLOCK_SIZE == BLOCK_BITS / 8 + HEADER_SIZE);
 
-    let mut block = BitBlock::new(BIT_DESC, 32).unwrap();
-    assert!(block.header.contents == BIT_DESC);
+    let mut block = BitBlock::new(BIT_DESC_CLEAR, 32).unwrap();
+    assert!(block.header.contents == BIT_DESC_CLEAR);
     assert!(block.header.bit_id == 32);
 
     block.set_checksum();
 
-    if let Err(_) = block.validate(BIT_DESC, 32) {
+    if let Err(_) = block.validate(BIT_DESC_CLEAR, 32) {
       panic!("Block validation failed.");
     }
 
     block.header.checksum.bytes[0] ^= 1;
 
-    if let Ok(_) = block.validate(BIT_DESC, 32) {
+    if let Ok(_) = block.validate(BIT_DESC_CLEAR, 32) {
       panic!("Block validation didn't detect a bad checksum.");
     }
   }
@@ -771,6 +890,8 @@ mod tests {
         }
       }
     }
+
+    let _ = bitmap.serialize();
 
     for i in 0..bitmap.size() {
       if i & 1 == 0 {
