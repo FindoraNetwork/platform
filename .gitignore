@@ -1,3 +1,4 @@
+/release
 /target
 **/*.rs.bk
 Cargo.lock
