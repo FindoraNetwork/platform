@@ -169,8 +169,11 @@ const BLOCK_SIZE: usize = 32 * 1024;
 const BITS_SIZE: usize = BLOCK_SIZE - HEADER_SIZE;
 const BLOCK_BITS: usize = BITS_SIZE * 8;
 
-const LOWER_LIMIT: u32 = BITS_SIZE as u32 / 8;
-const UPPER_LIMIT: u32 = (BLOCK_BITS - BITS_SIZE / 8) as u32;
+// Define the tradeoff points for switching between compression
+// modes.
+const INDEX_SIZE: usize = 3;
+const LOWER_LIMIT: u32 = BITS_SIZE as u32 / INDEX_SIZE as u32;
+const UPPER_LIMIT: u32 = (BLOCK_BITS - BITS_SIZE / INDEX_SIZE) as u32;
 
 // Define the layout of a block of a bitmap.  The on-disk
 // and in-memory layouts are the same.
@@ -302,10 +305,10 @@ fn bit_set(bits: &[u8], bit_index: usize) -> bool {
   bits[index] & mask != 0
 }
 
-fn slice(mut value: usize) -> [u8; 8] {
-  let mut result = [0u8; 8];
+fn slice(mut value: usize) -> [u8; INDEX_SIZE] {
+  let mut result = [0u8; INDEX_SIZE];
 
-  for i in 0..8 {
+  for i in 0..INDEX_SIZE {
     result[i] = (value & 0xff) as u8;
     value >>= 8;
   }
@@ -634,9 +637,9 @@ impl BitMap {
     if self.set[index] > LOWER_LIMIT && self.set[index] < UPPER_LIMIT {
       BLOCK_SIZE
     } else if self.set[index] <= LOWER_LIMIT {
-      HEADER_SIZE + (self.set[index] as usize) * 8
+      HEADER_SIZE + (self.set[index] as usize) * INDEX_SIZE
     } else {
-      HEADER_SIZE + (BLOCK_BITS - self.set[index] as usize) * 8
+      HEADER_SIZE + (BLOCK_BITS - self.set[index] as usize) * INDEX_SIZE
     }
   }
 
@@ -650,6 +653,7 @@ impl BitMap {
     }
   }
 
+  // Append an entire block to the serialized form.
   fn append_block(&self, index: usize, result: &mut Vec<u8>) {
     result.extend_from_slice(self.blocks[index].as_ref());
   }
@@ -670,7 +674,7 @@ impl BitMap {
 
     log!("append_set: {} bits -> {} bytes",
          self.set[index],
-         self.set[index] * 8 + HEADER_SIZE as u32);
+         self.set[index] * INDEX_SIZE as u32 + HEADER_SIZE as u32);
   }
 
   fn append_clear(&self, index: usize, result: &mut Vec<u8>) {
@@ -689,7 +693,7 @@ impl BitMap {
 
     log!("append_clear: {} bits -> {} bytes",
          self.set[index],
-         (BLOCK_BITS - self.set[index] as usize) * 8 + HEADER_SIZE as usize);
+         (BLOCK_BITS - self.set[index] as usize) * INDEX_SIZE + HEADER_SIZE as usize);
   }
 
   /// Return the number of bits in the map.
@@ -763,6 +767,7 @@ mod tests {
     }
 
     header.magic ^= 1;
+    assert!(header.validate(BIT_ARRAY, id).is_ok());
 
     header.count = (BLOCK_BITS + 1) as u32;
 
@@ -771,6 +776,7 @@ mod tests {
     }
 
     header.count = 0;
+    assert!(header.validate(BIT_ARRAY, id).is_ok());
     header.bit_id ^= 1;
 
     if let Ok(_) = header.validate(BIT_ARRAY, id) {
@@ -785,6 +791,7 @@ mod tests {
     }
 
     header.contents = BIT_ARRAY;
+    assert!(header.validate(BIT_ARRAY, id).is_ok());
     header.pad_1 = 1;
 
     if let Ok(_) = header.validate(BIT_ARRAY, id) {
@@ -792,11 +799,15 @@ mod tests {
     }
 
     header.pad_1 = 0;
+    assert!(header.validate(BIT_ARRAY, id).is_ok());
     header.pad_2 = 1;
 
     if let Ok(_) = header.validate(BIT_ARRAY, id) {
       panic!("Validation failed to detect a bad pad_2.");
     }
+
+    header.pad_2 = 0;
+    assert!(header.validate(BIT_ARRAY, id).is_ok());
 
     let header = BlockHeader::new(BIT_DESC_SET, 0).unwrap();
     assert!(header.contents == BIT_DESC_SET);
