@@ -124,7 +124,7 @@ impl BlockHeader {
   }
 
   // Validate the contents of a block header, except for
-  // the checksum, which might not be valid yet.
+  // the checksum, which might not be set yet.
   fn validate(&self, contents: u16, id: u64) -> Result<()> {
     if self.magic != HEADER_MAGIC {
       return se!("Block {} has a bad magic number:  {:x}", id, self.magic);
@@ -156,7 +156,7 @@ impl BlockHeader {
     Ok(())
   }
 
-  // Create a slice for writing a block to disk.
+  // Create a slice for writing a block to disk or serializing it.
   fn as_ref(&self) -> &[u8] {
     unsafe {
       from_raw_parts((self as *const BlockHeader) as *const u8,
@@ -170,7 +170,9 @@ const BITS_SIZE: usize = BLOCK_SIZE - HEADER_SIZE;
 const BLOCK_BITS: usize = BITS_SIZE * 8;
 
 // Define the tradeoff points for switching between compression
-// modes.
+// modes.  The bits are stored as a full bit map, or a list of
+// bits.  A list of bits can be those bits that are clear or
+// those that are set.
 const INDEX_SIZE: usize = 3;
 const LOWER_LIMIT: u32 = BITS_SIZE as u32 / INDEX_SIZE as u32;
 const UPPER_LIMIT: u32 = (BLOCK_BITS - BITS_SIZE / INDEX_SIZE) as u32;
@@ -263,10 +265,14 @@ impl Drop for BitMap {
   }
 }
 
+// Get a time in seconds since the epoch.
 fn time() -> i64 {
   time::now().to_timespec().sec
 }
 
+// Countthe number of set bits in a given array using
+// an existing map.  See create_map() for details on 
+// the map.
 fn count_bits(bits: &[u8], map: [u8; 256]) -> u32 {
   let mut result: u32 = 0;
 
@@ -277,6 +283,8 @@ fn count_bits(bits: &[u8], map: [u8; 256]) -> u32 {
   result
 }
 
+// Create a map of byte values to their corresponding
+// population count (count of set bits)
 fn create_map() -> [u8; 256] {
   let mut result = [0_u8; 256];
 
@@ -287,6 +295,7 @@ fn create_map() -> [u8; 256] {
   result
 }
 
+// Get the population count for a byte value.
 fn count_byte(mask: usize) -> u8 {
   let mut result = 0;
 
@@ -297,6 +306,7 @@ fn count_byte(mask: usize) -> u8 {
   result
 }
 
+// Query the given bit in an array to see whether it is set.
 fn bit_set(bits: &[u8], bit_index: usize) -> bool {
   let index = bit_index / 8;
   let mask_shift = bit_index % 8;
@@ -305,6 +315,8 @@ fn bit_set(bits: &[u8], bit_index: usize) -> bool {
   bits[index] & mask != 0
 }
 
+// Convert a count into its serialized form.  Currently,
+// that is little-endian, using INDEX_SIZE bytes.
 fn slice(mut value: usize) -> [u8; INDEX_SIZE] {
   let mut result = [0u8; INDEX_SIZE];
 
@@ -476,6 +488,8 @@ impl BitMap {
     Ok((count, blocks, dirty, set))
   }
 
+  // Check that the population count of bits for a given block
+  // in the file matches the contents of the bit map itself.
   fn validate_count(&self, index: usize) -> bool {
     let result = count_bits(&self.blocks[index].bits, self.map) == self.set[index];
 
@@ -489,6 +503,8 @@ impl BitMap {
     result
   }
 
+  // Check that all the blocks in the bit map have accurate
+  // population counts.
   fn validate(&self) -> bool {
     let mut pass = true;
 
@@ -499,7 +515,7 @@ impl BitMap {
     pass
   }
 
-  /// Query the value of a bit in the map.
+  /// Query the value of a bit in the bitmap.
   pub fn query(&self, bit: usize) -> Result<bool> {
     if bit >= self.size {
       return se!("That index is out of range ({} vs {}).", bit, self.size);
@@ -585,6 +601,8 @@ impl BitMap {
       return Ok(());
     }
 
+    // Change the actual value in the block.  Also,
+    // update the population count.
     if value == 0 {
       self.blocks[block].bits[index] &= !mask;
       self.set[block] -= 1;
@@ -633,6 +651,8 @@ impl BitMap {
     result
   }
 
+  // Compute the expected size of the serialize form
+  // of a given block.
   fn serial_size(&self, index: usize) -> usize {
     let set_bits = self.set[index];
     let clear_bits = BLOCK_BITS as u32 - set_bits;
@@ -646,6 +666,8 @@ impl BitMap {
     }
   }
 
+  // Append serialized form of a block to the Vec
+  // representing the result.
   fn serialize_block(&self, index: usize, result: &mut Vec<u8>) {
     let set_bits = self.set[index];
 
@@ -663,6 +685,8 @@ impl BitMap {
     result.extend_from_slice(self.blocks[index].as_ref());
   }
 
+  // Append a list of the set bits to the serialization
+  // results.
   fn append_set(&self, index: usize, result: &mut Vec<u8>) {
     let mut header = BlockHeader::new(BIT_DESC_SET, index as u64).unwrap();
 
@@ -682,6 +706,8 @@ impl BitMap {
          self.set[index] * INDEX_SIZE as u32 + HEADER_SIZE as u32);
   }
 
+  // Append a list of the clear bits to the serialization
+  // results.
   fn append_clear(&self, index: usize, result: &mut Vec<u8>) {
     let mut header = BlockHeader::new(BIT_DESC_CLEAR, index as u64).unwrap();
 
