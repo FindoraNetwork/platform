@@ -25,7 +25,9 @@ do
    fi
 done
 
-. ~/bin/get_src
+export directories=$(
+   find .  -name "target" -prune -o -name ".git"   -prune -o -name "src" -print | sort
+ )
 
 echo "Repository "`pwd`":"
 
