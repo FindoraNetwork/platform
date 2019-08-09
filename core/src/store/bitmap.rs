@@ -634,19 +634,24 @@ impl BitMap {
   }
 
   fn serial_size(&self, index: usize) -> usize {
-    if self.set[index] > LOWER_LIMIT && self.set[index] < UPPER_LIMIT {
+    let set_bits = self.set[index];
+    let clear_bits = BLOCK_BITS as u32 - set_bits;
+
+    if set_bits > LOWER_LIMIT && set_bits < UPPER_LIMIT {
       BLOCK_SIZE
-    } else if self.set[index] <= LOWER_LIMIT {
-      HEADER_SIZE + (self.set[index] as usize) * INDEX_SIZE
+    } else if set_bits <= LOWER_LIMIT {
+      HEADER_SIZE + set_bits as usize * INDEX_SIZE
     } else {
-      HEADER_SIZE + (BLOCK_BITS - self.set[index] as usize) * INDEX_SIZE
+      HEADER_SIZE + clear_bits as usize * INDEX_SIZE
     }
   }
 
   fn serialize_block(&self, index: usize, result: &mut Vec<u8>) {
-    if self.set[index] > LOWER_LIMIT && self.set[index] < UPPER_LIMIT {
+    let set_bits = self.set[index];
+
+    if set_bits > LOWER_LIMIT && set_bits < UPPER_LIMIT {
       self.append_block(index, result);
-    } else if self.set[index] <= LOWER_LIMIT {
+    } else if set_bits <= LOWER_LIMIT {
       self.append_set(index, result);
     } else {
       self.append_clear(index, result);
