@@ -20,11 +20,14 @@ do
    if [ "`pwd`" == "/" ]
    then
        echo "I didn't find .git."
+       echo "This directory doesn't seem to be part of a git repository."
        exit 1
    fi
 done
 
-. ~/bin/get_src
+export directories=$(
+   find .  -name "target" -prune -o -name ".git"   -prune -o -name "src" -print | sort
+ )
 
 echo "Repository "`pwd`":"
 

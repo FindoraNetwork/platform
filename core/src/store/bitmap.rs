@@ -1,18 +1,21 @@
 //! # A Simple BitMap Implementation
 //!
 //! This module implements a simple persistent bitmap.  The
-//! bitmap is maintained in a single file.  The caller is
-//! responsible for path management and file creation.
+//! bitmap currently is maintained in a single file.  The
+//! caller is responsible for file creation and open operations.
 //!
-//! The bit map is maintained in memory and on disk as a
-//! sequence of blocks.  Each block is self-identifying
-//! and checksummed to help handle problems with storage
-//! systems.
+//! The bitmap is maintained in memory and on disk as a sequence
+//! of blocks.  Each block is self-identifying and checksummed
+//! to help handle problems with storage systems.  The BitBlock
+//! and BlockHeader structures implement the disk (and memory)
+//! structure of the bitmap.
 //!
-//! This bitmap is intended for the ledger, so it allows
-//! the caller to append set bits, but not zero bits, as a
-//! minor check of correctness.
+//! This bitmap is intended for the ledger, so it allows the
+//! caller to append set bits, but not zero bits, as a minor
+//! check of correctness.
 //!
+
+extern crate time;
 
 use super::append_only_merkle::timestamp;
 use sodiumoxide::crypto::hash::sha256;
@@ -36,16 +39,14 @@ macro_rules! se {
 
 // Write a log entry to stdout.
 macro_rules! log {
-  ($($x:tt)+) => { print!("{}    ", timestamp()); println!($($x)+); }
+  ($($x:tt)+) => { println!("{}    {}", timestamp(), format!($($x)+)); }
 }
 
-// Write a log entry to stdout.
+// Write a debug entry to stdout.
 //
 // This macro is used only for debugging simple problems
 // with the basic mapping logic.
-//
-
-macro_rules! verbose_log {
+macro_rules! debug {
   ($($x:tt)+) => {}; // ($($x:tt)+) => { print!("{}    ", timestamp()); println!($($x)+); }
 }
 
@@ -72,6 +73,9 @@ const HEADER_SIZE: usize = 40;
 
 // Define the layout for a block header.
 //
+// This structure occupies the first bytes of each disk
+// block.  It also is maintained in memory.
+//
 // checksum  a checksum over the rest of the block
 // magic     a magic number
 // count     the count of valid bits in this block
@@ -91,6 +95,7 @@ struct BlockHeader {
 }
 
 impl BlockHeader {
+  // Create a new block header.
   fn new(block_contents: u16, block_id: u64) -> Result<BlockHeader> {
     if block_contents != BIT_ARRAY && block_contents != BIT_DESC {
       return se!("That content type ({}) is invalid.", block_contents);
@@ -107,9 +112,11 @@ impl BlockHeader {
     Ok(result)
   }
 
+  // Validate the contents of a block header, except for
+  // the checksum, which might not be valid yet.
   fn validate(&self, contents: u16, id: u64) -> Result<()> {
     if self.magic != HEADER_MAGIC {
-      return se!("Block {} has a bad header mark:  {:x}", id, self.magic);
+      return se!("Block {} has a bad magic number:  {:x}", id, self.magic);
     }
 
     if self.count > BLOCK_BITS as u32 {
@@ -199,7 +206,9 @@ impl BitBlock {
     }
   }
 
-  // Validate the contents of a block from the disk.
+  // Validate the contents of a block from the disk.  Here
+  // we validate the checksum, since it should be set when
+  // a block is sent to disk.
   fn validate(&self, contents: u16, id: u64) -> Result<()> {
     self.header.validate(contents, id)?;
 
@@ -218,13 +227,17 @@ pub struct BitMap {
   file: File,
   size: usize,
   blocks: Vec<BitBlock>,
-  dirty: Vec<bool>,
+  dirty: Vec<i64>,        // the modification time for the block, or zero
 }
 
 impl Drop for BitMap {
   fn drop(&mut self) {
     let _ = self.write();
   }
+}
+
+fn time() -> i64 {
+  time::now().to_timespec().sec
 }
 
 impl BitMap {
@@ -236,7 +249,7 @@ impl BitMap {
   /// use std::fs::OpenOptions;
   /// use crate::core::store::bitmap::BitMap;
   ///
-  /// let path = "sample_name";
+  /// let path = "sample_create_name";
   ///
   /// # let _ = std::fs::remove_file(&path);
   /// let file =
@@ -275,14 +288,15 @@ impl BitMap {
     Ok(result)
   }
 
-  /// Open an existing bitmap.
+  /// Open an existing bitmap.  The caller is responsible
+  /// for opening the file.
   ///
   /// # Example
   ///````
   /// use std::fs::OpenOptions;
   /// use crate::core::store::bitmap::BitMap;
   ///
-  /// let path = "sample_name";
+  /// let path = "sample_open_name";
   ///
   /// # let _ = std::fs::remove_file(&path);
   /// # let file =
@@ -329,7 +343,7 @@ impl BitMap {
 
   // Read the contents of a file into memory, checking the
   // validity as we go.
-  fn read_file(file: &mut File) -> Result<(usize, Vec<BitBlock>, Vec<bool>)> {
+  fn read_file(file: &mut File) -> Result<(usize, Vec<BitBlock>, Vec<i64>)> {
     let mut blocks = Vec::new();
     let mut dirty = Vec::new();
     let mut count = 0;
@@ -364,7 +378,7 @@ impl BitMap {
 
           count += block.header.count as usize;
           blocks.push(block);
-          dirty.push(false);
+          dirty.push(0 as i64);
         }
         Err(e) => {
           return Err(e);
@@ -386,13 +400,21 @@ impl BitMap {
     let index = bit_id / 8;
     let mask = 1 << (bit_id % 8);
 
-    verbose_log!("query({}) -> block {}, index {}, mask {}",
-                 bit,
-                 block,
-                 index,
-                 mask);
+    debug!("query({}) -> block {}, index {}, mask {}",
+           bit, block, index, mask);
     let value = self.blocks[block].bits[index] & mask;
     Ok(value != 0)
+  }
+
+  /// Append a set bit, and return the index on success.
+  pub fn append(&mut self) -> Result<u64> {
+    let bit = self.size;
+
+    if let Err(e) = self.mutate(bit, 1, true) {
+      return Err(e);
+    }
+
+    Ok(bit as u64)
   }
 
   /// Set the given bit.
@@ -418,28 +440,28 @@ impl BitMap {
   // Change the value of the given bit, as requested.
   fn mutate(&mut self, bit: usize, value: u8, extend: bool) -> Result<()> {
     if !extend && bit >= self.size {
-      return se!("That index ({}) is out of range.", bit);
+      return se!("That index ({}) is out of the range [0, {}).",
+                 bit,
+                 self.size);
     }
 
+    // Compute the various indices.
     let block = bit / BLOCK_BITS;
     let bit_id = bit % BLOCK_BITS;
     let index = bit_id / 8;
     let mask = 1 << (bit_id % 8);
 
+    // We might need to create a new block.  If so,
+    // push the new block and the dirty flag for it.
     if block >= self.blocks.len() {
       self.blocks.push(BitBlock::new(BIT_ARRAY, block as u64)?);
-      self.dirty.push(true);
+      self.dirty.push(time());
     } else {
-      self.dirty[block] = true;
+      self.dirty[block] = time();
     }
 
-    verbose_log!("mutate({}, {}) -> block {}, index {}, mask {}, BLOCK_BITS {}",
-                 bit,
-                 value,
-                 block,
-                 index,
-                 mask,
-                 BLOCK_BITS);
+    debug!("mutate({}, {}) -> block {}, index {}, mask {}, BLOCK_BITS {}",
+           bit, value, block, index, mask, BLOCK_BITS);
 
     if value == 0 {
       self.blocks[block].bits[index] &= !mask;
@@ -447,6 +469,10 @@ impl BitMap {
       self.blocks[block].bits[index] |= mask;
     }
 
+    // If we are extending the bit map, update all
+    // the various counters.  Also, write the block
+    // block if it is now full.  This heuristics might
+    // help prevent long pauses for write() operations.
     if bit >= self.size {
       self.size = bit + 1;
 
@@ -470,12 +496,28 @@ impl BitMap {
   /// Write the bitmap to disk.
   pub fn write(&mut self) -> Result<()> {
     for i in 0..self.blocks.len() {
-      if self.dirty[i] {
+      if self.dirty[i] != 0 {
         self.write_block(i)?;
       }
     }
 
     self.file.sync_all()?;
+    Ok(())
+  }
+
+  /// Flush buffers that haven't been modified in "age" seconds
+  /// to the operating system.  The write() method must be invoked
+  /// if the caller wants a guarantee that the data has been moved
+  /// to persistent store.
+  pub fn flush_old(&mut self, age: i64) -> Result<()> {
+    let now = time();
+
+    for i in 0..self.blocks.len() {
+      if self.dirty[i] <= now - age {
+        self.write_block(i)?;
+      }
+    }
+
     Ok(())
   }
 
@@ -485,7 +527,7 @@ impl BitMap {
     self.file.seek(Start(offset))?;
     self.blocks[index].set_checksum();
     self.file.write_all(self.blocks[index].as_ref())?;
-    self.dirty[index] = false;
+    self.dirty[index] = 0;
     Ok(())
   }
 }
@@ -513,7 +555,7 @@ mod tests {
     header.magic ^= 1;
 
     if let Ok(_) = header.validate(BIT_ARRAY, id) {
-      panic!("Validation failed to detect a bad mark.");
+      panic!("Validation failed to detect a bad magic number.");
     }
 
     header.magic ^= 1;
@@ -582,10 +624,17 @@ mod tests {
     if let Err(_) = block.validate(BIT_DESC, 32) {
       panic!("Block validation failed.");
     }
+
+    block.header.checksum.bytes[0] ^= 1;
+
+    if let Ok(_) = block.validate(BIT_DESC, 32) {
+      panic!("Block validation didn't detect a bad checksum.");
+    }
   }
 
   #[test]
   fn test_basic_bitmap() {
+    log!("Run the basic bitmap test.");
     let path = "basic_bitmap";
     let _ = fs::remove_file(&path);
 
@@ -620,6 +669,13 @@ mod tests {
       if let Ok(_) = bitmap.query(i + 1) {
         panic!("Index {} should be out of range.", i + 1);
       }
+
+      // Try a flush now and then.
+      if i % (BLOCK_BITS / 2) == 0 {
+        if let Err(e) = bitmap.flush_old(0) {
+          panic!("flush_old failed:  {}", e);
+        }
+      }
     }
 
     for i in 0..bitmap.size() {
@@ -634,13 +690,17 @@ mod tests {
     }
 
     if let Err(_) = bitmap.write() {
-      panic!("Write failed.");
+      panic!("write failed.");
     }
 
     let bits_initialized = bitmap.size();
 
     if let Err(e) = bitmap.write() {
-      panic!("Write failed:  {}", e);
+      panic!("write failed:  {}", e);
+    }
+
+    if let Err(e) = bitmap.flush_old(0) {
+      panic!("flush_old failed:  {}", e);
     }
 
     let file = OpenOptions::new().read(true)
@@ -648,13 +708,19 @@ mod tests {
                                  .open(&path)
                                  .unwrap();
 
-    let bitmap = BitMap::open(file).unwrap();
+    let mut bitmap = BitMap::open(file).unwrap();
     assert!(bits_initialized == bitmap.size());
     assert!(bits_initialized % BLOCK_BITS != 0);
 
     for i in 0..bits_initialized {
       assert!(bitmap.query(i).unwrap() == !(i & 1 == 0));
     }
+
+    let bit = bitmap.append().unwrap();
+    assert!(bit == bits_initialized as u64);
+
+    let bit = bitmap.append().unwrap();
+    assert!(bit == bits_initialized as u64 + 1);
 
     let _ = fs::remove_file(&path);
   }
