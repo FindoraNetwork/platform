@@ -270,7 +270,7 @@ fn time() -> i64 {
   time::now().to_timespec().sec
 }
 
-// Countthe number of set bits in a given array using
+// Count the number of set bits in a given array using
 // an existing map.  See create_map() for details on
 // the map.
 fn count_bits(bits: &[u8], map: [u8; 256]) -> u32 {
