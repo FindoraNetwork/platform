@@ -46,6 +46,7 @@ fn main() {
     Err(e) => {
       log!(main, "check_merkle failed to open \"{}\":  {}", path, e);
 
+      // The open failed, so try a rebuild if asked.
       if do_repairs {
         try_rebuild(&path);
       }
@@ -54,6 +55,8 @@ fn main() {
     }
   };
 
+  // The open succeeded.  Flush any reconstructed blocks to the
+  // disk.
   if let Some(e) = tree.write() {
     log!(main, "The Merkle tree write returned an error:  {}", e);
     log!(main, "Continuing.");
@@ -61,6 +64,7 @@ fn main() {
 
   log!(main, "Performing the initial check.");
 
+  // Perform the full check.
   if let Some(e) = tree.check_disk(true) {
     log!(main, "The Merkle tree check returned an error:  {}", e);
   } else {
@@ -75,6 +79,8 @@ fn main() {
     exit(1);
   }
 
+  // The check didn't pass, so try rebuilding the interior blocks
+  // (level 1 and up).
   log!(main, "Rewriting the Merkle tree.");
 
   // Try to save the level 0 data file.
@@ -82,16 +88,20 @@ fn main() {
   let _ = std::fs::remove_file(&save);
   let _ = std::fs::rename(&path, &save);
 
+  // Tell the tree to assume that the disk image is
+  // invalid.
   if let Some(e) = tree.reset_disk() {
     log!(main, "The disk reset failed:  {}", e);
     log!(main, "Continuing");
   }
 
+  // Rewrite the entire image, if possible.
   if let Some(e) = tree.write() {
     log!(main, "The rewrite failed:  {}", e);
     exit(1);
   }
 
+  // Try the full check again.
   if let Some(e) = tree.check_disk(true) {
     log!(main, "The final check failed:  {}", e);
     exit(1);

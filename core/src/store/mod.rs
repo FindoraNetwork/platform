@@ -9,6 +9,7 @@ use crate::data_model::{
   TxoSID, Utxo, TXN_SEQ_ID_PLACEHOLDER,
 };
 use append_only_merkle::{AppendOnlyMerkle, Proof};
+use bitmap::BitMap;
 use logged_merkle::LoggedMerkle;
 use rand::SeedableRng;
 use rand_chacha::ChaChaRng;
@@ -70,6 +71,7 @@ pub trait ArchiveUpdate {
 pub trait ArchiveAccess {
   fn get_transaction(&self, addr: TxnSID) -> Option<&Transaction>;
   fn get_proof(&self, addr: TxnSID) -> Option<Proof>;
+  fn get_utxo_map(&self) -> Option<Vec<u8>>;
 }
 
 pub fn compute_sha256_hash<T>(msg: &T) -> [u8; 32]
@@ -93,6 +95,8 @@ pub struct LedgerState {
   #[serde(skip)]
   txs: Vec<Transaction>,
   utxos: HashMap<TxoSID, Utxo>,
+  #[serde(skip)]
+  utxo_map: Option<BitMap>,
   contracts: HashMap<SmartContractKey, SmartContract>,
   policies: HashMap<AssetPolicyKey, CustomAssetPolicy>,
   tokens: HashMap<AssetTokenCode, AssetToken>,
@@ -114,7 +118,9 @@ impl LedgerState {
     let txn_path = txn_buf.to_str().unwrap();
     let snap_buf = tmp_dir.path().join("test_ledger_snap");
     let snap_path = snap_buf.to_str().unwrap();
-    LedgerState::new(&merkle_path, &txn_path, &snap_path, true).unwrap()
+    let utxo_map_buf = tmp_dir.path().join("test_ledger_utxo_map");
+    let utxo_map_path = utxo_map_buf.to_str().unwrap();
+    LedgerState::new(&merkle_path, &txn_path, &snap_path, &utxo_map_path, true).unwrap()
   }
 
   fn load_transaction_log(path: &str) -> Result<Vec<Transaction>, std::io::Error> {
@@ -155,9 +161,23 @@ impl LedgerState {
     Ok(LoggedMerkle::new(tree, writer))
   }
 
+  fn init_utxo_map(path: &str, create: bool) -> Result<BitMap, std::io::Error> {
+    let file = OpenOptions::new().read(true)
+                                 .write(true)
+                                 .create_new(create)
+                                 .open(path)?;
+
+    if create {
+      BitMap::create(file)
+    } else {
+      BitMap::open(file)
+    }
+  }
+
   pub fn new(merkle_path: &str,
              txn_path: &str,
              snapshot_path: &str,
+             utxo_map_path: &str,
              create: bool)
              -> Result<LedgerState, std::io::Error> {
     let ledger = LedgerState { merkle_path: merkle_path.to_owned(),
@@ -166,6 +186,8 @@ impl LedgerState {
                                merkle: Some(LedgerState::init_merkle_log(merkle_path, create)?),
                                txs: Vec::new(),
                                utxos: HashMap::new(),
+                               utxo_map: Some(LedgerState::init_utxo_map(utxo_map_path,
+                                                                         create)?),
                                contracts: HashMap::new(),
                                policies: HashMap::new(),
                                tokens: HashMap::new(),
@@ -832,6 +854,13 @@ impl ArchiveAccess for LedgerState {
       }
     }
   }
+
+  fn get_utxo_map(&self) -> Option<Vec<u8>> {
+    match &self.utxo_map {
+      Some(utxo_map) => Some(utxo_map.serialize()),
+      None => None,
+    }
+  }
 }
 
 pub mod helpers {
@@ -980,8 +1009,11 @@ mod tests {
     let txn_path = txn_buf.to_str().unwrap();
     let ledger_buf = tmp_dir.path().join("test_ledger");
     let ledger_path = ledger_buf.to_str().unwrap();
+    let utxo_map_buf = tmp_dir.path().join("test_utxo_map");
+    let utxo_map_path = utxo_map_buf.to_str().unwrap();
 
-    let mut ledger = LedgerState::new(&merkle_path, &txn_path, &ledger_path, true).unwrap();
+    let mut ledger =
+      LedgerState::new(&merkle_path, &txn_path, &ledger_path, &utxo_map_path, true).unwrap();
     let mut tx = Transaction::default();
     let token_code1 = AssetTokenCode { val: [1; 16] };
     let mut prng = ChaChaRng::from_seed([0u8; 32]);
