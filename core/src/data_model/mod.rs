@@ -10,8 +10,9 @@ use std::boxed::Box;
 use std::collections::HashMap;
 use std::convert::TryFrom;
 use zei::basic_crypto::signatures::{XfrKeyPair, XfrPublicKey, XfrSecretKey, XfrSignature};
+use zei::serialization::ZeiFromToBytes;
 use zei::xfr::lib::gen_xfr_note;
-use zei::xfr::structs::{AssetRecord, BlindAssetRecord, OpenAssetRecord, XfrNote};
+use zei::xfr::structs::{AssetRecord, BlindAssetRecord, EGPubKey, OpenAssetRecord, XfrNote};
 pub mod errors;
 
 pub const TXN_SEQ_ID_PLACEHOLDER: u64 = 0xD000_0000_0000_0000u64;
@@ -101,6 +102,7 @@ pub struct Asset {
   pub memo: Memo,
   pub confidential_memo: ConfidentialMemo,
   pub updatable: bool,
+  pub traceable: bool,
 }
 
 #[derive(Default, Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
@@ -253,6 +255,7 @@ impl AssetCreationBody {
   pub fn new(token_code: &AssetTokenCode,
              issuer_key: &IssuerPublicKey, // TODO: require private key check somehow?
              updatable: bool,
+             traceable: bool,
              memo: Option<Memo>,
              confidential_memo: Option<ConfidentialMemo>)
              -> Result<AssetCreationBody, errors::PlatformError> {
@@ -260,6 +263,7 @@ impl AssetCreationBody {
     asset_def.code = *token_code;
     asset_def.issuer = *issuer_key;
     asset_def.updatable = updatable;
+    asset_def.traceable = traceable;
 
     if memo.is_some() {
       asset_def.memo = *memo.as_ref().unwrap();

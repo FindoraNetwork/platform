@@ -211,6 +211,10 @@ fn main() {
           .short("u")
           .long("allow_updates")
           .help("If specified, updates may be made to asset memo"))
+        .arg(Arg::with_name("traceable")
+          .short("trace")
+          .long("traceable")
+          .help("If specified, asset transfers can be traced by the issuert "))
         .arg(Arg::with_name("memo")
           .short("m")
           .long("memo")
@@ -384,6 +388,7 @@ fn process_add_cmd(add_matches: &clap::ArgMatches,
                                      .to_string();
       let allow_updates = define_asset_matches.is_present("allow_updates");
       let confidential = define_asset_matches.is_present("confidential");
+      let traceable = define_asset_matches.is_present("traceable");
       if let Err(e) = load_txn_builder_from_file(&transaction_file_name) {
         println!("{:?}", e);
       }
@@ -399,6 +404,7 @@ fn process_add_cmd(add_matches: &clap::ArgMatches,
                                                                  &priv_key,
                                                                  Some(asset_token),
                                                                  allow_updates,
+                                                                 traceable,
                                                                  &memo,
                                                                  confidential)
         {

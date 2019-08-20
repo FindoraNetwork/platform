@@ -5,8 +5,8 @@ extern crate tempdir;
 use crate::data_model::errors::PlatformError;
 use crate::data_model::{
   AssetCreation, AssetIssuance, AssetPolicyKey, AssetToken, AssetTokenCode, AssetTransfer,
-  CustomAssetPolicy, Operation, SmartContract, SmartContractKey, Transaction, TxOutput, TxnSID,
-  TxoSID, Utxo, TXN_SEQ_ID_PLACEHOLDER,
+  CustomAssetPolicy, IssuerPublicKey, Operation, SmartContract, SmartContractKey, Transaction,
+  TxOutput, TxOutput::BlindAssetRecord, TxnSID, TxoSID, Utxo, TXN_SEQ_ID_PLACEHOLDER,
 };
 use append_only_merkle::{AppendOnlyMerkle, Proof};
 use logged_merkle::LoggedMerkle;
@@ -20,7 +20,9 @@ use std::io::BufReader;
 use std::sync::{Arc, RwLock};
 use std::u64;
 use tempdir::TempDir;
+use zei::algebra::groups::Group;
 use zei::xfr::lib::verify_xfr_note;
+use zei::xfr::structs::EGPubKey;
 
 pub mod append_only_merkle;
 pub mod bitmap;
@@ -70,6 +72,7 @@ pub trait ArchiveUpdate {
 pub trait ArchiveAccess {
   fn get_transaction(&self, addr: TxnSID) -> Option<&Transaction>;
   fn get_proof(&self, addr: TxnSID) -> Option<Proof>;
+  fn get_tracked_sids(&self, key: &EGPubKey) -> Option<Vec<TxoSID>>; // Asset issuers can query ids of UTXOs of assets they are tracking
 }
 
 pub fn compute_sha256_hash<T>(msg: &T) -> [u8; 32]
@@ -95,6 +98,7 @@ pub struct LedgerState {
   utxos: HashMap<TxoSID, Utxo>,
   contracts: HashMap<SmartContractKey, SmartContract>,
   policies: HashMap<AssetPolicyKey, CustomAssetPolicy>,
+  tracked_sids: HashMap<EGPubKey, Vec<TxoSID>>,
   tokens: HashMap<AssetTokenCode, AssetToken>,
   issuance_num: HashMap<AssetTokenCode, u64>,
   txn_count: usize,
@@ -169,6 +173,7 @@ impl LedgerState {
                                contracts: HashMap::new(),
                                policies: HashMap::new(),
                                tokens: HashMap::new(),
+                               tracked_sids: HashMap::new(),
                                issuance_num: HashMap::new(),
                                txn_count: 0,
                                txn_base_sid: TxoSID::default(),
@@ -236,9 +241,30 @@ impl LedgerState {
         }
       }
     }
-
     let utxo_ref = Utxo { digest: compute_sha256_hash(&serde_json::to_vec(&txo.1).unwrap()),
                           output: txo.1 };
+    // Check for asset tracing
+    match &utxo_ref.output {
+      BlindAssetRecord(record) => {
+        if let Some(issuer_public_key) = &record.issuer_public_key {
+          match self.tracked_sids
+                    .get_mut(&issuer_public_key.eg_ristretto_pub_key)
+          {
+            // add utxo address to the list of indices that can be unlocked by the
+            // issuer's public key
+            None => {
+              self.tracked_sids
+                  .insert(issuer_public_key.eg_ristretto_pub_key.clone(),
+                          vec![utxo_addr]);
+            }
+            Some(vec) => {
+              vec.push(utxo_addr);
+            }
+          };
+        }
+      }
+    }
+
     self.utxos.insert(utxo_addr, utxo_ref);
     self.max_applied_sid = utxo_addr;
   }
@@ -344,6 +370,8 @@ impl LedgerState {
       }
     }
 
+    // TODO: Noah ensure that issuer public key is in all inputs and outputs for traceable assets
+
     true
   }
 
@@ -384,6 +412,7 @@ impl LedgerState {
       println!("validate_asset_issuance:  invalid signature");
       return false;
     }
+    //TODO: Noah (blind asset record must contain issuer public key)
 
     //[4] The signature belongs to the anchor.
     if token.properties.issuer != issue.pubkey {
@@ -832,6 +861,13 @@ impl ArchiveAccess for LedgerState {
       }
     }
   }
+
+  fn get_tracked_sids(&self, key: &EGPubKey) -> Option<Vec<TxoSID>> {
+    match self.tracked_sids.get(key) {
+      Some(sids) => Some(sids.clone()),
+      None => None,
+    }
+  }
 }
 
 pub mod helpers {
@@ -858,6 +894,7 @@ pub mod helpers {
   pub fn asset_creation_body(token_code: &AssetTokenCode,
                              issuer_key: &XfrPublicKey,
                              updatable: bool,
+                             traceable: bool,
                              memo: Option<Memo>,
                              confidential_memo: Option<ConfidentialMemo>)
                              -> AssetCreationBody {
@@ -865,6 +902,7 @@ pub mod helpers {
     token_properties.code = *token_code;
     token_properties.issuer = IssuerPublicKey { key: *issuer_key };
     token_properties.updatable = updatable;
+    token_properties.traceable = traceable;
 
     if memo.is_some() {
       token_properties.memo = memo.unwrap();
