@@ -73,11 +73,8 @@ pub trait ArchiveUpdate {
 pub trait ArchiveAccess {
   fn get_transaction(&self, addr: TxnSID) -> Option<&Transaction>;
   fn get_proof(&self, addr: TxnSID) -> Option<Proof>;
-<<<<<<< HEAD
   fn get_tracked_sids(&self, key: &EGPubKey) -> Option<Vec<TxoSID>>; // Asset issuers can query ids of UTXOs of assets they are tracking
-=======
   fn get_utxo_map(&self) -> Option<Vec<u8>>;
->>>>>>> master
 }
 
 pub fn compute_sha256_hash<T>(msg: &T) -> [u8; 32]
@@ -887,15 +884,16 @@ impl ArchiveAccess for LedgerState {
     }
   }
 
-<<<<<<< HEAD
   fn get_tracked_sids(&self, key: &EGPubKey) -> Option<Vec<TxoSID>> {
     match self.tracked_sids.get(key) {
       Some(sids) => Some(sids.clone()),
-=======
+      None => None,
+    }
+  }
+
   fn get_utxo_map(&self) -> Option<Vec<u8>> {
     match &self.utxo_map {
       Some(utxo_map) => Some(utxo_map.serialize()),
->>>>>>> master
       None => None,
     }
   }
