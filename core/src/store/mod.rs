@@ -5,8 +5,8 @@ extern crate tempdir;
 use crate::data_model::errors::PlatformError;
 use crate::data_model::{
   AssetCreation, AssetIssuance, AssetPolicyKey, AssetToken, AssetTokenCode, AssetTransfer,
-  CustomAssetPolicy, IssuerPublicKey, Operation, SmartContract, SmartContractKey, Transaction,
-  TxOutput, TxOutput::BlindAssetRecord, TxnSID, TxoSID, Utxo, TXN_SEQ_ID_PLACEHOLDER,
+  CustomAssetPolicy, Operation, SmartContract, SmartContractKey, Transaction, TxOutput,
+  TxOutput::BlindAssetRecord, TxnSID, TxoSID, Utxo, TXN_SEQ_ID_PLACEHOLDER,
 };
 use append_only_merkle::{AppendOnlyMerkle, Proof};
 use bitmap::BitMap;
@@ -21,7 +21,6 @@ use std::io::BufReader;
 use std::sync::{Arc, RwLock};
 use std::u64;
 use tempdir::TempDir;
-use zei::algebra::groups::Group;
 use zei::xfr::lib::verify_xfr_note;
 use zei::xfr::structs::EGPubKey;
 
@@ -386,13 +385,11 @@ impl LedgerState {
       if self.check_utxo(*utxo_addr).is_none() {
         return false;
       }
-
-      if verify_xfr_note(&mut prng, &transfer.body.transfer, &null_policies).is_err() {
-        return false;
-      }
     }
 
-    // TODO: Noah ensure that issuer public key is in all inputs and outputs for traceable assets
+    if verify_xfr_note(&mut prng, &transfer.body.transfer, &null_policies).is_err() {
+      return false;
+    }
 
     true
   }
@@ -400,6 +397,8 @@ impl LedgerState {
   // An asset issuance is valid iff:
   //     1) The operation is unique (not a replay).
   //     2) The signature is valid and belongs to the anchor (the issuer).
+  //     3) The signature belongs to the anchor
+  //     4) For traceable assets, tracing key is included in output records
   #[cfg(test)]
   fn validate_asset_issuance(&mut self, issue: &AssetIssuance) -> bool {
     // Get a valid token
@@ -434,21 +433,20 @@ impl LedgerState {
       println!("validate_asset_issuance:  invalid signature");
       return false;
     }
-    //TODO: Noah (blind asset record must contain issuer public key)
 
-    //[4] The signature belongs to the anchor.
+    //[3] The signature belongs to the anchor.
     if token.properties.issuer != issue.pubkey {
       println!("validate_asset_issuance:  invalid issuer");
       return false;
     }
 
+    //[4] TODO: Noah For traceable assets, tracing key must exist and be included in all output records
     true
   }
 
   // An asset creation is valid iff:
   //     1) The signature is valid.
-  //     2) The token? has NOT been used by a different asset.
-  // Token?
+  //     2) The token? has NOT been used by a different asset token?
   #[cfg(test)]
   fn validate_asset_creation(&mut self, create: &AssetCreation) -> bool {
     //[1] the token is not already created, [2] the signature is correct.
