@@ -110,6 +110,7 @@ pub struct LedgerState {
 }
 
 impl LedgerState {
+  // Create a ledger for use by a unit test.
   pub fn test_ledger() -> LedgerState {
     let tmp_dir = TempDir::new("test").unwrap();
     let merkle_buf = tmp_dir.path().join("test_ledger_merkle");
@@ -137,6 +138,9 @@ impl LedgerState {
 
   fn store_transaction(&self, _txn: &Transaction) {}
 
+  // Initialize a logged Merkle tree for the ledger.  We might
+  // be creating a new tree or opening an existing one.  We
+  // always start a new log file.
   fn init_merkle_log(path: &str, create: bool) -> Result<LoggedMerkle, std::io::Error> {
     // Create a merkle tree or open an existing one.
     let result = if create {
@@ -161,6 +165,7 @@ impl LedgerState {
     Ok(LoggedMerkle::new(tree, writer))
   }
 
+  // Initialize a bitmap to track to track the unspent utxos.
   fn init_utxo_map(path: &str, create: bool) -> Result<BitMap, std::io::Error> {
     let file = OpenOptions::new().read(true)
                                  .write(true)
@@ -174,6 +179,7 @@ impl LedgerState {
     }
   }
 
+  // Initialize a new Ledger structure.
   pub fn new(merkle_path: &str,
              txn_path: &str,
              snapshot_path: &str,
@@ -203,6 +209,7 @@ impl LedgerState {
     Ok(ledger)
   }
 
+  // Load a ledger given the paths to the various storage elements.
   pub fn load(merkle_path: &str,
               txn_path: &str,
               snapshot_path: &str)
@@ -223,6 +230,9 @@ impl LedgerState {
     Ok(ledger)
   }
 
+  // Snapshot the ledger state.  This involves synchronizing
+  // the durable data structures to the disk and starting a
+  // new log file for the logged Merkle tree.
   pub fn snapshot(&mut self) -> Result<SnapshotId, std::io::Error> {
     let state = if let Some(merkle) = &self.merkle {
       merkle.state()
