@@ -1,6 +1,6 @@
 extern crate abci;
 extern crate arrayref;
-extern crate core;
+extern crate ledger;
 extern crate ledger_app;
 extern crate serde;
 extern crate serde_derive;
@@ -8,8 +8,8 @@ extern crate serde_json;
 
 use abci::*;
 use api_service::RestfulApiService;
-use core::data_model::errors::PlatformError;
-use core::store::*;
+use ledger::data_model::errors::PlatformError;
+use ledger::store::*;
 use ledger_app::{convert_tx, LedgerApp};
 use std::thread;
 

@@ -19,7 +19,7 @@ regex = "1"
 
 zei = { git = "ssh://github.com/eianio/zei" }
 
-core = {path = "core"}
+ledger = {path = "ledger"}
 txn_builder = {path = "components/txn_builder"}
 ledger_app = {path = "components/ledger_app"}
 api_service = {path = "components/api_service"}
