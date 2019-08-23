@@ -52,17 +52,25 @@
 // issuer incentive to be trustworthy. This is all that prevents the
 // user from lying about the attribute values.
 //
+// Note: there were minor changes to what was exposed in the Zei
+// interface needed to make the code below work outsize of Zei.
+//    algebra/mod.rs: Made bn and groups public. Previously pub(crate).
+//    src/lib.rs: Made algebra public. Was private.
 
 extern crate rand;
+extern crate rand_chacha;
 extern crate zei;
+use rand::SeedableRng;
+use rand_chacha::ChaChaRng;
 use zei::algebra::groups::Scalar;
 use zei::algebra::bls12_381::{BLSScalar, BLSGt};
 use zei::crypto::anon_creds::{ac_keygen_issuer, ac_keygen_user, ac_sign,
                               ac_reveal, ac_verify};
 
 fn main() {
-    // TODO Acceptable choice for pseudorandom number generator?
-    let mut prng = rand::thread_rng();
+    let mut prng: ChaChaRng;
+    // For a real application, the seed should be random.
+    prng = ChaChaRng::from_seed([0u8; 32]);
 
     // Attributes to be revealed. For example, they might be:
     //    account balance, zip code, credit score, and timestamp
