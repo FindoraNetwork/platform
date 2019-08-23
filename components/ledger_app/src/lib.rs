@@ -1,9 +1,9 @@
-extern crate core;
+extern crate ledger;
 extern crate api_service;
 
-use core::data_model::errors::PlatformError;
-use core::data_model::Transaction;
-use core::store::*;
+use ledger::data_model::errors::PlatformError;
+use ledger::data_model::Transaction;
+use ledger::store::*;
 use std::sync::{Arc, RwLock};
 
 pub struct LedgerApp {

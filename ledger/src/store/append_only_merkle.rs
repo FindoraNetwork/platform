@@ -541,7 +541,7 @@ impl AppendOnlyMerkle {
   ///
   /// # Example
   ///````
-  /// use crate::core::store::append_only_merkle::AppendOnlyMerkle;
+  /// use crate::ledger::store::append_only_merkle::AppendOnlyMerkle;
   ///
   /// let path = "public_ledger".to_string();
   ///
@@ -584,7 +584,7 @@ impl AppendOnlyMerkle {
   ///
   /// # Example
   ///````
-  /// use crate::core::store::append_only_merkle::AppendOnlyMerkle;
+  /// use crate::ledger::store::append_only_merkle::AppendOnlyMerkle;
   ///
   /// let path = "new_ledger";
   /// # let _ = std::fs::remove_file(&path);
@@ -815,7 +815,7 @@ impl AppendOnlyMerkle {
   ///
   /// # Example
   ///````
-  /// use crate::core::store::append_only_merkle::AppendOnlyMerkle;
+  /// use crate::ledger::store::append_only_merkle::AppendOnlyMerkle;
   ///
   /// let path       = "deserialize";
   /// # let _ = std::fs::remove_file(&path);

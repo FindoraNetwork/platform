@@ -5,7 +5,7 @@ authors = ["Nathan Yospe <nathan@eian.io>"]
 edition = "2018"
 
 [dependencies]
-core = { path = "../../core" }
+ledger = { path = "../../ledger" }
 actix-web = "1.0"
 actix-rt = "0.2"
 serde = "1.0"

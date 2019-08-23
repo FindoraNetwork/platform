@@ -16,8 +16,8 @@ use crate::ext_transaction::cpp::{
   PostTxnBlock, PreTxnBlock, RegisterCallbacks, SetTransactionResultStatus,
   TransactionResultStatus,
 };
-use core::data_model::errors::PlatformError;
-use core::store::{LedgerState, LedgerValidate, TxnContext};
+use ledger::data_model::errors::PlatformError;
+use ledger::store::{LedgerState, LedgerValidate, TxnContext};
 use ledger_app::{convert_tx, LedgerApp};
 
 use std::slice;
