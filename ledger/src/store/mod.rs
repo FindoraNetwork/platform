@@ -165,7 +165,7 @@ impl LedgerState {
     Ok(LoggedMerkle::new(tree, writer))
   }
 
-  // Initialize a bitmap to track to track the unspent utxos.
+  // Initialize a bitmap to track the unspent utxos.
   fn init_utxo_map(path: &str, create: bool) -> Result<BitMap, std::io::Error> {
     let file = OpenOptions::new().read(true)
                                  .write(true)
