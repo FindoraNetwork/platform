@@ -271,6 +271,12 @@ impl LedgerState {
 
     let utxo_ref = Utxo { digest: compute_sha256_hash(&serde_json::to_vec(&txo.1).unwrap()),
                           output: txo.1 };
+    // Add a bit to the utxo bitmap.
+    match &mut self.utxo_map {
+      Some(ref mut map) => { map.set(utxo_addr.index as usize).unwrap(); }
+      _ => {}
+    }
+
     self.utxos.insert(utxo_addr, utxo_ref);
     self.max_applied_sid = utxo_addr;
   }
@@ -283,6 +289,11 @@ impl LedgerState {
           rectified_txo.index -= TXN_SEQ_ID_PLACEHOLDER;
           rectified_txo.index += self.txn_base_sid.index;
         }
+      }
+      // Update the utxo bitmap to remove this asset.
+      match &mut self.utxo_map {
+        Some(ref mut map) => { map.clear(rectified_txo.index as usize).unwrap(); }
+        _ => {}
       }
       self.utxos.remove(&rectified_txo);
     }
