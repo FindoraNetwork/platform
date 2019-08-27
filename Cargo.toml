@@ -17,7 +17,7 @@ rand_chacha = "0.1.1"
 rand = "0.6"
 regex = "1"
 
-zei = {path = "../zei"} #{ git = "ssh://github.com/eianio/zei" }
+zei = { git = "ssh://github.com/eianio/zei" }
 
 core = {path = "core"}
 txn_builder = {path = "components/txn_builder"}
