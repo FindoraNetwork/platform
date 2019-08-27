@@ -335,7 +335,7 @@ impl BitMap {
   /// # Example
   ///````
   /// use std::fs::OpenOptions;
-  /// use crate::core::store::bitmap::BitMap;
+  /// use crate::ledger::store::bitmap::BitMap;
   ///
   /// let path = "sample_create_name";
   ///
@@ -384,7 +384,7 @@ impl BitMap {
   /// # Example
   ///````
   /// use std::fs::OpenOptions;
-  /// use crate::core::store::bitmap::BitMap;
+  /// use crate::ledger::store::bitmap::BitMap;
   ///
   /// let path = "sample_open_name";
   ///

@@ -228,8 +228,8 @@ impl LoggedMerkle {
   ///
   /// # Example
   ///````
-  /// use crate::core::store::append_only_merkle::AppendOnlyMerkle;
-  /// use crate::core::store::logged_merkle::LoggedMerkle;
+  /// use ledger::store::append_only_merkle::AppendOnlyMerkle;
+  /// use ledger::store::logged_merkle::LoggedMerkle;
   /// use std::fs::OpenOptions;
   ///
   /// let tree_path = "new_logged";
@@ -565,8 +565,6 @@ impl Drop for LoggedMerkle {
 
 #[cfg(test)]
 mod tests {
-  extern crate core;
-
   use crate::store::append_only_merkle::AppendOnlyMerkle;
   use crate::store::append_only_merkle::HashValue;
   use crate::store::logged_merkle::LogBuffer;

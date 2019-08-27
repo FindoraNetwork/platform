@@ -1,5 +1,5 @@
 [package]
-name = "core"
+name = "ledger"
 version = "0.1.0"
 authors = ["Nathan Yospe <nathan@eian.io>, Kevin Foley <kevin@eian.io>, Ajinkya Nene <ajinkya@eian.io>"]
 edition = "2018"

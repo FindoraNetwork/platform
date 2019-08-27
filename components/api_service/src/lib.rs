@@ -1,14 +1,14 @@
 extern crate actix_rt;
 extern crate actix_web;
-extern crate core;
+extern crate ledger;
 extern crate serde_json;
 
 use actix_web::{web, App, HttpServer};
-use core::data_model::{
+use ledger::data_model::{
   AssetPolicyKey, AssetToken, AssetTokenCode, CustomAssetPolicy, SmartContract, SmartContractKey,
   TxnSID, TxoSID, Utxo,
 };
-use core::store::{ArchiveAccess, LedgerAccess};
+use ledger::store::{ArchiveAccess, LedgerAccess};
 use std::io;
 use std::marker::{Send, Sync};
 use std::sync::{Arc, RwLock};
@@ -163,9 +163,9 @@ mod tests {
   use super::*;
   use actix_web::dev::Service;
   use actix_web::{test, web, App};
-  use core::data_model::{Operation, Transaction};
-  use core::store::helpers::*;
-  use core::store::{ArchiveUpdate, LedgerState, LedgerUpdate};
+  use ledger::data_model::{Operation, Transaction};
+  use ledger::store::helpers::*;
+  use ledger::store::{ArchiveUpdate, LedgerState, LedgerUpdate};
   use rand::SeedableRng;
   use rand_chacha::ChaChaRng;
 

@@ -5,7 +5,7 @@ authors = ["Nathan Yospe <nathan@eian.io>"]
 edition = "2018"
 
 [dependencies]
-core = { path = "../core" }
+ledger = { path = "../ledger" }
 ledger_app = { path = "../components/ledger_app" }
 libc = "0.2.0"
 arrayref = "0.3.5"
