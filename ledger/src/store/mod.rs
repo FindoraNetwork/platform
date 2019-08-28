@@ -72,6 +72,7 @@ pub trait ArchiveAccess {
   fn get_transaction(&self, addr: TxnSID) -> Option<&Transaction>;
   fn get_proof(&self, addr: TxnSID) -> Option<Proof>;
   fn get_utxo_map(&self) -> Option<Vec<u8>>;
+  fn get_utxos(&self, list: Vec<usize>) -> Option<Vec<u8>>;
 }
 
 pub fn compute_sha256_hash<T>(msg: &T) -> [u8; 32]
@@ -272,11 +273,11 @@ impl LedgerState {
     let utxo_ref = Utxo { digest: compute_sha256_hash(&serde_json::to_vec(&txo.1).unwrap()),
                           output: txo.1 };
     // Add a bit to the utxo bitmap.
-    match &mut self.utxo_map {
-      Some(ref mut map) => { map.set(utxo_addr.index as usize).unwrap(); }
-      _ => {}
-    }
-
+    self.utxo_map
+        .as_mut()
+        .unwrap()
+        .set(utxo_addr.index as usize)
+        .unwrap();
     self.utxos.insert(utxo_addr, utxo_ref);
     self.max_applied_sid = utxo_addr;
   }
@@ -291,10 +292,11 @@ impl LedgerState {
         }
       }
       // Update the utxo bitmap to remove this asset.
-      match &mut self.utxo_map {
-        Some(ref mut map) => { map.clear(rectified_txo.index as usize).unwrap(); }
-        _ => {}
-      }
+      self.utxo_map
+          .as_mut()
+          .unwrap()
+          .clear(rectified_txo.index as usize)
+          .unwrap();
       self.utxos.remove(&rectified_txo);
     }
 
@@ -877,10 +879,14 @@ impl ArchiveAccess for LedgerState {
   }
 
   fn get_utxo_map(&self) -> Option<Vec<u8>> {
-    match &self.utxo_map {
-      Some(utxo_map) => Some(utxo_map.serialize()),
-      None => None,
-    }
+    Some(self.utxo_map.as_ref().unwrap().serialize(self.txn_count))
+  }
+
+  fn get_utxos(&self, utxo_list: Vec<usize>) -> Option<Vec<u8>> {
+    Some(self.utxo_map
+             .as_ref()
+             .unwrap()
+             .serialize_partial(utxo_list, self.txn_count))
   }
 }
 
