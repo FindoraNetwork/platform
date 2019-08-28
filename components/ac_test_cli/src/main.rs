@@ -57,9 +57,15 @@
 //    algebra/mod.rs: Made bn and groups public. Previously pub(crate).
 //    src/lib.rs: Made algebra public. Was private.
 
+extern crate log;
 extern crate rand;
 extern crate rand_chacha;
 extern crate zei;
+extern crate env_logger;
+
+use log::{debug,info,error,warn,trace};
+use env_logger::{Env, Target};
+
 use rand::SeedableRng;
 use rand_chacha::ChaChaRng;
 use zei::algebra::groups::Scalar;
@@ -67,7 +73,16 @@ use zei::algebra::bls12_381::{BLSScalar, BLSGt};
 use zei::crypto::anon_creds::{ac_keygen_issuer, ac_keygen_user, ac_sign,
                               ac_reveal, ac_verify};
 
+
 fn main() {
+    env_logger::from_env(Env::default().default_filter_or("trace")).target(Target::Stdout).init();
+    error!("Sample error message");
+    warn!("Sample warn message");
+    info!("Sample info message");
+    debug!("Sample debug message");
+    trace!("Sample trace message");
+
+    info!("ac_test_cli, Version 0");
     let mut prng: ChaChaRng;
     // For a real application, the seed should be random.
     prng = ChaChaRng::from_seed([0u8; 32]);
@@ -83,19 +98,20 @@ fn main() {
     let att_count = bitmap.len();
     let (issuer_pk, issuer_sk) =
         ac_keygen_issuer::<_, BLSScalar, BLSGt>(&mut prng, att_count);
-    println!("\nIssuer keys\nPrivate key: {:?}\nPublic key: {:?}",
-             issuer_sk, issuer_pk);
+    trace!("Issuer public key: {:?}", issuer_pk);
+    trace!("Issuer secret key: {:?}", issuer_sk);
 
     let (user_pk, user_sk) =
         ac_keygen_user::<_, BLSScalar, BLSGt>(&mut prng, &issuer_pk);
-    println!("\nUser keys\nPrivate key: {:?}\nPublic key: {:?}",
-             user_pk, user_sk);
+    trace!("User public key: {:#?}", user_pk);
+    // The user secret key holds [u64; 6], but with more structure.
+    trace!("User secret key: {:?}", user_sk);
 
     // Issuer vouches for the user's attributes given above.
     let sig =
         ac_sign::<_, BLSScalar, BLSGt>(&mut prng, &issuer_sk, &user_pk,
                                        &attrs);
-    println!("\nCredential signature: {:?}", sig);
+    trace!("Credential signature: {:?}", sig);
 
     // The user presents this to the second party in a transaction as proof
     // attributes have been committed without revealing the values.
@@ -130,8 +146,8 @@ fn main() {
                                      &bitmap,
                                      &reveal_sig).is_ok()
     {
-        println!("Verified!");
+        info!("Verified revealed attributes match signed commitment.");
     } else {
-        println!("Verification failed.");
+        error!("Verification failed.");
     };
 }
