@@ -54,6 +54,10 @@ macro_rules! debug {
   ($($x:tt)+) => {}; // ($($x:tt)+) => { println!("{}    {}", timestamp(), format!($($x)+)); }
 }
 
+// Constants for calling serialize_block.
+// const HEADER_ONLY: bool = false;
+const INCLUDE_BITS: bool = true;
+
 const CHECK_SIZE: usize = 16;
 
 #[repr(C)]
@@ -710,6 +714,7 @@ impl BitMap {
   /// Serialize the bit map to a compressed representation.
   pub fn serialize(&self, version: usize) -> Vec<u8> {
     assert!(self.validate());
+    // Reserve space for the version number as a u64.
     let mut bytes = 8;
 
     for i in 0..self.blocks.len() {
@@ -718,10 +723,10 @@ impl BitMap {
 
     let mut result = Vec::new();
     result.reserve(bytes);
-    result.extend_from_slice(&version.to_le_bytes());
+    result.extend_from_slice(&(version as u64).to_le_bytes());
 
     for i in 0..self.blocks.len() {
-      self.serialize_block(i, &mut result, true);
+      self.serialize_block(i, &mut result, INCLUDE_BITS);
     }
 
     log!("serialize() -> {}, expected {}", result.len(), bytes);
