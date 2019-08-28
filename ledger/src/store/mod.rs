@@ -72,6 +72,7 @@ pub trait ArchiveAccess {
   fn get_transaction(&self, addr: TxnSID) -> Option<&Transaction>;
   fn get_proof(&self, addr: TxnSID) -> Option<Proof>;
   fn get_utxo_map(&self) -> Option<Vec<u8>>;
+  fn get_utxos(&self, list: Vec<usize>) -> Option<Vec<u8>>;
 }
 
 pub fn compute_sha256_hash<T>(msg: &T) -> [u8; 32]
@@ -165,7 +166,7 @@ impl LedgerState {
     Ok(LoggedMerkle::new(tree, writer))
   }
 
-  // Initialize a bitmap to track to track the unspent utxos.
+  // Initialize a bitmap to track the unspent utxos.
   fn init_utxo_map(path: &str, create: bool) -> Result<BitMap, std::io::Error> {
     let file = OpenOptions::new().read(true)
                                  .write(true)
@@ -271,6 +272,12 @@ impl LedgerState {
 
     let utxo_ref = Utxo { digest: compute_sha256_hash(&serde_json::to_vec(&txo.1).unwrap()),
                           output: txo.1 };
+    // Add a bit to the utxo bitmap.
+    self.utxo_map
+        .as_mut()
+        .unwrap()
+        .set(utxo_addr.index as usize)
+        .unwrap();
     self.utxos.insert(utxo_addr, utxo_ref);
     self.max_applied_sid = utxo_addr;
   }
@@ -284,6 +291,12 @@ impl LedgerState {
           rectified_txo.index += self.txn_base_sid.index;
         }
       }
+      // Update the utxo bitmap to remove this asset.
+      self.utxo_map
+          .as_mut()
+          .unwrap()
+          .clear(rectified_txo.index as usize)
+          .unwrap();
       self.utxos.remove(&rectified_txo);
     }
 
@@ -866,10 +879,14 @@ impl ArchiveAccess for LedgerState {
   }
 
   fn get_utxo_map(&self) -> Option<Vec<u8>> {
-    match &self.utxo_map {
-      Some(utxo_map) => Some(utxo_map.serialize()),
-      None => None,
-    }
+    Some(self.utxo_map.as_ref().unwrap().serialize(self.txn_count))
+  }
+
+  fn get_utxos(&self, utxo_list: Vec<usize>) -> Option<Vec<u8>> {
+    Some(self.utxo_map
+             .as_ref()
+             .unwrap()
+             .serialize_partial(utxo_list, self.txn_count))
   }
 }
 
