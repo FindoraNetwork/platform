@@ -74,6 +74,7 @@ pub trait ArchiveAccess {
   fn get_proof(&self, addr: TxnSID) -> Option<Proof>;
   fn get_utxo_map(&self) -> Option<Vec<u8>>;
   fn get_utxos(&self, list: Vec<usize>) -> Option<Vec<u8>>;
+  fn get_utxo_checksum(&self, version: u64) -> Option<BitDigest>;
 }
 
 pub fn compute_sha256_hash<T>(msg: &T) -> [u8; 32]
@@ -904,6 +905,16 @@ impl ArchiveAccess for LedgerState {
              .unwrap()
              .serialize_partial(utxo_list, self.txn_count))
   }
+
+  fn get_utxo_checksum(&self, version: u64) -> Option<BitDigest> {
+    for pair in self.utxo_map_versions.iter() {
+      if pair.0 as u64 == version {
+        return Some(pair.1);
+      }
+    }
+
+    None
+  }
 }
 
 pub mod helpers {
@@ -1105,6 +1116,17 @@ mod tests {
                ledger.merkle.unwrap().state());
       }
     }
+
+    // We don't actually have anything to commmit yet,
+    // but this will save the empty checksum, which is
+    // enough for a bit of a test.
+    ledger.end_commit();
+    let query_result = ledger.get_utxo_checksum(ledger.txn_count as u64).unwrap();
+    let compute_result = ledger.utxo_map.as_mut().unwrap().compute_checksum();
+    println!("query_result = {:?}, compute_result = {:?}",
+             query_result, compute_result);
+
+    assert!(query_result == compute_result);
 
     match ledger.snapshot() {
       Ok(n) => {
