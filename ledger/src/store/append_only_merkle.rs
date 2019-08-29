@@ -933,7 +933,7 @@ impl AppendOnlyMerkle {
 
     // Read the file for each level of the tree.
     for level in 0..self.files.len() {
-      log!("Reading level {}.", level);
+      debug!("Reading level {}.", level);
       state.level = level;
       self.read_level(&mut state)?;
     }

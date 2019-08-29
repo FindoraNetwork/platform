@@ -52,7 +52,8 @@ macro_rules! log {
 // This macro is used only for debugging simple problems
 // with the basic mapping logic.
 macro_rules! debug {
-  ($($x:tt)+) => {}; // ($($x:tt)+) => { println!("{}    {}", timestamp(), format!($($x)+)); }
+  // ($($x:tt)+) => { println!("{}    {}", timestamp(), format!($($x)+)); }
+  ($($x:tt)+) => {};
 }
 
 // Constants for calling serialize_block.
@@ -114,7 +115,7 @@ struct BlockHeader {
 }
 
 // For users who download the bitmap, this is what they
-// get.
+// get for a block header.
 #[derive(Debug, Default)]
 #[repr(C)]
 pub struct BlockInfo {
@@ -142,6 +143,62 @@ impl BlockInfo {
     }
 
     Ok(())
+  }
+}
+
+// The version of a bitmap that is downloaded.
+pub struct SparseMap {
+  version: u64,
+  headers: Vec<BlockInfo>,
+  map: HashMap<u64, BlockBits>,
+}
+
+impl SparseMap {
+  pub fn new(bytes: &Vec<u8>) -> Result<SparseMap> {
+    let (version, headers, map) = match BitMap::deserialize(bytes) {
+      Ok((version, headers, map)) => (version, headers, map),
+      Err(x) => {
+        return Err(x);
+      }
+    };
+
+    Ok(SparseMap { version,
+                   headers,
+                   map })
+  }
+
+  pub fn version(&self) -> u64 {
+    self.version
+  }
+
+  pub fn query(&self, id: u64) -> Result<bool> {
+    let block = (id / BLOCK_BITS as u64) as usize;
+    let block_index = (id % BLOCK_BITS as u64) as usize;
+    let index = block_index / 8;
+    let shift = block_index % 8;
+    let mask = 1 << shift;
+
+    if block >= self.headers.len() {
+      return se!("Bit {} in block {} is not present.", id, block);
+    }
+
+    let info = &self.headers[block];
+    debug!("query:  block_index {}, info {:?}", block_index, info);
+
+    if block_index >= info.count as usize {
+      return se!("Bit {} in block {} is not present.", id, block);
+    }
+
+    match self.map.get(&(block as u64)) {
+      Some(bits) => {
+        return Ok(bits[index] & mask != 0);
+      }
+      None => {
+        debug!("query:  no map for block {}", block);
+      }
+    }
+
+    se!("Bit {} in block {} is not present.", id, block)
   }
 }
 
@@ -686,7 +743,7 @@ impl BitMap {
     };
 
     debug!("mutate(bit = {}, value = {}, {}) -> block {}, index {}, mask {}, BLOCK_BITS {}, mutate {}",
-           bit, value, extend, block, index, mask, BLOCK_BITS, mutate);
+    bit, value, extend, block, index, mask, BLOCK_BITS, mutate);
 
     if !mutate {
       return Ok(());
@@ -928,8 +985,10 @@ impl BitMap {
 
   pub fn deserialize(bytes: &[u8]) -> Result<(u64, Vec<BlockInfo>, HashMap<u64, BlockBits>)> {
     let mut info_vec = Vec::new();
-    let mut bits_vec = HashMap::new();
+    let mut bits_map = HashMap::new();
     let mut index = 0;
+
+    debug!("deserialize:  entered");
 
     if bytes.len() < 8 {
       return se!("The input did not contain a version number.");
@@ -955,15 +1014,19 @@ impl BitMap {
       index += BLOCK_INFO_SIZE;
       info.validate()?;
 
+      let block = info.bit_id / BLOCK_BITS as u64;
       let mut bits: BlockBits;
 
       match info.contents {
-        BIT_HEADER => {}
+        BIT_HEADER => {
+          debug!("No contents for block {}", block);
+        }
         BIT_ARRAY => {
           bits = [0_u8; BITS_SIZE];
           bits.clone_from_slice(&bytes[index..index + BITS_SIZE]);
           index += BITS_SIZE;
-          bits_vec.insert(info.bit_id, bits);
+          bits_map.insert(block, bits);
+          debug!("deserialize:  insert map block {}", block);
         }
         BIT_DESC_SET => {
           let (next, ids) = BitMap::decode(info.list_size, bytes, index)?;
@@ -974,7 +1037,8 @@ impl BitMap {
             BitMap::mutate_bit(&mut bits, ids[i], true);
           }
 
-          bits_vec.insert(info.bit_id, bits);
+          bits_map.insert(block, bits);
+          debug!("deserialize:  insert set block {}", block);
           index = next;
         }
         BIT_DESC_CLEAR => {
@@ -986,7 +1050,8 @@ impl BitMap {
             BitMap::mutate_bit(&mut bits, ids[i], false);
           }
 
-          bits_vec.insert(info.bit_id, bits);
+          bits_map.insert(block, bits);
+          debug!("deserialize:  insert clear block {}", block);
           index = next;
         }
         _ => {
@@ -997,7 +1062,8 @@ impl BitMap {
       info_vec.push(info);
     }
 
-    Ok((version, info_vec, bits_vec))
+    debug!("deserialize:  enter");
+    Ok((version, info_vec, bits_map))
   }
 
   fn clone_info(info: &mut [u8], bytes: &[u8], index: usize) {
@@ -1263,6 +1329,22 @@ mod tests {
 
     if let Err(x) = BitMap::deserialize(&s2) {
       panic!("deserialize(&s2) failed:  {}", x);
+    }
+
+    let sparse_map = SparseMap::new(&s2).unwrap();
+
+    for (key, _value) in sparse_map.map.iter() {
+      println!("Block {} mapped.", key);
+    }
+
+    for i in 0..bitmap.size() as u64 {
+      println!("At query {} of {}", i, bitmap.size());
+      let bitmap_result = bitmap.query(i as usize).unwrap();
+      let sparse_result = sparse_map.query(i).unwrap();
+
+      if bitmap_result != sparse_result {
+        panic!("Sparse mismatch at {}", i);
+      }
     }
 
     for i in 0..bitmap.size() {
