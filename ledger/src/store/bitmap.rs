@@ -258,6 +258,7 @@ pub struct BitMap {
   set: Vec<u32>,
   map: [u8; 256],
 }
+type StoredState = (usize, Vec<BitBlock>, Vec<i64>, Vec<u32>);
 
 impl Drop for BitMap {
   fn drop(&mut self) {
@@ -276,8 +277,8 @@ fn time() -> i64 {
 fn count_bits(bits: &[u8], map: [u8; 256]) -> u32 {
   let mut result: u32 = 0;
 
-  for i in 0..bits.len() {
-    result += map[bits[i] as usize] as u32;
+  for bit in bits.iter() {
+    result += u32::from(map[*bit as usize]);
   }
 
   result
@@ -288,8 +289,8 @@ fn count_bits(bits: &[u8], map: [u8; 256]) -> u32 {
 fn create_map() -> [u8; 256] {
   let mut result = [0_u8; 256];
 
-  for i in 0..256 {
-    result[i] = count_byte(i);
+  for (i, res_pos) in result.iter_mut().enumerate() {
+    *res_pos = count_byte(i);
   }
 
   result
@@ -320,8 +321,8 @@ fn bit_set(bits: &[u8], bit_index: usize) -> bool {
 fn slice(mut value: usize) -> [u8; INDEX_SIZE] {
   let mut result = [0u8; INDEX_SIZE];
 
-  for i in 0..INDEX_SIZE {
-    result[i] = (value & 0xff) as u8;
+  for res_pos in result.iter_mut() {
+    *res_pos = (value & 0xff) as u8;
     value >>= 8;
   }
 
@@ -436,7 +437,7 @@ impl BitMap {
 
   // Read the contents of a file into memory, checking the
   // validity as we go.
-  fn read_file(file: &mut File) -> Result<(usize, Vec<BitBlock>, Vec<i64>, Vec<u32>)> {
+  fn read_file(file: &mut File) -> Result<StoredState> {
     let mut blocks = Vec::new();
     let mut dirty = Vec::new();
     let mut set = Vec::new();
