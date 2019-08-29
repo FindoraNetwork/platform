@@ -911,19 +911,39 @@ impl BitMap {
       BitMap::clone_info(info.as_mut(), bytes, index);
       index += BLOCK_INFO_SIZE;
 
+      let mut bits: BlockBits;
+
       match info.contents {
         BIT_HEADER => {}
         BIT_ARRAY => {
-          let mut bits = [0_u8; BITS_SIZE];
+          bits = [0_u8; BITS_SIZE];
           bits.clone_from_slice(&bytes[index..index + BITS_SIZE]);
           index += BITS_SIZE;
           bits_vec.insert(info.bit_id, bits);
         }
         BIT_DESC_SET => {
-          index += info.list_size as usize * INDEX_SIZE;
+          let (next, ids) = BitMap::decode(info.list_size, bytes, index)?;
+          bits = [0_u8; BITS_SIZE];
+
+          for i in 0..ids.len() {
+            assert!(ids[i] < info.count as usize);
+            BitMap::mutate_bit(&mut bits, ids[i], true);
+          }
+
+          bits_vec.insert(info.bit_id, bits);
+          index = next;
         }
         BIT_DESC_CLEAR => {
-          index += info.list_size as usize * INDEX_SIZE;
+          let (next, ids) = BitMap::decode(info.list_size, bytes, index)?;
+          bits = [0xff_u8; BITS_SIZE];
+
+          for i in 0..ids.len() {
+            assert!(ids[i] < info.count as usize);
+            BitMap::mutate_bit(&mut bits, ids[i], false);
+          }
+
+          bits_vec.insert(info.bit_id, bits);
+          index = next;
         }
         _ => {
           return se!("Invalid info contents type:  {}", info.contents);
@@ -938,6 +958,41 @@ impl BitMap {
 
   fn clone_info(info: &mut [u8], bytes: &[u8], index: usize) {
     info.clone_from_slice(&bytes[index..index + BLOCK_INFO_SIZE]);
+  }
+
+  fn decode(list_size: u32, bytes: &[u8], start: usize) -> Result<(usize, Vec<usize>)> {
+    let mut index = start;
+    let mut ids = Vec::new();
+    let bytes_consumed = list_size as usize * INDEX_SIZE;
+
+    if index + bytes_consumed > bytes.len() {
+      return se!("An index list was too long:  {}", list_size);
+    }
+
+    for _ in 0..list_size {
+      let mut id: usize = 0;
+
+      for _ in 0..INDEX_SIZE {
+        id = (id << 8) | bytes[index] as usize;
+        index += 1;
+      }
+
+      ids.push(id);
+    }
+
+    Ok((index, ids))
+  }
+
+  fn mutate_bit(bytes: &mut BlockBits, id: usize, bit_set: bool) {
+    let index = id / 8;
+    let shift = id % 8;
+    let mask = 1 << shift;
+
+    if bit_set {
+      bytes[index] |= mask
+    } else {
+      bytes[index] &= !mask;
+    }
   }
 
   /// Return the number of bits in the map.
