@@ -325,6 +325,9 @@ pub struct BitMap {
   set_bits: Vec<u32>,
   map: [u8; 256],
 }
+
+// Clippy requires this declaration, otherwise the type is
+// "too complicated".
 type StoredState = (usize, Vec<BitBlock>, Vec<i64>, Vec<u32>);
 
 impl Drop for BitMap {
