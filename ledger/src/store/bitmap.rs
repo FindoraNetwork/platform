@@ -62,7 +62,7 @@ const INCLUDE_BITS: bool = true;
 const CHECK_SIZE: usize = 16;
 
 #[repr(C)]
-#[derive(Copy, Clone, Default, PartialEq)]
+#[derive(Copy, Clone, Debug, Default, PartialEq)]
 struct CheckBlock {
   bytes: [u8; CHECK_SIZE],
 }
@@ -115,7 +115,7 @@ struct BlockHeader {
 
 // For users who download the bitmap, this is what they
 // get.
-#[derive(Default)]
+#[derive(Debug, Default)]
 #[repr(C)]
 pub struct BlockInfo {
   magic: u32, // Should be first to allow changes...
@@ -125,6 +125,24 @@ pub struct BlockInfo {
   contents: u16,
   list_size: u32,
   checksum: CheckBlock,
+}
+
+impl BlockInfo {
+  fn validate(&self) -> Result<()> {
+    if self.magic != HEADER_MAGIC {
+      return se!("Invalid magic value {:x}", self.magic);
+    }
+
+    if self.count > BLOCK_BITS as u32 {
+      return se!("Invalid count {}", self.count);
+    }
+
+    if self.list_size as usize > BITS_SIZE / INDEX_SIZE {
+      return se!("Invalid list size {}", self.list_size);
+    }
+
+    Ok(())
+  }
 }
 
 impl BlockInfo {
@@ -159,7 +177,7 @@ impl BlockHeader {
     let result = BlockHeader { checksum: CheckBlock::new(),
                                magic: HEADER_MAGIC,
                                count: 0,
-                               bit_id: block_id,
+                               bit_id: block_id * BLOCK_BITS as u64,
                                offset: block_id,
                                contents: block_contents,
                                pad_1: 0,
@@ -182,7 +200,7 @@ impl BlockHeader {
                  BLOCK_BITS);
     }
 
-    if self.bit_id != id {
+    if self.bit_id != id * BLOCK_BITS as u64 {
       return se!("Block {} has a bad id:  the disk said {}.", id, self.bit_id);
     }
 
@@ -359,15 +377,15 @@ fn count_byte(mask: usize) -> u8 {
 // Query the given bit in an array to see whether it is set.
 fn bit_set(bits: &[u8], bit_index: usize) -> bool {
   let index = bit_index / 8;
-  let mask_shift = bit_index % 8;
-  let mask = 1 << mask_shift;
+  let shift = bit_index % 8;
+  let mask = 1 << shift;
 
   bits[index] & mask != 0
 }
 
 // Convert a count into its serialized form.  Currently,
 // that is little-endian, using INDEX_SIZE bytes.
-fn slice(mut value: usize) -> [u8; INDEX_SIZE] {
+fn encode(mut value: usize) -> [u8; INDEX_SIZE] {
   let mut result = [0u8; INDEX_SIZE];
 
   for res_pos in result.iter_mut() {
@@ -762,7 +780,6 @@ impl BitMap {
       self.serialize_block(i, &mut result, INCLUDE_BITS);
     }
 
-    log!("serialize() -> {}, expected {}", result.len(), bytes);
     assert!(result.len() == bytes);
     result
   }
@@ -774,6 +791,7 @@ impl BitMap {
   /// with a checksum.
   pub fn serialize_partial(&self, bit_list: Vec<usize>, version: usize) -> Vec<u8> {
     assert!(self.validate());
+    // Reserve space for the version number as a u64.
     let mut bytes = 8;
     let mut set = HashSet::new();
 
@@ -781,6 +799,7 @@ impl BitMap {
       set.insert(bit_list[i] / BLOCK_BITS);
     }
 
+    // Add the length for each block.
     for i in 0..self.blocks.len() {
       if set.contains(&i) {
         bytes += self.serial_size(i);
@@ -791,15 +810,12 @@ impl BitMap {
 
     let mut result = Vec::new();
     result.reserve(bytes);
-    result.extend_from_slice(&version.to_le_bytes());
+    result.extend_from_slice(&(version as u64).to_le_bytes());
 
     for i in 0..self.blocks.len() {
       self.serialize_block(i, &mut result, set.contains(&i));
     }
 
-    log!("serialize_partial() -> {}, expected {}",
-         result.len(),
-         bytes);
     assert!(result.len() == bytes);
     result
   }
@@ -837,6 +853,7 @@ impl BitMap {
 
   // Append the header information as a BlockInfo.
   fn append_header(&self, index: usize, contents: u16, size: u32, result: &mut Vec<u8>) {
+    debug!("append_header({}, {}, {}, ...)", index, contents, size);
     let info = BlockInfo { magic: HEADER_MAGIC,
                            checksum: self.blocks[index].header.checksum,
                            count: self.blocks[index].header.count,
@@ -850,7 +867,10 @@ impl BitMap {
 
   // Append an entire block to the serialized form.
   fn append_block(&self, index: usize, result: &mut Vec<u8>) {
-    result.extend_from_slice(self.blocks[index].as_ref());
+    // Append the header to the serialization.
+    self.append_header(index, BIT_ARRAY, 0, result);
+
+    result.extend_from_slice(&self.blocks[index].bits[0..BITS_SIZE]);
   }
 
   // Append a list of the set bits to the serialization
@@ -861,18 +881,22 @@ impl BitMap {
     // Append the header to the serialization.
     self.append_header(index, BIT_DESC_SET, set_bits, result);
 
-    // Get the number of valid bits in this block.
+    // Get the bit map.
     let bits = &self.blocks[index].bits;
+    let mut count = 0;
 
-    for i in 0..BLOCK_BITS {
+    for i in 0..self.blocks[index].header.count as usize {
       if bit_set(bits, i) {
-        result.extend_from_slice(&slice(i));
+        result.extend_from_slice(&encode(i));
+        count += 1;
       }
     }
 
-    log!("append_set: {} bits -> {} bytes",
-         self.set_bits[index],
-         self.set_bits[index] * INDEX_SIZE as u32 + HEADER_SIZE as u32);
+    assert!(count == set_bits);
+    debug!("append_set: {} bits -> {} bytes ({} set)",
+           self.set_bits[index],
+           self.set_bits[index] * INDEX_SIZE as u32 + BLOCK_INFO_SIZE as u32,
+           set_bits);
   }
 
   // Append a list of the clear bits to the serialization
@@ -882,23 +906,39 @@ impl BitMap {
 
     self.append_header(index, BIT_DESC_CLEAR, clear_bits, result);
 
+    let mut count = 0;
     let bits = &self.blocks[index].bits;
 
     for i in 0..BLOCK_BITS {
       if !bit_set(bits, i) {
-        result.extend_from_slice(&slice(i));
+        result.extend_from_slice(&encode(i));
+        count += 1;
       }
     }
 
-    log!("append_clear: {} bits -> {} bytes",
-         self.set_bits[index],
-         (BLOCK_BITS - self.set_bits[index] as usize) * INDEX_SIZE + HEADER_SIZE as usize);
+    assert!(count == clear_bits);
+    debug!("append_clear:  {} bits -> {} bytes ({} clear)",
+           self.set_bits[index],
+           (BLOCK_BITS - self.set_bits[index] as usize) * INDEX_SIZE + BLOCK_INFO_SIZE as usize,
+           clear_bits);
   }
 
-  pub fn deserialize(bytes: &[u8]) -> Result<(Vec<BlockInfo>, HashMap<u64, BlockBits>)> {
+  pub fn deserialize(bytes: &[u8]) -> Result<(u64, Vec<BlockInfo>, HashMap<u64, BlockBits>)> {
     let mut info_vec = Vec::new();
     let mut bits_vec = HashMap::new();
     let mut index = 0;
+
+    if bytes.len() < 8 {
+      return se!("The input did not contain a version number.");
+    }
+
+    let mut version: u64 = 0;
+
+    for i in 0..8 {
+      version = (version << 8) | bytes[i] as u64;
+    }
+
+    index += 8;
 
     loop {
       if bytes.len() == index {
@@ -910,6 +950,7 @@ impl BitMap {
       let mut info = BlockInfo::default();
       BitMap::clone_info(info.as_mut(), bytes, index);
       index += BLOCK_INFO_SIZE;
+      info.validate()?;
 
       let mut bits: BlockBits;
 
@@ -953,7 +994,7 @@ impl BitMap {
       info_vec.push(info);
     }
 
-    Ok((info_vec, bits_vec))
+    Ok((version, info_vec, bits_vec))
   }
 
   fn clone_info(info: &mut [u8], bytes: &[u8], index: usize) {
@@ -972,14 +1013,15 @@ impl BitMap {
     for _ in 0..list_size {
       let mut id: usize = 0;
 
-      for _ in 0..INDEX_SIZE {
-        id = (id << 8) | bytes[index] as usize;
+      for position in 0..INDEX_SIZE {
+        id |= (bytes[index] as usize) << (8 * position);
         index += 1;
       }
 
       ids.push(id);
     }
 
+    debug!("decode() -> ({}, {:?})", index, ids);
     Ok((index, ids))
   }
 
@@ -1053,7 +1095,7 @@ mod tests {
     let id = 24_000;
     let mut header = BlockHeader::new(BIT_ARRAY, id).unwrap();
     assert!(header.contents == BIT_ARRAY);
-    assert!(header.bit_id == id);
+    assert!(header.bit_id == id * BLOCK_BITS as u64);
 
     if let Err(e) = header.validate(BIT_ARRAY, id) {
       panic!("Validation failed:  {}", e);
@@ -1132,7 +1174,7 @@ mod tests {
 
     let mut block = BitBlock::new(BIT_DESC_CLEAR, 32).unwrap();
     assert!(block.header.contents == BIT_DESC_CLEAR);
-    assert!(block.header.bit_id == 32);
+    assert!(block.header.bit_id == 32 * BLOCK_BITS as u64);
 
     block.set_checksum();
 
@@ -1209,10 +1251,16 @@ mod tests {
     }
 
     let s1 = bitmap.serialize_partial(vec![0, BLOCK_BITS], 1);
-    let _ = BitMap::deserialize(&s1);
+
+    if let Err(x) = BitMap::deserialize(&s1) {
+      panic!("deserialize(&s1) failed:  {}", x);
+    }
 
     let s2 = bitmap.serialize(1);
-    let _ = BitMap::deserialize(&s2);
+
+    if let Err(x) = BitMap::deserialize(&s2) {
+      panic!("deserialize(&s2) failed:  {}", x);
+    }
 
     for i in 0..bitmap.size() {
       if i & 1 == 0 {
