@@ -14,7 +14,8 @@ use logged_merkle::LoggedMerkle;
 use rand::SeedableRng;
 use rand_chacha::ChaChaRng;
 use sha2::{Digest, Sha256};
-use std::collections::{HashMap, HashSet};
+use sodiumoxide::crypto::hash::sha256::Digest as BitDigest;
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::fs::File;
 use std::fs::OpenOptions;
 use std::io::BufReader;
@@ -73,6 +74,7 @@ pub trait ArchiveAccess {
   fn get_proof(&self, addr: TxnSID) -> Option<Proof>;
   fn get_utxo_map(&self) -> Option<Vec<u8>>;
   fn get_utxos(&self, list: Vec<usize>) -> Option<Vec<u8>>;
+  fn get_utxo_checksum(&self, version: u64) -> Option<BitDigest>;
 }
 
 pub fn compute_sha256_hash<T>(msg: &T) -> [u8; 32]
@@ -86,6 +88,8 @@ pub fn compute_sha256_hash<T>(msg: &T) -> [u8; 32]
   *hash
 }
 
+const MAX_VERSION: usize = 100;
+
 #[derive(Serialize, Deserialize)]
 pub struct LedgerState {
   merkle_path: String,
@@ -98,6 +102,7 @@ pub struct LedgerState {
   utxos: HashMap<TxoSID, Utxo>,
   #[serde(skip)]
   utxo_map: Option<BitMap>,
+  utxo_map_versions: VecDeque<(usize, BitDigest)>,
   contracts: HashMap<SmartContractKey, SmartContract>,
   policies: HashMap<AssetPolicyKey, CustomAssetPolicy>,
   tokens: HashMap<AssetTokenCode, AssetToken>,
@@ -135,6 +140,15 @@ impl LedgerState {
       v.push(next_txn);
     }
     Ok(v)
+  }
+
+  fn save_utxo_map_version(&mut self) {
+    if self.utxo_map_versions.len() >= MAX_VERSION {
+      self.utxo_map_versions.pop_front();
+    }
+
+    self.utxo_map_versions
+        .push_back((self.txn_count, self.utxo_map.as_mut().unwrap().compute_checksum()));
   }
 
   fn store_transaction(&self, _txn: &Transaction) {}
@@ -195,6 +209,7 @@ impl LedgerState {
                                utxos: HashMap::new(),
                                utxo_map: Some(LedgerState::init_utxo_map(utxo_map_path,
                                                                          create)?),
+                               utxo_map_versions: VecDeque::new(),
                                contracts: HashMap::new(),
                                policies: HashMap::new(),
                                tokens: HashMap::new(),
@@ -252,7 +267,9 @@ impl LedgerState {
     self.txn_base_sid.index = self.max_applied_sid.index + 1;
   }
 
-  pub fn end_commit(&mut self) {}
+  pub fn end_commit(&mut self) {
+    self.save_utxo_map_version();
+  }
 
   fn add_txo(&mut self, txo: (&TxoSID, TxOutput)) {
     let mut utxo_addr = *txo.0;
@@ -888,6 +905,16 @@ impl ArchiveAccess for LedgerState {
              .unwrap()
              .serialize_partial(utxo_list, self.txn_count))
   }
+
+  fn get_utxo_checksum(&self, version: u64) -> Option<BitDigest> {
+    for pair in self.utxo_map_versions.iter() {
+      if pair.0 as u64 == version {
+        return Some(pair.1);
+      }
+    }
+
+    None
+  }
 }
 
 pub mod helpers {
@@ -1089,6 +1116,17 @@ mod tests {
                ledger.merkle.unwrap().state());
       }
     }
+
+    // We don't actually have anything to commmit yet,
+    // but this will save the empty checksum, which is
+    // enough for a bit of a test.
+    ledger.end_commit();
+    let query_result = ledger.get_utxo_checksum(ledger.txn_count as u64).unwrap();
+    let compute_result = ledger.utxo_map.as_mut().unwrap().compute_checksum();
+    println!("query_result = {:?}, compute_result = {:?}",
+             query_result, compute_result);
+
+    assert!(query_result == compute_result);
 
     match ledger.snapshot() {
       Ok(n) => {

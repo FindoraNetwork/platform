@@ -85,6 +85,24 @@ fn query_proof<AA>(data: web::Data<Arc<RwLock<AA>>>,
   }
 }
 
+fn query_utxo_map_checksum<AA>(data: web::Data<Arc<RwLock<AA>>>,
+                               info: web::Path<String>)
+                               -> actix_web::Result<String>
+  where AA: ArchiveAccess
+{
+  if let Ok(version) = info.parse::<u64>() {
+    let reader = data.read().unwrap();
+
+    if let Some(vec) = reader.get_utxo_checksum(version) {
+      Ok(serde_json::to_string(&vec)?)
+    } else {
+      Err(actix_web::error::ErrorNotFound("That version is unavailable."))
+    }
+  } else {
+    Err(actix_web::error::ErrorNotFound("Invalid version encoding."))
+  }
+}
+
 fn query_utxo_map<AA>(data: web::Data<Arc<RwLock<AA>>>,
                       _info: web::Path<String>)
                       -> actix_web::Result<String>
@@ -146,6 +164,8 @@ impl RestfulApiService {
                 .route("/txn_sid/{sid}", web::get().to(query_txn::<LA>))
                 .route("/proof/{sid}", web::get().to(query_proof::<LA>))
                 .route("/utxo_map", web::get().to(query_utxo_map::<LA>))
+                .route("/utxo_map_checksum",
+                       web::get().to(query_utxo_map_checksum::<LA>))
                 .route("/policy_key/{key}", web::get().to(query_policy::<LA>))
                 .route("/contract_key/{key}", web::get().to(query_contract::<LA>))
     }).bind("127.0.0.1:8668")?
