@@ -19,6 +19,10 @@ extern crate time;
 
 use super::append_only_merkle::timestamp;
 use sodiumoxide::crypto::hash::sha256;
+use sodiumoxide::crypto::hash::sha256::Digest;
+use sodiumoxide::crypto::hash::sha256::DIGESTBYTES;
+use std::cmp::min;
+use std::collections::HashSet;
 use std::fs::File;
 use std::io::Error;
 use std::io::ErrorKind;
@@ -50,15 +54,21 @@ macro_rules! debug {
   ($($x:tt)+) => {}; // ($($x:tt)+) => { println!("{}    {}", timestamp(), format!($($x)+)); }
 }
 
+// Constants for calling serialize_block.
+// const HEADER_ONLY: bool = false;
+const INCLUDE_BITS: bool = true;
+
 const CHECK_SIZE: usize = 16;
 
 #[repr(C)]
-#[derive(PartialEq)]
+#[derive(Copy, Clone, PartialEq)]
 struct CheckBlock {
   bytes: [u8; CHECK_SIZE],
 }
 
-// A structure for a checksum on a block.
+// A structure for a checksum on a block.  We use
+// the first CHECK_SIZE bytes of the sha256 digest
+// as the checksum.
 impl CheckBlock {
   fn new() -> CheckBlock {
     CheckBlock { bytes: [0_u8; CHECK_SIZE] }
@@ -73,6 +83,7 @@ const BIT_INVALID: u16 = 0; // This value is used for testing.
 const BIT_ARRAY: u16 = 1;
 const BIT_DESC_SET: u16 = 2;
 const BIT_DESC_CLEAR: u16 = 3;
+const BIT_HEADER: u16 = 4;
 
 // Define the layout for a block header.
 //
@@ -107,6 +118,7 @@ impl BlockHeader {
     if block_contents != BIT_ARRAY
        && block_contents != BIT_DESC_SET
        && block_contents != BIT_DESC_CLEAR
+       && block_contents != BIT_HEADER
     {
       return se!("That content type ({}) is invalid.", block_contents);
     }
@@ -249,11 +261,18 @@ impl BitBlock {
   }
 }
 
+// Define a type for the checksum operation.
+type ChecksumData = [u8; CHECK_SIZE + DIGESTBYTES];
+const EMPTY_CHECKSUM: ChecksumData = [0_u8; CHECK_SIZE + DIGESTBYTES];
+
 /// Define the structure for controlling a persistent bitmap.
 pub struct BitMap {
   file: File,
   size: usize,
   blocks: Vec<BitBlock>,
+  checksum_data: Vec<ChecksumData>,
+  checksum: Digest,
+  first_invalid: usize,
   dirty: Vec<i64>, // the modification time for the block, or zero
   set: Vec<u32>,
   map: [u8; 256],
@@ -372,6 +391,9 @@ impl BitMap {
     let result = BitMap { file: data,
                           size: 0,
                           blocks: Vec::new(),
+                          checksum_data: Vec::new(),
+                          checksum: Digest([0_u8; DIGESTBYTES]),
+                          first_invalid: 0,
                           dirty: Vec::new(),
                           set: Vec::new(),
                           map: create_map() };
@@ -424,12 +446,22 @@ impl BitMap {
   pub fn open(mut data: File) -> Result<BitMap> {
     let (count, block_vector, state_vector, set_vector) = BitMap::read_file(&mut data)?;
 
-    let result = BitMap { file: data,
-                          size: count,
-                          blocks: block_vector,
-                          dirty: state_vector,
-                          set: set_vector,
-                          map: create_map() };
+    let mut result = BitMap { file: data,
+                              size: count,
+                              blocks: block_vector,
+                              checksum_data: Vec::new(),
+                              checksum: Digest([0_u8; DIGESTBYTES]),
+                              first_invalid: 0,
+                              dirty: state_vector,
+                              set: set_vector,
+                              map: create_map() };
+
+    result.checksum_data.reserve(result.blocks.len());
+
+    // Reserve space for the checksum operation cache.
+    for _ in 0..result.blocks.len() {
+      result.checksum_data.push(EMPTY_CHECKSUM);
+    }
 
     assert!(result.validate());
     Ok(result)
@@ -583,12 +615,17 @@ impl BitMap {
     // push the new block and the dirty flag for it.
     if block >= self.blocks.len() {
       self.blocks.push(BitBlock::new(BIT_ARRAY, block as u64)?);
+      self.checksum_data.push(EMPTY_CHECKSUM);
       self.dirty.push(time());
       self.set.push(0);
     } else {
       self.dirty[block] = time();
+      self.blocks[block].header.checksum = CheckBlock::new();
+      self.first_invalid = min(self.first_invalid, block);
     }
 
+    // Check whether the bit map state actually is going to
+    // be changed.  We can skip the store if not.
     let mutate = if bit >= self.size {
       true
     } else {
@@ -631,10 +668,55 @@ impl BitMap {
     Ok(())
   }
 
+  /// Compute a checksum for the entire bitmap.
+  ///
+  /// The checksum is defined currently recursively across
+  /// the blocks where the checksum at block i is:
+  ///
+  ///    checksum[i] = sha256(check_block[i] | checksum[i - 1])
+  ///    checksum[0] = sha256(check_block[0] | [0_u8; DIGESTBYTES])
+  ///
+  /// where "|" denotes byte array concatenation.  The checksum result
+  /// is defined as the final sha256 value computed, or an array of
+  /// zeros, if no blocks exist in the bitmap.
+  ///
+  pub fn compute_checksum(&mut self) -> Digest {
+    if self.first_invalid == self.blocks.len() {
+      return self.checksum;
+    }
+
+    let mut result = Digest([0_u8; DIGESTBYTES]);
+
+    // For the first time through the loop, the checksum in the
+    // checksum_data array actually is valid, so make the first
+    // clone_from_slice thus into a nop.
+    if self.first_invalid > 0 {
+      result.0
+            .clone_from_slice(&self.checksum_data[self.first_invalid][CHECK_SIZE..]);
+    }
+
+    // For each block not yet computed.
+    for i in self.first_invalid..self.blocks.len() {
+      //
+      // Get the checkblock for this block of the bitmap, and
+      // clone the result of the previous checksum into it.
+      //
+      self.checksum_data[i][CHECK_SIZE..].clone_from_slice(result.as_ref());
+
+      // Compute the next sha256 result.
+      result = sha256::hash(&self.checksum_data[i]);
+    }
+
+    self.first_invalid = self.blocks.len();
+    self.checksum = result;
+    result
+  }
+
   /// Serialize the bit map to a compressed representation.
-  pub fn serialize(&self) -> Vec<u8> {
+  pub fn serialize(&self, version: usize) -> Vec<u8> {
     assert!(self.validate());
-    let mut bytes = 0;
+    // Reserve space for the version number as a u64.
+    let mut bytes = 8;
 
     for i in 0..self.blocks.len() {
       bytes += self.serial_size(i);
@@ -642,12 +724,50 @@ impl BitMap {
 
     let mut result = Vec::new();
     result.reserve(bytes);
+    result.extend_from_slice(&(version as u64).to_le_bytes());
 
     for i in 0..self.blocks.len() {
-      self.serialize_block(i, &mut result);
+      self.serialize_block(i, &mut result, INCLUDE_BITS);
     }
 
     log!("serialize() -> {}, expected {}", result.len(), bytes);
+    assert!(result.len() == bytes);
+    result
+  }
+
+  /// Serialize the bitmap to a compressed form that
+  /// contains bit values only for a blocks containing a
+  /// blocks containing an entry in a given list of bit
+  /// ids.  Other blocks are represented only by a header
+  /// with a checksum.
+  pub fn serialize_partial(&self, bit_list: Vec<usize>, version: usize) -> Vec<u8> {
+    assert!(self.validate());
+    let mut bytes = 8;
+    let mut set = HashSet::new();
+
+    for i in 0..bit_list.len() {
+      set.insert(bit_list[i] / BLOCK_BITS);
+    }
+
+    for i in 0..self.blocks.len() {
+      if set.contains(&i) {
+        bytes += self.serial_size(i);
+      } else {
+        bytes += HEADER_SIZE;
+      }
+    }
+
+    let mut result = Vec::new();
+    result.reserve(bytes);
+    result.extend_from_slice(&version.to_le_bytes());
+
+    for i in 0..self.blocks.len() {
+      self.serialize_block(i, &mut result, set.contains(&i));
+    }
+
+    log!("serialize_partial() -> {}, expected {}",
+         result.len(),
+         bytes);
     assert!(result.len() == bytes);
     result
   }
@@ -669,16 +789,24 @@ impl BitMap {
 
   // Append serialized form of a block to the Vec
   // representing the result.
-  fn serialize_block(&self, index: usize, result: &mut Vec<u8>) {
+  fn serialize_block(&self, index: usize, result: &mut Vec<u8>, include: bool) {
     let set_bits = self.set[index];
 
-    if set_bits > LOWER_LIMIT && set_bits < UPPER_LIMIT {
+    if !include {
+      self.append_header(index, result);
+    } else if set_bits > LOWER_LIMIT && set_bits < UPPER_LIMIT {
       self.append_block(index, result);
     } else if set_bits <= LOWER_LIMIT {
       self.append_set(index, result);
     } else {
       self.append_clear(index, result);
     }
+  }
+
+  // Append only the header.
+  fn append_header(&self, index: usize, result: &mut Vec<u8>) {
+    let header = BlockHeader::new(BIT_HEADER, index as u64).unwrap();
+    result.extend_from_slice(header.as_ref());
   }
 
   // Append an entire block to the serialized form.
@@ -875,7 +1003,9 @@ mod tests {
     block.header.checksum.bytes[0] ^= 1;
 
     if let Ok(_) = block.validate(BIT_DESC_CLEAR, 32) {
-      panic!("Block validation didn't detect a bad checksum.");
+      panic!("Block validation didn't detect a bad checksum: {:?} vs {:?}.",
+             block.header.checksum.bytes,
+             block.compute_checksum());
     }
   }
 
@@ -895,6 +1025,10 @@ mod tests {
 
     if let Err(e) = bitmap.write() {
       panic!("Write failed:  {}", e);
+    }
+
+    if bitmap.compute_checksum() != Digest([0_u8; DIGESTBYTES]) {
+      panic!("compute_checksum() failed on an empty tree");
     }
 
     if let Ok(_) = bitmap.set(1) {
@@ -934,7 +1068,8 @@ mod tests {
       }
     }
 
-    let _ = bitmap.serialize();
+    let _ = bitmap.serialize_partial(vec![0, BLOCK_BITS], 1);
+    let _ = bitmap.serialize(1);
 
     for i in 0..bitmap.size() {
       if i & 1 == 0 {

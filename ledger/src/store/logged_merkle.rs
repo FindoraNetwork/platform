@@ -85,7 +85,7 @@ const BUFFER_MARKER: u32 = 0xabab_efe0;
 /// field must follow the checksum.
 ///
 /// A flush operation causes the writing of a buffer whether that buffer
-/// is full or not, so any buffer in the can be only partially full.
+/// is full or not, so any buffer in the file might be only partially full.
 /// Partially full buffers are written as a full-size buffer with some
 /// number of empty (zero) entries.  All buffers should have at least
 /// one valid entry.

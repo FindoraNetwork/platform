@@ -79,13 +79,14 @@ macro_rules! log {
 pub fn timestamp() -> String {
   let now = Utc::now();
 
-  format!("{:04}/{:02}/{:02} {:02}:{:02}:{:02} UTC",
+  format!("{:04}/{:02}/{:02} {:02}:{:02}:{:02}.{:03} UTC",
           now.year(),
           now.month(),
           now.day(),
           now.hour(),
           now.minute(),
-          now.second())
+          now.second(),
+          now.nanosecond() / (1000 * 1000))
 }
 
 #[derive(PartialEq, Copy, Clone, Debug, Deserialize, Serialize)]
