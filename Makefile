@@ -14,7 +14,7 @@ bin_files =                             \
         ./$(pick)/check_merkle          \
 
 lib_files =                                                         \
-        core/$(pick)/libcore.rlib                                   \
+        ledger/$(pick)/libledger.rlib                               \
         components/ledger_app/$(pick)/libledger_app.rlib            \
         components/api_service/$(pick)/libapi_service.rlib          \
         components/query_processor/$(pick)/libquery_processor.rlib  \
