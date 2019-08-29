@@ -3,7 +3,10 @@ lib_dir         = lib
 pick            = target/release
 release_dir     = release
 release_subdirs = $(bin_dir) $(lib_dir)
-rust_dirs       = $(shell find . -name "Cargo.toml" | sed -e "s:/Cargo.toml::")
+rust_dirs       = $(shell find . -name target -prune -o    \
+                                 -name git    -prune -o    \
+                                 -name "Cargo.toml" -print \
+                              | sed -e "s:/Cargo.toml::")
 
 bin_files =                             \
         ./$(pick)/txn_builder_cli       \
