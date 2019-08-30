@@ -108,6 +108,7 @@ const BIT_HEADER: u16 = 4;
 // The size of this structure must match the HEADER_SIZE
 // constant.
 
+#[derive(Debug)]
 #[repr(C)]
 struct BlockHeader {
   checksum: CheckBlock, // must be first
@@ -215,6 +216,51 @@ impl SparseMap {
     }
 
     se!("Bit {} in block {} is not present.", id, block)
+  }
+
+  pub fn validate_checksum(&self) -> bool {
+    let mut checksum_data = EMPTY_CHECKSUM;
+    let mut digest = Digest { 0: [0_u8; DIGESTBYTES] };
+
+    for i in 0..self.headers.len() {
+      let info = &self.headers[i];
+
+      match self.map.get(&(i as u64)) {
+        Some(bits) => {
+          // Recreate the block as it should have been on disk...
+          let mut block = BitBlock::new(BIT_ARRAY, i as u64).unwrap();
+          block.header.count = info.count;
+          block.bits.clone_from_slice(&bits[0..]);
+
+          let checksum = block.compute_checksum();
+
+          if checksum != info.checksum.bytes {
+            debug!("validate_checksum:  header {:?}", block.header);
+            log!("Invalid checksum for block {}",
+                 info.bit_id / BLOCK_BITS as u64);
+            return false;
+          }
+
+          debug!("validate_checksum:  Block {} verifies.", i);
+        }
+        None => {
+          debug!("validate_checksum:  phantom data");
+        }
+      }
+
+      checksum_data[0..CHECK_SIZE].clone_from_slice(&info.checksum.bytes[0..CHECK_SIZE]);
+      digest = sha256::hash(&checksum_data);
+      debug!("validate_checksum:  checksum at block {} is {:?}",
+             i, info.checksum);
+      debug!("validate_checksum:  checksum_data at block {} is {:?}",
+             i,
+             show(&checksum_data));
+      debug!("validate_checksum:  digest at block {} is {:?}", i, digest);
+      checksum_data[CHECK_SIZE..].clone_from_slice(&digest.0[0..]);
+    }
+
+    debug!("validate_checksum:  got final digest {:?}", digest);
+    digest == self.checksum
   }
 }
 
@@ -386,6 +432,18 @@ impl BitBlock {
 // Define a type for the checksum operation.
 type ChecksumData = [u8; CHECK_SIZE + DIGESTBYTES];
 const EMPTY_CHECKSUM: ChecksumData = [0_u8; CHECK_SIZE + DIGESTBYTES];
+
+fn show(data: &ChecksumData) -> String {
+  let mut result: String = "{ ".to_string();
+
+  result = result + &format!("{}", data[0]);
+
+  for i in 1..data.len() {
+    result += &format!(", {}", data[i]);
+  }
+
+  result + " }"
+}
 
 /// Define the structure for controlling a persistent bitmap.
 pub struct BitMap {
@@ -571,7 +629,8 @@ impl BitMap {
   /// # let _ = std::fs::remove_file(&path);
   ///````
   pub fn open(mut data: File) -> Result<BitMap> {
-    let (count, block_vector, state_vector, checksum_vector, set_vector) = BitMap::read_file(&mut data)?;
+    let (count, block_vector, state_vector, checksum_vector, set_vector) =
+      BitMap::read_file(&mut data)?;
 
     let mut result = BitMap { file: data,
                               size: count,
@@ -639,7 +698,7 @@ impl BitMap {
           count += block.header.count as usize;
           blocks.push(block);
           dirty.push(0 as i64);
-          checksum_valid.push(true);
+          checksum_valid.push(false);
           set.push(set_count);
         }
         Err(e) => {
@@ -752,7 +811,6 @@ impl BitMap {
     } else {
       self.dirty[block] = time();
       self.checksum_valid[block] = false;
-      self.blocks[block].header.checksum = CheckBlock::new();
       self.first_invalid = min(self.first_invalid, block);
     }
 
@@ -815,39 +873,46 @@ impl BitMap {
   /// or an array of zeros, if no blocks exist in the bitmap.
   ///
   pub fn compute_checksum(&mut self) -> Digest {
-    let mut result = Digest([0_u8; DIGESTBYTES]);
-
-    // For the first time through the loop, the checksum in the
-    // checksum_data array actually is valid, so make the first
-    // clone_from_slice thus into a nop.
-    if self.first_invalid > 0 {
-      let previous_result = &self.checksum_data[self.first_invalid][CHECK_SIZE..];
-      result.0.clone_from_slice(previous_result);
-    }
+    let mut digest = Digest([0_u8; DIGESTBYTES]);
+    let mut first = false;
 
     // For each block not yet computed.
     for i in self.first_invalid..self.blocks.len() {
+      if !first {
+        self.checksum_data[i][CHECK_SIZE..].clone_from_slice(&digest[0..]);
+        first = false;
+      }
+
       //
-      // Compute the checksum for this block if needed.
+      // Compute the checksum for this block if needed and insert
+      // it into our checksum_data.
       //
       if !self.checksum_valid[i] {
         debug!("compute_checksum:  fixing block {}", i);
         self.blocks[i].set_checksum();
+        let checksum = &self.blocks[i].header.checksum.bytes;
+        self.checksum_data[i][0..CHECK_SIZE].clone_from_slice(checksum);
         self.checksum_valid[i] = true;
       }
 
       //
-      // Get the checkblock for this block of the bitmap, and
-      // clone the result of the previous checksum into it.
+      // Get the previous digest into our checksum_data.
       //
-      self.checksum_data[i][CHECK_SIZE..].clone_from_slice(result.as_ref());
+      self.checksum_data[i][CHECK_SIZE..].clone_from_slice(digest.as_ref());
 
-      // Compute the next sha256 result.
-      result = sha256::hash(&self.checksum_data[i]);
+      // Compute the next sha256 digest.
+      digest = sha256::hash(&self.checksum_data[i]);
+      debug!("compute_checksum:  checksum at block {} is {:?}",
+             i, self.blocks[i].header.checksum);
+      debug!("compute_checksum:  checksum_data at block {} is {:?}",
+             i,
+             show(&self.checksum_data[i]));
+      debug!("compute_checksum:  digest at block {} is {:?}", i, digest);
     }
 
-    self.checksum = result;
-    result
+    debug!("compute_checksum:  got final digest {:?}", digest);
+    self.checksum = digest;
+    digest
   }
 
   /// Serialize the bit map to a compressed representation.
@@ -915,7 +980,7 @@ impl BitMap {
     bytes.extend_from_slice(&digest[0..]);
   }
 
-  // Compute the expected size of the serialize form
+  // Compute the expected size of the serialized form
   // of a given block.
   fn serial_size(&self, index: usize) -> usize {
     let set_bits = self.set_bits[index];
@@ -957,6 +1022,7 @@ impl BitMap {
                            list_size: size,
                            contents: contents };
 
+    assert!(self.checksum_valid[index]);
     result.extend_from_slice(info.as_ref());
   }
 
@@ -1195,7 +1261,6 @@ impl BitMap {
     self.blocks[index].set_checksum();
     self.file.write_all(self.blocks[index].as_ref())?;
     self.dirty[index] = 0;
-    self.checksum_valid[index] = true;
     Ok(())
   }
 }
@@ -1357,7 +1422,6 @@ mod tests {
       }
 
       if i % 4096 == 1 {
-        println!("Validating the count at {}", i);
         assert!(bitmap.validate());
       }
 
@@ -1388,6 +1452,9 @@ mod tests {
     for (key, _value) in sparse_map.map.iter() {
       println!("Block {} mapped.", key);
     }
+
+    assert!(partial_map.validate_checksum());
+    assert!(sparse_map.validate_checksum());
 
     println!("sparse_version = {}, sparse_map.version() = {}",
              sparse_version,
