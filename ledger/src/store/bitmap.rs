@@ -1439,7 +1439,8 @@ mod tests {
       panic!("deserialize(&s1) failed:  {}", x);
     }
 
-    let sparse_version = 103;
+    // Pick a random version number.
+    let sparse_version = 0x010203;
     let s2 = bitmap.serialize(sparse_version);
 
     if let Err(x) = BitMap::deserialize(&s2) {
