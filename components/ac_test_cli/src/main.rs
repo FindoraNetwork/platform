@@ -57,12 +57,15 @@
 //    algebra/mod.rs: Made bn and groups public. Previously pub(crate).
 //    src/lib.rs: Made algebra public. Was private.
 
+#[macro_use]
+extern crate clap;
 extern crate log;
 extern crate rand;
 extern crate rand_chacha;
 extern crate zei;
 extern crate env_logger;
 
+//use clap::{App, Arg, SubCommand};
 use log::{debug,info,error,warn,trace};
 use env_logger::{Env, Target};
 
@@ -73,16 +76,75 @@ use zei::algebra::bls12_381::{BLSScalar, BLSGt};
 use zei::crypto::anon_creds::{ac_keygen_issuer, ac_keygen_user, ac_sign,
                               ac_reveal, ac_verify};
 
+const VERSION: &str = "0.0";
+const AUTHOR: &str = "John D. Corbett <corbett@findora.org>";
 
-fn main() {
-    env_logger::from_env(Env::default().default_filter_or("trace")).target(Target::Stdout).init();
+fn init_logging() {
+    // Log everything "trace" level or greater.
+    // Log to stdout.
+    // TODO document how to override this from an environment variable.
+    env_logger::from_env(Env::default().default_filter_or("trace"))
+        .target(Target::Stdout)
+        .init();
+}
+
+fn demo_logging() {
     error!("Sample error message");
     warn!("Sample warn message");
     info!("Sample info message");
     debug!("Sample debug message");
     trace!("Sample trace message");
+}
 
-    info!("ac_test_cli, Version 0");
+fn main() {
+    init_logging();
+
+    let path: std::path::PathBuf = std::env::current_exe().unwrap();
+    let program_name: &str = path.file_name().unwrap().to_str().unwrap();
+
+    // TODO Specify that one subcommand is required?
+    let matches = clap_app!(tbd =>
+        (version: VERSION)
+        (author: AUTHOR)
+        (about: "Anonomyous credential registry command line interface")
+        (@arg registry: -r --registry [FILE] "registry path (default: acreg.json)")
+        (@arg debug: -d ... "Sets the level of debugging information")
+        (@subcommand test =>
+            (about: "Automated self-test")
+        )
+        (@subcommand create =>
+            (about: "Create a new anonymous credential")
+        )
+        (@subcommand lookup =>
+            (about: "Lookup anonymous credential")
+            (@arg address: +required "anonymous credential address")
+        )
+    ).name(program_name).get_matches();
+
+    demo_logging();
+
+    trace!("registry: {}", matches.value_of("registry").unwrap_or("acreg.json"));
+    trace!("debug: {}", matches.occurrences_of("debug"));
+    trace!("test: {:?}", matches.subcommand_matches("test"));
+    trace!("create: {:?}", matches.subcommand_matches("create"));
+    if let Some(matches) = matches.subcommand_matches("lookup") {
+        if let Some(address) = matches.value_of("address") {
+            info!("lookup: {:?}", address);
+        }
+    }
+
+    match matches.subcommand() {
+        ("test", Some(_)) => {
+            info!("Got test");
+        }
+        ("create", Some(_)) => {
+            info!("Got create");
+        }
+        ("lookup", Some(lookup)) => {
+            info!("Got lookup: {:?}", lookup.value_of("address"));
+        }
+        _ => {}
+    }
     let mut prng: ChaChaRng;
     // For a real application, the seed should be random.
     prng = ChaChaRng::from_seed([0u8; 32]);
