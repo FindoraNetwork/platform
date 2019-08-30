@@ -51,6 +51,7 @@ pub trait LedgerAccess {
   fn get_issuance_num(&self, code: &AssetTokenCode) -> Option<u64>;
   fn get_asset_token(&self, code: &AssetTokenCode) -> Option<AssetToken>;
   fn get_asset_policy(&self, key: &AssetPolicyKey) -> Option<CustomAssetPolicy>;
+  fn get_tracked_sids(&self, key: &EGPubKey) -> Option<Vec<TxoSID>>; // Asset issuers can query ids of UTXOs of assets they are tracking
   fn get_smart_contract(&self, key: &SmartContractKey) -> Option<SmartContract>;
   fn check_txn_structure(&self, _txn: &Transaction) -> bool {
     true
@@ -72,7 +73,6 @@ pub trait ArchiveUpdate {
 pub trait ArchiveAccess {
   fn get_transaction(&self, addr: TxnSID) -> Option<&Transaction>;
   fn get_proof(&self, addr: TxnSID) -> Option<Proof>;
-  fn get_tracked_sids(&self, key: &EGPubKey) -> Option<Vec<TxoSID>>; // Asset issuers can query ids of UTXOs of assets they are tracking
   fn get_utxo_map(&self) -> Option<Vec<u8>>;
 }
 
@@ -586,6 +586,14 @@ impl<'la, LA> LedgerAccess for BlockContext<LA> where LA: LedgerAccess
       }
     }
   }
+
+  fn get_tracked_sids(&self, key: &EGPubKey) -> Option<Vec<TxoSID>> {
+    if let Ok(la_reader) = self.ledger.read() {
+      la_reader.get_tracked_sids(key)
+    } else {
+      None
+    }
+  }
 }
 
 pub struct TxnContext<'la, LA: LedgerAccess> {
@@ -748,6 +756,10 @@ impl<'la, LA> LedgerAccess for TxnContext<'la, LA> where LA: LedgerAccess
   fn get_issuance_num(&self, code: &AssetTokenCode) -> Option<u64> {
     self.block_context.get_issuance_num(code)
   }
+
+  fn get_tracked_sids(&self, key: &EGPubKey) -> Option<Vec<TxoSID>> {
+    self.block_context.get_tracked_sids(key)
+  }
 }
 
 impl<'la, LA> LedgerValidate for TxnContext<'la, LA> where LA: LedgerAccess
@@ -850,6 +862,13 @@ impl LedgerAccess for LedgerState {
       }
     }
   }
+
+  fn get_tracked_sids(&self, key: &EGPubKey) -> Option<Vec<TxoSID>> {
+    match self.tracked_sids.get(key) {
+      Some(sids) => Some(sids.clone()),
+      None => None,
+    }
+  }
 }
 
 impl ArchiveAccess for LedgerState {
@@ -879,13 +898,6 @@ impl ArchiveAccess for LedgerState {
           None => None,
         }
       }
-    }
-  }
-
-  fn get_tracked_sids(&self, key: &EGPubKey) -> Option<Vec<TxoSID>> {
-    match self.tracked_sids.get(key) {
-      Some(sids) => Some(sids.clone()),
-      None => None,
     }
   }
 
