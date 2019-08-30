@@ -1,0 +1,56 @@
+{
+    {
+	"definitions": {},
+	"$schema": "http://json-schema.org/draft-07/schema#",
+	"$id": "http://findora.org/schema/0.0/address_credential_map.json",
+	"type": "object",
+	"title": "Address-to-Credential Mapping"
+	"description":
+"A registry mapping addresses to signatures. Each entry has three columns:\n\
+    address - a sha256 hash of a credential signature.\n\
+    type - a code indicating the signature method.\n\
+    signature - a credential issuer's signing of a user's public key\n\
+        with no attribute revealed.",
+	"required": ["entry"],
+    }
+
+    "properties": {
+	"entry": { 
+	    "address": {
+		"$id": "#/properties/address",
+		"type": "string",
+		"title": "Address",
+		"examples": [
+		    "0123456701234567012345670123456701234567012345670123456701234567"
+		],
+		"pattern": "^([a-f0-9]{64})$"
+	    },
+	    "type": {
+		"$id" : "$/properties/type",
+		"type" : [ "integer", "string" ],
+		"title": "Credential Kind",
+		"default" : 1,
+		"minLength": 1,
+		"maxLength": 15,
+		"pattern": "^[0123456789]+$"
+	    },
+	    "signature": {
+		"$id" : "$/properties/signature",
+		"type" : "string",
+		"minLength": 1,
+		"maxLength": 4096,
+		"title": "Signature",
+		"pattern": "^[0-9a-f]+$"
+	    }
+	}
+    }
+}
+
+{
+    { "entry": { "address": "0123456701234567012345670123456701234567012345670123456701234567",
+		 "type" : 2,
+		 "signature": "John Handcock" }},
+    { "entry": { "address": "0123456701234567012345670123456701234567012345670123456701234567",
+		 "type" : 2,
+		 "signature": "John Handcock" }}
+}
