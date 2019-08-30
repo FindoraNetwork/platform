@@ -213,7 +213,7 @@ mod tests {
     let token_code1 = AssetTokenCode { val: [1; 16] };
     let (public_key, secret_key) = build_keys(&mut prng);
 
-    let asset_body = asset_creation_body(&token_code1, &public_key, true, None, None);
+    let asset_body = asset_creation_body(&token_code1, &public_key, true, false, None, None);
     let asset_create = asset_creation_operation(&asset_body, &public_key, &secret_key);
     tx.operations.push(Operation::AssetCreation(asset_create));
 

@@ -5,8 +5,8 @@ extern crate tempdir;
 use crate::data_model::errors::PlatformError;
 use crate::data_model::{
   AssetCreation, AssetIssuance, AssetPolicyKey, AssetToken, AssetTokenCode, AssetTransfer,
-  CustomAssetPolicy, Operation, SmartContract, SmartContractKey, Transaction, TxOutput, TxnSID,
-  TxoSID, Utxo, TXN_SEQ_ID_PLACEHOLDER,
+  CustomAssetPolicy, Operation, SmartContract, SmartContractKey, Transaction, TxOutput,
+  TxOutput::BlindAssetRecord, TxnSID, TxoSID, Utxo, TXN_SEQ_ID_PLACEHOLDER,
 };
 use append_only_merkle::{AppendOnlyMerkle, Proof};
 use bitmap::BitMap;
@@ -23,6 +23,7 @@ use std::sync::{Arc, RwLock};
 use std::u64;
 use tempdir::TempDir;
 use zei::xfr::lib::verify_xfr_note;
+use zei::xfr::structs::EGPubKey;
 
 pub mod append_only_merkle;
 pub mod bitmap;
@@ -51,6 +52,7 @@ pub trait LedgerAccess {
   fn get_issuance_num(&self, code: &AssetTokenCode) -> Option<u64>;
   fn get_asset_token(&self, code: &AssetTokenCode) -> Option<AssetToken>;
   fn get_asset_policy(&self, key: &AssetPolicyKey) -> Option<CustomAssetPolicy>;
+  fn get_tracked_sids(&self, key: &EGPubKey) -> Option<Vec<TxoSID>>; // Asset issuers can query ids of UTXOs of assets they are tracking
   fn get_smart_contract(&self, key: &SmartContractKey) -> Option<SmartContract>;
   fn check_txn_structure(&self, _txn: &Transaction) -> bool {
     true
@@ -105,6 +107,7 @@ pub struct LedgerState {
   utxo_map_versions: VecDeque<(usize, BitDigest)>,
   contracts: HashMap<SmartContractKey, SmartContract>,
   policies: HashMap<AssetPolicyKey, CustomAssetPolicy>,
+  tracked_sids: HashMap<EGPubKey, Vec<TxoSID>>,
   tokens: HashMap<AssetTokenCode, AssetToken>,
   issuance_num: HashMap<AssetTokenCode, u64>,
   txn_count: usize,
@@ -213,6 +216,7 @@ impl LedgerState {
                                contracts: HashMap::new(),
                                policies: HashMap::new(),
                                tokens: HashMap::new(),
+                               tracked_sids: HashMap::new(),
                                issuance_num: HashMap::new(),
                                txn_count: 0,
                                txn_base_sid: TxoSID::default(),
@@ -286,9 +290,30 @@ impl LedgerState {
         }
       }
     }
-
     let utxo_ref = Utxo { digest: compute_sha256_hash(&serde_json::to_vec(&txo.1).unwrap()),
                           output: txo.1 };
+    // Check for asset tracing
+    match &utxo_ref.output {
+      BlindAssetRecord(record) => {
+        if let Some(issuer_public_key) = &record.issuer_public_key {
+          match self.tracked_sids
+                    .get_mut(&issuer_public_key.eg_ristretto_pub_key)
+          {
+            // add utxo address to the list of indices that can be unlocked by the
+            // issuer's public key
+            None => {
+              self.tracked_sids
+                  .insert(issuer_public_key.eg_ristretto_pub_key.clone(),
+                          vec![utxo_addr]);
+            }
+            Some(vec) => {
+              vec.push(utxo_addr);
+            }
+          };
+        }
+      }
+    }
+
     // Add a bit to the utxo bitmap.
     self.utxo_map
         .as_mut()
@@ -400,10 +425,10 @@ impl LedgerState {
       if self.check_utxo(*utxo_addr).is_none() {
         return false;
       }
+    }
 
-      if verify_xfr_note(&mut prng, &transfer.body.transfer, &null_policies).is_err() {
-        return false;
-      }
+    if verify_xfr_note(&mut prng, &transfer.body.transfer, &null_policies).is_err() {
+      return false;
     }
 
     true
@@ -412,6 +437,8 @@ impl LedgerState {
   // An asset issuance is valid iff:
   //     1) The operation is unique (not a replay).
   //     2) The signature is valid and belongs to the anchor (the issuer).
+  //     3) The signature belongs to the anchor
+  //     4) For traceable assets, tracing key is included in output records
   #[cfg(test)]
   fn validate_asset_issuance(&mut self, issue: &AssetIssuance) -> bool {
     // Get a valid token
@@ -447,19 +474,19 @@ impl LedgerState {
       return false;
     }
 
-    //[4] The signature belongs to the anchor.
+    //[3] The signature belongs to the anchor.
     if token.properties.issuer != issue.pubkey {
       println!("validate_asset_issuance:  invalid issuer");
       return false;
     }
 
+    //[4] TODO: Noah For traceable assets, tracing key must exist and be included in all output records
     true
   }
 
   // An asset creation is valid iff:
   //     1) The signature is valid.
-  //     2) The token? has NOT been used by a different asset.
-  // Token?
+  //     2) The token? has NOT been used by a different asset token?
   #[cfg(test)]
   fn validate_asset_creation(&mut self, create: &AssetCreation) -> bool {
     //[1] the token is not already created, [2] the signature is correct.
@@ -597,6 +624,14 @@ impl<'la, LA> LedgerAccess for BlockContext<LA> where LA: LedgerAccess
           None
         }
       }
+    }
+  }
+
+  fn get_tracked_sids(&self, key: &EGPubKey) -> Option<Vec<TxoSID>> {
+    if let Ok(la_reader) = self.ledger.read() {
+      la_reader.get_tracked_sids(key)
+    } else {
+      None
     }
   }
 }
@@ -761,6 +796,10 @@ impl<'la, LA> LedgerAccess for TxnContext<'la, LA> where LA: LedgerAccess
   fn get_issuance_num(&self, code: &AssetTokenCode) -> Option<u64> {
     self.block_context.get_issuance_num(code)
   }
+
+  fn get_tracked_sids(&self, key: &EGPubKey) -> Option<Vec<TxoSID>> {
+    self.block_context.get_tracked_sids(key)
+  }
 }
 
 impl<'la, LA> LedgerValidate for TxnContext<'la, LA> where LA: LedgerAccess
@@ -863,6 +902,13 @@ impl LedgerAccess for LedgerState {
       }
     }
   }
+
+  fn get_tracked_sids(&self, key: &EGPubKey) -> Option<Vec<TxoSID>> {
+    match self.tracked_sids.get(key) {
+      Some(sids) => Some(sids.clone()),
+      None => None,
+    }
+  }
 }
 
 impl ArchiveAccess for LedgerState {
@@ -941,6 +987,7 @@ pub mod helpers {
   pub fn asset_creation_body(token_code: &AssetTokenCode,
                              issuer_key: &XfrPublicKey,
                              updatable: bool,
+                             traceable: bool,
                              memo: Option<Memo>,
                              confidential_memo: Option<ConfidentialMemo>)
                              -> AssetCreationBody {
@@ -948,6 +995,7 @@ pub mod helpers {
     token_properties.code = *token_code;
     token_properties.issuer = IssuerPublicKey { key: *issuer_key };
     token_properties.updatable = updatable;
+    token_properties.traceable = traceable;
 
     if memo.is_some() {
       token_properties.memo = memo.unwrap();
@@ -992,7 +1040,7 @@ mod tests {
     let token_code1 = AssetTokenCode { val: [1; 16] };
     let (public_key, secret_key) = build_keys(&mut prng);
 
-    let asset_body = asset_creation_body(&token_code1, &public_key, true, None, None);
+    let asset_body = asset_creation_body(&token_code1, &public_key, true, false, None, None);
     let asset_create = asset_creation_operation(&asset_body, &public_key, &secret_key);
     tx.operations.push(Operation::AssetCreation(asset_create));
 
@@ -1017,7 +1065,7 @@ mod tests {
     let token_code1 = AssetTokenCode { val: [1; 16] };
     let mut prng = ChaChaRng::from_seed([0u8; 32]);
     let (public_key1, secret_key1) = build_keys(&mut prng);
-    let asset_body = asset_creation_body(&token_code1, &public_key1, true, None, None);
+    let asset_body = asset_creation_body(&token_code1, &public_key1, true, false, None, None);
     let mut asset_create = asset_creation_operation(&asset_body, &public_key1, &secret_key1);
 
     // Now re-sign the operation with the wrong key.
@@ -1041,7 +1089,7 @@ mod tests {
     let mut prng = ChaChaRng::from_seed([0u8; 32]);
     let (public_key1, secret_key1) = build_keys(&mut prng);
 
-    let asset_body = asset_creation_body(&token_code1, &public_key1, true, None, None);
+    let asset_body = asset_creation_body(&token_code1, &public_key1, true, false, None, None);
     let mut asset_create = asset_creation_operation(&asset_body, &public_key1, &secret_key1);
 
     // Re-sign the operation with the wrong key.
@@ -1073,7 +1121,7 @@ mod tests {
     let mut prng = ChaChaRng::from_seed([0u8; 32]);
     let (public_key, secret_key) = build_keys(&mut prng);
 
-    let asset_body = asset_creation_body(&token_code1, &public_key, true, None, None);
+    let asset_body = asset_creation_body(&token_code1, &public_key, true, false, None, None);
     let asset_create = asset_creation_operation(&asset_body, &public_key, &secret_key);
     tx.operations.push(Operation::AssetCreation(asset_create));
 
