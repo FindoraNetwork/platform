@@ -1,11 +1,11 @@
-extern crate core;
+extern crate ledger;
 extern crate serde;
 extern crate zei;
 #[macro_use]
 extern crate serde_derive;
 
-use core::data_model::errors::PlatformError;
-use core::data_model::{
+use ledger::data_model::errors::PlatformError;
+use ledger::data_model::{
   AccountAddress, AssetCreation, AssetCreationBody, AssetIssuance, AssetIssuanceBody,
   AssetTokenCode, AssetTransfer, AssetTransferBody, ConfidentialMemo, IssuerPublicKey, Memo,
   Operation, Transaction, TxOutput, TxoSID,

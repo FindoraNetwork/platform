@@ -1,14 +1,14 @@
 extern crate actix_rt;
 extern crate actix_web;
-extern crate core;
+extern crate ledger;
 extern crate serde_json;
 
 use actix_web::{web, App, HttpServer};
-use core::data_model::{
+use ledger::data_model::{
   AssetPolicyKey, AssetToken, AssetTokenCode, CustomAssetPolicy, SmartContract, SmartContractKey,
   TxnSID, TxoSID, Utxo,
 };
-use core::store::{ArchiveAccess, LedgerAccess};
+use ledger::store::{ArchiveAccess, LedgerAccess};
 use std::io;
 use std::marker::{Send, Sync};
 use std::sync::{Arc, RwLock};
@@ -85,12 +85,30 @@ fn query_proof<AA>(data: web::Data<Arc<RwLock<AA>>>,
   }
 }
 
+fn query_utxo_map_checksum<AA>(data: web::Data<Arc<RwLock<AA>>>,
+                               info: web::Path<String>)
+                               -> actix_web::Result<String>
+  where AA: ArchiveAccess
+{
+  if let Ok(version) = info.parse::<u64>() {
+    let reader = data.read().unwrap();
+
+    if let Some(vec) = reader.get_utxo_checksum(version) {
+      Ok(serde_json::to_string(&vec)?)
+    } else {
+      Err(actix_web::error::ErrorNotFound("That version is unavailable."))
+    }
+  } else {
+    Err(actix_web::error::ErrorNotFound("Invalid version encoding."))
+  }
+}
+
 fn query_utxo_map<AA>(data: web::Data<Arc<RwLock<AA>>>,
                       _info: web::Path<String>)
                       -> actix_web::Result<String>
   where AA: ArchiveAccess
 {
-  let reader = data.read().unwrap();
+  let mut reader = data.write().unwrap();
 
   if let Some(vec) = reader.get_utxo_map() {
     Ok(serde_json::to_string(&vec)?)
@@ -146,6 +164,8 @@ impl RestfulApiService {
                 .route("/txn_sid/{sid}", web::get().to(query_txn::<LA>))
                 .route("/proof/{sid}", web::get().to(query_proof::<LA>))
                 .route("/utxo_map", web::get().to(query_utxo_map::<LA>))
+                .route("/utxo_map_checksum",
+                       web::get().to(query_utxo_map_checksum::<LA>))
                 .route("/policy_key/{key}", web::get().to(query_policy::<LA>))
                 .route("/contract_key/{key}", web::get().to(query_contract::<LA>))
     }).bind("127.0.0.1:8668")?
@@ -163,9 +183,9 @@ mod tests {
   use super::*;
   use actix_web::dev::Service;
   use actix_web::{test, web, App};
-  use core::data_model::{Operation, Transaction};
-  use core::store::helpers::*;
-  use core::store::{ArchiveUpdate, LedgerState, LedgerUpdate};
+  use ledger::data_model::{Operation, Transaction};
+  use ledger::store::helpers::*;
+  use ledger::store::{ArchiveUpdate, LedgerState, LedgerUpdate};
   use rand::SeedableRng;
   use rand_chacha::ChaChaRng;
 

@@ -23,10 +23,10 @@
 //!  If the file cannot be opened, the program invokes the tree
 //!  rebuild method, and returns the resul of that procedure.
 //!
-extern crate core;
+extern crate ledger;
 
-use core::store::append_only_merkle::AppendOnlyMerkle;
-use core::timestamp;
+use ledger::store::append_only_merkle::AppendOnlyMerkle;
+use ledger::timestamp;
 use std::env;
 use std::path::Path;
 use std::process::exit;

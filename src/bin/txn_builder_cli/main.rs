@@ -1,5 +1,5 @@
 extern crate clap;
-extern crate core;
+extern crate ledger;
 extern crate dirs;
 extern crate regex;
 extern crate serde;
@@ -8,8 +8,8 @@ extern crate txn_builder;
 extern crate zei;
 
 use clap::{App, Arg, SubCommand};
-use core::data_model::errors::PlatformError;
-use core::data_model::{AccountAddress, AssetTokenCode, IssuerPublicKey, TxoSID};
+use ledger::data_model::errors::PlatformError;
+use ledger::data_model::{AccountAddress, AssetTokenCode, IssuerPublicKey, TxoSID};
 use rand::SeedableRng;
 use rand_chacha::ChaChaRng;
 use regex::Regex;

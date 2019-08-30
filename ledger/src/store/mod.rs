@@ -14,7 +14,8 @@ use logged_merkle::LoggedMerkle;
 use rand::SeedableRng;
 use rand_chacha::ChaChaRng;
 use sha2::{Digest, Sha256};
-use std::collections::{HashMap, HashSet};
+use sodiumoxide::crypto::hash::sha256::Digest as BitDigest;
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::fs::File;
 use std::fs::OpenOptions;
 use std::io::BufReader;
@@ -73,7 +74,9 @@ pub trait ArchiveUpdate {
 pub trait ArchiveAccess {
   fn get_transaction(&self, addr: TxnSID) -> Option<&Transaction>;
   fn get_proof(&self, addr: TxnSID) -> Option<Proof>;
-  fn get_utxo_map(&self) -> Option<Vec<u8>>;
+  fn get_utxo_map(&mut self) -> Option<Vec<u8>>;
+  fn get_utxos(&mut self, list: Vec<usize>) -> Option<Vec<u8>>;
+  fn get_utxo_checksum(&self, version: u64) -> Option<BitDigest>;
 }
 
 pub fn compute_sha256_hash<T>(msg: &T) -> [u8; 32]
@@ -87,6 +90,8 @@ pub fn compute_sha256_hash<T>(msg: &T) -> [u8; 32]
   *hash
 }
 
+const MAX_VERSION: usize = 100;
+
 #[derive(Serialize, Deserialize)]
 pub struct LedgerState {
   merkle_path: String,
@@ -99,6 +104,7 @@ pub struct LedgerState {
   utxos: HashMap<TxoSID, Utxo>,
   #[serde(skip)]
   utxo_map: Option<BitMap>,
+  utxo_map_versions: VecDeque<(usize, BitDigest)>,
   contracts: HashMap<SmartContractKey, SmartContract>,
   policies: HashMap<AssetPolicyKey, CustomAssetPolicy>,
   tracked_sids: HashMap<EGPubKey, Vec<TxoSID>>,
@@ -113,6 +119,7 @@ pub struct LedgerState {
 }
 
 impl LedgerState {
+  // Create a ledger for use by a unit test.
   pub fn test_ledger() -> LedgerState {
     let tmp_dir = TempDir::new("test").unwrap();
     let merkle_buf = tmp_dir.path().join("test_ledger_merkle");
@@ -138,8 +145,20 @@ impl LedgerState {
     Ok(v)
   }
 
+  fn save_utxo_map_version(&mut self) {
+    if self.utxo_map_versions.len() >= MAX_VERSION {
+      self.utxo_map_versions.pop_front();
+    }
+
+    self.utxo_map_versions
+        .push_back((self.txn_count, self.utxo_map.as_mut().unwrap().compute_checksum()));
+  }
+
   fn store_transaction(&self, _txn: &Transaction) {}
 
+  // Initialize a logged Merkle tree for the ledger.  We might
+  // be creating a new tree or opening an existing one.  We
+  // always start a new log file.
   fn init_merkle_log(path: &str, create: bool) -> Result<LoggedMerkle, std::io::Error> {
     // Create a merkle tree or open an existing one.
     let result = if create {
@@ -164,6 +183,7 @@ impl LedgerState {
     Ok(LoggedMerkle::new(tree, writer))
   }
 
+  // Initialize a bitmap to track the unspent utxos.
   fn init_utxo_map(path: &str, create: bool) -> Result<BitMap, std::io::Error> {
     let file = OpenOptions::new().read(true)
                                  .write(true)
@@ -177,6 +197,7 @@ impl LedgerState {
     }
   }
 
+  // Initialize a new Ledger structure.
   pub fn new(merkle_path: &str,
              txn_path: &str,
              snapshot_path: &str,
@@ -191,6 +212,7 @@ impl LedgerState {
                                utxos: HashMap::new(),
                                utxo_map: Some(LedgerState::init_utxo_map(utxo_map_path,
                                                                          create)?),
+                               utxo_map_versions: VecDeque::new(),
                                contracts: HashMap::new(),
                                policies: HashMap::new(),
                                tokens: HashMap::new(),
@@ -207,6 +229,7 @@ impl LedgerState {
     Ok(ledger)
   }
 
+  // Load a ledger given the paths to the various storage elements.
   pub fn load(merkle_path: &str,
               txn_path: &str,
               snapshot_path: &str)
@@ -227,6 +250,9 @@ impl LedgerState {
     Ok(ledger)
   }
 
+  // Snapshot the ledger state.  This involves synchronizing
+  // the durable data structures to the disk and starting a
+  // new log file for the logged Merkle tree.
   pub fn snapshot(&mut self) -> Result<SnapshotId, std::io::Error> {
     let state = if let Some(merkle) = &self.merkle {
       merkle.state()
@@ -245,7 +271,9 @@ impl LedgerState {
     self.txn_base_sid.index = self.max_applied_sid.index + 1;
   }
 
-  pub fn end_commit(&mut self) {}
+  pub fn end_commit(&mut self) {
+    self.save_utxo_map_version();
+  }
 
   fn add_txo(&mut self, txo: (&TxoSID, TxOutput)) {
     let mut utxo_addr = *txo.0;
@@ -286,6 +314,12 @@ impl LedgerState {
       }
     }
 
+    // Add a bit to the utxo bitmap.
+    self.utxo_map
+        .as_mut()
+        .unwrap()
+        .set(utxo_addr.index as usize)
+        .unwrap();
     self.utxos.insert(utxo_addr, utxo_ref);
     self.max_applied_sid = utxo_addr;
   }
@@ -299,6 +333,12 @@ impl LedgerState {
           rectified_txo.index += self.txn_base_sid.index;
         }
       }
+      // Update the utxo bitmap to remove this asset.
+      self.utxo_map
+          .as_mut()
+          .unwrap()
+          .clear(rectified_txo.index as usize)
+          .unwrap();
       self.utxos.remove(&rectified_txo);
     }
 
@@ -901,11 +941,25 @@ impl ArchiveAccess for LedgerState {
     }
   }
 
-  fn get_utxo_map(&self) -> Option<Vec<u8>> {
-    match &self.utxo_map {
-      Some(utxo_map) => Some(utxo_map.serialize()),
-      None => None,
+  fn get_utxo_map(&mut self) -> Option<Vec<u8>> {
+    Some(self.utxo_map.as_mut().unwrap().serialize(self.txn_count))
+  }
+
+  fn get_utxos(&mut self, utxo_list: Vec<usize>) -> Option<Vec<u8>> {
+    Some(self.utxo_map
+             .as_mut()
+             .unwrap()
+             .serialize_partial(utxo_list, self.txn_count))
+  }
+
+  fn get_utxo_checksum(&self, version: u64) -> Option<BitDigest> {
+    for pair in self.utxo_map_versions.iter() {
+      if pair.0 as u64 == version {
+        return Some(pair.1);
+      }
     }
+
+    None
   }
 }
 
@@ -1110,6 +1164,17 @@ mod tests {
                ledger.merkle.unwrap().state());
       }
     }
+
+    // We don't actually have anything to commmit yet,
+    // but this will save the empty checksum, which is
+    // enough for a bit of a test.
+    ledger.end_commit();
+    let query_result = ledger.get_utxo_checksum(ledger.txn_count as u64).unwrap();
+    let compute_result = ledger.utxo_map.as_mut().unwrap().compute_checksum();
+    println!("query_result = {:?}, compute_result = {:?}",
+             query_result, compute_result);
+
+    assert!(query_result == compute_result);
 
     match ledger.snapshot() {
       Ok(n) => {

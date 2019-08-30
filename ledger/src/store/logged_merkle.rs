@@ -85,7 +85,7 @@ const BUFFER_MARKER: u32 = 0xabab_efe0;
 /// field must follow the checksum.
 ///
 /// A flush operation causes the writing of a buffer whether that buffer
-/// is full or not, so any buffer in the can be only partially full.
+/// is full or not, so any buffer in the file might be only partially full.
 /// Partially full buffers are written as a full-size buffer with some
 /// number of empty (zero) entries.  All buffers should have at least
 /// one valid entry.
@@ -228,8 +228,8 @@ impl LoggedMerkle {
   ///
   /// # Example
   ///````
-  /// use crate::core::store::append_only_merkle::AppendOnlyMerkle;
-  /// use crate::core::store::logged_merkle::LoggedMerkle;
+  /// use ledger::store::append_only_merkle::AppendOnlyMerkle;
+  /// use ledger::store::logged_merkle::LoggedMerkle;
   /// use std::fs::OpenOptions;
   ///
   /// let tree_path = "new_logged";
@@ -565,8 +565,6 @@ impl Drop for LoggedMerkle {
 
 #[cfg(test)]
 mod tests {
-  extern crate core;
-
   use crate::store::append_only_merkle::AppendOnlyMerkle;
   use crate::store::append_only_merkle::HashValue;
   use crate::store::logged_merkle::LogBuffer;
