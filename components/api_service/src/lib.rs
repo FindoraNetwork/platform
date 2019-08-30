@@ -108,7 +108,7 @@ fn query_utxo_map<AA>(data: web::Data<Arc<RwLock<AA>>>,
                       -> actix_web::Result<String>
   where AA: ArchiveAccess
 {
-  let reader = data.read().unwrap();
+  let mut reader = data.write().unwrap();
 
   if let Some(vec) = reader.get_utxo_map() {
     Ok(serde_json::to_string(&vec)?)

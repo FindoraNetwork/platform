@@ -72,8 +72,8 @@ pub trait ArchiveUpdate {
 pub trait ArchiveAccess {
   fn get_transaction(&self, addr: TxnSID) -> Option<&Transaction>;
   fn get_proof(&self, addr: TxnSID) -> Option<Proof>;
-  fn get_utxo_map(&self) -> Option<Vec<u8>>;
-  fn get_utxos(&self, list: Vec<usize>) -> Option<Vec<u8>>;
+  fn get_utxo_map(&mut self) -> Option<Vec<u8>>;
+  fn get_utxos(&mut self, list: Vec<usize>) -> Option<Vec<u8>>;
   fn get_utxo_checksum(&self, version: u64) -> Option<BitDigest>;
 }
 
@@ -895,13 +895,13 @@ impl ArchiveAccess for LedgerState {
     }
   }
 
-  fn get_utxo_map(&self) -> Option<Vec<u8>> {
-    Some(self.utxo_map.as_ref().unwrap().serialize(self.txn_count))
+  fn get_utxo_map(&mut self) -> Option<Vec<u8>> {
+    Some(self.utxo_map.as_mut().unwrap().serialize(self.txn_count))
   }
 
-  fn get_utxos(&self, utxo_list: Vec<usize>) -> Option<Vec<u8>> {
+  fn get_utxos(&mut self, utxo_list: Vec<usize>) -> Option<Vec<u8>> {
     Some(self.utxo_map
-             .as_ref()
+             .as_mut()
              .unwrap()
              .serialize_partial(utxo_list, self.txn_count))
   }
