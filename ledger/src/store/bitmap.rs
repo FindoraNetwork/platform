@@ -23,8 +23,6 @@
 //! The SparseMap structure allows various queries on the contents
 //! of the map.
 
-extern crate time;
-
 use super::append_only_merkle::timestamp;
 use sodiumoxide::crypto::hash::sha256;
 use sodiumoxide::crypto::hash::sha256::Digest;
@@ -97,21 +95,6 @@ const BIT_DESC_SET: u16 = 2;
 const BIT_DESC_CLEAR: u16 = 3;
 const BIT_HEADER: u16 = 4;
 
-// Define the layout for a block header.
-//
-// This structure occupies the first bytes of each disk
-// block.  It also is maintained in memory.
-//
-// checksum  a checksum over the rest of the block
-// magic     a magic number
-// count     the count of valid bits in this block
-// bit_id    the bit index corresponding to the first bit in the block
-// offset    the offset in the file at which this block should appear
-// contents  the contents type, currently always BIT_ARRAY
-//
-// The size of this structure must match the HEADER_SIZE
-// constant.
-
 // For users who download the bitmap, this is what they
 // get for a block header.
 #[derive(Debug, Default)]
@@ -160,9 +143,15 @@ impl BlockInfo {
   }
 }
 
-/// For deserialization, define an array for the valid bits.
+// For deserialization, define an array for the valid bits
+// of one block.
 pub type BlockBits = [u8; BITS_SIZE];
 
+// Define some constants for serialization.  DESCRIPTOR_SIZE
+// defines the number of bytes of global data desribing the
+// serialized bitmap.
+const BLOCK_INFO_SIZE: usize = mem::size_of::<BlockInfo>();
+const DESCRIPTOR_SIZE: usize = 8 + DIGESTBYTES;
 const BLOCK_BITS_SIZE: usize = mem::size_of::<BlockBits>();
 
 /// This structure can be initialized using a bitmap
@@ -284,10 +273,20 @@ impl SparseMap {
   }
 }
 
-/// Define the block header for the server version of
-/// the bitmap.  Each block starts with a block header.
-const BLOCK_INFO_SIZE: usize = mem::size_of::<BlockInfo>();
-const DESCRIPTOR_SIZE: usize = 8 + DIGESTBYTES;
+// Define the layout for a block header.
+//
+// This structure occupies the first bytes of each disk
+// block.  It also is maintained in memory.
+//
+// checksum  a checksum over the rest of the block
+// magic     a magic number
+// count     the count of valid bits in this block
+// bit_id    the bit index corresponding to the first bit in the block
+// offset    the offset in the file at which this block should appear
+// contents  the contents type, currently always BIT_ARRAY
+//
+// The size of this structure must match the HEADER_SIZE
+// constant.
 
 #[derive(Debug)]
 #[repr(C)]
@@ -359,8 +358,8 @@ impl BlockHeader {
   }
 }
 
-/// Define the block structure of the server version
-/// of the bitmap.
+// Define the block structure of the server version
+// of the bitmap.
 const BLOCK_SIZE: usize = 32 * 1024;
 const BITS_SIZE: usize = BLOCK_SIZE - HEADER_SIZE;
 const BLOCK_BITS: usize = BITS_SIZE * 8;
