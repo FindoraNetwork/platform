@@ -464,17 +464,40 @@ fn show(data: &ChecksumData) -> String {
 
 /// Define the in-memory structure for managing a
 /// persistent bitmap.
+///
+/// Data kept for the bitmap as a whole:
+///   file            a file structure for the disk data
+///   size            the number of bits in the bitmap
+///   checksum        a checksum for the entire bitmap, if valid
+///   first_invalid   the index to the first invalidated checksum term
+///                     See the BitMap compute_checksum method for
+///                     details.
+///   map             a map from a byte value to the set bit count
+///                     for that value, i.e., 0 maps to zero, 1 and 2
+///                     map to 1, ...
+///
+/// Data kept per block:
+///   blocks          the vector of data blocks in the map
+///   checksum_data   the work area for computing the bitmap checksum
+///   checksum_valid  a bit indicating whether the checksum_data field
+///                     a valid block checksum present
+///   dirty           the modification time for the block, or zero
+///                     if the block is clean (valid on disk)
+///   set_bits        the count of set bits in the block
+///
 pub struct BitMap {
   file: File,
   size: usize,
+  checksum: Digest,
+  first_invalid: usize,
+  map: [u8; 256],
+
+  // Data kept per block
   blocks: Vec<BitBlock>,
   checksum_data: Vec<ChecksumData>,
-  checksum: Digest,
-  dirty: Vec<i64>, // the modification time for the block, or zero
   checksum_valid: Vec<bool>,
+  dirty: Vec<i64>,
   set_bits: Vec<u32>,
-  map: [u8; 256],
-  first_invalid: usize,
 }
 
 // Write any dirty blocks when a bitmap is dropped.
@@ -845,9 +868,6 @@ impl BitMap {
       self.blocks[block].bits[index] & mask != value << mask_shift
     };
 
-    debug!("mutate(bit = {}, value = {}, {}) -> block {}, index {}, mask {}, BLOCK_BITS {}, mutate {}",
-    bit, value, extend, block, index, mask, BLOCK_BITS, mutate);
-
     if !mutate {
       return Ok(());
     }
@@ -881,7 +901,7 @@ impl BitMap {
     Ok(())
   }
 
-  /// Compute a checksum for the entire bitmap.
+  /// Compute a sha256 checksum for the entire bitmap.
   ///
   /// The checksum is defined currently recursively across
   /// the blocks where the checksum at block i is:
@@ -1298,7 +1318,7 @@ impl BitMap {
   // We must set the checksum here since it's been changed,
   // although compute_checksum() actually might have fixed
   // it.  TODO:  use first_invalid to avoid an unnecessary
-  // update?
+  // update of the checksum?
   fn write_block(&mut self, index: usize) -> Result<()> {
     self.blocks[index].set_checksum();
     let offset = index as u64 * BLOCK_SIZE as u64;

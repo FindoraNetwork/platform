@@ -907,6 +907,8 @@ impl ArchiveAccess for LedgerState {
   }
 
   fn get_utxo_checksum(&self, version: u64) -> Option<BitDigest> {
+    // TODO:  This could be done via a hashmap to support more versions
+    // efficiently.
     for pair in self.utxo_map_versions.iter() {
       if pair.0 as u64 == version {
         return Some(pair.1);
