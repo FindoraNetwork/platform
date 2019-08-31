@@ -148,8 +148,10 @@ impl BlockInfo {
 pub type BlockBits = [u8; BITS_SIZE];
 
 // Define some constants for serialization.  DESCRIPTOR_SIZE
-// defines the number of bytes of global data desribing the
-// serialized bitmap.
+// defines the number of bytes of global data describing the
+// serialized bitmap.  Currently, the descriptor contains an
+// 8-byte version and a checksum for the tree.
+
 const BLOCK_INFO_SIZE: usize = mem::size_of::<BlockInfo>();
 const DESCRIPTOR_SIZE: usize = 8 + DIGESTBYTES;
 const BLOCK_BITS_SIZE: usize = mem::size_of::<BlockBits>();
@@ -449,7 +451,8 @@ type ChecksumData = [u8; CHECK_SIZE + DIGESTBYTES];
 const EMPTY_CHECKSUM: ChecksumData = [0_u8; CHECK_SIZE + DIGESTBYTES];
 
 // Provide a way to display a checksum computation
-// buffer when debugging.
+// buffer when debugging.  Used by the debug macro
+// when it is enabled.
 fn show(data: &ChecksumData) -> String {
   let mut result: String = "{ ".to_string();
 
