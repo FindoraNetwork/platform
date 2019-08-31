@@ -59,157 +59,205 @@
 
 #[macro_use]
 extern crate clap;
+extern crate env_logger;
 extern crate log;
 extern crate rand;
 extern crate rand_chacha;
+extern crate serde;
+extern crate serde_json;
 extern crate zei;
-extern crate env_logger;
 
-//use clap::{App, Arg, SubCommand};
-use log::{debug,info,error,warn,trace};
 use env_logger::{Env, Target};
+use log::{debug, error, info, trace, warn};
+use serde::{Deserialize, Serialize};
+use serde_json::Result;
+use std::error::Error;
+use std::fs::File;
+use std::fs::OpenOptions;
+use std::io::prelude::*;
+use std::path::Path;
 
 use rand::SeedableRng;
 use rand_chacha::ChaChaRng;
+use zei::algebra::bls12_381::{BLSGt, BLSScalar};
 use zei::algebra::groups::Scalar;
-use zei::algebra::bls12_381::{BLSScalar, BLSGt};
-use zei::crypto::anon_creds::{ac_keygen_issuer, ac_keygen_user, ac_sign,
-                              ac_reveal, ac_verify};
+use zei::crypto::anon_creds::{ac_keygen_issuer, ac_keygen_user, ac_reveal, ac_sign, ac_verify};
 
 const VERSION: &str = "0.0";
 const AUTHOR: &str = "John D. Corbett <corbett@findora.org>";
+const DEFAULT_REGISTRY_PATH: &str = "acreg.json";
 
 fn init_logging() {
-    // Log everything "trace" level or greater.
-    // Log to stdout.
-    // TODO document how to override this from an environment variable.
-    env_logger::from_env(Env::default().default_filter_or("trace"))
-        .target(Target::Stdout)
-        .init();
+  // Log everything "trace" level or greater.
+  // Log to stdout.
+  // TODO document how to override this from an environment variable.
+  env_logger::from_env(Env::default().default_filter_or("trace")).target(Target::Stdout)
+                                                                 .init();
 }
 
 fn demo_logging() {
-    error!("Sample error message");
-    warn!("Sample warn message");
-    info!("Sample info message");
-    debug!("Sample debug message");
-    trace!("Sample trace message");
+  error!("Sample error message");
+  warn!("Sample warn message");
+  info!("Sample info message");
+  debug!("Sample debug message");
+  trace!("Sample trace message");
+}
+
+fn parse_args() -> clap::ArgMatches<'static> {
+  let path: std::path::PathBuf = std::env::current_exe().unwrap();
+  let program_name: &str = path.file_name().unwrap().to_str().unwrap();
+  clap_app!(tbd =>
+  (version: VERSION)
+  (author: AUTHOR)
+  (about: "Anonomyous credential registry command line interface")
+  (name: program_name)
+  (@arg registry: -r --registry [FILE]
+   "registry path (default: acreg.json)")
+  (@arg debug: -d ... "Sets the level of debugging information")
+  (@subcommand test => (about: "Automated self-test"))
+  (@subcommand create => (about: "Create a new anonymous credential"))
+  (@subcommand lookup =>
+   (about: "Lookup anonymous credential")
+   (@arg address: +required "anonymous credential address")
+  )).get_matches()
+}
+
+fn automated_test() {
+  let mut prng: ChaChaRng;
+  // For a real application, the seed should be random.
+  prng = ChaChaRng::from_seed([0u8; 32]);
+
+  // Attributes to be revealed. For example, they might be:
+  //    account balance, zip code, credit score, and timestamp
+  // In this case, account balance will not be revealed.
+  let bitmap = [false, true, true, true];
+  let attrs = [BLSScalar::from_u64(92574500),
+               BLSScalar::from_u64(95050),
+               BLSScalar::from_u64(720),
+               BLSScalar::from_u64(20190820)];
+  let att_count = bitmap.len();
+  let (issuer_pk, issuer_sk) = ac_keygen_issuer::<_, BLSScalar, BLSGt>(&mut prng, att_count);
+  trace!("Issuer public key: {:?}", issuer_pk);
+  trace!("Issuer secret key: {:?}", issuer_sk);
+
+  let (user_pk, user_sk) = ac_keygen_user::<_, BLSScalar, BLSGt>(&mut prng, &issuer_pk);
+  trace!("User public key: {:#?}", user_pk);
+  // The user secret key holds [u64; 6], but with more structure.
+  trace!("User secret key: {:?}", user_sk);
+
+  // Issuer vouches for the user's attributes given above.
+  let sig = ac_sign::<_, BLSScalar, BLSGt>(&mut prng, &issuer_sk, &user_pk, &attrs);
+  trace!("Credential signature: {:?}", sig);
+
+  // The user presents this to the second party in a transaction as proof
+  // attributes have been committed without revealing the values.
+  let reveal_sig = ac_reveal::<_, BLSScalar, BLSGt>(&mut prng, &user_sk, &issuer_pk, &sig, &attrs,
+                                                    &bitmap).unwrap();
+
+  // Decision point. Does the second party agree to do business?
+  // Sometimes this is presumed such as a syndicated investment
+  // round, where you'll take money from everyone qualified. Other
+  // times, there might be an off-chain negotiation to decide
+  // whether to provisionally accept the deal.
+
+  let mut revealed_attrs = vec![];
+  for (attr, b) in attrs.iter().zip(&bitmap) {
+    if *b {
+      revealed_attrs.push(attr.clone());
+    }
+  }
+
+  // Proves the attributes are what the user committed to. Anyone
+  // with the revealed attributes and the reveal signature can do
+  // this. But presumably, the reveal signature alone is insufficient to
+  // derive the attributes. Presumably if the range of legal values were small,
+  // exhaustive search would not be too exhausting. (?)
+  if ac_verify::<BLSScalar, BLSGt>(&issuer_pk,
+                                   revealed_attrs.as_slice(),
+                                   &bitmap,
+                                   &reveal_sig).is_ok()
+    {
+      info!("Verified revealed attributes match signed commitment.");
+    } else {
+      error!("Verification failed.");
+    };
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct AddrCred<'a> {
+  address: &'a str,
+  sig_type: u32,
+  signature: &'a str,
 }
 
 fn main() {
-    init_logging();
+  init_logging();
 
-    let path: std::path::PathBuf = std::env::current_exe().unwrap();
-    let program_name: &str = path.file_name().unwrap().to_str().unwrap();
+  let args = parse_args();
 
-    // TODO Specify that one subcommand is required?
-    let matches = clap_app!(tbd =>
-        (version: VERSION)
-        (author: AUTHOR)
-        (about: "Anonomyous credential registry command line interface")
-        (@arg registry: -r --registry [FILE] "registry path (default: acreg.json)")
-        (@arg debug: -d ... "Sets the level of debugging information")
-        (@subcommand test =>
-            (about: "Automated self-test")
-        )
-        (@subcommand create =>
-            (about: "Create a new anonymous credential")
-        )
-        (@subcommand lookup =>
-            (about: "Lookup anonymous credential")
-            (@arg address: +required "anonymous credential address")
-        )
-    ).name(program_name).get_matches();
+  let registry_path = Path::new(args.value_of("registry").unwrap_or(DEFAULT_REGISTRY_PATH));
 
-    demo_logging();
-
-    trace!("registry: {}", matches.value_of("registry").unwrap_or("acreg.json"));
-    trace!("debug: {}", matches.occurrences_of("debug"));
-    trace!("test: {:?}", matches.subcommand_matches("test"));
-    trace!("create: {:?}", matches.subcommand_matches("create"));
-    if let Some(matches) = matches.subcommand_matches("lookup") {
-        if let Some(address) = matches.value_of("address") {
-            info!("lookup: {:?}", address);
-        }
+  match args.subcommand() {
+    ("test", _) => {
+      if 0 < args.occurrences_of("debug") {
+        demo_logging();
+        trace!("registry: {}", registry_path.display());
+      }
+      automated_test();
     }
-
-    match matches.subcommand() {
-        ("test", Some(_)) => {
-            info!("Got test");
+    ("create", _) => {
+      trace!("create");
+      let _ = match OpenOptions::new().append(true)
+                                      .create(true)
+                                      .open(&registry_path)
+      {
+        Err(why) => panic!("Couldn't create registry {}: {}",
+                           &registry_path.display(),
+                           why.description()),
+        Ok(mut registry_file) => {
+          // TODO The address and signature should come from Zei.
+          let address = "0123";
+          let signature = "0123456";
+          let a = AddrCred { address: address,
+                             sig_type: 2,
+                             signature: signature };
+          let j = serde_json::to_string(&a).unwrap();
+          trace!("json: {}", j);
+          registry_file.write_fmt(format_args!("{}\n", j))
         }
-        ("create", Some(_)) => {
-            info!("Got create");
-        }
-        ("lookup", Some(lookup)) => {
-            info!("Got lookup: {:?}", lookup.value_of("address"));
-        }
-        _ => {}
+      };
     }
-    let mut prng: ChaChaRng;
-    // For a real application, the seed should be random.
-    prng = ChaChaRng::from_seed([0u8; 32]);
-
-    // Attributes to be revealed. For example, they might be:
-    //    account balance, zip code, credit score, and timestamp
-    // In this case, account balance will not be revealed.
-    let bitmap = [false, true, true, true];
-    let attrs = [BLSScalar::from_u64(92574500),
-                 BLSScalar::from_u64(95050),
-                 BLSScalar::from_u64(720),
-                 BLSScalar::from_u64(20190820)];
-    let att_count = bitmap.len();
-    let (issuer_pk, issuer_sk) =
-        ac_keygen_issuer::<_, BLSScalar, BLSGt>(&mut prng, att_count);
-    trace!("Issuer public key: {:?}", issuer_pk);
-    trace!("Issuer secret key: {:?}", issuer_sk);
-
-    let (user_pk, user_sk) =
-        ac_keygen_user::<_, BLSScalar, BLSGt>(&mut prng, &issuer_pk);
-    trace!("User public key: {:#?}", user_pk);
-    // The user secret key holds [u64; 6], but with more structure.
-    trace!("User secret key: {:?}", user_sk);
-
-    // Issuer vouches for the user's attributes given above.
-    let sig =
-        ac_sign::<_, BLSScalar, BLSGt>(&mut prng, &issuer_sk, &user_pk,
-                                       &attrs);
-    trace!("Credential signature: {:?}", sig);
-
-    // The user presents this to the second party in a transaction as proof
-    // attributes have been committed without revealing the values.
-    let reveal_sig = ac_reveal::<_, BLSScalar, BLSGt>(&mut prng,
-                                                      &user_sk,
-                                                      &issuer_pk,
-                                                      &sig,
-                                                      &attrs,
-                                                      &bitmap).unwrap();
-
-
-    // Decision point. Does the second party agree to do business?
-    // Sometimes this is presumed such as a syndicated investment
-    // round, where you'll take money from everyone qualified. Other
-    // times, there might be an off-chain negotiation to decide
-    // whether to provisionally accept the deal.
-
-    let mut revealed_attrs = vec![];
-    for (attr, b) in attrs.iter().zip(&bitmap) {
-      if *b {
-        revealed_attrs.push(attr.clone());
+    ("lookup", Some(lookup)) => {
+      // Maximum u64 is 20 digits: 18,446,744,073,709,551,616.
+      if let Ok(address) = lookup.value_of("address").unwrap().parse::<u64>() {
+        trace!("lookup: address={:?}", address);
+        let mut contents = String::new();
+        let _ = match File::open(&registry_path) {
+          Ok(mut registry_file) => &registry_file.read_to_string(&mut contents),
+          // TODO Iterate over lines and deserialize each from json
+          // even though the file isn't quite json--it's a colletion
+          // of json fragments.
+          //
+          // See https://doc.rust-lang.org/std/primitive.str.html#method.lines
+          //
+          // Eventually, this stuff will go into a proper database, so don't fuss
+          // over efficiency details yet. If this line-by-line approach interferes
+          // with validation, then add the header and footer.
+          Err(wut) => panic!("{:?}", wut),
+        };
+        trace!("Read: {}", &contents);
+        let mut acjson = contents.lines();
+        // TODO Parse x as JSON. Extract the address field. Compare to
+        // the command line argument.
+        let target = acjson.find(|&x| x.len() > 0);
+        trace!("target: {:?}", target);
+      } else {
+        error!("Address must be a number.");
       }
     }
-
-    // Proves the attributes are what the user committed to. Anyone
-    // with the revealed attributes and the reveal signature can do
-    // this. But presumably, the reveal signature alone is insufficient to
-    // derive the attributes. Presumably if the range of legal values were small,
-    // exhaustive search would not be too exhausting. (?)
-    if ac_verify::<BLSScalar, BLSGt>(&issuer_pk,
-                                     revealed_attrs.as_slice(),
-                                     &bitmap,
-                                     &reveal_sig).is_ok()
-    {
-        info!("Verified revealed attributes match signed commitment.");
-    } else {
-        error!("Verification failed.");
-    };
+    (subcommand, _) => {
+      error!("No match for subcommand: {:?}. Use -h for help.",
+             subcommand);
+    }
+  }
 }

@@ -25,7 +25,7 @@
 		],
 		"pattern": "^([a-f0-9]{64})$"
 	    },
-	    "type": {
+	    "sig_type": {
 		"$id" : "$/properties/type",
 		"type" : [ "integer", "string" ],
 		"title": "Credential Kind",
