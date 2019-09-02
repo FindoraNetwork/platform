@@ -70,7 +70,6 @@ extern crate zei;
 use env_logger::{Env, Target};
 use log::{debug, error, info, trace, warn};
 use serde::{Deserialize, Serialize};
-use serde_json::Result;
 use std::error::Error;
 use std::fs::File;
 use std::fs::OpenOptions;
@@ -85,16 +84,19 @@ use zei::crypto::anon_creds::{ac_keygen_issuer, ac_keygen_user, ac_reveal, ac_si
 
 const VERSION: &str = "0.0";
 const AUTHOR: &str = "John D. Corbett <corbett@findora.org>";
+
+// Default file path of the anonymous credential registry
 const DEFAULT_REGISTRY_PATH: &str = "acreg.json";
 
 fn init_logging() {
-  // Log everything "trace" level or greater.
-  // Log to stdout.
+  // Log everything "trace" level or greater to stdout.
   // TODO document how to override this from an environment variable.
   env_logger::from_env(Env::default().default_filter_or("trace")).target(Target::Stdout)
                                                                  .init();
 }
 
+// Demonstrate logging format including timestamp and color-coded
+// keywords
 fn demo_logging() {
   error!("Sample error message");
   warn!("Sample warn message");
@@ -106,11 +108,11 @@ fn demo_logging() {
 fn parse_args() -> clap::ArgMatches<'static> {
   let path: std::path::PathBuf = std::env::current_exe().unwrap();
   let program_name: &str = path.file_name().unwrap().to_str().unwrap();
-  clap_app!(tbd =>
+  clap_app!(tmp_name =>
+  (name: program_name)
   (version: VERSION)
   (author: AUTHOR)
   (about: "Anonomyous credential registry command line interface")
-  (name: program_name)
   (@arg registry: -r --registry [FILE]
    "registry path (default: acreg.json)")
   (@arg debug: -d ... "Sets the level of debugging information")
@@ -183,6 +185,7 @@ fn automated_test() {
     };
 }
 
+// Record mapping an address to an anonymous credential signature
 #[derive(Debug, Serialize, Deserialize)]
 struct AddrCred<'a> {
   address: &'a str,
@@ -190,6 +193,9 @@ struct AddrCred<'a> {
   signature: &'a str,
 }
 
+// TODO create command should create a random entry
+// TODO Extract a function for each command
+// TODO More error reporting?
 fn main() {
   init_logging();
 
@@ -206,7 +212,8 @@ fn main() {
       automated_test();
     }
     ("create", _) => {
-      trace!("create");
+      trace!("Creating and appending a record to {}",
+             registry_path.display());
       let _ = match OpenOptions::new().append(true)
                                       .create(true)
                                       .open(&registry_path)
@@ -229,28 +236,22 @@ fn main() {
     }
     ("lookup", Some(lookup)) => {
       // Maximum u64 is 20 digits: 18,446,744,073,709,551,616.
-      if let Ok(address) = lookup.value_of("address").unwrap().parse::<u64>() {
+      // TODO if we do string comparison, trim leading zeros.
+      //      if let Ok(address) = lookup.value_of("address").unwrap().parse::<u64>() {
+      if let Some(address) = lookup.value_of("address") {
         trace!("lookup: address={:?}", address);
         let mut contents = String::new();
         let _ = match File::open(&registry_path) {
           Ok(mut registry_file) => &registry_file.read_to_string(&mut contents),
-          // TODO Iterate over lines and deserialize each from json
-          // even though the file isn't quite json--it's a colletion
-          // of json fragments.
-          //
-          // See https://doc.rust-lang.org/std/primitive.str.html#method.lines
-          //
-          // Eventually, this stuff will go into a proper database, so don't fuss
-          // over efficiency details yet. If this line-by-line approach interferes
-          // with validation, then add the header and footer.
           Err(wut) => panic!("{:?}", wut),
         };
         trace!("Read: {}", &contents);
         let mut acjson = contents.lines();
-        // TODO Parse x as JSON. Extract the address field. Compare to
-        // the command line argument.
-        let target = acjson.find(|&x| x.len() > 0);
-        trace!("target: {:?}", target);
+        let target = acjson.rfind(|&x| {
+                             let a: AddrCred = serde_json::from_str(&x).unwrap();
+                             a.address == address
+                           });
+        info!("target: {}", target.unwrap());
       } else {
         error!("Address must be a number.");
       }
