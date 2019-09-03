@@ -54,9 +54,6 @@ macro_rules! log {
 }
 
 // Write a debug entry to stdout.
-//
-// This macro is used only for debugging simple problems
-// with the basic mapping logic.
 macro_rules! debug {
   // ($($x:tt)+) => { println!("{}    {}", timestamp(), format!($($x)+)); }
   ($($x:tt)+) => {};
@@ -66,9 +63,9 @@ macro_rules! debug {
 // const HEADER_ONLY: bool = false;
 const INCLUDE_BITS: bool = true;
 
-// Define a structure for a checksum on a block.  We use
-// the first CHECK_SIZE bytes of the sha256 digest as the
-// checksum.
+/// Define a structure for a checksum on a block.  We use
+/// the first CHECK_SIZE bytes of the sha256 digest as the
+/// checksum.
 const CHECK_SIZE: usize = 16;
 
 #[repr(C)]
@@ -125,9 +122,7 @@ impl BlockInfo {
 
     Ok(())
   }
-}
 
-impl BlockInfo {
   fn as_ref(&self) -> &[u8] {
     unsafe {
       from_raw_parts((self as *const BlockInfo) as *const u8,
@@ -159,6 +154,7 @@ const BLOCK_BITS_SIZE: usize = mem::size_of::<BlockBits>();
 /// This structure can be initialized using a bitmap
 /// downloaded from a server.  It allows queries and
 /// checksum verification.
+
 pub struct SparseMap {
   version: u64,
   checksum: Digest,
@@ -233,9 +229,12 @@ impl SparseMap {
     let mut checksum_data = EMPTY_CHECKSUM;
     let mut digest = Digest { 0: [0_u8; DIGESTBYTES] };
 
+    // For each block, compute the checksum.
     for i in 0..self.headers.len() {
       let info = &self.headers[i];
 
+      // If the bitmap is present, make sure that it matches
+      // expectations.
       match self.map.get(&(i as u64)) {
         Some(bits) => {
           // Recreate the block as it should have been on disk...
@@ -376,6 +375,7 @@ const UPPER_LIMIT: u32 = (BLOCK_BITS - BITS_SIZE / INDEX_SIZE) as u32;
 
 // Define the layout of a block of a bitmap.  The on-disk
 // and in-memory layouts are the same.
+
 #[repr(C)]
 struct BitBlock {
   header: BlockHeader,
@@ -447,6 +447,7 @@ impl BitBlock {
 }
 
 // Define a type for the checksum operation.
+
 type ChecksumData = [u8; CHECK_SIZE + DIGESTBYTES];
 const EMPTY_CHECKSUM: ChecksumData = [0_u8; CHECK_SIZE + DIGESTBYTES];
 
@@ -848,7 +849,7 @@ impl BitMap {
     let mask = 1 << mask_shift;
 
     // We might need to create a new block.  If so,
-    // push the new block and the dirty flag for it.
+    // push the new block and all the metadata entries.
     if block >= self.blocks.len() {
       self.blocks.push(BitBlock::new(BIT_ARRAY, block as u64)?);
       self.checksum_data.push(EMPTY_CHECKSUM);
@@ -906,15 +907,18 @@ impl BitMap {
 
   /// Compute a sha256 checksum for the entire bitmap.
   ///
-  /// The checksum is defined currently recursively across
-  /// the blocks where the checksum at block i is:
+  /// The checksum is defined currently recursively across the
+  /// blocks where the checksum at block i is:
   ///
   ///    checksum[i] = sha256(check_block[i] | checksum[i - 1])
   ///    checksum[0] = sha256(check_block[0] | [0_u8; DIGESTBYTES])
   ///
-  /// where "|" denotes byte array concatenation.  The checksum result
-  /// for the entire map is defined as the final sha256 value computed,
-  /// or an array of zeros, if no blocks exist in the bitmap.
+  /// where "|" denotes byte array concatenation, and check_block[i]
+  /// is the CheckBlock for block i.
+  ///
+  /// The final checksum result for the entire map is defined as the
+  /// final sha256 value computed, or an array of zeros, if no blocks
+  /// exist in the bitmap.
   ///
   pub fn compute_checksum(&mut self) -> Digest {
     let mut digest = Digest([0_u8; DIGESTBYTES]);
@@ -965,6 +969,7 @@ impl BitMap {
     // Reserve space for the version number as a u64.
     let mut bytes = DESCRIPTOR_SIZE;
 
+    // Reserve space for each block.
     for i in 0..self.blocks.len() {
       bytes += self.serial_size(i);
     }
@@ -995,7 +1000,7 @@ impl BitMap {
       set.insert(bit_list[i] / BLOCK_BITS);
     }
 
-    // Add the length for each block.
+    // Add the space needed for each block.
     for i in 0..self.blocks.len() {
       if set.contains(&i) {
         bytes += self.serial_size(i);
@@ -1041,8 +1046,8 @@ impl BitMap {
     }
   }
 
-  // Append serialized form of a block to the Vec
-  // representing the result.
+  // Append the serialized form of a block to the Vec
+  // representing the results.
   fn serialize_block(&self, index: usize, result: &mut Vec<u8>, include: bool) {
     let set_bits = self.set_bits[index];
 
@@ -1073,6 +1078,7 @@ impl BitMap {
   }
 
   // Append an entire block to the serialized form.
+  // This is called when the bitmap can't be compressed.
   fn append_block(&self, index: usize, result: &mut Vec<u8>) {
     // Append the header to the serialization.
     self.append_header(index, BIT_ARRAY, 0, result);
@@ -1136,8 +1142,6 @@ impl BitMap {
     let mut bits_map = HashMap::new();
     let mut index = 0;
 
-    debug!("deserialize:  entered");
-
     // First, retrieve the global data, if possible.
     if bytes.len() < DESCRIPTOR_SIZE {
       return se!("The input did not contain a descriptor.");
@@ -1163,7 +1167,8 @@ impl BitMap {
       let block = info.bit_id / BLOCK_BITS as u64;
       let mut bits: BlockBits;
 
-      // Now retrieve the block contents, if present.
+      // Now retrieve the block contents, if present, and
+      // restore them to bitmaps.
       match info.contents {
         BIT_HEADER => {
           debug!("No contents for block {}", block);
@@ -1213,7 +1218,6 @@ impl BitMap {
       return se!("The vector contained {} extra bytes.", bytes.len() - index);
     }
 
-    debug!("deserialize:  enter");
     Ok((version, checksum, info_vec, bits_map))
   }
 
@@ -1223,6 +1227,7 @@ impl BitMap {
     let mut index = start;
     let mut version: u64 = 0;
 
+    // TODO:  There probably is a library routine for this.
     for i in 0..8 {
       version |= (bytes[index + i] as u64) << (8 * i);
     }
