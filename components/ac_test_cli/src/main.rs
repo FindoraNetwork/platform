@@ -65,6 +65,7 @@ extern crate rand;
 extern crate rand_chacha;
 extern crate serde;
 extern crate serde_json;
+
 extern crate zei;
 
 use env_logger::{Env, Target};
@@ -75,14 +76,18 @@ use std::fs::File;
 use std::fs::OpenOptions;
 use std::io::prelude::*;
 use std::path::Path;
+use std::process::exit;
 
+use hex;
 use rand::SeedableRng;
 use rand_chacha::ChaChaRng;
+use rmp_serde;
+use sha2::{Digest, Sha256};
 use zei::algebra::bls12_381::{BLSGt, BLSScalar};
 use zei::algebra::groups::Scalar;
 use zei::crypto::anon_creds::{ac_keygen_issuer, ac_keygen_user, ac_reveal, ac_sign, ac_verify};
 
-const VERSION: &str = "0.0";
+const VERSION: &'static str = env!("CARGO_PKG_VERSION");
 const AUTHOR: &str = "John D. Corbett <corbett@findora.org>";
 
 // Default file path of the anonymous credential registry
@@ -124,7 +129,7 @@ fn parse_args() -> clap::ArgMatches<'static> {
   )).get_matches()
 }
 
-fn automated_test() {
+fn automated_test() -> bool {
   let mut prng: ChaChaRng;
   // For a real application, the seed should be random.
   prng = ChaChaRng::from_seed([0u8; 32]);
@@ -144,6 +149,19 @@ fn automated_test() {
 
   let (user_pk, user_sk) = ac_keygen_user::<_, BLSScalar, BLSGt>(&mut prng, &issuer_pk);
   trace!("User public key: {:#?}", user_pk);
+  // zei::crypto::anon_creds::ACUserPublicKey<zei::algebra::bls12_381::BLSG1>
+  let mut v2 = vec![];
+  user_pk.serialize(&mut rmp_serde::Serializer::new(&mut v2))
+         .unwrap();
+  info!("User public key bytes: {:?}", v2);
+  info!("Length: {}", v2.len());
+
+  let mut hasher = Sha256::new();
+  hasher.input("ACUserPublicKey<zei::algebra::bls12_381::BLSG1>");
+  hasher.input(v2.as_slice());
+
+  info!("Hasher: {:?}", hex::encode(hasher.result()));
+
   // The user secret key holds [u64; 6], but with more structure.
   trace!("User secret key: {:?}", user_sk);
 
@@ -174,15 +192,16 @@ fn automated_test() {
   // this. But presumably, the reveal signature alone is insufficient to
   // derive the attributes. Presumably if the range of legal values were small,
   // exhaustive search would not be too exhausting. (?)
-  if ac_verify::<BLSScalar, BLSGt>(&issuer_pk,
-                                   revealed_attrs.as_slice(),
-                                   &bitmap,
-                                   &reveal_sig).is_ok()
-    {
-      info!("Verified revealed attributes match signed commitment.");
-    } else {
-      error!("Verification failed.");
-    };
+  let verified = ac_verify::<BLSScalar, BLSGt>(&issuer_pk,
+                                               revealed_attrs.as_slice(),
+                                               &bitmap,
+                                               &reveal_sig).is_ok();
+  if verified {
+    info!("Verified revealed attributes match signed commitment.");
+  } else {
+    error!("Verification failed.");
+  };
+  verified
 }
 
 // Record mapping an address to an anonymous credential signature
@@ -193,72 +212,110 @@ struct AddrCred<'a> {
   signature: &'a str,
 }
 
-// TODO create command should create a random entry
-// TODO Extract a function for each command
-// TODO More error reporting?
-fn main() {
-  init_logging();
+impl Default for AddrCred<'_> {
+  fn default() -> Self {
+    AddrCred { address: "",
+               sig_type: 0,
+               signature: "" }
+  }
+}
 
-  let args = parse_args();
+enum ShellExitStatus {
+  Success = 0,
+  Failure = 1,
+}
 
-  let registry_path = Path::new(args.value_of("registry").unwrap_or(DEFAULT_REGISTRY_PATH));
+fn subcommand_test(registry_path: &Path, args: &clap::ArgMatches) -> ShellExitStatus {
+  trace!("subcommand test");
+  if 0 < args.occurrences_of("debug") {
+    demo_logging();
+    trace!("registry: {}", registry_path.display());
+  }
+  if automated_test() {
+    ShellExitStatus::Success
+  } else {
+    ShellExitStatus::Failure
+  }
+}
 
-  match args.subcommand() {
-    ("test", _) => {
-      if 0 < args.occurrences_of("debug") {
-        demo_logging();
-        trace!("registry: {}", registry_path.display());
-      }
-      automated_test();
+// TODO create command should create a random entry, not a dummy
+fn subcommand_create(registry_path: &Path) -> ShellExitStatus {
+  trace!("subcommand create");
+  trace!("Creating and appending a record to {}",
+         registry_path.display());
+  match OpenOptions::new().append(true)
+                          .create(true)
+                          .open(&registry_path)
+  {
+    Err(why) => {
+      error!("Couldn't create registry {}: {}",
+             &registry_path.display(),
+             why.description());
+      ShellExitStatus::Failure
     }
-    ("create", _) => {
-      trace!("Creating and appending a record to {}",
-             registry_path.display());
-      let _ = match OpenOptions::new().append(true)
-                                      .create(true)
-                                      .open(&registry_path)
-      {
-        Err(why) => panic!("Couldn't create registry {}: {}",
-                           &registry_path.display(),
-                           why.description()),
-        Ok(mut registry_file) => {
-          // TODO The address and signature should come from Zei.
-          let address = "0123";
-          let signature = "0123456";
-          let a = AddrCred { address: address,
-                             sig_type: 2,
-                             signature: signature };
-          let j = serde_json::to_string(&a).unwrap();
-          trace!("json: {}", j);
-          registry_file.write_fmt(format_args!("{}\n", j))
-        }
-      };
-    }
-    ("lookup", Some(lookup)) => {
-      // Maximum u64 is 20 digits: 18,446,744,073,709,551,616.
-      // TODO if we do string comparison, trim leading zeros.
-      //      if let Ok(address) = lookup.value_of("address").unwrap().parse::<u64>() {
-      if let Some(address) = lookup.value_of("address") {
-        trace!("lookup: address={:?}", address);
-        let mut contents = String::new();
-        let _ = match File::open(&registry_path) {
-          Ok(mut registry_file) => &registry_file.read_to_string(&mut contents),
-          Err(wut) => panic!("{:?}", wut),
-        };
-        trace!("Read: {}", &contents);
-        let mut acjson = contents.lines();
-        let target = acjson.rfind(|&x| {
-                             let a: AddrCred = serde_json::from_str(&x).unwrap();
-                             a.address == address
-                           });
-        info!("target: {}", target.unwrap());
+    Ok(mut registry_file) => {
+      // TODO The address and signature should come from Zei.
+      let address = "0123";
+      let signature = "0123456";
+      let a = AddrCred { address: address,
+                         sig_type: 2,
+                         signature: signature };
+      let j = serde_json::to_string(&a).unwrap();
+      trace!("json: {}", j);
+      if let Err(e) = registry_file.write_fmt(format_args!("{}\n", j)) {
+        error!("Error: {:?}", e);
+        ShellExitStatus::Failure
       } else {
-        error!("Address must be a number.");
+        ShellExitStatus::Success
       }
-    }
-    (subcommand, _) => {
-      error!("No match for subcommand: {:?}. Use -h for help.",
-             subcommand);
     }
   }
+}
+
+fn subcommand_lookup(registry_path: &Path, lookup: &clap::ArgMatches) -> ShellExitStatus {
+  trace!("subcommand lookup");
+  // Maximum u64 is 20 digits: 18,446,744,073,709,551,616.
+  // TODO if we do string comparison, trim leading zeros.
+  //      if let Ok(address) = lookup.value_of("address").unwrap().parse::<u64>() {
+  if let Some(address) = lookup.value_of("address") {
+    trace!("lookup: address={:?}", address);
+    let mut contents = String::new();
+    let exit_status = match File::open(&registry_path) {
+      Ok(mut registry_file) => {
+        &registry_file.read_to_string(&mut contents);
+        trace!("Read: {}", &contents);
+        let mut acjson = contents.lines();
+        // TODO It's sketchy to bury the json parsing error.
+        let target = acjson.rfind(|&x| {
+                             let a: AddrCred = serde_json::from_str(&x).unwrap_or_default();
+                             a.address == address
+                           });
+        info!("target: {}", target.unwrap_or("not found"));
+        ShellExitStatus::Success
+      }
+      Err(wut) => {
+        error!("{:?}", wut);
+        ShellExitStatus::Failure
+      }
+    };
+    exit_status
+  } else {
+    unreachable!();
+  }
+}
+
+fn main() {
+  init_logging();
+  let args = parse_args();
+  let registry_path = Path::new(args.value_of("registry").unwrap_or(DEFAULT_REGISTRY_PATH));
+  exit(match args.subcommand() {
+         ("test", _) => subcommand_test(&registry_path, &args),
+         ("create", _) => subcommand_create(&registry_path),
+         ("lookup", Some(lookup)) => subcommand_lookup(&registry_path, &lookup),
+         (subcommand, _) => {
+           error!("Please specify a valid subcommand: {:?}. Use -h for help.",
+                  subcommand);
+           ShellExitStatus::Failure
+         }
+       } as i32)
 }
