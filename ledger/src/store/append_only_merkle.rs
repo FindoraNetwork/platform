@@ -15,8 +15,6 @@ extern crate serde;
 extern crate serde_derive;
 extern crate sodiumoxide;
 
-use chrono::Datelike;
-use chrono::Timelike;
 use chrono::Utc;
 use findora::timestamp;
 use findora::EnableMap;
