@@ -17,6 +17,7 @@ extern crate sodiumoxide;
 
 use chrono::Utc;
 use findora::timestamp;
+use findora::DEFAULT_MAP;
 use findora::EnableMap;
 use serde::Deserialize;
 use serde::Deserializer;
@@ -39,18 +40,10 @@ use std::slice::from_raw_parts;
 use std::slice::from_raw_parts_mut;
 
 #[allow(non_upper_case_globals)]
-static append_map: EnableMap = EnableMap { log_enabled: true,
-                                           error_enabled: true,
-                                           warning_enabled: true,
-                                           debug_enabled: false,
-                                           info_enabled: false };
+static append_map: EnableMap = DEFAULT_MAP;
 
 #[allow(non_upper_case_globals)]
-static proof_map: EnableMap = EnableMap { log_enabled: true,
-                                          error_enabled: true,
-                                          warning_enabled: true,
-                                          debug_enabled: false,
-                                          info_enabled: false };
+static proof_map: EnableMap = DEFAULT_MAP;
 
 const BLOCK_SHIFT: u16 = 9;
 const HASHES_IN_BLOCK: usize = (1 << BLOCK_SHIFT) - 1;

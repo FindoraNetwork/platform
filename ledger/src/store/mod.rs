@@ -12,6 +12,7 @@ use crate::data_model::{
 use append_only_merkle::{AppendOnlyMerkle, Proof};
 use bitmap::BitMap;
 use findora::timestamp;
+use findora::DEFAULT_MAP;
 use findora::EnableMap;
 use logged_merkle::LoggedMerkle;
 use rand::SeedableRng;
@@ -34,25 +35,13 @@ pub mod errors;
 pub mod logged_merkle;
 
 #[allow(non_upper_case_globals)]
-static store: EnableMap = EnableMap { log_enabled: true,
-                                      error_enabled: true,
-                                      warning_enabled: true,
-                                      debug_enabled: true,
-                                      info_enabled: true };
+static store: EnableMap = DEFAULT_MAP;
 
 #[allow(non_upper_case_globals)]
-static ledger_map: EnableMap = EnableMap { log_enabled: true,
-                                           error_enabled: true,
-                                           warning_enabled: true,
-                                           debug_enabled: true,
-                                           info_enabled: true };
+static ledger_map: EnableMap = DEFAULT_MAP;
 
 #[allow(non_upper_case_globals)]
-static issue_map: EnableMap = EnableMap { log_enabled: true,
-                                          error_enabled: true,
-                                          warning_enabled: true,
-                                          debug_enabled: true,
-                                          info_enabled: true };
+static issue_map: EnableMap = DEFAULT_MAP;
 
 pub struct SnapshotId {
   pub id: u64,

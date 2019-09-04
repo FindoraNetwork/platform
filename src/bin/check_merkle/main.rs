@@ -29,28 +29,17 @@ extern crate findora;
 
 use ledger::store::append_only_merkle::AppendOnlyMerkle;
 use findora::timestamp;
+use findora::DEFAULT_MAP;
 use findora::EnableMap;
 use std::env;
 use std::path::Path;
 use std::process::exit;
 
 #[allow(non_upper_case_globals)]
-static check: EnableMap = EnableMap {
-  info_enabled:  true,
-  warning_enabled: true,
-  error_enabled: true,
-  log_enabled: true,
-  debug_enabled: true,
-};
+static check: EnableMap = DEFAULT_MAP;
 
 #[allow(non_upper_case_globals)]
-static rebuild: EnableMap = EnableMap {
-  info_enabled:  true,
-  warning_enabled: true,
-  error_enabled: true,
-  log_enabled: true,
-  debug_enabled: true,
-};
+static rebuild: EnableMap = DEFAULT_MAP;
 
 fn main() {
   let (path, do_repairs) = parse_arguments();

@@ -24,6 +24,7 @@
 //! of the map.
 
 use findora::timestamp;
+use findora::DEFAULT_MAP;
 use findora::EnableMap;
 use sodiumoxide::crypto::hash::sha256;
 use sodiumoxide::crypto::hash::sha256::Digest;
@@ -45,11 +46,7 @@ use std::slice::from_raw_parts;
 use std::slice::from_raw_parts_mut;
 
 #[allow(non_upper_case_globals)]
-static bitmap_map: EnableMap = EnableMap { log_enabled: true,
-                                           error_enabled: true,
-                                           warning_enabled: true,
-                                           debug_enabled: false,
-                                           info_enabled: false };
+static bitmap_map: EnableMap = DEFAULT_MAP;
 
 // Constants for calling serialize_block.
 // const HEADER_ONLY: bool = false;

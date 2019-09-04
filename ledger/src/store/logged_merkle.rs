@@ -46,21 +46,14 @@ use std::slice::from_raw_parts;
 use std::slice::from_raw_parts_mut;
 
 use findora::timestamp;
+use findora::DEFAULT_MAP;
 use findora::EnableMap;
 
 #[allow(non_upper_case_globals)]
-static apply_log: EnableMap = EnableMap { error_enabled: true,
-                                          debug_enabled: false,
-                                          warning_enabled: true,
-                                          info_enabled: false,
-                                          log_enabled: true };
+static apply_log: EnableMap = DEFAULT_MAP;
 
 #[allow(non_upper_case_globals)]
-static find_relevant: findora::EnableMap = findora::EnableMap { error_enabled: true,
-                                                                debug_enabled: false,
-                                                                warning_enabled: true,
-                                                                info_enabled: false,
-                                                                log_enabled: true };
+static find_relevant: findora::EnableMap = DEFAULT_MAP;
 
 const BUFFER_SIZE: usize = 32 * 1024;
 const CHECK_SIZE: usize = 16;
