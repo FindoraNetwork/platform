@@ -8,6 +8,16 @@ pub struct EnableMap {
   pub log_enabled: bool,
 }
 
+// Define a set of defaults for anyone who
+// prefers one.
+pub const DEFAULT_MAP: EnableMap = EnableMap {
+  error_enabled: true,
+  debug_enabled: false,
+  warning_enabled: true,
+  info_enabled: false,
+  log_enabled: true,
+};
+
 impl EnableMap {
   pub fn error_enabled(&self) -> bool {
     self.error_enabled
