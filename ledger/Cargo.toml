@@ -5,6 +5,7 @@ authors = ["Nathan Yospe <nathan@eian.io>, Kevin Foley <kevin@eian.io>, Ajinkya 
 edition = "2018"
 
 [dependencies]
+findora = { path = "../findora" }
 bincode = "1"
 rand_chacha = "0.1.1"
 arrayref = "0.3.5"

@@ -1,5 +1,6 @@
 extern crate bincode;
 extern crate byteorder;
+extern crate findora;
 extern crate tempdir;
 
 use crate::data_model::errors::PlatformError;
@@ -10,6 +11,8 @@ use crate::data_model::{
 };
 use append_only_merkle::{AppendOnlyMerkle, Proof};
 use bitmap::BitMap;
+use findora::timestamp;
+use findora::EnableMap;
 use logged_merkle::LoggedMerkle;
 use rand::SeedableRng;
 use rand_chacha::ChaChaRng;
@@ -30,18 +33,26 @@ pub mod bitmap;
 pub mod errors;
 pub mod logged_merkle;
 
-// use append_only_merkle::timestamp;
+#[allow(non_upper_case_globals)]
+static store: EnableMap = EnableMap { log_enabled: true,
+                                      error_enabled: true,
+                                      warning_enabled: true,
+                                      debug_enabled: true,
+                                      info_enabled: true };
 
-macro_rules! log {
-  ($($x:tt)+) => {
-    use crate::store::append_only_merkle::timestamp;
-    println!("{}    {}", timestamp(), format!($($x)+));
-  }
-}
+#[allow(non_upper_case_globals)]
+static ledger_map: EnableMap = EnableMap { log_enabled: true,
+                                           error_enabled: true,
+                                           warning_enabled: true,
+                                           debug_enabled: true,
+                                           info_enabled: true };
 
-macro_rules! debug {
-  ($c:tt, $($x:tt)+) => {}; // ($c:tt, $($x:tt)+) => { println!("{}    {}", timestamp(), format!($($x)+)); }
-}
+#[allow(non_upper_case_globals)]
+static issue_map: EnableMap = EnableMap { log_enabled: true,
+                                          error_enabled: true,
+                                          warning_enabled: true,
+                                          debug_enabled: true,
+                                          info_enabled: true };
 
 pub struct SnapshotId {
   pub id: u64,
@@ -167,7 +178,7 @@ impl LedgerState {
       AppendOnlyMerkle::open(path)
     };
 
-    log!("Using path {} for the Merkle tree.", path);
+    log!(store, "Using path {} for the Merkle tree.", path);
 
     let tree = match result {
       Err(x) => {
@@ -353,20 +364,20 @@ impl LedgerState {
   }
 
   fn apply_asset_issuance(&mut self, issue: &AssetIssuance) {
-    debug!(issue, "outputs {:?}", issue.body.outputs);
-    debug!(issue, "records {:?}", issue.body.records);
+    debug!(issue_map, "outputs {:?}", issue.body.outputs);
+    debug!(issue_map, "records {:?}", issue.body.records);
     for out in issue.body
                     .outputs
                     .iter()
                     .zip(issue.body.records.iter().map(|ref o| (*o).clone()))
     {
-      debug!(ledger, "add txo {:?}", out.1);
+      debug!(ledger_map, "add txo {:?}", out.1);
       self.add_txo(out);
     }
 
     self.issuance_num
         .insert(issue.body.code, issue.body.seq_num);
-    debug!(ledger,
+    debug!(ledger_map,
            "insert asset issue code {:?} -> seq {:?}", issue.body.code, issue.body.seq_num);
   }
 
@@ -818,11 +829,11 @@ impl LedgerUpdate for LedgerState {
   fn apply_transaction(&mut self, txn: &Transaction) -> TxoSID {
     let sid = self.txn_base_sid;
     self.txn_base_sid.index = self.max_applied_sid.index + 1;
-    debug!(ledger, "apply {:?}", sid);
+    debug!(ledger_map, "apply {:?}", sid);
 
     // Apply the operations
     for op in &txn.operations {
-      debug!(ledger, "Applying op:  {:?}", op);
+      debug!(ledger_map, "Applying op:  {:?}", op);
       self.apply_operation(op);
     }
     sid
