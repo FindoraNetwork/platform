@@ -83,9 +83,12 @@ use rand::SeedableRng;
 use rand_chacha::ChaChaRng;
 use rmp_serde;
 use sha2::{Digest, Sha256};
-use zei::algebra::bls12_381::{BLSGt, BLSScalar};
+use zei::algebra::bls12_381::{BLSGt, BLSScalar, BLSG1};
+
 use zei::algebra::groups::Scalar;
-use zei::crypto::anon_creds::{ac_keygen_issuer, ac_keygen_user, ac_reveal, ac_sign, ac_verify};
+use zei::crypto::anon_creds::{
+  ac_keygen_issuer, ac_keygen_user, ac_reveal, ac_sign, ac_verify, ACUserPublicKey,
+};
 
 const VERSION: &'static str = env!("CARGO_PKG_VERSION");
 const AUTHOR: &str = "John D. Corbett <corbett@findora.org>";
@@ -129,6 +132,24 @@ fn parse_args() -> clap::ArgMatches<'static> {
   )).get_matches()
 }
 
+// Return the SHA256 hash of a user public key as a hexadecimal string.
+fn sha256(user_pk: &ACUserPublicKey<BLSG1>) -> String {
+  let mut bytes = vec![];
+  user_pk.serialize(&mut rmp_serde::Serializer::new(&mut bytes))
+         .unwrap();
+  // TODO Strange that the serialization is 67 bytes, but the
+  // structure contains 6*3 u64 integers, which takes 144 bytes.
+  let mut hasher = Sha256::new();
+  // Salt the hash to avoid leaking information about other uses of
+  // sha256 on the user's public key.
+  // TODO Does this buy us anything?
+  hasher.input("ACUserPublicKey<zei::algebra::bls12_381::BLSG1>");
+  hasher.input(bytes.as_slice());
+  hex::encode(hasher.result())
+}
+
+// Test anonymous credentials on fixed inputs. Similar to
+// Zei's credentials_tests.
 fn automated_test() -> bool {
   let mut prng: ChaChaRng;
   // For a real application, the seed should be random.
@@ -136,7 +157,7 @@ fn automated_test() -> bool {
 
   // Attributes to be revealed. For example, they might be:
   //    account balance, zip code, credit score, and timestamp
-  // In this case, account balance will not be revealed.
+  // In this case, account balance (first) will not be revealed.
   let bitmap = [false, true, true, true];
   let attrs = [BLSScalar::from_u64(92574500),
                BLSScalar::from_u64(95050),
@@ -149,18 +170,7 @@ fn automated_test() -> bool {
 
   let (user_pk, user_sk) = ac_keygen_user::<_, BLSScalar, BLSGt>(&mut prng, &issuer_pk);
   trace!("User public key: {:#?}", user_pk);
-  // zei::crypto::anon_creds::ACUserPublicKey<zei::algebra::bls12_381::BLSG1>
-  let mut v2 = vec![];
-  user_pk.serialize(&mut rmp_serde::Serializer::new(&mut v2))
-         .unwrap();
-  info!("User public key bytes: {:?}", v2);
-  info!("Length: {}", v2.len());
-
-  let mut hasher = Sha256::new();
-  hasher.input("ACUserPublicKey<zei::algebra::bls12_381::BLSG1>");
-  hasher.input(v2.as_slice());
-
-  info!("Hasher: {:?}", hex::encode(hasher.result()));
+  info!("Address of user public key: {:?}", sha256(&user_pk));
 
   // The user secret key holds [u64; 6], but with more structure.
   trace!("User secret key: {:?}", user_sk);
