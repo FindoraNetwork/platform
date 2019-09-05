@@ -44,7 +44,7 @@ impl EnableMap {
 macro_rules! log_impl {
   ($level:tt, $module:tt, $($x:tt)+) => {
     println!("{}  {:10.10}  {:16.16}  {}",
-      timestamp(), stringify!($level), stringify!($module).to_lowercase(), format!($($x)+));
+      timestamp(), stringify!($level), stringify!($module), format!($($x)+));
   }
 }
 
