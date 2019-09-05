@@ -21,7 +21,7 @@
 //!  fatal and reports an error.
 //!
 //!  If the file cannot be opened, the program invokes the tree
-//!  rebuild method, and returns the resul of that procedure.
+//!  rebuild method, and returns the result of that procedure.
 //!
 extern crate ledger;
 #[macro_use]
@@ -87,7 +87,8 @@ fn main() {
   // (level 1 and up).
   log!(check, "Rewriting the Merkle tree.");
 
-  // Try to save the level 0 data file.
+  // Try to save the level 0 data file.  We will operate
+  // on the in-memory copy.
   let save = path.to_owned() + "-check_merkle";
   let _ = std::fs::remove_file(&save);
   let _ = std::fs::rename(&path, &save);
@@ -99,7 +100,10 @@ fn main() {
     log!(check, "Continuing");
   }
 
-  // Rewrite the entire image, if possible.
+  // Rewrite the entire image, if possible.  If we fail at
+  // this point, there's no more to do.  The disk probably
+  // is in bad shape.  There's no point to a rebuild since
+  // we got a valid image into memory.
   if let Some(e) = tree.write() {
     log!(check, "The rewrite failed:  {}", e);
     exit(1);
@@ -143,6 +147,8 @@ fn parse_arguments() -> (String, bool) {
   (arguments[2].clone(), do_repairs)
 }
 
+// Try a rebuild operation.  This process can recover parts
+// of a corrupted tree that cannot be opened.
 fn try_rebuild(path: &str) {
   if !Path::new(path).exists() {
     exit(1);
