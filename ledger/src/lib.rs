@@ -9,7 +9,8 @@ extern crate base64;
 extern crate itertools;
 extern crate zei;
 
+#[macro_use]
+extern crate findora;
+
 pub mod data_model;
 pub mod store;
-
-pub use self::store::append_only_merkle::timestamp;

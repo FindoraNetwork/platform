@@ -1,0 +1,8 @@
+[package]
+name = "findora"
+version = "0.1.0"
+authors = ["Jonathan Bertoni <jonathan@eian.io>"]
+edition = "2018"
+
+[dependencies]
+chrono = "0.4"
