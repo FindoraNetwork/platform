@@ -128,7 +128,7 @@ pub fn timestamp() -> String {
 
   let now: DateTime<Utc> = Utc::now();
 
-  format!("{:04}/{:02}/{:02} {:02}:{:02}:{:02}.{:03} UTC",
+  format!("{:04}/{:02}/{:02}  {:02}:{:02}:{:02}.{:03} UTC",
           now.year(),
           now.month(),
           now.day(),
