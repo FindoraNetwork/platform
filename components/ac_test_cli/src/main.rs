@@ -1,6 +1,5 @@
 // Copyright 2019 © Findora. All rights reserved.
 /// Command line executable to exercise functions related to credentials
-
 // Anonymous Credentials with Selective Attribute Revelation
 //
 // I'm not certain the use case below is the one intended.
@@ -59,15 +58,6 @@
 
 #[macro_use]
 extern crate clap;
-extern crate env_logger;
-extern crate log;
-extern crate rand;
-extern crate rand_chacha;
-extern crate serde;
-extern crate serde_json;
-
-extern crate zei;
-
 use env_logger::{Env, Target};
 use log::{debug, error, info, trace, warn};
 use serde::{Deserialize, Serialize};
@@ -83,11 +73,12 @@ use rand::SeedableRng;
 use rand_chacha::ChaChaRng;
 use rmp_serde;
 use sha2::{Digest, Sha256};
-use zei::algebra::bls12_381::{BLSGt, BLSScalar, BLSG1};
+use zei::algebra::bls12_381::{BLSGt, BLSScalar, BLSG1, BLSG2};
 
 use zei::algebra::groups::Scalar;
 use zei::crypto::anon_creds::{
-  ac_keygen_issuer, ac_keygen_user, ac_reveal, ac_sign, ac_verify, ACUserPublicKey,
+  ac_keygen_issuer, ac_keygen_user, ac_reveal, ac_sign, ac_verify, ACIssuerPublicKey,
+  ACIssuerSecretKey, ACUserPublicKey, ACUserSecretKey,
 };
 
 const VERSION: &'static str = env!("CARGO_PKG_VERSION");
@@ -117,35 +108,32 @@ fn parse_args() -> clap::ArgMatches<'static> {
   let path: std::path::PathBuf = std::env::current_exe().unwrap();
   let program_name: &str = path.file_name().unwrap().to_str().unwrap();
   clap_app!(tmp_name =>
-  (name: program_name)
-  (version: VERSION)
-  (author: AUTHOR)
-  (about: "Anonomyous credential registry command line interface")
-  (@arg registry: -r --registry [FILE]
-   "registry path (default: acreg.json)")
-  (@arg debug: -d ... "Sets the level of debugging information")
-  (@subcommand test => (about: "Automated self-test"))
-  (@subcommand create => (about: "Create a new anonymous credential"))
-  (@subcommand lookup =>
-   (about: "Lookup anonymous credential")
-   (@arg address: +required "anonymous credential address")
-  )).get_matches()
-}
+    (name: program_name)
+    (version: VERSION)
+    (author: AUTHOR)
+    (about: "Anonomyous credential registry command line interface")
+    (@arg registry: -r --registry [FILE]
+     "registry path (default: acreg.json)")
+    (@arg debug: -d ... "Sets the level of debugging information")
+    (@subcommand test => (about: "Automated self-test"))
+    (@subcommand create => (about: "Create a new anonymous credential"))
 
-// Return the SHA256 hash of a user public key as a hexadecimal string.
-fn sha256(user_pk: &ACUserPublicKey<BLSG1>) -> String {
-  let mut bytes = vec![];
-  user_pk.serialize(&mut rmp_serde::Serializer::new(&mut bytes))
-         .unwrap();
-  // TODO Strange that the serialization is 67 bytes, but the
-  // structure contains 6*3 u64 integers, which takes 144 bytes.
-  let mut hasher = Sha256::new();
-  // Salt the hash to avoid leaking information about other uses of
-  // sha256 on the user's public key.
-  // TODO Does this buy us anything?
-  hasher.input("ACUserPublicKey<zei::algebra::bls12_381::BLSG1>");
-  hasher.input(bytes.as_slice());
-  hex::encode(hasher.result())
+    (@subcommand addissuer => (about: "Add a new anonymous credential issuer"))
+    (@subcommand adduser =>
+     (about: "Add a new anonymous credential user")
+     (@arg issuer: +required "anonymous credential issuer"))
+    (@subcommand sign =>
+     (about: "Create an anonymous credential for user by issuer")
+     (@arg issuer: +required "anonymous credential issuer")
+     (@arg user: +required "user address"))
+    (@subcommand lookup =>
+     (about: "Lookup anonymous credential")
+     (@arg user: +required "anonymous credential address"))
+    (@subcommand verify =>
+     (about: "Verify an anonymous credential for user by issuer")
+     (@arg issuer: +required "anonymous credential issuer")
+     (@arg user: +required "user address"))
+  ).get_matches()
 }
 
 // Test anonymous credentials on fixed inputs. Similar to
@@ -170,7 +158,7 @@ fn automated_test() -> bool {
 
   let (user_pk, user_sk) = ac_keygen_user::<_, BLSScalar, BLSGt>(&mut prng, &issuer_pk);
   trace!("User public key: {:#?}", user_pk);
-  info!("Address of user public key: {:?}", sha256(&user_pk));
+  info!("Address of user public key: {:?}", upk_sha256(&user_pk));
 
   // The user secret key holds [u64; 6], but with more structure.
   trace!("User secret key: {:?}", user_sk);
@@ -214,6 +202,7 @@ fn automated_test() -> bool {
   verified
 }
 
+// TODO change this type to hold an actual signature, not a dummy string
 // Record mapping an address to an anonymous credential signature
 #[derive(Debug, Serialize, Deserialize)]
 struct AddrCred<'a> {
@@ -282,36 +271,219 @@ fn subcommand_create(registry_path: &Path) -> ShellExitStatus {
   }
 }
 
-fn subcommand_lookup(registry_path: &Path, lookup: &clap::ArgMatches) -> ShellExitStatus {
+fn subcommand_lookup(registry_path: &Path, address: &str) -> ShellExitStatus {
   trace!("subcommand lookup");
   // Maximum u64 is 20 digits: 18,446,744,073,709,551,616.
   // TODO if we do string comparison, trim leading zeros.
   //      if let Ok(address) = lookup.value_of("address").unwrap().parse::<u64>() {
-  if let Some(address) = lookup.value_of("address") {
-    trace!("lookup: address={:?}", address);
-    let mut contents = String::new();
-    let exit_status = match File::open(&registry_path) {
-      Ok(mut registry_file) => {
-        &registry_file.read_to_string(&mut contents);
-        trace!("Read: {}", &contents);
-        let mut acjson = contents.lines();
-        // TODO It's sketchy to bury the json parsing error.
-        let target = acjson.rfind(|&x| {
-                             let a: AddrCred = serde_json::from_str(&x).unwrap_or_default();
-                             a.address == address
-                           });
-        info!("target: {}", target.unwrap_or("not found"));
+  trace!("lookup: address={:?}", address);
+  let mut contents = String::new();
+  match File::open(&registry_path) {
+    Ok(mut registry_file) => {
+      &registry_file.read_to_string(&mut contents);
+      trace!("Read: {}", &contents);
+      let mut acjson = contents.lines();
+      // TODO It's sketchy to bury the json parsing error.
+      let target = acjson.rfind(|&x| {
+                           let a: AddrCred = serde_json::from_str(&x).unwrap_or_default();
+                           trace!("Comparing to: {}", a.address);
+                           a.address == address
+                         });
+      info!("target: {}", target.unwrap_or("not found"));
+      ShellExitStatus::Success
+    }
+    Err(wut) => {
+      error!("{:?}", wut);
+      ShellExitStatus::Failure
+    }
+  }
+}
+
+// Return the SHA256 hash of a user public key as a hexadecimal string.
+fn upk_sha256(key: &ACUserPublicKey<BLSG1>) -> String {
+  let mut bytes = vec![];
+  key.serialize(&mut rmp_serde::Serializer::new(&mut bytes))
+     .unwrap();
+  // TODO Strange that the serialization is 67 bytes, but the
+  // structure contains 6*3 u64 integers, which takes 144 bytes.
+  let mut hasher = Sha256::new();
+  // Salt the hash to avoid leaking information about other uses of
+  // sha256 on the user's public key.
+  // TODO Does this buy us anything?
+  hasher.input("ACUserPublicKey<zei::algebra::bls12_381::BLSG1>");
+  hasher.input(bytes.as_slice());
+  hex::encode(hasher.result())
+}
+
+// Return the SHA256 hash of an issuer public key as a hexadecimal string.
+fn ipk_sha256(key: &ACIssuerPublicKey<BLSG1, BLSG2>) -> String {
+  let mut bytes = vec![];
+  key.serialize(&mut rmp_serde::Serializer::new(&mut bytes))
+     .unwrap();
+  let mut hasher = Sha256::new();
+  // Salt the hash to avoid leaking information about other uses of
+  // sha256 on the user's public key.
+  // TODO Does this buy us anything?
+  hasher.input("ACIssuerPublicKey<zei::algebra::bls12_381::BLSG1, zei::algebra::bls12_381::BLSG2>");
+  hasher.input(bytes.as_slice());
+  hex::encode(hasher.result())
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct Issuer {
+  public_key: ACIssuerPublicKey<BLSG1, BLSG2>,
+  secret_key: ACIssuerSecretKey<BLSG1, BLSScalar>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct User {
+  public_key: ACUserPublicKey<BLSG1>,
+  secret_key: ACUserSecretKey<BLSScalar>,
+}
+
+// Generate a new issuer for anonymous credentials.
+fn new_issuer() -> Issuer {
+  let mut prng: ChaChaRng;
+  // For a real application, the seed should be random.
+  prng = ChaChaRng::from_seed([0u8; 32]);
+  let att_count = 10;
+  let (issuer_pk, issuer_sk) = ac_keygen_issuer::<_, BLSScalar, BLSGt>(&mut prng, att_count);
+  Issuer { public_key: issuer_pk,
+           secret_key: issuer_sk }
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct AddrIssuer {
+  address: String,
+  issuer_type: u32,
+  issuer: Issuer,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct AddrUser {
+  address: String,
+  user_type: u32,
+  user: User,
+}
+
+// Generate a new issuer and append it to the registry.
+fn subcommand_add_issuer(registry_path: &Path) -> ShellExitStatus {
+  trace!("subcommand addissuer");
+  let issuer = new_issuer();
+  let address = ipk_sha256(&issuer.public_key);
+  trace!("Issuer address: {}", &address);
+
+  match OpenOptions::new().append(true)
+                          .create(true)
+                          .open(&registry_path)
+  {
+    Err(why) => {
+      error!("Couldn't create registry {}: {}",
+             &registry_path.display(),
+             why.description());
+      ShellExitStatus::Failure
+    }
+    Ok(mut registry_file) => {
+      let a = AddrIssuer { address: address,
+                           issuer_type: 2,
+                           issuer: issuer };
+      let j = serde_json::to_string(&a).unwrap();
+      trace!("json: {}", j);
+      if let Err(e) = registry_file.write_fmt(format_args!("{}\n", j)) {
+        error!("Error: {:?}", e);
+        ShellExitStatus::Failure
+      } else {
         ShellExitStatus::Success
       }
-      Err(wut) => {
-        error!("{:?}", wut);
-        ShellExitStatus::Failure
-      }
-    };
-    exit_status
-  } else {
-    unreachable!();
+    }
   }
+}
+
+// Find the first record in the registry that is an AddrIssuer with
+// address matching the issuer argument.
+fn lookup_issuer(registry_path: &Path, issuer: &str) -> Option<Issuer> {
+  let mut contents = String::new();
+  match File::open(&registry_path) {
+    Ok(mut registry_file) => {
+      &registry_file.read_to_string(&mut contents);
+      let mut acjson = contents.lines();
+      acjson.find_map(|x| match serde_json::from_str::<AddrIssuer>(x) {
+              Ok(ai) => {
+                if ai.address == issuer {
+                  Some(ai.issuer)
+                } else {
+                  None
+                }
+              }
+              Err(_) => {
+                // TODO Report errors other than "missing field" errors.
+                None
+              }
+            })
+    }
+    Err(open_error) => {
+      error!("{:?}", open_error);
+      None
+    }
+  }
+}
+
+fn append_user(registry_path: &Path, user: AddrUser) -> bool {
+  match OpenOptions::new().append(true)
+                          .create(true)
+                          .open(&registry_path)
+  {
+    Err(why) => {
+      error!("Couldn't create registry {}: {}",
+             &registry_path.display(),
+             why.description());
+      false
+    }
+    Ok(mut registry_file) => {
+      let user_json = serde_json::to_string(&user).unwrap();
+      if let Err(e) = registry_file.write_fmt(format_args!("{}\n", user_json)) {
+        error!("Error: {:?}", e);
+        false
+      } else {
+        info!("User: {}", user.address);
+        true
+      }
+    }
+  }
+}
+
+fn subcommand_add_user(registry_path: &Path, issuer: &str) -> ShellExitStatus {
+  trace!("subcommand adduser");
+  if let Some(issuer) = lookup_issuer(registry_path, issuer) {
+    let mut prng: ChaChaRng;
+    // For a real application, the seed should be random.
+    prng = ChaChaRng::from_seed([0u8; 32]);
+    let (user_pk, user_sk) = ac_keygen_user::<_, BLSScalar, BLSGt>(&mut prng, &issuer.public_key);
+    let au = AddrUser { address: upk_sha256(&user_pk),
+                        user_type: 2,
+                        user: User { public_key: user_pk,
+                                     secret_key: user_sk } };
+    if append_user(registry_path, au) {
+      ShellExitStatus::Success
+    } else {
+      ShellExitStatus::Failure
+    }
+  } else {
+    error!("Unable to locate issuer");
+    ShellExitStatus::Failure
+  }
+}
+
+fn subcommand_sign(registry_path: &Path, user: &str, issuer: &str) -> ShellExitStatus {
+  trace!("subcommand sign user: {} issuer: {}", user, issuer);
+
+  ShellExitStatus::Success
+}
+
+fn subcommand_verify(registry_path: &Path, user: &str, issuer: &str) -> ShellExitStatus {
+  trace!("subcommand verify user: {} issuer: {}", user, issuer);
+
+  ShellExitStatus::Success
 }
 
 fn main() {
@@ -320,8 +492,28 @@ fn main() {
   let registry_path = Path::new(args.value_of("registry").unwrap_or(DEFAULT_REGISTRY_PATH));
   exit(match args.subcommand() {
          ("test", _) => subcommand_test(&registry_path, &args),
+
+         ("addissuer", _) => subcommand_add_issuer(&registry_path),
+         ("adduser", Some(matches)) => {
+           let issuer = matches.value_of("issuer").unwrap();
+           subcommand_add_user(&registry_path, &issuer)
+         }
+         ("sign", Some(matches)) => {
+           let user = matches.value_of("user").unwrap();
+           let issuer = matches.value_of("issuer").unwrap();
+           subcommand_sign(&registry_path, &user, &issuer)
+         }
+         ("lookup", Some(matches)) => {
+           let user = matches.value_of("user").unwrap();
+           subcommand_lookup(&registry_path, &user)
+         }
+         ("verify", Some(matches)) => {
+           let user = matches.value_of("user").unwrap();
+           let issuer = matches.value_of("issuer").unwrap();
+           subcommand_verify(&registry_path, &user, &issuer)
+         }
+
          ("create", _) => subcommand_create(&registry_path),
-         ("lookup", Some(lookup)) => subcommand_lookup(&registry_path, &lookup),
          (subcommand, _) => {
            error!("Please specify a valid subcommand: {:?}. Use -h for help.",
                   subcommand);
