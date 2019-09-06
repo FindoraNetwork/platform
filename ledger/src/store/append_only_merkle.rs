@@ -17,8 +17,8 @@ extern crate sodiumoxide;
 
 use chrono::Utc;
 use findora::timestamp;
-use findora::DEFAULT_MAP;
 use findora::EnableMap;
+use findora::DEFAULT_MAP;
 use serde::Deserialize;
 use serde::Deserializer;
 use serde::Serialize;
@@ -1441,6 +1441,15 @@ impl AppendOnlyMerkle {
                          hash_array: hashes };
 
     Ok(result)
+  }
+
+  pub fn get_root_hash(&self) -> HashValue {
+    if self.entry_count == 0 {
+      return HashValue::default();
+    }
+
+    let proof = self.generate_proof(0, self.entry_count).unwrap();
+    proof.hash_array[proof.hash_array.len() - 1]
   }
 
   pub fn validate_transaction_id(&self, transaction_id: u64) -> bool {

@@ -12,17 +12,19 @@ use crate::data_model::{
 use append_only_merkle::{AppendOnlyMerkle, Proof};
 use bitmap::BitMap;
 use findora::timestamp;
-use findora::DEFAULT_MAP;
 use findora::EnableMap;
+use findora::DEFAULT_MAP;
 use logged_merkle::LoggedMerkle;
 use rand::SeedableRng;
 use rand_chacha::ChaChaRng;
 use sha2::{Digest, Sha256};
+use sodiumoxide::crypto::hash::sha256;
 use sodiumoxide::crypto::hash::sha256::Digest as BitDigest;
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::fs::File;
 use std::fs::OpenOptions;
 use std::io::BufReader;
+use std::slice::from_raw_parts;
 use std::sync::{Arc, RwLock};
 use std::u64;
 use tempdir::TempDir;
@@ -77,6 +79,7 @@ pub trait ArchiveAccess {
   fn get_utxo_map(&mut self) -> Option<Vec<u8>>;
   fn get_utxos(&mut self, list: Vec<usize>) -> Option<Vec<u8>>;
   fn get_utxo_checksum(&self, version: u64) -> Option<BitDigest>;
+  fn get_global_hash(&self) -> (BitDigest, u64);
 }
 
 pub fn compute_sha256_hash<T>(msg: &T) -> [u8; 32]
@@ -88,6 +91,23 @@ pub fn compute_sha256_hash<T>(msg: &T) -> [u8; 32]
   let hash = array_ref![&result, 0, 32];
 
   *hash
+}
+
+#[repr(C)]
+struct GlobalHashData {
+  pub bitmap: BitDigest,
+  pub merkle: append_only_merkle::HashValue,
+  pub block: u64,
+  pub global_hash: BitDigest,
+}
+
+impl GlobalHashData {
+  fn as_ref(&self) -> &[u8] {
+    unsafe {
+      from_raw_parts((self as *const GlobalHashData) as *const u8,
+                     std::mem::size_of::<GlobalHashData>())
+    }
+  }
 }
 
 const MAX_VERSION: usize = 100;
@@ -116,6 +136,8 @@ pub struct LedgerState {
   loading: bool,
   #[serde(skip)]
   txn_log: Option<File>,
+  global_hash: BitDigest,
+  global_commit_count: u64,
 }
 
 impl LedgerState {
@@ -152,6 +174,16 @@ impl LedgerState {
 
     self.utxo_map_versions
         .push_back((self.txn_count, self.utxo_map.as_mut().unwrap().compute_checksum()));
+  }
+
+  fn save_global_hash(&mut self) {
+    let data = GlobalHashData { bitmap: self.utxo_map.as_mut().unwrap().compute_checksum(),
+                                merkle: self.merkle.as_ref().unwrap().get_root_hash(),
+                                block: self.global_commit_count,
+                                global_hash: self.global_hash.clone() };
+
+    self.global_hash = sha256::hash(data.as_ref());
+    self.global_commit_count += 1;
   }
 
   fn store_transaction(&self, _txn: &Transaction) {}
@@ -224,7 +256,9 @@ impl LedgerState {
                                loading: false,
                                txn_log: Some(std::fs::OpenOptions::new().create(create)
                                                                         .append(true)
-                                                                        .open(txn_path)?) };
+                                                                        .open(txn_path)?),
+                               global_hash: BitDigest { 0: [0_u8; 32] },
+                               global_commit_count: 0 };
 
     Ok(ledger)
   }
@@ -273,6 +307,7 @@ impl LedgerState {
 
   pub fn end_commit(&mut self) {
     self.save_utxo_map_version();
+    self.save_global_hash();
   }
 
   fn add_txo(&mut self, txo: (&TxoSID, TxOutput)) {
@@ -962,6 +997,10 @@ impl ArchiveAccess for LedgerState {
     }
 
     None
+  }
+
+  fn get_global_hash(&self) -> (BitDigest, u64) {
+    (self.global_hash, self.global_commit_count)
   }
 }
 

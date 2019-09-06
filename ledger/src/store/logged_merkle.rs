@@ -46,8 +46,8 @@ use std::slice::from_raw_parts;
 use std::slice::from_raw_parts_mut;
 
 use findora::timestamp;
-use findora::DEFAULT_MAP;
 use findora::EnableMap;
+use findora::DEFAULT_MAP;
 
 #[allow(non_upper_case_globals)]
 static apply_log: EnableMap = DEFAULT_MAP;
@@ -423,6 +423,10 @@ impl LoggedMerkle {
     }
 
     Ok(processed)
+  }
+
+  pub fn get_root_hash(&self) -> HashValue {
+    self.tree.get_root_hash()
   }
 
   /// Close the LoggedMerkle object.
