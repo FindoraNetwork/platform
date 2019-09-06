@@ -408,9 +408,38 @@ fn lookup_issuer(registry_path: &Path, issuer: &str) -> Option<Issuer> {
       &registry_file.read_to_string(&mut contents);
       let mut acjson = contents.lines();
       acjson.find_map(|x| match serde_json::from_str::<AddrIssuer>(x) {
-              Ok(ai) => {
-                if ai.address == issuer {
-                  Some(ai.issuer)
+              Ok(item) => {
+                if item.address == issuer {
+                  Some(item.issuer)
+                } else {
+                  None
+                }
+              }
+              Err(_) => {
+                // TODO Report errors other than "missing field" errors.
+                None
+              }
+            })
+    }
+    Err(open_error) => {
+      error!("{:?}", open_error);
+      None
+    }
+  }
+}
+
+// Find the first record in the registry that is an AddrUser with
+// address matching the user argument.
+fn lookup_user(registry_path: &Path, user: &str) -> Option<User> {
+  let mut contents = String::new();
+  match File::open(&registry_path) {
+    Ok(mut registry_file) => {
+      &registry_file.read_to_string(&mut contents);
+      let mut acjson = contents.lines();
+      acjson.find_map(|x| match serde_json::from_str::<AddrUser>(x) {
+              Ok(item) => {
+                if item.address == user {
+                  Some(item.user)
                 } else {
                   None
                 }
@@ -445,7 +474,6 @@ fn append_user(registry_path: &Path, user: AddrUser) -> bool {
         error!("Error: {:?}", e);
         false
       } else {
-        info!("User: {}", user.address);
         true
       }
     }
@@ -453,7 +481,6 @@ fn append_user(registry_path: &Path, user: AddrUser) -> bool {
 }
 
 fn subcommand_add_user(registry_path: &Path, issuer: &str) -> ShellExitStatus {
-  trace!("subcommand adduser");
   if let Some(issuer) = lookup_issuer(registry_path, issuer) {
     let mut prng: ChaChaRng;
     // For a real application, the seed should be random.
@@ -463,6 +490,7 @@ fn subcommand_add_user(registry_path: &Path, issuer: &str) -> ShellExitStatus {
                         user_type: 2,
                         user: User { public_key: user_pk,
                                      secret_key: user_sk } };
+    info!("Added user: {}", au.address);
     if append_user(registry_path, au) {
       ShellExitStatus::Success
     } else {
@@ -476,8 +504,38 @@ fn subcommand_add_user(registry_path: &Path, issuer: &str) -> ShellExitStatus {
 
 fn subcommand_sign(registry_path: &Path, user: &str, issuer: &str) -> ShellExitStatus {
   trace!("subcommand sign user: {} issuer: {}", user, issuer);
+  match (lookup_user(registry_path, user), lookup_issuer(registry_path, issuer)) {
+    (Some(user), Some(issuer)) => {
+      let mut prng: ChaChaRng;
+      // For a real application, the seed should be random.
+      prng = ChaChaRng::from_seed([0u8; 32]);
+      // TODO Ten attributes
+      let bitmap = [false, true, true, true];
+      let attrs = [BLSScalar::from_u64(92574500),
+                   BLSScalar::from_u64(95050),
+                   BLSScalar::from_u64(720),
+                   BLSScalar::from_u64(20190820)];
+      let att_count = bitmap.len();
 
-  ShellExitStatus::Success
+      //      let sig = ac_sign::<_, BLSScalar, BLSGt>(&mut prng, &issuer_sk, &user_pk, &attrs);
+      let sig =
+        ac_sign::<_, BLSScalar, BLSGt>(&mut prng, &issuer.secret_key, &user.public_key, &attrs);
+      // TODO write the signature to the registry
+      ShellExitStatus::Success
+    }
+    (Some(_), _) => {
+      error!("Unable to find user");
+      ShellExitStatus::Failure
+    }
+    (_, Some(_)) => {
+      error!("Unable to find issuer");
+      ShellExitStatus::Failure
+    }
+    (_, _) => {
+      error!("Unable to find either issuer or user");
+      ShellExitStatus::Failure
+    }
+  }
 }
 
 fn subcommand_verify(registry_path: &Path, user: &str, issuer: &str) -> ShellExitStatus {
