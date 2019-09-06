@@ -1157,6 +1157,8 @@ mod tests {
 
     let mut ledger =
       LedgerState::new(&merkle_path, &txn_path, &ledger_path, &utxo_map_path, true).unwrap();
+
+    assert!(ledger.get_global_hash() == (BitDigest { 0: [0_u8; 32] }, 0));
     let mut tx = Transaction::default();
     let token_code1 = AssetTokenCode { val: [1; 16] };
     let mut prng = ChaChaRng::from_seed([0u8; 32]);
@@ -1210,6 +1212,7 @@ mod tests {
     // but this will save the empty checksum, which is
     // enough for a bit of a test.
     ledger.end_commit();
+    assert!(ledger.get_global_hash() == (ledger.global_hash, 1));
     let query_result = ledger.get_utxo_checksum(ledger.txn_count as u64).unwrap();
     let compute_result = ledger.utxo_map.as_mut().unwrap().compute_checksum();
     println!("query_result = {:?}, compute_result = {:?}",
