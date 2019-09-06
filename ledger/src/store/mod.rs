@@ -180,7 +180,7 @@ impl LedgerState {
     let data = GlobalHashData { bitmap: self.utxo_map.as_mut().unwrap().compute_checksum(),
                                 merkle: self.merkle.as_ref().unwrap().get_root_hash(),
                                 block: self.global_commit_count,
-                                global_hash: self.global_hash.clone() };
+                                global_hash: self.global_hash };
 
     self.global_hash = sha256::hash(data.as_ref());
     self.global_commit_count += 1;

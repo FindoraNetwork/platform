@@ -2437,6 +2437,8 @@ mod tests {
   fn test_tree() {
     let path = "test_tree".to_string();
     let _ = std::fs::remove_file(&path);
+    let _ = std::fs::remove_file(&(path.clone() + &".1-base"));
+    let _ = std::fs::remove_file(&(path.clone() + &".2-base"));
     let result = AppendOnlyMerkle::create(&path);
 
     let mut tree = match result {
