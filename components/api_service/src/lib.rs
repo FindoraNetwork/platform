@@ -103,6 +103,39 @@ fn query_utxo_map_checksum<AA>(data: web::Data<Arc<RwLock<AA>>>,
   }
 }
 
+fn query_utxo_partial_map<AA>(data: web::Data<Arc<RwLock<AA>>>,
+                               info: web::Path<String>)
+                               -> actix_web::Result<String>
+  where AA: ArchiveAccess
+{
+  if let Some(block_list) = parse_blocks(info.to_string()) {
+    let mut reader = data.write().unwrap();
+
+    if let Some(vec) = reader.get_utxos(block_list) {
+      Ok(serde_json::to_string(&vec)?)
+    } else {
+      Err(actix_web::error::ErrorNotFound("The map is unavailable."))
+    }
+  } else {
+    Err(actix_web::error::ErrorNotFound("Invalid block list encoding."))
+  }
+}
+
+fn parse_blocks(block_input: String) -> Option<Vec<usize>> {
+  let blocks = block_input.split(',');
+  let mut result = Vec::new();
+
+  for block_str in blocks {
+    if let Ok(block_usize) = block_str.parse::<usize>() {
+      result.push(block_usize);
+    } else {
+      return None;
+    }
+  }
+
+  Some(result)
+}
+
 fn query_utxo_map<AA>(data: web::Data<Arc<RwLock<AA>>>,
                       _info: web::Path<String>)
                       -> actix_web::Result<String>
@@ -166,6 +199,8 @@ impl RestfulApiService {
                 .route("/utxo_map", web::get().to(query_utxo_map::<LA>))
                 .route("/utxo_map_checksum",
                        web::get().to(query_utxo_map_checksum::<LA>))
+                .route("/utxo_partial_map/{sidlist}",
+                       web::get().to(query_utxo_partial_map::<LA>))
                 .route("/policy_key/{key}", web::get().to(query_policy::<LA>))
                 .route("/contract_key/{key}", web::get().to(query_contract::<LA>))
     }).bind("127.0.0.1:8668")?
