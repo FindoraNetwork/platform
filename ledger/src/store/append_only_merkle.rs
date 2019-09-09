@@ -17,8 +17,8 @@ extern crate sodiumoxide;
 
 use chrono::Utc;
 use findora::timestamp;
-use findora::DEFAULT_MAP;
 use findora::EnableMap;
+use findora::DEFAULT_MAP;
 use serde::Deserialize;
 use serde::Deserializer;
 use serde::Serialize;
@@ -1443,6 +1443,15 @@ impl AppendOnlyMerkle {
     Ok(result)
   }
 
+  pub fn get_root_hash(&self) -> HashValue {
+    if self.entry_count == 0 {
+      return HashValue::default();
+    }
+
+    let proof = self.generate_proof(0, self.entry_count).unwrap();
+    proof.hash_array[proof.hash_array.len() - 1]
+  }
+
   pub fn validate_transaction_id(&self, transaction_id: u64) -> bool {
     transaction_id < self.entry_count
   }
@@ -2428,6 +2437,8 @@ mod tests {
   fn test_tree() {
     let path = "test_tree".to_string();
     let _ = std::fs::remove_file(&path);
+    let _ = std::fs::remove_file(&(path.clone() + &".1-base"));
+    let _ = std::fs::remove_file(&(path.clone() + &".2-base"));
     let result = AppendOnlyMerkle::create(&path);
 
     let mut tree = match result {

@@ -68,6 +68,27 @@ fn query_txn<AA>(data: web::Data<Arc<RwLock<AA>>>,
   }
 }
 
+fn stringer(data: &[u8; 32]) -> String {
+  let mut result = "".to_string();
+
+  for i in 0..data.len() {
+    result = result + &format!("{:02x}", data[i]);
+  }
+
+  result
+}
+
+fn query_global_state<AA>(data: web::Data<Arc<RwLock<AA>>>,
+                          _info: web::Path<String>)
+                          -> actix_web::Result<String>
+  where AA: ArchiveAccess
+{
+  let reader = data.read().unwrap();
+  let (hash, version) = reader.get_global_hash();
+  let result = format!("{} {}", stringer(&hash.0), version);
+  Ok(result)
+}
+
 fn query_proof<AA>(data: web::Data<Arc<RwLock<AA>>>,
                    info: web::Path<String>)
                    -> actix_web::Result<String>
@@ -104,8 +125,8 @@ fn query_utxo_map_checksum<AA>(data: web::Data<Arc<RwLock<AA>>>,
 }
 
 fn query_utxo_partial_map<AA>(data: web::Data<Arc<RwLock<AA>>>,
-                               info: web::Path<String>)
-                               -> actix_web::Result<String>
+                              info: web::Path<String>)
+                              -> actix_web::Result<String>
   where AA: ArchiveAccess
 {
   if let Some(block_list) = parse_blocks(info.to_string()) {
@@ -197,6 +218,7 @@ impl RestfulApiService {
                 .route("/txn_sid/{sid}", web::get().to(query_txn::<LA>))
                 .route("/proof/{sid}", web::get().to(query_proof::<LA>))
                 .route("/utxo_map", web::get().to(query_utxo_map::<LA>))
+                .route("/global_state", web::get().to(query_global_state::<LA>))
                 .route("/utxo_map_checksum",
                        web::get().to(query_utxo_map_checksum::<LA>))
                 .route("/utxo_partial_map/{sidlist}",

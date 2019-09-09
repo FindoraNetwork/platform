@@ -24,8 +24,8 @@
 //! of the map.
 
 use findora::timestamp;
-use findora::DEFAULT_MAP;
 use findora::EnableMap;
+use findora::DEFAULT_MAP;
 use sodiumoxide::crypto::hash::sha256;
 use sodiumoxide::crypto::hash::sha256::Digest;
 use sodiumoxide::crypto::hash::sha256::DIGESTBYTES;
