@@ -136,6 +136,7 @@ pub fn timestamp() -> String {
           (now.nanosecond() + 500 * 1000) / (1000 * 1000))
 }
 
+/// Convert a u64 into a string with commas.
 pub fn commas_u(input: u64) -> String {
   if input == 0 {
     return "0".to_string();
@@ -158,10 +159,12 @@ pub fn commas_u(input: u64) -> String {
   result
 }
 
+/// Convert a usize into a string with commas.
 pub fn commas_us(input: usize) -> String {
   commas_u(input as u64)
 }
 
+/// Convert an i64 into a string with commas.
 pub fn commas_i(input: i64) -> String {
   if input == 0 {
     return "0".to_string();
@@ -207,10 +210,11 @@ mod tests {
     log!(root, "Here at {}", commas_u(999));
     log!(root, "Here at {}", commas_u(1000));
     log!(root, "Here at {}", commas_u(1000 * 1000));
+    log!(root, "Here at {}", commas_u(1024 * 1024));
     log!(root, "Here at {}", commas_u(999 * 1000));
     log!(root, "Here at {}", commas_u(2 * 1000));
     log!(root, "Here at {}", commas_u(1000 * 1000 * 1000));
-    log!(root, "Here at {}", commas_u(std::u64::MAX));
+    log!(root, "Here at {} is u64::MAX", commas_u(std::u64::MAX));
     log!(root, "Here at {}", commas_i(100));
     log!(root, "Here at {}", commas_i(999));
     log!(root, "Here at {}", commas_i(1000));
@@ -218,14 +222,15 @@ mod tests {
     log!(root, "Here at {}", commas_i(999 * 1000));
     log!(root, "Here at {}", commas_i(2 * 1000));
     log!(root, "Here at {}", commas_i(1000 * 1000 * 1000));
+    log!(root, "Here at {} is i64::MAX", commas_i(std::i64::MAX));
     log!(root, "Here at {}", commas_i(-100));
     log!(root, "Here at {}", commas_i(-999));
     log!(root, "Here at {}", commas_i(-1000));
     log!(root, "Here at {}", commas_i(-1000 * 1000));
+    log!(root, "Here at {}", commas_i(-1024 * 1024));
     log!(root, "Here at {}", commas_i(-999 * 1000));
     log!(root, "Here at {}", commas_i(-2 * 1000));
     log!(root, "Here at {}", commas_i(-1000 * 1000 * 1000));
-    log!(root, "Here at {}", commas_i(std::i64::MIN));
-    log!(root, "Here at {}", commas_i(std::i64::MAX));
+    log!(root, "Here at {} should be {}", commas_i(std::i64::MIN), std::i64::MIN);
   }
 }
