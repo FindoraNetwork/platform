@@ -214,7 +214,10 @@ mod tests {
     log!(root, "Here at {}", commas_u(999 * 1000));
     log!(root, "Here at {}", commas_u(2 * 1000));
     log!(root, "Here at {}", commas_u(1000 * 1000 * 1000));
-    log!(root, "Here at {} is u64::MAX", commas_u(std::u64::MAX));
+    log!(root,
+         "Here at {} is u64::MAX should be {}",
+         commas_u(std::u64::MAX),
+         std::u64::MAX);
     log!(root, "Here at {}", commas_i(100));
     log!(root, "Here at {}", commas_i(999));
     log!(root, "Here at {}", commas_i(1000));
@@ -231,6 +234,9 @@ mod tests {
     log!(root, "Here at {}", commas_i(-999 * 1000));
     log!(root, "Here at {}", commas_i(-2 * 1000));
     log!(root, "Here at {}", commas_i(-1000 * 1000 * 1000));
-    log!(root, "Here at {} should be {}", commas_i(std::i64::MIN), std::i64::MIN);
+    log!(root,
+         "Here at {} should be {}",
+         commas_i(std::i64::MIN),
+         std::i64::MIN);
   }
 }
