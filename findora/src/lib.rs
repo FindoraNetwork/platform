@@ -136,10 +136,61 @@ pub fn timestamp() -> String {
           (now.nanosecond() + 500 * 1000) / (1000 * 1000))
 }
 
+/// Convert a u64 into a string with commas.
+pub fn commas_u(input: u64) -> String {
+  if input == 0 {
+    return "0".to_string();
+  }
+
+  let mut value = input;
+  let mut result = "".to_string();
+
+  while value > 1000 {
+    result = format!(",{:03.3}", value % 1000) + &result;
+    value /= 1000;
+  }
+
+  if value == 1000 {
+    result = "1,000".to_owned() + &result;
+  } else {
+    result = format!("{}", value) + &result;
+  }
+
+  result
+}
+
+/// Convert a usize into a string with commas.
+pub fn commas_us(input: usize) -> String {
+  commas_u(input as u64)
+}
+
+/// Convert an i64 into a string with commas.
+pub fn commas_i(input: i64) -> String {
+  if input == 0 {
+    return "0".to_string();
+  }
+
+  let sign = input < 0;
+  let mut result;
+
+  if input == std::i64::MIN {
+    result = commas_u(1u64 << 63);
+  } else if input < 0 {
+    result = commas_u(-input as u64);
+  } else {
+    result = commas_u(input as u64);
+  }
+
+  if sign {
+    result = "-".to_owned() + &result;
+  }
+
+  result
+}
+
 #[cfg(test)]
 mod tests {
-  use super::timestamp;
-  use super::EnableMap;
+  use super::*;
 
   #[test]
   fn test_basic_logging() {
@@ -154,5 +205,38 @@ mod tests {
     debug!(root, "Here at {}", timestamp());
     warning!(root, "Here at {}", timestamp());
     error!(root, "Here at {}", timestamp());
+    log!(root, "Here at {}", commas_u(0));
+    log!(root, "Here at {}", commas_u(100));
+    log!(root, "Here at {}", commas_u(999));
+    log!(root, "Here at {}", commas_u(1000));
+    log!(root, "Here at {}", commas_u(1000 * 1000));
+    log!(root, "Here at {}", commas_u(1024 * 1024));
+    log!(root, "Here at {}", commas_u(999 * 1000));
+    log!(root, "Here at {}", commas_u(2 * 1000));
+    log!(root, "Here at {}", commas_u(1000 * 1000 * 1000));
+    log!(root,
+         "Here at {} is u64::MAX should be {}",
+         commas_u(std::u64::MAX),
+         std::u64::MAX);
+    log!(root, "Here at {}", commas_i(100));
+    log!(root, "Here at {}", commas_i(999));
+    log!(root, "Here at {}", commas_i(1000));
+    log!(root, "Here at {}", commas_i(1000 * 1000));
+    log!(root, "Here at {}", commas_i(999 * 1000));
+    log!(root, "Here at {}", commas_i(2 * 1000));
+    log!(root, "Here at {}", commas_i(1000 * 1000 * 1000));
+    log!(root, "Here at {} is i64::MAX", commas_i(std::i64::MAX));
+    log!(root, "Here at {}", commas_i(-100));
+    log!(root, "Here at {}", commas_i(-999));
+    log!(root, "Here at {}", commas_i(-1000));
+    log!(root, "Here at {}", commas_i(-1000 * 1000));
+    log!(root, "Here at {}", commas_i(-1024 * 1024));
+    log!(root, "Here at {}", commas_i(-999 * 1000));
+    log!(root, "Here at {}", commas_i(-2 * 1000));
+    log!(root, "Here at {}", commas_i(-1000 * 1000 * 1000));
+    log!(root,
+         "Here at {} should be {}",
+         commas_i(std::i64::MIN),
+         std::i64::MIN);
   }
 }
