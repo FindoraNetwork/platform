@@ -23,6 +23,8 @@
 //! The SparseMap structure allows various queries on the contents
 //! of the map.
 
+use findora::commas_u;
+use findora::commas_us;
 use findora::timestamp;
 use findora::EnableMap;
 use findora::DEFAULT_MAP;
@@ -187,7 +189,7 @@ impl SparseMap {
     let mask = 1 << shift;
 
     if block >= self.headers.len() {
-      return er!("Bit {} in block {} is not present.", id, block);
+      return er!("Bit {} in block {} is not present.", id, commas_us(block));
     }
 
     let info = &self.headers[block];
@@ -195,7 +197,7 @@ impl SparseMap {
            "query:  block_index {}, info {:?}", block_index, info);
 
     if block_index >= info.count as usize {
-      return er!("Bit {} in block {} is not present.", id, block);
+      return er!("Bit {} in block {} is not present.", id, commas_us(block));
     }
 
     match self.map.get(&(block as u64)) {
@@ -203,11 +205,11 @@ impl SparseMap {
         return Ok(bits[index] & mask != 0);
       }
       None => {
-        debug!(bitmap_map, "query:  no map for block {}", block);
+        debug!(bitmap_map, "query:  no map for block {}", commas_us(block));
       }
     }
 
-    er!("Bit {} in block {} is not present.", id, block)
+    er!("Bit {} in block {} is not present.", id, commas_us(block))
   }
 
   /// Validate that the tree actually matches the
@@ -238,11 +240,13 @@ impl SparseMap {
             debug!(bitmap_map, "validate_checksum:  header {:?}", block.header);
             log!(bitmap_map,
                  "Invalid checksum for block {}",
-                 info.bit_id / BLOCK_BITS as u64);
+                 commas_u(info.bit_id / BLOCK_BITS as u64));
             return false;
           }
 
-          debug!(bitmap_map, "validate_checksum:  Block {} verifies.", i);
+          debug!(bitmap_map,
+                 "validate_checksum:  Block {} verifies.",
+                 commas_us(i));
         }
         None => {
           debug!(bitmap_map, "validate_checksum:  phantom data");
@@ -252,13 +256,17 @@ impl SparseMap {
       checksum_data[0..CHECK_SIZE].clone_from_slice(&info.checksum.bytes[0..CHECK_SIZE]);
       digest = sha256::hash(&checksum_data);
       debug!(bitmap_map,
-             "validate_checksum:  checksum at block {} is {:?}", i, info.checksum);
+             "validate_checksum:  checksum at block {} is {:?}",
+             commas_us(i),
+             info.checksum);
       debug!(bitmap_map,
              "validate_checksum:  checksum_data at block {} is {:?}",
-             i,
+             commas_us(i),
              show(&checksum_data));
       debug!(bitmap_map,
-             "validate_checksum:  digest at block {} is {:?}", i, digest);
+             "validate_checksum:  digest at block {} is {:?}",
+             commas_us(i),
+             digest);
       checksum_data[CHECK_SIZE..].clone_from_slice(&digest.0[0..]);
     }
 
@@ -323,30 +331,40 @@ impl BlockHeader {
   // the checksum, which might not be set yet.
   fn validate(&self, contents: u16, id: u64) -> Result<()> {
     if self.magic != HEADER_MAGIC {
-      return er!("Block {} has a bad magic number:  {:x}", id, self.magic);
+      return er!("Block {} has a bad magic number:  {:x}",
+                 commas_u(id),
+                 self.magic);
     }
 
     if self.count > BLOCK_BITS as u32 {
       return er!("Block {} has a bad count:  {} vs {}",
-                 id,
+                 commas_u(id),
                  self.count,
                  BLOCK_BITS);
     }
 
     if self.bit_id != id * BLOCK_BITS as u64 {
-      return er!("Block {} has a bad id:  the disk said {}.", id, self.bit_id);
+      return er!("Block {} has a bad id:  the disk said {}.",
+                 commas_u(id),
+                 self.bit_id);
     }
 
     if self.contents != contents {
-      return er!("Block {} has a bad contents type:  {}", id, self.contents);
+      return er!("Block {} has a bad contents type:  {}",
+                 commas_u(id),
+                 self.contents);
     }
 
     if self.pad_1 != 0 {
-      return er!("Block {} has an invalid pad_1:  {}", id, self.pad_1);
+      return er!("Block {} has an invalid pad_1:  {}",
+                 commas_u(id),
+                 self.pad_1);
     }
 
     if self.pad_2 != 0 {
-      return er!("Block {} has an invalid pad_2:  {}", id, self.pad_2);
+      return er!("Block {} has an invalid pad_2:  {}",
+                 commas_u(id),
+                 self.pad_2);
     }
 
     Ok(())
@@ -433,7 +451,7 @@ impl BitBlock {
     let checksum = self.compute_checksum();
 
     if self.header.checksum.bytes != checksum {
-      return er!("Block {} has a bad checksum.", id);
+      return er!("Block {} has a bad checksum.", commas_u(id));
     }
 
     Ok(())

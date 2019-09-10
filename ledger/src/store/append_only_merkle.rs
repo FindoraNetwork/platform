@@ -16,6 +16,8 @@ extern crate serde_derive;
 extern crate sodiumoxide;
 
 use chrono::Utc;
+use findora::commas_u;
+use findora::commas_us;
 use findora::timestamp;
 use findora::EnableMap;
 use findora::DEFAULT_MAP;
@@ -662,10 +664,13 @@ impl AppendOnlyMerkle {
           block = b;
         }
         Err(x) => {
-          log!(append_map, "Error reading block {}:  {}", block_id, x);
+          log!(append_map,
+               "Error reading block {}:  {}",
+               commas_u(block_id),
+               x);
           log!(append_map,
                "I will discard the following {} blocks.",
-               block_count - block_id - 1);
+               commas_u(block_count - block_id - 1));
           break;
         }
       }
@@ -1008,7 +1013,10 @@ impl AppendOnlyMerkle {
     }
 
     if rebuilds > 1 {
-      log!(append_map, "Rebuilt {} blocks at level {}", rebuilds, level);
+      log!(append_map,
+           "Rebuilt {} blocks at level {}",
+           commas_us(rebuilds),
+           level);
     } else if rebuilds == 1 {
       log!(append_map, "Rebuilt 1 block at level {}", level);
     }
@@ -1017,8 +1025,8 @@ impl AppendOnlyMerkle {
       log!(append_map,
            "Level {} has {} entries, but {} were expected.",
            level,
-           entries,
-           state.leaves_at_this_level);
+           commas_u(entries),
+           commas_u(state.leaves_at_this_level));
       return self.recover_file(level);
     }
 
@@ -1110,7 +1118,7 @@ impl AppendOnlyMerkle {
           log!(append_map,
                "Seek failed at level {}, block {} for rewrite:  {} vs {}",
                level,
-               block.id(),
+               commas_us(block.id()),
                n,
                offset);
           return;
@@ -1120,7 +1128,7 @@ impl AppendOnlyMerkle {
         log!(append_map,
              "Seek failed  at level {}, block {} for rewrite:  {}",
              level,
-             block.id(),
+             commas_us(block.id()),
              x);
         return;
       }
@@ -1134,7 +1142,7 @@ impl AppendOnlyMerkle {
         log!(append_map,
              "I/O failed for rewrite at level {}, block {}:  {}",
              level,
-             block.id(),
+             commas_us(block.id()),
              x);
       }
     }
@@ -1787,12 +1795,15 @@ impl AppendOnlyMerkle {
     };
 
     if let Some(x) = block.check(level, id, true) {
-      return Err(Error::new(ErrorKind::Other, format!("Invalid disk block:  {}", x)));
+      return Err(Error::new(ErrorKind::Other,
+                            format!("Invalid disk block {}:  {}", commas_u(id), x)));
     }
 
     if !last && !block.full() {
       return Err(Error::new(ErrorKind::Other,
-                            format!("Block {} at level {} from disk is not full.", id, level)));
+                            format!("Block {} at level {} from disk is not full.",
+                                    commas_u(id),
+                                    level)));
     }
 
     Ok(block)
@@ -2391,7 +2402,7 @@ mod tests {
     hash_value.hash.clone_from_slice(&buffer[0..HASH_SIZE]);
 
     if verbose {
-      println!("Create hash {}", i);
+      println!("Create hash {}", commas_u(i));
     }
 
     hash_value
@@ -2465,7 +2476,7 @@ mod tests {
 
     for _t in entry_id..2 * leaves_in_block * leaves_in_block + 1 {
       if entry_id % (64 * 1024) == 0 {
-        println!("At entry {}", entry_id);
+        println!("At entry {}", commas_u(entry_id));
       }
 
       test_append(&mut tree, entry_id, false);
@@ -2480,7 +2491,7 @@ mod tests {
          || entry_id == 2 * leaves_per_next + 1
          || entry_id == 3 * leaves_per_next
       {
-        println!("Checking the tree at {}.", entry_id);
+        println!("Checking the tree at {}.", commas_u(entry_id));
         check_tree(&tree);
         check_disk_tree(&mut tree, false);
         write_tree(&mut tree);
@@ -2539,7 +2550,7 @@ mod tests {
     for _t in entry_id..512 * 1024 + leaves_in_block {
       if entry_id % (64 * 1024) == 0 {
         check_tree(&tree);
-        println!("At entry {}", entry_id);
+        println!("At entry {}", commas_u(entry_id));
       }
 
       test_append(&mut tree, entry_id, false);
@@ -2548,7 +2559,7 @@ mod tests {
       countdown -= 1;
 
       if countdown <= 1 {
-        println!("Checking the tree and disk image at {}", entry_id);
+        println!("Checking the tree and disk image at {}", commas_u(entry_id));
         check_tree(&tree);
         check_disk_tree(&mut tree, false);
 
@@ -2722,7 +2733,7 @@ mod tests {
       }
 
       if i % (64 * 1024) == 0 {
-        println!("Generated proof {}.", i);
+        println!("Generated proof {}.", commas_u(i));
       }
     }
 
@@ -2776,7 +2787,7 @@ mod tests {
 
   fn validate_id(tree: &AppendOnlyMerkle, id: u64) {
     if !tree.validate_transaction_id(id) {
-      panic!("Id {} is not valid.", id);
+      panic!("Id {} is not valid.", commas_u(id));
     }
   }
 
