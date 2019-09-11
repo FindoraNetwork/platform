@@ -83,6 +83,22 @@ const AUTHOR: &str = "John D. Corbett <corbett@findora.org>";
 // Default file path of the anonymous credential registry
 const DEFAULT_REGISTRY_PATH: &str = "acreg.json";
 
+trait TypeInfo {
+  fn type_of(&self) -> &'static str;
+}
+
+impl TypeInfo for &ACUserPublicKey<BLSG1> {
+  fn type_of(&self) -> &'static str {
+    "ACUserPublicKey<BLSG1, BLSG2>"
+  }
+}
+
+impl TypeInfo for &ACIssuerPublicKey<BLSG1, BLSG2> {
+  fn type_of(&self) -> &'static str {
+    "ACIssuerPublicKey<BLSG1, BLSG2>"
+  }
+}
+
 fn init_logging() {
   // Log everything "trace" level or greater to stdout.
   // TODO document how to override this from an environment variable.
@@ -113,7 +129,6 @@ fn parse_args() -> clap::ArgMatches<'static> {
      "registry path (default: acreg.json)")
     (@arg debug: -d ... "Sets the level of debugging information")
     (@subcommand test => (about: "Automated self-test"))
-    (@subcommand create => (about: "Create a new anonymous credential"))
 
     (@subcommand addissuer => (about: "Add a new anonymous credential issuer"))
     (@subcommand adduser =>
@@ -123,9 +138,6 @@ fn parse_args() -> clap::ArgMatches<'static> {
      (about: "Create an anonymous credential for user by issuer")
      (@arg issuer: +required "anonymous credential issuer")
      (@arg user: +required "user address"))
-    (@subcommand lookup =>
-     (about: "Lookup anonymous credential")
-     (@arg user: +required "anonymous credential address"))
     (@subcommand reveal =>
      (about: "Generate a proof of an anonymous credential for user by issuer")
      (@arg issuer: +required "anonymous credential issuer")
@@ -154,12 +166,13 @@ fn automated_test() -> bool {
                BLSScalar::from_u64(20190820)];
   let att_count = bitmap.len();
   let (issuer_pk, issuer_sk) = ac_keygen_issuer::<_, BLSScalar, BLSGt>(&mut prng, att_count);
+
   trace!("Issuer public key: {:?}", issuer_pk);
   trace!("Issuer secret key: {:?}", issuer_sk);
 
   let (user_pk, user_sk) = ac_keygen_user::<_, BLSScalar, BLSGt>(&mut prng, &issuer_pk);
   trace!("User public key: {:#?}", user_pk);
-  info!("Address of user public key: {:?}", upk_sha256(&user_pk));
+  info!("Address of user public key: {:?}", sha256(&user_pk));
 
   // The user secret key holds [u64; 6], but with more structure.
   trace!("User secret key: {:?}", user_sk);
@@ -203,23 +216,6 @@ fn automated_test() -> bool {
   verified
 }
 
-// TODO change this type to hold an actual signature, not a dummy string
-// Record mapping an address to an anonymous credential signature
-#[derive(Debug, Serialize, Deserialize)]
-struct AddrCred<'a> {
-  address: &'a str,
-  sig_type: u32,
-  signature: &'a str,
-}
-
-impl Default for AddrCred<'_> {
-  fn default() -> Self {
-    AddrCred { address: "",
-               sig_type: 0,
-               signature: "" }
-  }
-}
-
 enum ShellExitStatus {
   Success = 0,
   Failure = 1,
@@ -238,94 +234,18 @@ fn subcommand_test(registry_path: &Path, args: &clap::ArgMatches) -> ShellExitSt
   }
 }
 
-// TODO create command should create a random entry, not a dummy
-fn subcommand_create(registry_path: &Path) -> ShellExitStatus {
-  trace!("subcommand create");
-  trace!("Creating and appending a record to {}",
-         registry_path.display());
-  match OpenOptions::new().append(true)
-                          .create(true)
-                          .open(&registry_path)
-  {
-    Err(io_error) => {
-      error!("Couldn't create registry {}: {}",
-             &registry_path.display(),
-             io_error.description());
-      ShellExitStatus::Failure
-    }
-    Ok(mut registry_file) => {
-      // TODO The address and signature should come from Zei.
-      let address = "0123";
-      let signature = "0123456";
-      let a = AddrCred { address: address,
-                         sig_type: 2,
-                         signature: signature };
-      let j = serde_json::to_string(&a).unwrap();
-      trace!("json: {}", j);
-      if let Err(e) = registry_file.write_fmt(format_args!("{}\n", j)) {
-        error!("Error: {:?}", e);
-        ShellExitStatus::Failure
-      } else {
-        ShellExitStatus::Success
-      }
-    }
-  }
-}
-
-fn subcommand_lookup(registry_path: &Path, address: &str) -> ShellExitStatus {
-  trace!("subcommand lookup");
-  // Maximum u64 is 20 digits: 18,446,744,073,709,551,616.
-  // TODO if we do string comparison, trim leading zeros.
-  //      if let Ok(address) = lookup.value_of("address").unwrap().parse::<u64>() {
-  trace!("lookup: address={:?}", address);
-  let mut contents = String::new();
-  match File::open(&registry_path) {
-    Ok(mut registry_file) => {
-      &registry_file.read_to_string(&mut contents);
-      trace!("Read: {}", &contents);
-      let mut acjson = contents.lines();
-      // TODO It's sketchy to bury the json parsing error.
-      let target = acjson.rfind(|&x| {
-                           let a: AddrCred = serde_json::from_str(&x).unwrap_or_default();
-                           trace!("Comparing to: {}", a.address);
-                           a.address == address
-                         });
-      info!("target: {}", target.unwrap_or("not found"));
-      ShellExitStatus::Success
-    }
-    Err(wut) => {
-      error!("{:?}", wut);
-      ShellExitStatus::Failure
-    }
-  }
-}
-
-// Return the SHA256 hash of a user public key as a hexadecimal string.
-fn upk_sha256(key: &ACUserPublicKey<BLSG1>) -> String {
-  let mut bytes = vec![];
-  key.serialize(&mut rmp_serde::Serializer::new(&mut bytes))
-     .unwrap();
-  // TODO Strange that the serialization is 67 bytes, but the
-  // structure contains 6*3 u64 integers, which takes 144 bytes.
-  let mut hasher = Sha256::new();
-  // Salt the hash to avoid leaking information about other uses of
-  // sha256 on the user's public key.
-  // TODO Does this buy us anything?
-  hasher.input("ACUserPublicKey<zei::algebra::bls12_381::BLSG1>");
-  hasher.input(bytes.as_slice());
-  hex::encode(hasher.result())
-}
-
-// Return the SHA256 hash of an issuer public key as a hexadecimal string.
-fn ipk_sha256(key: &ACIssuerPublicKey<BLSG1, BLSG2>) -> String {
+// Return the SHA256 hash of T as a hexadecimal string.
+fn sha256<T>(key: T) -> String
+  where T: Serialize + TypeInfo
+{
+  trace!("ipk type: {}", key.type_of());
   let mut bytes = vec![];
   key.serialize(&mut rmp_serde::Serializer::new(&mut bytes))
      .unwrap();
   let mut hasher = Sha256::new();
   // Salt the hash to avoid leaking information about other uses of
   // sha256 on the user's public key.
-  // TODO Does this buy us anything?
-  hasher.input("ACIssuerPublicKey<zei::algebra::bls12_381::BLSG1, zei::algebra::bls12_381::BLSG2>");
+  hasher.input(key.type_of());
   hasher.input(bytes.as_slice());
   hex::encode(hasher.result())
 }
@@ -371,7 +291,7 @@ struct AddrUser {
 fn subcommand_add_issuer(registry_path: &Path) -> ShellExitStatus {
   trace!("subcommand addissuer");
   let issuer = new_issuer();
-  let address = ipk_sha256(&issuer.public_key);
+  let address = sha256(&issuer.public_key);
   trace!("Issuer address: {}", &address);
 
   match OpenOptions::new().append(true)
@@ -400,18 +320,30 @@ fn subcommand_add_issuer(registry_path: &Path) -> ShellExitStatus {
   }
 }
 
-// Find the first record in the registry that is an AddrIssuer with
-// address matching the issuer argument.
-fn lookup_issuer(registry_path: &Path, issuer: &str) -> Option<Issuer> {
+type Signature = ACSignature<BLSG1>;
+
+#[derive(Debug, Serialize, Deserialize)]
+struct AddrValue<V> {
+  address: String,
+  value_type: i32,
+  value: V,
+}
+
+// Generic key-value lookup and deserialization
+fn lookup<T>(registry_path: &Path, address: &str) -> Option<T>
+  where for<'d> T: Deserialize<'d>
+{
   let mut contents = String::new();
-  match File::open(&registry_path) {
+  match File::open(registry_path) {
     Ok(mut registry_file) => {
-      &registry_file.read_to_string(&mut contents);
+      if registry_file.read_to_string(&mut contents).is_err() {
+        return None;
+      }
       let mut acjson = contents.lines();
-      acjson.find_map(|x| match serde_json::from_str::<AddrIssuer>(x) {
+      acjson.find_map(|x| match serde_json::from_str::<AddrValue<T>>(x) {
               Ok(item) => {
-                if item.address == issuer {
-                  Some(item.issuer)
+                if item.address == address {
+                  Some(item.value)
                 } else {
                   None
                 }
@@ -428,120 +360,6 @@ fn lookup_issuer(registry_path: &Path, issuer: &str) -> Option<Issuer> {
     }
   }
 }
-
-// Find the first record in the registry that is an AddrUser with
-// address matching the user argument.
-fn lookup_user(registry_path: &Path, user: &str) -> Option<User> {
-  let mut contents = String::new();
-  match File::open(&registry_path) {
-    Ok(mut registry_file) => {
-      &registry_file.read_to_string(&mut contents);
-      let mut acjson = contents.lines();
-      acjson.find_map(|x| match serde_json::from_str::<AddrUser>(x) {
-              Ok(item) => {
-                if item.address == user {
-                  Some(item.user)
-                } else {
-                  None
-                }
-              }
-              Err(_) => {
-                // TODO Report errors other than "missing field" errors.
-                None
-              }
-            })
-    }
-    Err(open_error) => {
-      error!("{:?}", open_error);
-      None
-    }
-  }
-}
-
-fn lookup_signature(registry_path: &Path, signature: &str) -> Option<ACSignature<BLSG1>> {
-  let mut contents = String::new();
-  match File::open(&registry_path) {
-    Ok(mut registry_file) => {
-      &registry_file.read_to_string(&mut contents);
-      let mut acjson = contents.lines();
-      acjson.find_map(|x| match serde_json::from_str::<AddrSig>(x) {
-              Ok(item) => {
-                if item.address == signature {
-                  Some(item.signature)
-                } else {
-                  None
-                }
-              }
-              Err(_) => {
-                // TODO Report errors other than "missing field" errors.
-                None
-              }
-            })
-    }
-    Err(open_error) => {
-      error!("{:?}", open_error);
-      None
-    }
-  }
-}
-
-// TODO I bet the return type is wrong.
-fn lookup_proof(registry_path: &Path,
-                signature: &str)
-                -> Option<ACRevealSig<BLSG1, BLSG2, BLSScalar>> {
-  let mut contents = String::new();
-  match File::open(&registry_path) {
-    Ok(mut registry_file) => {
-      &registry_file.read_to_string(&mut contents);
-      let mut acjson = contents.lines();
-      acjson.find_map(|x| match serde_json::from_str::<AddrProof>(x) {
-              Ok(item) => {
-                if item.address == signature {
-                  Some(item.proof)
-                } else {
-                  None
-                }
-              }
-              Err(_) => {
-                // TODO Report errors other than "missing field" errors.
-                None
-              }
-            })
-    }
-    Err(open_error) => {
-      error!("{:?}", open_error);
-      None
-    }
-  }
-}
-
-// TODO How do we constrain T and TA to make this compile?
-// fn lookup<T, TA>(registry_path: &Path, signature: &str) -> Option<T> {
-//   let mut contents = String::new();
-//   match File::open(&registry_path) {
-//     Ok(mut registry_file) => {
-//       &registry_file.read_to_string(&mut contents);
-//       let mut acjson = contents.lines();
-//       acjson.find_map(|x| match serde_json::from_str::<TA>(x) {
-//               Ok(item) => {
-//                 if item.address == signature {
-//                   Some(item.signature)
-//                 } else {
-//                   None
-//                 }
-//               }
-//               Err(_) => {
-//                 // TODO Report errors other than "missing field" errors.
-//                 None
-//               }
-//             })
-//     }
-//     Err(open_error) => {
-//       error!("{:?}", open_error);
-//       None
-//     }
-//   }
-// }
 
 fn append_user(registry_path: &Path, user: AddrUser) -> bool {
   match OpenOptions::new().append(true)
@@ -567,12 +385,12 @@ fn append_user(registry_path: &Path, user: AddrUser) -> bool {
 }
 
 fn subcommand_add_user(registry_path: &Path, issuer: &str) -> ShellExitStatus {
-  if let Some(issuer) = lookup_issuer(registry_path, issuer) {
+  if let Some(issuer) = lookup::<Issuer>(registry_path, issuer) {
     let mut prng: ChaChaRng;
     // For a real application, the seed should be random.
     prng = ChaChaRng::from_seed([0u8; 32]);
     let (user_pk, user_sk) = ac_keygen_user::<_, BLSScalar, BLSGt>(&mut prng, &issuer.public_key);
-    let au = AddrUser { address: upk_sha256(&user_pk),
+    let au = AddrUser { address: sha256(&user_pk),
                         user_type: 2,
                         user: User { public_key: user_pk,
                                      secret_key: user_sk } };
@@ -596,7 +414,7 @@ struct AddrSig {
 }
 
 fn subcommand_sign(registry_path: &Path, user: &str, issuer: &str) -> ShellExitStatus {
-  match (lookup_user(registry_path, user), lookup_issuer(registry_path, issuer)) {
+  match (lookup::<User>(registry_path, user), lookup::<Issuer>(registry_path, issuer)) {
     (Some(user_keys), Some(issuer_keys)) => {
       let mut prng: ChaChaRng;
       // TODO Share one prng across all invocations.
@@ -652,19 +470,21 @@ fn subcommand_sign(registry_path: &Path, user: &str, issuer: &str) -> ShellExitS
   }
 }
 
+type Proof = ACRevealSig<BLSG1, BLSG2, BLSScalar>;
+
 #[derive(Debug, Serialize, Deserialize)]
 struct AddrProof {
   address: String,
   proof_type: u32,
-  proof: ACRevealSig<BLSG1, BLSG2, BLSScalar>,
+  proof: Proof,
 }
 
 fn subcommand_reveal(registry_path: &Path, user: &str, issuer: &str) -> ShellExitStatus {
   trace!("subcommand reveal user: {} issuer: {}", user, issuer);
 
-  match (lookup_user(registry_path, user),
-         lookup_issuer(registry_path, issuer),
-         lookup_signature(registry_path, user))
+  match (lookup::<User>(registry_path, user),
+         lookup::<Issuer>(registry_path, issuer),
+         lookup::<Signature>(registry_path, user))
   {
     (Some(user_keys), Some(issuer_keys), Some(sig)) => {
       let mut prng: ChaChaRng;
@@ -733,7 +553,7 @@ fn subcommand_reveal(registry_path: &Path, user: &str, issuer: &str) -> ShellExi
 fn subcommand_verify(registry_path: &Path, user: &str, issuer: &str) -> ShellExitStatus {
   trace!("subcommand verify user: {} issuer: {}", user, issuer);
   let verified;
-  match (lookup_issuer(registry_path, issuer), lookup_proof(registry_path, user)) {
+  match (lookup::<Issuer>(registry_path, issuer), lookup::<Proof>(registry_path, user)) {
     (Some(issuer_keys), Some(proof)) => {
       let attrs = [BLSScalar::from_u64(0),
                    BLSScalar::from_u64(1),
@@ -781,10 +601,6 @@ fn main() {
            let issuer = matches.value_of("issuer").unwrap();
            subcommand_sign(&registry_path, &user, &issuer)
          }
-         ("lookup", Some(matches)) => {
-           let user = matches.value_of("user").unwrap();
-           subcommand_lookup(&registry_path, &user)
-         }
          ("reveal", Some(matches)) => {
            let user = matches.value_of("user").unwrap();
            let issuer = matches.value_of("issuer").unwrap();
@@ -796,7 +612,6 @@ fn main() {
            subcommand_verify(&registry_path, &user, &issuer)
          }
 
-         ("create", _) => subcommand_create(&registry_path),
          (subcommand, _) => {
            error!("Please specify a valid subcommand: {:?}. Use -h for help.",
                   subcommand);
