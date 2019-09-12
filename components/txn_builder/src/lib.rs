@@ -24,6 +24,7 @@ pub trait BuildsTransactions {
                                 priv_key: &XfrSecretKey,
                                 token_code: Option<AssetTokenCode>,
                                 updatable: bool,
+                                traceable: bool,
                                 memo: &str,
                                 make_confidential: bool)
                                 -> Result<(), PlatformError>;
@@ -120,6 +121,7 @@ impl BuildsTransactions for TransactionBuilder {
                                 priv_key: &XfrSecretKey,
                                 token_code: Option<AssetTokenCode>,
                                 updatable: bool,
+                                traceable: bool,
                                 _memo: &str,
                                 make_confidential: bool)
                                 -> Result<(), PlatformError> {
@@ -132,7 +134,7 @@ impl BuildsTransactions for TransactionBuilder {
       None
     };
 
-    self.txn.add_operation(Operation::AssetCreation(AssetCreation::new(AssetCreationBody::new(&token_code.unwrap_or_else(AssetTokenCode::gen_random), pub_key, updatable, memo, confidential_memo)?, pub_key, priv_key)?));
+    self.txn.add_operation(Operation::AssetCreation(AssetCreation::new(AssetCreationBody::new(&token_code.unwrap_or_else(AssetTokenCode::gen_random), pub_key, updatable, traceable, memo, confidential_memo)?, pub_key, priv_key)?));
     Ok(())
   }
   fn add_operation_issue_asset(&mut self,

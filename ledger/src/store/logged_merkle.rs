@@ -25,7 +25,7 @@
 //!
 use super::append_only_merkle::{AppendOnlyMerkle, HashValue, Proof};
 
-use crate::store::append_only_merkle::timestamp;
+use findora::commas_u;
 use serde::Deserialize;
 use serde::Deserializer;
 use serde::Serialize;
@@ -44,33 +44,21 @@ use std::io::Write;
 use std::slice::from_raw_parts;
 use std::slice::from_raw_parts_mut;
 
-// Returns Err(Error::new...).
-macro_rules! ser {
-    ($($x:tt)+) => { Err(Error::new(ErrorKind::Other, format!($($x)+))) }
-}
+use findora::timestamp;
+use findora::EnableMap;
+use findora::DEFAULT_MAP;
 
-// Returns a deserializer error:  Err(serder::de::Error::...)
-macro_rules! sde  {
-    ($($x:tt)+) => {
-        Err(serde::de::Error::custom(format!($($x)+)))
-    }
-}
+#[allow(non_upper_case_globals)]
+static apply_log: EnableMap = DEFAULT_MAP;
 
-// Writes a log entry when enabled.
-macro_rules! debug {
-  ($c:ident, $($x:tt)+) => {}; // ($c:tt, $($x:tt)+) => { println!($($x)+); }
-}
-
-// Writes a log entry when enabled.
-macro_rules! log {
-  ($c:tt, $($x:tt)+) => { println!("{}    {}", timestamp(), format!($($x)+)); }
-}
+#[allow(non_upper_case_globals)]
+static find_relevant: findora::EnableMap = DEFAULT_MAP;
 
 const BUFFER_SIZE: usize = 32 * 1024;
 const CHECK_SIZE: usize = 16;
 const HASH_SIZE: usize = std::mem::size_of::<HashValue>();
 const BUFFER_ENTRIES: u16 = ((BUFFER_SIZE / HASH_SIZE) - 1) as u16;
-const BUFFER_MARKER: u32 = 0xabab_efe0;
+const BUFFER_MARKER: u32 = 0xacab_efe0;
 
 /// This structure is used as the I/O buffer for the logs.  It consists
 /// of a header and a series of HashValues passed to the "append"
@@ -85,7 +73,7 @@ const BUFFER_MARKER: u32 = 0xabab_efe0;
 /// field must follow the checksum.
 ///
 /// A flush operation causes the writing of a buffer whether that buffer
-/// is full or not, so any buffer in the can be only partially full.
+/// is full or not, so any buffer in the file might be only partially full.
 /// Partially full buffers are written as a full-size buffer with some
 /// number of empty (zero) entries.  All buffers should have at least
 /// one valid entry.
@@ -183,24 +171,24 @@ impl LogBuffer {
   // error if it does not.
   fn validate(&self) -> Result<(), Error> {
     if self.marker != BUFFER_MARKER {
-      return ser!("The buffer marker ({:x} was invalid.", self.marker);
+      return er!("The buffer marker ({:x} was invalid.", self.marker);
     }
 
     if self.entry_count != BUFFER_ENTRIES {
-      return ser!("The entry count ({}) in a log buffer was invalid.",
-                  self.entry_count);
+      return er!("The entry count ({}) in a log buffer was invalid.",
+                 self.entry_count);
     }
 
     if self.valid == 0 || self.valid > self.entry_count {
-      return ser!("The valid count ({}) in a log buffer was invalid.",
-                  self.valid);
+      return er!("The valid count ({}) in a log buffer was invalid.",
+                 self.valid);
     }
 
     let checksum = self.checksum();
 
     if checksum != self.check {
-      return ser!("The checksum ({:?}) in a log buffer was invalid.",
-                  self.check);
+      return er!("The checksum ({:?}) in a log buffer was invalid.",
+                 self.check);
     }
 
     Ok(())
@@ -272,7 +260,7 @@ impl LoggedMerkle {
   ///   };
   pub fn append(&mut self, hash: &HashValue) -> Result<u64, Error> {
     if self.closed {
-      return ser!("This LoggedMerkle object is closed.");
+      return er!("This LoggedMerkle object is closed.");
     }
 
     let id = self.tree.append_hash(hash)?;
@@ -323,13 +311,13 @@ impl LoggedMerkle {
     };
 
     if transaction >= proof_state {
-      return ser!("That id ({}) is not valid for state {}.",
-                  transaction,
-                  state);
+      return er!("That id ({}) is not valid for state {}.",
+                 commas_u(transaction),
+                 state);
     }
 
     if !self.tree.validate_transaction_id(transaction) {
-      return ser!("That id ({}) is not valid.", transaction);
+      return er!("That id ({}) is not valid.", commas_u(transaction));
     }
 
     self.tree.generate_proof(transaction, proof_state)
@@ -396,7 +384,7 @@ impl LoggedMerkle {
       }
 
       if buffer.id > self.state() {
-        return ser!("This log file starts too far in the future.");
+        return er!("This log file starts too far in the future.");
       }
 
       // If there are entries in the current buffer that are not in
@@ -436,6 +424,10 @@ impl LoggedMerkle {
     Ok(processed)
   }
 
+  pub fn get_root_hash(&self) -> HashValue {
+    self.tree.get_root_hash()
+  }
+
   /// Close the LoggedMerkle object.
   pub fn close(&mut self) -> Result<(), Error> {
     self.flush()?;
@@ -473,7 +465,10 @@ impl LoggedMerkle {
       buffer.validate()?;
 
       debug!(find_relevant,
-             "current: {}, id: {}, state {}", current, buffer.id, state);
+             "current: {}, id: {}, state {}",
+             current,
+             commas_u(buffer.id),
+             state);
 
       if buffer.id > state {
         // The buffer is in the future!  Move back, if possible.
@@ -501,7 +496,9 @@ impl LoggedMerkle {
         debug!(find_relevant, "move forward {} to {}", gap / 2, current);
       } else {
         debug!(find_relevant,
-               "found id {}, valid {}", buffer.id, buffer.valid);
+               "found id {}, valid {}",
+               commas_u(buffer.id),
+               buffer.valid);
         break;
       }
 

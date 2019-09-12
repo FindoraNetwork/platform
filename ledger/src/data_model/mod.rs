@@ -101,6 +101,7 @@ pub struct Asset {
   pub memo: Memo,
   pub confidential_memo: ConfidentialMemo,
   pub updatable: bool,
+  pub traceable: bool,
 }
 
 #[derive(Default, Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
@@ -253,6 +254,7 @@ impl AssetCreationBody {
   pub fn new(token_code: &AssetTokenCode,
              issuer_key: &IssuerPublicKey, // TODO: require private key check somehow?
              updatable: bool,
+             traceable: bool,
              memo: Option<Memo>,
              confidential_memo: Option<ConfidentialMemo>)
              -> Result<AssetCreationBody, errors::PlatformError> {
@@ -260,6 +262,7 @@ impl AssetCreationBody {
     asset_def.code = *token_code;
     asset_def.issuer = *issuer_key;
     asset_def.updatable = updatable;
+    asset_def.traceable = traceable;
 
     if memo.is_some() {
       asset_def.memo = *memo.as_ref().unwrap();

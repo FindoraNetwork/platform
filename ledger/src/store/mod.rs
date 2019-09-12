@@ -1,45 +1,49 @@
 extern crate bincode;
 extern crate byteorder;
+extern crate findora;
 extern crate tempdir;
 
 use crate::data_model::errors::PlatformError;
 use crate::data_model::{
   AssetCreation, AssetIssuance, AssetPolicyKey, AssetToken, AssetTokenCode, AssetTransfer,
-  CustomAssetPolicy, Operation, SmartContract, SmartContractKey, Transaction, TxOutput, TxnSID,
-  TxoSID, Utxo, TXN_SEQ_ID_PLACEHOLDER,
+  CustomAssetPolicy, Operation, SmartContract, SmartContractKey, Transaction, TxOutput,
+  TxOutput::BlindAssetRecord, TxnSID, TxoSID, Utxo, TXN_SEQ_ID_PLACEHOLDER,
 };
 use append_only_merkle::{AppendOnlyMerkle, Proof};
 use bitmap::BitMap;
+use findora::timestamp;
+use findora::EnableMap;
+use findora::DEFAULT_MAP;
 use logged_merkle::LoggedMerkle;
 use rand::SeedableRng;
 use rand_chacha::ChaChaRng;
 use sha2::{Digest, Sha256};
-use std::collections::{HashMap, HashSet};
+use sodiumoxide::crypto::hash::sha256;
+use sodiumoxide::crypto::hash::sha256::Digest as BitDigest;
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::fs::File;
 use std::fs::OpenOptions;
 use std::io::BufReader;
+use std::slice::from_raw_parts;
 use std::sync::{Arc, RwLock};
 use std::u64;
 use tempdir::TempDir;
 use zei::xfr::lib::verify_xfr_note;
+use zei::xfr::structs::EGPubKey;
 
 pub mod append_only_merkle;
 pub mod bitmap;
 pub mod errors;
 pub mod logged_merkle;
 
-// use append_only_merkle::timestamp;
+#[allow(non_upper_case_globals)]
+static store: EnableMap = DEFAULT_MAP;
 
-macro_rules! log {
-  ($($x:tt)+) => {
-    use crate::store::append_only_merkle::timestamp;
-    println!("{}    {}", timestamp(), format!($($x)+));
-  }
-}
+#[allow(non_upper_case_globals)]
+static ledger_map: EnableMap = DEFAULT_MAP;
 
-macro_rules! debug {
-  ($c:tt, $($x:tt)+) => {}; // ($c:tt, $($x:tt)+) => { println!("{}    {}", timestamp(), format!($($x)+)); }
-}
+#[allow(non_upper_case_globals)]
+static issue_map: EnableMap = DEFAULT_MAP;
 
 pub struct SnapshotId {
   pub id: u64,
@@ -50,6 +54,7 @@ pub trait LedgerAccess {
   fn get_issuance_num(&self, code: &AssetTokenCode) -> Option<u64>;
   fn get_asset_token(&self, code: &AssetTokenCode) -> Option<AssetToken>;
   fn get_asset_policy(&self, key: &AssetPolicyKey) -> Option<CustomAssetPolicy>;
+  fn get_tracked_sids(&self, key: &EGPubKey) -> Option<Vec<TxoSID>>; // Asset issuers can query ids of UTXOs of assets they are tracking
   fn get_smart_contract(&self, key: &SmartContractKey) -> Option<SmartContract>;
   fn check_txn_structure(&self, _txn: &Transaction) -> bool {
     true
@@ -71,7 +76,10 @@ pub trait ArchiveUpdate {
 pub trait ArchiveAccess {
   fn get_transaction(&self, addr: TxnSID) -> Option<&Transaction>;
   fn get_proof(&self, addr: TxnSID) -> Option<Proof>;
-  fn get_utxo_map(&self) -> Option<Vec<u8>>;
+  fn get_utxo_map(&mut self) -> Option<Vec<u8>>;
+  fn get_utxos(&mut self, list: Vec<usize>) -> Option<Vec<u8>>;
+  fn get_utxo_checksum(&self, version: u64) -> Option<BitDigest>;
+  fn get_global_hash(&self) -> (BitDigest, u64);
 }
 
 pub fn compute_sha256_hash<T>(msg: &T) -> [u8; 32]
@@ -85,6 +93,25 @@ pub fn compute_sha256_hash<T>(msg: &T) -> [u8; 32]
   *hash
 }
 
+#[repr(C)]
+struct GlobalHashData {
+  pub bitmap: BitDigest,
+  pub merkle: append_only_merkle::HashValue,
+  pub block: u64,
+  pub global_hash: BitDigest,
+}
+
+impl GlobalHashData {
+  fn as_ref(&self) -> &[u8] {
+    unsafe {
+      from_raw_parts((self as *const GlobalHashData) as *const u8,
+                     std::mem::size_of::<GlobalHashData>())
+    }
+  }
+}
+
+const MAX_VERSION: usize = 100;
+
 #[derive(Serialize, Deserialize)]
 pub struct LedgerState {
   merkle_path: String,
@@ -97,8 +124,10 @@ pub struct LedgerState {
   utxos: HashMap<TxoSID, Utxo>,
   #[serde(skip)]
   utxo_map: Option<BitMap>,
+  utxo_map_versions: VecDeque<(usize, BitDigest)>,
   contracts: HashMap<SmartContractKey, SmartContract>,
   policies: HashMap<AssetPolicyKey, CustomAssetPolicy>,
+  tracked_sids: HashMap<EGPubKey, Vec<TxoSID>>,
   tokens: HashMap<AssetTokenCode, AssetToken>,
   issuance_num: HashMap<AssetTokenCode, u64>,
   txn_count: usize,
@@ -107,6 +136,8 @@ pub struct LedgerState {
   loading: bool,
   #[serde(skip)]
   txn_log: Option<File>,
+  global_hash: BitDigest,
+  global_commit_count: u64,
 }
 
 impl LedgerState {
@@ -136,6 +167,25 @@ impl LedgerState {
     Ok(v)
   }
 
+  fn save_utxo_map_version(&mut self) {
+    if self.utxo_map_versions.len() >= MAX_VERSION {
+      self.utxo_map_versions.pop_front();
+    }
+
+    self.utxo_map_versions
+        .push_back((self.txn_count, self.utxo_map.as_mut().unwrap().compute_checksum()));
+  }
+
+  fn save_global_hash(&mut self) {
+    let data = GlobalHashData { bitmap: self.utxo_map.as_mut().unwrap().compute_checksum(),
+                                merkle: self.merkle.as_ref().unwrap().get_root_hash(),
+                                block: self.global_commit_count,
+                                global_hash: self.global_hash };
+
+    self.global_hash = sha256::hash(data.as_ref());
+    self.global_commit_count += 1;
+  }
+
   fn store_transaction(&self, _txn: &Transaction) {}
 
   // Initialize a logged Merkle tree for the ledger.  We might
@@ -149,7 +199,7 @@ impl LedgerState {
       AppendOnlyMerkle::open(path)
     };
 
-    log!("Using path {} for the Merkle tree.", path);
+    log!(store, "Using path {} for the Merkle tree.", path);
 
     let tree = match result {
       Err(x) => {
@@ -165,7 +215,7 @@ impl LedgerState {
     Ok(LoggedMerkle::new(tree, writer))
   }
 
-  // Initialize a bitmap to track to track the unspent utxos.
+  // Initialize a bitmap to track the unspent utxos.
   fn init_utxo_map(path: &str, create: bool) -> Result<BitMap, std::io::Error> {
     let file = OpenOptions::new().read(true)
                                  .write(true)
@@ -194,9 +244,11 @@ impl LedgerState {
                                utxos: HashMap::new(),
                                utxo_map: Some(LedgerState::init_utxo_map(utxo_map_path,
                                                                          create)?),
+                               utxo_map_versions: VecDeque::new(),
                                contracts: HashMap::new(),
                                policies: HashMap::new(),
                                tokens: HashMap::new(),
+                               tracked_sids: HashMap::new(),
                                issuance_num: HashMap::new(),
                                txn_count: 0,
                                txn_base_sid: TxoSID::default(),
@@ -204,7 +256,9 @@ impl LedgerState {
                                loading: false,
                                txn_log: Some(std::fs::OpenOptions::new().create(create)
                                                                         .append(true)
-                                                                        .open(txn_path)?) };
+                                                                        .open(txn_path)?),
+                               global_hash: BitDigest { 0: [0_u8; 32] },
+                               global_commit_count: 0 };
 
     Ok(ledger)
   }
@@ -251,7 +305,10 @@ impl LedgerState {
     self.txn_base_sid.index = self.max_applied_sid.index + 1;
   }
 
-  pub fn end_commit(&mut self) {}
+  pub fn end_commit(&mut self) {
+    self.save_utxo_map_version();
+    self.save_global_hash();
+  }
 
   fn add_txo(&mut self, txo: (&TxoSID, TxOutput)) {
     let mut utxo_addr = *txo.0;
@@ -268,9 +325,36 @@ impl LedgerState {
         }
       }
     }
-
     let utxo_ref = Utxo { digest: compute_sha256_hash(&serde_json::to_vec(&txo.1).unwrap()),
                           output: txo.1 };
+    // Check for asset tracing
+    match &utxo_ref.output {
+      BlindAssetRecord(record) => {
+        if let Some(issuer_public_key) = &record.issuer_public_key {
+          match self.tracked_sids
+                    .get_mut(&issuer_public_key.eg_ristretto_pub_key)
+          {
+            // add utxo address to the list of indices that can be unlocked by the
+            // issuer's public key
+            None => {
+              self.tracked_sids
+                  .insert(issuer_public_key.eg_ristretto_pub_key.clone(),
+                          vec![utxo_addr]);
+            }
+            Some(vec) => {
+              vec.push(utxo_addr);
+            }
+          };
+        }
+      }
+    }
+
+    // Add a bit to the utxo bitmap.
+    self.utxo_map
+        .as_mut()
+        .unwrap()
+        .set(utxo_addr.index as usize)
+        .unwrap();
     self.utxos.insert(utxo_addr, utxo_ref);
     self.max_applied_sid = utxo_addr;
   }
@@ -284,6 +368,12 @@ impl LedgerState {
           rectified_txo.index += self.txn_base_sid.index;
         }
       }
+      // Update the utxo bitmap to remove this asset.
+      self.utxo_map
+          .as_mut()
+          .unwrap()
+          .clear(rectified_txo.index as usize)
+          .unwrap();
       self.utxos.remove(&rectified_txo);
     }
 
@@ -298,20 +388,20 @@ impl LedgerState {
   }
 
   fn apply_asset_issuance(&mut self, issue: &AssetIssuance) {
-    debug!(issue, "outputs {:?}", issue.body.outputs);
-    debug!(issue, "records {:?}", issue.body.records);
+    debug!(issue_map, "outputs {:?}", issue.body.outputs);
+    debug!(issue_map, "records {:?}", issue.body.records);
     for out in issue.body
                     .outputs
                     .iter()
                     .zip(issue.body.records.iter().map(|ref o| (*o).clone()))
     {
-      debug!(ledger, "add txo {:?}", out.1);
+      debug!(ledger_map, "add txo {:?}", out.1);
       self.add_txo(out);
     }
 
     self.issuance_num
         .insert(issue.body.code, issue.body.seq_num);
-    debug!(ledger,
+    debug!(ledger_map,
            "insert asset issue code {:?} -> seq {:?}", issue.body.code, issue.body.seq_num);
   }
 
@@ -370,10 +460,10 @@ impl LedgerState {
       if self.check_utxo(*utxo_addr).is_none() {
         return false;
       }
+    }
 
-      if verify_xfr_note(&mut prng, &transfer.body.transfer, &null_policies).is_err() {
-        return false;
-      }
+    if verify_xfr_note(&mut prng, &transfer.body.transfer, &null_policies).is_err() {
+      return false;
     }
 
     true
@@ -382,6 +472,8 @@ impl LedgerState {
   // An asset issuance is valid iff:
   //     1) The operation is unique (not a replay).
   //     2) The signature is valid and belongs to the anchor (the issuer).
+  //     3) The signature belongs to the anchor
+  //     4) For traceable assets, tracing key is included in output records
   #[cfg(test)]
   fn validate_asset_issuance(&mut self, issue: &AssetIssuance) -> bool {
     // Get a valid token
@@ -417,19 +509,19 @@ impl LedgerState {
       return false;
     }
 
-    //[4] The signature belongs to the anchor.
+    //[3] The signature belongs to the anchor.
     if token.properties.issuer != issue.pubkey {
       println!("validate_asset_issuance:  invalid issuer");
       return false;
     }
 
+    //[4] TODO: Noah For traceable assets, tracing key must exist and be included in all output records
     true
   }
 
   // An asset creation is valid iff:
   //     1) The signature is valid.
-  //     2) The token? has NOT been used by a different asset.
-  // Token?
+  //     2) The token? has NOT been used by a different asset token?
   #[cfg(test)]
   fn validate_asset_creation(&mut self, create: &AssetCreation) -> bool {
     //[1] the token is not already created, [2] the signature is correct.
@@ -567,6 +659,14 @@ impl<'la, LA> LedgerAccess for BlockContext<LA> where LA: LedgerAccess
           None
         }
       }
+    }
+  }
+
+  fn get_tracked_sids(&self, key: &EGPubKey) -> Option<Vec<TxoSID>> {
+    if let Ok(la_reader) = self.ledger.read() {
+      la_reader.get_tracked_sids(key)
+    } else {
+      None
     }
   }
 }
@@ -731,6 +831,10 @@ impl<'la, LA> LedgerAccess for TxnContext<'la, LA> where LA: LedgerAccess
   fn get_issuance_num(&self, code: &AssetTokenCode) -> Option<u64> {
     self.block_context.get_issuance_num(code)
   }
+
+  fn get_tracked_sids(&self, key: &EGPubKey) -> Option<Vec<TxoSID>> {
+    self.block_context.get_tracked_sids(key)
+  }
 }
 
 impl<'la, LA> LedgerValidate for TxnContext<'la, LA> where LA: LedgerAccess
@@ -749,11 +853,11 @@ impl LedgerUpdate for LedgerState {
   fn apply_transaction(&mut self, txn: &Transaction) -> TxoSID {
     let sid = self.txn_base_sid;
     self.txn_base_sid.index = self.max_applied_sid.index + 1;
-    debug!(ledger, "apply {:?}", sid);
+    debug!(ledger_map, "apply {:?}", sid);
 
     // Apply the operations
     for op in &txn.operations {
-      debug!(ledger, "Applying op:  {:?}", op);
+      debug!(ledger_map, "Applying op:  {:?}", op);
       self.apply_operation(op);
     }
     sid
@@ -833,6 +937,13 @@ impl LedgerAccess for LedgerState {
       }
     }
   }
+
+  fn get_tracked_sids(&self, key: &EGPubKey) -> Option<Vec<TxoSID>> {
+    match self.tracked_sids.get(key) {
+      Some(sids) => Some(sids.clone()),
+      None => None,
+    }
+  }
 }
 
 impl ArchiveAccess for LedgerState {
@@ -865,11 +976,31 @@ impl ArchiveAccess for LedgerState {
     }
   }
 
-  fn get_utxo_map(&self) -> Option<Vec<u8>> {
-    match &self.utxo_map {
-      Some(utxo_map) => Some(utxo_map.serialize()),
-      None => None,
+  fn get_utxo_map(&mut self) -> Option<Vec<u8>> {
+    Some(self.utxo_map.as_mut().unwrap().serialize(self.txn_count))
+  }
+
+  fn get_utxos(&mut self, utxo_list: Vec<usize>) -> Option<Vec<u8>> {
+    Some(self.utxo_map
+             .as_mut()
+             .unwrap()
+             .serialize_partial(utxo_list, self.txn_count))
+  }
+
+  fn get_utxo_checksum(&self, version: u64) -> Option<BitDigest> {
+    // TODO:  This could be done via a hashmap to support more versions
+    // efficiently.
+    for pair in self.utxo_map_versions.iter() {
+      if pair.0 as u64 == version {
+        return Some(pair.1);
+      }
     }
+
+    None
+  }
+
+  fn get_global_hash(&self) -> (BitDigest, u64) {
+    (self.global_hash, self.global_commit_count)
   }
 }
 
@@ -897,6 +1028,7 @@ pub mod helpers {
   pub fn asset_creation_body(token_code: &AssetTokenCode,
                              issuer_key: &XfrPublicKey,
                              updatable: bool,
+                             traceable: bool,
                              memo: Option<Memo>,
                              confidential_memo: Option<ConfidentialMemo>)
                              -> AssetCreationBody {
@@ -904,6 +1036,7 @@ pub mod helpers {
     token_properties.code = *token_code;
     token_properties.issuer = IssuerPublicKey { key: *issuer_key };
     token_properties.updatable = updatable;
+    token_properties.traceable = traceable;
 
     if memo.is_some() {
       token_properties.memo = memo.unwrap();
@@ -948,7 +1081,7 @@ mod tests {
     let token_code1 = AssetTokenCode { val: [1; 16] };
     let (public_key, secret_key) = build_keys(&mut prng);
 
-    let asset_body = asset_creation_body(&token_code1, &public_key, true, None, None);
+    let asset_body = asset_creation_body(&token_code1, &public_key, true, false, None, None);
     let asset_create = asset_creation_operation(&asset_body, &public_key, &secret_key);
     tx.operations.push(Operation::AssetCreation(asset_create));
 
@@ -973,7 +1106,7 @@ mod tests {
     let token_code1 = AssetTokenCode { val: [1; 16] };
     let mut prng = ChaChaRng::from_seed([0u8; 32]);
     let (public_key1, secret_key1) = build_keys(&mut prng);
-    let asset_body = asset_creation_body(&token_code1, &public_key1, true, None, None);
+    let asset_body = asset_creation_body(&token_code1, &public_key1, true, false, None, None);
     let mut asset_create = asset_creation_operation(&asset_body, &public_key1, &secret_key1);
 
     // Now re-sign the operation with the wrong key.
@@ -997,7 +1130,7 @@ mod tests {
     let mut prng = ChaChaRng::from_seed([0u8; 32]);
     let (public_key1, secret_key1) = build_keys(&mut prng);
 
-    let asset_body = asset_creation_body(&token_code1, &public_key1, true, None, None);
+    let asset_body = asset_creation_body(&token_code1, &public_key1, true, false, None, None);
     let mut asset_create = asset_creation_operation(&asset_body, &public_key1, &secret_key1);
 
     // Re-sign the operation with the wrong key.
@@ -1024,12 +1157,14 @@ mod tests {
 
     let mut ledger =
       LedgerState::new(&merkle_path, &txn_path, &ledger_path, &utxo_map_path, true).unwrap();
+
+    assert!(ledger.get_global_hash() == (BitDigest { 0: [0_u8; 32] }, 0));
     let mut tx = Transaction::default();
     let token_code1 = AssetTokenCode { val: [1; 16] };
     let mut prng = ChaChaRng::from_seed([0u8; 32]);
     let (public_key, secret_key) = build_keys(&mut prng);
 
-    let asset_body = asset_creation_body(&token_code1, &public_key, true, None, None);
+    let asset_body = asset_creation_body(&token_code1, &public_key, true, false, None, None);
     let asset_create = asset_creation_operation(&asset_body, &public_key, &secret_key);
     tx.operations.push(Operation::AssetCreation(asset_create));
 
@@ -1072,6 +1207,18 @@ mod tests {
                ledger.merkle.unwrap().state());
       }
     }
+
+    // We don't actually have anything to commmit yet,
+    // but this will save the empty checksum, which is
+    // enough for a bit of a test.
+    ledger.end_commit();
+    assert!(ledger.get_global_hash() == (ledger.global_hash, 1));
+    let query_result = ledger.get_utxo_checksum(ledger.txn_count as u64).unwrap();
+    let compute_result = ledger.utxo_map.as_mut().unwrap().compute_checksum();
+    println!("query_result = {:?}, compute_result = {:?}",
+             query_result, compute_result);
+
+    assert!(query_result == compute_result);
 
     match ledger.snapshot() {
       Ok(n) => {
