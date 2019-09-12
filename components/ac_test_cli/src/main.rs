@@ -87,13 +87,13 @@ trait TypeInfo {
   fn type_of(&self) -> &'static str;
 }
 
-impl TypeInfo for &ACUserPublicKey<BLSG1> {
+impl TypeInfo for ACUserPublicKey<BLSG1> {
   fn type_of(&self) -> &'static str {
     "ACUserPublicKey<BLSG1, BLSG2>"
   }
 }
 
-impl TypeInfo for &ACIssuerPublicKey<BLSG1, BLSG2> {
+impl TypeInfo for ACIssuerPublicKey<BLSG1, BLSG2> {
   fn type_of(&self) -> &'static str {
     "ACIssuerPublicKey<BLSG1, BLSG2>"
   }
@@ -116,7 +116,6 @@ fn demo_logging() {
   trace!("Sample trace message");
 }
 
-// TODO Change the commands to distinguish agents: issuer, user (prover), and verifier.
 fn parse_args() -> clap::ArgMatches<'static> {
   let path: std::path::PathBuf = std::env::current_exe().unwrap();
   let program_name: &str = path.file_name().unwrap().to_str().unwrap();
@@ -235,7 +234,7 @@ fn subcommand_test(registry_path: &Path, args: &clap::ArgMatches) -> ShellExitSt
 }
 
 // Return the SHA256 hash of T as a hexadecimal string.
-fn sha256<T>(key: T) -> String
+fn sha256<T>(key: &T) -> String
   where T: Serialize + TypeInfo
 {
   trace!("ipk type: {}", key.type_of());
