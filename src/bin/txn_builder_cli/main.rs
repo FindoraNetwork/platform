@@ -1,15 +1,11 @@
+#[macro_use]
 extern crate clap;
-extern crate dirs;
-extern crate ledger;
-extern crate regex;
-extern crate serde;
-extern crate serde_json;
-extern crate txn_builder;
-extern crate zei;
 
 use clap::{App, Arg, SubCommand};
+use env_logger::{Env, Target};
 use ledger::data_model::errors::PlatformError;
 use ledger::data_model::{AccountAddress, AssetTokenCode, IssuerPublicKey, TxoSID};
+use log::{debug, error, info, trace, warn};
 use rand::SeedableRng;
 use rand_chacha::ChaChaRng;
 use regex::Regex;
@@ -21,6 +17,9 @@ use txn_builder::{BuildsTransactions, TransactionBuilder};
 use zei::basic_crypto::signatures::{XfrKeyPair, XfrPublicKey, XfrSecretKey};
 use zei::serialization::ZeiFromToBytes;
 use zei::xfr::structs::BlindAssetRecord;
+
+const VERSION: &'static str = env!("CARGO_PKG_VERSION");
+const AUTHOR: &'static str = env!("CARGO_PKG_AUTHORS");
 
 fn load_txn_builder_from_file(file_name: &str) -> Result<TransactionBuilder, PlatformError> {
   let mut file = File::open(file_name).or_else(|_e| {
@@ -160,7 +159,22 @@ fn rename_existing_file(path: &str) {
   }
 }
 
+// Use environment variable RUST_LOG to select log level and filter
+// output by module or regex. For example,
+//
+//    RUST_LOG=ledger::data_model=info,main=trace/rec[ie]+ve ./main
+//
+// TODO Verify that this comment is correct.
+//
+// By default, log everything "trace" level or greater to stdout.
+// TODO switch to using from_default_env()
+fn init_logging() {
+  env_logger::from_env(Env::default().default_filter_or("trace")).target(Target::Stdout)
+                                                                 .init();
+}
+
 fn main() {
+  init_logging();
   let inputs = App::new("Transaction Builder")
     .version("0.0.1")
     .about("Copyright 2019 © Findora. All rights reserved.")
@@ -274,7 +288,48 @@ fn main() {
         .help("specify the path and name for the private key file; if the name has the form \"path/to/file_name.private\", the public key file will be \"path/to/file_name.pub\"; otherwise, \".pub\" will be appended to the name")
         .takes_value(true)))
     .get_matches();
+  let path: std::path::PathBuf = std::env::current_exe().unwrap();
+  let program_name: &str = path.file_name().unwrap().to_str().unwrap();
+  let inputs2 = clap_app!(tmp_name =>
+            (name: program_name)
+            (version: VERSION)
+            (author: AUTHOR)
+            (about: "Copyright 2019 © Findora. All rights reserved.")
+            (@arg config: -c --config <FILE> +takes_value "Specify a custom config file (default: \"$FINDORA_DIR/config.toml\")")
+            (@arg findora_dir: -d --dir <PATH> +takes_value "Directory for configuaration, security, and temporary files; must be writable")
+            // .env("FINDORA_DIR")
+            (@arg key_path: -k --keys <PATH> +takes_value "Path to private key (will extrapolate public key)")
+            (@arg txn: --txn <FILE> +takes_value "Use a named transaction file (will always be under findora_dir)")
+            (@subcommand create => (about: "By default, will rename previous file with a .<number> suffix")
+             (@arg named: -n <FILE> +takes_value "Specify a name for newly created transaction file")
+             (@arg overwrite: -f --force "Overwrite the default or named transaction file"))
+             // .alias("overwrite")
+            (@subcommand add =>
+             (@subcommand define_asset =>
+              (@arg token_code: -tc --token_code +takes_value "Specify an explicit 16 character token code for the new asset; must be a unique name. If specified code is already in use, transaction will fail. If not specified, will display automatically generated token code.")
+              (@arg allow_updates: -u --allow_updates "If specified, updates may be made to asset memo")
+              (@arg traceable: -trace --traceable "If specified, asset transfers can be traced by the issuer")
+              (@arg memo: -m --memo +takes_value "Memo as Json, with escaped quotation marks")
+              (@arg confidential: -xx --confidential "Make the memo confidential")
+              (@arg with_policy: -p "TODO: add support for policies"))
+             (@subcommand issue_asset =>
+              (@arg token_code: -tc --token_code +takes_value "Specify the token code of the asset to be issued. The transaction will fail if no asset with the token code exists.")
+              (@arg sequence_number: -seq --sequence_number "Sequence number for the issue transaction. Used to prevent replay attacks.")
+              (@arg amount: -amt --amount +takes_value "Sequence number for the issue transaction. Used to prevent replay attacks.")
+              (@subcommand transfer_asset =>
+               (@arg blind_asset_record: -bar --blind_asset_record +takes_value "Specify a string representing the JSON serialization of the blind asset record of the asset to be transferred.")
+               (@arg index: -idx --index +takes_value "Specify TxoSID index.")
+               (@arg address: -addr --address +takes_value "Specify address to send tokens to.")
+               (@arg transfer_amount: -tfr_amt --transfer_amount +takes_value "Amount of tokens to transfer."))))
+            (@subcommand serialize => (help: "Serialize help TBD"))
+            (@subcommand serialize => (help: "Serialize help TBD"))
+            (@subcommand drop => (help: "Drop help TBD"))
+            (@subcommand keygen =>
+             (@arg create_keys_path: -n --name +takes_value "specify the path and name for the private key file; if the name has the form \"path/to/file_name.private\", the public key file will be \"path/to/file_name.pub\"; otherwise, \".pub\" will be appended to the name"))).get_matches();
 
+  // TODO proofread inputs2. Should mostly match inputs.
+  trace!("BEFORE\n{:#?}", inputs);
+  trace!("AFTER\n{:#?}", inputs2);
   process_inputs(inputs)
 }
 
