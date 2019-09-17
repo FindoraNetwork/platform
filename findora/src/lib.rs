@@ -137,7 +137,7 @@ pub fn timestamp() -> String {
 }
 
 /// Convert a u64 into a string with commas.
-pub fn commas_u(input: u64) -> String {
+fn commas_u64(input: u64) -> String {
   if input == 0 {
     return "0".to_string();
   }
@@ -159,13 +159,8 @@ pub fn commas_u(input: u64) -> String {
   result
 }
 
-/// Convert a usize into a string with commas.
-pub fn commas_us(input: usize) -> String {
-  commas_u(input as u64)
-}
-
 /// Convert an i64 into a string with commas.
-pub fn commas_i(input: i64) -> String {
+fn commas_i64(input: i64) -> String {
   if input == 0 {
     return "0".to_string();
   }
@@ -174,11 +169,11 @@ pub fn commas_i(input: i64) -> String {
   let mut result;
 
   if input == std::i64::MIN {
-    result = commas_u(1u64 << 63);
+    result = commas_u64(1u64 << 63);
   } else if input < 0 {
-    result = commas_u(-input as u64);
+    result = commas_u64(-input as u64);
   } else {
-    result = commas_u(input as u64);
+    result = commas_u64(input as u64);
   }
 
   if sign {
@@ -186,6 +181,35 @@ pub fn commas_i(input: i64) -> String {
   }
 
   result
+}
+
+
+pub trait Commas {
+  fn commas(self) -> String;
+}
+
+impl Commas for u64 {
+  fn commas(self) -> String {
+    crate::commas_u64(self)
+  }
+}
+
+impl Commas for usize {
+  fn commas(self) -> String {
+    crate::commas_u64(self as u64)
+  }
+}
+
+impl Commas for i64 {
+  fn commas(self) -> String {
+    crate::commas_i64(self)
+  }
+}
+
+impl Commas for i32 {
+  fn commas(self) -> String {
+    crate::commas_i64(self as i64)
+  }
 }
 
 #[cfg(test)]
@@ -205,38 +229,37 @@ mod tests {
     debug!(root, "Here at {}", timestamp());
     warning!(root, "Here at {}", timestamp());
     error!(root, "Here at {}", timestamp());
-    log!(root, "Here at {}", commas_u(0));
-    log!(root, "Here at {}", commas_u(100));
-    log!(root, "Here at {}", commas_u(999));
-    log!(root, "Here at {}", commas_u(1000));
-    log!(root, "Here at {}", commas_u(1000 * 1000));
-    log!(root, "Here at {}", commas_u(1024 * 1024));
-    log!(root, "Here at {}", commas_u(999 * 1000));
-    log!(root, "Here at {}", commas_u(2 * 1000));
-    log!(root, "Here at {}", commas_u(1000 * 1000 * 1000));
-    log!(root,
-         "Here at {} is u64::MAX should be {}",
-         commas_u(std::u64::MAX),
-         std::u64::MAX);
-    log!(root, "Here at {}", commas_i(100));
-    log!(root, "Here at {}", commas_i(999));
-    log!(root, "Here at {}", commas_i(1000));
-    log!(root, "Here at {}", commas_i(1000 * 1000));
-    log!(root, "Here at {}", commas_i(999 * 1000));
-    log!(root, "Here at {}", commas_i(2 * 1000));
-    log!(root, "Here at {}", commas_i(1000 * 1000 * 1000));
-    log!(root, "Here at {} is i64::MAX", commas_i(std::i64::MAX));
-    log!(root, "Here at {}", commas_i(-100));
-    log!(root, "Here at {}", commas_i(-999));
-    log!(root, "Here at {}", commas_i(-1000));
-    log!(root, "Here at {}", commas_i(-1000 * 1000));
-    log!(root, "Here at {}", commas_i(-1024 * 1024));
-    log!(root, "Here at {}", commas_i(-999 * 1000));
-    log!(root, "Here at {}", commas_i(-2 * 1000));
-    log!(root, "Here at {}", commas_i(-1000 * 1000 * 1000));
-    log!(root,
-         "Here at {} should be {}",
-         commas_i(std::i64::MIN),
-         std::i64::MIN);
+  }
+
+  #[test]
+  fn test_commas() {
+    assert_eq!("0", 0u64.commas());
+    assert_eq!("100", 100u64.commas());
+    assert_eq!("999", 999u64.commas());
+    assert_eq!("1,000", 1000.commas());
+    assert_eq!("1,000,000", (1000u64 * 1000u64).commas());
+    assert_eq!("1,048,576", (1024 * 1024).commas());
+    assert_eq!("999,000", (999 * 1000).commas());
+    assert_eq!("2,000", (2 * 1000).commas());
+    assert_eq!("1,000,000,000", (1000 * 1000 * 1000).commas());
+    assert_eq!("18,446,744,073,709,551,615", std::u64::MAX.commas());
+    assert_eq!("0", 0i64.commas());
+    assert_eq!("100", 100i64.commas());
+    assert_eq!("999", 999i64.commas());
+    assert_eq!("1,000", 1000.commas());
+    assert_eq!("1,000,000", (1000i64 * 1000i64).commas());
+    assert_eq!("999,000", (999i64 * 1000i64).commas());
+    assert_eq!("2,000", (2 * 1000).commas());
+    assert_eq!("1,000,000,000", (1000 * 1000 * 1000).commas());
+    assert_eq!("9,223,372,036,854,775,807", std::i64::MAX.commas());
+    assert_eq!("-100", (-100).commas());
+    assert_eq!("-999", (-999).commas());
+    assert_eq!("-1,000", (-1000).commas());
+    assert_eq!("-1,000,000", (-1000 * 1000).commas());
+    assert_eq!("-1,048,576", (-1024 * 1024).commas());
+    assert_eq!("-999,000", (-999 * 1000).commas());
+    assert_eq!("-2,000", (-2 * 1000).commas());
+    assert_eq!("-1,000,000,000", (-1000 * 1000 * 1000).commas());
+    assert_eq!("-9,223,372,036,854,775,808", (std::i64::MIN).commas());
   }
 }
