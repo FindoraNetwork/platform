@@ -229,40 +229,37 @@ mod tests {
     debug!(root, "Here at {}", timestamp());
     warning!(root, "Here at {}", timestamp());
     error!(root, "Here at {}", timestamp());
+  }
 
-    log!(root, "Here at {}", 0u64.commas());
-    log!(root, "Here at {}", 100u64.commas());
-    log!(root, "Here at {}", 999u64.commas());
-    log!(root, "Here at {}", 1000.commas());
-    log!(root, "Here at {}", (1000u64 * 1000u64).commas());
-    log!(root, "Here at {}", (1024 * 1024).commas());
-    log!(root, "Here at {}", (999 * 1000).commas());
-    log!(root, "Here at {}", (2 * 1000).commas());
-    log!(root, "Here at {}", (1000 * 1000 * 1000).commas());
-    log!(root,
-         "Here at {} is u64::MAX should be {}",
-         std::u64::MAX.commas(),
-         std::u64::MAX);
-    log!(root, "Here at {}", 0i64.commas());
-    log!(root, "Here at {}", 100i64.commas());
-    log!(root, "Here at {}", 999i64.commas());
-    log!(root, "Here at {}", 1000.commas());
-    log!(root, "Here at {}", (1000i64 * 1000i64).commas());
-    log!(root, "Here at {}", (999i64 * 1000i64).commas());
-    log!(root, "Here at {}", (2 * 1000).commas());
-    log!(root, "Here at {}", (1000 * 1000 * 1000).commas());
-    log!(root, "Here at {} is i64::MAX", std::i64::MAX.commas());
-    log!(root, "Here at {}", (-100).commas());
-    log!(root, "Here at {}", (-999).commas());
-    log!(root, "Here at {}", (-1000).commas());
-    log!(root, "Here at {}", (-1000 * 1000).commas());
-    log!(root, "Here at {}", (-1024 * 1024).commas());
-    log!(root, "Here at {}", (-999 * 1000).commas());
-    log!(root, "Here at {}", (-2 * 1000).commas());
-    log!(root, "Here at {}", (-1000 * 1000 * 1000).commas());
-    log!(root,
-         "Here at {} should be {}",
-         (std::i64::MIN).commas(),
-         std::i64::MIN);
+  #[test]
+  fn test_commas() {
+    assert_eq!("0", 0u64.commas());
+    assert_eq!("100", 100u64.commas());
+    assert_eq!("999", 999u64.commas());
+    assert_eq!("1,000", 1000.commas());
+    assert_eq!("1,000,000", (1000u64 * 1000u64).commas());
+    assert_eq!("1,048,576", (1024 * 1024).commas());
+    assert_eq!("999,000", (999 * 1000).commas());
+    assert_eq!("2,000", (2 * 1000).commas());
+    assert_eq!("1,000,000,000", (1000 * 1000 * 1000).commas());
+    assert_eq!("18,446,744,073,709,551,615", std::u64::MAX.commas());
+    assert_eq!("0", 0i64.commas());
+    assert_eq!("100", 100i64.commas());
+    assert_eq!("999", 999i64.commas());
+    assert_eq!("1,000", 1000.commas());
+    assert_eq!("1,000,000", (1000i64 * 1000i64).commas());
+    assert_eq!("999,000", (999i64 * 1000i64).commas());
+    assert_eq!("2,000", (2 * 1000).commas());
+    assert_eq!("1,000,000,000", (1000 * 1000 * 1000).commas());
+    assert_eq!("9,223,372,036,854,775,807", std::i64::MAX.commas());
+    assert_eq!("-100", (-100).commas());
+    assert_eq!("-999", (-999).commas());
+    assert_eq!("-1,000", (-1000).commas());
+    assert_eq!("-1,000,000", (-1000 * 1000).commas());
+    assert_eq!("-1,048,576", (-1024 * 1024).commas());
+    assert_eq!("-999,000", (-999 * 1000).commas());
+    assert_eq!("-2,000", (-2 * 1000).commas());
+    assert_eq!("-1,000,000,000", (-1000 * 1000 * 1000).commas());
+    assert_eq!("-9,223,372,036,854,775,808", (std::i64::MIN).commas());
   }
 }
