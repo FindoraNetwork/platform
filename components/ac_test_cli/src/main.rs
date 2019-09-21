@@ -29,7 +29,7 @@
 // Trust Issues
 //
 // The issuer (specifically, the credential issuer) must be trusted
-// regarding their standing and their discression regarding keeping
+// regarding their standing and their discretion regarding keeping
 // the attribute values confidential. How does the issuer know the
 // user isn't lying about the attribute values? Maybe the issuer would
 // only participate under certain conditions.
@@ -78,23 +78,24 @@ use zei::crypto::anon_creds::{
 };
 
 const VERSION: &'static str = env!("CARGO_PKG_VERSION");
-const AUTHOR: &str = "John D. Corbett <corbett@findora.org>";
+//const AUTHOR: &str = "John D. Corbett <corbett@findora.org>";
+const AUTHOR: &'static str = env!("CARGO_PKG_AUTHORS");
 
 // Default file path of the anonymous credential registry
 const DEFAULT_REGISTRY_PATH: &str = "acreg.json";
 
-trait TypeInfo {
-  fn type_of(&self) -> &'static str;
+trait TypeName {
+  fn type_string(&self) -> &'static str;
 }
 
-impl TypeInfo for ACUserPublicKey<BLSG1> {
-  fn type_of(&self) -> &'static str {
+impl TypeName for ACUserPublicKey<BLSG1> {
+  fn type_string(&self) -> &'static str {
     "ACUserPublicKey<BLSG1, BLSG2>"
   }
 }
 
-impl TypeInfo for ACIssuerPublicKey<BLSG1, BLSG2> {
-  fn type_of(&self) -> &'static str {
+impl TypeName for ACIssuerPublicKey<BLSG1, BLSG2> {
+  fn type_string(&self) -> &'static str {
     "ACIssuerPublicKey<BLSG1, BLSG2>"
   }
 }
@@ -235,16 +236,16 @@ fn subcommand_test(registry_path: &Path, args: &clap::ArgMatches) -> ShellExitSt
 
 // Return the SHA256 hash of T as a hexadecimal string.
 fn sha256<T>(key: &T) -> String
-  where T: Serialize + TypeInfo
+  where T: Serialize + TypeName
 {
-  trace!("ipk type: {}", key.type_of());
+  trace!("ipk type: {}", key.type_string());
   let mut bytes = vec![];
   key.serialize(&mut rmp_serde::Serializer::new(&mut bytes))
      .unwrap();
   let mut hasher = Sha256::new();
   // Salt the hash to avoid leaking information about other uses of
   // sha256 on the user's public key.
-  hasher.input(key.type_of());
+  hasher.input(key.type_string());
   hasher.input(bytes.as_slice());
   hex::encode(hasher.result())
 }
@@ -332,9 +333,9 @@ struct AddrValue<V> {
 fn lookup<T>(registry_path: &Path, address: &str) -> Option<T>
   where for<'d> T: Deserialize<'d>
 {
-  let mut contents = String::new();
   match File::open(registry_path) {
     Ok(mut registry_file) => {
+      let mut contents = String::new();
       if registry_file.read_to_string(&mut contents).is_err() {
         return None;
       }
@@ -529,21 +530,16 @@ fn subcommand_reveal(registry_path: &Path, user: &str, issuer: &str) -> ShellExi
         }
       }
     }
-    // TODO this doesn't cover all the combinations and doesn't scale nicely
-    (Some(_), _, _) => {
-      error!("Unable to find user");
-      ShellExitStatus::Failure
-    }
-    (_, Some(_), _) => {
-      error!("Unable to find issuer");
-      ShellExitStatus::Failure
-    }
-    (_, _, Some(_)) => {
-      error!("Unable to find signature");
-      ShellExitStatus::Failure
-    }
-    (_, _, _) => {
-      error!("Unable to find more than one of user, issuer, and signature");
+    (some_user, some_issuer, some_sig) => {
+      if some_user.is_none() {
+        error!("Unable to find user.");
+      };
+      if some_issuer.is_none() {
+        error!("Unable to find issuer.");
+      };
+      if some_sig.is_none() {
+        error!("Unable to find signature.");
+      };
       ShellExitStatus::Failure
     }
   }
