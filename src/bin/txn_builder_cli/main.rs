@@ -1,6 +1,6 @@
 extern crate clap;
-extern crate dirs;
 extern crate ledger;
+extern crate dirs;
 extern crate regex;
 extern crate serde;
 extern crate serde_json;
@@ -163,20 +163,20 @@ fn rename_existing_file(path: &str) {
 fn main() {
   let inputs = App::new("Transaction Builder")
     .version("0.0.1")
-    .about("Copyright 2019 © Findora. All rights reserved.")
+    .about("©2019 eian.io")
     .arg(Arg::with_name("config")
       .short("c")
       .long("config")
       .value_name("PATH/TO/FILE")
-      .help("Specify a custom config file (default: \"$FINDORA_DIR/config.toml\")")
+      .help("Specify a custom config file (default: \"$EIAN_DIR/config.toml\")")
       .takes_value(true))
-    .arg(Arg::with_name("findora_dir")
+    .arg(Arg::with_name("eian_dir")
       .short("d")
       .long("dir")
       .value_name("PATH")
       .help("Directory for configuaration, security, and temporary files; must be writable")
       .takes_value(true)
-      .env("FINDORA_DIR"))
+      .env("EIAN_DIR"))
     .arg(Arg::with_name("keys_path")
       .short("k")
       .long("keys")
@@ -186,7 +186,7 @@ fn main() {
     .arg(Arg::with_name("txn")
       .long("txn")
       .value_name("FILE")
-      .help("Use a named transaction file (will always be under findora_dir)")
+      .help("Use a named transaction file (will always be under eian_dir)")
       .takes_value(true))
     .subcommand(SubCommand::with_name("create")
       .about("By default, will rename previous file with a .<number> suffix")
@@ -282,31 +282,31 @@ fn process_inputs(inputs: clap::ArgMatches) {
   let _config_file_path: String;
   let keys_file_path: String;
   let transaction_file_name: String;
-  let findora_dir = if let Some(dir) = inputs.value_of("findora_dir") {
+  let eian_dir = if let Some(dir) = inputs.value_of("eian_dir") {
     dir.to_string()
-  } else if let Ok(dir) = env::var("FINDORA_DIR") {
+  } else if let Ok(dir) = env::var("EIAN_DIR") {
     dir
   } else {
     let home_dir = dirs::home_dir().unwrap_or_else(|| Path::new(".").to_path_buf());
-    format!("{}/.findora", home_dir.to_str().unwrap_or("./.findora"))
+    format!("{}/.eian", home_dir.to_str().unwrap_or("./.eian"))
   };
 
   if let Some(cfg) = inputs.value_of("config") {
     _config_file_path = cfg.to_string();
   } else {
-    _config_file_path = format!("{}/config.toml", findora_dir);
+    _config_file_path = format!("{}/config.toml", eian_dir);
   }
 
   if let Some(priv_key) = inputs.value_of("keys_path") {
     keys_file_path = priv_key.to_string();
   } else {
-    keys_file_path = format!("{}/keys/default.private", findora_dir);
+    keys_file_path = format!("{}/keys/default.private", eian_dir);
   }
 
   if let Some(txn_store) = inputs.value_of("txn") {
     transaction_file_name = txn_store.to_string();
   } else {
-    transaction_file_name = format!("{}/current.txn", findora_dir);
+    transaction_file_name = format!("{}/current.txn", eian_dir);
   }
 
   match inputs.subcommand() {
@@ -314,13 +314,13 @@ fn process_inputs(inputs: clap::ArgMatches) {
       process_create_cmd(create_matches,
                          &keys_file_path,
                          &transaction_file_name,
-                         &findora_dir);
+                         &eian_dir);
     }
     ("add", Some(add_matches)) => {
       process_add_cmd(add_matches,
                       &keys_file_path,
                       &transaction_file_name,
-                      &findora_dir);
+                      &eian_dir);
     }
     ("serialize", Some(_serialize_matches)) => {
       if let Ok(txn_builder) = load_txn_builder_from_file(&transaction_file_name) {
@@ -339,7 +339,7 @@ fn process_inputs(inputs: clap::ArgMatches) {
       if let Some(new_keys_path_in) = new_keys_path_in {
         new_keys_path = new_keys_path_in.to_string();
       } else {
-        new_keys_path = format!("{}/keys/default.private", &findora_dir);
+        new_keys_path = format!("{}/keys/default.private", &eian_dir);
       }
       create_directory_if_missing(&new_keys_path);
       create_key_files(&new_keys_path);
@@ -351,7 +351,7 @@ fn process_inputs(inputs: clap::ArgMatches) {
 fn process_create_cmd(create_matches: &clap::ArgMatches,
                       _keys_file_path: &str,
                       transaction_file_name: &str,
-                      _findora_dir: &str) {
+                      _eian_dir: &str) {
   let named = create_matches.value_of("named");
   let overwrite = create_matches.is_present("overwrite");
   let file_path: String;
@@ -370,14 +370,14 @@ fn process_create_cmd(create_matches: &clap::ArgMatches,
 fn process_add_cmd(add_matches: &clap::ArgMatches,
                    keys_file_path: &str,
                    transaction_file_name: &str,
-                   _findora_dir: &str) {
+                   _eian_dir: &str) {
   let pub_key: XfrPublicKey;
   let priv_key: XfrSecretKey;
   if let Ok((pub_key_out, priv_key_out)) = load_key_pair_from_files(&keys_file_path) {
     pub_key = pub_key_out;
     priv_key = priv_key_out;
   } else {
-    println!("Valid keyfile required for this command; if no keyfile currently exists, try running \"findora_txn_builder keygen\"");
+    println!("Valid keyfile required for this command; if no keyfile currently exists, try running \"eian_txn_builder keygen\"");
     return;
   }
   match add_matches.subcommand() {
