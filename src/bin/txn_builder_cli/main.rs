@@ -217,7 +217,7 @@ fn main() {
     .subcommand(SubCommand::with_name("add")
       .subcommand(SubCommand::with_name("define_asset")
         .arg(Arg::with_name("token_code")
-//          .short("tc")
+          .short("tc")
           .long("token_code")
           .help("Specify an explicit 16 character token code for the new asset; must be a unique name. If specified code is already in use, transaction will fail. If not specified, will display automatically generated token code.")
           .takes_value(true))
@@ -244,7 +244,7 @@ fn main() {
           .help("TODO: add support for policies")))
       .subcommand(SubCommand::with_name("issue_asset")
         .arg(Arg::with_name("token_code")
-//          .short("tc")
+          .short("tc")
           .long("token_code")
           .takes_value(true)
           .help("Specify the token code of the asset to be issued. The transaction will fail if no asset with the token code exists."))
@@ -306,14 +306,14 @@ fn main() {
              // .alias("overwrite")
             (@subcommand add =>
              (@subcommand define_asset =>
-              (@arg token_code: --tc --token_code +takes_value "Specify an explicit 16 character token code for the new asset; must be a unique name. If specified code is already in use, transaction will fail. If not specified, will display automatically generated token code.")
+              (@arg token_code: -tc --token_code +takes_value "Specify an explicit 16 character token code for the new asset; must be a unique name. If specified code is already in use, transaction will fail. If not specified, will display automatically generated token code.")
               (@arg allow_updates: -u --allow_updates "If specified, updates may be made to asset memo")
               (@arg traceable: -trace --traceable "If specified, asset transfers can be traced by the issuer")
               (@arg memo: -m --memo +takes_value "Memo as Json, with escaped quotation marks")
               (@arg confidential: -xx --confidential "Make the memo confidential")
               (@arg with_policy: -p "TODO: add support for policies"))
              (@subcommand issue_asset =>
-              (@arg token_code: --tc --token_code +takes_value "Specify the token code of the asset to be issued. The transaction will fail if no asset with the token code exists.")
+              (@arg token_code: -tc --token_code +takes_value "Specify the token code of the asset to be issued. The transaction will fail if no asset with the token code exists.")
               (@arg sequence_number: -seq --sequence_number "Sequence number for the issue transaction. Used to prevent replay attacks.")
               (@arg amount: -amt --amount +takes_value "Sequence number for the issue transaction. Used to prevent replay attacks.")
               (@subcommand transfer_asset =>
