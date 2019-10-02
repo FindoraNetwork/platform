@@ -5,7 +5,7 @@
 
 extern crate rand;
 
-use findora::commas_u;
+use findora::Commas;
 use ledger::store::append_only_merkle::AppendOnlyMerkle;
 use ledger::store::append_only_merkle::HashValue;
 use rand::prelude::thread_rng;
@@ -88,14 +88,14 @@ fn main() -> Result<(), std::io::Error> {
 
     // Do consistency checks on the tree from time to time.
     if countdown <= 1 {
-      println!("Checking the tree and disk image at tid {}", commas_u(tid));
+      println!("Checking the tree and disk image at tid {}", tid.commas());
       check_tree(&tree);
       check_disk_tree(&mut tree, false);
 
       if tree.total_size() != tid + 1 {
         panic!("Got {} nodes, but expected {}.",
                tree.total_size(),
-               commas_u(tid));
+               tid.commas());
       }
 
       // Sync the tree to disk.
@@ -128,13 +128,13 @@ fn main() -> Result<(), std::io::Error> {
 
       if tree.total_size() as u64 > 4 * range {
         range *= 4;
-        println!("    Range extended to {}", commas_u(range));
+        println!("    Range extended to {}", range.commas());
       }
     }
   }
 
   tree.write();
-  println!("Done with {} entries.", commas_u(tree.total_size()));
+  println!("Done with {} entries.", tree.total_size().commas());
   println!("The test passed.");
   Ok(())
 }
@@ -169,7 +169,7 @@ fn test_proof(tree: &mut AppendOnlyMerkle) {
 
   let id = if state > 2 { rand % (state + 1) } else { state };
 
-  println!("    Testing a proof for tid {}", commas_u(id));
+  println!("    Testing a proof for tid {}", id.commas());
 
   match tree.generate_proof(id, state) {
     Err(x) => {

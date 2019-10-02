@@ -25,7 +25,6 @@
 //!
 use super::append_only_merkle::{AppendOnlyMerkle, HashValue, Proof};
 
-use findora::commas_u;
 use serde::Deserialize;
 use serde::Deserializer;
 use serde::Serialize;
@@ -45,6 +44,7 @@ use std::slice::from_raw_parts;
 use std::slice::from_raw_parts_mut;
 
 use findora::timestamp;
+use findora::Commas;
 use findora::EnableMap;
 use findora::DEFAULT_MAP;
 
@@ -312,12 +312,12 @@ impl LoggedMerkle {
 
     if transaction >= proof_state {
       return er!("That id ({}) is not valid for state {}.",
-                 commas_u(transaction),
+                 transaction.commas(),
                  state);
     }
 
     if !self.tree.validate_transaction_id(transaction) {
-      return er!("That id ({}) is not valid.", commas_u(transaction));
+      return er!("That id ({}) is not valid.", transaction.commas());
     }
 
     self.tree.generate_proof(transaction, proof_state)
@@ -467,7 +467,7 @@ impl LoggedMerkle {
       debug!(find_relevant,
              "current: {}, id: {}, state {}",
              current,
-             commas_u(buffer.id),
+             buffer.id.commas(),
              state);
 
       if buffer.id > state {
@@ -497,7 +497,7 @@ impl LoggedMerkle {
       } else {
         debug!(find_relevant,
                "found id {}, valid {}",
-               commas_u(buffer.id),
+               buffer.id.commas(),
                buffer.valid);
         break;
       }
