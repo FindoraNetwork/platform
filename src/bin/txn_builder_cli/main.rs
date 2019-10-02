@@ -1,22 +1,14 @@
-extern crate clap;
-extern crate ledger;
-extern crate dirs;
-extern crate regex;
-extern crate serde;
-extern crate serde_json;
-extern crate txn_builder;
-extern crate zei;
-
 use clap::{App, Arg, SubCommand};
+use env_logger::{Env, Target};
 use ledger::data_model::errors::PlatformError;
 use ledger::data_model::{AccountAddress, AssetTokenCode, IssuerPublicKey, TxoSID};
+use log::{error, trace}; // Other options: debug, info, warn
 use rand::SeedableRng;
 use rand_chacha::ChaChaRng;
-use regex::Regex;
 use std::env;
 use std::fs::{self, File};
 use std::io::prelude::*;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use txn_builder::{BuildsTransactions, TransactionBuilder};
 use zei::basic_crypto::signatures::{XfrKeyPair, XfrPublicKey, XfrSecretKey};
 use zei::serialization::ZeiFromToBytes;
@@ -66,16 +58,16 @@ fn load_key_pair_from_files(priv_file_name: &str)
     }
   }
 
-  let pub_file_name = if priv_file_name.ends_with(".private") {
+  let pub_file_path = if priv_file_name.ends_with(".private") {
     let (begin, _) = priv_file_name.split_at(priv_file_name.len() - "private".len());
     begin.to_string() + "pub"
   } else {
     priv_file_name.to_string() + "pub"
   };
 
-  let mut pub_file = File::open(&pub_file_name).or_else(|_e| {
+  let mut pub_file = File::open(&pub_file_path).or_else(|_e| {
                                                  println!("Failed to open public key file {}",
-                                                          &pub_file_name);
+                                                          &pub_file_path);
                                                  Err(PlatformError::DeserializationError)
                                                })?;
 
@@ -86,7 +78,7 @@ fn load_key_pair_from_files(priv_file_name: &str)
       pk = XfrPublicKey::zei_from_bytes(&pk_byte_buffer);
     }
     Err(_e) => {
-      println!("Failed to read public key file {}", pub_file_name);
+      println!("Failed to read public key file {}", pub_file_path);
       return Err(PlatformError::DeserializationError);
     }
   }
@@ -94,26 +86,44 @@ fn load_key_pair_from_files(priv_file_name: &str)
   Ok((pk, sk))
 }
 
-fn create_key_files(priv_file_name: &str) {
-  let mut prng: ChaChaRng;
-  prng = ChaChaRng::from_seed([0u8; 32]);
-  let keypair = XfrKeyPair::generate(&mut prng);
-  let pub_file_name = if priv_file_name.ends_with(".private") {
-    let (begin, _) = priv_file_name.split_at(priv_file_name.len() - "private".len());
-    begin.to_string() + "pub"
-  } else {
-    priv_file_name.to_string() + "pub"
-  };
-  rename_existing_file(&priv_file_name);
-  rename_existing_file(&pub_file_name);
-  let _skip_priv = fs::write(priv_file_name, keypair.get_sk_ref().zei_to_bytes()).or_else(|_e| {
-                     println!("Private key file {} could not be created", priv_file_name);
-                     Err(PlatformError::SerializationError)
-                   });
-  let _skip_pub = fs::write(&pub_file_name, keypair.get_pk_ref().zei_to_bytes()).or_else(|_e| {
-                    println!("Public key file {} could not be created", &pub_file_name);
-                    Err(PlatformError::SerializationError)
-                  });
+// Write a new key pair to the given paths.
+// Create subdirectories as needed.
+// Move aside any extant files at the given paths.
+// Reports errors rather than returning them.
+// Assumes tilde expansion has already been done on paths.
+fn create_key_files(priv_file_path: &Path, pub_file_path: &Path) {
+  trace!("private key path: {:?}", priv_file_path);
+  trace!("public key path: {:?}", pub_file_path);
+  match fs::create_dir_all(&priv_file_path.parent().unwrap()) {
+    Ok(()) => {
+      if let Err(error) = rename_existing_path(&priv_file_path) {
+        error!("Cannot rename private key {:?}: {}", &priv_file_path, error);
+      }
+      if let Err(error) = rename_existing_path(&pub_file_path) {
+        error!("Cannot rename public key {:?}: {}", &pub_file_path, error);
+      }
+      let mut prng: ChaChaRng;
+      prng = ChaChaRng::from_seed([0u8; 32]);
+      let keypair = XfrKeyPair::generate(&mut prng);
+      match fs::write(&priv_file_path, keypair.get_sk_ref().zei_to_bytes()) {
+        Ok(_) => {
+          if let Err(error) = fs::write(&pub_file_path, keypair.get_pk_ref().zei_to_bytes()) {
+            error!("Public key file {:?} could not be created: {}",
+                   &pub_file_path, error);
+          }
+        }
+        Err(error) => {
+          error!("Private key file {:?} could not be created: {}",
+                 priv_file_path, error);
+        }
+      };
+    }
+    Err(error) => {
+      error!("Failed to create directories for {}: {}",
+             &priv_file_path.display(),
+             error);
+    }
+  }
 }
 
 fn create_directory_if_missing(path_to_file_in_dir: &str) {
@@ -130,53 +140,92 @@ fn create_directory_if_missing(path_to_file_in_dir: &str) {
   }
 }
 
-fn next_file(path: &str) -> String {
-  let regex = Regex::new(".*\\.[0-9]+$").unwrap();
+const BACKUP_COUNT_MAX: i32 = 10000; // Arbitrary choice.
 
-  if !regex.is_match(path) {
-    return path.to_owned();
-  }
-
-  let last = path.rfind('.').unwrap();
-  let mut next = path[0..last].to_owned();
-
-  let current = match path[last + 1..path.len()].parse::<i32>() {
-    Err(_) => {
-      return path.to_owned();
+// Find a backup file name not currently in use.
+// Assumes the extension of path can be replaced by n.
+// Assumes it is safe to check the existence of the path after doing so.
+// This implies all path components of path must exist and be readable.
+// Assumes recursion won't hurt us here.
+fn find_available_path(path: &Path, n: i32) -> Result<PathBuf, std::io::Error> {
+  if n < BACKUP_COUNT_MAX {
+    let path_n = path.with_extension(&n.to_string());
+    if path_n.exists() {
+      find_available_path(path, n + 1)
+    } else {
+      Ok(path_n)
     }
-    Ok(n) => n,
-  };
-
-  next.push_str(&".");
-  next.push_str(&(current + 1).to_string());
-  next
+  } else {
+    Err(std::io::Error::new(std::io::ErrorKind::AlreadyExists,
+                            format!("Too many backups for {:?}", path)))
+  }
 }
 
-fn rename_existing_file(path: &str) {
-  let next = next_file(path);
-
-  if let Err(x) = std::fs::rename(path, &next) {
-    println!("Renaming {} returned an error:  {}", path, x);
+// Return a backup file path derived from path or or an error if an
+// unused path cannot cannot be derived.
+fn next_path(path: &Path) -> Result<PathBuf, std::io::Error> {
+  fn add_backup_extension(path: &Path) -> PathBuf {
+    let mut pb = PathBuf::from(path);
+    pb.set_file_name(format!("{}.0", path.file_name().unwrap().to_str().unwrap()));
+    pb
   }
+
+  if let Some(ext) = path.extension() {
+    if let Ok(n) = ext.to_str().unwrap().parse::<i32>() {
+      // Has a numeric extension
+      find_available_path(path, n)
+    } else {
+      // Doesn't have a numeric extension
+      find_available_path(&add_backup_extension(&path), 0)
+    }
+  } else {
+    // Doesn't have any extension.
+    find_available_path(&add_backup_extension(&path), 0)
+  }
+}
+
+fn rename_existing_path(path: &Path) -> std::result::Result<(), std::io::Error> {
+  match next_path(path) {
+    Ok(next) => {
+      trace!("Next path for {:?} is {:?}", &path, &next);
+      fs::rename(path, next.as_path())
+    }
+    Err(error) => Err(error),
+  }
+}
+
+// Use environment variable RUST_LOG to select log level and filter
+// output by module or regex. For example,
+//
+//    RUST_LOG=ledger::data_model=info,main=trace/rec[ie]+ve ./main
+//
+// TODO Verify that this comment is correct.
+//
+// By default, log everything "trace" level or greater to stdout.
+// TODO switch to using from_default_env()
+fn init_logging() {
+  env_logger::from_env(Env::default().default_filter_or("trace")).target(Target::Stdout)
+                                                                 .init();
 }
 
 fn main() {
+  init_logging();
   let inputs = App::new("Transaction Builder")
     .version("0.0.1")
-    .about("©2019 eian.io")
+    .about("Copyright 2019 © Findora. All rights reserved.")
     .arg(Arg::with_name("config")
       .short("c")
       .long("config")
       .value_name("PATH/TO/FILE")
-      .help("Specify a custom config file (default: \"$EIAN_DIR/config.toml\")")
+      .help("Specify a custom config file (default: \"$FINDORA_DIR/config.toml\")")
       .takes_value(true))
-    .arg(Arg::with_name("eian_dir")
+    .arg(Arg::with_name("findora_dir")
       .short("d")
       .long("dir")
       .value_name("PATH")
       .help("Directory for configuaration, security, and temporary files; must be writable")
       .takes_value(true)
-      .env("EIAN_DIR"))
+      .env("FINDORA_DIR"))
     .arg(Arg::with_name("keys_path")
       .short("k")
       .long("keys")
@@ -186,7 +235,7 @@ fn main() {
     .arg(Arg::with_name("txn")
       .long("txn")
       .value_name("FILE")
-      .help("Use a named transaction file (will always be under eian_dir)")
+      .help("Use a named transaction file (will always be under findora_dir)")
       .takes_value(true))
     .subcommand(SubCommand::with_name("create")
       .about("By default, will rename previous file with a .<number> suffix")
@@ -203,8 +252,8 @@ fn main() {
     .subcommand(SubCommand::with_name("add")
       .subcommand(SubCommand::with_name("define_asset")
         .arg(Arg::with_name("token_code")
-          .short("tc")
           .long("token_code")
+          .alias("tc")
           .help("Specify an explicit 16 character token code for the new asset; must be a unique name. If specified code is already in use, transaction will fail. If not specified, will display automatically generated token code.")
           .takes_value(true))
         .arg(Arg::with_name("allow_updates")
@@ -230,8 +279,8 @@ fn main() {
           .help("TODO: add support for policies")))
       .subcommand(SubCommand::with_name("issue_asset")
         .arg(Arg::with_name("token_code")
-          .short("tc")
           .long("token_code")
+          .alias("tc")
           .takes_value(true)
           .help("Specify the token code of the asset to be issued. The transaction will fail if no asset with the token code exists."))
         .arg(Arg::with_name("sequence_number")
@@ -274,7 +323,6 @@ fn main() {
         .help("specify the path and name for the private key file; if the name has the form \"path/to/file_name.private\", the public key file will be \"path/to/file_name.pub\"; otherwise, \".pub\" will be appended to the name")
         .takes_value(true)))
     .get_matches();
-
   process_inputs(inputs)
 }
 
@@ -282,31 +330,31 @@ fn process_inputs(inputs: clap::ArgMatches) {
   let _config_file_path: String;
   let keys_file_path: String;
   let transaction_file_name: String;
-  let eian_dir = if let Some(dir) = inputs.value_of("eian_dir") {
+  let findora_dir = if let Some(dir) = inputs.value_of("findora_dir") {
     dir.to_string()
-  } else if let Ok(dir) = env::var("EIAN_DIR") {
+  } else if let Ok(dir) = env::var("FINDORA_DIR") {
     dir
   } else {
     let home_dir = dirs::home_dir().unwrap_or_else(|| Path::new(".").to_path_buf());
-    format!("{}/.eian", home_dir.to_str().unwrap_or("./.eian"))
+    format!("{}/.findora", home_dir.to_str().unwrap_or("./.findora"))
   };
 
   if let Some(cfg) = inputs.value_of("config") {
     _config_file_path = cfg.to_string();
   } else {
-    _config_file_path = format!("{}/config.toml", eian_dir);
+    _config_file_path = format!("{}/config.toml", findora_dir);
   }
 
   if let Some(priv_key) = inputs.value_of("keys_path") {
     keys_file_path = priv_key.to_string();
   } else {
-    keys_file_path = format!("{}/keys/default.private", eian_dir);
+    keys_file_path = format!("{}/keys/default.private", findora_dir);
   }
 
   if let Some(txn_store) = inputs.value_of("txn") {
     transaction_file_name = txn_store.to_string();
   } else {
-    transaction_file_name = format!("{}/current.txn", eian_dir);
+    transaction_file_name = format!("{}/current.txn", findora_dir);
   }
 
   match inputs.subcommand() {
@@ -314,13 +362,13 @@ fn process_inputs(inputs: clap::ArgMatches) {
       process_create_cmd(create_matches,
                          &keys_file_path,
                          &transaction_file_name,
-                         &eian_dir);
+                         &findora_dir);
     }
     ("add", Some(add_matches)) => {
       process_add_cmd(add_matches,
                       &keys_file_path,
                       &transaction_file_name,
-                      &eian_dir);
+                      &findora_dir);
     }
     ("serialize", Some(_serialize_matches)) => {
       if let Ok(txn_builder) = load_txn_builder_from_file(&transaction_file_name) {
@@ -334,15 +382,16 @@ fn process_inputs(inputs: clap::ArgMatches) {
       Err(e) => println!("Error deleting file: {:?} ", e),
     },
     ("keygen", Some(keygen_matches)) => {
-      let new_keys_path_in = keygen_matches.value_of("create_keys_path");
-      let new_keys_path: String;
-      if let Some(new_keys_path_in) = new_keys_path_in {
-        new_keys_path = new_keys_path_in.to_string();
-      } else {
-        new_keys_path = format!("{}/keys/default.private", &eian_dir);
-      }
-      create_directory_if_missing(&new_keys_path);
-      create_key_files(&new_keys_path);
+      let new_keys_path =
+        if let Some(new_keys_path_in) = keygen_matches.value_of("create_keys_path") {
+          new_keys_path_in.to_string()
+        } else {
+          format!("{}/keys/default.private", &findora_dir)
+        };
+      let priv_file_str = shellexpand::tilde(&new_keys_path).to_string();
+      let priv_file_path = Path::new(&priv_file_str);
+      let pub_file_path = priv_file_path.with_extension("pub");
+      create_key_files(&priv_file_path, &pub_file_path);
     }
     _ => {}
   }
@@ -351,33 +400,37 @@ fn process_inputs(inputs: clap::ArgMatches) {
 fn process_create_cmd(create_matches: &clap::ArgMatches,
                       _keys_file_path: &str,
                       transaction_file_name: &str,
-                      _eian_dir: &str) {
+                      _findora_dir: &str) {
   let named = create_matches.value_of("named");
   let overwrite = create_matches.is_present("overwrite");
-  let file_path: String;
-  if let Some(named) = named {
-    file_path = named.to_string();
+  let file_str = if let Some(named) = named {
+    named.to_string()
   } else {
-    file_path = transaction_file_name.to_string();
-  }
-  create_directory_if_missing(&file_path);
+    transaction_file_name.to_string()
+  };
+  let expand_str = shellexpand::tilde(&file_str).to_string();
+  let file_path = Path::new(&expand_str);
+  create_directory_if_missing(&expand_str);
   if !overwrite {
-    rename_existing_file(&file_path);
+    if let Err(error) = rename_existing_path(&file_path) {
+      error!("Cannot rename file {:?}: {}", &file_path, error);
+    }
   }
   let txn_builder = TransactionBuilder::default();
-  store_txn_builder_to_file(&file_path, &txn_builder);
+  store_txn_builder_to_file(&expand_str, &txn_builder);
 }
+
 fn process_add_cmd(add_matches: &clap::ArgMatches,
                    keys_file_path: &str,
                    transaction_file_name: &str,
-                   _eian_dir: &str) {
+                   _findora_dir: &str) {
   let pub_key: XfrPublicKey;
   let priv_key: XfrSecretKey;
   if let Ok((pub_key_out, priv_key_out)) = load_key_pair_from_files(&keys_file_path) {
     pub_key = pub_key_out;
     priv_key = priv_key_out;
   } else {
-    println!("Valid keyfile required for this command; if no keyfile currently exists, try running \"eian_txn_builder keygen\"");
+    println!("Valid keyfile required for this command; if no keyfile currently exists, try running \"findora_txn_builder keygen\"");
     return;
   }
   match add_matches.subcommand() {
