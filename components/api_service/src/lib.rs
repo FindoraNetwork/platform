@@ -192,6 +192,7 @@ fn query_policy<LA>(data: web::Data<Arc<RwLock<LA>>>,
 fn submit_transaction<U>(data: web::Data<Arc<RwLock<U>>>, info: web::Path<String>)
   where U: LedgerUpdate + ArchiveUpdate
 {
+  // TODO: Handle submission to Tendermint layer
   let mut writer = data.write().unwrap();
   let uri_string = percent_decode_str(&*info).decode_utf8().unwrap();
   if let Ok(mut tx) = serde_json::from_str(&uri_string) {
