@@ -8,7 +8,8 @@ use ledger::data_model::{
   AssetPolicyKey, AssetToken, AssetTokenCode, CustomAssetPolicy, SmartContract, SmartContractKey,
   TxnSID, TxoSID, Utxo,
 };
-use ledger::store::{ArchiveAccess, LedgerAccess};
+use ledger::store::{ArchiveAccess, ArchiveUpdate, LedgerAccess, LedgerUpdate};
+use percent_encoding::percent_decode_str;
 use std::io;
 use std::marker::{Send, Sync};
 use std::sync::{Arc, RwLock};
@@ -188,6 +189,17 @@ fn query_policy<LA>(data: web::Data<Arc<RwLock<LA>>>,
   }
 }
 
+fn submit_transaction<U>(data: web::Data<Arc<RwLock<U>>>, info: web::Path<String>)
+  where U: LedgerUpdate + ArchiveUpdate
+{
+  let mut writer = data.write().unwrap();
+  let uri_string = percent_decode_str(&*info).decode_utf8().unwrap();
+  if let Ok(mut tx) = serde_json::from_str(&uri_string) {
+    writer.apply_transaction(&mut tx);
+    writer.append_transaction(tx);
+  }
+}
+
 fn query_contract<LA>(data: web::Data<Arc<RwLock<LA>>>,
                       info: web::Path<String>)
                       -> actix_web::Result<web::Json<SmartContract>>
@@ -206,11 +218,17 @@ fn query_contract<LA>(data: web::Data<Arc<RwLock<LA>>>,
 }
 
 impl RestfulApiService {
-  pub fn create<LA: 'static + LedgerAccess + ArchiveAccess + Sync + Send>(
+  pub fn create<LA: 'static
+                    + LedgerAccess
+                    + ArchiveAccess
+                    + LedgerUpdate
+                    + ArchiveUpdate
+                    + Sync
+                    + Send>(
     ledger_access: Arc<RwLock<LA>>)
     -> io::Result<RestfulApiService> {
     let web_runtime = actix_rt::System::new("eian API");
-    let data = web::Data::new(ledger_access.clone());
+    let data = ledger_access.clone();
     HttpServer::new(move || {
       App::new().data(data.clone())
                 .route("/utxo_sid/{sid}", web::get().to(query_utxo::<LA>))
@@ -225,6 +243,8 @@ impl RestfulApiService {
                        web::get().to(query_utxo_partial_map::<LA>))
                 .route("/policy_key/{key}", web::get().to(query_policy::<LA>))
                 .route("/contract_key/{key}", web::get().to(query_contract::<LA>))
+                .route("/submit_transaction/{tx}",
+                       web::get().to(submit_transaction::<LA>))
     }).bind("127.0.0.1:8668")?
       .start();
     Ok(RestfulApiService { web_runtime })
@@ -243,6 +263,7 @@ mod tests {
   use ledger::data_model::{Operation, Transaction};
   use ledger::store::helpers::*;
   use ledger::store::{ArchiveUpdate, LedgerState, LedgerUpdate};
+  use percent_encoding::{utf8_percent_encode, AsciiSet, CONTROLS};
   use rand::SeedableRng;
   use rand_chacha::ChaChaRng;
 
@@ -286,5 +307,48 @@ mod tests {
     let resp = test::block_on(app.call(req)).unwrap();
 
     assert!(resp.status().is_success());
+  }
+  #[test]
+  fn test_query_transaction_and_query() {
+    let mut prng = ChaChaRng::from_seed([0u8; 32]);
+    let state = LedgerState::test_ledger();
+    let mut tx = Transaction::default();
+
+    let token_code1 = AssetTokenCode { val: [1; 16] };
+    let (public_key, secret_key) = build_keys(&mut prng);
+
+    let asset_body = asset_creation_body(&token_code1, &public_key, true, false, None, None);
+    let asset_create = asset_creation_operation(&asset_body, &public_key, &secret_key);
+    tx.operations.push(Operation::AssetCreation(asset_create));
+
+    let mut app =
+      test::init_service(App::new().data(Arc::new(RwLock::new(state)))
+                                   .route("/submit_transaction/{tx}",
+                                          web::get().to(submit_transaction::<LedgerState>))
+                                   .route("/asset_token/{token}",
+                                          web::get().to(query_asset::<LedgerState>)));
+
+    let serialize = serde_json::to_string(&tx).unwrap();
+    const FRAGMENT: &AsciiSet = &CONTROLS.add(b' ')
+                                         .add(b'"')
+                                         .add(b'<')
+                                         .add(b'>')
+                                         .add(b'`')
+                                         .add(b'{')
+                                         .add(b'/')
+                                         .add(b'}');
+    let uri_string = utf8_percent_encode(&serialize, FRAGMENT).to_string();
+
+    let submit_req = test::TestRequest::get().uri(&format!("/submit_transaction/{}", uri_string))
+                                             .to_request();
+
+    let query_req = test::TestRequest::get().uri(&format!("/asset_token/{}",
+                                                          token_code1.to_base64()))
+                                            .to_request();
+
+    test::block_on(app.call(submit_req)).unwrap();
+    let query_resp = test::block_on(app.call(query_req)).unwrap();
+
+    assert!(query_resp.status().is_success());
   }
 }
