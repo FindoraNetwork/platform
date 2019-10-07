@@ -17,7 +17,7 @@ pub mod errors;
 pub const TXN_SEQ_ID_PLACEHOLDER: u64 = 0xD000_0000_0000_0000u64;
 
 // Unique Identifier for ledger objects
-#[derive(Default, Serialize, Deserialize, Hash, Eq, PartialEq, Copy, Clone, Debug)]
+#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, Hash, PartialEq, Serialize)]
 pub struct Code {
   pub val: [u8; 16],
 }
@@ -53,36 +53,36 @@ impl Code {
   }
 }
 
-#[derive(Default, Serialize, Deserialize, Hash, Eq, PartialEq, Copy, Clone, Debug)]
+#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, Hash, PartialEq, Serialize)]
 pub struct AssetDigest {
   // Generated from the asset definition, also unique
   pub val: [u8; 32],
 }
 
 // TODO: Define Memo
-#[derive(Default, Serialize, Deserialize, Hash, Eq, PartialEq, Copy, Clone, Debug)]
+#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, Hash, PartialEq, Serialize)]
 pub struct Memo;
-#[derive(Default, Serialize, Deserialize, Hash, Eq, PartialEq, Copy, Clone, Debug)]
+#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, Hash, PartialEq, Serialize)]
 pub struct ConfidentialMemo;
-#[derive(Default, Serialize, Deserialize, Hash, Eq, PartialEq, Copy, Clone, Debug)]
+#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, Hash, PartialEq, Serialize)]
 pub struct Commitment([u8; 32]);
 
-#[derive(Default, Eq, PartialEq, Clone, Copy, Debug, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 pub struct XfrAddress {
   pub key: XfrPublicKey,
 }
 
-#[derive(Default, Eq, PartialEq, Clone, Copy, Debug, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 pub struct IssuerPublicKey {
   pub key: XfrPublicKey,
 }
 
-#[derive(Default, Eq, PartialEq, Clone, Copy, Debug, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 pub struct AccountAddress {
   pub key: XfrPublicKey,
 }
 
-#[derive(Clone, Eq, PartialEq, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct SignedAddress {
   pub address: XfrAddress,
   pub signature: XfrSignature,
@@ -94,7 +94,7 @@ impl SignedAddress {
   }
 }
 
-#[derive(Default, Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 pub struct Asset {
   pub code: AssetTokenCode,
   pub issuer: IssuerPublicKey,
@@ -104,7 +104,7 @@ pub struct Asset {
   pub traceable: bool,
 }
 
-#[derive(Default, Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 pub struct AssetToken {
   pub properties: Asset,
   pub digest: [u8; 32],
@@ -127,68 +127,68 @@ pub struct AssetToken {
 //    }
 //}
 
-#[derive(Hash, Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, Serialize)]
 pub struct CustomAssetPolicy {
   policy: Vec<u8>, // serialized policy, underlying form TBD.
 }
 
-#[derive(Clone, Hash, Eq, PartialEq, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, Serialize)]
 pub struct CredentialProofKey([u8; 16]);
 
-#[derive(Clone, Hash, Eq, PartialEq, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, Serialize)]
 pub struct CredentialProof {
   pub key: CredentialProofKey,
 }
 
-#[derive(Hash, Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, Serialize)]
 pub struct SmartContract;
 
 //TODO(Kevin): define types
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Deserialize, Serialize)]
 pub struct Variable;
 
-#[derive(Default, Hash, Eq, PartialEq, Clone, Copy, Debug, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, Hash, PartialEq, Serialize)]
 pub struct TxoSID {
   pub index: u64,
 }
 
-#[derive(Default, Hash, Eq, PartialEq, Clone, Copy, Debug, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, Hash, PartialEq, Serialize)]
 pub struct TxnSID {
   pub index: usize,
 }
 
-#[derive(Hash, Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, Serialize)]
 pub struct AssetSpecification {
   pub code: AssetTokenCode,
   pub amount: u64,
 }
 
-#[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct PrivateAssetSpecification {
   amount_commitment: Option<CompressedRistretto>,
   asset_type_commitment: Option<CompressedRistretto>,
 }
 
-#[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub enum AssetType {
   // TODO: need to not include amount/ammount_commitment in zei type generation
   Normal(AssetSpecification),
   Private(PrivateAssetSpecification),
 }
 
-#[derive(Eq, PartialEq, Debug, Clone, Serialize, Deserialize)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub enum TxOutput {
   BlindAssetRecord(BlindAssetRecord),
 } // needs to be a generic view on an Operation, specifying one output record of a specific type...
 
-#[derive(Eq, PartialEq, Debug, Clone, Serialize, Deserialize)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct Utxo {
   // digest is a hash of the TxoSID and the operation output
   pub digest: [u8; 32],
   pub output: TxOutput,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 pub struct AssetTransferBody {
   //pub nonce: u128,
   pub inputs: Vec<TxoSID>,    // ledger address of inputs
@@ -218,7 +218,7 @@ impl AssetTransferBody {
   }
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 pub struct AssetIssuanceBody {
   pub code: AssetTokenCode,
   pub seq_num: u64,
@@ -245,7 +245,7 @@ impl AssetIssuanceBody {
   }
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 pub struct AssetCreationBody {
   pub asset: Asset,
 }
@@ -289,7 +289,7 @@ fn compute_signature<T>(secret_key: &XfrSecretKey,
 }
 
 // TODO: UTXO Addresses must be included in Transfer Signature
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 pub struct AssetTransfer {
   //pub nonce: u128,
   pub body: AssetTransferBody,
@@ -304,13 +304,13 @@ impl AssetTransfer {
 }
 
 //Tells the storage layer what to do the list of active asset records (i.e. UTXO set)
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct AssetTransferResult {
   pub success: bool,
 }
 
 // TODO: Include mechanism for replay attacks
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 pub struct AssetIssuance {
   pub body: AssetIssuanceBody,
   pub pubkey: IssuerPublicKey,
@@ -329,13 +329,13 @@ impl AssetIssuance {
   }
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct AssetIssuanceResult {
   pub success: bool,
 }
 
 // ... etc...
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 pub struct AssetCreation {
   pub body: AssetCreationBody,
   pub pubkey: IssuerPublicKey,
@@ -354,12 +354,12 @@ impl AssetCreation {
   }
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct AssetCreationResult {
   pub success: bool,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 pub enum Operation {
   AssetTransfer(AssetTransfer),
   AssetIssuance(AssetIssuance),
@@ -367,7 +367,7 @@ pub enum Operation {
   // ... etc...
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub enum OperationResult {
   AssetTransferResult(AssetTransferResult),
   AssetIssuanceResult(AssetIssuanceResult),
@@ -381,7 +381,7 @@ pub struct TimeBounds {
   pub end: DateTime<Utc>,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Transaction {
   pub operations: Vec<Operation>,
   pub variable_utxos: Vec<TxoSID>, // TODO: precondition support
@@ -431,12 +431,12 @@ pub struct TransactionResult {
   pub op_results: Vec<OperationResult>,
 }
 
-#[derive(Default, Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 pub struct AccountID {
   pub val: String,
 }
 
-#[derive(Default, Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 pub struct Account {
   pub id: AccountID,
   pub access_control_list: Vec<AccountAddress>,
@@ -445,15 +445,11 @@ pub struct Account {
 
 #[cfg(test)]
 mod tests {
+  use rand::SeedableRng;
   use super::*;
   use std::cmp::min;
-
-  // TODO
-  // Tests need for:
-  //   AssetTransferBody::new
-  //   AssetIssuanceBody::new
-  //   AssetCreationBody::new
-  //   AssetCreationBody::compute_signature
+  use std::mem;
+  use zei::xfr::structs::{AssetAmountProof, XfrBody, XfrProofs};
 
   #[test]
   fn test_gen_random() {
@@ -511,5 +507,155 @@ mod tests {
       assert!(checked == code.val.len());
       input = input + &value;
     }
+  }
+
+  #[test]
+  fn test_new_from_base64() {
+    let base64 = "ZGVmZ2hpamtsbW5vcHFycw==";
+    let result = Code::new_from_base64(base64);
+
+    assert_eq!(
+      result.ok(),
+      Some(Code{ val:[100, 101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111, 112, 113, 114, 115] })
+    );
+  }
+
+  #[test]
+  fn test_code_to_base64() {
+    let code = Code{ val: [100, 101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111, 112, 113, 114, 115] };
+    assert_eq!(code.to_base64(), "ZGVmZ2hpamtsbW5vcHFycw==");
+  }
+
+  #[test]
+  fn test_verify() {
+    let mut prng = rand_chacha::ChaChaRng::from_seed([0u8; 32]);
+
+    let keypair = XfrKeyPair::generate(&mut prng);
+    let message: &[u8] = b"test";
+
+    let signed_address = SignedAddress {
+      address: XfrAddress{ key: *keypair.get_pk_ref() },
+      signature: keypair.sign(message)
+    };
+    
+    assert!(signed_address.verify(message));
+  }
+
+  // Test Transaction::add_operation
+  // Below are not directly tested but called:
+  //   AssetTransferBody::new
+  //   AssetIssuanceBody::new
+  //   AssetCreationBody::new
+  //   AssetTransfer::new
+  //   AssetIssuance::new
+  //   AssetCreation::new
+  #[test]
+  fn test_add_operation() {
+    // Create values to be used to instantiate operations
+    let mut transaction: Transaction = Default::default();
+
+    let mut prng = rand_chacha::ChaChaRng::from_seed([0u8; 32]);
+
+    let keypair = XfrKeyPair::generate(&mut prng);
+    let message: &[u8] = b"test";
+
+    let public_key = *keypair.get_pk_ref();
+    let signature = keypair.sign(message);
+    
+    // Instantiate an AssetTransfer operation
+    let xfr_note = XfrNote {
+      body: XfrBody {
+        inputs: Vec::new(),
+        outputs: Vec::new(),
+        proofs: XfrProofs {
+          asset_amount_proof: AssetAmountProof::NoProof,
+          asset_tracking_proof: Default::default()
+        }
+      },
+      multisig: Default::default()
+    };
+
+    let assert_transfer_body = AssetTransferBody {
+      inputs: Vec::new(),
+      outputs: Vec::new(),
+      transfer: Box::new(xfr_note)
+    };
+
+    let asset_transfer = AssetTransfer {
+      body: assert_transfer_body,
+      body_signatures: Vec::new()
+    };
+
+    let transfer_operation = Operation::AssetTransfer(asset_transfer.clone());
+
+    // Instantiate an AssetIssuance operation
+    let asset_issuance_body = AssetIssuanceBody {
+      code: Default::default(),
+      seq_num: 0,
+      outputs: Vec::new(),
+      records: Vec::new()
+    };
+
+    let asset_issurance = AssetIssuance {
+      body: asset_issuance_body,
+      pubkey: IssuerPublicKey { key: public_key },
+      signature: signature.clone()
+    };
+
+    let issurance_operation = Operation::AssetIssuance(asset_issurance.clone());
+
+    // Instantiate an AssetCreation operation
+    let asset = Default::default();
+
+    let asset_creation = AssetCreation {
+      body: AssetCreationBody { asset },
+      pubkey: IssuerPublicKey { key: public_key },
+      signature: signature
+    };
+
+    let creation_operation = Operation::AssetCreation(asset_creation.clone());
+
+    // Add operations to the transaction
+    transaction.add_operation(transfer_operation);
+    transaction.add_operation(issurance_operation);
+    transaction.add_operation(creation_operation);
+
+    // Verify operatoins
+    assert_eq!(transaction.operations.len(), 3);
+
+    assert_eq!(transaction.operations.get(0), Some(&Operation::AssetTransfer(asset_transfer)));
+    assert_eq!(transaction.operations.get(1), Some(&Operation::AssetIssuance(asset_issurance)));
+    assert_eq!(transaction.operations.get(2), Some(&Operation::AssetCreation(asset_creation)));
+  }
+
+  // Verify that the hash values of two transactions:
+  //   are the same if the transactions differ only in merkle_id
+  //   are different if the transactions differ in other fields
+  #[test]
+  fn test_compute_merkle_hash() {
+    let transaction_default: Transaction = Default::default();
+
+    let transaction_different_merkle_id = Transaction { operations: Vec::new(),
+                  variable_utxos: Vec::new(),
+                  credentials: Vec::new(),
+                  memos: Vec::new(),
+                  tx_id: TxnSID { index: TXN_SEQ_ID_PLACEHOLDER as usize },
+                  merkle_id: 1,
+                  outputs: 0 };
+    
+    let transaction_other_differences = Transaction { operations: Vec::new(),
+                  variable_utxos: Vec::new(),
+                  credentials: Vec::new(),
+                  memos: Vec::new(),
+                  tx_id: TxnSID { index: TXN_SEQ_ID_PLACEHOLDER as usize },
+                  merkle_id: 1,
+                  outputs: 1 };
+    
+    let hash_value_default = transaction_default.compute_merkle_hash();
+    let hash_value_different_merkle_id = transaction_different_merkle_id.compute_merkle_hash();
+    let hash_value_other_differences = transaction_other_differences.compute_merkle_hash();
+
+    assert_eq!(hash_value_different_merkle_id, hash_value_default);
+    assert_ne!(hash_value_other_differences, hash_value_default);
   }
 }

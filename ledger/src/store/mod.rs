@@ -112,7 +112,7 @@ impl GlobalHashData {
 
 const MAX_VERSION: usize = 100;
 
-#[derive(Serialize, Deserialize)]
+#[derive(Deserialize, Serialize)]
 pub struct LedgerState {
   merkle_path: String,
   txn_path: String,
@@ -471,9 +471,9 @@ impl LedgerState {
 
   // An asset issuance is valid iff:
   //     1) The operation is unique (not a replay).
-  //     2) The signature is valid and belongs to the anchor (the issuer).
-  //     3) The signature belongs to the anchor
-  //     4) For traceable assets, tracing key is included in output records
+  //     2) The signature is valid.
+  //     3) The signature belongs to the anchor (the issuer).
+  //     4) For traceable assets, tracing key is included in output records.
   #[cfg(test)]
   fn validate_asset_issuance(&mut self, issue: &AssetIssuance) -> bool {
     // Get a valid token
@@ -492,7 +492,7 @@ impl LedgerState {
       lookup_issuance_num.unwrap()
     };
 
-    // [1] Is this a replay attack?
+    // [1] Check for a replay attack.
     if issue.body.seq_num <= issuance_num {
       println!("validate_asset_issuance:  replay attack:  {} vs {}",
                issue.body.seq_num, issuance_num);
@@ -509,7 +509,7 @@ impl LedgerState {
       return false;
     }
 
-    //[3] The signature belongs to the anchor.
+    // [3] The signature belongs to the anchor (the issuer).
     if token.properties.issuer != issue.pubkey {
       println!("validate_asset_issuance:  invalid issuer");
       return false;
@@ -741,9 +741,9 @@ impl<'la, LA: LedgerAccess> TxnContext<'la, LA> {
   // The asset issuance is valid iff:
   //      1) The operation is unique (not a replay).
   //      2) The signature is valid.
-  //      3) The assets were issued by the proper agent (the anchor).
-  //      3) The assets in the TxOutputs are owned by the signatory.
-  //      4) The signature belongs to the appropriate anchor (issuer).
+  //      3) The signature belongs to the anchor (the issuer).
+  //      4) The assets were issued by the proper agent (the anchor).
+  //      5) The assets in the TxOutputs are owned by the signatory.
   fn validate_asset_issuance(&mut self, issue: &AssetIssuance) -> bool {
     // Create a token.
     let token = self.block_context.get_asset_token(&issue.body.code);
@@ -774,7 +774,7 @@ impl<'la, LA: LedgerAccess> TxnContext<'la, LA> {
       return false;
     }
 
-    // [4] The signature belongs to the anchor (issuer).
+    // [3] The signature belongs to the anchor (the issuer).
     if !(token.properties.issuer == issue.pubkey) {
       return false;
     }
@@ -1071,6 +1071,61 @@ mod tests {
   use crate::data_model::{AssetIssuanceBody, IssuerPublicKey};
   use rand::SeedableRng;
   use rand_chacha::ChaChaRng;
+
+// TODO: Add unit tests for
+//   GlobalHashData::as_ref
+//   LedgerState::load_transaction_log
+//   LedgerState::save_utxo_map_version
+//   LedgerState::save_global_hash
+//   LedgerState::LedgerState
+//   LedgerState::store_transaction
+//   LedgerState::init_merkle_log
+//   LedgerState::init_utxo_map
+//   LedgerState::new
+//   LedgerState::load
+//   LedgerState::snapshot
+//   LedgerState::begin_commit
+//   LedgerState::end_commit
+//   LedgerState::add_txo
+//   LedgerState::apply_asset_transfer
+//   LedgerState::apply_asset_issuance
+//   LedgerState::apply_asset_creation
+//   BlockContext::new
+//   BlockContext::apply_operation
+//   LedgerAccess for BlockContext
+//     LedgerAccess::check_utxo
+//     LedgerAccess::get_asset_token
+//     LedgerAccess::get_asset_policy
+//     LedgerAccess::get_smart_contract
+//     LedgerAccess::get_issuance_num
+//     LedgerAccess::get_tracked_sids
+//   TxnContext::new
+//   TxnContext::apply_operation
+//   LedgerAccess for TxnContext
+//     LedgerAccess::check_utxo
+//     LedgerAccess::get_asset_token
+//     LedgerAccess::get_asset_policy
+//     LedgerAccess::get_smart_contract
+//     LedgerAccess::get_issuance_num
+//     LedgerAccess::get_tracked_sids
+//   LedgerUpdate for LedgerState
+//     LedgerUpdate::apply_transaction
+//   ArchiveUpdate for LedgerState
+//     ArchiveUpdate::append_transaction
+//   LedgerAccess for LedgerState
+//     LedgerAccess::check_utxo
+//     LedgerAccess::get_asset_token
+//     LedgerAccess::get_asset_policy
+//     LedgerAccess::get_smart_contract
+//     LedgerAccess::get_issuance_num
+//     LedgerAccess::get_tracked_sids
+//   ArchiveAccess for LedgerState
+//     ArchiveAccess::get_transaction
+//     ArchiveAccess::get_proof
+//     ArchiveAccess::get_utxo_map
+//     ArchiveAccess::get_utxos
+//     ArchiveAccess::get_utxo_checksum
+//     ArchiveAccess::get_global_hash
 
   #[test]
   fn test_asset_creation_valid() {
