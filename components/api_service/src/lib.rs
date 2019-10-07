@@ -330,10 +330,10 @@ mod tests {
                                           web::get().to(query_asset::<LedgerState>)));
 
     let serialize = serde_json::to_string(&tx).unwrap();
+    // Set of invalid URI characters that may appear in a JSON transaction
+    // TODO: (Noah) make sure set is complete
     const FRAGMENT: &AsciiSet = &CONTROLS.add(b' ')
                                          .add(b'"')
-                                         .add(b'<')
-                                         .add(b'>')
                                          .add(b'`')
                                          .add(b'{')
                                          .add(b'/')
