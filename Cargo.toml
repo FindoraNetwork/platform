@@ -13,12 +13,14 @@ dirs = "2.0.1"
 env_logger = "0.6.2"
 findora = { path = "findora" }
 log = "0.4.8"
+percent-encoding = "2.1.0"
 serde = "1.0"
 serde_derive = "1.0"
 serde_json = "1.0"
 shellexpand = "1.0"
 rand_chacha = "0.1.1"
 rand = "0.6"
+reqwest = "0.9.21"
 regex = "1"
 
 zei = { git = "ssh://github.com/findoraorg/zei" }
