@@ -381,7 +381,7 @@ pub struct TimeBounds {
   pub end: DateTime<Utc>,
 }
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 pub struct Transaction {
   pub operations: Vec<Operation>,
   pub variable_utxos: Vec<TxoSID>, // TODO: precondition support

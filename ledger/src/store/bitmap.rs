@@ -292,10 +292,10 @@ impl SparseMap {
 
 #[derive(Debug)]
 #[repr(C)]
-struct BlockHeader {
+pub struct BlockHeader {
   checksum: CheckBlock, // must be first
   magic: u32,           // must be second
-  count: u32,
+  pub count: u32,
   bit_id: u64,
   offset: u64,
   contents: u16,
@@ -388,9 +388,9 @@ const UPPER_LIMIT: u32 = (BLOCK_BITS - BITS_SIZE / INDEX_SIZE) as u32;
 // and in-memory layouts are the same.
 
 #[repr(C)]
-struct BitBlock {
-  header: BlockHeader,
-  bits: [u8; BITS_SIZE],
+pub struct BitBlock {
+  pub header: BlockHeader,
+  pub bits: [u8; BITS_SIZE],
 }
 
 impl BitBlock {
@@ -501,18 +501,18 @@ fn show(data: &ChecksumData) -> String {
 ///   set_bits        the count of set bits in the block
 ///
 pub struct BitMap {
-  file: File,
-  size: usize,
-  checksum: Digest,
-  first_invalid: usize,
-  map: [u8; 256],
+  pub file: File,
+  pub size: usize,
+  pub checksum: Digest,
+  pub first_invalid: usize,
+  pub map: [u8; 256],
 
   // Data kept per block
-  blocks: Vec<BitBlock>,
-  checksum_data: Vec<ChecksumData>,
-  checksum_valid: Vec<bool>,
-  dirty: Vec<i64>,
-  set_bits: Vec<u32>,
+  pub blocks: Vec<BitBlock>,
+  pub checksum_data: Vec<ChecksumData>,
+  pub checksum_valid: Vec<bool>,
+  pub dirty: Vec<i64>,
+  pub set_bits: Vec<u32>,
 }
 
 // Write any dirty blocks when a bitmap is dropped.

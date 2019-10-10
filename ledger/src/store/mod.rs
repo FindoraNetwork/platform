@@ -131,8 +131,8 @@ pub struct LedgerState {
   tokens: HashMap<AssetTokenCode, AssetToken>,
   issuance_num: HashMap<AssetTokenCode, u64>,
   txn_count: usize,
-  txn_base_sid: TxoSID,
-  max_applied_sid: TxoSID,
+  txn_base_sid: TxoSID,     // Next TxoSID to be commited
+  max_applied_sid: TxoSID,  // Last commited TxoSID
   loading: bool,
   #[serde(skip)]
   txn_log: Option<File>,
@@ -186,6 +186,7 @@ impl LedgerState {
     self.global_commit_count += 1;
   }
 
+  // If store_transaction is no longer empty: add a test
   fn store_transaction(&self, _txn: &Transaction) {}
 
   // Initialize a logged Merkle tree for the ledger.  We might
@@ -533,8 +534,8 @@ impl LedgerState {
              .is_ok()
   }
 
-  // Create a file structure for a Merkle tree log.  Mostly
-  // just make a path of the form:
+  // Create a file structure for a Merkle tree log.
+  // Mostly just make a path of the form:
   //
   //     <tree_path>-log-<Merkle tree state>
   //
@@ -1066,30 +1067,458 @@ pub mod helpers {
 
 #[cfg(test)]
 mod tests {
+  use bulletproofs::PedersenGens;
+  use crate::data_model::{AssetCreationBody, AssetIssuanceBody, AssetTransfer, AssetTransferBody, IssuerPublicKey};
+  use curve25519_dalek::scalar::Scalar;
+  use sodiumoxide::crypto::hash::sha256::{Digest, DIGESTBYTES};
+  use std::fs;
+  use std::io::BufWriter;
   use super::helpers::*;
   use super::*;
-  use crate::data_model::{AssetIssuanceBody, IssuerPublicKey};
   use rand::SeedableRng;
-  use rand_chacha::ChaChaRng;
+  use zei::algebra::bls12_381::{BLSScalar, BLSG1};
+  use zei::algebra::groups::Group;
+  use zei::algebra::ristretto::RistPoint;
+  use zei::basic_crypto::elgamal::{elgamal_derive_public_key, elgamal_generate_secret_key, ElGamalPublicKey};
+  use zei::basic_crypto::signatures::XfrKeyPair;
+  use zei::xfr::structs::{AssetAmountProof, AssetIssuerPubKeys, XfrBody, XfrNote, XfrProofs};
 
-// TODO: Add unit tests for
-//   GlobalHashData::as_ref
-//   LedgerState::load_transaction_log
-//   LedgerState::save_utxo_map_version
-//   LedgerState::save_global_hash
-//   LedgerState::LedgerState
-//   LedgerState::store_transaction
-//   LedgerState::init_merkle_log
-//   LedgerState::init_utxo_map
-//   LedgerState::new
-//   LedgerState::load
-//   LedgerState::snapshot
-//   LedgerState::begin_commit
-//   LedgerState::end_commit
-//   LedgerState::add_txo
-//   LedgerState::apply_asset_transfer
-//   LedgerState::apply_asset_issuance
-//   LedgerState::apply_asset_creation
+  #[test]
+  fn test_load_transaction_log() {
+    // Verify that loading transaction fails with incorrect path
+    let result_err = LedgerState::load_transaction_log("incorrect/path");
+    assert!(result_err.is_err());
+
+    // Verify that loading transaction succeeds with correct path
+    let transaction_0: Transaction = Default::default();
+
+    let transaction_1 = Transaction { operations: Vec::new(),
+                                      variable_utxos: Vec::new(),
+                                      credentials: Vec::new(),
+                                      memos: Vec::new(),
+                                      tx_id: TxnSID { index: TXN_SEQ_ID_PLACEHOLDER as usize },
+                                      merkle_id: TXN_SEQ_ID_PLACEHOLDER,
+                                      outputs: 1 };
+
+    let transaction_2 = Transaction { operations: Vec::new(),
+                                      variable_utxos: Vec::new(),
+                                      credentials: Vec::new(),
+                                      memos: Vec::new(),
+                                      tx_id: TxnSID { index: TXN_SEQ_ID_PLACEHOLDER as usize },
+                                      merkle_id: TXN_SEQ_ID_PLACEHOLDER,
+                                      outputs: 2 };
+
+                
+
+    let path = "./test_transactions.txt";
+    {
+      let mut writer = BufWriter::new(File::create(path).unwrap());
+      bincode::serialize_into::<&mut BufWriter<File>, Transaction>(&mut writer, &transaction_0).unwrap();
+      bincode::serialize_into::<&mut BufWriter<File>, Transaction>(&mut writer, &transaction_1).unwrap();
+      bincode::serialize_into::<&mut BufWriter<File>, Transaction>(&mut writer, &transaction_2).unwrap();
+    }
+
+    let result_ok = LedgerState::load_transaction_log(&path);
+    assert_eq!(result_ok.ok(), Some(vec![transaction_0, transaction_1, transaction_2]));
+
+    fs::remove_file(path).unwrap();
+  }
+
+  #[test]
+  fn test_save_utxo_map_version() {
+    let mut ledger_state = LedgerState::test_ledger();
+    let digest = BitDigest { 0: [0_u8; 32] };
+    ledger_state.utxo_map_versions = vec![(0, digest); MAX_VERSION - 1].into_iter().collect();
+    
+    // Verify that save_utxo_map_version increases the size of utxo_map_versions by 1 if its length < MAX_VERSION
+    ledger_state.save_utxo_map_version();
+    assert_eq!(ledger_state.utxo_map_versions.len(), MAX_VERSION);
+
+    // Verify that save_utxo_map_version doesn't change the size of utxo_map_versions if its length >= MAX_VERSION
+    ledger_state.utxo_map_versions.push_back((0, digest));
+    assert_eq!(ledger_state.utxo_map_versions.len(), MAX_VERSION + 1);
+    ledger_state.save_utxo_map_version();
+    assert_eq!(ledger_state.utxo_map_versions.len(), MAX_VERSION + 1);
+    
+    // Verify that the element pushed to the back is as expected
+    let back = ledger_state.utxo_map_versions.get(MAX_VERSION);
+    assert_eq!(
+      back,
+      Some(&(ledger_state.txn_count, ledger_state.utxo_map.as_mut().unwrap().compute_checksum()))
+    );
+  }
+
+  #[test]
+  fn test_save_global_hash() {
+    let mut ledger_state = LedgerState::test_ledger();
+
+    let data = GlobalHashData { bitmap: ledger_state.utxo_map.as_mut().unwrap().compute_checksum(),
+                                merkle: ledger_state.merkle.as_ref().unwrap().get_root_hash(),
+                                block: ledger_state.global_commit_count,
+                                global_hash: ledger_state.global_hash };
+
+    let count_original = ledger_state.global_commit_count;
+
+    ledger_state.save_global_hash();
+
+    assert_eq!(ledger_state.global_hash, sha256::hash(data.as_ref()));
+    assert_eq!(ledger_state.global_commit_count, count_original + 1);
+  }
+
+  #[test]
+  fn test_init_merkle_log() {
+    let path = "./test_merkle";
+
+    // Verify that opening a non-existing Merkle tree fails
+    let result_open_err= LedgerState::init_merkle_log(path, false);
+    assert!(result_open_err.is_err());
+
+    // Verify that creating a non-existing Merkle tree succeeds
+    let result_create_ok = LedgerState::init_merkle_log(path, true);
+    assert!(result_create_ok.is_ok());
+
+    // Verify that opening an existing Merkle tree succeeds
+    let result_open_ok = LedgerState::init_merkle_log(path, false);
+    assert!(result_open_ok.is_ok());
+
+    // Verify that creating an existing Merkle tree fails
+    let result_create_err = LedgerState::init_merkle_log(path, true);
+    assert!(result_create_err.is_err());
+    
+    fs::remove_file(path.to_owned()).unwrap();
+    fs::remove_file(path.to_owned() + "-log-0").unwrap();
+  }
+
+  #[test]
+  fn test_init_utxo_map() {
+    let path = "./test_init_bitmap";
+
+    // Verify that opening a non-existing bitmap fails
+    let result_open_err = LedgerState::init_utxo_map(path, false);
+    assert!(result_open_err.is_err());
+
+    // Verify that creating a non-existing bitmap succeeds
+    let result_create_ok = LedgerState::init_utxo_map(path, true);
+    assert!(result_create_ok.is_ok());
+
+    // Verify that creating an existing bitmap succeeds
+    let result_open_ok = LedgerState::init_utxo_map(path, false);
+    assert!(result_open_ok.is_ok());
+
+    // Verify that opening an existing bitmap fails
+    let result_create_err = LedgerState::init_utxo_map(path, true);
+    assert!(result_create_err.is_err());
+
+    fs::remove_file(path).unwrap();
+  }
+
+  #[test]
+  fn test_snapshot() {
+    let mut ledger_state = LedgerState::test_ledger();
+    let path = "./test_snapshot";
+    ledger_state.merkle_path = path.to_string();
+    let result = ledger_state.snapshot();
+
+    assert_eq!(result.ok().unwrap().id, 0);
+
+    fs::remove_file(path.to_owned() + "-log-0").unwrap();
+  }
+
+  #[test]
+  fn test_begin_commit() {
+    let mut ledger_state = LedgerState::test_ledger();
+    ledger_state.begin_commit();
+
+    assert_eq!(ledger_state.txn_base_sid.index, ledger_state.max_applied_sid.index + 1);
+  }
+
+  #[test]
+  fn test_end_commit() {
+    let mut ledger_state = LedgerState::test_ledger();
+
+    let digest = BitDigest { 0: [0_u8; 32] };
+    ledger_state.utxo_map_versions = vec![(0, digest); MAX_VERSION - 1].into_iter().collect();
+    
+    // Verify that end_commit increases the size of utxo_map_versions by 1 if its length < MAX_VERSION
+    ledger_state.end_commit();
+    assert_eq!(ledger_state.utxo_map_versions.len(), MAX_VERSION);
+
+    let count_original = ledger_state.global_commit_count;
+    let data = GlobalHashData { bitmap: ledger_state.utxo_map.as_mut().unwrap().compute_checksum(),
+                                merkle: ledger_state.merkle.as_ref().unwrap().get_root_hash(),
+                                block: count_original,
+                                global_hash: ledger_state.global_hash };
+
+    // Verify that end_commit doesn't change the size of utxo_map_versions if its length >= MAX_VERSION
+    ledger_state.utxo_map_versions.push_back((0, digest));
+    assert_eq!(ledger_state.utxo_map_versions.len(), MAX_VERSION + 1);
+    ledger_state.end_commit();
+    assert_eq!(ledger_state.utxo_map_versions.len(), MAX_VERSION + 1);
+    
+    // Verify that the element pushed to the back is as expected
+    let back = ledger_state.utxo_map_versions.get(MAX_VERSION);
+    assert_eq!(
+      back,
+      Some(&(ledger_state.txn_count, ledger_state.utxo_map.as_mut().unwrap().compute_checksum()))
+    );
+
+    // Verify that the global hash is saved as expected
+    assert_eq!(ledger_state.global_hash, sha256::hash(data.as_ref()));
+    assert_eq!(ledger_state.global_commit_count, count_original + 1);
+  }
+
+  #[test]
+  fn test_add_txo() {
+    // Instantiate a BlindAssetRecord
+    let mut prng = ChaChaRng::from_seed([0u8; 32]);
+    let pc_gens = PedersenGens::default();
+
+    let sk = elgamal_generate_secret_key::<_, Scalar>(&mut prng);
+    let xfr_pub_key = elgamal_derive_public_key(&pc_gens.B, &sk);
+    let elgamal_public_key = ElGamalPublicKey(RistPoint(xfr_pub_key.get_point()));
+
+    let sk = elgamal_generate_secret_key::<_, BLSScalar>(&mut prng);
+    let id_reveal_pub_key = elgamal_derive_public_key(&BLSG1::get_base(), &sk);
+
+    let asset_issuer_pub_key = AssetIssuerPubKeys {
+      eg_ristretto_pub_key: elgamal_public_key.clone(),
+      eg_blsg1_pub_key: id_reveal_pub_key
+    };
+
+    let record = zei::xfr::structs::BlindAssetRecord { issuer_public_key: Some(asset_issuer_pub_key),
+                                                       issuer_lock_type: None,
+                                                       issuer_lock_amount: None,
+                                                       amount: None,
+                                                       asset_type: None,
+                                                       public_key: Default::default(),
+                                                       amount_commitments: None,
+                                                       asset_type_commitment: None,
+                                                       blind_share: Default::default(),
+                                                       lock: None };
+
+    // Instantiate a transaction output
+    let sid = TxoSID { index: TXN_SEQ_ID_PLACEHOLDER };
+    let txo = (&sid, TxOutput::BlindAssetRecord(record.clone()));
+
+    // Instantiate a LedgerState
+    let mut ledger_state = LedgerState::test_ledger();
+    ledger_state.add_txo(txo.clone());
+
+    // Verify that add_txo sets values correctly
+    let utxo_addr = TxoSID { index: 0 };
+
+    assert_eq!(ledger_state.tracked_sids.get(&elgamal_public_key), Some(&vec![utxo_addr]));
+
+    let bitmap = ledger_state.utxo_map.unwrap();
+    assert_eq!(bitmap.blocks[0].bits[0], 1);
+    assert_eq!(bitmap.set_bits[0], 1);
+    assert_eq!(bitmap.size(), 1);
+    assert_eq!(bitmap.blocks[0].header.count, 1);
+
+    let utxo_ref = Utxo { digest: compute_sha256_hash(&serde_json::to_vec(&txo.1).unwrap()),
+                          output: txo.1 };
+    assert_eq!(ledger_state.utxos.get(&utxo_addr).unwrap(), &utxo_ref);
+
+    assert_eq!(ledger_state.max_applied_sid, utxo_addr)
+  }
+
+  #[test]
+  fn test_apply_asset_transfer() {
+    // Instantiate a BlindAssetRecord
+    let mut prng = ChaChaRng::from_seed([0u8; 32]);
+    let pc_gens = PedersenGens::default();
+
+    let sk = elgamal_generate_secret_key::<_, Scalar>(&mut prng);
+    let xfr_pub_key = elgamal_derive_public_key(&pc_gens.B, &sk);
+    let elgamal_public_key = ElGamalPublicKey(RistPoint(xfr_pub_key.get_point()));
+
+    let sk = elgamal_generate_secret_key::<_, BLSScalar>(&mut prng);
+    let id_reveal_pub_key = elgamal_derive_public_key(&BLSG1::get_base(), &sk);
+
+    let asset_issuer_pub_key = AssetIssuerPubKeys { eg_ristretto_pub_key: elgamal_public_key.clone(),
+                                                    eg_blsg1_pub_key: id_reveal_pub_key };
+
+    let record = zei::xfr::structs::BlindAssetRecord { issuer_public_key: Some(asset_issuer_pub_key),
+                                                       issuer_lock_type: None,
+                                                       issuer_lock_amount: None,
+                                                       amount: None,
+                                                       asset_type: None,
+                                                       public_key: Default::default(),
+                                                       amount_commitments: None,
+                                                       asset_type_commitment: None,
+                                                       blind_share: Default::default(),
+                                                       lock: None };
+
+    // Instantiate an AssetTransfer
+    let xfr_note = XfrNote { body: XfrBody { inputs: Vec::new(),
+                                             outputs: vec![record],
+                                             proofs: XfrProofs { asset_amount_proof: AssetAmountProof::NoProof,
+                                                                 asset_tracking_proof: Default::default() } },
+                                             multisig: Default::default() };
+
+    let assert_transfer_body = AssetTransferBody { inputs: vec![TxoSID { index: TXN_SEQ_ID_PLACEHOLDER }],
+                                                   outputs: vec![TxoSID { index: TXN_SEQ_ID_PLACEHOLDER }],
+                                                   transfer: Box::new(xfr_note) };
+
+    let asset_transfer = AssetTransfer { body: assert_transfer_body,
+                                         body_signatures: Vec::new() };
+
+    // Instantiate a LedgerState
+    let mut ledger_state = LedgerState::test_ledger();
+
+    let map_file = OpenOptions::new().read(true)
+                                     .write(true)
+                                     .create_new(true)
+                                     .open("./utxo_map")
+                                     .unwrap();
+
+    let bitmap = BitMap{ file: map_file,
+                         size: 10,
+                         checksum: Digest([0_u8; DIGESTBYTES]),
+                         first_invalid: 0,
+                         map: [0; 256],
+                         blocks: Vec::new(),
+                         checksum_data: Vec::new(),
+                         checksum_valid: Vec::new(),
+                         dirty: Vec::new(),
+                         set_bits: Vec::new() };
+
+    ledger_state.utxo_map = Some(bitmap);
+
+    ledger_state.apply_asset_transfer(&asset_transfer);
+
+    assert_eq!(ledger_state.tracked_sids.get(&elgamal_public_key), Some(&vec![TxoSID { index: 0 }]));
+
+    fs::remove_file("./utxo_map").unwrap();
+  }
+
+  #[test]
+  fn test_apply_asset_issuance() {
+    let mut ledger_state = LedgerState::test_ledger();
+
+    let mut prng = ChaChaRng::from_seed([0u8; 32]);
+    let keypair = XfrKeyPair::generate(&mut prng);
+    let message: &[u8] = b"test";
+    let public_key = *keypair.get_pk_ref();
+    let signature = keypair.sign(message);
+
+    let asset_issuance_body = AssetIssuanceBody { code: Default::default(),
+                                                  seq_num: 0,
+                                                  outputs: Vec::new(),
+                                                  records: Vec::new() };
+
+    let asset_issurance = AssetIssuance { body: asset_issuance_body,
+                                          pubkey: IssuerPublicKey { key: public_key },
+                                          signature: signature.clone() };
+
+    ledger_state.apply_asset_issuance(&asset_issurance);
+
+    for output in asset_issurance.body
+                        .outputs
+                        .iter()
+                        .zip(asset_issurance.body.records.iter().map(|ref o| (*o).clone())) {
+      match &output.1 {
+        BlindAssetRecord(record) => {
+            assert!(ledger_state.tracked_sids.get(&record.issuer_public_key.as_ref().unwrap().eg_ristretto_pub_key).unwrap()
+              .contains(output.0));
+        }
+      }
+    }
+
+    assert_eq!(ledger_state.issuance_num.get(&asset_issurance.body.code), Some(&asset_issurance.body.seq_num));
+  }
+
+  #[test]
+  fn test_apply_asset_creation() {
+    let mut ledger_state = LedgerState::test_ledger();
+
+    let mut prng = ChaChaRng::from_seed([0u8; 32]);
+    let keypair = XfrKeyPair::generate(&mut prng);
+    let message: &[u8] = b"test";
+    let public_key = *keypair.get_pk_ref();
+    let signature = keypair.sign(message);
+
+    let asset_creation = AssetCreation { body: AssetCreationBody { asset: Default::default() },
+                                         pubkey: IssuerPublicKey { key: public_key },
+                                         signature: signature };
+
+    let token = AssetToken { properties: asset_creation.body.asset.clone(),
+                             ..Default::default() };
+
+    ledger_state.apply_asset_creation(&asset_creation);
+
+    assert_eq!(ledger_state.tokens.get(&token.properties.code), Some(&token));
+  }
+
+  #[test]
+  fn test_apply_operation() {
+    // Create values to be used to instantiate operations
+    let mut prng = rand_chacha::ChaChaRng::from_seed([0u8; 32]);
+
+    let keypair = XfrKeyPair::generate(&mut prng);
+    let message: &[u8] = b"test";
+
+    let public_key = *keypair.get_pk_ref();
+    let signature = keypair.sign(message);
+    
+    // Instantiate an AssetTransfer operation
+    let xfr_note = XfrNote { body: XfrBody { inputs: Vec::new(),
+                                             outputs: Vec::new(),
+                                             proofs: XfrProofs { asset_amount_proof: AssetAmountProof::NoProof,
+                                                                 asset_tracking_proof: Default::default() } },
+                                             multisig: Default::default() };
+
+    let assert_transfer_body = AssetTransferBody { inputs: Vec::new(),
+                                                   outputs: Vec::new(),
+                                                   transfer: Box::new(xfr_note) };
+
+    let asset_transfer = AssetTransfer { body: assert_transfer_body,
+                                         body_signatures: Vec::new() };
+
+    let transfer_operation = Operation::AssetTransfer(asset_transfer.clone());
+
+    // Instantiate an AssetIssuance operation
+    let asset_issuance_body = AssetIssuanceBody { code: Default::default(),
+                                                  seq_num: 0,
+                                                  outputs: Vec::new(),
+                                                  records: Vec::new() };
+
+    let asset_issurance = AssetIssuance { body: asset_issuance_body,
+                                          pubkey: IssuerPublicKey { key: public_key },
+                                          signature: signature.clone() };
+
+    let issurance_operation = Operation::AssetIssuance(asset_issurance.clone());
+
+    // Instantiate an AssetCreation operation
+    let asset = Default::default();
+
+    let asset_creation = AssetCreation { body: AssetCreationBody { asset },
+                                         pubkey: IssuerPublicKey { key: public_key },
+                                         signature: signature };
+
+    let creation_operation = Operation::AssetCreation(asset_creation.clone());
+
+    // Test apply_operation
+    let mut ledger_state = LedgerState::test_ledger();
+    
+    assert_eq!(ledger_state.apply_operation(&transfer_operation), ledger_state.apply_asset_transfer(&asset_transfer));
+    assert_eq!(ledger_state.apply_operation(&issurance_operation), ledger_state.apply_asset_issuance(&asset_issurance));
+    assert_eq!(ledger_state.apply_operation(&creation_operation), ledger_state.apply_asset_creation(&asset_creation));
+  }
+
+  #[test]
+  fn test_create_merkle_log() {
+    let base_path = "./merkle_log.txt";
+    let result = LedgerState::create_merkle_log(base_path.to_string(), 0);
+    assert!(result.is_ok());
+
+    let path = base_path.to_owned() + "-log-0";
+    assert!(fs::metadata(path.clone()).is_ok());
+
+    fs::remove_file(path).unwrap();
+  }
+
+// TODO (Keyao): Add unit tests for
 //   BlockContext::new
 //   BlockContext::apply_operation
 //   LedgerAccess for BlockContext
