@@ -29,7 +29,6 @@ use serde::Deserialize;
 use serde::Deserializer;
 use serde::Serialize;
 use serde::Serializer;
-use sodiumoxide::crypto::hash::sha256;
 use std::fs::File;
 use std::io::BufWriter;
 use std::io::Error;
@@ -47,6 +46,8 @@ use findora::timestamp;
 use findora::Commas;
 use findora::EnableMap;
 use findora::DEFAULT_MAP;
+
+use sha2::{Digest, Sha256};
 
 #[allow(non_upper_case_globals)]
 static apply_log: EnableMap = DEFAULT_MAP;
@@ -155,7 +156,7 @@ impl LogBuffer {
   }
 
   fn checksum(&self) -> [u8; CHECK_SIZE] {
-    let digest = sha256::hash(self.as_checksummed_region());
+    let digest = Sha256::digest(self.as_checksummed_region());
     let mut result = [0_u8; CHECK_SIZE];
     result.clone_from_slice(&digest[0..CHECK_SIZE]);
     result

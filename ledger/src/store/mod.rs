@@ -11,6 +11,7 @@ use crate::data_model::{
 };
 use append_only_merkle::{AppendOnlyMerkle, Proof};
 use bitmap::BitMap;
+use byteorder::{ByteOrder, LittleEndian};
 use findora::timestamp;
 use findora::EnableMap;
 use findora::DEFAULT_MAP;
@@ -18,8 +19,6 @@ use logged_merkle::LoggedMerkle;
 use rand::SeedableRng;
 use rand_chacha::ChaChaRng;
 use sha2::{Digest, Sha256};
-use sodiumoxide::crypto::hash::sha256;
-use sodiumoxide::crypto::hash::sha256::Digest as BitDigest;
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::fs::File;
 use std::fs::OpenOptions;
@@ -44,6 +43,8 @@ static ledger_map: EnableMap = DEFAULT_MAP;
 
 #[allow(non_upper_case_globals)]
 static issue_map: EnableMap = DEFAULT_MAP;
+
+type BitDigest = [u8; 32];
 
 pub struct SnapshotId {
   pub id: u64,
@@ -107,6 +108,19 @@ impl GlobalHashData {
       from_raw_parts((self as *const GlobalHashData) as *const u8,
                      std::mem::size_of::<GlobalHashData>())
     }
+  }
+  fn compute_hash(&self) -> [u8; 32] {
+    let mut hasher = Sha256::new();
+    let mut block_buf = [0; 8];
+    LittleEndian::write_u64(&mut block_buf, self.block);
+
+    hasher.input(self.bitmap);
+    hasher.input(self.merkle.hash);
+    hasher.input(block_buf);
+    hasher.input(self.global_hash);
+    let result = hasher.result();
+    let hash = array_ref![&result, 0, 32];
+    *hash
   }
 }
 
@@ -182,7 +196,7 @@ impl LedgerState {
                                 block: self.global_commit_count,
                                 global_hash: self.global_hash };
 
-    self.global_hash = sha256::hash(data.as_ref());
+    self.global_hash = data.compute_hash();
     self.global_commit_count += 1;
   }
 
@@ -257,7 +271,7 @@ impl LedgerState {
                                txn_log: Some(std::fs::OpenOptions::new().create(create)
                                                                         .append(true)
                                                                         .open(txn_path)?),
-                               global_hash: BitDigest { 0: [0_u8; 32] },
+                               global_hash: [0_u8; 32],
                                global_commit_count: 0 };
 
     Ok(ledger)
@@ -1072,60 +1086,60 @@ mod tests {
   use rand::SeedableRng;
   use rand_chacha::ChaChaRng;
 
-// TODO: Add unit tests for
-//   GlobalHashData::as_ref
-//   LedgerState::load_transaction_log
-//   LedgerState::save_utxo_map_version
-//   LedgerState::save_global_hash
-//   LedgerState::LedgerState
-//   LedgerState::store_transaction
-//   LedgerState::init_merkle_log
-//   LedgerState::init_utxo_map
-//   LedgerState::new
-//   LedgerState::load
-//   LedgerState::snapshot
-//   LedgerState::begin_commit
-//   LedgerState::end_commit
-//   LedgerState::add_txo
-//   LedgerState::apply_asset_transfer
-//   LedgerState::apply_asset_issuance
-//   LedgerState::apply_asset_creation
-//   BlockContext::new
-//   BlockContext::apply_operation
-//   LedgerAccess for BlockContext
-//     LedgerAccess::check_utxo
-//     LedgerAccess::get_asset_token
-//     LedgerAccess::get_asset_policy
-//     LedgerAccess::get_smart_contract
-//     LedgerAccess::get_issuance_num
-//     LedgerAccess::get_tracked_sids
-//   TxnContext::new
-//   TxnContext::apply_operation
-//   LedgerAccess for TxnContext
-//     LedgerAccess::check_utxo
-//     LedgerAccess::get_asset_token
-//     LedgerAccess::get_asset_policy
-//     LedgerAccess::get_smart_contract
-//     LedgerAccess::get_issuance_num
-//     LedgerAccess::get_tracked_sids
-//   LedgerUpdate for LedgerState
-//     LedgerUpdate::apply_transaction
-//   ArchiveUpdate for LedgerState
-//     ArchiveUpdate::append_transaction
-//   LedgerAccess for LedgerState
-//     LedgerAccess::check_utxo
-//     LedgerAccess::get_asset_token
-//     LedgerAccess::get_asset_policy
-//     LedgerAccess::get_smart_contract
-//     LedgerAccess::get_issuance_num
-//     LedgerAccess::get_tracked_sids
-//   ArchiveAccess for LedgerState
-//     ArchiveAccess::get_transaction
-//     ArchiveAccess::get_proof
-//     ArchiveAccess::get_utxo_map
-//     ArchiveAccess::get_utxos
-//     ArchiveAccess::get_utxo_checksum
-//     ArchiveAccess::get_global_hash
+  // TODO: Add unit tests for
+  //   GlobalHashData::as_ref
+  //   LedgerState::load_transaction_log
+  //   LedgerState::save_utxo_map_version
+  //   LedgerState::save_global_hash
+  //   LedgerState::LedgerState
+  //   LedgerState::store_transaction
+  //   LedgerState::init_merkle_log
+  //   LedgerState::init_utxo_map
+  //   LedgerState::new
+  //   LedgerState::load
+  //   LedgerState::snapshot
+  //   LedgerState::begin_commit
+  //   LedgerState::end_commit
+  //   LedgerState::add_txo
+  //   LedgerState::apply_asset_transfer
+  //   LedgerState::apply_asset_issuance
+  //   LedgerState::apply_asset_creation
+  //   BlockContext::new
+  //   BlockContext::apply_operation
+  //   LedgerAccess for BlockContext
+  //     LedgerAccess::check_utxo
+  //     LedgerAccess::get_asset_token
+  //     LedgerAccess::get_asset_policy
+  //     LedgerAccess::get_smart_contract
+  //     LedgerAccess::get_issuance_num
+  //     LedgerAccess::get_tracked_sids
+  //   TxnContext::new
+  //   TxnContext::apply_operation
+  //   LedgerAccess for TxnContext
+  //     LedgerAccess::check_utxo
+  //     LedgerAccess::get_asset_token
+  //     LedgerAccess::get_asset_policy
+  //     LedgerAccess::get_smart_contract
+  //     LedgerAccess::get_issuance_num
+  //     LedgerAccess::get_tracked_sids
+  //   LedgerUpdate for LedgerState
+  //     LedgerUpdate::apply_transaction
+  //   ArchiveUpdate for LedgerState
+  //     ArchiveUpdate::append_transaction
+  //   LedgerAccess for LedgerState
+  //     LedgerAccess::check_utxo
+  //     LedgerAccess::get_asset_token
+  //     LedgerAccess::get_asset_policy
+  //     LedgerAccess::get_smart_contract
+  //     LedgerAccess::get_issuance_num
+  //     LedgerAccess::get_tracked_sids
+  //   ArchiveAccess for LedgerState
+  //     ArchiveAccess::get_transaction
+  //     ArchiveAccess::get_proof
+  //     ArchiveAccess::get_utxo_map
+  //     ArchiveAccess::get_utxos
+  //     ArchiveAccess::get_utxo_checksum
+  //     ArchiveAccess::get_global_hash
 
   #[test]
   fn test_asset_creation_valid() {
@@ -1213,7 +1227,7 @@ mod tests {
     let mut ledger =
       LedgerState::new(&merkle_path, &txn_path, &ledger_path, &utxo_map_path, true).unwrap();
 
-    assert!(ledger.get_global_hash() == (BitDigest { 0: [0_u8; 32] }, 0));
+    assert!(ledger.get_global_hash() == ([0_u8; 32], 0));
     let mut tx = Transaction::default();
     let token_code1 = AssetTokenCode { val: [1; 16] };
     let mut prng = ChaChaRng::from_seed([0u8; 32]);
