@@ -1089,10 +1089,40 @@ mod tests {
     let result_err = LedgerState::load_transaction_log("incorrect/path");
     assert!(result_err.is_err());
 
+    // Create values to be used to instantiate operations
+    let mut prng = rand_chacha::ChaChaRng::from_seed([0u8; 32]);
+
+    let keypair = XfrKeyPair::generate(&mut prng);
+    let message: &[u8] = b"test";
+
+    let public_key = *keypair.get_pk_ref();
+    let signature = keypair.sign(message);
+
+    // Instantiate an AssetIssuance operation
+    let asset_issuance_body = AssetIssuanceBody { code: Default::default(),
+                                                  seq_num: 0,
+                                                  outputs: Vec::new(),
+                                                  records: Vec::new() };
+
+    let asset_issurance = AssetIssuance { body: asset_issuance_body,
+                                          pubkey: IssuerPublicKey { key: public_key },
+                                          signature: signature.clone() };
+
+    let issurance_operation = Operation::AssetIssuance(asset_issurance);
+
+    // Instantiate an AssetCreation operation
+    let asset = Default::default();
+
+    let asset_creation = AssetCreation { body: AssetCreationBody { asset },
+                                         pubkey: IssuerPublicKey { key: public_key },
+                                         signature: signature };
+
+    let creation_operation = Operation::AssetCreation(asset_creation);
+
     // Verify that loading transaction succeeds with correct path
     let transaction_0: Transaction = Default::default();
 
-    let transaction_1 = Transaction { operations: Vec::new(),
+    let transaction_1 = Transaction { operations: vec![issurance_operation.clone()],
                                       variable_utxos: Vec::new(),
                                       credentials: Vec::new(),
                                       memos: Vec::new(),
@@ -1100,7 +1130,7 @@ mod tests {
                                       merkle_id: TXN_SEQ_ID_PLACEHOLDER,
                                       outputs: 1 };
 
-    let transaction_2 = Transaction { operations: Vec::new(),
+    let transaction_2 = Transaction { operations: vec![issurance_operation, creation_operation],
                                       variable_utxos: Vec::new(),
                                       credentials: Vec::new(),
                                       memos: Vec::new(),
@@ -1171,7 +1201,7 @@ mod tests {
 
     // Verify that opening a non-existing Merkle tree fails
     let result_open_err= LedgerState::init_merkle_log(path, false);
-    assert!(result_open_err.is_err());
+    assert_eq!(result_open_err.err().unwrap().kind(), std::io::ErrorKind::NotFound);
 
     // Verify that creating a non-existing Merkle tree succeeds
     let result_create_ok = LedgerState::init_merkle_log(path, true);
@@ -1183,7 +1213,7 @@ mod tests {
 
     // Verify that creating an existing Merkle tree fails
     let result_create_err = LedgerState::init_merkle_log(path, true);
-    assert!(result_create_err.is_err());
+    assert_eq!(result_create_err.err().unwrap().kind(), std::io::ErrorKind::AlreadyExists);
     
     fs::remove_file(path.to_owned()).unwrap();
     fs::remove_file(path.to_owned() + "-log-0").unwrap();
@@ -1195,7 +1225,7 @@ mod tests {
 
     // Verify that opening a non-existing bitmap fails
     let result_open_err = LedgerState::init_utxo_map(path, false);
-    assert!(result_open_err.is_err());
+    assert_eq!(result_open_err.err().unwrap().kind(), std::io::ErrorKind::NotFound);
 
     // Verify that creating a non-existing bitmap succeeds
     let result_create_ok = LedgerState::init_utxo_map(path, true);
@@ -1207,7 +1237,7 @@ mod tests {
 
     // Verify that opening an existing bitmap fails
     let result_create_err = LedgerState::init_utxo_map(path, true);
-    assert!(result_create_err.is_err());
+    assert_eq!(result_create_err.err().unwrap().kind(), std::io::ErrorKind::AlreadyExists);
 
     fs::remove_file(path).unwrap();
   }
@@ -1219,6 +1249,7 @@ mod tests {
     ledger_state.merkle_path = path.to_string();
     let result = ledger_state.snapshot();
 
+    // Verify that the SnapshotId is correct
     assert_eq!(result.ok().unwrap().id, 0);
 
     fs::remove_file(path.to_owned() + "-log-0").unwrap();
@@ -1309,12 +1340,6 @@ mod tests {
 
     assert_eq!(ledger_state.tracked_sids.get(&elgamal_public_key), Some(&vec![utxo_addr]));
 
-    let bitmap = ledger_state.utxo_map.unwrap();
-    assert_eq!(bitmap.blocks[0].bits[0], 1);
-    assert_eq!(bitmap.set_bits[0], 1);
-    assert_eq!(bitmap.size(), 1);
-    assert_eq!(bitmap.blocks[0].header.count, 1);
-
     let utxo_ref = Utxo { digest: compute_sha256_hash(&serde_json::to_vec(&txo.1).unwrap()),
                           output: txo.1 };
     assert_eq!(ledger_state.utxos.get(&utxo_addr).unwrap(), &utxo_ref);
@@ -1372,16 +1397,8 @@ mod tests {
                                      .open("./utxo_map")
                                      .unwrap();
 
-    let bitmap = BitMap{ file: map_file,
-                         size: 10,
-                         checksum: Digest([0_u8; DIGESTBYTES]),
-                         first_invalid: 0,
-                         map: [0; 256],
-                         blocks: Vec::new(),
-                         checksum_data: Vec::new(),
-                         checksum_valid: Vec::new(),
-                         dirty: Vec::new(),
-                         set_bits: Vec::new() };
+    let mut bitmap = BitMap::create(map_file).unwrap();
+    bitmap.append().unwrap();
 
     ledger_state.utxo_map = Some(bitmap);
 
@@ -1394,8 +1411,7 @@ mod tests {
 
   #[test]
   fn test_apply_asset_issuance() {
-    let mut ledger_state = LedgerState::test_ledger();
-
+    // Instantiate an AssetIssuance
     let mut prng = ChaChaRng::from_seed([0u8; 32]);
     let keypair = XfrKeyPair::generate(&mut prng);
     let message: &[u8] = b"test";
@@ -1404,19 +1420,22 @@ mod tests {
 
     let asset_issuance_body = AssetIssuanceBody { code: Default::default(),
                                                   seq_num: 0,
-                                                  outputs: Vec::new(),
+                                                  outputs: vec![TxoSID { index: 0 }, TxoSID { index: 1 }],
                                                   records: Vec::new() };
 
     let asset_issurance = AssetIssuance { body: asset_issuance_body,
                                           pubkey: IssuerPublicKey { key: public_key },
-                                          signature: signature.clone() };
+                                          signature: signature };
 
+    // Instantiate a LedgerState and apply the AssetIssuance
+    let mut ledger_state = LedgerState::test_ledger();
     ledger_state.apply_asset_issuance(&asset_issurance);
 
+    // Verify that apply_asset_issuance correctly adds each txo to tracked_sids
     for output in asset_issurance.body
                         .outputs
                         .iter()
-                        .zip(asset_issurance.body.records.iter().map(|ref o| (*o).clone())) {
+                        .zip(asset_issurance.body.records.iter().map(|ref o| (*o))) {
       match &output.1 {
         BlindAssetRecord(record) => {
             assert!(ledger_state.tracked_sids.get(&record.issuer_public_key.as_ref().unwrap().eg_ristretto_pub_key).unwrap()
@@ -1425,6 +1444,7 @@ mod tests {
       }
     }
 
+    // Verify that issuance_num is correctly set
     assert_eq!(ledger_state.issuance_num.get(&asset_issurance.body.code), Some(&asset_issurance.body.seq_num));
   }
 
