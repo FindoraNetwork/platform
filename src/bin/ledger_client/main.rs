@@ -20,8 +20,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let serialize = serde_json::to_string(&tx).unwrap();
     // Set of invalid URI characters that may appear in a JSON transaction
-    // Most of the following code is copy pasta from
-    // components/api_service/src/lib.rs
     const FRAGMENT: &AsciiSet = &CONTROLS.add(b' ')
                                          .add(b'"')
                                          .add(b'`')
