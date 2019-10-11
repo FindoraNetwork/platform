@@ -9,6 +9,8 @@ use crate::data_model::{
   CustomAssetPolicy, Operation, SmartContract, SmartContractKey, Transaction, TxOutput,
   TxOutput::BlindAssetRecord, TxnSID, TxoSID, Utxo, TXN_SEQ_ID_PLACEHOLDER,
 };
+use crate::utils::Sha256;
+use crate::utils::Sha256::Digest as BitDigest;
 use append_only_merkle::{AppendOnlyMerkle, Proof};
 use bitmap::BitMap;
 use byteorder::{ByteOrder, LittleEndian};
@@ -18,7 +20,7 @@ use findora::DEFAULT_MAP;
 use logged_merkle::LoggedMerkle;
 use rand::SeedableRng;
 use rand_chacha::ChaChaRng;
-use sha2::{Digest, Sha256};
+//use sha2::{Digest, Sha256};
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::fs::File;
 use std::fs::OpenOptions;
@@ -43,8 +45,6 @@ static ledger_map: EnableMap = DEFAULT_MAP;
 
 #[allow(non_upper_case_globals)]
 static issue_map: EnableMap = DEFAULT_MAP;
-
-type BitDigest = [u8; 32];
 
 pub struct SnapshotId {
   pub id: u64,
@@ -83,16 +83,16 @@ pub trait ArchiveAccess {
   fn get_global_hash(&self) -> (BitDigest, u64);
 }
 
-pub fn compute_sha256_hash<T>(msg: &T) -> [u8; 32]
-  where T: std::convert::AsRef<[u8]>
-{
-  let mut hasher = Sha256::new();
-  hasher.input(msg);
-  let result = hasher.result();
-  let hash = array_ref![&result, 0, 32];
+// pub fn compute_sha256_hash<T>(msg: &T) -> [u8; 32]
+//   where T: std::convert::AsRef<[u8]>
+// {
+//   let mut hasher = Sha256::new();
+//   hasher.input(msg);
+//   let result = hasher.result();
+//   let hash = array_ref![&result, 0, 32];
 
-  *hash
-}
+//   *hash
+// }
 
 #[repr(C)]
 struct GlobalHashData {
@@ -109,19 +109,19 @@ impl GlobalHashData {
                      std::mem::size_of::<GlobalHashData>())
     }
   }
-  fn compute_hash(&self) -> [u8; 32] {
-    let mut hasher = Sha256::new();
-    let mut block_buf = [0; 8];
-    LittleEndian::write_u64(&mut block_buf, self.block);
+  // fn compute_hash(&self) -> [u8; 32] {
+  //   let mut hasher = Sha256::new();
+  //   let mut block_buf = [0; 8];
+  //   LittleEndian::write_u64(&mut block_buf, self.block);
 
-    hasher.input(self.bitmap);
-    hasher.input(self.merkle.hash);
-    hasher.input(block_buf);
-    hasher.input(self.global_hash);
-    let result = hasher.result();
-    let hash = array_ref![&result, 0, 32];
-    *hash
-  }
+  //   hasher.input(self.bitmap);
+  //   hasher.input(self.merkle.hash);
+  //   hasher.input(block_buf);
+  //   hasher.input(self.global_hash);
+  //   let result = hasher.result();
+  //   let hash = array_ref![&result, 0, 32];
+  //   *hash
+  // }
 }
 
 const MAX_VERSION: usize = 100;
@@ -196,7 +196,7 @@ impl LedgerState {
                                 block: self.global_commit_count,
                                 global_hash: self.global_hash };
 
-    self.global_hash = data.compute_hash();
+    self.global_hash = Sha256::hash(data.as_ref());
     self.global_commit_count += 1;
   }
 
@@ -271,7 +271,7 @@ impl LedgerState {
                                txn_log: Some(std::fs::OpenOptions::new().create(create)
                                                                         .append(true)
                                                                         .open(txn_path)?),
-                               global_hash: [0_u8; 32],
+                               global_hash: BitDigest { 0: [0_u8; 32] },
                                global_commit_count: 0 };
 
     Ok(ledger)
@@ -339,7 +339,7 @@ impl LedgerState {
         }
       }
     }
-    let utxo_ref = Utxo { digest: compute_sha256_hash(&serde_json::to_vec(&txo.1).unwrap()),
+    let utxo_ref = Utxo { digest: Sha256::hash(&serde_json::to_vec(&txo.1).unwrap()).0,
                           output: txo.1 };
     // Check for asset tracing
     match &utxo_ref.output {
@@ -700,7 +700,7 @@ impl<'la, LA: LedgerAccess> TxnContext<'la, LA> {
     match op {
       Operation::AssetIssuance(ai) => {
         for (ref addr, out) in ai.body.outputs.iter().zip(ai.body.records.iter()) {
-          let utxo_ref = Utxo { digest: compute_sha256_hash(&serde_json::to_vec(out).unwrap()),
+          let utxo_ref = Utxo { digest: Sha256::hash(&serde_json::to_vec(out).unwrap()).0,
                                 output: out.clone() };
           self.utxos.insert((*addr).clone(), utxo_ref);
         }
@@ -712,7 +712,7 @@ impl<'la, LA: LedgerAccess> TxnContext<'la, LA> {
           }
         }
         for (ref addr, out) in at.body.outputs.iter().zip(at.body.transfer.outputs_iter()) {
-          let utxo_ref = Utxo { digest: compute_sha256_hash(&serde_json::to_vec(out).unwrap()),
+          let utxo_ref = Utxo { digest: Sha256::hash(&serde_json::to_vec(out).unwrap()).0,
                                 output: TxOutput::BlindAssetRecord(out.clone()) };
           self.utxos.insert((*addr).clone(), utxo_ref);
         }
@@ -1227,7 +1227,7 @@ mod tests {
     let mut ledger =
       LedgerState::new(&merkle_path, &txn_path, &ledger_path, &utxo_map_path, true).unwrap();
 
-    assert!(ledger.get_global_hash() == ([0_u8; 32], 0));
+    assert!(ledger.get_global_hash() == (BitDigest { 0: [0_u8; 32] }, 0));
     let mut tx = Transaction::default();
     let token_code1 = AssetTokenCode { val: [1; 16] };
     let mut prng = ChaChaRng::from_seed([0u8; 32]);

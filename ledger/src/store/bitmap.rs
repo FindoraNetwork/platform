@@ -23,12 +23,12 @@
 //! The SparseMap structure allows various queries on the contents
 //! of the map.
 
+use crate::utils::Sha256;
+use crate::utils::Sha256::{Digest, DIGESTBYTES};
 use findora::timestamp;
 use findora::Commas;
 use findora::EnableMap;
 use findora::DEFAULT_MAP;
-use sha2::Digest as DigestTrait;
-use sha2::Sha256;
 use std::cmp::min;
 use std::collections::HashMap;
 use std::collections::HashSet;
@@ -56,10 +56,6 @@ const INCLUDE_BITS: bool = true;
 /// the first CHECK_SIZE bytes of the sha256 digest as the
 /// checksum.
 const CHECK_SIZE: usize = 16;
-
-// SHA256 digest variables
-const DIGESTBYTES: usize = 32;
-type Digest = [u8; DIGESTBYTES];
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Default, PartialEq)]
@@ -221,7 +217,7 @@ impl SparseMap {
   /// are from validated blocks.
   pub fn validate_checksum(&self) -> bool {
     let mut checksum_data = EMPTY_CHECKSUM;
-    let mut digest = [0_u8; DIGESTBYTES];
+    let mut digest = Digest { 0: [0_u8; DIGESTBYTES] };
 
     // For each block, compute the checksum.
     for i in 0..self.headers.len() {
@@ -256,8 +252,7 @@ impl SparseMap {
       }
 
       checksum_data[0..CHECK_SIZE].clone_from_slice(&info.checksum.bytes[0..CHECK_SIZE]);
-      let temp_array = Sha256::digest(&checksum_data);
-      digest = *array_ref!(&temp_array, 0, 32);
+      digest = Sha256::hash(&checksum_data);
       debug!(bitmap_map,
              "validate_checksum:  checksum at block {} is {:?}",
              i.commas(),
@@ -270,7 +265,7 @@ impl SparseMap {
              "validate_checksum:  digest at block {} is {:?}",
              i.commas(),
              digest);
-      checksum_data[CHECK_SIZE..].clone_from_slice(&digest[0..]);
+      checksum_data[CHECK_SIZE..].clone_from_slice(&digest.0[0..]);
     }
 
     debug!(bitmap_map,
@@ -408,7 +403,7 @@ impl BitBlock {
 
   // Compute a checksum for the block.
   fn compute_checksum(&self) -> [u8; CHECK_SIZE] {
-    let digest = Sha256::digest(self.as_checksummed_region());
+    let digest = Sha256::hash(self.as_checksummed_region());
     let mut result: [u8; CHECK_SIZE] = Default::default();
 
     result.clone_from_slice(&digest[0..CHECK_SIZE]);
@@ -638,7 +633,7 @@ impl BitMap {
                           size: 0,
                           blocks: Vec::new(),
                           checksum_data: Vec::new(),
-                          checksum: [0_u8; DIGESTBYTES],
+                          checksum: Digest { 0: [0_u8; DIGESTBYTES] },
                           dirty: Vec::new(),
                           checksum_valid: Vec::new(),
                           set_bits: Vec::new(),
@@ -698,7 +693,7 @@ impl BitMap {
                               size: count,
                               blocks: block_vector,
                               checksum_data: Vec::new(),
-                              checksum: [0_u8; DIGESTBYTES],
+                              checksum: Digest { 0: [0_u8; DIGESTBYTES] },
                               dirty: state_vector,
                               checksum_valid: checksum_vector,
                               set_bits: set_vector,
@@ -937,7 +932,7 @@ impl BitMap {
   /// exist in the bitmap.
   ///
   pub fn compute_checksum(&mut self) -> Digest {
-    let mut digest = [0_u8; DIGESTBYTES];
+    let mut digest = Digest { 0: [0_u8; DIGESTBYTES] };
     let mut first = false;
 
     // For each block not yet computed.
@@ -965,8 +960,7 @@ impl BitMap {
       self.checksum_data[i][CHECK_SIZE..].clone_from_slice(digest.as_ref());
 
       // Compute the next sha256 digest.
-      let temp_array = Sha256::digest(&self.checksum_data[i]);
-      digest = *array_ref!(&temp_array, 0, 32);
+      digest = Sha256::hash(&self.checksum_data[i]);
       debug!(bitmap_map,
              "compute_checksum:  checksum at block {} is {:?}", i, self.blocks[i].header.checksum);
       debug!(bitmap_map,
@@ -1258,8 +1252,8 @@ impl BitMap {
     index += 8;
 
     // Now pull the checksum for the tree out of the structure.
-    let mut checksum = [0u8; DIGESTBYTES];
-    checksum[..DIGESTBYTES].clone_from_slice(&bytes[index..index + DIGESTBYTES]);
+    let mut checksum = Digest { 0: [0u8; DIGESTBYTES] };
+    checksum.0[..DIGESTBYTES].clone_from_slice(&bytes[index..index + DIGESTBYTES]);
 
     index += DIGESTBYTES;
     (index, version, checksum)
@@ -1363,6 +1357,7 @@ impl BitMap {
 #[cfg(test)]
 mod tests {
   use super::*;
+  use crate::utils::Sha256::{Digest, DIGESTBYTES};
   use std::fs;
   use std::fs::OpenOptions;
   use std::mem;
@@ -1488,7 +1483,7 @@ mod tests {
       panic!("Write failed:  {}", e);
     }
 
-    if bitmap.compute_checksum() != [0_u8; DIGESTBYTES] {
+    if bitmap.compute_checksum() != (Digest { 0: [0_u8; DIGESTBYTES] }) {
       panic!("compute_checksum() failed on an empty tree");
     }
 

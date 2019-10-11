@@ -14,6 +14,7 @@ extern crate rand;
 extern crate serde;
 extern crate serde_derive;
 
+use crate::utils::Sha256;
 use chrono::Utc;
 use findora::timestamp;
 use findora::Commas;
@@ -23,7 +24,6 @@ use serde::Deserialize;
 use serde::Deserializer;
 use serde::Serialize;
 use serde::Serializer;
-use sha2::{Digest, Sha256};
 use std::fmt;
 use std::fs::File;
 use std::fs::OpenOptions;
@@ -293,7 +293,7 @@ impl Block {
 
   // Compute a checksum for the block.
   fn compute_checksum(&self) -> [u8; CHECK_SIZE] {
-    let digest = Sha256::digest(self.as_checksummed_region());
+    let digest = Sha256::hash(self.as_checksummed_region());
     let mut result: [u8; CHECK_SIZE] = Default::default();
 
     result.clone_from_slice(&digest[0..CHECK_SIZE]);
@@ -408,7 +408,7 @@ fn hash_pair(left: &HashValue, right: &HashValue) -> HashValue {
   data[0..HASH_SIZE].clone_from_slice(&left.hash[0..HASH_SIZE]);
   data[HASH_SIZE..2 * HASH_SIZE].clone_from_slice(&right.hash[0..HASH_SIZE]);
 
-  let digest = Sha256::digest(&data);
+  let digest = Sha256::hash(&data);
   let mut result = HashValue::new();
   result.hash.clone_from_slice(&digest[0..HASH_SIZE]);
   result
@@ -418,7 +418,7 @@ fn hash_pair(left: &HashValue, right: &HashValue) -> HashValue {
 // when generating proofs.  Partially-filled nodes are constructed
 // using hashes of hashes.
 fn hash_single(hash: &HashValue) -> HashValue {
-  let digest = Sha256::digest(&hash.hash[0..HASH_SIZE]);
+  let digest = Sha256::hash(&hash.hash[0..HASH_SIZE]);
 
   let mut result = HashValue { hash: [0; HASH_SIZE] };
 
@@ -1360,7 +1360,7 @@ impl AppendOnlyMerkle {
   pub fn append_str(&mut self, value: &str) -> Result<u64, Error> {
     let mut hash_value = HashValue { hash: [0; HASH_SIZE] };
 
-    let digest = Sha256::digest(value.as_ref());
+    let digest = Sha256::hash(value.as_ref());
 
     hash_value.hash.clone_from_slice(digest.as_ref());
     self.append_hash(&hash_value)
@@ -2017,11 +2017,11 @@ impl AppendOnlyMerkle {
 #[cfg(test)]
 mod tests {
   use super::*;
+  use crate::utils::Sha256;
   use byteorder::LittleEndian;
   use byteorder::WriteBytesExt;
   use rand::prelude::thread_rng;
   use rand::Rng;
-  use sha2::{Digest, Sha256};
 
   #[test]
   fn test_info() {
@@ -2235,7 +2235,7 @@ mod tests {
       a[i] = i as u8;
     }
 
-    let digest = Sha256::digest(&a[0..2 * HASH_SIZE]);
+    let digest = Sha256::hash(&a[0..2 * HASH_SIZE]);
     let mut left = HashValue::new();
     let mut right = HashValue::new();
 
