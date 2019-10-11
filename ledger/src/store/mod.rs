@@ -1070,7 +1070,6 @@ mod tests {
   use bulletproofs::PedersenGens;
   use crate::data_model::{AssetCreationBody, AssetIssuanceBody, AssetTransfer, AssetTransferBody, IssuerPublicKey};
   use curve25519_dalek::scalar::Scalar;
-  use sodiumoxide::crypto::hash::sha256::{Digest, DIGESTBYTES};
   use std::fs;
   use std::io::BufWriter;
   use super::helpers::*;
@@ -1329,7 +1328,7 @@ mod tests {
 
     // Instantiate a transaction output
     let sid = TxoSID { index: TXN_SEQ_ID_PLACEHOLDER };
-    let txo = (&sid, TxOutput::BlindAssetRecord(record.clone()));
+    let txo = (&sid, TxOutput::BlindAssetRecord(record));
 
     // Instantiate a LedgerState
     let mut ledger_state = LedgerState::test_ledger();
