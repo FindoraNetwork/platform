@@ -218,6 +218,7 @@ fn query_contract<LA>(data: web::Data<Arc<RwLock<LA>>>,
   }
 }
 
+
 impl RestfulApiService {
   pub fn create<LA: 'static
                     + LedgerAccess
@@ -226,27 +227,38 @@ impl RestfulApiService {
                     + ArchiveUpdate
                     + Sync
                     + Send>(
-    ledger_access: Arc<RwLock<LA>>)
+    ledger_access: Arc<RwLock<LA>>,
+    host: &str,
+    port: &str)
     -> io::Result<RestfulApiService> {
     let web_runtime = actix_rt::System::new("eian API");
     let data = ledger_access.clone();
+    let addr = format!("https://{}:{}", host, port);
     HttpServer::new(move || {
       App::new().data(data.clone())
-                .route("/utxo_sid/{sid}", web::get().to(query_utxo::<LA>))
-                .route("/asset_token/{token}", web::get().to(query_asset::<LA>))
-                .route("/txn_sid/{sid}", web::get().to(query_txn::<LA>))
-                .route("/proof/{sid}", web::get().to(query_proof::<LA>))
-                .route("/utxo_map", web::get().to(query_utxo_map::<LA>))
-                .route("/global_state", web::get().to(query_global_state::<LA>))
-                .route("/utxo_map_checksum",
-                       web::get().to(query_utxo_map_checksum::<LA>))
-                .route("/utxo_partial_map/{sidlist}",
-                       web::get().to(query_utxo_partial_map::<LA>))
-                .route("/policy_key/{key}", web::get().to(query_policy::<LA>))
-                .route("/contract_key/{key}", web::get().to(query_contract::<LA>))
-                .route("/submit_transaction/{tx}",
-                       web::get().to(submit_transaction::<LA>))
-    }).bind("127.0.0.1:8668")?
+        .route("/utxo_sid/{sid}",
+          web::get().to(query_utxo::<LA>))
+        .route("/asset_token/{token}",
+          web::get().to(query_asset::<LA>))
+        .route("/txn_sid/{sid}",
+          web::get().to(query_txn::<LA>))
+        .route("/proof/{sid}",
+          web::get().to(query_proof::<LA>))
+        .route("/utxo_map",
+          web::get().to(query_utxo_map::<LA>))
+        .route("/global_state",
+          web::get().to(query_global_state::<LA>))
+        .route("/utxo_map_checksum",
+          web::get().to(query_utxo_map_checksum::<LA>))
+        .route("/utxo_partial_map/{sidlist}",
+          web::get().to(query_utxo_partial_map::<LA>))
+        .route("/policy_key/{key}",
+          web::get().to(query_policy::<LA>))
+        .route("/contract_key/{key}",
+          web::get().to(query_contract::<LA>))
+        .route("/submit_transaction/{tx}",
+          web::post().to(submit_transaction::<LA>))
+    }).bind(&addr)?
       .start();
     Ok(RestfulApiService { web_runtime })
   }
@@ -325,7 +337,7 @@ mod tests {
     let mut app =
       test::init_service(App::new().data(Arc::new(RwLock::new(state)))
                                    .route("/submit_transaction/{tx}",
-                                          web::get().to(submit_transaction::<LedgerState>))
+                                          web::post().to(submit_transaction::<LedgerState>))
                                    .route("/asset_token/{token}",
                                           web::get().to(query_asset::<LedgerState>)));
 
@@ -340,7 +352,7 @@ mod tests {
                                          .add(b'}');
     let uri_string = utf8_percent_encode(&serialize, FRAGMENT).to_string();
 
-    let submit_req = test::TestRequest::get().uri(&format!("/submit_transaction/{}", uri_string))
+    let submit_req = test::TestRequest::post().uri(&format!("/submit_transaction/{}", uri_string))
                                              .to_request();
 
     let query_req = test::TestRequest::get().uri(&format!("/asset_token/{}",
