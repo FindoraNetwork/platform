@@ -16,13 +16,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let asset_create = asset_creation_operation(&asset_body, &public_key, &secret_key);
     tx.operations.push(Operation::AssetCreation(asset_create));
 
-
     // env_logger::init();
 
-    // println!("GET https://www.rust-lang.org");
     let serialize = serde_json::to_string(&tx).unwrap();
     // Set of invalid URI characters that may appear in a JSON transaction
-    // TODO: (Noah) make sure set is complete
+    // Most of the following code is copy pasta from
+    // components/api_service/src/lib.rs
     const FRAGMENT: &AsciiSet = &CONTROLS.add(b' ')
                                          .add(b'"')
                                          .add(b'`')
@@ -64,11 +63,5 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     println!("\n\nDone.");
 
-/*
-    let resp: HashMap<String, String> =
-        reqwest::get(&format!("http://localhost:8668/global_state/{}", token_code1.to_base64()))? // https://httpbin.org/ip
-        .json()?;
-    println!("{:#?}", resp);
-*/
     Ok(())
 }
