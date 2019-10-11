@@ -98,8 +98,10 @@ fn main() {
   // abci::run(addr, ABCILedgerApp::default());
   let app = ABCILedgerApp::new().unwrap();
   let ledger_state = app.la.borrowable_ledger_state();
+  let host = std::option_env!("SERVER_HOST").unwrap_or("localhost");
+  let port = std::option_env!("SERVER_PORT").unwrap_or("8668");
   let _join = thread::spawn(move || {
-    let query_service = RestfulApiService::create(ledger_state)?;
+    let query_service = RestfulApiService::create(ledger_state, host, port)?;
     query_service.run()
   });
 
