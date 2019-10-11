@@ -1,4 +1,4 @@
-// API for issuing transactions that can be compiled to Wasm.
+// Interface for issuing transactions that can be compiled to Wasm.
 // Allows web clients to issue transactions from a browser contexts.
 // For now, forwards transactions to a ledger hosted locally.
 extern crate ledger;

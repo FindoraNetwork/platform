@@ -9,6 +9,7 @@ ledger = { path = "../../ledger" }
 serde = "1.0"
 serde_derive = "1.0"
 serde_json = "1.0"
-zei = { git = "ssh://github.com/findoraorg/zei" }
+zei = { path = "../../../zei" }
+#zei = { git = "ssh://github.com/findoraorg/zei" }
 rand_chacha = "0.1.1"
 rand = "0.6"

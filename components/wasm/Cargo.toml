@@ -13,7 +13,6 @@ serde_json = "1.0"
 wasm-bindgen = { version = "0.2.50", features = ["serde-serialize"]  }
 rand_chacha = "0.1.1"
 txn_builder = {path = "../txn_builder"}
-api_service = {path = "../api_service"}
 percent-encoding = "2.1.0"
 futures = "0.1.20"
 
