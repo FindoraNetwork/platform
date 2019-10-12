@@ -109,6 +109,6 @@ mod tests {
   #[test]
   fn test_wasm_define_transaction() {
     let key_pair = new_key_pair();
-    let transaction = create_asset(key_pair, true, true);
+    create_asset(key_pair, String::from("test"), true, true);
   }
 }
