@@ -6,8 +6,7 @@ edition = "2018"
 
 [dependencies]
 ledger = { path = "../../ledger" }
-#zei = { git = "ssh://github.com/findoraorg/zei" }
-zei = { path = "../../../zei" }
+zei = { git = "ssh://github.com/findoraorg/zei" }
 serde = "1.0"
 serde_json = "1.0"
 wasm-bindgen = { version = "0.2.50", features = ["serde-serialize"]  }

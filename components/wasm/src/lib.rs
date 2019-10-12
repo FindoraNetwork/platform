@@ -1,26 +1,23 @@
 // Interface for issuing transactions that can be compiled to Wasm.
 // Allows web clients to issue transactions from a browser contexts.
 // For now, forwards transactions to a ledger hosted locally.
+// To compile wasm package, run wasm-pack build in the wasm directory
 extern crate ledger;
 extern crate serde;
 extern crate zei;
-#[macro_use]
 use percent_encoding::{utf8_percent_encode, AsciiSet, CONTROLS};
 use txn_builder::{BuildsTransactions, TransactionBuilder};
 
-use futures::{future, Future};
-
 use js_sys::Promise;
-use ledger::data_model::{AssetTokenCode, IssuerPublicKey, Transaction};
+use ledger::data_model::{AssetTokenCode, IssuerPublicKey};
 
 use rand::SeedableRng;
 use rand_chacha::ChaChaRng;
 use wasm_bindgen::prelude::*;
-use wasm_bindgen::JsCast;
 
 use wasm_bindgen_futures::future_to_promise;
 use wasm_bindgen_futures::JsFuture;
-use web_sys::{Request, RequestInit, RequestMode, Response};
+use web_sys::{Request, RequestInit, RequestMode};
 use zei::basic_crypto::signatures::{XfrKeyPair, XfrPublicKey, XfrSecretKey};
 
 const HOST: &'static str = "localhost";
@@ -43,6 +40,7 @@ pub fn new_key_pair() -> KeyPair {
 // Defines an asset on the ledger using the serialized strings in KeyPair and a couple of boolean policies
 #[wasm_bindgen]
 pub fn create_asset(key_pair: KeyPair,
+                    token_code: String,
                     updatable: bool,
                     traceable: bool)
                     -> Result<String, JsValue> {
@@ -60,7 +58,7 @@ pub fn create_asset(key_pair: KeyPair,
     return Err(JsValue::from_str("Could not deserialize private key."));
   }
 
-  let asset_token = AssetTokenCode::new_from_base64(&String::from("test")).unwrap();
+  let asset_token = AssetTokenCode::new_from_base64(&token_code).unwrap();
 
   let mut txn_builder = TransactionBuilder::default();
   match txn_builder.add_operation_create_asset(&IssuerPublicKey { key: public_key },
@@ -92,7 +90,7 @@ fn encode_uri(to_encode: &str) -> String {
 // Submit transation to the ledger at HOST and PORT.
 pub fn submit_transaction(transaction_str: String) -> Promise {
   let mut opts = RequestInit::new();
-  opts.method("GET");
+  opts.method("POST");
   opts.mode(RequestMode::Cors);
 
   let req_string = format!("http://{}:{}/submit_transaction/{}",
@@ -105,6 +103,7 @@ pub fn submit_transaction(transaction_str: String) -> Promise {
   future_to_promise(JsFuture::from(request_promise))
 }
 
+#[cfg(test)]
 mod tests {
   use super::*;
   #[test]

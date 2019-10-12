@@ -47,7 +47,7 @@ use findora::Commas;
 use findora::EnableMap;
 use findora::DEFAULT_MAP;
 
-use crate::utils::Sha256;
+use crate::utils::sha256;
 #[allow(non_upper_case_globals)]
 static apply_log: EnableMap = DEFAULT_MAP;
 
@@ -155,7 +155,7 @@ impl LogBuffer {
   }
 
   fn checksum(&self) -> [u8; CHECK_SIZE] {
-    let digest = Sha256::hash(self.as_checksummed_region());
+    let digest = sha256::hash(self.as_checksummed_region());
     let mut result = [0_u8; CHECK_SIZE];
     result.clone_from_slice(&digest[0..CHECK_SIZE]);
     result

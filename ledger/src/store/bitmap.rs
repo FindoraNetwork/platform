@@ -23,8 +23,8 @@
 //! The SparseMap structure allows various queries on the contents
 //! of the map.
 
-use crate::utils::Sha256;
-use crate::utils::Sha256::{Digest, DIGESTBYTES};
+use crate::utils::sha256;
+use crate::utils::sha256::{Digest, DIGESTBYTES};
 use findora::timestamp;
 use findora::Commas;
 use findora::EnableMap;
@@ -252,7 +252,7 @@ impl SparseMap {
       }
 
       checksum_data[0..CHECK_SIZE].clone_from_slice(&info.checksum.bytes[0..CHECK_SIZE]);
-      digest = Sha256::hash(&checksum_data);
+      digest = sha256::hash(&checksum_data);
       debug!(bitmap_map,
              "validate_checksum:  checksum at block {} is {:?}",
              i.commas(),
@@ -403,7 +403,7 @@ impl BitBlock {
 
   // Compute a checksum for the block.
   fn compute_checksum(&self) -> [u8; CHECK_SIZE] {
-    let digest = Sha256::hash(self.as_checksummed_region());
+    let digest = sha256::hash(self.as_checksummed_region());
     let mut result: [u8; CHECK_SIZE] = Default::default();
 
     result.clone_from_slice(&digest[0..CHECK_SIZE]);
@@ -960,7 +960,7 @@ impl BitMap {
       self.checksum_data[i][CHECK_SIZE..].clone_from_slice(digest.as_ref());
 
       // Compute the next sha256 digest.
-      digest = Sha256::hash(&self.checksum_data[i]);
+      digest = sha256::hash(&self.checksum_data[i]);
       debug!(bitmap_map,
              "compute_checksum:  checksum at block {} is {:?}", i, self.blocks[i].header.checksum);
       debug!(bitmap_map,
@@ -1357,7 +1357,7 @@ impl BitMap {
 #[cfg(test)]
 mod tests {
   use super::*;
-  use crate::utils::Sha256::{Digest, DIGESTBYTES};
+  use crate::utils::sha256::{Digest, DIGESTBYTES};
   use std::fs;
   use std::fs::OpenOptions;
   use std::mem;

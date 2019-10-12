@@ -1,6 +1,5 @@
 use crate::store::append_only_merkle::HashValue;
-//use crate::store::compute_sha256_hash;
-use crate::utils::Sha256;
+use crate::utils::sha256;
 use base64::decode as b64dec;
 use base64::encode as b64enc;
 use chrono::prelude::*;
@@ -409,7 +408,7 @@ impl Transaction {
       bincode::serialize(&self).unwrap()
     };
 
-    let digest = Sha256::hash(&serialized).0;
+    let digest = sha256::hash(&serialized).0;
     let mut result = HashValue::new();
     result.hash.clone_from_slice(&digest);
     result

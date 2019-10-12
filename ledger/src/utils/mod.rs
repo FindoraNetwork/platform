@@ -1,5 +1,5 @@
 #[cfg(target_arch = "wasm32")]
-pub mod Sha256 {
+pub mod sha256 {
   use sha2::Digest as DigestTrait;
   use sha2::Sha256;
   use std::ops::{Index, Range, RangeFrom};
@@ -35,7 +35,7 @@ pub mod Sha256 {
 }
 
 #[cfg(not(target_arch = "wasm32"))]
-pub mod Sha256 {
+pub mod sha256 {
   use sodiumoxide::crypto::hash::sha256;
   pub const DIGESTBYTES: usize = sha256::DIGESTBYTES;
   pub type Digest = sha256::Digest;
