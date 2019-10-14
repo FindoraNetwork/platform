@@ -23,7 +23,7 @@ rand = "0.6"
 reqwest = "0.9.21"
 regex = "1"
 
-zei = { git = "ssh://github.com/findoraorg/zei" }
+zei = { git = "ssh://git@github.com/findoraorg/zei" }
 
 ledger = {path = "ledger"}
 txn_builder = {path = "components/txn_builder"}

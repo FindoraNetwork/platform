@@ -21,7 +21,7 @@ rand = "0.6"
 ed25519-dalek = "0.9.1"
 sha2 = "0.8.0"
 rust-crypto = "0.2.36"
-zei = { git = "ssh://github.com/findoraorg/zei" }
+zei = { git = "ssh://git@github.com/findoraorg/zei" }
 curve25519-dalek = { version =  "1.2.1", features = ["serde"] }
 sodiumoxide = "0.2.1"
 byteorder = "1.0.0"
