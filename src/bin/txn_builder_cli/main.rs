@@ -6,6 +6,7 @@ use log::{error, trace}; // Other options: debug, info, warn
 use rand::SeedableRng;
 use rand_chacha::ChaChaRng;
 use std::env;
+use std::ffi::OsStr;
 use std::fs::{self, File};
 use std::io::prelude::*;
 use std::path::{Path, PathBuf};
@@ -17,12 +18,12 @@ use zei::xfr::structs::BlindAssetRecord;
 fn load_txn_builder_from_file(file_name: &str) -> Result<TransactionBuilder, PlatformError> {
   let mut file = File::open(file_name).or_else(|_e| {
                                         println!("Transaction file {} does not exist", file_name);
-                                        Err(PlatformError::DeserializationError)
+                                        Err(PlatformError::IoError("missing file".to_string()))
                                       })?;
   let mut contents = String::new();
   file.read_to_string(&mut contents).or_else(|_e| {
                                        println!("Failed to read transaction file {}", file_name);
-                                       Err(PlatformError::DeserializationError)
+                                       Err(PlatformError::IoError("cannot read".to_string()))
                                      })?;
   println!("Parsing builder from file contents: \"{}\"", &contents);
   let builder = serde_json::from_str(&contents)?;
@@ -33,7 +34,7 @@ fn store_txn_builder_to_file(file_name: &str, txn: &TransactionBuilder) {
   if let Ok(as_json) = serde_json::to_string(txn) {
     let _skip = fs::write(file_name, &as_json).or_else(|_e| {
                   println!("Transaction file {} could not be created", file_name);
-                  Err(PlatformError::SerializationError)
+                  Err(PlatformError::IoError("unable to write".to_string()))
                 });
   }
 }
@@ -54,7 +55,7 @@ fn load_key_pair_from_files(priv_file_name: &str)
     }
     Err(_e) => {
       println!("Failed to read private key file {}", priv_file_name);
-      return Err(PlatformError::DeserializationError);
+      return Err(PlatformError::IoError("unable to read".to_string()));
     }
   }
 
@@ -66,10 +67,9 @@ fn load_key_pair_from_files(priv_file_name: &str)
   };
 
   let mut pub_file = File::open(&pub_file_path).or_else(|_e| {
-                                                 println!("Failed to open public key file {}",
-                                                          &pub_file_path);
-                                                 Err(PlatformError::DeserializationError)
-                                               })?;
+                       println!("Failed to open public key file {}", &pub_file_path);
+                       Err(PlatformError::IoError("cannot read".to_string()))
+                     })?;
 
   let pk: XfrPublicKey;
   let mut pk_byte_buffer = Vec::new();
@@ -79,7 +79,7 @@ fn load_key_pair_from_files(priv_file_name: &str)
     }
     Err(_e) => {
       println!("Failed to read public key file {}", pub_file_path);
-      return Err(PlatformError::DeserializationError);
+      return Err(PlatformError::IoError("cannot read".to_string()));
     }
   }
 
@@ -161,12 +161,17 @@ fn find_available_path(path: &Path, n: i32) -> Result<PathBuf, std::io::Error> {
   }
 }
 
-// Return a backup file path derived from path or or an error if an
-// unused path cannot cannot be derived.
+// Return a backup file path derived from path or an error if an
+// unused path cannot cannot be derived. The path must not be empty
+// and must not be dot (".").
 fn next_path(path: &Path) -> Result<PathBuf, std::io::Error> {
   fn add_backup_extension(path: &Path) -> PathBuf {
     let mut pb = PathBuf::from(path);
-    pb.set_file_name(format!("{}.0", path.file_name().unwrap().to_str().unwrap()));
+    pb.set_file_name(format!("{}.0",
+                             path.file_name()
+                                 .unwrap_or(OsStr::new(""))
+                                 .to_str()
+                                 .unwrap_or("")));
     pb
   }
 
@@ -180,7 +185,15 @@ fn next_path(path: &Path) -> Result<PathBuf, std::io::Error> {
     }
   } else {
     // Doesn't have any extension.
-    find_available_path(&add_backup_extension(&path), 0)
+    if path.components().next() == None {
+      Err(std::io::Error::new(std::io::ErrorKind::InvalidData,
+                              format!("Is empty: {:?}", path)))
+    } else if path.file_name() == None {
+      Err(std::io::Error::new(std::io::ErrorKind::InvalidData,
+                              format!("Is directory: {:?}", path)))
+    } else {
+      find_available_path(&add_backup_extension(&path), 0)
+    }
   }
 }
 
@@ -580,23 +593,68 @@ fn process_add_cmd(add_matches: &clap::ArgMatches,
 mod tests {
   use super::*;
 
-  fn check_one(input: &str, expected: &str) {
-    let result = next_file(input);
-
-    if result != expected.to_string() {
-      panic!("{} failed:  {}", input, result);
+  fn check_next_path(input: &str, expected: &str) {
+    let as_path = Path::new(input);
+    match next_path(as_path) {
+      Ok(result) => {
+        let as_str = result.to_str().unwrap();
+        if as_str != expected.to_string() {
+          panic!("{} failed:  {}", input, as_str);
+        }
+      }
+      Err(error) => {
+        panic!("next_path returned an error: {}", error);
+      }
     }
   }
 
+  // Note: creates and removes a file of the given name.
+  // If such a file was present, it gets overwritten
+  // and then removed.
+  fn check_next_path_typical(input: &str, expected: &str) {
+    trace!("check_next_path_typical({}, {})", input, expected);
+    if let Err(e) = fs::write(input, "txn_builder_cli next_path() test detritus") {
+      panic!("write error: {:?}", e);
+    }
+    check_next_path(input, expected);
+    if let Err(e) = fs::remove_file(input) {
+      panic!("remove_file error: {:?}", e);
+    }
+  }
+
+  fn check_next_path_nonextant(input: &str, expected: &str) {
+    check_next_path(input, expected)
+  }
+
   #[test]
-  fn test_next_file() {
-    check_one("1000", "1000");
-    check_one("abc", "abc");
-    check_one("abc.def", "abc.def");
-    check_one("a.12", "a.13");
-    check_one(".12", ".13");
-    check_one(".", ".");
-    check_one("abc.12", "abc.13");
-    check_one("abc.0", "abc.1");
+  fn test_next_path() {
+    check_next_path_typical("1000", "1000.0");
+    check_next_path_nonextant("1000", "1000.0");
+
+    check_next_path_typical("abc", "abc.0");
+    check_next_path_nonextant("abc", "abc.0");
+
+    check_next_path_typical("abc.def", "abc.def.0");
+    check_next_path_nonextant("abc.def", "abc.def.0");
+
+    check_next_path_typical("a.12", "a.13");
+    check_next_path_nonextant("a.12", "a.12");
+
+    check_next_path_typical(".12", ".12.0");
+    check_next_path_nonextant(".12", ".12.0");
+
+    check_next_path_typical("abc.12", "abc.13");
+    check_next_path_nonextant("abc.12", "abc.12");
+
+    check_next_path_typical("abc.0", "abc.1");
+    check_next_path_nonextant("abc.0", "abc.0");
+
+    let as_path = Path::new(".");
+    if let Err(_) = next_path(as_path) {
+      // This is the error:
+      // Custom { kind: InvalidData, error: "Is directory: \".\"" }
+    } else {
+      panic!("Expecting directory error");
+    }
   }
 }
