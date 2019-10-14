@@ -1074,6 +1074,7 @@ mod tests {
   use std::io::BufWriter;
   use super::helpers::*;
   use super::*;
+  use tempfile::{tempdir, tempfile};
   use rand::SeedableRng;
   use zei::algebra::bls12_381::{BLSScalar, BLSG1};
   use zei::algebra::groups::Group;
@@ -1137,20 +1138,23 @@ mod tests {
                                       merkle_id: TXN_SEQ_ID_PLACEHOLDER,
                                       outputs: 2 };
 
-                
+    let tmp_dir = tempdir().unwrap();
+    let buf = tmp_dir.path().join("test_transactions");
+    let path = buf.to_str().unwrap();
 
-    let path = "./test_transactions.txt";
     {
-      let mut writer = BufWriter::new(File::create(path).unwrap());
-      bincode::serialize_into::<&mut BufWriter<File>, Transaction>(&mut writer, &transaction_0).unwrap();
-      bincode::serialize_into::<&mut BufWriter<File>, Transaction>(&mut writer, &transaction_1).unwrap();
-      bincode::serialize_into::<&mut BufWriter<File>, Transaction>(&mut writer, &transaction_2).unwrap();
+    let file = File::create(path).unwrap();
+    let mut writer = BufWriter::new(file);
+
+    bincode::serialize_into::<&mut BufWriter<File>, Transaction>(&mut writer, &transaction_0).unwrap();
+    bincode::serialize_into::<&mut BufWriter<File>, Transaction>(&mut writer, &transaction_1).unwrap();
+    bincode::serialize_into::<&mut BufWriter<File>, Transaction>(&mut writer, &transaction_2).unwrap();
     }
 
     let result_ok = LedgerState::load_transaction_log(&path);
     assert_eq!(result_ok.ok(), Some(vec![transaction_0, transaction_1, transaction_2]));
 
-    fs::remove_file(path).unwrap();
+    tmp_dir.close().unwrap();
   }
 
   #[test]
@@ -1196,7 +1200,9 @@ mod tests {
 
   #[test]
   fn test_init_merkle_log() {
-    let path = "./test_merkle";
+    let tmp_dir = tempdir().unwrap();
+    let buf = tmp_dir.path().join("test_merkle");
+    let path = buf.to_str().unwrap();
 
     // Verify that opening a non-existing Merkle tree fails
     let result_open_err= LedgerState::init_merkle_log(path, false);
@@ -1214,13 +1220,14 @@ mod tests {
     let result_create_err = LedgerState::init_merkle_log(path, true);
     assert_eq!(result_create_err.err().unwrap().kind(), std::io::ErrorKind::AlreadyExists);
     
-    fs::remove_file(path.to_owned()).unwrap();
-    fs::remove_file(path.to_owned() + "-log-0").unwrap();
+    tmp_dir.close().unwrap();
   }
 
   #[test]
   fn test_init_utxo_map() {
-    let path = "./test_init_bitmap";
+    let tmp_dir = tempdir().unwrap();
+    let buf = tmp_dir.path().join("test_init_bitmap");
+    let path = buf.to_str().unwrap();
 
     // Verify that opening a non-existing bitmap fails
     let result_open_err = LedgerState::init_utxo_map(path, false);
@@ -1238,20 +1245,23 @@ mod tests {
     let result_create_err = LedgerState::init_utxo_map(path, true);
     assert_eq!(result_create_err.err().unwrap().kind(), std::io::ErrorKind::AlreadyExists);
 
-    fs::remove_file(path).unwrap();
+    tmp_dir.close().unwrap();
   }
 
   #[test]
   fn test_snapshot() {
+    let tmp_dir = tempdir().unwrap();
+    let buf = tmp_dir.path().join("test_snapshot");
+    let path = buf.to_str().unwrap();
+
     let mut ledger_state = LedgerState::test_ledger();
-    let path = "./test_snapshot";
     ledger_state.merkle_path = path.to_string();
     let result = ledger_state.snapshot();
 
     // Verify that the SnapshotId is correct
     assert_eq!(result.ok().unwrap().id, 0);
 
-    fs::remove_file(path.to_owned() + "-log-0").unwrap();
+    tmp_dir.close().unwrap();
   }
 
   #[test]
@@ -1347,7 +1357,38 @@ mod tests {
   }
 
   #[test]
-  fn test_apply_asset_transfer() {
+  fn test_apply_asset_transfer_no_tracking() {
+    // Instantiate an AssetTransfer
+    let xfr_note = XfrNote { body: XfrBody { inputs: Vec::new(),
+                                             outputs: Vec::new(),
+                                             proofs: XfrProofs { asset_amount_proof: AssetAmountProof::NoProof,
+                                                                 asset_tracking_proof: Default::default() } },
+                                             multisig: Default::default() };
+
+    let assert_transfer_body = AssetTransferBody { inputs: vec![TxoSID { index: TXN_SEQ_ID_PLACEHOLDER }],
+                                                   outputs: vec![TxoSID { index: TXN_SEQ_ID_PLACEHOLDER }],
+                                                   transfer: Box::new(xfr_note) };
+
+    let asset_transfer = AssetTransfer { body: assert_transfer_body,
+                                         body_signatures: Vec::new() };
+
+    // Instantiate a LedgerState
+    let mut ledger_state = LedgerState::test_ledger();
+
+    let map_file = tempfile().unwrap();
+
+    let mut bitmap = BitMap::create(map_file).unwrap();
+    bitmap.append().unwrap();
+
+    ledger_state.utxo_map = Some(bitmap);
+
+    ledger_state.apply_asset_transfer(&asset_transfer);
+
+    assert!(ledger_state.tracked_sids.is_empty());
+  }
+
+    #[test]
+  fn test_apply_asset_transfer_with_tracking() {
     // Instantiate a BlindAssetRecord
     let mut prng = ChaChaRng::from_seed([0u8; 32]);
     let pc_gens = PedersenGens::default();
@@ -1390,11 +1431,7 @@ mod tests {
     // Instantiate a LedgerState
     let mut ledger_state = LedgerState::test_ledger();
 
-    let map_file = OpenOptions::new().read(true)
-                                     .write(true)
-                                     .create_new(true)
-                                     .open("./utxo_map")
-                                     .unwrap();
+    let map_file = tempfile().unwrap();
 
     let mut bitmap = BitMap::create(map_file).unwrap();
     bitmap.append().unwrap();
@@ -1404,8 +1441,6 @@ mod tests {
     ledger_state.apply_asset_transfer(&asset_transfer);
 
     assert_eq!(ledger_state.tracked_sids.get(&elgamal_public_key), Some(&vec![TxoSID { index: 0 }]));
-
-    fs::remove_file("./utxo_map").unwrap();
   }
 
   #[test]
@@ -1527,14 +1562,17 @@ mod tests {
 
   #[test]
   fn test_create_merkle_log() {
-    let base_path = "./merkle_log.txt";
+    let tmp_dir = tempdir().unwrap();
+    let buf = tmp_dir.path().join("merkle_log");
+    let base_path = buf.to_str().unwrap();
+
     let result = LedgerState::create_merkle_log(base_path.to_string(), 0);
     assert!(result.is_ok());
 
     let path = base_path.to_owned() + "-log-0";
-    assert!(fs::metadata(path.clone()).is_ok());
+    assert!(fs::metadata(path).is_ok());
 
-    fs::remove_file(path).unwrap();
+    tmp_dir.close().unwrap();
   }
 
 // TODO (Keyao): Add unit tests for
