@@ -6,8 +6,8 @@ extern crate serde_derive;
 
 use ledger::data_model::errors::PlatformError;
 use ledger::data_model::{
-  AccountAddress, AssetCreation, AssetCreationBody, AssetIssuance, AssetIssuanceBody,
-  AssetTokenCode, AssetTransfer, AssetTransferBody, ConfidentialMemo, IssuerPublicKey, Memo,
+  AccountAddress, DefineAsset, DefineAssetBody, IssueAsset, IssueAssetBody,
+  AssetTokenCode, TransferAsset, TransferAssetBody, ConfidentialMemo, IssuerPublicKey, Memo,
   Operation, Transaction, TxOutput, TxoSID,
 };
 use rand::SeedableRng;
@@ -134,7 +134,7 @@ impl BuildsTransactions for TransactionBuilder {
       None
     };
 
-    self.txn.add_operation(Operation::AssetCreation(AssetCreation::new(AssetCreationBody::new(&token_code.unwrap_or_else(AssetTokenCode::gen_random), pub_key, updatable, traceable, memo, confidential_memo)?, pub_key, priv_key)?));
+    self.txn.add_operation(Operation::DefineAsset(DefineAsset::new(DefineAssetBody::new(&token_code.unwrap_or_else(AssetTokenCode::gen_random), pub_key, updatable, traceable, memo, confidential_memo)?, pub_key, priv_key)?));
     Ok(())
   }
   fn add_operation_issue_asset(&mut self,
@@ -145,7 +145,7 @@ impl BuildsTransactions for TransactionBuilder {
                                records: &[TxOutput])
                                -> Result<(), PlatformError> {
     let mut outputs = self.txn.outputs;
-    self.txn.add_operation(Operation::AssetIssuance(AssetIssuance::new(AssetIssuanceBody::new(token_code, seq_num, records, &mut outputs)?, pub_key, priv_key)?));
+    self.txn.add_operation(Operation::IssueAsset(IssueAsset::new(IssueAssetBody::new(token_code, seq_num, records, &mut outputs)?, pub_key, priv_key)?));
     self.txn.outputs = outputs;
     Ok(())
   }
@@ -158,7 +158,7 @@ impl BuildsTransactions for TransactionBuilder {
     prng = ChaChaRng::from_seed([0u8; 32]);
     let input_keys = Vec::new(); // TODO: multisig support...
     let mut outputs = self.txn.outputs;
-    self.txn.add_operation(Operation::AssetTransfer(AssetTransfer::new(AssetTransferBody::new(&mut prng, input_sids, input_records, output_records, &input_keys, &mut outputs)?)?));
+    self.txn.add_operation(Operation::TransferAsset(TransferAsset::new(TransferAssetBody::new(&mut prng, input_sids, input_records, output_records, &input_keys, &mut outputs)?)?));
     self.txn.outputs = outputs;
     Ok(())
   }

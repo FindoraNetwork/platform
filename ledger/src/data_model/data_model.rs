@@ -189,21 +189,21 @@ pub struct Utxo {
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
-pub struct AssetTransferBody {
+pub struct TransferAssetBody {
   //pub nonce: u128,
   pub inputs: Vec<TxoSID>,    // ledger address of inputs
   pub outputs: Vec<TxoSID>,   // computed in check?
   pub transfer: Box<XfrNote>, //TODO: ZEI. XfrNote,
 }
 
-impl AssetTransferBody {
+impl TransferAssetBody {
   pub fn new<R: CryptoRng + Rng>(prng: &mut R,
                                  input_sids: Vec<TxoSID>,
                                  input_records: &[OpenAssetRecord],
                                  output_records: &[AssetRecord],
                                  input_keys: &[XfrKeyPair],
                                  offset: &mut u64)
-                                 -> Result<AssetTransferBody, errors::PlatformError> {
+                                 -> Result<TransferAssetBody, errors::PlatformError> {
     let id_proofs = vec![];
     let note = Box::new(gen_xfr_note(prng, input_records, output_records, input_keys, &id_proofs)?);
     let mut txos = Vec::new();
@@ -212,33 +212,33 @@ impl AssetTransferBody {
           *offset += 1;
           TxoSID { index: tmp }
         });
-    Ok(AssetTransferBody { inputs: input_sids,
+    Ok(TransferAssetBody { inputs: input_sids,
                            outputs: txos,
                            transfer: note })
   }
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
-pub struct AssetIssuanceBody {
+pub struct IssueAssetBody {
   pub code: AssetTokenCode,
   pub seq_num: u64,
   pub outputs: Vec<TxoSID>,
   pub records: Vec<TxOutput>,
 }
 
-impl AssetIssuanceBody {
+impl IssueAssetBody {
   pub fn new(token_code: &AssetTokenCode,
              seq_num: u64,
              records: &[TxOutput],
              offset: &mut u64)
-             -> Result<AssetIssuanceBody, errors::PlatformError> {
+             -> Result<IssueAssetBody, errors::PlatformError> {
     let mut txos = Vec::new();
     txos.resize_with(records.len(), || {
           let tmp = *offset;
           *offset += 1;
           TxoSID { index: tmp }
         });
-    Ok(AssetIssuanceBody { code: *token_code,
+    Ok(IssueAssetBody { code: *token_code,
                            seq_num,
                            outputs: txos,
                            records: records.to_vec() })
@@ -246,18 +246,18 @@ impl AssetIssuanceBody {
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
-pub struct AssetCreationBody {
+pub struct DefineAssetBody {
   pub asset: Asset,
 }
 
-impl AssetCreationBody {
+impl DefineAssetBody {
   pub fn new(token_code: &AssetTokenCode,
              issuer_key: &IssuerPublicKey, // TODO: require private key check somehow?
              updatable: bool,
              traceable: bool,
              memo: Option<Memo>,
              confidential_memo: Option<ConfidentialMemo>)
-             -> Result<AssetCreationBody, errors::PlatformError> {
+             -> Result<DefineAssetBody, errors::PlatformError> {
     let mut asset_def: Asset = Default::default();
     asset_def.code = *token_code;
     asset_def.issuer = *issuer_key;
@@ -275,7 +275,7 @@ impl AssetCreationBody {
     } else {
       asset_def.confidential_memo = ConfidentialMemo {};
     }
-    Ok(AssetCreationBody { asset: asset_def })
+    Ok(DefineAssetBody { asset: asset_def })
   }
 }
 
@@ -290,88 +290,88 @@ fn compute_signature<T>(secret_key: &XfrSecretKey,
 
 // TODO: UTXO Addresses must be included in Transfer Signature
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
-pub struct AssetTransfer {
+pub struct TransferAsset {
   //pub nonce: u128,
-  pub body: AssetTransferBody,
+  pub body: TransferAssetBody,
   pub body_signatures: Vec<SignedAddress>, // not yet supported
 }
 
-impl AssetTransfer {
-  pub fn new(transfer_body: AssetTransferBody) -> Result<AssetTransfer, errors::PlatformError> {
-    Ok(AssetTransfer { body: transfer_body,
+impl TransferAsset {
+  pub fn new(transfer_body: TransferAssetBody) -> Result<TransferAsset, errors::PlatformError> {
+    Ok(TransferAsset { body: transfer_body,
                        body_signatures: Vec::new() })
   }
 }
 
 //Tells the storage layer what to do the list of active asset records (i.e. UTXO set)
 #[derive(Clone, Debug, Deserialize, Serialize)]
-pub struct AssetTransferResult {
+pub struct TransferAssetResult {
   pub success: bool,
 }
 
 // TODO: Include mechanism for replay attacks
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
-pub struct AssetIssuance {
-  pub body: AssetIssuanceBody,
+pub struct IssueAsset {
+  pub body: IssueAssetBody,
   pub pubkey: IssuerPublicKey,
   pub signature: XfrSignature,
 }
 
-impl AssetIssuance {
-  pub fn new(issuance_body: AssetIssuanceBody,
+impl IssueAsset {
+  pub fn new(issuance_body: IssueAssetBody,
              public_key: &IssuerPublicKey,
              secret_key: &XfrSecretKey)
-             -> Result<AssetIssuance, errors::PlatformError> {
+             -> Result<IssueAsset, errors::PlatformError> {
     let sign = compute_signature(&secret_key, &public_key.key, &issuance_body);
-    Ok(AssetIssuance { body: issuance_body,
+    Ok(IssueAsset { body: issuance_body,
                        pubkey: *public_key,
                        signature: sign })
   }
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
-pub struct AssetIssuanceResult {
+pub struct IssueAssetResult {
   pub success: bool,
 }
 
 // ... etc...
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
-pub struct AssetCreation {
-  pub body: AssetCreationBody,
+pub struct DefineAsset {
+  pub body: DefineAssetBody,
   pub pubkey: IssuerPublicKey,
   pub signature: XfrSignature,
 }
 
-impl AssetCreation {
-  pub fn new(creation_body: AssetCreationBody,
+impl DefineAsset {
+  pub fn new(creation_body: DefineAssetBody,
              public_key: &IssuerPublicKey,
              secret_key: &XfrSecretKey)
-             -> Result<AssetCreation, errors::PlatformError> {
+             -> Result<DefineAsset, errors::PlatformError> {
     let sign = compute_signature(&secret_key, &public_key.key, &creation_body);
-    Ok(AssetCreation { body: creation_body,
+    Ok(DefineAsset { body: creation_body,
                        pubkey: *public_key,
                        signature: sign })
   }
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
-pub struct AssetCreationResult {
+pub struct DefineAssetResult {
   pub success: bool,
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 pub enum Operation {
-  AssetTransfer(AssetTransfer),
-  AssetIssuance(AssetIssuance),
-  AssetCreation(AssetCreation),
+  TransferAsset(TransferAsset),
+  IssueAsset(IssueAsset),
+  DefineAsset(DefineAsset),
   // ... etc...
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub enum OperationResult {
-  AssetTransferResult(AssetTransferResult),
-  AssetIssuanceResult(AssetIssuanceResult),
-  AssetCreationResult(AssetCreationResult),
+  TransferAssetResult(TransferAssetResult),
+  IssueAssetResult(IssueAssetResult),
+  DefineAssetResult(DefineAssetResult),
   // ... etc...
 }
 
@@ -541,12 +541,12 @@ mod tests {
 
   // Test Transaction::add_operation
   // Below are not directly tested but called:
-  //   AssetTransferBody::new
-  //   AssetIssuanceBody::new
-  //   AssetCreationBody::new
-  //   AssetTransfer::new
-  //   AssetIssuance::new
-  //   AssetCreation::new
+  //   TransferAssetBody::new
+  //   IssueAssetBody::new
+  //   DefineAssetBody::new
+  //   TransferAsset::new
+  //   IssueAsset::new
+  //   DefineAsset::new
   #[test]
   fn test_add_operation() {
     // Create values to be used to instantiate operations
@@ -560,7 +560,7 @@ mod tests {
     let public_key = *keypair.get_pk_ref();
     let signature = keypair.sign(message);
 
-    // Instantiate an AssetTransfer operation
+    // Instantiate an TransferAsset operation
     let xfr_note = XfrNote { body: XfrBody { inputs: Vec::new(),
                                              outputs: Vec::new(),
                                              proofs: XfrProofs { asset_amount_proof:
@@ -569,35 +569,35 @@ mod tests {
                                                                    Default::default() } },
                              multisig: Default::default() };
 
-    let assert_transfer_body = AssetTransferBody { inputs: Vec::new(),
+    let assert_transfer_body = TransferAssetBody { inputs: Vec::new(),
                                                    outputs: Vec::new(),
                                                    transfer: Box::new(xfr_note) };
 
-    let asset_transfer = AssetTransfer { body: assert_transfer_body,
+    let asset_transfer = TransferAsset { body: assert_transfer_body,
                                          body_signatures: Vec::new() };
 
-    let transfer_operation = Operation::AssetTransfer(asset_transfer.clone());
+    let transfer_operation = Operation::TransferAsset(asset_transfer.clone());
 
-    // Instantiate an AssetIssuance operation
-    let asset_issuance_body = AssetIssuanceBody { code: Default::default(),
+    // Instantiate an IssueAsset operation
+    let asset_issuance_body = IssueAssetBody { code: Default::default(),
                                                   seq_num: 0,
                                                   outputs: Vec::new(),
                                                   records: Vec::new() };
 
-    let asset_issurance = AssetIssuance { body: asset_issuance_body,
+    let asset_issurance = IssueAsset { body: asset_issuance_body,
                                           pubkey: IssuerPublicKey { key: public_key },
                                           signature: signature.clone() };
 
-    let issurance_operation = Operation::AssetIssuance(asset_issurance.clone());
+    let issurance_operation = Operation::IssueAsset(asset_issurance.clone());
 
-    // Instantiate an AssetCreation operation
+    // Instantiate an DefineAsset operation
     let asset = Default::default();
 
-    let asset_creation = AssetCreation { body: AssetCreationBody { asset },
+    let asset_creation = DefineAsset { body: DefineAssetBody { asset },
                                          pubkey: IssuerPublicKey { key: public_key },
                                          signature: signature };
 
-    let creation_operation = Operation::AssetCreation(asset_creation.clone());
+    let creation_operation = Operation::DefineAsset(asset_creation.clone());
 
     // Add operations to the transaction
     transaction.add_operation(transfer_operation);
@@ -608,11 +608,11 @@ mod tests {
     assert_eq!(transaction.operations.len(), 3);
 
     assert_eq!(transaction.operations.get(0),
-               Some(&Operation::AssetTransfer(asset_transfer)));
+               Some(&Operation::TransferAsset(asset_transfer)));
     assert_eq!(transaction.operations.get(1),
-               Some(&Operation::AssetIssuance(asset_issurance)));
+               Some(&Operation::IssueAsset(asset_issurance)));
     assert_eq!(transaction.operations.get(2),
-               Some(&Operation::AssetCreation(asset_creation)));
+               Some(&Operation::DefineAsset(asset_creation)));
   }
 
   // Verify that the hash values of two transactions:

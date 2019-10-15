@@ -306,7 +306,7 @@ mod tests {
 
     let asset_body = asset_creation_body(&token_code1, &public_key, true, false, None, None);
     let asset_create = asset_creation_operation(&asset_body, &public_key, &secret_key);
-    tx.operations.push(Operation::AssetCreation(asset_create));
+    tx.operations.push(Operation::DefineAsset(asset_create));
 
     state.apply_transaction(&mut tx);
     state.append_transaction(tx);
@@ -332,7 +332,7 @@ mod tests {
 
     let asset_body = asset_creation_body(&token_code1, &public_key, true, false, None, None);
     let asset_create = asset_creation_operation(&asset_body, &public_key, &secret_key);
-    tx.operations.push(Operation::AssetCreation(asset_create));
+    tx.operations.push(Operation::DefineAsset(asset_create));
 
     let mut app =
       test::init_service(App::new().data(Arc::new(RwLock::new(state)))

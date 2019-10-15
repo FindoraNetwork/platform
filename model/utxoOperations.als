@@ -26,19 +26,19 @@ fact { lone o: Operation | no o.prevOp }
 fact { no o: Operation | some (o.^prevOp & o) }
 fact { no o: Operation | no o.signedBy }
 
-sig AssetCreation extends Operation {
+sig DefineAsset extends Operation {
 	newCode: disj AssetCode,
 	issuer: PublicKey
 }
 
-fact NoIrrelevantAssetCodes { all code: AssetCode | one cr: AssetCreation | code = cr.newCode }
+fact NoIrrelevantAssetCodes { all code: AssetCode | one cr: DefineAsset | code = cr.newCode }
 
-sig AssetIssuance extends Operation {
+sig IssueAsset extends Operation {
 	issCode: AssetCode,
 	issOutputs: disj set Txo,
 	issRecipients : issOutputs -> PublicKey
 }
-sig AssetTransfer extends Operation {
+sig TransferAsset extends Operation {
 	inputs: set Txo,
 	trnOutputs: disj set Txo,
 	trnRecipients : trnOutputs -> PublicKey
@@ -49,20 +49,20 @@ fun recipients(o: Operation): Txo -> PublicKey { o.issRecipients + o.trnRecipien
 
 fact NoReOutput { all o: Operation | no (o.outputs & o.^prevOp.outputs) }
 fact oneRecipient {
-	all iss: AssetIssuance | all txo: iss.issOutputs | one pk: PublicKey | txo -> pk in iss.issRecipients
-	all trn: AssetTransfer | all txo: trn.trnOutputs | one pk: PublicKey | txo -> pk in trn.trnRecipients
+	all iss: IssueAsset | all txo: iss.issOutputs | one pk: PublicKey | txo -> pk in iss.issRecipients
+	all trn: TransferAsset | all txo: trn.trnOutputs | one pk: PublicKey | txo -> pk in trn.trnRecipients
 }
 pred isLive[a: Asset, o: Operation] {
 	some txo: Txo | utxoFor[txo,o] and a in txo.assets
 }
 
-//check { all cr: AssetCreation | no cr': AssetCreation | cr' in cr.^prevOp and cr.newCode = cr'.newCode }
+//check { all cr: DefineAsset | no cr': DefineAsset | cr' in cr.^prevOp and cr.newCode = cr'.newCode }
 fact OnlyIssueCreatedAssets {
-	all iss: AssetIssuance | some cr: AssetCreation |
+	all iss: IssueAsset | some cr: DefineAsset |
 	cr in iss.^prevOp and cr.newCode = iss.issCode
 }
 fact OnlyIssuePermittedAssets {
-	all iss: AssetIssuance | some cr: AssetCreation | some privk: PrivateKey | (
+	all iss: IssueAsset | some cr: DefineAsset | some privk: PrivateKey | (
 		isKeyPair[cr.issuer,privk] and	
 		cr.newCode = iss.issCode and
 		privk in iss.signedBy and
@@ -70,21 +70,21 @@ fact OnlyIssuePermittedAssets {
 	)
 }
 fact IssueSomething {
-	all iss: AssetIssuance | some iss.outputs
+	all iss: IssueAsset | some iss.outputs
 }
 fact IssueUniqueThings {
-	all iss: AssetIssuance | all asset: iss.outputs.assets | one o: iss.outputs | asset in o.assets
-	all iss: AssetIssuance | all asset: iss.outputs.assets | not isLive[asset,iss]
+	all iss: IssueAsset | all asset: iss.outputs.assets | one o: iss.outputs | asset in o.assets
+	all iss: IssueAsset | all asset: iss.outputs.assets | not isLive[asset,iss]
 }
 fact TransferSomething {
-	all iss: AssetTransfer | some iss.outputs
+	all iss: TransferAsset | some iss.outputs
 }
 fact TransferSum {
-	all trn: AssetTransfer | all asset: trn.trnOutputs.assets | one i: trn.inputs | asset in i.assets
-	all trn: AssetTransfer | all asset: trn.inputs.assets | one o: trn.trnOutputs | asset in o.assets
+	all trn: TransferAsset | all asset: trn.trnOutputs.assets | one i: trn.inputs | asset in i.assets
+	all trn: TransferAsset | all asset: trn.inputs.assets | one o: trn.trnOutputs | asset in o.assets
 }
 fact NoReissue {
-	all trn: AssetTransfer | no (trn.inputs & trn.outputs)
+	all trn: TransferAsset | no (trn.inputs & trn.outputs)
 }
 
 pred utxoFor[txos: set Txo, o: Operation] {
@@ -103,14 +103,14 @@ pred assetOwnedBy[key: PrivateKey, a: Asset, o: Operation] {
 }
 
 fact OnlySpendYourOwn {
-	all trn: AssetTransfer | all txo: trn.inputs | some privk: trn.signedBy | txoOwnedBy[privk,txo,trn]
+	all trn: TransferAsset | all txo: trn.inputs | some privk: trn.signedBy | txoOwnedBy[privk,txo,trn]
 }
 
 run utxoFor
 
 check CheckNoReissue {
-	all iss: AssetIssuance | no txo : iss.outputs | utxoFor[txo,iss]
-	all iss: AssetIssuance | no a : iss.outputs.assets | isLive[a,iss]
+	all iss: IssueAsset | no txo : iss.outputs | utxoFor[txo,iss]
+	all iss: IssueAsset | no a : iss.outputs.assets | isLive[a,iss]
 } for 10
 
 check TxosUnique {
@@ -120,12 +120,12 @@ check TxosUnique {
 
 
 check TransfersPreserveLiveness {
-	all trn: AssetTransfer | all o: Operation | trn = o.prevOp => all a: Asset | some trn.prevOp =>
+	all trn: TransferAsset | all o: Operation | trn = o.prevOp => all a: Asset | some trn.prevOp =>
 	(isLive[a,trn] => isLive[a,o]) and (isLive[a,o] => isLive[a,trn])
 } for 7
 check AllLiveAssetsHaveBeenIssuedOnce {
 	all o: Operation | all a: Asset | isLive[a,o] =>
-	(one iss: AssetIssuance | iss in o.^prevOp and a in iss.outputs.assets)
+	(one iss: IssueAsset | iss in o.^prevOp and a in iss.outputs.assets)
 } for 7
 check TransfersAreSignedByOwner {
 	all o: Operation | all a: Asset | all privk: PrivateKey | (

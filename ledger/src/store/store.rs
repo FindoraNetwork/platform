@@ -5,7 +5,7 @@ extern crate tempdir;
 
 use crate::data_model::errors::PlatformError;
 use crate::data_model::{
-  AssetCreation, AssetIssuance, AssetPolicyKey, AssetToken, AssetTokenCode, AssetTransfer,
+  DefineAsset, IssueAsset, AssetPolicyKey, AssetToken, AssetTokenCode, TransferAsset,
   CustomAssetPolicy, Operation, SmartContract, SmartContractKey, Transaction, TxOutput,
   TxOutput::BlindAssetRecord, TxnSID, TxoSID, Utxo, TXN_SEQ_ID_PLACEHOLDER,
 };
@@ -359,7 +359,7 @@ impl LedgerState {
     self.max_applied_sid = utxo_addr;
   }
 
-  fn apply_asset_transfer(&mut self, transfer: &AssetTransfer) {
+  fn apply_asset_transfer(&mut self, transfer: &TransferAsset) {
     for utxo in &transfer.body.inputs {
       let mut rectified_txo = *utxo;
       if !self.loading {
@@ -387,7 +387,7 @@ impl LedgerState {
     }
   }
 
-  fn apply_asset_issuance(&mut self, issue: &AssetIssuance) {
+  fn apply_asset_issuance(&mut self, issue: &IssueAsset) {
     debug!(issue_map, "outputs {:?}", issue.body.outputs);
     debug!(issue_map, "records {:?}", issue.body.records);
     for out in issue.body
@@ -405,7 +405,7 @@ impl LedgerState {
            "insert asset issue code {:?} -> seq {:?}", issue.body.code, issue.body.seq_num);
   }
 
-  fn apply_asset_creation(&mut self, create: &AssetCreation) {
+  fn apply_asset_creation(&mut self, create: &DefineAsset) {
     let token: AssetToken = AssetToken { properties: create.body.asset.clone(),
                                          ..Default::default() };
     self.tokens.insert(token.properties.code, token);
@@ -413,9 +413,9 @@ impl LedgerState {
 
   fn apply_operation(&mut self, op: &Operation) {
     match op {
-      Operation::AssetTransfer(transfer) => self.apply_asset_transfer(transfer),
-      Operation::AssetIssuance(issuance) => self.apply_asset_issuance(issuance),
-      Operation::AssetCreation(creation) => self.apply_asset_creation(creation),
+      Operation::TransferAsset(transfer) => self.apply_asset_transfer(transfer),
+      Operation::IssueAsset(issuance) => self.apply_asset_issuance(issuance),
+      Operation::DefineAsset(creation) => self.apply_asset_creation(creation),
     }
   }
 
@@ -432,9 +432,9 @@ impl LedgerState {
   #[cfg(test)]
   fn validate_operation(&mut self, op: &Operation) -> bool {
     match op {
-      Operation::AssetTransfer(transfer) => self.validate_asset_transfer(transfer),
-      Operation::AssetIssuance(issuance) => self.validate_asset_issuance(issuance),
-      Operation::AssetCreation(creation) => self.validate_asset_creation(creation),
+      Operation::TransferAsset(transfer) => self.validate_asset_transfer(transfer),
+      Operation::IssueAsset(issuance) => self.validate_asset_issuance(issuance),
+      Operation::DefineAsset(creation) => self.validate_asset_creation(creation),
     }
   }
 
@@ -444,7 +444,7 @@ impl LedgerState {
   //     3) The zei transaction is valid.
   // TODO:  How do we know that the zei transaction matches?
   #[cfg(test)]
-  fn validate_asset_transfer(&mut self, transfer: &AssetTransfer) -> bool {
+  fn validate_asset_transfer(&mut self, transfer: &TransferAsset) -> bool {
     // [1] The signatures are valid.
     for signature in &transfer.body_signatures {
       if !signature.verify(&serde_json::to_vec(&transfer.body).unwrap()) {
@@ -475,7 +475,7 @@ impl LedgerState {
   //     3) The signature belongs to the anchor (the issuer).
   //     4) For traceable assets, tracing key is included in output records.
   #[cfg(test)]
-  fn validate_asset_issuance(&mut self, issue: &AssetIssuance) -> bool {
+  fn validate_asset_issuance(&mut self, issue: &IssueAsset) -> bool {
     // Get a valid token
     let token = self.get_asset_token(&issue.body.code);
 
@@ -523,7 +523,7 @@ impl LedgerState {
   //     1) The signature is valid.
   //     2) The token? has NOT been used by a different asset token?
   #[cfg(test)]
-  fn validate_asset_creation(&mut self, create: &AssetCreation) -> bool {
+  fn validate_asset_creation(&mut self, create: &DefineAsset) -> bool {
     //[1] the token is not already created, [2] the signature is correct.
     !self.tokens.contains_key(&create.body.asset.code)
     && create.pubkey
@@ -579,15 +579,15 @@ impl<LA: LedgerAccess> BlockContext<LA> {
 
   pub fn apply_operation(&mut self, op: &Operation) {
     match op {
-      Operation::AssetCreation(ac) => {
+      Operation::DefineAsset(ac) => {
         let token: AssetToken = AssetToken { properties: ac.body.asset.clone(),
                                              ..Default::default() };
         self.tokens.insert(ac.body.asset.code, token);
       }
-      Operation::AssetIssuance(ai) => {
+      Operation::IssueAsset(ai) => {
         self.issuance_num.insert(ai.body.code, ai.body.seq_num);
       }
-      Operation::AssetTransfer(at) => {
+      Operation::TransferAsset(at) => {
         for txo_sid in &at.body.inputs {
           if txo_sid.index < TXN_SEQ_ID_PLACEHOLDER {
             self.used_txos.insert(txo_sid.clone());
@@ -684,14 +684,14 @@ impl<'la, LA: LedgerAccess> TxnContext<'la, LA> {
 
   pub fn apply_operation(&mut self, op: &Operation) {
     match op {
-      Operation::AssetIssuance(ai) => {
+      Operation::IssueAsset(ai) => {
         for (ref addr, out) in ai.body.outputs.iter().zip(ai.body.records.iter()) {
           let utxo_ref = Utxo { digest: compute_sha256_hash(&serde_json::to_vec(out).unwrap()),
                                 output: out.clone() };
           self.utxos.insert((*addr).clone(), utxo_ref);
         }
       }
-      Operation::AssetTransfer(at) => {
+      Operation::TransferAsset(at) => {
         for addr in at.body.inputs.iter() {
           if addr.index >= TXN_SEQ_ID_PLACEHOLDER {
             let _op = self.utxos.remove(addr);
@@ -712,7 +712,7 @@ impl<'la, LA: LedgerAccess> TxnContext<'la, LA> {
   //     1) The signatures on the body all are valid.
   //     2) The UTXOs exist on the ledger and match the zei transaction.
   //     3) The zei transaction is valid.
-  fn validate_asset_transfer(&mut self, transfer: &AssetTransfer) -> bool {
+  fn validate_asset_transfer(&mut self, transfer: &TransferAsset) -> bool {
     // [1] The signatures are valid.
     for signature in &transfer.body_signatures {
       if !signature.verify(&serde_json::to_vec(&transfer.body).unwrap()) {
@@ -744,7 +744,7 @@ impl<'la, LA: LedgerAccess> TxnContext<'la, LA> {
   //      3) The signature belongs to the anchor (the issuer).
   //      4) The assets were issued by the proper agent (the anchor).
   //      5) The assets in the TxOutputs are owned by the signatory.
-  fn validate_asset_issuance(&mut self, issue: &AssetIssuance) -> bool {
+  fn validate_asset_issuance(&mut self, issue: &IssueAsset) -> bool {
     // Create a token.
     let token = self.block_context.get_asset_token(&issue.body.code);
 
@@ -785,7 +785,7 @@ impl<'la, LA: LedgerAccess> TxnContext<'la, LA> {
   // An asset creation is valid iff:
   //     1) The token id is available.
   //     2) The signature is valid.
-  fn validate_asset_creation(&mut self, create: &AssetCreation) -> bool {
+  fn validate_asset_creation(&mut self, create: &DefineAsset) -> bool {
     // [1] The token is available
     // [2] the signature is correct.
     !self.block_context
@@ -800,9 +800,9 @@ impl<'la, LA: LedgerAccess> TxnContext<'la, LA> {
 
   fn validate_operation(&mut self, op: &Operation) -> bool {
     match op {
-      Operation::AssetTransfer(transfer) => self.validate_asset_transfer(transfer),
-      Operation::AssetIssuance(issuance) => self.validate_asset_issuance(issuance),
-      Operation::AssetCreation(creation) => self.validate_asset_creation(creation),
+      Operation::TransferAsset(transfer) => self.validate_asset_transfer(transfer),
+      Operation::IssueAsset(issuance) => self.validate_asset_issuance(issuance),
+      Operation::DefineAsset(creation) => self.validate_asset_creation(creation),
     }
   }
 }
@@ -1006,7 +1006,7 @@ impl ArchiveAccess for LedgerState {
 
 pub mod helpers {
   use super::*;
-  use crate::data_model::{Asset, AssetCreationBody, ConfidentialMemo, IssuerPublicKey, Memo};
+  use crate::data_model::{Asset, DefineAssetBody, ConfidentialMemo, IssuerPublicKey, Memo};
   use rand::{CryptoRng, Rng};
   use zei::basic_crypto::signatures::{XfrKeyPair, XfrPublicKey, XfrSecretKey, XfrSignature};
 
@@ -1031,7 +1031,7 @@ pub mod helpers {
                              traceable: bool,
                              memo: Option<Memo>,
                              confidential_memo: Option<ConfidentialMemo>)
-                             -> AssetCreationBody {
+                             -> DefineAssetBody {
     let mut token_properties: Asset = Default::default();
     token_properties.code = *token_code;
     token_properties.issuer = IssuerPublicKey { key: *issuer_key };
@@ -1050,15 +1050,15 @@ pub mod helpers {
       token_properties.confidential_memo = ConfidentialMemo {};
     }
 
-    AssetCreationBody { asset: token_properties }
+    DefineAssetBody { asset: token_properties }
   }
 
-  pub fn asset_creation_operation(asset_body: &AssetCreationBody,
+  pub fn asset_creation_operation(asset_body: &DefineAssetBody,
                                   public_key: &XfrPublicKey,
                                   secret_key: &XfrSecretKey)
-                                  -> AssetCreation {
+                                  -> DefineAsset {
     let sign = compute_signature(&secret_key, &public_key, &asset_body);
-    AssetCreation { body: asset_body.clone(),
+    DefineAsset { body: asset_body.clone(),
                     pubkey: IssuerPublicKey { key: *public_key },
                     signature: sign }
   }
@@ -1069,7 +1069,7 @@ mod tests {
   use super::helpers::*;
   use super::*;
   use crate::data_model::{
-    AssetCreationBody, AssetIssuanceBody, AssetTransfer, AssetTransferBody, IssuerPublicKey,
+    DefineAssetBody, IssueAssetBody, TransferAsset, TransferAssetBody, IssuerPublicKey,
   };
   use bulletproofs::PedersenGens;
   use curve25519_dalek::scalar::Scalar;
@@ -1101,26 +1101,26 @@ mod tests {
     let public_key = *keypair.get_pk_ref();
     let signature = keypair.sign(message);
 
-    // Instantiate an AssetIssuance operation
-    let asset_issuance_body = AssetIssuanceBody { code: Default::default(),
+    // Instantiate an IssueAsset operation
+    let asset_issuance_body = IssueAssetBody { code: Default::default(),
                                                   seq_num: 0,
                                                   outputs: Vec::new(),
                                                   records: Vec::new() };
 
-    let asset_issurance = AssetIssuance { body: asset_issuance_body,
+    let asset_issurance = IssueAsset { body: asset_issuance_body,
                                           pubkey: IssuerPublicKey { key: public_key },
                                           signature: signature.clone() };
 
-    let issurance_operation = Operation::AssetIssuance(asset_issurance);
+    let issurance_operation = Operation::IssueAsset(asset_issurance);
 
-    // Instantiate an AssetCreation operation
+    // Instantiate an DefineAsset operation
     let asset = Default::default();
 
-    let asset_creation = AssetCreation { body: AssetCreationBody { asset },
+    let asset_creation = DefineAsset { body: DefineAssetBody { asset },
                                          pubkey: IssuerPublicKey { key: public_key },
                                          signature: signature };
 
-    let creation_operation = Operation::AssetCreation(asset_creation);
+    let creation_operation = Operation::DefineAsset(asset_creation);
 
     // Verify that loading transaction succeeds with correct path
     let transaction_0: Transaction = Default::default();
@@ -1368,7 +1368,7 @@ mod tests {
 
   #[test]
   fn test_apply_asset_transfer_no_tracking() {
-    // Instantiate an AssetTransfer
+    // Instantiate an TransferAsset
     let xfr_note = XfrNote { body: XfrBody { inputs: Vec::new(),
                                              outputs: Vec::new(),
                                              proofs: XfrProofs { asset_amount_proof:
@@ -1378,11 +1378,11 @@ mod tests {
                              multisig: Default::default() };
 
     let assert_transfer_body =
-      AssetTransferBody { inputs: vec![TxoSID { index: TXN_SEQ_ID_PLACEHOLDER }],
+      TransferAssetBody { inputs: vec![TxoSID { index: TXN_SEQ_ID_PLACEHOLDER }],
                           outputs: vec![TxoSID { index: TXN_SEQ_ID_PLACEHOLDER }],
                           transfer: Box::new(xfr_note) };
 
-    let asset_transfer = AssetTransfer { body: assert_transfer_body,
+    let asset_transfer = TransferAsset { body: assert_transfer_body,
                                          body_signatures: Vec::new() };
 
     // Instantiate a LedgerState
@@ -1429,7 +1429,7 @@ mod tests {
                                                        blind_share: Default::default(),
                                                        lock: None };
 
-    // Instantiate an AssetTransfer
+    // Instantiate an TransferAsset
     let xfr_note = XfrNote { body: XfrBody { inputs: Vec::new(),
                                              outputs: vec![record],
                                              proofs: XfrProofs { asset_amount_proof:
@@ -1439,11 +1439,11 @@ mod tests {
                              multisig: Default::default() };
 
     let assert_transfer_body =
-      AssetTransferBody { inputs: vec![TxoSID { index: TXN_SEQ_ID_PLACEHOLDER }],
+      TransferAssetBody { inputs: vec![TxoSID { index: TXN_SEQ_ID_PLACEHOLDER }],
                           outputs: vec![TxoSID { index: TXN_SEQ_ID_PLACEHOLDER }],
                           transfer: Box::new(xfr_note) };
 
-    let asset_transfer = AssetTransfer { body: assert_transfer_body,
+    let asset_transfer = TransferAsset { body: assert_transfer_body,
                                          body_signatures: Vec::new() };
 
     // Instantiate a LedgerState
@@ -1464,24 +1464,24 @@ mod tests {
 
   #[test]
   fn test_apply_asset_issuance() {
-    // Instantiate an AssetIssuance
+    // Instantiate an IssueAsset
     let mut prng = ChaChaRng::from_seed([0u8; 32]);
     let keypair = XfrKeyPair::generate(&mut prng);
     let message: &[u8] = b"test";
     let public_key = *keypair.get_pk_ref();
     let signature = keypair.sign(message);
 
-    let asset_issuance_body = AssetIssuanceBody { code: Default::default(),
+    let asset_issuance_body = IssueAssetBody { code: Default::default(),
                                                   seq_num: 0,
                                                   outputs: vec![TxoSID { index: 0 },
                                                                 TxoSID { index: 1 }],
                                                   records: Vec::new() };
 
-    let asset_issurance = AssetIssuance { body: asset_issuance_body,
+    let asset_issurance = IssueAsset { body: asset_issuance_body,
                                           pubkey: IssuerPublicKey { key: public_key },
                                           signature: signature };
 
-    // Instantiate a LedgerState and apply the AssetIssuance
+    // Instantiate a LedgerState and apply the IssueAsset
     let mut ledger_state = LedgerState::test_ledger();
     ledger_state.apply_asset_issuance(&asset_issurance);
 
@@ -1519,7 +1519,7 @@ mod tests {
     let public_key = *keypair.get_pk_ref();
     let signature = keypair.sign(message);
 
-    let asset_creation = AssetCreation { body: AssetCreationBody { asset: Default::default() },
+    let asset_creation = DefineAsset { body: DefineAssetBody { asset: Default::default() },
                                          pubkey: IssuerPublicKey { key: public_key },
                                          signature: signature };
 
@@ -1543,7 +1543,7 @@ mod tests {
     let public_key = *keypair.get_pk_ref();
     let signature = keypair.sign(message);
 
-    // Instantiate an AssetTransfer operation
+    // Instantiate an TransferAsset operation
     let xfr_note = XfrNote { body: XfrBody { inputs: Vec::new(),
                                              outputs: Vec::new(),
                                              proofs: XfrProofs { asset_amount_proof:
@@ -1552,35 +1552,35 @@ mod tests {
                                                                    Default::default() } },
                              multisig: Default::default() };
 
-    let assert_transfer_body = AssetTransferBody { inputs: Vec::new(),
+    let assert_transfer_body = TransferAssetBody { inputs: Vec::new(),
                                                    outputs: Vec::new(),
                                                    transfer: Box::new(xfr_note) };
 
-    let asset_transfer = AssetTransfer { body: assert_transfer_body,
+    let asset_transfer = TransferAsset { body: assert_transfer_body,
                                          body_signatures: Vec::new() };
 
-    let transfer_operation = Operation::AssetTransfer(asset_transfer.clone());
+    let transfer_operation = Operation::TransferAsset(asset_transfer.clone());
 
-    // Instantiate an AssetIssuance operation
-    let asset_issuance_body = AssetIssuanceBody { code: Default::default(),
+    // Instantiate an IssueAsset operation
+    let asset_issuance_body = IssueAssetBody { code: Default::default(),
                                                   seq_num: 0,
                                                   outputs: Vec::new(),
                                                   records: Vec::new() };
 
-    let asset_issurance = AssetIssuance { body: asset_issuance_body,
+    let asset_issurance = IssueAsset { body: asset_issuance_body,
                                           pubkey: IssuerPublicKey { key: public_key },
                                           signature: signature.clone() };
 
-    let issurance_operation = Operation::AssetIssuance(asset_issurance.clone());
+    let issurance_operation = Operation::IssueAsset(asset_issurance.clone());
 
-    // Instantiate an AssetCreation operation
+    // Instantiate an DefineAsset operation
     let asset = Default::default();
 
-    let asset_creation = AssetCreation { body: AssetCreationBody { asset },
+    let asset_creation = DefineAsset { body: DefineAssetBody { asset },
                                          pubkey: IssuerPublicKey { key: public_key },
                                          signature: signature };
 
-    let creation_operation = Operation::AssetCreation(asset_creation.clone());
+    let creation_operation = Operation::DefineAsset(asset_creation.clone());
 
     // Test apply_operation
     let mut ledger_state = LedgerState::test_ledger();
@@ -1657,7 +1657,7 @@ mod tests {
 
     let asset_body = asset_creation_body(&token_code1, &public_key, true, false, None, None);
     let asset_create = asset_creation_operation(&asset_body, &public_key, &secret_key);
-    tx.operations.push(Operation::AssetCreation(asset_create));
+    tx.operations.push(Operation::DefineAsset(asset_create));
 
     assert!(state.validate_transaction(&tx));
 
@@ -1688,7 +1688,7 @@ mod tests {
     let (public_key2, _secret_key2) = build_keys(&mut prng);
 
     asset_create.pubkey.key = public_key2;
-    tx.operations.push(Operation::AssetCreation(asset_create));
+    tx.operations.push(Operation::DefineAsset(asset_create));
 
     assert!(!state.validate_transaction(&tx));
   }
@@ -1712,7 +1712,7 @@ mod tests {
     let (public_key2, _secret_key2) = build_keys(&mut prng);
 
     asset_create.pubkey.key = public_key2;
-    tx.operations.push(Operation::AssetCreation(asset_create));
+    tx.operations.push(Operation::DefineAsset(asset_create));
 
     assert!(!state.validate_transaction(&tx));
   }
@@ -1740,7 +1740,7 @@ mod tests {
 
     let asset_body = asset_creation_body(&token_code1, &public_key, true, false, None, None);
     let asset_create = asset_creation_operation(&asset_body, &public_key, &secret_key);
-    tx.operations.push(Operation::AssetCreation(asset_create));
+    tx.operations.push(Operation::DefineAsset(asset_create));
 
     assert!(ledger.validate_transaction(&tx));
 
@@ -1748,19 +1748,19 @@ mod tests {
 
     let mut tx = Transaction::default();
 
-    let asset_issuance_body = AssetIssuanceBody { seq_num: 0,
+    let asset_issuance_body = IssueAssetBody { seq_num: 0,
                                                   code: token_code1,
                                                   outputs: vec![TxoSID { index: 0 }],
                                                   records: Vec::new() };
 
     let sign = compute_signature(&secret_key, &public_key, &asset_issuance_body);
 
-    let asset_issuance_operation = AssetIssuance { body: asset_issuance_body,
+    let asset_issuance_operation = IssueAsset { body: asset_issuance_body,
                                                    pubkey: IssuerPublicKey { key:
                                                                                public_key.clone() },
                                                    signature: sign };
 
-    let issue_op = Operation::AssetIssuance(asset_issuance_operation);
+    let issue_op = Operation::IssueAsset(asset_issuance_operation);
 
     tx.operations.push(issue_op);
     let sid = ledger.apply_transaction(&tx);
