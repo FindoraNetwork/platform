@@ -381,7 +381,7 @@ pub struct TimeBounds {
   pub end: DateTime<Utc>,
 }
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 pub struct Transaction {
   pub operations: Vec<Operation>,
   pub variable_utxos: Vec<TxoSID>, // TODO: precondition support
@@ -445,8 +445,8 @@ pub struct Account {
 
 #[cfg(test)]
 mod tests {
-  use rand::SeedableRng;
   use super::*;
+  use rand::SeedableRng;
   use std::cmp::min;
   use std::mem;
   use zei::xfr::structs::{AssetAmountProof, XfrBody, XfrProofs};
@@ -514,15 +514,15 @@ mod tests {
     let base64 = "ZGVmZ2hpamtsbW5vcHFycw==";
     let result = Code::new_from_base64(base64);
 
-    assert_eq!(
-      result.ok(),
-      Some(Code{ val:[100, 101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111, 112, 113, 114, 115] })
-    );
+    assert_eq!(result.ok(),
+               Some(Code { val: [100, 101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111,
+                                 112, 113, 114, 115] }));
   }
 
   #[test]
   fn test_code_to_base64() {
-    let code = Code{ val: [100, 101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111, 112, 113, 114, 115] };
+    let code = Code { val: [100, 101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111, 112,
+                            113, 114, 115] };
     assert_eq!(code.to_base64(), "ZGVmZ2hpamtsbW5vcHFycw==");
   }
 
@@ -533,11 +533,9 @@ mod tests {
     let keypair = XfrKeyPair::generate(&mut prng);
     let message: &[u8] = b"test";
 
-    let signed_address = SignedAddress {
-      address: XfrAddress{ key: *keypair.get_pk_ref() },
-      signature: keypair.sign(message)
-    };
-    
+    let signed_address = SignedAddress { address: XfrAddress { key: *keypair.get_pk_ref() },
+                                         signature: keypair.sign(message) };
+
     assert!(signed_address.verify(message));
   }
 
@@ -561,57 +559,43 @@ mod tests {
 
     let public_key = *keypair.get_pk_ref();
     let signature = keypair.sign(message);
-    
+
     // Instantiate an AssetTransfer operation
-    let xfr_note = XfrNote {
-      body: XfrBody {
-        inputs: Vec::new(),
-        outputs: Vec::new(),
-        proofs: XfrProofs {
-          asset_amount_proof: AssetAmountProof::NoProof,
-          asset_tracking_proof: Default::default()
-        }
-      },
-      multisig: Default::default()
-    };
+    let xfr_note = XfrNote { body: XfrBody { inputs: Vec::new(),
+                                             outputs: Vec::new(),
+                                             proofs: XfrProofs { asset_amount_proof:
+                                                                   AssetAmountProof::NoProof,
+                                                                 asset_tracking_proof:
+                                                                   Default::default() } },
+                             multisig: Default::default() };
 
-    let assert_transfer_body = AssetTransferBody {
-      inputs: Vec::new(),
-      outputs: Vec::new(),
-      transfer: Box::new(xfr_note)
-    };
+    let assert_transfer_body = AssetTransferBody { inputs: Vec::new(),
+                                                   outputs: Vec::new(),
+                                                   transfer: Box::new(xfr_note) };
 
-    let asset_transfer = AssetTransfer {
-      body: assert_transfer_body,
-      body_signatures: Vec::new()
-    };
+    let asset_transfer = AssetTransfer { body: assert_transfer_body,
+                                         body_signatures: Vec::new() };
 
     let transfer_operation = Operation::AssetTransfer(asset_transfer.clone());
 
     // Instantiate an AssetIssuance operation
-    let asset_issuance_body = AssetIssuanceBody {
-      code: Default::default(),
-      seq_num: 0,
-      outputs: Vec::new(),
-      records: Vec::new()
-    };
+    let asset_issuance_body = AssetIssuanceBody { code: Default::default(),
+                                                  seq_num: 0,
+                                                  outputs: Vec::new(),
+                                                  records: Vec::new() };
 
-    let asset_issurance = AssetIssuance {
-      body: asset_issuance_body,
-      pubkey: IssuerPublicKey { key: public_key },
-      signature: signature.clone()
-    };
+    let asset_issurance = AssetIssuance { body: asset_issuance_body,
+                                          pubkey: IssuerPublicKey { key: public_key },
+                                          signature: signature.clone() };
 
     let issurance_operation = Operation::AssetIssuance(asset_issurance.clone());
 
     // Instantiate an AssetCreation operation
     let asset = Default::default();
 
-    let asset_creation = AssetCreation {
-      body: AssetCreationBody { asset },
-      pubkey: IssuerPublicKey { key: public_key },
-      signature: signature
-    };
+    let asset_creation = AssetCreation { body: AssetCreationBody { asset },
+                                         pubkey: IssuerPublicKey { key: public_key },
+                                         signature: signature };
 
     let creation_operation = Operation::AssetCreation(asset_creation.clone());
 
@@ -623,9 +607,12 @@ mod tests {
     // Verify operatoins
     assert_eq!(transaction.operations.len(), 3);
 
-    assert_eq!(transaction.operations.get(0), Some(&Operation::AssetTransfer(asset_transfer)));
-    assert_eq!(transaction.operations.get(1), Some(&Operation::AssetIssuance(asset_issurance)));
-    assert_eq!(transaction.operations.get(2), Some(&Operation::AssetCreation(asset_creation)));
+    assert_eq!(transaction.operations.get(0),
+               Some(&Operation::AssetTransfer(asset_transfer)));
+    assert_eq!(transaction.operations.get(1),
+               Some(&Operation::AssetIssuance(asset_issurance)));
+    assert_eq!(transaction.operations.get(2),
+               Some(&Operation::AssetCreation(asset_creation)));
   }
 
   // Verify that the hash values of two transactions:
@@ -635,22 +622,24 @@ mod tests {
   fn test_compute_merkle_hash() {
     let transaction_default: Transaction = Default::default();
 
-    let transaction_different_merkle_id = Transaction { operations: Vec::new(),
-                  variable_utxos: Vec::new(),
-                  credentials: Vec::new(),
-                  memos: Vec::new(),
-                  tx_id: TxnSID { index: TXN_SEQ_ID_PLACEHOLDER as usize },
-                  merkle_id: 1,
-                  outputs: 0 };
-    
+    let transaction_different_merkle_id =
+      Transaction { operations: Vec::new(),
+                    variable_utxos: Vec::new(),
+                    credentials: Vec::new(),
+                    memos: Vec::new(),
+                    tx_id: TxnSID { index: TXN_SEQ_ID_PLACEHOLDER as usize },
+                    merkle_id: 1,
+                    outputs: 0 };
+
     let transaction_other_differences = Transaction { operations: Vec::new(),
-                  variable_utxos: Vec::new(),
-                  credentials: Vec::new(),
-                  memos: Vec::new(),
-                  tx_id: TxnSID { index: TXN_SEQ_ID_PLACEHOLDER as usize },
-                  merkle_id: 1,
-                  outputs: 1 };
-    
+                                                      variable_utxos: Vec::new(),
+                                                      credentials: Vec::new(),
+                                                      memos: Vec::new(),
+                                                      tx_id: TxnSID { index: TXN_SEQ_ID_PLACEHOLDER
+                                                                             as usize },
+                                                      merkle_id: 1,
+                                                      outputs: 1 };
+
     let hash_value_default = transaction_default.compute_merkle_hash();
     let hash_value_different_merkle_id = transaction_different_merkle_id.compute_merkle_hash();
     let hash_value_other_differences = transaction_other_differences.compute_merkle_hash();

@@ -289,7 +289,6 @@ impl SparseMap {
 //
 // The size of this structure must match the HEADER_SIZE
 // constant.
-
 #[derive(Debug)]
 #[repr(C)]
 struct BlockHeader {
