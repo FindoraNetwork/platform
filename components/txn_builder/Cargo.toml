@@ -4,6 +4,9 @@ version = "0.1.0"
 authors = ["Nathan Yospe <nathan@eian.io>"]
 edition = "2018"
 
+[lib]
+path = "src/txn_builder.rs"
+
 [dependencies]
 ledger = { path = "../../ledger" }
 serde = "1.0"
