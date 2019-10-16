@@ -188,64 +188,55 @@ pub struct Utxo {
   pub output: TxOutput,
 }
 
-#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Copy, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub enum TxoRef {
+    Relative(u64),    // Offset backwards from this operation (within a txn)
+    Absolute(TxoSID), // Absolute Txo address to a location outside this txn
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct TransferAssetBody {
-  //pub nonce: u128,
-  pub inputs: Vec<TxoSID>,    // ledger address of inputs
-  pub outputs: Vec<TxoSID>,   // computed in check?
-  pub transfer: Box<XfrNote>, //TODO: ZEI. XfrNote,
+  pub inputs: Vec<TxoRef>,    // Ledger address of inputs
+  pub num_outputs: usize,     // How many output TXOs?
+  pub transfer: Box<XfrNote>, // Encrypted transfer note
 }
 
 impl TransferAssetBody {
   pub fn new<R: CryptoRng + Rng>(prng: &mut R,
-                                 input_sids: Vec<TxoSID>,
+                                 input_refs: Vec<TxoRef>,
                                  input_records: &[OpenAssetRecord],
                                  output_records: &[AssetRecord],
-                                 input_keys: &[XfrKeyPair],
-                                 offset: &mut u64)
+                                 input_keys: &[XfrKeyPair])
                                  -> Result<TransferAssetBody, errors::PlatformError> {
     let id_proofs = vec![];
     let note = Box::new(gen_xfr_note(prng, input_records, output_records, input_keys, &id_proofs)?);
-    let mut txos = Vec::new();
-    txos.resize_with(output_records.len(), || {
-          let tmp = *offset;
-          *offset += 1;
-          TxoSID { index: tmp }
-        });
-    Ok(TransferAssetBody { inputs: input_sids,
-                           outputs: txos,
+    Ok(TransferAssetBody { inputs: input_refs,
+                           num_outputs: output_records.len(),
                            transfer: note })
   }
 }
 
-#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct IssueAssetBody {
   pub code: AssetTokenCode,
   pub seq_num: u64,
-  pub outputs: Vec<TxoSID>,
+  pub num_outputs: usize,
   pub records: Vec<TxOutput>,
 }
 
 impl IssueAssetBody {
   pub fn new(token_code: &AssetTokenCode,
              seq_num: u64,
-             records: &[TxOutput],
-             offset: &mut u64)
+             records: &[TxOutput])
              -> Result<IssueAssetBody, errors::PlatformError> {
-    let mut txos = Vec::new();
-    txos.resize_with(records.len(), || {
-          let tmp = *offset;
-          *offset += 1;
-          TxoSID { index: tmp }
-        });
     Ok(IssueAssetBody { code: *token_code,
-                           seq_num,
-                           outputs: txos,
-                           records: records.to_vec() })
+                        seq_num,
+                        num_outputs: records.len(),
+                        records: records.to_vec() })
   }
 }
 
-#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct DefineAssetBody {
   pub asset: Asset,
 }
@@ -289,7 +280,7 @@ fn compute_signature<T>(secret_key: &XfrSecretKey,
 }
 
 // TODO: UTXO Addresses must be included in Transfer Signature
-#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct TransferAsset {
   //pub nonce: u128,
   pub body: TransferAssetBody,
@@ -310,7 +301,7 @@ pub struct TransferAssetResult {
 }
 
 // TODO: Include mechanism for replay attacks
-#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct IssueAsset {
   pub body: IssueAssetBody,
   pub pubkey: IssuerPublicKey,
@@ -335,7 +326,7 @@ pub struct IssueAssetResult {
 }
 
 // ... etc...
-#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct DefineAsset {
   pub body: DefineAssetBody,
   pub pubkey: IssuerPublicKey,
@@ -359,7 +350,7 @@ pub struct DefineAssetResult {
   pub success: bool,
 }
 
-#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub enum Operation {
   TransferAsset(TransferAsset),
   IssueAsset(IssueAsset),
@@ -381,14 +372,12 @@ pub struct TimeBounds {
   pub end: DateTime<Utc>,
 }
 
-#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct Transaction {
   pub operations: Vec<Operation>,
-  pub variable_utxos: Vec<TxoSID>, // TODO: precondition support
   pub credentials: Vec<CredentialProof>,
   pub memos: Vec<Memo>,
   pub tx_id: TxnSID,
-  pub outputs: u64,
   pub merkle_id: u64,
   //pub time_bounds: TimeBounds,
   // ... etc...
@@ -418,12 +407,10 @@ impl Transaction {
 impl Default for Transaction {
   fn default() -> Self {
     Transaction { operations: Vec::new(),
-                  variable_utxos: Vec::new(),
                   credentials: Vec::new(),
                   memos: Vec::new(),
                   tx_id: TxnSID { index: TXN_SEQ_ID_PLACEHOLDER as usize },
-                  merkle_id: TXN_SEQ_ID_PLACEHOLDER,
-                  outputs: 0 }
+                  merkle_id: TXN_SEQ_ID_PLACEHOLDER }
   }
 }
 
@@ -570,7 +557,7 @@ mod tests {
                              multisig: Default::default() };
 
     let assert_transfer_body = TransferAssetBody { inputs: Vec::new(),
-                                                   outputs: Vec::new(),
+                                                   num_outputs: 0,
                                                    transfer: Box::new(xfr_note) };
 
     let asset_transfer = TransferAsset { body: assert_transfer_body,
@@ -581,7 +568,7 @@ mod tests {
     // Instantiate an IssueAsset operation
     let asset_issuance_body = IssueAssetBody { code: Default::default(),
                                                   seq_num: 0,
-                                                  outputs: Vec::new(),
+                                                  num_outputs: 0,
                                                   records: Vec::new() };
 
     let asset_issurance = IssueAsset { body: asset_issuance_body,
@@ -624,7 +611,6 @@ mod tests {
 
     let transaction_different_merkle_id =
       Transaction { operations: Vec::new(),
-                    variable_utxos: Vec::new(),
                     credentials: Vec::new(),
                     memos: Vec::new(),
                     tx_id: TxnSID { index: TXN_SEQ_ID_PLACEHOLDER as usize },
@@ -632,7 +618,6 @@ mod tests {
                     outputs: 0 };
 
     let transaction_other_differences = Transaction { operations: Vec::new(),
-                                                      variable_utxos: Vec::new(),
                                                       credentials: Vec::new(),
                                                       memos: Vec::new(),
                                                       tx_id: TxnSID { index: TXN_SEQ_ID_PLACEHOLDER
