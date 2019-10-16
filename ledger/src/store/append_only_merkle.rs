@@ -13,8 +13,8 @@ extern crate findora;
 extern crate rand;
 extern crate serde;
 extern crate serde_derive;
-extern crate sodiumoxide;
 
+use crate::utils::sha256;
 use chrono::Utc;
 use findora::timestamp;
 use findora::Commas;
@@ -24,7 +24,6 @@ use serde::Deserialize;
 use serde::Deserializer;
 use serde::Serialize;
 use serde::Serializer;
-use sodiumoxide::crypto::hash::sha256;
 use std::fmt;
 use std::fs::File;
 use std::fs::OpenOptions;
@@ -36,7 +35,6 @@ use std::io::SeekFrom::End;
 use std::io::SeekFrom::Start;
 use std::io::Write;
 use std::mem;
-// use std::mem::MaybeUninit;
 use std::slice::from_raw_parts;
 use std::slice::from_raw_parts_mut;
 
@@ -2019,11 +2017,11 @@ impl AppendOnlyMerkle {
 #[cfg(test)]
 mod tests {
   use super::*;
+  use crate::utils::sha256;
   use byteorder::LittleEndian;
   use byteorder::WriteBytesExt;
   use rand::prelude::thread_rng;
   use rand::Rng;
-  use sodiumoxide::crypto::hash::sha256::Digest;
 
   #[test]
   fn test_info() {
@@ -2256,7 +2254,6 @@ mod tests {
   fn test_basic_tree() {
     assert!(mem::size_of::<CheckBits>() == CHECK_SIZE);
     assert!(mem::size_of::<BlockHeader>() == HASH_SIZE);
-    assert!(mem::size_of::<Digest>() == HASH_SIZE);
     assert!(mem::size_of::<Block>() == BLOCK_SIZE);
 
     let result = AppendOnlyMerkle::open(&"no such file".to_string());

@@ -14,3 +14,4 @@ extern crate findora;
 
 pub mod data_model;
 pub mod store;
+pub mod utils;

@@ -23,13 +23,12 @@
 //! The SparseMap structure allows various queries on the contents
 //! of the map.
 
+use crate::utils::sha256;
+use crate::utils::sha256::{Digest, DIGESTBYTES};
 use findora::timestamp;
 use findora::Commas;
 use findora::EnableMap;
 use findora::DEFAULT_MAP;
-use sodiumoxide::crypto::hash::sha256;
-use sodiumoxide::crypto::hash::sha256::Digest;
-use sodiumoxide::crypto::hash::sha256::DIGESTBYTES;
 use std::cmp::min;
 use std::collections::HashMap;
 use std::collections::HashSet;
@@ -289,7 +288,6 @@ impl SparseMap {
 //
 // The size of this structure must match the HEADER_SIZE
 // constant.
-
 #[derive(Debug)]
 #[repr(C)]
 struct BlockHeader {
@@ -634,7 +632,7 @@ impl BitMap {
                           size: 0,
                           blocks: Vec::new(),
                           checksum_data: Vec::new(),
-                          checksum: Digest([0_u8; DIGESTBYTES]),
+                          checksum: Digest { 0: [0_u8; DIGESTBYTES] },
                           dirty: Vec::new(),
                           checksum_valid: Vec::new(),
                           set_bits: Vec::new(),
@@ -694,7 +692,7 @@ impl BitMap {
                               size: count,
                               blocks: block_vector,
                               checksum_data: Vec::new(),
-                              checksum: Digest([0_u8; DIGESTBYTES]),
+                              checksum: Digest { 0: [0_u8; DIGESTBYTES] },
                               dirty: state_vector,
                               checksum_valid: checksum_vector,
                               set_bits: set_vector,
@@ -933,7 +931,7 @@ impl BitMap {
   /// exist in the bitmap.
   ///
   pub fn compute_checksum(&mut self) -> Digest {
-    let mut digest = Digest([0_u8; DIGESTBYTES]);
+    let mut digest = Digest { 0: [0_u8; DIGESTBYTES] };
     let mut first = false;
 
     // For each block not yet computed.
@@ -1253,7 +1251,7 @@ impl BitMap {
     index += 8;
 
     // Now pull the checksum for the tree out of the structure.
-    let mut checksum = Digest([0u8; DIGESTBYTES]);
+    let mut checksum = Digest { 0: [0u8; DIGESTBYTES] };
     checksum.0[..DIGESTBYTES].clone_from_slice(&bytes[index..index + DIGESTBYTES]);
 
     index += DIGESTBYTES;
@@ -1358,6 +1356,7 @@ impl BitMap {
 #[cfg(test)]
 mod tests {
   use super::*;
+  use crate::utils::sha256::{Digest, DIGESTBYTES};
   use std::fs;
   use std::fs::OpenOptions;
   use std::mem;
@@ -1483,7 +1482,7 @@ mod tests {
       panic!("Write failed:  {}", e);
     }
 
-    if bitmap.compute_checksum() != Digest([0_u8; DIGESTBYTES]) {
+    if bitmap.compute_checksum() != (Digest { 0: [0_u8; DIGESTBYTES] }) {
       panic!("compute_checksum() failed on an empty tree");
     }
 

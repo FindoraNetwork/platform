@@ -29,7 +29,6 @@ use serde::Deserialize;
 use serde::Deserializer;
 use serde::Serialize;
 use serde::Serializer;
-use sodiumoxide::crypto::hash::sha256;
 use std::fs::File;
 use std::io::BufWriter;
 use std::io::Error;
@@ -48,6 +47,7 @@ use findora::Commas;
 use findora::EnableMap;
 use findora::DEFAULT_MAP;
 
+use crate::utils::sha256;
 #[allow(non_upper_case_globals)]
 static apply_log: EnableMap = DEFAULT_MAP;
 

@@ -4,6 +4,9 @@ version = "0.1.0"
 authors = ["Nathan Yospe <nathan@eian.io>"]
 edition = "2018"
 
+[lib]
+path = "src/ledger_app.rs"
+
 [dependencies]
 ledger = { path = "../../ledger" }
 api_service = { path = "../../components/api_service" }

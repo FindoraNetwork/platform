@@ -4,5 +4,8 @@ version = "0.1.0"
 authors = ["Jonathan Bertoni <jonathan@eian.io>"]
 edition = "2018"
 
+[lib]
+path = "src/findora.rs"
+
 [dependencies]
 chrono = "0.4"

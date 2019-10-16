@@ -429,7 +429,7 @@ mod tests {
     let uri_string = utf8_percent_encode(&serialize, FRAGMENT).to_string();
 
     let submit_req = test::TestRequest::post().uri(&format!("/submit_transaction/{}", uri_string))
-                                             .to_request();
+                                              .to_request();
 
     let query_req = test::TestRequest::get().uri(&format!("/asset_token/{}",
                                                           token_code1.to_base64()))
