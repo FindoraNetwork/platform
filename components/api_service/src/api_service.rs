@@ -3,7 +3,7 @@ extern crate actix_web;
 extern crate ledger;
 extern crate serde_json;
 
-use actix_web::{App, dev, error, HttpServer, web};
+use actix_web::{dev, error, web, App, HttpServer};
 use ledger::data_model::{
   AssetPolicyKey, AssetToken, AssetTokenCode, CustomAssetPolicy, SmartContract, SmartContractKey,
   TxnSID, TxoSID, Utxo,
@@ -72,7 +72,7 @@ fn query_policy<LA>(data: web::Data<Arc<RwLock<LA>>>,
 fn query_contract<LA>(data: web::Data<Arc<RwLock<LA>>>,
                       info: web::Path<String>)
                       -> actix_web::Result<web::Json<SmartContract>>
-  where LA:LedgerAccess
+  where LA: LedgerAccess
 {
   let reader = data.read().unwrap();
   if let Ok(smart_contract_key) = SmartContractKey::new_from_base64(&*info) {
@@ -226,90 +226,73 @@ enum Module {
 
 trait ApplyModule {
   fn apply_module<LA: 'static
-                    + LedgerAccess
-                    + ArchiveAccess
-                    + LedgerUpdate
-                    + ArchiveUpdate
-                    + Sync
-                    + Send>(self, module: Module) -> Self;
+                      + LedgerAccess
+                      + ArchiveAccess
+                      + LedgerUpdate
+                      + ArchiveUpdate
+                      + Sync
+                      + Send>(
+    self,
+    module: Module)
+    -> Self;
 
-  fn apply_ledger_access<LA: 'static
-                             + LedgerAccess
-                             + Sync
-                             + Send>(self) -> Self;
+  fn apply_ledger_access<LA: 'static + LedgerAccess + Sync + Send>(self) -> Self;
 
-  fn apply_archive_access<AA: 'static
-                              + ArchiveAccess
-                              + Sync
-                              + Send>(self) -> Self;
+  fn apply_archive_access<AA: 'static + ArchiveAccess + Sync + Send>(self) -> Self;
 
-  fn apply_update<U: 'static
-                     + LedgerUpdate
-                     + ArchiveUpdate
-                     + Sync
-                     + Send>(self) -> Self;
+  fn apply_update<U: 'static + LedgerUpdate + ArchiveUpdate + Sync + Send>(self) -> Self;
 }
 
-impl<T, B> ApplyModule for App<T, B> where
-    B: actix_web::dev::MessageBody,
-    T: actix_service::NewService<Config = (), Request = dev::ServiceRequest, Response = dev::ServiceResponse<B>, Error = error::Error, InitError = ()> {
+impl<T, B> ApplyModule for App<T, B>
+  where B: actix_web::dev::MessageBody,
+        T: actix_service::NewService<Config = (),
+                                     Request = dev::ServiceRequest,
+                                     Response = dev::ServiceResponse<B>,
+                                     Error = error::Error,
+                                     InitError = ()>
+{
   // Call the appropraite function depending on the module
   fn apply_module<LA: 'static
-                    + LedgerAccess
-                    + ArchiveAccess
-                    + LedgerUpdate
-                    + ArchiveUpdate
-                    + Sync
-                    + Send>(self, module: Module) -> Self {
+                      + LedgerAccess
+                      + ArchiveAccess
+                      + LedgerUpdate
+                      + ArchiveUpdate
+                      + Sync
+                      + Send>(
+    self,
+    module: Module)
+    -> Self {
     match module {
       Module::LedgerAccess => self.apply_ledger_access::<LA>(),
       Module::ArchiveAccess => self.apply_archive_access::<LA>(),
       Module::Update => self.apply_update::<LA>(),
     }
   }
-  
+
   // Apply the LedgerAccess module
-  fn apply_ledger_access<LA: 'static
-                             + LedgerAccess
-                             + Sync
-                             + Send>(self) -> Self {
-    self.route("/utxo_sid/{sid}",
-          web::get().to(query_utxo::<LA>))
-        .route("/asset_token/{token}",
-          web::get().to(query_asset::<LA>))
-        .route("/policy_key/{key}",
-          web::get().to(query_policy::<LA>))
-        .route("/contract_key/{key}",
-          web::get().to(query_contract::<LA>))
+  fn apply_ledger_access<LA: 'static + LedgerAccess + Sync + Send>(self) -> Self {
+    self.route("/utxo_sid/{sid}", web::get().to(query_utxo::<LA>))
+        .route("/asset_token/{token}", web::get().to(query_asset::<LA>))
+        .route("/policy_key/{key}", web::get().to(query_policy::<LA>))
+        .route("/contract_key/{key}", web::get().to(query_contract::<LA>))
   }
 
   // Apply the ArchiveAccess module
-  fn apply_archive_access<AA: 'static
-                              + ArchiveAccess
-                              + Sync
-                              + Send>(self) -> Self {
-    self.route("/txn_sid/{sid}",
-          web::get().to(query_txn::<AA>))
-        .route("/global_state",
-          web::get().to(query_global_state::<AA>))
-        .route("/proof/{sid}",
-          web::get().to(query_proof::<AA>))
-        .route("/utxo_map",
-          web::get().to(query_utxo_map::<AA>))
+  fn apply_archive_access<AA: 'static + ArchiveAccess + Sync + Send>(self) -> Self {
+    self.route("/txn_sid/{sid}", web::get().to(query_txn::<AA>))
+        .route("/global_state", web::get().to(query_global_state::<AA>))
+        .route("/proof/{sid}", web::get().to(query_proof::<AA>))
+        .route("/utxo_map", web::get().to(query_utxo_map::<AA>))
         .route("/utxo_map_checksum",
-          web::get().to(query_utxo_map_checksum::<AA>))
+               web::get().to(query_utxo_map_checksum::<AA>))
         .route("/utxo_partial_map/{sidlist}",
-          web::get().to(query_utxo_partial_map::<AA>))
+               web::get().to(query_utxo_partial_map::<AA>))
   }
 
   // Apply the combination of LedgerUpdate and ArchiveUpdate modules
-  fn apply_update<U: 'static
-                     + LedgerUpdate
-                     + ArchiveUpdate
-                     + Sync
-                     + Send>(self) -> Self {
+  fn apply_update<U: 'static + LedgerUpdate + ArchiveUpdate + Sync + Send>(self) -> Self {
     self.route("/submit_transaction/{tx}",
-          web::post().to(submit_transaction::<U>))
+               web::post().to(submit_transaction::<U>))
   }
 }
 
@@ -330,9 +313,9 @@ impl RestfulApiService {
 
     HttpServer::new(move || {
       App::new().data(ledger_access.clone())
-        .apply_module::<LA>(Module::LedgerAccess)
-        .apply_module::<LA>(Module::ArchiveAccess)
-        .apply_module::<LA>(Module::Update)
+                .apply_module::<LA>(Module::LedgerAccess)
+                .apply_module::<LA>(Module::ArchiveAccess)
+                .apply_module::<LA>(Module::Update)
     }).bind(&addr)?
       .start();
 
