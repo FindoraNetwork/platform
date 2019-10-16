@@ -4,4 +4,3 @@ pub mod errors;
 pub mod logged_merkle;
 mod store;
 pub use store::*;
-

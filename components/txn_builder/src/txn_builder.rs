@@ -6,9 +6,9 @@ extern crate serde_derive;
 
 use ledger::data_model::errors::PlatformError;
 use ledger::data_model::{
-  AccountAddress, DefineAsset, DefineAssetBody, IssueAsset, IssueAssetBody,
-  AssetTokenCode, TransferAsset, TransferAssetBody, ConfidentialMemo, IssuerPublicKey, Memo,
-  Operation, Transaction, TxOutput, TxoSID,
+  AccountAddress, AssetTokenCode, ConfidentialMemo, DefineAsset, DefineAssetBody, IssueAsset,
+  IssueAssetBody, IssuerPublicKey, Memo, Operation, Transaction, TransferAsset, TransferAssetBody,
+  TxOutput, TxoSID,
 };
 use rand::SeedableRng;
 use rand_chacha::ChaChaRng;

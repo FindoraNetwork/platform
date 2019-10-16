@@ -1,3 +1,4 @@
+use super::errors;
 use crate::store::append_only_merkle::HashValue;
 use crate::store::compute_sha256_hash;
 use base64::decode as b64dec;
@@ -12,7 +13,6 @@ use std::convert::TryFrom;
 use zei::basic_crypto::signatures::{XfrKeyPair, XfrPublicKey, XfrSecretKey, XfrSignature};
 use zei::xfr::lib::gen_xfr_note;
 use zei::xfr::structs::{AssetRecord, BlindAssetRecord, OpenAssetRecord, XfrNote};
-use super::errors;
 
 pub const TXN_SEQ_ID_PLACEHOLDER: u64 = 0xD000_0000_0000_0000u64;
 
@@ -190,8 +190,8 @@ pub struct Utxo {
 
 #[derive(Copy, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub enum TxoRef {
-    Relative(u64),    // Offset backwards from this operation (within a txn)
-    Absolute(TxoSID), // Absolute Txo address to a location outside this txn
+  Relative(u64),    // Offset backwards from this operation (within a txn)
+  Absolute(TxoSID), // Absolute Txo address to a location outside this txn
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -315,8 +315,8 @@ impl IssueAsset {
              -> Result<IssueAsset, errors::PlatformError> {
     let sign = compute_signature(&secret_key, &public_key.key, &issuance_body);
     Ok(IssueAsset { body: issuance_body,
-                       pubkey: *public_key,
-                       signature: sign })
+                    pubkey: *public_key,
+                    signature: sign })
   }
 }
 
@@ -340,8 +340,8 @@ impl DefineAsset {
              -> Result<DefineAsset, errors::PlatformError> {
     let sign = compute_signature(&secret_key, &public_key.key, &creation_body);
     Ok(DefineAsset { body: creation_body,
-                       pubkey: *public_key,
-                       signature: sign })
+                     pubkey: *public_key,
+                     signature: sign })
   }
 }
 
@@ -567,13 +567,13 @@ mod tests {
 
     // Instantiate an IssueAsset operation
     let asset_issuance_body = IssueAssetBody { code: Default::default(),
-                                                  seq_num: 0,
-                                                  num_outputs: 0,
-                                                  records: Vec::new() };
+                                               seq_num: 0,
+                                               num_outputs: 0,
+                                               records: Vec::new() };
 
     let asset_issurance = IssueAsset { body: asset_issuance_body,
-                                          pubkey: IssuerPublicKey { key: public_key },
-                                          signature: signature.clone() };
+                                       pubkey: IssuerPublicKey { key: public_key },
+                                       signature: signature.clone() };
 
     let issurance_operation = Operation::IssueAsset(asset_issurance.clone());
 
@@ -581,8 +581,8 @@ mod tests {
     let asset = Default::default();
 
     let asset_creation = DefineAsset { body: DefineAssetBody { asset },
-                                         pubkey: IssuerPublicKey { key: public_key },
-                                         signature: signature };
+                                       pubkey: IssuerPublicKey { key: public_key },
+                                       signature: signature };
 
     let creation_operation = Operation::DefineAsset(asset_creation.clone());
 

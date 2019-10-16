@@ -5,9 +5,9 @@ extern crate tempdir;
 
 use crate::data_model::errors::PlatformError;
 use crate::data_model::{
-  DefineAsset, IssueAsset, AssetPolicyKey, AssetToken, AssetTokenCode, TransferAsset,
-  CustomAssetPolicy, Operation, SmartContract, SmartContractKey, Transaction, TxOutput,
-  TxOutput::BlindAssetRecord, TxnSID, TxoSID, TxoRef, Utxo, TXN_SEQ_ID_PLACEHOLDER,
+  AssetPolicyKey, AssetToken, AssetTokenCode, CustomAssetPolicy, DefineAsset, IssueAsset,
+  Operation, SmartContract, SmartContractKey, Transaction, TransferAsset, TxOutput,
+  TxOutput::BlindAssetRecord, TxnSID, TxoRef, TxoSID, Utxo, TXN_SEQ_ID_PLACEHOLDER,
 };
 use append_only_merkle::{AppendOnlyMerkle, Proof};
 use bitmap::BitMap;
@@ -16,6 +16,7 @@ use findora::EnableMap;
 use findora::DEFAULT_MAP;
 use logged_merkle::LoggedMerkle;
 use rand::SeedableRng;
+use rand::{CryptoRng, Rng};
 use rand_chacha::ChaChaRng;
 use sha2::{Digest, Sha256};
 use sodiumoxide::crypto::hash::sha256;
@@ -30,7 +31,6 @@ use std::u64;
 use tempdir::TempDir;
 use zei::xfr::lib::verify_xfr_note;
 use zei::xfr::structs::EGPubKey;
-use rand::{CryptoRng, Rng};
 
 use super::append_only_merkle;
 use super::bitmap;
@@ -50,149 +50,151 @@ pub struct SnapshotId {
 }
 
 pub struct TxnEffect {
-    txn:               Transaction,
-    txo_count:         usize,
-    utxos:             Vec<TxOutput>,
-    input_txos:        HashSet<TxoSID>,
-    new_asset_codes:   HashMap<AssetTokenCode, AssetToken>,
-    new_issuance_nums: HashMap<AssetTokenCode, u64>,
+  txn: Transaction,
+  txo_count: usize,
+  utxos: Vec<TxOutput>,
+  input_txos: HashSet<TxoSID>,
+  new_asset_codes: HashMap<AssetTokenCode, AssetToken>,
+  new_issuance_nums: HashMap<AssetTokenCode, u64>,
 }
 
 // Internally validates the transaction as well.
 // If the transaction is invalid, it is dropped, so if you need to inspect
 // the transaction in order to diagnose the error, clone it first!
-fn compute_txn_effect<R: CryptoRng + Rng>(prng: &mut R, txn: Transaction)
-        -> Result<TxnEffect, PlatformError> {
-    let mut txo_count:         usize = 0;
-    let mut utxos:             Vec<Option<TxOutput>> = Vec::new();
-    let mut input_txos:        HashSet<TxoSID> = HashSet::new();
-    let mut new_asset_codes:   HashMap<AssetTokenCode, AssetToken> = HashMap::new();
-    let mut new_issuance_nums: HashMap<AssetTokenCode, u64> = HashMap::new();
+fn compute_txn_effect<R: CryptoRng + Rng>(prng: &mut R,
+                                          txn: Transaction)
+                                          -> Result<TxnEffect, PlatformError> {
+  let mut txo_count: usize = 0;
+  let mut utxos: Vec<Option<TxOutput>> = Vec::new();
+  let mut input_txos: HashSet<TxoSID> = HashSet::new();
+  let mut new_asset_codes: HashMap<AssetTokenCode, AssetToken> = HashMap::new();
+  let mut new_issuance_nums: HashMap<AssetTokenCode, u64> = HashMap::new();
 
-    for op in txn.operations.iter() {
-        assert!(txo_count == utxos.len());
+  for op in txn.operations.iter() {
+    assert!(txo_count == utxos.len());
 
-        match op {
-            // An asset creation is valid iff:
-            //     1) The signature is valid.
-            //         - Fully checked here
-            //     2) The token id is available.
-            //         - Partially checked here
-            Operation::DefineAsset(def) => {
-                // (1)
-                def.pubkey.key
-                   .verify(&serde_json::to_vec(&def.body).unwrap(),
-                           &def.signature)?;
+    match op {
+      // An asset creation is valid iff:
+      //     1) The signature is valid.
+      //         - Fully checked here
+      //     2) The token id is available.
+      //         - Partially checked here
+      Operation::DefineAsset(def) => {
+        // (1)
+        def.pubkey
+           .key
+           .verify(&serde_json::to_vec(&def.body).unwrap(), &def.signature)?;
 
-                let code = def.body.asset.code;
-                let token = AssetToken {
-                    properties: def.body.asset.clone(),
-                    ..Default::default() };
+        let code = def.body.asset.code;
+        let token = AssetToken { properties: def.body.asset.clone(),
+                                 ..Default::default() };
 
-                // (2), only within this transaction
-                if    new_asset_codes  .contains_key(&code)
-                   || new_issuance_nums.contains_key(&code) {
-                    return Err(PlatformError::InputsError);
-                }
-
-                new_asset_codes  .insert(code,token);
-                new_issuance_nums.insert(code,0);
-            }
-
-            // The asset issuance is valid iff:
-            //      1) The operation is unique (not a replay).
-            //          - Partially checked here
-            //      2) The signature is valid.
-            //          - Fully checked here
-            //      3) The signature belongs to the anchor (the issuer).
-            //          - Not checked here
-            //      4) The assets were issued by the proper agent (the anchor).
-            //          - Not checked here
-            //      5) The assets in the TxOutputs are owned by the signatory.
-            //          - TODO: determine how and when to check this
-            Operation::IssueAsset(iss) => {
-                assert!(iss.body.num_outputs == iss.body.records.len());
-
-                let code    = iss.body.code;
-                let seq_num = iss.body.seq_num;
-
-                // (1), within this transaction
-                if seq_num < *new_issuance_nums.get(&code).unwrap_or(&0) {
-                    return Err(PlatformError::InputsError);
-                }
-
-                // (2)
-                iss.pubkey.key
-                   .verify(&serde_json::to_vec(&iss.body).unwrap(),
-                           &iss.signature)?;
-
-                new_issuance_nums.insert(code,seq_num);
-
-                utxos.reserve(iss.body.records.len());
-                for output in iss.body.records.iter() {
-                    utxos.push(Some(output.clone()));
-                    txo_count += 1;
-                }
-            }
-
-            // An asset transfer is valid iff:
-            //     1) The signatures on the body all are valid.
-            //          - Fully checked here
-            //     2) The UTXOs exist on the ledger and match the zei transaction.
-            //          - Partially checked here -- anything which hasn't
-            //            been checked will appear in `input_txos`
-            //     3) The zei transaction is valid.
-            //          - Fully checked here
-            Operation::TransferAsset(trn) => {
-                assert!(trn.body.inputs.len() == trn.body.transfer.body.inputs .len());
-                assert!(trn.body.num_outputs  == trn.body.transfer.body.outputs.len());
-
-                // (1)
-                for sig in &trn.body_signatures {
-                    if !sig.verify(&serde_json::to_vec(&trn.body).unwrap()) {
-                        return Err(PlatformError::InputsError);
-                    }
-                }
-
-                // (2), checking within this transaction and recording
-                // external UTXOs
-                // (3)
-                let null_policies = vec![];
-                for inp in trn.body.inputs.iter() {
-                    verify_xfr_note(prng, &trn.body.transfer, &null_policies)?;
-                    match *inp {
-                        TxoRef::Relative(offs) => {
-                            if offs as usize >= txo_count {
-                                return Err(PlatformError::InputsError);
-                            }
-                            let ix = txo_count-(offs as usize);
-                            if utxos[ix].is_none() {
-                                return Err(PlatformError::InputsError);
-                            }
-                            utxos[ix] = None;
-                        }
-                        TxoRef::Absolute(txo_sid) => {
-                            if input_txos.contains(&txo_sid) {
-                                return Err(PlatformError::InputsError);
-                            }
-
-                            input_txos.insert(txo_sid);
-                        }
-                    }
-                }
-
-                utxos.reserve(trn.body.transfer.body.outputs.len());
-                for out in trn.body.transfer.body.outputs.iter() {
-                    utxos.push(Some(BlindAssetRecord(out.clone())));
-                    txo_count += 1;
-                }
-            }
+        // (2), only within this transaction
+        if new_asset_codes.contains_key(&code) || new_issuance_nums.contains_key(&code) {
+          return Err(PlatformError::InputsError);
         }
-    }
 
-    Ok(TxnEffect { txn, txo_count,
-                   utxos: utxos.into_iter().filter_map(|o| o).collect(),
-                   input_txos, new_asset_codes, new_issuance_nums })
+        new_asset_codes.insert(code, token);
+        new_issuance_nums.insert(code, 0);
+      }
+
+      // The asset issuance is valid iff:
+      //      1) The operation is unique (not a replay).
+      //          - Partially checked here
+      //      2) The signature is valid.
+      //          - Fully checked here
+      //      3) The signature belongs to the anchor (the issuer).
+      //          - Not checked here
+      //      4) The assets were issued by the proper agent (the anchor).
+      //          - Not checked here
+      //      5) The assets in the TxOutputs are owned by the signatory.
+      //          - TODO: determine how and when to check this
+      Operation::IssueAsset(iss) => {
+        assert!(iss.body.num_outputs == iss.body.records.len());
+
+        let code = iss.body.code;
+        let seq_num = iss.body.seq_num;
+
+        // (1), within this transaction
+        if seq_num < *new_issuance_nums.get(&code).unwrap_or(&0) {
+          return Err(PlatformError::InputsError);
+        }
+
+        // (2)
+        iss.pubkey
+           .key
+           .verify(&serde_json::to_vec(&iss.body).unwrap(), &iss.signature)?;
+
+        new_issuance_nums.insert(code, seq_num);
+
+        utxos.reserve(iss.body.records.len());
+        for output in iss.body.records.iter() {
+          utxos.push(Some(output.clone()));
+          txo_count += 1;
+        }
+      }
+
+      // An asset transfer is valid iff:
+      //     1) The signatures on the body all are valid.
+      //          - Fully checked here
+      //     2) The UTXOs exist on the ledger and match the zei transaction.
+      //          - Partially checked here -- anything which hasn't
+      //            been checked will appear in `input_txos`
+      //     3) The zei transaction is valid.
+      //          - Fully checked here
+      Operation::TransferAsset(trn) => {
+        assert!(trn.body.inputs.len() == trn.body.transfer.body.inputs.len());
+        assert!(trn.body.num_outputs == trn.body.transfer.body.outputs.len());
+
+        // (1)
+        for sig in &trn.body_signatures {
+          if !sig.verify(&serde_json::to_vec(&trn.body).unwrap()) {
+            return Err(PlatformError::InputsError);
+          }
+        }
+
+        // (2), checking within this transaction and recording
+        // external UTXOs
+        // (3)
+        let null_policies = vec![];
+        for inp in trn.body.inputs.iter() {
+          verify_xfr_note(prng, &trn.body.transfer, &null_policies)?;
+          match *inp {
+            TxoRef::Relative(offs) => {
+              if offs as usize >= txo_count {
+                return Err(PlatformError::InputsError);
+              }
+              let ix = txo_count - (offs as usize);
+              if utxos[ix].is_none() {
+                return Err(PlatformError::InputsError);
+              }
+              utxos[ix] = None;
+            }
+            TxoRef::Absolute(txo_sid) => {
+              if input_txos.contains(&txo_sid) {
+                return Err(PlatformError::InputsError);
+              }
+
+              input_txos.insert(txo_sid);
+            }
+          }
+        }
+
+        utxos.reserve(trn.body.transfer.body.outputs.len());
+        for out in trn.body.transfer.body.outputs.iter() {
+          utxos.push(Some(BlindAssetRecord(out.clone())));
+          txo_count += 1;
+        }
+      }
+    }
+  }
+
+  Ok(TxnEffect { txn,
+                 txo_count,
+                 utxos: utxos.into_iter().filter_map(|o| o).collect(),
+                 input_txos,
+                 new_asset_codes,
+                 new_issuance_nums })
 }
 
 pub trait LedgerAccess {
@@ -536,7 +538,7 @@ impl LedgerState {
   }
 
   fn apply_asset_issuance(&mut self, issue: &IssueAsset) {
-      unimplemented!();
+    unimplemented!();
     // debug!(issue_map, "outputs {:?}", issue.body.outputs);
     // debug!(issue_map, "records {:?}", issue.body.records);
     // for out in issue.body
@@ -721,7 +723,7 @@ impl<'la, LA: LedgerAccess> TxnContext<'la, LA> {
   pub fn apply_operation(&mut self, op: &Operation) {
     match op {
       Operation::IssueAsset(ai) => {
-          unimplemented!();
+        unimplemented!();
         // for (ref addr, out) in ai.body.outputs.iter().zip(ai.body.records.iter()) {
         //   let utxo_ref = Utxo { digest: compute_sha256_hash(&serde_json::to_vec(out).unwrap()),
         //                         output: out.clone() };
@@ -1037,7 +1039,7 @@ impl ArchiveAccess for LedgerState {
 
 pub mod helpers {
   use super::*;
-  use crate::data_model::{Asset, DefineAssetBody, ConfidentialMemo, IssuerPublicKey, Memo};
+  use crate::data_model::{Asset, ConfidentialMemo, DefineAssetBody, IssuerPublicKey, Memo};
   use rand::{CryptoRng, Rng};
   use zei::basic_crypto::signatures::{XfrKeyPair, XfrPublicKey, XfrSecretKey, XfrSignature};
 
@@ -1090,8 +1092,8 @@ pub mod helpers {
                                   -> DefineAsset {
     let sign = compute_signature(&secret_key, &public_key, &asset_body);
     DefineAsset { body: asset_body.clone(),
-                    pubkey: IssuerPublicKey { key: *public_key },
-                    signature: sign }
+                  pubkey: IssuerPublicKey { key: *public_key },
+                  signature: sign }
   }
 }
 
@@ -1100,7 +1102,7 @@ mod tests {
   use super::helpers::*;
   use super::*;
   use crate::data_model::{
-    DefineAssetBody, IssueAssetBody, TransferAsset, TransferAssetBody, IssuerPublicKey,
+    DefineAssetBody, IssueAssetBody, IssuerPublicKey, TransferAsset, TransferAssetBody,
   };
   use bulletproofs::PedersenGens;
   use curve25519_dalek::scalar::Scalar;
@@ -1134,13 +1136,13 @@ mod tests {
 
     // Instantiate an IssueAsset operation
     let asset_issuance_body = IssueAssetBody { code: Default::default(),
-                                                  seq_num: 0,
-                                                  outputs: Vec::new(),
-                                                  records: Vec::new() };
+                                               seq_num: 0,
+                                               outputs: Vec::new(),
+                                               records: Vec::new() };
 
     let asset_issurance = IssueAsset { body: asset_issuance_body,
-                                          pubkey: IssuerPublicKey { key: public_key },
-                                          signature: signature.clone() };
+                                       pubkey: IssuerPublicKey { key: public_key },
+                                       signature: signature.clone() };
 
     let issurance_operation = Operation::IssueAsset(asset_issurance);
 
@@ -1148,8 +1150,8 @@ mod tests {
     let asset = Default::default();
 
     let asset_creation = DefineAsset { body: DefineAssetBody { asset },
-                                         pubkey: IssuerPublicKey { key: public_key },
-                                         signature: signature };
+                                       pubkey: IssuerPublicKey { key: public_key },
+                                       signature: signature };
 
     let creation_operation = Operation::DefineAsset(asset_creation);
 
@@ -1503,14 +1505,14 @@ mod tests {
     let signature = keypair.sign(message);
 
     let asset_issuance_body = IssueAssetBody { code: Default::default(),
-                                                  seq_num: 0,
-                                                  outputs: vec![TxoSID { index: 0 },
-                                                                TxoSID { index: 1 }],
-                                                  records: Vec::new() };
+                                               seq_num: 0,
+                                               outputs: vec![TxoSID { index: 0 },
+                                                             TxoSID { index: 1 }],
+                                               records: Vec::new() };
 
     let asset_issurance = IssueAsset { body: asset_issuance_body,
-                                          pubkey: IssuerPublicKey { key: public_key },
-                                          signature: signature };
+                                       pubkey: IssuerPublicKey { key: public_key },
+                                       signature: signature };
 
     // Instantiate a LedgerState and apply the IssueAsset
     let mut ledger_state = LedgerState::test_ledger();
@@ -1551,8 +1553,8 @@ mod tests {
     let signature = keypair.sign(message);
 
     let asset_creation = DefineAsset { body: DefineAssetBody { asset: Default::default() },
-                                         pubkey: IssuerPublicKey { key: public_key },
-                                         signature: signature };
+                                       pubkey: IssuerPublicKey { key: public_key },
+                                       signature: signature };
 
     let token = AssetToken { properties: asset_creation.body.asset.clone(),
                              ..Default::default() };
@@ -1594,13 +1596,13 @@ mod tests {
 
     // Instantiate an IssueAsset operation
     let asset_issuance_body = IssueAssetBody { code: Default::default(),
-                                                  seq_num: 0,
-                                                  outputs: Vec::new(),
-                                                  records: Vec::new() };
+                                               seq_num: 0,
+                                               outputs: Vec::new(),
+                                               records: Vec::new() };
 
     let asset_issurance = IssueAsset { body: asset_issuance_body,
-                                          pubkey: IssuerPublicKey { key: public_key },
-                                          signature: signature.clone() };
+                                       pubkey: IssuerPublicKey { key: public_key },
+                                       signature: signature.clone() };
 
     let issurance_operation = Operation::IssueAsset(asset_issurance.clone());
 
@@ -1608,8 +1610,8 @@ mod tests {
     let asset = Default::default();
 
     let asset_creation = DefineAsset { body: DefineAssetBody { asset },
-                                         pubkey: IssuerPublicKey { key: public_key },
-                                         signature: signature };
+                                       pubkey: IssuerPublicKey { key: public_key },
+                                       signature: signature };
 
     let creation_operation = Operation::DefineAsset(asset_creation.clone());
 
@@ -1780,16 +1782,16 @@ mod tests {
     let mut tx = Transaction::default();
 
     let asset_issuance_body = IssueAssetBody { seq_num: 0,
-                                                  code: token_code1,
-                                                  outputs: vec![TxoSID { index: 0 }],
-                                                  records: Vec::new() };
+                                               code: token_code1,
+                                               outputs: vec![TxoSID { index: 0 }],
+                                               records: Vec::new() };
 
     let sign = compute_signature(&secret_key, &public_key, &asset_issuance_body);
 
     let asset_issuance_operation = IssueAsset { body: asset_issuance_body,
-                                                   pubkey: IssuerPublicKey { key:
-                                                                               public_key.clone() },
-                                                   signature: sign };
+                                                pubkey: IssuerPublicKey { key:
+                                                                            public_key.clone() },
+                                                signature: sign };
 
     let issue_op = Operation::IssueAsset(asset_issuance_operation);
 

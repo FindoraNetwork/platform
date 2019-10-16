@@ -1,5 +1,5 @@
-extern crate ledger;
 extern crate api_service;
+extern crate ledger;
 
 use ledger::data_model::errors::PlatformError;
 use ledger::data_model::Transaction;
@@ -16,8 +16,7 @@ impl LedgerApp {
   pub fn new(ledger_state: LedgerState) -> Result<LedgerApp, PlatformError> {
     Ok(LedgerApp { committed_state: Arc::new(RwLock::new(ledger_state)),
                    pending_state: None,
-                   txns: Vec::new(),
-                 })
+                   txns: Vec::new() })
   }
 
   pub fn borrowable_ledger_state(&self) -> Arc<RwLock<LedgerState>> {
