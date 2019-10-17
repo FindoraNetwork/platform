@@ -1,6 +1,6 @@
 use super::errors;
 use crate::store::append_only_merkle::HashValue;
-use crate::store::compute_sha256_hash;
+use crate::utils::sha256;
 use base64::decode as b64dec;
 use base64::encode as b64enc;
 use chrono::prelude::*;
@@ -371,9 +371,9 @@ impl Transaction {
     let mut serialized = bincode::serialize(&self).unwrap();
     serialized.extend(bincode::serialize(&sid).unwrap());
 
-    let digest = compute_sha256_hash(&serialized);
+    let digest = sha256::hash(&serialized);
     let mut result = HashValue::new();
-    result.hash.clone_from_slice(&digest);
+    result.hash.clone_from_slice(&digest.0);
     result
   }
 }
@@ -587,7 +587,7 @@ mod tests {
                     memos: Vec::new(),
                     tx_id: TxnSID { index: TXN_SEQ_ID_PLACEHOLDER as usize },
                     merkle_id: 1,
-                    outputs: 0 };
+                    outputs: TXN_SEQ_ID_PLACEHOLDER };
 
     let transaction_other_differences = Transaction { operations: Vec::new(),
                                                       credentials: Vec::new(),

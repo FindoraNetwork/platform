@@ -52,8 +52,7 @@ pub trait BuildsTransactions {
                            -> Result<(), PlatformError> {
     let mut prng = ChaChaRng::from_seed([0u8; 32]);
     let params = PublicParams::new();
-    let asset_type = [0u8; 16];
-    let ar = AssetRecord::new(amount, asset_type, pub_key.key)?;
+    let ar = AssetRecord::new(amount, token_code.val, pub_key.key)?;
     let ba = build_blind_asset_record(&mut prng, &params.pc_gens, &ar, false, false, &None);
     self.add_operation_issue_asset(pub_key,
                                    priv_key,

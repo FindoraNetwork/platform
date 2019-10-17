@@ -10,6 +10,8 @@ use crate::data_model::{
   SmartContractKey, Transaction, TxOutput, FinalizedTransaction, TxnSID,
   TxoSID, TxoRef, Utxo, TXN_SEQ_ID_PLACEHOLDER,
 };
+use crate::utils::sha256;
+use crate::utils::sha256::Digest as BitDigest;
 use append_only_merkle::{AppendOnlyMerkle, Proof};
 use bitmap::BitMap;
 use findora::timestamp;
@@ -20,9 +22,6 @@ use logged_merkle::LoggedMerkle;
 use rand::SeedableRng;
 use rand::{CryptoRng, Rng};
 use rand_chacha::ChaChaRng;
-use sha2::{Digest, Sha256};
-use sodiumoxide::crypto::hash::sha256;
-use sodiumoxide::crypto::hash::sha256::Digest as BitDigest;
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::fs::File;
 use std::fs::OpenOptions;
@@ -372,17 +371,6 @@ pub trait ArchiveAccess {
 
   // Get the hash of the most recent checkpoint, and its sequence number.
   fn get_global_hash  (&self)                       -> (BitDigest, u64);
-}
-
-pub fn compute_sha256_hash<T>(msg: &T) -> [u8; 32]
-  where T: std::convert::AsRef<[u8]>
-{
-  let mut hasher = Sha256::new();
-  hasher.input(msg);
-  let result = hasher.result();
-  let hash = array_ref![&result, 0, 32];
-
-  *hash
 }
 
 #[repr(C)]
@@ -1191,15 +1179,6 @@ mod tests {
   }
 
   #[test]
-  fn test_begin_commit() {
-    let mut ledger_state = LedgerState::test_ledger();
-    ledger_state.begin_commit();
-
-    assert_eq!(ledger_state.txn_base_sid.0,
-               ledger_state.max_applied_sid.0 + 1);
-  }
-
-  #[test]
   fn test_end_commit() {
     let mut ledger_state = LedgerState::test_ledger();
 
@@ -1277,7 +1256,7 @@ mod tests {
     assert_eq!(ledger_state.tracked_sids.get(&elgamal_public_key),
                Some(&vec![utxo_addr]));
 
-    let utxo_ref = Utxo { digest: compute_sha256_hash(&serde_json::to_vec(&txo.1).unwrap()),
+    let utxo_ref = Utxo { digest: sha256::hash(&serde_json::to_vec(&txo.1).unwrap()).0,
                           output: txo.1 };
     assert_eq!(ledger_state.utxos.get(&utxo_addr).unwrap(), &utxo_ref);
 
