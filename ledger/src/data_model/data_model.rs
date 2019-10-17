@@ -22,7 +22,7 @@ pub struct Code {
   pub val: [u8; 16],
 }
 
-pub type AssetTokenCode = Code;
+pub type AssetTypeCode = Code;
 pub type AssetPolicyKey = Code;
 pub type SmartContractKey = Code;
 
@@ -96,7 +96,7 @@ impl SignedAddress {
 
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 pub struct Asset {
-  pub code: AssetTokenCode,
+  pub code: AssetTypeCode,
   pub issuer: IssuerPublicKey,
   pub memo: Memo,
   pub confidential_memo: ConfidentialMemo,
@@ -105,17 +105,17 @@ pub struct Asset {
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
-pub struct AssetToken {
+pub struct AssetType {
   pub properties: Asset,
   pub digest: [u8; 32],
   pub units: u64,
   pub confidential_units: Commitment,
 }
 
-//impl AssetToken {
-//    pub fn create_empty() -> AssetToken {
-//        AssetToken {
-//            code: AssetTokenCode{val:[0;16]},
+//impl AssetType {
+//    pub fn create_empty() -> AssetType {
+//        AssetType {
+//            code: AssetTypeCode{val:[0;16]},
 //            digest: [0;32],
 //            issuer: Address{key:[0;32]},
 //            memo: Memo{},
@@ -143,10 +143,6 @@ pub struct CredentialProof {
 #[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, Serialize)]
 pub struct SmartContract;
 
-//TODO(Kevin): define types
-#[derive(Clone, Deserialize, Serialize)]
-pub struct Variable;
-
 #[derive(Clone, Copy, Debug, Default, Deserialize, Eq, Hash, PartialEq, Serialize)]
 pub struct TxoSID {
   pub index: u64,
@@ -155,25 +151,6 @@ pub struct TxoSID {
 #[derive(Clone, Copy, Debug, Default, Deserialize, Eq, Hash, PartialEq, Serialize)]
 pub struct TxnSID {
   pub index: usize,
-}
-
-#[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, Serialize)]
-pub struct AssetSpecification {
-  pub code: AssetTokenCode,
-  pub amount: u64,
-}
-
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct PrivateAssetSpecification {
-  amount_commitment: Option<CompressedRistretto>,
-  asset_type_commitment: Option<CompressedRistretto>,
-}
-
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub enum AssetType {
-  // TODO: need to not include amount/ammount_commitment in zei type generation
-  Normal(AssetSpecification),
-  Private(PrivateAssetSpecification),
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -218,14 +195,14 @@ impl TransferAssetBody {
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct IssueAssetBody {
-  pub code: AssetTokenCode,
+  pub code: AssetTypeCode,
   pub seq_num: u64,
   pub num_outputs: usize,
   pub records: Vec<TxOutput>,
 }
 
 impl IssueAssetBody {
-  pub fn new(token_code: &AssetTokenCode,
+  pub fn new(token_code: &AssetTypeCode,
              seq_num: u64,
              records: &[TxOutput])
              -> Result<IssueAssetBody, errors::PlatformError> {
@@ -242,7 +219,7 @@ pub struct DefineAssetBody {
 }
 
 impl DefineAssetBody {
-  pub fn new(token_code: &AssetTokenCode,
+  pub fn new(token_code: &AssetTypeCode,
              issuer_key: &IssuerPublicKey, // TODO: require private key check somehow?
              updatable: bool,
              traceable: bool,
@@ -378,9 +355,12 @@ pub struct Transaction {
   pub credentials: Vec<CredentialProof>,
   pub memos: Vec<Memo>,
   pub tx_id: TxnSID,
-  pub merkle_id: u64,
-  //pub time_bounds: TimeBounds,
-  // ... etc...
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct HashedTransaction {
+    pub txn:       Transaction,
+    pub merkle_id: u64,
 }
 
 impl Transaction {
@@ -389,13 +369,7 @@ impl Transaction {
   }
 
   pub fn compute_merkle_hash(&self) -> HashValue {
-    let serialized = if self.merkle_id != 0 {
-      let mut copy = self.clone();
-      copy.merkle_id = 0;
-      bincode::serialize(&copy).unwrap()
-    } else {
-      bincode::serialize(&self).unwrap()
-    };
+    let serialized = bincode::serialize(&self).unwrap();
 
     let digest = compute_sha256_hash(&serialized);
     let mut result = HashValue::new();
@@ -444,7 +418,7 @@ mod tests {
     let mut sample_size = 0;
 
     for _ in 0..1000 {
-      let code = AssetTokenCode::gen_random();
+      let code = AssetTypeCode::gen_random();
       let mut failed = true;
 
       for byte in code.val.iter() {
@@ -478,7 +452,7 @@ mod tests {
     let mut input = "".to_string();
 
     for i in 0..64 {
-      let code = AssetTokenCode::new_from_str(&input);
+      let code = AssetTypeCode::new_from_str(&input);
       let mut checked = 0;
 
       for j in 0..min(i, code.val.len()) {

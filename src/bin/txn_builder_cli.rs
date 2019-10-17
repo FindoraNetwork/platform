@@ -1,7 +1,7 @@
 use clap::{App, Arg, SubCommand};
 use env_logger::{Env, Target};
 use ledger::data_model::errors::PlatformError;
-use ledger::data_model::{AccountAddress, AssetTokenCode, IssuerPublicKey, TxoSID};
+use ledger::data_model::{AccountAddress, AssetTypeCode, IssuerPublicKey, TxoSID};
 use log::{error, trace}; // Other options: debug, info, warn
 use rand::SeedableRng;
 use rand_chacha::ChaChaRng;
@@ -459,11 +459,11 @@ fn process_add_cmd(add_matches: &clap::ArgMatches,
         println!("{:?}", e);
       }
       if let Ok(mut txn_builder) = load_txn_builder_from_file(&transaction_file_name) {
-        let asset_token: AssetTokenCode;
+        let asset_token: AssetTypeCode;
         if let Some(token_code) = token_code {
-          asset_token = AssetTokenCode::new_from_str(token_code);
+          asset_token = AssetTypeCode::new_from_str(token_code);
         } else {
-          asset_token = AssetTokenCode::gen_random();
+          asset_token = AssetTypeCode::gen_random();
           println!("Creating asset with token code {:?}", asset_token.val);
         }
         if let Ok(_res) = txn_builder.add_operation_create_asset(&IssuerPublicKey { key: pub_key },
@@ -507,9 +507,9 @@ fn process_add_cmd(add_matches: &clap::ArgMatches,
         return;
       }
       if let Ok(mut txn_builder) = load_txn_builder_from_file(&transaction_file_name) {
-        let asset_token: AssetTokenCode;
+        let asset_token: AssetTypeCode;
         if let Some(token_code) = token_code {
-          asset_token = AssetTokenCode::new_from_str(token_code);
+          asset_token = AssetTypeCode::new_from_str(token_code);
         } else {
           println!("Token code is required to issue asset.");
           return;

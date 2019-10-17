@@ -1,4 +1,4 @@
-use ledger::data_model::{AssetTokenCode, Operation, Transaction};
+use ledger::data_model::{AssetTypeCode, Operation, Transaction};
 use ledger::store::helpers::*;
 // use ledger::store::{ArchiveUpdate, LedgerState, LedgerUpdate};
 use percent_encoding::{utf8_percent_encode, AsciiSet, CONTROLS};
@@ -9,7 +9,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
   let mut prng = ChaChaRng::from_seed([0u8; 32]);
   let mut tx = Transaction::default();
 
-  let token_code1 = AssetTokenCode { val: [1; 16] };
+  let token_code1 = AssetTypeCode { val: [1; 16] };
   let (public_key, secret_key) = build_keys(&mut prng);
 
   let asset_body = asset_creation_body(&token_code1, &public_key, true, false, None, None);

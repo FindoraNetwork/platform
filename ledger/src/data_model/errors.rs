@@ -6,6 +6,9 @@ pub enum PlatformError {
   DeserializationError,
   SerializationError,
   InputsError,
+  // Option(String) so I (joe) can be lazy about error descriptions but also catch the laziness
+  // later by removing Option
+  InvariantError(Option<String>),
   ZeiError(ZeiError),
   IoError(String),
 }
@@ -16,6 +19,10 @@ impl fmt::Display for PlatformError {
       PlatformError::DeserializationError => f.write_str("Could not deserialize object"),
       PlatformError::SerializationError => f.write_str("Could not serialize object"),
       PlatformError::InputsError => f.write_str("Invalid parameters"),
+      PlatformError::InvariantError(msg) => {
+          f.write_str(format!("Invariant violated: {}",
+                              msg.as_ref().unwrap_or(&"UNKNOWN".to_string())).as_str())
+      },
       PlatformError::ZeiError(ze) => ze.fmt(f),
       PlatformError::IoError(ioe) => f.write_str(&ioe),
     }
@@ -28,6 +35,7 @@ impl error::Error for PlatformError {
       PlatformError::DeserializationError => "Could not deserialize object",
       PlatformError::SerializationError => "Could not serialize object",
       PlatformError::InputsError => "Parameters were not consistent",
+      PlatformError::InvariantError(msg) => "Invariant error",
       PlatformError::ZeiError(ze) => ze.description(),
       PlatformError::IoError(ioe) => &ioe,
     }

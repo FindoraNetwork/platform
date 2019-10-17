@@ -6,7 +6,7 @@ extern crate serde_derive;
 
 use ledger::data_model::errors::PlatformError;
 use ledger::data_model::{
-  AccountAddress, AssetTokenCode, ConfidentialMemo, DefineAsset, DefineAssetBody, IssueAsset,
+  AccountAddress, AssetTypeCode, ConfidentialMemo, DefineAsset, DefineAssetBody, IssueAsset,
   IssueAssetBody, IssuerPublicKey, Memo, Operation, Transaction, TransferAsset, TransferAssetBody,
   TxOutput, TxoSID,
 };
@@ -22,7 +22,7 @@ pub trait BuildsTransactions {
   fn add_operation_create_asset(&mut self,
                                 pub_key: &IssuerPublicKey,
                                 priv_key: &XfrSecretKey,
-                                token_code: Option<AssetTokenCode>,
+                                token_code: Option<AssetTypeCode>,
                                 updatable: bool,
                                 traceable: bool,
                                 memo: &str,
@@ -31,7 +31,7 @@ pub trait BuildsTransactions {
   fn add_operation_issue_asset(&mut self,
                                pub_key: &IssuerPublicKey,
                                priv_key: &XfrSecretKey,
-                               token_code: &AssetTokenCode,
+                               token_code: &AssetTypeCode,
                                seq_num: u64,
                                records: &[TxOutput])
                                -> Result<(), PlatformError>;
@@ -45,7 +45,7 @@ pub trait BuildsTransactions {
   fn add_basic_issue_asset(&mut self,
                            pub_key: &IssuerPublicKey,
                            priv_key: &XfrSecretKey,
-                           token_code: &AssetTokenCode,
+                           token_code: &AssetTypeCode,
                            seq_num: u64,
                            amount: u64)
                            -> Result<(), PlatformError> {
@@ -119,7 +119,7 @@ impl BuildsTransactions for TransactionBuilder {
   fn add_operation_create_asset(&mut self,
                                 pub_key: &IssuerPublicKey,
                                 priv_key: &XfrSecretKey,
-                                token_code: Option<AssetTokenCode>,
+                                token_code: Option<AssetTypeCode>,
                                 updatable: bool,
                                 traceable: bool,
                                 _memo: &str,
@@ -134,13 +134,13 @@ impl BuildsTransactions for TransactionBuilder {
       None
     };
 
-    self.txn.add_operation(Operation::DefineAsset(DefineAsset::new(DefineAssetBody::new(&token_code.unwrap_or_else(AssetTokenCode::gen_random), pub_key, updatable, traceable, memo, confidential_memo)?, pub_key, priv_key)?));
+    self.txn.add_operation(Operation::DefineAsset(DefineAsset::new(DefineAssetBody::new(&token_code.unwrap_or_else(AssetTypeCode::gen_random), pub_key, updatable, traceable, memo, confidential_memo)?, pub_key, priv_key)?));
     Ok(())
   }
   fn add_operation_issue_asset(&mut self,
                                pub_key: &IssuerPublicKey,
                                priv_key: &XfrSecretKey,
-                               token_code: &AssetTokenCode,
+                               token_code: &AssetTypeCode,
                                seq_num: u64,
                                records: &[TxOutput])
                                -> Result<(), PlatformError> {

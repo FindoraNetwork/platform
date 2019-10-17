@@ -5,15 +5,16 @@ extern crate tempdir;
 
 use crate::data_model::errors::PlatformError;
 use crate::data_model::{
-  AssetPolicyKey, AssetToken, AssetTokenCode, CustomAssetPolicy, DefineAsset, IssueAsset,
-  Operation, SmartContract, SmartContractKey, Transaction, TransferAsset, TxOutput,
-  TxOutput::BlindAssetRecord, TxnSID, TxoRef, TxoSID, Utxo, TXN_SEQ_ID_PLACEHOLDER,
+  DefineAsset, IssueAsset, AssetPolicyKey, AssetType, AssetTypeCode, TransferAsset,
+  CustomAssetPolicy, Operation, SmartContract, SmartContractKey, Transaction, TxOutput,
+  TxnSID, TxoSID, TxoRef, Utxo, TXN_SEQ_ID_PLACEHOLDER,
 };
 use append_only_merkle::{AppendOnlyMerkle, Proof};
 use bitmap::BitMap;
 use findora::timestamp;
 use findora::EnableMap;
 use findora::DEFAULT_MAP;
+use findora::HasInvariants;
 use logged_merkle::LoggedMerkle;
 use rand::SeedableRng;
 use rand::{CryptoRng, Rng};
@@ -30,7 +31,8 @@ use std::sync::{Arc, RwLock};
 use std::u64;
 use tempdir::TempDir;
 use zei::xfr::lib::verify_xfr_note;
-use zei::xfr::structs::EGPubKey;
+use zei::xfr::structs::{EGPubKey,BlindAssetRecord};
+use rand::{CryptoRng, Rng};
 
 use super::append_only_merkle;
 use super::bitmap;
@@ -49,176 +51,278 @@ pub struct SnapshotId {
   pub id: u64,
 }
 
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub struct TxnEffect {
-  txn: Transaction,
-  txo_count: usize,
-  utxos: Vec<TxOutput>,
-  input_txos: HashSet<TxoSID>,
-  new_asset_codes: HashMap<AssetTokenCode, AssetToken>,
-  new_issuance_nums: HashMap<AssetTokenCode, u64>,
+  txn:               Transaction,
+  // Internally-spent TXOs are None, UTXOs are Some(...)
+  txos:              Vec<Option<TxOutput>>,
+  input_txos:        HashMap<TxoSID, BlindAssetRecord>,
+  new_asset_codes:   HashMap<AssetTypeCode, AssetType>,
+  new_issuance_nums: HashMap<AssetTypeCode, u64>,
 }
 
 // Internally validates the transaction as well.
 // If the transaction is invalid, it is dropped, so if you need to inspect
 // the transaction in order to diagnose the error, clone it first!
-fn compute_txn_effect<R: CryptoRng + Rng>(prng: &mut R,
-                                          txn: Transaction)
-                                          -> Result<TxnEffect, PlatformError> {
-  let mut txo_count: usize = 0;
-  let mut utxos: Vec<Option<TxOutput>> = Vec::new();
-  let mut input_txos: HashSet<TxoSID> = HashSet::new();
-  let mut new_asset_codes: HashMap<AssetTokenCode, AssetToken> = HashMap::new();
-  let mut new_issuance_nums: HashMap<AssetTokenCode, u64> = HashMap::new();
+impl TxnEffect {
+  pub fn compute_effect<R: CryptoRng + Rng>(prng: &mut R, txn: Transaction)
+      -> Result<TxnEffect, PlatformError> {
+    let mut txo_count:         usize = 0;
+    let mut txos:              Vec<Option<TxOutput>> = Vec::new();
+    let mut input_txos:        HashMap<TxoSID, BlindAssetRecord> = HashMap::new();
+    let mut new_asset_codes:   HashMap<AssetTypeCode, AssetType> = HashMap::new();
+    let mut new_issuance_nums: HashMap<AssetTypeCode, u64>       = HashMap::new();
 
-  for op in txn.operations.iter() {
-    assert!(txo_count == utxos.len());
+    // Sequentially go through the operations, validating intrinsic or
+    // local-to-the-transaction properties, then recording effects and
+    // external properties.
+    //
+    // Incrementally recording operations in this way is necessary since
+    // validity can depend upon earlier operations within a single
+    // transaction (eg, a single transaction containing two Transfers which
+    // consume the same TXO is invalid).
+    //
+    // This process should be a complete internal check of a transaction.
+    // In particular, functions consuming a TxnEffect should be able to
+    // assume that all internal consistency checks are valid, and that the
+    // validity of the whole transaction now only depends on the
+    // relationship between the outside world and the TxnEffect's fields
+    // (eg, any input TXO SIDs of a Transfer should be recorded in
+    // `input_txos` and that Transfer should be valid if all those TXO SIDs
+    // exist unspent in the ledger and correspond to the correct
+    // BlindAssetRecord).
+    for op in txn.operations.iter() {
+      assert!(txo_count == txos.len());
 
-    match op {
-      // An asset creation is valid iff:
-      //     1) The signature is valid.
-      //         - Fully checked here
-      //     2) The token id is available.
-      //         - Partially checked here
-      Operation::DefineAsset(def) => {
-        // (1)
-        def.pubkey
-           .key
-           .verify(&serde_json::to_vec(&def.body).unwrap(), &def.signature)?;
+      match op {
+        // An asset creation is valid iff:
+        //     1) The signature is valid.
+        //         - Fully checked here
+        //     2) The token id is available.
+        //         - Partially checked here
+        Operation::DefineAsset(def) => {
+          // (1)
+          def.pubkey.key
+            .verify(&serde_json::to_vec(&def.body).unwrap(),
+            &def.signature)?;
 
-        let code = def.body.asset.code;
-        let token = AssetToken { properties: def.body.asset.clone(),
-                                 ..Default::default() };
+          let code = def.body.asset.code;
+          let token = AssetType {
+            properties: def.body.asset.clone(),
+            ..Default::default() };
 
-        // (2), only within this transaction
-        if new_asset_codes.contains_key(&code) || new_issuance_nums.contains_key(&code) {
-          return Err(PlatformError::InputsError);
+          // (2), only within this transaction
+          if   new_asset_codes  .contains_key(&code)
+            || new_issuance_nums.contains_key(&code) {
+              return Err(PlatformError::InputsError);
+          }
+
+          new_asset_codes  .insert(code,token);
+          new_issuance_nums.insert(code,0);
         }
 
-        new_asset_codes.insert(code, token);
-        new_issuance_nums.insert(code, 0);
-      }
-
-      // The asset issuance is valid iff:
-      //      1) The operation is unique (not a replay).
-      //          - Partially checked here
-      //      2) The signature is valid.
-      //          - Fully checked here
-      //      3) The signature belongs to the anchor (the issuer).
-      //          - Not checked here
-      //      4) The assets were issued by the proper agent (the anchor).
-      //          - Not checked here
-      //      5) The assets in the TxOutputs are owned by the signatory.
-      //          - TODO: determine how and when to check this
-      Operation::IssueAsset(iss) => {
-        assert!(iss.body.num_outputs == iss.body.records.len());
-
-        let code = iss.body.code;
-        let seq_num = iss.body.seq_num;
-
-        // (1), within this transaction
-        if seq_num < *new_issuance_nums.get(&code).unwrap_or(&0) {
-          return Err(PlatformError::InputsError);
-        }
-
-        // (2)
-        iss.pubkey
-           .key
-           .verify(&serde_json::to_vec(&iss.body).unwrap(), &iss.signature)?;
-
-        new_issuance_nums.insert(code, seq_num);
-
-        utxos.reserve(iss.body.records.len());
-        for output in iss.body.records.iter() {
-          utxos.push(Some(output.clone()));
-          txo_count += 1;
-        }
-      }
-
-      // An asset transfer is valid iff:
-      //     1) The signatures on the body all are valid.
-      //          - Fully checked here
-      //     2) The UTXOs exist on the ledger and match the zei transaction.
-      //          - Partially checked here -- anything which hasn't
-      //            been checked will appear in `input_txos`
-      //     3) The zei transaction is valid.
-      //          - Fully checked here
-      Operation::TransferAsset(trn) => {
-        assert!(trn.body.inputs.len() == trn.body.transfer.body.inputs.len());
-        assert!(trn.body.num_outputs == trn.body.transfer.body.outputs.len());
-
-        // (1)
-        for sig in &trn.body_signatures {
-          if !sig.verify(&serde_json::to_vec(&trn.body).unwrap()) {
+        // The asset issuance is valid iff:
+        //      1) The operation is unique (not a replay).
+        //          - Partially checked here
+        //      2) The signature is valid.
+        //          - Fully checked here
+        //      3) The signature belongs to the anchor (the issuer).
+        //          - Not checked here
+        //      4) The assets were issued by the proper agent (the anchor).
+        //          - Not checked here
+        //      5) The assets in the TxOutputs are owned by the signatory.
+        //          - TODO: determine how and when to check this
+        Operation::IssueAsset(iss) => {
+          if iss.body.num_outputs != iss.body.records.len() {
             return Err(PlatformError::InputsError);
           }
-        }
 
-        // (2), checking within this transaction and recording
-        // external UTXOs
-        // (3)
-        let null_policies = vec![];
-        for inp in trn.body.inputs.iter() {
-          verify_xfr_note(prng, &trn.body.transfer, &null_policies)?;
-          match *inp {
-            TxoRef::Relative(offs) => {
-              if offs as usize >= txo_count {
-                return Err(PlatformError::InputsError);
-              }
-              let ix = txo_count - (offs as usize);
-              if utxos[ix].is_none() {
-                return Err(PlatformError::InputsError);
-              }
-              utxos[ix] = None;
-            }
-            TxoRef::Absolute(txo_sid) => {
-              if input_txos.contains(&txo_sid) {
-                return Err(PlatformError::InputsError);
-              }
+          assert!(iss.body.num_outputs == iss.body.records.len());
 
-              input_txos.insert(txo_sid);
-            }
+          let code    = iss.body.code;
+          let seq_num = iss.body.seq_num;
+
+          // (1), within this transaction
+          if seq_num < *new_issuance_nums.get(&code).unwrap_or(&0) {
+            return Err(PlatformError::InputsError);
+          }
+
+          // (2)
+          iss.pubkey.key
+            .verify(&serde_json::to_vec(&iss.body).unwrap(),
+            &iss.signature)?;
+
+          new_issuance_nums.insert(code,seq_num);
+
+          txos.reserve(iss.body.records.len());
+          for output in iss.body.records.iter() {
+            txos.push(Some(output.clone()));
+            txo_count += 1;
           }
         }
 
-        utxos.reserve(trn.body.transfer.body.outputs.len());
-        for out in trn.body.transfer.body.outputs.iter() {
-          utxos.push(Some(BlindAssetRecord(out.clone())));
-          txo_count += 1;
+        // An asset transfer is valid iff:
+        //     1) The signatures on the body all are valid.
+        //          - Fully checked here
+        //     2) The UTXOs (a) exist on the ledger and (b) match the zei transaction.
+        //          - Partially checked here -- anything which hasn't
+        //            been checked will appear in `input_txos`
+        //     3) The zei transaction is valid.
+        //          - Fully checked here
+        Operation::TransferAsset(trn) => {
+          if !(trn.body.inputs.len() == trn.body.transfer.body.inputs .len()) {
+            return Err(PlatformError::InputsError);
+          }
+          if !(trn.body.num_outputs  == trn.body.transfer.body.outputs.len()) {
+            return Err(PlatformError::InputsError);
+          }
+          assert!(trn.body.inputs.len() == trn.body.transfer.body.inputs .len());
+          assert!(trn.body.num_outputs  == trn.body.transfer.body.outputs.len());
+
+          // (1)
+          for sig in &trn.body_signatures {
+            if !sig.verify(&serde_json::to_vec(&trn.body).unwrap()) {
+              return Err(PlatformError::InputsError);
+            }
+          }
+
+          { // (3)
+            // TODO: implement real policies
+            let null_policies = vec![];
+            verify_xfr_note(prng, &trn.body.transfer, &null_policies)?;
+          }
+
+          for (inp,record) in
+            trn.body.inputs.iter()
+              .zip(trn.body.transfer.body.inputs.iter())
+              {
+                // (2), checking within this transaction and recording
+                // external UTXOs
+                match *inp {
+                  TxoRef::Relative(offs) => {
+                    // (2).(a)
+                    if offs as usize >= txo_count {
+                      return Err(PlatformError::InputsError);
+                    }
+                    let ix = txo_count-(offs as usize);
+                    match &txos[ix] {
+                      None => { return Err(PlatformError::InputsError); }
+                      Some(TxOutput::BlindAssetRecord(inp_record)) => {
+                        // (2).(b)
+                        if inp_record != record {
+                          return Err(PlatformError::InputsError);
+                        }
+                      }
+                    }
+                    txos[ix] = None;
+                  }
+                  TxoRef::Absolute(txo_sid) => {
+                    // (2).(a), partially
+                    if input_txos.contains_key(&txo_sid) {
+                      return Err(PlatformError::InputsError);
+                    }
+
+                    input_txos.insert(txo_sid, record.clone());
+                  }
+                }
+              }
+
+          txos.reserve(trn.body.transfer.body.outputs.len());
+          for out in trn.body.transfer.body.outputs.iter() {
+            txos.push(Some(TxOutput::BlindAssetRecord(out.clone())));
+            txo_count += 1;
+          }
         }
       }
     }
+
+    Ok(TxnEffect { txn, txo_count, txos, input_txos, new_asset_codes,
+                   new_issuance_nums })
+  }
+}
+
+impl HasInvariants<PlatformError> for TxnEffect {
+  fn fast_invariant_check(&self) -> Result<(),PlatformError> {
+    Ok(())
   }
 
-  Ok(TxnEffect { txn,
-                 txo_count,
-                 utxos: utxos.into_iter().filter_map(|o| o).collect(),
-                 input_txos,
-                 new_asset_codes,
-                 new_issuance_nums })
+  fn deep_invariant_check(&self) -> Result<(),PlatformError> {
+
+    // Kinda messy, but the intention of this loop is to encode: For
+    // every external input of a TxnEffect, there is exactly one
+    // TransferAsset which consumes it.
+    for (txo_sid, record) in self.input_txos.iter() {
+      let mut found = false;
+      for op in self.txn.operations.iter() {
+        match op {
+          Operation::TransferAsset(trn) => {
+            if trn.body.inputs.len() != trn.body.transfer.body.inputs.len() {
+              return Err(PlatformError::InvariantError(None));
+            }
+            for (ix, inp_record) in
+              trn.body.inputs.iter()
+                 .zip(trn.body.transfer.body.inputs.iter())
+            {
+              if let TxoRef::Absolute(input_tid) = ix {
+                if input_tid == txo_sid {
+                  if inp_record != record {
+                    return Err(PlatformError::InvariantError(None));
+                  }
+                  if found {
+                    return Err(PlatformError::InvariantError(None));
+                  }
+                  found = true;
+                }
+              } else {
+                if inp_record == record {
+                  return Err(PlatformError::InvariantError(None));
+                }
+              }
+            }
+          }
+
+          _ => {}
+        }
+      }
+      if !found { return Err(PlatformError::InvariantError(None)); }
+    }
+
+    // TODO(joe): Every Utxo corresponds to exactly one TranferAsset or
+    // IssueAsset, and does not appear in any inputs
+
+    // TODO(joe): other checks?
+    { // Slightly cheating
+      let mut prng = rand_chacha::ChaChaRng::from_seed([0u8; 32]);
+      if TxnEffect::compute_effect(&mut prng, self.txn.clone())? != *self {
+        return Err(PlatformError::InvariantError(None));
+      }
+    }
+
+    Ok(())
+  }
 }
 
 pub trait LedgerAccess {
-  fn check_utxo(&self, addr: TxoSID) -> Option<Utxo>;
-  fn get_issuance_num(&self, code: &AssetTokenCode) -> Option<u64>;
-  fn get_asset_token(&self, code: &AssetTokenCode) -> Option<AssetToken>;
-  fn get_asset_policy(&self, key: &AssetPolicyKey) -> Option<CustomAssetPolicy>;
-  fn get_tracked_sids(&self, key: &EGPubKey) -> Option<Vec<TxoSID>>; // Asset issuers can query ids of UTXOs of assets they are tracking
-  fn get_smart_contract(&self, key: &SmartContractKey) -> Option<SmartContract>;
-  fn check_txn_structure(&self, _txn: &Transaction) -> bool {
-    true
-  }
+  fn get_utxo          (&self, addr: TxoSID)          -> Option<Utxo>;
+  fn get_issuance_num  (&self, code: &AssetTypeCode) -> Option<u64>;
+  fn get_asset_token   (&self, code: &AssetTypeCode) -> Option<AssetType>;
+  fn get_asset_policy  (&self, key: &AssetPolicyKey)  -> Option<CustomAssetPolicy>;
+  fn get_tracked_sids  (&self, key: &EGPubKey)        -> Option<Vec<TxoSID>>; // Asset issuers can query ids of UTXOs of assets they are tracking
 }
 
 pub trait LedgerUpdate {
-  fn apply_transaction(&mut self, txn: &Transaction) -> TxoSID;
-}
-
-pub trait LedgerValidate {
-  fn validate_transaction(&mut self, txn: &Transaction) -> bool;
-}
-
-pub trait ArchiveUpdate {
-  fn append_transaction(&mut self, txn: Transaction) -> Transaction;
+  // Update the ledger state, validating the *external* properties of
+  // the TxnEffect against the current state of the ledger.
+  //
+  //  Returns: the finalized Transaction SID and the finalized TXO
+  //    SIDs of the UTXOs.
+  //
+  // NOTE: This function is allowed to assume that the TxnEffect is
+  // internally consistent, and matches its internal Transaction
+  // object, so any caller of this *must* validate the TxnEffect
+  // properly first.
+  fn apply_transaction(&mut self, txn: TxnEffect)
+    -> Result<(TxnSID,Vec<TxoSID>), PlatformError>;
 }
 
 pub trait ArchiveAccess {
@@ -260,46 +364,96 @@ impl GlobalHashData {
 
 const MAX_VERSION: usize = 100;
 
+// Parts of the current ledger state which can be restored from a snapshot
+// without replaying a log
 #[derive(Deserialize, Serialize)]
-pub struct LedgerState {
-  merkle_path: String,
-  txn_path: String,
-  snapshot_path: String,
-  #[serde(skip)]
-  merkle: Option<LoggedMerkle>,
-  #[serde(skip)]
-  txs: Vec<Transaction>,
-  utxos: HashMap<TxoSID, Utxo>,
-  #[serde(skip)]
-  utxo_map: Option<BitMap>,
-  utxo_map_versions: VecDeque<(usize, BitDigest)>,
-  contracts: HashMap<SmartContractKey, SmartContract>,
-  policies: HashMap<AssetPolicyKey, CustomAssetPolicy>,
-  tracked_sids: HashMap<EGPubKey, Vec<TxoSID>>,
-  tokens: HashMap<AssetTokenCode, AssetToken>,
-  issuance_num: HashMap<AssetTokenCode, u64>,
-  txn_count: usize,
-  txn_base_sid: TxoSID,    // Next TxoSID to be commited
-  max_applied_sid: TxoSID, // Last commited TxoSID
-  loading: bool,
-  #[serde(skip)]
-  txn_log: Option<File>,
-  global_hash: BitDigest,
+pub struct LedgerStatus {
+
+  // Paths to archival logs for the merkle tree and transaction history
+  merkle_path:         String,
+  txn_path:            String,
+
+  // TODO(joe): The old version of LedgerState had this field but it didn't
+  // seem to be used for anything -- so we should figure out what it's
+  // supposed to be for and whether or not having a reference to what file
+  // the state is loaded from in the state itself is a good idea.
+  // snapshot_path:       String,
+
+  // All currently-unspent TXOs
+  utxos:               HashMap<TxoSID, Utxo>,
+  // Digests of the UTXO bitmap to (I think -joe) track recent states of
+  // the UTXO map
+  utxo_map_versions:   VecDeque<(TxnSID, BitDigest)>,
+
+  // TODO(joe): This field should probably exist, but since it is not
+  // currently used by anything I'm leaving it commented out. We should
+  // figure out (a) whether it should exist and (b) what it should do
+  // policies:            HashMap<AssetPolicyKey, CustomAssetPolicy>,
+
+  // TODO(joe): Similar to `policies`, but possibly more grave. The prior
+  // implementation updated this map in `add_txo`, but there doesn't seem
+  // to be any logic to actually apply or verify the tracking proofs.
+  // Specifically, there are several tests which check that the right
+  // TxoSIDs get added to this map under the right EGPubKey, but all
+  // tracking proofs appear to be implemented with Default::default() and
+  // no existing code attempts to check the asset tracking proof through
+  // some `zei` interface.
+  //
+  // tracked_sids:        HashMap<EGPubKey,       Vec<TxoSID>>,
+
+  // Registered asset types, and the most recently issued sequence number.
+  // Issuance numbers must be increasing over time to prevent replays, but
+  // (as far as I know -joe) need not be strictly sequential.
+  asset_types:         HashMap<AssetTypeCode,  AssetType>,
+  issuance_num:        HashMap<AssetTypeCode,  u64>,
+
+  // Should be equal to the count of transactions
+  next_txn:            TxnSID,
+  // Should be equal to the count of TXOs
+  next_txo:            TxoSID,
+
+  // Hash and sequence number of the most recent "full checkpoint" of the
+  // ledger -- committing to the whole ledger history up to the most recent
+  // such checkpoint.
+  global_hash:         BitDigest,
   global_commit_count: u64,
+}
+
+pub struct LedgerState {
+  status:   LedgerStatus,
+
+  // Merkle tree tracking the sequence of transaction hashes
+  merkle:   LoggedMerkle,
+
+  // The `HashedTransaction`s consist of a Transaction and an index into
+  // `merkle` representing its hash.
+  // TODO(joe): should this be in-memory?
+  txs:      Vec<HashedTransaction>,
+
+  // Bitmap tracking all the live TXOs
+  utxo_map: BitMap,
+
+  // TODO(joe): use this file handle to actually record transactions
+  txn_log:  File,
 }
 
 impl LedgerState {
   // Create a ledger for use by a unit test.
   pub fn test_ledger() -> LedgerState {
-    let tmp_dir = TempDir::new("test").unwrap();
-    let merkle_buf = tmp_dir.path().join("test_ledger_merkle");
-    let merkle_path = merkle_buf.to_str().unwrap();
-    let txn_buf = tmp_dir.path().join("test_ledger_txns");
-    let txn_path = txn_buf.to_str().unwrap();
-    let snap_buf = tmp_dir.path().join("test_ledger_snap");
-    let snap_path = snap_buf.to_str().unwrap();
-    let utxo_map_buf = tmp_dir.path().join("test_ledger_utxo_map");
+    let tmp_dir       = TempDir::new("test").unwrap();
+
+    let merkle_buf    = tmp_dir.path().join("test_ledger_merkle");
+    let merkle_path   = merkle_buf.to_str().unwrap();
+
+    let txn_buf       = tmp_dir.path().join("test_ledger_txns");
+    let txn_path      = txn_buf.to_str().unwrap();
+
+    let snap_buf      = tmp_dir.path().join("test_ledger_snap");
+    let snap_path     = snap_buf.to_str().unwrap();
+
+    let utxo_map_buf  = tmp_dir.path().join("test_ledger_utxo_map");
     let utxo_map_path = utxo_map_buf.to_str().unwrap();
+
     LedgerState::new(&merkle_path, &txn_path, &snap_path, &utxo_map_path, true).unwrap()
   }
 
@@ -325,17 +479,14 @@ impl LedgerState {
   }
 
   fn save_global_hash(&mut self) {
-    let data = GlobalHashData { bitmap: self.utxo_map.as_mut().unwrap().compute_checksum(),
-                                merkle: self.merkle.as_ref().unwrap().get_root_hash(),
-                                block: self.global_commit_count,
+    let data = GlobalHashData { bitmap:      self.utxo_map.as_mut().unwrap().compute_checksum(),
+                                merkle:      self.merkle.as_ref().unwrap().get_root_hash(),
+                                block:       self.global_commit_count,
                                 global_hash: self.global_hash };
 
     self.global_hash = sha256::hash(data.as_ref());
     self.global_commit_count += 1;
   }
-
-  // If store_transaction is no longer empty: add a test
-  fn store_transaction(&self, _txn: &Transaction) {}
 
   // Initialize a logged Merkle tree for the ledger.  We might
   // be creating a new tree or opening an existing one.  We
@@ -396,7 +547,7 @@ impl LedgerState {
                                utxo_map_versions: VecDeque::new(),
                                contracts: HashMap::new(),
                                policies: HashMap::new(),
-                               tokens: HashMap::new(),
+                               asset_types: HashMap::new(),
                                tracked_sids: HashMap::new(),
                                issuance_num: HashMap::new(),
                                txn_count: 0,
@@ -450,11 +601,11 @@ impl LedgerState {
     Ok(SnapshotId { id: state })
   }
 
-  pub fn begin_commit(&mut self) {
-    self.txn_base_sid.index = self.max_applied_sid.index + 1;
-  }
+  // pub fn begin_commit(&mut self) {
+  //   self.txn_base_sid.index = self.max_applied_sid.index + 1;
+  // }
 
-  pub fn end_commit(&mut self) {
+  pub fn checkpoint(&mut self) {
     self.save_utxo_map_version();
     self.save_global_hash();
   }
@@ -478,7 +629,7 @@ impl LedgerState {
                           output: txo.1 };
     // Check for asset tracing
     match &utxo_ref.output {
-      BlindAssetRecord(record) => {
+      TxOutput::BlindAssetRecord(record) => {
         if let Some(issuer_public_key) = &record.issuer_public_key {
           match self.tracked_sids
                     .get_mut(&issuer_public_key.eg_ristretto_pub_key)
@@ -557,17 +708,9 @@ impl LedgerState {
   }
 
   fn apply_asset_creation(&mut self, create: &DefineAsset) {
-    let token: AssetToken = AssetToken { properties: create.body.asset.clone(),
+    let token: AssetType = AssetType { properties: create.body.asset.clone(),
                                          ..Default::default() };
-    self.tokens.insert(token.properties.code, token);
-  }
-
-  fn apply_operation(&mut self, op: &Operation) {
-    match op {
-      Operation::TransferAsset(transfer) => self.apply_asset_transfer(transfer),
-      Operation::IssueAsset(issuance) => self.apply_asset_issuance(issuance),
-      Operation::DefineAsset(creation) => self.apply_asset_creation(creation),
-    }
+    self.asset_types.insert(token.properties.code, token);
   }
 
   // Create a file structure for a Merkle tree log.
@@ -595,293 +738,6 @@ impl LedgerState {
   }
 }
 
-pub struct BlockContext<LA: LedgerAccess> {
-  ledger: Arc<RwLock<LA>>,
-  tokens: HashMap<AssetTokenCode, AssetToken>,
-  contracts: HashMap<SmartContractKey, SmartContract>,
-  policies: HashMap<AssetPolicyKey, CustomAssetPolicy>,
-  issuance_num: HashMap<AssetTokenCode, u64>,
-  used_txos: HashSet<TxoSID>,
-}
-
-impl<LA: LedgerAccess> BlockContext<LA> {
-  pub fn new(ledger_access: &Arc<RwLock<LA>>) -> Result<Self, PlatformError> {
-    Ok(BlockContext { ledger: ledger_access.clone(),
-                      tokens: HashMap::new(),
-                      contracts: HashMap::new(),
-                      policies: HashMap::new(),
-                      issuance_num: HashMap::new(),
-                      used_txos: HashSet::new() })
-  }
-
-  pub fn apply_operation(&mut self, op: &Operation) {
-    match op {
-      Operation::DefineAsset(ac) => {
-        let token: AssetToken = AssetToken { properties: ac.body.asset.clone(),
-                                             ..Default::default() };
-        self.tokens.insert(ac.body.asset.code, token);
-      }
-      Operation::IssueAsset(ai) => {
-        self.issuance_num.insert(ai.body.code, ai.body.seq_num);
-      }
-      Operation::TransferAsset(at) => {
-        unimplemented!();
-        // for txo_sid in &at.body.inputs {
-        //   if txo_sid.index < TXN_SEQ_ID_PLACEHOLDER {
-        //     self.used_txos.insert(txo_sid.clone());
-        //   }
-        // }
-      }
-    }
-  }
-}
-
-impl<'la, LA> LedgerAccess for BlockContext<LA> where LA: LedgerAccess
-{
-  fn check_utxo(&self, addr: TxoSID) -> Option<Utxo> {
-    if let Some(_used) = self.used_txos.get(&addr) {
-      None
-    } else if let Ok(la_reader) = self.ledger.read() {
-      la_reader.check_utxo(addr)
-    } else {
-      None
-    }
-  }
-
-  fn get_asset_token(&self, code: &AssetTokenCode) -> Option<AssetToken> {
-    match self.tokens.get(code) {
-      Some(token) => Some(token.clone()),
-      None => {
-        if let Ok(la_reader) = self.ledger.read() {
-          la_reader.get_asset_token(code)
-        } else {
-          None
-        }
-      }
-    }
-  }
-
-  fn get_asset_policy(&self, key: &AssetPolicyKey) -> Option<CustomAssetPolicy> {
-    match self.policies.get(key) {
-      Some(policy) => Some(policy.clone()),
-      None => {
-        if let Ok(la_reader) = self.ledger.read() {
-          la_reader.get_asset_policy(key)
-        } else {
-          None
-        }
-      }
-    }
-  }
-
-  fn get_smart_contract(&self, key: &SmartContractKey) -> Option<SmartContract> {
-    match self.contracts.get(key) {
-      Some(contract) => Some(contract.clone()),
-      None => {
-        if let Ok(la_reader) = self.ledger.read() {
-          la_reader.get_smart_contract(key)
-        } else {
-          None
-        }
-      }
-    }
-  }
-
-  fn get_issuance_num(&self, code: &AssetTokenCode) -> Option<u64> {
-    match self.issuance_num.get(code) {
-      Some(num) => Some(*num),
-      None => {
-        if let Ok(la_reader) = self.ledger.read() {
-          la_reader.get_issuance_num(code)
-        } else {
-          None
-        }
-      }
-    }
-  }
-
-  fn get_tracked_sids(&self, key: &EGPubKey) -> Option<Vec<TxoSID>> {
-    if let Ok(la_reader) = self.ledger.read() {
-      la_reader.get_tracked_sids(key)
-    } else {
-      None
-    }
-  }
-}
-
-pub struct TxnContext<'la, LA: LedgerAccess> {
-  block_context: &'la mut BlockContext<LA>,
-  utxos: HashMap<TxoSID, Utxo>,
-}
-
-impl<'la, LA: LedgerAccess> TxnContext<'la, LA> {
-  pub fn new(block_context: &'la mut BlockContext<LA>) -> Result<Self, PlatformError> {
-    Ok(TxnContext { block_context,
-                    utxos: HashMap::new() })
-  }
-
-  pub fn apply_operation(&mut self, op: &Operation) {
-    match op {
-      Operation::IssueAsset(ai) => {
-        unimplemented!();
-        // for (ref addr, out) in ai.body.outputs.iter().zip(ai.body.records.iter()) {
-        //   let utxo_ref = Utxo { digest: compute_sha256_hash(&serde_json::to_vec(out).unwrap()),
-        //                         output: out.clone() };
-        //   self.utxos.insert((*addr).clone(), utxo_ref);
-        // }
-      }
-      Operation::TransferAsset(at) => {
-        unimplemented!();
-        // for addr in at.body.inputs.iter() {
-        //   if addr.index >= TXN_SEQ_ID_PLACEHOLDER {
-        //     let _op = self.utxos.remove(addr);
-        //   }
-        // }
-        // for (ref addr, out) in at.body.outputs.iter().zip(at.body.transfer.outputs_iter()) {
-        //   let utxo_ref = Utxo { digest: compute_sha256_hash(&serde_json::to_vec(out).unwrap()),
-        //                         output: TxOutput::BlindAssetRecord(out.clone()) };
-        //   self.utxos.insert((*addr).clone(), utxo_ref);
-        // }
-      }
-      _ => {}
-    }
-    self.block_context.apply_operation(op);
-  }
-
-  // An asset transfer is valid iff:
-  //     1) The signatures on the body all are valid.
-  //     2) The UTXOs exist on the ledger and match the zei transaction.
-  //     3) The zei transaction is valid.
-  fn validate_asset_transfer(&mut self, transfer: &TransferAsset) -> bool {
-    // [1] The signatures are valid.
-    for signature in &transfer.body_signatures {
-      if !signature.verify(&serde_json::to_vec(&transfer.body).unwrap()) {
-        return false;
-      }
-    }
-
-    // [2] The utxos exist on ledger and match the zei transaction.
-    // let null_policies = vec![];
-    let mut prng: ChaChaRng;
-    prng = ChaChaRng::from_seed([0u8; 32]);
-
-    unimplemented!();
-    // for utxo_addr in &transfer.body.inputs {
-    //   if self.check_utxo(*utxo_addr).is_none() {
-    //     return false;
-    //   }
-
-    //   if verify_xfr_note(&mut prng, &transfer.body.transfer, &null_policies).is_err() {
-    //     return false;
-    //   }
-    // }
-
-    true
-  }
-
-  // The asset issuance is valid iff:
-  //      1) The operation is unique (not a replay).
-  //      2) The signature is valid.
-  //      3) The signature belongs to the anchor (the issuer).
-  //      4) The assets were issued by the proper agent (the anchor).
-  //      5) The assets in the TxOutputs are owned by the signatory.
-  fn validate_asset_issuance(&mut self, issue: &IssueAsset) -> bool {
-    // Create a token.
-    let token = self.block_context.get_asset_token(&issue.body.code);
-
-    if token.is_none() {
-      return false;
-    }
-
-    let token = token.unwrap();
-    let lookup_issuance_num = &self.block_context.get_issuance_num(&issue.body.code);
-    let issuance_num = if lookup_issuance_num.is_none() {
-      0
-    } else {
-      lookup_issuance_num.unwrap()
-    };
-
-    // [1] Check for a replay attack.
-    if issue.body.seq_num <= issuance_num {
-      return false;
-    }
-
-    // [2] The signature on the body is correct.
-    if issue.pubkey
-            .key
-            .verify(&serde_json::to_vec(&issue.body).unwrap(), &issue.signature)
-            .is_err()
-    {
-      return false;
-    }
-
-    // [3] The signature belongs to the anchor (the issuer).
-    if !(token.properties.issuer == issue.pubkey) {
-      return false;
-    }
-
-    true
-  }
-
-  fn validate_asset_creation(&mut self, create: &DefineAsset) -> bool {
-    // [1] The token is available
-    // [2] the signature is correct.
-    !self.block_context
-         .tokens
-         .contains_key(&create.body.asset.code)
-  }
-
-  fn validate_operation(&mut self, op: &Operation) -> bool {
-    match op {
-      Operation::TransferAsset(transfer) => self.validate_asset_transfer(transfer),
-      Operation::IssueAsset(issuance) => self.validate_asset_issuance(issuance),
-      Operation::DefineAsset(creation) => self.validate_asset_creation(creation),
-    }
-  }
-}
-
-impl<'la, LA> LedgerAccess for TxnContext<'la, LA> where LA: LedgerAccess
-{
-  fn check_utxo(&self, addr: TxoSID) -> Option<Utxo> {
-    match self.utxos.get(&addr) {
-      Some(utxo) => Some(utxo.clone()),
-      None => self.block_context.check_utxo(addr),
-    }
-  }
-
-  fn get_asset_token(&self, code: &AssetTokenCode) -> Option<AssetToken> {
-    self.block_context.get_asset_token(code)
-  }
-
-  fn get_asset_policy(&self, key: &AssetPolicyKey) -> Option<CustomAssetPolicy> {
-    self.block_context.get_asset_policy(key)
-  }
-
-  fn get_smart_contract(&self, key: &SmartContractKey) -> Option<SmartContract> {
-    self.block_context.get_smart_contract(key)
-  }
-
-  fn get_issuance_num(&self, code: &AssetTokenCode) -> Option<u64> {
-    self.block_context.get_issuance_num(code)
-  }
-
-  fn get_tracked_sids(&self, key: &EGPubKey) -> Option<Vec<TxoSID>> {
-    self.block_context.get_tracked_sids(key)
-  }
-}
-
-impl<'la, LA> LedgerValidate for TxnContext<'la, LA> where LA: LedgerAccess
-{
-  fn validate_transaction(&mut self, txn: &Transaction) -> bool {
-    for op in &txn.operations {
-      if !self.validate_operation(op) {
-        return false;
-      }
-    }
-    true
-  }
-}
-
 impl LedgerUpdate for LedgerState {
   fn apply_transaction(&mut self, txn: &Transaction) -> TxoSID {
     let sid = self.txn_base_sid;
@@ -904,7 +760,7 @@ impl ArchiveUpdate for LedgerState {
     txn.tx_id = TxnSID { index };
     txn.merkle_id = 0;
     // The transaction now is complete and all the fields had better
-    // be ready, except for the Merkle tree id.
+    // be ready, except for the Merkle tree TXOs
     let hash = txn.compute_merkle_hash();
 
     match &mut self.merkle {
@@ -937,8 +793,8 @@ impl LedgerAccess for LedgerState {
     }
   }
 
-  fn get_asset_token(&self, code: &AssetTokenCode) -> Option<AssetToken> {
-    match self.tokens.get(code) {
+  fn get_asset_token(&self, code: &AssetTypeCode) -> Option<AssetType> {
+    match self.asset_types.get(code) {
       Some(token) => Some(token.clone()),
       None => None,
     }
@@ -958,7 +814,7 @@ impl LedgerAccess for LedgerState {
     }
   }
 
-  fn get_issuance_num(&self, code: &AssetTokenCode) -> Option<u64> {
+  fn get_issuance_num(&self, code: &AssetTypeCode) -> Option<u64> {
     match self.issuance_num.get(code) {
       Some(num) => {
         println!("issuance_num.get -> {}", *num);
@@ -1058,7 +914,7 @@ pub mod helpers {
     secret_key.sign(&serde_json::to_vec(&asset_body).unwrap(), &public_key)
   }
 
-  pub fn asset_creation_body(token_code: &AssetTokenCode,
+  pub fn asset_creation_body(token_code: &AssetTypeCode,
                              issuer_key: &XfrPublicKey,
                              updatable: bool,
                              traceable: bool,
@@ -1556,12 +1412,12 @@ mod tests {
                                        pubkey: IssuerPublicKey { key: public_key },
                                        signature: signature };
 
-    let token = AssetToken { properties: asset_creation.body.asset.clone(),
+    let token = AssetType { properties: asset_creation.body.asset.clone(),
                              ..Default::default() };
 
     ledger_state.apply_asset_creation(&asset_creation);
 
-    assert_eq!(ledger_state.tokens.get(&token.properties.code),
+    assert_eq!(ledger_state.asset_types.get(&token.properties.code),
                Some(&token));
   }
 
@@ -1642,15 +1498,6 @@ mod tests {
   }
 
   // TODO (Keyao): Add unit tests for
-  //   BlockContext::new
-  //   BlockContext::apply_operation
-  //   LedgerAccess for BlockContext
-  //     LedgerAccess::check_utxo
-  //     LedgerAccess::get_asset_token
-  //     LedgerAccess::get_asset_policy
-  //     LedgerAccess::get_smart_contract
-  //     LedgerAccess::get_issuance_num
-  //     LedgerAccess::get_tracked_sids
   //   TxnContext::new
   //   TxnContext::apply_operation
   //   LedgerAccess for TxnContext
@@ -1685,7 +1532,7 @@ mod tests {
     let mut state = LedgerState::test_ledger();
     let mut tx = Transaction::default();
 
-    let token_code1 = AssetTokenCode { val: [1; 16] };
+    let token_code1 = AssetTypeCode { val: [1; 16] };
     let (public_key, secret_key) = build_keys(&mut prng);
 
     let asset_body = asset_creation_body(&token_code1, &public_key, true, false, None, None);
@@ -1710,7 +1557,7 @@ mod tests {
     // Create a valid asset creation operation.
     let mut state = LedgerState::test_ledger();
     let mut tx = Transaction::default();
-    let token_code1 = AssetTokenCode { val: [1; 16] };
+    let token_code1 = AssetTypeCode { val: [1; 16] };
     let mut prng = ChaChaRng::from_seed([0u8; 32]);
     let (public_key1, secret_key1) = build_keys(&mut prng);
     let asset_body = asset_creation_body(&token_code1, &public_key1, true, false, None, None);
@@ -1732,7 +1579,7 @@ mod tests {
     // Create a valid operation.
     let mut state = LedgerState::test_ledger();
     let mut tx = Transaction::default();
-    let token_code1 = AssetTokenCode { val: [1; 16] };
+    let token_code1 = AssetTypeCode { val: [1; 16] };
 
     let mut prng = ChaChaRng::from_seed([0u8; 32]);
     let (public_key1, secret_key1) = build_keys(&mut prng);
@@ -1767,7 +1614,7 @@ mod tests {
 
     assert!(ledger.get_global_hash() == (BitDigest { 0: [0_u8; 32] }, 0));
     let mut tx = Transaction::default();
-    let token_code1 = AssetTokenCode { val: [1; 16] };
+    let token_code1 = AssetTypeCode { val: [1; 16] };
     let mut prng = ChaChaRng::from_seed([0u8; 32]);
     let (public_key, secret_key) = build_keys(&mut prng);
 

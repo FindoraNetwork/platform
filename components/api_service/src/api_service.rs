@@ -5,7 +5,7 @@ extern crate serde_json;
 
 use actix_web::{web, App, HttpServer};
 use ledger::data_model::{
-  AssetPolicyKey, AssetToken, AssetTokenCode, CustomAssetPolicy, SmartContract, SmartContractKey,
+  AssetPolicyKey, AssetType, AssetTypeCode, CustomAssetPolicy, SmartContract, SmartContractKey,
   TxnSID, TxoSID, Utxo,
 };
 use ledger::store::{ArchiveAccess, ArchiveUpdate, LedgerAccess, LedgerUpdate};
@@ -37,11 +37,11 @@ fn query_utxo<LA>(data: web::Data<Arc<RwLock<LA>>>,
 
 fn query_asset<LA>(data: web::Data<Arc<RwLock<LA>>>,
                    info: web::Path<String>)
-                   -> actix_web::Result<web::Json<AssetToken>>
+                   -> actix_web::Result<web::Json<AssetType>>
   where LA: LedgerAccess
 {
   let reader = data.read().unwrap();
-  if let Ok(token_code) = AssetTokenCode::new_from_base64(&*info) {
+  if let Ok(token_code) = AssetTypeCode::new_from_base64(&*info) {
     if let Some(asset) = reader.get_asset_token(&token_code) {
       Ok(web::Json(asset))
     } else {
@@ -292,7 +292,7 @@ mod tests {
     let mut state = LedgerState::test_ledger();
     let mut tx = Transaction::default();
 
-    let token_code1 = AssetTokenCode { val: [1; 16] };
+    let token_code1 = AssetTypeCode { val: [1; 16] };
     let (public_key, secret_key) = build_keys(&mut prng);
 
     let asset_body = asset_creation_body(&token_code1, &public_key, true, false, None, None);
@@ -318,7 +318,7 @@ mod tests {
     let state = LedgerState::test_ledger();
     let mut tx = Transaction::default();
 
-    let token_code1 = AssetTokenCode { val: [1; 16] };
+    let token_code1 = AssetTypeCode { val: [1; 16] };
     let (public_key, secret_key) = build_keys(&mut prng);
 
     let asset_body = asset_creation_body(&token_code1, &public_key, true, false, None, None);

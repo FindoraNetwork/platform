@@ -16,6 +16,14 @@ pub struct EnableMap {
   pub log_enabled: AtomicI8,
 }
 
+pub trait HasInvariants<ErrT> {
+    // Simple sanity checks, preferably constant-time. Could be toggled in a production environment
+    // without jeopardizing moderate performance requirements.
+    fn fast_invariant_check(&self) -> Result<(),ErrT>;
+    // Computationally intensive checks, intended for a testing environment.
+    fn deep_invariant_check(&self) -> Result<(),ErrT>;
+}
+
 // Define a set of defaults for anyone who
 // prefers one.
 pub const DEFAULT_MAP: EnableMap = EnableMap { error_enabled: AtomicI8::new(1),
