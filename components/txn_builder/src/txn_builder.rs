@@ -41,6 +41,7 @@ pub trait BuildsTransactions {
                                   output_records: &[AssetRecord])
                                   -> Result<(), PlatformError>;
   fn serialize(&self) -> Result<Vec<u8>, PlatformError>;
+  fn serialize_str(&self) -> Result<String, PlatformError>;
 
   fn add_basic_issue_asset(&mut self,
                            pub_key: &IssuerPublicKey,
@@ -167,6 +168,14 @@ impl BuildsTransactions for TransactionBuilder {
   fn serialize(&self) -> Result<Vec<u8>, PlatformError> {
     let j = serde_json::to_string(&self.txn)?;
     Ok(j.as_bytes().to_vec())
+  }
+
+  fn serialize_str(&self) -> Result<String, PlatformError> {
+    if let Ok(serialized) = serde_json::to_string(&self.txn) {
+      return Ok(serialized);
+    } else {
+      return Err(PlatformError::SerializationError);
+    }
   }
 }
 

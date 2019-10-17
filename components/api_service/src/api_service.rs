@@ -232,7 +232,7 @@ impl RestfulApiService {
     -> io::Result<RestfulApiService> {
     let web_runtime = actix_rt::System::new("eian API");
     let data = ledger_access.clone();
-    let addr = format!("https://{}:{}", host, port);
+    let addr = format!("{}:{}", host, port);
     HttpServer::new(move || {
       App::new().data(data.clone())
                 .route("/utxo_sid/{sid}", web::get().to(query_utxo::<LA>))
