@@ -144,31 +144,30 @@ pub struct CredentialProof {
 pub struct SmartContract;
 
 #[derive(Clone, Copy, Debug, Default, Deserialize, Eq, Hash, PartialEq, Serialize)]
-pub struct TxoSID {
-  pub index: u64,
-}
+pub struct TxoSID(pub u64);
 
 #[derive(Clone, Copy, Debug, Default, Deserialize, Eq, Hash, PartialEq, Serialize)]
-pub struct TxnSID {
-  pub index: usize,
-}
+pub struct TxnSID(pub usize);
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub enum TxOutput {
-  BlindAssetRecord(BlindAssetRecord),
-} // needs to be a generic view on an Operation, specifying one output record of a specific type...
+pub struct TxOutput(pub BlindAssetRecord);
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct Utxo {
-  // digest is a hash of the TxoSID and the operation output
-  pub digest: [u8; 32],
-  pub output: TxOutput,
-}
+pub struct Utxo(pub TxOutput);
+// TODO(joe): the digest is currently unused -- should it be put back?
+// pub struct Utxo {
+//   // digest is a hash of the TxoSID and the operation output
+//   pub digest: [u8; 32],
+//   pub output: TxOutput,
+// }
 
 #[derive(Copy, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub enum TxoRef {
-  Relative(u64),    // Offset backwards from this operation (within a txn)
-  Absolute(TxoSID), // Absolute Txo address to a location outside this txn
+  // Offset backwards from this operation (within a txn) -- 0 is the most recent, (n-1) (if there
+  // are n outputs so far) is the first output of the transaction
+  Relative(u64),
+  // Absolute Txo address to a location outside this txn
+  Absolute(TxoSID),
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -354,12 +353,12 @@ pub struct Transaction {
   pub operations: Vec<Operation>,
   pub credentials: Vec<CredentialProof>,
   pub memos: Vec<Memo>,
-  pub tx_id: TxnSID,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct HashedTransaction {
+pub struct FinalizedTransaction {
     pub txn:       Transaction,
+    pub tx_id:     TxnSID,
     pub merkle_id: u64,
 }
 
@@ -368,8 +367,9 @@ impl Transaction {
     self.operations.push(op);
   }
 
-  pub fn compute_merkle_hash(&self) -> HashValue {
-    let serialized = bincode::serialize(&self).unwrap();
+  pub fn compute_merkle_hash(&self, sid: TxnSID) -> HashValue {
+    let mut serialized = bincode::serialize(&self).unwrap();
+    serialized.extend(bincode::serialize(&sid).unwrap());
 
     let digest = compute_sha256_hash(&serialized);
     let mut result = HashValue::new();
@@ -382,9 +382,7 @@ impl Default for Transaction {
   fn default() -> Self {
     Transaction { operations: Vec::new(),
                   credentials: Vec::new(),
-                  memos: Vec::new(),
-                  tx_id: TxnSID { index: TXN_SEQ_ID_PLACEHOLDER as usize },
-                  merkle_id: TXN_SEQ_ID_PLACEHOLDER }
+                  memos: Vec::new() }
   }
 }
 

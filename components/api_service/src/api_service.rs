@@ -8,7 +8,7 @@ use ledger::data_model::{
   AssetPolicyKey, AssetType, AssetTypeCode, CustomAssetPolicy, SmartContract, SmartContractKey,
   TxnSID, TxoSID, Utxo,
 };
-use ledger::store::{ArchiveAccess, ArchiveUpdate, LedgerAccess, LedgerUpdate};
+use ledger::store::{ArchiveAccess, LedgerAccess, LedgerUpdate};
 use percent_encoding::percent_decode_str;
 use std::io;
 use std::marker::{Send, Sync};

@@ -59,7 +59,7 @@ pub trait BuildsTransactions {
                                    priv_key,
                                    token_code,
                                    seq_num,
-                                   &[TxOutput::BlindAssetRecord(ba)])
+                                   &[TxOutput(ba)])
   }
 
   fn add_basic_transfer_asset(&mut self,

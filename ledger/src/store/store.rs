@@ -5,9 +5,10 @@ extern crate tempdir;
 
 use crate::data_model::errors::PlatformError;
 use crate::data_model::{
-  DefineAsset, IssueAsset, AssetPolicyKey, AssetType, AssetTypeCode, TransferAsset,
-  CustomAssetPolicy, Operation, SmartContract, SmartContractKey, Transaction, TxOutput,
-  TxnSID, TxoSID, TxoRef, Utxo, TXN_SEQ_ID_PLACEHOLDER,
+  DefineAsset, IssueAsset, AssetPolicyKey, AssetType, AssetTypeCode,
+  TransferAsset, CustomAssetPolicy, Operation, SmartContract,
+  SmartContractKey, Transaction, TxOutput, FinalizedTransaction, TxnSID,
+  TxoSID, TxoRef, Utxo, TXN_SEQ_ID_PLACEHOLDER,
 };
 use append_only_merkle::{AppendOnlyMerkle, Proof};
 use bitmap::BitMap;
@@ -32,7 +33,6 @@ use std::u64;
 use tempdir::TempDir;
 use zei::xfr::lib::verify_xfr_note;
 use zei::xfr::structs::{EGPubKey,BlindAssetRecord};
-use rand::{CryptoRng, Rng};
 
 use super::append_only_merkle;
 use super::bitmap;
@@ -53,12 +53,18 @@ pub struct SnapshotId {
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct TxnEffect {
+  // The Transaction object this represents
   txn:               Transaction,
   // Internally-spent TXOs are None, UTXOs are Some(...)
   txos:              Vec<Option<TxOutput>>,
+  // Which TXOs this consumes
   input_txos:        HashMap<TxoSID, BlindAssetRecord>,
+  // Which new asset types this defines
   new_asset_codes:   HashMap<AssetTypeCode, AssetType>,
-  new_issuance_nums: HashMap<AssetTypeCode, u64>,
+  // Which new TXO issuance sequence numbers are used, in sorted order
+  // The vec should be nonempty unless this asset code is being created in
+  // this transaction.
+  new_issuance_nums: HashMap<AssetTypeCode, Vec<u64>>,
 }
 
 // Internally validates the transaction as well.
@@ -71,7 +77,7 @@ impl TxnEffect {
     let mut txos:              Vec<Option<TxOutput>> = Vec::new();
     let mut input_txos:        HashMap<TxoSID, BlindAssetRecord> = HashMap::new();
     let mut new_asset_codes:   HashMap<AssetTypeCode, AssetType> = HashMap::new();
-    let mut new_issuance_nums: HashMap<AssetTypeCode, u64>       = HashMap::new();
+    let mut new_issuance_nums: HashMap<AssetTypeCode, Vec<u64>>  = HashMap::new();
 
     // Sequentially go through the operations, validating intrinsic or
     // local-to-the-transaction properties, then recording effects and
@@ -118,7 +124,7 @@ impl TxnEffect {
           }
 
           new_asset_codes  .insert(code,token);
-          new_issuance_nums.insert(code,0);
+          new_issuance_nums.insert(code,vec![]);
         }
 
         // The asset issuance is valid iff:
@@ -143,16 +149,22 @@ impl TxnEffect {
           let seq_num = iss.body.seq_num;
 
           // (1), within this transaction
-          if seq_num < *new_issuance_nums.get(&code).unwrap_or(&0) {
-            return Err(PlatformError::InputsError);
+          if !new_issuance_nums.contains_key(&code) {
+            new_issuance_nums.insert(code,vec![]);
           }
+
+          let iss_nums = new_issuance_nums.get_mut(&code).unwrap();
+          if let Some(last_num) = iss_nums.last() {
+            if seq_num <= iss_nums[iss_nums.len()-1] {
+              return Err(PlatformError::InputsError);
+            }
+          }
+          iss_nums.push(seq_num);
 
           // (2)
           iss.pubkey.key
             .verify(&serde_json::to_vec(&iss.body).unwrap(),
             &iss.signature)?;
-
-          new_issuance_nums.insert(code,seq_num);
 
           txos.reserve(iss.body.records.len());
           for output in iss.body.records.iter() {
@@ -204,10 +216,10 @@ impl TxnEffect {
                     if offs as usize >= txo_count {
                       return Err(PlatformError::InputsError);
                     }
-                    let ix = txo_count-(offs as usize);
+                    let ix = (txo_count-1)-(offs as usize);
                     match &txos[ix] {
                       None => { return Err(PlatformError::InputsError); }
-                      Some(TxOutput::BlindAssetRecord(inp_record)) => {
+                      Some(TxOutput(inp_record)) => {
                         // (2).(b)
                         if inp_record != record {
                           return Err(PlatformError::InputsError);
@@ -229,14 +241,14 @@ impl TxnEffect {
 
           txos.reserve(trn.body.transfer.body.outputs.len());
           for out in trn.body.transfer.body.outputs.iter() {
-            txos.push(Some(TxOutput::BlindAssetRecord(out.clone())));
+            txos.push(Some(TxOutput(out.clone())));
             txo_count += 1;
           }
         }
       }
     }
 
-    Ok(TxnEffect { txn, txo_count, txos, input_txos, new_asset_codes,
+    Ok(TxnEffect { txn, txos, input_txos, new_asset_codes,
                    new_issuance_nums })
   }
 }
@@ -303,19 +315,31 @@ impl HasInvariants<PlatformError> for TxnEffect {
 }
 
 pub trait LedgerAccess {
-  fn get_utxo          (&self, addr: TxoSID)          -> Option<Utxo>;
-  fn get_issuance_num  (&self, code: &AssetTypeCode) -> Option<u64>;
-  fn get_asset_token   (&self, code: &AssetTypeCode) -> Option<AssetType>;
-  fn get_asset_policy  (&self, key: &AssetPolicyKey)  -> Option<CustomAssetPolicy>;
-  fn get_tracked_sids  (&self, key: &EGPubKey)        -> Option<Vec<TxoSID>>; // Asset issuers can query ids of UTXOs of assets they are tracking
+  // Look up a currently unspent TXO
+  fn get_utxo        (&self, addr: TxoSID)         -> Option<&Utxo>;
+
+  // The most recently-issued sequence number for the `code`-labelled asset
+  // type
+  fn get_issuance_num(&self, code: &AssetTypeCode) -> Option<u64>;
+
+  // Retrieve asset type metadata
+  fn get_asset_type  (&self, code: &AssetTypeCode) -> Option<&AssetType>;
+
+  // TODO(joe): figure out what to do for these.
+  // See comments about asset policies and tracked SIDs in LedgerStatus
+  // fn get_asset_policy(&self, key: &AssetPolicyKey) -> Option<CustomAssetPolicy>;
+  //  // Asset issuers can query ids of UTXOs of assets they are tracking
+  // fn get_tracked_sids(&self, key: &EGPubKey)       -> Option<Vec<TxoSID>>;
 }
 
 pub trait LedgerUpdate {
   // Update the ledger state, validating the *external* properties of
   // the TxnEffect against the current state of the ledger.
   //
-  //  Returns: the finalized Transaction SID and the finalized TXO
-  //    SIDs of the UTXOs.
+  //  Returns:
+  //    If valid: the finalized Transaction SID and the finalized TXO SIDs
+  //      of the UTXOs. UTXO SIDs will be in increasing order.
+  //    If invalid: Err(...)
   //
   // NOTE: This function is allowed to assume that the TxnEffect is
   // internally consistent, and matches its internal Transaction
@@ -326,12 +350,28 @@ pub trait LedgerUpdate {
 }
 
 pub trait ArchiveAccess {
-  fn get_transaction(&self, addr: TxnSID) -> Option<&Transaction>;
-  fn get_proof(&self, addr: TxnSID) -> Option<Proof>;
-  fn get_utxo_map(&mut self) -> Option<Vec<u8>>;
-  fn get_utxos(&mut self, list: Vec<usize>) -> Option<Vec<u8>>;
-  fn get_utxo_checksum(&self, version: u64) -> Option<BitDigest>;
-  fn get_global_hash(&self) -> (BitDigest, u64);
+  // Look up transaction in the log
+  fn get_transaction  (&self,     addr: TxnSID)     -> Option<&FinalizedTransaction>;
+  // Get consistency proof for TxnSID `addr`
+  fn get_proof        (&self,     addr: TxnSID)     -> Option<Proof>;
+
+  // This previously did the serialization at the call to this, and
+  // unconditionally returned Some(...).
+  // fn get_utxo_map     (&mut self)                   -> Vec<u8>;
+  // I (joe) think returning &BitMap matches the intended usage a bit more
+  // closely
+  fn get_utxo_map     (&self)                       -> &BitMap;
+
+  // TODO(joe): figure out what interface this should have -- currently
+  // there isn't anything to handle out-of-bounds indices from `list`
+  // fn get_utxos        (&mut self, list: Vec<usize>) -> Option<Vec<u8>>;
+
+  // Get the bitmap's hash at version `version`, if such a hash is
+  // available.
+  fn get_utxo_checksum(&self,     version: u64)     -> Option<BitDigest>;
+
+  // Get the hash of the most recent checkpoint, and its sequence number.
+  fn get_global_hash  (&self)                       -> (BitDigest, u64);
 }
 
 pub fn compute_sha256_hash<T>(msg: &T) -> [u8; 32]
@@ -372,6 +412,7 @@ pub struct LedgerStatus {
   // Paths to archival logs for the merkle tree and transaction history
   merkle_path:         String,
   txn_path:            String,
+  utxo_map_path:       String,
 
   // TODO(joe): The old version of LedgerState had this field but it didn't
   // seem to be used for anything -- so we should figure out what it's
@@ -381,8 +422,10 @@ pub struct LedgerStatus {
 
   // All currently-unspent TXOs
   utxos:               HashMap<TxoSID, Utxo>,
+
   // Digests of the UTXO bitmap to (I think -joe) track recent states of
   // the UTXO map
+  // TODO(joe): should this be an ordered map of some sort?
   utxo_map_versions:   VecDeque<(TxnSID, BitDigest)>,
 
   // TODO(joe): This field should probably exist, but since it is not
@@ -401,9 +444,10 @@ pub struct LedgerStatus {
   //
   // tracked_sids:        HashMap<EGPubKey,       Vec<TxoSID>>,
 
-  // Registered asset types, and the most recently issued sequence number.
-  // Issuance numbers must be increasing over time to prevent replays, but
-  // (as far as I know -joe) need not be strictly sequential.
+  // Registered asset types, and one-more-than the most recently issued
+  // sequence number. Issuance numbers must be increasing over time to
+  // prevent replays, but (as far as I know -joe) need not be strictly
+  // sequential.
   asset_types:         HashMap<AssetTypeCode,  AssetType>,
   issuance_num:        HashMap<AssetTypeCode,  u64>,
 
@@ -425,16 +469,188 @@ pub struct LedgerState {
   // Merkle tree tracking the sequence of transaction hashes
   merkle:   LoggedMerkle,
 
-  // The `HashedTransaction`s consist of a Transaction and an index into
+  // The `FinalizedTransaction`s consist of a Transaction and an index into
   // `merkle` representing its hash.
   // TODO(joe): should this be in-memory?
-  txs:      Vec<HashedTransaction>,
+  txs:      Vec<FinalizedTransaction>,
 
   // Bitmap tracking all the live TXOs
   utxo_map: BitMap,
 
   // TODO(joe): use this file handle to actually record transactions
   txn_log:  File,
+}
+
+impl LedgerStatus {
+  pub fn new(merkle_path: &str,
+             txn_path: &str,
+             // TODO(joe): should this do something?
+             // snapshot_path: &str,
+             utxo_map_path: &str)
+             -> Result<LedgerStatus, std::io::Error> {
+    let ledger = LedgerStatus {
+      merkle_path:         merkle_path.to_owned(),
+      txn_path:            txn_path.to_owned(),
+      utxo_map_path:       utxo_map_path.to_owned(),
+      utxos:               HashMap::new(),
+      utxo_map_versions:   VecDeque::new(),
+      asset_types:         HashMap::new(),
+      issuance_num:        HashMap::new(),
+      next_txn:            TxnSID(0),
+      next_txo:            TxoSID(0),
+      global_hash:         BitDigest { 0: [0_u8; 32] },
+      global_commit_count: 0,
+    };
+
+    Ok(ledger)
+  }
+
+
+  fn apply_txn_effects(&mut self, txn: &TxnEffect)
+      -> Result<(TxnSID,Vec<TxoSID>), PlatformError> {
+    let new_txn  = self.next_txn;
+    // Each unspent TxOutput gets a TxoSID based on its position in the TXO
+    // list
+    let new_utxo_sids: Vec<TxoSID> = txn.txos.iter().enumerate()
+          // (ix,Some(..)) -> next_txo+ix
+          // (ix,None)     -> <no entry>
+          .filter_map(|(ix,txo)|
+              txo.as_ref().map(|_| TxoSID(self.next_txo.0 + (ix as u64))))
+          .collect();
+
+    // ==== Stage 1: Validate all the effects ====
+
+    // Each input must be unspent and correspond to the claimed record
+    for (inp_sid,inp_record) in txn.input_txos.iter() {
+      let inp_utxo = self.utxos.get(inp_sid)
+                      .map_or(Err(PlatformError::InputsError),Ok)?;
+      let record = &(inp_utxo.0).0;
+      if record != inp_record {
+        return Err(PlatformError::InputsError);
+      }
+    }
+
+    // New asset types must not already exist
+    for (code,asset_type) in txn.new_asset_codes.iter() {
+      if self.asset_types.contains_key(&code) {
+        return Err(PlatformError::InputsError);
+      }
+      if self.issuance_num.contains_key(&code) {
+        return Err(PlatformError::InputsError);
+      }
+      debug_assert!(txn.new_issuance_nums.contains_key(&code));
+    }
+
+    // New issuance numbers
+    // (1) Must refer to a created asset type
+    //  - NOTE: if the asset type is created in this transaction, this
+    //    function is assuming that the ordering within the transaction is
+    //    already valid.
+    // (2) Must not be below the current asset cap
+    //  - NOTE: this relies on the sequence numbers appearing in sorted
+    //    order
+    for (code,seq_nums) in txn.new_issuance_nums.iter() {
+      if seq_nums.is_empty() {
+        if !txn.new_asset_codes.contains_key(&code) {
+          return Err(PlatformError::InputsError);
+        }
+        // We could re-check that self.issuance_num doesn't contain `code`,
+        // but currently it's redundant with the new-asset-type checks
+      } else {
+        let curr_seq_num_limit = self.issuance_num.get(&code).unwrap();
+        let min_seq_num = seq_nums.first().unwrap();
+        if min_seq_num < curr_seq_num_limit {
+          return Err(PlatformError::InputsError);
+        }
+      }
+    }
+
+    // ==== AT THIS POINT, ALL VALIDATION SHOULD BE COMPLETE ====
+    // In particular, all return values past this point should be Ok(...)
+    //
+    // ==== Stage 2: Apply all the effects ====
+    self.next_txn = TxnSID(self.next_txn.0 + 1);
+    self.next_txo = TxoSID(self.next_txo.0 + (txn.txos.len() as u64));
+
+    // Remove consumed UTXOs
+    for (inp_sid,_) in txn.input_txos.iter() {
+      debug_assert!(self.utxos.contains_key(&inp_sid));
+      self.utxos.remove(&inp_sid);
+    }
+
+    // Add new UTXOs
+    {
+      let utxo_iter = txn.txos.iter().filter_map(|x| x.as_ref());
+      for (txo_sid,utxo) in new_utxo_sids.iter().zip(utxo_iter) {
+        debug_assert!(!self.utxos.contains_key(txo_sid));
+        debug_assert!(txo_sid.0 < self.next_txo.0);
+
+        self.utxos.insert(*txo_sid,Utxo(utxo.clone()));
+      }
+    }
+
+    // Update issuance sequence number limits
+    for (code,seq_nums) in txn.new_issuance_nums.iter() {
+      // One more than the greatest sequence number, or 0
+      let new_max_seq_num = seq_nums.last().map(|x| x+1).unwrap_or(0);
+      self.issuance_num.insert(*code,new_max_seq_num);
+    }
+
+    // Register new asset types
+    for (code,asset_type) in txn.new_asset_codes.iter() {
+      debug_assert!(!self.asset_types.contains_key(&code));
+      self.asset_types.insert(*code,asset_type.clone());
+    }
+
+    Ok((new_txn,new_utxo_sids))
+  }
+}
+
+impl LedgerUpdate for LedgerState {
+  fn apply_transaction(&mut self, txn: TxnEffect)
+      -> Result<(TxnSID,Vec<TxoSID>), PlatformError> {
+
+    let base_sid = self.status.next_txo.0;
+    let (txn_sid, utxo_sids) = self.status.apply_txn_effects(&txn)?;
+    let max_sid  = self.status.next_txo.0; // mutated by apply_txn_effects
+
+    // debug_assert!(utxo_sids.is_sorted());
+
+    { // Update the UTXO bitmap
+      let mut utxo_ix = 0;
+      for ix in base_sid..max_sid {
+        debug_assert!(utxo_ix < utxo_sids.len());
+
+        // Only .set() extends the bitmap, so to append a 0 we currently
+        // nead to .set() then .clear().
+        self.utxo_map.set(ix as usize);
+        if let Some(TxoSID(utxo_sid)) = utxo_sids.get(utxo_ix) {
+          if *utxo_sid != ix {
+            self.utxo_map.clear(ix as usize);
+          } else {
+            utxo_ix += 1;
+          }
+        }
+      }
+      debug_assert!(utxo_ix == utxo_sids.len());
+    }
+
+    { // Update the Merkle tree and transaction log
+      let mut inner_txn = txn.txn;
+      let hash = inner_txn.compute_merkle_hash(txn_sid);
+
+      // TODO(joe/jonathan): Since errors in the merkle tree are things like
+      // corruption and I/O failure, we don't have a good recovery story. Is
+      // panicking acceptable?
+      let merkle_id = self.merkle.append(&hash).unwrap();
+
+      self.txs.push(FinalizedTransaction{ txn: inner_txn, tx_id: txn_sid, merkle_id });
+    }
+
+    // TODO(joe): asset tracing?
+
+    Ok((txn_sid, utxo_sids))
+  }
 }
 
 impl LedgerState {
@@ -448,21 +664,23 @@ impl LedgerState {
     let txn_buf       = tmp_dir.path().join("test_ledger_txns");
     let txn_path      = txn_buf.to_str().unwrap();
 
-    let snap_buf      = tmp_dir.path().join("test_ledger_snap");
-    let snap_path     = snap_buf.to_str().unwrap();
+    // let snap_buf      = tmp_dir.path().join("test_ledger_snap");
+    // let snap_path     = snap_buf.to_str().unwrap();
 
     let utxo_map_buf  = tmp_dir.path().join("test_ledger_utxo_map");
     let utxo_map_path = utxo_map_buf.to_str().unwrap();
 
-    LedgerState::new(&merkle_path, &txn_path, &snap_path, &utxo_map_path, true).unwrap()
+    LedgerState::new(&merkle_path, &txn_path, &utxo_map_path, true).unwrap()
   }
 
-  fn load_transaction_log(path: &str) -> Result<Vec<Transaction>, std::io::Error> {
+  fn load_transaction_log(path: &str)
+      -> Result<Vec<FinalizedTransaction>, std::io::Error> {
     let file = File::open(path)?;
     let mut reader = BufReader::new(file);
     let mut v = Vec::new();
     while let Ok(next_txn) =
-      bincode::deserialize_from::<&mut BufReader<File>, Transaction>(&mut reader)
+      bincode::deserialize_from::<&mut BufReader<File>,
+                                  FinalizedTransaction>(&mut reader)
     {
       v.push(next_txn);
     }
@@ -470,22 +688,22 @@ impl LedgerState {
   }
 
   fn save_utxo_map_version(&mut self) {
-    if self.utxo_map_versions.len() >= MAX_VERSION {
-      self.utxo_map_versions.pop_front();
+    if self.status.utxo_map_versions.len() >= MAX_VERSION {
+      self.status.utxo_map_versions.pop_front();
     }
 
-    self.utxo_map_versions
-        .push_back((self.txn_count, self.utxo_map.as_mut().unwrap().compute_checksum()));
+    self.status.utxo_map_versions
+        .push_back((self.status.next_txn, self.utxo_map.compute_checksum()));
   }
 
   fn save_global_hash(&mut self) {
-    let data = GlobalHashData { bitmap:      self.utxo_map.as_mut().unwrap().compute_checksum(),
-                                merkle:      self.merkle.as_ref().unwrap().get_root_hash(),
-                                block:       self.global_commit_count,
-                                global_hash: self.global_hash };
+    let data = GlobalHashData { bitmap:      self.utxo_map.compute_checksum(),
+                                merkle:      self.merkle.get_root_hash(),
+                                block:       self.status.global_commit_count,
+                                global_hash: self.status.global_hash };
 
-    self.global_hash = sha256::hash(data.as_ref());
-    self.global_commit_count += 1;
+    self.status.global_hash = sha256::hash(data.as_ref());
+    self.status.global_commit_count += 1;
   }
 
   // Initialize a logged Merkle tree for the ledger.  We might
@@ -532,185 +750,77 @@ impl LedgerState {
   // Initialize a new Ledger structure.
   pub fn new(merkle_path: &str,
              txn_path: &str,
-             snapshot_path: &str,
+             // snapshot_path: &str,
              utxo_map_path: &str,
              create: bool)
              -> Result<LedgerState, std::io::Error> {
-    let ledger = LedgerState { merkle_path: merkle_path.to_owned(),
-                               txn_path: txn_path.to_owned(),
-                               snapshot_path: snapshot_path.to_owned(),
-                               merkle: Some(LedgerState::init_merkle_log(merkle_path, create)?),
-                               txs: Vec::new(),
-                               utxos: HashMap::new(),
-                               utxo_map: Some(LedgerState::init_utxo_map(utxo_map_path,
-                                                                         create)?),
-                               utxo_map_versions: VecDeque::new(),
-                               contracts: HashMap::new(),
-                               policies: HashMap::new(),
-                               asset_types: HashMap::new(),
-                               tracked_sids: HashMap::new(),
-                               issuance_num: HashMap::new(),
-                               txn_count: 0,
-                               txn_base_sid: TxoSID::default(),
-                               max_applied_sid: TxoSID::default(),
-                               loading: false,
-                               txn_log: Some(std::fs::OpenOptions::new().create(create)
-                                                                        .append(true)
-                                                                        .open(txn_path)?),
-                               global_hash: BitDigest { 0: [0_u8; 32] },
-                               global_commit_count: 0 };
+    let ledger = LedgerState {
+        status:              LedgerStatus::new(merkle_path, txn_path,
+                                utxo_map_path)?,
+        merkle:              LedgerState::init_merkle_log(merkle_path,
+                                create)?,
+        txs:                 Vec::new(),
+        utxo_map:            LedgerState::init_utxo_map(utxo_map_path,
+                                create)?,
+        txn_log:             std::fs::OpenOptions::new().create(create)
+                              .append(true).open(txn_path)?,
+    };
 
     Ok(ledger)
   }
 
   // Load a ledger given the paths to the various storage elements.
-  pub fn load(merkle_path: &str,
-              txn_path: &str,
+  pub fn load(merkle_path:   &str,
+              txn_path:      &str,
+              utxo_map_path: &str,
               snapshot_path: &str)
               -> Result<LedgerState, std::io::Error> {
-    let merkle = LedgerState::init_merkle_log(merkle_path, false)?;
-    let txs = LedgerState::load_transaction_log(txn_path)?;
+    let merkle      = LedgerState::init_merkle_log(merkle_path, false)?;
+    let utxo_map    = LedgerState::init_utxo_map  (utxo_map_path, false)?;
+    let txs         = LedgerState::load_transaction_log(txn_path)?;
     let ledger_file = File::open(snapshot_path)?;
-    let mut ledger = bincode::deserialize_from::<BufReader<File>, LedgerState>(BufReader::new(ledger_file))
-      .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
-    ledger.merkle = Some(merkle);
-    ledger.txn_log = Some(OpenOptions::new().append(true).open(txn_path)?);
-    ledger.loading = true;
-    for txn in &txs[ledger.txn_count..] {
-      ledger.apply_transaction(&txn);
-    }
-    ledger.txs = txs;
-    ledger.loading = false;
+    let status      = bincode::deserialize_from
+                             ::<BufReader<File>, LedgerStatus>(
+                                  BufReader::new(ledger_file)
+                             ).map_err(|e|
+                                std::io::Error::new(
+                                  std::io::ErrorKind::Other, e)
+                             )?;
+    let txn_log     = OpenOptions::new().append(true).open(txn_path)?;
+
+    // TODO(joe): thoughts about write-ahead transaction log so that
+    // recovery can happen between snapshots.
+    // for txn in &txs[ledger.txn_count..] {
+    //   ledger.apply_transaction(&txn);
+    // }
+
+    let ledger = LedgerState {
+      status, merkle, txs, utxo_map, txn_log
+    };
+    assert!(ledger.txs.len() == ledger.status.next_txn.0);
     Ok(ledger)
   }
 
   // Snapshot the ledger state.  This involves synchronizing
   // the durable data structures to the disk and starting a
   // new log file for the logged Merkle tree.
+  //
+  // TODO(joe): Actually serialize the active ledger state.
   pub fn snapshot(&mut self) -> Result<SnapshotId, std::io::Error> {
-    let state = if let Some(merkle) = &self.merkle {
-      merkle.state()
-    } else {
-      0
-    };
-    let writer = LedgerState::create_merkle_log(self.merkle_path.clone(), state)?;
-    if let Some(merkle) = &mut self.merkle {
-      merkle.snapshot(writer)?
-    };
+    let state = self.merkle.state();
+    let writer = LedgerState::create_merkle_log(self.status.merkle_path.clone(), state)?;
+    self.merkle.snapshot(writer)?;
 
     Ok(SnapshotId { id: state })
   }
 
   // pub fn begin_commit(&mut self) {
-  //   self.txn_base_sid.index = self.max_applied_sid.index + 1;
+  //   self.txn_base_sid.0 = self.max_applied_sid.0 + 1;
   // }
 
   pub fn checkpoint(&mut self) {
     self.save_utxo_map_version();
     self.save_global_hash();
-  }
-
-  fn add_txo(&mut self, txo: (&TxoSID, TxOutput)) {
-    let mut utxo_addr = *txo.0;
-
-    if !self.loading {
-      match utxo_addr.index {
-        TXN_SEQ_ID_PLACEHOLDER..=u64::MAX => {
-          utxo_addr.index -= TXN_SEQ_ID_PLACEHOLDER;
-          utxo_addr.index += self.txn_base_sid.index;
-        }
-        _ => {
-          // TODO:  Is this recoverable?
-          panic!("The index {} is not a placeholder.", utxo_addr.index);
-        }
-      }
-    }
-    let utxo_ref = Utxo { digest: compute_sha256_hash(&serde_json::to_vec(&txo.1).unwrap()),
-                          output: txo.1 };
-    // Check for asset tracing
-    match &utxo_ref.output {
-      TxOutput::BlindAssetRecord(record) => {
-        if let Some(issuer_public_key) = &record.issuer_public_key {
-          match self.tracked_sids
-                    .get_mut(&issuer_public_key.eg_ristretto_pub_key)
-          {
-            // add utxo address to the list of indices that can be unlocked by the
-            // issuer's public key
-            None => {
-              self.tracked_sids
-                  .insert(issuer_public_key.eg_ristretto_pub_key.clone(),
-                          vec![utxo_addr]);
-            }
-            Some(vec) => {
-              vec.push(utxo_addr);
-            }
-          };
-        }
-      }
-    }
-
-    // Add a bit to the utxo bitmap.
-    self.utxo_map
-        .as_mut()
-        .unwrap()
-        .set(utxo_addr.index as usize)
-        .unwrap();
-    self.utxos.insert(utxo_addr, utxo_ref);
-    self.max_applied_sid = utxo_addr;
-  }
-
-  fn apply_asset_transfer(&mut self, transfer: &TransferAsset) {
-    unimplemented!();
-    // for utxo in &transfer.body.inputs {
-    //   let mut rectified_txo = *utxo;
-    //   if !self.loading {
-    //     // if let TXN_SEQ_ID_PLACEHOLDER..=u64::MAX = rectified_txo.index {
-    //     //   rectified_txo.index -= TXN_SEQ_ID_PLACEHOLDER;
-    //     //   rectified_txo.index += self.txn_base_sid.index;
-    //     // }
-    //   }
-    //   // Update the utxo bitmap to remove this asset.
-    //   self.utxo_map
-    //       .as_mut()
-    //       .unwrap()
-    //       .clear(rectified_txo.index as usize)
-    //       .unwrap();
-    //   self.utxos.remove(&rectified_txo);
-    // }
-
-    // for out in
-    //   transfer.body.outputs.iter().zip(transfer.body
-    //                                            .transfer
-    //                                            .outputs_iter()
-    //                                            .map(|o| TxOutput::BlindAssetRecord(o.clone())))
-    // {
-    //   self.add_txo(out);
-    // }
-  }
-
-  fn apply_asset_issuance(&mut self, issue: &IssueAsset) {
-    unimplemented!();
-    // debug!(issue_map, "outputs {:?}", issue.body.outputs);
-    // debug!(issue_map, "records {:?}", issue.body.records);
-    // for out in issue.body
-    //                 .outputs
-    //                 .iter()
-    //                 .zip(issue.body.records.iter().map(|ref o| (*o).clone()))
-    // {
-    //   debug!(ledger_map, "add txo {:?}", out.1);
-    //   self.add_txo(out);
-    // }
-
-    // self.issuance_num
-    //     .insert(issue.body.code, issue.body.seq_num);
-    // debug!(ledger_map,
-    //        "insert asset issue code {:?} -> seq {:?}", issue.body.code, issue.body.seq_num);
-  }
-
-  fn apply_asset_creation(&mut self, create: &DefineAsset) {
-    let token: AssetType = AssetType { properties: create.body.asset.clone(),
-                                         ..Default::default() };
-    self.asset_types.insert(token.properties.code, token);
   }
 
   // Create a file structure for a Merkle tree log.
@@ -738,149 +848,69 @@ impl LedgerState {
   }
 }
 
-impl LedgerUpdate for LedgerState {
-  fn apply_transaction(&mut self, txn: &Transaction) -> TxoSID {
-    let sid = self.txn_base_sid;
-    self.txn_base_sid.index = self.max_applied_sid.index + 1;
-    debug!(ledger_map, "apply {:?}", sid);
-
-    // Apply the operations
-    for op in &txn.operations {
-      debug!(ledger_map, "Applying op:  {:?}", op);
-      self.apply_operation(op);
-    }
-    sid
+impl LedgerAccess for LedgerStatus {
+  fn get_utxo(&self, addr: TxoSID) -> Option<&Utxo> {
+    self.utxos.get(&addr)
   }
-}
 
-// TODO(jonathan) This routine should propagate errors.
-impl ArchiveUpdate for LedgerState {
-  fn append_transaction(&mut self, mut txn: Transaction) -> Transaction {
-    let index = self.txs.len();
-    txn.tx_id = TxnSID { index };
-    txn.merkle_id = 0;
-    // The transaction now is complete and all the fields had better
-    // be ready, except for the Merkle tree TXOs
-    let hash = txn.compute_merkle_hash();
+  fn get_issuance_num(&self, code: &AssetTypeCode) -> Option<u64> {
+    self.issuance_num.get(code).map(|x| *x)
+  }
 
-    match &mut self.merkle {
-      Some(merkle) => match merkle.append(&hash) {
-        Ok(n) => {
-          txn.merkle_id = n;
-        }
-        Err(x) => {
-          panic!("append failed:  {}", x);
-        }
-      },
-      None => {
-        panic!("merkle tree not loaded!");
-      }
-    }
-
-    let result = txn.clone();
-    self.store_transaction(&txn);
-    self.txs.push(txn);
-    self.txn_count = self.txs.len();
-    result
+  fn get_asset_type(&self, code: &AssetTypeCode) -> Option<&AssetType> {
+    self.asset_types.get(code)
   }
 }
 
 impl LedgerAccess for LedgerState {
-  fn check_utxo(&self, addr: TxoSID) -> Option<Utxo> {
-    match self.utxos.get(&addr) {
-      Some(utxo) => Some(utxo.clone()),
-      None => None,
-    }
-  }
-
-  fn get_asset_token(&self, code: &AssetTypeCode) -> Option<AssetType> {
-    match self.asset_types.get(code) {
-      Some(token) => Some(token.clone()),
-      None => None,
-    }
-  }
-
-  fn get_asset_policy(&self, key: &AssetPolicyKey) -> Option<CustomAssetPolicy> {
-    match self.policies.get(key) {
-      Some(policy) => Some(policy.clone()),
-      None => None,
-    }
-  }
-
-  fn get_smart_contract(&self, key: &SmartContractKey) -> Option<SmartContract> {
-    match self.contracts.get(key) {
-      Some(contract) => Some(contract.clone()),
-      None => None,
-    }
+  fn get_utxo(&self, addr: TxoSID) -> Option<&Utxo> {
+    self.status.get_utxo(addr)
   }
 
   fn get_issuance_num(&self, code: &AssetTypeCode) -> Option<u64> {
-    match self.issuance_num.get(code) {
-      Some(num) => {
-        println!("issuance_num.get -> {}", *num);
-        Some(*num)
-      }
-      None => {
-        println!("No issuance_num.get:  {:?}", self.issuance_num);
-        None
-      }
-    }
+    self.status.get_issuance_num(code)
   }
 
-  fn get_tracked_sids(&self, key: &EGPubKey) -> Option<Vec<TxoSID>> {
-    match self.tracked_sids.get(key) {
-      Some(sids) => Some(sids.clone()),
-      None => None,
-    }
+  fn get_asset_type(&self, code: &AssetTypeCode) -> Option<&AssetType> {
+    self.status.get_asset_type(code)
   }
 }
 
+
 impl ArchiveAccess for LedgerState {
-  fn get_transaction(&self, addr: TxnSID) -> Option<&Transaction> {
-    if addr.index < self.txs.len() {
-      Some(&self.txs[addr.index])
-    } else {
-      None
-    }
+  fn get_transaction(&self, addr: TxnSID) -> Option<&FinalizedTransaction> {
+    self.txs.get(addr.0)
   }
 
   fn get_proof(&self, addr: TxnSID) -> Option<Proof> {
     match self.get_transaction(addr) {
       None => None,
       Some(txn) => {
-        match &self.merkle {
-          Some(merkle) => {
-            match merkle.get_proof(txn.merkle_id, 0) {
-              Ok(proof) => Some(proof),
-              Err(x) => {
-                // TODO log error and recover?
-                println!("get_proof failed:  {}", x);
-                None
-              }
-            }
-          }
-          None => None,
-        }
+        let merkle = &self.merkle;
+        // TODO log error and recover?
+        Some(merkle.get_proof(txn.merkle_id, 0).unwrap())
       }
     }
   }
 
-  fn get_utxo_map(&mut self) -> Option<Vec<u8>> {
-    Some(self.utxo_map.as_mut().unwrap().serialize(self.txn_count))
-  }
+  fn get_utxo_map(&self) -> &BitMap { &self.utxo_map }
 
-  fn get_utxos(&mut self, utxo_list: Vec<usize>) -> Option<Vec<u8>> {
-    Some(self.utxo_map
-             .as_mut()
-             .unwrap()
-             .serialize_partial(utxo_list, self.txn_count))
-  }
+  // TODO(joe): see notes in ArchiveAccess about these
+  // fn get_utxo_map(&mut self) -> Option<Vec<u8>> {
+  //   Some(self.utxo_map.as_mut().unwrap().serialize(self.txn_count))
+  // }
+  // fn get_utxos(&mut self, utxo_list: Vec<usize>) -> Option<Vec<u8>> {
+  //   Some(self.utxo_map
+  //            .as_mut()
+  //            .unwrap()
+  //            .serialize_partial(utxo_list, self.txn_count))
+  // }
 
   fn get_utxo_checksum(&self, version: u64) -> Option<BitDigest> {
     // TODO:  This could be done via a hashmap to support more versions
     // efficiently.
-    for pair in self.utxo_map_versions.iter() {
-      if pair.0 as u64 == version {
+    for pair in self.status.utxo_map_versions.iter() {
+      if (pair.0).0 as u64 == version {
         return Some(pair.1);
       }
     }
@@ -889,14 +919,13 @@ impl ArchiveAccess for LedgerState {
   }
 
   fn get_global_hash(&self) -> (BitDigest, u64) {
-    (self.global_hash, self.global_commit_count)
+    (self.status.global_hash, self.status.global_commit_count)
   }
 }
 
 pub mod helpers {
   use super::*;
   use crate::data_model::{Asset, ConfidentialMemo, DefineAssetBody, IssuerPublicKey, Memo};
-  use rand::{CryptoRng, Rng};
   use zei::basic_crypto::signatures::{XfrKeyPair, XfrPublicKey, XfrSecretKey, XfrSignature};
 
   pub fn build_keys<R: CryptoRng + Rng>(prng: &mut R) -> (XfrPublicKey, XfrSecretKey) {
@@ -1166,8 +1195,8 @@ mod tests {
     let mut ledger_state = LedgerState::test_ledger();
     ledger_state.begin_commit();
 
-    assert_eq!(ledger_state.txn_base_sid.index,
-               ledger_state.max_applied_sid.index + 1);
+    assert_eq!(ledger_state.txn_base_sid.0,
+               ledger_state.max_applied_sid.0 + 1);
   }
 
   #[test]
@@ -1235,15 +1264,15 @@ mod tests {
                                                        lock: None };
 
     // Instantiate a transaction output
-    let sid = TxoSID { index: TXN_SEQ_ID_PLACEHOLDER };
-    let txo = (&sid, TxOutput::BlindAssetRecord(record));
+    let sid = TxoSID::default();
+    let txo = (&sid, TxOutput(record));
 
     // Instantiate a LedgerState
     let mut ledger_state = LedgerState::test_ledger();
     ledger_state.add_txo(txo.clone());
 
     // Verify that add_txo sets values correctly
-    let utxo_addr = TxoSID { index: 0 };
+    let utxo_addr = TxoSID(0);
 
     assert_eq!(ledger_state.tracked_sids.get(&elgamal_public_key),
                Some(&vec![utxo_addr]));
@@ -1652,11 +1681,11 @@ mod tests {
 
     match ledger.get_proof(txn_id) {
       Some(proof) => {
-        assert!(proof.tx_id == ledger.txs[txn_id.index].merkle_id);
+        assert!(proof.tx_id == ledger.txs[txn_id.0].merkle_id);
       }
       None => {
         panic!("get_proof failed for tx_id {}, merkle_id {}, state {}",
-               transaction.tx_id.index,
+               transaction.tx_id.0,
                transaction.merkle_id,
                ledger.merkle.unwrap().state());
       }
