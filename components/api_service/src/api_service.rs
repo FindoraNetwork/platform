@@ -18,6 +18,15 @@ pub struct RestfulApiService {
   web_runtime: actix_rt::SystemRunner,
 }
 
+// Future refactor:
+// Merge query functions
+//
+// Query functions for LedgerAccess are very similar, especially these three:
+//   query_asset
+//   query_policy
+//   query_contract
+// If we add more functions with the similar pattern, it will be good to merge them
+
 fn query_utxo<LA>(data: web::Data<Arc<RwLock<LA>>>,
                   info: web::Path<String>)
                   -> actix_web::Result<web::Json<Utxo>>
@@ -224,26 +233,26 @@ enum Module {
   Update,
 }
 
-trait ApplyModule {
-  fn apply_module<LA: 'static
-                      + LedgerAccess
-                      + ArchiveAccess
-                      + LedgerUpdate
-                      + ArchiveUpdate
-                      + Sync
-                      + Send>(
+trait Route {
+  fn set_route<LA: 'static
+                   + LedgerAccess
+                   + ArchiveAccess
+                   + LedgerUpdate
+                   + ArchiveUpdate
+                   + Sync
+                   + Send>(
     self,
     module: Module)
     -> Self;
 
-  fn apply_ledger_access<LA: 'static + LedgerAccess + Sync + Send>(self) -> Self;
+  fn set_route_for_ledger_access<LA: 'static + LedgerAccess + Sync + Send>(self) -> Self;
 
-  fn apply_archive_access<AA: 'static + ArchiveAccess + Sync + Send>(self) -> Self;
+  fn set_route_for_archive_access<AA: 'static + ArchiveAccess + Sync + Send>(self) -> Self;
 
-  fn apply_update<U: 'static + LedgerUpdate + ArchiveUpdate + Sync + Send>(self) -> Self;
+  fn set_route_for_update<U: 'static + LedgerUpdate + ArchiveUpdate + Sync + Send>(self) -> Self;
 }
 
-impl<T, B> ApplyModule for App<T, B>
+impl<T, B> Route for App<T, B>
   where B: actix_web::dev::MessageBody,
         T: actix_service::NewService<Config = (),
                                      Request = dev::ServiceRequest,
@@ -252,33 +261,33 @@ impl<T, B> ApplyModule for App<T, B>
                                      InitError = ()>
 {
   // Call the appropraite function depending on the module
-  fn apply_module<LA: 'static
-                      + LedgerAccess
-                      + ArchiveAccess
-                      + LedgerUpdate
-                      + ArchiveUpdate
-                      + Sync
-                      + Send>(
+  fn set_route<LA: 'static
+                   + LedgerAccess
+                   + ArchiveAccess
+                   + LedgerUpdate
+                   + ArchiveUpdate
+                   + Sync
+                   + Send>(
     self,
     module: Module)
     -> Self {
     match module {
-      Module::LedgerAccess => self.apply_ledger_access::<LA>(),
-      Module::ArchiveAccess => self.apply_archive_access::<LA>(),
-      Module::Update => self.apply_update::<LA>(),
+      Module::LedgerAccess => self.set_route_for_ledger_access::<LA>(),
+      Module::ArchiveAccess => self.set_route_for_archive_access::<LA>(),
+      Module::Update => self.set_route_for_update::<LA>(),
     }
   }
 
-  // Apply the LedgerAccess module
-  fn apply_ledger_access<LA: 'static + LedgerAccess + Sync + Send>(self) -> Self {
+  // Set routes for the LedgerAccess module
+  fn set_route_for_ledger_access<LA: 'static + LedgerAccess + Sync + Send>(self) -> Self {
     self.route("/utxo_sid/{sid}", web::get().to(query_utxo::<LA>))
         .route("/asset_token/{token}", web::get().to(query_asset::<LA>))
         .route("/policy_key/{key}", web::get().to(query_policy::<LA>))
         .route("/contract_key/{key}", web::get().to(query_contract::<LA>))
   }
 
-  // Apply the ArchiveAccess module
-  fn apply_archive_access<AA: 'static + ArchiveAccess + Sync + Send>(self) -> Self {
+  // Set routes for the ArchiveAccess module
+  fn set_route_for_archive_access<AA: 'static + ArchiveAccess + Sync + Send>(self) -> Self {
     self.route("/txn_sid/{sid}", web::get().to(query_txn::<AA>))
         .route("/global_state", web::get().to(query_global_state::<AA>))
         .route("/proof/{sid}", web::get().to(query_proof::<AA>))
@@ -289,8 +298,8 @@ impl<T, B> ApplyModule for App<T, B>
                web::get().to(query_utxo_partial_map::<AA>))
   }
 
-  // Apply the combination of LedgerUpdate and ArchiveUpdate modules
-  fn apply_update<U: 'static + LedgerUpdate + ArchiveUpdate + Sync + Send>(self) -> Self {
+  // Set routes for the combination of LedgerUpdate and ArchiveUpdate modules
+  fn set_route_for_update<U: 'static + LedgerUpdate + ArchiveUpdate + Sync + Send>(self) -> Self {
     self.route("/submit_transaction/{tx}",
                web::post().to(submit_transaction::<U>))
   }
@@ -313,9 +322,9 @@ impl RestfulApiService {
 
     HttpServer::new(move || {
       App::new().data(ledger_access.clone())
-                .apply_module::<LA>(Module::LedgerAccess)
-                .apply_module::<LA>(Module::ArchiveAccess)
-                .apply_module::<LA>(Module::Update)
+                .set_route::<LA>(Module::LedgerAccess)
+                .set_route::<LA>(Module::ArchiveAccess)
+                .set_route::<LA>(Module::Update)
     }).bind(&addr)?
       .start();
 

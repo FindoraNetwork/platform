@@ -33,7 +33,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
   let token_code_b64 = token_code1.to_base64();
   println!("\n\nQuery asset_token {:?}", &token_code1);
 
-  let mut res = reqwest::get(&format!("http://localhost:8668/asset_token/{}", &token_code_b64))?;
+  let host = "localhost";
+  let port = "8668";
+
+  let mut res = reqwest::get(&format!("http://{}:{}/{}/{}",
+                                      &host, &port, "asset_token", &token_code_b64))?;
 
   println!("Status: {}", res.status());
   println!("Headers:\n{:?}", res.headers());
@@ -43,7 +47,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
   println!("\n\nSubmit transaction: uri_string=\"{:?}\"", &uri_string);
 
-  res = client.post(&format!("http://localhost:8668/submit_transaction/{}", uri_string))
+  res = client.post(&format!("http://{}:{}/{}/{}",
+                             &host, &port, "submit_transaction", uri_string))
               .body("")
               .send()?;
   println!("Status: {}", res.status());
@@ -53,7 +58,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
   std::io::copy(&mut res, &mut std::io::stdout())?;
 
   println!("\n\nQuery global_state {:?} again", &token_code1);
-  res = reqwest::get(&format!("http://localhost:8668/global_state/{}", 0))?;
+  res = reqwest::get(&format!("http://{}:{}/{}/{}", &host, &port, "global_state", 0))?;
 
   println!("Status: {}", res.status());
   println!("Headers:\n{:?}", res.headers());
