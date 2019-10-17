@@ -1,5 +1,6 @@
+use super::errors;
 use crate::store::append_only_merkle::HashValue;
-use crate::store::compute_sha256_hash;
+use crate::utils::sha256;
 use base64::decode as b64dec;
 use base64::encode as b64enc;
 use chrono::prelude::*;
@@ -12,7 +13,6 @@ use std::convert::TryFrom;
 use zei::basic_crypto::signatures::{XfrKeyPair, XfrPublicKey, XfrSecretKey, XfrSignature};
 use zei::xfr::lib::gen_xfr_note;
 use zei::xfr::structs::{AssetRecord, BlindAssetRecord, OpenAssetRecord, XfrNote};
-use super::errors;
 
 pub const TXN_SEQ_ID_PLACEHOLDER: u64 = 0xD000_0000_0000_0000u64;
 
@@ -408,9 +408,9 @@ impl Transaction {
       bincode::serialize(&self).unwrap()
     };
 
-    let digest = compute_sha256_hash(&serialized);
+    let digest = sha256::hash(&serialized);
     let mut result = HashValue::new();
-    result.hash.clone_from_slice(&digest);
+    result.hash.clone_from_slice(&digest.0);
     result
   }
 }
@@ -423,7 +423,7 @@ impl Default for Transaction {
                   memos: Vec::new(),
                   tx_id: TxnSID { index: TXN_SEQ_ID_PLACEHOLDER as usize },
                   merkle_id: TXN_SEQ_ID_PLACEHOLDER,
-                  outputs: 0 }
+                  outputs: TXN_SEQ_ID_PLACEHOLDER }
   }
 }
 
@@ -629,7 +629,7 @@ mod tests {
                     memos: Vec::new(),
                     tx_id: TxnSID { index: TXN_SEQ_ID_PLACEHOLDER as usize },
                     merkle_id: 1,
-                    outputs: 0 };
+                    outputs: TXN_SEQ_ID_PLACEHOLDER };
 
     let transaction_other_differences = Transaction { operations: Vec::new(),
                                                       variable_utxos: Vec::new(),

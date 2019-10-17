@@ -9,6 +9,8 @@ use crate::data_model::{
   CustomAssetPolicy, Operation, SmartContract, SmartContractKey, Transaction, TxOutput,
   TxOutput::BlindAssetRecord, TxnSID, TxoSID, Utxo, TXN_SEQ_ID_PLACEHOLDER,
 };
+use crate::utils::sha256;
+use crate::utils::sha256::Digest as BitDigest;
 use append_only_merkle::{AppendOnlyMerkle, Proof};
 use bitmap::BitMap;
 use findora::timestamp;
@@ -17,9 +19,6 @@ use findora::DEFAULT_MAP;
 use logged_merkle::LoggedMerkle;
 use rand::SeedableRng;
 use rand_chacha::ChaChaRng;
-use sha2::{Digest, Sha256};
-use sodiumoxide::crypto::hash::sha256;
-use sodiumoxide::crypto::hash::sha256::Digest as BitDigest;
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::fs::File;
 use std::fs::OpenOptions;
@@ -79,17 +78,6 @@ pub trait ArchiveAccess {
   fn get_utxos(&mut self, list: Vec<usize>) -> Option<Vec<u8>>;
   fn get_utxo_checksum(&self, version: u64) -> Option<BitDigest>;
   fn get_global_hash(&self) -> (BitDigest, u64);
-}
-
-pub fn compute_sha256_hash<T>(msg: &T) -> [u8; 32]
-  where T: std::convert::AsRef<[u8]>
-{
-  let mut hasher = Sha256::new();
-  hasher.input(msg);
-  let result = hasher.result();
-  let hash = array_ref![&result, 0, 32];
-
-  *hash
 }
 
 #[repr(C)]
@@ -301,9 +289,7 @@ impl LedgerState {
     Ok(SnapshotId { id: state })
   }
 
-  pub fn begin_commit(&mut self) {
-    self.txn_base_sid.index = self.max_applied_sid.index + 1;
-  }
+  pub fn begin_commit(&mut self) {}
 
   pub fn end_commit(&mut self) {
     self.save_utxo_map_version();
@@ -325,7 +311,7 @@ impl LedgerState {
         }
       }
     }
-    let utxo_ref = Utxo { digest: compute_sha256_hash(&serde_json::to_vec(&txo.1).unwrap()),
+    let utxo_ref = Utxo { digest: sha256::hash(&serde_json::to_vec(&txo.1).unwrap()).0,
                           output: txo.1 };
     // Check for asset tracing
     match &utxo_ref.output {
@@ -356,6 +342,7 @@ impl LedgerState {
         .set(utxo_addr.index as usize)
         .unwrap();
     self.utxos.insert(utxo_addr, utxo_ref);
+    self.txn_base_sid.index = self.max_applied_sid.index + 1;
     self.max_applied_sid = utxo_addr;
   }
 
@@ -686,7 +673,7 @@ impl<'la, LA: LedgerAccess> TxnContext<'la, LA> {
     match op {
       Operation::AssetIssuance(ai) => {
         for (ref addr, out) in ai.body.outputs.iter().zip(ai.body.records.iter()) {
-          let utxo_ref = Utxo { digest: compute_sha256_hash(&serde_json::to_vec(out).unwrap()),
+          let utxo_ref = Utxo { digest: sha256::hash(&serde_json::to_vec(out).unwrap()).0,
                                 output: out.clone() };
           self.utxos.insert((*addr).clone(), utxo_ref);
         }
@@ -698,7 +685,7 @@ impl<'la, LA: LedgerAccess> TxnContext<'la, LA> {
           }
         }
         for (ref addr, out) in at.body.outputs.iter().zip(at.body.transfer.outputs_iter()) {
-          let utxo_ref = Utxo { digest: compute_sha256_hash(&serde_json::to_vec(out).unwrap()),
+          let utxo_ref = Utxo { digest: sha256::hash(&serde_json::to_vec(out).unwrap()).0,
                                 output: TxOutput::BlindAssetRecord(out.clone()) };
           self.utxos.insert((*addr).clone(), utxo_ref);
         }
@@ -852,7 +839,6 @@ impl<'la, LA> LedgerValidate for TxnContext<'la, LA> where LA: LedgerAccess
 impl LedgerUpdate for LedgerState {
   fn apply_transaction(&mut self, txn: &Transaction) -> TxoSID {
     let sid = self.txn_base_sid;
-    self.txn_base_sid.index = self.max_applied_sid.index + 1;
     debug!(ledger_map, "apply {:?}", sid);
 
     // Apply the operations
@@ -1273,15 +1259,6 @@ mod tests {
   }
 
   #[test]
-  fn test_begin_commit() {
-    let mut ledger_state = LedgerState::test_ledger();
-    ledger_state.begin_commit();
-
-    assert_eq!(ledger_state.txn_base_sid.index,
-               ledger_state.max_applied_sid.index + 1);
-  }
-
-  #[test]
   fn test_end_commit() {
     let mut ledger_state = LedgerState::test_ledger();
 
@@ -1359,7 +1336,7 @@ mod tests {
     assert_eq!(ledger_state.tracked_sids.get(&elgamal_public_key),
                Some(&vec![utxo_addr]));
 
-    let utxo_ref = Utxo { digest: compute_sha256_hash(&serde_json::to_vec(&txo.1).unwrap()),
+    let utxo_ref = Utxo { digest: sha256::hash(&serde_json::to_vec(&txo.1).unwrap()).0,
                           output: txo.1 };
     assert_eq!(ledger_state.utxos.get(&utxo_addr).unwrap(), &utxo_ref);
 
