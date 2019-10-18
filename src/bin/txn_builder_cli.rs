@@ -573,7 +573,7 @@ fn process_add_cmd(add_matches: &clap::ArgMatches,
       }
       if let Ok(mut txn_builder) = load_txn_builder_from_file(&transaction_file_name) {
         if let Ok(_res) =
-          txn_builder.add_basic_transfer_asset(&[(&TxoSID { index },
+          txn_builder.add_basic_transfer_asset(&[(&TxoSID(index),
                                                   &blind_asset_record,
                                                   amount,
                                                   &priv_key)],

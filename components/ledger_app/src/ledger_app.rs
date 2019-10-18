@@ -8,14 +8,12 @@ use std::sync::{Arc, RwLock};
 
 pub struct LedgerApp {
   committed_state: Arc<RwLock<LedgerState>>,
-  pending_state: Option<BlockContext<LedgerState>>,
-  txns: Vec<Transaction>,
+  txns: Vec<TxnEffect>,
 }
 
 impl LedgerApp {
   pub fn new(ledger_state: LedgerState) -> Result<LedgerApp, PlatformError> {
     Ok(LedgerApp { committed_state: Arc::new(RwLock::new(ledger_state)),
-                   pending_state: None,
                    txns: Vec::new() })
   }
 
@@ -27,34 +25,27 @@ impl LedgerApp {
     &self.committed_state
   }
 
-  pub fn get_pending_state(&self) -> &Option<BlockContext<LedgerState>> {
-    &self.pending_state
-  }
-
-  pub fn get_mut_pending_state(&mut self) -> &mut Option<BlockContext<LedgerState>> {
-    &mut self.pending_state
-  }
-
-  pub fn begin_block(&mut self) {
-    self.pending_state = BlockContext::new(&self.committed_state).ok();
-    self.txns.clear();
-  }
-
+  // TODO(joe): what should these do?
+  pub fn begin_block(&mut self) {}
   pub fn end_block(&mut self) {}
   pub fn begin_commit(&mut self) {}
 
   pub fn end_commit(&mut self) {
     let txns = &mut self.txns;
-    if let Ok(mut writer) = self.committed_state.write() {
+    if let Ok(mut ledger) = self.committed_state.write() {
       for tx in txns.drain(..) {
-        writer.apply_transaction(&tx);
-        writer.append_transaction(tx);
+        // TODO(joe): should error recovery be more graceful?
+        ledger.apply_transaction(tx).unwrap();
       }
     }
-    self.pending_state = None;
   }
-  pub fn cache_transaction(&mut self, txn: Transaction) {
-    self.txns.push(txn);
+  pub fn cache_transaction(&mut self, txn: Transaction) -> Result<(),PlatformError> {
+    if let Ok(mut ledger) = self.committed_state.write() {
+        let txn_effect = TxnEffect::compute_effect(ledger.get_prng(), txn)?;
+        self.txns.push(txn_effect);
+        return Ok(());
+    }
+    Err(PlatformError::InputsError)
   }
 }
 

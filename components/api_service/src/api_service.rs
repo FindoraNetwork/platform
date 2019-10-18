@@ -8,11 +8,12 @@ use ledger::data_model::{
   AssetPolicyKey, AssetType, AssetTypeCode, CustomAssetPolicy, SmartContract, SmartContractKey,
   TxnSID, TxoSID, Utxo,
 };
-use ledger::store::{ArchiveAccess, LedgerAccess, LedgerUpdate};
+use ledger::store::{ArchiveAccess, LedgerAccess, LedgerUpdate, TxnEffect};
 use percent_encoding::percent_decode_str;
 use std::io;
 use std::marker::{Send, Sync};
 use std::sync::{Arc, RwLock};
+use rand::{CryptoRng, Rng};
 
 pub struct RestfulApiService {
   web_runtime: actix_rt::SystemRunner,
@@ -25,8 +26,8 @@ fn query_utxo<LA>(data: web::Data<Arc<RwLock<LA>>>,
 {
   let reader = data.read().unwrap();
   if let Ok(txo_sid) = info.parse::<u64>() {
-    if let Some(txo) = reader.check_utxo(TxoSID { index: txo_sid }) {
-      Ok(web::Json(txo))
+    if let Some(txo) = reader.get_utxo(TxoSID(txo_sid)) {
+      Ok(web::Json(txo.clone()))
     } else {
       Err(actix_web::error::ErrorNotFound("Specified txo does not currently exist."))
     }
@@ -42,8 +43,8 @@ fn query_asset<LA>(data: web::Data<Arc<RwLock<LA>>>,
 {
   let reader = data.read().unwrap();
   if let Ok(token_code) = AssetTypeCode::new_from_base64(&*info) {
-    if let Some(asset) = reader.get_asset_token(&token_code) {
-      Ok(web::Json(asset))
+    if let Some(asset) = reader.get_asset_type(&token_code) {
+      Ok(web::Json(asset.clone()))
     } else {
       Err(actix_web::error::ErrorNotFound("Specified asset definition does not currently exist."))
     }
@@ -59,7 +60,7 @@ fn query_txn<AA>(data: web::Data<Arc<RwLock<AA>>>,
 {
   let reader = data.read().unwrap();
   if let Ok(txn_sid) = info.parse::<usize>() {
-    if let Some(txn) = reader.get_transaction(TxnSID { index: txn_sid }) {
+    if let Some(txn) = reader.get_transaction(TxnSID(txn_sid)) {
       Ok(serde_json::to_string(&*txn)?)
     } else {
       Err(actix_web::error::ErrorNotFound("Specified transaction does not exist."))
@@ -97,7 +98,7 @@ fn query_proof<AA>(data: web::Data<Arc<RwLock<AA>>>,
 {
   if let Ok(txn_sid) = info.parse::<usize>() {
     let reader = data.read().unwrap();
-    if let Some(proof) = reader.get_proof(TxnSID { index: txn_sid }) {
+    if let Some(proof) = reader.get_proof(TxnSID(txn_sid)) {
       Ok(serde_json::to_string(&proof)?)
     } else {
       Err(actix_web::error::ErrorNotFound("That transaction doesn't exist."))
@@ -130,17 +131,19 @@ fn query_utxo_partial_map<AA>(data: web::Data<Arc<RwLock<AA>>>,
                               -> actix_web::Result<String>
   where AA: ArchiveAccess
 {
-  if let Some(block_list) = parse_blocks(info.to_string()) {
-    let mut reader = data.write().unwrap();
+  // TODO(joe?): Implement this
+  Err(actix_web::error::ErrorNotFound("unimplemented"))
+  // if let Some(block_list) = parse_blocks(info.to_string()) {
+  //   let mut reader = data.write().unwrap();
 
-    if let Some(vec) = reader.get_utxos(block_list) {
-      Ok(serde_json::to_string(&vec)?)
-    } else {
-      Err(actix_web::error::ErrorNotFound("The map is unavailable."))
-    }
-  } else {
-    Err(actix_web::error::ErrorNotFound("Invalid block list encoding."))
-  }
+  //   if let Some(vec) = reader.get_utxos(block_list) {
+  //     Ok(serde_json::to_string(&vec)?)
+  //   } else {
+  //     Err(actix_web::error::ErrorNotFound("The map is unavailable."))
+  //   }
+  // } else {
+  //   Err(actix_web::error::ErrorNotFound("Invalid block list encoding."))
+  // }
 }
 
 fn parse_blocks(block_input: String) -> Option<Vec<usize>> {
@@ -165,11 +168,8 @@ fn query_utxo_map<AA>(data: web::Data<Arc<RwLock<AA>>>,
 {
   let mut reader = data.write().unwrap();
 
-  if let Some(vec) = reader.get_utxo_map() {
-    Ok(serde_json::to_string(&vec)?)
-  } else {
-    Err(actix_web::error::ErrorNotFound("The bitmap is unavailable."))
-  }
+  let vec = reader.serialize_utxo_map();
+  Ok(serde_json::to_string(&vec)?)
 }
 
 fn query_policy<LA>(data: web::Data<Arc<RwLock<LA>>>,
@@ -177,28 +177,44 @@ fn query_policy<LA>(data: web::Data<Arc<RwLock<LA>>>,
                     -> actix_web::Result<web::Json<CustomAssetPolicy>>
   where LA: LedgerAccess
 {
-  let reader = data.read().unwrap();
-  if let Ok(asset_policy_key) = AssetPolicyKey::new_from_base64(&*info) {
-    if let Some(policy) = reader.get_asset_policy(&asset_policy_key) {
-      Ok(web::Json(policy))
-    } else {
-      Err(actix_web::error::ErrorNotFound("Specified asset policy does not currently exist."))
-    }
-  } else {
-    Err(actix_web::error::ErrorNotFound("Invalid asset policy encoding."))
-  }
+  // TODO(joe?): Implement this
+  Err(actix_web::error::ErrorNotFound("unimplemented"))
+  // let reader = data.read().unwrap();
+  // if let Ok(asset_policy_key) = AssetPolicyKey::new_from_base64(&*info) {
+  //   if let Some(policy) = reader.get_asset_policy(&asset_policy_key) {
+  //     Ok(web::Json(policy))
+  //   } else {
+  //     Err(actix_web::error::ErrorNotFound("Specified asset policy does not currently exist."))
+  //   }
+  // } else {
+  //   Err(actix_web::error::ErrorNotFound("Invalid asset policy encoding."))
+  // }
 }
 
-fn submit_transaction<U>(data: web::Data<Arc<RwLock<U>>>, info: web::Path<String>)
-  where U: LedgerUpdate + ArchiveUpdate
+fn submit_transaction<RNG,U>(data: web::Data<Arc<RwLock<U>>>, info: web::Path<String>)
+    -> Result<String, actix_web::error::Error>
+  where RNG: Rng + CryptoRng,
+        U:   LedgerUpdate<RNG>
 {
   // TODO: Handle submission to Tendermint layer
-  let mut writer = data.write().unwrap();
+  let mut ledger = data.write().unwrap();
   let uri_string = percent_decode_str(&*info).decode_utf8().unwrap();
-  if let Ok(mut tx) = serde_json::from_str(&uri_string) {
-    writer.apply_transaction(&mut tx);
-    writer.append_transaction(tx);
-  }
+  let tx = serde_json::from_str(&uri_string)
+    .map_err(|e|
+      actix_web::error::ErrorBadRequest(e)
+    )?;
+
+  let txn_effect = TxnEffect::compute_effect(ledger.get_prng(), tx)
+    .map_err(|e|
+      actix_web::error::ErrorBadRequest(e)
+    )?;
+
+  let ret = ledger.apply_transaction(txn_effect)
+    .map_err(|e|
+      actix_web::error::ErrorBadRequest(e)
+    )?;
+
+  Ok(serde_json::to_string(&ret)?)
 }
 
 fn query_contract<LA>(data: web::Data<Arc<RwLock<LA>>>,
@@ -206,30 +222,31 @@ fn query_contract<LA>(data: web::Data<Arc<RwLock<LA>>>,
                       -> actix_web::Result<web::Json<SmartContract>>
   where LA: LedgerAccess
 {
-  let reader = data.read().unwrap();
-  if let Ok(smart_contract_key) = SmartContractKey::new_from_base64(&*info) {
-    if let Some(contract) = reader.get_smart_contract(&smart_contract_key) {
-      Ok(web::Json(contract))
-    } else {
-      Err(actix_web::error::ErrorNotFound("Specified smart contract does not currently exist."))
-    }
-  } else {
-    Err(actix_web::error::ErrorNotFound("Invalid smart contract encoding."))
-  }
+  // TODO(joe?): Implement this
+  Err(actix_web::error::ErrorNotFound("unimplemented"))
+
+  // let reader = data.read().unwrap();
+  // if let Ok(smart_contract_key) = SmartContractKey::new_from_base64(&*info) {
+  //   if let Some(contract) = reader.get_smart_contract(&smart_contract_key) {
+  //     Ok(web::Json(contract))
+  //   } else {
+  //     Err(actix_web::error::ErrorNotFound("Specified smart contract does not currently exist."))
+  //   }
+  // } else {
+  //   Err(actix_web::error::ErrorNotFound("Invalid smart contract encoding."))
+  // }
 }
 
 impl RestfulApiService {
-  pub fn create<LA: 'static
-                    + LedgerAccess
-                    + ArchiveAccess
-                    + LedgerUpdate
-                    + ArchiveUpdate
-                    + Sync
-                    + Send>(
+  pub fn create<RNG,LA>(
     ledger_access: Arc<RwLock<LA>>,
     host: &str,
     port: &str)
-    -> io::Result<RestfulApiService> {
+    -> io::Result<RestfulApiService>
+    where RNG: 'static + Rng + CryptoRng,
+          LA:  'static + LedgerAccess + ArchiveAccess + LedgerUpdate<RNG> +
+               Sync + Send
+  {
     let web_runtime = actix_rt::System::new("eian API");
     let data = ledger_access.clone();
     let addr = format!("{}:{}", host, port);
@@ -248,7 +265,7 @@ impl RestfulApiService {
                 .route("/policy_key/{key}", web::get().to(query_policy::<LA>))
                 .route("/contract_key/{key}", web::get().to(query_contract::<LA>))
                 .route("/submit_transaction/{tx}",
-                       web::post().to(submit_transaction::<LA>))
+                       web::post().to(submit_transaction::<RNG,LA>))
     }).bind(&addr)?
       .start();
     Ok(RestfulApiService { web_runtime })
@@ -266,7 +283,7 @@ mod tests {
   use actix_web::{test, web, App};
   use ledger::data_model::{Operation, Transaction};
   use ledger::store::helpers::*;
-  use ledger::store::{ArchiveUpdate, LedgerState, LedgerUpdate};
+  use ledger::store::{LedgerState, LedgerUpdate};
   use percent_encoding::{utf8_percent_encode, AsciiSet, CONTROLS};
   use rand::SeedableRng;
   use rand_chacha::ChaChaRng;

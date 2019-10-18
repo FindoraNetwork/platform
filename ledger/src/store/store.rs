@@ -331,7 +331,9 @@ pub trait LedgerAccess {
   // fn get_tracked_sids(&self, key: &EGPubKey)       -> Option<Vec<TxoSID>>;
 }
 
-pub trait LedgerUpdate {
+pub trait LedgerUpdate<RNG: Rng + CryptoRng> {
+  fn get_prng(&mut self) -> &mut RNG;
+
   // Update the ledger state, validating the *external* properties of
   // the TxnEffect against the current state of the ledger.
   //
@@ -349,6 +351,8 @@ pub trait LedgerUpdate {
 }
 
 pub trait ArchiveAccess {
+  // Number of transactions available
+  fn get_transaction_count(&self)                   -> usize;
   // Look up transaction in the log
   fn get_transaction  (&self,     addr: TxnSID)     -> Option<&FinalizedTransaction>;
   // Get consistency proof for TxnSID `addr`
@@ -360,6 +364,10 @@ pub trait ArchiveAccess {
   // I (joe) think returning &BitMap matches the intended usage a bit more
   // closely
   fn get_utxo_map     (&self)                       -> &BitMap;
+
+  // Since serializing the bitmap requires mutation access, I'm (joe)
+  // making this a separate method
+  fn serialize_utxo_map(&mut self)                  -> Vec<u8>;
 
   // TODO(joe): figure out what interface this should have -- currently
   // there isn't anything to handle out-of-bounds indices from `list`
@@ -454,6 +462,9 @@ pub struct LedgerStatus {
 pub struct LedgerState {
   status:   LedgerStatus,
 
+  // PRNG used for transaction validation
+  prng:                ChaChaRng,
+
   // Merkle tree tracking the sequence of transaction hashes
   merkle:   LoggedMerkle,
 
@@ -469,12 +480,35 @@ pub struct LedgerState {
   txn_log:  File,
 }
 
+// TODO(joe): fill these in
+impl HasInvariants<PlatformError> for LedgerStatus {
+  fn fast_invariant_check(&self) -> Result<(),PlatformError> {
+    Ok(())
+  }
+
+  fn deep_invariant_check(&self) -> Result<(),PlatformError> {
+    Ok(())
+  }
+}
+
+// TODO(joe): fill these in
+impl HasInvariants<PlatformError> for LedgerState {
+  fn fast_invariant_check(&self) -> Result<(),PlatformError> {
+    Ok(())
+  }
+
+  fn deep_invariant_check(&self) -> Result<(),PlatformError> {
+    Ok(())
+  }
+}
+
 impl LedgerStatus {
   pub fn new(merkle_path: &str,
              txn_path: &str,
              // TODO(joe): should this do something?
              // snapshot_path: &str,
-             utxo_map_path: &str)
+             utxo_map_path: &str,
+             )
              -> Result<LedgerStatus, std::io::Error> {
     let ledger = LedgerStatus {
       merkle_path:         merkle_path.to_owned(),
@@ -594,7 +628,10 @@ impl LedgerStatus {
   }
 }
 
-impl LedgerUpdate for LedgerState {
+impl LedgerUpdate<ChaChaRng> for LedgerState {
+
+  fn get_prng(&mut self) -> &mut ChaChaRng { &mut self.prng }
+
   fn apply_transaction(&mut self, txn: TxnEffect)
       -> Result<(TxnSID,Vec<TxoSID>), PlatformError> {
 
@@ -658,7 +695,7 @@ impl LedgerState {
     let utxo_map_buf  = tmp_dir.path().join("test_ledger_utxo_map");
     let utxo_map_path = utxo_map_buf.to_str().unwrap();
 
-    LedgerState::new(&merkle_path, &txn_path, &utxo_map_path, true).unwrap()
+    LedgerState::new(&merkle_path, &txn_path, &utxo_map_path, None, true).unwrap()
   }
 
   fn load_transaction_log(path: &str)
@@ -740,11 +777,15 @@ impl LedgerState {
              txn_path: &str,
              // snapshot_path: &str,
              utxo_map_path: &str,
+             prng_seed: Option<[u8;32]>,
              create: bool)
              -> Result<LedgerState, std::io::Error> {
     let ledger = LedgerState {
         status:              LedgerStatus::new(merkle_path, txn_path,
                                 utxo_map_path)?,
+        // TODO(joe): is this safe?
+        prng:                rand_chacha::ChaChaRng::from_seed(
+                                prng_seed.unwrap_or([0u8;32])),
         merkle:              LedgerState::init_merkle_log(merkle_path,
                                 create)?,
         txs:                 Vec::new(),
@@ -761,6 +802,7 @@ impl LedgerState {
   pub fn load(merkle_path:   &str,
               txn_path:      &str,
               utxo_map_path: &str,
+              prng_seed:     Option<[u8;32]>,
               snapshot_path: &str)
               -> Result<LedgerState, std::io::Error> {
     let merkle      = LedgerState::init_merkle_log(merkle_path, false)?;
@@ -782,8 +824,12 @@ impl LedgerState {
     //   ledger.apply_transaction(&txn);
     // }
 
+    let prng =
+        // TODO(joe): is this safe?
+        rand_chacha::ChaChaRng::from_seed(prng_seed.unwrap_or([0u8;32]));
+
     let ledger = LedgerState {
-      status, merkle, txs, utxo_map, txn_log
+      status, prng, merkle, txs, utxo_map, txn_log
     };
     assert!(ledger.txs.len() == ledger.status.next_txn.0);
     Ok(ledger)
@@ -881,7 +927,9 @@ impl ArchiveAccess for LedgerState {
     }
   }
 
-  fn get_utxo_map(&self) -> &BitMap { &self.utxo_map }
+  fn get_transaction_count(&self)  -> usize { self.txs.len() }
+  fn get_utxo_map(&self)           -> &BitMap { &self.utxo_map }
+  fn serialize_utxo_map(&mut self) -> Vec<u8> { self.utxo_map.serialize(self.txs.len()) }
 
   // TODO(joe): see notes in ArchiveAccess about these
   // fn get_utxo_map(&mut self) -> Option<Vec<u8>> {
@@ -1698,3 +1746,4 @@ mod tests {
     // ledger.utxos[sid] is a valid utxo.
   }
 }
+
