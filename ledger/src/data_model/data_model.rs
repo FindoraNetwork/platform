@@ -357,9 +357,9 @@ pub struct Transaction {
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct FinalizedTransaction {
-    pub txn:       Transaction,
-    pub tx_id:     TxnSID,
-    pub merkle_id: u64,
+  pub txn: Transaction,
+  pub tx_id: TxnSID,
+  pub merkle_id: u64,
 }
 
 impl Transaction {

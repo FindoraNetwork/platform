@@ -17,11 +17,11 @@ pub struct EnableMap {
 }
 
 pub trait HasInvariants<ErrT> {
-    // Simple sanity checks, preferably constant-time. Could be toggled in a production environment
-    // without jeopardizing moderate performance requirements.
-    fn fast_invariant_check(&self) -> Result<(),ErrT>;
-    // Computationally intensive checks, intended for a testing environment.
-    fn deep_invariant_check(&self) -> Result<(),ErrT>;
+  // Simple sanity checks, preferably constant-time. Could be toggled in a production environment
+  // without jeopardizing moderate performance requirements.
+  fn fast_invariant_check(&self) -> Result<(), ErrT>;
+  // Computationally intensive checks, intended for a testing environment.
+  fn deep_invariant_check(&self) -> Result<(), ErrT>;
 }
 
 // Define a set of defaults for anyone who

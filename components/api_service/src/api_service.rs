@@ -10,10 +10,10 @@ use ledger::data_model::{
 };
 use ledger::store::{ArchiveAccess, LedgerAccess, LedgerUpdate, TxnEffect};
 use percent_encoding::percent_decode_str;
+use rand::{CryptoRng, Rng};
 use std::io;
 use std::marker::{Send, Sync};
 use std::sync::{Arc, RwLock};
-use rand::{CryptoRng, Rng};
 
 pub struct RestfulApiService {
   web_runtime: actix_rt::SystemRunner,
@@ -191,28 +191,24 @@ fn query_policy<LA>(data: web::Data<Arc<RwLock<LA>>>,
   // }
 }
 
-fn submit_transaction<RNG,U>(data: web::Data<Arc<RwLock<U>>>, info: web::Path<String>)
-    -> Result<String, actix_web::error::Error>
+fn submit_transaction<RNG, U>(data: web::Data<Arc<RwLock<U>>>,
+                              info: web::Path<String>)
+                              -> Result<String, actix_web::error::Error>
   where RNG: Rng + CryptoRng,
-        U:   LedgerUpdate<RNG>
+        U: LedgerUpdate<RNG>
 {
   // TODO: Handle submission to Tendermint layer
   let mut ledger = data.write().unwrap();
   let uri_string = percent_decode_str(&*info).decode_utf8().unwrap();
-  let tx = serde_json::from_str(&uri_string)
-    .map_err(|e|
-      actix_web::error::ErrorBadRequest(e)
-    )?;
+  let tx = serde_json::from_str(&uri_string).map_err(|e| actix_web::error::ErrorBadRequest(e))?;
 
-  let txn_effect = TxnEffect::compute_effect(ledger.get_prng(), tx)
-    .map_err(|e|
-      actix_web::error::ErrorBadRequest(e)
-    )?;
+  let txn_effect =
+    TxnEffect::compute_effect(ledger.get_prng(), tx).map_err(|e| {
+                                                      actix_web::error::ErrorBadRequest(e)
+                                                    })?;
 
   let ret = ledger.apply_transaction(txn_effect)
-    .map_err(|e|
-      actix_web::error::ErrorBadRequest(e)
-    )?;
+                  .map_err(|e| actix_web::error::ErrorBadRequest(e))?;
 
   Ok(serde_json::to_string(&ret)?)
 }
@@ -238,14 +234,12 @@ fn query_contract<LA>(data: web::Data<Arc<RwLock<LA>>>,
 }
 
 impl RestfulApiService {
-  pub fn create<RNG,LA>(
-    ledger_access: Arc<RwLock<LA>>,
-    host: &str,
-    port: &str)
-    -> io::Result<RestfulApiService>
+  pub fn create<RNG, LA>(ledger_access: Arc<RwLock<LA>>,
+                         host: &str,
+                         port: &str)
+                         -> io::Result<RestfulApiService>
     where RNG: 'static + Rng + CryptoRng,
-          LA:  'static + LedgerAccess + ArchiveAccess + LedgerUpdate<RNG> +
-               Sync + Send
+          LA: 'static + LedgerAccess + ArchiveAccess + LedgerUpdate<RNG> + Sync + Send
   {
     let web_runtime = actix_rt::System::new("eian API");
     let data = ledger_access.clone();
@@ -265,7 +259,7 @@ impl RestfulApiService {
                 .route("/policy_key/{key}", web::get().to(query_policy::<LA>))
                 .route("/contract_key/{key}", web::get().to(query_contract::<LA>))
                 .route("/submit_transaction/{tx}",
-                       web::post().to(submit_transaction::<RNG,LA>))
+                       web::post().to(submit_transaction::<RNG, LA>))
     }).bind(&addr)?
       .start();
     Ok(RestfulApiService { web_runtime })
@@ -345,7 +339,8 @@ mod tests {
     let mut app =
       test::init_service(App::new().data(Arc::new(RwLock::new(state)))
                                    .route("/submit_transaction/{tx}",
-                                          web::post().to(submit_transaction::<ChaChaRng,LedgerState>))
+                                          web::post().to(submit_transaction::<ChaChaRng,
+                                                                            LedgerState>))
                                    .route("/asset_token/{token}",
                                           web::get().to(query_asset::<LedgerState>)));
 

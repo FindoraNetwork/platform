@@ -20,9 +20,9 @@ impl fmt::Display for PlatformError {
       PlatformError::SerializationError => f.write_str("Could not serialize object"),
       PlatformError::InputsError => f.write_str("Invalid parameters"),
       PlatformError::InvariantError(msg) => {
-          f.write_str(format!("Invariant violated: {}",
-                              msg.as_ref().unwrap_or(&"UNKNOWN".to_string())).as_str())
-      },
+        f.write_str(format!("Invariant violated: {}",
+                            msg.as_ref().unwrap_or(&"UNKNOWN".to_string())).as_str())
+      }
       PlatformError::ZeiError(ze) => ze.fmt(f),
       PlatformError::IoError(ioe) => f.write_str(&ioe),
     }

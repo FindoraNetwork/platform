@@ -39,11 +39,11 @@ impl LedgerApp {
       }
     }
   }
-  pub fn cache_transaction(&mut self, txn: Transaction) -> Result<(),PlatformError> {
+  pub fn cache_transaction(&mut self, txn: Transaction) -> Result<(), PlatformError> {
     if let Ok(mut ledger) = self.committed_state.write() {
-        let txn_effect = TxnEffect::compute_effect(ledger.get_prng(), txn)?;
-        self.txns.push(txn_effect);
-        return Ok(());
+      let txn_effect = TxnEffect::compute_effect(ledger.get_prng(), txn)?;
+      self.txns.push(txn_effect);
+      return Ok(());
     }
     Err(PlatformError::InputsError)
   }

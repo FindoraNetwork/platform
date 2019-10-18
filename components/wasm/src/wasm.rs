@@ -9,7 +9,9 @@ use percent_encoding::{utf8_percent_encode, AsciiSet, CONTROLS};
 use txn_builder::{BuildsTransactions, TransactionBuilder};
 
 use js_sys::Promise;
-use ledger::data_model::{AccountAddress, AssetTypeCode, IssuerPublicKey, TxOutput, TxoRef, TxoSID, Utxo};
+use ledger::data_model::{
+  AccountAddress, AssetTypeCode, IssuerPublicKey, TxOutput, TxoRef, TxoSID, Utxo,
+};
 
 use rand::SeedableRng;
 use rand_chacha::ChaChaRng;
