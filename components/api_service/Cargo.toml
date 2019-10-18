@@ -10,6 +10,7 @@ path = "src/api_service.rs"
 [dependencies]
 ledger = { path = "../../ledger" }
 actix-web = "1.0.8"
+actix-service = "0.4.2"
 actix-rt = "0.2"
 serde = "1.0"
 serde_derive = "1.0"
