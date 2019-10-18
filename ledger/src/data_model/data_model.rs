@@ -577,31 +577,26 @@ mod tests {
   // Verify that the hash values of two transactions:
   //   are the same if the transactions differ only in merkle_id
   //   are different if the transactions differ in other fields
-  #[test]
-  fn test_compute_merkle_hash() {
-    let transaction_default: Transaction = Default::default();
+  // TODO(joe): determine a good test to replace this
+  // #[test]
+  // fn test_compute_merkle_hash() {
+  //   let transaction_default: Transaction = Default::default();
 
-    let transaction_different_merkle_id =
-      Transaction { operations: Vec::new(),
-                    credentials: Vec::new(),
-                    memos: Vec::new(),
-                    tx_id: TxnSID { index: TXN_SEQ_ID_PLACEHOLDER as usize },
-                    merkle_id: 1,
-                    outputs: TXN_SEQ_ID_PLACEHOLDER };
+  //   let transaction_different_merkle_id =
+  //     Transaction { operations: Vec::new(),
+  //                   credentials: Vec::new(),
+  //                   memos: Vec::new() };
 
-    let transaction_other_differences = Transaction { operations: Vec::new(),
-                                                      credentials: Vec::new(),
-                                                      memos: Vec::new(),
-                                                      tx_id: TxnSID { index: TXN_SEQ_ID_PLACEHOLDER
-                                                                             as usize },
-                                                      merkle_id: 1,
-                                                      outputs: 1 };
+  //   let transaction_other_differences = Transaction { operations: Vec::new(),
+  //                                                     credentials: Vec::new(),
+  //                                                     memos: Vec::new(),
+  //                                                     };
 
-    let hash_value_default = transaction_default.compute_merkle_hash();
-    let hash_value_different_merkle_id = transaction_different_merkle_id.compute_merkle_hash();
-    let hash_value_other_differences = transaction_other_differences.compute_merkle_hash();
+  //   let hash_value_default = transaction_default.compute_merkle_hash();
+  //   let hash_value_different_merkle_id = transaction_different_merkle_id.compute_merkle_hash();
+  //   let hash_value_other_differences = transaction_other_differences.compute_merkle_hash();
 
-    assert_eq!(hash_value_different_merkle_id, hash_value_default);
-    assert_ne!(hash_value_other_differences, hash_value_default);
-  }
+  //   assert_eq!(hash_value_different_merkle_id, hash_value_default);
+  //   assert_ne!(hash_value_other_differences, hash_value_default);
+  // }
 }

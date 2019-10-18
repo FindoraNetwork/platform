@@ -22,9 +22,35 @@ abstract sig Operation {
 	signedBy: set PrivateKey
 }
 
-fact { lone o: Operation | no o.prevOp }
-fact { no o: Operation | some (o.^prevOp & o) }
-fact { no o: Operation | no o.signedBy }
+fact OnlyOneRoot { lone o: Operation | no o.prevOp }
+fact NoCycles    { no o: Operation | some (o.^prevOp & o) }
+fact SignEveryOp { no o: Operation | no o.signedBy }
+
+sig Transaction {
+  first: Operation,
+  last:  Operation
+}
+
+fact TxnsAreChains {
+  all t: Transaction | t.first in t.last.*prevOp
+}
+
+fact TxnsDisjoint {
+  all t1: Transaction | all t2: Transaction | (
+    t1 != t2 => no (t1.last.*prevOp & t2.last.*prevOp)
+  )
+}
+
+pred isLoan[t: Transaction, loanType: AssetType, fiatType: AssetType]
+{
+  loanType != fiatType
+  #(t.last.*prevOp) = 2
+  one trn1: TransferAsset | one trn2: TransferAsset | (
+    trn1 != trn2 and
+
+  )
+}
+
 
 sig DefineAsset extends Operation {
 	newCode: disj AssetCode,

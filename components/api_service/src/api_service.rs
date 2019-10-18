@@ -316,8 +316,8 @@ mod tests {
     let asset_create = asset_creation_operation(&asset_body, &public_key, &secret_key);
     tx.operations.push(Operation::DefineAsset(asset_create));
 
-    state.apply_transaction(&mut tx);
-    state.append_transaction(tx);
+    let effect = TxnEffect::compute_effect(state.get_prng(), tx).unwrap();
+    state.apply_transaction(effect).unwrap();
 
     let mut app = test::init_service(App::new().data(Arc::new(RwLock::new(state)))
                                                .route("/asset_token/{token}",
@@ -345,7 +345,7 @@ mod tests {
     let mut app =
       test::init_service(App::new().data(Arc::new(RwLock::new(state)))
                                    .route("/submit_transaction/{tx}",
-                                          web::post().to(submit_transaction::<LedgerState>))
+                                          web::post().to(submit_transaction::<ChaChaRng,LedgerState>))
                                    .route("/asset_token/{token}",
                                           web::get().to(query_asset::<LedgerState>)));
 
