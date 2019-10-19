@@ -3,7 +3,7 @@ extern crate actix_web;
 extern crate ledger;
 extern crate serde_json;
 
-use actix_web::{web, App, HttpServer};
+use actix_web::{dev, error, web, App, HttpServer};
 use ledger::data_model::{
   AssetPolicyKey, AssetType, AssetTypeCode, CustomAssetPolicy, SmartContract, SmartContractKey,
   TxnSID, TxoSID, Utxo,
@@ -18,6 +18,15 @@ use std::sync::{Arc, RwLock};
 pub struct RestfulApiService {
   web_runtime: actix_rt::SystemRunner,
 }
+
+// Future refactor:
+// Merge query functions
+//
+// Query functions for LedgerAccess are very similar, especially these three:
+//   query_asset
+//   query_policy
+//   query_contract
+// If we add more functions with the similar pattern, it will be good to merge them
 
 fn query_utxo<LA>(data: web::Data<Arc<RwLock<LA>>>,
                   info: web::Path<String>)
@@ -51,6 +60,45 @@ fn query_asset<LA>(data: web::Data<Arc<RwLock<LA>>>,
   } else {
     Err(actix_web::error::ErrorNotFound("Invalid asset definition encoding."))
   }
+}
+
+fn query_policy<LA>(data: web::Data<Arc<RwLock<LA>>>,
+                    info: web::Path<String>)
+                    -> actix_web::Result<web::Json<CustomAssetPolicy>>
+  where LA: LedgerAccess
+{
+  // TODO(joe?): Implement this
+  Err(actix_web::error::ErrorNotFound("unimplemented"))
+  // let reader = data.read().unwrap();
+  // if let Ok(asset_policy_key) = AssetPolicyKey::new_from_base64(&*info) {
+  //   if let Some(policy) = reader.get_asset_policy(&asset_policy_key) {
+  //     Ok(web::Json(policy))
+  //   } else {
+  //     Err(actix_web::error::ErrorNotFound("Specified asset policy does not currently exist."))
+  //   }
+  // } else {
+  //   Err(actix_web::error::ErrorNotFound("Invalid asset policy encoding."))
+  // }
+}
+
+fn query_contract<LA>(data: web::Data<Arc<RwLock<LA>>>,
+                      info: web::Path<String>)
+                      -> actix_web::Result<web::Json<SmartContract>>
+  where LA: LedgerAccess
+{
+  // TODO(joe?): Implement this
+  Err(actix_web::error::ErrorNotFound("unimplemented"))
+
+  // let reader = data.read().unwrap();
+  // if let Ok(smart_contract_key) = SmartContractKey::new_from_base64(&*info) {
+  //   if let Some(contract) = reader.get_smart_contract(&smart_contract_key) {
+  //     Ok(web::Json(contract))
+  //   } else {
+  //     Err(actix_web::error::ErrorNotFound("Specified smart contract does not currently exist."))
+  //   }
+  // } else {
+  //   Err(actix_web::error::ErrorNotFound("Invalid smart contract encoding."))
+  // }
 }
 
 fn query_txn<AA>(data: web::Data<Arc<RwLock<AA>>>,
@@ -108,6 +156,17 @@ fn query_proof<AA>(data: web::Data<Arc<RwLock<AA>>>,
   }
 }
 
+fn query_utxo_map<AA>(data: web::Data<Arc<RwLock<AA>>>,
+                      _info: web::Path<String>)
+                      -> actix_web::Result<String>
+  where AA: ArchiveAccess
+{
+  let mut reader = data.write().unwrap();
+
+  let vec = reader.serialize_utxo_map();
+  Ok(serde_json::to_string(&vec)?)
+}
+
 fn query_utxo_map_checksum<AA>(data: web::Data<Arc<RwLock<AA>>>,
                                info: web::Path<String>)
                                -> actix_web::Result<String>
@@ -124,6 +183,21 @@ fn query_utxo_map_checksum<AA>(data: web::Data<Arc<RwLock<AA>>>,
   } else {
     Err(actix_web::error::ErrorNotFound("Invalid version encoding."))
   }
+}
+
+fn parse_blocks(block_input: String) -> Option<Vec<usize>> {
+  let blocks = block_input.split(',');
+  let mut result = Vec::new();
+
+  for block_str in blocks {
+    if let Ok(block_usize) = block_str.parse::<usize>() {
+      result.push(block_usize);
+    } else {
+      return None;
+    }
+  }
+
+  Some(result)
 }
 
 fn query_utxo_partial_map<AA>(data: web::Data<Arc<RwLock<AA>>>,
@@ -143,51 +217,6 @@ fn query_utxo_partial_map<AA>(data: web::Data<Arc<RwLock<AA>>>,
   //   }
   // } else {
   //   Err(actix_web::error::ErrorNotFound("Invalid block list encoding."))
-  // }
-}
-
-fn parse_blocks(block_input: String) -> Option<Vec<usize>> {
-  let blocks = block_input.split(',');
-  let mut result = Vec::new();
-
-  for block_str in blocks {
-    if let Ok(block_usize) = block_str.parse::<usize>() {
-      result.push(block_usize);
-    } else {
-      return None;
-    }
-  }
-
-  Some(result)
-}
-
-fn query_utxo_map<AA>(data: web::Data<Arc<RwLock<AA>>>,
-                      _info: web::Path<String>)
-                      -> actix_web::Result<String>
-  where AA: ArchiveAccess
-{
-  let mut reader = data.write().unwrap();
-
-  let vec = reader.serialize_utxo_map();
-  Ok(serde_json::to_string(&vec)?)
-}
-
-fn query_policy<LA>(data: web::Data<Arc<RwLock<LA>>>,
-                    info: web::Path<String>)
-                    -> actix_web::Result<web::Json<CustomAssetPolicy>>
-  where LA: LedgerAccess
-{
-  // TODO(joe?): Implement this
-  Err(actix_web::error::ErrorNotFound("unimplemented"))
-  // let reader = data.read().unwrap();
-  // if let Ok(asset_policy_key) = AssetPolicyKey::new_from_base64(&*info) {
-  //   if let Some(policy) = reader.get_asset_policy(&asset_policy_key) {
-  //     Ok(web::Json(policy))
-  //   } else {
-  //     Err(actix_web::error::ErrorNotFound("Specified asset policy does not currently exist."))
-  //   }
-  // } else {
-  //   Err(actix_web::error::ErrorNotFound("Invalid asset policy encoding."))
   // }
 }
 
@@ -222,55 +251,106 @@ fn submit_transaction<RNG, U>(data: web::Data<Arc<RwLock<U>>>,
   Ok(serde_json::to_string(&ret)?)
 }
 
-fn query_contract<LA>(data: web::Data<Arc<RwLock<LA>>>,
-                      info: web::Path<String>)
-                      -> actix_web::Result<web::Json<SmartContract>>
-  where LA: LedgerAccess
-{
-  // TODO(joe?): Implement this
-  Err(actix_web::error::ErrorNotFound("unimplemented"))
+enum Module {
+  LedgerAccess,
+  ArchiveAccess,
+  Update,
+}
 
-  // let reader = data.read().unwrap();
-  // if let Ok(smart_contract_key) = SmartContractKey::new_from_base64(&*info) {
-  //   if let Some(contract) = reader.get_smart_contract(&smart_contract_key) {
-  //     Ok(web::Json(contract))
-  //   } else {
-  //     Err(actix_web::error::ErrorNotFound("Specified smart contract does not currently exist."))
-  //   }
-  // } else {
-  //   Err(actix_web::error::ErrorNotFound("Invalid smart contract encoding."))
-  // }
+trait Route {
+  fn set_route<RNG: 'static + Rng + CryptoRng,
+               LA: 'static
+                   + LedgerAccess
+                   + ArchiveAccess
+                   + LedgerUpdate<RNG>
+                   + Sync
+                   + Send>(
+    self,
+    module: Module)
+    -> Self;
+
+  fn set_route_for_ledger_access<LA: 'static + LedgerAccess + Sync + Send>(self) -> Self;
+
+  fn set_route_for_archive_access<AA: 'static + ArchiveAccess + Sync + Send>(self) -> Self;
+
+  fn set_route_for_update<RNG: 'static + Rng + CryptoRng,U: 'static + LedgerUpdate<RNG> + Sync + Send>(self) -> Self;
+}
+
+impl<T, B> Route for App<T, B>
+  where B: actix_web::dev::MessageBody,
+        T: actix_service::NewService<Config = (),
+                                     Request = dev::ServiceRequest,
+                                     Response = dev::ServiceResponse<B>,
+                                     Error = error::Error,
+                                     InitError = ()>
+{
+  // Call the appropraite function depending on the module
+  fn set_route<RNG: 'static + Rng + CryptoRng,
+               LA: 'static
+                   + LedgerAccess
+                   + ArchiveAccess
+                   + LedgerUpdate<RNG>
+                   + Sync
+                   + Send>(
+    self,
+    module: Module)
+    -> Self {
+    match module {
+      Module::LedgerAccess => self.set_route_for_ledger_access::<LA>(),
+      Module::ArchiveAccess => self.set_route_for_archive_access::<LA>(),
+      Module::Update => self.set_route_for_update::<RNG,LA>(),
+    }
+  }
+
+  // Set routes for the LedgerAccess module
+  fn set_route_for_ledger_access<LA: 'static + LedgerAccess + Sync + Send>(self) -> Self {
+    self.route("/utxo_sid/{sid}", web::get().to(query_utxo::<LA>))
+        .route("/asset_token/{token}", web::get().to(query_asset::<LA>))
+        .route("/policy_key/{key}", web::get().to(query_policy::<LA>))
+        .route("/contract_key/{key}", web::get().to(query_contract::<LA>))
+  }
+
+  // Set routes for the ArchiveAccess module
+  fn set_route_for_archive_access<AA: 'static + ArchiveAccess + Sync + Send>(self) -> Self {
+    self.route("/txn_sid/{sid}", web::get().to(query_txn::<AA>))
+        .route("/global_state", web::get().to(query_global_state::<AA>))
+        .route("/proof/{sid}", web::get().to(query_proof::<AA>))
+        .route("/utxo_map", web::get().to(query_utxo_map::<AA>))
+        .route("/utxo_map_checksum",
+               web::get().to(query_utxo_map_checksum::<AA>))
+        .route("/utxo_partial_map/{sidlist}",
+               web::get().to(query_utxo_partial_map::<AA>))
+  }
+
+  // Set routes for the LedgerUpdate module
+  fn set_route_for_update<RNG: 'static + Rng + CryptoRng,U: 'static + LedgerUpdate<RNG> + Sync + Send>(self) -> Self {
+    self.route("/submit_transaction/{tx}",
+               web::post().to(submit_transaction::<RNG,U>))
+  }
 }
 
 impl RestfulApiService {
-  pub fn create<RNG, LA>(ledger_access: Arc<RwLock<LA>>,
-                         host: &str,
-                         port: &str)
-                         -> io::Result<RestfulApiService>
-    where RNG: 'static + Rng + CryptoRng,
-          LA: 'static + LedgerAccess + ArchiveAccess + LedgerUpdate<RNG> + Sync + Send
-  {
-    let web_runtime = actix_rt::System::new("eian API");
-    let data = ledger_access.clone();
-    let addr = format!("{}:{}", host, port);
+  pub fn create<RNG: 'static + Rng + CryptoRng,LA: 'static
+                    + LedgerAccess
+                    + ArchiveAccess
+                    + LedgerUpdate<RNG>
+                    + Sync
+                    + Send>(
+    ledger_access: Arc<RwLock<LA>>,
+    host: &str,
+    port: &str)
+    -> io::Result<RestfulApiService> {
+    let web_runtime = actix_rt::System::new("findora API");
+    let addr = format!("https://{}:{}", host, port);
+
     HttpServer::new(move || {
-      App::new().data(data.clone())
-                .route("/utxo_sid/{sid}", web::get().to(query_utxo::<LA>))
-                .route("/asset_token/{token}", web::get().to(query_asset::<LA>))
-                .route("/txn_sid/{sid}", web::get().to(query_txn::<LA>))
-                .route("/proof/{sid}", web::get().to(query_proof::<LA>))
-                .route("/utxo_map", web::get().to(query_utxo_map::<LA>))
-                .route("/global_state", web::get().to(query_global_state::<LA>))
-                .route("/utxo_map_checksum",
-                       web::get().to(query_utxo_map_checksum::<LA>))
-                .route("/utxo_partial_map/{sidlist}",
-                       web::get().to(query_utxo_partial_map::<LA>))
-                .route("/policy_key/{key}", web::get().to(query_policy::<LA>))
-                .route("/contract_key/{key}", web::get().to(query_contract::<LA>))
-                .route("/submit_transaction/{tx}",
-                       web::post().to(submit_transaction::<RNG, LA>))
+      App::new().data(ledger_access.clone())
+                .set_route::<RNG,LA>(Module::LedgerAccess)
+                .set_route::<RNG,LA>(Module::ArchiveAccess)
+                .set_route::<RNG,LA>(Module::Update)
     }).bind(&addr)?
       .start();
+
     Ok(RestfulApiService { web_runtime })
   }
   // call from a thread; this will block.
