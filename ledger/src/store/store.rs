@@ -339,22 +339,64 @@ pub trait LedgerAccess {
   // fn get_tracked_sids(&self, key: &EGPubKey)       -> Option<Vec<TxoSID>>;
 }
 
+#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, Hash, PartialEq, Serialize)]
+pub struct TxnTempSID(pub usize);
+
 pub trait LedgerUpdate<RNG: Rng + CryptoRng> {
+  // Each Block represents a collection of transactions which have been
+  // validated and confirmed to be unconditionally consistent with the
+  // ledger and with each other.
+  type Block;
+
   fn get_prng(&mut self) -> &mut RNG;
 
-  // Update the ledger state, validating the *external* properties of
-  // the TxnEffect against the current state of the ledger.
+  // Returns a Block object representing an in-construction group of
+  // transactions.
   //
-  //  Returns:
-  //    If valid: the finalized Transaction SID and the finalized TXO SIDs
-  //      of the UTXOs. UTXO SIDs will be in increasing order.
-  //    If invalid: Err(...)
+  // NOTE: To ensure that each Block represents an *unconditionally*
+  // consistent collection of transactions, there should only be one live
+  // Block allowed at a time, unless you have a very good, carefully
+  // researched, checked-by-someone-else reason.
+  fn start_block(&mut self) -> Result<Self::Block, PlatformError>;
+
+  // Update the Block state, validating the *external* properties of
+  // the TxnEffect against the current block and state of the ledger.
+  //
+  // Returns:
+  //   If valid: An identifier representing the transaction within this
+  //             Block
+  //   If invalid: Err(...)
+  //
+  // When Err is returned, no modifications are made to the Block.
   //
   // NOTE: This function is allowed to assume that the TxnEffect is
   // internally consistent, and matches its internal Transaction
   // object, so any caller of this *must* validate the TxnEffect
   // properly first.
-  fn apply_transaction(&mut self, txn: TxnEffect) -> Result<(TxnSID, Vec<TxoSID>), PlatformError>;
+  fn apply_transaction(&self, block: &mut Self::Block, txn: TxnEffect)
+      -> Result<TxnTempSID, PlatformError>;
+
+  // Abort an in-development block. No effects of the block are reflected
+  // in the ledger.
+  //
+  // Returns:
+  //   Map of (temp identifier -> original transaction) for applied
+  //   transactions in this block.
+  fn abort_block(&mut self, block: Self::Block)
+      -> HashMap<TxnTempSID, Transaction>;
+
+  // Record a block into the ledger, applying the effects of all included
+  // transactions and making those effects externally visible.
+  //
+  // Returns:
+  //   If valid: Map from temporary IDs to the finalized Transaction SID
+  //      and the finalized TXO SIDs of that transaction's UTXOs. UTXO
+  //      SIDs for each transaction will be in increasing order.
+  //   If invalid: Err(...)
+  //
+  // When Err(...) is returned, no modifications are made to the ledger.
+  fn finish_block(&mut self, block: Self::Block)
+      -> HashMap<TxnTempSID, (TxnSID, Vec<TxoSID>)>;
 }
 
 pub trait ArchiveAccess {
@@ -484,6 +526,28 @@ pub struct LedgerState {
 
   // TODO(joe): use this file handle to actually record transactions
   txn_log: File,
+
+  block_ctx: Option<BlockEffect>,
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct BlockEffect {
+  // All Transaction objects validated in this block
+  txns: Vec<Transaction>,
+  // Identifiers within this block for each transaction
+  // (currently just an index into `txns`)
+  temp_sids: Vec<TxnTempSID>,
+  // Internally-spent TXOs are None, UTXOs are Some(...)
+  // Should line up element-wise with `txns`
+  txos: Vec<Vec<Option<TxOutput>>>,
+  // Which TXOs this consumes
+  input_txos: HashMap<TxoSID, BlindAssetRecord>,
+  // Which new asset types this defines
+  new_asset_codes: HashMap<AssetTypeCode, AssetType>,
+  // Which new TXO issuance sequence numbers are used, in sorted order
+  // The vec should be nonempty unless this asset code is being created in
+  // this transaction.
+  new_issuance_nums: HashMap<AssetTypeCode, Vec<u64>>,
 }
 
 // TODO(joe): fill these in
@@ -505,6 +569,79 @@ impl HasInvariants<PlatformError> for LedgerState {
 
   fn deep_invariant_check(&self) -> Result<(), PlatformError> {
     Ok(())
+  }
+}
+
+impl BlockEffect {
+  fn new() -> BlockEffect {
+    BlockEffect {
+      txns: Vec::new(),
+      temp_sids: Vec::new(),
+      txos: Vec::new(),
+      input_txos: HashMap::new(),
+      new_asset_codes: HashMap::new(),
+      new_issuance_nums: HashMap::new(),
+    }
+  }
+
+  // Combine a TxnEffect into this block.
+  //
+  // NOTE: this does not check the TxnEffect against the rest of the ledger
+  // state, so each TxnEffect should be passed through
+  // LedgerStatus::check_txn_effects *first*.
+  //
+  // Returns:
+  //   if `txn` would not interfere with any transaction in the block, the
+  //       new temp SID representing the transaction.
+  //   Otherwise, Err(...)
+  fn add_txn_effect(&mut self, txn: TxnEffect) -> Result<TxnTempSID, PlatformError> {
+    // Check that no inputs are consumed twice
+    for (input_sid,_) in txn.input_txos.iter() {
+      if self.input_txos.contains_key(&input_sid) {
+        return Err(PlatformError::InputsError);
+      }
+    }
+
+    // Check that no AssetType is affected by both the block so far and
+    // this transaction
+    {
+      for (type_code,_) in txn.new_asset_codes.iter() {
+        if    self.new_asset_codes.contains_key(&type_code)
+          || self.new_issuance_nums.contains_key(&type_code) {
+          return Err(PlatformError::InputsError);
+        }
+      }
+
+      for (type_code,_) in txn.new_issuance_nums.iter() {
+        if    self.new_asset_codes.contains_key(&type_code)
+          || self.new_issuance_nums.contains_key(&type_code) {
+          return Err(PlatformError::InputsError);
+        }
+      }
+    }
+
+    // == All validation done, apply `txn` to this block ==
+    let temp_sid = TxnTempSID(self.txns.len());
+    self.txns.push(txn.txn);
+    self.temp_sids.push(temp_sid);
+    self.txos.push(txn.txos);
+
+    for (input_sid,record) in txn.input_txos {
+      debug_assert!(!self.input_txos.contains_key(&input_sid));
+      self.input_txos.insert(input_sid,record);
+    }
+
+    for (type_code,asset_type) in txn.new_asset_codes {
+      debug_assert!(!self.new_asset_codes.contains_key(&type_code));
+      self.new_asset_codes.insert(type_code,asset_type);
+    }
+
+    for (type_code,issuance_nums) in txn.new_issuance_nums {
+      debug_assert!(!self.new_issuance_nums.contains_key(&type_code));
+      self.new_issuance_nums.insert(type_code,issuance_nums);
+    }
+
+    Ok(temp_sid)
   }
 }
 
@@ -530,21 +667,16 @@ impl LedgerStatus {
     Ok(ledger)
   }
 
-  fn apply_txn_effects(&mut self, txn: &TxnEffect) -> Result<(TxnSID, Vec<TxoSID>), PlatformError> {
-    let new_txn = self.next_txn;
-    // Each unspent TxOutput gets a TxoSID based on its position in the TXO
-    // list
-    let new_utxo_sids: Vec<TxoSID> =
-      txn.txos
-         .iter()
-         .enumerate()
-         // (ix,Some(..)) -> next_txo+ix
-         // (ix,None)     -> <no entry>
-         .filter_map(|(ix, txo)| txo.as_ref().map(|_| TxoSID(self.next_txo.0 + (ix as u64))))
-         .collect();
-
-    // ==== Stage 1: Validate all the effects ====
-
+  // Check that `txn` can be safely applied to the current ledger.
+  //
+  // Returns the same TxnEffect (unchanged) if it is safe. Consumes `txn`
+  // if it would be invalid to prevent a simple case of forgetting error
+  // handling, such as:
+  //
+  //  ledger.check_txn_effects(txn_effect);
+  //  block.add_txn_effect(txn_effect);
+  //
+  fn check_txn_effects(&self, txn: TxnEffect) -> Result<TxnEffect, PlatformError> {
     // Each input must be unspent and correspond to the claimed record
     for (inp_sid, inp_record) in txn.input_txos.iter() {
       let inp_utxo = self.utxos
@@ -591,99 +723,212 @@ impl LedgerStatus {
       }
     }
 
-    // ==== AT THIS POINT, ALL VALIDATION SHOULD BE COMPLETE ====
-    // In particular, all return values past this point should be Ok(...)
-    //
-    // ==== Stage 2: Apply all the effects ====
-    self.next_txn = TxnSID(self.next_txn.0 + 1);
-    self.next_txo = TxoSID(self.next_txo.0 + (txn.txos.len() as u64));
+    Ok(txn)
+  }
 
+  // This function assumes that `block` is COMPLETELY CONSISTENT with the
+  // ledger state. Calling `check_txn_effects` for each TxnEffect getting
+  // mixed into the BlockEffect *should* be enough to guarantee that (if
+  // that is ever false, it's a bug).
+  //
+  // This drains every field of `block` except `txns` and `temp_sids`.
+  fn apply_block_effects(&mut self, block: &mut BlockEffect)
+      -> HashMap<TxnTempSID,(TxnSID, Vec<TxoSID>)>
+  {
     // Remove consumed UTXOs
-    for (inp_sid, _) in txn.input_txos.iter() {
+    for (inp_sid, _) in block.input_txos.drain() {
       debug_assert!(self.utxos.contains_key(&inp_sid));
       self.utxos.remove(&inp_sid);
     }
 
     // Add new UTXOs
+    // Each transaction gets a TxnSID, and each of its unspent TXOs gets
+    // a TxoSID. TxoSID assignments are based on the order TXOs appear in
+    // the transaction.
+    let mut new_utxo_sids: HashMap<TxnTempSID,(TxnSID,Vec<TxoSID>)> = HashMap::new();
     {
-      let utxo_iter = txn.txos.iter().filter_map(|x| x.as_ref());
-      for (txo_sid, utxo) in new_utxo_sids.iter().zip(utxo_iter) {
-        debug_assert!(!self.utxos.contains_key(txo_sid));
-        debug_assert!(txo_sid.0 < self.next_txo.0);
+      let next_txn = &mut self.next_txn;
+      let next_txo = &mut self.next_txo;
 
-        self.utxos.insert(*txo_sid, Utxo(utxo.clone()));
+      debug_assert!(block.txos.len() == block.txns.len());
+      debug_assert!(block.txos.len() == block.temp_sids.len());
+      for (ix,txos) in block.temp_sids.iter()
+                            .zip(block.txos.drain(..)) {
+        let txn_sid = *next_txn;
+        next_txn.0 += 1;
+
+        let mut txn_utxo_sids: Vec<TxoSID> = vec![];
+
+        for txo in txos {
+          let txo_sid = *next_txo;
+          next_txo.0 += 1;
+          if let Some(tx_output) = txo {
+            self.utxos.insert(txo_sid, Utxo(tx_output));
+            txn_utxo_sids.push(txo_sid);
+          }
+        }
+
+        new_utxo_sids.insert(*ix,(txn_sid,txn_utxo_sids));
       }
     }
 
     // Update issuance sequence number limits
-    for (code, seq_nums) in txn.new_issuance_nums.iter() {
+    for (code, seq_nums) in block.new_issuance_nums.drain() {
       // One more than the greatest sequence number, or 0
       let new_max_seq_num = seq_nums.last().map(|x| x + 1).unwrap_or(0);
-      self.issuance_num.insert(*code, new_max_seq_num);
+      self.issuance_num.insert(code, new_max_seq_num);
     }
 
     // Register new asset types
-    for (code, asset_type) in txn.new_asset_codes.iter() {
+    for (code, asset_type) in block.new_asset_codes.drain() {
       debug_assert!(!self.asset_types.contains_key(&code));
-      self.asset_types.insert(*code, asset_type.clone());
+      self.asset_types.insert(code, asset_type.clone());
     }
 
-    Ok((new_txn, new_utxo_sids))
+    debug_assert!(block.temp_sids.len() == block.txns.len());
+    debug_assert!(block.txos.is_empty());
+    debug_assert!(block.input_txos.is_empty());
+    debug_assert!(block.new_asset_codes.is_empty());
+    debug_assert!(block.new_issuance_nums.is_empty());
+
+    new_utxo_sids
   }
 }
 
 impl LedgerUpdate<ChaChaRng> for LedgerState {
+  type Block = BlockEffect;
+
   fn get_prng(&mut self) -> &mut ChaChaRng {
     &mut self.prng
   }
 
-  fn apply_transaction(&mut self, txn: TxnEffect) -> Result<(TxnSID, Vec<TxoSID>), PlatformError> {
+  fn start_block(&mut self) -> Result<BlockEffect, PlatformError> {
+    let mut block_ctx = None;
+    std::mem::swap(&mut self.block_ctx,&mut block_ctx);
+    match block_ctx {
+      None => Err(PlatformError::InputsError), // Probably should be a more relevant error
+      Some(block) => Ok(block)
+    }
+  }
+
+  fn apply_transaction(&self, block: &mut BlockEffect, txn: TxnEffect)
+      -> Result<TxnTempSID, PlatformError> {
+    block.add_txn_effect(self.status.check_txn_effects(txn)?)
+  }
+
+
+  fn abort_block(&mut self, block: BlockEffect) -> HashMap<TxnTempSID, Transaction> {
+    let mut block = block;
+    let txns = block.txns.drain(..);
+    let ret: HashMap<TxnTempSID, Transaction> = block.temp_sids.drain(..).zip(txns).collect();
+
+    block.txos.clear();
+    block.input_txos.clear();
+    block.new_asset_codes.clear();
+    block.new_issuance_nums.clear();
+
+    debug_assert!(block.temp_sids.is_empty());
+    debug_assert!(block.txns.is_empty());
+    debug_assert!(block.txos.is_empty());
+    debug_assert!(block.input_txos.is_empty());
+    debug_assert!(block.new_asset_codes.is_empty());
+    debug_assert!(block.new_issuance_nums.is_empty());
+
+    return ret;
+  }
+
+  fn finish_block(&mut self, block: BlockEffect)
+      -> HashMap<TxnTempSID, (TxnSID, Vec<TxoSID>)> {
+    let mut block = block;
+
     let base_sid = self.status.next_txo.0;
-    let (txn_sid, utxo_sids) = self.status.apply_txn_effects(&txn)?;
+    let txn_temp_sids = block.temp_sids.clone();
+    let temp_sid_map = self.status.apply_block_effects(&mut block);
     let max_sid = self.status.next_txo.0; // mutated by apply_txn_effects
 
     // debug_assert!(utxo_sids.is_sorted());
 
     {
       // Update the UTXO bitmap
-      let mut utxo_ix = 0;
+      // This is, unfortunately, some horrible index-walking messiness.
+      // The core idea is that we walk over every new TXO SID (ix), tracking:
+      //  - by `temp_sid_ix`, which transaction we're in
+      //  - by `txo_sid_ix`, which UTXO within that transaction is next.
+      let mut temp_sid_ix = 0;
+      let mut txo_sid_ix = 0;
+
+      // Find the first index that matters
+      while temp_sid_ix < txn_temp_sids.len()
+            && (temp_sid_map[&txn_temp_sids[temp_sid_ix]].1).is_empty() {
+        temp_sid_ix += 1;
+      }
+
       for ix in base_sid..max_sid {
-        debug_assert!(utxo_ix < utxo_sids.len());
+
+        debug_assert!(temp_sid_ix < txn_temp_sids.len());
+
+        let temp_sid = txn_temp_sids[temp_sid_ix];
+        let utxo_sids = &temp_sid_map[&temp_sid].1;
+
+        debug_assert!(txo_sid_ix < utxo_sids.len());
 
         // Only .set() extends the bitmap, so to append a 0 we currently
         // nead to .set() then .clear().
         //
         // TODO(joe): are these unwraps okay?
         self.utxo_map.set(ix as usize).unwrap();
-        if let Some(TxoSID(utxo_sid)) = utxo_sids.get(utxo_ix) {
+        if let Some(TxoSID(utxo_sid)) = utxo_sids.get(txo_sid_ix) {
           if *utxo_sid != ix {
             self.utxo_map.clear(ix as usize).unwrap();
           } else {
-            utxo_ix += 1;
+            txo_sid_ix += 1;
+
+            // We've reached the end of this UTXO list, search for the next
+            // relevant one
+            if txo_sid_ix == utxo_sids.len() {
+
+              txo_sid_ix = 0;
+
+              while temp_sid_ix < txn_temp_sids.len()
+                    && (temp_sid_map[&txn_temp_sids[temp_sid_ix]].1).is_empty() {
+                temp_sid_ix += 1;
+              }
+
+            }
           }
         }
       }
-      debug_assert!(utxo_ix == utxo_sids.len());
+      debug_assert!(temp_sid_ix == txn_temp_sids.len());
+      debug_assert!(txo_sid_ix == 0);
     }
 
-    {
-      // Update the Merkle tree and transaction log
-      let mut inner_txn = txn.txn;
-      let hash = inner_txn.compute_merkle_hash(txn_sid);
+    // Update the Merkle tree and transaction log
+    for (tmp_sid,txn) in block.temp_sids.drain(..).zip(block.txns.drain(..)) {
+      let txn_sid = temp_sid_map.get(&tmp_sid).unwrap().0;
+      let hash = txn.compute_merkle_hash(txn_sid);
 
       // TODO(joe/jonathan): Since errors in the merkle tree are things like
       // corruption and I/O failure, we don't have a good recovery story. Is
       // panicking acceptable?
       let merkle_id = self.merkle.append(&hash).unwrap();
 
-      self.txs.push(FinalizedTransaction { txn: inner_txn,
+      self.txs.push(FinalizedTransaction { txn: txn,
                                            tx_id: txn_sid,
                                            merkle_id });
     }
 
     // TODO(joe): asset tracing?
 
-    Ok((txn_sid, utxo_sids))
+    debug_assert!(block.temp_sids.is_empty());
+    debug_assert!(block.txns.is_empty());
+    debug_assert!(block.txos.is_empty());
+    debug_assert!(block.input_txos.is_empty());
+    debug_assert!(block.new_asset_codes.is_empty());
+    debug_assert!(block.new_issuance_nums.is_empty());
+
+    self.block_ctx = Some(block);
+
+    temp_sid_map
   }
 }
 
@@ -797,7 +1042,8 @@ impl LedgerState {
                                utxo_map: LedgerState::init_utxo_map(utxo_map_path, create)?,
                                txn_log: std::fs::OpenOptions::new().create(create)
                                                                    .append(true)
-                                                                   .open(txn_path)? };
+                                                                   .open(txn_path)?,
+                               block_ctx: Some(BlockEffect::new()) };
 
     Ok(ledger)
   }
@@ -837,7 +1083,8 @@ impl LedgerState {
                                merkle,
                                txs,
                                utxo_map,
-                               txn_log };
+                               txn_log,
+                               block_ctx: Some(BlockEffect::new()) };
     assert!(ledger.txs.len() == ledger.status.next_txn.0);
     Ok(ledger)
   }
@@ -1617,7 +1864,11 @@ mod tests {
     tx.operations.push(Operation::DefineAsset(asset_create));
 
     let effect = TxnEffect::compute_effect(&mut prng, tx).unwrap();
-    state.apply_transaction(effect).unwrap();
+    {
+      let mut block = state.start_block().unwrap();
+      state.apply_transaction(&mut block, effect).unwrap();
+      state.finish_block(block);
+    }
 
     assert!(state.get_asset_type(&token_code1).is_some());
 
@@ -1698,7 +1949,11 @@ mod tests {
     tx.operations.push(Operation::DefineAsset(asset_create));
 
     let effect = TxnEffect::compute_effect(&mut prng, tx).unwrap();
-    ledger.apply_transaction(effect).unwrap();
+    {
+      let mut block = ledger.start_block().unwrap();
+      ledger.apply_transaction(&mut block, effect).unwrap();
+      ledger.finish_block(block);
+    }
 
     let mut tx = Transaction::default();
 
@@ -1718,7 +1973,12 @@ mod tests {
 
     tx.operations.push(issue_op);
     let effect = TxnEffect::compute_effect(&mut prng, tx).unwrap();
-    let (txn_sid, txos) = ledger.apply_transaction(effect).unwrap();
+
+    let mut block = ledger.start_block().unwrap();
+    let temp_sid = ledger.apply_transaction(&mut block, effect).unwrap();
+
+    let (txn_sid, txos) = ledger.finish_block(block).remove(&temp_sid).unwrap();
+
     let sid = txn_sid;
     let transaction = ledger.txs[txn_sid.0].clone();
     let txn_id = transaction.tx_id;

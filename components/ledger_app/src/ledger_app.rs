@@ -5,45 +5,66 @@ use ledger::data_model::errors::PlatformError;
 use ledger::data_model::Transaction;
 use ledger::store::*;
 use std::sync::{Arc, RwLock};
+use rand::{CryptoRng, Rng};
 
-pub struct LedgerApp {
-  committed_state: Arc<RwLock<LedgerState>>,
-  txns: Vec<TxnEffect>,
+pub struct LedgerApp<RNG,LA>
+    where RNG: Rng + CryptoRng,
+          LA:  LedgerUpdate<RNG>
+{
+  committed_state: Arc<RwLock<LA>>,
+  block: Option<LA::Block>,
+  temp_sids: Vec<TxnTempSID>,
+  prng: RNG,
 }
 
-impl LedgerApp {
-  pub fn new(ledger_state: LedgerState) -> Result<LedgerApp, PlatformError> {
+impl<RNG,LA> LedgerApp<RNG,LA>
+    where RNG: Rng + CryptoRng,
+          LA:  LedgerUpdate<RNG>
+{
+  pub fn new(prng: RNG, ledger_state: LA) -> Result<LedgerApp<RNG,LA>, PlatformError> {
     Ok(LedgerApp { committed_state: Arc::new(RwLock::new(ledger_state)),
-                   txns: Vec::new() })
+                   block: None,
+                   temp_sids: vec![],
+                   prng })
   }
 
-  pub fn borrowable_ledger_state(&self) -> Arc<RwLock<LedgerState>> {
+  pub fn borrowable_ledger_state(&self) -> Arc<RwLock<LA>> {
     self.committed_state.clone()
   }
 
-  pub fn get_committed_state(&self) -> &RwLock<LedgerState> {
+  pub fn get_committed_state(&self) -> &RwLock<LA> {
     &self.committed_state
   }
 
   // TODO(joe): what should these do?
-  pub fn begin_block(&mut self) {}
-  pub fn end_block(&mut self) {}
   pub fn begin_commit(&mut self) {}
+  pub fn end_commit(&mut self) {}
 
-  pub fn end_commit(&mut self) {
-    let txns = &mut self.txns;
+  pub fn begin_block(&mut self) {
+    assert!(self.block.is_none());
     if let Ok(mut ledger) = self.committed_state.write() {
-      for tx in txns.drain(..) {
-        // TODO(joe): should error recovery be more graceful?
-        ledger.apply_transaction(tx).unwrap();
-      }
-    }
+      self.block = Some(ledger.start_block().unwrap());
+    } // What should happen in failure? -joe
   }
+
+  pub fn end_block(&mut self) {
+    let mut block = None;
+    std::mem::swap(&mut self.block, &mut block);
+    if let Some(block) = block {
+      if let Ok(mut ledger) = self.committed_state.write() {
+        ledger.finish_block(block);
+      } // What should happen in failure? -joe
+    } // What should happen in failure? -joe
+  }
+
   pub fn cache_transaction(&mut self, txn: Transaction) -> Result<(), PlatformError> {
-    if let Ok(mut ledger) = self.committed_state.write() {
-      let txn_effect = TxnEffect::compute_effect(ledger.get_prng(), txn)?;
-      self.txns.push(txn_effect);
-      return Ok(());
+    if let Some(block) = &mut self.block {
+      if let Ok(ledger) = self.committed_state.read() {
+        let txn_effect = TxnEffect::compute_effect(&mut self.prng, txn)?;
+        self.temp_sids.push(ledger.apply_transaction(block, txn_effect)?);
+
+        return Ok(());
+      }
     }
     Err(PlatformError::InputsError)
   }

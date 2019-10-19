@@ -41,15 +41,15 @@ fact TxnsDisjoint {
   )
 }
 
-pred isLoan[t: Transaction, loanType: AssetType, fiatType: AssetType]
-{
-  loanType != fiatType
-  #(t.last.*prevOp) = 2
-  one trn1: TransferAsset | one trn2: TransferAsset | (
-    trn1 != trn2 and
-
-  )
-}
+//pred isLoan[t: Transaction, loanType: AssetType, fiatType: AssetType]
+//{
+//  loanType != fiatType
+//  #(t.last.*prevOp) = 2
+//  one trn1: TransferAsset | one trn2: TransferAsset | (
+//    trn1 != trn2 and
+//    one trn
+//  )
+//}
 
 
 sig DefineAsset extends Operation {
@@ -89,7 +89,7 @@ fact OnlyIssueCreatedAssets {
 }
 fact OnlyIssuePermittedAssets {
 	all iss: IssueAsset | some cr: DefineAsset | some privk: PrivateKey | (
-		isKeyPair[cr.issuer,privk] and	
+		isKeyPair[cr.issuer,privk] and
 		cr.newCode = iss.issCode and
 		privk in iss.signedBy and
 		(all txo: iss.outputs | all a: txo.assets | a.assetType = iss.issCode)

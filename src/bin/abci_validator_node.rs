@@ -12,15 +12,18 @@ use ledger::data_model::errors::PlatformError;
 use ledger::store::*;
 use ledger_app::{convert_tx, LedgerApp};
 use std::thread;
+use rand_chacha::ChaChaRng;
+use rand::SeedableRng;
 
 struct ABCILedgerApp {
-  la: LedgerApp,
+  la: LedgerApp<ChaChaRng,LedgerState>,
 }
 
 impl ABCILedgerApp {
   fn new() -> Result<ABCILedgerApp, PlatformError> {
     let ledger = LedgerState::test_ledger();
-    Ok(ABCILedgerApp { la: LedgerApp::new(ledger)? })
+    let prng = rand_chacha::ChaChaRng::from_seed([0u8;32]);
+    Ok(ABCILedgerApp { la: LedgerApp::new(prng,ledger)? })
   }
 }
 

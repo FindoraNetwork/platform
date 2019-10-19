@@ -207,8 +207,17 @@ fn submit_transaction<RNG, U>(data: web::Data<Arc<RwLock<U>>>,
                                                       actix_web::error::ErrorBadRequest(e)
                                                     })?;
 
-  let ret = ledger.apply_transaction(txn_effect)
-                  .map_err(|e| actix_web::error::ErrorBadRequest(e))?;
+  let mut block = ledger.start_block()
+        .map_err(|e| actix_web::error::ErrorInternalServerError(e))?;
+
+  let temp_sid = ledger.apply_transaction(&mut block,txn_effect)
+                  .map_err(|e| actix_web::error::ErrorBadRequest(e));
+
+  if let Err(e) = temp_sid { ledger.abort_block(block); return Err(e); }
+  let temp_sid = temp_sid.unwrap();
+
+  let ret = ledger.finish_block(block).remove(&temp_sid).unwrap().1;
+
 
   Ok(serde_json::to_string(&ret)?)
 }
@@ -311,7 +320,11 @@ mod tests {
     tx.operations.push(Operation::DefineAsset(asset_create));
 
     let effect = TxnEffect::compute_effect(state.get_prng(), tx).unwrap();
-    state.apply_transaction(effect).unwrap();
+    {
+      let mut block = state.start_block().unwrap();
+      state.apply_transaction(&mut block, effect).unwrap();
+      state.finish_block(block);
+    }
 
     let mut app = test::init_service(App::new().data(Arc::new(RwLock::new(state)))
                                                .route("/asset_token/{token}",
