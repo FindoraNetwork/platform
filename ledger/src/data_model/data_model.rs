@@ -149,6 +149,11 @@ pub struct TxoSID(pub u64);
 #[derive(Clone, Copy, Debug, Default, Deserialize, Eq, Hash, PartialEq, Serialize)]
 pub struct TxnSID(pub usize);
 
+// An ephemeral index for a transaction (with a different newtype so that
+// it's harder to mix up)
+#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, Hash, PartialEq, Serialize)]
+pub struct TxnTempSID(pub usize);
+
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct TxOutput(pub BlindAssetRecord);
 

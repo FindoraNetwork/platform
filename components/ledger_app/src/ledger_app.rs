@@ -2,7 +2,7 @@ extern crate api_service;
 extern crate ledger;
 
 use ledger::data_model::errors::PlatformError;
-use ledger::data_model::Transaction;
+use ledger::data_model::{Transaction, TxnTempSID};
 use ledger::store::*;
 use rand::{CryptoRng, Rng};
 use std::sync::{Arc, RwLock};
