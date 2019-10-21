@@ -448,7 +448,6 @@ mod tests {
   use super::*;
   use rand::SeedableRng;
   use std::cmp::min;
-  use std::mem;
   use zei::xfr::structs::{AssetAmountProof, XfrBody, XfrProofs};
 
   #[test]

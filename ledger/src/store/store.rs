@@ -14,8 +14,6 @@ use crate::utils::sha256::Digest as BitDigest;
 use append_only_merkle::{AppendOnlyMerkle, Proof};
 use bitmap::BitMap;
 use findora::timestamp;
-use findora::EnableMap;
-use findora::DEFAULT_MAP;
 use logged_merkle::LoggedMerkle;
 use rand::SeedableRng;
 use rand_chacha::ChaChaRng;
@@ -33,15 +31,6 @@ use zei::xfr::structs::EGPubKey;
 use super::append_only_merkle;
 use super::bitmap;
 use super::logged_merkle;
-
-#[allow(non_upper_case_globals)]
-static store: EnableMap = DEFAULT_MAP;
-
-#[allow(non_upper_case_globals)]
-static ledger_map: EnableMap = DEFAULT_MAP;
-
-#[allow(non_upper_case_globals)]
-static issue_map: EnableMap = DEFAULT_MAP;
 
 pub struct SnapshotId {
   pub id: u64,
@@ -187,7 +176,7 @@ impl LedgerState {
       AppendOnlyMerkle::open(path)
     };
 
-    log!(store, "Using path {} for the Merkle tree.", path);
+    log!(Store, "Using path {} for the Merkle tree.", path);
 
     let tree = match result {
       Err(x) => {
@@ -375,20 +364,20 @@ impl LedgerState {
   }
 
   fn apply_asset_issuance(&mut self, issue: &AssetIssuance) {
-    debug!(issue_map, "outputs {:?}", issue.body.outputs);
-    debug!(issue_map, "records {:?}", issue.body.records);
+    debug!(Issue, "outputs {:?}", issue.body.outputs);
+    debug!(Issue, "records {:?}", issue.body.records);
     for out in issue.body
                     .outputs
                     .iter()
                     .zip(issue.body.records.iter().map(|ref o| (*o).clone()))
     {
-      debug!(ledger_map, "add txo {:?}", out.1);
+      debug!(Ledger, "add txo {:?}", out.1);
       self.add_txo(out);
     }
 
     self.issuance_num
         .insert(issue.body.code, issue.body.seq_num);
-    debug!(ledger_map,
+    debug!(Ledger,
            "insert asset issue code {:?} -> seq {:?}", issue.body.code, issue.body.seq_num);
   }
 
@@ -839,11 +828,11 @@ impl<'la, LA> LedgerValidate for TxnContext<'la, LA> where LA: LedgerAccess
 impl LedgerUpdate for LedgerState {
   fn apply_transaction(&mut self, txn: &Transaction) -> TxoSID {
     let sid = self.txn_base_sid;
-    debug!(ledger_map, "apply {:?}", sid);
+    debug!(Ledger, "apply {:?}", sid);
 
     // Apply the operations
     for op in &txn.operations {
-      debug!(ledger_map, "Applying op:  {:?}", op);
+      debug!(Ledger, "Applying op:  {:?}", op);
       self.apply_operation(op);
     }
     sid
