@@ -445,8 +445,7 @@ impl LoggedMerkle {
     let mut top = buffer_count;
     let mut current = base;
 
-    debug!(FindRelevant,
-           "find_relevant:  state {}, top {}", state, top);
+    debug!(FindRelevant, "find_relevant:  state {}, top {}", state, top);
 
     // Do a binary search to find the first relevant buffer, if
     // any.  In theory, we could use a more sophisticated

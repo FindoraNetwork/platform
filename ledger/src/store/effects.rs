@@ -1,16 +1,16 @@
 use crate::data_model::errors::PlatformError;
 use crate::data_model::{
   AssetPolicyKey, AssetType, AssetTypeCode, CustomAssetPolicy, DefineAsset, FinalizedTransaction,
-  IssueAsset, Operation, SmartContract, SmartContractKey, Transaction, TransferAsset, TxOutput,
-  TxnSID, TxnTempSID, TxoRef, TxoSID, Utxo, TXN_SEQ_ID_PLACEHOLDER, IssuerPublicKey,
+  IssueAsset, IssuerPublicKey, Operation, SmartContract, SmartContractKey, Transaction,
+  TransferAsset, TxOutput, TxnSID, TxnTempSID, TxoRef, TxoSID, Utxo, TXN_SEQ_ID_PLACEHOLDER,
 };
-use std::collections::{HashMap, HashSet, VecDeque};
-use zei::xfr::structs::{BlindAssetRecord, EGPubKey};
-use rand::{CryptoRng, Rng};
-use rand::SeedableRng;
-use rand_chacha::ChaChaRng;
-use zei::xfr::lib::verify_xfr_note;
 use findora::{timestamp, EnableMap, HasInvariants};
+use rand::SeedableRng;
+use rand::{CryptoRng, Rng};
+use rand_chacha::ChaChaRng;
+use std::collections::{HashMap, HashSet, VecDeque};
+use zei::xfr::lib::verify_xfr_note;
+use zei::xfr::structs::{BlindAssetRecord, EGPubKey};
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct TxnEffect {
@@ -135,7 +135,7 @@ impl TxnEffect {
               return Err(PlatformError::InputsError);
             }
           } else {
-            issuance_keys.insert(code,iss.pubkey.clone());
+            issuance_keys.insert(code, iss.pubkey.clone());
           }
 
           txos.reserve(iss.body.records.len());
@@ -375,9 +375,7 @@ impl BlockEffect {
         if !nums.is_empty() {
           debug_assert!(txn.issuance_keys.contains_key(&type_code));
         }
-
       }
-
     }
 
     // == All validation done, apply `txn` to this block ==
@@ -409,5 +407,3 @@ impl BlockEffect {
     Ok(temp_sid)
   }
 }
-
-

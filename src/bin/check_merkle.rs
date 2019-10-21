@@ -40,7 +40,10 @@ fn main() {
   let mut tree = match AppendOnlyMerkle::open(&path) {
     Ok(tree) => tree,
     Err(e) => {
-      log!(CheckMerkle, "check_merkle failed to open \"{}\":  {}", path, e);
+      log!(CheckMerkle,
+           "check_merkle failed to open \"{}\":  {}",
+           path,
+           e);
 
       // The open failed, so try a rebuild if asked.
       if do_repairs {
@@ -54,7 +57,9 @@ fn main() {
   // The open succeeded.  Flush any reconstructed blocks to the
   // disk.
   if let Some(e) = tree.write() {
-    log!(CheckMerkle, "The Merkle tree write returned an error:  {}", e);
+    log!(CheckMerkle,
+         "The Merkle tree write returned an error:  {}",
+         e);
     log!(CheckMerkle, "Continuing.");
   }
 
@@ -62,7 +67,9 @@ fn main() {
 
   // Perform the full check.
   if let Some(e) = tree.check_disk(true) {
-    log!(CheckMerkle, "The Merkle tree check returned an error:  {}", e);
+    log!(CheckMerkle,
+         "The Merkle tree check returned an error:  {}",
+         e);
   } else {
     log!(CheckMerkle,
          "The Merkle tree at \"{}\" is valid with {} entries.",

@@ -30,8 +30,8 @@ use zei::xfr::structs::{BlindAssetRecord, EGPubKey};
 
 use super::append_only_merkle;
 use super::bitmap;
-use super::logged_merkle;
 use super::effects::*;
+use super::logged_merkle;
 
 pub struct SnapshotId {
   pub id: u64,
@@ -333,10 +333,12 @@ impl LedgerStatus {
       debug_assert!(txn.issuance_keys.contains_key(&code));
 
       let iss_key = txn.issuance_keys.get(&code).unwrap();
-      let proper_key = self.asset_types.get(&code)
+      let proper_key = self.asset_types
+                           .get(&code)
                            .or_else(|| txn.new_asset_codes.get(&code))
                            .ok_or(PlatformError::InputsError)?
-                           .properties.issuer;
+                           .properties
+                           .issuer;
       if *iss_key != proper_key {
         return Err(PlatformError::InputsError);
       }
@@ -355,8 +357,6 @@ impl LedgerStatus {
         }
       }
     }
-
-
 
     Ok(txn)
   }

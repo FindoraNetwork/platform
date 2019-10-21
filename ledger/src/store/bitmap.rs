@@ -237,9 +237,7 @@ impl SparseMap {
             return false;
           }
 
-          debug!(Bitmap,
-                 "validate_checksum:  Block {} verifies.",
-                 i.commas());
+          debug!(Bitmap, "validate_checksum:  Block {} verifies.", i.commas());
         }
         None => {
           debug!(Bitmap, "validate_checksum:  phantom data");
@@ -263,8 +261,7 @@ impl SparseMap {
       checksum_data[CHECK_SIZE..].clone_from_slice(&digest.0[0..]);
     }
 
-    debug!(Bitmap,
-           "validate_checksum:  got final digest {:?}", digest);
+    debug!(Bitmap, "validate_checksum:  got final digest {:?}", digest);
     digest == self.checksum
   }
 }
@@ -1002,8 +999,7 @@ impl BitMap {
              "compute_checksum:  digest at block {} is {:?}", i, digest);
     }
 
-    debug!(Bitmap,
-           "compute_checksum:  got final digest {:?}", digest);
+    debug!(Bitmap, "compute_checksum:  got final digest {:?}", digest);
     self.checksum = digest;
     digest
   }

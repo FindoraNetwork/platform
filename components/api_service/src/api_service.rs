@@ -284,7 +284,6 @@ impl<T, B> Route for App<T, B>
                                      Error = error::Error,
                                      InitError = ()>
 {
-
   // Call the appropraite function depending on the interface
   fn set_route<RNG: 'static + Rng + CryptoRng,
                  LA: 'static + LedgerAccess + ArchiveAccess + LedgerUpdate<RNG> + Sync + Send>(
@@ -294,7 +293,7 @@ impl<T, B> Route for App<T, B>
     match service_interface {
       ServiceInterface::LedgerAccess => self.set_route_for_ledger_access::<LA>(),
       ServiceInterface::ArchiveAccess => self.set_route_for_archive_access::<LA>(),
-      ServiceInterface::Update => self.set_route_for_update::<RNG,LA>(),
+      ServiceInterface::Update => self.set_route_for_update::<RNG, LA>(),
     }
   }
 
@@ -340,9 +339,9 @@ impl RestfulApiService {
 
     HttpServer::new(move || {
       App::new().data(ledger_access.clone())
-                .set_route::<RNG,LA>(ServiceInterface::LedgerAccess)
-                .set_route::<RNG,LA>(ServiceInterface::ArchiveAccess)
-                .set_route::<RNG,LA>(ServiceInterface::Update)
+                .set_route::<RNG, LA>(ServiceInterface::LedgerAccess)
+                .set_route::<RNG, LA>(ServiceInterface::ArchiveAccess)
+                .set_route::<RNG, LA>(ServiceInterface::Update)
     }).bind(&addr)?
       .start();
 
