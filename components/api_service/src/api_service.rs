@@ -237,16 +237,18 @@ fn submit_transaction<RNG, U>(data: web::Data<Arc<RwLock<U>>>,
                                                     })?;
 
   let mut block = ledger.start_block()
-        .map_err(|e| actix_web::error::ErrorInternalServerError(e))?;
+                        .map_err(|e| actix_web::error::ErrorInternalServerError(e))?;
 
-  let temp_sid = ledger.apply_transaction(&mut block,txn_effect)
-                  .map_err(|e| actix_web::error::ErrorBadRequest(e));
+  let temp_sid = ledger.apply_transaction(&mut block, txn_effect)
+                       .map_err(|e| actix_web::error::ErrorBadRequest(e));
 
-  if let Err(e) = temp_sid { ledger.abort_block(block); return Err(e); }
+  if let Err(e) = temp_sid {
+    ledger.abort_block(block);
+    return Err(e);
+  }
   let temp_sid = temp_sid.unwrap();
 
   let ret = ledger.finish_block(block).remove(&temp_sid).unwrap().1;
-
 
   Ok(serde_json::to_string(&ret)?)
 }
@@ -259,12 +261,7 @@ enum Module {
 
 trait Route {
   fn set_route<RNG: 'static + Rng + CryptoRng,
-               LA: 'static
-                   + LedgerAccess
-                   + ArchiveAccess
-                   + LedgerUpdate<RNG>
-                   + Sync
-                   + Send>(
+                 LA: 'static + LedgerAccess + ArchiveAccess + LedgerUpdate<RNG> + Sync + Send>(
     self,
     module: Module)
     -> Self;
@@ -273,7 +270,10 @@ trait Route {
 
   fn set_route_for_archive_access<AA: 'static + ArchiveAccess + Sync + Send>(self) -> Self;
 
-  fn set_route_for_update<RNG: 'static + Rng + CryptoRng,U: 'static + LedgerUpdate<RNG> + Sync + Send>(self) -> Self;
+  fn set_route_for_update<RNG: 'static + Rng + CryptoRng,
+                            U: 'static + LedgerUpdate<RNG> + Sync + Send>(
+    self)
+    -> Self;
 }
 
 impl<T, B> Route for App<T, B>
@@ -286,19 +286,14 @@ impl<T, B> Route for App<T, B>
 {
   // Call the appropraite function depending on the module
   fn set_route<RNG: 'static + Rng + CryptoRng,
-               LA: 'static
-                   + LedgerAccess
-                   + ArchiveAccess
-                   + LedgerUpdate<RNG>
-                   + Sync
-                   + Send>(
+                 LA: 'static + LedgerAccess + ArchiveAccess + LedgerUpdate<RNG> + Sync + Send>(
     self,
     module: Module)
     -> Self {
     match module {
       Module::LedgerAccess => self.set_route_for_ledger_access::<LA>(),
       Module::ArchiveAccess => self.set_route_for_archive_access::<LA>(),
-      Module::Update => self.set_route_for_update::<RNG,LA>(),
+      Module::Update => self.set_route_for_update::<RNG, LA>(),
     }
   }
 
@@ -323,19 +318,18 @@ impl<T, B> Route for App<T, B>
   }
 
   // Set routes for the LedgerUpdate module
-  fn set_route_for_update<RNG: 'static + Rng + CryptoRng,U: 'static + LedgerUpdate<RNG> + Sync + Send>(self) -> Self {
+  fn set_route_for_update<RNG: 'static + Rng + CryptoRng,
+                            U: 'static + LedgerUpdate<RNG> + Sync + Send>(
+    self)
+    -> Self {
     self.route("/submit_transaction/{tx}",
-               web::post().to(submit_transaction::<RNG,U>))
+               web::post().to(submit_transaction::<RNG, U>))
   }
 }
 
 impl RestfulApiService {
-  pub fn create<RNG: 'static + Rng + CryptoRng,LA: 'static
-                    + LedgerAccess
-                    + ArchiveAccess
-                    + LedgerUpdate<RNG>
-                    + Sync
-                    + Send>(
+  pub fn create<RNG: 'static + Rng + CryptoRng,
+                  LA: 'static + LedgerAccess + ArchiveAccess + LedgerUpdate<RNG> + Sync + Send>(
     ledger_access: Arc<RwLock<LA>>,
     host: &str,
     port: &str)
@@ -345,9 +339,9 @@ impl RestfulApiService {
 
     HttpServer::new(move || {
       App::new().data(ledger_access.clone())
-                .set_route::<RNG,LA>(Module::LedgerAccess)
-                .set_route::<RNG,LA>(Module::ArchiveAccess)
-                .set_route::<RNG,LA>(Module::Update)
+                .set_route::<RNG, LA>(Module::LedgerAccess)
+                .set_route::<RNG, LA>(Module::ArchiveAccess)
+                .set_route::<RNG, LA>(Module::Update)
     }).bind(&addr)?
       .start();
 

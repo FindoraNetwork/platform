@@ -4,12 +4,12 @@ extern crate ledger;
 use ledger::data_model::errors::PlatformError;
 use ledger::data_model::Transaction;
 use ledger::store::*;
-use std::sync::{Arc, RwLock};
 use rand::{CryptoRng, Rng};
+use std::sync::{Arc, RwLock};
 
-pub struct LedgerApp<RNG,LA>
-    where RNG: Rng + CryptoRng,
-          LA:  LedgerUpdate<RNG>
+pub struct LedgerApp<RNG, LA>
+  where RNG: Rng + CryptoRng,
+        LA: LedgerUpdate<RNG>
 {
   committed_state: Arc<RwLock<LA>>,
   block: Option<LA::Block>,
@@ -17,11 +17,11 @@ pub struct LedgerApp<RNG,LA>
   prng: RNG,
 }
 
-impl<RNG,LA> LedgerApp<RNG,LA>
-    where RNG: Rng + CryptoRng,
-          LA:  LedgerUpdate<RNG>
+impl<RNG, LA> LedgerApp<RNG, LA>
+  where RNG: Rng + CryptoRng,
+        LA: LedgerUpdate<RNG>
 {
-  pub fn new(prng: RNG, ledger_state: LA) -> Result<LedgerApp<RNG,LA>, PlatformError> {
+  pub fn new(prng: RNG, ledger_state: LA) -> Result<LedgerApp<RNG, LA>, PlatformError> {
     Ok(LedgerApp { committed_state: Arc::new(RwLock::new(ledger_state)),
                    block: None,
                    temp_sids: vec![],
@@ -61,7 +61,8 @@ impl<RNG,LA> LedgerApp<RNG,LA>
     if let Some(block) = &mut self.block {
       if let Ok(ledger) = self.committed_state.read() {
         let txn_effect = TxnEffect::compute_effect(&mut self.prng, txn)?;
-        self.temp_sids.push(ledger.apply_transaction(block, txn_effect)?);
+        self.temp_sids
+            .push(ledger.apply_transaction(block, txn_effect)?);
 
         return Ok(());
       }
