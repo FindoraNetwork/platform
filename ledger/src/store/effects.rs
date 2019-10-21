@@ -10,7 +10,7 @@ use rand::{CryptoRng, Rng};
 use rand::SeedableRng;
 use rand_chacha::ChaChaRng;
 use zei::xfr::lib::verify_xfr_note;
-use findora::{timestamp, EnableMap, HasInvariants, DEFAULT_MAP};
+use findora::{timestamp, EnableMap, HasInvariants};
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct TxnEffect {

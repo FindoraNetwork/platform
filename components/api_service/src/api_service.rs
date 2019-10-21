@@ -253,7 +253,7 @@ fn submit_transaction<RNG, U>(data: web::Data<Arc<RwLock<U>>>,
   Ok(serde_json::to_string(&ret)?)
 }
 
-enum Module {
+enum ServiceInterface {
   LedgerAccess,
   ArchiveAccess,
   Update,
@@ -263,7 +263,7 @@ trait Route {
   fn set_route<RNG: 'static + Rng + CryptoRng,
                  LA: 'static + LedgerAccess + ArchiveAccess + LedgerUpdate<RNG> + Sync + Send>(
     self,
-    module: Module)
+    service_interface: ServiceInterface)
     -> Self;
 
   fn set_route_for_ledger_access<LA: 'static + LedgerAccess + Sync + Send>(self) -> Self;
@@ -284,20 +284,21 @@ impl<T, B> Route for App<T, B>
                                      Error = error::Error,
                                      InitError = ()>
 {
-  // Call the appropraite function depending on the module
+
+  // Call the appropraite function depending on the interface
   fn set_route<RNG: 'static + Rng + CryptoRng,
                  LA: 'static + LedgerAccess + ArchiveAccess + LedgerUpdate<RNG> + Sync + Send>(
     self,
-    module: Module)
+    service_interface: ServiceInterface)
     -> Self {
-    match module {
-      Module::LedgerAccess => self.set_route_for_ledger_access::<LA>(),
-      Module::ArchiveAccess => self.set_route_for_archive_access::<LA>(),
-      Module::Update => self.set_route_for_update::<RNG, LA>(),
+    match service_interface {
+      ServiceInterface::LedgerAccess => self.set_route_for_ledger_access::<LA>(),
+      ServiceInterface::ArchiveAccess => self.set_route_for_archive_access::<LA>(),
+      ServiceInterface::Update => self.set_route_for_update::<RNG,LA>(),
     }
   }
 
-  // Set routes for the LedgerAccess module
+  // Set routes for the LedgerAccess interface
   fn set_route_for_ledger_access<LA: 'static + LedgerAccess + Sync + Send>(self) -> Self {
     self.route("/utxo_sid/{sid}", web::get().to(query_utxo::<LA>))
         .route("/asset_token/{token}", web::get().to(query_asset::<LA>))
@@ -305,7 +306,7 @@ impl<T, B> Route for App<T, B>
         .route("/contract_key/{key}", web::get().to(query_contract::<LA>))
   }
 
-  // Set routes for the ArchiveAccess module
+  // Set routes for the ArchiveAccess interface
   fn set_route_for_archive_access<AA: 'static + ArchiveAccess + Sync + Send>(self) -> Self {
     self.route("/txn_sid/{sid}", web::get().to(query_txn::<AA>))
         .route("/global_state", web::get().to(query_global_state::<AA>))
@@ -317,7 +318,7 @@ impl<T, B> Route for App<T, B>
                web::get().to(query_utxo_partial_map::<AA>))
   }
 
-  // Set routes for the LedgerUpdate module
+  // Set routes for the LedgerUpdate interface
   fn set_route_for_update<RNG: 'static + Rng + CryptoRng,
                             U: 'static + LedgerUpdate<RNG> + Sync + Send>(
     self)
@@ -339,9 +340,9 @@ impl RestfulApiService {
 
     HttpServer::new(move || {
       App::new().data(ledger_access.clone())
-                .set_route::<RNG, LA>(Module::LedgerAccess)
-                .set_route::<RNG, LA>(Module::ArchiveAccess)
-                .set_route::<RNG, LA>(Module::Update)
+                .set_route::<RNG,LA>(ServiceInterface::LedgerAccess)
+                .set_route::<RNG,LA>(ServiceInterface::ArchiveAccess)
+                .set_route::<RNG,LA>(ServiceInterface::Update)
     }).bind(&addr)?
       .start();
 

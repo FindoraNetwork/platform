@@ -28,27 +28,19 @@ extern crate ledger;
 extern crate findora;
 
 use findora::timestamp;
-use findora::EnableMap;
-use findora::DEFAULT_MAP;
 use ledger::store::append_only_merkle::AppendOnlyMerkle;
 use std::env;
 use std::path::Path;
 use std::process::exit;
 
-#[allow(non_upper_case_globals)]
-static check: EnableMap = DEFAULT_MAP;
-
-#[allow(non_upper_case_globals)]
-static rebuild: EnableMap = DEFAULT_MAP;
-
 fn main() {
   let (path, do_repairs) = parse_arguments();
-  log!(check, "Opening the Merkle tree at \"{}\".", path);
+  log!(CheckMerkle, "Opening the Merkle tree at \"{}\".", path);
 
   let mut tree = match AppendOnlyMerkle::open(&path) {
     Ok(tree) => tree,
     Err(e) => {
-      log!(check, "check_merkle failed to open \"{}\":  {}", path, e);
+      log!(CheckMerkle, "check_merkle failed to open \"{}\":  {}", path, e);
 
       // The open failed, so try a rebuild if asked.
       if do_repairs {
@@ -62,17 +54,17 @@ fn main() {
   // The open succeeded.  Flush any reconstructed blocks to the
   // disk.
   if let Some(e) = tree.write() {
-    log!(check, "The Merkle tree write returned an error:  {}", e);
-    log!(check, "Continuing.");
+    log!(CheckMerkle, "The Merkle tree write returned an error:  {}", e);
+    log!(CheckMerkle, "Continuing.");
   }
 
-  log!(check, "Performing the initial check.");
+  log!(CheckMerkle, "Performing the initial check.");
 
   // Perform the full check.
   if let Some(e) = tree.check_disk(true) {
-    log!(check, "The Merkle tree check returned an error:  {}", e);
+    log!(CheckMerkle, "The Merkle tree check returned an error:  {}", e);
   } else {
-    log!(check,
+    log!(CheckMerkle,
          "The Merkle tree at \"{}\" is valid with {} entries.",
          path,
          tree.total_size());
@@ -85,7 +77,7 @@ fn main() {
 
   // The check didn't pass, so try rebuilding the interior blocks
   // (level 1 and up).
-  log!(check, "Rewriting the Merkle tree.");
+  log!(CheckMerkle, "Rewriting the Merkle tree.");
 
   // Try to save the level 0 data file.  We will operate
   // on the in-memory copy.
@@ -96,8 +88,8 @@ fn main() {
   // Tell the tree to assume that the disk image is
   // invalid.
   if let Some(e) = tree.reset_disk() {
-    log!(check, "The disk reset failed:  {}", e);
-    log!(check, "Continuing");
+    log!(CheckMerkle, "The disk reset failed:  {}", e);
+    log!(CheckMerkle, "Continuing");
   }
 
   // Rewrite the entire image, if possible.  If we fail at
@@ -105,17 +97,17 @@ fn main() {
   // is in bad shape.  There's no point to a rebuild since
   // we got a valid image into memory.
   if let Some(e) = tree.write() {
-    log!(check, "The rewrite failed:  {}", e);
+    log!(CheckMerkle, "The rewrite failed:  {}", e);
     exit(1);
   }
 
   // Try the full check again.
   if let Some(e) = tree.check_disk(true) {
-    log!(check, "The final check failed:  {}", e);
+    log!(CheckMerkle, "The final check failed:  {}", e);
     exit(1);
   }
 
-  log!(check,
+  log!(CheckMerkle,
        "The Merkle tree at \"{}\" is now valid with {} entries.",
        path,
        tree.total_size());
@@ -154,17 +146,17 @@ fn try_rebuild(path: &str) {
     exit(1);
   }
 
-  log!(rebuild, "Trying to rebuild the Merkle tree.");
+  log!(RebuildMerkle, "Trying to rebuild the Merkle tree.");
 
   let tree = match AppendOnlyMerkle::rebuild(path) {
     Ok(tree) => tree,
     Err(e) => {
-      log!(rebuild, "The rebuild failed:  {}", e);
+      log!(RebuildMerkle, "The rebuild failed:  {}", e);
       exit(1);
     }
   };
 
-  log!(rebuild,
+  log!(RebuildMerkle,
        "The Merkle tree at \"{}\" has been rebuilt with {} entries.",
        path,
        tree.total_size());

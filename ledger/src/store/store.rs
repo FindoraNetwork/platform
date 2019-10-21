@@ -13,7 +13,7 @@ use crate::utils::sha256;
 use crate::utils::sha256::Digest as BitDigest;
 use append_only_merkle::{AppendOnlyMerkle, Proof};
 use bitmap::BitMap;
-use findora::{timestamp, EnableMap, HasInvariants, DEFAULT_MAP};
+use findora::{timestamp, EnableMap, HasInvariants};
 use logged_merkle::LoggedMerkle;
 use rand::SeedableRng;
 use rand::{CryptoRng, Rng};
@@ -32,15 +32,6 @@ use super::append_only_merkle;
 use super::bitmap;
 use super::logged_merkle;
 use super::effects::*;
-
-#[allow(non_upper_case_globals)]
-static store: EnableMap = DEFAULT_MAP;
-
-#[allow(non_upper_case_globals)]
-static ledger_map: EnableMap = DEFAULT_MAP;
-
-#[allow(non_upper_case_globals)]
-static issue_map: EnableMap = DEFAULT_MAP;
 
 pub struct SnapshotId {
   pub id: u64,
@@ -646,7 +637,7 @@ impl LedgerState {
       AppendOnlyMerkle::open(path)
     };
 
-    log!(store, "Using path {} for the Merkle tree.", path);
+    log!(Store, "Using path {} for the Merkle tree.", path);
 
     let tree = match result {
       Err(x) => {
