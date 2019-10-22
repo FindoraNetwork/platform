@@ -11,6 +11,8 @@ use txn_builder::{BuildsTransactions, TransactionBuilder};
 use js_sys::Promise;
 use ledger::data_model::{AccountAddress, AssetTokenCode, IssuerPublicKey, TxOutput, TxoSID, Utxo};
 
+use rand::prelude::thread_rng;
+use rand::Rng;
 use rand::SeedableRng;
 use rand_chacha::ChaChaRng;
 use wasm_bindgen::prelude::*;
@@ -33,6 +35,11 @@ pub struct KeyPair {
 }
 
 #[wasm_bindgen]
+pub fn test_thread_rng() {
+  let countdown = thread_rng().gen::<u32>() % (256 * 1024);
+}
+
+#[wasm_bindgen]
 impl KeyPair {
   pub fn get_pub_key(&self) -> String {
     self.pub_key.clone()
@@ -42,9 +49,9 @@ impl KeyPair {
     self.priv_key.clone()
   }
 
-  pub fn new() -> KeyPair {
+  pub fn new(rand_seed: &str) -> KeyPair {
     let mut prng: ChaChaRng;
-    prng = ChaChaRng::from_seed([0u8; 32]);
+    prng = ChaChaRng::from_seed([rand_seed.as_bytes()[0]; 32]);
     let keypair = XfrKeyPair::generate(&mut prng);
     KeyPair { priv_key: serde_json::to_string(keypair.get_sk_ref()).unwrap(),
               pub_key: serde_json::to_string(keypair.get_pk_ref()).unwrap() }
@@ -89,7 +96,8 @@ pub fn create_asset(key_pair: KeyPair,
 }
 
 #[wasm_bindgen]
-pub fn issue_asset(key_pair: KeyPair,
+pub fn issue_asset(public_key_str: String,
+                   private_key_str: String,
                    token_code: String,
                    seq_num: u64,
                    amount: u64)
@@ -97,12 +105,12 @@ pub fn issue_asset(key_pair: KeyPair,
   let public_key;
   let secret_key;
 
-  if let Ok(pub_key) = serde_json::from_str::<XfrPublicKey>(&key_pair.get_pub_key()) {
+  if let Ok(pub_key) = serde_json::from_str::<XfrPublicKey>(&public_key_str) {
     public_key = pub_key;
   } else {
     return Err(JsValue::from_str("Could not deserialize public key."));
   }
-  if let Ok(sec_key) = serde_json::from_str::<XfrSecretKey>(&key_pair.get_priv_key()) {
+  if let Ok(sec_key) = serde_json::from_str::<XfrSecretKey>(&private_key_str) {
     secret_key = sec_key;
   } else {
     return Err(JsValue::from_str("Could not deserialize private key."));
@@ -227,13 +235,17 @@ mod tests {
   // Test to ensure that define transaction is being constructed correctly
   #[test]
   fn test_wasm_define_transaction() {
-    let key_pair = KeyPair::new();
+    let key_pair = KeyPair::new(&String::from("test"));
     create_asset(key_pair, String::from("abcd"), true, true);
   }
   #[test]
   // Test to ensure that issue transaction is being constructed correctly
   fn test_wasm_issue_transaction() {
-    let key_pair = KeyPair::new();
-    issue_asset(key_pair, String::from("abcd"), 1, 5);
+    let key_pair = KeyPair::new(&String::from("test"));
+    issue_asset(key_pair.get_pub_key(),
+                key_pair.get_priv_key(),
+                String::from("abcd"),
+                1,
+                5);
   }
 }
