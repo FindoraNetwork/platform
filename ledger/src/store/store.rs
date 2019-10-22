@@ -528,6 +528,7 @@ impl LedgerUpdate<ChaChaRng> for LedgerState {
             if txo_sid_ix == utxo_sids.len() {
               txo_sid_ix = 0;
 
+              temp_sid_ix += 1;
               while temp_sid_ix < txn_temp_sids.len()
                     && (temp_sid_map[&txn_temp_sids[temp_sid_ix]].1).is_empty()
               {
