@@ -1494,6 +1494,7 @@ mod tests {
 
   // Do a simple test of the bitmap-level functions.
   #[test]
+  #[ignore]
   fn test_basic_bitmap() {
     log!(Bitmap, "Run the basic bitmap test.");
     let path = "basic_bitmap";
