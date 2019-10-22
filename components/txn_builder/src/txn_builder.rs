@@ -6,9 +6,9 @@ extern crate serde_derive;
 
 use ledger::data_model::errors::PlatformError;
 use ledger::data_model::{
-  AccountAddress, AssetCreation, AssetCreationBody, AssetIssuance, AssetIssuanceBody,
-  AssetTokenCode, AssetTransfer, AssetTransferBody, ConfidentialMemo, IssuerPublicKey, Memo,
-  Operation, Transaction, TxOutput, TxoSID,
+  AccountAddress, AssetTypeCode, ConfidentialMemo, DefineAsset, DefineAssetBody, IssueAsset,
+  IssueAssetBody, IssuerPublicKey, Memo, Operation, Transaction, TransferAsset, TransferAssetBody,
+  TxOutput, TxoRef, TxoSID,
 };
 use rand::SeedableRng;
 use rand_chacha::ChaChaRng;
@@ -22,7 +22,7 @@ pub trait BuildsTransactions {
   fn add_operation_create_asset(&mut self,
                                 pub_key: &IssuerPublicKey,
                                 priv_key: &XfrSecretKey,
-                                token_code: Option<AssetTokenCode>,
+                                token_code: Option<AssetTypeCode>,
                                 updatable: bool,
                                 traceable: bool,
                                 memo: &str,
@@ -31,12 +31,12 @@ pub trait BuildsTransactions {
   fn add_operation_issue_asset(&mut self,
                                pub_key: &IssuerPublicKey,
                                priv_key: &XfrSecretKey,
-                               token_code: &AssetTokenCode,
+                               token_code: &AssetTypeCode,
                                seq_num: u64,
                                records: &[TxOutput])
                                -> Result<(), PlatformError>;
   fn add_operation_transfer_asset(&mut self,
-                                  input_sids: Vec<TxoSID>,
+                                  input_sids: Vec<TxoRef>,
                                   input_records: &[OpenAssetRecord],
                                   output_records: &[AssetRecord])
                                   -> Result<(), PlatformError>;
@@ -46,7 +46,7 @@ pub trait BuildsTransactions {
   fn add_basic_issue_asset(&mut self,
                            pub_key: &IssuerPublicKey,
                            priv_key: &XfrSecretKey,
-                           token_code: &AssetTokenCode,
+                           token_code: &AssetTypeCode,
                            seq_num: u64,
                            amount: u64)
                            -> Result<(), PlatformError> {
@@ -54,23 +54,18 @@ pub trait BuildsTransactions {
     let params = PublicParams::new();
     let ar = AssetRecord::new(amount, token_code.val, pub_key.key)?;
     let ba = build_blind_asset_record(&mut prng, &params.pc_gens, &ar, false, false, &None);
-
-    self.add_operation_issue_asset(pub_key,
-                                   priv_key,
-                                   token_code,
-                                   seq_num,
-                                   &[TxOutput::BlindAssetRecord(ba)])
+    self.add_operation_issue_asset(pub_key, priv_key, token_code, seq_num, &[TxOutput(ba)])
   }
 
   fn add_basic_transfer_asset(&mut self,
-                              transfer_from: &[(&TxoSID,
+                              transfer_from: &[(&TxoRef,
                                  &BlindAssetRecord,
                                  u64,
                                  &XfrSecretKey)],
                               transfer_to: &[(u64, &AccountAddress)])
                               -> Result<(), PlatformError> {
-    let input_sids: Vec<TxoSID> = transfer_from.iter()
-                                               .map(|(ref txo_sid, _, _, _)| *(*txo_sid))
+    let input_sids: Vec<TxoRef> = transfer_from.iter()
+       true                                        .map(|(ref txo_sid, _, _, _)| *(*txo_sid))
                                                .collect();
     let input_amounts: Vec<u64> = transfer_from.iter()
                                                .map(|(_, _, amount, _)| *amount)
@@ -120,7 +115,7 @@ impl BuildsTransactions for TransactionBuilder {
   fn add_operation_create_asset(&mut self,
                                 pub_key: &IssuerPublicKey,
                                 priv_key: &XfrSecretKey,
-                                token_code: Option<AssetTokenCode>,
+                                token_code: Option<AssetTypeCode>,
                                 updatable: bool,
                                 traceable: bool,
                                 _memo: &str,
@@ -135,32 +130,35 @@ impl BuildsTransactions for TransactionBuilder {
       None
     };
 
-    self.txn.add_operation(Operation::AssetCreation(AssetCreation::new(AssetCreationBody::new(&token_code.unwrap_or_else(AssetTokenCode::gen_random), pub_key, updatable, traceable, memo, confidential_memo)?, pub_key, priv_key)?));
+    self.txn.add_operation(Operation::DefineAsset(DefineAsset::new(DefineAssetBody::new(&token_code.unwrap_or_else(AssetTypeCode::gen_random), pub_key, updatable, traceable, memo, confidential_memo)?, pub_key, priv_key)?));
     Ok(())
   }
   fn add_operation_issue_asset(&mut self,
                                pub_key: &IssuerPublicKey,
                                priv_key: &XfrSecretKey,
-                               token_code: &AssetTokenCode,
+                               token_code: &AssetTypeCode,
                                seq_num: u64,
                                records: &[TxOutput])
                                -> Result<(), PlatformError> {
-    let mut outputs = self.txn.outputs;
-    self.txn.add_operation(Operation::AssetIssuance(AssetIssuance::new(AssetIssuanceBody::new(token_code, seq_num, records, &mut outputs)?, pub_key, priv_key)?));
-    self.txn.outputs = outputs;
+    self.txn
+        .add_operation(Operation::IssueAsset(IssueAsset::new(IssueAssetBody::new(token_code,
+                                                                                 seq_num,
+                                                                                 records)?,
+                                                             pub_key,
+                                                             priv_key)?));
     Ok(())
   }
   fn add_operation_transfer_asset(&mut self,
-                                  input_sids: Vec<TxoSID>,
+                                  input_sids: Vec<TxoRef>,
                                   input_records: &[OpenAssetRecord],
                                   output_records: &[AssetRecord])
                                   -> Result<(), PlatformError> {
+    // TODO(joe/noah): keep a prng around somewhere?
     let mut prng: ChaChaRng;
     prng = ChaChaRng::from_seed([0u8; 32]);
+
     let input_keys = Vec::new(); // TODO: multisig support...
-    let mut outputs = self.txn.outputs;
-    self.txn.add_operation(Operation::AssetTransfer(AssetTransfer::new(AssetTransferBody::new(&mut prng, input_sids, input_records, output_records, &input_keys, &mut outputs)?)?));
-    self.txn.outputs = outputs;
+    self.txn.add_operation(Operation::TransferAsset(TransferAsset::new(TransferAssetBody::new(&mut prng, input_sids, input_records, output_records, &input_keys)?)?));
     Ok(())
   }
   fn serialize(&self) -> Result<Vec<u8>, PlatformError> {

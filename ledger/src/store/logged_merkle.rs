@@ -25,6 +25,7 @@
 //!
 use super::append_only_merkle::{AppendOnlyMerkle, HashValue, Proof};
 
+use crate::utils::sha256;
 use serde::Deserialize;
 use serde::Deserializer;
 use serde::Serialize;
@@ -44,15 +45,6 @@ use std::slice::from_raw_parts_mut;
 
 use findora::timestamp;
 use findora::Commas;
-use findora::EnableMap;
-use findora::DEFAULT_MAP;
-
-use crate::utils::sha256;
-#[allow(non_upper_case_globals)]
-static apply_log: EnableMap = DEFAULT_MAP;
-
-#[allow(non_upper_case_globals)]
-static find_relevant: findora::EnableMap = DEFAULT_MAP;
 
 const BUFFER_SIZE: usize = 32 * 1024;
 const CHECK_SIZE: usize = 16;
@@ -355,8 +347,8 @@ impl LoggedMerkle {
 
     // Try to seek to a relevant part of the log file.
     if let Err(e) = self.find_relevant(&mut file) {
-      log!(apply_log, "Seek operations failed:  {}", e);
-      log!(apply_log, "Reverting to sequential I/O");
+      log!(ApplyLog, "Seek operations failed:  {}", e);
+      log!(ApplyLog, "Reverting to sequential I/O");
     }
 
     // Loop reading buffers.  Return on EOF.  This code will
@@ -453,8 +445,7 @@ impl LoggedMerkle {
     let mut top = buffer_count;
     let mut current = base;
 
-    debug!(find_relevant,
-           "find_relevant:  state {}, top {}", state, top);
+    debug!(FindRelevant, "find_relevant:  state {}, top {}", state, top);
 
     // Do a binary search to find the first relevant buffer, if
     // any.  In theory, we could use a more sophisticated
@@ -464,7 +455,7 @@ impl LoggedMerkle {
       file.read_exact(buffer.as_mut_bytes())?;
       buffer.validate()?;
 
-      debug!(find_relevant,
+      debug!(FindRelevant,
              "current: {}, id: {}, state {}",
              current,
              buffer.id.commas(),
@@ -475,27 +466,27 @@ impl LoggedMerkle {
         let gap = current - base;
 
         if gap <= 1 {
-          debug!(find_relevant, "exit:  current {}, base {}", current, base);
+          debug!(FindRelevant, "exit:  current {}, base {}", current, base);
           break;
         }
 
         top = current;
         current -= gap / 2;
-        debug!(find_relevant, "move back {} to {}", gap / 2, current);
+        debug!(FindRelevant, "move back {} to {}", gap / 2, current);
       } else if buffer.id + u64::from(buffer.valid) <= state {
         // The buffer is in the past.  Move forward!
         let gap = top - current;
 
         if gap <= 1 {
-          debug!(find_relevant, "exit:  current {}, top {}", current, top);
+          debug!(FindRelevant, "exit:  current {}, top {}", current, top);
           break;
         }
 
         base = current;
         current += gap / 2;
-        debug!(find_relevant, "move forward {} to {}", gap / 2, current);
+        debug!(FindRelevant, "move forward {} to {}", gap / 2, current);
       } else {
-        debug!(find_relevant,
+        debug!(FindRelevant,
                "found id {}, valid {}",
                buffer.id.commas(),
                buffer.valid);
@@ -505,7 +496,7 @@ impl LoggedMerkle {
       file.seek(Start(current * BUFFER_SIZE as u64))?;
     }
 
-    debug!(find_relevant, "find_relevant:  return {}", current);
+    debug!(FindRelevant, "find_relevant:  return {}", current);
     file.seek(Start(current * BUFFER_SIZE as u64))?;
     Ok(())
   }

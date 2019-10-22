@@ -9,7 +9,9 @@ use percent_encoding::{utf8_percent_encode, AsciiSet, CONTROLS};
 use txn_builder::{BuildsTransactions, TransactionBuilder};
 
 use js_sys::Promise;
-use ledger::data_model::{AccountAddress, AssetTokenCode, IssuerPublicKey, TxOutput, TxoSID, Utxo};
+use ledger::data_model::{
+  AccountAddress, AssetTypeCode, IssuerPublicKey, TxOutput, TxoRef, TxoSID, Utxo,
+};
 
 use rand::prelude::thread_rng;
 use rand::Rng;
@@ -79,7 +81,7 @@ pub fn create_asset(key_pair: KeyPair,
     return Err(JsValue::from_str("Could not deserialize private key."));
   }
 
-  let asset_token = AssetTokenCode::new_from_base64(&token_code).unwrap();
+  let asset_token = AssetTypeCode::new_from_base64(&token_code).unwrap();
 
   let mut txn_builder = TransactionBuilder::default();
   match txn_builder.add_operation_create_asset(&IssuerPublicKey { key: public_key },
@@ -116,7 +118,7 @@ pub fn issue_asset(public_key_str: String,
     return Err(JsValue::from_str("Could not deserialize private key."));
   }
 
-  let asset_token = AssetTokenCode::new_from_base64(&token_code).unwrap();
+  let asset_token = AssetTypeCode::new_from_base64(&token_code).unwrap();
 
   let mut txn_builder = TransactionBuilder::default();
   match txn_builder.add_basic_issue_asset(&IssuerPublicKey { key: public_key },
@@ -160,7 +162,7 @@ pub fn transfer_asset(public_key_str: String,
   }
 
   let mut txn_builder = TransactionBuilder::default();
-  match txn_builder.add_basic_transfer_asset(&[(&TxoSID { index: txo_sid },
+  match txn_builder.add_basic_transfer_asset(&[(&TxoRef::Absolute(TxoSID(txo_sid)),
                                                 &blind_asset_record,
                                                 amount,
                                                 &secret_key)],
@@ -229,7 +231,7 @@ fn create_query_promise(opts: &RequestInit, req_string: &str) -> Promise {
 mod tests {
   use super::*;
   use ledger::data_model::TxoSID;
-  use ledger::store::{ArchiveUpdate, LedgerAccess, LedgerState, LedgerUpdate};
+  use ledger::store::{LedgerAccess, LedgerState, LedgerUpdate};
   use txn_builder::{BuildsTransactions, TransactionBuilder};
 
   // Test to ensure that define transaction is being constructed correctly
