@@ -54,6 +54,7 @@ pub trait BuildsTransactions {
     let params = PublicParams::new();
     let ar = AssetRecord::new(amount, token_code.val, pub_key.key)?;
     let ba = build_blind_asset_record(&mut prng, &params.pc_gens, &ar, false, false, &None);
+
     self.add_operation_issue_asset(pub_key,
                                    priv_key,
                                    token_code,
