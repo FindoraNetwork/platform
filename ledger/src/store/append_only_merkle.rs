@@ -653,10 +653,7 @@ impl AppendOnlyMerkle {
           block = b;
         }
         Err(x) => {
-          log!(Append,
-               "Error reading block {}:  {}",
-               block_id.commas(),
-               x);
+          log!(Append, "Error reading block {}:  {}", block_id.commas(), x);
           log!(Append,
                "I will discard the following {} blocks.",
                (block_count - block_id - 1).commas());
