@@ -528,6 +528,7 @@ impl LedgerUpdate<ChaChaRng> for LedgerState {
             if txo_sid_ix == utxo_sids.len() {
               txo_sid_ix = 0;
 
+              temp_sid_ix += 1;
               while temp_sid_ix < txn_temp_sids.len()
                     && (temp_sid_map[&txn_temp_sids[temp_sid_ix]].1).is_empty()
               {
@@ -939,7 +940,11 @@ mod tests {
     elgamal_derive_public_key, elgamal_generate_secret_key, ElGamalPublicKey,
   };
   use zei::basic_crypto::signatures::XfrKeyPair;
-  use zei::xfr::structs::{AssetAmountProof, AssetIssuerPubKeys, XfrBody, XfrNote, XfrProofs};
+  use zei::setup::PublicParams;
+  use zei::xfr::asset_record::{build_blind_asset_record, open_asset_record};
+  use zei::xfr::structs::{
+    AssetAmountProof, AssetIssuerPubKeys, AssetRecord, XfrBody, XfrNote, XfrProofs,
+  };
 
   #[test]
   fn test_load_transaction_log() {
@@ -1523,7 +1528,7 @@ mod tests {
   // Change the signature to have the wrong public key
   #[test]
   fn test_asset_creation_invalid_public_key() {
-    // Create a valid asset creation operation.
+    // Create a valid asset creation operation
     let mut state = LedgerState::test_ledger();
     let mut tx = Transaction::default();
     let token_code1 = AssetTypeCode { val: [1; 16] };
@@ -1599,10 +1604,11 @@ mod tests {
 
     let mut tx = Transaction::default();
 
-    let asset_issuance_body = IssueAssetBody { seq_num: 0,
-                                               code: token_code1,
-                                               num_outputs: 0,
-                                               records: Vec::new() };
+    let ar = AssetRecord::new(100, token_code1.val, public_key).unwrap();
+    let params = PublicParams::new();
+    let ba = build_blind_asset_record(&mut prng, &params.pc_gens, &ar, false, false, &None);
+
+    let asset_issuance_body = IssueAssetBody::new(&token_code1, 0, &[TxOutput(ba)]).unwrap();
 
     let sign = compute_signature(&secret_key, &public_key, &asset_issuance_body);
 
