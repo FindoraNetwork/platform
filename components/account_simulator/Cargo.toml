@@ -1,0 +1,26 @@
+[package]
+name = "api_service"
+version = "0.1.0"
+authors = ["Nathan Yospe <nathan@eian.io>"]
+edition = "2018"
+
+[lib]
+path = "src/account_simulator.rs"
+
+[dependencies]
+ledger = { path = "../../ledger" }
+findora = { path = "../../findora" }
+actix-web = "1.0.8"
+actix-service = "0.4.2"
+actix-rt = "0.2"
+serde = "1.0"
+serde_derive = "1.0"
+serde_json = "1.0"
+rand_chacha = "0.1.1"
+rand = "0.6"
+percent-encoding = "2.1.0"
+
+[dev-dependencies]
+quickcheck = "0.8"
+quickcheck_macros = "0.8"
+
