@@ -40,6 +40,7 @@ use std::io::SeekFrom::Current;
 use std::io::SeekFrom::End;
 use std::io::SeekFrom::Start;
 use std::io::Write;
+use std::mem::MaybeUninit;
 use std::slice::from_raw_parts;
 use std::slice::from_raw_parts_mut;
 
@@ -103,7 +104,9 @@ fn deserialize_array<'de, D>(deserializer: D)
     return sde!("The input slice has the wrong length:  {}", slice.len());
   }
 
-  let mut result: [HashValue; BUFFER_ENTRIES as usize] = unsafe { std::mem::uninitialized() };
+  // let mut result: [HashValue; BUFFER_ENTRIES as usize] = unsafe { std::mem::uninitialized() };
+  let mut result: [HashValue; BUFFER_ENTRIES as usize] =
+    unsafe { MaybeUninit::<[HashValue; BUFFER_ENTRIES as usize]>::uninit().assume_init() };
   result.copy_from_slice(&slice);
   Ok(result)
 }
