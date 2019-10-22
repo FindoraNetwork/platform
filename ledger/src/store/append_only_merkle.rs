@@ -2430,6 +2430,7 @@ mod tests {
 
   // Test a larger tree.
   #[test]
+  #[ignore]
   fn test_tree() {
     let path = "test_tree".to_string();
     let _ = std::fs::remove_file(&path);
@@ -2687,6 +2688,7 @@ mod tests {
   }
 
   #[test]
+  #[ignore]
   fn test_proof() {
     println!("Starting the proof test.");
 
@@ -2779,6 +2781,7 @@ mod tests {
   extern crate serde_json;
 
   #[test]
+  #[ignore]
   fn test_serde() {
     let path = "serde_tree".to_string();
     let _ = std::fs::remove_file(&path);
