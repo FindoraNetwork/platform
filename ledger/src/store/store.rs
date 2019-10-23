@@ -524,6 +524,7 @@ impl LedgerUpdate<ChaChaRng> for LedgerState {
             if txo_sid_ix == utxo_sids.len() {
               txo_sid_ix = 0;
 
+              temp_sid_ix += 1;
               while temp_sid_ix < txn_temp_sids.len()
                     && (temp_sid_map[&txn_temp_sids[temp_sid_ix]].1).is_empty()
               {
@@ -921,7 +922,12 @@ mod tests {
   use super::*;
   use rand::SeedableRng;
   use std::fs;
-  use tempfile::tempdir;
+  use tempfile::{tempdir};
+  use zei::setup::PublicParams;
+  use zei::xfr::asset_record::{build_blind_asset_record};
+  use zei::xfr::structs::{
+    AssetRecord,
+  };
 
   #[test]
   fn test_load_transaction_log() {
@@ -1577,10 +1583,11 @@ mod tests {
 
     let mut tx = Transaction::default();
 
-    let asset_issuance_body = IssueAssetBody { seq_num: 0,
-                                               code: token_code1,
-                                               num_outputs: 0,
-                                               records: Vec::new() };
+    let ar = AssetRecord::new(100, token_code1.val, public_key).unwrap();
+    let params = PublicParams::new();
+    let ba = build_blind_asset_record(&mut prng, &params.pc_gens, &ar, false, false, &None);
+
+    let asset_issuance_body = IssueAssetBody::new(&token_code1, 0, &[TxOutput(ba)]).unwrap();
 
     let sign = compute_signature(&secret_key, &public_key, &asset_issuance_body);
 

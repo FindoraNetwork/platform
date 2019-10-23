@@ -564,6 +564,7 @@ mod tests {
   use std::fs::OpenOptions;
 
   #[test]
+  #[ignore]
   fn test_basic() {
     let tree_path = "logged_tree";
     let (mut logged, mut logs) = create_test_tree(&tree_path);
@@ -640,6 +641,7 @@ mod tests {
   }
 
   #[test]
+  #[ignore]
   fn test_apply_log() {
     let offsets =
       [0, 1, 217, 1021, 1022, 1023, 1024, 4817, 2048, 8190, 8191, 8192, 8193, 8194, 16322];
