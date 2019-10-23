@@ -2,6 +2,8 @@
 //!
 //! This module implements a variety of tools for general use.
 
+use std::ptr::read_volatile;
+
 /// This structure defines the table entries for the logging enable flags.
 /// The table has one entry per category.
 #[derive(Default)]
@@ -16,8 +18,16 @@ pub struct EnableMap {
 
 impl EnableMap {
   // Set the flags
+  pub fn set_log(&mut self, value: bool) {
+    self.log_enabled = value;
+  }
+
   pub fn set_error(&mut self, value: bool) {
     self.error_enabled = value;
+  }
+
+  pub fn set_warning(&mut self, value: bool) {
+    self.warning_enabled = value;
   }
 
   pub fn set_debug(&mut self, value: bool) {
@@ -28,33 +38,25 @@ impl EnableMap {
     self.info_enabled = value;
   }
 
-  pub fn set_warning(&mut self, value: bool) {
-    self.warning_enabled = value;
-  }
-
-  pub fn set_log(&mut self, value: bool) {
-    self.log_enabled = value;
-  }
-
   // Check the flags.
+  pub fn log_enabled(&self) -> bool {
+    unsafe { read_volatile(&self.log_enabled as *const bool) }
+  }
+
   pub fn error_enabled(&self) -> bool {
-    self.error_enabled
-  }
-
-  pub fn debug_enabled(&self) -> bool {
-    self.debug_enabled
-  }
-
-  pub fn info_enabled(&self) -> bool {
-    self.info_enabled
+    unsafe { read_volatile(&self.error_enabled as *const bool) }
   }
 
   pub fn warning_enabled(&self) -> bool {
-    self.warning_enabled
+    unsafe { read_volatile(&self.warning_enabled as *const bool) }
   }
 
-  pub fn log_enabled(&self) -> bool {
-    self.log_enabled
+  pub fn debug_enabled(&self) -> bool {
+    unsafe { read_volatile(&self.debug_enabled as *const bool) }
+  }
+
+  pub fn info_enabled(&self) -> bool {
+    unsafe { read_volatile(&self.info_enabled as *const bool) }
   }
 }
 
@@ -151,6 +153,19 @@ pub enum Categories {
   RebuildMerkle = 10,
 }
 
+static mut TIMESTAMP: fn() -> String = timestamp;
+
+/// Set the function that generates the timestamp applied to
+/// log entries.
+///
+/// This function should be called at program startup time only,
+/// when no logging is happening.
+pub fn set_timestamp(f: fn() -> String) {
+  unsafe {
+    TIMESTAMP = f;
+  }
+}
+
 /// Define the structure used to specify dynamic (runtime) changes
 /// to the logging flags.
 pub struct EnableFlags {
@@ -191,7 +206,7 @@ macro_rules! log_impl {
   ($level:ident, $category:ident, $($x:tt)+) => {
     {
       println!("{}  {:10.10}  {:16.16}  {}",
-        timestamp(), stringify!($level),
+        TIMESTAMP(), stringify!($level),
         TABLE[Categories::$category as usize].name,
         format!($($x)+));
     }
@@ -566,11 +581,22 @@ mod tests {
     assert!(set_logging("test", &flags));
     check("test", &flags);
 
-    let flags = EnableFlags { log: false,
-                              error: true,
-                              warning: false,
-                              debug: true,
-                              info: false };
+    // Try an arbitrary set of flags.
+    let mut flags = EnableFlags { log: false,
+                                  error: true,
+                                  warning: false,
+                                  debug: true,
+                                  info: false };
+
+    assert!(set_logging("test", &flags));
+    check("test", &flags);
+
+    // Invert the flags and try again.
+    flags.log = !flags.log;
+    flags.error = !flags.error;
+    flags.warning = !flags.warning;
+    flags.debug = !flags.debug;
+    flags.info = !flags.info;
 
     assert!(set_logging("test", &flags));
     check("test", &flags);
