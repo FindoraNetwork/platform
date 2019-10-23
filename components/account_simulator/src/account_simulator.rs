@@ -288,16 +288,24 @@ struct LedgerAccounts {
   balances: HashMap<String, HashMap<String,u64>>,
   utxos: HashMap<String,VecDeque<TxoSID>>, // by account
   units: HashMap<String,(String,AssetTypeCode)>, // user, data
+  // These only affect new issuances
+  confidential_amounts: bool,
+  confidential_types: bool,
 }
 
 impl InterpretAccounts<PlatformError> for LedgerAccounts {
   fn run_account_command(&mut self, cmd: &AccountsCommand) -> Result<(),PlatformError> {
+    let conf_amts = self.confidential_amounts;
+    let conf_types = self.confidential_types;
+    dbg!(cmd);
     match cmd {
       AccountsCommand::NewUser(name) => {
         let keypair = XfrKeyPair::generate(self.ledger.get_prng());
 
         self.accounts.get(name)
           .map_or_else(|| Ok(()),|_| Err(PlatformError::InputsError))?;
+
+        dbg!("New user",&name,&keypair);
 
         self.accounts.insert(name.clone(), keypair);
         self.utxos.insert(name.clone(),VecDeque::new());
@@ -312,6 +320,8 @@ impl InterpretAccounts<PlatformError> for LedgerAccounts {
           .map_or_else(|| Ok(()),|_| Err(PlatformError::InputsError))?;
 
         let code = AssetTypeCode::gen_random();
+
+        dbg!("New unit",&name,&issuer,&code);
 
         let mut properties: Asset = Default::default();
         properties.code = code.clone();
@@ -368,7 +378,7 @@ impl InterpretAccounts<PlatformError> for LedgerAccounts {
         let ar = AssetRecord::new(amt, code.val, pubkey.clone()).unwrap();
         let params = PublicParams::new();
         let ba = build_blind_asset_record(self.ledger.get_prng(),
-          &params.pc_gens, &ar, false, false, &None);
+          &params.pc_gens, &ar, conf_amts, conf_types, &None);
 
         let asset_issuance_body = IssueAssetBody::new(&code, new_seq_num,
           &[TxOutput(ba)]).unwrap();
@@ -431,6 +441,7 @@ impl InterpretAccounts<PlatformError> for LedgerAccounts {
           let sid = avail.pop_front().unwrap();
           let blind_rec = &(self.ledger.get_utxo(sid).unwrap().0).0;
           let open_rec = open_asset_record(&blind_rec, &src_priv).unwrap();
+          dbg!(sid,open_rec.get_amount(), open_rec.get_asset_type());
           if *open_rec.get_asset_type() != unit_code.val {
             to_skip.push(sid);
             continue;
@@ -497,12 +508,19 @@ impl InterpretAccounts<PlatformError> for LedgerAccounts {
           dbg!(ix,rec.get_asset_type(),rec.get_amount(),rec.get_pub_key());
         }
 
+        let mut sig_keys: Vec<XfrKeyPair> = Vec::new();
+
+        for _ in to_use.iter() {
+          sig_keys.push(XfrKeyPair::zei_from_bytes(
+              &src_keypair.zei_to_bytes()));
+        }
+
         let transfer_body = TransferAssetBody::new(
           self.ledger.get_prng(),
           to_use.iter().cloned().map(TxoRef::Absolute).collect(),
           src_records.as_slice(),
           all_outputs.as_slice(),
-          &[XfrKeyPair::zei_from_bytes(&src_keypair.zei_to_bytes())]
+          &sig_keys
           // &vec![]
           ).unwrap();
         dbg!(&transfer_body);
@@ -534,10 +552,10 @@ impl InterpretAccounts<PlatformError> for LedgerAccounts {
 
         assert!(txos.len() == src_outputs.len() + dst_outputs.len());
 
-        self.utxos.get_mut(src).unwrap()
-          .extend(&txos[..src_outputs.len()]);
         self.utxos.get_mut(dst).unwrap()
-          .extend(&txos[src_outputs.len()..]);
+          .extend(&txos[..dst_outputs.len()]);
+        self.utxos.get_mut(src).unwrap()
+          .extend(&txos[dst_outputs.len()..]);
       }
     }
     Ok(())
@@ -546,6 +564,9 @@ impl InterpretAccounts<PlatformError> for LedgerAccounts {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 struct AccountsScenario {
+  // These only affect new issuances
+  confidential_amounts: bool,
+  confidential_types: bool,
   cmds: Vec<AccountsCommand>,
 }
 
@@ -594,29 +615,53 @@ impl Arbitrary for AccountsScenario {
       cmds.push(AccountsCommand::Send(src,count,unit,dst));
     }
 
-    AccountsScenario { cmds }
+    AccountsScenario {
+      confidential_amounts: bool::arbitrary(g),
+      confidential_types: bool::arbitrary(g),
+      cmds }
   }
 
   fn shrink(&self) -> Box<dyn Iterator<Item = Self>> {
     let ix = 0..(self.cmds.len());
     let base_cmds = self.cmds.clone();
+    let conf_amounts = self.confidential_amounts;
+    let conf_types = self.confidential_types;
 
     Box::new(
-      ix.clone().zip(repeat(base_cmds.clone())).map(|(i,base_cmds)| AccountsScenario {
+      repeat((conf_amounts,conf_types)).zip(ix.clone())
+      .zip(repeat(base_cmds.clone()))
+      .map(|(((conf_amt,conf_type),i),base_cmds)| AccountsScenario {
+        confidential_amounts: conf_amt,
+        confidential_types: conf_type,
         cmds: base_cmds[..i].iter().chain(&base_cmds[(i+1)..]).cloned().collect()
-      }).chain(ix.zip(repeat(base_cmds.clone())).flat_map(
-        |(i,base_cmds)|
+      }).chain(repeat((conf_amounts.clone(),conf_types.clone())).zip(ix.clone())
+        .zip(repeat(base_cmds.clone())).flat_map(
+          |(((conf_amt,conf_type),i),base_cmds)|
           {
             let old_cmd = base_cmds[i].clone();
-            base_cmds[i].shrink().zip(repeat((old_cmd,base_cmds,i))).map(|(x,(old_cmd,base_cmds,i))|
-              AccountsScenario { cmds:
-                base_cmds[..i].iter().chain(&vec![x.clone()]).cloned()
-                  .chain((base_cmds[(i+1)..]).into_iter()
-                    .map(|cmd| rename_by(&old_cmd,&x,cmd.clone())))
-                  .collect()
-              }
+            repeat((conf_amt,conf_type)).zip(base_cmds[i].shrink())
+              .zip(repeat((old_cmd,base_cmds,i))).map(|(((conf_amt,conf_type),x),(old_cmd,base_cmds,i))|
+                AccountsScenario {
+                  confidential_amounts: conf_amt,
+                  confidential_types: conf_type,
+                  cmds: base_cmds[..i].iter().chain(&vec![x.clone()]).cloned()
+                    .chain((base_cmds[(i+1)..]).into_iter()
+                      .map(|cmd| rename_by(&old_cmd,&x,cmd.clone())))
+                    .collect()
+                }
             )
           }
+      ))
+      .chain(once(conf_amounts.clone()).chain(conf_amounts.shrink())
+        .zip(once(conf_types.clone()).chain(conf_types.shrink()))
+        .zip(repeat(base_cmds.clone()))
+        .map(
+          |((conf_amt,conf_type),base_cmds)|
+            AccountsScenario {
+              confidential_amounts: conf_amt,
+              confidential_types: conf_type,
+              cmds: base_cmds
+            }
       ))
     )
   }
@@ -701,8 +746,6 @@ mod test {
   }
 
   fn ledger_simulates_accounts(cmds: AccountsScenario) {
-    let mut prev_simple: SimpleAccountsState = Default::default();
-    let cmds = cmds.cmds;
 
     let mut ledger = LedgerAccounts {
       ledger: LedgerState::test_ledger(),
@@ -710,7 +753,13 @@ mod test {
       utxos: HashMap::new(),
       units: HashMap::new(),
       balances: HashMap::new(),
+      confidential_amounts: cmds.confidential_amounts,
+      confidential_types: cmds.confidential_types,
     };
+
+    let mut prev_simple: SimpleAccountsState = Default::default();
+    let cmds = cmds.cmds;
+    dbg!(&cmds);
 
     let mut simple: SimpleAccountsState = Default::default();
     let mut normal:       AccountsState = Default::default();
@@ -748,14 +797,62 @@ mod test {
         cmds: vec![
           NewUser("".to_string()),
           NewUnit("".to_string(), "".to_string()),
-          Send("".to_string(), 0, "".to_string(), "".to_string())]
+          Send("".to_string(), 0, "".to_string(), "".to_string())],
+        confidential_types: false,
+        confidential_amounts: false,
     });
     ledger_simulates_accounts( AccountsScenario {
       cmds: vec![
         NewUser("".to_string()),
         NewUnit("".to_string(), "".to_string()),
         Mint(1, "".to_string()),
+        Send("".to_string(), 1, "".to_string(), "".to_string())],
+        confidential_types: false,
+        confidential_amounts: false,
+    });
+    ledger_simulates_accounts( AccountsScenario {
+      cmds: vec![
+        NewUser("".to_string()),
+        NewUnit("".to_string(), "".to_string()),
+        Mint(1, "".to_string()),
+        Send("".to_string(), 1, "".to_string(), "".to_string())],
+        confidential_types: false,
+        confidential_amounts: true,
+    });
+
+    ledger_simulates_accounts(AccountsScenario {
+      confidential_amounts: false,
+      confidential_types: false,
+      cmds: vec![
+        NewUser("".to_string()),
+        NewUser("\u{0}".to_string()),
+        NewUnit("".to_string(), "\u{0}".to_string()),
+        Mint(34, "".to_string()),
+        Send("\u{0}".to_string(), 1, "".to_string(), "".to_string()),
         Send("".to_string(), 1, "".to_string(), "".to_string())]
+    });
+
+    ledger_simulates_accounts(AccountsScenario {
+      confidential_amounts: true,
+      confidential_types: false,
+      cmds: vec![
+        NewUser("".to_string()),
+        NewUser("\u{0}".to_string()),
+        NewUnit("".to_string(), "\u{0}".to_string()),
+        Mint(34, "".to_string()),
+        Send("\u{0}".to_string(), 1, "".to_string(), "".to_string()),
+        Send("".to_string(), 1, "".to_string(), "".to_string())]
+    });
+
+    ledger_simulates_accounts(AccountsScenario {
+      confidential_amounts: false,
+      confidential_types: false,
+      cmds: vec![
+        NewUser("".to_string()),
+        NewUnit("".to_string(), "".to_string()),
+        Mint(32, "".to_string()),
+        Send("".to_string(), 1, "".to_string(), "".to_string()),
+        Send("".to_string(), 2, "".to_string(), "".to_string())]
     });
   }
 
