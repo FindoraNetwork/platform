@@ -1,3 +1,4 @@
+#![deny(warnings)]
 extern crate api_service;
 extern crate ledger;
 

@@ -1,3 +1,4 @@
+#![deny(warnings)]
 extern crate abci;
 extern crate arrayref;
 extern crate ledger;
