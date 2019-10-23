@@ -175,6 +175,12 @@ pub struct EnableFlags {
   warning: bool,
   debug: bool,
   info: bool,
+
+  modify_log: bool,
+  modify_error: bool,
+  modify_warning: bool,
+  modify_debug: bool,
+  modify_info: bool,
 }
 
 /// Set the logging flags for a category at run time.
@@ -182,11 +188,25 @@ pub fn set_logging(name: &str, flags: &EnableFlags) -> bool {
   unsafe {
     for entry in &mut TABLE {
       if entry.name == name {
-        entry.set_log(flags.log);
-        entry.set_error(flags.error);
-        entry.set_warning(flags.warning);
-        entry.set_debug(flags.debug);
-        entry.set_info(flags.info);
+        if flags.modify_log {
+          entry.set_log(flags.log);
+        }
+
+        if flags.modify_error {
+          entry.set_error(flags.error);
+        }
+
+        if flags.modify_warning {
+          entry.set_warning(flags.warning);
+        }
+
+        if flags.modify_debug {
+          entry.set_debug(flags.debug);
+        }
+
+        if flags.modify_info {
+          entry.set_info(flags.info);
+        }
 
         return true;
       }
@@ -570,7 +590,12 @@ mod tests {
                               error: false,
                               warning: false,
                               debug: false,
-                              info: false };
+                              info: false,
+                              modify_log: true,
+                              modify_error: true,
+                              modify_warning: true,
+                              modify_debug: true,
+                              modify_info: true };
 
     assert!(set_logging("test", &flags));
     check("test", &flags);
@@ -579,7 +604,12 @@ mod tests {
                               error: true,
                               warning: true,
                               debug: true,
-                              info: true };
+                              info: true,
+                              modify_log: true,
+                              modify_error: true,
+                              modify_warning: true,
+                              modify_debug: true,
+                              modify_info: true };
 
     assert!(set_logging("test", &flags));
     check("test", &flags);
@@ -589,7 +619,12 @@ mod tests {
                                   error: true,
                                   warning: false,
                                   debug: true,
-                                  info: false };
+                                  info: false,
+                                  modify_log: true,
+                                  modify_error: true,
+                                  modify_warning: true,
+                                  modify_debug: true,
+                                  modify_info: true };
 
     assert!(set_logging("test", &flags));
     check("test", &flags);
@@ -604,6 +639,58 @@ mod tests {
     assert!(set_logging("test", &flags));
     check("test", &flags);
 
+    // Invert the flags and try the modify_* enablers.
+    flags.log = !flags.log;
+    flags.error = !flags.error;
+    flags.warning = !flags.warning;
+    flags.debug = !flags.debug;
+    flags.info = !flags.info;
+
+    flags.modify_log = false;
+    flags.modify_error = false;
+    flags.modify_warning = false;
+    flags.modify_debug = false;
+    flags.modify_info = false;
+
+    // Call the flag-setting routine.
+    assert!(set_logging("test", &flags));
+
+    flags.log = !flags.log;
+    flags.error = !flags.error;
+    flags.warning = !flags.warning;
+    flags.debug = !flags.debug;
+    flags.info = !flags.info;
+
+    check("test", &flags);
+
+    // Check each modify_* field.
+
+    flags.log = !flags.log;
+    flags.modify_log = true;
+    assert!(set_logging("test", &flags));
+    check("test", &flags);
+
+    flags.error = !flags.error;
+    flags.modify_error = true;
+    assert!(set_logging("test", &flags));
+    check("test", &flags);
+
+    flags.warning = !flags.warning;
+    flags.modify_warning = true;
+    assert!(set_logging("test", &flags));
+    check("test", &flags);
+
+    flags.debug = !flags.debug;
+    flags.modify_debug = true;
+    assert!(set_logging("test", &flags));
+    check("test", &flags);
+
+    flags.info = !flags.info;
+    flags.modify_info = true;
+    assert!(set_logging("test", &flags));
+    check("test", &flags);
+
+    // Test an invalid category.
     assert!(!set_logging("no-test", &flags));
   }
 
