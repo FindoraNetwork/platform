@@ -4,11 +4,7 @@ extern crate findora;
 extern crate tempdir;
 
 use crate::data_model::errors::PlatformError;
-use crate::data_model::{
-  AssetPolicyKey, AssetType, AssetTypeCode, CustomAssetPolicy, DefineAsset, FinalizedTransaction,
-  IssueAsset, Operation, SmartContract, SmartContractKey, Transaction, TransferAsset, TxOutput,
-  TxnSID, TxnTempSID, TxoRef, TxoSID, Utxo, TXN_SEQ_ID_PLACEHOLDER,
-};
+use crate::data_model::*;
 use crate::utils::sha256;
 use crate::utils::sha256::Digest as BitDigest;
 use append_only_merkle::{AppendOnlyMerkle, Proof};
@@ -870,15 +866,6 @@ pub mod helpers {
     let keypair = XfrKeyPair::generate(prng);
 
     (*keypair.get_pk_ref(), keypair.get_sk())
-  }
-
-  pub fn compute_signature<T>(secret_key: &XfrSecretKey,
-                              public_key: &XfrPublicKey,
-                              asset_body: &T)
-                              -> XfrSignature
-    where T: serde::Serialize
-  {
-    secret_key.sign(&serde_json::to_vec(&asset_body).unwrap(), &public_key)
   }
 
   pub fn asset_creation_body(token_code: &AssetTypeCode,
