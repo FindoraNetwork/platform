@@ -32,6 +32,7 @@ use std::io::SeekFrom::End;
 use std::io::SeekFrom::Start;
 use std::io::Write;
 use std::mem;
+use std::mem::MaybeUninit;
 use std::slice::from_raw_parts;
 use std::slice::from_raw_parts_mut;
 
@@ -164,9 +165,9 @@ fn deserialize_array<'de, D>(deserializer: D) -> Result<[HashValue; HASHES_IN_BL
     return sde!("The input slice has the wrong length:  {}", slice.len());
   }
 
-  // let mut result: [HashValue; HASHES_IN_BLOCK] =
-  //     unsafe { MaybeUninit::<[HashValue; HASHES_IN_BLOCK]>::uninit().assume_init() };
-  let mut result: [HashValue; HASHES_IN_BLOCK] = unsafe { std::mem::uninitialized() };
+  let mut result: [HashValue; HASHES_IN_BLOCK] =
+    unsafe { MaybeUninit::<[HashValue; HASHES_IN_BLOCK]>::uninit().assume_init() };
+  // let mut result: [HashValue; HASHES_IN_BLOCK] = unsafe { std::mem::uninitialized() };
   result.copy_from_slice(&slice);
   Ok(result)
   // Ok(unsafe { mem::transmute::<_, [HashValue; HASHES_IN_BLOCK]>(result) })
@@ -1798,16 +1799,16 @@ impl AppendOnlyMerkle {
   // storage is working.
   fn read_struct(&mut self, level: usize) -> Result<Block, Error> {
     unsafe {
-      // let mut s: MaybeUninit<Block> = MaybeUninit::uninit();
-      let mut s = std::mem::uninitialized();
+      let mut s: MaybeUninit<Block> = MaybeUninit::uninit();
+      // let mut s = std::mem::uninitialized();
 
-      let buffer = from_raw_parts_mut(&mut s as *mut Block as *mut u8, BLOCK_SIZE);
-      // from_raw_parts_mut(s.as_mut_ptr() as *mut u8, BLOCK_SIZE);
+      let buffer = // from_raw_parts_mut(&mut s as *mut Block as *mut u8, BLOCK_SIZE);
+        from_raw_parts_mut(s.as_mut_ptr() as *mut u8, BLOCK_SIZE);
 
       match self.files[level].read_exact(buffer) {
         Ok(()) => {
-          Ok(s)
-          //Ok(mem::transmute::<_, Block>(s))
+          // Ok(s)
+          Ok(mem::transmute::<_, Block>(s))
         }
         Err(e) => {
           std::mem::forget(s);

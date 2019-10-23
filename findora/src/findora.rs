@@ -1,3 +1,4 @@
+#![deny(warnings)]
 //! findora
 //!
 //! This module implements a variety of tools for general use.
