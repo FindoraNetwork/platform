@@ -1,6 +1,6 @@
+#![deny(warnings)]
 #[cfg(test)]
 use quickcheck::{QuickCheck,Arbitrary,Gen};
-use rand::{CryptoRng,Rng};
 #[cfg(test)]
 use std::iter::{once,repeat};
 #[cfg(test)]
@@ -16,19 +16,20 @@ use std::collections::{HashMap, HashSet, VecDeque};
 use zei::setup::PublicParams;
 use zei::xfr::asset_record::{build_blind_asset_record, open_asset_record};
 use zei::xfr::structs::{
-  AssetAmountProof, AssetIssuerPubKeys, AssetRecord, OpenAssetRecord, BlindAssetRecord,
-  XfrBody, XfrNote, XfrProofs,
+  AssetRecord, OpenAssetRecord,
 };
-use zei::basic_crypto::signatures::{XfrKeyPair, XfrPublicKey, XfrSecretKey, XfrSignature};
+use zei::basic_crypto::signatures::{XfrKeyPair};
+use zei::serialization::ZeiFromToBytes;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-enum AccountsCommand {
+pub enum AccountsCommand {
     NewUser(String), // name
     NewUnit(String, String), // name, issuer
     Mint(usize, String), // count, unit
     Send(String, usize, String, String), // source,count,unit,dest
 }
 
+#[cfg(test)]
 fn rename_user(old: &str, new: &str, ac: AccountsCommand) -> AccountsCommand {
   use AccountsCommand::*;
   match ac {
@@ -39,6 +40,7 @@ fn rename_user(old: &str, new: &str, ac: AccountsCommand) -> AccountsCommand {
   }
 }
 
+#[cfg(test)]
 fn rename_unit(old: &str, new: &str, ac: AccountsCommand) -> AccountsCommand {
   use AccountsCommand::*;
   match ac {
@@ -48,6 +50,7 @@ fn rename_unit(old: &str, new: &str, ac: AccountsCommand) -> AccountsCommand {
   }
 }
 
+#[cfg(test)]
 fn rename_by(old: &AccountsCommand, new: &AccountsCommand, ac: AccountsCommand) -> AccountsCommand {
   use AccountsCommand::*;
   match (old,new) {
@@ -108,8 +111,6 @@ impl Arbitrary for AccountsCommand {
           .flat_map(|(((src,amt),unit),dst)|
             once(((src.clone(),amt.clone(),unit.clone()),dst.clone()))
             .chain(
-
-
               repeat((src,amt,unit)).zip(dst.shrink()))
           )
           .map(|((src,amt,unit),dst)|
@@ -250,7 +251,7 @@ impl InterpretAccounts<()> for AccountsState {
         unit_set.insert(name.clone());
         self.units_to_users.insert(name.clone(),issuer.clone());
 
-        for (user,acc) in self.accounts.iter_mut() {
+        for (_,acc) in self.accounts.iter_mut() {
           acc.insert(name.clone(),0);
         }
       }
@@ -261,7 +262,7 @@ impl InterpretAccounts<()> for AccountsState {
       AccountsCommand::Send(src,amt,unit,dst) => {
         {
           let dst_acct = self.accounts.get(dst).ok_or(())?;
-          let dst_column = dst_acct.get(unit).ok_or(())?;
+          dst_acct.get(unit).ok_or(())?;
         }
         {
           let src_acct = self.accounts.get_mut(src).ok_or(())?;
@@ -390,7 +391,7 @@ impl InterpretAccounts<PlatformError> for LedgerAccounts {
         let temp_sid = self.ledger.apply_transaction(&mut block, effect)
           .unwrap();
 
-        let (txn_sid, txos) = self.ledger.finish_block(block)
+        let (_, txos) = self.ledger.finish_block(block)
           .remove(&temp_sid).unwrap();
 
         assert!(txos.len() == 1);
@@ -405,7 +406,7 @@ impl InterpretAccounts<PlatformError> for LedgerAccounts {
                                   src_keypair.get_sk_ref());
         let dst_keypair = self.accounts.get(dst)
           .ok_or(PlatformError::InputsError)?;
-        let (dst_pub,dst_priv) = (dst_keypair.get_pk_ref(),
+        let (dst_pub,_) = (dst_keypair.get_pk_ref(),
                                   dst_keypair.get_sk_ref());
         let (_,unit_code) = self.units.get(unit)
           .ok_or(PlatformError::InputsError)?;
@@ -422,7 +423,7 @@ impl InterpretAccounts<PlatformError> for LedgerAccounts {
 
         let mut src_records: Vec<OpenAssetRecord> = Vec::new();
         let mut total_sum = 0u64;
-        let mut avail = self.utxos.get_mut(src).unwrap();
+        let avail = self.utxos.get_mut(src).unwrap();
         let mut to_use: Vec<TxoSID> = Vec::new();
         let mut to_skip: Vec<TxoSID> = Vec::new();
 
@@ -440,6 +441,7 @@ impl InterpretAccounts<PlatformError> for LedgerAccounts {
           total_sum += *open_rec.get_amount();
           src_records.push(open_rec);
         }
+        dbg!(&to_skip,&to_use);
         avail.extend(to_skip.into_iter());
 
         assert!(total_sum >= amt);
@@ -489,23 +491,30 @@ impl InterpretAccounts<PlatformError> for LedgerAccounts {
         let src_outputs = src_outputs;
         let dst_outputs = dst_outputs;
         let all_outputs = all_outputs;
+        assert!(!src_records.is_empty());
+        dbg!(unit_code.val);
+        for (ix,rec) in src_records.iter().enumerate() {
+          dbg!(ix,rec.get_asset_type(),rec.get_amount(),rec.get_pub_key());
+        }
 
         let transfer_body = TransferAssetBody::new(
           self.ledger.get_prng(),
           to_use.iter().cloned().map(TxoRef::Absolute).collect(),
           src_records.as_slice(),
           all_outputs.as_slice(),
-          // &[XfrKeyPair::zei_from_bytes(src_keypair.zei_to_bytes())]
-          &[]
+          &[XfrKeyPair::zei_from_bytes(&src_keypair.zei_to_bytes())]
+          // &vec![]
           ).unwrap();
-        let transfer_sig = SignedAddress {
+        dbg!(&transfer_body);
+        let _transfer_sig = SignedAddress {
           address: XfrAddress { key: src_pub.clone() },
           signature: compute_signature(src_priv, src_pub, &transfer_body)
         };
 
         let transfer = TransferAsset {
           body: transfer_body,
-          body_signatures: vec![transfer_sig],
+          // body_signatures: vec![transfer_sig],
+          body_signatures: vec![],
         };
         let txn = Transaction {
           operations: vec![Operation::TransferAsset(transfer)],
@@ -520,7 +529,7 @@ impl InterpretAccounts<PlatformError> for LedgerAccounts {
         let temp_sid = self.ledger.apply_transaction(&mut block, effect)
           .unwrap();
 
-        let (txn_sid, txos) = self.ledger.finish_block(block)
+        let (_, txos) = self.ledger.finish_block(block)
           .remove(&temp_sid).unwrap();
 
         assert!(txos.len() == src_outputs.len() + dst_outputs.len());
@@ -619,6 +628,8 @@ mod test {
   use super::*;
 
   #[quickcheck]
+  #[allow(non_snake_case)]
+  #[ignore]
   fn SimpleAccounts_simplifies(cmds: AccountsScenario) {
     let cmds = cmds.cmds;
     let mut simple: SimpleAccountsState = Default::default();
@@ -633,11 +644,11 @@ mod test {
 
       let simpl_res = simple.run_account_command(&cmd);
       let zero_cmd = match cmd {
-        AccountsCommand::Mint(amt,unit) => {
+        AccountsCommand::Mint(_,unit) => {
           //assert!(simpl_res.is_err());
           AccountsCommand::Mint(0,unit)
         },
-        AccountsCommand::Send(src,amt,unit,dst) => {
+        AccountsCommand::Send(src,_,unit,dst) => {
           //assert!(simpl_res.is_err());
           AccountsCommand::Send(src,0,unit,dst)
         },
@@ -653,6 +664,8 @@ mod test {
   }
 
   #[quickcheck]
+  #[allow(non_snake_case)]
+  #[ignore]
   fn SimpleAccounts_simplifies_with_amounts(cmds: AccountsScenario) {
     let cmds = cmds.cmds;
     let mut prev_simple: SimpleAccountsState = Default::default();
@@ -676,8 +689,10 @@ mod test {
         simple = prev_simple.clone();
         normal = prev_normal.clone();
       } else {
-        prev_simple.run_account_command(&cmd);
-        prev_normal.run_account_command(&cmd);
+        if simple_res.is_ok() {
+          prev_simple.run_account_command(&cmd).unwrap();
+          prev_normal.run_account_command(&cmd).unwrap();
+        }
       }
     }
 
@@ -716,11 +731,9 @@ mod test {
       if simple_res.is_err() != normal_res.is_err() {
         assert!(simple_res.is_ok());
         simple = prev_simple.clone();
-      } else {
-        prev_simple.run_account_command(&cmd);
-        if simple_res.is_ok() {
-          ledger_res.unwrap();
-        }
+      } else if simple_res.is_ok() {
+        prev_simple.run_account_command(&cmd).unwrap();
+        ledger_res.unwrap();
       }
     }
 
@@ -736,6 +749,13 @@ mod test {
           NewUser("".to_string()),
           NewUnit("".to_string(), "".to_string()),
           Send("".to_string(), 0, "".to_string(), "".to_string())]
+    });
+    ledger_simulates_accounts( AccountsScenario {
+      cmds: vec![
+        NewUser("".to_string()),
+        NewUnit("".to_string(), "".to_string()),
+        Mint(1, "".to_string()),
+        Send("".to_string(), 1, "".to_string(), "".to_string())]
     });
   }
 

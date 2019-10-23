@@ -860,7 +860,7 @@ impl ArchiveAccess for LedgerState {
 pub mod helpers {
   use super::*;
   use crate::data_model::{Asset, ConfidentialMemo, DefineAssetBody, IssuerPublicKey, Memo};
-  use zei::basic_crypto::signatures::{XfrKeyPair, XfrPublicKey, XfrSecretKey, XfrSignature};
+  use zei::basic_crypto::signatures::{XfrKeyPair, XfrPublicKey, XfrSecretKey};
 
   pub fn build_keys<R: CryptoRng + Rng>(prng: &mut R) -> (XfrPublicKey, XfrSecretKey) {
     let keypair = XfrKeyPair::generate(prng);
