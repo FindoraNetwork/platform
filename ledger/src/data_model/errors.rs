@@ -35,7 +35,7 @@ impl error::Error for PlatformError {
       PlatformError::DeserializationError => "Could not deserialize object",
       PlatformError::SerializationError => "Could not serialize object",
       PlatformError::InputsError => "Parameters were not consistent",
-      PlatformError::InvariantError(msg) => "Invariant error",
+      PlatformError::InvariantError(_msg) => "Invariant error",
       PlatformError::ZeiError(ze) => ze.description(),
       PlatformError::IoError(ioe) => &ioe,
     }

@@ -1,32 +1,27 @@
+#![deny(warnings)]
 extern crate bincode;
 extern crate byteorder;
 extern crate findora;
 extern crate tempdir;
 
 use crate::data_model::errors::PlatformError;
-use crate::data_model::{
-  AssetPolicyKey, AssetType, AssetTypeCode, CustomAssetPolicy, DefineAsset, FinalizedTransaction,
-  IssueAsset, Operation, SmartContract, SmartContractKey, Transaction, TransferAsset, TxOutput,
-  TxnSID, TxnTempSID, TxoRef, TxoSID, Utxo, TXN_SEQ_ID_PLACEHOLDER,
-};
+use crate::data_model::*;
 use crate::utils::sha256;
 use crate::utils::sha256::Digest as BitDigest;
 use append_only_merkle::{AppendOnlyMerkle, Proof};
 use bitmap::BitMap;
-use findora::{timestamp, EnableMap, HasInvariants};
+use findora::{timestamp, HasInvariants};
 use logged_merkle::LoggedMerkle;
 use rand::SeedableRng;
 use rand::{CryptoRng, Rng};
 use rand_chacha::ChaChaRng;
-use std::collections::{HashMap, HashSet, VecDeque};
+use std::collections::{HashMap, VecDeque};
 use std::fs::File;
 use std::fs::OpenOptions;
 use std::io::BufReader;
 use std::slice::from_raw_parts;
-use std::sync::{Arc, RwLock};
 use std::u64;
 use tempdir::TempDir;
-use zei::xfr::structs::{BlindAssetRecord, EGPubKey};
 
 use super::append_only_merkle;
 use super::bitmap;
@@ -238,6 +233,7 @@ pub struct LedgerState {
   utxo_map: BitMap,
 
   // TODO(joe): use this file handle to actually record transactions
+  #[allow(unused)]
   txn_log: File,
 
   block_ctx: Option<BlockEffect>,
@@ -309,7 +305,7 @@ impl LedgerStatus {
     }
 
     // New asset types must not already exist
-    for (code, asset_type) in txn.new_asset_codes.iter() {
+    for (code, _asset_type) in txn.new_asset_codes.iter() {
       if self.asset_types.contains_key(&code) {
         return Err(PlatformError::InputsError);
       }
@@ -924,26 +920,13 @@ pub mod helpers {
 mod tests {
   use super::helpers::*;
   use super::*;
-  use crate::data_model::{
-    DefineAssetBody, IssueAssetBody, IssuerPublicKey, TransferAsset, TransferAssetBody,
-  };
-  use bulletproofs::PedersenGens;
-  use curve25519_dalek::scalar::Scalar;
   use rand::SeedableRng;
   use std::fs;
-  use std::io::BufWriter;
-  use tempfile::{tempdir, tempfile};
-  use zei::algebra::bls12_381::{BLSScalar, BLSG1};
-  use zei::algebra::groups::Group;
-  use zei::algebra::ristretto::RistPoint;
-  use zei::basic_crypto::elgamal::{
-    elgamal_derive_public_key, elgamal_generate_secret_key, ElGamalPublicKey,
-  };
-  use zei::basic_crypto::signatures::XfrKeyPair;
+  use tempfile::{tempdir};
   use zei::setup::PublicParams;
-  use zei::xfr::asset_record::{build_blind_asset_record, open_asset_record};
+  use zei::xfr::asset_record::{build_blind_asset_record};
   use zei::xfr::structs::{
-    AssetAmountProof, AssetIssuerPubKeys, AssetRecord, XfrBody, XfrNote, XfrProofs,
+    AssetRecord,
   };
 
   #[test]
@@ -1528,8 +1511,7 @@ mod tests {
   // Change the signature to have the wrong public key
   #[test]
   fn test_asset_creation_invalid_public_key() {
-    // Create a valid asset creation operation
-    let mut state = LedgerState::test_ledger();
+    // Create a valid asset creation operation.
     let mut tx = Transaction::default();
     let token_code1 = AssetTypeCode { val: [1; 16] };
     let mut prng = ChaChaRng::from_seed([0u8; 32]);
@@ -1551,7 +1533,6 @@ mod tests {
   #[test]
   fn test_asset_creation_invalid_signature() {
     // Create a valid operation.
-    let mut state = LedgerState::test_ledger();
     let mut tx = Transaction::default();
     let token_code1 = AssetTypeCode { val: [1; 16] };
 
@@ -1578,8 +1559,6 @@ mod tests {
     let merkle_path = merkle_buf.to_str().unwrap();
     let txn_buf = tmp_dir.path().join("test_txnlog");
     let txn_path = txn_buf.to_str().unwrap();
-    let ledger_buf = tmp_dir.path().join("test_ledger");
-    let ledger_path = ledger_buf.to_str().unwrap();
     let utxo_map_buf = tmp_dir.path().join("test_utxo_map");
     let utxo_map_path = utxo_map_buf.to_str().unwrap();
 
@@ -1627,12 +1606,13 @@ mod tests {
 
     let (txn_sid, txos) = ledger.finish_block(block).remove(&temp_sid).unwrap();
 
-    let sid = txn_sid;
     let transaction = ledger.txs[txn_sid.0].clone();
     let txn_id = transaction.tx_id;
 
     println!("utxos = {:?}", ledger.status.utxos);
-    // TODO assert!(ledger.utxos.contains_key(&sid));
+    for txo_id in txos {
+      assert!(ledger.status.utxos.contains_key(&txo_id));
+    }
 
     match ledger.get_proof(txn_id) {
       Some(proof) => {

@@ -1,3 +1,4 @@
+#![deny(warnings)]
 // Copyright 2019 © Findora. All rights reserved.
 /// Command line executable to exercise functions related to credentials
 // Anonymous Credentials with Selective Attribute Revelation

@@ -1,3 +1,4 @@
+#![deny(warnings)]
 use ledger::data_model::{AssetTypeCode, Operation, Transaction};
 use ledger::store::helpers::*;
 // use ledger::store::{ArchiveUpdate, LedgerState, LedgerUpdate};

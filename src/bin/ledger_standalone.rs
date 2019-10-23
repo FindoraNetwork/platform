@@ -1,3 +1,4 @@
+#![deny(warnings)]
 use api_service::RestfulApiService;
 use ledger::store::LedgerState;
 use std::sync::{Arc, RwLock};
