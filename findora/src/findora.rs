@@ -153,7 +153,7 @@ pub enum Categories {
   RebuildMerkle = 10,
 }
 
-static mut TIMESTAMP: fn() -> String = timestamp;
+pub static mut TIMESTAMP: fn() -> String = timestamp;
 
 /// Set the function that generates the timestamp applied to
 /// log entries.
@@ -205,6 +205,8 @@ pub fn set_logging(name: &str, flags: &EnableFlags) -> bool {
 macro_rules! log_impl {
   ($level:ident, $category:ident, $($x:tt)+) => {
     {
+      use findora::TIMESTAMP;
+
       println!("{}  {:10.10}  {:16.16}  {}",
         TIMESTAMP(), stringify!($level),
         TABLE[Categories::$category as usize].name,

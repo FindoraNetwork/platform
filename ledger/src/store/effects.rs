@@ -4,7 +4,7 @@ use crate::data_model::{
   IssueAsset, IssuerPublicKey, Operation, SmartContract, SmartContractKey, Transaction,
   TransferAsset, TxOutput, TxnSID, TxnTempSID, TxoRef, TxoSID, Utxo, TXN_SEQ_ID_PLACEHOLDER,
 };
-use findora::{timestamp, EnableMap, HasInvariants};
+use findora::HasInvariants;
 use rand::SeedableRng;
 use rand::{CryptoRng, Rng};
 use rand_chacha::ChaChaRng;

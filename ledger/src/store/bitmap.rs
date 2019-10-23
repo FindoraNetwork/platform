@@ -25,7 +25,6 @@
 
 use crate::utils::sha256;
 use crate::utils::sha256::{Digest, DIGESTBYTES};
-use findora::timestamp;
 use findora::Commas;
 use std::cmp::min;
 use std::collections::HashMap;
