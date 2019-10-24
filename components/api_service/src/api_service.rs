@@ -1,13 +1,11 @@
+#![deny(warnings)]
 extern crate actix_rt;
 extern crate actix_web;
 extern crate ledger;
 extern crate serde_json;
 
 use actix_web::{dev, error, web, App, HttpServer};
-use ledger::data_model::{
-  AssetPolicyKey, AssetType, AssetTypeCode, CustomAssetPolicy, SmartContract, SmartContractKey,
-  TxnSID, TxoSID, Utxo,
-};
+use ledger::data_model::*;
 use ledger::store::{ArchiveAccess, LedgerAccess, LedgerUpdate, TxnEffect};
 use percent_encoding::percent_decode_str;
 use rand::{CryptoRng, Rng};
@@ -62,6 +60,7 @@ fn query_asset<LA>(data: web::Data<Arc<RwLock<LA>>>,
   }
 }
 
+#[allow(unused)]
 fn query_policy<LA>(data: web::Data<Arc<RwLock<LA>>>,
                     info: web::Path<String>)
                     -> actix_web::Result<web::Json<CustomAssetPolicy>>
@@ -81,6 +80,7 @@ fn query_policy<LA>(data: web::Data<Arc<RwLock<LA>>>,
   // }
 }
 
+#[allow(unused)]
 fn query_contract<LA>(data: web::Data<Arc<RwLock<LA>>>,
                       info: web::Path<String>)
                       -> actix_web::Result<web::Json<SmartContract>>
@@ -185,6 +185,7 @@ fn query_utxo_map_checksum<AA>(data: web::Data<Arc<RwLock<AA>>>,
   }
 }
 
+#[allow(unused)]
 fn parse_blocks(block_input: String) -> Option<Vec<usize>> {
   let blocks = block_input.split(',');
   let mut result = Vec::new();
@@ -200,6 +201,7 @@ fn parse_blocks(block_input: String) -> Option<Vec<usize>> {
   Some(result)
 }
 
+#[allow(unused)]
 fn query_utxo_partial_map<AA>(data: web::Data<Arc<RwLock<AA>>>,
                               info: web::Path<String>)
                               -> actix_web::Result<String>
