@@ -19,35 +19,61 @@ use zei::setup::PublicParams;
 use zei::xfr::asset_record::{build_blind_asset_record, open_asset_record};
 use zei::xfr::structs::{AssetRecord, OpenAssetRecord};
 
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub enum AccountsCommand {
-  NewUser(String),                     // name
-  NewUnit(String, String),             // name, issuer
-  Mint(usize, String),                 // count, unit
-  Send(String, usize, String, String), // source,count,unit,dest
+#[derive(Clone, Debug, Eq, PartialEq, Hash)]
+pub struct UserName(pub String);
+
+#[derive(Clone, Debug, Eq, PartialEq, Hash)]
+pub struct UnitName(pub String);
+
+#[cfg(test)]
+impl Arbitrary for UserName {
+  fn arbitrary<G: Gen>(g: &mut G) -> Self {
+    UserName(String::arbitrary(g))
+  }
+  fn shrink(&self) -> Box<dyn Iterator<Item = Self>> {
+    Box::new(self.0.shrink().map(UserName))
+  }
 }
 
 #[cfg(test)]
-fn rename_user(old: &str, new: &str, ac: AccountsCommand) -> AccountsCommand {
+impl Arbitrary for UnitName {
+  fn arbitrary<G: Gen>(g: &mut G) -> Self {
+    UnitName(String::arbitrary(g))
+  }
+  fn shrink(&self) -> Box<dyn Iterator<Item = Self>> {
+    Box::new(self.0.shrink().map(UnitName))
+  }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum AccountsCommand {
+    NewUser(UserName), // name
+    NewUnit(UnitName, UserName), // name, issuer
+    Mint(usize, UnitName), // count, unit
+    Send(UserName, usize, UnitName, UserName), // source,count,unit,dest
+}
+
+#[cfg(test)]
+fn rename_user(old: &UserName, new: &UserName, ac: AccountsCommand) -> AccountsCommand {
   use AccountsCommand::*;
   match ac {
-    NewUnit(unit, name) => NewUnit(unit, if name == old { new.to_string() } else { name }),
-    Send(src, count, unit, dest) => Send(if src == old { new.to_string() } else { src },
+    NewUnit(unit, name) => NewUnit(unit, if name == *old { new.clone() } else { name }),
+    Send(src, count, unit, dest) => Send(if src == *old { new.clone() } else { src },
                                          count,
                                          unit,
-                                         if dest == old { new.to_string() } else { dest }),
+                                         if dest == *old { new.clone() } else { dest }),
     _ => ac,
   }
 }
 
 #[cfg(test)]
-fn rename_unit(old: &str, new: &str, ac: AccountsCommand) -> AccountsCommand {
+fn rename_unit(old: &UnitName, new: &UnitName, ac: AccountsCommand) -> AccountsCommand {
   use AccountsCommand::*;
   match ac {
-    Mint(count, unit) => Mint(count, if unit == old { new.to_string() } else { unit }),
+    Mint(count, unit) => Mint(count, if unit == *old { new.clone() } else { unit }),
     Send(src, count, unit, dest) => Send(src,
                                          count,
-                                         if unit == old { new.to_string() } else { unit },
+                                         if unit == *old { new.clone() } else { unit },
                                          dest),
     _ => ac,
   }
@@ -71,18 +97,18 @@ fn rename_by(old: &AccountsCommand, new: &AccountsCommand, ac: AccountsCommand) 
 // which also implement `Arbitrary`)
 #[cfg(test)]
 impl Arbitrary for AccountsCommand {
-  fn arbitrary<G: Gen>(g: &mut G) -> AccountsCommand {
+  fn arbitrary<G: Gen>(g: &mut G) -> Self {
     // Use a random number from `g` to select what kind of operation, then
     // use the `Arbitrary` instance for the parameters' types to generate
     // random parameters.
     match g.next_u32() % 10 {
-      0 => AccountsCommand::NewUser(String::arbitrary(g)),
-      1 => AccountsCommand::NewUnit(String::arbitrary(g), String::arbitrary(g)),
-      2..=4 => AccountsCommand::Mint(usize::arbitrary(g), String::arbitrary(g)),
-      5..=9 => AccountsCommand::Send(String::arbitrary(g),
+      0 => AccountsCommand::NewUser(UserName::arbitrary(g)),
+      1 => AccountsCommand::NewUnit(UnitName::arbitrary(g), UserName::arbitrary(g)),
+      2..=4 => AccountsCommand::Mint(usize::arbitrary(g), UnitName::arbitrary(g)),
+      5..=9 => AccountsCommand::Send(UserName::arbitrary(g),
                                      usize::arbitrary(g),
-                                     String::arbitrary(g),
-                                     String::arbitrary(g)),
+                                     UnitName::arbitrary(g),
+                                     UserName::arbitrary(g)),
       _ => panic!("Out of range"),
     }
   }
@@ -133,16 +159,16 @@ impl Arbitrary for AccountsCommand {
 
 #[derive(Clone, Debug, Eq, PartialEq, Default)]
 struct SimpleAccountsState {
-  accounts: HashMap<String, ()>,
-  units_to_users: HashMap<String, String>,
-  users_to_units: HashMap<String, HashSet<String>>,
+  accounts: HashMap<UserName, ()>,
+  units_to_users: HashMap<UnitName, UserName>,
+  users_to_units: HashMap<UserName, HashSet<UnitName>>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Default)]
 struct AccountsState {
-  accounts: HashMap<String, HashMap<String, usize>>,
-  units_to_users: HashMap<String, String>,
-  users_to_units: HashMap<String, HashSet<String>>,
+  accounts: HashMap<UserName, HashMap<UnitName, usize>>,
+  units_to_users: HashMap<UnitName, UserName>,
+  users_to_units: HashMap<UserName, HashSet<UnitName>>,
 }
 
 impl HasInvariants<()> for SimpleAccountsState {
@@ -315,10 +341,10 @@ impl InterpretAccounts<()> for AccountsState {
 
 struct LedgerAccounts {
   ledger: LedgerState,
-  accounts: HashMap<String, XfrKeyPair>,
-  balances: HashMap<String, HashMap<String, u64>>,
-  utxos: HashMap<String, VecDeque<TxoSID>>, // by account
-  units: HashMap<String, (String, AssetTypeCode)>, // user, data
+  accounts: HashMap<UserName, XfrKeyPair>,
+  balances: HashMap<UserName, HashMap<UnitName, u64>>,
+  utxos: HashMap<UserName, VecDeque<TxoSID>>, // by account
+  units: HashMap<UnitName, (UserName, AssetTypeCode)>, // user, data
   // These only affect new issuances
   confidential_amounts: bool,
   confidential_types: bool,
@@ -384,10 +410,10 @@ impl InterpretAccounts<PlatformError> for LedgerAccounts {
           self.ledger.finish_block(block);
         }
 
-        self.units.insert(name.to_string(), (issuer.clone(), code));
+        self.units.insert(name.clone(), (issuer.clone(), code));
 
         for (_, bal) in self.balances.iter_mut() {
-          bal.insert(name.to_string(), 0);
+          bal.insert(name.clone(), 0);
         }
       }
       AccountsCommand::Mint(amt, unit) => {
@@ -576,11 +602,13 @@ struct AccountsScenario {
 
 #[cfg(test)]
 impl Arbitrary for AccountsScenario {
-  fn arbitrary<G: Gen>(g: &mut G) -> AccountsScenario {
+  fn arbitrary<G: Gen>(g: &mut G) -> Self {
+    // A random AccountsScenario has...
     let mut cmds: Vec<AccountsCommand> = Vec::new();
 
-    let mut users: HashSet<String> = vec![String::arbitrary(g)].into_iter().collect();
-    for extra_user in Vec::<String>::arbitrary(g) {
+    // Some users (at least one)...
+    let mut users: HashSet<UserName> = vec![UserName::arbitrary(g)].into_iter().collect();
+    for extra_user in Vec::<UserName>::arbitrary(g) {
       if users.contains(&extra_user) {
         continue;
       }
@@ -591,19 +619,22 @@ impl Arbitrary for AccountsScenario {
       cmds.push(AccountsCommand::NewUser(user.clone()));
     }
 
-    let user_vec: Vec<String> = users.into_iter().collect();
+    let user_vec: Vec<UserName> = users.into_iter().collect();
 
-    let mut units: HashSet<String> = vec![String::arbitrary(g)].into_iter().collect();
-    for extra_unit in Vec::<String>::arbitrary(g) {
+    // Some defined units-of-some-asset (at least one) issued by those
+    // users...
+    let mut units: HashSet<UnitName> = vec![UnitName::arbitrary(g)].into_iter().collect();
+    for extra_unit in Vec::<UnitName>::arbitrary(g) {
       if units.contains(&extra_unit) {
         continue;
       }
       units.insert(extra_unit);
     }
 
-    let unit_vec: Vec<String> = units.into_iter().collect();
-    let mut unit_amounts: HashMap<String, usize> = HashMap::new();
+    let unit_vec: Vec<UnitName> = units.into_iter().collect();
+    let mut unit_amounts: HashMap<UnitName, usize> = HashMap::new();
 
+    // Initial quantities of assets...
     for unit in unit_vec.iter() {
       let user = user_vec[usize::arbitrary(g) % user_vec.len()].clone();
       let amt = usize::arbitrary(g);
@@ -612,13 +643,23 @@ impl Arbitrary for AccountsScenario {
       cmds.push(AccountsCommand::Mint(amt, unit.clone()));
     }
 
+    // And some activity.
     for (src, count, unit, dst) in Vec::<(usize, usize, usize, usize)>::arbitrary(g) {
       let src = user_vec[src % user_vec.len()].clone();
       let dst = user_vec[dst % user_vec.len()].clone();
       let unit = unit_vec[unit % unit_vec.len()].clone();
-      let amt = unit_amounts.get(&unit).unwrap();
-      let count = if *amt != 0 { count % *amt } else { 0 };
-      cmds.push(AccountsCommand::Send(src, count, unit, dst));
+      let amt = unit_amounts.get_mut(&unit).unwrap();
+      match g.next_u32() % 10 {
+        0..=7 => {
+          let count = if *amt != 0 { count % *amt } else { 0 };
+          cmds.push(AccountsCommand::Send(src, count, unit, dst));
+        }
+        8..=9 => {
+          *amt += count;
+          cmds.push(AccountsCommand::Mint(count, unit));
+        }
+        _ => assert!(false),
+      }
     }
 
     AccountsScenario { confidential_amounts: bool::arbitrary(g),
@@ -801,82 +842,82 @@ mod test {
   #[test]
   fn regression_quickcheck_found() {
     use AccountsCommand::*;
-    ledger_simulates_accounts(AccountsScenario { cmds: vec![NewUser("".to_string()),
-                                                            NewUnit("".to_string(),
-                                                                    "".to_string()),
-                                                            Send("".to_string(),
+    ledger_simulates_accounts(AccountsScenario { cmds: vec![NewUser(UserName("".into())),
+                                                            NewUnit(UnitName("".into()),
+                                                                    UserName("".into())),
+                                                            Send(UserName("".into()),
                                                                  0,
-                                                                 "".to_string(),
-                                                                 "".to_string())],
+                                                                 UnitName("".into()),
+                                                                 UserName("".into()))],
                                                  confidential_types: false,
                                                  confidential_amounts: false });
-    ledger_simulates_accounts(AccountsScenario { cmds: vec![NewUser("".to_string()),
-                                                            NewUnit("".to_string(),
-                                                                    "".to_string()),
-                                                            Mint(1, "".to_string()),
-                                                            Send("".to_string(),
+    ledger_simulates_accounts(AccountsScenario { cmds: vec![NewUser(UserName("".into())),
+                                                            NewUnit(UnitName("".into()),
+                                                                    UserName("".into())),
+                                                            Mint(1, UnitName("".into())),
+                                                            Send(UserName("".into()),
                                                                  1,
-                                                                 "".to_string(),
-                                                                 "".to_string())],
+                                                                 UnitName("".into()),
+                                                                 UserName("".into()))],
                                                  confidential_types: false,
                                                  confidential_amounts: false });
-    ledger_simulates_accounts(AccountsScenario { cmds: vec![NewUser("".to_string()),
-                                                            NewUnit("".to_string(),
-                                                                    "".to_string()),
-                                                            Mint(1, "".to_string()),
-                                                            Send("".to_string(),
+    ledger_simulates_accounts(AccountsScenario { cmds: vec![NewUser(UserName("".into())),
+                                                            NewUnit(UnitName("".into()),
+                                                                    UserName("".into())),
+                                                            Mint(1, UnitName("".into())),
+                                                            Send(UserName("".into()),
                                                                  1,
-                                                                 "".to_string(),
-                                                                 "".to_string())],
+                                                                 UnitName("".into()),
+                                                                 UserName("".into()))],
                                                  confidential_types: false,
                                                  confidential_amounts: true });
 
     ledger_simulates_accounts(AccountsScenario { confidential_amounts: false,
                                                  confidential_types: false,
-                                                 cmds: vec![NewUser("".to_string()),
-                                                            NewUser("\u{0}".to_string()),
-                                                            NewUnit("".to_string(),
-                                                                    "\u{0}".to_string()),
-                                                            Mint(34, "".to_string()),
-                                                            Send("\u{0}".to_string(),
+                                                 cmds: vec![NewUser(UserName("".into())),
+                                                            NewUser(UserName("\u{0}".into())),
+                                                            NewUnit(UnitName("".into()),
+                                                                    UserName("\u{0}".into())),
+                                                            Mint(34, UnitName("".into())),
+                                                            Send(UserName("\u{0}".into()),
                                                                  1,
-                                                                 "".to_string(),
-                                                                 "".to_string()),
-                                                            Send("".to_string(),
+                                                                 UnitName("".into()),
+                                                                 UserName("".into())),
+                                                            Send(UserName("".into()),
                                                                  1,
-                                                                 "".to_string(),
-                                                                 "".to_string())] });
+                                                                 UnitName("".into()),
+                                                                 UserName("".into()))] });
 
     ledger_simulates_accounts(AccountsScenario { confidential_amounts: true,
                                                  confidential_types: false,
-                                                 cmds: vec![NewUser("".to_string()),
-                                                            NewUser("\u{0}".to_string()),
-                                                            NewUnit("".to_string(),
-                                                                    "\u{0}".to_string()),
-                                                            Mint(34, "".to_string()),
-                                                            Send("\u{0}".to_string(),
+                                                 cmds: vec![NewUser(UserName("".into())),
+                                                            NewUser(UserName("\u{0}".into())),
+                                                            NewUnit(UnitName("".into()),
+                                                                    UserName("\u{0}".into())),
+                                                            Mint(34, UnitName("".into())),
+                                                            Send(UserName("\u{0}".into()),
                                                                  1,
-                                                                 "".to_string(),
-                                                                 "".to_string()),
-                                                            Send("".to_string(),
+                                                                 UnitName("".into()),
+                                                                 UserName("".into())),
+                                                            Send(UserName("".into()),
                                                                  1,
-                                                                 "".to_string(),
-                                                                 "".to_string())] });
+                                                                 UnitName("".into()),
+                                                                 UserName("".into()))] });
 
     ledger_simulates_accounts(AccountsScenario { confidential_amounts: false,
                                                  confidential_types: false,
-                                                 cmds: vec![NewUser("".to_string()),
-                                                            NewUnit("".to_string(),
-                                                                    "".to_string()),
-                                                            Mint(32, "".to_string()),
-                                                            Send("".to_string(),
+                                                 cmds: vec![NewUser(UserName("".into())),
+                                                            NewUnit(UnitName("".into()),
+                                                                    UserName("".into())),
+                                                            Mint(32, UnitName("".into())),
+                                                            Send(UserName("".into()),
                                                                  1,
-                                                                 "".to_string(),
-                                                                 "".to_string()),
-                                                            Send("".to_string(),
+                                                                 UnitName("".into()),
+                                                                 UserName("".into())),
+                                                            Send(UserName("".into()),
                                                                  2,
-                                                                 "".to_string(),
-                                                                 "".to_string())] });
+                                                                 UnitName("".into()),
+                                                                 UserName("".into()))] });
   }
 
   #[test]
