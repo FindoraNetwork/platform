@@ -189,7 +189,7 @@ impl TransferAssetBody {
                                  input_keys: &[XfrKeyPair])
                                  -> Result<TransferAssetBody, errors::PlatformError> {
     let id_proofs = vec![];
-    if input_records.len() <= 0 {
+    if input_records.is_empty() {
         return Err(errors::PlatformError::InputsError);
     }
     let note = Box::new(gen_xfr_note(prng, input_records, output_records, input_keys, &id_proofs)?);
