@@ -10,7 +10,7 @@ use crate::utils::sha256;
 use crate::utils::sha256::Digest as BitDigest;
 use append_only_merkle::{AppendOnlyMerkle, Proof};
 use bitmap::BitMap;
-use findora::{timestamp, HasInvariants};
+use findora::HasInvariants;
 use logged_merkle::LoggedMerkle;
 use rand::SeedableRng;
 use rand::{CryptoRng, Rng};
