@@ -169,7 +169,7 @@ pub fn set_timestamp(f: fn() -> String) {
 
 /// Define the structure used to specify dynamic (runtime) changes
 /// to the logging flags.
-pub struct EnableFlags {
+pub struct LoggingEnableFlags {
   log: bool,
   error: bool,
   warning: bool,
@@ -184,7 +184,7 @@ pub struct EnableFlags {
 }
 
 /// Set the logging flags for a category at run time.
-pub fn set_logging(name: &str, flags: &EnableFlags) -> bool {
+pub fn set_logging(name: &str, flags: &LoggingEnableFlags) -> bool {
   unsafe {
     for entry in &mut TABLE {
       if entry.name == name {
@@ -224,14 +224,20 @@ pub fn set_logging(name: &str, flags: &EnableFlags) -> bool {
 // this routine.
 #[macro_export]
 macro_rules! log_impl {
-  ($level:ident, $category:ident, $($x:tt)+) => {
+  ($level:ident, $category:ident, $enable:ident, $($x:tt)+) => {
     {
       use findora::TIMESTAMP;
+      use findora::TABLE;
+      use findora::Categories;
 
-      println!("{}  {:10.10}  {:16.16}  {}",
-        TIMESTAMP(), stringify!($level),
-        TABLE[Categories::$category as usize].name,
-        format!($($x)+));
+      unsafe {
+        if TABLE[Categories::$category as usize].$enable() {
+          println!("{}  {:10.10}  {:16.16}  {}",
+            TIMESTAMP(), stringify!($level),
+            TABLE[Categories::$category as usize].name,
+            format!($($x)+));
+        }
+      }
     }
   }
 }
@@ -240,16 +246,7 @@ macro_rules! log_impl {
 #[macro_export]
 macro_rules! error {
     ($category:ident, $($x:tt)+) => {
-      {
-        use findora::TABLE;
-        use findora::Categories;
-
-        unsafe {
-          if TABLE[Categories::$category as usize].error_enabled() {
-            log_impl!(error, $category, $($x)+);
-          }
-        }
-      }
+      log_impl!(error, $category, error_enabled, $($x)+);
     }
 }
 
@@ -257,16 +254,7 @@ macro_rules! error {
 #[macro_export]
 macro_rules! debug {
     ($category:ident, $($x:tt)+) => {
-      {
-        use findora::TABLE;
-        use findora::Categories;
-
-        unsafe {
-          if TABLE[Categories::$category as usize].debug_enabled() {
-            log_impl!(debug, $category, $($x)+);
-          }
-        }
-      }
+      log_impl!(error, $category, debug_enabled, $($x)+);
     }
 }
 
@@ -274,16 +262,7 @@ macro_rules! debug {
 #[macro_export]
 macro_rules! warning {
     ($category:ident, $($x:tt)+) => {
-      {
-        use findora::TABLE;
-        use findora::Categories;
-
-        unsafe {
-          if TABLE[Categories::$category as usize].warning_enabled() {
-            log_impl!(warning, $category, $($x)+);
-          }
-        }
-      }
+      log_impl!(error, $category, warning_enabled, $($x)+);
     }
 }
 
@@ -291,16 +270,7 @@ macro_rules! warning {
 #[macro_export]
 macro_rules! info {
     ($category:ident, $($x:tt)+) => {
-      {
-        use findora::TABLE;
-        use findora::Categories;
-
-        unsafe {
-          if TABLE[Categories::$category as usize].info_enabled() {
-            log_impl!(info, $category, $($x)+);
-          }
-        }
-      }
+      log_impl!(error, $category, info_enabled, $($x)+);
     }
 }
 
@@ -308,16 +278,7 @@ macro_rules! info {
 #[macro_export]
 macro_rules! log {
     ($category:ident, $($x:tt)+) => {
-      {
-        use findora::TABLE;
-        use findora::Categories;
-
-        unsafe {
-          if TABLE[Categories::$category as usize].log_enabled() {
-            log_impl!(log, $category, $($x)+);
-          }
-        }
-      }
+      log_impl!(error, $category, log_enabled, $($x)+);
     }
 }
 
@@ -586,45 +547,45 @@ mod tests {
 
   #[test]
   fn test_basic_logging() {
-    let flags = EnableFlags { log: false,
-                              error: false,
-                              warning: false,
-                              debug: false,
-                              info: false,
-                              modify_log: true,
-                              modify_error: true,
-                              modify_warning: true,
-                              modify_debug: true,
-                              modify_info: true };
+    let flags = LoggingEnableFlags { log: false,
+                                     error: false,
+                                     warning: false,
+                                     debug: false,
+                                     info: false,
+                                     modify_log: true,
+                                     modify_error: true,
+                                     modify_warning: true,
+                                     modify_debug: true,
+                                     modify_info: true };
 
     assert!(set_logging("test", &flags));
     check("test", &flags);
 
-    let flags = EnableFlags { log: true,
-                              error: true,
-                              warning: true,
-                              debug: true,
-                              info: true,
-                              modify_log: true,
-                              modify_error: true,
-                              modify_warning: true,
-                              modify_debug: true,
-                              modify_info: true };
+    let flags = LoggingEnableFlags { log: true,
+                                     error: true,
+                                     warning: true,
+                                     debug: true,
+                                     info: true,
+                                     modify_log: true,
+                                     modify_error: true,
+                                     modify_warning: true,
+                                     modify_debug: true,
+                                     modify_info: true };
 
     assert!(set_logging("test", &flags));
     check("test", &flags);
 
     // Try an arbitrary set of flags.
-    let mut flags = EnableFlags { log: false,
-                                  error: true,
-                                  warning: false,
-                                  debug: true,
-                                  info: false,
-                                  modify_log: true,
-                                  modify_error: true,
-                                  modify_warning: true,
-                                  modify_debug: true,
-                                  modify_info: true };
+    let mut flags = LoggingEnableFlags { log: false,
+                                         error: true,
+                                         warning: false,
+                                         debug: true,
+                                         info: false,
+                                         modify_log: true,
+                                         modify_error: true,
+                                         modify_warning: true,
+                                         modify_debug: true,
+                                         modify_info: true };
 
     assert!(set_logging("test", &flags));
     check("test", &flags);
@@ -694,7 +655,7 @@ mod tests {
     assert!(!set_logging("no-test", &flags));
   }
 
-  fn check(name: &str, flags: &EnableFlags) {
+  fn check(name: &str, flags: &LoggingEnableFlags) {
     unsafe {
       for entry in &mut TABLE {
         if entry.name == name {
