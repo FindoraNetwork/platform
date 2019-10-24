@@ -4,7 +4,6 @@ use crate::utils::sha256;
 use base64::decode as b64dec;
 use base64::encode as b64enc;
 use chrono::prelude::*;
-use curve25519_dalek::ristretto::CompressedRistretto;
 use rand::rngs::SmallRng;
 use rand::{CryptoRng, FromEntropy, Rng};
 use std::boxed::Box;

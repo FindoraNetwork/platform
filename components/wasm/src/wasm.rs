@@ -2,6 +2,7 @@
 // Allows web clients to issue transactions from a browser contexts.
 // For now, forwards transactions to a ledger hosted locally.
 // To compile wasm package, run wasm-pack build in the wasm directory
+#![deny(warnings)]
 extern crate ledger;
 extern crate serde;
 extern crate zei;
@@ -9,9 +10,7 @@ use percent_encoding::{utf8_percent_encode, AsciiSet, CONTROLS};
 use txn_builder::{BuildsTransactions, TransactionBuilder};
 
 use js_sys::Promise;
-use ledger::data_model::{
-  AccountAddress, AssetTypeCode, IssuerPublicKey, TxOutput, TxoRef, TxoSID, Utxo,
-};
+use ledger::data_model::*;
 
 use rand::SeedableRng;
 use rand_chacha::ChaChaRng;
@@ -222,20 +221,17 @@ fn create_query_promise(opts: &RequestInit, req_string: &str) -> Promise {
 #[cfg(test)]
 mod tests {
   use super::*;
-  use ledger::data_model::TxoSID;
-  use ledger::store::{LedgerAccess, LedgerState, LedgerUpdate};
-  use txn_builder::{BuildsTransactions, TransactionBuilder};
 
   // Test to ensure that define transaction is being constructed correctly
   #[test]
   fn test_wasm_define_transaction() {
     let key_pair = KeyPair::new();
-    create_asset(key_pair, String::from("abcd"), true, true);
+    create_asset(key_pair, String::from("abcd"), true, true).unwrap();
   }
   #[test]
   // Test to ensure that issue transaction is being constructed correctly
   fn test_wasm_issue_transaction() {
     let key_pair = KeyPair::new();
-    issue_asset(key_pair, String::from("abcd"), 1, 5);
+    issue_asset(key_pair, String::from("abcd"), 1, 5).unwrap();
   }
 }
