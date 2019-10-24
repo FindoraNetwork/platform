@@ -25,7 +25,6 @@
 
 use crate::utils::sha256;
 use crate::utils::sha256::{Digest, DIGESTBYTES};
-use findora::timestamp;
 use findora::Commas;
 use std::cmp::min;
 use std::collections::HashMap;
@@ -365,6 +364,9 @@ impl BlockHeader {
 const BLOCK_SIZE: usize = 32 * 1024;
 const BITS_SIZE: usize = BLOCK_SIZE - HEADER_SIZE;
 const BLOCK_BITS: usize = BITS_SIZE * 8;
+
+/// Export the number of bits per block to the user.
+pub const BITMAP_BLOCK_SIZE: usize = BLOCK_BITS;
 
 // Define the tradeoff points for switching between compression
 // modes.  The bits are stored as a full bit map, or a list of

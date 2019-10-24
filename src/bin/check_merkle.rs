@@ -28,7 +28,6 @@ extern crate ledger;
 #[macro_use]
 extern crate findora;
 
-use findora::timestamp;
 use ledger::store::append_only_merkle::AppendOnlyMerkle;
 use std::env;
 use std::path::Path;
