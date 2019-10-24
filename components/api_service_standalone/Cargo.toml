@@ -1,11 +1,9 @@
 [package]
-name = "api_service"
+name = "api_service_standalone"
 version = "0.1.0"
-authors = ["Nathan Yospe <nathan@eian.io>"]
-edition = "2018"
 
 [lib]
-path = "src/api_service.rs"
+path = "src/api_service_standalone.rs"
 
 [dependencies]
 actix-rt = "0.2"
