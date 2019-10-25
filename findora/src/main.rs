@@ -56,7 +56,8 @@ fn log_command(stream: &mut TcpStream, category: &str, flags_str: &str) {
     return;
   }
 
-  // Now read the result.
+  // Now read the result.  The server returns a one-byte result
+  // indicating whether an error occurred.  A 0 implies success.
   let mut buffer = [0_u8; 1];
   let result = stream.read(&mut buffer[..]);
 
@@ -107,6 +108,15 @@ fn decode(value: u8) -> (bool, bool) {
 fn flags_usage() {
   println!("The flags must be 5 characters long.  Each");
   println!("character should be \"t\", \"f\", or \"x\".");
+  println!("An \"x\" indicates that the value should not");
+  println!("be changed.");
+  println!("The flags are:");
+  println!("  log");
+  println!("  error");
+  println!("  warning");
+  println!("  debug");
+  println!("  info");
+  println!("in that order.");
 }
 
 #[cfg(test)]
@@ -153,6 +163,8 @@ mod tests {
 
     write_packet(&mut stream, &command).unwrap();
 
+    // Read the result return from the command.  It should
+    // be zero, indicating success.
     let mut buffer = [0_u8; 1];
     let result = stream.read(&mut buffer[..]).unwrap();
 

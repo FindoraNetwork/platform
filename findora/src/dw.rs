@@ -5,9 +5,7 @@ use byteorder::LittleEndian;
 use byteorder::ReadBytesExt;
 use byteorder::WriteBytesExt;
 use serde_derive::Deserialize;
-// use serde::Deserializer;
 use serde_derive::Serialize;
-// use serde::Serializer;
 use std::io::Error;
 use std::io::ErrorKind;
 use std::io::Read;
@@ -237,10 +235,38 @@ pub mod tests {
     let command = Command { contents: Contents::LoggingFlags(flags) };
     write_packet(&mut stream, &command).unwrap();
 
+    // Read the one-byte response from the server side.  A
+    // value of zero implies success, and that's what this
+    // test should get.
     let mut buffer: [u8; 1] = [0_u8; 1];
-
     let count = stream.read(&mut buffer[..]).unwrap();
+
     assert!(count == buffer.len());
     assert!(buffer[0] == 0);
+
+    // Try an invalid category name.
+
+    let flags = LoggingEnableFlags { name: "no-test".to_owned(),
+                                     log: true,
+                                     error: true,
+                                     warning: true,
+                                     debug: true,
+                                     info: true,
+                                     modify_log: true,
+                                     modify_error: true,
+                                     modify_warning: true,
+                                     modify_debug: true,
+                                     modify_info: true };
+
+    let command = Command { contents: Contents::LoggingFlags(flags) };
+    write_packet(&mut stream, &command).unwrap();
+
+    // Okay, read the response.  It should indicate failure, which
+    // means it should not be zero.
+    let mut buffer: [u8; 1] = [0_u8; 1];
+    let count = stream.read(&mut buffer[..]).unwrap();
+
+    assert!(count == buffer.len());
+    assert!(buffer[0] != 0);
   }
 }
