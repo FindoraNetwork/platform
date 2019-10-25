@@ -86,9 +86,6 @@ impl<RNG, LU> LedgerApp<RNG, LU>
 
         return Ok(());
       }
-
-      // If any of the above steps fails, abort the block
-      self.abort_block();
     }
 
     Err(PlatformError::InputsError)
