@@ -1,6 +1,12 @@
 sig PublicKey {}
 sig PrivateKey {}
-sig AssetCode {}
+abstract sig AssetCode {}
+sig GenericAsset extends AssetCode {}
+sig Loan extends AssetCode {}
+fact { lone Loan }
+sig Fiat extends AssetCode {}
+fact { lone Fiat }
+
 sig Asset { assetType: AssetCode }
 
 sig Txo {
@@ -26,10 +32,20 @@ fact OnlyOneRoot { lone o: Operation | no o.prevOp }
 fact NoCycles    { no o: Operation | some (o.^prevOp & o) }
 fact SignEveryOp { no o: Operation | no o.signedBy }
 
+
 sig Transaction {
   first: Operation,
-  last:  Operation
+  last:  Operation,
+  prevTxn: lone Transaction
 }
+
+fact TxnHistory {
+  all t: Transaction | no t.prevTxn => no t.first.prevOp
+  all t: Transaction | no t.first.prevOp => no t.prevTxn
+  all t: Transaction | some t.prevTxn => t.prevTxn.last = t.first.prevOp
+}
+
+fun txnOps(t: Transaction): set Operation {t.last.*prevOp - t.first.^prevOp}
 
 fact TxnsAreChains {
   all t: Transaction | t.first in t.last.*prevOp
@@ -37,20 +53,35 @@ fact TxnsAreChains {
 
 fact TxnsDisjoint {
   all t1: Transaction | all t2: Transaction | (
-    t1 != t2 => no (t1.last.*prevOp & t2.last.*prevOp)
+    t1 != t2 => no (t1.txnOps & t2.txnOps)
   )
 }
 
-//pred isLoan[t: Transaction, loanType: AssetType, fiatType: AssetType]
-//{
-//  loanType != fiatType
-//  #(t.last.*prevOp) = 2
-//  one trn1: TransferAsset | one trn2: TransferAsset | (
-//    trn1 != trn2 and
-//    one trn
-//  )
-//}
+fact { #Asset < 4 }
 
+fact AllOpsAreInTransactions {
+  all o: Operation | some txn: Transaction | o in txn.txnOps
+}
+
+pred isLoan[lender: KeyPair, borrower: KeyPair, t: Transaction, loanType: Loan, fiatType: Fiat, theLoan: Asset, theMoney: set Asset]
+{
+  #(t.txnOps) = 2
+  lender != borrower
+  one trn1: TransferAsset | one trn2: TransferAsset | (
+    trn1.inputs.assets = theLoan and
+    trn2.inputs.assets = theMoney and
+    trn1 in trn2.^prevOp and
+    (trn1 in t.txnOps) and (trn2 in t.txnOps) and
+    (all a: trn1.inputs.assets | a.assetType = loanType) and
+    (all a: trn2.inputs.assets | a.assetType = fiatType) and
+    trn1.trnRecipients = (trn1.trnOutputs -> lender.pubkey) and
+    trn2.trnRecipients = (trn2.trnOutputs -> borrower.pubkey) and
+    txoOwnedBy[borrower.privkey,trn1.inputs,trn1.prevOp] and
+    txoOwnedBy[lender.privkey,trn2.inputs,trn1.prevOp]
+  )
+}
+
+run isLoan for 7
 
 sig DefineAsset extends Operation {
 	newCode: disj AssetCode,
@@ -92,7 +123,8 @@ fact OnlyIssuePermittedAssets {
 		isKeyPair[cr.issuer,privk] and
 		cr.newCode = iss.issCode and
 		privk in iss.signedBy and
-		(all txo: iss.outputs | all a: txo.assets | a.assetType = iss.issCode)
+		(all txo: iss.outputs | all a: txo.assets | a.assetType = iss.issCode) and
+               (iss.issOutputs -> cr.issuer) = iss.issRecipients
 	)
 }
 fact IssueSomething {
