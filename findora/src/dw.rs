@@ -25,6 +25,7 @@ pub fn start_socket(address: String) -> Result<(), Error> {
 }
 
 fn run_debug_window(socket: TcpListener) {
+  println!("run_debug_window:  active");
   let mut errors = 0;
 
   for incoming in socket.incoming() {
@@ -59,6 +60,12 @@ pub struct Command {
 }
 
 fn run_client(mut stream: TcpStream) {
+  println!("run_client:  active");
+  if let Err(e) = stream.set_nonblocking(false) {
+    println!("run_client:  nonblocking failed:  {}", e);
+    return;
+  }
+
   loop {
     let pass = match read_packet(&mut stream) {
       Ok(packet) => process_packet(packet),
@@ -91,13 +98,15 @@ fn read_packet(stream: &mut TcpStream) -> Result<Command, Error> {
 
   let mut slice = &buffer[0..];
   let size = slice.read_u32::<LittleEndian>()?;
-  let mut buffer = Vec::with_capacity(size as usize);
+  let mut buffer = vec![0; size as usize];
+  // println!("read_packet:  got {} for the size", size);
 
   i = 0;
 
   while i < size as usize {
     let count = stream.read(&mut buffer[i..])?;
     i += count;
+    // println!("read_packet:  got {} bytes for {} total", count, i);
   }
 
   let result: Command = match deserialize(&buffer[..]) {
@@ -107,12 +116,93 @@ fn read_packet(stream: &mut TcpStream) -> Result<Command, Error> {
     }
   };
 
+  // println!("read_packet:  got a packet");
   Ok(result)
 }
 
 fn process_packet(packet: Command) -> bool {
   match packet.contents {
-    Contents::Nop => true,
-    Contents::LoggingFlags(flags) => crate::set_logging(&flags),
+    Contents::Nop => {
+      // println!("process_packet:  nop");
+      true
+    }
+    Contents::LoggingFlags(flags) => {
+      let pass = crate::set_logging(&flags);
+      println!("process_packet:  set_logging -> {}", pass);
+      pass
+    }
+  }
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+  use crate::LoggingEnableFlags;
+  use byteorder::WriteBytesExt;
+  use std::net::TcpStream;
+
+  #[test]
+  fn test_socket() {
+    let mut i = 8192;
+    let mut address;
+
+    let found = loop {
+      address = "localhost:".to_owned() + &i.to_string();
+
+      match start_socket(address.clone()) {
+        Ok(()) => {
+          break true;
+        }
+        Err(_e) => {}
+      }
+
+      i += 1;
+
+      if i > 16000 {
+        break false;
+      }
+    };
+
+    assert!(found);
+    println!("The debug socket is {}", &address);
+
+    let result = TcpStream::connect(address);
+
+    if let Err(e) = result {
+      panic!("connect failed:  {}", e);
+    }
+
+    let mut stream = result.unwrap();
+    stream.set_nonblocking(false).unwrap();
+
+    let flags = LoggingEnableFlags { name: "test".to_owned(),
+                                     log: true,
+                                     error: true,
+                                     warning: true,
+                                     debug: true,
+                                     info: true,
+                                     modify_log: true,
+                                     modify_error: true,
+                                     modify_warning: true,
+                                     modify_debug: true,
+                                     modify_info: true };
+
+    let command = Command { contents: Contents::LoggingFlags(flags) };
+    let command = bincode::serialize(&command).unwrap();
+
+    let mut size = vec![];
+    size.write_u32::<LittleEndian>(command.len() as u32)
+        .unwrap();
+
+    let count = stream.write(&size[..]).unwrap();
+    assert!(count == 4);
+
+    let count = stream.write(&command[..]).unwrap();
+    assert!(count == command.len());
+
+    let mut buffer: [u8; 1] = [0_u8; 1];
+
+    let count = stream.read(&mut buffer[..]).unwrap();
+    assert!(count == buffer.len());
   }
 }
