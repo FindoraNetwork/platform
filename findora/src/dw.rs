@@ -3,6 +3,7 @@ use crate::LoggingEnableFlags;
 use bincode::deserialize;
 use byteorder::LittleEndian;
 use byteorder::ReadBytesExt;
+use byteorder::WriteBytesExt;
 use serde_derive::Deserialize;
 // use serde::Deserializer;
 use serde_derive::Serialize;
@@ -89,25 +90,13 @@ fn run_client(mut stream: TcpStream) {
 
 fn read_packet(stream: &mut TcpStream) -> Result<Command, Error> {
   let mut buffer: [u8; 4] = [0, 0, 0, 0];
-  let mut i = 0;
-
-  while i < buffer.len() {
-    let count = stream.read(&mut buffer[i..])?;
-    i += count;
-  }
+  read_all(stream, &mut buffer[..])?;
 
   let mut slice = &buffer[0..];
   let size = slice.read_u32::<LittleEndian>()?;
   let mut buffer = vec![0; size as usize];
   // println!("read_packet:  got {} for the size", size);
-
-  i = 0;
-
-  while i < size as usize {
-    let count = stream.read(&mut buffer[i..])?;
-    i += count;
-    // println!("read_packet:  got {} bytes for {} total", count, i);
-  }
+  read_all(stream, &mut buffer)?;
 
   let result: Command = match deserialize(&buffer[..]) {
     Ok(command) => command,
@@ -118,6 +107,18 @@ fn read_packet(stream: &mut TcpStream) -> Result<Command, Error> {
 
   // println!("read_packet:  got a packet");
   Ok(result)
+}
+
+fn read_all(stream: &mut TcpStream, slice: &mut [u8]) -> Result<(), Error> {
+  let total = slice.len();
+  let mut i = 0;
+
+  while i < total {
+    let count = stream.read(&mut slice[i..])?;
+    i += count;
+  }
+
+  Ok(())
 }
 
 fn process_packet(packet: Command) -> bool {
@@ -134,11 +135,34 @@ fn process_packet(packet: Command) -> bool {
   }
 }
 
+pub fn write_packet(stream: &mut TcpStream, command: &Command) -> Result<(), Error> {
+  let command = bincode::serialize(&command).unwrap();
+
+  let mut size = vec![];
+  size.write_u32::<LittleEndian>(command.len() as u32)
+      .unwrap();
+
+  write_all(stream, &size[..])?;
+  write_all(stream, &command[..])?;
+  Ok(())
+}
+
+fn write_all(stream: &mut TcpStream, slice: &[u8]) -> Result<(), Error> {
+  let total = slice.len();
+  let mut i = 0;
+
+  while i < total {
+    let count = stream.write(&slice[i..])?;
+    i += count;
+  }
+
+  Ok(())
+}
+
 #[cfg(test)]
 mod tests {
   use super::*;
   use crate::LoggingEnableFlags;
-  use byteorder::WriteBytesExt;
   use std::net::TcpStream;
 
   #[test]
@@ -188,21 +212,12 @@ mod tests {
                                      modify_info: true };
 
     let command = Command { contents: Contents::LoggingFlags(flags) };
-    let command = bincode::serialize(&command).unwrap();
-
-    let mut size = vec![];
-    size.write_u32::<LittleEndian>(command.len() as u32)
-        .unwrap();
-
-    let count = stream.write(&size[..]).unwrap();
-    assert!(count == 4);
-
-    let count = stream.write(&command[..]).unwrap();
-    assert!(count == command.len());
+    write_packet(&mut stream, &command).unwrap();
 
     let mut buffer: [u8; 1] = [0_u8; 1];
 
     let count = stream.read(&mut buffer[..]).unwrap();
     assert!(count == buffer.len());
+    assert!(buffer[0] == 0);
   }
 }
