@@ -178,19 +178,19 @@ pub fn set_timestamp(f: fn() -> String) {
 /// to the logging flags.
 #[derive(Serialize, Deserialize)]
 pub struct LoggingEnableFlags {
-  name: String,
+  pub name: String,
 
-  log: bool,
-  error: bool,
-  warning: bool,
-  debug: bool,
-  info: bool,
+  pub log: bool,
+  pub error: bool,
+  pub warning: bool,
+  pub debug: bool,
+  pub info: bool,
 
-  modify_log: bool,
-  modify_error: bool,
-  modify_warning: bool,
-  modify_debug: bool,
-  modify_info: bool,
+  pub modify_log: bool,
+  pub modify_error: bool,
+  pub modify_warning: bool,
+  pub modify_debug: bool,
+  pub modify_info: bool,
 }
 
 /// Set the logging flags for a category at run time.

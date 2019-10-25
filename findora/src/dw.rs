@@ -63,7 +63,7 @@ pub enum Contents {
 
 #[derive(Serialize, Deserialize)]
 pub struct Command {
-  contents: Contents,
+  pub contents: Contents,
 }
 
 // Run a single connection to the ledger process.
@@ -179,44 +179,47 @@ fn write_all(stream: &mut TcpStream, slice: &[u8]) -> Result<(), Error> {
   Ok(())
 }
 
+pub fn get_test_socket() -> TcpStream {
+  let mut i = 8192;
+  let mut address;
+
+  let found = loop {
+    address = "localhost:".to_owned() + &i.to_string();
+
+    match start_socket(address.clone()) {
+      Ok(()) => {
+        break true;
+      }
+      Err(_e) => {}
+    }
+
+    i += 1;
+
+    if i > 16000 {
+      break false;
+    }
+  };
+
+  assert!(found);
+  println!("The debug socket is {}", &address);
+
+  let result = TcpStream::connect(address);
+
+  if let Err(e) = result {
+    panic!("connect failed:  {}", e);
+  }
+
+  result.unwrap()
+}
+
 #[cfg(test)]
-mod tests {
+pub mod tests {
   use super::*;
   use crate::LoggingEnableFlags;
-  use std::net::TcpStream;
 
   #[test]
   fn test_socket() {
-    let mut i = 8192;
-    let mut address;
-
-    let found = loop {
-      address = "localhost:".to_owned() + &i.to_string();
-
-      match start_socket(address.clone()) {
-        Ok(()) => {
-          break true;
-        }
-        Err(_e) => {}
-      }
-
-      i += 1;
-
-      if i > 16000 {
-        break false;
-      }
-    };
-
-    assert!(found);
-    println!("The debug socket is {}", &address);
-
-    let result = TcpStream::connect(address);
-
-    if let Err(e) = result {
-      panic!("connect failed:  {}", e);
-    }
-
-    let mut stream = result.unwrap();
+    let mut stream = get_test_socket();
     stream.set_nonblocking(false).unwrap();
 
     let flags = LoggingEnableFlags { name: "test".to_owned(),
