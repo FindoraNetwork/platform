@@ -17,6 +17,7 @@ use std::net::TcpListener;
 use std::net::TcpStream;
 use std::thread::spawn;
 
+/// Start a thread to manage a socket for debug window requests.
 pub fn start_socket(address: String) -> Result<(), Error> {
   let socket = TcpListener::bind(&address)?;
   spawn(move || {
@@ -25,13 +26,17 @@ pub fn start_socket(address: String) -> Result<(), Error> {
   Ok(())
 }
 
+// Run a given server socket.  Multiple simultaneous connections
+// are allowed.
 fn run_debug_window(socket: TcpListener) {
   println!("run_debug_window:  active");
   let mut errors = 0;
 
+  // Wait for incoming connections.
   for incoming in socket.incoming() {
     match incoming {
       Ok(stream) => {
+        // Spawn another thread to handle this new socket.
         spawn(move || {
           run_client(stream);
         });
@@ -42,6 +47,7 @@ fn run_debug_window(socket: TcpListener) {
       }
     }
 
+    // Quit if the error rate seems too high.
     if errors > 10 {
       /* log!(DebugWindow, "incoming() failed too many times."); */
       break;
@@ -60,6 +66,7 @@ pub struct Command {
   contents: Contents,
 }
 
+// Run a single connection to the ledger process.
 fn run_client(mut stream: TcpStream) {
   println!("run_client:  active");
   if let Err(e) = stream.set_nonblocking(false) {
@@ -67,6 +74,7 @@ fn run_client(mut stream: TcpStream) {
     return;
   }
 
+  // Loop reading and processing commands.
   loop {
     let pass = match read_packet(&mut stream) {
       Ok(packet) => process_packet(packet),
@@ -76,6 +84,8 @@ fn run_client(mut stream: TcpStream) {
       }
     };
 
+    // Write a one-byte response indicating whether or
+    // not the command encountered an error.
     let buffer = if pass { [0_u8; 1] } else { [1_u8; 1] };
 
     let result = stream.write(&buffer);
@@ -88,10 +98,15 @@ fn run_client(mut stream: TcpStream) {
   let _ = stream.shutdown(Shutdown::Both);
 }
 
+// Read a single packet from the socket.  The packet proper is
+// preceded by a 4-byte length.  This routine returns a
+// deserialized Command structure if it is successful.
 fn read_packet(stream: &mut TcpStream) -> Result<Command, Error> {
+  // Read the length.
   let mut buffer: [u8; 4] = [0, 0, 0, 0];
   read_all(stream, &mut buffer[..])?;
 
+  // Read the command packet proper.
   let mut slice = &buffer[0..];
   let size = slice.read_u32::<LittleEndian>()?;
   let mut buffer = vec![0; size as usize];
@@ -109,6 +124,8 @@ fn read_packet(stream: &mut TcpStream) -> Result<Command, Error> {
   Ok(result)
 }
 
+// Read a full buffer.  Whether stream.read will block until all the bytes
+// are present is unclear.
 fn read_all(stream: &mut TcpStream, slice: &mut [u8]) -> Result<(), Error> {
   let total = slice.len();
   let mut i = 0;
@@ -121,6 +138,7 @@ fn read_all(stream: &mut TcpStream, slice: &mut [u8]) -> Result<(), Error> {
   Ok(())
 }
 
+// Process a packet.
 fn process_packet(packet: Command) -> bool {
   match packet.contents {
     Contents::Nop => {
@@ -147,6 +165,8 @@ pub fn write_packet(stream: &mut TcpStream, command: &Command) -> Result<(), Err
   Ok(())
 }
 
+// Write all the bytes in a given slice.  Whether stream.write
+// waits until all the bytes can be queued is unclear.
 fn write_all(stream: &mut TcpStream, slice: &[u8]) -> Result<(), Error> {
   let total = slice.len();
   let mut i = 0;
