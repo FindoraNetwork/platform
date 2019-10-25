@@ -1,14 +1,16 @@
 [package]
-name = "api_service"
+name = "account_simulator"
 version = "0.1.0"
 authors = ["Nathan Yospe <nathan@eian.io>"]
 edition = "2018"
 
 [lib]
-path = "src/api_service.rs"
+path = "src/account_simulator.rs"
 
 [dependencies]
 ledger = { path = "../../ledger" }
+findora = { path = "../../findora" }
+zei = { git = "ssh://git@github.com/findoraorg/zei" }
 actix-web = "1.0.8"
 actix-service = "0.4.2"
 actix-rt = "0.2"
