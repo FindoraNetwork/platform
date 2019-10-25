@@ -35,7 +35,8 @@ fn main() {
 }
 
 fn usage(arguments: &[String]) {
-  println!("{} <host:port> log <category> <flags>", arguments[0]);
+  println!("Usage:");
+  println!("    {} <host:port> log <category> <flags>", arguments[0]);
 }
 
 fn log_command(stream: &mut TcpStream, category: &str, flags_str: &str) {
