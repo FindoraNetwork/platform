@@ -54,7 +54,7 @@ pub trait LedgerUpdate<RNG: Rng + CryptoRng> {
   // Each Block represents a collection of transactions which have been
   // validated and confirmed to be unconditionally consistent with the
   // ledger and with each other.
-  type Block;
+  type Block: Sync + Send;
 
   fn get_prng(&mut self) -> &mut RNG;
 
