@@ -75,6 +75,7 @@ fn rename_unit(old: &UnitName, new: &UnitName, ac: AccountsCommand) -> AccountsC
                                          count,
                                          if unit == *old { new.clone() } else { unit },
                                          dest),
+    // Ignore NewUnit(..), since re-declaring a unit should be invalid.
     _ => ac,
   }
 }
