@@ -60,21 +60,20 @@ pub struct Command {
 
 fn run_client(mut stream: TcpStream) {
   loop {
-    match read_packet(&mut stream) {
-      Ok(packet) => {
-        let pass = process_packet(packet);
-
-        let buffer = if pass { [0_u8; 1] } else { [1_u8; 1] };
-
-        let result = stream.write(&buffer);
-
-        if let Err(_e) = result {
-          break;
-        }
-      }
+    let pass = match read_packet(&mut stream) {
+      Ok(packet) => process_packet(packet),
       Err(_e) => {
+        println!("run_client:  The stream failed.");
         break;
       }
+    };
+
+    let buffer = if pass { [0_u8; 1] } else { [1_u8; 1] };
+
+    let result = stream.write(&buffer);
+
+    if let Err(_e) = result {
+      break;
     }
   }
 
