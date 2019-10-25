@@ -69,6 +69,8 @@ impl TxnEffect {
         //         - Partially checked here
         Operation::DefineAsset(def) => {
           // (1)
+          // TODO(joe?): like the note in data_model, should the public key
+          // used here match `def.body.asset.issuer`?
           def.pubkey
              .key
              .verify(&serde_json::to_vec(&def.body).unwrap(), &def.signature)?;

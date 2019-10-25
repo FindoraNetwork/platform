@@ -10,7 +10,7 @@ use crate::utils::sha256;
 use crate::utils::sha256::Digest as BitDigest;
 use append_only_merkle::{AppendOnlyMerkle, Proof};
 use bitmap::BitMap;
-use findora::{timestamp, HasInvariants};
+use findora::HasInvariants;
 use logged_merkle::LoggedMerkle;
 use rand::SeedableRng;
 use rand::{CryptoRng, Rng};
@@ -860,21 +860,12 @@ impl ArchiveAccess for LedgerState {
 pub mod helpers {
   use super::*;
   use crate::data_model::{Asset, ConfidentialMemo, DefineAssetBody, IssuerPublicKey, Memo};
-  use zei::basic_crypto::signatures::{XfrKeyPair, XfrPublicKey, XfrSecretKey, XfrSignature};
+  use zei::basic_crypto::signatures::{XfrKeyPair, XfrPublicKey, XfrSecretKey};
 
   pub fn build_keys<R: CryptoRng + Rng>(prng: &mut R) -> (XfrPublicKey, XfrSecretKey) {
     let keypair = XfrKeyPair::generate(prng);
 
     (*keypair.get_pk_ref(), keypair.get_sk())
-  }
-
-  pub fn compute_signature<T>(secret_key: &XfrSecretKey,
-                              public_key: &XfrPublicKey,
-                              asset_body: &T)
-                              -> XfrSignature
-    where T: serde::Serialize
-  {
-    secret_key.sign(&serde_json::to_vec(&asset_body).unwrap(), &public_key)
   }
 
   pub fn asset_creation_body(token_code: &AssetTypeCode,

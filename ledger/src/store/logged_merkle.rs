@@ -26,6 +26,7 @@
 use super::append_only_merkle::{AppendOnlyMerkle, HashValue, Proof};
 
 use crate::utils::sha256;
+use findora::Commas;
 use serde::Deserialize;
 use serde::Deserializer;
 use serde::Serialize;
@@ -43,9 +44,6 @@ use std::io::Write;
 use std::mem::MaybeUninit;
 use std::slice::from_raw_parts;
 use std::slice::from_raw_parts_mut;
-
-use findora::timestamp;
-use findora::Commas;
 
 const BUFFER_SIZE: usize = 32 * 1024;
 const CHECK_SIZE: usize = 16;
