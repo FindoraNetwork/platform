@@ -94,11 +94,14 @@ fn create_enable_flags(name: &str, flags: &[u8]) -> LoggingEnableFlags {
 
 // Decode a single flag character into an modifier flag and
 // a value.
+//   t  set the flag to true
+//   f  set the flag to false
+//   x  leave the flag unchanged
 fn decode(value: u8) -> (bool, bool) {
   match value as char {
     't' => (true, true),
     'f' => (true, false),
-    'x' => (false, false),
+    'x' => (false, false), // The second value is ignored by the server
     _ => {
       flags_usage();
       exit(0);
