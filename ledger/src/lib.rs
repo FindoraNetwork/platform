@@ -1,6 +1,5 @@
 #![deny(warnings)]
 extern crate serde;
-#[macro_use]
 extern crate serde_derive;
 extern crate arrayref;
 extern crate base64;
