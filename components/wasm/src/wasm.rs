@@ -57,83 +57,8 @@ fn split_key_pair(key_pair: &KeyPair) -> Result<(XfrPublicKey, XfrSecretKey), se
   Ok((public_key, secret_key))
 }
 
-// Defines an asset on the ledger using the serialized strings in KeyPair and a couple of boolean policies
-#[wasm_bindgen]
-pub fn create_asset(key_pair: KeyPair,
-                    token_code: String,
-                    updatable: bool,
-                    traceable: bool)
-                    -> Result<String, JsValue> {
-  match split_key_pair(&key_pair) {
-    Ok((public_key, secret_key)) => {
-      let asset_token = AssetTypeCode::new_from_base64(&token_code).unwrap();
-      let mut txn_builder = TransactionBuilder::default();
-      if let Ok(_) = txn_builder.add_operation_create_asset(&IssuerPublicKey { key: public_key },
-                                                            &secret_key,
-                                                            Some(asset_token),
-                                                            updatable,
-                                                            traceable,
-                                                            &String::from("{}"),
-                                                            true) {
-        Ok(txn_builder.serialize_str().unwrap())
-      } else {
-        Err(JsValue::from_str("Could not add operation create_asset to transaction"))
-      }
-    },
-    _ => Err(JsValue::from_str("Could not deserialize key pair"))
-  }
-}
-
-#[wasm_bindgen]
-pub fn issue_asset(key_pair: KeyPair,
-                   token_code: String,
-                   seq_num: u64,
-                   amount: u64)
-                   -> Result<String, JsValue> {
-  match split_key_pair(&key_pair) {
-    Ok((public_key, secret_key)) => {
-      let asset_token = AssetTypeCode::new_from_base64(&token_code).unwrap();
-
-      let mut txn_builder = TransactionBuilder::default();
-      match txn_builder.add_basic_issue_asset(&IssuerPublicKey { key: public_key },
-                                              &secret_key,
-                                              &asset_token,
-                                              seq_num,
-                                              amount) {
-        Ok(_) => return Ok(txn_builder.serialize_str().unwrap()),
-        Err(_) => return Err(JsValue::from_str("Could not build transaction")),
-      }
-    },
-    _ => Err(JsValue::from_str("Could not deserialize key pair"))
-  }
-}
-
-#[wasm_bindgen]
-pub fn transfer_asset(key_pair: KeyPair,
-                      txo_sid: u64,
-                      amount: u64,
-                      blind_asset_record_str: String)
-                      -> Result<String, JsValue> {
-  match split_key_pair(&key_pair) {
-    Ok((public_key, secret_key)) => {
-      if let Ok(blind_asset_record) = serde_json::from_str::<BlindAssetRecord>(&blind_asset_record_str) {
-        let mut txn_builder = TransactionBuilder::default();
-        if let Ok(_) = txn_builder.add_basic_transfer_asset(&[(&TxoRef::Absolute(TxoSID(txo_sid)),
-                                                               &blind_asset_record,
-                                                               amount,
-                                                               &secret_key)],
-                                                            &[(amount, &AccountAddress { key: public_key })]) {
-          Ok(txn_builder.serialize_str().unwrap())
-        } else {
-          Err(JsValue::from_str("Could not build transaction"))
-        }
-      } else {
-        Err(JsValue::from_str("Could not deserialize blind asset record."))
-      }
-    },
-    _ => Err(JsValue::from_str("Could not deserialize key pair"))
-  }
-}
+// GENERATED CODE INSERTED HERE
+include!(concat!(env!("OUT_DIR"), "/wasm.rs"));
 
 // Ensures that the transaction serialization is valid URI text
 fn encode_uri(to_encode: &str) -> String {
