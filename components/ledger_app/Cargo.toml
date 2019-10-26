@@ -8,10 +8,12 @@ edition = "2018"
 path = "src/ledger_app.rs"
 
 [dependencies]
+actix-web = "1.0"
 ledger = { path = "../../ledger" }
-api_service = { path = "../../components/api_service" }
+rand = "0.6"
+rand_chacha = "0.1.1"
 serde = "1.0"
 serde_derive = "1.0"
 serde_json = "1.0"
-actix-web = "1.0"
-rand = "0.6"
+txn_builder = {path = "../txn_builder"}
+zei = { git = "ssh://git@github.com/findoraorg/zei" }

@@ -413,7 +413,7 @@ mod tests {
     assert!(resp.status().is_success());
   }
   #[test]
-  fn test_query_transaction_and_query() {
+  fn test_transaction_and_query() {
     let mut prng = ChaChaRng::from_seed([0u8; 32]);
     let state = LedgerState::test_ledger();
     let mut tx = Transaction::default();
@@ -451,9 +451,10 @@ mod tests {
                                                           token_code1.to_base64()))
                                             .to_request();
 
-    test::block_on(app.call(submit_req)).unwrap();
+    let submit_resp = test::block_on(app.call(submit_req)).unwrap();
     let query_resp = test::block_on(app.call(query_req)).unwrap();
 
+    assert!(submit_resp.status().is_success());
     assert!(query_resp.status().is_success());
   }
 }

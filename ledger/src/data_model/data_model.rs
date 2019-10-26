@@ -189,6 +189,9 @@ impl TransferAssetBody {
                                  input_keys: &[XfrKeyPair])
                                  -> Result<TransferAssetBody, errors::PlatformError> {
     let id_proofs = vec![];
+    if input_records.is_empty() {
+        return Err(errors::PlatformError::InputsError);
+    }
     let note = Box::new(gen_xfr_note(prng, input_records, output_records, input_keys, &id_proofs)?);
     Ok(TransferAssetBody { inputs: input_refs,
                            num_outputs: output_records.len(),
@@ -250,7 +253,7 @@ impl DefineAssetBody {
   }
 }
 
-fn compute_signature<T>(secret_key: &XfrSecretKey,
+pub fn compute_signature<T>(secret_key: &XfrSecretKey,
                         public_key: &XfrPublicKey,
                         operation_body: &T)
                         -> XfrSignature
@@ -309,6 +312,11 @@ pub struct IssueAssetResult {
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct DefineAsset {
   pub body: DefineAssetBody,
+
+  // TODO(joe?): Why is there a distinct public key used for signing?
+  // Should this be the same as the issuer key in `body`? Is it *dangerous*
+  // to have a distinct public key for this? Is it *beneficial* to have a
+  // distinct public key?
   pub pubkey: IssuerPublicKey,
   pub signature: XfrSignature,
 }
