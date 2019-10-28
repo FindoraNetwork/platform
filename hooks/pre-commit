@@ -11,6 +11,10 @@ set -e
 
 GIT_ROOT="$(git rev-parse --show-toplevel)"
 pushd $GIT_ROOT >/dev/null
+# TODO: if this check is too slow at some future point, incremental
+# checking can be done with eg.
+# `$(git diff --cached --name-only --diff-filter=ACMR "*.js" "*.jsx" |
+#    sed 's| |\\ |g')`
 for f in $(find -type f -name 'Cargo.toml'); do
   pushd $(dirname $f) >/dev/null
   cargo fmt -- --check
