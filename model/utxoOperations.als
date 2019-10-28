@@ -2,8 +2,12 @@ sig PublicKey {}
 sig PrivateKey {}
 abstract sig AssetCode {}
 sig GenericAsset extends AssetCode {}
-sig Loan extends AssetCode {}
-fact { lone Loan }
+sig IOU extends AssetCode {}
+fact {
+  all kp: KeyPair | lone kp_iou: IOU | some def: DefineAsset | (
+    def.newCode = kp_iou and def.issuer = kp.pubkey
+  )
+}
 sig Fiat extends AssetCode {}
 fact { lone Fiat }
 
@@ -57,30 +61,49 @@ fact TxnsDisjoint {
   )
 }
 
-fact { #Asset < 4 }
-
 fact AllOpsAreInTransactions {
   all o: Operation | some txn: Transaction | o in txn.txnOps
 }
 
-pred isLoan[lender: KeyPair, borrower: KeyPair, t: Transaction, loanType: Loan, fiatType: Fiat, theLoan: Asset, theMoney: set Asset]
+pred trnIsFrom[ident: KeyPair, trn: TransferAsset, when: Operation] {
+    txoOwnedBy[ident.privkey,trn.inputs,when]
+}
+
+pred trnIsTo[ident: KeyPair, trn: TransferAsset] {
+    trn.trnRecipients = (trn.trnOutputs -> ident.pubkey)
+}
+
+pred atomicExchange[ident1: KeyPair, trn1: TransferAsset,
+                    ident2: KeyPair, trn2: TransferAsset,
+                    txn: Transaction] {
+  #(txn.txnOps) = 2
+  ((trn1 + trn2) = txn.txnOps)
+
+  trnIsFrom[ident1,trn1,txn.first.prevOp]
+  trnIsTo[ident2,trn1]
+
+  trnIsFrom[ident2,trn2,txn.first.prevOp]
+  trnIsTo[ident1,trn2]
+}
+
+pred isLoan[lender: KeyPair, borrower: KeyPair, t: Transaction,
+            loanType: IOU, fiatType: Fiat,
+            theIOU: Asset, theMoney: set Asset]
 {
   #(t.txnOps) = 2
   lender != borrower
-  one trn1: TransferAsset | one trn2: TransferAsset | (
-    trn1.inputs.assets = theLoan and
-    trn2.inputs.assets = theMoney and
-    trn1 in trn2.^prevOp and
-    (trn1 in t.txnOps) and (trn2 in t.txnOps) and
-    (all a: trn1.inputs.assets | a.assetType = loanType) and
-    (all a: trn2.inputs.assets | a.assetType = fiatType) and
-    trn1.trnRecipients = (trn1.trnOutputs -> lender.pubkey) and
-    trn2.trnRecipients = (trn2.trnOutputs -> borrower.pubkey) and
-    txoOwnedBy[borrower.privkey,trn1.inputs,trn1.prevOp] and
-    txoOwnedBy[lender.privkey,trn2.inputs,trn1.prevOp]
+  one iou: TransferAsset | one loan: TransferAsset | (
+    atomicExchange[borrower,iou,lender,loan,t] and
+
+    iou.inputs.assets  = theIOU and
+    loan.inputs.assets = theMoney and
+
+    (iou.inputs.assets.assetType = loanType) and
+    (loan.inputs.assets.assetType = fiatType)
   )
 }
 
+run atomicExchange for 7
 run isLoan for 7
 
 sig DefineAsset extends Operation {
