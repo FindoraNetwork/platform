@@ -190,7 +190,7 @@ impl TransferAssetBody {
                                  -> Result<TransferAssetBody, errors::PlatformError> {
     let id_proofs = vec![];
     if input_records.is_empty() {
-        return Err(errors::PlatformError::InputsError);
+      return Err(errors::PlatformError::InputsError);
     }
     let note = Box::new(gen_xfr_note(prng, input_records, output_records, input_keys, &id_proofs)?);
     Ok(TransferAssetBody { inputs: input_refs,
@@ -254,9 +254,9 @@ impl DefineAssetBody {
 }
 
 pub fn compute_signature<T>(secret_key: &XfrSecretKey,
-                        public_key: &XfrPublicKey,
-                        operation_body: &T)
-                        -> XfrSignature
+                            public_key: &XfrPublicKey,
+                            operation_body: &T)
+                            -> XfrSignature
   where T: serde::Serialize
 {
   secret_key.sign(&serde_json::to_vec(&operation_body).unwrap(), &public_key)

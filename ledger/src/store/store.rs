@@ -913,12 +913,10 @@ mod tests {
   use super::*;
   use rand::SeedableRng;
   use std::fs;
-  use tempfile::{tempdir};
+  use tempfile::tempdir;
   use zei::setup::PublicParams;
-  use zei::xfr::asset_record::{build_blind_asset_record};
-  use zei::xfr::structs::{
-    AssetRecord,
-  };
+  use zei::xfr::asset_record::build_blind_asset_record;
+  use zei::xfr::structs::AssetRecord;
 
   #[test]
   fn test_load_transaction_log() {
