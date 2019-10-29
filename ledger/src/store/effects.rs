@@ -1,6 +1,8 @@
 #![deny(warnings)]
 use crate::data_model::errors::PlatformError;
 use crate::data_model::*;
+use crate::store::append_only_merkle::HashValue;
+use crate::utils::sha256;
 use findora::HasInvariants;
 use rand::SeedableRng;
 use rand::{CryptoRng, Rng};
@@ -300,7 +302,7 @@ impl HasInvariants<PlatformError> for TxnEffect {
   }
 }
 
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq, Serialize)]
 pub struct BlockEffect {
   // All Transaction objects validated in this block
   pub txns: Vec<Transaction>,
@@ -403,5 +405,15 @@ impl BlockEffect {
     }
 
     Ok(temp_sid)
+  }
+
+  pub fn compute_block_merkle_hash(&self, block_sid: BlockSID) -> HashValue {
+    let mut serialized = bincode::serialize(&self).unwrap();
+    serialized.extend(bincode::serialize(&block_sid).unwrap());
+
+    let digest = sha256::hash(&serialized);
+    let mut result = HashValue::new();
+    result.hash.clone_from_slice(&digest.0);
+    result
   }
 }

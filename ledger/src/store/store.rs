@@ -141,7 +141,8 @@ pub trait ArchiveAccess {
 #[repr(C)]
 struct GlobalHashData {
   pub bitmap: BitDigest,
-  pub merkle: append_only_merkle::HashValue,
+  pub block_merkle: append_only_merkle::HashValue,
+  pub txn_merkle: append_only_merkle::HashValue,
   pub block: u64,
   pub global_hash: BitDigest,
 }
@@ -162,7 +163,8 @@ const MAX_VERSION: usize = 100;
 #[derive(Deserialize, Serialize)]
 pub struct LedgerStatus {
   // Paths to archival logs for the merkle tree and transaction history
-  merkle_path: String,
+  block_merkle_path: String,
+  txn_merkle_path: String,
   txn_path: String,
   utxo_map_path: String,
 
@@ -221,8 +223,14 @@ pub struct LedgerState {
   // PRNG used for transaction validation
   prng: ChaChaRng,
 
+  // BlockSID of the next block
+  block_sid: BlockSID,
+
+  // Merkle tree tracking the sequence of block hashes
+  block_merkle: LoggedMerkle,
+
   // Merkle tree tracking the sequence of transaction hashes
-  merkle: LoggedMerkle,
+  txn_merkle: LoggedMerkle,
 
   // The `FinalizedTransaction`s consist of a Transaction and an index into
   // `merkle` representing its hash.
@@ -262,13 +270,15 @@ impl HasInvariants<PlatformError> for LedgerState {
 }
 
 impl LedgerStatus {
-  pub fn new(merkle_path: &str,
+  pub fn new(block_merkle_path: &str,
+             txn_merkle_path: &str,
              txn_path: &str,
              // TODO(joe): should this do something?
              // snapshot_path: &str,
              utxo_map_path: &str)
              -> Result<LedgerStatus, std::io::Error> {
-    let ledger = LedgerStatus { merkle_path: merkle_path.to_owned(),
+    let ledger = LedgerStatus { block_merkle_path: block_merkle_path.to_owned(),
+                                txn_merkle_path: txn_merkle_path.to_owned(),
                                 txn_path: txn_path.to_owned(),
                                 utxo_map_path: utxo_map_path.to_owned(),
                                 utxos: HashMap::new(),
@@ -538,7 +548,11 @@ impl LedgerUpdate<ChaChaRng> for LedgerState {
       debug_assert!(txo_sid_ix == 0);
     }
 
-    // Update the Merkle tree and transaction log
+    // Update the block Merkle tree
+    let block_hash = block.compute_block_merkle_hash(self.block_sid);
+    self.block_merkle.append(&block_hash).unwrap();
+
+    // Update the transaction Merkle tree and transaction log
     for (tmp_sid, txn) in block.temp_sids.drain(..).zip(block.txns.drain(..)) {
       let txn_sid = temp_sid_map.get(&tmp_sid).unwrap().0;
       let hash = txn.compute_merkle_hash(txn_sid);
@@ -546,7 +560,7 @@ impl LedgerUpdate<ChaChaRng> for LedgerState {
       // TODO(joe/jonathan): Since errors in the merkle tree are things like
       // corruption and I/O failure, we don't have a good recovery story. Is
       // panicking acceptable?
-      let merkle_id = self.merkle.append(&hash).unwrap();
+      let merkle_id = self.txn_merkle.append(&hash).unwrap();
 
       self.txs.push(FinalizedTransaction { txn: txn,
                                            tx_id: txn_sid,
@@ -567,6 +581,8 @@ impl LedgerUpdate<ChaChaRng> for LedgerState {
 
     self.block_ctx = Some(block);
 
+    self.block_sid = BlockSID(self.block_sid.0 + 1);
+
     temp_sid_map
   }
 }
@@ -576,8 +592,11 @@ impl LedgerState {
   pub fn test_ledger() -> LedgerState {
     let tmp_dir = TempDir::new("test").unwrap();
 
-    let merkle_buf = tmp_dir.path().join("test_ledger_merkle");
-    let merkle_path = merkle_buf.to_str().unwrap();
+    let block_merkle_buf = tmp_dir.path().join("test_ledger_block_merkle");
+    let block_merkle_path = block_merkle_buf.to_str().unwrap();
+
+    let txn_merkle_buf = tmp_dir.path().join("test_ledger_txn_merkle");
+    let txn_merkle_path = txn_merkle_buf.to_str().unwrap();
 
     let txn_buf = tmp_dir.path().join("test_ledger_txns");
     let txn_path = txn_buf.to_str().unwrap();
@@ -588,7 +607,12 @@ impl LedgerState {
     let utxo_map_buf = tmp_dir.path().join("test_ledger_utxo_map");
     let utxo_map_path = utxo_map_buf.to_str().unwrap();
 
-    LedgerState::new(&merkle_path, &txn_path, &utxo_map_path, None, true).unwrap()
+    LedgerState::new(&block_merkle_path,
+                     &txn_merkle_path,
+                     &txn_path,
+                     &utxo_map_path,
+                     None,
+                     true).unwrap()
   }
 
   fn load_transaction_log(path: &str) -> Result<Vec<FinalizedTransaction>, std::io::Error> {
@@ -615,7 +639,8 @@ impl LedgerState {
 
   fn save_global_hash(&mut self) {
     let data = GlobalHashData { bitmap: self.utxo_map.compute_checksum(),
-                                merkle: self.merkle.get_root_hash(),
+                                block_merkle: self.block_merkle.get_root_hash(),
+                                txn_merkle: self.txn_merkle.get_root_hash(),
                                 block: self.status.global_commit_count,
                                 global_hash: self.status.global_hash };
 
@@ -665,36 +690,44 @@ impl LedgerState {
   }
 
   // Initialize a new Ledger structure.
-  pub fn new(merkle_path: &str,
+  pub fn new(block_merkle_path: &str,
+             txn_merkle_path: &str,
              txn_path: &str,
              // snapshot_path: &str,
              utxo_map_path: &str,
              prng_seed: Option<[u8; 32]>,
              create: bool)
              -> Result<LedgerState, std::io::Error> {
-    let ledger = LedgerState { status: LedgerStatus::new(merkle_path, txn_path, utxo_map_path)?,
-                               // TODO(joe): is this safe?
-                               prng:
-                                 rand_chacha::ChaChaRng::from_seed(prng_seed.unwrap_or([0u8; 32])),
-                               merkle: LedgerState::init_merkle_log(merkle_path, create)?,
-                               txs: Vec::new(),
-                               utxo_map: LedgerState::init_utxo_map(utxo_map_path, create)?,
-                               txn_log: std::fs::OpenOptions::new().create(create)
-                                                                   .append(true)
-                                                                   .open(txn_path)?,
-                               block_ctx: Some(BlockEffect::new()) };
+    let ledger =
+      LedgerState { block_sid: BlockSID(0),
+                    status: LedgerStatus::new(block_merkle_path,
+                                              txn_merkle_path,
+                                              txn_path,
+                                              utxo_map_path)?,
+                    // TODO(joe): is this safe?
+                    prng: rand_chacha::ChaChaRng::from_seed(prng_seed.unwrap_or([0u8; 32])),
+                    block_merkle: LedgerState::init_merkle_log(block_merkle_path, create)?,
+                    txn_merkle: LedgerState::init_merkle_log(txn_merkle_path, create)?,
+                    txs: Vec::new(),
+                    utxo_map: LedgerState::init_utxo_map(utxo_map_path, create)?,
+                    txn_log: std::fs::OpenOptions::new().create(create)
+                                                        .append(true)
+                                                        .open(txn_path)?,
+                    block_ctx: Some(BlockEffect::new()) };
 
     Ok(ledger)
   }
 
   // Load a ledger given the paths to the various storage elements.
-  pub fn load(merkle_path: &str,
+  pub fn load(block_merkle_path: &str,
+              merkle_path: &str,
               txn_path: &str,
               utxo_map_path: &str,
               prng_seed: Option<[u8; 32]>,
               snapshot_path: &str)
               -> Result<LedgerState, std::io::Error> {
-    let merkle = LedgerState::init_merkle_log(merkle_path, false)?;
+    let block_merkle = LedgerState::init_merkle_log(block_merkle_path, false)?;
+    let txn_merkle = LedgerState::init_merkle_log(merkle_path, false)?;
     let utxo_map = LedgerState::init_utxo_map(utxo_map_path, false)?;
     let txs = LedgerState::load_transaction_log(txn_path)?;
     let ledger_file = File::open(snapshot_path)?;
@@ -719,7 +752,9 @@ impl LedgerState {
 
     let ledger = LedgerState { status,
                                prng,
-                               merkle,
+                               block_sid: BlockSID(0),
+                               block_merkle,
+                               txn_merkle,
                                txs,
                                utxo_map,
                                txn_log,
@@ -728,15 +763,24 @@ impl LedgerState {
     Ok(ledger)
   }
 
+  // Snapshot the block ledger state
+  pub fn snapshot_block(&mut self) -> Result<SnapshotId, std::io::Error> {
+    let state = self.block_merkle.state();
+    let writer = LedgerState::create_merkle_log(self.status.block_merkle_path.clone(), state)?;
+    self.block_merkle.snapshot(writer)?;
+
+    Ok(SnapshotId { id: state })
+  }
+
   // Snapshot the ledger state.  This involves synchronizing
   // the durable data structures to the disk and starting a
   // new log file for the logged Merkle tree.
   //
   // TODO(joe): Actually serialize the active ledger state.
-  pub fn snapshot(&mut self) -> Result<SnapshotId, std::io::Error> {
-    let state = self.merkle.state();
-    let writer = LedgerState::create_merkle_log(self.status.merkle_path.clone(), state)?;
-    self.merkle.snapshot(writer)?;
+  pub fn snapshot_txns(&mut self) -> Result<SnapshotId, std::io::Error> {
+    let state = self.txn_merkle.state();
+    let writer = LedgerState::create_merkle_log(self.status.txn_merkle_path.clone(), state)?;
+    self.txn_merkle.snapshot(writer)?;
 
     Ok(SnapshotId { id: state })
   }
@@ -812,7 +856,7 @@ impl ArchiveAccess for LedgerState {
     match self.get_transaction(addr) {
       None => None,
       Some(txn) => {
-        let merkle = &self.merkle;
+        let merkle = &self.txn_merkle;
         // TODO log error and recover?
         Some(merkle.get_proof(txn.merkle_id, 0).unwrap())
       }
@@ -913,12 +957,10 @@ mod tests {
   use super::*;
   use rand::SeedableRng;
   use std::fs;
-  use tempfile::{tempdir};
+  use tempfile::tempdir;
   use zei::setup::PublicParams;
-  use zei::xfr::asset_record::{build_blind_asset_record};
-  use zei::xfr::structs::{
-    AssetRecord,
-  };
+  use zei::xfr::asset_record::build_blind_asset_record;
+  use zei::xfr::structs::AssetRecord;
 
   #[test]
   fn test_load_transaction_log() {
@@ -1026,7 +1068,8 @@ mod tests {
     let mut ledger_state = LedgerState::test_ledger();
 
     let data = GlobalHashData { bitmap: ledger_state.utxo_map.compute_checksum(),
-                                merkle: ledger_state.merkle.get_root_hash(),
+                                block_merkle: ledger_state.block_merkle.get_root_hash(),
+                                txn_merkle: ledger_state.txn_merkle.get_root_hash(),
                                 block: ledger_state.status.global_commit_count,
                                 global_hash: ledger_state.status.global_hash };
 
@@ -1095,15 +1138,22 @@ mod tests {
   #[test]
   fn test_snapshot() {
     let tmp_dir = tempdir().unwrap();
-    let buf = tmp_dir.path().join("test_snapshot");
-    let path = buf.to_str().unwrap();
+    let block_buf = tmp_dir.path().join("test_snapshot_block");
+    let txn_buf = tmp_dir.path().join("test_snapshot_txns");
+    let block_path = block_buf.to_str().unwrap();
+    let txn_path = txn_buf.to_str().unwrap();
 
     let mut ledger_state = LedgerState::test_ledger();
-    ledger_state.status.merkle_path = path.to_string();
-    let result = ledger_state.snapshot();
+
+    ledger_state.status.block_merkle_path = block_path.to_string();
+    let block_result = ledger_state.snapshot_block();
+
+    ledger_state.status.txn_merkle_path = txn_path.to_string();
+    let txn_result = ledger_state.snapshot_txns();
 
     // Verify that the SnapshotId is correct
-    assert_eq!(result.ok().unwrap().id, 0);
+    assert_eq!(block_result.ok().unwrap().id, 0);
+    assert_eq!(txn_result.ok().unwrap().id, 0);
 
     tmp_dir.close().unwrap();
   }
@@ -1122,7 +1172,8 @@ mod tests {
 
     let count_original = ledger_state.status.global_commit_count;
     let data = GlobalHashData { bitmap: ledger_state.utxo_map.compute_checksum(),
-                                merkle: ledger_state.merkle.get_root_hash(),
+                                block_merkle: ledger_state.block_merkle.get_root_hash(),
+                                txn_merkle: ledger_state.txn_merkle.get_root_hash(),
                                 block: count_original,
                                 global_hash: ledger_state.status.global_hash };
 
@@ -1426,7 +1477,6 @@ mod tests {
   //   assert_eq!(ledger_state.apply_operation(&creation_operation),
   //              ledger_state.apply_asset_creation(&asset_creation));
   // }
-
   #[test]
   fn test_create_merkle_log() {
     let tmp_dir = tempdir().unwrap();
@@ -1546,14 +1596,21 @@ mod tests {
   #[test]
   fn asset_issued() {
     let tmp_dir = TempDir::new("test").unwrap();
-    let merkle_buf = tmp_dir.path().join("test_merkle");
-    let merkle_path = merkle_buf.to_str().unwrap();
+    let block_merkle_buf = tmp_dir.path().join("test_block_merkle");
+    let block_merkle_path = block_merkle_buf.to_str().unwrap();
+    let txn_merkle_buf = tmp_dir.path().join("test_txn_merkle");
+    let txn_merkle_path = txn_merkle_buf.to_str().unwrap();
     let txn_buf = tmp_dir.path().join("test_txnlog");
     let txn_path = txn_buf.to_str().unwrap();
     let utxo_map_buf = tmp_dir.path().join("test_utxo_map");
     let utxo_map_path = utxo_map_buf.to_str().unwrap();
 
-    let mut ledger = LedgerState::new(&merkle_path, &txn_path, &utxo_map_path, None, true).unwrap();
+    let mut ledger = LedgerState::new(&block_merkle_path,
+                                      &txn_merkle_path,
+                                      &txn_path,
+                                      &utxo_map_path,
+                                      None,
+                                      true).unwrap();
 
     assert!(ledger.get_global_hash() == (BitDigest { 0: [0_u8; 32] }, 0));
     let mut tx = Transaction::default();
@@ -1610,10 +1667,11 @@ mod tests {
         assert!(proof.tx_id == ledger.txs[txn_id.0].merkle_id);
       }
       None => {
-        panic!("get_proof failed for tx_id {}, merkle_id {}, state {}",
+        panic!("get_proof failed for tx_id {}, merkle_id {}, block state {}, transaction state {}",
                transaction.tx_id.0,
                transaction.merkle_id,
-               ledger.merkle.state());
+               ledger.block_merkle.state(),
+               ledger.txn_merkle.state());
       }
     }
 
@@ -1629,7 +1687,16 @@ mod tests {
 
     assert!(query_result == compute_result);
 
-    match ledger.snapshot() {
+    match ledger.snapshot_txns() {
+      Ok(n) => {
+        assert!(n.id == 2);
+      }
+      Err(x) => {
+        panic!("snapshot failed:  {}", x);
+      }
+    }
+
+    match ledger.snapshot_block() {
       Ok(n) => {
         assert!(n.id == 2);
       }
