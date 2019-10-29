@@ -8,7 +8,7 @@ use crate::data_model::errors::PlatformError;
 use crate::data_model::*;
 use crate::utils::sha256;
 use crate::utils::sha256::Digest as BitDigest;
-use append_only_merkle::{AppendOnlyMerkle, Proof};
+use append_only_merkle::{AppendOnlyMerkle, HashValue, Proof};
 use bitmap::BitMap;
 use findora::HasInvariants;
 use logged_merkle::LoggedMerkle;
@@ -210,6 +210,9 @@ pub struct LedgerStatus {
   // Should be equal to the count of TXOs
   next_txo: TxoSID,
 
+  // Hash of the most recent commited block
+  block_hash: HashValue,
+
   // Hash and sequence number of the most recent "full checkpoint" of the
   // ledger -- committing to the whole ledger history up to the most recent
   // such checkpoint.
@@ -223,9 +226,6 @@ pub struct LedgerState {
   // PRNG used for transaction validation
   prng: ChaChaRng,
 
-  // BlockSID of the next block
-  block_sid: BlockSID,
-
   // Merkle tree tracking the sequence of block hashes
   block_merkle: LoggedMerkle,
 
@@ -236,8 +236,6 @@ pub struct LedgerState {
   // `merkle` representing its hash.
   // TODO(joe): should this be in-memory?
   txs: Vec<FinalizedTransaction>,
-
-  // TODO (Keyao): Probably good to add a field containing the map from TxnSID to BlockSID
 
   // Bitmap tracking all the live TXOs
   utxo_map: BitMap,
@@ -289,6 +287,7 @@ impl LedgerStatus {
                                 issuance_num: HashMap::new(),
                                 next_txn: TxnSID(0),
                                 next_txo: TxoSID(0),
+                                block_hash: HashValue::new(),
                                 global_hash: BitDigest { 0: [0_u8; 32] },
                                 global_commit_count: 0 };
 
@@ -551,8 +550,8 @@ impl LedgerUpdate<ChaChaRng> for LedgerState {
     }
 
     // Update the block Merkle tree
-    let block_hash = block.compute_block_merkle_hash(self.block_sid);
-    self.block_merkle.append(&block_hash).unwrap();
+    self.status.block_hash = block.compute_block_merkle_hash(self.status.block_hash);
+    self.block_merkle.append(&self.status.block_hash).unwrap();
 
     // Update the transaction Merkle tree and transaction log
     for (tmp_sid, txn) in block.temp_sids.drain(..).zip(block.txns.drain(..)) {
@@ -582,8 +581,6 @@ impl LedgerUpdate<ChaChaRng> for LedgerState {
     debug_assert!(block.new_issuance_nums.is_empty());
 
     self.block_ctx = Some(block);
-
-    self.block_sid = BlockSID(self.block_sid.0 + 1);
 
     temp_sid_map
   }
@@ -701,8 +698,7 @@ impl LedgerState {
              create: bool)
              -> Result<LedgerState, std::io::Error> {
     let ledger =
-      LedgerState { block_sid: BlockSID(0),
-                    status: LedgerStatus::new(block_merkle_path,
+      LedgerState { status: LedgerStatus::new(block_merkle_path,
                                               txn_merkle_path,
                                               txn_path,
                                               utxo_map_path)?,
@@ -754,7 +750,6 @@ impl LedgerState {
 
     let ledger = LedgerState { status,
                                prng,
-                               block_sid: BlockSID(0),
                                block_merkle,
                                txn_merkle,
                                txs,

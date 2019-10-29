@@ -407,9 +407,9 @@ impl BlockEffect {
     Ok(temp_sid)
   }
 
-  pub fn compute_block_merkle_hash(&self, block_sid: BlockSID) -> HashValue {
-    let mut serialized = bincode::serialize(&self).unwrap();
-    serialized.extend(bincode::serialize(&block_sid).unwrap());
+  pub fn compute_block_merkle_hash(&self, block_hash: HashValue) -> HashValue {
+    let mut serialized = bincode::serialize(&self.txns).unwrap();
+    serialized.extend(bincode::serialize(&block_hash).unwrap());
 
     let digest = sha256::hash(&serialized);
     let mut result = HashValue::new();
