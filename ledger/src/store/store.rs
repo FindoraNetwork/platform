@@ -237,6 +237,8 @@ pub struct LedgerState {
   // TODO(joe): should this be in-memory?
   txs: Vec<FinalizedTransaction>,
 
+  // TODO (Keyao): Probably good to add a field containing the map from TxnSID to BlockSID
+
   // Bitmap tracking all the live TXOs
   utxo_map: BitMap,
 
