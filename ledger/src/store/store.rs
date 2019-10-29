@@ -8,7 +8,7 @@ use crate::data_model::errors::PlatformError;
 use crate::data_model::*;
 use crate::utils::sha256;
 use crate::utils::sha256::Digest as BitDigest;
-use append_only_merkle::{AppendOnlyMerkle, HashValue, Proof};
+use append_only_merkle::{AppendOnlyMerkle, Proof};
 use bitmap::BitMap;
 use findora::HasInvariants;
 use logged_merkle::LoggedMerkle;
@@ -210,9 +210,6 @@ pub struct LedgerStatus {
   // Should be equal to the count of TXOs
   next_txo: TxoSID,
 
-  // Hash of the most recent commited block
-  block_hash: HashValue,
-
   // Hash and sequence number of the most recent "full checkpoint" of the
   // ledger -- committing to the whole ledger history up to the most recent
   // such checkpoint.
@@ -287,7 +284,6 @@ impl LedgerStatus {
                                 issuance_num: HashMap::new(),
                                 next_txn: TxnSID(0),
                                 next_txo: TxoSID(0),
-                                block_hash: HashValue::new(),
                                 global_hash: BitDigest { 0: [0_u8; 32] },
                                 global_commit_count: 0 };
 
@@ -550,8 +546,8 @@ impl LedgerUpdate<ChaChaRng> for LedgerState {
     }
 
     // Update the block Merkle tree
-    self.status.block_hash = block.compute_block_merkle_hash(self.status.block_hash);
-    self.block_merkle.append(&self.status.block_hash).unwrap();
+    let block_hash = block.compute_block_merkle_hash();
+    self.block_merkle.append(&block_hash).unwrap();
 
     // Update the transaction Merkle tree and transaction log
     for (tmp_sid, txn) in block.temp_sids.drain(..).zip(block.txns.drain(..)) {
