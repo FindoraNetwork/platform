@@ -6,7 +6,7 @@ extern crate serde_json;
 use actix_web::{dev, error, web, App, HttpServer};
 use ledger::data_model::{
   AssetPolicyKey, AssetType, AssetTypeCode, CustomAssetPolicy, SmartContract, SmartContractKey,
-  TxnSID, TxoSID, Utxo,
+  Transaction, TxnSID, TxoSID, Utxo,
 };
 use ledger::store::{ArchiveAccess, LedgerAccess, LedgerUpdate, TxnEffect};
 use percent_encoding::percent_decode_str;
@@ -229,6 +229,12 @@ fn submit_transaction<RNG, U>(data: web::Data<Arc<RwLock<U>>>,
   // TODO: Handle submission to Tendermint layer
   let mut ledger = data.write().unwrap();
   let uri_string = percent_decode_str(&*info).decode_utf8().unwrap();
+  println!("{:?}", uri_string);
+  let tx_1 = serde_json::from_str::<Transaction>(&uri_string);
+  match &tx_1 {
+    Err(e) => println!("{:?}", tx_1),
+    Ok(_) => (),
+  }
   let tx = serde_json::from_str(&uri_string).map_err(|e| actix_web::error::ErrorBadRequest(e))?;
 
   let txn_effect =
@@ -238,10 +244,8 @@ fn submit_transaction<RNG, U>(data: web::Data<Arc<RwLock<U>>>,
 
   let mut block = ledger.start_block()
                         .map_err(|e| actix_web::error::ErrorInternalServerError(e))?;
-
   let temp_sid = ledger.apply_transaction(&mut block, txn_effect)
                        .map_err(|e| actix_web::error::ErrorBadRequest(e));
-
   if let Err(e) = temp_sid {
     ledger.abort_block(block);
     return Err(e);
@@ -335,7 +339,7 @@ impl RestfulApiService {
     port: &str)
     -> io::Result<RestfulApiService> {
     let web_runtime = actix_rt::System::new("findora API");
-    let addr = format!("https://{}:{}", host, port);
+    let addr = format!("{}:{}", host, port);
 
     HttpServer::new(move || {
       App::new().data(ledger_access.clone())

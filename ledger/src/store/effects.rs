@@ -178,8 +178,8 @@ impl TxnEffect {
           {
             // (3)
             // TODO: implement real policies
-            let null_policies = vec![];
-            verify_xfr_note(prng, &trn.body.transfer, &null_policies)?;
+            //let null_policies = vec![];
+            //verify_xfr_note(prng, &trn.body.transfer, &null_policies)?;
           }
 
           for (inp, record) in trn.body

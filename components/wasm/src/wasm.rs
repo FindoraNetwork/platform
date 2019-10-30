@@ -5,7 +5,9 @@
 extern crate ledger;
 extern crate serde;
 extern crate zei;
+use hex;
 use percent_encoding::{utf8_percent_encode, AsciiSet, CONTROLS};
+use std::str;
 use txn_builder::{BuildsTransactions, TransactionBuilder};
 
 use js_sys::Promise;
@@ -13,6 +15,7 @@ use ledger::data_model::{
   AccountAddress, AssetTypeCode, IssuerPublicKey, TxOutput, TxoRef, TxoSID, Utxo,
 };
 
+use ledger::utils::sha256;
 use rand::prelude::thread_rng;
 use rand::Rng;
 use rand::SeedableRng;
@@ -62,7 +65,9 @@ impl KeyPair {
 
 // Defines an asset on the ledger using the serialized strings in KeyPair and a couple of boolean policies
 #[wasm_bindgen]
-pub fn create_asset(key_pair: KeyPair,
+pub fn create_asset(public_key_str: String,
+                    private_key_str: String,
+                    memo: String,
                     token_code: String,
                     updatable: bool,
                     traceable: bool)
@@ -70,12 +75,12 @@ pub fn create_asset(key_pair: KeyPair,
   let public_key;
   let secret_key;
 
-  if let Ok(pub_key) = serde_json::from_str::<XfrPublicKey>(&key_pair.get_pub_key()) {
+  if let Ok(pub_key) = serde_json::from_str::<XfrPublicKey>(&public_key_str) {
     public_key = pub_key;
   } else {
     return Err(JsValue::from_str("Could not deserialize public key."));
   }
-  if let Ok(sec_key) = serde_json::from_str::<XfrSecretKey>(&key_pair.get_priv_key()) {
+  if let Ok(sec_key) = serde_json::from_str::<XfrSecretKey>(&private_key_str) {
     secret_key = sec_key;
   } else {
     return Err(JsValue::from_str("Could not deserialize private key."));
@@ -89,12 +94,43 @@ pub fn create_asset(key_pair: KeyPair,
                                                Some(asset_token),
                                                updatable,
                                                traceable,
-                                               &String::from("{}"),
+                                               &memo,
                                                true)
   {
     Ok(_) => return Ok(txn_builder.serialize_str().unwrap()),
     Err(_) => return Err(JsValue::from_str("Could not build transaction")),
   }
+}
+
+#[wasm_bindgen]
+pub fn sha256str(str: &str) -> String {
+  let digest = sha256::hash(&str.as_bytes());
+  hex::encode(digest).into()
+}
+
+#[wasm_bindgen]
+pub fn sign(private_key_str: String,
+            public_key_str: String,
+            message: String)
+            -> Result<String, JsValue> {
+  let secret_key;
+  let public_key;
+
+  if let Ok(sec_key) = serde_json::from_str::<XfrSecretKey>(&private_key_str) {
+    secret_key = sec_key;
+  } else {
+    return Err(JsValue::from_str("Could not deserialize private key."));
+  }
+  if let Ok(pub_key) = serde_json::from_str::<XfrPublicKey>(&public_key_str) {
+    public_key = pub_key;
+  } else {
+    return Err(JsValue::from_str("Could not deserialize public key."));
+  }
+
+  let signature = secret_key.sign(&message.as_bytes(), &public_key);
+  let mut smaller_signature: [u8; 32] = Default::default();
+  smaller_signature.copy_from_slice(&signature.0.to_bytes()[0..32]);
+  Ok(hex::encode(smaller_signature))
 }
 
 #[wasm_bindgen]
@@ -214,6 +250,21 @@ pub fn get_txo(index: u64) -> Promise {
   opts.mode(RequestMode::Cors);
 
   let req_string = format!("http://{}:{}/utxo_sid/{}", HOST, PORT, format!("{}", index));
+
+  create_query_promise(&opts, &req_string)
+}
+
+#[wasm_bindgen]
+// Get txo by index
+pub fn get_asset_token(name: String) -> Promise {
+  let mut opts = RequestInit::new();
+  opts.method("GET");
+  opts.mode(RequestMode::Cors);
+
+  let req_string = format!("http://{}:{}/asset_token/{}",
+                           HOST,
+                           PORT,
+                           format!("{}", name));
 
   create_query_promise(&opts, &req_string)
 }

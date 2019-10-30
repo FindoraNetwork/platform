@@ -444,7 +444,8 @@ impl LedgerUpdate<ChaChaRng> for LedgerState {
     let mut block_ctx = None;
     std::mem::swap(&mut self.block_ctx, &mut block_ctx);
     match block_ctx {
-      None => Err(PlatformError::InputsError), // Probably should be a more relevant error
+      None => Err(PlatformError::InputsError),
+      // Probably should be a more relevant error
       Some(block) => Ok(block),
     }
   }
@@ -897,7 +898,7 @@ pub mod helpers {
     if memo.is_some() {
       token_properties.memo = memo.unwrap();
     } else {
-      token_properties.memo = Memo {};
+      token_properties.memo = Memo(String::from(""));
     }
 
     if confidential_memo.is_some() {

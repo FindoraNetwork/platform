@@ -65,7 +65,7 @@ pub trait BuildsTransactions {
                               transfer_to: &[(u64, &AccountAddress)])
                               -> Result<(), PlatformError> {
     let input_sids: Vec<TxoRef> = transfer_from.iter()
-       true                                        .map(|(ref txo_sid, _, _, _)| *(*txo_sid))
+                                               .map(|(ref txo_sid, _, _, _)| *(*txo_sid))
                                                .collect();
     let input_amounts: Vec<u64> = transfer_from.iter()
                                                .map(|(_, _, amount, _)| *amount)
@@ -118,19 +118,10 @@ impl BuildsTransactions for TransactionBuilder {
                                 token_code: Option<AssetTypeCode>,
                                 updatable: bool,
                                 traceable: bool,
-                                _memo: &str,
+                                memo: &str,
                                 make_confidential: bool)
                                 -> Result<(), PlatformError> {
-    let memo;
-    let confidential_memo = if make_confidential {
-      memo = None;
-      Some(ConfidentialMemo {})
-    } else {
-      memo = Some(Memo {});
-      None
-    };
-
-    self.txn.add_operation(Operation::DefineAsset(DefineAsset::new(DefineAssetBody::new(&token_code.unwrap_or_else(AssetTypeCode::gen_random), pub_key, updatable, traceable, memo, confidential_memo)?, pub_key, priv_key)?));
+    self.txn.add_operation(Operation::DefineAsset(DefineAsset::new(DefineAssetBody::new(&token_code.unwrap_or_else(AssetTypeCode::gen_random), pub_key, updatable, traceable, Some(Memo(String::from(memo))), None)?, pub_key, priv_key)?));
     Ok(())
   }
   fn add_operation_issue_asset(&mut self,
