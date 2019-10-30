@@ -47,10 +47,10 @@ impl Arbitrary for UnitName {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum AccountsCommand {
-    NewUser(UserName), // name
-    NewUnit(UnitName, UserName), // name, issuer
-    Mint(usize, UnitName), // count, unit
-    Send(UserName, usize, UnitName, UserName), // source,count,unit,dest
+  NewUser(UserName),                         // name
+  NewUnit(UnitName, UserName),               // name, issuer
+  Mint(usize, UnitName),                     // count, unit
+  Send(UserName, usize, UnitName, UserName), // source,count,unit,dest
 }
 
 #[cfg(test)]
