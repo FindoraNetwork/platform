@@ -233,7 +233,7 @@ impl Block {
   }
 
   // Compute the hashes that form the subtree represented by this
-  // block.
+  // block.  This is called when the block becomes full.
   fn form_subtree(&mut self) {
     let mut input = 0;
 
@@ -265,7 +265,7 @@ impl Block {
   }
 
   // Return the hash that is the top level of the subtree
-  // of this block.
+  // of this block, if the block is full.
   fn top_hash(&self) -> Option<&HashValue> {
     if self.full() {
       Some(&self.hashes[HASHES_IN_BLOCK - 1])
@@ -357,7 +357,8 @@ impl Block {
     None
   }
 
-  // Check the hashes of nodes formed inside this block.
+  // Check the hashes of nodes formed inside this block.  The block
+  // must be full.
   fn check_subtree(&self) -> Option<Error> {
     let mut input = 0;
 
@@ -630,8 +631,8 @@ impl AppendOnlyMerkle {
     AppendOnlyMerkle::rebuild_ext()
   }
 
-  // The rebuild method creates a skeleton tree.  Now do the work of recreating
-  // all the blocks for all the files.
+  // The rebuild method creates a skeleton tree that is empty.  Now do
+  // the work of recreating all the blocks for all the files.
   fn rebuild_internal(&mut self, mut input: File) -> Result<(), Error> {
     // Compute the number of complete blocks there.
     let file_size = input.seek(End(0))?;
@@ -907,7 +908,8 @@ impl AppendOnlyMerkle {
     Ok(())
   }
 
-  // Read all the blocks from a single data file.
+  // Read all the blocks from a single data file.  Each data file
+  // represents one level of the tree.
   fn read_level(&mut self, state: &mut LevelState) -> Result<(), Error> {
     let level = state.level;
 
@@ -932,6 +934,9 @@ impl AppendOnlyMerkle {
       return self.recover_file(level);
     }
 
+    // Compute the number of blocks that should exist at this
+    // level, based on the number of leaves, and check that the
+    // file size matches this expectation.
     let block_count = file_size / BLOCK_SIZE as u64;
     let expected = covered(state.leaves_at_this_level, LEAVES_IN_BLOCK as u64);
 
@@ -956,7 +961,7 @@ impl AppendOnlyMerkle {
     for i in 0..block_count {
       let last_block = i == block_count - 1;
 
-      // Read the block and do some basic integrity checks.
+      // Read one block and do some basic integrity checks.
       match self.read_block(level, i, last_block) {
         Ok(block) => {
           last_block_full = block.full();
@@ -1007,6 +1012,8 @@ impl AppendOnlyMerkle {
       log!(Append, "Rebuilt 1 block at level {}", level);
     }
 
+    // If the size doesn't match the expected number of
+    // leaves, try a recovery.
     if level > 0 && entries != state.leaves_at_this_level {
       log!(Append,
            "Level {} has {} entries, but {} were expected.",
