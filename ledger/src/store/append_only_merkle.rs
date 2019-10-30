@@ -450,7 +450,7 @@ struct LevelState {
 // Compute the expected number of leaves in the next layer of the
 // tree given the number of blocks at the current level, and whether
 // the last block at the current layer is full.
-fn next_leaves(blocks: u64, last_full: bool) -> u64 {
+fn next_level_leaves(blocks: u64, last_full: bool) -> u64 {
   let full_blocks = if last_full { blocks } else { blocks - 1 };
 
   full_blocks / 2
@@ -676,7 +676,7 @@ impl AppendOnlyMerkle {
     self.entry_count = entries;
 
     // Now recover the upper level files.
-    let mut leaves_at_this_level = next_leaves(block_count, last_block_full);
+    let mut leaves_at_this_level = next_level_leaves(block_count, last_block_full);
     let mut level = 1;
 
     // For each upper level that exists,  move the old file
@@ -697,7 +697,7 @@ impl AppendOnlyMerkle {
       self.push_file(file);
       let block_count = covered(leaves_at_this_level, LEAVES_IN_BLOCK as u64);
       last_block_full = self.rebuild_level(level, block_count)?;
-      leaves_at_this_level = next_leaves(block_count, last_block_full);
+      leaves_at_this_level = next_level_leaves(block_count, last_block_full);
       level += 1;
     }
 
@@ -1033,7 +1033,7 @@ impl AppendOnlyMerkle {
 
     // Compute the number of entries to expect at the next level as a
     // consistency check.
-    state.leaves_at_this_level = next_leaves(block_count, last_block_full);
+    state.leaves_at_this_level = next_level_leaves(block_count, last_block_full);
 
     state.previous_leaves = entries;
     state.previous_blocks = block_count;
@@ -1660,7 +1660,7 @@ impl AppendOnlyMerkle {
       // Save the number of blocks we have written to disk and
       // compute the entries at the next level.
       self.blocks_on_disk[level] = total_blocks;
-      entries_at_this_level = next_leaves(total_blocks, last_block_full);
+      entries_at_this_level = next_level_leaves(total_blocks, last_block_full);
     }
 
     self.entries_on_disk = self.entry_count;
@@ -1763,7 +1763,7 @@ impl AppendOnlyMerkle {
       // so just predict the number of blocks to expect based on the count on
       // disk.  This value will be ignored unless the on-disk tree is expected
       // to match the in-memory version.
-      entries_at_this_level = next_leaves(blocks_on_disk, last_block_full);
+      entries_at_this_level = next_level_leaves(blocks_on_disk, last_block_full);
 
       let last_level = level == self.blocks.len() - 1;
 
@@ -1897,7 +1897,7 @@ impl AppendOnlyMerkle {
       // Advance to the next level of the  tree.  Compute the number
       // of entries that we expect to be there.
       last_blocks = blocks_at_this_level;
-      leaves_at_this_level = next_leaves(last_blocks as u64, last_block_full);
+      leaves_at_this_level = next_level_leaves(last_blocks as u64, last_block_full);
 
       // Check that there's an entry in the vector for the next level.
       // If not, return an error.
