@@ -6,6 +6,7 @@ extern crate tempdir;
 
 use crate::data_model::errors::PlatformError;
 use crate::data_model::*;
+use crate::utils::sha256;
 use crate::utils::sha256::Digest as BitDigest;
 use append_only_merkle::{AppendOnlyMerkle, HashValue, Proof};
 use bitmap::BitMap;
@@ -133,14 +134,15 @@ pub trait ArchiveAccess {
   fn get_utxo_checksum(&self, version: u64) -> Option<BitDigest>;
 
   // Get the hash of the most recent checkpoint, and its sequence number.
-  fn get_block_hash(&self) -> (BitDigest, u64);
+  fn get_global_block_hash(&self) -> (BitDigest, u64);
 }
 
 #[repr(C)]
 #[derive(Serialize)]
 pub struct BlockHashData {
   pub bitmap: BitDigest,
-  pub block_hash: BitDigest,
+  pub txns_in_block_hash: BitDigest,
+  pub global_block_hash: BitDigest,
 }
 
 const MAX_VERSION: usize = 100;
@@ -200,8 +202,11 @@ pub struct LedgerStatus {
   // Hash and sequence number of the most recent "full checkpoint" of the
   // ledger -- committing to the whole ledger history up to the most recent
   // such checkpoint.
-  block_hash: BitDigest,
+  global_block_hash: BitDigest,
   block_commit_count: u64, // TODO (Keyao): Remove this if not needed
+
+  // Hash of the transactions in the most recent block
+  txns_in_block_hash: BitDigest,
 }
 
 pub struct LedgerState {
@@ -210,10 +215,12 @@ pub struct LedgerState {
   // PRNG used for transaction validation
   prng: ChaChaRng,
 
-  // Merkle tree tracking the sequence of block hashes
+  // Merkle tree tracking the sequence of transaction hashes in the block
+  // Each appended hash is the hash of transactions in the same block
   block_merkle: LoggedMerkle,
 
-  // Merkle tree tracking the sequence of transaction hashes
+  // Merkle tree tracking the sequence of all transaction hashes
+  // Each appended hash is the hash of a transaction
   txn_merkle: LoggedMerkle,
 
   // The `FinalizedTransaction`s consist of a Transaction and an index into
@@ -271,7 +278,8 @@ impl LedgerStatus {
                                 issuance_num: HashMap::new(),
                                 next_txn: TxnSID(0),
                                 next_txo: TxoSID(0),
-                                block_hash: BitDigest { 0: [0_u8; 32] },
+                                txns_in_block_hash: BitDigest { 0: [0_u8; 32] },
+                                global_block_hash: BitDigest { 0: [0_u8; 32] },
                                 block_commit_count: 0 };
 
     Ok(ledger)
@@ -535,7 +543,7 @@ impl LedgerUpdate<ChaChaRng> for LedgerState {
     // Update the transaction Merkle tree and transaction log
     for (tmp_sid, txn) in block.temp_sids.drain(..).zip(block.txns.drain(..)) {
       let txn_sid = temp_sid_map.get(&tmp_sid).unwrap().0;
-      let hash = txn.compute_merkle_hash(txn_sid);
+      let hash = txn.compute_txn_merkle_hash(txn_sid);
 
       // TODO(joe/jonathan): Since errors in the merkle tree are things like
       // corruption and I/O failure, we don't have a good recovery story. Is
@@ -549,12 +557,6 @@ impl LedgerUpdate<ChaChaRng> for LedgerState {
 
     // Compute hash against history
     self.checkpoint(&block);
-
-    // Convert block_hash from BitDigest to HashValue, and update the block Merkle tree
-    let mut block_hash_value = HashValue::new();
-    block_hash_value.hash
-                    .clone_from_slice(&self.status.block_hash.0);
-    self.block_merkle.append(&block_hash_value).unwrap();
 
     // TODO(joe): asset tracing?
 
@@ -622,10 +624,23 @@ impl LedgerState {
   }
 
   fn compute_and_save_block_hash(&mut self, block: &BlockEffect) {
-    let data = BlockHashData { bitmap: self.utxo_map.compute_checksum(),
-                               block_hash: self.status.block_hash };
+    // Compute and save txns_in_block_hash
+    self.status.txns_in_block_hash = block.compute_txns_in_block_hash();
 
-    self.status.block_hash = block.compute_block_merkle_hash(&data);
+    // Convert txns_in_block_hash from BitDigest to HashValue, and update the block Merkle tree
+    let mut txns_in_block_hash = HashValue::new();
+    txns_in_block_hash.hash
+                      .clone_from_slice(&self.status.txns_in_block_hash.0);
+    self.block_merkle.append(&txns_in_block_hash).unwrap();
+
+    // Compute and save global_block_hash
+    let data = BlockHashData { bitmap: self.utxo_map.compute_checksum(),
+                               txns_in_block_hash: self.status.txns_in_block_hash,
+                               global_block_hash: self.status.global_block_hash };
+
+    let serialized = bincode::serialize(&data).unwrap();
+
+    self.status.global_block_hash = sha256::hash(&serialized);
     self.status.block_commit_count += 1;
   }
 
@@ -875,8 +890,8 @@ impl ArchiveAccess for LedgerState {
     None
   }
 
-  fn get_block_hash(&self) -> (BitDigest, u64) {
-    (self.status.block_hash, self.status.block_commit_count)
+  fn get_global_block_hash(&self) -> (BitDigest, u64) {
+    (self.status.global_block_hash, self.status.block_commit_count)
   }
 }
 
@@ -1047,15 +1062,12 @@ mod tests {
     let mut ledger_state = LedgerState::test_ledger();
     ledger_state.block_ctx = Some(BlockEffect::new());
 
-    let data = BlockHashData { bitmap: ledger_state.utxo_map.compute_checksum(),
-                               block_hash: ledger_state.status.block_hash };
-
     let count_original = ledger_state.status.block_commit_count;
 
     ledger_state.compute_and_save_block_hash(&BlockEffect::new());
 
-    assert_eq!(ledger_state.status.block_hash,
-               BlockEffect::new().compute_block_merkle_hash(&data));
+    assert_eq!(ledger_state.status.txns_in_block_hash,
+               BlockEffect::new().compute_txns_in_block_hash());
     assert_eq!(ledger_state.status.block_commit_count, count_original + 1);
   }
 
@@ -1150,8 +1162,6 @@ mod tests {
     assert_eq!(ledger_state.status.utxo_map_versions.len(), MAX_VERSION);
 
     let count_original = ledger_state.status.block_commit_count;
-    let data = BlockHashData { bitmap: ledger_state.utxo_map.compute_checksum(),
-                               block_hash: ledger_state.status.block_hash };
 
     // Verify that end_commit doesn't change the size of utxo_map_versions if its length >= MAX_VERSION
     ledger_state.status
@@ -1166,9 +1176,9 @@ mod tests {
     assert_eq!(back,
                Some(&(ledger_state.status.next_txn, ledger_state.utxo_map.compute_checksum())));
 
-    // Verify that the global hash is saved as expected
-    assert_eq!(ledger_state.status.block_hash,
-               BlockEffect::new().compute_block_merkle_hash(&data));
+    // Verify that the status is saved as expected
+    assert_eq!(ledger_state.status.txns_in_block_hash,
+               BlockEffect::new().compute_txns_in_block_hash());
     assert_eq!(ledger_state.status.block_commit_count, count_original + 1);
   }
 
@@ -1496,7 +1506,7 @@ mod tests {
   //     ArchiveAccess::get_utxo_map
   //     ArchiveAccess::get_utxos
   //     ArchiveAccess::get_utxo_checksum
-  //     ArchiveAccess::get_block_hash
+  //     ArchiveAccess::get_global_block_hash
 
   #[test]
   fn test_asset_creation_valid() {
@@ -1589,7 +1599,7 @@ mod tests {
                                       None,
                                       true).unwrap();
 
-    assert!(ledger.get_block_hash() == (BitDigest { 0: [0_u8; 32] }, 0));
+    assert!(ledger.get_global_block_hash() == (BitDigest { 0: [0_u8; 32] }, 0));
     let mut tx = Transaction::default();
     let token_code1 = AssetTypeCode { val: [1; 16] };
     let mut prng = ChaChaRng::from_seed([0u8; 32]);
@@ -1655,7 +1665,7 @@ mod tests {
     // We don't actually have anything to commmit yet,
     // but this will save the empty checksum, which is
     // enough for a bit of a test.
-    assert!(ledger.get_block_hash() == (ledger.status.block_hash, 2));
+    assert!(ledger.get_global_block_hash() == (ledger.status.global_block_hash, 2));
     let query_result = ledger.get_utxo_checksum(ledger.status.next_txn.0 as u64)
                              .unwrap();
     let compute_result = ledger.utxo_map.compute_checksum();

@@ -1,7 +1,6 @@
 #![deny(warnings)]
 use crate::data_model::errors::PlatformError;
 use crate::data_model::*;
-use crate::store::BlockHashData;
 use crate::utils::sha256;
 use crate::utils::sha256::Digest as BitDigest;
 use findora::HasInvariants;
@@ -408,9 +407,8 @@ impl BlockEffect {
     Ok(temp_sid)
   }
 
-  pub fn compute_block_merkle_hash(&self, data: &BlockHashData) -> BitDigest {
-    let mut serialized = bincode::serialize(&data).unwrap();
-    serialized.extend(bincode::serialize(&self.txns).unwrap());
+  pub fn compute_txns_in_block_hash(&self) -> BitDigest {
+    let serialized = bincode::serialize(&self.txns).unwrap();
 
     sha256::hash(&serialized)
   }
