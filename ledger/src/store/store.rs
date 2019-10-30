@@ -139,10 +139,15 @@ pub trait ArchiveAccess {
 
 #[repr(C)]
 #[derive(Serialize)]
+// TODO (Keyao):
+// Are the four fields below all necessary?
+// Can we remove one of txns_in_block_hash and global_block_hash?
+// Both of them contain the information of the previous state
 pub struct BlockHashData {
-  pub bitmap: BitDigest,
-  pub txns_in_block_hash: BitDigest,
-  pub global_block_hash: BitDigest,
+  pub bitmap: BitDigest,             // The checksum of the utxo_map
+  pub block_merkle: HashValue,       // The root hash of the block Merkle tree
+  pub txns_in_block_hash: BitDigest, // The hash of the transactions in the block
+  pub global_block_hash: BitDigest,  // The prior global block hash
 }
 
 const MAX_VERSION: usize = 100;
@@ -623,18 +628,26 @@ impl LedgerState {
         .push_back((self.status.next_txn, self.utxo_map.compute_checksum()));
   }
 
-  fn compute_and_save_block_hash(&mut self, block: &BlockEffect) {
-    // Compute and save txns_in_block_hash
+  // In this functionn:
+  //  1. Compute the hash of transactions in the block and update txns_in_block_hash
+  //  2. Append txns_in_block_hash to block_merkle
+  fn compute_and_append_txns_hash(&mut self, block: &BlockEffect) {
+    // 1. Compute the hash of transactions in the block and update txns_in_block_hash
     self.status.txns_in_block_hash = block.compute_txns_in_block_hash();
 
-    // Convert txns_in_block_hash from BitDigest to HashValue, and update the block Merkle tree
+    // 2. Append txns_in_block_hash to block_merkle
+    //  2.1 Convert txns_in_block_hash from BitDigest to HashValue
     let mut txns_in_block_hash = HashValue::new();
     txns_in_block_hash.hash
                       .clone_from_slice(&self.status.txns_in_block_hash.0);
-    self.block_merkle.append(&txns_in_block_hash).unwrap();
 
-    // Compute and save global_block_hash
+    //  2.2 Update the block Merkle tree
+    self.block_merkle.append(&txns_in_block_hash).unwrap();
+  }
+
+  fn compute_and_save_block_hash(&mut self) {
     let data = BlockHashData { bitmap: self.utxo_map.compute_checksum(),
+                               block_merkle: self.block_merkle.get_root_hash(),
                                txns_in_block_hash: self.status.txns_in_block_hash,
                                global_block_hash: self.status.global_block_hash };
 
@@ -785,7 +798,8 @@ impl LedgerState {
 
   pub fn checkpoint(&mut self, block: &BlockEffect) {
     self.save_utxo_map_version();
-    self.compute_and_save_block_hash(&block);
+    self.compute_and_append_txns_hash(&block);
+    self.compute_and_save_block_hash();
   }
 
   // Create a file structure for a Merkle tree log.
@@ -1062,12 +1076,18 @@ mod tests {
     let mut ledger_state = LedgerState::test_ledger();
     ledger_state.block_ctx = Some(BlockEffect::new());
 
+    let data = BlockHashData { bitmap: ledger_state.utxo_map.compute_checksum(),
+                               block_merkle: ledger_state.block_merkle.get_root_hash(),
+                               txns_in_block_hash: ledger_state.status.txns_in_block_hash,
+                               global_block_hash: ledger_state.status.global_block_hash };
+
+    let serialized = bincode::serialize(&data).unwrap();
     let count_original = ledger_state.status.block_commit_count;
 
-    ledger_state.compute_and_save_block_hash(&BlockEffect::new());
+    ledger_state.compute_and_save_block_hash();
 
-    assert_eq!(ledger_state.status.txns_in_block_hash,
-               BlockEffect::new().compute_txns_in_block_hash());
+    assert_eq!(ledger_state.status.global_block_hash,
+               sha256::hash(&serialized));
     assert_eq!(ledger_state.status.block_commit_count, count_original + 1);
   }
 
