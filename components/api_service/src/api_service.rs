@@ -337,14 +337,13 @@ impl RestfulApiService {
     port: &str)
     -> io::Result<RestfulApiService> {
     let web_runtime = actix_rt::System::new("findora API");
-    let addr = format!("https://{}:{}", host, port);
 
     HttpServer::new(move || {
       App::new().data(ledger_access.clone())
                 .set_route::<RNG, LA>(ServiceInterface::LedgerAccess)
                 .set_route::<RNG, LA>(ServiceInterface::ArchiveAccess)
                 .set_route::<RNG, LA>(ServiceInterface::Update)
-    }).bind(&addr)?
+    }).bind(&format!("{}:{}", host, port))?
       .start();
 
     Ok(RestfulApiService { web_runtime })
