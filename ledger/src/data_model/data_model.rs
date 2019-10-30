@@ -379,7 +379,7 @@ impl Transaction {
     self.operations.push(op);
   }
 
-  pub fn compute_merkle_hash(&self, sid: TxnSID) -> HashValue {
+  pub fn compute_txn_merkle_hash(&self, sid: TxnSID) -> HashValue {
     let mut serialized = bincode::serialize(&self).unwrap();
     serialized.extend(bincode::serialize(&sid).unwrap());
 

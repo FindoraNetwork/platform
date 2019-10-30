@@ -134,7 +134,7 @@ fn query_global_state<AA>(data: web::Data<Arc<RwLock<AA>>>,
   where AA: ArchiveAccess
 {
   let reader = data.read().unwrap();
-  let (hash, version) = reader.get_global_hash();
+  let (hash, version) = reader.get_global_block_hash();
   let result = format!("{} {}", stringer(&hash.0), version);
   Ok(result)
 }
