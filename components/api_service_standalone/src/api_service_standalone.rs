@@ -83,12 +83,11 @@ impl RestfulApiServiceStandalone {
     port: &str)
     -> io::Result<RestfulApiServiceStandalone> {
     let web_runtime = actix_rt::System::new("findora API");
-    let addr = format!("https://{}:{}", host, port);
 
     HttpServer::new(move || {
       App::new().data(ledger_app.clone())
                 .set_route::<RNG, LU>(ServiceInterfaceStandalone::LedgerUpdate)
-    }).bind(&addr)?
+    }).bind(&format!("{}:{}", host, port))?
       .start();
 
     Ok(RestfulApiServiceStandalone { web_runtime })

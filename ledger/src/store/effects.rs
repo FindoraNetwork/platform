@@ -1,6 +1,8 @@
 #![deny(warnings)]
 use crate::data_model::errors::PlatformError;
 use crate::data_model::*;
+use crate::utils::sha256;
+use crate::utils::sha256::Digest as BitDigest;
 use findora::HasInvariants;
 use rand::SeedableRng;
 use rand::{CryptoRng, Rng};
@@ -291,7 +293,7 @@ impl HasInvariants<PlatformError> for TxnEffect {
   }
 }
 
-#[derive(Debug, Clone, Eq, PartialEq, Default)]
+#[derive(Debug, Clone, Eq, PartialEq, Default, Serialize)]
 pub struct BlockEffect {
   // All Transaction objects validated in this block
   pub txns: Vec<Transaction>,
@@ -388,5 +390,11 @@ impl BlockEffect {
     }
 
     Ok(temp_sid)
+  }
+
+  pub fn compute_txns_in_block_hash(&self) -> BitDigest {
+    let serialized = bincode::serialize(&self.txns).unwrap();
+
+    sha256::hash(&serialized)
   }
 }
