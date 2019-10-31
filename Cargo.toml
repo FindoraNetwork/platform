@@ -10,6 +10,7 @@ actix-web = "1.0"
 arrayref = "0.3.5"
 clap = "2.33.0"
 dirs = "2.0.1"
+bulletproofs =  {version = "1.0.4"}
 hex = "0.3.2"
 env_logger = "0.6.2"
 findora = { path = "findora" }

@@ -15,6 +15,7 @@ use ledger::data_model::{
   AccountAddress, AssetTypeCode, IssuerPublicKey, TxOutput, TxoRef, TxoSID, Utxo,
 };
 
+use bulletproofs::PedersenGens;
 use ledger::utils::sha256;
 use rand::prelude::thread_rng;
 use rand::Rng;
@@ -25,6 +26,8 @@ use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::future_to_promise;
 use wasm_bindgen_futures::JsFuture;
 use web_sys::{Request, RequestInit, RequestMode};
+use zei::algebra::ristretto::RistPoint;
+use zei::basic_crypto::elgamal::{elgamal_decrypt, ElGamalSecretKey};
 use zei::basic_crypto::signatures::{XfrKeyPair, XfrPublicKey, XfrSecretKey};
 use zei::xfr::structs::BlindAssetRecord;
 
@@ -131,6 +134,44 @@ pub fn sign(private_key_str: String,
   let mut smaller_signature: [u8; 32] = Default::default();
   smaller_signature.copy_from_slice(&signature.0.to_bytes()[0..32]);
   Ok(hex::encode(smaller_signature))
+}
+
+fn u8_littleendian_slice_to_u32(array: &[u8]) -> u32 {
+  u32::from(array[0])
+  | u32::from(array[1]) << 8
+  | u32::from(array[2]) << 16
+  | u32::from(array[3]) << 24
+}
+
+fn u32_pair_to_u64(x: (u32, u32)) -> u64 {
+  (x.1 as u64) << 32 ^ (x.0 as u64)
+}
+
+#[wasm_bindgen]
+pub fn get_tracked_amount(blind_asset_record: String,
+                          issuer_private_key_point: String)
+                          -> Result<String, JsValue> {
+  let pc_gens = PedersenGens::default();
+  let blind_asset_record = serde_json::from_str::<BlindAssetRecord>(&blind_asset_record).map_err(|e| {
+                             JsValue::from_str("Could not deserialize blind asset record")
+                           })?;
+  let issuer_private_key = serde_json::from_str(&issuer_private_key_point).map_err(|e| {
+                             JsValue::from_str("Could not deserialize issuer private key")
+                           })?;
+  if let Some(lock_amount) = blind_asset_record.issuer_lock_amount {
+    match (elgamal_decrypt(&RistPoint(pc_gens.B), &(lock_amount.0), &issuer_private_key),
+           elgamal_decrypt(&RistPoint(pc_gens.B), &(lock_amount.1), &issuer_private_key))
+    {
+      (Ok(s1), Ok(s2)) => {
+        let amount = u32_pair_to_u64((u8_littleendian_slice_to_u32(s1.0.as_bytes()),
+                                      u8_littleendian_slice_to_u32(s1.0.as_bytes())));
+        return Ok(amount.to_string());
+      }
+      (_, _) => return Err(JsValue::from_str("Unable to decrypt amount")),
+    }
+  } else {
+    return Err(JsValue::from_str("Asset record does not contain decrypted lock amount"));
+  }
 }
 
 #[wasm_bindgen]
