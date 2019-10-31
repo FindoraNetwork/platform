@@ -78,9 +78,9 @@ use zei::crypto::anon_creds::{
   ACIssuerSecretKey, ACRevealSig, ACSignature, ACUserPublicKey, ACUserSecretKey,
 };
 
-const VERSION: &'static str = env!("CARGO_PKG_VERSION");
+const VERSION: &str = env!("CARGO_PKG_VERSION");
 //const AUTHOR: &str = "John D. Corbett <corbett@findora.org>";
-const AUTHOR: &'static str = env!("CARGO_PKG_AUTHORS");
+const AUTHOR: &str = env!("CARGO_PKG_AUTHORS");
 
 // Default file path of the anonymous credential registry
 const DEFAULT_REGISTRY_PATH: &str = "acreg.json";
@@ -161,10 +161,10 @@ fn automated_test() -> bool {
   //    account balance, zip code, credit score, and timestamp
   // In this case, account balance (first) will not be revealed.
   let bitmap = [false, true, true, true];
-  let attrs = [BLSScalar::from_u64(92574500),
-               BLSScalar::from_u64(95050),
+  let attrs = [BLSScalar::from_u64(92_574_500),
+               BLSScalar::from_u64(95_050),
                BLSScalar::from_u64(720),
-               BLSScalar::from_u64(20190820)];
+               BLSScalar::from_u64(20_190_820)];
   let att_count = bitmap.len();
   let (issuer_pk, issuer_sk) = ac_keygen_issuer::<_, BLSScalar, BLSGt>(&mut prng, att_count);
 
@@ -306,9 +306,9 @@ fn subcommand_add_issuer(registry_path: &Path) -> ShellExitStatus {
       ShellExitStatus::Failure
     }
     Ok(mut registry_file) => {
-      let a = AddrIssuer { address: address,
+      let a = AddrIssuer { address,
                            issuer_type: 2,
-                           issuer: issuer };
+                           issuer };
       let j = serde_json::to_string(&a).unwrap();
       trace!("json: {}", j);
       if let Err(e) = registry_file.write_fmt(format_args!("{}\n", j)) {
@@ -508,7 +508,7 @@ fn subcommand_reveal(registry_path: &Path, user: &str, issuer: &str) -> ShellExi
       // address precludes multiple proofs
       let addr_proof = AddrProof { address: user.to_string(),
                                    proof_type: 2,
-                                   proof: proof };
+                                   proof };
       // TODO extract a generic function to append a record to the registry
       match OpenOptions::new().append(true).open(&registry_path) {
         Err(io_error) => {
@@ -560,13 +560,11 @@ fn subcommand_verify(registry_path: &Path, user: &str, issuer: &str) -> ShellExi
         ac_verify::<BLSScalar, BLSGt>(&issuer_keys.public_key, &attrs, &bitmap, &proof).is_ok();
     }
     (lookup_issuer, lookup_proof) => {
-      match lookup_issuer {
-        None => error!("Unable to find issuer: {}", issuer),
-        _ => (),
+      if lookup_issuer.is_none() {
+        error!("Unable to find issuer: {}", issuer);
       }
-      match lookup_proof {
-        None => error!("Unable to find proof"),
-        _ => (),
+      if lookup_proof.is_none() {
+        error!("Unable to find proof");
       }
       verified = false;
     }

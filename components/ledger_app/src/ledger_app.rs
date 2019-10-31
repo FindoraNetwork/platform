@@ -1,3 +1,4 @@
+#![deny(warnings)]
 extern crate ledger;
 
 use ledger::data_model::errors::PlatformError;
@@ -31,7 +32,7 @@ impl<RNG, LU> LedgerApp<RNG, LU>
   }
 
   pub fn all_commited(&self) -> bool {
-    self.temp_sids.len() == 0
+    self.temp_sids.is_empty()
   }
 
   // TODO (Keyao): Determine the condition
@@ -109,7 +110,7 @@ impl<RNG, LU> LedgerApp<RNG, LU>
     }
 
     self.cache_transaction(txn)
-        .map_err(|e| actix_web::error::ErrorBadRequest(e))
+        .map_err(actix_web::error::ErrorBadRequest)
         .unwrap();
 
     // End the current block if it's eligible to commit

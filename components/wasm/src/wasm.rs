@@ -21,8 +21,8 @@ use web_sys::{Request, RequestInit, RequestMode};
 use zei::basic_crypto::signatures::{XfrKeyPair, XfrPublicKey, XfrSecretKey};
 use zei::xfr::structs::BlindAssetRecord;
 
-const HOST: &'static str = "localhost";
-const PORT: &'static str = "8668";
+const HOST: &str = "localhost";
+const PORT: &str = "8668";
 
 #[wasm_bindgen]
 #[derive(Debug)]
@@ -42,7 +42,7 @@ impl KeyPair {
     self.priv_key.clone()
   }
 
-  pub fn new() -> KeyPair {
+  pub fn example() -> KeyPair {
     let mut prng: ChaChaRng;
     prng = ChaChaRng::from_seed([0u8; 32]);
     let keypair = XfrKeyPair::generate(&mut prng);
@@ -69,13 +69,14 @@ pub fn create_asset(key_pair: KeyPair,
     Ok((public_key, secret_key)) => {
       let asset_token = AssetTypeCode::new_from_base64(&token_code).unwrap();
       let mut txn_builder = TransactionBuilder::default();
-      if let Ok(_) = txn_builder.add_operation_create_asset(&IssuerPublicKey { key: public_key },
-                                                            &secret_key,
-                                                            Some(asset_token),
-                                                            updatable,
-                                                            traceable,
-                                                            &String::from("{}"),
-                                                            true)
+      if txn_builder.add_operation_create_asset(&IssuerPublicKey { key: public_key },
+                                                &secret_key,
+                                                Some(asset_token),
+                                                updatable,
+                                                traceable,
+                                                &String::from("{}"),
+                                                true)
+                    .is_ok()
       {
         Ok(txn_builder.serialize_str().unwrap())
       } else {
@@ -103,8 +104,8 @@ pub fn issue_asset(key_pair: KeyPair,
                                               seq_num,
                                               amount)
       {
-        Ok(_) => return Ok(txn_builder.serialize_str().unwrap()),
-        Err(_) => return Err(JsValue::from_str("Could not build transaction")),
+        Ok(_) => Ok(txn_builder.serialize_str().unwrap()),
+        Err(_) => Err(JsValue::from_str("Could not build transaction")),
       }
     }
     _ => Err(JsValue::from_str("Could not deserialize key pair")),
@@ -123,12 +124,12 @@ pub fn transfer_asset(key_pair: KeyPair,
         serde_json::from_str::<BlindAssetRecord>(&blind_asset_record_str)
       {
         let mut txn_builder = TransactionBuilder::default();
-        if let Ok(_) =
-          txn_builder.add_basic_transfer_asset(&[(&TxoRef::Absolute(TxoSID(txo_sid)),
-                                                  &blind_asset_record,
-                                                  amount,
-                                                  &secret_key)],
-                                               &[(amount, &AccountAddress { key: public_key })])
+        if txn_builder.add_basic_transfer_asset(&[(&TxoRef::Absolute(TxoSID(txo_sid)),
+                                                   &blind_asset_record,
+                                                   amount,
+                                                   &secret_key)],
+                                                &[(amount, &AccountAddress { key: public_key })])
+                      .is_ok()
         {
           Ok(txn_builder.serialize_str().unwrap())
         } else {
@@ -172,7 +173,7 @@ pub fn submit_transaction(transaction_str: String) -> Promise {
 #[wasm_bindgen]
 pub fn test_deserialize(str: String) -> bool {
   let blind_asset_record = serde_json::from_str::<BlindAssetRecord>(&str);
-  return blind_asset_record.is_ok();
+  blind_asset_record.is_ok()
 }
 
 #[wasm_bindgen]
@@ -203,13 +204,13 @@ mod tests {
   // Test to ensure that define transaction is being constructed correctly
   #[test]
   fn test_wasm_define_transaction() {
-    let key_pair = KeyPair::new();
+    let key_pair = KeyPair::example();
     create_asset(key_pair, String::from("abcd"), true, true).unwrap();
   }
   #[test]
   // Test to ensure that issue transaction is being constructed correctly
   fn test_wasm_issue_transaction() {
-    let key_pair = KeyPair::new();
+    let key_pair = KeyPair::example();
     issue_asset(key_pair, String::from("abcd"), 1, 5).unwrap();
   }
 }

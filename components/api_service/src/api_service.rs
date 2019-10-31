@@ -121,8 +121,8 @@ fn query_txn<AA>(data: web::Data<Arc<RwLock<AA>>>,
 fn stringer(data: &[u8; 32]) -> String {
   let mut result = "".to_string();
 
-  for i in 0..data.len() {
-    result = result + &format!("{:02x}", data[i]);
+  for d in data.iter() {
+    result = result + &format!("{:02x}", *d);
   }
 
   result
@@ -231,18 +231,16 @@ fn submit_transaction<RNG, U>(data: web::Data<Arc<RwLock<U>>>,
   // TODO: Handle submission to Tendermint layer
   let mut ledger = data.write().unwrap();
   let uri_string = percent_decode_str(&*info).decode_utf8().unwrap();
-  let tx = serde_json::from_str(&uri_string).map_err(|e| actix_web::error::ErrorBadRequest(e))?;
+  let tx = serde_json::from_str(&uri_string).map_err(actix_web::error::ErrorBadRequest)?;
 
   let txn_effect =
-    TxnEffect::compute_effect(ledger.get_prng(), tx).map_err(|e| {
-                                                      actix_web::error::ErrorBadRequest(e)
-                                                    })?;
+    TxnEffect::compute_effect(ledger.get_prng(), tx).map_err(actix_web::error::ErrorBadRequest)?;
 
   let mut block = ledger.start_block()
-                        .map_err(|e| actix_web::error::ErrorInternalServerError(e))?;
+                        .map_err(actix_web::error::ErrorInternalServerError)?;
 
   let temp_sid = ledger.apply_transaction(&mut block, txn_effect)
-                       .map_err(|e| actix_web::error::ErrorBadRequest(e));
+                       .map_err(actix_web::error::ErrorBadRequest);
 
   if let Err(e) = temp_sid {
     ledger.abort_block(block);

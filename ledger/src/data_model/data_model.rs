@@ -565,7 +565,7 @@ mod tests {
 
     let asset_creation = DefineAsset { body: DefineAssetBody { asset },
                                        pubkey: IssuerPublicKey { key: public_key },
-                                       signature: signature };
+                                       signature };
 
     let creation_operation = Operation::DefineAsset(asset_creation.clone());
 

@@ -33,6 +33,7 @@ use std::io::SeekFrom::Start;
 use std::io::Write;
 use std::mem;
 use std::mem::MaybeUninit;
+use std::ptr::copy_nonoverlapping;
 use std::slice::from_raw_parts;
 use std::slice::from_raw_parts_mut;
 
@@ -165,12 +166,17 @@ fn deserialize_array<'de, D>(deserializer: D) -> Result<[HashValue; HASHES_IN_BL
     return sde!("The input slice has the wrong length:  {}", slice.len());
   }
 
-  let mut result: [HashValue; HASHES_IN_BLOCK] =
-    unsafe { MaybeUninit::<[HashValue; HASHES_IN_BLOCK]>::uninit().assume_init() };
-  // let mut result: [HashValue; HASHES_IN_BLOCK] = unsafe { std::mem::uninitialized() };
-  result.copy_from_slice(&slice);
+  let result: [HashValue; HASHES_IN_BLOCK] = unsafe {
+    let mut val = MaybeUninit::<[HashValue; HASHES_IN_BLOCK]>::uninit();
+
+    debug_assert!(slice.len() == (*val.as_ptr()).len());
+    copy_nonoverlapping(slice.as_ptr(),
+                        (*val.as_mut_ptr()).as_mut_ptr(),
+                        slice.len());
+
+    val.assume_init()
+  };
   Ok(result)
-  // Ok(unsafe { mem::transmute::<_, [HashValue; HASHES_IN_BLOCK]>(result) })
 }
 
 // A Merkle tree is represented by a collection of blocks.  Blocks
@@ -908,6 +914,7 @@ impl AppendOnlyMerkle {
   }
 
   // Read all the blocks from a single data file.
+  #[allow(clippy::comparison_chain)]
   fn read_level(&mut self, state: &mut LevelState) -> Result<(), Error> {
     let level = state.level;
 
@@ -2265,8 +2272,12 @@ mod tests {
         panic!("Created a tree from \".\".");
       }
       Err(x) => {
-        if x.kind() != ErrorKind::AlreadyExists {
-          panic!("Unexpected error:  {}", x);
+        match x.kind() {
+          ErrorKind::AlreadyExists => {} // macOS
+          ErrorKind::Other => {}         // linux
+          _ => {
+            panic!("Unexpected error:  {}", x);
+          }
         }
       }
     }

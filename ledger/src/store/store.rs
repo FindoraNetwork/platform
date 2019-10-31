@@ -363,6 +363,7 @@ impl LedgerStatus {
   // that is ever false, it's a bug).
   //
   // This drains every field of `block` except `txns` and `temp_sids`.
+  #[allow(clippy::cognitive_complexity)]
   fn apply_block_effects(&mut self,
                          block: &mut BlockEffect)
                          -> HashMap<TxnTempSID, (TxnSID, Vec<TxoSID>)> {
@@ -471,9 +472,10 @@ impl LedgerUpdate<ChaChaRng> for LedgerState {
     debug_assert!(block.new_issuance_nums.is_empty());
     debug_assert!(block.issuance_keys.is_empty());
 
-    return ret;
+    ret
   }
 
+  #[allow(clippy::cognitive_complexity)]
   fn finish_block(&mut self, block: BlockEffect) -> HashMap<TxnTempSID, (TxnSID, Vec<TxoSID>)> {
     let mut block = block;
 
@@ -548,7 +550,7 @@ impl LedgerUpdate<ChaChaRng> for LedgerState {
       // panicking acceptable?
       let merkle_id = self.merkle.append(&hash).unwrap();
 
-      self.txs.push(FinalizedTransaction { txn: txn,
+      self.txs.push(FinalizedTransaction { txn,
                                            tx_id: txn_sid,
                                            merkle_id });
     }
@@ -756,7 +758,7 @@ impl LedgerState {
   //     <tree_path>-log-<Merkle tree state>
   //
   fn create_merkle_log(base_path: String, next_id: u64) -> Result<File, std::io::Error> {
-    let log_path = base_path.to_owned() + "-log-" + &next_id.to_string();
+    let log_path = base_path + "-log-" + &next_id.to_string();
     println!("merkle log:  {}", log_path);
     let result = OpenOptions::new().write(true)
                                    .create(true)
@@ -781,7 +783,7 @@ impl LedgerAccess for LedgerStatus {
   }
 
   fn get_issuance_num(&self, code: &AssetTypeCode) -> Option<u64> {
-    self.issuance_num.get(code).map(|x| *x)
+    self.issuance_num.get(code).copied()
   }
 
   fn get_asset_type(&self, code: &AssetTypeCode) -> Option<&AssetType> {
@@ -881,14 +883,14 @@ pub mod helpers {
     token_properties.updatable = updatable;
     token_properties.traceable = traceable;
 
-    if memo.is_some() {
-      token_properties.memo = memo.unwrap();
+    if let Some(memo) = memo {
+      token_properties.memo = memo;
     } else {
       token_properties.memo = Memo {};
     }
 
-    if confidential_memo.is_some() {
-      token_properties.confidential_memo = confidential_memo.unwrap();
+    if let Some(confidential_memo) = confidential_memo {
+      token_properties.confidential_memo = confidential_memo;
     } else {
       token_properties.confidential_memo = ConfidentialMemo {};
     }

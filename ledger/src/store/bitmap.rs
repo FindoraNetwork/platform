@@ -462,8 +462,8 @@ fn show(data: &ChecksumData) -> String {
 
   result = result + &format!("{}", data[0]);
 
-  for i in 1..data.len() {
-    result += &format!(", {}", data[i]);
+  for d in data.iter() {
+    result += &format!(", {}", d);
   }
 
   result + " }"
@@ -806,11 +806,9 @@ impl BitMap {
           println!("Block {} failed validation:  {}", i, e);
           pass = false;
         }
-      } else {
-        if let Err(e) = header.validate(BIT_ARRAY, i as u64) {
-          println!("Block {} failed validation:  {}", i, e);
-          pass = false;
-        }
+      } else if let Err(e) = header.validate(BIT_ARRAY, i as u64) {
+        println!("Block {} failed validation:  {}", i, e);
+        pass = false;
       }
 
       pass &= self.validate_count(i);
@@ -1039,8 +1037,8 @@ impl BitMap {
     let mut bytes = DESCRIPTOR_SIZE;
     let mut set = HashSet::new();
 
-    for i in 0..bit_list.len() {
-      set.insert(bit_list[i] / BLOCK_BITS);
+    for b in bit_list.iter() {
+      set.insert(b / BLOCK_BITS);
     }
 
     // Add the space needed for each block.
@@ -1183,6 +1181,7 @@ impl BitMap {
   }
 
   // Convert a serialized bitmap back into structured data.
+  #[allow(clippy::type_complexity)]
   fn deserialize(bytes: &[u8]) -> Result<(u64, Digest, Vec<BlockInfo>, HashMap<u64, BlockBits>)> {
     let mut info_vec = Vec::new();
     let mut bits_map = HashMap::new();
@@ -1230,9 +1229,9 @@ impl BitMap {
           let (next, ids) = BitMap::decode(info.list_size, bytes, index)?;
           bits = [0_u8; BITS_SIZE];
 
-          for i in 0..ids.len() {
-            assert!(ids[i] < info.count as usize);
-            BitMap::mutate_bit(&mut bits, ids[i], true);
+          for id in ids.iter() {
+            assert!(*id < info.count as usize);
+            BitMap::mutate_bit(&mut bits, *id, true);
           }
 
           bits_map.insert(block, bits);
@@ -1243,9 +1242,9 @@ impl BitMap {
           let (next, ids) = BitMap::decode(info.list_size, bytes, index)?;
           bits = [0xff_u8; BITS_SIZE];
 
-          for i in 0..ids.len() {
-            assert!(ids[i] < info.count as usize);
-            BitMap::mutate_bit(&mut bits, ids[i], false);
+          for id in ids.iter() {
+            assert!(*id < info.count as usize);
+            BitMap::mutate_bit(&mut bits, *id, false);
           }
 
           bits_map.insert(block, bits);
