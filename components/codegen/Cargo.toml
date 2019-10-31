@@ -1,8 +1,9 @@
 [package]
-name = "wasm"
+name = "codegen"
 version = "0.1.0"
-authors = ["ngolub <ngolub@stanford.edu>"]
+authors = ["Brian Rogoff <brian@findora.org>"]
 edition = "2018"
+build = "build.rs"
 
 [dependencies]
 ledger = { path = "../../ledger" }
