@@ -12,6 +12,8 @@ clap = "2.33.0"
 dirs = "2.0.1"
 env_logger = "0.6.2"
 findora = { path = "findora" }
+futures = "0.1"
+libp2p = "0.12.0"
 log = "0.4.8"
 percent-encoding = "2.1.0"
 serde = "1.0"
@@ -22,11 +24,11 @@ rand_chacha = "0.1.1"
 rand = "0.6"
 reqwest = "0.9.21"
 regex = "1"
-
-zei = { git = "ssh://git@github.com/findoraorg/zei" }
-
+tokio = "0.1.22"
+tokio-stdin-stdout = "0.1.5"
 ledger = {path = "ledger"}
 txn_builder = {path = "components/txn_builder"}
 ledger_app = {path = "components/ledger_app"}
 api_service = {path = "components/api_service"}
 api_service_standalone = {path = "components/api_service_standalone"}
+zei = { git = "ssh://git@github.com/findoraorg/zei" }
