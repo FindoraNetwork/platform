@@ -1,16 +1,14 @@
 [package]
-name = "wasm"
+name = "codegen"
 version = "0.1.0"
-authors = ["ngolub <ngolub@stanford.edu>"]
+authors = ["Brian Rogoff <brian@findora.org>"]
 edition = "2018"
+build = "build.rs"
 
 [dependencies]
 ledger = { path = "../../ledger" }
-#zei = { git = "ssh://git@github.com/findoraorg/zei" }
-zei = { path = "../../../zei" }
-hex = "0.3.2"
+zei = { git = "ssh://git@github.com/findoraorg/zei" }
 serde = "1.0"
-bulletproofs =  {version = "1.0.4"}
 serde_json = "1.0"
 wasm-bindgen = { version = "0.2.50", features = ["serde-serialize"]  }
 rand_chacha = "0.1.1"
@@ -19,7 +17,7 @@ percent-encoding = "2.1.0"
 futures = "0.1.20"
 
 wasm-bindgen-futures = "0.3.27"
-rand = { version = "0.6", features = ["wasm-bindgen"] }
+rand = "0.6"
 js-sys = "0.3.27"
 
 [lib]

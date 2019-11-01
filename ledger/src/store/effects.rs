@@ -1,16 +1,14 @@
+#![deny(warnings)]
 use crate::data_model::errors::PlatformError;
-use crate::data_model::{
-  AssetPolicyKey, AssetType, AssetTypeCode, CustomAssetPolicy, DefineAsset, FinalizedTransaction,
-  IssueAsset, IssuerPublicKey, Operation, SmartContract, SmartContractKey, Transaction,
-  TransferAsset, TxOutput, TxnSID, TxnTempSID, TxoRef, TxoSID, Utxo, TXN_SEQ_ID_PLACEHOLDER,
-};
-use findora::{timestamp, EnableMap, HasInvariants};
+use crate::data_model::*;
+use crate::utils::sha256;
+use crate::utils::sha256::Digest as BitDigest;
+use findora::HasInvariants;
 use rand::SeedableRng;
 use rand::{CryptoRng, Rng};
-use rand_chacha::ChaChaRng;
-use std::collections::{HashMap, HashSet, VecDeque};
+use std::collections::HashMap;
 use zei::xfr::lib::verify_xfr_note;
-use zei::xfr::structs::{BlindAssetRecord, EGPubKey};
+use zei::xfr::structs::BlindAssetRecord;
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct TxnEffect {
@@ -73,6 +71,8 @@ impl TxnEffect {
         //         - Partially checked here
         Operation::DefineAsset(def) => {
           // (1)
+          // TODO(joe?): like the note in data_model, should the public key
+          // used here match `def.body.asset.issuer`?
           def.pubkey
              .key
              .verify(&serde_json::to_vec(&def.body).unwrap(), &def.signature)?;
@@ -118,7 +118,7 @@ impl TxnEffect {
 
           let iss_nums = new_issuance_nums.get_mut(&code).unwrap();
           if let Some(last_num) = iss_nums.last() {
-            if seq_num <= iss_nums[iss_nums.len() - 1] {
+            if seq_num <= *last_num {
               return Err(PlatformError::InputsError);
             }
           }
@@ -302,7 +302,7 @@ impl HasInvariants<PlatformError> for TxnEffect {
   }
 }
 
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq, Serialize)]
 pub struct BlockEffect {
   // All Transaction objects validated in this block
   pub txns: Vec<Transaction>,
@@ -405,5 +405,11 @@ impl BlockEffect {
     }
 
     Ok(temp_sid)
+  }
+
+  pub fn compute_txns_in_block_hash(&self) -> BitDigest {
+    let serialized = bincode::serialize(&self.txns).unwrap();
+
+    sha256::hash(&serialized)
   }
 }

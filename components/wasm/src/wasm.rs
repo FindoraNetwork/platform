@@ -2,6 +2,7 @@
 // Allows web clients to issue transactions from a browser contexts.
 // For now, forwards transactions to a ledger hosted locally.
 // To compile wasm package, run wasm-pack build in the wasm directory
+#![deny(warnings)]
 extern crate ledger;
 extern crate serde;
 extern crate zei;
@@ -21,8 +22,9 @@ use rand::prelude::thread_rng;
 use rand::Rng;
 use rand::SeedableRng;
 use rand_chacha::ChaChaRng;
+use serde_json::from_str;
+use txn_builder::{BuildsTransactions, TransactionBuilder};
 use wasm_bindgen::prelude::*;
-
 use wasm_bindgen_futures::future_to_promise;
 use wasm_bindgen_futures::JsFuture;
 use web_sys::{Request, RequestInit, RequestMode};
@@ -60,6 +62,13 @@ pub fn keypair_to_str(key_pair: &XfrKeyPair) -> String {
 #[wasm_bindgen]
 pub fn keypair_from_str(str: String) -> XfrKeyPair {
   return XfrKeyPair::zei_from_bytes(&hex::decode(str).unwrap());
+}
+
+fn split_key_pair(key_pair: &KeyPair)
+                  -> Result<(XfrPublicKey, XfrSecretKey), serde_json::error::Error> {
+  let public_key = from_str::<XfrPublicKey>(&key_pair.get_pub_key())?;
+  let secret_key = from_str::<XfrSecretKey>(&key_pair.get_priv_key())?;
+  Ok((public_key, secret_key))
 }
 
 // Defines an asset on the ledger using the serialized strings in KeyPair and a couple of boolean policies
@@ -256,9 +265,6 @@ fn create_query_promise(opts: &RequestInit, req_string: &str) -> Promise {
 #[cfg(test)]
 mod tests {
   use super::*;
-  use ledger::data_model::TxoSID;
-  use ledger::store::{LedgerAccess, LedgerState, LedgerUpdate};
-  use txn_builder::{BuildsTransactions, TransactionBuilder};
 
   // Test to ensure that define transaction is being constructed correctly
   #[test]

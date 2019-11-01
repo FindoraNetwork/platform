@@ -1,3 +1,4 @@
+#![deny(warnings)]
 extern crate ledger;
 extern crate serde;
 extern crate zei;
@@ -5,11 +6,7 @@ extern crate zei;
 extern crate serde_derive;
 
 use ledger::data_model::errors::PlatformError;
-use ledger::data_model::{
-  AccountAddress, AssetTypeCode, ConfidentialMemo, DefineAsset, DefineAssetBody, IssueAsset,
-  IssueAssetBody, IssuerPublicKey, Memo, Operation, Transaction, TransferAsset, TransferAssetBody,
-  TxOutput, TxoRef, TxoSID,
-};
+use ledger::data_model::*;
 use rand::SeedableRng;
 use rand_chacha::ChaChaRng;
 use zei::basic_crypto::signatures::{XfrKeyPair, XfrSecretKey};

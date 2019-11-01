@@ -1,13 +1,11 @@
+#![deny(warnings)]
 extern crate actix_rt;
 extern crate actix_web;
 extern crate ledger;
 extern crate serde_json;
 
 use actix_web::{dev, error, web, App, HttpServer};
-use ledger::data_model::{
-  AssetPolicyKey, AssetType, AssetTypeCode, CustomAssetPolicy, SmartContract, SmartContractKey,
-  Transaction, TxnSID, TxoSID, Utxo,
-};
+use ledger::data_model::*;
 use ledger::store::{ArchiveAccess, LedgerAccess, LedgerUpdate, TxnEffect};
 use percent_encoding::percent_decode_str;
 use rand::{CryptoRng, Rng};
@@ -62,6 +60,7 @@ fn query_asset<LA>(data: web::Data<Arc<RwLock<LA>>>,
   }
 }
 
+#[allow(unused)]
 fn query_policy<LA>(data: web::Data<Arc<RwLock<LA>>>,
                     info: web::Path<String>)
                     -> actix_web::Result<web::Json<CustomAssetPolicy>>
@@ -81,6 +80,7 @@ fn query_policy<LA>(data: web::Data<Arc<RwLock<LA>>>,
   // }
 }
 
+#[allow(unused)]
 fn query_contract<LA>(data: web::Data<Arc<RwLock<LA>>>,
                       info: web::Path<String>)
                       -> actix_web::Result<web::Json<SmartContract>>
@@ -134,7 +134,7 @@ fn query_global_state<AA>(data: web::Data<Arc<RwLock<AA>>>,
   where AA: ArchiveAccess
 {
   let reader = data.read().unwrap();
-  let (hash, version) = reader.get_global_hash();
+  let (hash, version) = reader.get_global_block_hash();
   let result = format!("{} {}", stringer(&hash.0), version);
   Ok(result)
 }
@@ -185,6 +185,7 @@ fn query_utxo_map_checksum<AA>(data: web::Data<Arc<RwLock<AA>>>,
   }
 }
 
+#[allow(unused)]
 fn parse_blocks(block_input: String) -> Option<Vec<usize>> {
   let blocks = block_input.split(',');
   let mut result = Vec::new();
@@ -200,6 +201,7 @@ fn parse_blocks(block_input: String) -> Option<Vec<usize>> {
   Some(result)
 }
 
+#[allow(unused)]
 fn query_utxo_partial_map<AA>(data: web::Data<Arc<RwLock<AA>>>,
                               info: web::Path<String>)
                               -> actix_web::Result<String>
@@ -339,14 +341,13 @@ impl RestfulApiService {
     port: &str)
     -> io::Result<RestfulApiService> {
     let web_runtime = actix_rt::System::new("findora API");
-    let addr = format!("{}:{}", host, port);
 
     HttpServer::new(move || {
       App::new().data(ledger_access.clone())
                 .set_route::<RNG, LA>(ServiceInterface::LedgerAccess)
                 .set_route::<RNG, LA>(ServiceInterface::ArchiveAccess)
                 .set_route::<RNG, LA>(ServiceInterface::Update)
-    }).bind(&addr)?
+    }).bind(&format!("{}:{}", host, port))?
       .start();
 
     Ok(RestfulApiService { web_runtime })
@@ -415,7 +416,7 @@ mod tests {
     assert!(resp.status().is_success());
   }
   #[test]
-  fn test_query_transaction_and_query() {
+  fn test_transaction_and_query() {
     let mut prng = ChaChaRng::from_seed([0u8; 32]);
     let state = LedgerState::test_ledger();
     let mut tx = Transaction::default();
@@ -453,9 +454,10 @@ mod tests {
                                                           token_code1.to_base64()))
                                             .to_request();
 
-    test::block_on(app.call(submit_req)).unwrap();
+    let submit_resp = test::block_on(app.call(submit_req)).unwrap();
     let query_resp = test::block_on(app.call(query_req)).unwrap();
 
+    assert!(submit_resp.status().is_success());
     assert!(query_resp.status().is_success());
   }
 }

@@ -1,3 +1,4 @@
+#![deny(warnings)]
 use clap::{App, Arg, SubCommand};
 use env_logger::{Env, Target};
 use ledger::data_model::errors::PlatformError;
