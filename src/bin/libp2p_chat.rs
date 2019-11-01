@@ -48,8 +48,8 @@
 //! ```
 //!
 //! The two nodes then connect.
-extern crate tokio;
-extern crate tokio_stdin_stdout;
+use tokio;
+use tokio_stdin_stdout;
 
 use futures::prelude::*;
 use libp2p::{
