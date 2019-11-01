@@ -251,21 +251,29 @@ fn create_query_promise(opts: &RequestInit, req_string: &str) -> Promise {
 #[cfg(test)]
 mod tests {
   use super::*;
+  use rand_chacha;
+  use zei::basic_crypto::signatures::XfrKeyPair;
 
   // Test to ensure that define transaction is being constructed correctly
   #[test]
   fn test_wasm_define_transaction() {
-    let key_pair = KeyPair::new(&String::from("test"));
-    create_asset(key_pair, String::from("abcd"), true, true);
+    let mut prng = rand_chacha::ChaChaRng::from_seed([0u8; 32]);
+
+    let keypair = XfrKeyPair::generate(&mut prng);
+    let txn = create_asset(&keypair,
+                           String::from("abcd"),
+                           String::from("test"),
+                           true,
+                           true);
+    assert!(txn.is_ok());
   }
   #[test]
   // Test to ensure that issue transaction is being constructed correctly
   fn test_wasm_issue_transaction() {
-    let key_pair = KeyPair::new(&String::from("test"));
-    issue_asset(key_pair.get_pub_key(),
-                key_pair.get_priv_key(),
-                String::from("abcd"),
-                1,
-                5);
+    let mut prng = rand_chacha::ChaChaRng::from_seed([0u8; 32]);
+
+    let keypair = XfrKeyPair::generate(&mut prng);
+    let txn = issue_asset(&keypair, String::from("abcd"), 1, 5);
+    assert!(txn.is_ok());
   }
 }

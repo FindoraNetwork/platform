@@ -1,12 +1,9 @@
 use api_service::RestfulApiService;
 use ledger::store::LedgerState;
-use rand::SeedableRng;
 use std::sync::{Arc, RwLock};
-use std::thread;
 
 fn main() {
   let ledger_state = LedgerState::test_ledger();
-  let prng = rand_chacha::ChaChaRng::from_seed([0u8; 32]);
 
   let host = std::option_env!("SERVER_HOST").unwrap_or("localhost");
   let port = std::option_env!("SERVER_PORT").unwrap_or("8668");

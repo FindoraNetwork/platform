@@ -6,8 +6,7 @@ edition = "2018"
 
 [dependencies]
 ledger = { path = "../../ledger" }
-#zei = { git = "ssh://git@github.com/findoraorg/zei" }
-zei = { path = "../../../zei" }
+zei = { git = "ssh://git@github.com/findoraorg/zei" }
 hex = "0.3.2"
 serde = "1.0"
 bulletproofs =  {version = "1.0.4"}
