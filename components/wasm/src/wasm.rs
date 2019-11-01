@@ -12,25 +12,19 @@ use std::str;
 use txn_builder::{BuildsTransactions, TransactionBuilder};
 
 use js_sys::Promise;
-use ledger::data_model::{
-  AccountAddress, AssetTypeCode, IssuerPublicKey, TxOutput, TxoRef, TxoSID, Utxo,
-};
+use ledger::data_model::{AccountAddress, AssetTypeCode, IssuerPublicKey, TxoRef, TxoSID};
 
 use bulletproofs::PedersenGens;
 use ledger::utils::sha256;
-use rand::prelude::thread_rng;
-use rand::Rng;
 use rand::SeedableRng;
 use rand_chacha::ChaChaRng;
-use serde_json::from_str;
-use txn_builder::{BuildsTransactions, TransactionBuilder};
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::future_to_promise;
 use wasm_bindgen_futures::JsFuture;
 use web_sys::{Request, RequestInit, RequestMode};
 use zei::algebra::ristretto::RistPoint;
-use zei::basic_crypto::elgamal::{elgamal_decrypt, ElGamalSecretKey};
-use zei::basic_crypto::signatures::{XfrKeyPair, XfrPublicKey, XfrSecretKey};
+use zei::basic_crypto::elgamal::elgamal_decrypt;
+use zei::basic_crypto::signatures::XfrKeyPair;
 use zei::serialization::ZeiFromToBytes;
 use zei::xfr::structs::BlindAssetRecord;
 
@@ -64,13 +58,6 @@ pub fn keypair_from_str(str: String) -> XfrKeyPair {
   return XfrKeyPair::zei_from_bytes(&hex::decode(str).unwrap());
 }
 
-fn split_key_pair(key_pair: &KeyPair)
-                  -> Result<(XfrPublicKey, XfrSecretKey), serde_json::error::Error> {
-  let public_key = from_str::<XfrPublicKey>(&key_pair.get_pub_key())?;
-  let secret_key = from_str::<XfrSecretKey>(&key_pair.get_priv_key())?;
-  Ok((public_key, secret_key))
-}
-
 // Defines an asset on the ledger using the serialized strings in KeyPair and a couple of boolean policies
 #[wasm_bindgen]
 pub fn create_asset(key_pair: &XfrKeyPair,
@@ -87,8 +74,7 @@ pub fn create_asset(key_pair: &XfrKeyPair,
                                                Some(asset_token),
                                                updatable,
                                                traceable,
-                                               &memo,
-                                               true)
+                                               &memo)
   {
     Ok(_) => return Ok(txn_builder.serialize_str().unwrap()),
     Err(_) => return Err(JsValue::from_str("Could not build transaction")),
@@ -126,10 +112,10 @@ pub fn get_tracked_amount(blind_asset_record: String,
                           issuer_private_key_point: String)
                           -> Result<String, JsValue> {
   let pc_gens = PedersenGens::default();
-  let blind_asset_record = serde_json::from_str::<BlindAssetRecord>(&blind_asset_record).map_err(|e| {
+  let blind_asset_record = serde_json::from_str::<BlindAssetRecord>(&blind_asset_record).map_err(|_e| {
                              JsValue::from_str("Could not deserialize blind asset record")
                            })?;
-  let issuer_private_key = serde_json::from_str(&issuer_private_key_point).map_err(|e| {
+  let issuer_private_key = serde_json::from_str(&issuer_private_key_point).map_err(|_e| {
                              JsValue::from_str("Could not deserialize issuer private key")
                            })?;
   if let Some(lock_amount) = blind_asset_record.issuer_lock_amount {
@@ -138,7 +124,7 @@ pub fn get_tracked_amount(blind_asset_record: String,
     {
       (Ok(s1), Ok(s2)) => {
         let amount = u32_pair_to_u64((u8_littleendian_slice_to_u32(s1.0.as_bytes()),
-                                      u8_littleendian_slice_to_u32(s1.0.as_bytes())));
+                                      u8_littleendian_slice_to_u32(s2.0.as_bytes())));
         return Ok(amount.to_string());
       }
       (_, _) => return Err(JsValue::from_str("Unable to decrypt amount")),
@@ -175,7 +161,7 @@ pub fn transfer_asset(transfer_from: &XfrKeyPair,
                       amount: u64,
                       blind_asset_record: String)
                       -> Result<String, JsValue> {
-  let blind_asset_record = serde_json::from_str::<BlindAssetRecord>(&blind_asset_record).map_err(|e| {
+  let blind_asset_record = serde_json::from_str::<BlindAssetRecord>(&blind_asset_record).map_err(|_e| {
                              JsValue::from_str("Could not deserialize blind asset record")
                            })?;
 

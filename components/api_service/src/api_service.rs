@@ -231,12 +231,6 @@ fn submit_transaction<RNG, U>(data: web::Data<Arc<RwLock<U>>>,
   // TODO: Handle submission to Tendermint layer
   let mut ledger = data.write().unwrap();
   let uri_string = percent_decode_str(&*info).decode_utf8().unwrap();
-  println!("{:?}", uri_string);
-  let tx_1 = serde_json::from_str::<Transaction>(&uri_string);
-  match &tx_1 {
-    Err(e) => println!("{:?}", tx_1),
-    Ok(_) => (),
-  }
   let tx = serde_json::from_str(&uri_string).map_err(|e| actix_web::error::ErrorBadRequest(e))?;
 
   let txn_effect =

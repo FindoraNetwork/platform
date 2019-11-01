@@ -1,11 +1,8 @@
-extern crate serde;
 #[macro_use]
-extern crate serde_derive;
-#[macro_use]
-#![deny(warnings)]
 extern crate arrayref;
 extern crate base64;
 extern crate serde;
+extern crate serde_derive;
 
 #[macro_use]
 extern crate itertools;

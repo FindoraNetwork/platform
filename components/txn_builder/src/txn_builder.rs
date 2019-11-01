@@ -23,8 +23,7 @@ pub trait BuildsTransactions {
                                 token_code: Option<AssetTypeCode>,
                                 updatable: bool,
                                 traceable: bool,
-                                memo: &str,
-                                make_confidential: bool)
+                                memo: &str)
                                 -> Result<(), PlatformError>;
   fn add_operation_issue_asset(&mut self,
                                pub_key: &IssuerPublicKey,
@@ -113,8 +112,7 @@ impl BuildsTransactions for TransactionBuilder {
                                 token_code: Option<AssetTypeCode>,
                                 updatable: bool,
                                 traceable: bool,
-                                memo: &str,
-                                make_confidential: bool)
+                                memo: &str)
                                 -> Result<(), PlatformError> {
     self.txn.add_operation(Operation::DefineAsset(DefineAsset::new(DefineAssetBody::new(&token_code.unwrap_or_else(AssetTypeCode::gen_random), pub_key, updatable, traceable, Some(Memo(String::from(memo))), None)?, pub_key, priv_key)?));
     Ok(())
