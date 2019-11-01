@@ -572,17 +572,20 @@ fn process_add_cmd(add_matches: &clap::ArgMatches,
         return;
       }
       if let Ok(mut txn_builder) = load_txn_builder_from_file(&transaction_file_name) {
-        if let Ok(_res) =
-          txn_builder.add_basic_transfer_asset(&[(&TxoRef::Absolute(TxoSID(index)),
-                                                  &blind_asset_record,
-                                                  amount,
-                                                  &priv_key)],
-                                               &[(amount, &AccountAddress { key: address })])
-        {
-          store_txn_builder_to_file(&transaction_file_name, &txn_builder);
-        } else {
-          println!("Failed to add operation to transaction.");
-        }
+        //TODO: (noah/nathan) because of recent zei refactor we need an
+        // XfrKeyPair to sign all of the inputs for transferring. Currently, we store the keys
+        // as distinct private/public keys and there is no way to recreate the keypair
+        //if let Ok(_res) =
+        //  txn_builder.add_basic_transfer_asset(&[(&TxoRef::Absolute(TxoSID(index)),
+        //                                          &blind_asset_record,
+        //                                          amount,
+        //                                          &priv_key)],
+        //                                       &[(amount, &AccountAddress { key: address })])
+        //{
+        //  store_txn_builder_to_file(&transaction_file_name, &txn_builder);
+        //} else {
+        //  println!("Failed to add operation to transaction.");
+        //}
       }
     }
     _ => unreachable!(),
