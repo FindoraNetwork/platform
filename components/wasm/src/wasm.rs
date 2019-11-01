@@ -29,71 +29,52 @@ use web_sys::{Request, RequestInit, RequestMode};
 use zei::algebra::ristretto::RistPoint;
 use zei::basic_crypto::elgamal::{elgamal_decrypt, ElGamalSecretKey};
 use zei::basic_crypto::signatures::{XfrKeyPair, XfrPublicKey, XfrSecretKey};
+use zei::serialization::ZeiFromToBytes;
 use zei::xfr::structs::BlindAssetRecord;
 
 const HOST: &'static str = "localhost";
 const PORT: &'static str = "8668";
 
 #[wasm_bindgen]
-#[derive(Debug)]
-// Keypair representing serialized private and public keys.
-pub struct KeyPair {
-  pub_key: String,
-  priv_key: String,
+pub fn get_pub_key_str(key_pair: &XfrKeyPair) -> String {
+  serde_json::to_string(key_pair.get_pk_ref()).unwrap()
 }
 
 #[wasm_bindgen]
-pub fn test_thread_rng() {
-  let countdown = thread_rng().gen::<u32>() % (256 * 1024);
+pub fn get_priv_key_str(key_pair: &XfrKeyPair) -> String {
+  serde_json::to_string(key_pair.get_sk_ref()).unwrap()
 }
 
 #[wasm_bindgen]
-impl KeyPair {
-  pub fn get_pub_key(&self) -> String {
-    self.pub_key.clone()
-  }
+pub fn new_keypair(rand_seed: &str) -> XfrKeyPair {
+  let mut prng: ChaChaRng;
+  prng = ChaChaRng::from_seed([rand_seed.as_bytes()[0]; 32]);
+  return XfrKeyPair::generate(&mut prng);
+}
 
-  pub fn get_priv_key(&self) -> String {
-    self.priv_key.clone()
-  }
+#[wasm_bindgen]
+pub fn keypair_to_str(key_pair: &XfrKeyPair) -> String {
+  return hex::encode(key_pair.zei_to_bytes());
+}
 
-  pub fn new(rand_seed: &str) -> KeyPair {
-    let mut prng: ChaChaRng;
-    prng = ChaChaRng::from_seed([rand_seed.as_bytes()[0]; 32]);
-    let keypair = XfrKeyPair::generate(&mut prng);
-    KeyPair { priv_key: serde_json::to_string(keypair.get_sk_ref()).unwrap(),
-              pub_key: serde_json::to_string(keypair.get_pk_ref()).unwrap() }
-  }
+#[wasm_bindgen]
+pub fn keypair_from_str(str: String) -> XfrKeyPair {
+  return XfrKeyPair::zei_from_bytes(&hex::decode(str).unwrap());
 }
 
 // Defines an asset on the ledger using the serialized strings in KeyPair and a couple of boolean policies
 #[wasm_bindgen]
-pub fn create_asset(public_key_str: String,
-                    private_key_str: String,
+pub fn create_asset(key_pair: &XfrKeyPair,
                     memo: String,
                     token_code: String,
                     updatable: bool,
                     traceable: bool)
                     -> Result<String, JsValue> {
-  let public_key;
-  let secret_key;
-
-  if let Ok(pub_key) = serde_json::from_str::<XfrPublicKey>(&public_key_str) {
-    public_key = pub_key;
-  } else {
-    return Err(JsValue::from_str("Could not deserialize public key."));
-  }
-  if let Ok(sec_key) = serde_json::from_str::<XfrSecretKey>(&private_key_str) {
-    secret_key = sec_key;
-  } else {
-    return Err(JsValue::from_str("Could not deserialize private key."));
-  }
-
   let asset_token = AssetTypeCode::new_from_base64(&token_code).unwrap();
 
   let mut txn_builder = TransactionBuilder::default();
-  match txn_builder.add_operation_create_asset(&IssuerPublicKey { key: public_key },
-                                               &secret_key,
+  match txn_builder.add_operation_create_asset(&IssuerPublicKey { key: *key_pair.get_pk_ref() },
+                                               &key_pair.get_sk_ref(),
                                                Some(asset_token),
                                                updatable,
                                                traceable,
@@ -112,25 +93,9 @@ pub fn sha256str(str: &str) -> String {
 }
 
 #[wasm_bindgen]
-pub fn sign(private_key_str: String,
-            public_key_str: String,
-            message: String)
-            -> Result<String, JsValue> {
-  let secret_key;
-  let public_key;
-
-  if let Ok(sec_key) = serde_json::from_str::<XfrSecretKey>(&private_key_str) {
-    secret_key = sec_key;
-  } else {
-    return Err(JsValue::from_str("Could not deserialize private key."));
-  }
-  if let Ok(pub_key) = serde_json::from_str::<XfrPublicKey>(&public_key_str) {
-    public_key = pub_key;
-  } else {
-    return Err(JsValue::from_str("Could not deserialize public key."));
-  }
-
-  let signature = secret_key.sign(&message.as_bytes(), &public_key);
+pub fn sign(key_pair: &XfrKeyPair, message: String) -> Result<String, JsValue> {
+  let signature = key_pair.get_sk_ref()
+                          .sign(&message.as_bytes(), key_pair.get_pk_ref());
   let mut smaller_signature: [u8; 32] = Default::default();
   smaller_signature.copy_from_slice(&signature.0.to_bytes()[0..32]);
   Ok(hex::encode(smaller_signature))
@@ -175,31 +140,16 @@ pub fn get_tracked_amount(blind_asset_record: String,
 }
 
 #[wasm_bindgen]
-pub fn issue_asset(public_key_str: String,
-                   private_key_str: String,
+pub fn issue_asset(key_pair: &XfrKeyPair,
                    token_code: String,
                    seq_num: u64,
                    amount: u64)
                    -> Result<String, JsValue> {
-  let public_key;
-  let secret_key;
-
-  if let Ok(pub_key) = serde_json::from_str::<XfrPublicKey>(&public_key_str) {
-    public_key = pub_key;
-  } else {
-    return Err(JsValue::from_str("Could not deserialize public key."));
-  }
-  if let Ok(sec_key) = serde_json::from_str::<XfrSecretKey>(&private_key_str) {
-    secret_key = sec_key;
-  } else {
-    return Err(JsValue::from_str("Could not deserialize private key."));
-  }
-
   let asset_token = AssetTypeCode::new_from_base64(&token_code).unwrap();
 
   let mut txn_builder = TransactionBuilder::default();
-  match txn_builder.add_basic_issue_asset(&IssuerPublicKey { key: public_key },
-                                          &secret_key,
+  match txn_builder.add_basic_issue_asset(&IssuerPublicKey { key: *key_pair.get_pk_ref() },
+                                          key_pair.get_sk_ref(),
                                           &asset_token,
                                           seq_num,
                                           amount)
@@ -210,40 +160,24 @@ pub fn issue_asset(public_key_str: String,
 }
 
 #[wasm_bindgen]
-pub fn transfer_asset(public_key_str: String,
-                      secret_key_str: String,
+pub fn transfer_asset(transfer_from: &XfrKeyPair,
+                      transfer_to: &XfrKeyPair,
                       txo_sid: u64,
                       amount: u64,
-                      blind_asset_record_str: String)
+                      blind_asset_record: String)
                       -> Result<String, JsValue> {
-  let public_key;
-  let secret_key;
-  let blind_asset_record;
-
-  if let Ok(pub_key) = serde_json::from_str::<XfrPublicKey>(&public_key_str) {
-    public_key = pub_key;
-  } else {
-    return Err(JsValue::from_str("Could not deserialize public key."));
-  }
-
-  if let Ok(sec_key) = serde_json::from_str::<XfrSecretKey>(&secret_key_str) {
-    secret_key = sec_key;
-  } else {
-    return Err(JsValue::from_str("Could not deserialize private key."));
-  }
-
-  if let Ok(asset_record) = serde_json::from_str::<BlindAssetRecord>(&blind_asset_record_str) {
-    blind_asset_record = asset_record;
-  } else {
-    return Err(JsValue::from_str("Could not deserialize blind asset record."));
-  }
+  let blind_asset_record = serde_json::from_str::<BlindAssetRecord>(&blind_asset_record).map_err(|e| {
+                             JsValue::from_str("Could not deserialize blind asset record")
+                           })?;
 
   let mut txn_builder = TransactionBuilder::default();
-  match txn_builder.add_basic_transfer_asset(&[(&TxoRef::Absolute(TxoSID(txo_sid)),
+  match txn_builder.add_basic_transfer_asset(&transfer_from,
+                                             &[(&TxoRef::Absolute(TxoSID(txo_sid)),
                                                 &blind_asset_record,
-                                                amount,
-                                                &secret_key)],
-                                             &[(amount, &AccountAddress { key: public_key })])
+                                                amount)],
+                                             &[(amount,
+                                                &AccountAddress { key:
+                                                                    *transfer_to.get_pk_ref() })])
   {
     Ok(_) => return Ok(txn_builder.serialize_str().unwrap()),
     Err(_) => return Err(JsValue::from_str("Could not build transaction")),

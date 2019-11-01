@@ -12,7 +12,8 @@ use ledger::data_model::{
 };
 use rand::SeedableRng;
 use rand_chacha::ChaChaRng;
-use zei::basic_crypto::signatures::XfrSecretKey;
+use zei::basic_crypto::signatures::{XfrKeyPair, XfrSecretKey};
+use zei::serialization::ZeiFromToBytes;
 use zei::setup::PublicParams;
 use zei::xfr::asset_record::{build_blind_asset_record, open_asset_record};
 use zei::xfr::structs::{AssetRecord, BlindAssetRecord, OpenAssetRecord};
@@ -37,6 +38,7 @@ pub trait BuildsTransactions {
                                -> Result<(), PlatformError>;
   fn add_operation_transfer_asset(&mut self,
                                   input_sids: Vec<TxoRef>,
+                                  input_key: &XfrKeyPair,
                                   input_records: &[OpenAssetRecord],
                                   output_records: &[AssetRecord])
                                   -> Result<(), PlatformError>;
@@ -58,21 +60,17 @@ pub trait BuildsTransactions {
   }
 
   fn add_basic_transfer_asset(&mut self,
-                              transfer_from: &[(&TxoRef,
-                                 &BlindAssetRecord,
-                                 u64,
-                                 &XfrSecretKey)],
+                              key_pair: &XfrKeyPair,
+                              transfer_from: &[(&TxoRef, &BlindAssetRecord, u64)],
                               transfer_to: &[(u64, &AccountAddress)])
                               -> Result<(), PlatformError> {
     let input_sids: Vec<TxoRef> = transfer_from.iter()
-                                               .map(|(ref txo_sid, _, _, _)| *(*txo_sid))
+                                               .map(|(ref txo_sid, _, _)| *(*txo_sid))
                                                .collect();
-    let input_amounts: Vec<u64> = transfer_from.iter()
-                                               .map(|(_, _, amount, _)| *amount)
-                                               .collect();
+    let input_amounts: Vec<u64> = transfer_from.iter().map(|(_, _, amount)| *amount).collect();
     let input_oars: Result<Vec<OpenAssetRecord>, _> =
       transfer_from.iter()
-                   .map(|(_, ref ba, _, ref sk)| open_asset_record(&ba, &sk))
+                   .map(|(_, ref ba, _)| open_asset_record(&ba, &key_pair.get_sk_ref()))
                    .collect();
     let input_oars = input_oars?;
     let input_total: u64 = input_amounts.iter().sum();
@@ -98,7 +96,7 @@ pub trait BuildsTransactions {
                  .collect();
     let mut output_ars = output_ars?;
     output_ars.append(&mut partially_consumed_inputs);
-    self.add_operation_transfer_asset(input_sids, &input_oars, &output_ars)
+    self.add_operation_transfer_asset(input_sids, &key_pair, &input_oars, &output_ars)
   }
 }
 
@@ -141,6 +139,7 @@ impl BuildsTransactions for TransactionBuilder {
   }
   fn add_operation_transfer_asset(&mut self,
                                   input_sids: Vec<TxoRef>,
+                                  input_key: &XfrKeyPair,
                                   input_records: &[OpenAssetRecord],
                                   output_records: &[AssetRecord])
                                   -> Result<(), PlatformError> {
@@ -148,8 +147,9 @@ impl BuildsTransactions for TransactionBuilder {
     let mut prng: ChaChaRng;
     prng = ChaChaRng::from_seed([0u8; 32]);
 
-    let input_keys = Vec::new(); // TODO: multisig support...
-    self.txn.add_operation(Operation::TransferAsset(TransferAsset::new(TransferAssetBody::new(&mut prng, input_sids, input_records, output_records, &input_keys)?)?));
+    let input_keys = &[XfrKeyPair::zei_from_bytes(&input_key.zei_to_bytes())];
+
+    self.txn.add_operation(Operation::TransferAsset(TransferAsset::new(TransferAssetBody::new(&mut prng, input_sids, input_records, output_records, input_keys)?)?));
     Ok(())
   }
   fn serialize(&self) -> Result<Vec<u8>, PlatformError> {
