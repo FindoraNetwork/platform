@@ -161,8 +161,7 @@ mod tests {
                                              Some(asset_token),
                                              true,
                                              true,
-                                             &String::from("{}"),
-                                             true)
+                                             &String::from("{}"))
                  .unwrap();
 
     txn_builder_1.add_operation_create_asset(&IssuerPublicKey { key: public_key },
@@ -170,8 +169,7 @@ mod tests {
                                              None,
                                              true,
                                              true,
-                                             "test",
-                                             true)
+                                             "test")
                  .unwrap();
 
     // Cache transactions

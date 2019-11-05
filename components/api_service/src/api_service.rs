@@ -240,10 +240,8 @@ fn submit_transaction<RNG, U>(data: web::Data<Arc<RwLock<U>>>,
 
   let mut block = ledger.start_block()
                         .map_err(|e| actix_web::error::ErrorInternalServerError(e))?;
-
   let temp_sid = ledger.apply_transaction(&mut block, txn_effect)
                        .map_err(|e| actix_web::error::ErrorBadRequest(e));
-
   if let Err(e) = temp_sid {
     ledger.abort_block(block);
     return Err(e);
