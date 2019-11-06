@@ -2,7 +2,7 @@
 use clap::{App, Arg, SubCommand};
 use env_logger::{Env, Target};
 use ledger::data_model::errors::PlatformError;
-use ledger::data_model::{AccountAddress, AssetTypeCode, IssuerPublicKey, TxoRef, TxoSID};
+use ledger::data_model::{AssetTypeCode, IssuerPublicKey};
 use log::{error, trace}; // Other options: debug, info, warn
 use rand::SeedableRng;
 use rand_chacha::ChaChaRng;
@@ -14,7 +14,6 @@ use std::path::{Path, PathBuf};
 use txn_builder::{BuildsTransactions, TransactionBuilder};
 use zei::basic_crypto::signatures::{XfrKeyPair, XfrPublicKey, XfrSecretKey};
 use zei::serialization::ZeiFromToBytes;
-use zei::xfr::structs::BlindAssetRecord;
 
 fn load_txn_builder_from_file(file_name: &str) -> Result<TransactionBuilder, PlatformError> {
   let mut file = File::open(file_name).or_else(|_e| {
@@ -454,7 +453,6 @@ fn process_add_cmd(add_matches: &clap::ArgMatches,
                                      .unwrap_or("{}")
                                      .to_string();
       let allow_updates = define_asset_matches.is_present("allow_updates");
-      let confidential = define_asset_matches.is_present("confidential");
       let traceable = define_asset_matches.is_present("traceable");
       if let Err(e) = load_txn_builder_from_file(&transaction_file_name) {
         println!("{:?}", e);
@@ -472,8 +470,7 @@ fn process_add_cmd(add_matches: &clap::ArgMatches,
                                                                  Some(asset_token),
                                                                  allow_updates,
                                                                  traceable,
-                                                                 &memo,
-                                                                 confidential)
+                                                                 &memo)
         {
           store_txn_builder_to_file(&transaction_file_name, &txn_builder);
         } else {
@@ -528,63 +525,66 @@ fn process_add_cmd(add_matches: &clap::ArgMatches,
         }
       }
     }
-    ("transfer_asset", Some(transfer_asset_matches)) => {
-      let index;
-      if let Some(index_arg) = transfer_asset_matches.value_of("index") {
-        if let Ok(index_num_parsed) = index_arg.parse::<u64>() {
-          index = index_num_parsed;
-        } else {
-          println!("Improperly formatted index.");
-          return;
-        }
-      } else {
-        println!("TxoSID index is required to transfer asset.");
-        return;
-      }
-      let amount;
-      if let Some(amount_arg) = transfer_asset_matches.value_of("transfer_amount") {
-        if let Ok(amount_arg_parsed) = amount_arg.parse::<u64>() {
-          amount = amount_arg_parsed;
-        } else {
-          println!("Improperly formatted amount.");
-          return;
-        }
-      } else {
-        println!("Amount is required to transfer asset.");
-        return;
-      }
-      let blind_asset_record: BlindAssetRecord;
-      if let Some(blind_asset_record_arg) = transfer_asset_matches.value_of("blind_asset_record") {
-        if let Ok(blind_asset_record_parsed) = serde_json::from_str(&blind_asset_record_arg) {
-          blind_asset_record = blind_asset_record_parsed;
-        } else {
-          println!("Improperly formatted blind asset record JSON.");
-          return;
-        }
-      } else {
-        println!("Blind asset record JSON is required to transfer asset.");
-        return;
-      }
-      let address: XfrPublicKey;
-      if let Some(address_arg) = transfer_asset_matches.value_of("address") {
-        address = XfrPublicKey::zei_from_bytes(address_arg.as_bytes());
-      } else {
-        println!("Address required for transfer.");
-        return;
-      }
-      if let Ok(mut txn_builder) = load_txn_builder_from_file(&transaction_file_name) {
-        if let Ok(_res) =
-          txn_builder.add_basic_transfer_asset(&[(&TxoRef::Absolute(TxoSID(index)),
-                                                  &blind_asset_record,
-                                                  amount,
-                                                  &priv_key)],
-                                               &[(amount, &AccountAddress { key: address })])
-        {
-          store_txn_builder_to_file(&transaction_file_name, &txn_builder);
-        } else {
-          println!("Failed to add operation to transaction.");
-        }
-      }
+    ("transfer_asset", Some(_transfer_asset_matches)) => {
+      //TODO: (noah/nathan) because of recent zei refactor we need an
+      // XfrKeyPair to sign all of the inputs for transferring. Currently, we store the keys
+      // as distinct private/public keys and there is no way to recreate the keypair
+      //let index;
+      //if let Some(index_arg) = transfer_asset_matches.value_of("index") {
+      //  if let Ok(index_num_parsed) = index_arg.parse::<u64>() {
+      //    index = index_num_parsed;
+      //  } else {
+      //    println!("Improperly formatted index.");
+      //    return;
+      //  }
+      //} else {
+      //  println!("TxoSID index is required to transfer asset.");
+      //  return;
+      //}
+      //let amount;
+      //if let Some(amount_arg) = transfer_asset_matches.value_of("transfer_amount") {
+      //  if let Ok(amount_arg_parsed) = amount_arg.parse::<u64>() {
+      //    amount = amount_arg_parsed;
+      //  } else {
+      //    println!("Improperly formatted amount.");
+      //    return;
+      //  }
+      //} else {
+      //  println!("Amount is required to transfer asset.");
+      //  return;
+      //}
+      //let blind_asset_record: BlindAssetRecord;
+      //if let Some(blind_asset_record_arg) = transfer_asset_matches.value_of("blind_asset_record") {
+      //  if let Ok(blind_asset_record_parsed) = serde_json::from_str(&blind_asset_record_arg) {
+      //    blind_asset_record = blind_asset_record_parsed;
+      //  } else {
+      //    println!("Improperly formatted blind asset record JSON.");
+      //    return;
+      //  }
+      //} else {
+      //  println!("Blind asset record JSON is required to transfer asset.");
+      //  return;
+      //}
+      //let address: XfrPublicKey;
+      //if let Some(address_arg) = transfer_asset_matches.value_of("address") {
+      //  address = XfrPublicKey::zei_from_bytes(address_arg.as_bytes());
+      //} else {
+      //  println!("Address required for transfer.");
+      //  return;
+      //}
+      //if let Ok(mut txn_builder) = load_txn_builder_from_file(&transaction_file_name) {
+      //if let Ok(_res) =
+      //  txn_builder.add_basic_transfer_asset(&[(&TxoRef::Absolute(TxoSID(index)),
+      //                                          &blind_asset_record,
+      //                                          amount,
+      //                                          &priv_key)],
+      //                                       &[(amount, &AccountAddress { key: address })])
+      //{
+      //  store_txn_builder_to_file(&transaction_file_name, &txn_builder);
+      //} else {
+      //  println!("Failed to add operation to transaction.");
+      //}
+      //}
     }
     _ => unreachable!(),
   }
