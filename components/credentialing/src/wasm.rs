@@ -1,4 +1,4 @@
-// Credentialing interface, with Issuer, User and Prover components
+// Issuer, User and Prover structs for credentialing
 // Currently support verifying the lower bound of the credit score
 //
 // To compile, run wasm-pack build in the credentialing directory
@@ -45,13 +45,11 @@ impl Issuer {
              secret_key: issuer_sk }
   }
 
-  #[wasm_bindgen]
   // Convert an Issuer to JsValue
   pub fn jsvalue(&mut self) -> JsValue {
     JsValue::from_serde(&self).unwrap()
   }
 
-  #[wasm_bindgen]
   // Sign the low bound of the credit score
   pub fn sign_min_credit_score(&self, user_jsvalue: &JsValue, min_credit_score: u64) -> JsValue {
     let mut prng: ChaChaRng;
@@ -84,13 +82,11 @@ impl User {
            secret_key: user_sk }
   }
 
-  #[wasm_bindgen]
   // Convert a User to JsValue
   pub fn jsvalue(&mut self) -> JsValue {
     JsValue::from_serde(&self).unwrap()
   }
 
-  #[wasm_bindgen]
   // Commit the lower bound of the credit score with the issuer's signature
   pub fn commit_min_credit_score(&self,
                                  issuer_jsvalue: &JsValue,
@@ -122,7 +118,6 @@ pub struct Prover;
 
 #[wasm_bindgen]
 impl Prover {
-  #[wasm_bindgen]
   // Verify the lower bound of credit score
   pub fn verify_min_credit_score(proof_jsvalue: &JsValue,
                                  issuer_jsvalue: &JsValue,
@@ -137,7 +132,6 @@ impl Prover {
     ac_verify::<BLSGt>(&issuer.public_key, &attrs, &bitmap, &proof).is_ok()
   }
 
-  #[wasm_bindgen]
   // Prove that the credit score meets the requirement
   pub fn prove_min_credit_score(proof_jsvalue: &JsValue,
                                 issuer_jsvalue: &JsValue,
