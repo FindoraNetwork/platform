@@ -1,8 +1,8 @@
 // Credentialing interface, with Issuer, User and Prover components
 // Currently support verifying the lower bound of the credit score
 //
-// To compile, run wasm-pack build in the wasm_credential directory
-// To test, run wasm-pack test --node in the wasm_credential directory
+// To compile, run wasm-pack build in the credentialing directory
+// To test, run wasm-pack test --node in the credentialing directory
 
 #![deny(warnings)]
 extern crate rand;
