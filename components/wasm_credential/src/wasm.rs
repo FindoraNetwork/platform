@@ -1,4 +1,4 @@
-// Credentialling interface, with Issuer, User and Prover components
+// Credentialing interface, with Issuer, User and Prover components
 // Currently support verifying the lower bound of the credit score
 //
 // To compile, run wasm-pack build in the wasm_credential directory
