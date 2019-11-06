@@ -47,7 +47,7 @@ impl Issuer {
 
   #[wasm_bindgen]
   // Convert an Issuer to JsValue
-  pub fn to_jsvalue(&mut self) -> JsValue {
+  pub fn jsvalue(&mut self) -> JsValue {
     JsValue::from_serde(&self).unwrap()
   }
 
@@ -86,7 +86,7 @@ impl User {
 
   #[wasm_bindgen]
   // Convert a User to JsValue
-  pub fn to_jsvalue(&mut self) -> JsValue {
+  pub fn jsvalue(&mut self) -> JsValue {
     JsValue::from_serde(&self).unwrap()
   }
 
@@ -163,9 +163,9 @@ use wasm_bindgen_test::*;
 // Test to ensure that credit score is checked correctly
 fn test_credit_score_proof() {
   let mut issuer = Issuer::new(10);
-  let issuer_jsvalue = issuer.to_jsvalue();
+  let issuer_jsvalue = issuer.jsvalue();
   let mut user = User::new(&issuer, "user");
-  let user_jsvalue = user.to_jsvalue();
+  let user_jsvalue = user.jsvalue();
 
   let min_credit_score = 520;
   let fake_credit_score = 620;
