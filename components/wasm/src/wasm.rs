@@ -16,17 +16,23 @@ use ledger::data_model::{AccountAddress, AssetTypeCode, IssuerPublicKey, TxoRef,
 
 use bulletproofs::PedersenGens;
 use ledger::utils::sha256;
+use rand::FromEntropy;
 use rand::SeedableRng;
 use rand_chacha::ChaChaRng;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::future_to_promise;
 use wasm_bindgen_futures::JsFuture;
 use web_sys::{Request, RequestInit, RequestMode};
-use zei::algebra::ristretto::RistPoint;
-use zei::basic_crypto::elgamal::elgamal_decrypt;
+use zei::algebra::bls12_381::{BLSScalar, BLSG1};
+use zei::algebra::groups::Group;
+use zei::algebra::ristretto::{RistPoint, RistScalar};
+use zei::basic_crypto::elgamal::{
+  elgamal_decrypt, elgamal_derive_public_key, elgamal_generate_secret_key, ElGamalPublicKey,
+  ElGamalSecretKey,
+};
 use zei::basic_crypto::signatures::XfrKeyPair;
 use zei::serialization::ZeiFromToBytes;
-use zei::xfr::structs::BlindAssetRecord;
+use zei::xfr::structs::{AssetIssuerPubKeys, BlindAssetRecord};
 
 const HOST: &'static str = "localhost";
 const PORT: &'static str = "8668";
@@ -56,6 +62,21 @@ pub fn keypair_to_str(key_pair: &XfrKeyPair) -> String {
 #[wasm_bindgen]
 pub fn keypair_from_str(str: String) -> XfrKeyPair {
   return XfrKeyPair::zei_from_bytes(&hex::decode(str).unwrap());
+}
+
+#[wasm_bindgen]
+pub fn generate_elgamal_secret_key() -> String {
+  let mut small_rng = ChaChaRng::from_entropy();
+  let sk = elgamal_generate_secret_key::<_, RistScalar>(&mut small_rng);
+  return serde_json::to_string(&sk).unwrap();
+}
+
+#[wasm_bindgen]
+pub fn derive_elgamal_public_key(elgamal_secret_key: String) -> Result<String, JsValue> {
+  let pc_gens = PedersenGens::default();
+  let sk = serde_json::from_str::<ElGamalSecretKey<RistScalar>>(&elgamal_secret_key).map_err(|_e| return JsValue::from_str("could not deserialize elgamal key"))?;
+  let pk = elgamal_derive_public_key(&RistPoint(pc_gens.B), &sk);
+  return Ok(serde_json::to_string(&pk).unwrap());
 }
 
 // Defines an asset on the ledger using the serialized strings in KeyPair and a couple of boolean policies
@@ -136,6 +157,7 @@ pub fn get_tracked_amount(blind_asset_record: String,
 
 #[wasm_bindgen]
 pub fn issue_asset(key_pair: &XfrKeyPair,
+                   elgamal_pub_key: String,
                    token_code: String,
                    seq_num: u64,
                    amount: u64)
@@ -143,8 +165,24 @@ pub fn issue_asset(key_pair: &XfrKeyPair,
   let asset_token = AssetTypeCode::new_from_base64(&token_code).unwrap();
 
   let mut txn_builder = TransactionBuilder::default();
+  // construct asset tracking keys
+  let issuer_keys;
+  if elgamal_pub_key.is_empty() {
+    issuer_keys = None
+  } else {
+    let pk = serde_json::from_str::<ElGamalPublicKey<RistPoint>>(&elgamal_pub_key).map_err(|_e| return JsValue::from_str("could not deserialize elgamal key"))?;
+    let mut small_rng = ChaChaRng::from_entropy();
+    let sk = elgamal_generate_secret_key::<_, BLSScalar>(&mut small_rng);
+    // For now, zei expecs both id reveal key and tracking decryption key, so we construct a dummy
+    // id reveal key
+    let id_reveal_pub_key = elgamal_derive_public_key(&BLSG1::get_base(), &sk);
+    issuer_keys = Some(AssetIssuerPubKeys { eg_ristretto_pub_key: pk,
+                                            eg_blsg1_pub_key: id_reveal_pub_key });
+  }
+
   match txn_builder.add_basic_issue_asset(&IssuerPublicKey { key: *key_pair.get_pk_ref() },
                                           key_pair.get_sk_ref(),
+                                          &issuer_keys,
                                           &asset_token,
                                           seq_num,
                                           amount)
@@ -275,5 +313,12 @@ mod tests {
     let keypair = XfrKeyPair::generate(&mut prng);
     let txn = issue_asset(&keypair, String::from("abcd"), 1, 5);
     assert!(txn.is_ok());
+  }
+
+  #[test]
+  fn test_elgamal_serialization() {
+    let sk = generate_elgamal_secret_key();
+    let pk = derive_elgamal_public_key(sk);
+    assert!(pk.is_ok());
   }
 }

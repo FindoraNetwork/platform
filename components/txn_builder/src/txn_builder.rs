@@ -13,7 +13,7 @@ use zei::basic_crypto::signatures::{XfrKeyPair, XfrSecretKey};
 use zei::serialization::ZeiFromToBytes;
 use zei::setup::PublicParams;
 use zei::xfr::asset_record::{build_blind_asset_record, open_asset_record};
-use zei::xfr::structs::{AssetRecord, BlindAssetRecord, OpenAssetRecord};
+use zei::xfr::structs::{AssetIssuerPubKeys, AssetRecord, BlindAssetRecord, OpenAssetRecord};
 
 pub trait BuildsTransactions {
   fn transaction(&self) -> &Transaction;
@@ -44,6 +44,7 @@ pub trait BuildsTransactions {
   fn add_basic_issue_asset(&mut self,
                            pub_key: &IssuerPublicKey,
                            priv_key: &XfrSecretKey,
+                           tracking_keys: &Option<AssetIssuerPubKeys>,
                            token_code: &AssetTypeCode,
                            seq_num: u64,
                            amount: u64)
@@ -51,7 +52,7 @@ pub trait BuildsTransactions {
     let mut prng = ChaChaRng::from_seed([0u8; 32]);
     let params = PublicParams::new();
     let ar = AssetRecord::new(amount, token_code.val, pub_key.key)?;
-    let ba = build_blind_asset_record(&mut prng, &params.pc_gens, &ar, false, false, &None);
+    let ba = build_blind_asset_record(&mut prng, &params.pc_gens, &ar, true, true, tracking_keys);
     self.add_operation_issue_asset(pub_key, priv_key, token_code, seq_num, &[TxOutput(ba)])
   }
 
@@ -112,9 +113,9 @@ impl BuildsTransactions for TransactionBuilder {
                                 token_code: Option<AssetTypeCode>,
                                 updatable: bool,
                                 traceable: bool,
-                                memo: &str)
+                                _memo: &str)
                                 -> Result<(), PlatformError> {
-    self.txn.add_operation(Operation::DefineAsset(DefineAsset::new(DefineAssetBody::new(&token_code.unwrap_or_else(AssetTypeCode::gen_random), pub_key, updatable, traceable, Some(Memo(String::from(memo))), None)?, pub_key, priv_key)?));
+    self.txn.add_operation(Operation::DefineAsset(DefineAsset::new(DefineAssetBody::new(&token_code.unwrap_or_else(AssetTypeCode::gen_random), pub_key, updatable, traceable, None, Some(ConfidentialMemo {}))?, pub_key, priv_key)?));
     Ok(())
   }
   fn add_operation_issue_asset(&mut self,
