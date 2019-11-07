@@ -84,7 +84,7 @@ pub fn create_asset(key_pair: &XfrKeyPair,
 #[wasm_bindgen]
 pub fn sha256str(str: &str) -> String {
   let digest = sha256::hash(&str.as_bytes());
-  hex::encode(digest).into()
+  hex::encode(digest)
 }
 
 #[wasm_bindgen]
@@ -234,7 +234,7 @@ pub fn get_asset_token(name: String) -> Promise {
   let req_string = format!("http://{}:{}/asset_token/{}",
                            HOST,
                            PORT,
-                           format!("{}", name));
+                           name);
 
   create_query_promise(&opts, &req_string)
 }
