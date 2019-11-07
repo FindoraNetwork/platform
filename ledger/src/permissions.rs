@@ -1,3 +1,4 @@
+use fs2::FileExt;
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::Error;
@@ -61,12 +62,18 @@ impl TransactionDictionary {
   }
 
   /// Write a dictionary's contents to a file.
-  pub fn write(&self, mut data: File) -> Result<()> {
-    if let Err(e) = bincode::serialize_into(&mut data, &self) {
+  pub fn write(&self, data: &mut File) -> Result<()> {
+    // The serialize interface consumes our file descriptor.
+    let copy = data.duplicate();
+
+    if let Err(e) = bincode::serialize_into(data, &self) {
       return er!("{}", e);
     }
 
-    data.sync_all()?;
+    if let Ok(file) = copy {
+      file.sync_all()?;
+    }
+
     Ok(())
   }
 
@@ -148,14 +155,14 @@ mod tests {
     let path = "test-dictionary";
 
     let _ = remove_file(&path);
-    let file = OpenOptions::new().create(true)
-                                 .read(true)
-                                 .write(true)
-                                 .open(&path)
-                                 .unwrap();
+    let mut file = OpenOptions::new().create(true)
+                                     .read(true)
+                                     .write(true)
+                                     .open(&path)
+                                     .unwrap();
 
     // Write the dictionary to a file and try reopening it.
-    if let Err(e) = dictionary.write(file) {
+    if let Err(e) = dictionary.write(&mut file) {
       panic!("Close returned an error:  {}", e);
     }
 
@@ -186,12 +193,12 @@ mod tests {
     assert!(dictionary.query("undefined", 3) == TransactionPermissions::Undefined);
 
     // Try another write.
-    let file = OpenOptions::new().create(true)
-                                 .read(true)
-                                 .write(true)
-                                 .open(&path)
-                                 .unwrap();
-    dictionary.write(file).unwrap();
+    let mut file = OpenOptions::new().create(true)
+                                     .read(true)
+                                     .write(true)
+                                     .open(&path)
+                                     .unwrap();
+    dictionary.write(&mut file).unwrap();
     let _ = remove_file(&path);
   }
 }
