@@ -1,17 +1,17 @@
 // build.rs
 
+extern crate codegen;
 extern crate serde;
 extern crate serde_json;
-extern crate codegen;
 
+use codegen::{Scope, Type};
+use serde_json::{Map, Value};
 use std::env;
 use std::error::Error;
 use std::fs::File;
-use std::io::Write;
 use std::io::BufReader;
+use std::io::Write;
 use std::path::Path;
-use serde_json::{Value, Map};
-use codegen::{Scope, Type};
 
 fn read_schema_from_file<P: AsRef<Path>>(path: P) -> Result<Value, Box<dyn Error>> {
   // Open the file in read-only mode with buffer.
@@ -27,7 +27,7 @@ fn read_schema_from_file<P: AsRef<Path>>(path: P) -> Result<Value, Box<dyn Error
 fn extract_string(value: &Value) -> &String {
   match value {
     Value::String(s) => return s,
-    _ => panic!("Expected a string")
+    _ => panic!("Expected a string"),
   }
 }
 
@@ -35,16 +35,16 @@ fn to_pair(value: &Value) -> (&String, &String) {
   match value {
     Value::Array(v) => match v.as_slice() {
       [l, r] => (extract_string(l), extract_string(r)),
-      _ => panic!("expected a pair")
+      _ => panic!("expected a pair"),
     },
-    _ => panic!("Expected a string")
+    _ => panic!("Expected a string"),
   }
 }
 
 fn extract_args(value: &Value) -> Vec<(&String, &String)> {
   match value {
     Value::Array(v) => v.into_iter().map(|p| to_pair(p)).collect(),
-    _ => panic!("Expected a string")
+    _ => panic!("Expected a string"),
   }
 }
 
@@ -102,7 +102,7 @@ fn add_wasm_func(scope: &mut Scope, fn_desc: &Map<String, Value>) {
   } else {
     panic!("unhandled function name");
   }
-  
+
   new_fn.line("    },");
   new_fn.line("    _ => Err(JsValue::from_str(\"Could not deserialize key pair\"))");
   new_fn.line("}");
@@ -126,9 +126,9 @@ fn main() -> Result<(), std::io::Error> {
 
   match &json["wasm-funcs"] {
     Value::Array(vv) => add_wasm_funcs(&mut scope, vv),
-    _ => panic!("Invalid JSON")
+    _ => panic!("Invalid JSON"),
   }
-  
+
   out_file.write_all(scope.to_string().as_bytes()).unwrap();
 
   Ok(())

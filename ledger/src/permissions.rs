@@ -44,7 +44,9 @@ pub struct TransactionDictionary {
 
 impl TransactionDictionary {
   /// Create a new, empty directory.
-  pub fn new() -> TransactionDictionary { Default::default() }
+  pub fn new() -> TransactionDictionary {
+    Default::default()
+  }
 
   /// Create a directory and initialize it from a file saved
   /// from a previous run.

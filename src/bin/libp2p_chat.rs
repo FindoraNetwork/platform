@@ -49,8 +49,7 @@
 //!
 //! The two nodes then connect.
 
-pub fn main() {
-}
+pub fn main() {}
 /*
 use tokio;
 use tokio_stdin_stdout;

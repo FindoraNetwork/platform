@@ -126,7 +126,7 @@ pub fn get_tracked_amount(blind_asset_record: String,
         let amount = u32_pair_to_u64((u8_littleendian_slice_to_u32(s1.0.as_bytes()),
                                       u8_littleendian_slice_to_u32(s2.0.as_bytes())));
         Ok(amount.to_string())
-      },
+      }
       (_, _) => Err(JsValue::from_str("Unable to decrypt amount")),
     }
   } else {
@@ -231,10 +231,7 @@ pub fn get_asset_token(name: String) -> Promise {
   opts.method("GET");
   opts.mode(RequestMode::Cors);
 
-  let req_string = format!("http://{}:{}/asset_token/{}",
-                           HOST,
-                           PORT,
-                           name);
+  let req_string = format!("http://{}:{}/asset_token/{}", HOST, PORT, name);
 
   create_query_promise(&opts, &req_string)
 }
