@@ -1814,14 +1814,12 @@ impl AppendOnlyMerkle {
   fn read_struct(&mut self, level: usize) -> Result<Block, Error> {
     unsafe {
       let mut s: MaybeUninit<Block> = MaybeUninit::uninit();
-      // let mut s = std::mem::uninitialized();
 
-      let buffer = // from_raw_parts_mut(&mut s as *mut Block as *mut u8, BLOCK_SIZE);
+      let buffer =
         from_raw_parts_mut(s.as_mut_ptr() as *mut u8, BLOCK_SIZE);
 
       match self.files[level].read_exact(buffer) {
         Ok(()) => {
-          // Ok(s)
           Ok(mem::transmute::<_, Block>(s))
         }
         Err(e) => {
