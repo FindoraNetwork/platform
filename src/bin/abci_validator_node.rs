@@ -36,7 +36,7 @@ impl abci::Application for ABCILedgerApp {
 
     if let Some(tx) = convert_tx(req.get_tx()) {
       if let Ok(mut state) = self.la.get_committed_state().write() {
-        if let Err(_) = TxnEffect::compute_effect(state.get_prng(), tx) {
+        if TxnEffect::compute_effect(state.get_prng(), tx).is_err() {
           resp.set_code(1);
           resp.set_log(String::from("Check failed"));
         }
@@ -56,7 +56,7 @@ impl abci::Application for ABCILedgerApp {
     // Get the Tx [u8]
     let mut resp = ResponseDeliverTx::new();
     if let Some(tx) = convert_tx(req.get_tx()) {
-      if let Ok(_) = self.la.cache_transaction(tx) {
+      if self.la.cache_transaction(tx).is_ok() {
         return resp;
       }
     }

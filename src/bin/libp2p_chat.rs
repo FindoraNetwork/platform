@@ -48,6 +48,10 @@
 //! ```
 //!
 //! The two nodes then connect.
+
+pub fn main() {
+}
+/*
 use tokio;
 use tokio_stdin_stdout;
 
@@ -177,3 +181,4 @@ fn main() {
         Ok(Async::NotReady)
     }));
 }
+*/
