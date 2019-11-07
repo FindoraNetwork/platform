@@ -166,12 +166,12 @@ fn automated_test() -> bool {
                BLSScalar::from_u64(720),
                BLSScalar::from_u64(20190820)];
   let att_count = bitmap.len();
-  let (issuer_pk, issuer_sk) = ac_keygen_issuer::<_, BLSScalar, BLSGt>(&mut prng, att_count);
+  let (issuer_pk, issuer_sk) = ac_keygen_issuer::<_, BLSGt>(&mut prng, att_count);
 
   trace!("Issuer public key: {:?}", issuer_pk);
   trace!("Issuer secret key: {:?}", issuer_sk);
 
-  let (user_pk, user_sk) = ac_keygen_user::<_, BLSScalar, BLSGt>(&mut prng, &issuer_pk);
+  let (user_pk, user_sk) = ac_keygen_user::<_, BLSGt>(&mut prng, &issuer_pk);
   trace!("User public key: {:#?}", user_pk);
   info!("Address of user public key: {:?}", sha256(&user_pk));
 
@@ -179,12 +179,12 @@ fn automated_test() -> bool {
   trace!("User secret key: {:?}", user_sk);
 
   // Issuer vouches for the user's attributes given above.
-  let sig = ac_sign::<_, BLSScalar, BLSGt>(&mut prng, &issuer_sk, &user_pk, &attrs);
+  let sig = ac_sign::<_, BLSGt>(&mut prng, &issuer_sk, &user_pk, &attrs);
   trace!("Credential signature: {:?}", sig);
 
   // The user presents this to the second party in a transaction as proof
   // attributes have been committed without revealing the values.
-  let reveal_sig = ac_reveal::<_, BLSScalar, BLSGt>(&mut prng, &user_sk, &issuer_pk, &sig, &attrs,
+  let reveal_sig = ac_reveal::<_, BLSGt>(&mut prng, &user_sk, &issuer_pk, &sig, &attrs,
                                                     &bitmap).unwrap();
 
   // Decision point. Does the second party agree to do business?
@@ -205,7 +205,7 @@ fn automated_test() -> bool {
   // this. But presumably, the reveal signature alone is insufficient to
   // derive the attributes. Presumably if the range of legal values were small,
   // exhaustive search would not be too exhausting. (?)
-  let verified = ac_verify::<BLSScalar, BLSGt>(&issuer_pk,
+  let verified = ac_verify::<BLSGt>(&issuer_pk,
                                                revealed_attrs.as_slice(),
                                                &bitmap,
                                                &reveal_sig).is_ok();
@@ -269,7 +269,7 @@ fn new_issuer() -> Issuer {
   // For a real application, the seed should be random.
   prng = ChaChaRng::from_seed([0u8; 32]);
   let att_count = 10;
-  let (issuer_pk, issuer_sk) = ac_keygen_issuer::<_, BLSScalar, BLSGt>(&mut prng, att_count);
+  let (issuer_pk, issuer_sk) = ac_keygen_issuer::<_, BLSGt>(&mut prng, att_count);
   Issuer { public_key: issuer_pk,
            secret_key: issuer_sk }
 }
@@ -390,7 +390,7 @@ fn subcommand_add_user(registry_path: &Path, issuer: &str) -> ShellExitStatus {
     let mut prng: ChaChaRng;
     // For a real application, the seed should be random.
     prng = ChaChaRng::from_seed([0u8; 32]);
-    let (user_pk, user_sk) = ac_keygen_user::<_, BLSScalar, BLSGt>(&mut prng, &issuer.public_key);
+    let (user_pk, user_sk) = ac_keygen_user::<_, BLSGt>(&mut prng, &issuer.public_key);
     let au = AddrUser { address: sha256(&user_pk),
                         user_type: 2,
                         user: User { public_key: user_pk,
@@ -425,7 +425,7 @@ fn subcommand_sign(registry_path: &Path, user: &str, issuer: &str) -> ShellExitS
                    BLSScalar::from_u64(1),
                    BLSScalar::from_u64(2),
                    BLSScalar::from_u64(3)];
-      let sig = ac_sign::<_, BLSScalar, BLSGt>(&mut prng,
+      let sig = ac_sign::<_, BLSGt>(&mut prng,
                                                &issuer_keys.secret_key,
                                                &user_keys.public_key,
                                                &attrs);
@@ -498,7 +498,7 @@ fn subcommand_reveal(registry_path: &Path, user: &str, issuer: &str) -> ShellExi
                    BLSScalar::from_u64(3)];
       let bitmap = [false, false, false, false];
       // TODO handle the error
-      let proof = ac_reveal::<_, BLSScalar, BLSGt>(&mut prng,
+      let proof = ac_reveal::<_, BLSGt>(&mut prng,
                                                    &user_keys.secret_key,
                                                    &issuer_keys.public_key,
                                                    &sig,
@@ -557,7 +557,7 @@ fn subcommand_verify(registry_path: &Path, user: &str, issuer: &str) -> ShellExi
                    BLSScalar::from_u64(3)];
       let bitmap = [false, false, false, false];
       verified =
-        ac_verify::<BLSScalar, BLSGt>(&issuer_keys.public_key, &attrs, &bitmap, &proof).is_ok();
+        ac_verify::<BLSGt>(&issuer_keys.public_key, &attrs, &bitmap, &proof).is_ok();
     }
     (lookup_issuer, lookup_proof) => {
       match lookup_issuer {
