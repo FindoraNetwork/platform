@@ -12,5 +12,6 @@ extern crate zei;
 extern crate findora;
 
 pub mod data_model;
+pub mod permissions;
 pub mod store;
 pub mod utils;

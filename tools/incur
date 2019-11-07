@@ -1,10 +1,17 @@
 #! /bin/sh
 
-set -e
+if [ "$1" == "--dontstop" ]
+then
+  stop="echo Continuing."
+  shift
+  echo " === Ignoring errors"
+else
+  stop="exit 1"
+fi
 
 if [ "$1" == "" -o "$1" == "help" ]
 then
-  echo "Usage:  incur <cargo command> [ cargo options...]"
+  echo "Usage:  incur [ --dontstop ] <cargo command> [ cargo options...]"
   echo " "
   echo "Example:"
   echo " "
@@ -36,5 +43,5 @@ echo "Repository "`pwd`":"
 for i in $directories
 do
     echo " ===== "$i":"
-    (cd $i; cargo $*) || exit 1
+    (cd $i; cargo $*) || $stop
 done
