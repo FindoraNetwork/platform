@@ -26,10 +26,8 @@ do
 done
 
 export directories=$(
-   find .  -name "target" -prune -o -name ".git" -prune -o -name "src"  -print | sort
+   find .  -name "target" -prune -o -name ".git"   -prune -o -name "src" -print | sort
  )
-
-echo $directories
 
 echo "Repository "`pwd`":"
 
