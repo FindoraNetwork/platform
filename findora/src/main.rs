@@ -104,7 +104,7 @@ fn decode(value: u8) -> (bool, bool) {
     'x' => (false, false), // The second value is ignored by the server
     _ => {
       flags_usage();
-      exit(0);
+      exit(1);
     }
   }
 }
