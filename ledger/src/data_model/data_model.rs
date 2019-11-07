@@ -59,8 +59,8 @@ pub struct AssetDigest {
 }
 
 // TODO: Define Memo
-#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, Hash, PartialEq, Serialize)]
-pub struct Memo;
+#[derive(Clone, Debug, Default, Deserialize, Eq, Hash, PartialEq, Serialize)]
+pub struct Memo(pub String);
 #[derive(Clone, Copy, Debug, Default, Deserialize, Eq, Hash, PartialEq, Serialize)]
 pub struct ConfidentialMemo;
 #[derive(Clone, Copy, Debug, Default, Deserialize, Eq, Hash, PartialEq, Serialize)]
@@ -238,14 +238,14 @@ impl DefineAssetBody {
     asset_def.updatable = updatable;
     asset_def.traceable = traceable;
 
-    if memo.is_some() {
-      asset_def.memo = *memo.as_ref().unwrap();
+    if let Some(memo) = memo {
+      asset_def.memo = Memo(memo.0);
     } else {
-      asset_def.memo = Memo {};
+      asset_def.memo = Memo(String::from(""));
     }
 
-    if confidential_memo.is_some() {
-      asset_def.confidential_memo = *confidential_memo.as_ref().unwrap();
+    if let Some(confidential_memo) = confidential_memo {
+      asset_def.confidential_memo = confidential_memo;
     } else {
       asset_def.confidential_memo = ConfidentialMemo {};
     }
