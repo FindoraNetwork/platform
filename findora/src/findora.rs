@@ -3,7 +3,14 @@
 //!
 //! This module implements a variety of tools for general use.
 
+extern crate serde;
+extern crate serde_derive;
+
+use serde_derive::Deserialize;
+use serde_derive::Serialize;
 use std::ptr::read_volatile;
+
+pub mod dw;
 
 /// This structure defines the table entries for the logging enable flags.
 /// The table has one entry per category.
@@ -169,25 +176,28 @@ pub fn set_timestamp(f: fn() -> String) {
 
 /// Define the structure used to specify dynamic (runtime) changes
 /// to the logging flags.
+#[derive(Serialize, Deserialize)]
 pub struct LoggingEnableFlags {
-  log: bool,
-  error: bool,
-  warning: bool,
-  debug: bool,
-  info: bool,
+  pub name: String,
 
-  modify_log: bool,
-  modify_error: bool,
-  modify_warning: bool,
-  modify_debug: bool,
-  modify_info: bool,
+  pub log: bool,
+  pub error: bool,
+  pub warning: bool,
+  pub debug: bool,
+  pub info: bool,
+
+  pub modify_log: bool,
+  pub modify_error: bool,
+  pub modify_warning: bool,
+  pub modify_debug: bool,
+  pub modify_info: bool,
 }
 
 /// Set the logging flags for a category at run time.
-pub fn set_logging(name: &str, flags: &LoggingEnableFlags) -> bool {
+pub fn set_logging(flags: &LoggingEnableFlags) -> bool {
   unsafe {
     for entry in &mut TABLE {
-      if entry.name == name {
+      if entry.name == flags.name {
         if flags.modify_log {
           entry.set_log(flags.log);
         }
@@ -547,7 +557,8 @@ mod tests {
 
   #[test]
   fn test_basic_logging() {
-    let flags = LoggingEnableFlags { log: false,
+    let flags = LoggingEnableFlags { name: "test".to_owned(),
+                                     log: false,
                                      error: false,
                                      warning: false,
                                      debug: false,
@@ -558,10 +569,11 @@ mod tests {
                                      modify_debug: true,
                                      modify_info: true };
 
-    assert!(set_logging("test", &flags));
-    check("test", &flags);
+    assert!(set_logging(&flags));
+    check(&flags);
 
-    let flags = LoggingEnableFlags { log: true,
+    let flags = LoggingEnableFlags { name: "test".to_owned(),
+                                     log: true,
                                      error: true,
                                      warning: true,
                                      debug: true,
@@ -572,11 +584,12 @@ mod tests {
                                      modify_debug: true,
                                      modify_info: true };
 
-    assert!(set_logging("test", &flags));
-    check("test", &flags);
+    assert!(set_logging(&flags));
+    check(&flags);
 
     // Try an arbitrary set of flags.
-    let mut flags = LoggingEnableFlags { log: false,
+    let mut flags = LoggingEnableFlags { name: "test".to_owned(),
+                                         log: false,
                                          error: true,
                                          warning: false,
                                          debug: true,
@@ -587,8 +600,8 @@ mod tests {
                                          modify_debug: true,
                                          modify_info: true };
 
-    assert!(set_logging("test", &flags));
-    check("test", &flags);
+    assert!(set_logging(&flags));
+    check(&flags);
 
     // Invert the flags and try again.
     flags.log = !flags.log;
@@ -597,8 +610,8 @@ mod tests {
     flags.debug = !flags.debug;
     flags.info = !flags.info;
 
-    assert!(set_logging("test", &flags));
-    check("test", &flags);
+    assert!(set_logging(&flags));
+    check(&flags);
 
     // Invert the flags and try the modify_* enablers.
     flags.log = !flags.log;
@@ -614,7 +627,7 @@ mod tests {
     flags.modify_info = false;
 
     // Call the flag-setting routine.
-    assert!(set_logging("test", &flags));
+    assert!(set_logging(&flags));
 
     flags.log = !flags.log;
     flags.error = !flags.error;
@@ -622,43 +635,44 @@ mod tests {
     flags.debug = !flags.debug;
     flags.info = !flags.info;
 
-    check("test", &flags);
+    check(&flags);
 
     // Check each modify_* field.
 
     flags.log = !flags.log;
     flags.modify_log = true;
-    assert!(set_logging("test", &flags));
-    check("test", &flags);
+    assert!(set_logging(&flags));
+    check(&flags);
 
     flags.error = !flags.error;
     flags.modify_error = true;
-    assert!(set_logging("test", &flags));
-    check("test", &flags);
+    assert!(set_logging(&flags));
+    check(&flags);
 
     flags.warning = !flags.warning;
     flags.modify_warning = true;
-    assert!(set_logging("test", &flags));
-    check("test", &flags);
+    assert!(set_logging(&flags));
+    check(&flags);
 
     flags.debug = !flags.debug;
     flags.modify_debug = true;
-    assert!(set_logging("test", &flags));
-    check("test", &flags);
+    assert!(set_logging(&flags));
+    check(&flags);
 
     flags.info = !flags.info;
     flags.modify_info = true;
-    assert!(set_logging("test", &flags));
-    check("test", &flags);
+    assert!(set_logging(&flags));
+    check(&flags);
 
     // Test an invalid category.
-    assert!(!set_logging("no-test", &flags));
+    flags.name = "no-test".to_owned();
+    assert!(!set_logging(&flags));
   }
 
-  fn check(name: &str, flags: &LoggingEnableFlags) {
+  fn check(flags: &LoggingEnableFlags) {
     unsafe {
       for entry in &mut TABLE {
-        if entry.name == name {
+        if entry.name == flags.name {
           assert!(entry.log_enabled() == flags.log);
           assert!(entry.error_enabled() == flags.error);
           assert!(entry.warning_enabled() == flags.warning);

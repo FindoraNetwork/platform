@@ -59,8 +59,8 @@ pub struct AssetDigest {
 }
 
 // TODO: Define Memo
-#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, Hash, PartialEq, Serialize)]
-pub struct Memo;
+#[derive(Clone, Debug, Default, Deserialize, Eq, Hash, PartialEq, Serialize)]
+pub struct Memo(pub String);
 #[derive(Clone, Copy, Debug, Default, Deserialize, Eq, Hash, PartialEq, Serialize)]
 pub struct ConfidentialMemo;
 #[derive(Clone, Copy, Debug, Default, Deserialize, Eq, Hash, PartialEq, Serialize)]
@@ -190,7 +190,7 @@ impl TransferAssetBody {
                                  -> Result<TransferAssetBody, errors::PlatformError> {
     let id_proofs = vec![];
     if input_records.is_empty() {
-        return Err(errors::PlatformError::InputsError);
+      return Err(errors::PlatformError::InputsError);
     }
     let note = Box::new(gen_xfr_note(prng, input_records, output_records, input_keys, &id_proofs)?);
     Ok(TransferAssetBody { inputs: input_refs,
@@ -238,14 +238,14 @@ impl DefineAssetBody {
     asset_def.updatable = updatable;
     asset_def.traceable = traceable;
 
-    if memo.is_some() {
-      asset_def.memo = *memo.as_ref().unwrap();
+    if let Some(memo) = memo {
+      asset_def.memo = Memo(memo.0);
     } else {
-      asset_def.memo = Memo {};
+      asset_def.memo = Memo(String::from(""));
     }
 
-    if confidential_memo.is_some() {
-      asset_def.confidential_memo = *confidential_memo.as_ref().unwrap();
+    if let Some(confidential_memo) = confidential_memo {
+      asset_def.confidential_memo = confidential_memo;
     } else {
       asset_def.confidential_memo = ConfidentialMemo {};
     }
@@ -254,9 +254,9 @@ impl DefineAssetBody {
 }
 
 pub fn compute_signature<T>(secret_key: &XfrSecretKey,
-                        public_key: &XfrPublicKey,
-                        operation_body: &T)
-                        -> XfrSignature
+                            public_key: &XfrPublicKey,
+                            operation_body: &T)
+                            -> XfrSignature
   where T: serde::Serialize
 {
   secret_key.sign(&serde_json::to_vec(&operation_body).unwrap(), &public_key)
@@ -379,7 +379,7 @@ impl Transaction {
     self.operations.push(op);
   }
 
-  pub fn compute_merkle_hash(&self, sid: TxnSID) -> HashValue {
+  pub fn compute_txn_merkle_hash(&self, sid: TxnSID) -> HashValue {
     let mut serialized = bincode::serialize(&self).unwrap();
     serialized.extend(bincode::serialize(&sid).unwrap());
 
@@ -565,7 +565,7 @@ mod tests {
 
     let asset_creation = DefineAsset { body: DefineAssetBody { asset },
                                        pubkey: IssuerPublicKey { key: public_key },
-                                       signature: signature };
+                                       signature };
 
     let creation_operation = Operation::DefineAsset(asset_creation.clone());
 

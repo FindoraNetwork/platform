@@ -33,6 +33,7 @@ use std::io::SeekFrom::Start;
 use std::io::Write;
 use std::mem;
 use std::mem::MaybeUninit;
+use std::ptr::copy_nonoverlapping;
 use std::slice::from_raw_parts;
 use std::slice::from_raw_parts_mut;
 
@@ -165,12 +166,17 @@ fn deserialize_array<'de, D>(deserializer: D) -> Result<[HashValue; HASHES_IN_BL
     return sde!("The input slice has the wrong length:  {}", slice.len());
   }
 
-  let mut result: [HashValue; HASHES_IN_BLOCK] =
-    unsafe { MaybeUninit::<[HashValue; HASHES_IN_BLOCK]>::uninit().assume_init() };
-  // let mut result: [HashValue; HASHES_IN_BLOCK] = unsafe { std::mem::uninitialized() };
-  result.copy_from_slice(&slice);
+  let result: [HashValue; HASHES_IN_BLOCK] = unsafe {
+    let mut val = MaybeUninit::<[HashValue; HASHES_IN_BLOCK]>::uninit();
+
+    debug_assert!(slice.len() == (*val.as_ptr()).len());
+    copy_nonoverlapping(slice.as_ptr(),
+                        (*val.as_mut_ptr()).as_mut_ptr(),
+                        slice.len());
+
+    val.assume_init()
+  };
   Ok(result)
-  // Ok(unsafe { mem::transmute::<_, [HashValue; HASHES_IN_BLOCK]>(result) })
 }
 
 // A Merkle tree is represented by a collection of blocks.  Blocks
@@ -233,7 +239,7 @@ impl Block {
   }
 
   // Compute the hashes that form the subtree represented by this
-  // block.
+  // block.  This is called when the block becomes full.
   fn form_subtree(&mut self) {
     let mut input = 0;
 
@@ -265,7 +271,7 @@ impl Block {
   }
 
   // Return the hash that is the top level of the subtree
-  // of this block.
+  // of this block, if the block is full.
   fn top_hash(&self) -> Option<&HashValue> {
     if self.full() {
       Some(&self.hashes[HASHES_IN_BLOCK - 1])
@@ -357,7 +363,8 @@ impl Block {
     None
   }
 
-  // Check the hashes of nodes formed inside this block.
+  // Check the hashes of nodes formed inside this block.  The block
+  // must be full.
   fn check_subtree(&self) -> Option<Error> {
     let mut input = 0;
 
@@ -449,7 +456,7 @@ struct LevelState {
 // Compute the expected number of leaves in the next layer of the
 // tree given the number of blocks at the current level, and whether
 // the last block at the current layer is full.
-fn next_leaves(blocks: u64, last_full: bool) -> u64 {
+fn next_level_leaves(blocks: u64, last_full: bool) -> u64 {
   let full_blocks = if last_full { blocks } else { blocks - 1 };
 
   full_blocks / 2
@@ -630,8 +637,8 @@ impl AppendOnlyMerkle {
     AppendOnlyMerkle::rebuild_ext()
   }
 
-  // The rebuild method creates a skeleton tree.  Now do the work of recreating
-  // all the blocks for all the files.
+  // The rebuild method creates a skeleton tree that is empty.  Now do
+  // the work of recreating all the blocks for all the files.
   fn rebuild_internal(&mut self, mut input: File) -> Result<(), Error> {
     // Compute the number of complete blocks there.
     let file_size = input.seek(End(0))?;
@@ -675,7 +682,7 @@ impl AppendOnlyMerkle {
     self.entry_count = entries;
 
     // Now recover the upper level files.
-    let mut leaves_at_this_level = next_leaves(block_count, last_block_full);
+    let mut leaves_at_this_level = next_level_leaves(block_count, last_block_full);
     let mut level = 1;
 
     // For each upper level that exists,  move the old file
@@ -696,7 +703,7 @@ impl AppendOnlyMerkle {
       self.push_file(file);
       let block_count = covered(leaves_at_this_level, LEAVES_IN_BLOCK as u64);
       last_block_full = self.rebuild_level(level, block_count)?;
-      leaves_at_this_level = next_leaves(block_count, last_block_full);
+      leaves_at_this_level = next_level_leaves(block_count, last_block_full);
       level += 1;
     }
 
@@ -907,7 +914,9 @@ impl AppendOnlyMerkle {
     Ok(())
   }
 
-  // Read all the blocks from a single data file.
+  // Read all the blocks from a single data file.  Each data file
+  // represents one level of the tree.
+  #[allow(clippy::comparison_chain)]
   fn read_level(&mut self, state: &mut LevelState) -> Result<(), Error> {
     let level = state.level;
 
@@ -932,6 +941,9 @@ impl AppendOnlyMerkle {
       return self.recover_file(level);
     }
 
+    // Compute the number of blocks that should exist at this
+    // level, based on the number of leaves, and check that the
+    // file size matches this expectation.
     let block_count = file_size / BLOCK_SIZE as u64;
     let expected = covered(state.leaves_at_this_level, LEAVES_IN_BLOCK as u64);
 
@@ -956,7 +968,7 @@ impl AppendOnlyMerkle {
     for i in 0..block_count {
       let last_block = i == block_count - 1;
 
-      // Read the block and do some basic integrity checks.
+      // Read one block and do some basic integrity checks.
       match self.read_block(level, i, last_block) {
         Ok(block) => {
           last_block_full = block.full();
@@ -1007,6 +1019,8 @@ impl AppendOnlyMerkle {
       log!(Append, "Rebuilt 1 block at level {}", level);
     }
 
+    // If the size doesn't match the expected number of
+    // leaves, try a recovery.
     if level > 0 && entries != state.leaves_at_this_level {
       log!(Append,
            "Level {} has {} entries, but {} were expected.",
@@ -1026,7 +1040,7 @@ impl AppendOnlyMerkle {
 
     // Compute the number of entries to expect at the next level as a
     // consistency check.
-    state.leaves_at_this_level = next_leaves(block_count, last_block_full);
+    state.leaves_at_this_level = next_level_leaves(block_count, last_block_full);
 
     state.previous_leaves = entries;
     state.previous_blocks = block_count;
@@ -1653,7 +1667,7 @@ impl AppendOnlyMerkle {
       // Save the number of blocks we have written to disk and
       // compute the entries at the next level.
       self.blocks_on_disk[level] = total_blocks;
-      entries_at_this_level = next_leaves(total_blocks, last_block_full);
+      entries_at_this_level = next_level_leaves(total_blocks, last_block_full);
     }
 
     self.entries_on_disk = self.entry_count;
@@ -1756,7 +1770,7 @@ impl AppendOnlyMerkle {
       // so just predict the number of blocks to expect based on the count on
       // disk.  This value will be ignored unless the on-disk tree is expected
       // to match the in-memory version.
-      entries_at_this_level = next_leaves(blocks_on_disk, last_block_full);
+      entries_at_this_level = next_level_leaves(blocks_on_disk, last_block_full);
 
       let last_level = level == self.blocks.len() - 1;
 
@@ -1800,14 +1814,12 @@ impl AppendOnlyMerkle {
   fn read_struct(&mut self, level: usize) -> Result<Block, Error> {
     unsafe {
       let mut s: MaybeUninit<Block> = MaybeUninit::uninit();
-      // let mut s = std::mem::uninitialized();
 
-      let buffer = // from_raw_parts_mut(&mut s as *mut Block as *mut u8, BLOCK_SIZE);
+      let buffer =
         from_raw_parts_mut(s.as_mut_ptr() as *mut u8, BLOCK_SIZE);
 
       match self.files[level].read_exact(buffer) {
         Ok(()) => {
-          // Ok(s)
           Ok(mem::transmute::<_, Block>(s))
         }
         Err(e) => {
@@ -1890,7 +1902,7 @@ impl AppendOnlyMerkle {
       // Advance to the next level of the  tree.  Compute the number
       // of entries that we expect to be there.
       last_blocks = blocks_at_this_level;
-      leaves_at_this_level = next_leaves(last_blocks as u64, last_block_full);
+      leaves_at_this_level = next_level_leaves(last_blocks as u64, last_block_full);
 
       // Check that there's an entry in the vector for the next level.
       // If not, return an error.
@@ -2265,8 +2277,12 @@ mod tests {
         panic!("Created a tree from \".\".");
       }
       Err(x) => {
-        if x.kind() != ErrorKind::AlreadyExists {
-          panic!("Unexpected error:  {}", x);
+        match x.kind() {
+          ErrorKind::AlreadyExists => {} // macOS
+          ErrorKind::Other => {}         // linux
+          _ => {
+            panic!("Unexpected error:  {}", x);
+          }
         }
       }
     }

@@ -47,10 +47,10 @@ impl Arbitrary for UnitName {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum AccountsCommand {
-    NewUser(UserName), // name
-    NewUnit(UnitName, UserName), // name, issuer
-    Mint(usize, UnitName), // count, unit
-    Send(UserName, usize, UnitName, UserName), // source,count,unit,dest
+  NewUser(UserName),                         // name
+  NewUnit(UnitName, UserName),               // name, issuer
+  Mint(usize, UnitName),                     // count, unit
+  Send(UserName, usize, UnitName, UserName), // source,count,unit,dest
 }
 
 #[cfg(test)]
@@ -385,7 +385,7 @@ impl InterpretAccounts<PlatformError> for LedgerAccounts {
         dbg!("New unit", &name, &issuer, &code);
 
         let mut properties: Asset = Default::default();
-        properties.code = code.clone();
+        properties.code = code;
         properties.issuer.key = *pubkey;
 
         let body = DefineAssetBody { asset: properties };
@@ -393,7 +393,7 @@ impl InterpretAccounts<PlatformError> for LedgerAccounts {
         let sig = compute_signature(privkey, pubkey, &body);
 
         let op = DefineAsset { body,
-                               pubkey: IssuerPublicKey { key: pubkey.clone() },
+                               pubkey: IssuerPublicKey { key: *pubkey },
                                signature: sig };
 
         let txn = Transaction { operations: vec![Operation::DefineAsset(op)],
@@ -437,7 +437,7 @@ impl InterpretAccounts<PlatformError> for LedgerAccounts {
 
         let mut tx = Transaction::default();
 
-        let ar = AssetRecord::new(amt, code.val, pubkey.clone()).unwrap();
+        let ar = AssetRecord::new(amt, code.val, *pubkey).unwrap();
         let params = PublicParams::new();
         let ba = build_blind_asset_record(self.ledger.get_prng(),
                                           &params.pc_gens,
@@ -451,8 +451,7 @@ impl InterpretAccounts<PlatformError> for LedgerAccounts {
         let sign = compute_signature(&privkey, &pubkey, &asset_issuance_body);
 
         let asset_issuance_operation = IssueAsset { body: asset_issuance_body,
-                                                    pubkey: IssuerPublicKey { key:
-                                                                                pubkey.clone() },
+                                                    pubkey: IssuerPublicKey { key: *pubkey },
                                                     signature: sign };
 
         let issue_op = Operation::IssueAsset(asset_issuance_operation);
@@ -518,19 +517,19 @@ impl InterpretAccounts<PlatformError> for LedgerAccounts {
 
         {
           // Simple output to dst
-          let ar = AssetRecord::new(amt, unit_code.val, dst_pub.clone()).unwrap();
+          let ar = AssetRecord::new(amt, unit_code.val, *dst_pub).unwrap();
           dst_outputs.push(ar);
 
-          let ar = AssetRecord::new(amt, unit_code.val, dst_pub.clone()).unwrap();
+          let ar = AssetRecord::new(amt, unit_code.val, *dst_pub).unwrap();
           all_outputs.push(ar);
         }
 
         if total_sum > amt {
           // Extras left over go back to src
-          let ar = AssetRecord::new(total_sum - amt, unit_code.val, src_pub.clone()).unwrap();
+          let ar = AssetRecord::new(total_sum - amt, unit_code.val, *src_pub).unwrap();
           src_outputs.push(ar);
 
-          let ar = AssetRecord::new(total_sum - amt, unit_code.val, src_pub.clone()).unwrap();
+          let ar = AssetRecord::new(total_sum - amt, unit_code.val, *src_pub).unwrap();
           all_outputs.push(ar);
         }
 
@@ -560,7 +559,7 @@ impl InterpretAccounts<PlatformError> for LedgerAccounts {
                                  &sig_keys).unwrap();
         dbg!(&transfer_body);
         let _transfer_sig =
-          SignedAddress { address: XfrAddress { key: src_pub.clone() },
+          SignedAddress { address: XfrAddress { key: *src_pub },
                           signature: compute_signature(src_priv, src_pub, &transfer_body) };
 
         let transfer = TransferAsset { body: transfer_body,

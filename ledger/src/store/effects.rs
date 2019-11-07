@@ -1,6 +1,8 @@
 #![deny(warnings)]
 use crate::data_model::errors::PlatformError;
 use crate::data_model::*;
+use crate::utils::sha256;
+use crate::utils::sha256::Digest as BitDigest;
 use findora::HasInvariants;
 use rand::SeedableRng;
 use rand::{CryptoRng, Rng};
@@ -110,11 +112,8 @@ impl TxnEffect {
           let seq_num = iss.body.seq_num;
 
           // (1), within this transaction
-          if !new_issuance_nums.contains_key(&code) {
-            new_issuance_nums.insert(code, vec![]);
-          }
+          let iss_nums = new_issuance_nums.entry(code).or_insert_with(|| vec![]);
 
-          let iss_nums = new_issuance_nums.get_mut(&code).unwrap();
           if let Some(last_num) = iss_nums.last() {
             if seq_num <= *last_num {
               return Err(PlatformError::InputsError);
@@ -157,10 +156,10 @@ impl TxnEffect {
         //     3) The zei transaction is valid.
         //          - Fully checked here
         Operation::TransferAsset(trn) => {
-          if !(trn.body.inputs.len() == trn.body.transfer.body.inputs.len()) {
+          if trn.body.inputs.len() != trn.body.transfer.body.inputs.len() {
             return Err(PlatformError::InputsError);
           }
-          if !(trn.body.num_outputs == trn.body.transfer.body.outputs.len()) {
+          if trn.body.num_outputs != trn.body.transfer.body.outputs.len() {
             return Err(PlatformError::InputsError);
           }
           assert!(trn.body.inputs.len() == trn.body.transfer.body.inputs.len());
@@ -248,35 +247,29 @@ impl HasInvariants<PlatformError> for TxnEffect {
     for (txo_sid, record) in self.input_txos.iter() {
       let mut found = false;
       for op in self.txn.operations.iter() {
-        match op {
-          Operation::TransferAsset(trn) => {
-            if trn.body.inputs.len() != trn.body.transfer.body.inputs.len() {
-              return Err(PlatformError::InvariantError(None));
-            }
-            for (ix, inp_record) in trn.body
-                                       .inputs
-                                       .iter()
-                                       .zip(trn.body.transfer.body.inputs.iter())
-            {
-              if let TxoRef::Absolute(input_tid) = ix {
-                if input_tid == txo_sid {
-                  if inp_record != record {
-                    return Err(PlatformError::InvariantError(None));
-                  }
-                  if found {
-                    return Err(PlatformError::InvariantError(None));
-                  }
-                  found = true;
-                }
-              } else {
-                if inp_record == record {
+        if let Operation::TransferAsset(trn) = op {
+          if trn.body.inputs.len() != trn.body.transfer.body.inputs.len() {
+            return Err(PlatformError::InvariantError(None));
+          }
+          for (ix, inp_record) in trn.body
+                                     .inputs
+                                     .iter()
+                                     .zip(trn.body.transfer.body.inputs.iter())
+          {
+            if let TxoRef::Absolute(input_tid) = ix {
+              if input_tid == txo_sid {
+                if inp_record != record {
                   return Err(PlatformError::InvariantError(None));
                 }
+                if found {
+                  return Err(PlatformError::InvariantError(None));
+                }
+                found = true;
               }
+            } else if inp_record == record {
+              return Err(PlatformError::InvariantError(None));
             }
           }
-
-          _ => {}
         }
       }
       if !found {
@@ -300,7 +293,7 @@ impl HasInvariants<PlatformError> for TxnEffect {
   }
 }
 
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq, Default, Serialize)]
 pub struct BlockEffect {
   // All Transaction objects validated in this block
   pub txns: Vec<Transaction>,
@@ -324,13 +317,7 @@ pub struct BlockEffect {
 
 impl BlockEffect {
   pub fn new() -> BlockEffect {
-    BlockEffect { txns: Vec::new(),
-                  temp_sids: Vec::new(),
-                  txos: Vec::new(),
-                  input_txos: HashMap::new(),
-                  new_asset_codes: HashMap::new(),
-                  new_issuance_nums: HashMap::new(),
-                  issuance_keys: HashMap::new() }
+    Default::default()
   }
 
   // Combine a TxnEffect into this block.
@@ -403,5 +390,11 @@ impl BlockEffect {
     }
 
     Ok(temp_sid)
+  }
+
+  pub fn compute_txns_in_block_hash(&self) -> BitDigest {
+    let serialized = bincode::serialize(&self.txns).unwrap();
+
+    sha256::hash(&serialized)
   }
 }

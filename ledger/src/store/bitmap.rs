@@ -1,10 +1,9 @@
 //! # A Simple BitMap Implementation
 //!
 //! This module implements a simple persistent bitmap.  The
-//! bitmap currently is stored persistently in a single file.
-//! The caller is responsible for file creation and open
-//! operations; thus this module does not manage or use file
-//! paths.
+//! bitmap currently is stored in a single file.  The caller
+//! is responsible for file creation and open operations; thus
+//! this module does not manage or use file paths.
 //!
 //! The bitmap is maintained in memory and on disk as a sequence
 //! of blocks.  Each block is self-identifying and checksummed
@@ -137,7 +136,6 @@ const BLOCK_BITS_SIZE: usize = mem::size_of::<BlockBits>();
 /// This structure can be initialized using a bitmap
 /// downloaded from a server.  It allows queries and
 /// checksum verification.
-
 pub struct SparseMap {
   version: u64,
   checksum: Digest,
@@ -204,11 +202,10 @@ impl SparseMap {
     er!("Bit {} in block {} is not present.", id, block.commas())
   }
 
-  /// Validate that the tree actually matches the
-  /// checksum in the download.  The checksum of
-  /// complete blocks that were downloaded are
-  /// checked as well, so that further query results
-  /// are from validated blocks.
+  /// Validate that the tree actually matches the checksum
+  /// in the download.  The checksum of blocks that were
+  /// downloaded are checked as well, so that further query
+  /// results are from validated blocks.
   pub fn validate_checksum(&self) -> bool {
     let mut checksum_data = EMPTY_CHECKSUM;
     let mut digest = Digest { 0: [0_u8; DIGESTBYTES] };
@@ -462,8 +459,8 @@ fn show(data: &ChecksumData) -> String {
 
   result = result + &format!("{}", data[0]);
 
-  for i in 1..data.len() {
-    result += &format!(", {}", data[i]);
+  for d in data.iter() {
+    result += &format!(", {}", d);
   }
 
   result + " }"
@@ -578,7 +575,7 @@ fn encode(mut value: usize) -> [u8; INDEX_SIZE] {
   result
 }
 
-// Clippy requires this declaration, otherwise a type is
+// Clippy requires this declaration, otherwise the type is
 // "too complicated".
 type StoredState = (usize, Vec<BitBlock>, Vec<i64>, Vec<bool>, Vec<u32>);
 
@@ -806,11 +803,9 @@ impl BitMap {
           println!("Block {} failed validation:  {}", i, e);
           pass = false;
         }
-      } else {
-        if let Err(e) = header.validate(BIT_ARRAY, i as u64) {
-          println!("Block {} failed validation:  {}", i, e);
-          pass = false;
-        }
+      } else if let Err(e) = header.validate(BIT_ARRAY, i as u64) {
+        println!("Block {} failed validation:  {}", i, e);
+        pass = false;
       }
 
       pass &= self.validate_count(i);
@@ -853,7 +848,8 @@ impl BitMap {
     Ok(bit as u64)
   }
 
-  /// Set the given bit.
+  /// Set the given bit.  This routine can be invoked to
+  /// append a bit to the bitmap.
   pub fn set(&mut self, bit: usize) -> Result<()> {
     if bit > self.size {
       return er!("That index is too large to set ({} vs {}).", bit, self.size);
@@ -951,8 +947,8 @@ impl BitMap {
   /// The checksum is defined currently recursively across the
   /// blocks where the checksum at block i is:
   ///
-  ///    checksum[i] = sha256(check_block[i] | checksum[i - 1])
   ///    checksum[0] = sha256(check_block[0] | [0_u8; DIGESTBYTES])
+  ///    checksum[i] = sha256(check_block[i] | checksum[i - 1])
   ///
   /// where "|" denotes byte array concatenation, and check_block[i]
   /// is the CheckBlock for block i.
@@ -1006,7 +1002,7 @@ impl BitMap {
     digest
   }
 
-  /// Serialize the bit map to a compressed representation.
+  /// Serialize the entire bit map to a compressed representation.
   pub fn serialize(&mut self, version: usize) -> Vec<u8> {
     assert!(self.validate(false));
     // Reserve space for the version number as a u64.
@@ -1030,17 +1026,17 @@ impl BitMap {
   }
 
   /// Serialize the bitmap to a compressed form that contains
-  /// bit values only for a blocks containing a blocks
-  /// containing an entry in a given list of bit ids.  Other
-  /// blocks are represented only by a header with a checksum.
+  /// bit values only for blocks in a given list of bit ids.
+  /// Other blocks are represented only by a header with a
+  /// checksum.
   pub fn serialize_partial(&mut self, bit_list: Vec<usize>, version: usize) -> Vec<u8> {
     assert!(self.validate(false));
     // Reserve space for the version number as a u64.
     let mut bytes = DESCRIPTOR_SIZE;
     let mut set = HashSet::new();
 
-    for i in 0..bit_list.len() {
-      set.insert(bit_list[i] / BLOCK_BITS);
+    for b in bit_list.iter() {
+      set.insert(b / BLOCK_BITS);
     }
 
     // Add the space needed for each block.
@@ -1105,7 +1101,7 @@ impl BitMap {
     }
   }
 
-  // Append the header information as a BlockInfo.
+  // Append the header information as a BlockInfo structure.
   fn append_header(&self, index: usize, block_contents: u16, size: u32, result: &mut Vec<u8>) {
     debug!(Bitmap,
            "append_header({}, {}, {}, ...)", index, block_contents, size);
@@ -1183,6 +1179,7 @@ impl BitMap {
   }
 
   // Convert a serialized bitmap back into structured data.
+  #[allow(clippy::type_complexity)]
   fn deserialize(bytes: &[u8]) -> Result<(u64, Digest, Vec<BlockInfo>, HashMap<u64, BlockBits>)> {
     let mut info_vec = Vec::new();
     let mut bits_map = HashMap::new();
@@ -1230,9 +1227,9 @@ impl BitMap {
           let (next, ids) = BitMap::decode(info.list_size, bytes, index)?;
           bits = [0_u8; BITS_SIZE];
 
-          for i in 0..ids.len() {
-            assert!(ids[i] < info.count as usize);
-            BitMap::mutate_bit(&mut bits, ids[i], true);
+          for id in ids.iter() {
+            assert!(*id < info.count as usize);
+            BitMap::mutate_bit(&mut bits, *id, true);
           }
 
           bits_map.insert(block, bits);
@@ -1243,9 +1240,9 @@ impl BitMap {
           let (next, ids) = BitMap::decode(info.list_size, bytes, index)?;
           bits = [0xff_u8; BITS_SIZE];
 
-          for i in 0..ids.len() {
-            assert!(ids[i] < info.count as usize);
-            BitMap::mutate_bit(&mut bits, ids[i], false);
+          for id in ids.iter() {
+            assert!(*id < info.count as usize);
+            BitMap::mutate_bit(&mut bits, *id, false);
           }
 
           bits_map.insert(block, bits);

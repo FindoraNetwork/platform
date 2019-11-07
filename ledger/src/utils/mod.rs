@@ -1,5 +1,6 @@
 #[cfg(target_arch = "wasm32")]
 pub mod sha256 {
+  use arrayref::array_ref;
   use sha2::Digest as DigestTrait;
   use sha2::Sha256;
   use std::ops::{Index, Range, RangeFrom};
