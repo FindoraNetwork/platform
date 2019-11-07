@@ -311,7 +311,7 @@ mod tests {
     let mut prng = rand_chacha::ChaChaRng::from_seed([0u8; 32]);
 
     let keypair = XfrKeyPair::generate(&mut prng);
-    let txn = issue_asset(&keypair, String::from("abcd"), 1, 5);
+    let txn = issue_asset(&keypair, String::from(""), String::from("abcd"), 1, 5);
     assert!(txn.is_ok());
   }
 
