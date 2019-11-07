@@ -119,11 +119,11 @@ pub struct Prover;
 #[wasm_bindgen]
 impl Prover {
   // Verify the lower bound of credit score
-  pub fn verify_min_credit_score(proof_jsvalue: &JsValue,
-                                 issuer_jsvalue: &JsValue,
-                                 min_credit_score: u64,
-                                 reveal_min_credit_score: bool)
-                                 -> bool {
+  fn verify_min_credit_score(proof_jsvalue: &JsValue,
+                             issuer_jsvalue: &JsValue,
+                             min_credit_score: u64,
+                             reveal_min_credit_score: bool)
+                             -> bool {
     let proof: ACRevealSig<BLSG1, BLSG2, BLSScalar> = proof_jsvalue.into_serde().unwrap();
     let issuer: Issuer = issuer_jsvalue.into_serde().unwrap();
 

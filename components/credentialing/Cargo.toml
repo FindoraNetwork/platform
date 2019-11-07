@@ -14,7 +14,3 @@ zei = { git = "ssh://git@github.com/findoraorg/zei" }
 [lib]
 crate-type = ["cdylib", "rlib"]
 path = "src/wasm.rs"
-
-[build-dependencies]
-serde = "1.0.101"
-wasm-bindgen = { version = "0.2.50", features = ["serde-serialize"]  }
