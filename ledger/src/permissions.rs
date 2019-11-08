@@ -7,7 +7,7 @@ use std::io::Result;
 
 /// Define a type for a key for the hashmap.  A version of a
 /// transaction has a name and a sequence number.
-#[derive(Deserialize, Eq, Hash, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, Eq, Hash, PartialEq, Serialize)]
 struct TransactionVersion {
   name: String,
   sequence: u32,
@@ -26,7 +26,7 @@ struct TransactionVersion {
 /// machines in the network at some point in time.  Deprecated
 /// transactions might result in a warning returned to the source.
 ///
-#[derive(Clone, Copy, Deserialize, PartialEq, Serialize)]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, Hash, PartialEq, Serialize)]
 pub enum TransactionPermissions {
   Undefined,
   Current,
@@ -37,14 +37,18 @@ pub enum TransactionPermissions {
 
 /// Define a transaction dictionary type.  It maps a transaction
 /// version to a permission.
-#[derive(Deserialize, Serialize, Default)]
+#[derive(Debug, Deserialize, Serialize, Default)]
 pub struct TransactionDictionary {
   map: HashMap<TransactionVersion, TransactionPermissions>,
 }
 
+type Summary = HashMap<String, HashMap<u32, HashMap<TransactionPermissions, u32>>>;
+
 impl TransactionDictionary {
   /// Create a new, empty directory.
-  pub fn new() -> TransactionDictionary { Default::default() }
+  pub fn new() -> TransactionDictionary {
+    Default::default()
+  }
 
   /// Create a directory and initialize it from a file saved
   /// from a previous run.
@@ -111,6 +115,53 @@ impl TransactionDictionary {
       Some(&x) => x,
       None => TransactionPermissions::Undefined,
     }
+  }
+
+  /// Combine a set of dictionaries to form a list of acceptable transaction
+  /// versions.
+  pub fn summarize(list: &[TransactionDictionary]) -> Summary {
+    let mut counts: Summary = HashMap::new();
+
+    for dictionary in list {
+      for key in dictionary.map.keys() {
+        let counts_entry = match counts.get_mut(&key.name) {
+          Some(e) => e,
+          None => {
+            let e = HashMap::new();
+            counts.insert(key.name.clone(), e);
+            counts.get_mut(&key.name).unwrap()
+          }
+        };
+
+        let sequence_entry = match counts_entry.get_mut(&key.sequence) {
+          Some(e) => e,
+          None => {
+            let e = HashMap::new();
+            counts_entry.insert(key.sequence, e);
+            counts_entry.get_mut(&key.sequence).unwrap()
+          }
+        };
+
+        let permission = dictionary.map[key];
+
+        let permission_entry = match sequence_entry.get_mut(&permission) {
+          Some(e) => e,
+          None => {
+            sequence_entry.insert(permission, 0);
+            sequence_entry.get_mut(&permission).unwrap()
+          }
+        };
+
+        *permission_entry += 1;
+      }
+    }
+
+    counts
+  }
+
+  /// Eventually, compute the set of acceptable transaction versions.
+  pub fn reconcile(_input: Summary) -> TransactionDictionary {
+    TransactionDictionary { map: HashMap::new() }
   }
 }
 
@@ -198,5 +249,62 @@ mod tests {
                                      .unwrap();
     dictionary.write(&mut file).unwrap();
     let _ = remove_file(&path);
+
+    let mut vector = vec![dictionary];
+    let summary = TransactionDictionary::summarize(&vector);
+
+    println!("summary = {:?}", summary);
+    assert!(summary.len() == 5);
+    assert!(summary["current"][&1][&TransactionPermissions::Current] == 1);
+    assert!(summary["current"][&2][&TransactionPermissions::Retired] == 1);
+    assert!(summary["deprecated"][&0][&TransactionPermissions::Deprecated] == 1);
+    assert!(summary["disallowed"][&1][&TransactionPermissions::Disallowed] == 1);
+    assert!(summary["retired"][&2][&TransactionPermissions::Retired] == 1);
+    assert!(summary["undefined"][&3][&TransactionPermissions::Undefined] == 1);
+
+    // Declare another dictionary.
+    let mut dictionary = TransactionDictionary { map: HashMap::new() };
+
+    dictionary.declare("current", 1, TransactionPermissions::Current)
+              .unwrap();
+    dictionary.declare("current", 2, TransactionPermissions::Retired)
+              .unwrap();
+    dictionary.declare("deprecated", 1, TransactionPermissions::Deprecated)
+              .unwrap();
+    dictionary.declare("disallowed", 2, TransactionPermissions::Disallowed)
+              .unwrap();
+    dictionary.declare("different", 2, TransactionPermissions::Retired)
+              .unwrap();
+    dictionary.declare("unmapped", 3, TransactionPermissions::Undefined)
+              .unwrap();
+
+    vector.push(dictionary);
+    let summary = TransactionDictionary::summarize(&vector);
+
+    println!("summary = {:?}", summary);
+
+    // Check the number of entries in the first level hash map.
+    assert!(summary.len() == 7);
+
+    // Now check the counts for all the second-level hash maps.
+    assert!(summary["current"].len() == 2);
+    assert!(summary["deprecated"].len() == 2);
+    assert!(summary["disallowed"].len() == 2);
+    assert!(summary["retired"].len() == 1);
+    assert!(summary["undefined"].len() == 1);
+    assert!(summary["different"].len() == 1);
+    assert!(summary["unmapped"].len() == 1);
+
+    // Check the actual count values.
+    assert!(summary["current"][&1][&TransactionPermissions::Current] == 2);
+    assert!(summary["current"][&2][&TransactionPermissions::Retired] == 2);
+    assert!(summary["deprecated"][&0][&TransactionPermissions::Deprecated] == 1);
+    assert!(summary["disallowed"][&1][&TransactionPermissions::Disallowed] == 1);
+    assert!(summary["deprecated"][&1][&TransactionPermissions::Deprecated] == 1);
+    assert!(summary["disallowed"][&2][&TransactionPermissions::Disallowed] == 1);
+    assert!(summary["retired"][&2][&TransactionPermissions::Retired] == 1);
+    assert!(summary["undefined"][&3][&TransactionPermissions::Undefined] == 1);
+    assert!(summary["different"][&2][&TransactionPermissions::Retired] == 1);
+    assert!(summary["unmapped"][&3][&TransactionPermissions::Undefined] == 1);
   }
 }
