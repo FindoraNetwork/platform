@@ -10,6 +10,9 @@ import qualified Text.Parsec.Token as P
 import           Text.Parsec.Language (javaStyle)
 import           Data.Maybe (maybeToList)
 import           Control.Applicative ((<$>),(<*>),(*>))
+import           Control.Monad (join, filterM)
+import           System.Directory (getCurrentDirectory, getDirectoryContents, doesFileExist)
+import           System.IO (hGetContents,openFile,IOMode(..))
 
 alloyish = P.makeTokenParser $ javaStyle
   { P.reservedNames = [ "sig", "abstract", "extends"
@@ -128,21 +131,56 @@ data RelExp v
   | IffRel   (RelExp v) (RelExp v)
   deriving (Eq,Show,Read,Functor)
 
-data Env v = Env
+data Env v dat = Env
   { envVars     :: M.Map T.Text [[v]] -- relations
   , envUniverse :: [v]
+  , envExtra    :: M.Map v dat
   } deriving (Eq,Show,Read,Functor)
 
--- leftToMaybe (Left x) = Some x
--- leftToMaybe _ = Nothing
+data Entry = Entry
+  { entName  :: T.Text
+  , entEdges :: M.Map T.Text [T.Text]
+  , entData  :: M.Map T.Text T.Text
+  } deriving (Eq,Show,Read)
 
--- lookupClosure :: Ord k => M.Map k (Either k v) -> [[v]]
--- lookupClosure m = (rights $ map sequence $ M.elems m) ++
---                   (lookupClosure $
---                    M.mapMaybe (sequence $ map (either (M.lookup m) id)) $
---                    map (\ (k,v) -> either (k,) (k,) <$> v) $
---                    filter (any isLeft) $
---                    M.assocs m)
+applyEntry :: Entry -> Env T.Text (M.Map T.Text T.Text) -> Env T.Text (M.Map T.Text T.Text)
+applyEntry (Entry name edges dat)
+           (Env{envVars=vars,envUniverse=univ,envExtra=extra})
+  = Env
+    { envVars = foldl (\x f -> f x) (M.insert name [[name]] vars)
+                edgeUpdates
+    , envUniverse = (if name `elem` univ then [] else [name]) ++ univ
+                  ++ (filter (not . (`elem` (name:univ))) $
+                      nub $ join $ M.elems edges)
+    , envExtra = M.insert name dat extra
+    }
+  where
+    edgeUpdates = do
+      (k,v) <- M.assocs edges
+      other <- v
+      return $ flip M.alter k $ Just . \case
+        Nothing -> [[name,other]]
+        Just es -> if [name,other] `elem` es
+          then es else [name,other]:es
+
+parseEntry = do
+  name <- (T.pack <$>) $ P.manyTill (P.alphaNum P.<|> P.oneOf "_") $ P.try $ P.newline
+  P.many P.newline
+  P.string "Edges:" >> P.newline
+  edges <- (M.fromListWith (++) <$>) $ P.many $ P.try $ do
+    edgeName <- (T.pack <$>) $ P.manyTill (P.alphaNum P.<|> P.oneOf "_") P.space
+    P.spaces
+    targetName <- (T.pack <$>) $ P.manyTill (P.alphaNum P.<|> P.oneOf "_") $ P.newline
+    return (edgeName,[targetName])
+  P.many1 P.newline
+  P.string "Data:" >> P.newline
+  attrs <- (M.fromList <$>) $ P.many $ P.try $ do
+    dataKey <- (T.pack <$>) $ P.manyTill (P.alphaNum P.<|> P.oneOf "_") $ P.char ':'
+    P.spaces
+    P.newline
+    dataData <- (T.pack <$>) $ P.manyTill (P.anyChar) $ P.try $ (P.newline >> P.newline >> return ()) P.<|> P.eof
+    return (dataKey,dataData)
+  return Entry{entName=name, entEdges=edges, entData=attrs}
 
 safeLast [] = Nothing
 safeLast (x:[]) = Just x
@@ -170,13 +208,13 @@ listOneClosure x = go [] x x
            (filter (not . (`elem` (univ++base))) (listJoin base x))
            x
 
-evalSetExp :: Eq v => SetExp T.Text -> Env v -> Maybe [[v]]
-evalSetExp (AtomSet x) (Env vars _) = M.lookup x vars
+evalSetExp :: Eq v => SetExp T.Text -> Env v dat -> Maybe [[v]]
+evalSetExp (AtomSet x) (Env vars _ _) = M.lookup x vars
 evalSetExp NoneSet _ = Just []
-evalSetExp UnivSet (Env _ univ) = Just $ do
+evalSetExp UnivSet (Env _ univ _) = Just $ do
   x <- univ
   return [x]
-evalSetExp IdentSet (Env _ univ) = Just $ do
+evalSetExp IdentSet (Env _ univ _) = Just $ do
   x <- univ
   return [x,x]
 evalSetExp (IsectSet x y) e
@@ -199,7 +237,7 @@ evalSetExp (OneClosureSet x) e = do
 evalSetExp (ClosureSet x) e = evalSetExp (UnionSet IdentSet (OneClosureSet x)) e
 evalSetExp (TransposeSet x) e = map reverse <$> evalSetExp x e
 
-evalRelExp :: Eq v => RelExp T.Text -> Env v -> Maybe Bool
+evalRelExp :: Eq v => RelExp T.Text -> Env v dat -> Maybe Bool
 evalRelExp (InRel x y) e = do
   x' <- evalSetExp x e
   y' <- evalSetExp y e
@@ -234,6 +272,12 @@ evalRelExp (ImplyRel x y) e = (\a b -> not a || b) <$> evalRelExp x e <*> evalRe
 evalRelExp (IffRel x y) e = (==) <$> evalRelExp x e <*> evalRelExp y e
 
 defaultEnv = Env
+  { envVars = M.fromList []
+  , envUniverse = []
+  , envExtra = M.fromList []
+  }
+
+testEnv = Env
   { envVars = M.fromList
             [ ("this", [["goodbye"]])
             , ("that", [["stuff"]])
@@ -242,10 +286,25 @@ defaultEnv = Env
             , ("right", [["sad","happy"]])
             ]
   , envUniverse = ["hello","goodbye","stuff","sad","happy"]
+  , envExtra = M.fromList $ zip (envUniverse testEnv) (repeat ())
   }
+
+getFiles = do
+  currdir <- getCurrentDirectory
+  contents <- getDirectoryContents currdir
+  filterM doesFileExist contents
 
 main :: IO ()
 main = do
+  files <- getFiles
+  -- mapM putStrLn files
+  files <- sequence $ map (flip openFile ReadMode) files
+  files <- sequence $ map hGetContents files
+  entries <- return $ sequence $ map (P.parse parseEntry "") files
+  -- putStrLn $ show entries
+  (Right entries) <- return entries
+  env <- return $ foldl (flip applyEntry) defaultEnv entries
+  -- env <- return $ testEnv
   x <- P.parse (P.try (Left <$> (P.reserved alloyish "setexp" *> parseSetExp <* P.eof))
                 P.<|> (Right <$> (P.reserved alloyish "relexp" *> parseRelExp <* P.eof)))
                "" <$> getLine
@@ -254,8 +313,8 @@ main = do
   case x of
     Left x -> do
       x <- return $ T.pack <$> x
-      putStrLn $ show $ evalSetExp x defaultEnv
+      putStrLn $ show $ evalSetExp x env
     Right x -> do
       x <- return $ T.pack <$> x
-      putStrLn $ show $ evalRelExp x defaultEnv
+      putStrLn $ show $ evalRelExp x env
 

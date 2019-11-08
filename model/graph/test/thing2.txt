@@ -1,0 +1,12 @@
+ATask
+
+Edges:
+fulfilled_by AnotherTask
+
+Data:
+GoodIdeaness:
+This is a good idea.
+
+ABoolean:
+false :(
+

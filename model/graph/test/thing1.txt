@@ -1,0 +1,16 @@
+ABusinessPlan
+
+Edges:
+depends_on ATask
+fulfilled_by AnotherTask
+
+Data:
+GoodIdeaness:
+This is a good idea.
+
+BadIdeaness:
+This is not a
+bad idea
+
+ABoolean:
+true!
