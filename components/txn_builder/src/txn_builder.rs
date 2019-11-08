@@ -17,6 +17,7 @@ use zei::xfr::structs::{AssetIssuerPubKeys, AssetRecord, BlindAssetRecord, OpenA
 
 pub trait BuildsTransactions {
   fn transaction(&self) -> &Transaction;
+  #[allow(clippy::too_many_arguments)]
   fn add_operation_create_asset(&mut self,
                                 pub_key: &IssuerPublicKey,
                                 priv_key: &XfrSecretKey,
@@ -56,6 +57,7 @@ pub trait BuildsTransactions {
     self.add_operation_issue_asset(pub_key, priv_key, token_code, seq_num, &[TxOutput(ba)])
   }
 
+  #[allow(clippy::comparison_chain)]
   fn add_basic_transfer_asset(&mut self,
                               key_pair: &XfrKeyPair,
                               transfer_from: &[(&TxoRef, &BlindAssetRecord, u64)],
@@ -155,9 +157,9 @@ impl BuildsTransactions for TransactionBuilder {
 
   fn serialize_str(&self) -> Result<String, PlatformError> {
     if let Ok(serialized) = serde_json::to_string(&self.txn) {
-      return Ok(serialized);
+      Ok(serialized)
     } else {
-      return Err(PlatformError::SerializationError);
+      Err(PlatformError::SerializationError)
     }
   }
 }

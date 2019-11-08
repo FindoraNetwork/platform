@@ -1,3 +1,4 @@
+#![deny(warnings)]
 extern crate actix_rt;
 extern crate actix_web;
 extern crate ledger;
@@ -22,7 +23,7 @@ fn submit_transaction_standalone<RNG, LU>(data: web::Data<Arc<RwLock<LedgerApp<R
 {
   let mut ledger_app = data.write().unwrap();
   let uri_string = percent_decode_str(&*info).decode_utf8().unwrap();
-  let tx = serde_json::from_str(&uri_string).map_err(|e| actix_web::error::ErrorBadRequest(e))
+  let tx = serde_json::from_str(&uri_string).map_err(actix_web::error::ErrorBadRequest)
                                             .unwrap();
 
   ledger_app.handle_transaction(tx);

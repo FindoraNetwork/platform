@@ -42,8 +42,8 @@ use zei::crypto::anon_creds::{
 use zei::serialization::ZeiFromToBytes;
 use zei::xfr::structs::{AssetIssuerPubKeys, BlindAssetRecord};
 
-const HOST: &'static str = "localhost";
-const PORT: &'static str = "8668";
+const HOST: &str = "localhost";
+const PORT: &str = "8668";
 
 #[wasm_bindgen]
 pub fn get_pub_key_str(key_pair: &XfrKeyPair) -> String {
@@ -59,17 +59,17 @@ pub fn get_priv_key_str(key_pair: &XfrKeyPair) -> String {
 pub fn new_keypair(rand_seed: &str) -> XfrKeyPair {
   let mut prng: ChaChaRng;
   prng = ChaChaRng::from_seed([rand_seed.as_bytes()[0]; 32]);
-  return XfrKeyPair::generate(&mut prng);
+  XfrKeyPair::generate(&mut prng)
 }
 
 #[wasm_bindgen]
 pub fn keypair_to_str(key_pair: &XfrKeyPair) -> String {
-  return hex::encode(key_pair.zei_to_bytes());
+  hex::encode(key_pair.zei_to_bytes())
 }
 
 #[wasm_bindgen]
 pub fn keypair_from_str(str: String) -> XfrKeyPair {
-  return XfrKeyPair::zei_from_bytes(&hex::decode(str).unwrap());
+  XfrKeyPair::zei_from_bytes(&hex::decode(str).unwrap())
 }
 
 #[wasm_bindgen]
@@ -105,15 +105,15 @@ pub fn create_asset(key_pair: &XfrKeyPair,
                                                traceable,
                                                &memo)
   {
-    Ok(_) => return Ok(txn_builder.serialize_str().unwrap()),
-    Err(_) => return Err(JsValue::from_str("Could not build transaction")),
+    Ok(_) => Ok(txn_builder.serialize_str().unwrap()),
+    Err(_) => Err(JsValue::from_str("Could not build transaction")),
   }
 }
 
 #[wasm_bindgen]
 pub fn sha256str(str: &str) -> String {
   let digest = sha256::hash(&str.as_bytes());
-  hex::encode(digest).into()
+  hex::encode(digest)
 }
 
 #[wasm_bindgen]
@@ -154,12 +154,12 @@ pub fn get_tracked_amount(blind_asset_record: String,
       (Ok(s1), Ok(s2)) => {
         let amount = u32_pair_to_u64((u8_littleendian_slice_to_u32(s1.0.as_bytes()),
                                       u8_littleendian_slice_to_u32(s2.0.as_bytes())));
-        return Ok(amount.to_string());
-      }
-      (_, _) => return Err(JsValue::from_str("Unable to decrypt amount")),
+        Ok(amount.to_string())
+      },
+      (_, _) => Err(JsValue::from_str("Unable to decrypt amount")),
     }
   } else {
-    return Err(JsValue::from_str("Asset record does not contain decrypted lock amount"));
+    Err(JsValue::from_str("Asset record does not contain decrypted lock amount"))
   }
 }
 
@@ -195,8 +195,8 @@ pub fn issue_asset(key_pair: &XfrKeyPair,
                                           seq_num,
                                           amount)
   {
-    Ok(_) => return Ok(txn_builder.serialize_str().unwrap()),
-    Err(_) => return Err(JsValue::from_str("Could not build transaction")),
+    Ok(_) => Ok(txn_builder.serialize_str().unwrap()),
+    Err(_) => Err(JsValue::from_str("Could not build transaction")),
   }
 }
 
@@ -220,8 +220,8 @@ pub fn transfer_asset(transfer_from: &XfrKeyPair,
                                                 &AccountAddress { key:
                                                                     *transfer_to.get_pk_ref() })])
   {
-    Ok(_) => return Ok(txn_builder.serialize_str().unwrap()),
-    Err(_) => return Err(JsValue::from_str("Could not build transaction")),
+    Ok(_) => Ok(txn_builder.serialize_str().unwrap()),
+    Err(_) => Err(JsValue::from_str("Could not build transaction")),
   }
 }
 
@@ -255,7 +255,7 @@ pub fn submit_transaction(transaction_str: String) -> Promise {
 #[wasm_bindgen]
 pub fn test_deserialize(str: String) -> bool {
   let blind_asset_record = serde_json::from_str::<BlindAssetRecord>(&str);
-  return blind_asset_record.is_ok();
+  blind_asset_record.is_ok()
 }
 
 #[wasm_bindgen]
@@ -280,7 +280,7 @@ pub fn get_asset_token(name: String) -> Promise {
   let req_string = format!("http://{}:{}/asset_token/{}",
                            HOST,
                            PORT,
-                           format!("{}", name));
+                           name);
 
   create_query_promise(&opts, &req_string)
 }

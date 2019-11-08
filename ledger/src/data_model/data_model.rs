@@ -238,14 +238,14 @@ impl DefineAssetBody {
     asset_def.updatable = updatable;
     asset_def.traceable = traceable;
 
-    if memo.is_some() {
-      asset_def.memo = Memo(memo.unwrap().0.clone());
+    if let Some(memo) = memo {
+      asset_def.memo = Memo(memo.0);
     } else {
       asset_def.memo = Memo(String::from(""));
     }
 
-    if confidential_memo.is_some() {
-      asset_def.confidential_memo = *confidential_memo.as_ref().unwrap();
+    if let Some(confidential_memo) = confidential_memo {
+      asset_def.confidential_memo = confidential_memo;
     } else {
       asset_def.confidential_memo = ConfidentialMemo {};
     }
@@ -565,7 +565,7 @@ mod tests {
 
     let asset_creation = DefineAsset { body: DefineAssetBody { asset },
                                        pubkey: IssuerPublicKey { key: public_key },
-                                       signature: signature };
+                                       signature };
 
     let creation_operation = Operation::DefineAsset(asset_creation.clone());
 

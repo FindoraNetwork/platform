@@ -169,7 +169,7 @@ fn next_path(path: &Path) -> Result<PathBuf, std::io::Error> {
     let mut pb = PathBuf::from(path);
     pb.set_file_name(format!("{}.0",
                              path.file_name()
-                                 .unwrap_or(OsStr::new(""))
+                                 .unwrap_or_else(|| OsStr::new(""))
                                  .to_str()
                                  .unwrap_or("")));
     pb

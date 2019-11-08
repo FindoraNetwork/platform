@@ -104,7 +104,7 @@ fn decode(value: u8) -> (bool, bool) {
     'x' => (false, false), // The second value is ignored by the server
     _ => {
       flags_usage();
-      exit(0);
+      exit(1);
     }
   }
 }
@@ -161,6 +161,20 @@ mod tests {
     assert!(flags.warning == true);
     assert!(flags.debug == false);
     assert!(flags.info == true);
+
+    let flags = create_enable_flags("test", "xtxtx".as_ref());
+
+    assert!(flags.modify_log == false);
+    assert!(flags.modify_error == true);
+    assert!(flags.modify_warning == false);
+    assert!(flags.modify_debug == true);
+    assert!(flags.modify_info == false);
+
+    assert!(flags.log == false);
+    assert!(flags.error == true);
+    assert!(flags.warning == false);
+    assert!(flags.debug == true);
+    assert!(flags.info == false);
 
     let mut stream = get_test_socket();
     let command = Command { contents: LoggingFlags(flags) };
