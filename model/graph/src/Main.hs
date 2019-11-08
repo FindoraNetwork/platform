@@ -1,11 +1,105 @@
 {-# LANGUAGE LambdaCase        #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE DeriveFunctor     #-}
 module Main where
+import qualified Data.Text as T
 import           Data.List (nub)
 import qualified Data.Map.Lazy as M
+import qualified Text.Parsec   as P
+import qualified Text.Parsec.Token as P
+import           Text.Parsec.Language (javaStyle)
+import           Data.Maybe (maybeToList)
+import           Control.Applicative ((<$>),(<*>),(*>))
+
+alloyish = P.makeTokenParser $ javaStyle
+  { P.reservedNames = [ "sig", "abstract", "extends"
+                    , "in", "let", "fun", "pred", "fact", "check"
+                    , "all", "one", "some", "no", "sum"
+                    , "none", "univ", "ident"
+                    , "fresh", "setexp", "relexp"
+                    ]
+  , P.caseSensitive = True
+  }
+
+parseOp op = do
+  theOp <- P.operator alloyish
+  if theOp == op then return () else fail ("Expected '" ++ op ++ "'")
+
+setBop op = do
+  l <- parseLeftSetExp
+  parseOp op
+  r <- parseSetExp
+  return (l,r)
+
+setLeftBop op = do
+  l <- parseSimpleSetExp
+  parseOp op
+  r <- parseSimpleSetExp
+  return (l,r)
+
+parseSimpleSetExp
+  = foldl1 (\x y -> P.try x P.<|> y) $
+  [ P.parens alloyish parseSetExp
+  , ClosureSet <$> (parseOp "*" *> parseSimpleSetExp)
+  , OneClosureSet <$> (parseOp "^" *> parseSimpleSetExp)
+  , TransposeSet <$> (parseOp "~" *> parseSimpleSetExp)
+  , AtomSet <$> (P.identifier alloyish)
+  , const NoneSet <$> (P.reserved alloyish "none")
+  , const UnivSet <$> (P.reserved alloyish "univ")
+  , const IdentSet <$> (P.reserved alloyish "ident")
+  ]
+
+parseLeftSetExp
+  = foldl1 (\x y -> P.try x P.<|> y) $
+  [ uncurry (\x y -> JoinSet x (ClosureSet y)) <$> setLeftBop ".*"
+  , uncurry (\x y -> JoinSet x (OneClosureSet y)) <$> setLeftBop ".^"
+  , parseSimpleSetExp
+  ]
+
+parseSetExp
+  = foldl1 (\x y -> P.try x P.<|> y) $
+  [ uncurry JoinSet <$> setBop "."
+  , uncurry ProdSet <$> setBop "->"
+  , uncurry IsectSet <$> setBop "&"
+  , uncurry UnionSet <$> setBop "+"
+  , uncurry DiffSet <$> setBop "-"
+  , parseLeftSetExp
+  ]
+
+relBop op = do
+  l <- parseSimpleRelExp
+  parseOp op
+  r <- parseRelExp
+  return (l,r)
+
+parseSimpleRelExp
+  = foldl1 (\x y -> P.try x P.<|> y) $
+  [ P.parens alloyish parseRelExp
+  , NoRel <$> (P.reserved alloyish "no" *> parseSimpleSetExp)
+  , SomeRel <$> (P.reserved alloyish "some" *> parseSimpleSetExp)
+  , LoneRel <$> (P.reserved alloyish "lone" *> parseSimpleSetExp)
+  , OneRel <$> (P.reserved alloyish "one" *> parseSimpleSetExp)
+  , uncurry EqRel <$> setBop "=="
+  , uncurry NeqRel <$> setBop "!="
+  , uncurry InRel <$> do
+      l <- parseSimpleSetExp
+      P.reserved alloyish "in"
+      r <- parseSetExp
+      return (l,r)
+  , NotRel <$> (P.reserved alloyish "not" *> parseSimpleRelExp)
+  ]
+
+parseRelExp
+  = foldl1 (\x y -> P.try x P.<|> y) $
+  [ uncurry AndRel <$> relBop "&&"
+  , uncurry OrRel <$> relBop "||"
+  , uncurry ImplyRel <$> relBop "=>"
+  , uncurry IffRel <$> relBop "<=>"
+  , parseSimpleRelExp
+  ]
 
 data SetExp v
-  = BaseSet v
+  = AtomSet v
   | NoneSet -- empty 1-ary relation
   | UnivSet -- Universe of 1-ary relations
   | IdentSet -- binary identity relation
@@ -17,7 +111,7 @@ data SetExp v
   | ClosureSet    (SetExp v)
   | OneClosureSet (SetExp v)
   | TransposeSet  (SetExp v)
-  deriving (Eq,Show,Read)
+  deriving (Eq,Show,Read,Functor)
 
 data RelExp v
   = InRel    (SetExp v) (SetExp v)
@@ -32,12 +126,12 @@ data RelExp v
   | OrRel    (RelExp v) (RelExp v)
   | ImplyRel (RelExp v) (RelExp v)
   | IffRel   (RelExp v) (RelExp v)
-  deriving (Eq,Show,Read)
+  deriving (Eq,Show,Read,Functor)
 
 data Env v = Env
-  { envVars     :: M.Map Text [[v]] -- relations
+  { envVars     :: M.Map T.Text [[v]] -- relations
   , envUniverse :: [v]
-  } deriving (Eq,Show,Read)
+  } deriving (Eq,Show,Read,Functor)
 
 -- leftToMaybe (Left x) = Some x
 -- leftToMaybe _ = Nothing
@@ -50,9 +144,9 @@ data Env v = Env
 --                    filter (any isLeft) $
 --                    M.assocs m)
 
-last [] = Nothing
-last (x:[]) = Just x
-last (x:xs) = last xs
+safeLast [] = Nothing
+safeLast (x:[]) = Just x
+safeLast (x:xs) = safeLast xs
 
 allButLast [] = []
 allButLast (x:[]) = []
@@ -60,7 +154,7 @@ allButLast (x:xs) = x:allButLast xs
 
 listJoin x y = do
   xRow <- x
-  lastVal <- maybeToList $ last xRow
+  lastVal <- maybeToList $ safeLast xRow
   pref <- return $ allButLast xRow
   yRow <- y
   case yRow of
@@ -73,10 +167,10 @@ listOneClosure x = go [] x x
     go univ base x
       = base ++
         go (univ++base)
-           (filter (not . `elem` univ) (listJoin base x))
+           (filter (not . (`elem` (univ++base))) (listJoin base x))
            x
 
-evalSetExp :: SetExp Text -> Env v -> Maybe [[v]]
+evalSetExp :: Eq v => SetExp T.Text -> Env v -> Maybe [[v]]
 evalSetExp (AtomSet x) (Env vars _) = M.lookup x vars
 evalSetExp NoneSet _ = Just []
 evalSetExp UnivSet (Env _ univ) = Just $ do
@@ -103,9 +197,9 @@ evalSetExp (OneClosureSet x) e = do
   x' <- evalSetExp x e
   return $ listOneClosure x'
 evalSetExp (ClosureSet x) e = evalSetExp (UnionSet IdentSet (OneClosureSet x)) e
-evalSetExp (Transpose x) e = map reverse $ evalSetExp x e
+evalSetExp (TransposeSet x) e = map reverse <$> evalSetExp x e
 
-evalRelExp :: RelExp Text -> Env v -> Maybe Bool
+evalRelExp :: Eq v => RelExp T.Text -> Env v -> Maybe Bool
 evalRelExp (InRel x y) e = do
   x' <- evalSetExp x e
   y' <- evalSetExp y e
@@ -139,16 +233,29 @@ evalRelExp (OrRel x y) e = (||) <$> evalRelExp x e <*> evalRelExp y e
 evalRelExp (ImplyRel x y) e = (\a b -> not a || b) <$> evalRelExp x e <*> evalRelExp y e
 evalRelExp (IffRel x y) e = (==) <$> evalRelExp x e <*> evalRelExp y e
 
-
+defaultEnv = Env
+  { envVars = M.fromList
+            [ ("this", [["goodbye"]])
+            , ("that", [["stuff"]])
+            , ("hello", [["hello"]])
+            , ("left", [["hello", "goodbye"],["goodbye","sad"]])
+            , ("right", [["sad","happy"]])
+            ]
+  , envUniverse = ["hello","goodbye","stuff","sad","happy"]
+  }
 
 main :: IO ()
 main = do
-  putStrLn $ show $ (
-    lookupClosure $ M.fromList
-      [ ("0",0)
-      , ("1",["0"])
-      , ("2",["0","1"])
-      , ("3",["0","1","2"])
-      ]
-  )
+  x <- P.parse (P.try (Left <$> (P.reserved alloyish "setexp" *> parseSetExp <* P.eof))
+                P.<|> (Right <$> (P.reserved alloyish "relexp" *> parseRelExp <* P.eof)))
+               "" <$> getLine
+  (Right x) <- return x
+  putStrLn $ show x
+  case x of
+    Left x -> do
+      x <- return $ T.pack <$> x
+      putStrLn $ show $ evalSetExp x defaultEnv
+    Right x -> do
+      x <- return $ T.pack <$> x
+      putStrLn $ show $ evalRelExp x defaultEnv
 

@@ -8,3 +8,5 @@
 **/*~
 **/.vscode
 .*.sw*
+.stack-work
+stack.yaml.lock
