@@ -160,8 +160,49 @@ impl TransactionDictionary {
   }
 
   /// Eventually, compute the set of acceptable transaction versions.
-  pub fn reconcile(_input: Summary) -> TransactionDictionary {
-    TransactionDictionary { map: HashMap::new() }
+  pub fn reconcile(input: &Summary) -> TransactionDictionary {
+    let mut result = TransactionDictionary { map: HashMap::new() };
+
+    for name in input.keys() {
+      for version in input[name].keys() {
+        let mut state = TransactionPermissions::Current;
+
+        for permission in input[name][version].keys() {
+          state = match permission {
+            TransactionPermissions::Current => state,
+            TransactionPermissions::Deprecated => match state {
+              TransactionPermissions::Current => *permission,
+              TransactionPermissions::Deprecated => state,
+              TransactionPermissions::Disallowed => state,
+              TransactionPermissions::Retired => state,
+              TransactionPermissions::Undefined => state,
+            },
+            TransactionPermissions::Disallowed => TransactionPermissions::Disallowed,
+            TransactionPermissions::Retired => match state {
+              TransactionPermissions::Current => *permission,
+              TransactionPermissions::Deprecated => *permission,
+              TransactionPermissions::Disallowed => state,
+              TransactionPermissions::Retired => state,
+              TransactionPermissions::Undefined => state,
+            },
+            TransactionPermissions::Undefined => match state {
+              TransactionPermissions::Current => *permission,
+              TransactionPermissions::Deprecated => *permission,
+              TransactionPermissions::Disallowed => state,
+              TransactionPermissions::Retired => *permission,
+              TransactionPermissions::Undefined => state,
+            },
+          };
+        }
+
+        let key = TransactionVersion { name: name.to_string(),
+                                       sequence: *version };
+
+        result.map.insert(key, state);
+      }
+    }
+
+    result
   }
 }
 
@@ -306,5 +347,22 @@ mod tests {
     assert!(summary["undefined"][&3][&TransactionPermissions::Undefined] == 1);
     assert!(summary["different"][&2][&TransactionPermissions::Retired] == 1);
     assert!(summary["unmapped"][&3][&TransactionPermissions::Undefined] == 1);
+
+    let reconciled = TransactionDictionary::reconcile(&summary);
+
+    println!("reconciled = {:?}", reconciled);
+
+    assert!(reconciled.map.len() == 10);
+
+    assert!(reconciled.query("unmapped", 3) == TransactionPermissions::Undefined);
+    assert!(reconciled.query("undefined", 3) == TransactionPermissions::Undefined);
+    assert!(reconciled.query("deprecated", 0) == TransactionPermissions::Deprecated);
+    assert!(reconciled.query("deprecated", 1) == TransactionPermissions::Deprecated);
+    assert!(reconciled.query("current", 2) == TransactionPermissions::Retired);
+    assert!(reconciled.query("different", 2) == TransactionPermissions::Retired);
+    assert!(reconciled.query("retired", 2) == TransactionPermissions::Retired);
+    assert!(reconciled.query("disallowed", 1) == TransactionPermissions::Disallowed);
+    assert!(reconciled.query("disallowed", 2) == TransactionPermissions::Disallowed);
+    assert!(reconciled.query("current", 1) == TransactionPermissions::Current);
   }
 }
