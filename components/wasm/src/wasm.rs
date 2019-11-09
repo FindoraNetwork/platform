@@ -290,43 +290,6 @@ fn create_query_promise(opts: &RequestInit, req_string: &str) -> Promise {
   future_to_promise(JsFuture::from(request_promise))
 }
 
-#[cfg(test)]
-mod tests {
-  use super::*;
-  use rand_chacha;
-  use zei::basic_crypto::signatures::XfrKeyPair;
-
-  // Test to ensure that define transaction is being constructed correctly
-  #[test]
-  fn test_wasm_define_transaction() {
-    let mut prng = rand_chacha::ChaChaRng::from_seed([0u8; 32]);
-
-    let keypair = XfrKeyPair::generate(&mut prng);
-    let txn = create_asset(&keypair,
-                           String::from("abcd"),
-                           String::from("test"),
-                           true,
-                           true);
-    assert!(txn.is_ok());
-  }
-  #[test]
-  // Test to ensure that issue transaction is being constructed correctly
-  fn test_wasm_issue_transaction() {
-    let mut prng = rand_chacha::ChaChaRng::from_seed([0u8; 32]);
-
-    let keypair = XfrKeyPair::generate(&mut prng);
-    let txn = issue_asset(&keypair, String::from(""), String::from("abcd"), 1, 5);
-    assert!(txn.is_ok());
-  }
-
-  #[test]
-  fn test_elgamal_serialization() {
-    let sk = generate_elgamal_secret_key();
-    let pk = derive_elgamal_public_key(sk);
-    assert!(pk.is_ok());
-  }
-}
-
 //
 // Issuer, User and Prover structs for credentialing
 // Currently support verifying the lower bound of the credit score
@@ -458,10 +421,57 @@ impl Prover {
   }
 }
 
+//
+// Test section
+//
 // wasm-bindgen-test must be placed in the root of the crate or in a pub mod
 // To test, run wasm-pack test --node in the wasm directory
+//
+// TODO (Keyao):
+// 1. Make wasm_bindgen_test work in the wasm directory
+//    It's currently not working due to dependency issue
+// 2. Once it's working, convert the cargo tests below to wasm_bindgen_test
+//
+
 extern crate wasm_bindgen_test;
 use wasm_bindgen_test::*;
+
+// #[cfg(test)]
+// mod tests {
+//   use super::*;
+//   use rand_chacha;
+//   use zei::basic_crypto::signatures::XfrKeyPair;
+
+//   // Test to ensure that define transaction is being constructed correctly
+//   #[test]
+//   fn test_wasm_define_transaction() {
+//     let mut prng = rand_chacha::ChaChaRng::from_seed([0u8; 32]);
+
+//     let keypair = XfrKeyPair::generate(&mut prng);
+//     let txn = create_asset(&keypair,
+//                            String::from("abcd"),
+//                            String::from("test"),
+//                            true,
+//                            true);
+//     assert!(txn.is_ok());
+//   }
+//   #[test]
+//   // Test to ensure that issue transaction is being constructed correctly
+//   fn test_wasm_issue_transaction() {
+//     let mut prng = rand_chacha::ChaChaRng::from_seed([0u8; 32]);
+
+//     let keypair = XfrKeyPair::generate(&mut prng);
+//     let txn = issue_asset(&keypair, String::from(""), String::from("abcd"), 1, 5);
+//     assert!(txn.is_ok());
+//   }
+
+//   #[test]
+//   fn test_elgamal_serialization() {
+//     let sk = generate_elgamal_secret_key();
+//     let pk = derive_elgamal_public_key(sk);
+//     assert!(pk.is_ok());
+//   }
+// }
 
 #[wasm_bindgen_test]
 // Test to ensure that credit score is checked correctly
