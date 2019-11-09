@@ -32,7 +32,6 @@ use zei::algebra::groups::Scalar;
 use zei::algebra::ristretto::{RistPoint, RistScalar};
 use zei::basic_crypto::elgamal::{
   elgamal_decrypt, elgamal_derive_public_key, elgamal_generate_secret_key, ElGamalPublicKey,
-  ElGamalSecretKey,
 };
 use zei::basic_crypto::signatures::XfrKeyPair;
 use zei::crypto::anon_creds::{
@@ -73,18 +72,18 @@ pub fn keypair_from_str(str: String) -> XfrKeyPair {
 }
 
 #[wasm_bindgen]
-pub fn generate_elgamal_secret_key() -> String {
+pub fn generate_elgamal_secret_key() -> JsValue {
   let mut small_rng = ChaChaRng::from_entropy();
   let sk = elgamal_generate_secret_key::<_, RistScalar>(&mut small_rng);
-  return serde_json::to_string(&sk).unwrap();
+  JsValue::from_serde(&sk).unwrap()
 }
 
 #[wasm_bindgen]
-pub fn derive_elgamal_public_key(elgamal_secret_key: String) -> Result<String, JsValue> {
+pub fn derive_elgamal_public_key(elgamal_secret_key_jsvalue: JsValue) -> Result<JsValue, JsValue> {
   let pc_gens = PedersenGens::default();
-  let sk = serde_json::from_str::<ElGamalSecretKey<RistScalar>>(&elgamal_secret_key).map_err(|_e| return JsValue::from_str("could not deserialize elgamal key"))?;
+  let sk = elgamal_secret_key_jsvalue.into_serde().unwrap();
   let pk = elgamal_derive_public_key(&RistPoint(pc_gens.B), &sk);
-  return Ok(serde_json::to_string(&pk).unwrap());
+  return Ok(JsValue::from_serde(&pk).unwrap());
 }
 
 // Defines an asset on the ledger using the serialized strings in KeyPair and a couple of boolean policies
@@ -117,12 +116,12 @@ pub fn sha256str(str: &str) -> String {
 }
 
 #[wasm_bindgen]
-pub fn sign(key_pair: &XfrKeyPair, message: String) -> Result<String, JsValue> {
+pub fn sign(key_pair: &XfrKeyPair, message: String) -> Result<JsValue, JsValue> {
   let signature = key_pair.get_sk_ref()
                           .sign(&message.as_bytes(), key_pair.get_pk_ref());
   let mut smaller_signature: [u8; 32] = Default::default();
   smaller_signature.copy_from_slice(&signature.0.to_bytes()[0..32]);
-  Ok(hex::encode(smaller_signature))
+  Ok(JsValue::from_serde(&smaller_signature).unwrap())
 }
 
 fn u8_littleendian_slice_to_u32(array: &[u8]) -> u32 {
@@ -155,7 +154,7 @@ pub fn get_tracked_amount(blind_asset_record: String,
         let amount = u32_pair_to_u64((u8_littleendian_slice_to_u32(s1.0.as_bytes()),
                                       u8_littleendian_slice_to_u32(s2.0.as_bytes())));
         Ok(amount.to_string())
-      },
+      }
       (_, _) => Err(JsValue::from_str("Unable to decrypt amount")),
     }
   } else {
@@ -277,10 +276,7 @@ pub fn get_asset_token(name: String) -> Promise {
   opts.method("GET");
   opts.mode(RequestMode::Cors);
 
-  let req_string = format!("http://{}:{}/asset_token/{}",
-                           HOST,
-                           PORT,
-                           name);
+  let req_string = format!("http://{}:{}/asset_token/{}", HOST, PORT, name);
 
   create_query_promise(&opts, &req_string)
 }
