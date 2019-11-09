@@ -45,3 +45,9 @@ do
     echo " ===== "$i":"
     (cd $i; cargo $*) || $stop
 done
+
+if [ "$*" == "build" ]
+then
+  (cd components/wasm; wasm-pack build)
+  echo "If you are unable to build the wasm package, download wasm-pack 'curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh'"
+fi
