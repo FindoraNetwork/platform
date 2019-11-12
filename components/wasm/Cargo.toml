@@ -9,6 +9,7 @@ ledger = { path = "../../ledger" }
 zei = { git = "ssh://git@github.com/findoraorg/zei" }
 hex = "0.3.2"
 serde = "1.0"
+curve25519-dalek = { version =  "1.2.1", features = ["serde"] }
 bulletproofs =  {version = "1.0.4"}
 serde_json = "1.0"
 wasm-bindgen = { version = "0.2.50", features = ["serde-serialize"]  }
