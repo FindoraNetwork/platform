@@ -285,7 +285,7 @@ fn create_query_promise(opts: &RequestInit, req_string: &str) -> Promise {
 }
 
 #[wasm_bindgen_test]
-fn test_credit_score_proof() {
+fn test_wasm() {
   assert!(1 + 1 == 2);
 }
 
