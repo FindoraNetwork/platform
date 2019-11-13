@@ -8,8 +8,8 @@ extern crate rand;
 extern crate rand_chacha;
 extern crate serde;
 extern crate wasm_bindgen;
+extern crate wasm_bindgen_test;
 extern crate zei;
-
 use bulletproofs::PedersenGens;
 use hex;
 use js_sys::Promise;
@@ -25,6 +25,7 @@ use txn_builder::{BuildsTransactions, TransactionBuilder};
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::future_to_promise;
 use wasm_bindgen_futures::JsFuture;
+use wasm_bindgen_test::*;
 use web_sys::{Request, RequestInit, RequestMode};
 use zei::algebra::bls12_381::{BLSGt, BLSScalar, BLSG1, BLSG2};
 use zei::algebra::groups::Group;
@@ -432,9 +433,6 @@ impl Prover {
 //    It's currently not working due to dependency issue
 // 2. Once it's working, convert the cargo tests below to wasm_bindgen_test
 //
-
-extern crate wasm_bindgen_test;
-use wasm_bindgen_test::*;
 
 // #[cfg(test)]
 // mod tests {
