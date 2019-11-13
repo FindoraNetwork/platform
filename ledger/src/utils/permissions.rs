@@ -7,7 +7,7 @@ use std::io::Result;
 
 /// Define a type for a key for the hashmap.  A version of a
 /// transaction has a name and a sequence number.
-#[derive(Debug, Deserialize, Eq, Hash, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, Serialize)]
 struct TransactionVersion {
   name: String,
   sequence: u32,
@@ -42,7 +42,7 @@ pub struct TransactionDictionary {
   map: HashMap<TransactionVersion, TransactionPermissions>,
 }
 
-type Summary = HashMap<String, HashMap<u32, HashMap<TransactionPermissions, u32>>>;
+type Superset = HashMap<TransactionVersion, TransactionPermissions>;
 
 impl TransactionDictionary {
   /// Create a new, empty directory.
@@ -119,86 +119,59 @@ impl TransactionDictionary {
 
   /// Combine a set of dictionaries to form a list of acceptable transaction
   /// versions.
-  pub fn summarize(list: &[TransactionDictionary]) -> Summary {
-    let mut counts: Summary = HashMap::new();
+  fn superset(list: &[TransactionDictionary]) -> Superset {
+    let mut superset: Superset = HashMap::new();
 
     for dictionary in list {
       for key in dictionary.map.keys() {
-        let counts_entry = match counts.get_mut(&key.name) {
-          Some(e) => e,
-          None => {
-            let e = HashMap::new();
-            counts.insert(key.name.clone(), e);
-            counts.get_mut(&key.name).unwrap()
-          }
-        };
-
-        let sequence_entry = match counts_entry.get_mut(&key.sequence) {
-          Some(e) => e,
-          None => {
-            let e = HashMap::new();
-            counts_entry.insert(key.sequence, e);
-            counts_entry.get_mut(&key.sequence).unwrap()
-          }
-        };
-
-        let permission = dictionary.map[key];
-
-        let permission_entry = match sequence_entry.get_mut(&permission) {
-          Some(e) => e,
-          None => {
-            sequence_entry.insert(permission, 0);
-            sequence_entry.get_mut(&permission).unwrap()
-          }
-        };
-
-        *permission_entry += 1;
+        superset.insert(key.clone(), TransactionPermissions::Undefined);
       }
     }
 
-    counts
+    superset
   }
 
   /// Eventually, compute the set of acceptable transaction versions.
-  pub fn reconcile(input: &Summary) -> TransactionDictionary {
+  pub fn reconcile(list: &[TransactionDictionary]) -> TransactionDictionary {
+    // Clippy doesn't allow cloning of ** types, but its suggested workaround
+    // doesn't compile.
+    #[allow(clippy::clone_double_ref)]
+    let superset = TransactionDictionary::superset(list.clone());
     let mut result = TransactionDictionary { map: HashMap::new() };
 
-    for name in input.keys() {
-      for version in input[name].keys() {
-        let mut state = TransactionPermissions::Current;
+    for key in superset.keys() {
+      let mut state = TransactionPermissions::Current;
 
-        for permission in input[name][version].keys() {
-          state = match permission {
-            TransactionPermissions::Current => state,
-            TransactionPermissions::Deprecated => match state {
-              TransactionPermissions::Current => *permission,
-              TransactionPermissions::Deprecated => state,
-              TransactionPermissions::Disallowed => state,
-              TransactionPermissions::Retired => state,
-              TransactionPermissions::Undefined => state,
-            },
-            TransactionPermissions::Disallowed => TransactionPermissions::Disallowed,
-            TransactionPermissions::Retired => match state {
-              TransactionPermissions::Current => *permission,
-              TransactionPermissions::Deprecated => *permission,
-              TransactionPermissions::Disallowed => state,
-              TransactionPermissions::Retired => state,
-              TransactionPermissions::Undefined => state,
-            },
-            TransactionPermissions::Undefined => match state {
-              TransactionPermissions::Current => *permission,
-              TransactionPermissions::Deprecated => *permission,
-              TransactionPermissions::Disallowed => state,
-              TransactionPermissions::Retired => *permission,
-              TransactionPermissions::Undefined => state,
-            },
-          };
-        }
+      for dictionary in list {
+        let permission = dictionary.query(&key.name, key.sequence);
 
-        let key = TransactionVersion { name: name.to_string(),
-                                       sequence: *version };
+        state = match permission {
+          TransactionPermissions::Current => state,
+          TransactionPermissions::Deprecated => match state {
+            TransactionPermissions::Current => permission,
+            TransactionPermissions::Deprecated => state,
+            TransactionPermissions::Disallowed => state,
+            TransactionPermissions::Retired => state,
+            TransactionPermissions::Undefined => state,
+          },
+          TransactionPermissions::Disallowed => TransactionPermissions::Disallowed,
+          TransactionPermissions::Retired => match state {
+            TransactionPermissions::Current => permission,
+            TransactionPermissions::Deprecated => permission,
+            TransactionPermissions::Disallowed => state,
+            TransactionPermissions::Retired => state,
+            TransactionPermissions::Undefined => state,
+          },
+          TransactionPermissions::Undefined => match state {
+            TransactionPermissions::Current => permission,
+            TransactionPermissions::Deprecated => permission,
+            TransactionPermissions::Disallowed => state,
+            TransactionPermissions::Retired => permission,
+            TransactionPermissions::Undefined => state,
+          },
+        };
 
-        result.map.insert(key, state);
+        result.map.insert(key.clone(), state);
       }
     }
 
@@ -221,7 +194,7 @@ mod tests {
     // Declare some entries in the dictionary.
     dictionary.declare("current", 1, TransactionPermissions::Current)
               .unwrap();
-    dictionary.declare("current", 2, TransactionPermissions::Retired)
+    dictionary.declare("transit", 2, TransactionPermissions::Current)
               .unwrap();
     dictionary.declare("deprecated", 0, TransactionPermissions::Deprecated)
               .unwrap();
@@ -234,7 +207,7 @@ mod tests {
 
     // Check that our entries are working.
     assert!(dictionary.allow("current", 1));
-    assert!(!dictionary.allow("current", 2));
+    assert!(dictionary.allow("transit", 2));
     assert!(dictionary.allow("deprecated", 0));
     assert!(!dictionary.allow("disallowed", 1));
     assert!(!dictionary.allow("retired", 2));
@@ -266,7 +239,7 @@ mod tests {
 
     // Check that the contents match.
     assert!(dictionary.allow("current", 1));
-    assert!(!dictionary.allow("current", 2));
+    assert!(dictionary.allow("transit", 2));
     assert!(dictionary.allow("deprecated", 0));
     assert!(!dictionary.allow("disallowed", 1));
     assert!(!dictionary.allow("retired", 2));
@@ -274,9 +247,9 @@ mod tests {
     assert!(!dictionary.allow("xxxxyyyy", 0));
     assert!(dictionary.map.len() == 6);
 
-    // Declare some entries in the dictionary.
+    // Check the entries in the dictionary.
     assert!(dictionary.query("current", 1) == TransactionPermissions::Current);
-    assert!(dictionary.query("current", 2) == TransactionPermissions::Retired);
+    assert!(dictionary.query("transit", 2) == TransactionPermissions::Current);
     assert!(dictionary.query("deprecated", 0) == TransactionPermissions::Deprecated);
     assert!(dictionary.query("disallowed", 1) == TransactionPermissions::Disallowed);
     assert!(dictionary.query("retired", 2) == TransactionPermissions::Retired);
@@ -292,25 +265,103 @@ mod tests {
     let _ = remove_file(&path);
 
     let mut vector = vec![dictionary];
-    let summary = TransactionDictionary::summarize(&vector);
+    let summary = TransactionDictionary::reconcile(&vector);
 
     println!("summary = {:?}", summary);
-    assert!(summary.len() == 5);
-    assert!(summary["current"][&1][&TransactionPermissions::Current] == 1);
-    assert!(summary["current"][&2][&TransactionPermissions::Retired] == 1);
-    assert!(summary["deprecated"][&0][&TransactionPermissions::Deprecated] == 1);
-    assert!(summary["disallowed"][&1][&TransactionPermissions::Disallowed] == 1);
-    assert!(summary["retired"][&2][&TransactionPermissions::Retired] == 1);
-    assert!(summary["undefined"][&3][&TransactionPermissions::Undefined] == 1);
+    assert!(summary.map.len() == 6);
+
+    assert!(summary.query("retired", 2) == TransactionPermissions::Retired);
+    assert!(summary.query("undefined", 3) == TransactionPermissions::Undefined);
+    assert!(summary.query("deprecated", 0) == TransactionPermissions::Deprecated);
+    assert!(summary.query("current", 1) == TransactionPermissions::Current);
+    assert!(summary.query("transit", 2) == TransactionPermissions::Current);
+    assert!(summary.query("disallowed", 1) == TransactionPermissions::Disallowed);
 
     // Declare another dictionary.
+    let dictionary = new_dictionary();
+
+    vector.push(dictionary);
+    let summary = TransactionDictionary::reconcile(&vector);
+
+    println!("summary = {:?}", summary);
+
+    assert!(summary.query("retired", 2) == TransactionPermissions::Retired);
+    assert!(summary.query("undefined", 3) == TransactionPermissions::Undefined);
+    assert!(summary.query("deprecated", 0) == TransactionPermissions::Deprecated);
+    assert!(summary.query("current", 1) == TransactionPermissions::Current);
+    assert!(summary.query("transit", 2) == TransactionPermissions::Retired);
+    assert!(summary.query("disallowed", 1) == TransactionPermissions::Disallowed);
+    assert!(summary.query("unmapped", 3) == TransactionPermissions::Undefined);
+    assert!(summary.query("different", 2) == TransactionPermissions::Undefined);
+
+    // Check the number of entries in the dictionary.
+    assert!(summary.map.len() == 16);
+
+    let dictionary = new_dictionary();
+
+    assert!(dictionary.query("different", 3) == TransactionPermissions::Current);
+
+    let mut vector = vec![dictionary];
+    let summary = TransactionDictionary::reconcile(&vector);
+
+    println!("summary = {:?}", summary);
+
+    assert!(summary.query("different", 3) == TransactionPermissions::Current);
+    assert!(summary.query("different", 4) == TransactionPermissions::Undefined);
+    assert!(summary.query("different", 5) == TransactionPermissions::Current);
+    assert!(summary.query("different", 6) == TransactionPermissions::Current);
+    assert!(summary.query("different", 7) == TransactionPermissions::Current);
+    assert!(summary.query("different", 8) == TransactionPermissions::Deprecated);
+    assert!(summary.query("different", 9) == TransactionPermissions::Retired);
+
+    assert!(summary.map.len() == 14);
+
+    let dictionary = new_dictionary();
+    vector.push(dictionary);
+
+    let mut dictionary = new_dictionary();
+
+    dictionary.declare("different", 3, TransactionPermissions::Deprecated)
+              .unwrap();
+    dictionary.declare("different", 4, TransactionPermissions::Disallowed)
+              .unwrap();
+    dictionary.declare("different", 5, TransactionPermissions::Retired)
+              .unwrap();
+    dictionary.declare("different", 6, TransactionPermissions::Deprecated)
+              .unwrap();
+    dictionary.declare("different", 7, TransactionPermissions::Undefined)
+              .unwrap();
+    dictionary.declare("different", 8, TransactionPermissions::Undefined)
+              .unwrap();
+    dictionary.declare("different", 9, TransactionPermissions::Undefined)
+              .unwrap();
+
+    let length = dictionary.map.len();
+
+    vector.push(dictionary);
+
+    let summary = TransactionDictionary::reconcile(&vector);
+
+    assert!(summary.query("different", 3) == TransactionPermissions::Deprecated);
+    assert!(summary.query("different", 4) == TransactionPermissions::Disallowed);
+    assert!(summary.query("different", 5) == TransactionPermissions::Retired);
+    assert!(summary.query("different", 6) == TransactionPermissions::Deprecated);
+    assert!(summary.query("different", 7) == TransactionPermissions::Undefined);
+    assert!(summary.query("different", 8) == TransactionPermissions::Undefined);
+    assert!(summary.query("different", 9) == TransactionPermissions::Undefined);
+    assert!(summary.map.len() == length);
+  }
+
+  fn new_dictionary() -> TransactionDictionary {
     let mut dictionary = TransactionDictionary { map: HashMap::new() };
 
     dictionary.declare("current", 1, TransactionPermissions::Current)
               .unwrap();
-    dictionary.declare("current", 2, TransactionPermissions::Retired)
+    dictionary.declare("retired", 2, TransactionPermissions::Retired)
               .unwrap();
-    dictionary.declare("deprecated", 1, TransactionPermissions::Deprecated)
+    dictionary.declare("transit", 2, TransactionPermissions::Retired)
+              .unwrap();
+    dictionary.declare("deprecated", 0, TransactionPermissions::Deprecated)
               .unwrap();
     dictionary.declare("disallowed", 2, TransactionPermissions::Disallowed)
               .unwrap();
@@ -319,50 +370,20 @@ mod tests {
     dictionary.declare("unmapped", 3, TransactionPermissions::Undefined)
               .unwrap();
 
-    vector.push(dictionary);
-    let summary = TransactionDictionary::summarize(&vector);
-
-    println!("summary = {:?}", summary);
-
-    // Check the number of entries in the first level hash map.
-    assert!(summary.len() == 7);
-
-    // Now check the counts for all the second-level hash maps.
-    assert!(summary["current"].len() == 2);
-    assert!(summary["deprecated"].len() == 2);
-    assert!(summary["disallowed"].len() == 2);
-    assert!(summary["retired"].len() == 1);
-    assert!(summary["undefined"].len() == 1);
-    assert!(summary["different"].len() == 1);
-    assert!(summary["unmapped"].len() == 1);
-
-    // Check the actual count values.
-    assert!(summary["current"][&1][&TransactionPermissions::Current] == 2);
-    assert!(summary["current"][&2][&TransactionPermissions::Retired] == 2);
-    assert!(summary["deprecated"][&0][&TransactionPermissions::Deprecated] == 1);
-    assert!(summary["disallowed"][&1][&TransactionPermissions::Disallowed] == 1);
-    assert!(summary["deprecated"][&1][&TransactionPermissions::Deprecated] == 1);
-    assert!(summary["disallowed"][&2][&TransactionPermissions::Disallowed] == 1);
-    assert!(summary["retired"][&2][&TransactionPermissions::Retired] == 1);
-    assert!(summary["undefined"][&3][&TransactionPermissions::Undefined] == 1);
-    assert!(summary["different"][&2][&TransactionPermissions::Retired] == 1);
-    assert!(summary["unmapped"][&3][&TransactionPermissions::Undefined] == 1);
-
-    let reconciled = TransactionDictionary::reconcile(&summary);
-
-    println!("reconciled = {:?}", reconciled);
-
-    assert!(reconciled.map.len() == 10);
-
-    assert!(reconciled.query("unmapped", 3) == TransactionPermissions::Undefined);
-    assert!(reconciled.query("undefined", 3) == TransactionPermissions::Undefined);
-    assert!(reconciled.query("deprecated", 0) == TransactionPermissions::Deprecated);
-    assert!(reconciled.query("deprecated", 1) == TransactionPermissions::Deprecated);
-    assert!(reconciled.query("current", 2) == TransactionPermissions::Retired);
-    assert!(reconciled.query("different", 2) == TransactionPermissions::Retired);
-    assert!(reconciled.query("retired", 2) == TransactionPermissions::Retired);
-    assert!(reconciled.query("disallowed", 1) == TransactionPermissions::Disallowed);
-    assert!(reconciled.query("disallowed", 2) == TransactionPermissions::Disallowed);
-    assert!(reconciled.query("current", 1) == TransactionPermissions::Current);
+    dictionary.declare("different", 3, TransactionPermissions::Current)
+              .unwrap();
+    dictionary.declare("different", 4, TransactionPermissions::Undefined)
+              .unwrap();
+    dictionary.declare("different", 5, TransactionPermissions::Current)
+              .unwrap();
+    dictionary.declare("different", 6, TransactionPermissions::Current)
+              .unwrap();
+    dictionary.declare("different", 7, TransactionPermissions::Current)
+              .unwrap();
+    dictionary.declare("different", 8, TransactionPermissions::Deprecated)
+              .unwrap();
+    dictionary.declare("different", 9, TransactionPermissions::Retired)
+              .unwrap();
+    dictionary
   }
 }
