@@ -515,6 +515,7 @@ fn process_add_cmd(add_matches: &clap::ArgMatches,
 
         if let Ok(_res) = txn_builder.add_basic_issue_asset(&IssuerPublicKey { key: pub_key },
                                                             &priv_key,
+                                                            &None,
                                                             &asset_token,
                                                             seq_num,
                                                             amount)
