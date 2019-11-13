@@ -16,4 +16,5 @@ pub mod utils;
 
 #[cfg(not(target_arch = "wasm32"))]
 pub mod permissions;
+#[cfg(not(target_arch = "wasm32"))]
 pub mod store;
