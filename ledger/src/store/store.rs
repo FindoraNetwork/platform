@@ -551,7 +551,10 @@ impl LedgerUpdate<ChaChaRng> for LedgerState {
     // Update the transaction Merkle tree and transaction log
     for (tmp_sid, txn) in block.temp_sids.drain(..).zip(block.txns.drain(..)) {
       let txn_sid = temp_sid_map.get(&tmp_sid).unwrap().0;
-      let hash = txn.compute_txn_merkle_hash(txn_sid);
+
+      let digest = sha256::hash(&txn.serialize_bincode(txn_sid));
+      let mut hash = HashValue::new();
+      hash.hash.clone_from_slice(&digest.0);
 
       // TODO(joe/jonathan): Since errors in the merkle tree are things like
       // corruption and I/O failure, we don't have a good recovery story. Is

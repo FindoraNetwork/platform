@@ -44,6 +44,3 @@ pub mod sha256 {
     sha256::hash(m)
   }
 }
-
-#[cfg(not(target_arch = "wasm32"))]
-pub mod permissions;
