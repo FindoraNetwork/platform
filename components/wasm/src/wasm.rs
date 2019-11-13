@@ -421,6 +421,26 @@ impl Prover {
   }
 }
 
+#[wasm_bindgen]
+// Create a credit score credentialing secenario
+// with the lower bound of the user's credit score and the minimum requirement
+pub fn attest_credit_score(min_credit_score: u64, min_requirement: u64) -> bool {
+  let mut issuer = Issuer::new(1);
+  let issuer_jsvalue = issuer.jsvalue();
+  let mut user = User::new(&issuer, "user");
+  let user_jsvalue = user.jsvalue();
+
+  let sig_jsvalue = issuer.sign_min_credit_score(&user_jsvalue, min_credit_score);
+  let proof_jsvalue =
+    user.commit_min_credit_score(&issuer_jsvalue, &sig_jsvalue, min_credit_score, true);
+
+  Prover::prove_min_credit_score(&proof_jsvalue,
+                                 &issuer_jsvalue,
+                                 min_credit_score,
+                                 true,
+                                 min_requirement)
+}
+
 //
 // Test section
 //
