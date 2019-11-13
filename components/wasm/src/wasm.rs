@@ -10,6 +10,7 @@ use hex;
 use percent_encoding::{utf8_percent_encode, AsciiSet, CONTROLS};
 use std::str;
 use txn_builder::{BuildsTransactions, TransactionBuilder};
+use wasm_bindgen_test::*;
 
 use js_sys::Promise;
 use ledger::data_model::{AccountAddress, AssetTypeCode, IssuerPublicKey, TxoRef, TxoSID};
@@ -147,7 +148,7 @@ pub fn get_tracked_amount(blind_asset_record: String,
         let amount = u32_pair_to_u64((u8_littleendian_slice_to_u32(s1.0.as_bytes()),
                                       u8_littleendian_slice_to_u32(s2.0.as_bytes())));
         Ok(amount.to_string())
-      },
+      }
       (_, _) => Err(JsValue::from_str("Unable to decrypt amount")),
     }
   } else {
@@ -269,10 +270,7 @@ pub fn get_asset_token(name: String) -> Promise {
   opts.method("GET");
   opts.mode(RequestMode::Cors);
 
-  let req_string = format!("http://{}:{}/asset_token/{}",
-                           HOST,
-                           PORT,
-                           name);
+  let req_string = format!("http://{}:{}/asset_token/{}", HOST, PORT, name);
 
   create_query_promise(&opts, &req_string)
 }
@@ -284,6 +282,11 @@ fn create_query_promise(opts: &RequestInit, req_string: &str) -> Promise {
   let window = web_sys::window().unwrap();
   let request_promise = window.fetch_with_request(&request);
   future_to_promise(JsFuture::from(request_promise))
+}
+
+#[wasm_bindgen_test]
+fn test_wasm() {
+  assert!(1 + 1 == 2);
 }
 
 #[cfg(test)]

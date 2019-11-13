@@ -12,5 +12,8 @@ extern crate zei;
 extern crate findora;
 
 pub mod data_model;
-pub mod store;
 pub mod utils;
+
+#[cfg(not(target_arch = "wasm32"))]
+pub mod permissions;
+pub mod store;
