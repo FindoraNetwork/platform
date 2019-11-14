@@ -134,7 +134,8 @@ impl TransactionDictionary {
   /// Eventually, compute the set of acceptable transaction versions.
   pub fn reconcile(list: &[TransactionDictionary]) -> TransactionDictionary {
     // Clippy doesn't allow cloning of ** types, but its suggested workaround
-    // doesn't compile.
+    // doesn't compile.  When I fix it to compile, another clippy warning
+    // is triggered.
     #[allow(clippy::clone_double_ref)]
     let superset = TransactionDictionary::superset(list.clone());
     let mut result = TransactionDictionary { map: HashMap::new() };
