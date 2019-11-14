@@ -9,6 +9,14 @@ extern crate rand_chacha;
 extern crate serde;
 extern crate wasm_bindgen;
 extern crate zei;
+<<<<<<< HEAD
+=======
+use hex;
+use percent_encoding::{utf8_percent_encode, AsciiSet, CONTROLS};
+use std::str;
+use txn_builder::{BuildsTransactions, TransactionBuilder};
+use wasm_bindgen_test::*;
+>>>>>>> master
 
 use bulletproofs::PedersenGens;
 use hex;
