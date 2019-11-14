@@ -1,18 +1,35 @@
 sig Value {}
-abstract sig Color {}
-sig Red extends Color {} { one Red }
-sig Black extends Color {} { one Black }
 
-sig BinNode {
+fun max[a: Int, b: Int]: Int { a > b => a else b }
+fun min[a: Int, b: Int]: Int { a < b => a else b }
+
+fun defHeight[x: lone BinNode]: Int { some x => x.data.height else 0 }
+fun defShortest[x: lone BinNode]: Int { some x => x.data.shortest else 0 }
+fun defBlackHeight[x: lone BinNode]: Int { some x => x.data.blackHeight else 0 }
+
+sig NodeData {
+  height: Int,
+  shortest: Int,
+  blackHeight: Int
+}
+
+abstract sig BinNode {
   key: Int,
   val: Value,
   left:  lone BinNode,
   right: lone BinNode,
-  color: Color
+  data: NodeData
 } {
   no ((left.*(@left+@right)) & (right.*(@left+@right)))
   this not in this.descendents
+  data.height = plus[1,max[left.defHeight,right.defHeight]]
+  data.shortest = plus[1,min[left.defShortest,right.defShortest]]
 }
+
+sig RedNode extends BinNode {}
+{ data.blackHeight = max[left.defBlackHeight,right.defBlackHeight] }
+sig BlackNode extends BinNode {}
+{ data.blackHeight = plus[1,max[left.defBlackHeight,right.defBlackHeight]] }
 
 fun descendents[par: BinNode]: set BinNode {
   par.^(left + right)
@@ -23,14 +40,10 @@ fun treeFrom[par: BinNode]: set BinNode {
 }
 
 pred balanced[par: BinNode] {
-  ((plus[1,plus[#(par.left.treeFrom),#(par.left.treeFrom)]]
-      >= #(par.right.treeFrom)
-    and #par.left.treeFrom < #par.right.treeFrom
-   ) or
-   (plus[1,plus[#(par.right.treeFrom),#(par.right.treeFrom)]]
-      >= #(par.left.treeFrom)
-    and (#(par.left.treeFrom) > #(par.right.treeFrom))
-   ) or (#par.left.treeFrom = #par.right.treeFrom)
+  (let smaller = par.defShortest,
+       larger  = par.defHeight |
+
+       plus[plus[smaller,smaller],1] >= larger
   )
 }
 
@@ -52,13 +65,13 @@ pred isBST[t: BinTree] {
 }
 
 pred rbInvariant[n: BinNode] {
-  some r: Red   | n.color = r => (all c: n.(left+right).color | c != Red)
-  (some b: Black |
-    (sum c: (n.left.treeFrom) |
-      c.color = b => 1 else 0) =
-    (sum c: (n.right.treeFrom) |
-      c.color = b => 1 else 0)
-  )
+  all r: RedNode | no (r.(left+right) & RedNode)
+  n.left.defBlackHeight = n.right.defBlackHeight
+}
+
+pred rbInvariant2[n: BinNode] {
+  all r: RedNode | no (r.(left+right) & RedNode)
+  #((n.left.treeFrom)&BlackNode) = #((n.right.treeFrom)&BlackNode)
 }
 
 fact { one BinTree }
@@ -66,9 +79,19 @@ fact { all b: BinTree | isBST[b] }
 fact { all n: BinNode | one t: BinTree | inTree[n,t] }
 fact { all v: Value | some n: BinNode | v = n.val }
 
-fact { all n: BinNode | rbInvariant[n] }
+// fact { all n: BinNode | rbInvariant[n] }
+pred isRbTree[] { all n: BinNode | rbInvariant[n] }
+fact { all n: BinTree | n.root in BlackNode }
 
-check { all b: BinNode | balanced[b] } for 10 but 6 Int
+check InvsEquiv {
+  (all n: BinNode | rbInvariant[n]) <=> (all n: BinNode | rbInvariant2[n])
+} for 10 but 6 int expect 1
 
-run { #BinNode > 7 } for 40 but 6 Int
+run { isRbTree[] and #BinNode > 5 } for 10 but 6 Int
+run { isRbTree[] and #BinNode > 5 and (some b: BinTree | some
+(b.root.(left+right)&RedNode)) } for 10 but 6 Int
+
+check RbHeightBound { (all b: BinNode | rbInvariant[b]) => (all b: BinNode | balanced[b]) } for 10 but 6 Int
+
+run { isRbTree[] and #BinNode > 6 } for 20 but 6 Int
 

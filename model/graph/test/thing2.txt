@@ -2,6 +2,8 @@ ATask
 
 Edges:
 fulfilled_by AnotherTask
+depends_on ATest
+depends_on AnotherTest
 
 Data:
 GoodIdeaness:

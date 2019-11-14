@@ -3,7 +3,7 @@
 {-# LANGUAGE DeriveFunctor     #-}
 module Main where
 import qualified Data.Text as T
-import           Data.List (nub)
+import           Data.List (nub,isPrefixOf,sort)
 import qualified Data.Map.Lazy as M
 import qualified Text.Parsec   as P
 import qualified Text.Parsec.Token as P
@@ -12,7 +12,8 @@ import           Data.Maybe (maybeToList)
 import           Control.Applicative ((<$>),(<*>),(*>))
 import           Control.Monad (join, filterM)
 import           System.Directory (getCurrentDirectory, getDirectoryContents, doesFileExist)
-import           System.IO (hGetContents,openFile,IOMode(..))
+import           System.IO (hGetContents,openFile,IOMode(..),hFlush,stdout)
+import           System.FilePath.Posix (takeBaseName)
 
 alloyish = P.makeTokenParser $ javaStyle
   { P.reservedNames = [ "sig", "abstract", "extends"
@@ -114,6 +115,8 @@ data SetExp v
   | ClosureSet    (SetExp v)
   | OneClosureSet (SetExp v)
   | TransposeSet  (SetExp v)
+  -- | FilterSet     (SetExp v) (RelExp (Maybe v))
+  -- | MapSet        (SetExp v) (SetExp (Maybe v))
   deriving (Eq,Show,Read,Functor)
 
 data RelExp v
@@ -129,6 +132,11 @@ data RelExp v
   | OrRel    (RelExp v) (RelExp v)
   | ImplyRel (RelExp v) (RelExp v)
   | IffRel   (RelExp v) (RelExp v)
+  -- | QAllExp  (SetExp v) (RelExp (Maybe v))
+  -- | QSomeExp (SetExp v) (RelExp (Maybe v))
+  -- | QOneExp  (SetExp v) (RelExp (Maybe v))
+  -- | QLoneExp (SetExp v) (RelExp (Maybe v))
+  -- | QNoExp   (SetExp v) (RelExp (Maybe v))
   deriving (Eq,Show,Read,Functor)
 
 data Env v dat = Env
@@ -176,7 +184,6 @@ parseEntry = do
   P.string "Data:" >> P.newline
   attrs <- (M.fromList <$>) $ P.many $ P.try $ do
     dataKey <- (T.pack <$>) $ P.manyTill (P.alphaNum P.<|> P.oneOf "_") $ P.char ':'
-    P.spaces
     P.newline
     dataData <- (T.pack <$>) $ P.manyTill (P.anyChar) $ P.try $ (P.newline >> P.newline >> return ()) P.<|> P.eof
     return (dataKey,dataData)
@@ -292,7 +299,20 @@ testEnv = Env
 getFiles = do
   currdir <- getCurrentDirectory
   contents <- getDirectoryContents currdir
-  filterM doesFileExist contents
+  filter (not . isPrefixOf "." . takeBaseName) <$> filterM doesFileExist contents
+
+whileEither_ :: Monad m => m (Either a b) -> (a -> m ()) -> (b -> m ()) -> m ()
+whileEither_ cond lOp rOp = do
+  cond' <- cond
+  case cond' of
+    Left lVal -> lOp lVal
+    Right rVal -> rOp rVal >> whileEither_ cond lOp rOp
+
+lineJoin [] = ""
+lineJoin ls = foldl1 (\x y -> x <> "\n" <> y) ls
+
+prefixWith s = lineJoin . map (s <>) . T.lines
+indent = prefixWith "  "
 
 main :: IO ()
 main = do
@@ -304,17 +324,38 @@ main = do
   -- putStrLn $ show entries
   (Right entries) <- return entries
   env <- return $ foldl (flip applyEntry) defaultEnv entries
+  -- putStrLn $ show env
   -- env <- return $ testEnv
-  x <- P.parse (P.try (Left <$> (P.reserved alloyish "setexp" *> parseSetExp <* P.eof))
+  expLine <- return $
+       P.parse (P.try (Left <$> (P.reserved alloyish "setexp" *> parseSetExp <* P.eof))
                 P.<|> (Right <$> (P.reserved alloyish "relexp" *> parseRelExp <* P.eof)))
-               "" <$> getLine
-  (Right x) <- return x
-  putStrLn $ show x
-  case x of
-    Left x -> do
-      x <- return $ T.pack <$> x
-      putStrLn $ show $ evalSetExp x env
-    Right x -> do
-      x <- return $ T.pack <$> x
-      putStrLn $ show $ evalRelExp x env
+               "" <$> (putStr "> " >> hFlush stdout >> getLine)
+  whileEither_ expLine (\_ -> putStrLn "Done.") $ \x -> do
+    putStrLn $ show x
+    case x of
+      Left x -> do
+        x <- return $ T.pack <$> x
+        putStrLn $ case evalSetExp x env of
+          Nothing -> "Error"
+          Just items -> T.unpack $ T.unlines $ do
+            [item] <- items
+            foldl1 (++) $ [
+              return $ item <> ":"
+              , do
+                edges <- return $ map (\ (k,v) -> (k,join v))
+                                $ filter ((>= 1) . length . snd)
+                                $ map (\ (k,v) -> (k, filter ((>= 1) . length) v))
+                                $ map (\ (k,v) -> (k,map tail $ filter (([item] `isPrefixOf`)) v))
+                                $ M.assocs $ envVars env
+                dat <- return $ (\ (k,v) -> [k <> ":", indent $ prefixWith "-> " v]) =<< (sort $ map (\ (k,v) -> (k, lineJoin v)) $ edges)
+                map indent dat
+              , do
+                (Just dat) <- return $ M.lookup item $ envExtra env
+                dat <- return $ (\ (k,v) -> [k <> ":", indent v]) =<< sort (M.assocs dat)
+                map indent dat
+              ]
+        -- putStrLn $ show $ 
+      Right x -> do
+        x <- return $ T.pack <$> x
+        putStrLn $ maybe "Error" show $ evalRelExp x env
 
