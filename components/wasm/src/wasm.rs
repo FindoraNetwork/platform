@@ -448,8 +448,12 @@ pub fn get_proof(attribute: u64) -> JsValue {
   user.commit_attribute(&issuer_jsvalue, &sig_jsvalue, attribute, true)
 }
 
+// In the P2P Lending app, the user has the option to save the proof for future use
+// 1. If the proof exists, use attest_with_proof for credentialing
+// 2. Else, use attest_without_proof for credentialing
+
 #[wasm_bindgen]
-// Create a credentialing secenario with proof as an input
+// 1. Create a credentialing secenario with proof as an input
 pub fn attest_with_proof(attribute: u64,
                          requirement: u64,
                          requirement_type: RequirementType,
@@ -464,7 +468,7 @@ pub fn attest_with_proof(attribute: u64,
 }
 
 #[wasm_bindgen]
-// Create a credentialing secenario without proof as an input
+// 2. Create a credentialing secenario without proof as an input
 pub fn attest_without_proof(attribute: u64,
                             requirement: u64,
                             requirement_type: RequirementType)
