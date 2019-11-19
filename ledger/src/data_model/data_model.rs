@@ -1,6 +1,4 @@
 use super::errors;
-use crate::store::append_only_merkle::HashValue;
-use crate::utils::sha256;
 use base64::decode as b64dec;
 use base64::encode as b64enc;
 use chrono::prelude::*;
@@ -379,14 +377,10 @@ impl Transaction {
     self.operations.push(op);
   }
 
-  pub fn compute_txn_merkle_hash(&self, sid: TxnSID) -> HashValue {
+  pub fn serialize_bincode(&self, sid: TxnSID) -> Vec<u8> {
     let mut serialized = bincode::serialize(&self).unwrap();
     serialized.extend(bincode::serialize(&sid).unwrap());
-
-    let digest = sha256::hash(&serialized);
-    let mut result = HashValue::new();
-    result.hash.clone_from_slice(&digest.0);
-    result
+    serialized
   }
 }
 

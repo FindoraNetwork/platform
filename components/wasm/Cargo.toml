@@ -5,21 +5,23 @@ authors = ["ngolub <ngolub@stanford.edu>"]
 edition = "2018"
 
 [dependencies]
-ledger = { path = "../../ledger" }
-zei = { git = "ssh://git@github.com/findoraorg/zei" }
-hex = "0.3.2"
-serde = "1.0"
 bulletproofs =  {version = "1.0.4"}
-serde_json = "1.0"
-wasm-bindgen = { version = "0.2.50", features = ["serde-serialize"]  }
-rand_chacha = "0.1.1"
-txn_builder = {path = "../txn_builder"}
-percent-encoding = "2.1.0"
+curve25519-dalek = { version =  "1.2.1", features = ["serde"] }
 futures = "0.1.20"
-
-wasm-bindgen-futures = "0.3.27"
-rand = { version = "0.6", features = ["wasm-bindgen"] }
+hex = "0.3.2"
 js-sys = "0.3.27"
+ledger = { path = "../../ledger" }
+percent-encoding = "2.1.0"
+rand = { version = "0.6", features = ["wasm-bindgen"] }
+rand_chacha = "0.1.1"
+serde = { version = "1.0.99", features = ["derive"] }
+serde_derive = "^1.0.59"
+serde_json = "1.0"
+txn_builder = {path = "../txn_builder"}
+wasm-bindgen = { version = "0.2.50", features = ["serde-serialize"]  }
+wasm-bindgen-futures = "0.3.27"
+wasm-bindgen-test = "0.2.50"
+zei = { git = "ssh://git@github.com/findoraorg/zei" }
 
 [lib]
 crate-type = ["cdylib", "rlib"]
@@ -37,7 +39,6 @@ features = [
 ]
 
 [build-dependencies]
-codegen = { git = "ssh://git@github.com/findoraorg/codegen" }
 serde = "1.0.101"
 serde_json = "1.0.41"
 wasm-bindgen = { version = "0.2.50", features = ["serde-serialize"]  }

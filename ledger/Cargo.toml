@@ -15,7 +15,6 @@ chrono = "0.4"
 curve25519-dalek = { version =  "1.2.1", features = ["serde"] }
 ed25519-dalek = "0.9.1"
 findora = { path = "../findora" }
-fs2 = "0.4"
 itertools = "0.8.0"
 rand = "0.6"
 rand_chacha = "0.1.1"
@@ -31,3 +30,5 @@ zei = { git = "ssh://git@github.com/findoraorg/zei" }
 
 [target.'cfg(not(target_arch = "wasm32"))'. dependencies]
 sodiumoxide = "0.2.1"
+fs2 = "0.4"
+
