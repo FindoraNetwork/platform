@@ -1,4 +1,4 @@
-ABusinessPlan
+ABusinessPlan: Plan
 
 Edges:
 depends_on ATask

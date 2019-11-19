@@ -85,13 +85,13 @@ fact { all n: BinTree | n.root in BlackNode }
 
 check InvsEquiv {
   (all n: BinNode | rbInvariant[n]) <=> (all n: BinNode | rbInvariant2[n])
-} for 10 but 6 int expect 1
+} for 7 but 6 int expect 1
 
-run { isRbTree[] and #BinNode > 5 } for 10 but 6 Int
+run { isRbTree[] and #BinNode > 5 } for 7 but 6 Int
 run { isRbTree[] and #BinNode > 5 and (some b: BinTree | some
-(b.root.(left+right)&RedNode)) } for 10 but 6 Int
+(b.root.(left+right)&RedNode)) } for 7 but 6 Int
 
-check RbHeightBound { (all b: BinNode | rbInvariant[b]) => (all b: BinNode | balanced[b]) } for 10 but 6 Int
+check RbHeightBound { (all b: BinNode | rbInvariant[b]) => (all b: BinNode | balanced[b]) } for 8 but 6 Int
 
-run { isRbTree[] and #BinNode > 6 } for 20 but 6 Int
+run { isRbTree[] and #BinNode > 6 } for 8 but 6 Int
 

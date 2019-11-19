@@ -1,4 +1,4 @@
-AnotherTest
+AnotherTest: Test Task
 
 Edges:
 depends_on SomethingInteresting

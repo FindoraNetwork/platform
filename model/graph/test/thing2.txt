@@ -1,4 +1,4 @@
-ATask
+ATask: Task
 
 Edges:
 fulfilled_by AnotherTask
