@@ -917,8 +917,49 @@ impl ArchiveAccess for LedgerState {
 
 pub mod helpers {
   use super::*;
-  use crate::data_model::{Asset, ConfidentialMemo, DefineAssetBody, IssuerPublicKey, Memo};
+  use crate::data_model::{
+    Asset, ConfidentialMemo, DefineAsset, DefineAssetBody, IssuerPublicKey, Memo,
+  };
   use zei::basic_crypto::signatures::{XfrKeyPair, XfrPublicKey, XfrSecretKey};
+  use zei::setup::PublicParams;
+  use zei::xfr::asset_record::build_blind_asset_record;
+  use zei::xfr::structs::AssetRecord;
+
+  pub fn create_definition_transaction(code: &AssetTypeCode,
+                                       public_key: &XfrPublicKey,
+                                       secret_key: &XfrSecretKey)
+                                       -> Result<Transaction, PlatformError> {
+    let issuer_key = IssuerPublicKey { key: public_key.clone() };
+    let mut tx = Transaction::default();
+    let asset_body = DefineAssetBody::new(&code, &issuer_key, false, false, None, None)?;
+    let asset_create = DefineAsset::new(asset_body, &issuer_key, &secret_key)?;
+    tx.operations.push(Operation::DefineAsset(asset_create));
+    return Ok(tx);
+  }
+
+  pub fn create_issuance_transaction<R: CryptoRng + Rng>(amount: u64,
+                                                         seq_num: u64,
+                                                         code: &AssetTypeCode,
+                                                         public_key: XfrPublicKey,
+                                                         secret_key: XfrSecretKey,
+                                                         conf_amount: bool,
+                                                         conf_type: bool,
+                                                         params: &PublicParams,
+                                                         prng: &mut R)
+                                                         -> Result<Transaction, PlatformError> {
+    let mut tx = Transaction::default();
+    let ar = AssetRecord::new(amount, code.val, public_key).unwrap();
+    let ba = build_blind_asset_record(prng, &params.pc_gens, &ar, conf_amount, conf_type, &None);
+    let asset_issuance_body = IssueAssetBody::new(&code, seq_num, &[TxOutput(ba)])?;
+    let asset_issuance_operation = IssueAsset::new(asset_issuance_body,
+                                                   &IssuerPublicKey { key: public_key.clone() },
+                                                   &secret_key)?;
+
+    let issue_op = Operation::IssueAsset(asset_issuance_operation);
+
+    tx.operations.push(issue_op);
+    return Ok(tx);
+  }
 
   pub fn build_keys<R: CryptoRng + Rng>(prng: &mut R) -> (XfrPublicKey, XfrSecretKey) {
     let keypair = XfrKeyPair::generate(prng);
@@ -973,8 +1014,6 @@ mod tests {
   use std::fs;
   use tempfile::tempdir;
   use zei::setup::PublicParams;
-  use zei::xfr::asset_record::build_blind_asset_record;
-  use zei::xfr::structs::AssetRecord;
 
   #[test]
   fn test_load_transaction_log() {
@@ -1583,6 +1622,39 @@ mod tests {
     assert!(TxnEffect::compute_effect(&mut prng, tx).is_err());
   }
 
+  // fn test_asset_transfer() {
+  //   let mut ledger_state = LedgerState::test_ledger();
+
+  //   let token_code1 = AssetTypeCode::new_from_str(String::from("a"));
+
+  //   // create keys
+  //   let (public_key, secret_key) = build_keys(&mut ledger_state.get_prng());
+
+  //   // compose asset definition transaction
+  //   let tx = create_definition_transaction(&token_code1);
+
+  //   // submit define asset transaction
+  //   let effect = TxnEffect::compute_effect(&mut prng, tx).unwrap();
+  //   {
+  //     let mut block = ledger.start_block().unwrap();
+  //     ledger.apply_transaction(&mut block, effect).unwrap();
+  //     ledger.finish_block(block);
+  //   }
+
+  //   // compose asset issuance transaction
+  //   let mut tx = Transaction::default();
+
+  //   let effect = TxnEffect::compute_effect(&mut prng, tx).unwrap();
+
+  //   let mut block = ledger.start_block().unwrap();
+  //   let temp_sid = ledger.apply_transaction(&mut block, effect).unwrap();
+
+  //   let (txn_sid, txos) = ledger.finish_block(block).remove(&temp_sid).unwrap();
+
+  //   let transaction = ledger.txs[txn_sid.0].clone();
+  //   let txn_id = transaction.tx_id;
+  // }
+
   // Sign with the wrong key.
   #[test]
   fn test_asset_creation_invalid_signature() {
@@ -1608,59 +1680,33 @@ mod tests {
 
   #[test]
   fn asset_issued() {
-    let tmp_dir = TempDir::new("test").unwrap();
-    let block_merkle_buf = tmp_dir.path().join("test_block_merkle");
-    let block_merkle_path = block_merkle_buf.to_str().unwrap();
-    let txn_merkle_buf = tmp_dir.path().join("test_txn_merkle");
-    let txn_merkle_path = txn_merkle_buf.to_str().unwrap();
-    let txn_buf = tmp_dir.path().join("test_txnlog");
-    let txn_path = txn_buf.to_str().unwrap();
-    let utxo_map_buf = tmp_dir.path().join("test_utxo_map");
-    let utxo_map_path = utxo_map_buf.to_str().unwrap();
-
-    let mut ledger = LedgerState::new(&block_merkle_path,
-                                      &txn_merkle_path,
-                                      &txn_path,
-                                      &utxo_map_path,
-                                      None,
-                                      true).unwrap();
+    let mut ledger = LedgerState::test_ledger();
+    let params = PublicParams::new();
 
     assert!(ledger.get_global_block_hash() == (BitDigest { 0: [0_u8; 32] }, 0));
-    let mut tx = Transaction::default();
     let token_code1 = AssetTypeCode { val: [1; 16] };
-    let mut prng = ChaChaRng::from_seed([0u8; 32]);
-    let (public_key, secret_key) = build_keys(&mut prng);
+    let (public_key, secret_key) = build_keys(&mut ledger.get_prng());
 
-    let asset_body = asset_creation_body(&token_code1, &public_key, true, false, None, None);
-    let asset_create = asset_creation_operation(&asset_body, &public_key, &secret_key);
-    tx.operations.push(Operation::DefineAsset(asset_create));
+    let tx = create_definition_transaction(&token_code1, &public_key, &secret_key).unwrap();
 
-    let effect = TxnEffect::compute_effect(&mut prng, tx).unwrap();
+    let effect = TxnEffect::compute_effect(&mut ledger.get_prng(), tx).unwrap();
     {
       let mut block = ledger.start_block().unwrap();
       ledger.apply_transaction(&mut block, effect).unwrap();
       ledger.finish_block(block);
     }
 
-    let mut tx = Transaction::default();
+    let tx = create_issuance_transaction(100,
+                                         0,
+                                         &token_code1,
+                                         public_key,
+                                         secret_key,
+                                         false,
+                                         false,
+                                         &params,
+                                         ledger.get_prng()).unwrap();
 
-    let ar = AssetRecord::new(100, token_code1.val, public_key).unwrap();
-    let params = PublicParams::new();
-    let ba = build_blind_asset_record(&mut prng, &params.pc_gens, &ar, false, false, &None);
-
-    let asset_issuance_body = IssueAssetBody::new(&token_code1, 0, &[TxOutput(ba)]).unwrap();
-
-    let sign = compute_signature(&secret_key, &public_key, &asset_issuance_body);
-
-    let asset_issuance_operation = IssueAsset { body: asset_issuance_body,
-                                                pubkey: IssuerPublicKey { key:
-                                                                            public_key.clone() },
-                                                signature: sign };
-
-    let issue_op = Operation::IssueAsset(asset_issuance_operation);
-
-    tx.operations.push(issue_op);
-    let effect = TxnEffect::compute_effect(&mut prng, tx).unwrap();
+    let effect = TxnEffect::compute_effect(ledger.get_prng(), tx).unwrap();
 
     let mut block = ledger.start_block().unwrap();
     let temp_sid = ledger.apply_transaction(&mut block, effect).unwrap();
