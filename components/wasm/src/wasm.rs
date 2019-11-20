@@ -411,18 +411,20 @@ impl Prover {
                          requirement_type: RequirementType)
                          -> bool {
     // 1. Prove that the attribut meets the requirement
-    //    Case 1. "Equal" requirement
-    //    E.g. prove that the country code is the same as the requirement
-    if requirement_type == RequirementType::Equal {
-      if attribute != requirement {
-        return false;
+    match requirement_type {
+      //    Case 1. "Equal" requirement
+      //    E.g. prove that the country code is the same as the requirement
+      RequirementType::Equal => {
+        if attribute != requirement {
+          return false;
+        }
       }
-    }
-    //    Case 2. "AtLeast" requirement
-    //    E.g. prove that the credit score is at least the required value
-    else if requirement_type == RequirementType::AtLeast {
-      if attribute < requirement {
-        return false;
+      //    Case 2. "AtLeast" requirement
+      //    E.g. prove that the credit score is at least the required value
+      RequirementType::AtLeast => {
+        if attribute < requirement {
+          return false;
+        }
       }
     }
 
