@@ -177,6 +177,7 @@ pub struct TransferAssetBody {
   pub inputs: Vec<TxoRef>,    // Ledger address of inputs
   pub num_outputs: usize,     // How many output TXOs?
   pub transfer: Box<XfrNote>, // Encrypted transfer note
+  pub is_debt_swap: bool,     // Indicates whether transfer should be evaluated by debt swap policy
 }
 
 impl TransferAssetBody {

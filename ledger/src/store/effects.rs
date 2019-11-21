@@ -26,6 +26,8 @@ pub struct TxnEffect {
   pub new_issuance_nums: HashMap<AssetTypeCode, Vec<u64>>,
   // Which public key is being used to issue each asset type
   pub issuance_keys: HashMap<AssetTypeCode, IssuerPublicKey>,
+  // Debt swap information that must be externally validated
+  pub debt_effects: HashMap<AssetTypeCode, DebtSwapEffect>,
 }
 
 // Internally validates the transaction as well.
@@ -166,16 +168,26 @@ impl TxnEffect {
           assert!(trn.body.num_outputs == trn.body.transfer.body.outputs.len());
 
           // (1)
+          // TODO: (noah/joe) ensure that all relevant public keys have signed transfer body
           for sig in &trn.body_signatures {
             if !sig.verify(&serde_json::to_vec(&trn.body).unwrap()) {
               return Err(PlatformError::InputsError);
             }
           }
+          let null_policies = vec![];
 
-          {
+          if trn.is_debt_swap {
+            let (debt_type, debt_swap_effect) = compute_debt_swap_effect(&trn.body)?;
+
+            if debt_effects.contains_key(&debt_type) {
+              return Err(PlatformError::InputsError);
+            }
+            debt_effects.insert(&debt_type, debt_swap_effect);
+
+            verify_xfr_body(prng, &trn.body.transfer.body, &null_policies)?;
+          } else {
             // (3)
             // TODO: implement real policies
-            let null_policies = vec![];
             verify_xfr_note(prng, &trn.body.transfer, &null_policies)?;
           }
 
