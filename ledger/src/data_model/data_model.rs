@@ -11,8 +11,6 @@ use zei::basic_crypto::signatures::{XfrKeyPair, XfrPublicKey, XfrSecretKey, XfrS
 use zei::xfr::lib::gen_xfr_note;
 use zei::xfr::structs::{AssetRecord, BlindAssetRecord, OpenAssetRecord, XfrNote};
 
-pub const TXN_SEQ_ID_PLACEHOLDER: u64 = 0xD000_0000_0000_0000u64;
-
 // Unique Identifier for ledger objects
 #[derive(Clone, Copy, Debug, Default, Deserialize, Eq, Hash, PartialEq, Serialize)]
 pub struct Code {
@@ -69,9 +67,12 @@ pub struct XfrAddress {
   pub key: XfrPublicKey,
 }
 
+// TODO(joe): Better name! There's more than one thing that gets issued.
 #[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 pub struct IssuerPublicKey {
   pub key: XfrPublicKey,
+  // TODO(joe): possibly include other keys, pending zei interface updates.
+  // eg. encryption key
 }
 
 #[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
@@ -174,8 +175,10 @@ pub enum TxoRef {
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct TransferAssetBody {
-  pub inputs: Vec<TxoRef>,    // Ledger address of inputs
-  pub num_outputs: usize,     // How many output TXOs?
+  pub inputs: Vec<TxoRef>, // Ledger address of inputs
+  pub num_outputs: usize,  // How many output TXOs?
+  // TODO(joe): we probably don't need the whole XfrNote with input records
+  // once it's on the chain
   pub transfer: Box<XfrNote>, // Encrypted transfer note
 }
 
@@ -275,12 +278,6 @@ impl TransferAsset {
   }
 }
 
-//Tells the storage layer what to do the list of active asset records (i.e. UTXO set)
-#[derive(Clone, Debug, Deserialize, Serialize)]
-pub struct TransferAssetResult {
-  pub success: bool,
-}
-
 // TODO: Include mechanism for replay attacks
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct IssueAsset {
@@ -299,11 +296,6 @@ impl IssueAsset {
                     pubkey: *public_key,
                     signature: sign })
   }
-}
-
-#[derive(Clone, Debug, Deserialize, Serialize)]
-pub struct IssueAssetResult {
-  pub success: bool,
 }
 
 // ... etc...
@@ -331,24 +323,11 @@ impl DefineAsset {
   }
 }
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
-pub struct DefineAssetResult {
-  pub success: bool,
-}
-
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub enum Operation {
   TransferAsset(TransferAsset),
   IssueAsset(IssueAsset),
   DefineAsset(DefineAsset),
-  // ... etc...
-}
-
-#[derive(Clone, Debug, Deserialize, Serialize)]
-pub enum OperationResult {
-  TransferAssetResult(TransferAssetResult),
-  IssueAssetResult(IssueAssetResult),
-  DefineAssetResult(DefineAssetResult),
   // ... etc...
 }
 
@@ -390,10 +369,6 @@ impl Default for Transaction {
                   credentials: Vec::new(),
                   memos: Vec::new() }
   }
-}
-
-pub struct TransactionResult {
-  pub op_results: Vec<OperationResult>,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
