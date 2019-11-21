@@ -589,19 +589,19 @@ impl LedgerState {
   pub fn test_ledger() -> LedgerState {
     let tmp_dir = TempDir::new("test").unwrap();
 
-    let block_merkle_buf = tmp_dir.path().join("test_ledger_block_merkle");
+    let block_merkle_buf = tmp_dir.path().join("test_block_merkle");
     let block_merkle_path = block_merkle_buf.to_str().unwrap();
 
-    let txn_merkle_buf = tmp_dir.path().join("test_ledger_txn_merkle");
+    let txn_merkle_buf = tmp_dir.path().join("test_txn_merkle");
     let txn_merkle_path = txn_merkle_buf.to_str().unwrap();
 
-    let txn_buf = tmp_dir.path().join("test_ledger_txns");
+    let txn_buf = tmp_dir.path().join("test_txnlog");
     let txn_path = txn_buf.to_str().unwrap();
 
     // let snap_buf      = tmp_dir.path().join("test_ledger_snap");
     // let snap_path     = snap_buf.to_str().unwrap();
 
-    let utxo_map_buf = tmp_dir.path().join("test_ledger_utxo_map");
+    let utxo_map_buf = tmp_dir.path().join("test_utxo_map");
     let utxo_map_path = utxo_map_buf.to_str().unwrap();
 
     LedgerState::new(&block_merkle_path,
@@ -1680,7 +1680,23 @@ mod tests {
 
   #[test]
   fn asset_issued() {
-    let mut ledger = LedgerState::test_ledger();
+    let tmp_dir = TempDir::new("test").unwrap();
+    let block_merkle_buf = tmp_dir.path().join("test_block_merkle");
+    let block_merkle_path = block_merkle_buf.to_str().unwrap();
+    let txn_merkle_buf = tmp_dir.path().join("test_txn_merkle");
+    let txn_merkle_path = txn_merkle_buf.to_str().unwrap();
+    let txn_buf = tmp_dir.path().join("test_txnlog");
+    let txn_path = txn_buf.to_str().unwrap();
+    let utxo_map_buf = tmp_dir.path().join("test_utxo_map");
+    let utxo_map_path = utxo_map_buf.to_str().unwrap();
+
+    let mut ledger = LedgerState::new(&block_merkle_path,
+                                      &txn_merkle_path,
+                                      &txn_path,
+                                      &utxo_map_path,
+                                      None,
+                                      true).unwrap();
+
     let params = PublicParams::new();
 
     assert!(ledger.get_global_block_hash() == (BitDigest { 0: [0_u8; 32] }, 0));
