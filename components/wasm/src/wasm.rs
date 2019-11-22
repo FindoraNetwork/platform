@@ -84,7 +84,7 @@ pub fn derive_elgamal_public_key(elgamal_secret_key_jsvalue: JsValue) -> Result<
   let pc_gens = PedersenGens::default();
   let sk = elgamal_secret_key_jsvalue.into_serde().unwrap();
   let pk = elgamal_derive_public_key(&RistPoint(pc_gens.B), &sk);
-  return Ok(JsValue::from_serde(&pk).unwrap());
+  Ok(JsValue::from_serde(&pk).unwrap())
 }
 
 // Defines an asset on the ledger using the serialized strings in KeyPair and a couple of boolean policies
@@ -178,7 +178,7 @@ pub fn issue_asset(key_pair: &XfrKeyPair,
   if elgamal_pub_key.is_empty() {
     issuer_keys = None
   } else {
-    let pk = serde_json::from_str::<ElGamalPublicKey<RistPoint>>(&elgamal_pub_key).map_err(|_e| return JsValue::from_str("could not deserialize elgamal key"))?;
+    let pk = serde_json::from_str::<ElGamalPublicKey<RistPoint>>(&elgamal_pub_key).map_err(|_e| JsValue::from_str("could not deserialize elgamal key"))?;
     let mut small_rng = ChaChaRng::from_entropy();
     let sk = elgamal_generate_secret_key::<_, BLSScalar>(&mut small_rng);
     // For now, zei expecs both id reveal key and tracking decryption key, so we construct a dummy
@@ -292,8 +292,7 @@ fn create_query_promise(opts: &RequestInit, req_string: &str) -> Promise {
 }
 
 //
-// Issuer, User and Prover structs for credentialing
-// Currently support verifying the lower bound of the credit score
+// Credentialing section
 //
 
 #[wasm_bindgen]
@@ -323,13 +322,14 @@ impl Issuer {
     JsValue::from_serde(&self).unwrap()
   }
 
-  // Sign the low bound of the credit score
-  pub fn sign_min_credit_score(&self, user_jsvalue: &JsValue, min_credit_score: u64) -> JsValue {
+  // Sign an attribute
+  // E.g. sign the lower bound of the credit score
+  pub fn sign_attribute(&self, user_jsvalue: &JsValue, attribute: u64) -> JsValue {
     let mut prng: ChaChaRng;
     prng = ChaChaRng::from_seed([0u8; 32]);
     let user: User = user_jsvalue.into_serde().unwrap();
 
-    let attrs = [BLSScalar::from_u64(min_credit_score)];
+    let attrs = [BLSScalar::from_u64(attribute)];
     let sig = ac_sign::<_, BLSGt>(&mut prng, &self.secret_key, &user.public_key, &attrs);
 
     JsValue::from_serde(&sig).unwrap()
@@ -360,19 +360,20 @@ impl User {
     JsValue::from_serde(&self).unwrap()
   }
 
-  // Commit the lower bound of the credit score with the issuer's signature
-  pub fn commit_min_credit_score(&self,
-                                 issuer_jsvalue: &JsValue,
-                                 sig: &JsValue,
-                                 min_credit_score: u64,
-                                 reveal_credit_score: bool)
-                                 -> JsValue {
+  // Commit an attribute with the issuer's signature
+  // E.g. commit the lower bound of the credit score
+  pub fn commit_attribute(&self,
+                          issuer_jsvalue: &JsValue,
+                          sig: &JsValue,
+                          attribute: u64,
+                          reveal_attribute: bool)
+                          -> JsValue {
     let issuer: Issuer = issuer_jsvalue.into_serde().unwrap();
     let sig: ACSignature<BLSG1> = sig.into_serde().unwrap();
     let mut prng = ChaChaRng::from_seed([0u8; 32]);
 
-    let attrs = [BLSScalar::from_u64(min_credit_score)];
-    let bitmap = [reveal_credit_score];
+    let attrs = [BLSScalar::from_u64(attribute)];
+    let bitmap = [reveal_attribute];
 
     let proof = ac_reveal::<_, BLSGt>(&mut prng,
                                       &self.secret_key,
@@ -386,60 +387,108 @@ impl User {
 }
 
 #[wasm_bindgen]
+#[derive(PartialEq)]
+pub enum RequirementType {
+  // Requirement: attribute value == requirement
+  Equal = 0,
+
+  // Requirement: attribute value >= requirement
+  AtLeast = 1,
+}
+
+#[wasm_bindgen]
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Prover;
 
 #[wasm_bindgen]
 impl Prover {
-  // Verify the lower bound of credit score
-  fn verify_min_credit_score(proof_jsvalue: &JsValue,
-                             issuer_jsvalue: &JsValue,
-                             min_credit_score: u64,
-                             reveal_min_credit_score: bool)
-                             -> bool {
-    let proof: ACRevealSig<BLSG1, BLSG2, BLSScalar> = proof_jsvalue.into_serde().unwrap();
-    let issuer: Issuer = issuer_jsvalue.into_serde().unwrap();
-
-    let attrs = [BLSScalar::from_u64(min_credit_score)];
-    let bitmap = [reveal_min_credit_score];
-    ac_verify::<BLSGt>(&issuer.public_key, &attrs, &bitmap, &proof).is_ok()
-  }
-
-  // Prove that the credit score meets the requirement
-  pub fn prove_min_credit_score(proof_jsvalue: &JsValue,
-                                issuer_jsvalue: &JsValue,
-                                min_credit_score: u64,
-                                reveal_min_credit_score: bool,
-                                min_requirement: u64)
-                                -> bool {
-    if min_credit_score < min_requirement {
-      return false;
+  // Prove that an attribute meets the requirement and is true
+  pub fn prove_attribute(proof_jsvalue: &JsValue,
+                         issuer_jsvalue: &JsValue,
+                         attribute: u64,
+                         reveal_attribute: bool,
+                         requirement: u64,
+                         requirement_type: RequirementType)
+                         -> bool {
+    // 1. Prove that the attribut meets the requirement
+    match requirement_type {
+      //    Case 1. "Equal" requirement
+      //    E.g. prove that the country code is the same as the requirement
+      RequirementType::Equal => {
+        if attribute != requirement {
+          return false;
+        }
+      }
+      //    Case 2. "AtLeast" requirement
+      //    E.g. prove that the credit score is at least the required value
+      RequirementType::AtLeast => {
+        if attribute < requirement {
+          return false;
+        }
+      }
     }
-    Prover::verify_min_credit_score(proof_jsvalue,
-                                    issuer_jsvalue,
-                                    min_credit_score,
-                                    reveal_min_credit_score)
+
+    // 2. Prove that the attribute is true
+    //    E.g. verify the lower bound of the credit score
+    let issuer: Issuer = issuer_jsvalue.into_serde().unwrap();
+    let attrs = [BLSScalar::from_u64(attribute)];
+    let bitmap = [reveal_attribute];
+    let proof: ACRevealSig<BLSG1, BLSG2, BLSScalar> = proof_jsvalue.into_serde().unwrap();
+    ac_verify::<BLSGt>(&issuer.public_key, &attrs, &bitmap, &proof).is_ok()
   }
 }
 
 #[wasm_bindgen]
-// Create a credit score credentialing secenario
-// with the lower bound of the user's credit score and the minimum requirement
-pub fn attest_credit_score(min_credit_score: u64, min_requirement: u64) -> bool {
+// Create a proving secenario
+pub fn get_proof(attribute: u64) -> JsValue {
   let mut issuer = Issuer::new(1);
   let issuer_jsvalue = issuer.jsvalue();
   let mut user = User::new(&issuer, "user");
   let user_jsvalue = user.jsvalue();
 
-  let sig_jsvalue = issuer.sign_min_credit_score(&user_jsvalue, min_credit_score);
-  let proof_jsvalue =
-    user.commit_min_credit_score(&issuer_jsvalue, &sig_jsvalue, min_credit_score, true);
+  let sig_jsvalue = issuer.sign_attribute(&user_jsvalue, attribute);
+  user.commit_attribute(&issuer_jsvalue, &sig_jsvalue, attribute, true)
+}
 
-  Prover::prove_min_credit_score(&proof_jsvalue,
-                                 &issuer_jsvalue,
-                                 min_credit_score,
-                                 true,
-                                 min_requirement)
+// In the P2P Lending app, the user has the option to save the proof for future use
+// 1. If the proof exists, use attest_with_proof for credentialing
+// 2. Else, use attest_without_proof for credentialing
+
+#[wasm_bindgen]
+// 1. Create a credentialing secenario with proof as an input
+pub fn attest_with_proof(attribute: u64,
+                         requirement: u64,
+                         requirement_type: RequirementType,
+                         proof_jsvalue: JsValue)
+                         -> bool {
+  Prover::prove_attribute(&proof_jsvalue,
+                          &Issuer::new(1).jsvalue(),
+                          attribute,
+                          true,
+                          requirement,
+                          requirement_type)
+}
+
+#[wasm_bindgen]
+// 2. Create a credentialing secenario without proof as an input
+pub fn attest_without_proof(attribute: u64,
+                            requirement: u64,
+                            requirement_type: RequirementType)
+                            -> bool {
+  let mut issuer = Issuer::new(1);
+  let issuer_jsvalue = issuer.jsvalue();
+  let mut user = User::new(&issuer, "user");
+  let user_jsvalue = user.jsvalue();
+
+  let sig_jsvalue = issuer.sign_attribute(&user_jsvalue, attribute);
+  let proof_jsvalue = user.commit_attribute(&issuer_jsvalue, &sig_jsvalue, attribute, true);
+
+  Prover::prove_attribute(&proof_jsvalue,
+                          &issuer_jsvalue,
+                          attribute,
+                          true,
+                          requirement,
+                          requirement_type)
 }
 
 //
@@ -464,6 +513,69 @@ fn test_wasm_define_transaction() {
 }
 
 #[wasm_bindgen_test]
+// Test to ensure that "Equal" requirement is checked correctly
+// E.g. citizenship requirement
+fn test_citizenship_proof() {
+  let mut issuer = Issuer::new(10);
+  let issuer_jsvalue = issuer.jsvalue();
+  let mut user = User::new(&issuer, "user");
+  let user_jsvalue = user.jsvalue();
+
+  let citizenship_code = 1;
+  let fake_citizenship_code = 86;
+
+  let sig_jsvalue = issuer.sign_attribute(&user_jsvalue, citizenship_code);
+  let proof_jsvalue = user.commit_attribute(&issuer_jsvalue, &sig_jsvalue, citizenship_code, true);
+  let fake_proof_jsvalue =
+    user.commit_attribute(&issuer_jsvalue, &sig_jsvalue, fake_citizenship_code, true);
+
+  let requirement_usa = 1;
+  let requirement_china = 86;
+  let incorrect_credit_score = 11;
+
+  // Verify that prove_attribute succeedes
+  assert!(Prover::prove_attribute(&proof_jsvalue,
+                                  &issuer_jsvalue,
+                                  citizenship_code,
+                                  true,
+                                  requirement_usa,
+                                  RequirementType::Equal));
+
+  // Verify that prove_attribute fails if:
+  //  1. The attribute doesn't equal the requirement
+  assert!(!Prover::prove_attribute(&proof_jsvalue,
+                                   &issuer_jsvalue,
+                                   citizenship_code,
+                                   true,
+                                   requirement_china,
+                                   RequirementType::Equal));
+
+  // 2. The prover uses the incorrect credit score for the verification
+  assert!(!Prover::prove_attribute(&proof_jsvalue,
+                                   &issuer_jsvalue,
+                                   incorrect_credit_score,
+                                   true,
+                                   requirement_usa,
+                                   RequirementType::Equal));
+
+  // 3. The user provides a fake proof
+  assert!(!Prover::prove_attribute(&fake_proof_jsvalue,
+                                   &issuer_jsvalue,
+                                   citizenship_code,
+                                   true,
+                                   requirement_china,
+                                   RequirementType::Equal));
+
+  // 4. reveal_min_credit_score isn't consistant
+  assert!(!Prover::prove_attribute(&proof_jsvalue,
+                                   &issuer_jsvalue,
+                                   citizenship_code,
+                                   false,
+                                   requirement_usa,
+                                   RequirementType::Equal));
+}
+
+#[wasm_bindgen_test]
 // Test to ensure that issue transaction is being constructed correctly
 fn test_wasm_issue_transaction() {
   let mut prng = rand_chacha::ChaChaRng::from_seed([0u8; 32]);
@@ -481,8 +593,9 @@ fn test_elgamal_serialization() {
 }
 
 #[wasm_bindgen_test]
-// Test to ensure that credit score is checked correctly
-fn test_credit_score_proof() {
+// Test to ensure that "AtLeast" requirement is checked correctly
+// E.g. minimun credit score requirement
+fn test_min_credit_score_proof() {
   let mut issuer = Issuer::new(10);
   let issuer_jsvalue = issuer.jsvalue();
   let mut user = User::new(&issuer, "user");
@@ -491,49 +604,53 @@ fn test_credit_score_proof() {
   let min_credit_score = 520;
   let fake_credit_score = 620;
 
-  let sig_jsvalue = issuer.sign_min_credit_score(&user_jsvalue, min_credit_score);
-  let proof_jsvalue =
-    user.commit_min_credit_score(&issuer_jsvalue, &sig_jsvalue, min_credit_score, true);
+  let sig_jsvalue = issuer.sign_attribute(&user_jsvalue, min_credit_score);
+  let proof_jsvalue = user.commit_attribute(&issuer_jsvalue, &sig_jsvalue, min_credit_score, true);
   let fake_proof_jsvalue =
-    user.commit_min_credit_score(&issuer_jsvalue, &sig_jsvalue, fake_credit_score, true);
+    user.commit_attribute(&issuer_jsvalue, &sig_jsvalue, fake_credit_score, true);
 
   let requirement_low = 500;
   let requirement_high = 600;
   let incorrect_credit_score = 700;
 
-  // Verify that prove_min_credit_score succeedes
-  assert!(Prover::prove_min_credit_score(&proof_jsvalue,
-                                         &issuer_jsvalue,
-                                         min_credit_score,
-                                         true,
-                                         requirement_low));
+  // Verify that prove_attribute succeedes
+  assert!(Prover::prove_attribute(&proof_jsvalue,
+                                  &issuer_jsvalue,
+                                  min_credit_score,
+                                  true,
+                                  requirement_low,
+                                  RequirementType::AtLeast));
 
-  // Verify that prove_min_credit_score fails if:
+  // Verify that prove_attribute fails if:
   //  1. The lower bound of the credit score doesn't meet the requirement
-  assert!(!Prover::prove_min_credit_score(&proof_jsvalue,
-                                          &issuer_jsvalue,
-                                          min_credit_score,
-                                          true,
-                                          requirement_high));
+  assert!(!Prover::prove_attribute(&proof_jsvalue,
+                                   &issuer_jsvalue,
+                                   min_credit_score,
+                                   true,
+                                   requirement_high,
+                                   RequirementType::AtLeast));
 
   // 2. The prover uses the incorrect credit score for the verification
-  assert!(!Prover::prove_min_credit_score(&proof_jsvalue,
-                                          &issuer_jsvalue,
-                                          incorrect_credit_score,
-                                          true,
-                                          requirement_high));
+  assert!(!Prover::prove_attribute(&proof_jsvalue,
+                                   &issuer_jsvalue,
+                                   incorrect_credit_score,
+                                   true,
+                                   requirement_low,
+                                   RequirementType::AtLeast));
 
   // 3. The user provides a fake proof
-  assert!(!Prover::prove_min_credit_score(&fake_proof_jsvalue,
-                                          &issuer_jsvalue,
-                                          min_credit_score,
-                                          true,
-                                          requirement_high));
+  assert!(!Prover::prove_attribute(&fake_proof_jsvalue,
+                                   &issuer_jsvalue,
+                                   min_credit_score,
+                                   true,
+                                   requirement_high,
+                                   RequirementType::AtLeast));
 
   // 4. reveal_min_credit_score isn't consistant
-  assert!(!Prover::prove_min_credit_score(&proof_jsvalue,
-                                          &issuer_jsvalue,
-                                          min_credit_score,
-                                          false,
-                                          requirement_low));
+  assert!(!Prover::prove_attribute(&proof_jsvalue,
+                                   &issuer_jsvalue,
+                                   min_credit_score,
+                                   false,
+                                   requirement_low,
+                                   RequirementType::AtLeast));
 }

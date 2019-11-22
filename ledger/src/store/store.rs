@@ -154,6 +154,8 @@ const MAX_VERSION: usize = 100;
 
 // Parts of the current ledger state which can be restored from a snapshot
 // without replaying a log
+//
+// TODO(joe): Better name!
 #[derive(Deserialize, Serialize)]
 pub struct LedgerStatus {
   // Paths to archival logs for the merkle tree and transaction history

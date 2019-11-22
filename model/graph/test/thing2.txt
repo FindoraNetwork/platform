@@ -1,0 +1,14 @@
+ATask: Task
+
+Edges:
+fulfilled_by AnotherTask
+depends_on ATest
+depends_on AnotherTest
+
+Data:
+GoodIdeaness:
+This is a good idea.
+
+ABoolean:
+false :(
+
