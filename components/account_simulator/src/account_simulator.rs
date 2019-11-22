@@ -13,10 +13,10 @@ use ledger::data_model::errors::PlatformError;
 use ledger::data_model::*;
 use ledger::store::*;
 use std::collections::{HashMap, HashSet, VecDeque};
-use zei::basic_crypto::signatures::XfrKeyPair;
 use zei::serialization::ZeiFromToBytes;
 use zei::setup::PublicParams;
 use zei::xfr::asset_record::{build_blind_asset_record, open_asset_record};
+use zei::xfr::sig::XfrKeyPair;
 use zei::xfr::structs::{AssetRecord, OpenAssetRecord};
 
 #[derive(Clone, Debug, Eq, PartialEq, Hash)]
@@ -558,13 +558,12 @@ impl InterpretAccounts<PlatformError> for LedgerAccounts {
                                  all_outputs.as_slice(),
                                  &sig_keys).unwrap();
         dbg!(&transfer_body);
-        let _transfer_sig =
+        let transfer_sig =
           SignedAddress { address: XfrAddress { key: *src_pub },
                           signature: compute_signature(src_priv, src_pub, &transfer_body) };
 
         let transfer = TransferAsset { body: transfer_body,
-                                       // body_signatures: vec![transfer_sig],
-                                       body_signatures: vec![] };
+                                       body_signatures: vec![transfer_sig] };
         let txn = Transaction { operations: vec![Operation::TransferAsset(transfer)],
                                 credentials: vec![],
                                 memos: vec![] };

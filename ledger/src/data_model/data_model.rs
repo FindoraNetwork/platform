@@ -7,8 +7,8 @@ use rand::{CryptoRng, FromEntropy, Rng};
 use std::boxed::Box;
 use std::collections::HashMap;
 use std::convert::TryFrom;
-use zei::basic_crypto::signatures::{XfrKeyPair, XfrPublicKey, XfrSecretKey, XfrSignature};
 use zei::xfr::lib::gen_xfr_note;
+use zei::xfr::sig::{XfrKeyPair, XfrPublicKey, XfrSecretKey, XfrSignature};
 use zei::xfr::structs::{AssetRecord, BlindAssetRecord, OpenAssetRecord, XfrNote};
 
 // Unique Identifier for ledger objects

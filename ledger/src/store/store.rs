@@ -154,8 +154,6 @@ const MAX_VERSION: usize = 100;
 
 // Parts of the current ledger state which can be restored from a snapshot
 // without replaying a log
-//
-// TODO(joe): Better name!
 #[derive(Deserialize, Serialize)]
 pub struct LedgerStatus {
   // Paths to archival logs for the merkle tree and transaction history
@@ -926,9 +924,9 @@ pub mod helpers {
   use crate::data_model::{
     Asset, ConfidentialMemo, DefineAsset, DefineAssetBody, IssuerPublicKey, Memo,
   };
-  use zei::basic_crypto::signatures::{XfrKeyPair, XfrPublicKey, XfrSecretKey};
   use zei::setup::PublicParams;
   use zei::xfr::asset_record::build_blind_asset_record;
+  use zei::xfr::sig::{XfrKeyPair, XfrPublicKey, XfrSecretKey};
   use zei::xfr::structs::AssetRecord;
 
   pub fn create_definition_transaction(code: &AssetTypeCode,
@@ -1019,9 +1017,9 @@ mod tests {
   use rand::SeedableRng;
   use std::fs;
   use tempfile::tempdir;
-  use zei::basic_crypto::signatures::XfrKeyPair;
   use zei::setup::PublicParams;
   use zei::xfr::asset_record::{build_blind_asset_record, open_asset_record};
+  use zei::xfr::sig::XfrKeyPair;
   use zei::xfr::structs::AssetRecord;
 
   #[test]
