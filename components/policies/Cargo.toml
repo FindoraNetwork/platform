@@ -1,0 +1,17 @@
+[package]
+name = "policies"
+version = "0.1.0"
+authors = ["ngolub <ngolub@stanford.edu>"]
+edition = "2018"
+
+[dependencies]
+ledger = { path = "../../ledger" }
+zei = { git = "ssh://git@github.com/findoraorg/zei" }
+serde = { version = "1.0.99", features = ["derive"] }
+serde_derive = "^1.0.59"
+serde_json = "1.0"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+path = "src/debt.rs"
+

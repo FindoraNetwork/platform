@@ -343,11 +343,14 @@ impl LedgerStatus {
                            .properties
                            .issuer;
       if *iss_key != proper_key {
+        dbg!("NOT OK");
         return Err(PlatformError::InputsError);
       }
+      dbg!("OK");
 
       if seq_nums.is_empty() {
         if !txn.new_asset_codes.contains_key(&code) {
+          dbg!("NOT OK");
           return Err(PlatformError::InputsError);
         }
       // We could re-check that self.issuance_num doesn't contain `code`,
@@ -356,6 +359,7 @@ impl LedgerStatus {
         let curr_seq_num_limit = self.issuance_num.get(&code).unwrap();
         let min_seq_num = seq_nums.first().unwrap();
         if min_seq_num < curr_seq_num_limit {
+          dbg!("NOT OK");
           return Err(PlatformError::InputsError);
         }
       }
@@ -940,15 +944,15 @@ pub mod helpers {
   pub fn create_issuance_transaction<R: CryptoRng + Rng>(amount: u64,
                                                          seq_num: u64,
                                                          code: &AssetTypeCode,
-                                                         public_key: XfrPublicKey,
-                                                         secret_key: XfrSecretKey,
+                                                         public_key: &XfrPublicKey,
+                                                         secret_key: &XfrSecretKey,
                                                          conf_amount: bool,
                                                          conf_type: bool,
                                                          params: &PublicParams,
                                                          prng: &mut R)
                                                          -> Result<Transaction, PlatformError> {
     let mut tx = Transaction::default();
-    let ar = AssetRecord::new(amount, code.val, public_key).unwrap();
+    let ar = AssetRecord::new(amount, code.val, public_key.clone()).unwrap();
     let ba = build_blind_asset_record(prng, &params.pc_gens, &ar, conf_amount, conf_type, &None);
     let asset_issuance_body = IssueAssetBody::new(&code, seq_num, &[TxOutput(ba)])?;
     let asset_issuance_operation = IssueAsset::new(asset_issuance_body,
@@ -1013,7 +1017,10 @@ mod tests {
   use rand::SeedableRng;
   use std::fs;
   use tempfile::tempdir;
+  use zei::basic_crypto::signatures::XfrKeyPair;
   use zei::setup::PublicParams;
+  use zei::xfr::asset_record::{build_blind_asset_record, open_asset_record};
+  use zei::xfr::structs::AssetRecord;
 
   #[test]
   fn test_load_transaction_log() {
@@ -1622,38 +1629,97 @@ mod tests {
     assert!(TxnEffect::compute_effect(&mut prng, tx).is_err());
   }
 
-  // fn test_asset_transfer() {
-  //   let mut ledger_state = LedgerState::test_ledger();
+  #[test]
+  fn test_asset_transfer() {
+    let mut ledger = LedgerState::test_ledger();
+    let params = PublicParams::new();
 
-  //   let token_code1 = AssetTypeCode::new_from_str(String::from("a"));
+    let code = AssetTypeCode { val: [1; 16] };
+    let mut prng = ChaChaRng::from_seed([0u8; 32]);
+    let key_pair = XfrKeyPair::generate(&mut prng);
+    prng = ChaChaRng::from_seed([0u8; 32]);
+    let second_key_pair = XfrKeyPair::generate(&mut prng);
+    let key_pair_adversary = XfrKeyPair::generate(ledger.get_prng());
 
-  //   // create keys
-  //   let (public_key, secret_key) = build_keys(&mut ledger_state.get_prng());
+    let tx =
+      create_definition_transaction(&code, key_pair.get_pk_ref(), key_pair.get_sk_ref()).unwrap();
 
-  //   // compose asset definition transaction
-  //   let tx = create_definition_transaction(&token_code1);
+    let effect = TxnEffect::compute_effect(&mut ledger.get_prng(), tx).unwrap();
+    {
+      let mut block = ledger.start_block().unwrap();
+      ledger.apply_transaction(&mut block, effect).unwrap();
+      ledger.finish_block(block);
+    }
 
-  //   // submit define asset transaction
-  //   let effect = TxnEffect::compute_effect(&mut prng, tx).unwrap();
-  //   {
-  //     let mut block = ledger.start_block().unwrap();
-  //     ledger.apply_transaction(&mut block, effect).unwrap();
-  //     ledger.finish_block(block);
-  //   }
+    // Issuance with two outputs
+    let mut tx = Transaction::default();
 
-  //   // compose asset issuance transaction
-  //   let mut tx = Transaction::default();
+    let ar = AssetRecord::new(100, code.val, key_pair.get_pk_ref().clone()).unwrap();
+    let ba = build_blind_asset_record(ledger.get_prng(), &params.pc_gens, &ar, false, false, &None);
+    let second_ba = ba.clone();
 
-  //   let effect = TxnEffect::compute_effect(&mut prng, tx).unwrap();
+    let asset_issuance_body =
+      IssueAssetBody::new(&code, 0, &[TxOutput(ba), TxOutput(second_ba)]).unwrap();
+    let asset_issuance_operation =
+      IssueAsset::new(asset_issuance_body,
+                      &IssuerPublicKey { key: key_pair.get_pk_ref().clone() },
+                      key_pair.get_sk_ref()).unwrap();
 
-  //   let mut block = ledger.start_block().unwrap();
-  //   let temp_sid = ledger.apply_transaction(&mut block, effect).unwrap();
+    let issue_op = Operation::IssueAsset(asset_issuance_operation);
 
-  //   let (txn_sid, txos) = ledger.finish_block(block).remove(&temp_sid).unwrap();
+    tx.operations.push(issue_op);
 
-  //   let transaction = ledger.txs[txn_sid.0].clone();
-  //   let txn_id = transaction.tx_id;
-  // }
+    // Commit issuance to block
+    let effect = TxnEffect::compute_effect(ledger.get_prng(), tx).unwrap();
+
+    let mut block = ledger.start_block().unwrap();
+    let temp_sid = ledger.apply_transaction(&mut block, effect).unwrap();
+
+    let (_txn_sid, txos) = ledger.finish_block(block).remove(&temp_sid).unwrap();
+
+    // Store txo_sids for subsequent transfers
+    let txo_sid = txos[0];
+    let second_txo_id = txos[1];
+
+    // Construct transfer operation
+    let bar = ((ledger.get_utxo(txo_sid).unwrap().0).0).clone();
+    let ar = AssetRecord::new(100, code.val, key_pair_adversary.get_pk_ref().clone()).unwrap();
+
+    let mut tx = Transaction::default();
+    let transfer_body =
+      TransferAssetBody::new(ledger.get_prng(),
+                             vec![TxoRef::Absolute(txo_sid)],
+                             &[open_asset_record(&bar, &key_pair.get_sk_ref()).unwrap()],
+                             &[ar],
+                             &[key_pair]).unwrap();
+
+    let mut second_transfer_body = transfer_body.clone();
+    tx.operations
+      .push(Operation::TransferAsset(TransferAsset::new(transfer_body,
+                                                                   &[&second_key_pair]).unwrap()));
+
+    // Commit first transfer
+    let effect = TxnEffect::compute_effect(ledger.get_prng(), tx).unwrap();
+    let mut block = ledger.start_block().unwrap();
+    let temp_sid = ledger.apply_transaction(&mut block, effect).unwrap();
+
+    let (_txn_sid, _txos) = ledger.finish_block(block).remove(&temp_sid).unwrap();
+
+    // Adversary will attempt to spend the same blind asset record at another index
+    second_transfer_body.inputs = vec![TxoRef::Absolute(second_txo_id)];
+
+    // Submit spend of same asset at second sid without signature
+    let mut tx = Transaction::default();
+    let mut transfer_asset = TransferAsset::new(second_transfer_body, &[&second_key_pair]).unwrap();
+    // remove the signature and try to apply txn
+    transfer_asset.body_signatures = Vec::new();
+    tx.operations.push(Operation::TransferAsset(transfer_asset));
+
+    // remove the signature and try to apply txn
+
+    let effect = TxnEffect::compute_effect(ledger.get_prng(), tx);
+    assert!(effect.is_err());
+  }
 
   // Sign with the wrong key.
   #[test]
@@ -1715,12 +1781,13 @@ mod tests {
     let tx = create_issuance_transaction(100,
                                          0,
                                          &token_code1,
-                                         public_key,
-                                         secret_key,
+                                         &public_key,
+                                         &secret_key,
                                          false,
                                          false,
                                          &params,
                                          ledger.get_prng()).unwrap();
+    let second_tx = tx.clone();
 
     let effect = TxnEffect::compute_effect(ledger.get_prng(), tx).unwrap();
 
@@ -1728,6 +1795,13 @@ mod tests {
     let temp_sid = ledger.apply_transaction(&mut block, effect).unwrap();
 
     let (txn_sid, txos) = ledger.finish_block(block).remove(&temp_sid).unwrap();
+
+    // shouldn't be able to replay issuance
+    let effect = TxnEffect::compute_effect(ledger.get_prng(), second_tx).unwrap();
+    let mut block = ledger.start_block().unwrap();
+    let result = ledger.apply_transaction(&mut block, effect);
+    assert!(result.is_err());
+    ledger.abort_block(block);
 
     let transaction = ledger.txs[txn_sid.0].clone();
     let txn_id = transaction.tx_id;
