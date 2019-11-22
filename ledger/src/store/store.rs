@@ -343,14 +343,11 @@ impl LedgerStatus {
                            .properties
                            .issuer;
       if *iss_key != proper_key {
-        dbg!("NOT OK");
         return Err(PlatformError::InputsError);
       }
-      dbg!("OK");
 
       if seq_nums.is_empty() {
         if !txn.new_asset_codes.contains_key(&code) {
-          dbg!("NOT OK");
           return Err(PlatformError::InputsError);
         }
       // We could re-check that self.issuance_num doesn't contain `code`,
@@ -359,7 +356,6 @@ impl LedgerStatus {
         let curr_seq_num_limit = self.issuance_num.get(&code).unwrap();
         let min_seq_num = seq_nums.first().unwrap();
         if min_seq_num < curr_seq_num_limit {
-          dbg!("NOT OK");
           return Err(PlatformError::InputsError);
         }
       }

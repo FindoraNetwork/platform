@@ -7,7 +7,6 @@ use findora::HasInvariants;
 use rand::SeedableRng;
 use rand::{CryptoRng, Rng};
 use std::collections::{HashMap, HashSet};
-//use zei::basic_crypto::signatures::XfrPublicKey;
 use zei::serialization::ZeiFromToBytes;
 use zei::xfr::lib::verify_xfr_note;
 use zei::xfr::structs::BlindAssetRecord;
