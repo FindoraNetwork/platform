@@ -84,7 +84,7 @@ pub fn derive_elgamal_public_key(elgamal_secret_key_jsvalue: JsValue) -> Result<
   let pc_gens = PedersenGens::default();
   let sk = elgamal_secret_key_jsvalue.into_serde().unwrap();
   let pk = elgamal_derive_public_key(&RistPoint(pc_gens.B), &sk);
-  return Ok(JsValue::from_serde(&pk).unwrap());
+  Ok(JsValue::from_serde(&pk).unwrap())
 }
 
 // Defines an asset on the ledger using the serialized strings in KeyPair and a couple of boolean policies
@@ -178,7 +178,7 @@ pub fn issue_asset(key_pair: &XfrKeyPair,
   if elgamal_pub_key.is_empty() {
     issuer_keys = None
   } else {
-    let pk = serde_json::from_str::<ElGamalPublicKey<RistPoint>>(&elgamal_pub_key).map_err(|_e| return JsValue::from_str("could not deserialize elgamal key"))?;
+    let pk = serde_json::from_str::<ElGamalPublicKey<RistPoint>>(&elgamal_pub_key).map_err(|_e| JsValue::from_str("could not deserialize elgamal key"))?;
     let mut small_rng = ChaChaRng::from_entropy();
     let sk = elgamal_generate_secret_key::<_, BLSScalar>(&mut small_rng);
     // For now, zei expecs both id reveal key and tracking decryption key, so we construct a dummy
@@ -411,18 +411,20 @@ impl Prover {
                          requirement_type: RequirementType)
                          -> bool {
     // 1. Prove that the attribut meets the requirement
-    //    Case 1. "Equal" requirement
-    //    E.g. prove that the country code is the same as the requirement
-    if requirement_type == RequirementType::Equal {
-      if attribute != requirement {
-        return false;
+    match requirement_type {
+      //    Case 1. "Equal" requirement
+      //    E.g. prove that the country code is the same as the requirement
+      RequirementType::Equal => {
+        if attribute != requirement {
+          return false;
+        }
       }
-    }
-    //    Case 2. "AtLeast" requirement
-    //    E.g. prove that the credit score is at least the required value
-    else if requirement_type == RequirementType::AtLeast {
-      if attribute < requirement {
-        return false;
+      //    Case 2. "AtLeast" requirement
+      //    E.g. prove that the credit score is at least the required value
+      RequirementType::AtLeast => {
+        if attribute < requirement {
+          return false;
+        }
       }
     }
 

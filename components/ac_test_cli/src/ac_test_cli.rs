@@ -184,8 +184,8 @@ fn automated_test() -> bool {
 
   // The user presents this to the second party in a transaction as proof
   // attributes have been committed without revealing the values.
-  let reveal_sig = ac_reveal::<_, BLSGt>(&mut prng, &user_sk, &issuer_pk, &sig, &attrs,
-                                                    &bitmap).unwrap();
+  let reveal_sig =
+    ac_reveal::<_, BLSGt>(&mut prng, &user_sk, &issuer_pk, &sig, &attrs, &bitmap).unwrap();
 
   // Decision point. Does the second party agree to do business?
   // Sometimes this is presumed such as a syndicated investment
@@ -205,10 +205,8 @@ fn automated_test() -> bool {
   // this. But presumably, the reveal signature alone is insufficient to
   // derive the attributes. Presumably if the range of legal values were small,
   // exhaustive search would not be too exhausting. (?)
-  let verified = ac_verify::<BLSGt>(&issuer_pk,
-                                               revealed_attrs.as_slice(),
-                                               &bitmap,
-                                               &reveal_sig).is_ok();
+  let verified =
+    ac_verify::<BLSGt>(&issuer_pk, revealed_attrs.as_slice(), &bitmap, &reveal_sig).is_ok();
   if verified {
     info!("Verified revealed attributes match signed commitment.");
   } else {
@@ -426,9 +424,9 @@ fn subcommand_sign(registry_path: &Path, user: &str, issuer: &str) -> ShellExitS
                    BLSScalar::from_u64(2),
                    BLSScalar::from_u64(3)];
       let sig = ac_sign::<_, BLSGt>(&mut prng,
-                                               &issuer_keys.secret_key,
-                                               &user_keys.public_key,
-                                               &attrs);
+                                    &issuer_keys.secret_key,
+                                    &user_keys.public_key,
+                                    &attrs);
       // TODO Using the hash of the user's public key as the signature
       // address precludes multiple signatures
       let addr_sig = AddrSig { address: user.to_string(),
@@ -499,11 +497,11 @@ fn subcommand_reveal(registry_path: &Path, user: &str, issuer: &str) -> ShellExi
       let bitmap = [false, false, false, false];
       // TODO handle the error
       let proof = ac_reveal::<_, BLSGt>(&mut prng,
-                                                   &user_keys.secret_key,
-                                                   &issuer_keys.public_key,
-                                                   &sig,
-                                                   &attrs,
-                                                   &bitmap).unwrap();
+                                        &user_keys.secret_key,
+                                        &issuer_keys.public_key,
+                                        &sig,
+                                        &attrs,
+                                        &bitmap).unwrap();
       // TODO Using the hash of the user's public key as the proof
       // address precludes multiple proofs
       let addr_proof = AddrProof { address: user.to_string(),
@@ -556,8 +554,7 @@ fn subcommand_verify(registry_path: &Path, user: &str, issuer: &str) -> ShellExi
                    BLSScalar::from_u64(2),
                    BLSScalar::from_u64(3)];
       let bitmap = [false, false, false, false];
-      verified =
-        ac_verify::<BLSGt>(&issuer_keys.public_key, &attrs, &bitmap, &proof).is_ok();
+      verified = ac_verify::<BLSGt>(&issuer_keys.public_key, &attrs, &bitmap, &proof).is_ok();
     }
     (lookup_issuer, lookup_proof) => {
       if lookup_issuer.is_none() {
