@@ -70,10 +70,7 @@ use rand::SeedableRng;
 use rand_chacha::ChaChaRng;
 use rmp_serde;
 use sha2::{Digest, Sha256};
-use zei::algebra::bls12_381::{BLSGt, BLSScalar, BLSG1, BLSG2};
-
-use zei::algebra::groups::Scalar;
-use zei::crypto::anon_creds::{
+use zei::api::anon_creds::{
   ac_keygen_issuer, ac_keygen_user, ac_reveal, ac_sign, ac_verify, ACIssuerPublicKey,
   ACIssuerSecretKey, ACRevealSig, ACSignature, ACUserPublicKey, ACUserSecretKey,
 };
@@ -89,15 +86,15 @@ trait TypeName {
   fn type_string(&self) -> &'static str;
 }
 
-impl TypeName for ACUserPublicKey<BLSG1> {
+impl TypeName for ACUserPublicKey {
   fn type_string(&self) -> &'static str {
-    "ACUserPublicKey<BLSG1, BLSG2>"
+    "ACUserPublicKey"
   }
 }
 
-impl TypeName for ACIssuerPublicKey<BLSG1, BLSG2> {
+impl TypeName for ACIssuerPublicKey {
   fn type_string(&self) -> &'static str {
-    "ACIssuerPublicKey<BLSG1, BLSG2>"
+    "ACIssuerPublicKey"
   }
 }
 
@@ -161,17 +158,17 @@ fn automated_test() -> bool {
   //    account balance, zip code, credit score, and timestamp
   // In this case, account balance (first) will not be revealed.
   let bitmap = [false, true, true, true];
-  let attrs = [BLSScalar::from_u64(92_574_500),
-               BLSScalar::from_u64(95_050),
-               BLSScalar::from_u64(720),
-               BLSScalar::from_u64(20_190_820)];
+  let attrs = [92_574_500u64.to_be_bytes(),
+               95_050u64.to_be_bytes(),
+               720u64.to_be_bytes(),
+               20_190_820u64.to_be_bytes()];
   let att_count = bitmap.len();
-  let (issuer_pk, issuer_sk) = ac_keygen_issuer::<_, BLSGt>(&mut prng, att_count);
+  let (issuer_pk, issuer_sk) = ac_keygen_issuer::<_>(&mut prng, att_count);
 
   trace!("Issuer public key: {:?}", issuer_pk);
   trace!("Issuer secret key: {:?}", issuer_sk);
 
-  let (user_pk, user_sk) = ac_keygen_user::<_, BLSGt>(&mut prng, &issuer_pk);
+  let (user_pk, user_sk) = ac_keygen_user::<_>(&mut prng, &issuer_pk);
   trace!("User public key: {:#?}", user_pk);
   info!("Address of user public key: {:?}", sha256(&user_pk));
 
@@ -179,13 +176,13 @@ fn automated_test() -> bool {
   trace!("User secret key: {:?}", user_sk);
 
   // Issuer vouches for the user's attributes given above.
-  let sig = ac_sign::<_, BLSGt>(&mut prng, &issuer_sk, &user_pk, &attrs);
+  let sig = ac_sign(&mut prng, &issuer_sk, &user_pk, &attrs[..]);
   trace!("Credential signature: {:?}", sig);
 
   // The user presents this to the second party in a transaction as proof
   // attributes have been committed without revealing the values.
-  let reveal_sig = ac_reveal::<_, BLSGt>(&mut prng, &user_sk, &issuer_pk, &sig, &attrs,
-                                                    &bitmap).unwrap();
+  let reveal_sig = ac_reveal(&mut prng, &user_sk, &issuer_pk, &sig, &attrs,
+                             &bitmap).unwrap();
 
   // Decision point. Does the second party agree to do business?
   // Sometimes this is presumed such as a syndicated investment
@@ -205,10 +202,10 @@ fn automated_test() -> bool {
   // this. But presumably, the reveal signature alone is insufficient to
   // derive the attributes. Presumably if the range of legal values were small,
   // exhaustive search would not be too exhausting. (?)
-  let verified = ac_verify::<BLSGt>(&issuer_pk,
-                                               revealed_attrs.as_slice(),
-                                               &bitmap,
-                                               &reveal_sig).is_ok();
+  let verified = ac_verify(&issuer_pk,
+                           revealed_attrs.as_slice(),
+                           &bitmap,
+                           &reveal_sig).is_ok();
   if verified {
     info!("Verified revealed attributes match signed commitment.");
   } else {
@@ -253,14 +250,14 @@ fn sha256<T>(key: &T) -> String
 
 #[derive(Debug, Serialize, Deserialize)]
 struct Issuer {
-  public_key: ACIssuerPublicKey<BLSG1, BLSG2>,
-  secret_key: ACIssuerSecretKey<BLSG1, BLSScalar>,
+  public_key: ACIssuerPublicKey,
+  secret_key: ACIssuerSecretKey,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 struct User {
-  public_key: ACUserPublicKey<BLSG1>,
-  secret_key: ACUserSecretKey<BLSScalar>,
+  public_key: ACUserPublicKey,
+  secret_key: ACUserSecretKey,
 }
 
 // Generate a new issuer for anonymous credentials.
@@ -269,7 +266,7 @@ fn new_issuer() -> Issuer {
   // For a real application, the seed should be random.
   prng = ChaChaRng::from_seed([0u8; 32]);
   let att_count = 10;
-  let (issuer_pk, issuer_sk) = ac_keygen_issuer::<_, BLSGt>(&mut prng, att_count);
+  let (issuer_pk, issuer_sk) = ac_keygen_issuer::<_>(&mut prng, att_count);
   Issuer { public_key: issuer_pk,
            secret_key: issuer_sk }
 }
@@ -321,7 +318,7 @@ fn subcommand_add_issuer(registry_path: &Path) -> ShellExitStatus {
   }
 }
 
-type Signature = ACSignature<BLSG1>;
+type Signature = ACSignature;
 
 #[derive(Debug, Serialize, Deserialize)]
 struct AddrValue<V> {
@@ -390,7 +387,7 @@ fn subcommand_add_user(registry_path: &Path, issuer: &str) -> ShellExitStatus {
     let mut prng: ChaChaRng;
     // For a real application, the seed should be random.
     prng = ChaChaRng::from_seed([0u8; 32]);
-    let (user_pk, user_sk) = ac_keygen_user::<_, BLSGt>(&mut prng, &issuer.public_key);
+    let (user_pk, user_sk) = ac_keygen_user::<_>(&mut prng, &issuer.public_key);
     let au = AddrUser { address: sha256(&user_pk),
                         user_type: 2,
                         user: User { public_key: user_pk,
@@ -411,7 +408,7 @@ fn subcommand_add_user(registry_path: &Path, issuer: &str) -> ShellExitStatus {
 struct AddrSig {
   address: String,
   sig_type: u32,
-  signature: ACSignature<BLSG1>,
+  signature: ACSignature,
 }
 
 fn subcommand_sign(registry_path: &Path, user: &str, issuer: &str) -> ShellExitStatus {
@@ -421,14 +418,14 @@ fn subcommand_sign(registry_path: &Path, user: &str, issuer: &str) -> ShellExitS
       // TODO Share one prng across all invocations.
       prng = ChaChaRng::from_seed([0u8; 32]);
 
-      let attrs = [BLSScalar::from_u64(0),
-                   BLSScalar::from_u64(1),
-                   BLSScalar::from_u64(2),
-                   BLSScalar::from_u64(3)];
-      let sig = ac_sign::<_, BLSGt>(&mut prng,
-                                               &issuer_keys.secret_key,
-                                               &user_keys.public_key,
-                                               &attrs);
+      let attrs = [0u64.to_be_bytes(),
+                   1u64.to_be_bytes(),
+                   2u64.to_be_bytes(),
+                   3u64.to_be_bytes()];
+      let sig = ac_sign(&mut prng,
+                       &issuer_keys.secret_key,
+                       &user_keys.public_key,
+                       &attrs);
       // TODO Using the hash of the user's public key as the signature
       // address precludes multiple signatures
       let addr_sig = AddrSig { address: user.to_string(),
@@ -471,7 +468,7 @@ fn subcommand_sign(registry_path: &Path, user: &str, issuer: &str) -> ShellExitS
   }
 }
 
-type Proof = ACRevealSig<BLSG1, BLSG2, BLSScalar>;
+type Proof = ACRevealSig;
 
 #[derive(Debug, Serialize, Deserialize)]
 struct AddrProof {
@@ -492,18 +489,18 @@ fn subcommand_reveal(registry_path: &Path, user: &str, issuer: &str) -> ShellExi
       // TODO Share one prng across all invocations.
       prng = ChaChaRng::from_seed([0u8; 32]);
 
-      let attrs = [BLSScalar::from_u64(0),
-                   BLSScalar::from_u64(1),
-                   BLSScalar::from_u64(2),
-                   BLSScalar::from_u64(3)];
-      let bitmap = [false, false, false, false];
+      let attrs = [0u64.to_be_bytes(),
+                   1u64.to_be_bytes(),
+                   2u64.to_be_bytes(),
+                   3u64.to_be_bytes()];
+     let bitmap = [false, false, false, false];
       // TODO handle the error
-      let proof = ac_reveal::<_, BLSGt>(&mut prng,
-                                                   &user_keys.secret_key,
-                                                   &issuer_keys.public_key,
-                                                   &sig,
-                                                   &attrs,
-                                                   &bitmap).unwrap();
+      let proof = ac_reveal(&mut prng,
+                            &user_keys.secret_key,
+                            &issuer_keys.public_key,
+                            &sig,
+                            &attrs,
+                            &bitmap).unwrap();
       // TODO Using the hash of the user's public key as the proof
       // address precludes multiple proofs
       let addr_proof = AddrProof { address: user.to_string(),
@@ -551,13 +548,13 @@ fn subcommand_verify(registry_path: &Path, user: &str, issuer: &str) -> ShellExi
   let verified;
   match (lookup::<Issuer>(registry_path, issuer), lookup::<Proof>(registry_path, user)) {
     (Some(issuer_keys), Some(proof)) => {
-      let attrs = [BLSScalar::from_u64(0),
-                   BLSScalar::from_u64(1),
-                   BLSScalar::from_u64(2),
-                   BLSScalar::from_u64(3)];
+      let attrs = [0u64.to_be_bytes(),
+                   1u64.to_be_bytes(),
+                   2u64.to_be_bytes(),
+                   3u64.to_be_bytes()];
       let bitmap = [false, false, false, false];
       verified =
-        ac_verify::<BLSGt>(&issuer_keys.public_key, &attrs, &bitmap, &proof).is_ok();
+        ac_verify(&issuer_keys.public_key, &attrs, &bitmap, &proof).is_ok();
     }
     (lookup_issuer, lookup_proof) => {
       if lookup_issuer.is_none() {
