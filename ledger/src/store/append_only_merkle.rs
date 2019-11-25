@@ -1815,13 +1815,10 @@ impl AppendOnlyMerkle {
     unsafe {
       let mut s: MaybeUninit<Block> = MaybeUninit::uninit();
 
-      let buffer =
-        from_raw_parts_mut(s.as_mut_ptr() as *mut u8, BLOCK_SIZE);
+      let buffer = from_raw_parts_mut(s.as_mut_ptr() as *mut u8, BLOCK_SIZE);
 
       match self.files[level].read_exact(buffer) {
-        Ok(()) => {
-          Ok(mem::transmute::<_, Block>(s))
-        }
+        Ok(()) => Ok(mem::transmute::<_, Block>(s)),
         Err(e) => {
           std::mem::forget(s);
           Err(e)
