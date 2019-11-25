@@ -7,8 +7,8 @@ use rand::{CryptoRng, FromEntropy, Rng};
 use std::boxed::Box;
 use std::collections::HashMap;
 use std::convert::TryFrom;
-use zei::basic_crypto::signatures::{XfrKeyPair, XfrPublicKey, XfrSecretKey, XfrSignature};
 use zei::xfr::lib::gen_xfr_note;
+use zei::xfr::sig::{XfrKeyPair, XfrPublicKey, XfrSecretKey, XfrSignature};
 use zei::xfr::structs::{AssetRecord, BlindAssetRecord, OpenAssetRecord, XfrNote};
 
 // Unique Identifier for ledger objects
@@ -266,15 +266,27 @@ pub fn compute_signature<T>(secret_key: &XfrSecretKey,
 // TODO: UTXO Addresses must be included in Transfer Signature
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct TransferAsset {
-  //pub nonce: u128,
   pub body: TransferAssetBody,
-  pub body_signatures: Vec<SignedAddress>, // not yet supported
+  pub body_signatures: Vec<SignedAddress>,
 }
 
 impl TransferAsset {
-  pub fn new(transfer_body: TransferAssetBody) -> Result<TransferAsset, errors::PlatformError> {
+  pub fn new(transfer_body: TransferAssetBody,
+             input_keys: &[&XfrKeyPair])
+             -> Result<TransferAsset, errors::PlatformError> {
+    let mut body_signatures = Vec::new();
+
+    for key in input_keys {
+      let sig = key.get_sk_ref()
+                   .sign(&serde_json::to_vec(&transfer_body).unwrap(),
+                         key.get_pk_ref());
+
+      body_signatures.push(SignedAddress { signature: sig,
+                                           address: XfrAddress { key: *key.get_pk_ref() } });
+    }
+
     Ok(TransferAsset { body: transfer_body,
-                       body_signatures: Vec::new() })
+                       body_signatures })
   }
 }
 

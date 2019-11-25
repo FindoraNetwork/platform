@@ -6,7 +6,8 @@ use crate::utils::sha256::Digest as BitDigest;
 use findora::HasInvariants;
 use rand::SeedableRng;
 use rand::{CryptoRng, Rng};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
+use zei::serialization::ZeiFromToBytes;
 use zei::xfr::lib::verify_xfr_note;
 use zei::xfr::structs::BlindAssetRecord;
 
@@ -148,7 +149,8 @@ impl TxnEffect {
         }
 
         // An asset transfer is valid iff:
-        //     1) The signatures on the body all are valid.
+        //     1) The signatures on the body all are valid and there is a signature for each input
+        //       key
         //          - Fully checked here
         //     2) The UTXOs (a) exist on the ledger and (b) match the zei transaction.
         //          - Partially checked here -- anything which hasn't
@@ -165,9 +167,17 @@ impl TxnEffect {
           assert!(trn.body.inputs.len() == trn.body.transfer.body.inputs.len());
           assert!(trn.body.num_outputs == trn.body.transfer.body.outputs.len());
 
-          // (1)
+          // (1a) all body signatures are valid
+          let mut sig_keys = HashSet::new();
           for sig in &trn.body_signatures {
             if !sig.verify(&serde_json::to_vec(&trn.body).unwrap()) {
+              return Err(PlatformError::InputsError);
+            }
+            sig_keys.insert(sig.address.key.zei_to_bytes());
+          }
+          // (1b) all input record owners have signed
+          for record in &trn.body.transfer.body.inputs {
+            if !sig_keys.contains(&record.public_key.zei_to_bytes()) {
               return Err(PlatformError::InputsError);
             }
           }
