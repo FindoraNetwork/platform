@@ -158,10 +158,10 @@ fn automated_test() -> bool {
   //    account balance, zip code, credit score, and timestamp
   // In this case, account balance (first) will not be revealed.
   let bitmap = [false, true, true, true];
-  let attrs = [92_574_500u64.to_be_bytes(),
-               95_050u64.to_be_bytes(),
-               720u64.to_be_bytes(),
-               20_190_820u64.to_be_bytes()];
+  let attrs = [92_574_500u64.to_le_bytes(),
+               95_050u64.to_le_bytes(),
+               720u64.to_le_bytes(),
+               20_190_820u64.to_le_bytes()];
   let att_count = bitmap.len();
   let (issuer_pk, issuer_sk) = ac_keygen_issuer::<_>(&mut prng, att_count);
 
@@ -414,10 +414,10 @@ fn subcommand_sign(registry_path: &Path, user: &str, issuer: &str) -> ShellExitS
       // TODO Share one prng across all invocations.
       prng = ChaChaRng::from_seed([0u8; 32]);
 
-      let attrs = [0u64.to_be_bytes(),
-                   1u64.to_be_bytes(),
-                   2u64.to_be_bytes(),
-                   3u64.to_be_bytes()];
+      let attrs = [0u64.to_le_bytes(),
+                   1u64.to_le_bytes(),
+                   2u64.to_le_bytes(),
+                   3u64.to_le_bytes()];
       let sig = ac_sign(&mut prng,
                         &issuer_keys.secret_key,
                         &user_keys.public_key,
@@ -486,10 +486,10 @@ fn subcommand_reveal(registry_path: &Path, user: &str, issuer: &str) -> ShellExi
       // TODO Share one prng across all invocations.
       prng = ChaChaRng::from_seed([0u8; 32]);
 
-      let attrs = [0u64.to_be_bytes(),
-                   1u64.to_be_bytes(),
-                   2u64.to_be_bytes(),
-                   3u64.to_be_bytes()];
+      let attrs = [0u64.to_le_bytes(),
+                   1u64.to_le_bytes(),
+                   2u64.to_le_bytes(),
+                   3u64.to_le_bytes()];
       let bitmap = [false, false, false, false];
       // TODO handle the error
       let proof = ac_reveal(&mut prng,
@@ -546,10 +546,10 @@ fn subcommand_verify(registry_path: &Path, user: &str, issuer: &str) -> ShellExi
   let verified;
   match (lookup::<Issuer>(registry_path, issuer), lookup::<Proof>(registry_path, user)) {
     (Some(issuer_keys), Some(proof)) => {
-      let attrs = [0u64.to_be_bytes(),
-                   1u64.to_be_bytes(),
-                   2u64.to_be_bytes(),
-                   3u64.to_be_bytes()];
+      let attrs = [0u64.to_le_bytes(),
+                   1u64.to_le_bytes(),
+                   2u64.to_le_bytes(),
+                   3u64.to_le_bytes()];
       let bitmap = [false, false, false, false];
       verified = ac_verify(&issuer_keys.public_key, &attrs, &bitmap, &proof).is_ok();
     }
