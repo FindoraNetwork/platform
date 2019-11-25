@@ -282,12 +282,11 @@ impl TransferAsset {
                          key.get_pk_ref());
 
       body_signatures.push(SignedAddress { signature: sig,
-                                           address: XfrAddress { key: key.get_pk_ref()
-                                                                         .clone() } });
+                                           address: XfrAddress { key: *key.get_pk_ref() } });
     }
 
     Ok(TransferAsset { body: transfer_body,
-                       body_signatures: body_signatures })
+                       body_signatures })
   }
 }
 

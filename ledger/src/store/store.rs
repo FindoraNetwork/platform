@@ -920,45 +920,18 @@ pub mod helpers {
   use crate::data_model::{
     Asset, ConfidentialMemo, DefineAsset, DefineAssetBody, IssuerPublicKey, Memo,
   };
-  use zei::setup::PublicParams;
-  use zei::xfr::asset_record::build_blind_asset_record;
   use zei::xfr::sig::{XfrKeyPair, XfrPublicKey, XfrSecretKey};
-  use zei::xfr::structs::AssetRecord;
 
   pub fn create_definition_transaction(code: &AssetTypeCode,
                                        public_key: &XfrPublicKey,
                                        secret_key: &XfrSecretKey)
                                        -> Result<Transaction, PlatformError> {
-    let issuer_key = IssuerPublicKey { key: public_key.clone() };
+    let issuer_key = IssuerPublicKey { key: *public_key };
     let mut tx = Transaction::default();
     let asset_body = DefineAssetBody::new(&code, &issuer_key, false, false, None, None)?;
     let asset_create = DefineAsset::new(asset_body, &issuer_key, &secret_key)?;
     tx.operations.push(Operation::DefineAsset(asset_create));
-    return Ok(tx);
-  }
-
-  pub fn create_issuance_transaction<R: CryptoRng + Rng>(amount: u64,
-                                                         seq_num: u64,
-                                                         code: &AssetTypeCode,
-                                                         public_key: &XfrPublicKey,
-                                                         secret_key: &XfrSecretKey,
-                                                         conf_amount: bool,
-                                                         conf_type: bool,
-                                                         params: &PublicParams,
-                                                         prng: &mut R)
-                                                         -> Result<Transaction, PlatformError> {
-    let mut tx = Transaction::default();
-    let ar = AssetRecord::new(amount, code.val, public_key.clone()).unwrap();
-    let ba = build_blind_asset_record(prng, &params.pc_gens, &ar, conf_amount, conf_type, &None);
-    let asset_issuance_body = IssueAssetBody::new(&code, seq_num, &[TxOutput(ba)])?;
-    let asset_issuance_operation = IssueAsset::new(asset_issuance_body,
-                                                   &IssuerPublicKey { key: public_key.clone() },
-                                                   &secret_key)?;
-
-    let issue_op = Operation::IssueAsset(asset_issuance_operation);
-
-    tx.operations.push(issue_op);
-    return Ok(tx);
+    Ok(tx)
   }
 
   pub fn build_keys<R: CryptoRng + Rng>(prng: &mut R) -> (XfrPublicKey, XfrSecretKey) {
@@ -1774,15 +1747,17 @@ mod tests {
       ledger.finish_block(block);
     }
 
-    let tx = create_issuance_transaction(100,
-                                         0,
-                                         &token_code1,
-                                         &public_key,
-                                         &secret_key,
-                                         false,
-                                         false,
-                                         &params,
-                                         ledger.get_prng()).unwrap();
+    let mut tx = Transaction::default();
+    let ar = AssetRecord::new(100, token_code1.val, public_key).unwrap();
+    let ba = build_blind_asset_record(ledger.get_prng(), &params.pc_gens, &ar, false, false, &None);
+    let asset_issuance_body = IssueAssetBody::new(&token_code1, 0, &[TxOutput(ba)]).unwrap();
+    let asset_issuance_operation = IssueAsset::new(asset_issuance_body,
+                                                   &IssuerPublicKey { key: public_key },
+                                                   &secret_key).unwrap();
+
+    let issue_op = Operation::IssueAsset(asset_issuance_operation);
+
+    tx.operations.push(issue_op);
     let second_tx = tx.clone();
 
     let effect = TxnEffect::compute_effect(ledger.get_prng(), tx).unwrap();
