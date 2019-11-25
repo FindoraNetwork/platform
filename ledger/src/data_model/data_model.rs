@@ -180,7 +180,6 @@ pub struct TransferAssetBody {
   // TODO(joe): we probably don't need the whole XfrNote with input records
   // once it's on the chain
   pub transfer: Box<XfrNote>, // Encrypted transfer note
-  pub is_debt_swap: bool,     // Indicates whether transfer should be evaluated by debt swap policy
 }
 
 impl TransferAssetBody {
