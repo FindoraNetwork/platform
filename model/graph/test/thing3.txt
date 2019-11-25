@@ -1,0 +1,10 @@
+AnotherTask: Task
+
+Edges:
+
+Data:
+GoodIdeaness:
+This is not a good idea.
+
+Value:
+10.3

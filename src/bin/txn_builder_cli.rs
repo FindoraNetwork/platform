@@ -12,8 +12,8 @@ use std::fs::{self, File};
 use std::io::prelude::*;
 use std::path::{Path, PathBuf};
 use txn_builder::{BuildsTransactions, TransactionBuilder};
-use zei::basic_crypto::signatures::{XfrKeyPair, XfrPublicKey, XfrSecretKey};
 use zei::serialization::ZeiFromToBytes;
+use zei::xfr::sig::{XfrKeyPair, XfrPublicKey, XfrSecretKey};
 
 fn load_txn_builder_from_file(file_name: &str) -> Result<TransactionBuilder, PlatformError> {
   let mut file = File::open(file_name).or_else(|_e| {

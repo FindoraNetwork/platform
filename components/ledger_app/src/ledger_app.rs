@@ -135,7 +135,7 @@ mod tests {
   use ledger::data_model::{AssetTypeCode, IssuerPublicKey};
   use rand::SeedableRng;
   use txn_builder::{BuildsTransactions, TransactionBuilder};
-  use zei::basic_crypto::signatures::XfrKeyPair;
+  use zei::xfr::sig::XfrKeyPair;
 
   #[test]
   fn test_cache_transaction() {
