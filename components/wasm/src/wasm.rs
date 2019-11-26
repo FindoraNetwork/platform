@@ -27,19 +27,15 @@ use wasm_bindgen_futures::future_to_promise;
 use wasm_bindgen_futures::JsFuture;
 use wasm_bindgen_test::*;
 use web_sys::{Request, RequestInit, RequestMode};
-use zei::algebra::bls12_381::{BLSGt, BLSScalar, BLSG1, BLSG2};
-use zei::algebra::groups::Group;
-use zei::algebra::groups::Scalar;
-use zei::algebra::ristretto::{RistPoint, RistScalar};
-use zei::basic_crypto::elgamal::{
-  elgamal_decrypt, elgamal_derive_public_key, elgamal_generate_secret_key, ElGamalPublicKey,
-};
-use zei::basic_crypto::signatures::XfrKeyPair;
-use zei::crypto::anon_creds::{
+use zei::algebra::ristretto::RistPoint;
+use zei::api::anon_creds::{
   ac_keygen_issuer, ac_keygen_user, ac_reveal, ac_sign, ac_verify, ACIssuerPublicKey,
   ACIssuerSecretKey, ACRevealSig, ACSignature, ACUserPublicKey, ACUserSecretKey,
 };
+use zei::api::conf_cred_reveal::cac_gen_encryption_keys;
+use zei::basic_crypto::elgamal::{elgamal_decrypt, ElGamalPublicKey};
 use zei::serialization::ZeiFromToBytes;
+use zei::xfr::sig::XfrKeyPair;
 use zei::xfr::structs::{AssetIssuerPubKeys, BlindAssetRecord};
 
 const HOST: &str = "localhost";
@@ -72,20 +68,22 @@ pub fn keypair_from_str(str: String) -> XfrKeyPair {
   XfrKeyPair::zei_from_bytes(&hex::decode(str).unwrap())
 }
 
-#[wasm_bindgen]
-pub fn generate_elgamal_secret_key() -> JsValue {
-  let mut small_rng = ChaChaRng::from_entropy();
-  let sk = elgamal_generate_secret_key::<_, RistScalar>(&mut small_rng);
-  JsValue::from_serde(&sk).unwrap()
-}
+// TODO(noah): Update this to current zei
+// #[wasm_bindgen]
+// pub fn generate_elgamal_secret_key() -> JsValue {
+//   let mut small_rng = ChaChaRng::from_entropy();
+//   let sk = elgamal_generate_secret_key::<_, RistScalar>(&mut small_rng);
+//   JsValue::from_serde(&sk).unwrap()
+// }
 
-#[wasm_bindgen]
-pub fn derive_elgamal_public_key(elgamal_secret_key_jsvalue: JsValue) -> Result<JsValue, JsValue> {
-  let pc_gens = PedersenGens::default();
-  let sk = elgamal_secret_key_jsvalue.into_serde().unwrap();
-  let pk = elgamal_derive_public_key(&RistPoint(pc_gens.B), &sk);
-  Ok(JsValue::from_serde(&pk).unwrap())
-}
+// TODO(noah): Update this to current zei
+// #[wasm_bindgen]
+// pub fn derive_elgamal_public_key(elgamal_secret_key_jsvalue: JsValue) -> Result<JsValue, JsValue> {
+//   let pc_gens = PedersenGens::default();
+//   let sk = elgamal_secret_key_jsvalue.into_serde().unwrap();
+//   let pk = elgamal_derive_public_key(&RistPoint(pc_gens.B), &sk);
+//   Ok(JsValue::from_serde(&pk).unwrap())
+// }
 
 // Defines an asset on the ledger using the serialized strings in KeyPair and a couple of boolean policies
 #[wasm_bindgen]
@@ -180,10 +178,11 @@ pub fn issue_asset(key_pair: &XfrKeyPair,
   } else {
     let pk = serde_json::from_str::<ElGamalPublicKey<RistPoint>>(&elgamal_pub_key).map_err(|_e| JsValue::from_str("could not deserialize elgamal key"))?;
     let mut small_rng = ChaChaRng::from_entropy();
-    let sk = elgamal_generate_secret_key::<_, BLSScalar>(&mut small_rng);
-    // For now, zei expecs both id reveal key and tracking decryption key, so we construct a dummy
-    // id reveal key
-    let id_reveal_pub_key = elgamal_derive_public_key(&BLSG1::get_base(), &sk);
+    // let sk = elgamal_generate_secret_key::<_, BLSScalar>(&mut small_rng);
+    // // For now, zei expecs both id reveal key and tracking decryption key, so we construct a dummy
+    // // id reveal key
+    // let id_reveal_pub_key = elgamal_derive_public_key(&BLSG1::get_base(), &sk);
+    let (_, id_reveal_pub_key) = cac_gen_encryption_keys(&mut small_rng);
     issuer_keys = Some(AssetIssuerPubKeys { eg_ristretto_pub_key: pk,
                                             eg_blsg1_pub_key: id_reveal_pub_key });
   }
@@ -298,8 +297,8 @@ fn create_query_promise(opts: &RequestInit, req_string: &str) -> Promise {
 #[wasm_bindgen]
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Issuer {
-  public_key: ACIssuerPublicKey<BLSG1, BLSG2>,
-  secret_key: ACIssuerSecretKey<BLSG1, BLSScalar>,
+  public_key: ACIssuerPublicKey,
+  secret_key: ACIssuerSecretKey,
 }
 
 #[wasm_bindgen]
@@ -311,7 +310,7 @@ impl Issuer {
   pub fn new(num_attr: usize) -> Issuer {
     let mut prng: ChaChaRng;
     prng = ChaChaRng::from_seed([0u8; 32]);
-    let (issuer_pk, issuer_sk) = ac_keygen_issuer::<_, BLSGt>(&mut prng, num_attr);
+    let (issuer_pk, issuer_sk) = ac_keygen_issuer::<_>(&mut prng, num_attr);
 
     Issuer { public_key: issuer_pk,
              secret_key: issuer_sk }
@@ -329,8 +328,8 @@ impl Issuer {
     prng = ChaChaRng::from_seed([0u8; 32]);
     let user: User = user_jsvalue.into_serde().unwrap();
 
-    let attrs = [BLSScalar::from_u64(attribute)];
-    let sig = ac_sign::<_, BLSGt>(&mut prng, &self.secret_key, &user.public_key, &attrs);
+    let attrs = [attribute.to_le_bytes()];
+    let sig = ac_sign(&mut prng, &self.secret_key, &user.public_key, &attrs);
 
     JsValue::from_serde(&sig).unwrap()
   }
@@ -339,8 +338,8 @@ impl Issuer {
 #[wasm_bindgen]
 #[derive(Debug, Serialize, Deserialize)]
 pub struct User {
-  public_key: ACUserPublicKey<BLSG1>,
-  secret_key: ACUserSecretKey<BLSScalar>,
+  public_key: ACUserPublicKey,
+  secret_key: ACUserSecretKey,
 }
 
 #[wasm_bindgen]
@@ -349,7 +348,7 @@ impl User {
   pub fn new(issuer: &Issuer, rand_seed: &str) -> User {
     let mut prng: ChaChaRng;
     prng = ChaChaRng::from_seed([rand_seed.as_bytes()[0]; 32]);
-    let (user_pk, user_sk) = ac_keygen_user::<_, BLSGt>(&mut prng, &issuer.public_key);
+    let (user_pk, user_sk) = ac_keygen_user::<_>(&mut prng, &issuer.public_key);
 
     User { public_key: user_pk,
            secret_key: user_sk }
@@ -369,18 +368,18 @@ impl User {
                           reveal_attribute: bool)
                           -> JsValue {
     let issuer: Issuer = issuer_jsvalue.into_serde().unwrap();
-    let sig: ACSignature<BLSG1> = sig.into_serde().unwrap();
+    let sig: ACSignature = sig.into_serde().unwrap();
     let mut prng = ChaChaRng::from_seed([0u8; 32]);
 
-    let attrs = [BLSScalar::from_u64(attribute)];
+    let attrs = [attribute.to_le_bytes()];
     let bitmap = [reveal_attribute];
 
-    let proof = ac_reveal::<_, BLSGt>(&mut prng,
-                                      &self.secret_key,
-                                      &issuer.public_key,
-                                      &sig,
-                                      &attrs,
-                                      &bitmap).unwrap();
+    let proof = ac_reveal(&mut prng,
+                          &self.secret_key,
+                          &issuer.public_key,
+                          &sig,
+                          &attrs,
+                          &bitmap).unwrap();
 
     JsValue::from_serde(&proof).unwrap()
   }
@@ -431,10 +430,10 @@ impl Prover {
     // 2. Prove that the attribute is true
     //    E.g. verify the lower bound of the credit score
     let issuer: Issuer = issuer_jsvalue.into_serde().unwrap();
-    let attrs = [BLSScalar::from_u64(attribute)];
+    let attrs = [attribute.to_le_bytes()];
     let bitmap = [reveal_attribute];
-    let proof: ACRevealSig<BLSG1, BLSG2, BLSScalar> = proof_jsvalue.into_serde().unwrap();
-    ac_verify::<BLSGt>(&issuer.public_key, &attrs, &bitmap, &proof).is_ok()
+    let proof: ACRevealSig = proof_jsvalue.into_serde().unwrap();
+    ac_verify(&issuer.public_key, &attrs, &bitmap, &proof).is_ok()
   }
 }
 
@@ -585,12 +584,13 @@ fn test_wasm_issue_transaction() {
   assert!(txn.is_ok());
 }
 
-#[wasm_bindgen_test]
-fn test_elgamal_serialization() {
-  let sk = generate_elgamal_secret_key();
-  let pk = derive_elgamal_public_key(sk);
-  assert!(pk.is_ok());
-}
+// TODO(noah): Update this to current zei
+// #[wasm_bindgen_test]
+// fn test_elgamal_serialization() {
+//   let sk = generate_elgamal_secret_key();
+//   let pk = derive_elgamal_public_key(sk);
+//   assert!(pk.is_ok());
+// }
 
 #[wasm_bindgen_test]
 // Test to ensure that "AtLeast" requirement is checked correctly
