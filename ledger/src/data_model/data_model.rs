@@ -267,12 +267,14 @@ pub fn compute_signature<T>(secret_key: &XfrSecretKey,
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct TransferAsset {
   pub body: TransferAssetBody,
+  pub is_debt_swap: bool,
   pub body_signatures: Vec<SignedAddress>,
 }
 
 impl TransferAsset {
   pub fn new(transfer_body: TransferAssetBody,
-             input_keys: &[&XfrKeyPair])
+             input_keys: &[&XfrKeyPair],
+             is_debt_swap: bool)
              -> Result<TransferAsset, errors::PlatformError> {
     let mut body_signatures = Vec::new();
 
@@ -286,7 +288,8 @@ impl TransferAsset {
     }
 
     Ok(TransferAsset { body: transfer_body,
-                       body_signatures })
+                       body_signatures,
+                       is_debt_swap })
   }
 }
 

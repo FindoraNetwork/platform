@@ -6,6 +6,7 @@ extern crate tempdir;
 
 use crate::data_model::errors::PlatformError;
 use crate::data_model::*;
+use crate::policies::DebtMemo;
 use crate::utils::sha256;
 use crate::utils::sha256::Digest as BitDigest;
 use append_only_merkle::{AppendOnlyMerkle, HashValue, Proof};
@@ -358,6 +359,33 @@ impl LedgerStatus {
         if min_seq_num < curr_seq_num_limit {
           return Err(PlatformError::InputsError);
         }
+      }
+    }
+
+    // Debt swaps
+    // (1) Fiat code must match debt asset memo
+    // (2) Payor must match borrower key
+    // (3) fee must be correct
+    // (4) Payee must match lender key
+    for (code, debt_swap_effects) in txn.debt_effects.iter() {
+      let debt_type = &self.asset_types
+                           .get(&code)
+                           .or_else(|| txn.new_asset_codes.get(&code))
+                           .ok_or(PlatformError::InputsError)?
+                           .properties;
+
+      let debt_memo = serde_json::from_str::<DebtMemo>(&debt_type.memo.0)?;
+
+      // (1), (2), (3)
+      if debt_swap_effects.fiat_code != debt_memo.fiat_code
+         || debt_swap_effects.borrower_key != debt_memo.borrower_key
+      {
+        return Err(PlatformError::InputsError);
+      }
+
+      // (4)
+      if debt_swap_effects.lender_key != debt_type.issuer.key {
+        return Err(PlatformError::InputsError);
       }
     }
 

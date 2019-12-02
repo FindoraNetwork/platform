@@ -1,6 +1,7 @@
 #![deny(warnings)]
 use crate::data_model::errors::PlatformError;
 use crate::data_model::*;
+use crate::policies::{compute_debt_swap_effect, DebtSwapEffect};
 use crate::utils::sha256;
 use crate::utils::sha256::Digest as BitDigest;
 use findora::HasInvariants;
@@ -8,7 +9,7 @@ use rand::SeedableRng;
 use rand::{CryptoRng, Rng};
 use std::collections::{HashMap, HashSet};
 use zei::serialization::ZeiFromToBytes;
-use zei::xfr::lib::verify_xfr_note;
+use zei::xfr::lib::{verify_xfr_body, verify_xfr_note};
 use zei::xfr::structs::BlindAssetRecord;
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -44,6 +45,7 @@ impl TxnEffect {
     let mut new_asset_codes: HashMap<AssetTypeCode, AssetType> = HashMap::new();
     let mut new_issuance_nums: HashMap<AssetTypeCode, Vec<u64>> = HashMap::new();
     let mut issuance_keys: HashMap<AssetTypeCode, IssuerPublicKey> = HashMap::new();
+    let mut debt_effects: HashMap<AssetTypeCode, DebtSwapEffect> = HashMap::new();
 
     // Sequentially go through the operations, validating intrinsic or
     // local-to-the-transaction properties, then recording effects and
@@ -177,6 +179,7 @@ impl TxnEffect {
             }
             sig_keys.insert(sig.address.key.zei_to_bytes());
           }
+
           // (1b) all input record owners have signed
           for record in &trn.body.transfer.body.inputs {
             if !sig_keys.contains(&record.public_key.zei_to_bytes()) {
@@ -186,12 +189,12 @@ impl TxnEffect {
           let null_policies = vec![];
 
           if trn.is_debt_swap {
-            let (debt_type, debt_swap_effect) = compute_debt_swap_effect(&trn.body)?;
+            let (debt_type, debt_swap_effect) = compute_debt_swap_effect(&trn.body.transfer)?;
 
             if debt_effects.contains_key(&debt_type) {
               return Err(PlatformError::InputsError);
             }
-            debt_effects.insert(&debt_type, debt_swap_effect);
+            debt_effects.insert(debt_type, debt_swap_effect);
 
             verify_xfr_body(prng, &trn.body.transfer.body, &null_policies)?;
           } else {
@@ -252,7 +255,8 @@ impl TxnEffect {
                    input_txos,
                    new_asset_codes,
                    new_issuance_nums,
-                   issuance_keys })
+                   issuance_keys,
+                   debt_effects })
   }
 }
 
