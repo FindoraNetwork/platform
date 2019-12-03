@@ -528,7 +528,8 @@ mod tests {
                                                    transfer: Box::new(xfr_note) };
 
     let asset_transfer = TransferAsset { body: assert_transfer_body,
-                                         body_signatures: Vec::new() };
+                                         body_signatures: Vec::new(),
+                                         is_debt_swap: false };
 
     let transfer_operation = Operation::TransferAsset(asset_transfer.clone());
 

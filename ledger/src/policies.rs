@@ -6,18 +6,24 @@ use rand_chacha::ChaChaRng;
 use zei::xfr::sig::{XfrKeyPair, XfrPublicKey};
 use zei::xfr::structs::XfrNote;
 
-// this should be defined in ledger utils perhaps
-pub type Fraction = I20F12;
+#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
+pub struct Fraction(pub I20F12);
+
+impl Fraction {
+  pub fn new(num: u64, denom: u64) -> Fraction {
+    Fraction(I20F12::from_num(num) / I20F12::from_num(denom))
+  }
+}
 
 // Debt swap parameters that must be validated against current ledger state
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct DebtSwapEffect {
   pub fiat_code: AssetTypeCode,
-  pub borrower_key: XfrPublicKey,
   pub lender_key: XfrPublicKey,
   pub fee_percentage: Fraction,
 }
 
+// TODO: Noah require signature here
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub struct DebtMemo {
   pub interest_rate: Fraction,
@@ -65,9 +71,8 @@ pub fn compute_debt_swap_effect(transfer: &XfrNote)
       Ok((AssetTypeCode { val: burned_debt_output.asset_type.unwrap() },
           DebtSwapEffect { fiat_code: AssetTypeCode { val: fiat_output.asset_type.unwrap() },
                            lender_key: returned_debt_output.public_key,
-                           borrower_key: fiat_output.public_key,
-                           fee_percentage: I20F12::from_num(amount_c - amount_a)
-                                           / I20F12::from_num(amount_a + amount_b) }))
+                           fee_percentage: Fraction::new(amount_c - amount_a,
+                                                         amount_a + amount_b) }))
     }
     (_, _, _) => Err(PlatformError::InputsError),
   }

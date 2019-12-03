@@ -171,21 +171,6 @@ impl TxnEffect {
           assert!(trn.body.inputs.len() == trn.body.transfer.body.inputs.len());
           assert!(trn.body.num_outputs == trn.body.transfer.body.outputs.len());
 
-          // (1a) all body signatures are valid
-          let mut sig_keys = HashSet::new();
-          for sig in &trn.body_signatures {
-            if !sig.verify(&serde_json::to_vec(&trn.body).unwrap()) {
-              return Err(PlatformError::InputsError);
-            }
-            sig_keys.insert(sig.address.key.zei_to_bytes());
-          }
-
-          // (1b) all input record owners have signed
-          for record in &trn.body.transfer.body.inputs {
-            if !sig_keys.contains(&record.public_key.zei_to_bytes()) {
-              return Err(PlatformError::InputsError);
-            }
-          }
           let null_policies = vec![];
 
           if trn.is_debt_swap {
@@ -198,6 +183,21 @@ impl TxnEffect {
 
             verify_xfr_body(prng, &trn.body.transfer.body, &null_policies)?;
           } else {
+            // (1a) all body signatures are valid
+            let mut sig_keys = HashSet::new();
+            for sig in &trn.body_signatures {
+              if !sig.verify(&serde_json::to_vec(&trn.body).unwrap()) {
+                return Err(PlatformError::InputsError);
+              }
+              sig_keys.insert(sig.address.key.zei_to_bytes());
+            }
+
+            // (1b) all input record owners have signed
+            for record in &trn.body.transfer.body.inputs {
+              if !sig_keys.contains(&record.public_key.zei_to_bytes()) {
+                return Err(PlatformError::InputsError);
+              }
+            }
             // (3)
             // TODO: implement real policies
             verify_xfr_note(prng, &trn.body.transfer, &null_policies)?;
