@@ -1,5 +1,5 @@
 use crate::data_model::errors::PlatformError;
-use crate::data_model::AssetTypeCode;
+use crate::data_model::{AssetType, AssetTypeCode};
 use fixed::types::I20F12;
 use rand::SeedableRng;
 use rand_chacha::ChaChaRng;
@@ -13,6 +13,10 @@ impl Fraction {
   pub fn new(num: u64, denom: u64) -> Fraction {
     Fraction(I20F12::from_num(num) / I20F12::from_num(denom))
   }
+}
+
+pub fn is_debt_token(asset_type: &AssetType) -> bool {
+  return serde_json::from_str::<DebtMemo>(&asset_type.properties.memo.0).is_ok();
 }
 
 // Debt swap parameters that must be validated against current ledger state
@@ -29,6 +33,14 @@ pub struct DebtMemo {
   pub interest_rate: Fraction,
   pub fiat_code: AssetTypeCode,
   pub borrower_key: XfrPublicKey,
+  pub loan_amount: u64,
+}
+
+#[derive(Clone, Copy)]
+enum DebtIndices {
+  Fiat = 0,
+  BurnedDebt = 1,
+  ReturnedDebt = 2,
 }
 
 // A debt swap is valid under the following conditions:
@@ -40,9 +52,9 @@ pub struct DebtMemo {
 // The function also computes internal consistency checks that do not rely on external information
 pub fn compute_debt_swap_effect(transfer: &XfrNote)
                                 -> Result<(AssetTypeCode, DebtSwapEffect), PlatformError> {
-  let fiat_output = &transfer.body.outputs[0];
-  let burned_debt_output = &transfer.body.outputs[1];
-  let returned_debt_output = &transfer.body.outputs[2];
+  let fiat_output = &transfer.body.outputs[DebtIndices::Fiat as usize];
+  let burned_debt_output = &transfer.body.outputs[DebtIndices::BurnedDebt as usize];
+  let returned_debt_output = &transfer.body.outputs[DebtIndices::ReturnedDebt as usize];
   let null_address = *(XfrKeyPair::generate(&mut ChaChaRng::from_seed([0u8; 32])).get_pk_ref());
 
   // Ensure that payment and debt tokens are going to the same place
