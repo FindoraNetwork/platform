@@ -147,7 +147,7 @@ impl BuildsTransactions for TransactionBuilder {
 
     let input_keys = &[XfrKeyPair::zei_from_bytes(&input_key.zei_to_bytes())];
 
-    self.txn.add_operation(Operation::TransferAsset(TransferAsset::new(TransferAssetBody::new(&mut prng, input_sids, input_records, output_records, input_keys)?, &[input_key])?));
+    self.txn.add_operation(Operation::TransferAsset(TransferAsset::new(TransferAssetBody::new(&mut prng, input_sids, input_records, output_records, input_keys)?, &[input_key], false)?));
     Ok(())
   }
   fn serialize(&self) -> Result<Vec<u8>, PlatformError> {

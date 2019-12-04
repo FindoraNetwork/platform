@@ -16,7 +16,7 @@ impl Fraction {
 }
 
 pub fn is_debt_token(asset_type: &AssetType) -> bool {
-  return serde_json::from_str::<DebtMemo>(&asset_type.properties.memo.0).is_ok();
+  serde_json::from_str::<DebtMemo>(&asset_type.properties.memo.0).is_ok()
 }
 
 // Debt swap parameters that must be validated against current ledger state

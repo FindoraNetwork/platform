@@ -1050,7 +1050,7 @@ pub mod helpers {
 
     let mut block = ledger.start_block().unwrap();
     let temp_sid = ledger.apply_transaction(&mut block, effect).unwrap();
-    return ledger.finish_block(block).remove(&temp_sid).unwrap();
+    ledger.finish_block(block).remove(&temp_sid).unwrap()
   }
 
   pub fn create_issue_and_transfer_txn(ledger: &mut LedgerState,
@@ -1064,21 +1064,21 @@ pub mod helpers {
     let issuer_key_copy = XfrKeyPair::zei_from_bytes(&issuer_keys.zei_to_bytes());
 
     // issue operation
-    let ar = AssetRecord::new(amount, code.val, issuer_keys.get_pk_ref().clone()).unwrap();
+    let ar = AssetRecord::new(amount, code.val, *issuer_keys.get_pk_ref()).unwrap();
     let ba = build_blind_asset_record(ledger.get_prng(), &params.pc_gens, &ar, false, false, &None);
 
     let asset_issuance_body = IssueAssetBody::new(&code, 0, &[TxOutput(ba.clone())]).unwrap();
-    let asset_issuance_operation =
-      IssueAsset::new(asset_issuance_body,
-                      &IssuerPublicKey { key: issuer_keys.get_pk_ref().clone() },
-                      issuer_keys.get_sk_ref()).unwrap();
+    let asset_issuance_operation = IssueAsset::new(asset_issuance_body,
+                                                   &IssuerPublicKey { key:
+                                                                        *issuer_keys.get_pk_ref() },
+                                                   issuer_keys.get_sk_ref()).unwrap();
 
     let issue_op = Operation::IssueAsset(asset_issuance_operation);
 
     tx.operations.push(issue_op);
 
     // transfer operation
-    let ar = AssetRecord::new(amount, code.val, recipient_pk.clone()).unwrap();
+    let ar = AssetRecord::new(amount, code.val, *recipient_pk).unwrap();
     let transfer_body =
       TransferAssetBody::new(ledger.get_prng(),
                              vec![TxoRef::Relative(0)],
@@ -1090,7 +1090,7 @@ pub mod helpers {
       .push(Operation::TransferAsset(TransferAsset::new(transfer_body,
                                                                    &[&issuer_keys],
                                                                    false).unwrap()));
-    return tx;
+    tx
   }
 }
 
