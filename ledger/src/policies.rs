@@ -1,9 +1,8 @@
 use crate::data_model::errors::PlatformError;
 use crate::data_model::{AssetType, AssetTypeCode};
 use fixed::types::I20F12;
-use rand::SeedableRng;
-use rand_chacha::ChaChaRng;
-use zei::xfr::sig::{XfrKeyPair, XfrPublicKey};
+use zei::serialization::ZeiFromToBytes;
+use zei::xfr::sig::XfrPublicKey;
 use zei::xfr::structs::XfrNote;
 
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
@@ -55,7 +54,8 @@ pub fn compute_debt_swap_effect(transfer: &XfrNote)
   let fiat_output = &transfer.body.outputs[DebtIndices::Fiat as usize];
   let burned_debt_output = &transfer.body.outputs[DebtIndices::BurnedDebt as usize];
   let returned_debt_output = &transfer.body.outputs[DebtIndices::ReturnedDebt as usize];
-  let null_address = *(XfrKeyPair::generate(&mut ChaChaRng::from_seed([0u8; 32])).get_pk_ref());
+  // TODO: (noah) figure out how to safely increment lender public key for null pk
+  let null_public_key = XfrPublicKey::zei_from_bytes(&[0; 32]);
 
   // Ensure that payment and debt tokens are going to the same place
   if fiat_output.public_key != returned_debt_output.public_key {
@@ -63,7 +63,7 @@ pub fn compute_debt_swap_effect(transfer: &XfrNote)
   }
 
   // Debt tokens must be burned
-  if burned_debt_output.public_key != null_address {
+  if burned_debt_output.public_key != null_public_key {
     return Err(PlatformError::InputsError);
   }
 

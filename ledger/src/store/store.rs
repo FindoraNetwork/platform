@@ -1105,7 +1105,7 @@ mod tests {
   use zei::serialization::ZeiFromToBytes;
   use zei::setup::PublicParams;
   use zei::xfr::asset_record::{build_blind_asset_record, open_asset_record};
-  use zei::xfr::sig::XfrKeyPair;
+  use zei::xfr::sig::{XfrKeyPair, XfrPublicKey};
   use zei::xfr::structs::AssetRecord;
 
   #[test]
@@ -2013,20 +2013,20 @@ mod tests {
                                                         false).unwrap()));
 
     let (_txn_sid, txo_sids) = apply_transaction(&mut ledger, tx);
-    dbg!(&txo_sids);
     let debt_sid = txo_sids[0];
     let fiat_sid = txo_sids[1];
 
     // Try to pay off debt without paying interest
     let mut bad_tx = Transaction::default();
-    let null_address = *(XfrKeyPair::generate(&mut ChaChaRng::from_seed([0u8; 32])).get_pk_ref());
+    let null_public_key = XfrPublicKey::zei_from_bytes(&[0; 32]);
+
     let fiat_bar = ((ledger.get_utxo(fiat_sid).unwrap().0).0).clone();
     let debt_bar = ((ledger.get_utxo(debt_sid).unwrap().0).0).clone();
 
     // Attempt to burn 100 debt tokens by only paying 100 fiat tokens
     let payment_record =
       AssetRecord::new(100, fiat_code.val, lender_key_pair.get_pk_ref().clone()).unwrap();
-    let burned_debt_record = AssetRecord::new(100, debt_code.val, null_address).unwrap();
+    let burned_debt_record = AssetRecord::new(100, debt_code.val, null_public_key).unwrap();
     let returned_debt_record =
       AssetRecord::new(900, debt_code.val, lender_key_pair.get_pk_ref().clone()).unwrap();
     let returned_fiat_record =
@@ -2056,7 +2056,7 @@ mod tests {
     // Attempt to burn 100 debt tokens by only paying 100 fiat tokens
     let payment_record =
       AssetRecord::new(200, fiat_code.val, lender_key_pair.get_pk_ref().clone()).unwrap();
-    let burned_debt_record = AssetRecord::new(100, debt_code.val, null_address).unwrap();
+    let burned_debt_record = AssetRecord::new(100, debt_code.val, null_public_key).unwrap();
     let returned_debt_record =
       AssetRecord::new(900, debt_code.val, lender_key_pair.get_pk_ref().clone()).unwrap();
     let returned_fiat_record =
