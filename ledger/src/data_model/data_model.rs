@@ -263,18 +263,24 @@ pub fn compute_signature<T>(secret_key: &XfrSecretKey,
   secret_key.sign(&serde_json::to_vec(&operation_body).unwrap(), &public_key)
 }
 
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub enum TransferType {
+  Standard,
+  DebtSwap,
+}
+
 // TODO: UTXO Addresses must be included in Transfer Signature
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct TransferAsset {
   pub body: TransferAssetBody,
-  pub is_debt_swap: bool,
+  pub transfer_type: TransferType,
   pub body_signatures: Vec<SignedAddress>,
 }
 
 impl TransferAsset {
   pub fn new(transfer_body: TransferAssetBody,
              input_keys: &[&XfrKeyPair],
-             is_debt_swap: bool)
+             transfer_type: TransferType)
              -> Result<TransferAsset, errors::PlatformError> {
     let mut body_signatures = Vec::new();
 
@@ -289,7 +295,7 @@ impl TransferAsset {
 
     Ok(TransferAsset { body: transfer_body,
                        body_signatures,
-                       is_debt_swap })
+                       transfer_type })
   }
 }
 
@@ -529,7 +535,7 @@ mod tests {
 
     let asset_transfer = TransferAsset { body: assert_transfer_body,
                                          body_signatures: Vec::new(),
-                                         is_debt_swap: false };
+                                         transfer_type: TransferType::Standard };
 
     let transfer_operation = Operation::TransferAsset(asset_transfer.clone());
 

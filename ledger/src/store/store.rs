@@ -334,10 +334,10 @@ impl LedgerStatus {
     //  - NOTE: this relies on the sequence numbers appearing in sorted
     //    order
     // Debt issuance
-    // (3) Only one debt issuance per transaction
+    // (3) Only one issuance per debt type is allowed. Every debt type represents it's own
+    // independent legal contract and a new loan should correspond to a new asset type.
     // (4) Issuance must be paired with fiat transfer to borrower
-    let mut contains_debt_issuance = false;
-    for (code, seq_nums) in txn.new_issuance_nums.iter() {
+    'outer: for (code, seq_nums) in txn.new_issuance_nums.iter() {
       debug_assert!(txn.issuance_keys.contains_key(&code));
 
       let iss_key = txn.issuance_keys.get(&code).unwrap();
@@ -369,13 +369,11 @@ impl LedgerStatus {
                 .contains_key(&asset_type.properties.code)
       {
         //(3)
-        if contains_debt_issuance {
+        if seq_nums.len() > 1 || seq_nums.get(0) != Some(&0) {
           return Err(PlatformError::InputsError);
         }
 
-        contains_debt_issuance = true;
         let debt_memo = serde_json::from_str::<DebtMemo>(&asset_type.properties.memo.0).unwrap();
-        let mut loan_transferred = false;
 
         for txo in txn.txos.iter() {
           if let Some(output) = txo {
@@ -386,14 +384,13 @@ impl LedgerStatus {
                  && amount == debt_memo.loan_amount
                  && fiat_type == debt_memo.fiat_code.val
               {
-                loan_transferred = true;
+                continue 'outer;
               }
             }
           }
         }
-        if !loan_transferred {
-          return Err(PlatformError::InputsError);
-        }
+        // Fail if no fiat transfer found
+        return Err(PlatformError::InputsError);
       }
     }
 
@@ -1088,8 +1085,8 @@ pub mod helpers {
 
     tx.operations
       .push(Operation::TransferAsset(TransferAsset::new(transfer_body,
-                                                                   &[&issuer_keys],
-                                                                   false).unwrap()));
+                                                        &[&issuer_keys],
+                                                        TransferType::Standard).unwrap()));
     tx
   }
 }
@@ -1785,7 +1782,7 @@ mod tests {
     tx.operations
       .push(Operation::TransferAsset(TransferAsset::new(transfer_body,
                                                         &[&second_key_pair],
-                                                        false).unwrap()));
+                                                        TransferType::Standard).unwrap()));
 
     // Commit first transfer
     let effect = TxnEffect::compute_effect(ledger.get_prng(), tx).unwrap();
@@ -1799,8 +1796,9 @@ mod tests {
 
     // Submit spend of same asset at second sid without signature
     let mut tx = Transaction::default();
-    let mut transfer_asset =
-      TransferAsset::new(second_transfer_body, &[&second_key_pair], false).unwrap();
+    let mut transfer_asset = TransferAsset::new(second_transfer_body,
+                                                &[&second_key_pair],
+                                                TransferType::Standard).unwrap();
     // remove the signature and try to apply txn
     transfer_asset.body_signatures = Vec::new();
     tx.operations.push(Operation::TransferAsset(transfer_asset));
@@ -2010,7 +2008,7 @@ mod tests {
     tx.operations
       .push(Operation::TransferAsset(TransferAsset::new(transfer_body,
                                                         &[&lender_key_pair],
-                                                        false).unwrap()));
+                                                        TransferType::Standard).unwrap()));
 
     let (_txn_sid, txo_sids) = apply_transaction(&mut ledger, tx);
     let debt_sid = txo_sids[0];
@@ -2041,7 +2039,9 @@ mod tests {
                                XfrKeyPair::zei_from_bytes(&lender_key_pair.zei_to_bytes())]).unwrap();
 
     bad_tx.operations
-          .push(Operation::TransferAsset(TransferAsset::new(transfer_body, &[], true).unwrap()));
+          .push(Operation::TransferAsset(TransferAsset::new(transfer_body,
+                                                            &[],
+                                                            TransferType::DebtSwap).unwrap()));
 
     let effect = TxnEffect::compute_effect(ledger.get_prng(), bad_tx).unwrap();
     let mut block = ledger.start_block().unwrap();
@@ -2071,7 +2071,9 @@ mod tests {
                                XfrKeyPair::zei_from_bytes(&lender_key_pair.zei_to_bytes())]).unwrap();
 
     tx.operations
-      .push(Operation::TransferAsset(TransferAsset::new(transfer_body, &[], true).unwrap()));
+      .push(Operation::TransferAsset(TransferAsset::new(transfer_body,
+                                                        &[],
+                                                        TransferType::DebtSwap).unwrap()));
 
     let effect = TxnEffect::compute_effect(ledger.get_prng(), tx).unwrap();
     let result = ledger.apply_transaction(&mut block, effect);

@@ -172,35 +172,37 @@ impl TxnEffect {
           assert!(trn.body.num_outputs == trn.body.transfer.body.outputs.len());
 
           let null_policies = vec![];
+          match trn.transfer_type {
+            TransferType::DebtSwap => {
+              let (debt_type, debt_swap_effect) = compute_debt_swap_effect(&trn.body.transfer)?;
 
-          if trn.is_debt_swap {
-            let (debt_type, debt_swap_effect) = compute_debt_swap_effect(&trn.body.transfer)?;
-
-            if debt_effects.contains_key(&debt_type) {
-              return Err(PlatformError::InputsError);
-            }
-            debt_effects.insert(debt_type, debt_swap_effect);
-
-            verify_xfr_body(prng, &trn.body.transfer.body, &null_policies)?;
-          } else {
-            // (1a) all body signatures are valid
-            let mut sig_keys = HashSet::new();
-            for sig in &trn.body_signatures {
-              if !sig.verify(&serde_json::to_vec(&trn.body).unwrap()) {
+              if debt_effects.contains_key(&debt_type) {
                 return Err(PlatformError::InputsError);
               }
-              sig_keys.insert(sig.address.key.zei_to_bytes());
-            }
+              debt_effects.insert(debt_type, debt_swap_effect);
 
-            // (1b) all input record owners have signed
-            for record in &trn.body.transfer.body.inputs {
-              if !sig_keys.contains(&record.public_key.zei_to_bytes()) {
-                return Err(PlatformError::InputsError);
-              }
+              verify_xfr_body(prng, &trn.body.transfer.body, &null_policies)?;
             }
-            // (3)
-            // TODO: implement real policies
-            verify_xfr_note(prng, &trn.body.transfer, &null_policies)?;
+            TransferType::Standard => {
+              // (1a) all body signatures are valid
+              let mut sig_keys = HashSet::new();
+              for sig in &trn.body_signatures {
+                if !sig.verify(&serde_json::to_vec(&trn.body).unwrap()) {
+                  return Err(PlatformError::InputsError);
+                }
+                sig_keys.insert(sig.address.key.zei_to_bytes());
+              }
+
+              // (1b) all input record owners have signed
+              for record in &trn.body.transfer.body.inputs {
+                if !sig_keys.contains(&record.public_key.zei_to_bytes()) {
+                  return Err(PlatformError::InputsError);
+                }
+              }
+              // (3)
+              // TODO: implement real policies
+              verify_xfr_note(prng, &trn.body.transfer, &null_policies)?;
+            }
           }
 
           for (inp, record) in trn.body

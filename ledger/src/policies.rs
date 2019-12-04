@@ -47,6 +47,7 @@ enum DebtIndices {
 //    balance
 // 2) The fee is paid in the correct currency
 // 3) The fee is the correct amount
+// 4) There are no extraneous inputs.
 // This function returns all of the information needed to validate these conditions in DebtSwapEffect
 // The function also computes internal consistency checks that do not rely on external information
 pub fn compute_debt_swap_effect(transfer: &XfrNote)
@@ -54,6 +55,11 @@ pub fn compute_debt_swap_effect(transfer: &XfrNote)
   let fiat_output = &transfer.body.outputs[DebtIndices::Fiat as usize];
   let burned_debt_output = &transfer.body.outputs[DebtIndices::BurnedDebt as usize];
   let returned_debt_output = &transfer.body.outputs[DebtIndices::ReturnedDebt as usize];
+
+  if transfer.body.inputs.len() > 2 {
+    return Err(PlatformError::InputsError);
+  }
+
   // TODO: (noah) figure out how to safely increment lender public key for null pk
   let null_public_key = XfrPublicKey::zei_from_bytes(&[0; 32]);
 

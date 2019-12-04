@@ -564,7 +564,7 @@ impl InterpretAccounts<PlatformError> for LedgerAccounts {
 
         let transfer = TransferAsset { body: transfer_body,
                                        body_signatures: vec![transfer_sig],
-                                       is_debt_swap: false };
+                                       transfer_type: TransferType::Standard };
         let txn = Transaction { operations: vec![Operation::TransferAsset(transfer)],
                                 credentials: vec![],
                                 memos: vec![] };
