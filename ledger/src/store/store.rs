@@ -2053,7 +2053,7 @@ mod tests {
     let fiat_bar = ((ledger.get_utxo(fiat_sid).unwrap().0).0).clone();
     let debt_bar = ((ledger.get_utxo(debt_sid).unwrap().0).0).clone();
 
-    // Attempt to burn 100 debt tokens by only paying 100 fiat tokens
+    // Attempt to burn 100 debt tokens by paying 200 fiat tokens
     let payment_record =
       AssetRecord::new(200, fiat_code.val, lender_key_pair.get_pk_ref().clone()).unwrap();
     let burned_debt_record = AssetRecord::new(100, debt_code.val, null_public_key).unwrap();
