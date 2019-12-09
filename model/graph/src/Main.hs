@@ -26,6 +26,54 @@ alloyish = P.makeTokenParser $ javaStyle
   , P.caseSensitive = True
   }
 
+-- policy_lang = P.makeTokenParser $ javaStyle
+--   { P.reservedNames = [ "const", "global_param", "global_state"
+--                     , "local", "param", "resource", "credential"
+--                     , "record", "choice", "asset", "property", "txn"
+--                     , "fraction", "number"
+--                     ]
+--   , P.caseSensitive = True
+--   }
+
+-- data DataType
+--   = Choice   (Maybe Text) [(Text,DataType)]
+--   | Record   (Maybe Text) [(Text,DataType)]
+--   | Number
+--   | Fraction
+--   | NamedType Text
+--   deriving (Eq,Show,Read)
+
+-- data NormedDataType
+--   = NormedChoice   (Maybe Text) [(Text,NormedDataType)]
+--   | NormedRecord   (Maybe Text) [(Text,NormedDataType)]
+--   | NormedNumber
+--   | NormedFraction
+--   deriving (Eq,Show,Read)
+
+-- newtype UnitId = UnitId Integer
+--   deriving (Eq,Show,Read)
+
+-- data ResourceType = BaseUnit UnitId
+--                   | Compound [(Text,ResourceType)]
+--   deriving (Eq,Show,Read)
+
+-- data PolicyProgram = PolicyProgram
+--   { constants     :: M.Map Text (DataType, Value)
+--   , globalparams  :: M.Map Text DataType
+--   , globalstate   :: M.Map Text DataTypDatae
+--   , datatypes     :: M.Map Text DataType
+--   , resourcetypes :: M.Map Text ResourceType
+--   , properties    :: M.Map Text (Map Text DataType, [PolicyExpr])
+--   , txns          :: M.Map Text (Map Text ParamDescr, PolicyStmt)
+--   }
+
+-- parseDataType = (
+--   (P.try $ do
+    
+--   )
+  
+
+
 parseOp op = do
   theOp <- P.operator alloyish
   if theOp == op then return () else fail ("Expected '" ++ op ++ "'")

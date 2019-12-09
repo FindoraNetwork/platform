@@ -1,0 +1,41 @@
+bound_asset_type debt;
+global_param interest_rate: Fraction
+  { interest_rate > 0; interest_rate < 1; };
+global_param fiat: ResourceType;
+global_param borrower: Identity;
+global_param lender: Identity;
+global_param loan_amount: number;
+
+// What do state vars even mean?
+// state_var loan: bundle<debt>
+//   { loan.amount > 0; };
+
+init txn start_loan(out resource the_debt:  bundle<debt>,
+                    out resource the_money: bundle<fiat>,
+                    in  resource money_src: bundle<fiat>,
+) {
+  assert money_src.amount == loan_amount;
+  assert the_money.owner == borrower;
+  assert the_debt.owner == lender;
+  transfer loan_amount of money_src -> the_money;
+  issue loan_amount of debt -> the_debt;
+}
+
+txn repay_loan(inout resource the_debt:    bundle<debt>,
+               in    resource payment_src: bundle<fiat>,
+               out   resource payment_dst: bundle<fiat>,
+) {
+  assert payment_dst.owner == lender;
+  // assert payment_dst.owner == the_debt.owner;
+
+  // TODO: time?
+  local interest_amt = round(the_debt.amount * interest_rate);
+  assert payment_src.amount >= interest_amt;
+
+  local burn_amt = payment_src.amount - interest_amt;
+
+  transfer burn_amt of the_debt -> BURN_ADDRESS;
+  transfer ALL of the_debt -> the_debt; // implicit?
+  transfer ALL of payment_src -> payment_dst;
+}
+
