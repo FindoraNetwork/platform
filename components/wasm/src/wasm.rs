@@ -570,14 +570,6 @@ fn test_wasm_issue_transaction() {
   assert!(txn.is_ok());
 }
 
-// TODO(noah): Update this to current zei
-// #[wasm_bindgen_test]
-// fn test_elgamal_serialization() {
-//   let sk = generate_elgamal_secret_key();
-//   let pk = derive_elgamal_public_key(sk);
-//   assert!(pk.is_ok());
-// }
-
 #[wasm_bindgen_test]
 // Test to ensure that "AtLeast" requirement is checked correctly
 // E.g. minimun credit score requirement
