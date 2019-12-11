@@ -174,7 +174,6 @@ impl TxnEffect {
           let null_policies = vec![];
           match trn.transfer_type {
             TransferType::DebtSwap => {
-              dbg!("computed effect");
               let (debt_type, debt_swap_effect) = compute_debt_swap_effect(&trn.body.transfer)?;
 
               if debt_effects.contains_key(&debt_type) {

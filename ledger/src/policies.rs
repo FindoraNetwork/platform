@@ -5,7 +5,7 @@ use zei::serialization::ZeiFromToBytes;
 use zei::xfr::sig::XfrPublicKey;
 use zei::xfr::structs::XfrNote;
 
-#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Serialize, Deserialize)]
 pub struct Fraction(pub I20F12);
 
 impl Fraction {
@@ -18,10 +18,11 @@ impl Fraction {
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct DebtSwapEffect {
   pub fiat_code: AssetTypeCode,
-  pub fee_percentage: Fraction,
+  pub initial_balance: u64,
+  pub fiat_paid: u64,
+  pub debt_burned: u64,
 }
 
-// TODO: Noah require signature here
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub struct DebtMemo {
   pub interest_rate: Fraction,
@@ -39,6 +40,11 @@ enum DebtOutputIndices {
 #[derive(Clone, Copy)]
 enum DebtInputIndices {
   Debt = 0,
+}
+
+// Returns expected fee for debt swap transaction
+pub fn calculate_fee(principal: u64, interest_rate: Fraction) -> u64 {
+  (I20F12::from_num(principal) * interest_rate.0).to_num()
 }
 
 // A debt swap is valid under the following conditions:
@@ -79,7 +85,6 @@ pub fn compute_debt_swap_effect(transfer: &XfrNote)
   if burned_debt_output.public_key != null_public_key
      || debt_input.public_key != fiat_output.public_key
   {
-    dbg!("failed here");
     return Err(PlatformError::InputsError);
   }
 
@@ -100,13 +105,15 @@ pub fn compute_debt_swap_effect(transfer: &XfrNote)
     }
   }
 
-  // Compute fee percentage and return effect
-  match (burned_debt_output.amount, debt_input.amount, fiat_output.amount) {
-    (Some(amount_a), Some(amount_b), Some(amount_c)) => {
-      Ok((AssetTypeCode { val: burned_debt_output.asset_type.unwrap() },
-          DebtSwapEffect { fiat_code: AssetTypeCode { val: fiat_output.asset_type.unwrap() },
-                           fee_percentage: Fraction::new(amount_c - amount_a, amount_b) }))
+  match (debt_input.amount, fiat_output.amount, fiat_output.asset_type, burned_debt_output.amount) {
+    (Some(initial_balance), Some(fiat_paid), Some(fiat_type), Some(debt_burned)) => {
+      // Return effect
+      Ok((AssetTypeCode { val: burned_debt_output.asset_type.unwrap() }, // some or err here
+          DebtSwapEffect { fiat_code: AssetTypeCode { val: fiat_type },
+                           initial_balance,
+                           fiat_paid,
+                           debt_burned }))
     }
-    (_, _, _) => Err(PlatformError::InputsError),
+    (_, _, _, _) => Err(PlatformError::InputsError),
   }
 }
