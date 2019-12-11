@@ -378,8 +378,6 @@ impl LedgerStatus {
       if debt_swap_effects.fiat_code != debt_memo.fiat_code
          || debt_swap_effects.fiat_paid != debt_swap_effects.debt_burned + correct_fee
       {
-        dbg!(debt_swap_effects);
-        dbg!(correct_fee);
         return Err(PlatformError::InputsError);
       }
     }
