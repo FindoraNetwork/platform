@@ -1910,7 +1910,7 @@ mod tests {
     // Setup
     let mut ledger = LedgerState::test_ledger();
     let params = PublicParams::new();
-    let interest_rate = Fraction::new(1, 10);
+    let interest_rate = Fraction::new(1, 10); // Interest rate of 10%
     let loan_amount = 1000;
     let loan_burn_amount = 200;
     let payment_amount = calculate_fee(loan_amount, interest_rate) + loan_burn_amount;
@@ -1975,7 +1975,7 @@ mod tests {
     let mut tx = Transaction::default();
 
     let transfer_body = TransferAssetBody::new(ledger.get_prng(),
-                             vec![TxoRef::Absolute(fiat_sid), TxoRef::Absolute(debt_sid)], //maybe switch
+                             vec![TxoRef::Absolute(fiat_sid), TxoRef::Absolute(debt_sid)],
                              &[open_asset_record(&fiat_bar, &lender_key_pair.get_sk_ref()).unwrap(),
                              open_asset_record(&debt_bar, &borrower_key_pair.get_sk_ref()).unwrap()],
                                &[fiat_transfer_record, loan_transfer_record],

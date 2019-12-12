@@ -105,15 +105,24 @@ pub fn compute_debt_swap_effect(transfer: &XfrNote)
     }
   }
 
-  match (debt_input.amount, fiat_output.amount, fiat_output.asset_type, burned_debt_output.amount) {
-    (Some(initial_balance), Some(fiat_paid), Some(fiat_type), Some(debt_burned)) => {
+  match (debt_input.amount,
+         fiat_output.amount,
+         fiat_output.asset_type,
+         burned_debt_output.amount,
+         burned_debt_output.asset_type)
+  {
+    (Some(initial_balance),
+     Some(fiat_paid),
+     Some(fiat_type),
+     Some(debt_burned),
+     Some(debt_burned_type)) => {
       // Return effect
-      Ok((AssetTypeCode { val: burned_debt_output.asset_type.unwrap() }, // some or err here
+      Ok((AssetTypeCode { val: debt_burned_type },
           DebtSwapEffect { fiat_code: AssetTypeCode { val: fiat_type },
                            initial_balance,
                            fiat_paid,
                            debt_burned }))
     }
-    (_, _, _, _) => Err(PlatformError::InputsError),
+    (_, _, _, _, _) => Err(PlatformError::InputsError),
   }
 }
