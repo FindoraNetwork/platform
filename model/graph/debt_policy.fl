@@ -1,30 +1,32 @@
-bound_asset_type debt;
+bound_asset_type debt {} issued_by lender;
+
 global_param interest_rate: Fraction
   { interest_rate > 0; interest_rate < 1; };
 global_param fiat: ResourceType;
 global_param borrower: Identity;
-global_param lender: Identity;
+// global_param lender: Identity;
 global_param loan_amount: number;
 
-// What do state vars even mean?
-// state_var loan: bundle<debt>
-//   { loan.amount > 0; };
-
-init txn start_loan(out resource the_debt:  bundle<debt>,
-                    out resource the_money: bundle<fiat>,
-                    in  resource money_src: bundle<fiat>,
-) {
+txn start_loan(out resource the_debt:  debt,
+               out resource the_money: fiat,
+               in  resource money_src: fiat,
+)
+  ensures the_debt.amount == the_money.amount;
+  ensures the_debt.amount == loan_amount;
+{
   assert money_src.amount == loan_amount;
-  assert the_money.owner == borrower;
-  assert the_debt.owner == lender;
+  assert the_money.owner  == borrower;
+  assert the_debt.owner   == lender;
   transfer loan_amount of money_src -> the_money;
-  issue loan_amount of debt -> the_debt;
+  issue    loan_amount of debt      -> the_debt;
 }
 
-txn repay_loan(inout resource the_debt:    bundle<debt>,
-               in    resource payment_src: bundle<fiat>,
-               out   resource payment_dst: bundle<fiat>,
-) {
+txn repay_loan(inout resource the_debt:    debt,
+               in    resource payment_src: fiat,
+               out   resource payment_dst: fiat,
+)
+  ensures the_debt.amount <= old(the_debt.amount);
+{
   assert payment_dst.owner == lender;
   // assert payment_dst.owner == the_debt.owner;
 
@@ -33,9 +35,10 @@ txn repay_loan(inout resource the_debt:    bundle<debt>,
   assert payment_src.amount >= interest_amt;
 
   local burn_amt = payment_src.amount - interest_amt;
+  local remainder = the_debt.amount - burn_amt;
 
-  transfer burn_amt of the_debt -> BURN_ADDRESS;
-  transfer ALL of the_debt -> the_debt; // implicit?
+  transfer burn_amt  of the_debt -> BURN_ADDRESS;
+  transfer remainder of the_debt -> the_debt; // implicit?
   transfer ALL of payment_src -> payment_dst;
 }
 
