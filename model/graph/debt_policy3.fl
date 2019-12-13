@@ -3,7 +3,6 @@ bound_asset_type credit {
   param interest_rate: Fraction
     { interest_rate > 0; interest_rate < 1; };
   param interest_timestep: Time;
-  param borrower:          Identity;
   var   state:             choice {
     case Approval {
       param start_date, end_date: Date;
@@ -24,7 +23,6 @@ invariant for (c: credit) {
     case Loan { ... } {
       assert c.owner == c.lender;
     }
-    default {}
   }
 };
 
@@ -35,7 +33,6 @@ txn approve_credit(out resource the_credit: credit,
                    param interest_rate: Fraction
                      { interest_rate > 0; interest_rate < 1; },
                    param interest_timestep: Time,
-                   param borrower:          Identity,
                    param limit:             Amount,
 )
 {
@@ -56,6 +53,8 @@ txn approve_credit(out resource the_credit: credit,
       end_date = end_date;
     };
   };
+
+
   transfer ALL of issued_credit -> the_credit;
 }
 
