@@ -1,6 +1,7 @@
 #![deny(warnings)]
 pub mod append_only_merkle;
 pub mod bitmap;
+pub mod smt_map;
 mod effects;
 pub mod errors;
 pub mod logged_merkle;
