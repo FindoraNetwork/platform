@@ -33,7 +33,7 @@ use zei::api::anon_creds::{
   ACIssuerSecretKey, ACRevealSig, ACSignature, ACUserPublicKey, ACUserSecretKey,
 };
 use zei::api::conf_cred_reveal::cac_gen_encryption_keys;
-use zei::basic_crypto::elgamal::{elgamal_decrypt, ElGamalPublicKey};
+use zei::basic_crypto::elgamal::{elgamal_decrypt, elgamal_keygen, ElGamalPublicKey};
 use zei::serialization::ZeiFromToBytes;
 use zei::xfr::sig::XfrKeyPair;
 use zei::xfr::structs::{AssetIssuerPubKeys, BlindAssetRecord};
@@ -68,22 +68,12 @@ pub fn keypair_from_str(str: String) -> XfrKeyPair {
   XfrKeyPair::zei_from_bytes(&hex::decode(str).unwrap())
 }
 
-// TODO(noah): Update this to current zei
-// #[wasm_bindgen]
-// pub fn generate_elgamal_secret_key() -> JsValue {
-//   let mut small_rng = ChaChaRng::from_entropy();
-//   let sk = elgamal_generate_secret_key::<_, RistScalar>(&mut small_rng);
-//   JsValue::from_serde(&sk).unwrap()
-// }
-
-// TODO(noah): Update this to current zei
-// #[wasm_bindgen]
-// pub fn derive_elgamal_public_key(elgamal_secret_key_jsvalue: JsValue) -> Result<JsValue, JsValue> {
-//   let pc_gens = PedersenGens::default();
-//   let sk = elgamal_secret_key_jsvalue.into_serde().unwrap();
-//   let pk = elgamal_derive_public_key(&RistPoint(pc_gens.B), &sk);
-//   Ok(JsValue::from_serde(&pk).unwrap())
-// }
+#[wasm_bindgen]
+pub fn generate_elgamal_keys() -> JsValue {
+  let mut small_rng = ChaChaRng::from_entropy();
+  let pc_gens = PedersenGens::default();
+  return JsValue::from_serde(&elgamal_keygen(&mut small_rng, &RistPoint(pc_gens.B))).unwrap();
+}
 
 // Defines an asset on the ledger using the serialized strings in KeyPair and a couple of boolean policies
 #[wasm_bindgen]
@@ -178,10 +168,6 @@ pub fn issue_asset(key_pair: &XfrKeyPair,
   } else {
     let pk = serde_json::from_str::<ElGamalPublicKey<RistPoint>>(&elgamal_pub_key).map_err(|_e| JsValue::from_str("could not deserialize elgamal key"))?;
     let mut small_rng = ChaChaRng::from_entropy();
-    // let sk = elgamal_generate_secret_key::<_, BLSScalar>(&mut small_rng);
-    // // For now, zei expecs both id reveal key and tracking decryption key, so we construct a dummy
-    // // id reveal key
-    // let id_reveal_pub_key = elgamal_derive_public_key(&BLSG1::get_base(), &sk);
     let (_, id_reveal_pub_key) = cac_gen_encryption_keys(&mut small_rng);
     issuer_keys = Some(AssetIssuerPubKeys { eg_ristretto_pub_key: pk,
                                             eg_blsg1_pub_key: id_reveal_pub_key });
@@ -583,14 +569,6 @@ fn test_wasm_issue_transaction() {
   let txn = issue_asset(&keypair, String::from(""), String::from("abcd"), 1, 5);
   assert!(txn.is_ok());
 }
-
-// TODO(noah): Update this to current zei
-// #[wasm_bindgen_test]
-// fn test_elgamal_serialization() {
-//   let sk = generate_elgamal_secret_key();
-//   let pk = derive_elgamal_public_key(sk);
-//   assert!(pk.is_ok());
-// }
 
 #[wasm_bindgen_test]
 // Test to ensure that "AtLeast" requirement is checked correctly

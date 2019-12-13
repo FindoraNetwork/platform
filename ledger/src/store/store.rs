@@ -6,7 +6,7 @@ extern crate tempdir;
 
 use crate::data_model::errors::PlatformError;
 use crate::data_model::*;
-use crate::policies::{is_debt_token, DebtMemo};
+use crate::policies::{calculate_fee, DebtMemo};
 use crate::utils::sha256;
 use crate::utils::sha256::Digest as BitDigest;
 use append_only_merkle::{AppendOnlyMerkle, HashValue, Proof};
@@ -333,11 +333,7 @@ impl LedgerStatus {
     // (2) Must not be below the current asset cap
     //  - NOTE: this relies on the sequence numbers appearing in sorted
     //    order
-    // Debt issuance
-    // (3) Only one issuance per debt type is allowed. Every debt type represents it's own
-    // independent legal contract and a new loan should correspond to a new asset type.
-    // (4) Issuance must be paired with fiat transfer to borrower
-    'outer: for (code, seq_nums) in txn.new_issuance_nums.iter() {
+    for (code, seq_nums) in txn.new_issuance_nums.iter() {
       debug_assert!(txn.issuance_keys.contains_key(&code));
 
       let iss_key = txn.issuance_keys.get(&code).unwrap();
@@ -363,41 +359,11 @@ impl LedgerStatus {
           return Err(PlatformError::InputsError);
         }
       }
-
-      if is_debt_token(asset_type)
-         && !txn.new_asset_codes
-                .contains_key(&asset_type.properties.code)
-      {
-        //(3)
-        if seq_nums.len() > 1 || seq_nums.get(0) != Some(&0) {
-          return Err(PlatformError::InputsError);
-        }
-
-        let debt_memo = serde_json::from_str::<DebtMemo>(&asset_type.properties.memo.0).unwrap();
-
-        for txo in txn.txos.iter() {
-          if let Some(output) = txo {
-            // TODO (noah): figure out how to get this checked in zero-knowledge
-            if let (Some(amount), Some(fiat_type)) = (output.0.amount, output.0.asset_type) {
-              // (4) fiat has been transferred to borrower
-              if output.0.public_key == debt_memo.borrower_key
-                 && amount == debt_memo.loan_amount
-                 && fiat_type == debt_memo.fiat_code.val
-              {
-                continue 'outer;
-              }
-            }
-          }
-        }
-        // Fail if no fiat transfer found
-        return Err(PlatformError::InputsError);
-      }
     }
 
     // Debt swaps
     // (1) Fiat code must match debt asset memo
     // (2) fee must be correct
-    // (3) Payee must match lender key
     for (code, debt_swap_effects) in txn.debt_effects.iter() {
       let debt_type = &self.asset_types
                            .get(&code)
@@ -406,16 +372,12 @@ impl LedgerStatus {
                            .properties;
 
       let debt_memo = serde_json::from_str::<DebtMemo>(&debt_type.memo.0)?;
+      let correct_fee = calculate_fee(debt_swap_effects.initial_balance, debt_memo.interest_rate);
 
       // (1), (2)
       if debt_swap_effects.fiat_code != debt_memo.fiat_code
-         || debt_swap_effects.fee_percentage != debt_memo.interest_rate
+         || debt_swap_effects.fiat_paid != debt_swap_effects.debt_burned + correct_fee
       {
-        return Err(PlatformError::InputsError);
-      }
-
-      // (3)
-      if debt_swap_effects.lender_key != debt_type.issuer.key {
         return Err(PlatformError::InputsError);
       }
     }
@@ -1095,7 +1057,7 @@ pub mod helpers {
 mod tests {
   use super::helpers::*;
   use super::*;
-  use crate::policies::Fraction;
+  use crate::policies::{calculate_fee, Fraction};
   use rand::SeedableRng;
   use std::fs;
   use tempfile::tempdir;
@@ -1948,6 +1910,12 @@ mod tests {
     // Setup
     let mut ledger = LedgerState::test_ledger();
     let params = PublicParams::new();
+    let interest_rate = Fraction::new(1, 10); // Interest rate of 10%
+    let loan_amount = 1000;
+    let loan_burn_amount = 200;
+    let payment_amount = calculate_fee(loan_amount, interest_rate) + loan_burn_amount;
+    let fiat_refund = 1000;
+    let fiat_amount = payment_amount + fiat_refund;
 
     // Users
     let fiat_issuer_key_pair = XfrKeyPair::generate(&mut ledger.get_prng());
@@ -1964,14 +1932,13 @@ mod tests {
 
     // Define debt token
     let debt_code = AssetTypeCode { val: [2; 16] };
-    let debt_memo = DebtMemo { interest_rate: Fraction::new(1, 10),
+    let debt_memo = DebtMemo { interest_rate,
                                fiat_code,
-                               loan_amount: 2000,
-                               borrower_key: borrower_key_pair.get_pk_ref().clone() };
+                               loan_amount: loan_amount as u64 };
     let tx =
       create_definition_transaction(&debt_code,
-                                    lender_key_pair.get_pk_ref(),
-                                    lender_key_pair.get_sk_ref(),
+                                    borrower_key_pair.get_pk_ref(),
+                                    borrower_key_pair.get_sk_ref(),
                                     Some(Memo(serde_json::to_string(&debt_memo).unwrap()))).unwrap();
     apply_transaction(&mut ledger, tx);
 
@@ -1979,96 +1946,77 @@ mod tests {
     let tx = create_issue_and_transfer_txn(&mut ledger,
                                            &params,
                                            &fiat_code,
-                                           2000,
+                                           fiat_amount,
                                            &fiat_issuer_key_pair,
                                            lender_key_pair.get_pk_ref());
 
     let (_txn_sid, txo_sids) = apply_transaction(&mut ledger, tx);
     let fiat_sid = txo_sids[0];
 
-    // Issue and transfer debt tokens to lender
-    let mut tx = create_issue_and_transfer_txn(&mut ledger,
-                                               &params,
-                                               &debt_code,
-                                               1000,
-                                               &lender_key_pair,
-                                               lender_key_pair.get_pk_ref());
+    // Issue and transfer debt tokens to borrower
+    let tx = create_issue_and_transfer_txn(&mut ledger,
+                                           &params,
+                                           &debt_code,
+                                           loan_amount,
+                                           &borrower_key_pair,
+                                           borrower_key_pair.get_pk_ref());
+    let (_txn_sid, txo_sids) = apply_transaction(&mut ledger, tx);
+    let debt_sid = txo_sids[0];
 
-    // Add fiat transfer so that debt issuance is valid
-    let loan_transfer_record =
-      AssetRecord::new(2000, fiat_code.val, borrower_key_pair.get_pk_ref().clone()).unwrap();
+    let loan_transfer_record = AssetRecord::new(loan_amount,
+                                                debt_code.val,
+                                                lender_key_pair.get_pk_ref().clone()).unwrap();
+    let fiat_transfer_record = AssetRecord::new(fiat_amount,
+                                                fiat_code.val,
+                                                borrower_key_pair.get_pk_ref().clone()).unwrap();
     let fiat_bar = ((ledger.get_utxo(fiat_sid).unwrap().0).0).clone();
+    let debt_bar = ((ledger.get_utxo(debt_sid).unwrap().0).0).clone();
+
+    let mut tx = Transaction::default();
 
     let transfer_body = TransferAssetBody::new(ledger.get_prng(),
-                             vec![TxoRef::Absolute(fiat_sid)],
-                             &[open_asset_record(&fiat_bar, &lender_key_pair.get_sk_ref()).unwrap()],
-                               &[loan_transfer_record],
-                               &[XfrKeyPair::zei_from_bytes(&lender_key_pair.zei_to_bytes())]).unwrap();
+                             vec![TxoRef::Absolute(fiat_sid), TxoRef::Absolute(debt_sid)],
+                             &[open_asset_record(&fiat_bar, &lender_key_pair.get_sk_ref()).unwrap(),
+                             open_asset_record(&debt_bar, &borrower_key_pair.get_sk_ref()).unwrap()],
+                               &[fiat_transfer_record, loan_transfer_record],
+                               &[XfrKeyPair::zei_from_bytes(&lender_key_pair.zei_to_bytes()),
+                               XfrKeyPair::zei_from_bytes(&borrower_key_pair.zei_to_bytes())]).unwrap();
 
     tx.operations
       .push(Operation::TransferAsset(TransferAsset::new(transfer_body,
-                                                        &[&lender_key_pair],
+                                                        &[&lender_key_pair, &borrower_key_pair],
                                                         TransferType::Standard).unwrap()));
 
     let (_txn_sid, txo_sids) = apply_transaction(&mut ledger, tx);
-    let debt_sid = txo_sids[0];
-    let fiat_sid = txo_sids[1];
-
-    // Try to pay off debt without paying interest
-    let mut bad_tx = Transaction::default();
-    let null_public_key = XfrPublicKey::zei_from_bytes(&[0; 32]);
-
-    let fiat_bar = ((ledger.get_utxo(fiat_sid).unwrap().0).0).clone();
-    let debt_bar = ((ledger.get_utxo(debt_sid).unwrap().0).0).clone();
-
-    // Attempt to burn 100 debt tokens by only paying 100 fiat tokens
-    let payment_record =
-      AssetRecord::new(100, fiat_code.val, lender_key_pair.get_pk_ref().clone()).unwrap();
-    let burned_debt_record = AssetRecord::new(100, debt_code.val, null_public_key).unwrap();
-    let returned_debt_record =
-      AssetRecord::new(900, debt_code.val, lender_key_pair.get_pk_ref().clone()).unwrap();
-    let returned_fiat_record =
-      AssetRecord::new(1900, fiat_code.val, borrower_key_pair.get_pk_ref().clone()).unwrap();
-
-    let transfer_body = TransferAssetBody::new(ledger.get_prng(),
-                             vec![TxoRef::Absolute(fiat_sid), TxoRef::Absolute(debt_sid)],
-                             &[open_asset_record(&fiat_bar, &borrower_key_pair.get_sk_ref()).unwrap(),
-                               open_asset_record(&debt_bar, &lender_key_pair.get_sk_ref()).unwrap()],
-                               &[payment_record, burned_debt_record, returned_debt_record, returned_fiat_record],
-                               &[XfrKeyPair::zei_from_bytes(&borrower_key_pair.zei_to_bytes()),
-                               XfrKeyPair::zei_from_bytes(&lender_key_pair.zei_to_bytes())]).unwrap();
-
-    bad_tx.operations
-          .push(Operation::TransferAsset(TransferAsset::new(transfer_body,
-                                                            &[],
-                                                            TransferType::DebtSwap).unwrap()));
-
-    let effect = TxnEffect::compute_effect(ledger.get_prng(), bad_tx).unwrap();
-    let mut block = ledger.start_block().unwrap();
-    let result = ledger.apply_transaction(&mut block, effect);
-    assert!(result.is_err());
+    let fiat_sid = txo_sids[0];
+    let debt_sid = txo_sids[1];
 
     // Attempt to pay off debt with correct interest payment
+    let null_public_key = XfrPublicKey::zei_from_bytes(&[0; 32]);
     let mut tx = Transaction::default();
+    let mut block = ledger.start_block().unwrap();
     let fiat_bar = ((ledger.get_utxo(fiat_sid).unwrap().0).0).clone();
     let debt_bar = ((ledger.get_utxo(debt_sid).unwrap().0).0).clone();
 
-    // Attempt to burn 100 debt tokens by paying 200 fiat tokens
-    let payment_record =
-      AssetRecord::new(200, fiat_code.val, lender_key_pair.get_pk_ref().clone()).unwrap();
-    let burned_debt_record = AssetRecord::new(100, debt_code.val, null_public_key).unwrap();
-    let returned_debt_record =
-      AssetRecord::new(900, debt_code.val, lender_key_pair.get_pk_ref().clone()).unwrap();
-    let returned_fiat_record =
-      AssetRecord::new(1800, fiat_code.val, borrower_key_pair.get_pk_ref().clone()).unwrap();
+    let payment_record = AssetRecord::new(payment_amount,
+                                          fiat_code.val,
+                                          lender_key_pair.get_pk_ref().clone()).unwrap();
+    let burned_debt_record =
+      AssetRecord::new(loan_burn_amount, debt_code.val, null_public_key).unwrap();
+    let returned_debt_record = AssetRecord::new(loan_amount - loan_burn_amount,
+                                                debt_code.val,
+                                                lender_key_pair.get_pk_ref().clone()).unwrap();
+    let returned_fiat_record = AssetRecord::new(fiat_amount - payment_amount,
+                                                fiat_code.val,
+                                                borrower_key_pair.get_pk_ref().clone()).unwrap();
 
     let transfer_body = TransferAssetBody::new(ledger.get_prng(),
-                             vec![TxoRef::Absolute(fiat_sid), TxoRef::Absolute(debt_sid)],
-                             &[open_asset_record(&fiat_bar, &borrower_key_pair.get_sk_ref()).unwrap(),
-                               open_asset_record(&debt_bar, &lender_key_pair.get_sk_ref()).unwrap()],
+                             vec![TxoRef::Absolute(debt_sid), TxoRef::Absolute(fiat_sid)],
+                             &[open_asset_record(&debt_bar, &lender_key_pair.get_sk_ref()).unwrap(),
+                               open_asset_record(&fiat_bar, &borrower_key_pair.get_sk_ref()).unwrap()],
                                &[payment_record, burned_debt_record, returned_debt_record, returned_fiat_record],
-                               &[XfrKeyPair::zei_from_bytes(&borrower_key_pair.zei_to_bytes()),
-                               XfrKeyPair::zei_from_bytes(&lender_key_pair.zei_to_bytes())]).unwrap();
+                               &[XfrKeyPair::zei_from_bytes(&lender_key_pair.zei_to_bytes()),
+                               XfrKeyPair::zei_from_bytes(&borrower_key_pair.zei_to_bytes())]).unwrap();
 
     tx.operations
       .push(Operation::TransferAsset(TransferAsset::new(transfer_body,
