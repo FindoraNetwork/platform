@@ -1,7 +1,10 @@
+//! # An authenticated key value store mapping SHA-256 keys to values implemented 
+//! # as a Sparse Merkle Tree
+//!
+//!
 use std::collections::HashMap;
-
-use hex::FromHex;
-use std::string::ToString;
+use crate::utils::sha256;
+use sha256::{DIGESTBYTES};
 
 pub fn get_bit(b: &[u8; 32], index: usize) -> bool {
     b[index >> 3] & (1_u8 << (index & 7)) != 0
@@ -19,47 +22,6 @@ pub fn flip_bit(b: &mut [u8; 32], index: usize) {
     b[index >> 3] ^= 1_u8 << (index & 7);
 }
 
-// `hex` is the first a few bytes of the desired 32 bytes (the rest bytes are zeros).
-pub fn l256(hex: &str) -> [u8; 32] {
-  assert!(hex.len() % 2 == 0 && hex.len() <= 64);
-  let hex = hex.to_string() + &"0".repeat(64 - hex.len());
-  <[u8; 32]>::from_hex(&hex).unwrap()
-}
-
-// `hex` is the last a few bytes of the desired 32 bytes (the rest bytes are zeros).
-pub fn r256(hex: &str) -> [u8; 32] {
-  assert!(hex.len() % 2 == 0 && hex.len() <= 64);
-  let hex = "0".repeat(64 - hex.len()) + hex;
-  <[u8; 32]>::from_hex(&hex).unwrap()
-}
-
-
-// `hex` must be a 64-byte long hex string.
-pub fn b256(hex: &str) -> Hash256 {
-  <[u8; 32]>::from_hex(hex).unwrap()
-}
-
-pub fn max256() -> [u8; 32] {
-  b256("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")
-}
-
-fn hex_from_digit(num: u8) -> char {
-  if num < 10 {
-    (b'0' + num) as char
-  } else {
-    (b'A' + num - 10) as char
-  }
-}
-
-pub fn to_hex(blob: &[u8]) -> String {
-  let mut buf: String = String::new(); 
-  for ch in blob {
-    buf.push(hex_from_digit(ch / 16));
-    buf.push(hex_from_digit(ch % 16));
-  }
-  buf
-}
-
 pub type Key = [u8; 32];
 // pub type Value = [u8; 32];
 pub type Hash256 = [u8; 32];
@@ -69,7 +31,7 @@ lazy_static::lazy_static! {
     // The element at index `i` is the hash of a subtree with `2^i` default nodes.
     let mut hashes: [Hash256; 257] = [[0; 32]; 257];
     for i in 1..=256 {
-      hashes[i] = merge_hashes(&hashes[i-1], &hashes[i-1]);
+      hashes[i] = hash_pair(&hashes[i-1], &hashes[i-1]);
     }
     hashes
   };
@@ -183,9 +145,9 @@ impl<Value: AsRef<[u8]>> SmtMap256<Value> {
       let sibling_hash = self.get_hash(&index.sibling().unwrap());
 
       hash = if index.is_left() {
-        merge_hashes(&hash, &sibling_hash)
+        hash_pair(&hash, &sibling_hash)
       } else {
-        merge_hashes(&sibling_hash, &hash)
+        hash_pair(&sibling_hash, &hash)
       };
       index.move_up();
       self.update_hash(&index, &hash);
@@ -281,10 +243,10 @@ pub fn check_merkle_proof<Value: AsRef<[u8]>>(
     let depth = 256 - i;
     hash = if get_bit(key, depth - 1) {
       // sibling is at left
-      merge_hashes(sibling_hash, &hash)
+      hash_pair(sibling_hash, &hash)
     } else {
       // sibling is at right
-      merge_hashes(&hash, sibling_hash)
+      hash_pair(&hash, sibling_hash)
     };
   }
 
@@ -292,30 +254,68 @@ pub fn check_merkle_proof<Value: AsRef<[u8]>>(
 }
 
 fn hash_256(value: impl AsRef<[u8]>) -> Hash256 {
-  use tiny_keccak::Keccak;
-  let mut hasher = Keccak::new_keccak256();
-  hasher.update(value.as_ref());
-  let mut result: Hash256 = [0; 32];
-  hasher.finalize(&mut result);
-  result
+  sha256::hash(value.as_ref()).0
 }
 
-fn merge_hashes(left: &Hash256, right: &Hash256) -> Hash256 {
-  use tiny_keccak::Keccak;
-  let mut hasher = Keccak::new_keccak256();
-  hasher.update(&*left);
-  hasher.update(&*right);
-  let mut result: Hash256 = [0; 32];
-  hasher.finalize(&mut result);
-  result
-}
+// Compute the hash of two hashes.  This Merkle tree is a binary
+// representation, so this is a common operation.
+fn hash_pair(left: &Hash256, right: &Hash256) -> Hash256 {
+  let mut data = [0_u8; 2 * DIGESTBYTES];
 
+  data[0..DIGESTBYTES].clone_from_slice(left);
+  data[DIGESTBYTES..2 * DIGESTBYTES].clone_from_slice(right);
+
+  let digest = sha256::hash(&data);
+  digest.0
+}
 
 #[cfg(test)]
 mod tests {
   use super::*;
-  use hex::encode as hex_encode;
+  use hex::{FromHex, encode};
+  use std::string::ToString;
   use quickcheck::{quickcheck, TestResult};
+
+  // `hex` is the first a few bytes of the desired 32 bytes (the rest bytes are zeros).
+  pub fn l256(hex: &str) -> [u8; 32] {
+    assert!(hex.len() % 2 == 0 && hex.len() <= 64);
+    let hex = hex.to_string() + &"0".repeat(64 - hex.len());
+    <[u8; 32]>::from_hex(&hex).unwrap()
+  }
+
+  // `hex` is the last a few bytes of the desired 32 bytes (the rest bytes are zeros).
+  pub fn r256(hex: &str) -> [u8; 32] {
+    assert!(hex.len() % 2 == 0 && hex.len() <= 64);
+    let hex = "0".repeat(64 - hex.len()) + hex;
+    <[u8; 32]>::from_hex(&hex).unwrap()
+  }
+
+
+  // `hex` must be a 64-byte long hex string.
+  pub fn b256(hex: &str) -> Hash256 {
+    <[u8; 32]>::from_hex(hex).unwrap()
+  }
+
+  pub fn max256() -> [u8; 32] {
+    b256("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")
+  }
+
+  fn hex_from_digit(num: u8) -> char {
+    if num < 10 {
+      (b'0' + num) as char
+    } else {
+      (b'A' + num - 10) as char
+    }
+  }
+
+  pub fn to_hex(blob: &[u8]) -> String {
+    let mut buf: String = String::new(); 
+    for ch in blob {
+      buf.push(hex_from_digit(ch / 16));
+      buf.push(hex_from_digit(ch % 16));
+    }
+    buf
+  }
 
   fn mask_u8(x: u64, shift:usize) -> u8 {
     (x >> shift) as u8 & 0xffu8
@@ -344,45 +344,45 @@ mod tests {
   fn test_bit_manipulation() {
     let mut u = [0_u8; 32];
     set_bit(&mut u, 0);
-    assert_eq!(hex_encode(&u),
+    assert_eq!(encode(&u),
                "0100000000000000000000000000000000000000000000000000000000000000");
     set_bit(&mut u, 255);
-    assert_eq!(hex_encode(&u),
+    assert_eq!(encode(&u),
                "0100000000000000000000000000000000000000000000000000000000000080");
     for i in 0..256 {
       set_bit(&mut u, i);
     }
-    assert_eq!(hex_encode(&u),
+    assert_eq!(encode(&u),
                "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff");
 
     clear_bit(&mut u, 0);
-    assert_eq!(hex_encode(&u),
+    assert_eq!(encode(&u),
                "feffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff");
     clear_bit(&mut u, 255);
-    assert_eq!(hex_encode(&u),
+    assert_eq!(encode(&u),
                "feffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7f");
     clear_bit(&mut u, 126);
-    assert_eq!(hex_encode(&u),
+    assert_eq!(encode(&u),
                "feffffffffffffffffffffffffffffbfffffffffffffffffffffffffffffff7f");
     for i in 0..256 {
       clear_bit(&mut u, i);
     }
-    assert_eq!(hex_encode(&u),
+    assert_eq!(encode(&u),
                "0000000000000000000000000000000000000000000000000000000000000000");
 
     flip_bit(&mut u, 0);
-    assert_eq!(hex_encode(&u),
+    assert_eq!(encode(&u),
                "0100000000000000000000000000000000000000000000000000000000000000");
     flip_bit(&mut u, 255);
-    assert_eq!(hex_encode(&u),
+    assert_eq!(encode(&u),
                "0100000000000000000000000000000000000000000000000000000000000080");
     flip_bit(&mut u, 255);
-    assert_eq!(hex_encode(&u),
+    assert_eq!(encode(&u),
                "0100000000000000000000000000000000000000000000000000000000000000");
     for i in 0..256 {
       flip_bit(&mut u, i);
     }
-    assert_eq!(hex_encode(&u),
+    assert_eq!(encode(&u),
                "feffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff");
   }
 
@@ -495,7 +495,7 @@ mod tests {
     assert_eq!((*DEFAULT_HASHES)[0], [0; 32]);
 
     let expected_default_root_hash =
-      b256("a7ff9e28ffd3def443d324547688c2c4eb98edf7da757d6bfa22bff55b9ce24a");
+      b256("b178c245c947ea7e21ecede07728941a6ab1b706143c06873baff8ebd6de6308");
     assert_eq!((*DEFAULT_HASHES)[256], expected_default_root_hash);
 
     let mut smt = SmtMap256::new();
@@ -523,13 +523,13 @@ mod tests {
       MerkleProof {
         bitmap: l256("02"),
         hashes: vec![b256(
-          "6be4392c7e7f5a762783f200425311e8f07cfa86b2bd786c8ef7a840c2dc5b56"
+          "5031918db6776a678116ebe3352a3283f28983dbec4df0783c4988a7be461922"
         )],
       },
     );
     assert_eq!(
       *smt.merkle_root(),
-      b256("b1666beba7016c5e3d046246d8081ca0a9c26a2bd7a1aeb8b8ac5c741f696200")
+      b256("56b922abb27bf898b800264443f4b68020ee92bc7108c8365e593b64625ec373")
     );
     assert!(smt.check_merkle_proof(&key, value, &proof));
     assert!(check_merkle_proof(smt.merkle_root(), &key, value, &proof));
@@ -543,14 +543,14 @@ mod tests {
       MerkleProof {
         bitmap: b256("0200000000000000000000000000000000000000000000000000000000000080"),
         hashes: vec![
-          b256("6be4392c7e7f5a762783f200425311e8f07cfa86b2bd786c8ef7a840c2dc5b56"),
-          b256("0e7c0958e8b322a5612f450c03ff78fe9935826bb8c3907799e36c858c1c8179"),
+          b256("5031918db6776a678116ebe3352a3283f28983dbec4df0783c4988a7be461922"),
+          b256("947fe5c0ed6e7cb25966cc649d96d84305ad6a4dc2296500e3a8d47fc0b06a2e"),
         ],
       },
     );
     assert_eq!(
       *smt.merkle_root(),
-      b256("c9749ac4eff2305f7bfec92499ddbcca10209267d41bd786e3a1d6bf908b73fe")
+      b256("dd04dc389476b63529fc39586621b46e88f7da948f502e35030879f216572f64")
     );
     assert!(smt.check_merkle_proof(&key, value, &proof));
     assert!(check_merkle_proof(smt.merkle_root(), &key, value, &proof));
@@ -565,14 +565,14 @@ mod tests {
       MerkleProof {
         bitmap: b256("0200000000000000000000000000000000000000000000000000000000000080"),
         hashes: vec![
-          b256("6be4392c7e7f5a762783f200425311e8f07cfa86b2bd786c8ef7a840c2dc5b56"),
-          b256("0e7c0958e8b322a5612f450c03ff78fe9935826bb8c3907799e36c858c1c8179"),
+          b256("5031918db6776a678116ebe3352a3283f28983dbec4df0783c4988a7be461922"),
+          b256("947fe5c0ed6e7cb25966cc649d96d84305ad6a4dc2296500e3a8d47fc0b06a2e"),
         ],
       },
     );
     assert_eq!(
       *smt.merkle_root(),
-      b256("3603fac845821960d862459a5074ffd1ec5ec4fb0be98982b1922c36b5f48899")
+      b256("bf874cc83690dc37fab6b6091233df42f9f2c77810b0a1492ad6ee96c3dcfa43")
     );
 
     // Reset the value of key 0x00..00 to the default, and verify the merkle proof of `key`.
@@ -584,13 +584,13 @@ mod tests {
       MerkleProof {
         bitmap: b256("0000000000000000000000000000000000000000000000000000000000000080"),
         hashes: vec![b256(
-          "0e7c0958e8b322a5612f450c03ff78fe9935826bb8c3907799e36c858c1c8179"
+          "947fe5c0ed6e7cb25966cc649d96d84305ad6a4dc2296500e3a8d47fc0b06a2e"
         ),],
       },
     );
     assert_eq!(
       *smt.merkle_root(),
-      b256("4d15e9738affd99791768a9ab876abca8a8418387dccdd42d25b5ae9cadda833")
+      b256("305d96677c327d0d5334eba45a3f6a3f7ccf4f6af22ea7ec11ac87f09aee433e")
     );
 
     // Reset the value of the max key to the default, and verify the merkle proof of `key`.
@@ -606,7 +606,7 @@ mod tests {
     );
     assert_eq!(
       *smt.merkle_root(),
-      b256("5385035f1a791313bed3b8023f19cab1b28a30e671c4e6e26bcb566dd8a5b842")
+      b256("4395d627b48837f27903d35704292118d0dbc69b5e04c99aad3cd4ae30d41346")
     );
 
     // Reset the value of `key`, and verify that the merkle tree has been reset to the init state.
