@@ -1,0 +1,541 @@
+bound_asset_type debt {} issued_by lender;
+
+// global_params are given at policy instantiation time
+
+global_param interest_rate: Fraction
+  { interest_rate > 0; interest_rate < 1; };
+global_param fiat: ResourceType;
+global_param borrower: Identity;
+// global_param lender: Identity;
+global_param loan_amount: Amount;
+
+txn start_loan(out resource the_debt:  debt,
+               out resource the_money: fiat,
+               in  resource money_src: fiat,
+)
+  ensures the_debt.amount == the_money.amount;
+  ensures the_debt.amount == loan_amount;
+{
+  require_signature borrower;
+  require_signature lender;
+
+  assert money_src.amount == loan_amount;
+  assert the_money.owner  == borrower;
+  assert the_debt.owner   == lender;
+  transfer loan_amount of money_src -> the_money;
+  issue    loan_amount of debt      -> the_debt;
+}
+
+txn repay_loan(inout resource the_debt:    debt,
+               in    resource payment_src: fiat,
+               out   resource payment_dst: fiat,
+)
+  ensures the_debt.amount <= old(the_debt.amount);
+{
+  // assert payment_dst.owner == lender;
+  assert payment_dst.owner == the_debt.owner;
+
+  // TODO: time?
+  local interest_amt = round(the_debt.amount * interest_rate);
+  assert payment_src.amount >= interest_amt;
+
+  local burn_amt = payment_src.amount - interest_amt; // Amount
+  local remainder = the_debt.amount - burn_amt;
+
+  transfer burn_amt  of the_debt -> BURN_ADDRESS;
+  transfer remainder of the_debt -> the_debt; // implicit?
+  transfer ALL of payment_src -> payment_dst;
+}
+
+======================================================================
+explicit init check
+======================================================================
+
+bound_asset_type debt {} issued_by lender;
+
+// global_params are given at policy instantiation time
+
+global_param interest_rate: Fraction
+  { interest_rate > 0; interest_rate < 1; };
+global_param fiat: ResourceType;
+global_param borrower: Identity;
+global_param loan_amount: Amount;
+
+init_check()
+{
+}
+
+
+txn start_loan(out resource the_debt:  debt,
+               out resource the_money: fiat,
+               in  resource money_src: fiat,
+)
+  ensures the_debt.amount == the_money.amount;
+  ensures the_debt.amount == loan_amount;
+{
+  require_signature borrower;
+  require_signature lender;
+
+  assert money_src.amount == loan_amount;
+  assert the_money.owner  == borrower;
+  assert the_debt.owner   == lender;
+  transfer loan_amount of money_src -> the_money;
+  issue    loan_amount of debt      -> the_debt;
+}
+
+txn repay_loan(inout resource the_debt:    debt,
+               in    resource payment_src: fiat,
+               out   resource payment_dst: fiat,
+)
+  ensures the_debt.amount <= old(the_debt.amount);
+{
+  // assert payment_dst.owner == lender;
+  assert payment_dst.owner == the_debt.owner;
+
+  // TODO: time?
+  local interest_amt = round(the_debt.amount * interest_rate);
+  assert payment_src.amount >= interest_amt;
+
+  local burn_amt = payment_src.amount - interest_amt; // Amount
+  local remainder = the_debt.amount - burn_amt;
+
+  transfer burn_amt  of the_debt -> BURN_ADDRESS;
+  transfer remainder of the_debt -> the_debt; // implicit?
+  transfer ALL of payment_src -> payment_dst;
+}
+
+======================================================================
+explicit asserts
+======================================================================
+
+bound_asset_type debt {} issued_by lender;
+
+global_param interest_rate: Fraction;
+global_param fiat: ResourceType;
+global_param borrower: Identity;
+global_param loan_amount: Amount;
+
+init_check()
+{
+  assert interest_rate > 0;
+  assert interest_rate < 1;
+}
+
+
+txn start_loan(out resource the_debt:  debt,
+               out resource the_money: fiat,
+               in  resource money_src: fiat,
+)
+{
+  require_signature borrower;
+  require_signature lender;
+
+  assert money_src.amount == loan_amount;
+  assert the_money.owner  == borrower;
+  assert the_debt.owner   == lender;
+
+  assert loan_amount >= 0;
+  assert loan_amount <= money_src.amount;
+  transfer loan_amount of money_src -> the_money;
+  assert loan_amount >= 0;
+  issue    loan_amount of debt      -> the_debt;
+
+  assert the_debt.amount == the_money.amount;
+  assert the_debt.amount == loan_amount;
+  assert money_src.amount == 0;
+}
+
+txn repay_loan(inout resource the_debt:    debt,
+               in    resource payment_src: fiat,
+               out   resource payment_dst: fiat,
+)
+{
+  assert payment_dst.owner == the_debt.owner;
+
+  local interest_amt = round(the_debt.amount * interest_rate);
+  assert payment_src.amount >= interest_amt;
+
+  local burn_amt = payment_src.amount - interest_amt;
+  local remainder = the_debt.amount - burn_amt;
+
+  assert burn_amt >= 0;
+  assert burn_amt <= the_debt.amount;
+  transfer burn_amt  of the_debt -> BURN_ADDRESS;
+  assert remainder >= 0;
+  assert remainder <= the_debt.amount;
+  transfer remainder of the_debt -> the_debt;
+  transfer ALL of payment_src -> payment_dst;
+
+  assert the_debt.amount <= old(the_debt.amount);
+  assert in(the_debt).amount == 0; // hrm...
+  assert payment_src.amount == 0;
+}
+
+======================================================================
+expression substitution
+======================================================================
+
+bound_asset_type debt {} issued_by lender;
+
+global_param interest_rate: Fraction;
+global_param fiat: ResourceType;
+global_param borrower: Identity;
+global_param loan_amount: Amount;
+
+init_check()
+{
+  assert interest_rate > 0;
+  assert interest_rate < 1;
+}
+
+
+txn start_loan(out resource the_debt:  debt,
+               out resource the_money: fiat,
+               in  resource money_src: fiat,
+)
+{
+  require_signature borrower;
+  require_signature lender;
+
+  assert money_src.amount == loan_amount;
+  assert the_money.owner  == borrower;
+  assert the_debt.owner   == lender;
+  transfer loan_amount of money_src -> the_money;
+  issue    loan_amount of debt      -> the_debt;
+
+  assert new(the_debt.amount) == new(the_money.amount);
+  assert new(the_debt.amount) == loan_amount;
+  assert old(money_src.amount)-loan_amount == 0;
+}
+
+txn repay_loan(inout resource the_debt:    debt,
+               in    resource payment_src: fiat,
+               out   resource payment_dst: fiat,
+)
+{
+  assert payment_dst.owner == the_debt.owner;
+
+  // local interest_amt = round(old(the_debt.amount) * interest_rate);
+  assert payment_src.amount >= round(old(the_debt.amount) * interest_rate);
+
+  // local burn_amt = payment_src.amount - round(old(the_debt.amount) * interest_rate);
+  // local remainder = old(the_debt.amount) - (payment_src.amount - round(old(the_debt.amount) * interest_rate));
+  // assert remainder: Amount ?
+
+  assert payment_src.amount - round(old(the_debt.amount) * interest_rate) >= 0;
+  assert payment_src.amount - round(old(the_debt.amount) * interest_rate) <= old(the_debt.amount);
+  transfer (payment_src.amount
+            - round(old(the_debt.amount) * interest_rate))
+          of the_debt -> BURN_ADDRESS;
+
+  assert old(the_debt.amount) - (payment_src.amount - round(old(the_debt.amount) * interest_rate)) >= 0;
+  assert old(the_debt.amount) - (payment_src.amount - round(old(the_debt.amount) * interest_rate)) <= old(the_debt.amount);
+  transfer (old(the_debt.amount)
+            - (payment_src.amount - round(old(the_debt.amount) * interest_rate)))
+           of the_debt -> the_debt;
+  // timestamp these reads?
+  transfer old(payment_src.amount) of payment_src -> payment_dst;
+
+  assert new(the_debt.amount) <= old(the_debt.amount);
+  assert old(the_debt.amount)
+          - ((new(payment_src.amount)
+             - round(old(the_debt.amount) * interest_rate))
+             + (old(the_debt.amount)
+                - (old(payment_src.amount)
+                   - round(old(the_debt.amount) * interest_rate))
+               )
+            ) == 0;
+  assert new(payment_src.amount) == 0;
+}
+
+======================================================================
+type desugar
+======================================================================
+
+bound_asset_type debt {} issued_by lender;
+
+global_param interest_rate: Fraction;
+global_param fiat: ResourceType;
+global_param borrower: Identity;
+global_param loan_amount: Amount;
+
+init_check()
+{
+  // type declarations for bound_asset_type?
+  assert valid_ResourceType(debt);
+  // assert debt.policy == THIS_POLICY;
+  assert valid_Identity(lender);
+  assert debt.issuer == lender;
+
+  // Maybe these are truly implicit?
+  assert valid_Fraction(interest_rate);
+  assert valid_ResourceType(fiat);
+  assert valid_Identity(borrower);
+  assert valid_Amount(loan_amount);
+
+  assert interest_rate > 0;
+  assert interest_rate < 1;
+}
+
+
+txn start_loan(out resource the_debt,
+               out resource the_money,
+               in  resource money_src,
+)
+{
+  assert the_debt.asset_type == debt;
+  assert the_money.asset_type == fiat;
+  assert money_src.asset_type == fiat;
+
+  require_signature borrower;
+  require_signature lender;
+
+  assert money_src.amount == loan_amount;
+  assert the_money.owner  == borrower;
+  assert the_debt.owner   == lender;
+  transfer loan_amount of money_src -> the_money;
+  issue    loan_amount of debt      -> the_debt;
+
+  assert new(the_debt.amount) == new(the_money.amount);
+  assert new(the_debt.amount) == loan_amount;
+  assert old(money_src.amount)-loan_amount == 0;
+}
+
+txn repay_loan(inout resource the_debt,
+               in    resource payment_src,
+               out   resource payment_dst,
+)
+{
+  assert the_debt.asset_type == debt;
+  assert payment_src.asset_type == fiat;
+  assert payment_dst.asset_type == fiat;
+
+  assert payment_dst.owner == the_debt.owner;
+
+  assert payment_src.amount >= round(old(the_debt.amount) * interest_rate);
+
+  assert payment_src.amount - round(old(the_debt.amount) * interest_rate) >= 0;
+  assert payment_src.amount - round(old(the_debt.amount) * interest_rate) <= old(the_debt.amount);
+  transfer (payment_src.amount
+            - round(old(the_debt.amount) * interest_rate))
+          of the_debt -> BURN_ADDRESS;
+
+  assert old(the_debt.amount) - (payment_src.amount - round(old(the_debt.amount) * interest_rate)) >= 0;
+  assert old(the_debt.amount) - (payment_src.amount - round(old(the_debt.amount) * interest_rate)) <= old(the_debt.amount);
+  transfer (old(the_debt.amount)
+            - (payment_src.amount - round(old(the_debt.amount) * interest_rate)))
+           of the_debt -> the_debt;
+  // timestamp these reads?
+  transfer old(payment_src.amount) of payment_src -> payment_dst;
+
+  assert new(the_debt.amount) <= old(the_debt.amount);
+  assert old(the_debt.amount)
+          - ((new(payment_src.amount)
+             - round(old(the_debt.amount) * interest_rate))
+             + (old(the_debt.amount)
+                - (old(payment_src.amount)
+                   - round(old(the_debt.amount) * interest_rate))
+               )
+            ) == 0;
+  assert new(payment_src.amount) == 0;
+}
+
+======================================================================
+inout desugar
+======================================================================
+
+bound_asset_type debt {} issued_by lender;
+
+global_param interest_rate: Fraction;
+global_param fiat: ResourceType;
+global_param borrower: Identity;
+global_param loan_amount: Amount;
+
+init_check()
+{
+  // type declarations for bound_asset_type?
+  assert valid_ResourceType(debt);
+  // assert debt.policy == THIS_POLICY;
+  assert valid_Identity(lender);
+  assert debt.issuer == lender;
+
+  // Maybe these are truly implicit?
+  assert valid_Fraction(interest_rate);
+  assert valid_ResourceType(fiat);
+  assert valid_Identity(borrower);
+  assert valid_Amount(loan_amount);
+
+  assert interest_rate > 0;
+  assert interest_rate < 1;
+}
+
+
+txn start_loan(out resource the_debt,
+               out resource the_money,
+               in  resource money_src,
+)
+{
+  assert the_debt.asset_type == debt;
+  assert the_money.asset_type == fiat;
+  assert money_src.asset_type == fiat;
+
+  require_signature borrower;
+  require_signature lender;
+
+  assert money_src.amount == loan_amount;
+  assert the_money.owner  == borrower;
+  assert the_debt.owner   == lender;
+  transfer loan_amount of money_src -> the_money;
+  issue    loan_amount of debt      -> the_debt;
+
+  assert new(the_debt.amount) == new(the_money.amount);
+  assert new(the_debt.amount) == loan_amount;
+  assert old(money_src.amount)-loan_amount == 0;
+}
+
+txn repay_loan(in    resource the_debt_in,
+                 out resource the_debt_out,
+               in    resource payment_src,
+               out   resource payment_dst,
+)
+{
+  assert the_debt.asset_type == debt;
+  assert payment_src.asset_type == fiat;
+  assert payment_dst.asset_type == fiat;
+
+  assert payment_dst.owner == the_debt.owner;
+
+  assert payment_src.amount >= round(old(the_debt.amount) * interest_rate);
+
+  assert payment_src.amount - round(old(the_debt.amount) * interest_rate) >= 0;
+  assert payment_src.amount - round(old(the_debt.amount) * interest_rate) <= old(the_debt.amount);
+  transfer (payment_src.amount
+            - round(old(the_debt.amount) * interest_rate))
+          of the_debt_in -> BURN_ADDRESS;
+
+  assert old(the_debt.amount) - (payment_src.amount - round(old(the_debt.amount) * interest_rate)) >= 0;
+  assert old(the_debt.amount) - (payment_src.amount - round(old(the_debt.amount) * interest_rate)) <= old(the_debt.amount);
+  transfer (old(the_debt.amount)
+            - (payment_src.amount - round(old(the_debt.amount) * interest_rate)))
+           of the_debt_in -> the_debt_out;
+  // timestamp these reads?
+  transfer old(payment_src.amount) of payment_src -> payment_dst;
+
+  assert new(the_debt.amount) <= old(the_debt.amount);
+  assert old(the_debt.amount)
+          - ((new(payment_src.amount)
+             - round(old(the_debt.amount) * interest_rate))
+             + (old(the_debt.amount)
+                - (old(payment_src.amount)
+                   - round(old(the_debt.amount) * interest_rate))
+               )
+            ) == 0;
+  assert new(payment_src.amount) == 0;
+}
+
+======================================================================
+patternize
+======================================================================
+
+bound_asset_type debt {} issued_by lender;
+
+global_param interest_rate: Fraction;
+global_param fiat: ResourceType;
+global_param borrower: Identity;
+global_param loan_amount: Amount;
+
+init_check()
+{
+  // type declarations for bound_asset_type?
+  assert valid_ResourceType(debt);
+  // assert debt.policy == THIS_POLICY;
+  assert valid_Identity(lender);
+  assert debt.issuer == lender;
+
+  // Maybe these are truly implicit?
+  assert valid_Fraction(interest_rate);
+  assert valid_ResourceType(fiat);
+  assert valid_Identity(borrower);
+  assert valid_Amount(loan_amount);
+
+  assert interest_rate > 0;
+  assert interest_rate < 1;
+}
+
+txn start_loan(out resource the_debt,
+               out resource the_money,
+               in  resource money_src,
+)
+{
+  assert the_debt.asset_type == debt;
+  assert the_money.asset_type == fiat;
+  assert money_src.asset_type == fiat;
+
+  require_signature borrower;
+  require_signature lender;
+
+  assert money_src.amount == loan_amount;
+  assert the_money.owner  == borrower;
+  assert the_debt.owner   == lender;
+
+  expect {
+    transfer ?trn_amount of ?trn_src -> ?trn_dst;
+    issue    ?iss_amount of ?iss_type -> ?iss_dst;
+  }
+
+  assert trn_amount == loan_amount;
+  assert trn_src == money_src;
+  assert trn_dst == the_money;
+
+  assert iss_amount == loan_amount;
+  assert iss_type == debt;
+  assert iss_dst == the_debt;
+
+  // Is this transformation reasonable?
+  // assert new(the_debt.amount) == new(the_money.amount);
+  assert iss_amount == trn_amount;
+  // assert new(the_debt.amount) == loan_amount;
+  assert iss_amount == loan_amount;
+  assert money_src.amount-loan_amount == 0;
+}
+
+txn repay_loan(in    resource the_debt_in,
+                 out resource the_debt_out,
+               in    resource payment_src,
+               out   resource payment_dst,
+)
+{
+  assert the_debt.asset_type == debt;
+  assert payment_src.asset_type == fiat;
+  assert payment_dst.asset_type == fiat;
+
+  assert payment_dst.owner == the_debt.owner;
+
+  assert payment_src.amount >= round(old(the_debt.amount) * interest_rate);
+
+  assert payment_src.amount - round(old(the_debt.amount) * interest_rate) >= 0;
+  assert payment_src.amount - round(old(the_debt.amount) * interest_rate) <= old(the_debt.amount);
+  transfer (payment_src.amount
+            - round(old(the_debt.amount) * interest_rate))
+          of the_debt_in -> BURN_ADDRESS;
+
+  assert old(the_debt.amount) - (payment_src.amount - round(old(the_debt.amount) * interest_rate)) >= 0;
+  assert old(the_debt.amount) - (payment_src.amount - round(old(the_debt.amount) * interest_rate)) <= old(the_debt.amount);
+  transfer (old(the_debt.amount)
+            - (payment_src.amount - round(old(the_debt.amount) * interest_rate)))
+           of the_debt_in -> the_debt_out;
+  // timestamp these reads?
+  transfer old(payment_src.amount) of payment_src -> payment_dst;
+
+  assert new(the_debt.amount) <= old(the_debt.amount);
+  assert old(the_debt.amount)
+          - ((new(payment_src.amount)
+             - round(old(the_debt.amount) * interest_rate))
+             + (old(the_debt.amount)
+                - (old(payment_src.amount)
+                   - round(old(the_debt.amount) * interest_rate))
+               )
+            ) == 0;
+  assert new(payment_src.amount) == 0;
+}
+

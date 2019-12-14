@@ -72,7 +72,7 @@ pub fn keypair_from_str(str: String) -> XfrKeyPair {
 pub fn generate_elgamal_keys() -> JsValue {
   let mut small_rng = ChaChaRng::from_entropy();
   let pc_gens = PedersenGens::default();
-  return JsValue::from_serde(&elgamal_keygen(&mut small_rng, &RistPoint(pc_gens.B))).unwrap();
+  JsValue::from_serde(&elgamal_keygen(&mut small_rng, &RistPoint(pc_gens.B))).unwrap()
 }
 
 // Defines an asset on the ledger using the serialized strings in KeyPair and a couple of boolean policies
