@@ -12,8 +12,9 @@ import           Data.Maybe (maybeToList,fromMaybe)
 import           Control.Applicative ((<$>),(<*>),(*>))
 import           Control.Monad (join, filterM)
 import           System.Directory (getCurrentDirectory, getDirectoryContents, doesFileExist)
-import           System.IO (hGetContents,openFile,IOMode(..),hFlush,stdout)
+import           System.IO (hGetContents,openFile,IOMode(..),hFlush,stdout,stdin)
 import           System.FilePath.Posix (takeBaseName)
+import qualified Text.PrettyPrint.Annotated as PP
 
 alloyish = P.makeTokenParser $ javaStyle
   { P.reservedNames = [ "sig", "abstract", "extends"
@@ -26,53 +27,324 @@ alloyish = P.makeTokenParser $ javaStyle
   , P.caseSensitive = True
   }
 
--- policy_lang = P.makeTokenParser $ javaStyle
---   { P.reservedNames = [ "const", "global_param", "global_state"
---                     , "local", "param", "resource", "credential"
---                     , "record", "choice", "asset", "property", "txn"
---                     , "fraction", "number"
---                     ]
---   , P.caseSensitive = True
---   }
+policy_lang = P.makeTokenParser $ javaStyle
+  { P.reservedNames = [ "param", "global_param", "local", "resource",
+                        "credential", "in", "out", "inout" ,
+                        "bound_asset_type", "issued_by", "asset",
+                        "txn", "assert", "ensures", "require",
+                        "require_signature",
+                        "of", "old", "new", "round",
+                        "transfer", "issue",
+                        "Fraction", "Amount", "Identity", "ResourceType",
+                        "ALL", "BURN_ADDRESS", "owner", "amount",
+                        "true", "false"
+                      ]
+  , P.reservedOpNames = [ "->", "*", "+", "-", "==", ">=", "<=", "<",
+                          ">", ":", "&&", "||"
+                        ]
+  , P.caseSensitive = True
+  }
 
--- data DataType
---   = Choice   (Maybe Text) [(Text,DataType)]
---   | Record   (Maybe Text) [(Text,DataType)]
---   | Number
---   | Fraction
---   | NamedType Text
---   deriving (Eq,Show,Read)
+polReserved = P.reserved policy_lang
+polId = P.identifier policy_lang
+polOp = P.reservedOp policy_lang
+polBop op parseExpr = do
+  e1 <- parseExpr
+  polOp op
+  e2 <- parseExpr
+  return (e1,e2)
 
--- data NormedDataType
---   = NormedChoice   (Maybe Text) [(Text,NormedDataType)]
---   | NormedRecord   (Maybe Text) [(Text,NormedDataType)]
---   | NormedNumber
---   | NormedFraction
---   deriving (Eq,Show,Read)
+data BoundAssetTypeStmt = BoundAssetTypeStmt { _batsType :: T.Text, _batsIssuer :: T.Text }
+  deriving (Eq,Show,Read)
 
--- newtype UnitId = UnitId Integer
---   deriving (Eq,Show,Read)
+parseBats = do
+  polReserved "bound_asset_type"
+  tp <- polId
+  P.braces policy_lang (return ())
+  polReserved "issued_by"
+  issuer <- polId
+  P.semi policy_lang
+  return $ BoundAssetTypeStmt (T.pack tp) (T.pack issuer)
 
--- data ResourceType = BaseUnit UnitId
---                   | Compound [(Text,ResourceType)]
---   deriving (Eq,Show,Read)
+pprintBats (BoundAssetTypeStmt tp iss) = PP.hsep
+  [ PP.text "bound_asset_type"
+  , PP.text (T.unpack tp)
+  , PP.braces PP.empty
+  , PP.text "issued_by"
+  , PP.text (T.unpack iss)
+  ]
 
--- data PolicyProgram = PolicyProgram
---   { constants     :: M.Map Text (DataType, Value)
---   , globalparams  :: M.Map Text DataType
---   , globalstate   :: M.Map Text DataTypDatae
---   , datatypes     :: M.Map Text DataType
---   , resourcetypes :: M.Map Text ResourceType
---   , properties    :: M.Map Text (Map Text DataType, [PolicyExpr])
---   , txns          :: M.Map Text (Map Text ParamDescr, PolicyStmt)
---   }
+data DataType = FractionType
+              | ResourceTypeType
+              | IdentityType
+              | AmountType
+  deriving (Eq,Show,Read)
 
--- parseDataType = (
---   (P.try $ do
-    
---   )
-  
+parseDataType
+  = foldl1 (\x y -> P.try x P.<|> y) $
+  [ const FractionType <$> polReserved "Fraction"
+  , const ResourceTypeType <$> polReserved "ResourceType"
+  , const IdentityType <$> polReserved "Identity"
+  , const AmountType <$> polReserved "Amount"
+  ]
 
+pprintDataType FractionType = PP.text "Fraction"
+pprintDataType ResourceTypeType = PP.text "ResourceType"
+pprintDataType IdentityType = PP.text "Identity"
+pprintDataType AmountType = PP.text "Amount"
+
+data ArithExpr = ConstAmountExpr   Integer
+               | ConstFractionExpr Rational
+               | PlusExpr  ArithExpr ArithExpr
+               | MinusExpr ArithExpr ArithExpr
+               | TimesExpr ArithExpr ArithExpr
+               | RoundExpr ArithExpr
+               | OldExpr ArithExpr
+               | AllExpr
+               | ArithVar  T.Text
+               | AmountField T.Text
+               | OwnerField T.Text -- TODO: This isn't arithmetic!
+  deriving (Eq,Show,Read)
+
+parseSimpleArithExpr
+  = foldl1 (\x y -> P.try x P.<|> y) $
+  [ ConstAmountExpr <$> P.decimal policy_lang
+  , ConstFractionExpr . toRational <$> P.float policy_lang-- TODO: don't go through float maybe?
+  , AmountField . T.pack <$> (polId <* (polOp "." >> polReserved "amount"))
+  , OwnerField  . T.pack <$> (polId <* (polOp "." >> polReserved "owner"))
+  , ArithVar    . T.pack <$> polId
+  , RoundExpr <$> (polReserved "round" >> P.parens policy_lang parseArithExpr)
+  , OldExpr <$> (polReserved "old" >> P.parens policy_lang parseArithExpr)
+  , const AllExpr <$> (polReserved "ALL")
+  , P.parens policy_lang parseArithExpr
+  ]
+
+parseArithExpr
+  = foldl1 (\x y -> P.try x P.<|> y) $
+  [ uncurry PlusExpr <$> polBop "+" parseSimpleArithExpr
+  , uncurry MinusExpr <$> polBop "-" parseSimpleArithExpr
+  , uncurry TimesExpr <$> polBop "*" parseSimpleArithExpr
+  , parseSimpleArithExpr
+  ]
+
+pprintArithExpr (ConstAmountExpr i) = PP.integer i
+pprintArithExpr (ConstFractionExpr f) = PP.double $ fromRational f
+pprintArithExpr (AllExpr) = PP.text "ALL"
+pprintArithExpr (ArithVar v) = PP.text $ T.unpack v
+pprintArithExpr (AmountField v) = (PP.text $ T.unpack v) PP.<> PP.text ".amount"
+pprintArithExpr (OwnerField v) = (PP.text $ T.unpack v) PP.<> PP.text ".owner"
+pprintArithExpr (OldExpr e) = PP.text "old" PP.<> PP.parens (pprintArithExpr e)
+pprintArithExpr (RoundExpr e) = PP.text "round" PP.<> PP.parens (pprintArithExpr e)
+pprintArithExpr (PlusExpr l r) = PP.parens (pprintArithExpr l) PP.<+> PP.text "+" PP.<+> PP.parens (pprintArithExpr r)
+pprintArithExpr (TimesExpr l r) = PP.parens (pprintArithExpr l) PP.<+> PP.text "*" PP.<+> PP.parens (pprintArithExpr r)
+pprintArithExpr (MinusExpr l r) = PP.parens (pprintArithExpr l) PP.<+> PP.text "-" PP.<+> PP.parens (pprintArithExpr r)
+
+data BoolExpr = TrueExpr
+              | FalseExpr
+              | NotExpr (BoolExpr)
+              | AndExpr (BoolExpr) (BoolExpr)
+              | OrExpr  (BoolExpr) (BoolExpr)
+              | EqExpr (ArithExpr) (ArithExpr)
+              | GtExpr (ArithExpr) (ArithExpr)
+              | GeExpr (ArithExpr) (ArithExpr)
+              | LtExpr (ArithExpr) (ArithExpr)
+              | LeExpr (ArithExpr) (ArithExpr)
+  deriving (Eq,Show,Read)
+
+parseSimpleBoolExpr
+  = foldl1 (\x y -> P.try x P.<|> y) $
+  [ const TrueExpr <$> polReserved "true"
+  , const FalseExpr <$> polReserved "false"
+  , NotExpr <$> (polOp "!" >> parseSimpleBoolExpr)
+  , uncurry EqExpr <$> polBop "==" parseSimpleArithExpr
+  , uncurry GtExpr <$> polBop ">"  parseSimpleArithExpr
+  , uncurry GeExpr <$> polBop ">=" parseSimpleArithExpr
+  , uncurry LtExpr <$> polBop "<"  parseSimpleArithExpr
+  , uncurry LeExpr <$> polBop "<=" parseSimpleArithExpr
+  ]
+
+parseBoolExpr
+  = foldl1 (\x y -> P.try x P.<|> y) $
+  [ uncurry AndExpr <$> polBop "&&" parseSimpleBoolExpr
+  , uncurry OrExpr <$> polBop "||" parseSimpleBoolExpr
+  , parseSimpleBoolExpr
+  ]
+
+pprintBoolExpr (TrueExpr) = PP.text "true"
+pprintBoolExpr (FalseExpr) = PP.text "false"
+pprintBoolExpr (NotExpr e) = PP.text "!" PP.<> PP.parens (pprintBoolExpr e)
+pprintBoolExpr (AndExpr l r) = PP.parens (pprintBoolExpr l)  PP.<+> PP.text "&&" PP.<+> PP.parens (pprintBoolExpr r)
+pprintBoolExpr (OrExpr l r)  = PP.parens (pprintBoolExpr l)  PP.<+> PP.text "||" PP.<+> PP.parens (pprintBoolExpr r)
+pprintBoolExpr (EqExpr l r)  = PP.parens (pprintArithExpr l) PP.<+> PP.text "==" PP.<+> PP.parens (pprintArithExpr r)
+pprintBoolExpr (GtExpr l r)  = PP.parens (pprintArithExpr l) PP.<+> PP.text ">"  PP.<+> PP.parens (pprintArithExpr r)
+pprintBoolExpr (GeExpr l r)  = PP.parens (pprintArithExpr l) PP.<+> PP.text ">=" PP.<+> PP.parens (pprintArithExpr r)
+pprintBoolExpr (LtExpr l r)  = PP.parens (pprintArithExpr l) PP.<+> PP.text "<"  PP.<+> PP.parens (pprintArithExpr r)
+pprintBoolExpr (LeExpr l r)  = PP.parens (pprintArithExpr l) PP.<+> PP.text "<=" PP.<+> PP.parens (pprintArithExpr r)
+
+data GlobalParamDecl = GlobalParamDecl
+  { _gparamName :: T.Text, _gparamType :: DataType
+  , _gparamInvs :: [BoolExpr] }
+  deriving (Eq,Show,Read)
+
+parseGParamDecl = do
+  polReserved "global_param"
+  varname <- polId
+  polOp ":"
+  vartype <- parseDataType
+  invs <- ((fromMaybe [] <$>) $ P.optionMaybe $ P.braces policy_lang
+                              $ parseBoolExpr `P.endBy` P.semi policy_lang
+          )
+  return $ GlobalParamDecl (T.pack varname) vartype invs
+
+pprintGParamDecl (GlobalParamDecl name tp invs) =
+  ((PP.text "global_param" PP.<+> PP.text (T.unpack name) PP.<> PP.text ":"
+                          PP.<+> pprintDataType tp)
+   PP.$+$ (PP.nest 4 $ PP.braces $ PP.vcat
+                     $ map (\x -> pprintBoolExpr x PP.<> PP.semi) invs
+          )
+  )
+
+-- Currently resources only
+data TxnParamDecl = TxnParamDecl
+  { _txnparamIn :: Bool, _txnparamOut :: Bool
+  , _txnparamName :: T.Text, _txnparamType :: T.Text }
+  deriving (Eq,Show,Read)
+
+parseTxnParamDecl = do
+  (isIn,isOut) <- P.choice [P.try (polReserved "in"    >> return (True,False))
+                           ,P.try (polReserved "out"   >> return (False,True))
+                           ,(polReserved "inout" >> return (True,True))
+                           ]
+  polReserved "resource"
+  paramname <- polId
+  polOp ":"
+  paramtype <- polId
+  return $ TxnParamDecl isIn isOut (T.pack paramname) (T.pack paramtype)
+
+pprintTxnParamDecl (TxnParamDecl isIn isOut name tp)
+  = PP.hsep [ (if isIn then PP.text "in" else PP.empty)
+              PP.<> (if isOut then PP.text "out" else PP.empty)
+            , PP.text "resource"
+            , (PP.text $ T.unpack name) PP.<> PP.colon
+            , PP.text $ T.unpack tp
+            ]
+
+data TxnStmt = AssertStmt BoolExpr
+             | RequireSignatureStmt T.Text
+             | LocalStmt T.Text ArithExpr -- TODO: Currently only arithmetic locals
+             | IssueStmt ArithExpr T.Text T.Text -- amount of asset-type to resource
+             -- amount from resource1 to resource2 (Nothing => burn address)
+             | TransferStmt ArithExpr T.Text (Maybe T.Text)
+  deriving (Eq,Show,Read)
+
+parseTxnStmt
+  = foldl1 (\x y -> P.try x P.<|> y) $
+  [ AssertStmt <$> (polReserved "assert" >> parseBoolExpr)
+  , RequireSignatureStmt . T.pack <$> (polReserved "require_signature" >> polId)
+  , do
+      polReserved "local"
+      name <- polId
+      polOp "="
+      expr <- parseArithExpr
+      return $ LocalStmt (T.pack name) expr
+  , do
+      polReserved "issue"
+      amt <- parseSimpleArithExpr
+      polReserved "of"
+      asset_type <- polId
+      polOp "->"
+      dst <- polId
+      return $ IssueStmt amt (T.pack asset_type) (T.pack dst)
+  , do
+      polReserved "transfer"
+      amt <- parseSimpleArithExpr
+      polReserved "of"
+      src <- polId
+      polOp "->"
+      dst <- P.choice [polReserved "BURN_ADDRESS" >> return Nothing, Just <$> polId]
+      return $ TransferStmt amt (T.pack src) (T.pack <$> dst)
+  ]
+
+pprintTxnStmt (AssertStmt be) = PP.text "assert" PP.<+> pprintBoolExpr be
+pprintTxnStmt (RequireSignatureStmt name) = PP.text "require_signature" PP.<+> PP.text (T.unpack name)
+pprintTxnStmt (LocalStmt varname aexp) = PP.hsep
+  [ PP.text "local"
+  , PP.text (T.unpack varname)
+  , PP.text "="
+  , pprintArithExpr aexp
+  ]
+pprintTxnStmt (IssueStmt amt tp dst) = PP.hsep
+  [ PP.text "issue"
+  , PP.parens $ pprintArithExpr amt
+  , PP.text "of"
+  , PP.text $ T.unpack tp
+  , PP.text "->"
+  , PP.text $ T.unpack dst
+  ]
+pprintTxnStmt (TransferStmt amt src dst) = PP.hsep
+  [ PP.text "transfer"
+  , PP.parens $ pprintArithExpr amt
+  , PP.text "of"
+  , PP.text $ T.unpack src
+  , PP.text "->"
+  , PP.text $ fromMaybe "BURN_ADDRESS" $ T.unpack <$> dst
+  ]
+
+data TxnDecl = TxnDecl
+  { _txnName :: T.Text, _txnParams :: [TxnParamDecl], _txnRequires :: [BoolExpr]
+  , _txnEnsures :: [BoolExpr], _txnBody :: [TxnStmt] }
+  deriving (Eq,Show,Read)
+
+parseTxnDecl = do
+  polReserved "txn"
+  name <- polId
+  params <- P.parens policy_lang $ parseTxnParamDecl `P.sepEndBy` P.comma policy_lang
+  requires <- (polReserved "requires" >> parseBoolExpr) `P.endBy` P.semi policy_lang
+  ensures  <- (polReserved "ensures"  >> parseBoolExpr) `P.endBy` P.semi policy_lang
+  body <- P.braces policy_lang $ parseTxnStmt `P.endBy` P.semi policy_lang
+  return $ TxnDecl (T.pack name) params requires ensures body
+
+pprintTxnDecl (TxnDecl name params requires ensures body) = PP.vcat
+  [ PP.hsep [PP.text "txn", PP.text (T.unpack name),
+             PP.parens $ PP.hsep
+                       $ map (\x -> pprintTxnParamDecl x PP.<> PP.comma)
+                             params]
+  , PP.nest 4 $ PP.vcat
+              $ map (\x -> PP.text "requires" PP.<> pprintBoolExpr x
+                                              PP.<> PP.semi)
+                    requires
+  , PP.nest 4 $ PP.vcat
+              $ map (\x -> PP.text "ensures" PP.<> pprintBoolExpr x
+                                             PP.<> PP.semi)
+                    ensures
+  , PP.lbrace
+  , PP.nest 4 $ PP.vcat $ (\x -> [PP.text ""] ++ x ++ [PP.text ""])
+              $ map (\x -> pprintTxnStmt x PP.<> PP.semi) body
+  , PP.rbrace
+  ]
+
+data PolicyFile = PolicyFile
+  { _polfBats :: BoundAssetTypeStmt -- _bad_ name
+  , _polfGParams :: [GlobalParamDecl]
+  , _polfTxns :: [TxnDecl]
+  }
+  deriving (Eq,Show,Read)
+
+parsePolicyFile = do
+  bats    <- parseBats
+  gparams <- parseGParamDecl `P.endBy` P.semi policy_lang
+  txns    <- P.many1 parseTxnDecl
+  P.eof
+  return $ PolicyFile bats gparams txns
+
+pprintPolicyFile (PolicyFile bats gparams txns) = PP.vcat (
+  [ pprintBats bats PP.<> PP.semi
+  , PP.text ""
+  ] ++ (map (\x -> pprintGParamDecl x PP.<> PP.semi) gparams) ++
+  [ PP.text ""
+  ] ++ (map (\x -> PP.text "" PP.$+$ pprintTxnDecl x) txns) ++
+  [ PP.text ""
+  ])
 
 parseOp op = do
   theOp <- P.operator alloyish
@@ -459,8 +731,8 @@ lineJoin ls = foldl1 (\x y -> x <> "\n" <> y) ls
 prefixWith s = lineJoin . map (s <>) . T.lines
 indent = prefixWith "  "
 
-main :: IO ()
-main = do
+graphmain :: IO ()
+graphmain = do
   files <- getFiles
   -- mapM putStrLn files
   files <- sequence $ map (flip openFile ReadMode) files
@@ -512,5 +784,20 @@ main = do
           putStrLn $ maybe "Error" show $ evalRelExp x env
   sequence_ $ repeat step
 
-  -- whileEither_ expLine (\_ -> putStrLn "Done.") $ 
+-- main = graphmain
+main = do
+  polf <- hGetContents stdin
+  ast <- return $ P.parse parsePolicyFile "" polf
+  case ast of
+    Left err -> putStrLn $ "parse error: " ++ show err
+    Right ast -> do
+      putStrLn $ show ast
+      putStrLn "\n\nPretty-printed:\n\n===============\n\n"
+      rendered <- return $ PP.render $ pprintPolicyFile ast
+      putStrLn rendered
+
+      case (P.parse parsePolicyFile "" rendered) of
+        Left err -> putStrLn $ "reparse error: " ++ show err
+        Right ast' -> do
+          putStrLn $ "ASTs " ++ (if ast == ast' then "" else "don't ") ++ "match"
 
