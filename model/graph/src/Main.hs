@@ -5,16 +5,18 @@ module Main where
 import qualified Data.Text as T
 import           Data.List (nub,isPrefixOf,sort)
 import qualified Data.Map.Lazy as M
+import qualified Control.Monad.State.Lazy as S
 import qualified Text.Parsec   as P
 import qualified Text.Parsec.Token as P
 import           Text.Parsec.Language (javaStyle)
-import           Data.Maybe (maybeToList,fromMaybe)
+import           Data.Maybe (maybeToList,fromMaybe,fromJust)
 import           Control.Applicative ((<$>),(<*>),(*>))
-import           Control.Monad (join, filterM)
+import           Control.Monad (join, filterM, foldM)
 import           System.Directory (getCurrentDirectory, getDirectoryContents, doesFileExist)
 import           System.IO (hGetContents,openFile,IOMode(..),hFlush,stdout,stdin)
 import           System.FilePath.Posix (takeBaseName)
 import qualified Text.PrettyPrint.Annotated as PP
+import           Control.Monad.Identity (runIdentity)
 
 alloyish = P.makeTokenParser $ javaStyle
   { P.reservedNames = [ "sig", "abstract", "extends"
@@ -139,6 +141,66 @@ pprintArithExpr (PlusExpr l r) = PP.parens (pprintArithExpr l) PP.<+> PP.text "+
 pprintArithExpr (TimesExpr l r) = PP.parens (pprintArithExpr l) PP.<+> PP.text "*" PP.<+> PP.parens (pprintArithExpr r)
 pprintArithExpr (MinusExpr l r) = PP.parens (pprintArithExpr l) PP.<+> PP.text "-" PP.<+> PP.parens (pprintArithExpr r)
 
+traverseArithExpr f (ConstAmountExpr i) = f (ConstAmountExpr i)
+traverseArithExpr f (ConstFractionExpr fr) = f (ConstFractionExpr fr)
+traverseArithExpr f (AllExpr) = f AllExpr
+traverseArithExpr f (ArithVar v) = f $ ArithVar v
+traverseArithExpr f (AmountField v) = f $ AmountField v
+traverseArithExpr f (OwnerField v) = f $ OwnerField v
+traverseArithExpr f (OldExpr e) = OldExpr <$> f e
+traverseArithExpr f (RoundExpr e) = RoundExpr <$> f e
+traverseArithExpr f (PlusExpr l r) = PlusExpr <$> f l <*> f r
+traverseArithExpr f (TimesExpr l r) = TimesExpr <$> f l <*> f r
+traverseArithExpr f (MinusExpr l r) = MinusExpr <$> f l <*> f r
+
+-- clumsy
+traverseNonOldArithExpr f (ConstAmountExpr i) = f (ConstAmountExpr i)
+traverseNonOldArithExpr f (ConstFractionExpr fr) = f (ConstFractionExpr fr)
+traverseNonOldArithExpr f (AllExpr) = f AllExpr
+traverseNonOldArithExpr f (ArithVar v) = f $ ArithVar v
+traverseNonOldArithExpr f (AmountField v) = f $ AmountField v
+traverseNonOldArithExpr f (OwnerField v) = f $ OwnerField v
+traverseNonOldArithExpr f (OldExpr e) = pure $ OldExpr e
+traverseNonOldArithExpr f (RoundExpr e) = RoundExpr <$> f e
+traverseNonOldArithExpr f (PlusExpr l r) = PlusExpr <$> f l <*> f r
+traverseNonOldArithExpr f (TimesExpr l r) = TimesExpr <$> f l <*> f r
+traverseNonOldArithExpr f (MinusExpr l r) = MinusExpr <$> f l <*> f r
+
+
+traverseArithSubExpr _ (ConstAmountExpr i) = pure (ConstAmountExpr i)
+traverseArithSubExpr _ (ConstFractionExpr f) = pure (ConstFractionExpr f)
+traverseArithSubExpr _ (AllExpr) = pure AllExpr
+traverseArithSubExpr _ (ArithVar v) = pure $ ArithVar v
+traverseArithSubExpr f (AmountField v) = pure $ AmountField v
+traverseArithSubExpr f (OwnerField v) = pure $ OwnerField v
+traverseArithSubExpr f (OldExpr e) = OldExpr <$> f e
+traverseArithSubExpr f (RoundExpr e) = RoundExpr <$> f e
+traverseArithSubExpr f (PlusExpr l r) = PlusExpr <$> f l <*> f r
+traverseArithSubExpr f (TimesExpr l r) = TimesExpr <$> f l <*> f r
+traverseArithSubExpr f (MinusExpr l r) = MinusExpr <$> f l <*> f r
+
+
+data ArithType = ArithAmount
+               | ArithAll
+               | ArithFraction
+               | ArithOwner
+  deriving (Eq,Show,Read)
+
+-- arithExprArithVars :: ArithExpr -> [T.Text]
+-- arithExprArithVars (ArithVar v) = [v]
+-- arithExprArithVars (PlusExpr l r) = arithExprArithVars l ++ arithExprArithVars r
+-- arithExprArithVars (MinusExpr l r) = arithExprArithVars l ++ arithExprArithVars r
+-- arithExprArithVars (TimesExpr l r) = arithExprArithVars l ++ arithExprArithVars r
+-- arithExprArithVars (RoundExpr e) = arithExprArithVars e
+-- arithExprArithVars (OldExpr e) = arithExprArithVars e
+-- arithExprArithVars _ = []
+
+-- arithExprType :: ArithExpr -> Maybe ArithType
+-- arithExprType (ConstAmountExpr _) = Just ArithAmount
+-- arithExprType (ConstFractionExpr _) = Just ArithFraction
+-- arithExprType (AllExpr) = Just ArithAll
+-- arithExprType (AllExpr) = Just ArithAll
+
 data BoolExpr = TrueExpr
               | FalseExpr
               | NotExpr (BoolExpr)
@@ -150,6 +212,17 @@ data BoolExpr = TrueExpr
               | LtExpr (ArithExpr) (ArithExpr)
               | LeExpr (ArithExpr) (ArithExpr)
   deriving (Eq,Show,Read)
+
+beTraverseArithExprs f (TrueExpr) = pure TrueExpr
+beTraverseArithExprs f (FalseExpr) = pure FalseExpr
+beTraverseArithExprs f (NotExpr be) = NotExpr <$> (beTraverseArithExprs f be)
+beTraverseArithExprs f (AndExpr bl br) = AndExpr <$> (beTraverseArithExprs f bl) <*> (beTraverseArithExprs f br)
+beTraverseArithExprs f (OrExpr bl br) = OrExpr <$> (beTraverseArithExprs f bl) <*> (beTraverseArithExprs f br)
+beTraverseArithExprs f (EqExpr bl br) = EqExpr <$> f bl <*> f br
+beTraverseArithExprs f (GtExpr bl br) = GtExpr <$> f bl <*> f br
+beTraverseArithExprs f (GeExpr bl br) = GeExpr <$> f bl <*> f br
+beTraverseArithExprs f (LtExpr bl br) = LtExpr <$> f bl <*> f br
+beTraverseArithExprs f (LeExpr bl br) = LeExpr <$> f bl <*> f br
 
 parseSimpleBoolExpr
   = foldl1 (\x y -> P.try x P.<|> y) $
@@ -295,6 +368,8 @@ data TxnDecl = TxnDecl
   , _txnEnsures :: [BoolExpr], _txnBody :: [TxnStmt] }
   deriving (Eq,Show,Read)
 
+txnBody f decl = (\body' -> decl { _txnBody = body' }) <$> f (_txnBody decl)
+
 parseTxnDecl = do
   polReserved "txn"
   name <- polId
@@ -310,11 +385,11 @@ pprintTxnDecl (TxnDecl name params requires ensures body) = PP.vcat
                        $ map (\x -> pprintTxnParamDecl x PP.<> PP.comma)
                              params]
   , PP.nest 4 $ PP.vcat
-              $ map (\x -> PP.text "requires" PP.<> pprintBoolExpr x
+              $ map (\x -> PP.text "requires" PP.<+> pprintBoolExpr x
                                               PP.<> PP.semi)
                     requires
   , PP.nest 4 $ PP.vcat
-              $ map (\x -> PP.text "ensures" PP.<> pprintBoolExpr x
+              $ map (\x -> PP.text "ensures" PP.<+> pprintBoolExpr x
                                              PP.<> PP.semi)
                     ensures
   , PP.lbrace
@@ -345,6 +420,205 @@ pprintPolicyFile (PolicyFile bats gparams txns) = PP.vcat (
   ] ++ (map (\x -> PP.text "" PP.$+$ pprintTxnDecl x) txns) ++
   [ PP.text ""
   ])
+
+killAllExprs AllExpr = Nothing
+killAllExprs x = Just x
+
+fixAllExprs (AssertStmt be) = AssertStmt <$> beTraverseArithExprs killAllExprs be
+fixAllExprs (RequireSignatureStmt i) = return $ (RequireSignatureStmt i)
+fixAllExprs (LocalStmt v ae) = LocalStmt v <$> (traverseArithExpr killAllExprs ae)
+fixAllExprs (IssueStmt amt tp dst) = (\amt -> IssueStmt amt tp dst)
+                                    <$> (traverseArithExpr killAllExprs amt)
+fixAllExprs (TransferStmt amt src dst) = (\amt -> TransferStmt amt src dst) <$> do
+  amt <- traverseArithSubExpr killAllExprs amt
+  return $ case amt of
+    AllExpr -> AmountField src
+    _ -> amt
+
+freshname ix vars = head $ do
+    incr <- [0..]
+    ix <- return $ ix+incr
+    ix' <- return $ ix+1
+    varname <- return $ T.pack $ "__fresh" ++ show ix
+    if (M.member varname vars) then [] else return (varname,ix')
+
+
+newvar ix vars exp = (ix',varname,[LocalStmt varname exp])
+  where (varname,ix') = freshname ix vars
+
+explicitAmounts body = go body
+  where
+    go ls = ls'
+      where
+        (ls',_) = flip S.runState (M.fromList []) $ goStmt ls
+
+    goStmt :: [TxnStmt] -> S.State (M.Map T.Text ArithExpr) [TxnStmt]
+    goStmt [] = return []
+    goStmt (l:ls) = do
+      l' <- case l of
+        AssertStmt be -> AssertStmt <$> beTraverseArithExprs goAE be
+        LocalStmt v ae -> LocalStmt v <$> goAE ae
+        IssueStmt ae tp dst -> do
+          ae' <- goAE ae
+          updates <- S.get
+          updates <- return $ M.insert dst ae' updates
+          S.put updates
+          return $ IssueStmt ae' tp dst
+        TransferStmt ae src dst -> do
+          ae' <- goAE ae
+          updates <- S.get
+          oldSrcVal <- return $ fromMaybe (OldExpr (AmountField src))
+                              $ M.lookup src updates
+          updates <- return $ M.insert src (MinusExpr oldSrcVal ae') updates
+          updates <- return $ case dst of
+            Nothing -> updates
+            Just dst -> M.insert dst ae' updates
+          S.put updates
+          return $ TransferStmt ae' src dst
+        _ -> return l
+      (l':) <$> goStmt ls
+
+    goAE :: ArithExpr -> S.State (M.Map T.Text ArithExpr) ArithExpr
+    goAE ae = flip traverseNonOldArithExpr ae $ \ae -> do
+      case ae of
+        AmountField v -> do
+          updates <- S.get
+          return $ fromMaybe ae $ M.lookup v updates
+        _ -> return ae
+
+sortTxnStmts body = locals ++ nonops ++ ops
+  where
+    (locals,nonops,ops) = go body
+    go [] = ([],[],[])
+    go (l:ls) = let (locals,nonops,ops) = go ls in
+      case l of
+        (LocalStmt _ _) -> (l:locals,nonops,ops)
+        (AssertStmt _) -> (locals,l:nonops,ops)
+        (RequireSignatureStmt _) -> (locals,l:nonops,ops)
+        (IssueStmt _ _ _) -> (locals,nonops,l:ops)
+        (TransferStmt _ _ _) -> (locals,nonops,l:ops)
+
+moveOldExprs body = go body
+  where
+    freshvar :: ArithExpr -> S.State (Integer,M.Map T.Text ArithExpr,[TxnStmt]) (T.Text,[TxnStmt])
+    freshvar exp = do
+      (ix,vars,stmts) <- S.get
+      (ix',varname,newstmts) <- return $ newvar ix vars exp
+      vars' <- return $ M.insert varname exp vars
+      S.put (ix',vars',stmts)
+      return (varname,newstmts)
+
+    go ls = oldDecls ++ ls'
+      where
+        (ls',(_,_,oldDecls)) = flip S.runState (0,M.fromList [],[]) $ goStmt ls
+
+    goStmt [] = return []
+    goStmt (l:ls) = do
+      l' <- case l of
+        AssertStmt be -> AssertStmt <$> beTraverseArithExprs goAE be
+        LocalStmt v ae -> LocalStmt v <$> goAE ae
+        IssueStmt ae tp dst
+          -> (\ae' -> IssueStmt ae' tp dst) <$> goAE ae
+        TransferStmt ae src dst
+          -> (\ae' -> TransferStmt ae' src dst) <$> goAE ae
+        _ -> return l
+      (l':) <$> goStmt ls
+
+    goAE ae = do
+      ae' <- traverseArithSubExpr goAE ae
+      case ae' of
+        OldExpr e -> do
+          (varname,oldDecl) <- freshvar e
+          (ix,vars,oldDecls) <- S.get
+          S.put (ix,vars,oldDecls++oldDecl)
+          return $ ArithVar varname
+        _ -> return ae'
+
+
+explicitSubExprs body = fst $ flip S.runState (0,M.fromList ([] :: [(T.Text,ArithExpr)])) $ goStmt body
+  where
+    freshvar :: ArithExpr -> S.State (Integer,M.Map T.Text ArithExpr) (T.Text,[TxnStmt])
+    freshvar exp = do
+      (ix,vars) <- S.get
+      (ix',varname,newstmts) <- return $ newvar ix vars exp
+      vars' <- return $ M.insert varname exp vars
+      S.put (ix',vars')
+      return (varname,newstmts)
+
+    goStmt :: [TxnStmt] -> S.State (Integer,M.Map T.Text ArithExpr) [TxnStmt]
+    goStmt [] = return []
+    goStmt (l:ls) = do
+      l' <- case l of
+        AssertStmt be -> do
+          (vstmts,be') <- goBE be
+          return $ vstmts ++ [AssertStmt be']
+        LocalStmt v ae -> do
+          (vstmts,ae') <- goAE ae
+          (ix,vars) <- S.get
+          vars' <- return $ M.insert v ae' vars
+          S.put (ix,vars')
+          return $ vstmts ++ [LocalStmt v ae']
+        IssueStmt ae tp dst -> do
+          (vstmts,ae') <- goAE ae
+          (varname,newstmts) <- freshvar ae'
+          return $ vstmts ++ newstmts ++ [IssueStmt (ArithVar varname) tp dst]
+        TransferStmt ae src dst -> do
+          (vstmts,ae') <- goAE ae
+          (varname,newstmts) <- freshvar ae'
+          return $ vstmts ++ newstmts ++ [TransferStmt (ArithVar varname) src dst]
+        _ -> return [l]
+      ls' <- goStmt ls
+      return $ l'++ls'
+    goBE :: BoolExpr -> S.State (Integer,M.Map T.Text ArithExpr) ([TxnStmt],BoolExpr)
+    goBE be = do
+      (ix,vars) <- S.get
+      (be',(ix',vars',vstmts)) <- return $ flip S.runState (ix,vars,[]) $ do
+        be' <- beTraverseArithExprs goAEinner be
+        flip beTraverseArithExprs be' $ \ae -> do
+          (ix,vars,vstmts) <- S.get
+          (ix',varname,newstmts) <- return $ newvar ix vars ae
+          vars' <- return $ M.insert varname ae vars
+          vstmts' <- return $ vstmts ++ newstmts
+          S.put (ix',vars',vstmts')
+          return $ ArithVar varname
+      S.put (ix',vars')
+      return (vstmts,be')
+
+    goAE :: ArithExpr -> S.State (Integer,M.Map T.Text ArithExpr) ([TxnStmt],ArithExpr)
+    goAE ae = do
+      (ix,vars) <- S.get
+      let (ae',(ix',vars',vstmts)) = flip S.runState (ix,vars,[]) $ goAEinner ae
+      S.put (ix',vars')
+      return (vstmts,ae')
+
+    goAEinner :: ArithExpr -> S.State (Integer,M.Map T.Text ArithExpr,[TxnStmt]) ArithExpr
+    goAEinner ae = flip traverseArithSubExpr ae $ \exp -> do
+      exp' <- goAEinner exp
+      (ix,vars,vstmts) <- S.get
+      (ix',varname,newstmts) <- return $ newvar ix vars exp'
+      vars' <- return $ M.insert varname exp' vars
+      vstmts' <- return $ vstmts ++ newstmts
+      S.put (ix',vars',vstmts')
+      return $ ArithVar varname
+
+-- explicitSubExprsTxnDecl (TxnDecl name params requires ensures body)
+--   = TxnDecl name params requires ensures $ explicitSubExprs body
+
+over l f = runIdentity . l (return . f)
+
+explicitSubExprsTxnDecl = over txnBody explicitSubExprs
+
+explicitReqEns (TxnDecl name params requires ensures body)
+  = TxnDecl name params [] [] (reqAsserts ++ body ++ ensAsserts)
+  where
+    reqAsserts = map AssertStmt requires
+    ensAsserts = map AssertStmt ensures
+
+data PolicyFileWithInit = PolicyFileWithInit
+  { _polfwiInitChecks :: [BoolExpr]
+  , _polfwiPolf :: PolicyFile
+  }
+  deriving (Eq,Show,Read)
 
 parseOp op = do
   theOp <- P.operator alloyish
@@ -800,4 +1074,22 @@ main = do
         Left err -> putStrLn $ "reparse error: " ++ show err
         Right ast' -> do
           putStrLn $ "ASTs " ++ (if ast == ast' then "" else "don't ") ++ "match"
+
+      const () <$> foldM (\ast (name,f) -> do
+        putStrLn $ "\n\n" ++ name ++ ":\n\n===============\n\n"
+        ast <- return $ ast {
+          _polfTxns = do
+            txn <- _polfTxns ast
+            return $ f txn
+        }
+        astRendered <- return $ PP.render $ pprintPolicyFile $ ast
+        putStrLn astRendered
+        return ast
+        ) ast [ ("Explicit requires/ensures",explicitReqEns)
+              , ("Make ALL expressions explicit", (over txnBody $ map (fromJust . fixAllExprs)))
+              , ("Make amount calculations explicit", (over txnBody explicitAmounts))
+              , ("Move old(...) expressions",(over txnBody moveOldExprs))
+              , ("Make a var for each subexpression", explicitSubExprsTxnDecl)
+              , ("Reformat into locals -> asserts -> ops", over txnBody sortTxnStmts)
+              ]
 

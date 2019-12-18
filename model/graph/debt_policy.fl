@@ -40,10 +40,9 @@ txn repay_loan(inout resource the_debt:    debt,
   assert payment_src.amount >= interest_amt;
 
   local burn_amt = payment_src.amount - interest_amt; // Amount
-  local remainder = the_debt.amount - burn_amt;
 
   transfer burn_amt  of the_debt -> BURN_ADDRESS;
-  transfer remainder of the_debt -> the_debt; // implicit?
+  transfer ALL of the_debt -> the_debt; // implicit?
   transfer ALL of payment_src -> payment_dst;
 }
 
