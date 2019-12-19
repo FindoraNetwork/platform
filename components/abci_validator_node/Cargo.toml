@@ -1,0 +1,23 @@
+[package]
+name = "abci_validator_node"
+version = "0.0.1"
+authors = ["Engineering <engineering@findora.org>"]
+edition = "2018"
+
+[[bin]]
+name = "abci_validator_node"
+path = "src/abci_validator_node.rs"
+
+[dependencies]
+abci = "0.4.3"
+api_service = { path = "../api_service" }
+arrayref = "0.3.5"
+findora = { path = "../../findora" }
+ledger = { path = "../../ledger" }
+ledger_app = { path = "../ledger_app" }
+rand = "0.6"
+rand_chacha = "0.1.1"
+serde = { version = "1.0.99", features = ["derive"] }
+serde_derive = "1.0"
+serde_json = "1.0.40"
+zei = { git = "ssh://git@github.com/findoraorg/zei" }

@@ -1,0 +1,27 @@
+[package]
+name = "ledger_client"
+version = "0.1.0"
+authors = ["Engineering <engineering@findora.org>"]
+edition = "2018"
+
+[[bin]]
+name = "ledger_client"
+path = "src/ledger_client.rs"
+
+[dependencies]
+arrayref = "0.3.5"
+ledger = { path = "../../ledger" }
+findora = { path = "../../findora" }
+zei = { git = "ssh://git@github.com/findoraorg/zei" }
+percent-encoding = "2.1.0"
+rand = "0.6"
+rand_chacha = "0.1.1"
+reqwest = "0.9.24"
+serde = "1.0"
+serde_derive = "1.0"
+serde_json = "1.0"
+
+[dev-dependencies]
+quickcheck = "0.8"
+quickcheck_macros = "0.8"
+
