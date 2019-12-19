@@ -9,10 +9,9 @@ use ledger::data_model::errors::PlatformError;
 use ledger::data_model::*;
 use rand::SeedableRng;
 use rand_chacha::ChaChaRng;
-use zei::serialization::ZeiFromToBytes;
 use zei::setup::PublicParams;
 use zei::xfr::asset_record::{build_blind_asset_record, open_asset_record};
-use zei::xfr::sig::{XfrKeyPair, XfrSecretKey};
+use zei::xfr::sig::{XfrKeyPair, XfrPublicKey, XfrSecretKey};
 use zei::xfr::structs::{AssetIssuerPubKeys, AssetRecord, BlindAssetRecord, OpenAssetRecord};
 
 pub trait BuildsTransactions {
@@ -35,7 +34,6 @@ pub trait BuildsTransactions {
                                -> Result<(), PlatformError>;
   fn add_operation_transfer_asset(&mut self,
                                   input_sids: Vec<TxoRef>,
-                                  input_key: &XfrKeyPair,
                                   input_records: &[OpenAssetRecord],
                                   output_records: &[AssetRecord])
                                   -> Result<(), PlatformError>;
@@ -95,7 +93,7 @@ pub trait BuildsTransactions {
                  .collect();
     let mut output_ars = output_ars?;
     output_ars.append(&mut partially_consumed_inputs);
-    self.add_operation_transfer_asset(input_sids, &key_pair, &input_oars, &output_ars)
+    self.add_operation_transfer_asset(input_sids, &input_oars, &output_ars)
   }
 }
 
@@ -137,7 +135,6 @@ impl BuildsTransactions for TransactionBuilder {
   }
   fn add_operation_transfer_asset(&mut self,
                                   input_sids: Vec<TxoRef>,
-                                  input_key: &XfrKeyPair,
                                   input_records: &[OpenAssetRecord],
                                   output_records: &[AssetRecord])
                                   -> Result<(), PlatformError> {
@@ -145,9 +142,7 @@ impl BuildsTransactions for TransactionBuilder {
     let mut prng: ChaChaRng;
     prng = ChaChaRng::from_seed([0u8; 32]);
 
-    let input_keys = &[XfrKeyPair::zei_from_bytes(&input_key.zei_to_bytes())];
-
-    self.txn.add_operation(Operation::TransferAsset(TransferAsset::new(TransferAssetBody::new(&mut prng, input_sids, input_records, output_records, input_keys)?, &[input_key], TransferType::Standard)?));
+    self.txn.add_operation(Operation::TransferAsset(TransferAsset::new(TransferAssetBody::new(&mut prng, input_sids, input_records, output_records)?, TransferType::Standard)?));
     Ok(())
   }
   fn serialize(&self) -> Result<Vec<u8>, PlatformError> {
@@ -161,6 +156,94 @@ impl BuildsTransactions for TransactionBuilder {
     } else {
       Err(PlatformError::SerializationError)
     }
+  }
+}
+
+pub struct TransferOperationBuilder {
+  input_sids: Vec<TxoRef>,
+  input_records: Vec<OpenAssetRecord>,
+  output_records: Vec<AssetRecord>,
+  transfer_type: TransferType,
+}
+
+impl TransferOperationBuilder {
+  pub fn new() -> Self {
+    TransferOperationBuilder { input_sids: Vec::new(),
+                               input_records: Vec::new(),
+                               output_records: Vec::new(),
+                               transfer_type: TransferType::Standard }
+  }
+
+  pub fn add_input(&mut self, txo_sid: TxoRef, open_ar: OpenAssetRecord) -> &mut Self {
+    self.input_sids.push(txo_sid);
+    self.input_records.push(open_ar);
+    self
+  }
+
+  pub fn add_output(&mut self,
+                    amount: u64,
+                    recipient: &XfrPublicKey,
+                    code: AssetTypeCode)
+                    -> &mut Self {
+    self.output_records
+        .push(AssetRecord::new(amount, code.val, *recipient).unwrap());
+    self
+  }
+
+  pub fn make_debt_swap(&mut self) -> &mut Self {
+    self.transfer_type = TransferType::DebtSwap;
+    self
+  }
+
+  // Ensures that outputs and inputs are balanced by adding remainder outputs for leftover asset
+  // amounts
+  pub fn balance(&mut self) -> &mut Self {
+    let _collect: Vec<u64> = self.input_records
+                                 .iter()
+                                 .map(|ref oar| *oar.get_amount())
+                                 .collect();
+    self
+    //let input_sids: Vec<TxoRef> = transfer_from.iter()
+    //                                           .map(|(ref txo_sid, _, _)| *(*txo_sid))
+    //                                           .collect();
+    //let input_amounts: Vec<u64> = transfer_from.iter().map(|(_, _, amount)| *amount).collect();
+    //let input_oars: Result<Vec<OpenAssetRecord>, _> =
+    //  transfer_from.iter()
+    //               .map(|(_, ref ba, _)| open_asset_record(&ba, &key_pair.get_sk_ref()))
+    //               .collect();
+    //let input_oars = input_oars?;
+    //let input_total: u64 = input_amounts.iter().sum();
+    //let mut partially_consumed_inputs = Vec::new();
+    //for (input_amount, oar) in input_amounts.iter().zip(input_oars.iter()) {
+    //  if input_amount > oar.get_amount() {
+    //    return Err(PlatformError::InputsError);
+    //  } else if input_amount < oar.get_amount() {
+    //    let ar = AssetRecord::new(oar.get_amount() - input_amount,
+    //                              *oar.get_asset_type(),
+    //                              *oar.get_pub_key())?;
+    //    partially_consumed_inputs.push(ar);
+    //  }
+    //}
+    //let output_total = transfer_to.iter().fold(0, |acc, (amount, _)| acc + amount);
+    //if input_total != output_total {
+    //  return Err(PlatformError::InputsError);
+    //}
+    //let asset_type = input_oars[0].get_asset_type();
+    //let output_ars: Result<Vec<AssetRecord>, _> =
+    //  transfer_to.iter()
+    //             .map(|(amount, ref addr)| AssetRecord::new(*amount, *asset_type, addr.key))
+    //             .collect();
+    //let mut output_ars = output_ars?;
+    //output_ars.append(&mut partially_consumed_inputs);
+  }
+
+  pub fn create(&self) -> Result<TransferAsset, PlatformError> {
+    let mut prng = ChaChaRng::from_seed([0u8; 32]);
+    let body = TransferAssetBody::new(&mut prng,
+                                      self.input_sids.clone(),
+                                      &self.input_records,
+                                      &self.output_records)?;
+    TransferAsset::new(body, self.transfer_type)
   }
 }
 
