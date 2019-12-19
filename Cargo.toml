@@ -23,8 +23,3 @@ members = [
     "findora",
     "ledger",
 ]
-
-[dependencies.rand]
-version = "0.6"
-
-features = ["stdweb", "wasm-bindgen"]
