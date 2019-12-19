@@ -39,7 +39,7 @@ txn repay_loan(inout resource the_debt:    debt,
   local interest_amt = round(the_debt.amount * interest_rate);
   assert payment_src.amount >= interest_amt;
 
-  local burn_amt = payment_src.amount - interest_amt; // Amount
+  local burn_amt: Amount = payment_src.amount - interest_amt; // Amount
 
   transfer burn_amt  of the_debt -> BURN_ADDRESS;
   transfer ALL of the_debt -> the_debt; // implicit?

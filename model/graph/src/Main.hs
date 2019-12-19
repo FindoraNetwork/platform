@@ -304,7 +304,8 @@ pprintTxnParamDecl (TxnParamDecl isIn isOut name tp)
 
 data TxnStmt = AssertStmt BoolExpr
              | RequireSignatureStmt T.Text
-             | LocalStmt T.Text ArithExpr -- TODO: Currently only arithmetic locals
+             -- TODO: Currently only "arithmetic" locals
+             | LocalStmt T.Text (Maybe DataType) ArithExpr
              | IssueStmt ArithExpr T.Text T.Text -- amount of asset-type to resource
              -- amount from resource1 to resource2 (Nothing => burn address)
              | TransferStmt ArithExpr T.Text (Maybe T.Text)
@@ -317,9 +318,10 @@ parseTxnStmt
   , do
       polReserved "local"
       name <- polId
+      tp <- P.optionMaybe $ polOp ":" *> parseDataType
       polOp "="
       expr <- parseArithExpr
-      return $ LocalStmt (T.pack name) expr
+      return $ LocalStmt (T.pack name) tp expr
   , do
       polReserved "issue"
       amt <- parseSimpleArithExpr
@@ -340,9 +342,10 @@ parseTxnStmt
 
 pprintTxnStmt (AssertStmt be) = PP.text "assert" PP.<+> pprintBoolExpr be
 pprintTxnStmt (RequireSignatureStmt name) = PP.text "require_signature" PP.<+> PP.text (T.unpack name)
-pprintTxnStmt (LocalStmt varname aexp) = PP.hsep
+pprintTxnStmt (LocalStmt varname tp aexp) = PP.hsep
   [ PP.text "local"
   , PP.text (T.unpack varname)
+  , fromMaybe PP.empty $ (\tp -> PP.text ":" PP.<+> pprintDataType tp) <$> tp
   , PP.text "="
   , pprintArithExpr aexp
   ]
@@ -405,6 +408,9 @@ data PolicyFile = PolicyFile
   }
   deriving (Eq,Show,Read)
 
+-- TODO: makeLenses''
+polfTxns f ast = (\txns' -> ast { _polfTxns = txns' }) <$> (f $ _polfTxns ast)
+
 parsePolicyFile = do
   bats    <- parseBats
   gparams <- parseGParamDecl `P.endBy` P.semi policy_lang
@@ -426,7 +432,7 @@ killAllExprs x = Just x
 
 fixAllExprs (AssertStmt be) = AssertStmt <$> beTraverseArithExprs killAllExprs be
 fixAllExprs (RequireSignatureStmt i) = return $ (RequireSignatureStmt i)
-fixAllExprs (LocalStmt v ae) = LocalStmt v <$> (traverseArithExpr killAllExprs ae)
+fixAllExprs (LocalStmt v tp ae) = LocalStmt v tp <$> (traverseArithExpr killAllExprs ae)
 fixAllExprs (IssueStmt amt tp dst) = (\amt -> IssueStmt amt tp dst)
                                     <$> (traverseArithExpr killAllExprs amt)
 fixAllExprs (TransferStmt amt src dst) = (\amt -> TransferStmt amt src dst) <$> do
@@ -443,8 +449,188 @@ freshname ix vars = head $ do
     if (M.member varname vars) then [] else return (varname,ix')
 
 
-newvar ix vars exp = (ix',varname,[LocalStmt varname exp])
+newvar ix vars exp = (ix',varname,[LocalStmt varname Nothing exp])
   where (varname,ix') = freshname ix vars
+
+-- NOTE: assumes that vars-for-subexpressions transformation has been
+-- done
+addExprPreconds lines = do
+  l <- lines
+  case l of
+    LocalStmt v _ ae -> case ae of
+      ConstAmountExpr i -> [AssertStmt (GeExpr (ConstAmountExpr i)
+                                               (ConstAmountExpr 0)), l]
+      ConstFractionExpr fr -> [AssertStmt (GeExpr (ConstFractionExpr fr)
+                                                  (ConstFractionExpr 0)), l]
+      MinusExpr le re -> [AssertStmt (GeExpr le re), l]
+      -- NOTE: assumes that all other expressions are non-negative if
+      -- their inputs are non-negative
+      _ -> [l]
+    _ -> return l
+
+unifyTypes x y | x == y = Just x
+unifyTypes AmountType FractionType = Just FractionType
+unifyTypes FractionType AmountType = Just FractionType
+unifyTypes _ _ = Nothing
+
+typeForExpr _ (ConstAmountExpr _) = Just AmountType
+typeForExpr _ (ConstFractionExpr _) = Just FractionType
+typeForExpr _ (AmountField _) = Just AmountType
+typeForExpr _ (OwnerField _) = Just IdentityType
+typeForExpr tpMap (ArithVar v) = M.lookup v tpMap
+typeForExpr tpMap (PlusExpr l r) = do
+  lt <- typeForExpr tpMap l
+  rt <- typeForExpr tpMap r
+  unifyTypes lt rt
+typeForExpr tpMap (TimesExpr l r) = do
+  lt <- typeForExpr tpMap l
+  rt <- typeForExpr tpMap r
+  unifyTypes lt rt
+typeForExpr tpMap (MinusExpr l r) = do
+  lt <- typeForExpr tpMap l
+  rt <- typeForExpr tpMap r
+  case (lt,rt) of
+    (AmountType,AmountType) -> Just AmountType
+    _ -> Nothing
+typeForExpr tpMap (RoundExpr e) = do
+  et <- typeForExpr tpMap e
+  -- check that et can unify with FractionType
+  _ <- unifyTypes FractionType et
+  return AmountType
+typeForExpr _ _ = Nothing
+
+typecheckBoolExpr _ TrueExpr = Just ()
+typecheckBoolExpr _ FalseExpr = Just ()
+typecheckBoolExpr tpMap (NotExpr e) = typecheckBoolExpr tpMap e
+typecheckBoolExpr tpMap (AndExpr l r)
+  = typecheckBoolExpr tpMap l *> typecheckBoolExpr tpMap r
+typecheckBoolExpr tpMap (OrExpr l r)
+  = typecheckBoolExpr tpMap l *> typecheckBoolExpr tpMap r
+typecheckBoolExpr tpMap (EqExpr l r) = do
+  lt <- typeForExpr tpMap l
+  rt <- typeForExpr tpMap r
+  if lt == rt then return () else Nothing
+typecheckBoolExpr tpMap (GtExpr l r) = do
+  lt <- typeForExpr tpMap l
+  rt <- typeForExpr tpMap r
+  case (lt,rt) of
+    (AmountType,AmountType) -> Just ()
+    _ -> Nothing
+typecheckBoolExpr tpMap (GeExpr l r) = do
+  lt <- typeForExpr tpMap l
+  rt <- typeForExpr tpMap r
+  case (lt,rt) of
+    (AmountType,AmountType) -> Just ()
+    _ -> Nothing
+typecheckBoolExpr tpMap (LeExpr l r) = do
+  lt <- typeForExpr tpMap l
+  rt <- typeForExpr tpMap r
+  case (lt,rt) of
+    (AmountType,AmountType) -> Just ()
+    _ -> Nothing
+typecheckBoolExpr tpMap (LtExpr l r) = do
+  lt <- typeForExpr tpMap l
+  rt <- typeForExpr tpMap r
+  case (lt,rt) of
+    (AmountType,AmountType) -> Just ()
+    _ -> Nothing
+
+typecheckTxnDecl globalTps txn@(TxnDecl{ _txnBody = body })
+  = txn {
+    _txnBody = go globalTps body
+  }
+  where
+    go _ [] = []
+    go tpMap (l:ls) = l' : go tpMap' ls
+      where
+        (tpMap',l') = case res of
+          Just x -> x
+          _ -> error $ "Bad typechecking stmt '" ++ show l ++ "' (dict '" ++ show tpMap ++ "')"
+        res = case l of
+          AssertStmt be -> do
+            typecheckBoolExpr tpMap be
+            return (tpMap,l)
+          RequireSignatureStmt v -> do
+            IdentityType <- M.lookup v tpMap
+            return (tpMap,l)
+          LocalStmt v Nothing ae -> do
+            ae_tp <- typeForExpr tpMap ae
+            return (M.insert v ae_tp tpMap,LocalStmt v (Just ae_tp) ae)
+          LocalStmt v (Just tp) ae -> do
+            ae_tp <- typeForExpr tpMap ae
+            unifyTypes tp ae_tp
+            return (M.insert v tp tpMap,l)
+          IssueStmt amt _ _ -> do
+            amt_tp <- typeForExpr tpMap amt
+            unifyTypes AmountType amt_tp
+            return (tpMap,l)
+          TransferStmt amt _ _ -> do
+            amt_tp <- typeForExpr tpMap amt
+            unifyTypes AmountType amt_tp
+            return (tpMap,l)
+
+splitInouts txn@(TxnDecl{ _txnParams = params, _txnBody = body })
+  = txn {
+    _txnParams = newParams,
+    _txnBody = map (update inRecs outRecs) body ++ inConsumed
+  }
+  where
+    inParams = filter _txnparamIn params
+    outParams = filter _txnparamOut params
+    inRecs = M.fromList $ [(_txnparamName p,(_txnparamName p <> "_in")) | p <- inParams]
+    outRecs = M.fromList $ [(_txnparamName p,(_txnparamName p <> "_out")) | p <- outParams]
+
+    newParams = [p { _txnparamName = (fromJust $ M.lookup (_txnparamName p) inRecs),
+                     _txnparamOut = False } | p <- inParams]
+              ++[p { _txnparamName = (fromJust $ M.lookup (_txnparamName p) outRecs),
+                     _txnparamIn  = False } | p <- outParams]
+
+    update inMap _ (TransferStmt ae src Nothing)
+      = TransferStmt ae (fromJust $ M.lookup src inMap) Nothing
+    update inMap outMap (TransferStmt ae src (Just dst))
+      = TransferStmt ae (fromJust $ M.lookup src inMap)
+                        (Just $ fromJust $ M.lookup dst outMap)
+    update _ outMap (IssueStmt ae tp dst)
+      = IssueStmt ae tp (fromJust $ M.lookup dst outMap)
+    update _ _ x = x
+
+    inConsumed = flip map (snd <$> M.toList inRecs) $ \x ->
+      AssertStmt $ EqExpr (AmountField x) (ConstAmountExpr 0)
+
+replaceVars m = over traverseArithExpr $ \x -> case x of
+  ArithVar v -> fromMaybe x $ M.lookup v m
+  _ -> x
+
+replaceBeVars m = over beTraverseArithExprs $ replaceVars m
+
+linLookup _ [] = Nothing
+linLookup x ((k,v):vs) | x == k = Just v
+linLookup x (_:vs) = linLookup x vs
+
+deleteRedundantStmts = go [] [] (M.fromList [])
+  where
+    go _ _ _ [] = []
+    go knownExprs knownAsserts replacedVars (l:ls)
+      = maybeToList l' ++ go knownExprs' knownAsserts' replacedVars' ls
+      where
+        (l',knownExprs',knownAsserts',replacedVars') = case l of
+          AssertStmt be -> let be' = (replaceBeVars replacedVars be) in
+            if be' `elem` knownAsserts
+              then (Nothing,knownExprs,knownAsserts,replacedVars)
+              else (Just $ AssertStmt be',knownExprs,be':knownAsserts,replacedVars)
+          LocalStmt v tp ae -> let ae' = (replaceVars replacedVars ae) in
+            case (linLookup (ae',tp) knownExprs) of
+              Nothing -> (Just $ LocalStmt v tp ae', ((ArithVar v,tp),v):((ae',tp),v):knownExprs,
+                          knownAsserts, replacedVars)
+              Just v' -> (Nothing, knownExprs, knownAsserts,
+                          M.insert v (ArithVar v') replacedVars)
+          IssueStmt ae tp dst
+            -> (Just $ IssueStmt (replaceVars replacedVars ae) tp dst,
+                knownExprs,knownAsserts,replacedVars)
+          TransferStmt ae src dst
+            -> (Just $ TransferStmt (replaceVars replacedVars ae) src dst,
+                knownExprs,knownAsserts,replacedVars)
+          _ -> (Just l,knownExprs,knownAsserts,replacedVars)
 
 explicitAmounts body = go body
   where
@@ -457,7 +643,7 @@ explicitAmounts body = go body
     goStmt (l:ls) = do
       l' <- case l of
         AssertStmt be -> AssertStmt <$> beTraverseArithExprs goAE be
-        LocalStmt v ae -> LocalStmt v <$> goAE ae
+        LocalStmt v tp ae -> LocalStmt v tp <$> goAE ae
         IssueStmt ae tp dst -> do
           ae' <- goAE ae
           updates <- S.get
@@ -492,7 +678,7 @@ sortTxnStmts body = locals ++ nonops ++ ops
     go [] = ([],[],[])
     go (l:ls) = let (locals,nonops,ops) = go ls in
       case l of
-        (LocalStmt _ _) -> (l:locals,nonops,ops)
+        (LocalStmt _ _ _) -> (l:locals,nonops,ops)
         (AssertStmt _) -> (locals,l:nonops,ops)
         (RequireSignatureStmt _) -> (locals,l:nonops,ops)
         (IssueStmt _ _ _) -> (locals,nonops,l:ops)
@@ -516,7 +702,7 @@ moveOldExprs body = go body
     goStmt (l:ls) = do
       l' <- case l of
         AssertStmt be -> AssertStmt <$> beTraverseArithExprs goAE be
-        LocalStmt v ae -> LocalStmt v <$> goAE ae
+        LocalStmt v tp ae -> LocalStmt v tp <$> goAE ae
         IssueStmt ae tp dst
           -> (\ae' -> IssueStmt ae' tp dst) <$> goAE ae
         TransferStmt ae src dst
@@ -552,12 +738,12 @@ explicitSubExprs body = fst $ flip S.runState (0,M.fromList ([] :: [(T.Text,Arit
         AssertStmt be -> do
           (vstmts,be') <- goBE be
           return $ vstmts ++ [AssertStmt be']
-        LocalStmt v ae -> do
+        LocalStmt v tp ae -> do
           (vstmts,ae') <- goAE ae
           (ix,vars) <- S.get
           vars' <- return $ M.insert v ae' vars
           S.put (ix,vars')
-          return $ vstmts ++ [LocalStmt v ae']
+          return $ vstmts ++ [LocalStmt v tp ae']
         IssueStmt ae tp dst -> do
           (vstmts,ae') <- goAE ae
           (varname,newstmts) <- freshvar ae'
@@ -1058,6 +1244,14 @@ graphmain = do
           putStrLn $ maybe "Error" show $ evalRelExp x env
   sequence_ $ repeat step
 
+typecheck ast = over (polfTxns) (map $ typecheckTxnDecl globalTypes) ast
+  where
+    globalTypes = M.insert (_batsIssuer $ _polfBats ast) IdentityType
+                $ M.insert (_batsType   $ _polfBats ast) ResourceTypeType
+                $ M.fromList
+                $ (\decl -> (_gparamName decl, _gparamType decl))
+                  <$> _polfGParams ast
+
 -- main = graphmain
 main = do
   polf <- hGetContents stdin
@@ -1077,19 +1271,19 @@ main = do
 
       const () <$> foldM (\ast (name,f) -> do
         putStrLn $ "\n\n" ++ name ++ ":\n\n===============\n\n"
-        ast <- return $ ast {
-          _polfTxns = do
-            txn <- _polfTxns ast
-            return $ f txn
-        }
+        ast <- return $ f ast
         astRendered <- return $ PP.render $ pprintPolicyFile $ ast
         putStrLn astRendered
         return ast
-        ) ast [ ("Explicit requires/ensures",explicitReqEns)
-              , ("Make ALL expressions explicit", (over txnBody $ map (fromJust . fixAllExprs)))
-              , ("Make amount calculations explicit", (over txnBody explicitAmounts))
-              , ("Move old(...) expressions",(over txnBody moveOldExprs))
-              , ("Make a var for each subexpression", explicitSubExprsTxnDecl)
-              , ("Reformat into locals -> asserts -> ops", over txnBody sortTxnStmts)
+        ) ast [ ("Explicit requires/ensures",over (polfTxns.traverse) explicitReqEns)
+              , ("Split inout resources", over (polfTxns.traverse) splitInouts)
+              , ("Make ALL expressions explicit", (over (polfTxns.traverse.txnBody) $ map (fromJust . fixAllExprs)))
+              , ("Make amount calculations explicit", (over (polfTxns.traverse.txnBody) explicitAmounts))
+              , ("Move old(...) expressions",(over (polfTxns.traverse.txnBody) moveOldExprs))
+              , ("Make a var for each subexpression", over (polfTxns.traverse) explicitSubExprsTxnDecl)
+              , ("Expression preconditions", over (polfTxns.traverse.txnBody) addExprPreconds)
+              , ("typechecking", typecheck)
+              , ("Reformat into locals -> asserts -> ops", over (polfTxns.traverse.txnBody) sortTxnStmts)
+              , ("Remove redundant locals/asserts", over (polfTxns.traverse.txnBody) deleteRedundantStmts)
               ]
 
