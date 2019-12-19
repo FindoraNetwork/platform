@@ -1,4 +1,3 @@
-#![deny(warnings)]
 //! # The Append-Only Merkle Tree Check and Repair Program
 //!
 //!  This program provides Merkle tree check and repair

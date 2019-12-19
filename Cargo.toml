@@ -1,41 +1,25 @@
 [package]
 name = "platform"
 version = "0.1.0"
-authors = ["Nathan Yospe <nathan@findora.org>"]
+authors = ["Engineering <engineering@findora.org>"]
 edition = "2018"
 
-[dependencies]
-abci = "0.4.3"
-actix-web = "1.0"
-arrayref = "0.3.5"
-clap = "2.33.0"
-dirs = "2.0.1"
-bulletproofs =  {version = "1.0.4"}
-hex = "0.3.2"
-env_logger = "0.6.2"
-findora = { path = "findora" }
-futures = "0.1"
-libp2p = "0.13.0"
-log = "0.4.8"
-percent-encoding = "2.1.0"
-serde = "1.0"
-serde_derive = "1.0"
-serde_json = "1.0"
-shellexpand = "1.0"
-rand_chacha = "0.1.1"
-reqwest = "0.9.21"
-regex = "1"
-tokio = "0.1.22"
-tokio-stdin-stdout = "0.1.5"
-
-ledger = {path = "ledger"}
-txn_builder = {path = "components/txn_builder"}
-ledger_app = {path = "components/ledger_app"}
-api_service = {path = "components/api_service"}
-api_service_standalone = {path = "components/api_service_standalone"}
-zei = { git = "ssh://git@github.com/findoraorg/zei" }
-
-[dependencies.rand]
-version = "0.6"
-
-features = ["stdweb", "wasm-bindgen"]
+[workspace]
+members = [
+    "components/abci_validator_node",
+    "components/ac_test_cli",
+    "components/account_simulator",
+    "components/api_service",
+    "components/api_service_standalone",
+    "components/chat",
+    "components/check_merkle",
+    "components/ledger_app",
+    "components/ledger_client",
+    "components/ledger_standalone",
+    "components/query_processor",
+    "components/txn_builder",
+    "components/txn_builder_cli",
+    "components/wasm",
+    "findora",
+    "ledger",
+]
