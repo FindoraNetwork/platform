@@ -35,7 +35,8 @@ do
 done
 
 export directories=$(
-   find .  -name "target" -prune -o -name ".git"   -prune -o -name "src" -print | sort
+   find . -type f -name 'Cargo.toml' | xargs dirname | sort
+   # find .  -name "target" -prune -o -name ".git"   -prune -o -name "src" -print | sort
  )
 
 echo "Repository "`pwd`":"
