@@ -9,7 +9,7 @@ use rand::SeedableRng;
 use rand::{CryptoRng, Rng};
 use std::collections::{HashMap, HashSet};
 use zei::serialization::ZeiFromToBytes;
-use zei::xfr::lib::{verify_xfr_body, verify_xfr_note};
+use zei::xfr::lib::verify_xfr_body;
 use zei::xfr::structs::BlindAssetRecord;
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -162,16 +162,15 @@ impl TxnEffect {
         //     3) The zei transaction is valid.
         //          - Fully checked here
         Operation::TransferAsset(trn) => {
-          if trn.body.inputs.len() != trn.body.transfer.body.inputs.len() {
+          if trn.body.inputs.len() != trn.body.transfer.inputs.len() {
             return Err(PlatformError::InputsError);
           }
-          if trn.body.num_outputs != trn.body.transfer.body.outputs.len() {
+          if trn.body.num_outputs != trn.body.transfer.outputs.len() {
             return Err(PlatformError::InputsError);
           }
-          assert!(trn.body.inputs.len() == trn.body.transfer.body.inputs.len());
-          assert!(trn.body.num_outputs == trn.body.transfer.body.outputs.len());
+          assert!(trn.body.inputs.len() == trn.body.transfer.inputs.len());
+          assert!(trn.body.num_outputs == trn.body.transfer.outputs.len());
 
-          let null_policies = vec![];
           match trn.transfer_type {
             TransferType::DebtSwap => {
               let (debt_type, debt_swap_effect) = compute_debt_swap_effect(&trn.body.transfer)?;
@@ -180,8 +179,6 @@ impl TxnEffect {
                 return Err(PlatformError::InputsError);
               }
               debt_effects.insert(debt_type, debt_swap_effect);
-
-              verify_xfr_body(prng, &trn.body.transfer.body, &null_policies)?;
             }
             TransferType::Standard => {
               // (1a) all body signatures are valid
@@ -194,22 +191,19 @@ impl TxnEffect {
               }
 
               // (1b) all input record owners have signed
-              for record in &trn.body.transfer.body.inputs {
+              for record in &trn.body.transfer.inputs {
                 if !sig_keys.contains(&record.public_key.zei_to_bytes()) {
                   return Err(PlatformError::InputsError);
                 }
               }
-              // (3)
-              // TODO: implement real policies
-              verify_xfr_note(prng, &trn.body.transfer, &null_policies)?;
             }
           }
+          // (3)
+          // TODO: implement real policies
+          let null_policies = vec![];
+          verify_xfr_body(prng, &trn.body.transfer, &null_policies)?;
 
-          for (inp, record) in trn.body
-                                  .inputs
-                                  .iter()
-                                  .zip(trn.body.transfer.body.inputs.iter())
-          {
+          for (inp, record) in trn.body.inputs.iter().zip(trn.body.transfer.inputs.iter()) {
             // (2), checking within this transaction and recording
             // external UTXOs
             match *inp {
@@ -243,8 +237,8 @@ impl TxnEffect {
             }
           }
 
-          txos.reserve(trn.body.transfer.body.outputs.len());
-          for out in trn.body.transfer.body.outputs.iter() {
+          txos.reserve(trn.body.transfer.outputs.len());
+          for out in trn.body.transfer.outputs.iter() {
             txos.push(Some(TxOutput(out.clone())));
             txo_count += 1;
           }
@@ -275,14 +269,10 @@ impl HasInvariants<PlatformError> for TxnEffect {
       let mut found = false;
       for op in self.txn.operations.iter() {
         if let Operation::TransferAsset(trn) = op {
-          if trn.body.inputs.len() != trn.body.transfer.body.inputs.len() {
+          if trn.body.inputs.len() != trn.body.transfer.inputs.len() {
             return Err(PlatformError::InvariantError(None));
           }
-          for (ix, inp_record) in trn.body
-                                     .inputs
-                                     .iter()
-                                     .zip(trn.body.transfer.body.inputs.iter())
-          {
+          for (ix, inp_record) in trn.body.inputs.iter().zip(trn.body.transfer.inputs.iter()) {
             if let TxoRef::Absolute(input_tid) = ix {
               if input_tid == txo_sid {
                 if inp_record != record {

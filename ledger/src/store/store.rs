@@ -1020,7 +1020,7 @@ pub mod helpers {
                                        recipient_pk: &XfrPublicKey)
                                        -> Transaction {
     let mut tx = Transaction::default();
-    let issuer_key_copy = XfrKeyPair::zei_from_bytes(&issuer_keys.zei_to_bytes());
+    let _issuer_key_copy = XfrKeyPair::zei_from_bytes(&issuer_keys.zei_to_bytes());
 
     // issue operation
     let ar = AssetRecord::new(amount, code.val, *issuer_keys.get_pk_ref()).unwrap();
@@ -1042,12 +1042,10 @@ pub mod helpers {
       TransferAssetBody::new(ledger.get_prng(),
                              vec![TxoRef::Relative(0)],
                              &[open_asset_record(&ba, &issuer_keys.get_sk_ref()).unwrap()],
-                             &[ar],
-                             &[issuer_key_copy]).unwrap();
+                             &[ar]).unwrap();
 
     tx.operations
       .push(Operation::TransferAsset(TransferAsset::new(transfer_body,
-                                                        &[&issuer_keys],
                                                         TransferType::Standard).unwrap()));
     tx
   }
@@ -1065,7 +1063,7 @@ mod tests {
   use zei::setup::PublicParams;
   use zei::xfr::asset_record::{build_blind_asset_record, open_asset_record};
   use zei::xfr::sig::{XfrKeyPair, XfrPublicKey};
-  use zei::xfr::structs::AssetRecord;
+  use zei::xfr::structs::{AssetRecord, BlindAssetRecord};
 
   #[test]
   fn test_load_transaction_log() {
@@ -1166,6 +1164,20 @@ mod tests {
     let back = ledger_state.status.utxo_map_versions.get(MAX_VERSION);
     assert_eq!(back,
                Some(&(ledger_state.status.next_txn, ledger_state.utxo_map.compute_checksum())));
+  }
+
+  #[test]
+  fn test_base64() {
+    let mut prng = rand_chacha::ChaChaRng::from_seed([0u8; 32]);
+    let keypair = XfrKeyPair::generate(&mut prng);
+    let code = AssetTypeCode { val: [2; 16] };
+    let ar = AssetRecord::new(100, code.val, *keypair.get_pk_ref()).unwrap();
+    let params = PublicParams::new();
+    let ba = build_blind_asset_record(&mut prng, &params.pc_gens, &ar, false, false, &None);
+    let encoded = base64::encode(&bincode::serialize(&ba).unwrap());
+    let decoded =
+      bincode::deserialize::<BlindAssetRecord>(&base64::decode(&encoded).unwrap()).unwrap();
+    dbg!(decoded);
   }
 
   #[test]
