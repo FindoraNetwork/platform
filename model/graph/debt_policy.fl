@@ -3,7 +3,7 @@ bound_asset_type debt {} issued_by lender;
 // global_params are given at policy instantiation time
 
 global_param interest_rate: Fraction
-  { interest_rate > 0; interest_rate < 1; };
+  { interest_rate > 0.0; interest_rate < 1.0; };
 global_param fiat: ResourceType;
 global_param borrower: Identity;
 // global_param lender: Identity;

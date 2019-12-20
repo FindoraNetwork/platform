@@ -22,6 +22,7 @@ import           Alloyish(alloyish_main)
 policy_lang = P.makeTokenParser $ javaStyle
   { P.reservedNames = [ "param", "global_param", "local", "resource",
                         "credential", "in", "out", "inout" ,
+                        "init_txn",
                         "bound_asset_type", "issued_by", "asset",
                         "txn", "assert", "ensures", "require",
                         "require_signature",
@@ -100,8 +101,8 @@ data ArithExpr = ConstAmountExpr   Integer
 
 parseSimpleArithExpr
   = foldl1 (\x y -> P.try x P.<|> y) $
-  [ ConstAmountExpr <$> P.decimal policy_lang
-  , ConstFractionExpr . toRational <$> P.float policy_lang-- TODO: don't go through float maybe?
+  [ ConstFractionExpr . toRational <$> P.float policy_lang-- TODO: don't go through float maybe?
+  , ConstAmountExpr <$> P.integer policy_lang
   , AmountField . T.pack <$> (polId <* (polOp "." >> polReserved "amount"))
   , OwnerField  . T.pack <$> (polId <* (polOp "." >> polReserved "owner"))
   , ArithVar    . T.pack <$> polId
@@ -505,24 +506,28 @@ typecheckBoolExpr tpMap (GtExpr l r) = do
   rt <- typeForExpr tpMap r
   case (lt,rt) of
     (AmountType,AmountType) -> Just ()
+    (FractionType,FractionType) -> Just ()
     _ -> Nothing
 typecheckBoolExpr tpMap (GeExpr l r) = do
   lt <- typeForExpr tpMap l
   rt <- typeForExpr tpMap r
   case (lt,rt) of
     (AmountType,AmountType) -> Just ()
+    (FractionType,FractionType) -> Just ()
     _ -> Nothing
 typecheckBoolExpr tpMap (LeExpr l r) = do
   lt <- typeForExpr tpMap l
   rt <- typeForExpr tpMap r
   case (lt,rt) of
     (AmountType,AmountType) -> Just ()
+    (FractionType,FractionType) -> Just ()
     _ -> Nothing
 typecheckBoolExpr tpMap (LtExpr l r) = do
   lt <- typeForExpr tpMap l
   rt <- typeForExpr tpMap r
   case (lt,rt) of
     (AmountType,AmountType) -> Just ()
+    (FractionType,FractionType) -> Just ()
     _ -> Nothing
 
 typecheckTxnDecl globalTps txn@(TxnDecl{ _txnBody = body })
@@ -562,7 +567,7 @@ typecheckTxnDecl globalTps txn@(TxnDecl{ _txnBody = body })
 splitInouts txn@(TxnDecl{ _txnParams = params, _txnBody = body })
   = txn {
     _txnParams = newParams,
-    _txnBody = map (update inRecs outRecs) body ++ inConsumed
+    _txnBody = map (update inRecs outRecs) (go inRecs outRecs body) ++ inConsumed
   }
   where
     inParams = filter _txnparamIn params
@@ -583,6 +588,30 @@ splitInouts txn@(TxnDecl{ _txnParams = params, _txnBody = body })
     update _ outMap (IssueStmt ae tp dst)
       = IssueStmt ae tp (fromJust $ M.lookup dst outMap)
     update _ _ x = x
+
+    go _ _ [] = []
+    go recs outRecs (l:ls) = l' : go recs' outRecs ls
+      where
+        recs' = case l of
+          TransferStmt _ _ (Just v) -> M.insert v (fromJust $ M.lookup v outRecs) recs
+          _ -> recs
+        l' = case l of
+          AssertStmt be
+            -> AssertStmt $ over beTraverseArithExprs  (replaceResource recs) be
+          LocalStmt v tp ae
+            -> LocalStmt v tp $ replaceResource recs ae
+          IssueStmt ae tp dst
+            -> IssueStmt (replaceResource recs ae) tp dst
+          TransferStmt ae src dst
+            -> TransferStmt (replaceResource recs ae) src dst
+          RequireSignatureStmt _ -> l
+        replaceResource recs = over traverseArithExpr $ \x ->
+          case x of
+            AmountField v -> AmountField $ fromJust $ M.lookup v recs
+            OwnerField v  -> OwnerField  $ case (M.lookup v recs) of
+              Nothing -> fromJust $ M.lookup v outRecs
+              Just val -> val
+            _ -> over traverseArithSubExpr (replaceResource recs) x
 
     inConsumed = flip map (snd <$> M.toList inRecs) $ \x ->
       AssertStmt $ EqExpr (AmountField x) (ConstAmountExpr 0)
@@ -796,6 +825,21 @@ data PolicyFileWithInit = PolicyFileWithInit
   }
   deriving (Eq,Show,Read)
 
+explicitGParamInit ast = ast'
+  where
+    ast' = ast {
+      _polfGParams = flip map (_polfGParams ast) $ (\gpd -> gpd { _gparamInvs = [] }),
+      _polfTxns = init_txn : _polfTxns ast
+    }
+
+    init_txn = TxnDecl
+      { _txnName = "init_txn", _txnParams = [], _txnRequires = []
+      , _txnEnsures = do
+          var <- _polfGParams ast
+          inv <- _gparamInvs var
+          return inv
+      , _txnBody = [] }
+
 typecheck ast = over (polfTxns) (map $ typecheckTxnDecl globalTypes) ast
   where
     globalTypes = M.insert (_batsIssuer $ _polfBats ast) IdentityType
@@ -821,21 +865,24 @@ main = do
         Right ast' -> do
           putStrLn $ "ASTs " ++ (if ast == ast' then "" else "don't ") ++ "match"
 
-      const () <$> foldM (\ast (name,f) -> do
+      final_ast <- foldM (\ast (name,f) -> do
         putStrLn $ "\n\n" ++ name ++ ":\n\n===============\n\n"
         ast <- return $ f ast
         astRendered <- return $ PP.render $ pprintPolicyFile $ ast
         putStrLn astRendered
         return ast
-        ) ast [ ("Explicit requires/ensures",over (polfTxns.traverse) explicitReqEns)
-              , ("Split inout resources", over (polfTxns.traverse) splitInouts)
+        ) ast [ ("Explicit global_param init check", explicitGParamInit)
+              , ("Explicit requires/ensures",over (polfTxns.traverse) explicitReqEns)
               , ("Make ALL expressions explicit", (over (polfTxns.traverse.txnBody) $ map (fromJust . fixAllExprs)))
               , ("Make amount calculations explicit", (over (polfTxns.traverse.txnBody) explicitAmounts))
               , ("Move old(...) expressions",(over (polfTxns.traverse.txnBody) moveOldExprs))
+              , ("Split inout resources", over (polfTxns.traverse) splitInouts)
               , ("Make a var for each subexpression", over (polfTxns.traverse) explicitSubExprsTxnDecl)
               , ("Expression preconditions", over (polfTxns.traverse.txnBody) addExprPreconds)
               , ("typechecking", typecheck)
               , ("Reformat into locals -> asserts -> ops", over (polfTxns.traverse.txnBody) sortTxnStmts)
               , ("Remove redundant locals/asserts", over (polfTxns.traverse.txnBody) deleteRedundantStmts)
               ]
+
+      return ()
 
