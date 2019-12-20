@@ -572,7 +572,7 @@ splitInouts txn@(TxnDecl{ _txnParams = params, _txnBody = body })
   where
     inParams = filter _txnparamIn params
     outParams = filter _txnparamOut params
-    inRecs = M.fromList $ [(_txnparamName p,(_txnparamName p <> "_in")) | p <- inParams]
+    inRecs  = M.fromList $ [(_txnparamName p,(_txnparamName p <> "_in"))  | p <- inParams]
     outRecs = M.fromList $ [(_txnparamName p,(_txnparamName p <> "_out")) | p <- outParams]
 
     newParams = [p { _txnparamName = (fromJust $ M.lookup (_txnparamName p) inRecs),
@@ -836,7 +836,12 @@ explicitGParamInit ast = ast'
       { _txnName = "init_txn", _txnParams = [], _txnRequires = []
       , _txnEnsures = do
           var <- _polfGParams ast
-          inv <- _gparamInvs var
+          vname <- return $ _gparamName var
+          typeInv <- return $ case _gparamType var of
+            FractionType -> [GeExpr (ArithVar vname) (ConstFractionExpr 0)]
+            AmountType -> [GeExpr (ArithVar vname) (ConstAmountExpr 0)]
+            _ -> []
+          inv <- typeInv++_gparamInvs var
           return inv
       , _txnBody = [] }
 
