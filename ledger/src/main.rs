@@ -6,8 +6,7 @@
 
 extern crate rand;
 use findora::Commas;
-use ledger::store::append_only_merkle::AppendOnlyMerkle;
-use ledger::store::append_only_merkle::HashValue;
+use merkle_tree::append_only_merkle::{AppendOnlyMerkle, HashValue};
 use rand::prelude::thread_rng;
 use rand::Rng;
 use std::env;

@@ -1,9 +1,3 @@
-[package]
-name = "platform"
-version = "0.1.0"
-authors = ["Engineering <engineering@findora.org>"]
-edition = "2018"
-
 [workspace]
 members = [
     "components/abci_validator_node",
@@ -22,4 +16,8 @@ members = [
     "components/wasm",
     "findora",
     "ledger",
+    "libs/ads/merkle_tree",
+    "libs/ads/sparse_merkle_tree",
+    "libs/bitmap",
+    "libs/cryptohash",
 ]

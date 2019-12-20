@@ -6,6 +6,7 @@ edition = "2018"
 
 [dependencies]
 bulletproofs =  {version = "1.0.4"}
+cryptohash = { path = "../../libs/cryptohash" }
 curve25519-dalek = { version =  "1.2.1", features = ["serde"] }
 futures = "0.1.20"
 hex = "0.3.2"

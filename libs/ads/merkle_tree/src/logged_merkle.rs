@@ -25,8 +25,8 @@
 //!
 use super::append_only_merkle::{AppendOnlyMerkle, HashValue, Proof};
 
-use crate::utils::sha256;
-use findora::Commas;
+use cryptohash::sha256;
+use findora::{Commas, debug, er, log, log_impl};
 use serde::Deserialize;
 use serde::Deserializer;
 use serde::Serialize;
@@ -212,8 +212,8 @@ impl LoggedMerkle {
   ///
   /// # Example
   ///````
-  /// use ledger::store::append_only_merkle::AppendOnlyMerkle;
-  /// use ledger::store::logged_merkle::LoggedMerkle;
+  /// use merkle_tree::append_only_merkle::AppendOnlyMerkle;
+  /// use merkle_tree::logged_merkle::LoggedMerkle;
   /// use std::fs::OpenOptions;
   ///
   /// let tree_path = "new_logged";
@@ -557,10 +557,10 @@ impl Drop for LoggedMerkle {
 
 #[cfg(test)]
 mod tests {
-  use crate::store::append_only_merkle::AppendOnlyMerkle;
-  use crate::store::append_only_merkle::HashValue;
-  use crate::store::logged_merkle::LogBuffer;
-  use crate::store::logged_merkle::LoggedMerkle;
+  use crate::append_only_merkle::AppendOnlyMerkle;
+  use crate::append_only_merkle::HashValue;
+  use crate::logged_merkle::LogBuffer;
+  use crate::logged_merkle::LoggedMerkle;
   use std::cmp::max;
   use std::fs::OpenOptions;
 
