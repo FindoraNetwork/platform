@@ -2,7 +2,7 @@
 //! # as a Sparse Merkle Tree
 //!
 //!
-use crate::utils::sha256;
+use cryptohash::sha256;
 use sha256::DIGESTBYTES;
 use std::collections::HashMap;
 

@@ -27,7 +27,7 @@ extern crate ledger;
 #[macro_use]
 extern crate findora;
 
-use ledger::store::append_only_merkle::AppendOnlyMerkle;
+use merkle_tree::append_only_merkle::AppendOnlyMerkle;
 use std::env;
 use std::path::Path;
 use std::process::exit;
