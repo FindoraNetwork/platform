@@ -6,6 +6,8 @@ edition = "2018"
 
 [dependencies]
 bulletproofs =  {version = "1.0.4"}
+bincode = "1"
+base64 = "0.10"
 curve25519-dalek = { version =  "1.2.1", features = ["serde"] }
 futures = "0.1.20"
 hex = "0.3.2"
@@ -21,7 +23,9 @@ txn_builder = {path = "../txn_builder"}
 wasm-bindgen = { version = "0.2.50", features = ["serde-serialize"]  }
 wasm-bindgen-futures = "0.3.27"
 wasm-bindgen-test = "0.2.50"
-zei = { git = "ssh://git@github.com/findoraorg/zei" }
+#kzei = { git = "ssh://git@github.com/findoraorg/zei" }
+zei = { path = "../../../zei" }
+
 
 [lib]
 crate-type = ["cdylib", "rlib"]
