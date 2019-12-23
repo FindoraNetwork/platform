@@ -49,7 +49,7 @@ impl Code {
   }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Serialized<T> {
   val: String,
   phantom: PhantomData<T>,
@@ -57,7 +57,7 @@ pub struct Serialized<T> {
 
 impl<T> Serialized<T> where T: serde::Serialize + serde::de::DeserializeOwned
 {
-  pub fn new(to_serialize: T) -> Self {
+  pub fn new(to_serialize: &T) -> Self {
     Serialized { val: b64enc(&bincode::serialize(&to_serialize).unwrap()),
                  phantom: PhantomData }
   }
@@ -547,13 +547,11 @@ mod tests {
     let signature = keypair.sign(message);
 
     // Instantiate an TransferAsset operation
-    let xfr_note = XfrNote { body: XfrBody { inputs: Vec::new(),
-                                             outputs: Vec::new(),
-                                             proofs: XfrProofs { asset_amount_proof:
-                                                                   AssetAmountProof::NoProof,
-                                                                 asset_tracking_proof:
-                                                                   Default::default() } },
-                             multisig: Default::default() };
+    let xfr_note = XfrBody { inputs: Vec::new(),
+                             outputs: Vec::new(),
+                             proofs: XfrProofs { asset_amount_proof:
+                                                   AssetAmountProof::NoProof,
+                                                 asset_tracking_proof: Default::default() } };
 
     let assert_transfer_body = TransferAssetBody { inputs: Vec::new(),
                                                    num_outputs: 0,

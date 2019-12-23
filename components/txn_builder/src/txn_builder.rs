@@ -24,21 +24,23 @@ pub trait BuildsTransactions {
                                 updatable: bool,
                                 traceable: bool,
                                 memo: &str)
-                                -> Result<(), PlatformError>;
+                                -> Result<&mut Self, PlatformError>;
   fn add_operation_issue_asset(&mut self,
                                pub_key: &IssuerPublicKey,
                                priv_key: &XfrSecretKey,
                                token_code: &AssetTypeCode,
                                seq_num: u64,
                                records: &[TxOutput])
-                               -> Result<(), PlatformError>;
+                               -> Result<&mut Self, PlatformError>;
   fn add_operation_transfer_asset(&mut self,
                                   input_sids: Vec<TxoRef>,
                                   input_records: &[OpenAssetRecord],
                                   output_records: &[AssetRecord])
-                                  -> Result<(), PlatformError>;
+                                  -> Result<&mut Self, PlatformError>;
   fn serialize(&self) -> Result<Vec<u8>, PlatformError>;
   fn serialize_str(&self) -> Result<String, PlatformError>;
+
+  fn add_operation(&mut self, op: Operation) -> &mut Self;
 
   fn add_basic_issue_asset(&mut self,
                            pub_key: &IssuerPublicKey,
@@ -47,12 +49,13 @@ pub trait BuildsTransactions {
                            token_code: &AssetTypeCode,
                            seq_num: u64,
                            amount: u64)
-                           -> Result<(), PlatformError> {
+                           -> Result<&mut Self, PlatformError> {
     let mut prng = ChaChaRng::from_seed([0u8; 32]);
     let params = PublicParams::new();
     let ar = AssetRecord::new(amount, token_code.val, pub_key.key)?;
     let ba = build_blind_asset_record(&mut prng, &params.pc_gens, &ar, true, true, tracking_keys);
-    self.add_operation_issue_asset(pub_key, priv_key, token_code, seq_num, &[TxOutput(ba)])
+    self.add_operation_issue_asset(pub_key, priv_key, token_code, seq_num, &[TxOutput(ba)])?;
+    Ok(self)
   }
 
   #[allow(clippy::comparison_chain)]
@@ -60,7 +63,7 @@ pub trait BuildsTransactions {
                               key_pair: &XfrKeyPair,
                               transfer_from: &[(&TxoRef, &BlindAssetRecord, u64)],
                               transfer_to: &[(u64, &AccountAddress)])
-                              -> Result<(), PlatformError> {
+                              -> Result<&mut Self, PlatformError> {
     let input_sids: Vec<TxoRef> = transfer_from.iter()
                                                .map(|(ref txo_sid, _, _)| *(*txo_sid))
                                                .collect();
@@ -93,7 +96,8 @@ pub trait BuildsTransactions {
                  .collect();
     let mut output_ars = output_ars?;
     output_ars.append(&mut partially_consumed_inputs);
-    self.add_operation_transfer_asset(input_sids, &input_oars, &output_ars)
+    self.add_operation_transfer_asset(input_sids, &input_oars, &output_ars)?;
+    Ok(self)
   }
 }
 
@@ -114,9 +118,9 @@ impl BuildsTransactions for TransactionBuilder {
                                 updatable: bool,
                                 traceable: bool,
                                 _memo: &str)
-                                -> Result<(), PlatformError> {
+                                -> Result<&mut Self, PlatformError> {
     self.txn.add_operation(Operation::DefineAsset(DefineAsset::new(DefineAssetBody::new(&token_code.unwrap_or_else(AssetTypeCode::gen_random), pub_key, updatable, traceable, None, Some(ConfidentialMemo {}))?, pub_key, priv_key)?));
-    Ok(())
+    Ok(self)
   }
   fn add_operation_issue_asset(&mut self,
                                pub_key: &IssuerPublicKey,
@@ -124,27 +128,33 @@ impl BuildsTransactions for TransactionBuilder {
                                token_code: &AssetTypeCode,
                                seq_num: u64,
                                records: &[TxOutput])
-                               -> Result<(), PlatformError> {
+                               -> Result<&mut Self, PlatformError> {
     self.txn
         .add_operation(Operation::IssueAsset(IssueAsset::new(IssueAssetBody::new(token_code,
                                                                                  seq_num,
                                                                                  records)?,
                                                              pub_key,
                                                              priv_key)?));
-    Ok(())
+    Ok(self)
   }
   fn add_operation_transfer_asset(&mut self,
                                   input_sids: Vec<TxoRef>,
                                   input_records: &[OpenAssetRecord],
                                   output_records: &[AssetRecord])
-                                  -> Result<(), PlatformError> {
+                                  -> Result<&mut Self, PlatformError> {
     // TODO(joe/noah): keep a prng around somewhere?
     let mut prng: ChaChaRng;
     prng = ChaChaRng::from_seed([0u8; 32]);
 
     self.txn.add_operation(Operation::TransferAsset(TransferAsset::new(TransferAssetBody::new(&mut prng, input_sids, input_records, output_records)?, TransferType::Standard)?));
-    Ok(())
+    Ok(self)
   }
+
+  fn add_operation(&mut self, op: Operation) -> &mut Self {
+    self.txn.add_operation(op);
+    self
+  }
+
   fn serialize(&self) -> Result<Vec<u8>, PlatformError> {
     let j = serde_json::to_string(&self.txn)?;
     Ok(j.as_bytes().to_vec())
@@ -159,9 +169,11 @@ impl BuildsTransactions for TransactionBuilder {
   }
 }
 
+#[derive(Serialize, Deserialize)]
 pub struct TransferOperationBuilder {
   input_sids: Vec<TxoRef>,
   input_records: Vec<OpenAssetRecord>,
+  spend_amounts: Vec<u64>, //Amount of each input record to spend, the rest will be refunded
   output_records: Vec<AssetRecord>,
   transfer_type: TransferType,
 }
@@ -171,12 +183,14 @@ impl TransferOperationBuilder {
     TransferOperationBuilder { input_sids: Vec::new(),
                                input_records: Vec::new(),
                                output_records: Vec::new(),
+                               spend_amounts: Vec::new(),
                                transfer_type: TransferType::Standard }
   }
 
-  pub fn add_input(&mut self, txo_sid: TxoRef, open_ar: OpenAssetRecord) -> &mut Self {
+  pub fn add_input(&mut self, txo_sid: TxoRef, open_ar: OpenAssetRecord, amount: u64) -> &mut Self {
     self.input_sids.push(txo_sid);
     self.input_records.push(open_ar);
+    self.spend_amounts.push(amount);
     self
   }
 
@@ -197,53 +211,36 @@ impl TransferOperationBuilder {
 
   // Ensures that outputs and inputs are balanced by adding remainder outputs for leftover asset
   // amounts
-  pub fn balance(&mut self) -> &mut Self {
-    let _collect: Vec<u64> = self.input_records
-                                 .iter()
-                                 .map(|ref oar| *oar.get_amount())
-                                 .collect();
-    self
-    //let input_sids: Vec<TxoRef> = transfer_from.iter()
-    //                                           .map(|(ref txo_sid, _, _)| *(*txo_sid))
-    //                                           .collect();
-    //let input_amounts: Vec<u64> = transfer_from.iter().map(|(_, _, amount)| *amount).collect();
-    //let input_oars: Result<Vec<OpenAssetRecord>, _> =
-    //  transfer_from.iter()
-    //               .map(|(_, ref ba, _)| open_asset_record(&ba, &key_pair.get_sk_ref()))
-    //               .collect();
-    //let input_oars = input_oars?;
-    //let input_total: u64 = input_amounts.iter().sum();
-    //let mut partially_consumed_inputs = Vec::new();
-    //for (input_amount, oar) in input_amounts.iter().zip(input_oars.iter()) {
-    //  if input_amount > oar.get_amount() {
-    //    return Err(PlatformError::InputsError);
-    //  } else if input_amount < oar.get_amount() {
-    //    let ar = AssetRecord::new(oar.get_amount() - input_amount,
-    //                              *oar.get_asset_type(),
-    //                              *oar.get_pub_key())?;
-    //    partially_consumed_inputs.push(ar);
-    //  }
-    //}
-    //let output_total = transfer_to.iter().fold(0, |acc, (amount, _)| acc + amount);
-    //if input_total != output_total {
-    //  return Err(PlatformError::InputsError);
-    //}
-    //let asset_type = input_oars[0].get_asset_type();
-    //let output_ars: Result<Vec<AssetRecord>, _> =
-    //  transfer_to.iter()
-    //             .map(|(amount, ref addr)| AssetRecord::new(*amount, *asset_type, addr.key))
-    //             .collect();
-    //let mut output_ars = output_ars?;
-    //output_ars.append(&mut partially_consumed_inputs);
+  pub fn balance(&mut self) -> Result<&mut Self, PlatformError> {
+    let spend_total: u64 = self.spend_amounts.iter().sum();
+    let mut partially_consumed_inputs = Vec::new();
+    for (spend_amount, oar) in self.spend_amounts.iter().zip(self.input_records.iter()) {
+      if spend_amount > oar.get_amount() {
+        return Err(PlatformError::InputsError);
+      } else if spend_amount < oar.get_amount() {
+        let ar = AssetRecord::new(oar.get_amount() - spend_amount,
+                                  *oar.get_asset_type(),
+                                  *oar.get_pub_key())?;
+        partially_consumed_inputs.push(ar);
+      }
+    }
+    let output_total = self.output_records
+                           .iter()
+                           .fold(0, |acc, ar| acc + ar.amount);
+    if spend_total != output_total {
+      return Err(PlatformError::InputsError);
+    }
+    self.output_records.append(&mut partially_consumed_inputs);
+    Ok(self)
   }
 
-  pub fn create(&self) -> Result<TransferAsset, PlatformError> {
+  pub fn create(&self) -> Result<Operation, PlatformError> {
     let mut prng = ChaChaRng::from_seed([0u8; 32]);
     let body = TransferAssetBody::new(&mut prng,
                                       self.input_sids.clone(),
                                       &self.input_records,
                                       &self.output_records)?;
-    TransferAsset::new(body, self.transfer_type)
+    Ok(Operation::TransferAsset(TransferAsset::new(body, self.transfer_type)?))
   }
 }
 
@@ -401,5 +398,39 @@ mod tests {
       let null_policies = vec![];
       assert!(verify_xfr_note(&mut prng, &xfr_note, &null_policies).is_ok())
     }
+  }
+
+  #[test]
+  fn test_transfer_op_builder() {
+    let mut prng = ChaChaRng::from_seed([0u8; 32]);
+    let params = PublicParams::new();
+    let code_1 = AssetTypeCode::gen_random();
+    let code_2 = AssetTypeCode::gen_random();
+    let alice = XfrKeyPair::generate(&mut prng);
+    let bob = XfrKeyPair::generate(&mut prng);
+    let charlie = XfrKeyPair::generate(&mut prng);
+    let ben = XfrKeyPair::generate(&mut prng);
+
+    let ar_1 = AssetRecord::new(1000, code_1.val, *alice.get_pk_ref()).unwrap();
+    let ar_2 = AssetRecord::new(1000, code_2.val, *bob.get_pk_ref()).unwrap();
+    let ba_1 = build_blind_asset_record(&mut prng, &params.pc_gens, &ar_1, false, false, &None);
+    let ba_2 = build_blind_asset_record(&mut prng, &params.pc_gens, &ar_2, false, false, &None);
+
+    let transfer_op =
+      TransferOperationBuilder::new()
+      .add_input(TxoRef::Relative(1), open_asset_record(&ba_1, alice.get_sk_ref()).unwrap(), 20)
+      .add_input(TxoRef::Relative(2), open_asset_record(&ba_2, bob.get_sk_ref()).unwrap(), 20)
+      .add_output(5, bob.get_pk_ref(), code_1)
+      .add_output(13, charlie.get_pk_ref(), code_1)
+      .add_output(2, ben.get_pk_ref(), code_1)
+      .add_output(5, bob.get_pk_ref(), code_2)
+      .add_output(13, charlie.get_pk_ref(), code_2)
+      .add_output(2, ben.get_pk_ref(), code_2)
+      .balance()
+      .unwrap()
+      .create()
+      .unwrap();
+
+    dbg!(&serde_json::to_string(&transfer_op));
   }
 }

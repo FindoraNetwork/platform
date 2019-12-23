@@ -8,6 +8,7 @@ edition = "2018"
 abci = "0.4.3"
 actix-web = "1.0"
 arrayref = "0.3.5"
+base64 = "0.10"
 clap = "2.33.0"
 dirs = "2.0.1"
 bulletproofs =  {version = "1.0.4"}
