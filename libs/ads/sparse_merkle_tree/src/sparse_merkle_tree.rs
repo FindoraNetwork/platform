@@ -1,25 +1,25 @@
-//! # An authenticated key value store mapping SHA-256 keys to values implemented 
+//! # An authenticated key value store mapping SHA-256 keys to values implemented
 //! # as a Sparse Merkle Tree
 //!
 //!
+use cryptohash::sha256;
+use sha256::DIGESTBYTES;
 use std::collections::HashMap;
-use crate::utils::sha256;
-use sha256::{DIGESTBYTES};
 
 pub fn get_bit(b: &[u8; 32], index: usize) -> bool {
-    b[index >> 3] & (1_u8 << (index & 7)) != 0
+  b[index >> 3] & (1_u8 << (index & 7)) != 0
 }
 
 pub fn set_bit(b: &mut [u8; 32], index: usize) {
-    b[index >> 3] |= 1_u8 << (index & 7);
+  b[index >> 3] |= 1_u8 << (index & 7);
 }
 
 pub fn clear_bit(b: &mut [u8; 32], index: usize) {
-    b[index >> 3] &= !(1_u8 << (index & 7));
+  b[index >> 3] &= !(1_u8 << (index & 7));
 }
 
 pub fn flip_bit(b: &mut [u8; 32], index: usize) {
-    b[index >> 3] ^= 1_u8 << (index & 7);
+  b[index >> 3] ^= 1_u8 << (index & 7);
 }
 
 // 256 bit values are used both as keys, and as per node hashes. To avoid confusion,
@@ -49,18 +49,14 @@ struct TreeNodeIndex {
 impl TreeNodeIndex {
   /// Get a new TreeNodeIndex of the leaf corresponding to the given key.
   fn leaf(key: Key) -> Self {
-    Self {
-      bit_path: key,
-      depth: 256,
-    }
+    Self { bit_path: key,
+           depth: 256 }
   }
 
   /// Index of the root.
   fn root() -> Self {
-    Self {
-      bit_path: ZERO_KEY,
-      depth: 0,
-    }
+    Self { bit_path: ZERO_KEY,
+           depth: 0 }
   }
 
   /// Whether this is the root.
@@ -103,7 +99,7 @@ pub struct MerkleProof {
 }
 
 /// SmtMap256 is Sparse Merkle Tree Map from 256-bit keys to an optional value
-//  and supports generating 256-bit merkle (non) inclusion proofs. 
+//  and supports generating 256-bit merkle (non) inclusion proofs.
 /// Initially, each  of the 2**256 possible keys has a default value of None,
 /// which has a hash value of zero.
 ///
@@ -124,10 +120,8 @@ pub struct SmtMap256<Value: AsRef<[u8]>> {
 impl<Value: AsRef<[u8]>> SmtMap256<Value> {
   /// Returns a new SMT-Map where all keys have the default value (zero).
   pub fn new() -> Self {
-    Self {
-      kvs: HashMap::new(),
-      hashes: HashMap::new(),
-    }
+    Self { kvs: HashMap::new(),
+           hashes: HashMap::new() }
   }
 
   /// Sets the value of a key. Returns the previous value corresponding to the key.
@@ -174,13 +168,9 @@ impl<Value: AsRef<[u8]>> SmtMap256<Value> {
       }
       index.move_up();
     }
-    (
-      self.get(key),
-      MerkleProof {
-        bitmap,
-        hashes: sibling_hashes,
-      },
-    )
+    (self.get(key),
+     MerkleProof { bitmap,
+                   hashes: sibling_hashes })
   }
 
   /// Returns the Merkle root
@@ -189,17 +179,12 @@ impl<Value: AsRef<[u8]>> SmtMap256<Value> {
   }
 
   /// Returns `true` when proof is valid, `false` otherwise.
-  pub fn check_merkle_proof(&self,
-                            key: &Key,
-                            value: Option<&Value>, proof: &MerkleProof)
-                            -> bool {
+  pub fn check_merkle_proof(&self, key: &Key, value: Option<&Value>, proof: &MerkleProof) -> bool {
     check_merkle_proof(self.merkle_root(), key, value, proof)
   }
 
   fn get_hash(&self, index: &TreeNodeIndex) -> &Hash256 {
-    self.hashes
-      .get(index)
-      .unwrap_or(&ZERO_DIGEST) // (&(*DEFAULT_HASHES)[256 - index.depth])
+    self.hashes.get(index).unwrap_or(&ZERO_DIGEST) // (&(*DEFAULT_HASHES)[256 - index.depth])
   }
 
   fn update_hash(&mut self, index: &TreeNodeIndex, hash: &Hash256) {
@@ -213,12 +198,11 @@ impl<Value: AsRef<[u8]>> SmtMap256<Value> {
 
 /// Check the Merkle proof of a key-value pair in a Merkle root.
 /// whether the proof is valid.
-pub fn check_merkle_proof<Value: AsRef<[u8]>>(
-  merkle_root: &Hash256,
-  key: &Key,
-  value: Option<&Value>,
-  proof: &MerkleProof)
-  -> bool {
+pub fn check_merkle_proof<Value: AsRef<[u8]>>(merkle_root: &Hash256,
+                                              key: &Key,
+                                              value: Option<&Value>,
+                                              proof: &MerkleProof)
+                                              -> bool {
   let mut hash = value.map_or(ZERO_DIGEST, |v| hash_256(v));
   let mut iter = proof.hashes.iter();
   for i in 0..256 {
@@ -268,9 +252,9 @@ fn hash_pair(left: &Hash256, right: &Hash256) -> Hash256 {
 #[cfg(test)]
 mod tests {
   use super::*;
-  use hex::{FromHex, encode};
-  use std::string::ToString;
+  use hex::{encode, FromHex};
   use quickcheck::{quickcheck, TestResult};
+  use std::string::ToString;
 
   // `hex` is the first a few bytes of the desired 32 bytes (the rest bytes are zeros).
   pub fn l256(hex: &str) -> [u8; 32] {
@@ -285,7 +269,6 @@ mod tests {
     let hex = "0".repeat(64 - hex.len()) + hex;
     <[u8; 32]>::from_hex(&hex).unwrap()
   }
-
 
   // `hex` must be a 64-byte long hex string.
   pub fn b256(hex: &str) -> Hash256 {
@@ -305,7 +288,7 @@ mod tests {
   }
 
   pub fn to_hex(blob: &[u8]) -> String {
-    let mut buf: String = String::new(); 
+    let mut buf: String = String::new();
     for ch in blob {
       buf.push(hex_from_digit(ch / 16));
       buf.push(hex_from_digit(ch % 16));
@@ -313,7 +296,7 @@ mod tests {
     buf
   }
 
-  fn mask_u8(x: u64, shift:usize) -> u8 {
+  fn mask_u8(x: u64, shift: usize) -> u8 {
     (x >> shift) as u8 & 0xffu8
   }
 
@@ -390,20 +373,12 @@ mod tests {
       index.move_up();
     }
     assert!(index.is_left());
-    assert_eq!(
-      index,
-      TreeNodeIndex {
-        bit_path: r256("1234567890abcdef1234567890abcd0f"),
-        depth: 256 - 3,
-      }
-    );
-    assert_eq!(
-      index.sibling().unwrap(),
-      TreeNodeIndex {
-        bit_path: r256("1234567890abcdef1234567890abcd1f"),
-        depth: 256 - 3,
-      }
-    );
+    assert_eq!(index,
+               TreeNodeIndex { bit_path: r256("1234567890abcdef1234567890abcd0f"),
+                               depth: 256 - 3 });
+    assert_eq!(index.sibling().unwrap(),
+               TreeNodeIndex { bit_path: r256("1234567890abcdef1234567890abcd1f"),
+                               depth: 256 - 3 });
 
     // Climb up from the left-most leaf.
     let mut index = TreeNodeIndex::leaf([0; 32]);
@@ -455,7 +430,7 @@ mod tests {
     let value3 = Some("cafebabecafebabecafebabecafebabecafebabecafebabecafebabecafebabe");
 
     assert_eq!(smt.set(&key, value1), None);
-    assert!(merkle_root !=  *(&smt).merkle_root());
+    assert!(merkle_root != *(&smt).merkle_root());
     assert_eq!(smt.get(&key), value1.as_ref());
     assert_eq!(smt.set(&key, value2), value1);
     assert_eq!(smt.get(&key), value2.as_ref());
@@ -463,7 +438,9 @@ mod tests {
     assert_eq!(smt.get(&key), value3.as_ref());
     assert_eq!(smt.set(&key, None), value3);
     assert_eq!(merkle_root, *(&smt).merkle_root());
-    println!("retrieved value {:?} associated with key {:?}", &value3.unwrap(), to_hex(&key));
+    println!("retrieved value {:?} associated with key {:?}",
+             &value3.unwrap(),
+             to_hex(&key));
 
     fn prop(x0: u64, x1: u64, x2: u64, x3: u64, s: String) -> TestResult {
       let mut smt = SmtMap256::new();
@@ -471,7 +448,7 @@ mod tests {
       let prev = smt.set(&key, value);
       match prev {
         Some(_) => TestResult::failed(),
-        None => 
+        None => {
           if let Some(v) = smt.get(&key) {
             if v == &s {
               TestResult::passed()
@@ -481,6 +458,7 @@ mod tests {
           } else {
             TestResult::failed()
           }
+        }
       }
     }
     quickcheck(prop as fn(u64, u64, u64, u64, String) -> TestResult);
@@ -496,15 +474,12 @@ mod tests {
     // Verify proof of `key` when the values of all keys are default.
     let key = r256("C0");
     let (value, proof) = smt.get_with_proof(&key);
-    println!("test_smt_map_256_merkle_proof: key={:?}, value={:?}, proof={:?}", &key, &value, &proof);
+    println!("test_smt_map_256_merkle_proof: key={:?}, value={:?}, proof={:?}",
+             &key, &value, &proof);
     assert_eq!(value, None); // [0; 32]);
-    assert_eq!(
-      proof,
-      MerkleProof {
-        bitmap: [0; 32],
-        hashes: Vec::new(),
-      }
-    );
+    assert_eq!(proof,
+               MerkleProof { bitmap: [0; 32],
+                             hashes: Vec::new() });
     assert!(smt.check_merkle_proof(&key, value, &proof));
     assert!(check_merkle_proof(smt.merkle_root(), &key, value, &proof));
 
@@ -513,18 +488,14 @@ mod tests {
     let (value, proof) = smt.get_with_proof(&key);
     assert_eq!(value, None); // [0; 32]);
     assert_eq!(
-      proof,
-      MerkleProof {
-        bitmap: l256("02"),
-        hashes: vec![b256(
-          "5031918db6776a678116ebe3352a3283f28983dbec4df0783c4988a7be461922"
-        )],
-      },
+               proof,
+               MerkleProof { bitmap: l256("02"),
+                             hashes: vec![b256(
+      "5031918db6776a678116ebe3352a3283f28983dbec4df0783c4988a7be461922"
+    )], },
     );
-    assert_eq!(
-      *smt.merkle_root(),
-      b256("b2ad41cbb57aa3e5f0645c1c15568856063c8b1fa91a36261c07f79b5a83eb57")
-    );
+    assert_eq!(*smt.merkle_root(),
+               b256("b2ad41cbb57aa3e5f0645c1c15568856063c8b1fa91a36261c07f79b5a83eb57"));
     assert!(smt.check_merkle_proof(&key, value, &proof));
     assert!(check_merkle_proof(smt.merkle_root(), &key, value, &proof));
 
@@ -542,10 +513,8 @@ mod tests {
         ],
       },
     );
-    assert_eq!(
-      *smt.merkle_root(),
-      b256("240a695aed4152b8f5b77aa9cb0e2b93b844ee0bc184fe898d28a29c348d57f6")
-    );
+    assert_eq!(*smt.merkle_root(),
+               b256("240a695aed4152b8f5b77aa9cb0e2b93b844ee0bc184fe898d28a29c348d57f6"));
     assert!(smt.check_merkle_proof(&key, value, &proof));
     assert!(check_merkle_proof(smt.merkle_root(), &key, value, &proof));
 
@@ -564,10 +533,8 @@ mod tests {
         ],
       },
     );
-    assert_eq!(
-      *smt.merkle_root(),
-      b256("ada8f75819448c00025257d17bfd78c821487e60f9b31340bcf393e9c6acefa2")
-    );
+    assert_eq!(*smt.merkle_root(),
+               b256("ada8f75819448c00025257d17bfd78c821487e60f9b31340bcf393e9c6acefa2"));
 
     // Reset the value of key 0x00..00 to the default, and verify the merkle proof of `key`.
     smt.set(&[0; 32], None); // [0; 32]);
@@ -582,38 +549,26 @@ mod tests {
         ),],
       },
     );
-    assert_eq!(
-      *smt.merkle_root(),
-      b256("46b50abc16c1f97e918186a18397082e02adb1f38dd79c765da71f37501f9277")
-    );
+    assert_eq!(*smt.merkle_root(),
+               b256("46b50abc16c1f97e918186a18397082e02adb1f38dd79c765da71f37501f9277"));
 
     // Reset the value of the max key to the default, and verify the merkle proof of `key`.
     smt.set(&max256(), None); // [0; 32]);
     let (value, proof) = smt.get_with_proof(&key);
     assert_eq!(value, value2.as_ref());
-    assert_eq!(
-      proof,
-      MerkleProof {
-        bitmap: [0; 32],
-        hashes: vec![]
-      },
-    );
-    assert_eq!(
-      *smt.merkle_root(),
-      b256("41cf2d63e95cc4f4e430ffebb1c4c7d84adf81c6196348d6ea1f8afb9871599b")
-    );
+    assert_eq!(proof,
+               MerkleProof { bitmap: [0; 32],
+                             hashes: vec![] },);
+    assert_eq!(*smt.merkle_root(),
+               b256("41cf2d63e95cc4f4e430ffebb1c4c7d84adf81c6196348d6ea1f8afb9871599b"));
 
     // Reset the value of `key`, and verify that the merkle tree has been reset to the init state.
     smt.set(&key, None); // [0; 32]);
     let (value, proof) = smt.get_with_proof(&key);
     assert_eq!(value, None); // [0; 32]);
-    assert_eq!(
-      proof,
-      MerkleProof {
-        bitmap: [0; 32],
-        hashes: vec![]
-      },
-    );
+    assert_eq!(proof,
+               MerkleProof { bitmap: [0; 32],
+                             hashes: vec![] },);
     assert_eq!(smt.merkle_root(), &expected_default_root_hash);
   }
 

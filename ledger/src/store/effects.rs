@@ -2,8 +2,8 @@
 use crate::data_model::errors::PlatformError;
 use crate::data_model::*;
 use crate::policies::{compute_debt_swap_effect, DebtSwapEffect};
-use crate::utils::sha256;
-use crate::utils::sha256::Digest as BitDigest;
+use cryptohash::sha256;
+use cryptohash::sha256::Digest as BitDigest;
 use findora::HasInvariants;
 use rand::SeedableRng;
 use rand::{CryptoRng, Rng};

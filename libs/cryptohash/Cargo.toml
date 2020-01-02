@@ -1,0 +1,28 @@
+[package]
+name = "cryptohash"
+version = "0.1.0"
+authors = ["Engineering <engineering@findora.org>"]
+edition = "2018"
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+arrayref = "0.3.5"
+base64 = "0.10"
+bincode = "1"
+blake2 = "0.8.0"
+byteorder = "1.0.0"
+rand = "0.6"
+rand_chacha = "0.1.1"
+sha2 = "0.8.0"
+tiny-keccak = "1.4.2"
+
+[dependencies.fixed]
+version = "0.4.6"
+features = ["f16", "serde"]
+
+[target.'cfg(not(target_arch = "wasm32"))'. dependencies]
+sodiumoxide = "0.2.1"
+fs2 = "0.4"
+

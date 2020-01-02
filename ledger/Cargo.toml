@@ -8,16 +8,19 @@ edition = "2018"
 arrayref = "0.3.5"
 base64 = "0.10"
 bincode = "1"
+bitmap = { path = "../libs/bitmap" }
 blake2 = "0.8.0"
 bulletproofs =  {version = "1.0.4"}
 byteorder = "1.0.0"
 chrono = "0.4"
+cryptohash = { path = "../libs/cryptohash" }
 curve25519-dalek = { version =  "1.2.1", features = ["serde"] }
 ed25519-dalek = "0.9.1"
 findora = { path = "../findora" }
 hex = "0.3.2"
 itertools = "0.8.0"
 lazy_static = { version = "1.2.0" }
+merkle_tree = { path = "../libs/ads/merkle_tree" }
 quickcheck = "0.9.0"
 rand = "0.6"
 rand_chacha = "0.1.1"

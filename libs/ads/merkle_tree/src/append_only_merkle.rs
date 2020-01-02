@@ -7,16 +7,11 @@
 //!  support a paged tree, i.e., one that is loaded on demand and paged
 //!  to disk as needed.
 //!
-extern crate byteorder;
-extern crate chrono;
-extern crate findora;
-extern crate rand;
-extern crate serde;
-extern crate serde_derive;
 
-use crate::utils::sha256;
+use cryptohash::sha256;
 use chrono::Utc;
-use findora::Commas;
+use findora::{Commas, debug, er, log, log_impl, sde, se};
+use itertools::izip;
 use serde::Deserialize;
 use serde::Deserializer;
 use serde::Serialize;
@@ -507,7 +502,7 @@ impl AppendOnlyMerkle {
   ///
   /// # Example
   ///````
-  /// use crate::ledger::store::append_only_merkle::AppendOnlyMerkle;
+  /// use merkle_tree::append_only_merkle::AppendOnlyMerkle;
   ///
   /// let path = "public_ledger".to_string();
   ///
@@ -550,7 +545,7 @@ impl AppendOnlyMerkle {
   ///
   /// # Example
   ///````
-  /// use crate::ledger::store::append_only_merkle::AppendOnlyMerkle;
+  /// use merkle_tree::append_only_merkle::AppendOnlyMerkle;
   ///
   /// let path = "new_ledger";
   /// # let _ = std::fs::remove_file(&path);
@@ -782,7 +777,7 @@ impl AppendOnlyMerkle {
   ///
   /// # Example
   ///````
-  /// use crate::ledger::store::append_only_merkle::AppendOnlyMerkle;
+  /// use merkle_tree::append_only_merkle::AppendOnlyMerkle;
   ///
   /// let path       = "deserialize";
   /// # let _ = std::fs::remove_file(&path);
@@ -2015,7 +2010,7 @@ impl AppendOnlyMerkle {
 #[cfg(test)]
 mod tests {
   use super::*;
-  use crate::utils::sha256;
+  use cryptohash::sha256;
   use byteorder::LittleEndian;
   use byteorder::WriteBytesExt;
   use rand::prelude::thread_rng;

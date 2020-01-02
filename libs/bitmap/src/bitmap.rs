@@ -22,9 +22,9 @@
 //! The SparseMap structure allows various queries on the contents
 //! of the map.
 
-use crate::utils::sha256;
-use crate::utils::sha256::{Digest, DIGESTBYTES};
-use findora::Commas;
+use cryptohash::sha256;
+use cryptohash::sha256::{Digest, DIGESTBYTES};
+use findora::{Commas, debug, er, log, log_impl};
 use std::cmp::min;
 use std::collections::HashMap;
 use std::collections::HashSet;
@@ -586,7 +586,7 @@ impl BitMap {
   /// # Example
   ///````
   /// use std::fs::OpenOptions;
-  /// use crate::ledger::store::bitmap::BitMap;
+  /// use bitmap::BitMap;
   ///
   /// let path = "sample_create_name";
   ///
@@ -639,7 +639,7 @@ impl BitMap {
   /// # Example
   ///````
   /// use std::fs::OpenOptions;
-  /// use crate::ledger::store::bitmap::BitMap;
+  /// use bitmap::BitMap;
   ///
   /// let path = "sample_open_name";
   ///
@@ -1383,7 +1383,7 @@ impl BitMap {
 #[cfg(test)]
 mod tests {
   use super::*;
-  use crate::utils::sha256::{Digest, DIGESTBYTES};
+  use cryptohash::sha256::{Digest, DIGESTBYTES};
   use std::fs;
   use std::fs::OpenOptions;
   use std::mem;

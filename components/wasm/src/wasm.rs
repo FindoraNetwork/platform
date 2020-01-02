@@ -11,12 +11,12 @@ extern crate wasm_bindgen;
 extern crate wasm_bindgen_test;
 extern crate zei;
 use bulletproofs::PedersenGens;
+use cryptohash::sha256;
 use hex;
 use js_sys::Promise;
 use ledger::data_model::{
   AccountAddress, AssetTypeCode, IssuerPublicKey, Operation, Serialized, TxoRef, TxoSID,
 };
-use ledger::utils::sha256;
 use percent_encoding::{utf8_percent_encode, AsciiSet, CONTROLS};
 use rand::FromEntropy;
 use rand::SeedableRng;

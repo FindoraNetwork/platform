@@ -24,11 +24,11 @@ bin_files =                             \
         ./$(pick)/check_merkle          \
 
 lib_files =                                                         \
-        ledger/$(pick)/libledger.rlib                               \
-        components/ledger_app/$(pick)/libledger_app.rlib            \
-        components/api_service/$(pick)/libapi_service.rlib          \
-        components/query_processor/$(pick)/libquery_processor.rlib  \
-        components/txn_builder/$(pick)/libtxn_builder.rlib          \
+        ./$(pick)/libledger.rlib                               \
+        ./$(pick)/libledger_app.rlib            \
+        ./$(pick)/libapi_service.rlib          \
+        ./$(pick)/libquery_processor.rlib  \
+        ./$(pick)/libtxn_builder.rlib          \
 
 release:  rust
 	rm -rf $(release_dir)
@@ -41,7 +41,7 @@ rust:
 	for i in $(rust_dirs); do (cd $$i; cargo build --release) || exit; done
 
 test_status:
-	tools/incur build
-	tools/incur build --release
-	tools/incur test
+	scripts/incur build
+	scripts/incur build --release
+	scripts/incur test
 	make release
