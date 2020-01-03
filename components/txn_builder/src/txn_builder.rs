@@ -254,7 +254,7 @@ impl TransferOperationBuilder {
     Ok(self)
   }
 
-  pub fn sign(&mut self, kp: XfrKeyPair) -> Result<&mut Self, PlatformError> {
+  pub fn sign(&mut self, kp: &XfrKeyPair) -> Result<&mut Self, PlatformError> {
     if self.transfer.is_none() {
       return Err(PlatformError::InvariantError(Some("Must create transfer before signing".to_string())));
     }
@@ -456,8 +456,8 @@ mod tests {
       .add_output(2, ben.get_pk_ref(), code_2)?
       .balance()?
       .create(TransferType::Standard)?
-      .sign(alice)?
-      .sign(bob)?
+      .sign(&alice)?
+      .sign(&bob)?
       .transaction()?;
 
     dbg!(&serde_json::to_string(&transfer_op));

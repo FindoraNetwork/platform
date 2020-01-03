@@ -164,7 +164,7 @@ impl WasmTransactionBuilder {
                                                                            .add_operation(op)) })
   }
 
-  pub fn create(&mut self) -> Result<String, JsValue> {
+  pub fn transaction(&mut self) -> Result<String, JsValue> {
     Ok(self.transaction_builder
            .deserialize()
            .serialize_str()
@@ -210,13 +210,12 @@ impl WasmTransferOperationBuilder {
                     -> Result<WasmTransferOperationBuilder, JsValue> {
     let code = AssetTypeCode::new_from_base64(&code).map_err(|_e| {
       JsValue::from_str("Could not deserialize asset token code")})?;
-    Ok(WasmTransferOperationBuilder { op_builder:
-                                        Serialized::new(&*self.op_builder
-                                                              .deserialize()
-                                                              .add_output(amount, recipient, code)
-                                                              .map_err(|e| {
-                                                                JsValue::from_str(&format!("{}", e))
-                                                              })?) })
+
+    let new_builder = Serialized::new(&*self.op_builder
+                                            .deserialize()
+                                            .add_output(amount, recipient, code)
+                                            .map_err(|e| JsValue::from_str(&format!("{}", e)))?);
+    Ok(WasmTransferOperationBuilder { op_builder: new_builder })
   }
 
   pub fn balance(&mut self) -> Result<WasmTransferOperationBuilder, JsValue> {
@@ -225,15 +224,35 @@ impl WasmTransferOperationBuilder {
                                                                         .balance().map_err(|_e| JsValue::from_str("Error balancing txn"))?) })
   }
 
-  pub fn create(&mut self, transfer_type: String) -> Result<String, JsValue> {
+  pub fn create(&mut self, transfer_type: String) -> Result<WasmTransferOperationBuilder, JsValue> {
     let transfer_type =
       serde_json::from_str::<TransferType>(&transfer_type).map_err(|_e| {
                                                 JsValue::from_str("Could not deserialize transfer type")
                                               })?;
-    Ok(serde_json::to_string(&self.op_builder
-                                  .deserialize()
-                                  .create(transfer_type)
-                                  .map_err(|_e| JsValue::from_str("Error balancing txn"))?).unwrap())
+    let new_builder = Serialized::new(&*self.op_builder
+                                            .deserialize()
+                                            .create(transfer_type)
+                                            .map_err(|e| JsValue::from_str(&format!("{}", e)))?);
+
+    Ok(WasmTransferOperationBuilder { op_builder: new_builder })
+  }
+
+  pub fn sign(&mut self, kp: &XfrKeyPair) -> Result<WasmTransferOperationBuilder, JsValue> {
+    let new_builder = Serialized::new(&*self.op_builder
+                                            .deserialize()
+                                            .sign(&kp)
+                                            .map_err(|e| JsValue::from_str(&format!("{}", e)))?);
+
+    Ok(WasmTransferOperationBuilder { op_builder: new_builder })
+  }
+
+  pub fn transaction(&self) -> Result<String, JsValue> {
+    let transaction = self.op_builder
+                          .deserialize()
+                          .transaction()
+                          .map_err(|e| JsValue::from_str(&format!("{}", e)))?;
+
+    Ok(serde_json::to_string(&transaction).unwrap())
   }
 }
 
@@ -266,10 +285,10 @@ pub fn keypair_from_str(str: String) -> XfrKeyPair {
 }
 
 #[wasm_bindgen]
-pub fn generate_elgamal_keys() -> JsValue {
+pub fn generate_elgamal_keys() -> String {
   let mut small_rng = ChaChaRng::from_entropy();
   let pc_gens = PedersenGens::default();
-  return JsValue::from_serde(&elgamal_keygen(&mut small_rng, &RistPoint(pc_gens.B))).unwrap();
+  return serde_json::to_string(&elgamal_keygen(&mut small_rng, &RistPoint(pc_gens.B))).unwrap();
 }
 
 ///////////// CRYPTO //////////////////////
