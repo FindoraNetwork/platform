@@ -175,6 +175,7 @@ pub struct TransferOperationBuilder {
   input_records: Vec<OpenAssetRecord>,
   spend_amounts: Vec<u64>, //Amount of each input record to spend, the rest will be refunded
   output_records: Vec<AssetRecord>,
+  transfer: Option<TransferAsset>,
   transfer_type: TransferType,
 }
 
@@ -184,34 +185,43 @@ impl TransferOperationBuilder {
                                input_records: Vec::new(),
                                output_records: Vec::new(),
                                spend_amounts: Vec::new(),
+                               transfer: None,
                                transfer_type: TransferType::Standard }
   }
 
-  pub fn add_input(&mut self, txo_sid: TxoRef, open_ar: OpenAssetRecord, amount: u64) -> &mut Self {
+  pub fn add_input(&mut self,
+                   txo_sid: TxoRef,
+                   open_ar: OpenAssetRecord,
+                   amount: u64)
+                   -> Result<&mut Self, PlatformError> {
+    if self.transfer.is_some() {
+      return Err(PlatformError::InvariantError(Some("Cannot mutate a transfer that has been signed".to_string())));
+    }
     self.input_sids.push(txo_sid);
     self.input_records.push(open_ar);
     self.spend_amounts.push(amount);
-    self
+    Ok(self)
   }
 
   pub fn add_output(&mut self,
                     amount: u64,
                     recipient: &XfrPublicKey,
                     code: AssetTypeCode)
-                    -> &mut Self {
+                    -> Result<&mut Self, PlatformError> {
+    if self.transfer.is_some() {
+      return Err(PlatformError::InvariantError(Some("Cannot mutate a transfer that has been signed".to_string())));
+    }
     self.output_records
         .push(AssetRecord::new(amount, code.val, *recipient).unwrap());
-    self
-  }
-
-  pub fn make_debt_swap(&mut self) -> &mut Self {
-    self.transfer_type = TransferType::DebtSwap;
-    self
+    Ok(self)
   }
 
   // Ensures that outputs and inputs are balanced by adding remainder outputs for leftover asset
   // amounts
   pub fn balance(&mut self) -> Result<&mut Self, PlatformError> {
+    if self.transfer.is_some() {
+      return Err(PlatformError::InvariantError(Some("Cannot mutate a transfer that has been signed".to_string())));
+    }
     let spend_total: u64 = self.spend_amounts.iter().sum();
     let mut partially_consumed_inputs = Vec::new();
     for (spend_amount, oar) in self.spend_amounts.iter().zip(self.input_records.iter()) {
@@ -234,13 +244,31 @@ impl TransferOperationBuilder {
     Ok(self)
   }
 
-  pub fn create(&self) -> Result<Operation, PlatformError> {
+  pub fn create(&mut self, transfer_type: TransferType) -> Result<&mut Self, PlatformError> {
     let mut prng = ChaChaRng::from_seed([0u8; 32]);
     let body = TransferAssetBody::new(&mut prng,
                                       self.input_sids.clone(),
                                       &self.input_records,
                                       &self.output_records)?;
-    Ok(Operation::TransferAsset(TransferAsset::new(body, self.transfer_type)?))
+    self.transfer = Some(TransferAsset::new(body, transfer_type)?);
+    Ok(self)
+  }
+
+  pub fn sign(&mut self, kp: XfrKeyPair) -> Result<&mut Self, PlatformError> {
+    if self.transfer.is_none() {
+      return Err(PlatformError::InvariantError(Some("Must create transfer before signing".to_string())));
+    }
+    let mut new_transfer = self.transfer.as_ref().unwrap().clone();
+    new_transfer.sign(&kp);
+    self.transfer = Some(new_transfer);
+    Ok(self)
+  }
+
+  pub fn transaction(&self) -> Result<Operation, PlatformError> {
+    if self.transfer.is_none() {
+      return Err(PlatformError::InvariantError(Some("Must create transfer".to_string())));
+    }
+    Ok(Operation::TransferAsset(self.transfer.clone().unwrap()))
   }
 }
 
@@ -401,7 +429,7 @@ mod tests {
   }
 
   #[test]
-  fn test_transfer_op_builder() {
+  fn test_transfer_op_builder() -> Result<(), PlatformError> {
     let mut prng = ChaChaRng::from_seed([0u8; 32]);
     let params = PublicParams::new();
     let code_1 = AssetTypeCode::gen_random();
@@ -418,19 +446,21 @@ mod tests {
 
     let transfer_op =
       TransferOperationBuilder::new()
-      .add_input(TxoRef::Relative(1), open_asset_record(&ba_1, alice.get_sk_ref()).unwrap(), 20)
-      .add_input(TxoRef::Relative(2), open_asset_record(&ba_2, bob.get_sk_ref()).unwrap(), 20)
-      .add_output(5, bob.get_pk_ref(), code_1)
-      .add_output(13, charlie.get_pk_ref(), code_1)
-      .add_output(2, ben.get_pk_ref(), code_1)
-      .add_output(5, bob.get_pk_ref(), code_2)
-      .add_output(13, charlie.get_pk_ref(), code_2)
-      .add_output(2, ben.get_pk_ref(), code_2)
-      .balance()
-      .unwrap()
-      .create()
-      .unwrap();
+      .add_input(TxoRef::Relative(1), open_asset_record(&ba_1, alice.get_sk_ref()).unwrap(), 20)?
+      .add_input(TxoRef::Relative(2), open_asset_record(&ba_2, bob.get_sk_ref()).unwrap(), 20)?
+      .add_output(5, bob.get_pk_ref(), code_1)?
+      .add_output(13, charlie.get_pk_ref(), code_1)?
+      .add_output(2, ben.get_pk_ref(), code_1)?
+      .add_output(5, bob.get_pk_ref(), code_2)?
+      .add_output(13, charlie.get_pk_ref(), code_2)?
+      .add_output(2, ben.get_pk_ref(), code_2)?
+      .balance()?
+      .create(TransferType::Standard)?
+      .sign(alice)?
+      .sign(bob)?
+      .transaction()?;
 
     dbg!(&serde_json::to_string(&transfer_op));
+    Ok(())
   }
 }

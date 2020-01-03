@@ -4,15 +4,15 @@ extern crate byteorder;
 extern crate findora;
 extern crate tempdir;
 
-use bitmap;
 use crate::data_model::errors::PlatformError;
 use crate::data_model::*;
 use crate::policies::{calculate_fee, DebtMemo};
+use bitmap;
+use bitmap::BitMap;
 use cryptohash::sha256;
 use cryptohash::sha256::Digest as BitDigest;
-use merkle_tree::append_only_merkle::{AppendOnlyMerkle, HashValue, Proof};
-use bitmap::BitMap;
 use findora::HasInvariants;
+use merkle_tree::append_only_merkle::{AppendOnlyMerkle, HashValue, Proof};
 use merkle_tree::logged_merkle::LoggedMerkle;
 use rand::SeedableRng;
 use rand::{CryptoRng, Rng};
@@ -1060,7 +1060,7 @@ mod tests {
   use zei::setup::PublicParams;
   use zei::xfr::asset_record::{build_blind_asset_record, open_asset_record};
   use zei::xfr::sig::{XfrKeyPair, XfrPublicKey};
-  use zei::xfr::structs::{AssetRecord, BlindAssetRecord};
+  use zei::xfr::structs::AssetRecord;
 
   #[test]
   fn test_load_transaction_log() {
@@ -1161,20 +1161,6 @@ mod tests {
     let back = ledger_state.status.utxo_map_versions.get(MAX_VERSION);
     assert_eq!(back,
                Some(&(ledger_state.status.next_txn, ledger_state.utxo_map.compute_checksum())));
-  }
-
-  #[test]
-  fn test_base64() {
-    let mut prng = rand_chacha::ChaChaRng::from_seed([0u8; 32]);
-    let keypair = XfrKeyPair::generate(&mut prng);
-    let code = AssetTypeCode { val: [2; 16] };
-    let ar = AssetRecord::new(100, code.val, *keypair.get_pk_ref()).unwrap();
-    let params = PublicParams::new();
-    let ba = build_blind_asset_record(&mut prng, &params.pc_gens, &ar, false, false, &None);
-    let encoded = base64::encode(&bincode::serialize(&ba).unwrap());
-    let decoded =
-      bincode::deserialize::<BlindAssetRecord>(&base64::decode(&encoded).unwrap()).unwrap();
-    dbg!(decoded);
   }
 
   #[test]

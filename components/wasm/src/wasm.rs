@@ -15,7 +15,8 @@ use cryptohash::sha256;
 use hex;
 use js_sys::Promise;
 use ledger::data_model::{
-  AccountAddress, AssetTypeCode, IssuerPublicKey, Operation, Serialized, TxoRef, TxoSID,
+  AccountAddress, AssetTypeCode, IssuerPublicKey, Operation, Serialized, TransferType, TxoRef,
+  TxoSID,
 };
 use percent_encoding::{utf8_percent_encode, AsciiSet, CONTROLS};
 use rand::FromEntropy;
@@ -87,9 +88,9 @@ pub fn open_blind_asset_record(blind_asset_record: String,
                            })?;
   let open_asset_record = open_asset_record(&blind_asset_record, key.get_sk_ref()).map_err(|_e| JsValue::from_str("could not open asset record"))?;
   let bincode_encoded =
-    bincode::serialize(&blind_asset_record).map_err(|_e| {
-                                             JsValue::from_str("could not encode open asset record")
-                                           })?;
+    bincode::serialize(&open_asset_record).map_err(|_e| {
+                                            JsValue::from_str("could not encode open asset record")
+                                          })?;
   Ok(base64::encode(&bincode_encoded))
 }
 
@@ -193,10 +194,13 @@ impl WasmTransferOperationBuilder {
     let oar = serde_json::from_str::<OpenAssetRecord>(&oar).map_err(|_e| {
                              JsValue::from_str("Could not deserialize open asset record")
                            })?;
-    Ok(WasmTransferOperationBuilder { op_builder: Serialized::new(&*self.op_builder
-                                                                        .deserialize()
-                                                                        .add_input(txo_sid, oar,
-                                                                                   amount)) })
+    Ok(WasmTransferOperationBuilder { op_builder:
+                                        Serialized::new(&*self.op_builder
+                                                              .deserialize()
+                                                              .add_input(txo_sid, oar, amount)
+                                                              .map_err(|e| {
+                                                                JsValue::from_str(&format!("{}", e))
+                                                              })?) })
   }
 
   pub fn add_output(&mut self,
@@ -206,17 +210,13 @@ impl WasmTransferOperationBuilder {
                     -> Result<WasmTransferOperationBuilder, JsValue> {
     let code = AssetTypeCode::new_from_base64(&code).map_err(|_e| {
       JsValue::from_str("Could not deserialize asset token code")})?;
-    Ok(WasmTransferOperationBuilder { op_builder: Serialized::new(&*self.op_builder
-                                                                        .deserialize()
-                                                                        .add_output(amount,
-                                                                                    recipient,
-                                                                                    code)) })
-  }
-
-  pub fn make_debt_swap(&mut self) -> Result<WasmTransferOperationBuilder, JsValue> {
-    Ok(WasmTransferOperationBuilder { op_builder: Serialized::new(&*self.op_builder
-                                                                        .deserialize()
-                                                                        .make_debt_swap()) })
+    Ok(WasmTransferOperationBuilder { op_builder:
+                                        Serialized::new(&*self.op_builder
+                                                              .deserialize()
+                                                              .add_output(amount, recipient, code)
+                                                              .map_err(|e| {
+                                                                JsValue::from_str(&format!("{}", e))
+                                                              })?) })
   }
 
   pub fn balance(&mut self) -> Result<WasmTransferOperationBuilder, JsValue> {
@@ -225,15 +225,17 @@ impl WasmTransferOperationBuilder {
                                                                         .balance().map_err(|_e| JsValue::from_str("Error balancing txn"))?) })
   }
 
-  pub fn create(&mut self) -> Result<String, JsValue> {
+  pub fn create(&mut self, transfer_type: String) -> Result<String, JsValue> {
+    let transfer_type =
+      serde_json::from_str::<TransferType>(&transfer_type).map_err(|_e| {
+                                                JsValue::from_str("Could not deserialize transfer type")
+                                              })?;
     Ok(serde_json::to_string(&self.op_builder
                                   .deserialize()
-                                  .create()
+                                  .create(transfer_type)
                                   .map_err(|_e| JsValue::from_str("Error balancing txn"))?).unwrap())
   }
 }
-
-////////////////////////////////////////////
 
 ///////////// CRYPTO //////////////////////
 
@@ -270,7 +272,7 @@ pub fn generate_elgamal_keys() -> JsValue {
   return JsValue::from_serde(&elgamal_keygen(&mut small_rng, &RistPoint(pc_gens.B))).unwrap();
 }
 
-//////////////////////////////////////////////////////////////////////////////////////////////
+///////////// CRYPTO //////////////////////
 
 // Defines an asset on the ledger using the serialized strings in KeyPair and a couple of boolean policies
 #[wasm_bindgen]

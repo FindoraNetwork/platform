@@ -503,16 +503,6 @@ mod tests {
   }
 
   #[test]
-  fn test_serialize_struct() {
-    let code = Code { val: [100, 101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111, 112,
-                            113, 114, 115] };
-    let test_struct = Serialized::new(code);
-    let deserialized = test_struct.deserialize();
-    dbg!(&test_struct);
-    dbg!(deserialized);
-  }
-
-  #[test]
   fn test_verify() {
     let mut prng = rand_chacha::ChaChaRng::from_seed([0u8; 32]);
 
