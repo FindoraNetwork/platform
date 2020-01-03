@@ -24,8 +24,8 @@ txn_builder = {path = "../txn_builder"}
 wasm-bindgen = { version = "0.2.50", features = ["serde-serialize"]  }
 wasm-bindgen-futures = "0.3.27"
 wasm-bindgen-test = "0.2.50"
-#zei = { git = "ssh://git@github.com/findoraorg/zei" }
-zei = { path = "../../../zei" }
+zei = { git = "ssh://git@github.com/findoraorg/zei" }
+#zei = { path = "../../../zei" }
 
 
 [lib]

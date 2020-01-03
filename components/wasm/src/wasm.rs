@@ -291,8 +291,6 @@ pub fn generate_elgamal_keys() -> String {
   return serde_json::to_string(&elgamal_keygen(&mut small_rng, &RistPoint(pc_gens.B))).unwrap();
 }
 
-///////////// CRYPTO //////////////////////
-
 // Defines an asset on the ledger using the serialized strings in KeyPair and a couple of boolean policies
 #[wasm_bindgen]
 pub fn create_asset(key_pair: &XfrKeyPair,

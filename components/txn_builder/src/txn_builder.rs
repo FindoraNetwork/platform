@@ -9,6 +9,8 @@ use ledger::data_model::errors::PlatformError;
 use ledger::data_model::*;
 use rand::SeedableRng;
 use rand_chacha::ChaChaRng;
+use std::collections::HashSet;
+use zei::serialization::ZeiFromToBytes;
 use zei::setup::PublicParams;
 use zei::xfr::asset_record::{build_blind_asset_record, open_asset_record};
 use zei::xfr::sig::{XfrKeyPair, XfrPublicKey, XfrSecretKey};
@@ -189,6 +191,8 @@ impl TransferOperationBuilder {
                                transfer_type: TransferType::Standard }
   }
 
+  // TxoRef is the location of the input on the ledger and the amount is how much of the record
+  // should be spent in the transfer. See tests for example usage.
   pub fn add_input(&mut self,
                    txo_sid: TxoRef,
                    open_ar: OpenAssetRecord,
@@ -244,6 +248,7 @@ impl TransferOperationBuilder {
     Ok(self)
   }
 
+  // Finalize the transaction and prepare for signing.
   pub fn create(&mut self, transfer_type: TransferType) -> Result<&mut Self, PlatformError> {
     let mut prng = ChaChaRng::from_seed([0u8; 32]);
     let body = TransferAssetBody::new(&mut prng,
@@ -256,7 +261,7 @@ impl TransferOperationBuilder {
 
   pub fn sign(&mut self, kp: &XfrKeyPair) -> Result<&mut Self, PlatformError> {
     if self.transfer.is_none() {
-      return Err(PlatformError::InvariantError(Some("Must create transfer before signing".to_string())));
+      return Err(PlatformError::InvariantError(Some("Transaction has not yet been finalized".to_string())));
     }
     let mut new_transfer = self.transfer.as_ref().unwrap().clone();
     new_transfer.sign(&kp);
@@ -269,6 +274,30 @@ impl TransferOperationBuilder {
       return Err(PlatformError::InvariantError(Some("Must create transfer".to_string())));
     }
     Ok(Operation::TransferAsset(self.transfer.clone().unwrap()))
+  }
+
+  // Checks to see whether all necessary signatures are present and valid
+  pub fn validate_signatures(&mut self) -> Result<&mut Self, PlatformError> {
+    if self.transfer.is_none() {
+      return Err(PlatformError::InvariantError(Some("Transaction has not yet been finalized".to_string())));
+    }
+
+    let trn = self.transfer.as_ref().unwrap();
+    let mut sig_keys = HashSet::new();
+    for sig in &trn.body_signatures {
+      if !sig.verify(&serde_json::to_vec(&trn.body).unwrap()) {
+        return Err(PlatformError::InvariantError(Some("Invalid signature".to_string())));
+      }
+      sig_keys.insert(sig.address.key.zei_to_bytes());
+    }
+
+    // (1b) all input record owners have signed
+    for record in &trn.body.transfer.inputs {
+      if !sig_keys.contains(&record.public_key.zei_to_bytes()) {
+        return Err(PlatformError::InvariantError(Some("Not all signatures present".to_string())));
+      }
+    }
+    Ok(self)
   }
 }
 
@@ -444,7 +473,43 @@ mod tests {
     let ba_1 = build_blind_asset_record(&mut prng, &params.pc_gens, &ar_1, false, false, &None);
     let ba_2 = build_blind_asset_record(&mut prng, &params.pc_gens, &ar_2, false, false, &None);
 
-    let transfer_op =
+    // Attempt to spend too much
+    let mut invalid_outputs_transfer_op = TransferOperationBuilder::new();
+    let res =
+      invalid_outputs_transfer_op.add_input(TxoRef::Relative(1),
+                                            open_asset_record(&ba_1, alice.get_sk_ref()).unwrap(),
+                                            20)?
+                                 .add_output(25, bob.get_pk_ref(), code_1)?
+                                 .balance();
+
+    assert!(res.is_err());
+
+    // Change transaction after signing
+    let mut invalid_sig_op = TransferOperationBuilder::new();
+    let res = invalid_sig_op.add_input(TxoRef::Relative(1),
+                                       open_asset_record(&ba_1, alice.get_sk_ref()).unwrap(),
+                                       20)?
+                            .add_output(20, bob.get_pk_ref(), code_1)?
+                            .balance()?
+                            .create(TransferType::Standard)?
+                            .sign(&alice)?
+                            .add_output(20, bob.get_pk_ref(), code_1);
+    assert!(res.is_err());
+
+    // Not all signatures present
+    let mut missing_sig_op = TransferOperationBuilder::new();
+    let res = missing_sig_op.add_input(TxoRef::Relative(1),
+                                       open_asset_record(&ba_1, alice.get_sk_ref()).unwrap(),
+                                       20)?
+                            .add_output(20, bob.get_pk_ref(), code_1)?
+                            .balance()?
+                            .create(TransferType::Standard)?
+                            .validate_signatures();
+
+    assert!(&res.is_err());
+
+    // Finally, test a valid transfer
+    let _valid_transfer_op =
       TransferOperationBuilder::new()
       .add_input(TxoRef::Relative(1), open_asset_record(&ba_1, alice.get_sk_ref()).unwrap(), 20)?
       .add_input(TxoRef::Relative(2), open_asset_record(&ba_2, bob.get_sk_ref()).unwrap(), 20)?
@@ -460,7 +525,6 @@ mod tests {
       .sign(&bob)?
       .transaction()?;
 
-    dbg!(&serde_json::to_string(&transfer_op));
     Ok(())
   }
 }
