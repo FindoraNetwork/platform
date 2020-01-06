@@ -11,6 +11,7 @@ path = "src/check_merkle.rs"
 [dependencies]
 ledger = { path = "../../ledger" }
 findora = { path = "../../findora" }
+merkle_tree = { path = "../../libs/ads/merkle_tree" }
 zei = { git = "ssh://git@github.com/findoraorg/zei" }
 serde = "1.0"
 serde_derive = "1.0"

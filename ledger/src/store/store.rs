@@ -4,15 +4,16 @@ extern crate byteorder;
 extern crate findora;
 extern crate tempdir;
 
+use bitmap;
 use crate::data_model::errors::PlatformError;
 use crate::data_model::*;
 use crate::policies::{calculate_fee, DebtMemo};
-use crate::utils::sha256;
-use crate::utils::sha256::Digest as BitDigest;
-use append_only_merkle::{AppendOnlyMerkle, HashValue, Proof};
+use cryptohash::sha256;
+use cryptohash::sha256::Digest as BitDigest;
+use merkle_tree::append_only_merkle::{AppendOnlyMerkle, HashValue, Proof};
 use bitmap::BitMap;
 use findora::HasInvariants;
-use logged_merkle::LoggedMerkle;
+use merkle_tree::logged_merkle::LoggedMerkle;
 use rand::SeedableRng;
 use rand::{CryptoRng, Rng};
 use rand_chacha::ChaChaRng;
@@ -23,10 +24,7 @@ use std::io::BufReader;
 use std::u64;
 use tempdir::TempDir;
 
-use super::append_only_merkle;
-use super::bitmap;
 use super::effects::*;
-use super::logged_merkle;
 
 pub struct SnapshotId {
   pub id: u64,
