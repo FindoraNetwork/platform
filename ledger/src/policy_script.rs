@@ -95,6 +95,15 @@ fn run_txn_check(check: &TxnCheck, ) -> Result<()> {
  * How should this work?
  * Each op generates a var, the only possible dependency cycle is fraction
  * <-> amount so some "cycle detection" is necessary.
+ *  - alg sketch:
+ *      min_frac_index, min_amt_index
+ *      which = frac | amt
+ *      iterate forward on ops[which], do computation *unless* it depends
+ *        on an index in the other list which is past the current computed
+ *        list. If min_[which]_index is after our current position, fail.
+ *        Otherwise, set min_[other]_index to the thing we depend on, set
+ *        which to other, continue.
+ *
  *
  * We need to be able to decode the global variables from a DefineAsset
  * memo
@@ -106,8 +115,9 @@ fn run_txn_check(check: &TxnCheck, ) -> Result<()> {
  *  (c) Some info about combining multiple Transfer/Issue `TxnOp`s?
  *
  * Important checks:
- *  - overflow?
- *  - making sure everything's accounted for?
+ *  - overflow -- always use checked_* methods
+ *  - making sure everything's accounted for at the end
+ *  - 
  *
  * The other important thing here is that a policy should be able to
  * generate a transaction passing the policy.
