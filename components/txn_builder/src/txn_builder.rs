@@ -166,13 +166,13 @@ impl BuildsTransactions for TransactionBuilder {
 
 #[cfg(test)]
 mod tests {
-  /*
   use super::*;
   use ledger::data_model::TxoRef;
   use quickcheck::{Arbitrary, Gen};
   use quickcheck_macros::quickcheck;
-  use rand_core::SeedableRng;
+  use rand::Rng;
   use rand_chacha::ChaChaRng;
+  use rand_core::SeedableRng;
   use zei::serialization::ZeiFromToBytes;
   use zei::setup::PublicParams;
   use zei::xfr::asset_record::{build_blind_asset_record, open_asset_record};
@@ -320,5 +320,4 @@ mod tests {
       assert!(verify_xfr_note(&mut prng, &xfr_note, &null_policies).is_ok())
     }
   }
-*/
 }
