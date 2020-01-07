@@ -361,7 +361,7 @@ mod tests {
   use ledger::store::helpers::*;
   use ledger::store::{LedgerState, LedgerUpdate};
   use percent_encoding::{utf8_percent_encode, AsciiSet, CONTROLS};
-  use rand::SeedableRng;
+  use rand_core::SeedableRng;
   use rand_chacha::ChaChaRng;
 
   #[test]

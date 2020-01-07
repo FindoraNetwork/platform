@@ -108,7 +108,7 @@ mod tests {
   use ledger::store::helpers::*;
   use ledger::store::LedgerState;
   use percent_encoding::{utf8_percent_encode, AsciiSet, CONTROLS};
-  use rand::SeedableRng;
+  use rand_core::SeedableRng;
 
   #[test]
   fn test_submit_transaction_standalone() {
