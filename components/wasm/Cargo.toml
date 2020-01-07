@@ -5,18 +5,18 @@ authors = ["ngolub <ngolub@stanford.edu>"]
 edition = "2018"
 
 [dependencies]
-bulletproofs =  {version = "1.0.4"}
-bincode = "1"
 base64 = "0.10"
+bincode = "1"
+ bulletproofs = { version = "1.0.4",  package = "bulletproofs", git = "https://github.com/dalek-cryptography/bulletproofs", branch = "develop", features = ["yoloproofs"], rev = "3239bc9dd562bc8400f9054477c7c26c36974baf"}
 cryptohash = { path = "../../libs/cryptohash" }
-curve25519-dalek = { version =  "1.2.1", features = ["serde"] }
+curve25519-dalek = { version =  "2.0.0", features = ["serde"] }
 futures = "0.1.20"
 hex = "0.3.2"
 js-sys = "0.3.27"
 ledger = { path = "../../ledger" }
 percent-encoding = "2.1.0"
-rand = { version = "0.6", features = ["wasm-bindgen"] }
-rand_chacha = "0.1.1"
+rand_chacha = "0.2.0"
+rand_core = { version = "0.5", default-features = false, features = ["alloc"] }
 serde = { version = "1.0.99", features = ["derive"] }
 serde_derive = "^1.0.59"
 serde_json = "1.0"

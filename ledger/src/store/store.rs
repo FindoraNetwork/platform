@@ -14,9 +14,8 @@ use cryptohash::sha256::Digest as BitDigest;
 use findora::HasInvariants;
 use merkle_tree::append_only_merkle::{AppendOnlyMerkle, HashValue, Proof};
 use merkle_tree::logged_merkle::LoggedMerkle;
-use rand::SeedableRng;
-use rand::{CryptoRng, Rng};
 use rand_chacha::ChaChaRng;
+use rand_core::{CryptoRng, RngCore, SeedableRng};
 use std::collections::{HashMap, VecDeque};
 use std::fs::File;
 use std::fs::OpenOptions;
@@ -48,7 +47,7 @@ pub trait LedgerAccess {
   // fn get_tracked_sids(&self, key: &EGPubKey)       -> Option<Vec<TxoSID>>;
 }
 
-pub trait LedgerUpdate<RNG: Rng + CryptoRng> {
+pub trait LedgerUpdate<RNG: RngCore + CryptoRng> {
   // Each Block represents a collection of transactions which have been
   // validated and confirmed to be unconditionally consistent with the
   // ledger and with each other.
@@ -958,7 +957,7 @@ pub mod helpers {
     Ok(tx)
   }
 
-  pub fn build_keys<R: CryptoRng + Rng>(prng: &mut R) -> (XfrPublicKey, XfrSecretKey) {
+  pub fn build_keys<R: CryptoRng + RngCore>(prng: &mut R) -> (XfrPublicKey, XfrSecretKey) {
     let keypair = XfrKeyPair::generate(prng);
 
     (*keypair.get_pk_ref(), keypair.get_sk())
@@ -1053,7 +1052,7 @@ mod tests {
   use super::helpers::*;
   use super::*;
   use crate::policies::{calculate_fee, Fraction};
-  use rand::SeedableRng;
+  use rand_core::SeedableRng;
   use std::fs;
   use tempfile::tempdir;
   use zei::serialization::ZeiFromToBytes;

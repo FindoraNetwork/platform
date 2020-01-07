@@ -15,8 +15,8 @@ arrayref = "0.3.5"
 findora = { path = "../../findora" }
 ledger = { path = "../../ledger" }
 ledger_app = { path = "../ledger_app" }
-rand = "0.6"
-rand_chacha = "0.1.1"
+rand_chacha = "0.2.0"
+rand_core = { version = "0.5", default-features = false, features = ["alloc"] }
 serde = { version = "1.0.99", features = ["derive"] }
 serde_derive = "1.0"
 serde_json = "1.0.40"

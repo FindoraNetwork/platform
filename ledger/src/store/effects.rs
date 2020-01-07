@@ -5,8 +5,7 @@ use crate::policies::{compute_debt_swap_effect, DebtSwapEffect};
 use cryptohash::sha256;
 use cryptohash::sha256::Digest as BitDigest;
 use findora::HasInvariants;
-use rand::SeedableRng;
-use rand::{CryptoRng, Rng};
+use rand_core::{CryptoRng, RngCore, SeedableRng};
 use std::collections::{HashMap, HashSet};
 use zei::serialization::ZeiFromToBytes;
 use zei::xfr::lib::verify_xfr_body;
@@ -36,9 +35,9 @@ pub struct TxnEffect {
 // If the transaction is invalid, it is dropped, so if you need to inspect
 // the transaction in order to diagnose the error, clone it first!
 impl TxnEffect {
-  pub fn compute_effect<R: CryptoRng + Rng>(prng: &mut R,
-                                            txn: Transaction)
-                                            -> Result<TxnEffect, PlatformError> {
+  pub fn compute_effect<R: CryptoRng + RngCore>(prng: &mut R,
+                                                txn: Transaction)
+                                                -> Result<TxnEffect, PlatformError> {
     let mut txo_count: usize = 0;
     let mut txos: Vec<Option<TxOutput>> = Vec::new();
     let mut input_txos: HashMap<TxoSID, BlindAssetRecord> = HashMap::new();

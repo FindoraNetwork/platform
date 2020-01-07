@@ -12,8 +12,8 @@ use api_service::RestfulApiService;
 use ledger::data_model::errors::PlatformError;
 use ledger::store::*;
 use ledger_app::{convert_tx, LedgerApp};
-use rand::SeedableRng;
 use rand_chacha::ChaChaRng;
+use rand_core::SeedableRng;
 use std::thread;
 
 struct ABCILedgerApp {
