@@ -4,21 +4,19 @@
 // To compile wasm package, run wasm-pack build in the wasm directory
 #![deny(warnings)]
 extern crate ledger;
-extern crate rand;
 extern crate rand_chacha;
 extern crate serde;
 extern crate wasm_bindgen;
 extern crate wasm_bindgen_test;
 extern crate zei;
 use bulletproofs::PedersenGens;
+use cryptohash::sha256;
 use hex;
 use js_sys::Promise;
-use cryptohash::sha256;
 use ledger::data_model::{AccountAddress, AssetTypeCode, IssuerPublicKey, TxoRef, TxoSID};
 use percent_encoding::{utf8_percent_encode, AsciiSet, CONTROLS};
-use rand::FromEntropy;
-use rand::SeedableRng;
 use rand_chacha::ChaChaRng;
+use rand_core::SeedableRng;
 use serde::{Deserialize, Serialize};
 use std::str;
 use txn_builder::{BuildsTransactions, TransactionBuilder};

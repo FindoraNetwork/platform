@@ -4,8 +4,8 @@ use env_logger::{Env, Target};
 use ledger::data_model::errors::PlatformError;
 use ledger::data_model::{AssetTypeCode, IssuerPublicKey};
 use log::{error, trace}; // Other options: debug, info, warn
-use rand::SeedableRng;
 use rand_chacha::ChaChaRng;
+use rand_core::SeedableRng;
 use std::env;
 use std::ffi::OsStr;
 use std::fs::{self, File};

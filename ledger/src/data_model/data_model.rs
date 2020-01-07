@@ -3,7 +3,8 @@ use base64::decode as b64dec;
 use base64::encode as b64enc;
 use chrono::prelude::*;
 use rand::rngs::SmallRng;
-use rand::{CryptoRng, FromEntropy, Rng};
+use rand::{FromEntropy, Rng};
+use rand_core::{CryptoRng, RngCore};
 use std::boxed::Box;
 use std::collections::HashMap;
 use std::convert::TryFrom;
@@ -183,12 +184,12 @@ pub struct TransferAssetBody {
 }
 
 impl TransferAssetBody {
-  pub fn new<R: CryptoRng + Rng>(prng: &mut R,
-                                 input_refs: Vec<TxoRef>,
-                                 input_records: &[OpenAssetRecord],
-                                 output_records: &[AssetRecord],
-                                 input_keys: &[XfrKeyPair])
-                                 -> Result<TransferAssetBody, errors::PlatformError> {
+  pub fn new<R: CryptoRng + RngCore>(prng: &mut R,
+                                     input_refs: Vec<TxoRef>,
+                                     input_records: &[OpenAssetRecord],
+                                     output_records: &[AssetRecord],
+                                     input_keys: &[XfrKeyPair])
+                                     -> Result<TransferAssetBody, errors::PlatformError> {
     let id_proofs = vec![];
     if input_records.is_empty() {
       return Err(errors::PlatformError::InputsError);
@@ -407,7 +408,7 @@ pub struct Account {
 #[cfg(test)]
 mod tests {
   use super::*;
-  use rand::SeedableRng;
+  use rand_core::SeedableRng;
   use std::cmp::min;
   use zei::xfr::structs::{AssetAmountProof, XfrBody, XfrProofs};
 
