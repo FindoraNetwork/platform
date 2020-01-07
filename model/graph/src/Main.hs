@@ -204,6 +204,15 @@ data BoolExpr = TrueExpr
               | LeExpr (ArithExpr) (ArithExpr)
   deriving (Eq,Show,Read)
 
+simplifyCompares (NotExpr be) = NotExpr $ simplifyCompares be
+simplifyCompares (AndExpr l r) = AndExpr (simplifyCompares l) (simplifyCompares r)
+simplifyCompares (OrExpr l r) = OrExpr (simplifyCompares l) (simplifyCompares r)
+simplifyCompares (GtExpr l r) = AndExpr (NotExpr (EqExpr l r)) (GeExpr l r)
+simplifyCompares (GeExpr l r) = GeExpr l r
+simplifyCompares (LeExpr l r) = GeExpr r l
+simplifyCompares (LtExpr l r) = simplifyCompares (GtExpr r l)
+simplifyCompares x = x
+
 beTraverseArithExprs f (TrueExpr) = pure TrueExpr
 beTraverseArithExprs f (FalseExpr) = pure FalseExpr
 beTraverseArithExprs f (NotExpr be) = NotExpr <$> (beTraverseArithExprs f be)
@@ -301,6 +310,9 @@ data TxnStmt = AssertStmt BoolExpr
              -- amount from resource1 to resource2 (Nothing => burn address)
              | TransferStmt ArithExpr T.Text (Maybe T.Text)
   deriving (Eq,Show,Read)
+
+txnStmt_bexpr f (AssertStmt be) = AssertStmt <$> f be
+txnStmt_bexpr _ txnStmt = pure txnStmt
 
 parseTxnStmt
   = foldl1 (\x y -> P.try x P.<|> y) $
@@ -887,6 +899,8 @@ main = do
               , ("typechecking", typecheck)
               , ("Reformat into locals -> asserts -> ops", over (polfTxns.traverse.txnBody) sortTxnStmts)
               , ("Remove redundant locals/asserts", over (polfTxns.traverse.txnBody) deleteRedundantStmts)
+              , ("Simplify comparisons",
+                 over (polfTxns.traverse.txnBody.traverse.txnStmt_bexpr) simplifyCompares)
               ]
 
       return ()
