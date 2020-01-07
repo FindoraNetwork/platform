@@ -50,6 +50,7 @@ impl Code {
   }
 }
 
+// Wrapper around a serialized variable that maintains type semantics.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Serialized<T> {
   val: String,

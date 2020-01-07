@@ -92,6 +92,7 @@ pub fn open_blind_asset_record(blind_asset_record: String,
   Ok(base64::encode(&bincode_encoded))
 }
 
+// Wrapper around TransactionBuilder that does necessary serialization.
 #[wasm_bindgen]
 pub struct WasmTransactionBuilder {
   transaction_builder: Serialized<TransactionBuilder>,
@@ -170,6 +171,7 @@ impl WasmTransactionBuilder {
   }
 }
 
+// Wrapper around TransferOperationBuilder that does necessary serialization.
 #[wasm_bindgen]
 pub struct WasmTransferOperationBuilder {
   op_builder: Serialized<TransferOperationBuilder>,

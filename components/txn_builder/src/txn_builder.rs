@@ -171,6 +171,25 @@ impl BuildsTransactions for TransactionBuilder {
   }
 }
 
+// TransferOperationBuilder constructs transfer operations using the factory pattern
+// Inputs and outputs are added iteratively before being signed by all input record owners
+//
+// Example usage:
+//
+//    let alice = XfrKeyPair::generate(&mut prng);
+//    let bob = XfrKeyPair::generate(&mut prng);
+//
+//    let ar = AssetRecord::new(1000, code_1.val, *alice.get_pk_ref()).unwrap();
+//    let ba = build_blind_asset_record(&mut prng, &params.pc_gens, &ar_1, false, false, &None);
+//
+//    let builder = TransferOperationBuilder::new()..add_input(TxoRef::Relative(1),
+//                                       open_asset_record(&ba, alice.get_sk_ref()).unwrap(),
+//                                       20)?
+//                            .add_output(20, bob.get_pk_ref(), code_1)?
+//                            .balance()?
+//                            .create(TransferType::Standard)?
+//                            .sign(&alice)?;
+//
 #[derive(Serialize, Deserialize)]
 pub struct TransferOperationBuilder {
   input_sids: Vec<TxoRef>,
@@ -248,7 +267,8 @@ impl TransferOperationBuilder {
     Ok(self)
   }
 
-  // Finalize the transaction and prepare for signing.
+  // Finalize the transaction and prepare for signing. Once called, the transaction cannot be
+  // modified.
   pub fn create(&mut self, transfer_type: TransferType) -> Result<&mut Self, PlatformError> {
     let mut prng = ChaChaRng::from_seed([0u8; 32]);
     let body = TransferAssetBody::new(&mut prng,
@@ -259,6 +279,7 @@ impl TransferOperationBuilder {
     Ok(self)
   }
 
+  // All input owners must sign eventually for the transaction to be valid.
   pub fn sign(&mut self, kp: &XfrKeyPair) -> Result<&mut Self, PlatformError> {
     if self.transfer.is_none() {
       return Err(PlatformError::InvariantError(Some("Transaction has not yet been finalized".to_string())));
@@ -269,6 +290,7 @@ impl TransferOperationBuilder {
     Ok(self)
   }
 
+  // Return the transaction operation
   pub fn transaction(&self) -> Result<Operation, PlatformError> {
     if self.transfer.is_none() {
       return Err(PlatformError::InvariantError(Some("Must create transfer".to_string())));
@@ -291,7 +313,6 @@ impl TransferOperationBuilder {
       sig_keys.insert(sig.address.key.zei_to_bytes());
     }
 
-    // (1b) all input record owners have signed
     for record in &trn.body.transfer.inputs {
       if !sig_keys.contains(&record.public_key.zei_to_bytes()) {
         return Err(PlatformError::InvariantError(Some("Not all signatures present".to_string())));
@@ -307,8 +328,9 @@ mod tests {
   use ledger::data_model::TxoRef;
   use quickcheck::{Arbitrary, Gen};
   use quickcheck_macros::quickcheck;
-  use rand::{Rng, SeedableRng};
+  use rand::Rng;
   use rand_chacha::ChaChaRng;
+  use rand_core::SeedableRng;
   use zei::serialization::ZeiFromToBytes;
   use zei::setup::PublicParams;
   use zei::xfr::asset_record::{build_blind_asset_record, open_asset_record};

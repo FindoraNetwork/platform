@@ -19,4 +19,5 @@ zei = { git = "ssh://git@github.com/findoraorg/zei" }
 
 [dev-dependencies]
 quickcheck = "0.8"
+rand = "0.5"
 quickcheck_macros = "0.8"
