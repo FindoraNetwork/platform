@@ -2,7 +2,7 @@
 // Copyright 2019 © Findora. All rights reserved.
 /// Command line executable to exercise functions related to credentials
 // Anonymous Credentials with Selective Attribute Revelation
-//
+
 // I'm not certain the use case below is the one intended.
 //
 // 1. The (credential) issuer generates a key pair with knowledge of
@@ -66,8 +66,8 @@ use std::path::Path;
 use std::process::exit;
 
 use hex;
-use rand::SeedableRng;
 use rand_chacha::ChaChaRng;
+use rand_core::SeedableRng;
 use rmp_serde;
 use sha2::{Digest, Sha256};
 use zei::api::anon_creds::{

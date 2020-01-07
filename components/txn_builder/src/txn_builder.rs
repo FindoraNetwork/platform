@@ -7,8 +7,8 @@ extern crate serde_derive;
 
 use ledger::data_model::errors::PlatformError;
 use ledger::data_model::*;
-use rand::SeedableRng;
 use rand_chacha::ChaChaRng;
+use rand_core::SeedableRng;
 use zei::serialization::ZeiFromToBytes;
 use zei::setup::PublicParams;
 use zei::xfr::asset_record::{build_blind_asset_record, open_asset_record};

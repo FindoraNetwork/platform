@@ -3,8 +3,8 @@ use ledger::data_model::{AssetTypeCode, Operation, Transaction};
 use ledger::store::helpers::*;
 // use ledger::store::{ArchiveUpdate, LedgerState, LedgerUpdate};
 use percent_encoding::{utf8_percent_encode, AsciiSet, CONTROLS};
-use rand::SeedableRng;
 use rand_chacha::ChaChaRng;
+use rand_core::SeedableRng;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
   let mut prng = ChaChaRng::from_seed([0u8; 32]);

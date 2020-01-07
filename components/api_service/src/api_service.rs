@@ -8,7 +8,7 @@ use actix_web::{dev, error, web, App, HttpServer};
 use ledger::data_model::*;
 use ledger::store::{ArchiveAccess, LedgerAccess, LedgerUpdate, TxnEffect};
 use percent_encoding::percent_decode_str;
-use rand::{CryptoRng, Rng};
+use rand_core::{CryptoRng, RngCore};
 use std::io;
 use std::marker::{Send, Sync};
 use std::sync::{Arc, RwLock};
@@ -225,7 +225,7 @@ fn query_utxo_partial_map<AA>(data: web::Data<Arc<RwLock<AA>>>,
 fn submit_transaction<RNG, U>(data: web::Data<Arc<RwLock<U>>>,
                               info: web::Path<String>)
                               -> Result<String, actix_web::error::Error>
-  where RNG: Rng + CryptoRng,
+  where RNG: RngCore + CryptoRng,
         U: LedgerUpdate<RNG>
 {
   // TODO: Handle submission to Tendermint layer
@@ -260,7 +260,7 @@ enum ServiceInterface {
 }
 
 trait Route {
-  fn set_route<RNG: 'static + Rng + CryptoRng,
+  fn set_route<RNG: 'static + RngCore + CryptoRng,
                  LA: 'static + LedgerAccess + ArchiveAccess + LedgerUpdate<RNG> + Sync + Send>(
     self,
     service_interface: ServiceInterface)
@@ -270,7 +270,7 @@ trait Route {
 
   fn set_route_for_archive_access<AA: 'static + ArchiveAccess + Sync + Send>(self) -> Self;
 
-  fn set_route_for_update<RNG: 'static + Rng + CryptoRng,
+  fn set_route_for_update<RNG: 'static + RngCore + CryptoRng,
                             U: 'static + LedgerUpdate<RNG> + Sync + Send>(
     self)
     -> Self;
@@ -285,7 +285,7 @@ impl<T, B> Route for App<T, B>
                                      InitError = ()>
 {
   // Call the appropraite function depending on the interface
-  fn set_route<RNG: 'static + Rng + CryptoRng,
+  fn set_route<RNG: 'static + RngCore + CryptoRng,
                  LA: 'static + LedgerAccess + ArchiveAccess + LedgerUpdate<RNG> + Sync + Send>(
     self,
     service_interface: ServiceInterface)
@@ -318,7 +318,7 @@ impl<T, B> Route for App<T, B>
   }
 
   // Set routes for the LedgerUpdate interface
-  fn set_route_for_update<RNG: 'static + Rng + CryptoRng,
+  fn set_route_for_update<RNG: 'static + RngCore + CryptoRng,
                             U: 'static + LedgerUpdate<RNG> + Sync + Send>(
     self)
     -> Self {
@@ -328,7 +328,7 @@ impl<T, B> Route for App<T, B>
 }
 
 impl RestfulApiService {
-  pub fn create<RNG: 'static + Rng + CryptoRng,
+  pub fn create<RNG: 'static + RngCore + CryptoRng,
                   LA: 'static + LedgerAccess + ArchiveAccess + LedgerUpdate<RNG> + Sync + Send>(
     ledger_access: Arc<RwLock<LA>>,
     host: &str,
