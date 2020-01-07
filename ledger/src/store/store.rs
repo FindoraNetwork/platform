@@ -4,15 +4,15 @@ extern crate byteorder;
 extern crate findora;
 extern crate tempdir;
 
-use bitmap;
 use crate::data_model::errors::PlatformError;
 use crate::data_model::*;
 use crate::policies::{calculate_fee, DebtMemo};
+use bitmap;
+use bitmap::BitMap;
 use cryptohash::sha256;
 use cryptohash::sha256::Digest as BitDigest;
-use merkle_tree::append_only_merkle::{AppendOnlyMerkle, HashValue, Proof};
-use bitmap::BitMap;
 use findora::HasInvariants;
+use merkle_tree::append_only_merkle::{AppendOnlyMerkle, HashValue, Proof};
 use merkle_tree::logged_merkle::LoggedMerkle;
 use rand::SeedableRng;
 use rand::{CryptoRng, Rng};

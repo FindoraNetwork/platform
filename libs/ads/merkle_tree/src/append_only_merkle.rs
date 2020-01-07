@@ -8,9 +8,9 @@
 //!  to disk as needed.
 //!
 
-use cryptohash::sha256;
 use chrono::Utc;
-use findora::{Commas, debug, er, log, log_impl, sde, se};
+use cryptohash::sha256;
+use findora::{debug, er, log, log_impl, sde, se, Commas};
 use itertools::izip;
 use serde::Deserialize;
 use serde::Deserializer;
@@ -2010,9 +2010,9 @@ impl AppendOnlyMerkle {
 #[cfg(test)]
 mod tests {
   use super::*;
-  use cryptohash::sha256;
   use byteorder::LittleEndian;
   use byteorder::WriteBytesExt;
+  use cryptohash::sha256;
   use rand::prelude::thread_rng;
   use rand::Rng;
 

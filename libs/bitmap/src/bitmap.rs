@@ -24,7 +24,7 @@
 
 use cryptohash::sha256;
 use cryptohash::sha256::{Digest, DIGESTBYTES};
-use findora::{Commas, debug, er, log, log_impl};
+use findora::{debug, er, log, log_impl, Commas};
 use std::cmp::min;
 use std::collections::HashMap;
 use std::collections::HashSet;
