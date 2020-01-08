@@ -2,9 +2,8 @@
 // Allows web clients to issue transactions from a browser contexts.
 // For now, forwards transactions to a ledger hosted locally.
 // To compile wasm package, run wasm-pack build in the wasm directory
-#![deny(warnings)]
+//#![deny(warnings)]
 extern crate ledger;
-extern crate rand_chacha;
 extern crate serde;
 extern crate wasm_bindgen;
 extern crate wasm_bindgen_test;
@@ -43,6 +42,7 @@ use zei::xfr::structs::{AssetIssuerPubKeys, AssetRecord, BlindAssetRecord, OpenA
 
 const HOST: &str = "localhost";
 const PORT: &str = "8668";
+const SUBMISSION_PORT: &str = "8669";
 
 /////////// TRANSACTION BUILDING ////////////////
 
@@ -270,7 +270,7 @@ pub fn get_priv_key_str(key_pair: &XfrKeyPair) -> String {
 
 #[wasm_bindgen]
 pub fn new_keypair() -> XfrKeyPair {
-  let mut small_rng = ChaChaRng::from_entropy();
+  let mut small_rng = rand::thread_rng();
   XfrKeyPair::generate(&mut small_rng)
 }
 
@@ -440,14 +440,14 @@ fn encode_uri(to_encode: &str) -> String {
 
 #[wasm_bindgen]
 // Submit transation to the ledger at HOST and PORT.
-pub fn submit_transaction(transaction_str: String) -> Promise {
+pub fn submit_transaction(transaction_str: String) -> Result<Promise, JsValue> {
   let mut opts = RequestInit::new();
   opts.method("POST");
   opts.mode(RequestMode::Cors);
 
   let req_string = format!("http://{}:{}/submit_transaction/{}",
                            HOST,
-                           PORT,
+                           SUBMISSION_PORT,
                            encode_uri(&transaction_str));
 
   create_query_promise(&opts, &req_string)
@@ -461,7 +461,7 @@ pub fn test_deserialize(str: String) -> bool {
 
 #[wasm_bindgen]
 // Get txo by index
-pub fn get_txo(index: u64) -> Promise {
+pub fn get_txo(index: u64) -> Result<Promise, JsValue> {
   let mut opts = RequestInit::new();
   opts.method("GET");
   opts.mode(RequestMode::Cors);
@@ -473,7 +473,7 @@ pub fn get_txo(index: u64) -> Promise {
 
 #[wasm_bindgen]
 // Get txo by index
-pub fn get_asset_token(name: String) -> Promise {
+pub fn get_asset_token(name: String) -> Result<Promise, JsValue> {
   let mut opts = RequestInit::new();
   opts.method("GET");
   opts.mode(RequestMode::Cors);
@@ -485,11 +485,13 @@ pub fn get_asset_token(name: String) -> Promise {
 
 // Given a request string and a request init object, constructs
 // the JS promise to be returned to the client
-fn create_query_promise(opts: &RequestInit, req_string: &str) -> Promise {
-  let request = Request::new_with_str_and_init(&req_string, &opts).unwrap();
+fn create_query_promise(opts: &RequestInit, req_string: &str) -> Result<Promise, JsValue> {
+  use web_sys::console;
+  console::log_1(&req_string.into());
+  let request = Request::new_with_str_and_init(&req_string, &opts)?;
   let window = web_sys::window().unwrap();
   let request_promise = window.fetch_with_request(&request);
-  future_to_promise(JsFuture::from(request_promise))
+  Ok(future_to_promise(JsFuture::from(request_promise)))
 }
 
 //

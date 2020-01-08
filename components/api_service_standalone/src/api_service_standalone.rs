@@ -20,6 +20,7 @@ fn submit_transaction_standalone<RNG, LU>(data: web::Data<Arc<RwLock<LedgerApp<R
   where RNG: RngCore + CryptoRng,
         LU: LedgerUpdate<RNG> + Sync + Send
 {
+  dbg!("submitting transaction");
   let mut ledger_app = data.write().unwrap();
   let uri_string = percent_decode_str(&*info).decode_utf8().unwrap();
   let tx = serde_json::from_str(&uri_string).map_err(actix_web::error::ErrorBadRequest)
@@ -114,7 +115,7 @@ mod tests {
   fn test_submit_transaction_standalone() {
     let mut prng = rand_chacha::ChaChaRng::from_seed([0u8; 32]);
     let ledger_state = LedgerState::test_ledger();
-    let ledger_app = LedgerApp::new(prng.clone(), ledger_state).unwrap();
+    let ledger_app = LedgerApp::new(prng.clone(), Arc::new(RwLock::new(ledger_state))).unwrap();
     let mut tx = Transaction::default();
 
     let token_code1 = AssetTypeCode { val: [1; 16] };

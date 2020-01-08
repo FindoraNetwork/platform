@@ -8,7 +8,7 @@ use rand_core::{CryptoRng, RngCore};
 use std::sync::{Arc, RwLock};
 
 // Maximum number of transactions in a block
-static BLOCK_CAPACITY: usize = 8;
+static BLOCK_CAPACITY: usize = 1;
 
 pub struct LedgerApp<RNG, LU>
   where RNG: RngCore + CryptoRng,
@@ -24,8 +24,10 @@ impl<RNG, LU> LedgerApp<RNG, LU>
   where RNG: RngCore + CryptoRng,
         LU: LedgerUpdate<RNG>
 {
-  pub fn new(prng: RNG, ledger_state: LU) -> Result<LedgerApp<RNG, LU>, PlatformError> {
-    Ok(LedgerApp { committed_state: Arc::new(RwLock::new(ledger_state)),
+  pub fn new(prng: RNG,
+             ledger_state: Arc<RwLock<LU>>)
+             -> Result<LedgerApp<RNG, LU>, PlatformError> {
+    Ok(LedgerApp { committed_state: ledger_state,
                    block: None,
                    temp_sids: vec![],
                    prng })
@@ -142,7 +144,7 @@ mod tests {
     // Create a LedgerApp
     let ledger_state = LedgerState::test_ledger();
     let mut prng = rand_chacha::ChaChaRng::from_seed([0u8; 32]);
-    let mut ledger_app = LedgerApp::new(prng.clone(), ledger_state).unwrap();
+    let mut ledger_app = LedgerApp::new(prng.clone(), Arc::new(RwLock::new(ledger_state))).unwrap();
 
     ledger_app.begin_block();
 
@@ -192,7 +194,7 @@ mod tests {
     // Create a LedgerApp
     let ledger_state = LedgerState::test_ledger();
     let prng = rand_chacha::ChaChaRng::from_seed([0u8; 32]);
-    let mut ledger_app = LedgerApp::new(prng, ledger_state).unwrap();
+    let mut ledger_app = LedgerApp::new(prng, Arc::new(RwLock::new(ledger_state))).unwrap();
 
     ledger_app.begin_block();
 
