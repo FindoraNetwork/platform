@@ -1017,7 +1017,7 @@ pub mod helpers {
                                        recipient_pk: &XfrPublicKey)
                                        -> Transaction {
     let mut tx = Transaction::default();
-    let issuer_key_copy = XfrKeyPair::zei_from_bytes(&issuer_keys.zei_to_bytes());
+    let _issuer_key_copy = XfrKeyPair::zei_from_bytes(&issuer_keys.zei_to_bytes());
 
     // issue operation
     let ar = AssetRecord::new(amount, code.val, *issuer_keys.get_pk_ref()).unwrap();
@@ -1035,17 +1035,14 @@ pub mod helpers {
 
     // transfer operation
     let ar = AssetRecord::new(amount, code.val, *recipient_pk).unwrap();
-    let transfer_body =
-      TransferAssetBody::new(ledger.get_prng(),
+    let mut transfer =
+      TransferAsset::new(TransferAssetBody::new(ledger.get_prng(),
                              vec![TxoRef::Relative(0)],
                              &[open_asset_record(&ba, &issuer_keys.get_sk_ref()).unwrap()],
-                             &[ar],
-                             &[issuer_key_copy]).unwrap();
+                             &[ar]).unwrap(), TransferType::Standard).unwrap();
 
-    tx.operations
-      .push(Operation::TransferAsset(TransferAsset::new(transfer_body,
-                                                        &[&issuer_keys],
-                                                        TransferType::Standard).unwrap()));
+    transfer.sign(&issuer_keys);
+    tx.operations.push(Operation::TransferAsset(transfer));
     tx
   }
 }
@@ -1679,8 +1676,6 @@ mod tests {
     let code = AssetTypeCode { val: [1; 16] };
     let mut prng = ChaChaRng::from_seed([0u8; 32]);
     let key_pair = XfrKeyPair::generate(&mut prng);
-    prng = ChaChaRng::from_seed([0u8; 32]);
-    let second_key_pair = XfrKeyPair::generate(&mut prng);
     let key_pair_adversary = XfrKeyPair::generate(ledger.get_prng());
 
     let tx = create_definition_transaction(&code,
@@ -1730,18 +1725,15 @@ mod tests {
     let ar = AssetRecord::new(100, code.val, key_pair_adversary.get_pk_ref().clone()).unwrap();
 
     let mut tx = Transaction::default();
-    let transfer_body =
-      TransferAssetBody::new(ledger.get_prng(),
+    let mut transfer =
+      TransferAsset::new(TransferAssetBody::new(ledger.get_prng(),
                              vec![TxoRef::Absolute(txo_sid)],
                              &[open_asset_record(&bar, &key_pair.get_sk_ref()).unwrap()],
-                             &[ar],
-                             &[key_pair]).unwrap();
+                             &[ar]).unwrap(), TransferType::Standard).unwrap();
 
-    let mut second_transfer_body = transfer_body.clone();
-    tx.operations
-      .push(Operation::TransferAsset(TransferAsset::new(transfer_body,
-                                                        &[&second_key_pair],
-                                                        TransferType::Standard).unwrap()));
+    let mut second_transfer = transfer.clone();
+    transfer.sign(&key_pair);
+    tx.operations.push(Operation::TransferAsset(transfer));
 
     // Commit first transfer
     let effect = TxnEffect::compute_effect(ledger.get_prng(), tx).unwrap();
@@ -1751,16 +1743,13 @@ mod tests {
     let (_txn_sid, _txos) = ledger.finish_block(block).remove(&temp_sid).unwrap();
 
     // Adversary will attempt to spend the same blind asset record at another index
-    second_transfer_body.inputs = vec![TxoRef::Absolute(second_txo_id)];
+    let mut tx = Transaction::default();
+    second_transfer.body.inputs = vec![TxoRef::Absolute(second_txo_id)];
 
     // Submit spend of same asset at second sid without signature
-    let mut tx = Transaction::default();
-    let mut transfer_asset = TransferAsset::new(second_transfer_body,
-                                                &[&second_key_pair],
-                                                TransferType::Standard).unwrap();
-    // remove the signature and try to apply txn
-    transfer_asset.body_signatures = Vec::new();
-    tx.operations.push(Operation::TransferAsset(transfer_asset));
+    second_transfer.body_signatures = Vec::new();
+    tx.operations
+      .push(Operation::TransferAsset(second_transfer));
 
     let effect = TxnEffect::compute_effect(ledger.get_prng(), tx);
     assert!(effect.is_err());
@@ -1971,18 +1960,14 @@ mod tests {
 
     let mut tx = Transaction::default();
 
-    let transfer_body = TransferAssetBody::new(ledger.get_prng(),
+    let mut transfer = TransferAsset::new(TransferAssetBody::new(ledger.get_prng(),
                              vec![TxoRef::Absolute(fiat_sid), TxoRef::Absolute(debt_sid)],
                              &[open_asset_record(&fiat_bar, &lender_key_pair.get_sk_ref()).unwrap(),
                              open_asset_record(&debt_bar, &borrower_key_pair.get_sk_ref()).unwrap()],
-                               &[fiat_transfer_record, loan_transfer_record],
-                               &[XfrKeyPair::zei_from_bytes(&lender_key_pair.zei_to_bytes()),
-                               XfrKeyPair::zei_from_bytes(&borrower_key_pair.zei_to_bytes())]).unwrap();
-
-    tx.operations
-      .push(Operation::TransferAsset(TransferAsset::new(transfer_body,
-                                                        &[&lender_key_pair, &borrower_key_pair],
-                                                        TransferType::Standard).unwrap()));
+                               &[fiat_transfer_record, loan_transfer_record]).unwrap(), TransferType::Standard).unwrap();
+    transfer.sign(&lender_key_pair);
+    transfer.sign(&borrower_key_pair);
+    tx.operations.push(Operation::TransferAsset(transfer));
 
     let (_txn_sid, txo_sids) = apply_transaction(&mut ledger, tx);
     let fiat_sid = txo_sids[0];
@@ -2011,13 +1996,10 @@ mod tests {
                              vec![TxoRef::Absolute(debt_sid), TxoRef::Absolute(fiat_sid)],
                              &[open_asset_record(&debt_bar, &lender_key_pair.get_sk_ref()).unwrap(),
                                open_asset_record(&fiat_bar, &borrower_key_pair.get_sk_ref()).unwrap()],
-                               &[payment_record, burned_debt_record, returned_debt_record, returned_fiat_record],
-                               &[XfrKeyPair::zei_from_bytes(&lender_key_pair.zei_to_bytes()),
-                               XfrKeyPair::zei_from_bytes(&borrower_key_pair.zei_to_bytes())]).unwrap();
+                               &[payment_record, burned_debt_record, returned_debt_record, returned_fiat_record]).unwrap();
 
     tx.operations
       .push(Operation::TransferAsset(TransferAsset::new(transfer_body,
-                                                        &[],
                                                         TransferType::DebtSwap).unwrap()));
 
     let effect = TxnEffect::compute_effect(ledger.get_prng(), tx).unwrap();
