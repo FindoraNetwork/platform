@@ -7,7 +7,7 @@ edition = "2018"
 [dependencies]
 base64 = "0.10"
 bincode = "1"
- bulletproofs = { version = "1.0.4",  package = "bulletproofs", git = "https://github.com/dalek-cryptography/bulletproofs", branch = "develop", features = ["yoloproofs"], rev = "3239bc9dd562bc8400f9054477c7c26c36974baf"}
+bulletproofs = { version = "1.0.4",  package = "bulletproofs", git = "https://github.com/dalek-cryptography/bulletproofs", branch = "develop", features = ["yoloproofs"] }
 cryptohash = { path = "../../libs/cryptohash" }
 curve25519-dalek = { version =  "2.0.0", features = ["serde"] }
 futures = "0.1.20"
