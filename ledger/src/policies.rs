@@ -12,6 +12,9 @@ impl Fraction {
   pub fn new(num: u64, denom: u64) -> Fraction {
     Fraction(I20F12::from_num(num) / I20F12::from_num(denom))
   }
+  pub fn checked_new(num: u64, denom: u64) -> Option<Fraction> {
+    Some(Fraction(I20F12::checked_from_num(num)?.checked_div(I20F12::checked_from_num(denom)?)?))
+  }
 }
 
 // Debt swap parameters that must be validated against current ledger state

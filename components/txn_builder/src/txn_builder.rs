@@ -9,6 +9,7 @@ use ledger::data_model::errors::PlatformError;
 use ledger::data_model::*;
 use rand_chacha::ChaChaRng;
 use rand_core::SeedableRng;
+use std::cmp::Ordering;
 use std::collections::HashSet;
 use zei::serialization::ZeiFromToBytes;
 use zei::setup::PublicParams;
@@ -190,7 +191,7 @@ impl BuildsTransactions for TransactionBuilder {
 //                            .create(TransferType::Standard)?
 //                            .sign(&alice)?;
 //
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Default)]
 pub struct TransferOperationBuilder {
   input_sids: Vec<TxoRef>,
   input_records: Vec<OpenAssetRecord>,
@@ -201,15 +202,6 @@ pub struct TransferOperationBuilder {
 }
 
 impl TransferOperationBuilder {
-  pub fn new() -> Self {
-    TransferOperationBuilder { input_sids: Vec::new(),
-                               input_records: Vec::new(),
-                               output_records: Vec::new(),
-                               spend_amounts: Vec::new(),
-                               transfer: None,
-                               transfer_type: TransferType::Standard }
-  }
-
   // TxoRef is the location of the input on the ledger and the amount is how much of the record
   // should be spent in the transfer. See tests for example usage.
   pub fn add_input(&mut self,
@@ -248,13 +240,17 @@ impl TransferOperationBuilder {
     let spend_total: u64 = self.spend_amounts.iter().sum();
     let mut partially_consumed_inputs = Vec::new();
     for (spend_amount, oar) in self.spend_amounts.iter().zip(self.input_records.iter()) {
-      if spend_amount > oar.get_amount() {
-        return Err(PlatformError::InputsError);
-      } else if spend_amount < oar.get_amount() {
-        let ar = AssetRecord::new(oar.get_amount() - spend_amount,
-                                  *oar.get_asset_type(),
-                                  *oar.get_pub_key())?;
-        partially_consumed_inputs.push(ar);
+      match spend_amount.cmp(oar.get_amount()) {
+        Ordering::Greater => {
+          return Err(PlatformError::InputsError);
+        }
+        Ordering::Less => {
+          let ar = AssetRecord::new(oar.get_amount() - spend_amount,
+                                    *oar.get_asset_type(),
+                                    *oar.get_pub_key())?;
+          partially_consumed_inputs.push(ar);
+        }
+        _ => {}
       }
     }
     let output_total = self.output_records

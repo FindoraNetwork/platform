@@ -57,6 +57,13 @@ pub struct Serialized<T> {
   phantom: PhantomData<T>,
 }
 
+impl<T> Default for Serialized<T> where T: Default + serde::Serialize + serde::de::DeserializeOwned
+{
+  fn default() -> Self {
+    Self::new(&T::default())
+  }
+}
+
 impl<T> Serialized<T> where T: serde::Serialize + serde::de::DeserializeOwned
 {
   pub fn new(to_serialize: &T) -> Self {
@@ -289,6 +296,12 @@ pub enum TransferType {
   DebtSwap,
 }
 
+impl Default for TransferType {
+  fn default() -> Self {
+    TransferType::Standard
+  }
+}
+
 // TODO: UTXO Addresses must be included in Transfer Signature
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct TransferAsset {
@@ -362,6 +375,7 @@ impl DefineAsset {
   }
 }
 
+#[allow(clippy::large_enum_variant)]
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub enum Operation {
   TransferAsset(TransferAsset),

@@ -6,6 +6,7 @@ pub enum PlatformError {
   DeserializationError,
   SerializationError,
   InputsError,
+  PolicyFailureError,
   // Option(String) so I (joe) can be lazy about error descriptions but also catch the laziness
   // later by removing Option
   InvariantError(Option<String>),
@@ -19,6 +20,7 @@ impl fmt::Display for PlatformError {
       PlatformError::DeserializationError => f.write_str("Could not deserialize object"),
       PlatformError::SerializationError => f.write_str("Could not serialize object"),
       PlatformError::InputsError => f.write_str("Invalid parameters"),
+      PlatformError::PolicyFailureError => f.write_str("Failed policy check"),
       PlatformError::InvariantError(msg) => {
         f.write_str(format!("Invariant violated: {}",
                             msg.as_ref().unwrap_or(&"UNKNOWN".to_string())).as_str())
@@ -35,6 +37,7 @@ impl error::Error for PlatformError {
       PlatformError::DeserializationError => "Could not deserialize object",
       PlatformError::SerializationError => "Could not serialize object",
       PlatformError::InputsError => "Parameters were not consistent",
+      PlatformError::PolicyFailureError => "Policy check failed",
       PlatformError::InvariantError(_msg) => "Invariant error",
       PlatformError::ZeiError(ze) => ze.description(),
       PlatformError::IoError(ioe) => &ioe,
