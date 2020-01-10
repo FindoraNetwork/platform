@@ -4,21 +4,20 @@ extern crate actix_web;
 extern crate ledger;
 extern crate ledger_app;
 extern crate percent_encoding;
-extern crate rand;
 extern crate serde_json;
 
 use actix_web::{dev, error, web, App, HttpServer};
 use ledger::store::LedgerUpdate;
 use ledger_app::LedgerApp;
 use percent_encoding::percent_decode_str;
-use rand::{CryptoRng, Rng};
+use rand_core::{CryptoRng, RngCore};
 use std::io;
 use std::marker::{Send, Sized, Sync};
 use std::sync::{Arc, RwLock};
 
 fn submit_transaction_standalone<RNG, LU>(data: web::Data<Arc<RwLock<LedgerApp<RNG, LU>>>>,
                                           info: web::Path<String>)
-  where RNG: Rng + CryptoRng,
+  where RNG: RngCore + CryptoRng,
         LU: LedgerUpdate<RNG> + Sync + Send
 {
   let mut ledger_app = data.write().unwrap();
@@ -34,7 +33,7 @@ pub enum ServiceInterfaceStandalone {
 }
 
 pub trait RouteStandalone {
-  fn set_route<RNG: 'static + Rng + CryptoRng, LU: 'static + LedgerUpdate<RNG> + Sync + Send>(
+  fn set_route<RNG: 'static + RngCore + CryptoRng, LU: 'static + LedgerUpdate<RNG> + Sync + Send>(
     self,
     service_interface: ServiceInterfaceStandalone)
     -> Self
@@ -47,7 +46,7 @@ pub trait RouteStandalone {
     }
   }
 
-  fn set_route_for_ledger_update_standalone<RNG: 'static + Rng + CryptoRng,
+  fn set_route_for_ledger_update_standalone<RNG: 'static + RngCore + CryptoRng,
                                               LU: 'static + LedgerUpdate<RNG> + Sync + Send>(
     self)
     -> Self;
@@ -62,7 +61,7 @@ impl<T, B> RouteStandalone for App<T, B>
                                      InitError = ()>
 {
   // Set routes for the LedgerUpdate interface via ledger_app
-  fn set_route_for_ledger_update_standalone<RNG: 'static + Rng + CryptoRng,
+  fn set_route_for_ledger_update_standalone<RNG: 'static + RngCore + CryptoRng,
                                               LU: 'static + LedgerUpdate<RNG> + Sync + Send>(
     self)
     -> Self {
@@ -76,7 +75,7 @@ pub struct RestfulApiServiceStandalone {
 }
 
 impl RestfulApiServiceStandalone {
-  pub fn create_standalone<RNG: 'static + Rng + CryptoRng + Sync + Send,
+  pub fn create_standalone<RNG: 'static + RngCore + CryptoRng + Sync + Send,
                              LU: 'static + LedgerUpdate<RNG> + Sync + Send>(
     ledger_app: Arc<RwLock<LedgerApp<RNG, LU>>>,
     host: &str,
@@ -109,7 +108,7 @@ mod tests {
   use ledger::store::helpers::*;
   use ledger::store::LedgerState;
   use percent_encoding::{utf8_percent_encode, AsciiSet, CONTROLS};
-  use rand::SeedableRng;
+  use rand_core::SeedableRng;
 
   #[test]
   fn test_submit_transaction_standalone() {

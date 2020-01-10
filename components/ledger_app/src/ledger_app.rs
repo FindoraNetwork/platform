@@ -4,14 +4,14 @@ extern crate ledger;
 use ledger::data_model::errors::PlatformError;
 use ledger::data_model::{Transaction, TxnTempSID};
 use ledger::store::*;
-use rand::{CryptoRng, Rng};
+use rand_core::{CryptoRng, RngCore};
 use std::sync::{Arc, RwLock};
 
 // Maximum number of transactions in a block
 static BLOCK_CAPACITY: usize = 8;
 
 pub struct LedgerApp<RNG, LU>
-  where RNG: Rng + CryptoRng,
+  where RNG: RngCore + CryptoRng,
         LU: LedgerUpdate<RNG>
 {
   committed_state: Arc<RwLock<LU>>,
@@ -21,7 +21,7 @@ pub struct LedgerApp<RNG, LU>
 }
 
 impl<RNG, LU> LedgerApp<RNG, LU>
-  where RNG: Rng + CryptoRng,
+  where RNG: RngCore + CryptoRng,
         LU: LedgerUpdate<RNG>
 {
   pub fn new(prng: RNG, ledger_state: LU) -> Result<LedgerApp<RNG, LU>, PlatformError> {
@@ -133,7 +133,7 @@ pub fn convert_tx(tx: &[u8]) -> Option<Transaction> {
 mod tests {
   use super::*;
   use ledger::data_model::{AssetTypeCode, IssuerPublicKey};
-  use rand::SeedableRng;
+  use rand_core::SeedableRng;
   use txn_builder::{BuildsTransactions, TransactionBuilder};
   use zei::xfr::sig::XfrKeyPair;
 

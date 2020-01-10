@@ -555,8 +555,7 @@ impl InterpretAccounts<PlatformError> for LedgerAccounts {
           TransferAssetBody::new(self.ledger.get_prng(),
                                  to_use.iter().cloned().map(TxoRef::Absolute).collect(),
                                  src_records.as_slice(),
-                                 all_outputs.as_slice(),
-                                 &sig_keys).unwrap();
+                                 all_outputs.as_slice()).unwrap();
         dbg!(&transfer_body);
         let transfer_sig =
           SignedAddress { address: XfrAddress { key: *src_pub },
