@@ -140,12 +140,15 @@ pub fn run_txn_check(check: &TxnCheck,
   let mut pending_outputs = HashSet::<ResourceVar>::new();
   let mut pending_op: Option<RealTxnOp> = None;
 
+  let mut num_outputs: u64 = 0;
+  let mut num_inputs: u64 = 0;
   let mut used_resources = HashSet::<ResourceVar>::new();
   let mut real_ops = Vec::<RealTxnOp>::new();
   for op in check.txn_template.iter() {
     debug_assert!(pending_inputs.is_disjoint(&used_resources));
     debug_assert!(pending_inputs.is_disjoint(&pending_outputs));
     debug_assert!(pending_outputs.is_disjoint(&used_resources));
+    debug_assert!(num_inputs + num_outputs == used_resources.len() as u64);
 
     match op {
       TxnOp::Issue(amt, rt, res) => {
@@ -157,6 +160,8 @@ pub fn run_txn_check(check: &TxnCheck,
           match pending {
             RealTxnOp::Transfer(_) => {
               real_ops.push(pending.clone());
+              num_inputs += pending_inputs.len() as u64;
+              num_outputs += pending_outputs.len() as u64;
               used_resources.extend(pending_inputs.drain());
               used_resources.extend(pending_outputs.drain());
               pending_op = Some(RealTxnOp::Issue(*rt, vec![(*amt, *res)]));
@@ -165,6 +170,7 @@ pub fn run_txn_check(check: &TxnCheck,
               debug_assert!(pending_inputs.is_empty());
               if *pending_rt != *rt {
                 real_ops.push(pending.clone());
+                num_outputs += pending_outputs.len() as u64;
                 used_resources.extend(pending_outputs.drain());
                 pending_op = Some(RealTxnOp::Issue(*rt, vec![(*amt, *res)]));
               } else {
@@ -201,6 +207,7 @@ pub fn run_txn_check(check: &TxnCheck,
               }
               real_ops.push(pending.clone());
               debug_assert!(pending_inputs.is_empty());
+              num_outputs += pending_outputs.len() as u64;
               used_resources.extend(pending_outputs.drain());
               pending_op = Some(RealTxnOp::Transfer(vec![(*amt, *inp, *out)]));
             }
@@ -251,12 +258,18 @@ pub fn run_txn_check(check: &TxnCheck,
 
   if let Some(final_op) = pending_op {
     real_ops.push(final_op);
+    num_inputs += pending_inputs.len() as u64;
+    num_outputs += pending_outputs.len() as u64;
     used_resources.extend(pending_inputs.drain());
     used_resources.extend(pending_outputs.drain());
     pending_op = None;
   }
 
   debug_assert!(pending_op.is_none());
+  debug_assert!(num_inputs + num_outputs == used_resources.len() as u64);
+  if num_inputs != check.num_in_params || num_outputs != check.num_out_params {
+    return Err(fail.clone());
+  }
 
   // check that all resources in the index range are used
   for ix in 0..used_resources.len().try_into().map_err(|_| fail.clone())? {
