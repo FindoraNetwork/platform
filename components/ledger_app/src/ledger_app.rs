@@ -142,7 +142,6 @@ impl<RNG, LU> LedgerApp<RNG, LU>
   }
 
   // Handle the whole process when there's a new transaction
-  // TODO noah propagate error
   pub fn handle_transaction(&mut self, txn: Transaction) -> TxnHandle {
     // Begin a block if the previous one has been commited
     if self.all_commited() {

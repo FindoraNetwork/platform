@@ -21,7 +21,6 @@ fn submit_transaction_standalone<RNG, LU>(data: web::Data<Arc<RwLock<LedgerApp<R
   where RNG: RngCore + CryptoRng,
         LU: LedgerUpdate<RNG> + Sync + Send
 {
-  dbg!("submitting txn");
   let mut ledger_app = data.write().unwrap();
   let uri_string = percent_decode_str(&*info).decode_utf8().unwrap();
   let tx = serde_json::from_str(&uri_string).map_err(actix_web::error::ErrorBadRequest)
@@ -29,7 +28,6 @@ fn submit_transaction_standalone<RNG, LU>(data: web::Data<Arc<RwLock<LedgerApp<R
 
   let handle = ledger_app.handle_transaction(tx);
   let res = serde_json::to_string(&handle)?;
-  dbg!(&res);
   Ok(res)
 }
 
@@ -164,7 +162,6 @@ mod tests {
                                        .to_request();
 
     let submit_resp = test::block_on(app.call(req)).unwrap();
-    dbg!(&submit_resp.response());
 
     assert!(submit_resp.status().is_success());
   }
