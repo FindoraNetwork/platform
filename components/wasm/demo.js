@@ -17,7 +17,24 @@ let memo = "test memo";
 let definition_transaction = wasm.WasmTransactionBuilder.new().add_operation_create_asset(kp_alice, memo, token_code, false, false).transaction();
 console.log(definition_transaction);
 
-let submit = wasm.submit_transaction(definition_transaction);
+
+const axios = require('axios')
+
+axios.post('http://localhost:8669/submit_transaction_standalone/'+  definition_transaction,{}, {
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+      'Accept': '*/*'
+    }
+  })
+.then((res) => {
+    console.log(`statusCode: ${res.statusCode}`)
+    console.log(res)
+})
+.catch((error) => {
+    console.error(error)
+})
+
+//let submit = wasm.submit_transaction(definition_transaction);
 
 // At this point, transaction would be submitted to the ledger
 // Once the definition transaction succeeds, Alice can issue and transfer 1000 units to herself

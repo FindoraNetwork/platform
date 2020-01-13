@@ -483,11 +483,19 @@ pub fn get_asset_token(name: String) -> Result<Promise, JsValue> {
   create_query_promise(&opts, &req_string)
 }
 
+pub fn get_txn_status(handle: String) -> Result<Promise, JsValue> {
+  let mut opts = RequestInit::new();
+  opts.method("GET");
+  opts.mode(RequestMode::Cors);
+
+  let req_string = format!("http://{}:{}/txn_status/{}", HOST, PORT, handle);
+
+  create_query_promise(&opts, &req_string)
+}
+
 // Given a request string and a request init object, constructs
 // the JS promise to be returned to the client
 fn create_query_promise(opts: &RequestInit, req_string: &str) -> Result<Promise, JsValue> {
-  use web_sys::console;
-  console::log_1(&req_string.into());
   let request = Request::new_with_str_and_init(&req_string, &opts)?;
   let window = web_sys::window().unwrap();
   let request_promise = window.fetch_with_request(&request);

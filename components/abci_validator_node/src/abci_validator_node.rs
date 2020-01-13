@@ -25,7 +25,7 @@ impl ABCILedgerApp {
   fn new() -> Result<ABCILedgerApp, PlatformError> {
     let ledger = LedgerState::test_ledger();
     let prng = rand_chacha::ChaChaRng::from_seed([0u8; 32]);
-    Ok(ABCILedgerApp { la: LedgerApp::new(prng, Arc::new(RwLock::new(ledger)))? })
+    Ok(ABCILedgerApp { la: LedgerApp::new(prng, Arc::new(RwLock::new(ledger)), 8)? })
   }
 }
 

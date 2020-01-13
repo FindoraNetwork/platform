@@ -17,16 +17,32 @@ use std::sync::{Arc, RwLock};
 
 fn submit_transaction_standalone<RNG, LU>(data: web::Data<Arc<RwLock<LedgerApp<RNG, LU>>>>,
                                           info: web::Path<String>)
+                                          -> Result<String, actix_web::error::Error>
   where RNG: RngCore + CryptoRng,
         LU: LedgerUpdate<RNG> + Sync + Send
 {
-  dbg!("submitting transaction");
+  dbg!("submitting txn");
   let mut ledger_app = data.write().unwrap();
   let uri_string = percent_decode_str(&*info).decode_utf8().unwrap();
   let tx = serde_json::from_str(&uri_string).map_err(actix_web::error::ErrorBadRequest)
                                             .unwrap();
 
-  ledger_app.handle_transaction(tx);
+  let handle = ledger_app.handle_transaction(tx);
+  let res = serde_json::to_string(&handle)?;
+  dbg!(&res);
+  Ok(res)
+}
+
+fn txn_status<RNG, LU>(data: web::Data<Arc<RwLock<LedgerApp<RNG, LU>>>>,
+                       info: web::Path<String>)
+                       -> Result<String, actix_web::error::Error>
+  where RNG: RngCore + CryptoRng,
+        LU: LedgerUpdate<RNG> + Sync + Send
+{
+  let ledger_app = data.write().unwrap();
+  let txn_handle = serde_json::from_str(&*info).expect("Cannot deserialize txn handle");
+  let txn_status = ledger_app.get_txn_status(&txn_handle);
+  Ok(serde_json::to_string(&txn_status)?)
 }
 
 pub enum ServiceInterfaceStandalone {
@@ -68,6 +84,7 @@ impl<T, B> RouteStandalone for App<T, B>
     -> Self {
     self.route("/submit_transaction_standalone/{tx}",
                web::post().to(submit_transaction_standalone::<RNG, LU>))
+        .route("/txn_status/{handle}", web::get().to(txn_status::<RNG, LU>))
   }
 }
 
@@ -115,7 +132,7 @@ mod tests {
   fn test_submit_transaction_standalone() {
     let mut prng = rand_chacha::ChaChaRng::from_seed([0u8; 32]);
     let ledger_state = LedgerState::test_ledger();
-    let ledger_app = LedgerApp::new(prng.clone(), Arc::new(RwLock::new(ledger_state))).unwrap();
+    let ledger_app = LedgerApp::new(prng.clone(), Arc::new(RwLock::new(ledger_state)), 8).unwrap();
     let mut tx = Transaction::default();
 
     let token_code1 = AssetTypeCode { val: [1; 16] };
@@ -147,6 +164,7 @@ mod tests {
                                        .to_request();
 
     let submit_resp = test::block_on(app.call(req)).unwrap();
+    dbg!(&submit_resp.response());
 
     assert!(submit_resp.status().is_success());
   }
