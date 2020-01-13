@@ -2,7 +2,7 @@
 // Allows web clients to issue transactions from a browser contexts.
 // For now, forwards transactions to a ledger hosted locally.
 // To compile wasm package, run wasm-pack build in the wasm directory
-//#![deny(warnings)]
+#![deny(warnings)]
 extern crate ledger;
 extern crate serde;
 extern crate wasm_bindgen;
