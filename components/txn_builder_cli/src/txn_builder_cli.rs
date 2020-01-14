@@ -2,7 +2,7 @@
 use clap::{App, Arg, SubCommand};
 use env_logger::{Env, Target};
 use ledger::data_model::errors::PlatformError;
-use ledger::data_model::{AssetTypeCode, IssuerPublicKey};
+use ledger::data_model::{AccountAddress, AssetTypeCode, TxoRef, TxoSID};
 use log::{error, trace}; // Other options: debug, info, warn
 use rand_chacha::ChaChaRng;
 use rand_core::SeedableRng;
@@ -13,7 +13,8 @@ use std::io::prelude::*;
 use std::path::{Path, PathBuf};
 use txn_builder::{BuildsTransactions, TransactionBuilder};
 use zei::serialization::ZeiFromToBytes;
-use zei::xfr::sig::{XfrKeyPair, XfrPublicKey, XfrSecretKey};
+use zei::xfr::sig::{XfrKeyPair, XfrPublicKey};
+use zei::xfr::structs::BlindAssetRecord;
 
 fn load_txn_builder_from_file(file_name: &str) -> Result<TransactionBuilder, PlatformError> {
   let mut file = File::open(file_name).or_else(|_e| {
@@ -37,53 +38,6 @@ fn store_txn_builder_to_file(file_name: &str, txn: &TransactionBuilder) {
                   Err(PlatformError::IoError("unable to write".to_string()))
                 });
   }
-}
-
-fn load_key_pair_from_files(priv_file_name: &str)
-                            -> Result<(XfrPublicKey, XfrSecretKey), PlatformError> {
-  let mut priv_file = File::open(priv_file_name).or_else(|_e| {
-                                                  println!("Failed to open private key file {}",
-                                                           priv_file_name);
-                                                  Err(PlatformError::DeserializationError)
-                                                })?;
-
-  let sk: XfrSecretKey;
-  let mut sk_byte_buffer = Vec::new();
-  match priv_file.read_to_end(&mut sk_byte_buffer) {
-    Ok(_len) => {
-      sk = XfrSecretKey::zei_from_bytes(&sk_byte_buffer);
-    }
-    Err(_e) => {
-      println!("Failed to read private key file {}", priv_file_name);
-      return Err(PlatformError::IoError("unable to read".to_string()));
-    }
-  }
-
-  let pub_file_path = if priv_file_name.ends_with(".private") {
-    let (begin, _) = priv_file_name.split_at(priv_file_name.len() - "private".len());
-    begin.to_string() + "pub"
-  } else {
-    priv_file_name.to_string() + "pub"
-  };
-
-  let mut pub_file = File::open(&pub_file_path).or_else(|_e| {
-                       println!("Failed to open public key file {}", &pub_file_path);
-                       Err(PlatformError::IoError("cannot read".to_string()))
-                     })?;
-
-  let pk: XfrPublicKey;
-  let mut pk_byte_buffer = Vec::new();
-  match pub_file.read_to_end(&mut pk_byte_buffer) {
-    Ok(_len) => {
-      pk = XfrPublicKey::zei_from_bytes(&pk_byte_buffer);
-    }
-    Err(_e) => {
-      println!("Failed to read public key file {}", pub_file_path);
-      return Err(PlatformError::IoError("cannot read".to_string()));
-    }
-  }
-
-  Ok((pk, sk))
 }
 
 // Write a new key pair to the given paths.
@@ -162,7 +116,7 @@ fn find_available_path(path: &Path, n: i32) -> Result<PathBuf, std::io::Error> {
 }
 
 // Return a backup file path derived from path or an error if an
-// unused path cannot cannot be derived. The path must not be empty
+// unused path cannot be derived. The path must not be empty
 // and must not be dot (".").
 fn next_path(path: &Path) -> Result<PathBuf, std::io::Error> {
   fn add_backup_extension(path: &Path) -> PathBuf {
@@ -263,6 +217,7 @@ fn main() {
         .short("f")
         .help("Overwrite the default or named transaction file")))
     .subcommand(SubCommand::with_name("add")
+    // TODO (Keyao): Add "Required" to the help message for required arguments
       .subcommand(SubCommand::with_name("define_asset")
         .arg(Arg::with_name("token_code")
           .long("token_code")
@@ -276,7 +231,7 @@ fn main() {
         .arg(Arg::with_name("traceable")
           .short("trace")
           .long("traceable")
-          .help("If specified, asset transfers can be traced by the issuert "))
+          .help("If specified, asset transfers can be traced by the issuer "))
         .arg(Arg::with_name("memo")
           .short("m")
           .long("memo")
@@ -292,8 +247,8 @@ fn main() {
           .help("TODO: add support for policies")))
       .subcommand(SubCommand::with_name("issue_asset")
         .arg(Arg::with_name("token_code")
+          .short("tc")
           .long("token_code")
-          .alias("tc")
           .takes_value(true)
           .help("Specify the token code of the asset to be issued. The transaction will fail if no asset with the token code exists."))
         .arg(Arg::with_name("sequence_number")
@@ -307,26 +262,31 @@ fn main() {
           .takes_value(true)
           .help("Amount of tokens to issue.")))
       .subcommand(SubCommand::with_name("transfer_asset")
-        .arg(Arg::with_name("blind_asset_record")
-          .short("bar")
-          .long("blind_asset_record")
+        .arg(Arg::with_name("input_sids")
+          .short("iss")
+          .long("input_sids")
           .takes_value(true)
-          .help("Specify a string representing the JSON serialization of the blind asset record of the asset to be transferred."))
-        .arg(Arg::with_name("index")
-          .short("idx")
-          .long("index")
+          .help("Required: input TxoSID indeces. Separate by comma (\",\") without space."))
+        .arg(Arg::with_name("blind_asset_records")
+          .short("bars")
+          .long("blind_asset_records")
           .takes_value(true)
-          .help("Specify TxoSID index."))
-        .arg(Arg::with_name("address")
-          .short("addr")
-          .long("address")
+          .help("Required: JSON serializations of the blind asset records of the assets to be transferred. Separate by comma (\",\") without space."))
+        .arg(Arg::with_name("input_amounts")
+          .short("iamts")
+          .long("input_amounts")
           .takes_value(true)
-          .help("Specify address to send tokens to."))
-        .arg(Arg::with_name("transfer_amount")
-          .short("tfr_amt")
-          .long("transfer_amount")
+          .help("Required: the amount to transfer from each record. Separate by comma (\",\") without space."))
+        .arg(Arg::with_name("output_amounts")
+          .short("oamts")
+          .long("output_amounts")
           .takes_value(true)
-          .help("Amount of tokens to transfer."))))
+          .help("Required: the amount to transfer to each account. Separate by comma (\",\") without space."))
+        .arg(Arg::with_name("addresses")
+          .short("ads")
+          .long("addresses")
+          .takes_value(true)
+          .help("Required: addresses to send tokens to. Separate by comma (\",\") without space."))))
     .subcommand(SubCommand::with_name("serialize"))
     .subcommand(SubCommand::with_name("drop"))
     .subcommand(SubCommand::with_name("keygen")
@@ -437,15 +397,8 @@ fn process_add_cmd(add_matches: &clap::ArgMatches,
                    keys_file_path: &str,
                    transaction_file_name: &str,
                    _findora_dir: &str) {
-  let pub_key: XfrPublicKey;
-  let priv_key: XfrSecretKey;
-  if let Ok((pub_key_out, priv_key_out)) = load_key_pair_from_files(&keys_file_path) {
-    pub_key = pub_key_out;
-    priv_key = priv_key_out;
-  } else {
-    println!("Valid keyfile required for this command; if no keyfile currently exists, try running \"findora_txn_builder keygen\"");
-    return;
-  }
+  // TODO (Keyao): Handle invalid key pair input?
+  let key_pair = XfrKeyPair::zei_from_bytes(keys_file_path.as_bytes());
   match add_matches.subcommand() {
     ("define_asset", Some(define_asset_matches)) => {
       let token_code = define_asset_matches.value_of("token_code");
@@ -465,8 +418,7 @@ fn process_add_cmd(add_matches: &clap::ArgMatches,
           asset_token = AssetTypeCode::gen_random();
           println!("Creating asset with token code {:?}", asset_token.val);
         }
-        if let Ok(_res) = txn_builder.add_operation_create_asset(&IssuerPublicKey { key: pub_key },
-                                                                 &priv_key,
+        if let Ok(_res) = txn_builder.add_operation_create_asset(&key_pair,
                                                                  Some(asset_token),
                                                                  allow_updates,
                                                                  traceable,
@@ -513,12 +465,8 @@ fn process_add_cmd(add_matches: &clap::ArgMatches,
           return;
         }
 
-        if let Ok(_res) = txn_builder.add_basic_issue_asset(&IssuerPublicKey { key: pub_key },
-                                                            &priv_key,
-                                                            &None,
-                                                            &asset_token,
-                                                            seq_num,
-                                                            amount)
+        if let Ok(_res) =
+          txn_builder.add_basic_issue_asset(&key_pair, &None, &asset_token, seq_num, amount)
         {
           store_txn_builder_to_file(&transaction_file_name, &txn_builder);
         } else {
@@ -526,66 +474,116 @@ fn process_add_cmd(add_matches: &clap::ArgMatches,
         }
       }
     }
-    ("transfer_asset", Some(_transfer_asset_matches)) => {
-      //TODO: (noah/nathan) because of recent zei refactor we need an
-      // XfrKeyPair to sign all of the inputs for transferring. Currently, we store the keys
-      // as distinct private/public keys and there is no way to recreate the keypair
-      //let index;
-      //if let Some(index_arg) = transfer_asset_matches.value_of("index") {
-      //  if let Ok(index_num_parsed) = index_arg.parse::<u64>() {
-      //    index = index_num_parsed;
-      //  } else {
-      //    println!("Improperly formatted index.");
-      //    return;
-      //  }
-      //} else {
-      //  println!("TxoSID index is required to transfer asset.");
-      //  return;
-      //}
-      //let amount;
-      //if let Some(amount_arg) = transfer_asset_matches.value_of("transfer_amount") {
-      //  if let Ok(amount_arg_parsed) = amount_arg.parse::<u64>() {
-      //    amount = amount_arg_parsed;
-      //  } else {
-      //    println!("Improperly formatted amount.");
-      //    return;
-      //  }
-      //} else {
-      //  println!("Amount is required to transfer asset.");
-      //  return;
-      //}
-      //let blind_asset_record: BlindAssetRecord;
-      //if let Some(blind_asset_record_arg) = transfer_asset_matches.value_of("blind_asset_record") {
-      //  if let Ok(blind_asset_record_parsed) = serde_json::from_str(&blind_asset_record_arg) {
-      //    blind_asset_record = blind_asset_record_parsed;
-      //  } else {
-      //    println!("Improperly formatted blind asset record JSON.");
-      //    return;
-      //  }
-      //} else {
-      //  println!("Blind asset record JSON is required to transfer asset.");
-      //  return;
-      //}
-      //let address: XfrPublicKey;
-      //if let Some(address_arg) = transfer_asset_matches.value_of("address") {
-      //  address = XfrPublicKey::zei_from_bytes(address_arg.as_bytes());
-      //} else {
-      //  println!("Address required for transfer.");
-      //  return;
-      //}
-      //if let Ok(mut txn_builder) = load_txn_builder_from_file(&transaction_file_name) {
-      //if let Ok(_res) =
-      //  txn_builder.add_basic_transfer_asset(&[(&TxoRef::Absolute(TxoSID(index)),
-      //                                          &blind_asset_record,
-      //                                          amount,
-      //                                          &priv_key)],
-      //                                       &[(amount, &AccountAddress { key: address })])
-      //{
-      //  store_txn_builder_to_file(&transaction_file_name, &txn_builder);
-      //} else {
-      //  println!("Failed to add operation to transaction.");
-      //}
-      //}
+    ("transfer_asset", Some(transfer_asset_matches)) => {
+      // Compose transfer_from for add_basic_transfer_asset
+      let mut input_sids = Vec::new();
+      if let Some(input_sids_arg) = transfer_asset_matches.value_of("input_sids") {
+        let input_sids_str = input_sids_arg.split(",").collect::<Vec<&str>>();
+        for input_sid_str in input_sids_str {
+          if let Ok(input_sid) = input_sid_str.parse::<u64>() {
+            input_sids.push(TxoRef::Absolute(TxoSID(input_sid)))
+          } else {
+            println!("Improperly formatted input sids.");
+          }
+        }
+      } else {
+        println!("TxoSID sids are required to transfer asset.");
+        return;
+      }
+      let mut blind_asset_records = Vec::new();
+      if let Some(blind_asset_records_arg) = transfer_asset_matches.value_of("blind_asset_record") {
+        let blind_asset_records_str = blind_asset_records_arg.split(",").collect::<Vec<&str>>();
+        for blind_asset_record_str in blind_asset_records_str {
+          let blind_asset_record: BlindAssetRecord =
+            serde_json::from_str(blind_asset_record_str).unwrap();
+          blind_asset_records.push(blind_asset_record);
+        }
+      } else {
+        println!("Blind asset records are required to transfer asset.");
+        return;
+      }
+      let mut input_amounts = Vec::new();
+      if let Some(input_amounts_arg) = transfer_asset_matches.value_of("input_amounts") {
+        let input_amounts_str = input_amounts_arg.split(",").collect::<Vec<&str>>();
+        for input_amount_str in input_amounts_str {
+          if let Ok(input_amount) = input_amount_str.parse::<u64>() {
+            input_amounts.push(input_amount);
+          } else {
+            println!("Improperly formatted input amounts.");
+          }
+        }
+      } else {
+        println!("Input amounts are required to transfer asset.");
+        return;
+      }
+      let mut count = input_sids.len();
+      if blind_asset_records.len() != count || input_amounts.len() != count {
+        println!("Size of input sids, blind asset records, and input amounts should match.");
+        return;
+      }
+      let mut transfer_from = Vec::new();
+      let mut input_sids_iter = input_sids.iter();
+      let mut blind_asset_records_iter = blind_asset_records.iter();
+      let mut input_amounts_iter = input_amounts.iter();
+      while count > 0 {
+        transfer_from.push((input_sids_iter.next().unwrap(),
+                            blind_asset_records_iter.next().unwrap(),
+                            *input_amounts_iter.next().unwrap()));
+        count = count - 1;
+      }
+
+      // Compose transfer_to for add_basic_transfer_asset
+      let mut output_amounts = Vec::new();
+      if let Some(output_amounts_arg) = transfer_asset_matches.value_of("output_amounts") {
+        let output_amounts_str = output_amounts_arg.split(",").collect::<Vec<&str>>();
+        for output_amount_str in output_amounts_str {
+          if let Ok(output_amount) = output_amount_str.parse::<u64>() {
+            output_amounts.push(output_amount);
+          } else {
+            println!("Improperly formatted output amounts.");
+            return;
+          }
+        }
+      } else {
+        println!("Output amounts are required to transfer asset.");
+        return;
+      }
+      let mut addresses = Vec::new();
+      if let Some(output_amounts_arg) = transfer_asset_matches.value_of("addresses") {
+        let addresses_str = output_amounts_arg.split(",").collect::<Vec<&str>>();
+        for address_str in addresses_str {
+          addresses.push(AccountAddress { key:
+                                            XfrPublicKey::zei_from_bytes(address_str.as_bytes()) })
+        }
+      } else {
+        println!("Addresses are required to transfer asset.");
+        return;
+      }
+      let mut count = output_amounts.len();
+      if addresses.len() != count {
+        println!("Size of output amounts and addresses should match.");
+        return;
+      }
+      let mut transfer_to = Vec::new();
+      let mut output_amounts_iter = output_amounts.iter();
+      let mut addresses_iter = addresses.iter();
+      while count > 0 {
+        transfer_to.push((*output_amounts_iter.next().unwrap(), addresses_iter.next().unwrap()));
+        count = count - 1;
+      }
+
+      // Transfer asset
+      if let Ok(mut txn_builder) = load_txn_builder_from_file(&transaction_file_name) {
+        if let Ok(_res) =
+          txn_builder.add_basic_transfer_asset(&XfrKeyPair::zei_from_bytes(keys_file_path.as_bytes()),
+                                               &transfer_from[..],
+                                               &transfer_to[..])
+        {
+          store_txn_builder_to_file(&transaction_file_name, &txn_builder);
+        } else {
+          println!("Failed to add operation to transaction.");
+        }
+      }
     }
     _ => unreachable!(),
   }
@@ -657,6 +655,17 @@ mod tests {
       // Custom { kind: InvalidData, error: "Is directory: \".\"" }
     } else {
       panic!("Expecting directory error");
+    }
+  }
+
+  #[test]
+  fn test_rename_existing_path() {
+    let as_path = Path::new("1000");
+    if let Err(_) = rename_existing_path(as_path) {
+      // This is the error:
+      // No such file or directory
+    } else {
+      panic!("Expecting 'No such file or directory' error ");
     }
   }
 }

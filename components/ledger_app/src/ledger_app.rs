@@ -132,7 +132,7 @@ pub fn convert_tx(tx: &[u8]) -> Option<Transaction> {
 #[cfg(test)]
 mod tests {
   use super::*;
-  use ledger::data_model::{AssetTypeCode, IssuerPublicKey};
+  use ledger::data_model::AssetTypeCode;
   use rand_core::SeedableRng;
   use txn_builder::{BuildsTransactions, TransactionBuilder};
   use zei::xfr::sig::XfrKeyPair;
@@ -148,8 +148,6 @@ mod tests {
 
     // Create values to be used to build transactions
     let keypair = XfrKeyPair::generate(&mut prng);
-    let public_key = *keypair.get_pk_ref();
-    let secret_key = keypair.get_sk_ref();
     let token_code = "test";
     let asset_token = AssetTypeCode::new_from_base64(&token_code).unwrap();
 
@@ -157,20 +155,14 @@ mod tests {
     let mut txn_builder_0 = TransactionBuilder::default();
     let mut txn_builder_1 = TransactionBuilder::default();
 
-    txn_builder_0.add_operation_create_asset(&IssuerPublicKey { key: public_key },
-                                             &secret_key,
+    txn_builder_0.add_operation_create_asset(&keypair,
                                              Some(asset_token),
                                              true,
                                              true,
                                              &String::from("{}"))
                  .unwrap();
 
-    txn_builder_1.add_operation_create_asset(&IssuerPublicKey { key: public_key },
-                                             &secret_key,
-                                             None,
-                                             true,
-                                             true,
-                                             "test")
+    txn_builder_1.add_operation_create_asset(&keypair, None, true, true, "test")
                  .unwrap();
 
     // Cache transactions

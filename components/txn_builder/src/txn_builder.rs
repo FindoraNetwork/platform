@@ -12,23 +12,21 @@ use rand_core::SeedableRng;
 use zei::serialization::ZeiFromToBytes;
 use zei::setup::PublicParams;
 use zei::xfr::asset_record::{build_blind_asset_record, open_asset_record};
-use zei::xfr::sig::{XfrKeyPair, XfrSecretKey};
+use zei::xfr::sig::XfrKeyPair;
 use zei::xfr::structs::{AssetIssuerPubKeys, AssetRecord, BlindAssetRecord, OpenAssetRecord};
 
 pub trait BuildsTransactions {
   fn transaction(&self) -> &Transaction;
   #[allow(clippy::too_many_arguments)]
   fn add_operation_create_asset(&mut self,
-                                pub_key: &IssuerPublicKey,
-                                priv_key: &XfrSecretKey,
+                                key_pair: &XfrKeyPair,
                                 token_code: Option<AssetTypeCode>,
                                 updatable: bool,
                                 traceable: bool,
                                 memo: &str)
                                 -> Result<(), PlatformError>;
   fn add_operation_issue_asset(&mut self,
-                               pub_key: &IssuerPublicKey,
-                               priv_key: &XfrSecretKey,
+                               key_pair: &XfrKeyPair,
                                token_code: &AssetTypeCode,
                                seq_num: u64,
                                records: &[TxOutput])
@@ -43,8 +41,7 @@ pub trait BuildsTransactions {
   fn serialize_str(&self) -> Result<String, PlatformError>;
 
   fn add_basic_issue_asset(&mut self,
-                           pub_key: &IssuerPublicKey,
-                           priv_key: &XfrSecretKey,
+                           key_pair: &XfrKeyPair,
                            tracking_keys: &Option<AssetIssuerPubKeys>,
                            token_code: &AssetTypeCode,
                            seq_num: u64,
@@ -52,9 +49,9 @@ pub trait BuildsTransactions {
                            -> Result<(), PlatformError> {
     let mut prng = ChaChaRng::from_seed([0u8; 32]);
     let params = PublicParams::new();
-    let ar = AssetRecord::new(amount, token_code.val, pub_key.key)?;
+    let ar = AssetRecord::new(amount, token_code.val, key_pair.get_pk())?;
     let ba = build_blind_asset_record(&mut prng, &params.pc_gens, &ar, true, true, tracking_keys);
-    self.add_operation_issue_asset(pub_key, priv_key, token_code, seq_num, &[TxOutput(ba)])
+    self.add_operation_issue_asset(key_pair, token_code, seq_num, &[TxOutput(ba)])
   }
 
   #[allow(clippy::comparison_chain)]
@@ -110,23 +107,25 @@ impl BuildsTransactions for TransactionBuilder {
     &self.txn
   }
   fn add_operation_create_asset(&mut self,
-                                pub_key: &IssuerPublicKey,
-                                priv_key: &XfrSecretKey,
+                                key_pair: &XfrKeyPair,
                                 token_code: Option<AssetTypeCode>,
                                 updatable: bool,
                                 traceable: bool,
                                 _memo: &str)
                                 -> Result<(), PlatformError> {
+    let pub_key = &IssuerPublicKey { key: key_pair.get_pk() };
+    let priv_key = &key_pair.get_sk();
     self.txn.add_operation(Operation::DefineAsset(DefineAsset::new(DefineAssetBody::new(&token_code.unwrap_or_else(AssetTypeCode::gen_random), pub_key, updatable, traceable, None, Some(ConfidentialMemo {}))?, pub_key, priv_key)?));
     Ok(())
   }
   fn add_operation_issue_asset(&mut self,
-                               pub_key: &IssuerPublicKey,
-                               priv_key: &XfrSecretKey,
+                               key_pair: &XfrKeyPair,
                                token_code: &AssetTypeCode,
                                seq_num: u64,
                                records: &[TxOutput])
                                -> Result<(), PlatformError> {
+    let pub_key = &IssuerPublicKey { key: key_pair.get_pk() };
+    let priv_key = &key_pair.get_sk();
     self.txn
         .add_operation(Operation::IssueAsset(IssueAsset::new(IssueAssetBody::new(token_code,
                                                                                  seq_num,
