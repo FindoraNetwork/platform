@@ -2,6 +2,7 @@ use super::errors;
 use base64::decode as b64dec;
 use base64::encode as b64enc;
 use chrono::prelude::*;
+use errors::PlatformError;
 use rand::rngs::SmallRng;
 use rand::{FromEntropy, Rng};
 use rand_core::{CryptoRng, RngCore};
@@ -36,13 +37,13 @@ impl Code {
     let buf = <[u8; 16]>::try_from(as_vec.as_slice()).unwrap();
     Self { val: buf }
   }
-  pub fn new_from_base64(b64: &str) -> Result<Self, errors::PlatformError> {
+  pub fn new_from_base64(b64: &str) -> Result<Self, PlatformError> {
     if let Ok(mut bin) = b64dec(b64) {
       bin.resize(16, 0u8);
       let buf = <[u8; 16]>::try_from(bin.as_slice()).unwrap();
       Ok(Self { val: buf })
     } else {
-      Err(errors::PlatformError::DeserializationError)
+      Err(PlatformError::DeserializationError)
     }
   }
   pub fn to_base64(&self) -> String {
@@ -215,10 +216,10 @@ impl TransferAssetBody {
                                      input_refs: Vec<TxoRef>,
                                      input_records: &[OpenAssetRecord],
                                      output_records: &[AssetRecord])
-                                     -> Result<TransferAssetBody, errors::PlatformError> {
+                                     -> Result<TransferAssetBody, PlatformError> {
     let id_proofs = vec![];
     if input_records.is_empty() {
-      return Err(errors::PlatformError::InputsError);
+      return Err(PlatformError::InputsError);
     }
     let note = Box::new(gen_xfr_body(prng, input_records, output_records, &id_proofs)?);
     Ok(TransferAssetBody { inputs: input_refs,
@@ -239,7 +240,7 @@ impl IssueAssetBody {
   pub fn new(token_code: &AssetTypeCode,
              seq_num: u64,
              records: &[TxOutput])
-             -> Result<IssueAssetBody, errors::PlatformError> {
+             -> Result<IssueAssetBody, PlatformError> {
     Ok(IssueAssetBody { code: *token_code,
                         seq_num,
                         num_outputs: records.len(),
@@ -259,7 +260,7 @@ impl DefineAssetBody {
              traceable: bool,
              memo: Option<Memo>,
              confidential_memo: Option<ConfidentialMemo>)
-             -> Result<DefineAssetBody, errors::PlatformError> {
+             -> Result<DefineAssetBody, PlatformError> {
     let mut asset_def: Asset = Default::default();
     asset_def.code = *token_code;
     asset_def.issuer = *issuer_key;
@@ -313,7 +314,7 @@ pub struct TransferAsset {
 impl TransferAsset {
   pub fn new(transfer_body: TransferAssetBody,
              transfer_type: TransferType)
-             -> Result<TransferAsset, errors::PlatformError> {
+             -> Result<TransferAsset, PlatformError> {
     Ok(TransferAsset { body: transfer_body,
                        body_signatures: Vec::new(),
                        transfer_type })
@@ -342,7 +343,7 @@ impl IssueAsset {
   pub fn new(issuance_body: IssueAssetBody,
              public_key: &IssuerPublicKey,
              secret_key: &XfrSecretKey)
-             -> Result<IssueAsset, errors::PlatformError> {
+             -> Result<IssueAsset, PlatformError> {
     let sign = compute_signature(&secret_key, &public_key.key, &issuance_body);
     Ok(IssueAsset { body: issuance_body,
                     pubkey: *public_key,
@@ -367,7 +368,7 @@ impl DefineAsset {
   pub fn new(creation_body: DefineAssetBody,
              public_key: &IssuerPublicKey,
              secret_key: &XfrSecretKey)
-             -> Result<DefineAsset, errors::PlatformError> {
+             -> Result<DefineAsset, PlatformError> {
     let sign = compute_signature(&secret_key, &public_key.key, &creation_body);
     Ok(DefineAsset { body: creation_body,
                      pubkey: *public_key,
@@ -390,11 +391,12 @@ pub struct TimeBounds {
   pub end: DateTime<Utc>,
 }
 
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize, Default)]
 pub struct Transaction {
   pub operations: Vec<Operation>,
   pub credentials: Vec<CredentialProof>,
   pub memos: Vec<Memo>,
+  pub signatures: Vec<XfrSignature>,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -414,13 +416,44 @@ impl Transaction {
     serialized.extend(bincode::serialize(&sid).unwrap());
     serialized
   }
-}
 
-impl Default for Transaction {
-  fn default() -> Self {
-    Transaction { operations: Vec::new(),
-                  credentials: Vec::new(),
-                  memos: Vec::new() }
+  fn serialize_without_sigs(&self) -> Vec<u8> {
+    // TODO(joe): do this without a clone?
+    let mut other_txn;
+    let base_txn = if self.signatures.is_empty() {
+      &self
+    } else {
+      other_txn = self.clone();
+      other_txn.signatures.clear();
+      &other_txn
+    };
+    serde_json::to_vec(base_txn).unwrap()
+  }
+
+  pub fn sign(&mut self, secret_key: &XfrSecretKey, public_key: &XfrPublicKey) {
+    let sig = secret_key.sign(&self.serialize_without_sigs(), &public_key);
+    self.signatures.push(sig);
+  }
+
+  pub fn check_signature(&self,
+                         public_key: &XfrPublicKey,
+                         sig: &XfrSignature)
+                         -> Result<(), PlatformError> {
+    public_key.verify(&self.serialize_without_sigs(), sig)?;
+    Ok(())
+  }
+
+  pub fn check_has_signature(&self, public_key: &XfrPublicKey) -> Result<(), PlatformError> {
+    let serialized = self.serialize_without_sigs();
+    for sig in self.signatures.iter() {
+      match public_key.verify(&serialized, sig) {
+        Err(_) => {}
+        Ok(_) => {
+          return Ok(());
+        }
+      }
+    }
+    Err(PlatformError::InputsError)
   }
 }
 

@@ -91,6 +91,7 @@ pub struct TxnCheck {
 
   pub bool_ops: Vec<BoolOp>,
   pub assertions: Vec<BoolVar>,
+  pub required_signatures: Vec<IdVar>,
 
   pub txn_template: Vec<TxnOp>,
 }
@@ -740,7 +741,14 @@ pub fn run_txn_check(check: &TxnCheck,
     }
   }
 
-  /* Step 6: consistency checks with asset records.
+  /* Step 6: check for signatures */
+  for iv in check.required_signatures.iter() {
+    let iv: usize = iv.0.try_into().map_err(|_| fail.clone())?;
+    let v: &XfrPublicKey = id_vars.get(iv).ok_or_else(|| fail.clone())?;
+    txn.check_has_signature(v).map_err(|_| fail.clone())?;
+  }
+
+  /* Step 7: consistency checks with asset records.
    *  (a) Check that asset type vars of issuances match
    *  (b) Check that amount sums of transfers match
    */
@@ -798,6 +806,7 @@ pub fn run_txn_check(check: &TxnCheck,
    *  - Checked that all stated transfers match in asset type
    *  - Computed all the various values within the policy, erroring out
    *    if anything has an ill-defined effect (eg overflow)
+   *  - Checked that all required signatures are present.
    *  - Checked that all asserted boolean values came out as true.
    *  - Checked that resource-type expressions agree with the asset types
    *    used for issuance

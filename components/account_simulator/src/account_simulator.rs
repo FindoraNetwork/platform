@@ -398,7 +398,8 @@ impl InterpretAccounts<PlatformError> for LedgerAccounts {
 
         let txn = Transaction { operations: vec![Operation::DefineAsset(op)],
                                 credentials: vec![],
-                                memos: vec![] };
+                                memos: vec![],
+                                signatures: vec![] };
 
         let eff = TxnEffect::compute_effect(self.ledger.get_prng(), txn).unwrap();
 
@@ -566,7 +567,8 @@ impl InterpretAccounts<PlatformError> for LedgerAccounts {
                                        transfer_type: TransferType::Standard };
         let txn = Transaction { operations: vec![Operation::TransferAsset(transfer)],
                                 credentials: vec![],
-                                memos: vec![] };
+                                memos: vec![],
+                                signatures: vec![] };
 
         let effect = TxnEffect::compute_effect(self.ledger.get_prng(), txn).unwrap();
 
