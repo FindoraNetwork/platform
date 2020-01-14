@@ -1182,6 +1182,7 @@ mod tests {
   use rand_core::SeedableRng;
   use std::fs;
   use tempfile::tempdir;
+  use tempdir::TempDir;
   use zei::serialization::ZeiFromToBytes;
   use zei::setup::PublicParams;
   use zei::xfr::asset_record::{build_blind_asset_record, open_asset_record};
@@ -1763,7 +1764,7 @@ mod tests {
     {
       let mut block = state.start_block().unwrap();
       state.apply_transaction(&mut block, effect).unwrap();
-      state.finish_block(block);
+      state.finish_block(block).unwrap();
     }
 
     assert!(state.get_asset_type(&token_code1).is_some());
@@ -1814,7 +1815,7 @@ mod tests {
     {
       let mut block = ledger.start_block().unwrap();
       ledger.apply_transaction(&mut block, effect).unwrap();
-      ledger.finish_block(block);
+      ledger.finish_block(block).unwrap();
     }
 
     // Issuance with two outputs
@@ -1841,7 +1842,7 @@ mod tests {
     let mut block = ledger.start_block().unwrap();
     let temp_sid = ledger.apply_transaction(&mut block, effect).unwrap();
 
-    let (_txn_sid, txos) = ledger.finish_block(block).remove(&temp_sid).unwrap();
+    let (_txn_sid, txos) = ledger.finish_block(block).unwrap().remove(&temp_sid).unwrap();
 
     // Store txo_sids for subsequent transfers
     let txo_sid = txos[0];
@@ -1867,7 +1868,7 @@ mod tests {
     let mut block = ledger.start_block().unwrap();
     let temp_sid = ledger.apply_transaction(&mut block, effect).unwrap();
 
-    let (_txn_sid, _txos) = ledger.finish_block(block).remove(&temp_sid).unwrap();
+    let (_txn_sid, _txos) = ledger.finish_block(block).unwrap().remove(&temp_sid).unwrap();
 
     // Adversary will attempt to spend the same blind asset record at another index
     let mut tx = Transaction::default();
@@ -1921,8 +1922,7 @@ mod tests {
                                       &txn_merkle_path,
                                       &txn_path,
                                       &utxo_map_path,
-                                      None,
-                                      true).unwrap();
+                                      None).unwrap();
 
     let params = PublicParams::new();
 
@@ -1936,7 +1936,7 @@ mod tests {
     {
       let mut block = ledger.start_block().unwrap();
       ledger.apply_transaction(&mut block, effect).unwrap();
-      ledger.finish_block(block);
+      ledger.finish_block(block).unwrap();
     }
 
     let mut tx = Transaction::default();
@@ -1957,7 +1957,7 @@ mod tests {
     let mut block = ledger.start_block().unwrap();
     let temp_sid = ledger.apply_transaction(&mut block, effect).unwrap();
 
-    let (txn_sid, txos) = ledger.finish_block(block).remove(&temp_sid).unwrap();
+    let (txn_sid, txos) = ledger.finish_block(block).unwrap().remove(&temp_sid).unwrap();
 
     // shouldn't be able to replay issuance
     let effect = TxnEffect::compute_effect(ledger.get_prng(), second_tx).unwrap();

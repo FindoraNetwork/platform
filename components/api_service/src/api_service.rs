@@ -396,7 +396,7 @@ mod tests {
     {
       let mut block = state.start_block().unwrap();
       state.apply_transaction(&mut block, effect).unwrap();
-      state.finish_block(block);
+      state.finish_block(block).unwrap();
     }
 
     let mut app = test::init_service(App::new().data(Arc::new(RwLock::new(state)))
