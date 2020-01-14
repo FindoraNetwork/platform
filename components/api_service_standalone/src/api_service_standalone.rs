@@ -17,6 +17,7 @@ use std::sync::{Arc, RwLock};
 
 fn submit_transaction_standalone<RNG, LU>(data: web::Data<Arc<RwLock<LedgerApp<RNG, LU>>>>,
                                           info: web::Path<String>)
+                                          -> Result<String, actix_web::error::Error>
   where RNG: RngCore + CryptoRng,
         LU: LedgerUpdate<RNG> + Sync + Send
 {
@@ -25,7 +26,21 @@ fn submit_transaction_standalone<RNG, LU>(data: web::Data<Arc<RwLock<LedgerApp<R
   let tx = serde_json::from_str(&uri_string).map_err(actix_web::error::ErrorBadRequest)
                                             .unwrap();
 
-  ledger_app.handle_transaction(tx);
+  let handle = ledger_app.handle_transaction(tx);
+  let res = serde_json::to_string(&handle)?;
+  Ok(res)
+}
+
+fn txn_status<RNG, LU>(data: web::Data<Arc<RwLock<LedgerApp<RNG, LU>>>>,
+                       info: web::Path<String>)
+                       -> Result<String, actix_web::error::Error>
+  where RNG: RngCore + CryptoRng,
+        LU: LedgerUpdate<RNG> + Sync + Send
+{
+  let ledger_app = data.write().unwrap();
+  let txn_handle = serde_json::from_str(&*info).map_err(actix_web::error::ErrorBadRequest)?;
+  let txn_status = ledger_app.get_txn_status(&txn_handle);
+  Ok(serde_json::to_string(&txn_status)?)
 }
 
 pub enum ServiceInterfaceStandalone {
@@ -67,6 +82,7 @@ impl<T, B> RouteStandalone for App<T, B>
     -> Self {
     self.route("/submit_transaction_standalone/{tx}",
                web::post().to(submit_transaction_standalone::<RNG, LU>))
+        .route("/txn_status/{handle}", web::get().to(txn_status::<RNG, LU>))
   }
 }
 
@@ -114,7 +130,7 @@ mod tests {
   fn test_submit_transaction_standalone() {
     let mut prng = rand_chacha::ChaChaRng::from_seed([0u8; 32]);
     let ledger_state = LedgerState::test_ledger();
-    let ledger_app = LedgerApp::new(prng.clone(), ledger_state).unwrap();
+    let ledger_app = LedgerApp::new(prng.clone(), Arc::new(RwLock::new(ledger_state)), 8).unwrap();
     let mut tx = Transaction::default();
 
     let token_code1 = AssetTypeCode { val: [1; 16] };
