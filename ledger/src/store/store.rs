@@ -1181,8 +1181,8 @@ mod tests {
   use crate::policies::{calculate_fee, Fraction};
   use rand_core::SeedableRng;
   use std::fs;
-  use tempfile::tempdir;
   use tempdir::TempDir;
+  use tempfile::tempdir;
   use zei::serialization::ZeiFromToBytes;
   use zei::setup::PublicParams;
   use zei::xfr::asset_record::{build_blind_asset_record, open_asset_record};
@@ -1842,7 +1842,10 @@ mod tests {
     let mut block = ledger.start_block().unwrap();
     let temp_sid = ledger.apply_transaction(&mut block, effect).unwrap();
 
-    let (_txn_sid, txos) = ledger.finish_block(block).unwrap().remove(&temp_sid).unwrap();
+    let (_txn_sid, txos) = ledger.finish_block(block)
+                                 .unwrap()
+                                 .remove(&temp_sid)
+                                 .unwrap();
 
     // Store txo_sids for subsequent transfers
     let txo_sid = txos[0];
@@ -1868,7 +1871,10 @@ mod tests {
     let mut block = ledger.start_block().unwrap();
     let temp_sid = ledger.apply_transaction(&mut block, effect).unwrap();
 
-    let (_txn_sid, _txos) = ledger.finish_block(block).unwrap().remove(&temp_sid).unwrap();
+    let (_txn_sid, _txos) = ledger.finish_block(block)
+                                  .unwrap()
+                                  .remove(&temp_sid)
+                                  .unwrap();
 
     // Adversary will attempt to spend the same blind asset record at another index
     let mut tx = Transaction::default();
@@ -1957,7 +1963,10 @@ mod tests {
     let mut block = ledger.start_block().unwrap();
     let temp_sid = ledger.apply_transaction(&mut block, effect).unwrap();
 
-    let (txn_sid, txos) = ledger.finish_block(block).unwrap().remove(&temp_sid).unwrap();
+    let (txn_sid, txos) = ledger.finish_block(block)
+                                .unwrap()
+                                .remove(&temp_sid)
+                                .unwrap();
 
     // shouldn't be able to replay issuance
     let effect = TxnEffect::compute_effect(ledger.get_prng(), second_tx).unwrap();
