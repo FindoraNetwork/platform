@@ -1,7 +1,7 @@
 #[macro_use]
 extern crate criterion;
 
-use criterion::{Criterion, BenchmarkId};
+use criterion::{BenchmarkId, Criterion};
 //use criterion::black_box;
 
 use cryptohash::sha256;
@@ -12,8 +12,7 @@ use rand::{Rng, SeedableRng};
 
 use sparse_merkle_tree::*;
 
-fn prepare_inserts(num_entries: usize, rng: &mut StdRng) ->
-  (Vec<[u8; DIGESTBYTES]>, Vec<Vec<u8>>) {
+fn prepare_inserts(num_entries: usize, rng: &mut StdRng) -> (Vec<[u8; DIGESTBYTES]>, Vec<Vec<u8>>) {
   let mut keys = Vec::with_capacity(num_entries);
   let mut data = Vec::with_capacity(num_entries);
   for _ in 0..num_entries {
@@ -42,17 +41,15 @@ fn smt_set_benchmark(c: &mut Criterion) {
     let id = BenchmarkId::new("Insert", parameter_string);
 
     let inserts = prepare_inserts(*size, &mut rng); // 1000
-    group.bench_with_input(id,
-                           &inserts,
-                           |b, (keys, values)| {
-                             let mut smt = SmtMap256::new();
-                             b.iter(|| {
-                               for i in 0..*size {
-                                 let res = smt.set(&keys[i], Some(&values[i]));
-                                 criterion::black_box(res);
-                               }
-                             });
-                           });
+    group.bench_with_input(id, &inserts, |b, (keys, values)| {
+           let mut smt = SmtMap256::new();
+           b.iter(|| {
+              for i in 0..*size {
+                let res = smt.set(&keys[i], Some(&values[i]));
+                criterion::black_box(res);
+              }
+            });
+         });
   }
   group.finish();
 }
@@ -72,17 +69,15 @@ fn smt_get_benchmark(c: &mut Criterion) {
       smt.set(&inserts.0[i], Some(&inserts.1[i]));
     }
 
-    group.bench_with_input(id,
-                           &inserts,
-                           |b, (keys, values)| {
-                             b.iter(|| {
-                               for i in 0..*size {
-                                 let res = smt.get(&keys[i]); 
-                                 assert_eq!(res, Some(&values[i]).as_ref());
-                                 criterion::black_box(res);
-                               }
-                             });
-                           });
+    group.bench_with_input(id, &inserts, |b, (keys, values)| {
+           b.iter(|| {
+              for i in 0..*size {
+                let res = smt.get(&keys[i]);
+                assert_eq!(res, Some(&values[i]).as_ref());
+                criterion::black_box(res);
+              }
+            });
+         });
   }
   group.finish();
 }
@@ -102,16 +97,14 @@ fn smt_get_and_prove_benchmark(c: &mut Criterion) {
       smt.set(&inserts.0[i], Some(&inserts.1[i]));
     }
 
-    group.bench_with_input(id,
-                           &inserts,
-                           |b, (keys, values)| {
-                             b.iter(|| {
-                               for i in 0..*size {
-                                 let (value, proof) = smt.get_with_proof(&keys[i]);
-                                 assert!(smt.check_merkle_proof(&keys[i], value, &proof));
-                               }
-                             });
-                           });
+    group.bench_with_input(id, &inserts, |b, (keys, values)| {
+           b.iter(|| {
+              for i in 0..*size {
+                let (value, proof) = smt.get_with_proof(&keys[i]);
+                assert!(smt.check_merkle_proof(&keys[i], value, &proof));
+              }
+            });
+         });
   }
   group.finish();
 }
@@ -131,25 +124,21 @@ fn smt_delete_benchmark(c: &mut Criterion) {
       smt.set(&inserts.0[i], Some(&inserts.1[i]));
     }
 
-    group.bench_with_input(id,
-                           &inserts,
-                           |b, (keys, values)| {
-                             b.iter(|| {
-                               for i in 0..*size {
-                                 smt.set(&keys[i], None);
-                               }
-                             });
-                           });
+    group.bench_with_input(id, &inserts, |b, (keys, values)| {
+           b.iter(|| {
+              for i in 0..*size {
+                smt.set(&keys[i], None);
+              }
+            });
+         });
   }
   group.finish();
 }
 
-criterion_group!(
-    benches,
-    smt_set_benchmark,
-    smt_get_benchmark,
-    smt_get_and_prove_benchmark,
-    smt_delete_benchmark
-);
+criterion_group!(benches,
+                 smt_set_benchmark,
+                 smt_get_benchmark,
+                 smt_get_and_prove_benchmark,
+                 smt_delete_benchmark);
 
 criterion_main!(benches);

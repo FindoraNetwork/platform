@@ -69,7 +69,8 @@ impl<RNG, LU> LedgerApp<RNG, LU>
     std::mem::swap(&mut self.block, &mut block);
     if let Some(block) = block {
       if let Ok(mut ledger) = self.committed_state.write() {
-        ledger.finish_block(block);
+        // TODO(noah): is this unwrap reasonable?
+        ledger.finish_block(block).unwrap();
       } // What should happen in failure? -joe
     } // What should happen in failure? -joe
 

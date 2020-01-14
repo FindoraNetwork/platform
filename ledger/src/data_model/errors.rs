@@ -13,6 +13,8 @@ pub enum PlatformError {
   IoError(String),
 }
 
+impl std::error::Error for PlatformError {}
+
 impl fmt::Display for PlatformError {
   fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
     match self {

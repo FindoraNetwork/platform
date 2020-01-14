@@ -248,7 +248,7 @@ fn submit_transaction<RNG, U>(data: web::Data<Arc<RwLock<U>>>,
   }
   let temp_sid = temp_sid.unwrap();
 
-  let ret = ledger.finish_block(block).remove(&temp_sid).unwrap().1;
+  let ret = ledger.finish_block(block)?.remove(&temp_sid).unwrap().1;
 
   Ok(serde_json::to_string(&ret)?)
 }
@@ -361,8 +361,8 @@ mod tests {
   use ledger::store::helpers::*;
   use ledger::store::{LedgerState, LedgerUpdate};
   use percent_encoding::{utf8_percent_encode, AsciiSet, CONTROLS};
-  use rand_core::SeedableRng;
   use rand_chacha::ChaChaRng;
+  use rand_core::SeedableRng;
 
   #[test]
   fn test_query_utxo() {}
