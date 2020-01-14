@@ -476,6 +476,7 @@ unifyTypes AmountType FractionType = Just FractionType
 unifyTypes FractionType AmountType = Just FractionType
 unifyTypes _ _ = Nothing
 
+-- TODO: Identity/AssetTypeType arithmetic??!
 typeForExpr _ (ConstAmountExpr _) = Just AmountType
 typeForExpr _ (ConstFractionExpr _) = Just FractionType
 typeForExpr _ (AmountField _) = Just AmountType
@@ -864,6 +865,128 @@ typecheck ast = over (polfTxns) (map $ typecheckTxnDecl globalTypes) ast
                 $ M.fromList
                 $ (\decl -> (_gparamName decl, _gparamType decl))
                   <$> _polfGParams ast
+
+newtype PSIdVar = PSIdVar Int deriving (Eq,Show,Read)
+newtype PSAmtVar = PSAmtVar Int deriving (Eq,Show,Read)
+newtype PSFracVar = PSFracVar Int deriving (Eq,Show,Read)
+newtype PSResTypeVar = PSResTypeVar Int deriving (Eq,Show,Read)
+newtype PSResVar = PSResVar Int deriving (Eq,Show,Read)
+newtype PSBoolVar = PSBoolVar Int deriving (Eq,Show,Read)
+
+data PSIdOp = PSOwnerOfOp PSResVar
+            | PSIdVarOp PSIdVar
+ deriving (Eq,Show,Read)
+
+data PSResTypeOp = PSTypeOfOp PSResVar
+                 | PSResTypeVarOp PSResTypeVar
+ deriving (Eq,Show,Read)
+
+data PSAmtOp
+  = PSAmtVarOp PSAmtVar
+  | PSAmtConstOp Int
+  | PSAmtPlusOp PSAmtVar PSAmtVar
+  | PSAmtMinusOp PSAmtVar PSAmtVar
+  | PSAmtTimesOp PSAmtVar PSAmtVar
+  | PSAmtRoundOp PSFracVar
+ deriving (Eq,Show,Read)
+
+data PSFracOp
+  = PSFracVarOp PSFracVar
+  | PSFracConstOp Rational
+  | PSFracPlusOp PSFracVar PSFracVar
+  | PSFracTimesOp PSFracVar PSFracVar
+  | PSFracTimesAmtOp PSFracVar PSAmtVar
+  | PSFracAmtTimesOp PSAmtVar PSFracVar
+ deriving (Eq,Show,Read)
+
+data PSBoolOp
+  = PSBoolVarOp PSBoolVar
+  | PSBoolConstOp Bool
+
+  | PSIdEq PSIdVar PSIdVar
+  | PSAmtEq PSAmtVar PSAmtVar
+  | PSFracEq PSFracVar PSFracVar
+  | PSResTypeEq PSResTypeVar PSResTypeVar
+
+  | PSNot PSBoolVar
+  | PSAnd PSBoolVar PSBoolVar
+  | PSOr PSBoolVar PSBoolVar
+
+  | PSAmtGe PSAmtVar PSAmtVar
+  | PSFracGe PSFracVar PSFracVar
+ deriving (Eq,Show,Read)
+
+data PSTxnOp
+  = PSIssue PSAmtVar PSResTypeVar PSResVar
+  | PSTransfer PSAmtVar PSResVar PSResVar
+  deriving (Eq,Show,Read)
+
+data PolicyTxnCheck = PolicyTxnCheck
+  { _ptcNumInParams  :: Int
+  , _ptcNumOutParams :: Int
+
+  , _ptcIdOps        :: [PSIdOp]
+  , _ptcRtOps        :: [PSResTypeOp]
+  , _ptcAmtOps       :: [PSAmtOp]
+  , _ptcFracOps      :: [PSFracOp]
+
+  , _ptcBoolOps      :: [PSBoolOp]
+
+  , _ptcAssertions   :: [PSBoolVar]
+  , _ptcSignatures   :: [PSIdVar]
+  , _ptcTxnTemplate  :: [PSTxnOp]
+  } deriving (Eq,Show,Read)
+
+data PolicyScript = PolicyScript
+  { _polNumIdGlobals      :: Int
+  , _polNumResTypeGlobals :: Int
+  , _polNumAmtGlobals     :: Int
+  , _polNumFracGlobals    :: Int
+  , _polInitCheck         :: PolicyTxnCheck
+  , _polTxns              :: [PolicyTxnCheck]
+  } deriving (Eq,Show,Read)
+
+data PolicyTxnConversionState = PolicyTxnConversionState
+  { _ptcTypes :: M.Map T.Text DataType
+
+  , _ptcResVars :: M.Map T.Text PSResVar
+  , _ptcIdVars :: M.Map T.Text PSIdVar
+  , _ptcResTypeVars :: M.Map T.Text PSResTypeVar
+  , _ptcAmtVars :: M.Map T.Text PSAmtVar
+  , _ptcFracVars :: M.Map T.Text PSFracVar
+
+  , _ptcTxnSoFar :: PolicyTxnCheck
+  } deriving (Eq,Show,Read)
+
+convertPolfToScript (PolicyFile { _polfBats = bats
+                                , _polfGParams = gparams
+                                , _polfTxns = (init_txn:txns) })
+  = PolicyScript { _polNumIdGlobals = M.size id_globals
+                 , _polNumResTypeGlobals = M.size res_type_globals
+                 , _polNumAmtGlobals = M.size amt_globals
+                 , _polNumFracGlobals = M.size frac_globals
+                 , _polInitCheck = txnConvert init_txn
+                 , _polTxns = map txnConvert txns
+                 }
+  where
+    id_globals = M.fromList
+      $ [(_batsIssuer bats,PSIdVar 0)]
+        ++ ((\ (gparam,i) -> (_gparamName gparam, PSIdVar i))
+            <$> zip [1..] (filter ((== IdentityType) . _gparamType) gparams))
+    res_type_globals = M.fromList
+      $ [(_batsType bats,PSResTypeVar 0)]
+        ++ ((\ (gparam,i) -> (_gparamName gparam, PSResTypeVar i))
+            <$> zip [1..] (filter ((== ResourceTypeType) . _gparamType) gparams))
+    amt_globals = M.fromList
+      $ (\ (gparam,i) -> (_gparamName gparam, PSAmtVar i))
+      <$> (zip [0..] $ filter ((== AmountType) . _gparamType) gparams
+    frac_globals = M.fromList
+      $ (\ (gparam,i) -> (_gparamName gparam, PSFracVar i))
+      <$> (zip [0..] $ filter ((== FractionType) . _gparamType) gparams
+
+    txnConvert (TxnDecl { _txnParams = params, _txnRequires = []
+                        , _txnEnsures = [], _txnBody = bodyStmts })
+      = undefined
 
 -- main = alloyish_main
 main = do
