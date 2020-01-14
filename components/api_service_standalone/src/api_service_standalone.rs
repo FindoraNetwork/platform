@@ -38,7 +38,7 @@ fn txn_status<RNG, LU>(data: web::Data<Arc<RwLock<LedgerApp<RNG, LU>>>>,
         LU: LedgerUpdate<RNG> + Sync + Send
 {
   let ledger_app = data.write().unwrap();
-  let txn_handle = serde_json::from_str(&*info).expect("Cannot deserialize txn handle");
+  let txn_handle = serde_json::from_str(&*info).map_err(actix_web::error::ErrorBadRequest)?;
   let txn_status = ledger_app.get_txn_status(&txn_handle);
   Ok(serde_json::to_string(&txn_status)?)
 }

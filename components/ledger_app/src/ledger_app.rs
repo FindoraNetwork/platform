@@ -223,8 +223,8 @@ mod tests {
               .unwrap();
 
     // Verify temp_sids
-    let temp_sid_0 = &*ledger_app.pending_txns.get(0).unwrap();
-    let temp_sid_1 = &*ledger_app.pending_txns.get(1).unwrap();
+    let temp_sid_0 = ledger_app.pending_txns.get(0).unwrap();
+    let temp_sid_1 = ledger_app.pending_txns.get(1).unwrap();
 
     assert_eq!(temp_sid_0.0, TxnTempSID(0));
     assert_eq!(temp_sid_1.0, TxnTempSID(1));
