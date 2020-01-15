@@ -202,6 +202,10 @@ pub struct TransferOperationBuilder {
 }
 
 impl TransferOperationBuilder {
+  pub fn new() -> Self {
+    Self::default()
+  }
+
   // TxoRef is the location of the input on the ledger and the amount is how much of the record
   // should be spent in the transfer. See tests for example usage.
   pub fn add_input(&mut self,

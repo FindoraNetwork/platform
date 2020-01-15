@@ -1,3 +1,4 @@
+#![deny(warnings)]
 use super::errors;
 use base64::decode as b64dec;
 use base64::encode as b64enc;
@@ -299,7 +300,7 @@ pub enum TransferType {
 
 impl Default for TransferType {
   fn default() -> Self {
-    TransferType::Standard
+    Self::Standard
   }
 }
 

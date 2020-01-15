@@ -57,9 +57,7 @@ impl<RNG, LU> LedgerApp<RNG, LU>
   }
 
   pub fn get_txn_status(&self, txn_handle: &TxnHandle) -> Option<TxnStatus> {
-    self.txn_status
-        .get(&txn_handle)
-        .map(|handle| handle.clone())
+    self.txn_status.get(&txn_handle).cloned()
   }
 
   pub fn all_commited(&self) -> bool {
@@ -100,7 +98,8 @@ impl<RNG, LU> LedgerApp<RNG, LU>
     std::mem::swap(&mut self.block, &mut block);
     if let Some(block) = block {
       if let Ok(mut ledger) = self.committed_state.write() {
-        let finalized_txns = ledger.finish_block(block);
+        // TODO(noah): is this unwrap reasonable?
+        let finalized_txns = ledger.finish_block(block).unwrap();
         // Update status of all committed transactions
         for (txn_temp_sid, handle) in self.pending_txns.drain(..) {
           self.txn_status
