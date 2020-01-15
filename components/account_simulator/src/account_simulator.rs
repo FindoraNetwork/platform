@@ -408,7 +408,7 @@ impl InterpretAccounts<PlatformError> for LedgerAccounts {
             self.ledger.abort_block(block);
             return Err(e);
           }
-          self.ledger.finish_block(block);
+          self.ledger.finish_block(block).unwrap();
         }
 
         self.units.insert(name.clone(), (issuer.clone(), code));
@@ -462,7 +462,11 @@ impl InterpretAccounts<PlatformError> for LedgerAccounts {
         let mut block = self.ledger.start_block().unwrap();
         let temp_sid = self.ledger.apply_transaction(&mut block, effect).unwrap();
 
-        let (_, txos) = self.ledger.finish_block(block).remove(&temp_sid).unwrap();
+        let (_, txos) = self.ledger
+                            .finish_block(block)
+                            .unwrap()
+                            .remove(&temp_sid)
+                            .unwrap();
 
         assert!(txos.len() == 1);
         utxos.extend(txos.iter());
@@ -555,8 +559,7 @@ impl InterpretAccounts<PlatformError> for LedgerAccounts {
           TransferAssetBody::new(self.ledger.get_prng(),
                                  to_use.iter().cloned().map(TxoRef::Absolute).collect(),
                                  src_records.as_slice(),
-                                 all_outputs.as_slice(),
-                                 &sig_keys).unwrap();
+                                 all_outputs.as_slice()).unwrap();
         dbg!(&transfer_body);
         let transfer_sig =
           SignedAddress { address: XfrAddress { key: *src_pub },
@@ -574,7 +577,11 @@ impl InterpretAccounts<PlatformError> for LedgerAccounts {
         let mut block = self.ledger.start_block().unwrap();
         let temp_sid = self.ledger.apply_transaction(&mut block, effect).unwrap();
 
-        let (_, txos) = self.ledger.finish_block(block).remove(&temp_sid).unwrap();
+        let (_, txos) = self.ledger
+                            .finish_block(block)
+                            .unwrap()
+                            .remove(&temp_sid)
+                            .unwrap();
 
         assert!(txos.len() == src_outputs.len() + dst_outputs.len());
 
@@ -798,13 +805,13 @@ mod test {
   }
 
   fn ledger_simulates_accounts(cmds: AccountsScenario) {
-    let mut ledger = LedgerAccounts { ledger: LedgerState::test_ledger(),
-                                      accounts: HashMap::new(),
-                                      utxos: HashMap::new(),
-                                      units: HashMap::new(),
-                                      balances: HashMap::new(),
-                                      confidential_amounts: cmds.confidential_amounts,
-                                      confidential_types: cmds.confidential_types };
+    let mut ledger = Box::new(LedgerAccounts { ledger: LedgerState::test_ledger(),
+                                               accounts: HashMap::new(),
+                                               utxos: HashMap::new(),
+                                               units: HashMap::new(),
+                                               balances: HashMap::new(),
+                                               confidential_amounts: cmds.confidential_amounts,
+                                               confidential_types: cmds.confidential_types });
 
     let mut prev_simple: SimpleAccountsState = Default::default();
     let cmds = cmds.cmds;
@@ -815,6 +822,7 @@ mod test {
 
     simple.deep_invariant_check().unwrap();
     normal.deep_invariant_check().unwrap();
+    ledger.ledger.deep_invariant_check().unwrap();
 
     for cmd in cmds {
       simple.fast_invariant_check().unwrap();
@@ -837,6 +845,7 @@ mod test {
 
     simple.deep_invariant_check().unwrap();
     normal.deep_invariant_check().unwrap();
+    ledger.ledger.deep_invariant_check().unwrap();
   }
 
   #[test]

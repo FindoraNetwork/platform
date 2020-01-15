@@ -14,6 +14,7 @@ use ledger::store::*;
 use ledger_app::{convert_tx, LedgerApp};
 use rand_chacha::ChaChaRng;
 use rand_core::SeedableRng;
+use std::sync::{Arc, RwLock};
 use std::thread;
 
 struct ABCILedgerApp {
@@ -24,7 +25,7 @@ impl ABCILedgerApp {
   fn new() -> Result<ABCILedgerApp, PlatformError> {
     let ledger = LedgerState::test_ledger();
     let prng = rand_chacha::ChaChaRng::from_seed([0u8; 32]);
-    Ok(ABCILedgerApp { la: LedgerApp::new(prng, ledger)? })
+    Ok(ABCILedgerApp { la: LedgerApp::new(prng, Arc::new(RwLock::new(ledger)), 8)? })
   }
 }
 
