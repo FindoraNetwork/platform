@@ -30,6 +30,7 @@ pub enum IdOp {
 pub enum AmountOp {
   Var(AmountVar),
   Const(u64),
+  AmountOf(ResourceVar),
   Plus(AmountVar, AmountVar),
   Minus(AmountVar, AmountVar),
   Times(AmountVar, AmountVar),
@@ -299,6 +300,7 @@ pub fn run_txn_check(check: &TxnCheck,
    */
 
   let mut res_vars = HashMap::<ResourceVar, TxOutput>::new();
+  let mut res_var_inputs = HashSet::<ResourceVar>::new();
   res_vars.reserve(used_resources.len());
   let mut res_totals = HashMap::<ResourceVar, Vec<AmountVar>>::new();
 
@@ -347,6 +349,7 @@ pub fn run_txn_check(check: &TxnCheck,
 
             res_vars.insert(*inp, TxOutput(inp_txo.clone()));
             res_totals.insert(*inp, vec![*amt]);
+            res_var_inputs.insert(*inp);
 
             inp_ix += 1;
           }
@@ -500,6 +503,19 @@ pub fn run_txn_check(check: &TxnCheck,
             }
             Some(AmountOp::Const(n)) => {
               amt_vars.push(*n);
+              amt_ix += 1;
+            }
+            Some(AmountOp::AmountOf(res_var)) => {
+              if !res_var_inputs.contains(res_var) {
+                return Err(fail.clone());
+              }
+
+              let n = res_vars.get(res_var)
+                              .ok_or_else(|| fail.clone())?
+                              .0
+                              .amount
+                              .ok_or_else(|| fail.clone())?;
+              amt_vars.push(n);
               amt_ix += 1;
             }
             Some(AmountOp::Plus(l, r)) => {

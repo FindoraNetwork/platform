@@ -444,6 +444,11 @@ impl Transaction {
     Ok(())
   }
 
+  /// NOTE: this does *not* guarantee that a private key affiliated with
+  /// `public_key` has signed this transaction! If `public_key` is derived
+  /// from `self` somehow, then it is infeasible for someone to forge a
+  /// passing signature, but it is plausible for someone to generate an
+  /// unrelated `public_key` which can pass this signature check!
   pub fn check_has_signature(&self, public_key: &XfrPublicKey) -> Result<(), PlatformError> {
     let serialized = self.serialize_without_sigs();
     for sig in self.signatures.iter() {
