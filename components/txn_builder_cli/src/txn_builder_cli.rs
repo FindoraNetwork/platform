@@ -722,6 +722,17 @@ mod tests {
   }
 
   #[test]
+  fn test_get_blind_asset_records() {
+    let blind_asset_record_0 =
+      wasm::create_blind_asset_record(10,
+                                      "code".to_owned(),
+                                      &XfrPublicKey::zei_from_bytes(&[0; 32]),
+                                      true,
+                                      true).unwrap();
+    assert!(get_blind_asset_records(&blind_asset_record_0).is_ok());
+  }
+
+  #[test]
   fn test_get_amounts() {
     let amounts_arg = "1, 2,4";
     let expected_amounts = vec![1, 2, 4];
