@@ -986,7 +986,35 @@ convertPolfToScript (PolicyFile { _polfBats = bats
 
     txnConvert (TxnDecl { _txnParams = params, _txnRequires = []
                         , _txnEnsures = [], _txnBody = bodyStmts })
-      = undefined
+      = flip S.runState (PolicyTxnConversionState
+                        { _ptcResVars = M.fromList
+                            $ (\ (i,param) -> (_txnparamName param,PSResVar i))
+                            <$> zip [0..] params
+                        , _ptcIdVars = id_globals
+                        , _ptcResTypeVars = res_type_globals
+                        , _ptcAmtVars = amt_globals
+                        , _ptcFracVars = frac_globals
+                        , _ptcTypes = M.unions
+                            [ const FractionType <$> frac_globals
+                            , const AmountType <$> amt_globals
+                            , const IdentityType <$> id_globals
+                            , const ResourceTypeType <$> res_type_globals
+                            ]
+                        , _ptcTxnSoFar = PolicyTxnCheck
+                            { _ptcNumInParams = length $ filter _txnParamIn params
+                            , _ptcNumOutParams = length $ filter _txnParamIn params
+                            , _ptcIdOps = []
+                            , _ptcRtOps = []
+                            , _ptcAmtOps = []
+                            , _ptcFracOps = []
+                            , _ptcBoolOps = []
+                            , _ptcAssertions = []
+                            , _ptcSignatures = []
+                            , _ptcTxnTemplate = []
+                            }
+                        }) $ forM bodyStmts convertStmt
+    convertStmt _ = undefined
+    convertBexpr _ = undefined
 
 -- main = alloyish_main
 main = do
