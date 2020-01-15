@@ -24,6 +24,8 @@ fn main() {
       let utxo_map = base_dir.join("utxo_map");
       let utxo_map = utxo_map.to_str().unwrap();
 
+      // TODO(joe): distinguish between the transaction log not existing
+      // and it being corrupted
       LedgerState::load_from_log(&block_merkle, &txn_merkle, &txn_log,
                 &utxo_map, None)
               .or_else(|_| LedgerState::new(&block_merkle, &txn_merkle, &txn_log,
