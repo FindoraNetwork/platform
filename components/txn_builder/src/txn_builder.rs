@@ -35,6 +35,7 @@ pub trait BuildsTransactions {
                                records: &[TxOutput])
                                -> Result<&mut Self, PlatformError>;
   fn add_operation_transfer_asset(&mut self,
+                                  keys: &XfrKeyPair,
                                   input_sids: Vec<TxoRef>,
                                   input_records: &[OpenAssetRecord],
                                   output_records: &[AssetRecord])
@@ -98,15 +99,22 @@ pub trait BuildsTransactions {
                  .collect();
     let mut output_ars = output_ars?;
     output_ars.append(&mut partially_consumed_inputs);
-    self.add_operation_transfer_asset(input_sids, &input_oars, &output_ars)?;
+    self.add_operation_transfer_asset(&key_pair, input_sids, &input_oars, &output_ars)?;
     Ok(self)
   }
 }
 
-#[derive(Default, Serialize, Deserialize)]
+#[derive(Debug, Default, Serialize, Deserialize)]
 pub struct TransactionBuilder {
   txn: Transaction,
   outputs: u64,
+}
+
+impl TransactionBuilder {
+  pub fn new() -> Self {
+    TransactionBuilder { txn: Transaction::default(),
+                         outputs: 0 }
+  }
 }
 
 impl BuildsTransactions for TransactionBuilder {
@@ -140,6 +148,7 @@ impl BuildsTransactions for TransactionBuilder {
     Ok(self)
   }
   fn add_operation_transfer_asset(&mut self,
+                                  keys: &XfrKeyPair,
                                   input_sids: Vec<TxoRef>,
                                   input_records: &[OpenAssetRecord],
                                   output_records: &[AssetRecord])
@@ -147,8 +156,14 @@ impl BuildsTransactions for TransactionBuilder {
     // TODO(joe/noah): keep a prng around somewhere?
     let mut prng: ChaChaRng;
     prng = ChaChaRng::from_seed([0u8; 32]);
+    let mut xfr = TransferAsset::new(TransferAssetBody::new(&mut prng,
+                                                            input_sids,
+                                                            input_records,
+                                                            output_records)?,
+                                     TransferType::Standard)?;
+    xfr.sign(&keys);
 
-    self.txn.add_operation(Operation::TransferAsset(TransferAsset::new(TransferAssetBody::new(&mut prng, input_sids, input_records, output_records)?, TransferType::Standard)?));
+    self.txn.add_operation(Operation::TransferAsset(xfr));
     Ok(self)
   }
 
