@@ -13,11 +13,7 @@ use std::collections::HashSet;
 use zei::serialization::ZeiFromToBytes;
 use zei::setup::PublicParams;
 use zei::xfr::asset_record::{build_blind_asset_record, open_asset_record};
-<<<<<<< HEAD
-use zei::xfr::sig::XfrKeyPair;
-=======
-use zei::xfr::sig::{XfrKeyPair, XfrPublicKey, XfrSecretKey};
->>>>>>> master
+use zei::xfr::sig::{XfrKeyPair, XfrPublicKey};
 use zei::xfr::structs::{AssetIssuerPubKeys, AssetRecord, BlindAssetRecord, OpenAssetRecord};
 
 pub trait BuildsTransactions {
@@ -57,12 +53,7 @@ pub trait BuildsTransactions {
     let params = PublicParams::new();
     let ar = AssetRecord::new(amount, token_code.val, key_pair.get_pk())?;
     let ba = build_blind_asset_record(&mut prng, &params.pc_gens, &ar, true, true, tracking_keys);
-<<<<<<< HEAD
     self.add_operation_issue_asset(key_pair, token_code, seq_num, &[TxOutput(ba)])
-=======
-    self.add_operation_issue_asset(pub_key, priv_key, token_code, seq_num, &[TxOutput(ba)])?;
-    Ok(self)
->>>>>>> master
   }
 
   #[allow(clippy::comparison_chain)]
@@ -124,13 +115,9 @@ impl BuildsTransactions for TransactionBuilder {
                                 updatable: bool,
                                 traceable: bool,
                                 _memo: &str)
-<<<<<<< HEAD
-                                -> Result<(), PlatformError> {
+                                -> Result<&mut Self, PlatformError> {
     let pub_key = &IssuerPublicKey { key: key_pair.get_pk() };
     let priv_key = &key_pair.get_sk();
-=======
-                                -> Result<&mut Self, PlatformError> {
->>>>>>> master
     self.txn.add_operation(Operation::DefineAsset(DefineAsset::new(DefineAssetBody::new(&token_code.unwrap_or_else(AssetTypeCode::gen_random), pub_key, updatable, traceable, None, Some(ConfidentialMemo {}))?, pub_key, priv_key)?));
     Ok(self)
   }
@@ -139,13 +126,9 @@ impl BuildsTransactions for TransactionBuilder {
                                token_code: &AssetTypeCode,
                                seq_num: u64,
                                records: &[TxOutput])
-<<<<<<< HEAD
-                               -> Result<(), PlatformError> {
+                               -> Result<&mut Self, PlatformError> {
     let pub_key = &IssuerPublicKey { key: key_pair.get_pk() };
     let priv_key = &key_pair.get_sk();
-=======
-                               -> Result<&mut Self, PlatformError> {
->>>>>>> master
     self.txn
         .add_operation(Operation::IssueAsset(IssueAsset::new(IssueAssetBody::new(token_code,
                                                                                  seq_num,
