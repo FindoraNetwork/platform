@@ -262,9 +262,9 @@ fn main() {
           .takes_value(true)
           .help("Amount of tokens to issue.")))
       .subcommand(SubCommand::with_name("transfer_asset")
-        .arg(Arg::with_name("input_sids")
-          .short("iss")
-          .long("input_sids")
+        .arg(Arg::with_name("sids")
+          .short("ss")
+          .long("sids")
           .takes_value(true)
           .help("Required: input TxoSID indeces. Separate by comma (\",\") without space."))
         .arg(Arg::with_name("blind_asset_records")
@@ -393,6 +393,48 @@ fn process_create_cmd(create_matches: &clap::ArgMatches,
   store_txn_builder_to_file(&expand_str, &txn_builder);
 }
 
+fn split_arg(string: &str) -> Vec<&str> {
+  string.split(|c| c == ',' || c == ' ')
+        .collect::<Vec<&str>>()
+}
+
+fn get_sids(sids_arg: &str) -> std::result::Result<Vec<TxoRef>, std::io::Error> {
+  let sids_str = split_arg(sids_arg);
+  let mut sids = Vec::new();
+  for sid_str in sids_str {
+    if let Ok(sid) = sid_str.parse::<u64>() {
+      sids.push(TxoRef::Absolute(TxoSID(sid)))
+    } else {
+      error!("Improperly formatted sids")
+    }
+  }
+  Ok(sids)
+}
+
+fn get_blind_asset_records(blind_asset_records_arg: &str) -> Vec<BlindAssetRecord> {
+  let blind_asset_records_str = split_arg(blind_asset_records_arg);
+  let mut blind_asset_records = Vec::new();
+  for blind_asset_record_str in blind_asset_records_str {
+    let blind_asset_record: BlindAssetRecord =
+      serde_json::from_str(blind_asset_record_str).unwrap();
+    blind_asset_records.push(blind_asset_record);
+  }
+  blind_asset_records
+}
+
+fn get_input_amounts(input_amounts_arg: &str) -> Vec<u64> {
+  let input_amounts_str = split_arg(input_amounts_arg);
+  let mut input_amounts = Vec::new();
+  for input_amount_str in input_amounts_str {
+    if let Ok(input_amount) = input_amount_str.parse::<u64>() {
+      input_amounts.push(input_amount);
+    } else {
+      error!("Improperly formatted input amounts");
+    }
+  }
+  input_amounts
+}
+
 fn process_add_cmd(add_matches: &clap::ArgMatches,
                    keys_file_path: &str,
                    transaction_file_name: &str,
@@ -476,53 +518,34 @@ fn process_add_cmd(add_matches: &clap::ArgMatches,
     }
     ("transfer_asset", Some(transfer_asset_matches)) => {
       // Compose transfer_from for add_basic_transfer_asset
-      let mut input_sids = Vec::new();
-      if let Some(input_sids_arg) = transfer_asset_matches.value_of("input_sids") {
-        let input_sids_str = input_sids_arg.split(",").collect::<Vec<&str>>();
-        for input_sid_str in input_sids_str {
-          if let Ok(input_sid) = input_sid_str.parse::<u64>() {
-            input_sids.push(TxoRef::Absolute(TxoSID(input_sid)))
-          } else {
-            println!("Improperly formatted input sids.");
-          }
-        }
+      let sids;
+      if let Some(sids_arg) = transfer_asset_matches.value_of("sids") {
+        sids = get_sids(sids_arg).unwrap();
       } else {
         println!("TxoSID sids are required to transfer asset.");
         return;
       }
-      let mut blind_asset_records = Vec::new();
+      let blind_asset_records;
       if let Some(blind_asset_records_arg) = transfer_asset_matches.value_of("blind_asset_record") {
-        let blind_asset_records_str = blind_asset_records_arg.split(",").collect::<Vec<&str>>();
-        for blind_asset_record_str in blind_asset_records_str {
-          let blind_asset_record: BlindAssetRecord =
-            serde_json::from_str(blind_asset_record_str).unwrap();
-          blind_asset_records.push(blind_asset_record);
-        }
+        blind_asset_records = get_blind_asset_records(blind_asset_records_arg);
       } else {
         println!("Blind asset records are required to transfer asset.");
         return;
       }
-      let mut input_amounts = Vec::new();
+      let input_amounts;
       if let Some(input_amounts_arg) = transfer_asset_matches.value_of("input_amounts") {
-        let input_amounts_str = input_amounts_arg.split(",").collect::<Vec<&str>>();
-        for input_amount_str in input_amounts_str {
-          if let Ok(input_amount) = input_amount_str.parse::<u64>() {
-            input_amounts.push(input_amount);
-          } else {
-            println!("Improperly formatted input amounts.");
-          }
-        }
+        input_amounts = get_input_amounts(input_amounts_arg);
       } else {
         println!("Input amounts are required to transfer asset.");
         return;
       }
-      let mut count = input_sids.len();
+      let mut count = sids.len();
       if blind_asset_records.len() != count || input_amounts.len() != count {
         println!("Size of input sids, blind asset records, and input amounts should match.");
         return;
       }
       let mut transfer_from = Vec::new();
-      let mut input_sids_iter = input_sids.iter();
+      let mut input_sids_iter = sids.iter();
       let mut blind_asset_records_iter = blind_asset_records.iter();
       let mut input_amounts_iter = input_amounts.iter();
       while count > 0 {
@@ -665,7 +688,27 @@ mod tests {
       // This is the error:
       // No such file or directory
     } else {
-      panic!("Expecting 'No such file or directory' error ");
+      panic!("Expecting \"No such file or directory\" error");
     }
+  }
+
+  #[test]
+  fn test_get_sids() {
+    let sids_arg_num = "1,2,4,10";
+    let sids_arg_num_space = "1, 2,4,10";
+    let sids_arg_num_letter = "1,2,a,10";
+
+    let expected_sids = vec![TxoRef::Absolute(TxoSID(1)),
+                             TxoRef::Absolute(TxoSID(2)),
+                             TxoRef::Absolute(TxoSID(4)),
+                             TxoRef::Absolute(TxoSID(10))];
+    let expected_sids_skipped = vec![TxoRef::Absolute(TxoSID(1)),
+                                     TxoRef::Absolute(TxoSID(2)),
+                                     TxoRef::Absolute(TxoSID(10))];
+
+    assert_eq!(get_sids(sids_arg_num).unwrap(), expected_sids);
+    assert_eq!(get_sids(sids_arg_num_space).unwrap(), expected_sids);
+    assert_eq!(get_sids(sids_arg_num_letter).unwrap(),
+               expected_sids_skipped);
   }
 }
