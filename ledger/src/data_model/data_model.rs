@@ -1,3 +1,4 @@
+#![deny(warnings)]
 use super::errors;
 use base64::decode as b64dec;
 use base64::encode as b64enc;
@@ -55,6 +56,13 @@ impl Code {
 pub struct Serialized<T> {
   val: String,
   phantom: PhantomData<T>,
+}
+
+impl<T> Default for Serialized<T> where T: Default + serde::Serialize + serde::de::DeserializeOwned
+{
+  fn default() -> Self {
+    Self::new(&T::default())
+  }
 }
 
 impl<T> Serialized<T> where T: serde::Serialize + serde::de::DeserializeOwned
@@ -289,6 +297,12 @@ pub enum TransferType {
   DebtSwap,
 }
 
+impl Default for TransferType {
+  fn default() -> Self {
+    Self::Standard
+  }
+}
+
 // TODO: UTXO Addresses must be included in Transfer Signature
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct TransferAsset {
@@ -362,6 +376,7 @@ impl DefineAsset {
   }
 }
 
+#[allow(clippy::large_enum_variant)]
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub enum Operation {
   TransferAsset(TransferAsset),

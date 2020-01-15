@@ -57,9 +57,7 @@ impl<RNG, LU> LedgerApp<RNG, LU>
   }
 
   pub fn get_txn_status(&self, txn_handle: &TxnHandle) -> Option<TxnStatus> {
-    self.txn_status
-        .get(&txn_handle)
-        .map(|handle| handle.clone())
+    self.txn_status.get(&txn_handle).cloned()
   }
 
   pub fn all_commited(&self) -> bool {

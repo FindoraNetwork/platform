@@ -55,7 +55,7 @@ pub fn create_txo_ref(idx: u64, relative: bool) -> String {
   } else {
     txo_ref = TxoRef::Absolute(TxoSID(idx))
   }
-  return serde_json::to_string(&txo_ref).unwrap();
+  serde_json::to_string(&txo_ref).unwrap()
 }
 
 #[wasm_bindgen]
@@ -94,6 +94,7 @@ pub fn open_blind_asset_record(blind_asset_record: String,
 
 // Wrapper around TransactionBuilder that does necessary serialization.
 #[wasm_bindgen]
+#[derive(Default)]
 pub struct WasmTransactionBuilder {
   transaction_builder: Serialized<TransactionBuilder>,
 }
@@ -101,7 +102,7 @@ pub struct WasmTransactionBuilder {
 #[wasm_bindgen]
 impl WasmTransactionBuilder {
   pub fn new() -> Self {
-    WasmTransactionBuilder { transaction_builder: Serialized::new(&TransactionBuilder::default()) }
+    Self::default()
   }
 
   pub fn add_operation_create_asset(&self,
@@ -173,13 +174,14 @@ impl WasmTransactionBuilder {
 
 // Wrapper around TransferOperationBuilder that does necessary serialization.
 #[wasm_bindgen]
+#[derive(Default)]
 pub struct WasmTransferOperationBuilder {
   op_builder: Serialized<TransferOperationBuilder>,
 }
 #[wasm_bindgen]
 impl WasmTransferOperationBuilder {
   pub fn new() -> Self {
-    WasmTransferOperationBuilder { op_builder: Serialized::new(&TransferOperationBuilder::new()) }
+    Self::default()
   }
 
   pub fn add_input(&mut self,
@@ -288,7 +290,7 @@ pub fn keypair_from_str(str: String) -> XfrKeyPair {
 pub fn generate_elgamal_keys() -> String {
   let mut small_rng = ChaChaRng::from_entropy();
   let pc_gens = PedersenGens::default();
-  return serde_json::to_string(&elgamal_keygen(&mut small_rng, &RistPoint(pc_gens.B))).unwrap();
+  serde_json::to_string(&elgamal_keygen(&mut small_rng, &RistPoint(pc_gens.B))).unwrap()
 }
 
 // Defines an asset on the ledger using the serialized strings in KeyPair and a couple of boolean policies
