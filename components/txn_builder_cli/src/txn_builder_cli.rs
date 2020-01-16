@@ -10,6 +10,8 @@ use std::env;
 use std::ffi::OsStr;
 use std::fs::{self, File};
 use std::io::prelude::*;
+use std::io::Error;
+use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
 use txn_builder::{BuildsTransactions, TransactionBuilder};
 use zei::serialization::ZeiFromToBytes;
@@ -266,27 +268,27 @@ fn main() {
           .short("ss")
           .long("sids")
           .takes_value(true)
-          .help("Required: input TxoSID indeces. Separate by comma (\",\")."))
+          .help("Required: input TxoSID indeces. Separate by semicolon (\";\")."))
         .arg(Arg::with_name("blind_asset_records")
           .short("bars")
           .long("blind_asset_records")
           .takes_value(true)
-          .help("Required: JSON serializations of the blind asset records of the assets to be transferred. Separate by comma (\",\")."))
+          .help("Required: JSON serializations of the blind asset records of the assets to be transferred. Separate by semicolon (\";\")."))
         .arg(Arg::with_name("input_amounts")
           .short("iamts")
           .long("input_amounts")
           .takes_value(true)
-          .help("Required: the amount to transfer from each record. Separate by comma (\",\")."))
+          .help("Required: the amount to transfer from each record. Separate by semicolon (\";\")."))
         .arg(Arg::with_name("output_amounts")
           .short("oamts")
           .long("output_amounts")
           .takes_value(true)
-          .help("Required: the amount to transfer to each account. Separate by comma (\",\")."))
+          .help("Required: the amount to transfer to each account. Separate by semicolon (\";\")."))
         .arg(Arg::with_name("addresses")
           .short("ads")
           .long("addresses")
           .takes_value(true)
-          .help("Required: addresses to send tokens to. Separate by comma (\",\")."))))
+          .help("Required: addresses to send tokens to. Separate by semicolon (\";\")."))))
     .subcommand(SubCommand::with_name("serialize"))
     .subcommand(SubCommand::with_name("drop"))
     .subcommand(SubCommand::with_name("keygen")
@@ -394,18 +396,17 @@ fn process_create_cmd(create_matches: &clap::ArgMatches,
 }
 
 fn split_arg(string: &str) -> Vec<&str> {
-  string.split(|c| c == ',' || c == ' ')
-        .collect::<Vec<&str>>()
+  string.split(";").collect::<Vec<&str>>()
 }
 
 fn get_txo_refs(sids_arg: &str) -> std::result::Result<Vec<TxoRef>, std::io::Error> {
   let sids_str = split_arg(sids_arg);
   let mut txo_refs = Vec::new();
   for sid_str in sids_str {
-    if let Ok(sid) = sid_str.parse::<u64>() {
-      txo_refs.push(TxoRef::Absolute(TxoSID(sid)))
+    if let Ok(sid) = sid_str.trim().parse::<u64>() {
+      txo_refs.push(TxoRef::Absolute(TxoSID(sid)));
     } else {
-      error!("Improperly formatted sids");
+      return Err(Error::new(ErrorKind::InvalidInput, "Improperly formatted sids"));
     }
   }
   Ok(txo_refs)
@@ -416,10 +417,11 @@ fn get_blind_asset_records(blind_asset_records_arg: &str)
   let blind_asset_records_str = split_arg(blind_asset_records_arg);
   let mut blind_asset_records = Vec::new();
   for blind_asset_record_str in blind_asset_records_str {
-    if let Ok(blind_asset_record) = serde_json::from_str(blind_asset_record_str) {
+    if let Ok(blind_asset_record) = serde_json::from_str(blind_asset_record_str.trim()) {
       blind_asset_records.push(blind_asset_record);
     } else {
-      error!("Improperly formatted blind asset records");
+      return Err(Error::new(ErrorKind::InvalidInput,
+                            "Improperly formatted blind asset records"));
     }
   }
   Ok(blind_asset_records)
@@ -429,10 +431,10 @@ fn get_amounts(amounts_arg: &str) -> std::result::Result<Vec<u64>, std::io::Erro
   let amounts_str = split_arg(amounts_arg);
   let mut amounts = Vec::new();
   for amount_str in amounts_str {
-    if let Ok(amount) = amount_str.parse::<u64>() {
+    if let Ok(amount) = amount_str.trim().parse::<u64>() {
       amounts.push(amount);
     } else {
-      error!("Improperly formatted amounts");
+      return Err(Error::new(ErrorKind::InvalidInput, "Improperly formatted amounts"));
     }
   }
   Ok(amounts)
@@ -442,7 +444,8 @@ fn get_addresses(addresses_arg: &str) -> Vec<AccountAddress> {
   let addresses_str = split_arg(addresses_arg);
   let mut addresses = Vec::new();
   for address_str in addresses_str {
-    addresses.push(AccountAddress { key: XfrPublicKey::zei_from_bytes(address_str.as_bytes()) })
+    addresses.push(AccountAddress { key: XfrPublicKey::zei_from_bytes(address_str.trim()
+                                                                                 .as_bytes()) })
   }
   addresses
 }
@@ -615,6 +618,9 @@ fn process_add_cmd(add_matches: &clap::ArgMatches,
 #[cfg(test)]
 mod tests {
   use super::*;
+  use zei::setup::PublicParams;
+  use zei::xfr::asset_record::build_blind_asset_record;
+  use zei::xfr::structs::AssetRecord;
 
   fn check_next_path(input: &str, expected: &str) {
     let as_path = Path::new(input);
@@ -684,35 +690,30 @@ mod tests {
   #[test]
   fn test_rename_existing_path() {
     let as_path = Path::new("1000");
-    if let Err(_) = rename_existing_path(as_path) {
-      // This is the error:
-      // No such file or directory
-    } else {
-      panic!("Expecting \"No such file or directory\" error");
-    }
+    assert_eq!(rename_existing_path(as_path).map_err(|e| e.kind()),
+               Err(ErrorKind::NotFound));
   }
 
   #[test]
   fn test_get_txo_refs() {
-    let sids_arg_num = "1,2,4";
-    let sids_arg_num_space = "1, 2,4";
-    let sids_arg_num_letter = "1,2,a";
+    let sids_arg_num = "1;2;4";
+    let sids_arg_num_space = "1; 2;4";
+    let sids_arg_num_letter = "1;2;a";
 
     let expected_sids = vec![TxoRef::Absolute(TxoSID(1)),
                              TxoRef::Absolute(TxoSID(2)),
                              TxoRef::Absolute(TxoSID(4))];
-    let expected_sids_skipped = vec![TxoRef::Absolute(TxoSID(1)), TxoRef::Absolute(TxoSID(2))];
 
     assert_eq!(get_txo_refs(sids_arg_num).unwrap(), expected_sids);
     assert_eq!(get_txo_refs(sids_arg_num_space).unwrap(), expected_sids);
-    assert_eq!(get_txo_refs(sids_arg_num_letter).unwrap(),
-               expected_sids_skipped);
+    assert_eq!(get_txo_refs(sids_arg_num_letter).map_err(|e| e.kind()),
+               Err(ErrorKind::InvalidInput));
   }
 
   #[test]
   fn test_get_addresses() {
     let mut addresses_arg = String::from_utf8(vec![0; 32]).unwrap();
-    addresses_arg.push_str(",");
+    addresses_arg.push_str(";");
     addresses_arg.push_str(&String::from_utf8(vec![1; 32]).unwrap());
 
     let expected_addresses = vec![AccountAddress { key: XfrPublicKey::zei_from_bytes(&[0; 32]) },
@@ -724,17 +725,34 @@ mod tests {
   #[test]
   fn test_get_blind_asset_records() {
     let blind_asset_record_0 =
-      wasm::create_blind_asset_record(10,
-                                      "code".to_owned(),
-                                      &XfrPublicKey::zei_from_bytes(&[0; 32]),
-                                      true,
-                                      true).unwrap();
-    assert!(get_blind_asset_records(&blind_asset_record_0).is_ok());
+      build_blind_asset_record(&mut ChaChaRng::from_entropy(),
+                               &PublicParams::new().pc_gens,
+                               &AssetRecord::new(10,
+                                                 [0x1; 16],
+                                                 XfrPublicKey::zei_from_bytes(&[0; 32])).unwrap(),
+                               true,
+                               true,
+                               &None);
+    let blind_asset_record_1 =
+      build_blind_asset_record(&mut ChaChaRng::from_entropy(),
+                               &PublicParams::new().pc_gens,
+                               &AssetRecord::new(100,
+                                                 [0x0; 16],
+                                                 XfrPublicKey::zei_from_bytes(&[1; 32])).unwrap(),
+                               false,
+                               false,
+                               &None);
+
+    let mut blind_asset_records_arg = serde_json::to_string(&blind_asset_record_0).unwrap();
+    blind_asset_records_arg.push_str(";");
+    blind_asset_records_arg.push_str(&serde_json::to_string(&blind_asset_record_1).unwrap());
+
+    assert!(get_blind_asset_records(&blind_asset_records_arg).is_ok());
   }
 
   #[test]
   fn test_get_amounts() {
-    let amounts_arg = "1, 2,4";
+    let amounts_arg = "1; 2;4";
     let expected_amounts = vec![1, 2, 4];
 
     assert_eq!(get_amounts(amounts_arg).unwrap(), expected_amounts);
