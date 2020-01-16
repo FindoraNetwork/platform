@@ -44,8 +44,8 @@ fn query_utxo<LA>(data: web::Data<Arc<RwLock<LA>>>,
 }
 
 fn query_asset_issuance_num<LA>(data: web::Data<Arc<RwLock<LA>>>,
-                   info: web::Path<String>)
-                   -> actix_web::Result<web::Json<u64>>
+                                info: web::Path<String>)
+                                -> actix_web::Result<web::Json<u64>>
   where LA: LedgerAccess
 {
   let reader = data.read().unwrap();
@@ -317,7 +317,8 @@ impl<T, B> Route for App<T, B>
   // Set routes for the LedgerAccess interface
   fn set_route_for_ledger_access<LA: 'static + LedgerAccess + Sync + Send>(self) -> Self {
     self.route("/utxo_sid/{sid}", web::get().to(query_utxo::<LA>))
-        .route("/asset_issuance_num/{token}", web::get().to(query_asset_issuance_num::<LA>))
+        .route("/asset_issuance_num/{token}",
+               web::get().to(query_asset_issuance_num::<LA>))
         .route("/asset_token/{token}", web::get().to(query_asset::<LA>))
         .route("/policy_key/{key}", web::get().to(query_policy::<LA>))
         .route("/contract_key/{key}", web::get().to(query_contract::<LA>))

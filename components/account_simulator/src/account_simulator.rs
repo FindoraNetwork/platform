@@ -12,24 +12,24 @@ use ledger::data_model::compute_signature;
 use ledger::data_model::errors::PlatformError;
 use ledger::data_model::*;
 use ledger::store::*;
+use percent_encoding::{utf8_percent_encode, AsciiSet, CONTROLS};
+#[cfg(test)]
+use rand_core::SeedableRng;
+use reqwest;
 use std::collections::{HashMap, HashSet, VecDeque};
+#[cfg(test)]
+use std::ffi::OsString;
+#[cfg(test)]
+use std::thread;
+use std::time;
+use subprocess::Popen;
+#[cfg(test)]
+use subprocess::PopenConfig;
 use zei::serialization::ZeiFromToBytes;
 use zei::setup::PublicParams;
 use zei::xfr::asset_record::{build_blind_asset_record, open_asset_record};
 use zei::xfr::sig::XfrKeyPair;
 use zei::xfr::structs::{AssetRecord, OpenAssetRecord};
-use reqwest;
-use subprocess::{Popen};
-#[cfg(test)]
-use subprocess::PopenConfig;
-use percent_encoding::{utf8_percent_encode, AsciiSet, CONTROLS};
-#[cfg(test)]
-use std::ffi::OsString;
-#[cfg(test)]
-use rand_core::{SeedableRng};
-use std::time;
-#[cfg(test)]
-use std::thread;
 
 #[derive(Clone, Debug, Eq, PartialEq, Hash)]
 pub struct UserName(pub String);
@@ -629,8 +629,9 @@ struct LedgerStandaloneAccounts {
 impl Drop for LedgerStandaloneAccounts {
   fn drop(&mut self) {
     self.ledger.terminate().unwrap();
-    if let Err(_) = self.ledger.wait_timeout(time::Duration::from_millis(10)) {
-      self.ledger.kill().unwrap(); self.ledger.wait().unwrap();
+    if self.ledger.wait_timeout(time::Duration::from_millis(10)).is_err() {
+      self.ledger.kill().unwrap();
+      self.ledger.wait().unwrap();
     }
   }
 }
@@ -689,20 +690,25 @@ impl InterpretAccounts<PlatformError> for LedgerStandaloneAccounts {
           // Set of invalid URI characters that may appear in a JSON transaction
           // TODO: (Noah) make sure set is complete
           const FRAGMENT: &AsciiSet = &CONTROLS.add(b' ')
-                                              .add(b'"')
-                                              .add(b'`')
-                                              .add(b'{')
-                                              .add(b'/')
-                                              .add(b'}');
+                                               .add(b'"')
+                                               .add(b'`')
+                                               .add(b'{')
+                                               .add(b'/')
+                                               .add(b'}');
           let uri_string = utf8_percent_encode(&serialize, FRAGMENT).to_string();
 
           let host = "localhost";
-          let port = format!("{}",self.submit_port);
-          let query = format!("http://{}:{}/submit_transaction/{}",host,port,uri_string);
+          let port = format!("{}", self.submit_port);
+          let query = format!("http://{}:{}/submit_transaction/{}", host, port, uri_string);
           dbg!(&query);
-          let res = self.client.post(&query).body("").send().unwrap().error_for_status();
+          let res = self.client
+                        .post(&query)
+                        .body("")
+                        .send()
+                        .unwrap()
+                        .error_for_status();
           dbg!(&res);
-          res.map_err(|x| PlatformError::IoError(format!("{}",x)))?;
+          res.map_err(|x| PlatformError::IoError(format!("{}", x)))?;
         }
 
         self.units.insert(name.clone(), (issuer.clone(), code));
@@ -717,10 +723,17 @@ impl InterpretAccounts<PlatformError> for LedgerStandaloneAccounts {
 
         let new_seq_num = {
           let host = "localhost";
-          let port = format!("{}",self.query_port);
-          let query = format!("http://{}:{}/asset_issuance_num/{}",host,port,code.to_base64());
+          let port = format!("{}", self.query_port);
+          let query = format!("http://{}:{}/asset_issuance_num/{}",
+                              host,
+                              port,
+                              code.to_base64());
           dbg!(&query);
-          reqwest::get(&query).unwrap().error_for_status().unwrap().text().unwrap()
+          reqwest::get(&query).unwrap()
+                              .error_for_status()
+                              .unwrap()
+                              .text()
+                              .unwrap()
         };
         dbg!(&new_seq_num);
         let new_seq_num = serde_json::from_str::<u64>(&new_seq_num).unwrap();
@@ -765,19 +778,26 @@ impl InterpretAccounts<PlatformError> for LedgerStandaloneAccounts {
           // Set of invalid URI characters that may appear in a JSON transaction
           // TODO: (Noah) make sure set is complete
           const FRAGMENT: &AsciiSet = &CONTROLS.add(b' ')
-            .add(b'"')
-            .add(b'`')
-            .add(b'{')
-            .add(b'/')
-            .add(b'}');
+                                               .add(b'"')
+                                               .add(b'`')
+                                               .add(b'{')
+                                               .add(b'/')
+                                               .add(b'}');
           let uri_string = utf8_percent_encode(&serialize, FRAGMENT).to_string();
 
           let host = "localhost";
-          let port = format!("{}",self.submit_port);
-          let query = format!("http://{}:{}/submit_transaction/{}",host,port,uri_string);
+          let port = format!("{}", self.submit_port);
+          let query = format!("http://{}:{}/submit_transaction/{}", host, port, uri_string);
           dbg!(&query);
-          self.client.post(&query).body("").send().unwrap().error_for_status()
-            .map_err(|x| PlatformError::IoError(format!("{}",x)))?.text().unwrap()
+          self.client
+              .post(&query)
+              .body("")
+              .send()
+              .unwrap()
+              .error_for_status()
+              .map_err(|x| PlatformError::IoError(format!("{}", x)))?
+              .text()
+              .unwrap()
         };
         let txos = serde_json::from_str::<Vec<TxoSID>>(&res).unwrap();
 
@@ -894,19 +914,26 @@ impl InterpretAccounts<PlatformError> for LedgerStandaloneAccounts {
           // Set of invalid URI characters that may appear in a JSON transaction
           // TODO: (Noah) make sure set is complete
           const FRAGMENT: &AsciiSet = &CONTROLS.add(b' ')
-            .add(b'"')
-            .add(b'`')
-            .add(b'{')
-            .add(b'/')
-            .add(b'}');
+                                               .add(b'"')
+                                               .add(b'`')
+                                               .add(b'{')
+                                               .add(b'/')
+                                               .add(b'}');
           let uri_string = utf8_percent_encode(&serialize, FRAGMENT).to_string();
 
           let host = "localhost";
-          let port = format!("{}",self.submit_port);
-          let query = format!("http://{}:{}/submit_transaction/{}",host,port,uri_string);
+          let port = format!("{}", self.submit_port);
+          let query = format!("http://{}:{}/submit_transaction/{}", host, port, uri_string);
           dbg!(&query);
-          self.client.post(&query).body("").send().unwrap().error_for_status()
-            .map_err(|x| PlatformError::IoError(format!("{}",x)))?.text().unwrap()
+          self.client
+              .post(&query)
+              .body("")
+              .send()
+              .unwrap()
+              .error_for_status()
+              .map_err(|x| PlatformError::IoError(format!("{}", x)))?
+              .text()
+              .unwrap()
         };
         let txos = serde_json::from_str::<Vec<TxoSID>>(&res).unwrap();
 
@@ -1054,13 +1081,13 @@ impl Arbitrary for AccountsScenario {
 #[cfg(test)]
 mod test {
   use super::*;
-  use quickcheck;
   use lazy_static::lazy_static;
+  use quickcheck;
 
-  use std::{sync::Mutex};
+  use std::sync::Mutex;
 
   lazy_static! {
-        static ref LEDGER_STANDALONE_LOCK: Mutex<()> = Mutex::new(());
+    static ref LEDGER_STANDALONE_LOCK: Mutex<()> = Mutex::new(());
   }
 
   // #[quickcheck] tests that function with randomized input (then shrinks
@@ -1139,7 +1166,11 @@ mod test {
   }
 
   fn ledger_simulates_accounts(cmds: AccountsScenario, with_standalone: bool) {
-    let _ = if with_standalone { Some(LEDGER_STANDALONE_LOCK.lock().unwrap()) } else { None };
+    let _ = if with_standalone {
+      Some(LEDGER_STANDALONE_LOCK.lock().unwrap())
+    } else {
+      None
+    };
     let wait_time = time::Duration::from_millis(1000);
     let mut ledger = Box::new(LedgerAccounts { ledger: LedgerState::test_ledger(),
                                                accounts: HashMap::new(),
@@ -1149,7 +1180,10 @@ mod test {
                                                confidential_amounts: cmds.confidential_amounts,
                                                confidential_types: cmds.confidential_types });
 
-    let mut active_ledger = if !with_standalone { None } else { Some(Box::new(
+    let mut active_ledger = if !with_standalone {
+      None
+    } else {
+      Some(Box::new(
       LedgerStandaloneAccounts {
         ledger: Popen::create(&["/usr/bin/env", "bash", "-c", "flock .test_standalone_lock cargo run"],
                   PopenConfig {
@@ -1165,7 +1199,8 @@ mod test {
         units: HashMap::new(),
         balances: HashMap::new(),
         confidential_amounts: cmds.confidential_amounts,
-        confidential_types: cmds.confidential_types })) };
+        confidential_types: cmds.confidential_types }))
+    };
 
     thread::sleep(wait_time);
 
@@ -1210,7 +1245,7 @@ mod test {
   }
 
   fn ledger_simulates_accounts_with_standalone(cmds: AccountsScenario) {
-    ledger_simulates_accounts(cmds,true)
+    ledger_simulates_accounts(cmds, true)
   }
 
   fn regression_quickcheck_found(with_standalone: bool) {
@@ -1223,7 +1258,8 @@ mod test {
                                                                  UnitName("".into()),
                                                                  UserName("".into()))],
                                                  confidential_types: false,
-                                                 confidential_amounts: false }, with_standalone);
+                                                 confidential_amounts: false },
+                              with_standalone);
     ledger_simulates_accounts(AccountsScenario { cmds: vec![NewUser(UserName("".into())),
                                                             NewUnit(UnitName("".into()),
                                                                     UserName("".into())),
@@ -1233,7 +1269,8 @@ mod test {
                                                                  UnitName("".into()),
                                                                  UserName("".into()))],
                                                  confidential_types: false,
-                                                 confidential_amounts: false }, with_standalone);
+                                                 confidential_amounts: false },
+                              with_standalone);
     ledger_simulates_accounts(AccountsScenario { cmds: vec![NewUser(UserName("".into())),
                                                             NewUnit(UnitName("".into()),
                                                                     UserName("".into())),
@@ -1243,7 +1280,8 @@ mod test {
                                                                  UnitName("".into()),
                                                                  UserName("".into()))],
                                                  confidential_types: false,
-                                                 confidential_amounts: true }, with_standalone);
+                                                 confidential_amounts: true },
+                              with_standalone);
 
     ledger_simulates_accounts(AccountsScenario { confidential_amounts: false,
                                                  confidential_types: false,
@@ -1259,7 +1297,8 @@ mod test {
                                                             Send(UserName("".into()),
                                                                  1,
                                                                  UnitName("".into()),
-                                                                 UserName("".into()))] }, with_standalone);
+                                                                 UserName("".into()))] },
+                              with_standalone);
 
     ledger_simulates_accounts(AccountsScenario { confidential_amounts: true,
                                                  confidential_types: false,
@@ -1275,7 +1314,8 @@ mod test {
                                                             Send(UserName("".into()),
                                                                  1,
                                                                  UnitName("".into()),
-                                                                 UserName("".into()))] }, with_standalone);
+                                                                 UserName("".into()))] },
+                              with_standalone);
 
     ledger_simulates_accounts(AccountsScenario { confidential_amounts: false,
                                                  confidential_types: false,
@@ -1290,7 +1330,8 @@ mod test {
                                                             Send(UserName("".into()),
                                                                  2,
                                                                  UnitName("".into()),
-                                                                 UserName("".into()))] }, with_standalone);
+                                                                 UserName("".into()))] },
+                              with_standalone);
   }
 
   #[test]
@@ -1308,6 +1349,7 @@ mod test {
   #[ignore]
   fn quickcheck_ledger_simulates() {
     QuickCheck::new().tests(5)
-                     .quickcheck(ledger_simulates_accounts_with_standalone as fn(AccountsScenario) -> ());
+                     .quickcheck(ledger_simulates_accounts_with_standalone
+                                 as fn(AccountsScenario) -> ());
   }
 }
