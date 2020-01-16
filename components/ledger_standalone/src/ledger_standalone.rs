@@ -1,3 +1,4 @@
+#![deny(warnings)]
 use api_service::RestfulApiService;
 use api_service_standalone::RestfulApiServiceStandalone;
 use ledger::store::LedgerState;
@@ -35,7 +36,7 @@ fn main() {
   let prng = ChaChaRng::from_seed([0u8; 32]);
   let state_lock = Arc::new(RwLock::new(ledger_state));
   let cloned_lock = Arc::clone(&state_lock);
-  let ledger_app = LedgerApp::new(prng.clone(), state_lock, 1).unwrap();
+  let ledger_app = LedgerApp::new(prng, state_lock, 1).unwrap();
 
   let host = std::option_env!("SERVER_HOST").unwrap_or("localhost");
   let submission_port = std::option_env!("SUBMISSION_PORT").unwrap_or("8669");
