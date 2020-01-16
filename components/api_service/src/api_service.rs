@@ -43,6 +43,23 @@ fn query_utxo<LA>(data: web::Data<Arc<RwLock<LA>>>,
   }
 }
 
+fn query_asset_issuance_num<LA>(data: web::Data<Arc<RwLock<LA>>>,
+                                info: web::Path<String>)
+                                -> actix_web::Result<web::Json<u64>>
+  where LA: LedgerAccess
+{
+  let reader = data.read().unwrap();
+  if let Ok(token_code) = AssetTypeCode::new_from_base64(&*info) {
+    if let Some(iss_num) = reader.get_issuance_num(&token_code) {
+      Ok(web::Json(iss_num))
+    } else {
+      Err(actix_web::error::ErrorNotFound("Specified asset definition does not currently exist."))
+    }
+  } else {
+    Err(actix_web::error::ErrorNotFound("Invalid asset definition encoding."))
+  }
+}
+
 fn query_asset<LA>(data: web::Data<Arc<RwLock<LA>>>,
                    info: web::Path<String>)
                    -> actix_web::Result<web::Json<AssetType>>
@@ -300,6 +317,8 @@ impl<T, B> Route for App<T, B>
   // Set routes for the LedgerAccess interface
   fn set_route_for_ledger_access<LA: 'static + LedgerAccess + Sync + Send>(self) -> Self {
     self.route("/utxo_sid/{sid}", web::get().to(query_utxo::<LA>))
+        .route("/asset_issuance_num/{token}",
+               web::get().to(query_asset_issuance_num::<LA>))
         .route("/asset_token/{token}", web::get().to(query_asset::<LA>))
         .route("/policy_key/{key}", web::get().to(query_policy::<LA>))
         .route("/contract_key/{key}", web::get().to(query_contract::<LA>))
