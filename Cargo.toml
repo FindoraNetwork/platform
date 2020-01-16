@@ -10,7 +10,6 @@ members = [
     "components/ledger_app",
     "components/ledger_client",
     "components/ledger_standalone",
-    "components/query_processor",
     "components/txn_builder",
     "components/txn_builder_cli",
     "components/wasm",

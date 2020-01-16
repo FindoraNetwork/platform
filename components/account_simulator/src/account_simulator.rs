@@ -629,7 +629,10 @@ struct LedgerStandaloneAccounts {
 impl Drop for LedgerStandaloneAccounts {
   fn drop(&mut self) {
     self.ledger.terminate().unwrap();
-    if self.ledger.wait_timeout(time::Duration::from_millis(10)).is_err() {
+    if self.ledger
+           .wait_timeout(time::Duration::from_millis(10))
+           .is_err()
+    {
       self.ledger.kill().unwrap();
       self.ledger.wait().unwrap();
     }
