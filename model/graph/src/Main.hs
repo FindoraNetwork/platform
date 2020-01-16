@@ -901,8 +901,7 @@ data PSFracOp
  deriving (Eq,Show,Read)
 
 data PSBoolOp
-  = PSBoolVarOp PSBoolVar
-  | PSBoolConstOp Bool
+  = PSBoolConstOp Bool
 
   | PSIdEq PSIdVar PSIdVar
   | PSAmtEq PSAmtVar PSAmtVar
@@ -919,7 +918,7 @@ data PSBoolOp
 
 data PSTxnOp
   = PSIssue PSAmtVar PSResTypeVar PSResVar
-  | PSTransfer PSAmtVar PSResVar PSResVar
+  | PSTransfer PSAmtVar PSResVar (Maybe PSResVar)
   deriving (Eq,Show,Read)
 
 
@@ -1039,7 +1038,9 @@ convertPolfToScript (PolicyFile { _polfBats = bats
 
       let (Just amt_var) = M.lookup av  $ _ptcAmtVars cx_state
       let (Just src_res) = M.lookup src $ _ptcResVars cx_state
-      let (Just dst_res) = M.lookup dst $ _ptcResVars cx_state
+      let (Just dst_res) = case dst of
+        Nothing -> Just Nothing
+        Just dst -> fmap Just $ M.lookup dst $ _ptcResVars cx_state
 
       put $ cx_state {
         _ptcTxnSoFar = txn {
@@ -1455,6 +1456,137 @@ convertPolfToScript (PolicyFile { _polfBats = bats
     convertBexpr (LtExpr _) = undefined
     convertBexpr (LeExpr _) = undefined
 
+pprintPolicyScript ps =
+  (PP.text "Policy" PP.<+>) $ PP.braces $ PP.nest 4 $ PP.vcat $ map (PP.<+> PP.comma)
+    [ PP.text "num_id_globals:" PP.<+> PP.int (_polNumIdGlobals ps)
+    , PP.text "num_rt_globals:" PP.<+> PP.int (_polNumResTypeGlobals ps)
+    , PP.text "num_amt_globals:" PP.<+> PP.int (_polNumAmtGlobals ps)
+    , PP.text "num_frac_globals:" PP.<+> PP.int (_polNumFracGlobals ps)
+    , PP.text "init_check:" PP.<+> pprintPolicyTxnCheck (_polInitCheck ps)
+    , (PP.text "txn_choices:" PP.<+> PP.text "vec!" PP.<+>)
+      $ PP.brackets $ PP.nest 4 $ PP.vcat $ map (PP.<+> PP.comma)
+      $ map pprintPolicyTxnCheck (_polTxns ps)
+    ]
+
+pprintPolicyTxnCheck ptc =
+  (PP.text "TxnCheck" PP.<+>) $ PP.braces $ PP.nest 4 $ PP.vcat $ map (PP.<+> PP.comma)
+    [ PP.text "num_in_params:" PP.<+> PP.int (_ptcNumInParams ptc)
+    , PP.text "num_out_params:" PP.<+> PP.int (_ptcNumOutParams ptc)
+
+    , (PP.text "id_ops:" PP.<+> PP.text "vec!" PP.<+>)
+      $ PP.brackets $ PP.nest 4 $ PP.vcat $ map (PP.<+> PP.comma)
+      $ map pprintIdOp $ _ptcIdOps ptc
+    , (PP.text "rt_ops:" PP.<+> PP.text "vec!" PP.<+>)
+      $ PP.brackets $ PP.nest 4 $ PP.vcat $ map (PP.<+> PP.comma)
+      $ map pprintRtOp $ _ptcRtOps ptc
+    , (PP.text "fraction_ops:" PP.<+> PP.text "vec!" PP.<+>)
+      $ PP.brackets $ PP.nest 4 $ PP.vcat $ map (PP.<+> PP.comma)
+      $ map pprintFracOp $ _ptcFracOps ptc
+    , (PP.text "amount_ops:" PP.<+> PP.text "vec!" PP.<+>)
+      $ PP.brackets $ PP.nest 4 $ PP.vcat $ map (PP.<+> PP.comma)
+      $ map pprintAmtOp $ _ptcAmtOps ptc
+    , (PP.text "bool_ops:" PP.<+> PP.text "vec!" PP.<+>)
+      $ PP.brackets $ PP.nest 4 $ PP.vcat $ map (PP.<+> PP.comma)
+      $ map pprintBoolOp $ _ptcBoolOps ptc
+    , (PP.text "assertions:" PP.<+> PP.text "vec!" PP.<+>)
+      $ PP.brackets $ PP.nest 4 $ PP.vcat $ map (PP.<+> PP.comma)
+      $ map pprintBoolVar $ _ptcAssertions ptc
+    , (PP.text "required_signatures:" PP.<+> PP.text "vec!" PP.<+>)
+      $ PP.brackets $ PP.nest 4 $ PP.vcat $ map (PP.<+> PP.comma)
+      $ map pprintIdVar $ _ptcSignatures ptc
+
+    , (PP.text "txn_template:" PP.<+> PP.text "vec!" PP.<+>)
+      $ PP.brackets $ PP.nest 4 $ PP.vcat $ map (PP.<+> PP.comma)
+      $ map pprintTxnOp $ _ptcTxnTemplate ptc
+    ]
+
+pprintTxnOp (PSIssue amt restype res)
+  = (PP.text "TxnOp::Issue" PP.<>) $ PP.parens $ PP.hsep
+    $ map (PP.<> PP.comma) [pprintAmtVar amt, pprintResTypeVar restype, pprintResVar res]
+pprintTxnOp (PSTransfer amt src dst)
+  = (PP.text "TxnOp::Transfer" PP.<>) $ PP.parens $ PP.hsep
+    $ map (PP.<> PP.comma) [pprintAmtVar amt, pprintResVar src,
+        maybe (PP.text "None")
+              ((PP.text "Some" PP.<>) . PP.parens . pprintResVar)
+              dst
+        ]
+
+pprintBoolOp (PSBoolConstOp bc)
+  = PP.text "BoolOp::Const" PP.<> PP.parens (PP.text $ if bc then "true" else "false")
+pprintBoolOp (PSIdEq l r)
+  = PP.text "BoolOp::IdEq" PP.<> PP.parens (pprintIdVar l PP.<> PP.comma PP.<+> pprintIdVar r)
+pprintBoolOp (PSAmtEq l r)
+  = PP.text "BoolOp::AmtEq" PP.<> PP.parens (pprintAmtVar l PP.<> PP.comma PP.<+> pprintAmtVar r)
+pprintBoolOp (PSFracEq l r)
+  = PP.text "BoolOp::FracEq" PP.<> PP.parens (pprintFracVar l PP.<> PP.comma PP.<+> pprintFracVar r)
+pprintBoolOp (PSResTypeEq l r)
+  = PP.text "BoolOp::ResourceTypeEq" PP.<> PP.parens (pprintResTypeVar l PP.<> PP.comma PP.<+> pprintResTypeVar r)
+pprintBoolOp (PSNotEq bv)
+  = PP.text "BoolOp::Not" PP.<> PP.parens (pprintBoolVar bv)
+pprintBoolOp (PSAnd l r)
+  = PP.text "BoolOp::And" PP.<> PP.parens (pprintBoolVar l PP.<> PP.comma PP.<+> pprintBoolVar r)
+pprintBoolOp (PSOr l r)
+  = PP.text "BoolOp::Or" PP.<> PP.parens (pprintBoolVar l PP.<> PP.comma PP.<+> pprintBoolVar r)
+pprintBoolOp (PSAmtGe l r)
+  = PP.text "BoolOp::AmtGe" PP.<> PP.parens (pprintAmtVar l PP.<> PP.comma PP.<+> pprintAmtVar r)
+pprintBoolOp (PSFracGe l r)
+  = PP.text "BoolOp::FracGe" PP.<> PP.parens (pprintFracVar l PP.<> PP.comma PP.<+> pprintFracVar r)
+
+pprintResTypeOp (PSTypeOf res)
+  = PP.text "ResourceTypeOp::TypeOfResource" PP.<> PP.parens (pprintResVar res)
+pprintResTypeOp (PSResTypeVarOp rt_var)
+  = PP.text "ResourceTypeOp::Var" PP.<> PP.parens (pprintResTypeVar rt_var)
+
+pprintIdOp (PSIdVarOp idvar)
+  = PP.text "IdOp::Var" PP.<> PP.parens (pprintIdVar idvar)
+pprintIdOp (PSOwnerOfOp res)
+  = PP.text "IdOp::OwnerOf" PP.<> PP.parens (pprintResVar res)
+
+pprintFracOp (PSFracVarOp fv)
+  = PP.text "FractionOp::Var" PP.<> PP.parens (pprintFracVar fv)
+pprintFracOp (PSFracConstOp fc)
+  = (PP.text "FractionOp::Const" PP.<>)
+    $ PP.parens $ (PP.text "Fraction::new" PP.<>) $ PP.parens
+    $ PP.int (numerator fc) PP.<> PP.comma PP.<+> PP.int (denominator fc)
+pprintFracOp (PSFracPlusOp l r)
+  = (PP.text "FractionOp::Plus" PP.<>)
+    $ PP.parens $ pprintFracVar l PP.<> PP.comma PP.<+> pprintFracVar r
+pprintFracOp (PSFracTimesOp l r)
+  = (PP.text "FractionOp::Times" PP.<>)
+    $ PP.parens $ pprintFracVar l PP.<> PP.comma PP.<+> pprintFracVar r
+pprintFracOp (PSFracTimesAmtOp l r)
+  = (PP.text "FractionOp::TimesAmt" PP.<>)
+    $ PP.parens $ pprintFracVar l PP.<> PP.comma PP.<+> pprintAmtVar r
+pprintFracOp (PSFracAmtTimesOp l r)
+  = (PP.text "FractionOp::AmtTimes" PP.<>)
+    $ PP.parens $ pprintFracVar l PP.<> PP.comma PP.<+> pprintFracVar r
+
+pprintAmtOp (PSAmtVarOp av)
+  = PP.text "AmountOp::Var" PP.<> PP.parens (pprintAmtVar av)
+pprintAmtOp (PSAmtConstOp n)
+  = PP.text "AmountOp::Const" PP.<> PP.parens (PP.int n)
+pprintAmtOp (PSAmtOfResOp res)
+  = PP.text "AmountOp::AmountOf" PP.<> PP.parens (pprintResVar res)
+pprintAmtOp (PSAmtPlusOp l r)
+  = (PP.text "AmountOp::Plus" PP.<>) $ PP.parens
+    $ pprintAmtVar l PP.<> PP.comma PP.<+> pprintAmtVar r
+pprintAmtOp (PSAmtTimesOp l r)
+  = (PP.text "AmountOp::Times" PP.<>) $ PP.parens
+    $ pprintAmtVar l PP.<> PP.comma PP.<+> pprintAmtVar r
+pprintAmtOp (PSAmtMinusOp l r)
+  = (PP.text "AmountOp::Minus" PP.<>) $ PP.parens
+    $ pprintAmtVar l PP.<> PP.comma PP.<+> pprintAmtVar r
+pprintAmtOp (PSAmtRoundOp fv)
+  = (PP.text "AmountOp::Round" PP.<>) $ PP.parens
+    $ pprintFracVar fv
+
+pprintBoolVar (PSBoolVar n) = PP.text "BoolVar" PP.<> PP.parens (PP.int n)
+pprintAmtVar (PSAmtVar n) = PP.text "AmountVar" PP.<> PP.parens (PP.int n)
+pprintFracVar (PSFracVar n) = PP.text "FractionVar" PP.<> PP.parens (PP.int n)
+pprintResTypeVar (PSResTypeVar n) = PP.text "ResourceTypeVar" PP.<> PP.parens (PP.int n)
+pprintResVar (PSResVar n) = PP.text "ResourceVar" PP.<> PP.parens (PP.int n)
+pprintIdVar (PSIdVar n) = PP.text "IdVar" PP.<> PP.parens (PP.int n)
+
 -- main = alloyish_main
 main = do
   polf <- hGetContents stdin
@@ -1492,6 +1624,9 @@ main = do
               , ("Simplify comparisons",
                  over (polfTxns.traverse.txnBody.traverse.txnStmt_bexpr) simplifyCompares)
               ]
+
+      putStrLn "\n\nFinal result:\n\n===============\n\n"
+      putStrLn $ PP.render $ pprintPolicyScript $ convertPolfToScript $ final_ast
 
       return ()
 
