@@ -34,6 +34,7 @@ pub trait BuildsTransactions {
                                records: &[TxOutput])
                                -> Result<&mut Self, PlatformError>;
   fn add_operation_transfer_asset(&mut self,
+                                  keys: &XfrKeyPair,
                                   input_sids: Vec<TxoRef>,
                                   input_records: &[OpenAssetRecord],
                                   output_records: &[AssetRecord])
@@ -95,12 +96,12 @@ pub trait BuildsTransactions {
                  .collect();
     let mut output_ars = output_ars?;
     output_ars.append(&mut partially_consumed_inputs);
-    self.add_operation_transfer_asset(input_sids, &input_oars, &output_ars)?;
+    self.add_operation_transfer_asset(&key_pair, input_sids, &input_oars, &output_ars)?;
     Ok(self)
   }
 }
 
-#[derive(Default, Serialize, Deserialize)]
+#[derive(Debug, Default, Serialize, Deserialize)]
 pub struct TransactionBuilder {
   txn: Transaction,
   outputs: u64,
@@ -115,11 +116,11 @@ impl BuildsTransactions for TransactionBuilder {
                                 token_code: Option<AssetTypeCode>,
                                 updatable: bool,
                                 traceable: bool,
-                                _memo: &str)
+                                memo: &str)
                                 -> Result<&mut Self, PlatformError> {
     let pub_key = &IssuerPublicKey { key: key_pair.get_pk() };
     let priv_key = &key_pair.get_sk();
-    self.txn.add_operation(Operation::DefineAsset(DefineAsset::new(DefineAssetBody::new(&token_code.unwrap_or_else(AssetTypeCode::gen_random), pub_key, updatable, traceable, None, Some(ConfidentialMemo {}))?, pub_key, priv_key)?));
+    self.txn.add_operation(Operation::DefineAsset(DefineAsset::new(DefineAssetBody::new(&token_code.unwrap_or_else(AssetTypeCode::gen_random), pub_key, updatable, traceable, Some(Memo(memo.into())), Some(ConfidentialMemo {}))?, pub_key, priv_key)?));
     Ok(self)
   }
   fn add_operation_issue_asset(&mut self,
@@ -139,6 +140,7 @@ impl BuildsTransactions for TransactionBuilder {
     Ok(self)
   }
   fn add_operation_transfer_asset(&mut self,
+                                  keys: &XfrKeyPair,
                                   input_sids: Vec<TxoRef>,
                                   input_records: &[OpenAssetRecord],
                                   output_records: &[AssetRecord])
@@ -146,8 +148,14 @@ impl BuildsTransactions for TransactionBuilder {
     // TODO(joe/noah): keep a prng around somewhere?
     let mut prng: ChaChaRng;
     prng = ChaChaRng::from_seed([0u8; 32]);
+    let mut xfr = TransferAsset::new(TransferAssetBody::new(&mut prng,
+                                                            input_sids,
+                                                            input_records,
+                                                            output_records)?,
+                                     TransferType::Standard)?;
+    xfr.sign(&keys);
 
-    self.txn.add_operation(Operation::TransferAsset(TransferAsset::new(TransferAssetBody::new(&mut prng, input_sids, input_records, output_records)?, TransferType::Standard)?));
+    self.txn.add_operation(Operation::TransferAsset(xfr));
     Ok(self)
   }
 
@@ -275,6 +283,21 @@ impl TransferOperationBuilder {
                                       &self.output_records)?;
     self.transfer = Some(TransferAsset::new(body, transfer_type)?);
     Ok(self)
+  }
+
+  pub fn get_output_record(&self, idx: usize) -> Option<BlindAssetRecord> {
+    if self.transfer.is_none() {
+      return None;
+    }
+    self.transfer
+        .as_ref()
+        .unwrap()
+        .body
+        .transfer
+        .outputs
+        .get(idx)
+        .map(|bar| bar.clone())
+        .clone()
   }
 
   // All input owners must sign eventually for the transaction to be valid.
