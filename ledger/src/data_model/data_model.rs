@@ -1,6 +1,5 @@
+#![deny(warnings)]
 use super::errors;
-use base64::decode as b64dec;
-use base64::encode as b64enc;
 use chrono::prelude::*;
 use rand::rngs::SmallRng;
 use rand::{FromEntropy, Rng};
@@ -12,6 +11,13 @@ use std::marker::PhantomData;
 use zei::xfr::lib::gen_xfr_body;
 use zei::xfr::sig::{XfrKeyPair, XfrPublicKey, XfrSecretKey, XfrSignature};
 use zei::xfr::structs::{AssetRecord, BlindAssetRecord, OpenAssetRecord, XfrBody};
+
+fn b64enc<T: ?Sized + AsRef<[u8]>>(input: &T) -> String {
+  base64::encode_config(input, base64::URL_SAFE)
+}
+fn b64dec<T: ?Sized + AsRef<[u8]>>(input: &T) -> Result<Vec<u8>, base64::DecodeError> {
+  base64::decode_config(input, base64::URL_SAFE)
+}
 
 // Unique Identifier for ledger objects
 #[derive(Clone, Copy, Debug, Default, Deserialize, Eq, Hash, PartialEq, Serialize)]
@@ -55,6 +61,13 @@ impl Code {
 pub struct Serialized<T> {
   val: String,
   phantom: PhantomData<T>,
+}
+
+impl<T> Default for Serialized<T> where T: Default + serde::Serialize + serde::de::DeserializeOwned
+{
+  fn default() -> Self {
+    Self::new(&T::default())
+  }
 }
 
 impl<T> Serialized<T> where T: serde::Serialize + serde::de::DeserializeOwned
@@ -289,6 +302,12 @@ pub enum TransferType {
   DebtSwap,
 }
 
+impl Default for TransferType {
+  fn default() -> Self {
+    Self::Standard
+  }
+}
+
 // TODO: UTXO Addresses must be included in Transfer Signature
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct TransferAsset {
@@ -362,6 +381,7 @@ impl DefineAsset {
   }
 }
 
+#[allow(clippy::large_enum_variant)]
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub enum Operation {
   TransferAsset(TransferAsset),

@@ -58,7 +58,6 @@ extern crate clap;
 use env_logger::{Env, Target};
 use log::{debug, error, info, trace, warn};
 use serde::{Deserialize, Serialize};
-use std::error::Error;
 use std::fs::File;
 use std::fs::OpenOptions;
 use std::io::prelude::*;
@@ -295,7 +294,7 @@ fn subcommand_add_issuer(registry_path: &Path) -> ShellExitStatus {
     Err(io_error) => {
       error!("Couldn't create registry {}: {}",
              &registry_path.display(),
-             io_error.description());
+             io_error.to_string());
       ShellExitStatus::Failure
     }
     Ok(mut registry_file) => {
@@ -363,7 +362,7 @@ fn append_user(registry_path: &Path, user: AddrUser) -> bool {
     Err(io_error) => {
       error!("Couldn't create registry {}: {}",
              &registry_path.display(),
-             io_error.description());
+             io_error.to_string());
       false
     }
     Ok(mut registry_file) => {
@@ -433,7 +432,7 @@ fn subcommand_sign(registry_path: &Path, user: &str, issuer: &str) -> ShellExitS
         Err(io_error) => {
           error!("Couldn't write to registry {}: {}",
                  &registry_path.display(),
-                 io_error.description());
+                 io_error.to_string());
           ShellExitStatus::Failure
         }
         Ok(mut registry_file) => {
@@ -441,7 +440,7 @@ fn subcommand_sign(registry_path: &Path, user: &str, issuer: &str) -> ShellExitS
           if let Err(io_error) = registry_file.write_fmt(format_args!("{}\n", sig_json)) {
             error!("Couldn't append to registry {}: {}",
                    registry_path.display(),
-                   io_error.description());
+                   io_error.to_string());
             ShellExitStatus::Failure
           } else {
             info!("Signature");
@@ -509,7 +508,7 @@ fn subcommand_reveal(registry_path: &Path, user: &str, issuer: &str) -> ShellExi
         Err(io_error) => {
           error!("Couldn't write to registry {}: {}",
                  &registry_path.display(),
-                 io_error.description());
+                 io_error.to_string());
           ShellExitStatus::Failure
         }
         Ok(mut registry_file) => {
@@ -517,7 +516,7 @@ fn subcommand_reveal(registry_path: &Path, user: &str, issuer: &str) -> ShellExi
           if let Err(io_error) = registry_file.write_fmt(format_args!("{}\n", sig_json)) {
             error!("Couldn't append to registry {}: {}",
                    registry_path.display(),
-                   io_error.description());
+                   io_error.to_string());
             ShellExitStatus::Failure
           } else {
             info!("Signature");

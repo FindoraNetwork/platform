@@ -1,7 +1,7 @@
 #![deny(warnings)]
 use ledger::data_model::errors::PlatformError;
 use ledger::data_model::{
-  AssetTypeCode, IssuerPublicKey, Transaction, TransferType, TxOutput, TxnSID, TxoRef, TxoSID,
+  AssetTypeCode, Transaction, TransferType, TxOutput, TxnSID, TxoRef, TxoSID,
 };
 use ledger::policies::{calculate_fee, DebtMemo, Fraction};
 use ledger::store::LedgerState;
@@ -23,6 +23,7 @@ pub fn apply_transaction(ledger: &mut LedgerState, tx: Transaction) -> (TxnSID, 
   let temp_sid = ledger.apply_transaction(&mut block, effect)
                        .expect("apply transaction failed");
   ledger.finish_block(block)
+        .unwrap()
         .remove(&temp_sid)
         .expect("finishing block failed")
 }
@@ -34,25 +35,18 @@ fn test_create_asset() -> Result<(), PlatformError> {
   let code = AssetTypeCode { val: [1; 16] };
   let keys = XfrKeyPair::generate(&mut prng);
   let mut builder = TransactionBuilder::default();
-  let issuer_pub_key = IssuerPublicKey { key: *keys.get_pk_ref() };
 
   // Define
-  let tx = builder.add_operation_create_asset(&issuer_pub_key,
-                                              keys.get_sk_ref(),
-                                              Some(code),
-                                              false,
-                                              false,
-                                              "test".into())?
+  let tx = builder.add_operation_create_asset(&keys, Some(code), false, false, "test".into())?
                   .transaction();
   apply_transaction(&mut ledger, tx.clone());
   assert!(ledger.get_asset_type(&code).is_some());
 
   // Issue
   let mut builder = TransactionBuilder::default();
-  let tx =
-    builder.add_basic_issue_asset(&issuer_pub_key, keys.get_sk_ref(), &None, &code, 0, 1000)?
-           .add_basic_issue_asset(&issuer_pub_key, keys.get_sk_ref(), &None, &code, 1, 500)?
-           .transaction();
+  let tx = builder.add_basic_issue_asset(&keys, &None, &code, 0, 1000)?
+                  .add_basic_issue_asset(&keys, &None, &code, 1, 500)?
+                  .transaction();
   let (_, txos) = apply_transaction(&mut ledger, tx.clone());
 
   // Basic transfer
@@ -87,7 +81,7 @@ fn test_loan_repayment(loan_amount: u64,
   // Asset Info
   let fiat_code = AssetTypeCode { val: [0; 16] };
   let debt_code = AssetTypeCode { val: [1; 16] };
-  let interest_rate = Fraction::new(interest_num, interest_denom); // Interest rate of 10%
+  let interest_rate = Fraction::new(interest_num, interest_denom); // Interest rate interest_num/interest_denom
   let debt_memo = DebtMemo { interest_rate,
                              fiat_code,
                              loan_amount: loan_amount as u64 };
@@ -99,19 +93,15 @@ fn test_loan_repayment(loan_amount: u64,
   let lender_keys = XfrKeyPair::generate(&mut prng);
   let borrower_keys = XfrKeyPair::generate(&mut prng);
   let burn_address = XfrPublicKey::zei_from_bytes(&[0; 32]);
-  let fiat_issuing_key = IssuerPublicKey { key: *fiat_issuer_keys.get_pk_ref() };
-  let borrower_issuing_key = IssuerPublicKey { key: *borrower_keys.get_pk_ref() };
 
   // Define assets
   let mut builder = TransactionBuilder::default();
-  let tx = builder.add_operation_create_asset(&fiat_issuing_key,
-                                              fiat_issuer_keys.get_sk_ref(),
+  let tx = builder.add_operation_create_asset(&fiat_issuer_keys,
                                               Some(fiat_code),
                                               false,
                                               false,
                                               "fiat".into())?
-                  .add_operation_create_asset(&borrower_issuing_key,
-                                              borrower_keys.get_sk_ref(),
+                  .add_operation_create_asset(&borrower_keys,
                                               Some(debt_code),
                                               false,
                                               false,
@@ -143,16 +133,15 @@ fn test_loan_repayment(loan_amount: u64,
 
   //  Mega transaction to do everything
   let mut builder = TransactionBuilder::default();
-  let tx = builder.add_operation_issue_asset(&fiat_issuing_key,
-                                             fiat_issuer_keys.get_sk_ref(),
-                                             &fiat_code,
-                                             0,
-                                             &[TxOutput(fiat_ba.clone())])?
-                  .add_operation_issue_asset(&borrower_issuing_key,
-                                             borrower_keys.get_sk_ref(),
-                                             &debt_code,
-                                             0,
-                                             &[TxOutput(debt_ba.clone())])?;
+  let tx =
+    builder.add_operation_issue_asset(&fiat_issuer_keys,
+                                      &fiat_code,
+                                      0,
+                                      &[TxOutput(fiat_ba.clone())])?
+           .add_operation_issue_asset(&borrower_keys,
+                                      &debt_code,
+                                      0,
+                                      &[TxOutput(debt_ba.clone())])?;
   let mut xfr_builder = TransferOperationBuilder::new();
   let fiat_to_lender_op = xfr_builder.add_input(TxoRef::Relative(1), fiat_oar, loan_amount)?
                                      .add_output(loan_amount, lender_keys.get_pk_ref(), fiat_code)?

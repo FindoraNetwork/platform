@@ -9,27 +9,26 @@ use ledger::data_model::errors::PlatformError;
 use ledger::data_model::*;
 use rand_chacha::ChaChaRng;
 use rand_core::SeedableRng;
+use std::cmp::Ordering;
 use std::collections::HashSet;
 use zei::serialization::ZeiFromToBytes;
 use zei::setup::PublicParams;
 use zei::xfr::asset_record::{build_blind_asset_record, open_asset_record};
-use zei::xfr::sig::{XfrKeyPair, XfrPublicKey, XfrSecretKey};
+use zei::xfr::sig::{XfrKeyPair, XfrPublicKey};
 use zei::xfr::structs::{AssetIssuerPubKeys, AssetRecord, BlindAssetRecord, OpenAssetRecord};
 
 pub trait BuildsTransactions {
   fn transaction(&self) -> &Transaction;
   #[allow(clippy::too_many_arguments)]
   fn add_operation_create_asset(&mut self,
-                                pub_key: &IssuerPublicKey,
-                                priv_key: &XfrSecretKey,
+                                key_pair: &XfrKeyPair,
                                 token_code: Option<AssetTypeCode>,
                                 updatable: bool,
                                 traceable: bool,
                                 memo: &str)
                                 -> Result<&mut Self, PlatformError>;
   fn add_operation_issue_asset(&mut self,
-                               pub_key: &IssuerPublicKey,
-                               priv_key: &XfrSecretKey,
+                               key_pair: &XfrKeyPair,
                                token_code: &AssetTypeCode,
                                seq_num: u64,
                                records: &[TxOutput])
@@ -46,8 +45,7 @@ pub trait BuildsTransactions {
   fn add_operation(&mut self, op: Operation) -> &mut Self;
 
   fn add_basic_issue_asset(&mut self,
-                           pub_key: &IssuerPublicKey,
-                           priv_key: &XfrSecretKey,
+                           key_pair: &XfrKeyPair,
                            tracking_keys: &Option<AssetIssuerPubKeys>,
                            token_code: &AssetTypeCode,
                            seq_num: u64,
@@ -55,10 +53,9 @@ pub trait BuildsTransactions {
                            -> Result<&mut Self, PlatformError> {
     let mut prng = ChaChaRng::from_seed([0u8; 32]);
     let params = PublicParams::new();
-    let ar = AssetRecord::new(amount, token_code.val, pub_key.key)?;
+    let ar = AssetRecord::new(amount, token_code.val, key_pair.get_pk())?;
     let ba = build_blind_asset_record(&mut prng, &params.pc_gens, &ar, true, true, tracking_keys);
-    self.add_operation_issue_asset(pub_key, priv_key, token_code, seq_num, &[TxOutput(ba)])?;
-    Ok(self)
+    self.add_operation_issue_asset(key_pair, token_code, seq_num, &[TxOutput(ba)])
   }
 
   #[allow(clippy::comparison_chain)]
@@ -115,23 +112,25 @@ impl BuildsTransactions for TransactionBuilder {
     &self.txn
   }
   fn add_operation_create_asset(&mut self,
-                                pub_key: &IssuerPublicKey,
-                                priv_key: &XfrSecretKey,
+                                key_pair: &XfrKeyPair,
                                 token_code: Option<AssetTypeCode>,
                                 updatable: bool,
                                 traceable: bool,
                                 memo: &str)
                                 -> Result<&mut Self, PlatformError> {
+    let pub_key = &IssuerPublicKey { key: key_pair.get_pk() };
+    let priv_key = &key_pair.get_sk();
     self.txn.add_operation(Operation::DefineAsset(DefineAsset::new(DefineAssetBody::new(&token_code.unwrap_or_else(AssetTypeCode::gen_random), pub_key, updatable, traceable, Some(Memo(memo.into())), Some(ConfidentialMemo {}))?, pub_key, priv_key)?));
     Ok(self)
   }
   fn add_operation_issue_asset(&mut self,
-                               pub_key: &IssuerPublicKey,
-                               priv_key: &XfrSecretKey,
+                               key_pair: &XfrKeyPair,
                                token_code: &AssetTypeCode,
                                seq_num: u64,
                                records: &[TxOutput])
                                -> Result<&mut Self, PlatformError> {
+    let pub_key = &IssuerPublicKey { key: key_pair.get_pk() };
+    let priv_key = &key_pair.get_sk();
     self.txn
         .add_operation(Operation::IssueAsset(IssueAsset::new(IssueAssetBody::new(token_code,
                                                                                  seq_num,
@@ -198,7 +197,7 @@ impl BuildsTransactions for TransactionBuilder {
 //                            .create(TransferType::Standard)?
 //                            .sign(&alice)?;
 //
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Default)]
 pub struct TransferOperationBuilder {
   input_sids: Vec<TxoRef>,
   input_records: Vec<OpenAssetRecord>,
@@ -210,12 +209,7 @@ pub struct TransferOperationBuilder {
 
 impl TransferOperationBuilder {
   pub fn new() -> Self {
-    TransferOperationBuilder { input_sids: Vec::new(),
-                               input_records: Vec::new(),
-                               output_records: Vec::new(),
-                               spend_amounts: Vec::new(),
-                               transfer: None,
-                               transfer_type: TransferType::Standard }
+    Self::default()
   }
 
   // TxoRef is the location of the input on the ledger and the amount is how much of the record
@@ -256,13 +250,17 @@ impl TransferOperationBuilder {
     let spend_total: u64 = self.spend_amounts.iter().sum();
     let mut partially_consumed_inputs = Vec::new();
     for (spend_amount, oar) in self.spend_amounts.iter().zip(self.input_records.iter()) {
-      if spend_amount > oar.get_amount() {
-        return Err(PlatformError::InputsError);
-      } else if spend_amount < oar.get_amount() {
-        let ar = AssetRecord::new(oar.get_amount() - spend_amount,
-                                  *oar.get_asset_type(),
-                                  *oar.get_pub_key())?;
-        partially_consumed_inputs.push(ar);
+      match spend_amount.cmp(oar.get_amount()) {
+        Ordering::Greater => {
+          return Err(PlatformError::InputsError);
+        }
+        Ordering::Less => {
+          let ar = AssetRecord::new(oar.get_amount() - spend_amount,
+                                    *oar.get_asset_type(),
+                                    *oar.get_pub_key())?;
+          partially_consumed_inputs.push(ar);
+        }
+        _ => {}
       }
     }
     let output_total = self.output_records

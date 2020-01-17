@@ -26,7 +26,7 @@
 use super::append_only_merkle::{AppendOnlyMerkle, HashValue, Proof};
 
 use cryptohash::sha256;
-use findora::{Commas, debug, er, log, log_impl};
+use findora::{debug, er, log, log_impl, Commas};
 use serde::Deserialize;
 use serde::Deserializer;
 use serde::Serialize;

@@ -23,11 +23,10 @@ bin_files =                             \
         ./$(pick)/abci_validator_node   \
         ./$(pick)/check_merkle          \
 
-lib_files =                                                         \
-        ./$(pick)/libledger.rlib                               \
-        ./$(pick)/libledger_app.rlib            \
+lib_files =                                    \
+        ./$(pick)/libledger.rlib               \
+        ./$(pick)/libledger_app.rlib           \
         ./$(pick)/libapi_service.rlib          \
-        ./$(pick)/libquery_processor.rlib  \
         ./$(pick)/libtxn_builder.rlib          \
 
 release:  rust
