@@ -1,4 +1,4 @@
-//#![deny(warnings)]
+#![deny(warnings)]
 use ledger::data_model::errors::PlatformError;
 use ledger::data_model::{
   AssetTypeCode, IssuerPublicKey, Transaction, TransferType, TxOutput, TxnSID, TxoRef, TxoSID,
@@ -208,6 +208,6 @@ fn test_loan_repayment(loan_amount: u64,
 #[test]
 fn test_loan_repayments() -> Result<(), PlatformError> {
   test_loan_repayment(1000, 100, 1, 10)?;
-  //test_loan_repayment(2000, 1300, 1, 1)?;
+  test_loan_repayment(500, 3, 1, 25)?;
   Ok(())
 }
