@@ -690,10 +690,10 @@ mod tests {
   #[test]
   fn test_rename_existing_path() {
     // Path name shoud be different from those in test_next_path()
-    // Otherwise will cause test_next_path() to fail
+    // Otherwise may cause test_next_path() to fail
     let as_path = Path::new("10");
 
-    // Remove the file if it exists.
+    // Remove the file if it exists
     if as_path.exists() {
       fs::remove_file(as_path).unwrap();
     }
