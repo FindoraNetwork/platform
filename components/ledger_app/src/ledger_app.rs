@@ -12,7 +12,7 @@ use std::sync::{Arc, RwLock};
 
 // Query handle for user
 #[derive(Debug, Hash, Eq, PartialEq, Clone, Serialize, Deserialize)]
-pub struct TxnHandle(String);
+pub struct TxnHandle(pub String);
 
 impl TxnHandle {
   pub fn new(txn: &Transaction) -> Self {
@@ -30,7 +30,7 @@ pub enum TxnStatus {
 
 pub struct LedgerApp<RNG, LU>
   where RNG: RngCore + CryptoRng,
-        LU: LedgerUpdate<RNG>
+        LU: LedgerUpdate<RNG> + LedgerAccess
 {
   committed_state: Arc<RwLock<LU>>,
   block: Option<LU::Block>,
@@ -42,7 +42,7 @@ pub struct LedgerApp<RNG, LU>
 
 impl<RNG, LU> LedgerApp<RNG, LU>
   where RNG: RngCore + CryptoRng,
-        LU: LedgerUpdate<RNG>
+        LU: LedgerUpdate<RNG> + LedgerAccess
 {
   pub fn new(prng: RNG,
              ledger_state: Arc<RwLock<LU>>,
@@ -93,25 +93,26 @@ impl<RNG, LU> LedgerApp<RNG, LU>
     } // What should happen in failure? -joe
   }
 
-  pub fn end_block(&mut self) {
+  pub fn end_block(&mut self) -> Result<(), PlatformError> {
     let mut block = None;
     std::mem::swap(&mut self.block, &mut block);
     if let Some(block) = block {
-      if let Ok(mut ledger) = self.committed_state.write() {
-        // TODO(noah): is this unwrap reasonable?
-        let finalized_txns = ledger.finish_block(block).unwrap();
-        // Update status of all committed transactions
-        for (txn_temp_sid, handle) in self.pending_txns.drain(..) {
-          self.txn_status
-              .insert(handle,
-                      TxnStatus::Committed(finalized_txns.get(&txn_temp_sid).unwrap().clone()));
-        }
-      } // What should happen in failure? -joe
-    } // What should happen in failure? -joe
-
-    // Empty temp_sids after the block is finished
-    // If begin_commit or end_commit is no longer empty, move this line to the end of end_commit
-    self.pending_txns = Vec::new();
+      let mut ledger = self.committed_state.write().unwrap();
+      // TODO(noah): is this unwrap reasonable?
+      let finalized_txns = ledger.finish_block(block).unwrap();
+      // Update status of all committed transactions
+      for (txn_temp_sid, handle) in self.pending_txns.drain(..) {
+        self.txn_status
+            .insert(handle,
+                    TxnStatus::Committed(finalized_txns.get(&txn_temp_sid).unwrap().clone()));
+      }
+      // Empty temp_sids after the block is finished
+      // If begin_commit or end_commit is no longer empty, move this line to the end of end_commit
+      self.pending_txns = Vec::new();
+      // Finally, return the finalized txn sids
+      return Ok(());
+    }
+    Err(PlatformError::LedgerAppError(Some("Cannot finish block because there are no pending txns".into())))
   }
 
   pub fn cache_transaction(&mut self, txn: Transaction) -> Result<TxnHandle, PlatformError> {
@@ -127,7 +128,7 @@ impl<RNG, LU> LedgerApp<RNG, LU>
       }
     }
 
-    Err(PlatformError::InputsError)
+    Err(PlatformError::LedgerAppError(Some("Transaction is invalid and cannot be added to pending txn list.".into())))
   }
 
   pub fn abort_block(&mut self) {
@@ -141,23 +142,21 @@ impl<RNG, LU> LedgerApp<RNG, LU>
   }
 
   // Handle the whole process when there's a new transaction
-  pub fn handle_transaction(&mut self, txn: Transaction) -> TxnHandle {
+  pub fn handle_transaction(&mut self, txn: Transaction) -> Result<TxnHandle, PlatformError> {
     // Begin a block if the previous one has been commited
     if self.all_commited() {
       self.begin_block();
     }
 
-    let handle = self.cache_transaction(txn)
-                     .map_err(actix_web::error::ErrorBadRequest)
-                     .unwrap();
-
+    let handle = self.cache_transaction(txn)?;
     // End the current block if it's eligible to commit
     if self.eligible_to_commit() {
-      self.end_block();
+      // If the ledger is eligible for a commit, end block will not return an error
+      let _res = self.end_block();
 
       // If begin_commit and end_commit are no longer empty, call them here
     }
-    handle
+    Ok(handle)
   }
 }
 
@@ -255,7 +254,7 @@ mod tests {
 
     // Submit the first transcation. Ensure that the txn is pending.
     let transaction = Transaction::default();
-    let txn_handle = ledger_app.handle_transaction(transaction.clone());
+    let txn_handle = ledger_app.handle_transaction(transaction.clone()).unwrap();
     let status = ledger_app.txn_status
                            .get(&txn_handle)
                            .expect("handle should be in map")
@@ -263,7 +262,8 @@ mod tests {
     assert_eq!(status, TxnStatus::Pending);
 
     // Submit a second transaction and ensure that it is tracked as committed
-    ledger_app.handle_transaction(transaction.clone());
+    ledger_app.handle_transaction(transaction.clone())
+              .expect("Txn should be valid");
     // In this case, both transactions have the same handle. Because transactions are unique and
     // We are using a collision resistant hash function, this will not occur on a live ledger.
     let status = ledger_app.txn_status
