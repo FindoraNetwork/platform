@@ -73,11 +73,6 @@ pub enum ServiceInterfaceStandalone {
   LedgerUpdate,
 }
 
-//pub enum Mode {
-//  Test,
-//  Production,
-//}
-
 pub trait RouteStandalone {
   fn set_route<RNG: 'static + RngCore + CryptoRng,
                  LU: 'static + LedgerUpdate<RNG> + LedgerAccess + Sync + Send>(
