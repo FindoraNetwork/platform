@@ -32,8 +32,8 @@ pub struct DebtMemo {
 
 #[derive(Clone, Copy)]
 enum DebtOutputIndices {
-  Fiat = 0,
   BurnedDebt = 1,
+  Fiat = 0,
   ReturnedDebt = 2,
 }
 
