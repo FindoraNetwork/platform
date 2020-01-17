@@ -309,6 +309,7 @@ impl LedgerStatus {
       }
     }
 
+    dbg!("starting");
     // New asset types must not already exist
     for (code, _asset_type) in txn.new_asset_codes.iter() {
       if self.asset_types.contains_key(&code) {
@@ -321,6 +322,7 @@ impl LedgerStatus {
 
       // Asset issuance should match the currently registered key
     }
+    dbg!("fine here");
 
     // New issuance numbers
     // (1) Must refer to a created asset type

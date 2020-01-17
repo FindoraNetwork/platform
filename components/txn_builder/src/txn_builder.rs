@@ -110,13 +110,6 @@ pub struct TransactionBuilder {
   outputs: u64,
 }
 
-impl TransactionBuilder {
-  pub fn new() -> Self {
-    TransactionBuilder { txn: Transaction::default(),
-                         outputs: 0 }
-  }
-}
-
 impl BuildsTransactions for TransactionBuilder {
   fn transaction(&self) -> &Transaction {
     &self.txn
@@ -127,9 +120,9 @@ impl BuildsTransactions for TransactionBuilder {
                                 token_code: Option<AssetTypeCode>,
                                 updatable: bool,
                                 traceable: bool,
-                                _memo: &str)
+                                memo: &str)
                                 -> Result<&mut Self, PlatformError> {
-    self.txn.add_operation(Operation::DefineAsset(DefineAsset::new(DefineAssetBody::new(&token_code.unwrap_or_else(AssetTypeCode::gen_random), pub_key, updatable, traceable, None, Some(ConfidentialMemo {}))?, pub_key, priv_key)?));
+    self.txn.add_operation(Operation::DefineAsset(DefineAsset::new(DefineAssetBody::new(&token_code.unwrap_or_else(AssetTypeCode::gen_random), pub_key, updatable, traceable, Some(Memo(memo.into())), Some(ConfidentialMemo {}))?, pub_key, priv_key)?));
     Ok(self)
   }
   fn add_operation_issue_asset(&mut self,
@@ -292,6 +285,21 @@ impl TransferOperationBuilder {
                                       &self.output_records)?;
     self.transfer = Some(TransferAsset::new(body, transfer_type)?);
     Ok(self)
+  }
+
+  pub fn get_output_record(&self, idx: usize) -> Option<BlindAssetRecord> {
+    if self.transfer.is_none() {
+      return None;
+    }
+    self.transfer
+        .as_ref()
+        .unwrap()
+        .body
+        .transfer
+        .outputs
+        .get(idx)
+        .map(|bar| bar.clone())
+        .clone()
   }
 
   // All input owners must sign eventually for the transaction to be valid.
