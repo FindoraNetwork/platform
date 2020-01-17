@@ -1,6 +1,7 @@
 {-# LANGUAGE LambdaCase        #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE DeriveFunctor     #-}
+{-# LANGUAGE FlexibleContexts  #-} -- TODO: check if I need this
 module Main where
 import qualified Data.Text as T
 import           Data.List (nub,isPrefixOf,sort)
@@ -11,13 +12,15 @@ import qualified Text.Parsec.Token as P
 import           Text.Parsec.Language (javaStyle)
 import           Data.Maybe (maybeToList,fromMaybe,fromJust)
 import           Control.Applicative ((<$>),(<*>),(*>))
-import           Control.Monad (join, filterM, foldM)
+import           Control.Monad (join, filterM, foldM, forM_)
 import           System.Directory (getCurrentDirectory, getDirectoryContents, doesFileExist)
 import           System.IO (hGetContents,openFile,IOMode(..),hFlush,stdout,stdin)
 import           System.FilePath.Posix (takeBaseName)
 import qualified Text.PrettyPrint.Annotated as PP
 import           Control.Monad.Identity (runIdentity)
 import           Alloyish(alloyish_main)
+import           Data.Ratio(numerator,denominator)
+import           Debug.Trace(trace)
 
 policy_lang = P.makeTokenParser $ javaStyle
   { P.reservedNames = [ "param", "global_param", "local", "resource",
@@ -311,6 +314,9 @@ data TxnStmt = AssertStmt BoolExpr
              | TransferStmt ArithExpr T.Text (Maybe T.Text)
   deriving (Eq,Show,Read)
 
+stmtVars ((LocalStmt var _ ae)) = [(var,ae)]
+stmtVars _ = []
+
 txnStmt_bexpr f (AssertStmt be) = AssertStmt <$> f be
 txnStmt_bexpr _ txnStmt = pure txnStmt
 
@@ -375,6 +381,8 @@ data TxnDecl = TxnDecl
   deriving (Eq,Show,Read)
 
 txnBody f decl = (\body' -> decl { _txnBody = body' }) <$> f (_txnBody decl)
+
+freeVars = foldl (++) [] . map stmtVars
 
 parseTxnDecl = do
   polReserved "txn"
@@ -728,7 +736,7 @@ moveOldExprs body = go body
 
     go ls = oldDecls ++ ls'
       where
-        (ls',(_,_,oldDecls)) = flip S.runState (0,M.fromList [],[]) $ goStmt ls
+        (ls',(_,_,oldDecls)) = flip S.runState (0,M.fromList $ freeVars body,[]) $ goStmt ls
 
     goStmt [] = return []
     goStmt (l:ls) = do
@@ -753,7 +761,7 @@ moveOldExprs body = go body
         _ -> return ae'
 
 
-explicitSubExprs body = fst $ flip S.runState (0,M.fromList ([] :: [(T.Text,ArithExpr)])) $ goStmt body
+explicitSubExprs body = fst $ flip S.runState (0,(M.fromList $ freeVars body) :: M.Map T.Text ArithExpr) $ goStmt body
   where
     freshvar :: ArithExpr -> S.State (Integer,M.Map T.Text ArithExpr) (T.Text,[TxnStmt])
     freshvar exp = do
@@ -810,6 +818,20 @@ explicitSubExprs body = fst $ flip S.runState (0,M.fromList ([] :: [(T.Text,Arit
       return (vstmts,ae')
 
     goAEinner :: ArithExpr -> S.State (Integer,M.Map T.Text ArithExpr,[TxnStmt]) ArithExpr
+    goAEinner exp@(ConstAmountExpr i) = do
+      (ix,vars,vstmts) <- S.get
+      (ix',varname,newstmts) <- return $ newvar ix vars exp
+      vars' <- return $ M.insert varname exp vars
+      vstmts' <- return $ vstmts ++ newstmts
+      S.put (ix',vars',vstmts')
+      return $ ArithVar varname
+    goAEinner exp@(ConstFractionExpr i) = do
+      (ix,vars,vstmts) <- S.get
+      (ix',varname,newstmts) <- return $ newvar ix vars exp
+      vars' <- return $ M.insert varname exp vars
+      vstmts' <- return $ vstmts ++ newstmts
+      S.put (ix',vars',vstmts')
+      return $ ArithVar varname
     goAEinner ae = flip traverseArithSubExpr ae $ \exp -> do
       exp' <- goAEinner exp
       (ix,vars,vstmts) <- S.get
@@ -914,6 +936,8 @@ data PSBoolOp
 
   | PSAmtGe PSAmtVar PSAmtVar
   | PSFracGe PSFracVar PSFracVar
+  | PSFracAmtGe PSFracVar PSAmtVar
+  | PSAmtFracGe PSAmtVar PSFracVar
  deriving (Eq,Show,Read)
 
 data PSTxnOp
@@ -963,28 +987,29 @@ data PolicyTxnConversionState = PolicyTxnConversionState
 convertPolfToScript (PolicyFile { _polfBats = bats
                                 , _polfGParams = gparams
                                 , _polfTxns = (init_txn:txns) })
-  = PolicyScript { _polNumIdGlobals = M.size id_globals
+  = final_script
+  where
+    final_script = PolicyScript { _polNumIdGlobals = M.size id_globals
                  , _polNumResTypeGlobals = M.size res_type_globals
                  , _polNumAmtGlobals = M.size amt_globals
                  , _polNumFracGlobals = M.size frac_globals
                  , _polInitCheck = txnConvert init_txn
                  , _polTxns = map txnConvert txns
                  }
-  where
     id_globals = M.fromList
       $ [(_batsIssuer bats,PSIdVar 0)]
-        ++ ((\ (gparam,i) -> (_gparamName gparam, PSIdVar i))
+        ++ ((\ (i,gparam) -> (_gparamName gparam, PSIdVar i))
             <$> zip [1..] (filter ((== IdentityType) . _gparamType) gparams))
     res_type_globals = M.fromList
       $ [(_batsType bats,PSResTypeVar 0)]
-        ++ ((\ (gparam,i) -> (_gparamName gparam, PSResTypeVar i))
+        ++ ((\ (i,gparam) -> (_gparamName gparam, PSResTypeVar i))
             <$> zip [1..] (filter ((== ResourceTypeType) . _gparamType) gparams))
     amt_globals = M.fromList
-      $ (\ (gparam,i) -> (_gparamName gparam, PSAmtVar i))
-      <$> (zip [0..] $ filter ((== AmountType) . _gparamType) gparams
+      $ (\ (i,gparam) -> (_gparamName gparam, PSAmtVar i))
+      <$> zip [0..] (filter ((== AmountType) . _gparamType) gparams)
     frac_globals = M.fromList
-      $ (\ (gparam,i) -> (_gparamName gparam, PSFracVar i))
-      <$> (zip [0..] $ filter ((== FractionType) . _gparamType) gparams
+      $ (\ (i,gparam) -> (_gparamName gparam, PSFracVar i))
+      <$> zip [0..] (filter ((== FractionType) . _gparamType) gparams)
 
     txnConvert (TxnDecl { _txnParams = params, _txnRequires = []
                         , _txnEnsures = [], _txnBody = bodyStmts })
@@ -1003,8 +1028,8 @@ convertPolfToScript (PolicyFile { _polfBats = bats
                             , const ResourceTypeType <$> res_type_globals
                             ]
                         , _ptcTxnSoFar = PolicyTxnCheck
-                            { _ptcNumInParams = length $ filter _txnParamIn params
-                            , _ptcNumOutParams = length $ filter _txnParamIn params
+                            { _ptcNumInParams = length $ filter _txnparamIn params
+                            , _ptcNumOutParams = length $ filter _txnparamOut params
                             , _ptcIdOps = []
                             , _ptcRtOps = []
                             , _ptcAmtOps = []
@@ -1018,31 +1043,31 @@ convertPolfToScript (PolicyFile { _polfBats = bats
 
     -- TODO: for the love of god refactor this
     convertStmt (IssueStmt ae tp dst) = do
-      cx_state@(PolicyTxnConversionState { _ptcTxnSoFar = txn }) <- get
-      let (ArithVar av) = ae
+      cx_state@(PolicyTxnConversionState { _ptcTxnSoFar = txn }) <- S.get
+      let (ArithVar av) = ae;
 
-      let (Just amt_var) = M.lookup av  $ _ptcAmtVars cx_state
-      let (Just restype) = M.lookup tp  $ _ptcResTypeVars cx_state
-      let (Just dst_res) = M.lookup dst $ _ptcResVars cx_state
+      amt_var <- return $ fromJust $ M.lookup av  $ _ptcAmtVars cx_state
+      restype <- return $ fromJust $ M.lookup tp  $ _ptcResTypeVars cx_state
+      dst_res <- return $ fromJust $ M.lookup dst $ _ptcResVars cx_state
 
-      put $ cx_state {
+      S.put $ (cx_state {
         _ptcTxnSoFar = txn {
           _ptcTxnTemplate = (_ptcTxnTemplate txn
                             ++ [PSIssue amt_var restype dst_res])
           }
-        }
-
+        })
     convertStmt (TransferStmt ae src dst) = do
-      cx_state@(PolicyTxnConversionState { _ptcTxnSoFar = txn }) <- get
-      let (ArithVar av) = ae
+      cx_state@(PolicyTxnConversionState { _ptcTxnSoFar = txn }) <- S.get
+      let (ArithVar av) = ae;
 
-      let (Just amt_var) = M.lookup av  $ _ptcAmtVars cx_state
-      let (Just src_res) = M.lookup src $ _ptcResVars cx_state
-      let (Just dst_res) = case dst of
+      let { (Just amt_var) = M.lookup av  $ _ptcAmtVars cx_state }
+      let { (Just src_res) = M.lookup src $ _ptcResVars cx_state }
+      let { (Just dst_res) = case dst of
         Nothing -> Just Nothing
         Just dst -> fmap Just $ M.lookup dst $ _ptcResVars cx_state
+      }
 
-      put $ cx_state {
+      S.put $ cx_state {
         _ptcTxnSoFar = txn {
           _ptcTxnTemplate = (_ptcTxnTemplate txn
                             ++ [PSTransfer amt_var src_res dst_res])
@@ -1050,72 +1075,72 @@ convertPolfToScript (PolicyFile { _polfBats = bats
         }
 
     convertStmt (RequireSignatureStmt id_name) = do
-      cx_state@(PolicyTxnConversionState { _ptcTxnSoFar = txn }) <- get
+      cx_state@(PolicyTxnConversionState { _ptcTxnSoFar = txn }) <- S.get
       let (Just id_var) = M.lookup id_name $ _ptcIdVars cx_state
 
-      put $ cx_state {
+      S.put $ cx_state {
         _ptcTxnSoFar = txn {
           _ptcSignatures = (_ptcSignatures txn ++ [id_var])
           }
         }
 
     convertStmt (LocalStmt var tp exp) = do
-      (Just tp) <- return tp
-      cx_state@(PolicyTxnConversionState { _ptcTxnSoFar = txn }) <- get
+      (tp) <- return $ fromJust tp
+      cx_state@(PolicyTxnConversionState { _ptcTxnSoFar = txn }) <- S.get
       let Nothing = M.lookup var $ _ptcTypes cx_state
 
       let types' = M.insert var tp $ _ptcTypes cx_state
 
       case exp of
         ConstAmountExpr n -> do
-          let ix = _polNumAmtGlobals cx_state ++ length (_ptcAmtOps txn)
+          let ix = _polNumAmtGlobals final_script + length (_ptcAmtOps txn)
 
-          put $ cx_state {
+          S.put $ cx_state {
             _ptcTypes = types',
-            _ptcAmtVars = M.insert var $ PSAmtVar ix,
-            _ptcsTxnSoFar = txn {
-              _ptcAmtOps = _ptcAmtOps txn ++ [PSAmtConstOp n]
+            _ptcAmtVars = M.insert var (PSAmtVar ix) $ _ptcAmtVars cx_state,
+            _ptcTxnSoFar = txn {
+              _ptcAmtOps = _ptcAmtOps txn ++ [PSAmtConstOp (fromInteger n)]
             }
           }
         ConstFractionExpr fv -> do
-          let ix = _polNumFracGlobals cx_state ++ length (_ptcFracOps txn)
+          let ix = _polNumFracGlobals final_script + length (_ptcFracOps txn)
 
-          put $ cx_state {
+          S.put $ cx_state {
             _ptcTypes = types',
-            _ptcFracVars = M.insert var $ PSFracVar ix,
-            _ptcsTxnSoFar = txn {
+            _ptcFracVars = M.insert var (PSFracVar ix) $ _ptcFracVars cx_state,
+            _ptcTxnSoFar = txn {
               _ptcFracOps = _ptcFracOps txn ++ [PSFracConstOp fv]
             }
           }
 
         PlusExpr l r -> case tp of
           AmountType -> do
-            let (ArithVar lv) = l
-            (Just lv) <- return $ M.lookup lv $ _ptcAmtVars cx_state
-            let (ArithVar rv) = r
-            (Just rv) <- return $ M.lookup rv $ _ptcAmtVars cx_state
+            let (ArithVar li) = l
+            let (Just lv) = M.lookup li $ _ptcAmtVars cx_state
+            let (ArithVar ri) = r
+            let (Just rv) = M.lookup ri $ _ptcAmtVars cx_state
 
-            let ix = _polNumAmtGlobals cx_state ++ length (_ptcAmtOps txn)
+            let ix = _polNumAmtGlobals final_script + length (_ptcAmtOps txn)
 
-            put $ cx_state {
+            S.put $ cx_state {
               _ptcTypes = types',
-              _ptcFracVars = M.insert var $ PSAmtVar ix,
-              _ptcsTxnSoFar = txn {
-                _ptcFracOps = _ptcFracOps txn ++ [PSAmtPlusOp lv rv]
+              _ptcAmtVars = M.insert var (PSAmtVar ix) $ _ptcAmtVars cx_state,
+              _ptcTxnSoFar = txn {
+                _ptcAmtOps = _ptcAmtOps txn ++ [PSAmtPlusOp lv rv]
               }
             }
           FractionType -> do
-            let (ArithVar lv) = l
-            (Just lv) <- return $ M.lookup lv $ _ptcFracVars cx_state
-            let (ArithVar rv) = r
-            (Just rv) <- return $ M.lookup rv $ _ptcFracVars cx_state
+            let (ArithVar li) = l
+            let (Just lv) = M.lookup li $ _ptcFracVars cx_state
+            let (ArithVar ri) = r
+            let (Just rv) = M.lookup ri $ _ptcFracVars cx_state
 
-            let ix = _polNumFracGlobals cx_state ++ length (_ptcFracOps txn)
+            let ix = _polNumFracGlobals final_script + length (_ptcFracOps txn)
 
-            put $ cx_state {
+            S.put $ cx_state {
               _ptcTypes = types',
-              _ptcFracVars = M.insert var $ PSFracVar ix,
-              _ptcsTxnSoFar = txn {
+              _ptcFracVars = M.insert var (PSFracVar ix) $ _ptcFracVars cx_state,
+              _ptcTxnSoFar = txn {
                 _ptcFracOps = _ptcFracOps txn ++ [PSFracPlusOp lv rv]
               }
             }
@@ -1123,57 +1148,57 @@ convertPolfToScript (PolicyFile { _polfBats = bats
 
         TimesExpr l r -> case tp of
           AmountType -> do
-            let (ArithVar lv) = l
-            (Just lv) <- return $ M.lookup lv $ _ptcAmtVars cx_state
-            let (ArithVar rv) = r
-            (Just rv) <- return $ M.lookup rv $ _ptcAmtVars cx_state
+            let (ArithVar li) = l
+            let (Just lv) = M.lookup li $ _ptcAmtVars cx_state
+            let (ArithVar ri) = r
+            let (Just rv) = M.lookup ri $ _ptcAmtVars cx_state
 
-            let ix = _polNumAmtGlobals cx_state ++ length (_ptcAmtOps txn)
+            let ix = _polNumAmtGlobals final_script + length (_ptcAmtOps txn)
 
-            put $ cx_state {
+            S.put $ cx_state {
               _ptcTypes = types',
-              _ptcFracVars = M.insert var $ PSAmtVar ix,
-              _ptcsTxnSoFar = txn {
-                _ptcFracOps = _ptcFracOps txn ++ [PSAmtTimesOp lv rv]
+              _ptcAmtVars = M.insert var (PSAmtVar ix) $ _ptcAmtVars cx_state,
+              _ptcTxnSoFar = txn {
+                _ptcAmtOps = _ptcAmtOps txn ++ [PSAmtTimesOp lv rv]
               }
             }
           FractionType -> do
-            let ix = _polNumFracGlobals cx_state ++ length (_ptcFracOps txn)
+            let ix = _polNumFracGlobals final_script + length (_ptcFracOps txn)
             let (ArithVar lv) = l
             let (ArithVar rv) = r
             case (M.lookup lv $ _ptcTypes cx_state, M.lookup rv $ _ptcTypes cx_state) of
               (Just FractionType,Just FractionType) -> do
-                (Just lv) <- return $ M.lookup lv $ _ptcFracVars cx_state
-                (Just rv) <- return $ M.lookup rv $ _ptcFracVars cx_state
+                lv <- return $ fromJust $ M.lookup lv $ _ptcFracVars cx_state
+                rv <- return $ fromJust $ M.lookup rv $ _ptcFracVars cx_state
 
-                put $ cx_state {
+                S.put $ cx_state {
                   _ptcTypes = types',
-                  _ptcFracVars = M.insert var $ PSFracVar ix,
-                  _ptcsTxnSoFar = txn {
+                  _ptcFracVars = M.insert var (PSFracVar ix) $ _ptcFracVars cx_state,
+                  _ptcTxnSoFar = txn {
                     _ptcFracOps = _ptcFracOps txn ++ [PSFracTimesOp lv rv]
                   }
                 }
 
               (Just FractionType,Just AmountType) -> do
-                (Just lv) <- return $ M.lookup lv $ _ptcFracVars cx_state
-                (Just rv) <- return $ M.lookup rv $ _ptcAmtVars cx_state
+                lv <- return $ fromJust $ M.lookup lv $ _ptcFracVars cx_state
+                rv <- return $ fromJust $ M.lookup rv $ _ptcAmtVars cx_state
 
-                put $ cx_state {
+                S.put $ cx_state {
                   _ptcTypes = types',
-                  _ptcFracVars = M.insert var $ PSFracVar ix,
-                  _ptcsTxnSoFar = txn {
+                  _ptcFracVars = M.insert var (PSFracVar ix) $ _ptcFracVars cx_state,
+                  _ptcTxnSoFar = txn {
                     _ptcFracOps = _ptcFracOps txn ++ [PSFracTimesAmtOp lv rv]
                   }
                 }
 
               (Just AmountType,Just FractionType) -> do
-                (Just lv) <- return $ M.lookup lv $ _ptcAmtVars cx_state
-                (Just rv) <- return $ M.lookup rv $ _ptcFracVars cx_state
+                lv <- return $ fromJust $ M.lookup lv $ _ptcAmtVars cx_state
+                rv <- return $ fromJust $ M.lookup rv $ _ptcFracVars cx_state
 
-                put $ cx_state {
+                S.put $ cx_state {
                   _ptcTypes = types',
-                  _ptcFracVars = M.insert var $ PSFracVar ix,
-                  _ptcsTxnSoFar = txn {
+                  _ptcFracVars = M.insert var (PSFracVar ix) $ _ptcFracVars cx_state,
+                  _ptcTxnSoFar = txn {
                     _ptcFracOps = _ptcFracOps txn ++ [PSFracAmtTimesOp lv rv]
                   }
                 }
@@ -1184,144 +1209,148 @@ convertPolfToScript (PolicyFile { _polfBats = bats
 
         MinusExpr l r -> case tp of
           AmountType -> do
-            let (ArithVar lv) = l
-            (Just lv) <- return $ M.lookup lv $ _ptcAmtVars cx_state
-            let (ArithVar rv) = r
-            (Just rv) <- return $ M.lookup rv $ _ptcAmtVars cx_state
+            let (ArithVar li) = l
+            let (Just lv) = M.lookup li $ _ptcAmtVars cx_state
+            let (ArithVar ri) = r
+            let (Just rv) = M.lookup ri $ _ptcAmtVars cx_state
 
-            let ix = _polNumAmtGlobals cx_state ++ length (_ptcAmtOps txn)
+            let ix = _polNumAmtGlobals final_script + length (_ptcAmtOps txn)
 
-            put $ cx_state {
+            S.put $ cx_state {
               _ptcTypes = types',
-              _ptcFracVars = M.insert var $ PSAmtVar ix,
-              _ptcsTxnSoFar = txn {
-                _ptcFracOps = _ptcFracOps txn ++ [PSAmtMinusOp lv rv]
+              _ptcAmtVars = M.insert var (PSAmtVar ix) $ _ptcAmtVars cx_state,
+              _ptcTxnSoFar = txn {
+                _ptcAmtOps = _ptcAmtOps txn ++ [PSAmtMinusOp lv rv]
               }
             }
           _ -> undefined
 
         RoundExpr v -> do
-          let (ArithVar fv) = v
-          (Just fv) <- return $ M.lookup fv $ _ptcFracVars cx_state
-          let ix = _polNumAmtGlobals cx_state ++ length (_ptcAmtOps txn)
+          let (ArithVar fi) = v
+          let (Just fv) = M.lookup fi $ _ptcFracVars cx_state
+          let ix = _polNumAmtGlobals final_script + length (_ptcAmtOps txn)
 
-          put $ cx_state {
+          S.put $ cx_state {
             _ptcTypes = types',
-            _ptcAmtVars = M.insert var $ PSAmtVar ix,
-            _ptcsTxnSoFar = txn {
-              _ptcAmtOps = _ptcAmtOps txn ++ [PSAmtRound fv]
+            _ptcAmtVars = M.insert var (PSAmtVar ix) $ _ptcAmtVars cx_state,
+            _ptcTxnSoFar = txn {
+              _ptcAmtOps = _ptcAmtOps txn ++ [PSAmtRoundOp fv]
             }
           }
 
         AmountField res -> do
-          (Just res_var) <- return $ M.lookup res $ _ptcResVars cx_state
-          let ix = _polNumAmtGlobals cx_state ++ length (_ptcAmtOps txn)
+          let (Just res_var) = M.lookup res $ _ptcResVars cx_state
+          ix <- return $ _polNumAmtGlobals final_script + length (_ptcAmtOps txn)
 
-          put $ cx_state {
+          S.put $ cx_state {
             _ptcTypes = types',
-            _ptcAmtVars = M.insert var $ PSAmtVar ix,
-            _ptcsTxnSoFar = txn {
+            _ptcAmtVars = M.insert var (PSAmtVar ix) $ _ptcAmtVars cx_state,
+            _ptcTxnSoFar = txn {
               _ptcAmtOps = _ptcAmtOps txn ++ [PSAmtOfResOp res_var]
             }
           }
 
         OwnerField res -> do
-          (Just res_var) <- return $ M.lookup res $ _ptcResVars cx_state
-          let ix = _polNumIdGlobals cx_state ++ length (_ptcIdOps txn)
+          let (Just res_var) = M.lookup res $ _ptcResVars cx_state
+          ix <- return $ _polNumIdGlobals final_script + length (_ptcIdOps txn)
 
-          put $ cx_state {
+          S.put $ (cx_state {
             _ptcTypes = types',
-            _ptcIdVars = M.insert var $ PSIdVar ix,
-            _ptcsTxnSoFar = txn {
+            _ptcIdVars = M.insert var (PSIdVar ix) $ _ptcIdVars cx_state,
+            _ptcTxnSoFar = txn {
               _ptcIdOps = _ptcIdOps txn ++ [PSOwnerOfOp res_var]
             }
-          }
+          })
 
         ArithVar v ->
           case (M.lookup v $ _ptcTypes cx_state) of
             Just FractionType -> do
-              (Just v) <- return $ M.lookup v $ _ptcFracVars cx_state
+              ix <- return $ _polNumFracGlobals final_script + length (_ptcFracOps txn)
+              v <- return $ fromJust $ M.lookup v $ _ptcFracVars cx_state
 
-              put $ cx_state {
+              S.put $ cx_state {
                 _ptcTypes = types',
-                _ptcFracVars = M.insert var $ PSFracVar ix,
-                _ptcsTxnSoFar = txn {
+                _ptcFracVars = M.insert var (PSFracVar ix) $ _ptcFracVars cx_state,
+                _ptcTxnSoFar = txn {
                   _ptcFracOps = _ptcFracOps txn ++ [PSFracVarOp v]
                 }
               }
 
             Just AmountType -> do
-              (Just v) <- return $ M.lookup v $ _ptcAmtVars cx_state
+              ix <- return $ _polNumAmtGlobals final_script + length (_ptcAmtOps txn)
+              v <- return $ fromJust $ M.lookup v $ _ptcAmtVars cx_state
 
-              put $ cx_state {
+              S.put $ cx_state {
                 _ptcTypes = types',
-                _ptcAmtVars = M.insert var $ PSAmtVar ix,
-                _ptcsTxnSoFar = txn {
+                _ptcAmtVars = M.insert var (PSAmtVar ix) $ _ptcAmtVars cx_state,
+                _ptcTxnSoFar = txn {
                   _ptcAmtOps = _ptcAmtOps txn ++ [PSAmtVarOp v]
                 }
               }
 
             Just IdentityType -> do
-              (Just v) <- return $ M.lookup v $ _ptcIdVars cx_state
+              ix <- return $ _polNumIdGlobals final_script + length (_ptcIdOps txn)
+              v <- return $ fromJust $ M.lookup v $ _ptcIdVars cx_state
 
-              put $ cx_state {
+              S.put $ cx_state {
                 _ptcTypes = types',
-                _ptcIdVars = M.insert var $ PSIdVar ix,
-                _ptcsTxnSoFar = txn {
+                _ptcIdVars = M.insert var (PSIdVar ix) $ _ptcIdVars cx_state,
+                _ptcTxnSoFar = txn {
                   _ptcIdOps = _ptcIdOps txn ++ [PSIdVarOp v]
                 }
               }
 
             Just ResourceTypeType -> do
-              (Just v) <- return $ M.lookup v $ _ptcResTypeVars cx_state
+              ix <- return $ _polNumResTypeGlobals final_script + length (_ptcRtOps txn)
+              v <- return $ fromJust $ M.lookup v $ _ptcResTypeVars cx_state
 
-              put $ cx_state {
+              S.put $ cx_state {
                 _ptcTypes = types',
-                _ptcResTypeVars = M.insert var $ PSResTypeVar ix,
-                _ptcsTxnSoFar = txn {
+                _ptcResTypeVars = M.insert var (PSResTypeVar ix) $ _ptcResTypeVars cx_state,
+                _ptcTxnSoFar = txn {
                   _ptcRtOps = _ptcRtOps txn ++ [PSResTypeVarOp v]
                 }
               }
             _ -> undefined
 
-          (Just res_var) <- return $ M.lookup res $ _ptcResVars cx_state
-          let ix = _polNumIdGlobals cx_state ++ length (_ptcIdOps txn)
+          -- (Just res_var) <- return $ M.lookup res $ _ptcResVars cx_state
+          -- ix <- return $ _polNumIdGlobals final_script + length (_ptcIdOps txn)
 
-          put $ cx_state {
-            _ptcTypes = types',
-            _ptcIdVars = M.insert var $ PSIdVar ix,
-            _ptcsTxnSoFar = txn {
-              _ptcIdOps = _ptcIdOps txn ++ [PSOwnerOfOp res_var]
-            }
-          }
+          -- S.put $ cx_state {
+          --   _ptcTypes = types',
+          --   _ptcIdVars = M.insert var (PSIdVar ix) $ -- cx_state,
+          --   _ptcTxnSoFar = txn {
+          --     _ptcIdOps = _ptcIdOps txn ++ [PSOwnerOfOp res_var]
+          --   }
+          -- }
 
-    convertStmt (AssertStmt bexp) = do
-      bvar <- convertBexpr bexp
-      cx_state@(PolicyTxnConversionState { _ptcTxnSoFar = txn }) <- get
+    convertStmt stmt@(AssertStmt bexp) = do
+      bvar <- {-trace (show ctx) $-} {-trace (show stmt) $-} convertBexpr bexp
+      cx_state@(PolicyTxnConversionState { _ptcTxnSoFar = txn }) <- S.get
 
-      put $ cx_state {
-        _ptcsTxnSoFar = txn {
+      S.put $ cx_state {
+        _ptcTxnSoFar = txn {
           _ptcAssertions = _ptcAssertions txn ++ [bvar]
         }
       }
 
     convertBexpr TrueExpr = do
-      cx_state@(PolicyTxnConversionState { _ptcTxnSoFar = txn }) <- get
-      let ret = PSBoolVar $ length $ _ptcBoolOps txn
+      cx_state@(PolicyTxnConversionState { _ptcTxnSoFar = txn }) <- S.get
+      ret <- return $ PSBoolVar $ length $ _ptcBoolOps txn
 
-      put $ cx_state {
-        _ptcsTxnSoFar = txn {
+      S.put $ cx_state {
+        _ptcTxnSoFar = txn {
           _ptcBoolOps = _ptcBoolOps txn ++ [PSBoolConstOp True]
         }
       }
       return ret
 
     convertBexpr FalseExpr = do
-      cx_state@(PolicyTxnConversionState { _ptcTxnSoFar = txn }) <- get
-      let ret = PSBoolVar $ length $ _ptcBoolOps txn
+      cx_state@(PolicyTxnConversionState { _ptcTxnSoFar = txn }) <- S.get
+      ret <- return $ PSBoolVar $ length $ _ptcBoolOps txn
 
-      put $ cx_state {
-        _ptcsTxnSoFar = txn {
+      S.put $ cx_state {
+        _ptcTxnSoFar = txn {
           _ptcBoolOps = _ptcBoolOps txn ++ [PSBoolConstOp False]
         }
       }
@@ -1329,11 +1358,11 @@ convertPolfToScript (PolicyFile { _polfBats = bats
 
     convertBexpr (NotExpr be) = do
       bvar <- convertBexpr be
-      cx_state@(PolicyTxnConversionState { _ptcTxnSoFar = txn }) <- get
-      let ret = PSBoolVar $ length $ _ptcBoolOps txn
+      cx_state@(PolicyTxnConversionState { _ptcTxnSoFar = txn }) <- S.get
+      ret <- return $ PSBoolVar $ length $ _ptcBoolOps txn
 
-      put $ cx_state {
-        _ptcsTxnSoFar = txn {
+      S.put $ cx_state {
+        _ptcTxnSoFar = txn {
           _ptcBoolOps = _ptcBoolOps txn ++ [PSNot bvar]
         }
       }
@@ -1342,11 +1371,11 @@ convertPolfToScript (PolicyFile { _polfBats = bats
     convertBexpr (AndExpr l r) = do
       lvar <- convertBexpr l
       rvar <- convertBexpr r
-      cx_state@(PolicyTxnConversionState { _ptcTxnSoFar = txn }) <- get
-      let ret = PSBoolVar $ length $ _ptcBoolOps txn
+      cx_state@(PolicyTxnConversionState { _ptcTxnSoFar = txn }) <- S.get
+      ret <- return $ PSBoolVar $ length $ _ptcBoolOps txn
 
-      put $ cx_state {
-        _ptcsTxnSoFar = txn {
+      S.put $ cx_state {
+        _ptcTxnSoFar = txn {
           _ptcBoolOps = _ptcBoolOps txn ++ [PSAnd lvar rvar]
         }
       }
@@ -1355,148 +1384,156 @@ convertPolfToScript (PolicyFile { _polfBats = bats
     convertBexpr (OrExpr l r) = do
       lvar <- convertBexpr l
       rvar <- convertBexpr r
-      cx_state@(PolicyTxnConversionState { _ptcTxnSoFar = txn }) <- get
-      let ret = PSBoolVar $ length $ _ptcBoolOps txn
+      cx_state@(PolicyTxnConversionState { _ptcTxnSoFar = txn }) <- S.get
+      ret <- return $ PSBoolVar $ length $ _ptcBoolOps txn
 
-      put $ cx_state {
-        _ptcsTxnSoFar = txn {
+      S.put $ cx_state {
+        _ptcTxnSoFar = txn {
           _ptcBoolOps = _ptcBoolOps txn ++ [PSOr lvar rvar]
         }
       }
       return ret
 
-    convertBexpr (OrExpr l r) = do
-      lvar <- convertBexpr l
-      rvar <- convertBexpr r
-      cx_state@(PolicyTxnConversionState { _ptcTxnSoFar = txn }) <- get
-      let ret = PSBoolVar $ length $ _ptcBoolOps txn
-
-      put $ cx_state {
-        _ptcsTxnSoFar = txn {
-          _ptcBoolOps = _ptcBoolOps txn ++ [PSOr lvar rvar]
-        }
-      }
-      return ret
-
-    convertBexpr (GeExpr l r) = do
-      cx_state@(PolicyTxnConversionState { _ptcTxnSoFar = txn }) <- get
-      let (ArithVar lv) = l
-      let (ArithVar rv) = r
+    convertBexpr be@(GeExpr l r) = {-trace (show be) $-} do
+      cx_state@(PolicyTxnConversionState { _ptcTxnSoFar = txn }) <- S.get
+      let (ArithVar lv) = {-trace (show l) $-} l
+      let (ArithVar rv) = {-trace (show r) $-} r
       let ret = PSBoolVar $ length $ _ptcBoolOps txn
 
       case (M.lookup lv $ _ptcTypes cx_state, M.lookup rv $ _ptcTypes cx_state) of
-        (Just FractionType,Just FractionType) -> do
-          (Just lv) <- return $ M.lookup lv $ _ptcFracVars cx_state
-          (Just rv) <- return $ M.lookup rv $ _ptcFracVars cx_state
+        tps@(Just FractionType,Just FractionType) -> {-trace (show tps) $-} do
+          lv <- return $ fromJust $ {-(\x -> trace (show (lv,x)) x) $-} M.lookup lv $ _ptcFracVars cx_state
+          rv <- return $ fromJust $ {-(\x -> trace (show (rv,x)) x) $-} M.lookup rv $ _ptcFracVars cx_state
 
-          put $ cx_state {
-            _ptcsTxnSoFar = txn {
-              _ptcBoolOps = _ptcBoolOps txn ++ [PSFracGe lvar rvar]
+          S.put $ cx_state {
+            _ptcTxnSoFar = txn {
+              _ptcBoolOps = _ptcBoolOps txn ++ [PSFracGe lv rv]
             }
           }
-        (Just AmountType,Just AmountType) -> do
-          (Just lv) <- return $ M.lookup lv $ _ptcAmtVars cx_state
-          (Just rv) <- return $ M.lookup rv $ _ptcAmtVars cx_state
+        tps@(Just AmountType,Just AmountType) -> {-trace (show tps) $-} do
+          lv <- return $ fromJust $ {-(\x -> trace (show (lv,x)) x) $-} M.lookup lv $ _ptcAmtVars cx_state
+          rv <- return $ fromJust $ {-(\x -> trace (show (rv,x)) x) $-} M.lookup rv $ _ptcAmtVars cx_state
 
-          put $ cx_state {
-            _ptcsTxnSoFar = txn {
-              _ptcBoolOps = _ptcBoolOps txn ++ [PSAmtGe lvar rvar]
+          S.put $ cx_state {
+            _ptcTxnSoFar = txn {
+              _ptcBoolOps = _ptcBoolOps txn ++ [PSAmtGe lv rv]
             }
           }
-        _ -> undefined
+        tps@(Just AmountType,Just FractionType) -> {-trace (show tps) $-} do
+          lv <- return $ fromJust $ {-(\x -> trace (show (lv,x)) x) $-} M.lookup lv $ _ptcAmtVars cx_state
+          rv <- return $ fromJust $ {-(\x -> trace (show (rv,x)) x) $-} M.lookup rv $ _ptcFracVars cx_state
+
+          S.put $ cx_state {
+            _ptcTxnSoFar = txn {
+              _ptcBoolOps = _ptcBoolOps txn ++ [PSAmtFracGe lv rv]
+            }
+          }
+        tps@(Just FractionType,Just AmountType) -> {-trace (show tps) $-} do
+          lv <- return $ fromJust $ {-(\x -> trace (show (lv,x)) x) $-} M.lookup lv $ _ptcFracVars cx_state
+          rv <- return $ fromJust $ {-(\x -> trace (show (rv,x)) x) $-} M.lookup rv $ _ptcAmtVars cx_state
+
+          S.put $ cx_state {
+            _ptcTxnSoFar = txn {
+              _ptcBoolOps = _ptcBoolOps txn ++ [PSFracAmtGe lv rv]
+            }
+          }
+        _ -> {-trace (show be)-} undefined
       return ret
 
     convertBexpr (EqExpr l r) = do
-      cx_state@(PolicyTxnConversionState { _ptcTxnSoFar = txn }) <- get
+      cx_state@(PolicyTxnConversionState { _ptcTxnSoFar = txn }) <- S.get
       let (ArithVar lv) = l
       let (ArithVar rv) = r
       let ret = PSBoolVar $ length $ _ptcBoolOps txn
 
       case (M.lookup lv $ _ptcTypes cx_state, M.lookup rv $ _ptcTypes cx_state) of
         (Just FractionType,Just FractionType) -> do
-          (Just lvar) <- return $ M.lookup lv $ _ptcFracVars cx_state
-          (Just rvar) <- return $ M.lookup rv $ _ptcFracVars cx_state
+          lvar <- return $ fromJust $ M.lookup lv $ _ptcFracVars cx_state
+          rvar <- return $ fromJust $ M.lookup rv $ _ptcFracVars cx_state
 
-          put $ cx_state {
-            _ptcsTxnSoFar = txn {
+          S.put $ cx_state {
+            _ptcTxnSoFar = txn {
               _ptcBoolOps = _ptcBoolOps txn ++ [PSFracEq lvar rvar]
             }
           }
         (Just AmountType,Just AmountType) -> do
-          (Just lvar) <- return $ M.lookup lv $ _ptcAmtVars cx_state
-          (Just rvar) <- return $ M.lookup rv $ _ptcAmtVars cx_state
+          lvar <- return $ fromJust $ M.lookup lv $ _ptcAmtVars cx_state
+          rvar <- return $ fromJust $ M.lookup rv $ _ptcAmtVars cx_state
 
-          put $ cx_state {
-            _ptcsTxnSoFar = txn {
+          S.put $ cx_state {
+            _ptcTxnSoFar = txn {
               _ptcBoolOps = _ptcBoolOps txn ++ [PSAmtEq lvar rvar]
             }
           }
         (Just ResourceTypeType,Just ResourceTypeType) -> do
-          (Just lvar) <- return $ M.lookup lv $ _ptcResTypeVars cx_state
-          (Just rvar) <- return $ M.lookup rv $ _ptcResTypeVars cx_state
+          lvar <- return $ fromJust $ M.lookup lv $ _ptcResTypeVars cx_state
+          rvar <- return $ fromJust $ M.lookup rv $ _ptcResTypeVars cx_state
 
-          put $ cx_state {
-            _ptcsTxnSoFar = txn {
+          S.put $ cx_state {
+            _ptcTxnSoFar = txn {
               _ptcBoolOps = _ptcBoolOps txn ++ [PSResTypeEq lvar rvar]
             }
           }
         (Just IdentityType,Just IdentityType) -> do
-          (Just lvar) <- return $ M.lookup lv $ _ptcIdVars cx_state
-          (Just rvar) <- return $ M.lookup rv $ _ptcIdVars cx_state
+          lvar <- return $ fromJust $ M.lookup lv $ _ptcIdVars cx_state
+          rvar <- return $ fromJust $ M.lookup rv $ _ptcIdVars cx_state
 
-          put $ cx_state {
-            _ptcsTxnSoFar = txn {
+          S.put $ cx_state {
+            _ptcTxnSoFar = txn {
               _ptcBoolOps = _ptcBoolOps txn ++ [PSIdEq lvar rvar]
             }
           }
         _ -> undefined
       return ret
 
-    convertBexpr (GtExpr _) = undefined
-    convertBexpr (LtExpr _) = undefined
-    convertBexpr (LeExpr _) = undefined
+    convertBexpr (GtExpr _ _) = undefined
+    convertBexpr (LtExpr _ _) = undefined
+    convertBexpr (LeExpr _ _) = undefined
 
 pprintPolicyScript ps =
-  (PP.text "Policy" PP.<+>) $ PP.braces $ PP.nest 4 $ PP.vcat $ map (PP.<+> PP.comma)
+  (PP.text "Policy" PP.<+>) $ ppBraces $ PP.nest 4 $ PP.vcat $ map (PP.<+> PP.comma)
     [ PP.text "num_id_globals:" PP.<+> PP.int (_polNumIdGlobals ps)
     , PP.text "num_rt_globals:" PP.<+> PP.int (_polNumResTypeGlobals ps)
     , PP.text "num_amt_globals:" PP.<+> PP.int (_polNumAmtGlobals ps)
     , PP.text "num_frac_globals:" PP.<+> PP.int (_polNumFracGlobals ps)
     , PP.text "init_check:" PP.<+> pprintPolicyTxnCheck (_polInitCheck ps)
     , (PP.text "txn_choices:" PP.<+> PP.text "vec!" PP.<+>)
-      $ PP.brackets $ PP.nest 4 $ PP.vcat $ map (PP.<+> PP.comma)
+      $ ppBrackets $ PP.nest 4 $ PP.vcat $ map (PP.<+> PP.comma)
       $ map pprintPolicyTxnCheck (_polTxns ps)
     ]
 
+ppBrackets = (\x -> PP.lbrack PP.$$ x PP.$$ PP.rbrack)
+ppBraces = (\x -> PP.lbrace PP.$$ x PP.$$ PP.rbrace)
+
 pprintPolicyTxnCheck ptc =
-  (PP.text "TxnCheck" PP.<+>) $ PP.braces $ PP.nest 4 $ PP.vcat $ map (PP.<+> PP.comma)
+  (PP.text "TxnCheck" PP.<+>) $ ppBraces $ PP.nest 4 $ PP.vcat $ map (PP.<+> PP.comma)
     [ PP.text "num_in_params:" PP.<+> PP.int (_ptcNumInParams ptc)
     , PP.text "num_out_params:" PP.<+> PP.int (_ptcNumOutParams ptc)
 
     , (PP.text "id_ops:" PP.<+> PP.text "vec!" PP.<+>)
-      $ PP.brackets $ PP.nest 4 $ PP.vcat $ map (PP.<+> PP.comma)
+      $ ppBrackets $ PP.nest 4 $ PP.vcat $ map (PP.<+> PP.comma)
       $ map pprintIdOp $ _ptcIdOps ptc
     , (PP.text "rt_ops:" PP.<+> PP.text "vec!" PP.<+>)
-      $ PP.brackets $ PP.nest 4 $ PP.vcat $ map (PP.<+> PP.comma)
-      $ map pprintRtOp $ _ptcRtOps ptc
+      $ ppBrackets $ PP.nest 4 $ PP.vcat $ map (PP.<+> PP.comma)
+      $ map pprintResTypeOp $ _ptcRtOps ptc
     , (PP.text "fraction_ops:" PP.<+> PP.text "vec!" PP.<+>)
-      $ PP.brackets $ PP.nest 4 $ PP.vcat $ map (PP.<+> PP.comma)
+      $ ppBrackets $ PP.nest 4 $ PP.vcat $ map (PP.<+> PP.comma)
       $ map pprintFracOp $ _ptcFracOps ptc
     , (PP.text "amount_ops:" PP.<+> PP.text "vec!" PP.<+>)
-      $ PP.brackets $ PP.nest 4 $ PP.vcat $ map (PP.<+> PP.comma)
+      $ ppBrackets $ PP.nest 4 $ PP.vcat $ map (PP.<+> PP.comma)
       $ map pprintAmtOp $ _ptcAmtOps ptc
     , (PP.text "bool_ops:" PP.<+> PP.text "vec!" PP.<+>)
-      $ PP.brackets $ PP.nest 4 $ PP.vcat $ map (PP.<+> PP.comma)
+      $ ppBrackets $ PP.nest 4 $ PP.vcat $ map (PP.<+> PP.comma)
       $ map pprintBoolOp $ _ptcBoolOps ptc
     , (PP.text "assertions:" PP.<+> PP.text "vec!" PP.<+>)
-      $ PP.brackets $ PP.nest 4 $ PP.vcat $ map (PP.<+> PP.comma)
+      $ ppBrackets $ PP.nest 4 $ PP.vcat $ map (PP.<+> PP.comma)
       $ map pprintBoolVar $ _ptcAssertions ptc
     , (PP.text "required_signatures:" PP.<+> PP.text "vec!" PP.<+>)
-      $ PP.brackets $ PP.nest 4 $ PP.vcat $ map (PP.<+> PP.comma)
+      $ ppBrackets $ PP.nest 4 $ PP.vcat $ map (PP.<+> PP.comma)
       $ map pprintIdVar $ _ptcSignatures ptc
 
     , (PP.text "txn_template:" PP.<+> PP.text "vec!" PP.<+>)
-      $ PP.brackets $ PP.nest 4 $ PP.vcat $ map (PP.<+> PP.comma)
+      $ ppBrackets $ PP.nest 4 $ PP.vcat $ map (PP.<+> PP.comma)
       $ map pprintTxnOp $ _ptcTxnTemplate ptc
     ]
 
@@ -1521,7 +1558,7 @@ pprintBoolOp (PSFracEq l r)
   = PP.text "BoolOp::FracEq" PP.<> PP.parens (pprintFracVar l PP.<> PP.comma PP.<+> pprintFracVar r)
 pprintBoolOp (PSResTypeEq l r)
   = PP.text "BoolOp::ResourceTypeEq" PP.<> PP.parens (pprintResTypeVar l PP.<> PP.comma PP.<+> pprintResTypeVar r)
-pprintBoolOp (PSNotEq bv)
+pprintBoolOp (PSNot bv)
   = PP.text "BoolOp::Not" PP.<> PP.parens (pprintBoolVar bv)
 pprintBoolOp (PSAnd l r)
   = PP.text "BoolOp::And" PP.<> PP.parens (pprintBoolVar l PP.<> PP.comma PP.<+> pprintBoolVar r)
@@ -1531,8 +1568,12 @@ pprintBoolOp (PSAmtGe l r)
   = PP.text "BoolOp::AmtGe" PP.<> PP.parens (pprintAmtVar l PP.<> PP.comma PP.<+> pprintAmtVar r)
 pprintBoolOp (PSFracGe l r)
   = PP.text "BoolOp::FracGe" PP.<> PP.parens (pprintFracVar l PP.<> PP.comma PP.<+> pprintFracVar r)
+pprintBoolOp (PSFracAmtGe l r)
+  = PP.text "BoolOp::FracAmtGe" PP.<> PP.parens (pprintFracVar l PP.<> PP.comma PP.<+> pprintAmtVar r)
+pprintBoolOp (PSAmtFracGe l r)
+  = PP.text "BoolOp::AmtFracGe" PP.<> PP.parens (pprintAmtVar l PP.<> PP.comma PP.<+> pprintFracVar r)
 
-pprintResTypeOp (PSTypeOf res)
+pprintResTypeOp (PSTypeOfOp res)
   = PP.text "ResourceTypeOp::TypeOfResource" PP.<> PP.parens (pprintResVar res)
 pprintResTypeOp (PSResTypeVarOp rt_var)
   = PP.text "ResourceTypeOp::Var" PP.<> PP.parens (pprintResTypeVar rt_var)
@@ -1547,7 +1588,7 @@ pprintFracOp (PSFracVarOp fv)
 pprintFracOp (PSFracConstOp fc)
   = (PP.text "FractionOp::Const" PP.<>)
     $ PP.parens $ (PP.text "Fraction::new" PP.<>) $ PP.parens
-    $ PP.int (numerator fc) PP.<> PP.comma PP.<+> PP.int (denominator fc)
+    $ PP.int (fromInteger $ numerator fc) PP.<> PP.comma PP.<+> PP.int (fromInteger $ denominator fc)
 pprintFracOp (PSFracPlusOp l r)
   = (PP.text "FractionOp::Plus" PP.<>)
     $ PP.parens $ pprintFracVar l PP.<> PP.comma PP.<+> pprintFracVar r
@@ -1559,7 +1600,7 @@ pprintFracOp (PSFracTimesAmtOp l r)
     $ PP.parens $ pprintFracVar l PP.<> PP.comma PP.<+> pprintAmtVar r
 pprintFracOp (PSFracAmtTimesOp l r)
   = (PP.text "FractionOp::AmtTimes" PP.<>)
-    $ PP.parens $ pprintFracVar l PP.<> PP.comma PP.<+> pprintFracVar r
+    $ PP.parens $ pprintAmtVar l PP.<> PP.comma PP.<+> pprintFracVar r
 
 pprintAmtOp (PSAmtVarOp av)
   = PP.text "AmountOp::Var" PP.<> PP.parens (pprintAmtVar av)
@@ -1618,6 +1659,7 @@ main = do
               , ("Split inout resources", over (polfTxns.traverse) splitInouts)
               , ("Make a var for each subexpression", over (polfTxns.traverse) explicitSubExprsTxnDecl)
               , ("Expression preconditions", over (polfTxns.traverse.txnBody) addExprPreconds)
+              , ("Make a var for each subexpression", over (polfTxns.traverse) explicitSubExprsTxnDecl)
               , ("typechecking", typecheck)
               , ("Reformat into locals -> asserts -> ops", over (polfTxns.traverse.txnBody) sortTxnStmts)
               , ("Remove redundant locals/asserts", over (polfTxns.traverse.txnBody) deleteRedundantStmts)
