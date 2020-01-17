@@ -128,7 +128,7 @@ impl<Value: AsRef<[u8]>> SmtMap256<Value> {
   pub fn set(&mut self, key: &Key, value: Option<Value>) -> Option<Value> {
     // Update the hash of the leaf.
     let mut index = TreeNodeIndex::leaf(*key);
-    let mut hash: Hash256 = value.as_ref().map(|v| hash_256(v)).unwrap_or(ZERO_DIGEST);
+    let mut hash: Hash256 = value.as_ref().map(hash_256).unwrap_or(ZERO_DIGEST);
     self.update_hash(&index, &hash);
 
     // Update the hashes of the inner nodes along the path.
@@ -203,17 +203,15 @@ pub fn check_merkle_proof<Value: AsRef<[u8]>>(merkle_root: &Hash256,
                                               value: Option<&Value>,
                                               proof: &MerkleProof)
                                               -> bool {
-  let mut hash = value.map_or(ZERO_DIGEST, |v| hash_256(v));
+  let mut hash = value.map_or(ZERO_DIGEST, hash_256);
   let mut iter = proof.hashes.iter();
   for i in 0..256 {
     let sibling_hash = if !get_bit(&proof.bitmap, i) {
       &ZERO_DIGEST // &(*DEFAULT_HASHES)[i]
+    } else if let Some(h) = iter.next() {
+      h
     } else {
-      if let Some(h) = iter.next() {
-        h
-      } else {
-        return false;
-      }
+      return false;
     };
 
     let depth = 256 - i;
