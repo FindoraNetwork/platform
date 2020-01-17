@@ -12,7 +12,6 @@ use ledger::data_model::compute_signature;
 use ledger::data_model::errors::PlatformError;
 use ledger::data_model::*;
 use ledger::store::*;
-use percent_encoding::{utf8_percent_encode, AsciiSet, CONTROLS};
 #[cfg(test)]
 use rand_core::SeedableRng;
 use reqwest;
@@ -689,24 +688,15 @@ impl InterpretAccounts<PlatformError> for LedgerStandaloneAccounts {
                                 memos: vec![] };
 
         {
-          let serialize = serde_json::to_string(&txn).unwrap();
-          // Set of invalid URI characters that may appear in a JSON transaction
-          // TODO: (Noah) make sure set is complete
-          const FRAGMENT: &AsciiSet = &CONTROLS.add(b' ')
-                                               .add(b'"')
-                                               .add(b'`')
-                                               .add(b'{')
-                                               .add(b'/')
-                                               .add(b'}');
-          let uri_string = utf8_percent_encode(&serialize, FRAGMENT).to_string();
+          // let serialize = serde_json::to_string(&txn).unwrap();
 
           let host = "localhost";
           let port = format!("{}", self.submit_port);
-          let query = format!("http://{}:{}/submit_transaction/{}", host, port, uri_string);
+          let query = format!("http://{}:{}/submit_transaction", host, port);
           dbg!(&query);
           let res = self.client
                         .post(&query)
-                        .body("")
+                        .json(&txn)
                         .send()
                         .unwrap()
                         .error_for_status();
@@ -777,24 +767,15 @@ impl InterpretAccounts<PlatformError> for LedgerStandaloneAccounts {
         tx.operations.push(issue_op);
 
         let res = {
-          let serialize = serde_json::to_string(&tx).unwrap();
-          // Set of invalid URI characters that may appear in a JSON transaction
-          // TODO: (Noah) make sure set is complete
-          const FRAGMENT: &AsciiSet = &CONTROLS.add(b' ')
-                                               .add(b'"')
-                                               .add(b'`')
-                                               .add(b'{')
-                                               .add(b'/')
-                                               .add(b'}');
-          let uri_string = utf8_percent_encode(&serialize, FRAGMENT).to_string();
+          // let serialize = serde_json::to_string(&tx).unwrap();
 
           let host = "localhost";
           let port = format!("{}", self.submit_port);
-          let query = format!("http://{}:{}/submit_transaction/{}", host, port, uri_string);
+          let query = format!("http://{}:{}/submit_transaction", host, port);
           dbg!(&query);
           self.client
               .post(&query)
-              .body("")
+              .json(&tx)
               .send()
               .unwrap()
               .error_for_status()
@@ -913,24 +894,15 @@ impl InterpretAccounts<PlatformError> for LedgerStandaloneAccounts {
                                 memos: vec![] };
 
         let res = {
-          let serialize = serde_json::to_string(&txn).unwrap();
-          // Set of invalid URI characters that may appear in a JSON transaction
-          // TODO: (Noah) make sure set is complete
-          const FRAGMENT: &AsciiSet = &CONTROLS.add(b' ')
-                                               .add(b'"')
-                                               .add(b'`')
-                                               .add(b'{')
-                                               .add(b'/')
-                                               .add(b'}');
-          let uri_string = utf8_percent_encode(&serialize, FRAGMENT).to_string();
+          // let serialize = serde_json::to_string(&txn).unwrap();
 
           let host = "localhost";
           let port = format!("{}", self.submit_port);
-          let query = format!("http://{}:{}/submit_transaction/{}", host, port, uri_string);
+          let query = format!("http://{}:{}/submit_transaction", host, port);
           dbg!(&query);
           self.client
               .post(&query)
-              .body("")
+              .json(&txn)
               .send()
               .unwrap()
               .error_for_status()

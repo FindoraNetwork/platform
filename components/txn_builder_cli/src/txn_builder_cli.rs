@@ -396,7 +396,7 @@ fn process_create_cmd(create_matches: &clap::ArgMatches,
 }
 
 fn split_arg(string: &str) -> Vec<&str> {
-  string.split(";").collect::<Vec<&str>>()
+  string.split(';').collect::<Vec<&str>>()
 }
 
 fn get_txo_refs(sids_arg: &str) -> std::result::Result<Vec<TxoRef>, std::io::Error> {
@@ -567,7 +567,7 @@ fn process_add_cmd(add_matches: &clap::ArgMatches,
         transfer_from.push((txo_refs_iter.next().unwrap(),
                             blind_asset_records_iter.next().unwrap(),
                             *input_amounts_iter.next().unwrap()));
-        count = count - 1;
+        count -= 1;
       }
 
       // Compose transfer_to for add_basic_transfer_asset
@@ -595,7 +595,7 @@ fn process_add_cmd(add_matches: &clap::ArgMatches,
       let mut addresses_iter = addresses.iter();
       while count > 0 {
         transfer_to.push((*output_amounts_iter.next().unwrap(), addresses_iter.next().unwrap()));
-        count = count - 1;
+        count -= 1;
       }
 
       // Transfer asset
