@@ -689,7 +689,10 @@ mod tests {
 
   #[test]
   fn test_rename_existing_path() {
-    let as_path = Path::new("1000");
+    let as_path = Path::new("10");
+    if as_path.exists() {
+      fs::remove_file(as_path).unwrap();
+    }
     assert_eq!(rename_existing_path(as_path).map_err(|e| e.kind()),
                Err(ErrorKind::NotFound));
   }
