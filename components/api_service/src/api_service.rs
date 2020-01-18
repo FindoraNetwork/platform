@@ -4,10 +4,9 @@ extern crate actix_web;
 extern crate ledger;
 extern crate serde_json;
 
-use actix_web::{dev, error, web, App, HttpServer};
+use actix_web::{dev, error, web, App, HttpResponse, HttpServer};
 use ledger::data_model::*;
 use ledger::store::{ArchiveAccess, LedgerAccess, LedgerUpdate, TxnEffect};
-use percent_encoding::percent_decode_str;
 use rand_core::{CryptoRng, RngCore};
 use std::io;
 use std::marker::{Send, Sync};
@@ -156,6 +155,50 @@ fn query_global_state<AA>(data: web::Data<Arc<RwLock<AA>>>,
   Ok(result)
 }
 
+fn query_block_log<AA>(data: web::Data<Arc<RwLock<AA>>>) -> impl actix_web::Responder
+  where AA: ArchiveAccess
+{
+  let reader = data.read().unwrap();
+  let mut res = String::new();
+  res.push_str("<html><head><META HTTP-EQUIV=\"Pragma\" CONTENT=\"no-cache\"></head><body><table border=\"1\">");
+  res.push_str("<tr>");
+  res.push_str("<th>Block ID</th>");
+  res.push_str("<th>Transactions</th>");
+  res.push_str("</tr>");
+  for ix in 0..reader.get_block_count() {
+    let block = reader.get_block(BlockSID(ix)).unwrap();
+    res.push_str("<tr>");
+
+    res.push_str(&format!("<td>{}</td>", ix));
+
+    res.push_str("<td><table border=\"1\">");
+    res.push_str("<tr>");
+    res.push_str("<th>TXN ID</th>");
+    res.push_str("<th>merkle id</th>");
+    res.push_str("<th>Operations</th>");
+    res.push_str("</tr>");
+
+    for txn in block.iter() {
+      res.push_str("<tr>");
+      res.push_str(&format!("<td>{}</td>", txn.tx_id.0));
+      res.push_str(&format!("<td>{}</td>", txn.merkle_id));
+      res.push_str("<td>");
+      res.push_str("<table border=\"1\">");
+      for op in txn.txn.operations.iter() {
+        res.push_str(&format!("<tr><td><pre>{}</pre></td></tr>",
+                              serde_json::to_string_pretty(&op).unwrap()));
+      }
+      res.push_str("</table></td>");
+      res.push_str("</tr>");
+    }
+
+    res.push_str("</table></td></tr>");
+  }
+  res.push_str("</table></body></html>");
+  HttpResponse::Ok().content_type("text/html; charset=utf-8")
+                    .body(res)
+}
+
 fn query_proof<AA>(data: web::Data<Arc<RwLock<AA>>>,
                    info: web::Path<String>)
                    -> actix_web::Result<String>
@@ -240,15 +283,14 @@ fn query_utxo_partial_map<AA>(data: web::Data<Arc<RwLock<AA>>>,
 }
 
 fn submit_transaction<RNG, U>(data: web::Data<Arc<RwLock<U>>>,
-                              info: web::Path<String>)
+                              body: web::Json<Transaction>)
                               -> Result<String, actix_web::error::Error>
   where RNG: RngCore + CryptoRng,
         U: LedgerUpdate<RNG>
 {
   // TODO: Handle submission to Tendermint layer
   let mut ledger = data.write().unwrap();
-  let uri_string = percent_decode_str(&*info).decode_utf8().unwrap();
-  let tx = serde_json::from_str(&uri_string).map_err(actix_web::error::ErrorBadRequest)?;
+  let tx = body.into_inner(); //serde_json::from_str(&uri_string).map_err(actix_web::error::ErrorBadRequest)?;
 
   let txn_effect =
     TxnEffect::compute_effect(ledger.get_prng(), tx).map_err(actix_web::error::ErrorBadRequest)?;
@@ -329,6 +371,7 @@ impl<T, B> Route for App<T, B>
     self.route("/txn_sid/{sid}", web::get().to(query_txn::<AA>))
         .route("/global_state", web::get().to(query_global_state::<AA>))
         .route("/proof/{sid}", web::get().to(query_proof::<AA>))
+        .route("/block_log", web::get().to(query_block_log::<AA>))
         .route("/utxo_map", web::get().to(query_utxo_map::<AA>))
         .route("/utxo_map_checksum",
                web::get().to(query_utxo_map_checksum::<AA>))
@@ -341,7 +384,7 @@ impl<T, B> Route for App<T, B>
                             U: 'static + LedgerUpdate<RNG> + Sync + Send>(
     self)
     -> Self {
-    self.route("/submit_transaction/{tx}",
+    self.route("/submit_transaction",
                web::post().to(submit_transaction::<RNG, U>))
   }
 }
@@ -379,7 +422,6 @@ mod tests {
   use ledger::data_model::{Operation, Transaction};
   use ledger::store::helpers::*;
   use ledger::store::{LedgerState, LedgerUpdate};
-  use percent_encoding::{utf8_percent_encode, AsciiSet, CONTROLS};
   use rand_chacha::ChaChaRng;
   use rand_core::SeedableRng;
 
@@ -443,24 +485,16 @@ mod tests {
 
     let mut app =
       test::init_service(App::new().data(Arc::new(RwLock::new(state)))
-                                   .route("/submit_transaction/{tx}",
+                                   .route("/submit_transaction",
                                           web::post().to(submit_transaction::<ChaChaRng,
                                                                             LedgerState>))
                                    .route("/asset_token/{token}",
                                           web::get().to(query_asset::<LedgerState>)));
 
-    let serialize = serde_json::to_string(&tx).unwrap();
-    // Set of invalid URI characters that may appear in a JSON transaction
-    // TODO: (Noah) make sure set is complete
-    const FRAGMENT: &AsciiSet = &CONTROLS.add(b' ')
-                                         .add(b'"')
-                                         .add(b'`')
-                                         .add(b'{')
-                                         .add(b'/')
-                                         .add(b'}');
-    let uri_string = utf8_percent_encode(&serialize, FRAGMENT).to_string();
+    // let serialize = serde_json::to_string(&tx).unwrap();
 
-    let submit_req = test::TestRequest::post().uri(&format!("/submit_transaction/{}", uri_string))
+    let submit_req = test::TestRequest::post().uri("/submit_transaction")
+                                              .set_json(&tx)
                                               .to_request();
 
     let query_req = test::TestRequest::get().uri(&format!("/asset_token/{}",

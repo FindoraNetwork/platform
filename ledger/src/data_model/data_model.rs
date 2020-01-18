@@ -181,6 +181,9 @@ pub struct TxoSID(pub u64);
 #[derive(Clone, Copy, Debug, Default, Deserialize, Eq, Hash, PartialEq, Serialize)]
 pub struct TxnSID(pub usize);
 
+#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, Hash, PartialEq, Serialize)]
+pub struct BlockSID(pub usize);
+
 // An ephemeral index for a transaction (with a different newtype so that
 // it's harder to mix up)
 #[derive(Clone, Copy, Debug, Default, Deserialize, Eq, Hash, PartialEq, Serialize)]
