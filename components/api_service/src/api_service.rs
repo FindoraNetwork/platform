@@ -144,15 +144,28 @@ fn stringer(data: &[u8; 32]) -> String {
   result
 }
 
-fn query_global_state<AA>(data: web::Data<Arc<RwLock<AA>>>,
-                          _info: web::Path<String>)
-                          -> actix_web::Result<String>
+fn query_global_state<AA>(data: web::Data<Arc<RwLock<AA>>>) -> actix_web::Result<String>
   where AA: ArchiveAccess
 {
   let reader = data.read().unwrap();
   let (hash, version) = reader.get_global_block_hash();
   let result = format!("{} {}", stringer(&hash.0), version);
   Ok(result)
+}
+
+fn query_blocks_since<AA>(data: web::Data<Arc<RwLock<AA>>>,
+                          block_id: web::Path<usize>)
+                          -> web::Json<Vec<(usize, Vec<FinalizedTransaction>)>>
+  where AA: ArchiveAccess
+{
+  let reader = data.read().unwrap();
+  let mut ret = Vec::new();
+  for ix in block_id.into_inner()..reader.get_block_count() {
+    let sid = BlockSID(ix);
+    let block = reader.get_block(sid).unwrap();
+    ret.push((sid.0, block.clone()));
+  }
+  web::Json(ret)
 }
 
 fn query_block_log<AA>(data: web::Data<Arc<RwLock<AA>>>) -> impl actix_web::Responder
@@ -372,6 +385,8 @@ impl<T, B> Route for App<T, B>
         .route("/global_state", web::get().to(query_global_state::<AA>))
         .route("/proof/{sid}", web::get().to(query_proof::<AA>))
         .route("/block_log", web::get().to(query_block_log::<AA>))
+        .route("/blocks_since/{block_sid}",
+               web::get().to(query_blocks_since::<AA>))
         .route("/utxo_map", web::get().to(query_utxo_map::<AA>))
         .route("/utxo_map_checksum",
                web::get().to(query_utxo_map_checksum::<AA>))

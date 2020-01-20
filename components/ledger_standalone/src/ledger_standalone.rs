@@ -16,24 +16,7 @@ fn main() {
   dbg!(&base_dir);
   let ledger_state = match base_dir {
     None => LedgerState::test_ledger(),
-    Some(base_dir) => {
-      dbg!(&base_dir);
-      let block_merkle = base_dir.join("block_merkle");
-      let block_merkle = block_merkle.to_str().unwrap();
-      let txn_merkle = base_dir.join("txn_merkle");
-      let txn_merkle = txn_merkle.to_str().unwrap();
-      let txn_log = base_dir.join("txn_log");
-      let txn_log = txn_log.to_str().unwrap();
-      let utxo_map = base_dir.join("utxo_map");
-      let utxo_map = utxo_map.to_str().unwrap();
-
-      // TODO(joe): distinguish between the transaction log not existing
-      // and it being corrupted
-      LedgerState::load_from_log(&block_merkle, &txn_merkle, &txn_log,
-                &utxo_map, None)
-              .or_else(|_| LedgerState::new(&block_merkle, &txn_merkle, &txn_log,
-                &utxo_map, None)).unwrap()
-    }
+    Some(base_dir) => LedgerState::load_or_init(base_dir).unwrap(),
   };
   let prng = ChaChaRng::from_seed([0u8; 32]);
   let state_lock = Arc::new(RwLock::new(ledger_state));
