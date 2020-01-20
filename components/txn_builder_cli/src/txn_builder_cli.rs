@@ -1,4 +1,4 @@
-//#![deny(warnings)]
+#![deny(warnings)]
 use clap::{App, Arg, SubCommand};
 use env_logger::{Env, Target};
 use ledger::data_model::errors::PlatformError;
@@ -416,13 +416,6 @@ fn process_submit_cmd(submit_matches: &clap::ArgMatches, transaction_file_name: 
   // serialize txn
   let txn;
   if let Ok(txn_builder) = load_txn_builder_from_file(&transaction_file_name) {
-    // if let Ok(as_json) = serde_json::to_string(txn_builder.transaction()) {
-    //   txn = as_json;
-    // } else {
-    //   error!("Cannot serialize transaction contained in {}",
-    //          &transaction_file_name);
-    //   return;
-    // }
     txn = txn_builder.transaction().clone();
   } else {
     error!("Cannot deserialize transaction builder file at {}",
@@ -430,27 +423,17 @@ fn process_submit_cmd(submit_matches: &clap::ArgMatches, transaction_file_name: 
     return;
   }
 
-  dbg!(&txn);
   // submit
   let client = reqwest::Client::new();
-  let token_code1 = AssetTypeCode { val: [1; 16] };
-  let token_code_b64 = token_code1.to_base64();
-  let mut res = client.post(&format!("http://{}:{}/{}", &host, &port, "submit_transaction"))
-                      .json(&txn)
-                      .send()
-                      .unwrap();
+  let res = client.post(&format!("http://{}:{}/{}", &host, &port, "submit_transaction"))
+                  .json(&txn)
+                  .send()
+                  .unwrap();
 
-  let mut res = reqwest::get(&format!("http://{}:{}/{}/{}",
-                                      &host, &port, "asset_token", &token_code_b64)).unwrap();
-  res = client.post(&format!("http://{}:{}/{}", &host, &port, "submit_transaction"))
-              .json(&txn)
-              .send()
-              .unwrap();
-
+  // log body
+  println!("{:?}", res);
   println!("Status: {}", res.status());
   println!("Headers:\n{:?}", res.headers());
-  // log body
-  std::io::copy(&mut res, &mut std::io::stdout()).unwrap();
 }
 
 fn process_create_cmd(create_matches: &clap::ArgMatches,
@@ -566,8 +549,7 @@ fn process_add_cmd(add_matches: &clap::ArgMatches,
         }
         info!("{:?}", &key_pair);
         if let Ok(_res) = txn_builder.add_operation_create_asset(&key_pair,
-                                                                 Some(AssetTypeCode { val: [1;
-                                                                                            16] }),
+                                                                 Some(asset_token),
                                                                  allow_updates,
                                                                  traceable,
                                                                  &memo)

@@ -1,8 +1,7 @@
-//#![deny(warnings)]
+#![deny(warnings)]
 use ledger::data_model::{AssetTypeCode, Operation, Transaction};
 use ledger::store::helpers::*;
 // use ledger::store::{ArchiveUpdate, LedgerState, LedgerUpdate};
-use percent_encoding::{utf8_percent_encode, AsciiSet, CONTROLS};
 use rand_chacha::ChaChaRng;
 use rand_core::SeedableRng;
 
@@ -16,18 +15,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
   let asset_body = asset_creation_body(&token_code1, &public_key, true, false, None, None);
   let asset_create = asset_creation_operation(&asset_body, &public_key, &secret_key);
   tx.operations.push(Operation::DefineAsset(asset_create));
-  let cloned = tx.clone();
-  dbg!(&cloned);
 
   // env_logger::init();
-
-  // Set of invalid URI characters that may appear in a JSON transaction
-  const FRAGMENT: &AsciiSet = &CONTROLS.add(b' ')
-                                       .add(b'"')
-                                       .add(b'`')
-                                       .add(b'{')
-                                       .add(b'/')
-                                       .add(b'}');
 
   let client = reqwest::Client::new();
 
