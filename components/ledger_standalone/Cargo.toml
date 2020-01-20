@@ -12,6 +12,7 @@ path = "src/ledger_standalone.rs"
 api_service = { path = "../api_service" }
 api_service_standalone  = { path = "../api_service_standalone" }
 ledger = { path = "../../ledger" }
+env_logger = "0.7.1"
 ledger_app = { path = "../ledger_app" }
 findora = { path = "../../findora" }
 rand_chacha = "0.2.0"

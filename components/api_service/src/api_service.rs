@@ -4,7 +4,7 @@ extern crate actix_web;
 extern crate ledger;
 extern crate serde_json;
 
-use actix_web::{dev, error, web, App, HttpResponse, HttpServer};
+use actix_web::{dev, error, middleware, web, App, HttpResponse, HttpServer};
 use ledger::data_model::*;
 use ledger::store::{ArchiveAccess, LedgerAccess, LedgerUpdate, TxnEffect};
 use rand_core::{CryptoRng, RngCore};
@@ -399,7 +399,8 @@ impl RestfulApiService {
     let web_runtime = actix_rt::System::new("findora API");
 
     HttpServer::new(move || {
-      App::new().data(ledger_access.clone())
+      App::new().wrap(middleware::Logger::default())
+                .data(ledger_access.clone())
                 .set_route::<RNG, LA>(ServiceInterface::LedgerAccess)
                 .set_route::<RNG, LA>(ServiceInterface::ArchiveAccess)
                 .set_route::<RNG, LA>(ServiceInterface::Update)
