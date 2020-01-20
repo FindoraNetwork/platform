@@ -9,9 +9,11 @@ path = "src/ledger_app.rs"
 
 [dependencies]
 actix-web = "1.0"
+hex = "0.3.2"
+cryptohash = { path = "../../libs/cryptohash" }
 ledger = { path = "../../ledger" }
-rand = "0.6"
-rand_chacha = "0.1.1"
+rand_chacha = "0.2.0"
+rand_core = { version = "0.5", default-features = false, features = ["alloc"] }
 serde = "1.0"
 serde_derive = "1.0"
 serde_json = "1.0"

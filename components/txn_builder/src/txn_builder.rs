@@ -7,54 +7,55 @@ extern crate serde_derive;
 
 use ledger::data_model::errors::PlatformError;
 use ledger::data_model::*;
-use rand::SeedableRng;
 use rand_chacha::ChaChaRng;
+use rand_core::SeedableRng;
+use std::cmp::Ordering;
+use std::collections::HashSet;
 use zei::serialization::ZeiFromToBytes;
 use zei::setup::PublicParams;
 use zei::xfr::asset_record::{build_blind_asset_record, open_asset_record};
-use zei::xfr::sig::{XfrKeyPair, XfrSecretKey};
+use zei::xfr::sig::{XfrKeyPair, XfrPublicKey};
 use zei::xfr::structs::{AssetIssuerPubKeys, AssetRecord, BlindAssetRecord, OpenAssetRecord};
 
 pub trait BuildsTransactions {
   fn transaction(&self) -> &Transaction;
   #[allow(clippy::too_many_arguments)]
   fn add_operation_create_asset(&mut self,
-                                pub_key: &IssuerPublicKey,
-                                priv_key: &XfrSecretKey,
+                                key_pair: &XfrKeyPair,
                                 token_code: Option<AssetTypeCode>,
                                 updatable: bool,
                                 traceable: bool,
                                 memo: &str)
-                                -> Result<(), PlatformError>;
+                                -> Result<&mut Self, PlatformError>;
   fn add_operation_issue_asset(&mut self,
-                               pub_key: &IssuerPublicKey,
-                               priv_key: &XfrSecretKey,
+                               key_pair: &XfrKeyPair,
                                token_code: &AssetTypeCode,
                                seq_num: u64,
                                records: &[TxOutput])
-                               -> Result<(), PlatformError>;
+                               -> Result<&mut Self, PlatformError>;
   fn add_operation_transfer_asset(&mut self,
+                                  keys: &XfrKeyPair,
                                   input_sids: Vec<TxoRef>,
-                                  input_key: &XfrKeyPair,
                                   input_records: &[OpenAssetRecord],
                                   output_records: &[AssetRecord])
-                                  -> Result<(), PlatformError>;
+                                  -> Result<&mut Self, PlatformError>;
   fn serialize(&self) -> Result<Vec<u8>, PlatformError>;
   fn serialize_str(&self) -> Result<String, PlatformError>;
 
+  fn add_operation(&mut self, op: Operation) -> &mut Self;
+
   fn add_basic_issue_asset(&mut self,
-                           pub_key: &IssuerPublicKey,
-                           priv_key: &XfrSecretKey,
+                           key_pair: &XfrKeyPair,
                            tracking_keys: &Option<AssetIssuerPubKeys>,
                            token_code: &AssetTypeCode,
                            seq_num: u64,
                            amount: u64)
-                           -> Result<(), PlatformError> {
+                           -> Result<&mut Self, PlatformError> {
     let mut prng = ChaChaRng::from_seed([0u8; 32]);
     let params = PublicParams::new();
-    let ar = AssetRecord::new(amount, token_code.val, pub_key.key)?;
+    let ar = AssetRecord::new(amount, token_code.val, key_pair.get_pk())?;
     let ba = build_blind_asset_record(&mut prng, &params.pc_gens, &ar, true, true, tracking_keys);
-    self.add_operation_issue_asset(pub_key, priv_key, token_code, seq_num, &[TxOutput(ba)])
+    self.add_operation_issue_asset(key_pair, token_code, seq_num, &[TxOutput(ba)])
   }
 
   #[allow(clippy::comparison_chain)]
@@ -62,7 +63,7 @@ pub trait BuildsTransactions {
                               key_pair: &XfrKeyPair,
                               transfer_from: &[(&TxoRef, &BlindAssetRecord, u64)],
                               transfer_to: &[(u64, &AccountAddress)])
-                              -> Result<(), PlatformError> {
+                              -> Result<&mut Self, PlatformError> {
     let input_sids: Vec<TxoRef> = transfer_from.iter()
                                                .map(|(ref txo_sid, _, _)| *(*txo_sid))
                                                .collect();
@@ -95,11 +96,12 @@ pub trait BuildsTransactions {
                  .collect();
     let mut output_ars = output_ars?;
     output_ars.append(&mut partially_consumed_inputs);
-    self.add_operation_transfer_asset(input_sids, &key_pair, &input_oars, &output_ars)
+    self.add_operation_transfer_asset(&key_pair, input_sids, &input_oars, &output_ars)?;
+    Ok(self)
   }
 }
 
-#[derive(Default, Serialize, Deserialize)]
+#[derive(Debug, Default, Serialize, Deserialize)]
 pub struct TransactionBuilder {
   txn: Transaction,
   outputs: u64,
@@ -110,46 +112,58 @@ impl BuildsTransactions for TransactionBuilder {
     &self.txn
   }
   fn add_operation_create_asset(&mut self,
-                                pub_key: &IssuerPublicKey,
-                                priv_key: &XfrSecretKey,
+                                key_pair: &XfrKeyPair,
                                 token_code: Option<AssetTypeCode>,
                                 updatable: bool,
                                 traceable: bool,
-                                _memo: &str)
-                                -> Result<(), PlatformError> {
-    self.txn.add_operation(Operation::DefineAsset(DefineAsset::new(DefineAssetBody::new(&token_code.unwrap_or_else(AssetTypeCode::gen_random), pub_key, updatable, traceable, None, Some(ConfidentialMemo {}))?, pub_key, priv_key)?));
-    Ok(())
+                                memo: &str)
+                                -> Result<&mut Self, PlatformError> {
+    let pub_key = &IssuerPublicKey { key: key_pair.get_pk() };
+    let priv_key = &key_pair.get_sk();
+    self.txn.add_operation(Operation::DefineAsset(DefineAsset::new(DefineAssetBody::new(&token_code.unwrap_or_else(AssetTypeCode::gen_random), pub_key, updatable, traceable, Some(Memo(memo.into())), Some(ConfidentialMemo {}))?, pub_key, priv_key)?));
+    Ok(self)
   }
   fn add_operation_issue_asset(&mut self,
-                               pub_key: &IssuerPublicKey,
-                               priv_key: &XfrSecretKey,
+                               key_pair: &XfrKeyPair,
                                token_code: &AssetTypeCode,
                                seq_num: u64,
                                records: &[TxOutput])
-                               -> Result<(), PlatformError> {
+                               -> Result<&mut Self, PlatformError> {
+    let pub_key = &IssuerPublicKey { key: key_pair.get_pk() };
+    let priv_key = &key_pair.get_sk();
     self.txn
         .add_operation(Operation::IssueAsset(IssueAsset::new(IssueAssetBody::new(token_code,
                                                                                  seq_num,
                                                                                  records)?,
                                                              pub_key,
                                                              priv_key)?));
-    Ok(())
+    Ok(self)
   }
   fn add_operation_transfer_asset(&mut self,
+                                  keys: &XfrKeyPair,
                                   input_sids: Vec<TxoRef>,
-                                  input_key: &XfrKeyPair,
                                   input_records: &[OpenAssetRecord],
                                   output_records: &[AssetRecord])
-                                  -> Result<(), PlatformError> {
+                                  -> Result<&mut Self, PlatformError> {
     // TODO(joe/noah): keep a prng around somewhere?
     let mut prng: ChaChaRng;
     prng = ChaChaRng::from_seed([0u8; 32]);
+    let mut xfr = TransferAsset::new(TransferAssetBody::new(&mut prng,
+                                                            input_sids,
+                                                            input_records,
+                                                            output_records)?,
+                                     TransferType::Standard)?;
+    xfr.sign(&keys);
 
-    let input_keys = &[XfrKeyPair::zei_from_bytes(&input_key.zei_to_bytes())];
-
-    self.txn.add_operation(Operation::TransferAsset(TransferAsset::new(TransferAssetBody::new(&mut prng, input_sids, input_records, output_records, input_keys)?, &[input_key], TransferType::Standard)?));
-    Ok(())
+    self.txn.add_operation(Operation::TransferAsset(xfr));
+    Ok(self)
   }
+
+  fn add_operation(&mut self, op: Operation) -> &mut Self {
+    self.txn.add_operation(op);
+    self
+  }
+
   fn serialize(&self) -> Result<Vec<u8>, PlatformError> {
     let j = serde_json::to_string(&self.txn)?;
     Ok(j.as_bytes().to_vec())
@@ -164,14 +178,180 @@ impl BuildsTransactions for TransactionBuilder {
   }
 }
 
+// TransferOperationBuilder constructs transfer operations using the factory pattern
+// Inputs and outputs are added iteratively before being signed by all input record owners
+//
+// Example usage:
+//
+//    let alice = XfrKeyPair::generate(&mut prng);
+//    let bob = XfrKeyPair::generate(&mut prng);
+//
+//    let ar = AssetRecord::new(1000, code_1.val, *alice.get_pk_ref()).unwrap();
+//    let ba = build_blind_asset_record(&mut prng, &params.pc_gens, &ar_1, false, false, &None);
+//
+//    let builder = TransferOperationBuilder::new()..add_input(TxoRef::Relative(1),
+//                                       open_asset_record(&ba, alice.get_sk_ref()).unwrap(),
+//                                       20)?
+//                            .add_output(20, bob.get_pk_ref(), code_1)?
+//                            .balance()?
+//                            .create(TransferType::Standard)?
+//                            .sign(&alice)?;
+//
+#[derive(Serialize, Deserialize, Default)]
+pub struct TransferOperationBuilder {
+  input_sids: Vec<TxoRef>,
+  input_records: Vec<OpenAssetRecord>,
+  spend_amounts: Vec<u64>, //Amount of each input record to spend, the rest will be refunded
+  output_records: Vec<AssetRecord>,
+  transfer: Option<TransferAsset>,
+  transfer_type: TransferType,
+}
+
+impl TransferOperationBuilder {
+  pub fn new() -> Self {
+    Self::default()
+  }
+
+  // TxoRef is the location of the input on the ledger and the amount is how much of the record
+  // should be spent in the transfer. See tests for example usage.
+  pub fn add_input(&mut self,
+                   txo_sid: TxoRef,
+                   open_ar: OpenAssetRecord,
+                   amount: u64)
+                   -> Result<&mut Self, PlatformError> {
+    if self.transfer.is_some() {
+      return Err(PlatformError::InvariantError(Some("Cannot mutate a transfer that has been signed".to_string())));
+    }
+    self.input_sids.push(txo_sid);
+    self.input_records.push(open_ar);
+    self.spend_amounts.push(amount);
+    Ok(self)
+  }
+
+  pub fn add_output(&mut self,
+                    amount: u64,
+                    recipient: &XfrPublicKey,
+                    code: AssetTypeCode)
+                    -> Result<&mut Self, PlatformError> {
+    if self.transfer.is_some() {
+      return Err(PlatformError::InvariantError(Some("Cannot mutate a transfer that has been signed".to_string())));
+    }
+    self.output_records
+        .push(AssetRecord::new(amount, code.val, *recipient).unwrap());
+    Ok(self)
+  }
+
+  // Ensures that outputs and inputs are balanced by adding remainder outputs for leftover asset
+  // amounts
+  pub fn balance(&mut self) -> Result<&mut Self, PlatformError> {
+    if self.transfer.is_some() {
+      return Err(PlatformError::InvariantError(Some("Cannot mutate a transfer that has been signed".to_string())));
+    }
+    let spend_total: u64 = self.spend_amounts.iter().sum();
+    let mut partially_consumed_inputs = Vec::new();
+    for (spend_amount, oar) in self.spend_amounts.iter().zip(self.input_records.iter()) {
+      match spend_amount.cmp(oar.get_amount()) {
+        Ordering::Greater => {
+          return Err(PlatformError::InputsError);
+        }
+        Ordering::Less => {
+          let ar = AssetRecord::new(oar.get_amount() - spend_amount,
+                                    *oar.get_asset_type(),
+                                    *oar.get_pub_key())?;
+          partially_consumed_inputs.push(ar);
+        }
+        _ => {}
+      }
+    }
+    let output_total = self.output_records
+                           .iter()
+                           .fold(0, |acc, ar| acc + ar.amount);
+    if spend_total != output_total {
+      return Err(PlatformError::InputsError);
+    }
+    self.output_records.append(&mut partially_consumed_inputs);
+    Ok(self)
+  }
+
+  // Finalize the transaction and prepare for signing. Once called, the transaction cannot be
+  // modified.
+  pub fn create(&mut self, transfer_type: TransferType) -> Result<&mut Self, PlatformError> {
+    let mut prng = ChaChaRng::from_seed([0u8; 32]);
+    let body = TransferAssetBody::new(&mut prng,
+                                      self.input_sids.clone(),
+                                      &self.input_records,
+                                      &self.output_records)?;
+    self.transfer = Some(TransferAsset::new(body, transfer_type)?);
+    Ok(self)
+  }
+
+  pub fn get_output_record(&self, idx: usize) -> Option<BlindAssetRecord> {
+    if self.transfer.is_none() {
+      return None;
+    }
+    self.transfer
+        .as_ref()
+        .unwrap()
+        .body
+        .transfer
+        .outputs
+        .get(idx)
+        .map(|bar| bar.clone())
+        .clone()
+  }
+
+  // All input owners must sign eventually for the transaction to be valid.
+  pub fn sign(&mut self, kp: &XfrKeyPair) -> Result<&mut Self, PlatformError> {
+    if self.transfer.is_none() {
+      return Err(PlatformError::InvariantError(Some("Transaction has not yet been finalized".to_string())));
+    }
+    let mut new_transfer = self.transfer.as_ref().unwrap().clone();
+    new_transfer.sign(&kp);
+    self.transfer = Some(new_transfer);
+    Ok(self)
+  }
+
+  // Return the transaction operation
+  pub fn transaction(&self) -> Result<Operation, PlatformError> {
+    if self.transfer.is_none() {
+      return Err(PlatformError::InvariantError(Some("Must create transfer".to_string())));
+    }
+    Ok(Operation::TransferAsset(self.transfer.clone().unwrap()))
+  }
+
+  // Checks to see whether all necessary signatures are present and valid
+  pub fn validate_signatures(&mut self) -> Result<&mut Self, PlatformError> {
+    if self.transfer.is_none() {
+      return Err(PlatformError::InvariantError(Some("Transaction has not yet been finalized".to_string())));
+    }
+
+    let trn = self.transfer.as_ref().unwrap();
+    let mut sig_keys = HashSet::new();
+    for sig in &trn.body_signatures {
+      if !sig.verify(&serde_json::to_vec(&trn.body).unwrap()) {
+        return Err(PlatformError::InvariantError(Some("Invalid signature".to_string())));
+      }
+      sig_keys.insert(sig.address.key.zei_to_bytes());
+    }
+
+    for record in &trn.body.transfer.inputs {
+      if !sig_keys.contains(&record.public_key.zei_to_bytes()) {
+        return Err(PlatformError::InvariantError(Some("Not all signatures present".to_string())));
+      }
+    }
+    Ok(self)
+  }
+}
+
 #[cfg(test)]
 mod tests {
   use super::*;
   use ledger::data_model::TxoRef;
   use quickcheck::{Arbitrary, Gen};
   use quickcheck_macros::quickcheck;
-  use rand::{Rng, SeedableRng};
+  use rand::Rng;
   use rand_chacha::ChaChaRng;
+  use rand_core::SeedableRng;
   use zei::serialization::ZeiFromToBytes;
   use zei::setup::PublicParams;
   use zei::xfr::asset_record::{build_blind_asset_record, open_asset_record};
@@ -318,5 +498,76 @@ mod tests {
       let null_policies = vec![];
       assert!(verify_xfr_note(&mut prng, &xfr_note, &null_policies).is_ok())
     }
+  }
+
+  #[test]
+  fn test_transfer_op_builder() -> Result<(), PlatformError> {
+    let mut prng = ChaChaRng::from_seed([0u8; 32]);
+    let params = PublicParams::new();
+    let code_1 = AssetTypeCode::gen_random();
+    let code_2 = AssetTypeCode::gen_random();
+    let alice = XfrKeyPair::generate(&mut prng);
+    let bob = XfrKeyPair::generate(&mut prng);
+    let charlie = XfrKeyPair::generate(&mut prng);
+    let ben = XfrKeyPair::generate(&mut prng);
+
+    let ar_1 = AssetRecord::new(1000, code_1.val, *alice.get_pk_ref()).unwrap();
+    let ar_2 = AssetRecord::new(1000, code_2.val, *bob.get_pk_ref()).unwrap();
+    let ba_1 = build_blind_asset_record(&mut prng, &params.pc_gens, &ar_1, false, false, &None);
+    let ba_2 = build_blind_asset_record(&mut prng, &params.pc_gens, &ar_2, false, false, &None);
+
+    // Attempt to spend too much
+    let mut invalid_outputs_transfer_op = TransferOperationBuilder::new();
+    let res =
+      invalid_outputs_transfer_op.add_input(TxoRef::Relative(1),
+                                            open_asset_record(&ba_1, alice.get_sk_ref()).unwrap(),
+                                            20)?
+                                 .add_output(25, bob.get_pk_ref(), code_1)?
+                                 .balance();
+
+    assert!(res.is_err());
+
+    // Change transaction after signing
+    let mut invalid_sig_op = TransferOperationBuilder::new();
+    let res = invalid_sig_op.add_input(TxoRef::Relative(1),
+                                       open_asset_record(&ba_1, alice.get_sk_ref()).unwrap(),
+                                       20)?
+                            .add_output(20, bob.get_pk_ref(), code_1)?
+                            .balance()?
+                            .create(TransferType::Standard)?
+                            .sign(&alice)?
+                            .add_output(20, bob.get_pk_ref(), code_1);
+    assert!(res.is_err());
+
+    // Not all signatures present
+    let mut missing_sig_op = TransferOperationBuilder::new();
+    let res = missing_sig_op.add_input(TxoRef::Relative(1),
+                                       open_asset_record(&ba_1, alice.get_sk_ref()).unwrap(),
+                                       20)?
+                            .add_output(20, bob.get_pk_ref(), code_1)?
+                            .balance()?
+                            .create(TransferType::Standard)?
+                            .validate_signatures();
+
+    assert!(&res.is_err());
+
+    // Finally, test a valid transfer
+    let _valid_transfer_op =
+      TransferOperationBuilder::new()
+      .add_input(TxoRef::Relative(1), open_asset_record(&ba_1, alice.get_sk_ref()).unwrap(), 20)?
+      .add_input(TxoRef::Relative(2), open_asset_record(&ba_2, bob.get_sk_ref()).unwrap(), 20)?
+      .add_output(5, bob.get_pk_ref(), code_1)?
+      .add_output(13, charlie.get_pk_ref(), code_1)?
+      .add_output(2, ben.get_pk_ref(), code_1)?
+      .add_output(5, bob.get_pk_ref(), code_2)?
+      .add_output(13, charlie.get_pk_ref(), code_2)?
+      .add_output(2, ben.get_pk_ref(), code_2)?
+      .balance()?
+      .create(TransferType::Standard)?
+      .sign(&alice)?
+      .sign(&bob)?
+      .transaction()?;
+
+    Ok(())
   }
 }

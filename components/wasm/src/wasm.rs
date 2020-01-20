@@ -4,24 +4,23 @@
 // To compile wasm package, run wasm-pack build in the wasm directory
 #![deny(warnings)]
 extern crate ledger;
-extern crate rand;
-extern crate rand_chacha;
 extern crate serde;
 extern crate wasm_bindgen;
 extern crate wasm_bindgen_test;
 extern crate zei;
 use bulletproofs::PedersenGens;
+use cryptohash::sha256;
 use hex;
 use js_sys::Promise;
-use ledger::data_model::{AccountAddress, AssetTypeCode, IssuerPublicKey, TxoRef, TxoSID};
-use ledger::utils::sha256;
+use ledger::data_model::{
+  AccountAddress, AssetTypeCode, Operation, Serialized, TransferType, TxoRef, TxoSID,
+};
 use percent_encoding::{utf8_percent_encode, AsciiSet, CONTROLS};
-use rand::FromEntropy;
-use rand::SeedableRng;
 use rand_chacha::ChaChaRng;
+use rand_core::SeedableRng;
 use serde::{Deserialize, Serialize};
 use std::str;
-use txn_builder::{BuildsTransactions, TransactionBuilder};
+use txn_builder::{BuildsTransactions, TransactionBuilder, TransferOperationBuilder};
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::future_to_promise;
 use wasm_bindgen_futures::JsFuture;
@@ -35,11 +34,228 @@ use zei::api::anon_creds::{
 use zei::api::conf_cred_reveal::cac_gen_encryption_keys;
 use zei::basic_crypto::elgamal::{elgamal_decrypt, elgamal_keygen, ElGamalPublicKey};
 use zei::serialization::ZeiFromToBytes;
-use zei::xfr::sig::XfrKeyPair;
-use zei::xfr::structs::{AssetIssuerPubKeys, BlindAssetRecord};
+use zei::setup::PublicParams;
+use zei::xfr::asset_record::{build_blind_asset_record, open_asset_record};
+use zei::xfr::sig::{XfrKeyPair, XfrPublicKey};
+use zei::xfr::structs::{AssetIssuerPubKeys, AssetRecord, BlindAssetRecord, OpenAssetRecord};
 
 const HOST: &str = "localhost";
 const PORT: &str = "8668";
+const SUBMISSION_PORT: &str = "8669";
+
+/////////// TRANSACTION BUILDING ////////////////
+
+//Random Helpers
+#[wasm_bindgen]
+pub fn create_txo_ref(idx: u64, relative: bool) -> String {
+  let txo_ref;
+  if relative {
+    txo_ref = TxoRef::Relative(idx)
+  } else {
+    txo_ref = TxoRef::Absolute(TxoSID(idx))
+  }
+  serde_json::to_string(&txo_ref).unwrap()
+}
+
+#[wasm_bindgen]
+pub fn create_blind_asset_record(amount: u64,
+                                 code: String,
+                                 pk: &XfrPublicKey,
+                                 conf_amount: bool,
+                                 conf_type: bool)
+                                 -> Result<String, JsValue> {
+  let params = PublicParams::new();
+  let code = AssetTypeCode::new_from_base64(&code).map_err(|_e| {
+      JsValue::from_str("Could not deserialize asset token code")})?;
+  let mut small_rng = ChaChaRng::from_entropy();
+  Ok(serde_json::to_string(&build_blind_asset_record(&mut small_rng,
+                                                     &params.pc_gens,
+                                                     &AssetRecord::new(amount, code.val, *pk).unwrap(),
+                                                     conf_amount,
+                                                     conf_type,
+                                                     &None)).unwrap())
+}
+
+#[wasm_bindgen]
+pub fn open_blind_asset_record(blind_asset_record: String,
+                               key: &XfrKeyPair)
+                               -> Result<String, JsValue> {
+  let blind_asset_record = serde_json::from_str::<BlindAssetRecord>(&blind_asset_record).map_err(|_e| {
+                             JsValue::from_str("Could not deserialize blind asset record")
+                           })?;
+  let open_asset_record = open_asset_record(&blind_asset_record, key.get_sk_ref()).map_err(|_e| JsValue::from_str("could not open asset record"))?;
+  let bincode_encoded =
+    bincode::serialize(&open_asset_record).map_err(|_e| {
+                                            JsValue::from_str("could not encode open asset record")
+                                          })?;
+  Ok(base64::encode(&bincode_encoded))
+}
+
+// Wrapper around TransactionBuilder that does necessary serialization.
+#[wasm_bindgen]
+#[derive(Default)]
+pub struct WasmTransactionBuilder {
+  transaction_builder: Serialized<TransactionBuilder>,
+}
+
+#[wasm_bindgen]
+impl WasmTransactionBuilder {
+  pub fn new() -> Self {
+    Self::default()
+  }
+
+  pub fn add_operation_create_asset(&self,
+                                    key_pair: &XfrKeyPair,
+                                    memo: String,
+                                    token_code: String,
+                                    updatable: bool,
+                                    traceable: bool)
+                                    -> Result<WasmTransactionBuilder, JsValue> {
+    let asset_token = AssetTypeCode::new_from_base64(&token_code).unwrap();
+
+    Ok(WasmTransactionBuilder { transaction_builder: Serialized::new(&*self.transaction_builder.deserialize().add_operation_create_asset(&key_pair,
+                                              Some(asset_token),
+                                              updatable,
+                                              traceable,
+                                              &memo)
+                  .map_err(|_e| JsValue::from_str("Could not build transaction"))?)})
+  }
+
+  pub fn add_operation_issue_asset(&self,
+                                   key_pair: &XfrKeyPair,
+                                   elgamal_pub_key: String,
+                                   asset_token: String,
+                                   seq_num: u64,
+                                   amount: u64)
+                                   -> Result<WasmTransactionBuilder, JsValue> {
+    let asset_token = AssetTypeCode::new_from_base64(&asset_token).map_err(|_e| {
+      JsValue::from_str("Could not deserialize asset token code")})?;
+
+    let mut txn_builder = self.transaction_builder.deserialize();
+    // construct asset tracking keys
+    let issuer_keys;
+    if elgamal_pub_key.is_empty() {
+      issuer_keys = None
+    } else {
+      let pk = serde_json::from_str::<ElGamalPublicKey<RistPoint>>(&elgamal_pub_key).map_err(|_e| JsValue::from_str("could not deserialize elgamal key"))?;
+      let mut small_rng = ChaChaRng::from_entropy();
+      let (_, id_reveal_pub_key) = cac_gen_encryption_keys(&mut small_rng);
+      issuer_keys = Some(AssetIssuerPubKeys { eg_ristretto_pub_key: pk,
+                                              eg_blsg1_pub_key: id_reveal_pub_key });
+    }
+
+    Ok(WasmTransactionBuilder { transaction_builder: Serialized::new(&*txn_builder.add_basic_issue_asset(&key_pair,
+                                            &issuer_keys,
+                                            &asset_token,
+                                            seq_num,
+                                            amount).map_err(|_e| JsValue::from_str("could not build transaction"))?)})
+  }
+
+  pub fn add_operation(&mut self, op: String) -> Result<WasmTransactionBuilder, JsValue> {
+    let op =
+      serde_json::from_str::<Operation>(&op).map_err(|_e| {
+                                              JsValue::from_str("Could not deserialize operation")
+                                            })?;
+    Ok(WasmTransactionBuilder { transaction_builder: Serialized::new(&*self.transaction_builder
+                                                                           .deserialize()
+                                                                           .add_operation(op)) })
+  }
+
+  pub fn transaction(&mut self) -> Result<String, JsValue> {
+    Ok(self.transaction_builder
+           .deserialize()
+           .serialize_str()
+           .map_err(|_e| JsValue::from_str("could not serialize transaction"))?)
+  }
+}
+
+// Wrapper around TransferOperationBuilder that does necessary serialization.
+#[wasm_bindgen]
+#[derive(Default)]
+pub struct WasmTransferOperationBuilder {
+  op_builder: Serialized<TransferOperationBuilder>,
+}
+#[wasm_bindgen]
+impl WasmTransferOperationBuilder {
+  pub fn new() -> Self {
+    Self::default()
+  }
+
+  pub fn add_input(&mut self,
+                   txo_ref: String,
+                   oar: String,
+                   amount: u64)
+                   -> Result<WasmTransferOperationBuilder, JsValue> {
+    let txo_sid =
+      serde_json::from_str::<TxoRef>(&txo_ref).map_err(|_e| {
+                                                JsValue::from_str("Could not deserialize txo sid")
+                                              })?;
+    let oar = serde_json::from_str::<OpenAssetRecord>(&oar).map_err(|_e| {
+                             JsValue::from_str("Could not deserialize open asset record")
+                           })?;
+    Ok(WasmTransferOperationBuilder { op_builder:
+                                        Serialized::new(&*self.op_builder
+                                                              .deserialize()
+                                                              .add_input(txo_sid, oar, amount)
+                                                              .map_err(|e| {
+                                                                JsValue::from_str(&format!("{}", e))
+                                                              })?) })
+  }
+
+  pub fn add_output(&mut self,
+                    amount: u64,
+                    recipient: &XfrPublicKey,
+                    code: String)
+                    -> Result<WasmTransferOperationBuilder, JsValue> {
+    let code = AssetTypeCode::new_from_base64(&code).map_err(|_e| {
+      JsValue::from_str("Could not deserialize asset token code")})?;
+
+    let new_builder = Serialized::new(&*self.op_builder
+                                            .deserialize()
+                                            .add_output(amount, recipient, code)
+                                            .map_err(|e| JsValue::from_str(&format!("{}", e)))?);
+    Ok(WasmTransferOperationBuilder { op_builder: new_builder })
+  }
+
+  pub fn balance(&mut self) -> Result<WasmTransferOperationBuilder, JsValue> {
+    Ok(WasmTransferOperationBuilder { op_builder: Serialized::new(&*self.op_builder
+                                                                        .deserialize()
+                                                                        .balance().map_err(|_e| JsValue::from_str("Error balancing txn"))?) })
+  }
+
+  pub fn create(&mut self, transfer_type: String) -> Result<WasmTransferOperationBuilder, JsValue> {
+    let transfer_type =
+      serde_json::from_str::<TransferType>(&transfer_type).map_err(|_e| {
+                                                JsValue::from_str("Could not deserialize transfer type")
+                                              })?;
+    let new_builder = Serialized::new(&*self.op_builder
+                                            .deserialize()
+                                            .create(transfer_type)
+                                            .map_err(|e| JsValue::from_str(&format!("{}", e)))?);
+
+    Ok(WasmTransferOperationBuilder { op_builder: new_builder })
+  }
+
+  pub fn sign(&mut self, kp: &XfrKeyPair) -> Result<WasmTransferOperationBuilder, JsValue> {
+    let new_builder = Serialized::new(&*self.op_builder
+                                            .deserialize()
+                                            .sign(&kp)
+                                            .map_err(|e| JsValue::from_str(&format!("{}", e)))?);
+
+    Ok(WasmTransferOperationBuilder { op_builder: new_builder })
+  }
+
+  pub fn transaction(&self) -> Result<String, JsValue> {
+    let transaction = self.op_builder
+                          .deserialize()
+                          .transaction()
+                          .map_err(|e| JsValue::from_str(&format!("{}", e)))?;
+
+    Ok(serde_json::to_string(&transaction).unwrap())
+  }
+}
+
+///////////// CRYPTO //////////////////////
 
 #[wasm_bindgen]
 pub fn get_pub_key_str(key_pair: &XfrKeyPair) -> String {
@@ -52,10 +268,9 @@ pub fn get_priv_key_str(key_pair: &XfrKeyPair) -> String {
 }
 
 #[wasm_bindgen]
-pub fn new_keypair(rand_seed: &str) -> XfrKeyPair {
-  let mut prng: ChaChaRng;
-  prng = ChaChaRng::from_seed([rand_seed.as_bytes()[0]; 32]);
-  XfrKeyPair::generate(&mut prng)
+pub fn new_keypair() -> XfrKeyPair {
+  let mut small_rng = rand::thread_rng();
+  XfrKeyPair::generate(&mut small_rng)
 }
 
 #[wasm_bindgen]
@@ -69,10 +284,10 @@ pub fn keypair_from_str(str: String) -> XfrKeyPair {
 }
 
 #[wasm_bindgen]
-pub fn generate_elgamal_keys() -> JsValue {
+pub fn generate_elgamal_keys() -> String {
   let mut small_rng = ChaChaRng::from_entropy();
   let pc_gens = PedersenGens::default();
-  return JsValue::from_serde(&elgamal_keygen(&mut small_rng, &RistPoint(pc_gens.B))).unwrap();
+  serde_json::to_string(&elgamal_keygen(&mut small_rng, &RistPoint(pc_gens.B))).unwrap()
 }
 
 // Defines an asset on the ledger using the serialized strings in KeyPair and a couple of boolean policies
@@ -86,8 +301,7 @@ pub fn create_asset(key_pair: &XfrKeyPair,
   let asset_token = AssetTypeCode::new_from_base64(&token_code).unwrap();
 
   let mut txn_builder = TransactionBuilder::default();
-  match txn_builder.add_operation_create_asset(&IssuerPublicKey { key: *key_pair.get_pk_ref() },
-                                               &key_pair.get_sk_ref(),
+  match txn_builder.add_operation_create_asset(&key_pair,
                                                Some(asset_token),
                                                updatable,
                                                traceable,
@@ -173,13 +387,7 @@ pub fn issue_asset(key_pair: &XfrKeyPair,
                                             eg_blsg1_pub_key: id_reveal_pub_key });
   }
 
-  match txn_builder.add_basic_issue_asset(&IssuerPublicKey { key: *key_pair.get_pk_ref() },
-                                          key_pair.get_sk_ref(),
-                                          &issuer_keys,
-                                          &asset_token,
-                                          seq_num,
-                                          amount)
-  {
+  match txn_builder.add_basic_issue_asset(&key_pair, &issuer_keys, &asset_token, seq_num, amount) {
     Ok(_) => Ok(txn_builder.serialize_str().unwrap()),
     Err(_) => Err(JsValue::from_str("Could not build transaction")),
   }
@@ -224,14 +432,14 @@ fn encode_uri(to_encode: &str) -> String {
 
 #[wasm_bindgen]
 // Submit transation to the ledger at HOST and PORT.
-pub fn submit_transaction(transaction_str: String) -> Promise {
+pub fn submit_transaction(transaction_str: String) -> Result<Promise, JsValue> {
   let mut opts = RequestInit::new();
   opts.method("POST");
   opts.mode(RequestMode::Cors);
 
   let req_string = format!("http://{}:{}/submit_transaction/{}",
                            HOST,
-                           PORT,
+                           SUBMISSION_PORT,
                            encode_uri(&transaction_str));
 
   create_query_promise(&opts, &req_string)
@@ -245,7 +453,7 @@ pub fn test_deserialize(str: String) -> bool {
 
 #[wasm_bindgen]
 // Get txo by index
-pub fn get_txo(index: u64) -> Promise {
+pub fn get_txo(index: u64) -> Result<Promise, JsValue> {
   let mut opts = RequestInit::new();
   opts.method("GET");
   opts.mode(RequestMode::Cors);
@@ -257,7 +465,7 @@ pub fn get_txo(index: u64) -> Promise {
 
 #[wasm_bindgen]
 // Get txo by index
-pub fn get_asset_token(name: String) -> Promise {
+pub fn get_asset_token(name: String) -> Result<Promise, JsValue> {
   let mut opts = RequestInit::new();
   opts.method("GET");
   opts.mode(RequestMode::Cors);
@@ -267,13 +475,23 @@ pub fn get_asset_token(name: String) -> Promise {
   create_query_promise(&opts, &req_string)
 }
 
+pub fn get_txn_status(handle: String) -> Result<Promise, JsValue> {
+  let mut opts = RequestInit::new();
+  opts.method("GET");
+  opts.mode(RequestMode::Cors);
+
+  let req_string = format!("http://{}:{}/txn_status/{}", HOST, PORT, handle);
+
+  create_query_promise(&opts, &req_string)
+}
+
 // Given a request string and a request init object, constructs
 // the JS promise to be returned to the client
-fn create_query_promise(opts: &RequestInit, req_string: &str) -> Promise {
-  let request = Request::new_with_str_and_init(&req_string, &opts).unwrap();
+fn create_query_promise(opts: &RequestInit, req_string: &str) -> Result<Promise, JsValue> {
+  let request = Request::new_with_str_and_init(&req_string, &opts)?;
   let window = web_sys::window().unwrap();
   let request_promise = window.fetch_with_request(&request);
-  future_to_promise(JsFuture::from(request_promise))
+  Ok(future_to_promise(JsFuture::from(request_promise)))
 }
 
 //

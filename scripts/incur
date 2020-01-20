@@ -1,0 +1,54 @@
+#! /usr/bin/env bash
+
+if [ "$1" == "--dontstop" ]
+then
+  stop="echo Continuing."
+  shift
+  echo " === Ignoring errors"
+else
+  stop="exit 1"
+fi
+
+if [ "$1" == "" -o "$1" == "help" ]
+then
+  echo "Usage:  incur [ --dontstop ] <cargo command> [ cargo options...]"
+  echo " "
+  echo "Example:"
+  echo " "
+  echo "    incur build"
+  echo " "
+  echo "This command should build all cargo setups in the current git repository."
+  echo "It may be invoked in any directory in the repository."
+  exit 1
+fi
+
+while [ ! -d .git ]
+do
+   cd ..
+
+   if [ "`pwd`" == "/" ]
+   then
+       echo "I didn't find .git."
+       echo "This directory doesn't seem to be part of a git repository."
+       exit 1
+   fi
+done
+
+export directories=$(
+   find . -type f -name 'Cargo.toml' | xargs -n 1 dirname | sort
+   # find .  -name "target" -prune -o -name ".git"   -prune -o -name "src" -print | sort
+ )
+
+echo "Repository "`pwd`":"
+
+for i in $directories
+do
+    echo " ===== "$i":"
+    (cd $i; cargo $*) || $stop
+done
+
+if [ "$*" == "build" ]
+then
+  (cd components/wasm; wasm-pack build)
+  echo "If you are unable to build the wasm package, download wasm-pack 'curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh'"
+fi

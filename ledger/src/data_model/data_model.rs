@@ -1,15 +1,23 @@
+#![deny(warnings)]
 use super::errors;
-use base64::decode as b64dec;
-use base64::encode as b64enc;
 use chrono::prelude::*;
 use rand::rngs::SmallRng;
-use rand::{CryptoRng, FromEntropy, Rng};
+use rand::{FromEntropy, Rng};
+use rand_core::{CryptoRng, RngCore};
 use std::boxed::Box;
 use std::collections::HashMap;
 use std::convert::TryFrom;
-use zei::xfr::lib::gen_xfr_note;
+use std::marker::PhantomData;
+use zei::xfr::lib::gen_xfr_body;
 use zei::xfr::sig::{XfrKeyPair, XfrPublicKey, XfrSecretKey, XfrSignature};
-use zei::xfr::structs::{AssetRecord, BlindAssetRecord, OpenAssetRecord, XfrNote};
+use zei::xfr::structs::{AssetRecord, BlindAssetRecord, OpenAssetRecord, XfrBody};
+
+fn b64enc<T: ?Sized + AsRef<[u8]>>(input: &T) -> String {
+  base64::encode_config(input, base64::URL_SAFE)
+}
+fn b64dec<T: ?Sized + AsRef<[u8]>>(input: &T) -> Result<Vec<u8>, base64::DecodeError> {
+  base64::decode_config(input, base64::URL_SAFE)
+}
 
 // Unique Identifier for ledger objects
 #[derive(Clone, Copy, Debug, Default, Deserialize, Eq, Hash, PartialEq, Serialize)]
@@ -45,6 +53,32 @@ impl Code {
   }
   pub fn to_base64(&self) -> String {
     b64enc(&self.val)
+  }
+}
+
+// Wrapper around a serialized variable that maintains type semantics.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct Serialized<T> {
+  val: String,
+  phantom: PhantomData<T>,
+}
+
+impl<T> Default for Serialized<T> where T: Default + serde::Serialize + serde::de::DeserializeOwned
+{
+  fn default() -> Self {
+    Self::new(&T::default())
+  }
+}
+
+impl<T> Serialized<T> where T: serde::Serialize + serde::de::DeserializeOwned
+{
+  pub fn new(to_serialize: &T) -> Self {
+    Serialized { val: b64enc(&bincode::serialize(&to_serialize).unwrap()),
+                 phantom: PhantomData }
+  }
+
+  pub fn deserialize(&self) -> T {
+    bincode::deserialize(&b64dec(&self.val).unwrap()).unwrap()
   }
 }
 
@@ -147,6 +181,9 @@ pub struct TxoSID(pub u64);
 #[derive(Clone, Copy, Debug, Default, Deserialize, Eq, Hash, PartialEq, Serialize)]
 pub struct TxnSID(pub usize);
 
+#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, Hash, PartialEq, Serialize)]
+pub struct BlockSID(pub usize);
+
 // An ephemeral index for a transaction (with a different newtype so that
 // it's harder to mix up)
 #[derive(Clone, Copy, Debug, Default, Deserialize, Eq, Hash, PartialEq, Serialize)]
@@ -179,21 +216,20 @@ pub struct TransferAssetBody {
   pub num_outputs: usize,  // How many output TXOs?
   // TODO(joe): we probably don't need the whole XfrNote with input records
   // once it's on the chain
-  pub transfer: Box<XfrNote>, // Encrypted transfer note
+  pub transfer: Box<XfrBody>, // Encrypted transfer note
 }
 
 impl TransferAssetBody {
-  pub fn new<R: CryptoRng + Rng>(prng: &mut R,
-                                 input_refs: Vec<TxoRef>,
-                                 input_records: &[OpenAssetRecord],
-                                 output_records: &[AssetRecord],
-                                 input_keys: &[XfrKeyPair])
-                                 -> Result<TransferAssetBody, errors::PlatformError> {
+  pub fn new<R: CryptoRng + RngCore>(prng: &mut R,
+                                     input_refs: Vec<TxoRef>,
+                                     input_records: &[OpenAssetRecord],
+                                     output_records: &[AssetRecord])
+                                     -> Result<TransferAssetBody, errors::PlatformError> {
     let id_proofs = vec![];
     if input_records.is_empty() {
       return Err(errors::PlatformError::InputsError);
     }
-    let note = Box::new(gen_xfr_note(prng, input_records, output_records, input_keys, &id_proofs)?);
+    let note = Box::new(gen_xfr_body(prng, input_records, output_records, &id_proofs)?);
     Ok(TransferAssetBody { inputs: input_refs,
                            num_outputs: output_records.len(),
                            transfer: note })
@@ -263,10 +299,16 @@ pub fn compute_signature<T>(secret_key: &XfrSecretKey,
   secret_key.sign(&serde_json::to_vec(&operation_body).unwrap(), &public_key)
 }
 
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub enum TransferType {
   Standard,
   DebtSwap,
+}
+
+impl Default for TransferType {
+  fn default() -> Self {
+    Self::Standard
+  }
 }
 
 // TODO: UTXO Addresses must be included in Transfer Signature
@@ -279,23 +321,21 @@ pub struct TransferAsset {
 
 impl TransferAsset {
   pub fn new(transfer_body: TransferAssetBody,
-             input_keys: &[&XfrKeyPair],
              transfer_type: TransferType)
              -> Result<TransferAsset, errors::PlatformError> {
-    let mut body_signatures = Vec::new();
-
-    for key in input_keys {
-      let sig = key.get_sk_ref()
-                   .sign(&serde_json::to_vec(&transfer_body).unwrap(),
-                         key.get_pk_ref());
-
-      body_signatures.push(SignedAddress { signature: sig,
-                                           address: XfrAddress { key: *key.get_pk_ref() } });
-    }
-
     Ok(TransferAsset { body: transfer_body,
-                       body_signatures,
+                       body_signatures: Vec::new(),
                        transfer_type })
+  }
+
+  pub fn sign(&mut self, keypair: &XfrKeyPair) {
+    let sig = keypair.get_sk_ref()
+                     .sign(&serde_json::to_vec(&self.body).unwrap(),
+                           keypair.get_pk_ref());
+
+    self.body_signatures
+        .push(SignedAddress { signature: sig,
+                              address: XfrAddress { key: *keypair.get_pk_ref() } });
   }
 }
 
@@ -344,6 +384,7 @@ impl DefineAsset {
   }
 }
 
+#[allow(clippy::large_enum_variant)]
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub enum Operation {
   TransferAsset(TransferAsset),
@@ -407,7 +448,7 @@ pub struct Account {
 #[cfg(test)]
 mod tests {
   use super::*;
-  use rand::SeedableRng;
+  use rand_core::SeedableRng;
   use std::cmp::min;
   use zei::xfr::structs::{AssetAmountProof, XfrBody, XfrProofs};
 
@@ -521,13 +562,11 @@ mod tests {
     let signature = keypair.sign(message);
 
     // Instantiate an TransferAsset operation
-    let xfr_note = XfrNote { body: XfrBody { inputs: Vec::new(),
-                                             outputs: Vec::new(),
-                                             proofs: XfrProofs { asset_amount_proof:
-                                                                   AssetAmountProof::NoProof,
-                                                                 asset_tracking_proof:
-                                                                   Default::default() } },
-                             multisig: Default::default() };
+    let xfr_note = XfrBody { inputs: Vec::new(),
+                             outputs: Vec::new(),
+                             proofs: XfrProofs { asset_amount_proof:
+                                                   AssetAmountProof::NoProof,
+                                                 asset_tracking_proof: Default::default() } };
 
     let assert_transfer_body = TransferAssetBody { inputs: Vec::new(),
                                                    num_outputs: 0,

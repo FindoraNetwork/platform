@@ -4,21 +4,21 @@ extern crate actix_web;
 extern crate ledger;
 extern crate ledger_app;
 extern crate percent_encoding;
-extern crate rand;
 extern crate serde_json;
 
 use actix_web::{dev, error, web, App, HttpServer};
 use ledger::store::LedgerUpdate;
 use ledger_app::LedgerApp;
 use percent_encoding::percent_decode_str;
-use rand::{CryptoRng, Rng};
+use rand_core::{CryptoRng, RngCore};
 use std::io;
 use std::marker::{Send, Sized, Sync};
 use std::sync::{Arc, RwLock};
 
 fn submit_transaction_standalone<RNG, LU>(data: web::Data<Arc<RwLock<LedgerApp<RNG, LU>>>>,
                                           info: web::Path<String>)
-  where RNG: Rng + CryptoRng,
+                                          -> Result<String, actix_web::error::Error>
+  where RNG: RngCore + CryptoRng,
         LU: LedgerUpdate<RNG> + Sync + Send
 {
   let mut ledger_app = data.write().unwrap();
@@ -26,7 +26,21 @@ fn submit_transaction_standalone<RNG, LU>(data: web::Data<Arc<RwLock<LedgerApp<R
   let tx = serde_json::from_str(&uri_string).map_err(actix_web::error::ErrorBadRequest)
                                             .unwrap();
 
-  ledger_app.handle_transaction(tx);
+  let handle = ledger_app.handle_transaction(tx);
+  let res = serde_json::to_string(&handle)?;
+  Ok(res)
+}
+
+fn txn_status<RNG, LU>(data: web::Data<Arc<RwLock<LedgerApp<RNG, LU>>>>,
+                       info: web::Path<String>)
+                       -> Result<String, actix_web::error::Error>
+  where RNG: RngCore + CryptoRng,
+        LU: LedgerUpdate<RNG> + Sync + Send
+{
+  let ledger_app = data.write().unwrap();
+  let txn_handle = serde_json::from_str(&*info).map_err(actix_web::error::ErrorBadRequest)?;
+  let txn_status = ledger_app.get_txn_status(&txn_handle);
+  Ok(serde_json::to_string(&txn_status)?)
 }
 
 pub enum ServiceInterfaceStandalone {
@@ -34,7 +48,7 @@ pub enum ServiceInterfaceStandalone {
 }
 
 pub trait RouteStandalone {
-  fn set_route<RNG: 'static + Rng + CryptoRng, LU: 'static + LedgerUpdate<RNG> + Sync + Send>(
+  fn set_route<RNG: 'static + RngCore + CryptoRng, LU: 'static + LedgerUpdate<RNG> + Sync + Send>(
     self,
     service_interface: ServiceInterfaceStandalone)
     -> Self
@@ -47,7 +61,7 @@ pub trait RouteStandalone {
     }
   }
 
-  fn set_route_for_ledger_update_standalone<RNG: 'static + Rng + CryptoRng,
+  fn set_route_for_ledger_update_standalone<RNG: 'static + RngCore + CryptoRng,
                                               LU: 'static + LedgerUpdate<RNG> + Sync + Send>(
     self)
     -> Self;
@@ -62,12 +76,13 @@ impl<T, B> RouteStandalone for App<T, B>
                                      InitError = ()>
 {
   // Set routes for the LedgerUpdate interface via ledger_app
-  fn set_route_for_ledger_update_standalone<RNG: 'static + Rng + CryptoRng,
+  fn set_route_for_ledger_update_standalone<RNG: 'static + RngCore + CryptoRng,
                                               LU: 'static + LedgerUpdate<RNG> + Sync + Send>(
     self)
     -> Self {
     self.route("/submit_transaction_standalone/{tx}",
                web::post().to(submit_transaction_standalone::<RNG, LU>))
+        .route("/txn_status/{handle}", web::get().to(txn_status::<RNG, LU>))
   }
 }
 
@@ -76,7 +91,7 @@ pub struct RestfulApiServiceStandalone {
 }
 
 impl RestfulApiServiceStandalone {
-  pub fn create_standalone<RNG: 'static + Rng + CryptoRng + Sync + Send,
+  pub fn create_standalone<RNG: 'static + RngCore + CryptoRng + Sync + Send,
                              LU: 'static + LedgerUpdate<RNG> + Sync + Send>(
     ledger_app: Arc<RwLock<LedgerApp<RNG, LU>>>,
     host: &str,
@@ -109,13 +124,13 @@ mod tests {
   use ledger::store::helpers::*;
   use ledger::store::LedgerState;
   use percent_encoding::{utf8_percent_encode, AsciiSet, CONTROLS};
-  use rand::SeedableRng;
+  use rand_core::SeedableRng;
 
   #[test]
   fn test_submit_transaction_standalone() {
     let mut prng = rand_chacha::ChaChaRng::from_seed([0u8; 32]);
     let ledger_state = LedgerState::test_ledger();
-    let ledger_app = LedgerApp::new(prng.clone(), ledger_state).unwrap();
+    let ledger_app = LedgerApp::new(prng.clone(), Arc::new(RwLock::new(ledger_state)), 8).unwrap();
     let mut tx = Transaction::default();
 
     let token_code1 = AssetTypeCode { val: [1; 16] };

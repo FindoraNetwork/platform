@@ -1,4 +1,4 @@
-use std::{error, fmt};
+use std::fmt;
 use zei::errors::ZeiError;
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -13,6 +13,8 @@ pub enum PlatformError {
   IoError(String),
 }
 
+impl std::error::Error for PlatformError {}
+
 impl fmt::Display for PlatformError {
   fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
     match self {
@@ -25,19 +27,6 @@ impl fmt::Display for PlatformError {
       }
       PlatformError::ZeiError(ze) => ze.fmt(f),
       PlatformError::IoError(ioe) => f.write_str(&ioe),
-    }
-  }
-}
-
-impl error::Error for PlatformError {
-  fn description(&self) -> &str {
-    match self {
-      PlatformError::DeserializationError => "Could not deserialize object",
-      PlatformError::SerializationError => "Could not serialize object",
-      PlatformError::InputsError => "Parameters were not consistent",
-      PlatformError::InvariantError(_msg) => "Invariant error",
-      PlatformError::ZeiError(ze) => ze.description(),
-      PlatformError::IoError(ioe) => &ioe,
     }
   }
 }

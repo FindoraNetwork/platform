@@ -12,7 +12,18 @@ use ledger::data_model::compute_signature;
 use ledger::data_model::errors::PlatformError;
 use ledger::data_model::*;
 use ledger::store::*;
+#[cfg(test)]
+use rand_core::SeedableRng;
+use reqwest;
 use std::collections::{HashMap, HashSet, VecDeque};
+#[cfg(test)]
+use std::ffi::OsString;
+#[cfg(test)]
+use std::thread;
+use std::time;
+use subprocess::Popen;
+#[cfg(test)]
+use subprocess::PopenConfig;
 use zei::serialization::ZeiFromToBytes;
 use zei::setup::PublicParams;
 use zei::xfr::asset_record::{build_blind_asset_record, open_asset_record};
@@ -408,7 +419,7 @@ impl InterpretAccounts<PlatformError> for LedgerAccounts {
             self.ledger.abort_block(block);
             return Err(e);
           }
-          self.ledger.finish_block(block);
+          self.ledger.finish_block(block).unwrap();
         }
 
         self.units.insert(name.clone(), (issuer.clone(), code));
@@ -462,7 +473,11 @@ impl InterpretAccounts<PlatformError> for LedgerAccounts {
         let mut block = self.ledger.start_block().unwrap();
         let temp_sid = self.ledger.apply_transaction(&mut block, effect).unwrap();
 
-        let (_, txos) = self.ledger.finish_block(block).remove(&temp_sid).unwrap();
+        let (_, txos) = self.ledger
+                            .finish_block(block)
+                            .unwrap()
+                            .remove(&temp_sid)
+                            .unwrap();
 
         assert!(txos.len() == 1);
         utxos.extend(txos.iter());
@@ -555,8 +570,7 @@ impl InterpretAccounts<PlatformError> for LedgerAccounts {
           TransferAssetBody::new(self.ledger.get_prng(),
                                  to_use.iter().cloned().map(TxoRef::Absolute).collect(),
                                  src_records.as_slice(),
-                                 all_outputs.as_slice(),
-                                 &sig_keys).unwrap();
+                                 all_outputs.as_slice()).unwrap();
         dbg!(&transfer_body);
         let transfer_sig =
           SignedAddress { address: XfrAddress { key: *src_pub },
@@ -574,7 +588,329 @@ impl InterpretAccounts<PlatformError> for LedgerAccounts {
         let mut block = self.ledger.start_block().unwrap();
         let temp_sid = self.ledger.apply_transaction(&mut block, effect).unwrap();
 
-        let (_, txos) = self.ledger.finish_block(block).remove(&temp_sid).unwrap();
+        let (_, txos) = self.ledger
+                            .finish_block(block)
+                            .unwrap()
+                            .remove(&temp_sid)
+                            .unwrap();
+
+        assert!(txos.len() == src_outputs.len() + dst_outputs.len());
+
+        self.utxos
+            .get_mut(dst)
+            .unwrap()
+            .extend(&txos[..dst_outputs.len()]);
+        self.utxos
+            .get_mut(src)
+            .unwrap()
+            .extend(&txos[dst_outputs.len()..]);
+      }
+    }
+    Ok(())
+  }
+}
+
+struct LedgerStandaloneAccounts {
+  ledger: Popen,
+  submit_port: usize,
+  query_port: usize,
+  client: reqwest::Client,
+  prng: rand_chacha::ChaChaRng,
+  accounts: HashMap<UserName, XfrKeyPair>,
+  balances: HashMap<UserName, HashMap<UnitName, u64>>,
+  utxos: HashMap<UserName, VecDeque<TxoSID>>, // by account
+  units: HashMap<UnitName, (UserName, AssetTypeCode)>, // user, data
+  // These only affect new issuances
+  confidential_amounts: bool,
+  confidential_types: bool,
+}
+
+impl Drop for LedgerStandaloneAccounts {
+  fn drop(&mut self) {
+    self.ledger.terminate().unwrap();
+    if self.ledger
+           .wait_timeout(time::Duration::from_millis(10))
+           .is_err()
+    {
+      self.ledger.kill().unwrap();
+      self.ledger.wait().unwrap();
+    }
+  }
+}
+
+impl InterpretAccounts<PlatformError> for LedgerStandaloneAccounts {
+  fn run_account_command(&mut self, cmd: &AccountsCommand) -> Result<(), PlatformError> {
+    let conf_amts = self.confidential_amounts;
+    let conf_types = self.confidential_types;
+    dbg!(cmd);
+    match cmd {
+      AccountsCommand::NewUser(name) => {
+        let keypair = XfrKeyPair::generate(&mut self.prng);
+
+        self.accounts
+            .get(name)
+            .map_or_else(|| Ok(()), |_| Err(PlatformError::InputsError))?;
+
+        dbg!("New user", &name, &keypair);
+
+        self.accounts.insert(name.clone(), keypair);
+        self.utxos.insert(name.clone(), VecDeque::new());
+        self.balances.insert(name.clone(), HashMap::new());
+      }
+      AccountsCommand::NewUnit(name, issuer) => {
+        let keypair = self.accounts
+                          .get(issuer)
+                          .ok_or(PlatformError::InputsError)?;
+        let (pubkey, privkey) = (keypair.get_pk_ref(), keypair.get_sk_ref());
+
+        self.units
+            .get(name)
+            .map_or_else(|| Ok(()), |_| Err(PlatformError::InputsError))?;
+
+        let code = AssetTypeCode::gen_random();
+
+        dbg!("New unit", &name, &issuer, &code);
+
+        let mut properties: Asset = Default::default();
+        properties.code = code;
+        properties.issuer.key = *pubkey;
+
+        let body = DefineAssetBody { asset: properties };
+
+        let sig = compute_signature(privkey, pubkey, &body);
+
+        let op = DefineAsset { body,
+                               pubkey: IssuerPublicKey { key: *pubkey },
+                               signature: sig };
+
+        let txn = Transaction { operations: vec![Operation::DefineAsset(op)],
+                                credentials: vec![],
+                                memos: vec![] };
+
+        {
+          // let serialize = serde_json::to_string(&txn).unwrap();
+
+          let host = "localhost";
+          let port = format!("{}", self.submit_port);
+          let query = format!("http://{}:{}/submit_transaction", host, port);
+          dbg!(&query);
+          let res = self.client
+                        .post(&query)
+                        .json(&txn)
+                        .send()
+                        .unwrap()
+                        .error_for_status();
+          dbg!(&res);
+          res.map_err(|x| PlatformError::IoError(format!("{}", x)))?;
+        }
+
+        self.units.insert(name.clone(), (issuer.clone(), code));
+
+        for (_, bal) in self.balances.iter_mut() {
+          bal.insert(name.clone(), 0);
+        }
+      }
+      AccountsCommand::Mint(amt, unit) => {
+        let amt = *amt as u64;
+        let (issuer, code) = self.units.get(unit).ok_or(PlatformError::InputsError)?;
+
+        let new_seq_num = {
+          let host = "localhost";
+          let port = format!("{}", self.query_port);
+          let query = format!("http://{}:{}/asset_issuance_num/{}",
+                              host,
+                              port,
+                              code.to_base64());
+          dbg!(&query);
+          reqwest::get(&query).unwrap()
+                              .error_for_status()
+                              .unwrap()
+                              .text()
+                              .unwrap()
+        };
+        dbg!(&new_seq_num);
+        let new_seq_num = serde_json::from_str::<u64>(&new_seq_num).unwrap();
+
+        let keypair = self.accounts
+                          .get(issuer)
+                          .ok_or(PlatformError::InputsError)?;
+        let (pubkey, privkey) = (keypair.get_pk_ref(), keypair.get_sk_ref());
+        let utxos = self.utxos.get_mut(issuer).unwrap();
+
+        *self.balances
+             .get_mut(issuer)
+             .unwrap()
+             .get_mut(unit)
+             .unwrap() += amt;
+
+        let mut tx = Transaction::default();
+
+        let ar = AssetRecord::new(amt, code.val, *pubkey).unwrap();
+        let params = PublicParams::new();
+        let ba = build_blind_asset_record(&mut self.prng,
+                                          &params.pc_gens,
+                                          &ar,
+                                          conf_amts,
+                                          conf_types,
+                                          &None);
+
+        let asset_issuance_body = IssueAssetBody::new(&code, new_seq_num, &[TxOutput(ba)]).unwrap();
+
+        let sign = compute_signature(&privkey, &pubkey, &asset_issuance_body);
+
+        let asset_issuance_operation = IssueAsset { body: asset_issuance_body,
+                                                    pubkey: IssuerPublicKey { key: *pubkey },
+                                                    signature: sign };
+
+        let issue_op = Operation::IssueAsset(asset_issuance_operation);
+
+        tx.operations.push(issue_op);
+
+        let res = {
+          // let serialize = serde_json::to_string(&tx).unwrap();
+
+          let host = "localhost";
+          let port = format!("{}", self.submit_port);
+          let query = format!("http://{}:{}/submit_transaction", host, port);
+          dbg!(&query);
+          self.client
+              .post(&query)
+              .json(&tx)
+              .send()
+              .unwrap()
+              .error_for_status()
+              .map_err(|x| PlatformError::IoError(format!("{}", x)))?
+              .text()
+              .unwrap()
+        };
+        let txos = serde_json::from_str::<Vec<TxoSID>>(&res).unwrap();
+
+        assert!(txos.len() == 1);
+        utxos.extend(txos.iter());
+      }
+      AccountsCommand::Send(src, amt, unit, dst) => {
+        let amt = *amt as u64;
+        let src_keypair = self.accounts.get(src).ok_or(PlatformError::InputsError)?;
+        let (src_pub, src_priv) = (src_keypair.get_pk_ref(), src_keypair.get_sk_ref());
+        let dst_keypair = self.accounts.get(dst).ok_or(PlatformError::InputsError)?;
+        let (dst_pub, _) = (dst_keypair.get_pk_ref(), dst_keypair.get_sk_ref());
+        let (_, unit_code) = self.units.get(unit).ok_or(PlatformError::InputsError)?;
+
+        if *self.balances.get(src).unwrap().get(unit).unwrap() < amt {
+          return Err(PlatformError::InputsError);
+        }
+        if amt == 0 {
+          return Ok(());
+        }
+
+        *self.balances.get_mut(src).unwrap().get_mut(unit).unwrap() -= amt;
+        *self.balances.get_mut(dst).unwrap().get_mut(unit).unwrap() += amt;
+
+        let mut src_records: Vec<OpenAssetRecord> = Vec::new();
+        let mut total_sum = 0u64;
+        let avail = self.utxos.get_mut(src).unwrap();
+        let mut to_use: Vec<TxoSID> = Vec::new();
+        let mut to_skip: Vec<TxoSID> = Vec::new();
+
+        while total_sum < amt && !avail.is_empty() {
+          let sid = avail.pop_front().unwrap();
+          let blind_rec = serde_json::from_str::<TxOutput>(&{
+            let host = "localhost";
+            let port = format!("{}",self.query_port);
+            reqwest::get(&format!("http://{}:{}/utxo_sid/{}",host,port,sid.0)).unwrap().error_for_status().unwrap().text().unwrap()
+          }).unwrap().0;
+          let open_rec = open_asset_record(&blind_rec, &src_priv).unwrap();
+          dbg!(sid, open_rec.get_amount(), open_rec.get_asset_type());
+          if *open_rec.get_asset_type() != unit_code.val {
+            to_skip.push(sid);
+            continue;
+          }
+
+          debug_assert!(*open_rec.get_asset_type() == unit_code.val);
+          to_use.push(sid);
+          total_sum += *open_rec.get_amount();
+          src_records.push(open_rec);
+        }
+        dbg!(&to_skip, &to_use);
+        avail.extend(to_skip.into_iter());
+
+        assert!(total_sum >= amt);
+
+        let mut src_outputs: Vec<AssetRecord> = Vec::new();
+        let mut dst_outputs: Vec<AssetRecord> = Vec::new();
+        let mut all_outputs: Vec<AssetRecord> = Vec::new();
+
+        {
+          // Simple output to dst
+          let ar = AssetRecord::new(amt, unit_code.val, *dst_pub).unwrap();
+          dst_outputs.push(ar);
+
+          let ar = AssetRecord::new(amt, unit_code.val, *dst_pub).unwrap();
+          all_outputs.push(ar);
+        }
+
+        if total_sum > amt {
+          // Extras left over go back to src
+          let ar = AssetRecord::new(total_sum - amt, unit_code.val, *src_pub).unwrap();
+          src_outputs.push(ar);
+
+          let ar = AssetRecord::new(total_sum - amt, unit_code.val, *src_pub).unwrap();
+          all_outputs.push(ar);
+        }
+
+        let src_outputs = src_outputs;
+        let dst_outputs = dst_outputs;
+        let all_outputs = all_outputs;
+        assert!(!src_records.is_empty());
+        dbg!(unit_code.val);
+        for (ix, rec) in src_records.iter().enumerate() {
+          dbg!(ix,
+               rec.get_asset_type(),
+               rec.get_amount(),
+               rec.get_pub_key());
+        }
+
+        let mut sig_keys: Vec<XfrKeyPair> = Vec::new();
+
+        for _ in to_use.iter() {
+          sig_keys.push(XfrKeyPair::zei_from_bytes(&src_keypair.zei_to_bytes()));
+        }
+
+        let transfer_body =
+          TransferAssetBody::new(&mut self.prng,
+                                 to_use.iter().cloned().map(TxoRef::Absolute).collect(),
+                                 src_records.as_slice(),
+                                 all_outputs.as_slice()).unwrap();
+        dbg!(&transfer_body);
+        let transfer_sig =
+          SignedAddress { address: XfrAddress { key: *src_pub },
+                          signature: compute_signature(src_priv, src_pub, &transfer_body) };
+
+        let transfer = TransferAsset { body: transfer_body,
+                                       body_signatures: vec![transfer_sig],
+                                       transfer_type: TransferType::Standard };
+        let txn = Transaction { operations: vec![Operation::TransferAsset(transfer)],
+                                credentials: vec![],
+                                memos: vec![] };
+
+        let res = {
+          // let serialize = serde_json::to_string(&txn).unwrap();
+
+          let host = "localhost";
+          let port = format!("{}", self.submit_port);
+          let query = format!("http://{}:{}/submit_transaction", host, port);
+          dbg!(&query);
+          self.client
+              .post(&query)
+              .json(&txn)
+              .send()
+              .unwrap()
+              .error_for_status()
+              .map_err(|x| PlatformError::IoError(format!("{}", x)))?
+              .text()
+              .unwrap()
+        };
+        let txos = serde_json::from_str::<Vec<TxoSID>>(&res).unwrap();
 
         assert!(txos.len() == src_outputs.len() + dst_outputs.len());
 
@@ -720,7 +1056,14 @@ impl Arbitrary for AccountsScenario {
 #[cfg(test)]
 mod test {
   use super::*;
+  use lazy_static::lazy_static;
   use quickcheck;
+
+  use std::sync::Mutex;
+
+  lazy_static! {
+    static ref LEDGER_STANDALONE_LOCK: Mutex<()> = Mutex::new(());
+  }
 
   // #[quickcheck] tests that function with randomized input (then shrinks
   // the input if it fails).
@@ -797,14 +1140,44 @@ mod test {
     normal.deep_invariant_check().unwrap();
   }
 
-  fn ledger_simulates_accounts(cmds: AccountsScenario) {
-    let mut ledger = LedgerAccounts { ledger: LedgerState::test_ledger(),
-                                      accounts: HashMap::new(),
-                                      utxos: HashMap::new(),
-                                      units: HashMap::new(),
-                                      balances: HashMap::new(),
-                                      confidential_amounts: cmds.confidential_amounts,
-                                      confidential_types: cmds.confidential_types };
+  fn ledger_simulates_accounts(cmds: AccountsScenario, with_standalone: bool) {
+    let _ = if with_standalone {
+      Some(LEDGER_STANDALONE_LOCK.lock().unwrap())
+    } else {
+      None
+    };
+    let wait_time = time::Duration::from_millis(1000);
+    let mut ledger = Box::new(LedgerAccounts { ledger: LedgerState::test_ledger(),
+                                               accounts: HashMap::new(),
+                                               utxos: HashMap::new(),
+                                               units: HashMap::new(),
+                                               balances: HashMap::new(),
+                                               confidential_amounts: cmds.confidential_amounts,
+                                               confidential_types: cmds.confidential_types });
+
+    let mut active_ledger = if !with_standalone {
+      None
+    } else {
+      Some(Box::new(
+      LedgerStandaloneAccounts {
+        ledger: Popen::create(&["/usr/bin/env", "bash", "-c", "flock .test_standalone_lock cargo run"],
+                  PopenConfig {
+                    cwd: Some(OsString::from("../ledger_standalone/")),
+                    ..Default::default()
+                  }).unwrap(),
+        submit_port: 8668,
+        query_port: 8668,
+        client: reqwest::Client::new(),
+        prng: rand_chacha::ChaChaRng::from_seed([0u8; 32]),
+        accounts: HashMap::new(),
+        utxos: HashMap::new(),
+        units: HashMap::new(),
+        balances: HashMap::new(),
+        confidential_amounts: cmds.confidential_amounts,
+        confidential_types: cmds.confidential_types }))
+    };
+
+    thread::sleep(wait_time);
 
     let mut prev_simple: SimpleAccountsState = Default::default();
     let cmds = cmds.cmds;
@@ -815,6 +1188,7 @@ mod test {
 
     simple.deep_invariant_check().unwrap();
     normal.deep_invariant_check().unwrap();
+    ledger.ledger.deep_invariant_check().unwrap();
 
     for cmd in cmds {
       simple.fast_invariant_check().unwrap();
@@ -825,6 +1199,11 @@ mod test {
       assert!(simple_res.is_ok() || normal_res.is_err());
       let ledger_res = ledger.run_account_command(&cmd);
       assert!(ledger_res.is_ok() == normal_res.is_ok());
+      if with_standalone {
+        let active_ledger_res = active_ledger.as_mut().unwrap().run_account_command(&cmd);
+        dbg!(&active_ledger_res);
+        assert!(active_ledger_res.is_ok() == normal_res.is_ok());
+      }
 
       if simple_res.is_err() != normal_res.is_err() {
         assert!(simple_res.is_ok());
@@ -837,10 +1216,14 @@ mod test {
 
     simple.deep_invariant_check().unwrap();
     normal.deep_invariant_check().unwrap();
+    ledger.ledger.deep_invariant_check().unwrap();
   }
 
-  #[test]
-  fn regression_quickcheck_found() {
+  fn ledger_simulates_accounts_with_standalone(cmds: AccountsScenario) {
+    ledger_simulates_accounts(cmds, true)
+  }
+
+  fn regression_quickcheck_found(with_standalone: bool) {
     use AccountsCommand::*;
     ledger_simulates_accounts(AccountsScenario { cmds: vec![NewUser(UserName("".into())),
                                                             NewUnit(UnitName("".into()),
@@ -850,7 +1233,8 @@ mod test {
                                                                  UnitName("".into()),
                                                                  UserName("".into()))],
                                                  confidential_types: false,
-                                                 confidential_amounts: false });
+                                                 confidential_amounts: false },
+                              with_standalone);
     ledger_simulates_accounts(AccountsScenario { cmds: vec![NewUser(UserName("".into())),
                                                             NewUnit(UnitName("".into()),
                                                                     UserName("".into())),
@@ -860,7 +1244,8 @@ mod test {
                                                                  UnitName("".into()),
                                                                  UserName("".into()))],
                                                  confidential_types: false,
-                                                 confidential_amounts: false });
+                                                 confidential_amounts: false },
+                              with_standalone);
     ledger_simulates_accounts(AccountsScenario { cmds: vec![NewUser(UserName("".into())),
                                                             NewUnit(UnitName("".into()),
                                                                     UserName("".into())),
@@ -870,7 +1255,8 @@ mod test {
                                                                  UnitName("".into()),
                                                                  UserName("".into()))],
                                                  confidential_types: false,
-                                                 confidential_amounts: true });
+                                                 confidential_amounts: true },
+                              with_standalone);
 
     ledger_simulates_accounts(AccountsScenario { confidential_amounts: false,
                                                  confidential_types: false,
@@ -886,7 +1272,8 @@ mod test {
                                                             Send(UserName("".into()),
                                                                  1,
                                                                  UnitName("".into()),
-                                                                 UserName("".into()))] });
+                                                                 UserName("".into()))] },
+                              with_standalone);
 
     ledger_simulates_accounts(AccountsScenario { confidential_amounts: true,
                                                  confidential_types: false,
@@ -902,7 +1289,8 @@ mod test {
                                                             Send(UserName("".into()),
                                                                  1,
                                                                  UnitName("".into()),
-                                                                 UserName("".into()))] });
+                                                                 UserName("".into()))] },
+                              with_standalone);
 
     ledger_simulates_accounts(AccountsScenario { confidential_amounts: false,
                                                  confidential_types: false,
@@ -917,13 +1305,26 @@ mod test {
                                                             Send(UserName("".into()),
                                                                  2,
                                                                  UnitName("".into()),
-                                                                 UserName("".into()))] });
+                                                                 UserName("".into()))] },
+                              with_standalone);
+  }
+
+  #[test]
+  fn regression_quickcheck_found_no_standalone() {
+    regression_quickcheck_found(false)
+  }
+
+  #[test]
+  #[ignore]
+  fn regression_quickcheck_found_with_standalone() {
+    regression_quickcheck_found(true)
   }
 
   #[test]
   #[ignore]
   fn quickcheck_ledger_simulates() {
     QuickCheck::new().tests(5)
-                     .quickcheck(ledger_simulates_accounts as fn(AccountsScenario) -> ());
+                     .quickcheck(ledger_simulates_accounts_with_standalone
+                                 as fn(AccountsScenario) -> ());
   }
 }

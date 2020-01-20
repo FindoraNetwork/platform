@@ -3,7 +3,7 @@ use crate::data_model::AssetTypeCode;
 use fixed::types::I20F12;
 use zei::serialization::ZeiFromToBytes;
 use zei::xfr::sig::XfrPublicKey;
-use zei::xfr::structs::XfrNote;
+use zei::xfr::structs::XfrBody;
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Serialize, Deserialize)]
 pub struct Fraction(pub I20F12);
@@ -32,8 +32,8 @@ pub struct DebtMemo {
 
 #[derive(Clone, Copy)]
 enum DebtOutputIndices {
-  Fiat = 0,
   BurnedDebt = 1,
+  Fiat = 0,
   ReturnedDebt = 2,
 }
 
@@ -55,26 +55,22 @@ pub fn calculate_fee(principal: u64, interest_rate: Fraction) -> u64 {
 // 4) There are no extraneous inputs.
 // This function returns all of the information needed to validate these conditions in DebtSwapEffect
 // The function also computes internal consistency checks that do not rely on external information
-pub fn compute_debt_swap_effect(transfer: &XfrNote)
+pub fn compute_debt_swap_effect(transfer: &XfrBody)
                                 -> Result<(AssetTypeCode, DebtSwapEffect), PlatformError> {
-  let fiat_output = &transfer.body
-                             .outputs
+  let fiat_output = &transfer.outputs
                              .get(DebtOutputIndices::Fiat as usize)
                              .ok_or(PlatformError::InputsError)?;
 
-  let burned_debt_output = &transfer.body
-                                    .outputs
+  let burned_debt_output = &transfer.outputs
                                     .get(DebtOutputIndices::BurnedDebt as usize)
                                     .ok_or(PlatformError::InputsError)?;
-  let returned_debt_output = &transfer.body
-                                      .outputs
+  let returned_debt_output = &transfer.outputs
                                       .get(DebtOutputIndices::ReturnedDebt as usize);
-  let debt_input = &transfer.body
-                            .inputs
+  let debt_input = &transfer.inputs
                             .get(DebtInputIndices::Debt as usize)
                             .ok_or(PlatformError::InputsError)?;
 
-  if transfer.body.inputs.len() > 2 {
+  if transfer.inputs.len() > 2 {
     return Err(PlatformError::InputsError);
   }
 
