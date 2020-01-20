@@ -269,15 +269,15 @@ fn new_issuer() -> Issuer {
 #[derive(Debug, Serialize, Deserialize)]
 struct AddrIssuer {
   address: String,
-  issuer_type: u32,
-  issuer: Issuer,
+  value_type: u32,
+  value: Issuer,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 struct AddrUser {
   address: String,
-  user_type: u32,
-  user: User,
+  value_type: u32,
+  value: User,
 }
 
 // Generate a new issuer and append it to the registry.
@@ -299,8 +299,8 @@ fn subcommand_add_issuer(registry_path: &Path) -> ShellExitStatus {
     }
     Ok(mut registry_file) => {
       let a = AddrIssuer { address,
-                           issuer_type: 2,
-                           issuer };
+                           value_type: 2,
+                           value: issuer };
       let j = serde_json::to_string(&a).unwrap();
       trace!("json: {}", j);
       if let Err(e) = registry_file.write_fmt(format_args!("{}\n", j)) {
@@ -384,9 +384,9 @@ fn subcommand_add_user(registry_path: &Path, issuer: &str) -> ShellExitStatus {
     prng = ChaChaRng::from_seed([0u8; 32]);
     let (user_pk, user_sk) = ac_keygen_user::<_>(&mut prng, &issuer.public_key);
     let au = AddrUser { address: sha256(&user_pk),
-                        user_type: 2,
-                        user: User { public_key: user_pk,
-                                     secret_key: user_sk } };
+                        value_type: 2,
+                        value: User { public_key: user_pk,
+                                      secret_key: user_sk } };
     info!("Added user: {}", au.address);
     if append_user(registry_path, au) {
       ShellExitStatus::Success
@@ -402,8 +402,8 @@ fn subcommand_add_user(registry_path: &Path, issuer: &str) -> ShellExitStatus {
 #[derive(Debug, Serialize, Deserialize)]
 struct AddrSig {
   address: String,
-  sig_type: u32,
-  signature: ACSignature,
+  value_type: u32,
+  value: ACSignature,
 }
 
 fn subcommand_sign(registry_path: &Path, user: &str, issuer: &str) -> ShellExitStatus {
@@ -425,8 +425,8 @@ fn subcommand_sign(registry_path: &Path, user: &str, issuer: &str) -> ShellExitS
       // TODO Using the hash of the user's public key as the signature
       // address precludes multiple signatures
       let addr_sig = AddrSig { address: user.to_string(),
-                               sig_type: 2,
-                               signature: sig };
+                               value_type: 2,
+                               value: sig };
       // TODO extract a generic function to append a record to the registry
       match OpenOptions::new().append(true).open(&registry_path) {
         Err(io_error) => {
@@ -469,8 +469,8 @@ type Proof = ACRevealSig;
 #[derive(Debug, Serialize, Deserialize)]
 struct AddrProof {
   address: String,
-  proof_type: u32,
-  proof: Proof,
+  value_type: u32,
+  value: Proof,
 }
 
 fn subcommand_reveal(registry_path: &Path, user: &str, issuer: &str) -> ShellExitStatus {
@@ -501,8 +501,8 @@ fn subcommand_reveal(registry_path: &Path, user: &str, issuer: &str) -> ShellExi
       // TODO Using the hash of the user's public key as the proof
       // address precludes multiple proofs
       let addr_proof = AddrProof { address: user.to_string(),
-                                   proof_type: 2,
-                                   proof };
+                                   value_type: 2,
+                                   value: proof };
       // TODO extract a generic function to append a record to the registry
       match OpenOptions::new().append(true).open(&registry_path) {
         Err(io_error) => {
