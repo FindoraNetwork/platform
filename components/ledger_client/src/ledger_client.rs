@@ -1,4 +1,4 @@
-#![deny(warnings)]
+//#![deny(warnings)]
 use ledger::data_model::{AssetTypeCode, Operation, Transaction};
 use ledger::store::helpers::*;
 // use ledger::store::{ArchiveUpdate, LedgerState, LedgerUpdate};
@@ -16,10 +16,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
   let asset_body = asset_creation_body(&token_code1, &public_key, true, false, None, None);
   let asset_create = asset_creation_operation(&asset_body, &public_key, &secret_key);
   tx.operations.push(Operation::DefineAsset(asset_create));
+  let cloned = tx.clone();
+  dbg!(&cloned);
 
   // env_logger::init();
 
-  let serialize = serde_json::to_string(&tx).unwrap();
   // Set of invalid URI characters that may appear in a JSON transaction
   const FRAGMENT: &AsciiSet = &CONTROLS.add(b' ')
                                        .add(b'"')
@@ -27,7 +28,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                                        .add(b'{')
                                        .add(b'/')
                                        .add(b'}');
-  let uri_string = utf8_percent_encode(&serialize, FRAGMENT).to_string();
 
   let client = reqwest::Client::new();
 
@@ -46,11 +46,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
   // copy the response body directly to stdout
   std::io::copy(&mut res, &mut std::io::stdout())?;
 
-  println!("\n\nSubmit transaction: uri_string=\"{:?}\"", &uri_string);
+  println!("\n\nSubmit transaction");
 
-  res = client.post(&format!("http://{}:{}/{}/{}",
-                             &host, &port, "submit_transaction", uri_string))
-              .body("")
+  res = client.post(&format!("http://{}:{}/{}", &host, &port, "submit_transaction"))
+              .json(&tx)
               .send()?;
   println!("Status: {}", res.status());
   println!("Headers:\n{:?}", res.headers());
@@ -60,6 +59,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
   println!("\n\nQuery global_state {:?} again", &token_code1);
   res = reqwest::get(&format!("http://{}:{}/{}/{}", &host, &port, "global_state", 0))?;
+
+  println!("Status: {}", res.status());
+  println!("Headers:\n{:?}", res.headers());
+
+  let mut res = reqwest::get(&format!("http://{}:{}/{}/{}",
+                                      &host, &port, "asset_token", &token_code_b64))?;
 
   println!("Status: {}", res.status());
   println!("Headers:\n{:?}", res.headers());
