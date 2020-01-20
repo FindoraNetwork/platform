@@ -21,6 +21,7 @@ fn submit_transaction<RNG, LU>(data: web::Data<Arc<RwLock<LedgerApp<RNG, LU>>>>,
   where RNG: RngCore + CryptoRng,
         LU: LedgerUpdate<RNG> + LedgerAccess + Sync + Send
 {
+  println!("submitting txn!");
   let mut ledger_app = data.write().unwrap();
   let uri_string = percent_decode_str(&*info).decode_utf8().unwrap();
   let tx = serde_json::from_str(&uri_string)?;
