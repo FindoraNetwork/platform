@@ -3,7 +3,7 @@ use clap::{App, Arg, SubCommand};
 use env_logger::{Env, Target};
 use ledger::data_model::errors::PlatformError;
 use ledger::data_model::{AccountAddress, AssetTypeCode, TxoRef, TxoSID};
-use log::{error, info, trace}; // Other options: debug, info, warn
+use log::{error, trace}; // Other options: debug, info, warn
 use rand_chacha::ChaChaRng;
 use rand_core::SeedableRng;
 use std::env;
@@ -535,7 +535,6 @@ fn process_add_cmd(add_matches: &clap::ArgMatches,
                                      .to_string();
       let allow_updates = define_asset_matches.is_present("allow_updates");
       let traceable = define_asset_matches.is_present("traceable");
-      info!("attempting");
       if let Err(e) = load_txn_builder_from_file(&transaction_file_name) {
         println!("{:?}", e);
       }
@@ -547,7 +546,6 @@ fn process_add_cmd(add_matches: &clap::ArgMatches,
           asset_token = AssetTypeCode::gen_random();
           println!("Creating asset with token code {:?}", asset_token.val);
         }
-        info!("{:?}", &key_pair);
         if let Ok(_res) = txn_builder.add_operation_create_asset(&key_pair,
                                                                  Some(asset_token),
                                                                  allow_updates,
