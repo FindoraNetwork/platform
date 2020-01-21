@@ -287,10 +287,8 @@ impl TransferOperationBuilder {
   }
 
   pub fn get_output_record(&self, idx: usize) -> Option<BlindAssetRecord> {
-    self.transfer.as_ref()?;
     self.transfer
-        .as_ref()
-        .unwrap()
+        .as_ref()?
         .body
         .transfer
         .outputs
