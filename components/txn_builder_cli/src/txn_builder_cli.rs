@@ -690,7 +690,7 @@ fn process_add_cmd(add_matches: &clap::ArgMatches,
 mod tests {
   use super::*;
   use zei::setup::PublicParams;
-  use zei::xfr::asset_record::build_blind_asset_record;
+  use zei::xfr::asset_record::{AssetRecordType, build_blind_asset_record};
   use zei::xfr::structs::AssetRecord;
 
   fn check_next_path(input: &str, expected: &str) {
@@ -803,23 +803,23 @@ mod tests {
 
   #[test]
   fn test_get_blind_asset_records() {
+    let art_0 = AssetRecordType::ConfidentialAmount_ConfidentialAssetType;
     let blind_asset_record_0 =
       build_blind_asset_record(&mut ChaChaRng::from_entropy(),
                                &PublicParams::new().pc_gens,
                                &AssetRecord::new(10,
                                                  [0x1; 16],
                                                  XfrPublicKey::zei_from_bytes(&[0; 32])).unwrap(),
-                               true,
-                               true,
+                               art_0,                   
                                &None);
+    let art_1 = AssetRecordType::PublicAmount_PublicAssetType;
     let blind_asset_record_1 =
       build_blind_asset_record(&mut ChaChaRng::from_entropy(),
                                &PublicParams::new().pc_gens,
                                &AssetRecord::new(100,
                                                  [0x0; 16],
                                                  XfrPublicKey::zei_from_bytes(&[1; 32])).unwrap(),
-                               false,
-                               false,
+                               art_1,
                                &None);
 
     let mut blind_asset_records_arg = serde_json::to_string(&blind_asset_record_0).unwrap();

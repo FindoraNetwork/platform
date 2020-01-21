@@ -13,7 +13,7 @@ use rand_core::SeedableRng;
 use txn_builder::{BuildsTransactions, TransactionBuilder, TransferOperationBuilder};
 use zei::serialization::ZeiFromToBytes;
 use zei::setup::PublicParams;
-use zei::xfr::asset_record::{build_blind_asset_record, open_asset_record};
+use zei::xfr::asset_record::{AssetRecordType, build_blind_asset_record, open_asset_record};
 use zei::xfr::sig::{XfrKeyPair, XfrPublicKey};
 use zei::xfr::structs::AssetRecord;
 
@@ -121,14 +121,12 @@ fn test_loan_repayment(loan_amount: u64,
   let debt_ba = build_blind_asset_record(ledger.get_prng(),
                                          &params.pc_gens,
                                          &debt_ar,
-                                         false,
-                                         false,
+                                         AssetRecordType::PublicAmount_PublicAssetType,
                                          &None);
   let fiat_ba = build_blind_asset_record(ledger.get_prng(),
                                          &params.pc_gens,
                                          &fiat_ar,
-                                         false,
-                                         false,
+                                         AssetRecordType::PublicAmount_PublicAssetType,
                                          &None);
   let debt_oar = open_asset_record(&debt_ba, borrower_keys.get_sk_ref()).unwrap();
   let fiat_oar = open_asset_record(&fiat_ba, lender_keys.get_sk_ref()).unwrap();

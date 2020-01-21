@@ -8,7 +8,7 @@ extern crate serde;
 extern crate wasm_bindgen;
 extern crate wasm_bindgen_test;
 extern crate zei;
-use bulletproofs::PedersenGens;
+// use bulletproofs::PedersenGens;
 use cryptohash::sha256;
 use hex;
 use js_sys::Promise;
@@ -26,18 +26,18 @@ use wasm_bindgen_futures::future_to_promise;
 use wasm_bindgen_futures::JsFuture;
 use wasm_bindgen_test::*;
 use web_sys::{Request, RequestInit, RequestMode};
-use zei::algebra::ristretto::RistPoint;
 use zei::api::anon_creds::{
   ac_keygen_issuer, ac_keygen_user, ac_reveal, ac_sign, ac_verify, ACIssuerPublicKey,
   ACIssuerSecretKey, ACRevealSig, ACSignature, ACUserPublicKey, ACUserSecretKey,
 };
 use zei::api::conf_cred_reveal::cac_gen_encryption_keys;
-use zei::basic_crypto::elgamal::{elgamal_decrypt, elgamal_keygen, ElGamalPublicKey};
+use zei::basic_crypto::elgamal::{/* elgamal_decrypt, elgamal_keygen, */ ElGamalPublicKey};
 use zei::serialization::ZeiFromToBytes;
 use zei::setup::PublicParams;
-use zei::xfr::asset_record::{build_blind_asset_record, open_asset_record};
+use zei::xfr::asset_record::{AssetRecordType, build_blind_asset_record, open_asset_record};
 use zei::xfr::sig::{XfrKeyPair, XfrPublicKey};
 use zei::xfr::structs::{AssetIssuerPubKeys, AssetRecord, BlindAssetRecord, OpenAssetRecord};
+use curve25519_dalek::ristretto::RistrettoPoint;
 
 const HOST: &str = "localhost";
 const PORT: &str = "8668";
@@ -71,8 +71,7 @@ pub fn create_blind_asset_record(amount: u64,
   Ok(serde_json::to_string(&build_blind_asset_record(&mut small_rng,
                                                      &params.pc_gens,
                                                      &AssetRecord::new(amount, code.val, *pk).unwrap(),
-                                                     conf_amount,
-                                                     conf_type,
+                                                     AssetRecordType::from_booleans(conf_amount, conf_type),
                                                      &None)).unwrap())
 }
 
@@ -137,7 +136,7 @@ impl WasmTransactionBuilder {
     if elgamal_pub_key.is_empty() {
       issuer_keys = None
     } else {
-      let pk = serde_json::from_str::<ElGamalPublicKey<RistPoint>>(&elgamal_pub_key).map_err(|_e| JsValue::from_str("could not deserialize elgamal key"))?;
+      let pk = serde_json::from_str::<ElGamalPublicKey<RistrettoPoint>>(&elgamal_pub_key).map_err(|_e| JsValue::from_str("could not deserialize elgamal key"))?;
       let mut small_rng = ChaChaRng::from_entropy();
       let (_, id_reveal_pub_key) = cac_gen_encryption_keys(&mut small_rng);
       issuer_keys = Some(AssetIssuerPubKeys { eg_ristretto_pub_key: pk,
@@ -282,14 +281,14 @@ pub fn keypair_to_str(key_pair: &XfrKeyPair) -> String {
 pub fn keypair_from_str(str: String) -> XfrKeyPair {
   XfrKeyPair::zei_from_bytes(&hex::decode(str).unwrap())
 }
-
+/*
 #[wasm_bindgen]
 pub fn generate_elgamal_keys() -> String {
   let mut small_rng = ChaChaRng::from_entropy();
   let pc_gens = PedersenGens::default();
-  serde_json::to_string(&elgamal_keygen(&mut small_rng, &RistPoint(pc_gens.B))).unwrap()
+  serde_json::to_string(&elgamal_keygen(&mut small_rng, &RistrettoPoint(pc_gens.B))).unwrap()
 }
-
+*/
 // Defines an asset on the ledger using the serialized strings in KeyPair and a couple of boolean policies
 #[wasm_bindgen]
 pub fn create_asset(key_pair: &XfrKeyPair,
@@ -326,7 +325,7 @@ pub fn sign(key_pair: &XfrKeyPair, message: String) -> Result<JsValue, JsValue> 
   smaller_signature.copy_from_slice(&signature.0.to_bytes()[0..32]);
   Ok(JsValue::from_serde(&smaller_signature).unwrap())
 }
-
+/*
 fn u8_littleendian_slice_to_u32(array: &[u8]) -> u32 {
   u32::from(array[0])
   | u32::from(array[1]) << 8
@@ -337,7 +336,8 @@ fn u8_littleendian_slice_to_u32(array: &[u8]) -> u32 {
 fn u32_pair_to_u64(x: (u32, u32)) -> u64 {
   (x.1 as u64) << 32 ^ (x.0 as u64)
 }
-
+*/
+/*
 #[wasm_bindgen]
 pub fn get_tracked_amount(blind_asset_record: String,
                           issuer_private_key_point: String)
@@ -350,8 +350,8 @@ pub fn get_tracked_amount(blind_asset_record: String,
                              JsValue::from_str("Could not deserialize issuer private key")
                            })?;
   if let Some(lock_amount) = blind_asset_record.issuer_lock_amount {
-    match (elgamal_decrypt(&RistPoint(pc_gens.B), &(lock_amount.0), &issuer_private_key),
-           elgamal_decrypt(&RistPoint(pc_gens.B), &(lock_amount.1), &issuer_private_key))
+    match (elgamal_decrypt(&RistrettoPoint(pc_gens.B), &(lock_amount.0), &issuer_private_key),
+           elgamal_decrypt(&RistrettoPoint(pc_gens.B), &(lock_amount.1), &issuer_private_key))
     {
       (Ok(s1), Ok(s2)) => {
         let amount = u32_pair_to_u64((u8_littleendian_slice_to_u32(s1.0.as_bytes()),
@@ -364,7 +364,7 @@ pub fn get_tracked_amount(blind_asset_record: String,
     Err(JsValue::from_str("Asset record does not contain decrypted lock amount"))
   }
 }
-
+*/
 #[wasm_bindgen]
 pub fn issue_asset(key_pair: &XfrKeyPair,
                    elgamal_pub_key: String,
@@ -380,7 +380,7 @@ pub fn issue_asset(key_pair: &XfrKeyPair,
   if elgamal_pub_key.is_empty() {
     issuer_keys = None
   } else {
-    let pk = serde_json::from_str::<ElGamalPublicKey<RistPoint>>(&elgamal_pub_key).map_err(|_e| JsValue::from_str("could not deserialize elgamal key"))?;
+    let pk = serde_json::from_str::<ElGamalPublicKey<RistrettoPoint>>(&elgamal_pub_key).map_err(|_e| JsValue::from_str("could not deserialize elgamal key"))?;
     let mut small_rng = ChaChaRng::from_entropy();
     let (_, id_reveal_pub_key) = cac_gen_encryption_keys(&mut small_rng);
     issuer_keys = Some(AssetIssuerPubKeys { eg_ristretto_pub_key: pk,
