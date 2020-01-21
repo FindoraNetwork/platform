@@ -33,6 +33,28 @@ fn load_txn_builder_from_file(file_name: &str) -> Result<TransactionBuilder, Pla
   Ok(builder)
 }
 
+fn load_key_pair_from_files(key_file_name: &str) -> Result<XfrKeyPair, PlatformError> {
+  let mut key_file = File::open(key_file_name).or_else(|_e| {
+                                                println!("Failed to open key file {}",
+                                                         key_file_name);
+                                                Err(PlatformError::DeserializationError)
+                                              })?;
+
+  let kp: XfrKeyPair;
+  let mut kp_byte_buffer = Vec::new();
+  match key_file.read_to_end(&mut kp_byte_buffer) {
+    Ok(_len) => {
+      kp = XfrKeyPair::zei_from_bytes(&kp_byte_buffer);
+    }
+    Err(_e) => {
+      println!("Failed to read key file {}", key_file_name);
+      return Err(PlatformError::IoError("unable to read".to_string()));
+    }
+  }
+
+  Ok(kp)
+}
+
 fn store_txn_builder_to_file(file_name: &str, txn: &TransactionBuilder) {
   if let Ok(as_json) = serde_json::to_string(txn) {
     let _skip = fs::write(file_name, &as_json).or_else(|_e| {
@@ -47,36 +69,25 @@ fn store_txn_builder_to_file(file_name: &str, txn: &TransactionBuilder) {
 // Move aside any extant files at the given paths.
 // Reports errors rather than returning them.
 // Assumes tilde expansion has already been done on paths.
-fn create_key_files(priv_file_path: &Path, pub_file_path: &Path) {
-  trace!("private key path: {:?}", priv_file_path);
-  trace!("public key path: {:?}", pub_file_path);
-  match fs::create_dir_all(&priv_file_path.parent().unwrap()) {
+fn create_key_files(key_path: &Path) {
+  match fs::create_dir_all(&key_path.parent().unwrap()) {
     Ok(()) => {
-      if let Err(error) = rename_existing_path(&priv_file_path) {
-        error!("Cannot rename private key {:?}: {}", &priv_file_path, error);
-      }
-      if let Err(error) = rename_existing_path(&pub_file_path) {
-        error!("Cannot rename public key {:?}: {}", &pub_file_path, error);
+      if let Err(error) = rename_existing_path(&key_path) {
+        error!("Cannot rename key {:?}: {}", &key_path, error);
       }
       let mut prng: ChaChaRng;
       prng = ChaChaRng::from_seed([0u8; 32]);
       let keypair = XfrKeyPair::generate(&mut prng);
-      match fs::write(&priv_file_path, keypair.get_sk_ref().zei_to_bytes()) {
-        Ok(_) => {
-          if let Err(error) = fs::write(&pub_file_path, keypair.get_pk_ref().zei_to_bytes()) {
-            error!("Public key file {:?} could not be created: {}",
-                   &pub_file_path, error);
-          }
-        }
+      match fs::write(&key_path, keypair.zei_to_bytes()) {
+        Ok(_) => {}
         Err(error) => {
-          error!("Private key file {:?} could not be created: {}",
-                 priv_file_path, error);
+          error!("Key file {:?} could not be created: {}", key_path, error);
         }
       };
     }
     Err(error) => {
       error!("Failed to create directories for {}: {}",
-             &priv_file_path.display(),
+             &key_path.display(),
              error);
     }
   }
@@ -199,7 +210,7 @@ fn main() {
       .short("k")
       .long("keys")
       .value_name("PATH/TO/FILE")
-      .help("Path to private key (will extrapolate public key)")
+      .help("Path to keys)")
       .takes_value(true))
     .arg(Arg::with_name("txn")
       .long("txn")
@@ -297,6 +308,17 @@ fn main() {
         .long("name")
         .help("specify the path and name for the private key file; if the name has the form \"path/to/file_name.private\", the public key file will be \"path/to/file_name.pub\"; otherwise, \".pub\" will be appended to the name")
         .takes_value(true)))
+    .subcommand(SubCommand::with_name("submit")
+        .arg(Arg::with_name("port")
+            .short("p")
+            .long("port")
+            .takes_value(true)
+            .help("specify ledger standalone port (e.g. 8669)"))
+        .arg(Arg::with_name("host")
+            .short("h")
+            .long("host")
+            .takes_value(true)
+            .help("specify ledger standalone host (e.g. localhost)")))
     .get_matches();
   process_inputs(inputs)
 }
@@ -320,10 +342,10 @@ fn process_inputs(inputs: clap::ArgMatches) {
     _config_file_path = format!("{}/config.toml", findora_dir);
   }
 
-  if let Some(priv_key) = inputs.value_of("keys_path") {
-    keys_file_path = priv_key.to_string();
+  if let Some(key) = inputs.value_of("keys_path") {
+    keys_file_path = key.to_string();
   } else {
-    keys_file_path = format!("{}/keys/default.private", findora_dir);
+    keys_file_path = format!("{}/keys/default.keys", findora_dir);
   }
 
   if let Some(txn_store) = inputs.value_of("txn") {
@@ -361,15 +383,57 @@ fn process_inputs(inputs: clap::ArgMatches) {
         if let Some(new_keys_path_in) = keygen_matches.value_of("create_keys_path") {
           new_keys_path_in.to_string()
         } else {
-          format!("{}/keys/default.private", &findora_dir)
+          format!("{}/keys/default.keys", &findora_dir)
         };
-      let priv_file_str = shellexpand::tilde(&new_keys_path).to_string();
-      let priv_file_path = Path::new(&priv_file_str);
-      let pub_file_path = priv_file_path.with_extension("pub");
-      create_key_files(&priv_file_path, &pub_file_path);
+      let file_str = shellexpand::tilde(&new_keys_path).to_string();
+      let file_path = Path::new(&file_str);
+      create_key_files(&file_path);
+    }
+    ("submit", Some(submit_matches)) => {
+      process_submit_cmd(submit_matches, &transaction_file_name);
     }
     _ => {}
   }
+}
+
+fn process_submit_cmd(submit_matches: &clap::ArgMatches, transaction_file_name: &str) {
+  // get host and port
+  let host;
+  if let Some(host_arg) = submit_matches.value_of("host") {
+    host = host_arg;
+  } else {
+    error!("Standalone host must be specified (e.g. localhost)");
+    return;
+  }
+  let port;
+  if let Some(port_arg) = submit_matches.value_of("port") {
+    port = port_arg;
+  } else {
+    error!("Standalone port must be specified (e.g. 8668)");
+    return;
+  }
+
+  // serialize txn
+  let txn;
+  if let Ok(txn_builder) = load_txn_builder_from_file(&transaction_file_name) {
+    txn = txn_builder.transaction().clone();
+  } else {
+    error!("Cannot deserialize transaction builder file at {}",
+           &transaction_file_name);
+    return;
+  }
+
+  // submit
+  let client = reqwest::Client::new();
+  let res = client.post(&format!("http://{}:{}/{}", &host, &port, "submit_transaction"))
+                  .json(&txn)
+                  .send()
+                  .unwrap();
+
+  // log body
+  println!("{:?}", res);
+  println!("Status: {}", res.status());
+  println!("Headers:\n{:?}", res.headers());
 }
 
 fn process_create_cmd(create_matches: &clap::ArgMatches,
@@ -455,7 +519,14 @@ fn process_add_cmd(add_matches: &clap::ArgMatches,
                    transaction_file_name: &str,
                    _findora_dir: &str) {
   // TODO (Keyao): Handle invalid key pair input?
-  let key_pair = XfrKeyPair::zei_from_bytes(keys_file_path.as_bytes());
+  println!("{}", keys_file_path);
+  let key_pair: XfrKeyPair;
+  if let Ok(kp) = load_key_pair_from_files(&keys_file_path) {
+    key_pair = kp;
+  } else {
+    error!("Valid keyfile required for this command; if no keyfile currently exists, try running \"findora_txn_builder keygen\"");
+    return;
+  }
   match add_matches.subcommand() {
     ("define_asset", Some(define_asset_matches)) => {
       let token_code = define_asset_matches.value_of("token_code");
