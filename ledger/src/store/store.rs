@@ -1091,6 +1091,7 @@ pub mod helpers {
   use zei::xfr::asset_record::{build_blind_asset_record, open_asset_record};
   use zei::xfr::sig::{XfrKeyPair, XfrPublicKey, XfrSecretKey};
   use zei::xfr::structs::AssetRecord;
+  use zei::xfr::asset_record::AssetRecordType;
 
   pub fn create_definition_transaction(code: &AssetTypeCode,
                                        public_key: &XfrPublicKey,
@@ -1172,7 +1173,8 @@ pub mod helpers {
 
     // issue operation
     let ar = AssetRecord::new(amount, code.val, *issuer_keys.get_pk_ref()).unwrap();
-    let ba = build_blind_asset_record(ledger.get_prng(), &params.pc_gens, &ar, false, false, &None);
+    let art = AssetRecordType::PublicAmount_PublicAssetType;
+    let ba = build_blind_asset_record(ledger.get_prng(), &params.pc_gens, &ar, art, &None);
 
     let asset_issuance_body = IssueAssetBody::new(&code, 0, &[TxOutput(ba.clone())]).unwrap();
     let asset_issuance_operation = IssueAsset::new(asset_issuance_body,
@@ -1209,7 +1211,7 @@ mod tests {
   use tempfile::tempdir;
   use zei::serialization::ZeiFromToBytes;
   use zei::setup::PublicParams;
-  use zei::xfr::asset_record::{build_blind_asset_record, open_asset_record};
+  use zei::xfr::asset_record::{AssetRecordType, build_blind_asset_record, open_asset_record};
   use zei::xfr::sig::{XfrKeyPair, XfrPublicKey};
   use zei::xfr::structs::AssetRecord;
 
@@ -1846,7 +1848,8 @@ mod tests {
     let mut tx = Transaction::default();
 
     let ar = AssetRecord::new(100, code.val, key_pair.get_pk_ref().clone()).unwrap();
-    let ba = build_blind_asset_record(ledger.get_prng(), &params.pc_gens, &ar, false, false, &None);
+    let art = AssetRecordType::PublicAmount_PublicAssetType;
+    let ba = build_blind_asset_record(ledger.get_prng(), &params.pc_gens, &ar, art, &None);
     let second_ba = ba.clone();
 
     let asset_issuance_body =
@@ -1971,7 +1974,8 @@ mod tests {
 
     let mut tx = Transaction::default();
     let ar = AssetRecord::new(100, token_code1.val, public_key).unwrap();
-    let ba = build_blind_asset_record(ledger.get_prng(), &params.pc_gens, &ar, false, false, &None);
+    let art = AssetRecordType::PublicAmount_PublicAssetType;
+    let ba = build_blind_asset_record(ledger.get_prng(), &params.pc_gens, &ar, art, &None);
     let asset_issuance_body = IssueAssetBody::new(&token_code1, 0, &[TxOutput(ba)]).unwrap();
     let asset_issuance_operation = IssueAsset::new(asset_issuance_body,
                                                    &IssuerPublicKey { key: public_key },
