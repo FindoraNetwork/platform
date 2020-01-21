@@ -1,5 +1,4 @@
 #![deny(warnings)]
-#![allow(clippy::blacklisted_name)] // for `bar`
 extern crate ledger;
 extern crate serde;
 extern crate zei;
