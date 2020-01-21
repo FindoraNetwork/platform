@@ -49,8 +49,8 @@
 {
     { "entry": { "address": "0123456701234567012345670123456701234567012345670123456701234567",
 		 "type" : 2,
-		 "signature": "John Handcock" }},
+		 "signature": "John Hancock" }},
     { "entry": { "address": "0123456701234567012345670123456701234567012345670123456701234567",
 		 "type" : 2,
-		 "signature": "John Handcock" }}
+		 "signature": "John Hancock" }}
 }

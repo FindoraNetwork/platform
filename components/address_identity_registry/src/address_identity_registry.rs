@@ -70,8 +70,8 @@ use rand_core::SeedableRng;
 use rmp_serde;
 use sha2::{Digest, Sha256};
 use zei::api::anon_creds::{
-  ac_keygen_issuer, ac_keygen_user, ac_reveal, ac_sign, ac_verify, ACIssuerPublicKey,
-  ACIssuerSecretKey, ACRevealSig, ACSignature, ACUserPublicKey, ACUserSecretKey,
+  ac_keygen_issuer, ac_keygen_user, ac_reveal, ac_sign, ac_verify,
+  ACIssuerPublicKey, ACIssuerSecretKey, ACRevealSig, ACSignature, ACUserPublicKey, ACUserSecretKey,
 };
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -606,3 +606,12 @@ fn main() {
          }
        } as i32)
 }
+
+/*
+pub fn verify_credential(issuer_pub_key: &ACIssuerPublicKey<P::G1, P::G2>,
+                         attrs: &[P::ScalarField],
+                         bitmap: &[bool],
+                         credential: &ACSignature<P::G1>)
+                         -> Result<(), ZeiError> {
+}
+*/
