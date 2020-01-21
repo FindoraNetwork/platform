@@ -28,7 +28,7 @@ fn submit_transaction<RNG, LU>(data: web::Data<Arc<RwLock<LedgerApp<RNG, LU>>>>,
   let handle = ledger_app.handle_transaction(tx)
                          .map_err(error::ErrorBadRequest)?;
   let res = serde_json::to_string(&handle)?;
-  Ok(res.into())
+  Ok(res)
 }
 
 // Force the validator node to end the block. Useful for testing when it is desirable to commmit
@@ -41,13 +41,11 @@ fn force_end_block<RNG, LU>(data: web::Data<Arc<RwLock<LedgerApp<RNG, LU>>>>)
         LU: LedgerUpdate<RNG> + LedgerAccess + Sync + Send
 {
   let mut ledger_app = data.write().unwrap();
-  let res;
-  if let Ok(_) = ledger_app.end_block() {
-    res = "Block successfully ended. All previously valid pending transactions are now committed";
+  if ledger_app.end_block().is_ok() {
+    Ok("Block successfully ended. All previously valid pending transactions are now committed".to_string())
   } else {
-    res = "No pending transactions to commit";
+    Ok("No pending transactions to commit".to_string())
   }
-  Ok(res.into())
 }
 
 fn txn_status<RNG, LU>(data: web::Data<Arc<RwLock<LedgerApp<RNG, LU>>>>,

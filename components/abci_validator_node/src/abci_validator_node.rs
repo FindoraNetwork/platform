@@ -71,7 +71,7 @@ impl abci::Application for ABCILedgerApp {
   }
 
   fn end_block(&mut self, _req: &RequestEndBlock) -> ResponseEndBlock {
-    self.la.end_block();
+    self.la.end_block().unwrap();
     ResponseEndBlock::new()
   }
 
