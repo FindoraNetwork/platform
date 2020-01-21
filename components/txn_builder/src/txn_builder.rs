@@ -286,9 +286,7 @@ impl TransferOperationBuilder {
   }
 
   pub fn get_output_record(&self, idx: usize) -> Option<BlindAssetRecord> {
-    if self.transfer.is_none() {
-      return None;
-    }
+    self.transfer.as_ref()?;
     self.transfer
         .as_ref()
         .unwrap()
@@ -296,8 +294,7 @@ impl TransferOperationBuilder {
         .transfer
         .outputs
         .get(idx)
-        .map(|bar| bar.clone())
-        .clone()
+        .cloned()
   }
 
   // All input owners must sign eventually for the transaction to be valid.
