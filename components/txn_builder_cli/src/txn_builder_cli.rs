@@ -3,6 +3,7 @@ use clap::{App, Arg, SubCommand};
 use env_logger::{Env, Target};
 use ledger::data_model::errors::PlatformError;
 use ledger::data_model::{AccountAddress, AssetTypeCode, TxoRef, TxoSID};
+use ledger_app::TxnHandle;
 use log::{error, trace}; // Other options: debug, info, warn
 use rand_chacha::ChaChaRng;
 use rand_core::SeedableRng;
@@ -310,12 +311,12 @@ fn main() {
         .takes_value(true)))
     .subcommand(SubCommand::with_name("submit")
         .arg(Arg::with_name("port")
-            .short("p")
+            .short("P")
             .long("port")
             .takes_value(true)
             .help("specify ledger standalone port (e.g. 8669)"))
         .arg(Arg::with_name("host")
-            .short("h")
+            .short("H")
             .long("host")
             .takes_value(true)
             .help("specify ledger standalone host (e.g. localhost)")))
@@ -425,13 +426,14 @@ fn process_submit_cmd(submit_matches: &clap::ArgMatches, transaction_file_name: 
 
   // submit
   let client = reqwest::Client::new();
-  let res = client.post(&format!("http://{}:{}/{}", &host, &port, "submit_transaction"))
-                  .json(&txn)
-                  .send()
-                  .unwrap();
+  let mut res = client.post(&format!("http://{}:{}/{}", &host, &port, "submit_transaction"))
+                      .json(&txn)
+                      .send()
+                      .unwrap();
 
   // log body
-  println!("{:?}", res);
+  //std::io::copy(&mut res, &mut std::io::stdout()).unwrap();
+  println!("Response: {}", res.json::<TxnHandle>().unwrap());
   println!("Status: {}", res.status());
   println!("Headers:\n{:?}", res.headers());
 }
@@ -690,7 +692,7 @@ fn process_add_cmd(add_matches: &clap::ArgMatches,
 mod tests {
   use super::*;
   use zei::setup::PublicParams;
-  use zei::xfr::asset_record::{AssetRecordType, build_blind_asset_record};
+  use zei::xfr::asset_record::{build_blind_asset_record, AssetRecordType};
   use zei::xfr::structs::AssetRecord;
 
   fn check_next_path(input: &str, expected: &str) {
@@ -810,7 +812,7 @@ mod tests {
                                &AssetRecord::new(10,
                                                  [0x1; 16],
                                                  XfrPublicKey::zei_from_bytes(&[0; 32])).unwrap(),
-                               art_0,                   
+                               art_0,
                                &None);
     let art_1 = AssetRecordType::PublicAmount_PublicAssetType;
     let blind_asset_record_1 =

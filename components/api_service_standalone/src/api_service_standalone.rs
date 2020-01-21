@@ -3,32 +3,29 @@ extern crate actix_rt;
 extern crate actix_web;
 extern crate ledger;
 extern crate ledger_app;
-extern crate percent_encoding;
 extern crate serde_json;
 
 use actix_web::{dev, error, web, App, HttpServer};
+use ledger::data_model::Transaction;
 use ledger::store::{LedgerAccess, LedgerUpdate};
-use ledger_app::LedgerApp;
-use percent_encoding::percent_decode_str;
+use ledger_app::{LedgerApp, TxnHandle};
 use rand_core::{CryptoRng, RngCore};
 use std::io;
 use std::marker::{Send, Sized, Sync};
 use std::sync::{Arc, RwLock};
 
 fn submit_transaction<RNG, LU>(data: web::Data<Arc<RwLock<LedgerApp<RNG, LU>>>>,
-                               info: web::Path<String>)
-                               -> Result<String, actix_web::error::Error>
+                               body: web::Json<Transaction>)
+                               -> Result<web::Json<TxnHandle>, actix_web::error::Error>
   where RNG: RngCore + CryptoRng,
         LU: LedgerUpdate<RNG> + LedgerAccess + Sync + Send
 {
   let mut ledger_app = data.write().unwrap();
-  let uri_string = percent_decode_str(&*info).decode_utf8().unwrap();
-  let tx = serde_json::from_str(&uri_string)?;
+  let tx = body.into_inner();
 
   let handle = ledger_app.handle_transaction(tx)
                          .map_err(error::ErrorBadRequest)?;
-  let res = serde_json::to_string(&handle)?;
-  Ok(res)
+  Ok(web::Json(handle))
 }
 
 // Force the validator node to end the block. Useful for testing when it is desirable to commmit
@@ -113,7 +110,7 @@ impl<T, B> RouteStandalone for App<T, B>
                                                 + Send>(
     self)
     -> Self {
-    self.route("/submit_transaction/{tx}",
+    self.route("/submit_transaction",
                web::post().to(submit_transaction::<RNG, LU>))
         .route("/txn_status/{handle}", web::get().to(txn_status::<RNG, LU>))
         .route("/force_end_block",
@@ -158,7 +155,6 @@ mod tests {
   use ledger::data_model::{Operation, Transaction};
   use ledger::store::helpers::*;
   use ledger::store::{LedgerAccess, LedgerState};
-  use percent_encoding::{utf8_percent_encode, AsciiSet, CONTROLS};
   use rand_core::SeedableRng;
 
   #[test]
@@ -180,25 +176,15 @@ mod tests {
 
     let mut app =
       test::init_service(App::new().data(ledger_app)
-                                   .route("/submit_transaction/{tx}",
+                                   .route("/submit_transaction",
                                           web::post().to(submit_transaction::<rand_chacha::ChaChaRng,
                                                                             LedgerState>))
                                   .route("/force_end_block",
                                           web::post().to(force_end_block::<rand_chacha::ChaChaRng,
                                                                             LedgerState>)));
 
-    let serialize = serde_json::to_string(&tx).unwrap();
-    // Set of invalid URI characters that may appear in a JSON transaction
-    // TODO: (Noah) make sure set is complete
-    const FRAGMENT: &AsciiSet = &CONTROLS.add(b' ')
-                                         .add(b'"')
-                                         .add(b'`')
-                                         .add(b'{')
-                                         .add(b'/')
-                                         .add(b'}');
-    let uri_string = utf8_percent_encode(&serialize, FRAGMENT).to_string();
-
-    let req = test::TestRequest::post().uri(&format!("/submit_transaction/{}", uri_string))
+    let req = test::TestRequest::post().uri("/submit_transaction")
+                                       .set_json(&tx)
                                        .to_request();
 
     let submit_resp = test::block_on(app.call(req)).unwrap();
