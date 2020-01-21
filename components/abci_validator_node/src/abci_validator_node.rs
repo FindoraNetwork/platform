@@ -71,6 +71,7 @@ impl abci::Application for ABCILedgerApp {
   }
 
   fn end_block(&mut self, _req: &RequestEndBlock) -> ResponseEndBlock {
+    // TODO: this should propagate errors instead of panicking
     self.la.end_block().unwrap();
     ResponseEndBlock::new()
   }
