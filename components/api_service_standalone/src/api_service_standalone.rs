@@ -52,14 +52,13 @@ fn txn_status<RNG, LU>(data: web::Data<Arc<RwLock<LedgerApp<RNG, LU>>>>,
         LU: LedgerUpdate<RNG> + LedgerAccess + Sync + Send
 {
   let ledger_app = data.write().unwrap();
-  let txn_handle = serde_json::from_str(&*info).map_err(actix_web::error::ErrorBadRequest)?;
-  let txn_status = ledger_app.get_txn_status(&txn_handle);
+  let txn_status = ledger_app.get_txn_status(&TxnHandle(info.clone()));
   let res;
   if let Some(status) = txn_status {
     res = serde_json::to_string(&status)?;
   } else {
     res = format!("No transaction with handle {} found. Please retry with a new handle.",
-                  &txn_handle.0);
+                  &info);
   }
   Ok(res)
 }
