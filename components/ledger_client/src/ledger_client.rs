@@ -34,6 +34,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
   // copy the response body directly to stdout
   std::io::copy(&mut res, &mut std::io::stdout())?;
 
+  println!("\n\nSubmit transaction");
+
   res = client.post(&format!("http://{}:{}/{}", &host, &port, "submit_transaction"))
               .json(&tx)
               .send()?;
@@ -45,6 +47,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
   println!("\n\nQuery global_state {:?} again", &token_code1);
   res = reqwest::get(&format!("http://{}:{}/{}/{}", &host, &port, "global_state", 0))?;
+
+  println!("Status: {}", res.status());
+  println!("Headers:\n{:?}", res.headers());
+
+  let mut res = reqwest::get(&format!("http://{}:{}/{}/{}",
+                                      &host, &port, "asset_token", &token_code_b64))?;
 
   println!("Status: {}", res.status());
   println!("Headers:\n{:?}", res.headers());

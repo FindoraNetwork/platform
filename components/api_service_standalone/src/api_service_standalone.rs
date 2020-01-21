@@ -41,12 +41,11 @@ fn force_end_block<RNG, LU>(data: web::Data<Arc<RwLock<LedgerApp<RNG, LU>>>>)
         LU: LedgerUpdate<RNG> + LedgerAccess + Sync + Send
 {
   let mut ledger_app = data.write().unwrap();
-  let res = if ledger_app.end_block().is_ok() {
-    "Block successfully ended. All previously valid pending transactions are now committed"
+  if ledger_app.end_block().is_ok() {
+    Ok("Block successfully ended. All previously valid pending transactions are now committed".to_string())
   } else {
-    "No pending transactions to commit"
-  };
-  Ok(res.into())
+    Ok("No pending transactions to commit".to_string())
+  }
 }
 
 fn txn_status<RNG, LU>(data: web::Data<Arc<RwLock<LedgerApp<RNG, LU>>>>,
