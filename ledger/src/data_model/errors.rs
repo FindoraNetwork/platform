@@ -9,7 +9,7 @@ pub enum PlatformError {
   // Option(String) so I (joe) can be lazy about error descriptions but also catch the laziness
   // later by removing Option
   InvariantError(Option<String>),
-  LedgerAppError(Option<String>),
+  SubmissionServerError(Option<String>),
   ZeiError(ZeiError),
   IoError(String),
 }
@@ -26,7 +26,7 @@ impl fmt::Display for PlatformError {
         f.write_str(format!("Invariant violated: {}",
                             msg.as_ref().unwrap_or(&"UNKNOWN".to_string())).as_str())
       }
-      PlatformError::LedgerAppError(msg) => {
+      PlatformError::SubmissionServerError(msg) => {
         f.write_str(format!("Ledger Application Error: {}",
                             msg.as_ref().unwrap_or(&"UNKNOWN".to_string())).as_str())
       }
