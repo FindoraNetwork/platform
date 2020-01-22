@@ -1,7 +1,7 @@
 [workspace]
 members = [
     "components/abci_validator_node",
-    "components/ac_test_cli",
+    "components/address_identity_registry",
     "components/account_simulator",
     "components/api_service",
     "components/api_service_standalone",
