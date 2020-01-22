@@ -3,7 +3,6 @@ use clap::{App, Arg, SubCommand};
 use env_logger::{Env, Target};
 use ledger::data_model::errors::PlatformError;
 use ledger::data_model::{AccountAddress, AssetTypeCode, TxoRef, TxoSID};
-use ledger_app::TxnHandle;
 use log::{error, trace}; // Other options: debug, info, warn
 use rand_chacha::ChaChaRng;
 use rand_core::SeedableRng;
@@ -14,6 +13,7 @@ use std::io::prelude::*;
 use std::io::Error;
 use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
+use submission_server::TxnHandle;
 use txn_builder::{BuildsTransactions, TransactionBuilder};
 use zei::serialization::ZeiFromToBytes;
 use zei::xfr::sig::{XfrKeyPair, XfrPublicKey};

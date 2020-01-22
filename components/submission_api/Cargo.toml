@@ -1,18 +1,18 @@
 [package]
-name = "api_service_standalone"
+name = "submission_api"
 version = "0.1.0"
 authors = ["Nathan Yospe <nathan@eian.io>"]
 edition = "2018"
 
 [lib]
-path = "src/api_service_standalone.rs"
+path = "src/submission_api.rs"
 
 [dependencies]
 actix-rt = "0.2"
 actix-service = "0.4.2"
 actix-web = "1.0.8"
 ledger = { path = "../../ledger" }
-ledger_app = {path = "../ledger_app"}
+submission_server = {path = "../submission_server"}
 rand_core = { version = "0.5", default-features = false, features = ["alloc"] }
 rand_chacha = "0.2.0"
 serde = "1.0"

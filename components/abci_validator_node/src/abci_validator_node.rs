@@ -1,36 +1,28 @@
 #![deny(warnings)]
-extern crate abci;
-extern crate arrayref;
-extern crate ledger;
-extern crate ledger_app;
-extern crate serde;
-extern crate serde_derive;
-extern crate serde_json;
-
 use abci::*;
-use api_service::RestfulApiService;
 use ledger::data_model::errors::PlatformError;
 use ledger::store::*;
-use ledger_app::{convert_tx, LedgerApp};
+use ledger_api_service::RestfulApiService;
 use rand_chacha::ChaChaRng;
 use rand_core::SeedableRng;
 use std::sync::{Arc, RwLock};
 use std::thread;
+use submission_server::{convert_tx, SubmissionServer};
 
-struct ABCILedgerApp {
-  la: LedgerApp<ChaChaRng, LedgerState>,
+struct ABCISubmissionServer {
+  la: SubmissionServer<ChaChaRng, LedgerState>,
 }
 
-impl ABCILedgerApp {
-  fn new() -> Result<ABCILedgerApp, PlatformError> {
+impl ABCISubmissionServer {
+  fn new() -> Result<ABCISubmissionServer, PlatformError> {
     let ledger = LedgerState::test_ledger();
     let prng = rand_chacha::ChaChaRng::from_seed([0u8; 32]);
-    Ok(ABCILedgerApp { la: LedgerApp::new(prng, Arc::new(RwLock::new(ledger)), 8)? })
+    Ok(ABCISubmissionServer { la: SubmissionServer::new(prng, Arc::new(RwLock::new(ledger)), 8)? })
   }
 }
 
 // TODO: implement abci hooks
-impl abci::Application for ABCILedgerApp {
+impl abci::Application for ABCISubmissionServer {
   fn check_tx(&mut self, req: &RequestCheckTx) -> ResponseCheckTx {
     // Get the Tx [u8] and convert to u64
     let mut resp = ResponseCheckTx::new();
@@ -78,7 +70,7 @@ impl abci::Application for ABCILedgerApp {
 
   fn commit(&mut self, _req: &RequestCommit) -> ResponseCommit {
     self.la.begin_commit();
-    // TODO: anything not handled by the general LedgerApp (publishing notifications?) should go here.
+    // TODO: anything not handled by the general SubmissionServer (publishing notifications?) should go here.
     self.la.end_commit();
     ResponseCommit::new()
   }
@@ -95,8 +87,8 @@ fn main() {
   // Tendermint ABCI port
   // let addr = "127.0.0.1:26658".parse().unwrap();
 
-  // abci::run(addr, ABCILedgerApp::default());
-  let app = ABCILedgerApp::new().unwrap();
+  // abci::run(addr, ABCISubmissionServer::default());
+  let app = ABCISubmissionServer::new().unwrap();
   let ledger_state = app.la.borrowable_ledger_state();
   let host = std::option_env!("SERVER_HOST").unwrap_or("localhost");
   let port = std::option_env!("SERVER_PORT").unwrap_or("8668");
