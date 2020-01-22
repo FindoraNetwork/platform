@@ -38,7 +38,7 @@ fn query_utxo<LA>(data: web::Data<Arc<RwLock<LA>>>,
       Err(actix_web::error::ErrorNotFound("Specified txo does not currently exist."))
     }
   } else {
-    Err(actix_web::error::ErrorNotFound("Invalid txo sid encoding"))
+    Err(actix_web::error::ErrorBadRequest("Invalid txo sid encoding"))
   }
 }
 
@@ -55,7 +55,7 @@ fn query_asset_issuance_num<LA>(data: web::Data<Arc<RwLock<LA>>>,
       Err(actix_web::error::ErrorNotFound("Specified asset definition does not currently exist."))
     }
   } else {
-    Err(actix_web::error::ErrorNotFound("Invalid asset definition encoding."))
+    Err(actix_web::error::ErrorBadRequest("Invalid asset definition encoding."))
   }
 }
 
@@ -72,7 +72,7 @@ fn query_asset<LA>(data: web::Data<Arc<RwLock<LA>>>,
       Err(actix_web::error::ErrorNotFound("Specified asset definition does not currently exist."))
     }
   } else {
-    Err(actix_web::error::ErrorNotFound("Invalid asset definition encoding."))
+    Err(actix_web::error::ErrorBadRequest("Invalid asset definition encoding."))
   }
 }
 
@@ -83,7 +83,7 @@ fn query_policy<LA>(data: web::Data<Arc<RwLock<LA>>>,
   where LA: LedgerAccess
 {
   // TODO(joe?): Implement this
-  Err(actix_web::error::ErrorNotFound("unimplemented"))
+  Err(actix_web::error::ErrorBadRequest("unimplemented"))
   // let reader = data.read().unwrap();
   // if let Ok(asset_policy_key) = AssetPolicyKey::new_from_base64(&*info) {
   //   if let Some(policy) = reader.get_asset_policy(&asset_policy_key) {
@@ -92,7 +92,7 @@ fn query_policy<LA>(data: web::Data<Arc<RwLock<LA>>>,
   //     Err(actix_web::error::ErrorNotFound("Specified asset policy does not currently exist."))
   //   }
   // } else {
-  //   Err(actix_web::error::ErrorNotFound("Invalid asset policy encoding."))
+  //   Err(actix_web::error::ErrorBadRequest("Invalid asset policy encoding."))
   // }
 }
 
@@ -103,7 +103,7 @@ fn query_contract<LA>(data: web::Data<Arc<RwLock<LA>>>,
   where LA: LedgerAccess
 {
   // TODO(joe?): Implement this
-  Err(actix_web::error::ErrorNotFound("unimplemented"))
+  Err(actix_web::error::ErrorBadRequest("unimplemented"))
 
   // let reader = data.read().unwrap();
   // if let Ok(smart_contract_key) = SmartContractKey::new_from_base64(&*info) {
@@ -113,7 +113,7 @@ fn query_contract<LA>(data: web::Data<Arc<RwLock<LA>>>,
   //     Err(actix_web::error::ErrorNotFound("Specified smart contract does not currently exist."))
   //   }
   // } else {
-  //   Err(actix_web::error::ErrorNotFound("Invalid smart contract encoding."))
+  //   Err(actix_web::error::ErrorBadRequest("Invalid smart contract encoding."))
   // }
 }
 
@@ -130,7 +130,7 @@ fn query_txn<AA>(data: web::Data<Arc<RwLock<AA>>>,
       Err(actix_web::error::ErrorNotFound("Specified transaction does not exist."))
     }
   } else {
-    Err(actix_web::error::ErrorNotFound("Invalid txn sid encoding."))
+    Err(actix_web::error::ErrorBadRequest("Invalid txn sid encoding."))
   }
 }
 
@@ -225,7 +225,7 @@ fn query_proof<AA>(data: web::Data<Arc<RwLock<AA>>>,
       Err(actix_web::error::ErrorNotFound("That transaction doesn't exist."))
     }
   } else {
-    Err(actix_web::error::ErrorNotFound("Invalid txn sid encoding."))
+    Err(actix_web::error::ErrorBadRequest("Invalid txn sid encoding."))
   }
 }
 
@@ -254,7 +254,7 @@ fn query_utxo_map_checksum<AA>(data: web::Data<Arc<RwLock<AA>>>,
       Err(actix_web::error::ErrorNotFound("That version is unavailable."))
     }
   } else {
-    Err(actix_web::error::ErrorNotFound("Invalid version encoding."))
+    Err(actix_web::error::ErrorBadRequest("Invalid version encoding."))
   }
 }
 
@@ -281,7 +281,7 @@ fn query_utxo_partial_map<AA>(data: web::Data<Arc<RwLock<AA>>>,
   where AA: ArchiveAccess
 {
   // TODO(joe?): Implement this
-  Err(actix_web::error::ErrorNotFound("unimplemented"))
+  Err(actix_web::error::ErrorBadRequest("unimplemented"))
   // if let Some(block_list) = parse_blocks(info.to_string()) {
   //   let mut reader = data.write().unwrap();
 
@@ -291,7 +291,7 @@ fn query_utxo_partial_map<AA>(data: web::Data<Arc<RwLock<AA>>>,
   //     Err(actix_web::error::ErrorNotFound("The map is unavailable."))
   //   }
   // } else {
-  //   Err(actix_web::error::ErrorNotFound("Invalid block list encoding."))
+  //   Err(actix_web::error::ErrorBadRequest("Invalid block list encoding."))
   // }
 }
 

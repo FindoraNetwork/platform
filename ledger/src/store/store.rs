@@ -1107,10 +1107,10 @@ pub mod helpers {
   };
   use zei::serialization::ZeiFromToBytes;
   use zei::setup::PublicParams;
+  use zei::xfr::asset_record::AssetRecordType;
   use zei::xfr::asset_record::{build_blind_asset_record, open_asset_record};
   use zei::xfr::sig::{XfrKeyPair, XfrPublicKey, XfrSecretKey};
   use zei::xfr::structs::AssetRecord;
-  use zei::xfr::asset_record::AssetRecordType;
 
   pub fn create_definition_transaction(code: &AssetTypeCode,
                                        public_key: &XfrPublicKey,
@@ -1230,7 +1230,7 @@ mod tests {
   use tempfile::tempdir;
   use zei::serialization::ZeiFromToBytes;
   use zei::setup::PublicParams;
-  use zei::xfr::asset_record::{AssetRecordType, build_blind_asset_record, open_asset_record};
+  use zei::xfr::asset_record::{build_blind_asset_record, open_asset_record, AssetRecordType};
   use zei::xfr::sig::{XfrKeyPair, XfrPublicKey};
   use zei::xfr::structs::AssetRecord;
 

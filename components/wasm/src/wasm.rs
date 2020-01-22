@@ -10,6 +10,7 @@ extern crate wasm_bindgen_test;
 extern crate zei;
 // use bulletproofs::PedersenGens;
 use cryptohash::sha256;
+use curve25519_dalek::ristretto::RistrettoPoint;
 use hex;
 use js_sys::Promise;
 use ledger::data_model::{
@@ -31,13 +32,12 @@ use zei::api::anon_creds::{
   ACIssuerSecretKey, ACRevealSig, ACSignature, ACUserPublicKey, ACUserSecretKey,
 };
 use zei::api::conf_cred_reveal::cac_gen_encryption_keys;
-use zei::basic_crypto::elgamal::{/* elgamal_decrypt, elgamal_keygen, */ ElGamalPublicKey};
+use zei::basic_crypto::elgamal::ElGamalPublicKey;
 use zei::serialization::ZeiFromToBytes;
 use zei::setup::PublicParams;
-use zei::xfr::asset_record::{AssetRecordType, build_blind_asset_record, open_asset_record};
+use zei::xfr::asset_record::{build_blind_asset_record, open_asset_record, AssetRecordType};
 use zei::xfr::sig::{XfrKeyPair, XfrPublicKey};
 use zei::xfr::structs::{AssetIssuerPubKeys, AssetRecord, BlindAssetRecord, OpenAssetRecord};
-use curve25519_dalek::ristretto::RistrettoPoint;
 
 const HOST: &str = "localhost";
 const PORT: &str = "8668";

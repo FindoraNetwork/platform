@@ -690,7 +690,7 @@ fn process_add_cmd(add_matches: &clap::ArgMatches,
 mod tests {
   use super::*;
   use zei::setup::PublicParams;
-  use zei::xfr::asset_record::{AssetRecordType, build_blind_asset_record};
+  use zei::xfr::asset_record::{build_blind_asset_record, AssetRecordType};
   use zei::xfr::structs::AssetRecord;
 
   fn check_next_path(input: &str, expected: &str) {
@@ -810,7 +810,7 @@ mod tests {
                                &AssetRecord::new(10,
                                                  [0x1; 16],
                                                  XfrPublicKey::zei_from_bytes(&[0; 32])).unwrap(),
-                               art_0,                   
+                               art_0,
                                &None);
     let art_1 = AssetRecordType::PublicAmount_PublicAssetType;
     let blind_asset_record_1 =
