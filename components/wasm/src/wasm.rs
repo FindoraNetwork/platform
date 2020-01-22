@@ -10,6 +10,7 @@ extern crate wasm_bindgen_test;
 extern crate zei;
 // use bulletproofs::PedersenGens;
 use cryptohash::sha256;
+use curve25519_dalek::ristretto::RistrettoPoint;
 use hex;
 use js_sys::Promise;
 use ledger::data_model::{
@@ -31,13 +32,12 @@ use zei::api::anon_creds::{
   ACIssuerSecretKey, ACRevealSig, ACSignature, ACUserPublicKey, ACUserSecretKey,
 };
 use zei::api::conf_cred_reveal::cac_gen_encryption_keys;
-use zei::basic_crypto::elgamal::{/* elgamal_decrypt, elgamal_keygen, */ ElGamalPublicKey};
+use zei::basic_crypto::elgamal::ElGamalPublicKey;
 use zei::serialization::ZeiFromToBytes;
 use zei::setup::PublicParams;
-use zei::xfr::asset_record::{AssetRecordType, build_blind_asset_record, open_asset_record};
+use zei::xfr::asset_record::{build_blind_asset_record, open_asset_record, AssetRecordType};
 use zei::xfr::sig::{XfrKeyPair, XfrPublicKey};
 use zei::xfr::structs::{AssetIssuerPubKeys, AssetRecord, BlindAssetRecord, OpenAssetRecord};
-use curve25519_dalek::ristretto::RistrettoPoint;
 
 const HOST: &str = "localhost";
 const PORT: &str = "8668";
@@ -46,7 +46,15 @@ const SUBMISSION_PORT: &str = "8669";
 /////////// TRANSACTION BUILDING ////////////////
 
 //Random Helpers
+
 #[wasm_bindgen]
+/// Create a transaction reference as a JSON string. Pass true for the relative
+/// parameter for a relative transaction reference and false for an absolute
+/// reference.
+///
+/// TODO It's unlikely that a single invocation of this function will sometimes create
+/// relative references and sometimes absolute. Remove this function from the API and
+/// add create_relative_txo_ref and create_absolute_txo_ref
 pub fn create_txo_ref(idx: u64, relative: bool) -> String {
   let txo_ref;
   if relative {
@@ -58,6 +66,10 @@ pub fn create_txo_ref(idx: u64, relative: bool) -> String {
 }
 
 #[wasm_bindgen]
+/// Create a blind asset record.
+///
+/// TODO Describe each of the arguments.
+/// TODO Point to documentation that explains how to use a Result return type.
 pub fn create_blind_asset_record(amount: u64,
                                  code: String,
                                  pk: &XfrPublicKey,
@@ -76,6 +88,15 @@ pub fn create_blind_asset_record(amount: u64,
 }
 
 #[wasm_bindgen]
+/// Decode (open) a blind asset record expressed as a JSON string using the given key pair.
+/// If successful returns a base64 encoding of the serialized open asset record.
+/// Otherwise, returns one of the following errors:
+/// * Could not deserialize blind asset record
+/// * could not open asset record
+/// * could not encode open asset record
+///
+/// TODO The error messages should be consistent regarding capitalization
+/// TODO Add advice for resolving the errors to the error messages when possible
 pub fn open_blind_asset_record(blind_asset_record: String,
                                key: &XfrKeyPair)
                                -> Result<String, JsValue> {
@@ -90,8 +111,9 @@ pub fn open_blind_asset_record(blind_asset_record: String,
   Ok(base64::encode(&bincode_encoded))
 }
 
-// Wrapper around TransactionBuilder that does necessary serialization.
 #[wasm_bindgen]
+// Wrapper around TransactionBuilder that does necessary serialization.
+/// Transaction builder
 #[derive(Default)]
 pub struct WasmTransactionBuilder {
   transaction_builder: Serialized<TransactionBuilder>,
@@ -99,10 +121,12 @@ pub struct WasmTransactionBuilder {
 
 #[wasm_bindgen]
 impl WasmTransactionBuilder {
+  /// Create a new transaction builder.
   pub fn new() -> Self {
     Self::default()
   }
 
+  /// Create an asset reference in a transaction.
   pub fn add_operation_create_asset(&self,
                                     key_pair: &XfrKeyPair,
                                     memo: String,
@@ -120,6 +144,7 @@ impl WasmTransactionBuilder {
                   .map_err(|_e| JsValue::from_str("Could not build transaction"))?)})
   }
 
+  /// Create an asset issuance in a transaction.
   pub fn add_operation_issue_asset(&self,
                                    key_pair: &XfrKeyPair,
                                    elgamal_pub_key: String,
@@ -150,6 +175,14 @@ impl WasmTransactionBuilder {
                                             amount).map_err(|_e| JsValue::from_str("could not build transaction"))?)})
   }
 
+  /// Create an operator expression in a transaction.
+  ///
+  /// TODO List all the legal value for op. create_asset, issue_asset, transfer_asset?
+  /// There's an enum in data_model.rs. Can't add a cross-reference link here because the reader
+  /// may not get the platform documentation. Just the WASM entry points.
+  ///   TransferAsset(TransferAsset),
+  ///   IssueAsset(IssueAsset),
+  ///   DefineAsset(DefineAsset),
   pub fn add_operation(&mut self, op: String) -> Result<WasmTransactionBuilder, JsValue> {
     let op =
       serde_json::from_str::<Operation>(&op).map_err(|_e| {
@@ -160,6 +193,9 @@ impl WasmTransactionBuilder {
                                                                            .add_operation(op)) })
   }
 
+  /// Extract the serialized form of a transaction.
+  ///
+  /// TODO Develop standard terminology for Javascript functions that may throw errors.
   pub fn transaction(&mut self) -> Result<String, JsValue> {
     Ok(self.transaction_builder
            .deserialize()
@@ -168,18 +204,23 @@ impl WasmTransactionBuilder {
   }
 }
 
-// Wrapper around TransferOperationBuilder that does necessary serialization.
 #[wasm_bindgen]
 #[derive(Default)]
+// Wrapper around TransferOperationBuilder that does necessary serialization.
+/// Transfer operation builder
 pub struct WasmTransferOperationBuilder {
   op_builder: Serialized<TransferOperationBuilder>,
 }
 #[wasm_bindgen]
 impl WasmTransferOperationBuilder {
+  /// Create a new transfer operation builder.
   pub fn new() -> Self {
     Self::default()
   }
 
+  /// Add an input to a transfer operation builder
+  ///
+  /// TODO Describe the parameters
   pub fn add_input(&mut self,
                    txo_ref: String,
                    oar: String,
@@ -201,6 +242,9 @@ impl WasmTransferOperationBuilder {
                                                               })?) })
   }
 
+  /// Add an output to a transfer operation builder
+  ///
+  /// TODO Describe the parameters
   pub fn add_output(&mut self,
                     amount: u64,
                     recipient: &XfrPublicKey,
@@ -216,12 +260,14 @@ impl WasmTransferOperationBuilder {
     Ok(WasmTransferOperationBuilder { op_builder: new_builder })
   }
 
+  /// TODO What's this?
   pub fn balance(&mut self) -> Result<WasmTransferOperationBuilder, JsValue> {
     Ok(WasmTransferOperationBuilder { op_builder: Serialized::new(&*self.op_builder
                                                                         .deserialize()
                                                                         .balance().map_err(|_e| JsValue::from_str("Error balancing txn"))?) })
   }
 
+  /// TODO What's this and how is it different than transaction() below?
   pub fn create(&mut self, transfer_type: String) -> Result<WasmTransferOperationBuilder, JsValue> {
     let transfer_type =
       serde_json::from_str::<TransferType>(&transfer_type).map_err(|_e| {
@@ -235,6 +281,7 @@ impl WasmTransferOperationBuilder {
     Ok(WasmTransferOperationBuilder { op_builder: new_builder })
   }
 
+  // Add a signature to a transfer operation.
   pub fn sign(&mut self, kp: &XfrKeyPair) -> Result<WasmTransferOperationBuilder, JsValue> {
     let new_builder = Serialized::new(&*self.op_builder
                                             .deserialize()
@@ -244,6 +291,7 @@ impl WasmTransferOperationBuilder {
     Ok(WasmTransferOperationBuilder { op_builder: new_builder })
   }
 
+  // Extract a transaction expression as JSON from a transaction builder.
   pub fn transaction(&self) -> Result<String, JsValue> {
     let transaction = self.op_builder
                           .deserialize()
@@ -257,27 +305,32 @@ impl WasmTransferOperationBuilder {
 ///////////// CRYPTO //////////////////////
 
 #[wasm_bindgen]
+/// Extract the public key as a string from a transfer key pair.
 pub fn get_pub_key_str(key_pair: &XfrKeyPair) -> String {
   serde_json::to_string(key_pair.get_pk_ref()).unwrap()
 }
 
 #[wasm_bindgen]
+/// Extract the private key as a string from a transfer key pair.
 pub fn get_priv_key_str(key_pair: &XfrKeyPair) -> String {
   serde_json::to_string(key_pair.get_sk_ref()).unwrap()
 }
 
 #[wasm_bindgen]
+/// Create a new transfer key pair.
 pub fn new_keypair() -> XfrKeyPair {
   let mut small_rng = rand::thread_rng();
   XfrKeyPair::generate(&mut small_rng)
 }
 
 #[wasm_bindgen]
+/// Express a transfer key pair as a string.
 pub fn keypair_to_str(key_pair: &XfrKeyPair) -> String {
   hex::encode(key_pair.zei_to_bytes())
 }
 
 #[wasm_bindgen]
+/// Construct a transfer key pair from a hex-encoded string.
 pub fn keypair_from_str(str: String) -> XfrKeyPair {
   XfrKeyPair::zei_from_bytes(&hex::decode(str).unwrap())
 }
@@ -289,8 +342,13 @@ pub fn generate_elgamal_keys() -> String {
   serde_json::to_string(&elgamal_keygen(&mut small_rng, &RistrettoPoint(pc_gens.B))).unwrap()
 }
 */
-// Defines an asset on the ledger using the serialized strings in KeyPair and a couple of boolean policies
 #[wasm_bindgen]
+// Defines an asset on the ledger using the serialized strings in KeyPair and a couple of boolean policies
+/// Define a new asset for the given transfer key pair and token code.
+///
+/// TODO What defines a valid token_code?
+/// TODO What does it mean for an asset to be "updatable"?
+/// TODO What does it mean for an asset to be "traceable"?
 pub fn create_asset(key_pair: &XfrKeyPair,
                     memo: String,
                     token_code: String,
@@ -312,12 +370,15 @@ pub fn create_asset(key_pair: &XfrKeyPair,
 }
 
 #[wasm_bindgen]
+/// Return the SHA256 signature of the given string as a hex-encoded
+/// string.
 pub fn sha256str(str: &str) -> String {
   let digest = sha256::hash(&str.as_bytes());
   hex::encode(digest)
 }
 
 #[wasm_bindgen]
+/// Sign the given message using the given transfer key pair.
 pub fn sign(key_pair: &XfrKeyPair, message: String) -> Result<JsValue, JsValue> {
   let signature = key_pair.get_sk_ref()
                           .sign(&message.as_bytes(), key_pair.get_pk_ref());
@@ -366,6 +427,10 @@ pub fn get_tracked_amount(blind_asset_record: String,
 }
 */
 #[wasm_bindgen]
+/// Generate a JSON expression describing an asset issuance.
+///
+/// TODO describe each of the parameters
+/// TODO describe the return value
 pub fn issue_asset(key_pair: &XfrKeyPair,
                    elgamal_pub_key: String,
                    token_code: String,
@@ -394,6 +459,10 @@ pub fn issue_asset(key_pair: &XfrKeyPair,
 }
 
 #[wasm_bindgen]
+/// Generate a JSON expression describing an asset transfer.
+///
+/// TODO describe each of the parameters.
+/// TODO describe the return value
 pub fn transfer_asset(transfer_from: &XfrKeyPair,
                       transfer_to: &XfrKeyPair,
                       txo_sid: u64,
@@ -431,7 +500,15 @@ fn encode_uri(to_encode: &str) -> String {
 }
 
 #[wasm_bindgen]
-// Submit transation to the ledger at HOST and PORT.
+/// Submit a transaction to the ledger and return a promise for the
+/// ledger's eventual response. The transaction will be enqueued for
+/// validation. If it is valid, it will eventually be committed to the
+/// ledger.
+///
+/// To determine whether or not the transaction has been committed to the ledger,
+/// query the ledger by transaction ID.
+///
+/// TODO Design and implement a notification mechanism.
 pub fn submit_transaction(transaction_str: String) -> Result<Promise, JsValue> {
   let mut opts = RequestInit::new();
   opts.method("POST");
@@ -452,7 +529,15 @@ pub fn test_deserialize(str: String) -> bool {
 }
 
 #[wasm_bindgen]
-// Get txo by index
+/// If successful, return a promise that will eventually provide a
+/// JsValue describing an unspent transaction output (UTXO).
+/// Otherwise, return 'not found'. The request fails if the txo uid
+/// has been spent or the transaction index does not correspond to a
+/// transaction.
+///
+/// TODO Provide an example (test case) that demonstrates how to
+/// handle the error in the case of an invalid transaction index.
+/// TODO Rename this function get_utxo
 pub fn get_txo(index: u64) -> Result<Promise, JsValue> {
   let mut opts = RequestInit::new();
   opts.method("GET");
@@ -464,7 +549,13 @@ pub fn get_txo(index: u64) -> Result<Promise, JsValue> {
 }
 
 #[wasm_bindgen]
-// Get txo by index
+/// If successful, returns a promise that will eventually provide a
+/// JsValue describing an asset token. Otherwise, returns 'not found'.
+/// The request fails if the given asset name does not correspond to
+/// an asset.
+///
+/// TODO Provide an example (test case) that demonstrates how to
+/// handle the error in the case of an undefined asset.
 pub fn get_asset_token(name: String) -> Result<Promise, JsValue> {
   let mut opts = RequestInit::new();
   opts.method("GET");
@@ -507,7 +598,10 @@ pub struct Issuer {
 
 #[wasm_bindgen]
 impl Issuer {
-  // Create a new issuer, generating the key pair with the knowledge of the number of attributes
+  /// Create a new issuer, generating the key pair with the knowledge of the number of attributes.
+  ///
+  /// TODO Add an overview description of the anonymous credential
+  /// functions and how they work together.
   // TODO (Keyao):
   //  Make sure we can tell which attribute is which, possibly by fixing the order of attributes
   //  Then pass all the attributes to sign_min_credit_score and sign the lower bound of credit score only
@@ -520,12 +614,12 @@ impl Issuer {
              secret_key: issuer_sk }
   }
 
-  // Convert an Issuer to JsValue
+  /// Convert an Issuer to JsValue.
   pub fn jsvalue(&mut self) -> JsValue {
     JsValue::from_serde(&self).unwrap()
   }
 
-  // Sign an attribute
+  /// Sign an attribute.
   // E.g. sign the lower bound of the credit score
   pub fn sign_attribute(&self, user_jsvalue: &JsValue, attribute: u64) -> JsValue {
     let mut prng: ChaChaRng;
@@ -548,7 +642,8 @@ pub struct User {
 
 #[wasm_bindgen]
 impl User {
-  // Create a new user, generating the key pair using the issuer's public key
+  /// Create a new user, generating the key pair using the issuer's
+  /// public key.
   pub fn new(issuer: &Issuer, rand_seed: &str) -> User {
     let mut prng: ChaChaRng;
     prng = ChaChaRng::from_seed([rand_seed.as_bytes()[0]; 32]);
@@ -558,12 +653,12 @@ impl User {
            secret_key: user_sk }
   }
 
-  // Convert a User to JsValue
+  /// Convert a User to JsValue.
   pub fn jsvalue(&mut self) -> JsValue {
     JsValue::from_serde(&self).unwrap()
   }
 
-  // Commit an attribute with the issuer's signature
+  /// Commit an attribute with the issuer's signature.
   // E.g. commit the lower bound of the credit score
   pub fn commit_attribute(&self,
                           issuer_jsvalue: &JsValue,
@@ -591,6 +686,8 @@ impl User {
 
 #[wasm_bindgen]
 #[derive(PartialEq)]
+/// TODO Rename this RelationType, ComparisonOperator,
+/// RelationalOperator, etc. RequirementType is too broad.
 pub enum RequirementType {
   // Requirement: attribute value == requirement
   Equal = 0,
@@ -605,7 +702,7 @@ pub struct Prover;
 
 #[wasm_bindgen]
 impl Prover {
-  // Prove that an attribute meets the requirement and is true
+  /// Prove that an attribute meets the requirement and is true.
   pub fn prove_attribute(proof_jsvalue: &JsValue,
                          issuer_jsvalue: &JsValue,
                          attribute: u64,
@@ -642,6 +739,8 @@ impl Prover {
 }
 
 #[wasm_bindgen]
+/// Generate a proof that a user has committed to the given attribute
+/// value.
 // Create a proving secenario
 pub fn get_proof(attribute: u64) -> JsValue {
   let mut issuer = Issuer::new(1);
@@ -659,6 +758,7 @@ pub fn get_proof(attribute: u64) -> JsValue {
 
 #[wasm_bindgen]
 // 1. Create a credentialing secenario with proof as an input
+/// TODO Document this function more explicitly. What's a credentialing scenario?
 pub fn attest_with_proof(attribute: u64,
                          requirement: u64,
                          requirement_type: RequirementType,
@@ -674,6 +774,7 @@ pub fn attest_with_proof(attribute: u64,
 
 #[wasm_bindgen]
 // 2. Create a credentialing secenario without proof as an input
+/// TODO Document this function more explicitly. What's a credentialing scenario?
 pub fn attest_without_proof(attribute: u64,
                             requirement: u64,
                             requirement_type: RequirementType)
