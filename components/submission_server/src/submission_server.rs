@@ -6,6 +6,7 @@ use ledger::store::*;
 use rand_core::{CryptoRng, RngCore};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::fmt;
 use std::sync::{Arc, RwLock};
 
 // Query handle for user
@@ -16,6 +17,12 @@ impl TxnHandle {
   pub fn new(txn: &Transaction) -> Self {
     let digest = sha256::hash(&txn.serialize_bincode(TxnSID(0)));
     TxnHandle(hex::encode(digest))
+  }
+}
+
+impl fmt::Display for TxnHandle {
+  fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    write!(f, "TxnHandle: {}", self.0)
   }
 }
 

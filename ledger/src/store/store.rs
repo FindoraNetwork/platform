@@ -20,6 +20,7 @@ use std::collections::{HashMap, VecDeque};
 use std::fs::File;
 use std::fs::OpenOptions;
 use std::io::BufReader;
+use std::path::Path;
 use std::u64;
 
 use super::effects::*;
@@ -877,6 +878,24 @@ impl LedgerState {
     ledger.txn_log = Some(txn_log);
 
     Ok(ledger)
+  }
+
+  pub fn load_or_init(base_dir: &Path) -> Result<LedgerState, std::io::Error> {
+    let block_merkle = base_dir.join("block_merkle");
+    let block_merkle = block_merkle.to_str().unwrap();
+    let txn_merkle = base_dir.join("txn_merkle");
+    let txn_merkle = txn_merkle.to_str().unwrap();
+    let txn_log = base_dir.join("txn_log");
+    let txn_log = txn_log.to_str().unwrap();
+    let utxo_map = base_dir.join("utxo_map");
+    let utxo_map = utxo_map.to_str().unwrap();
+
+    // TODO(joe): distinguish between the transaction log not existing
+    // and it being corrupted
+    LedgerState::load_from_log(&block_merkle, &txn_merkle, &txn_log,
+                &utxo_map, None)
+              .or_else(|_| LedgerState::new(&block_merkle, &txn_merkle, &txn_log,
+                &utxo_map, None))
   }
 
   // Load a ledger given the paths to the various storage elements.

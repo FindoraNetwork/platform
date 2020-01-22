@@ -1,27 +1,25 @@
 #![deny(warnings)]
 use actix_web::{error, web, App, HttpServer};
+use ledger::data_model::Transaction;
 use ledger::store::{LedgerAccess, LedgerUpdate};
-use percent_encoding::percent_decode_str;
 use rand_core::{CryptoRng, RngCore};
 use std::io;
 use std::marker::{Send, Sync};
 use std::sync::{Arc, RwLock};
-use submission_server::SubmissionServer;
+use submission_server::{SubmissionServer, TxnHandle};
 
 fn submit_transaction<RNG, LU>(data: web::Data<Arc<RwLock<SubmissionServer<RNG, LU>>>>,
-                               info: web::Path<String>)
-                               -> Result<String, actix_web::error::Error>
+                               body: web::Json<Transaction>)
+                               -> Result<web::Json<TxnHandle>, actix_web::error::Error>
   where RNG: RngCore + CryptoRng,
         LU: LedgerUpdate<RNG> + LedgerAccess + Sync + Send
 {
   let mut submission_server = data.write().unwrap();
-  let uri_string = percent_decode_str(&*info).decode_utf8().unwrap();
-  let tx = serde_json::from_str(&uri_string)?;
+  let tx = body.into_inner();
 
   let handle = submission_server.handle_transaction(tx)
                                 .map_err(error::ErrorBadRequest)?;
-  let res = serde_json::to_string(&handle)?;
-  Ok(res)
+  Ok(web::Json(handle))
 }
 
 // Force the validator node to end the block. Useful for testing when it is desirable to commmit
@@ -50,14 +48,13 @@ fn txn_status<RNG, LU>(data: web::Data<Arc<RwLock<SubmissionServer<RNG, LU>>>>,
         LU: LedgerUpdate<RNG> + LedgerAccess + Sync + Send
 {
   let submission_server = data.write().unwrap();
-  let txn_handle = serde_json::from_str(&*info).map_err(actix_web::error::ErrorBadRequest)?;
-  let txn_status = submission_server.get_txn_status(&txn_handle);
+  let txn_status = submission_server.get_txn_status(&TxnHandle(info.clone()));
   let res;
   if let Some(status) = txn_status {
     res = serde_json::to_string(&status)?;
   } else {
     res = format!("No transaction with handle {} found. Please retry with a new handle.",
-                  &txn_handle.0);
+                  &info);
   }
   Ok(res)
 }
@@ -103,7 +100,6 @@ mod tests {
   use ledger::data_model::{Operation, Transaction};
   use ledger::store::helpers::*;
   use ledger::store::{LedgerAccess, LedgerState};
-  use percent_encoding::{utf8_percent_encode, AsciiSet, CONTROLS};
   use rand_core::SeedableRng;
 
   #[test]
@@ -126,25 +122,15 @@ mod tests {
 
     let mut app =
       test::init_service(App::new().data(submission_server)
-                                   .route("/submit_transaction/{tx}",
+                                   .route("/submit_transaction",
                                           web::post().to(submit_transaction::<rand_chacha::ChaChaRng,
                                                                             LedgerState>))
                                   .route("/force_end_block",
                                           web::post().to(force_end_block::<rand_chacha::ChaChaRng,
                                                                             LedgerState>)));
 
-    let serialize = serde_json::to_string(&tx).unwrap();
-    // Set of invalid URI characters that may appear in a JSON transaction
-    // TODO: (Noah) make sure set is complete
-    const FRAGMENT: &AsciiSet = &CONTROLS.add(b' ')
-                                         .add(b'"')
-                                         .add(b'`')
-                                         .add(b'{')
-                                         .add(b'/')
-                                         .add(b'}');
-    let uri_string = utf8_percent_encode(&serialize, FRAGMENT).to_string();
-
-    let req = test::TestRequest::post().uri(&format!("/submit_transaction/{}", uri_string))
+    let req = test::TestRequest::post().uri("/submit_transaction")
+                                       .set_json(&tx)
                                        .to_request();
 
     let submit_resp = test::block_on(app.call(req)).unwrap();

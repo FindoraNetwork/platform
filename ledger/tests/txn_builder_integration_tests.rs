@@ -13,7 +13,7 @@ use rand_core::SeedableRng;
 use txn_builder::{BuildsTransactions, TransactionBuilder, TransferOperationBuilder};
 use zei::serialization::ZeiFromToBytes;
 use zei::setup::PublicParams;
-use zei::xfr::asset_record::{AssetRecordType, build_blind_asset_record, open_asset_record};
+use zei::xfr::asset_record::{build_blind_asset_record, open_asset_record, AssetRecordType};
 use zei::xfr::sig::{XfrKeyPair, XfrPublicKey};
 use zei::xfr::structs::AssetRecord;
 
