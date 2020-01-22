@@ -432,8 +432,8 @@ fn process_submit_cmd(submit_matches: &clap::ArgMatches, transaction_file_name: 
                       .unwrap();
 
   // log body
-  //std::io::copy(&mut res, &mut std::io::stdout()).unwrap();
-  println!("Response: {}", res.json::<TxnHandle>().unwrap());
+  println!("Response: {}",
+           res.json::<TxnHandle>().expect("<Invalid JSON>"));
   println!("Status: {}", res.status());
   println!("Headers:\n{:?}", res.headers());
 }
