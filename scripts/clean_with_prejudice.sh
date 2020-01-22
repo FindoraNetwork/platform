@@ -8,12 +8,25 @@ set -euo pipefail
 GIT_ROOT="$(git rev-parse --show-toplevel)"
 pushd $GIT_ROOT >/dev/null
 
+# While I would *like* to use `xargs -r` to keep everything behaving
+# when no matching files come out of `find`, this option does not
+# appear on MacOS. So instead, we run `find` twice.
+#
+# An alternative choice would be to run `find`, save its stdout to a
+# variable, then `echo` that variable into xargs. But I'm not feeling
+# optimistic about linux and MacOS having `bash` versions that handle
+# NUL-characters exactly the same, so we just run `find` twice.
+
 # Delete all files named 'Cargo.lock' in the tree below
-find . -type f -name 'Cargo.lock' -print0 | xargs -r -n 1 -0 rm -v
+if [[ -n "$(find . -type f -name 'Cargo.lock')" ]]; then
+  find . -type f -name 'Cargo.lock' -print0 | xargs -n 1 -0 rm -v
+fi
 # Delete all directories named 'target' in the tree below
 # Sorting in reverse order suppresses error messages by deleting
 #   .../target/.../target before .../target
-find . -type d -name 'target' -print0 | sort -z -r | xargs -r -n 1 -0 rm -rv
+if [[ -n "$(find . -type d -name 'target')" ]]; then
+  find . -type d -name 'target' -print0 | sort -z -r | xargs -n 1 -0 rm -rv
+fi
 
 # return to original working directory
 popd >/dev/null
