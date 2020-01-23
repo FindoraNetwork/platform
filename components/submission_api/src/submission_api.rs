@@ -74,7 +74,7 @@ impl SubmissionApi {
 
     HttpServer::new(move || {
       App::new().data(submission_server.clone())
-                .route("/submit_transaction/{tx}",
+                .route("/submit_transaction",
                        web::post().to(submit_transaction::<RNG, LU>))
                 .route("/txn_status/{handle}", web::get().to(txn_status::<RNG, LU>))
                 .route("/force_end_block",

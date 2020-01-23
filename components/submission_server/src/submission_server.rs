@@ -66,7 +66,7 @@ impl<RNG, LU> SubmissionServer<RNG, LU>
   }
 
   pub fn all_commited(&self) -> bool {
-    self.pending_txns.is_empty()
+    self.block.is_none()
   }
 
   // TODO (Keyao): Determine the condition
@@ -115,6 +115,7 @@ impl<RNG, LU> SubmissionServer<RNG, LU>
       // If begin_commit or end_commit is no longer empty, move this line to the end of end_commit
       self.pending_txns = Vec::new();
       // Finally, return the finalized txn sids
+      assert!(self.block.is_none());
       return Ok(());
     }
     Err(PlatformError::SubmissionServerError(Some("Cannot finish block because there are no pending txns".into())))
@@ -154,10 +155,11 @@ impl<RNG, LU> SubmissionServer<RNG, LU>
     }
 
     let handle = self.cache_transaction(txn)?;
+
     // End the current block if it's eligible to commit
     if self.eligible_to_commit() {
       // If the ledger is eligible for a commit, end block will not return an error
-      let _res = self.end_block();
+      self.end_block().unwrap();
 
       // If begin_commit and end_commit are no longer empty, call them here
     }
