@@ -204,13 +204,15 @@ impl WasmTransactionBuilder {
                                    -> Result<WasmTransactionBuilder, JsValue> {
     let asset_token = AssetTypeCode::new_from_base64(&code).map_err(|_e| {
       JsValue::from_str("Could not deserialize asset token code")})?;
-    let bar = serde_json::from_str::<BlindAssetRecord>(&record).map_err(|_e| JsValue::from_str("could not deserialize blind asset record"))?;
+    let blind_asset_record = serde_json::from_str::<BlindAssetRecord>(&record).map_err(|_e| {
+                               JsValue::from_str("could not deserialize blind asset record")
+                             })?;
 
     let mut txn_builder = self.transaction_builder.deserialize();
     Ok(WasmTransactionBuilder { transaction_builder: Serialized::new(&*txn_builder.add_operation_issue_asset(&key_pair,
                                             &asset_token,
                                             seq_num,
-                                            &[TxOutput(bar)]).map_err(|_e| JsValue::from_str("could not build transaction"))?)})
+                                            &[TxOutput(blind_asset_record)]).map_err(|_e| JsValue::from_str("could not build transaction"))?)})
   }
 
   /// Create an operator expression in a transaction.
