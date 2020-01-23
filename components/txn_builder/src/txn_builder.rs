@@ -13,7 +13,7 @@ use std::cmp::Ordering;
 use std::collections::HashSet;
 use zei::serialization::ZeiFromToBytes;
 use zei::setup::PublicParams;
-use zei::xfr::asset_record::{AssetRecordType, build_blind_asset_record, open_asset_record};
+use zei::xfr::asset_record::{build_blind_asset_record, open_asset_record, AssetRecordType};
 use zei::xfr::sig::{XfrKeyPair, XfrPublicKey};
 use zei::xfr::structs::{AssetIssuerPubKeys, AssetRecord, BlindAssetRecord, OpenAssetRecord};
 
@@ -468,8 +468,8 @@ mod tests {
                                                      &params.pc_gens,
                                                      &ar,
                                                      art,
-                                                    // *conf_type,
-                                                    // *conf_amount,
+                                                     // *conf_type,
+                                                     // *conf_amount,
                                                      &None);
                    return open_asset_record(&ba, &key_pair.get_sk_ref());
                  })
