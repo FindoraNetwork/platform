@@ -10,7 +10,7 @@ base64 = "0.10"
 bincode = "1"
 bitmap = { path = "../libs/bitmap" }
 blake2 = "0.8.0"
-bulletproofs =  {version = "1.0.4"}
+bulletproofs =  { version = "2.0.0" }
 byteorder = "1.0.0"
 chrono = "0.4"
 cryptohash = { path = "../libs/cryptohash" }

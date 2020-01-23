@@ -4,10 +4,9 @@ extern crate actix_web;
 extern crate ledger;
 extern crate serde_json;
 
-use actix_web::{dev, error, web, App, HttpResponse, HttpServer};
+use actix_web::{dev, error, middleware, web, App, HttpResponse, HttpServer};
 use ledger::data_model::*;
-use ledger::store::{ArchiveAccess, LedgerAccess, LedgerUpdate, TxnEffect};
-use rand_core::{CryptoRng, RngCore};
+use ledger::store::{ArchiveAccess, LedgerAccess};
 use std::io;
 use std::marker::{Send, Sync};
 use std::sync::{Arc, RwLock};
@@ -144,15 +143,28 @@ fn stringer(data: &[u8; 32]) -> String {
   result
 }
 
-fn query_global_state<AA>(data: web::Data<Arc<RwLock<AA>>>,
-                          _info: web::Path<String>)
-                          -> actix_web::Result<String>
+fn query_global_state<AA>(data: web::Data<Arc<RwLock<AA>>>) -> actix_web::Result<String>
   where AA: ArchiveAccess
 {
   let reader = data.read().unwrap();
   let (hash, version) = reader.get_global_block_hash();
   let result = format!("{} {}", stringer(&hash.0), version);
   Ok(result)
+}
+
+fn query_blocks_since<AA>(data: web::Data<Arc<RwLock<AA>>>,
+                          block_id: web::Path<usize>)
+                          -> web::Json<Vec<(usize, Vec<FinalizedTransaction>)>>
+  where AA: ArchiveAccess
+{
+  let reader = data.read().unwrap();
+  let mut ret = Vec::new();
+  for ix in block_id.into_inner()..reader.get_block_count() {
+    let sid = BlockSID(ix);
+    let block = reader.get_block(sid).unwrap();
+    ret.push((sid.0, block.clone()));
+  }
+  web::Json(ret)
 }
 
 fn query_block_log<AA>(data: web::Data<Arc<RwLock<AA>>>) -> impl actix_web::Responder
@@ -282,57 +294,19 @@ fn query_utxo_partial_map<AA>(data: web::Data<Arc<RwLock<AA>>>,
   // }
 }
 
-fn submit_transaction<RNG, U>(data: web::Data<Arc<RwLock<U>>>,
-                              body: web::Json<Transaction>)
-                              -> Result<String, actix_web::error::Error>
-  where RNG: RngCore + CryptoRng,
-        U: LedgerUpdate<RNG>
-{
-  // TODO: Handle submission to Tendermint layer
-  let mut ledger = data.write().unwrap();
-  let tx = body.into_inner(); //serde_json::from_str(&uri_string).map_err(actix_web::error::ErrorBadRequest)?;
-
-  let txn_effect =
-    TxnEffect::compute_effect(ledger.get_prng(), tx).map_err(actix_web::error::ErrorBadRequest)?;
-
-  let mut block = ledger.start_block()
-                        .map_err(actix_web::error::ErrorInternalServerError)?;
-
-  let temp_sid = ledger.apply_transaction(&mut block, txn_effect)
-                       .map_err(actix_web::error::ErrorBadRequest);
-
-  if let Err(e) = temp_sid {
-    ledger.abort_block(block);
-    return Err(e);
-  }
-  let temp_sid = temp_sid.unwrap();
-
-  let ret = ledger.finish_block(block)?.remove(&temp_sid).unwrap().1;
-
-  Ok(serde_json::to_string(&ret)?)
-}
-
 enum ServiceInterface {
   LedgerAccess,
   ArchiveAccess,
-  Update,
 }
 
 trait Route {
-  fn set_route<RNG: 'static + RngCore + CryptoRng,
-                 LA: 'static + LedgerAccess + ArchiveAccess + LedgerUpdate<RNG> + Sync + Send>(
-    self,
-    service_interface: ServiceInterface)
-    -> Self;
+  fn set_route<LA: 'static + LedgerAccess + ArchiveAccess + Sync + Send>(self,
+                                                                         service_interface: ServiceInterface)
+                                                                         -> Self;
 
   fn set_route_for_ledger_access<LA: 'static + LedgerAccess + Sync + Send>(self) -> Self;
 
   fn set_route_for_archive_access<AA: 'static + ArchiveAccess + Sync + Send>(self) -> Self;
-
-  fn set_route_for_update<RNG: 'static + RngCore + CryptoRng,
-                            U: 'static + LedgerUpdate<RNG> + Sync + Send>(
-    self)
-    -> Self;
 }
 
 impl<T, B> Route for App<T, B>
@@ -344,15 +318,12 @@ impl<T, B> Route for App<T, B>
                                      InitError = ()>
 {
   // Call the appropraite function depending on the interface
-  fn set_route<RNG: 'static + RngCore + CryptoRng,
-                 LA: 'static + LedgerAccess + ArchiveAccess + LedgerUpdate<RNG> + Sync + Send>(
-    self,
-    service_interface: ServiceInterface)
-    -> Self {
+  fn set_route<LA: 'static + LedgerAccess + ArchiveAccess + Sync + Send>(self,
+                                                                         service_interface: ServiceInterface)
+                                                                         -> Self {
     match service_interface {
       ServiceInterface::LedgerAccess => self.set_route_for_ledger_access::<LA>(),
       ServiceInterface::ArchiveAccess => self.set_route_for_archive_access::<LA>(),
-      ServiceInterface::Update => self.set_route_for_update::<RNG, LA>(),
     }
   }
 
@@ -372,26 +343,18 @@ impl<T, B> Route for App<T, B>
         .route("/global_state", web::get().to(query_global_state::<AA>))
         .route("/proof/{sid}", web::get().to(query_proof::<AA>))
         .route("/block_log", web::get().to(query_block_log::<AA>))
+        .route("/blocks_since/{block_sid}",
+               web::get().to(query_blocks_since::<AA>))
         .route("/utxo_map", web::get().to(query_utxo_map::<AA>))
         .route("/utxo_map_checksum",
                web::get().to(query_utxo_map_checksum::<AA>))
         .route("/utxo_partial_map/{sidlist}",
                web::get().to(query_utxo_partial_map::<AA>))
   }
-
-  // Set routes for the LedgerUpdate interface
-  fn set_route_for_update<RNG: 'static + RngCore + CryptoRng,
-                            U: 'static + LedgerUpdate<RNG> + Sync + Send>(
-    self)
-    -> Self {
-    self.route("/submit_transaction",
-               web::post().to(submit_transaction::<RNG, U>))
-  }
 }
 
 impl RestfulApiService {
-  pub fn create<RNG: 'static + RngCore + CryptoRng,
-                  LA: 'static + LedgerAccess + ArchiveAccess + LedgerUpdate<RNG> + Sync + Send>(
+  pub fn create<LA: 'static + LedgerAccess + ArchiveAccess + Sync + Send>(
     ledger_access: Arc<RwLock<LA>>,
     host: &str,
     port: &str)
@@ -399,10 +362,10 @@ impl RestfulApiService {
     let web_runtime = actix_rt::System::new("findora API");
 
     HttpServer::new(move || {
-      App::new().data(ledger_access.clone())
-                .set_route::<RNG, LA>(ServiceInterface::LedgerAccess)
-                .set_route::<RNG, LA>(ServiceInterface::ArchiveAccess)
-                .set_route::<RNG, LA>(ServiceInterface::Update)
+      App::new().wrap(middleware::Logger::default())
+                .data(ledger_access.clone())
+                .set_route::<LA>(ServiceInterface::LedgerAccess)
+                .set_route::<LA>(ServiceInterface::ArchiveAccess)
     }).bind(&format!("{}:{}", host, port))?
       .start();
 
@@ -421,7 +384,7 @@ mod tests {
   use actix_web::{test, web, App};
   use ledger::data_model::{Operation, Transaction};
   use ledger::store::helpers::*;
-  use ledger::store::{LedgerState, LedgerUpdate};
+  use ledger::store::{LedgerState, LedgerUpdate, TxnEffect};
   use rand_chacha::ChaChaRng;
   use rand_core::SeedableRng;
 
@@ -469,42 +432,5 @@ mod tests {
     let resp = test::block_on(app.call(req)).unwrap();
 
     assert!(resp.status().is_success());
-  }
-  #[test]
-  fn test_transaction_and_query() {
-    let mut prng = ChaChaRng::from_seed([0u8; 32]);
-    let state = LedgerState::test_ledger();
-    let mut tx = Transaction::default();
-
-    let token_code1 = AssetTypeCode { val: [1; 16] };
-    let (public_key, secret_key) = build_keys(&mut prng);
-
-    let asset_body = asset_creation_body(&token_code1, &public_key, true, false, None, None);
-    let asset_create = asset_creation_operation(&asset_body, &public_key, &secret_key);
-    tx.operations.push(Operation::DefineAsset(asset_create));
-
-    let mut app =
-      test::init_service(App::new().data(Arc::new(RwLock::new(state)))
-                                   .route("/submit_transaction",
-                                          web::post().to(submit_transaction::<ChaChaRng,
-                                                                            LedgerState>))
-                                   .route("/asset_token/{token}",
-                                          web::get().to(query_asset::<LedgerState>)));
-
-    // let serialize = serde_json::to_string(&tx).unwrap();
-
-    let submit_req = test::TestRequest::post().uri("/submit_transaction")
-                                              .set_json(&tx)
-                                              .to_request();
-
-    let query_req = test::TestRequest::get().uri(&format!("/asset_token/{}",
-                                                          token_code1.to_base64()))
-                                            .to_request();
-
-    let submit_resp = test::block_on(app.call(submit_req)).unwrap();
-    let query_resp = test::block_on(app.call(query_req)).unwrap();
-
-    assert!(submit_resp.status().is_success());
-    assert!(query_resp.status().is_success());
   }
 }

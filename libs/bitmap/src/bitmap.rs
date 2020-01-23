@@ -947,10 +947,12 @@ impl BitMap {
   /// The checksum is defined currently recursively across the
   /// blocks where the checksum at block i is:
   ///
+  /// ```text
   ///    checksum[0] = sha256(check_block[0] | [0_u8; DIGESTBYTES])
   ///    checksum[i] = sha256(check_block[i] | checksum[i - 1])
+  /// ```
   ///
-  /// where "|" denotes byte array concatenation, and check_block[i]
+  /// where "|" denotes byte array concatenation, and `check_block[i]`
   /// is the CheckBlock for block i.
   ///
   /// The final checksum result for the entire map is defined as the

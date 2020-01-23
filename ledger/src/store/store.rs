@@ -20,6 +20,7 @@ use std::collections::{HashMap, VecDeque};
 use std::fs::File;
 use std::fs::OpenOptions;
 use std::io::BufReader;
+use std::path::Path;
 use std::u64;
 
 use super::effects::*;
@@ -879,6 +880,24 @@ impl LedgerState {
     Ok(ledger)
   }
 
+  pub fn load_or_init(base_dir: &Path) -> Result<LedgerState, std::io::Error> {
+    let block_merkle = base_dir.join("block_merkle");
+    let block_merkle = block_merkle.to_str().unwrap();
+    let txn_merkle = base_dir.join("txn_merkle");
+    let txn_merkle = txn_merkle.to_str().unwrap();
+    let txn_log = base_dir.join("txn_log");
+    let txn_log = txn_log.to_str().unwrap();
+    let utxo_map = base_dir.join("utxo_map");
+    let utxo_map = utxo_map.to_str().unwrap();
+
+    // TODO(joe): distinguish between the transaction log not existing
+    // and it being corrupted
+    LedgerState::load_from_log(&block_merkle, &txn_merkle, &txn_log,
+                &utxo_map, None)
+              .or_else(|_| LedgerState::new(&block_merkle, &txn_merkle, &txn_log,
+                &utxo_map, None))
+  }
+
   // Load a ledger given the paths to the various storage elements.
   #[allow(unused_variables)]
   pub fn load_from_snapshot(block_merkle_path: &str,
@@ -1091,6 +1110,7 @@ pub mod helpers {
   use zei::xfr::asset_record::{build_blind_asset_record, open_asset_record};
   use zei::xfr::sig::{XfrKeyPair, XfrPublicKey, XfrSecretKey};
   use zei::xfr::structs::AssetRecord;
+  use zei::xfr::asset_record::AssetRecordType;
 
   pub fn create_definition_transaction(code: &AssetTypeCode,
                                        public_key: &XfrPublicKey,
@@ -1172,7 +1192,8 @@ pub mod helpers {
 
     // issue operation
     let ar = AssetRecord::new(amount, code.val, *issuer_keys.get_pk_ref()).unwrap();
-    let ba = build_blind_asset_record(ledger.get_prng(), &params.pc_gens, &ar, false, false, &None);
+    let art = AssetRecordType::PublicAmount_PublicAssetType;
+    let ba = build_blind_asset_record(ledger.get_prng(), &params.pc_gens, &ar, art, &None);
 
     let asset_issuance_body = IssueAssetBody::new(&code, 0, &[TxOutput(ba.clone())]).unwrap();
     let asset_issuance_operation = IssueAsset::new(asset_issuance_body,
@@ -1209,7 +1230,7 @@ mod tests {
   use tempfile::tempdir;
   use zei::serialization::ZeiFromToBytes;
   use zei::setup::PublicParams;
-  use zei::xfr::asset_record::{build_blind_asset_record, open_asset_record};
+  use zei::xfr::asset_record::{AssetRecordType, build_blind_asset_record, open_asset_record};
   use zei::xfr::sig::{XfrKeyPair, XfrPublicKey};
   use zei::xfr::structs::AssetRecord;
 
@@ -1846,7 +1867,8 @@ mod tests {
     let mut tx = Transaction::default();
 
     let ar = AssetRecord::new(100, code.val, key_pair.get_pk_ref().clone()).unwrap();
-    let ba = build_blind_asset_record(ledger.get_prng(), &params.pc_gens, &ar, false, false, &None);
+    let art = AssetRecordType::PublicAmount_PublicAssetType;
+    let ba = build_blind_asset_record(ledger.get_prng(), &params.pc_gens, &ar, art, &None);
     let second_ba = ba.clone();
 
     let asset_issuance_body =
@@ -1971,7 +1993,8 @@ mod tests {
 
     let mut tx = Transaction::default();
     let ar = AssetRecord::new(100, token_code1.val, public_key).unwrap();
-    let ba = build_blind_asset_record(ledger.get_prng(), &params.pc_gens, &ar, false, false, &None);
+    let art = AssetRecordType::PublicAmount_PublicAssetType;
+    let ba = build_blind_asset_record(ledger.get_prng(), &params.pc_gens, &ar, art, &None);
     let asset_issuance_body = IssueAssetBody::new(&token_code1, 0, &[TxOutput(ba)]).unwrap();
     let asset_issuance_operation = IssueAsset::new(asset_issuance_body,
                                                    &IssuerPublicKey { key: public_key },

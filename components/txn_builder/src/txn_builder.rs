@@ -13,7 +13,7 @@ use std::cmp::Ordering;
 use std::collections::HashSet;
 use zei::serialization::ZeiFromToBytes;
 use zei::setup::PublicParams;
-use zei::xfr::asset_record::{build_blind_asset_record, open_asset_record};
+use zei::xfr::asset_record::{AssetRecordType, build_blind_asset_record, open_asset_record};
 use zei::xfr::sig::{XfrKeyPair, XfrPublicKey};
 use zei::xfr::structs::{AssetIssuerPubKeys, AssetRecord, BlindAssetRecord, OpenAssetRecord};
 
@@ -54,7 +54,8 @@ pub trait BuildsTransactions {
     let mut prng = ChaChaRng::from_seed([0u8; 32]);
     let params = PublicParams::new();
     let ar = AssetRecord::new(amount, token_code.val, key_pair.get_pk())?;
-    let ba = build_blind_asset_record(&mut prng, &params.pc_gens, &ar, true, true, tracking_keys);
+    let art = AssetRecordType::ConfidentialAmount_ConfidentialAssetType;
+    let ba = build_blind_asset_record(&mut prng, &params.pc_gens, &ar, art, tracking_keys);
     self.add_operation_issue_asset(key_pair, token_code, seq_num, &[TxOutput(ba)])
   }
 
@@ -286,18 +287,13 @@ impl TransferOperationBuilder {
   }
 
   pub fn get_output_record(&self, idx: usize) -> Option<BlindAssetRecord> {
-    if self.transfer.is_none() {
-      return None;
-    }
     self.transfer
-        .as_ref()
-        .unwrap()
+        .as_ref()?
         .body
         .transfer
         .outputs
         .get(idx)
-        .map(|bar| bar.clone())
-        .clone()
+        .cloned()
   }
 
   // All input owners must sign eventually for the transaction to be valid.
@@ -462,15 +458,18 @@ mod tests {
     // Compose input records
     let input_records: Result<Vec<OpenAssetRecord>, _> =
       inputs.iter()
-            .map(|InputRecord(amount, asset_type, conf_type, conf_amount, _)| {
+            .map(|InputRecord(amount, asset_type, _conf_type, _conf_amount, _)| {
                    let ar = AssetRecord::new(*amount,
                                              [asset_type.0; 16],
                                              *key_pair_copy.get_pk_ref()).unwrap();
+                   let art = AssetRecordType::PublicAmount_PublicAssetType;
+
                    let ba = build_blind_asset_record(&mut prng,
                                                      &params.pc_gens,
                                                      &ar,
-                                                     *conf_type,
-                                                     *conf_amount,
+                                                     art,
+                                                    // *conf_type,
+                                                    // *conf_amount,
                                                      &None);
                    return open_asset_record(&ba, &key_pair.get_sk_ref());
                  })
@@ -513,8 +512,9 @@ mod tests {
 
     let ar_1 = AssetRecord::new(1000, code_1.val, *alice.get_pk_ref()).unwrap();
     let ar_2 = AssetRecord::new(1000, code_2.val, *bob.get_pk_ref()).unwrap();
-    let ba_1 = build_blind_asset_record(&mut prng, &params.pc_gens, &ar_1, false, false, &None);
-    let ba_2 = build_blind_asset_record(&mut prng, &params.pc_gens, &ar_2, false, false, &None);
+    let art = AssetRecordType::PublicAmount_PublicAssetType;
+    let ba_1 = build_blind_asset_record(&mut prng, &params.pc_gens, &ar_1, art, &None);
+    let ba_2 = build_blind_asset_record(&mut prng, &params.pc_gens, &ar_2, art, &None);
 
     // Attempt to spend too much
     let mut invalid_outputs_transfer_op = TransferOperationBuilder::new();

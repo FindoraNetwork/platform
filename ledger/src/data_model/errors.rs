@@ -9,6 +9,7 @@ pub enum PlatformError {
   // Option(String) so I (joe) can be lazy about error descriptions but also catch the laziness
   // later by removing Option
   InvariantError(Option<String>),
+  SubmissionServerError(Option<String>),
   ZeiError(ZeiError),
   IoError(String),
 }
@@ -23,6 +24,10 @@ impl fmt::Display for PlatformError {
       PlatformError::InputsError => f.write_str("Invalid parameters"),
       PlatformError::InvariantError(msg) => {
         f.write_str(format!("Invariant violated: {}",
+                            msg.as_ref().unwrap_or(&"UNKNOWN".to_string())).as_str())
+      }
+      PlatformError::SubmissionServerError(msg) => {
+        f.write_str(format!("Ledger Application Error: {}",
                             msg.as_ref().unwrap_or(&"UNKNOWN".to_string())).as_str())
       }
       PlatformError::ZeiError(ze) => ze.fmt(f),
