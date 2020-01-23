@@ -63,12 +63,8 @@ impl abci::Application for ABCISubmissionServer {
   }
 
   fn end_block(&mut self, _req: &RequestEndBlock) -> ResponseEndBlock {
-<<<<<<< HEAD
-    let _ = self.la.end_block();
-=======
     // TODO: this should propagate errors instead of panicking
     self.la.end_block().unwrap();
->>>>>>> master
     ResponseEndBlock::new()
   }
 
