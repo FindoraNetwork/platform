@@ -17,7 +17,7 @@ use submission_server::TxnHandle;
 use txn_builder::{BuildsTransactions, TransactionBuilder};
 use zei::serialization::ZeiFromToBytes;
 use zei::setup::PublicParams;
-use zei::xfr::asset_record::build_blind_asset_record;
+use zei::xfr::asset_record::{build_blind_asset_record, AssetRecordType};
 use zei::xfr::sig::{XfrKeyPair, XfrPublicKey};
 use zei::xfr::structs::{AssetRecord, BlindAssetRecord};
 
@@ -197,14 +197,17 @@ fn store_blind_asset_record(file_path: &str,
   let bytes = asset_type.as_bytes();
   asset_type_arr.copy_from_slice(&bytes[..16]);
 
-  let blind_asset_record = build_blind_asset_record(&mut ChaChaRng::from_entropy(),
-                                                    &PublicParams::new().pc_gens,
-                                                    &AssetRecord::new(amount.parse::<u64>().unwrap(),
-                                                    asset_type_arr,
-                                                    XfrPublicKey::zei_from_bytes(pub_key.as_bytes())).unwrap(),
-                                                    confidential_amount,
-                                                    confidential_asset,
-                                                    &None);
+  let asset_record = AssetRecord::new(amount.parse::<u64>().unwrap(),
+                                      asset_type_arr,
+                                      XfrPublicKey::zei_from_bytes(pub_key.as_bytes())).unwrap();
+
+  let blind_asset_record =
+    build_blind_asset_record(&mut ChaChaRng::from_entropy(),
+                             &PublicParams::new().pc_gens,
+                             &asset_record,
+                             AssetRecordType::from_booleans(confidential_amount,
+                                                            confidential_asset),
+                             &None);
 
   if let Ok(as_json) = serde_json::to_string(&blind_asset_record) {
     let _ = fs::write(file_path, &as_json).or_else(|_e| {
