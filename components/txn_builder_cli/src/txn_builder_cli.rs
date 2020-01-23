@@ -13,6 +13,7 @@ use std::io::prelude::*;
 use std::io::Error;
 use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
+use submission_server::TxnHandle;
 use txn_builder::{BuildsTransactions, TransactionBuilder};
 use zei::serialization::ZeiFromToBytes;
 use zei::xfr::sig::{XfrKeyPair, XfrPublicKey};
@@ -310,12 +311,12 @@ fn main() {
         .takes_value(true)))
     .subcommand(SubCommand::with_name("submit")
         .arg(Arg::with_name("port")
-            .short("p")
+            .short("P")
             .long("port")
             .takes_value(true)
             .help("specify ledger standalone port (e.g. 8669)"))
         .arg(Arg::with_name("host")
-            .short("h")
+            .short("H")
             .long("host")
             .takes_value(true)
             .help("specify ledger standalone host (e.g. localhost)")))
@@ -425,13 +426,14 @@ fn process_submit_cmd(submit_matches: &clap::ArgMatches, transaction_file_name: 
 
   // submit
   let client = reqwest::Client::new();
-  let res = client.post(&format!("http://{}:{}/{}", &host, &port, "submit_transaction"))
-                  .json(&txn)
-                  .send()
-                  .unwrap();
+  let mut res = client.post(&format!("http://{}:{}/{}", &host, &port, "submit_transaction"))
+                      .json(&txn)
+                      .send()
+                      .unwrap();
 
   // log body
-  println!("{:?}", res);
+  println!("Response: {}",
+           res.json::<TxnHandle>().expect("<Invalid JSON>"));
   println!("Status: {}", res.status());
   println!("Headers:\n{:?}", res.headers());
 }

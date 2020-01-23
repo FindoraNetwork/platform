@@ -1,6 +1,4 @@
 #![deny(warnings)]
-extern crate ledger;
-
 use cryptohash::sha256;
 use ledger::data_model::errors::PlatformError;
 use ledger::data_model::{Transaction, TxnSID, TxnTempSID, TxoSID};
@@ -8,6 +6,7 @@ use ledger::store::*;
 use rand_core::{CryptoRng, RngCore};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::fmt;
 use std::sync::{Arc, RwLock};
 
 // Query handle for user
@@ -21,6 +20,12 @@ impl TxnHandle {
   }
 }
 
+impl fmt::Display for TxnHandle {
+  fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    write!(f, "TxnHandle: {}", self.0)
+  }
+}
+
 // Indicates whether a transaction has been committed to the ledger
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub enum TxnStatus {
@@ -28,7 +33,7 @@ pub enum TxnStatus {
   Pending,
 }
 
-pub struct LedgerApp<RNG, LU>
+pub struct SubmissionServer<RNG, LU>
   where RNG: RngCore + CryptoRng,
         LU: LedgerUpdate<RNG> + LedgerAccess
 {
@@ -40,20 +45,20 @@ pub struct LedgerApp<RNG, LU>
   prng: RNG,
 }
 
-impl<RNG, LU> LedgerApp<RNG, LU>
+impl<RNG, LU> SubmissionServer<RNG, LU>
   where RNG: RngCore + CryptoRng,
         LU: LedgerUpdate<RNG> + LedgerAccess
 {
   pub fn new(prng: RNG,
              ledger_state: Arc<RwLock<LU>>,
              block_capacity: usize)
-             -> Result<LedgerApp<RNG, LU>, PlatformError> {
-    Ok(LedgerApp { committed_state: ledger_state,
-                   block: None,
-                   txn_status: HashMap::new(),
-                   pending_txns: vec![],
-                   prng,
-                   block_capacity })
+             -> Result<SubmissionServer<RNG, LU>, PlatformError> {
+    Ok(SubmissionServer { committed_state: ledger_state,
+                          block: None,
+                          txn_status: HashMap::new(),
+                          pending_txns: vec![],
+                          prng,
+                          block_capacity })
   }
 
   pub fn get_txn_status(&self, txn_handle: &TxnHandle) -> Option<TxnStatus> {
@@ -112,7 +117,7 @@ impl<RNG, LU> LedgerApp<RNG, LU>
       // Finally, return the finalized txn sids
       return Ok(());
     }
-    Err(PlatformError::LedgerAppError(Some("Cannot finish block because there are no pending txns".into())))
+    Err(PlatformError::SubmissionServerError(Some("Cannot finish block because there are no pending txns".into())))
   }
 
   pub fn cache_transaction(&mut self, txn: Transaction) -> Result<TxnHandle, PlatformError> {
@@ -128,7 +133,7 @@ impl<RNG, LU> LedgerApp<RNG, LU>
       }
     }
 
-    Err(PlatformError::LedgerAppError(Some("Transaction is invalid and cannot be added to pending txn list.".into())))
+    Err(PlatformError::SubmissionServerError(Some("Transaction is invalid and cannot be added to pending txn list.".into())))
   }
 
   pub fn abort_block(&mut self) {
@@ -177,15 +182,15 @@ mod tests {
 
   #[test]
   fn test_cache_transaction() {
-    // Create a LedgerApp
+    // Create a SubmissionServer
     let block_capacity = 8;
     let ledger_state = LedgerState::test_ledger();
     let mut prng = rand_chacha::ChaChaRng::from_seed([0u8; 32]);
-    let mut ledger_app = LedgerApp::new(prng.clone(),
-                                        Arc::new(RwLock::new(ledger_state)),
-                                        block_capacity).unwrap();
+    let mut submission_server = SubmissionServer::new(prng.clone(),
+                                                      Arc::new(RwLock::new(ledger_state)),
+                                                      block_capacity).unwrap();
 
-    ledger_app.begin_block();
+    submission_server.begin_block();
 
     // Create values to be used to build transactions
     let keypair = XfrKeyPair::generate(&mut prng);
@@ -207,14 +212,14 @@ mod tests {
                  .unwrap();
 
     // Cache transactions
-    ledger_app.cache_transaction(txn_builder_0.transaction().clone())
-              .unwrap();
-    ledger_app.cache_transaction(txn_builder_1.transaction().clone())
-              .unwrap();
+    submission_server.cache_transaction(txn_builder_0.transaction().clone())
+                     .unwrap();
+    submission_server.cache_transaction(txn_builder_1.transaction().clone())
+                     .unwrap();
 
     // Verify temp_sids
-    let temp_sid_0 = ledger_app.pending_txns.get(0).unwrap();
-    let temp_sid_1 = ledger_app.pending_txns.get(1).unwrap();
+    let temp_sid_0 = submission_server.pending_txns.get(0).unwrap();
+    let temp_sid_1 = submission_server.pending_txns.get(1).unwrap();
 
     assert_eq!(temp_sid_0.0, TxnTempSID(0));
     assert_eq!(temp_sid_1.0, TxnTempSID(1));
@@ -222,26 +227,27 @@ mod tests {
 
   #[test]
   fn test_eligible_to_commit() {
-    // Create a LedgerApp
+    // Create a SubmissionServer
     let block_capacity = 8;
     let ledger_state = LedgerState::test_ledger();
     let prng = rand_chacha::ChaChaRng::from_seed([0u8; 32]);
-    let mut ledger_app =
-      LedgerApp::new(prng, Arc::new(RwLock::new(ledger_state)), block_capacity).unwrap();
+    let mut submission_server =
+      SubmissionServer::new(prng, Arc::new(RwLock::new(ledger_state)), block_capacity).unwrap();
 
-    ledger_app.begin_block();
+    submission_server.begin_block();
 
     let transaction = Transaction::default();
 
     // Verify that it's ineligible to commit if #transactions < BLOCK_CAPACITY
     for _i in 0..(block_capacity - 1) {
-      ledger_app.cache_transaction(transaction.clone()).unwrap();
-      assert!(!ledger_app.eligible_to_commit());
+      submission_server.cache_transaction(transaction.clone())
+                       .unwrap();
+      assert!(!submission_server.eligible_to_commit());
     }
 
     // Verify that it's eligible to commit if #transactions == BLOCK_CAPACITY
-    ledger_app.cache_transaction(transaction).unwrap();
-    assert!(ledger_app.eligible_to_commit());
+    submission_server.cache_transaction(transaction).unwrap();
+    assert!(submission_server.eligible_to_commit());
   }
 
   #[test]
@@ -249,27 +255,28 @@ mod tests {
     let block_capacity = 2;
     let ledger_state = LedgerState::test_ledger();
     let prng = rand_chacha::ChaChaRng::from_seed([0u8; 32]);
-    let mut ledger_app =
-      LedgerApp::new(prng, Arc::new(RwLock::new(ledger_state)), block_capacity).unwrap();
+    let mut submission_server =
+      SubmissionServer::new(prng, Arc::new(RwLock::new(ledger_state)), block_capacity).unwrap();
 
     // Submit the first transcation. Ensure that the txn is pending.
     let transaction = Transaction::default();
-    let txn_handle = ledger_app.handle_transaction(transaction.clone()).unwrap();
-    let status = ledger_app.txn_status
-                           .get(&txn_handle)
-                           .expect("handle should be in map")
-                           .clone();
+    let txn_handle = submission_server.handle_transaction(transaction.clone())
+                                      .unwrap();
+    let status = submission_server.txn_status
+                                  .get(&txn_handle)
+                                  .expect("handle should be in map")
+                                  .clone();
     assert_eq!(status, TxnStatus::Pending);
 
     // Submit a second transaction and ensure that it is tracked as committed
-    ledger_app.handle_transaction(transaction.clone())
-              .expect("Txn should be valid");
+    submission_server.handle_transaction(transaction.clone())
+                     .expect("Txn should be valid");
     // In this case, both transactions have the same handle. Because transactions are unique and
     // We are using a collision resistant hash function, this will not occur on a live ledger.
-    let status = ledger_app.txn_status
-                           .get(&txn_handle)
-                           .expect("handle should be in map")
-                           .clone();
+    let status = submission_server.txn_status
+                                  .get(&txn_handle)
+                                  .expect("handle should be in map")
+                                  .clone();
     assert_eq!(status, TxnStatus::Committed((TxnSID(1), Vec::new())));
   }
 }

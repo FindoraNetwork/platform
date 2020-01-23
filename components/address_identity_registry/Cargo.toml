@@ -1,12 +1,12 @@
 [package]
-name = "ac_test_cli"
+name = "address_identity_registry"
 version = "0.0.1"
-authors = ["John D. Corbett <corbett@findora.org>"]
+authors = ["Engineering <engineering@findora.org>"]
 edition = "2018"
 
 [[bin]]
-name = "ac_test_cli"
-path = "src/ac_test_cli.rs"
+name = "address_identity_registry"
+path = "src/address_identity_registry.rs"
 
 [dependencies]
 hex = "0.3.2"

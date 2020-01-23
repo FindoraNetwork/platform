@@ -1,7 +1,7 @@
 #![deny(warnings)]
-use api_service::RestfulApiService;
 use ledger::data_model::FinalizedTransaction;
 use ledger::store::*;
+use ledger_api_service::RestfulApiService;
 use log::{error, info};
 use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
