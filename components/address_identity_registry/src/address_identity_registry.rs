@@ -1,82 +1,27 @@
 #![deny(warnings)]
+#![feature(slice_patterns)]
 // Copyright 2019 © Findora. All rights reserved.
 /// Command line executable to exercise functions related to credentials
-// Anonymous Credentials with Selective Attribute Revelation
 
-// I'm not certain the use case below is the one intended.
-//
-// 1. The (credential) issuer generates a key pair with knowledge of
-//    the number of attributes. The number of attributes is either set by
-//    the nature of the deal to be made (e.g. a standard form) or the
-//    user's choice.
-// 2. The user generates keys using the issuer's public key.
-// 3. The user supplies attribute values and their newly generated public
-//    key to the issuer. Or maybe the issuer already knows the attribute
-//    values?
-// 4. The issuer signs the attributes with the issuer's secret key
-//    and the user's public key. This is the issuer's attestation that
-//    the user has committed to the attribute values.
-// 5. The user presents to the prover (second party) the issuer
-//    attestation signature as proof the user has committed to certain
-//    attributes.
-// 6. Possibly immediately, possibly later, the user generates and presents a
-//    "reveal signature" that makes it possible to prove the user committed
-//    to the to-be revealed values without revealing the values.
-// 8. The user reveals the attribute values to the prover.
-// ?. Something happens to commit the prover to something?
-// 9. Finally, the prover has sufficient information to prove the user
-//    did in fact commit to the attributes as revealed.
-//
-// Trust Issues
-//
-// The issuer (specifically, the credential issuer) must be trusted
-// regarding their standing and their discretion regarding keeping
-// the attribute values confidential. How does the issuer know the
-// user isn't lying about the attribute values? Maybe the issuer would
-// only participate under certain conditions.
-//
-// The user must trust the issuer not to prematurely reveal the
-// attributes or alter the attributes. Maybe the credential issuer has
-// limited knowledge of the account requesting attestation or the
-// pending transaction? If there were a small number of bidders
-// perhaps the second party could infer something. Maybe the issuer
-// wouldn't know with whom to conspire?
-//
-// How does the prover know these attributes are germane? Could the user
-// game the system by getting the issuer to sign one set of attributes
-// and later claim they were another set of attributes, i.e. changing
-// the column headings?
-//
-// The only thing the prover knows is that the values were committed.
-// The prover must also trust the issuer. Maybe reputation give the
-// issuer incentive to be trustworthy. This is all that prevents the
-// user from lying about the attribute values.
-
-#[macro_use]
-extern crate clap;
-
-use env_logger::{Env, Target};
-use log::{debug, error, info, trace, warn};
-use serde::{Deserialize, Serialize};
-use std::fs::File;
-use std::fs::OpenOptions;
-use std::io::prelude::*;
-use std::path::Path;
-use std::process::exit;
-
+use clap;
+use clap::{Arg, App, ArgMatches};
 use hex;
 use rand_chacha::ChaChaRng;
 use rand_core::SeedableRng;
 use rmp_serde;
 use sha2::{Digest, Sha256};
+use serde::{Deserialize, Serialize};
+use sparse_merkle_tree::{SmtMap256/*, check_merkle_proof*/};
+// use std::fs::File;
+use std::fs::OpenOptions;
+use std::io::Write;
+use std::io;
+use std::io::{Error, ErrorKind};
+use std::path::Path;
 use zei::api::anon_creds::{
   ac_keygen_issuer, ac_keygen_user, ac_reveal, ac_sign, ac_verify, ACIssuerPublicKey,
   ACIssuerSecretKey, ACRevealSig, ACSignature, ACUserPublicKey, ACUserSecretKey,
 };
-
-const VERSION: &str = env!("CARGO_PKG_VERSION");
-//const AUTHOR: &str = "John D. Corbett <corbett@findora.org>";
-const AUTHOR: &str = env!("CARGO_PKG_AUTHORS");
 
 // Default file path of the anonymous credential registry
 const DEFAULT_REGISTRY_PATH: &str = "acreg.json";
@@ -97,58 +42,18 @@ impl TypeName for ACIssuerPublicKey {
   }
 }
 
-fn init_logging() {
-  // Log everything "trace" level or greater to stdout.
-  // TODO document how to override this from an environment variable.
-  env_logger::from_env(Env::default().default_filter_or("trace")).target(Target::Stdout)
-                                                                 .init();
+/*
+pub fn verify_credential(issuer_pub_key: &ACIssuerPublicKey<P::G1, P::G2>,
+                         attrs: &[P::ScalarField],
+                         bitmap: &[bool],
+                         credential: &ACSignature<P::G1>)
+                         -> Result<(), ZeiError> {
 }
-
-// Demonstrate logging format including timestamp and color-coded
-// keywords
-fn demo_logging() {
-  error!("Sample error message");
-  warn!("Sample warn message");
-  info!("Sample info message");
-  debug!("Sample debug message");
-  trace!("Sample trace message");
-}
-
-fn parse_args() -> clap::ArgMatches<'static> {
-  let path: std::path::PathBuf = std::env::current_exe().unwrap();
-  let program_name: &str = path.file_name().unwrap().to_str().unwrap();
-  clap_app!(tmp_name =>
-    (name: program_name)
-    (version: VERSION)
-    (author: AUTHOR)
-    (about: "Anonomyous credential registry command line interface")
-    (@arg registry: -r --registry [FILE]
-     "registry path (default: acreg.json)")
-    (@arg debug: -d ... "Sets the level of debugging information")
-    (@subcommand test => (about: "Automated self-test"))
-
-    (@subcommand addissuer => (about: "Add a new anonymous credential issuer"))
-    (@subcommand adduser =>
-     (about: "Add a new anonymous credential user")
-     (@arg issuer: +required "anonymous credential issuer"))
-    (@subcommand sign =>
-     (about: "Create an anonymous credential for user by issuer")
-     (@arg issuer: +required "anonymous credential issuer")
-     (@arg user: +required "user address"))
-    (@subcommand reveal =>
-     (about: "Generate a proof of an anonymous credential for user by issuer")
-     (@arg issuer: +required "anonymous credential issuer")
-     (@arg user: +required "user address"))
-    (@subcommand verify =>
-     (about: "Verify an anonymous credential for user by issuer")
-     (@arg issuer: +required "anonymous credential issuer")
-     (@arg user: +required "user address"))
-  ).get_matches()
-}
+*/
 
 // Test anonymous credentials on fixed inputs. Similar to
 // Zei's credentials_tests.
-fn automated_test() -> bool {
+fn test(_global_state: &mut GlobalState, _args: &ArgMatches) -> Result<(), std::io::Error> {
   let mut prng: ChaChaRng;
   // For a real application, the seed should be random.
   prng = ChaChaRng::from_seed([0u8; 32]);
@@ -164,19 +69,19 @@ fn automated_test() -> bool {
   let att_count = bitmap.len();
   let (issuer_pk, issuer_sk) = ac_keygen_issuer::<_>(&mut prng, att_count);
 
-  trace!("Issuer public key: {:?}", issuer_pk);
-  trace!("Issuer secret key: {:?}", issuer_sk);
+  println!("Issuer public key: {:?}", issuer_pk);
+  println!("Issuer secret key: {:?}", issuer_sk);
 
   let (user_pk, user_sk) = ac_keygen_user::<_>(&mut prng, &issuer_pk);
-  trace!("User public key: {:#?}", user_pk);
-  info!("Address of user public key: {:?}", sha256(&user_pk));
+  println!("User public key: {:#?}", user_pk);
+  println!("Address of user public key: {:?}", sha256(&user_pk));
 
   // The user secret key holds [u64; 6], but with more structure.
-  trace!("User secret key: {:?}", user_sk);
+  println!("User secret key: {:?}", user_sk);
 
   // Issuer vouches for the user's attributes given above.
   let sig = ac_sign(&mut prng, &issuer_sk, &user_pk, &attrs[..]);
-  trace!("Credential signature: {:?}", sig);
+  println!("Credential signature: {:?}", sig);
 
   // The user presents this to the second party in a transaction as proof
   // attributes have been committed without revealing the values.
@@ -200,30 +105,10 @@ fn automated_test() -> bool {
   // this. But presumably, the reveal signature alone is insufficient to
   // derive the attributes. Presumably if the range of legal values were small,
   // exhaustive search would not be too exhausting. (?)
-  let verified = ac_verify(&issuer_pk, revealed_attrs.as_slice(), &bitmap, &reveal_sig).is_ok();
-  if verified {
-    info!("Verified revealed attributes match signed commitment.");
+  if let Err(e) = ac_verify(&issuer_pk, revealed_attrs.as_slice(), &bitmap, &reveal_sig) {
+    Err(Error::new(ErrorKind::InvalidInput, format!("{}", e)))
   } else {
-    error!("Verification failed.");
-  };
-  verified
-}
-
-enum ShellExitStatus {
-  Success = 0,
-  Failure = 1,
-}
-
-fn subcommand_test(registry_path: &Path, args: &clap::ArgMatches) -> ShellExitStatus {
-  trace!("subcommand test");
-  if 0 < args.occurrences_of("debug") {
-    demo_logging();
-    trace!("registry: {}", registry_path.display());
-  }
-  if automated_test() {
-    ShellExitStatus::Success
-  } else {
-    ShellExitStatus::Failure
+    Ok(())
   }
 }
 
@@ -231,7 +116,7 @@ fn subcommand_test(registry_path: &Path, args: &clap::ArgMatches) -> ShellExitSt
 fn sha256<T>(key: &T) -> String
   where T: Serialize + TypeName
 {
-  trace!("ipk type: {}", key.type_string());
+  println!("ipk type: {}", key.type_string());
   let mut bytes = vec![];
   key.serialize(&mut rmp_serde::Serializer::new(&mut bytes))
      .unwrap();
@@ -241,6 +126,21 @@ fn sha256<T>(key: &T) -> String
   hasher.input(key.type_string());
   hasher.input(bytes.as_slice());
   hex::encode(hasher.result())
+}
+
+#[derive(Debug)]
+struct GlobalState<'a> {
+  registry: Vec<String>,
+  smt_map: SmtMap256<&'a str>,
+}
+
+impl GlobalState<'_> {
+  fn new() -> Self {
+    GlobalState {
+      registry: Vec::<String>::new(),
+      smt_map: SmtMap256::<&str>::new(),
+    }
+  }
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -279,40 +179,6 @@ struct AddrUser {
   value_type: u32,
   value: User,
 }
-
-// Generate a new issuer and append it to the registry.
-fn subcommand_add_issuer(registry_path: &Path) -> ShellExitStatus {
-  trace!("subcommand addissuer");
-  let issuer = new_issuer();
-  let address = sha256(&issuer.public_key);
-  trace!("Issuer address: {}", &address);
-
-  match OpenOptions::new().append(true)
-                          .create(true)
-                          .open(&registry_path)
-  {
-    Err(io_error) => {
-      error!("Couldn't create registry {}: {}",
-             &registry_path.display(),
-             io_error.to_string());
-      ShellExitStatus::Failure
-    }
-    Ok(mut registry_file) => {
-      let a = AddrIssuer { address,
-                           value_type: 2,
-                           value: issuer };
-      let j = serde_json::to_string(&a).unwrap();
-      trace!("json: {}", j);
-      if let Err(e) = registry_file.write_fmt(format_args!("{}\n", j)) {
-        error!("Error: {:?}", e);
-        ShellExitStatus::Failure
-      } else {
-        ShellExitStatus::Success
-      }
-    }
-  }
-}
-
 type Signature = ACSignature;
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -323,62 +189,48 @@ struct AddrValue<V> {
 }
 
 // Generic key-value lookup and deserialization
-fn lookup<T>(registry_path: &Path, address: &str) -> Option<T>
+fn lookup<T>(global_state: &mut GlobalState, address: &str) -> Option<T>
   where for<'d> T: Deserialize<'d>
 {
-  match File::open(registry_path) {
-    Ok(mut registry_file) => {
-      let mut contents = String::new();
-      if registry_file.read_to_string(&mut contents).is_err() {
-        return None;
+  // println!("contents  = {}", &contents);
+  global_state.registry.iter().rev().find_map(|x: &String| match serde_json::from_str::<AddrValue<T>>(x) {
+    Ok(item) => {
+      println!("item.address = {}, address  = {}", &item.address, &address);
+      if item.address == address {
+        Some(item.value)
+      } else {
+        None
       }
-      let mut acjson = contents.lines();
-      acjson.find_map(|x| match serde_json::from_str::<AddrValue<T>>(x) {
-              Ok(item) => {
-                if item.address == address {
-                  Some(item.value)
-                } else {
-                  None
-                }
-              }
-              Err(_) => {
-                // TODO Report errors other than "missing field" errors.
-                None
-              }
-            })
     }
-    Err(open_error) => {
-      error!("{:?}", open_error);
+    Err(_) => {
+      // TODO Report errors other than "missing field" errors.
       None
     }
-  }
+  })
 }
 
-fn append_user(registry_path: &Path, user: AddrUser) -> bool {
-  match OpenOptions::new().append(true)
-                          .create(true)
-                          .open(&registry_path)
-  {
-    Err(io_error) => {
-      error!("Couldn't create registry {}: {}",
-             &registry_path.display(),
-             io_error.to_string());
-      false
-    }
-    Ok(mut registry_file) => {
-      let user_json = serde_json::to_string(&user).unwrap();
-      if let Err(e) = registry_file.write_fmt(format_args!("{}\n", user_json)) {
-        error!("Error: {:?}", e);
-        false
-      } else {
-        true
-      }
-    }
-  }
+fn append_to_registry<T: Serialize>(global_state: &mut GlobalState, item: T) -> Result<(), std::io::Error> {
+  let item_json = serde_json::to_string(&item).unwrap();
+  global_state.registry.push(item_json);
+  Ok(())
 }
 
-fn subcommand_add_user(registry_path: &Path, issuer: &str) -> ShellExitStatus {
-  if let Some(issuer) = lookup::<Issuer>(registry_path, issuer) {
+// Generate a new issuer and append it to the registry.
+fn add_issuer(global_state: &mut GlobalState) -> Result<(), std::io::Error> {
+  println!("subcommand addissuer");
+  let issuer = new_issuer();
+  let address = sha256(&issuer.public_key);
+  println!("Issuer address: {}", &address);
+
+  let a = AddrIssuer { address,
+                       value_type: 2,
+                       value: issuer };
+  append_to_registry::<AddrIssuer>(global_state, a)
+}
+
+fn add_user(global_state: &mut GlobalState, issuer: &str) -> Result<(), std::io::Error> {
+  println!("Looking up issuer: {}", issuer);
+  if let Some(issuer) = lookup::<Issuer>(global_state, issuer) {
     let mut prng: ChaChaRng;
     // For a real application, the seed should be random.
     prng = ChaChaRng::from_seed([0u8; 32]);
@@ -387,17 +239,13 @@ fn subcommand_add_user(registry_path: &Path, issuer: &str) -> ShellExitStatus {
                         value_type: 2,
                         value: User { public_key: user_pk,
                                       secret_key: user_sk } };
-    info!("Added user: {}", au.address);
-    if append_user(registry_path, au) {
-      ShellExitStatus::Success
-    } else {
-      ShellExitStatus::Failure
-    }
+    println!("Added user: {}", au.address);
+    append_to_registry::<AddrUser>(global_state, au)
   } else {
-    error!("Unable to locate issuer");
-    ShellExitStatus::Failure
+    Err(Error::new(ErrorKind::InvalidInput, format!("lookup of issuer {} failed", issuer)))
   }
 }
+
 
 #[derive(Debug, Serialize, Deserialize)]
 struct AddrSig {
@@ -406,8 +254,8 @@ struct AddrSig {
   value: ACSignature,
 }
 
-fn subcommand_sign(registry_path: &Path, user: &str, issuer: &str) -> ShellExitStatus {
-  match (lookup::<User>(registry_path, user), lookup::<Issuer>(registry_path, issuer)) {
+fn sign(global_state: &mut GlobalState, user: &str, issuer: &str) -> Result<(), std::io::Error> {
+  match (lookup::<User>(global_state, user), lookup::<Issuer>(global_state, issuer)) {
     (Some(user_keys), Some(issuer_keys)) => {
       let mut prng: ChaChaRng;
       // TODO Share one prng across all invocations.
@@ -427,40 +275,18 @@ fn subcommand_sign(registry_path: &Path, user: &str, issuer: &str) -> ShellExitS
       let addr_sig = AddrSig { address: user.to_string(),
                                value_type: 2,
                                value: sig };
-      // TODO extract a generic function to append a record to the registry
-      match OpenOptions::new().append(true).open(&registry_path) {
-        Err(io_error) => {
-          error!("Couldn't write to registry {}: {}",
-                 &registry_path.display(),
-                 io_error.to_string());
-          ShellExitStatus::Failure
-        }
-        Ok(mut registry_file) => {
-          let sig_json = serde_json::to_string(&addr_sig).unwrap();
-          if let Err(io_error) = registry_file.write_fmt(format_args!("{}\n", sig_json)) {
-            error!("Couldn't append to registry {}: {}",
-                   registry_path.display(),
-                   io_error.to_string());
-            ShellExitStatus::Failure
-          } else {
-            info!("Signature");
-            ShellExitStatus::Success
-          }
-        }
-      }
+
+      append_to_registry::<AddrSig>(global_state, addr_sig)
     }
-    (Some(_), _) => {
-      error!("Unable to find user");
-      ShellExitStatus::Failure
-    }
-    (_, Some(_)) => {
-      error!("Unable to find issuer");
-      ShellExitStatus::Failure
-    }
-    (_, _) => {
-      error!("Unable to find either issuer or user");
-      ShellExitStatus::Failure
-    }
+    (None, None) => {
+      Err(Error::new(ErrorKind::InvalidInput, "Unable to find either issuer or user"))
+    },
+    (None, _) => {
+      Err(Error::new(ErrorKind::InvalidInput, "Unable to find user"))
+    },
+    (_, None) => {
+      Err(Error::new(ErrorKind::InvalidInput, "Unable to find issuer"))
+    },
   }
 }
 
@@ -473,13 +299,10 @@ struct AddrProof {
   value: Proof,
 }
 
-fn subcommand_reveal(registry_path: &Path, user: &str, issuer: &str) -> ShellExitStatus {
-  trace!("subcommand reveal user: {} issuer: {}", user, issuer);
-
-  match (lookup::<User>(registry_path, user),
-         lookup::<Issuer>(registry_path, issuer),
-         lookup::<Signature>(registry_path, user))
-  {
+fn reveal(global_state: &mut GlobalState, user: &str, issuer: &str) -> Result<(), std::io::Error> {
+  match (lookup::<User>(global_state, user),
+         lookup::<Issuer>(global_state, issuer),
+         lookup::<Signature>(global_state, user)) {
     (Some(user_keys), Some(issuer_keys), Some(sig)) => {
       let mut prng: ChaChaRng;
       // TODO Share one prng across all invocations.
@@ -503,115 +326,101 @@ fn subcommand_reveal(registry_path: &Path, user: &str, issuer: &str) -> ShellExi
       let addr_proof = AddrProof { address: user.to_string(),
                                    value_type: 2,
                                    value: proof };
-      // TODO extract a generic function to append a record to the registry
-      match OpenOptions::new().append(true).open(&registry_path) {
-        Err(io_error) => {
-          error!("Couldn't write to registry {}: {}",
-                 &registry_path.display(),
-                 io_error.to_string());
-          ShellExitStatus::Failure
-        }
-        Ok(mut registry_file) => {
-          let sig_json = serde_json::to_string(&addr_proof).unwrap();
-          if let Err(io_error) = registry_file.write_fmt(format_args!("{}\n", sig_json)) {
-            error!("Couldn't append to registry {}: {}",
-                   registry_path.display(),
-                   io_error.to_string());
-            ShellExitStatus::Failure
-          } else {
-            info!("Signature");
-            ShellExitStatus::Success
-          }
-        }
-      }
-    }
-    (some_user, some_issuer, some_sig) => {
-      if some_user.is_none() {
-        error!("Unable to find user.");
-      };
-      if some_issuer.is_none() {
-        error!("Unable to find issuer.");
-      };
-      if some_sig.is_none() {
-        error!("Unable to find signature.");
-      };
-      ShellExitStatus::Failure
-    }
+      append_to_registry::<AddrProof>(global_state, addr_proof)
+    },
+    (None, _, _) => Err(Error::new(ErrorKind::InvalidInput, "Unable to find user")),
+    (_, None, _) => Err(Error::new(ErrorKind::InvalidInput, "Unable to find issuer")),
+    (_, _, None) => Err(Error::new(ErrorKind::InvalidInput, "Unable to find signature")),
   }
 }
 
-fn subcommand_verify(registry_path: &Path, user: &str, issuer: &str) -> ShellExitStatus {
-  trace!("subcommand verify user: {} issuer: {}", user, issuer);
-  let verified;
-  match (lookup::<Issuer>(registry_path, issuer), lookup::<Proof>(registry_path, user)) {
+fn verify(global_state: &mut GlobalState, user: &str, issuer: &str) -> Result<(), std::io::Error> {
+  println!("subcommand verify user: {} issuer: {}", user, issuer);
+  match (lookup::<Issuer>(global_state, issuer), lookup::<Proof>(global_state, user)) {
     (Some(issuer_keys), Some(proof)) => {
       let attrs = [0u64.to_le_bytes(),
                    1u64.to_le_bytes(),
                    2u64.to_le_bytes(),
                    3u64.to_le_bytes()];
       let bitmap = [false, false, false, false];
-      verified = ac_verify(&issuer_keys.public_key, &attrs, &bitmap, &proof).is_ok();
-    }
-    (lookup_issuer, lookup_proof) => {
-      if lookup_issuer.is_none() {
-        error!("Unable to find issuer: {}", issuer);
+      if let Err(e) = ac_verify(&issuer_keys.public_key, &attrs, &bitmap, &proof) {
+        Err(Error::new(ErrorKind::InvalidInput, format!("{}", e)))
+      } else {
+        Ok(())
       }
-      if lookup_proof.is_none() {
-        error!("Unable to find proof");
-      }
-      verified = false;
     }
-  }
-  if verified {
-    info!("Verified revealed attributes match signed commitment.");
-    ShellExitStatus::Success
-  } else {
-    error!("Verification failed.");
-    ShellExitStatus::Failure
+    (None, _) => Err(Error::new(ErrorKind::InvalidInput, "Unable to find issuer")),
+    (_, None) => Err(Error::new(ErrorKind::InvalidInput, "Unable to find proof")),
   }
 }
 
-fn main() {
-  init_logging();
+fn first_char(s: &str, c: char) -> bool {
+  match s.chars().nth(0) {
+    None => false,
+    Some(c0) => c0.to_ascii_uppercase() == c.to_ascii_uppercase(),
+  }
+}
+
+fn parse_args() -> ArgMatches<'static> {
+  App::new("Test REPL")
+    .version("0.1.0")
+    .author("Brian Rogoff <brogoff@gmail.com>")
+    .about("REPL with argument parsing")
+    .arg(Arg::with_name("registry")
+         .short("r")
+         .long("registry")
+         .takes_value(true)
+         .help("the registry dude"))
+    .arg(Arg::with_name("file")
+         .short("f")
+         .takes_value(true)
+         .help("Name of the file"))
+    .get_matches()
+}
+
+fn main() -> Result<(), std::io::Error> {
   let args = parse_args();
+
   let registry_path = Path::new(args.value_of("registry").unwrap_or(DEFAULT_REGISTRY_PATH));
-  exit(match args.subcommand() {
-         ("test", _) => subcommand_test(&registry_path, &args),
+  let mut _registry_file = OpenOptions::new()
+    .read(true)
+    .append(true)
+    .create(true)
+    .open(&registry_path)?;
 
-         ("addissuer", _) => subcommand_add_issuer(&registry_path),
-         ("adduser", Some(matches)) => {
-           let issuer = matches.value_of("issuer").unwrap();
-           subcommand_add_user(&registry_path, &issuer)
-         }
-         ("sign", Some(matches)) => {
-           let user = matches.value_of("user").unwrap();
-           let issuer = matches.value_of("issuer").unwrap();
-           subcommand_sign(&registry_path, &user, &issuer)
-         }
-         ("reveal", Some(matches)) => {
-           let user = matches.value_of("user").unwrap();
-           let issuer = matches.value_of("issuer").unwrap();
-           subcommand_reveal(&registry_path, &user, &issuer)
-         }
-         ("verify", Some(matches)) => {
-           let user = matches.value_of("user").unwrap();
-           let issuer = matches.value_of("issuer").unwrap();
-           subcommand_verify(&registry_path, &user, &issuer)
-         }
+  let mut global_state = GlobalState::new();
 
-         (subcommand, _) => {
-           error!("Please specify a valid subcommand: {:?}. Use -h for help.",
-                  subcommand);
-           ShellExitStatus::Failure
-         }
-       } as i32)
+  println!("The registry path is {:?}", registry_path);
+
+  println!("REPL");
+
+  loop {
+    print!(">>>");
+    io::stdout().flush()?;
+
+    let mut line = String::new();
+
+    io::stdin().read_line(&mut line)
+      .expect("Failed to read line");
+
+    // let res: Vec<&str> = line.trim().split(' ').collect();
+    // let res_slice: &[&str] = &res;
+    match line.trim().split(' ').collect::<Vec<&str>>().as_slice() {
+      ["test"] /* if x.as_bytes() == "test".as_bytes() */ =>
+        test(&mut global_state, &args)?,
+      ["addissuer"]  =>
+        add_issuer(&mut global_state)?,
+      ["adduser", issuer] =>
+        add_user(&mut global_state, &issuer)?,
+      ["sign", user, issuer]  =>
+        sign(&mut global_state, &user, &issuer)?,
+      ["reveal", user, issuer] =>
+        reveal(&mut global_state, &user, &issuer)?,
+      ["verify", user, issuer] =>
+        verify(&mut global_state, &user, &issuer)?,
+      [x, ..] if first_char(x, 'Q') /*x.chars().nth(0).to_uppercase() == 'Q' */ => break,
+      _ => println!("Invalid line: {}", line),
+    }
+  };
+  Ok(())
 }
-
-/*
-pub fn verify_credential(issuer_pub_key: &ACIssuerPublicKey<P::G1, P::G2>,
-                         attrs: &[P::ScalarField],
-                         bitmap: &[bool],
-                         credential: &ACSignature<P::G1>)
-                         -> Result<(), ZeiError> {
-}
-*/

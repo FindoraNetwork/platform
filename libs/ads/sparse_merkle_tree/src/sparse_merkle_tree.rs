@@ -3,6 +3,7 @@
 //!
 //!
 use cryptohash::sha256;
+use serde::{Deserialize, Serialize};
 use sha256::DIGESTBYTES;
 use std::collections::HashMap;
 
@@ -35,7 +36,7 @@ const ZERO_KEY: Key = [0; DIGESTBYTES];
 // and H(0u256, 0u256) = 0u256.
 
 /// Index of a node in a Sparse Merkle Tree.
-#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
+#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Debug, Serialize, Deserialize)]
 struct TreeNodeIndex {
   // The path starts from the first bit (the LSB of the first byte), and ends at
   // the bit indexed by `depth`. Bit 0 means left, and bit 1 means right. Bits beyond
@@ -109,7 +110,7 @@ pub struct MerkleProof {
 /// The hash of the leaf node is a 256 bit zero value. The hash of an non-leaf
 /// node is calculated by hashing (using keccak-256) the concatenation of the
 /// hashes of its two sub-nodes.
-#[derive(Clone, Default)]
+#[derive(Clone, Default, Debug, Serialize, Deserialize)]
 pub struct SmtMap256<Value: AsRef<[u8]>> {
   kvs: HashMap<Key, Value>,
 
