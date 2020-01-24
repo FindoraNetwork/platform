@@ -2,6 +2,7 @@
 use actix_web::{error, web, App, HttpServer};
 use ledger::data_model::Transaction;
 use ledger::store::{LedgerAccess, LedgerUpdate};
+use log::{error, info};
 use rand_core::{CryptoRng, RngCore};
 use std::io;
 use std::marker::{Send, Sync};
@@ -17,9 +18,14 @@ fn submit_transaction<RNG, LU>(data: web::Data<Arc<RwLock<SubmissionServer<RNG, 
   let mut submission_server = data.write().unwrap();
   let tx = body.into_inner();
 
-  let handle = submission_server.handle_transaction(tx)
-                                .map_err(error::ErrorBadRequest)?;
-  Ok(web::Json(handle))
+  let handle_res = submission_server.handle_transaction(tx);
+
+  if let Ok(handle) = handle_res {
+    return Ok(web::Json(handle));
+  } else {
+    error!("Transaction invalid");
+    return Err(error::ErrorBadRequest("Transaction Invalid"));
+  }
 }
 
 // Force the validator node to end the block. Useful for testing when it is desirable to commmit
@@ -81,6 +87,8 @@ impl SubmissionApi {
                        web::post().to(force_end_block::<RNG, LU>))
     }).bind(&format!("{}:{}", host, port))?
       .start();
+
+    info!("Submission server started");
 
     Ok(SubmissionApi { web_runtime })
   }

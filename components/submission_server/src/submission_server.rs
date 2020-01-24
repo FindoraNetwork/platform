@@ -3,6 +3,7 @@ use cryptohash::sha256;
 use ledger::data_model::errors::PlatformError;
 use ledger::data_model::{Transaction, TxnSID, TxnTempSID, TxoSID};
 use ledger::store::*;
+use log::info;
 use rand_core::{CryptoRng, RngCore};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -94,7 +95,8 @@ impl<RNG, LU> SubmissionServer<RNG, LU>
   pub fn begin_block(&mut self) {
     assert!(self.block.is_none());
     if let Ok(mut ledger) = self.committed_state.write() {
-      self.block = Some(ledger.start_block().unwrap());
+      self.block = Some(ledger.start_block().expect("Ledger could not start block"));
+      info!("New block started");
     } // What should happen in failure? -joe
   }
 
@@ -104,13 +106,15 @@ impl<RNG, LU> SubmissionServer<RNG, LU>
     if let Some(block) = block {
       let mut ledger = self.committed_state.write().unwrap();
       // TODO(noah): is this unwrap reasonable?
-      let finalized_txns = ledger.finish_block(block).unwrap();
+      let finalized_txns = ledger.finish_block(block)
+                                 .expect("Ledger could not finish block");
       // Update status of all committed transactions
       for (txn_temp_sid, handle) in self.pending_txns.drain(..) {
         self.txn_status
             .insert(handle,
                     TxnStatus::Committed(finalized_txns.get(&txn_temp_sid).unwrap().clone()));
       }
+      info!("Block ended. Statuses of committed transactions are now updated");
       // Empty temp_sids after the block is finished
       // If begin_commit or end_commit is no longer empty, move this line to the end of end_commit
       self.pending_txns = Vec::new();
@@ -154,10 +158,11 @@ impl<RNG, LU> SubmissionServer<RNG, LU>
     }
 
     let handle = self.cache_transaction(txn)?;
+    info!("Transaction added to cache and will be committed in the next block");
     // End the current block if it's eligible to commit
     if self.eligible_to_commit() {
       // If the ledger is eligible for a commit, end block will not return an error
-      let _res = self.end_block();
+      self.end_block().unwrap();
 
       // If begin_commit and end_commit are no longer empty, call them here
     }
@@ -168,7 +173,6 @@ impl<RNG, LU> SubmissionServer<RNG, LU>
 // Convert incoming tx data to the proper Transaction format
 pub fn convert_tx(tx: &[u8]) -> Option<Transaction> {
   let transaction: Option<Transaction> = serde_json::from_slice(tx).ok();
-
   transaction
 }
 
