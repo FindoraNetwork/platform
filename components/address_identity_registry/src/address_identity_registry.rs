@@ -12,10 +12,8 @@ use rmp_serde;
 use sha2::{Digest, Sha256};
 use serde::{Deserialize, Serialize};
 use sparse_merkle_tree::{SmtMap256/*, check_merkle_proof*/};
-// use std::fs::File;
-use std::fs::OpenOptions;
-use std::io::Write;
 use std::io;
+use std::io::Write;
 use std::io::{Error, ErrorKind};
 use std::path::Path;
 use zei::api::anon_creds::{
@@ -381,16 +379,11 @@ fn parse_args() -> ArgMatches<'static> {
 fn main() -> Result<(), std::io::Error> {
   let args = parse_args();
 
-  let registry_path = Path::new(args.value_of("registry").unwrap_or(DEFAULT_REGISTRY_PATH));
-  let mut _registry_file = OpenOptions::new()
-    .read(true)
-    .append(true)
-    .create(true)
-    .open(&registry_path)?;
+  let _registry_path = Path::new(args.value_of("registry").unwrap_or(DEFAULT_REGISTRY_PATH));
 
   let mut global_state = GlobalState::new();
 
-  println!("The registry path is {:?}", registry_path);
+  // println!("The registry path is {:?}", _registry_path);
 
   println!("REPL");
 
@@ -403,10 +396,8 @@ fn main() -> Result<(), std::io::Error> {
     io::stdin().read_line(&mut line)
       .expect("Failed to read line");
 
-    // let res: Vec<&str> = line.trim().split(' ').collect();
-    // let res_slice: &[&str] = &res;
     match line.trim().split(' ').collect::<Vec<&str>>().as_slice() {
-      ["test"] /* if x.as_bytes() == "test".as_bytes() */ =>
+      ["test"] =>
         test(&mut global_state, &args)?,
       ["addissuer"]  =>
         add_issuer(&mut global_state)?,
