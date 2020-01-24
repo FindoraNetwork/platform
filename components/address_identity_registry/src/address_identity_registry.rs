@@ -9,11 +9,11 @@ use hex;
 use rand_chacha::ChaChaRng;
 use rand_core::SeedableRng;
 use rmp_serde;
+use rustyline::error::ReadlineError;
+use rustyline::Editor;
 use sha2::{Digest, Sha256};
 use serde::{Deserialize, Serialize};
 use sparse_merkle_tree::{SmtMap256/*, check_merkle_proof*/};
-use std::io;
-use std::io::Write;
 use std::io::{Error, ErrorKind};
 use std::path::Path;
 use zei::api::anon_creds::{
@@ -23,6 +23,14 @@ use zei::api::anon_creds::{
 
 // Default file path of the anonymous credential registry
 const DEFAULT_REGISTRY_PATH: &str = "acreg.json";
+
+const HELP_STRING: &str = r#"
+  A typical session
+  >>> addissuer
+  >>> adduser 4d600960de4bcffeb4b379748cef964c2542fe8c66948f5517b00129d3b22552
+  >>> sign 9ff04d269cdb2fd8f5935f162d4ec20de8d176c324d99df2126b2c84a9f8b26a 4d600960de4bcffeb4b379748cef964c2542fe8c66948f5517b00129d3b22552
+  etc...
+"#;
 
 trait TypeName {
   fn type_string(&self) -> &'static str;
@@ -51,6 +59,7 @@ pub fn verify_credential(issuer_pub_key: &ACIssuerPublicKey<P::G1, P::G2>,
 
 // Test anonymous credentials on fixed inputs. Similar to
 // Zei's credentials_tests.
+/*
 fn test(_global_state: &mut GlobalState, _args: &ArgMatches) -> Result<(), std::io::Error> {
   let mut prng: ChaChaRng;
   // For a real application, the seed should be random.
@@ -109,6 +118,7 @@ fn test(_global_state: &mut GlobalState, _args: &ArgMatches) -> Result<(), std::
     Ok(())
   }
 }
+ */
 
 // Return the SHA256 hash of T as a hexadecimal string.
 fn sha256<T>(key: &T) -> String
@@ -352,13 +362,6 @@ fn verify(global_state: &mut GlobalState, user: &str, issuer: &str) -> Result<()
   }
 }
 
-fn first_char(s: &str, c: char) -> bool {
-  match s.chars().nth(0) {
-    None => false,
-    Some(c0) => c0.to_ascii_uppercase() == c.to_ascii_uppercase(),
-  }
-}
-
 fn parse_args() -> ArgMatches<'static> {
   App::new("Test REPL")
     .version("0.1.0")
@@ -376,6 +379,26 @@ fn parse_args() -> ArgMatches<'static> {
     .get_matches()
 }
 
+fn exec_line(mut global_state: &mut GlobalState, line: &str) -> Result<(), std::io::Error> {
+  match line.trim().split(' ').collect::<Vec<&str>>().as_slice() {
+    // ["test"] /* if x.as_bytes() == "test".as_bytes() */ =>
+    //   test(&mut global_state, &args)?,
+    ["help"]  =>
+    { println!("{}", HELP_STRING); Ok(()) },
+    ["addissuer"]  =>
+      add_issuer(&mut global_state),
+    ["adduser", issuer] =>
+      add_user(&mut global_state, &issuer),
+    ["sign", user, issuer]  =>
+      sign(&mut global_state, &user, &issuer),
+    ["reveal", user, issuer] =>
+      reveal(&mut global_state, &user, &issuer),
+    ["verify", user, issuer] =>
+      verify(&mut global_state, &user, &issuer),
+    _ => Err(Error::new(ErrorKind::InvalidInput, format!("Invalid line: {}", line))),
+  }
+}
+
 fn main() -> Result<(), std::io::Error> {
   let args = parse_args();
 
@@ -385,32 +408,35 @@ fn main() -> Result<(), std::io::Error> {
 
   // println!("The registry path is {:?}", _registry_path);
 
-  println!("REPL");
+  // `()` can be used when no completer is required
+  let mut rl = Editor::<()>::new();
+  if rl.load_history("history.txt").is_err() {
+    println!("No previous history.");
+  }
 
   loop {
-    print!(">>>");
-    io::stdout().flush()?;
-
-    let mut line = String::new();
-
-    io::stdin().read_line(&mut line)
-      .expect("Failed to read line");
-
-    match line.trim().split(' ').collect::<Vec<&str>>().as_slice() {
-      ["test"] =>
-        test(&mut global_state, &args)?,
-      ["addissuer"]  =>
-        add_issuer(&mut global_state)?,
-      ["adduser", issuer] =>
-        add_user(&mut global_state, &issuer)?,
-      ["sign", user, issuer]  =>
-        sign(&mut global_state, &user, &issuer)?,
-      ["reveal", user, issuer] =>
-        reveal(&mut global_state, &user, &issuer)?,
-      ["verify", user, issuer] =>
-        verify(&mut global_state, &user, &issuer)?,
-      [x, ..] if first_char(x, 'Q') /*x.chars().nth(0).to_uppercase() == 'Q' */ => break,
-      _ => println!("Invalid line: {}", line),
+    let readline = rl.readline(">>> ");
+    match readline {
+      Ok(line) => {
+        rl.add_history_entry(line.as_str());
+        if let Err(e) = exec_line(&mut global_state, &line) {
+          println!("Error: {}", e);
+        } else {
+          println!("Line: {}", line);
+        }
+      },
+      Err(ReadlineError::Interrupted) => {
+        println!("CTRL-C");
+        break
+      },
+      Err(ReadlineError::Eof) => {
+        println!("CTRL-D");
+        break
+      },
+      Err(err) => {
+        println!("Error: {:?}", err);
+        break
+      }
     }
   };
   Ok(())
