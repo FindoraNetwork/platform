@@ -9,14 +9,13 @@ name = "address_identity_registry"
 path = "src/address_identity_registry.rs"
 
 [dependencies]
-hex = "0.3.2"
-serde = { version = "1.0.99", features = ["derive"] }
-serde_json = "1.0.40"
-rmp-serde = "0.13.7"
 clap = "2.33.0"
-sha2 = "0.8.0"
+hex = "0.3.2"
+rmp-serde = "0.13.7"
 rand_chacha = "0.2.0"
 rand_core = { version = "0.5", default-features = false, features = ["alloc"] }
-log = "0.4.8"
-env_logger = "0.6.2"
+serde = { version = "1.0.99", features = ["derive"] }
+serde_json = "1.0.40"
+sha2 = "0.8.0"
+sparse_merkle_tree = { path = "../../libs/ads/sparse_merkle_tree" }
 zei = { git = "ssh://git@github.com/findoraorg/zei" }
