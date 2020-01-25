@@ -32,7 +32,7 @@ fn load_txn_builder_from_file(file_path: &str) -> Result<TransactionBuilder, Pla
   let mut contents = String::new();
   file.read_to_string(&mut contents).or_else(|_e| {
                                        println!("Failed to read transaction file {}", file_path);
-                                       Err(PlatformError::IoError("unable to read".to_string()))
+                                       Err(PlatformError::IoError("Failed to read".to_string()))
                                      })?;
   println!("Parsing builder from file contents: \"{}\"", &contents);
   let builder = serde_json::from_str(&contents)?;
@@ -53,7 +53,7 @@ fn load_key_pair_from_file(file_path: &str) -> Result<XfrKeyPair, PlatformError>
     }
     Err(_e) => {
       println!("Failed to read key file {}", file_path);
-      return Err(PlatformError::IoError("unable to read".to_string()));
+      return Err(PlatformError::IoError("Failed to read".to_string()));
     }
   }
   Ok(kp)
@@ -72,7 +72,7 @@ fn load_sids_from_file(file_path: &str) -> Result<Vec<TxoRef>, PlatformError> {
   let mut sids_str = String::new();
   file.read_to_string(&mut sids_str).or_else(|_e| {
                                        println!("Failed to read sids file {}", file_path);
-                                       Err(PlatformError::IoError("unable to read".to_string()))
+                                       Err(PlatformError::IoError("Failed to read".to_string()))
                                      })?;
 
   let mut txo_refs = Vec::new();
@@ -103,7 +103,7 @@ fn load_blind_asset_records_from_files(file_paths: &str)
     file.read_to_string(&mut blind_asset_record_str)
         .or_else(|_e| {
           println!("Failed to read blind asset record file {}", file_path);
-          Err(PlatformError::IoError("unable to read".to_string()))
+          Err(PlatformError::IoError("Failed to read".to_string()))
         })?;
 
     if let Ok(blind_asset_record) = serde_json::from_str(&blind_asset_record_str) {
@@ -125,7 +125,7 @@ fn load_addresses_from_file(file_path: &str) -> Result<Vec<AccountAddress>, Plat
   let mut address_keys = String::new();
   file.read_to_string(&mut address_keys).or_else(|_e| {
                                            println!("Failed to read address file {}", file_path);
-                                           Err(PlatformError::IoError("unable to read".to_string()))
+                                           Err(PlatformError::IoError("Failed to read".to_string()))
                                          })?;
 
   let mut addresses = Vec::new();
@@ -142,20 +142,25 @@ fn load_addresses_from_file(file_path: &str) -> Result<Vec<AccountAddress>, Plat
 //
 // TODO (Keyao): Generate file names, rather than ask the user to specify
 //
-fn store_str_to_file(file_path: &str, contents: &str) {
+fn store_str_to_file(file_path: &str, contents: &str) -> Result<(), PlatformError> {
   let _ = fs::write(file_path, contents).or_else(|_e| {
                                           println!("File {} could not be created", file_path);
-                                          Err(PlatformError::IoError("unable to write".to_string()))
+                                          Err(PlatformError::IoError("Failed to write".to_string()))
                                         });
+  Ok(())
 }
 
-fn store_txn_builder_to_file(file_path: &str, txn: &TransactionBuilder) {
+fn store_txn_builder_to_file(file_path: &str,
+                             txn: &TransactionBuilder)
+                             -> Result<(), PlatformError> {
   if let Ok(as_json) = serde_json::to_string(txn) {
     let _skip = fs::write(file_path, &as_json).or_else(|_e| {
                   println!("Transaction file {} could not be created", file_path);
-                  Err(PlatformError::IoError("unable to write".to_string()))
+                  Err(PlatformError::IoError("Failed to write".to_string()))
                 });
   }
+
+  Ok(())
 }
 
 // Write a new key pair to the given paths.
@@ -163,11 +168,12 @@ fn store_txn_builder_to_file(file_path: &str, txn: &TransactionBuilder) {
 // Move aside any extant files at the given paths.
 // Reports errors rather than returning them.
 // Assumes tilde expansion has already been done on paths.
-fn store_key_pair_to_file(file_path: &Path) {
+fn store_key_pair_to_file(file_path: &Path) -> Result<(), PlatformError> {
   match fs::create_dir_all(&file_path.parent().unwrap()) {
     Ok(()) => {
       if let Err(error) = rename_existing_path(&file_path) {
-        error!("Cannot rename key {:?}: {}", &file_path, error);
+        println!("Cannot rename key {:?}: {}", &file_path, error);
+        return Err(PlatformError::IoError("Failed to write".to_string()));
       }
       let mut prng: ChaChaRng;
       prng = ChaChaRng::from_seed([0u8; 32]);
@@ -175,16 +181,20 @@ fn store_key_pair_to_file(file_path: &Path) {
       match fs::write(&file_path, keypair.zei_to_bytes()) {
         Ok(_) => {}
         Err(error) => {
-          error!("Key file {:?} could not be created: {}", file_path, error);
+          println!("Key file {:?} could not be created: {}", file_path, error);
+          return Err(PlatformError::IoError("Failed to write".to_string()));
         }
       };
     }
     Err(error) => {
-      error!("Failed to create directories for {}: {}",
-             &file_path.display(),
-             error);
+      println!("Failed to create directories for {}: {}",
+               &file_path.display(),
+               error);
+      return Err(PlatformError::IoError("Unable to write".to_string()));
     }
   }
+
+  Ok(())
 }
 
 fn store_blind_asset_record(file_path: &str,
@@ -192,7 +202,8 @@ fn store_blind_asset_record(file_path: &str,
                             asset_type: &str,
                             pub_key: &str,
                             confidential_amount: bool,
-                            confidential_asset: bool) {
+                            confidential_asset: bool)
+                            -> Result<(), PlatformError> {
   let mut asset_type_arr = [0u8; 16];
   let bytes = asset_type.as_bytes();
   asset_type_arr.copy_from_slice(&bytes[..16]);
@@ -215,6 +226,8 @@ fn store_blind_asset_record(file_path: &str,
               Err(PlatformError::IoError("unable to write".to_string()))
             });
   }
+
+  Ok(())
 }
 
 fn create_directory_if_missing(path_to_file_in_dir: &str) {
@@ -325,7 +338,7 @@ fn init_logging() {
                                                                  .init();
 }
 
-fn main() {
+fn main() -> Result<(), PlatformError> {
   init_logging();
   let inputs = App::new("Transaction Builder")
     .version("0.0.1")
@@ -373,11 +386,11 @@ fn main() {
           .long("path")
           .takes_value(true)
           .help("Required: Path to store the sids"))
-        .arg(Arg::with_name("indeces")
+        .arg(Arg::with_name("indices")
           .short("is")
-          .long("indeces")
+          .long("indices")
           .takes_value(true)
-          .help("Required: Input TxoSID indeces. Separate by comma (\",\")")))
+          .help("Required: Input TxoSID indices. Separate by comma (\",\")")))
       .subcommand(SubCommand::with_name("blind_asset_record")
         .arg(Arg::with_name("path")
           .short("p")
@@ -468,7 +481,7 @@ fn main() {
           .short("ssp")
           .long("sids_path")
           .takes_value(true)
-          .help("Required: Path to the file where input TxoSID indeces are stored."))
+          .help("Required: Path to the file where input TxoSID indices are stored."))
         .arg(Arg::with_name("blind_asset_record_paths")
           .short("barps")
           .long("blind_asset_record_paths")
@@ -512,7 +525,7 @@ fn main() {
   process_inputs(inputs)
 }
 
-fn process_inputs(inputs: clap::ArgMatches) {
+fn process_inputs(inputs: clap::ArgMatches) -> Result<(), PlatformError> {
   let _config_file_path: String;
   let keys_file_path: String;
   let transaction_file_name: String;
@@ -544,31 +557,39 @@ fn process_inputs(inputs: clap::ArgMatches) {
   }
 
   match inputs.subcommand() {
-    ("create", Some(create_matches)) => {
-      process_create_cmd(create_matches,
-                         &keys_file_path,
-                         &transaction_file_name,
-                         &findora_dir);
-    }
-    ("store", Some(store_matches)) => {
-      process_store_cmd(store_matches);
-    }
-    ("add", Some(add_matches)) => {
-      process_add_cmd(add_matches,
-                      &keys_file_path,
-                      &transaction_file_name,
-                      &findora_dir);
-    }
+    ("create", Some(create_matches)) => process_create_cmd(create_matches,
+                                                           &keys_file_path,
+                                                           &transaction_file_name,
+                                                           &findora_dir),
+    ("store", Some(store_matches)) => process_store_cmd(store_matches),
+    ("add", Some(add_matches)) => process_add_cmd(add_matches,
+                                                  &keys_file_path,
+                                                  &transaction_file_name,
+                                                  &findora_dir),
     ("serialize", Some(_serialize_matches)) => {
-      if let Ok(txn_builder) = load_txn_builder_from_file(&transaction_file_name) {
-        if let Ok(as_json) = serde_json::to_string(txn_builder.transaction()) {
+      let txn_builder = load_txn_builder_from_file(&transaction_file_name).or_else(|e| {
+                          println!("Failed to load txn builder from file {}.",
+                                   transaction_file_name);
+                          return Err(e);
+                        })
+                        .unwrap();
+      match serde_json::to_string(txn_builder.transaction()) {
+        Ok(as_json) => {
           println!("{}", as_json);
+          Ok(())
         }
+        Err(_) => Err(PlatformError::IoError("Failed to serialize txn".to_string())),
       }
     }
     ("drop", Some(_drop_matches)) => match std::fs::remove_file(&transaction_file_name) {
-      Ok(_) => println!("Deleted transaction file {}", transaction_file_name),
-      Err(e) => println!("Error deleting file: {:?} ", e),
+      Ok(_) => {
+        println!("Deleted transaction file {}", transaction_file_name);
+        return Ok(());
+      }
+      Err(e) => {
+        println!("Error deleting file: {:?} ", e);
+        return Err(PlatformError::IoError("Failed to remove".to_string()));
+      }
     },
     ("keygen", Some(keygen_matches)) => {
       let new_keys_path =
@@ -579,41 +600,40 @@ fn process_inputs(inputs: clap::ArgMatches) {
         };
       let file_str = shellexpand::tilde(&new_keys_path).to_string();
       let file_path = Path::new(&file_str);
-      store_key_pair_to_file(&file_path);
+      store_key_pair_to_file(&file_path)
     }
-    ("submit", Some(submit_matches)) => {
-      process_submit_cmd(submit_matches, &transaction_file_name);
-    }
-    _ => {}
+    ("submit", Some(submit_matches)) => process_submit_cmd(submit_matches, &transaction_file_name),
+    _ => Err(PlatformError::IoError("Subcommand not recognized".to_string())),
   }
 }
 
-fn process_submit_cmd(submit_matches: &clap::ArgMatches, transaction_file_name: &str) {
+fn process_submit_cmd(submit_matches: &clap::ArgMatches,
+                      transaction_file_name: &str)
+                      -> Result<(), PlatformError> {
   // get host and port
   let host;
   if let Some(host_arg) = submit_matches.value_of("host") {
     host = host_arg;
   } else {
     error!("Standalone host must be specified (e.g. localhost)");
-    return;
+    return Err(PlatformError::IoError("Argument missing".to_string()));
   }
   let port;
   if let Some(port_arg) = submit_matches.value_of("port") {
     port = port_arg;
   } else {
     error!("Standalone port must be specified (e.g. 8668)");
-    return;
+    return Err(PlatformError::IoError("Argument missing".to_string()));
   }
 
   // serialize txn
-  let txn;
-  if let Ok(txn_builder) = load_txn_builder_from_file(&transaction_file_name) {
-    txn = txn_builder.transaction().clone();
-  } else {
-    error!("Cannot deserialize transaction builder file at {}",
-           &transaction_file_name);
-    return;
-  }
+  let txn_builder = load_txn_builder_from_file(&transaction_file_name).or_else(|e| {
+                      println!("Failed to load txn builder from file {}.",
+                               transaction_file_name);
+                      return Err(e);
+                    })
+                    .unwrap();
+  let txn = txn_builder.transaction().clone();
 
   // submit
   let client = reqwest::Client::new();
@@ -627,12 +647,14 @@ fn process_submit_cmd(submit_matches: &clap::ArgMatches, transaction_file_name: 
            res.json::<TxnHandle>().expect("<Invalid JSON>"));
   println!("Status: {}", res.status());
   println!("Headers:\n{:?}", res.headers());
+  Ok(())
 }
 
 fn process_create_cmd(create_matches: &clap::ArgMatches,
                       _keys_file_path: &str,
                       transaction_file_name: &str,
-                      _findora_dir: &str) {
+                      _findora_dir: &str)
+                      -> Result<(), PlatformError> {
   let named = create_matches.value_of("named");
   let overwrite = create_matches.is_present("overwrite");
   let file_str = if let Some(named) = named {
@@ -645,14 +667,15 @@ fn process_create_cmd(create_matches: &clap::ArgMatches,
   create_directory_if_missing(&expand_str);
   if !overwrite {
     if let Err(error) = rename_existing_path(&file_path) {
-      error!("Cannot rename file {:?}: {}", &file_path, error);
+      println!("Cannot rename file {:?}: {}", &file_path, error);
+      return Err(PlatformError::IoError("Failed to rename".to_string()));
     }
   }
   let txn_builder = TransactionBuilder::default();
-  store_txn_builder_to_file(&expand_str, &txn_builder);
+  store_txn_builder_to_file(&expand_str, &txn_builder)
 }
 
-fn process_store_cmd(store_matches: &clap::ArgMatches) {
+fn process_store_cmd(store_matches: &clap::ArgMatches) -> Result<(), PlatformError> {
   match store_matches.subcommand() {
     ("sids", Some(sids_matches)) => {
       let path;
@@ -660,16 +683,16 @@ fn process_store_cmd(store_matches: &clap::ArgMatches) {
         path = path_arg
       } else {
         println!("Path to the sids file is required.");
-        return;
+        return Err(PlatformError::IoError("Argument missing".to_string()));
       }
       let sids;
-      if let Some(sids_arg) = sids_matches.value_of("indeces") {
+      if let Some(sids_arg) = sids_matches.value_of("indices") {
         sids = sids_arg
       } else {
-        println!("TxoSID indeces are required.");
-        return;
+        println!("TxoSID indices are required.");
+        return Err(PlatformError::IoError("Argument missing".to_string()));
       }
-      store_str_to_file(path, sids);
+      store_str_to_file(path, sids)
     }
 
     ("blind_asset_record", Some(blind_asset_record_path_matches)) => {
@@ -678,28 +701,28 @@ fn process_store_cmd(store_matches: &clap::ArgMatches) {
         path = path_arg
       } else {
         println!("Path to the blind asset record file is required.");
-        return;
+        return Err(PlatformError::IoError("Argument missing".to_string()));
       }
       let amount;
       if let Some(amount_arg) = blind_asset_record_path_matches.value_of("amount") {
         amount = amount_arg
       } else {
         println!("Amount is required.");
-        return;
+        return Err(PlatformError::IoError("Argument missing".to_string()));
       }
       let asset_type;
       if let Some(asset_type_arg) = blind_asset_record_path_matches.value_of("asset_type") {
         asset_type = asset_type_arg
       } else {
         println!("Asset type is required.");
-        return;
+        return Err(PlatformError::IoError("Argument missing".to_string()));
       }
       let pub_key;
       if let Some(pub_key_arg) = blind_asset_record_path_matches.value_of("pub_key") {
         pub_key = pub_key_arg
       } else {
         println!("Public key is required.");
-        return;
+        return Err(PlatformError::IoError("Argument missing".to_string()));
       }
       let confidential_amount = blind_asset_record_path_matches.is_present("confidential_amount");
       let confidential_asset = blind_asset_record_path_matches.is_present("confidential_asset");
@@ -708,7 +731,7 @@ fn process_store_cmd(store_matches: &clap::ArgMatches) {
                                asset_type,
                                pub_key,
                                confidential_amount,
-                               confidential_asset);
+                               confidential_asset)
     }
 
     ("addresses", Some(addresses_matches)) => {
@@ -717,16 +740,16 @@ fn process_store_cmd(store_matches: &clap::ArgMatches) {
         path = path_arg
       } else {
         println!("Paths to the address key files are required.");
-        return;
+        return Err(PlatformError::IoError("Argument missing".to_string()));
       }
       let keys;
       if let Some(keys_arg) = addresses_matches.value_of("keys") {
         keys = keys_arg
       } else {
         println!("Keys are required.");
-        return;
+        return Err(PlatformError::IoError("Argument missing".to_string()));
       }
-      store_str_to_file(path, keys);
+      store_str_to_file(path, keys)
     }
 
     _ => unreachable!(),
@@ -736,14 +759,18 @@ fn process_store_cmd(store_matches: &clap::ArgMatches) {
 fn process_add_cmd(add_matches: &clap::ArgMatches,
                    keys_file_path: &str,
                    transaction_file_name: &str,
-                   _findora_dir: &str) {
+                   _findora_dir: &str)
+                   -> Result<(), PlatformError> {
   println!("{}", keys_file_path);
   let key_pair: XfrKeyPair;
-  if let Ok(kp) = load_key_pair_from_file(&keys_file_path) {
-    key_pair = kp;
-  } else {
-    error!("Valid keyfile required for this command; if no keyfile currently exists, try running \"findora_txn_builder keygen\"");
-    return;
+  match load_key_pair_from_file(&keys_file_path) {
+    Ok(kp) => {
+      key_pair = kp;
+    }
+    Err(e) => {
+      println!("Valid keyfile required for this command; if no keyfile currently exists, try running \"findora_txn_builder keygen\"");
+      return Err(e);
+    }
   }
   match add_matches.subcommand() {
     ("define_asset", Some(define_asset_matches)) => {
@@ -753,28 +780,33 @@ fn process_add_cmd(add_matches: &clap::ArgMatches,
                                      .to_string();
       let allow_updates = define_asset_matches.is_present("allow_updates");
       let traceable = define_asset_matches.is_present("traceable");
-      if let Err(e) = load_txn_builder_from_file(&transaction_file_name) {
-        println!("{:?}", e);
+      let mut txn_builder = load_txn_builder_from_file(&transaction_file_name).or_else(|e| {
+                              println!("Failed to load txn builder from file {}.",
+                                       transaction_file_name);
+                              return Err(e);
+                            })
+                            .unwrap();
+      let asset_token: AssetTypeCode;
+      if let Some(token_code) = token_code {
+        asset_token = AssetTypeCode::new_from_str(token_code);
+      } else {
+        asset_token = AssetTypeCode::gen_random();
+        println!("Creating asset with token code {:?}", asset_token.val);
       }
-      if let Ok(mut txn_builder) = load_txn_builder_from_file(&transaction_file_name) {
-        let asset_token: AssetTypeCode;
-        if let Some(token_code) = token_code {
-          asset_token = AssetTypeCode::new_from_str(token_code);
-        } else {
-          asset_token = AssetTypeCode::gen_random();
-          println!("Creating asset with token code {:?}", asset_token.val);
-        }
-        if let Ok(_res) = txn_builder.add_operation_create_asset(&key_pair,
-                                                                 Some(asset_token),
-                                                                 allow_updates,
-                                                                 traceable,
-                                                                 &memo)
-        {
-          store_txn_builder_to_file(&transaction_file_name, &txn_builder);
-        } else {
-          println!("Failed to add operation to transaction.");
-        }
+      if let Err(e) = txn_builder.add_operation_create_asset(&key_pair,
+                                                             Some(asset_token),
+                                                             allow_updates,
+                                                             traceable,
+                                                             &memo)
+      {
+        println!("Failed to add operation to transaction.");
+        return Err(e);
       }
+      if let Err(e) = store_txn_builder_to_file(&transaction_file_name, &txn_builder) {
+        println!("Failed to store txn builder to file.");
+        return Err(e);
+      };
+      Ok(())
     }
     ("issue_asset", Some(issue_asset_matches)) => {
       let token_code = issue_asset_matches.value_of("token_code");
@@ -784,11 +816,11 @@ fn process_add_cmd(add_matches: &clap::ArgMatches,
           seq_num = seq_num_parsed;
         } else {
           println!("Improperly formatted sequence number.");
-          return;
+          return Err(PlatformError::IoError("Incorrect format".to_string()));
         }
       } else {
         println!("Sequence number is required to issue asset.");
-        return;
+        return Err(PlatformError::IoError("Argument missing".to_string()));
       }
       let amount;
       if let Some(amount_arg) = issue_asset_matches.value_of("amount") {
@@ -796,29 +828,36 @@ fn process_add_cmd(add_matches: &clap::ArgMatches,
           amount = amount_parsed;
         } else {
           println!("Improperly formatted amount.");
-          return;
+          return Err(PlatformError::IoError("Incorrect format".to_string()));
         }
       } else {
         println!("Amount is required to issue asset.");
-        return;
+        return Err(PlatformError::IoError("Argument missing".to_string()));
       }
-      if let Ok(mut txn_builder) = load_txn_builder_from_file(&transaction_file_name) {
-        let asset_token: AssetTypeCode;
-        if let Some(token_code) = token_code {
-          asset_token = AssetTypeCode::new_from_str(token_code);
-        } else {
-          println!("Token code is required to issue asset.");
-          return;
-        }
-
-        if let Ok(_res) =
-          txn_builder.add_basic_issue_asset(&key_pair, &None, &asset_token, seq_num, amount)
-        {
-          store_txn_builder_to_file(&transaction_file_name, &txn_builder);
-        } else {
-          println!("Failed to add operation to transaction.");
-        }
+      let mut txn_builder = load_txn_builder_from_file(&transaction_file_name).or_else(|e| {
+                              println!("Failed to load txn builder from file {}.",
+                                       transaction_file_name);
+                              return Err(e);
+                            })
+                            .unwrap();
+      let asset_token: AssetTypeCode;
+      if let Some(token_code) = token_code {
+        asset_token = AssetTypeCode::new_from_str(token_code);
+      } else {
+        println!("Token code is required to issue asset.");
+        return Err(PlatformError::IoError("Argument missing".to_string()));
       }
+      if let Err(e) =
+        txn_builder.add_basic_issue_asset(&key_pair, &None, &asset_token, seq_num, amount)
+      {
+        println!("Failed to add basic issue asset.");
+        return Err(e);
+      }
+      if let Err(e) = store_txn_builder_to_file(&transaction_file_name, &txn_builder) {
+        println!("Failed to store txn builder to file.");
+        return Err(e);
+      }
+      Ok(())
     }
     ("transfer_asset", Some(transfer_asset_matches)) => {
       // Compose transfer_from for add_basic_transfer_asset
@@ -830,12 +869,12 @@ fn process_add_cmd(add_matches: &clap::ArgMatches,
           }
           Err(error) => {
             println!("Error loading txo_refs from {}: {}", sids_path, error);
-            return;
+            return Err(error);
           }
         }
       } else {
         println!("Sids are required to transfer asset.");
-        return;
+        return Err(PlatformError::IoError("Argument missing".to_string()));
       }
       let blind_asset_records;
       if let Some(blind_asset_record_paths) =
@@ -848,24 +887,24 @@ fn process_add_cmd(add_matches: &clap::ArgMatches,
           Err(error) => {
             println!("Error loading blind_asset_records from {}: {}",
                      blind_asset_record_paths, error);
-            return;
+            return Err(error);
           }
         }
       } else {
         println!("Blind asset records are required to transfer asset.");
-        return;
+        return Err(PlatformError::IoError("Argument missing".to_string()));
       }
       let input_amounts;
       if let Some(input_amounts_arg) = transfer_asset_matches.value_of("input_amounts") {
         input_amounts = get_amounts(input_amounts_arg).unwrap();
       } else {
         println!("Input amounts are required to transfer asset.");
-        return;
+        return Err(PlatformError::IoError("Argument missing".to_string()));
       }
       let mut count = txo_refs.len();
       if blind_asset_records.len() != count || input_amounts.len() != count {
         println!("Size of input sids, blind asset records, and input amounts should match.");
-        return;
+        return Err(PlatformError::IoError("Input error".to_string()));
       }
       let mut transfer_from = Vec::new();
       let mut txo_refs_iter = txo_refs.iter();
@@ -884,7 +923,7 @@ fn process_add_cmd(add_matches: &clap::ArgMatches,
         output_amounts = get_amounts(output_amounts_arg).unwrap();
       } else {
         println!("Output amounts are required to transfer asset.");
-        return;
+        return Err(PlatformError::IoError("Argument missing".to_string()));
       }
       let addresses;
       if let Some(addresses_path) = transfer_asset_matches.value_of("addresses_path") {
@@ -894,17 +933,17 @@ fn process_add_cmd(add_matches: &clap::ArgMatches,
           }
           Err(error) => {
             println!("Error loading addresses from {}: {}", addresses_path, error);
-            return;
+            return Err(error);
           }
         }
       } else {
         println!("Addresses are required to transfer asset.");
-        return;
+        return Err(PlatformError::IoError("Argument missing".to_string()));
       }
       let mut count = output_amounts.len();
       if addresses.len() != count {
         println!("Size of output amounts and addresses should match.");
-        return;
+        return Err(PlatformError::IoError("Input error".to_string()));
       }
       let mut transfer_to = Vec::new();
       let mut output_amounts_iter = output_amounts.iter();
@@ -915,17 +954,25 @@ fn process_add_cmd(add_matches: &clap::ArgMatches,
       }
 
       // Transfer asset
-      if let Ok(mut txn_builder) = load_txn_builder_from_file(&transaction_file_name) {
-        if let Ok(_res) =
-          txn_builder.add_basic_transfer_asset(&XfrKeyPair::zei_from_bytes(keys_file_path.as_bytes()),
-                                               &transfer_from[..],
-                                               &transfer_to[..])
-        {
-          store_txn_builder_to_file(&transaction_file_name, &txn_builder);
-        } else {
-          println!("Failed to add operation to transaction.");
-        }
+      let mut txn_builder = load_txn_builder_from_file(&transaction_file_name).or_else(|e| {
+                              println!("Failed to load txn builder from file {}.",
+                                       transaction_file_name);
+                              return Err(e);
+                            })
+                            .unwrap();
+      if let Err(e) =
+        txn_builder.add_basic_transfer_asset(&XfrKeyPair::zei_from_bytes(keys_file_path.as_bytes()),
+                                             &transfer_from[..],
+                                             &transfer_to[..])
+      {
+        println!("Failed to add operation to transaction.");
+        return Err(e);
+      };
+      if let Err(e) = store_txn_builder_to_file(&transaction_file_name, &txn_builder) {
+        println!("Failed to store txn builder to file.");
+        return Err(e);
       }
+      Ok(())
     }
     _ => unreachable!(),
   }
@@ -1022,7 +1069,7 @@ mod tests {
     let sids = vec!["1,2,4", "1,2, 4", "1,a,4"];
 
     for i in 0..3 {
-      store_str_to_file(paths[i], sids[i]);
+      store_str_to_file(paths[i], sids[i]).unwrap();
     }
 
     let expected_txo_refs = vec![TxoRef::Absolute(TxoSID(1)),
@@ -1060,7 +1107,7 @@ mod tests {
                                from_utf8(&asset_types[i]).unwrap(),
                                from_utf8(&pub_keys[i]).unwrap(),
                                confidential_amount_bools[i],
-                               confidential_asset_bools[i]);
+                               confidential_asset_bools[i]).unwrap();
     }
 
     // Load all the blind asset records
@@ -1097,7 +1144,7 @@ mod tests {
     address_keys.push_str(",");
     address_keys.push_str(from_utf8(&[1; 32]).unwrap());
 
-    store_str_to_file(path, &address_keys);
+    store_str_to_file(path, &address_keys).unwrap();
 
     let expected_addresses = vec![AccountAddress { key: XfrPublicKey::zei_from_bytes(&[0; 32]) },
                                   AccountAddress { key: XfrPublicKey::zei_from_bytes(&[1; 32]) }];
