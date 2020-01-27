@@ -10,7 +10,9 @@ path = "src/address_identity_registry.rs"
 
 [dependencies]
 clap = "2.33.0"
+cryptohash = { path = "../../libs/cryptohash" }
 hex = "0.3.2"
+lazy_static = { version = "1.2.0" }
 rmp-serde = "0.13.7"
 rand_chacha = "0.2.0"
 rand_core = { version = "0.5", default-features = false, features = ["alloc"] }
