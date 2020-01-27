@@ -26,7 +26,7 @@ use subprocess::Popen;
 use subprocess::PopenConfig;
 use zei::serialization::ZeiFromToBytes;
 use zei::setup::PublicParams;
-use zei::xfr::asset_record::{AssetRecordType, build_blind_asset_record, open_asset_record};
+use zei::xfr::asset_record::{build_blind_asset_record, open_asset_record, AssetRecordType};
 use zei::xfr::sig::XfrKeyPair;
 use zei::xfr::structs::{AssetRecord, OpenAssetRecord};
 
@@ -451,11 +451,7 @@ impl InterpretAccounts<PlatformError> for LedgerAccounts {
 
         let ar = AssetRecord::new(amt, code.val, *pubkey).unwrap();
         let params = PublicParams::new();
-        let ba = build_blind_asset_record(self.ledger.get_prng(),
-                                          &params.pc_gens,
-                                          &ar,
-                                          art,
-                                          &None);
+        let ba = build_blind_asset_record(self.ledger.get_prng(), &params.pc_gens, &ar, art, &None);
 
         let asset_issuance_body = IssueAssetBody::new(&code, new_seq_num, &[TxOutput(ba)]).unwrap();
 
@@ -748,11 +744,7 @@ impl InterpretAccounts<PlatformError> for LedgerStandaloneAccounts {
 
         let ar = AssetRecord::new(amt, code.val, *pubkey).unwrap();
         let params = PublicParams::new();
-        let ba = build_blind_asset_record(&mut self.prng,
-                                          &params.pc_gens,
-                                          &ar,
-                                          art,
-                                          &None);
+        let ba = build_blind_asset_record(&mut self.prng, &params.pc_gens, &ar, art, &None);
 
         let asset_issuance_body = IssueAssetBody::new(&code, new_seq_num, &[TxOutput(ba)]).unwrap();
 

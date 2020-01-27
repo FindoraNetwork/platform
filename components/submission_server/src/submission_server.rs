@@ -1,7 +1,7 @@
 #![deny(warnings)]
 use cryptohash::sha256;
 use ledger::data_model::errors::PlatformError;
-use ledger::data_model::{Transaction, TxnSID, TxnTempSID, TxoSID};
+use ledger::data_model::{Operation, Transaction, TxnSID, TxnTempSID, TxoSID};
 use ledger::store::*;
 use log::info;
 use rand_core::{CryptoRng, RngCore};
@@ -36,7 +36,7 @@ pub enum TxnStatus {
 
 pub struct SubmissionServer<RNG, LU>
   where RNG: RngCore + CryptoRng,
-        LU: LedgerUpdate<RNG> + LedgerAccess
+        LU: LedgerUpdate<RNG> + LedgerAccess + ArchiveAccess
 {
   committed_state: Arc<RwLock<LU>>,
   block: Option<LU::Block>,
@@ -48,7 +48,7 @@ pub struct SubmissionServer<RNG, LU>
 
 impl<RNG, LU> SubmissionServer<RNG, LU>
   where RNG: RngCore + CryptoRng,
-        LU: LedgerUpdate<RNG> + LedgerAccess
+        LU: LedgerUpdate<RNG> + LedgerAccess + ArchiveAccess
 {
   pub fn new(prng: RNG,
              ledger_state: Arc<RwLock<LU>>,
@@ -67,7 +67,7 @@ impl<RNG, LU> SubmissionServer<RNG, LU>
   }
 
   pub fn all_commited(&self) -> bool {
-    self.pending_txns.is_empty()
+    self.block.is_none()
   }
 
   // TODO (Keyao): Determine the condition
@@ -110,15 +110,19 @@ impl<RNG, LU> SubmissionServer<RNG, LU>
                                  .expect("Ledger could not finish block");
       // Update status of all committed transactions
       for (txn_temp_sid, handle) in self.pending_txns.drain(..) {
+        let committed_txn_info = finalized_txns.get(&txn_temp_sid).unwrap();
         self.txn_status
-            .insert(handle,
-                    TxnStatus::Committed(finalized_txns.get(&txn_temp_sid).unwrap().clone()));
+            .insert(handle, TxnStatus::Committed(committed_txn_info.clone()));
+
+        // Log txn details
+        txn_log_info(&ledger.get_transaction(committed_txn_info.0).unwrap().txn);
       }
       info!("Block ended. Statuses of committed transactions are now updated");
       // Empty temp_sids after the block is finished
       // If begin_commit or end_commit is no longer empty, move this line to the end of end_commit
       self.pending_txns = Vec::new();
       // Finally, return the finalized txn sids
+      assert!(self.block.is_none());
       return Ok(());
     }
     Err(PlatformError::SubmissionServerError(Some("Cannot finish block because there are no pending txns".into())))
@@ -167,6 +171,17 @@ impl<RNG, LU> SubmissionServer<RNG, LU>
       // If begin_commit and end_commit are no longer empty, call them here
     }
     Ok(handle)
+  }
+}
+pub fn txn_log_info(txn: &Transaction) {
+  for op in &txn.operations {
+    match op {
+      Operation::DefineAsset(define_asset_op) => {
+        info!("Asset Definition: New asset with code {} defined",
+              define_asset_op.body.asset.code.to_base64())
+      }
+      _ => info!("Other op"),
+    };
   }
 }
 
