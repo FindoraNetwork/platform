@@ -21,40 +21,6 @@ use zei::xfr::asset_record::{build_blind_asset_record, AssetRecordType};
 use zei::xfr::sig::{XfrKeyPair, XfrPublicKey};
 use zei::xfr::structs::{AssetRecord, BlindAssetRecord};
 
-/**
-EXAMPLES
-
-1 Create txn builder, key pair, and public keys:
-    1.1 Txn builder:
-        ./txn_builder_cli create --name tb
-    1.2 Key pair:
-        ./txn_builder_cli keygen --name kp
-    1.3 Public keys:
-        ./txn_builder_cli pubkeygen --name pub1
-        ./txn_builder_cli pubkeygen --name pub2
-        ./txn_builder_cli pubkeygen --name pub3
-        ./txn_builder_cli pubkeygen --name addr1
-        ./txn_builder_cli pubkeygen --name addr2
-        ./txn_builder_cli pubkeygen --name addr3
-
-2 Define asset:
-  ./txn_builder_cli --keys kp --txn tb add define_asset --token_code 0000000000000000 --allow_updates --traceable --memo 'define asset' --confidential
-
-3 Issue asset:
-  ./txn_builder_cli --keys kp --txn tb add issue_asset --token_code 0000000000000000 --sequence_number 1 --amount 100
-
-4 Transfer asset:
-    4.1 Store objects to files:
-        4.1.1 Sids:
-              ./txn_builder_cli store sids --indices 1,2,4 --path s
-        4.1.2 Blind asset records:
-              ./txn_builder_cli store blind_asset_record --path bar1 --amount 10 --asset_type 0000000000000000 --pub_key_path pub1
-              ./txn_builder_cli store blind_asset_record --path bar2 --amount 100 --asset_type 0000000000000000 --pub_key_path pub2
-              ./txn_builder_cli store blind_asset_record --path bar3 --amount 1000 --asset_type 0000000000000000 --pub_key_path pub3
-    4.2 Transfer:
-    ./txn_builder_cli --keys kp --txn tb add transfer_asset --sids_path s --blind_asset_record_paths bar1,bar2,bar3 --input_amounts 1,2,3 --output_amounts 1,1,4 --address_paths addr1,addr2,addr3
-*/
-
 //
 // Load functions
 //
@@ -501,7 +467,7 @@ fn main() -> Result<(), PlatformError> {
       .subcommand(SubCommand::with_name("define_asset")
         .arg(Arg::with_name("token_code")
           .long("token_code")
-          .short("tc")
+          .short("c")
           .help("Required: Explicit 16 character token code for the new asset; must be a unique name. If specified code is already in use, transaction will fail. If not specified, will display automatically generated token code.")
           .takes_value(true))
         .arg(Arg::with_name("allow_updates")
@@ -527,7 +493,7 @@ fn main() -> Result<(), PlatformError> {
           .help("TODO: add support for policies")))
       .subcommand(SubCommand::with_name("issue_asset")
         .arg(Arg::with_name("token_code")
-          .short("tc")
+          .short("c")
           .long("token_code")
           .takes_value(true)
           .help("Required: Token code of the asset to be issued. The transaction will fail if no asset with the token code exists."))
@@ -685,7 +651,7 @@ fn process_inputs(inputs: clap::ArgMatches) -> Result<(), PlatformError> {
       store_pub_key_to_file(&file_path)
     }
     ("submit", Some(submit_matches)) => process_submit_cmd(submit_matches, &transaction_file_name),
-    _ => Err(PlatformError::IoError("Subcommand not recognized".to_string())),
+    _ => Err(PlatformError::IoError("Subcommand missing or not recognized".to_string())),
   }
 }
 
@@ -1180,18 +1146,21 @@ mod tests {
     assert_eq!(blind_asset_records[0].amount, Some(amounts[0]));
     assert_eq!(blind_asset_records[0].asset_type, Some(asset_types[0]));
     fs::remove_file(paths[0]).unwrap();
+    fs::remove_file(pub_key_paths[0]).unwrap();
 
     // Verify the field of the second blind asset record
     // Asset type should be None because it's set as confidential
     assert_eq!(blind_asset_records[1].amount, Some(amounts[1]));
     assert_eq!(blind_asset_records[1].asset_type, None);
     fs::remove_file(paths[1]).unwrap();
+    fs::remove_file(pub_key_paths[1]).unwrap();
 
     // Verify the field of the third blind asset record
     // Amount should be None because the it's set as confidential
     assert_eq!(blind_asset_records[2].amount, None);
     assert_eq!(blind_asset_records[2].asset_type, Some(asset_types[2]));
     fs::remove_file(paths[2]).unwrap();
+    fs::remove_file(pub_key_paths[2]).unwrap();
   }
 
   #[test]
