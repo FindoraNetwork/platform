@@ -4,6 +4,7 @@ extern crate actix_web;
 extern crate ledger;
 extern crate serde_json;
 
+use actix_cors::Cors;
 use actix_web::{dev, error, middleware, web, App, HttpResponse, HttpServer};
 use ledger::data_model::*;
 use ledger::store::{ArchiveAccess, LedgerAccess};
@@ -363,6 +364,7 @@ impl RestfulApiService {
 
     HttpServer::new(move || {
       App::new().wrap(middleware::Logger::default())
+                .wrap(Cors::new().supports_credentials())
                 .data(ledger_access.clone())
                 .set_route::<LA>(ServiceInterface::LedgerAccess)
                 .set_route::<LA>(ServiceInterface::ArchiveAccess)
