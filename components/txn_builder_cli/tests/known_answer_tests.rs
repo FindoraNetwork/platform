@@ -49,7 +49,9 @@ fn store_blind_asset_record(path: &str,
                        .output()
 }
 
+//
 // No subcommand
+//
 #[test]
 fn test_call_no_args() {
   let output = Command::new(COMMAND).output()
@@ -62,6 +64,10 @@ fn test_call_no_args() {
                                        .contains("Subcommand missing or not recognized"));
 }
 
+//
+// "help" arg
+// Note: Not all cases with "help" arg are tested
+//
 #[test]
 fn test_call_with_help() {
   let output = Command::new(COMMAND).arg("help")
@@ -74,7 +80,6 @@ fn test_call_with_help() {
   assert!(output.status.success())
 }
 
-// Create
 #[test]
 fn test_create_with_help() {
   let output = Command::new(COMMAND).args(&["create", "--help"])
@@ -88,18 +93,6 @@ fn test_create_with_help() {
 }
 
 #[test]
-fn test_create_with_name() {
-  let output = create("txn_builder").expect("failed to execute process");
-
-  io::stdout().write_all(&output.stdout).unwrap();
-  io::stdout().write_all(&output.stderr).unwrap();
-
-  assert!(output.status.success());
-  fs::remove_file("txn_builder").unwrap();
-}
-
-// Generate key pair
-#[test]
 fn test_keygen_with_help() {
   let output = Command::new(COMMAND).args(&["keygen", "--help"])
                                     .output()
@@ -111,18 +104,6 @@ fn test_keygen_with_help() {
   assert!(output.status.success());
 }
 
-#[test]
-fn test_keygen_with_name() {
-  let output = keygen("key_pair").expect("failed to execute process");
-
-  io::stdout().write_all(&output.stdout).unwrap();
-  io::stdout().write_all(&output.stderr).unwrap();
-
-  assert!(output.status.success());
-  fs::remove_file("key_pair").unwrap();
-}
-
-// Generate public key
 #[test]
 fn test_pubkeygen_with_help() {
   let output = Command::new(COMMAND).args(&["pubkeygen", "--help"])
@@ -136,6 +117,91 @@ fn test_pubkeygen_with_help() {
 }
 
 #[test]
+fn test_add_with_help() {
+  let output = Command::new(COMMAND).args(&["add", "--help"])
+                                    .output()
+                                    .expect("failed to execute process");
+
+  io::stdout().write_all(&output.stdout).unwrap();
+  io::stdout().write_all(&output.stderr).unwrap();
+
+  assert!(output.status.success())
+}
+
+#[test]
+fn test_define_asset_with_help() {
+  let output = Command::new(COMMAND).args(&["add", "define_asset", "--help"])
+                                    .output()
+                                    .expect("failed to execute process");
+
+  io::stdout().write_all(&output.stdout).unwrap();
+  io::stdout().write_all(&output.stderr).unwrap();
+
+  assert!(output.status.success())
+}
+
+#[test]
+fn test_issue_asset_with_help() {
+  let output = Command::new(COMMAND).args(&["add", "issue_asset", "--help"])
+                                    .output()
+                                    .expect("failed to execute process");
+
+  io::stdout().write_all(&output.stdout).unwrap();
+  io::stdout().write_all(&output.stderr).unwrap();
+
+  assert!(output.status.success())
+}
+
+#[test]
+fn test_transfer_asset_with_help() {
+  let output = Command::new(COMMAND).args(&["add", "transfer_asset", "--help"])
+                                    .output()
+                                    .expect("failed to execute process");
+
+  io::stdout().write_all(&output.stdout).unwrap();
+  io::stdout().write_all(&output.stderr).unwrap();
+
+  assert!(output.status.success())
+}
+
+#[test]
+fn test_submit_with_help() {
+  let output = Command::new(COMMAND).args(&["submit", "--help"])
+                                    .output()
+                                    .expect("failed to execute process");
+
+  io::stdout().write_all(&output.stdout).unwrap();
+  io::stdout().write_all(&output.stderr).unwrap();
+
+  assert!(output.status.success())
+}
+
+//
+// File creation (txn builder, key pair, and public key)
+//
+#[test]
+fn test_create_with_name() {
+  let output = create("txn_builder").expect("failed to execute process");
+
+  io::stdout().write_all(&output.stdout).unwrap();
+  io::stdout().write_all(&output.stderr).unwrap();
+
+  assert!(output.status.success());
+  fs::remove_file("txn_builder").unwrap();
+}
+
+#[test]
+fn test_keygen_with_name() {
+  let output = keygen("key_pair").expect("failed to execute process");
+
+  io::stdout().write_all(&output.stdout).unwrap();
+  io::stdout().write_all(&output.stderr).unwrap();
+
+  assert!(output.status.success());
+  fs::remove_file("key_pair").unwrap();
+}
+
+#[test]
 fn test_pubkeygen_with_name() {
   let output = pubkeygen("pub").expect("failed to execute process");
 
@@ -146,7 +212,9 @@ fn test_pubkeygen_with_name() {
   fs::remove_file("pub").unwrap();
 }
 
-// Store
+//
+// Store (sids and blind asset record)
+//
 #[test]
 fn test_store_sids() {
   let output = store_sids("sids", "1,2,4").expect("failed to execute process");
@@ -172,32 +240,9 @@ fn test_store_blind_asset_record() {
   fs::remove_file("bar").unwrap();
 }
 
-// Add
-#[test]
-fn test_add_with_help() {
-  let output = Command::new(COMMAND).args(&["add", "--help"])
-                                    .output()
-                                    .expect("failed to execute process");
-
-  io::stdout().write_all(&output.stdout).unwrap();
-  io::stdout().write_all(&output.stderr).unwrap();
-
-  assert!(output.status.success())
-}
-
-// Define asset
-#[test]
-fn test_define_asset_with_help() {
-  let output = Command::new(COMMAND).args(&["add", "define_asset", "--help"])
-                                    .output()
-                                    .expect("failed to execute process");
-
-  io::stdout().write_all(&output.stdout).unwrap();
-  io::stdout().write_all(&output.stderr).unwrap();
-
-  assert!(output.status.success())
-}
-
+//
+// Define, issue and transfer
+//
 #[test]
 fn test_define_asset_with_args() {
   // Create txn builder and key pair
@@ -223,19 +268,6 @@ fn test_define_asset_with_args() {
   fs::remove_file("kp_define").unwrap();
 }
 
-// Issue asset
-#[test]
-fn test_issue_asset_with_help() {
-  let output = Command::new(COMMAND).args(&["add", "issue_asset", "--help"])
-                                    .output()
-                                    .expect("failed to execute process");
-
-  io::stdout().write_all(&output.stdout).unwrap();
-  io::stdout().write_all(&output.stderr).unwrap();
-
-  assert!(output.status.success())
-}
-
 #[test]
 fn test_issue_asset_with_args() {
   // Create txn builder and key pair
@@ -259,19 +291,6 @@ fn test_issue_asset_with_args() {
 
   fs::remove_file("tb_issue").unwrap();
   fs::remove_file("kp_issue").unwrap();
-}
-
-// Transfer asset
-#[test]
-fn test_transfer_asset_with_help() {
-  let output = Command::new(COMMAND).args(&["add", "transfer_asset", "--help"])
-                                    .output()
-                                    .expect("failed to execute process");
-
-  io::stdout().write_all(&output.stdout).unwrap();
-  io::stdout().write_all(&output.stderr).unwrap();
-
-  assert!(output.status.success())
 }
 
 #[test]
@@ -322,17 +341,4 @@ fn test_transfer_asset_with_args() {
   for file in files {
     fs::remove_file(file).unwrap();
   }
-}
-
-// Submit
-#[test]
-fn test_submit_with_help() {
-  let output = Command::new(COMMAND).args(&["submit", "--help"])
-                                    .output()
-                                    .expect("failed to execute process");
-
-  io::stdout().write_all(&output.stdout).unwrap();
-  io::stdout().write_all(&output.stderr).unwrap();
-
-  assert!(output.status.success())
 }
