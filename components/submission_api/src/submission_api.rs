@@ -1,8 +1,10 @@
 #![deny(warnings)]
-use actix_web::{error, web, App, HttpServer};
+use actix_cors::Cors;
+use actix_web::{error, middleware, web, App, HttpServer};
 use ledger::data_model::Transaction;
 use ledger::store::{ArchiveAccess, LedgerAccess, LedgerUpdate};
 use log::{error, info};
+use percent_encoding::percent_decode_str;
 use rand_core::{CryptoRng, RngCore};
 use std::io;
 use std::marker::{Send, Sync};
@@ -26,6 +28,20 @@ fn submit_transaction<RNG, LU>(data: web::Data<Arc<RwLock<SubmissionServer<RNG, 
     error!("Transaction invalid");
     Err(error::ErrorBadRequest("Transaction Invalid"))
   }
+}
+
+fn submit_transaction_wasm<RNG, LU>(data: web::Data<Arc<RwLock<SubmissionServer<RNG, LU>>>>,
+                                    info: web::Path<String>)
+                                    -> Result<web::Json<TxnHandle>, actix_web::error::Error>
+  where RNG: RngCore + CryptoRng,
+        LU: LedgerUpdate<RNG> + LedgerAccess + ArchiveAccess + Sync + Send
+{
+  let mut submission_server = data.write().unwrap();
+  let uri_string = percent_decode_str(&*info).decode_utf8().unwrap();
+  let tx = serde_json::from_str(&uri_string).unwrap();
+  let handle = submission_server.handle_transaction(tx)
+                                .map_err(error::ErrorBadRequest)?;
+  Ok(web::Json(handle))
 }
 
 // Force the validator node to end the block. Useful for testing when it is desirable to commmit
@@ -79,9 +95,13 @@ impl SubmissionApi {
     let web_runtime = actix_rt::System::new("findora API");
 
     HttpServer::new(move || {
-      App::new().data(submission_server.clone())
+      App::new().wrap(middleware::Logger::default())
+                .wrap(Cors::new().supports_credentials())
+                .data(submission_server.clone())
                 .route("/submit_transaction",
                        web::post().to(submit_transaction::<RNG, LU>))
+                .route("/submit_transaction_wasm/{tx}",
+                       web::post().to(submit_transaction_wasm::<RNG, LU>))
                 .route("/txn_status/{handle}", web::get().to(txn_status::<RNG, LU>))
                 .route("/force_end_block",
                        web::post().to(force_end_block::<RNG, LU>))
