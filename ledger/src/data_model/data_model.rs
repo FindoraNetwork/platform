@@ -1,9 +1,8 @@
 #![deny(warnings)]
 use super::errors;
 use chrono::prelude::*;
-use rand::rngs::SmallRng;
-use rand::{FromEntropy, Rng};
-use rand_core::{CryptoRng, RngCore};
+use rand_chacha::ChaChaRng;
+use rand_core::{CryptoRng, RngCore, SeedableRng};
 use std::boxed::Box;
 use std::collections::HashMap;
 use std::convert::TryFrom;
@@ -31,9 +30,9 @@ pub type SmartContractKey = Code;
 
 impl Code {
   pub fn gen_random() -> Self {
-    let mut small_rng = SmallRng::from_entropy();
+    let mut small_rng = ChaChaRng::from_entropy();
     let mut buf: [u8; 16] = [0u8; 16];
-    small_rng.fill(&mut buf);
+    small_rng.fill_bytes(&mut buf);
     Self { val: buf }
   }
   pub fn new_from_str(s: &str) -> Self {

@@ -173,13 +173,18 @@ impl WasmTransactionBuilder {
   ///
   /// key_pair: Issuer XfrKeyPair
   /// memo: Text field for asset definition.
-  /// code: Base64 string representing the token code of the asset to be issued.
+  /// code: Optional Base64 string representing the token code of the asset to be issued. If empty,
+  /// a token code will be chosen at random.
   pub fn add_operation_create_asset(&self,
                                     key_pair: &XfrKeyPair,
                                     memo: String,
                                     token_code: String)
                                     -> Result<WasmTransactionBuilder, JsValue> {
-    let asset_token = AssetTypeCode::new_from_base64(&token_code).unwrap();
+    let asset_token = if token_code.is_empty() {
+      AssetTypeCode::gen_random()
+    } else {
+      AssetTypeCode::new_from_base64(&token_code).unwrap()
+    };
 
     Ok(WasmTransactionBuilder { transaction_builder: Serialized::new(&*self.transaction_builder.deserialize().add_operation_create_asset(&key_pair,
                                               Some(asset_token),
