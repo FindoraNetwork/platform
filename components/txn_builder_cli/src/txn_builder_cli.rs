@@ -570,7 +570,7 @@ fn process_inputs(inputs: clap::ArgMatches) -> Result<(), PlatformError> {
       let txn_builder = load_txn_builder_from_file(&transaction_file_name).or_else(|e| {
                           println!("Failed to load txn builder from file {}.",
                                    transaction_file_name);
-                          return Err(e);
+                          Err(e)
                         })
                         .unwrap();
       match serde_json::to_string(txn_builder.transaction()) {
@@ -584,11 +584,11 @@ fn process_inputs(inputs: clap::ArgMatches) -> Result<(), PlatformError> {
     ("drop", Some(_drop_matches)) => match std::fs::remove_file(&transaction_file_name) {
       Ok(_) => {
         println!("Deleted transaction file {}", transaction_file_name);
-        return Ok(());
+        Ok(())
       }
       Err(e) => {
         println!("Error deleting file: {:?} ", e);
-        return Err(PlatformError::IoError("Failed to remove".to_string()));
+        Err(PlatformError::IoError("Failed to remove".to_string()))
       }
     },
     ("keygen", Some(keygen_matches)) => {
@@ -630,7 +630,7 @@ fn process_submit_cmd(submit_matches: &clap::ArgMatches,
   let txn_builder = load_txn_builder_from_file(&transaction_file_name).or_else(|e| {
                       println!("Failed to load txn builder from file {}.",
                                transaction_file_name);
-                      return Err(e);
+                      Err(e)
                     })
                     .unwrap();
   let txn = txn_builder.transaction().clone();
@@ -665,7 +665,7 @@ fn process_create_cmd(create_matches: &clap::ArgMatches,
   let expand_str = shellexpand::tilde(&file_str).to_string();
   let file_path = Path::new(&expand_str);
   create_directory_if_missing(&expand_str);
-  if !overwrite {
+  if file_path.exists() && !overwrite {
     if let Err(error) = rename_existing_path(&file_path) {
       println!("Cannot rename file {:?}: {}", &file_path, error);
       return Err(PlatformError::IoError("Failed to rename".to_string()));
@@ -783,7 +783,7 @@ fn process_add_cmd(add_matches: &clap::ArgMatches,
       let mut txn_builder = load_txn_builder_from_file(&transaction_file_name).or_else(|e| {
                               println!("Failed to load txn builder from file {}.",
                                        transaction_file_name);
-                              return Err(e);
+                              Err(e)
                             })
                             .unwrap();
       let asset_token: AssetTypeCode;
@@ -837,7 +837,7 @@ fn process_add_cmd(add_matches: &clap::ArgMatches,
       let mut txn_builder = load_txn_builder_from_file(&transaction_file_name).or_else(|e| {
                               println!("Failed to load txn builder from file {}.",
                                        transaction_file_name);
-                              return Err(e);
+                              Err(e)
                             })
                             .unwrap();
       let asset_token: AssetTypeCode;
@@ -957,7 +957,7 @@ fn process_add_cmd(add_matches: &clap::ArgMatches,
       let mut txn_builder = load_txn_builder_from_file(&transaction_file_name).or_else(|e| {
                               println!("Failed to load txn builder from file {}.",
                                        transaction_file_name);
-                              return Err(e);
+                              Err(e)
                             })
                             .unwrap();
       if let Err(e) =
@@ -988,7 +988,7 @@ mod tests {
     match next_path(as_path) {
       Ok(result) => {
         let as_str = result.to_str().unwrap();
-        if as_str != expected.to_string() {
+        if as_str != expected {
           panic!("{} failed:  {}", input, as_str);
         }
       }
@@ -1040,7 +1040,7 @@ mod tests {
     check_next_path_nonextant("abc.0", "abc.0");
 
     let as_path = Path::new(".");
-    if let Err(_) = next_path(as_path) {
+    if next_path(as_path).is_err() {
       // This is the error:
       // Custom { kind: InvalidData, error: "Is directory: \".\"" }
     } else {
@@ -1084,9 +1084,9 @@ mod tests {
     assert_eq!(load_sids_from_file(paths[2]),
                Err(PlatformError::IoError("Improperly formatted sid".to_string())));
 
-    for i in 0..3 {
-      fs::remove_file(paths[i]).unwrap();
-    }
+    paths.into_iter()
+         .map(|path| fs::remove_file(path).unwrap())
+         .collect()
   }
 
   #[test]
