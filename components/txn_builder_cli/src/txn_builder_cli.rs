@@ -570,7 +570,7 @@ fn process_inputs(inputs: clap::ArgMatches) -> Result<(), PlatformError> {
       let txn_builder = load_txn_builder_from_file(&transaction_file_name).or_else(|e| {
                           println!("Failed to load txn builder from file {}.",
                                    transaction_file_name);
-                          return Err(e);
+                          Err(e)
                         })
                         .unwrap();
       match serde_json::to_string(txn_builder.transaction()) {
@@ -584,11 +584,11 @@ fn process_inputs(inputs: clap::ArgMatches) -> Result<(), PlatformError> {
     ("drop", Some(_drop_matches)) => match std::fs::remove_file(&transaction_file_name) {
       Ok(_) => {
         println!("Deleted transaction file {}", transaction_file_name);
-        return Ok(());
+        Ok(())
       }
       Err(e) => {
         println!("Error deleting file: {:?} ", e);
-        return Err(PlatformError::IoError("Failed to remove".to_string()));
+        Err(PlatformError::IoError("Failed to remove".to_string()))
       }
     },
     ("keygen", Some(keygen_matches)) => {
@@ -630,7 +630,7 @@ fn process_submit_cmd(submit_matches: &clap::ArgMatches,
   let txn_builder = load_txn_builder_from_file(&transaction_file_name).or_else(|e| {
                       println!("Failed to load txn builder from file {}.",
                                transaction_file_name);
-                      return Err(e);
+                      Err(e)
                     })
                     .unwrap();
   let txn = txn_builder.transaction().clone();
@@ -783,7 +783,7 @@ fn process_add_cmd(add_matches: &clap::ArgMatches,
       let mut txn_builder = load_txn_builder_from_file(&transaction_file_name).or_else(|e| {
                               println!("Failed to load txn builder from file {}.",
                                        transaction_file_name);
-                              return Err(e);
+                              Err(e)
                             })
                             .unwrap();
       let asset_token: AssetTypeCode;
@@ -837,7 +837,7 @@ fn process_add_cmd(add_matches: &clap::ArgMatches,
       let mut txn_builder = load_txn_builder_from_file(&transaction_file_name).or_else(|e| {
                               println!("Failed to load txn builder from file {}.",
                                        transaction_file_name);
-                              return Err(e);
+                              Err(e)
                             })
                             .unwrap();
       let asset_token: AssetTypeCode;
@@ -957,7 +957,7 @@ fn process_add_cmd(add_matches: &clap::ArgMatches,
       let mut txn_builder = load_txn_builder_from_file(&transaction_file_name).or_else(|e| {
                               println!("Failed to load txn builder from file {}.",
                                        transaction_file_name);
-                              return Err(e);
+                              Err(e)
                             })
                             .unwrap();
       if let Err(e) =
