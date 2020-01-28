@@ -180,6 +180,7 @@ pub fn txn_log_info(txn: &Transaction) {
         info!("Asset Definition: New asset with code {} defined",
               define_asset_op.body.asset.code.to_base64())
       }
+      // TODO (noah) log other operations
       _ => info!("Other op"),
     };
   }

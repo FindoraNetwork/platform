@@ -141,9 +141,10 @@ impl WasmTransactionBuilder {
                                     memo: String,
                                     token_code: String)
                                     -> Result<WasmTransactionBuilder, JsValue> {
-    let asset_token = match token_code.is_empty() {
-      true => AssetTypeCode::gen_random(),
-      false => AssetTypeCode::new_from_base64(&token_code).unwrap(),
+    let asset_token = if token_code.is_empty() {
+      AssetTypeCode::gen_random()
+    } else {
+      AssetTypeCode::new_from_base64(&token_code).unwrap()
     };
 
     Ok(WasmTransactionBuilder { transaction_builder: Serialized::new(&*self.transaction_builder.deserialize().add_operation_create_asset(&key_pair,

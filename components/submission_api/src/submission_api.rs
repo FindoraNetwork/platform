@@ -21,10 +21,10 @@ fn submit_transaction<RNG, LU>(data: web::Data<Arc<RwLock<SubmissionServer<RNG, 
   let handle_res = submission_server.handle_transaction(tx);
 
   if let Ok(handle) = handle_res {
-    return Ok(web::Json(handle));
+    Ok(web::Json(handle))
   } else {
     error!("Transaction invalid");
-    return Err(error::ErrorBadRequest("Transaction Invalid"));
+    Err(error::ErrorBadRequest("Transaction Invalid"))
   }
 }
 
