@@ -2,7 +2,7 @@
 // Allows web clients to issue transactions from a browser contexts.
 // For now, forwards transactions to a ledger hosted locally.
 // To compile wasm package, run wasm-pack build in the wasm directory
-//#![deny(warnings)]
+#![deny(warnings)]
 use bulletproofs::PedersenGens;
 use cryptohash::sha256;
 use curve25519_dalek::ristretto::RistrettoPoint;
@@ -10,7 +10,7 @@ use curve25519_dalek::scalar::Scalar;
 use hex;
 use js_sys::Promise;
 use ledger::data_model::{
-  AssetTypeCode, Operation, Serialized, Transaction, TransferType, TxOutput, TxoRef, TxoSID,
+  AssetTypeCode, Operation, Serialized, TransferType, TxOutput, TxoRef, TxoSID,
 };
 use ledger::policies::{DebtMemo, Fraction};
 use percent_encoding::{utf8_percent_encode, AsciiSet, CONTROLS};
@@ -491,12 +491,9 @@ pub fn get_tracked_amount(blind_asset_record: String,
 ///
 /// TODO Design and implement a notification mechanism.
 pub fn submit_transaction(transaction_str: String) -> Result<Promise, JsValue> {
-  use web_sys::console;
   let mut opts = RequestInit::new();
   opts.method("POST");
   opts.mode(RequestMode::Cors);
-  //let tx = serde_json::from_str::<Transaction>(&transaction_str).unwrap();
-  // opts.body(Some(&JsValue::from_str(&transaction_str)));
 
   let req_string = format!("http://{}:{}/submit_transaction_wasm/{}",
                            HOST,

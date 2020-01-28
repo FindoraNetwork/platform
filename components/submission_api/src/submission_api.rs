@@ -17,7 +17,6 @@ fn submit_transaction<RNG, LU>(data: web::Data<Arc<RwLock<SubmissionServer<RNG, 
         LU: LedgerUpdate<RNG> + LedgerAccess + Sync + Send
 {
   let mut submission_server = data.write().unwrap();
-  println!("attempting to parse body");
   let tx = body.into_inner();
 
   let handle = submission_server.handle_transaction(tx)
