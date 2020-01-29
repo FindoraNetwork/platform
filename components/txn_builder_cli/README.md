@@ -51,4 +51,4 @@ $ curl https://testnet.findora.org:8668/blocks_since/0
 ```
 
 This looks nicer in a web browser that formats JSON nicely such as Firefox.
-[Expanding outline](./doc/ledger_json.png)
+![Expanding outline](./doc/ledger_json.png)
