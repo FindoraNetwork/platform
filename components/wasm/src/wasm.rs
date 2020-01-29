@@ -71,6 +71,12 @@ pub fn debt_transfer_type() -> String {
 }
 
 #[wasm_bindgen]
+// Generates random base64 encoded asset type string
+pub fn random_asset_type() -> String {
+  AssetTypeCode::gen_random().to_base64()
+}
+
+#[wasm_bindgen]
 // Calculate fee for a debt repayment
 //
 // ir_numerator: interest rate numerator

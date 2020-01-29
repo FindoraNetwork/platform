@@ -180,8 +180,17 @@ pub fn txn_log_info(txn: &Transaction) {
         info!("Asset Definition: New asset with code {} defined",
               define_asset_op.body.asset.code.to_base64())
       }
-      // TODO (noah) log other operations
-      _ => info!("Other op"),
+      Operation::IssueAsset(issue_asset_op) => {
+        info!("Asset Issuance: Issued asset {} with {} new outputs. Sequence number is {}.",
+              issue_asset_op.body.code.to_base64(),
+              issue_asset_op.body.num_outputs,
+              issue_asset_op.body.seq_num);
+      }
+      Operation::TransferAsset(xfr_asset_op) => {
+        info!("Asset Transfer: Transfer with {} inputs and {} outputs",
+              xfr_asset_op.body.inputs.len(),
+              xfr_asset_op.body.num_outputs);
+      }
     };
   }
 }
