@@ -60,6 +60,9 @@ fn test_call_no_args() {
   io::stdout().write_all(&output.stdout).unwrap();
   io::stdout().write_all(&output.stderr).unwrap();
 
+  // TODO (copied from John's comment):
+  // Running the command with no arguments should produce a helpful usage message, not a cryptic error.
+  // Also, we should check that the exit status when giving usage is non-zero.
   assert!(from_utf8(&output.stderr[..]).unwrap()
                                        .contains("Subcommand missing or not recognized"));
 }
