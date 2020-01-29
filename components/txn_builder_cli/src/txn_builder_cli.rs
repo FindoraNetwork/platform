@@ -59,6 +59,26 @@ fn load_key_pair_from_file(file_path: &str) -> Result<XfrKeyPair, PlatformError>
   Ok(kp)
 }
 
+fn load_pub_key_from_file(file_path: &str) -> Result<XfrPublicKey, PlatformError> {
+  let mut file = File::open(file_path).or_else(|_e| {
+                                        println!("Key file {} does not exist", file_path);
+                                        Err(PlatformError::IoError("Missing file".to_string()))
+                                      })?;
+
+  let key: XfrPublicKey;
+  let mut key_byte_buffer = Vec::new();
+  match file.read_to_end(&mut key_byte_buffer) {
+    Ok(_len) => {
+      key = XfrPublicKey::zei_from_bytes(&key_byte_buffer);
+    }
+    Err(_e) => {
+      println!("Failed to read key file {}", file_path);
+      return Err(PlatformError::IoError("Failed to read".to_string()));
+    }
+  }
+  Ok(key)
+}
+
 fn split_arg(string: &str) -> Vec<&str> {
   string.split(',').collect::<Vec<&str>>()
 }
@@ -96,7 +116,7 @@ fn load_blind_asset_records_from_files(file_paths: &str)
     let mut file = File::open(file_path).or_else(|_e| {
                                           println!("Blind asset record file {} does not exist",
                                                    file_path);
-                                          Err(PlatformError::IoError("missing file".to_string()))
+                                          Err(PlatformError::IoError("Missing file".to_string()))
                                         })?;
 
     let mut blind_asset_record_str = String::new();
@@ -116,22 +136,15 @@ fn load_blind_asset_records_from_files(file_paths: &str)
   Ok(blind_asset_records)
 }
 
-fn load_addresses_from_file(file_path: &str) -> Result<Vec<AccountAddress>, PlatformError> {
-  let mut file = File::open(file_path).or_else(|_e| {
-                                        println!("Addresses file {} does not exist", file_path);
-                                        Err(PlatformError::IoError("missing file".to_string()))
-                                      })?;
-
-  let mut address_keys = String::new();
-  file.read_to_string(&mut address_keys).or_else(|_e| {
-                                           println!("Failed to read address file {}", file_path);
-                                           Err(PlatformError::IoError("Failed to read".to_string()))
-                                         })?;
-
+fn load_addresses_from_files(file_paths: &str) -> Result<Vec<AccountAddress>, PlatformError> {
   let mut addresses = Vec::new();
-  for address_key in split_arg(&address_keys) {
-    addresses.push(AccountAddress { key: XfrPublicKey::zei_from_bytes(address_key.trim()
-                                                                                 .as_bytes()) });
+
+  for file_path in split_arg(file_paths) {
+    let address_key = load_pub_key_from_file(file_path.trim()).or_else(|e| {
+                        println!("Failed to load address key from file {}", file_path);
+                        Err(e)
+                      })?;
+    addresses.push(AccountAddress { key: address_key });
   }
 
   Ok(addresses)
@@ -142,11 +155,11 @@ fn load_addresses_from_file(file_path: &str) -> Result<Vec<AccountAddress>, Plat
 //
 // TODO (Keyao): Generate file names, rather than ask the user to specify
 //
-fn store_str_to_file(file_path: &str, contents: &str) -> Result<(), PlatformError> {
-  let _ = fs::write(file_path, contents).or_else(|_e| {
-                                          println!("File {} could not be created", file_path);
-                                          Err(PlatformError::IoError("Failed to write".to_string()))
-                                        });
+fn store_sids_to_file(file_path: &str, sids: &str) -> Result<(), PlatformError> {
+  let _ = fs::write(file_path, sids).or_else(|_e| {
+                                      println!("File {} could not be created", file_path);
+                                      Err(PlatformError::IoError("Failed to write".to_string()))
+                                    });
   Ok(())
 }
 
@@ -166,19 +179,48 @@ fn store_txn_builder_to_file(file_path: &str,
 // Write a new key pair to the given paths.
 // Create subdirectories as needed.
 // Move aside any extant files at the given paths.
-// Reports errors rather than returning them.
 // Assumes tilde expansion has already been done on paths.
 fn store_key_pair_to_file(file_path: &Path) -> Result<(), PlatformError> {
   match fs::create_dir_all(&file_path.parent().unwrap()) {
     Ok(()) => {
       if let Err(error) = rename_existing_path(&file_path) {
         println!("Cannot rename key {:?}: {}", &file_path, error);
-        return Err(PlatformError::IoError("Failed to write".to_string()));
       }
       let mut prng: ChaChaRng;
       prng = ChaChaRng::from_seed([0u8; 32]);
       let keypair = XfrKeyPair::generate(&mut prng);
       match fs::write(&file_path, keypair.zei_to_bytes()) {
+        Ok(_) => {}
+        Err(error) => {
+          println!("Key file {:?} could not be created: {}", file_path, error);
+          return Err(PlatformError::IoError("Failed to write".to_string()));
+        }
+      };
+    }
+    Err(error) => {
+      println!("Failed to create directories for {}: {}",
+               &file_path.display(),
+               error);
+      return Err(PlatformError::IoError("Failed to write".to_string()));
+    }
+  }
+
+  Ok(())
+}
+
+// Write a new public key to the given paths.
+// Create subdirectories as needed.
+// Move aside any extant files at the given paths.
+// Assumes tilde expansion has already been done on paths.
+fn store_pub_key_to_file(file_path: &Path) -> Result<(), PlatformError> {
+  match fs::create_dir_all(&file_path.parent().unwrap()) {
+    Ok(()) => {
+      if let Err(error) = rename_existing_path(&file_path) {
+        println!("Cannot rename key {:?}: {}", &file_path, error);
+      }
+      let mut prng = ChaChaRng::from_seed([0u8; 32]);
+      let keypair = XfrKeyPair::generate(&mut prng);
+      match fs::write(&file_path, keypair.get_pk_ref().as_bytes()) {
         Ok(_) => {}
         Err(error) => {
           println!("Key file {:?} could not be created: {}", file_path, error);
@@ -200,7 +242,7 @@ fn store_key_pair_to_file(file_path: &Path) -> Result<(), PlatformError> {
 fn store_blind_asset_record(file_path: &str,
                             amount: &str,
                             asset_type: &str,
-                            pub_key: &str,
+                            pub_key_path: &str,
                             confidential_amount: bool,
                             confidential_asset: bool)
                             -> Result<(), PlatformError> {
@@ -210,7 +252,7 @@ fn store_blind_asset_record(file_path: &str,
 
   let asset_record = AssetRecord::new(amount.parse::<u64>().unwrap(),
                                       asset_type_arr,
-                                      XfrPublicKey::zei_from_bytes(pub_key.as_bytes())).unwrap();
+                                      load_pub_key_from_file(pub_key_path).unwrap()).unwrap();
 
   let blind_asset_record =
     build_blind_asset_record(&mut ChaChaRng::from_entropy(),
@@ -365,12 +407,13 @@ fn main() -> Result<(), PlatformError> {
     .arg(Arg::with_name("txn")
       .long("txn")
       .value_name("FILE")
-      .help("Use a named transaction file (will always be under findora_dir)")
+      .help("Use a name transaction file (will always be under findora_dir)")
       .takes_value(true))
     .subcommand(SubCommand::with_name("create")
       .about("By default, will rename previous file with a .<number> suffix")
-      .arg(Arg::with_name("named")
+      .arg(Arg::with_name("name")
         .short("n")
+        .long("name")
         .value_name("FILE")
         .help("Specify a name for newly created transaction file")
         .takes_value(true))
@@ -378,7 +421,7 @@ fn main() -> Result<(), PlatformError> {
         .long("force")
         .alias("overwrite")
         .short("f")
-        .help("Overwrite the default or named transaction file")))
+        .help("Overwrite the default or name transaction file")))
     .subcommand(SubCommand::with_name("store")
       .subcommand(SubCommand::with_name("sids")
         .arg(Arg::with_name("path")
@@ -407,11 +450,11 @@ fn main() -> Result<(), PlatformError> {
           .long("asset_type")
           .takes_value(true)
           .help("Required: String representation of the asset type"))
-        .arg(Arg::with_name("pub_key")
+        .arg(Arg::with_name("pub_key_path")
           .short("k")
-          .long("pub_key")
+          .long("pub_key_path")
           .takes_value(true)
-          .help("Required: String representation of the public key"))
+          .help("Required: Path to the public key"))
         .arg(Arg::with_name("confidential_amount")
           .short("m")
           .long("confidential_amount")
@@ -419,25 +462,13 @@ fn main() -> Result<(), PlatformError> {
         .arg(Arg::with_name("confidential_asset")
           .short("s")
           .long("confidential_asset")
-          .help("If specified, the asset will be confidential")))
-      .subcommand(SubCommand::with_name("addresses")
-        .arg(Arg::with_name("path")
-          .short("p")
-          .long("path")
-          .takes_value(true)
-          .help("Required: Path to store the address keys"))
-        .arg(Arg::with_name("keys")
-          .short("ks")
-          .long("keys")
-          .takes_value(true)
-          .help("Required: Address keys. Separate by comma (\",\")"))))
+          .help("If specified, the asset will be confidential"))))
     .subcommand(SubCommand::with_name("add")
-    // TODO (Keyao): Add "Required" to the help message for required arguments
       .subcommand(SubCommand::with_name("define_asset")
         .arg(Arg::with_name("token_code")
           .long("token_code")
-          .alias("tc")
-          .help("Specify an explicit 16 character token code for the new asset; must be a unique name. If specified code is already in use, transaction will fail. If not specified, will display automatically generated token code.")
+          .short("c")
+          .help("Required: Explicit 16 character token code for the new asset; must be a unique name. If specified code is already in use, transaction will fail. If not specified, will display automatically generated token code.")
           .takes_value(true))
         .arg(Arg::with_name("allow_updates")
           .short("u")
@@ -451,7 +482,7 @@ fn main() -> Result<(), PlatformError> {
           .short("m")
           .long("memo")
           .takes_value(true)
-          .help("Memo as Json, with escaped quotation marks")
+          .help("Required: Memo as Json, with escaped quotation marks")
           .required(true))
         .arg(Arg::with_name("confidential")
           .short("xx")
@@ -462,20 +493,20 @@ fn main() -> Result<(), PlatformError> {
           .help("TODO: add support for policies")))
       .subcommand(SubCommand::with_name("issue_asset")
         .arg(Arg::with_name("token_code")
-          .short("tc")
+          .short("c")
           .long("token_code")
           .takes_value(true)
-          .help("Specify the token code of the asset to be issued. The transaction will fail if no asset with the token code exists."))
+          .help("Required: Token code of the asset to be issued. The transaction will fail if no asset with the token code exists."))
         .arg(Arg::with_name("sequence_number")
           .short("seq")
           .long("sequence_number")
           .takes_value(true)
-          .help("Sequence number for the issue transaction. Used to prevent replay attacks."))
+          .help("Required: Sequence number for the issue transaction. Used to prevent replay attacks."))
         .arg(Arg::with_name("amount")
           .short("amt")
           .long("amount")
           .takes_value(true)
-          .help("Amount of tokens to issue.")))
+          .help("Required: Amount of tokens to issue.")))
       .subcommand(SubCommand::with_name("transfer_asset")
         .arg(Arg::with_name("sids_path")
           .short("ssp")
@@ -497,30 +528,40 @@ fn main() -> Result<(), PlatformError> {
           .long("output_amounts")
           .takes_value(true)
           .help("Required: the amount to transfer to each account. Separate by comma (\",\")."))
-        .arg(Arg::with_name("addresses_path")
+        .arg(Arg::with_name("address_paths")
           .short("asp")
-          .long("addresses_path")
+          .long("address_paths")
           .takes_value(true)
-          .help("Required: Path to the file where address keys are stored."))))
+          .help("Required: Path to the files where address keys are stored. If no such file, try pubkeygen subcommand."))))
     .subcommand(SubCommand::with_name("serialize"))
     .subcommand(SubCommand::with_name("drop"))
     .subcommand(SubCommand::with_name("keygen")
       .arg(Arg::with_name("create_keys_path")
         .short("n")
         .long("name")
-        .help("specify the path and name for the private key file; if the name has the form \"path/to/file_name.private\", the public key file will be \"path/to/file_name.pub\"; otherwise, \".pub\" will be appended to the name")
+        .help("specify the path and name for the key pair file.")
+        .takes_value(true)))
+    .subcommand(SubCommand::with_name("pubkeygen")
+      .arg(Arg::with_name("create_pub_key_path")
+        .short("n")
+        .long("name")
+        .help("specify the path and name for the public key file.")
         .takes_value(true)))
     .subcommand(SubCommand::with_name("submit")
-        .arg(Arg::with_name("port")
-            .short("P")
-            .long("port")
-            .takes_value(true)
-            .help("specify ledger standalone port (e.g. 8669)"))
-        .arg(Arg::with_name("host")
-            .short("H")
-            .long("host")
-            .takes_value(true)
-            .help("specify ledger standalone host (e.g. localhost)")))
+      .arg(Arg::with_name("protocol")
+           .long("http")
+           .takes_value(false)
+           .help("specify that http, not https should be used."))
+      .arg(Arg::with_name("port")
+          .short("P")
+          .long("port")
+          .takes_value(true)
+          .help("specify ledger standalone port (e.g. 8669)"))
+      .arg(Arg::with_name("host")
+          .short("H")
+          .long("host")
+          .takes_value(true)
+          .help("specify ledger standalone host (e.g. localhost)")))
     .get_matches();
   process_inputs(inputs)
 }
@@ -602,15 +643,33 @@ fn process_inputs(inputs: clap::ArgMatches) -> Result<(), PlatformError> {
       let file_path = Path::new(&file_str);
       store_key_pair_to_file(&file_path)
     }
+    ("pubkeygen", Some(pubkeygen_matches)) => {
+      let new_key_path =
+        if let Some(new_key_path_in) = pubkeygen_matches.value_of("create_pub_key_path") {
+          new_key_path_in.to_string()
+        } else {
+          format!("{}/pub_key/default.key", &findora_dir)
+        };
+      let file_str = shellexpand::tilde(&new_key_path).to_string();
+      let file_path = Path::new(&file_str);
+      store_pub_key_to_file(&file_path)
+    }
     ("submit", Some(submit_matches)) => process_submit_cmd(submit_matches, &transaction_file_name),
-    _ => Err(PlatformError::IoError("Subcommand not recognized".to_string())),
+    _ => Err(PlatformError::IoError("Subcommand missing or not recognized".to_string())),
   }
 }
 
 fn process_submit_cmd(submit_matches: &clap::ArgMatches,
                       transaction_file_name: &str)
                       -> Result<(), PlatformError> {
-  // get host and port
+  // Get protocol, host and port.
+  let protocol = if submit_matches.value_of("http").is_none() {
+    // Default to HTTPS
+    "https"
+  } else {
+    // Allow HTTP which may be useful for running a ledger locally.
+    "http"
+  };
   let host;
   if let Some(host_arg) = submit_matches.value_of("host") {
     host = host_arg;
@@ -637,7 +696,8 @@ fn process_submit_cmd(submit_matches: &clap::ArgMatches,
 
   // submit
   let client = reqwest::Client::new();
-  let mut res = client.post(&format!("http://{}:{}/{}", &host, &port, "submit_transaction"))
+  let mut res = client.post(&format!("{}://{}:{}/{}",
+                                     &protocol, &host, &port, "submit_transaction"))
                       .json(&txn)
                       .send()
                       .unwrap();
@@ -655,20 +715,19 @@ fn process_create_cmd(create_matches: &clap::ArgMatches,
                       transaction_file_name: &str,
                       _findora_dir: &str)
                       -> Result<(), PlatformError> {
-  let named = create_matches.value_of("named");
+  let name = create_matches.value_of("name");
   let overwrite = create_matches.is_present("overwrite");
-  let file_str = if let Some(named) = named {
-    named.to_string()
+  let file_str = if let Some(name) = name {
+    name.to_string()
   } else {
     transaction_file_name.to_string()
   };
   let expand_str = shellexpand::tilde(&file_str).to_string();
   let file_path = Path::new(&expand_str);
   create_directory_if_missing(&expand_str);
-  if !overwrite {
+  if file_path.exists() && !overwrite {
     if let Err(error) = rename_existing_path(&file_path) {
       println!("Cannot rename file {:?}: {}", &file_path, error);
-      return Err(PlatformError::IoError("Failed to rename".to_string()));
     }
   }
   let txn_builder = TransactionBuilder::default();
@@ -692,7 +751,7 @@ fn process_store_cmd(store_matches: &clap::ArgMatches) -> Result<(), PlatformErr
         println!("TxoSID indices are required.");
         return Err(PlatformError::IoError("Argument missing".to_string()));
       }
-      store_str_to_file(path, sids)
+      store_sids_to_file(path, sids)
     }
 
     ("blind_asset_record", Some(blind_asset_record_path_matches)) => {
@@ -717,11 +776,11 @@ fn process_store_cmd(store_matches: &clap::ArgMatches) -> Result<(), PlatformErr
         println!("Asset type is required.");
         return Err(PlatformError::IoError("Argument missing".to_string()));
       }
-      let pub_key;
-      if let Some(pub_key_arg) = blind_asset_record_path_matches.value_of("pub_key") {
-        pub_key = pub_key_arg
+      let pub_key_path;
+      if let Some(pub_key_path_arg) = blind_asset_record_path_matches.value_of("pub_key_path") {
+        pub_key_path = pub_key_path_arg
       } else {
-        println!("Public key is required.");
+        println!("File to public key is required. If no such file, try pubkeygen subcommand.");
         return Err(PlatformError::IoError("Argument missing".to_string()));
       }
       let confidential_amount = blind_asset_record_path_matches.is_present("confidential_amount");
@@ -729,27 +788,9 @@ fn process_store_cmd(store_matches: &clap::ArgMatches) -> Result<(), PlatformErr
       store_blind_asset_record(path,
                                amount,
                                asset_type,
-                               pub_key,
+                               pub_key_path,
                                confidential_amount,
                                confidential_asset)
-    }
-
-    ("addresses", Some(addresses_matches)) => {
-      let path;
-      if let Some(path_arg) = addresses_matches.value_of("path") {
-        path = path_arg
-      } else {
-        println!("Paths to the address key files are required.");
-        return Err(PlatformError::IoError("Argument missing".to_string()));
-      }
-      let keys;
-      if let Some(keys_arg) = addresses_matches.value_of("keys") {
-        keys = keys_arg
-      } else {
-        println!("Keys are required.");
-        return Err(PlatformError::IoError("Argument missing".to_string()));
-      }
-      store_str_to_file(path, keys)
     }
 
     _ => unreachable!(),
@@ -809,7 +850,13 @@ fn process_add_cmd(add_matches: &clap::ArgMatches,
       Ok(())
     }
     ("issue_asset", Some(issue_asset_matches)) => {
-      let token_code = issue_asset_matches.value_of("token_code");
+      let asset_token: AssetTypeCode;
+      if let Some(token_code_arg) = issue_asset_matches.value_of("token_code") {
+        asset_token = AssetTypeCode::new_from_str(token_code_arg);
+      } else {
+        println!("Token code is required to issue asset.");
+        return Err(PlatformError::IoError("Argument missing".to_string()));
+      }
       let seq_num;
       if let Some(sequence_number_arg) = issue_asset_matches.value_of("sequence_number") {
         if let Ok(seq_num_parsed) = sequence_number_arg.parse::<u64>() {
@@ -840,13 +887,6 @@ fn process_add_cmd(add_matches: &clap::ArgMatches,
                               Err(e)
                             })
                             .unwrap();
-      let asset_token: AssetTypeCode;
-      if let Some(token_code) = token_code {
-        asset_token = AssetTypeCode::new_from_str(token_code);
-      } else {
-        println!("Token code is required to issue asset.");
-        return Err(PlatformError::IoError("Argument missing".to_string()));
-      }
       if let Err(e) =
         txn_builder.add_basic_issue_asset(&key_pair, &None, &asset_token, seq_num, amount)
       {
@@ -926,13 +966,13 @@ fn process_add_cmd(add_matches: &clap::ArgMatches,
         return Err(PlatformError::IoError("Argument missing".to_string()));
       }
       let addresses;
-      if let Some(addresses_path) = transfer_asset_matches.value_of("addresses_path") {
-        match load_addresses_from_file(addresses_path) {
+      if let Some(addresses_path) = transfer_asset_matches.value_of("address_paths") {
+        match load_addresses_from_files(addresses_path) {
           Ok(result) => {
             addresses = result;
           }
           Err(error) => {
-            println!("Error loading addresses from {}: {}", addresses_path, error);
+            println!("Error loading addresses: {}", error);
             return Err(error);
           }
         }
@@ -961,7 +1001,7 @@ fn process_add_cmd(add_matches: &clap::ArgMatches,
                             })
                             .unwrap();
       if let Err(e) =
-        txn_builder.add_basic_transfer_asset(&XfrKeyPair::zei_from_bytes(keys_file_path.as_bytes()),
+        txn_builder.add_basic_transfer_asset(&load_key_pair_from_file(keys_file_path).unwrap(),
                                              &transfer_from[..],
                                              &transfer_to[..])
       {
@@ -988,7 +1028,7 @@ mod tests {
     match next_path(as_path) {
       Ok(result) => {
         let as_str = result.to_str().unwrap();
-        if as_str != expected.to_string() {
+        if as_str != expected {
           panic!("{} failed:  {}", input, as_str);
         }
       }
@@ -1040,7 +1080,7 @@ mod tests {
     check_next_path_nonextant("abc.0", "abc.0");
 
     let as_path = Path::new(".");
-    if let Err(_) = next_path(as_path) {
+    if next_path(as_path).is_err() {
       // This is the error:
       // Custom { kind: InvalidData, error: "Is directory: \".\"" }
     } else {
@@ -1069,7 +1109,7 @@ mod tests {
     let sids = vec!["1,2,4", "1,2, 4", "1,a,4"];
 
     for i in 0..3 {
-      store_str_to_file(paths[i], sids[i]).unwrap();
+      store_sids_to_file(paths[i], sids[i]).unwrap();
     }
 
     let expected_txo_refs = vec![TxoRef::Absolute(TxoSID(1)),
@@ -1084,9 +1124,9 @@ mod tests {
     assert_eq!(load_sids_from_file(paths[2]),
                Err(PlatformError::IoError("Improperly formatted sid".to_string())));
 
-    for i in 0..3 {
-      fs::remove_file(paths[i]).unwrap();
-    }
+    paths.into_iter()
+         .map(|path| fs::remove_file(path).unwrap())
+         .collect()
   }
 
   #[test]
@@ -1094,18 +1134,19 @@ mod tests {
     // Set fields for constructing blind asset records
     let paths = vec!["file1", "file2", "file3"];
     let paths_str = "file1,file2, file3";
+    let pub_key_paths = vec!["pub1", "pub2", "pub3"];
     let amounts = vec![100, 200, 300];
     let asset_types = vec![[0u8; 16], [0u8; 16], [0u8; 16]];
-    let pub_keys = vec![[0; 32], [1; 32], [0; 32]];
     let confidential_amount_bools = vec![false, false, true];
     let confidential_asset_bools = vec![false, true, false];
 
     // Store each blind asset record
     for i in 0..3 {
+      let _ = store_pub_key_to_file(Path::new(pub_key_paths[i]));
       store_blind_asset_record(paths[i],
                                &amounts[i].to_string(),
                                from_utf8(&asset_types[i]).unwrap(),
-                               from_utf8(&pub_keys[i]).unwrap(),
+                               pub_key_paths[i],
                                confidential_amount_bools[i],
                                confidential_asset_bools[i]).unwrap();
     }
@@ -1116,41 +1157,22 @@ mod tests {
     // Verify the field of the first blind asset record
     assert_eq!(blind_asset_records[0].amount, Some(amounts[0]));
     assert_eq!(blind_asset_records[0].asset_type, Some(asset_types[0]));
-    assert_eq!(blind_asset_records[0].public_key,
-               XfrPublicKey::zei_from_bytes(&pub_keys[0]));
     fs::remove_file(paths[0]).unwrap();
+    fs::remove_file(pub_key_paths[0]).unwrap();
 
     // Verify the field of the second blind asset record
     // Asset type should be None because it's set as confidential
     assert_eq!(blind_asset_records[1].amount, Some(amounts[1]));
     assert_eq!(blind_asset_records[1].asset_type, None);
-    assert_eq!(blind_asset_records[1].public_key,
-               XfrPublicKey::zei_from_bytes(&pub_keys[1]));
     fs::remove_file(paths[1]).unwrap();
+    fs::remove_file(pub_key_paths[1]).unwrap();
 
     // Verify the field of the third blind asset record
     // Amount should be None because the it's set as confidential
     assert_eq!(blind_asset_records[2].amount, None);
     assert_eq!(blind_asset_records[2].asset_type, Some(asset_types[2]));
-    assert_eq!(blind_asset_records[2].public_key,
-               XfrPublicKey::zei_from_bytes(&pub_keys[2]));
     fs::remove_file(paths[2]).unwrap();
-  }
-
-  #[test]
-  fn test_store_and_load_addresses() {
-    let path = "addresses_file";
-    let mut address_keys = from_utf8(&[0; 32]).unwrap().to_owned();
-    address_keys.push_str(",");
-    address_keys.push_str(from_utf8(&[1; 32]).unwrap());
-
-    store_str_to_file(path, &address_keys).unwrap();
-
-    let expected_addresses = vec![AccountAddress { key: XfrPublicKey::zei_from_bytes(&[0; 32]) },
-                                  AccountAddress { key: XfrPublicKey::zei_from_bytes(&[1; 32]) }];
-
-    assert_eq!(load_addresses_from_file(path).unwrap(), expected_addresses);
-    fs::remove_file(path).unwrap();
+    fs::remove_file(pub_key_paths[2]).unwrap();
   }
 
   #[test]
