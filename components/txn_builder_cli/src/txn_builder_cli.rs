@@ -548,6 +548,10 @@ fn main() -> Result<(), PlatformError> {
         .help("specify the path and name for the public key file.")
         .takes_value(true)))
     .subcommand(SubCommand::with_name("submit")
+      .arg(Arg::with_name("protocol")
+           .long("http")
+           .takes_value(false)
+           .help("specify that http, not https should be used."))
       .arg(Arg::with_name("port")
           .short("P")
           .long("port")
@@ -658,7 +662,14 @@ fn process_inputs(inputs: clap::ArgMatches) -> Result<(), PlatformError> {
 fn process_submit_cmd(submit_matches: &clap::ArgMatches,
                       transaction_file_name: &str)
                       -> Result<(), PlatformError> {
-  // get host and port
+  // Get protocol, host and port.
+  let protocol = if submit_matches.value_of("http").is_none() {
+    // Default to HTTPS
+    "https"
+  } else {
+    // Allow HTTP which may be useful for running a ledger locally.
+    "http"
+  };
   let host;
   if let Some(host_arg) = submit_matches.value_of("host") {
     host = host_arg;
@@ -685,7 +696,8 @@ fn process_submit_cmd(submit_matches: &clap::ArgMatches,
 
   // submit
   let client = reqwest::Client::new();
-  let mut res = client.post(&format!("http://{}:{}/{}", &host, &port, "submit_transaction"))
+  let mut res = client.post(&format!("{}://{}:{}/{}",
+                                     &protocol, &host, &port, "submit_transaction"))
                       .json(&txn)
                       .send()
                       .unwrap();
