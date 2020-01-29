@@ -41,6 +41,9 @@ $ curl https://testnet.findora.org:8669/txn_status/4977619fd7c7dd1c6b917ced37abc
 {"Committed":[0,[]]}
 ```
 
+### Listing blocks
+
+It is possible to list all the transaction blocks since a given transaction serial number.
 
 ```
 $ curl https://testnet.findora.org:8668/blocks_since/0
@@ -48,3 +51,4 @@ $ curl https://testnet.findora.org:8668/blocks_since/0
 ```
 
 This looks nicer in a web browser that formats JSON nicely such as Firefox.
+[Expanding outline](https://raw.githubusercontent.com/findoraorg/platform/txn_builder_cli_readme/components/txn_builder_cli/doc/ledger_json.png)
