@@ -59,7 +59,11 @@ $ curl https://testnet.findora.org:8669/txn_status/4977619fd7c7dd1c6b917ced37abc
 
 ### Listing blocks
 
-It is possible to list all the transaction blocks since a given transaction serial number.
+It is possible to list all the transaction blocks since a given
+transaction serial number. The `blocks_since` route takes a
+transaction serial number and returns a JSON expression with all the
+transactions from the given serial number to the most recent
+transaction.
 
 ```
 $ curl https://testnet.findora.org:8668/blocks_since/0
@@ -68,5 +72,12 @@ $ curl https://testnet.findora.org:8668/blocks_since/0
 
 This looks nicer in a web browser that formats JSON nicely such as Firefox.
 ![Expanding outline](./doc/ledger_json.png)
+
+
+The `block_log` route returns all the transaction as tabular HTML.
+
+```
+$ curl https://testnet.findora.org:8669/block_log
+```
 
 
