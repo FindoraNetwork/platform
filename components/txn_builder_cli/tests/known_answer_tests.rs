@@ -101,15 +101,15 @@ fn transfer_asset(txn_builder_path: &str,
                        .output()
 }
 
-// #[cfg(test)]
-// fn submit(txn_builder_path: &str, host: &str, port: &str) -> io::Result<Output> {
-//   Command::new(COMMAND).args(&["--txn", txn_builder_path])
-//                        .arg("submit")
-//                        .arg("--http")
-//                        .args(&["--host", host])
-//                        .args(&["--port", port])
-//                        .output()
-// }
+#[cfg(test)]
+fn submit(txn_builder_path: &str, host: &str, port: &str) -> io::Result<Output> {
+  Command::new(COMMAND).args(&["--txn", txn_builder_path])
+                       .arg("submit")
+                       .arg("--http")
+                       .args(&["--host", host])
+                       .args(&["--port", port])
+                       .output()
+}
 
 //
 // No subcommand
@@ -406,106 +406,104 @@ fn test_transfer_asset_with_args() {
 
 // TODO (Keyao): Tests below don't pass. Fix them.
 
-// //
-// // Submit
-// //
-// #[test]
-// fn test_define_and_submit() {
-//   // Create txn builder and key pair
-//   let txn_builder_file = "tb_define_submit";
-//   let key_pair_file = "kp_define_submit";
-//   Command::new(COMMAND).arg("create")
-//                        .output()
-//                        .expect("Failed to create transaction builder");
-//   keygen(key_pair_file).expect("Failed to generate key pair");
+//
+// Submit
+//
+#[test]
+fn test_define_and_submit() {
+  // Create txn builder and key pair
+  let txn_builder_file = "tb_define_submit";
+  let key_pair_file = "kp_define_submit";
+  create(txn_builder_file).expect("Failed to create transaction builder");
+  keygen(key_pair_file).expect("Failed to generate key pair");
 
-//   // Define asset
-//   define_asset(txn_builder_file,
-//                key_pair_file,
-//                &AssetTypeCode::gen_random().to_base64(),
-//                "Define an asset").expect("Failed to define asset");
+  // Define asset
+  define_asset(txn_builder_file,
+               key_pair_file,
+               &AssetTypeCode::gen_random().to_base64(),
+               "Define an asset").expect("Failed to define asset");
 
-//   // Submit transaction
-//   let output =
-//     submit(txn_builder_file, "testnet.findora.org", "8669").expect("Failed to execute process");
+  // Submit transaction
+  let output =
+    submit(txn_builder_file, "testnet.findora.org", "8669").expect("Failed to execute process");
 
-//   io::stdout().write_all(&output.stdout).unwrap();
-//   io::stdout().write_all(&output.stderr).unwrap();
+  io::stdout().write_all(&output.stdout).unwrap();
+  io::stdout().write_all(&output.stderr).unwrap();
 
-//   assert!(output.status.success());
+  assert!(output.status.success());
 
-//   // fs::remove_file(txn_builder_file).unwrap();
-//   fs::remove_file(key_pair_file).unwrap();
-// }
+  fs::remove_file(txn_builder_file).unwrap();
+  fs::remove_file(key_pair_file).unwrap();
+}
 
-// #[test]
-// fn test_submit_with_args() {
-//   // Create txn builder and key pair
-//   let txn_builder_file = "tb_submit";
-//   let key_pair_file = "kp_submit";
-//   create(txn_builder_file).expect("Failed to create transaction builder");
-//   keygen(key_pair_file).expect("Failed to generate key pair");
+#[test]
+fn test_submit_with_args() {
+  // Create txn builder and key pair
+  let txn_builder_file = "tb_submit";
+  let key_pair_file = "kp_submit";
+  create(txn_builder_file).expect("Failed to create transaction builder");
+  keygen(key_pair_file).expect("Failed to generate key pair");
 
-//   let files = vec!["pub", "addr", "sid", "bar"];
-//   for file in &files[0..2] {
-//     pubkeygen(file).expect("Failed to generate public key");
-//   }
+  let files = vec!["pub", "addr", "sid", "bar"];
+  for file in &files[0..2] {
+    pubkeygen(file).expect("Failed to generate public key");
+  }
 
-//   // Store sids and blind asset records
-//   let token_code = AssetTypeCode::gen_random().to_base64();
-//   store_sids(files[2], "1").expect("Failed to store sids");
-//   store_blind_asset_record(files[3],
-//                              "10",
-//                              &token_code,
-//                              files[0]).expect("Failed to store blind asset record");
+  // Store sids and blind asset records
+  let token_code = AssetTypeCode::gen_random().to_base64();
+  store_sids(files[2], "1").expect("Failed to store sids");
+  store_blind_asset_record(files[3],
+                             "10",
+                             &token_code,
+                             files[0]).expect("Failed to store blind asset record");
 
-//   // Define asset
-//   define_asset(txn_builder_file,
-//                key_pair_file,
-//                &token_code,
-//                "Define an asset").expect("Failed to define asset");
+  // Define asset
+  define_asset(txn_builder_file,
+               key_pair_file,
+               &token_code,
+               "Define an asset").expect("Failed to define asset");
 
-//   let host = "testnet.findora.org";
-//   let port = "8669";
+  let host = "testnet.findora.org";
+  let port = "8669";
 
-//   let output = submit(txn_builder_file, host, port).expect("Failed to execute process");
+  let output = submit(txn_builder_file, host, port).expect("Failed to execute process");
 
-//   io::stdout().write_all(&output.stdout).unwrap();
-//   io::stdout().write_all(&output.stderr).unwrap();
+  io::stdout().write_all(&output.stdout).unwrap();
+  io::stdout().write_all(&output.stderr).unwrap();
 
-//   assert!(output.status.success());
+  assert!(output.status.success());
 
-//   // Issue asset
-//   issue_asset(txn_builder_file,
-//               key_pair_file,
-//               &token_code,
-//               "0",
-//               "100").expect("Failed to issue fiat asset");
+  // Issue asset
+  issue_asset(txn_builder_file,
+              key_pair_file,
+              &token_code,
+              "0",
+              "100").expect("Failed to issue fiat asset");
 
-//   let output = submit(txn_builder_file, host, port).expect("Failed to execute process");
+  let output = submit(txn_builder_file, host, port).expect("Failed to execute process");
 
-//   io::stdout().write_all(&output.stdout).unwrap();
-//   io::stdout().write_all(&output.stderr).unwrap();
+  io::stdout().write_all(&output.stdout).unwrap();
+  io::stdout().write_all(&output.stderr).unwrap();
 
-//   assert!(output.status.success());
+  assert!(output.status.success());
 
-//   // Transfer asset
+  // Transfer asset
 
-//   transfer_asset(txn_builder_file,
-//                  key_pair_file,
-//                  files[2],
-//                  files[3],
-//                  "10",
-//                  "10",
-//                  files[1]).expect("Failed to transfer asset");
+  transfer_asset(txn_builder_file,
+                 key_pair_file,
+                 files[2],
+                 files[3],
+                 "10",
+                 "10",
+                 files[1]).expect("Failed to transfer asset");
 
-//   let output = submit(txn_builder_file, host, port).expect("Failed to execute process");
+  let output = submit(txn_builder_file, host, port).expect("Failed to execute process");
 
-//   io::stdout().write_all(&output.stdout).unwrap();
-//   io::stdout().write_all(&output.stderr).unwrap();
+  io::stdout().write_all(&output.stdout).unwrap();
+  io::stdout().write_all(&output.stderr).unwrap();
 
-//   assert!(output.status.success());
+  assert!(output.status.success());
 
-//   fs::remove_file(txn_builder_file).unwrap();
-//   fs::remove_file(key_pair_file).unwrap();
-// }
+  fs::remove_file(txn_builder_file).unwrap();
+  fs::remove_file(key_pair_file).unwrap();
+}
