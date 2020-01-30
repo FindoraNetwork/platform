@@ -663,7 +663,7 @@ fn process_submit_cmd(submit_matches: &clap::ArgMatches,
                       transaction_file_name: &str)
                       -> Result<(), PlatformError> {
   // Get protocol, host and port.
-  let protocol = if submit_matches.value_of("http").is_none() {
+  let protocol = if submit_matches.is_present("http") {
     // Default to HTTPS
     "https"
   } else {
