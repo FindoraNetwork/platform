@@ -79,5 +79,6 @@ The `block_log` route returns all the transaction as tabular HTML.
 ```
 $ curl https://testnet.findora.org:8669/block_log
 ```
+![Table of blocks](./doc/block_log.png)
 
 
