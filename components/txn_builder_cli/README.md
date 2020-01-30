@@ -40,7 +40,7 @@ $ ./txn_builder_cli create
 [2020-01-29T00:33:36Z TRACE txn_builder_cli] Next path for "/home/alex/.findora/current.txn" is "/home/alex/.findora/current.txn.1"
 
 ```
-Then add operations to the transaction. Three operation can be added
+Then add operations to the transaction. Three operations can be added
 * Define a new asset. See `txn_builder_cli add define_asset`.
 * Issue units of an asset. See `txn_builder_cli add issue_asset`.
 * Transfer units of an asset. See `txn_builder_cli add transfer_asset`.
