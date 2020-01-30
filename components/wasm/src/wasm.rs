@@ -12,6 +12,7 @@ use js_sys::Promise;
 use ledger::data_model::{
   AssetTypeCode, Operation, Serialized, TransferType, TxOutput, TxoRef, TxoSID,
 };
+use ledger::policies::{DebtMemo, Fraction};
 use percent_encoding::{utf8_percent_encode, AsciiSet, CONTROLS};
 use rand_chacha::ChaChaRng;
 use rand_core::SeedableRng;
@@ -67,6 +68,50 @@ pub fn standard_transfer_type() -> String {
 // Debt swap TransferType variant for txn builder.
 pub fn debt_transfer_type() -> String {
   serde_json::to_string(&TransferType::DebtSwap).unwrap()
+}
+
+#[wasm_bindgen]
+// Generates random base64 encoded asset type string
+pub fn random_asset_type() -> String {
+  AssetTypeCode::gen_random().to_base64()
+}
+
+#[wasm_bindgen]
+// Calculate fee for a debt repayment
+//
+// ir_numerator: interest rate numerator
+// ir_denominator: interest rate denominator
+// outstanding_balance: amount of outstanding debt
+pub fn calculate_fee(ir_numerator: u64, ir_denominator: u64, outstanding_balance: u64) -> u64 {
+  ledger::policies::calculate_fee(outstanding_balance,
+                                  Fraction::new(ir_numerator, ir_denominator))
+}
+
+#[wasm_bindgen]
+// Return burn address. Used in debt swaps
+// TODO (noah) put helper function in ledger::policies
+pub fn get_null_pk() -> XfrPublicKey {
+  XfrPublicKey::zei_from_bytes(&[0; 32])
+}
+#[wasm_bindgen]
+// Create memo needed for debt token asset types. The memo will be parsed by the policy evalautor to ensure
+// that all payment and fee amounts are correct
+//
+// ir_numerator: interest rate numerator
+// ir_denominator: interest rate denominator
+// fiat_code: Base64 string representing asset type used to pay off the loan
+// amount: Loan amount
+pub fn create_debt_memo(ir_numerator: u64,
+                        ir_denominator: u64,
+                        fiat_code: String,
+                        loan_amount: u64)
+                        -> Result<String, JsValue> {
+  let fiat_code = AssetTypeCode::new_from_base64(&fiat_code).map_err(|_e| {
+      JsValue::from_str("Could not deserialize asset token code")})?;
+  let memo = DebtMemo { interest_rate: Fraction::new(ir_numerator, ir_denominator),
+                        fiat_code,
+                        loan_amount };
+  Ok(serde_json::to_string(&memo).unwrap())
 }
 
 #[wasm_bindgen]
@@ -134,13 +179,18 @@ impl WasmTransactionBuilder {
   ///
   /// key_pair: Issuer XfrKeyPair
   /// memo: Text field for asset definition.
-  /// code: Base64 string representing the token code of the asset to be issued.
+  /// code: Optional Base64 string representing the token code of the asset to be issued. If empty,
+  /// a token code will be chosen at random.
   pub fn add_operation_create_asset(&self,
                                     key_pair: &XfrKeyPair,
                                     memo: String,
                                     token_code: String)
                                     -> Result<WasmTransactionBuilder, JsValue> {
-    let asset_token = AssetTypeCode::new_from_base64(&token_code).unwrap();
+    let asset_token = if token_code.is_empty() {
+      AssetTypeCode::gen_random()
+    } else {
+      AssetTypeCode::new_from_base64(&token_code).unwrap()
+    };
 
     Ok(WasmTransactionBuilder { transaction_builder: Serialized::new(&*self.transaction_builder.deserialize().add_operation_create_asset(&key_pair,
                                               Some(asset_token),
@@ -441,17 +491,6 @@ pub fn get_tracked_amount(blind_asset_record: String,
 */
 
 // Ensures that the transaction serialization is valid URI text
-fn encode_uri(to_encode: &str) -> String {
-  const FRAGMENT: &AsciiSet = &CONTROLS.add(b' ')
-                                       .add(b'"')
-                                       .add(b'`')
-                                       .add(b'{')
-                                       .add(b'/')
-                                       .add(b'}');
-
-  utf8_percent_encode(&to_encode, FRAGMENT).to_string()
-}
-
 #[wasm_bindgen]
 /// Submit a transaction to the ledger and return a promise for the
 /// ledger's eventual response. The transaction will be enqueued for
@@ -467,12 +506,24 @@ pub fn submit_transaction(transaction_str: String) -> Result<Promise, JsValue> {
   opts.method("POST");
   opts.mode(RequestMode::Cors);
 
-  let req_string = format!("http://{}:{}/submit_transaction/{}",
+  let req_string = format!("http://{}:{}/submit_transaction_wasm/{}",
                            HOST,
                            SUBMISSION_PORT,
                            encode_uri(&transaction_str));
 
   create_query_promise(&opts, &req_string)
+}
+
+fn encode_uri(to_encode: &str) -> String {
+  const FRAGMENT: &AsciiSet = &CONTROLS.add(b' ')
+                                       .add(b'"')
+                                       .add(b'`')
+                                       .add(b'{')
+                                       .add(b'/')
+                                       .add(b'\\')
+                                       .add(b'}');
+
+  utf8_percent_encode(&to_encode, FRAGMENT).to_string()
 }
 
 #[wasm_bindgen]
@@ -519,12 +570,13 @@ pub fn get_asset_token(name: String) -> Result<Promise, JsValue> {
   create_query_promise(&opts, &req_string)
 }
 
+#[wasm_bindgen]
 pub fn get_txn_status(handle: String) -> Result<Promise, JsValue> {
   let mut opts = RequestInit::new();
   opts.method("GET");
   opts.mode(RequestMode::Cors);
 
-  let req_string = format!("http://{}:{}/txn_status/{}", HOST, PORT, handle);
+  let req_string = format!("http://{}:{}/txn_status/{}", HOST, SUBMISSION_PORT, handle);
 
   create_query_promise(&opts, &req_string)
 }

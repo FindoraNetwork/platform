@@ -1,10 +1,9 @@
-// #![deny(warnings)]
+#![deny(warnings)]
 #![feature(slice_patterns)]
 // Copyright 2019 © Findora. All rights reserved.
 /// Command line executable to exercise functions related to credentials
-
 use clap;
-use clap::{Arg, App, ArgMatches};
+use clap::{App, Arg, ArgMatches};
 use cryptohash::sha256;
 use hex;
 use rand_chacha::ChaChaRng;
@@ -15,22 +14,12 @@ use rustyline::Editor;
 // use sha2::{Digest, Sha256};
 use serde::{Deserialize, Serialize};
 use sha256::DIGESTBYTES;
-use sparse_merkle_tree::{SmtMap256/*, check_merkle_proof*/};
+use sparse_merkle_tree::SmtMap256;
 use std::collections::HashMap;
 use std::path::Path;
 use zei::api::anon_creds::{
-  ac_keygen_issuer,
-  ac_keygen_user,
-  ac_reveal,
-  ac_reveal_with_rand,
-  ac_sign,
-  ac_verify,
-  ACIssuerPublicKey,
-  ACIssuerSecretKey,
-  ACRevealSig,
-  ACSignature,
-  ACUserPublicKey,
-  ACUserSecretKey,
+  ac_keygen_issuer, ac_keygen_user, ac_reveal, ac_sign, ac_verify, ACIssuerPublicKey,
+  ACIssuerSecretKey, ACRevealSig, ACSignature, ACUserPublicKey, ACUserSecretKey,
 };
 
 // Default file path of the anonymous credential registry
@@ -67,7 +56,7 @@ const ZERO_DIGEST: Hash256 = Hash256([0; DIGESTBYTES]);
 
 impl std::fmt::Display for Hash256 {
   fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-    write!(f, "{}",  hex::encode(&self.0))
+    write!(f, "{}", hex::encode(&self.0))
   }
 }
 
@@ -141,13 +130,11 @@ struct GlobalState<'a> {
 
 impl GlobalState<'_> {
   fn new() -> Self {
-    GlobalState {
-      prng: ChaChaRng::from_seed([0u8; 32]),
-      registry: Vec::<String>::new(),
-      smt_map: SmtMap256::<&str>::new(),
-      user_addr: HashMap::new(),
-      issuer_addr: HashMap::new(),
-    }
+    GlobalState { prng: ChaChaRng::from_seed([0u8; 32]),
+                  registry: Vec::<String>::new(),
+                  smt_map: SmtMap256::<&str>::new(),
+                  user_addr: HashMap::new(),
+                  issuer_addr: HashMap::new() }
   }
 }
 
@@ -180,7 +167,7 @@ fn sha256<T>(key: &T) -> Hash256
   // sha256 on the user's public key.
   let mut bytes = key.type_string().to_string().into_bytes();
   key.serialize(&mut rmp_serde::Serializer::new(&mut bytes))
-    .unwrap();
+     .unwrap();
   hash_256(bytes)
 }
 
@@ -188,20 +175,23 @@ fn sha256<T>(key: &T) -> Hash256
 fn find_by_address<T>(global_state: &GlobalState, address: Hash256) -> Option<T>
   where for<'d> T: Deserialize<'d>
 {
-  global_state.registry.iter().rev().find_map(|x: &String| match serde_json::from_str::<AddrValue<T>>(x) {
-    Ok(item) => {
-      println!("item.address = {}, address  = {}", &item.address, &address);
-      if item.address == address {
-        Some(item.value)
-      } else {
-        None
-      }
-    }
-    Err(_) => {
-      // TODO Report errors other than "missing field" errors.
-      None
-    }
-  })
+  global_state.registry.iter().rev().find_map(|x: &String| {
+                                      match serde_json::from_str::<AddrValue<T>>(x) {
+                                        Ok(item) => {
+                                          println!("item.address = {}, address  = {}",
+                                                   &item.address, &address);
+                                          if item.address == address {
+                                            Some(item.value)
+                                          } else {
+                                            None
+                                          }
+                                        }
+                                        Err(_) => {
+                                          // TODO Report errors other than "missing field" errors.
+                                          None
+                                        }
+                                      }
+                                    })
 }
 
 // Test anonymous credentials on fixed inputs. Similar to
@@ -235,7 +225,12 @@ fn test(global_state: &mut GlobalState) -> Result<(), String> {
 
   // The user presents this to the second party in a transaction as proof
   // attributes have been committed without revealing the values.
-  let reveal_sig = ac_reveal(&mut global_state.prng, &user_sk, &issuer_pk, &sig, &attrs, &bitmap).unwrap();
+  let reveal_sig = ac_reveal(&mut global_state.prng,
+                             &user_sk,
+                             &issuer_pk,
+                             &sig,
+                             &attrs,
+                             &bitmap).unwrap();
 
   // Decision point. Does the second party agree to do business?
   // Sometimes this is presumed such as a syndicated investment
@@ -273,7 +268,8 @@ fn add_issuer(mut global_state: &mut GlobalState, issuer_name: &str) -> Result<(
   println!("subcommand addissuer");
   let issuer = new_issuer(&mut global_state);
   let address = sha256(&issuer.public_key);
-  global_state.issuer_addr.insert(issuer_name.to_string(), address);
+  global_state.issuer_addr
+              .insert(issuer_name.to_string(), address);
   println!("Issuer address: {}", &address);
 
   let a = AddrIssuer { address,
@@ -281,7 +277,10 @@ fn add_issuer(mut global_state: &mut GlobalState, issuer_name: &str) -> Result<(
   append_to_registry::<AddrIssuer>(global_state, a)
 }
 
-fn add_user(global_state: &mut GlobalState, issuer_name: &str, user_name: &str) -> Result<(), String> {
+fn add_user(global_state: &mut GlobalState,
+            issuer_name: &str,
+            user_name: &str)
+            -> Result<(), String> {
   let issuer_addr = global_state.issuer_addr.get(issuer_name).unwrap();
   println!("Looking up issuer: {}", issuer_name);
   if let Some(issuer) = find_by_address::<Issuer>(global_state, *issuer_addr) {
@@ -291,7 +290,8 @@ fn add_user(global_state: &mut GlobalState, issuer_name: &str, user_name: &str) 
                         value: User { public_key: user_pk,
                                       secret_key: user_sk } };
     println!("Added user: {} with address {}", user_name, au.address);
-    global_state.user_addr.insert(user_name.to_string(), user_addr);
+    global_state.user_addr
+                .insert(user_name.to_string(), user_addr);
     append_to_registry::<AddrUser>(global_state, au)
   } else {
     Err(format!("lookup of issuer {} failed", issuer_addr))
@@ -302,7 +302,8 @@ fn sign(global_state: &mut GlobalState, user: &str, issuer: &str) -> Result<(), 
   let user_addr = global_state.user_addr.get(user).unwrap();
   let issuer_addr = global_state.issuer_addr.get(issuer).unwrap();
   match (find_by_address::<User>(global_state, *user_addr),
-         find_by_address::<Issuer>(global_state, *issuer_addr)) {
+         find_by_address::<Issuer>(global_state, *issuer_addr))
+  {
     (Some(user_keys), Some(issuer_keys)) => {
       let attrs = [0u64.to_le_bytes(),
                    1u64.to_le_bytes(),
@@ -320,15 +321,9 @@ fn sign(global_state: &mut GlobalState, user: &str, issuer: &str) -> Result<(), 
 
       append_to_registry::<AddrSig>(global_state, addr_sig)
     }
-    (None, None) => {
-      Err("Unable to find either issuer or user".to_string())
-    },
-    (None, _) => {
-      Err("Unable to find user".to_string())
-    },
-    (_, None) => {
-      Err("Unable to find issuer".to_string())
-    },
+    (None, None) => Err("Unable to find either issuer or user".to_string()),
+    (None, _) => Err("Unable to find user".to_string()),
+    (_, None) => Err("Unable to find issuer".to_string()),
   }
 }
 
@@ -337,7 +332,8 @@ fn reveal(global_state: &mut GlobalState, user: &str, issuer: &str) -> Result<()
   let issuer_addr = global_state.issuer_addr.get(issuer).unwrap();
   match (find_by_address::<User>(global_state, *user_addr),
          find_by_address::<Issuer>(global_state, *issuer_addr),
-         find_by_address::<ACSignature>(global_state, *user_addr)) {
+         find_by_address::<ACSignature>(global_state, *user_addr))
+  {
     (Some(user_keys), Some(issuer_keys), Some(sig)) => {
       let attrs = [0u64.to_le_bytes(),
                    1u64.to_le_bytes(),
@@ -357,7 +353,7 @@ fn reveal(global_state: &mut GlobalState, user: &str, issuer: &str) -> Result<()
       let addr_proof = AddrProof { address: *user_addr,
                                    value: proof };
       append_to_registry::<AddrProof>(global_state, addr_proof)
-    },
+    }
     (None, _, _) => Err("Unable to find user".to_string()),
     (_, None, _) => Err("Unable to find issuer".to_string()),
     (_, _, None) => Err("Unable to find signature".to_string()),
@@ -369,7 +365,8 @@ fn verify(global_state: &mut GlobalState, user: &str, issuer: &str) -> Result<()
   let user_addr = global_state.user_addr.get(user).unwrap_or(&ZERO_DIGEST);
   let issuer_addr = global_state.issuer_addr.get(issuer).unwrap_or(&ZERO_DIGEST);
   match (find_by_address::<Issuer>(global_state, *issuer_addr),
-         find_by_address::<ACRevealSig>(global_state, *user_addr)) {
+         find_by_address::<ACRevealSig>(global_state, *user_addr))
+  {
     (Some(issuer_keys), Some(proof)) => {
       let attrs = [0u64.to_le_bytes(),
                    1u64.to_le_bytes(),
@@ -388,38 +385,31 @@ fn verify(global_state: &mut GlobalState, user: &str, issuer: &str) -> Result<()
 }
 
 fn parse_args() -> ArgMatches<'static> {
-  App::new("Test REPL")
-    .version("0.1.0")
-    .author("Brian Rogoff <brogoff@gmail.com>")
-    .about("REPL with argument parsing")
-    .arg(Arg::with_name("registry")
-         .short("r")
-         .long("registry")
-         .takes_value(true)
-         .help("the registry dude"))
-    .arg(Arg::with_name("file")
-         .short("f")
-         .takes_value(true)
-         .help("Name of the file"))
-    .get_matches()
+  App::new("Test REPL").version("0.1.0")
+                       .author("Brian Rogoff <brogoff@gmail.com>")
+                       .about("REPL with argument parsing")
+                       .arg(Arg::with_name("registry").short("r")
+                                                      .long("registry")
+                                                      .takes_value(true)
+                                                      .help("the registry dude"))
+                       .arg(Arg::with_name("file").short("f")
+                                                  .takes_value(true)
+                                                  .help("Name of the file"))
+                       .get_matches()
 }
 
 fn exec_line(mut global_state: &mut GlobalState, line: &str) -> Result<(), String> {
   match line.trim().split(' ').collect::<Vec<&str>>().as_slice() {
-    ["help"]  =>
-    { println!("{}", HELP_STRING); Ok(()) },
-    ["test"] =>
-      test(&mut global_state),
-    ["addissuer", issuer]  =>
-      add_issuer(&mut global_state, &issuer),
-    ["adduser", issuer, user] =>
-      add_user(&mut global_state, &issuer, &user),
-    ["sign", user, issuer]  =>
-      sign(&mut global_state, &user, &issuer),
-    ["reveal", user, issuer] =>
-      reveal(&mut global_state, &user, &issuer),
-    ["verify", user, issuer] =>
-      verify(&mut global_state, &user, &issuer),
+    ["help"] => {
+      println!("{}", HELP_STRING);
+      Ok(())
+    }
+    ["test"] => test(&mut global_state),
+    ["addissuer", issuer] => add_issuer(&mut global_state, &issuer),
+    ["adduser", issuer, user] => add_user(&mut global_state, &issuer, &user),
+    ["sign", user, issuer] => sign(&mut global_state, &user, &issuer),
+    ["reveal", user, issuer] => reveal(&mut global_state, &user, &issuer),
+    ["verify", user, issuer] => verify(&mut global_state, &user, &issuer),
     _ => Err(format!("Invalid line: {}", line)),
   }
 }
@@ -449,21 +439,20 @@ fn main() -> Result<(), rustyline::error::ReadlineError> {
         } else {
           println!("Line: {}", line);
         }
-      },
+      }
       Err(ReadlineError::Interrupted) => {
         println!("CTRL-C");
-        break
-      },
+        break;
+      }
       Err(ReadlineError::Eof) => {
         println!("CTRL-D");
-        break
-      },
+        break;
+      }
       Err(err) => {
         println!("Error: {}", err);
-        break
+        break;
       }
     }
-  };
+  }
   rl.save_history("history.txt")
 }
-

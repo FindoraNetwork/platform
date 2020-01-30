@@ -410,7 +410,16 @@ impl LedgerStatus {
       // We could re-check that self.issuance_num doesn't contain `code`,
       // but currently it's redundant with the new-asset-type checks
       } else {
-        let curr_seq_num_limit = self.issuance_num.get(&code).unwrap();
+        let curr_seq_num_limit = self.issuance_num
+                                     .get(&code)
+                                     // If a transaction defines and then issues, it should pass.
+                                     // However, if there is a bug elsewhere in validation, panicking
+                                     // is better than allowing incorrect issuances to pass through.
+                                     .or_else(|| {
+                                       assert!(txn.new_asset_codes.contains_key(&code));
+                                       Some(&0)
+                                     })
+                                     .unwrap();
         let min_seq_num = seq_nums.first().unwrap();
         if min_seq_num < curr_seq_num_limit {
           return Err(PlatformError::InputsError);

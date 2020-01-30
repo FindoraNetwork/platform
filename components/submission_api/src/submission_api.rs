@@ -1,7 +1,10 @@
 #![deny(warnings)]
-use actix_web::{error, web, App, HttpServer};
+use actix_cors::Cors;
+use actix_web::{error, middleware, web, App, HttpServer};
 use ledger::data_model::Transaction;
-use ledger::store::{LedgerAccess, LedgerUpdate};
+use ledger::store::{ArchiveAccess, LedgerAccess, LedgerUpdate};
+use log::{error, info};
+use percent_encoding::percent_decode_str;
 use rand_core::{CryptoRng, RngCore};
 use std::io;
 use std::marker::{Send, Sync};
@@ -12,11 +15,30 @@ fn submit_transaction<RNG, LU>(data: web::Data<Arc<RwLock<SubmissionServer<RNG, 
                                body: web::Json<Transaction>)
                                -> Result<web::Json<TxnHandle>, actix_web::error::Error>
   where RNG: RngCore + CryptoRng,
-        LU: LedgerUpdate<RNG> + LedgerAccess + Sync + Send
+        LU: LedgerUpdate<RNG> + LedgerAccess + ArchiveAccess + Sync + Send
 {
   let mut submission_server = data.write().unwrap();
   let tx = body.into_inner();
 
+  let handle_res = submission_server.handle_transaction(tx);
+
+  if let Ok(handle) = handle_res {
+    Ok(web::Json(handle))
+  } else {
+    error!("Transaction invalid");
+    Err(error::ErrorBadRequest("Transaction Invalid"))
+  }
+}
+
+fn submit_transaction_wasm<RNG, LU>(data: web::Data<Arc<RwLock<SubmissionServer<RNG, LU>>>>,
+                                    info: web::Path<String>)
+                                    -> Result<web::Json<TxnHandle>, actix_web::error::Error>
+  where RNG: RngCore + CryptoRng,
+        LU: LedgerUpdate<RNG> + LedgerAccess + ArchiveAccess + Sync + Send
+{
+  let mut submission_server = data.write().unwrap();
+  let uri_string = percent_decode_str(&*info).decode_utf8().unwrap();
+  let tx = serde_json::from_str(&uri_string).unwrap();
   let handle = submission_server.handle_transaction(tx)
                                 .map_err(error::ErrorBadRequest)?;
   Ok(web::Json(handle))
@@ -29,7 +51,7 @@ fn submit_transaction<RNG, LU>(data: web::Data<Arc<RwLock<SubmissionServer<RNG, 
 fn force_end_block<RNG, LU>(data: web::Data<Arc<RwLock<SubmissionServer<RNG, LU>>>>)
                             -> Result<String, actix_web::error::Error>
   where RNG: RngCore + CryptoRng,
-        LU: LedgerUpdate<RNG> + LedgerAccess + Sync + Send
+        LU: LedgerUpdate<RNG> + LedgerAccess + ArchiveAccess + Sync + Send
 {
   let mut submission_server = data.write().unwrap();
   if submission_server.end_block().is_ok() {
@@ -45,7 +67,7 @@ fn txn_status<RNG, LU>(data: web::Data<Arc<RwLock<SubmissionServer<RNG, LU>>>>,
                        info: web::Path<String>)
                        -> Result<String, actix_web::error::Error>
   where RNG: RngCore + CryptoRng,
-        LU: LedgerUpdate<RNG> + LedgerAccess + Sync + Send
+        LU: LedgerUpdate<RNG> + LedgerAccess + ArchiveAccess + Sync + Send
 {
   let submission_server = data.write().unwrap();
   let txn_status = submission_server.get_txn_status(&TxnHandle(info.clone()));
@@ -65,7 +87,7 @@ pub struct SubmissionApi {
 
 impl SubmissionApi {
   pub fn create<RNG: 'static + RngCore + CryptoRng + Sync + Send,
-                  LU: 'static + LedgerUpdate<RNG> + LedgerAccess + Sync + Send>(
+                  LU: 'static + LedgerUpdate<RNG> + LedgerAccess + ArchiveAccess + Sync + Send>(
     submission_server: Arc<RwLock<SubmissionServer<RNG, LU>>>,
     host: &str,
     port: &str)
@@ -73,14 +95,20 @@ impl SubmissionApi {
     let web_runtime = actix_rt::System::new("findora API");
 
     HttpServer::new(move || {
-      App::new().data(submission_server.clone())
+      App::new().wrap(middleware::Logger::default())
+                .wrap(Cors::new().supports_credentials())
+                .data(submission_server.clone())
                 .route("/submit_transaction",
                        web::post().to(submit_transaction::<RNG, LU>))
+                .route("/submit_transaction_wasm/{tx}",
+                       web::post().to(submit_transaction_wasm::<RNG, LU>))
                 .route("/txn_status/{handle}", web::get().to(txn_status::<RNG, LU>))
                 .route("/force_end_block",
                        web::post().to(force_end_block::<RNG, LU>))
     }).bind(&format!("{}:{}", host, port))?
       .start();
+
+    info!("Submission server started");
 
     Ok(SubmissionApi { web_runtime })
   }

@@ -8,10 +8,13 @@ edition = "2018"
 path = "src/submission_api.rs"
 
 [dependencies]
+actix-cors = "0.1.0"
 actix-rt = "0.2"
 actix-service = "0.4.2"
-actix-web = "1.0.8"
+actix-web = "1.0.5"
 ledger = { path = "../../ledger" }
+log = "0.4.8"
+percent-encoding = "2.1.0"
 submission_server = {path = "../submission_server"}
 rand_core = { version = "0.5", default-features = false, features = ["alloc"] }
 rand_chacha = "0.2.0"

@@ -8,9 +8,10 @@ edition = "2018"
 path = "src/ledger_api_service.rs"
 
 [dependencies]
+actix-cors = "0.1.0"
 actix-rt = "0.2"
 actix-service = "0.4.2"
-actix-web = "1.0.8"
+actix-web = "1.0.5"
 ledger = { path = "../../ledger" }
 submission_server = {path = "../submission_server"}
 percent-encoding = "2.1.0"
