@@ -21,6 +21,7 @@ use std::ffi::OsString;
 #[cfg(test)]
 use std::thread;
 use std::time;
+use submission_server::{TxnHandle, TxnStatus};
 use subprocess::Popen;
 #[cfg(test)]
 use subprocess::PopenConfig;
@@ -685,20 +686,46 @@ impl InterpretAccounts<PlatformError> for LedgerStandaloneAccounts {
                                 memos: vec![] };
 
         {
-          // let serialize = serde_json::to_string(&txn).unwrap();
+          // let serialize = serde_json::to_string(&tx).unwrap();
 
           let host = "localhost";
           let port = format!("{}", self.submit_port);
-          let query = format!("http://{}:{}/submit_transaction", host, port);
-          dbg!(&query);
-          let res = self.client
-                        .post(&query)
-                        .json(&txn)
-                        .send()
-                        .unwrap()
-                        .error_for_status();
-          dbg!(&res);
-          res.map_err(|x| PlatformError::IoError(format!("{}", x)))?;
+          let query1 = format!("http://{}:{}/submit_transaction", host, port);
+          let query2 = format!("http://{}:{}/force_end_block", host, port);
+          dbg!(&query1);
+          dbg!(&query2);
+          let h = serde_json::from_str::<TxnHandle>(&self.client
+                                                         .post(&query1)
+                                                         .json(&txn)
+                                                         .send()
+                                                         .unwrap()
+                                                         .error_for_status()
+                                                         .map_err(|x| {
+                                                           PlatformError::IoError(format!("{}", x))
+                                                         })?
+                                                         .text()
+                                                         .unwrap()).unwrap();
+          let query3 = format!("http://{}:{}/txn_status/{}", host, port, h.0);
+          self.client
+              .post(&query2)
+              .send()
+              .unwrap()
+              .error_for_status()
+              .unwrap()
+              .text()
+              .unwrap();
+          match serde_json::from_str::<TxnStatus>(&self.client
+                                                       .get(&query3)
+                                                       .send()
+                                                       .unwrap()
+                                                       .error_for_status()
+                                                       .unwrap()
+                                                       .text()
+                                                       .unwrap()).unwrap()
+          {
+            TxnStatus::Committed((_sid, _txos)) => {}
+            _ => panic!("Pending status found when Committed expected"),
+          }
         }
 
         self.units.insert(name.clone(), (issuer.clone(), code));
@@ -758,24 +785,48 @@ impl InterpretAccounts<PlatformError> for LedgerStandaloneAccounts {
 
         tx.operations.push(issue_op);
 
-        let res = {
+        let txos = {
           // let serialize = serde_json::to_string(&tx).unwrap();
 
           let host = "localhost";
           let port = format!("{}", self.submit_port);
-          let query = format!("http://{}:{}/submit_transaction", host, port);
-          dbg!(&query);
+          let query1 = format!("http://{}:{}/submit_transaction", host, port);
+          let query2 = format!("http://{}:{}/force_end_block", host, port);
+          dbg!(&query1);
+          dbg!(&query2);
+          let h = serde_json::from_str::<TxnHandle>(&self.client
+                                                         .post(&query1)
+                                                         .json(&tx)
+                                                         .send()
+                                                         .unwrap()
+                                                         .error_for_status()
+                                                         .map_err(|x| {
+                                                           PlatformError::IoError(format!("{}", x))
+                                                         })?
+                                                         .text()
+                                                         .unwrap()).unwrap();
+          let query3 = format!("http://{}:{}/txn_status/{}", host, port, h.0);
           self.client
-              .post(&query)
-              .json(&tx)
+              .post(&query2)
               .send()
               .unwrap()
               .error_for_status()
-              .map_err(|x| PlatformError::IoError(format!("{}", x)))?
-              .text()
               .unwrap()
+              .text()
+              .unwrap();
+          match serde_json::from_str::<TxnStatus>(&self.client
+                                                       .get(&query3)
+                                                       .send()
+                                                       .unwrap()
+                                                       .error_for_status()
+                                                       .unwrap()
+                                                       .text()
+                                                       .unwrap()).unwrap()
+          {
+            TxnStatus::Committed((_sid, txos)) => txos,
+            _ => panic!("Pending status found when Committed expected"),
+          }
         };
-        let txos = serde_json::from_str::<Vec<TxoSID>>(&res).unwrap();
 
         assert!(txos.len() == 1);
         utxos.extend(txos.iter());
@@ -885,24 +936,48 @@ impl InterpretAccounts<PlatformError> for LedgerStandaloneAccounts {
                                 credentials: vec![],
                                 memos: vec![] };
 
-        let res = {
-          // let serialize = serde_json::to_string(&txn).unwrap();
+        let txos = {
+          // let serialize = serde_json::to_string(&tx).unwrap();
 
           let host = "localhost";
           let port = format!("{}", self.submit_port);
-          let query = format!("http://{}:{}/submit_transaction", host, port);
-          dbg!(&query);
+          let query1 = format!("http://{}:{}/submit_transaction", host, port);
+          let query2 = format!("http://{}:{}/force_end_block", host, port);
+          dbg!(&query1);
+          dbg!(&query2);
+          let h = serde_json::from_str::<TxnHandle>(&self.client
+                                                         .post(&query1)
+                                                         .json(&txn)
+                                                         .send()
+                                                         .unwrap()
+                                                         .error_for_status()
+                                                         .map_err(|x| {
+                                                           PlatformError::IoError(format!("{}", x))
+                                                         })?
+                                                         .text()
+                                                         .unwrap()).unwrap();
+          let query3 = format!("http://{}:{}/txn_status/{}", host, port, h.0);
           self.client
-              .post(&query)
-              .json(&txn)
+              .post(&query2)
               .send()
               .unwrap()
               .error_for_status()
-              .map_err(|x| PlatformError::IoError(format!("{}", x)))?
-              .text()
               .unwrap()
+              .text()
+              .unwrap();
+          match serde_json::from_str::<TxnStatus>(&self.client
+                                                       .get(&query3)
+                                                       .send()
+                                                       .unwrap()
+                                                       .error_for_status()
+                                                       .unwrap()
+                                                       .text()
+                                                       .unwrap()).unwrap()
+          {
+            TxnStatus::Committed((_sid, txos)) => txos,
+            _ => panic!("Pending status found when Committed expected"),
+          }
         };
-        let txos = serde_json::from_str::<Vec<TxoSID>>(&res).unwrap();
 
         assert!(txos.len() == src_outputs.len() + dst_outputs.len());
 
@@ -1157,7 +1232,7 @@ mod test {
                     cwd: Some(OsString::from("../ledger_standalone/")),
                     ..Default::default()
                   }).unwrap(),
-        submit_port: 8668,
+        submit_port: 8669,
         query_port: 8668,
         client: reqwest::Client::new(),
         prng: rand_chacha::ChaChaRng::from_seed([0u8; 32]),
