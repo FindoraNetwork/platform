@@ -2,6 +2,9 @@
 #![feature(slice_patterns)]
 // Copyright 2019 © Findora. All rights reserved.
 /// Command line executable to exercise functions related to credentials
+#[macro_use]
+extern crate lazy_static;
+
 use clap;
 use clap::{App, Arg, ArgMatches};
 use colored::*;
@@ -15,12 +18,13 @@ use rustyline::Editor;
 // use sha2::{Digest, Sha256};
 use serde::{Deserialize, Serialize};
 use sha256::DIGESTBYTES;
-use sparse_merkle_tree::{SmtMap256, check_merkle_proof};
+use sparse_merkle_tree::SmtMap256;
 use std::collections::HashMap;
 use std::path::Path;
 use zei::api::anon_creds::{
-  ac_keygen_issuer, ac_keygen_user, ac_reveal, ac_sign, ac_verify, ACIssuerPublicKey,
-  ACIssuerSecretKey, ACRevealSig, ACSignature, ACUserPublicKey, ACUserSecretKey,
+  ac_keygen_issuer, ac_keygen_user, ac_reveal, ac_reveal_with_rand, ac_sample_random_factors,
+  ac_sign, ac_verify, ACIssuerPublicKey, ACIssuerSecretKey, ACRevealSig, ACUserPublicKey,
+  ACUserSecretKey,
 };
 
 // Default file path of the anonymous credential registry
@@ -34,7 +38,7 @@ const HELP_STRING: &str = r#"
       Creates an issuer which can be referred to by the name "issuer_name"
     adduser <issuer_name> <user_name>:
       Creates an user named "user_name" bound to "issuer_name
-    sign <user_name> <issuer_name>:
+    issue <issuer_name> <user_name> [<attr_name>]*:
       Creates a signature
     reveal <user_name> <issuer_name>:
       Creates a proof for a signature
@@ -44,11 +48,25 @@ const HELP_STRING: &str = r#"
 Example of use
   >>> addissuer bank0
   >>> adduser bank0 user0
-  >>> sign user0 bank0
+  >>> issue user0 bank0
   >>> reveal user0 bank0
   >>> verify user0 bank0
   etc...
 "#;
+lazy_static! {
+  static ref COMMANDS: HashMap<&'static str, &'static str> = {
+    let mut m = HashMap::new();
+    m.insert("help", HELP_STRING);
+    m.insert("addissuer", "");
+    m.insert("adduser", "");
+    m.insert("sign", "");
+    m.insert("reveal", "");
+    m.insert("verify", "");
+    m
+  };
+}
+
+const ATTRIBUTES: [&[u8]; 4] = [b"attr0", b"attr1", b"attr2", b"attr3"];
 
 #[derive(Copy, Clone, PartialEq, Eq, Debug, Serialize, Deserialize)]
 struct Hash256([u8; DIGESTBYTES]);
@@ -61,13 +79,13 @@ impl std::fmt::Display for Hash256 {
   }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 struct Issuer {
   public_key: ACIssuerPublicKey,
   secret_key: ACIssuerSecretKey,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 struct User {
   public_key: ACUserPublicKey,
   secret_key: ACUserSecretKey,
@@ -90,43 +108,21 @@ impl TypeName for ACIssuerPublicKey {
   }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
-struct AddrIssuer {
-  address: Hash256,
-  value: Issuer,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-struct AddrUser {
-  address: Hash256,
-  value: User,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-struct AddrValue<V> {
-  address: Hash256,
-  value: V,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-struct AddrSig {
-  address: Hash256,
-  value: ACSignature,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-struct AddrProof {
-  address: Hash256,
-  value: ACRevealSig,
+#[derive(Clone, Debug, Serialize, Deserialize)]
+struct Credential {
+  cred: ACRevealSig,
+  attrs: Vec<String>,
 }
 
 #[derive(Debug)]
 struct GlobalState {
   prng: ChaChaRng,
-  registry: Vec<String>,
+  registry: Vec<String>, // Not used anymore, used to represent file storage
   smt_map: SmtMap256<String>,
-  user_addr: HashMap<String, Hash256>,
-  issuer_addr: HashMap<String, Hash256>,
+  users: HashMap<String, User>,
+  issuers: HashMap<String, Issuer>,
+  user_issuer: HashMap<String, Issuer>, // Each user has a single issuer
+  user_cred: HashMap<String, Credential>, // Each user has at most a single credential issued to it
 }
 
 impl GlobalState {
@@ -134,19 +130,12 @@ impl GlobalState {
     GlobalState { prng: ChaChaRng::from_seed([0u8; 32]),
                   registry: Vec::<String>::new(),
                   smt_map: SmtMap256::<String>::new(),
-                  user_addr: HashMap::new(),
-                  issuer_addr: HashMap::new() }
+                  users: HashMap::new(),
+                  issuers: HashMap::new(),
+                  user_issuer: HashMap::new(),
+                  user_cred: HashMap::new() }
   }
 }
-
-/*
-pub fn verify_credential(issuer_pub_key: &ACIssuerPublicKey<P::G1, P::G2>,
-                         attrs: &[P::ScalarField],
-                         bitmap: &[bool],
-                         credential: &ACSignature<P::G1>)
-                         -> Result<(), ZeiError> {
-}
-*/
 
 fn hash_256(value: impl AsRef<[u8]>) -> Hash256 {
   Hash256(sha256::hash(value.as_ref()).0)
@@ -156,34 +145,16 @@ fn hash_256(value: impl AsRef<[u8]>) -> Hash256 {
 fn sha256<T>(key: &T) -> Hash256
   where T: Serialize + TypeName
 {
-  println!("sha256: hashing type: {}", key.type_string().to_string().cyan());
+  println!("sha256: hashing type: {}",
+           key.type_string().to_string().cyan());
   // Salt the hash to avoid leaking information about other uses of
   // sha256 on the user's public key.
   let mut bytes = key.type_string().to_string().into_bytes();
+  // TODO: Verify that when we do serialize into a non-empty vector that we
+  //       do NOT overwrite the existing vec data but rather push data onto it.
   key.serialize(&mut rmp_serde::Serializer::new(&mut bytes))
      .unwrap();
   hash_256(bytes)
-}
-
-// Generic key-value lookup and deserialization
-fn find_by_address<T>(global_state: &GlobalState, address: Hash256) -> Option<T>
-  where for<'d> T: Deserialize<'d>
-{
-  global_state.registry.iter().rev().find_map(|x: &String| {
-                                      match serde_json::from_str::<AddrValue<T>>(x) {
-                                        Ok(item) => {
-                                          if item.address == address {
-                                            Some(item.value)
-                                          } else {
-                                            None
-                                          }
-                                        }
-                                        Err(_) => {
-                                          // TODO Report errors other than "missing field" errors.
-                                          None
-                                        }
-                                      }
-                                    })
 }
 
 // Test anonymous credentials on fixed inputs. Similar to
@@ -242,17 +213,16 @@ fn test(global_state: &mut GlobalState) -> Result<(), String> {
   // this. But presumably, the reveal signature alone is insufficient to
   // derive the attributes. Presumably if the range of legal values were small,
   // exhaustive search would not be too exhausting. (?)
-  if let Err(e) = ac_verify(&issuer_pk, revealed_attrs.as_slice(), &bitmap, &reveal_sig) {
+  if let Err(e) = ac_verify(&issuer_pk,
+                            revealed_attrs.as_slice(),
+                            &bitmap,
+                            &reveal_sig.sig,
+                            &reveal_sig.pok)
+  {
     Err(format!("{}", e))
   } else {
     Ok(())
   }
-}
-
-fn append_to_registry<T: Serialize>(global_state: &mut GlobalState, item: T) -> Result<(), String> {
-  let item_json = serde_json::to_string(&item).unwrap();
-  global_state.registry.push(item_json);
-  Ok(())
 }
 
 // Generate a new issuer and append it to the registry.
@@ -264,18 +234,13 @@ fn add_issuer(mut global_state: &mut GlobalState, issuer_name: &str) -> Result<(
     Issuer { public_key: issuer_pk,
              secret_key: issuer_sk }
   }
-  if let Some(_) = global_state.issuer_addr.get(issuer_name) {
+  if let Some(_) = global_state.issuers.get(issuer_name) {
     Err(format!("issuer named {} already exists", issuer_name))
   } else {
     let issuer = new_issuer(&mut global_state);
-    let address = sha256(&issuer.public_key);
-    global_state.issuer_addr
-      .insert(issuer_name.to_string(), address);
-    println!("New issuer {} with address: {}", issuer_name.yellow(), &address.to_string().yellow());
-
-    let a = AddrIssuer { address,
-                         value: issuer };
-    append_to_registry::<AddrIssuer>(global_state, a)
+    global_state.issuers.insert(issuer_name.to_string(), issuer);
+    println!("New issuer {}", issuer_name.yellow());
+    Ok(())
   }
 }
 
@@ -283,50 +248,57 @@ fn add_user(global_state: &mut GlobalState,
             issuer_name: &str,
             user_name: &str)
             -> Result<(), String> {
-  if let Some(_) = global_state.user_addr.get(user_name) {
+  if let Some(_) = global_state.users.get(user_name) {
     Err(format!("user named {} already exists", user_name))
   } else {
-    // NB: this unwrap is safe,checked by `issuer_exists`
-    let issuer_addr = global_state.issuer_addr.get(issuer_name).unwrap();
     // println!("Looking up issuer: {}", issuer_name);
-    if let Some(issuer) = find_by_address::<Issuer>(global_state, *issuer_addr) {
+    if let Some(issuer) = global_state.issuers.get(issuer_name) {
       let (user_pk, user_sk) = ac_keygen_user::<_>(&mut global_state.prng, &issuer.public_key);
-      let user_addr = sha256(&user_pk);
-      let au = AddrUser { address: user_addr,
-                          value: User { public_key: user_pk,
-                                        secret_key: user_sk } };
-      println!("New user {} with address {}", user_name, au.address);
-      global_state.user_addr
-        .insert(user_name.to_string(), user_addr);
-      append_to_registry::<AddrUser>(global_state, au)
+      let user = User { public_key: user_pk,
+                        secret_key: user_sk };
+      println!("New user {} with issuer {}", user_name, issuer_name);
+      global_state.users.insert(user_name.to_string(), user);
+      global_state.user_issuer
+                  .insert(user_name.to_string(), issuer.clone());
+      Ok(())
     } else {
-      Err(format!("lookup of issuer {} failed", issuer_addr))
+      Err(format!("lookup of issuer {} failed", issuer_name))
     }
   }
 }
 
-fn sign(global_state: &mut GlobalState, user: &str, issuer: &str) -> Result<(), String> {
-  let user_addr = global_state.user_addr.get(user).unwrap();
-  let issuer_addr = global_state.issuer_addr.get(issuer).unwrap();
-  match (find_by_address::<User>(global_state, *user_addr),
-         find_by_address::<Issuer>(global_state, *issuer_addr))
-  {
+fn issue_credential(global_state: &mut GlobalState,
+                    user: &str,
+                    attrs: &Vec<String>)
+                    -> Result<(), String> {
+  match (global_state.users.get(user), global_state.user_issuer.get(user)) {
     (Some(user_keys), Some(issuer_keys)) => {
-      let attrs = [0u64.to_le_bytes(),
-                   1u64.to_le_bytes(),
-                   2u64.to_le_bytes(),
-                   3u64.to_le_bytes()];
       let sig = ac_sign(&mut global_state.prng,
                         &issuer_keys.secret_key,
                         &user_keys.public_key,
                         &attrs);
 
-      // TODO Using the hash of the user's public key as the signature
-      // address precludes multiple signatures
-      let addr_sig = AddrSig { address: *user_addr,
-                               value: sig };
-
-      append_to_registry::<AddrSig>(global_state, addr_sig)
+      // User generates cred by calling ac_reveal with no attributes
+      let empty_attrs: Vec<String> = Vec::new();
+      let empty_bitmap: Vec<bool> = Vec::new();
+      if let Ok(proof) = ac_reveal(&mut global_state.prng,
+                                   &user_keys.secret_key,
+                                   &issuer_keys.public_key,
+                                   &sig,
+                                   &empty_attrs,
+                                   &empty_bitmap)
+      {
+        // Insert an entry AIR[user_pk] = cred, where
+        let sig_string = serde_json::to_string(&proof.sig).unwrap();
+        let user_addr = sha256(&user_keys.public_key);
+        global_state.smt_map.set(&user_addr.0, Some(sig_string));
+        let credential = Credential { cred: proof,
+                                      attrs: attrs.to_vec() };
+        global_state.user_cred.insert(user.to_string(), credential);
+        Ok(())
+      } else {
+        Err("Credential generation fails during credential issuing process".to_string())
+      }
     }
     (None, None) => Err("Unable to find either issuer or user".to_string()),
     (None, _) => Err("Unable to find user".to_string()),
@@ -334,35 +306,26 @@ fn sign(global_state: &mut GlobalState, user: &str, issuer: &str) -> Result<(), 
   }
 }
 
-fn reveal(global_state: &mut GlobalState, user: &str, issuer: &str) -> Result<(), String> {
-  let user_addr = global_state.user_addr.get(user).unwrap();
-  let issuer_addr = global_state.issuer_addr.get(issuer).unwrap();
-  match (find_by_address::<User>(global_state, *user_addr),
-         find_by_address::<Issuer>(global_state, *issuer_addr),
-         find_by_address::<ACSignature>(global_state, *user_addr))
+fn reveal(global_state: &mut GlobalState, user: &str, bitmap: &Vec<bool>) -> Result<(), String> {
+  match (global_state.users.get(user),
+         global_state.user_issuer.get(user),
+         global_state.user_cred.get(user))
   {
-    (Some(user_keys), Some(issuer_keys), Some(sig)) => {
-      let attrs = [0u64.to_le_bytes(),
-                   1u64.to_le_bytes(),
-                   2u64.to_le_bytes(),
-                   3u64.to_le_bytes()];
-      let bitmap = [false, false, false, false];
-
-      if let Ok(proof) = ac_reveal(&mut global_state.prng,
-                                   &user_keys.secret_key,
-                                   &issuer_keys.public_key,
-                                   &sig,
-                                   &attrs,
-                                   &bitmap) {
-
+    (Some(user_keys), Some(issuer_keys), Some(cred)) => {
+      if let Ok(proof) = ac_reveal_with_rand(&mut global_state.prng,
+                                             &user_keys.secret_key,
+                                             &issuer_keys.public_key,
+                                             &cred.cred.sig,
+                                             &cred.attrs,
+                                             &bitmap,
+                                             cred.cred.rnd.clone())
+      {
         // global_state.smt.get()
         // TODO Using the hash of the user's public key as the proof
         // address precludes multiple proofs
-        let sig_string = serde_json::to_string(&sig).unwrap();
-        global_state.smt_map.set(&user_addr.0, Some(sig_string));
-        let addr_proof = AddrProof { address: *user_addr,
-                                     value: proof };
-        append_to_registry::<AddrProof>(global_state, addr_proof)
+
+        // global_state.user_reveal.insert(user.to_string(), proof);
+        Ok(())
       } else {
         Err("ac_reveal failed".to_string())
       }
@@ -373,20 +336,16 @@ fn reveal(global_state: &mut GlobalState, user: &str, issuer: &str) -> Result<()
   }
 }
 
-fn verify(global_state: &mut GlobalState, user: &str, issuer: &str) -> Result<(), String> {
-  println!("subcommand verify user: {} issuer: {}", user, issuer);
-  let user_addr = global_state.user_addr.get(user).unwrap_or(&ZERO_DIGEST);
-  let issuer_addr = global_state.issuer_addr.get(issuer).unwrap_or(&ZERO_DIGEST);
-  match (find_by_address::<Issuer>(global_state, *issuer_addr),
-         find_by_address::<ACRevealSig>(global_state, *user_addr))
-  {
-    (Some(issuer_keys), Some(proof)) => {
-      let attrs = [0u64.to_le_bytes(),
-                   1u64.to_le_bytes(),
-                   2u64.to_le_bytes(),
-                   3u64.to_le_bytes()];
-      let bitmap = [false, false, false, false];
-      if let Err(e) = ac_verify(&issuer_keys.public_key, &attrs, &bitmap, &proof) {
+fn verify(global_state: &mut GlobalState, user: &str, bitmap: &Vec<bool>) -> Result<(), String> {
+  println!("Command verify user {} with bitmap {:?}", user, bitmap);
+  match (global_state.user_issuer.get(user), global_state.user_cred.get(user)) {
+    (Some(issuer_keys), Some(cred)) => {
+      if let Err(e) = ac_verify(&issuer_keys.public_key,
+                                &cred.attrs,
+                                &bitmap,
+                                &cred.cred.sig,
+                                &cred.cred.pok)
+      {
         Err(format!("{}", e))
       } else {
         // Check merkle proof here?
@@ -394,24 +353,23 @@ fn verify(global_state: &mut GlobalState, user: &str, issuer: &str) -> Result<()
       }
     }
     (None, _) => Err("Unable to find issuer".to_string()),
-    (_, None) => Err("Unable to find proof".to_string()),
+    (_, None) => Err("Unable to find credentials".to_string()),
   }
 }
 
 fn issuer_exists(global_state: &GlobalState, issuer: &str) -> Result<(), String> {
-  if let Some(_) = global_state.issuer_addr.get(issuer) {
+  if let Some(_) = global_state.issuers.get(issuer) {
     Ok(())
   } else {
     Err(format!("{} is not a valid issuer name", issuer))
   }
 }
 
-fn issuer_and_user_exist(global_state: &GlobalState, issuer: &str, user: &str) -> Result<(), String> {
-  match (global_state.issuer_addr.get(issuer), global_state.user_addr.get(user)) {
-    (Some(_), Some(_)) => Ok(()),
-    (Some(_), None) => Err(format!("{} is not a valid user name", user)),
-    (None, Some(_)) => Err(format!("{} is not a valid issuer name", issuer)),
-    (None, None) => Err(format!("{}, {} are invalid issuer and user", issuer, user)),
+fn user_exists(global_state: &GlobalState, user: &str) -> Result<(), String> {
+  if let Some(_) = global_state.users.get(user) {
+    Ok(())
+  } else {
+    Err(format!("{} is not a valid user name", user))
   }
 }
 
@@ -429,6 +387,11 @@ fn parse_args() -> ArgMatches<'static> {
                        .get_matches()
 }
 
+fn str_to_bool(s: &str) -> bool {
+  let c = s.chars().next().unwrap();
+  c == 'T' || c == 't'
+}
+
 fn exec_line(mut global_state: &mut GlobalState, line: &str) -> Result<(), String> {
   match line.trim().split(' ').collect::<Vec<&str>>().as_slice() {
     ["help"] => {
@@ -440,19 +403,25 @@ fn exec_line(mut global_state: &mut GlobalState, line: &str) -> Result<(), Strin
     ["adduser", issuer, user] => {
       issuer_exists(&global_state, &issuer)?;
       add_user(&mut global_state, &issuer, &user)
-    },
-    ["sign", user, issuer] => {
-      issuer_and_user_exist(&global_state, &issuer, &user)?;
-      sign(&mut global_state, &user, &issuer)
-    },
-    ["reveal", user, issuer] => {
-      issuer_and_user_exist(&global_state, &issuer, &user)?;
-      reveal(&mut global_state, &user, &issuer)
-    },
-    ["verify", user, issuer] => {
-      issuer_and_user_exist(&global_state, &issuer, &user)?;
-      verify(&mut global_state, &user, &issuer)
-    },
+    }
+    ["getcreds", user, attrs @ ..] => {
+      user_exists(&global_state, &user)?;
+      let attrs_vec: Vec<String> = attrs.to_vec()
+                                        .into_iter()
+                                        .map(|s: &str| -> String { s.to_string() })
+                                        .collect();
+      issue_credential(&mut global_state, &user, &attrs_vec)
+    }
+    ["reveal", user, bits @ ..] => {
+      user_exists(&global_state, &user)?;
+      let bitmap: Vec<bool> = bits.to_vec().into_iter().map(str_to_bool).collect();
+      reveal(&mut global_state, &user, &bitmap)
+    }
+    ["verify", user, bits @ ..] => {
+      user_exists(&global_state, &user)?;
+      let bitmap: Vec<bool> = bits.to_vec().into_iter().map(str_to_bool).collect();
+      verify(&mut global_state, &user, &bitmap)
+    }
     _ => Err(format!("Invalid line: {}", line.red())),
   }
 }
