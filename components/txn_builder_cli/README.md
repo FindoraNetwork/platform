@@ -60,10 +60,10 @@ $ curl https://testnet.findora.org:8669/txn_status/4977619fd7c7dd1c6b917ced37abc
 ### Listing blocks
 
 It is possible to list all the transaction blocks since a given
-transaction serial number. The `blocks_since` route takes a
-transaction serial number and returns a JSON expression with all the
-transactions from the given serial number to the most recent
-transaction.
+block sequence number. The `blocks_since` route takes a
+block sequence number and returns a JSON expression with all the
+transactions in the blocks from the one specified by the sequence
+number to the most recent block.
 
 ```
 $ curl https://testnet.findora.org:8668/blocks_since/0
