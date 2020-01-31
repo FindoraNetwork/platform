@@ -135,6 +135,7 @@ pub struct Asset {
   pub confidential_memo: ConfidentialMemo,
   pub updatable: bool,
   pub traceable: bool,
+  // pub policy: Option<Box<Policy>>,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]

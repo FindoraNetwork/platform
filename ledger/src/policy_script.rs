@@ -80,6 +80,7 @@ pub enum RealTxnOp {
 }
 
 pub struct TxnCheck {
+  pub name: String,
   pub num_in_params: u64,
   pub num_out_params: u64,
   pub id_ops: Vec<IdOp>,

@@ -35,7 +35,7 @@ do
 done
 
 export directories=$(
-   find . -type f -name 'Cargo.toml' | xargs dirname | sort
+   find . -type f -name 'Cargo.toml' | xargs -n 1 dirname | sort
    # find .  -name "target" -prune -o -name ".git"   -prune -o -name "src" -print | sort
  )
 

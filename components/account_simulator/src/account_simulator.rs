@@ -688,7 +688,8 @@ impl InterpretAccounts<PlatformError> for LedgerStandaloneAccounts {
 
         let txn = Transaction { operations: vec![Operation::DefineAsset(op)],
                                 credentials: vec![],
-                                memos: vec![] };
+                                memos: vec![],
+                                signatures: vec![] };
 
         {
           let serialize = serde_json::to_string(&txn).unwrap();
@@ -912,7 +913,8 @@ impl InterpretAccounts<PlatformError> for LedgerStandaloneAccounts {
                                        transfer_type: TransferType::Standard };
         let txn = Transaction { operations: vec![Operation::TransferAsset(transfer)],
                                 credentials: vec![],
-                                memos: vec![] };
+                                memos: vec![],
+                                signatures: vec![] };
 
         let res = {
           let serialize = serde_json::to_string(&txn).unwrap();
@@ -1195,7 +1197,7 @@ mod test {
                     cwd: Some(OsString::from("../ledger_standalone/")),
                     ..Default::default()
                   }).unwrap(),
-        submit_port: 8668,
+        submit_port: 8669,
         query_port: 8668,
         client: reqwest::Client::new(),
         prng: rand_chacha::ChaChaRng::from_seed([0u8; 32]),

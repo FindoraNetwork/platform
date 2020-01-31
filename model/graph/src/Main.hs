@@ -948,7 +948,9 @@ data PSTxnOp
 
 
 data PolicyTxnCheck = PolicyTxnCheck
-  { _ptcNumInParams  :: Int
+  { _ptcTxnName      :: T.Text
+
+  , _ptcNumInParams  :: Int
   , _ptcNumOutParams :: Int
 
   , _ptcIdOps        :: [PSIdOp]
@@ -1011,8 +1013,9 @@ convertPolfToScript (PolicyFile { _polfBats = bats
       $ (\ (i,gparam) -> (_gparamName gparam, PSFracVar i))
       <$> zip [0..] (filter ((== FractionType) . _gparamType) gparams)
 
-    txnConvert (TxnDecl { _txnParams = params, _txnRequires = []
-                        , _txnEnsures = [], _txnBody = bodyStmts })
+    txnConvert (TxnDecl { _txnName = txnName, _txnParams = params
+                        , _txnRequires = [], _txnEnsures = []
+                        , _txnBody = bodyStmts })
       = _ptcTxnSoFar $ snd $ flip S.runState (PolicyTxnConversionState
                         { _ptcResVars = M.fromList
                             $ (\ (i,param) -> (_txnparamName param,PSResVar i))
@@ -1028,7 +1031,8 @@ convertPolfToScript (PolicyFile { _polfBats = bats
                             , const ResourceTypeType <$> res_type_globals
                             ]
                         , _ptcTxnSoFar = PolicyTxnCheck
-                            { _ptcNumInParams = length $ filter _txnparamIn params
+                            { _ptcTxnName = txnName
+                            , _ptcNumInParams = length $ filter _txnparamIn params
                             , _ptcNumOutParams = length $ filter _txnparamOut params
                             , _ptcIdOps = []
                             , _ptcRtOps = []
@@ -1497,17 +1501,18 @@ pprintPolicyScript ps =
     , PP.text "num_amt_globals:" PP.<+> PP.int (_polNumAmtGlobals ps)
     , PP.text "num_frac_globals:" PP.<+> PP.int (_polNumFracGlobals ps)
     , PP.text "init_check:" PP.<+> pprintPolicyTxnCheck (_polInitCheck ps)
-    , (PP.text "txn_choices:" PP.<+> PP.text "vec!" PP.<+>)
-      $ ppBrackets $ PP.nest 4 $ PP.vcat $ map (PP.<+> PP.comma)
+    , (PP.text "txn_choices:" PP.<+> PP.text "vec!" PP.$$)
+      $ PP.nest 1 $ ppBrackets $ PP.nest 4 $ PP.vcat $ map (PP.<+> PP.comma)
       $ map pprintPolicyTxnCheck (_polTxns ps)
     ]
 
-ppBrackets = (\x -> PP.lbrack PP.$$ x PP.$$ PP.rbrack)
-ppBraces = (\x -> PP.lbrace PP.$$ x PP.$$ PP.rbrace)
+ppBrackets = (\x -> PP.lbrack PP.$+$ x PP.$+$ PP.rbrack)
+ppBraces = (\x -> PP.lbrace PP.$+$ x PP.$+$ PP.rbrace)
 
 pprintPolicyTxnCheck ptc =
   (PP.text "TxnCheck" PP.<+>) $ ppBraces $ PP.nest 4 $ PP.vcat $ map (PP.<+> PP.comma)
-    [ PP.text "num_in_params:" PP.<+> PP.int (_ptcNumInParams ptc)
+    [ PP.text "name:" PP.<+> PP.doubleQuotes (PP.text $ T.unpack $ _ptcTxnName ptc)
+    , PP.text "num_in_params:" PP.<+> PP.int (_ptcNumInParams ptc)
     , PP.text "num_out_params:" PP.<+> PP.int (_ptcNumOutParams ptc)
 
     , (PP.text "id_ops:" PP.<+> PP.text "vec!" PP.<+>)
