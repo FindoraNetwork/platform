@@ -16,6 +16,7 @@ use std::path::{Path, PathBuf};
 use std::process::exit;
 use submission_server::TxnHandle;
 use txn_builder::{BuildsTransactions, TransactionBuilder};
+use txn_builder_cli::codes::ExitCode;
 use zei::serialization::ZeiFromToBytes;
 use zei::setup::PublicParams;
 use zei::xfr::asset_record::{build_blind_asset_record, AssetRecordType};
@@ -26,27 +27,39 @@ use zei::xfr::structs::{AssetRecord, BlindAssetRecord};
 // Load functions
 //
 fn load_txn_builder_from_file(file_path: &str) -> Result<TransactionBuilder, PlatformError> {
-  let mut file = File::open(file_path).or_else(|_e| {
-                   println!("Transaction file {} does not exist. Try subcommand create.",
-                            file_path);
-                   Err(PlatformError::InputsError)
-                 })?;
-  let mut contents = String::new();
-  file.read_to_string(&mut contents).or_else(|_e| {
-                                       println!("Failed to read transaction file {}", file_path);
-                                       Err(PlatformError::IoError("Failed to read".to_string()))
-                                     })?;
-  println!("Parsing builder from file contents: \"{}\"", &contents);
-  let builder = serde_json::from_str(&contents)?;
+  let mut file;
+  match File::open(file_path) {
+    Ok(f) => {
+      file = f;
+    }
+    Err(_) => {
+      println!("Transaction file {} does not exist. Try subcommand create.",
+               file_path);
+      exit(ExitCode::NoInput as i32)
+    }
+  }
+  let mut txn = String::new();
+  if let Err(_) = file.read_to_string(&mut txn) {
+    println!("Failed to read transaction file {}", file_path);
+    exit(ExitCode::NoInput as i32)
+  }
+  println!("Parsing builder from file contents: \"{}\"", &txn);
+  let builder = serde_json::from_str(&txn)?;
   Ok(builder)
 }
 
 fn load_key_pair_from_file(file_path: &str) -> Result<XfrKeyPair, PlatformError> {
-  let mut file = File::open(file_path).or_else(|_e| {
-                   println!("Key pair file {} does not exist. Try subcommand keygen.",
-                            file_path);
-                   Err(PlatformError::InputsError)
-                 })?;
+  let mut file;
+  match File::open(file_path) {
+    Ok(f) => {
+      file = f;
+    }
+    Err(_) => {
+      println!("Key pair file {} does not exist. Try subcommand keygen.",
+               file_path);
+      exit(ExitCode::NoInput as i32)
+    }
+  }
 
   let kp: XfrKeyPair;
   let mut kp_byte_buffer = Vec::new();
@@ -56,18 +69,24 @@ fn load_key_pair_from_file(file_path: &str) -> Result<XfrKeyPair, PlatformError>
     }
     Err(_e) => {
       println!("Failed to read key file {}", file_path);
-      return Err(PlatformError::IoError("Failed to read".to_string()));
+      exit(ExitCode::NoInput as i32)
     }
   }
   Ok(kp)
 }
 
 fn load_pub_key_from_file(file_path: &str) -> Result<XfrPublicKey, PlatformError> {
-  let mut file = File::open(file_path).or_else(|_e| {
-                   println!("Key file {} does not exist. Try subcommand pubkeygen.",
-                            file_path);
-                   Err(PlatformError::InputsError)
-                 })?;
+  let mut file;
+  match File::open(file_path) {
+    Ok(f) => {
+      file = f;
+    }
+    Err(_) => {
+      println!("Public key file {} does not exist. Try subcommand pubkeygen.",
+               file_path);
+      exit(ExitCode::NoInput as i32)
+    }
+  }
 
   let key: XfrPublicKey;
   let mut key_byte_buffer = Vec::new();
@@ -77,7 +96,7 @@ fn load_pub_key_from_file(file_path: &str) -> Result<XfrPublicKey, PlatformError
     }
     Err(_e) => {
       println!("Failed to read key file {}", file_path);
-      return Err(PlatformError::IoError("Failed to read".to_string()));
+      exit(ExitCode::NoInput as i32)
     }
   }
   Ok(key)
@@ -88,17 +107,23 @@ fn split_arg(string: &str) -> Vec<&str> {
 }
 
 fn load_sids_from_file(file_path: &str) -> Result<Vec<TxoRef>, PlatformError> {
-  let mut file = File::open(file_path).or_else(|_e| {
-                   println!("Sids file {} does not exist. Try subcommand store --sids.",
-                            file_path);
-                   Err(PlatformError::InputsError)
-                 })?;
+  let mut file;
+  match File::open(file_path) {
+    Ok(f) => {
+      file = f;
+    }
+    Err(_) => {
+      println!("Sids file {} does not exist. Try subcommand store --sids.",
+               file_path);
+      exit(ExitCode::NoInput as i32)
+    }
+  }
 
   let mut sids_str = String::new();
-  file.read_to_string(&mut sids_str).or_else(|_e| {
-                                       println!("Failed to read sids file {}", file_path);
-                                       Err(PlatformError::IoError("Failed to read".to_string()))
-                                     })?;
+  if let Err(_) = file.read_to_string(&mut sids_str) {
+    println!("Failed to read sids file {}", file_path);
+    exit(ExitCode::NoInput as i32)
+  }
 
   let mut txo_refs = Vec::new();
   for sid_str in split_arg(&sids_str) {
@@ -106,7 +131,7 @@ fn load_sids_from_file(file_path: &str) -> Result<Vec<TxoRef>, PlatformError> {
       txo_refs.push(TxoRef::Absolute(TxoSID(sid)));
     } else {
       println!("Improperly formatted sid.");
-      return Err(PlatformError::InputsError);
+      exit(ExitCode::Usage as i32)
     }
   }
 
@@ -119,24 +144,29 @@ fn load_blind_asset_records_from_files(file_paths: &str)
 
   for mut file_path in split_arg(file_paths) {
     file_path = file_path.trim();
-    let mut file = File::open(file_path).or_else(|_e| {
-      println!("Blind asset record file {} does not exist. Try subcommand store --blind_asset_record.",
-               file_path);
-      Err(PlatformError::InputsError)
-    })?;
+    let mut file;
+    match File::open(file_path) {
+      Ok(f) => {
+        file = f;
+      }
+      Err(_) => {
+        println!("Blind asset record file {} does not exist. Try subcommand store --blind_asset_record.",
+                 file_path);
+        exit(ExitCode::NoInput as i32)
+      }
+    }
 
     let mut blind_asset_record_str = String::new();
-    file.read_to_string(&mut blind_asset_record_str)
-        .or_else(|_e| {
-          println!("Failed to read blind asset record file {}", file_path);
-          Err(PlatformError::IoError("Failed to read".to_string()))
-        })?;
+    if let Err(_) = file.read_to_string(&mut blind_asset_record_str) {
+      println!("Failed to read blind asset record file {}", file_path);
+      exit(ExitCode::NoInput as i32)
+    }
 
     if let Ok(blind_asset_record) = serde_json::from_str(&blind_asset_record_str) {
       blind_asset_records.push(blind_asset_record);
     } else {
       println!("Improperly formatted blind asset record.");
-      return Err(PlatformError::InputsError);
+      exit(ExitCode::Usage as i32)
     }
   }
 
@@ -147,10 +177,16 @@ fn load_addresses_from_files(file_paths: &str) -> Result<Vec<AccountAddress>, Pl
   let mut addresses = Vec::new();
 
   for file_path in split_arg(file_paths) {
-    let address_key = load_pub_key_from_file(file_path.trim()).or_else(|e| {
-                        println!("Failed to load address key from file {}", file_path);
-                        Err(e)
-                      })?;
+    let address_key;
+    match load_pub_key_from_file(file_path.trim()) {
+      Ok(key) => {
+        address_key = key;
+      }
+      Err(_) => {
+        println!("Failed to load address key from file {}", file_path);
+        exit(ExitCode::NoInput as i32)
+      }
+    }
     addresses.push(AccountAddress { key: address_key });
   }
 
@@ -163,10 +199,10 @@ fn load_addresses_from_files(file_paths: &str) -> Result<Vec<AccountAddress>, Pl
 // TODO (Keyao): Generate file names, rather than ask the user to specify
 //
 fn store_sids_to_file(file_path: &str, sids: &str) -> Result<(), PlatformError> {
-  let _ = fs::write(file_path, sids).or_else(|_e| {
-                                      println!("File {} could not be created", file_path);
-                                      Err(PlatformError::IoError("Failed to write".to_string()))
-                                    });
+  if let Err(_) = fs::write(file_path, sids) {
+    println!("Sids file {} could not be created", file_path);
+    exit(ExitCode::CantCreate as i32)
+  };
   Ok(())
 }
 
@@ -174,10 +210,10 @@ fn store_txn_builder_to_file(file_path: &str,
                              txn: &TransactionBuilder)
                              -> Result<(), PlatformError> {
   if let Ok(as_json) = serde_json::to_string(txn) {
-    let _skip = fs::write(file_path, &as_json).or_else(|_e| {
-                  println!("Transaction file {} could not be created", file_path);
-                  Err(PlatformError::IoError("Failed to write".to_string()))
-                });
+    if let Err(_) = fs::write(file_path, &as_json) {
+      println!("Transaction file {} could not be created", file_path);
+      exit(ExitCode::CantCreate as i32)
+    };
   }
 
   Ok(())
@@ -200,7 +236,7 @@ fn store_key_pair_to_file(file_path: &Path) -> Result<(), PlatformError> {
         Ok(_) => {}
         Err(error) => {
           println!("Key file {:?} could not be created: {}", file_path, error);
-          return Err(PlatformError::IoError("Failed to write".to_string()));
+          exit(ExitCode::CantCreate as i32)
         }
       };
     }
@@ -208,7 +244,7 @@ fn store_key_pair_to_file(file_path: &Path) -> Result<(), PlatformError> {
       println!("Failed to create directories for {}: {}",
                &file_path.display(),
                error);
-      return Err(PlatformError::IoError("Failed to write".to_string()));
+      exit(ExitCode::CantCreate as i32)
     }
   }
 
@@ -231,7 +267,7 @@ fn store_pub_key_to_file(file_path: &Path) -> Result<(), PlatformError> {
         Ok(_) => {}
         Err(error) => {
           println!("Key file {:?} could not be created: {}", file_path, error);
-          return Err(PlatformError::IoError("Failed to write".to_string()));
+          exit(ExitCode::CantCreate as i32)
         }
       };
     }
@@ -239,7 +275,7 @@ fn store_pub_key_to_file(file_path: &Path) -> Result<(), PlatformError> {
       println!("Failed to create directories for {}: {}",
                &file_path.display(),
                error);
-      return Err(PlatformError::IoError("Unable to write".to_string()));
+      exit(ExitCode::CantCreate as i32)
     }
   }
 
@@ -270,10 +306,10 @@ fn store_blind_asset_record(file_path: &str,
                              &None);
 
   if let Ok(as_json) = serde_json::to_string(&blind_asset_record) {
-    let _ = fs::write(file_path, &as_json).or_else(|_e| {
-              println!("Blind asset record file {} could not be created", file_path);
-              Err(PlatformError::IoError("unable to write".to_string()))
-            });
+    if let Err(_) = fs::write(file_path, &as_json) {
+      println!("Blind asset record file {} could not be created", file_path);
+      exit(ExitCode::CantCreate as i32)
+    };
   }
 
   Ok(())
@@ -570,14 +606,7 @@ fn main() -> Result<(), PlatformError> {
           .takes_value(true)
           .help("specify ledger standalone host (e.g. localhost)")))
     .get_matches();
-  let res = process_inputs(inputs);
-  // If the error is InputsError, print a usage message and exit.
-  // Otherwise, return the result.
-  if res.clone().err() == Some(PlatformError::InputsError) {
-    println!("Invalid input. See usage message above.");
-    exit(0)
-  }
-  res
+  process_inputs(inputs)
 }
 
 fn process_inputs(inputs: clap::ArgMatches) -> Result<(), PlatformError> {
@@ -646,7 +675,7 @@ fn process_inputs(inputs: clap::ArgMatches) -> Result<(), PlatformError> {
       }
       Err(e) => {
         println!("Error deleting file: {:?} ", e);
-        Err(PlatformError::IoError("Failed to remove".to_string()))
+        exit(ExitCode::IOErr as i32)
       }
     },
     ("keygen", Some(keygen_matches)) => {
@@ -674,7 +703,7 @@ fn process_inputs(inputs: clap::ArgMatches) -> Result<(), PlatformError> {
     ("submit", Some(submit_matches)) => process_submit_cmd(submit_matches, &transaction_file_name),
     _ => {
       println!("Subcommand missing or not recognized. Try --help");
-      Err(PlatformError::InputsError)
+      exit(ExitCode::Usage as i32)
     }
   }
 }
@@ -695,14 +724,14 @@ fn process_submit_cmd(submit_matches: &clap::ArgMatches,
     host = host_arg;
   } else {
     error!("Standalone host must be specified (e.g. localhost)");
-    return Err(PlatformError::InputsError);
+    exit(ExitCode::Usage as i32)
   }
   let port;
   if let Some(port_arg) = submit_matches.value_of("port") {
     port = port_arg;
   } else {
     error!("Standalone port must be specified (e.g. 8668)");
-    return Err(PlatformError::InputsError);
+    exit(ExitCode::Usage as i32)
   }
 
   // serialize txn
@@ -762,14 +791,14 @@ fn process_store_cmd(store_matches: &clap::ArgMatches) -> Result<(), PlatformErr
         path = path_arg
       } else {
         println!("Path to the sids file is required. Use --path.");
-        return Err(PlatformError::InputsError);
+        exit(ExitCode::Usage as i32)
       }
       let sids;
       if let Some(sids_arg) = sids_matches.value_of("indices") {
         sids = sids_arg
       } else {
         println!("TxoSID indices are required. Use --indices.");
-        return Err(PlatformError::InputsError);
+        exit(ExitCode::Usage as i32)
       }
       store_sids_to_file(path, sids)
     }
@@ -780,28 +809,28 @@ fn process_store_cmd(store_matches: &clap::ArgMatches) -> Result<(), PlatformErr
         path = path_arg
       } else {
         println!("Path to the blind asset record file is required. Use --path.");
-        return Err(PlatformError::InputsError);
+        exit(ExitCode::Usage as i32)
       }
       let amount;
       if let Some(amount_arg) = blind_asset_record_path_matches.value_of("amount") {
         amount = amount_arg
       } else {
         println!("Amount is required. Use --amount.");
-        return Err(PlatformError::InputsError);
+        exit(ExitCode::Usage as i32)
       }
       let asset_type;
       if let Some(asset_type_arg) = blind_asset_record_path_matches.value_of("asset_type") {
         asset_type = asset_type_arg
       } else {
         println!("Asset type is required. Use --asset_type.");
-        return Err(PlatformError::InputsError);
+        exit(ExitCode::Usage as i32)
       }
       let pub_key_path;
       if let Some(pub_key_path_arg) = blind_asset_record_path_matches.value_of("pub_key_path") {
         pub_key_path = pub_key_path_arg
       } else {
         println!("File to public key is required. If no such file, try pubkeygen subcommand.");
-        return Err(PlatformError::InputsError);
+        exit(ExitCode::Usage as i32)
       }
       let confidential_amount = blind_asset_record_path_matches.is_present("confidential_amount");
       let confidential_asset = blind_asset_record_path_matches.is_present("confidential_asset");
@@ -815,7 +844,7 @@ fn process_store_cmd(store_matches: &clap::ArgMatches) -> Result<(), PlatformErr
 
     _ => {
       println!("Subcommand missing or not recognized. Try store --help");
-      Err(PlatformError::InputsError)
+      exit(ExitCode::Usage as i32)
     }
   }
 }
@@ -878,7 +907,7 @@ fn process_add_cmd(add_matches: &clap::ArgMatches,
         asset_token = AssetTypeCode::new_from_str(token_code_arg);
       } else {
         println!("Token code is required to issue asset. Use --token_code.");
-        return Err(PlatformError::InputsError);
+        exit(ExitCode::Usage as i32)
       }
       let seq_num;
       if let Some(sequence_number_arg) = issue_asset_matches.value_of("sequence_number") {
@@ -886,11 +915,11 @@ fn process_add_cmd(add_matches: &clap::ArgMatches,
           seq_num = seq_num_parsed;
         } else {
           println!("Improperly formatted sequence number.");
-          return Err(PlatformError::InputsError);
+          exit(ExitCode::Usage as i32)
         }
       } else {
         println!("Sequence number is required to issue asset. Use --sequence_number.");
-        return Err(PlatformError::InputsError);
+        exit(ExitCode::Usage as i32)
       }
       let amount;
       if let Some(amount_arg) = issue_asset_matches.value_of("amount") {
@@ -898,11 +927,11 @@ fn process_add_cmd(add_matches: &clap::ArgMatches,
           amount = amount_parsed;
         } else {
           println!("Improperly formatted amount.");
-          return Err(PlatformError::InputsError);
+          exit(ExitCode::Usage as i32)
         }
       } else {
         println!("Amount is required to issue asset. Use --amount.");
-        return Err(PlatformError::InputsError);
+        exit(ExitCode::Usage as i32)
       }
       let mut txn_builder = load_txn_builder_from_file(&transaction_file_name).or_else(|e| {
                               println!("Failed to load txn builder from file {}.",
@@ -937,7 +966,7 @@ fn process_add_cmd(add_matches: &clap::ArgMatches,
         }
       } else {
         println!("Path to sids file is required to transfer asset. Use --sids_path");
-        return Err(PlatformError::InputsError);
+        exit(ExitCode::Usage as i32)
       }
       let blind_asset_records;
       if let Some(blind_asset_record_paths) =
@@ -955,19 +984,19 @@ fn process_add_cmd(add_matches: &clap::ArgMatches,
         }
       } else {
         println!("Paths to blind asset records are required to transfer asset. Use --blind_asset_record_paths");
-        return Err(PlatformError::InputsError);
+        exit(ExitCode::Usage as i32)
       }
       let input_amounts;
       if let Some(input_amounts_arg) = transfer_asset_matches.value_of("input_amounts") {
         input_amounts = get_amounts(input_amounts_arg).unwrap();
       } else {
         println!("Input amounts are required to transfer asset. Use --input_amounts.");
-        return Err(PlatformError::InputsError);
+        exit(ExitCode::Usage as i32)
       }
       let mut count = txo_refs.len();
       if blind_asset_records.len() != count || input_amounts.len() != count {
         println!("Size of input sids, blind asset records, and input amounts should match.");
-        return Err(PlatformError::InputsError);
+        exit(ExitCode::Usage as i32)
       }
       let mut transfer_from = Vec::new();
       let mut txo_refs_iter = txo_refs.iter();
@@ -986,7 +1015,7 @@ fn process_add_cmd(add_matches: &clap::ArgMatches,
         output_amounts = get_amounts(output_amounts_arg).unwrap();
       } else {
         println!("Output amounts are required to transfer asset. Use --output_amounts.");
-        return Err(PlatformError::InputsError);
+        exit(ExitCode::Usage as i32)
       }
       let addresses;
       if let Some(addresses_path) = transfer_asset_matches.value_of("address_paths") {
@@ -1001,12 +1030,12 @@ fn process_add_cmd(add_matches: &clap::ArgMatches,
         }
       } else {
         println!("Paths to address keys are required to transfer asset. Use --address_paths");
-        return Err(PlatformError::InputsError);
+        exit(ExitCode::Usage as i32)
       }
       let mut count = output_amounts.len();
       if addresses.len() != count {
         println!("Size of output amounts and addresses should match.");
-        return Err(PlatformError::InputsError);
+        exit(ExitCode::Usage as i32)
       }
       let mut transfer_to = Vec::new();
       let mut output_amounts_iter = output_amounts.iter();
@@ -1039,7 +1068,7 @@ fn process_add_cmd(add_matches: &clap::ArgMatches,
     }
     _ => {
       println!("Subcommand missing or not recognized. Try add --help");
-      Err(PlatformError::InputsError)
+      exit(ExitCode::Usage as i32)
     }
   }
 }
@@ -1145,10 +1174,6 @@ mod tests {
     // Verify that load_sids_from_file succeeds with correctly formatted input
     assert_eq!(load_sids_from_file(paths[0]).unwrap(), expected_txo_refs);
     assert_eq!(load_sids_from_file(paths[1]).unwrap(), expected_txo_refs);
-
-    // Verify that load_sids_from_file fails with incorrectly formatted input
-    assert_eq!(load_sids_from_file(paths[2]),
-               Err(PlatformError::InputsError));
 
     paths.into_iter()
          .map(|path| fs::remove_file(path).unwrap())
