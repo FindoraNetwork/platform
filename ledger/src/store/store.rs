@@ -20,6 +20,7 @@ use std::collections::{HashMap, VecDeque};
 use std::fs::File;
 use std::fs::OpenOptions;
 use std::io::BufReader;
+use std::path::Path;
 use std::u64;
 
 use super::effects::*;
@@ -106,10 +107,14 @@ pub trait LedgerUpdate<RNG: RngCore + CryptoRng> {
 }
 
 pub trait ArchiveAccess {
+  // Number of blocks committed
+  fn get_block_count(&self) -> usize;
   // Number of transactions available
   fn get_transaction_count(&self) -> usize;
   // Look up transaction in the log
   fn get_transaction(&self, addr: TxnSID) -> Option<&FinalizedTransaction>;
+  // Look up block in the log
+  fn get_block(&self, addr: BlockSID) -> Option<&Vec<FinalizedTransaction>>;
   // Get consistency proof for TxnSID `addr`
   fn get_proof(&self, addr: TxnSID) -> Option<Proof>;
 
@@ -230,7 +235,7 @@ pub struct LedgerState {
   // The `FinalizedTransaction`s consist of a Transaction and an index into
   // `merkle` representing its hash.
   // TODO(joe): should this be in-memory?
-  txs: Vec<FinalizedTransaction>,
+  blocks: Vec<Vec<FinalizedTransaction>>,
 
   // Bitmap tracking all the live TXOs
   utxo_map: BitMap,
@@ -405,7 +410,16 @@ impl LedgerStatus {
       // We could re-check that self.issuance_num doesn't contain `code`,
       // but currently it's redundant with the new-asset-type checks
       } else {
-        let curr_seq_num_limit = self.issuance_num.get(&code).unwrap();
+        let curr_seq_num_limit = self.issuance_num
+                                     .get(&code)
+                                     // If a transaction defines and then issues, it should pass.
+                                     // However, if there is a bug elsewhere in validation, panicking
+                                     // is better than allowing incorrect issuances to pass through.
+                                     .or_else(|| {
+                                       assert!(txn.new_asset_codes.contains_key(&code));
+                                       Some(&0)
+                                     })
+                                     .unwrap();
         let min_seq_num = seq_nums.first().unwrap();
         if min_seq_num < curr_seq_num_limit {
           return Err(PlatformError::InputsError);
@@ -630,22 +644,26 @@ impl LedgerUpdate<ChaChaRng> for LedgerState {
       debug_assert!(txo_sid_ix == 0);
     }
 
-    // Update the transaction Merkle tree and transaction log
-    for (tmp_sid, txn) in block.temp_sids.drain(..).zip(block.txns.drain(..)) {
-      let txn_sid = temp_sid_map.get(&tmp_sid).unwrap().0;
+    {
+      let mut tx_block = Vec::new();
+      // Update the transaction Merkle tree and transaction log
+      for (tmp_sid, txn) in block.temp_sids.drain(..).zip(block.txns.drain(..)) {
+        let txn_sid = temp_sid_map.get(&tmp_sid).unwrap().0;
 
-      let digest = sha256::hash(&txn.serialize_bincode(txn_sid));
-      let mut hash = HashValue::new();
-      hash.hash.clone_from_slice(&digest.0);
+        let digest = sha256::hash(&txn.serialize_bincode(txn_sid));
+        let mut hash = HashValue::new();
+        hash.hash.clone_from_slice(&digest.0);
 
-      // TODO(joe/jonathan): Since errors in the merkle tree are things like
-      // corruption and I/O failure, we don't have a good recovery story. Is
-      // panicking acceptable?
-      let merkle_id = self.txn_merkle.append(&hash).unwrap();
+        // TODO(joe/jonathan): Since errors in the merkle tree are things like
+        // corruption and I/O failure, we don't have a good recovery story. Is
+        // panicking acceptable?
+        let merkle_id = self.txn_merkle.append(&hash).unwrap();
 
-      self.txs.push(FinalizedTransaction { txn,
-                                           tx_id: txn_sid,
-                                           merkle_id });
+        tx_block.push(FinalizedTransaction { txn,
+                                             tx_id: txn_sid,
+                                             merkle_id });
+      }
+      self.blocks.push(tx_block);
     }
 
     // Compute hash against history
@@ -821,7 +839,7 @@ impl LedgerState {
                     prng: rand_chacha::ChaChaRng::from_seed(prng_seed.unwrap_or([0u8; 32])),
                     block_merkle: LedgerState::init_merkle_log(block_merkle_path, true)?,
                     txn_merkle: LedgerState::init_merkle_log(txn_merkle_path, true)?,
-                    txs: Vec::new(),
+                    blocks: Vec::new(),
                     utxo_map: LedgerState::init_utxo_map(utxo_map_path, true)?,
                     txn_log: Some(std::fs::OpenOptions::new().create_new(true)
                                                              .append(true)
@@ -850,7 +868,7 @@ impl LedgerState {
                     prng: rand_chacha::ChaChaRng::from_seed(prng_seed.unwrap_or([0u8; 32])),
                     block_merkle: LedgerState::init_merkle_log(block_merkle_path, true)?,
                     txn_merkle: LedgerState::init_merkle_log(txn_merkle_path, true)?,
-                    txs: Vec::new(),
+                    blocks: Vec::new(),
                     utxo_map: LedgerState::init_utxo_map(utxo_map_path, true)?,
                     txn_log: None,
                     block_ctx: Some(BlockEffect::new()) };
@@ -869,6 +887,24 @@ impl LedgerState {
     ledger.txn_log = Some(txn_log);
 
     Ok(ledger)
+  }
+
+  pub fn load_or_init(base_dir: &Path) -> Result<LedgerState, std::io::Error> {
+    let block_merkle = base_dir.join("block_merkle");
+    let block_merkle = block_merkle.to_str().unwrap();
+    let txn_merkle = base_dir.join("txn_merkle");
+    let txn_merkle = txn_merkle.to_str().unwrap();
+    let txn_log = base_dir.join("txn_log");
+    let txn_log = txn_log.to_str().unwrap();
+    let utxo_map = base_dir.join("utxo_map");
+    let utxo_map = utxo_map.to_str().unwrap();
+
+    // TODO(joe): distinguish between the transaction log not existing
+    // and it being corrupted
+    LedgerState::load_from_log(&block_merkle, &txn_merkle, &txn_log,
+                &utxo_map, None)
+              .or_else(|_| LedgerState::new(&block_merkle, &txn_merkle, &txn_log,
+                &utxo_map, None))
   }
 
   // Load a ledger given the paths to the various storage elements.
@@ -1005,7 +1041,20 @@ impl LedgerAccess for LedgerState {
 
 impl ArchiveAccess for LedgerState {
   fn get_transaction(&self, addr: TxnSID) -> Option<&FinalizedTransaction> {
-    self.txs.get(addr.0)
+    let mut ix: usize = addr.0;
+    for b in self.blocks.iter() {
+      match b.get(ix) {
+        None => {
+          debug_assert!(ix >= b.len());
+          ix -= b.len();
+        }
+        v => return v,
+      }
+    }
+    None
+  }
+  fn get_block(&self, addr: BlockSID) -> Option<&Vec<FinalizedTransaction>> {
+    self.blocks.get(addr.0)
   }
 
   fn get_proof(&self, addr: TxnSID) -> Option<Proof> {
@@ -1019,14 +1068,17 @@ impl ArchiveAccess for LedgerState {
     }
   }
 
+  fn get_block_count(&self) -> usize {
+    self.blocks.len()
+  }
   fn get_transaction_count(&self) -> usize {
-    self.txs.len()
+    self.status.next_txn.0
   }
   fn get_utxo_map(&self) -> &BitMap {
     &self.utxo_map
   }
   fn serialize_utxo_map(&mut self) -> Vec<u8> {
-    self.utxo_map.serialize(self.txs.len())
+    self.utxo_map.serialize(self.get_transaction_count())
   }
 
   // TODO(joe): see notes in ArchiveAccess about these
@@ -1064,6 +1116,7 @@ pub mod helpers {
   };
   use zei::serialization::ZeiFromToBytes;
   use zei::setup::PublicParams;
+  use zei::xfr::asset_record::AssetRecordType;
   use zei::xfr::asset_record::{build_blind_asset_record, open_asset_record};
   use zei::xfr::sig::{XfrKeyPair, XfrPublicKey, XfrSecretKey};
   use zei::xfr::structs::AssetRecord;
@@ -1148,7 +1201,8 @@ pub mod helpers {
 
     // issue operation
     let ar = AssetRecord::new(amount, code.val, *issuer_keys.get_pk_ref()).unwrap();
-    let ba = build_blind_asset_record(ledger.get_prng(), &params.pc_gens, &ar, false, false, &None);
+    let art = AssetRecordType::PublicAmount_PublicAssetType;
+    let ba = build_blind_asset_record(ledger.get_prng(), &params.pc_gens, &ar, art, &None);
 
     let asset_issuance_body = IssueAssetBody::new(&code, 0, &[TxOutput(ba.clone())]).unwrap();
     let asset_issuance_operation = IssueAsset::new(asset_issuance_body,
@@ -1185,7 +1239,7 @@ mod tests {
   use tempfile::tempdir;
   use zei::serialization::ZeiFromToBytes;
   use zei::setup::PublicParams;
-  use zei::xfr::asset_record::{build_blind_asset_record, open_asset_record};
+  use zei::xfr::asset_record::{build_blind_asset_record, open_asset_record, AssetRecordType};
   use zei::xfr::sig::{XfrKeyPair, XfrPublicKey};
   use zei::xfr::structs::AssetRecord;
 
@@ -1540,7 +1594,8 @@ mod tests {
     let mut tx = Transaction::default();
 
     let ar = AssetRecord::new(100, code.val, key_pair.get_pk_ref().clone()).unwrap();
-    let ba = build_blind_asset_record(ledger.get_prng(), &params.pc_gens, &ar, false, false, &None);
+    let art = AssetRecordType::PublicAmount_PublicAssetType;
+    let ba = build_blind_asset_record(ledger.get_prng(), &params.pc_gens, &ar, art, &None);
     let second_ba = ba.clone();
 
     let asset_issuance_body =
@@ -1665,7 +1720,8 @@ mod tests {
 
     let mut tx = Transaction::default();
     let ar = AssetRecord::new(100, token_code1.val, public_key).unwrap();
-    let ba = build_blind_asset_record(ledger.get_prng(), &params.pc_gens, &ar, false, false, &None);
+    let art = AssetRecordType::PublicAmount_PublicAssetType;
+    let ba = build_blind_asset_record(ledger.get_prng(), &params.pc_gens, &ar, art, &None);
     let asset_issuance_body = IssueAssetBody::new(&token_code1, 0, &[TxOutput(ba)]).unwrap();
     let asset_issuance_operation = IssueAsset::new(asset_issuance_body,
                                                    &IssuerPublicKey { key: public_key },
@@ -1693,7 +1749,7 @@ mod tests {
     assert!(result.is_err());
     ledger.abort_block(block);
 
-    let transaction = ledger.txs[txn_sid.0].clone();
+    let transaction = ledger.get_transaction(txn_sid).unwrap().clone();
     let txn_id = transaction.tx_id;
 
     println!("utxos = {:?}", ledger.status.utxos);
@@ -1703,7 +1759,7 @@ mod tests {
 
     match ledger.get_proof(txn_id) {
       Some(proof) => {
-        assert!(proof.tx_id == ledger.txs[txn_id.0].merkle_id);
+        assert!(proof.tx_id == ledger.get_transaction(txn_id).unwrap().merkle_id);
       }
       None => {
         panic!("get_proof failed for tx_id {}, merkle_id {}, block state {}, transaction state {}",

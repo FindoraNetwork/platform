@@ -1,17 +1,18 @@
 [package]
-name = "ledger_app"
+name = "submission_server"
 version = "0.1.0"
 authors = ["Nathan Yospe <nathan@eian.io>"]
 edition = "2018"
 
 [lib]
-path = "src/ledger_app.rs"
+path = "src/submission_server.rs"
 
 [dependencies]
 actix-web = "1.0"
 hex = "0.3.2"
 cryptohash = { path = "../../libs/cryptohash" }
 ledger = { path = "../../ledger" }
+log = "0.4.8"
 rand_chacha = "0.2.0"
 rand_core = { version = "0.5", default-features = false, features = ["alloc"] }
 serde = "1.0"
