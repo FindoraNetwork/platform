@@ -8,11 +8,9 @@ edition = "2018"
 name = "txn_builder_cli"
 path = "src/txn_builder_cli.rs"
 
-[lib]
-path = "src/lib.rs"
-
 [dependencies]
 clap = "2.33.0"
+codes = { path = "../codes" }
 dirs = "2.0.2"
 env_logger = "0.6.2"
 findora = { path = "../../findora" }

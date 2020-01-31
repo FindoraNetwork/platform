@@ -1,10 +1,10 @@
 #![deny(warnings)]
+use codes::exit_code::*;
 use ledger::data_model::AssetTypeCode;
 use std::fs;
 use std::io::{self, Write};
 use std::process::{Command, Output};
 use std::str::from_utf8;
-use txn_builder_cli::codes::ExitCode;
 
 // TODOs:
 // Derive path and command name from cwd
@@ -124,8 +124,7 @@ fn test_call_no_args() {
   io::stdout().write_all(&output.stdout).unwrap();
   io::stdout().write_all(&output.stderr).unwrap();
 
-  // assert_eq!(output.status.code(), Some(ExitCode::Usage as i32));
-  assert_eq!(output.status.code(), Some(ExitCode::Usage as i32));
+  assert_eq!(output.status.code(), Some(EX_USAGE));
   assert!(from_utf8(&output.stdout).unwrap().contains(&"Subcommand missing or not recognized. Try --help".to_owned()));
 }
 
@@ -138,8 +137,7 @@ fn test_store_no_args() {
   io::stdout().write_all(&output.stdout).unwrap();
   io::stdout().write_all(&output.stderr).unwrap();
 
-  // assert_eq!(output.status.code(), Some(ExitCode::Usage as i32));
-  assert_eq!(output.status.code(), Some(ExitCode::Usage as i32));
+  assert_eq!(output.status.code(), Some(EX_USAGE));
   assert!(from_utf8(&output.stdout).unwrap().contains(&"Subcommand missing or not recognized. Try store --help".to_owned()));
 }
 
@@ -152,8 +150,7 @@ fn test_add_no_args() {
   io::stdout().write_all(&output.stdout).unwrap();
   io::stdout().write_all(&output.stderr).unwrap();
 
-  // assert_eq!(output.status.code(), Some(ExitCode::Usage as i32));
-  assert_eq!(output.status.code(), Some(ExitCode::Usage as i32));
+  assert_eq!(output.status.code(), Some(EX_USAGE));
   assert!(from_utf8(&output.stdout).unwrap().contains(&"Subcommand missing or not recognized. Try add --help".to_owned()));
 }
 

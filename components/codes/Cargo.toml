@@ -1,0 +1,6 @@
+[package]
+name = "codes"
+version = "0.1.0"
+
+[lib]
+path = "src/codes.rs"

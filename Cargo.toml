@@ -6,6 +6,7 @@ members = [
     "components/ledger_api_service",
     "components/chat",
     "components/check_merkle",
+    "components/codes",
     "components/ledger_client",
     "components/ledger_standalone",
     "components/ledger_mirror",
