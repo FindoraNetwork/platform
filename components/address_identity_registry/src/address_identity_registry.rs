@@ -460,12 +460,6 @@ fn exec_line(mut global_state: &mut GlobalState, line: &str) -> Result<(), Strin
 
 fn main() -> Result<(), rustyline::error::ReadlineError> {
   let args = parse_args();
-
-  if args.is_present("v") {
-    println!("Fuck yeah");
-  } else {
-    println!("Awww NOOOO!!!");
-  }
   let _registry_path = Path::new(args.value_of("registry").unwrap_or(DEFAULT_REGISTRY_PATH));
 
   let mut global_state = GlobalState::new(&args);
