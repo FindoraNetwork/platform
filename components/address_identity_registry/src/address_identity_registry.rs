@@ -22,8 +22,16 @@ use sparse_merkle_tree::SmtMap256;
 use std::collections::HashMap;
 use std::path::Path;
 use zei::api::anon_creds::{
-  ac_keygen_issuer, ac_keygen_user, ac_reveal, ac_reveal_with_rand, ac_sample_random_factors,
-  ac_sign, ac_verify, ACIssuerPublicKey, ACIssuerSecretKey, ACRevealSig, ACUserPublicKey,
+  ac_keygen_issuer,
+  ac_keygen_user,
+  ac_reveal,
+  ac_reveal_with_rand, // need both variants here
+  ac_sign,
+  ac_verify,
+  ACIssuerPublicKey,
+  ACIssuerSecretKey,
+  ACRevealSig,
+  ACUserPublicKey,
   ACUserSecretKey,
 };
 
@@ -38,19 +46,19 @@ const HELP_STRING: &str = r#"
       Creates an issuer which can be referred to by the name "issuer_name"
     adduser <issuer_name> <user_name>:
       Creates an user named "user_name" bound to "issuer_name
-    issue <issuer_name> <user_name> [<attr_name>]*:
+    getcreds <user_name> [<attr_name>]*:
       Creates a signature
-    reveal <user_name> <issuer_name>:
+    reveal <user_name> [<bool>]*:
       Creates a proof for a signature
-    verify <user_name> <issuer_name>:
+    verify <user_name> [<bool>]*:
       Verifies the proof
 
 Example of use
   >>> addissuer bank0
   >>> adduser bank0 user0
-  >>> issue user0 bank0
-  >>> reveal user0 bank0
-  >>> verify user0 bank0
+  >>> getcreds user0 foo bar baz
+  >>> reveal user0 t t t
+  >>> verify user0 t t t
   etc...
 "#;
 lazy_static! {
@@ -66,12 +74,10 @@ lazy_static! {
   };
 }
 
-const ATTRIBUTES: [&[u8]; 4] = [b"attr0", b"attr1", b"attr2", b"attr3"];
-
 #[derive(Copy, Clone, PartialEq, Eq, Debug, Serialize, Deserialize)]
 struct Hash256([u8; DIGESTBYTES]);
 
-const ZERO_DIGEST: Hash256 = Hash256([0; DIGESTBYTES]);
+// const ZERO_DIGEST: Hash256 = Hash256([0; DIGESTBYTES]);
 
 impl std::fmt::Display for Hash256 {
   fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
@@ -116,9 +122,10 @@ struct Credential {
 
 #[derive(Debug)]
 struct GlobalState {
+  verbose: bool,
   prng: ChaChaRng,
   registry: Vec<String>, // Not used anymore, used to represent file storage
-  smt_map: SmtMap256<String>,
+  smt: SmtMap256<String>,
   users: HashMap<String, User>,
   issuers: HashMap<String, Issuer>,
   user_issuer: HashMap<String, Issuer>, // Each user has a single issuer
@@ -126,10 +133,11 @@ struct GlobalState {
 }
 
 impl GlobalState {
-  fn new() -> Self {
-    GlobalState { prng: ChaChaRng::from_seed([0u8; 32]),
+  fn new(args: &ArgMatches /*<'static>*/) -> Self {
+    GlobalState { verbose: args.is_present("v"),
+                  prng: ChaChaRng::from_seed([0u8; 32]),
                   registry: Vec::<String>::new(),
-                  smt_map: SmtMap256::<String>::new(),
+                  smt: SmtMap256::<String>::new(),
                   users: HashMap::new(),
                   issuers: HashMap::new(),
                   user_issuer: HashMap::new(),
@@ -238,8 +246,11 @@ fn add_issuer(mut global_state: &mut GlobalState, issuer_name: &str) -> Result<(
     Err(format!("issuer named {} already exists", issuer_name))
   } else {
     let issuer = new_issuer(&mut global_state);
-    global_state.issuers.insert(issuer_name.to_string(), issuer);
     println!("New issuer {}", issuer_name.yellow());
+    if global_state.verbose {
+      println!("{} is : {:?}", issuer_name.yellow(), &issuer);
+    }
+    global_state.issuers.insert(issuer_name.to_string(), issuer);
     Ok(())
   }
 }
@@ -257,6 +268,9 @@ fn add_user(global_state: &mut GlobalState,
       let user = User { public_key: user_pk,
                         secret_key: user_sk };
       println!("New user {} with issuer {}", user_name, issuer_name);
+      if global_state.verbose {
+        println!("user is {:?}", &user);
+      }
       global_state.users.insert(user_name.to_string(), user);
       global_state.user_issuer
                   .insert(user_name.to_string(), issuer.clone());
@@ -288,12 +302,21 @@ fn issue_credential(global_state: &mut GlobalState,
                                    &empty_attrs,
                                    &empty_bitmap)
       {
-        // Insert an entry AIR[user_pk] = cred, where
+        // There should be three outputs from ac_reveal: a signature, a proof,
+        // and the randomness used to generate the signature
+        let sig = &proof.sig;
+        let pok = &proof.pok;
+        let rnd = &proof.rnd;
         let sig_string = serde_json::to_string(&proof.sig).unwrap();
         let user_addr = sha256(&user_keys.public_key);
-        global_state.smt_map.set(&user_addr.0, Some(sig_string));
+        // Insert an entry AIR[user_pk] = cred, where
+        global_state.smt.set(&user_addr.0, Some(sig_string));
         let credential = Credential { cred: proof,
                                       attrs: attrs.to_vec() };
+        println!("Credential issued to {}", user);
+        if global_state.verbose {
+          println!("Credential is {:?}", &credential);
+        }
         global_state.user_cred.insert(user.to_string(), credential);
         Ok(())
       } else {
@@ -312,22 +335,28 @@ fn reveal(global_state: &mut GlobalState, user: &str, bitmap: &Vec<bool>) -> Res
          global_state.user_cred.get(user))
   {
     (Some(user_keys), Some(issuer_keys), Some(cred)) => {
-      if let Ok(proof) = ac_reveal_with_rand(&mut global_state.prng,
-                                             &user_keys.secret_key,
-                                             &issuer_keys.public_key,
-                                             &cred.cred.sig,
-                                             &cred.attrs,
-                                             &bitmap,
-                                             cred.cred.rnd.clone())
+      if let Ok(_proof) = ac_reveal_with_rand(&mut global_state.prng,
+                                              &user_keys.secret_key,
+                                              &issuer_keys.public_key,
+                                              &cred.cred.sig,
+                                              &cred.attrs,
+                                              &bitmap,
+                                              cred.cred.rnd.clone())
       {
-        // global_state.smt.get()
         // TODO Using the hash of the user's public key as the proof
         // address precludes multiple proofs
 
-        // global_state.user_reveal.insert(user.to_string(), proof);
-        Ok(())
+        let key = sha256(&user_keys.public_key).0;
+        let (value, proof) = global_state.smt.get_with_proof(&key);
+        if global_state.smt.check_merkle_proof(&key, value, &proof) {
+          println!("ac_reveal_with_rand and smt merkle proof succeed");
+          Ok(())
+        } else {
+          println!("ac_reveal_with_rand succeeds but smt merkle proof fails");
+          Err("smt merkle proof failed".to_string())
+        }
       } else {
-        Err("ac_reveal failed".to_string())
+        Err("ac_reveal_with_rand failed".to_string())
       }
     }
     (None, _, _) => Err("Unable to find user".to_string()),
@@ -337,16 +366,17 @@ fn reveal(global_state: &mut GlobalState, user: &str, bitmap: &Vec<bool>) -> Res
 }
 
 fn verify(global_state: &mut GlobalState, user: &str, bitmap: &Vec<bool>) -> Result<(), String> {
-  println!("Command verify user {} with bitmap {:?}", user, bitmap);
   match (global_state.user_issuer.get(user), global_state.user_cred.get(user)) {
     (Some(issuer_keys), Some(cred)) => {
+      println!("Command verify user {} with attrs = {:?}, bitmap {:?}",
+               user, &cred.attrs, bitmap);
       if let Err(e) = ac_verify(&issuer_keys.public_key,
                                 &cred.attrs,
                                 &bitmap,
                                 &cred.cred.sig,
                                 &cred.cred.pok)
       {
-        Err(format!("{}", e))
+        Err(format!("ac_verify fails with {}", e))
       } else {
         // Check merkle proof here?
         Ok(())
@@ -384,6 +414,8 @@ fn parse_args() -> ArgMatches<'static> {
                        .arg(Arg::with_name("file").short("f")
                                                   .takes_value(true)
                                                   .help("Name of the file"))
+                       .arg(Arg::with_name("v").short("v")
+                                               .help("Sets the level of verbosity"))
                        .get_matches()
 }
 
@@ -429,9 +461,14 @@ fn exec_line(mut global_state: &mut GlobalState, line: &str) -> Result<(), Strin
 fn main() -> Result<(), rustyline::error::ReadlineError> {
   let args = parse_args();
 
+  if args.is_present("v") {
+    println!("Fuck yeah");
+  } else {
+    println!("Awww NOOOO!!!");
+  }
   let _registry_path = Path::new(args.value_of("registry").unwrap_or(DEFAULT_REGISTRY_PATH));
 
-  let mut global_state = GlobalState::new();
+  let mut global_state = GlobalState::new(&args);
 
   // println!("The registry path is {}", _registry_path);
 
