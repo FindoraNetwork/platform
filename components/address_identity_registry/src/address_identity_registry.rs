@@ -52,6 +52,12 @@ const HELP_STRING: &str = r#"
       Creates a proof for a signature
     verify <user_name> [<bool>]*:
       Verifies the proof
+    showissuer <issuer_name>
+      Print the internal representation of the issuer
+    showuser <issuer_name>
+      Print the internal representation of the user
+    showcreds <issuer_name>
+      Print the internal representation of the credentials
 
 Example of use
   >>> addissuer bank0
@@ -70,6 +76,9 @@ lazy_static! {
     m.insert("sign", "");
     m.insert("reveal", "");
     m.insert("verify", "");
+    m.insert("showissuer", "");
+    m.insert("showuser", "");
+    m.insert("showcreds", "");
     m
   };
 }
@@ -255,6 +264,16 @@ fn add_issuer(mut global_state: &mut GlobalState, issuer_name: &str) -> Result<(
   }
 }
 
+// Generate a new issuer and append it to the registry.
+fn show_issuer(global_state: &mut GlobalState, issuer_name: &str) -> Result<(), String> {
+  if let Some(issuer) = global_state.issuers.get(issuer_name) {
+    println!("{} is : {:?}", issuer_name.yellow(), &issuer);
+    Ok(())
+  } else {
+    Err(format!("issuer named {} not found", issuer_name))
+  }
+}
+
 fn add_user(global_state: &mut GlobalState,
             issuer_name: &str,
             user_name: &str)
@@ -281,6 +300,15 @@ fn add_user(global_state: &mut GlobalState,
   }
 }
 
+fn show_user(global_state: &mut GlobalState, user_name: &str) -> Result<(), String> {
+  if let Some(user) = global_state.users.get(user_name) {
+    println!("{} is : {:?}", user_name.yellow(), &user);
+    Ok(())
+  } else {
+    Err(format!("user named {} not found", user_name))
+  }
+}
+
 fn issue_credential(global_state: &mut GlobalState,
                     user: &str,
                     attrs: &Vec<String>)
@@ -304,9 +332,9 @@ fn issue_credential(global_state: &mut GlobalState,
       {
         // There should be three outputs from ac_reveal: a signature, a proof,
         // and the randomness used to generate the signature
-        let sig = &proof.sig;
-        let pok = &proof.pok;
-        let rnd = &proof.rnd;
+        // let sig = &proof.sig;
+        // let pok = &proof.pok;
+        // let rnd = &proof.rnd;
         let sig_string = serde_json::to_string(&proof.sig).unwrap();
         let user_addr = sha256(&user_keys.public_key);
         // Insert an entry AIR[user_pk] = cred, where
@@ -326,6 +354,15 @@ fn issue_credential(global_state: &mut GlobalState,
     (None, None) => Err("Unable to find either issuer or user".to_string()),
     (None, _) => Err("Unable to find user".to_string()),
     (_, None) => Err("Unable to find issuer".to_string()),
+  }
+}
+
+fn show_credentials(global_state: &mut GlobalState, user_name: &str) -> Result<(), String> {
+  if let Some(credential) = global_state.user_cred.get(&user_name.to_string()) {
+    println!("{} is : {:?}", user_name.yellow(), &credential);
+    Ok(())
+  } else {
+    Err(format!("user {} credential not found", user_name))
   }
 }
 
@@ -366,24 +403,46 @@ fn reveal(global_state: &mut GlobalState, user: &str, bitmap: &Vec<bool>) -> Res
 }
 
 fn verify(global_state: &mut GlobalState, user: &str, bitmap: &Vec<bool>) -> Result<(), String> {
-  match (global_state.user_issuer.get(user), global_state.user_cred.get(user)) {
-    (Some(issuer_keys), Some(cred)) => {
+  match (global_state.users.get(user),
+         global_state.user_issuer.get(user),
+         global_state.user_cred.get(user))
+  {
+    (Some(user_keys), Some(issuer_keys), Some(cred)) => {
       println!("Command verify user {} with attrs = {:?}, bitmap {:?}",
                user, &cred.attrs, bitmap);
-      if let Err(e) = ac_verify(&issuer_keys.public_key,
-                                &cred.attrs,
-                                &bitmap,
-                                &cred.cred.sig,
-                                &cred.cred.pok)
+      if let Ok(proof) = ac_reveal_with_rand(&mut global_state.prng,
+                                             &user_keys.secret_key,
+                                             &issuer_keys.public_key,
+                                             &cred.cred.sig,
+                                             &cred.attrs,
+                                             &bitmap,
+                                             cred.cred.rnd.clone())
       {
-        Err(format!("ac_verify fails with {}", e))
+        if let Err(e) = ac_verify(&issuer_keys.public_key,
+                                  &cred.attrs,
+                                  &bitmap,
+                                  &proof.sig,
+                                  &proof.pok)
+        {
+          Err(format!("ac_verify fails with {}", e))
+        } else {
+          // Check merkle proof here?
+          let key = sha256(&user_keys.public_key).0;
+          let (value, proof) = global_state.smt.get_with_proof(&key);
+          if global_state.smt.check_merkle_proof(&key, value, &proof) {
+            Ok(())
+          } else {
+            println!("ac_verify succeeds but smt merkle proof fails");
+            Err("smt merkle proof failed".to_string())
+          }
+        }
       } else {
-        // Check merkle proof here?
-        Ok(())
+        Err("ac_reveal_with_rand fails".to_string())
       }
     }
-    (None, _) => Err("Unable to find issuer".to_string()),
-    (_, None) => Err("Unable to find credentials".to_string()),
+    (None, _, _) => Err("Unable to find user".to_string()),
+    (_, None, _) => Err("Unable to find issuer".to_string()),
+    (_, _, None) => Err("Unable to find signature".to_string()),
   }
 }
 
@@ -454,6 +513,9 @@ fn exec_line(mut global_state: &mut GlobalState, line: &str) -> Result<(), Strin
       let bitmap: Vec<bool> = bits.to_vec().into_iter().map(str_to_bool).collect();
       verify(&mut global_state, &user, &bitmap)
     }
+    ["showissuer", issuer] => show_issuer(&mut global_state, &issuer),
+    ["showuser", user] => show_user(&mut global_state, &user),
+    ["showcreds", user] => show_credentials(&mut global_state, &user),
     _ => Err(format!("Invalid line: {}", line.red())),
   }
 }
