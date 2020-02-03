@@ -39,7 +39,7 @@ fn load_txn_builder_from_file(file_path: &str) -> Result<TransactionBuilder, Pla
     }
   }
   let mut txn = String::new();
-  if let Err(_) = file.read_to_string(&mut txn) {
+  if file.read_to_string(&mut txn).is_err() {
     println!("Failed to read transaction file {}", file_path);
     exit(EX_NOINPUT)
   }
@@ -120,7 +120,7 @@ fn load_sids_from_file(file_path: &str) -> Result<Vec<TxoRef>, PlatformError> {
   }
 
   let mut sids_str = String::new();
-  if let Err(_) = file.read_to_string(&mut sids_str) {
+  if file.read_to_string(&mut sids_str).is_err() {
     println!("Failed to read sids file {}", file_path);
     exit(EX_NOINPUT)
   }
@@ -157,7 +157,7 @@ fn load_blind_asset_records_from_files(file_paths: &str)
     }
 
     let mut blind_asset_record_str = String::new();
-    if let Err(_) = file.read_to_string(&mut blind_asset_record_str) {
+    if file.read_to_string(&mut blind_asset_record_str).is_err() {
       println!("Failed to read blind asset record file {}", file_path);
       exit(EX_NOINPUT)
     }
@@ -199,7 +199,7 @@ fn load_addresses_from_files(file_paths: &str) -> Result<Vec<AccountAddress>, Pl
 // TODO (Keyao): Generate file names, rather than ask the user to specify
 //
 fn store_sids_to_file(file_path: &str, sids: &str) -> Result<(), PlatformError> {
-  if let Err(_) = fs::write(file_path, sids) {
+  if fs::write(file_path, sids).is_err() {
     println!("Sids file {} could not be created", file_path);
     exit(EX_CANTCREATE)
   };
@@ -210,7 +210,7 @@ fn store_txn_builder_to_file(file_path: &str,
                              txn: &TransactionBuilder)
                              -> Result<(), PlatformError> {
   if let Ok(as_json) = serde_json::to_string(txn) {
-    if let Err(_) = fs::write(file_path, &as_json) {
+    if fs::write(file_path, &as_json).is_err() {
       println!("Transaction file {} could not be created", file_path);
       exit(EX_CANTCREATE)
     };
@@ -306,7 +306,7 @@ fn store_blind_asset_record(file_path: &str,
                              &None);
 
   if let Ok(as_json) = serde_json::to_string(&blind_asset_record) {
-    if let Err(_) = fs::write(file_path, &as_json) {
+    if fs::write(file_path, &as_json).is_err() {
       println!("Blind asset record file {} could not be created", file_path);
       exit(EX_CANTCREATE)
     };
