@@ -11,6 +11,7 @@ use bitmap;
 use bitmap::BitMap;
 use cryptohash::sha256;
 use cryptohash::sha256::Digest as BitDigest;
+use cryptohash::sha256::DIGESTBYTES;
 use findora::HasInvariants;
 use merkle_tree::append_only_merkle::{AppendOnlyMerkle, HashValue, Proof};
 use merkle_tree::logged_merkle::LoggedMerkle;
@@ -112,11 +113,9 @@ pub trait ArchiveAccess {
   // Number of transactions available
   fn get_transaction_count(&self) -> usize;
   // Look up transaction in the log
-  fn get_transaction(&self, addr: TxnSID) -> Option<&FinalizedTransaction>;
+  fn get_transaction(&self, addr: TxnSID) -> Option<AuthenticatedTransaction>;
   // Look up block in the log
   fn get_block(&self, addr: BlockSID) -> Option<&Vec<FinalizedTransaction>>;
-  // Get consistency proof for TxnSID `addr`
-  fn get_proof(&self, addr: TxnSID) -> Option<Proof>;
 
   // This previously did the serialization at the call to this, and
   // unconditionally returned Some(...).
@@ -138,20 +137,28 @@ pub trait ArchiveAccess {
   fn get_utxo_checksum(&self, version: u64) -> Option<BitDigest>;
 
   // Get the hash of the most recent checkpoint, and its sequence number.
-  fn get_global_block_hash(&self) -> (BitDigest, u64);
+  fn get_state_commitment(&self) -> (BitDigest, u64);
 }
 
 #[repr(C)]
-#[derive(Serialize)]
+#[derive(Clone, Serialize, Deserialize, PartialEq)]
 // TODO (Keyao):
 // Are the four fields below all necessary?
 // Can we remove one of txns_in_block_hash and global_block_hash?
 // Both of them contain the information of the previous state
-pub struct BlockHashData {
-  pub bitmap: BitDigest,             // The checksum of the utxo_map
-  pub block_merkle: HashValue,       // The root hash of the block Merkle tree
-  pub txns_in_block_hash: BitDigest, // The hash of the transactions in the block
-  pub global_block_hash: BitDigest,  // The prior global block hash
+pub struct StateCommitmentData {
+  pub bitmap: BitDigest,                    // The checksum of the utxo_map
+  pub block_merkle: HashValue,              // The root hash of the block Merkle tree
+  pub txns_in_block_hash: BitDigest,        // The hash of the transactions in the block
+  pub previous_state_commitment: BitDigest, // The prior global block hash
+  pub transaction_merkle_commitment: HashValue,
+}
+
+impl StateCommitmentData {
+  pub fn compute_commitment(&self) -> BitDigest {
+    let serialized = bincode::serialize(&self).unwrap();
+    sha256::hash(&serialized)
+  }
 }
 
 const MAX_VERSION: usize = 100;
@@ -211,7 +218,7 @@ pub struct LedgerStatus {
   // Hash and sequence number of the most recent "full checkpoint" of the
   // ledger -- committing to the whole ledger history up to the most recent
   // such checkpoint.
-  global_block_hash: BitDigest,
+  state_commitment_data: Option<StateCommitmentData>,
   block_commit_count: u64, // TODO (Keyao): Remove this if not needed
 
   // Hash of the transactions in the most recent block
@@ -342,7 +349,7 @@ impl LedgerStatus {
                                 next_txn: TxnSID(0),
                                 next_txo: TxoSID(0),
                                 txns_in_block_hash: BitDigest { 0: [0_u8; 32] },
-                                global_block_hash: BitDigest { 0: [0_u8; 32] },
+                                state_commitment_data: None,
                                 block_commit_count: 0 };
 
     Ok(ledger)
@@ -770,15 +777,18 @@ impl LedgerState {
     self.block_merkle.append(&txns_in_block_hash).unwrap();
   }
 
-  fn compute_and_save_block_hash(&mut self) {
-    let data = BlockHashData { bitmap: self.utxo_map.compute_checksum(),
-                               block_merkle: self.block_merkle.get_root_hash(),
-                               txns_in_block_hash: self.status.txns_in_block_hash,
-                               global_block_hash: self.status.global_block_hash };
+  fn compute_and_save_state_commitment_data(&mut self) {
+    let prev_commitment = match &self.status.state_commitment_data {
+      Some(commitment_data) => commitment_data.compute_commitment(),
+      None => BitDigest { 0: [0_u8; DIGESTBYTES] },
+    };
+    self.status.state_commitment_data =
+      Some(StateCommitmentData { bitmap: self.utxo_map.compute_checksum(),
+                                 block_merkle: self.block_merkle.get_root_hash(),
+                                 transaction_merkle_commitment: self.txn_merkle.get_root_hash(),
+                                 txns_in_block_hash: self.status.txns_in_block_hash,
+                                 previous_state_commitment: prev_commitment });
 
-    let serialized = bincode::serialize(&data).unwrap();
-
-    self.status.global_block_hash = sha256::hash(&serialized);
     self.status.block_commit_count += 1;
   }
 
@@ -983,7 +993,7 @@ impl LedgerState {
   pub fn checkpoint(&mut self, block: &BlockEffect) {
     self.save_utxo_map_version();
     self.compute_and_append_txns_hash(&block);
-    self.compute_and_save_block_hash();
+    self.compute_and_save_state_commitment_data();
   }
 
   // Create a file structure for a Merkle tree log.
@@ -1039,8 +1049,50 @@ impl LedgerAccess for LedgerState {
   }
 }
 
+#[derive(Serialize, Deserialize)]
+pub struct AuthenticatedTransaction {
+  pub finalized_txn: FinalizedTransaction,
+  pub txn_inclusion_proof: Proof,
+  pub state_commitment_data: StateCommitmentData,
+  pub state_commitment: BitDigest,
+}
+
+impl AuthenticatedTransaction {
+  // An authenticated txn result is valid if
+  // 1) The transaction merkle proof is valid
+  // 2) The transaction merkle root matches the value in root_hash_data
+  // 3) root_hash_data hashes to root_hash
+  pub fn is_valid(&self) -> bool {
+    //1)
+    let txn = &self.finalized_txn.txn;
+    let txn_sid = self.finalized_txn.tx_id;
+    let digest = sha256::hash(&txn.serialize_bincode(txn_sid));
+    let mut hash = HashValue::new();
+    hash.hash.clone_from_slice(&digest.0);
+
+    if !AppendOnlyMerkle::valid_proof(&self.txn_inclusion_proof, &hash) {
+      return false;
+    }
+
+    //2)
+    // TODO (jonathan/noah) we should be using digest everywhere
+    if self.state_commitment_data.transaction_merkle_commitment
+       != self.txn_inclusion_proof.get_root_hash()
+    {
+      return false;
+    }
+
+    //3)
+    if self.state_commitment != self.state_commitment_data.compute_commitment() {
+      return false;
+    }
+
+    return true;
+  }
+}
+
 impl ArchiveAccess for LedgerState {
-  fn get_transaction(&self, addr: TxnSID) -> Option<&FinalizedTransaction> {
+  fn get_transaction(&self, addr: TxnSID) -> Option<AuthenticatedTransaction> {
     let mut ix: usize = addr.0;
     for b in self.blocks.iter() {
       match b.get(ix) {
@@ -1048,24 +1100,25 @@ impl ArchiveAccess for LedgerState {
           debug_assert!(ix >= b.len());
           ix -= b.len();
         }
-        v => return v,
+        v => {
+          // Unwrap is safe because if transaction is on ledger there must be a state commitment
+          let state_commitment_data = self.status.state_commitment_data.as_ref().unwrap().clone();
+          let merkle = &self.txn_merkle;
+          // TODO log error and recover?
+          let proof = merkle.get_proof(v.unwrap().merkle_id, 0).unwrap();
+          return Some(AuthenticatedTransaction { finalized_txn: v.unwrap().clone(),
+                                                 txn_inclusion_proof: proof,
+                                                 state_commitment_data:
+                                                   state_commitment_data.clone(),
+                                                 state_commitment:
+                                                   state_commitment_data.compute_commitment() });
+        }
       }
     }
     None
   }
   fn get_block(&self, addr: BlockSID) -> Option<&Vec<FinalizedTransaction>> {
     self.blocks.get(addr.0)
-  }
-
-  fn get_proof(&self, addr: TxnSID) -> Option<Proof> {
-    match self.get_transaction(addr) {
-      None => None,
-      Some(txn) => {
-        let merkle = &self.txn_merkle;
-        // TODO log error and recover?
-        Some(merkle.get_proof(txn.merkle_id, 0).unwrap())
-      }
-    }
   }
 
   fn get_block_count(&self) -> usize {
@@ -1104,8 +1157,12 @@ impl ArchiveAccess for LedgerState {
     None
   }
 
-  fn get_global_block_hash(&self) -> (BitDigest, u64) {
-    (self.status.global_block_hash, self.status.block_commit_count)
+  fn get_state_commitment(&self) -> (BitDigest, u64) {
+    let commitment = match &self.status.state_commitment_data {
+      Some(commitment_data) => commitment_data.compute_commitment(),
+      None => BitDigest { 0: [0_u8; DIGESTBYTES] },
+    };
+    (commitment, self.status.block_commit_count)
   }
 }
 
@@ -1349,17 +1406,23 @@ mod tests {
     let mut ledger_state = LedgerState::test_ledger();
     ledger_state.block_ctx = Some(BlockEffect::new());
 
-    let data = BlockHashData { bitmap: ledger_state.utxo_map.compute_checksum(),
-                               block_merkle: ledger_state.block_merkle.get_root_hash(),
-                               txns_in_block_hash: ledger_state.status.txns_in_block_hash,
-                               global_block_hash: ledger_state.status.global_block_hash };
+    let data = StateCommitmentData { bitmap: ledger_state.utxo_map.compute_checksum(),
+                                     block_merkle: ledger_state.block_merkle.get_root_hash(),
+                                     txns_in_block_hash: ledger_state.status.txns_in_block_hash,
+                                     previous_state_commitment: BitDigest { 0: [0_u8;
+                                                                                DIGESTBYTES] },
+                                     transaction_merkle_commitment: ledger_state.txn_merkle
+                                                                                .get_root_hash() };
 
     let serialized = bincode::serialize(&data).unwrap();
     let count_original = ledger_state.status.block_commit_count;
 
-    ledger_state.compute_and_save_block_hash();
+    ledger_state.compute_and_save_state_commitment_data();
 
-    assert_eq!(ledger_state.status.global_block_hash,
+    assert_eq!(ledger_state.status
+                           .state_commitment_data
+                           .unwrap()
+                           .compute_commitment(),
                sha256::hash(&serialized));
     assert_eq!(ledger_state.status.block_commit_count, count_original + 1);
   }
@@ -1795,7 +1858,6 @@ mod tests {
   //     LedgerAccess::get_tracked_sids
   //   ArchiveAccess for LedgerState
   //     ArchiveAccess::get_transaction
-  //     ArchiveAccess::get_proof
   //     ArchiveAccess::get_utxo_map
   //     ArchiveAccess::get_utxos
   //     ArchiveAccess::get_utxo_checksum
@@ -1987,7 +2049,7 @@ mod tests {
 
     let params = PublicParams::new();
 
-    assert!(ledger.get_global_block_hash() == (BitDigest { 0: [0_u8; 32] }, 0));
+    assert!(ledger.get_state_commitment() == (BitDigest { 0: [0_u8; 32] }, 0));
     let token_code1 = AssetTypeCode { val: [1; 16] };
     let (public_key, secret_key) = build_keys(&mut ledger.get_prng());
 
@@ -2031,22 +2093,23 @@ mod tests {
     assert!(result.is_err());
     ledger.abort_block(block);
 
-    let transaction = ledger.get_transaction(txn_sid).unwrap().clone();
-    let txn_id = transaction.tx_id;
+    let transaction = ledger.get_transaction(txn_sid).unwrap();
+    let txn_id = transaction.finalized_txn.tx_id;
 
     println!("utxos = {:?}", ledger.status.utxos);
     for txo_id in txos {
       assert!(ledger.status.utxos.contains_key(&txo_id));
     }
 
-    match ledger.get_proof(txn_id) {
-      Some(proof) => {
-        assert!(proof.tx_id == ledger.get_transaction(txn_id).unwrap().merkle_id);
+    match ledger.get_transaction(txn_id) {
+      Some(authenticated_txn) => {
+        assert!(authenticated_txn.txn_inclusion_proof.tx_id
+                == authenticated_txn.finalized_txn.merkle_id);
       }
       None => {
         panic!("get_proof failed for tx_id {}, merkle_id {}, block state {}, transaction state {}",
-               transaction.tx_id.0,
-               transaction.merkle_id,
+               transaction.finalized_txn.tx_id.0,
+               transaction.finalized_txn.merkle_id,
                ledger.block_merkle.state(),
                ledger.txn_merkle.state());
       }
@@ -2055,7 +2118,13 @@ mod tests {
     // We don't actually have anything to commmit yet,
     // but this will save the empty checksum, which is
     // enough for a bit of a test.
-    assert!(ledger.get_global_block_hash() == (ledger.status.global_block_hash, 2));
+    assert!(ledger.get_state_commitment()
+            == (ledger.status
+                      .state_commitment_data
+                      .clone()
+                      .unwrap()
+                      .compute_commitment(),
+                2));
     let query_result = ledger.get_utxo_checksum(ledger.status.next_txn.0 as u64)
                              .unwrap();
     let compute_result = ledger.utxo_map.compute_checksum();

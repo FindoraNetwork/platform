@@ -143,6 +143,13 @@ pub struct Proof {
   pub hash_array: Vec<HashValue>,
 }
 
+impl Proof {
+  // Get merkle tree root of tree that the proof refers to
+  pub fn get_root_hash(&self) -> HashValue {
+    self.hash_array[self.hash_array.len() - 1].clone()
+  }
+}
+
 // Provide the serialization help for the array of hashes in a block.
 fn serialize_array<S, T>(array: &[T], serializer: S) -> Result<S::Ok, S::Error>
   where S: Serializer,
@@ -1175,6 +1182,11 @@ impl AppendOnlyMerkle {
     Ok(block)
   }
 
+  /// Verify that proof is a valid merkle proof for hash_value,
+  /// namely that there is a chain of hashes from hash_value to the merkle root
+  pub fn valid_proof(_proof: &Proof, _hash_value: &HashValue) -> bool {
+    unimplemented!();
+  }
   /// Add a new level zero entry to the Merkle tree.  This leaf will represent
   /// an actual transaction.  The transaction id that is returned is used when
   /// generating a proof.

@@ -125,7 +125,7 @@ fn query_txn<AA>(data: web::Data<Arc<RwLock<AA>>>,
   let reader = data.read().unwrap();
   if let Ok(txn_sid) = info.parse::<usize>() {
     if let Some(txn) = reader.get_transaction(TxnSID(txn_sid)) {
-      Ok(serde_json::to_string(&*txn)?)
+      Ok(serde_json::to_string(&txn)?)
     } else {
       Err(actix_web::error::ErrorNotFound("Specified transaction does not exist."))
     }
@@ -148,7 +148,7 @@ fn query_global_state<AA>(data: web::Data<Arc<RwLock<AA>>>) -> actix_web::Result
   where AA: ArchiveAccess
 {
   let reader = data.read().unwrap();
-  let (hash, version) = reader.get_global_block_hash();
+  let (hash, version) = reader.get_state_commitment();
   let result = format!("{} {}", stringer(&hash.0), version);
   Ok(result)
 }
@@ -212,22 +212,9 @@ fn query_block_log<AA>(data: web::Data<Arc<RwLock<AA>>>) -> impl actix_web::Resp
                     .body(res)
 }
 
-fn query_proof<AA>(data: web::Data<Arc<RwLock<AA>>>,
-                   info: web::Path<String>)
-                   -> actix_web::Result<String>
-  where AA: ArchiveAccess
-{
-  if let Ok(txn_sid) = info.parse::<usize>() {
-    let reader = data.read().unwrap();
-    if let Some(proof) = reader.get_proof(TxnSID(txn_sid)) {
-      Ok(serde_json::to_string(&proof)?)
-    } else {
-      Err(actix_web::error::ErrorNotFound("That transaction doesn't exist."))
-    }
-  } else {
-    Err(actix_web::error::ErrorBadRequest("Invalid txn sid encoding."))
-  }
-}
+//fn query_root_txn_hash<AA>(data: web::Data<Arc<RwLock<AA>>) -> actix_web::Result< {
+//
+//}
 
 fn query_utxo_map<AA>(data: web::Data<Arc<RwLock<AA>>>,
                       _info: web::Path<String>)
@@ -342,7 +329,6 @@ impl<T, B> Route for App<T, B>
   fn set_route_for_archive_access<AA: 'static + ArchiveAccess + Sync + Send>(self) -> Self {
     self.route("/txn_sid/{sid}", web::get().to(query_txn::<AA>))
         .route("/global_state", web::get().to(query_global_state::<AA>))
-        .route("/proof/{sid}", web::get().to(query_proof::<AA>))
         .route("/block_log", web::get().to(query_block_log::<AA>))
         .route("/blocks_since/{block_sid}",
                web::get().to(query_blocks_since::<AA>))
