@@ -59,6 +59,13 @@ fn create_with_path(path: &str) -> io::Result<Output> {
 }
 
 #[cfg(test)]
+fn create_overwrite_path(path: &str) -> io::Result<Output> {
+  Command::new(COMMAND).args(&["create", "--name", path])
+                       .arg("--force")
+                       .output()
+}
+
+#[cfg(test)]
 fn keygen_with_path(path: &str) -> io::Result<Output> {
   Command::new(COMMAND).args(&["keygen", "--name", path])
                        .output()
@@ -313,7 +320,8 @@ fn test_submit_with_help() {
 // File creation (txn builder, key pair, and public key)
 //
 #[test]
-fn test_create_invalid_path() {
+fn test_invalid_valid_overwrite_and_rename_path() {
+  // Invalid path
   let output = create_with_path(".").expect("Failed to execute process");
 
   io::stdout().write_all(&output.stdout).unwrap();
@@ -322,6 +330,34 @@ fn test_create_invalid_path() {
   assert_eq!(output.status.code(), Some(USAGE));
   assert!(from_utf8(&output.stdout).unwrap()
                                    .contains(&"Is directory".to_owned()));
+
+  // Valid path
+  let path = "valid_path";
+  let output = create_with_path(path).expect("Failed to execute process");
+
+  io::stdout().write_all(&output.stdout).unwrap();
+  io::stdout().write_all(&output.stderr).unwrap();
+
+  assert!(output.status.success());
+
+  // Overwrite existing file
+  let output = create_overwrite_path(path).expect("Failed to execute process");
+
+  io::stdout().write_all(&output.stdout).unwrap();
+  io::stdout().write_all(&output.stderr).unwrap();
+
+  assert!(output.status.success());
+
+  // Rename existing file
+  let output = create_with_path(path).expect("Failed to execute process");
+
+  io::stdout().write_all(&output.stdout).unwrap();
+  io::stdout().write_all(&output.stderr).unwrap();
+
+  assert!(output.status.success());
+
+  fs::remove_file("valid_path").unwrap();
+  fs::remove_file("valid_path.0").unwrap();
 }
 
 #[test]

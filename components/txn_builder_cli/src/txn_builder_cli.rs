@@ -461,7 +461,7 @@ fn main() -> Result<(), PlatformError> {
         .long("force")
         .alias("overwrite")
         .short("f")
-        .help("Overwrite the default or name transaction file")))
+        .help("If specified, the existing file with the same name will be overwritten.")))
     .subcommand(SubCommand::with_name("store")
       .subcommand(SubCommand::with_name("sids")
         .arg(Arg::with_name("path")
@@ -469,6 +469,11 @@ fn main() -> Result<(), PlatformError> {
           .long("path")
           .takes_value(true)
           .help("Path to store the sids. If not specified, a default path will be given."))
+        .arg(Arg::with_name("overwrite")
+          .long("force")
+          .alias("overwrite")
+          .short("f")
+          .help("If specified, the existing file with the same name will be overwritten."))
         .arg(Arg::with_name("indices")
           .short("is")
           .long("indices")
@@ -480,6 +485,11 @@ fn main() -> Result<(), PlatformError> {
           .long("path")
           .takes_value(true)
           .help("Path to store the blind asset record. If not specified, a default path will be given."))
+        .arg(Arg::with_name("overwrite")
+          .long("force")
+          .alias("overwrite")
+          .short("f")
+          .help("If specified, the existing file with the same name will be overwritten."))
         .arg(Arg::with_name("amount")
           .short("a")
           .long("amount")
@@ -580,13 +590,23 @@ fn main() -> Result<(), PlatformError> {
         .short("n")
         .long("name")
         .help("specify the path and name for the key pair file.")
-        .takes_value(true)))
+        .takes_value(true))
+      .arg(Arg::with_name("overwrite")
+        .long("force")
+        .alias("overwrite")
+        .short("f")
+        .help("If specified, the existing file with the same name will be overwritten.")))
     .subcommand(SubCommand::with_name("pubkeygen")
       .arg(Arg::with_name("create_pub_key_path")
         .short("n")
         .long("name")
         .help("specify the path and name for the public key file.")
-        .takes_value(true)))
+        .takes_value(true))
+      .arg(Arg::with_name("overwrite")
+        .long("force")
+        .alias("overwrite")
+        .short("f")
+        .help("If specified, the existing file with the same name will be overwritten.")))
     .subcommand(SubCommand::with_name("submit")
       .arg(Arg::with_name("protocol")
            .long("http")
@@ -683,7 +703,8 @@ fn process_inputs(inputs: clap::ArgMatches) -> Result<(), PlatformError> {
           format!("{}/keys/default.keys", &findora_dir)
         };
       let expand_str = shellexpand::tilde(&new_keys_path).to_string();
-      create_directory_and_rename_path(&expand_str, false);
+      let overwrite = keygen_matches.is_present("overwrite");
+      create_directory_and_rename_path(&expand_str, overwrite);
       store_key_pair_to_file(&expand_str)
     }
     ("pubkeygen", Some(pubkeygen_matches)) => {
@@ -694,7 +715,8 @@ fn process_inputs(inputs: clap::ArgMatches) -> Result<(), PlatformError> {
           format!("{}/pub_key/default.key", &findora_dir)
         };
       let expand_str = shellexpand::tilde(&new_key_path).to_string();
-      create_directory_and_rename_path(&expand_str, false);
+      let overwrite = pubkeygen_matches.is_present("overwrite");
+      create_directory_and_rename_path(&expand_str, overwrite);
       store_pub_key_to_file(&expand_str)
     }
     ("submit", Some(submit_matches)) => process_submit_cmd(submit_matches, &transaction_file_name),
@@ -758,7 +780,6 @@ fn process_submit_cmd(submit_matches: &clap::ArgMatches,
 
 // Create the specific file if missing
 // Rename the existing path if necessary
-// TODO (Keyao): Take overwrite arg or not?
 fn create_directory_and_rename_path(path_str: &str, overwrite: bool) {
   let path = Path::new(&path_str);
   create_directory_if_missing(&path_str.clone());
@@ -797,7 +818,8 @@ fn process_store_cmd(store_matches: &clap::ArgMatches,
       };
       let path_expand = shellexpand::tilde(&path).to_string();
       println!("Storing sids to {}", path_expand);
-      create_directory_and_rename_path(&path_expand, false);
+      let overwrite = sids_matches.is_present("overwrite");
+      create_directory_and_rename_path(&path_expand, overwrite);
       let sids;
       if let Some(sids_arg) = sids_matches.value_of("indices") {
         sids = sids_arg
@@ -816,7 +838,8 @@ fn process_store_cmd(store_matches: &clap::ArgMatches,
       };
       let path_expand = shellexpand::tilde(&path).to_string();
       println!("Storing blind asset records to {}", path_expand);
-      create_directory_and_rename_path(&path_expand, false);
+      let overwrite = blind_asset_record_path_matches.is_present("overwrite");
+      create_directory_and_rename_path(&path_expand, overwrite);
       let amount;
       if let Some(amount_arg) = blind_asset_record_path_matches.value_of("amount") {
         amount = amount_arg
