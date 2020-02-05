@@ -11,8 +11,6 @@ use std::env;
 use std::ffi::OsStr;
 use std::fs::{self, File};
 use std::io::prelude::*;
-use std::io::Error;
-use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
 use std::process::exit;
 use submission_server::TxnHandle;
@@ -196,16 +194,6 @@ fn load_addresses_from_files(file_paths: &str) -> Result<Vec<AccountAddress>, Pl
 //
 // Store functions
 //
-// TODO (Keyao): Generate file names, rather than ask the user to specify
-//
-fn store_sids_to_file(file_path: &str, sids: &str) -> Result<(), PlatformError> {
-  if fs::write(file_path, sids).is_err() {
-    println!("Sids file {} could not be created", file_path);
-    exit(CANT_CREATE)
-  };
-  Ok(())
-}
-
 fn store_txn_builder_to_file(file_path: &str,
                              txn: &TransactionBuilder)
                              -> Result<(), PlatformError> {
@@ -223,12 +211,11 @@ fn store_txn_builder_to_file(file_path: &str,
 // Create subdirectories as needed.
 // Move aside any extant files at the given paths.
 // Assumes tilde expansion has already been done on paths.
-fn store_key_pair_to_file(file_path: &Path) -> Result<(), PlatformError> {
+fn store_key_pair_to_file(path_str: &str) -> Result<(), PlatformError> {
+  let file_path = Path::new(path_str);
   match fs::create_dir_all(&file_path.parent().unwrap()) {
     Ok(()) => {
-      if let Err(error) = rename_existing_path(&file_path) {
-        println!("Cannot rename key {:?}: {}", &file_path, error);
-      }
+      rename_existing_path(&file_path);
       let mut prng: ChaChaRng;
       prng = ChaChaRng::from_seed([0u8; 32]);
       let keypair = XfrKeyPair::generate(&mut prng);
@@ -255,12 +242,11 @@ fn store_key_pair_to_file(file_path: &Path) -> Result<(), PlatformError> {
 // Create subdirectories as needed.
 // Move aside any extant files at the given paths.
 // Assumes tilde expansion has already been done on paths.
-fn store_pub_key_to_file(file_path: &Path) -> Result<(), PlatformError> {
+fn store_pub_key_to_file(path_str: &str) -> Result<(), PlatformError> {
+  let file_path = Path::new(path_str);
   match fs::create_dir_all(&file_path.parent().unwrap()) {
     Ok(()) => {
-      if let Err(error) = rename_existing_path(&file_path) {
-        println!("Cannot rename key {:?}: {}", &file_path, error);
-      }
+      rename_existing_path(&file_path);
       let mut prng = ChaChaRng::from_seed([0u8; 32]);
       let keypair = XfrKeyPair::generate(&mut prng);
       match fs::write(&file_path, keypair.get_pk_ref().as_bytes()) {
@@ -279,6 +265,14 @@ fn store_pub_key_to_file(file_path: &Path) -> Result<(), PlatformError> {
     }
   }
 
+  Ok(())
+}
+
+fn store_sids_to_file(file_path: &str, sids: &str) -> Result<(), PlatformError> {
+  if fs::write(file_path, sids).is_err() {
+    println!("Sids file {} could not be created", file_path);
+    exit(CANT_CREATE)
+  };
   Ok(())
 }
 
@@ -336,7 +330,7 @@ const BACKUP_COUNT_MAX: i32 = 10000; // Arbitrary choice.
 // Assumes it is safe to check the existence of the path after doing so.
 // This implies all path components of path must exist and be readable.
 // Assumes recursion won't hurt us here.
-fn find_available_path(path: &Path, n: i32) -> Result<PathBuf, std::io::Error> {
+fn find_available_path(path: &Path, n: i32) -> Result<PathBuf, ()> {
   if n < BACKUP_COUNT_MAX {
     let path_n = path.with_extension(&n.to_string());
     if path_n.exists() {
@@ -345,15 +339,16 @@ fn find_available_path(path: &Path, n: i32) -> Result<PathBuf, std::io::Error> {
       Ok(path_n)
     }
   } else {
-    Err(std::io::Error::new(std::io::ErrorKind::AlreadyExists,
-                            format!("Too many backups for {:?}", path)))
+    println!("Too many backups for {:?}. Use --path to specify another path.",
+             path);
+    exit(IO_ERR)
   }
 }
 
-// Return a backup file path derived from path or an error if an
+// Return a backup file path derived from path or exit with usage message if an
 // unused path cannot be derived. The path must not be empty
 // and must not be dot (".").
-fn next_path(path: &Path) -> Result<PathBuf, std::io::Error> {
+fn next_path(path: &Path) -> Result<PathBuf, ()> {
   fn add_backup_extension(path: &Path) -> PathBuf {
     let mut pb = PathBuf::from(path);
     pb.set_file_name(format!("{}.0",
@@ -375,35 +370,37 @@ fn next_path(path: &Path) -> Result<PathBuf, std::io::Error> {
   } else {
     // Doesn't have any extension.
     if path.components().next() == None {
-      Err(std::io::Error::new(std::io::ErrorKind::InvalidData,
-                              format!("Is empty: {:?}", path)))
+      println!("Is empty: {:?}. Specify a file path.", path);
+      exit(USAGE)
     } else if path.file_name() == None {
-      Err(std::io::Error::new(std::io::ErrorKind::InvalidData,
-                              format!("Is directory: {:?}", path)))
+      println!("Is directory: {:?}. Specify a file path.", path);
+      exit(USAGE)
     } else {
       find_available_path(&add_backup_extension(&path), 0)
     }
   }
 }
 
-fn rename_existing_path(path: &Path) -> std::result::Result<(), std::io::Error> {
-  match next_path(path) {
-    Ok(next) => {
-      trace!("Next path for {:?} is {:?}", &path, &next);
-      fs::rename(path, next.as_path())
+fn rename_existing_path(path: &Path) {
+  if let Ok(next) = next_path(path) {
+    trace!("Next path for {:?} is {:?}", &path, &next);
+    if let Err(error) = fs::rename(path, next.as_path()) {
+      println!("Failed to rename path {} to {}: {}",
+               path.to_str().unwrap(),
+               next.to_str().unwrap(),
+               error);
     }
-    Err(error) => Err(error),
   }
 }
 
-fn get_amounts(amounts_arg: &str) -> std::result::Result<Vec<u64>, std::io::Error> {
+fn get_amounts(amounts_arg: &str) -> Result<Vec<u64>, ()> {
   let amounts_str = split_arg(amounts_arg);
   let mut amounts = Vec::new();
   for amount_str in amounts_str {
     if let Ok(amount) = amount_str.trim().parse::<u64>() {
       amounts.push(amount);
     } else {
-      return Err(Error::new(ErrorKind::InvalidInput, "Improperly formatted amounts"));
+      exit(USAGE)
     }
   }
   Ok(amounts)
@@ -471,7 +468,7 @@ fn main() -> Result<(), PlatformError> {
           .short("p")
           .long("path")
           .takes_value(true)
-          .help("Required: Path to store the sids"))
+          .help("Path to store the sids. If not specified, a default path will be given."))
         .arg(Arg::with_name("indices")
           .short("is")
           .long("indices")
@@ -482,7 +479,7 @@ fn main() -> Result<(), PlatformError> {
           .short("p")
           .long("path")
           .takes_value(true)
-          .help("Required: Path to store the blind asset record"))
+          .help("Path to store the blind asset record. If not specified, a default path will be given."))
         .arg(Arg::with_name("amount")
           .short("a")
           .long("amount")
@@ -645,7 +642,7 @@ fn process_inputs(inputs: clap::ArgMatches) -> Result<(), PlatformError> {
                                                            &keys_file_path,
                                                            &transaction_file_name,
                                                            &findora_dir),
-    ("store", Some(store_matches)) => process_store_cmd(store_matches),
+    ("store", Some(store_matches)) => process_store_cmd(store_matches, &findora_dir),
     ("add", Some(add_matches)) => process_add_cmd(add_matches,
                                                   &keys_file_path,
                                                   &transaction_file_name,
@@ -685,9 +682,9 @@ fn process_inputs(inputs: clap::ArgMatches) -> Result<(), PlatformError> {
         } else {
           format!("{}/keys/default.keys", &findora_dir)
         };
-      let file_str = shellexpand::tilde(&new_keys_path).to_string();
-      let file_path = Path::new(&file_str);
-      store_key_pair_to_file(&file_path)
+      let expand_str = shellexpand::tilde(&new_keys_path).to_string();
+      create_directory_and_rename_path(&expand_str, false);
+      store_key_pair_to_file(&expand_str)
     }
     ("pubkeygen", Some(pubkeygen_matches)) => {
       let new_key_path =
@@ -696,9 +693,9 @@ fn process_inputs(inputs: clap::ArgMatches) -> Result<(), PlatformError> {
         } else {
           format!("{}/pub_key/default.key", &findora_dir)
         };
-      let file_str = shellexpand::tilde(&new_key_path).to_string();
-      let file_path = Path::new(&file_str);
-      store_pub_key_to_file(&file_path)
+      let expand_str = shellexpand::tilde(&new_key_path).to_string();
+      create_directory_and_rename_path(&expand_str, false);
+      store_pub_key_to_file(&expand_str)
     }
     ("submit", Some(submit_matches)) => process_submit_cmd(submit_matches, &transaction_file_name),
     _ => {
@@ -759,6 +756,17 @@ fn process_submit_cmd(submit_matches: &clap::ArgMatches,
   Ok(())
 }
 
+// Create the specific file if missing
+// Rename the existing path if necessary
+// TODO (Keyao): Take overwrite arg or not?
+fn create_directory_and_rename_path(path_str: &str, overwrite: bool) {
+  let path = Path::new(&path_str);
+  create_directory_if_missing(&path_str.clone());
+  if path.exists() && !overwrite {
+    rename_existing_path(&path);
+  }
+}
+
 fn process_create_cmd(create_matches: &clap::ArgMatches,
                       _keys_file_path: &str,
                       transaction_file_name: &str,
@@ -772,27 +780,24 @@ fn process_create_cmd(create_matches: &clap::ArgMatches,
     transaction_file_name.to_string()
   };
   let expand_str = shellexpand::tilde(&file_str).to_string();
-  let file_path = Path::new(&expand_str);
-  create_directory_if_missing(&expand_str);
-  if file_path.exists() && !overwrite {
-    if let Err(error) = rename_existing_path(&file_path) {
-      println!("Cannot rename file {:?}: {}", &file_path, error);
-    }
-  }
+  create_directory_and_rename_path(&expand_str, overwrite);
   let txn_builder = TransactionBuilder::default();
   store_txn_builder_to_file(&expand_str, &txn_builder)
 }
 
-fn process_store_cmd(store_matches: &clap::ArgMatches) -> Result<(), PlatformError> {
+fn process_store_cmd(store_matches: &clap::ArgMatches,
+                     findora_dir: &str)
+                     -> Result<(), PlatformError> {
   match store_matches.subcommand() {
     ("sids", Some(sids_matches)) => {
-      let path;
-      if let Some(path_arg) = sids_matches.value_of("path") {
-        path = path_arg
+      let path = if let Some(path_arg) = sids_matches.value_of("path") {
+        path_arg.to_string()
       } else {
-        println!("Path to the sids file is required. Use --path.");
-        exit(USAGE)
-      }
+        format!("{}/values/default.sids", &findora_dir)
+      };
+      let path_expand = shellexpand::tilde(&path).to_string();
+      println!("Storing sids to {}", path_expand);
+      create_directory_and_rename_path(&path_expand, false);
       let sids;
       if let Some(sids_arg) = sids_matches.value_of("indices") {
         sids = sids_arg
@@ -800,17 +805,18 @@ fn process_store_cmd(store_matches: &clap::ArgMatches) -> Result<(), PlatformErr
         println!("TxoSID indices are required. Use --indices.");
         exit(USAGE)
       }
-      store_sids_to_file(path, sids)
+      store_sids_to_file(&path_expand, sids)
     }
 
     ("blind_asset_record", Some(blind_asset_record_path_matches)) => {
-      let path;
-      if let Some(path_arg) = blind_asset_record_path_matches.value_of("path") {
-        path = path_arg
+      let path = if let Some(path_arg) = blind_asset_record_path_matches.value_of("path") {
+        path_arg.to_string()
       } else {
-        println!("Path to the blind asset record file is required. Use --path.");
-        exit(USAGE)
-      }
+        format!("{}/values/default.blind_asset_record", &findora_dir)
+      };
+      let path_expand = shellexpand::tilde(&path).to_string();
+      println!("Storing blind asset records to {}", path_expand);
+      create_directory_and_rename_path(&path_expand, false);
       let amount;
       if let Some(amount_arg) = blind_asset_record_path_matches.value_of("amount") {
         amount = amount_arg
@@ -834,7 +840,7 @@ fn process_store_cmd(store_matches: &clap::ArgMatches) -> Result<(), PlatformErr
       }
       let confidential_amount = blind_asset_record_path_matches.is_present("confidential_amount");
       let confidential_asset = blind_asset_record_path_matches.is_present("confidential_asset");
-      store_blind_asset_record(path,
+      store_blind_asset_record(&path_expand,
                                amount,
                                asset_type,
                                pub_key_path,
@@ -1080,15 +1086,10 @@ mod tests {
 
   fn check_next_path(input: &str, expected: &str) {
     let as_path = Path::new(input);
-    match next_path(as_path) {
-      Ok(result) => {
-        let as_str = result.to_str().unwrap();
-        if as_str != expected {
-          panic!("{} failed:  {}", input, as_str);
-        }
-      }
-      Err(error) => {
-        panic!("next_path returned an error: {}", error);
+    if let Ok(result) = next_path(as_path) {
+      let as_str = result.to_str().unwrap();
+      if as_str != expected {
+        panic!("{} failed:  {}", input, as_str);
       }
     }
   }
@@ -1133,29 +1134,6 @@ mod tests {
 
     check_next_path_typical("abc.0", "abc.1");
     check_next_path_nonextant("abc.0", "abc.0");
-
-    let as_path = Path::new(".");
-    if next_path(as_path).is_err() {
-      // This is the error:
-      // Custom { kind: InvalidData, error: "Is directory: \".\"" }
-    } else {
-      panic!("Expecting directory error");
-    }
-  }
-
-  #[test]
-  fn test_rename_existing_path() {
-    // Path name shoud be different from those in test_next_path()
-    // Otherwise may cause test_next_path() to fail
-    let as_path = Path::new("10");
-
-    // Remove the file if it exists
-    if as_path.exists() {
-      fs::remove_file(as_path).unwrap();
-    }
-
-    assert_eq!(rename_existing_path(as_path).map_err(|e| e.kind()),
-               Err(ErrorKind::NotFound));
   }
 
   #[test]
@@ -1193,7 +1171,7 @@ mod tests {
 
     // Store each blind asset record
     for i in 0..3 {
-      let _ = store_pub_key_to_file(Path::new(pub_key_paths[i]));
+      let _ = store_pub_key_to_file(pub_key_paths[i]);
       store_blind_asset_record(paths[i],
                                &amounts[i].to_string(),
                                from_utf8(&asset_types[i]).unwrap(),
