@@ -348,6 +348,12 @@ impl LedgerStatus {
     Ok(ledger)
   }
 
+  #[cfg(feature = "TESTING")]
+  #[allow(non_snake_case)]
+  pub fn TESTING_check_txn_effects(&self, txn: TxnEffect) -> Result<TxnEffect, PlatformError> {
+    self.check_txn_effects(txn)
+  }
+
   // Check that `txn` can be safely applied to the current ledger.
   //
   // Returns the same TxnEffect (unchanged) if it is safe. Consumes `txn`
@@ -685,6 +691,12 @@ impl LedgerUpdate<ChaChaRng> for LedgerState {
 }
 
 impl LedgerState {
+  #[cfg(feature = "TESTING")]
+  #[allow(non_snake_case)]
+  pub fn TESTING_get_status(&self) -> &LedgerStatus {
+    &self.status
+  }
+
   // Create a ledger for use by a unit test.
   pub fn test_ledger() -> LedgerState {
     let tmp_dir = {
