@@ -1,10 +1,11 @@
 #![deny(warnings)]
-use codes::exit_code::*;
 use ledger::data_model::AssetTypeCode;
 use std::fs;
 use std::io::{self, Write};
 use std::process::{Command, Output};
 use std::str::from_utf8;
+
+extern crate exitcode;
 
 // TODOs:
 // Derive path and command name from cwd
@@ -174,7 +175,7 @@ fn test_call_no_args() {
   io::stdout().write_all(&output.stdout).unwrap();
   io::stdout().write_all(&output.stderr).unwrap();
 
-  assert_eq!(output.status.code(), Some(USAGE));
+  assert_eq!(output.status.code(), Some(exitcode::USAGE));
   assert!(from_utf8(&output.stdout).unwrap().contains(&"Subcommand missing or not recognized. Try --help".to_owned()));
 }
 
@@ -187,7 +188,7 @@ fn test_store_no_args() {
   io::stdout().write_all(&output.stdout).unwrap();
   io::stdout().write_all(&output.stderr).unwrap();
 
-  assert_eq!(output.status.code(), Some(USAGE));
+  assert_eq!(output.status.code(), Some(exitcode::USAGE));
   assert!(from_utf8(&output.stdout).unwrap().contains(&"Subcommand missing or not recognized. Try store --help".to_owned()));
 }
 
@@ -201,7 +202,7 @@ fn test_add_no_args() {
   io::stdout().write_all(&output.stdout).unwrap();
   io::stdout().write_all(&output.stderr).unwrap();
 
-  assert_eq!(output.status.code(), Some(USAGE));
+  assert_eq!(output.status.code(), Some(exitcode::USAGE));
   assert!(from_utf8(&output.stdout).unwrap().contains(&"Subcommand missing or not recognized. Try add --help".to_owned()));
 }
  */
@@ -329,7 +330,7 @@ fn test_invalid_valid_overwrite_and_rename_path() {
   io::stdout().write_all(&output.stdout).unwrap();
   io::stdout().write_all(&output.stderr).unwrap();
 
-  assert_eq!(output.status.code(), Some(USAGE));
+  assert_eq!(output.status.code(), Some(exitcode::USAGE));
   assert!(from_utf8(&output.stdout).unwrap()
                                    .contains(&"Is directory".to_owned()));
 

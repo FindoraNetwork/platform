@@ -10,9 +10,9 @@ path = "src/txn_builder_cli.rs"
 
 [dependencies]
 clap = "2.33.0"
-codes = { path = "../codes" }
 dirs = "2.0.2"
 env_logger = "0.6.2"
+exitcode = "1.1.2"
 findora = { path = "../../findora" }
 ledger = { path = "../../ledger" }
 submission_server = { path = "../submission_server" }
