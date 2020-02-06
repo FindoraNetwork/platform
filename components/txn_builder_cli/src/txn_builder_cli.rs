@@ -346,7 +346,7 @@ fn find_available_path(path: &Path, n: i32) -> Result<PathBuf, ()> {
   }
 }
 
-// Return a backup file path derived from path or exit with exitcode::USAGE message if an
+// Return a backup file path derived from path or exit with usage message if an
 // unused path cannot be derived. The path must not be empty
 // and must not be dot (".").
 fn next_path(path: &Path) -> Result<PathBuf, ()> {
