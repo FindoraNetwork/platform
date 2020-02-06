@@ -412,6 +412,12 @@ pub struct FinalizedTransaction {
   pub merkle_id: u64,
 }
 
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct FinalizedBlock {
+  pub txns: Vec<FinalizedTransaction>,
+  pub merkle_id: u64,
+}
+
 impl Transaction {
   pub fn add_operation(&mut self, op: Operation) {
     self.operations.push(op);

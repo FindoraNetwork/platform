@@ -162,8 +162,8 @@ fn query_blocks_since<AA>(data: web::Data<Arc<RwLock<AA>>>,
   let mut ret = Vec::new();
   for ix in block_id.into_inner()..reader.get_block_count() {
     let sid = BlockSID(ix);
-    let block = reader.get_block(sid).unwrap();
-    ret.push((sid.0, block.clone()));
+    let authenticated_block = reader.get_block(sid).unwrap();
+    ret.push((sid.0, authenticated_block.block.txns.clone()));
   }
   web::Json(ret)
 }
@@ -179,7 +179,7 @@ fn query_block_log<AA>(data: web::Data<Arc<RwLock<AA>>>) -> impl actix_web::Resp
   res.push_str("<th>Transactions</th>");
   res.push_str("</tr>");
   for ix in 0..reader.get_block_count() {
-    let block = reader.get_block(BlockSID(ix)).unwrap();
+    let authenticated_block = reader.get_block(BlockSID(ix)).unwrap();
     res.push_str("<tr>");
 
     res.push_str(&format!("<td>{}</td>", ix));
@@ -191,7 +191,7 @@ fn query_block_log<AA>(data: web::Data<Arc<RwLock<AA>>>) -> impl actix_web::Resp
     res.push_str("<th>Operations</th>");
     res.push_str("</tr>");
 
-    for txn in block.iter() {
+    for txn in authenticated_block.block.txns.iter() {
       res.push_str("<tr>");
       res.push_str(&format!("<td>{}</td>", txn.tx_id.0));
       res.push_str(&format!("<td>{}</td>", txn.merkle_id));

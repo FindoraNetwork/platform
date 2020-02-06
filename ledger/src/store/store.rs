@@ -115,7 +115,7 @@ pub trait ArchiveAccess {
   // Look up transaction in the log
   fn get_transaction(&self, addr: TxnSID) -> Option<AuthenticatedTransaction>;
   // Look up block in the log
-  fn get_block(&self, addr: BlockSID) -> Option<&Vec<FinalizedTransaction>>;
+  fn get_block(&self, addr: BlockSID) -> Option<AuthenticatedBlock>;
 
   // This previously did the serialization at the call to this, and
   // unconditionally returned Some(...).
@@ -242,7 +242,7 @@ pub struct LedgerState {
   // The `FinalizedTransaction`s consist of a Transaction and an index into
   // `merkle` representing its hash.
   // TODO(joe): should this be in-memory?
-  blocks: Vec<Vec<FinalizedTransaction>>,
+  blocks: Vec<FinalizedBlock>,
 
   // Bitmap tracking all the live TXOs
   utxo_map: BitMap,
@@ -670,11 +670,13 @@ impl LedgerUpdate<ChaChaRng> for LedgerState {
                                              tx_id: txn_sid,
                                              merkle_id });
       }
-      self.blocks.push(tx_block);
-    }
+      // Checkpoint
+      let block_merkle_id = self.checkpoint(&block);
 
-    // Compute hash against history
-    self.checkpoint(&block);
+      //Add block to txn history
+      self.blocks.push(FinalizedBlock { txns: tx_block,
+                                        merkle_id: block_merkle_id });
+    }
 
     // TODO(joe): asset tracing?
 
@@ -763,7 +765,7 @@ impl LedgerState {
   // In this functionn:
   //  1. Compute the hash of transactions in the block and update txns_in_block_hash
   //  2. Append txns_in_block_hash to block_merkle
-  fn compute_and_append_txns_hash(&mut self, block: &BlockEffect) {
+  fn compute_and_append_txns_hash(&mut self, block: &BlockEffect) -> u64 {
     // 1. Compute the hash of transactions in the block and update txns_in_block_hash
     self.status.txns_in_block_hash = block.compute_txns_in_block_hash();
 
@@ -774,7 +776,7 @@ impl LedgerState {
                       .clone_from_slice(&self.status.txns_in_block_hash.0);
 
     //  2.2 Update the block Merkle tree
-    self.block_merkle.append(&txns_in_block_hash).unwrap();
+    self.block_merkle.append(&txns_in_block_hash).unwrap()
   }
 
   fn compute_and_save_state_commitment_data(&mut self) {
@@ -989,11 +991,13 @@ impl LedgerState {
   // pub fn begin_commit(&mut self) {
   //   self.txn_base_sid.0 = self.max_applied_sid.0 + 1;
   // }
+  //
 
-  pub fn checkpoint(&mut self, block: &BlockEffect) {
+  pub fn checkpoint(&mut self, block: &BlockEffect) -> u64 {
     self.save_utxo_map_version();
-    self.compute_and_append_txns_hash(&block);
+    let merkle_id = self.compute_and_append_txns_hash(&block);
     self.compute_and_save_state_commitment_data();
+    merkle_id
   }
 
   // Create a file structure for a Merkle tree log.
@@ -1049,6 +1053,48 @@ impl LedgerAccess for LedgerState {
   }
 }
 
+pub struct AuthenticatedBlock {
+  pub block: FinalizedBlock,
+  pub block_inclusion_proof: Proof,
+  pub state_commitment_data: StateCommitmentData,
+  pub state_commitment: BitDigest,
+}
+
+impl AuthenticatedBlock {
+  // An authenticated block result is valid if
+  // 1) The block merkle proof is valid
+  // 2) The block merkle root matches the value in root_hash_data
+  // 3) root_hash_data hashes to root_hash
+  pub fn is_valid(&self) -> bool {
+    //1) compute block hash
+    let txns: Vec<Transaction> = self.block
+                                     .txns
+                                     .iter()
+                                     .map(|auth_tx| auth_tx.txn.clone())
+                                     .collect();
+    let serialized = bincode::serialize(&txns).unwrap();
+    let digest = sha256::hash(&serialized);
+    let mut hash = HashValue::new();
+    hash.hash.clone_from_slice(&digest.0);
+
+    if !AppendOnlyMerkle::valid_proof(&self.block_inclusion_proof, &hash) {
+      return false;
+    }
+
+    //2)
+    if self.state_commitment_data.block_merkle != self.block_inclusion_proof.get_root_hash() {
+      return false;
+    }
+
+    //3)
+    if self.state_commitment != self.state_commitment_data.compute_commitment() {
+      return false;
+    }
+
+    return true;
+  }
+}
+
 #[derive(Serialize, Deserialize)]
 pub struct AuthenticatedTransaction {
   pub finalized_txn: FinalizedTransaction,
@@ -1095,10 +1141,10 @@ impl ArchiveAccess for LedgerState {
   fn get_transaction(&self, addr: TxnSID) -> Option<AuthenticatedTransaction> {
     let mut ix: usize = addr.0;
     for b in self.blocks.iter() {
-      match b.get(ix) {
+      match b.txns.get(ix) {
         None => {
-          debug_assert!(ix >= b.len());
-          ix -= b.len();
+          debug_assert!(ix >= b.txns.len());
+          ix -= b.txns.len();
         }
         v => {
           // Unwrap is safe because if transaction is on ledger there must be a state commitment
@@ -1117,8 +1163,21 @@ impl ArchiveAccess for LedgerState {
     }
     None
   }
-  fn get_block(&self, addr: BlockSID) -> Option<&Vec<FinalizedTransaction>> {
-    self.blocks.get(addr.0)
+  fn get_block(&self, addr: BlockSID) -> Option<AuthenticatedBlock> {
+    match self.blocks.get(addr.0) {
+      None => return None,
+      Some(finalized_block) => {
+        let block_inclusion_proof = self.block_merkle
+                                        .get_proof(finalized_block.merkle_id, 0)
+                                        .unwrap();
+        let state_commitment_data = self.status.state_commitment_data.as_ref().unwrap().clone();
+        return Some(AuthenticatedBlock { block: finalized_block.clone(),
+                                         block_inclusion_proof,
+                                         state_commitment_data: state_commitment_data.clone(),
+                                         state_commitment:
+                                           state_commitment_data.compute_commitment() });
+      }
+    }
   }
 
   fn get_block_count(&self) -> usize {
