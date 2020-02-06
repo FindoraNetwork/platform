@@ -782,8 +782,8 @@ fn process_submit_cmd(submit_matches: &clap::ArgMatches,
 // Create the specific file if missing
 // Rename the existing path if necessary
 fn create_directory_and_rename_path(path_str: &str, overwrite: bool) {
-  let path = Path::new(&path_str);
-  create_directory_if_missing(&path_str.clone());
+  let path = Path::new(path_str);
+  create_directory_if_missing(path_str);
   if path.exists() && !overwrite {
     rename_existing_path(&path);
   }
