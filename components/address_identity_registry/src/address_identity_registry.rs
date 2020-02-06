@@ -37,6 +37,16 @@ use zei::api::anon_creds::{
 
 // Default file path of the anonymous credential registry
 const DEFAULT_REGISTRY_PATH: &str = "acreg.json";
+const HELP_HELP_STRING: &str = "Prints a help message";
+const HELP_ADDISSUER_STRING: &str =
+  "Creates an issuer which can be referred to by the name \"issuer_name\"";
+const HELP_ADDUSER_STRING: &str = "Creates an user named \"user_name\" bound to \"issuer_name\"";
+const HELP_GETCREDS_STRING: &str = "Creates a signature";
+const HELP_REVEAL_STRING: &str = "Creates a proof for a signature";
+const HELP_VERIFY_STRING: &str = "Verifies the proof";
+const HELP_SHOWISSUER_STRING: &str = "Print the internal representation of the issuer";
+const HELP_SHOWUSER_STRING: &str = "Print the internal representation of the user";
+const HELP_SHOWCREDS_STRING: &str = "Print the internal representation of the credentials";
 
 const HELP_STRING: &str = r#"
   Commands:
@@ -45,7 +55,7 @@ const HELP_STRING: &str = r#"
     addissuer <issuer_name>:
       Creates an issuer which can be referred to by the name "issuer_name"
     adduser <issuer_name> <user_name>:
-      Creates an user named "user_name" bound to "issuer_name
+      Creates an user named "user_name" bound to "issuer_name"
     getcreds <user_name> [<attr_name>]*:
       Creates a signature
     reveal <user_name> [<bool>]*:
@@ -70,15 +80,15 @@ Example of use
 lazy_static! {
   static ref COMMANDS: HashMap<&'static str, &'static str> = {
     let mut m = HashMap::new();
-    m.insert("help", HELP_STRING);
-    m.insert("addissuer", "");
-    m.insert("adduser", "");
-    m.insert("sign", "");
-    m.insert("reveal", "");
-    m.insert("verify", "");
-    m.insert("showissuer", "");
-    m.insert("showuser", "");
-    m.insert("showcreds", "");
+    m.insert("help", HELP_HELP_STRING);
+    m.insert("addissuer", HELP_ADDISSUER_STRING);
+    m.insert("adduser", HELP_ADDUSER_STRING);
+    m.insert("sign", HELP_GETCREDS_STRING);
+    m.insert("reveal", HELP_REVEAL_STRING);
+    m.insert("verify", HELP_VERIFY_STRING);
+    m.insert("showissuer", HELP_SHOWISSUER_STRING);
+    m.insert("showuser", HELP_SHOWUSER_STRING);
+    m.insert("showcreds", HELP_SHOWCREDS_STRING);
     m
   };
 }
@@ -163,7 +173,7 @@ fn sha256<T>(key: &T) -> Hash256
   where T: Serialize + TypeName
 {
   println!("sha256: hashing type: {}",
-           key.type_string().to_string().cyan());
+           key.type_string().to_string().blue());
   // Salt the hash to avoid leaking information about other uses of
   // sha256 on the user's public key.
   let mut bytes = key.type_string().to_string().into_bytes();
@@ -256,9 +266,6 @@ fn add_issuer(mut global_state: &mut GlobalState, issuer_name: &str) -> Result<(
   } else {
     let issuer = new_issuer(&mut global_state);
     println!("New issuer {}", issuer_name.yellow());
-    if global_state.verbose {
-      println!("{} is : {:?}", issuer_name.yellow(), &issuer);
-    }
     global_state.issuers.insert(issuer_name.to_string(), issuer);
     Ok(())
   }
@@ -267,7 +274,9 @@ fn add_issuer(mut global_state: &mut GlobalState, issuer_name: &str) -> Result<(
 // Generate a new issuer and append it to the registry.
 fn show_issuer(global_state: &mut GlobalState, issuer_name: &str) -> Result<(), String> {
   if let Some(issuer) = global_state.issuers.get(issuer_name) {
-    println!("{} is : {:?}", issuer_name.yellow(), &issuer);
+    println!("{} is : {}",
+             issuer_name.yellow(),
+             serde_json::to_string_pretty(&issuer).unwrap().magenta());
     Ok(())
   } else {
     Err(format!("issuer named {} not found", issuer_name))
@@ -287,9 +296,6 @@ fn add_user(global_state: &mut GlobalState,
       let user = User { public_key: user_pk,
                         secret_key: user_sk };
       println!("New user {} with issuer {}", user_name, issuer_name);
-      if global_state.verbose {
-        println!("user is {:?}", &user);
-      }
       global_state.users.insert(user_name.to_string(), user);
       global_state.user_issuer
                   .insert(user_name.to_string(), issuer.clone());
@@ -302,7 +308,9 @@ fn add_user(global_state: &mut GlobalState,
 
 fn show_user(global_state: &mut GlobalState, user_name: &str) -> Result<(), String> {
   if let Some(user) = global_state.users.get(user_name) {
-    println!("{} is : {:?}", user_name.yellow(), &user);
+    println!("{} is : {}",
+             user_name.yellow(),
+             serde_json::to_string_pretty(&user).unwrap().magenta());
     Ok(())
   } else {
     Err(format!("user named {} not found", user_name))
@@ -320,7 +328,7 @@ fn issue_credential(global_state: &mut GlobalState,
                         &user_keys.public_key,
                         &attrs);
 
-      // User generates cred by calling ac_reveal with no attributes
+      // User generates committment to cred by calling ac_reveal with no attributes
       let empty_attrs: Vec<String> = Vec::new();
       let empty_bitmap: Vec<bool> = Vec::new();
       if let Ok(proof) = ac_reveal(&mut global_state.prng,
@@ -342,9 +350,6 @@ fn issue_credential(global_state: &mut GlobalState,
         let credential = Credential { cred: proof,
                                       attrs: attrs.to_vec() };
         println!("Credential issued to {}", user);
-        if global_state.verbose {
-          println!("Credential is {:?}", &credential);
-        }
         global_state.user_cred.insert(user.to_string(), credential);
         Ok(())
       } else {
@@ -359,7 +364,9 @@ fn issue_credential(global_state: &mut GlobalState,
 
 fn show_credentials(global_state: &mut GlobalState, user_name: &str) -> Result<(), String> {
   if let Some(credential) = global_state.user_cred.get(&user_name.to_string()) {
-    println!("{} is : {:?}", user_name.yellow(), &credential);
+    println!("{} is : {}",
+             user_name.yellow(),
+             serde_json::to_string_pretty(&credential).unwrap().magenta());
     Ok(())
   } else {
     Err(format!("user {} credential not found", user_name))
@@ -489,6 +496,14 @@ fn exec_line(mut global_state: &mut GlobalState, line: &str) -> Result<(), Strin
       println!("{}", HELP_STRING.green());
       Ok(())
     }
+    ["help", cmd] => {
+      if let Some(s) = COMMANDS.get(cmd) {
+        println!("{}", s.green());
+        Ok(())
+      } else {
+        Err(format!("{} is not a command", cmd.red()))
+      }
+    }
     ["test"] => test(&mut global_state),
     ["addissuer", issuer] => add_issuer(&mut global_state, &issuer),
     ["adduser", issuer, user] => {
@@ -542,7 +557,7 @@ fn main() -> Result<(), rustyline::error::ReadlineError> {
         if let Err(e) = exec_line(&mut global_state, &line) {
           println!("Error: {}", e.red());
         } else {
-          println!("Success: {}", line.blue());
+          println!("Success: {}", line.cyan());
         }
       }
       Err(ReadlineError::Interrupted) => {
