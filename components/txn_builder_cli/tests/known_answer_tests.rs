@@ -2,6 +2,7 @@
 use ledger::data_model::AssetTypeCode;
 use std::fs;
 use std::io::{self, Write};
+use std::path::Path;
 use std::process::{Command, Output};
 use std::str::from_utf8;
 
@@ -48,6 +49,36 @@ fn store_blind_asset_record_no_path(amount: &str,
                        .args(&["--asset_type", asset_type])
                        .args(&["--pub_key_path", pub_key_path])
                        .output()
+}
+
+#[cfg(test)]
+fn get_findora_dir() -> String {
+  let findora_dir = {
+    let home_dir = dirs::home_dir().unwrap_or_else(|| Path::new(".").to_path_buf());
+    format!("{}/.findora", home_dir.to_str().unwrap_or("./.findora"))
+  };
+
+  findora_dir
+}
+
+#[cfg(test)]
+fn remove_txn_dir() {
+  fs::remove_dir_all(format!("{}/txn", get_findora_dir())).unwrap();
+}
+
+#[cfg(test)]
+fn remove_keypair_dir() {
+  fs::remove_dir_all(format!("{}/keypair", get_findora_dir())).unwrap();
+}
+
+#[cfg(test)]
+fn remove_pubkey_dir() {
+  fs::remove_dir_all(format!("{}/pubkey", get_findora_dir())).unwrap();
+}
+
+#[cfg(test)]
+fn remove_values_dir() {
+  fs::remove_dir_all(format!("{}/values", get_findora_dir())).unwrap();
 }
 
 //
@@ -110,7 +141,7 @@ fn define_asset(txn_builder_path: &str,
                 memo: &str)
                 -> io::Result<Output> {
   Command::new(COMMAND).args(&["--txn", txn_builder_path])
-                       .args(&["--keys", key_pair_path])
+                       .args(&["--key_pair", key_pair_path])
                        .args(&["add", "define_asset"])
                        .args(&["--token_code", token_code])
                        .args(&["--memo", memo])
@@ -125,7 +156,7 @@ fn issue_asset(txn_builder_path: &str,
                amount: &str)
                -> io::Result<Output> {
   Command::new(COMMAND).args(&["--txn", txn_builder_path])
-                       .args(&["--keys", key_pair_path])
+                       .args(&["--key_pair", key_pair_path])
                        .args(&["add", "issue_asset"])
                        .args(&["--token_code", token_code])
                        .args(&["--sequence_number", sequence_number])
@@ -143,7 +174,7 @@ fn transfer_asset(txn_builder_path: &str,
                   address_paths: &str)
                   -> io::Result<Output> {
   Command::new(COMMAND).args(&["--txn", txn_builder_path])
-                       .args(&["--keys", key_pair_path])
+                       .args(&["--key_pair", key_pair_path])
                        .args(&["add", "transfer_asset"])
                        .args(&["--sids_path", sids_path])
                        .args(&["--blind_asset_record_paths", blind_asset_record_paths])
@@ -161,6 +192,61 @@ fn _submit(txn_builder_path: &str, host: &str, port: &str) -> io::Result<Output>
                        .args(&["--host", host])
                        .args(&["--port", port])
                        .output()
+}
+
+//
+// No path
+//
+#[test]
+fn test_no_path() {
+  // Create transaction builder
+  let output = create_no_path().expect("Failed to execute process");
+
+  io::stdout().write_all(&output.stdout).unwrap();
+  io::stdout().write_all(&output.stderr).unwrap();
+
+  assert!(output.status.success());
+
+  // Generate key pair
+  let output = keygen_no_path().expect("Failed to execute process");
+
+  io::stdout().write_all(&output.stdout).unwrap();
+  io::stdout().write_all(&output.stderr).unwrap();
+
+  assert!(output.status.success());
+
+  // Generate public key
+  let output = pubkeygen_no_path().expect("Failed to execute process");
+
+  io::stdout().write_all(&output.stdout).unwrap();
+  io::stdout().write_all(&output.stderr).unwrap();
+
+  assert!(output.status.success());
+
+  // Store sids
+  let output = store_sids_no_path("1,2,4").expect("Failed to execute process");
+
+  io::stdout().write_all(&output.stdout).unwrap();
+  io::stdout().write_all(&output.stderr).unwrap();
+
+  assert!(output.status.success());
+
+  // Store blind asset record
+  let pubkeygen_path = "pub_no_bar_path";
+  pubkeygen_with_path(pubkeygen_path).expect("Failed to generate public key");
+
+  let output = store_blind_asset_record_no_path("10", "0000000000000000", pubkeygen_path).expect("Failed to execute process");
+
+  io::stdout().write_all(&output.stdout).unwrap();
+  io::stdout().write_all(&output.stderr).unwrap();
+
+  fs::remove_file(pubkeygen_path).unwrap();
+  assert!(output.status.success());
+
+  remove_txn_dir();
+  remove_keypair_dir();
+  remove_pubkey_dir();
+  remove_values_dir();
 }
 
 //
@@ -192,20 +278,22 @@ fn test_store_no_args() {
   assert!(from_utf8(&output.stdout).unwrap().contains(&"Subcommand missing or not recognized. Try store --help".to_owned()));
 }
 
-/* FIXME
 #[test]
 fn test_add_no_args() {
+  keygen_no_path().expect("Failed to generate key pair");
+
   let output = Command::new(COMMAND).arg("add")
                                     .output()
-                                    .expect("failed to execute process");
+                                    .expect("Failed to execute process");
 
   io::stdout().write_all(&output.stdout).unwrap();
   io::stdout().write_all(&output.stderr).unwrap();
 
+  remove_keypair_dir();
+
   assert_eq!(output.status.code(), Some(exitcode::USAGE));
   assert!(from_utf8(&output.stdout).unwrap().contains(&"Subcommand missing or not recognized. Try add --help".to_owned()));
 }
- */
 
 //
 // "help" arg
@@ -364,44 +452,14 @@ fn test_invalid_valid_overwrite_and_rename_path() {
 }
 
 #[test]
-fn test_create_no_path() {
-  let output = create_no_path().expect("Failed to execute process");
-
-  io::stdout().write_all(&output.stdout).unwrap();
-  io::stdout().write_all(&output.stderr).unwrap();
-
-  assert!(output.status.success());
-}
-
-#[test]
-fn test_keygen_no_path() {
-  let output = keygen_no_path().expect("Failed to execute process");
-
-  io::stdout().write_all(&output.stdout).unwrap();
-  io::stdout().write_all(&output.stderr).unwrap();
-
-  assert!(output.status.success());
-}
-
-#[test]
-fn test_pubkeygen_no_path() {
-  let output = pubkeygen_no_path().expect("Failed to execute process");
-
-  io::stdout().write_all(&output.stdout).unwrap();
-  io::stdout().write_all(&output.stderr).unwrap();
-
-  assert!(output.status.success());
-}
-
-#[test]
 fn test_create_with_name() {
   let output = create_with_path("txn_builder").expect("failed to execute process");
 
   io::stdout().write_all(&output.stdout).unwrap();
   io::stdout().write_all(&output.stderr).unwrap();
 
-  assert!(output.status.success());
   fs::remove_file("txn_builder").unwrap();
+  assert!(output.status.success());
 }
 
 #[test]
@@ -411,8 +469,8 @@ fn test_keygen_with_name() {
   io::stdout().write_all(&output.stdout).unwrap();
   io::stdout().write_all(&output.stderr).unwrap();
 
-  assert!(output.status.success());
   fs::remove_file("key_pair").unwrap();
+  assert!(output.status.success());
 }
 
 #[test]
@@ -422,37 +480,13 @@ fn test_pubkeygen_with_name() {
   io::stdout().write_all(&output.stdout).unwrap();
   io::stdout().write_all(&output.stderr).unwrap();
 
-  assert!(output.status.success());
   fs::remove_file("pub").unwrap();
+  assert!(output.status.success());
 }
 
 //
 // Store (sids and blind asset record)
 //
-#[test]
-fn test_store_sids_no_path() {
-  let output = store_sids_no_path("1,2,4").expect("Failed to execute process");
-
-  io::stdout().write_all(&output.stdout).unwrap();
-  io::stdout().write_all(&output.stderr).unwrap();
-
-  assert!(output.status.success());
-}
-
-#[test]
-fn test_store_blind_asset_record_no_path() {
-  let pubkeygen_path = "pub_no_bar_path";
-  pubkeygen_with_path(pubkeygen_path).expect("Failed to generate public key");
-
-  let output = store_blind_asset_record_no_path("10", "0000000000000000", pubkeygen_path).expect("Failed to execute process");
-
-  io::stdout().write_all(&output.stdout).unwrap();
-  io::stdout().write_all(&output.stderr).unwrap();
-
-  assert!(output.status.success());
-  fs::remove_file(pubkeygen_path).unwrap();
-}
-
 #[test]
 fn test_store_sids_with_path() {
   let output = store_sids_with_path("sids", "1,2,4").expect("failed to execute process");
@@ -460,8 +494,8 @@ fn test_store_sids_with_path() {
   io::stdout().write_all(&output.stdout).unwrap();
   io::stdout().write_all(&output.stderr).unwrap();
 
-  assert!(output.status.success());
   fs::remove_file("sids").unwrap();
+  assert!(output.status.success());
 }
 
 #[test]
@@ -474,21 +508,41 @@ fn test_store_blind_asset_record_with_path() {
   io::stdout().write_all(&output.stdout).unwrap();
   io::stdout().write_all(&output.stderr).unwrap();
 
-  assert!(output.status.success());
   fs::remove_file(pubkeygen_path).unwrap();
   fs::remove_file("bar").unwrap();
+
+  assert!(output.status.success());
 }
 
 //
 // Define, issue and transfer
 //
 #[test]
-fn test_define_asset_with_args() {
-  // Create txn builder and key pair
-  let txn_builder_file = "tb_define";
-  let key_pair_file = "kp_define";
+fn test_define_issue_and_transfer_with_args() {
+  // Create txn builder, key pair, and public keys
+  let txn_builder_file = "tb";
+  let key_pair_file = "kp";
+  let files = vec!["pub1", "pub2", "pub3", "addr1", "addr2", "addr3", "s", "bar1", "bar2", "bar3"];
   create_with_path(txn_builder_file).expect("Failed to create transaction builder");
   keygen_with_path(key_pair_file).expect("Failed to generate key pair");
+  for file in &files[0..6] {
+    pubkeygen_with_path(file).expect("Failed to generate public key");
+  }
+
+  // Store sids and blind asset records
+  store_sids_with_path(files[6], "1,2,4").expect("Failed to store sids");
+  store_blind_asset_record_with_path(files[7],
+                             "10",
+                             "0000000000000000",
+                             files[0]).expect("Failed to store blind asset record");
+  store_blind_asset_record_with_path(files[8],
+                             "100",
+                             "0000000000000000",
+                             files[1]).expect("Failed to store blind asset record");
+  store_blind_asset_record_with_path(files[9],
+                             "1000",
+                             "0000000000000000",
+                             files[2]).expect("Failed to store blind asset record");
 
   // Define asset
   let output = define_asset(txn_builder_file,
@@ -501,18 +555,6 @@ fn test_define_asset_with_args() {
 
   assert!(output.status.success());
 
-  fs::remove_file(txn_builder_file).unwrap();
-  fs::remove_file(key_pair_file).unwrap();
-}
-
-#[test]
-fn test_issue_asset_with_args() {
-  // Create txn builder and key pair
-  let txn_builder_file = "tb_issue";
-  let key_pair_file = "kp_issue";
-  create_with_path(txn_builder_file).expect("Failed to create transaction builder");
-  keygen_with_path(key_pair_file).expect("Failed to generate key pair");
-
   // Issue asset
   let output = issue_asset(txn_builder_file,
                            key_pair_file,
@@ -524,38 +566,6 @@ fn test_issue_asset_with_args() {
   io::stdout().write_all(&output.stderr).unwrap();
 
   assert!(output.status.success());
-
-  fs::remove_file(txn_builder_file).unwrap();
-  fs::remove_file(key_pair_file).unwrap();
-}
-
-#[test]
-fn test_transfer_asset_with_args() {
-  // Create txn builder, key pair, and public keys
-  let txn_builder_file = "tb_transfer";
-  let key_pair_file = "kp_transfer";
-  create_with_path(txn_builder_file).expect("Failed to create transaction builder");
-  keygen_with_path(key_pair_file).expect("Failed to generate key pair");
-
-  let files = vec!["pub1", "pub2", "pub3", "addr1", "addr2", "addr3", "s", "bar1", "bar2", "bar3"];
-  for file in &files[0..6] {
-    pubkeygen_with_path(file).expect("Failed to generate public key");
-  }
-
-  // Store sids and blind asset records
-  store_sids_with_path(files[6], "1,2,4").expect("Failed to store sids");
-  store_blind_asset_record_with_path(files[7],
-                           "10",
-                           "0000000000000000",
-                           files[0]).expect("Failed to store blind asset record");
-  store_blind_asset_record_with_path(files[8],
-                           "100",
-                           "0000000000000000",
-                           files[1]).expect("Failed to store blind asset record");
-  store_blind_asset_record_with_path(files[9],
-                           "1000",
-                           "0000000000000000",
-                           files[2]).expect("Failed to store blind asset record");
 
   // Transfer asset
   let output = transfer_asset(txn_builder_file,
@@ -676,8 +686,8 @@ fn test_transfer_asset_with_args() {
 //   io::stdout().write_all(&output.stdout).unwrap();
 //   io::stdout().write_all(&output.stderr).unwrap();
 
-//   assert!(output.status.success());
-
 //   fs::remove_file(txn_builder_file).unwrap();
 //   fs::remove_file(key_pair_file).unwrap();
+
+//   assert!(output.status.success());
 // }

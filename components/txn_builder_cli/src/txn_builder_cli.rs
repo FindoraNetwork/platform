@@ -219,11 +219,12 @@ fn store_key_pair_to_file(path_str: &str) -> Result<(), PlatformError> {
       rename_existing_path(&file_path);
       let mut prng: ChaChaRng;
       prng = ChaChaRng::from_seed([0u8; 32]);
-      let keypair = XfrKeyPair::generate(&mut prng);
-      match fs::write(&file_path, keypair.zei_to_bytes()) {
+      let key_pair = XfrKeyPair::generate(&mut prng);
+      match fs::write(&file_path, key_pair.zei_to_bytes()) {
         Ok(_) => {}
         Err(error) => {
-          println!("Key file {:?} could not be created: {}", file_path, error);
+          println!("Key pair file {:?} could not be created: {}",
+                   file_path, error);
           exit(exitcode::CANTCREAT)
         }
       };
@@ -249,11 +250,12 @@ fn store_pub_key_to_file(path_str: &str) -> Result<(), PlatformError> {
     Ok(()) => {
       rename_existing_path(&file_path);
       let mut prng = ChaChaRng::from_seed([0u8; 32]);
-      let keypair = XfrKeyPair::generate(&mut prng);
-      match fs::write(&file_path, keypair.get_pk_ref().as_bytes()) {
+      let key_pair = XfrKeyPair::generate(&mut prng);
+      match fs::write(&file_path, key_pair.get_pk_ref().as_bytes()) {
         Ok(_) => {}
         Err(error) => {
-          println!("Key file {:?} could not be created: {}", file_path, error);
+          println!("Public key file {:?} could not be created: {}",
+                   file_path, error);
           exit(exitcode::CANTCREAT)
         }
       };
@@ -439,11 +441,11 @@ fn main() -> Result<(), PlatformError> {
       .help("Directory for configuaration, security, and temporary files; must be writable")
       .takes_value(true)
       .env("FINDORA_DIR"))
-    .arg(Arg::with_name("keys_path")
+    .arg(Arg::with_name("key_pair_path")
       .short("k")
-      .long("keys")
+      .long("key_pair")
       .value_name("PATH/TO/FILE")
-      .help("Path to keys)")
+      .help("Path to key pair)")
       .takes_value(true))
     .arg(Arg::with_name("txn")
       .long("txn")
@@ -587,7 +589,7 @@ fn main() -> Result<(), PlatformError> {
     .subcommand(SubCommand::with_name("serialize"))
     .subcommand(SubCommand::with_name("drop"))
     .subcommand(SubCommand::with_name("keygen")
-      .arg(Arg::with_name("create_keys_path")
+      .arg(Arg::with_name("create_key_pair_path")
         .short("n")
         .long("name")
         .help("specify the path and name for the key pair file.")
@@ -598,7 +600,7 @@ fn main() -> Result<(), PlatformError> {
         .short("f")
         .help("If specified, the existing file with the same name will be overwritten.")))
     .subcommand(SubCommand::with_name("pubkeygen")
-      .arg(Arg::with_name("create_pub_key_path")
+      .arg(Arg::with_name("create_pubkey_path")
         .short("n")
         .long("name")
         .help("specify the path and name for the public key file.")
@@ -629,7 +631,7 @@ fn main() -> Result<(), PlatformError> {
 
 fn process_inputs(inputs: clap::ArgMatches) -> Result<(), PlatformError> {
   let _config_file_path: String;
-  let keys_file_path: String;
+  let key_pair_file_path: String;
   let transaction_file_name: String;
   let findora_dir = if let Some(dir) = inputs.value_of("findora_dir") {
     dir.to_string()
@@ -646,26 +648,26 @@ fn process_inputs(inputs: clap::ArgMatches) -> Result<(), PlatformError> {
     _config_file_path = format!("{}/config.toml", findora_dir);
   }
 
-  if let Some(key) = inputs.value_of("keys_path") {
-    keys_file_path = key.to_string();
+  if let Some(key_pair) = inputs.value_of("key_pair_path") {
+    key_pair_file_path = key_pair.to_string();
   } else {
-    keys_file_path = format!("{}/keys/default.keys", findora_dir);
+    key_pair_file_path = format!("{}/keypair/default.keypair", findora_dir);
   }
 
   if let Some(txn_store) = inputs.value_of("txn") {
     transaction_file_name = txn_store.to_string();
   } else {
-    transaction_file_name = format!("{}/current.txn", findora_dir);
+    transaction_file_name = format!("{}/txn/default.txn", findora_dir);
   }
 
   match inputs.subcommand() {
     ("create", Some(create_matches)) => process_create_cmd(create_matches,
-                                                           &keys_file_path,
+                                                           &key_pair_file_path,
                                                            &transaction_file_name,
                                                            &findora_dir),
     ("store", Some(store_matches)) => process_store_cmd(store_matches, &findora_dir),
     ("add", Some(add_matches)) => process_add_cmd(add_matches,
-                                                  &keys_file_path,
+                                                  &key_pair_file_path,
                                                   &transaction_file_name,
                                                   &findora_dir),
     ("serialize", Some(_serialize_matches)) => {
@@ -697,25 +699,27 @@ fn process_inputs(inputs: clap::ArgMatches) -> Result<(), PlatformError> {
       }
     },
     ("keygen", Some(keygen_matches)) => {
-      let new_keys_path =
-        if let Some(new_keys_path_in) = keygen_matches.value_of("create_keys_path") {
-          new_keys_path_in.to_string()
+      let new_key_pair_path =
+        if let Some(new_key_pair_path_in) = keygen_matches.value_of("create_key_pair_path") {
+          new_key_pair_path_in.to_string()
         } else {
-          format!("{}/keys/default.keys", &findora_dir)
+          format!("{}/keypair/default.keypair", &findora_dir)
         };
-      let expand_str = shellexpand::tilde(&new_keys_path).to_string();
+      let expand_str = shellexpand::tilde(&new_key_pair_path).to_string();
       let overwrite = keygen_matches.is_present("overwrite");
+      println!("Storing key pair to {}", expand_str);
       create_directory_and_rename_path(&expand_str, overwrite);
       store_key_pair_to_file(&expand_str)
     }
     ("pubkeygen", Some(pubkeygen_matches)) => {
       let new_key_path =
-        if let Some(new_key_path_in) = pubkeygen_matches.value_of("create_pub_key_path") {
+        if let Some(new_key_path_in) = pubkeygen_matches.value_of("create_pubkey_path") {
           new_key_path_in.to_string()
         } else {
-          format!("{}/pub_key/default.key", &findora_dir)
+          format!("{}/pubkey/default.pubkey", &findora_dir)
         };
       let expand_str = shellexpand::tilde(&new_key_path).to_string();
+      println!("Storing public key to {}", expand_str);
       let overwrite = pubkeygen_matches.is_present("overwrite");
       create_directory_and_rename_path(&expand_str, overwrite);
       store_pub_key_to_file(&expand_str)
@@ -880,13 +884,13 @@ fn process_store_cmd(store_matches: &clap::ArgMatches,
 }
 
 fn process_add_cmd(add_matches: &clap::ArgMatches,
-                   keys_file_path: &str,
+                   key_pair_file_path: &str,
                    transaction_file_name: &str,
                    _findora_dir: &str)
                    -> Result<(), PlatformError> {
-  println!("{}", keys_file_path);
+  println!("{}", key_pair_file_path);
   let key_pair: XfrKeyPair;
-  match load_key_pair_from_file(&keys_file_path) {
+  match load_key_pair_from_file(&key_pair_file_path) {
     Ok(kp) => {
       key_pair = kp;
     }
@@ -1083,7 +1087,7 @@ fn process_add_cmd(add_matches: &clap::ArgMatches,
                             })
                             .unwrap();
       if let Err(e) =
-        txn_builder.add_basic_transfer_asset(&load_key_pair_from_file(keys_file_path).unwrap(),
+        txn_builder.add_basic_transfer_asset(&load_key_pair_from_file(key_pair_file_path).unwrap(),
                                              &transfer_from[..],
                                              &transfer_to[..])
       {
