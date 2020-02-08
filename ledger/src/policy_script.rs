@@ -1,6 +1,6 @@
 #![deny(warnings)]
 use crate::data_model::errors::PlatformError;
-use crate::data_model::{Operation, Transaction, TxOutput};
+use crate::data_model::{Asset, AssetTypeCode, Operation, Transaction, TxOutput};
 use crate::policies::Fraction;
 use fixed::types::I20F12;
 use std::collections::{HashMap, HashSet};
@@ -22,11 +22,13 @@ pub struct ResourceVar(pub u64);
 #[derive(Clone, Copy, Debug, Default, Deserialize, Eq, Hash, PartialEq, Serialize)]
 pub struct BoolVar(pub u64);
 
+#[derive(Clone, Copy, Debug, Deserialize, Eq, Hash, PartialEq, Serialize)]
 pub enum IdOp {
   OwnerOf(ResourceVar),
   Var(IdVar),
 }
 
+#[derive(Clone, Copy, Debug, Deserialize, Eq, Hash, PartialEq, Serialize)]
 pub enum AmountOp {
   Var(AmountVar),
   Const(u64),
@@ -37,6 +39,7 @@ pub enum AmountOp {
   Round(FractionVar),
 }
 
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub enum FractionOp {
   Var(FractionVar),
   Const(Fraction),
@@ -46,11 +49,13 @@ pub enum FractionOp {
   TimesAmt(FractionVar, AmountVar),
 }
 
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub enum ResourceTypeOp {
   Var(ResourceTypeVar),
   TypeOfResource(ResourceVar),
 }
 
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub enum BoolOp {
   Const(bool),
   IdEq(IdVar, IdVar),
@@ -66,6 +71,7 @@ pub enum BoolOp {
   FracGe(FractionVar, FractionVar),
 }
 
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub enum TxnOp {
   Issue(AmountVar, ResourceTypeVar, ResourceVar),
   Transfer(AmountVar, ResourceVar, Option<ResourceVar>), // None is a burn address
@@ -79,6 +85,7 @@ pub enum RealTxnOp {
   Transfer(Vec<(AmountVar, ResourceVar, Option<ResourceVar>)>), // None is a burn address
 }
 
+#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 pub struct TxnCheck {
   pub name: String,
   pub num_in_params: u64,
@@ -98,17 +105,83 @@ pub struct TxnCheck {
   pub txn_template: Vec<TxnOp>,
 }
 
+#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 pub struct Policy {
   // Implicitly: bound asset type and issuer as AssetType & Id globals
   // respectively
-  pub num_id_globals: u64,
-  pub num_rt_globals: u64,
-  pub num_amt_globals: u64,
-  pub num_frac_globals: u64,
+  pub num_id_globals: usize,
+  pub num_rt_globals: usize,
+  pub num_amt_globals: usize,
+  pub num_frac_globals: usize,
 
   pub init_check: TxnCheck,
 
   pub txn_choices: Vec<TxnCheck>,
+}
+
+#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+pub struct TxnCheckInputs {
+  pub which_check: String,
+}
+
+#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+pub struct PolicyGlobals {
+  pub id_vars: Vec<XfrPublicKey>,
+  pub rt_vars: Vec<AssetType>,
+  pub amt_vars: Vec<u64>,
+  pub frac_vars: Vec<Fraction>,
+}
+
+#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+pub struct TxnPolicyData(pub HashMap<AssetTypeCode, TxnCheckInputs>);
+
+pub fn policy_get_globals(asset: &Asset) -> Result<PolicyGlobals, PlatformError> {
+  let (pol, mem) = asset.policy.as_ref().ok_or(PlatformError::InputsError)?;
+
+  let ret = serde_json::from_str::<PolicyGlobals>(&mem.0).map_err(|_| PlatformError::InputsError)?;
+
+  if ret.id_vars.len() != pol.num_id_globals
+     || ret.rt_vars.len() != pol.num_rt_globals
+     || ret.amt_vars.len() != pol.num_amt_globals
+     || ret.frac_vars.len() != pol.num_frac_globals
+     || ret.id_vars.first().ok_or(PlatformError::InputsError)? != &asset.issuer.key
+     || ret.rt_vars.first().ok_or(PlatformError::InputsError)? != &asset.code.val
+  {
+    Err(PlatformError::InputsError)
+  } else {
+    Ok(ret)
+  }
+}
+
+pub fn policy_check_txn(type_code: &AssetTypeCode,
+                        globals: PolicyGlobals,
+                        pol: &Policy,
+                        txn: &Transaction)
+                        -> Result<(), PlatformError> {
+  let pol_data =
+    serde_json::from_str::<TxnPolicyData>(&txn.memos.get(0).ok_or(PlatformError::InputsError)?.0)?;
+
+  let inputs = pol_data.0
+                       .get(type_code)
+                       .ok_or(PlatformError::InputsError)?;
+
+  let the_check = {
+    let mut check = Err(PlatformError::InputsError);
+    for c in pol.txn_choices.iter() {
+      if c.name == inputs.which_check {
+        check = Ok(c);
+        break;
+      }
+    }
+    check
+  }?;
+
+  run_txn_check(the_check,
+                globals.id_vars,
+                globals.rt_vars,
+                globals.amt_vars,
+                globals.frac_vars,
+                txn)
 }
 
 /*
