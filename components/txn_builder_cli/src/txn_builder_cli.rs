@@ -274,6 +274,7 @@ fn store_sids_to_file(file_path: &str, sids: &str) -> Result<(), PlatformError> 
     println!("Sids file {} could not be created", file_path);
     exit(exitcode::CANTCREAT)
   };
+  println!("Sids stored to {}", file_path);
   Ok(())
 }
 
@@ -305,6 +306,7 @@ fn store_blind_asset_record(file_path: &str,
       println!("Blind asset record file {} could not be created", file_path);
       exit(exitcode::CANTCREAT)
     };
+    println!("Blind asset record stored to {}", file_path);
   }
 
   Ok(())

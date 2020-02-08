@@ -522,10 +522,11 @@ fn test_define_issue_and_transfer_with_args() {
   keygen_with_path(key_pair_file).expect("Failed to generate key pair");
 
   // Define asset
+  let token_code = AssetTypeCode::gen_random().to_base64();
   let output = define_asset(txn_builder_file,
                             key_pair_file,
-                            &AssetTypeCode::gen_random().to_base64(),
-                            "define an asset").expect("Failed to execute process");
+                            &token_code,
+                            "define an asset").expect("Failed to define asset");
 
   io::stdout().write_all(&output.stdout).unwrap();
   io::stdout().write_all(&output.stderr).unwrap();
@@ -535,9 +536,9 @@ fn test_define_issue_and_transfer_with_args() {
   // Issue asset
   let output = issue_asset(txn_builder_file,
                            key_pair_file,
-                           &AssetTypeCode::gen_random().to_base64(),
+                           &token_code,
                            "1",
-                           "10").expect("Failed to execute process");
+                           "10").expect("Failed to issue asset");
 
   io::stdout().write_all(&output.stdout).unwrap();
   io::stdout().write_all(&output.stderr).unwrap();
@@ -554,15 +555,15 @@ fn test_define_issue_and_transfer_with_args() {
   store_sids_with_path(files[6], "1,2,4").expect("Failed to store sids");
   store_blind_asset_record_with_path(files[7],
                                "10",
-                               "0000000000000000",
+                               &token_code,
                                files[0]).expect("Failed to store blind asset record");
   store_blind_asset_record_with_path(files[8],
                                "100",
-                               "0000000000000000",
+                               &token_code,
                                files[1]).expect("Failed to store blind asset record");
   store_blind_asset_record_with_path(files[9],
                                "1000",
-                               "0000000000000000",
+                               &token_code,
                                files[2]).expect("Failed to store blind asset record");
 
   // Transfer asset
@@ -572,18 +573,18 @@ fn test_define_issue_and_transfer_with_args() {
                               "bar1,bar2,bar3",
                               "1,2,3",
                               "1,1,4",
-                              "addr1,addr2,addr3").expect("Failed to execute process");
+                              "addr1,addr2,addr3").expect("Failed to transfer asset");
 
   io::stdout().write_all(&output.stdout).unwrap();
   io::stdout().write_all(&output.stderr).unwrap();
-
-  assert!(output.status.success());
 
   fs::remove_file(txn_builder_file).unwrap();
   fs::remove_file(key_pair_file).unwrap();
   for file in files {
     fs::remove_file(file).unwrap();
   }
+
+  assert!(output.status.success());
 }
 
 // TODO (Keyao): Tests below don't pass. Fix them.
