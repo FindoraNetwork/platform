@@ -13,7 +13,6 @@ use ledger::data_model::{
   AssetTypeCode, Operation, Serialized, TransferType, TxOutput, TxoRef, TxoSID,
 };
 use ledger::policies::{DebtMemo, Fraction};
-use percent_encoding::{utf8_percent_encode, AsciiSet, CONTROLS};
 use rand_chacha::ChaChaRng;
 use rand_core::SeedableRng;
 use serde::{Deserialize, Serialize};
@@ -36,9 +35,8 @@ use zei::xfr::asset_record::{build_blind_asset_record, open_asset_record, AssetR
 use zei::xfr::sig::{XfrKeyPair, XfrPublicKey};
 use zei::xfr::structs::{AssetIssuerPubKeys, AssetRecord, BlindAssetRecord, OpenAssetRecord};
 
-const HOST: &str = "localhost";
-const PORT: &str = "8668";
-const SUBMISSION_PORT: &str = "8669";
+const SUBMIT_PATH: &str = "./submit_server";
+const QUERY_PATH: &str = "./query_server";
 
 /////////// TRANSACTION BUILDING ////////////////
 
@@ -59,48 +57,49 @@ pub fn create_absolute_txo_ref(idx: u64) -> String {
 }
 
 #[wasm_bindgen]
-// Standard TransferType variant for txn builder.
+/// Standard TransferType variant for txn builder.
 pub fn standard_transfer_type() -> String {
   serde_json::to_string(&TransferType::Standard).unwrap()
 }
 
 #[wasm_bindgen]
-// Debt swap TransferType variant for txn builder.
+/// Debt swap TransferType variant for txn builder.
 pub fn debt_transfer_type() -> String {
   serde_json::to_string(&TransferType::DebtSwap).unwrap()
 }
 
 #[wasm_bindgen]
-// Generates random base64 encoded asset type string
+/// Generates random base64 encoded asset type string
 pub fn random_asset_type() -> String {
   AssetTypeCode::gen_random().to_base64()
 }
 
 #[wasm_bindgen]
-// Calculate fee for a debt repayment
-//
-// ir_numerator: interest rate numerator
-// ir_denominator: interest rate denominator
-// outstanding_balance: amount of outstanding debt
+/// Calculate fee for a debt repayment
+/// # Arguments
+///
+/// * `ir_numerator`: interest rate numerator
+/// * `ir_denominator`: interest rate denominator
+/// * `outstanding_balance`: amount of outstanding debt
 pub fn calculate_fee(ir_numerator: u64, ir_denominator: u64, outstanding_balance: u64) -> u64 {
   ledger::policies::calculate_fee(outstanding_balance,
                                   Fraction::new(ir_numerator, ir_denominator))
 }
 
 #[wasm_bindgen]
-// Return burn address. Used in debt swaps
-// TODO (noah) put helper function in ledger::policies
+///  Return burn address. Used in debt swaps
 pub fn get_null_pk() -> XfrPublicKey {
   XfrPublicKey::zei_from_bytes(&[0; 32])
 }
 #[wasm_bindgen]
-// Create memo needed for debt token asset types. The memo will be parsed by the policy evalautor to ensure
-// that all payment and fee amounts are correct
-//
-// ir_numerator: interest rate numerator
-// ir_denominator: interest rate denominator
-// fiat_code: Base64 string representing asset type used to pay off the loan
-// amount: Loan amount
+/// Create memo needed for debt token asset types. The memo will be parsed by the policy evalautor to ensure
+/// that all payment and fee amounts are correct.
+/// # Arguments
+///
+/// * `ir_numerator` - interest rate numerator
+/// * `ir_denominator`- interest rate denominator
+/// * `fiat_code` - base64 string representing asset type used to pay off the loan
+/// * `amount` - loan amount
 pub fn create_debt_memo(ir_numerator: u64,
                         ir_denominator: u64,
                         fiat_code: String,
@@ -117,13 +116,14 @@ pub fn create_debt_memo(ir_numerator: u64,
 #[wasm_bindgen]
 /// Create a blind asset record.
 ///
-/// amount: Asset amount to store in the record.
-/// code: Base64 string representing the token code of the asset to be stored in the record.
-/// pk: XfrPublicKey representing the record owner.
-/// conf_amount: Boolean indicating whether the asset amount should be private.
-/// conf_amount: Boolean indicating whether the asset type should be private.
+/// # Arguments
+/// * `amount` - asset amount to store in the record
+/// * `code`- base64 string representing the token code of the asset to be stored in the record
+/// * `pk`- XfrPublicKey representing the record owner
+/// * `conf_amount` - boolean indicating whether the asset amount should be private
+/// * `conf_amount` - boolean indicating whether the asset type should be private
 ///
-/// TODO Point to documentation that explains how to use a Result return type.
+/// Use the result of this function in [add_operation_issue_asset](struct.WasmTransactionBuilder.html#method.add_operation_issue_asset) to construct issuance operations.
 pub fn create_blind_asset_record(amount: u64,
                                  code: String,
                                  pk: &XfrPublicKey,
@@ -177,10 +177,11 @@ impl WasmTransactionBuilder {
 
   /// Add an asset definition operation to a transaction builder instance.
   ///
-  /// key_pair: Issuer XfrKeyPair
-  /// memo: Text field for asset definition.
-  /// code: Optional Base64 string representing the token code of the asset to be issued. If empty,
-  /// a token code will be chosen at random.
+  /// # Arguments
+  /// * `key_pair` -  Issuer XfrKeyPair
+  /// * `memo`-  Text field for asset definition
+  /// * `code`-  Optional Base64 string representing the token code of the asset to be issued. If empty,
+  /// a token code will be chosen at random
   pub fn add_operation_create_asset(&self,
                                     key_pair: &XfrKeyPair,
                                     memo: String,
@@ -202,11 +203,12 @@ impl WasmTransactionBuilder {
 
   /// Add an asset issuance to a transaction builder instance.
   ///
-  /// key_pair: Issuer XfrKeyPair
-  /// elgamal_pub_key: Optional tracking public key. Pass in serialized tracking key or "".
-  /// code: Base64 string representing the token code of the asset to be issued.
-  /// seq_num: Issuance sequence number. Every subsequent issuance of a given asset type must have a higher sequence number than before.
-  /// amount: Amount to be issued.
+  /// # Arguments
+  /// *`key_pair` - Issuer XfrKeyPair
+  /// *`elgamal_pub_key` - Optional tracking public key. Pass in serialized tracking key or ""
+  /// *`code`-  Base64 string representing the token code of the asset to be issued
+  /// *`seq_num` - Issuance sequence number. Every subsequent issuance of a given asset type must have a higher sequence number than before
+  /// *`amount`- Amount to be issued.
   pub fn add_basic_issue_asset(&self,
                                key_pair: &XfrKeyPair,
                                elgamal_pub_key: String,
@@ -242,10 +244,11 @@ impl WasmTransactionBuilder {
   /// transactions (e.g. issue and
   /// transfers) the client must have a handle on the issuance record for subsequent operations.
   ///
-  /// key_pair: Issuer XfrKeyPair
-  /// code: Base64 string representing the token code of the asset to be issued.
-  /// seq_num: Issuance sequence number. Every subsequent issuance of a given asset type must have a higher sequence number than before.
-  /// record: Issunace output (serialized blind asset record).
+  /// # Arguments
+  /// `key_pair`- Issuer XfrKeyPair
+  /// `code` -  Base64 string representing the token code of the asset to be issued
+  /// `seq_num` -  Issuance sequence number. Every subsequent issuance of a given asset type must have a higher sequence number than before
+  /// `record` -  Issunace output (serialized blind asset record)
   pub fn add_operation_issue_asset(&self,
                                    key_pair: &XfrKeyPair,
                                    code: String,
@@ -265,14 +268,13 @@ impl WasmTransactionBuilder {
                                             &[TxOutput(blind_asset_record)]).map_err(|_e| JsValue::from_str("could not build transaction"))?)})
   }
 
-  /// Create an operator expression in a transaction.
+  /// Create an operator expression in a transaction. Must be a serialized form of:
+  ///   *TransferAsset(TransferAsset),
+  ///   *IssueAsset(IssueAsset),
+  ///   *DefineAsset(DefineAsset),
   ///
-  /// TODO List all the legal value for op. create_asset, issue_asset, transfer_asset?
-  /// There's an enum in data_model.rs. Can't add a cross-reference link here because the reader
-  /// may not get the platform documentation. Just the WASM entry points.
-  ///   TransferAsset(TransferAsset),
-  ///   IssueAsset(IssueAsset),
-  ///   DefineAsset(DefineAsset),
+  ///   Construct operation argument with serialized transaction constructed by
+  ///   [WasmTransferOperationBuilder](struct.WasmTransferOperationBuilder.html).
   pub fn add_operation(&mut self, op: String) -> Result<WasmTransactionBuilder, JsValue> {
     let op =
       serde_json::from_str::<Operation>(&op).map_err(|_e| {
@@ -285,6 +287,7 @@ impl WasmTransactionBuilder {
 
   /// Extract the serialized form of a transaction.
   ///
+  /// # Arguments
   /// TODO Develop standard terminology for Javascript functions that may throw errors.
   pub fn transaction(&mut self) -> Result<String, JsValue> {
     Ok(self.transaction_builder
@@ -310,7 +313,12 @@ impl WasmTransferOperationBuilder {
 
   /// Add an input to a transfer operation builder
   ///
-  /// TODO Describe the parameters
+  /// # Arguments
+  /// `txo_ref` - Absolute or relative utxo ref. Construct using functions
+  /// [create_relative_txo_ref](fn.create_relative_txo_ref.html) or
+  /// [create_absolute_txo_ref](fn.create_absolute_txo_ref.html)
+  /// `oar` - Opened asset record to serve as transfer input. See
+  /// [open_blind_asset_record](fn.open_blind_asset_record.html)
   pub fn add_input(&mut self,
                    txo_ref: String,
                    oar: String,
@@ -505,25 +513,11 @@ pub fn submit_transaction(transaction_str: String) -> Result<Promise, JsValue> {
   let mut opts = RequestInit::new();
   opts.method("POST");
   opts.mode(RequestMode::Cors);
+  opts.body(Some(&JsValue::from_str(&transaction_str)));
 
-  let req_string = format!("http://{}:{}/submit_transaction_wasm/{}",
-                           HOST,
-                           SUBMISSION_PORT,
-                           encode_uri(&transaction_str));
+  let req_string = format!("{}/submit_transaction", SUBMIT_PATH);
 
-  create_query_promise(&opts, &req_string)
-}
-
-fn encode_uri(to_encode: &str) -> String {
-  const FRAGMENT: &AsciiSet = &CONTROLS.add(b' ')
-                                       .add(b'"')
-                                       .add(b'`')
-                                       .add(b'{')
-                                       .add(b'/')
-                                       .add(b'\\')
-                                       .add(b'}');
-
-  utf8_percent_encode(&to_encode, FRAGMENT).to_string()
+  create_query_promise(&opts, &req_string, true)
 }
 
 #[wasm_bindgen]
@@ -547,9 +541,9 @@ pub fn get_txo(index: u64) -> Result<Promise, JsValue> {
   opts.method("GET");
   opts.mode(RequestMode::Cors);
 
-  let req_string = format!("http://{}:{}/utxo_sid/{}", HOST, PORT, format!("{}", index));
+  let req_string = format!("{}/utxo_sid/{}", QUERY_PATH, format!("{}", index));
 
-  create_query_promise(&opts, &req_string)
+  create_query_promise(&opts, &req_string, false)
 }
 
 #[wasm_bindgen]
@@ -565,9 +559,9 @@ pub fn get_asset_token(name: String) -> Result<Promise, JsValue> {
   opts.method("GET");
   opts.mode(RequestMode::Cors);
 
-  let req_string = format!("http://{}:{}/asset_token/{}", HOST, PORT, name);
+  let req_string = format!("{}/asset_token/{}", QUERY_PATH, name);
 
-  create_query_promise(&opts, &req_string)
+  create_query_promise(&opts, &req_string, false)
 }
 
 #[wasm_bindgen]
@@ -576,15 +570,21 @@ pub fn get_txn_status(handle: String) -> Result<Promise, JsValue> {
   opts.method("GET");
   opts.mode(RequestMode::Cors);
 
-  let req_string = format!("http://{}:{}/txn_status/{}", HOST, SUBMISSION_PORT, handle);
+  let req_string = format!("{}/txn_status/{}", SUBMIT_PATH, handle);
 
-  create_query_promise(&opts, &req_string)
+  create_query_promise(&opts, &req_string, false)
 }
 
 // Given a request string and a request init object, constructs
 // the JS promise to be returned to the client
-fn create_query_promise(opts: &RequestInit, req_string: &str) -> Result<Promise, JsValue> {
+fn create_query_promise(opts: &RequestInit,
+                        req_string: &str,
+                        is_json: bool)
+                        -> Result<Promise, JsValue> {
   let request = Request::new_with_str_and_init(&req_string, &opts)?;
+  if is_json {
+    request.headers().set("content-type", "application/json")?;
+  }
   let window = web_sys::window().unwrap();
   let request_promise = window.fetch_with_request(&request);
   Ok(future_to_promise(JsFuture::from(request_promise)))
@@ -739,7 +739,7 @@ impl Prover {
     let attrs = [attribute.to_le_bytes()];
     let bitmap = [reveal_attribute];
     let proof: ACRevealSig = proof_jsvalue.into_serde().unwrap();
-    ac_verify(&issuer.public_key, &attrs, &bitmap, &proof).is_ok()
+    ac_verify(&issuer.public_key, &attrs, &bitmap, &proof.sig, &proof.pok).is_ok()
   }
 }
 

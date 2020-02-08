@@ -1,0 +1,100 @@
+addissuer bank0
+adduser bank0 brian
+getcreds brian foo bar baz
+verify brian foo bar baz
+addissuer bank0
+adduser bank0 brian
+getcreds brian foo bar baz
+verify brian foo bar baz
+reveal brian t t t
+verify brian foo bar baz
+verify brian t t t 
+verify brian t t f
+help
+test
+help
+addissuer bank0
+adduser bank0 brian
+getcreds brian foo bar baz
+reveal brian t t t
+verify brian t t t
+help
+test
+adduser bank0 brian
+addissuer bank0
+adduser bank0 brian
+getcreds brian foo bar baz
+reveal brian t t t
+reveal brian t t f
+reveal brian f f f 
+verify brian f f f 
+verify brian t t t 
+adduser bank0 brian
+fucwiuecjn;ile
+adduser bank0 brian
+bweiub
+bwove
+adduser bank0 brian
+addissuer bank0
+fgfg
+ffg
+addissuer bank0
+adduser bank0 brian
+addissuer bank0
+adduser bank0 brian
+addissuer bank0
+adduser bank0 brian
+getcreds brian score0 score1 score2
+reveal brian true true true
+reveal brian true true false
+verify brian true true true
+verify brian true true false
+addissuer bank0
+adduser bank0 brian
+getcreds brian score0 score1 score2
+reveal brian true true true
+showissuer bank0
+addissuer bank0
+showissuer bank0
+addissuer bank0
+adduser bank0 brian
+getcreds brian score0 score1 score2
+reveal brian true true true
+verify brian true true true
+verify brian true true false
+addissuer bank0
+showissuer bank0
+adduser bank0 brian
+showuser brian
+help
+adduser bank0 brian
+addissuer bank0
+showissuer bank0
+addissuer bank0
+showissuer bank0
+help addissuer
+help showuser
+addissuer bank0
+showissuer bank0
+showissuer brian
+addissuer
+addissuer brian
+adduser brian brian
+showuser brian
+addissuer bank0
+adduser bank0 brian
+help
+getcreds brian foo bar baz
+reveal brian t t t
+verify brian t t t
+help
+help addissuer
+addissuer bank
+showissuer bank
+adduser bank brian
+showuser brian
+getcreds brian foo bar baz
+showcreds brian
+help
+reveal brian foo bar baz
+reveal 
