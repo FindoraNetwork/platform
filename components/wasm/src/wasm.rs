@@ -13,6 +13,7 @@ use ledger::data_model::{
   AssetTypeCode, Operation, Serialized, TransferType, TxOutput, TxoRef, TxoSID,
 };
 use ledger::policies::{DebtMemo, Fraction};
+use ledger::store::AuthenticatedTransaction;
 use rand_chacha::ChaChaRng;
 use rand_core::SeedableRng;
 use serde::{Deserialize, Serialize};
@@ -72,6 +73,18 @@ pub fn debt_transfer_type() -> String {
 /// Generates random base64 encoded asset type string
 pub fn random_asset_type() -> String {
   AssetTypeCode::gen_random().to_base64()
+}
+
+/// Authenticates transaction against the state commitment.
+///
+/// # Arguments
+/// * `authenticated_txn`: json encoded authentication transaction
+#[wasm_bindgen]
+pub fn is_authenticated_txn_valid(authenticated_txn: String) -> Result<bool, JsValue> {
+  let authenticated_txn = serde_json::from_str::<AuthenticatedTransaction>(&authenticated_txn).map_err(|_e| {
+                             JsValue::from_str("Could not deserialize blind asset record")
+                           })?;
+  Ok(authenticated_txn.is_valid())
 }
 
 #[wasm_bindgen]
