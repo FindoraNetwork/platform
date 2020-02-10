@@ -607,7 +607,7 @@ fn load_funds(sid_pre: TxoRef,
       return Err(error);
     }
   };
-  println!("612");
+
   // Submit transaction
   let sid_next = match submit_and_get_sid(protocol, transaction_file_name) {
     Ok(sid) => {
@@ -618,12 +618,11 @@ fn load_funds(sid_pre: TxoRef,
       return Err(PlatformError::SubmissionServerError(Some("Failed to submit transaction".into())));
     }
   };
-  println!("622");
 
   // Get next blind asset record
   let res = query(protocol, "utxo_sid", &format!("{}", sid_next.0));
   let blind_asset_record_next = serde_json::from_str::<BlindAssetRecord>(&res).or_else(|_| {
-                                  return Err(PlatformError::DeserializationError);
+                                  Err(PlatformError::DeserializationError)
                                 })
                                 .unwrap();
 
@@ -853,33 +852,41 @@ fn main() -> Result<(), PlatformError> {
       .arg(Arg::with_name("sid_pre")
         .short("p")
         .long("sid_pre")
-        .takes_value(true))
+        .takes_value(true)
+        .help("Required: sid corresponding to the recipient's previous record."))
       .arg(Arg::with_name("sid_new")
         .short("n")
         .long("sid_new")
-        .takes_value(true))
+        .takes_value(true)
+        .help("Required: sid corresponding to the new record."))
       .arg(Arg::with_name("blind_asset_record_pre_path")
         .long("blind_asset_record_pre_path")
-        .takes_value(true))
+        .takes_value(true)      
+        .help("Required: path to the file of the recipient's previous blind asset record."))
       .arg(Arg::with_name("blind_asset_record_new_path")
         .long("blind_asset_record_new_path")
-        .takes_value(true))
+        .takes_value(true)
+        .help("Required: path to the file of the new blind asset record."))
       .arg(Arg::with_name("recipient_key_pair_path")
         .short("r")
         .long("recipient_key_pair_path")
-        .takes_value(true))
+        .takes_value(true)
+        .help("Required: path to the recipient's key pair."))
       .arg(Arg::with_name("amount")
         .short("a")
         .long("amount")
-        .takes_value(true))
+        .takes_value(true)
+        .help("Required: amount to transfer to the recipient."))
       .arg(Arg::with_name("token_code")
         .short("tc")
         .long("token_code")
-        .takes_value(true))
+        .takes_value(true)
+        .help("Required: token code."))
       .arg(Arg::with_name("sequence_number")
         .short("s")
         .long("sequence_number")
-        .takes_value(true))
+        .takes_value(true)
+        .help("Required: sequence number for the issue transaction. Used to prevent replay attacks."))
       .arg(Arg::with_name("protocol")
         .long("http")
         .takes_value(false)
@@ -1016,7 +1023,7 @@ fn process_submit_cmd(submit_matches: &clap::ArgMatches,
 // Rename the existing path if necessary
 fn create_directory_and_rename_path(path_str: &str, overwrite: bool) {
   let path = Path::new(&path_str);
-  create_directory_if_missing(&path_str.clone());
+  create_directory_if_missing(&path_str);
   if path.exists() && !overwrite {
     rename_existing_path(&path);
   }
