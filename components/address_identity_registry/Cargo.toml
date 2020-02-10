@@ -10,6 +10,7 @@ path = "src/address_identity_registry.rs"
 
 [dependencies]
 clap = "2.33.0"
+colored = "1.9"
 cryptohash = { path = "../../libs/cryptohash" }
 hex = "0.3.2"
 lazy_static = { version = "1.2.0" }

@@ -752,7 +752,7 @@ impl Prover {
     let attrs = [attribute.to_le_bytes()];
     let bitmap = [reveal_attribute];
     let proof: ACRevealSig = proof_jsvalue.into_serde().unwrap();
-    ac_verify(&issuer.public_key, &attrs, &bitmap, &proof).is_ok()
+    ac_verify(&issuer.public_key, &attrs, &bitmap, &proof.sig, &proof.pok).is_ok()
   }
 }
 
