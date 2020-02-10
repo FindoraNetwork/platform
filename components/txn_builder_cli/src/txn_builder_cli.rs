@@ -25,8 +25,6 @@ extern crate exitcode;
 const HOST: &str = "testnet.findora.org";
 const SUBMIT_PORT: &str = "8669";
 
-// TODO (Keyao): Table to store data
-
 //
 // Load functions
 //
