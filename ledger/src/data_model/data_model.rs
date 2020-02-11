@@ -191,6 +191,12 @@ pub struct TxnTempSID(pub usize);
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct TxOutput(pub BlindAssetRecord);
 
+#[derive(Eq, PartialEq)]
+pub enum UtxoStatus {
+  Spent,
+  Unspent,
+}
+
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct Utxo(pub TxOutput);
 // TODO(joe): the digest is currently unused -- should it be put back?

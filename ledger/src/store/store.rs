@@ -132,6 +132,9 @@ pub trait ArchiveAccess {
   // there isn't anything to handle out-of-bounds indices from `list`
   // fn get_utxos        (&mut self, list: Vec<usize>) -> Option<Vec<u8>>;
 
+  // Authenticated query of whether the txo is spent or unspent
+  fn get_utxo_status(&mut self, addr: TxoSID) -> Option<AuthenticatedUtxoStatus>;
+
   // Get the bitmap's hash at version `version`, if such a hash is
   // available.
   fn get_utxo_checksum(&self, version: u64) -> Option<BitDigest>;
@@ -1095,6 +1098,38 @@ impl AuthenticatedBlock {
   }
 }
 
+pub struct AuthenticatedUtxoStatus {
+  pub status: UtxoStatus,
+  pub utxo_sid: TxoSID,
+  pub state_commitment_data: StateCommitmentData,
+  pub utxo_map: BitMap,
+  pub state_commitment: BitDigest,
+}
+
+impl AuthenticatedUtxoStatus {
+  // An authenticated utxo status is valid if
+  // 1) The status matches the bit stored in the bitmap
+  // 2) The bitmap checksum matches digest in state commitment data
+  // 3) The state commitment data hashes to the state commitment
+  pub fn is_valid(&self) -> bool {
+    // 1) The status matches the bit stored in the bitmap
+    let spent = !self.utxo_map.query(self.utxo_sid.0 as usize).unwrap();
+    if (self.status == UtxoStatus::Spent && !spent) || (self.status == UtxoStatus::Unspent && spent)
+    {
+      return false;
+    }
+    // 2)
+    if self.utxo_map.get_checksum() != self.state_commitment_data.bitmap {
+      return false;
+    }
+    // 3)
+    if self.state_commitment != self.state_commitment_data.compute_commitment() {
+      return false;
+    }
+    return true;
+  }
+}
+
 #[derive(Serialize, Deserialize)]
 pub struct AuthenticatedTransaction {
   pub finalized_txn: FinalizedTransaction,
@@ -1177,6 +1212,18 @@ impl ArchiveAccess for LedgerState {
                                          state_commitment:
                                            state_commitment_data.compute_commitment() });
       }
+    }
+  }
+
+  fn get_utxo_status(&self, addr: TxoSID) -> AuthenticatedUtxoResult {
+    let state_commitment_data = self.status.state_commitment_data;
+    let utxo_map = self.utxo_map.clone();
+    if addr.0 <= state_commitment_data.max_txo_sid {
+      let status = match utxo_map.query(self.utxo_sid.0 as usize).unwrap() {
+        true => UtxoStatus::Unspent,
+        false => UtxoStatus::Spend,
+      };
+      return AuthenticatedUtxoStatus {};
     }
   }
 

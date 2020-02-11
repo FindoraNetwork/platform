@@ -1004,6 +1004,10 @@ impl BitMap {
     digest
   }
 
+  pub fn get_checksum(&self) -> Digest {
+    self.checksum
+  }
+
   /// Serialize the entire bit map to a compressed representation.
   pub fn serialize(&mut self, version: usize) -> Vec<u8> {
     assert!(self.validate(false));
