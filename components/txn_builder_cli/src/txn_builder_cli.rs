@@ -209,14 +209,15 @@ fn store_txn_builder_to_file(file_path: &str,
 }
 
 // Write a new key pair to the given paths.
-// Create subdirectories as needed.
-// Move aside any extant files at the given paths.
 // Assumes tilde expansion has already been done on paths.
+//
+// Note:
+// Call this function only after moving aside any extant files.
+// Use rename_existing_path or create_directory_and_rename_path functions to achieve this.
 fn store_key_pair_to_file(path_str: &str) -> Result<(), PlatformError> {
   let file_path = Path::new(path_str);
   match fs::create_dir_all(&file_path.parent().unwrap()) {
     Ok(()) => {
-      rename_existing_path(&file_path);
       let mut prng: ChaChaRng;
       prng = ChaChaRng::from_seed([0u8; 32]);
       let key_pair = XfrKeyPair::generate(&mut prng);
@@ -241,14 +242,15 @@ fn store_key_pair_to_file(path_str: &str) -> Result<(), PlatformError> {
 }
 
 // Write a new public key to the given paths.
-// Create subdirectories as needed.
-// Move aside any extant files at the given paths.
 // Assumes tilde expansion has already been done on paths.
+//
+// Note:
+// Call this function only after moving aside any extant files.
+// Use rename_existing_path or create_directory_and_rename_path functions to achieve this.
 fn store_pub_key_to_file(path_str: &str) -> Result<(), PlatformError> {
   let file_path = Path::new(path_str);
   match fs::create_dir_all(&file_path.parent().unwrap()) {
     Ok(()) => {
-      rename_existing_path(&file_path);
       let mut prng = ChaChaRng::from_seed([0u8; 32]);
       let key_pair = XfrKeyPair::generate(&mut prng);
       match fs::write(&file_path, key_pair.get_pk_ref().as_bytes()) {
@@ -276,6 +278,7 @@ fn store_sids_to_file(file_path: &str, sids: &str) -> Result<(), PlatformError> 
     println!("Sids file {} could not be created", file_path);
     exit(exitcode::CANTCREAT)
   };
+  println!("Sids stored to {}", file_path);
   Ok(())
 }
 
@@ -307,6 +310,7 @@ fn store_blind_asset_record(file_path: &str,
       println!("Blind asset record file {} could not be created", file_path);
       exit(exitcode::CANTCREAT)
     };
+    println!("Blind asset record stored to {}", file_path);
   }
 
   Ok(())
