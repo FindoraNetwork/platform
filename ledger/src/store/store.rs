@@ -132,7 +132,7 @@ pub trait ArchiveAccess {
   // fn get_utxos        (&mut self, list: Vec<usize>) -> Option<Vec<u8>>;
 
   // Authenticated query of whether the txo is spent, unspent, or non-existent
-  fn get_utxo_status(&self, addr: TxoSID) -> AuthenticatedUtxoStatus;
+  fn get_utxo_status(&mut self, addr: TxoSID) -> AuthenticatedUtxoStatus;
 
   // Get the bitmap's hash at version `version`, if such a hash is
   // available.
@@ -154,7 +154,7 @@ pub struct StateCommitmentData {
   pub txns_in_block_hash: BitDigest,        // The hash of the transactions in the block
   pub previous_state_commitment: BitDigest, // The prior global block hash
   pub transaction_merkle_commitment: HashValue,
-  pub max_txo_sid: TxoSID,
+  pub txo_count: u64,
 }
 
 impl StateCommitmentData {
@@ -792,7 +792,8 @@ impl LedgerState {
                                  block_merkle: self.block_merkle.get_root_hash(),
                                  transaction_merkle_commitment: self.txn_merkle.get_root_hash(),
                                  txns_in_block_hash: self.status.txns_in_block_hash,
-                                 previous_state_commitment: prev_commitment });
+                                 previous_state_commitment: prev_commitment,
+                                 txo_count: self.status.next_txo.0 });
 
     self.status.block_commit_count += 1;
   }
@@ -1113,7 +1114,7 @@ impl AuthenticatedUtxoStatus {
   // 3) The bitmap checksum matches digest in state commitment data
   // 4) For txos that don't exist, simply show that the utxo_sid greater than max_sid
   pub fn is_valid(&self) -> bool {
-    let state_commitment_data = self.state_commitment_data;
+    let state_commitment_data = &self.state_commitment_data;
     let utxo_sid = self.utxo_sid.0;
     // 1) First, validate the state commitment
     if self.state_commitment != state_commitment_data.compute_commitment() {
@@ -1121,11 +1122,11 @@ impl AuthenticatedUtxoStatus {
     }
     if self.status == UtxoStatus::Nonexistent {
       // 4)
-      return utxo_sid > state_commitment_data.max_txo_sid.0;
+      return utxo_sid >= state_commitment_data.txo_count;
     }
 
     // If the txo exists, the proof must also contain a bitmap
-    let utxo_map = self.utxo_map.unwrap();
+    let utxo_map = self.utxo_map.as_ref().unwrap();
     // 2) The status matches the bit stored in the bitmap
     let spent = utxo_map.query(utxo_sid).unwrap();
     if (self.status == UtxoStatus::Spent && !spent) || (self.status == UtxoStatus::Unspent && spent)
@@ -1225,13 +1226,13 @@ impl ArchiveAccess for LedgerState {
     }
   }
 
-  fn get_utxo_status(&self, addr: TxoSID) -> AuthenticatedUtxoStatus {
-    let state_commitment_data = self.status.state_commitment_data.as_ref().unwrap().clone();
+  fn get_utxo_status(&mut self, addr: TxoSID) -> AuthenticatedUtxoStatus {
+    let state_commitment_data = self.status.state_commitment_data.as_ref().unwrap();
     let utxo_map: Option<SparseMap>;
     let status;
-    if addr.0 <= state_commitment_data.max_txo_sid.0 {
+    if addr.0 < state_commitment_data.txo_count {
       utxo_map = Some(SparseMap::new(&self.utxo_map.serialize(0)).unwrap());
-      status = match utxo_map.unwrap().query(addr.0).unwrap() {
+      status = match utxo_map.as_ref().unwrap().query(addr.0).unwrap() {
         true => UtxoStatus::Unspent,
         false => UtxoStatus::Spent,
       };
@@ -1242,7 +1243,7 @@ impl ArchiveAccess for LedgerState {
 
     // TODO: verify in constructor
     AuthenticatedUtxoStatus { status,
-                              state_commitment_data,
+                              state_commitment_data: state_commitment_data.clone(),
                               state_commitment: state_commitment_data.compute_commitment(),
                               utxo_sid: addr,
                               utxo_map }
@@ -1539,7 +1540,8 @@ mod tests {
                                      previous_state_commitment: BitDigest { 0: [0_u8;
                                                                                 DIGESTBYTES] },
                                      transaction_merkle_commitment: ledger_state.txn_merkle
-                                                                                .get_root_hash() };
+                                                                                .get_root_hash(),
+                                     txo_count: 0 };
 
     let serialized = bincode::serialize(&data).unwrap();
     let count_original = ledger_state.status.block_commit_count;

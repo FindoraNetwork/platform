@@ -146,7 +146,7 @@ pub struct Proof {
 impl Proof {
   // Get merkle tree root of tree that the proof refers to
   pub fn get_root_hash(&self) -> HashValue {
-    self.hash_array[self.hash_array.len() - 1].clone()
+    self.hash_array[self.hash_array.len() - 1]
   }
 }
 
