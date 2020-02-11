@@ -7,8 +7,7 @@ extern crate tempdir;
 use crate::data_model::errors::PlatformError;
 use crate::data_model::*;
 use crate::policies::{calculate_fee, DebtMemo};
-use bitmap;
-use bitmap::BitMap;
+use bitmap::{BitMap, SparseMap};
 use cryptohash::sha256;
 use cryptohash::sha256::Digest as BitDigest;
 use cryptohash::sha256::DIGESTBYTES;
@@ -132,8 +131,8 @@ pub trait ArchiveAccess {
   // there isn't anything to handle out-of-bounds indices from `list`
   // fn get_utxos        (&mut self, list: Vec<usize>) -> Option<Vec<u8>>;
 
-  // Authenticated query of whether the txo is spent or unspent
-  fn get_utxo_status(&mut self, addr: TxoSID) -> Option<AuthenticatedUtxoStatus>;
+  // Authenticated query of whether the txo is spent, unspent, or non-existent
+  fn get_utxo_status(&self, addr: TxoSID) -> AuthenticatedUtxoStatus;
 
   // Get the bitmap's hash at version `version`, if such a hash is
   // available.
@@ -155,6 +154,7 @@ pub struct StateCommitmentData {
   pub txns_in_block_hash: BitDigest,        // The hash of the transactions in the block
   pub previous_state_commitment: BitDigest, // The prior global block hash
   pub transaction_merkle_commitment: HashValue,
+  pub max_txo_sid: TxoSID,
 }
 
 impl StateCommitmentData {
@@ -1102,28 +1102,38 @@ pub struct AuthenticatedUtxoStatus {
   pub status: UtxoStatus,
   pub utxo_sid: TxoSID,
   pub state_commitment_data: StateCommitmentData,
-  pub utxo_map: BitMap,
+  pub utxo_map: Option<SparseMap>, // BitMap only needed for proof if the txo_sid exists
   pub state_commitment: BitDigest,
 }
 
 impl AuthenticatedUtxoStatus {
-  // An authenticated utxo status is valid if
-  // 1) The status matches the bit stored in the bitmap
-  // 2) The bitmap checksum matches digest in state commitment data
-  // 3) The state commitment data hashes to the state commitment
+  // An authenticated utxo status is valid (for txos that exist) if
+  // 1) The state commitment data hashes to the state commitment
+  // 2) The status matches the bit stored in the bitmap
+  // 3) The bitmap checksum matches digest in state commitment data
+  // 4) For txos that don't exist, simply show that the utxo_sid greater than max_sid
   pub fn is_valid(&self) -> bool {
-    // 1) The status matches the bit stored in the bitmap
-    let spent = !self.utxo_map.query(self.utxo_sid.0 as usize).unwrap();
+    let state_commitment_data = self.state_commitment_data;
+    let utxo_sid = self.utxo_sid.0;
+    // 1) First, validate the state commitment
+    if self.state_commitment != state_commitment_data.compute_commitment() {
+      return false;
+    }
+    if self.status == UtxoStatus::Nonexistent {
+      // 4)
+      return utxo_sid > state_commitment_data.max_txo_sid.0;
+    }
+
+    // If the txo exists, the proof must also contain a bitmap
+    let utxo_map = self.utxo_map.unwrap();
+    // 2) The status matches the bit stored in the bitmap
+    let spent = utxo_map.query(utxo_sid).unwrap();
     if (self.status == UtxoStatus::Spent && !spent) || (self.status == UtxoStatus::Unspent && spent)
     {
       return false;
     }
-    // 2)
-    if self.utxo_map.get_checksum() != self.state_commitment_data.bitmap {
-      return false;
-    }
     // 3)
-    if self.state_commitment != self.state_commitment_data.compute_commitment() {
+    if utxo_map.checksum() != self.state_commitment_data.bitmap {
       return false;
     }
     return true;
@@ -1215,16 +1225,27 @@ impl ArchiveAccess for LedgerState {
     }
   }
 
-  fn get_utxo_status(&self, addr: TxoSID) -> AuthenticatedUtxoResult {
-    let state_commitment_data = self.status.state_commitment_data;
-    let utxo_map = self.utxo_map.clone();
-    if addr.0 <= state_commitment_data.max_txo_sid {
-      let status = match utxo_map.query(self.utxo_sid.0 as usize).unwrap() {
+  fn get_utxo_status(&self, addr: TxoSID) -> AuthenticatedUtxoStatus {
+    let state_commitment_data = self.status.state_commitment_data.as_ref().unwrap().clone();
+    let utxo_map: Option<SparseMap>;
+    let status;
+    if addr.0 <= state_commitment_data.max_txo_sid.0 {
+      utxo_map = Some(SparseMap::new(&self.utxo_map.serialize(0)).unwrap());
+      status = match utxo_map.unwrap().query(addr.0).unwrap() {
         true => UtxoStatus::Unspent,
-        false => UtxoStatus::Spend,
+        false => UtxoStatus::Spent,
       };
-      return AuthenticatedUtxoStatus {};
+    } else {
+      status = UtxoStatus::Nonexistent;
+      utxo_map = None;
     }
+
+    // TODO: verify in constructor
+    AuthenticatedUtxoStatus { status,
+                              state_commitment_data,
+                              state_commitment: state_commitment_data.compute_commitment(),
+                              utxo_sid: addr,
+                              utxo_map }
   }
 
   fn get_block_count(&self) -> usize {

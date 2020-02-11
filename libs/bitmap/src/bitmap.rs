@@ -375,7 +375,6 @@ const UPPER_LIMIT: u32 = (BLOCK_BITS - BITS_SIZE / INDEX_SIZE) as u32;
 
 // Define the layout of a block of a bitmap.  The on-disk
 // and in-memory layouts are the same.
-
 #[repr(C)]
 struct BitBlock {
   header: BlockHeader,

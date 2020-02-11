@@ -195,6 +195,7 @@ pub struct TxOutput(pub BlindAssetRecord);
 pub enum UtxoStatus {
   Spent,
   Unspent,
+  Nonexistent,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
