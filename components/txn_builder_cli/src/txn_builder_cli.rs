@@ -23,6 +23,7 @@ use zei::xfr::structs::{AssetRecord, BlindAssetRecord};
 extern crate exitcode;
 
 const HOST: &str = "testnet.findora.org";
+const QUERY_PORT: &str = "8668";
 const SUBMIT_PORT: &str = "8669";
 
 //
@@ -450,7 +451,7 @@ fn submit(protocol: &str, transaction_file_name: &str) -> Result<(), PlatformErr
   // Submit transaction
   let txn_builder = &mut load_txn_builder_from_file(transaction_file_name).unwrap();
   let client = reqwest::Client::new();
-  let txn = txn_builder.transaction().clone();
+  let txn = txn_builder.transaction();
   let mut res = client.post(&format!("{}://{}:{}/{}",
                                      protocol, HOST, SUBMIT_PORT, "submit_transaction"))
                       .json(&txn)
@@ -469,35 +470,34 @@ fn submit_and_get_sid(protocol: &str,
   // Submit transaction
   let txn_builder = &mut load_txn_builder_from_file(transaction_file_name).unwrap();
   let client = reqwest::Client::new();
-  let txn = txn_builder.transaction().clone();
+  let txn = txn_builder.transaction();
   let mut res = client.post(&format!("{}://{}:{}/{}",
                                      protocol, HOST, SUBMIT_PORT, "submit_transaction"))
                       .json(&txn)
                       .send()
                       .unwrap();
   // Log body
-  println!("Response: {}",
-           res.json::<TxnHandle>().expect("<Invalid JSON>"));
+  let handle = res.json::<TxnHandle>().expect("<Invalid JSON>");
+  println!("Response: {}", handle);
   println!("Status: {}", res.status());
   println!("Headers:\n{:?}", res.headers());
 
   // Get sid
-  let handle = serde_json::from_str::<TxnHandle>(&res.text().unwrap()).unwrap();
-
-  let res = query(protocol, "txn_status", &handle.0);
+  let res = query(protocol, SUBMIT_PORT, "txn_status", &handle.0);
   match serde_json::from_str::<TxnStatus>(&res).unwrap() {
-    TxnStatus::Committed((_sid, txos)) => Ok(txos[0]),
+    TxnStatus::Committed((_sid, txos)) => {
+      println!("Sid: {}", txos[0].0);
+      Ok(txos[0])
+    }
     _ => Err(PlatformError::DeserializationError),
   }
 }
 
-fn query(protocol: &str, item: &str, value: &str) -> String {
+fn query(protocol: &str, port: &str, item: &str, value: &str) -> String {
   let mut res =
-    reqwest::get(&format!("{}://{}:{}/{}/{}", protocol, HOST, SUBMIT_PORT, item, value)).unwrap();
+    reqwest::get(&format!("{}://{}:{}/{}/{}", protocol, HOST, port, item, value)).unwrap();
 
   // Log body
-  println!("Response: {}",
-           res.json::<TxnHandle>().expect("<Invalid JSON>"));
   println!("Status: {}", res.status());
   println!("Headers:\n{:?}", res.headers());
 
@@ -513,8 +513,6 @@ fn issue_and_transfer(sid: TxoRef,
                       transaction_file_name: &str,
                       seq_num: u64)
                       -> Result<(), PlatformError> {
-  let txn_builder = &mut load_txn_builder_from_file(&transaction_file_name).unwrap();
-
   // Transfer Operation
   let xfr_op =
     TransferOperationBuilder::new().add_input(sid,
@@ -528,6 +526,7 @@ fn issue_and_transfer(sid: TxoRef,
                                    .transaction()?;
 
   // Issue and Transfer transaction
+  let mut txn_builder = TransactionBuilder::default();
   txn_builder.add_operation_issue_asset(issuer_key_pair,
                                         &token_code,
                                         seq_num,
@@ -550,7 +549,6 @@ fn merge_records(key_pair: &XfrKeyPair,
                  token_code: AssetTypeCode,
                  transaction_file_name: &str)
                  -> Result<(), PlatformError> {
-  let txn_builder = &mut load_txn_builder_from_file(&transaction_file_name).unwrap();
   let oar1 = open_asset_record(&blind_asset_record1, key_pair.get_sk_ref())?;
   let oar2 = open_asset_record(&blind_asset_record2, key_pair.get_sk_ref())?;
   let amount1 = *oar1.get_amount();
@@ -568,6 +566,7 @@ fn merge_records(key_pair: &XfrKeyPair,
                                    .transaction()?;
 
   // Merge records
+  let mut txn_builder = TransactionBuilder::default();
   txn_builder.add_operation(xfr_op).transaction();
 
   if let Err(e) = store_txn_builder_to_file(&transaction_file_name, &txn_builder) {
@@ -618,11 +617,12 @@ fn load_funds(sid_pre: TxoRef,
   };
 
   // Get next blind asset record
-  let res = query(protocol, "utxo_sid", &format!("{}", sid_next.0));
-  let blind_asset_record_next = serde_json::from_str::<BlindAssetRecord>(&res).or_else(|_| {
-                                  Err(PlatformError::DeserializationError)
-                                })
-                                .unwrap();
+  let res = query(protocol, QUERY_PORT, "utxo_sid", &format!("{}", sid_next.0));
+  let blind_asset_record_next =
+    serde_json::from_str::<BlindAssetRecord>(&res).or_else(|_| {
+                                                    Err(PlatformError::DeserializationError)
+                                                  })
+                                                  .unwrap();
 
   // Merge records
   merge_records(recipient_key_pair,
@@ -637,6 +637,7 @@ fn load_funds(sid_pre: TxoRef,
   if submit(protocol, transaction_file_name).is_err() {
     return Err(PlatformError::SubmissionServerError(Some("Failed to submit transaction".into())));
   };
+
   Ok(())
 }
 
@@ -859,7 +860,7 @@ fn main() -> Result<(), PlatformError> {
         .help("Required: sid corresponding to the new record."))
       .arg(Arg::with_name("blind_asset_record_pre_path")
         .long("blind_asset_record_pre_path")
-        .takes_value(true)      
+        .takes_value(true)
         .help("Required: path to the file of the recipient's previous blind asset record."))
       .arg(Arg::with_name("blind_asset_record_new_path")
         .long("blind_asset_record_new_path")
@@ -1626,61 +1627,260 @@ mod tests {
     assert!(res.is_ok());
   }
 
-  // TODO (Keyao): Tests below don't pass. Fix them.
-  // They both fail when submitting transaction.
+  #[test]
+  // Define an asset and submit the transaction
+  fn test_define_and_submit() {
+    let txn_builder_path = "tb_define_and_submit";
+    store_txn_builder_to_file(&txn_builder_path, &TransactionBuilder::default()).unwrap();
+    let mut txn_builder = load_txn_builder_from_file(&txn_builder_path).unwrap();
 
-  //   #[test]
-  //   fn test_define_and_submit() {
-  //     let txn_builder_path = "tb_define_and_submit";
-  //     store_txn_builder_to_file(&txn_builder_path, &TransactionBuilder::default()).unwrap();
-  //     let mut txn_builder = load_txn_builder_from_file(&txn_builder_path).unwrap();
+    let mut prng: ChaChaRng = ChaChaRng::from_seed([0u8; 32]);
+    let key_pair = XfrKeyPair::generate(&mut prng);
+    let token_code = AssetTypeCode::gen_random();
 
-  //     let mut prng: ChaChaRng = ChaChaRng::from_seed([0u8; 32]);
-  //     let key_pair = XfrKeyPair::generate(&mut prng);
-  //     let token_code = AssetTypeCode::gen_random();
+    txn_builder.add_operation_create_asset(&key_pair, Some(token_code), false, false, "")
+               .unwrap();
+    store_txn_builder_to_file(&txn_builder_path, &txn_builder).unwrap();
 
-  //     txn_builder.add_operation_create_asset(&key_pair, Some(token_code), false, false, "")
-  //                .unwrap();
-  //     store_txn_builder_to_file(&txn_builder_path, &txn_builder).unwrap();
+    let res = submit("https", txn_builder_path);
+    fs::remove_file(txn_builder_path).unwrap();
+    assert!(res.is_ok());
+  }
 
-  //     let res = submit("https", txn_builder_path);
-  //     fs::remove_file(txn_builder_path).unwrap();
-  //     assert!(res.is_ok());
-  //   }
+  #[test]
+  // Define an asset, issue certain amount, then submit the transaction
+  fn test_define_issue_and_submit() {
+    let txn_builder_path = "tb_define_issue_submit";
+    store_txn_builder_to_file(&txn_builder_path, &TransactionBuilder::default()).unwrap();
+    let mut txn_builder = load_txn_builder_from_file(&txn_builder_path).unwrap();
 
-  //   #[test]
-  //   fn test_load_funds() {
-  //     // Create txn builder and key pairs
-  //     let txn_builder_path = "tb_load_funds";
-  //     store_txn_builder_to_file(&txn_builder_path, &TransactionBuilder::default()).unwrap();
-  //     let mut prng = ChaChaRng::from_seed([0u8; 32]);
-  //     let issuer_key_pair = XfrKeyPair::generate(&mut prng);
-  //     let recipient_key_pair = XfrKeyPair::generate(&mut prng);
+    let mut prng: ChaChaRng = ChaChaRng::from_seed([0u8; 32]);
+    let key_pair = XfrKeyPair::generate(&mut prng);
 
-  //     // Build blind asset records
-  //     let params = PublicParams::new();
-  //     let art = AssetRecordType::PublicAmount_PublicAssetType;
-  //     let amount_pre = 1000;
-  //     let amount_new = 500;
-  //     let code = AssetTypeCode::gen_random();
-  //     let ar_pre = AssetRecord::new(amount_pre, code.val, recipient_key_pair.get_pk()).unwrap();
-  //     let ar_new = AssetRecord::new(amount_new, code.val, issuer_key_pair.get_pk()).unwrap();
-  //     let bar_pre = build_blind_asset_record(&mut prng, &params.pc_gens, &ar_pre, art, &None);
-  //     let bar_new = build_blind_asset_record(&mut prng, &params.pc_gens, &ar_new, art, &None);
+    // Build blind asset record
+    let params = PublicParams::new();
+    let art = AssetRecordType::PublicAmount_PublicAssetType;
+    let code = AssetTypeCode::gen_random();
+    let amount = 1000;
+    let ar = AssetRecord::new(amount, code.val, key_pair.get_pk()).unwrap();
+    let bar = build_blind_asset_record(&mut prng, &params.pc_gens, &ar, art, &None);
 
-  //     // Load funds
-  //     let res = load_funds(TxoRef::Absolute(TxoSID(1)),
-  //                          TxoRef::Relative(2),
-  //                          bar_pre,
-  //                          bar_new,
-  //                          &issuer_key_pair,
-  //                          &recipient_key_pair,
-  //                          amount_new,
-  //                          code,
-  //                          txn_builder_path,
-  //                          1,
-  //                          "https");
-  //     fs::remove_file(txn_builder_path).unwrap();
-  //     assert!(res.is_ok());
-  //   }
+    // Define asset
+    txn_builder.add_operation_create_asset(&key_pair, Some(code), false, false, "")
+               .unwrap()
+               .transaction();
+    store_txn_builder_to_file(&txn_builder_path, &txn_builder).unwrap();
+
+    let res = submit("https", &txn_builder_path);
+    assert!(res.is_ok());
+
+    // Issue asset
+    store_txn_builder_to_file(&txn_builder_path, &TransactionBuilder::default()).unwrap();
+    let mut txn_builder = load_txn_builder_from_file(&txn_builder_path).unwrap();
+
+    txn_builder.add_operation_issue_asset(&key_pair, &code, 1, &[TxOutput(bar)])
+               .unwrap();
+    store_txn_builder_to_file(&txn_builder_path, &txn_builder).unwrap();
+
+    let res = submit("https", txn_builder_path);
+    fs::remove_file(txn_builder_path).unwrap();
+    assert!(res.is_ok());
+  }
+
+  #[test]
+  // 1. The issuer defines an asset
+  // 2. The issuer issues certain amount and transfers the amount to the recipient
+  // 3. Submit the transaction
+  fn test_define_issue_transfer_and_submit() {
+    // Create txn builder and key pairs
+    let txn_builder_path = "tb_issue_transfer_submit";
+    store_txn_builder_to_file(&txn_builder_path, &TransactionBuilder::default()).unwrap();
+    let mut prng: ChaChaRng = ChaChaRng::from_seed([0u8; 32]);
+    let issuer_key_pair = XfrKeyPair::generate(&mut prng);
+    let recipient_key_pair = XfrKeyPair::generate(&mut prng);
+
+    // Build blind asset record
+    let params = PublicParams::new();
+    let art = AssetRecordType::PublicAmount_PublicAssetType;
+    let code = AssetTypeCode::gen_random();
+    let amount = 1000;
+    let ar = AssetRecord::new(amount, code.val, issuer_key_pair.get_pk()).unwrap();
+    let bar = build_blind_asset_record(&mut prng, &params.pc_gens, &ar, art, &None);
+
+    // Define asset
+    let mut txn_builder = load_txn_builder_from_file(&txn_builder_path).unwrap();
+    txn_builder.add_operation_create_asset(&issuer_key_pair, Some(code), false, false, "")
+               .unwrap()
+               .transaction();
+    store_txn_builder_to_file(&txn_builder_path, &txn_builder).unwrap();
+    let res = submit("https", txn_builder_path);
+    assert!(res.is_ok());
+
+    // Issue and transfer asset
+    issue_and_transfer(TxoRef::Relative(0),
+                       bar,
+                       &issuer_key_pair,
+                       &recipient_key_pair.get_pk(),
+                       amount,
+                       code,
+                       txn_builder_path,
+                       1).unwrap();
+
+    // Submit transaction
+    let res = submit("https", txn_builder_path);
+    fs::remove_file(txn_builder_path).unwrap();
+    assert!(res.is_ok());
+  }
+
+  #[test]
+  // 1. The issuer defines the asset
+  // 2. The issuer issues and transfers two assets to the recipient
+  // 3. Merge the two records for the recipient
+  // 4. Submit the transaction
+  fn test_define_issue_transfer_merge_and_submit() {
+    // Create txn builder and key pairs
+    let txn_builder_path = "tb_merge_and_submit";
+    store_txn_builder_to_file(&txn_builder_path, &TransactionBuilder::default()).unwrap();
+    let mut prng: ChaChaRng = ChaChaRng::from_seed([0u8; 32]);
+    let issuer_key_pair = XfrKeyPair::generate(&mut prng);
+    let recipient_key_pair = XfrKeyPair::generate(&mut prng);
+
+    // Build blind asset records
+    let params = PublicParams::new();
+    let art = AssetRecordType::PublicAmount_PublicAssetType;
+    let amount1 = 1000;
+    let amount2 = 500;
+    let code = AssetTypeCode::gen_random();
+    let ar1 = AssetRecord::new(amount1, code.val, issuer_key_pair.get_pk()).unwrap();
+    let ar2 = AssetRecord::new(amount2, code.val, issuer_key_pair.get_pk()).unwrap();
+    let bar1 = build_blind_asset_record(&mut prng, &params.pc_gens, &ar1, art, &None);
+    let bar2 = build_blind_asset_record(&mut prng, &params.pc_gens, &ar2, art, &None);
+
+    // Define asset
+    let mut txn_builder = load_txn_builder_from_file(&txn_builder_path).unwrap();
+    txn_builder.add_operation_create_asset(&issuer_key_pair, Some(code), false, false, "")
+               .unwrap()
+               .transaction();
+    store_txn_builder_to_file(&txn_builder_path, &txn_builder).unwrap();
+    let res = submit("https", txn_builder_path);
+    assert!(res.is_ok());
+
+    // Issue and transfer the first asset
+    issue_and_transfer(TxoRef::Relative(0),
+                       bar1,
+                       &issuer_key_pair,
+                       &recipient_key_pair.get_pk(),
+                       amount1,
+                       code,
+                       txn_builder_path,
+                       1).unwrap();
+
+    let sid1 = submit_and_get_sid("https", txn_builder_path).unwrap();
+    let res = query("https", QUERY_PORT, "utxo_sid", &format!("{}", sid1.0));
+    let blind_asset_record_1 =
+      serde_json::from_str::<BlindAssetRecord>(&res).or_else(|_| {
+                                                      Err(PlatformError::DeserializationError)
+                                                    })
+                                                    .unwrap();
+
+    // Issue and transfer the second asset
+    issue_and_transfer(TxoRef::Relative(0),
+                       bar2,
+                       &issuer_key_pair,
+                       &recipient_key_pair.get_pk(),
+                       amount2,
+                       code,
+                       txn_builder_path,
+                       2).unwrap();
+    let sid2 = submit_and_get_sid("https", txn_builder_path).unwrap();
+    let res = query("https", QUERY_PORT, "utxo_sid", &format!("{}", sid2.0));
+    let blind_asset_record_2 =
+      serde_json::from_str::<BlindAssetRecord>(&res).or_else(|_| {
+                                                      Err(PlatformError::DeserializationError)
+                                                    })
+                                                    .unwrap();
+
+    // Merge records
+    merge_records(&recipient_key_pair,
+                  TxoRef::Absolute(sid1),
+                  TxoRef::Absolute(sid2),
+                  blind_asset_record_1,
+                  blind_asset_record_2,
+                  code,
+                  txn_builder_path).unwrap();
+
+    // Submit transactions
+    let res = submit("https", txn_builder_path);
+    fs::remove_file(txn_builder_path).unwrap();
+    assert!(res.is_ok());
+  }
+
+  #[test]
+  // 1. The issuer defines the asset
+  // 2. The issuer issues and transfers an asset to the recipient
+  // 3. Load funds for the recipient
+  fn test_load_funds() {
+    // Create txn builder and key pairs
+    let txn_builder_path = "tb_load_funds";
+    store_txn_builder_to_file(&txn_builder_path, &TransactionBuilder::default()).unwrap();
+    let mut prng = ChaChaRng::from_seed([0u8; 32]);
+    let issuer_key_pair = XfrKeyPair::generate(&mut prng);
+    let recipient_key_pair = XfrKeyPair::generate(&mut prng);
+
+    // Build blind asset records
+    let params = PublicParams::new();
+    let art = AssetRecordType::PublicAmount_PublicAssetType;
+    let amount_original = 1000;
+    let amount_new = 500;
+    let code = AssetTypeCode::gen_random();
+    let ar_original =
+      AssetRecord::new(amount_original, code.val, issuer_key_pair.get_pk()).unwrap();
+    let ar_new = AssetRecord::new(amount_new, code.val, issuer_key_pair.get_pk()).unwrap();
+    let bar_original =
+      build_blind_asset_record(&mut prng, &params.pc_gens, &ar_original, art, &None);
+    let bar_new = build_blind_asset_record(&mut prng, &params.pc_gens, &ar_new, art, &None);
+
+    // Define asset
+    let mut txn_builder = load_txn_builder_from_file(&txn_builder_path).unwrap();
+    txn_builder.add_operation_create_asset(&issuer_key_pair, Some(code), false, false, "")
+               .unwrap()
+               .transaction();
+    store_txn_builder_to_file(&txn_builder_path, &txn_builder).unwrap();
+    let res = submit("https", txn_builder_path);
+    assert!(res.is_ok());
+
+    // Set the original record
+    issue_and_transfer(TxoRef::Relative(0),
+                       bar_original,
+                       &issuer_key_pair,
+                       &recipient_key_pair.get_pk(),
+                       amount_original,
+                       code,
+                       txn_builder_path,
+                       3).unwrap();
+
+    let sid1 = submit_and_get_sid("https", txn_builder_path).unwrap();
+    let res = query("https", QUERY_PORT, "utxo_sid", &format!("{}", sid1.0));
+    let bar_pre =
+      serde_json::from_str::<BlindAssetRecord>(&res).or_else(|_| {
+                                                      Err(PlatformError::DeserializationError)
+                                                    })
+                                                    .unwrap();
+
+    // Load funds
+    // The new record will be merged with the original record
+    let res = load_funds(TxoRef::Absolute(sid1),
+                         TxoRef::Relative(0),
+                         bar_pre,
+                         bar_new,
+                         &issuer_key_pair,
+                         &recipient_key_pair,
+                         amount_new,
+                         code,
+                         txn_builder_path,
+                         4,
+                         "https");
+    fs::remove_file(txn_builder_path).unwrap();
+    assert!(res.is_ok());
+  }
 }

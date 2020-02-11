@@ -189,7 +189,7 @@ fn transfer_asset(txn_builder_path: &str,
 }
 
 #[cfg(test)]
-fn _submit(txn_builder_path: &str) -> io::Result<Output> {
+fn submit(txn_builder_path: &str) -> io::Result<Output> {
   Command::new(COMMAND).args(&["--txn", txn_builder_path])
                        .arg("submit")
                        //  .arg("--http")
@@ -629,37 +629,37 @@ fn test_define_issue_and_transfer_with_args() {
   }
 }
 
-// TODO (Keyao): Tests below don't pass. Fix them.
-// They both fail with "400 Bad Request" when submitting transaction.
+//
+// Submit
+//
+#[test]
+fn test_define_and_submit_with_args() {
+  // Create txn builder and key pair
+  let txn_builder_file = "tb_define_submit";
+  let key_pair_file = "kp_define_submit";
+  create_with_path(txn_builder_file).expect("Failed to create transaction builder");
+  keygen_with_path(key_pair_file).expect("Failed to generate key pair");
 
-// //
-// // Submit
-// //
-// #[test]
-// fn test_define_and_submit_with_args() {
-//   // Create txn builder and key pair
-//   let txn_builder_file = "tb_define_submit";
-//   let key_pair_file = "kp_define_submit";
-//   create_with_path(txn_builder_file).expect("Failed to create transaction builder");
-//   keygen_with_path(key_pair_file).expect("Failed to generate key pair");
+  // Define asset
+  define_asset(txn_builder_file,
+               key_pair_file,
+               &AssetTypeCode::gen_random().to_base64(),
+               "Define an asset").expect("Failed to define asset");
 
-//   // Define asset
-//   define_asset(txn_builder_file,
-//                key_pair_file,
-//                &AssetTypeCode::gen_random().to_base64(),
-//                "Define an asset").expect("Failed to define asset");
+  // Submit transaction
+  let output = submit(txn_builder_file).expect("Failed to submit transaction");
 
-//   // Submit transaction
-//   let output = submit(txn_builder_file).expect("Failed to submit transaction");
+  io::stdout().write_all(&output.stdout).unwrap();
+  io::stdout().write_all(&output.stderr).unwrap();
 
-//   io::stdout().write_all(&output.stdout).unwrap();
-//   io::stdout().write_all(&output.stderr).unwrap();
+  fs::remove_file(txn_builder_file).unwrap();
+  fs::remove_file(key_pair_file).unwrap();
 
-//   fs::remove_file(txn_builder_file).unwrap();
-//   fs::remove_file(key_pair_file).unwrap();
+  assert!(output.status.success());
+}
 
-//   assert!(output.status.success());
-// }
+// TODO (Keyao): I'm working on adding the "issue_and_transfer" command, which will affect the test below.
+//               I'll update this test afterwards.
 
 // //
 // // Load funds
