@@ -26,24 +26,51 @@ _**Note**: Even if the subcommand is unique, it is still necessary to
 supply the command name as well. This is true for both help and the
 actual subcommands._
 
-## Generating cryptographic keys
-
-Before you can create a transaction, you need a public/private key
-pair. The `txn_builder_cli keygen` command will generate and save a
-key pair. Note, you only need to do this one time.
-
 ## Composing a transaction
 
-To compose a transaction, first create an empty transaction
+### Create an empty transaction
 ```
-$ ./txn_builder_cli create
-[2020-01-29T00:33:36Z TRACE txn_builder_cli] Next path for "/home/alex/.findora/current.txn" is "/home/alex/.findora/current.txn.1"
+./txn_builder_cli create --name tb
+```
+### Create an key pair
+```
+./txn_builder_cli keygen --name kp
+```
 
-```
-Then add operations to the transaction. Three operations can be added
+### Add operations to the transaction. Three operations can be added:
 * Define a new asset. See `txn_builder_cli add define_asset`.
+```
+./txn_builder_cli --txn tb --key_pair kp add define_asset --token_code ibIaBlHV-PdQkvSuEg6YSA== --memo 'define an asset'
+```
 * Issue units of an asset. See `txn_builder_cli add issue_asset`.
+```
+./txn_builder_cli --txn tb --key_pair kp add issue_asset --token_code ibIaBlHV-PdQkvSuEg6YSA== --sequence_number 1 --amount 100
+```
 * Transfer units of an asset. See `txn_builder_cli add transfer_asset`.
+  * Create input and output public keys
+  ```
+  ./txn_builder_cli pubkeygen --name pki1
+  ./txn_builder_cli pubkeygen --name pki2
+  ./txn_builder_cli pubkeygen --name pko1
+  ./txn_builder_cli pubkeygen --name pko2
+  ./txn_builder_cli pubkeygen --name pko3
+  ```
+  * Store sids and blind asset records
+  ```
+  ./txn_builder_cli store sids --path s --indices 2,4
+  ./txn_builder_cli store blind_asset_record --path bar1 --amount 100 --asset_type ibIaBlHV-PdQkvSuEg6YSA== --pub_key_path pki1
+  ./txn_builder_cli store blind_asset_record --path bar2 --amount 1000 --asset_type ibIaBlHV-PdQkvSuEg6YSA== --pub_key_path pki2
+  ```
+  * Transfer
+  ```
+  ./txn_builder_cli --txn tb --key_pair kp add transfer_asset --sids_path s --blind_asset_record_paths bar1,bar2 --input_amounts 15,45 --output_amounts 10,20,30 --address_paths pko1,pko2,pko3
+  ```
+
+## Submitting a transaction
+After a transaction is composed:
+```
+./txn_builder_cli --txn tb --key_pair kp submit
+```
 
 ## Querying the ledger server
 
