@@ -469,10 +469,16 @@ impl LedgerStatus {
   // This drains every field of `block` except `txns` and `temp_sids`.
   #[allow(clippy::cognitive_complexity)]
   fn apply_block_effects(&mut self,
+                         utxo_map: &mut BitMap,
                          block: &mut BlockEffect)
                          -> HashMap<TxnTempSID, (TxnSID, Vec<TxoSID>)> {
     // Remove consumed UTXOs
     for (inp_sid, _) in block.input_txos.drain() {
+      // Remove from bitmap
+      debug_assert!(utxo_map.query(inp_sid.0 as usize).unwrap() == true);
+      utxo_map.clear(inp_sid.0 as usize).unwrap();
+
+      // Remove from ledger status
       debug_assert!(self.utxos.contains_key(&inp_sid));
       self.utxos.remove(&inp_sid);
     }
@@ -595,7 +601,8 @@ impl LedgerUpdate<ChaChaRng> for LedgerState {
       txn_log_fd.sync_data()?;
     }
 
-    let temp_sid_map = self.status.apply_block_effects(&mut block);
+    let temp_sid_map = self.status
+                           .apply_block_effects(&mut self.utxo_map, &mut block);
     let max_sid = self.status.next_txo.0; // mutated by apply_txn_effects
 
     // debug_assert!(utxo_sids.is_sorted());
@@ -1128,13 +1135,14 @@ impl AuthenticatedUtxoStatus {
     // If the txo exists, the proof must also contain a bitmap
     let utxo_map = self.utxo_map.as_ref().unwrap();
     // 2) The status matches the bit stored in the bitmap
-    let spent = utxo_map.query(utxo_sid).unwrap();
+    let spent = !utxo_map.query(utxo_sid).unwrap();
     if (self.status == UtxoStatus::Spent && !spent) || (self.status == UtxoStatus::Unspent && spent)
     {
       return false;
     }
     // 3)
     if utxo_map.checksum() != self.state_commitment_data.bitmap {
+      println!("failed at bitmap checksum");
       return false;
     }
     return true;
@@ -2093,6 +2101,13 @@ mod tests {
                                  .remove(&temp_sid)
                                  .unwrap();
 
+    for txo_id in &txos {
+      assert!(ledger.status.utxos.contains_key(&txo_id));
+      let utxo_status = ledger.get_utxo_status(*txo_id);
+      assert!(utxo_status.is_valid());
+      assert!(utxo_status.status == UtxoStatus::Unspent);
+    }
+
     // Store txo_sids for subsequent transfers
     let txo_sid = txos[0];
     let second_txo_id = txos[1];
@@ -2121,6 +2136,10 @@ mod tests {
                                   .unwrap()
                                   .remove(&temp_sid)
                                   .unwrap();
+    // Ensure that previous txo is now spent
+    let utxo_status = ledger.get_utxo_status(TxoSID(0));
+    assert!(utxo_status.is_valid());
+    assert!(utxo_status.status == UtxoStatus::Spent);
 
     // Adversary will attempt to spend the same blind asset record at another index
     let mut tx = Transaction::default();
@@ -2228,6 +2247,9 @@ mod tests {
     println!("utxos = {:?}", ledger.status.utxos);
     for txo_id in txos {
       assert!(ledger.status.utxos.contains_key(&txo_id));
+      let utxo_status = ledger.get_utxo_status(txo_id);
+      assert!(utxo_status.is_valid());
+      assert!(utxo_status.status == UtxoStatus::Unspent);
     }
 
     match ledger.get_transaction(txn_id) {

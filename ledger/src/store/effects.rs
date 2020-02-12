@@ -386,6 +386,7 @@ impl BlockEffect {
     self.txos.push(txn.txos);
 
     for (input_sid, record) in txn.input_txos {
+      dbg!(&input_sid);
       debug_assert!(!self.input_txos.contains_key(&input_sid));
       self.input_txos.insert(input_sid, record);
     }

@@ -191,7 +191,7 @@ pub struct TxnTempSID(pub usize);
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct TxOutput(pub BlindAssetRecord);
 
-#[derive(Eq, PartialEq)]
+#[derive(Eq, PartialEq, Debug)]
 pub enum UtxoStatus {
   Spent,
   Unspent,
