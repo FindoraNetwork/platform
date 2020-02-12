@@ -2,6 +2,7 @@
 use crate::data_model::errors::PlatformError;
 use crate::data_model::*;
 use crate::policies::{compute_debt_swap_effect, DebtSwapEffect};
+use crate::policy_script::run_txn_check;
 use cryptohash::sha256;
 use cryptohash::sha256::Digest as BitDigest;
 use findora::HasInvariants;
@@ -29,6 +30,8 @@ pub struct TxnEffect {
   pub issuance_keys: HashMap<AssetTypeCode, IssuerPublicKey>,
   // Debt swap information that must be externally validated
   pub debt_effects: HashMap<AssetTypeCode, DebtSwapEffect>,
+
+  pub asset_types_involved: HashSet<AssetTypeCode>,
 }
 
 // Internally validates the transaction as well.
@@ -45,6 +48,7 @@ impl TxnEffect {
     let mut new_issuance_nums: HashMap<AssetTypeCode, Vec<u64>> = HashMap::new();
     let mut issuance_keys: HashMap<AssetTypeCode, IssuerPublicKey> = HashMap::new();
     let mut debt_effects: HashMap<AssetTypeCode, DebtSwapEffect> = HashMap::new();
+    let mut asset_types_involved = HashSet::<AssetTypeCode>::new();
 
     // Sequentially go through the operations, validating intrinsic or
     // local-to-the-transaction properties, then recording effects and
@@ -73,6 +77,8 @@ impl TxnEffect {
         //         - Fully checked here
         //     2) The token id is available.
         //         - Partially checked here
+        //     3) The policy, if provided, passes its init check
+        //         - Fully checked here
         Operation::DefineAsset(def) => {
           // (1)
           // TODO(joe?): like the note in data_model, should the public key
@@ -88,6 +94,17 @@ impl TxnEffect {
           // (2), only within this transaction
           if new_asset_codes.contains_key(&code) || new_issuance_nums.contains_key(&code) {
             return Err(PlatformError::InputsError);
+          }
+
+          // (3)
+          if let Some((ref pol, ref globals)) = def.body.asset.policy {
+            let globals = globals.clone();
+            run_txn_check(&pol.init_check,
+                          globals.id_vars,
+                          globals.rt_vars,
+                          globals.amt_vars,
+                          globals.frac_vars,
+                          &Transaction::default())?;
           }
 
           issuance_keys.insert(code, token.properties.issuer.clone());
@@ -114,6 +131,8 @@ impl TxnEffect {
 
           let code = iss.body.code;
           let seq_num = iss.body.seq_num;
+
+          asset_types_involved.insert(code);
 
           // (1), within this transaction
           let iss_nums = new_issuance_nums.entry(code).or_insert_with(|| vec![]);
@@ -203,6 +222,10 @@ impl TxnEffect {
           verify_xfr_body(prng, &trn.body.transfer, &null_policies)?;
 
           for (inp, record) in trn.body.inputs.iter().zip(trn.body.transfer.inputs.iter()) {
+            if let Some(inp_code) = record.asset_type {
+              asset_types_involved.insert(AssetTypeCode { val: inp_code });
+            }
+
             // (2), checking within this transaction and recording
             // external UTXOs
             match *inp {
@@ -238,6 +261,9 @@ impl TxnEffect {
 
           txos.reserve(trn.body.transfer.outputs.len());
           for out in trn.body.transfer.outputs.iter() {
+            if let Some(out_code) = out.asset_type {
+              asset_types_involved.insert(AssetTypeCode { val: out_code });
+            }
             txos.push(Some(TxOutput(out.clone())));
             txo_count += 1;
           }
@@ -251,7 +277,8 @@ impl TxnEffect {
                    new_asset_codes,
                    new_issuance_nums,
                    issuance_keys,
-                   debt_effects })
+                   debt_effects,
+                   asset_types_involved })
   }
 }
 

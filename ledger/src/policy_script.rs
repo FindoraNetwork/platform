@@ -138,7 +138,9 @@ pub struct TxnPolicyData(pub HashMap<AssetTypeCode, TxnCheckInputs>);
 pub fn policy_get_globals(asset: &Asset) -> Result<PolicyGlobals, PlatformError> {
   let (pol, mem) = asset.policy.as_ref().ok_or(PlatformError::InputsError)?;
 
-  let ret = serde_json::from_str::<PolicyGlobals>(&mem.0).map_err(|_| PlatformError::InputsError)?;
+  let ret = mem.clone();
+
+  // let ret = serde_json::from_str::<PolicyGlobals>(&mem.0).map_err(|_| PlatformError::InputsError)?;
 
   if ret.id_vars.len() != pol.num_id_globals
      || ret.rt_vars.len() != pol.num_rt_globals

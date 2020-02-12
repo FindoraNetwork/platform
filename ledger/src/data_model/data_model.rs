@@ -1,6 +1,6 @@
 #![deny(warnings)]
 use super::errors;
-use crate::policy_script::Policy;
+use crate::policy_script::{Policy, PolicyGlobals};
 use chrono::prelude::*;
 use errors::PlatformError;
 use rand_chacha::ChaChaRng;
@@ -135,7 +135,7 @@ pub struct Asset {
   pub confidential_memo: ConfidentialMemo,
   pub updatable: bool,
   pub traceable: bool,
-  pub policy: Option<(Box<Policy>, Memo)>,
+  pub policy: Option<(Box<Policy>, PolicyGlobals)>,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]

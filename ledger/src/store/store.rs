@@ -7,6 +7,7 @@ extern crate tempdir;
 use crate::data_model::errors::PlatformError;
 use crate::data_model::*;
 use crate::policies::{calculate_fee, DebtMemo};
+use crate::policy_script::policy_check_txn;
 use bitmap;
 use bitmap::BitMap;
 use cryptohash::sha256;
@@ -445,6 +446,14 @@ impl LedgerStatus {
          || debt_swap_effects.fiat_paid != debt_swap_effects.debt_burned + correct_fee
       {
         return Err(PlatformError::InputsError);
+      }
+    }
+
+    // Policy checking
+    for code in txn.asset_types_involved.iter() {
+      if let Some((ref pol, ref globals)) = self.asset_types.get(code).unwrap().properties.policy {
+        let globals = globals.clone();
+        policy_check_txn(code, globals, &pol, &txn.txn)?;
       }
     }
 
