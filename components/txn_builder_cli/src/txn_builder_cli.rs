@@ -29,6 +29,8 @@ const SUBMIT_PORT: &str = "8669";
 //
 // Load functions
 //
+/// If the input file doesn't exist, exit with code NOINPUT
+/// In other case of failure, return the error itself
 fn load_txn_builder_from_file(file_path: &str) -> Result<TransactionBuilder, PlatformError> {
   let mut file;
   match File::open(file_path) {
@@ -47,11 +49,14 @@ fn load_txn_builder_from_file(file_path: &str) -> Result<TransactionBuilder, Pla
     exit(exitcode::NOINPUT)
   }
   println!("Parsing builder from file contents: \"{}\"", &txn);
-  let builder = serde_json::from_str(&txn)?;
-  Ok(builder)
+  match serde_json::from_str(&txn) {
+    Ok(builder) => Ok(builder),
+    Err(_) => Err(PlatformError::DeserializationError),
+  }
 }
 
-fn load_key_pair_from_file(file_path: &str) -> Result<XfrKeyPair, PlatformError> {
+/// If the input file doesn't exist, exit with code NOINPUT
+fn load_key_pair_from_file(file_path: &str) -> XfrKeyPair {
   let mut file;
   match File::open(file_path) {
     Ok(f) => {
@@ -75,10 +80,11 @@ fn load_key_pair_from_file(file_path: &str) -> Result<XfrKeyPair, PlatformError>
       exit(exitcode::NOINPUT)
     }
   }
-  Ok(kp)
+  kp
 }
 
-fn load_pub_key_from_file(file_path: &str) -> Result<XfrPublicKey, PlatformError> {
+/// If the input file doesn't exist, exit with code NOINPUT
+fn load_pub_key_from_file(file_path: &str) -> XfrPublicKey {
   let mut file;
   match File::open(file_path) {
     Ok(f) => {
@@ -102,13 +108,15 @@ fn load_pub_key_from_file(file_path: &str) -> Result<XfrPublicKey, PlatformError
       exit(exitcode::NOINPUT)
     }
   }
-  Ok(key)
+  key
 }
 
 fn split_arg(string: &str) -> Vec<&str> {
   string.split(',').collect::<Vec<&str>>()
 }
 
+/// If the input file doesn't exist, exit with code NOINPUT
+/// In other case of failure, return the error itself
 fn load_sids_from_file(file_path: &str) -> Result<Vec<TxoRef>, PlatformError> {
   let mut file;
   match File::open(file_path) {
@@ -134,13 +142,15 @@ fn load_sids_from_file(file_path: &str) -> Result<Vec<TxoRef>, PlatformError> {
       txo_refs.push(TxoRef::Absolute(TxoSID(sid)));
     } else {
       println!("Improperly formatted sid.");
-      exit(exitcode::USAGE)
+      return Err(PlatformError::InputsError);
     }
   }
 
   Ok(txo_refs)
 }
 
+/// If the input file doesn't exist, exit with code NOINPUT
+/// In other case of failure, return the error itself
 fn load_blind_asset_record_from_file(file_path: &str) -> Result<BlindAssetRecord, PlatformError> {
   let file_path = file_path.trim();
   let mut file;
@@ -165,10 +175,12 @@ fn load_blind_asset_record_from_file(file_path: &str) -> Result<BlindAssetRecord
     Ok(blind_asset_record)
   } else {
     println!("Improperly formatted blind asset record.");
-    exit(exitcode::USAGE)
+    Err(PlatformError::InputsError)
   }
 }
 
+/// If the input file doesn't exist, exit with code NOINPUT
+/// In other case of failure, return the error itself
 fn load_blind_asset_records_from_files(file_paths: &str)
                                        -> Result<Vec<BlindAssetRecord>, PlatformError> {
   let mut blind_asset_records = Vec::new();
@@ -197,54 +209,43 @@ fn load_blind_asset_records_from_files(file_paths: &str)
       blind_asset_records.push(blind_asset_record);
     } else {
       println!("Improperly formatted blind asset record.");
-      exit(exitcode::USAGE)
+      return Err(PlatformError::InputsError);
     }
   }
 
   Ok(blind_asset_records)
 }
 
-fn load_addresses_from_files(file_paths: &str) -> Result<Vec<AccountAddress>, PlatformError> {
+fn load_addresses_from_files(file_paths: &str) -> Vec<AccountAddress> {
   let mut addresses = Vec::new();
 
   for file_path in split_arg(file_paths) {
-    let address_key;
-    match load_pub_key_from_file(file_path.trim()) {
-      Ok(key) => {
-        address_key = key;
-      }
-      Err(_) => {
-        println!("Failed to load address key from file {}", file_path);
-        exit(exitcode::NOINPUT)
-      }
-    }
+    let address_key = load_pub_key_from_file(file_path.trim());
     addresses.push(AccountAddress { key: address_key });
   }
 
-  Ok(addresses)
+  addresses
 }
 
 //
 // Store functions
 //
-fn store_txn_builder_to_file(file_path: &str,
-                             txn: &TransactionBuilder)
-                             -> Result<(), PlatformError> {
+/// If the output file can't be created, exit with code CANTCREAT
+fn store_txn_builder_to_file(file_path: &str, txn: &TransactionBuilder) {
   if let Ok(as_json) = serde_json::to_string(txn) {
     if fs::write(file_path, &as_json).is_err() {
       println!("Transaction file {} could not be created", file_path);
       exit(exitcode::CANTCREAT)
     };
   }
-
-  Ok(())
 }
 
 // Write a new key pair to the given paths.
 // Create subdirectories as needed.
 // Move aside any extant files at the given paths.
 // Assumes tilde expansion has already been done on paths.
-fn store_key_pair_to_file(path_str: &str) -> Result<(), PlatformError> {
+/// If the output file can't be created, exit with code CANTCREAT
+fn store_key_pair_to_file(path_str: &str) {
   let file_path = Path::new(path_str);
   match fs::create_dir_all(&file_path.parent().unwrap()) {
     Ok(()) => {
@@ -267,15 +268,14 @@ fn store_key_pair_to_file(path_str: &str) -> Result<(), PlatformError> {
       exit(exitcode::CANTCREAT)
     }
   }
-
-  Ok(())
 }
 
 // Write a new public key to the given paths.
 // Create subdirectories as needed.
 // Move aside any extant files at the given paths.
 // Assumes tilde expansion has already been done on paths.
-fn store_pub_key_to_file(path_str: &str) -> Result<(), PlatformError> {
+/// If the output file can't be created, exit with code CANTCREAT
+fn store_pub_key_to_file(path_str: &str) {
   let file_path = Path::new(path_str);
   match fs::create_dir_all(&file_path.parent().unwrap()) {
     Ok(()) => {
@@ -297,32 +297,30 @@ fn store_pub_key_to_file(path_str: &str) -> Result<(), PlatformError> {
       exit(exitcode::CANTCREAT)
     }
   }
-
-  Ok(())
 }
 
-fn store_sids_to_file(file_path: &str, sids: &str) -> Result<(), PlatformError> {
+/// If the output file can't be created, exit with code CANTCREAT
+fn store_sids_to_file(file_path: &str, sids: &str) {
   if fs::write(file_path, sids).is_err() {
     println!("Sids file {} could not be created", file_path);
     exit(exitcode::CANTCREAT)
   };
-  Ok(())
 }
 
+/// If the output file can't be created, exit with code CANTCREAT
 fn store_blind_asset_record(file_path: &str,
                             amount: &str,
                             asset_type: &str,
                             pub_key_path: &str,
                             confidential_amount: bool,
-                            confidential_asset: bool)
-                            -> Result<(), PlatformError> {
+                            confidential_asset: bool) {
   let mut asset_type_arr = [0u8; 16];
   let bytes = asset_type.as_bytes();
   asset_type_arr.copy_from_slice(&bytes[..16]);
 
   let asset_record = AssetRecord::new(amount.parse::<u64>().unwrap(),
                                       asset_type_arr,
-                                      load_pub_key_from_file(pub_key_path).unwrap()).unwrap();
+                                      load_pub_key_from_file(pub_key_path)).unwrap();
 
   let blind_asset_record =
     build_blind_asset_record(&mut ChaChaRng::from_entropy(),
@@ -338,8 +336,6 @@ fn store_blind_asset_record(file_path: &str,
       exit(exitcode::CANTCREAT)
     };
   }
-
-  Ok(())
 }
 
 fn create_directory_if_missing(path_to_file_in_dir: &str) {
@@ -363,7 +359,7 @@ const BACKUP_COUNT_MAX: i32 = 10000; // Arbitrary choice.
 // Assumes it is safe to check the existence of the path after doing so.
 // This implies all path components of path must exist and be readable.
 // Assumes recursion won't hurt us here.
-fn find_available_path(path: &Path, n: i32) -> Result<PathBuf, ()> {
+fn find_available_path(path: &Path, n: i32) -> Result<PathBuf, PlatformError> {
   if n < BACKUP_COUNT_MAX {
     let path_n = path.with_extension(&n.to_string());
     if path_n.exists() {
@@ -372,16 +368,15 @@ fn find_available_path(path: &Path, n: i32) -> Result<PathBuf, ()> {
       Ok(path_n)
     }
   } else {
-    println!("Too many backups for {:?}. Use --path to specify another path.",
-             path);
-    exit(exitcode::IOERR)
+    return Err(PlatformError::IoError(format!("Too many backups for {:?}. Use --path to specify another path.",
+    path)));
   }
 }
 
-// Return a backup file path derived from path or exit with usage message if an
+// Return a backup file path derived from path or an InputsError if an
 // unused path cannot be derived. The path must not be empty
 // and must not be dot (".").
-fn next_path(path: &Path) -> Result<PathBuf, ()> {
+fn next_path(path: &Path) -> Result<PathBuf, PlatformError> {
   fn add_backup_extension(path: &Path) -> PathBuf {
     let mut pb = PathBuf::from(path);
     pb.set_file_name(format!("{}.0",
@@ -404,44 +399,44 @@ fn next_path(path: &Path) -> Result<PathBuf, ()> {
     // Doesn't have any extension.
     if path.components().next() == None {
       println!("Is empty: {:?}. Specify a file path.", path);
-      exit(exitcode::USAGE)
+      Err(PlatformError::InputsError)
     } else if path.file_name() == None {
       println!("Is directory: {:?}. Specify a file path.", path);
-      exit(exitcode::USAGE)
+      Err(PlatformError::InputsError)
     } else {
       find_available_path(&add_backup_extension(&path), 0)
     }
   }
 }
 
-fn rename_existing_path(path: &Path) {
-  if let Ok(next) = next_path(path) {
-    trace!("Next path for {:?} is {:?}", &path, &next);
-    if let Err(error) = fs::rename(path, next.as_path()) {
-      println!("Failed to rename path {} to {}: {}",
-               path.to_str().unwrap(),
-               next.to_str().unwrap(),
-               error);
-    }
+fn rename_existing_path(path: &Path) -> Result<(), PlatformError> {
+  let next = next_path(path)?;
+  trace!("Next path for {:?} is {:?}", &path, &next);
+  if let Err(error) = fs::rename(path, next.as_path()) {
+    return Err(PlatformError::IoError(format!("Failed to rename path {} to {}: {}",
+                                              path.to_str().unwrap(),
+                                              next.to_str().unwrap(),
+                                              error)));
   }
+  Ok(())
 }
 
-fn get_amount(amount_arg: &str) -> Result<u64, ()> {
+fn get_amount(amount_arg: &str) -> Result<u64, PlatformError> {
   if let Ok(amount) = amount_arg.trim().parse::<u64>() {
     Ok(amount)
   } else {
-    exit(exitcode::USAGE)
+    return Err(PlatformError::InputsError);
   }
 }
 
-fn get_amounts(amounts_arg: &str) -> Result<Vec<u64>, ()> {
+fn get_amounts(amounts_arg: &str) -> Result<Vec<u64>, PlatformError> {
   let amounts_str = split_arg(amounts_arg);
   let mut amounts = Vec::new();
   for amount_str in amounts_str {
     if let Ok(amount) = amount_str.trim().parse::<u64>() {
       amounts.push(amount);
     } else {
-      exit(exitcode::USAGE)
+      return Err(PlatformError::InputsError);
     }
   }
   Ok(amounts)
@@ -449,7 +444,7 @@ fn get_amounts(amounts_arg: &str) -> Result<Vec<u64>, ()> {
 
 fn submit(protocol: &str, transaction_file_name: &str) -> Result<(), PlatformError> {
   // Submit transaction
-  let txn_builder = &mut load_txn_builder_from_file(transaction_file_name).unwrap();
+  let txn_builder = load_txn_builder_from_file(transaction_file_name)?;
   let client = reqwest::Client::new();
   let txn = txn_builder.transaction();
   let mut res = client.post(&format!("{}://{}:{}/{}",
@@ -464,11 +459,12 @@ fn submit(protocol: &str, transaction_file_name: &str) -> Result<(), PlatformErr
   println!("Headers:\n{:?}", res.headers());
   Ok(())
 }
+
 fn submit_and_get_sid(protocol: &str,
                       transaction_file_name: &str)
                       -> Result<TxoSID, PlatformError> {
   // Submit transaction
-  let txn_builder = &mut load_txn_builder_from_file(transaction_file_name).unwrap();
+  let txn_builder = load_txn_builder_from_file(transaction_file_name)?;
   let client = reqwest::Client::new();
   let txn = txn_builder.transaction();
   let mut res = client.post(&format!("{}://{}:{}/{}",
@@ -534,10 +530,7 @@ fn issue_and_transfer(sid: TxoRef,
              .add_operation(xfr_op)
              .transaction();
 
-  if let Err(e) = store_txn_builder_to_file(&transaction_file_name, &txn_builder) {
-    println!("Failed to store txn builder to file.");
-    return Err(e);
-  };
+  store_txn_builder_to_file(&transaction_file_name, &txn_builder);
   Ok(())
 }
 
@@ -569,10 +562,7 @@ fn merge_records(key_pair: &XfrKeyPair,
   let mut txn_builder = TransactionBuilder::default();
   txn_builder.add_operation(xfr_op).transaction();
 
-  if let Err(e) = store_txn_builder_to_file(&transaction_file_name, &txn_builder) {
-    println!("Failed to store txn builder to file.");
-    return Err(e);
-  };
+  store_txn_builder_to_file(&transaction_file_name, &txn_builder);
   Ok(())
 }
 
@@ -589,32 +579,17 @@ fn load_funds(sid_pre: TxoRef,
               protocol: &str)
               -> Result<(), PlatformError> {
   // Issue and transfer asset
-  match issue_and_transfer(sid_new,
-                           blind_asset_record_new,
-                           issuer_key_pair,
-                           recipient_key_pair.get_pk_ref(),
-                           amount,
-                           token_code,
-                           transaction_file_name,
-                           sequence_num)
-  {
-    Ok(_) => {}
-    Err(error) => {
-      println!("Failed to issue and transfer");
-      return Err(error);
-    }
-  };
+  issue_and_transfer(sid_new,
+                     blind_asset_record_new,
+                     issuer_key_pair,
+                     recipient_key_pair.get_pk_ref(),
+                     amount,
+                     token_code,
+                     transaction_file_name,
+                     sequence_num)?;
 
   // Submit transaction
-  let sid_next = match submit_and_get_sid(protocol, transaction_file_name) {
-    Ok(sid) => {
-      println!("Next sid: {}", sid.0);
-      sid
-    }
-    _ => {
-      return Err(PlatformError::SubmissionServerError(Some("Failed to submit transaction".into())));
-    }
-  };
+  let sid_next = submit_and_get_sid(protocol, transaction_file_name)?;
 
   // Get next blind asset record
   let res = query(protocol, QUERY_PORT, "utxo_sid", &format!("{}", sid_next.0));
@@ -634,9 +609,7 @@ fn load_funds(sid_pre: TxoRef,
                 transaction_file_name).unwrap();
 
   // Submit transaction
-  if submit(protocol, transaction_file_name).is_err() {
-    return Err(PlatformError::SubmissionServerError(Some("Failed to submit transaction".into())));
-  };
+  submit(protocol, transaction_file_name)?;
 
   Ok(())
 }
@@ -655,6 +628,10 @@ fn init_logging() {
                                                                  .init();
 }
 
+/// If the function process_inputs returns an error, for different types of error:
+/// SerializationError or DeserializationError: exit with code DATAERR
+/// IoError: exit with code IOERR
+/// Other types (e.g. InputsError): exit with code USAGE
 fn main() -> Result<(), PlatformError> {
   init_logging();
   let inputs = App::new("Transaction Builder")
@@ -891,7 +868,16 @@ fn main() -> Result<(), PlatformError> {
         .takes_value(false)
         .help("specify that http, not https should be used.")))
     .get_matches();
-  process_inputs(inputs)
+  let res = process_inputs(inputs);
+  if let Err(error) = res {
+    match error {
+      PlatformError::SerializationError => exit(exitcode::DATAERR),
+      PlatformError::DeserializationError => exit(exitcode::DATAERR),
+      PlatformError::IoError(_) => exit(exitcode::IOERR),
+      _ => exit(exitcode::USAGE),
+    }
+  }
+  Ok(())
 }
 
 fn process_inputs(inputs: clap::ArgMatches) -> Result<(), PlatformError> {
@@ -957,10 +943,7 @@ fn process_inputs(inputs: clap::ArgMatches) -> Result<(), PlatformError> {
         println!("Deleted transaction file {}", transaction_file_name);
         Ok(())
       }
-      Err(e) => {
-        println!("Error deleting file: {:?} ", e);
-        exit(exitcode::IOERR)
-      }
+      Err(e) => Err(PlatformError::IoError(format!("Error deleting file: {:?} ", e))),
     },
     ("keygen", Some(keygen_matches)) => {
       let new_key_pair_path =
@@ -972,8 +955,9 @@ fn process_inputs(inputs: clap::ArgMatches) -> Result<(), PlatformError> {
       let expand_str = shellexpand::tilde(&new_key_pair_path).to_string();
       let overwrite = keygen_matches.is_present("overwrite");
       println!("Storing key pair to {}", expand_str);
-      create_directory_and_rename_path(&expand_str, overwrite);
-      store_key_pair_to_file(&expand_str)
+      create_directory_and_rename_path(&expand_str, overwrite)?;
+      store_key_pair_to_file(&expand_str);
+      Ok(())
     }
     ("pubkeygen", Some(pubkeygen_matches)) => {
       let new_key_path =
@@ -985,8 +969,9 @@ fn process_inputs(inputs: clap::ArgMatches) -> Result<(), PlatformError> {
       let expand_str = shellexpand::tilde(&new_key_path).to_string();
       println!("Storing public key to {}", expand_str);
       let overwrite = pubkeygen_matches.is_present("overwrite");
-      create_directory_and_rename_path(&expand_str, overwrite);
-      store_pub_key_to_file(&expand_str)
+      create_directory_and_rename_path(&expand_str, overwrite)?;
+      store_pub_key_to_file(&expand_str);
+      Ok(())
     }
     ("submit", Some(submit_matches)) => process_submit_cmd(submit_matches, &transaction_file_name),
     ("load_funds", Some(load_funds_matches)) => process_load_funds_cmd(load_funds_matches,
@@ -994,7 +979,7 @@ fn process_inputs(inputs: clap::ArgMatches) -> Result<(), PlatformError> {
                                                                        &transaction_file_name),
     _ => {
       println!("Subcommand missing or not recognized. Try --help");
-      exit(exitcode::USAGE)
+      Err(PlatformError::InputsError)
     }
   }
 }
@@ -1012,20 +997,18 @@ fn process_submit_cmd(submit_matches: &clap::ArgMatches,
   };
 
   // serialize txn
-  if let Err(error) = submit(protocol, &transaction_file_name) {
-    return Err(error);
-  }
-  Ok(())
+  submit(protocol, &transaction_file_name)
 }
 
 // Create the specific file if missing
 // Rename the existing path if necessary
-fn create_directory_and_rename_path(path_str: &str, overwrite: bool) {
+fn create_directory_and_rename_path(path_str: &str, overwrite: bool) -> Result<(), PlatformError> {
   let path = Path::new(&path_str);
   create_directory_if_missing(&path_str);
   if path.exists() && !overwrite {
-    rename_existing_path(&path);
+    rename_existing_path(&path)?;
   }
+  Ok(())
 }
 
 fn process_create_cmd(create_matches: &clap::ArgMatches,
@@ -1041,9 +1024,10 @@ fn process_create_cmd(create_matches: &clap::ArgMatches,
     transaction_file_name.to_string()
   };
   let expand_str = shellexpand::tilde(&file_str).to_string();
-  create_directory_and_rename_path(&expand_str, overwrite);
+  create_directory_and_rename_path(&expand_str, overwrite)?;
   let txn_builder = TransactionBuilder::default();
-  store_txn_builder_to_file(&expand_str, &txn_builder)
+  store_txn_builder_to_file(&expand_str, &txn_builder);
+  Ok(())
 }
 
 fn process_store_cmd(store_matches: &clap::ArgMatches,
@@ -1059,15 +1043,16 @@ fn process_store_cmd(store_matches: &clap::ArgMatches,
       let path_expand = shellexpand::tilde(&path).to_string();
       println!("Storing sids to {}", path_expand);
       let overwrite = sids_matches.is_present("overwrite");
-      create_directory_and_rename_path(&path_expand, overwrite);
+      create_directory_and_rename_path(&path_expand, overwrite)?;
       let sids;
       if let Some(sids_arg) = sids_matches.value_of("indices") {
         sids = sids_arg
       } else {
         println!("TxoSID indices are required. Use --indices.");
-        exit(exitcode::USAGE)
+        return Err(PlatformError::InputsError);
       }
-      store_sids_to_file(&path_expand, sids)
+      store_sids_to_file(&path_expand, sids);
+      Ok(())
     }
 
     ("blind_asset_record", Some(blind_asset_record_path_matches)) => {
@@ -1079,27 +1064,27 @@ fn process_store_cmd(store_matches: &clap::ArgMatches,
       let path_expand = shellexpand::tilde(&path).to_string();
       println!("Storing blind asset records to {}", path_expand);
       let overwrite = blind_asset_record_path_matches.is_present("overwrite");
-      create_directory_and_rename_path(&path_expand, overwrite);
+      create_directory_and_rename_path(&path_expand, overwrite)?;
       let amount;
       if let Some(amount_arg) = blind_asset_record_path_matches.value_of("amount") {
         amount = amount_arg
       } else {
         println!("Amount is required. Use --amount.");
-        exit(exitcode::USAGE)
+        return Err(PlatformError::InputsError);
       }
       let asset_type;
       if let Some(asset_type_arg) = blind_asset_record_path_matches.value_of("asset_type") {
         asset_type = asset_type_arg
       } else {
         println!("Asset type is required. Use --asset_type.");
-        exit(exitcode::USAGE)
+        return Err(PlatformError::InputsError);
       }
       let pub_key_path;
       if let Some(pub_key_path_arg) = blind_asset_record_path_matches.value_of("pub_key_path") {
         pub_key_path = pub_key_path_arg
       } else {
         println!("File to public key is required. If no such file, try pubkeygen subcommand.");
-        exit(exitcode::USAGE)
+        return Err(PlatformError::InputsError);
       }
       let confidential_amount = blind_asset_record_path_matches.is_present("confidential_amount");
       let confidential_asset = blind_asset_record_path_matches.is_present("confidential_asset");
@@ -1108,12 +1093,13 @@ fn process_store_cmd(store_matches: &clap::ArgMatches,
                                asset_type,
                                pub_key_path,
                                confidential_amount,
-                               confidential_asset)
+                               confidential_asset);
+      Ok(())
     }
 
     _ => {
       println!("Subcommand missing or not recognized. Try store --help");
-      exit(exitcode::USAGE)
+      Err(PlatformError::InputsError)
     }
   }
 }
@@ -1123,16 +1109,7 @@ fn process_add_cmd(add_matches: &clap::ArgMatches,
                    transaction_file_name: &str)
                    -> Result<(), PlatformError> {
   println!("{}", key_pair_file_path);
-  let key_pair: XfrKeyPair;
-  match load_key_pair_from_file(&key_pair_file_path) {
-    Ok(kp) => {
-      key_pair = kp;
-    }
-    Err(e) => {
-      println!("Valid keyfile required for this command; if no keyfile currently exists, try running \"findora_txn_builder keygen\"");
-      return Err(e);
-    }
-  }
+  let key_pair: XfrKeyPair = load_key_pair_from_file(&key_pair_file_path);
   match add_matches.subcommand() {
     ("define_asset", Some(define_asset_matches)) => {
       let token_code = define_asset_matches.value_of("token_code");
@@ -1163,10 +1140,7 @@ fn process_add_cmd(add_matches: &clap::ArgMatches,
         println!("Failed to add operation to transaction.");
         return Err(e);
       }
-      if let Err(e) = store_txn_builder_to_file(&transaction_file_name, &txn_builder) {
-        println!("Failed to store txn builder to file.");
-        return Err(e);
-      };
+      store_txn_builder_to_file(&transaction_file_name, &txn_builder);
       Ok(())
     }
     ("issue_asset", Some(issue_asset_matches)) => {
@@ -1175,7 +1149,7 @@ fn process_add_cmd(add_matches: &clap::ArgMatches,
         asset_token = AssetTypeCode::new_from_str(token_code_arg);
       } else {
         println!("Token code is required to issue asset. Use --token_code.");
-        exit(exitcode::USAGE)
+        return Err(PlatformError::InputsError);
       }
       let seq_num;
       if let Some(sequence_number_arg) = issue_asset_matches.value_of("sequence_number") {
@@ -1183,11 +1157,11 @@ fn process_add_cmd(add_matches: &clap::ArgMatches,
           seq_num = seq_num_parsed;
         } else {
           println!("Improperly formatted sequence number.");
-          exit(exitcode::USAGE)
+          return Err(PlatformError::InputsError);
         }
       } else {
         println!("Sequence number is required to issue asset. Use --sequence_number.");
-        exit(exitcode::USAGE)
+        return Err(PlatformError::InputsError);
       }
       let amount;
       if let Some(amount_arg) = issue_asset_matches.value_of("amount") {
@@ -1195,11 +1169,11 @@ fn process_add_cmd(add_matches: &clap::ArgMatches,
           amount = amount_parsed;
         } else {
           println!("Improperly formatted amount.");
-          exit(exitcode::USAGE)
+          return Err(PlatformError::InputsError);
         }
       } else {
         println!("Amount is required to issue asset. Use --amount.");
-        exit(exitcode::USAGE)
+        return Err(PlatformError::InputsError);
       }
       let mut txn_builder = load_txn_builder_from_file(&transaction_file_name).or_else(|e| {
                               println!("Failed to load txn builder from file {}.",
@@ -1213,10 +1187,7 @@ fn process_add_cmd(add_matches: &clap::ArgMatches,
         println!("Failed to add basic issue asset.");
         return Err(e);
       }
-      if let Err(e) = store_txn_builder_to_file(&transaction_file_name, &txn_builder) {
-        println!("Failed to store txn builder to file.");
-        return Err(e);
-      }
+      store_txn_builder_to_file(&transaction_file_name, &txn_builder);
       Ok(())
     }
     ("transfer_asset", Some(transfer_asset_matches)) => {
@@ -1234,7 +1205,7 @@ fn process_add_cmd(add_matches: &clap::ArgMatches,
         }
       } else {
         println!("Path to sids file is required to transfer asset. Use --sids_path");
-        exit(exitcode::USAGE)
+        return Err(PlatformError::InputsError);
       }
       let blind_asset_records;
       if let Some(blind_asset_record_paths) =
@@ -1252,19 +1223,19 @@ fn process_add_cmd(add_matches: &clap::ArgMatches,
         }
       } else {
         println!("Paths to blind asset records are required to transfer asset. Use --blind_asset_record_paths");
-        exit(exitcode::USAGE)
+        return Err(PlatformError::InputsError);
       }
       let input_amounts;
       if let Some(input_amounts_arg) = transfer_asset_matches.value_of("input_amounts") {
         input_amounts = get_amounts(input_amounts_arg).unwrap();
       } else {
         println!("Input amounts are required to transfer asset. Use --input_amounts.");
-        exit(exitcode::USAGE)
+        return Err(PlatformError::InputsError);
       }
       let mut count = txo_refs.len();
       if blind_asset_records.len() != count || input_amounts.len() != count {
         println!("Size of input sids, blind asset records, and input amounts should match.");
-        exit(exitcode::USAGE)
+        return Err(PlatformError::InputsError);
       }
       let mut transfer_from = Vec::new();
       let mut txo_refs_iter = txo_refs.iter();
@@ -1283,27 +1254,19 @@ fn process_add_cmd(add_matches: &clap::ArgMatches,
         output_amounts = get_amounts(output_amounts_arg).unwrap();
       } else {
         println!("Output amounts are required to transfer asset. Use --output_amounts.");
-        exit(exitcode::USAGE)
+        return Err(PlatformError::InputsError);
       }
       let addresses;
       if let Some(addresses_path) = transfer_asset_matches.value_of("address_paths") {
-        match load_addresses_from_files(addresses_path) {
-          Ok(result) => {
-            addresses = result;
-          }
-          Err(error) => {
-            println!("Error loading addresses: {}", error);
-            return Err(error);
-          }
-        }
+        addresses = load_addresses_from_files(addresses_path);
       } else {
         println!("Paths to address keys are required to transfer asset. Use --address_paths");
-        exit(exitcode::USAGE)
+        return Err(PlatformError::InputsError);
       }
       let mut count = output_amounts.len();
       if addresses.len() != count {
         println!("Size of output amounts and addresses should match.");
-        exit(exitcode::USAGE)
+        return Err(PlatformError::InputsError);
       }
       let mut transfer_to = Vec::new();
       let mut output_amounts_iter = output_amounts.iter();
@@ -1321,22 +1284,19 @@ fn process_add_cmd(add_matches: &clap::ArgMatches,
                             })
                             .unwrap();
       if let Err(e) =
-        txn_builder.add_basic_transfer_asset(&load_key_pair_from_file(key_pair_file_path).unwrap(),
+        txn_builder.add_basic_transfer_asset(&load_key_pair_from_file(key_pair_file_path),
                                              &transfer_from[..],
                                              &transfer_to[..])
       {
         println!("Failed to add operation to transaction.");
         return Err(e);
       };
-      if let Err(e) = store_txn_builder_to_file(&transaction_file_name, &txn_builder) {
-        println!("Failed to store txn builder to file.");
-        return Err(e);
-      }
+      store_txn_builder_to_file(&transaction_file_name, &txn_builder);
       Ok(())
     }
     _ => {
       println!("Subcommand missing or not recognized. Try add --help");
-      exit(exitcode::USAGE)
+      Err(PlatformError::InputsError)
     }
   }
 }
@@ -1349,13 +1309,13 @@ fn process_load_funds_cmd(load_funds_matches: &clap::ArgMatches,
     TxoRef::Absolute(TxoSID(get_amount(sid_pre_arg).unwrap()))
   } else {
     println!("Previous sid is required to load funds. Use --sid_pre.");
-    exit(exitcode::USAGE)
+    return Err(PlatformError::InputsError);
   };
   let sid_new = if let Some(sid_new_arg) = load_funds_matches.value_of("sid_new") {
     TxoRef::Absolute(TxoSID(get_amount(sid_new_arg).unwrap()))
   } else {
     println!("New sid is required to load funds. Use --sid_new.");
-    exit(exitcode::USAGE)
+    return Err(PlatformError::InputsError);
   };
   let blind_asset_record_pre = if let Some(blind_asset_record_pre_path_arg) =
     load_funds_matches.value_of("blind_asset_record_pre_path")
@@ -1363,7 +1323,7 @@ fn process_load_funds_cmd(load_funds_matches: &clap::ArgMatches,
     load_blind_asset_record_from_file(blind_asset_record_pre_path_arg).unwrap()
   } else {
     println!("Path to the previous blind asset record is required to load funds. Use --blind_asset_record_pre_path.");
-    exit(exitcode::USAGE)
+    return Err(PlatformError::InputsError);
   };
   let blind_asset_record_new = if let Some(blind_asset_record_new_path_arg) =
     load_funds_matches.value_of("blind_asset_record_new_path")
@@ -1371,27 +1331,27 @@ fn process_load_funds_cmd(load_funds_matches: &clap::ArgMatches,
     load_blind_asset_record_from_file(blind_asset_record_new_path_arg).unwrap()
   } else {
     println!("Path to the new blind asset record is required to load funds. Use --blind_asset_record_new_path.");
-    exit(exitcode::USAGE)
+    return Err(PlatformError::InputsError);
   };
   let recipient_key_pair = if let Some(recipient_key_pair_path_arg) =
     load_funds_matches.value_of("recipient_key_pair_path")
   {
-    load_key_pair_from_file(recipient_key_pair_path_arg).unwrap()
+    load_key_pair_from_file(recipient_key_pair_path_arg)
   } else {
     println!("Path to the recipient's key pair is required to load funds. Use --recipient_key_pair_path.");
-    exit(exitcode::USAGE)
+    return Err(PlatformError::InputsError);
   };
   let amount = if let Some(amount_arg) = load_funds_matches.value_of("amount") {
     get_amount(amount_arg).unwrap()
   } else {
     println!("Amount is required to load funds. Use --amount.");
-    exit(exitcode::USAGE)
+    return Err(PlatformError::InputsError);
   };
   let token_code = if let Some(token_code_arg) = load_funds_matches.value_of("token_code") {
     AssetTypeCode::new_from_str(token_code_arg)
   } else {
     println!("Token code is required to load funds. Use --token_code.");
-    exit(exitcode::USAGE)
+    return Err(PlatformError::InputsError);
   };
   let sequence_num =
     if let Some(sequence_number_arg) = load_funds_matches.value_of("sequence_number") {
@@ -1399,11 +1359,11 @@ fn process_load_funds_cmd(load_funds_matches: &clap::ArgMatches,
         seq_num_parsed
       } else {
         println!("Improperly formatted sequence number.");
-        exit(exitcode::USAGE)
+        return Err(PlatformError::InputsError);
       }
     } else {
       println!("Sequence number is required to load funds. Use --sequence_number.");
-      exit(exitcode::USAGE)
+      return Err(PlatformError::InputsError);
     };
   let protocol = if load_funds_matches.is_present("http") {
     // Allow HTTP which may be useful for running a ledger locally.
@@ -1417,7 +1377,7 @@ fn process_load_funds_cmd(load_funds_matches: &clap::ArgMatches,
              sid_new,
              blind_asset_record_pre,
              blind_asset_record_new,
-             &load_key_pair_from_file(key_pair_file_path).unwrap(),
+             &load_key_pair_from_file(key_pair_file_path),
              &recipient_key_pair,
              amount,
              token_code,
@@ -1489,7 +1449,7 @@ mod tests {
     let sids = vec!["1,2,4", "1,2, 4", "1,a,4"];
 
     for i in 0..3 {
-      store_sids_to_file(paths[i], sids[i]).unwrap();
+      store_sids_to_file(paths[i], sids[i]);
     }
 
     let expected_txo_refs = vec![TxoRef::Absolute(TxoSID(1)),
@@ -1524,7 +1484,7 @@ mod tests {
                                from_utf8(&asset_types[i]).unwrap(),
                                pub_key_paths[i],
                                confidential_amount_bools[i],
-                               confidential_asset_bools[i]).unwrap();
+                               confidential_asset_bools[i]);
     }
 
     // Load all the blind asset records
@@ -1563,7 +1523,7 @@ mod tests {
   fn test_issue_and_transfer() {
     // Create txn builder and key pairs
     let txn_builder_path = "tb_issue_and_transfer";
-    store_txn_builder_to_file(&txn_builder_path, &TransactionBuilder::default()).unwrap();
+    store_txn_builder_to_file(&txn_builder_path, &TransactionBuilder::default());
     let mut prng: ChaChaRng = ChaChaRng::from_seed([0u8; 32]);
     let issuer_key_pair = XfrKeyPair::generate(&mut prng);
     let recipient_key_pair = XfrKeyPair::generate(&mut prng);
@@ -1593,7 +1553,7 @@ mod tests {
   fn test_merge_records() {
     // Create txn builder and key pair
     let txn_builder_path = "tb_merge";
-    store_txn_builder_to_file(&txn_builder_path, &TransactionBuilder::default()).unwrap();
+    store_txn_builder_to_file(&txn_builder_path, &TransactionBuilder::default());
     let mut prng: ChaChaRng = ChaChaRng::from_seed([0u8; 32]);
     let key_pair = XfrKeyPair::generate(&mut prng);
 
@@ -1621,7 +1581,7 @@ mod tests {
   #[test]
   fn test_submit() {
     let txn_builder_path = "tb_submit";
-    store_txn_builder_to_file(&txn_builder_path, &TransactionBuilder::default()).unwrap();
+    store_txn_builder_to_file(&txn_builder_path, &TransactionBuilder::default());
     let res = submit("https", txn_builder_path);
     fs::remove_file(txn_builder_path).unwrap();
     assert!(res.is_ok());
@@ -1631,7 +1591,7 @@ mod tests {
   // Define an asset and submit the transaction
   fn test_define_and_submit() {
     let txn_builder_path = "tb_define_and_submit";
-    store_txn_builder_to_file(&txn_builder_path, &TransactionBuilder::default()).unwrap();
+    store_txn_builder_to_file(&txn_builder_path, &TransactionBuilder::default());
     let mut txn_builder = load_txn_builder_from_file(&txn_builder_path).unwrap();
 
     let mut prng: ChaChaRng = ChaChaRng::from_seed([0u8; 32]);
@@ -1640,7 +1600,7 @@ mod tests {
 
     txn_builder.add_operation_create_asset(&key_pair, Some(token_code), false, false, "")
                .unwrap();
-    store_txn_builder_to_file(&txn_builder_path, &txn_builder).unwrap();
+    store_txn_builder_to_file(&txn_builder_path, &txn_builder);
 
     let res = submit("https", txn_builder_path);
     fs::remove_file(txn_builder_path).unwrap();
@@ -1651,7 +1611,7 @@ mod tests {
   // Define an asset, issue certain amount, then submit the transaction
   fn test_define_issue_and_submit() {
     let txn_builder_path = "tb_define_issue_submit";
-    store_txn_builder_to_file(&txn_builder_path, &TransactionBuilder::default()).unwrap();
+    store_txn_builder_to_file(&txn_builder_path, &TransactionBuilder::default());
     let mut txn_builder = load_txn_builder_from_file(&txn_builder_path).unwrap();
 
     let mut prng: ChaChaRng = ChaChaRng::from_seed([0u8; 32]);
@@ -1669,18 +1629,18 @@ mod tests {
     txn_builder.add_operation_create_asset(&key_pair, Some(code), false, false, "")
                .unwrap()
                .transaction();
-    store_txn_builder_to_file(&txn_builder_path, &txn_builder).unwrap();
+    store_txn_builder_to_file(&txn_builder_path, &txn_builder);
 
     let res = submit("https", &txn_builder_path);
     assert!(res.is_ok());
 
     // Issue asset
-    store_txn_builder_to_file(&txn_builder_path, &TransactionBuilder::default()).unwrap();
+    store_txn_builder_to_file(&txn_builder_path, &TransactionBuilder::default());
     let mut txn_builder = load_txn_builder_from_file(&txn_builder_path).unwrap();
 
     txn_builder.add_operation_issue_asset(&key_pair, &code, 1, &[TxOutput(bar)])
                .unwrap();
-    store_txn_builder_to_file(&txn_builder_path, &txn_builder).unwrap();
+    store_txn_builder_to_file(&txn_builder_path, &txn_builder);
 
     let res = submit("https", txn_builder_path);
     fs::remove_file(txn_builder_path).unwrap();
@@ -1694,7 +1654,7 @@ mod tests {
   fn test_define_issue_transfer_and_submit() {
     // Create txn builder and key pairs
     let txn_builder_path = "tb_issue_transfer_submit";
-    store_txn_builder_to_file(&txn_builder_path, &TransactionBuilder::default()).unwrap();
+    store_txn_builder_to_file(&txn_builder_path, &TransactionBuilder::default());
     let mut prng: ChaChaRng = ChaChaRng::from_seed([0u8; 32]);
     let issuer_key_pair = XfrKeyPair::generate(&mut prng);
     let recipient_key_pair = XfrKeyPair::generate(&mut prng);
@@ -1712,7 +1672,7 @@ mod tests {
     txn_builder.add_operation_create_asset(&issuer_key_pair, Some(code), false, false, "")
                .unwrap()
                .transaction();
-    store_txn_builder_to_file(&txn_builder_path, &txn_builder).unwrap();
+    store_txn_builder_to_file(&txn_builder_path, &txn_builder);
     let res = submit("https", txn_builder_path);
     assert!(res.is_ok());
 
@@ -1740,7 +1700,7 @@ mod tests {
   fn test_define_issue_transfer_merge_and_submit() {
     // Create txn builder and key pairs
     let txn_builder_path = "tb_merge_and_submit";
-    store_txn_builder_to_file(&txn_builder_path, &TransactionBuilder::default()).unwrap();
+    store_txn_builder_to_file(&txn_builder_path, &TransactionBuilder::default());
     let mut prng: ChaChaRng = ChaChaRng::from_seed([0u8; 32]);
     let issuer_key_pair = XfrKeyPair::generate(&mut prng);
     let recipient_key_pair = XfrKeyPair::generate(&mut prng);
@@ -1761,7 +1721,7 @@ mod tests {
     txn_builder.add_operation_create_asset(&issuer_key_pair, Some(code), false, false, "")
                .unwrap()
                .transaction();
-    store_txn_builder_to_file(&txn_builder_path, &txn_builder).unwrap();
+    store_txn_builder_to_file(&txn_builder_path, &txn_builder);
     let res = submit("https", txn_builder_path);
     assert!(res.is_ok());
 
@@ -1822,7 +1782,7 @@ mod tests {
   fn test_load_funds() {
     // Create txn builder and key pairs
     let txn_builder_path = "tb_load_funds";
-    store_txn_builder_to_file(&txn_builder_path, &TransactionBuilder::default()).unwrap();
+    store_txn_builder_to_file(&txn_builder_path, &TransactionBuilder::default());
     let mut prng = ChaChaRng::from_seed([0u8; 32]);
     let issuer_key_pair = XfrKeyPair::generate(&mut prng);
     let recipient_key_pair = XfrKeyPair::generate(&mut prng);
@@ -1845,7 +1805,7 @@ mod tests {
     txn_builder.add_operation_create_asset(&issuer_key_pair, Some(code), false, false, "")
                .unwrap()
                .transaction();
-    store_txn_builder_to_file(&txn_builder_path, &txn_builder).unwrap();
+    store_txn_builder_to_file(&txn_builder_path, &txn_builder);
     let res = submit("https", txn_builder_path);
     assert!(res.is_ok());
 
