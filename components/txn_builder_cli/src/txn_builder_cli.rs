@@ -241,8 +241,6 @@ fn store_txn_builder_to_file(file_path: &str, txn: &TransactionBuilder) {
 }
 
 // Write a new key pair to the given paths.
-// Create subdirectories as needed.
-// Move aside any extant files at the given paths.
 // Assumes tilde expansion has already been done on paths.
 /// If the output file can't be created, exit with code CANTCREAT
 fn store_key_pair_to_file(path_str: &str) {
@@ -271,8 +269,6 @@ fn store_key_pair_to_file(path_str: &str) {
 }
 
 // Write a new public key to the given paths.
-// Create subdirectories as needed.
-// Move aside any extant files at the given paths.
 // Assumes tilde expansion has already been done on paths.
 /// If the output file can't be created, exit with code CANTCREAT
 fn store_pub_key_to_file(path_str: &str) {
@@ -335,6 +331,7 @@ fn store_blind_asset_record(file_path: &str,
       println!("Blind asset record file {} could not be created", file_path);
       exit(exitcode::CANTCREAT)
     };
+    println!("Blind asset record stored to {}", file_path);
   }
 }
 
