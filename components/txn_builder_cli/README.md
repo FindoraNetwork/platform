@@ -22,19 +22,24 @@ For example, for help defining an asset
 ./txn_builder_cli help add define_asset
 ```
 
-_**Note**: Even if the subcommand is unique, it is still necessary to
+**Note**:
+* Even if the subcommand is unique, it is still necessary to
 supply the command name as well. This is true for both help and the
-actual subcommands._
+actual subcommands.
+* By default, all the generated files will be stored in ```~./findora```, unless specified otherwise. For example, if the current directory is ```platform/target/debug```, running ```./txn_builder_cli keygen``` will put the generated key pair in ~./findora, but ```./txn_builder_cli keygen --name keys/key_pair``` will store the key pair to ```platform/target/debug/keys/key_pair```.
+* Examples below are assuming the current directory is ```platform/target/debug```. If not, change ```./txn_builder_cli``` to the path to ```./txn_builder_cli```.
+
+## Generate a key pair
+Before composing a transaction, generate and save a cryptographic key pair.
+```
+./txn_builder_cli keygen --name kp
+```
 
 ## Composing a transaction
 
 ### Create an empty transaction
 ```
 ./txn_builder_cli create --name tb
-```
-### Create an key pair
-```
-./txn_builder_cli keygen --name kp
 ```
 
 ### Add operations to the transaction. Three operations can be added:
