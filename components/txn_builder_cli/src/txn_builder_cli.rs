@@ -403,7 +403,8 @@ fn submit(protocol: &str, transaction_file_name: &str) -> Result<(), PlatformErr
 }
 
 fn submit_and_get_sid(protocol: &str,
-                      transaction_file_name: &str)
+                      transaction_file_name: &str,
+                      file_path: Option<&str>)
                       -> Result<TxoSID, PlatformError> {
   // Submit transaction
   let txn_builder = load_txn_builder_from_file(transaction_file_name)?;
@@ -421,8 +422,11 @@ fn submit_and_get_sid(protocol: &str,
   println!("Submission response: {}", handle);
   println!("Submission status: {}", res.status());
 
-  // Get sid
-  let res = query(protocol, SUBMIT_PORT, "txn_status", &handle.0);
+  // Store and return sid
+  let res = match file_path {
+    Some(path) => query_and_store(protocol, SUBMIT_PORT, "txn_status", &handle.0, path)?,
+    None => query(protocol, SUBMIT_PORT, "txn_status", &handle.0),
+  };
   match serde_json::from_str::<TxnStatus>(&res).unwrap() {
     TxnStatus::Committed((_sid, txos)) => {
       println!("Sid: {}", txos[0].0);
@@ -442,6 +446,28 @@ fn query(protocol: &str, port: &str, item: &str, value: &str) -> String {
   println!("TxnStatus: {}", text);
 
   text
+}
+
+// Query a value and store it to file for future use
+fn query_and_store(protocol: &str,
+                   port: &str,
+                   item: &str,
+                   value: &str,
+                   file_path: &str)
+                   -> Result<String, PlatformError> {
+  let mut res =
+    reqwest::get(&format!("{}://{}:{}/{}/{}", protocol, HOST, port, item, value)).unwrap();
+
+  // Log body
+  println!("Querying Status: {}", res.status());
+  let text = res.text().unwrap();
+  println!("TxnStatus: {}", text);
+
+  if let Err(error) = fs::write(file_path, text.clone()) {
+    return Err(PlatformError::IoError(format!("Failed to create file {}: {}.", item, error)));
+  }
+  println!("Queryed and stored to {}", item);
+  Ok(text)
 }
 
 fn get_blind_asset_record(pub_key: XfrPublicKey,
@@ -526,8 +552,8 @@ fn merge_records(key_pair: &XfrKeyPair,
   store_txn_builder_to_file(&transaction_file_name, &txn_builder)
 }
 
-// TODO (Keyao): Make issuer_key_pair a global variable
-// Clippy error: this function has too many arguments (8/7)
+// TODO (Keyao): Make sequence_num a static mutable value, to fix the Clippy error:
+// error: this function has too many arguments (8/7)
 fn load_funds(sid_pre: u64,
               issuer_key_pair: &XfrKeyPair,
               recipient_key_pair: &XfrKeyPair,
@@ -546,7 +572,7 @@ fn load_funds(sid_pre: u64,
                      sequence_num)?;
 
   // Submit transaction
-  let sid_new = submit_and_get_sid(protocol, transaction_file_name)?;
+  let sid_new = submit_and_get_sid(protocol, transaction_file_name, Some("txn_status"))?;
 
   // Get blind asset records
   let res_pre = query(protocol, QUERY_PORT, "utxo_sid", &format!("{}", sid_pre));
@@ -1012,7 +1038,7 @@ fn process_submit_and_get_sid_cmd(submit_and_get_sid_matches: &clap::ArgMatches,
   };
 
   // serialize txn
-  submit_and_get_sid(protocol, &transaction_file_name)?;
+  submit_and_get_sid(protocol, &transaction_file_name, Some("txn_status"))?;
   Ok(())
 }
 
@@ -1694,7 +1720,7 @@ mod tests {
   // 2. The issuer issues and transfers two assets to the recipient
   // 3. Merge the two records for the recipient
   // 4. Submit the transaction
-  fn test_define_issue_transfer_merge_and_submit() {
+  fn test_merge_and_submit() {
     // Create txn builder and key pairs
     let txn_builder_path = "tb_merge_and_submit";
     store_txn_builder_to_file(&txn_builder_path, &TransactionBuilder::default()).unwrap();
@@ -1724,7 +1750,7 @@ mod tests {
                        txn_builder_path,
                        1).unwrap();
 
-    let sid1 = submit_and_get_sid("https", txn_builder_path).unwrap();
+    let sid1 = submit_and_get_sid("https", txn_builder_path, None).unwrap();
     let res = query("https", QUERY_PORT, "utxo_sid", &format!("{}", sid1.0));
     let blind_asset_record_1 =
       serde_json::from_str::<BlindAssetRecord>(&res).or_else(|_| {
@@ -1739,7 +1765,7 @@ mod tests {
                        code,
                        txn_builder_path,
                        2).unwrap();
-    let sid2 = submit_and_get_sid("https", txn_builder_path).unwrap();
+    let sid2 = submit_and_get_sid("https", txn_builder_path, None).unwrap();
     let res = query("https", QUERY_PORT, "utxo_sid", &format!("{}", sid2.0));
     let blind_asset_record_2 =
       serde_json::from_str::<BlindAssetRecord>(&res).or_else(|_| {
@@ -1794,8 +1820,8 @@ mod tests {
                        amount_original,
                        code,
                        txn_builder_path,
-                       3).unwrap();
-    let sid = submit_and_get_sid("https", txn_builder_path).unwrap();
+                       1).unwrap();
+    let sid = submit_and_get_sid("https", txn_builder_path, None).unwrap();
 
     // Load funds
     // The new record will be merged with the original record
@@ -1805,7 +1831,7 @@ mod tests {
                          amount_new,
                          code,
                          txn_builder_path,
-                         4,
+                         2,
                          "https");
     fs::remove_file(txn_builder_path).unwrap();
     assert!(res.is_ok());
