@@ -49,5 +49,3 @@ a hash of sk and credential id. Given this, it seems that having some sort of `c
 would make sense.
 
 2. When the Verifier completes, is there another party to which it is reporting the results?
-
-## Adding 
