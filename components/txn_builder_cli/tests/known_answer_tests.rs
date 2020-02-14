@@ -16,7 +16,6 @@ extern crate exitcode;
 
 const COMMAND: &str = "../../target/debug/txn_builder_cli";
 const TXN_STATUS_PATH: &str = "txn_status";
-const FIAT_CODE: &str = "ibIaBlHV-PdQkvSuEg6YSA==";
 
 //
 // Helper functions: create and store without path
@@ -243,6 +242,7 @@ fn load_funds(txn_builder_path: &str,
               sid_pre: &str,
               recipient_key_pair_path: &str,
               amount: &str,
+              token_code: &str,
               sequence_number: &str)
               -> io::Result<Output> {
   Command::new(COMMAND).args(&["--txn", txn_builder_path])
@@ -251,6 +251,7 @@ fn load_funds(txn_builder_path: &str,
                        .args(&["--sid_pre", sid_pre])
                        .args(&["--recipient_key_pair_path", recipient_key_pair_path])
                        .args(&["--amount", amount])
+                       .args(&["--token_code", token_code])
                        .args(&["--sequence_number", sequence_number])
                        .output()
 }
@@ -716,8 +717,6 @@ fn test_issue_transfer_and_submit_with_args() {
 }
 
 #[test]
-// TODO (Keyao): The sequence number passed to the function issue_and_transfer_asset needs to be updated each time
-// Otherwise, the test will fail due to duplicate sequence number
 fn test_load_funds_with_args() {
   // Create txn builder, key pairs, and public key
   let txn_builder_file = "tb_load_funds_args";
@@ -728,12 +727,12 @@ fn test_load_funds_with_args() {
   keygen_with_path(recipient_key_pair_file).expect("Failed to generate key pair for the recipient");
 
   // Define token code
-  // let token_code = AssetTypeCode::gen_random().to_base64();
+  let token_code = AssetTypeCode::gen_random().to_base64();
 
   // Define asset
   define_asset(txn_builder_file,
                issuer_key_pair_file,
-               FIAT_CODE,
+               &token_code,
                "Define an asset").expect("Failed to define asset");
   submit(txn_builder_file).expect("Failed to submit transaction");
 
@@ -742,14 +741,11 @@ fn test_load_funds_with_args() {
                            issuer_key_pair_file,
                            recipient_key_pair_file,
                            "1000",
-                           FIAT_CODE,
-                           "3").expect("Failed to issue and transfer asset");
+                           &token_code,
+                           "1").expect("Failed to issue and transfer asset");
 
   // Submit transaction and get the sid
-  let output = submit_and_store_sid(txn_builder_file).expect("Failed to submit transaction");
-  io::stdout().write_all(&output.stdout).unwrap();
-  io::stdout().write_all(&output.stderr).unwrap();
-  println!("Submitted and stored");
+  submit_and_store_sid(txn_builder_file).expect("Failed to submit transaction");
   let sid = get_sid_from_txn_status_file();
   println!("Sid: {}", &sid);
 
@@ -759,14 +755,16 @@ fn test_load_funds_with_args() {
                           &sid,
                           recipient_key_pair_file,
                           "500",
+                          &token_code,
                           "2").expect("Failed to load funds");
 
   io::stdout().write_all(&output.stdout).unwrap();
   io::stdout().write_all(&output.stderr).unwrap();
 
+  fs::remove_file("txn_status").unwrap();
   fs::remove_file(txn_builder_file).unwrap();
   fs::remove_file(issuer_key_pair_file).unwrap();
   fs::remove_file(recipient_key_pair_file).unwrap();
 
-  // assert!(output.status.success());
+  assert!(output.status.success());
 }
