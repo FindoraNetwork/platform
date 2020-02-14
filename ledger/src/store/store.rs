@@ -530,7 +530,7 @@ impl LedgerStatus {
       self.asset_types.insert(code, asset_type.clone());
     }
 
-    // issuance_keys should already have been checked
+  // issuance_keys should already have been checked
     block.issuance_keys.clear();
 
     debug_assert!(block.temp_sids.len() == block.txns.len());
@@ -578,6 +578,7 @@ impl LedgerUpdate<ChaChaRng> for LedgerState {
     block.new_asset_codes.clear();
     block.new_issuance_nums.clear();
     block.issuance_keys.clear();
+    block.air_updates.clear();
 
     debug_assert!(block.temp_sids.is_empty());
     debug_assert!(block.txns.is_empty());
@@ -586,6 +587,7 @@ impl LedgerUpdate<ChaChaRng> for LedgerState {
     debug_assert!(block.new_asset_codes.is_empty());
     debug_assert!(block.new_issuance_nums.is_empty());
     debug_assert!(block.issuance_keys.is_empty());
+    debug_assert!(block.air_updates.is_empty());
 
     ret
   }
@@ -688,6 +690,12 @@ impl LedgerUpdate<ChaChaRng> for LedgerState {
 
     // Compute hash against history
     self.checkpoint(&block);
+
+    // Apply AIR updates
+    for (addr, data) in block.air_updates.drain() {
+      debug_assert!(self.sparse_merkle.get(&addr.0).is_none());
+      self.sparse_merkle.set(&addr.0, Some(data));
+    }
 
     // TODO(joe): asset tracing?
 
