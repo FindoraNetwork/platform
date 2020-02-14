@@ -25,6 +25,8 @@ extern crate exitcode;
 const HOST: &str = "testnet.findora.org";
 const QUERY_PORT: &str = "8668";
 const SUBMIT_PORT: &str = "8669";
+// const FIAT_CODE_VAL: [u8; 16] = [0; 16];
+const FIAT_CODE: &str = "ibIaBlHV-PdQkvSuEg6YSA==";
 
 //
 // Load functions
@@ -552,18 +554,16 @@ fn merge_records(key_pair: &XfrKeyPair,
   store_txn_builder_to_file(&transaction_file_name, &txn_builder)
 }
 
-// TODO (Keyao): Make sequence_num a static mutable value, to fix the Clippy error:
-// error: this function has too many arguments (8/7)
 fn load_funds(sid_pre: u64,
               issuer_key_pair: &XfrKeyPair,
               recipient_key_pair: &XfrKeyPair,
               amount: u64,
-              token_code: AssetTypeCode,
               transaction_file_name: &str,
               sequence_num: u64,
               protocol: &str)
               -> Result<(), PlatformError> {
   // Issue and transfer asset
+  let token_code = AssetTypeCode::new_from_str(FIAT_CODE);
   issue_and_transfer(issuer_key_pair,
                      recipient_key_pair,
                      amount,
@@ -1012,7 +1012,6 @@ fn process_inputs(inputs: clap::ArgMatches) -> Result<(), PlatformError> {
 fn process_submit_cmd(submit_matches: &clap::ArgMatches,
                       transaction_file_name: &str)
                       -> Result<(), PlatformError> {
-  // Get protocol, host and port.
   let protocol = if submit_matches.is_present("http") {
     // Allow HTTP which may be useful for running a ledger locally.
     "http"
@@ -1028,7 +1027,6 @@ fn process_submit_cmd(submit_matches: &clap::ArgMatches,
 fn process_submit_and_get_sid_cmd(submit_and_get_sid_matches: &clap::ArgMatches,
                                   transaction_file_name: &str)
                                   -> Result<(), PlatformError> {
-  // Get protocol, host and port.
   let protocol = if submit_and_get_sid_matches.is_present("http") {
     // Allow HTTP which may be useful for running a ledger locally.
     "http"
@@ -1399,12 +1397,6 @@ fn process_load_funds_cmd(load_funds_matches: &clap::ArgMatches,
     println!("Amount is required to load funds. Use --amount.");
     return Err(PlatformError::InputsError);
   };
-  let token_code = if let Some(token_code_arg) = load_funds_matches.value_of("token_code") {
-    AssetTypeCode::new_from_str(token_code_arg)
-  } else {
-    println!("Token code is required to load funds. Use --token_code.");
-    return Err(PlatformError::InputsError);
-  };
   let sequence_number =
     if let Some(sequence_number_arg) = load_funds_matches.value_of("sequence_number") {
       get_amount(sequence_number_arg).unwrap()
@@ -1424,7 +1416,6 @@ fn process_load_funds_cmd(load_funds_matches: &clap::ArgMatches,
              &load_key_pair_from_file(key_pair_file_path)?,
              &recipient_key_pair,
              amount,
-             token_code,
              transaction_file_name,
              sequence_number,
              protocol)
@@ -1803,7 +1794,7 @@ mod tests {
     // Define amounts and token code
     let amount_original = 1000;
     let amount_new = 500;
-    let code = AssetTypeCode::gen_random();
+    let code = AssetTypeCode::new_from_str(FIAT_CODE);
 
     // Define asset
     let mut txn_builder = load_txn_builder_from_file(&txn_builder_path).unwrap();
@@ -1829,7 +1820,6 @@ mod tests {
                          &issuer_key_pair,
                          &recipient_key_pair,
                          amount_new,
-                         code,
                          txn_builder_path,
                          2,
                          "https");
