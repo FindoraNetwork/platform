@@ -169,14 +169,12 @@ fn define_asset(txn_builder_path: &str,
 fn issue_asset(txn_builder_path: &str,
                key_pair_path: &str,
                token_code: &str,
-               sequence_number: &str,
                amount: &str)
                -> io::Result<Output> {
   Command::new(COMMAND).args(&["--txn", txn_builder_path])
                        .args(&["--key_pair", key_pair_path])
                        .args(&["add", "issue_asset"])
                        .args(&["--token_code", token_code])
-                       .args(&["--sequence_number", sequence_number])
                        .args(&["--amount", amount])
                        .output()
 }
@@ -206,8 +204,7 @@ fn issue_and_transfer_asset(txn_builder_path: &str,
                             issuer_key_pair_path: &str,
                             recipient_key_pair_path: &str,
                             amount: &str,
-                            token_code: &str,
-                            sequence_number: &str)
+                            token_code: &str)
                             -> io::Result<Output> {
   Command::new(COMMAND).args(&["--txn", txn_builder_path])
                        .args(&["--key_pair", issuer_key_pair_path])
@@ -215,7 +212,6 @@ fn issue_and_transfer_asset(txn_builder_path: &str,
                        .args(&["--recipient_key_pair_path", recipient_key_pair_path])
                        .args(&["--amount", amount])
                        .args(&["--token_code", token_code])
-                       .args(&["--sequence_number", sequence_number])
                        .output()
 }
 
@@ -242,8 +238,7 @@ fn load_funds(txn_builder_path: &str,
               sid_pre: &str,
               recipient_key_pair_path: &str,
               amount: &str,
-              token_code: &str,
-              sequence_number: &str)
+              token_code: &str)
               -> io::Result<Output> {
   Command::new(COMMAND).args(&["--txn", txn_builder_path])
                        .args(&["--key_pair", issuer_key_pair_path])
@@ -252,7 +247,6 @@ fn load_funds(txn_builder_path: &str,
                        .args(&["--recipient_key_pair_path", recipient_key_pair_path])
                        .args(&["--amount", amount])
                        .args(&["--token_code", token_code])
-                       .args(&["--sequence_number", sequence_number])
                        .output()
 }
 
@@ -597,7 +591,7 @@ fn test_define_issue_and_transfer_with_args() {
 
   // Issue asset
   let output =
-    issue_asset(txn_builder_file, key_pair_file, &token_code,"1", "10").expect("Failed to issue asset");
+    issue_asset(txn_builder_file, key_pair_file, &token_code, "10").expect("Failed to issue asset");
 
   io::stdout().write_all(&output.stdout).unwrap();
   io::stdout().write_all(&output.stderr).unwrap();
@@ -700,8 +694,7 @@ fn test_issue_transfer_and_submit_with_args() {
                            issuer_key_pair_file,
                            recipient_key_pair_file,
                            "1000",
-                           &token_code,
-                           "1").expect("Failed to issue and transfer asset");
+                           &token_code).expect("Failed to issue and transfer asset");
 
   // Submit transaction
   let output = submit(txn_builder_file).expect("Failed to submit transaction");
@@ -741,8 +734,7 @@ fn test_load_funds_with_args() {
                            issuer_key_pair_file,
                            recipient_key_pair_file,
                            "1000",
-                           &token_code,
-                           "1").expect("Failed to issue and transfer asset");
+                           &token_code).expect("Failed to issue and transfer asset");
 
   // Submit transaction and get the sid
   submit_and_store_sid(txn_builder_file).expect("Failed to submit transaction");
@@ -755,8 +747,7 @@ fn test_load_funds_with_args() {
                           &sid,
                           recipient_key_pair_file,
                           "500",
-                          &token_code,
-                          "2").expect("Failed to load funds");
+                          &token_code).expect("Failed to load funds");
 
   io::stdout().write_all(&output.stdout).unwrap();
   io::stdout().write_all(&output.stderr).unwrap();
