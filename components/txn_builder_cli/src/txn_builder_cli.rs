@@ -24,7 +24,8 @@ extern crate exitcode;
 
 const INIT_DATA: &str = r#"
 {
-  "sequence_number": 1
+  "sequence_number": 1,
+  "utxo": 1
 }"#;
 const DATA_FILE: &str = "data.json";
 const HOST: &str = "testnet.findora.org";
@@ -38,7 +39,13 @@ const SUBMIT_PORT: &str = "8669";
 //
 #[derive(Clone, Copy, Deserialize, Serialize)]
 struct Data {
+  // Sequence number of the next transaction
   sequence_number: u64,
+
+  // Utxo of the previously submitted transaction
+  // TODO (Keyao): Should this be a vector instead?
+  // TODO (Keyao): Define a borrower struct, and associate each utxo with id
+  utxo: TxoSID,
 }
 
 impl Data {
@@ -55,21 +62,6 @@ fn get_init_data() -> Data {
 //
 // Load functions
 //
-
-// Get the sequence number and increment it
-fn get_and_update_sequence_number() -> Result<u64, PlatformError> {
-  // Get the sequence number
-  let mut data = load_data()?;
-  let sequence_number = data.sequence_number;
-  println!("Sequence number: {}", sequence_number);
-
-  // Increment the sequence number
-  data.increment_sequence_number();
-  store_data_to_file(data)?;
-
-  Ok(sequence_number)
-}
-
 fn load_data() -> Result<Data, PlatformError> {
   let mut file;
   match File::open(DATA_FILE) {
@@ -88,6 +80,28 @@ fn load_data() -> Result<Data, PlatformError> {
   } else {
     Ok(serde_json::from_str::<Data>(&data).unwrap())
   }
+}
+
+// Get the sequence number and increment it
+fn load_and_update_sequence_number() -> Result<u64, PlatformError> {
+  // Get the sequence number
+  let mut data = load_data()?;
+  let sequence_number = data.sequence_number;
+  println!("Sequence number: {}", sequence_number);
+
+  // Increment the sequence number
+  data.increment_sequence_number();
+  store_data_to_file(data)?;
+
+  Ok(sequence_number)
+}
+
+// Get the utxo
+fn load_utxo() -> Result<TxoSID, PlatformError> {
+  let data = load_data()?;
+  let utxo = data.utxo;
+  println!("Utxo: {}", utxo.0);
+  Ok(utxo)
 }
 
 fn load_txn_builder_from_file(file_path: &str) -> Result<TransactionBuilder, PlatformError> {
@@ -352,6 +366,9 @@ fn store_blind_asset_record(file_path: &str,
   Ok(())
 }
 
+//
+// Path related helper functions
+//
 fn create_directory_if_missing(path_to_file_in_dir: &str) {
   let as_path = Path::new(path_to_file_in_dir);
   if as_path.exists() {
@@ -473,10 +490,9 @@ fn submit(protocol: &str, transaction_file_name: &str) -> Result<(), PlatformErr
   Ok(())
 }
 
-fn submit_and_get_sid(protocol: &str,
-                      transaction_file_name: &str,
-                      file_path: Option<&str>)
-                      -> Result<TxoSID, PlatformError> {
+fn submit_and_store_sid(protocol: &str,
+                        transaction_file_name: &str)
+                        -> Result<TxoSID, PlatformError> {
   // Submit transaction
   let txn_builder = load_txn_builder_from_file(transaction_file_name)?;
 
@@ -494,13 +510,13 @@ fn submit_and_get_sid(protocol: &str,
   println!("Submission status: {}", res.status());
 
   // Store and return sid
-  let res = match file_path {
-    Some(path) => query_and_store(protocol, SUBMIT_PORT, "txn_status", &handle.0, path)?,
-    None => query(protocol, SUBMIT_PORT, "txn_status", &handle.0),
-  };
+  let res = query(protocol, SUBMIT_PORT, "txn_status", &handle.0);
   match serde_json::from_str::<TxnStatus>(&res).unwrap() {
     TxnStatus::Committed((_sid, txos)) => {
       println!("Sid: {}", txos[0].0);
+      let mut data = load_data()?;
+      data.utxo = txos[0];
+      store_data_to_file(data)?;
       Ok(txos[0])
     }
     _ => Err(PlatformError::DeserializationError),
@@ -512,33 +528,11 @@ fn query(protocol: &str, port: &str, item: &str, value: &str) -> String {
     reqwest::get(&format!("{}://{}:{}/{}/{}", protocol, HOST, port, item, value)).unwrap();
 
   // Log body
-  println!("Querying Status: {}", res.status());
+  println!("Querying status: {}", res.status());
   let text = res.text().unwrap();
-  println!("TxnStatus: {}", text);
+  println!("Querying result: {}", item);
 
   text
-}
-
-// Query a value and store it to file for future use
-fn query_and_store(protocol: &str,
-                   port: &str,
-                   item: &str,
-                   value: &str,
-                   file_path: &str)
-                   -> Result<String, PlatformError> {
-  let mut res =
-    reqwest::get(&format!("{}://{}:{}/{}/{}", protocol, HOST, port, item, value)).unwrap();
-
-  // Log body
-  println!("Querying Status: {}", res.status());
-  let text = res.text().unwrap();
-  println!("TxnStatus: {}", text);
-
-  if let Err(error) = fs::write(file_path, text.clone()) {
-    return Err(PlatformError::IoError(format!("Failed to create file {}: {}.", item, error)));
-  }
-  println!("Queryed and stored to {}", item);
-  Ok(text)
 }
 
 fn get_blind_asset_record(pub_key: XfrPublicKey,
@@ -583,7 +577,7 @@ fn issue_and_transfer(issuer_key_pair: &XfrKeyPair,
   let mut txn_builder = TransactionBuilder::default();
   txn_builder.add_operation_issue_asset(issuer_key_pair,
                                         &token_code,
-                                        get_and_update_sequence_number()?,
+                                        load_and_update_sequence_number()?,
                                         &[TxOutput(blind_asset_record)])?
              .add_operation(xfr_op)
              .transaction();
@@ -622,14 +616,22 @@ fn merge_records(key_pair: &XfrKeyPair,
   store_txn_builder_to_file(&transaction_file_name, &txn_builder)
 }
 
-fn load_funds(sid_pre: u64,
-              issuer_key_pair: &XfrKeyPair,
+fn load_funds(issuer_key_pair: &XfrKeyPair,
               recipient_key_pair: &XfrKeyPair,
               amount: u64,
               token_code: AssetTypeCode,
               transaction_file_name: &str,
               protocol: &str)
               -> Result<(), PlatformError> {
+  // Get the original record
+  let sid_pre = load_utxo()?;
+  let res_pre = query(protocol, QUERY_PORT, "utxo_sid", &format!("{}", sid_pre.0));
+  let blind_asset_record_pre =
+    serde_json::from_str::<BlindAssetRecord>(&res_pre).or_else(|_| {
+                                                        Err(PlatformError::DeserializationError)
+                                                      })
+                                                      .unwrap();
+
   // Issue and transfer asset
   issue_and_transfer(issuer_key_pair,
                      recipient_key_pair,
@@ -637,17 +639,9 @@ fn load_funds(sid_pre: u64,
                      token_code,
                      transaction_file_name)?;
 
-  // Submit transaction
-  let sid_new = submit_and_get_sid(protocol, transaction_file_name, Some("txn_status"))?;
-
-  // Get blind asset records
-  let res_pre = query(protocol, QUERY_PORT, "utxo_sid", &format!("{}", sid_pre));
+  // Submit transaction and get the new record
+  let sid_new = submit_and_store_sid(protocol, transaction_file_name)?;
   let res_new = query(protocol, QUERY_PORT, "utxo_sid", &format!("{}", sid_new.0));
-  let blind_asset_record_pre =
-    serde_json::from_str::<BlindAssetRecord>(&res_pre).or_else(|_| {
-                                                        Err(PlatformError::DeserializationError)
-                                                      })
-                                                      .unwrap();
   let blind_asset_record_new =
     serde_json::from_str::<BlindAssetRecord>(&res_new).or_else(|_| {
                                                         Err(PlatformError::DeserializationError)
@@ -656,7 +650,7 @@ fn load_funds(sid_pre: u64,
 
   // Merge records
   merge_records(recipient_key_pair,
-                TxoRef::Absolute(TxoSID(sid_pre)),
+                TxoRef::Absolute(sid_pre),
                 TxoRef::Absolute(sid_new),
                 blind_asset_record_pre,
                 blind_asset_record_new,
@@ -964,17 +958,12 @@ fn main() {
         .long("http")
         .takes_value(false)
         .help("specify that http, not https should be used.")))
-    .subcommand(SubCommand::with_name("submit_and_get_sid")
+    .subcommand(SubCommand::with_name("submit_and_store_sid")
       .arg(Arg::with_name("protocol")
         .long("http")
         .takes_value(false)
         .help("specify that http, not https should be used.")))
     .subcommand(SubCommand::with_name("load_funds")
-      .arg(Arg::with_name("sid_pre")
-        .short("p")
-        .long("sid_pre")
-        .takes_value(true)
-        .help("Required: sid corresponding to the recipient's previous record."))
       .arg(Arg::with_name("recipient_key_pair_path")
         .short("r")
         .long("recipient_key_pair_path")
@@ -1092,8 +1081,8 @@ fn process_inputs(inputs: clap::ArgMatches) -> Result<(), PlatformError> {
       store_pub_key_to_file(&expand_str)
     }
     ("submit", Some(submit_matches)) => process_submit_cmd(submit_matches, &transaction_file_name),
-    ("submit_and_get_sid", Some(submit_and_get_sid_matches)) => {
-      process_submit_and_get_sid_cmd(submit_and_get_sid_matches, &transaction_file_name)
+    ("submit_and_store_sid", Some(submit_and_store_sid_matches)) => {
+      process_submit_and_store_sid_cmd(submit_and_store_sid_matches, &transaction_file_name)
     }
     ("load_funds", Some(load_funds_matches)) => process_load_funds_cmd(load_funds_matches,
                                                                        &key_pair_file_path,
@@ -1121,11 +1110,11 @@ fn process_submit_cmd(submit_matches: &clap::ArgMatches,
   submit(protocol, &transaction_file_name)
 }
 
-fn process_submit_and_get_sid_cmd(submit_and_get_sid_matches: &clap::ArgMatches,
-                                  transaction_file_name: &str)
-                                  -> Result<(), PlatformError> {
+fn process_submit_and_store_sid_cmd(submit_and_store_sid_matches: &clap::ArgMatches,
+                                    transaction_file_name: &str)
+                                    -> Result<(), PlatformError> {
   // Get protocol, host and port.
-  let protocol = if submit_and_get_sid_matches.is_present("http") {
+  let protocol = if submit_and_store_sid_matches.is_present("http") {
     // Allow HTTP which may be useful for running a ledger locally.
     "http"
   } else {
@@ -1134,7 +1123,7 @@ fn process_submit_and_get_sid_cmd(submit_and_get_sid_matches: &clap::ArgMatches,
   };
 
   // serialize txn
-  submit_and_get_sid(protocol, &transaction_file_name, Some("txn_status"))?;
+  submit_and_store_sid(protocol, &transaction_file_name)?;
   Ok(())
 }
 
@@ -1306,7 +1295,7 @@ fn process_add_cmd(add_matches: &clap::ArgMatches,
       if let Err(e) = txn_builder.add_basic_issue_asset(&key_pair,
                                                         &None,
                                                         &asset_token,
-                                                        get_and_update_sequence_number()?,
+                                                        load_and_update_sequence_number()?,
                                                         amount)
       {
         println!("Failed to add basic issue asset.");
@@ -1458,12 +1447,6 @@ fn process_load_funds_cmd(load_funds_matches: &clap::ArgMatches,
                           key_pair_file_path: &str,
                           transaction_file_name: &str)
                           -> Result<(), PlatformError> {
-  let sid_pre = if let Some(sid_pre_arg) = load_funds_matches.value_of("sid_pre") {
-    get_amount(sid_pre_arg).unwrap()
-  } else {
-    println!("Previous sid is required to load funds. Use --sid_pre.");
-    return Err(PlatformError::InputsError);
-  };
   let recipient_key_pair = if let Some(recipient_key_pair_path_arg) =
     load_funds_matches.value_of("recipient_key_pair_path")
   {
@@ -1492,8 +1475,7 @@ fn process_load_funds_cmd(load_funds_matches: &clap::ArgMatches,
     "https"
   };
 
-  load_funds(sid_pre,
-             &load_key_pair_from_file(key_pair_file_path)?,
+  load_funds(&load_key_pair_from_file(key_pair_file_path)?,
              &recipient_key_pair,
              amount,
              token_code,
@@ -1828,7 +1810,7 @@ mod tests {
                        code,
                        txn_builder_path).unwrap();
 
-    let sid1 = submit_and_get_sid("https", txn_builder_path, None).unwrap();
+    let sid1 = submit_and_store_sid("https", txn_builder_path).unwrap();
     let res = query("https", QUERY_PORT, "utxo_sid", &format!("{}", sid1.0));
     let blind_asset_record_1 =
       serde_json::from_str::<BlindAssetRecord>(&res).or_else(|_| {
@@ -1842,7 +1824,7 @@ mod tests {
                        amount2,
                        code,
                        txn_builder_path).unwrap();
-    let sid2 = submit_and_get_sid("https", txn_builder_path, None).unwrap();
+    let sid2 = submit_and_store_sid("https", txn_builder_path).unwrap();
     let res = query("https", QUERY_PORT, "utxo_sid", &format!("{}", sid2.0));
     let blind_asset_record_2 =
       serde_json::from_str::<BlindAssetRecord>(&res).or_else(|_| {
@@ -1901,12 +1883,11 @@ mod tests {
                        amount_original,
                        code,
                        txn_builder_path).unwrap();
-    let sid = submit_and_get_sid("https", txn_builder_path, None).unwrap();
+    submit_and_store_sid("https", txn_builder_path).unwrap();
 
     // Load funds
     // The new record will be merged with the original record
-    let res = load_funds(sid.0,
-                         &issuer_key_pair,
+    let res = load_funds(&issuer_key_pair,
                          &recipient_key_pair,
                          amount_new,
                          code,
@@ -1923,8 +1904,8 @@ mod tests {
     let sequence_number_init = load_data().unwrap().sequence_number;
 
     // Get and increment the sequence number twice
-    let sequence_number_1 = get_and_update_sequence_number().unwrap();
-    let sequence_number_2 = get_and_update_sequence_number().unwrap();
+    let sequence_number_1 = load_and_update_sequence_number().unwrap();
+    let sequence_number_2 = load_and_update_sequence_number().unwrap();
     let sequence_number_3 = load_data().unwrap().sequence_number;
 
     // Verify the sequence numbers

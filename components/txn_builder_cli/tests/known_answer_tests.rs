@@ -1,12 +1,10 @@
 #![deny(warnings)]
 use ledger::data_model::AssetTypeCode;
-use std::fs::{self, File};
-use std::io::prelude::*;
+use std::fs;
 use std::io::{self, Write};
 use std::path::Path;
 use std::process::{Command, Output};
 use std::str::from_utf8;
-use submission_server::TxnStatus;
 
 extern crate exitcode;
 
@@ -15,7 +13,6 @@ extern crate exitcode;
 // Figure out how to colorize stdout and stderr
 
 const COMMAND: &str = "../../target/debug/txn_builder_cli";
-const TXN_STATUS_PATH: &str = "txn_status";
 
 //
 // Helper functions: create and store without path
@@ -62,20 +59,6 @@ fn get_findora_dir() -> String {
   };
 
   findora_dir
-}
-
-pub fn get_sid_from_txn_status_file() -> String {
-  let mut file = File::open(TXN_STATUS_PATH).unwrap();
-  let mut txn_status_str = String::new();
-  file.read_to_string(&mut txn_status_str).unwrap();
-
-  match serde_json::from_str::<TxnStatus>(&txn_status_str).unwrap() {
-    TxnStatus::Committed((_sid, txos)) => {
-      fs::remove_file(TXN_STATUS_PATH).unwrap();
-      format!("{}", txos[0].0)
-    }
-    _ => "".to_owned(),
-  }
 }
 
 #[cfg(test)]
@@ -227,7 +210,7 @@ fn submit(txn_builder_path: &str) -> io::Result<Output> {
 #[cfg(test)]
 fn submit_and_store_sid(txn_builder_path: &str) -> io::Result<Output> {
   Command::new(COMMAND).args(&["--txn", txn_builder_path])
-                       .arg("submit_and_get_sid")
+                       .arg("submit_and_store_sid")
                        .output()
 }
 
@@ -235,7 +218,6 @@ fn submit_and_store_sid(txn_builder_path: &str) -> io::Result<Output> {
 #[cfg(test)]
 fn load_funds(txn_builder_path: &str,
               issuer_key_pair_path: &str,
-              sid_pre: &str,
               recipient_key_pair_path: &str,
               amount: &str,
               token_code: &str)
@@ -243,7 +225,6 @@ fn load_funds(txn_builder_path: &str,
   Command::new(COMMAND).args(&["--txn", txn_builder_path])
                        .args(&["--key_pair", issuer_key_pair_path])
                        .arg("load_funds")
-                       .args(&["--sid_pre", sid_pre])
                        .args(&["--recipient_key_pair_path", recipient_key_pair_path])
                        .args(&["--amount", amount])
                        .args(&["--token_code", token_code])
@@ -738,13 +719,10 @@ fn test_load_funds_with_args() {
 
   // Submit transaction and get the sid
   submit_and_store_sid(txn_builder_file).expect("Failed to submit transaction");
-  let sid = get_sid_from_txn_status_file();
-  println!("Sid: {}", &sid);
 
   // Load funds
   let output = load_funds(txn_builder_file,
                           issuer_key_pair_file,
-                          &sid,
                           recipient_key_pair_file,
                           "500",
                           &token_code).expect("Failed to load funds");
@@ -752,7 +730,6 @@ fn test_load_funds_with_args() {
   io::stdout().write_all(&output.stdout).unwrap();
   io::stdout().write_all(&output.stderr).unwrap();
 
-  fs::remove_file("txn_status").unwrap();
   fs::remove_file(txn_builder_file).unwrap();
   fs::remove_file(issuer_key_pair_file).unwrap();
   fs::remove_file(recipient_key_pair_file).unwrap();
