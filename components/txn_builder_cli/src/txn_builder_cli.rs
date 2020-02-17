@@ -31,8 +31,6 @@ const DATA_FILE: &str = "data.json";
 const HOST: &str = "testnet.findora.org";
 const QUERY_PORT: &str = "8668";
 const SUBMIT_PORT: &str = "8669";
-// // TODO (Keyao): Change this after credentialing feature is added
-// const INTEREST_RATE: f64 = 0.1;
 
 //
 // Data
@@ -44,7 +42,7 @@ struct Data {
 
   // Utxo of the previously submitted transaction
   // TODO (Keyao): Should this be a vector instead?
-  // TODO (Keyao): Define a borrower struct, and associate each utxo with id
+  // TODO (Keyao): Define a borrower struct, and associate each utxo with a borrower id
   utxo: TxoSID,
 }
 
@@ -662,45 +660,6 @@ fn load_funds(issuer_key_pair: &XfrKeyPair,
 
   Ok(())
 }
-
-// fn initiate_loan(issuer_key_pair: &XfrKeyPair,
-//                  lender_key_pair: &XfrKeyPair,
-//                  borrower_key_pair: &XfrKeyPair,
-//                  debt_code: AssetTypeCode,
-//                  fiat_code: AssetTypeCode,
-//                  amount: u64,
-//                  transaction_file_name: &str,
-//                  sequence_num: u64)
-//                  -> Result<(), PlatformError> {
-//   // Define debt asset
-//   let mut txn_builder = TransactionBuilder::default();
-//   // TODO (Keyao): Make the memo meaningful
-//   txn_builder.add_operation_create_asset(&issuer_key_pair,
-//                                          Some(debt_code),
-//                                          false,
-//                                          false,
-//                                          "Debt asset defined")?
-//              .transaction();
-//   store_txn_builder_to_file(&transaction_file_name, &txn_builder);
-//   submit("https", transaction_file_name);
-
-//   // Define fiat asset
-//   // TODO (Keyao): Define the fiat asset before calling this function to avoid duplicate definitions
-//   let mut txn_builder = TransactionBuilder::default();
-//   txn_builder.add_operation_create_asset(&issuer_key_pair,
-//                                          Some(fiat_code),
-//                                          false,
-//                                          false,
-//                                          "Fiat asset defined")?
-//              .transaction();
-//   store_txn_builder_to_file(&transaction_file_name, &txn_builder);
-//   submit("https", transaction_file_name);
-
-//   // Issue and transfer debt and fiat tokens
-//   issue_and_transfer(borrower_key_pair, borrower_key_pair, amount, debt_code, transaction_file_name, seq_num: u64)
-
-//   Ok(())
-// }
 
 // Use environment variable RUST_LOG to select log level and filter
 // output by module or regex. For example,
