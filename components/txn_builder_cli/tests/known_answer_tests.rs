@@ -231,6 +231,27 @@ fn load_funds(txn_builder_path: &str,
                        .output()
 }
 
+// Helper function: initiate loan
+#[cfg(test)]
+fn init_loan(txn_builder_path: &str,
+             issuer_key_pair_path: &str,
+             lender_key_pair_path: &str,
+             borrower_key_pair_path: &str,
+             fiat_code: &str,
+             debt_code: &str,
+             amount: &str)
+             -> io::Result<Output> {
+  Command::new(COMMAND).args(&["--txn", txn_builder_path])
+                       .args(&["--key_pair", issuer_key_pair_path])
+                       .arg("init_loan")
+                       .args(&["--lender_key_pair_path", lender_key_pair_path])
+                       .args(&["--borrower_key_pair_path", borrower_key_pair_path])
+                       .args(&["--fiat_code", fiat_code])
+                       .args(&["--debt_code", debt_code])
+                       .args(&["--amount", amount])
+                       .output()
+}
+
 //
 // No path
 //
@@ -716,8 +737,6 @@ fn test_load_funds_with_args() {
                            recipient_key_pair_file,
                            "1000",
                            &token_code).expect("Failed to issue and transfer asset");
-
-  // Submit transaction and get the sid
   submit_and_store_sid(txn_builder_file).expect("Failed to submit transaction");
 
   // Load funds
@@ -733,6 +752,64 @@ fn test_load_funds_with_args() {
   fs::remove_file(txn_builder_file).unwrap();
   fs::remove_file(issuer_key_pair_file).unwrap();
   fs::remove_file(recipient_key_pair_file).unwrap();
+
+  assert!(output.status.success());
+}
+
+#[test]
+fn test_init_loan_with_args() {
+  // Create txn builder, key pairs, and public key
+  let txn_builder_file = "tb_init_loan_args";
+  let issuer_key_pair_file = "ikp_init_loan_args";
+  let lender_key_pair_file = "lkp_init_loan_args";
+  let borrower_key_pair_file = "bkp_init_loan_args";
+  create_with_path(txn_builder_file).expect("Failed to create transaction builder");
+  keygen_with_path(issuer_key_pair_file).expect("Failed to generate key pair for the issuer");
+  keygen_with_path(lender_key_pair_file).expect("Failed to generate key pair for the lender");
+  keygen_with_path(borrower_key_pair_file).expect("Failed to generate key pair for the borrower");
+
+  // Define fiat asset
+  let fiat_code = AssetTypeCode::gen_random().to_base64();
+  define_asset(txn_builder_file,
+               issuer_key_pair_file,
+               &fiat_code,
+               "Define fiat asset").expect("Failed to define fiat asset");
+  submit(txn_builder_file).expect("Failed to submit transaction");
+  fs::remove_file(txn_builder_file).unwrap();
+
+  // Define debt asset
+  create_with_path(txn_builder_file).expect("Failed to create transaction builder");
+  let debt_code = AssetTypeCode::gen_random().to_base64();
+  define_asset(txn_builder_file,
+               borrower_key_pair_file,
+               &debt_code,
+               "Define debt asset").expect("Failed to define debt asset");
+  submit(txn_builder_file).expect("Failed to submit transaction");
+
+  // Set the original record for the borrower
+  issue_and_transfer_asset(txn_builder_file,
+                           issuer_key_pair_file,
+                           borrower_key_pair_file,
+                           "1000",
+                           &fiat_code).expect("Failed to issue and transfer asset");
+  submit_and_store_sid(txn_builder_file).expect("Failed to submit transaction");
+
+  // Initiate loan
+  let output = init_loan(txn_builder_file,
+                         issuer_key_pair_file,
+                         lender_key_pair_file,
+                         borrower_key_pair_file,
+                         &fiat_code,
+                         &debt_code,
+                         "500").expect("Failed to load funds");
+
+  io::stdout().write_all(&output.stdout).unwrap();
+  io::stdout().write_all(&output.stderr).unwrap();
+
+  fs::remove_file(txn_builder_file).unwrap();
+  fs::remove_file(issuer_key_pair_file).unwrap();
+  fs::remove_file(lender_key_pair_file).unwrap();
+  fs::remove_file(borrower_key_pair_file).unwrap();
 
   assert!(output.status.success());
 }
