@@ -552,8 +552,9 @@ fn merge_records(key_pair: &XfrKeyPair,
   store_txn_builder_to_file(&transaction_file_name, &txn_builder)
 }
 
-// TODO (Keyao): Make sequence_num a static mutable value, to fix the Clippy error:
-// error: this function has too many arguments (8/7)
+// TODO (Keyao): Fix the Clippy error: this function has too many arguments (8/7)
+// I'm working on defining a Data struct, to store and update values including sequence number.
+// This should simplify the data structure and fix the Clippy error.
 fn load_funds(sid_pre: u64,
               issuer_key_pair: &XfrKeyPair,
               recipient_key_pair: &XfrKeyPair,
