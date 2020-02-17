@@ -36,6 +36,10 @@ time = "0.1"
 tiny-keccak = "1.4.2"
 wasm-bindgen = { version = "0.2.50", features = ["serde-serialize"]  }
 zei = { git = "ssh://git@github.com/findoraorg/zei" }
+log = "0.4.8"
+
+[features]
+TESTING = []
 
 [dev-dependencies]
 txn_builder = { path = "../components/txn_builder" }
