@@ -104,6 +104,9 @@ impl TxnEffect {
         //          - Either checked here or recorded in `new_issuance_keys`
         //      4) The assets in the TxOutputs are owned by the signatory.
         //          - Fully checked here
+        //      5) The assets in the TxOutputs have a non-confidential
+        //         asset type which agrees with the stated asset type.
+        //          - Fully checked here
         //      TODO(joe): tracking!
         Operation::IssueAsset(iss) => {
           if iss.body.num_outputs != iss.body.records.len() {
@@ -143,6 +146,11 @@ impl TxnEffect {
           for output in iss.body.records.iter() {
             // (4)
             if (output.0).public_key != iss.pubkey.key {
+              return Err(PlatformError::InputsError);
+            }
+
+            // (5)
+            if (output.0).asset_type != Some(code.val) {
               return Err(PlatformError::InputsError);
             }
 
