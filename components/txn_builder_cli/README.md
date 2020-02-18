@@ -26,8 +26,8 @@ For example, for help defining an asset
 * Even if the subcommand is unique, it is still necessary to
 supply the command name as well. This is true for both help and the
 actual subcommands.
-* By default, all the generated files will be stored in ```~./findora```, unless specified otherwise. For example, if the current directory is ```platform/target/debug```, running ```./txn_builder_cli keygen``` will put the generated key pair in ~./findora, but ```./txn_builder_cli keygen --name keys/key_pair``` will store the key pair to ```platform/target/debug/keys/key_pair```.
-* Examples below are assuming the current directory is ```platform/target/debug```. If not, change ```./txn_builder_cli``` to the path to ```./txn_builder_cli```.
+* By default, all the generated files will be stored in `~./findora`, unless specified otherwise. For example, if the current directory is `platform/target/debug`, running `./txn_builder_cli keygen` will put the generated key pair in ~./findora, but `./txn_builder_cli keygen --name keys/key_pair` will store the key pair to `platform/target/debug/keys/key_pair`.
+* Examples below are assuming the current directory is `platform/target/debug`. If not, change `./txn_builder_cli` to the path to `./txn_builder_cli`.
 
 ## Generate a key pair
 Before composing a transaction, generate and save a cryptographic key pair.
@@ -70,11 +70,122 @@ Before composing a transaction, generate and save a cryptographic key pair.
   ```
   ./txn_builder_cli --txn tb --key_pair kp add transfer_asset --sids_path s --blind_asset_record_paths bar1,bar2 --input_amounts 15,45 --output_amounts 10,20,30 --address_paths pko1,pko2,pko3
   ```
+* Issue and transfer units of an asset. See `txn_builder_cli add issue_and_transfer_asset`.
+  * Generate a key pair for the recipient
+  ```
+  ./txn_builder_cli keygen --name re_kp
+  ```
+  * Issue and transfer
+  ```
+  ./txn_builder_cli --txn tb --key_pair kp add issue_and_transfer_asset --recipient_key_pair_path re_kp --amount 1000 --token_code ibIaBlHV-PdQkvSuEg6YSA==
+  ```
 
 ## Submitting a transaction
 After a transaction is composed:
 ```
-./txn_builder_cli --txn tb --key_pair kp submit
+./txn_builder_cli --txn tb submit
+```
+Add the `--store` arg to store the utxo sid.
+
+## Loading funds
+### Generate key pairs for the issuer and recipient
+```
+./txn_builder_cli keygen --name issuer_kp
+./txn_builder_cli keygen --name recipient_kp
+```
+
+### Create an empty transaction
+```
+./txn_builder_cli create --name tran
+```
+
+### Definea a asset
+* Define
+```
+./txn_builder_cli --txn tran --key_pair issuer_kp add define_asset --memo 'fiat asset'
+```
+Note the base 64 representation of the token code from the last line of the output. For example:
+```
+Creating asset with token code "BcXJm75GvJFcSeuf-rALlQ=="
+```
+then the token code is `BcXJm75GvJFcSeuf-rALlQ==`.
+
+* Submit
+```
+./txn_builder_cli --txn tran submit
+```
+
+### Issue and transfer some amount as the original record
+* Issue and transfer
+```
+./txn_builder_cli --txn tran --key_pair issuer_kp add issue_and_transfer_asset --recipient_key_pair_path recipient_kp --amount 1000 --token_code BcXJm75GvJFcSeuf-rALlQ==
+```
+* Submit
+```
+./txn_builder_cli --txn tran submit --store
+```
+
+### Load funds
+```
+./txn_builder_cli --txn tran --key_pair issuer_kp load_funds --recipient_key_pair_path recipient_kp --amount 500 --token_code BcXJm75GvJFcSeuf-rALlQ==
+```
+
+## Initiate loan
+### Generate key pairs for the issuer, lender and borrower
+```
+./txn_builder_cli keygen --name issuer_kp
+./txn_builder_cli keygen --name lender_kp
+./txn_builder_cli keygen --name borrower_kp
+```
+
+### Create an empty transaction
+```
+./txn_builder_cli create --name tran
+```
+
+### Definea fiat and debt assets
+* Fiat asset
+  * Define a fiat asset using the issuer's key pair
+  ```
+  ./txn_builder_cli --txn tran --key_pair issuer_kp add define_asset --memo 'fiat asset'
+  ```
+  Note the base 64 representation of the token code from the last line of the output. For example:
+  ```
+  Creating asset with token code "BcXJm75GvJFcSeuf-rALlQ=="
+  ```
+  then the fiat code is `BcXJm75GvJFcSeuf-rALlQ==`.
+  * Submit
+  ```
+  ./txn_builder_cli --txn tran submit
+  ```
+* Debt asset
+  * Define a debt asset using the borrower's key pair
+  ```
+  ./txn_builder_cli --txn tran --key_pair borrower_kp add define_asset --memo 'debt asset'
+  ```
+  Note the base 64 representation of the token code from the last line of the output. For example:
+  ```
+  Creating asset with token code "NBWGcBwKQL_HDUDeU8aOFw=="
+  ```
+  then the debt code is `NBWGcBwKQL_HDUDeU8aOFw==`.
+  * Submit
+  ```
+  ./txn_builder_cli --txn tran submit
+  ```
+
+### Issue and transfer units of fiat asset to the borrower as the original record
+* Issue and transfer
+```
+./txn_builder_cli --txn tran --key_pair issuer_kp add issue_and_transfer_asset --recipient_key_pair_path borrower_kp --amount 1000 --token_code BcXJm75GvJFcSeuf-rALlQ==
+```
+* Submit
+```
+./txn_builder_cli --txn tran submit --store
+```
+
+### Initiate the loan
+```
+./txn_builder_cli --txn tran --key_pair issuer_kp init_loan --lender_key_pair_path lender_kp --borrower_key_pair_path borrower_kp --fiat_code BcXJm75GvJFcSeuf-rALlQ== --debt_code NBWGcBwKQL_HDUDeU8aOFw== --amount 500
 ```
 
 ## Querying the ledger server

@@ -31,7 +31,6 @@ const DATA_FILE: &str = "data.json";
 const HOST: &str = "testnet.findora.org";
 const QUERY_PORT: &str = "8668";
 const SUBMIT_PORT: &str = "8669";
-// TODO (Keyao): Define fiat code and don't change it
 
 //
 // Data
@@ -681,7 +680,9 @@ fn get_open_asset_record(protocol: &str,
 
 // Issues and transfers fiat and debt token to the lender and borrower, respectively
 // Then initiate the loan
+//
 // Note: make sure assets have been defined before calling this function
+//
 // TODO (Keyao): Credential check
 // TODO (Keyao): Fix the Clippy error: this function has too many arguments (8/7)
 fn init_loan(issuer_key_pair: &XfrKeyPair,
@@ -1015,12 +1016,11 @@ fn main() {
       .arg(Arg::with_name("protocol")
         .long("http")
         .takes_value(false)
-        .help("specify that http, not https should be used.")))
-    .subcommand(SubCommand::with_name("submit_and_store_sid")
-      .arg(Arg::with_name("protocol")
-        .long("http")
+        .help("specify that http, not https should be used."))
+      .arg(Arg::with_name("store")
+        .long("store")
         .takes_value(false)
-        .help("specify that http, not https should be used.")))
+        .help("If specified, the transaction utxo sid will be stored.")))
     .subcommand(SubCommand::with_name("load_funds")
       .arg(Arg::with_name("recipient_key_pair_path")
         .short("r")
@@ -1169,9 +1169,6 @@ fn process_inputs(inputs: clap::ArgMatches) -> Result<(), PlatformError> {
       store_pub_key_to_file(&expand_str)
     }
     ("submit", Some(submit_matches)) => process_submit_cmd(submit_matches, &transaction_file_name),
-    ("submit_and_store_sid", Some(submit_and_store_sid_matches)) => {
-      process_submit_and_store_sid_cmd(submit_and_store_sid_matches, &transaction_file_name)
-    }
     ("load_funds", Some(load_funds_matches)) => process_load_funds_cmd(load_funds_matches,
                                                                        &key_pair_file_path,
                                                                        &transaction_file_name),
@@ -1198,24 +1195,14 @@ fn process_submit_cmd(submit_matches: &clap::ArgMatches,
   };
 
   // serialize txn
-  submit(protocol, &transaction_file_name)
-}
-
-fn process_submit_and_store_sid_cmd(submit_and_store_sid_matches: &clap::ArgMatches,
-                                    transaction_file_name: &str)
-                                    -> Result<(), PlatformError> {
-  // Get protocol, host and port.
-  let protocol = if submit_and_store_sid_matches.is_present("http") {
-    // Allow HTTP which may be useful for running a ledger locally.
-    "http"
+  if submit_matches.is_present("store") {
+    match submit_and_store_sid(protocol, &transaction_file_name) {
+      Ok(_) => Ok(()),
+      Err(error) => Err(error),
+    }
   } else {
-    // Default to HTTPS
-    "https"
-  };
-
-  // serialize txn
-  submit_and_store_sid(protocol, &transaction_file_name)?;
-  Ok(())
+    submit(protocol, &transaction_file_name)
+  }
 }
 
 // Create the specific file if missing
@@ -1341,10 +1328,12 @@ fn process_add_cmd(add_matches: &clap::ArgMatches,
                             .unwrap();
       let asset_token: AssetTypeCode;
       if let Some(token_code) = token_code {
-        asset_token = AssetTypeCode::new_from_str(token_code);
+        asset_token = AssetTypeCode::new_from_base64(token_code)?;
       } else {
         asset_token = AssetTypeCode::gen_random();
-        println!("Creating asset with token code {:?}", asset_token.val);
+        println!("Creating asset with token code {:?}: {:?}",
+                 asset_token.to_base64(),
+                 asset_token.val);
       }
       if let Err(e) = txn_builder.add_operation_create_asset(&key_pair,
                                                              Some(asset_token),
@@ -1360,7 +1349,7 @@ fn process_add_cmd(add_matches: &clap::ArgMatches,
     ("issue_asset", Some(issue_asset_matches)) => {
       let asset_token: AssetTypeCode;
       if let Some(token_code_arg) = issue_asset_matches.value_of("token_code") {
-        asset_token = AssetTypeCode::new_from_str(token_code_arg);
+        asset_token = AssetTypeCode::new_from_base64(token_code_arg)?;
       } else {
         println!("Token code is required to issue asset. Use --token_code.");
         return Err(PlatformError::InputsError);
@@ -1513,7 +1502,7 @@ fn process_add_cmd(add_matches: &clap::ArgMatches,
       };
       let token_code =
         if let Some(token_code_arg) = issue_and_transfer_matches.value_of("token_code") {
-          AssetTypeCode::new_from_str(token_code_arg)
+          AssetTypeCode::new_from_base64(token_code_arg)?
         } else {
           println!("Token code is required to issue asset. Use --token_code.");
           return Err(PlatformError::InputsError);
@@ -1553,7 +1542,7 @@ fn process_load_funds_cmd(load_funds_matches: &clap::ArgMatches,
     return Err(PlatformError::InputsError);
   };
   let token_code = if let Some(token_code_arg) = load_funds_matches.value_of("token_code") {
-    AssetTypeCode::new_from_str(token_code_arg)
+    AssetTypeCode::new_from_base64(token_code_arg)?
   } else {
     println!("Token code is required to load funds. Use --token_code.");
     return Err(PlatformError::InputsError);
@@ -1595,13 +1584,13 @@ fn process_init_loan_cmd(load_funds_matches: &clap::ArgMatches,
     return Err(PlatformError::InputsError);
   };
   let fiat_code = if let Some(fiat_code_arg) = load_funds_matches.value_of("fiat_code") {
-    AssetTypeCode::new_from_str(fiat_code_arg)
+    AssetTypeCode::new_from_base64(fiat_code_arg)?
   } else {
     println!("Token code is required to initiate the loan. Use --fiat_code.");
     return Err(PlatformError::InputsError);
   };
   let debt_code = if let Some(debt_code_arg) = load_funds_matches.value_of("debt_code") {
-    AssetTypeCode::new_from_str(debt_code_arg)
+    AssetTypeCode::new_from_base64(debt_code_arg)?
   } else {
     println!("Token code is required to initiate the loan. Use --debt_code.");
     return Err(PlatformError::InputsError);

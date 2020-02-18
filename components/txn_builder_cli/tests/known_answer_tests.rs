@@ -210,7 +210,8 @@ fn submit(txn_builder_path: &str) -> io::Result<Output> {
 #[cfg(test)]
 fn submit_and_store_sid(txn_builder_path: &str) -> io::Result<Output> {
   Command::new(COMMAND).args(&["--txn", txn_builder_path])
-                       .arg("submit_and_store_sid")
+                       .arg("submit")
+                       .arg("--store")
                        .output()
 }
 
