@@ -99,7 +99,7 @@ Add the `--store` arg to store the utxo sid.
 ./txn_builder_cli create --name tran
 ```
 
-### Definea a asset
+### Define an asset
 * Define
 ```
 ./txn_builder_cli --txn tran --key_pair issuer_kp add define_asset --memo 'fiat asset'
@@ -143,7 +143,7 @@ then the token code is `BcXJm75GvJFcSeuf-rALlQ==`.
 ./txn_builder_cli create --name tran
 ```
 
-### Definea fiat and debt assets
+### Define fiat and debt assets
 * Fiat asset
   * Define a fiat asset using the issuer's key pair
   ```
