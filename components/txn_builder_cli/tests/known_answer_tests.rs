@@ -1,14 +1,12 @@
 #![deny(warnings)]
 use ledger::data_model::AssetTypeCode;
-use rand_chacha::ChaChaRng;
-use rand_core::SeedableRng;
-use std::fs;
+use std::fs::{self, File};
+use std::io::prelude::*;
 use std::io::{self, Write};
 use std::path::Path;
 use std::process::{Command, Output};
 use std::str::from_utf8;
-use zei::serialization::ZeiFromToBytes;
-use zei::xfr::sig::XfrKeyPair;
+use submission_server::TxnStatus;
 
 extern crate exitcode;
 
@@ -17,6 +15,7 @@ extern crate exitcode;
 // Figure out how to colorize stdout and stderr
 
 const COMMAND: &str = "../../target/debug/txn_builder_cli";
+const TXN_STATUS_PATH: &str = "txn_status";
 
 //
 // Helper functions: create and store without path
@@ -63,6 +62,20 @@ fn get_findora_dir() -> String {
   };
 
   findora_dir
+}
+
+pub fn get_sid_from_txn_status_file() -> String {
+  let mut file = File::open(TXN_STATUS_PATH).unwrap();
+  let mut txn_status_str = String::new();
+  file.read_to_string(&mut txn_status_str).unwrap();
+
+  match serde_json::from_str::<TxnStatus>(&txn_status_str).unwrap() {
+    TxnStatus::Committed((_sid, txos)) => {
+      fs::remove_file(TXN_STATUS_PATH).unwrap();
+      format!("{}", txos[0].0)
+    }
+    _ => "".to_owned(),
+  }
 }
 
 #[cfg(test)]
@@ -189,49 +202,57 @@ fn transfer_asset(txn_builder_path: &str,
 }
 
 #[cfg(test)]
-fn submit(txn_builder_path: &str) -> io::Result<Output> {
-  Command::new(COMMAND).args(&["--txn", txn_builder_path])
-                       .arg("submit")
-                       //  .arg("--http")
-                       .output()
-}
-
-// Helper functions: load funds
-#[cfg(test)]
-fn _store_key_pair_and_pub_key_to_files(kay_pair_path: &str,
-                                        pub_key_path: &str)
-                                        -> std::io::Result<()> {
-  let mut prng = ChaChaRng::from_seed([0u8; 32]);
-  let key_pair = XfrKeyPair::generate(&mut prng);
-  fs::write(&kay_pair_path, key_pair.zei_to_bytes())?;
-  fs::write(&pub_key_path, key_pair.get_pk_ref().as_bytes())?;
-  Ok(())
-}
-
-#[cfg(test)]
-fn _load_funds(txn_builder_path: &str,
-               issuer_key_pair_path: &str,
-               sid_pre: &str,
-               sid_new: &str,
-               blind_asset_record_pre_path: &str,
-               blind_asset_record_new_path: &str,
-               recipient_key_pair_path: &str,
-               amount: &str,
-               token_code: &str,
-               sequence_number: &str)
-               -> io::Result<Output> {
+fn issue_and_transfer_asset(txn_builder_path: &str,
+                            issuer_key_pair_path: &str,
+                            recipient_key_pair_path: &str,
+                            amount: &str,
+                            token_code: &str,
+                            sequence_number: &str)
+                            -> io::Result<Output> {
   Command::new(COMMAND).args(&["--txn", txn_builder_path])
                        .args(&["--key_pair", issuer_key_pair_path])
-                       .arg("load_funds")
-                       .args(&["--sid_pre", sid_pre])
-                       .args(&["--sid_new", sid_new])
-                       .args(&["--blind_asset_record_pre_path", blind_asset_record_pre_path])
-                       .args(&["--blind_asset_record_new_path", blind_asset_record_new_path])
+                       .args(&["add", "issue_and_transfer_asset"])
                        .args(&["--recipient_key_pair_path", recipient_key_pair_path])
                        .args(&["--amount", amount])
                        .args(&["--token_code", token_code])
                        .args(&["--sequence_number", sequence_number])
-                       //  .arg("--http")
+                       .output()
+}
+
+// Helper functions: submit transaction
+
+#[cfg(test)]
+fn submit(txn_builder_path: &str) -> io::Result<Output> {
+  Command::new(COMMAND).args(&["--txn", txn_builder_path])
+                       .arg("submit")
+                       .output()
+}
+
+#[cfg(test)]
+fn submit_and_store_sid(txn_builder_path: &str) -> io::Result<Output> {
+  Command::new(COMMAND).args(&["--txn", txn_builder_path])
+                       .arg("submit_and_get_sid")
+                       .output()
+}
+
+// Helper function: load funds
+#[cfg(test)]
+fn load_funds(txn_builder_path: &str,
+              issuer_key_pair_path: &str,
+              sid_pre: &str,
+              recipient_key_pair_path: &str,
+              amount: &str,
+              token_code: &str,
+              sequence_number: &str)
+              -> io::Result<Output> {
+  Command::new(COMMAND).args(&["--txn", txn_builder_path])
+                       .args(&["--key_pair", issuer_key_pair_path])
+                       .arg("load_funds")
+                       .args(&["--sid_pre", sid_pre])
+                       .args(&["--recipient_key_pair_path", recipient_key_pair_path])
+                       .args(&["--amount", amount])
+                       .args(&["--token_code", token_code])
+                       .args(&["--sequence_number", sequence_number])
                        .output()
 }
 
@@ -575,11 +596,8 @@ fn test_define_issue_and_transfer_with_args() {
   assert!(output.status.success());
 
   // Issue asset
-  let output = issue_asset(txn_builder_file,
-                           key_pair_file,
-                           &token_code,
-                           "1",
-                           "10").expect("Failed to issue asset");
+  let output =
+    issue_asset(txn_builder_file, key_pair_file, &token_code,"1", "10").expect("Failed to issue asset");
 
   io::stdout().write_all(&output.stdout).unwrap();
   io::stdout().write_all(&output.stderr).unwrap();
@@ -629,7 +647,7 @@ fn test_define_issue_and_transfer_with_args() {
 }
 
 //
-// Submit
+// Compose transaction and submit
 //
 #[test]
 fn test_define_and_submit_with_args() {
@@ -657,58 +675,96 @@ fn test_define_and_submit_with_args() {
   assert!(output.status.success());
 }
 
-// TODO (Keyao): I'm working on adding the "issue_and_transfer" command, which will affect the test below.
-//               I'll update this test afterwards.
+#[test]
+fn test_issue_transfer_and_submit_with_args() {
+  // Create txn builder and key pairs
+  let txn_builder_file = "tb_issue_transfer_args";
+  let issuer_key_pair_file = "ikp";
+  let recipient_key_pair_file = "rkp";
+  create_with_path(txn_builder_file).expect("Failed to create transaction builder");
+  keygen_with_path(issuer_key_pair_file).expect("Failed to generate key pair for the issuer");
+  keygen_with_path(recipient_key_pair_file).expect("Failed to generate key pair for the recipient");
 
-// //
-// // Load funds
-// //
-// #[test]
-// fn test_load_funds_with_args() {
-//   // Create txn builder, key pairs, and public key
-//   let txn_builder_file = "tb_load_funds";
-//   let issuer_key_pair_file = "ikp";
-//   let issuer_pub_key_file = "rpk";
-//   let recipient_key_pair_file = "rkp";
-//   let recipient_pub_key_file = "rpk";
-//   create_with_path(txn_builder_file).expect("Failed to create transaction builder");
-//   store_key_pair_and_pub_key_to_files(issuer_key_pair_file, issuer_pub_key_file).expect("Failed to store kay pair and public key for the issuer");
-//   store_key_pair_and_pub_key_to_files(recipient_key_pair_file, recipient_pub_key_file).expect("Failed to store kay pair and public key for the recipient");
+  // Define token code
+  let token_code = AssetTypeCode::gen_random().to_base64();
 
-//   // Store sids and blind asset records
-//   let blind_asset_record_pre_path = "bar_load_pre";
-//   let blind_asset_record_new_path = "bar_load_new";
-//   let token_code = AssetTypeCode::gen_random().to_base64();
-//   store_blind_asset_record_with_path(blind_asset_record_pre_path,
-//                                "10",
-//                                &token_code,
-//                                recipient_pub_key_file).expect("Failed to store blind asset record");
-//   store_blind_asset_record_with_path(blind_asset_record_new_path,
-//                                 "100",
-//                                 &token_code,
-//                                 issuer_pub_key_file).expect("Failed to store blind asset record");
+  // Define asset
+  define_asset(txn_builder_file,
+               issuer_key_pair_file,
+               &token_code,
+               "Define an asset").expect("Failed to define asset");
+  submit(txn_builder_file).expect("Failed to submit transaction");
 
-//   let output = load_funds(txn_builder_file,
-//                           issuer_key_pair_file,
-//                           "1",
-//                           "2",
-//                           blind_asset_record_pre_path,
-//                           blind_asset_record_new_path,
-//                           recipient_key_pair_file,
-//                           "100",
-//                           &token_code,
-//                           "1").expect("Failed to load funds");
+  // Issue and transfer
+  issue_and_transfer_asset(txn_builder_file,
+                           issuer_key_pair_file,
+                           recipient_key_pair_file,
+                           "1000",
+                           &token_code,
+                           "1").expect("Failed to issue and transfer asset");
 
-//   io::stdout().write_all(&output.stdout).unwrap();
-//   io::stdout().write_all(&output.stderr).unwrap();
+  // Submit transaction
+  let output = submit(txn_builder_file).expect("Failed to submit transaction");
 
-//   fs::remove_file(blind_asset_record_pre_path).unwrap();
-//   fs::remove_file(blind_asset_record_new_path).unwrap();
-//   fs::remove_file(txn_builder_file).unwrap();
-//   fs::remove_file(issuer_key_pair_file).unwrap();
-//   fs::remove_file(issuer_pub_key_file).unwrap();
-//   fs::remove_file(recipient_key_pair_file).unwrap();
-//   fs::remove_file(recipient_pub_key_file).unwrap();
+  io::stdout().write_all(&output.stdout).unwrap();
+  io::stdout().write_all(&output.stderr).unwrap();
 
-//   assert!(output.status.success());
-// }
+  fs::remove_file(txn_builder_file).unwrap();
+  fs::remove_file(issuer_key_pair_file).unwrap();
+  fs::remove_file(recipient_key_pair_file).unwrap();
+
+  assert!(output.status.success());
+}
+
+#[test]
+fn test_load_funds_with_args() {
+  // Create txn builder, key pairs, and public key
+  let txn_builder_file = "tb_load_funds_args";
+  let issuer_key_pair_file = "ikp_load_funds_args";
+  let recipient_key_pair_file = "rkp_load_funds_args";
+  create_with_path(txn_builder_file).expect("Failed to create transaction builder");
+  keygen_with_path(issuer_key_pair_file).expect("Failed to generate key pair for the issuer");
+  keygen_with_path(recipient_key_pair_file).expect("Failed to generate key pair for the recipient");
+
+  // Define token code
+  let token_code = AssetTypeCode::gen_random().to_base64();
+
+  // Define asset
+  define_asset(txn_builder_file,
+               issuer_key_pair_file,
+               &token_code,
+               "Define an asset").expect("Failed to define asset");
+  submit(txn_builder_file).expect("Failed to submit transaction");
+
+  // Set the original record for the recipient
+  issue_and_transfer_asset(txn_builder_file,
+                           issuer_key_pair_file,
+                           recipient_key_pair_file,
+                           "1000",
+                           &token_code,
+                           "1").expect("Failed to issue and transfer asset");
+
+  // Submit transaction and get the sid
+  submit_and_store_sid(txn_builder_file).expect("Failed to submit transaction");
+  let sid = get_sid_from_txn_status_file();
+  println!("Sid: {}", &sid);
+
+  // Load funds
+  let output = load_funds(txn_builder_file,
+                          issuer_key_pair_file,
+                          &sid,
+                          recipient_key_pair_file,
+                          "500",
+                          &token_code,
+                          "2").expect("Failed to load funds");
+
+  io::stdout().write_all(&output.stdout).unwrap();
+  io::stdout().write_all(&output.stderr).unwrap();
+
+  fs::remove_file("txn_status").unwrap();
+  fs::remove_file(txn_builder_file).unwrap();
+  fs::remove_file(issuer_key_pair_file).unwrap();
+  fs::remove_file(recipient_key_pair_file).unwrap();
+
+  assert!(output.status.success());
+}

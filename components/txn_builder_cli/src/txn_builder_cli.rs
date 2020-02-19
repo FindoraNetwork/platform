@@ -22,6 +22,8 @@ use zei::xfr::structs::{AssetRecord, BlindAssetRecord};
 
 extern crate exitcode;
 
+// TODO (Keyao): Check each unwrap() call and make sure we get a meaningful error message
+
 const HOST: &str = "testnet.findora.org";
 const QUERY_PORT: &str = "8668";
 const SUBMIT_PORT: &str = "8669";
@@ -132,32 +134,6 @@ fn load_sids_from_file(file_path: &str) -> Result<Vec<TxoRef>, PlatformError> {
   }
 
   Ok(txo_refs)
-}
-
-fn load_blind_asset_record_from_file(file_path: &str) -> Result<BlindAssetRecord, PlatformError> {
-  let file_path = file_path.trim();
-  let mut file;
-  match File::open(file_path) {
-    Ok(f) => {
-      file = f;
-    }
-    Err(_) => {
-      return Err(PlatformError::IoError(format!("File doesn't exist: {}. Try subcommand store --blind_asset_record.",
-                 file_path)));
-    }
-  }
-
-  let mut blind_asset_record_str = String::new();
-  if file.read_to_string(&mut blind_asset_record_str).is_err() {
-    return Err(PlatformError::IoError(format!("Failed to read file: {}", file_path)));
-  }
-
-  if let Ok(blind_asset_record) = serde_json::from_str(&blind_asset_record_str) {
-    Ok(blind_asset_record)
-  } else {
-    println!("Improperly formatted blind asset record.");
-    Err(PlatformError::InputsError)
-  }
 }
 
 fn load_blind_asset_records_from_files(file_paths: &str)
@@ -422,18 +398,19 @@ fn submit(protocol: &str, transaction_file_name: &str) -> Result<(), PlatformErr
                       .send()
                       .unwrap();
   // Log body
-  println!("Response: {}",
+  println!("Submission response: {}",
            res.json::<TxnHandle>().expect("<Invalid JSON>"));
-  println!("Status: {}", res.status());
-  println!("Headers:\n{:?}", res.headers());
+  println!("Submission status: {}", res.status());
   Ok(())
 }
 
 fn submit_and_get_sid(protocol: &str,
-                      transaction_file_name: &str)
+                      transaction_file_name: &str,
+                      file_path: Option<&str>)
                       -> Result<TxoSID, PlatformError> {
   // Submit transaction
   let txn_builder = load_txn_builder_from_file(transaction_file_name)?;
+
   let client = reqwest::Client::new();
   let txn = txn_builder.transaction();
   let mut res = client.post(&format!("{}://{}:{}/{}",
@@ -441,14 +418,17 @@ fn submit_and_get_sid(protocol: &str,
                       .json(&txn)
                       .send()
                       .unwrap();
+
   // Log body
   let handle = res.json::<TxnHandle>().expect("<Invalid JSON>");
-  println!("Response: {}", handle);
-  println!("Status: {}", res.status());
-  println!("Headers:\n{:?}", res.headers());
+  println!("Submission response: {}", handle);
+  println!("Submission status: {}", res.status());
 
-  // Get sid
-  let res = query(protocol, SUBMIT_PORT, "txn_status", &handle.0);
+  // Store and return sid
+  let res = match file_path {
+    Some(path) => query_and_store(protocol, SUBMIT_PORT, "txn_status", &handle.0, path)?,
+    None => query(protocol, SUBMIT_PORT, "txn_status", &handle.0),
+  };
   match serde_json::from_str::<TxnStatus>(&res).unwrap() {
     TxnStatus::Committed((_sid, txos)) => {
       println!("Sid: {}", txos[0].0);
@@ -463,28 +443,69 @@ fn query(protocol: &str, port: &str, item: &str, value: &str) -> String {
     reqwest::get(&format!("{}://{}:{}/{}/{}", protocol, HOST, port, item, value)).unwrap();
 
   // Log body
-  println!("Status: {}", res.status());
-  println!("Headers:\n{:?}", res.headers());
+  println!("Querying Status: {}", res.status());
+  let text = res.text().unwrap();
+  println!("TxnStatus: {}", text);
 
-  res.text().unwrap()
+  text
 }
 
-fn issue_and_transfer(sid: TxoRef,
-                      blind_asset_record: BlindAssetRecord,
-                      issuer_key_pair: &XfrKeyPair,
-                      recipient_pub_key: &XfrPublicKey,
+// Query a value and store it to file for future use
+fn query_and_store(protocol: &str,
+                   port: &str,
+                   item: &str,
+                   value: &str,
+                   file_path: &str)
+                   -> Result<String, PlatformError> {
+  let mut res =
+    reqwest::get(&format!("{}://{}:{}/{}/{}", protocol, HOST, port, item, value)).unwrap();
+
+  // Log body
+  println!("Querying Status: {}", res.status());
+  let text = res.text().unwrap();
+  println!("TxnStatus: {}", text);
+
+  if let Err(error) = fs::write(file_path, text.clone()) {
+    return Err(PlatformError::IoError(format!("Failed to create file {}: {}.", item, error)));
+  }
+  println!("Queryed and stored to {}", item);
+  Ok(text)
+}
+
+fn get_blind_asset_record(pub_key: XfrPublicKey,
+                          amount: u64,
+                          token_code: AssetTypeCode,
+                          confidential_amount: bool,
+                          confidential_asset: bool)
+                          -> BlindAssetRecord {
+  let mut prng = ChaChaRng::from_seed([0u8; 32]);
+  let params = PublicParams::new();
+  let asset_record_type = AssetRecordType::from_booleans(confidential_amount, confidential_asset);
+  let asset_record = AssetRecord::new(amount, token_code.val, pub_key).unwrap();
+  build_blind_asset_record(&mut prng,
+                           &params.pc_gens,
+                           &asset_record,
+                           asset_record_type,
+                           &None)
+}
+
+fn issue_and_transfer(issuer_key_pair: &XfrKeyPair,
+                      recipient_key_pair: &XfrKeyPair,
                       amount: u64,
                       token_code: AssetTypeCode,
                       transaction_file_name: &str,
                       seq_num: u64)
                       -> Result<(), PlatformError> {
+  let blind_asset_record =
+    get_blind_asset_record(issuer_key_pair.get_pk(), amount, token_code, false, false);
+
   // Transfer Operation
   let xfr_op =
-    TransferOperationBuilder::new().add_input(sid,
+    TransferOperationBuilder::new().add_input(TxoRef::Relative(0),
                                               open_asset_record(&blind_asset_record,
                                                                 issuer_key_pair.get_sk_ref())?,
                                               amount)?
-                                   .add_output(amount, recipient_pub_key, token_code)?
+                                   .add_output(amount, recipient_key_pair.get_pk_ref(), token_code)?
                                    .balance()?
                                    .create(TransferType::Standard)?
                                    .sign(issuer_key_pair)?
@@ -533,10 +554,10 @@ fn merge_records(key_pair: &XfrKeyPair,
   store_txn_builder_to_file(&transaction_file_name, &txn_builder)
 }
 
-fn load_funds(sid_pre: TxoRef,
-              sid_new: TxoRef,
-              blind_asset_record_pre: BlindAssetRecord,
-              blind_asset_record_new: BlindAssetRecord,
+// TODO (Keyao): Fix the Clippy error: this function has too many arguments (8/7)
+// I'm working on defining a Data struct, to store and update values including sequence number.
+// This should simplify the data structure and fix the Clippy error.
+fn load_funds(sid_pre: u64,
               issuer_key_pair: &XfrKeyPair,
               recipient_key_pair: &XfrKeyPair,
               amount: u64,
@@ -546,32 +567,36 @@ fn load_funds(sid_pre: TxoRef,
               protocol: &str)
               -> Result<(), PlatformError> {
   // Issue and transfer asset
-  issue_and_transfer(sid_new,
-                     blind_asset_record_new,
-                     issuer_key_pair,
-                     recipient_key_pair.get_pk_ref(),
+  issue_and_transfer(issuer_key_pair,
+                     recipient_key_pair,
                      amount,
                      token_code,
                      transaction_file_name,
                      sequence_num)?;
 
   // Submit transaction
-  let sid_next = submit_and_get_sid(protocol, transaction_file_name)?;
+  let sid_new = submit_and_get_sid(protocol, transaction_file_name, Some("txn_status"))?;
 
-  // Get next blind asset record
-  let res = query(protocol, QUERY_PORT, "utxo_sid", &format!("{}", sid_next.0));
-  let blind_asset_record_next =
-    serde_json::from_str::<BlindAssetRecord>(&res).or_else(|_| {
-                                                    Err(PlatformError::DeserializationError)
-                                                  })
-                                                  .unwrap();
+  // Get blind asset records
+  let res_pre = query(protocol, QUERY_PORT, "utxo_sid", &format!("{}", sid_pre));
+  let res_new = query(protocol, QUERY_PORT, "utxo_sid", &format!("{}", sid_new.0));
+  let blind_asset_record_pre =
+    serde_json::from_str::<BlindAssetRecord>(&res_pre).or_else(|_| {
+                                                        Err(PlatformError::DeserializationError)
+                                                      })
+                                                      .unwrap();
+  let blind_asset_record_new =
+    serde_json::from_str::<BlindAssetRecord>(&res_new).or_else(|_| {
+                                                        Err(PlatformError::DeserializationError)
+                                                      })
+                                                      .unwrap();
 
   // Merge records
   merge_records(recipient_key_pair,
-                sid_pre,
-                TxoRef::Absolute(sid_next),
+                TxoRef::Absolute(TxoSID(sid_pre)),
+                TxoRef::Absolute(sid_new),
                 blind_asset_record_pre,
-                blind_asset_record_next,
+                blind_asset_record_new,
                 token_code,
                 transaction_file_name).unwrap();
 
@@ -790,7 +815,28 @@ fn main() {
           .short("asp")
           .long("address_paths")
           .takes_value(true)
-          .help("Required: Path to the files where address keys are stored. If no such file, try pubkeygen subcommand."))))
+          .help("Required: Path to the files where address keys are stored. If no such file, try pubkeygen subcommand.")))
+      .subcommand(SubCommand::with_name("issue_and_transfer_asset")
+        .arg(Arg::with_name("recipient_key_pair_path")
+          .short("r")
+          .long("recipient_key_pair_path")
+          .takes_value(true)
+          .help("Required: Path to the recipient's key pair"))
+        .arg(Arg::with_name("amount")
+          .short("amt")
+          .long("amount")
+          .takes_value(true)
+          .help("Required: Amount of tokens to issue and transfer."))
+        .arg(Arg::with_name("token_code")
+          .short("tc")
+          .long("token_code")
+          .takes_value(true)
+          .help("Required: Token code of the asset."))
+        .arg(Arg::with_name("sequence_number")
+          .short("seq")
+          .long("sequence_number")
+          .takes_value(true)
+          .help("Required: Sequence number for the issue transaction. Used to prevent replay attacks."))))
     .subcommand(SubCommand::with_name("serialize"))
     .subcommand(SubCommand::with_name("drop"))
     .subcommand(SubCommand::with_name("keygen")
@@ -820,25 +866,17 @@ fn main() {
         .long("http")
         .takes_value(false)
         .help("specify that http, not https should be used.")))
+    .subcommand(SubCommand::with_name("submit_and_get_sid")
+      .arg(Arg::with_name("protocol")
+        .long("http")
+        .takes_value(false)
+        .help("specify that http, not https should be used.")))
     .subcommand(SubCommand::with_name("load_funds")
       .arg(Arg::with_name("sid_pre")
         .short("p")
         .long("sid_pre")
         .takes_value(true)
         .help("Required: sid corresponding to the recipient's previous record."))
-      .arg(Arg::with_name("sid_new")
-        .short("n")
-        .long("sid_new")
-        .takes_value(true)
-        .help("Required: sid corresponding to the new record."))
-      .arg(Arg::with_name("blind_asset_record_pre_path")
-        .long("blind_asset_record_pre_path")
-        .takes_value(true)
-        .help("Required: path to the file of the recipient's previous blind asset record."))
-      .arg(Arg::with_name("blind_asset_record_new_path")
-        .long("blind_asset_record_new_path")
-        .takes_value(true)
-        .help("Required: path to the file of the new blind asset record."))
       .arg(Arg::with_name("recipient_key_pair_path")
         .short("r")
         .long("recipient_key_pair_path")
@@ -961,6 +999,9 @@ fn process_inputs(inputs: clap::ArgMatches) -> Result<(), PlatformError> {
       store_pub_key_to_file(&expand_str)
     }
     ("submit", Some(submit_matches)) => process_submit_cmd(submit_matches, &transaction_file_name),
+    ("submit_and_get_sid", Some(submit_and_get_sid_matches)) => {
+      process_submit_and_get_sid_cmd(submit_and_get_sid_matches, &transaction_file_name)
+    }
     ("load_funds", Some(load_funds_matches)) => process_load_funds_cmd(load_funds_matches,
                                                                        &key_pair_file_path,
                                                                        &transaction_file_name),
@@ -985,6 +1026,23 @@ fn process_submit_cmd(submit_matches: &clap::ArgMatches,
 
   // serialize txn
   submit(protocol, &transaction_file_name)
+}
+
+fn process_submit_and_get_sid_cmd(submit_and_get_sid_matches: &clap::ArgMatches,
+                                  transaction_file_name: &str)
+                                  -> Result<(), PlatformError> {
+  // Get protocol, host and port.
+  let protocol = if submit_and_get_sid_matches.is_present("http") {
+    // Allow HTTP which may be useful for running a ledger locally.
+    "http"
+  } else {
+    // Default to HTTPS
+    "https"
+  };
+
+  // serialize txn
+  submit_and_get_sid(protocol, &transaction_file_name, Some("txn_status"))?;
+  Ok(())
 }
 
 // Create the specific file if missing
@@ -1274,6 +1332,45 @@ fn process_add_cmd(add_matches: &clap::ArgMatches,
       };
       store_txn_builder_to_file(&transaction_file_name, &txn_builder)
     }
+    ("issue_and_transfer_asset", Some(issue_and_transfer_matches)) => {
+      let recipient_key_pair = if let Some(recipient_key_pair_path_arg) =
+        issue_and_transfer_matches.value_of("recipient_key_pair_path")
+      {
+        load_key_pair_from_file(recipient_key_pair_path_arg)?
+      } else {
+        println!("File to recipient's public key is required to transfer asset. If no such file, try pubkeygen subcommand.");
+        return Err(PlatformError::InputsError);
+      };
+      let amount = if let Some(amount_arg) = issue_and_transfer_matches.value_of("amount") {
+        get_amount(amount_arg).unwrap()
+      } else {
+        println!("Amount is required to issue and transfer asset. Use --amount.");
+        return Err(PlatformError::InputsError);
+      };
+      let token_code =
+        if let Some(token_code_arg) = issue_and_transfer_matches.value_of("token_code") {
+          AssetTypeCode::new_from_str(token_code_arg)
+        } else {
+          println!("Token code is required to issue asset. Use --token_code.");
+          return Err(PlatformError::InputsError);
+        };
+      let sequence_number =
+        if let Some(sequence_number_arg) = issue_and_transfer_matches.value_of("sequence_number") {
+          get_amount(sequence_number_arg).unwrap()
+        } else {
+          println!("Sequence number is required to issue asset. Use --sequence_number.");
+          return Err(PlatformError::InputsError);
+        };
+
+      let issuer_key_pair = load_key_pair_from_file(key_pair_file_path)?;
+      issue_and_transfer(&issuer_key_pair,
+                         &recipient_key_pair,
+                         amount,
+                         token_code,
+                         transaction_file_name,
+                         sequence_number)?;
+      Ok(())
+    }
     _ => {
       println!("Subcommand missing or not recognized. Try add --help");
       Err(PlatformError::InputsError)
@@ -1286,31 +1383,9 @@ fn process_load_funds_cmd(load_funds_matches: &clap::ArgMatches,
                           transaction_file_name: &str)
                           -> Result<(), PlatformError> {
   let sid_pre = if let Some(sid_pre_arg) = load_funds_matches.value_of("sid_pre") {
-    TxoRef::Absolute(TxoSID(get_amount(sid_pre_arg).unwrap()))
+    get_amount(sid_pre_arg).unwrap()
   } else {
     println!("Previous sid is required to load funds. Use --sid_pre.");
-    return Err(PlatformError::InputsError);
-  };
-  let sid_new = if let Some(sid_new_arg) = load_funds_matches.value_of("sid_new") {
-    TxoRef::Absolute(TxoSID(get_amount(sid_new_arg).unwrap()))
-  } else {
-    println!("New sid is required to load funds. Use --sid_new.");
-    return Err(PlatformError::InputsError);
-  };
-  let blind_asset_record_pre = if let Some(blind_asset_record_pre_path_arg) =
-    load_funds_matches.value_of("blind_asset_record_pre_path")
-  {
-    load_blind_asset_record_from_file(blind_asset_record_pre_path_arg).unwrap()
-  } else {
-    println!("Path to the previous blind asset record is required to load funds. Use --blind_asset_record_pre_path.");
-    return Err(PlatformError::InputsError);
-  };
-  let blind_asset_record_new = if let Some(blind_asset_record_new_path_arg) =
-    load_funds_matches.value_of("blind_asset_record_new_path")
-  {
-    load_blind_asset_record_from_file(blind_asset_record_new_path_arg).unwrap()
-  } else {
-    println!("Path to the new blind asset record is required to load funds. Use --blind_asset_record_new_path.");
     return Err(PlatformError::InputsError);
   };
   let recipient_key_pair = if let Some(recipient_key_pair_path_arg) =
@@ -1333,14 +1408,9 @@ fn process_load_funds_cmd(load_funds_matches: &clap::ArgMatches,
     println!("Token code is required to load funds. Use --token_code.");
     return Err(PlatformError::InputsError);
   };
-  let sequence_num =
+  let sequence_number =
     if let Some(sequence_number_arg) = load_funds_matches.value_of("sequence_number") {
-      if let Ok(seq_num_parsed) = sequence_number_arg.parse::<u64>() {
-        seq_num_parsed
-      } else {
-        println!("Improperly formatted sequence number.");
-        return Err(PlatformError::InputsError);
-      }
+      get_amount(sequence_number_arg).unwrap()
     } else {
       println!("Sequence number is required to load funds. Use --sequence_number.");
       return Err(PlatformError::InputsError);
@@ -1354,15 +1424,12 @@ fn process_load_funds_cmd(load_funds_matches: &clap::ArgMatches,
   };
 
   load_funds(sid_pre,
-             sid_new,
-             blind_asset_record_pre,
-             blind_asset_record_new,
              &load_key_pair_from_file(key_pair_file_path)?,
              &recipient_key_pair,
              amount,
              token_code,
              transaction_file_name,
-             sequence_num,
+             sequence_number,
              protocol)
 }
 
@@ -1508,19 +1575,11 @@ mod tests {
     let issuer_key_pair = XfrKeyPair::generate(&mut prng);
     let recipient_key_pair = XfrKeyPair::generate(&mut prng);
 
-    // Build blind asset record
-    let params = PublicParams::new();
-    let art = AssetRecordType::PublicAmount_PublicAssetType;
+    // Issue and transfer asset
     let code = AssetTypeCode::gen_random();
     let amount = 1000;
-    let ar = AssetRecord::new(amount, code.val, issuer_key_pair.get_pk()).unwrap();
-    let bar = build_blind_asset_record(&mut prng, &params.pc_gens, &ar, art, &None);
-
-    // Issue and transfer asset
-    assert!(issue_and_transfer(TxoRef::Relative(1),
-                               bar,
-                               &issuer_key_pair,
-                               &recipient_key_pair.get_pk(),
+    assert!(issue_and_transfer(&issuer_key_pair,
+                               &recipient_key_pair,
                                amount,
                                code,
                                txn_builder_path,
@@ -1538,13 +1597,9 @@ mod tests {
     let key_pair = XfrKeyPair::generate(&mut prng);
 
     // Build blind asset records
-    let params = PublicParams::new();
-    let art = AssetRecordType::PublicAmount_PublicAssetType;
     let code = AssetTypeCode::gen_random();
-    let ar1 = AssetRecord::new(1000, code.val, key_pair.get_pk()).unwrap();
-    let ar2 = AssetRecord::new(1000, code.val, key_pair.get_pk()).unwrap();
-    let bar1 = build_blind_asset_record(&mut prng, &params.pc_gens, &ar1, art, &None);
-    let bar2 = build_blind_asset_record(&mut prng, &params.pc_gens, &ar2, art, &None);
+    let bar1 = get_blind_asset_record(key_pair.get_pk(), 1000, code, false, false);
+    let bar2 = get_blind_asset_record(key_pair.get_pk(), 500, code, false, false);
 
     // Merge records
     assert!(merge_records(&key_pair,
@@ -1598,12 +1653,9 @@ mod tests {
     let key_pair = XfrKeyPair::generate(&mut prng);
 
     // Build blind asset record
-    let params = PublicParams::new();
-    let art = AssetRecordType::PublicAmount_PublicAssetType;
-    let code = AssetTypeCode::gen_random();
     let amount = 1000;
-    let ar = AssetRecord::new(amount, code.val, key_pair.get_pk()).unwrap();
-    let bar = build_blind_asset_record(&mut prng, &params.pc_gens, &ar, art, &None);
+    let code = AssetTypeCode::gen_random();
+    let bar = get_blind_asset_record(key_pair.get_pk(), amount, code, false, false);
 
     // Define asset
     txn_builder.add_operation_create_asset(&key_pair, Some(code), false, false, "")
@@ -1639,13 +1691,9 @@ mod tests {
     let issuer_key_pair = XfrKeyPair::generate(&mut prng);
     let recipient_key_pair = XfrKeyPair::generate(&mut prng);
 
-    // Build blind asset record
-    let params = PublicParams::new();
-    let art = AssetRecordType::PublicAmount_PublicAssetType;
-    let code = AssetTypeCode::gen_random();
+    // Define amount and token code
     let amount = 1000;
-    let ar = AssetRecord::new(amount, code.val, issuer_key_pair.get_pk()).unwrap();
-    let bar = build_blind_asset_record(&mut prng, &params.pc_gens, &ar, art, &None);
+    let code = AssetTypeCode::gen_random();
 
     // Define asset
     let mut txn_builder = load_txn_builder_from_file(&txn_builder_path).unwrap();
@@ -1657,10 +1705,8 @@ mod tests {
     assert!(res.is_ok());
 
     // Issue and transfer asset
-    issue_and_transfer(TxoRef::Relative(0),
-                       bar,
-                       &issuer_key_pair,
-                       &recipient_key_pair.get_pk(),
+    issue_and_transfer(&issuer_key_pair,
+                       &recipient_key_pair,
                        amount,
                        code,
                        txn_builder_path,
@@ -1677,7 +1723,7 @@ mod tests {
   // 2. The issuer issues and transfers two assets to the recipient
   // 3. Merge the two records for the recipient
   // 4. Submit the transaction
-  fn test_define_issue_transfer_merge_and_submit() {
+  fn test_merge_and_submit() {
     // Create txn builder and key pairs
     let txn_builder_path = "tb_merge_and_submit";
     store_txn_builder_to_file(&txn_builder_path, &TransactionBuilder::default()).unwrap();
@@ -1685,16 +1731,10 @@ mod tests {
     let issuer_key_pair = XfrKeyPair::generate(&mut prng);
     let recipient_key_pair = XfrKeyPair::generate(&mut prng);
 
-    // Build blind asset records
-    let params = PublicParams::new();
-    let art = AssetRecordType::PublicAmount_PublicAssetType;
+    // Define amounts and token code
     let amount1 = 1000;
     let amount2 = 500;
     let code = AssetTypeCode::gen_random();
-    let ar1 = AssetRecord::new(amount1, code.val, issuer_key_pair.get_pk()).unwrap();
-    let ar2 = AssetRecord::new(amount2, code.val, issuer_key_pair.get_pk()).unwrap();
-    let bar1 = build_blind_asset_record(&mut prng, &params.pc_gens, &ar1, art, &None);
-    let bar2 = build_blind_asset_record(&mut prng, &params.pc_gens, &ar2, art, &None);
 
     // Define asset
     let mut txn_builder = load_txn_builder_from_file(&txn_builder_path).unwrap();
@@ -1706,16 +1746,14 @@ mod tests {
     assert!(res.is_ok());
 
     // Issue and transfer the first asset
-    issue_and_transfer(TxoRef::Relative(0),
-                       bar1,
-                       &issuer_key_pair,
-                       &recipient_key_pair.get_pk(),
+    issue_and_transfer(&issuer_key_pair,
+                       &recipient_key_pair,
                        amount1,
                        code,
                        txn_builder_path,
                        1).unwrap();
 
-    let sid1 = submit_and_get_sid("https", txn_builder_path).unwrap();
+    let sid1 = submit_and_get_sid("https", txn_builder_path, None).unwrap();
     let res = query("https", QUERY_PORT, "utxo_sid", &format!("{}", sid1.0));
     let blind_asset_record_1 =
       serde_json::from_str::<BlindAssetRecord>(&res).or_else(|_| {
@@ -1724,15 +1762,13 @@ mod tests {
                                                     .unwrap();
 
     // Issue and transfer the second asset
-    issue_and_transfer(TxoRef::Relative(0),
-                       bar2,
-                       &issuer_key_pair,
-                       &recipient_key_pair.get_pk(),
+    issue_and_transfer(&issuer_key_pair,
+                       &recipient_key_pair,
                        amount2,
                        code,
                        txn_builder_path,
                        2).unwrap();
-    let sid2 = submit_and_get_sid("https", txn_builder_path).unwrap();
+    let sid2 = submit_and_get_sid("https", txn_builder_path, None).unwrap();
     let res = query("https", QUERY_PORT, "utxo_sid", &format!("{}", sid2.0));
     let blind_asset_record_2 =
       serde_json::from_str::<BlindAssetRecord>(&res).or_else(|_| {
@@ -1767,18 +1803,10 @@ mod tests {
     let issuer_key_pair = XfrKeyPair::generate(&mut prng);
     let recipient_key_pair = XfrKeyPair::generate(&mut prng);
 
-    // Build blind asset records
-    let params = PublicParams::new();
-    let art = AssetRecordType::PublicAmount_PublicAssetType;
+    // Define amounts and token code
     let amount_original = 1000;
     let amount_new = 500;
     let code = AssetTypeCode::gen_random();
-    let ar_original =
-      AssetRecord::new(amount_original, code.val, issuer_key_pair.get_pk()).unwrap();
-    let ar_new = AssetRecord::new(amount_new, code.val, issuer_key_pair.get_pk()).unwrap();
-    let bar_original =
-      build_blind_asset_record(&mut prng, &params.pc_gens, &ar_original, art, &None);
-    let bar_new = build_blind_asset_record(&mut prng, &params.pc_gens, &ar_new, art, &None);
 
     // Define asset
     let mut txn_builder = load_txn_builder_from_file(&txn_builder_path).unwrap();
@@ -1790,35 +1818,23 @@ mod tests {
     assert!(res.is_ok());
 
     // Set the original record
-    issue_and_transfer(TxoRef::Relative(0),
-                       bar_original,
-                       &issuer_key_pair,
-                       &recipient_key_pair.get_pk(),
+    issue_and_transfer(&issuer_key_pair,
+                       &recipient_key_pair,
                        amount_original,
                        code,
                        txn_builder_path,
-                       3).unwrap();
-
-    let sid1 = submit_and_get_sid("https", txn_builder_path).unwrap();
-    let res = query("https", QUERY_PORT, "utxo_sid", &format!("{}", sid1.0));
-    let bar_pre =
-      serde_json::from_str::<BlindAssetRecord>(&res).or_else(|_| {
-                                                      Err(PlatformError::DeserializationError)
-                                                    })
-                                                    .unwrap();
+                       1).unwrap();
+    let sid = submit_and_get_sid("https", txn_builder_path, None).unwrap();
 
     // Load funds
     // The new record will be merged with the original record
-    let res = load_funds(TxoRef::Absolute(sid1),
-                         TxoRef::Relative(0),
-                         bar_pre,
-                         bar_new,
+    let res = load_funds(sid.0,
                          &issuer_key_pair,
                          &recipient_key_pair,
                          amount_new,
                          code,
                          txn_builder_path,
-                         4,
+                         2,
                          "https");
     fs::remove_file(txn_builder_path).unwrap();
     assert!(res.is_ok());
