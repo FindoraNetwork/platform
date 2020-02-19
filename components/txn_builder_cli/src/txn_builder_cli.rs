@@ -22,6 +22,8 @@ use zei::xfr::structs::{AssetRecord, BlindAssetRecord};
 
 extern crate exitcode;
 
+// TODO (Keyao): Check each unwrap() call and make sure we get a meaningful error message
+
 const HOST: &str = "testnet.findora.org";
 const QUERY_PORT: &str = "8668";
 const SUBMIT_PORT: &str = "8669";
