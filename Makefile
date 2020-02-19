@@ -25,8 +25,7 @@ bin_files =                             \
 
 lib_files =                                    \
         ./$(pick)/libledger.rlib               \
-        ./$(pick)/libledger_app.rlib           \
-        ./$(pick)/libapi_service.rlib          \
+        ./$(pick)/libledger_api_service.rlib   \
         ./$(pick)/libtxn_builder.rlib          \
 
 release:  rust

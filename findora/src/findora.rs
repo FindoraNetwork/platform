@@ -95,7 +95,7 @@ pub static mut TABLE: [EnableMap; 11] = [EnableMap { name: "bitmap",
                                                      log_enabled: true,
                                                      error_enabled: true,
                                                      warning_enabled: true,
-                                                     debug_enabled: false,
+                                                     debug_enabled: true,
                                                      info_enabled: false },
                                          EnableMap { name: "test",
                                                      log_enabled: true,
@@ -264,7 +264,7 @@ macro_rules! error {
 #[macro_export]
 macro_rules! debug {
     ($category:ident, $($x:tt)+) => {
-      log_impl!(error, $category, debug_enabled, $($x)+);
+      log_impl!(debug, $category, debug_enabled, $($x)+);
     }
 }
 
@@ -272,7 +272,7 @@ macro_rules! debug {
 #[macro_export]
 macro_rules! warning {
     ($category:ident, $($x:tt)+) => {
-      log_impl!(error, $category, warning_enabled, $($x)+);
+      log_impl!(warning, $category, warning_enabled, $($x)+);
     }
 }
 
@@ -280,7 +280,7 @@ macro_rules! warning {
 #[macro_export]
 macro_rules! info {
     ($category:ident, $($x:tt)+) => {
-      log_impl!(error, $category, info_enabled, $($x)+);
+      log_impl!(info, $category, info_enabled, $($x)+);
     }
 }
 
