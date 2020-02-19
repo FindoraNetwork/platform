@@ -1,3 +1,12 @@
+// Ben defines a loan L
+// Ben issues himself debt tokens for L
+//
+// Lenny and Ben run `start_loan` with L as `the_debt`
+//
+// Ben repays Lenny through `repay_loan`.
+
+
+
 bound_asset_type debt {} issued_by borrower;
 
 // global_params are given at policy instantiation time
@@ -37,6 +46,7 @@ txn start_loan(in    resource the_debt:  debt,
   transfer ALL of money_src             -> money_src;
   transfer ALL of the_debt              -> the_iou;
 }
+
 
 txn repay_loan(inout resource the_debt:    debt,
                in    resource payment_src: fiat,

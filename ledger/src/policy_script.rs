@@ -133,7 +133,7 @@ pub struct PolicyGlobals {
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
-pub struct TxnPolicyData(pub HashMap<AssetTypeCode, TxnCheckInputs>);
+pub struct TxnPolicyData(pub Vec<(AssetTypeCode, TxnCheckInputs)>);
 
 pub fn policy_get_globals(asset: &Asset) -> Result<PolicyGlobals, PlatformError> {
   let (pol, mem) = asset.policy.as_ref().ok_or(PlatformError::InputsError)?;
@@ -161,10 +161,9 @@ pub fn policy_check_txn(type_code: &AssetTypeCode,
                         txn: &Transaction)
                         -> Result<(), PlatformError> {
   let pol_data =
-    serde_json::from_str::<TxnPolicyData>(&txn.memos.get(0).ok_or(PlatformError::InputsError)?.0)?;
+    serde_json::from_str::<TxnPolicyData>(&txn.memos.get(0).ok_or(PlatformError::InputsError)?.0)?.0.drain(..).collect::<HashMap<_,_>>();
 
-  let inputs = pol_data.0
-                       .get(type_code)
+  let inputs = pol_data.get(type_code)
                        .ok_or(PlatformError::InputsError)?;
 
   let the_check = {

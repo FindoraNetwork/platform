@@ -35,8 +35,10 @@ use zei::xfr::asset_record::{build_blind_asset_record, open_asset_record, AssetR
 use zei::xfr::sig::{XfrKeyPair, XfrPublicKey};
 use zei::xfr::structs::{AssetIssuerPubKeys, AssetRecord, BlindAssetRecord, OpenAssetRecord};
 
-const SUBMIT_PATH: &str = "./submit_server";
-const QUERY_PATH: &str = "./query_server";
+// const SUBMIT_PATH: &str = "./submit_server";
+// const QUERY_PATH: &str = "./query_server";
+const SUBMIT_PATH: &str = "http://localhost:8669";
+const QUERY_PATH : &str = "http://localhost:8668";
 
 /////////// TRANSACTION BUILDING ////////////////
 
@@ -92,7 +94,8 @@ pub fn get_null_pk() -> XfrPublicKey {
   XfrPublicKey::zei_from_bytes(&[0; 32])
 }
 #[wasm_bindgen]
-/// Create memo needed for debt token asset types. The memo will be parsed by the policy evalautor to ensure
+/// Create policy information needed for debt token asset types.
+/// This data will be parsed by the policy evalautor to ensure
 /// that all payment and fee amounts are correct.
 /// # Arguments
 ///
@@ -100,17 +103,21 @@ pub fn get_null_pk() -> XfrPublicKey {
 /// * `ir_denominator`- interest rate denominator
 /// * `fiat_code` - base64 string representing asset type used to pay off the loan
 /// * `amount` - loan amount
-pub fn create_debt_memo(ir_numerator: u64,
+pub fn create_debt_policy_info(ir_numerator: u64,
                         ir_denominator: u64,
                         fiat_code: String,
                         loan_amount: u64)
-                        -> Result<String, JsValue> {
+                        -> Result<PolicyChoice, JsValue> {
   let fiat_code = AssetTypeCode::new_from_base64(&fiat_code).map_err(|_e| {
       JsValue::from_str("Could not deserialize asset token code")})?;
-  let memo = DebtMemo { interest_rate: Fraction::new(ir_numerator, ir_denominator),
-                        fiat_code,
-                        loan_amount };
-  Ok(serde_json::to_string(&memo).unwrap())
+
+  Ok(PolicyChoice::LoanToken(Fraction::new(ir_numerator, ir_denominator),
+      AssetTypeCode::new_from_base64(&fiat_code)?, loan_amount))
+
+  // let memo = DebtMemo { interest_rate: Fraction::new(ir_numerator, ir_denominator),
+  //                       fiat_code,
+  //                       loan_amount };
+  // Ok(serde_json::to_string(&memo).unwrap())
 }
 
 #[wasm_bindgen]
@@ -175,6 +182,11 @@ impl WasmTransactionBuilder {
     Self::default()
   }
 
+  fn add_memo(&mut self, memo: Memo) -> &mut Self {
+    self.transaction.memos.push(memo);
+    self
+  }
+
   /// Add an asset definition operation to a transaction builder instance.
   ///
   /// # Arguments
@@ -185,7 +197,9 @@ impl WasmTransactionBuilder {
   pub fn add_operation_create_asset(&self,
                                     key_pair: &XfrKeyPair,
                                     memo: String,
-                                    token_code: String)
+                                    token_code: String,
+                                    policy_choice: &PolicyChoice
+                                    )
                                     -> Result<WasmTransactionBuilder, JsValue> {
     let asset_token = if token_code.is_empty() {
       AssetTypeCode::gen_random()
@@ -197,7 +211,7 @@ impl WasmTransactionBuilder {
                                               Some(asset_token),
                                               false,
                                               false,
-                                              &memo)
+                                              &memo, policy_choice)
                   .map_err(|_e| JsValue::from_str("Could not build transaction"))?)})
   }
 

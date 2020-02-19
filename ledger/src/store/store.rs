@@ -456,8 +456,14 @@ impl LedgerStatus {
     }
 
     // Policy checking
+    // TODO(joe): Currently the policy language can't validate transactions
+    //   which include DefineAsset, so it's safe to assume that any valid
+    //   policy usage involves an asset whose definition is already in the
+    //   committed state. However, it may not always be that way, and this
+    //   code will lead to erroneous validation failures when that change
+    //   arrives.
     for code in txn.asset_types_involved.iter() {
-      if let Some((ref pol, ref globals)) = self.asset_types.get(code).unwrap().properties.policy {
+      if let Some((ref pol, ref globals)) = self.asset_types.get(code)?.properties.policy {
         let globals = globals.clone();
         policy_check_txn(code, globals, &pol, &txn.txn)?;
       }
