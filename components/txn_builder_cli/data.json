@@ -1,1 +1,38 @@
-{"sequence_number":28,"utxo":1610}
+{
+    "issuers": [
+        {
+            "id": 1,
+            "name": "Izzie",
+            "key_pair": "{\"public\":\"IP26ybELdYe7p7W8FjvOaeeW1x5O1EwQ_LRIhon3oUQ=\",\"secret\":\"drjgraDxPZBAXWrlU4a9KL3SGbigje0aqDbvzIt3Dcc=\"}"
+        }
+    ],
+    "lenders": [
+        {
+            "id": 1,
+            "name": "Lenny",
+            "key_pair": "{\"public\":\"IP26ybELdYe7p7W8FjvOaeeW1x5O1EwQ_LRIhon3oUQ=\",\"secret\":\"drjgraDxPZBAXWrlU4a9KL3SGbigje0aqDbvzIt3Dcc=\"}"
+        }
+    ],
+    "borrowers": [
+        {
+            "id": 1,
+            "name": "Ben",
+            "key_pair": "{\"public\":\"IP26ybELdYe7p7W8FjvOaeeW1x5O1EwQ_LRIhon3oUQ=\",\"secret\":\"drjgraDxPZBAXWrlU4a9KL3SGbigje0aqDbvzIt3Dcc=\"}",
+            "balance": 0
+        }
+    ],
+    "loans": [
+        {
+            "id": 1,
+            "lender": 1,
+            "borrower": 1,
+            "active": false,
+            "amount_total": 1000,
+            "amount_paid": 0,
+            "duration": 12,
+            "payments": 0
+        }
+    ],
+    "sequence_number": 19,
+    "utxo": 1774
+}

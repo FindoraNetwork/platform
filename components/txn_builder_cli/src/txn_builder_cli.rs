@@ -26,6 +26,40 @@ extern crate exitcode;
 
 const INIT_DATA: &str = r#"
 {
+  "issuers": [
+      {
+          "id": 1,
+          "name": "Izzie",
+          "key_pair": "{\"public\":\"IP26ybELdYe7p7W8FjvOaeeW1x5O1EwQ_LRIhon3oUQ=\",\"secret\":\"drjgraDxPZBAXWrlU4a9KL3SGbigje0aqDbvzIt3Dcc=\"}"
+      }
+  ],
+  "lenders": [
+      {
+          "id": 1,
+          "name": "Lenny",
+          "key_pair": "{\"public\":\"IP26ybELdYe7p7W8FjvOaeeW1x5O1EwQ_LRIhon3oUQ=\",\"secret\":\"drjgraDxPZBAXWrlU4a9KL3SGbigje0aqDbvzIt3Dcc=\"}"
+      }
+  ],
+  "borrowers": [
+      {
+          "id": 1,
+          "name": "Ben",
+          "key_pair": "{\"public\":\"IP26ybELdYe7p7W8FjvOaeeW1x5O1EwQ_LRIhon3oUQ=\",\"secret\":\"drjgraDxPZBAXWrlU4a9KL3SGbigje0aqDbvzIt3Dcc=\"}",
+          "balance": 0
+      }
+  ],
+  "loans": [
+      {
+          "id": 1,
+          "lender": 1,
+          "borrower": 1,
+          "active": false,
+          "amount_total": 1000,
+          "amount_paid": 0,
+          "duration": 12,
+          "payments": 0
+      }
+  ],
   "sequence_number": 1,
   "utxo": 1
 }"#;
@@ -35,10 +69,111 @@ const QUERY_PORT: &str = "8668";
 const SUBMIT_PORT: &str = "8669";
 
 //
+// Users
+//
+#[derive(Clone, Deserialize, Serialize)]
+struct Issuer {
+  id: u64,
+  name: String,
+  key_pair: String,
+}
+
+impl Issuer {
+  fn new(id: usize, name: String) -> Result<Self, PlatformError> {
+    let key_pair = XfrKeyPair::generate(&mut ChaChaRng::from_seed([0u8; 32]));
+    let key_pair_str =
+      serde_json::to_string(&key_pair).or_else(|_| Err(PlatformError::SerializationError))
+                                      .unwrap();
+
+    Ok(Issuer { id: id as u64,
+                name,
+                key_pair: key_pair_str })
+  }
+}
+
+#[derive(Clone, Deserialize, Serialize)]
+struct Lender {
+  id: u64,
+  name: String,
+  key_pair: String,
+}
+
+impl Lender {
+  fn new(id: usize, name: String) -> Result<Self, PlatformError> {
+    let key_pair = XfrKeyPair::generate(&mut ChaChaRng::from_seed([0u8; 32]));
+    let key_pair_str =
+      serde_json::to_string(&key_pair).or_else(|_| Err(PlatformError::SerializationError))
+                                      .unwrap();
+
+    Ok(Lender { id: id as u64,
+                name,
+                key_pair: key_pair_str })
+  }
+}
+
+#[derive(Clone, Deserialize, Serialize)]
+struct Borrower {
+  id: u64,
+  name: String,
+  key_pair: String,
+  balance: u64,
+}
+
+impl Borrower {
+  fn new(id: usize, name: String) -> Result<Self, PlatformError> {
+    let key_pair = XfrKeyPair::generate(&mut ChaChaRng::from_seed([0u8; 32]));
+    let key_pair_str =
+      serde_json::to_string(&key_pair).or_else(|_| Err(PlatformError::SerializationError))
+                                      .unwrap();
+
+    Ok(Borrower { id: id as u64,
+                  name,
+                  key_pair: key_pair_str,
+                  balance: 0 })
+  }
+}
+
+//
+// Loan
+//
+#[derive(Clone, Deserialize, Serialize)]
+struct Loan {
+  id: u64,           // Loan's id
+  lender: u64,       // Lender's id
+  borrower: u64,     // Borrower's id
+  active: bool,      // Whether the loan has been activated
+  amount_total: u64, // Amount in total
+  amount_paid: u64,  // Amount that has been paid
+  duration: u64,     // Duration of the loan
+  payments: u64,     // Number of payments that have been made
+}
+
+impl Loan {
+  fn new(id: usize, lender: u64, borrower: u64, amount_total: u64, duration: u64) -> Self {
+    Loan { id: id as u64,
+           lender,
+           borrower,
+           active: false,
+           amount_total,
+           amount_paid: 0,
+           duration,
+           payments: 0 }
+  }
+}
+
+//
 // Data
 //
-#[derive(Clone, Copy, Deserialize, Serialize)]
+#[derive(Clone, Deserialize, Serialize)]
 struct Data {
+  // Users
+  issuers: Vec<Issuer>,
+  lenders: Vec<Lender>,
+  borrowers: Vec<Borrower>,
+
+  // Loans
+  loans: Vec<Loan>,
+
   // Sequence number of the next transaction
   sequence_number: u64,
 
@@ -51,6 +186,36 @@ struct Data {
 impl Data {
   fn increment_sequence_number(&mut self) {
     self.sequence_number += 1;
+  }
+
+  fn add_loan(&mut self,
+              lender: u64,
+              borrower: u64,
+              amount_total: u64,
+              duration: u64)
+              -> Result<(), PlatformError> {
+    let id = self.loans.len() + 1;
+    self.loans
+        .push(Loan::new(id, lender, borrower, amount_total, duration));
+    store_data_to_file(self.clone())
+  }
+
+  fn add_issuer(&mut self, name: String) -> Result<(), PlatformError> {
+    let id = self.issuers.len() + 1;
+    self.issuers.push(Issuer::new(id, name)?);
+    store_data_to_file(self.clone())
+  }
+
+  fn add_lender(&mut self, name: String) -> Result<(), PlatformError> {
+    let id = self.lenders.len() + 1;
+    self.lenders.push(Lender::new(id, name)?);
+    store_data_to_file(self.clone())
+  }
+
+  fn add_borrower(&mut self, name: String) -> Result<(), PlatformError> {
+    let id = self.borrowers.len() + 1;
+    self.borrowers.push(Borrower::new(id, name)?);
+    store_data_to_file(self.clone())
   }
 }
 
@@ -70,7 +235,7 @@ fn load_data() -> Result<Data, PlatformError> {
     }
     Err(_) => {
       let data = get_init_data();
-      store_data_to_file(data)?;
+      store_data_to_file(data.clone())?;
       return Ok(data);
     }
   }
@@ -686,16 +851,15 @@ fn get_open_asset_record(protocol: &str,
 // Note: make sure assets have been defined before calling this function
 //
 // TODO (Keyao): Credential check
-// TODO (Keyao): Fix the Clippy error: this function has too many arguments (8/7)
-fn init_loan(issuer_key_pair: &XfrKeyPair,
-             lender_key_pair: &XfrKeyPair,
-             borrower_key_pair: &XfrKeyPair,
-             fiat_code: AssetTypeCode,
-             debt_code: AssetTypeCode,
-             amount: u64,
-             transaction_file_name: &str,
-             protocol: &str)
-             -> Result<(), PlatformError> {
+fn activate_loan(issuer_key_pair: &XfrKeyPair,
+                 lender_key_pair: &XfrKeyPair,
+                 borrower_key_pair: &XfrKeyPair,
+                 fiat_code: AssetTypeCode,
+                 debt_code: AssetTypeCode,
+                 amount: u64,
+                 transaction_file_name: &str,
+                 protocol: &str)
+                 -> Result<(), PlatformError> {
   // Get the original record
   let sid_pre = load_utxo()?;
   let res_pre = query(protocol, QUERY_PORT, "utxo_sid", &format!("{}", sid_pre.0));
@@ -812,11 +976,8 @@ fn match_error_and_exit(error: PlatformError) {
 /// Other types (e.g. InputsError): exit with code USAGE
 fn main() {
   init_logging();
-  match load_data() {
-    Ok(init_data) => init_data,
-    Err(error) => {
-      return match_error_and_exit(error);
-    }
+  if let Err(error) = load_data() {
+    return match_error_and_exit(error);
   };
   let inputs = App::new("Transaction Builder")
     .version("0.0.1")
@@ -846,18 +1007,52 @@ fn main() {
       .help("Use a name transaction file (will always be under findora_dir)")
       .takes_value(true))
     .subcommand(SubCommand::with_name("create")
-      .about("By default, will rename previous file with a .<number> suffix")
-      .arg(Arg::with_name("name")
-        .short("n")
-        .long("name")
-        .value_name("FILE")
-        .help("Specify a name for newly created transaction file")
-        .takes_value(true))
-      .arg(Arg::with_name("overwrite")
-        .long("force")
-        .alias("overwrite")
-        .short("f")
-        .help("If specified, the existing file with the same name will be overwritten.")))
+      .subcommand(SubCommand::with_name("user")
+        .arg(Arg::with_name("type")
+          .short("t")
+          .long("type")
+          .takes_value(true)
+          .possible_values(&["issuer", "lender", "borrower"])
+          .help("Required: user type."))
+        .arg(Arg::with_name("name")
+          .short("n")
+          .long("name")
+          .takes_value(true)
+          .help("Specify the user's name")))
+      .subcommand(SubCommand::with_name("loan")
+        .arg(Arg::with_name("lender")
+          .short("l")
+          .long("lender")
+          .takes_value(true)
+          .help("Required: lender's id."))
+        .arg(Arg::with_name("borrower")
+          .short("b")
+          .long("borrower")
+          .takes_value(true)
+          .help("Required: borrower's id."))
+        .arg(Arg::with_name("amount")
+          .short("a")
+          .long("amount")
+          .takes_value(true)
+          .help("Required: amount of the loan."))
+        .arg(Arg::with_name("duration")
+          .short("d")
+          .long("duration")
+          .takes_value(true)
+          .help("Required: payment duration")))
+      .subcommand(SubCommand::with_name("txn_builder")
+        .about("By default, will rename previous file with a .<number> suffix")
+        .arg(Arg::with_name("name")
+          .short("n")
+          .long("name")
+          .value_name("FILE")
+          .help("Specify a name for newly created transaction file")
+          .takes_value(true))
+        .arg(Arg::with_name("overwrite")
+          .long("force")
+          .alias("overwrite")
+          .short("f")
+          .help("If specified, the existing file with the same name will be overwritten."))))
     .subcommand(SubCommand::with_name("store")
       .subcommand(SubCommand::with_name("sids")
         .arg(Arg::with_name("path")
@@ -1043,7 +1238,7 @@ fn main() {
         .long("http")
         .takes_value(false)
         .help("specify that http, not https should be used.")))
-    .subcommand(SubCommand::with_name("init_loan")
+    .subcommand(SubCommand::with_name("activate_loan")
       .arg(Arg::with_name("lender_key_pair_path")
         .short("l")
         .long("lender_key_pair_path")
@@ -1111,10 +1306,9 @@ fn process_inputs(inputs: clap::ArgMatches) -> Result<(), PlatformError> {
   }
 
   match inputs.subcommand() {
-    ("create", Some(create_matches)) => process_create_cmd(create_matches,
-                                                           &key_pair_file_path,
-                                                           &transaction_file_name,
-                                                           &findora_dir),
+    ("create", Some(create_matches)) => {
+      process_create_cmd(create_matches, &transaction_file_name, &findora_dir)
+    }
     ("store", Some(store_matches)) => process_store_cmd(store_matches, &findora_dir),
     ("add", Some(add_matches)) => {
       process_add_cmd(add_matches, &key_pair_file_path, &transaction_file_name)
@@ -1174,9 +1368,11 @@ fn process_inputs(inputs: clap::ArgMatches) -> Result<(), PlatformError> {
     ("load_funds", Some(load_funds_matches)) => process_load_funds_cmd(load_funds_matches,
                                                                        &key_pair_file_path,
                                                                        &transaction_file_name),
-    ("init_loan", Some(init_loan_matches)) => process_init_loan_cmd(init_loan_matches,
-                                                                    &key_pair_file_path,
-                                                                    &transaction_file_name),
+    ("activate_loan", Some(activate_loan_matches)) => {
+      process_activate_loan_cmd(activate_loan_matches,
+                                &key_pair_file_path,
+                                &transaction_file_name)
+    }
     _ => {
       println!("Subcommand missing or not recognized. Try --help");
       Err(PlatformError::InputsError)
@@ -1219,21 +1415,95 @@ fn create_directory_and_rename_path(path_str: &str, overwrite: bool) -> Result<(
 }
 
 fn process_create_cmd(create_matches: &clap::ArgMatches,
-                      _keys_file_path: &str,
                       transaction_file_name: &str,
                       _findora_dir: &str)
                       -> Result<(), PlatformError> {
-  let name = create_matches.value_of("name");
-  let overwrite = create_matches.is_present("overwrite");
-  let file_str = if let Some(name) = name {
-    name.to_string()
-  } else {
-    transaction_file_name.to_string()
-  };
-  let expand_str = shellexpand::tilde(&file_str).to_string();
-  create_directory_and_rename_path(&expand_str, overwrite)?;
-  let txn_builder = TransactionBuilder::default();
-  store_txn_builder_to_file(&expand_str, &txn_builder)
+  match create_matches.subcommand() {
+    ("user", Some(user_matches)) => {
+      let name = if let Some(name_arg) = user_matches.value_of("name") {
+        name_arg
+      } else {
+        println!("Name is required to create the user. Use --name.");
+        return Err(PlatformError::InputsError);
+      };
+      let mut data = load_data()?;
+      if let Some(type_arg) = user_matches.value_of("type") {
+        match type_arg {
+          "issuer" => data.add_issuer(name.to_owned()),
+          "lender" => data.add_lender(name.to_owned()),
+          _ => data.add_borrower(name.to_owned()),
+        }
+      } else {
+        println!("User type is required to create the user. Use --type.");
+        Err(PlatformError::InputsError)
+      }
+    }
+    ("loan", Some(loan_matches)) => {
+      let lender = if let Some(lender_arg) = loan_matches.value_of("lender") {
+        if let Ok(id) = lender_arg.parse::<u64>() {
+          id
+        } else {
+          println!("Improperly formatted lender's id.");
+          return Err(PlatformError::InputsError);
+        }
+      } else {
+        println!("Lender's id is required to create the loan. Use --lender.");
+        return Err(PlatformError::InputsError);
+      };
+      let borrower = if let Some(borrower_arg) = loan_matches.value_of("borrower") {
+        if let Ok(id) = borrower_arg.parse::<u64>() {
+          id
+        } else {
+          println!("Improperly formatted borrower's id.");
+          return Err(PlatformError::InputsError);
+        }
+      } else {
+        println!("Borrower's id is required to create the loan. Use --borrower.");
+        return Err(PlatformError::InputsError);
+      };
+      let amount_total = if let Some(amount_arg) = loan_matches.value_of("amount") {
+        if let Ok(amount) = amount_arg.parse::<u64>() {
+          amount
+        } else {
+          println!("Improperly formatted amount.");
+          return Err(PlatformError::InputsError);
+        }
+      } else {
+        println!("Amount is required to create the loan. Use --amount.");
+        return Err(PlatformError::InputsError);
+      };
+      let duration = if let Some(duration_arg) = loan_matches.value_of("duration") {
+        if let Ok(duration) = duration_arg.parse::<u64>() {
+          duration
+        } else {
+          println!("Improperly formatted duration.");
+          return Err(PlatformError::InputsError);
+        }
+      } else {
+        println!("Duration is required to create the loan. Use --amount.");
+        return Err(PlatformError::InputsError);
+      };
+      let mut data = load_data()?;
+      data.add_loan(lender, borrower, amount_total, duration)
+    }
+    ("txn_builder", Some(txn_builder_matches)) => {
+      let name = txn_builder_matches.value_of("name");
+      let overwrite = txn_builder_matches.is_present("overwrite");
+      let file_str = if let Some(name) = name {
+        name.to_string()
+      } else {
+        transaction_file_name.to_string()
+      };
+      let expand_str = shellexpand::tilde(&file_str).to_string();
+      create_directory_and_rename_path(&expand_str, overwrite)?;
+      let txn_builder = TransactionBuilder::default();
+      store_txn_builder_to_file(&expand_str, &txn_builder)
+    }
+    _ => {
+      println!("Subcommand missing or not recognized. Try create --help");
+      Err(PlatformError::InputsError)
+    }
+  }
 }
 
 fn process_store_cmd(store_matches: &clap::ArgMatches,
@@ -1565,10 +1835,10 @@ fn process_load_funds_cmd(load_funds_matches: &clap::ArgMatches,
              protocol)
 }
 
-fn process_init_loan_cmd(load_funds_matches: &clap::ArgMatches,
-                         key_pair_file_path: &str,
-                         transaction_file_name: &str)
-                         -> Result<(), PlatformError> {
+fn process_activate_loan_cmd(load_funds_matches: &clap::ArgMatches,
+                             key_pair_file_path: &str,
+                             transaction_file_name: &str)
+                             -> Result<(), PlatformError> {
   let lender_key_pair = if let Some(lender_key_pair_path_arg) =
     load_funds_matches.value_of("lender_key_pair_path")
   {
@@ -1611,14 +1881,14 @@ fn process_init_loan_cmd(load_funds_matches: &clap::ArgMatches,
     "https"
   };
 
-  init_loan(&load_key_pair_from_file(key_pair_file_path)?,
-            &lender_key_pair,
-            &borrower_key_pair,
-            fiat_code,
-            debt_code,
-            amount,
-            transaction_file_name,
-            protocol)
+  activate_loan(&load_key_pair_from_file(key_pair_file_path)?,
+                &lender_key_pair,
+                &borrower_key_pair,
+                fiat_code,
+                debt_code,
+                amount,
+                transaction_file_name,
+                protocol)
 }
 
 #[cfg(test)]
@@ -2055,12 +2325,12 @@ mod tests {
   // 1. Define the fiat and debt assets
   // 2. Issue and transfer fiat token to the lender and debt token to the borrower
   // 3. Initiate the loan
-  fn test_init_loan() {
+  fn test_activate_loan() {
     // Load data
     load_data().unwrap();
 
     // Create txn builder and key pairs
-    let txn_builder_path = "tb_init_loan";
+    let txn_builder_path = "tb_activate_loan";
     store_txn_builder_to_file(&txn_builder_path, &TransactionBuilder::default()).unwrap();
     let mut prng = ChaChaRng::from_seed([0u8; 32]);
     let issuer_key_pair = XfrKeyPair::generate(&mut prng);
@@ -2100,14 +2370,14 @@ mod tests {
     submit_and_store_sid("https", txn_builder_path).unwrap();
 
     // Initiate loan
-    let res = init_loan(&issuer_key_pair,
-                        &lender_key_pair,
-                        &borrower_key_pair,
-                        fiat_code,
-                        debt_code,
-                        500,
-                        txn_builder_path,
-                        "https");
+    let res = activate_loan(&issuer_key_pair,
+                            &lender_key_pair,
+                            &borrower_key_pair,
+                            fiat_code,
+                            debt_code,
+                            500,
+                            txn_builder_path,
+                            "https");
 
     fs::remove_file(txn_builder_path).unwrap();
     assert!(res.is_ok());
