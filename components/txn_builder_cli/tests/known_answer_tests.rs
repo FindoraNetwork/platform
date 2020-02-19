@@ -1,12 +1,10 @@
 #![deny(warnings)]
 use ledger::data_model::AssetTypeCode;
-use std::fs::{self, File};
-use std::io::prelude::*;
+use std::fs;
 use std::io::{self, Write};
 use std::path::Path;
 use std::process::{Command, Output};
 use std::str::from_utf8;
-use submission_server::TxnStatus;
 
 extern crate exitcode;
 
@@ -15,7 +13,6 @@ extern crate exitcode;
 // Figure out how to colorize stdout and stderr
 
 const COMMAND: &str = "../../target/debug/txn_builder_cli";
-const TXN_STATUS_PATH: &str = "txn_status";
 
 //
 // Helper functions: create and store without path
@@ -62,20 +59,6 @@ fn get_findora_dir() -> String {
   };
 
   findora_dir
-}
-
-pub fn get_sid_from_txn_status_file() -> String {
-  let mut file = File::open(TXN_STATUS_PATH).unwrap();
-  let mut txn_status_str = String::new();
-  file.read_to_string(&mut txn_status_str).unwrap();
-
-  match serde_json::from_str::<TxnStatus>(&txn_status_str).unwrap() {
-    TxnStatus::Committed((_sid, txos)) => {
-      fs::remove_file(TXN_STATUS_PATH).unwrap();
-      format!("{}", txos[0].0)
-    }
-    _ => "".to_owned(),
-  }
 }
 
 #[cfg(test)]
@@ -169,14 +152,12 @@ fn define_asset(txn_builder_path: &str,
 fn issue_asset(txn_builder_path: &str,
                key_pair_path: &str,
                token_code: &str,
-               sequence_number: &str,
                amount: &str)
                -> io::Result<Output> {
   Command::new(COMMAND).args(&["--txn", txn_builder_path])
                        .args(&["--key_pair", key_pair_path])
                        .args(&["add", "issue_asset"])
                        .args(&["--token_code", token_code])
-                       .args(&["--sequence_number", sequence_number])
                        .args(&["--amount", amount])
                        .output()
 }
@@ -206,8 +187,7 @@ fn issue_and_transfer_asset(txn_builder_path: &str,
                             issuer_key_pair_path: &str,
                             recipient_key_pair_path: &str,
                             amount: &str,
-                            token_code: &str,
-                            sequence_number: &str)
+                            token_code: &str)
                             -> io::Result<Output> {
   Command::new(COMMAND).args(&["--txn", txn_builder_path])
                        .args(&["--key_pair", issuer_key_pair_path])
@@ -215,7 +195,6 @@ fn issue_and_transfer_asset(txn_builder_path: &str,
                        .args(&["--recipient_key_pair_path", recipient_key_pair_path])
                        .args(&["--amount", amount])
                        .args(&["--token_code", token_code])
-                       .args(&["--sequence_number", sequence_number])
                        .output()
 }
 
@@ -231,7 +210,8 @@ fn submit(txn_builder_path: &str) -> io::Result<Output> {
 #[cfg(test)]
 fn submit_and_store_sid(txn_builder_path: &str) -> io::Result<Output> {
   Command::new(COMMAND).args(&["--txn", txn_builder_path])
-                       .arg("submit_and_get_sid")
+                       .arg("submit")
+                       .arg("--store")
                        .output()
 }
 
@@ -239,20 +219,37 @@ fn submit_and_store_sid(txn_builder_path: &str) -> io::Result<Output> {
 #[cfg(test)]
 fn load_funds(txn_builder_path: &str,
               issuer_key_pair_path: &str,
-              sid_pre: &str,
               recipient_key_pair_path: &str,
               amount: &str,
-              token_code: &str,
-              sequence_number: &str)
+              token_code: &str)
               -> io::Result<Output> {
   Command::new(COMMAND).args(&["--txn", txn_builder_path])
                        .args(&["--key_pair", issuer_key_pair_path])
                        .arg("load_funds")
-                       .args(&["--sid_pre", sid_pre])
                        .args(&["--recipient_key_pair_path", recipient_key_pair_path])
                        .args(&["--amount", amount])
                        .args(&["--token_code", token_code])
-                       .args(&["--sequence_number", sequence_number])
+                       .output()
+}
+
+// Helper function: initiate loan
+#[cfg(test)]
+fn init_loan(txn_builder_path: &str,
+             issuer_key_pair_path: &str,
+             lender_key_pair_path: &str,
+             borrower_key_pair_path: &str,
+             fiat_code: &str,
+             debt_code: &str,
+             amount: &str)
+             -> io::Result<Output> {
+  Command::new(COMMAND).args(&["--txn", txn_builder_path])
+                       .args(&["--key_pair", issuer_key_pair_path])
+                       .arg("init_loan")
+                       .args(&["--lender_key_pair_path", lender_key_pair_path])
+                       .args(&["--borrower_key_pair_path", borrower_key_pair_path])
+                       .args(&["--fiat_code", fiat_code])
+                       .args(&["--debt_code", debt_code])
+                       .args(&["--amount", amount])
                        .output()
 }
 
@@ -597,7 +594,7 @@ fn test_define_issue_and_transfer_with_args() {
 
   // Issue asset
   let output =
-    issue_asset(txn_builder_file, key_pair_file, &token_code,"1", "10").expect("Failed to issue asset");
+    issue_asset(txn_builder_file, key_pair_file, &token_code, "10").expect("Failed to issue asset");
 
   io::stdout().write_all(&output.stdout).unwrap();
   io::stdout().write_all(&output.stderr).unwrap();
@@ -700,8 +697,7 @@ fn test_issue_transfer_and_submit_with_args() {
                            issuer_key_pair_file,
                            recipient_key_pair_file,
                            "1000",
-                           &token_code,
-                           "1").expect("Failed to issue and transfer asset");
+                           &token_code).expect("Failed to issue and transfer asset");
 
   // Submit transaction
   let output = submit(txn_builder_file).expect("Failed to submit transaction");
@@ -741,30 +737,80 @@ fn test_load_funds_with_args() {
                            issuer_key_pair_file,
                            recipient_key_pair_file,
                            "1000",
-                           &token_code,
-                           "1").expect("Failed to issue and transfer asset");
-
-  // Submit transaction and get the sid
+                           &token_code).expect("Failed to issue and transfer asset");
   submit_and_store_sid(txn_builder_file).expect("Failed to submit transaction");
-  let sid = get_sid_from_txn_status_file();
-  println!("Sid: {}", &sid);
 
   // Load funds
   let output = load_funds(txn_builder_file,
                           issuer_key_pair_file,
-                          &sid,
                           recipient_key_pair_file,
                           "500",
-                          &token_code,
-                          "2").expect("Failed to load funds");
+                          &token_code).expect("Failed to load funds");
 
   io::stdout().write_all(&output.stdout).unwrap();
   io::stdout().write_all(&output.stderr).unwrap();
 
-  fs::remove_file("txn_status").unwrap();
   fs::remove_file(txn_builder_file).unwrap();
   fs::remove_file(issuer_key_pair_file).unwrap();
   fs::remove_file(recipient_key_pair_file).unwrap();
+
+  assert!(output.status.success());
+}
+
+#[test]
+fn test_init_loan_with_args() {
+  // Create txn builder, key pairs, and public key
+  let txn_builder_file = "tb_init_loan_args";
+  let issuer_key_pair_file = "ikp_init_loan_args";
+  let lender_key_pair_file = "lkp_init_loan_args";
+  let borrower_key_pair_file = "bkp_init_loan_args";
+  create_with_path(txn_builder_file).expect("Failed to create transaction builder");
+  keygen_with_path(issuer_key_pair_file).expect("Failed to generate key pair for the issuer");
+  keygen_with_path(lender_key_pair_file).expect("Failed to generate key pair for the lender");
+  keygen_with_path(borrower_key_pair_file).expect("Failed to generate key pair for the borrower");
+
+  // Define fiat asset
+  let fiat_code = AssetTypeCode::gen_random().to_base64();
+  define_asset(txn_builder_file,
+               issuer_key_pair_file,
+               &fiat_code,
+               "Define fiat asset").expect("Failed to define fiat asset");
+  submit(txn_builder_file).expect("Failed to submit transaction");
+  fs::remove_file(txn_builder_file).unwrap();
+
+  // Define debt asset
+  create_with_path(txn_builder_file).expect("Failed to create transaction builder");
+  let debt_code = AssetTypeCode::gen_random().to_base64();
+  define_asset(txn_builder_file,
+               borrower_key_pair_file,
+               &debt_code,
+               "Define debt asset").expect("Failed to define debt asset");
+  submit(txn_builder_file).expect("Failed to submit transaction");
+
+  // Set the original record for the borrower
+  issue_and_transfer_asset(txn_builder_file,
+                           issuer_key_pair_file,
+                           borrower_key_pair_file,
+                           "1000",
+                           &fiat_code).expect("Failed to issue and transfer asset");
+  submit_and_store_sid(txn_builder_file).expect("Failed to submit transaction");
+
+  // Initiate loan
+  let output = init_loan(txn_builder_file,
+                         issuer_key_pair_file,
+                         lender_key_pair_file,
+                         borrower_key_pair_file,
+                         &fiat_code,
+                         &debt_code,
+                         "500").expect("Failed to load funds");
+
+  io::stdout().write_all(&output.stdout).unwrap();
+  io::stdout().write_all(&output.stderr).unwrap();
+
+  fs::remove_file(txn_builder_file).unwrap();
+  fs::remove_file(issuer_key_pair_file).unwrap();
+  fs::remove_file(lender_key_pair_file).unwrap();
+  fs::remove_file(borrower_key_pair_file).unwrap();
 
   assert!(output.status.success());
 }
