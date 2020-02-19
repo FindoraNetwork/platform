@@ -22,6 +22,8 @@ use zei::xfr::sig::{XfrKeyPair, XfrPublicKey};
 use zei::xfr::structs::{AssetRecord, BlindAssetRecord, OpenAssetRecord};
 extern crate exitcode;
 
+// TODO (Keyao): Check each unwrap() call and make sure we get a meaningful error message
+
 const INIT_DATA: &str = r#"
 {
   "sequence_number": 1,

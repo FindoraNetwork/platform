@@ -191,6 +191,11 @@ pub fn txn_log_info(txn: &Transaction) {
               xfr_asset_op.body.inputs.len(),
               xfr_asset_op.body.num_outputs);
       }
+      Operation::AIRAssign(air_assign_op) => {
+        info!("Assigning to AIR: AIR[{:?}] <- {}",
+              air_assign_op.body.addr,
+              air_assign_op.body.data);
+      }
     };
   }
 }
