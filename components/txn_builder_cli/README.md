@@ -29,10 +29,28 @@ actual subcommands.
 * By default, all the generated files will be stored in `~./findora`, unless specified otherwise. For example, if the current directory is `platform/target/debug`, running `./txn_builder_cli keygen` will put the generated key pair in ~./findora, but `./txn_builder_cli keygen --name keys/key_pair` will store the key pair to `platform/target/debug/keys/key_pair`.
 * Examples below are assuming the current directory is `platform/target/debug`. If not, change `./txn_builder_cli` to the path to `./txn_builder_cli`.
 
-## Generate a key pair
-Before composing a transaction, generate and save a cryptographic key pair.
+## Create a user
+In the initial data, there are three users (issuer Izzie, lender Lenny and borrower Ben). More users can be created.
+
+### Create an issuer
 ```
-./txn_builder_cli keygen --name kp
+./txn_builder_cli create user --type issuer --name IssuerName
+```
+
+### Create a lender
+```
+./txn_builder_cli create user --type issuer --name LenderName
+```
+
+### Create a borrower
+```
+./txn_builder_cli create user --type borrower --name BorrowerName
+```
+
+## Create a loan
+In the initial data, there is one loan. More loans can be created:
+```
+./txn_builder_cli create loan --lender 0 --borrower 0 --amount 500 --duration 5
 ```
 
 ## Composing a transaction
