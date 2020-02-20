@@ -16,6 +16,7 @@ use serde::Deserialize;
 use serde::Deserializer;
 use serde::Serialize;
 use serde::Serializer;
+use std::collections::HashMap;
 use std::fmt;
 use std::fs::File;
 use std::fs::OpenOptions;
@@ -146,6 +147,30 @@ pub struct Proof {
   pub tx_id: u64,
   pub root_hash: HashValue,
   pub hash_array: Vec<HashValue>,
+}
+
+struct Dictionary {
+  entries: HashMap<usize, Entry>,
+}
+
+struct Entry {
+  level: usize,
+  id: usize,
+  hashes: [HashValue; HASHES_IN_BLOCK],
+}
+
+impl Entry {
+  pub fn new(level: usize, id: usize) -> Entry {
+    Entry { level,
+            id,
+            hashes: [HashValue::new(); HASHES_IN_BLOCK] }
+  }
+
+  pub fn fill(&mut self) {
+    for i in 0..HASHES_IN_BLOCK / 2 {
+      self.hashes[LEAVES_IN_BLOCK + i] = hash_partial(&self.hashes[2 * i], &self.hashes[2 * i + 1]);
+    }
+  }
 }
 
 // Provide the serialization help for the array of hashes in a block.
@@ -1397,12 +1422,120 @@ impl AppendOnlyMerkle {
       return er!("Versioning is not yet supported.");
     }
 
+    let dictionary = self.generate_tree_completion();
+    let empty_hash = HashValue::new();
+
+    let mut level = 0;
+    let mut hashes = Vec::new();
+    let mut id = transaction_id as usize;
+    let mut root;
+
+    loop {
+      root = self.append_proof_hashes(&mut hashes, level, id, &dictionary);
+
+      if root != empty_hash {
+        break;
+      }
+
+      level += 1;
+      id /= LEAVES_IN_BLOCK;
+    }
+
+    let result = Proof { version: PROOF_VERSION,
+                         ledger: self.path.clone(),
+                         state: self.entry_count,
+                         time: Utc::now().timestamp(),
+                         tx_id: transaction_id,
+                         root_hash: root,
+                         hash_array: hashes };
+
+    Ok(result)
+  }
+
+  fn generate_tree_completion(&self) -> Dictionary {
+    let empty_hash = HashValue::new();
+
+    let mut dictionary = Dictionary { entries: HashMap::new() };
+    let mut level = 0;
+    let mut carried_hash = HashValue::new();
+
+    while level < self.blocks.len() {
+      let length = self.blocks[level].len();
+      let last = &self.blocks[level][length - 1];
+      let count = last.valid_leaves() as usize;
+
+      if count != LEAVES_IN_BLOCK {
+        let mut entry = Entry::new(level, length - 1);
+
+        for i in 0..count {
+          entry.hashes[i] = last.hashes[i];
+        }
+
+        entry.hashes[count] = carried_hash;
+        carried_hash = empty_hash;
+        entry.fill();
+        dictionary.entries.insert(level, entry);
+        // get new carry_hash
+      } else if carried_hash != empty_hash {
+        let mut entry = Entry::new(level, length);
+
+        entry.hashes[0] = carried_hash;
+        entry.fill();
+        carried_hash = empty_hash;
+        dictionary.entries.insert(level, entry);
+        // get new carry_hash
+      }
+
+      level += 1;
+    }
+
+    dictionary
+  }
+
+  fn append_proof_hashes(&self,
+                         hashes: &mut Vec<HashValue>,
+                         level: usize,
+                         id: usize,
+                         dictionary: &Dictionary)
+                         -> HashValue {
+    match dictionary.entries.get(&level) {
+      Some(entry) => {
+        assert!(entry.level == level);
+        self.push_dictionary(hashes, entry);
+        // push the partner of the root of this block, if any
+        // get the root hash, if we are there.
+      }
+      None => {
+        let block = &self.blocks[level][id / LEAVES_IN_BLOCK];
+        self.push_subtree(block, (id % LEAVES_IN_BLOCK) ^ 1, hashes);
+        // push the partner of the root of this block, if any
+        // get the root hash, if we are there.
+      }
+    }
+
+    HashValue::new()
+  }
+
+  fn push_dictionary(&self, _hashes: &mut Vec<HashValue>, _entry: &Entry) {
+  }
+
+/*
+  pub fn generate_proof(&self, transaction_id: u64, version: u64) -> Result<Proof, Error> {
+    if transaction_id >= self.entry_count {
+      return er!("That transaction id ({}) does not exist.", transaction_id);
+    }
+
+    if version != self.entry_count {
+      return er!("Versioning is not yet supported.");
+    }
+
     let empty_hash = HashValue::new();
 
     let mut hashes = Vec::new();
     let mut index = transaction_id as usize;
     let mut block_id = index / LEAVES_IN_BLOCK as usize;
     let mut root = empty_hash;
+    let mut carried_hash = empty_hash;
 
     debug!(Proof,
            "Proof for {} at {}", transaction_id, self.entry_count);
@@ -1416,7 +1549,7 @@ impl AppendOnlyMerkle {
              index,
              self.blocks[level].len());
 
-      if block_id >= self.blocks[level].len() {
+      if self.blocks[level].len() == 0 {
         break;
       }
 
@@ -1427,30 +1560,25 @@ impl AppendOnlyMerkle {
 
       if block.full() {
         self.push_subtree(block, partner_index, &mut hashes);
-
-        // If this block is the sole block at this level, it
-        // contains the root of the tree.  Otherwise, this block
-        // might have a partner.  If so, we need to get its
-        // hash to continue the chain.
-        if self.blocks[level].len() == 1 {
-          assert!(block_id == 0);
-          // assert!(block.hashes[HASHES_IN_BLOCK - 1] != empty_hash);
-          root = block.hashes[HASHES_IN_BLOCK - 1];
-          debug!(Proof, "Set root from full block {}", block_id);
-        } else if partner_block >= self.blocks[level].len() {
-        } else {
-        }
+      } else if block_id == self.blocks[level].len() - 1 && carried_hash != empty_hash {
+        let table = self.push_partial(block, partner_index, &mut hashes);
+        carried_hash = empty_hash;
       } else {
         let table = self.push_partial(block, partner_index, &mut hashes);
+      }
 
-        if self.blocks[level].len() == 1 {
-          assert!(block_id == 0);
-          // assert!(table[HASHES_IN_BLOCK - 1] != empty_hash);
-          root = table[HASHES_IN_BLOCK - 1];
-          debug!(Proof, "Set root from partial block {}", block_id);
-        } else if partner_block >= self.blocks[level].len() {
-        } else {
-        }
+      // If this block is the sole block at this level, it
+      // contains the root of the tree.  Otherwise, this block
+      // might have a partner.  If so, we need to get its
+      // hash to continue the chain.
+      if self.blocks[level].len() == 1 && carried_hash == empty_hash {
+        assert!(block_id == 0);
+        root = block.hashes[HASHES_IN_BLOCK - 1];
+        debug!(Proof, "Set root from full block {}", block_id);
+        break;
+      } else if self.blocks[level].len() == 1 {
+      } else if partner_block >= self.blocks[level].len() {
+      } else {
       }
 
       index = block_id;
@@ -1467,6 +1595,7 @@ impl AppendOnlyMerkle {
 
     Ok(result)
   }
+  */
 
   pub fn get_root_hash(&self) -> HashValue {
     if self.entry_count == 0 {
@@ -1525,6 +1654,7 @@ impl AppendOnlyMerkle {
   // This routine will need to be extended to handle blocks that
   // weren't full in a previous state of the tree, if we allow callers
   // to request proofs for past versions of the tree.
+  /*
   fn push_partial(&self,
                   block: &Block,
                   partner: usize,
@@ -1586,6 +1716,7 @@ impl AppendOnlyMerkle {
     debug!(Proof, "hashes now has {} elements.", hashes.len());
     fake_block
   }
+  */
 
   /// Return the number of transaction entries in the tree.
   ///
