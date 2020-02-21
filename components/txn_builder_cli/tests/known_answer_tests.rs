@@ -13,6 +13,7 @@ extern crate exitcode;
 // Figure out how to colorize stdout and stderr
 
 const COMMAND: &str = "../../target/debug/txn_builder_cli";
+const DATA_FILE: &str = "data.json";
 
 //
 // Helper functions: create and store without path
@@ -170,20 +171,6 @@ fn define_asset(txn_builder_path: &str,
 }
 
 #[cfg(test)]
-fn define_asset_with_borrower_id(txn_builder_path: &str,
-                                 id: &str,
-                                 token_code: &str,
-                                 memo: &str)
-                                 -> io::Result<Output> {
-  Command::new(COMMAND).args(&["--txn", txn_builder_path])
-                       .args(&["add", "define_asset"])
-                       .args(&["--user", id, "--borrower"])
-                       .args(&["--token_code", token_code])
-                       .args(&["--memo", memo])
-                       .output()
-}
-
-#[cfg(test)]
 fn issue_asset(txn_builder_path: &str,
                id: &str,
                token_code: &str,
@@ -269,18 +256,11 @@ fn load_funds(txn_builder_path: &str,
 
 // Helper function: initiate loan
 #[cfg(test)]
-fn activate_loan(txn_builder_path: &str,
-                 loan_id: &str,
-                 issuer_id: &str,
-                 fiat_code: &str,
-                 debt_code: &str)
-                 -> io::Result<Output> {
+fn activate_loan(txn_builder_path: &str, loan_id: &str, issuer_id: &str) -> io::Result<Output> {
   Command::new(COMMAND).args(&["--txn", txn_builder_path])
                        .arg("activate_loan")
                        .args(&["--loan", loan_id])
                        .args(&["--issuer", issuer_id])
-                       .args(&["--fiat_code", fiat_code])
-                       .args(&["--debt_code", debt_code])
                        .output()
 }
 
@@ -312,17 +292,8 @@ fn test_create_users() {
   io::stdout().write_all(&output.stderr).unwrap();
 
   assert!(output.status.success());
-}
 
-#[test]
-fn test_create_loan() {
-  // Create an issuer
-  let output = create_loan("0", "0", "1000", "12").expect("Failed to create an issuer");
-
-  io::stdout().write_all(&output.stdout).unwrap();
-  io::stdout().write_all(&output.stderr).unwrap();
-
-  assert!(output.status.success());
+  let _ = fs::remove_file(DATA_FILE);
 }
 
 #[test]
@@ -731,6 +702,7 @@ fn test_define_and_submit_with_args() {
   io::stdout().write_all(&output.stdout).unwrap();
   io::stdout().write_all(&output.stderr).unwrap();
 
+  let _ = fs::remove_file(DATA_FILE);
   fs::remove_file(txn_builder_file).unwrap();
 
   assert!(output.status.success());
@@ -765,13 +737,17 @@ fn test_issue_transfer_and_submit_with_args() {
   io::stdout().write_all(&output.stdout).unwrap();
   io::stdout().write_all(&output.stderr).unwrap();
 
+  let _ = fs::remove_file(DATA_FILE);
   fs::remove_file(txn_builder_file).unwrap();
 
   assert!(output.status.success());
 }
 
 #[test]
+#[ignore]
 fn test_load_funds_with_args() {
+  let _ = fs::remove_file(DATA_FILE);
+
   // Create txn builder, key pairs, and public key
   let txn_builder_file = "tb_load_funds_args";
   create_txn_builder_with_path(txn_builder_file).expect("Failed to create transaction builder");
@@ -801,50 +777,37 @@ fn test_load_funds_with_args() {
   io::stdout().write_all(&output.stdout).unwrap();
   io::stdout().write_all(&output.stderr).unwrap();
 
+  let _ = fs::remove_file(DATA_FILE);
   fs::remove_file(txn_builder_file).unwrap();
 
   assert!(output.status.success());
 }
 
 #[test]
-fn test_activate_loan_with_args() {
-  // Create txn builder, key pairs, and public key
-  let txn_builder_file = "tb_activate_loan_args";
-  create_txn_builder_with_path(txn_builder_file).expect("Failed to create transaction builder");
+#[ignore]
+fn test_create_and_activate_loan_with_args() {
+  let _ = fs::remove_file(DATA_FILE);
 
-  // Define fiat asset
-  let fiat_code = AssetTypeCode::gen_random().to_base64();
-  define_asset(txn_builder_file,
-               "0",
-               &fiat_code,
-               "Define fiat asset").expect("Failed to define fiat asset");
-  submit(txn_builder_file).expect("Failed to submit transaction");
-  fs::remove_file(txn_builder_file).unwrap();
-
-  // Define debt asset
-  create_txn_builder_with_path(txn_builder_file).expect("Failed to create transaction builder");
-  let debt_code = AssetTypeCode::gen_random().to_base64();
-  define_asset_with_borrower_id(txn_builder_file,
-                                "0",
-                                &debt_code,
-                                "Define debt asset").expect("Failed to define debt asset");
-  submit(txn_builder_file).expect("Failed to submit transaction");
-
-  // Set the original record for the borrower
-  issue_and_transfer_asset(txn_builder_file,
-                           "0",
-                           "0",
-                           "1000",
-                           &fiat_code).expect("Failed to issue and transfer asset");
-  submit_and_store_sid(txn_builder_file).expect("Failed to submit transaction");
-
-  // Initiate loan
-  let output =
-    activate_loan(txn_builder_file, "0", "0", &fiat_code, &debt_code).expect("Failed to load funds");
+  // Create loan
+  let output = create_loan("0", "0", "1500", "8").expect("Failed to create an issuer");
 
   io::stdout().write_all(&output.stdout).unwrap();
   io::stdout().write_all(&output.stderr).unwrap();
 
+  assert!(output.status.success());
+
+  // Create txn builder, key pairs, and public key
+  let txn_builder_file = "tb_activate_loan_args";
+  create_txn_builder_with_path(txn_builder_file).expect("Failed to create transaction builder");
+
+  // Initiate loan
+  let output = activate_loan(txn_builder_file, "0", "0").expect("Failed to load funds");
+
+  io::stdout().write_all(&output.stdout).unwrap();
+  io::stdout().write_all(&output.stderr).unwrap();
+
+  let _ = fs::remove_file(DATA_FILE);
   fs::remove_file(txn_builder_file).unwrap();
+
   assert!(output.status.success());
 }

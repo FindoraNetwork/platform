@@ -1,0 +1,29 @@
+{
+    "issuers": [
+        {
+            "id": 0,
+            "name": "Izzie",
+            "key_pair": "76b8e0ada0f13d90405d6ae55386bd28bdd219b8a08ded1aa836efcc8b770dc720fdbac9b10b7587bba7b5bc163bce69e796d71e4ed44c10fcb4488689f7a144"
+        }
+    ],
+    "lenders": [
+        {
+            "id": 0,
+            "name": "Lenny",
+            "key_pair": "76b8e0ada0f13d90405d6ae55386bd28bdd219b8a08ded1aa836efcc8b770dc720fdbac9b10b7587bba7b5bc163bce69e796d71e4ed44c10fcb4488689f7a144"
+        }
+    ],
+    "borrowers": [
+        {
+            "id": 0,
+            "name": "Ben",
+            "key_pair": "76b8e0ada0f13d90405d6ae55386bd28bdd219b8a08ded1aa836efcc8b770dc720fdbac9b10b7587bba7b5bc163bce69e796d71e4ed44c10fcb4488689f7a144",
+            "balance": 0,
+            "utxo": null
+        }
+    ],
+    "loans": [],
+    "fiat_code": null,
+    "sequence_number": 1,
+    "utxo": 1
+  }
