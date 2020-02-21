@@ -158,13 +158,13 @@ fn store_blind_asset_record_with_path(path: &str,
 //
 #[cfg(test)]
 fn define_asset(txn_builder_path: &str,
-                id: &str,
+                issuer_id: &str,
                 token_code: &str,
                 memo: &str)
                 -> io::Result<Output> {
   Command::new(COMMAND).args(&["--txn", txn_builder_path])
                        .args(&["add", "define_asset"])
-                       .args(&["--user", id])
+                       .args(&["--issuer", issuer_id])
                        .args(&["--token_code", token_code])
                        .args(&["--memo", memo])
                        .output()
@@ -673,6 +673,7 @@ fn test_define_issue_and_transfer_with_args() {
   io::stdout().write_all(&output.stdout).unwrap();
   io::stdout().write_all(&output.stderr).unwrap();
 
+  let _ = fs::remove_file(DATA_FILE);
   fs::remove_file(txn_builder_file).unwrap();
   for file in files {
     fs::remove_file(file).unwrap();
@@ -710,6 +711,8 @@ fn test_define_and_submit_with_args() {
 
 #[test]
 fn test_issue_transfer_and_submit_with_args() {
+  let _ = fs::remove_file(DATA_FILE);
+
   // Create txn builder and key pairs
   let txn_builder_file = "tb_issue_transfer_args";
   create_txn_builder_with_path(txn_builder_file).expect("Failed to create transaction builder");
@@ -746,8 +749,6 @@ fn test_issue_transfer_and_submit_with_args() {
 #[test]
 #[ignore]
 fn test_load_funds_with_args() {
-  let _ = fs::remove_file(DATA_FILE);
-
   // Create txn builder, key pairs, and public key
   let txn_builder_file = "tb_load_funds_args";
   create_txn_builder_with_path(txn_builder_file).expect("Failed to create transaction builder");
