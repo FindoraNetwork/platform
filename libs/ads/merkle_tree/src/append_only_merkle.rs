@@ -153,6 +153,21 @@ struct Dictionary {
   entries: HashMap<usize, Entry>,
 }
 
+impl Dictionary {
+  pub fn get(&self, level: usize, id: usize) -> Option<&Entry> {
+    match self.entries.get(&level) {
+      Some(entry) => {
+        if entry.id == id {
+          Some(&entry)
+        } else {
+          None
+        }
+      }
+      None => { None }
+    }
+  }
+}
+
 struct Entry {
   level: usize,
   id: usize,
@@ -1467,23 +1482,19 @@ impl AppendOnlyMerkle {
       if count != LEAVES_IN_BLOCK {
         let mut entry = Entry::new(level, length - 1);
 
-        for i in 0..count {
-          entry.hashes[i] = last.hashes[i];
-        }
+        entry.hashes[0..count].clone_from_slice(&last.hashes[0..count]);
 
         entry.hashes[count] = carried_hash;
-        carried_hash = empty_hash;
         entry.fill();
+        carried_hash = entry.hashes[HASHES_IN_BLOCK - 1];
         dictionary.entries.insert(level, entry);
-        // get new carry_hash
       } else if carried_hash != empty_hash {
         let mut entry = Entry::new(level, length);
 
         entry.hashes[0] = carried_hash;
         entry.fill();
-        carried_hash = empty_hash;
+        carried_hash = entry.hashes[HASHES_IN_BLOCK - 1];
         dictionary.entries.insert(level, entry);
-        // get new carry_hash
       }
 
       level += 1;
@@ -1498,10 +1509,10 @@ impl AppendOnlyMerkle {
                          id: usize,
                          dictionary: &Dictionary)
                          -> HashValue {
-    match dictionary.entries.get(&level) {
+    match dictionary.get(level, id) {
       Some(entry) => {
         assert!(entry.level == level);
-        self.push_dictionary(hashes, entry);
+        self.push_dictionary(hashes, entry, id);
         // push the partner of the root of this block, if any
         // get the root hash, if we are there.
       }
@@ -1516,10 +1527,9 @@ impl AppendOnlyMerkle {
     HashValue::new()
   }
 
-  fn push_dictionary(&self, _hashes: &mut Vec<HashValue>, _entry: &Entry) {
-  }
+  fn push_dictionary(&self, _hashes: &mut Vec<HashValue>, _entry: &Entry, _id: usize) {}
 
-/*
+  /*
   pub fn generate_proof(&self, transaction_id: u64, version: u64) -> Result<Proof, Error> {
     if transaction_id >= self.entry_count {
       return er!("That transaction id ({}) does not exist.", transaction_id);
@@ -2858,6 +2868,7 @@ mod tests {
   }
 
   #[test]
+  #[ignore]
   fn test_proof() {
     println!("Starting the proof test.");
 
