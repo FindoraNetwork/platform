@@ -149,7 +149,7 @@ pub fn policy_get_globals(asset: &Asset) -> Result<PolicyGlobals, PlatformError>
      || ret.id_vars.first().ok_or(PlatformError::InputsError)? != &asset.issuer.key
      || ret.rt_vars.first().ok_or(PlatformError::InputsError)? != &asset.code.val
   {
-    Err(PlatformError::InputsError)
+    Err(PlatformError::PolicyFailureError(Some("Incorrect number of variables for policy".to_string())))
   } else {
     Ok(ret)
   }
@@ -161,10 +161,11 @@ pub fn policy_check_txn(type_code: &AssetTypeCode,
                         txn: &Transaction)
                         -> Result<(), PlatformError> {
   let pol_data =
-    serde_json::from_str::<TxnPolicyData>(&txn.memos.get(0).ok_or(PlatformError::InputsError)?.0)?.0.drain(..).collect::<HashMap<_,_>>();
+    // serde_json::from_str::<TxnPolicyData>(&txn.memos.get(0).ok_or(PlatformError::InputsError)?.0)?.0.drain(..).collect::<HashMap<_,_>>();
+    txn.policy_options.as_ref().ok_or(PlatformError::InputsError)?.0.iter().cloned().collect::<HashMap<_,_>>();
+  // serde_json::from_str::<TxnPolicyData>(&txn.memos.get(0).ok_or(PlatformError::InputsError)?.0)?.0.drain(..).collect::<HashMap<_,_>>();
 
-  let inputs = pol_data.get(type_code)
-                       .ok_or(PlatformError::InputsError)?;
+  let inputs = pol_data.get(type_code).ok_or(PlatformError::InputsError)?;
 
   let the_check = {
     let mut check = Err(PlatformError::InputsError);
@@ -196,7 +197,14 @@ pub fn run_txn_check(check: &TxnCheck,
                      mut frac_vars: Vec<Fraction>,
                      txn: &Transaction)
                      -> Result<(), PlatformError> {
-  let fail = &PlatformError::PolicyFailureError;
+  dbg!(check);
+  dbg!(&id_vars);
+  dbg!(&rt_vars);
+  dbg!(&amt_vars);
+  dbg!(&frac_vars);
+  dbg!(txn);
+
+  let fail = &PlatformError::PolicyFailureError(None);
 
   /*
    * To convert the TxnOps into RealTxnOps, we need to:
@@ -222,6 +230,7 @@ pub fn run_txn_check(check: &TxnCheck,
   let mut used_resources = HashSet::<ResourceVar>::new();
   let mut real_ops = Vec::<RealTxnOp>::new();
   for op in check.txn_template.iter() {
+    dbg!(&pending_op);
     debug_assert!(pending_inputs.is_disjoint(&used_resources));
     debug_assert!(pending_inputs.is_disjoint(&pending_outputs));
     debug_assert!(pending_outputs.is_disjoint(&used_resources));
@@ -328,6 +337,7 @@ pub fn run_txn_check(check: &TxnCheck,
       }
     }
   }
+  dbg!(&pending_op);
 
   debug_assert!(pending_inputs.is_disjoint(&used_resources));
   debug_assert!(pending_inputs.is_disjoint(&pending_outputs));
@@ -342,12 +352,15 @@ pub fn run_txn_check(check: &TxnCheck,
     pending_op = None;
   }
 
+  dbg!("Built txn template");
+
   debug_assert!(pending_op.is_none());
   debug_assert!(num_inputs + num_outputs == used_resources.len() as u64);
   if num_inputs != check.num_in_params || num_outputs != check.num_out_params {
     return Err(fail.clone());
   }
 
+  dbg!("Resource check");
   // check that all resources in the index range are used
   for ix in 0..used_resources.len().try_into().map_err(|_| fail.clone())? {
     if !used_resources.contains(&ResourceVar(ix)) {
@@ -379,7 +392,10 @@ pub fn run_txn_check(check: &TxnCheck,
   res_vars.reserve(used_resources.len());
   let mut res_totals = HashMap::<ResourceVar, Vec<AmountVar>>::new();
 
+  dbg!(&real_ops);
+
   for (target, real) in real_ops.iter().zip(txn.operations.iter()) {
+    dbg!("Txn match step");
     match (target, real) {
       (RealTxnOp::Issue(_, outs), Operation::IssueAsset(iss)) => {
         debug_assert!(!outs.is_empty());
@@ -510,6 +526,7 @@ pub fn run_txn_check(check: &TxnCheck,
 
   /* Step 1: calculate resource type vars */
   for rt_op in check.rt_ops.iter() {
+    dbg!("RT op");
     rt_vars.push(match rt_op {
                    ResourceTypeOp::Var(rv) => {
                      let ix: usize = rv.0.try_into().map_err(|_| fail.clone())?;
@@ -526,6 +543,7 @@ pub fn run_txn_check(check: &TxnCheck,
 
   /* Step 2: Calculate identity ops */
   for id_op in check.id_ops.iter() {
+    dbg!("ID op");
     id_vars.push(match id_op {
                    IdOp::Var(iv) => {
                      let ix: usize = iv.0.try_into().map_err(|_| fail.clone())?;
@@ -566,6 +584,7 @@ pub fn run_txn_check(check: &TxnCheck,
 
       match phase {
         FracAmtPhase::Amt => {
+          dbg!("Amount op");
           match check.amount_ops.get(amt_ix) {
             None => {
               phase = FracAmtPhase::Frac;
@@ -649,6 +668,7 @@ pub fn run_txn_check(check: &TxnCheck,
           }
         }
         FracAmtPhase::Frac => {
+          dbg!("Frac op");
           match check.fraction_ops.get(frac_ix) {
             None => {
               phase = FracAmtPhase::Amt;
@@ -759,6 +779,7 @@ pub fn run_txn_check(check: &TxnCheck,
   let mut bool_vars = Vec::<bool>::new();
 
   for op in check.bool_ops.iter() {
+    dbg!("Bool op");
     match op {
       BoolOp::Const(v) => {
         bool_vars.push(*v);
@@ -825,6 +846,7 @@ pub fn run_txn_check(check: &TxnCheck,
 
   /* Step 5: check assertions */
   for bv in check.assertions.iter() {
+    dbg!("assertion");
     let bv: usize = bv.0.try_into().map_err(|_| fail.clone())?;
     let v: &bool = bool_vars.get(bv).ok_or_else(|| fail.clone())?;
     if !*v {
@@ -834,8 +856,11 @@ pub fn run_txn_check(check: &TxnCheck,
 
   /* Step 6: check for signatures */
   for iv in check.required_signatures.iter() {
+    dbg!("signature");
     let iv: usize = iv.0.try_into().map_err(|_| fail.clone())?;
     let v: &XfrPublicKey = id_vars.get(iv).ok_or_else(|| fail.clone())?;
+    dbg!("has signature?");
+    dbg!(v);
     txn.check_has_signature(v).map_err(|_| fail.clone())?;
   }
 
@@ -846,6 +871,7 @@ pub fn run_txn_check(check: &TxnCheck,
 
   // (a)
   for op in real_ops.iter() {
+    dbg!("op check");
     if let RealTxnOp::Issue(rt_ix, outs) = op {
       // should never happen
       if outs.is_empty() {
@@ -868,6 +894,7 @@ pub fn run_txn_check(check: &TxnCheck,
 
   // (b)
   for (rv, tot_vars) in res_totals.iter() {
+    dbg!("total check");
     if tot_vars.is_empty() {
       return Err(fail.clone());
     }

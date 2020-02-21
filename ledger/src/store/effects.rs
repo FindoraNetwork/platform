@@ -2,7 +2,7 @@
 use crate::data_model::errors::PlatformError;
 use crate::data_model::*;
 use crate::policies::{compute_debt_swap_effect, DebtSwapEffect};
-use crate::policy_script::run_txn_check;
+use crate::policy_script::{run_txn_check, TxnCheckInputs, TxnPolicyData};
 use cryptohash::sha256;
 use cryptohash::sha256::Digest as BitDigest;
 use findora::HasInvariants;
@@ -32,6 +32,7 @@ pub struct TxnEffect {
   pub debt_effects: HashMap<AssetTypeCode, DebtSwapEffect>,
 
   pub asset_types_involved: HashSet<AssetTypeCode>,
+  pub custom_policy_asset_types: HashMap<AssetTypeCode, TxnCheckInputs>,
 }
 
 // Internally validates the transaction as well.
@@ -48,7 +49,14 @@ impl TxnEffect {
     let mut new_issuance_nums: HashMap<AssetTypeCode, Vec<u64>> = HashMap::new();
     let mut issuance_keys: HashMap<AssetTypeCode, IssuerPublicKey> = HashMap::new();
     let mut debt_effects: HashMap<AssetTypeCode, DebtSwapEffect> = HashMap::new();
-    let mut asset_types_involved = HashSet::<AssetTypeCode>::new();
+    let mut asset_types_involved: HashSet<AssetTypeCode> = HashSet::new();
+
+    let custom_policy_asset_types = txn.policy_options
+                                       .clone()
+                                       .unwrap_or_else(TxnPolicyData::default)
+                                       .0
+                                       .drain(..)
+                                       .collect::<HashMap<_, _>>();
 
     // Sequentially go through the operations, validating intrinsic or
     // local-to-the-transaction properties, then recording effects and
@@ -179,8 +187,8 @@ impl TxnEffect {
         }
 
         // An asset transfer is valid iff:
-        //     1) The signatures on the body all are valid and there is a signature for each input
-        //       key
+        //     1) The signatures on the body (a) all are valid and (b)
+        //        there is a signature for each non-custom-policy input key
         //          - Fully checked here
         //     2) The UTXOs (a) exist on the ledger and (b) match the zei transaction.
         //          - Partially checked here -- anything which hasn't
@@ -216,8 +224,17 @@ impl TxnEffect {
                 sig_keys.insert(sig.address.key.zei_to_bytes());
               }
 
-              // (1b) all input record owners have signed
+              // (1b) all input record owners (for non-custom-policy
+              //      assets) have signed
               for record in &trn.body.transfer.inputs {
+                // skip signature checking for custom-policy assets
+                if let Some(inp_code) = record.asset_type {
+                  if custom_policy_asset_types.get(&AssetTypeCode { val: inp_code })
+                                              .is_some()
+                  {
+                    continue;
+                  }
+                }
                 if !sig_keys.contains(&record.public_key.zei_to_bytes()) {
                   return Err(PlatformError::InputsError);
                 }
@@ -286,7 +303,8 @@ impl TxnEffect {
                    new_issuance_nums,
                    issuance_keys,
                    debt_effects,
-                   asset_types_involved })
+                   asset_types_involved,
+                   custom_policy_asset_types })
   }
 }
 

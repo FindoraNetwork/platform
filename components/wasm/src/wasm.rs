@@ -12,12 +12,12 @@ use js_sys::Promise;
 use ledger::data_model::{
   AssetTypeCode, Operation, Serialized, TransferType, TxOutput, TxoRef, TxoSID,
 };
-use ledger::policies::{DebtMemo, Fraction};
+use ledger::policies::Fraction;
 use rand_chacha::ChaChaRng;
 use rand_core::SeedableRng;
 use serde::{Deserialize, Serialize};
 use std::str;
-use txn_builder::{BuildsTransactions, TransactionBuilder, TransferOperationBuilder};
+use txn_builder::{BuildsTransactions, PolicyChoice, TransactionBuilder, TransferOperationBuilder};
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::future_to_promise;
 use wasm_bindgen_futures::JsFuture;
@@ -38,7 +38,7 @@ use zei::xfr::structs::{AssetIssuerPubKeys, AssetRecord, BlindAssetRecord, OpenA
 // const SUBMIT_PATH: &str = "./submit_server";
 // const QUERY_PATH: &str = "./query_server";
 const SUBMIT_PATH: &str = "http://localhost:8669";
-const QUERY_PATH : &str = "http://localhost:8668";
+const QUERY_PATH: &str = "http://localhost:8668";
 
 /////////// TRANSACTION BUILDING ////////////////
 
@@ -93,6 +93,12 @@ pub fn calculate_fee(ir_numerator: u64, ir_denominator: u64, outstanding_balance
 pub fn get_null_pk() -> XfrPublicKey {
   XfrPublicKey::zei_from_bytes(&[0; 32])
 }
+
+#[wasm_bindgen]
+pub fn create_default_policy_info() -> String {
+  serde_json::to_string(&PolicyChoice::Fungible()).unwrap() // should never fail
+}
+
 #[wasm_bindgen]
 /// Create policy information needed for debt token asset types.
 /// This data will be parsed by the policy evalautor to ensure
@@ -104,15 +110,16 @@ pub fn get_null_pk() -> XfrPublicKey {
 /// * `fiat_code` - base64 string representing asset type used to pay off the loan
 /// * `amount` - loan amount
 pub fn create_debt_policy_info(ir_numerator: u64,
-                        ir_denominator: u64,
-                        fiat_code: String,
-                        loan_amount: u64)
-                        -> Result<PolicyChoice, JsValue> {
+                               ir_denominator: u64,
+                               fiat_code: String,
+                               loan_amount: u64)
+                               -> Result<String, JsValue> {
   let fiat_code = AssetTypeCode::new_from_base64(&fiat_code).map_err(|_e| {
       JsValue::from_str("Could not deserialize asset token code")})?;
 
-  Ok(PolicyChoice::LoanToken(Fraction::new(ir_numerator, ir_denominator),
-      AssetTypeCode::new_from_base64(&fiat_code)?, loan_amount))
+  serde_json::to_string(&PolicyChoice::LoanToken(Fraction::new(ir_numerator, ir_denominator),
+    fiat_code, loan_amount))
+      .map_err(|e| JsValue::from_str(&format!("Could not serialize PolicyChoice: {}",e)))
 
   // let memo = DebtMemo { interest_rate: Fraction::new(ir_numerator, ir_denominator),
   //                       fiat_code,
@@ -182,11 +189,6 @@ impl WasmTransactionBuilder {
     Self::default()
   }
 
-  fn add_memo(&mut self, memo: Memo) -> &mut Self {
-    self.transaction.memos.push(memo);
-    self
-  }
-
   /// Add an asset definition operation to a transaction builder instance.
   ///
   /// # Arguments
@@ -198,8 +200,7 @@ impl WasmTransactionBuilder {
                                     key_pair: &XfrKeyPair,
                                     memo: String,
                                     token_code: String,
-                                    policy_choice: &PolicyChoice
-                                    )
+                                    policy_choice: String)
                                     -> Result<WasmTransactionBuilder, JsValue> {
     let asset_token = if token_code.is_empty() {
       AssetTypeCode::gen_random()
@@ -207,12 +208,30 @@ impl WasmTransactionBuilder {
       AssetTypeCode::new_from_base64(&token_code).unwrap()
     };
 
+    let policy_choice = serde_json::from_str::<PolicyChoice>(&policy_choice).map_err(|e| {
+                          JsValue::from_str(&format!("Could not deserialize PolicyChoice: {}", e))
+                        })?;
+
     Ok(WasmTransactionBuilder { transaction_builder: Serialized::new(&*self.transaction_builder.deserialize().add_operation_create_asset(&key_pair,
                                               Some(asset_token),
                                               false,
                                               false,
                                               &memo, policy_choice)
                   .map_err(|_e| JsValue::from_str("Could not build transaction"))?)})
+  }
+
+  pub fn add_policy_option(&self,
+                           token_code: String,
+                           which_check: String)
+                           -> Result<WasmTransactionBuilder, JsValue> {
+    let token_code = AssetTypeCode::new_from_base64(&token_code).map_err(|e| {
+                       JsValue::from_str(&format!("Could not deserialize asset type code: {}", e))
+                     })?;
+
+    Ok(WasmTransactionBuilder { transaction_builder:
+                                  Serialized::new(&*self.transaction_builder
+                                                        .deserialize()
+                                                        .add_policy_option(token_code, which_check)) })
   }
 
   /// Add an asset issuance to a transaction builder instance.
@@ -297,6 +316,12 @@ impl WasmTransactionBuilder {
     Ok(WasmTransactionBuilder { transaction_builder: Serialized::new(&*self.transaction_builder
                                                                            .deserialize()
                                                                            .add_operation(op)) })
+  }
+
+  pub fn sign(&mut self, kp: &XfrKeyPair) -> Result<WasmTransactionBuilder, JsValue> {
+    let new_builder = Serialized::new(&*self.transaction_builder.deserialize().sign(kp));
+
+    Ok(WasmTransactionBuilder { transaction_builder: new_builder })
   }
 
   /// Extract the serialized form of a transaction.

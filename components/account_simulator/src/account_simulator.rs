@@ -423,7 +423,8 @@ impl InterpretAccounts<PlatformError> for LedgerAccounts {
         let txn = Transaction { operations: vec![Operation::DefineAsset(op)],
                                 credentials: vec![],
                                 memos: vec![],
-                                signatures: vec![] };
+                                signatures: vec![],
+                                policy_options: None };
 
         let eff = TxnEffect::compute_effect(self.ledger.get_prng(), txn).unwrap();
 
@@ -591,7 +592,8 @@ impl InterpretAccounts<PlatformError> for LedgerAccounts {
         let txn = Transaction { operations: vec![Operation::TransferAsset(transfer)],
                                 credentials: vec![],
                                 memos: vec![],
-                                signatures: vec![] };
+                                signatures: vec![],
+                                policy_options: None };
 
         let effect = TxnEffect::compute_effect(self.ledger.get_prng(), txn).unwrap();
 
@@ -971,7 +973,8 @@ impl InterpretAccounts<PlatformError> for LedgerStandaloneAccounts {
         let txn = Transaction { operations: vec![Operation::DefineAsset(op)],
                                 credentials: vec![],
                                 memos: vec![],
-                                signatures: vec![] };
+                                signatures: vec![],
+                                policy_options: None };
 
         {
           // let serialize = serde_json::to_string(&tx).unwrap();
@@ -1223,7 +1226,8 @@ impl InterpretAccounts<PlatformError> for LedgerStandaloneAccounts {
         let txn = Transaction { operations: vec![Operation::TransferAsset(transfer)],
                                 credentials: vec![],
                                 memos: vec![],
-                                signatures: vec![] };
+                                signatures: vec![],
+                                policy_options: None };
 
         let txos = {
           // let serialize = serde_json::to_string(&tx).unwrap();

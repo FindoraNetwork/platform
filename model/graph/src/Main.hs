@@ -618,21 +618,23 @@ splitInouts txn@(TxnDecl{ _txnParams = params, _txnBody = body })
           _ -> recs
         l' = case l of
           AssertStmt be
-            -> AssertStmt $ over beTraverseArithExprs  (replaceResource recs) be
+            -> AssertStmt $ over beTraverseArithExprs  (replaceResource) be
           LocalStmt v tp ae
-            -> LocalStmt v tp $ replaceResource recs ae
+            -> LocalStmt v tp $ replaceResource ae
           IssueStmt ae tp dst
-            -> IssueStmt (replaceResource recs ae) tp dst
+            -> IssueStmt (replaceResource ae) tp dst
           TransferStmt ae src dst
-            -> TransferStmt (replaceResource recs ae) src dst
+            -> TransferStmt (replaceResource ae) src dst
           RequireSignatureStmt _ -> l
-        replaceResource recs = over traverseArithExpr $ \x ->
+        replaceResource = over traverseArithExpr $ \x ->
           case x of
-            AmountField v -> AmountField $ fromJust $ M.lookup v recs
+            AmountField v -> AmountField $ case (M.lookup v recs) of
+              Nothing -> fromJust $ M.lookup v outRecs
+              Just val -> val
             OwnerField v  -> OwnerField  $ case (M.lookup v recs) of
               Nothing -> fromJust $ M.lookup v outRecs
               Just val -> val
-            _ -> over traverseArithSubExpr (replaceResource recs) x
+            _ -> over traverseArithSubExpr (replaceResource) x
 
     inConsumed = flip map (snd <$> M.toList inRecs) $ \x ->
       AssertStmt $ EqExpr (AmountField x) (ConstAmountExpr 0)
@@ -1659,9 +1661,9 @@ main = do
         ) ast [ ("Explicit global_param init check", explicitGParamInit)
               , ("Explicit requires/ensures",over (polfTxns.traverse) explicitReqEns)
               , ("Make ALL expressions explicit", (over (polfTxns.traverse.txnBody) $ map (fromJust . fixAllExprs)))
+              , ("Split inout resources", over (polfTxns.traverse) splitInouts)
               , ("Make amount calculations explicit", (over (polfTxns.traverse.txnBody) explicitAmounts))
               , ("Move old(...) expressions",(over (polfTxns.traverse.txnBody) moveOldExprs))
-              , ("Split inout resources", over (polfTxns.traverse) splitInouts)
               , ("Make a var for each subexpression", over (polfTxns.traverse) explicitSubExprsTxnDecl)
               , ("Expression preconditions", over (polfTxns.traverse.txnBody) addExprPreconds)
               , ("Make a var for each subexpression", over (polfTxns.traverse) explicitSubExprsTxnDecl)

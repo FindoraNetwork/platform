@@ -13,7 +13,7 @@ use std::io::prelude::*;
 use std::path::{Path, PathBuf};
 use std::process::exit;
 use submission_server::TxnHandle;
-use txn_builder::{BuildsTransactions, TransactionBuilder};
+use txn_builder::{BuildsTransactions, PolicyChoice, TransactionBuilder};
 use zei::serialization::ZeiFromToBytes;
 use zei::setup::PublicParams;
 use zei::xfr::asset_record::{build_blind_asset_record, AssetRecordType};
@@ -928,7 +928,8 @@ fn process_add_cmd(add_matches: &clap::ArgMatches,
                                                              Some(asset_token),
                                                              allow_updates,
                                                              traceable,
-                                                             &memo)
+                                                             &memo,
+                                                             PolicyChoice::Fungible())
       {
         println!("Failed to add operation to transaction.");
         return Err(e);

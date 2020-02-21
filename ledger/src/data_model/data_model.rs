@@ -1,6 +1,6 @@
 #![deny(warnings)]
 use super::errors;
-use crate::policy_script::{Policy, PolicyGlobals};
+use crate::policy_script::{Policy, PolicyGlobals, TxnPolicyData};
 use chrono::prelude::*;
 use errors::PlatformError;
 use rand_chacha::ChaChaRng;
@@ -269,13 +269,15 @@ impl DefineAssetBody {
              updatable: bool,
              traceable: bool,
              memo: Option<Memo>,
-             confidential_memo: Option<ConfidentialMemo>)
+             confidential_memo: Option<ConfidentialMemo>,
+             policy: Option<(Box<Policy>, PolicyGlobals)>)
              -> Result<DefineAssetBody, PlatformError> {
     let mut asset_def: Asset = Default::default();
     asset_def.code = *token_code;
     asset_def.issuer = *issuer_key;
     asset_def.updatable = updatable;
     asset_def.traceable = traceable;
+    asset_def.policy = policy;
 
     if let Some(memo) = memo {
       asset_def.memo = Memo(memo.0);
@@ -405,6 +407,7 @@ pub struct TimeBounds {
 pub struct Transaction {
   pub operations: Vec<Operation>,
   pub credentials: Vec<CredentialProof>,
+  pub policy_options: Option<TxnPolicyData>,
   pub memos: Vec<Memo>,
   pub signatures: Vec<XfrSignature>,
 }
@@ -413,6 +416,7 @@ pub struct Transaction {
 pub struct FinalizedTransaction {
   pub txn: Transaction,
   pub tx_id: TxnSID,
+
   pub merkle_id: u64,
 }
 

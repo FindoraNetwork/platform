@@ -463,7 +463,10 @@ impl LedgerStatus {
     //   code will lead to erroneous validation failures when that change
     //   arrives.
     for code in txn.asset_types_involved.iter() {
-      if let Some((ref pol, ref globals)) = self.asset_types.get(code)?.properties.policy {
+      let asset = self.asset_types
+                      .get(code)
+                      .ok_or(PlatformError::InputsError)?;
+      if let Some((ref pol, ref globals)) = asset.properties.policy {
         let globals = globals.clone();
         policy_check_txn(code, globals, &pol, &txn.txn)?;
       }
@@ -1155,7 +1158,7 @@ pub mod helpers {
                                        -> Result<Transaction, PlatformError> {
     let issuer_key = IssuerPublicKey { key: *public_key };
     let mut tx = Transaction::default();
-    let asset_body = DefineAssetBody::new(&code, &issuer_key, false, false, memo, None)?;
+    let asset_body = DefineAssetBody::new(&code, &issuer_key, false, false, memo, None, None)?;
     let asset_create = DefineAsset::new(asset_body, &issuer_key, &secret_key)?;
     tx.operations.push(Operation::DefineAsset(asset_create));
     Ok(tx)
