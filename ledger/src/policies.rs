@@ -47,7 +47,8 @@ enum DebtInputIndices {
 
 // Returns expected fee for debt swap transaction
 pub fn calculate_fee(principal: u64, interest_rate: Fraction) -> u64 {
-  (I20F12::from_num(principal) * interest_rate.0).to_num()
+  (I20F12::from_num(principal) * interest_rate.0).round()
+                                                 .to_num()
 }
 
 // A debt swap is valid under the following conditions:

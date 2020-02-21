@@ -110,20 +110,20 @@ fn debt_policy() -> Policy {
                                         rt_ops: vec![],
                                         fraction_ops: vec![],
                                         amount_ops: vec![
-    AmountOp::AmountOf(ResourceVar(0)),
     AmountOp::AmountOf(ResourceVar(1)),
+    AmountOp::AmountOf(ResourceVar(0)),
     AmountOp::Const(0),
-    AmountOp::Minus(AmountVar(2), AmountVar(1)),
-    AmountOp::Minus(AmountVar(1), AmountVar(1)),
+    AmountOp::Minus(AmountVar(1), AmountVar(2)),
+    AmountOp::Minus(AmountVar(2), AmountVar(2)),
   ],
                                         bool_ops: vec![
-    BoolOp::AmtGe(AmountVar(2), AmountVar(1)),
+    BoolOp::AmtGe(AmountVar(1), AmountVar(2)),
     BoolOp::IdEq(IdVar(1), IdVar(2)),
     BoolOp::IdEq(IdVar(4), IdVar(3)),
-    BoolOp::AmtEq(AmountVar(1), AmountVar(1)),
+    BoolOp::AmtEq(AmountVar(2), AmountVar(2)),
     BoolOp::AmtGe(AmountVar(3), AmountVar(3)),
     BoolOp::AmtEq(AmountVar(4), AmountVar(3)),
-    BoolOp::AmtGe(AmountVar(1), AmountVar(1)),
+    BoolOp::AmtGe(AmountVar(2), AmountVar(2)),
     BoolOp::AmtEq(AmountVar(5), AmountVar(3)),
   ],
                                         assertions: vec![
@@ -138,8 +138,8 @@ fn debt_policy() -> Policy {
   ],
                                         required_signatures: vec![IdVar(0), IdVar(3)],
                                         txn_template: vec![
-    TxnOp::Transfer(AmountVar(1), ResourceVar(1), Some(ResourceVar(3))),
-    TxnOp::Transfer(AmountVar(1), ResourceVar(0), Some(ResourceVar(2))),
+    TxnOp::Transfer(AmountVar(2), ResourceVar(1), Some(ResourceVar(3))),
+    TxnOp::Transfer(AmountVar(2), ResourceVar(0), Some(ResourceVar(2))),
   ], },
                              TxnCheck { name: "repay_loan".to_string(),
                                         num_in_params: 2,
@@ -155,25 +155,24 @@ fn debt_policy() -> Policy {
   ],
                                         amount_ops: vec![
     AmountOp::AmountOf(ResourceVar(0)),
-    AmountOp::AmountOf(ResourceVar(2)),
     AmountOp::AmountOf(ResourceVar(1)),
     AmountOp::Round(FractionVar(2)),
-    AmountOp::Minus(AmountVar(3), AmountVar(4)),
-    AmountOp::Minus(AmountVar(1), AmountVar(5)),
+    AmountOp::Minus(AmountVar(2), AmountVar(3)),
+    AmountOp::Minus(AmountVar(1), AmountVar(4)),
     AmountOp::Const(0),
-    AmountOp::Minus(AmountVar(3), AmountVar(3)),
-    AmountOp::Minus(AmountVar(6), AmountVar(6)),
+    AmountOp::Minus(AmountVar(2), AmountVar(2)),
+    AmountOp::Minus(AmountVar(5), AmountVar(5)),
   ],
                                         bool_ops: vec![
     BoolOp::IdEq(IdVar(1), IdVar(2)),
-    BoolOp::AmtGe(AmountVar(3), AmountVar(4)),
+    BoolOp::AmtGe(AmountVar(2), AmountVar(3)),
+    BoolOp::AmtGe(AmountVar(1), AmountVar(4)),
     BoolOp::AmtGe(AmountVar(1), AmountVar(5)),
-    BoolOp::AmtGe(AmountVar(2), AmountVar(6)),
-    BoolOp::AmtGe(AmountVar(7), AmountVar(7)),
-    BoolOp::AmtGe(AmountVar(3), AmountVar(3)),
-    BoolOp::AmtEq(AmountVar(8), AmountVar(7)),
     BoolOp::AmtGe(AmountVar(6), AmountVar(6)),
-    BoolOp::AmtEq(AmountVar(9), AmountVar(7)),
+    BoolOp::AmtGe(AmountVar(2), AmountVar(2)),
+    BoolOp::AmtEq(AmountVar(7), AmountVar(6)),
+    BoolOp::AmtGe(AmountVar(5), AmountVar(5)),
+    BoolOp::AmtEq(AmountVar(8), AmountVar(6)),
   ],
                                         assertions: vec![
     BoolVar(0),
@@ -188,9 +187,9 @@ fn debt_policy() -> Policy {
   ],
                                         required_signatures: vec![],
                                         txn_template: vec![
-    TxnOp::Transfer(AmountVar(5), ResourceVar(0), None),
-    TxnOp::Transfer(AmountVar(6), ResourceVar(0), Some(ResourceVar(2))),
-    TxnOp::Transfer(AmountVar(3), ResourceVar(1), Some(ResourceVar(3))),
+    TxnOp::Transfer(AmountVar(4), ResourceVar(0), None),
+    TxnOp::Transfer(AmountVar(5), ResourceVar(0), Some(ResourceVar(2))),
+    TxnOp::Transfer(AmountVar(2), ResourceVar(1), Some(ResourceVar(3))),
   ], },
   ] }
 }
@@ -499,6 +498,7 @@ impl TransferOperationBuilder {
     let output_total = self.output_records
                            .iter()
                            .fold(0, |acc, ar| acc + ar.amount);
+    assert!(spend_total == output_total);
     if spend_total != output_total {
       return Err(PlatformError::InputsError);
     }

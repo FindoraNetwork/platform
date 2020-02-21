@@ -1513,7 +1513,7 @@ ppBraces = (\x -> PP.lbrace PP.$+$ x PP.$+$ PP.rbrace)
 
 pprintPolicyTxnCheck ptc =
   (PP.text "TxnCheck" PP.<+>) $ ppBraces $ PP.nest 4 $ PP.vcat $ map (PP.<+> PP.comma)
-    [ PP.text "name:" PP.<+> PP.doubleQuotes (PP.text $ T.unpack $ _ptcTxnName ptc)
+    [ PP.text "name:" PP.<+> PP.doubleQuotes (PP.text $ T.unpack $ _ptcTxnName ptc) PP.<> PP.text ".to_string()"
     , PP.text "num_in_params:" PP.<+> PP.int (_ptcNumInParams ptc)
     , PP.text "num_out_params:" PP.<+> PP.int (_ptcNumOutParams ptc)
 
@@ -1661,6 +1661,7 @@ main = do
         ) ast [ ("Explicit global_param init check", explicitGParamInit)
               , ("Explicit requires/ensures",over (polfTxns.traverse) explicitReqEns)
               , ("Make ALL expressions explicit", (over (polfTxns.traverse.txnBody) $ map (fromJust . fixAllExprs)))
+              , ("Move old(...) expressions",(over (polfTxns.traverse.txnBody) moveOldExprs))
               , ("Split inout resources", over (polfTxns.traverse) splitInouts)
               , ("Make amount calculations explicit", (over (polfTxns.traverse.txnBody) explicitAmounts))
               , ("Move old(...) expressions",(over (polfTxns.traverse.txnBody) moveOldExprs))

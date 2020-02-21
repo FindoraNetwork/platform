@@ -511,6 +511,8 @@ pub fn run_txn_check(check: &TxnCheck,
   let res_vars = res_vars;
   let res_totals = res_totals;
 
+  dbg!(&res_vars);
+
   /*
    * AT THIS POINT we should know:
    *  - All the *transfers* are of consistent asset types.
@@ -538,7 +540,9 @@ pub fn run_txn_check(check: &TxnCheck,
                                                                       .0
                                                                       .asset_type
                                                                       .ok_or_else(|| fail.clone())?,
-                 })
+                 });
+    dbg!(rt_vars.len());
+    dbg!(rt_vars.last());
   }
 
   /* Step 2: Calculate identity ops */
@@ -565,6 +569,7 @@ pub fn run_txn_check(check: &TxnCheck,
     let mut amt_ix = 0;
     let mut needed_frac_ix = 0;
     let mut needed_amt_ix = 0;
+    #[derive(Debug)]
     enum FracAmtPhase {
       Frac,
       Amt,
@@ -582,9 +587,16 @@ pub fn run_txn_check(check: &TxnCheck,
       debug_assert!(needed_amt_ix == 0
                     || needed_amt_ix < amt_vars.len() + (check.amount_ops.len() - amt_ix));
 
+      dbg!(&phase);
+      dbg!(&needed_frac_ix);
+      dbg!(&needed_amt_ix);
+      dbg!(&amt_vars.len());
+      dbg!(&frac_vars.len());
+
       match phase {
         FracAmtPhase::Amt => {
           dbg!("Amount op");
+          dbg!(check.amount_ops.get(amt_ix));
           match check.amount_ops.get(amt_ix) {
             None => {
               phase = FracAmtPhase::Frac;
@@ -636,9 +648,11 @@ pub fn run_txn_check(check: &TxnCheck,
               amt_vars.push(lv.checked_mul(rv).ok_or_else(|| fail.clone())?);
               amt_ix += 1;
             }
-            Some(AmountOp::Round(frac_ix)) => {
-              let frac_ix = frac_ix.0.try_into().map_err(|_| fail.clone())?;
-              match frac_vars.get(frac_ix) {
+            Some(AmountOp::Round(round_ix)) => {
+              let round_ix = round_ix.0.try_into().map_err(|_| fail.clone())?;
+              dbg!(&round_ix);
+              dbg!(frac_vars.get(round_ix));
+              match frac_vars.get(round_ix) {
                 Some(fv) => {
                   let fv: &Fraction = fv;
                   let fv: I20F12 = fv.0;
@@ -656,19 +670,22 @@ pub fn run_txn_check(check: &TxnCheck,
 
                   // If the needed fraction index can't
                   // possibly be available, error.
-                  if frac_ix >= frac_vars.len() + (check.fraction_ops.len() - frac_ix) {
+                  if round_ix >= frac_vars.len() + (check.fraction_ops.len() - frac_ix) {
                     return Err(fail.clone());
                   }
 
-                  needed_frac_ix = frac_ix;
+                  needed_frac_ix = round_ix;
                   phase = FracAmtPhase::Frac;
                 }
               }
             }
           }
+          dbg!(amt_vars.len());
+          dbg!(amt_vars.last());
         }
         FracAmtPhase::Frac => {
           dbg!("Frac op");
+          dbg!(check.fraction_ops.get(frac_ix));
           match check.fraction_ops.get(frac_ix) {
             None => {
               phase = FracAmtPhase::Amt;
@@ -762,6 +779,8 @@ pub fn run_txn_check(check: &TxnCheck,
               }
             }
           }
+          dbg!(frac_vars.len());
+          dbg!(frac_vars.last());
         }
       }
     }

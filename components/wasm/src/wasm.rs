@@ -401,7 +401,7 @@ impl WasmTransferOperationBuilder {
   pub fn balance(&mut self) -> Result<WasmTransferOperationBuilder, JsValue> {
     Ok(WasmTransferOperationBuilder { op_builder: Serialized::new(&*self.op_builder
                                                                         .deserialize()
-                                                                        .balance().map_err(|_e| JsValue::from_str("Error balancing txn"))?) })
+                                                                        .balance().map_err(|e| JsValue::from_str(&format!("Error balancing txn: {}",e)))?) })
   }
 
   /// TODO What's this and how is it different than transaction() below?
@@ -426,6 +426,10 @@ impl WasmTransferOperationBuilder {
                                             .map_err(|e| JsValue::from_str(&format!("{}", e)))?);
 
     Ok(WasmTransferOperationBuilder { op_builder: new_builder })
+  }
+
+  pub fn builder(&self) -> String {
+    serde_json::to_string(&self.op_builder.deserialize()).unwrap()
   }
 
   // Extract a transaction expression as JSON from a transaction builder.
