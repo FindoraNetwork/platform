@@ -677,10 +677,7 @@ fn submit_and_get_sids(protocol: &str,
   // Store and return sid
   let res = query(protocol, SUBMIT_PORT, "txn_status", &handle.0);
   match serde_json::from_str::<TxnStatus>(&res).unwrap() {
-    TxnStatus::Committed((_sid, txos)) => {
-      println!("Sid: {}", txos[0].0);
-      Ok(txos)
-    }
+    TxnStatus::Committed((_sid, txos)) => Ok(txos),
     _ => Err(PlatformError::DeserializationError),
   }
 }
@@ -913,6 +910,7 @@ fn activate_loan(loan_id: u64,
                      fiat_code,
                      transaction_file_name)?;
   let fiat_sid = submit_and_get_sids(protocol, transaction_file_name)?[0];
+  println!("Fiat sid: {}", fiat_sid.0);
   let fiat_open_asset_record = get_open_asset_record(protocol, fiat_sid, lender_key_pair)?;
 
   // Define debt asset
@@ -939,6 +937,7 @@ fn activate_loan(loan_id: u64,
                      debt_code,
                      transaction_file_name)?;
   let debt_sid = submit_and_get_sids(protocol, transaction_file_name)?[0];
+  println!("Fiat sid: {}", debt_sid.0);
   let debt_open_asset_record = get_open_asset_record(protocol, debt_sid, borrower_key_pair)?;
 
   // Initiate loan
@@ -991,6 +990,9 @@ fn activate_loan(loan_id: u64,
     sids_new[1]
   };
 
+  println!("New debt utxo sid: {}, fiat utxo sid: {}.",
+           sids_new[0].0, fiat_sid_merged.0);
+
   // Update data
   data.fiat_code = Some(fiat_code.to_base64());
   data.loans[loan_id as usize].active = true;
@@ -1002,6 +1004,7 @@ fn activate_loan(loan_id: u64,
 }
 
 // Pay loan with certain amount
+// TODO (Keyao): Fix the ZeiError(XfrCreationAssetAmountError) when building transfer operation
 fn pay_loan(loan_id: u64,
             amount: u64,
             transaction_file_name: &str,
@@ -1010,32 +1013,41 @@ fn pay_loan(loan_id: u64,
   // Get data
   let mut data = load_data()?;
   let loan = &data.loans.clone()[loan_id as usize];
+  // Check if the loan has been activated
+  if !loan.active {
+    println!("Loan {} hasn't been activated yet. Use active_loan to activate the loan.",
+             loan_id);
+    return Err(PlatformError::InputsError);
+  }
   let lender_id = loan.lender;
   let borrower_id = loan.borrower;
   let borrower = &data.borrowers.clone()[borrower_id as usize];
   let lender_key_pair = &data.get_lender_key_pair(lender_id)?;
   let borrower_key_pair = &data.get_borrower_key_pair(borrower_id)?;
 
-  // Get amount to burn
-  // TODO (Keyao): after the credentialing feature is added:
-  // 1. Change the hard coded fee
-  // 1. Check if the payment amount < fee (minimum requirement)
-  let fee = 10;
-
+  // Check if funds are sufficient
   if amount > borrower.balance {
-    println!("Insufficient funds. Use --load_funds.");
+    println!("Insufficient funds. Use --load_funds to load more funds.");
     return Err(PlatformError::InputsError);
   }
+
+  // Check if the amount meets the minimum requirement, i.e., the fee
+  // TODO (Keyao): after the credentialing feature is added, change the hard-coded fee
+  let fee = 10;
   if amount < fee {
-    println!("Amount should meet the minimum requirement: {}", fee);
+    println!("Payment amount should be at least: {}", fee);
     return Err(PlatformError::InputsError);
   }
-  let mut amount_burn = amount - fee;
-  if amount_burn > loan.balance {
+
+  // Get the amount to burn the balance, and the total amount the borrow will spend
+  let mut amount_to_burn = amount - fee;
+  if amount_to_burn > loan.balance {
     println!("Paying {} is enough.", loan.balance);
-    amount_burn = loan.balance;
+    amount_to_burn = loan.balance;
   }
-  println!("Amount to burn: {}", amount_burn);
+  let amount_to_spend = amount_to_burn + fee;
+  println!("The borrower will spend {} to burn {}.",
+           amount_to_spend, amount_to_burn);
 
   // Get fiat and debt sids
   let fiat_sid = if let Some(sid) = borrower.utxo {
@@ -1067,20 +1079,21 @@ fn pay_loan(loan_id: u64,
     return Err(PlatformError::InputsError);
   };
 
-  // TODO (Keyao): Fix the op constructoin error:
-  // ZeiError(XfrCreationAssetAmountError)
+  println!("Fiat code: {}", serde_json::to_string(&fiat_code.val)?);
+  println!("Debt code: {}", serde_json::to_string(&debt_code.val)?);
 
   let op = TransferOperationBuilder::new().add_input(TxoRef::Absolute(debt_sid),
                                                      debt_open_asset_record,
-                                                     amount_burn)?
+                                                     amount_to_burn)?
                                           .add_input(TxoRef::Absolute(fiat_sid),
                                                      fiat_open_asset_record,
-                                                     amount_burn + fee)?
-                                          .add_output(amount_burn + fee,
+                                                     amount_to_spend)?
+                                          .add_output(amount_to_spend,
                                                       lender_key_pair.get_pk_ref(),
                                                       fiat_code)?
-                                          .add_output(amount_burn,
-                                                      &XfrPublicKey::zei_from_bytes(&[0; 32]),
+                                          .add_output(amount_to_burn,
+                                            XfrKeyPair::generate(&mut ChaChaRng::from_seed([0u8; 32])).get_pk_ref(),
+                                                      // &XfrPublicKey::zei_from_bytes(&[0; 32]),
                                                       debt_code)?
                                           .create(TransferType::DebtSwap)?
                                           .sign(borrower_key_pair)?
@@ -1092,10 +1105,10 @@ fn pay_loan(loan_id: u64,
   // Submit transaction and update data
   let sids = submit_and_get_sids(protocol, transaction_file_name)?;
 
-  data.loans[loan_id as usize].balance = loan.balance - amount_burn;
+  data.loans[loan_id as usize].balance = loan.balance - amount_to_burn;
   data.loans[loan_id as usize].payments = loan.payments + 1;
   data.loans[loan_id as usize].utxo = Some(sids[2]);
-  data.borrowers[borrower_id as usize].balance = borrower.balance - amount_burn;
+  data.borrowers[borrower_id as usize].balance = borrower.balance - amount_to_spend;
   data.borrowers[borrower_id as usize].utxo = Some(sids[3]);
 
   store_data_to_file(data)
@@ -1409,11 +1422,7 @@ fn main() {
       .arg(Arg::with_name("protocol")
         .long("http")
         .takes_value(false)
-        .help("specify that http, not https should be used."))
-      .arg(Arg::with_name("store")
-        .long("store")
-        .takes_value(false)
-        .help("If specified, the transaction utxo sid will be stored.")))
+        .help("specify that http, not https should be used.")))
     .subcommand(SubCommand::with_name("load_funds")
       .arg(Arg::with_name("issuer")
         .short("i")
@@ -1580,15 +1589,7 @@ fn process_submit_cmd(submit_matches: &clap::ArgMatches,
     "https"
   };
 
-  // serialize txn
-  if submit_matches.is_present("store") {
-    match submit_and_get_sids(protocol, &transaction_file_name) {
-      Ok(_) => Ok(()),
-      Err(error) => Err(error),
-    }
-  } else {
-    submit(protocol, &transaction_file_name)
-  }
+  submit(protocol, &transaction_file_name)
 }
 
 // Create the specific file if missing
@@ -2513,7 +2514,7 @@ mod tests {
     let data = load_data().unwrap();
     let balance_pre = data.borrowers[0].balance;
 
-    // Create txn builder and key pairs
+    // Create txn builder
     let txn_builder_path = "tb_load_funds";
     store_txn_builder_to_file(&txn_builder_path, &TransactionBuilder::default()).unwrap();
 
@@ -2542,8 +2543,8 @@ mod tests {
   }
 
   #[test]
-  #[ignore]
-  // Create and activate a loan
+  // Create, activate and pay a loan
+  // TODO (Keyao): Fix the "Pay loan" part below
   fn test_create_activate_and_pay_loan() {
     // Load data
     let mut data = load_data().unwrap();
@@ -2563,13 +2564,13 @@ mod tests {
     assert_eq!(load_data().unwrap().loans[loan_id].active, true);
     assert_eq!(load_data().unwrap().loans[loan_id].balance, amount);
 
-    // TODO (Keyao): Fix pay_loan and uncomment the test below
+    // Pay loan
+    // TODO (Keyao): calling pay_loan fails due to "Invalid JSON"
 
-    // // Pay loan
     // let payment_amount = 200;
     // pay_loan(loan_id as u64, payment_amount, txn_builder_path, "https").unwrap();
 
-    // // TODO (keyao): After credentialing is added, change the hard-coded fee
+    // // TODO (keyao): After credentialing feature is added, modify the assertion below
     // assert_eq!(load_data().unwrap().loans[loan_id].balance,
     //            amount - payment_amount + 10);
     // assert_eq!(load_data().unwrap().loans[loan_id].payments, 1);

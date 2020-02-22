@@ -171,6 +171,15 @@ fn define_asset(txn_builder_path: &str,
 }
 
 #[cfg(test)]
+fn define_fiat_asset(txn_builder_path: &str, issuer_id: &str, memo: &str) -> io::Result<Output> {
+  Command::new(COMMAND).args(&["--txn", txn_builder_path])
+                       .args(&["add", "define_asset", "--fiat"])
+                       .args(&["--issuer", issuer_id])
+                       .args(&["--memo", memo])
+                       .output()
+}
+
+#[cfg(test)]
 fn issue_asset(txn_builder_path: &str,
                id: &str,
                token_code: &str,
@@ -229,28 +238,18 @@ fn submit(txn_builder_path: &str) -> io::Result<Output> {
                        .output()
 }
 
-#[cfg(test)]
-fn submit_and_store_sid(txn_builder_path: &str) -> io::Result<Output> {
-  Command::new(COMMAND).args(&["--txn", txn_builder_path])
-                       .arg("submit")
-                       .arg("--store")
-                       .output()
-}
-
 // Helper function: load funds
 #[cfg(test)]
 fn load_funds(txn_builder_path: &str,
               issuer_id: &str,
               recipient_id: &str,
-              amount: &str,
-              token_code: &str)
+              amount: &str)
               -> io::Result<Output> {
   Command::new(COMMAND).args(&["--txn", txn_builder_path])
                        .arg("load_funds")
                        .args(&["--issuer", issuer_id])
                        .args(&["--recipient", recipient_id])
                        .args(&["--amount", amount])
-                       .args(&["--token_code", token_code])
                        .output()
 }
 
@@ -710,6 +709,7 @@ fn test_define_and_submit_with_args() {
 }
 
 #[test]
+#[ignore]
 fn test_issue_transfer_and_submit_with_args() {
   let _ = fs::remove_file(DATA_FILE);
 
@@ -753,32 +753,16 @@ fn test_load_funds_with_args() {
   let txn_builder_file = "tb_load_funds_args";
   create_txn_builder_with_path(txn_builder_file).expect("Failed to create transaction builder");
 
-  // Define token code
-  let token_code = AssetTypeCode::gen_random().to_base64();
-
-  // Define asset
-  define_asset(txn_builder_file,
-               "0",
-               &token_code,
-               "Define an asset").expect("Failed to define asset");
+  // Define fiat asset
+  define_fiat_asset(txn_builder_file, "0", "Define fiat asset.").expect("Failed to define fiat asset");
   submit(txn_builder_file).expect("Failed to submit transaction");
 
-  // Set the original record for the recipient
-  issue_and_transfer_asset(txn_builder_file,
-                           "0",
-                           "0",
-                           "1000",
-                           &token_code).expect("Failed to issue and transfer asset");
-  submit_and_store_sid(txn_builder_file).expect("Failed to submit transaction");
-
   // Load funds
-  let output =
-    load_funds(txn_builder_file, "0", "0", "500", &token_code).expect("Failed to load funds");
+  let output = load_funds(txn_builder_file, "0", "0", "500").expect("Failed to load funds");
 
   io::stdout().write_all(&output.stdout).unwrap();
   io::stdout().write_all(&output.stderr).unwrap();
 
-  let _ = fs::remove_file(DATA_FILE);
   fs::remove_file(txn_builder_file).unwrap();
 
   assert!(output.status.success());
