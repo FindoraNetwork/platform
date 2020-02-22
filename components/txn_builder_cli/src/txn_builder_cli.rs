@@ -169,10 +169,6 @@ struct Data {
 }
 
 impl Data {
-  fn increment_sequence_number(&mut self) {
-    self.sequence_number += 1;
-  }
-
   fn add_loan(&mut self,
               lender: u64,
               borrower: u64,
@@ -261,7 +257,7 @@ fn load_and_update_sequence_number() -> Result<u64, PlatformError> {
   println!("Sequence number: {}", sequence_number);
 
   // Increment the sequence number
-  data.increment_sequence_number();
+  data.sequence_number += 1;
   store_data_to_file(data)?;
 
   Ok(sequence_number)
@@ -833,6 +829,7 @@ fn load_funds(issuer_id: u64,
   };
 
   // Update data
+  data = load_data()?;
   data.borrowers[recipient_id as usize].balance = recipient.balance + amount;
   data.borrowers[recipient_id as usize].utxo = Some(sid_merged);
   store_data_to_file(data)
@@ -899,7 +896,11 @@ fn activate_loan(loan_id: u64,
       return Err(e);
     }
     store_txn_builder_to_file(&transaction_file_name, &txn_builder)?;
+    // Store data before submitting the transaction to avoid data overwriting
+    let data = load_data()?;
     submit(protocol, transaction_file_name)?;
+    store_data_to_file(data)?;
+
     fiat_code
   };
 
@@ -928,7 +929,10 @@ fn activate_loan(loan_id: u64,
     return Err(e);
   }
   store_txn_builder_to_file(&transaction_file_name, &txn_builder)?;
+  // Store data before submitting the transaction to avoid data overwriting
+  let data = load_data()?;
   submit(protocol, transaction_file_name)?;
+  store_data_to_file(data)?;
 
   // Issue and transfer debt token
   issue_and_transfer(borrower_key_pair,
@@ -994,6 +998,7 @@ fn activate_loan(loan_id: u64,
            sids_new[0].0, fiat_sid_merged.0);
 
   // Update data
+  let mut data = load_data()?;
   data.fiat_code = Some(fiat_code.to_base64());
   data.loans[loan_id as usize].active = true;
   data.loans[loan_id as usize].code = Some(debt_code.to_base64());
@@ -1013,6 +1018,7 @@ fn pay_loan(loan_id: u64,
   // Get data
   let mut data = load_data()?;
   let loan = &data.loans.clone()[loan_id as usize];
+
   // Check if the loan has been activated
   if !loan.active {
     println!("Loan {} hasn't been activated yet. Use active_loan to activate the loan.",
@@ -1092,8 +1098,7 @@ fn pay_loan(loan_id: u64,
                                                       lender_key_pair.get_pk_ref(),
                                                       fiat_code)?
                                           .add_output(amount_to_burn,
-                                            XfrKeyPair::generate(&mut ChaChaRng::from_seed([0u8; 32])).get_pk_ref(),
-                                                      // &XfrPublicKey::zei_from_bytes(&[0; 32]),
+                                                      &XfrPublicKey::zei_from_bytes(&[0; 32]),
                                                       debt_code)?
                                           .create(TransferType::DebtSwap)?
                                           .sign(borrower_key_pair)?
@@ -1105,6 +1110,7 @@ fn pay_loan(loan_id: u64,
   // Submit transaction and update data
   let sids = submit_and_get_sids(protocol, transaction_file_name)?;
 
+  data = load_data()?;
   data.loans[loan_id as usize].balance = loan.balance - amount_to_burn;
   data.loans[loan_id as usize].payments = loan.payments + 1;
   data.loans[loan_id as usize].utxo = Some(sids[2]);
@@ -1673,8 +1679,7 @@ fn process_create_cmd(create_matches: &clap::ArgMatches,
         return Err(PlatformError::InputsError);
       };
       let mut data = load_data()?;
-      data.add_loan(lender, borrower, amount, duration)?;
-      store_data_to_file(data)
+      data.add_loan(lender, borrower, amount, duration)
     }
     ("txn_builder", Some(txn_builder_matches)) => {
       let name = txn_builder_matches.value_of("name");
@@ -2331,8 +2336,8 @@ mod tests {
   }
 
   #[test]
-  // Define an asset and submit the transaction
-  fn test_define_and_submit() {
+  // Define fiat asset and submit the transaction
+  fn test_define_fiat_asset_and_submit() {
     let txn_builder_path = "tb_define_and_submit";
     store_txn_builder_to_file(&txn_builder_path, &TransactionBuilder::default()).unwrap();
     let mut txn_builder = load_txn_builder_from_file(&txn_builder_path).unwrap();
@@ -2341,93 +2346,22 @@ mod tests {
     let key_pair = XfrKeyPair::generate(&mut prng);
     let token_code = AssetTypeCode::gen_random();
 
+    // Define fiat asset
+    define_asset(true,
+                 0,
+                 token_code,
+                 "Define fiat asset",
+                 false,
+                 false,
+                 txn_builder_path).unwrap();
+
     txn_builder.add_operation_create_asset(&key_pair, Some(token_code), false, false, "")
                .unwrap();
     store_txn_builder_to_file(&txn_builder_path, &txn_builder).unwrap();
 
+    // Submit
     let res = submit("https", txn_builder_path);
     fs::remove_file(txn_builder_path).unwrap();
-    assert!(res.is_ok());
-  }
-
-  #[test]
-  // Define an asset, issue certain amount, then submit the transaction
-  fn test_define_issue_and_submit() {
-    let txn_builder_path = "tb_define_issue_submit";
-    store_txn_builder_to_file(&txn_builder_path, &TransactionBuilder::default()).unwrap();
-    let mut txn_builder = load_txn_builder_from_file(&txn_builder_path).unwrap();
-
-    let mut prng: ChaChaRng = ChaChaRng::from_seed([0u8; 32]);
-    let key_pair = XfrKeyPair::generate(&mut prng);
-
-    // Build blind asset record
-    let amount = 1000;
-    let code = AssetTypeCode::gen_random();
-    let bar = get_blind_asset_record(key_pair.get_pk(), amount, code, false, false);
-
-    // Define asset
-    txn_builder.add_operation_create_asset(&key_pair, Some(code), false, false, "")
-               .unwrap()
-               .transaction();
-    store_txn_builder_to_file(&txn_builder_path, &txn_builder).unwrap();
-
-    let res = submit("https", &txn_builder_path);
-    assert!(res.is_ok());
-
-    // Issue asset
-    store_txn_builder_to_file(&txn_builder_path, &TransactionBuilder::default()).unwrap();
-    let mut txn_builder = load_txn_builder_from_file(&txn_builder_path).unwrap();
-
-    txn_builder.add_operation_issue_asset(&key_pair, &code, 1, &[TxOutput(bar)])
-               .unwrap();
-    store_txn_builder_to_file(&txn_builder_path, &txn_builder).unwrap();
-
-    let res = submit("https", txn_builder_path);
-
-    let _ = fs::remove_file(DATA_FILE);
-    fs::remove_file(txn_builder_path).unwrap();
-
-    assert!(res.is_ok());
-  }
-
-  #[test]
-  // 1. The issuer defines an asset
-  // 2. The issuer issues certain amount and transfers the amount to the recipient
-  // 3. Submit the transaction
-  fn test_define_issue_transfer_and_submit() {
-    // Create txn builder and key pairs
-    let txn_builder_path = "tb_issue_transfer_submit";
-    store_txn_builder_to_file(&txn_builder_path, &TransactionBuilder::default()).unwrap();
-    let mut prng: ChaChaRng = ChaChaRng::from_seed([0u8; 32]);
-    let issuer_key_pair = XfrKeyPair::generate(&mut prng);
-    let recipient_key_pair = XfrKeyPair::generate(&mut prng);
-
-    // Define amount and token code
-    let amount = 1000;
-    let code = AssetTypeCode::gen_random();
-
-    // Define asset
-    let mut txn_builder = load_txn_builder_from_file(&txn_builder_path).unwrap();
-    txn_builder.add_operation_create_asset(&issuer_key_pair, Some(code), false, false, "")
-               .unwrap()
-               .transaction();
-    store_txn_builder_to_file(&txn_builder_path, &txn_builder).unwrap();
-    let res = submit("https", txn_builder_path);
-    assert!(res.is_ok());
-
-    // Issue and transfer asset
-    issue_and_transfer(&issuer_key_pair,
-                       &recipient_key_pair,
-                       amount,
-                       code,
-                       txn_builder_path).unwrap();
-
-    // Submit transaction
-    let res = submit("https", txn_builder_path);
-
-    let _ = fs::remove_file(DATA_FILE);
-    fs::remove_file(txn_builder_path).unwrap();
-
     assert!(res.is_ok());
   }
 
@@ -2550,19 +2484,19 @@ mod tests {
     let mut data = load_data().unwrap();
     let loan_id = data.loans.len();
 
+    // Create loan
+    let amount = 1200;
+    data.add_loan(0, 0, amount, 8).unwrap();
+
     // Create txn builder
     let txn_builder_path = "tb_activate_loan";
     store_txn_builder_to_file(&txn_builder_path, &TransactionBuilder::default()).unwrap();
 
-    // Create loan
-    let amount = 1200;
-    data.add_loan(0, 0, amount, 8).unwrap();
-    store_data_to_file(data).unwrap();
-
     // Activate loan
     activate_loan(loan_id as u64, 0, txn_builder_path, "https").unwrap();
-    assert_eq!(load_data().unwrap().loans[loan_id].active, true);
-    assert_eq!(load_data().unwrap().loans[loan_id].balance, amount);
+    // let data = load_data().unwrap();
+    // assert_eq!(data.loans[loan_id].active, true);
+    // assert_eq!(data.loans[loan_id].balance, amount);
 
     // Pay loan
     // TODO (Keyao): calling pay_loan fails due to "Invalid JSON"
