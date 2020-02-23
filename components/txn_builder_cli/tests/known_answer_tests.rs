@@ -253,13 +253,22 @@ fn load_funds(txn_builder_path: &str,
                        .output()
 }
 
-// Helper function: initiate loan
+// Helper functions: initiate and pay loan
 #[cfg(test)]
 fn activate_loan(txn_builder_path: &str, loan_id: &str, issuer_id: &str) -> io::Result<Output> {
   Command::new(COMMAND).args(&["--txn", txn_builder_path])
                        .arg("activate_loan")
                        .args(&["--loan", loan_id])
                        .args(&["--issuer", issuer_id])
+                       .output()
+}
+
+#[cfg(test)]
+fn pay_loan(txn_builder_path: &str, loan_id: &str, amount: &str) -> io::Result<Output> {
+  Command::new(COMMAND).args(&["--txn", txn_builder_path])
+                       .arg("pay_loan")
+                       .args(&["--loan", loan_id])
+                       .args(&["--amount", amount])
                        .output()
 }
 
@@ -770,7 +779,7 @@ fn test_load_funds_with_args() {
 
 #[test]
 #[ignore]
-fn test_create_and_activate_loan_with_args() {
+fn test_create_activate_and_pay_loan_with_args() {
   let _ = fs::remove_file(DATA_FILE);
 
   // Create loan
@@ -787,6 +796,14 @@ fn test_create_and_activate_loan_with_args() {
 
   // Initiate loan
   let output = activate_loan(txn_builder_file, "0", "0").expect("Failed to load funds");
+
+  io::stdout().write_all(&output.stdout).unwrap();
+  io::stdout().write_all(&output.stderr).unwrap();
+
+  assert!(output.status.success());
+
+  // Pay loan
+  let output = pay_loan(txn_builder_file, "0", "300").expect("Failed to pay loan");
 
   io::stdout().write_all(&output.stdout).unwrap();
   io::stdout().write_all(&output.stderr).unwrap();

@@ -1020,7 +1020,6 @@ fn activate_loan(loan_id: u64,
 }
 
 // Pay loan with certain amount
-// TODO (Keyao): Fix the "Invalid JSON" error when submitting transaction
 fn pay_loan(loan_id: u64,
             amount: u64,
             transaction_file_name: &str,
@@ -1112,6 +1111,12 @@ fn pay_loan(loan_id: u64,
                                           .add_output(amount_to_burn,
                                                       &XfrPublicKey::zei_from_bytes(&[0; 32]),
                                                       debt_code)?
+                                          .add_output(loan.amount - amount_to_burn,
+                                                      lender_key_pair.get_pk_ref(),
+                                                      debt_code)?
+                                          .add_output(loan.amount - amount_to_spend,
+                                                      borrower_key_pair.get_pk_ref(),
+                                                      fiat_code)?
                                           .create(TransferType::DebtSwap)?
                                           .sign(borrower_key_pair)?
                                           .transaction()?;
@@ -1312,7 +1317,7 @@ fn main() {
           .short("f")
           .long("fiat")
           .takes_value(false)
-          .help("Indicate the asset is a fiat asset."))  
+          .help("Indicate the asset is a fiat asset."))
         .arg(Arg::with_name("issuer")
           .short("i")
           .long("issuer")
@@ -2378,7 +2383,6 @@ mod tests {
   }
 
   #[test]
-  #[ignore]
   // 1. The issuer defines the asset
   // 2. The issuer issues and transfers two assets to the recipient
   // 3. Merge the two records for the recipient
@@ -2489,8 +2493,8 @@ mod tests {
   }
 
   #[test]
+  #[ignore]
   // Create, activate and pay a loan
-  // TODO (Keyao): Fix the "Pay loan" part below
   fn test_create_activate_and_pay_loan() {
     // Load data
     let mut data = load_data().unwrap();
@@ -2499,6 +2503,7 @@ mod tests {
     // Create loan
     let amount = 1200;
     data.add_loan(0, 0, amount, 8).unwrap();
+    assert_eq!(data.loans.len(), loan_id + 1);
 
     // Create txn builder
     let txn_builder_path = "tb_activate_loan";
@@ -2510,14 +2515,12 @@ mod tests {
     assert_eq!(data.loans[loan_id].active, true);
     assert_eq!(data.loans[loan_id].balance, amount);
 
-    // // Pay loan
-    // // TODO (Keyao): calling pay_loan fails due to "Invalid JSON"
+    // Pay loan
+    let payment_amount = 200;
+    pay_loan(loan_id as u64, payment_amount, txn_builder_path, "https").unwrap();
 
-    // let payment_amount = 200;
-    // pay_loan(loan_id as u64, payment_amount, txn_builder_path, "https").unwrap();
-
-    // let data = load_data().unwrap();
-    // assert_eq!(data.loans[loan_id].payments, 1);
+    let data = load_data().unwrap();
+    assert_eq!(data.loans[loan_id].payments, 1);
 
     let _ = fs::remove_file(DATA_FILE);
     fs::remove_file(txn_builder_path).unwrap();
