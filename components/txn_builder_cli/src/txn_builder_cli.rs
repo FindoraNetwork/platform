@@ -4,6 +4,7 @@ use env_logger::{Env, Target};
 use hex;
 use ledger::data_model::errors::PlatformError;
 use ledger::data_model::{AccountAddress, AssetTypeCode, TransferType, TxOutput, TxoRef, TxoSID};
+use ledger::policies::{DebtMemo, Fraction};
 use log::trace; // Other options: debug, info, warn
 use rand_chacha::ChaChaRng;
 use rand_core::SeedableRng;
@@ -38,14 +39,14 @@ const INIT_DATA: &str = r#"
       {
           "id": 0,
           "name": "Lenny",
-          "key_pair": "76b8e0ada0f13d90405d6ae55386bd28bdd219b8a08ded1aa836efcc8b770dc720fdbac9b10b7587bba7b5bc163bce69e796d71e4ed44c10fcb4488689f7a144"
+          "key_pair": "023f37203a2476c42566a61cc55c3ca875dbb4cc41c0deb789f8e7bf881836384d4b18062f8502598de045ca7b69f067f59f93b16e3af8733a988adc2341f5c8"
       }
   ],
   "borrowers": [
       {
           "id": 0,
           "name": "Ben",
-          "key_pair": "76b8e0ada0f13d90405d6ae55386bd28bdd219b8a08ded1aa836efcc8b770dc720fdbac9b10b7587bba7b5bc163bce69e796d71e4ed44c10fcb4488689f7a144",
+          "key_pair": "f6a12ca8ffc30a66ca140ccc7276336115819361186d3f535dd99f8eaaca8fce7d177f1e71b490ad0ce380f9578ab12bb0fc00a98de8f6a555c81d48c2039249",
           "balance": 0,
           "utxo": null
       }
@@ -58,15 +59,13 @@ const DATA_FILE: &str = "data.json";
 const HOST: &str = "testnet.findora.org";
 const QUERY_PORT: &str = "8668";
 const SUBMIT_PORT: &str = "8669";
+// TODO (Keyao): After the credentialing feature is added, change the hard-coded interest rate
+const INTEREST_RATE_NUMERATOR: u64 = 1;
+const INTEREST_RATE_DENOMINATOR: u64 = 100;
 
 //
 // Users
 //
-fn generate_key_pair_str() -> String {
-  let key_pair = XfrKeyPair::generate(&mut ChaChaRng::from_seed([0u8; 32]));
-  hex::encode(key_pair.zei_to_bytes())
-}
-
 #[derive(Clone, Deserialize, Serialize)]
 struct Issuer {
   id: u64,
@@ -76,9 +75,11 @@ struct Issuer {
 
 impl Issuer {
   fn new(id: usize, name: String) -> Self {
+    let key_pair = XfrKeyPair::generate(&mut ChaChaRng::from_seed([0u8; 32]));
+    let key_pair_str = hex::encode(key_pair.zei_to_bytes());
     Issuer { id: id as u64,
              name,
-             key_pair: generate_key_pair_str() }
+             key_pair: key_pair_str }
   }
 }
 
@@ -91,9 +92,11 @@ struct Lender {
 
 impl Lender {
   fn new(id: usize, name: String) -> Self {
+    let key_pair = XfrKeyPair::generate(&mut ChaChaRng::from_seed([1u8; 32]));
+    let key_pair_str = hex::encode(key_pair.zei_to_bytes());
     Lender { id: id as u64,
              name,
-             key_pair: generate_key_pair_str() }
+             key_pair: key_pair_str }
   }
 }
 
@@ -108,9 +111,11 @@ struct Borrower {
 
 impl Borrower {
   fn new(id: usize, name: String) -> Self {
+    let key_pair = XfrKeyPair::generate(&mut ChaChaRng::from_seed([2u8; 32]));
+    let key_pair_str = hex::encode(key_pair.zei_to_bytes());
     Borrower { id: id as u64,
                name,
-               key_pair: generate_key_pair_str(),
+               key_pair: key_pair_str,
                balance: 0,
                utxo: None }
   }
@@ -919,11 +924,17 @@ fn activate_loan(loan_id: u64,
   let debt_code = AssetTypeCode::gen_random();
   println!("Generated debt code: {}",
            serde_json::to_string(&debt_code.val).unwrap());
+  let memo = DebtMemo { interest_rate: Fraction::new(INTEREST_RATE_NUMERATOR,
+                                                     INTEREST_RATE_DENOMINATOR),
+                        fiat_code,
+                        loan_amount: amount };
+  let memo_str = serde_json::to_string(&memo).or_else(|_| Err(PlatformError::SerializationError))
+                                             .unwrap();
   if let Err(e) = txn_builder.add_operation_create_asset(&borrower_key_pair,
                                                          Some(debt_code),
                                                          false,
                                                          false,
-                                                         "Define debt asset.")
+                                                         &memo_str)
   {
     println!("Failed to add operation to transaction.");
     return Err(e);
@@ -1009,7 +1020,7 @@ fn activate_loan(loan_id: u64,
 }
 
 // Pay loan with certain amount
-// TODO (Keyao): Fix the ZeiError(XfrCreationAssetAmountError) when building transfer operation
+// TODO (Keyao): Fix the "Invalid JSON" error when submitting transaction
 fn pay_loan(loan_id: u64,
             amount: u64,
             transaction_file_name: &str,
@@ -1038,8 +1049,9 @@ fn pay_loan(loan_id: u64,
   }
 
   // Check if the amount meets the minimum requirement, i.e., the fee
-  // TODO (Keyao): after the credentialing feature is added, change the hard-coded fee
-  let fee = 10;
+  let fee = ledger::policies::calculate_fee(loan.balance,
+                                            Fraction::new(INTEREST_RATE_NUMERATOR,
+                                                          INTEREST_RATE_DENOMINATOR));
   if amount < fee {
     println!("Payment amount should be at least: {}", fee);
     return Err(PlatformError::InputsError);
@@ -2494,20 +2506,18 @@ mod tests {
 
     // Activate loan
     activate_loan(loan_id as u64, 0, txn_builder_path, "https").unwrap();
-    // let data = load_data().unwrap();
-    // assert_eq!(data.loans[loan_id].active, true);
-    // assert_eq!(data.loans[loan_id].balance, amount);
+    let data = load_data().unwrap();
+    assert_eq!(data.loans[loan_id].active, true);
+    assert_eq!(data.loans[loan_id].balance, amount);
 
-    // Pay loan
-    // TODO (Keyao): calling pay_loan fails due to "Invalid JSON"
+    // // Pay loan
+    // // TODO (Keyao): calling pay_loan fails due to "Invalid JSON"
 
     // let payment_amount = 200;
     // pay_loan(loan_id as u64, payment_amount, txn_builder_path, "https").unwrap();
 
-    // // TODO (keyao): After credentialing feature is added, modify the assertion below
-    // assert_eq!(load_data().unwrap().loans[loan_id].balance,
-    //            amount - payment_amount + 10);
-    // assert_eq!(load_data().unwrap().loans[loan_id].payments, 1);
+    // let data = load_data().unwrap();
+    // assert_eq!(data.loans[loan_id].payments, 1);
 
     let _ = fs::remove_file(DATA_FILE);
     fs::remove_file(txn_builder_path).unwrap();
