@@ -19,10 +19,33 @@ const DATA_FILE: &str = "data.json";
 // Helper functions: create and store without path
 //
 #[cfg(test)]
-fn create_user(user_type: &str, name: &str) -> io::Result<Output> {
-  Command::new(COMMAND).args(&["create", "user"])
-                       .args(&["--type", user_type])
+fn create_issuer(name: &str) -> io::Result<Output> {
+  Command::new(COMMAND).args(&["create", "user", "issuer"])
                        .args(&["--name", name])
+                       .output()
+}
+
+#[cfg(test)]
+fn create_lender(name: &str, min_credit_score: &str) -> io::Result<Output> {
+  Command::new(COMMAND).args(&["create", "user", "lender"])
+                       .args(&["--name", name])
+                       .args(&["--min_credit_score", min_credit_score])
+                       .output()
+}
+
+#[cfg(test)]
+fn create_borrower(name: &str) -> io::Result<Output> {
+  Command::new(COMMAND).args(&["create", "user", "borrower"])
+                       .args(&["--name", name])
+                       .output()
+}
+
+#[cfg(test)]
+fn create_credential(borrower: &str, attribute: &str, value: &str) -> io::Result<Output> {
+  Command::new(COMMAND).args(&["create", "credential"])
+                       .args(&["--borrower", borrower])
+                       .args(&["--attribute", attribute])
+                       .args(&["--value", value])
                        .output()
 }
 
@@ -278,24 +301,49 @@ fn pay_loan(txn_builder_path: &str, loan_id: &str, amount: &str) -> io::Result<O
 #[test]
 fn test_create_users() {
   // Create an issuer
-  let output = create_user("issuer", "Issuer I").expect("Failed to create an issuer");
-
+  let output = create_issuer("Issuer I").expect("Failed to create an issuer");
   io::stdout().write_all(&output.stdout).unwrap();
   io::stdout().write_all(&output.stderr).unwrap();
 
   assert!(output.status.success());
 
-  // Create an lender
-  let output = create_user("lender", "Lender L").expect("Failed to create a lender");
-
+  // Create a lender
+  let output = create_lender("Lender L", "550").expect("Failed to create a lender");
   io::stdout().write_all(&output.stdout).unwrap();
   io::stdout().write_all(&output.stderr).unwrap();
 
   assert!(output.status.success());
 
   // Create a borrower
-  let output = create_user("borrower", "Borrower B").expect("Failed to create a borrower");
+  let output = create_borrower("Borrower B").expect("Failed to create a borrower");
+  io::stdout().write_all(&output.stdout).unwrap();
+  io::stdout().write_all(&output.stderr).unwrap();
 
+  assert!(output.status.success());
+
+  let _ = fs::remove_file(DATA_FILE);
+}
+
+#[test]
+fn test_create_credentials() {
+  // Create a min_credit_score credential
+  let output = create_credential("0", "min_credit_score", "600").expect("Failed to create a min_credit_score credential");
+  io::stdout().write_all(&output.stdout).unwrap();
+  io::stdout().write_all(&output.stderr).unwrap();
+
+  assert!(output.status.success());
+
+  // Create a min_income credential
+  let output =
+    create_credential("0", "min_income", "1000").expect("Failed to create a min_income credential");
+  io::stdout().write_all(&output.stdout).unwrap();
+  io::stdout().write_all(&output.stderr).unwrap();
+
+  assert!(output.status.success());
+
+  // Create a citizenshiip credential
+  let output =
+    create_credential("0", "citizenship", "1").expect("Failed to create a citizenship credential");
   io::stdout().write_all(&output.stdout).unwrap();
   io::stdout().write_all(&output.stderr).unwrap();
 

@@ -34,17 +34,24 @@ In the initial data, there are three users (issuer Izzie, lender Lenny and borro
 
 ### Create an issuer
 ```
-./txn_builder_cli create user --type issuer --name IssuerName
+./txn_builder_cli create user issuer --name IssuerName
 ```
 
 ### Create a lender
 ```
-./txn_builder_cli create user --type issuer --name LenderName
+./txn_builder_cli create user lender --name LenderName --min_credit_score 580
 ```
 
 ### Create a borrower
 ```
-./txn_builder_cli create user --type borrower --name BorrowerName
+./txn_builder_cli create user borrower --name BorrowerName
+```
+
+## Create a credential record
+Currently supported attributes are min_credit_score, min_income and citizenshiip.
+For example, to create a min_credit_score credential:
+```
+./txn_builder_cli create credential --borrower 0 --attribute min_credit_score --amount 650
 ```
 
 ## Create a loan
