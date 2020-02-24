@@ -860,8 +860,6 @@ fn get_open_asset_record(protocol: &str,
 // Issues and transfers fiat and debt token to the lender and borrower, respectively
 // Then activate the loan
 //
-// Note: make sure assets have been defined before calling this function
-//
 // TODO (Keyao): Credential check
 fn activate_loan(loan_id: u64,
                  issuer_id: u64,
