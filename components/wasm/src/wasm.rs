@@ -198,6 +198,7 @@ impl WasmTransactionBuilder {
   /// a token code will be chosen at random
   pub fn add_operation_create_asset(&self,
                                     key_pair: &XfrKeyPair,
+
                                     memo: String,
                                     token_code: String,
                                     policy_choice: String)

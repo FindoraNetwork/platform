@@ -33,6 +33,8 @@ pub struct TxnEffect {
 
   pub asset_types_involved: HashSet<AssetTypeCode>,
   pub custom_policy_asset_types: HashMap<AssetTypeCode, TxnCheckInputs>,
+  // Updates to the AIR
+  pub air_updates: HashMap<BitDigest, String>,
 }
 
 // Internally validates the transaction as well.
@@ -57,6 +59,8 @@ impl TxnEffect {
                                        .0
                                        .drain(..)
                                        .collect::<HashMap<_, _>>();
+
+    let mut air_updates: HashMap<BitDigest, String> = HashMap::new();
 
     // Sequentially go through the operations, validating intrinsic or
     // local-to-the-transaction properties, then recording effects and
@@ -293,8 +297,13 @@ impl TxnEffect {
             txo_count += 1;
           }
         }
-      }
-    }
+
+        Operation::AIRAssign(air_assign) => {
+          // unimplemented!("AIRAssign {:?}", air_assign);
+          air_updates.insert(air_assign.body.addr, air_assign.body.data.clone());
+        }
+      } // end -- match op {
+    } // end -- for op in txn.operations.iter() {
 
     Ok(TxnEffect { txn,
                    txos,
@@ -304,7 +313,8 @@ impl TxnEffect {
                    issuance_keys,
                    debt_effects,
                    asset_types_involved,
-                   custom_policy_asset_types })
+                   custom_policy_asset_types,
+                   air_updates })
   }
 }
 
@@ -382,6 +392,8 @@ pub struct BlockEffect {
   pub new_issuance_nums: HashMap<AssetTypeCode, Vec<u64>>,
   // Which public key is being used to issue each asset type
   pub issuance_keys: HashMap<AssetTypeCode, IssuerPublicKey>,
+  // Updates to the AIR
+  pub air_updates: HashMap<BitDigest, String>,
 }
 
 impl BlockEffect {
@@ -453,9 +465,9 @@ impl BlockEffect {
       self.new_issuance_nums.insert(type_code, issuance_nums);
     }
 
-    for (type_code, issuer_key) in txn.issuance_keys {
-      debug_assert!(!self.issuance_keys.contains_key(&type_code));
-      self.issuance_keys.insert(type_code, issuer_key);
+    for (addr, data) in txn.air_updates {
+      debug_assert!(!self.air_updates.contains_key(&addr));
+      self.air_updates.insert(addr, data);
     }
 
     Ok(temp_sid)

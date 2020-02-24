@@ -152,14 +152,12 @@ fn define_asset(txn_builder_path: &str,
 fn issue_asset(txn_builder_path: &str,
                key_pair_path: &str,
                token_code: &str,
-               sequence_number: &str,
                amount: &str)
                -> io::Result<Output> {
   Command::new(COMMAND).args(&["--txn", txn_builder_path])
                        .args(&["--key_pair", key_pair_path])
                        .args(&["add", "issue_asset"])
                        .args(&["--token_code", token_code])
-                       .args(&["--sequence_number", sequence_number])
                        .args(&["--amount", amount])
                        .output()
 }
@@ -185,12 +183,73 @@ fn transfer_asset(txn_builder_path: &str,
 }
 
 #[cfg(test)]
-fn _submit(txn_builder_path: &str, host: &str, port: &str) -> io::Result<Output> {
+fn issue_and_transfer_asset(txn_builder_path: &str,
+                            issuer_key_pair_path: &str,
+                            recipient_key_pair_path: &str,
+                            amount: &str,
+                            token_code: &str)
+                            -> io::Result<Output> {
+  Command::new(COMMAND).args(&["--txn", txn_builder_path])
+                       .args(&["--key_pair", issuer_key_pair_path])
+                       .args(&["add", "issue_and_transfer_asset"])
+                       .args(&["--recipient_key_pair_path", recipient_key_pair_path])
+                       .args(&["--amount", amount])
+                       .args(&["--token_code", token_code])
+                       .output()
+}
+
+// Helper functions: submit transaction
+
+#[cfg(test)]
+fn submit(txn_builder_path: &str) -> io::Result<Output> {
   Command::new(COMMAND).args(&["--txn", txn_builder_path])
                        .arg("submit")
-                       .arg("--http")
-                       .args(&["--host", host])
-                       .args(&["--port", port])
+                       .output()
+}
+
+#[cfg(test)]
+fn submit_and_store_sid(txn_builder_path: &str) -> io::Result<Output> {
+  Command::new(COMMAND).args(&["--txn", txn_builder_path])
+                       .arg("submit")
+                       .arg("--store")
+                       .output()
+}
+
+// Helper function: load funds
+#[cfg(test)]
+fn load_funds(txn_builder_path: &str,
+              issuer_key_pair_path: &str,
+              recipient_key_pair_path: &str,
+              amount: &str,
+              token_code: &str)
+              -> io::Result<Output> {
+  Command::new(COMMAND).args(&["--txn", txn_builder_path])
+                       .args(&["--key_pair", issuer_key_pair_path])
+                       .arg("load_funds")
+                       .args(&["--recipient_key_pair_path", recipient_key_pair_path])
+                       .args(&["--amount", amount])
+                       .args(&["--token_code", token_code])
+                       .output()
+}
+
+// Helper function: initiate loan
+#[cfg(test)]
+fn init_loan(txn_builder_path: &str,
+             issuer_key_pair_path: &str,
+             lender_key_pair_path: &str,
+             borrower_key_pair_path: &str,
+             fiat_code: &str,
+             debt_code: &str,
+             amount: &str)
+             -> io::Result<Output> {
+  Command::new(COMMAND).args(&["--txn", txn_builder_path])
+                       .args(&["--key_pair", issuer_key_pair_path])
+                       .arg("init_loan")
+                       .args(&["--lender_key_pair_path", lender_key_pair_path])
+                       .args(&["--borrower_key_pair_path", borrower_key_pair_path])
+                       .args(&["--fiat_code", fiat_code])
+                       .args(&["--debt_code", debt_code])
+                       .args(&["--amount", amount])
                        .output()
 }
 
@@ -534,11 +593,8 @@ fn test_define_issue_and_transfer_with_args() {
   assert!(output.status.success());
 
   // Issue asset
-  let output = issue_asset(txn_builder_file,
-                           key_pair_file,
-                           &token_code,
-                           "1",
-                           "10").expect("Failed to issue asset");
+  let output =
+    issue_asset(txn_builder_file, key_pair_file, &token_code, "10").expect("Failed to issue asset");
 
   io::stdout().write_all(&output.stdout).unwrap();
   io::stdout().write_all(&output.stderr).unwrap();
@@ -587,106 +643,174 @@ fn test_define_issue_and_transfer_with_args() {
   assert!(output.status.success());
 }
 
-// TODO (Keyao): Tests below don't pass. Fix them.
+//
+// Compose transaction and submit
+//
+#[test]
+fn test_define_and_submit_with_args() {
+  // Create txn builder and key pair
+  let txn_builder_file = "tb_define_submit";
+  let key_pair_file = "kp_define_submit";
+  create_with_path(txn_builder_file).expect("Failed to create transaction builder");
+  keygen_with_path(key_pair_file).expect("Failed to generate key pair");
 
-// //
-// // Submit
-// //
-// #[test]
-// fn test_define_and_submit() {
-//   // Create txn builder and key pair
-//   let txn_builder_file = "tb_define_submit";
-//   let key_pair_file = "kp_define_submit";
-//   create_with_path(txn_builder_file).expect("Failed to create transaction builder");
-//   keygen_with_path(key_pair_file).expect("Failed to generate key pair");
+  // Define asset
+  define_asset(txn_builder_file,
+               key_pair_file,
+               &AssetTypeCode::gen_random().to_base64(),
+               "Define an asset").expect("Failed to define asset");
 
-//   // Define asset
-//   define_asset(txn_builder_file,
-//                key_pair_file,
-//                &AssetTypeCode::gen_random().to_base64(),
-//                "Define an asset").expect("Failed to define asset");
+  // Submit transaction
+  let output = submit(txn_builder_file).expect("Failed to submit transaction");
 
-//   // Submit transaction
-//   let output =
-//     submit(txn_builder_file, "testnet.findora.org", "8669").expect("Failed to execute process");
+  io::stdout().write_all(&output.stdout).unwrap();
+  io::stdout().write_all(&output.stderr).unwrap();
 
-//   io::stdout().write_all(&output.stdout).unwrap();
-//   io::stdout().write_all(&output.stderr).unwrap();
+  fs::remove_file(txn_builder_file).unwrap();
+  fs::remove_file(key_pair_file).unwrap();
 
-//   assert!(output.status.success());
+  assert!(output.status.success());
+}
 
-//   fs::remove_file(txn_builder_file).unwrap();
-//   fs::remove_file(key_pair_file).unwrap();
-// }
+#[test]
+fn test_issue_transfer_and_submit_with_args() {
+  // Create txn builder and key pairs
+  let txn_builder_file = "tb_issue_transfer_args";
+  let issuer_key_pair_file = "ikp";
+  let recipient_key_pair_file = "rkp";
+  create_with_path(txn_builder_file).expect("Failed to create transaction builder");
+  keygen_with_path(issuer_key_pair_file).expect("Failed to generate key pair for the issuer");
+  keygen_with_path(recipient_key_pair_file).expect("Failed to generate key pair for the recipient");
 
-// #[test]
-// fn test_submit_with_args() {
-//   // Create txn builder and key pair
-//   let txn_builder_file = "tb_submit";
-//   let key_pair_file = "kp_submit";
-//   create_with_path(txn_builder_file).expect("Failed to create transaction builder");
-//   keygen_with_path(key_pair_file).expect("Failed to generate key pair");
+  // Define token code
+  let token_code = AssetTypeCode::gen_random().to_base64();
 
-//   let files = vec!["pub", "addr", "sid", "bar"];
-//   for file in &files[0..2] {
-//     pubkeygen_with_path(file).expect("Failed to generate public key");
-//   }
+  // Define asset
+  define_asset(txn_builder_file,
+               issuer_key_pair_file,
+               &token_code,
+               "Define an asset").expect("Failed to define asset");
+  submit(txn_builder_file).expect("Failed to submit transaction");
 
-//   // Store sids and blind asset records
-//   let token_code = AssetTypeCode::gen_random().to_base64();
-//   store_sids_with_path(files[2], "1").expect("Failed to store sids");
-//   store_blind_asset_record_with_path(files[3],
-//                              "10",
-//                              &token_code,
-//                              files[0]).expect("Failed to store blind asset record");
+  // Issue and transfer
+  issue_and_transfer_asset(txn_builder_file,
+                           issuer_key_pair_file,
+                           recipient_key_pair_file,
+                           "1000",
+                           &token_code).expect("Failed to issue and transfer asset");
 
-//   // Define asset
-//   define_asset(txn_builder_file,
-//                key_pair_file,
-//                &token_code,
-//                "Define an asset").expect("Failed to define asset");
+  // Submit transaction
+  let output = submit(txn_builder_file).expect("Failed to submit transaction");
 
-//   let host = "testnet.findora.org";
-//   let port = "8669";
+  io::stdout().write_all(&output.stdout).unwrap();
+  io::stdout().write_all(&output.stderr).unwrap();
 
-//   let output = submit(txn_builder_file, host, port).expect("Failed to execute process");
+  fs::remove_file(txn_builder_file).unwrap();
+  fs::remove_file(issuer_key_pair_file).unwrap();
+  fs::remove_file(recipient_key_pair_file).unwrap();
 
-//   io::stdout().write_all(&output.stdout).unwrap();
-//   io::stdout().write_all(&output.stderr).unwrap();
+  assert!(output.status.success());
+}
 
-//   assert!(output.status.success());
+#[test]
+fn test_load_funds_with_args() {
+  // Create txn builder, key pairs, and public key
+  let txn_builder_file = "tb_load_funds_args";
+  let issuer_key_pair_file = "ikp_load_funds_args";
+  let recipient_key_pair_file = "rkp_load_funds_args";
+  create_with_path(txn_builder_file).expect("Failed to create transaction builder");
+  keygen_with_path(issuer_key_pair_file).expect("Failed to generate key pair for the issuer");
+  keygen_with_path(recipient_key_pair_file).expect("Failed to generate key pair for the recipient");
 
-//   // Issue asset
-//   issue_asset(txn_builder_file,
-//               key_pair_file,
-//               &token_code,
-//               "0",
-//               "100").expect("Failed to issue fiat asset");
+  // Define token code
+  let token_code = AssetTypeCode::gen_random().to_base64();
 
-//   let output = submit(txn_builder_file, host, port).expect("Failed to execute process");
+  // Define asset
+  define_asset(txn_builder_file,
+               issuer_key_pair_file,
+               &token_code,
+               "Define an asset").expect("Failed to define asset");
+  submit(txn_builder_file).expect("Failed to submit transaction");
 
-//   io::stdout().write_all(&output.stdout).unwrap();
-//   io::stdout().write_all(&output.stderr).unwrap();
+  // Set the original record for the recipient
+  issue_and_transfer_asset(txn_builder_file,
+                           issuer_key_pair_file,
+                           recipient_key_pair_file,
+                           "1000",
+                           &token_code).expect("Failed to issue and transfer asset");
+  submit_and_store_sid(txn_builder_file).expect("Failed to submit transaction");
 
-//   assert!(output.status.success());
+  // Load funds
+  let output = load_funds(txn_builder_file,
+                          issuer_key_pair_file,
+                          recipient_key_pair_file,
+                          "500",
+                          &token_code).expect("Failed to load funds");
 
-//   // Transfer asset
+  io::stdout().write_all(&output.stdout).unwrap();
+  io::stdout().write_all(&output.stderr).unwrap();
 
-//   transfer_asset(txn_builder_file,
-//                  key_pair_file,
-//                  files[2],
-//                  files[3],
-//                  "10",
-//                  "10",
-//                  files[1]).expect("Failed to transfer asset");
+  fs::remove_file(txn_builder_file).unwrap();
+  fs::remove_file(issuer_key_pair_file).unwrap();
+  fs::remove_file(recipient_key_pair_file).unwrap();
 
-//   let output = submit(txn_builder_file, host, port).expect("Failed to execute process");
+  assert!(output.status.success());
+}
 
-//   io::stdout().write_all(&output.stdout).unwrap();
-//   io::stdout().write_all(&output.stderr).unwrap();
+#[test]
+fn test_init_loan_with_args() {
+  // Create txn builder, key pairs, and public key
+  let txn_builder_file = "tb_init_loan_args";
+  let issuer_key_pair_file = "ikp_init_loan_args";
+  let lender_key_pair_file = "lkp_init_loan_args";
+  let borrower_key_pair_file = "bkp_init_loan_args";
+  create_with_path(txn_builder_file).expect("Failed to create transaction builder");
+  keygen_with_path(issuer_key_pair_file).expect("Failed to generate key pair for the issuer");
+  keygen_with_path(lender_key_pair_file).expect("Failed to generate key pair for the lender");
+  keygen_with_path(borrower_key_pair_file).expect("Failed to generate key pair for the borrower");
 
-//   fs::remove_file(txn_builder_file).unwrap();
-//   fs::remove_file(key_pair_file).unwrap();
+  // Define fiat asset
+  let fiat_code = AssetTypeCode::gen_random().to_base64();
+  define_asset(txn_builder_file,
+               issuer_key_pair_file,
+               &fiat_code,
+               "Define fiat asset").expect("Failed to define fiat asset");
+  submit(txn_builder_file).expect("Failed to submit transaction");
+  fs::remove_file(txn_builder_file).unwrap();
 
-//   assert!(output.status.success());
-// }
+  // Define debt asset
+  create_with_path(txn_builder_file).expect("Failed to create transaction builder");
+  let debt_code = AssetTypeCode::gen_random().to_base64();
+  define_asset(txn_builder_file,
+               borrower_key_pair_file,
+               &debt_code,
+               "Define debt asset").expect("Failed to define debt asset");
+  submit(txn_builder_file).expect("Failed to submit transaction");
+
+  // Set the original record for the borrower
+  issue_and_transfer_asset(txn_builder_file,
+                           issuer_key_pair_file,
+                           borrower_key_pair_file,
+                           "1000",
+                           &fiat_code).expect("Failed to issue and transfer asset");
+  submit_and_store_sid(txn_builder_file).expect("Failed to submit transaction");
+
+  // Initiate loan
+  let output = init_loan(txn_builder_file,
+                         issuer_key_pair_file,
+                         lender_key_pair_file,
+                         borrower_key_pair_file,
+                         &fiat_code,
+                         &debt_code,
+                         "500").expect("Failed to load funds");
+
+  io::stdout().write_all(&output.stdout).unwrap();
+  io::stdout().write_all(&output.stderr).unwrap();
+
+  fs::remove_file(txn_builder_file).unwrap();
+  fs::remove_file(issuer_key_pair_file).unwrap();
+  fs::remove_file(lender_key_pair_file).unwrap();
+  fs::remove_file(borrower_key_pair_file).unwrap();
+
+  assert!(output.status.success());
+}
