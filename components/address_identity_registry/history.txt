@@ -1,28 +1,3 @@
-addissuer bank0
-adduser bank0 brian
-getcreds brian foo bar baz
-verify brian foo bar baz
-addissuer bank0
-adduser bank0 brian
-getcreds brian foo bar baz
-verify brian foo bar baz
-reveal brian t t t
-verify brian foo bar baz
-verify brian t t t 
-verify brian t t f
-help
-test
-help
-addissuer bank0
-adduser bank0 brian
-getcreds brian foo bar baz
-reveal brian t t t
-verify brian t t t
-help
-test
-adduser bank0 brian
-addissuer bank0
-adduser bank0 brian
 getcreds brian foo bar baz
 reveal brian t t t
 reveal brian t t f
@@ -98,3 +73,28 @@ showcreds brian
 help
 reveal brian foo bar baz
 reveal 
+add_issuer DOS
+add_user DOS brian
+issue_credential DOS brian dob:08221964 ss:031601411
+user_commit brian
+verify brian dob:08221964 ""
+add_issuer DOS
+add_user DOS brian
+issue_credential DOS brian dob:08221964 ss:031601411
+user_commit brian
+verify brian dob:08221964 ""
+add_issuer DOS
+add_user DOS brian
+issue_credential DOS brian dob:08221964 ss:031601411
+user_commit brian
+verify brian dob:08221964 ""
+add_issuer DOS
+add_user DOS brian
+show_user brian
+show_issuer
+show_issuer DOS
+issue_credential DOS brian dob:08221964 ss:031601411
+show_credential brian
+show_creds brian
+user_commit brian
+verify brian dob:08221964 ""

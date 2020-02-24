@@ -4,7 +4,7 @@ members = [
     "components/address_identity_registry",
     "components/account_simulator",
     "components/ledger_api_service",
-    "components/chat",
+    "components/client",
     "components/check_merkle",
     "components/ledger_client",
     "components/ledger_standalone",
