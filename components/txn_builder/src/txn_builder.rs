@@ -498,7 +498,6 @@ impl TransferOperationBuilder {
     let output_total = self.output_records
                            .iter()
                            .fold(0, |acc, ar| acc + ar.amount);
-    assert!(spend_total == output_total);
     if spend_total != output_total {
       return Err(PlatformError::InputsError);
     }

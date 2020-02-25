@@ -136,6 +136,7 @@ pub struct Asset {
   pub confidential_memo: ConfidentialMemo,
   pub updatable: bool,
   pub traceable: bool,
+  #[serde(default)]
   pub policy: Option<(Box<Policy>, PolicyGlobals)>,
 }
 
@@ -439,6 +440,7 @@ pub struct TimeBounds {
 pub struct Transaction {
   pub operations: Vec<Operation>,
   pub credentials: Vec<CredentialProof>,
+  #[serde(default)]
   pub policy_options: Option<TxnPolicyData>,
   pub memos: Vec<Memo>,
   pub signatures: Vec<XfrSignature>,

@@ -1825,7 +1825,12 @@ mod tests {
     let key_pair = XfrKeyPair::generate(&mut prng);
     let token_code = AssetTypeCode::gen_random();
 
-    txn_builder.add_operation_create_asset(&key_pair, Some(token_code), false, false, "")
+    txn_builder.add_operation_create_asset(&key_pair,
+                                           Some(token_code),
+                                           false,
+                                           false,
+                                           "",
+                                           PolicyChoice::Fungible())
                .unwrap();
     store_txn_builder_to_file(&txn_builder_path, &txn_builder).unwrap();
 
@@ -1866,7 +1871,12 @@ mod tests {
     let bar = get_blind_asset_record(key_pair.get_pk(), amount, code, false, false);
 
     // Define asset
-    txn_builder.add_operation_create_asset(&key_pair, Some(code), false, false, "")
+    txn_builder.add_operation_create_asset(&key_pair,
+                                           Some(code),
+                                           false,
+                                           false,
+                                           "",
+                                           PolicyChoice::Fungible())
                .unwrap()
                .transaction();
     store_txn_builder_to_file(&txn_builder_path, &txn_builder).unwrap();
@@ -1908,7 +1918,12 @@ mod tests {
 
     // Define asset
     let mut txn_builder = load_txn_builder_from_file(&txn_builder_path).unwrap();
-    txn_builder.add_operation_create_asset(&issuer_key_pair, Some(code), false, false, "")
+    txn_builder.add_operation_create_asset(&issuer_key_pair,
+                                           Some(code),
+                                           false,
+                                           false,
+                                           "",
+                                           PolicyChoice::Fungible())
                .unwrap()
                .transaction();
     store_txn_builder_to_file(&txn_builder_path, &txn_builder).unwrap();
@@ -1952,7 +1967,12 @@ mod tests {
 
     // Define asset
     let mut txn_builder = load_txn_builder_from_file(&txn_builder_path).unwrap();
-    txn_builder.add_operation_create_asset(&issuer_key_pair, Some(code), false, false, "")
+    txn_builder.add_operation_create_asset(&issuer_key_pair,
+                                           Some(code),
+                                           false,
+                                           false,
+                                           "",
+                                           PolicyChoice::Fungible())
                .unwrap()
                .transaction();
     store_txn_builder_to_file(&txn_builder_path, &txn_builder).unwrap();
@@ -2026,7 +2046,12 @@ mod tests {
 
     // Define asset
     let mut txn_builder = load_txn_builder_from_file(&txn_builder_path).unwrap();
-    txn_builder.add_operation_create_asset(&issuer_key_pair, Some(code), false, false, "")
+    txn_builder.add_operation_create_asset(&issuer_key_pair,
+                                           Some(code),
+                                           false,
+                                           false,
+                                           "",
+                                           PolicyChoice::Fungible())
                .unwrap()
                .transaction();
     store_txn_builder_to_file(&txn_builder_path, &txn_builder).unwrap();
@@ -2075,7 +2100,12 @@ mod tests {
 
     // Define fiat asset
     let mut txn_builder = load_txn_builder_from_file(&txn_builder_path).unwrap();
-    txn_builder.add_operation_create_asset(&issuer_key_pair, Some(fiat_code), false, false, "")
+    txn_builder.add_operation_create_asset(&issuer_key_pair,
+                                           Some(fiat_code),
+                                           false,
+                                           false,
+                                           "",
+                                           PolicyChoice::Fungible())
                .unwrap()
                .transaction();
     store_txn_builder_to_file(&txn_builder_path, &txn_builder).unwrap();
@@ -2087,7 +2117,8 @@ mod tests {
                                            Some(debt_code),
                                            false,
                                            false,
-                                           "Debt asset defined")
+                                           "Debt asset defined",
+                                           PolicyChoice::Fungible())
                .unwrap()
                .transaction();
     store_txn_builder_to_file(&txn_builder_path, &txn_builder).unwrap();

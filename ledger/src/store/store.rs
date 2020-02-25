@@ -390,6 +390,8 @@ impl LedgerStatus {
       }
     }
 
+    dbg!("records work");
+
     // New asset types must not already exist
     for (code, _asset_type) in txn.new_asset_codes.iter() {
       if self.asset_types.contains_key(&code) {
@@ -403,6 +405,8 @@ impl LedgerStatus {
       // Asset issuance should match the currently registered key
     }
 
+    dbg!("new types work");
+
     // New issuance numbers
     // (1) Must refer to a created asset type
     //  - NOTE: if the asset type is created in this transaction, this
@@ -413,6 +417,7 @@ impl LedgerStatus {
     //    order
     for (code, seq_nums) in txn.new_issuance_nums.iter() {
       debug_assert!(txn.issuance_keys.contains_key(&code));
+      dbg!(&(code, seq_nums));
 
       let iss_key = txn.issuance_keys.get(&code).unwrap();
       let asset_type = self.asset_types
@@ -452,6 +457,7 @@ impl LedgerStatus {
     // (1) Fiat code must match debt asset memo
     // (2) fee must be correct
     for (code, debt_swap_effects) in txn.debt_effects.iter() {
+      dbg!(&(code, debt_swap_effects));
       let debt_type = &self.asset_types
                            .get(&code)
                            .or_else(|| txn.new_asset_codes.get(&code))
@@ -477,12 +483,14 @@ impl LedgerStatus {
     //   code will lead to erroneous validation failures when that change
     //   arrives.
     for code in txn.asset_types_involved.iter() {
-      let asset = self.asset_types
-                      .get(code)
-                      .ok_or(PlatformError::InputsError)?;
-      if let Some((ref pol, ref globals)) = asset.properties.policy {
-        let globals = globals.clone();
-        policy_check_txn(code, globals, &pol, &txn.txn)?;
+      if txn.custom_policy_asset_types.contains_key(code) {
+        let asset = self.asset_types
+                        .get(code)
+                        .ok_or(PlatformError::InputsError)?;
+        if let Some((ref pol, ref globals)) = asset.properties.policy {
+          let globals = globals.clone();
+          policy_check_txn(code, globals, &pol, &txn.txn)?;
+        }
       }
     }
 
