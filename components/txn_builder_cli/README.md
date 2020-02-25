@@ -33,7 +33,6 @@ supply the command name as well. This is true for both help and the
 actual subcommands.
 * By default, all the generated files will be stored in `~./findora`, unless specified otherwise. For example, if the current directory is `platform/target/debug`, running `./txn_builder_cli keygen` will put the generated key pair in ~./findora, but `./txn_builder_cli keygen --name keys/key_pair` will store the key pair to `platform/target/debug/keys/key_pair`.
 * Examples below are assuming the current directory is `platform/target/debug`. If not, change `./txn_builder_cli` to the path to `./txn_builder_cli`.
-* By default, `https://testnet.findora.org` is used for transaction submission and data query. To switch to `http://localhost`, add `--http --localhost` to the related command, and make sure `ledger_standalone` is running.
 
 ## Create a user
 In the initial data, there are three users (issuer Izzie, lender Lenny and borrower Ben). More users can be created.

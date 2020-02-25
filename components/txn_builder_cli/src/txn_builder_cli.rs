@@ -15,6 +15,8 @@ use std::fs::{self, File};
 use std::io::prelude::*;
 use std::path::{Path, PathBuf};
 use std::process::exit;
+use std::process::Command;
+use std::thread;
 use submission_server::{TxnHandle, TxnStatus};
 use txn_builder::{BuildsTransactions, TransactionBuilder, TransferOperationBuilder};
 use zei::serialization::ZeiFromToBytes;
@@ -58,6 +60,7 @@ const INIT_DATA: &str = r#"
 const DATA_FILE: &str = "data.json";
 const QUERY_PORT: &str = "8668";
 const SUBMIT_PORT: &str = "8669";
+const LEDGER_STANDALONE: &str = "../../target/debug/ledger_standalone";
 // TODO (Keyao): After the credentialing feature is added, change the hard-coded interest rate
 const INTEREST_RATE_NUMERATOR: u64 = 1;
 const INTEREST_RATE_DENOMINATOR: u64 = 100;
@@ -636,6 +639,12 @@ fn define_asset(fiat_asset: bool,
   } else {
     Ok(())
   }
+}
+
+fn run_ledger_standalone() {
+  thread::spawn(move || {
+    Command::new(LEDGER_STANDALONE).status().unwrap();
+  });
 }
 
 fn submit(protocol: &str, host: &str, transaction_file_name: &str) -> Result<(), PlatformError> {
@@ -1648,6 +1657,7 @@ fn process_submit_cmd(submit_matches: &clap::ArgMatches,
   };
   let host = if submit_matches.is_present("localhost") {
     // Use localhost
+    run_ledger_standalone();
     "localhost"
   } else {
     // Default to testnet.findora.org
@@ -2127,6 +2137,7 @@ fn process_load_funds_cmd(load_funds_matches: &clap::ArgMatches,
   };
   let host = if load_funds_matches.is_present("localhost") {
     // Use localhost
+    run_ledger_standalone();
     "localhost"
   } else {
     // Default to testnet.findora.org
@@ -2175,6 +2186,7 @@ fn process_activate_loan_cmd(activate_loan_matches: &clap::ArgMatches,
   };
   let host = if activate_loan_matches.is_present("localhost") {
     // Use localhost
+    run_ledger_standalone();
     "localhost"
   } else {
     // Default to testnet.findora.org
@@ -2218,6 +2230,7 @@ fn process_pay_loan_cmd(pay_loan_matches: &clap::ArgMatches,
   };
   let host = if pay_loan_matches.is_present("localhost") {
     // Use localhost
+    run_ledger_standalone();
     "localhost"
   } else {
     // Default to testnet.findora.org
@@ -2414,6 +2427,7 @@ mod tests {
   fn test_submit() {
     let txn_builder_path = "tb_submit";
     store_txn_builder_to_file(&txn_builder_path, &TransactionBuilder::default()).unwrap();
+    run_ledger_standalone();
     let res = submit(PROTOCOL, HOST, txn_builder_path);
     fs::remove_file(txn_builder_path).unwrap();
     assert!(res.is_ok());
@@ -2444,6 +2458,7 @@ mod tests {
     store_txn_builder_to_file(&txn_builder_path, &txn_builder).unwrap();
 
     // Submit
+    run_ledger_standalone();
     let res = submit(PROTOCOL, HOST, txn_builder_path);
     fs::remove_file(txn_builder_path).unwrap();
     assert!(res.is_ok());
@@ -2455,6 +2470,8 @@ mod tests {
   // 3. Merge the two records for the recipient
   // 4. Submit the transaction
   fn test_merge_and_submit() {
+    run_ledger_standalone();
+
     // Create txn builder and key pairs
     let txn_builder_path = "tb_merge_and_submit";
     store_txn_builder_to_file(&txn_builder_path, &TransactionBuilder::default()).unwrap();
@@ -2536,6 +2553,8 @@ mod tests {
   // 1. The issuer defines the asset
   // 2. Load funds for the recipient
   fn test_load_funds() {
+    run_ledger_standalone();
+
     let data = load_data().unwrap();
     let balance_pre = data.borrowers[0].balance;
 
@@ -2571,6 +2590,8 @@ mod tests {
   #[ignore]
   // Create, activate and pay a loan
   fn test_create_activate_and_pay_loan() {
+    run_ledger_standalone();
+
     // Load data
     let mut data = load_data().unwrap();
     let loan_id = data.loans.len();
