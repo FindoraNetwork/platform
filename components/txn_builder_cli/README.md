@@ -3,8 +3,13 @@
 The `txn_builder_cli` application creates transactions and submits
 them to the ledger server. The typical workflow is as follows
 * Generate a cryptographic key pair. Just once. See `txn_builder_cli keygen`
-* Create a new empty transaction. See `txn_builder_cli create`.
+* Create a new empty transaction. See `txn_builder_cli create txn_builder`.
+* Create a new user. See `txn_builder_cli create user`.
+* Create a new loan. See `txn_builder_cli create loan`.
 * Add operations to the transaction. See `txn_builder_cli add`.
+* Load funds. See `txn_builder_cli load funds`.
+* Activate a loan. See `txn_builder_cli activate_loan`.
+* Pay off a loan. See `txn_builder_cli pay_loan`.
 * Submit the transaction to the ledger. See `txn_builder_cli submit`
   and note the transaction ID reported.
 * Query the ledger with the transaction ID to see if the transaction
@@ -28,6 +33,7 @@ supply the command name as well. This is true for both help and the
 actual subcommands.
 * By default, all the generated files will be stored in `~./findora`, unless specified otherwise. For example, if the current directory is `platform/target/debug`, running `./txn_builder_cli keygen` will put the generated key pair in ~./findora, but `./txn_builder_cli keygen --name keys/key_pair` will store the key pair to `platform/target/debug/keys/key_pair`.
 * Examples below are assuming the current directory is `platform/target/debug`. If not, change `./txn_builder_cli` to the path to `./txn_builder_cli`.
+* By default, `https://testnet.findora.org` is used for transaction submission and data query. To switch to `http://localhost`, add `--http --localhost` to the related command, and make sure `ledger_standalone` is running.
 
 ## Create a user
 In the initial data, there are three users (issuer Izzie, lender Lenny and borrower Ben). More users can be created.
@@ -53,7 +59,7 @@ In the initial data, there is one loan. More loans can be created:
 ./txn_builder_cli create loan --lender 0 --borrower 0 --amount 500 --duration 5
 ```
 
-## Composing a transaction
+## Compose a transaction
 
 ### Create an empty transaction
 ```
@@ -98,13 +104,14 @@ In the initial data, there is one loan. More loans can be created:
   ./txn_builder_cli --txn tb add issue_and_transfer_asset --issuer 0 --recipient 0 --amount 1000 --token_code ibIaBlHV-PdQkvSuEg6YSA==
   ```
 
-## Submitting a transaction
+## Submit a transaction
 After a transaction is composed:
 ```
 ./txn_builder_cli --txn tb submit
 ```
+By default, `https://testnet.findora.org` is used. To switch to `http://localhost`, add `--http --localhost`.
 
-## Loading funds
+## Load funds
 After users are created:
 ### Create an empty transaction
 ```
@@ -121,6 +128,7 @@ After users are created:
 ```
 ./txn_builder_cli --txn tran load_funds --issuer 0 --recipient 0 --amount 500
 ```
+By default, `https://testnet.findora.org` is used. To switch to `http://localhost`, add `--http --localhost`.
 
 ## Activate and pay off a loan
 After users and a loan are created:
@@ -133,12 +141,13 @@ After users and a loan are created:
 ```
 ./txn_builder_cli --txn txn_loan activate_loan --issuer 0 --loan 0
 ```
+By default, `https://testnet.findora.org` is used. To switch to `http://localhost`, add `--http --localhost`.
 
 ### Pay off the loan
 ```
 ./txn_builder_cli --txn txn_loan pay_loan --loan 0 --amount 200
-
 ```
+By default, `https://testnet.findora.org` is used. To switch to `http://localhost`, add `--http --localhost`.
 
 ## Querying the ledger server
 

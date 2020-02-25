@@ -56,7 +56,6 @@ const INIT_DATA: &str = r#"
   "sequence_number": 1
 }"#;
 const DATA_FILE: &str = "data.json";
-const HOST: &str = "testnet.findora.org";
 const QUERY_PORT: &str = "8668";
 const SUBMIT_PORT: &str = "8669";
 // TODO (Keyao): After the credentialing feature is added, change the hard-coded interest rate
@@ -639,13 +638,13 @@ fn define_asset(fiat_asset: bool,
   }
 }
 
-fn submit(protocol: &str, transaction_file_name: &str) -> Result<(), PlatformError> {
+fn submit(protocol: &str, host: &str, transaction_file_name: &str) -> Result<(), PlatformError> {
   // Submit transaction
   let txn_builder = load_txn_builder_from_file(transaction_file_name)?;
   let client = reqwest::Client::new();
   let txn = txn_builder.transaction();
   let mut res = client.post(&format!("{}://{}:{}/{}",
-                                     protocol, HOST, SUBMIT_PORT, "submit_transaction"))
+                                     protocol, host, SUBMIT_PORT, "submit_transaction"))
                       .json(&txn)
                       .send()
                       .unwrap();
@@ -657,6 +656,7 @@ fn submit(protocol: &str, transaction_file_name: &str) -> Result<(), PlatformErr
 }
 
 fn submit_and_get_sids(protocol: &str,
+                       host: &str,
                        transaction_file_name: &str)
                        -> Result<Vec<TxoSID>, PlatformError> {
   // Submit transaction
@@ -665,7 +665,7 @@ fn submit_and_get_sids(protocol: &str,
   let client = reqwest::Client::new();
   let txn = txn_builder.transaction();
   let mut res = client.post(&format!("{}://{}:{}/{}",
-                                     protocol, HOST, SUBMIT_PORT, "submit_transaction"))
+                                     protocol, host, SUBMIT_PORT, "submit_transaction"))
                       .json(&txn)
                       .send()
                       .unwrap();
@@ -676,16 +676,16 @@ fn submit_and_get_sids(protocol: &str,
   println!("Submission status: {}", res.status());
 
   // Store and return sid
-  let res = query(protocol, SUBMIT_PORT, "txn_status", &handle.0);
+  let res = query(protocol, host, SUBMIT_PORT, "txn_status", &handle.0);
   match serde_json::from_str::<TxnStatus>(&res).unwrap() {
     TxnStatus::Committed((_sid, txos)) => Ok(txos),
     _ => Err(PlatformError::DeserializationError),
   }
 }
 
-fn query(protocol: &str, port: &str, item: &str, value: &str) -> String {
+fn query(protocol: &str, host: &str, port: &str, item: &str, value: &str) -> String {
   let mut res =
-    reqwest::get(&format!("{}://{}:{}/{}/{}", protocol, HOST, port, item, value)).unwrap();
+    reqwest::get(&format!("{}://{}:{}/{}/{}", protocol, host, port, item, value)).unwrap();
 
   // Log body
   println!("Querying status: {}", res.status());
@@ -780,7 +780,8 @@ fn load_funds(issuer_id: u64,
               recipient_id: u64,
               amount: u64,
               transaction_file_name: &str,
-              protocol: &str)
+              protocol: &str,
+              host: &str)
               -> Result<(), PlatformError> {
   // Get data
   let mut data = load_data()?;
@@ -804,8 +805,12 @@ fn load_funds(issuer_id: u64,
                      transaction_file_name)?;
 
   // Submit transaction and get the new record
-  let sid_new = submit_and_get_sids(protocol, transaction_file_name)?[0];
-  let res_new = query(protocol, QUERY_PORT, "utxo_sid", &format!("{}", sid_new.0));
+  let sid_new = submit_and_get_sids(protocol, host, transaction_file_name)?[0];
+  let res_new = query(protocol,
+                      host,
+                      QUERY_PORT,
+                      "utxo_sid",
+                      &format!("{}", sid_new.0));
   let blind_asset_record_new =
     serde_json::from_str::<BlindAssetRecord>(&res_new).or_else(|_| {
                                                         Err(PlatformError::DeserializationError)
@@ -814,7 +819,11 @@ fn load_funds(issuer_id: u64,
 
   // Merge records
   let sid_merged = if let Some(sid_pre) = recipient.utxo {
-    let res_pre = query(protocol, QUERY_PORT, "utxo_sid", &format!("{}", sid_pre.0));
+    let res_pre = query(protocol,
+                        host,
+                        QUERY_PORT,
+                        "utxo_sid",
+                        &format!("{}", sid_pre.0));
     let blind_asset_record_pre =
       serde_json::from_str::<BlindAssetRecord>(&res_pre).or_else(|_| {
                                                           Err(PlatformError::DeserializationError)
@@ -828,7 +837,7 @@ fn load_funds(issuer_id: u64,
                   token_code,
                   transaction_file_name).unwrap();
 
-    submit_and_get_sids(protocol, transaction_file_name)?[0]
+    submit_and_get_sids(protocol, host, transaction_file_name)?[0]
   } else {
     sid_new
   };
@@ -843,10 +852,15 @@ fn load_funds(issuer_id: u64,
 // Get the blind asset record by querying the utxo sid
 // Construct the open asset record with the blind asset record and the secret key
 fn get_open_asset_record(protocol: &str,
+                         host: &str,
                          sid: TxoSID,
                          key_pair: &XfrKeyPair)
                          -> Result<OpenAssetRecord, PlatformError> {
-  let res = query(protocol, QUERY_PORT, "utxo_sid", &format!("{}", sid.0));
+  let res = query(protocol,
+                  host,
+                  QUERY_PORT,
+                  "utxo_sid",
+                  &format!("{}", sid.0));
   let blind_asset_record =
     serde_json::from_str::<BlindAssetRecord>(&res).or_else(|_| {
                                                     Err(PlatformError::DeserializationError)
@@ -864,7 +878,8 @@ fn get_open_asset_record(protocol: &str,
 fn activate_loan(loan_id: u64,
                  issuer_id: u64,
                  transaction_file_name: &str,
-                 protocol: &str)
+                 protocol: &str,
+                 host: &str)
                  -> Result<(), PlatformError> {
   // Get data
   let mut data = load_data()?;
@@ -901,7 +916,7 @@ fn activate_loan(loan_id: u64,
     store_txn_builder_to_file(&transaction_file_name, &txn_builder)?;
     // Store data before submitting the transaction to avoid data overwriting
     let data = load_data()?;
-    submit(protocol, transaction_file_name)?;
+    submit(protocol, host, transaction_file_name)?;
     store_data_to_file(data)?;
 
     fiat_code
@@ -913,9 +928,9 @@ fn activate_loan(loan_id: u64,
                      amount,
                      fiat_code,
                      transaction_file_name)?;
-  let fiat_sid = submit_and_get_sids(protocol, transaction_file_name)?[0];
+  let fiat_sid = submit_and_get_sids(protocol, host, transaction_file_name)?[0];
   println!("Fiat sid: {}", fiat_sid.0);
-  let fiat_open_asset_record = get_open_asset_record(protocol, fiat_sid, lender_key_pair)?;
+  let fiat_open_asset_record = get_open_asset_record(protocol, host, fiat_sid, lender_key_pair)?;
 
   // Define debt asset
   let mut txn_builder = TransactionBuilder::default();
@@ -940,7 +955,7 @@ fn activate_loan(loan_id: u64,
   store_txn_builder_to_file(&transaction_file_name, &txn_builder)?;
   // Store data before submitting the transaction to avoid data overwriting
   let data = load_data()?;
-  submit(protocol, transaction_file_name)?;
+  submit(protocol, host, transaction_file_name)?;
   store_data_to_file(data)?;
 
   // Issue and transfer debt token
@@ -949,9 +964,9 @@ fn activate_loan(loan_id: u64,
                      amount,
                      debt_code,
                      transaction_file_name)?;
-  let debt_sid = submit_and_get_sids(protocol, transaction_file_name)?[0];
+  let debt_sid = submit_and_get_sids(protocol, host, transaction_file_name)?[0];
   println!("Fiat sid: {}", debt_sid.0);
-  let debt_open_asset_record = get_open_asset_record(protocol, debt_sid, borrower_key_pair)?;
+  let debt_open_asset_record = get_open_asset_record(protocol, host, debt_sid, borrower_key_pair)?;
 
   // Initiate loan
   let xfr_op =
@@ -972,8 +987,9 @@ fn activate_loan(loan_id: u64,
   store_txn_builder_to_file(&transaction_file_name, &txn_builder)?;
 
   // Submit transaction and get the new record
-  let sids_new = submit_and_get_sids(protocol, transaction_file_name)?;
+  let sids_new = submit_and_get_sids(protocol, host, transaction_file_name)?;
   let res_new = query(protocol,
+                      host,
                       QUERY_PORT,
                       "utxo_sid",
                       &format!("{}", sids_new[1].0));
@@ -985,7 +1001,11 @@ fn activate_loan(loan_id: u64,
 
   // Merge records
   let fiat_sid_merged = if let Some(sid_pre) = borrower.utxo {
-    let res_pre = query(protocol, QUERY_PORT, "utxo_sid", &format!("{}", sid_pre.0));
+    let res_pre = query(protocol,
+                        host,
+                        QUERY_PORT,
+                        "utxo_sid",
+                        &format!("{}", sid_pre.0));
     let blind_asset_record_pre =
       serde_json::from_str::<BlindAssetRecord>(&res_pre).or_else(|_| {
                                                           Err(PlatformError::DeserializationError)
@@ -998,7 +1018,7 @@ fn activate_loan(loan_id: u64,
                   blind_asset_record_new,
                   fiat_code,
                   transaction_file_name).unwrap();
-    submit_and_get_sids(protocol, transaction_file_name)?[0]
+    submit_and_get_sids(protocol, host, transaction_file_name)?[0]
   } else {
     sids_new[1]
   };
@@ -1021,7 +1041,8 @@ fn activate_loan(loan_id: u64,
 fn pay_loan(loan_id: u64,
             amount: u64,
             transaction_file_name: &str,
-            protocol: &str)
+            protocol: &str,
+            host: &str)
             -> Result<(), PlatformError> {
   // Get data
   let mut data = load_data()?;
@@ -1077,8 +1098,8 @@ fn pay_loan(loan_id: u64,
     println!("Missing debt utxo in the loan record. Try --activate_loan.");
     return Err(PlatformError::InputsError);
   };
-  let fiat_open_asset_record = get_open_asset_record(protocol, fiat_sid, lender_key_pair)?;
-  let debt_open_asset_record = get_open_asset_record(protocol, debt_sid, borrower_key_pair)?;
+  let fiat_open_asset_record = get_open_asset_record(protocol, host, fiat_sid, lender_key_pair)?;
+  let debt_open_asset_record = get_open_asset_record(protocol, host, debt_sid, borrower_key_pair)?;
 
   // Get fiat and debt codes
   let fiat_code = if let Some(code) = data.clone().fiat_code {
@@ -1123,7 +1144,7 @@ fn pay_loan(loan_id: u64,
   store_txn_builder_to_file(&transaction_file_name, &txn_builder)?;
 
   // Submit transaction and update data
-  let sids = submit_and_get_sids(protocol, transaction_file_name)?;
+  let sids = submit_and_get_sids(protocol, host, transaction_file_name)?;
 
   data = load_data()?;
   data.loans[loan_id as usize].balance = loan.balance - amount_to_burn;
@@ -1443,7 +1464,11 @@ fn main() {
       .arg(Arg::with_name("protocol")
         .long("http")
         .takes_value(false)
-        .help("specify that http, not https should be used.")))
+        .help("Specify that http, not https should be used."))
+      .arg(Arg::with_name("host")
+        .long("localhost")
+        .takes_value(false)
+        .help("Specify that localhost, not testnet.findora.org should be used.")))
     .subcommand(SubCommand::with_name("load_funds")
       .arg(Arg::with_name("issuer")
         .short("i")
@@ -1463,7 +1488,11 @@ fn main() {
       .arg(Arg::with_name("protocol")
         .long("http")
         .takes_value(false)
-        .help("specify that http, not https should be used.")))
+        .help("Specify that http, not https should be used."))
+      .arg(Arg::with_name("host")
+        .long("localhost")
+        .takes_value(false)
+        .help("Specify that localhost, not testnet.findora.org should be used.")))
     .subcommand(SubCommand::with_name("activate_loan")
       .arg(Arg::with_name("loan")
         .short("l")
@@ -1478,7 +1507,11 @@ fn main() {
       .arg(Arg::with_name("protocol")
         .long("http")
         .takes_value(false)
-        .help("specify that http, not https should be used.")))
+        .help("Specify that http, not https should be used."))
+      .arg(Arg::with_name("host")
+        .long("localhost")
+        .takes_value(false)
+        .help("Specify that localhost, not testnet.findora.org should be used.")))
     .subcommand(SubCommand::with_name("pay_loan")
       .arg(Arg::with_name("loan")
         .short("l")
@@ -1493,7 +1526,11 @@ fn main() {
       .arg(Arg::with_name("protocol")
         .long("http")
         .takes_value(false)
-        .help("Specify that http, not https should be used.")))
+        .help("Specify that http, not https should be used."))
+      .arg(Arg::with_name("host")
+        .long("localhost")
+        .takes_value(false)
+        .help("Specify that localhost, not testnet.findora.org should be used.")))
     .get_matches();
   if let Err(error) = process_inputs(inputs) {
     match_error_and_exit(error);
@@ -1601,7 +1638,7 @@ fn process_inputs(inputs: clap::ArgMatches) -> Result<(), PlatformError> {
 fn process_submit_cmd(submit_matches: &clap::ArgMatches,
                       transaction_file_name: &str)
                       -> Result<(), PlatformError> {
-  // Get protocol, host and port.
+  // Get protocol and host.
   let protocol = if submit_matches.is_present("http") {
     // Allow HTTP which may be useful for running a ledger locally.
     "http"
@@ -1609,8 +1646,15 @@ fn process_submit_cmd(submit_matches: &clap::ArgMatches,
     // Default to HTTPS
     "https"
   };
+  let host = if submit_matches.is_present("localhost") {
+    // Use localhost
+    "localhost"
+  } else {
+    // Default to testnet.findora.org
+    "testnet.findora.org"
+  };
 
-  submit(protocol, &transaction_file_name)
+  submit(protocol, host, &transaction_file_name)
 }
 
 // Create the specific file if missing
@@ -2081,12 +2125,20 @@ fn process_load_funds_cmd(load_funds_matches: &clap::ArgMatches,
     // Default to HTTPS
     "https"
   };
+  let host = if load_funds_matches.is_present("localhost") {
+    // Use localhost
+    "localhost"
+  } else {
+    // Default to testnet.findora.org
+    "testnet.findora.org"
+  };
 
   load_funds(issuer_id,
              recipient_id,
              amount,
              transaction_file_name,
-             protocol)
+             protocol,
+             host)
 }
 
 fn process_activate_loan_cmd(activate_loan_matches: &clap::ArgMatches,
@@ -2121,8 +2173,15 @@ fn process_activate_loan_cmd(activate_loan_matches: &clap::ArgMatches,
     // Default to HTTPS
     "https"
   };
+  let host = if activate_loan_matches.is_present("localhost") {
+    // Use localhost
+    "localhost"
+  } else {
+    // Default to testnet.findora.org
+    "testnet.findora.org"
+  };
 
-  activate_loan(loan_id, issuer_id, transaction_file_name, protocol)
+  activate_loan(loan_id, issuer_id, transaction_file_name, protocol, host)
 }
 
 fn process_pay_loan_cmd(pay_loan_matches: &clap::ArgMatches,
@@ -2157,14 +2216,24 @@ fn process_pay_loan_cmd(pay_loan_matches: &clap::ArgMatches,
     // Default to HTTPS
     "https"
   };
+  let host = if pay_loan_matches.is_present("localhost") {
+    // Use localhost
+    "localhost"
+  } else {
+    // Default to testnet.findora.org
+    "testnet.findora.org"
+  };
 
-  pay_loan(loan_id, amount, transaction_file_name, protocol)
+  pay_loan(loan_id, amount, transaction_file_name, protocol, host)
 }
 
 #[cfg(test)]
 mod tests {
   use super::*;
   use std::str::from_utf8;
+
+  const PROTOCOL: &str = "http";
+  const HOST: &str = "localhost";
 
   fn check_next_path(input: &str, expected: &str) {
     let as_path = Path::new(input);
@@ -2345,7 +2414,7 @@ mod tests {
   fn test_submit() {
     let txn_builder_path = "tb_submit";
     store_txn_builder_to_file(&txn_builder_path, &TransactionBuilder::default()).unwrap();
-    let res = submit("https", txn_builder_path);
+    let res = submit(PROTOCOL, HOST, txn_builder_path);
     fs::remove_file(txn_builder_path).unwrap();
     assert!(res.is_ok());
   }
@@ -2375,7 +2444,7 @@ mod tests {
     store_txn_builder_to_file(&txn_builder_path, &txn_builder).unwrap();
 
     // Submit
-    let res = submit("https", txn_builder_path);
+    let res = submit(PROTOCOL, HOST, txn_builder_path);
     fs::remove_file(txn_builder_path).unwrap();
     assert!(res.is_ok());
   }
@@ -2404,7 +2473,7 @@ mod tests {
                .unwrap()
                .transaction();
     store_txn_builder_to_file(&txn_builder_path, &txn_builder).unwrap();
-    let res = submit("https", txn_builder_path);
+    let res = submit(PROTOCOL, HOST, txn_builder_path);
     assert!(res.is_ok());
 
     // Issue and transfer the first asset
@@ -2414,8 +2483,12 @@ mod tests {
                        code,
                        txn_builder_path).unwrap();
 
-    let sid1 = submit_and_get_sids("https", txn_builder_path).unwrap()[0];
-    let res = query("https", QUERY_PORT, "utxo_sid", &format!("{}", sid1.0));
+    let sid1 = submit_and_get_sids(PROTOCOL, HOST, txn_builder_path).unwrap()[0];
+    let res = query(PROTOCOL,
+                    HOST,
+                    QUERY_PORT,
+                    "utxo_sid",
+                    &format!("{}", sid1.0));
     let blind_asset_record_1 =
       serde_json::from_str::<BlindAssetRecord>(&res).or_else(|_| {
                                                       Err(PlatformError::DeserializationError)
@@ -2428,8 +2501,12 @@ mod tests {
                        amount2,
                        code,
                        txn_builder_path).unwrap();
-    let sid2 = submit_and_get_sids("https", txn_builder_path).unwrap()[0];
-    let res = query("https", QUERY_PORT, "utxo_sid", &format!("{}", sid2.0));
+    let sid2 = submit_and_get_sids(PROTOCOL, HOST, txn_builder_path).unwrap()[0];
+    let res = query(PROTOCOL,
+                    HOST,
+                    QUERY_PORT,
+                    "utxo_sid",
+                    &format!("{}", sid2.0));
     let blind_asset_record_2 =
       serde_json::from_str::<BlindAssetRecord>(&res).or_else(|_| {
                                                       Err(PlatformError::DeserializationError)
@@ -2446,7 +2523,7 @@ mod tests {
                   txn_builder_path).unwrap();
 
     // Submit transactions
-    let res = submit("https", txn_builder_path);
+    let res = submit(PROTOCOL, HOST, txn_builder_path);
 
     let _ = fs::remove_file(DATA_FILE);
     fs::remove_file(txn_builder_path).unwrap();
@@ -2478,10 +2555,10 @@ mod tests {
                  false,
                  false,
                  txn_builder_path).unwrap();
-    submit("https", txn_builder_path).unwrap();
+    submit(PROTOCOL, HOST, txn_builder_path).unwrap();
 
     // Load funds
-    load_funds(0, 0, amount, txn_builder_path, "https").unwrap();
+    load_funds(0, 0, amount, txn_builder_path, PROTOCOL, HOST).unwrap();
     fs::remove_file(txn_builder_path).unwrap();
 
     assert_eq!(load_data().unwrap().borrowers[0].balance,
@@ -2508,14 +2585,18 @@ mod tests {
     store_txn_builder_to_file(&txn_builder_path, &TransactionBuilder::default()).unwrap();
 
     // Activate loan
-    activate_loan(loan_id as u64, 0, txn_builder_path, "https").unwrap();
+    activate_loan(loan_id as u64, 0, txn_builder_path, PROTOCOL, HOST).unwrap();
     let data = load_data().unwrap();
     assert_eq!(data.loans[loan_id].active, true);
     assert_eq!(data.loans[loan_id].balance, amount);
 
     // Pay loan
     let payment_amount = 200;
-    pay_loan(loan_id as u64, payment_amount, txn_builder_path, "https").unwrap();
+    pay_loan(loan_id as u64,
+             payment_amount,
+             txn_builder_path,
+             PROTOCOL,
+             HOST).unwrap();
 
     let data = load_data().unwrap();
     assert_eq!(data.loans[loan_id].payments, 1);
