@@ -288,7 +288,7 @@ macro_rules! info {
 #[macro_export]
 macro_rules! log {
     ($category:ident, $($x:tt)+) => {
-      log_impl!(error, $category, log_enabled, $($x)+);
+      log_impl!(log, $category, log_enabled, $($x)+);
     }
 }
 
