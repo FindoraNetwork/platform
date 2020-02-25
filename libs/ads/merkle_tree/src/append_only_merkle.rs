@@ -11,7 +11,6 @@
 use chrono::Utc;
 use cryptohash::sha256;
 use findora::{debug, er, log, log_impl, sde, se, Commas};
-// use itertools::izip;
 use serde::Deserialize;
 use serde::Deserializer;
 use serde::Serialize;
@@ -175,6 +174,8 @@ impl Dictionary {
   }
 
   pub fn insert(&mut self, level: usize, entry: Entry) {
+    debug!(Proof,
+           "add dictionary block {} at level {}", entry.id, level);
     self.map.insert(level, entry);
 
     if level > self.max_level {
@@ -209,10 +210,10 @@ impl Entry {
     for i in 0..LEVELS_IN_BLOCK - 1 {
       let partner = base + (index ^ 1);
       debug!(Proof,
-             "entry push hashes[{:3}] = {}, base = {}",
+             "entry  push hashes[{:3}] = {}, index = {}",
              partner,
              self.hashes[partner].desc(),
-             base);
+             hashes.len());
       hashes.push(self.hashes[partner]);
 
       // !check.is_empty == check.len() > 0
@@ -491,13 +492,14 @@ impl Block {
     for i in 0..LEVELS_IN_BLOCK - 1 {
       let partner = base + (index ^ 1);
       let hash = self.hashes[partner];
-      hashes.push(hash);
 
       debug!(Proof,
-             "entry push hashes[{:3}] = {}, base = {}",
+             "block  push hashes[{:3}] = {}, index = {}",
              partner,
              hash.desc(),
-             base);
+             hashes.len());
+
+      hashes.push(hash);
 
       // !check.is_empty == check.len() > 0
       if !check.is_empty() {
@@ -1553,7 +1555,7 @@ impl AppendOnlyMerkle {
       // if one exists.  If not, append the hash of the
       // root hash of this block.
       let block_id = id / LEAVES_IN_BLOCK;
-      self.append_partner_hash(&mut hashes, level, block_id, &dictionary);
+      self.push_partner_hash(&mut hashes, level, block_id, &dictionary);
 
       level += 1;
       id /= LEAVES_IN_BLOCK * 2;
@@ -1571,24 +1573,26 @@ impl AppendOnlyMerkle {
   }
 
   // Append the hash of the partner of the current block.
-  fn append_partner_hash(&self,
-                         hashes: &mut Vec<HashValue>,
-                         level: usize,
-                         block_id: usize,
-                         dictionary: &Dictionary) {
+  fn push_partner_hash(&self,
+                       hashes: &mut Vec<HashValue>,
+                       level: usize,
+                       block_id: usize,
+                       dictionary: &Dictionary) {
     let partner_id = block_id ^ 1;
     let empty_hash = HashValue::new();
-    let hash;
+
+    let hash = if level >= self.blocks.len() || partner_id >= self.blocks[level].len() {
+      empty_hash
+    } else {
+      self.find_block_root(dictionary, level, partner_id)
+    };
 
     debug!(Proof,
-           "append_partner_hash:  block {}, partner {}", block_id, partner_id);
-
-    if level >= self.blocks.len() || partner_id >= self.blocks[level].len() {
-      hash = empty_hash;
-    } else {
-      hash = self.find_block_root(dictionary, level, partner_id);
-    }
-
+           "partner push hashes {}, partner {} = {}, index = {}",
+           block_id,
+           partner_id,
+           hash.desc(),
+           hashes.len());
     hashes.push(hash);
   }
 
@@ -1636,10 +1640,12 @@ impl AppendOnlyMerkle {
     let mut level = 0;
     let mut carried_hash = HashValue::new();
     let mut carried = false;
+    let mut solitary_block = false;
 
     while level < self.blocks.len() {
       let length = self.blocks[level].len();
-      let last_block = &self.blocks[level][length - 1];
+      let last_id = length - 1;
+      let last_block = &self.blocks[level][last_id];
       let count = last_block.valid_leaves() as usize;
 
       if count != LEAVES_IN_BLOCK {
@@ -1648,7 +1654,7 @@ impl AppendOnlyMerkle {
                level,
                count,
                carried_hash.desc());
-        let mut entry = Entry::new(level, length - 1);
+        let mut entry = Entry::new(level, last_id);
 
         entry.hashes[0..count].clone_from_slice(&last_block.hashes[0..count]);
         entry.hashes[count] = carried_hash;
@@ -1656,41 +1662,63 @@ impl AppendOnlyMerkle {
         carried_hash = entry.hashes[HASHES_IN_BLOCK - 1];
         carried = true;
         dictionary.insert(level, entry);
+        solitary_block = length == 1;
+
+        if last_id & 1 == 0 {
+          carried_hash = hash_partial(&carried_hash, &empty_hash);
+        } else {
+          let left = self.blocks[level][last_id - 1].root();
+          carried_hash = hash_partial(&left, &carried_hash);
+        }
       } else if carried_hash != empty_hash {
         debug!(Proof,
                "Level {}:  full block, carried_hash = {}",
                level,
                carried_hash.desc());
         let mut entry = Entry::new(level, length);
+        let new_block_id = length;
 
         entry.hashes[0] = carried_hash;
         entry.fill();
         carried_hash = entry.hashes[HASHES_IN_BLOCK - 1];
         carried = true;
         dictionary.insert(level, entry);
+        solitary_block = level > self.blocks.len();
+
+        if new_block_id & 1 == 0 {
+          carried_hash = hash_partial(&carried_hash, &empty_hash);
+        } else {
+          let left = self.blocks[level][new_block_id - 1].root();
+          carried_hash = hash_partial(&left, &carried_hash);
+        }
       } else if !carried && length % 2 == 1 {
         debug!(Proof,
                "Level {}:  full block, create carry, size {}", level, self.entry_count);
         carried = true;
         carried_hash = last_block.root();
+        carried_hash = hash_partial(&carried_hash, &empty_hash);
+        solitary_block = false;
       } else if !carried {
-        // This should happen only with a complete tree.
         debug!(Proof,
                "Level {}:  full block, no carry, size {}", level, self.entry_count);
-        //let check_size = self.entry_count as isize;
 
+        // This should happen only if this block is paired and all the
+        // blocks below this are paired, recursively.
         for i in 0..=level {
           let length = self.blocks[level - i].len();
           assert!(length % (1 << (i + 1)) == 0);
         }
+
+        solitary_block = length == 1;
       }
 
       level += 1;
     }
 
     // This should be called unless the tree is a full
-    // binary tree.
-    if carried_hash != empty_hash {
+    // binary tree with LEAVES_PER_BLOCK^N entries for some N.
+    if solitary_block {
+    } else if carried_hash != empty_hash {
       let mut entry = Entry::new(level, 0);
       entry.hashes[0] = carried_hash;
       entry.fill();
@@ -2888,10 +2916,31 @@ mod tests {
       panic!("The tx_id is {}, but it should be {}.", proof.tx_id, tx_id);
     }
 
+    let mut id = tx_id;
+    let mut result = tree.leaf(tx_id as usize);
+    debug!(Proof, "Leaf hash is {}", result.desc());
+
     //
     // Now validate the actual hash values.
     //
-    for _i in 0..proof.hash_array.len() {}
+    for i in 0..proof.hash_array.len() {
+      if id & 1 == 0 {
+        result = hash_partial(&result, &proof.hash_array[i]);
+      } else {
+        result = hash_partial(&proof.hash_array[i], &result);
+      }
+
+      debug!(Proof,
+             "check_proof:  result at {:3} = {} from {}",
+             i,
+             result.desc(),
+             proof.hash_array[i].desc());
+      id /= 2;
+    }
+
+    debug!(Proof, "result = {}", result.desc());
+    debug!(Proof, "root   = {}", proof.root_hash.desc());
+    assert!(result == proof.root_hash);
   }
 
   #[test]
@@ -2994,7 +3043,6 @@ mod tests {
   }
 
   #[test]
-  #[ignore]
   fn test_proof() {
     println!("Starting the proof test.");
 
