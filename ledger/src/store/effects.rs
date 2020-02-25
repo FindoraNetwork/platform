@@ -211,7 +211,8 @@ impl TxnEffect {
           // (3)
           // TODO: implement real policies
           let null_policies = vec![];
-          verify_xfr_body(prng, &trn.body.transfer, &null_policies)?;
+          let null_commitments = vec![];
+          verify_xfr_body(prng, &trn.body.transfer, &null_policies, &null_commitments)?;
 
           for (inp, record) in trn.body.inputs.iter().zip(trn.body.transfer.inputs.iter()) {
             // (2), checking within this transaction and recording

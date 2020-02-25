@@ -267,11 +267,21 @@ pub fn open(path: &str) -> Result<SmtMap256<String>, Error> {
 
 #[cfg(test)]
 mod tests {
+  #![allow(dead_code)]
   use super::*;
   use hex::{encode, FromHex};
   use quickcheck::{quickcheck, TestResult};
   use std::string::ToString;
-
+/*
+  impl fmt::Display for [u8; 32] {
+    // This trait requires `fmt` with this exact signature.
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+      for u in self.iter() {
+        write!(f, "{}", u)
+      }
+    }
+  }
+*/
   // `hex` is the first a few bytes of the desired 32 bytes (the rest bytes are zeros).
   pub fn l256(hex: &str) -> [u8; 32] {
     assert!(hex.len() % 2 == 0 && hex.len() <= 64);
@@ -479,7 +489,6 @@ mod tests {
     }
     quickcheck(prop as fn(String, String) -> TestResult);
   }
-
 /*
   #[test]
   fn test_smt_map_256_merkle_proof() {
@@ -522,15 +531,15 @@ mod tests {
     assert_eq!(
       proof,
       MerkleProof {
-        bitmap: b256("0200000000000000000000000000000000000000000000000000000000000080"),
+        bitmap: b256("00000000000000000000000000000000000000000000000000000000000000c0"),
         hashes: vec![
-          b256("5031918db6776a678116ebe3352a3283f28983dbec4df0783c4988a7be461922"),
-          b256("09e975535684248aafbf0d00824aadd496879c9e375e298fdd33e7adc09c5067"),
+          b256("58b3c562f26b8f1a590360e13ee22921e73ffa4fb80d4c8bf8fa2062c676e115"),
+          b256("64f2216d3622e923f0ae2895c6346e135cdfedffbe9fae06eca0494be56f4127"),
         ],
       },
     );
     assert_eq!(*smt.merkle_root(),
-               b256("240a695aed4152b8f5b77aa9cb0e2b93b844ee0bc184fe898d28a29c348d57f6"));
+               b256("9215ac4fa910f55f87a300729c4821012e2a40e47000d3aa96b9537b507a364e"));
     assert!(smt.check_merkle_proof(&key, value, &proof));
     assert!(check_merkle_proof(smt.merkle_root(), &key, value, &proof));
 
