@@ -17,6 +17,9 @@ use std::path::{Path, PathBuf};
 use std::process::exit;
 use submission_server::{TxnHandle, TxnStatus};
 use txn_builder::{BuildsTransactions, TransactionBuilder, TransferOperationBuilder};
+use zei::api::anon_creds::{
+  ac_keygen_issuer, ac_keygen_user, ac_reveal, ac_sign, ac_verify, ACIssuerPublicKey, ACRevealSig,
+};
 use zei::serialization::ZeiFromToBytes;
 use zei::setup::PublicParams;
 use zei::xfr::asset_record::{build_blind_asset_record, open_asset_record, AssetRecordType};
@@ -48,13 +51,26 @@ const INIT_DATA: &str = r#"
           "id": 0,
           "name": "Ben",
           "key_pair": "f6a12ca8ffc30a66ca140ccc7276336115819361186d3f535dd99f8eaaca8fce7d177f1e71b490ad0ce380f9578ab12bb0fc00a98de8f6a555c81d48c2039249",
-          "credentials": [null, null, null],
+          "credentials": [
+              0,
+              null,
+              null
+          ],
           "balance": 0,
           "utxo": null
       }
   ],
   "loans": [],
-  "credentials": [],
+  "credentials": [
+      {
+          "id": 0,
+          "borrower": 0,
+          "attribute": "MinCreditScore",
+          "value": 650,
+          "proof": null,
+          "proved_value": null
+      }
+  ],
   "fiat_code": null,
   "sequence_number": 1
 }"#;
@@ -85,6 +101,7 @@ struct Credential {
   attribute: CredentialIndex,
   value: u64,
   proof: Option<String>,
+  proved_value: Option<u64>,
 }
 
 impl Credential {
@@ -93,7 +110,8 @@ impl Credential {
                  borrower,
                  attribute,
                  value,
-                 proof: None }
+                 proof: None,
+                 proved_value: None }
   }
 }
 
@@ -171,6 +189,7 @@ struct Loan {
   lender: u64,          // Lender id
   borrower: u64,        // Borrower id
   active: bool,         // Whether the loan has been activated
+  rejected: bool,       // Whether the loan has been rejected
   amount: u64,          // Amount in total
   balance: u64,         // Loan balance
   duration: u64,        // Duration of the loan
@@ -185,6 +204,7 @@ impl Loan {
            lender,
            borrower,
            active: false,
+           rejected: false,
            amount,
            balance: amount,
            duration,
@@ -915,6 +935,52 @@ fn get_open_asset_record(protocol: &str,
                                                                })
 }
 
+enum RelationType {
+  // // Requirement: attribute value == requirement
+  // Equal,
+
+  // Requirement: attribute value >= requirement
+  AtLeast,
+}
+
+// TODO (Keyao): Add "prove" command utilizing this function
+fn prove(reveal_sig: &ACRevealSig,
+         ac_issuer_pk: &ACIssuerPublicKey,
+         value: u64,
+         requirement: u64,
+         relation_type: RelationType)
+         -> Result<(), PlatformError> {
+  // 1. Prove that the attribut meets the requirement
+  match relation_type {
+    // //    Case 1. "Equal" requirement
+    // //    E.g. prove that the country code is the same as the requirement
+    // RelationType::Equal => {
+    //   if value != requirement {
+    //     println!("Value should be: {}.", requirement);
+    //     return Err(PlatformError::InputsError);
+    //   }
+    // }
+    //    Case 2. "AtLeast" requirement
+    //    E.g. prove that the credit score is at least the required value
+    RelationType::AtLeast => {
+      if value < requirement {
+        println!("Value should be at least: {}.", requirement);
+        return Err(PlatformError::InputsError);
+      }
+    }
+  }
+
+  // 2. Prove that the attribute is true
+  //    E.g. verify the lower bound of the credit score
+  let attrs = [value.to_le_bytes()];
+  let bitmap = [true];
+  ac_verify(ac_issuer_pk,
+            &attrs,
+            &bitmap,
+            &reveal_sig.sig,
+            &reveal_sig.pok).or_else(|error| Err(PlatformError::ZeiError(error)))
+}
+
 // Issues and transfers fiat and debt token to the lender and borrower, respectively
 // Then activate the loan
 fn activate_loan(loan_id: u64,
@@ -930,12 +996,86 @@ fn activate_loan(loan_id: u64,
     println!("Loan {} has already been activated.", loan_id);
     return Err(PlatformError::InputsError);
   }
+  if loan.rejected {
+    println!("Loan {} has already been rejected.", loan_id);
+    return Err(PlatformError::InputsError);
+  }
 
+  let lender_id = loan.lender;
+  let lender = &data.lenders.clone()[lender_id as usize];
   let lender_key_pair = &data.get_lender_key_pair(loan.lender)?;
   let borrower_id = loan.borrower;
   let borrower = &data.borrowers.clone()[borrower_id as usize];
   let borrower_key_pair = &data.get_borrower_key_pair(borrower_id)?;
   let amount = loan.amount;
+
+  // Credential check
+  // TODO (Keyao): Add requirements about other credential attributes, and attest them too
+  let credential_id =
+    if let Some(id) = borrower.credentials[CredentialIndex::MinCreditScore as usize] {
+      id as usize
+    } else {
+      println!("Minimum credit score is required. Use create credential.");
+      return Err(PlatformError::InputsError);
+    };
+  let credential = &data.credentials.clone()[credential_id as usize];
+  let requirement = lender.min_credit_score;
+
+  // If the proof exists and the proved value is valid, attest with the proof
+  // Otherwise, prove and attest the value
+  if let Some(proof) = &credential.proof {
+    if let Some(proved_value) = credential.proved_value {
+      let mut prng: ChaChaRng = ChaChaRng::from_seed([0u8; 32]);
+      let issuer_pk = ac_keygen_issuer::<_>(&mut prng, 1).0;
+      if let Err(error) =
+        prove(&serde_json::from_str::<ACRevealSig>(proof).or_else(|_| {
+                                                           Err(PlatformError::DeserializationError)
+                                                         })?,
+              &issuer_pk,
+              proved_value,
+              requirement,
+              RelationType::AtLeast)
+      {
+        // Update loans data
+        data.loans[loan_id as usize].rejected = true;
+        store_data_to_file(data)?;
+        return Err(error);
+      }
+    } else {
+      println!("Missing proved value while a proof exists.");
+      return Err(PlatformError::InputsError);
+    }
+  } else {
+    let mut prng: ChaChaRng = ChaChaRng::from_seed([0u8; 32]);
+    let (issuer_pk, issuer_sk) = ac_keygen_issuer::<_>(&mut prng, 1);
+    let (user_pk, user_sk) = ac_keygen_user::<_>(&mut prng, &issuer_pk);
+
+    let value = credential.value;
+    let attrs = [value.to_le_bytes()];
+    let sig = ac_sign(&mut prng, &issuer_sk, &user_pk, &attrs);
+    let bitmap = [true];
+    let reveal_sig = ac_reveal(&mut prng, &user_sk, &issuer_pk, &sig, &attrs, &bitmap).or_else(|error| Err(PlatformError::ZeiError(error))
+    )?;
+
+    prove(&reveal_sig,
+          &issuer_pk,
+          value,
+          requirement,
+          RelationType::AtLeast)?;
+
+    // Update credentials data
+    data.credentials[credential_id as usize].proof =
+      Some(serde_json::to_string(&reveal_sig).or_else(|_| {
+                                               Err(PlatformError::DeserializationError)
+                                             })
+                                             .unwrap());
+    data.credentials[credential_id as usize].proved_value =
+      Some(data.credentials[credential_id as usize].value);
+    store_data_to_file(data)?;
+    data = load_data()?;
+  }
+
+  // Define fiat asset
   let fiat_code = if let Some(code) = data.fiat_code {
     println!("Fiat code: {}", code);
     AssetTypeCode::new_from_base64(&code)?
@@ -2624,6 +2764,24 @@ mod tests {
                balance_pre + amount);
 
     let _ = fs::remove_file(DATA_FILE);
+  }
+
+  #[test]
+  fn test_prove() {
+    let mut prng: ChaChaRng = ChaChaRng::from_seed([0u8; 32]);
+    let (issuer_pk, issuer_sk) = ac_keygen_issuer::<_>(&mut prng, 1);
+    let (user_pk, user_sk) = ac_keygen_user::<_>(&mut prng, &issuer_pk);
+
+    let value: u64 = 200;
+    let attrs = [value.to_le_bytes()];
+    let sig = ac_sign(&mut prng, &issuer_sk, &user_pk, &attrs);
+    let bitmap = [true];
+    let reveal_sig = ac_reveal(&mut prng, &user_sk, &issuer_pk, &sig, &attrs, &bitmap).or_else(|error| Err(PlatformError::ZeiError(error))
+    ).unwrap();
+
+    assert!(prove(&reveal_sig, &issuer_pk, value, 150, RelationType::AtLeast).is_ok());
+    assert_eq!(prove(&reveal_sig, &issuer_pk, value, 300, RelationType::AtLeast),
+               Err(PlatformError::InputsError));
   }
 
   #[test]
