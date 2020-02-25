@@ -1566,9 +1566,8 @@ impl AppendOnlyMerkle {
         break;
       }
 
-      // Now append the hash of the partner for this block,
-      // if one exists.  If not, append the hash of the
-      // root hash of this block.
+      // Now append the hash of the partner (sibling) for this block,
+      // if one exists, or the empty hash.
       let block_id = id / LEAVES_IN_BLOCK;
       self.push_partner_hash(&mut hashes, level, block_id, &dictionary);
 
@@ -1587,7 +1586,8 @@ impl AppendOnlyMerkle {
     Ok(result)
   }
 
-  // Append the hash of the partner of the current block.
+  // Append the hash of the partner of the current block, or
+  // the empty hash, if this block has no sibling in the tree.
   fn push_partner_hash(&self,
                        hashes: &mut Vec<HashValue>,
                        level: usize,
@@ -1597,6 +1597,8 @@ impl AppendOnlyMerkle {
     let block_hash = self.find_block_root(dictionary, level, block_id);
     let partner_hash = self.find_block_root(dictionary, level, partner_id);
 
+    // Compute the hash of the parent of the block. This is
+    // useful for debugging.
     let combine = if partner_id & 1 == 0 {
       hash_partial(&partner_hash, &block_hash)
     } else {
@@ -1614,6 +1616,8 @@ impl AppendOnlyMerkle {
     hashes.push(partner_hash);
   }
 
+  // Find the hash at the root of the given block.  The
+  // block might be in the dictionary, or not.
   fn find_block_root(&self, dictionary: &Dictionary, level: usize, block_id: usize) -> HashValue {
     let empty_hash = HashValue::new();
     debug!(Proof, "find_block_root(level {}, id {})", level, block_id);
@@ -1644,12 +1648,13 @@ impl AppendOnlyMerkle {
   // The basic tree code only computes the upper tree elements
   // when a block becomes full.  When we produce a proof, we need
   // to work on a "complete" tree.  In a complete tree, nodes with
-  // only one child become a hash of that child's value.  This change
-  // from the working form of a tree ripples up to the root.
+  // only one child contain a hash of that child's value.  This
+  // change from the working form of a tree ripples up to the root.
   //
   // The implementation of this modification is represented by a
   // dictionary that holds an entry for each block modified (or
   // created) by this rippling.
+  //
   fn generate_tree_completion(&self) -> Dictionary {
     debug!(Proof, "Generating a tree completion");
     let empty_hash = HashValue::new();
@@ -1660,12 +1665,29 @@ impl AppendOnlyMerkle {
     let mut carried = false;
     let mut solitary_block = false;
 
+    // Iterate over each level of the tree that's present
+    // in the working copy.
     while level < self.blocks.len() {
       let length = self.blocks[level].len();
       let last_id = length - 1;
       let last_block = &self.blocks[level][last_id];
       let count = last_block.valid_leaves() as usize;
 
+      //
+      // We have three important cases to consider:
+      //   1) The current block is only partially full.  Create
+      //      a dictionary entry for it.  Append the carried
+      //      hash from the lower level to it.  If we are at
+      //      level zero, the carried hash will be the empty
+      //      hash.
+      //   2) The block is full, but we have a valid carried
+      //      hash.  Create a new entry and add it to the
+      //      directory.
+      //   3) There's no carried hash, the block is full, and
+      //      the length of the block list at this level is
+      //      odd.  The carried hash becomes the hash of the
+      //      root of the last block in this chain.
+      //
       if count != LEAVES_IN_BLOCK {
         debug!(Proof,
                "Level {}:  partial block {} ({} entries), carried_hash = {}",
@@ -1683,6 +1705,11 @@ impl AppendOnlyMerkle {
         dictionary.insert(level, entry);
         solitary_block = length == 1;
 
+        // Compute the hash to carry upward.  That is the
+        // hash of the root of this block and the root of
+        // its sibling, if it has a sibling.  Otherwise,
+        // the carried hash is the hash of the root of this
+        // block and the empty hash.
         if last_id & 1 == 0 {
           carried_hash = hash_partial(&carried_hash, &empty_hash);
         } else {
@@ -1704,6 +1731,8 @@ impl AppendOnlyMerkle {
         dictionary.insert(level, entry);
         solitary_block = level > self.blocks.len();
 
+        // Similarly to the previous case, compute the
+        // carried hash.
         if new_block_id & 1 == 0 {
           carried_hash = hash_partial(&carried_hash, &empty_hash);
         } else {
@@ -1714,8 +1743,7 @@ impl AppendOnlyMerkle {
         debug!(Proof,
                "Level {}:  full block, create carry, size {}", level, self.entry_count);
         carried = true;
-        carried_hash = last_block.root();
-        carried_hash = hash_partial(&carried_hash, &empty_hash);
+        carried_hash = hash_partial(&last_block.root(), &empty_hash);
         solitary_block = false;
       } else if !carried {
         debug!(Proof,
@@ -1734,9 +1762,24 @@ impl AppendOnlyMerkle {
       level += 1;
     }
 
+    //
+    // Okay, we are at the top of the tree.  We have a
+    // couple of cases:
+    //   1) The top of the tree is a solitary block.
+    //      We have nothing to do.
+    //   2) We have a carried hash.  In this case, add
+    //      a new dictionary entry to form the top of the
+    //      tree.
+    //
     if solitary_block {
+      // The top of the tree is a single block.  There's nothing
+      // to do.  The hash of the root of this block is the
+      // hash of the completed tree.
     } else if carried_hash != empty_hash {
-      debug!(Proof, "Level {}:  create block 0 with {}", level, carried_hash.desc());
+      debug!(Proof,
+             "Level {}:  create block 0 with {}",
+             level,
+             carried_hash.desc());
       let mut entry = Entry::new(level, 0);
       entry.hashes[0] = carried_hash;
       entry.fill();
@@ -1749,16 +1792,17 @@ impl AppendOnlyMerkle {
     dictionary
   }
 
-  // Append the hashes for a given level in the
-  // block structure.  This amounts to adding the
-  // hierarchy for one block, excluding the root
-  // of the block itself.  We either use a complete
-  // block from the working tree, or we use a fake
-  // block from the tree completion we generated.
   //
-  // We return the root hash of the block since it
-  // might be the root of the tree, and it's easy
-  // to get it.
+  // Append the hashes for a given level in the block
+  // structure.  This amounts to adding the hierarchy
+  // for one block, excluding the root of the block
+  // itself.  We either use a complete block from the
+  // working tree, or we use a fake block from the tree
+  // completion we generated.
+  //
+  // We return the root hash of the block since it might
+  // be the root of the tree, and it's easy to get it.
+  //
   fn append_proof_hashes(&self,
                          hashes: &mut Vec<HashValue>,
                          level: usize,
@@ -1788,6 +1832,9 @@ impl AppendOnlyMerkle {
     block_root_hash
   }
 
+  ///
+  /// Compute the root hash of the Merkle tree.
+  ///
   pub fn get_root_hash(&self) -> HashValue {
     if self.entry_count == 0 {
       return HashValue::default();
@@ -1797,6 +1844,9 @@ impl AppendOnlyMerkle {
     proof.root_hash
   }
 
+  ///
+  /// Check that a transaction id actually is present in the
+  /// Merkle tree.
   pub fn validate_transaction_id(&self, transaction_id: u64) -> bool {
     transaction_id < self.entry_count
   }
@@ -2628,7 +2678,7 @@ mod tests {
   }
 
   fn create_test_hash(i: u64, verbose: bool) -> HashValue {
-    let mut buffer = [0_u8; HASH_SIZE];
+    let mut buffer = [0_u8; HASH_SIZE - 1];
     let mut hash_value = HashValue::new();
 
     for i in 0..buffer.len() {
@@ -2638,7 +2688,7 @@ mod tests {
     buffer.as_mut()
           .write_u64::<LittleEndian>(i)
           .expect("le write");
-    hash_value.hash.clone_from_slice(&buffer[0..HASH_SIZE]);
+    hash_value.hash[1..].clone_from_slice(&buffer[0..HASH_SIZE - 1]);
 
     if verbose {
       println!("Create hash {}", i.commas());
@@ -3089,11 +3139,10 @@ mod tests {
   }
 
   #[test]
-  #[ignore]
   fn test_proof() {
     println!("Starting the proof test.");
 
-    // First, generate a tree.
+    // First, create a tree.
     let path = "proof_tree".to_string();
     let _ = std::fs::remove_file(&path);
 
@@ -3104,11 +3153,14 @@ mod tests {
       }
     };
 
+    // Now add some transactions to it.
     let transactions = (2 * LEAVES_IN_BLOCK * LEAVES_IN_BLOCK + 1) as u64;
 
     for i in 0..transactions {
       let id = test_append(&mut tree, i, false);
 
+      // Try a proof of the appended id just as a bit
+      // of a test.
       match tree.generate_proof(id, tree.total_size()) {
         Err(x) => {
           panic!("Error on proof for transaction {}:  {}", i, x);
@@ -3124,22 +3176,19 @@ mod tests {
         println!("Generated proof {}.", i.commas());
       }
 
+      // Check that the proof for each element in the tree
+      // is correct for this size of a tree.
       if tree.total_size() as usize == 2 * LEAVES_IN_BLOCK * LEAVES_IN_BLOCK {
         check_all_proofs(&tree);
       }
     }
 
+    // Check that the proof of each entry in the
+    // tree is generated properly.
     check_all_proofs(&tree);
 
     if let Ok(_x) = tree.generate_proof(transactions, tree.total_size()) {
       panic!("Transaction {} does not exist.", transactions);
-    }
-
-    let _ = std::fs::remove_file(&path);
-
-    for i in 1..MAX_BLOCK_LEVELS {
-      let path = tree.file_path(i);
-      let _ = std::fs::remove_file(&path);
     }
 
     match tree.generate_proof(0, tree.total_size() - 1) {
@@ -3154,6 +3203,14 @@ mod tests {
     }
 
     assert!(!tree.validate_transaction_id(tree.total_size()));
+
+    // Remove the test files.
+    let _ = std::fs::remove_file(&path);
+
+    for i in 1..MAX_BLOCK_LEVELS {
+      let path = tree.file_path(i);
+      let _ = std::fs::remove_file(&path);
+    }
     println!("Done with the proof test.");
   }
 
