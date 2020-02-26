@@ -11,11 +11,11 @@
 use chrono::Utc;
 use cryptohash::sha256;
 use findora::{debug, er, log, log_impl, sde, se, Commas};
-use itertools::izip;
 use serde::Deserialize;
 use serde::Deserializer;
 use serde::Serialize;
 use serde::Serializer;
+use std::collections::HashMap;
 use std::fmt;
 use std::fs::File;
 use std::fs::OpenOptions;
@@ -33,6 +33,7 @@ use std::slice::from_raw_parts;
 use std::slice::from_raw_parts_mut;
 
 const BLOCK_SHIFT: u16 = 9;
+const LEVELS_IN_BLOCK: usize = BLOCK_SHIFT as usize;
 const HASHES_IN_BLOCK: usize = (1 << BLOCK_SHIFT) - 1;
 const LEAVES_IN_BLOCK: usize = (HASHES_IN_BLOCK + 1) / 2;
 const CHECK_SIZE: usize = 16;
@@ -41,7 +42,6 @@ const HASH_SIZE: usize = 32;
 const BLOCK_SIZE: usize = HASH_SIZE * (HASHES_IN_BLOCK + 1);
 const MAX_BLOCK_LEVELS: usize = 64;
 const PROOF_VERSION: u64 = 0;
-const PROOF_LEVELS: usize = 56;
 
 #[derive(PartialEq, Copy, Clone, Debug, Deserialize, Serialize)]
 #[repr(C)]
@@ -120,6 +120,11 @@ impl HashValue {
   pub fn new() -> HashValue {
     HashValue { hash: [0; HASH_SIZE] }
   }
+
+  pub fn desc(&self) -> String {
+    format!("[ {:3}, {:3}, {:3}, {:3} ]",
+            self.hash[0], self.hash[1], self.hash[2], self.hash[3])
+  }
 }
 
 /// This structure describes what is passed to the upper layers
@@ -140,7 +145,108 @@ pub struct Proof {
   pub state: u64,
   pub time: i64,
   pub tx_id: u64,
+  pub root_hash: HashValue,
   pub hash_array: Vec<HashValue>,
+}
+
+struct Dictionary {
+  max_level: usize,
+  map: HashMap<usize, Entry>,
+}
+
+impl Dictionary {
+  pub fn new() -> Dictionary {
+    Dictionary { max_level: 0,
+                 map: HashMap::new() }
+  }
+
+  pub fn get(&self, level: usize, id: usize) -> Option<&Entry> {
+    match self.map.get(&level) {
+      Some(entry) => {
+        if entry.id == id {
+          Some(&entry)
+        } else {
+          None
+        }
+      }
+      None => None,
+    }
+  }
+
+  pub fn insert(&mut self, level: usize, entry: Entry) {
+    debug!(Proof,
+           "add dictionary block {} at level {}", entry.id, level);
+    self.map.insert(level, entry);
+
+    if level > self.max_level {
+      self.max_level = level;
+    }
+  }
+
+  pub fn max_level(&self) -> usize {
+    self.max_level
+  }
+}
+
+struct Entry {
+  level: usize,
+  id: usize,
+  hashes: [HashValue; HASHES_IN_BLOCK],
+}
+
+impl Entry {
+  pub fn new(level: usize, id: usize) -> Entry {
+    Entry { level,
+            id,
+            hashes: [HashValue::new(); HASHES_IN_BLOCK] }
+  }
+
+  pub fn push(&self, hashes: &mut Vec<HashValue>, id: usize, check: &[usize]) {
+    assert!(id < LEAVES_IN_BLOCK);
+    let mut index = id;
+    let mut base = 0;
+    let mut interval = LEAVES_IN_BLOCK;
+
+    for i in 0..LEVELS_IN_BLOCK - 1 {
+      let block = base + index;
+      let partner = block ^ 1;
+
+      let combine = if block > partner {
+        hash_partial(&self.hashes[partner], &self.hashes[block])
+      } else {
+        hash_partial(&self.hashes[block], &self.hashes[partner])
+      };
+
+      debug!(Proof,
+             "entry  push hashes[{:3}] = {}, pair = {}, combine = {}",
+             partner,
+             self.hashes[partner].desc(),
+             self.hashes[block].desc(),
+             combine.desc());
+      hashes.push(self.hashes[partner]);
+
+      if !check.is_empty() {
+        assert!(partner == check[i] + 1);
+      }
+
+      index /= 2;
+      base += interval;
+      interval /= 2;
+    }
+  }
+
+  pub fn fill(&mut self) {
+    for i in 0..HASHES_IN_BLOCK / 2 {
+      self.hashes[LEAVES_IN_BLOCK + i] = hash_partial(&self.hashes[2 * i], &self.hashes[2 * i + 1]);
+    }
+  }
+
+  pub fn root(&self) -> HashValue {
+    let empty_hash = HashValue::new();
+    let last = HASHES_IN_BLOCK - 1;
+    assert!(self.hashes[last] != empty_hash);
+    self.hashes[last]
+  }
 }
 
 // Provide the serialization help for the array of hashes in a block.
@@ -379,6 +485,53 @@ impl Block {
     }
 
     None
+  }
+
+  // Add the subtree for the given block into the proof.  This code
+  // handles full blocks. Here, "id" is the index within the block.
+  fn push(&self, hashes: &mut Vec<HashValue>, id: usize, check: &[usize]) {
+    assert!(id < LEAVES_IN_BLOCK);
+    let mut index = id;
+    let mut base = 0;
+    let mut interval = LEAVES_IN_BLOCK;
+
+    debug!(Proof, "Subtree for id {} (from a full block)", id);
+
+    for i in 0..LEVELS_IN_BLOCK - 1 {
+      let block = base + index;
+      let partner = block ^ 1;
+      let hash = self.hashes[partner];
+
+      let combine = if block > partner {
+        hash_partial(&self.hashes[partner], &self.hashes[block])
+      } else {
+        hash_partial(&self.hashes[block], &self.hashes[partner])
+      };
+
+      debug!(Proof,
+             "block  push hashes[{:3}] = {}, pair = {}, combine = {}",
+             partner,
+             hash.desc(),
+             self.hashes[block].desc(),
+             combine.desc());
+
+      hashes.push(hash);
+
+      if !check.is_empty() {
+        assert!(partner == check[i] + 1);
+      }
+
+      index /= 2;
+      base += interval;
+      interval /= 2;
+    }
+
+    debug!(Proof, "hashes now has {} elements.", hashes.len());
+  }
+
+  pub fn root(&self) -> HashValue {
+    let last = HASHES_IN_BLOCK - 1;
+    self.hashes[last]
   }
 
   // Return a pointer to the raw bytes of the block for I/O.
@@ -1392,48 +1545,34 @@ impl AppendOnlyMerkle {
       return er!("Versioning is not yet supported.");
     }
 
+    debug!(Proof,
+           "Generate proof for tid {} at state {}", transaction_id, self.entry_count);
+
+    // Generate a dictionary of all the blocks that
+    // would change or be added to make a complete
+    // Merkle tree.
+    let dictionary = self.generate_tree_completion();
+
+    let mut level = 0;
     let mut hashes = Vec::new();
-    let mut index = transaction_id as usize;
-    let mut block_id = index / LEAVES_IN_BLOCK as usize;
+    let mut id = transaction_id as usize;
+    let mut root;
 
-    debug!(Proof, "Proof for {}", transaction_id);
+    // Loop through each level of the tree.
+    loop {
+      root = self.append_proof_hashes(&mut hashes, level, id, &dictionary);
 
-    // Go up the tree grabbing hashes.
-    for level in 0..self.files.len() {
-      debug!(Proof,
-             "level {}, block_id {}, index {} into len {}",
-             level,
-             block_id,
-             index,
-             self.blocks[level].len());
-
-      if block_id >= self.blocks[level].len() {
+      if level == dictionary.max_level() {
         break;
       }
 
-      let block = &self.blocks[level][block_id];
-      let block_index = index % LEAVES_IN_BLOCK;
-      let partner = block_index ^ 1;
+      // Now append the hash of the partner (sibling) for this block,
+      // if one exists, or the empty hash.
+      let block_id = id / LEAVES_IN_BLOCK;
+      self.push_partner_hash(&mut hashes, level, block_id, &dictionary);
 
-      debug!(Proof,
-             "push block[{}].hashes[{}] at level {}", block_id, partner, level);
-
-      if block.full() {
-        self.push_subtree(block, partner, &mut hashes);
-      } else {
-        self.push_partial(block, partner, &mut hashes);
-      }
-
-      index = block_id;
-      block_id /= LEAVES_IN_BLOCK * 2;
-    }
-
-    // Generate fake levels to match the proof format.
-    while hashes.len() < PROOF_LEVELS {
-      let lower = &hashes[hashes.len() - 1];
-      let upper = hash_single(lower);
-
-      hashes.push(upper);
+      level += 1;
+      id /= LEAVES_IN_BLOCK * 2;
     }
 
     let result = Proof { version: PROOF_VERSION,
@@ -1441,118 +1580,275 @@ impl AppendOnlyMerkle {
                          state: self.entry_count,
                          time: Utc::now().timestamp(),
                          tx_id: transaction_id,
+                         root_hash: root,
                          hash_array: hashes };
 
     Ok(result)
   }
 
+  // Append the hash of the partner of the current block, or
+  // the empty hash, if this block has no sibling in the tree.
+  fn push_partner_hash(&self,
+                       hashes: &mut Vec<HashValue>,
+                       level: usize,
+                       block_id: usize,
+                       dictionary: &Dictionary) {
+    let partner_id = block_id ^ 1;
+    let block_hash = self.find_block_root(dictionary, level, block_id);
+    let partner_hash = self.find_block_root(dictionary, level, partner_id);
+
+    // Compute the hash of the parent of the block. This is
+    // useful for debugging.
+    let combine = if partner_id & 1 == 0 {
+      hash_partial(&partner_hash, &block_hash)
+    } else {
+      hash_partial(&block_hash, &partner_hash)
+    };
+
+    debug!(Proof,
+           "partner push level {}, block {} = {}, partner {} = {}, combine = {}",
+           level,
+           block_id,
+           block_hash.desc(),
+           partner_id,
+           partner_hash.desc(),
+           combine.desc());
+    hashes.push(partner_hash);
+  }
+
+  // Find the hash at the root of the given block.  The
+  // block might be in the dictionary, or not.
+  fn find_block_root(&self, dictionary: &Dictionary, level: usize, block_id: usize) -> HashValue {
+    let empty_hash = HashValue::new();
+    debug!(Proof, "find_block_root(level {}, id {})", level, block_id);
+
+    match dictionary.get(level, block_id) {
+      Some(entry) => {
+        assert!(entry.root() != empty_hash);
+        entry.root()
+      }
+      None => {
+        if level >= self.blocks.len() || block_id >= self.blocks[level].len() {
+          debug!(Proof,
+                 "find_block_root(level {}, id {}) -> len {}",
+                 level,
+                 block_id,
+                 self.blocks[level].len());
+          assert!(block_id == self.blocks[level].len());
+          empty_hash
+        } else {
+          let block = &self.blocks[level][block_id];
+          assert!(block.full());
+          block.root()
+        }
+      }
+    }
+  }
+
+  // The basic tree code only computes the upper tree elements
+  // when a block becomes full.  When we produce a proof, we need
+  // to work on a "complete" tree.  In a complete tree, nodes with
+  // only one child contain a hash of that child's value.  This
+  // change from the working form of a tree ripples up to the root.
+  //
+  // The implementation of this modification is represented by a
+  // dictionary that holds an entry for each block modified (or
+  // created) by this rippling.
+  //
+  fn generate_tree_completion(&self) -> Dictionary {
+    debug!(Proof, "Generating a tree completion");
+    let empty_hash = HashValue::new();
+
+    let mut dictionary = Dictionary::new();
+    let mut level = 0;
+    let mut carried_hash = HashValue::new();
+    let mut carried = false;
+    let mut solitary_block = false;
+
+    // Iterate over each level of the tree that's present
+    // in the working copy.
+    while level < self.blocks.len() {
+      let length = self.blocks[level].len();
+      let last_id = length - 1;
+      let last_block = &self.blocks[level][last_id];
+      let count = last_block.valid_leaves() as usize;
+
+      //
+      // We have three important cases to consider:
+      //   1) The current block is only partially full.  Create
+      //      a dictionary entry for it.  Append the carried
+      //      hash from the lower level to it.  If we are at
+      //      level zero, the carried hash will be the empty
+      //      hash.
+      //   2) The block is full, but we have a valid carried
+      //      hash.  Create a new entry and add it to the
+      //      directory.
+      //   3) There's no carried hash, the block is full, and
+      //      the length of the block list at this level is
+      //      odd.  The carried hash becomes the hash of the
+      //      root of the last block in this chain.
+      //
+      if count != LEAVES_IN_BLOCK {
+        debug!(Proof,
+               "Level {}:  partial block {} ({} entries), carried_hash = {}",
+               level,
+               last_block.id(),
+               count,
+               carried_hash.desc());
+        let mut entry = Entry::new(level, last_id);
+
+        entry.hashes[0..count].clone_from_slice(&last_block.hashes[0..count]);
+        entry.hashes[count] = carried_hash;
+        entry.fill();
+        carried_hash = entry.root();
+        carried = true;
+        dictionary.insert(level, entry);
+        solitary_block = length == 1;
+
+        // Compute the hash to carry upward.  That is the
+        // hash of the root of this block and the root of
+        // its sibling, if it has a sibling.  Otherwise,
+        // the carried hash is the hash of the root of this
+        // block and the empty hash.
+        if last_id & 1 == 0 {
+          carried_hash = hash_partial(&carried_hash, &empty_hash);
+        } else {
+          let left = self.blocks[level][last_id - 1].root();
+          carried_hash = hash_partial(&left, &carried_hash);
+        }
+      } else if carried_hash != empty_hash {
+        debug!(Proof,
+               "Level {}:  full block, carried_hash = {}",
+               level,
+               carried_hash.desc());
+        let mut entry = Entry::new(level, length);
+        let new_block_id = length;
+
+        entry.hashes[0] = carried_hash;
+        entry.fill();
+        carried_hash = entry.root();
+        carried = true;
+        dictionary.insert(level, entry);
+        solitary_block = level > self.blocks.len();
+
+        // Similarly to the previous case, compute the
+        // carried hash.
+        if new_block_id & 1 == 0 {
+          carried_hash = hash_partial(&carried_hash, &empty_hash);
+        } else {
+          let left = self.blocks[level][new_block_id - 1].root();
+          carried_hash = hash_partial(&left, &carried_hash);
+        }
+      } else if !carried && length % 2 == 1 {
+        debug!(Proof,
+               "Level {}:  full block, create carry, size {}", level, self.entry_count);
+        carried = true;
+        carried_hash = hash_partial(&last_block.root(), &empty_hash);
+        solitary_block = false;
+      } else if !carried {
+        debug!(Proof,
+               "Level {}:  full block, no carry, size {}", level, self.entry_count);
+
+        // This should happen only if this block is paired and all the
+        // blocks below this are paired, recursively.
+        for i in 0..=level {
+          let length = self.blocks[level - i].len();
+          assert!(length % (1 << (i + 1)) == 0);
+        }
+
+        solitary_block = length == 1;
+      }
+
+      level += 1;
+    }
+
+    //
+    // Okay, we are at the top of the tree.  We have a
+    // couple of cases:
+    //   1) The top of the tree is a solitary block.
+    //      We have nothing to do.
+    //   2) We have a carried hash.  In this case, add
+    //      a new dictionary entry to form the top of the
+    //      tree.
+    //
+    if solitary_block {
+      // The top of the tree is a single block.  There's nothing
+      // to do.  The hash of the root of this block is the
+      // hash of the completed tree.
+    } else if carried_hash != empty_hash {
+      debug!(Proof,
+             "Level {}:  create block 0 with {}",
+             level,
+             carried_hash.desc());
+      let mut entry = Entry::new(level, 0);
+      entry.hashes[0] = carried_hash;
+      entry.fill();
+      dictionary.insert(level, entry);
+    } else {
+      let check_size = self.entry_count as isize;
+      assert!((check_size & -check_size) == check_size);
+    }
+
+    dictionary
+  }
+
+  //
+  // Append the hashes for a given level in the block
+  // structure.  This amounts to adding the hierarchy
+  // for one block, excluding the root of the block
+  // itself.  We either use a complete block from the
+  // working tree, or we use a fake block from the tree
+  // completion we generated.
+  //
+  // We return the root hash of the block since it might
+  // be the root of the tree, and it's easy to get it.
+  //
+  fn append_proof_hashes(&self,
+                         hashes: &mut Vec<HashValue>,
+                         level: usize,
+                         id: usize,
+                         dictionary: &Dictionary)
+                         -> HashValue {
+    let block_id = id / LEAVES_IN_BLOCK;
+    let block_index = id % LEAVES_IN_BLOCK;
+    let last = HASHES_IN_BLOCK - 1;
+    let block_root_hash;
+
+    debug!(Proof, "Appending hashes for level {}, id {}", level, id);
+
+    match dictionary.get(level, block_id) {
+      Some(entry) => {
+        assert!(entry.level == level);
+        entry.push(hashes, block_index, &[]);
+        block_root_hash = entry.hashes[last];
+      }
+      None => {
+        let block = &self.blocks[level][id / LEAVES_IN_BLOCK];
+        block.push(hashes, block_index, &[]);
+        block_root_hash = block.hashes[last];
+      }
+    }
+
+    block_root_hash
+  }
+
+  ///
+  /// Compute the root hash of the Merkle tree.
+  ///
   pub fn get_root_hash(&self) -> HashValue {
     if self.entry_count == 0 {
       return HashValue::default();
     }
 
     let proof = self.generate_proof(0, self.entry_count).unwrap();
-    proof.hash_array[proof.hash_array.len() - 1]
+    proof.root_hash
   }
 
+  ///
+  /// Check that a transaction id actually is present in the
+  /// Merkle tree.
   pub fn validate_transaction_id(&self, transaction_id: u64) -> bool {
     transaction_id < self.entry_count
-  }
-
-  // Add the subtree for the given block into the proof.  This code
-  // handles full blocks.
-  fn push_subtree(&self, block: &Block, partner: usize, hashes: &mut Vec<HashValue>) {
-    let mut current = partner / 2;
-    let mut base = LEAVES_IN_BLOCK;
-    let mut size = base / 2;
-
-    debug!(Proof, "Subtree for partner {}", partner);
-    hashes.push(block.hashes[partner]);
-
-    // Nodes in the tree are stored by level, from the lowest level
-    // to the highest level.  The variable "size" tells us how many
-    // nodes exist at the level we are examining.
-    while size > 1 {
-      current ^= 1;
-      debug!(Proof,
-             "push {:3} + {:3} = {:3} {:3}",
-             current,
-             base,
-             current + base,
-             size);
-      let hash = block.hashes[current + base];
-      hashes.push(hash);
-
-      current /= 2;
-      base += size;
-      size /= 2;
-    }
-
-    debug!(Proof, "hashes now has {} elements.", hashes.len());
-  }
-
-  // Push a subtree from a partially-filled block.
-  //
-  // Nodes that have one child are defined to contain the hash of
-  // that child's hash.  Referring to a node that has zero children
-  // is an error in the logic.  Such a proof would be for a transaction
-  // that hasn't been entered into the tree.
-  //
-  // This routine will need to be extended to handle blocks that
-  // weren't full in a previous state of the tree, if we allow callers
-  // to request proofs for past versions of the tree.
-  fn push_partial(&self, block: &Block, partner: usize, hashes: &mut Vec<HashValue>) {
-    let empty_hash = HashValue::new();
-    let mut current = partner / 2;
-    let mut base = 0;
-    let mut size = base / 2;
-    let mut table = [empty_hash; HASHES_IN_BLOCK / 2];
-
-    // Compute the values for the interior nodes of this block.
-    // Just to simplify the code, we define nodes that have no
-    // valid children as containing HashValue::new(), the "empty"
-    // hash.  The hash_partial function handles this case.
-    // Hopefully, this loop is equivalent to:
-    //   for i in 0..LEAVES_IN_BLOCK / 2 {
-    //     table[i] = hash_partial(&block.hashes[i * 2], &block.hashes[i * 2 + 1]);
-    //   }
-    // which clippy can't handle properly.
-    for (loc, hash_1st, hash_2nd) in izip!(table.iter_mut(),
-                                           block.hashes.iter().step_by(2),
-                                           block.hashes.iter().skip(1).step_by(2))
-    {
-      *loc = hash_partial(hash_1st, hash_2nd);
-    }
-
-    if partner < block.valid_leaves() as usize {
-      hashes.push(block.hashes[partner]);
-    } else {
-      hashes.push(hash_single(&block.hashes[partner ^ 1]));
-    }
-
-    debug!(Proof, "Subtree for partner {}", partner);
-
-    // Similarly to push_subtree, the "size" variable refers to the
-    // number of nodes that can exist on this level, if the block
-    // were full.
-    while size > 1 {
-      current ^= 1;
-      debug!(Proof,
-             "push {:3} + {:3} = {:3} {:3}",
-             current,
-             base,
-             current + base,
-             size);
-      let hash = table[current + base];
-      assert!(hash != empty_hash);
-      hashes.push(hash);
-
-      current /= 2;
-      base += size;
-      size /= 2;
-    }
-
-    debug!(Proof, "hashes now has {} elements.", hashes.len());
   }
 
   /// Return the number of transaction entries in the tree.
@@ -2382,7 +2678,7 @@ mod tests {
   }
 
   fn create_test_hash(i: u64, verbose: bool) -> HashValue {
-    let mut buffer = [0_u8; HASH_SIZE];
+    let mut buffer = [0_u8; HASH_SIZE - 1];
     let mut hash_value = HashValue::new();
 
     for i in 0..buffer.len() {
@@ -2392,7 +2688,7 @@ mod tests {
     buffer.as_mut()
           .write_u64::<LittleEndian>(i)
           .expect("le write");
-    hash_value.hash.clone_from_slice(&buffer[0..HASH_SIZE]);
+    hash_value.hash[1..].clone_from_slice(&buffer[0..HASH_SIZE - 1]);
 
     if verbose {
       println!("Create hash {}", i.commas());
@@ -2688,11 +2984,158 @@ mod tests {
       panic!("The tx_id is {}, but it should be {}.", proof.tx_id, tx_id);
     }
 
-    if proof.hash_array.len() != PROOF_LEVELS {
-      panic!("The proof has {} levels.", proof.hash_array.len());
+    let mut id = tx_id;
+    let mut result = tree.leaf(tx_id as usize);
+    debug!(Proof, "Leaf hash is {}", result.desc());
+
+    //
+    // Now validate the actual hash values.
+    //
+    for i in 0..proof.hash_array.len() {
+      if id & 1 == 0 {
+        result = hash_partial(&result, &proof.hash_array[i]);
+      } else {
+        result = hash_partial(&proof.hash_array[i], &result);
+      }
+
+      debug!(Proof,
+             "check_proof:  result at {:3} = {} from {}",
+             i,
+             result.desc(),
+             proof.hash_array[i].desc());
+      id /= 2;
     }
 
-    // TODO:  Validate the hash values.
+    debug!(Proof, "result = {}", result.desc());
+    debug!(Proof, "root   = {}", proof.root_hash.desc());
+
+    if result != proof.root_hash {
+      let empty_hash = HashValue::new();
+      debug!(Proof,
+             "more   = {}",
+             hash_partial(&proof.root_hash, &empty_hash).desc());
+      panic!("Proof hash mismatch:  {} vs {}, id = {}, size = {}",
+             result.desc(),
+             proof.root_hash.desc(),
+             tx_id,
+             tree.total_size());
+    }
+  }
+
+  #[test]
+  fn test_pieces() {
+    // Test an entry that has one non-empty hash.
+    let mut entry = Entry::new(0, 0);
+
+    entry.hashes[0].hash[0] = 24;
+    entry.hashes[0].hash[1] = 25;
+    entry.hashes[0].hash[2] = 26;
+    entry.hashes[0].hash[3] = 27;
+
+    // Now compute the full tree of hashes for this block.
+
+    entry.fill();
+
+    // We should have 9 non-empty hashes in this entry's tree,
+    // corresponding to the line up from the one valid hash.
+    // We also know what their indices should be...
+
+    let empty_hash = HashValue::new();
+    let mut count = 0;
+
+    let expected_entries = [0, 256, 384, 448, 480, 496, 504, 508, 510];
+
+    for i in 0..HASHES_IN_BLOCK {
+      if entry.hashes[i] != empty_hash {
+        println!("hashes[{:3}] = {}", i, entry.hashes[i].desc());
+        assert!(i == expected_entries[count]);
+        count += 1;
+      }
+    }
+
+    println!("Got {} hashes.", count);
+    assert!(count == 9);
+    let last = entry.hashes.len() - 1;
+    println!("hashes[last = {}] = {}", last, entry.hashes[last].desc());
+
+    // Okay, try pushing a piece of a proof.  We should push a partner
+    // for all but the topmost element of this entry's tree.  We know
+    // what indices should be pushed, too.
+
+    let mut hashes = Vec::new();
+    entry.push(&mut hashes, 0, &expected_entries);
+    assert!(hashes.len() == LEVELS_IN_BLOCK - 1);
+
+    // All of the partners should be empty hashes for
+    // this subtree.
+    for hash in hashes.iter() {
+      assert!(*hash == empty_hash);
+    }
+
+    let mut hashes = Vec::new();
+    let mut block = Block::new(0, 0);
+    block.hashes[0..HASHES_IN_BLOCK].clone_from_slice(&entry.hashes[0..HASHES_IN_BLOCK]);
+
+    block.push(&mut hashes, 0, &expected_entries);
+    assert!(hashes.len() == LEVELS_IN_BLOCK - 1);
+
+    // All of the partners should be empty hashes for
+    // this subtree.
+    for hash in hashes.iter() {
+      assert!(*hash == empty_hash);
+    }
+  }
+
+  #[test]
+  fn test_basic_proof() {
+    println!("Starting the basic proof test.");
+
+    println!("Generating and checking the proofs.");
+
+    let path = "basic_proof_tree".to_string();
+    let _ = std::fs::remove_file(&path);
+    let transactions = (LEAVES_IN_BLOCK + 2) as u64;
+
+    let mut tree = match AppendOnlyMerkle::create(&path) {
+      Ok(x) => x,
+      Err(x) => {
+        panic!("Error on open:  {}", x);
+      }
+    };
+
+    for i in 0..transactions {
+      test_append(&mut tree, i as u64, false);
+
+      if i == 1
+         || i == 2
+         || (i as usize) % LEAVES_IN_BLOCK == LEAVES_IN_BLOCK - 1
+         || (i as usize) % LEAVES_IN_BLOCK == 0
+         || (i as usize) % LEAVES_IN_BLOCK == 1
+         || (i as usize) % LEAVES_IN_BLOCK == 2
+      {
+        check_all_proofs(&tree);
+      }
+    }
+
+    let _ = std::fs::remove_file(&path);
+  }
+
+  fn check_all_proofs(tree: &AppendOnlyMerkle) {
+    log!(Proof, "Check all proofs at tree size {}", tree.total_size());
+
+    for i in 0..tree.total_size() {
+      match tree.generate_proof(i, tree.total_size()) {
+        Err(x) => {
+          panic!("Error on proof for transaction {}:  {}", i, x);
+        }
+        Ok(proof) => {
+          check_proof(&tree, &proof, i);
+          validate_id(&tree, i);
+        }
+      }
+    }
+
+    log!(Proof, "All proofs verified for size {}", tree.total_size());
   }
 
   #[test]
@@ -2700,7 +3143,7 @@ mod tests {
   fn test_proof() {
     println!("Starting the proof test.");
 
-    // First, generate a tree.
+    // First, create a tree.
     let path = "proof_tree".to_string();
     let _ = std::fs::remove_file(&path);
 
@@ -2711,11 +3154,14 @@ mod tests {
       }
     };
 
-    let transactions = (2 * LEAVES_IN_BLOCK * LEAVES_IN_BLOCK) as u64;
+    // Now add some transactions to it.
+    let transactions = (2 * LEAVES_IN_BLOCK * LEAVES_IN_BLOCK + 1) as u64;
 
     for i in 0..transactions {
       let id = test_append(&mut tree, i, false);
 
+      // Try a proof of the appended id just as a bit
+      // of a test.
       match tree.generate_proof(id, tree.total_size()) {
         Err(x) => {
           panic!("Error on proof for transaction {}:  {}", i, x);
@@ -2727,42 +3173,23 @@ mod tests {
         }
       }
 
-      if i % (64 * 1024) == 0 {
+      if i % (16 * 1024) == 0 {
         println!("Generated proof {}.", i.commas());
       }
-    }
 
-    println!("Generating and checking the proofs.");
-
-    for i in 0..transactions {
-      let proof;
-
-      match tree.generate_proof(i, tree.total_size()) {
-        Ok(x) => {
-          proof = x;
-          validate_id(&tree, i);
-        }
-        Err(x) => {
-          panic!("Proof failed at {}:  {}", i, x);
-        }
+      // Check that the proof for each element in the tree
+      // is correct for this size of a tree.
+      if tree.total_size() as usize == 2 * LEAVES_IN_BLOCK * LEAVES_IN_BLOCK {
+        check_all_proofs(&tree);
       }
-
-      debug!(Proof,
-             "Generated a proof for tx_id {} with {} hashes.",
-             i,
-             proof.hash_array.len());
-      check_proof(&tree, &proof, i);
     }
+
+    // Check that the proof of each entry in the
+    // tree is generated properly.
+    check_all_proofs(&tree);
 
     if let Ok(_x) = tree.generate_proof(transactions, tree.total_size()) {
       panic!("Transaction {} does not exist.", transactions);
-    }
-
-    let _ = std::fs::remove_file(&path);
-
-    for i in 1..MAX_BLOCK_LEVELS {
-      let path = tree.file_path(i);
-      let _ = std::fs::remove_file(&path);
     }
 
     match tree.generate_proof(0, tree.total_size() - 1) {
@@ -2777,6 +3204,14 @@ mod tests {
     }
 
     assert!(!tree.validate_transaction_id(tree.total_size()));
+
+    // Remove the test files.
+    let _ = std::fs::remove_file(&path);
+
+    for i in 1..MAX_BLOCK_LEVELS {
+      let path = tree.file_path(i);
+      let _ = std::fs::remove_file(&path);
+    }
     println!("Done with the proof test.");
   }
 
