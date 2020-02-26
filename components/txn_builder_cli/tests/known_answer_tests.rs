@@ -670,6 +670,7 @@ fn test_store_with_path() {
 // Define, issue and transfer
 //
 #[test]
+#[ignore]
 fn test_define_issue_and_transfer_with_args() {
   // Create transaction builder and key pair
   let txn_builder_file = "tb";

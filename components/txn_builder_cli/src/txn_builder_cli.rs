@@ -19,6 +19,7 @@ use submission_server::{TxnHandle, TxnStatus};
 use txn_builder::{BuildsTransactions, TransactionBuilder, TransferOperationBuilder};
 use zei::api::anon_creds::{
   ac_keygen_issuer, ac_keygen_user, ac_reveal, ac_sign, ac_verify, ACIssuerPublicKey, ACRevealSig,
+  Credential as ZeiCredential,
 };
 use zei::serialization::ZeiFromToBytes;
 use zei::setup::PublicParams;
@@ -972,12 +973,10 @@ fn prove(reveal_sig: &ACRevealSig,
 
   // 2. Prove that the attribute is true
   //    E.g. verify the lower bound of the credit score
-  let attrs = [value.to_le_bytes()];
-  let bitmap = [true];
+  let attrs = [Some(value.to_le_bytes())];
   ac_verify(ac_issuer_pk,
             &attrs,
-            &bitmap,
-            &reveal_sig.sig,
+            &reveal_sig.sig_commitment,
             &reveal_sig.pok).or_else(|error| Err(PlatformError::ZeiError(error)))
 }
 
@@ -1048,14 +1047,19 @@ fn activate_loan(loan_id: u64,
   } else {
     let mut prng: ChaChaRng = ChaChaRng::from_seed([0u8; 32]);
     let (issuer_pk, issuer_sk) = ac_keygen_issuer::<_>(&mut prng, 1);
-    let (user_pk, user_sk) = ac_keygen_user::<_>(&mut prng, &issuer_pk);
+    let (user_pk, user_sk) = ac_keygen_user::<_>(&mut prng, &issuer_pk.clone());
 
     let value = credential.value;
-    let attrs = [value.to_le_bytes()];
-    let sig = ac_sign(&mut prng, &issuer_sk, &user_pk, &attrs);
-    let bitmap = [true];
-    let reveal_sig = ac_reveal(&mut prng, &user_sk, &issuer_pk, &sig, &attrs, &bitmap).or_else(|error| Err(PlatformError::ZeiError(error))
-    )?;
+    let attributes = [value.to_le_bytes()].to_vec();
+    let signature = ac_sign(&mut prng, &issuer_sk, &user_pk, &attributes);
+    let zei_credential = ZeiCredential { signature,
+                                         attributes,
+                                         issuer_pk: issuer_pk.clone() };
+
+    let reveal_sig =
+      ac_reveal(&mut prng, &user_sk, &zei_credential, &[true]).or_else(|error| {
+                                                                Err(PlatformError::ZeiError(error))
+                                                              })?;
 
     prove(&reveal_sig,
           &issuer_pk,
@@ -2770,16 +2774,26 @@ mod tests {
   fn test_prove() {
     let mut prng: ChaChaRng = ChaChaRng::from_seed([0u8; 32]);
     let (issuer_pk, issuer_sk) = ac_keygen_issuer::<_>(&mut prng, 1);
-    let (user_pk, user_sk) = ac_keygen_user::<_>(&mut prng, &issuer_pk);
+    let (user_pk, user_sk) = ac_keygen_user::<_>(&mut prng, &issuer_pk.clone());
 
     let value: u64 = 200;
-    let attrs = [value.to_le_bytes()];
-    let sig = ac_sign(&mut prng, &issuer_sk, &user_pk, &attrs);
-    let bitmap = [true];
-    let reveal_sig = ac_reveal(&mut prng, &user_sk, &issuer_pk, &sig, &attrs, &bitmap).or_else(|error| Err(PlatformError::ZeiError(error))
-    ).unwrap();
+    let attributes = [value.to_le_bytes()].to_vec();
+    let signature = ac_sign(&mut prng, &issuer_sk, &user_pk, &attributes);
+    let zei_credential = ZeiCredential { signature,
+                                         attributes,
+                                         issuer_pk: issuer_pk.clone() };
 
-    assert!(prove(&reveal_sig, &issuer_pk, value, 150, RelationType::AtLeast).is_ok());
+    let reveal_sig =
+      ac_reveal(&mut prng, &user_sk, &zei_credential, &[true]).or_else(|error| {
+                                                                Err(PlatformError::ZeiError(error))
+                                                              })
+                                                              .unwrap();
+
+    assert!(prove(&reveal_sig,
+                  &issuer_pk.clone(),
+                  value,
+                  150,
+                  RelationType::AtLeast).is_ok());
     assert_eq!(prove(&reveal_sig, &issuer_pk, value, 300, RelationType::AtLeast),
                Err(PlatformError::InputsError));
   }
