@@ -29,48 +29,54 @@ use zei::xfr::structs::{AssetRecord, BlindAssetRecord, OpenAssetRecord};
 extern crate exitcode;
 
 // TODO (Keyao): Check each unwrap() call and make sure we get a meaningful error message
+// TODO (Keyao): Add "required(true)" flag to the required command args
 
 const INIT_DATA: &str = r#"
 {
   "issuers": [
-      {
-          "id": 0,
-          "name": "Izzie",
-          "key_pair": "76b8e0ada0f13d90405d6ae55386bd28bdd219b8a08ded1aa836efcc8b770dc720fdbac9b10b7587bba7b5bc163bce69e796d71e4ed44c10fcb4488689f7a144"
-      }
+    {
+      "id": 0,
+      "name": "Izzie",
+      "key_pair": "76b8e0ada0f13d90405d6ae55386bd28bdd219b8a08ded1aa836efcc8b770dc720fdbac9b10b7587bba7b5bc163bce69e796d71e4ed44c10fcb4488689f7a144"
+    }
   ],
   "lenders": [
-      {
-          "id": 0,
-          "name": "Lenny",
-          "key_pair": "023f37203a2476c42566a61cc55c3ca875dbb4cc41c0deb789f8e7bf881836384d4b18062f8502598de045ca7b69f067f59f93b16e3af8733a988adc2341f5c8",
-          "min_credit_score": 500
-      }
+    {
+      "id": 0,
+      "name": "Lenny",
+      "key_pair": "023f37203a2476c42566a61cc55c3ca875dbb4cc41c0deb789f8e7bf881836384d4b18062f8502598de045ca7b69f067f59f93b16e3af8733a988adc2341f5c8",
+      "min_credit_score": 500
+    },
+    {
+      "id": 1,
+      "name": "Luna",
+      "key_pair": "023f37203a2476c42566a61cc55c3ca875dbb4cc41c0deb789f8e7bf881836384d4b18062f8502598de045ca7b69f067f59f93b16e3af8733a988adc2341f5c8",
+      "min_credit_score": 680
+    }
   ],
   "borrowers": [
-      {
-          "id": 0,
-          "name": "Ben",
-          "key_pair": "f6a12ca8ffc30a66ca140ccc7276336115819361186d3f535dd99f8eaaca8fce7d177f1e71b490ad0ce380f9578ab12bb0fc00a98de8f6a555c81d48c2039249",
-          "credentials": [
-              0,
-              null,
-              null
-          ],
-          "balance": 0,
-          "utxo": null
-      }
+    {
+      "id": 0,
+      "name": "Ben",
+      "key_pair": "f6a12ca8ffc30a66ca140ccc7276336115819361186d3f535dd99f8eaaca8fce7d177f1e71b490ad0ce380f9578ab12bb0fc00a98de8f6a555c81d48c2039249",
+      "credentials": [
+          0,
+          null,
+          null
+      ],
+      "balance": 0,
+      "utxo": null
+    }
   ],
   "loans": [],
   "credentials": [
-      {
-          "id": 0,
-          "borrower": 0,
-          "attribute": "MinCreditScore",
-          "value": 650,
-          "proof": null,
-          "proved_value": null
-      }
+    {
+      "id": 0,
+      "borrower": 0,
+      "attribute": "MinCreditScore",
+      "value": 650,
+      "proof": null
+    }
   ],
   "fiat_code": null,
   "sequence_number": 1
@@ -79,9 +85,6 @@ const DATA_FILE: &str = "data.json";
 const HOST: &str = "testnet.findora.org";
 const QUERY_PORT: &str = "8668";
 const SUBMIT_PORT: &str = "8669";
-// TODO (Keyao): After the credentialing feature is added, change the hard-coded interest rate
-const INTEREST_RATE_NUMERATOR: u64 = 1;
-const INTEREST_RATE_DENOMINATOR: u64 = 100;
 
 //
 // Credentials
@@ -102,7 +105,6 @@ struct Credential {
   attribute: CredentialIndex,
   value: u64,
   proof: Option<String>,
-  proved_value: Option<u64>,
 }
 
 impl Credential {
@@ -111,8 +113,7 @@ impl Credential {
                  borrower,
                  attribute,
                  value,
-                 proof: None,
-                 proved_value: None }
+                 proof: None }
   }
 }
 
@@ -186,21 +187,28 @@ impl Borrower {
 //
 #[derive(Clone, Deserialize, Serialize)]
 struct Loan {
-  id: u64,              // Loan id
-  lender: u64,          // Lender id
-  borrower: u64,        // Borrower id
-  active: bool,         // Whether the loan has been activated
-  rejected: bool,       // Whether the loan has been rejected
-  amount: u64,          // Amount in total
-  balance: u64,         // Loan balance
-  duration: u64,        // Duration of the loan
-  payments: u64,        // Number of payments that have been made
-  code: Option<String>, // Debt token code
-  utxo: Option<TxoSID>, // Debt utxo sid
+  id: u64,                 // Loan id
+  lender: u64,             // Lender id
+  borrower: u64,           // Borrower id
+  active: bool,            // Whether the loan has been activated
+  rejected: bool,          // Whether the loan has been rejected
+  amount: u64,             // Amount in total
+  balance: u64,            // Loan balance
+  interest_per_mille: u64, // Interest per 1000. E.g. 120 means the interest rate is 0.12
+  duration: u64,           // Duration of the loan
+  payments: u64,           // Number of payments that have been made
+  code: Option<String>,    // Debt token code
+  utxo: Option<TxoSID>,    // Debt utxo sid
 }
 
 impl Loan {
-  fn new(id: usize, lender: u64, borrower: u64, amount: u64, duration: u64) -> Self {
+  fn new(id: usize,
+         lender: u64,
+         borrower: u64,
+         amount: u64,
+         interest_per_mille: u64,
+         duration: u64)
+         -> Self {
     Loan { id: id as u64,
            lender,
            borrower,
@@ -208,6 +216,7 @@ impl Loan {
            rejected: false,
            amount,
            balance: amount,
+           interest_per_mille,
            duration,
            payments: 0,
            code: None,
@@ -243,11 +252,12 @@ impl Data {
               lender: u64,
               borrower: u64,
               amount: u64,
+              interest_per_mille: u64,
               duration: u64)
               -> Result<(), PlatformError> {
     let id = self.loans.len();
     self.loans
-        .push(Loan::new(id, lender, borrower, amount, duration));
+        .push(Loan::new(id, lender, borrower, amount, interest_per_mille, duration));
     store_data_to_file(self.clone())
   }
 
@@ -290,16 +300,29 @@ impl Data {
                                    })))
   }
 
-  fn add_credential(&mut self,
-                    borrower_id: u64,
-                    attribute: CredentialIndex,
-                    value: u64)
-                    -> Result<(), PlatformError> {
-    let credential_id = self.credentials.len();
-    self.credentials
-        .push(Credential::new(credential_id as u64, borrower_id, attribute.clone(), value));
-    self.borrowers[borrower_id as usize].credentials[attribute as usize] =
-      Some(credential_id as u64);
+  fn add_or_update_credential(&mut self,
+                              borrower_id: u64,
+                              attribute: CredentialIndex,
+                              value: u64)
+                              -> Result<(), PlatformError> {
+    // If there's an existing record, update the value and remove the proof
+    // Otherwise, add the record directly
+    if let Some(credential_id) =
+      self.borrowers[borrower_id as usize].credentials[attribute.clone() as usize]
+    {
+      println!("Updating the credential record.");
+      self.credentials[credential_id as usize].value = value;
+      self.credentials[credential_id as usize].proof = None;
+    } else {
+      println!("Adding the credential record.");
+      let credential_id = self.credentials.len();
+      self.credentials
+          .push(Credential::new(credential_id as u64, borrower_id, attribute.clone(), value));
+      self.borrowers[borrower_id as usize].credentials[attribute as usize] =
+        Some(credential_id as u64);
+    }
+
+    // Update the data
     store_data_to_file(self.clone())
   }
 }
@@ -944,7 +967,6 @@ enum RelationType {
   AtLeast,
 }
 
-// TODO (Keyao): Add "prove" command utilizing this function
 fn prove(reveal_sig: &ACRevealSig,
          ac_issuer_pk: &ACIssuerPublicKey,
          value: u64,
@@ -1023,28 +1045,25 @@ fn activate_loan(loan_id: u64,
   // If the proof exists and the proved value is valid, attest with the proof
   // Otherwise, prove and attest the value
   if let Some(proof) = &credential.proof {
-    if let Some(proved_value) = credential.proved_value {
-      let mut prng: ChaChaRng = ChaChaRng::from_seed([0u8; 32]);
-      let issuer_pk = ac_keygen_issuer::<_>(&mut prng, 1).0;
-      if let Err(error) =
-        prove(&serde_json::from_str::<ACRevealSig>(proof).or_else(|_| {
-                                                           Err(PlatformError::DeserializationError)
-                                                         })?,
-              &issuer_pk,
-              proved_value,
-              requirement,
-              RelationType::AtLeast)
-      {
-        // Update loans data
-        data.loans[loan_id as usize].rejected = true;
-        store_data_to_file(data)?;
-        return Err(error);
-      }
-    } else {
-      println!("Missing proved value while a proof exists.");
-      return Err(PlatformError::InputsError);
+    println!("Attesting with the existing proof.");
+    let mut prng: ChaChaRng = ChaChaRng::from_seed([0u8; 32]);
+    let issuer_pk = ac_keygen_issuer::<_>(&mut prng, 1).0;
+    if let Err(error) =
+      prove(&serde_json::from_str::<ACRevealSig>(proof).or_else(|_| {
+                                                         Err(PlatformError::DeserializationError)
+                                                       })?,
+            &issuer_pk,
+            credential.value,
+            requirement,
+            RelationType::AtLeast)
+    {
+      // Update loans data
+      data.loans[loan_id as usize].rejected = true;
+      store_data_to_file(data)?;
+      return Err(error);
     }
   } else {
+    println!("Proving before attesting.");
     let mut prng: ChaChaRng = ChaChaRng::from_seed([0u8; 32]);
     let (issuer_pk, issuer_sk) = ac_keygen_issuer::<_>(&mut prng, 1);
     let (user_pk, user_sk) = ac_keygen_user::<_>(&mut prng, &issuer_pk.clone());
@@ -1073,8 +1092,6 @@ fn activate_loan(loan_id: u64,
                                                Err(PlatformError::DeserializationError)
                                              })
                                              .unwrap());
-    data.credentials[credential_id as usize].proved_value =
-      Some(data.credentials[credential_id as usize].value);
     store_data_to_file(data)?;
     data = load_data()?;
   }
@@ -1122,8 +1139,7 @@ fn activate_loan(loan_id: u64,
   let debt_code = AssetTypeCode::gen_random();
   println!("Generated debt code: {}",
            serde_json::to_string(&debt_code.val).unwrap());
-  let memo = DebtMemo { interest_rate: Fraction::new(INTEREST_RATE_NUMERATOR,
-                                                     INTEREST_RATE_DENOMINATOR),
+  let memo = DebtMemo { interest_rate: Fraction::new(loan.interest_per_mille, 1000),
                         fiat_code,
                         loan_amount: amount };
   let memo_str = serde_json::to_string(&memo).or_else(|_| Err(PlatformError::SerializationError))
@@ -1246,9 +1262,8 @@ fn pay_loan(loan_id: u64,
   }
 
   // Check if the amount meets the minimum requirement, i.e., the fee
-  let fee = ledger::policies::calculate_fee(loan.balance,
-                                            Fraction::new(INTEREST_RATE_NUMERATOR,
-                                                          INTEREST_RATE_DENOMINATOR));
+  let fee =
+    ledger::policies::calculate_fee(loan.balance, Fraction::new(loan.interest_per_mille, 1000));
   if amount < fee {
     println!("Payment amount should be at least: {}", fee);
     return Err(PlatformError::InputsError);
@@ -1469,6 +1484,11 @@ fn main() {
           .long("amount")
           .takes_value(true)
           .help("Required: amount of the loan."))
+        .arg(Arg::with_name("interest_per_mille")
+          .short("i")
+          .long("interest_per_mille")
+          .takes_value(true)
+          .help("Required: interest per mille. The interest rate will be interest_per_mille/1000."))
         .arg(Arg::with_name("duration")
           .short("d")
           .long("duration")
@@ -1926,55 +1946,42 @@ fn process_create_cmd(create_matches: &clap::ArgMatches,
         return Err(PlatformError::InputsError);
       };
       let mut data = load_data()?;
-      data.add_credential(borrower, attribute, value)
+      data.add_or_update_credential(borrower, attribute, value)
     }
     ("loan", Some(loan_matches)) => {
       let lender = if let Some(lender_arg) = loan_matches.value_of("lender") {
-        if let Ok(id) = lender_arg.parse::<u64>() {
-          id
-        } else {
-          println!("Improperly formatted lender id.");
-          return Err(PlatformError::InputsError);
-        }
+        get_amount(lender_arg)?
       } else {
         println!("Lender id is required to create the loan. Use --lender.");
         return Err(PlatformError::InputsError);
       };
       let borrower = if let Some(borrower_arg) = loan_matches.value_of("borrower") {
-        if let Ok(id) = borrower_arg.parse::<u64>() {
-          id
-        } else {
-          println!("Improperly formatted borrower id.");
-          return Err(PlatformError::InputsError);
-        }
+        get_amount(borrower_arg)?
       } else {
         println!("Borrower id is required to create the loan. Use --borrower.");
         return Err(PlatformError::InputsError);
       };
       let amount = if let Some(amount_arg) = loan_matches.value_of("amount") {
-        if let Ok(amount) = amount_arg.parse::<u64>() {
-          amount
-        } else {
-          println!("Improperly formatted amount.");
-          return Err(PlatformError::InputsError);
-        }
+        get_amount(amount_arg)?
       } else {
         println!("Amount is required to create the loan. Use --amount.");
         return Err(PlatformError::InputsError);
       };
-      let duration = if let Some(duration_arg) = loan_matches.value_of("duration") {
-        if let Ok(duration) = duration_arg.parse::<u64>() {
-          duration
+      let interest_per_mille =
+        if let Some(interest_per_mille_arg) = loan_matches.value_of("interest_per_mille") {
+          get_amount(interest_per_mille_arg)?
         } else {
-          println!("Improperly formatted duration.");
+          println!("Interest per mille is required to create the loan. Use --interest_per_mille.");
           return Err(PlatformError::InputsError);
-        }
+        };
+      let duration = if let Some(duration_arg) = loan_matches.value_of("duration") {
+        get_amount(duration_arg)?
       } else {
         println!("Duration is required to create the loan. Use --amount.");
         return Err(PlatformError::InputsError);
       };
       let mut data = load_data()?;
-      data.add_loan(lender, borrower, amount, duration)
+      data.add_loan(lender, borrower, amount, interest_per_mille, duration)
     }
     ("txn_builder", Some(txn_builder_matches)) => {
       let name = txn_builder_matches.value_of("name");
@@ -2808,7 +2815,7 @@ mod tests {
 
     // Create loan
     let amount = 1200;
-    data.add_loan(0, 0, amount, 8).unwrap();
+    data.add_loan(0, 0, amount, 100, 8).unwrap();
     assert_eq!(data.loans.len(), loan_id + 1);
 
     // Create txn builder

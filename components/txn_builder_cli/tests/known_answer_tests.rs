@@ -41,7 +41,7 @@ fn create_borrower(name: &str) -> io::Result<Output> {
 }
 
 #[cfg(test)]
-fn create_credential(borrower: &str, attribute: &str, value: &str) -> io::Result<Output> {
+fn create_or_update_credential(borrower: &str, attribute: &str, value: &str) -> io::Result<Output> {
   Command::new(COMMAND).args(&["create", "credential"])
                        .args(&["--borrower", borrower])
                        .args(&["--attribute", attribute])
@@ -50,11 +50,17 @@ fn create_credential(borrower: &str, attribute: &str, value: &str) -> io::Result
 }
 
 #[cfg(test)]
-fn create_loan(lender: &str, borrower: &str, amount: &str, duration: &str) -> io::Result<Output> {
+fn create_loan(lender: &str,
+               borrower: &str,
+               amount: &str,
+               interest_per_mille: &str,
+               duration: &str)
+               -> io::Result<Output> {
   Command::new(COMMAND).args(&["create", "loan"])
                        .args(&["--lender", lender])
                        .args(&["--borrower", borrower])
                        .args(&["--amount", amount])
+                       .args(&["--interest_per_mille", interest_per_mille])
                        .args(&["--duration", duration])
                        .output()
 }
@@ -325,29 +331,35 @@ fn test_create_users() {
 }
 
 #[test]
-fn test_create_credentials() {
-  // Create a min_credit_score credential
-  let output = create_credential("0", "min_credit_score", "600").expect("Failed to create a min_credit_score credential");
+fn test_create_or_update_credentials() {
+  // Update the min_credit_score credential
+  let output = create_or_update_credential("0", "min_credit_score", "600").expect("Failed to create a min_credit_score credential");
   io::stdout().write_all(&output.stdout).unwrap();
   io::stdout().write_all(&output.stderr).unwrap();
 
   assert!(output.status.success());
+  assert!(from_utf8(&output.stdout).unwrap()
+                                   .contains(&"Updating the credential record.".to_owned()));
 
   // Create a min_income credential
   let output =
-    create_credential("0", "min_income", "1000").expect("Failed to create a min_income credential");
+  create_or_update_credential("0", "min_income", "1000").expect("Failed to create a min_income credential");
   io::stdout().write_all(&output.stdout).unwrap();
   io::stdout().write_all(&output.stderr).unwrap();
 
   assert!(output.status.success());
+  assert!(from_utf8(&output.stdout).unwrap()
+                                   .contains(&"Adding the credential record.".to_owned()));
 
   // Create a citizenshiip credential
   let output =
-    create_credential("0", "citizenship", "1").expect("Failed to create a citizenship credential");
+  create_or_update_credential("0", "citizenship", "1").expect("Failed to create a citizenship credential");
   io::stdout().write_all(&output.stdout).unwrap();
   io::stdout().write_all(&output.stderr).unwrap();
 
   assert!(output.status.success());
+  assert!(from_utf8(&output.stdout).unwrap()
+                                   .contains(&"Adding the credential record.".to_owned()));
 
   let _ = fs::remove_file(DATA_FILE);
 }
@@ -670,7 +682,6 @@ fn test_store_with_path() {
 // Define, issue and transfer
 //
 #[test]
-#[ignore]
 fn test_define_issue_and_transfer_with_args() {
   // Create transaction builder and key pair
   let txn_builder_file = "tb";
@@ -831,25 +842,72 @@ fn test_load_funds_with_args() {
 fn test_create_activate_and_pay_loan_with_args() {
   let _ = fs::remove_file(DATA_FILE);
 
-  // Create loan
-  let output = create_loan("0", "0", "1500", "8").expect("Failed to create an issuer");
+  // Create the first loan
+  let output = create_loan("0", "0", "1500", "100", "8").expect("Failed to create a loan");
 
   io::stdout().write_all(&output.stdout).unwrap();
   io::stdout().write_all(&output.stderr).unwrap();
 
   assert!(output.status.success());
 
-  // Create txn builder, key pairs, and public key
+  // Create the second loan
+  let output = create_loan("1", "0", "1000", "80", "10").expect("Failed to create a loan");
+
+  io::stdout().write_all(&output.stdout).unwrap();
+  io::stdout().write_all(&output.stderr).unwrap();
+
+  assert!(output.status.success());
+
+  // Create txn builder
   let txn_builder_file = "tb_activate_loan_args";
   create_txn_builder_with_path(txn_builder_file).expect("Failed to create transaction builder");
 
-  // Initiate loan
-  let output = activate_loan(txn_builder_file, "0", "0").expect("Failed to load funds");
+  // Initiate the first loan
+  // 1. First time
+  //    Add the credential proof, then successfully initiate the loan
+  let output = activate_loan(txn_builder_file, "0", "0").expect("Failed to initiate the loan");
 
   io::stdout().write_all(&output.stdout).unwrap();
   io::stdout().write_all(&output.stderr).unwrap();
 
   assert!(output.status.success());
+  assert!(from_utf8(&output.stdout).unwrap()
+                                   .contains(&"Proving before attesting.".to_owned()));
+
+  // 2. Second time:
+  //    Fail because the loan has been activated
+  let output = activate_loan(txn_builder_file, "0", "0").expect("Failed to initiate the loan");
+
+  io::stdout().write_all(&output.stdout).unwrap();
+  io::stdout().write_all(&output.stderr).unwrap();
+
+  assert_eq!(output.status.code(), Some(exitcode::USAGE));
+  assert!(from_utf8(&output.stdout).unwrap()
+                                   .contains(&"has already been activated.".to_owned()));
+
+  // Initiate the second loan
+  // 1. First time:
+  //    Get the credential proof, then fail to initiate the loan because the requirement isn't met
+  let output = activate_loan(txn_builder_file, "1", "0").expect("Failed to initiate the loan");
+
+  io::stdout().write_all(&output.stdout).unwrap();
+  io::stdout().write_all(&output.stderr).unwrap();
+
+  assert_eq!(output.status.code(), Some(exitcode::USAGE));
+  let stdout = from_utf8(&output.stdout).unwrap();
+  assert!(stdout.contains(&"Attesting with the existing proof.".to_owned())
+          && stdout.contains(&"Value should be at least:".to_owned()));
+
+  // 2. Second time:
+  //    Fail because the loan has been rejected
+  let output = activate_loan(txn_builder_file, "1", "0").expect("Failed to initiate the loan");
+
+  io::stdout().write_all(&output.stdout).unwrap();
+  io::stdout().write_all(&output.stderr).unwrap();
+
+  assert_eq!(output.status.code(), Some(exitcode::USAGE));
+  assert!(from_utf8(&output.stdout).unwrap()
+                                   .contains(&"has already been rejected.".to_owned()));
 
   // Pay loan
   let output = pay_loan(txn_builder_file, "0", "300").expect("Failed to pay loan");

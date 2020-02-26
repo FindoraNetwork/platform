@@ -30,7 +30,7 @@ actual subcommands.
 * Examples below are assuming the current directory is `platform/target/debug`. If not, change `./txn_builder_cli` to the path to `./txn_builder_cli`.
 
 ## Create a user
-In the initial data, there are three users (issuer Izzie, lender Lenny and borrower Ben). More users can be created.
+In the initial data, there are four users (one issuer Izzie, two lenders Lenny and Luna, and one borrower Ben). More users can be created.
 
 ### Create an issuer
 ```
@@ -53,6 +53,7 @@ For example, to create a min_credit_score credential:
 ```
 ./txn_builder_cli create credential --borrower 0 --attribute min_credit_score --amount 650
 ```
+If the credential already exists, the original record will be updated.
 
 ## Create a loan
 In the initial data, there is one loan. More loans can be created:
@@ -140,6 +141,7 @@ After users and a loan are created:
 ```
 ./txn_builder_cli --txn txn_loan activate_loan --issuer 0 --loan 0
 ```
+Once the loan is activated or rejected, attempting to activate it again will fail.
 
 ### Pay off the loan
 ```
