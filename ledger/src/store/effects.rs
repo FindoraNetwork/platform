@@ -29,6 +29,8 @@ pub struct TxnEffect {
   pub issuance_keys: HashMap<AssetTypeCode, IssuerPublicKey>,
   // Debt swap information that must be externally validated
   pub debt_effects: HashMap<AssetTypeCode, DebtSwapEffect>,
+  // Updates to the AIR
+  pub air_updates: HashMap<BitDigest, String>
 }
 
 // Internally validates the transaction as well.
@@ -45,7 +47,8 @@ impl TxnEffect {
     let mut new_issuance_nums: HashMap<AssetTypeCode, Vec<u64>> = HashMap::new();
     let mut issuance_keys: HashMap<AssetTypeCode, IssuerPublicKey> = HashMap::new();
     let mut debt_effects: HashMap<AssetTypeCode, DebtSwapEffect> = HashMap::new();
-
+    let mut air_updates: HashMap<BitDigest, String> = HashMap::new();
+    
     // Sequentially go through the operations, validating intrinsic or
     // local-to-the-transaction properties, then recording effects and
     // external properties.
@@ -104,6 +107,9 @@ impl TxnEffect {
         //          - Either checked here or recorded in `new_issuance_keys`
         //      4) The assets in the TxOutputs are owned by the signatory.
         //          - Fully checked here
+        //      5) The assets in the TxOutputs have a non-confidential
+        //         asset type which agrees with the stated asset type.
+        //          - Fully checked here
         //      TODO(joe): tracking!
         Operation::IssueAsset(iss) => {
           if iss.body.num_outputs != iss.body.records.len() {
@@ -143,6 +149,11 @@ impl TxnEffect {
           for output in iss.body.records.iter() {
             // (4)
             if (output.0).public_key != iss.pubkey.key {
+              return Err(PlatformError::InputsError);
+            }
+
+            // (5)
+            if (output.0).asset_type != Some(code.val) {
               return Err(PlatformError::InputsError);
             }
 
@@ -200,7 +211,8 @@ impl TxnEffect {
           // (3)
           // TODO: implement real policies
           let null_policies = vec![];
-          verify_xfr_body(prng, &trn.body.transfer, &null_policies)?;
+          let null_commitments = vec![];
+          verify_xfr_body(prng, &trn.body.transfer, &null_policies, &null_commitments)?;
 
           for (inp, record) in trn.body.inputs.iter().zip(trn.body.transfer.inputs.iter()) {
             // (2), checking within this transaction and recording
@@ -242,8 +254,13 @@ impl TxnEffect {
             txo_count += 1;
           }
         }
-      }
-    }
+
+        Operation::AIRAssign(air_assign) => {
+          // unimplemented!("AIRAssign {:?}", air_assign);
+          air_updates.insert(air_assign.body.addr, air_assign.body.data.clone());
+         }
+      } // end -- match op {
+    } // end -- for op in txn.operations.iter() {
 
     Ok(TxnEffect { txn,
                    txos,
@@ -251,7 +268,8 @@ impl TxnEffect {
                    new_asset_codes,
                    new_issuance_nums,
                    issuance_keys,
-                   debt_effects })
+                   debt_effects,
+                   air_updates })
   }
 }
 
@@ -329,6 +347,8 @@ pub struct BlockEffect {
   pub new_issuance_nums: HashMap<AssetTypeCode, Vec<u64>>,
   // Which public key is being used to issue each asset type
   pub issuance_keys: HashMap<AssetTypeCode, IssuerPublicKey>,
+  // Updates to the AIR
+  pub air_updates: HashMap<BitDigest, String>,
 }
 
 impl BlockEffect {
@@ -401,9 +421,9 @@ impl BlockEffect {
       self.new_issuance_nums.insert(type_code, issuance_nums);
     }
 
-    for (type_code, issuer_key) in txn.issuance_keys {
-      debug_assert!(!self.issuance_keys.contains_key(&type_code));
-      self.issuance_keys.insert(type_code, issuer_key);
+    for (addr, data) in txn.air_updates {
+      debug_assert!(!self.air_updates.contains_key(&addr));
+      self.air_updates.insert(addr, data);
     }
 
     Ok(temp_sid)

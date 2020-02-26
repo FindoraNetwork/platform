@@ -30,12 +30,17 @@ serde = "1.0"
 serde_derive = "1.0"
 serde_json = "1.0"
 sha2 = "0.8.0"
+sparse_merkle_tree = { path = "../libs/ads/sparse_merkle_tree" }
 tempdir = "0.3"
 tempfile = "3.1.0"
 time = "0.1"
 tiny-keccak = "1.4.2"
 wasm-bindgen = { version = "0.2.50", features = ["serde-serialize"]  }
 zei = { git = "ssh://git@github.com/findoraorg/zei" }
+log = "0.4.8"
+
+[features]
+TESTING = []
 
 [dev-dependencies]
 txn_builder = { path = "../components/txn_builder" }

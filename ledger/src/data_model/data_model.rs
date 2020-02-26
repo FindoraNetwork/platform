@@ -1,6 +1,7 @@
 #![deny(warnings)]
 use super::errors;
 use chrono::prelude::*;
+use cryptohash::sha256::Digest;
 use rand_chacha::ChaChaRng;
 use rand_core::{CryptoRng, RngCore, SeedableRng};
 use std::boxed::Box;
@@ -295,6 +296,18 @@ impl DefineAssetBody {
     Ok(DefineAssetBody { asset: asset_def })
   }
 }
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct AIRAssignBody {
+  pub addr: Digest,
+  pub data: String,
+}
+
+impl AIRAssignBody {
+  pub fn new(addr: Digest, data: String)
+             -> Result<AIRAssignBody, errors::PlatformError> {
+    Ok(AIRAssignBody { addr, data })
+  }
+}
 
 pub fn compute_signature<T>(secret_key: &XfrSecretKey,
                             public_key: &XfrPublicKey,
@@ -390,12 +403,32 @@ impl DefineAsset {
   }
 }
 
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct AIRAssign {
+  pub body: AIRAssignBody,
+  pub pubkey: IssuerPublicKey,
+  pub signature: XfrSignature,
+}
+
+impl AIRAssign {
+  pub fn new(creation_body: AIRAssignBody,
+             public_key: &IssuerPublicKey,
+             secret_key: &XfrSecretKey)
+             -> Result<AIRAssign, errors::PlatformError> {
+    let sign = compute_signature(&secret_key, &public_key.key, &creation_body);
+    Ok(AIRAssign { body: creation_body,
+                   pubkey: *public_key,
+                   signature: sign })
+  }
+}
+
 #[allow(clippy::large_enum_variant)]
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub enum Operation {
   TransferAsset(TransferAsset),
   IssueAsset(IssueAsset),
   DefineAsset(DefineAsset),
+  AIRAssign(AIRAssign),
   // ... etc...
 }
 

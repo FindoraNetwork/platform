@@ -54,7 +54,7 @@ pub trait BuildsTransactions {
     let mut prng = ChaChaRng::from_seed([0u8; 32]);
     let params = PublicParams::new();
     let ar = AssetRecord::new(amount, token_code.val, key_pair.get_pk())?;
-    let art = AssetRecordType::ConfidentialAmount_ConfidentialAssetType;
+    let art = AssetRecordType::ConfidentialAmount_PublicAssetType;
     let ba = build_blind_asset_record(&mut prng, &params.pc_gens, &ar, art, tracking_keys);
     self.add_operation_issue_asset(key_pair, token_code, seq_num, &[TxOutput(ba)])
   }
@@ -495,7 +495,8 @@ mod tests {
                             &id_proofs);
     if let Ok(xfr_note) = note {
       let null_policies = vec![];
-      assert!(verify_xfr_note(&mut prng, &xfr_note, &null_policies).is_ok())
+      let null_commitments = vec![];
+      assert!(verify_xfr_note(&mut prng, &xfr_note, &null_policies, &null_commitments).is_ok())
     }
   }
 

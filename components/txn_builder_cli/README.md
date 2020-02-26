@@ -3,8 +3,13 @@
 The `txn_builder_cli` application creates transactions and submits
 them to the ledger server. The typical workflow is as follows
 * Generate a cryptographic key pair. Just once. See `txn_builder_cli keygen`
-* Create a new empty transaction. See `txn_builder_cli create`.
+* Create a new empty transaction. See `txn_builder_cli create txn_builder`.
+* Create a new user. See `txn_builder_cli create user`.
+* Create a new loan. See `txn_builder_cli create loan`.
 * Add operations to the transaction. See `txn_builder_cli add`.
+* Load funds. See `txn_builder_cli load funds`.
+* Activate a loan. See `txn_builder_cli activate_loan`.
+* Pay off a loan. See `txn_builder_cli pay_loan`.
 * Submit the transaction to the ledger. See `txn_builder_cli submit`
   and note the transaction ID reported.
 * Query the ledger with the transaction ID to see if the transaction
@@ -22,28 +27,126 @@ For example, for help defining an asset
 ./txn_builder_cli help add define_asset
 ```
 
-_**Note**: Even if the subcommand is unique, it is still necessary to
+**Note**:
+* Even if the subcommand is unique, it is still necessary to
 supply the command name as well. This is true for both help and the
-actual subcommands._
+actual subcommands.
+* By default, all the generated files will be stored in `~./findora`, unless specified otherwise. For example, if the current directory is `platform/target/debug`, running `./txn_builder_cli keygen` will put the generated key pair in ~./findora, but `./txn_builder_cli keygen --name keys/key_pair` will store the key pair to `platform/target/debug/keys/key_pair`.
+* Examples below are assuming the current directory is `platform/target/debug`. If not, change `./txn_builder_cli` to the path to `./txn_builder_cli`.
 
-## Generating cryptographic keys
+## Create a user
+In the initial data, there are three users (issuer Izzie, lender Lenny and borrower Ben). More users can be created.
 
-Before you can create a transaction, you need a public/private key
-pair. The `txn_builder_cli keygen` command will generate and save a
-key pair. Note, you only need to do this one time.
-
-## Composing a transaction
-
-To compose a transaction, first create an empty transaction
+### Create an issuer
 ```
-$ ./txn_builder_cli create
-[2020-01-29T00:33:36Z TRACE txn_builder_cli] Next path for "/home/alex/.findora/current.txn" is "/home/alex/.findora/current.txn.1"
-
+./txn_builder_cli create user --type issuer --name IssuerName
 ```
-Then add operations to the transaction. Three operations can be added
+
+### Create a lender
+```
+./txn_builder_cli create user --type issuer --name LenderName
+```
+
+### Create a borrower
+```
+./txn_builder_cli create user --type borrower --name BorrowerName
+```
+
+## Create a loan
+In the initial data, there is one loan. More loans can be created:
+```
+./txn_builder_cli create loan --lender 0 --borrower 0 --amount 500 --duration 5
+```
+
+## Compose a transaction
+
+### Create an empty transaction
+```
+./txn_builder_cli create --name tb
+```
+
+### Add operations to the transaction. Three operations can be added:
 * Define a new asset. See `txn_builder_cli add define_asset`.
+  * In general
+  ```
+  ./txn_builder_cli --txn tb add define_asset --issuer 0 --token_code ibIaBlHV-PdQkvSuEg6YSA== --memo 'Define an asset.'
+  ```
+  * Fiat asset
+  ```
+  ./txn_builder_cli --txn tb add define_asset --fiat --issuer 0 --memo 'Define fiat asset.'
+  ```
 * Issue units of an asset. See `txn_builder_cli add issue_asset`.
+```
+./txn_builder_cli --txn tb --key_pair kp add issue_asset --token_code ibIaBlHV-PdQkvSuEg6YSA== --amount 100
+```
 * Transfer units of an asset. See `txn_builder_cli add transfer_asset`.
+  * Create input and output public keys
+  ```
+  ./txn_builder_cli pubkeygen --name pki1
+  ./txn_builder_cli pubkeygen --name pki2
+  ./txn_builder_cli pubkeygen --name pko1
+  ./txn_builder_cli pubkeygen --name pko2
+  ./txn_builder_cli pubkeygen --name pko3
+  ```
+  * Store sids and blind asset records
+  ```
+  ./txn_builder_cli store sids --path s --indices 2,4
+  ./txn_builder_cli store blind_asset_record --path bar1 --amount 100 --asset_type ibIaBlHV-PdQkvSuEg6YSA== --pub_key_path pki1
+  ./txn_builder_cli store blind_asset_record --path bar2 --amount 1000 --asset_type ibIaBlHV-PdQkvSuEg6YSA== --pub_key_path pki2
+  ```
+  * Transfer
+  ```
+  ./txn_builder_cli --txn tb --key_pair kp add transfer_asset --sids_path s --blind_asset_record_paths bar1,bar2 --input_amounts 15,45 --output_amounts 10,20,30 --address_paths pko1,pko2,pko3
+  ```
+* Issue and transfer units of an asset. See `txn_builder_cli add issue_and_transfer_asset`.
+  ```
+  ./txn_builder_cli --txn tb add issue_and_transfer_asset --issuer 0 --recipient 0 --amount 1000 --token_code ibIaBlHV-PdQkvSuEg6YSA==
+  ```
+
+## Submit a transaction
+After a transaction is composed:
+```
+./txn_builder_cli --txn tb submit
+```
+By default, `https://testnet.findora.org` is used. To switch to `http://localhost`, add `--http --localhost`.
+
+## Load funds
+After users are created:
+### Create an empty transaction
+```
+./txn_builder_cli create --name tran
+```
+
+### Define fiat asset and submit
+```
+./txn_builder_cli --txn tran add define_asset --issuer 0 --memo 'Define fiat asset.'
+./txn_builder_cli --txn tran submit
+```
+
+### Load funds
+```
+./txn_builder_cli --txn tran load_funds --issuer 0 --recipient 0 --amount 500
+```
+By default, `https://testnet.findora.org` is used. To switch to `http://localhost`, add `--http --localhost`.
+
+## Activate and pay off a loan
+After users and a loan are created:
+### Activate the loan
+* Create an empty transaction
+```
+./txn_builder_cli create txn_builder --name txn_loan
+```
+* Activate the loan
+```
+./txn_builder_cli --txn txn_loan activate_loan --issuer 0 --loan 0
+```
+By default, `https://testnet.findora.org` is used. To switch to `http://localhost`, add `--http --localhost`.
+
+### Pay off the loan
+```
+./txn_builder_cli --txn txn_loan pay_loan --loan 0 --amount 200
+```
+By default, `https://testnet.findora.org` is used. To switch to `http://localhost`, add `--http --localhost`.
 
 ## Querying the ledger server
 
