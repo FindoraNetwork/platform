@@ -324,7 +324,7 @@ impl HasInvariants<PlatformError> for LedgerState {
       std::fs::copy(&self.status.txn_path, &other_txn_path).unwrap();
 
       let state2 = Box::new(LedgerState::load_from_log(&other_block_merkle_path,
-                                                       &other_sparse_merkle_path,  
+                                                       &other_sparse_merkle_path,
                                                        &other_txn_merkle_path,
                                                        &other_txn_path,
                                                        &other_utxo_map_path,
@@ -546,7 +546,7 @@ impl LedgerStatus {
       self.asset_types.insert(code, asset_type.clone());
     }
 
-  // issuance_keys should already have been checked
+    // issuance_keys should already have been checked
     block.issuance_keys.clear();
 
     debug_assert!(block.temp_sids.len() == block.txns.len());
@@ -920,7 +920,8 @@ impl LedgerState {
                     // TODO(joe): is this safe?
                     prng: rand_chacha::ChaChaRng::from_seed(prng_seed.unwrap_or([0u8; 32])),
                     block_merkle: LedgerState::init_merkle_log(block_merkle_path, true)?,
-                    sparse_merkle: LedgerState::init_sparse_merkle_log(sparse_merkle_path, true)?,
+                    sparse_merkle: LedgerState::init_sparse_merkle_log(sparse_merkle_path,
+                                                                       true)?,
                     txn_merkle: LedgerState::init_merkle_log(txn_merkle_path, true)?,
                     blocks: Vec::new(),
                     utxo_map: LedgerState::init_utxo_map(utxo_map_path, true)?,
@@ -952,7 +953,8 @@ impl LedgerState {
                     // TODO(joe): is this safe?
                     prng: rand_chacha::ChaChaRng::from_seed(prng_seed.unwrap_or([0u8; 32])),
                     block_merkle: LedgerState::init_merkle_log(block_merkle_path, true)?,
-                    sparse_merkle: LedgerState::init_sparse_merkle_log(sparse_merkle_path, true)?,
+                    sparse_merkle: LedgerState::init_sparse_merkle_log(sparse_merkle_path,
+                                                                       true)?,
                     txn_merkle: LedgerState::init_merkle_log(txn_merkle_path, true)?,
                     blocks: Vec::new(),
                     utxo_map: LedgerState::init_utxo_map(utxo_map_path, true)?,
@@ -989,10 +991,19 @@ impl LedgerState {
 
     // TODO(joe): distinguish between the transaction log not existing
     // and it being corrupted
-    LedgerState::load_from_log(&block_merkle, &sparse_merkle, &txn_merkle, &txn_log,
-                &utxo_map, None)
-              .or_else(|_| LedgerState::new(&block_merkle, &sparse_merkle, &txn_merkle, &txn_log,
-                &utxo_map, None))
+    LedgerState::load_from_log(&block_merkle,
+                               &sparse_merkle,
+                               &txn_merkle,
+                               &txn_log,
+                               &utxo_map,
+                               None).or_else(|_| {
+                                      LedgerState::new(&block_merkle,
+                                                       &sparse_merkle,
+                                                       &txn_merkle,
+                                                       &txn_log,
+                                                       &utxo_map,
+                                                       None)
+                                    })
   }
 
   // Load a ledger given the paths to the various storage elements.
@@ -1154,12 +1165,12 @@ impl AuthenticatedBlock {
     let mut hash = HashValue::new();
     hash.hash.clone_from_slice(&digest.0);
 
-    if !AppendOnlyMerkle::valid_proof(&self.block_inclusion_proof, &hash) {
-      return false;
-    }
+    //if !AppendOnlyMerkle::valid_proof(&self.block_inclusion_proof, &hash) {
+    //  return false;
+    //}
 
     //2)
-    if self.state_commitment_data.block_merkle != self.block_inclusion_proof.get_root_hash() {
+    if self.state_commitment_data.block_merkle != self.block_inclusion_proof.root_hash {
       return false;
     }
 
@@ -1236,14 +1247,14 @@ impl AuthenticatedTransaction {
     let mut hash = HashValue::new();
     hash.hash.clone_from_slice(&digest.0);
 
-    if !AppendOnlyMerkle::valid_proof(&self.txn_inclusion_proof, &hash) {
-      return false;
-    }
+    //if !AppendOnlyMerkle::valid_proof(&self.txn_inclusion_proof, &hash) {
+    //  return false;
+    //}
 
     //2)
     // TODO (jonathan/noah) we should be using digest everywhere
     if self.state_commitment_data.transaction_merkle_commitment
-       != self.txn_inclusion_proof.get_root_hash()
+       != self.txn_inclusion_proof.root_hash
     {
       return false;
     }

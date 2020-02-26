@@ -149,6 +149,24 @@ pub struct Proof {
   pub hash_array: Vec<HashValue>,
 }
 
+impl Proof {
+  pub fn is_valid_proof(&self, leaf: HashValue) -> bool {
+    let mut result = leaf;
+    let mut id = self.tx_id;
+    for i in 0..self.hash_array.len() {
+      if id & 1 == 0 {
+        result = hash_partial(&result, &self.hash_array[i]);
+      } else {
+        result = hash_partial(&self.hash_array[i], &result);
+      }
+
+      id /= 2;
+    }
+
+    return result == self.root_hash;
+  }
+}
+
 struct Dictionary {
   max_level: usize,
   map: HashMap<usize, Entry>,
@@ -911,7 +929,6 @@ impl AppendOnlyMerkle {
   // id.
   //
   // This function currently is only for testing.
-  #[cfg(test)]
   pub fn leaf(&self, index: usize) -> HashValue {
     if index as u64 > self.entry_count {
       return HashValue::new();
@@ -1328,11 +1345,6 @@ impl AppendOnlyMerkle {
     Ok(block)
   }
 
-  /// Verify that proof is a valid merkle proof for hash_value,
-  /// namely that there is a chain of hashes from hash_value to the merkle root
-  pub fn valid_proof(_proof: &Proof, _hash_value: &HashValue) -> bool {
-    unimplemented!();
-  }
   /// Add a new level zero entry to the Merkle tree.  This leaf will represent
   /// an actual transaction.  The transaction id that is returned is used when
   /// generating a proof.
