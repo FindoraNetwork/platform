@@ -14,7 +14,6 @@ use ledger::data_model::*;
 use ledger::store::*;
 #[cfg(test)]
 use rand_core::SeedableRng;
-use reqwest;
 use std::collections::{HashMap, HashSet, VecDeque};
 #[cfg(test)]
 use std::ffi::OsString;

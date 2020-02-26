@@ -27,12 +27,12 @@ There reader should be aware that in the discussion below, there are two kinds o
 1. The User asks the Issuer to **ac_sign** a set of credentials the user provides and receives a signature back.
    (Txn : User -> Issuer -> User)
 2. The User generates a commitment to the signed attribute values using **ac_commit** and stores both the commitment
-   and the randomness used to generate the it, in a User wallet. The User generates a unique address using his secret key
-   and the issuer publick key, and asks the Ledger to store the commitment in the AIR at that address. (Txn: User -> Ledger)
+   and the *commitment key* used to generate the it, in a User wallet. The User generates a unique address (how?),
+   and asks the Ledger to store the commitment in the AIR at that address. (Txn: User -> Ledger)
 
-## Credential Validation
+## Credential Verificration
 1. A Verifier asks the User to selectively reveal some attributes. (Txn: Verifier sends attributes -> User)
-2. The User runs **ac_reveal_with_rand** using the committed signature and randomness stored in his wallet, and the attributes
+2. The User runs **ac_open_commitment** using the committed signature and *commitment key* stored in his wallet, and the attributes
    supplied by the Verifier. The result is a reveal_sig: ACRevealSig. The User sends the proof of knowledge, reveal_sig.pok,
    and the address, back to the verifier (Txn: User sends address, pok -> Verifier)
 3. The Verifier queries the SMT on the Ledger using the address, and retrieves the signature and a Merkle proof

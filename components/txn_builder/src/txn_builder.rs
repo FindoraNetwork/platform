@@ -726,7 +726,8 @@ mod tests {
                             &id_proofs);
     if let Ok(xfr_note) = note {
       let null_policies = vec![];
-      assert!(verify_xfr_note(&mut prng, &xfr_note, &null_policies).is_ok())
+      let null_commitments = vec![];
+      assert!(verify_xfr_note(&mut prng, &xfr_note, &null_policies, &null_commitments).is_ok())
     }
   }
 

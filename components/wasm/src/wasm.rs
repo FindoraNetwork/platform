@@ -7,7 +7,6 @@ use bulletproofs::PedersenGens;
 use cryptohash::sha256;
 use curve25519_dalek::ristretto::RistrettoPoint;
 use curve25519_dalek::scalar::Scalar;
-use hex;
 use js_sys::Promise;
 use ledger::data_model::{
   AssetTypeCode, Operation, Serialized, TransferType, TxOutput, TxoRef, TxoSID,
@@ -24,10 +23,10 @@ use wasm_bindgen_futures::JsFuture;
 use wasm_bindgen_test::*;
 use web_sys::{Request, RequestInit, RequestMode};
 use zei::api::anon_creds::{
-  ac_keygen_issuer, ac_keygen_user, ac_reveal, ac_sign, ac_verify, ACIssuerPublicKey,
-  ACIssuerSecretKey, ACRevealSig, ACSignature, ACUserPublicKey, ACUserSecretKey,
+  ac_confidential_gen_encryption_keys, ac_keygen_issuer, ac_keygen_user, ac_reveal, ac_sign,
+  ac_verify, ACIssuerPublicKey, ACIssuerSecretKey, ACRevealSig, ACSignature, ACUserPublicKey,
+  ACUserSecretKey, Credential,
 };
-use zei::api::conf_cred_reveal::cac_gen_encryption_keys;
 use zei::basic_crypto::elgamal::{elgamal_keygen, ElGamalPublicKey};
 use zei::serialization::ZeiFromToBytes;
 use zei::setup::PublicParams;
@@ -182,7 +181,6 @@ pub struct WasmTransactionBuilder {
   transaction_builder: Serialized<TransactionBuilder>,
 }
 
-#[wasm_bindgen]
 impl WasmTransactionBuilder {
   /// Create a new transaction builder.
   pub fn new() -> Self {
@@ -261,7 +259,7 @@ impl WasmTransactionBuilder {
     } else {
       let pk = serde_json::from_str::<ElGamalPublicKey<RistrettoPoint>>(&elgamal_pub_key).map_err(|_e| JsValue::from_str("could not deserialize elgamal key"))?;
       let mut small_rng = ChaChaRng::from_entropy();
-      let (_, id_reveal_pub_key) = cac_gen_encryption_keys(&mut small_rng);
+      let (_, id_reveal_pub_key) = ac_confidential_gen_encryption_keys(&mut small_rng);
       issuer_keys = Some(AssetIssuerPubKeys { eg_ristretto_pub_key: pk,
                                               eg_blsg1_pub_key: id_reveal_pub_key });
     }
@@ -721,13 +719,10 @@ impl User {
 
     let attrs = [attribute.to_le_bytes()];
     let bitmap = [reveal_attribute];
-
-    let proof = ac_reveal(&mut prng,
-                          &self.secret_key,
-                          &issuer.public_key,
-                          &sig,
-                          &attrs,
-                          &bitmap).unwrap();
+    let credential = Credential { signature: sig,
+                                  attributes: attrs.to_vec(),
+                                  issuer_pk: issuer.public_key };
+    let proof = ac_reveal(&mut prng, &self.secret_key, &credential, &bitmap).unwrap();
 
     JsValue::from_serde(&proof).unwrap()
   }
@@ -779,11 +774,14 @@ impl Prover {
 
     // 2. Prove that the attribute is true
     //    E.g. verify the lower bound of the credit score
+    let _bitmap = [reveal_attribute];
     let issuer: Issuer = issuer_jsvalue.into_serde().unwrap();
-    let attrs = [attribute.to_le_bytes()];
-    let bitmap = [reveal_attribute];
+    let attrs = [Some(attribute.to_le_bytes())];
     let proof: ACRevealSig = proof_jsvalue.into_serde().unwrap();
-    ac_verify(&issuer.public_key, &attrs, &bitmap, &proof.sig, &proof.pok).is_ok()
+    ac_verify(&issuer.public_key,
+              &attrs,
+              &proof.sig_commitment,
+              &proof.pok).is_ok()
   }
 }
 
