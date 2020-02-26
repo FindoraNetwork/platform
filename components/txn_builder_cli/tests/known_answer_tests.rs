@@ -230,11 +230,13 @@ fn issue_and_transfer_asset(txn_builder_path: &str,
 }
 
 // Helper functions: submit transaction
+// Note: http://localhost is used instead of https://testnet.findora.org
 
 #[cfg(test)]
 fn submit(txn_builder_path: &str) -> io::Result<Output> {
   Command::new(COMMAND).args(&["--txn", txn_builder_path])
                        .arg("submit")
+                       .args(&["--http", "--localhost"])
                        .output()
 }
 
@@ -250,6 +252,7 @@ fn load_funds(txn_builder_path: &str,
                        .args(&["--issuer", issuer_id])
                        .args(&["--recipient", recipient_id])
                        .args(&["--amount", amount])
+                       .args(&["--http", "--localhost"])
                        .output()
 }
 
@@ -260,6 +263,7 @@ fn activate_loan(txn_builder_path: &str, loan_id: &str, issuer_id: &str) -> io::
                        .arg("activate_loan")
                        .args(&["--loan", loan_id])
                        .args(&["--issuer", issuer_id])
+                       .args(&["--http", "--localhost"])
                        .output()
 }
 
@@ -269,6 +273,7 @@ fn pay_loan(txn_builder_path: &str, loan_id: &str, amount: &str) -> io::Result<O
                        .arg("pay_loan")
                        .args(&["--loan", loan_id])
                        .args(&["--amount", amount])
+                       .args(&["--http", "--localhost"])
                        .output()
 }
 
