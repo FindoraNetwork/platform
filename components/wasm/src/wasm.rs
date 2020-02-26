@@ -13,7 +13,6 @@ use ledger::data_model::{
   AssetTypeCode, Operation, Serialized, TransferType, TxOutput, TxoRef, TxoSID,
 };
 use ledger::policies::{DebtMemo, Fraction};
-use ledger::store::AuthenticatedTransaction;
 use rand_chacha::ChaChaRng;
 use rand_core::SeedableRng;
 use serde::{Deserialize, Serialize};
@@ -25,8 +24,9 @@ use wasm_bindgen_futures::JsFuture;
 use wasm_bindgen_test::*;
 use web_sys::{Request, RequestInit, RequestMode};
 use zei::api::anon_creds::{
-  ac_confidential_gen_encryption_keys, ac_keygen_issuer, ac_keygen_user, ac_reveal, ac_sign, ac_verify,
-  ACIssuerPublicKey, ACIssuerSecretKey, ACRevealSig, ACSignature, ACUserPublicKey, ACUserSecretKey, Credential,
+  ac_confidential_gen_encryption_keys, ac_keygen_issuer, ac_keygen_user, ac_reveal, ac_sign,
+  ac_verify, ACIssuerPublicKey, ACIssuerSecretKey, ACRevealSig, ACSignature, ACUserPublicKey,
+  ACUserSecretKey, Credential,
 };
 use zei::basic_crypto::elgamal::{elgamal_keygen, ElGamalPublicKey};
 use zei::serialization::ZeiFromToBytes;
@@ -72,18 +72,6 @@ pub fn debt_transfer_type() -> String {
 /// Generates random base64 encoded asset type string
 pub fn random_asset_type() -> String {
   AssetTypeCode::gen_random().to_base64()
-}
-
-/// Authenticates transaction against the state commitment.
-///
-/// # Arguments
-/// * `authenticated_txn`: json encoded authentication transaction
-#[wasm_bindgen]
-pub fn is_authenticated_txn_valid(authenticated_txn: String) -> Result<bool, JsValue> {
-  let authenticated_txn = serde_json::from_str::<AuthenticatedTransaction>(&authenticated_txn).map_err(|_e| {
-                             JsValue::from_str("Could not deserialize blind asset record")
-                           })?;
-  Ok(authenticated_txn.is_valid())
 }
 
 #[wasm_bindgen]
@@ -688,15 +676,10 @@ impl User {
 
     let attrs = [attribute.to_le_bytes()];
     let bitmap = [reveal_attribute];
-    let credential = Credential{
-      signature: sig,
-      attributes: attrs.to_vec(),
-      issuer_pk: issuer.public_key.clone(),
-    };
-    let proof = ac_reveal(&mut prng,
-                          &self.secret_key,
-                          &credential,
-                          &bitmap).unwrap();
+    let credential = Credential { signature: sig,
+                                  attributes: attrs.to_vec(),
+                                  issuer_pk: issuer.public_key.clone() };
+    let proof = ac_reveal(&mut prng, &self.secret_key, &credential, &bitmap).unwrap();
 
     JsValue::from_serde(&proof).unwrap()
   }
@@ -752,7 +735,10 @@ impl Prover {
     let issuer: Issuer = issuer_jsvalue.into_serde().unwrap();
     let attrs = [Some(attribute.to_le_bytes())];
     let proof: ACRevealSig = proof_jsvalue.into_serde().unwrap();
-    ac_verify(&issuer.public_key, &attrs, &proof.sig_commitment, &proof.pok).is_ok()
+    ac_verify(&issuer.public_key,
+              &attrs,
+              &proof.sig_commitment,
+              &proof.pok).is_ok()
   }
 }
 

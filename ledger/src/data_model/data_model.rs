@@ -1,7 +1,9 @@
 #![deny(warnings)]
 use super::errors;
 use chrono::prelude::*;
+use cryptohash::sha256;
 use cryptohash::sha256::Digest;
+use merkle_tree::append_only_merkle::HashValue;
 use rand_chacha::ChaChaRng;
 use rand_core::{CryptoRng, RngCore, SeedableRng};
 use std::boxed::Box;
@@ -303,8 +305,7 @@ pub struct AIRAssignBody {
 }
 
 impl AIRAssignBody {
-  pub fn new(addr: Digest, data: String)
-             -> Result<AIRAssignBody, errors::PlatformError> {
+  pub fn new(addr: Digest, data: String) -> Result<AIRAssignBody, errors::PlatformError> {
     Ok(AIRAssignBody { addr, data })
   }
 }
@@ -458,6 +459,12 @@ pub struct FinalizedBlock {
   pub merkle_id: u64,
 }
 
+impl FinalizedTransaction {
+  pub fn hash(&self) -> HashValue {
+    self.txn.hash(self.tx_id)
+  }
+}
+
 impl Transaction {
   pub fn add_operation(&mut self, op: Operation) {
     self.operations.push(op);
@@ -467,6 +474,13 @@ impl Transaction {
     let mut serialized = bincode::serialize(&self).unwrap();
     serialized.extend(bincode::serialize(&sid).unwrap());
     serialized
+  }
+
+  pub fn hash(&self, sid: TxnSID) -> HashValue {
+    let digest = sha256::hash(&self.serialize_bincode(sid));
+    let mut hash = HashValue::new();
+    hash.hash.clone_from_slice(&digest.0);
+    hash
   }
 }
 

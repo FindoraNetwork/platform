@@ -1,5 +1,4 @@
-// FIXME: Reenable #![deny(warnings)] when LedgerState::sparse_merkle is read
-#![allow(warnings)]
+#![deny(warnings)]
 extern crate bincode;
 extern crate byteorder;
 extern crate findora;
@@ -689,14 +688,14 @@ impl LedgerUpdate<ChaChaRng> for LedgerState {
       for (tmp_sid, txn) in block.temp_sids.drain(..).zip(block.txns.drain(..)) {
         let txn_sid = temp_sid_map.get(&tmp_sid).unwrap().0;
 
-        let digest = sha256::hash(&txn.serialize_bincode(txn_sid));
-        let mut hash = HashValue::new();
-        hash.hash.clone_from_slice(&digest.0);
+        //let digest = sha256::hash(&txn.serialize_bincode(txn_sid));
+        //let mut hash = HashValue::new();
+        //hash.hash.clone_from_slice(&digest.0);
 
         // TODO(joe/jonathan): Since errors in the merkle tree are things like
         // corruption and I/O failure, we don't have a good recovery story. Is
         // panicking acceptable?
-        let merkle_id = self.txn_merkle.append(&hash).unwrap();
+        let merkle_id = self.txn_merkle.append(&txn.hash(txn_sid)).unwrap();
 
         tx_block.push(FinalizedTransaction { txn,
                                              tx_id: txn_sid,
@@ -1153,7 +1152,8 @@ impl AuthenticatedBlock {
   // 1) The block merkle proof is valid
   // 2) The block merkle root matches the value in root_hash_data
   // 3) root_hash_data hashes to root_hash
-  pub fn is_valid(&self) -> bool {
+  // 4) The state commitment of the proof matches the state commitment passed in
+  pub fn is_valid(&self, state_commitment: BitDigest) -> bool {
     //1) compute block hash
     let txns: Vec<Transaction> = self.block
                                      .txns
@@ -1165,17 +1165,19 @@ impl AuthenticatedBlock {
     let mut hash = HashValue::new();
     hash.hash.clone_from_slice(&digest.0);
 
-    //if !AppendOnlyMerkle::valid_proof(&self.block_inclusion_proof, &hash) {
-    //  return false;
-    //}
+    if self.block_inclusion_proof.is_valid_proof(hash) {
+      return false;
+    }
 
     //2)
     if self.state_commitment_data.block_merkle != self.block_inclusion_proof.root_hash {
       return false;
     }
 
-    //3)
-    if self.state_commitment != self.state_commitment_data.compute_commitment() {
+    //3) 4)
+    if self.state_commitment != self.state_commitment_data.compute_commitment()
+       || state_commitment != self.state_commitment
+    {
       return false;
     }
 
@@ -1193,15 +1195,18 @@ pub struct AuthenticatedUtxoStatus {
 
 impl AuthenticatedUtxoStatus {
   // An authenticated utxo status is valid (for txos that exist) if
-  // 1) The state commitment data hashes to the state commitment
-  // 2) The status matches the bit stored in the bitmap
-  // 3) The bitmap checksum matches digest in state commitment data
-  // 4) For txos that don't exist, simply show that the utxo_sid greater than max_sid
-  pub fn is_valid(&self) -> bool {
+  // 1) The state commitment of the proof matches the state commitment passed in
+  // 2) The state commitment data hashes to the state commitment
+  // 3) The status matches the bit stored in the bitmap
+  // 4) The bitmap checksum matches digest in state commitment data
+  // 5) For txos that don't exist, simply show that the utxo_sid greater than max_sid
+  pub fn is_valid(&self, state_commitment: BitDigest) -> bool {
     let state_commitment_data = &self.state_commitment_data;
     let utxo_sid = self.utxo_sid.0;
-    // 1) First, validate the state commitment
-    if self.state_commitment != state_commitment_data.compute_commitment() {
+    // 1, 2) First, validate the state commitment
+    if state_commitment != self.state_commitment
+       || self.state_commitment != state_commitment_data.compute_commitment()
+    {
       return false;
     }
     if self.status == UtxoStatus::Nonexistent {
@@ -1236,31 +1241,30 @@ pub struct AuthenticatedTransaction {
 
 impl AuthenticatedTransaction {
   // An authenticated txn result is valid if
-  // 1) The transaction merkle proof is valid
-  // 2) The transaction merkle root matches the value in root_hash_data
-  // 3) root_hash_data hashes to root_hash
-  pub fn is_valid(&self) -> bool {
+  // 1) The state commitment used in the proof matches what we pass in and the state commitment
+  //    data hashes to the state commitment
+  // 2) The transaction merkle proof is valid
+  // 3) The transaction merkle root matches the value in root_hash_data
+  pub fn is_valid(&self, state_commitment: BitDigest) -> bool {
     //1)
-    let txn = &self.finalized_txn.txn;
-    let txn_sid = self.finalized_txn.tx_id;
-    let digest = sha256::hash(&txn.serialize_bincode(txn_sid));
-    let mut hash = HashValue::new();
-    hash.hash.clone_from_slice(&digest.0);
-
-    //if !AppendOnlyMerkle::valid_proof(&self.txn_inclusion_proof, &hash) {
-    //  return false;
-    //}
-
-    //2)
-    // TODO (jonathan/noah) we should be using digest everywhere
-    if self.state_commitment_data.transaction_merkle_commitment
-       != self.txn_inclusion_proof.root_hash
+    if self.state_commitment != state_commitment
+       || self.state_commitment != self.state_commitment_data.compute_commitment()
     {
       return false;
     }
 
+    //2)
+    let hash = self.finalized_txn.hash();
+
+    if !self.txn_inclusion_proof.is_valid_proof(hash) {
+      return false;
+    }
+
     //3)
-    if self.state_commitment != self.state_commitment_data.compute_commitment() {
+    // TODO (jonathan/noah) we should be using digest everywhere
+    if self.state_commitment_data.transaction_merkle_commitment
+       != self.txn_inclusion_proof.root_hash
+    {
       return false;
     }
 
@@ -2177,11 +2181,12 @@ mod tests {
                                  .unwrap()
                                  .remove(&temp_sid)
                                  .unwrap();
+    let state_commitment = ledger.get_state_commitment().0;
 
     for txo_id in &txos {
       assert!(ledger.status.utxos.contains_key(&txo_id));
       let utxo_status = ledger.get_utxo_status(*txo_id);
-      assert!(utxo_status.is_valid());
+      assert!(utxo_status.is_valid(state_commitment));
       assert!(utxo_status.status == UtxoStatus::Unspent);
     }
 
@@ -2214,8 +2219,9 @@ mod tests {
                                   .remove(&temp_sid)
                                   .unwrap();
     // Ensure that previous txo is now spent
+    let state_commitment = ledger.get_state_commitment().0;
     let utxo_status = ledger.get_utxo_status(TxoSID(0));
-    assert!(utxo_status.is_valid());
+    assert!(utxo_status.is_valid(state_commitment));
     assert!(utxo_status.status == UtxoStatus::Spent);
 
     // Adversary will attempt to spend the same blind asset record at another index
@@ -2323,19 +2329,29 @@ mod tests {
 
     let transaction = ledger.get_transaction(txn_sid).unwrap();
     let txn_id = transaction.finalized_txn.tx_id;
+    let state_commitment_and_version = ledger.get_state_commitment();
 
     println!("utxos = {:?}", ledger.status.utxos);
     for txo_id in txos {
       assert!(ledger.status.utxos.contains_key(&txo_id));
       let utxo_status = ledger.get_utxo_status(txo_id);
-      assert!(utxo_status.is_valid());
+      assert!(utxo_status.is_valid(state_commitment_and_version.0));
       assert!(utxo_status.status == UtxoStatus::Unspent);
+    }
+
+    match ledger.get_block(BlockSID(0)) {
+      Some(authenticated_block) => {
+        assert!(authenticated_block.is_valid(state_commitment_and_version.0));
+      }
+      None => panic!("get_proof failed for block id 0"),
     }
 
     match ledger.get_transaction(txn_id) {
       Some(authenticated_txn) => {
         assert!(authenticated_txn.txn_inclusion_proof.tx_id
                 == authenticated_txn.finalized_txn.merkle_id);
+        assert!(authenticated_txn.is_valid(state_commitment_and_version.0));
+        assert!(transaction.finalized_txn == authenticated_txn.finalized_txn);
       }
       None => {
         panic!("get_proof failed for tx_id {}, merkle_id {}, block state {}, transaction state {}",
@@ -2349,7 +2365,7 @@ mod tests {
     // We don't actually have anything to commmit yet,
     // but this will save the empty checksum, which is
     // enough for a bit of a test.
-    assert!(ledger.get_state_commitment()
+    assert!(state_commitment_and_version
             == (ledger.status
                       .state_commitment_data
                       .clone()
