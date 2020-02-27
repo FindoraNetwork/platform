@@ -287,10 +287,8 @@ fn user_commit(global_state: &mut GlobalState,
         let user_addr = serde_json::to_string(&user_struct.public_key).unwrap();
         // println!("User {}: commitment = {}", user, &commitment_string);
          // Insert an entry AIR[user_pk] = cred, where
-        println!("********************************************************************************");
-        println!("user_commit: {:?}", &commitment);
-        println!("user_commit: as string = {}", &commitment_string);
-        println!("********************************************************************************");
+        info!("user_commit: {:?}", &commitment);
+        info!("user_commit: as string = {}", &commitment_string);
         global_state.smt.set(&user_addr, Some(commitment_string));
         global_state.user_commitment.insert(user.to_string(), (commitment, key));
         Ok(())
@@ -318,13 +316,13 @@ fn show_creds(global_state: &mut GlobalState, user_name: &str) -> Result<(), Str
 // user_selectively_reveal is run inside a User
 fn user_selectively_reveal(global_state: &mut GlobalState, user: &str, bitmap: &Vec<bool>)
  -> Result<(String, ACPoK), String> {
-   match (global_state.users.get(user), global_state.user_commitment.get(user)) {
-    (Some(user_struct), Some((commitment, key))) => {
+   match (global_state.users.get(user), global_state.user_commitment.get(user), global_state.user_sig.get(user)) {
+    (Some(user_struct), Some((_commitment, key)), Some(sig)) => {
       // println!("user_selectively_reveal: commitment = {:?}", &commitment);
       let attrs = global_state.user_attrs.get(user).unwrap();
       // let attributes = attrs.to_vec(); //Vec<ACAttribute<String>> = attrs.to_vec().into_iter().map(string_to_attr).collect();
       let attributes: Vec<&[u8]> = attrs.iter().map(|s| { s.as_bytes() }).collect();
-      let credential = Credential { signature: commitment.clone(), attributes: attributes, issuer_pk: user_struct.issuer_pk.clone()};
+      let credential = Credential { signature: sig.clone(), attributes: attributes, issuer_pk: user_struct.issuer_pk.clone()};
       if let Ok(pok) = ac_open_commitment::<ChaChaRng, &[u8]>(&mut global_state.prng, &user_struct.secret_key, &credential, &key, bitmap) {
         let address = serde_json::to_string(&user_struct.public_key).unwrap();
         Ok((address, pok))
@@ -332,9 +330,10 @@ fn user_selectively_reveal(global_state: &mut GlobalState, user: &str, bitmap: &
         Err("user_selectively_reveal: open commitment fails".to_string())
       }
     },
-    (None, None) => Err("Unable to find either user or commitment".to_string()),
-    (None, _) => Err("Unable to find user".to_string()),
-    (_, None) => Err("Unable to find commitment".to_string()),   
+    (None, None, None) => Err("Unable to find either user or commitment".to_string()),
+    (None, _, _) => Err("Unable to find user".to_string()),
+    (_, None, _) => Err("Unable to find commitment".to_string()),   
+    (_, _, None) => Err("Unable to find signature".to_string()),   
   }
 }
 
@@ -354,19 +353,11 @@ fn verify(global_state: &mut GlobalState, user: &str, attrs: &Vec<&[u8]>) -> Res
   let (address, pok) = user_selectively_reveal(global_state, user, &bitmap)?;
   let (commitment_opt, merkle_proof) = global_state.smt.get_with_proof(address.clone());
   if let Some(commitment_string) = commitment_opt {
-    let commitment: ACSignature = serde_json::from_str(&commitment_string[..]).unwrap();
-    println!("********************************************************************************");
-    println!("verify: as string = {}", &commitment_string);
-    println!("verify: {:?}", &commitment);
-    println!("********************************************************************************");
+    let commitment = serde_json::from_str(&commitment_string[..]).unwrap();
+    info!("verify: as string = {}", &commitment_string);
+    info!("verify: {:?}", &commitment);
     // println!("verify with attributes = {:?}", &attributes);
     if global_state.smt.check_merkle_proof(&address, commitment_opt, &merkle_proof) {
-      let (commitment2, _) = global_state.user_commitment.get(user).unwrap();
-      if commitment == *commitment2 {
-        println!("commitments unchanged by serde");
-      } else {
-        println!("WTF commitments changed by serde");
-      }
       let user_info = global_state.users.get(user).unwrap();
       if let Err(e) = ac_verify::<&[u8]>(&user_info.issuer_pk,
                                          &attributes[..],
