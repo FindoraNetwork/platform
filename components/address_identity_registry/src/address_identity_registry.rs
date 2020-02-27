@@ -505,9 +505,7 @@ mod tests {
   #![allow(dead_code)]
   use rand_core::SeedableRng;
   use rand_chacha::ChaChaRng;
-  use serde::{Deserialize, Serialize};
-  use zei::algebra::bls12_381::BLSG1;
-use zei::api::anon_creds::{ac_commit, ac_keygen_issuer, ac_keygen_user, ac_sign, ac_verify, ac_open_commitment, Credential};
+  use zei::api::anon_creds::{ac_commit, ac_keygen_issuer, ac_keygen_user, ac_sign, ac_verify, ac_open_commitment, Credential};
 
   #[test]
 
@@ -534,7 +532,7 @@ use zei::api::anon_creds::{ac_commit, ac_keygen_issuer, ac_keygen_user, ac_sign,
                                                                   b"some addr").unwrap();
     println!("verify: commitment  = {:?}, key = {:?}", &commitment, &key);
     let commitment_string = serde_json::to_string(&commitment).unwrap();
-    let commitment2:ACSignature<BLSG1> = serde_json::from_str(&commitment_string[..]).unwrap();
+    let commitment2 = serde_json::from_str(&commitment_string[..]).unwrap();
     println!("verify: commitment2 = {:?}, key = {:?}", &commitment, &key);
 
     if commitment == commitment2 {
