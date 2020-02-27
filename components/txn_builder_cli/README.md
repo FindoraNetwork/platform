@@ -52,13 +52,13 @@ In the initial data, there are four users (one issuer Izzie, two lenders Lenny a
 ./txn_builder_cli create user borrower --name BorrowerName
 ```
 
-## Create a credential record
+## Create or overwrite a credential record
 Currently supported attributes are min_credit_score, min_income and citizenshiip.
 For example, to create a min_credit_score credential:
 ```
 ./txn_builder_cli create credential --borrower 0 --attribute min_credit_score --amount 650
 ```
-If the credential already exists, the original record will be updated.
+If the credential already exists, the original record will be overwritten.
 
 ## Create a loan
 In the initial data, there is one loan. More loans can be created:
