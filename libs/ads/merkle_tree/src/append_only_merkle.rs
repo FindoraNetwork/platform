@@ -3227,7 +3227,7 @@ mod tests {
   }
 
   #[test]
-  // #[ignore]
+  #[ignore]
   fn test_proof() {
     println!("Starting the proof test.");
 
