@@ -712,7 +712,7 @@ fn rename_existing_path(path: &Path) -> Result<(), PlatformError> {
   Ok(())
 }
 
-fn get_amount(amount_arg: &str) -> Result<u64, PlatformError> {
+fn parse_to_u64(amount_arg: &str) -> Result<u64, PlatformError> {
   if let Ok(amount) = amount_arg.parse::<u64>() {
     Ok(amount)
   } else {
@@ -1983,29 +1983,6 @@ fn process_inputs(inputs: clap::ArgMatches) -> Result<(), PlatformError> {
   }
 }
 
-fn process_submit_cmd(submit_matches: &clap::ArgMatches,
-                      transaction_file_name: &str)
-                      -> Result<(), PlatformError> {
-  // Get protocol and host.
-  let protocol = if submit_matches.is_present("http") {
-    // Allow HTTP which may be useful for running a ledger locally.
-    "http"
-  } else {
-    // Default to HTTPS
-    "https"
-  };
-  let host = if submit_matches.is_present("localhost") {
-    // Use localhost
-    run_ledger_standalone()?;
-    "localhost"
-  } else {
-    // Default to testnet.findora.org
-    "testnet.findora.org"
-  };
-
-  submit(protocol, host, &transaction_file_name)
-}
-
 // Create the specific file if missing
 // Rename the existing path if necessary
 fn create_directory_and_rename_path(path_str: &str, overwrite: bool) -> Result<(), PlatformError> {
@@ -2044,7 +2021,7 @@ fn process_create_cmd(create_matches: &clap::ArgMatches,
           let min_credit_score = if let Some(min_credit_score_arg) =
             lender_matches.value_of("min_credit_score")
           {
-            get_amount(min_credit_score_arg)?
+            parse_to_u64(min_credit_score_arg)?
           } else {
             println!("Minimum credit score requirement is required to create the lender. Use --min_credit_score.");
             return Err(PlatformError::InputsError);
@@ -2068,7 +2045,7 @@ fn process_create_cmd(create_matches: &clap::ArgMatches,
     }
     ("credential", Some(credential_matches)) => {
       let borrower = if let Some(borrower_arg) = credential_matches.value_of("borrower") {
-        get_amount(borrower_arg)?
+        parse_to_u64(borrower_arg)?
       } else {
         println!("Borrower id is required to create the credential. Use --borrower.");
         return Err(PlatformError::InputsError);
@@ -2084,7 +2061,7 @@ fn process_create_cmd(create_matches: &clap::ArgMatches,
         return Err(PlatformError::InputsError);
       };
       let value = if let Some(value_arg) = credential_matches.value_of("value") {
-        get_amount(value_arg)?
+        parse_to_u64(value_arg)?
       } else {
         println!("Credential value is required to create the credential. Use --value.");
         return Err(PlatformError::InputsError);
@@ -2094,32 +2071,32 @@ fn process_create_cmd(create_matches: &clap::ArgMatches,
     }
     ("loan", Some(loan_matches)) => {
       let lender = if let Some(lender_arg) = loan_matches.value_of("lender") {
-        get_amount(lender_arg)?
+        parse_to_u64(lender_arg)?
       } else {
         println!("Lender id is required to create the loan. Use --lender.");
         return Err(PlatformError::InputsError);
       };
       let borrower = if let Some(borrower_arg) = loan_matches.value_of("borrower") {
-        get_amount(borrower_arg)?
+        parse_to_u64(borrower_arg)?
       } else {
         println!("Borrower id is required to create the loan. Use --borrower.");
         return Err(PlatformError::InputsError);
       };
       let amount = if let Some(amount_arg) = loan_matches.value_of("amount") {
-        get_amount(amount_arg)?
+        parse_to_u64(amount_arg)?
       } else {
         println!("Amount is required to create the loan. Use --amount.");
         return Err(PlatformError::InputsError);
       };
       let interest_per_mille =
         if let Some(interest_per_mille_arg) = loan_matches.value_of("interest_per_mille") {
-          get_amount(interest_per_mille_arg)?
+          parse_to_u64(interest_per_mille_arg)?
         } else {
           println!("Interest per mille is required to create the loan. Use --interest_per_mille.");
           return Err(PlatformError::InputsError);
         };
       let duration = if let Some(duration_arg) = loan_matches.value_of("duration") {
-        get_amount(duration_arg)?
+        parse_to_u64(duration_arg)?
       } else {
         println!("Duration is required to create the loan. Use --amount.");
         return Err(PlatformError::InputsError);
@@ -2182,7 +2159,7 @@ fn process_store_cmd(store_matches: &clap::ArgMatches,
       let overwrite = blind_asset_record_path_matches.is_present("overwrite");
       create_directory_and_rename_path(&path_expand, overwrite)?;
       let amount = if let Some(amount_arg) = blind_asset_record_path_matches.value_of("amount") {
-        get_amount(amount_arg)?
+        parse_to_u64(amount_arg)?
       } else {
         println!("Amount is required. Use --amount.");
         return Err(PlatformError::InputsError);
@@ -2225,12 +2202,7 @@ fn process_add_cmd(add_matches: &clap::ArgMatches,
     ("define_asset", Some(define_asset_matches)) => {
       let fiat_asset = define_asset_matches.is_present("fiat");
       let issuer_id = if let Some(issuer_arg) = define_asset_matches.value_of("issuer") {
-        if let Ok(id) = issuer_arg.parse::<u64>() {
-          id
-        } else {
-          println!("Improperly formatted issuer id.");
-          return Err(PlatformError::InputsError);
-        }
+        parse_to_u64(issuer_arg)?
       } else {
         println!("User id is required to define asset. Use --issuer.");
         return Err(PlatformError::InputsError);
@@ -2280,18 +2252,12 @@ fn process_add_cmd(add_matches: &clap::ArgMatches,
         println!("Token code is required to issue asset. Use --token_code.");
         return Err(PlatformError::InputsError);
       }
-      let amount;
-      if let Some(amount_arg) = issue_asset_matches.value_of("amount") {
-        if let Ok(amount_parsed) = amount_arg.parse::<u64>() {
-          amount = amount_parsed;
-        } else {
-          println!("Improperly formatted amount.");
-          return Err(PlatformError::InputsError);
-        }
+      let amount = if let Some(amount_arg) = issue_asset_matches.value_of("amount") {
+        parse_to_u64(amount_arg)?
       } else {
         println!("Amount is required to issue asset. Use --amount.");
         return Err(PlatformError::InputsError);
-      }
+      };
       let mut txn_builder = load_txn_builder_from_file(&transaction_file_name).or_else(|e| {
                               println!("Failed to load txn builder from file {}.",
                                        transaction_file_name);
@@ -2476,7 +2442,7 @@ fn process_add_cmd(add_matches: &clap::ArgMatches,
           return Err(PlatformError::InputsError);
         };
       let amount = if let Some(amount_arg) = issue_and_transfer_matches.value_of("amount") {
-        get_amount(amount_arg)?
+        parse_to_u64(amount_arg)?
       } else {
         println!("Amount is required to issue and transfer asset. Use --amount.");
         return Err(PlatformError::InputsError);
@@ -2503,6 +2469,29 @@ fn process_add_cmd(add_matches: &clap::ArgMatches,
   }
 }
 
+fn process_submit_cmd(submit_matches: &clap::ArgMatches,
+                      transaction_file_name: &str)
+                      -> Result<(), PlatformError> {
+  // Get protocol and host.
+  let protocol = if submit_matches.is_present("http") {
+    // Allow HTTP which may be useful for running a ledger locally.
+    "http"
+  } else {
+    // Default to HTTPS
+    "https"
+  };
+  let host = if submit_matches.is_present("localhost") {
+    // Use localhost
+    run_ledger_standalone()?;
+    "localhost"
+  } else {
+    // Default to testnet.findora.org
+    "testnet.findora.org"
+  };
+
+  submit(protocol, host, &transaction_file_name)
+}
+
 fn process_load_funds_cmd(load_funds_matches: &clap::ArgMatches,
                           transaction_file_name: &str)
                           -> Result<(), PlatformError> {
@@ -2518,18 +2507,13 @@ fn process_load_funds_cmd(load_funds_matches: &clap::ArgMatches,
     return Err(PlatformError::InputsError);
   };
   let recipient_id = if let Some(recipient_arg) = load_funds_matches.value_of("recipient") {
-    if let Ok(id) = recipient_arg.parse::<u64>() {
-      id
-    } else {
-      println!("Improperly formatted recipient id.");
-      return Err(PlatformError::InputsError);
-    }
+    parse_to_u64(recipient_arg)?
   } else {
     println!("Recipient id is required to load funds. Use --recipient.");
     return Err(PlatformError::InputsError);
   };
   let amount = if let Some(amount_arg) = load_funds_matches.value_of("amount") {
-    get_amount(amount_arg)?
+    parse_to_u64(amount_arg)?
   } else {
     println!("Amount is required to load funds. Use --amount.");
     return Err(PlatformError::InputsError);
@@ -2562,23 +2546,13 @@ fn process_activate_loan_cmd(activate_loan_matches: &clap::ArgMatches,
                              transaction_file_name: &str)
                              -> Result<(), PlatformError> {
   let loan_id = if let Some(loan_arg) = activate_loan_matches.value_of("loan") {
-    if let Ok(id) = loan_arg.parse::<u64>() {
-      id
-    } else {
-      println!("Improperly formatted loan id.");
-      return Err(PlatformError::InputsError);
-    }
+    parse_to_u64(loan_arg)?
   } else {
     println!("Loan id is required to activate the loan. Use --loan.");
     return Err(PlatformError::InputsError);
   };
   let issuer_id = if let Some(issuer_arg) = activate_loan_matches.value_of("issuer") {
-    if let Ok(id) = issuer_arg.parse::<u64>() {
-      id
-    } else {
-      println!("Improperly formatted issuer id.");
-      return Err(PlatformError::InputsError);
-    }
+    parse_to_u64(issuer_arg)?
   } else {
     println!("Issuer id is required to activate the loan. Use --issuer.");
     return Err(PlatformError::InputsError);
@@ -2606,23 +2580,13 @@ fn process_pay_loan_cmd(pay_loan_matches: &clap::ArgMatches,
                         transaction_file_name: &str)
                         -> Result<(), PlatformError> {
   let loan_id = if let Some(loan_arg) = pay_loan_matches.value_of("loan") {
-    if let Ok(id) = loan_arg.parse::<u64>() {
-      id
-    } else {
-      println!("Improperly formatted loan id.");
-      return Err(PlatformError::InputsError);
-    }
+    parse_to_u64(loan_arg)?
   } else {
     println!("Loan id is required to pay the loan. Use --loan.");
     return Err(PlatformError::InputsError);
   };
   let amount = if let Some(amount_arg) = pay_loan_matches.value_of("amount") {
-    if let Ok(amount) = amount_arg.parse::<u64>() {
-      amount
-    } else {
-      println!("Improperly formatted amount.");
-      return Err(PlatformError::InputsError);
-    }
+    parse_to_u64(amount_arg)?
   } else {
     println!("Amount is required to pay the loan. Use --amount.");
     return Err(PlatformError::InputsError);
