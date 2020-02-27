@@ -162,9 +162,11 @@ pub struct Proof {
 // Define a dictionary that will contain "completed"
 // blocks used when generating a proof.  The working
 // copy of the tree is completed as blocks fill, but
-// a proof requires special handling for partial block
-// and for parent with one child.  The dictionary is
-// used to contain such blocks when generating a proof.
+// a proof requires that we complete partial blocks
+// by defining the value of a parent node with one
+// child as the hash of the child node.  The dictionary
+// contains such blocks when generating a proof so
+// that the working copy is not modified.
 //
 
 struct Dictionary {
