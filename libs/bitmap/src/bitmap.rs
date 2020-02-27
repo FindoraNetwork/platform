@@ -963,6 +963,11 @@ impl BitMap {
     let mut digest = Digest { 0: [0_u8; DIGESTBYTES] };
     let mut first = false;
 
+    if self.first_invalid >= self.blocks.len() {
+      debug!(Bitmap, "compute_checksum:  cached");
+      return self.checksum;
+    }
+
     // For each block not yet computed.
     for i in self.first_invalid..self.blocks.len() {
       if !first {
@@ -999,6 +1004,7 @@ impl BitMap {
              "compute_checksum:  digest at block {} is {:?}", i, digest);
     }
 
+    self.first_invalid = self.blocks.len();
     debug!(Bitmap, "compute_checksum:  got final digest {:?}", digest);
     self.checksum = digest;
     digest
@@ -1559,6 +1565,12 @@ mod tests {
         }
       }
     }
+
+    let checksum1 = bitmap.compute_checksum();
+    let checksum2 = bitmap.compute_checksum();
+    println!("Checksum 1: {:?}", checksum1);
+    println!("Checksum 2: {:?}", checksum2);
+    assert!(checksum1 == checksum2);
 
     // Serialize a part of the bitmap.
     let s1 = bitmap.serialize_partial(vec![0, BLOCK_BITS], 1);
