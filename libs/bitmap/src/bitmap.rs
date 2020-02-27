@@ -885,20 +885,6 @@ impl BitMap {
     let mask_shift = bit_id % 8;
     let mask = 1 << mask_shift;
 
-    // We might need to create a new block.  If so,
-    // push the new block and all the metadata entries.
-    if block >= self.blocks.len() {
-      self.blocks.push(BitBlock::new(BIT_ARRAY, block as u64)?);
-      self.checksum_data.push(EMPTY_CHECKSUM);
-      self.dirty.push(time());
-      self.checksum_valid.push(false);
-      self.set_bits.push(0);
-    } else {
-      self.dirty[block] = time();
-      self.checksum_valid[block] = false;
-      self.first_invalid = min(self.first_invalid, block);
-    }
-
     // Check whether the bit map state actually is going to
     // be changed.  We can skip the store if not.  Also, we
     // don't want to update the "set" count if nothing is
@@ -912,6 +898,22 @@ impl BitMap {
     if !mutate {
       return Ok(());
     }
+
+    // We might need to create a new block.  If so,
+    // push the new block and all the metadata entries.
+    if block >= self.blocks.len() {
+      self.blocks.push(BitBlock::new(BIT_ARRAY, block as u64)?);
+      self.checksum_data.push(EMPTY_CHECKSUM);
+      self.dirty.push(time());
+      self.checksum_valid.push(false);
+      self.set_bits.push(0);
+    } else {
+      self.dirty[block] = time();
+      self.checksum_valid[block] = false;
+    }
+
+    // Update the first invalid spot in the checksum.
+    self.first_invalid = min(self.first_invalid, block);
 
     // Change the actual value in the block.  Also,
     // update the population count.
@@ -963,6 +965,11 @@ impl BitMap {
     let mut digest = Digest { 0: [0_u8; DIGESTBYTES] };
     let mut first = false;
 
+    if self.first_invalid >= self.blocks.len() {
+      debug!(Bitmap, "compute_checksum:  cached");
+      return self.checksum;
+    }
+
     // For each block not yet computed.
     for i in self.first_invalid..self.blocks.len() {
       if !first {
@@ -999,6 +1006,7 @@ impl BitMap {
              "compute_checksum:  digest at block {} is {:?}", i, digest);
     }
 
+    self.first_invalid = self.blocks.len();
     debug!(Bitmap, "compute_checksum:  got final digest {:?}", digest);
     self.checksum = digest;
     digest
@@ -1495,7 +1503,6 @@ mod tests {
 
   // Do a simple test of the bitmap-level functions.
   #[test]
-  #[ignore]
   fn test_basic_bitmap() {
     log!(Bitmap, "Run the basic bitmap test.");
     let path = "basic_bitmap";
@@ -1559,6 +1566,12 @@ mod tests {
         }
       }
     }
+
+    let checksum1 = bitmap.compute_checksum();
+    let checksum2 = bitmap.compute_checksum();
+    println!("Checksum 1: {:?}", checksum1);
+    println!("Checksum 2: {:?}", checksum2);
+    assert!(checksum1 == checksum2);
 
     // Serialize a part of the bitmap.
     let s1 = bitmap.serialize_partial(vec![0, BLOCK_BITS], 1);
