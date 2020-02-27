@@ -885,20 +885,6 @@ impl BitMap {
     let mask_shift = bit_id % 8;
     let mask = 1 << mask_shift;
 
-    // We might need to create a new block.  If so,
-    // push the new block and all the metadata entries.
-    if block >= self.blocks.len() {
-      self.blocks.push(BitBlock::new(BIT_ARRAY, block as u64)?);
-      self.checksum_data.push(EMPTY_CHECKSUM);
-      self.dirty.push(time());
-      self.checksum_valid.push(false);
-      self.set_bits.push(0);
-    } else {
-      self.dirty[block] = time();
-      self.checksum_valid[block] = false;
-      self.first_invalid = min(self.first_invalid, block);
-    }
-
     // Check whether the bit map state actually is going to
     // be changed.  We can skip the store if not.  Also, we
     // don't want to update the "set" count if nothing is
@@ -912,6 +898,22 @@ impl BitMap {
     if !mutate {
       return Ok(());
     }
+
+    // We might need to create a new block.  If so,
+    // push the new block and all the metadata entries.
+    if block >= self.blocks.len() {
+      self.blocks.push(BitBlock::new(BIT_ARRAY, block as u64)?);
+      self.checksum_data.push(EMPTY_CHECKSUM);
+      self.dirty.push(time());
+      self.checksum_valid.push(false);
+      self.set_bits.push(0);
+    } else {
+      self.dirty[block] = time();
+      self.checksum_valid[block] = false;
+    }
+
+    // Update the first invalid spot in the checksum.
+    self.first_invalid = min(self.first_invalid, block);
 
     // Change the actual value in the block.  Also,
     // update the population count.
@@ -1501,7 +1503,6 @@ mod tests {
 
   // Do a simple test of the bitmap-level functions.
   #[test]
-  #[ignore]
   fn test_basic_bitmap() {
     log!(Bitmap, "Run the basic bitmap test.");
     let path = "basic_bitmap";
