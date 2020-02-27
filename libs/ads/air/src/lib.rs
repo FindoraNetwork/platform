@@ -1,4 +1,4 @@
-#[allow(dead_code)]
+#![allow(dead_code)]
 use serde::{Deserialize, Serialize};
 use sparse_merkle_tree::{MerkleProof, SmtMap256, Hash256, hash_256, check_merkle_proof as smt_check_proof};
 use std::io::Error;

@@ -1,3 +1,5 @@
+#![allow(stable_features)]
+#![feature(slice_patterns)]
 //#![deny(warnings)]
 // Copyright 2019 © Findora. All rights reserved.
 /// Command line executable to exercise functions related to credentials
@@ -242,10 +244,10 @@ fn issue_credential(global_state: &mut GlobalState,
                     -> Result<(), String> {
   match (global_state.issuers.get(issuer), global_state.users.get(user)) {
     (Some(issuer_keys), Some(user_keys)) => {
-      let sig = ac_sign(&mut global_state.prng,
-                        &issuer_keys.secret_key,
-                        &user_keys.public_key,
-                        &attrs);
+      let sig = ac_sign::<ChaChaRng, &[u8]>(&mut global_state.prng,
+                                            &issuer_keys.secret_key,
+                                            &user_keys.public_key,
+                                            &attrs);
       println!("Issuer {}: credential issued to {}", issuer, user);
       global_state.user_sig.insert(user.to_string(), sig);
       global_state.user_attrs.insert(user.to_string(), attrs.iter().map(|s| { String::from_utf8(s.to_vec()).unwrap() }).collect());
@@ -265,7 +267,7 @@ fn user_commit(global_state: &mut GlobalState,
     (Some(user_struct), Some(sig)) => {
       let a = global_state.user_attrs.get(user).unwrap();
       let attrs: Vec<&[u8]> = a.iter().map(|s| { s.as_bytes() }).collect();
-      println!("User {}: about to commit to attrs = {:?}", user, &attrs);
+      // println!("User {}: about to commit to attrs = {:?}", user, &attrs);
       let credential: Credential<&[u8]> = Credential {
         signature: sig.clone(),
         attributes: attrs,
@@ -273,20 +275,23 @@ fn user_commit(global_state: &mut GlobalState,
       };
 
       if let Ok((commitment, _proof, key)) =
-        ac_commit(&mut global_state.prng,
-                  &user_struct.secret_key,
-                  &credential,
-                  b"random message") {
+        ac_commit::<ChaChaRng, &[u8]>(&mut global_state.prng,
+                               &user_struct.secret_key,
+                               &credential,
+                               b"random message") {
         // There should be three outputs from ac_commit: a commitment, a proof, and a key
         // The User generates a commitment to the signed attribute values using **ac_commit** and stores both the commitment
         // and the *commitment key* used to generate the it, in a User wallet. The User generates a unique address (how?), and
         // asks the Ledger to store the commitment in the AIR at that address.      
         let commitment_string = serde_json::to_string(&commitment).unwrap();
         let user_addr = serde_json::to_string(&user_struct.public_key).unwrap();
-        println!("User {}: commitment = {}", user, &commitment_string);
+        // println!("User {}: commitment = {}", user, &commitment_string);
          // Insert an entry AIR[user_pk] = cred, where
+        println!("********************************************************************************");
+        println!("user_commit: {:?}", &commitment);
+        println!("user_commit: as string = {}", &commitment_string);
+        println!("********************************************************************************");
         global_state.smt.set(&user_addr, Some(commitment_string));
-        println!("User {}: commitment at address {}", user, &user_addr);
         global_state.user_commitment.insert(user.to_string(), (commitment, key));
         Ok(())
       } else {
@@ -315,10 +320,12 @@ fn user_selectively_reveal(global_state: &mut GlobalState, user: &str, bitmap: &
  -> Result<(String, ACPoK), String> {
    match (global_state.users.get(user), global_state.user_commitment.get(user)) {
     (Some(user_struct), Some((commitment, key))) => {
+      // println!("user_selectively_reveal: commitment = {:?}", &commitment);
       let attrs = global_state.user_attrs.get(user).unwrap();
-      let attributes = attrs.to_vec(); //Vec<ACAttribute<String>> = attrs.to_vec().into_iter().map(string_to_attr).collect();
+      // let attributes = attrs.to_vec(); //Vec<ACAttribute<String>> = attrs.to_vec().into_iter().map(string_to_attr).collect();
+      let attributes: Vec<&[u8]> = attrs.iter().map(|s| { s.as_bytes() }).collect();
       let credential = Credential { signature: commitment.clone(), attributes: attributes, issuer_pk: user_struct.issuer_pk.clone()};
-      if let Ok(pok) = ac_open_commitment(&mut global_state.prng, &user_struct.secret_key, &credential, &key, bitmap) {
+      if let Ok(pok) = ac_open_commitment::<ChaChaRng, &[u8]>(&mut global_state.prng, &user_struct.secret_key, &credential, &key, bitmap) {
         let address = serde_json::to_string(&user_struct.public_key).unwrap();
         Ok((address, pok))
       } else {
@@ -343,19 +350,28 @@ fn slice_to_attr(s: &[u8]) -> Option<&[u8]> {
 fn verify(global_state: &mut GlobalState, user: &str, attrs: &Vec<&[u8]>) -> Result<(), String> {
   let attributes: Vec<Option<&[u8]>> = attrs.to_vec().into_iter().map(slice_to_attr).collect();
   let bitmap: Vec<bool> = attributes.iter().map(|s| { s.is_some() }).collect();
-  println!("verify: bitmap = {:?}", &bitmap);
+  // println!("verify: bitmap = {:?}", &bitmap);
   let (address, pok) = user_selectively_reveal(global_state, user, &bitmap)?;
   let (commitment_opt, merkle_proof) = global_state.smt.get_with_proof(address.clone());
   if let Some(commitment_string) = commitment_opt {
-    println!("AIR[{}] = {}", &address, &commitment_string);
-    let commitment = serde_json::from_str(&commitment_string[..]).unwrap();
-    println!("verify with attributes = {:?}", &attributes);
+    let commitment: ACSignature = serde_json::from_str(&commitment_string[..]).unwrap();
+    println!("********************************************************************************");
+    println!("verify: as string = {}", &commitment_string);
+    println!("verify: {:?}", &commitment);
+    println!("********************************************************************************");
+    // println!("verify with attributes = {:?}", &attributes);
     if global_state.smt.check_merkle_proof(&address, commitment_opt, &merkle_proof) {
-    let user_info = global_state.users.get(user).unwrap();
-    if let Err(e) = ac_verify(&user_info.issuer_pk,
-                               &attributes[..],
-                               &commitment,
-                               &pok) {
+      let (commitment2, _) = global_state.user_commitment.get(user).unwrap();
+      if commitment == *commitment2 {
+        println!("commitments unchanged by serde");
+      } else {
+        println!("WTF commitments changed by serde");
+      }
+      let user_info = global_state.users.get(user).unwrap();
+      if let Err(e) = ac_verify::<&[u8]>(&user_info.issuer_pk,
+                                         &attributes[..],
+                                         &commitment,
+                                         &pok) {
         Err(format!("smt merkle proof succeeds but ac_verify fails with {}", e))
       } else {
         println!("smt merkle proof and ac_verify succeed");
@@ -498,7 +514,9 @@ mod tests {
   #![allow(dead_code)]
   use rand_core::SeedableRng;
   use rand_chacha::ChaChaRng;
-  use zei::api::anon_creds::{ac_commit, ac_keygen_issuer, ac_keygen_user, ac_sign, ac_verify, ac_open_commitment, Credential};
+  use serde::{Deserialize, Serialize};
+  use zei::algebra::bls12_381::BLSG1;
+use zei::api::anon_creds::{ac_commit, ac_keygen_issuer, ac_keygen_user, ac_sign, ac_verify, ac_open_commitment, Credential};
 
   #[test]
 
@@ -510,11 +528,11 @@ mod tests {
     let (user_pk, user_sk) = ac_keygen_user::<ChaChaRng>(&mut prng, &issuer_pk);
     let attr1 = b"dob:08221964";
     let attr2 = b"ss:666666666";
-    let attributes = vec![&attr1[..], &attr2[..]];
+    let attributes: Vec<&[u8]> = vec![&attr1[..], &attr2[..]];
     println!("verify: attributes = {:?}", &attributes);
     let signature = ac_sign::<ChaChaRng, &[u8]>(&mut prng, &issuer_sk, &user_pk, &attributes[..]); // Done by Issuer
     // Enter the User
-    let credential = Credential{
+    let credential: Credential<&[u8]> = Credential {
       signature: signature.clone(),
       attributes: attributes,
       issuer_pk: issuer_pk.clone(),
@@ -523,6 +541,16 @@ mod tests {
                                                                   &user_sk,
                                                                   &credential,
                                                                   b"some addr").unwrap();
+    println!("verify: commitment  = {:?}, key = {:?}", &commitment, &key);
+    let commitment_string = serde_json::to_string(&commitment).unwrap();
+    let commitment2:ACSignature<BLSG1> = serde_json::from_str(&commitment_string[..]).unwrap();
+    println!("verify: commitment2 = {:?}, key = {:?}", &commitment, &key);
+
+    if commitment == commitment2 {
+      println!("commitments unchanged by serde");
+    } else {
+      println!("WTF commitments changed by serde");
+    }
     // Inside user store commitment in AIR, commitment and key in user "wallet"
   
     // Next the Verifier wants to verify dob (the first attr) and asks the User to
@@ -534,7 +562,7 @@ mod tests {
 
     // Enter the Verifier with user generated POK (and address in the AIR tests)
     let attr_map = [Some(&attr1[..]), None];
-    println!("verify: attr_map = {:?}", &attr_map);
+    // println!("verify: attr_map = {:?}", &attr_map);
     let result_verification_ok = ac_verify::<&[u8]>(&issuer_pk, &attr_map, &commitment, &reveal_pok);
     assert!(result_verification_ok.is_ok());
     let attr_map = [None, Some(&attr2[..])];
