@@ -7,7 +7,6 @@ use bulletproofs::PedersenGens;
 use cryptohash::sha256;
 use curve25519_dalek::ristretto::RistrettoPoint;
 use curve25519_dalek::scalar::Scalar;
-use hex;
 use js_sys::Promise;
 use ledger::data_model::{
   AssetTypeCode, Operation, Serialized, TransferType, TxOutput, TxoRef, TxoSID,
@@ -678,7 +677,7 @@ impl User {
     let bitmap = [reveal_attribute];
     let credential = Credential { signature: sig,
                                   attributes: attrs.to_vec(),
-                                  issuer_pk: issuer.public_key.clone() };
+                                  issuer_pk: issuer.public_key };
     let proof = ac_reveal(&mut prng, &self.secret_key, &credential, &bitmap).unwrap();
 
     JsValue::from_serde(&proof).unwrap()

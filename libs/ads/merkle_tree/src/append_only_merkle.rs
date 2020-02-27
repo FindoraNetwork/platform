@@ -163,7 +163,7 @@ impl Proof {
       id /= 2;
     }
 
-    return result == self.root_hash;
+    result == self.root_hash
   }
 }
 
@@ -929,6 +929,7 @@ impl AppendOnlyMerkle {
   // id.
   //
   // This function currently is only for testing.
+  #[cfg(test)]
   pub fn leaf(&self, index: usize) -> HashValue {
     if index as u64 > self.entry_count {
       return HashValue::new();

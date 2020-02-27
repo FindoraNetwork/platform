@@ -16,7 +16,6 @@ use merkle_tree::append_only_merkle::{AppendOnlyMerkle, HashValue, Proof};
 use merkle_tree::logged_merkle::LoggedMerkle;
 use rand_chacha::ChaChaRng;
 use rand_core::{CryptoRng, RngCore, SeedableRng};
-use sparse_merkle_tree;
 use sparse_merkle_tree::SmtMap256;
 use std::collections::{HashMap, VecDeque};
 use std::fs::File;
@@ -151,12 +150,12 @@ pub trait ArchiveAccess {
 // Can we remove one of txns_in_block_hash and global_block_hash?
 // Both of them contain the information of the previous state
 pub struct StateCommitmentData {
-  pub bitmap: BitDigest,                    // The checksum of the utxo_map
-  pub block_merkle: HashValue,              // The root hash of the block Merkle tree
-  pub txns_in_block_hash: BitDigest,        // The hash of the transactions in the block
-  pub previous_state_commitment: BitDigest, // The prior global block hash
-  pub transaction_merkle_commitment: HashValue,
-  pub txo_count: u64,
+  pub bitmap: BitDigest,                        // The checksum of the utxo_map
+  pub block_merkle: HashValue,                  // The root hash of the block Merkle tree
+  pub txns_in_block_hash: BitDigest,            // The hash of the transactions in the block
+  pub previous_state_commitment: BitDigest,     // The prior global block hash
+  pub transaction_merkle_commitment: HashValue, // The root hash of the transaction Merkle tree
+  pub txo_count: u64, // Number of transaction outputs. Used to provide proof that a utxo does not exist
 }
 
 impl StateCommitmentData {
@@ -494,7 +493,7 @@ impl LedgerStatus {
     // Remove consumed UTXOs
     for (inp_sid, _) in block.input_txos.drain() {
       // Remove from bitmap
-      debug_assert!(utxo_map.query(inp_sid.0 as usize).unwrap() == true);
+      debug_assert!(utxo_map.query(inp_sid.0 as usize).unwrap());
       utxo_map.clear(inp_sid.0 as usize).unwrap();
 
       // Remove from ledger status
@@ -687,10 +686,6 @@ impl LedgerUpdate<ChaChaRng> for LedgerState {
       // Update the transaction Merkle tree and transaction log
       for (tmp_sid, txn) in block.temp_sids.drain(..).zip(block.txns.drain(..)) {
         let txn_sid = temp_sid_map.get(&tmp_sid).unwrap().0;
-
-        //let digest = sha256::hash(&txn.serialize_bincode(txn_sid));
-        //let mut hash = HashValue::new();
-        //hash.hash.clone_from_slice(&digest.0);
 
         // TODO(joe/jonathan): Since errors in the merkle tree are things like
         // corruption and I/O failure, we don't have a good recovery story. Is
@@ -1181,7 +1176,7 @@ impl AuthenticatedBlock {
       return false;
     }
 
-    return true;
+    true
   }
 }
 
@@ -1209,25 +1204,26 @@ impl AuthenticatedUtxoStatus {
     {
       return false;
     }
-    if self.status == UtxoStatus::Nonexistent {
-      // 4)
-      return utxo_sid >= state_commitment_data.txo_count;
-    }
-
     // If the txo exists, the proof must also contain a bitmap
     let utxo_map = self.utxo_map.as_ref().unwrap();
-    // 2) The status matches the bit stored in the bitmap
+    // 3) The status matches the bit stored in the bitmap
     let spent = !utxo_map.query(utxo_sid).unwrap();
     if (self.status == UtxoStatus::Spent && !spent) || (self.status == UtxoStatus::Unspent && spent)
     {
       return false;
     }
-    // 3)
+    // 4)
     if utxo_map.checksum() != self.state_commitment_data.bitmap {
       println!("failed at bitmap checksum");
       return false;
     }
-    return true;
+
+    if self.status == UtxoStatus::Nonexistent {
+      // 5)
+      return utxo_sid >= state_commitment_data.txo_count;
+    }
+
+    true
   }
 }
 
@@ -1268,7 +1264,7 @@ impl AuthenticatedTransaction {
       return false;
     }
 
-    return true;
+    true
   }
 }
 
@@ -1300,17 +1296,16 @@ impl ArchiveAccess for LedgerState {
   }
   fn get_block(&self, addr: BlockSID) -> Option<AuthenticatedBlock> {
     match self.blocks.get(addr.0) {
-      None => return None,
+      None => None,
       Some(finalized_block) => {
         let block_inclusion_proof = self.block_merkle
                                         .get_proof(finalized_block.merkle_id, 0)
                                         .unwrap();
         let state_commitment_data = self.status.state_commitment_data.as_ref().unwrap().clone();
-        return Some(AuthenticatedBlock { block: finalized_block.clone(),
-                                         block_inclusion_proof,
-                                         state_commitment_data: state_commitment_data.clone(),
-                                         state_commitment:
-                                           state_commitment_data.compute_commitment() });
+        Some(AuthenticatedBlock { block: finalized_block.clone(),
+                                  block_inclusion_proof,
+                                  state_commitment_data: state_commitment_data.clone(),
+                                  state_commitment: state_commitment_data.compute_commitment() })
       }
     }
   }
@@ -1321,16 +1316,16 @@ impl ArchiveAccess for LedgerState {
     let status;
     if addr.0 < state_commitment_data.txo_count {
       utxo_map = Some(SparseMap::new(&self.utxo_map.serialize(0)).unwrap());
-      status = match utxo_map.as_ref().unwrap().query(addr.0).unwrap() {
-        true => UtxoStatus::Unspent,
-        false => UtxoStatus::Spent,
+      status = if utxo_map.as_ref().unwrap().query(addr.0).unwrap() {
+        UtxoStatus::Unspent
+      } else {
+        UtxoStatus::Spent
       };
     } else {
       status = UtxoStatus::Nonexistent;
       utxo_map = None;
     }
 
-    // TODO: verify in constructor
     AuthenticatedUtxoStatus { status,
                               state_commitment_data: state_commitment_data.clone(),
                               state_commitment: state_commitment_data.compute_commitment(),

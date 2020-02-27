@@ -4,11 +4,9 @@
 #[macro_use]
 extern crate lazy_static;
 
-use clap;
 use clap::{App, Arg, ArgMatches};
 use colored::*;
 use cryptohash::sha256;
-use hex;
 use rand_chacha::ChaChaRng;
 use rand_core::SeedableRng;
 use rustyline::error::ReadlineError;
@@ -20,21 +18,9 @@ use sparse_merkle_tree::SmtMap256;
 use std::collections::HashMap;
 use std::path::Path;
 use zei::api::anon_creds::{
-  ac_keygen_issuer,
-  ac_keygen_user,
-  ac_commit,
-  ac_open_commitment,
-  ac_sign,
-  ac_verify,
-  ACCommitment,
-  ACCommitmentKey,
-  ACIssuerPublicKey,
-  ACIssuerSecretKey,
-  ACPoK,
-  ACSignature,
-  ACUserPublicKey,
-  ACUserSecretKey,
-  Credential,
+  ac_commit, ac_keygen_issuer, ac_keygen_user, ac_open_commitment, ac_sign, ac_verify,
+  ACCommitment, ACCommitmentKey, ACIssuerPublicKey, ACIssuerSecretKey, ACPoK, ACSignature,
+  ACUserPublicKey, ACUserSecretKey, Credential,
 };
 
 // Default file path of the anonymous credential registry
@@ -177,7 +163,7 @@ fn add_issuer(mut global_state: &mut GlobalState, issuer_name: &str) -> Result<(
              secret_key: issuer_sk,
              users: HashMap::new() }
   }
-  if let Some(_) = global_state.issuers.get(issuer_name) {
+  if global_state.issuers.get(issuer_name).is_some() {
     Err(format!("issuer named {} already exists", issuer_name))
   } else {
     let issuer = new_issuer(&mut global_state, issuer_name);
@@ -203,7 +189,7 @@ fn add_user(global_state: &mut GlobalState,
             issuer_name: &str,
             user_name: &str)
             -> Result<(), String> {
-  if let Some(_) = global_state.users.get(user_name) {
+  if global_state.users.get(user_name).is_some() {
     Err(format!("user named {} already exists", user_name))
   } else {
     // println!("Looking up issuer: {}", issuer_name);
@@ -237,7 +223,7 @@ fn show_user(global_state: &mut GlobalState, user_name: &str) -> Result<(), Stri
 fn issue_credential(global_state: &mut GlobalState,
                     issuer: &str,
                     user: &str,
-                    attrs: &Vec<String>)
+                    attrs: &[String])
                     -> Result<(), String> {
   match (global_state.issuers.get(issuer), global_state.users.get(user)) {
     (Some(issuer_keys), Some(user_keys)) => {
@@ -247,9 +233,10 @@ fn issue_credential(global_state: &mut GlobalState,
                         &attrs);
       println!("Issuer {}: credential issued to {}", issuer, user);
       global_state.user_sig.insert(user.to_string(), sig);
-      global_state.user_attrs.insert(user.to_string(), attrs.to_vec());
+      global_state.user_attrs
+                  .insert(user.to_string(), attrs.to_vec());
       Ok(())
-    },
+    }
     (None, None) => Err("Unable to find either issuer or user".to_string()),
     (None, _) => Err("Unable to find issuer".to_string()),
     (_, None) => Err("Unable to find user".to_string()),
@@ -257,33 +244,31 @@ fn issue_credential(global_state: &mut GlobalState,
 }
 
 // user_commit is performed by the User and has access to user secret key
-fn user_commit(global_state: &mut GlobalState,
-               user: &str)
-               -> Result<(), String> {
+fn user_commit(global_state: &mut GlobalState, user: &str) -> Result<(), String> {
   match (global_state.users.get(user), global_state.user_sig.get(user)) {
     (Some(user_struct), Some(sig)) => {
       let attrs = global_state.user_attrs.get(user).unwrap();
-      let credential: Credential<String> = Credential {
-        signature: sig.clone(),
-        attributes: attrs.to_vec(),
-        issuer_pk: user_struct.issuer_pk.clone(),
-      };
+      let credential: Credential<String> = Credential { signature: sig.clone(),
+                                                        attributes: attrs.to_vec(),
+                                                        issuer_pk: user_struct.issuer_pk.clone() };
 
-      if let Ok((commitment, _proof, key)) =
-        ac_commit(&mut global_state.prng,
-                  &user_struct.secret_key,
-                  &credential,
-                  b"random message") {
+      if let Ok((commitment, _proof, key)) = ac_commit(&mut global_state.prng,
+                                                       &user_struct.secret_key,
+                                                       &credential,
+                                                       b"random message")
+      {
         // There should be three outputs from ac_commit: a commitment, a proof, and a key
         // The User generates a commitment to the signed attribute values using **ac_commit** and stores both the commitment
         // and the *commitment key* used to generate the it, in a User wallet. The User generates a unique address (how?), and
-        // asks the Ledger to store the commitment in the AIR at that address.      
+        // asks the Ledger to store the commitment in the AIR at that address.
         let commitment_string = serde_json::to_string(&commitment).unwrap();
         let user_addr = serde_json::to_string(&user_struct.public_key).unwrap();
         // Insert an entry AIR[user_pk] = cred, where
         global_state.smt.set(&user_addr, Some(commitment_string));
-        println!("User {}: commitment to credential saved in AIR at address {}", user, &user_addr);
-        global_state.user_commitment.insert(user.to_string(), (commitment, key));
+        println!("User {}: commitment to credential saved in AIR at address {}",
+                 user, &user_addr);
+        global_state.user_commitment
+                    .insert(user.to_string(), (commitment, key));
         Ok(())
       } else {
         Err("Credential generation fails during credential issuing process".to_string())
@@ -307,48 +292,59 @@ fn show_creds(global_state: &mut GlobalState, user_name: &str) -> Result<(), Str
 }
 
 // user_selectively_reveal is run inside a User
-fn user_selectively_reveal(global_state: &mut GlobalState, user: &str, bitmap: &Vec<bool>)
- -> Result<(String, ACPoK), String> {
-   match (global_state.users.get(user), global_state.user_commitment.get(user)) {
+fn user_selectively_reveal(global_state: &mut GlobalState,
+                           user: &str,
+                           bitmap: &[bool])
+                           -> Result<(String, ACPoK), String> {
+  match (global_state.users.get(user), global_state.user_commitment.get(user)) {
     (Some(user_struct), Some((commitment, key))) => {
       let attrs = global_state.user_attrs.get(user).unwrap();
       let attributes = attrs.to_vec(); //Vec<ACAttribute<String>> = attrs.to_vec().into_iter().map(string_to_attr).collect();
-      let credential = Credential { signature: commitment.clone(), attributes: attributes, issuer_pk: user_struct.issuer_pk.clone()};
-      if let Ok(pok) = ac_open_commitment(&mut global_state.prng, &user_struct.secret_key, &credential, &key, bitmap) {
+      let credential = Credential { signature: commitment.clone(),
+                                    attributes,
+                                    issuer_pk: user_struct.issuer_pk.clone() };
+      if let Ok(pok) = ac_open_commitment(&mut global_state.prng,
+                                          &user_struct.secret_key,
+                                          &credential,
+                                          &key,
+                                          bitmap)
+      {
         let address = serde_json::to_string(&user_struct.public_key).unwrap();
         Ok((address, pok))
       } else {
         Err("user_selectively_reveal: open commitment fails".to_string())
       }
-    },
+    }
     (None, None) => Err("Unable to find either user or commitment".to_string()),
     (None, _) => Err("Unable to find user".to_string()),
-    (_, None) => Err("Unable to find commitment".to_string()),   
+    (_, None) => Err("Unable to find commitment".to_string()),
   }
 }
 
 fn string_to_attr(s: String) -> Option<String> {
-  if s.as_bytes().len() > 0 {
-    Some(s.to_string())
+  if !s.as_bytes().is_empty() {
+    Some(s)
   } else {
     None
   }
 }
 
 // Verify is run by the verifier
-fn verify(global_state: &mut GlobalState, user: &str, attrs: &Vec<String>) -> Result<(), String> {
-  let bitmap: Vec<bool> = attrs.to_vec().into_iter().map(|s| { s.as_bytes().len() > 0 }).collect();
+fn verify(global_state: &mut GlobalState, user: &str, attrs: &[String]) -> Result<(), String> {
+  let bitmap: Vec<bool> = attrs.to_vec()
+                               .into_iter()
+                               .map(|s| !s.as_bytes().is_empty())
+                               .collect();
   let (address, pok) = user_selectively_reveal(global_state, user, &bitmap)?;
   let (commitment_opt, merkle_proof) = global_state.smt.get_with_proof(address.clone());
   if let Some(commitment_string) = commitment_opt {
     let commitment = serde_json::from_str(&commitment_string[..]).unwrap();
     let attributes: Vec<Option<String>> = attrs.to_vec().into_iter().map(string_to_attr).collect();
-    if global_state.smt.check_merkle_proof(&address, commitment_opt, &merkle_proof) {
-    let user_info = global_state.users.get(user).unwrap();
-    if let Err(_e) = ac_verify(&user_info.issuer_pk,
-                               &attributes[..],
-                               &commitment,
-                               &pok) {
+    if global_state.smt
+                   .check_merkle_proof(&address, commitment_opt, &merkle_proof)
+    {
+      let user_info = global_state.users.get(user).unwrap();
+      if let Err(_e) = ac_verify(&user_info.issuer_pk, &attributes[..], &commitment, &pok) {
         Err("smt merkle proof succeeds but ac_verify fails".to_string())
       } else {
         println!("smt merkle proof and ac_verify succeed");
@@ -361,9 +357,9 @@ fn verify(global_state: &mut GlobalState, user: &str, attrs: &Vec<String>) -> Re
     Err(format!("Nothing stored in AIR at address {}", &address))
   }
 }
- 
+
 fn issuer_exists(global_state: &GlobalState, issuer: &str) -> Result<(), String> {
-  if let Some(_) = global_state.issuers.get(issuer) {
+  if global_state.issuers.get(issuer).is_some() {
     Ok(())
   } else {
     Err(format!("{} is not a valid issuer name", issuer))
@@ -371,7 +367,7 @@ fn issuer_exists(global_state: &GlobalState, issuer: &str) -> Result<(), String>
 }
 
 fn user_exists(global_state: &GlobalState, user: &str) -> Result<(), String> {
-  if let Some(_) = global_state.users.get(user) {
+  if global_state.users.get(user).is_some() {
     Ok(())
   } else {
     Err(format!("{} is not a valid user name", user))
@@ -422,7 +418,7 @@ fn exec_line(mut global_state: &mut GlobalState, line: &str) -> Result<(), Strin
                                         .collect();
       issue_credential(&mut global_state, &issuer, &user, &attrs_vec)
     }
-    ["user_commit", user ] => {
+    ["user_commit", user] => {
       user_exists(&global_state, &user)?;
       user_commit(&mut global_state, user)
     }
@@ -489,6 +485,5 @@ mod tests {
   #![allow(dead_code)]
 
   #[test]
-  fn test_ac_functions() {
-  }
+  fn test_ac_functions() {}
 }

@@ -1,7 +1,6 @@
 #![deny(warnings)]
 use clap::{App, Arg, SubCommand};
 use env_logger::{Env, Target};
-use hex;
 use ledger::data_model::errors::PlatformError;
 use ledger::data_model::{AccountAddress, AssetTypeCode, TransferType, TxOutput, TxoRef, TxoSID};
 use ledger::policies::{DebtMemo, Fraction};
