@@ -267,7 +267,8 @@ impl Data {
 
   fn get_issuer_key_pair(&mut self, id: u64) -> Result<XfrKeyPair, PlatformError> {
     let key_pair_str = &self.issuers[id as usize].key_pair;
-    Ok(XfrKeyPair::zei_from_bytes(&hex::decode(key_pair_str).or_else(|_| {Err(PlatformError::DeserializationError)
+    Ok(XfrKeyPair::zei_from_bytes(&hex::decode(key_pair_str).or_else(|_| {
+                                     Err(PlatformError::DeserializationError)
                                    })?))
   }
 
@@ -280,7 +281,7 @@ impl Data {
   fn get_lender_key_pair(&mut self, id: u64) -> Result<XfrKeyPair, PlatformError> {
     let key_pair_str = &self.lenders[id as usize].key_pair;
     Ok(XfrKeyPair::zei_from_bytes(&hex::decode(key_pair_str).or_else(|_| {
-                                    Err(PlatformError::DeserializationError)
+                                     Err(PlatformError::DeserializationError)
                                    })?))
   }
 
@@ -1884,8 +1885,17 @@ fn process_inputs(inputs: clap::ArgMatches) -> Result<(), PlatformError> {
   } else if let Ok(dir) = env::var("FINDORA_DIR") {
     dir
   } else {
-    let home_dir = dirs::home_dir().unwrap_or_else(|| Path::new(".").to_path_buf());
-    format!("{}/.findora", home_dir.to_str().unwrap_or("./.findora"))
+    let home_dir = if let Some(dir) = dirs::home_dir() {
+      dir
+    } else {
+      Path::new(".").to_path_buf()
+    };
+    let dir_str = if let Some(string) = home_dir.to_str() {
+      string
+    } else {
+      "."
+    };
+    format!("{}/.findora", dir_str)
   };
 
   if let Some(cfg) = inputs.value_of("config") {
@@ -2362,9 +2372,26 @@ fn process_add_cmd(add_matches: &clap::ArgMatches,
       let mut blind_asset_records_iter = blind_asset_records.iter();
       let mut input_amounts_iter = input_amounts.iter();
       while count > 0 {
-        transfer_from.push((txo_refs_iter.next().unwrap(),
-                            blind_asset_records_iter.next().unwrap(),
-                            *input_amounts_iter.next().unwrap()));
+        let txo_ref_next = if let Some(txo_ref) = txo_refs_iter.next() {
+          txo_ref
+        } else {
+          println!("More txo ref expected.");
+          return Err(PlatformError::InputsError);
+        };
+        let blind_asset_record_next =
+          if let Some(blind_asset_record) = blind_asset_records_iter.next() {
+            blind_asset_record
+          } else {
+            println!("More blind asset record expected.");
+            return Err(PlatformError::InputsError);
+          };
+        let input_amount_next = if let Some(input_amount) = input_amounts_iter.next() {
+          *input_amount
+        } else {
+          println!("More input amount expected.");
+          return Err(PlatformError::InputsError);
+        };
+        transfer_from.push((txo_ref_next, blind_asset_record_next, input_amount_next));
         count -= 1;
       }
 
@@ -2392,7 +2419,19 @@ fn process_add_cmd(add_matches: &clap::ArgMatches,
       let mut output_amounts_iter = output_amounts.iter();
       let mut addresses_iter = addresses.iter();
       while count > 0 {
-        transfer_to.push((*output_amounts_iter.next().unwrap(), addresses_iter.next().unwrap()));
+        let output_amount_next = if let Some(output_amount) = output_amounts_iter.next() {
+          *output_amount
+        } else {
+          println!("More output amount expected.");
+          return Err(PlatformError::InputsError);
+        };
+        let address_next = if let Some(address) = addresses_iter.next() {
+          address
+        } else {
+          println!("More address expected.");
+          return Err(PlatformError::InputsError);
+        };
+        transfer_to.push((output_amount_next, address_next));
         count -= 1;
       }
 
