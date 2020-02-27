@@ -3022,7 +3022,9 @@ mod tests {
   }
 
   //
-  // Check that a proof is reasonably correct.
+  // Check that a proof is reasonably correct.  Make sure the
+  // fields are set, and that the hash fields merge to form
+  // the root hash.
   //
   fn check_proof(tree: &AppendOnlyMerkle, proof: &Proof, tx_id: u64) {
     if proof.version != PROOF_VERSION {
@@ -3159,21 +3161,6 @@ mod tests {
     for hash in hashes.iter() {
       assert!(*hash == empty_hash);
     }
-
-    /*
-    let mut hashes = Vec::new();
-    let mut block = Block::new(0, 0);
-    block.hashes[0..HASHES_IN_BLOCK].clone_from_slice(&entry.hashes[0..HASHES_IN_BLOCK]);
-
-    block.push(&mut hashes, 0, &expected_entries);
-    assert!(hashes.len() == LEVELS_IN_BLOCK - 1);
-
-    // All of the partners should be empty hashes for
-    // this subtree.
-    for hash in hashes.iter() {
-      assert!(*hash == empty_hash);
-    }
-    */
   }
 
   #[test]
