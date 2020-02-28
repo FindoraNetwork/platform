@@ -10,3 +10,4 @@
 .*.sw*
 .stack-work
 stack.yaml.lock
+**/history.txt

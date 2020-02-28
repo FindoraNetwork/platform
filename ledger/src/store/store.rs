@@ -7,6 +7,7 @@ extern crate tempdir;
 use crate::data_model::errors::PlatformError;
 use crate::data_model::*;
 use crate::policies::{calculate_fee, DebtMemo};
+use air::AIR;
 use bitmap::{BitMap, SparseMap};
 use cryptohash::sha256;
 use cryptohash::sha256::Digest as BitDigest;
@@ -16,7 +17,6 @@ use merkle_tree::append_only_merkle::{AppendOnlyMerkle, HashValue, Proof};
 use merkle_tree::logged_merkle::LoggedMerkle;
 use rand_chacha::ChaChaRng;
 use rand_core::{CryptoRng, RngCore, SeedableRng};
-use sparse_merkle_tree::SmtMap256;
 use std::collections::{HashMap, VecDeque};
 use std::fs::File;
 use std::fs::OpenOptions;
@@ -173,7 +173,7 @@ const MAX_VERSION: usize = 100;
 pub struct LedgerStatus {
   // Paths to archival logs for the merkle tree and transaction history
   block_merkle_path: String,
-  sparse_merkle_path: String,
+  air_path: String,
   txn_merkle_path: String,
   txn_path: String,
   utxo_map_path: String,
@@ -241,7 +241,7 @@ pub struct LedgerState {
   block_merkle: LoggedMerkle,
 
   // Sparse Merkle Tree for Addres Identity Registry
-  sparse_merkle: SmtMap256<String>,
+  air: AIR<String>,
 
   // Merkle tree tracking the sequence of all transaction hashes
   // Each appended hash is the hash of a transaction
@@ -304,8 +304,8 @@ impl HasInvariants<PlatformError> for LedgerState {
       let block_merkle_buf = tmp_dir.join("test_block_merkle");
       let other_block_merkle_path = block_merkle_buf.to_str().unwrap();
 
-      let sparse_merkle_buf = tmp_dir.join("test_sparse_merkle");
-      let other_sparse_merkle_path = sparse_merkle_buf.to_str().unwrap();
+      let air_buf = tmp_dir.join("test_air");
+      let other_air_path = air_buf.to_str().unwrap();
 
       let txn_merkle_buf = tmp_dir.join("test_txn_merkle");
       let other_txn_merkle_path = txn_merkle_buf.to_str().unwrap();
@@ -322,7 +322,7 @@ impl HasInvariants<PlatformError> for LedgerState {
       std::fs::copy(&self.status.txn_path, &other_txn_path).unwrap();
 
       let state2 = Box::new(LedgerState::load_from_log(&other_block_merkle_path,
-                                                       &other_sparse_merkle_path,
+                                                       &other_air_path,
                                                        &other_txn_merkle_path,
                                                        &other_txn_path,
                                                        &other_utxo_map_path,
@@ -330,7 +330,7 @@ impl HasInvariants<PlatformError> for LedgerState {
 
       let mut status2 = Box::new(state2.status);
       status2.block_merkle_path = self.status.block_merkle_path.clone();
-      status2.sparse_merkle_path = self.status.sparse_merkle_path.clone();
+      status2.air_path = self.status.air_path.clone();
       status2.txn_merkle_path = self.status.txn_merkle_path.clone();
       status2.txn_path = self.status.txn_path.clone();
       status2.utxo_map_path = self.status.utxo_map_path.clone();
@@ -345,7 +345,7 @@ impl HasInvariants<PlatformError> for LedgerState {
 
 impl LedgerStatus {
   pub fn new(block_merkle_path: &str,
-             sparse_merkle_path: &str,
+             air_path: &str,
              txn_merkle_path: &str,
              txn_path: &str,
              // TODO(joe): should this do something?
@@ -353,7 +353,7 @@ impl LedgerStatus {
              utxo_map_path: &str)
              -> Result<LedgerStatus, std::io::Error> {
     let ledger = LedgerStatus { block_merkle_path: block_merkle_path.to_owned(),
-                                sparse_merkle_path: sparse_merkle_path.to_owned(),
+                                air_path: air_path.to_owned(),
                                 txn_merkle_path: txn_merkle_path.to_owned(),
                                 txn_path: txn_path.to_owned(),
                                 utxo_map_path: utxo_map_path.to_owned(),
@@ -706,8 +706,8 @@ impl LedgerUpdate<ChaChaRng> for LedgerState {
 
     // Apply AIR updates
     for (addr, data) in block.air_updates.drain() {
-      debug_assert!(self.sparse_merkle.get(&addr.0).is_none());
-      self.sparse_merkle.set(&addr.0, Some(data));
+      debug_assert!(self.air.get(&addr.0).is_none());
+      self.air.set(&addr.0, Some(data));
     }
 
     // TODO(joe): asset tracing?
@@ -757,8 +757,8 @@ impl LedgerState {
     let block_merkle_buf = tmp_dir.join("test_block_merkle");
     let block_merkle_path = block_merkle_buf.to_str().unwrap();
 
-    let sparse_merkle_buf = tmp_dir.join("test_sparse_merkle");
-    let sparse_merkle_path = sparse_merkle_buf.to_str().unwrap();
+    let air_buf = tmp_dir.join("test_air");
+    let air_path = air_buf.to_str().unwrap();
 
     let txn_merkle_buf = tmp_dir.join("test_txn_merkle");
     let txn_merkle_path = txn_merkle_buf.to_str().unwrap();
@@ -773,7 +773,7 @@ impl LedgerState {
     let utxo_map_path = utxo_map_buf.to_str().unwrap();
 
     LedgerState::new(&block_merkle_path,
-                     &sparse_merkle_path,
+                     &air_path,
                      &txn_merkle_path,
                      &txn_path,
                      &utxo_map_path,
@@ -864,15 +864,17 @@ impl LedgerState {
     Ok(LoggedMerkle::new(tree, writer))
   }
 
-  fn init_sparse_merkle_log(path: &str, create: bool) -> Result<SmtMap256<String>, std::io::Error> {
+  fn init_air_log(path: &str, create: bool) -> Result<AIR<String>, std::io::Error> {
     // Create a merkle tree or open an existing one.
     let result = if create {
-      Ok(SmtMap256::<String>::new())
+      Ok(AIR::<String>::new())
     } else {
-      sparse_merkle_tree::open(path)
+      air::open(path)
     };
 
-    log!(Store, "Using path {} for the Sparse Merkle Tree.", path);
+    log!(Store,
+         "Using path {} for the Address Identity Registry.",
+         path);
 
     let tree = match result {
       Err(x) => {
@@ -899,7 +901,7 @@ impl LedgerState {
 
   // Initialize a new Ledger structure.
   pub fn new(block_merkle_path: &str,
-             sparse_merkle_path: &str,
+             air_path: &str,
              txn_merkle_path: &str,
              txn_path: &str,
              utxo_map_path: &str,
@@ -907,15 +909,14 @@ impl LedgerState {
              -> Result<LedgerState, std::io::Error> {
     let ledger =
       LedgerState { status: LedgerStatus::new(block_merkle_path,
-                                              sparse_merkle_path,
+                                              air_path,
                                               txn_merkle_path,
                                               txn_path,
                                               utxo_map_path)?,
                     // TODO(joe): is this safe?
                     prng: rand_chacha::ChaChaRng::from_seed(prng_seed.unwrap_or([0u8; 32])),
                     block_merkle: LedgerState::init_merkle_log(block_merkle_path, true)?,
-                    sparse_merkle: LedgerState::init_sparse_merkle_log(sparse_merkle_path,
-                                                                       true)?,
+                    air: LedgerState::init_air_log(air_path, true)?,
                     txn_merkle: LedgerState::init_merkle_log(txn_merkle_path, true)?,
                     blocks: Vec::new(),
                     utxo_map: LedgerState::init_utxo_map(utxo_map_path, true)?,
@@ -930,7 +931,7 @@ impl LedgerState {
   }
 
   pub fn load_from_log(block_merkle_path: &str,
-                       sparse_merkle_path: &str,
+                       air_path: &str,
                        txn_merkle_path: &str,
                        txn_path: &str,
                        utxo_map_path: &str,
@@ -940,15 +941,14 @@ impl LedgerState {
     let txn_log = std::fs::OpenOptions::new().append(true).open(txn_path)?;
     let mut ledger =
       LedgerState { status: LedgerStatus::new(block_merkle_path,
-                                              sparse_merkle_path,
+                                              air_path,
                                               txn_merkle_path,
                                               txn_path,
                                               utxo_map_path)?,
                     // TODO(joe): is this safe?
                     prng: rand_chacha::ChaChaRng::from_seed(prng_seed.unwrap_or([0u8; 32])),
                     block_merkle: LedgerState::init_merkle_log(block_merkle_path, true)?,
-                    sparse_merkle: LedgerState::init_sparse_merkle_log(sparse_merkle_path,
-                                                                       true)?,
+                    air: LedgerState::init_air_log(air_path, true)?,
                     txn_merkle: LedgerState::init_merkle_log(txn_merkle_path, true)?,
                     blocks: Vec::new(),
                     utxo_map: LedgerState::init_utxo_map(utxo_map_path, true)?,
@@ -974,8 +974,8 @@ impl LedgerState {
   pub fn load_or_init(base_dir: &Path) -> Result<LedgerState, std::io::Error> {
     let block_merkle = base_dir.join("block_merkle");
     let block_merkle = block_merkle.to_str().unwrap();
-    let sparse_merkle = base_dir.join("sparse_merkle");
-    let sparse_merkle = sparse_merkle.to_str().unwrap();
+    let air = base_dir.join("air");
+    let air = air.to_str().unwrap();
     let txn_merkle = base_dir.join("txn_merkle");
     let txn_merkle = txn_merkle.to_str().unwrap();
     let txn_log = base_dir.join("txn_log");
@@ -985,25 +985,16 @@ impl LedgerState {
 
     // TODO(joe): distinguish between the transaction log not existing
     // and it being corrupted
-    LedgerState::load_from_log(&block_merkle,
-                               &sparse_merkle,
-                               &txn_merkle,
-                               &txn_log,
-                               &utxo_map,
-                               None).or_else(|_| {
-                                      LedgerState::new(&block_merkle,
-                                                       &sparse_merkle,
-                                                       &txn_merkle,
-                                                       &txn_log,
-                                                       &utxo_map,
-                                                       None)
-                                    })
+    LedgerState::load_from_log(&block_merkle, &air, &txn_merkle, &txn_log,
+                &utxo_map, None)
+              .or_else(|_| LedgerState::new(&block_merkle, &air, &txn_merkle, &txn_log,
+                &utxo_map, None))
   }
 
   // Load a ledger given the paths to the various storage elements.
   #[allow(unused_variables)]
   pub fn load_from_snapshot(block_merkle_path: &str,
-                            sparse_merkle_path: &str,
+                            air_path: &str,
                             merkle_path: &str,
                             txn_path: &str,
                             utxo_map_path: &str,
@@ -2260,8 +2251,8 @@ mod tests {
     let tmp_dir = TempDir::new("test").unwrap();
     let block_merkle_buf = tmp_dir.path().join("test_block_merkle");
     let block_merkle_path = block_merkle_buf.to_str().unwrap();
-    let sparse_merkle_buf = tmp_dir.path().join("test_sparse_merkle");
-    let sparse_merkle_path = sparse_merkle_buf.to_str().unwrap();
+    let air_buf = tmp_dir.path().join("test_air");
+    let air_path = air_buf.to_str().unwrap();
     let txn_merkle_buf = tmp_dir.path().join("test_txn_merkle");
     let txn_merkle_path = txn_merkle_buf.to_str().unwrap();
     let txn_buf = tmp_dir.path().join("test_txnlog");
@@ -2270,7 +2261,7 @@ mod tests {
     let utxo_map_path = utxo_map_buf.to_str().unwrap();
 
     let mut ledger = LedgerState::new(&block_merkle_path,
-                                      &sparse_merkle_path,
+                                      &air_path,
                                       &txn_merkle_path,
                                       &txn_path,
                                       &utxo_map_path,

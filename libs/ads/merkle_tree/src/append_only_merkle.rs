@@ -49,10 +49,13 @@ struct CheckBits {
   bits: [u8; CHECK_SIZE],
 }
 
+//
 // Define a header structure for each block.  It identifies the data
 // in the block, and contains a checksum.  This structure needs to
 // be HASH_SIZE bytes in size.  It must sit at the start of the block.
 // The check_bits field must be first in the structure.
+//
+
 #[derive(PartialEq, Copy, Clone, Debug, Deserialize, Serialize)]
 #[repr(C)]
 struct BlockHeader {
@@ -106,10 +109,13 @@ impl BlockHeader {
   }
 }
 
+///
 /// Define the structure containing a hash value for the tree.
 ///
 /// This structure must be HASH_SIZE bytes in size.  Each entry of this
 /// type corresponds to a node in the Merkle tree.
+///
+
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Default, PartialEq, Deserialize, Serialize)]
 pub struct HashValue {
@@ -127,6 +133,7 @@ impl HashValue {
   }
 }
 
+///
 /// This structure describes what is passed to the upper layers
 /// for a proof of inclusion in the tree.
 ///
@@ -138,6 +145,8 @@ impl HashValue {
 /// * time      the time at which the proof was generated, in POSIX time
 /// * tx_id     the transaction id to which this proof applies
 /// * hashes    the set of hashes up the tree
+///
+
 #[derive(Debug, Deserialize, Serialize)]
 pub struct Proof {
   pub version: u64,
@@ -166,6 +175,16 @@ impl Proof {
     result == self.root_hash
   }
 }
+//
+// Define a dictionary that will contain "completed"
+// blocks used when generating a proof.  The working
+// copy of the tree is completed as blocks fill, but
+// a proof requires that we complete partial blocks
+// by defining the value of a parent node with one
+// child as the hash of the child node.  The dictionary
+// contains such blocks when generating a proof so
+// that the working copy is not modified.
+//
 
 struct Dictionary {
   max_level: usize,
@@ -178,6 +197,7 @@ impl Dictionary {
                  map: HashMap::new() }
   }
 
+  // Retrieve an entry from the dictionary, or None.
   pub fn get(&self, level: usize, id: usize) -> Option<&Entry> {
     match self.map.get(&level) {
       Some(entry) => {
@@ -191,6 +211,7 @@ impl Dictionary {
     }
   }
 
+  // Add an entry to the dictionary.
   pub fn insert(&mut self, level: usize, entry: Entry) {
     debug!(Proof,
            "add dictionary block {} at level {}", entry.id, level);
@@ -206,6 +227,14 @@ impl Dictionary {
   }
 }
 
+//
+// An entry contains the data needed to describe
+// the parts of a block used when generating a
+// proof.  We generate entries when the working
+// copy of the tree doesn't match the "completed"
+// form of a tree needed for a proof.
+//
+
 struct Entry {
   level: usize,
   id: usize,
@@ -219,6 +248,12 @@ impl Entry {
             hashes: [HashValue::new(); HASHES_IN_BLOCK] }
   }
 
+  //
+  // Push the hashes needed for a proof.  The "id" parameter
+  // specifies the entry in this block that the proof checker
+  // will have generated, so we need to push the "partner" of
+  // this block, and so on up the tree.
+  //
   pub fn push(&self, hashes: &mut Vec<HashValue>, id: usize, check: &[usize]) {
     assert!(id < LEAVES_IN_BLOCK);
     let mut index = id;
@@ -253,12 +288,16 @@ impl Entry {
     }
   }
 
+  // Given an entry that has the non-empty leaf hashes added
+  // to it, generate the rest of the tree for this block.
+  //
   pub fn fill(&mut self) {
     for i in 0..HASHES_IN_BLOCK / 2 {
       self.hashes[LEAVES_IN_BLOCK + i] = hash_partial(&self.hashes[2 * i], &self.hashes[2 * i + 1]);
     }
   }
 
+  // Return the root hash of this block.
   pub fn root(&self) -> HashValue {
     let empty_hash = HashValue::new();
     let last = HASHES_IN_BLOCK - 1;
@@ -298,6 +337,7 @@ fn deserialize_array<'de, D>(deserializer: D) -> Result<[HashValue; HASHES_IN_BL
   Ok(result)
 }
 
+//
 // A Merkle tree is represented by a collection of blocks.  Blocks
 // are used both in memory and on disk, and form a tree.
 //
@@ -307,6 +347,8 @@ fn deserialize_array<'de, D>(deserializer: D) -> Result<[HashValue; HASHES_IN_BL
 // up to HASHES_IN_BLOCK interior nodes at that block's lowest level,
 // with each such interior node being the parent of two level zero
 // blocks.
+//
+
 #[repr(C)]
 #[derive(Serialize, Deserialize)]
 struct Block {
@@ -390,7 +432,8 @@ impl Block {
   }
 
   // Return the hash that is the top level of the subtree
-  // of this block, if the block is full.
+  // of this block, if the block is full.  Otherwise, return
+  // None.
   fn top_hash(&self) -> Option<&HashValue> {
     if self.full() {
       Some(&self.hashes[HASHES_IN_BLOCK - 1])
@@ -508,6 +551,7 @@ impl Block {
   // Add the subtree for the given block into the proof.  This code
   // handles full blocks. Here, "id" is the index within the block.
   fn push(&self, hashes: &mut Vec<HashValue>, id: usize, check: &[usize]) {
+    assert!(self.full());
     assert!(id < LEAVES_IN_BLOCK);
     let mut index = id;
     let mut base = 0;
@@ -548,6 +592,7 @@ impl Block {
   }
 
   pub fn root(&self) -> HashValue {
+    assert!(self.full());
     let last = HASHES_IN_BLOCK - 1;
     self.hashes[last]
   }
@@ -585,7 +630,7 @@ fn hash_pair(left: &HashValue, right: &HashValue) -> HashValue {
 fn hash_single(hash: &HashValue) -> HashValue {
   let digest = sha256::hash(&hash.hash[0..HASH_SIZE]);
 
-  let mut result = HashValue { hash: [0; HASH_SIZE] };
+  let mut result = HashValue::new();
 
   result.hash.clone_from_slice(&digest[0..HASH_SIZE]);
   result
@@ -610,7 +655,7 @@ fn hash_partial(left: &HashValue, right: &HashValue) -> HashValue {
 }
 
 // This structure is used only to pass data between internal
-// routines.
+// routines when reading data from files.
 struct LevelState {
   level: usize,
   leaves_at_this_level: u64,
@@ -628,9 +673,12 @@ fn next_level_leaves(blocks: u64, last_full: bool) -> u64 {
   full_blocks / 2
 }
 
+///
 /// Defines an append-ony Merkle tree that eventually will support
 /// a sparse in-memory representation.  We will need to use Box
 /// for the blocks at that point.
+///
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct AppendOnlyMerkle {
   entry_count: u64, // total entries in the tree
@@ -664,6 +712,7 @@ impl AppendOnlyMerkle {
                        blocks_on_disk: vec![0] }
   }
 
+  ///
   /// Open an existing Merkle tree and and call read_files to
   /// initialize it from the contents on disk.
   ///
@@ -707,6 +756,7 @@ impl AppendOnlyMerkle {
     }
   }
 
+  ///
   /// Create a new Merkle tree at the given path.  This routine returns
   /// an error if the tree exists.
   ///
@@ -755,6 +805,7 @@ impl AppendOnlyMerkle {
     }
   }
 
+  ///
   /// Rebuild a tree using only the file containing the leaves.
   ///
   /// # Argument
@@ -771,6 +822,7 @@ impl AppendOnlyMerkle {
   /// If the rebuild is successful, a valid tree structure is
   /// returned, and this tree is guaranteed to be fully synchronized
   /// to disk.
+  ///
   pub fn rebuild(path: &str) -> Result<AppendOnlyMerkle, Error> {
     let input = OpenOptions::new().read(true).open(&path)?;
     let ext = AppendOnlyMerkle::rebuild_ext();
@@ -1527,7 +1579,7 @@ impl AppendOnlyMerkle {
   ///     };
   ///
   pub fn append_str(&mut self, value: &str) -> Result<u64, Error> {
-    let mut hash_value = HashValue { hash: [0; HASH_SIZE] };
+    let mut hash_value = HashValue::new();
 
     let digest = sha256::hash(value.as_ref());
 
@@ -1576,7 +1628,8 @@ impl AppendOnlyMerkle {
     let mut id = transaction_id as usize;
     let mut root;
 
-    // Loop through each level of the tree.
+    // Loop through each level of the tree building
+    // the list of hashes.
     loop {
       root = self.append_proof_hashes(&mut hashes, level, id, &dictionary);
 
@@ -1865,10 +1918,12 @@ impl AppendOnlyMerkle {
   ///
   /// Check that a transaction id actually is present in the
   /// Merkle tree.
+  ///
   pub fn validate_transaction_id(&self, transaction_id: u64) -> bool {
     transaction_id < self.entry_count
   }
 
+  ///
   /// Return the number of transaction entries in the tree.
   ///
   /// # Example
@@ -1879,6 +1934,7 @@ impl AppendOnlyMerkle {
     self.entry_count
   }
 
+  ///
   /// Save the tree to disk.
   ///
   /// At some point, flushes for transactional semantics might be important.
@@ -2273,6 +2329,7 @@ impl AppendOnlyMerkle {
     None
   }
 
+  ///
   /// Reset the disk image to null.
   ///
   /// This action will cause the entire tree to be written to disk on
@@ -2981,6 +3038,11 @@ mod tests {
     }
   }
 
+  //
+  // Check that a proof is reasonably correct.  Make sure the
+  // fields are set, and that the hash fields merge to form
+  // the root hash.
+  //
   fn check_proof(tree: &AppendOnlyMerkle, proof: &Proof, tx_id: u64) {
     if proof.version != PROOF_VERSION {
       panic!("The proof version is not set.");
@@ -3003,12 +3065,24 @@ mod tests {
     }
 
     let mut id = tx_id;
+
+    //
+    // Now validate the actual hash values.  We start with the
+    // hash of the transaction, and hash it with each entry
+    // in the hash_array field.  At the end of this process,
+    // we should have the value in the root_hash field.
+    //
+    // We need to decide whether the current result should be
+    // first in the buffer to be hash (the "left" sibling in
+    // our binary tree) or the second (the "right" sibling).
+    // Checking the corresponding bit of the transaction id
+    // gives us the order.  The lowest-order bit gives the
+    // answer for the first entry in the hash array, and so
+    // on up the list.
+    //
     let mut result = tree.leaf(tx_id as usize);
     debug!(Proof, "Leaf hash is {}", result.desc());
 
-    //
-    // Now validate the actual hash values.
-    //
     for i in 0..proof.hash_array.len() {
       if id & 1 == 0 {
         result = hash_partial(&result, &proof.hash_array[i]);
@@ -3021,12 +3095,15 @@ mod tests {
              i,
              result.desc(),
              proof.hash_array[i].desc());
+
       id /= 2;
     }
 
     debug!(Proof, "result = {}", result.desc());
     debug!(Proof, "root   = {}", proof.root_hash.desc());
 
+    // The result now had better match the root of the tree
+    // at the time the proof was generated.
     if result != proof.root_hash {
       let empty_hash = HashValue::new();
       debug!(Proof,
@@ -3035,6 +3112,18 @@ mod tests {
       panic!("Proof hash mismatch:  {} vs {}, id = {}, size = {}",
              result.desc(),
              proof.root_hash.desc(),
+             tx_id,
+             tree.total_size());
+    }
+
+    // The result of "get_root_hash" should match,
+    // as well.
+    let tree_root_hash = tree.get_root_hash();
+
+    if result != tree_root_hash {
+      panic!("Tree hash mismatch:  {} vs {}, id = {}, size = {}",
+             result.desc(),
+             tree_root_hash.desc(),
              tx_id,
              tree.total_size());
     }
@@ -3082,19 +3171,6 @@ mod tests {
 
     let mut hashes = Vec::new();
     entry.push(&mut hashes, 0, &expected_entries);
-    assert!(hashes.len() == LEVELS_IN_BLOCK - 1);
-
-    // All of the partners should be empty hashes for
-    // this subtree.
-    for hash in hashes.iter() {
-      assert!(*hash == empty_hash);
-    }
-
-    let mut hashes = Vec::new();
-    let mut block = Block::new(0, 0);
-    block.hashes[0..HASHES_IN_BLOCK].clone_from_slice(&entry.hashes[0..HASHES_IN_BLOCK]);
-
-    block.push(&mut hashes, 0, &expected_entries);
     assert!(hashes.len() == LEVELS_IN_BLOCK - 1);
 
     // All of the partners should be empty hashes for
@@ -3161,7 +3237,9 @@ mod tests {
   fn test_proof() {
     println!("Starting the proof test.");
 
+    //
     // First, create a tree.
+    //
     let path = "proof_tree".to_string();
     let _ = std::fs::remove_file(&path);
 
@@ -3172,7 +3250,9 @@ mod tests {
       }
     };
 
+    //
     // Now add some transactions to it.
+    //
     let transactions = (2 * LEAVES_IN_BLOCK * LEAVES_IN_BLOCK + 1) as u64;
 
     for i in 0..transactions {
@@ -3202,14 +3282,20 @@ mod tests {
       }
     }
 
-    // Check that the proof of each entry in the
+    // Check that the proof for each entry in the
     // tree is generated properly.
     check_all_proofs(&tree);
 
+    // Generating a proof for a non-existent transaction
+    // should fail.
     if let Ok(_x) = tree.generate_proof(transactions, tree.total_size()) {
       panic!("Transaction {} does not exist.", transactions);
     }
 
+    //
+    // Generating a proof for a version other than the
+    // current version should fail.
+    //
     match tree.generate_proof(0, tree.total_size() - 1) {
       Err(e) => {
         if e.to_string() != "Versioning is not yet supported." {
@@ -3223,7 +3309,9 @@ mod tests {
 
     assert!(!tree.validate_transaction_id(tree.total_size()));
 
+    //
     // Remove the test files.
+    //
     let _ = std::fs::remove_file(&path);
 
     for i in 1..MAX_BLOCK_LEVELS {
