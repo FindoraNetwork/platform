@@ -621,18 +621,22 @@ fn store_blind_asset_record(file_path: &str,
 //
 // Path related helper functions
 //
-fn create_directory_if_missing(path_to_file_in_dir: &str) {
+fn create_directory_if_missing(path_to_file_in_dir: &str) -> Result<(), PlatformError> {
   let as_path = Path::new(path_to_file_in_dir);
   if as_path.exists() {
-    return;
+    return Ok(());
   }
 
   if let Some(parent) = as_path.parent() {
     if parent.exists() {
-      return;
+      return Ok(());
     }
-    if let Err(_e) = fs::create_dir_all(&parent) {}
+    if let Err(error) = fs::create_dir_all(&parent) {
+      return Err(PlatformError::IoError(format!("Failed to create directory for the parent path of {}: {}", path_to_file_in_dir, error)));
+    }
   }
+
+  Ok(())
 }
 
 const BACKUP_COUNT_MAX: i32 = 10000; // Arbitrary choice.
@@ -660,19 +664,18 @@ fn find_available_path(path: &Path, n: i32) -> Result<PathBuf, PlatformError> {
 // unused path cannot be derived. The path must not be empty
 // and must not be dot (".").
 fn next_path(path: &Path) -> Result<PathBuf, PlatformError> {
-  fn add_backup_extension(path: &Path) -> PathBuf {
+  fn add_backup_extension(path: &Path) -> Result<PathBuf, PlatformError> {
     let mut pb = PathBuf::from(path);
-    let file_name = if let Some(name) = path.file_name() {
+    if let Some(name) = path.file_name() {
       if let Some(name_str) = name.to_str() {
-        name_str
+        pb.set_file_name(format!("{}.0", name_str));
+        Ok(pb)
       } else {
-        ""
+        Err(PlatformError::IoError("Failed to convert the path to string.".to_owned()))
       }
     } else {
-      ""
-    };
-    pb.set_file_name(format!("{}.0", file_name));
-    pb
+      Err(PlatformError::IoError("Failed to get the file name.".to_owned()))
+    }
   }
 
   if let Some(ext) = path.extension() {
@@ -687,7 +690,7 @@ fn next_path(path: &Path) -> Result<PathBuf, PlatformError> {
       find_available_path(path, n)
     } else {
       // Doesn't have a numeric extension
-      find_available_path(&add_backup_extension(&path), 0)
+      find_available_path(&add_backup_extension(&path)?, 0)
     }
   } else {
     // Doesn't have any extension.
@@ -698,7 +701,7 @@ fn next_path(path: &Path) -> Result<PathBuf, PlatformError> {
       println!("Is directory: {:?}. Specify a file path.", path);
       Err(PlatformError::InputsError)
     } else {
-      find_available_path(&add_backup_extension(&path), 0)
+      find_available_path(&add_backup_extension(&path)?, 0)
     }
   }
 }
@@ -1888,12 +1891,12 @@ fn process_inputs(inputs: clap::ArgMatches) -> Result<(), PlatformError> {
     let home_dir = if let Some(dir) = dirs::home_dir() {
       dir
     } else {
-      Path::new(".").to_path_buf()
+      return Err(PlatformError::IoError("Failed to get the home directory.".to_owned()));
     };
     let dir_str = if let Some(string) = home_dir.to_str() {
       string
     } else {
-      "."
+      return Err(PlatformError::IoError("Failed to convert the path to string.".to_owned()));
     };
     format!("{}/.findora", dir_str)
   };
@@ -1987,7 +1990,7 @@ fn process_inputs(inputs: clap::ArgMatches) -> Result<(), PlatformError> {
 // Rename the existing path if necessary
 fn create_directory_and_rename_path(path_str: &str, overwrite: bool) -> Result<(), PlatformError> {
   let path = Path::new(&path_str);
-  create_directory_if_missing(&path_str);
+  create_directory_if_missing(&path_str)?;
   if path.exists() && !overwrite {
     rename_existing_path(&path)?;
   }
