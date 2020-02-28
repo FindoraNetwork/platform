@@ -35,22 +35,30 @@ actual subcommands.
 * Examples below are assuming the current directory is `platform/target/debug`. If not, change `./txn_builder_cli` to the path to `./txn_builder_cli`.
 
 ## Create a user
-In the initial data, there are three users (issuer Izzie, lender Lenny and borrower Ben). More users can be created.
+In the initial data, there are four users (one issuer Izzie, two lenders Lenny and Luna, and one borrower Ben). More users can be created.
 
 ### Create an issuer
 ```
-./txn_builder_cli create user --type issuer --name IssuerName
+./txn_builder_cli create user issuer --name IssuerName
 ```
 
 ### Create a lender
 ```
-./txn_builder_cli create user --type issuer --name LenderName
+./txn_builder_cli create user lender --name LenderName --min_credit_score 580
 ```
 
 ### Create a borrower
 ```
-./txn_builder_cli create user --type borrower --name BorrowerName
+./txn_builder_cli create user borrower --name BorrowerName
 ```
+
+## Create or overwrite a credential record
+Currently supported attributes are min_credit_score, min_income and citizenshiip.
+For example, to create a min_credit_score credential:
+```
+./txn_builder_cli create credential --borrower 0 --attribute min_credit_score --amount 650
+```
+If the credential already exists, the original record will be overwritten.
 
 ## Create a loan
 In the initial data, there is one loan. More loans can be created:
@@ -141,6 +149,7 @@ After users and a loan are created:
 ./txn_builder_cli --txn txn_loan activate_loan --issuer 0 --loan 0
 ```
 By default, `https://testnet.findora.org` is used. To switch to `http://localhost`, add `--http --localhost`.
+Once the loan is activated or rejected, attempting to activate it again will fail.
 
 ### Pay off the loan
 ```

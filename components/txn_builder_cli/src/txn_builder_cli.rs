@@ -19,6 +19,10 @@ use std::process::Command;
 use std::thread;
 use submission_server::{TxnHandle, TxnStatus};
 use txn_builder::{BuildsTransactions, TransactionBuilder, TransferOperationBuilder};
+use zei::api::anon_creds::{
+  ac_keygen_issuer, ac_keygen_user, ac_reveal, ac_sign, ac_verify, ACIssuerPublicKey, ACRevealSig,
+  Credential as ZeiCredential,
+};
 use zei::serialization::ZeiFromToBytes;
 use zei::setup::PublicParams;
 use zei::xfr::asset_record::{build_blind_asset_record, open_asset_record, AssetRecordType};
@@ -27,33 +31,55 @@ use zei::xfr::structs::{AssetRecord, BlindAssetRecord, OpenAssetRecord};
 extern crate exitcode;
 
 // TODO (Keyao): Check each unwrap() call and make sure we get a meaningful error message
+// TODO (Keyao): Add "required(true)" flag to the required command args
 
 const INIT_DATA: &str = r#"
 {
   "issuers": [
-      {
-          "id": 0,
-          "name": "Izzie",
-          "key_pair": "76b8e0ada0f13d90405d6ae55386bd28bdd219b8a08ded1aa836efcc8b770dc720fdbac9b10b7587bba7b5bc163bce69e796d71e4ed44c10fcb4488689f7a144"
-      }
+    {
+      "id": 0,
+      "name": "Izzie",
+      "key_pair": "76b8e0ada0f13d90405d6ae55386bd28bdd219b8a08ded1aa836efcc8b770dc720fdbac9b10b7587bba7b5bc163bce69e796d71e4ed44c10fcb4488689f7a144"
+    }
   ],
   "lenders": [
-      {
-          "id": 0,
-          "name": "Lenny",
-          "key_pair": "023f37203a2476c42566a61cc55c3ca875dbb4cc41c0deb789f8e7bf881836384d4b18062f8502598de045ca7b69f067f59f93b16e3af8733a988adc2341f5c8"
-      }
+    {
+      "id": 0,
+      "name": "Lenny",
+      "key_pair": "023f37203a2476c42566a61cc55c3ca875dbb4cc41c0deb789f8e7bf881836384d4b18062f8502598de045ca7b69f067f59f93b16e3af8733a988adc2341f5c8",
+      "min_credit_score": 500
+    },
+    {
+      "id": 1,
+      "name": "Luna",
+      "key_pair": "023f37203a2476c42566a61cc55c3ca875dbb4cc41c0deb789f8e7bf881836384d4b18062f8502598de045ca7b69f067f59f93b16e3af8733a988adc2341f5c8",
+      "min_credit_score": 680
+    }
   ],
   "borrowers": [
-      {
-          "id": 0,
-          "name": "Ben",
-          "key_pair": "f6a12ca8ffc30a66ca140ccc7276336115819361186d3f535dd99f8eaaca8fce7d177f1e71b490ad0ce380f9578ab12bb0fc00a98de8f6a555c81d48c2039249",
-          "balance": 0,
-          "utxo": null
-      }
+    {
+      "id": 0,
+      "name": "Ben",
+      "key_pair": "f6a12ca8ffc30a66ca140ccc7276336115819361186d3f535dd99f8eaaca8fce7d177f1e71b490ad0ce380f9578ab12bb0fc00a98de8f6a555c81d48c2039249",
+      "credentials": [
+          0,
+          null,
+          null
+      ],
+      "balance": 0,
+      "utxo": null
+    }
   ],
   "loans": [],
+  "credentials": [
+    {
+      "id": 0,
+      "borrower": 0,
+      "attribute": "MinCreditScore",
+      "value": 650,
+      "proof": null
+    }
+  ],
   "fiat_code": null,
   "sequence_number": 1
 }"#;
@@ -61,9 +87,37 @@ const DATA_FILE: &str = "data.json";
 const QUERY_PORT: &str = "8668";
 const SUBMIT_PORT: &str = "8669";
 const LEDGER_STANDALONE: &str = "../../target/debug/ledger_standalone";
-// TODO (Keyao): After the credentialing feature is added, change the hard-coded interest rate
-const INTEREST_RATE_NUMERATOR: u64 = 1;
-const INTEREST_RATE_DENOMINATOR: u64 = 100;
+
+//
+// Credentials
+//
+// TODO (Keyao): Support more attributes
+#[derive(Clone, Deserialize, Eq, PartialEq, Serialize)]
+// Credential attributes and their corresponding indeces in the borrower's data
+enum CredentialIndex {
+  MinCreditScore = 0,
+  MinIncome = 1,
+  Citizenship = 2,
+}
+
+#[derive(Clone, Deserialize, Serialize)]
+struct Credential {
+  id: u64,
+  borrower: u64,
+  attribute: CredentialIndex,
+  value: u64,
+  proof: Option<String>,
+}
+
+impl Credential {
+  fn new(id: u64, borrower: u64, attribute: CredentialIndex, value: u64) -> Self {
+    Credential { id,
+                 borrower,
+                 attribute,
+                 value,
+                 proof: None }
+  }
+}
 
 //
 // Users
@@ -90,15 +144,17 @@ struct Lender {
   id: u64,
   name: String,
   key_pair: String,
+  min_credit_score: u64,
 }
 
 impl Lender {
-  fn new(id: usize, name: String) -> Self {
+  fn new(id: usize, name: String, min_credit_score: u64) -> Self {
     let key_pair = XfrKeyPair::generate(&mut ChaChaRng::from_seed([1u8; 32]));
     let key_pair_str = hex::encode(key_pair.zei_to_bytes());
     Lender { id: id as u64,
              name,
-             key_pair: key_pair_str }
+             key_pair: key_pair_str,
+             min_credit_score }
   }
 }
 
@@ -107,17 +163,22 @@ struct Borrower {
   id: u64,
   name: String,
   key_pair: String,
+  credentials: [Option<u64>; 3], // Credential ids, ordered by CredentialIndex
   balance: u64,
   utxo: Option<TxoSID>, // Fiat utxo sid
 }
 
 impl Borrower {
   fn new(id: usize, name: String) -> Self {
+    // Get the encoded key pair
     let key_pair = XfrKeyPair::generate(&mut ChaChaRng::from_seed([2u8; 32]));
     let key_pair_str = hex::encode(key_pair.zei_to_bytes());
+
+    // Construct the Borrower
     Borrower { id: id as u64,
                name,
                key_pair: key_pair_str,
+               credentials: [None; 3],
                balance: 0,
                utxo: None }
   }
@@ -128,26 +189,36 @@ impl Borrower {
 //
 #[derive(Clone, Deserialize, Serialize)]
 struct Loan {
-  id: u64,              // Loan id
-  lender: u64,          // Lender id
-  borrower: u64,        // Borrower id
-  active: bool,         // Whether the loan has been activated
-  amount: u64,          // Amount in total
-  balance: u64,         // Loan balance
-  duration: u64,        // Duration of the loan
-  payments: u64,        // Number of payments that have been made
-  code: Option<String>, // Debt token code
-  utxo: Option<TxoSID>, // Debt utxo sid
+  id: u64,                 // Loan id
+  lender: u64,             // Lender id
+  borrower: u64,           // Borrower id
+  active: bool,            // Whether the loan has been activated
+  rejected: bool,          // Whether the loan has been rejected
+  amount: u64,             // Amount in total
+  balance: u64,            // Loan balance
+  interest_per_mille: u64, // Interest per 1000. E.g. 120 means the interest rate is 0.12
+  duration: u64,           // Duration of the loan
+  payments: u64,           // Number of payments that have been made
+  code: Option<String>,    // Debt token code
+  utxo: Option<TxoSID>,    // Debt utxo sid
 }
 
 impl Loan {
-  fn new(id: usize, lender: u64, borrower: u64, amount: u64, duration: u64) -> Self {
+  fn new(id: usize,
+         lender: u64,
+         borrower: u64,
+         amount: u64,
+         interest_per_mille: u64,
+         duration: u64)
+         -> Self {
     Loan { id: id as u64,
            lender,
            borrower,
            active: false,
+           rejected: false,
            amount,
            balance: amount,
+           interest_per_mille,
            duration,
            payments: 0,
            code: None,
@@ -168,6 +239,9 @@ struct Data {
   // Loans
   loans: Vec<Loan>,
 
+  // Credentials
+  credentials: Vec<Credential>,
+
   // Fiat token coce
   fiat_code: Option<String>,
 
@@ -180,11 +254,12 @@ impl Data {
               lender: u64,
               borrower: u64,
               amount: u64,
+              interest_per_mille: u64,
               duration: u64)
               -> Result<(), PlatformError> {
     let id = self.loans.len();
     self.loans
-        .push(Loan::new(id, lender, borrower, amount, duration));
+        .push(Loan::new(id, lender, borrower, amount, interest_per_mille, duration));
     store_data_to_file(self.clone())
   }
 
@@ -201,9 +276,9 @@ impl Data {
                                    })))
   }
 
-  fn add_lender(&mut self, name: String) -> Result<(), PlatformError> {
+  fn add_lender(&mut self, name: String, min_credit_score: u64) -> Result<(), PlatformError> {
     let id = self.lenders.len();
-    self.lenders.push(Lender::new(id, name));
+    self.lenders.push(Lender::new(id, name, min_credit_score));
     store_data_to_file(self.clone())
   }
 
@@ -225,6 +300,32 @@ impl Data {
     Ok(XfrKeyPair::zei_from_bytes(&hex::decode(key_pair_str).unwrap_or_else(|_| {
                                      Err(PlatformError::DeserializationError).unwrap()
                                    })))
+  }
+
+  fn add_or_update_credential(&mut self,
+                              borrower_id: u64,
+                              attribute: CredentialIndex,
+                              value: u64)
+                              -> Result<(), PlatformError> {
+    // If there's an existing record, update the value and remove the proof
+    // Otherwise, add the record directly
+    if let Some(credential_id) =
+      self.borrowers[borrower_id as usize].credentials[attribute.clone() as usize]
+    {
+      println!("Updating the credential record.");
+      self.credentials[credential_id as usize].value = value;
+      self.credentials[credential_id as usize].proof = None;
+    } else {
+      println!("Adding the credential record.");
+      let credential_id = self.credentials.len();
+      self.credentials
+          .push(Credential::new(credential_id as u64, borrower_id, attribute.clone(), value));
+      self.borrowers[borrower_id as usize].credentials[attribute as usize] =
+        Some(credential_id as u64);
+    }
+
+    // Update the data
+    store_data_to_file(self.clone())
   }
 }
 
@@ -594,9 +695,10 @@ fn rename_existing_path(path: &Path) -> Result<(), PlatformError> {
 }
 
 fn get_amount(amount_arg: &str) -> Result<u64, PlatformError> {
-  if let Ok(amount) = amount_arg.trim().parse::<u64>() {
+  if let Ok(amount) = amount_arg.parse::<u64>() {
     Ok(amount)
   } else {
+    println!("Improperly formatted number.");
     Err(PlatformError::InputsError)
   }
 }
@@ -880,10 +982,51 @@ fn get_open_asset_record(protocol: &str,
                                                                })
 }
 
+enum RelationType {
+  // // Requirement: attribute value == requirement
+  // Equal,
+
+  // Requirement: attribute value >= requirement
+  AtLeast,
+}
+
+fn prove(reveal_sig: &ACRevealSig,
+         ac_issuer_pk: &ACIssuerPublicKey,
+         value: u64,
+         requirement: u64,
+         relation_type: RelationType)
+         -> Result<(), PlatformError> {
+  // 1. Prove that the attribut meets the requirement
+  match relation_type {
+    // //    Case 1. "Equal" requirement
+    // //    E.g. prove that the country code is the same as the requirement
+    // RelationType::Equal => {
+    //   if value != requirement {
+    //     println!("Value should be: {}.", requirement);
+    //     return Err(PlatformError::InputsError);
+    //   }
+    // }
+    //    Case 2. "AtLeast" requirement
+    //    E.g. prove that the credit score is at least the required value
+    RelationType::AtLeast => {
+      if value < requirement {
+        println!("Value should be at least: {}.", requirement);
+        return Err(PlatformError::InputsError);
+      }
+    }
+  }
+
+  // 2. Prove that the attribute is true
+  //    E.g. verify the lower bound of the credit score
+  let attrs = [Some(value.to_le_bytes())];
+  ac_verify(ac_issuer_pk,
+            &attrs,
+            &reveal_sig.sig_commitment,
+            &reveal_sig.pok).or_else(|error| Err(PlatformError::ZeiError(error)))
+}
+
 // Issues and transfers fiat and debt token to the lender and borrower, respectively
 // Then activate the loan
-//
-// TODO (Keyao): Credential check
 fn activate_loan(loan_id: u64,
                  issuer_id: u64,
                  transaction_file_name: &str,
@@ -898,12 +1041,86 @@ fn activate_loan(loan_id: u64,
     println!("Loan {} has already been activated.", loan_id);
     return Err(PlatformError::InputsError);
   }
+  if loan.rejected {
+    println!("Loan {} has already been rejected.", loan_id);
+    return Err(PlatformError::InputsError);
+  }
 
+  let lender_id = loan.lender;
+  let lender = &data.lenders.clone()[lender_id as usize];
   let lender_key_pair = &data.get_lender_key_pair(loan.lender)?;
   let borrower_id = loan.borrower;
   let borrower = &data.borrowers.clone()[borrower_id as usize];
   let borrower_key_pair = &data.get_borrower_key_pair(borrower_id)?;
   let amount = loan.amount;
+
+  // Credential check
+  // TODO (Keyao): Add requirements about other credential attributes, and attest them too
+  let credential_id =
+    if let Some(id) = borrower.credentials[CredentialIndex::MinCreditScore as usize] {
+      id as usize
+    } else {
+      println!("Minimum credit score is required. Use create credential.");
+      return Err(PlatformError::InputsError);
+    };
+  let credential = &data.credentials.clone()[credential_id as usize];
+  let requirement = lender.min_credit_score;
+
+  // If the proof exists and the proved value is valid, attest with the proof
+  // Otherwise, prove and attest the value
+  if let Some(proof) = &credential.proof {
+    println!("Attesting with the existing proof.");
+    let mut prng: ChaChaRng = ChaChaRng::from_seed([0u8; 32]);
+    let issuer_pk = ac_keygen_issuer::<_>(&mut prng, 1).0;
+    if let Err(error) =
+      prove(&serde_json::from_str::<ACRevealSig>(proof).or_else(|_| {
+                                                         Err(PlatformError::DeserializationError)
+                                                       })?,
+            &issuer_pk,
+            credential.value,
+            requirement,
+            RelationType::AtLeast)
+    {
+      // Update loans data
+      data.loans[loan_id as usize].rejected = true;
+      store_data_to_file(data)?;
+      return Err(error);
+    }
+  } else {
+    println!("Proving before attesting.");
+    let mut prng: ChaChaRng = ChaChaRng::from_seed([0u8; 32]);
+    let (issuer_pk, issuer_sk) = ac_keygen_issuer::<_>(&mut prng, 1);
+    let (user_pk, user_sk) = ac_keygen_user::<_>(&mut prng, &issuer_pk.clone());
+
+    let value = credential.value;
+    let attributes = [value.to_le_bytes()].to_vec();
+    let signature = ac_sign(&mut prng, &issuer_sk, &user_pk, &attributes);
+    let zei_credential = ZeiCredential { signature,
+                                         attributes,
+                                         issuer_pk: issuer_pk.clone() };
+
+    let reveal_sig =
+      ac_reveal(&mut prng, &user_sk, &zei_credential, &[true]).or_else(|error| {
+                                                                Err(PlatformError::ZeiError(error))
+                                                              })?;
+
+    prove(&reveal_sig,
+          &issuer_pk,
+          value,
+          requirement,
+          RelationType::AtLeast)?;
+
+    // Update credentials data
+    data.credentials[credential_id as usize].proof =
+      Some(serde_json::to_string(&reveal_sig).or_else(|_| {
+                                               Err(PlatformError::DeserializationError)
+                                             })
+                                             .unwrap());
+    store_data_to_file(data)?;
+    data = load_data()?;
+  }
+
+  // Define fiat asset
   let fiat_code = if let Some(code) = data.fiat_code {
     println!("Fiat code: {}", code);
     AssetTypeCode::new_from_base64(&code)?
@@ -946,8 +1163,7 @@ fn activate_loan(loan_id: u64,
   let debt_code = AssetTypeCode::gen_random();
   println!("Generated debt code: {}",
            serde_json::to_string(&debt_code.val).unwrap());
-  let memo = DebtMemo { interest_rate: Fraction::new(INTEREST_RATE_NUMERATOR,
-                                                     INTEREST_RATE_DENOMINATOR),
+  let memo = DebtMemo { interest_rate: Fraction::new(loan.interest_per_mille, 1000),
                         fiat_code,
                         loan_amount: amount };
   let memo_str = serde_json::to_string(&memo).or_else(|_| Err(PlatformError::SerializationError))
@@ -1076,9 +1292,8 @@ fn pay_loan(loan_id: u64,
   }
 
   // Check if the amount meets the minimum requirement, i.e., the fee
-  let fee = ledger::policies::calculate_fee(loan.balance,
-                                            Fraction::new(INTEREST_RATE_NUMERATOR,
-                                                          INTEREST_RATE_DENOMINATOR));
+  let fee =
+    ledger::policies::calculate_fee(loan.balance, Fraction::new(loan.interest_per_mille, 1000));
   if amount < fee {
     println!("Payment amount should be at least: {}", fee);
     return Err(PlatformError::InputsError);
@@ -1243,17 +1458,47 @@ fn main() {
       .takes_value(true))
     .subcommand(SubCommand::with_name("create")
       .subcommand(SubCommand::with_name("user")
-        .arg(Arg::with_name("type")
-          .short("t")
-          .long("type")
+        .subcommand(SubCommand::with_name("issuer")
+          .arg(Arg::with_name("name")
+            .short("n")
+            .long("name")
+            .takes_value(true)
+            .help("Required: name.")))
+        .subcommand(SubCommand::with_name("lender")
+          .arg(Arg::with_name("name")
+            .short("n")
+            .long("name")
+            .takes_value(true)
+            .help("Required: name."))
+          .arg(Arg::with_name("min_credit_score")
+            .short("c")
+            .long("min_credit_score")
+            .takes_value(true)
+            .help("Required: minimum credit score requirement.")))
+        .subcommand(SubCommand::with_name("borrower")
+          .arg(Arg::with_name("name")
+            .short("n")
+            .long("name")
+            .takes_value(true)
+            .help("Required: name."))))
+      .subcommand(SubCommand::with_name("credential")
+        .arg(Arg::with_name("borrower")
+          .short("b")
+          .long("borrower")
           .takes_value(true)
-          .possible_values(&["issuer", "lender", "borrower"])
-          .help("Required: user type."))
-        .arg(Arg::with_name("name")
-          .short("n")
-          .long("name")
+          .help("Required: borrower id."))
+        .arg(Arg::with_name("attribute")
+          .short("a")
+          .long("attribute")
           .takes_value(true)
-          .help("Required: user's name.")))
+          .possible_values(&["min_credit_score", "min_income", "citizenship"])
+          .help("Required: credential attribute."))
+        .arg(Arg::with_name("value")
+          .short("v")
+          .long("value")
+          .takes_value(true)
+          .help("Required: value of the credential record."))
+        .help("Create or overwrite a credential record."))
       .subcommand(SubCommand::with_name("loan")
         .arg(Arg::with_name("lender")
           .short("l")
@@ -1270,6 +1515,11 @@ fn main() {
           .long("amount")
           .takes_value(true)
           .help("Required: amount of the loan."))
+        .arg(Arg::with_name("interest_per_mille")
+          .short("i")
+          .long("interest_per_mille")
+          .takes_value(true)
+          .help("Required: interest per mille. The interest rate will be interest_per_mille/1000."))
         .arg(Arg::with_name("duration")
           .short("d")
           .long("duration")
@@ -1684,71 +1934,109 @@ fn process_create_cmd(create_matches: &clap::ArgMatches,
                       -> Result<(), PlatformError> {
   match create_matches.subcommand() {
     ("user", Some(user_matches)) => {
-      let name = if let Some(name_arg) = user_matches.value_of("name") {
-        name_arg
+      let mut data = load_data()?;
+      match user_matches.subcommand() {
+        ("issuer", Some(issuer_matches)) => {
+          let name = if let Some(name_arg) = issuer_matches.value_of("name") {
+            name_arg.to_owned()
+          } else {
+            println!("Name is required to create the issuer. Use --name.");
+            return Err(PlatformError::InputsError);
+          };
+          data.add_issuer(name)
+        }
+        ("lender", Some(lender_matches)) => {
+          let name = if let Some(name_arg) = lender_matches.value_of("name") {
+            name_arg.to_owned()
+          } else {
+            println!("Name is required to create the lender. Use --name.");
+            return Err(PlatformError::InputsError);
+          };
+          let min_credit_score = if let Some(min_credit_score_arg) =
+            lender_matches.value_of("min_credit_score")
+          {
+            get_amount(min_credit_score_arg)?
+          } else {
+            println!("Minimum credit score requirement is required to create the lender. Use --min_credit_score.");
+            return Err(PlatformError::InputsError);
+          };
+          data.add_lender(name, min_credit_score)
+        }
+        ("borrower", Some(borrower_matches)) => {
+          let name = if let Some(name_arg) = borrower_matches.value_of("name") {
+            name_arg.to_owned()
+          } else {
+            println!("Name is required to create the borrower. Use --name.");
+            return Err(PlatformError::InputsError);
+          };
+          data.add_borrower(name)
+        }
+        _ => {
+          println!("Subcommand missing or not recognized. Try create user --help");
+          Err(PlatformError::InputsError)
+        }
+      }
+    }
+    ("credential", Some(credential_matches)) => {
+      let borrower = if let Some(borrower_arg) = credential_matches.value_of("borrower") {
+        get_amount(borrower_arg)?
       } else {
-        println!("Name is required to create the user. Use --name.");
+        println!("Borrower id is required to create the credential. Use --borrower.");
+        return Err(PlatformError::InputsError);
+      };
+      let attribute = if let Some(attribute_arg) = credential_matches.value_of("attribute") {
+        match attribute_arg {
+          "min_credit_score" => CredentialIndex::MinCreditScore,
+          "min_income" => CredentialIndex::MinIncome,
+          _ => CredentialIndex::Citizenship,
+        }
+      } else {
+        println!("Credential attribute is required to create the credential. Use --attribute.");
+        return Err(PlatformError::InputsError);
+      };
+      let value = if let Some(value_arg) = credential_matches.value_of("value") {
+        get_amount(value_arg)?
+      } else {
+        println!("Credential value is required to create the credential. Use --value.");
         return Err(PlatformError::InputsError);
       };
       let mut data = load_data()?;
-      if let Some(type_arg) = user_matches.value_of("type") {
-        match type_arg {
-          "issuer" => data.add_issuer(name.to_owned()),
-          "lender" => data.add_lender(name.to_owned()),
-          _ => data.add_borrower(name.to_owned()),
-        }
-      } else {
-        println!("User type is required to create the user. Use --type.");
-        Err(PlatformError::InputsError)
-      }
+      data.add_or_update_credential(borrower, attribute, value)
     }
     ("loan", Some(loan_matches)) => {
       let lender = if let Some(lender_arg) = loan_matches.value_of("lender") {
-        if let Ok(id) = lender_arg.parse::<u64>() {
-          id
-        } else {
-          println!("Improperly formatted lender id.");
-          return Err(PlatformError::InputsError);
-        }
+        get_amount(lender_arg)?
       } else {
         println!("Lender id is required to create the loan. Use --lender.");
         return Err(PlatformError::InputsError);
       };
       let borrower = if let Some(borrower_arg) = loan_matches.value_of("borrower") {
-        if let Ok(id) = borrower_arg.parse::<u64>() {
-          id
-        } else {
-          println!("Improperly formatted borrower id.");
-          return Err(PlatformError::InputsError);
-        }
+        get_amount(borrower_arg)?
       } else {
         println!("Borrower id is required to create the loan. Use --borrower.");
         return Err(PlatformError::InputsError);
       };
       let amount = if let Some(amount_arg) = loan_matches.value_of("amount") {
-        if let Ok(amount) = amount_arg.parse::<u64>() {
-          amount
-        } else {
-          println!("Improperly formatted amount.");
-          return Err(PlatformError::InputsError);
-        }
+        get_amount(amount_arg)?
       } else {
         println!("Amount is required to create the loan. Use --amount.");
         return Err(PlatformError::InputsError);
       };
-      let duration = if let Some(duration_arg) = loan_matches.value_of("duration") {
-        if let Ok(duration) = duration_arg.parse::<u64>() {
-          duration
+      let interest_per_mille =
+        if let Some(interest_per_mille_arg) = loan_matches.value_of("interest_per_mille") {
+          get_amount(interest_per_mille_arg)?
         } else {
-          println!("Improperly formatted duration.");
+          println!("Interest per mille is required to create the loan. Use --interest_per_mille.");
           return Err(PlatformError::InputsError);
-        }
+        };
+      let duration = if let Some(duration_arg) = loan_matches.value_of("duration") {
+        get_amount(duration_arg)?
       } else {
         println!("Duration is required to create the loan. Use --amount.");
         return Err(PlatformError::InputsError);
       };
       let mut data = load_data()?;
-      data.add_loan(lender, borrower, amount, duration)
+      data.add_loan(lender, borrower, amount, interest_per_mille, duration)
     }
     ("txn_builder", Some(txn_builder_matches)) => {
       let name = txn_builder_matches.value_of("name");
@@ -2587,6 +2875,34 @@ mod tests {
   }
 
   #[test]
+  fn test_prove() {
+    let mut prng: ChaChaRng = ChaChaRng::from_seed([0u8; 32]);
+    let (issuer_pk, issuer_sk) = ac_keygen_issuer::<_>(&mut prng, 1);
+    let (user_pk, user_sk) = ac_keygen_user::<_>(&mut prng, &issuer_pk.clone());
+
+    let value: u64 = 200;
+    let attributes = [value.to_le_bytes()].to_vec();
+    let signature = ac_sign(&mut prng, &issuer_sk, &user_pk, &attributes);
+    let zei_credential = ZeiCredential { signature,
+                                         attributes,
+                                         issuer_pk: issuer_pk.clone() };
+
+    let reveal_sig =
+      ac_reveal(&mut prng, &user_sk, &zei_credential, &[true]).or_else(|error| {
+                                                                Err(PlatformError::ZeiError(error))
+                                                              })
+                                                              .unwrap();
+
+    assert!(prove(&reveal_sig,
+                  &issuer_pk.clone(),
+                  value,
+                  150,
+                  RelationType::AtLeast).is_ok());
+    assert_eq!(prove(&reveal_sig, &issuer_pk, value, 300, RelationType::AtLeast),
+               Err(PlatformError::InputsError));
+  }
+
+  #[test]
   #[ignore]
   // Create, activate and pay a loan
   fn test_create_activate_and_pay_loan() {
@@ -2598,11 +2914,11 @@ mod tests {
 
     // Create loan
     let amount = 1200;
-    data.add_loan(0, 0, amount, 8).unwrap();
+    data.add_loan(0, 0, amount, 100, 8).unwrap();
     assert_eq!(data.loans.len(), loan_id + 1);
 
     // Create txn builder
-    let txn_builder_path = "tb_activate_loan";
+    let txn_builder_path = "tb_loan";
     store_txn_builder_to_file(&txn_builder_path, &TransactionBuilder::default()).unwrap();
 
     // Activate loan
