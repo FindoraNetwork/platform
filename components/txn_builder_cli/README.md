@@ -35,14 +35,14 @@ actual subcommands.
 * Examples below are assuming the current directory is `platform/target/debug`. If not, change `./txn_builder_cli` to the path to `./txn_builder_cli`.
 
 ## View records
-## View loans
+### View loans
 ```
 ./txn_builder_cli view loan --by lender --id 0
 ```
-To look up loans by the id of loan or borrower instead, use `--by loan` or `--by borrower`.
+To look up loans by loan id or borrower id instead, use `--by loan` or `--by borrower`.
 By default, all records with the specified id will be displayed. To filter the records, add `--filter` with `active`, `inactive` or `unrejected`, for loans that have been activate, haven't been activated, or have been rejected, respectively,
 
-## View credentials
+### View credentials
 ```
 ./txn_builder_cli view credential --by borrower --id 0
 ```
