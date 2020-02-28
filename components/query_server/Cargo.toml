@@ -1,0 +1,23 @@
+[package]
+name = "query_server"
+version = "0.1.0"
+authors = ["Nathan Yospe <nathan@eian.io>"]
+edition = "2018"
+
+[lib]
+path = "src/query_server.rs"
+
+[dependencies]
+#actix-web = "1.0"
+#hex = "0.3.2"
+#cryptohash = { path = "../../libs/cryptohash" }
+ledger = { path = "../../ledger" }
+log = "0.4.8"
+rand_chacha = "0.2.0"
+rand_core = { version = "0.5", default-features = false, features = ["alloc"] }
+reqwest = "0.9.24"
+serde = "1.0"
+serde_derive = "1.0"
+serde_json = "1.0"
+#txn_builder = {path = "../txn_builder"}
+#zei = { git = "ssh://git@github.com/findoraorg/zei" }
