@@ -34,6 +34,20 @@ actual subcommands.
 * By default, all the generated files will be stored in `~./findora`, unless specified otherwise. For example, if the current directory is `platform/target/debug`, running `./txn_builder_cli keygen` will put the generated key pair in ~./findora, but `./txn_builder_cli keygen --name keys/key_pair` will store the key pair to `platform/target/debug/keys/key_pair`.
 * Examples below are assuming the current directory is `platform/target/debug`. If not, change `./txn_builder_cli` to the path to `./txn_builder_cli`.
 
+## View records
+## View loans
+```
+./txn_builder_cli view loan --by lender --id 0
+```
+To look up loans by the id of loan or borrower instead, use `--by loan` or `--by borrower`.
+By default, all records with the specified id will be displayed. To filter the records, add `--filter` with `active`, `inactive` or `unrejected`, for loans that have been activate, haven't been activated, or have been rejected, respectively,
+
+## View credentials
+```
+./txn_builder_cli view credential --by borrower --id 0
+```
+To look up credentials by the credential id instead, use `--by loan`.
+
 ## Create a user
 In the initial data, there are four users (one issuer Izzie, two lenders Lenny and Luna, and one borrower Ben). More users can be created.
 

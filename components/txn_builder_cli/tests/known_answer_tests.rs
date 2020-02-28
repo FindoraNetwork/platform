@@ -16,6 +16,34 @@ const COMMAND: &str = "../../target/debug/txn_builder_cli";
 const DATA_FILE: &str = "data.json";
 
 //
+// Helper functions: view records
+//
+#[cfg(test)]
+fn view_loan_no_filter(by: &str, id: &str) -> io::Result<Output> {
+  Command::new(COMMAND).args(&["view", "loan"])
+                       .args(&["--by", by])
+                       .args(&["--id", id])
+                       .output()
+}
+
+#[cfg(test)]
+fn view_loan_with_filter(by: &str, id: &str, filter: &str) -> io::Result<Output> {
+  Command::new(COMMAND).args(&["view", "loan"])
+                       .args(&["--by", by])
+                       .args(&["--id", id])
+                       .args(&["--filter", filter])
+                       .output()
+}
+
+#[cfg(test)]
+fn view_credential(by: &str, id: &str) -> io::Result<Output> {
+  Command::new(COMMAND).args(&["view", "credential"])
+                       .args(&["--by", by])
+                       .args(&["--id", id])
+                       .output()
+}
+
+//
 // Helper functions: create and store without path
 //
 #[cfg(test)]
@@ -422,6 +450,104 @@ fn test_no_path() {
 }
 
 //
+// View records
+//
+#[test]
+fn test_view_loans() {
+  // Add credentials
+  create_or_update_credential("0", "min_income", "1500").expect("Failed to create a credential");
+
+  // Create loans
+  create_loan("0", "0", "100", "100", "3").expect("Failed to create the loan");
+  create_loan("1", "0", "300", "200", "9").expect("Failed to create the loan");
+  create_loan("1", "0", "500", "300", "15").expect("Failed to create the loan");
+
+  // Activate some of the loans
+  let txn_builder_path = "txn_builder_view_loans";
+  create_txn_builder_with_path(txn_builder_path).expect("Failed to create transaction builder");
+  activate_loan(txn_builder_path, "0", "0").expect("Failed to activate the loan");
+  activate_loan(txn_builder_path, "1", "0").expect("Failed to activate the loan");
+
+  // View loans
+  // 1. View a loan by loan id
+  let output = view_loan_no_filter("loan", "0").expect("Failed to view the loan");
+  io::stdout().write_all(&output.stdout).unwrap();
+  io::stdout().write_all(&output.stderr).unwrap();
+
+  assert!(output.status.success());
+  assert!(from_utf8(&output.stdout).unwrap()
+                                   .contains(&"Displaying 1 loan(s):".to_owned()));
+
+  // 2. View loans by lender id
+  let output = view_loan_no_filter("lender", "1").expect("Failed to view the loan");
+  io::stdout().write_all(&output.stdout).unwrap();
+  io::stdout().write_all(&output.stderr).unwrap();
+
+  assert!(output.status.success());
+  assert!(from_utf8(&output.stdout).unwrap()
+                                   .contains(&"Displaying 2 loan(s):".to_owned()));
+
+  // 3. View loans by borrower id
+  let output = view_loan_no_filter("borrower", "0").expect("Failed to view the loan");
+  io::stdout().write_all(&output.stdout).unwrap();
+  io::stdout().write_all(&output.stderr).unwrap();
+
+  assert!(output.status.success());
+  assert!(from_utf8(&output.stdout).unwrap()
+                                   .contains(&"Displaying 3 loan(s):".to_owned()));
+
+  // 4. View active loans by borrower id
+  let output = view_loan_with_filter("borrower", "0", "active").expect("Failed to view the loan");
+  io::stdout().write_all(&output.stdout).unwrap();
+  io::stdout().write_all(&output.stderr).unwrap();
+
+  assert!(output.status.success());
+  assert!(from_utf8(&output.stdout).unwrap()
+                                   .contains(&"Displaying 1 loan(s):".to_owned()));
+
+  // 5. View inactive loans by borrower id
+  let output = view_loan_with_filter("borrower", "0", "inactive").expect("Failed to view the loan");
+  io::stdout().write_all(&output.stdout).unwrap();
+  io::stdout().write_all(&output.stderr).unwrap();
+
+  assert!(output.status.success());
+  assert!(from_utf8(&output.stdout).unwrap()
+                                   .contains(&"Displaying 2 loan(s):".to_owned()));
+
+  // 6. View unrejected loans by borrower id
+  let output =
+    view_loan_with_filter("borrower", "0", "unrejected").expect("Failed to view the loan");
+  io::stdout().write_all(&output.stdout).unwrap();
+  io::stdout().write_all(&output.stderr).unwrap();
+
+  assert!(output.status.success());
+  assert!(from_utf8(&output.stdout).unwrap()
+                                   .contains(&"Displaying 2 loan(s):".to_owned()));
+
+  // View credentials
+  // 1. View a credential by credential id
+  let output = view_credential("credential", "0").expect("Failed to view the loan");
+  io::stdout().write_all(&output.stdout).unwrap();
+  io::stdout().write_all(&output.stderr).unwrap();
+
+  assert!(output.status.success());
+  assert!(from_utf8(&output.stdout).unwrap()
+                                   .contains(&"Displaying 1 credential(s):".to_owned()));
+
+  // 2. View credentials by borrower id
+  let output = view_credential("borrower", "0").expect("Failed to view the loan");
+  io::stdout().write_all(&output.stdout).unwrap();
+  io::stdout().write_all(&output.stderr).unwrap();
+
+  assert!(output.status.success());
+  assert!(from_utf8(&output.stdout).unwrap()
+                                   .contains(&"Displaying 2 credential(s):".to_owned()));
+
+  let _ = fs::remove_file(DATA_FILE);
+  fs::remove_file(txn_builder_path).unwrap();
+}
+
+//
 // Subcommand or argument missing
 // Note: Not all cases are tested
 //
@@ -624,7 +750,7 @@ fn test_invalid_valid_overwrite_and_rename_path() {
 }
 
 #[test]
-fn test_create_with_name() {
+fn test_create_txn_builder_with_name() {
   // Create transaction builder
   let output =
     create_txn_builder_with_path("txn_builder").expect("Failed to create transaction builder");
@@ -687,6 +813,7 @@ fn test_store_with_path() {
 // Define, issue and transfer
 //
 #[test]
+#[ignore]
 fn test_define_issue_and_transfer_with_args() {
   // Create transaction builder and key pair
   let txn_builder_file = "tb";
