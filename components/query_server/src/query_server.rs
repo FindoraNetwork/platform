@@ -7,7 +7,7 @@ use ledger::store::*;
 use log::{error, info};
 use rand_core::{CryptoRng, RngCore};
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fmt;
 use std::marker::PhantomData;
 use std::sync::{Arc, RwLock};
@@ -17,7 +17,8 @@ pub struct QueryServer<RNG, LU>
         LU: LedgerUpdate<RNG> + ArchiveAccess
 {
   committed_state: Arc<RwLock<LU>>,
-  addresses_to_utxos: HashMap<XfrAddress, Vec<TxoSID>>,
+  addresses_to_utxos: HashMap<XfrAddress, HashSet<TxoSID>>,
+  utxos_to_map_index: HashMap<TxoSID, XfrAddress>,
   prng: RNG,
 }
 
@@ -30,10 +31,24 @@ impl<RNG, LU> QueryServer<RNG, LU>
              -> Result<QueryServer<RNG, LU>, PlatformError> {
     Ok(QueryServer { committed_state: ledger_state,
                      addresses_to_utxos: HashMap::new(),
+                     utxo_to_map_index: HashMap::new(),
                      prng })
   }
 
-  pub fn poll_new_blocks(&self) {
+  pub fn update_spent_utxos(&self, transfer: &TransferAsset) {
+    inputs = transfer.body.inputs;
+    for input in &inputs {
+      match input {
+        Relative(_) => panic!("wtf"),
+        Absolute(txo_sid) => {
+          let address = self.utxos_to_map_index.get(&txo_sid);
+          self.addresses_to_utxos
+        }
+      }
+    }
+  }
+
+  pub fn poll_new_blocks(&self) -> Result<(), PlatformError> {
     let ledger_url = std::env::var_os("LEDGER_URL").filter(|x| !x.is_empty())
                                                    .unwrap_or_else(|| "localhost:8668".into());
     let latest_block = {
@@ -45,14 +60,10 @@ impl<RNG, LU> QueryServer<RNG, LU>
                                                  "blocks_since",
                                                  &latest_block))
     {
-      Err(e) => {
-        error!("HTTP Request failed {}", e);
-      }
+      Err(e) => return Err(PlatformError::SubmissionServerError(Some("whoops".into()))),
 
       Ok(mut bs) => match bs.json::<Vec<(usize, Vec<FinalizedTransaction>)>>() {
-        Err(e) => {
-          error!("JSON deserialization failed {}", e);
-        }
+        Err(_) => return Err(PlatformError::DeserializationError),
         Ok(bs) => bs,
       },
     };
@@ -63,10 +74,14 @@ impl<RNG, LU> QueryServer<RNG, LU>
       let mut block_builder = ledger.start_block().unwrap();
       for txn in block {
         let txn = txn.txn;
-        let eff = TxnEffect::compute_effect(ledger.get_prng(), txn).unwrap();
+        let eff = TxnEffect::compute_effect(ledger.get_prng(), txn.clone()).unwrap();
         ledger.apply_transaction(&mut block_builder, eff).unwrap();
+        for op in &txn.operations {
+          self.update_utxos(&op);
+        }
       }
       ledger.finish_block(block_builder).unwrap();
     }
+    Ok(())
   }
 }
