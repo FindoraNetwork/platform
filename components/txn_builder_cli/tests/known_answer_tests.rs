@@ -19,27 +19,67 @@ const DATA_FILE: &str = "data.json";
 // Helper functions: view records
 //
 #[cfg(test)]
-fn view_loan_no_filter(by: &str, id: &str) -> io::Result<Output> {
-  Command::new(COMMAND).args(&["view", "loan"])
-                       .args(&["--by", by])
-                       .args(&["--id", id])
+fn view_loan_all(user_type: &str, user_id: &str) -> io::Result<Output> {
+  Command::new(COMMAND).args(&[user_type, "--id", user_id])
+                       .arg("view_loan")
                        .output()
 }
 
 #[cfg(test)]
-fn view_loan_with_filter(by: &str, id: &str, filter: &str) -> io::Result<Output> {
-  Command::new(COMMAND).args(&["view", "loan"])
-                       .args(&["--by", by])
-                       .args(&["--id", id])
+fn view_loan_with_loan_id(user_type: &str, user_id: &str, loan_id: &str) -> io::Result<Output> {
+  Command::new(COMMAND).args(&[user_type, "--id", user_id])
+                       .arg("view_loan")
+                       .args(&["--loan", loan_id])
+                       .output()
+}
+
+#[cfg(test)]
+fn view_loan_with_filter(user_type: &str, user_id: &str, filter: &str) -> io::Result<Output> {
+  Command::new(COMMAND).args(&[user_type, "--id", user_id])
+                       .arg("view_loan")
                        .args(&["--filter", filter])
                        .output()
 }
 
 #[cfg(test)]
-fn view_credential(by: &str, id: &str) -> io::Result<Output> {
-  Command::new(COMMAND).args(&["view", "credential"])
-                       .args(&["--by", by])
-                       .args(&["--id", id])
+fn view_credential_all(borrower_id: &str) -> io::Result<Output> {
+  Command::new(COMMAND).args(&["borrower", "--id", borrower_id])
+                       .arg("view_credential")
+                       .output()
+}
+
+#[cfg(test)]
+fn view_credential_with_credential_id(borrower_id: &str,
+                                      credential_id: &str)
+                                      -> io::Result<Output> {
+  Command::new(COMMAND).args(&["borrower", "--id", borrower_id])
+                       .arg("view_credential")
+                       .args(&["--credential", credential_id])
+                       .output()
+}
+
+//
+// Helper functions: sign up an account
+//
+#[cfg(test)]
+fn sign_up_issuer(name: &str) -> io::Result<Output> {
+  Command::new(COMMAND).args(&["issuer", "sign_up"])
+                       .args(&["--name", name])
+                       .output()
+}
+
+#[cfg(test)]
+fn sign_up_lender(name: &str, min_credit_score: &str) -> io::Result<Output> {
+  Command::new(COMMAND).args(&["lender", "sign_up"])
+                       .args(&["--name", name])
+                       .args(&["--min_credit_score", min_credit_score])
+                       .output()
+}
+
+#[cfg(test)]
+fn sign_up_borrower(name: &str) -> io::Result<Output> {
+  Command::new(COMMAND).args(&["borrower", "sign_up"])
+                       .args(&["--name", name])
                        .output()
 }
 
@@ -47,31 +87,9 @@ fn view_credential(by: &str, id: &str) -> io::Result<Output> {
 // Helper functions: create and store without path
 //
 #[cfg(test)]
-fn create_issuer(name: &str) -> io::Result<Output> {
-  Command::new(COMMAND).args(&["create", "user", "issuer"])
-                       .args(&["--name", name])
-                       .output()
-}
-
-#[cfg(test)]
-fn create_lender(name: &str, min_credit_score: &str) -> io::Result<Output> {
-  Command::new(COMMAND).args(&["create", "user", "lender"])
-                       .args(&["--name", name])
-                       .args(&["--min_credit_score", min_credit_score])
-                       .output()
-}
-
-#[cfg(test)]
-fn create_borrower(name: &str) -> io::Result<Output> {
-  Command::new(COMMAND).args(&["create", "user", "borrower"])
-                       .args(&["--name", name])
-                       .output()
-}
-
-#[cfg(test)]
-fn create_or_update_credential(borrower: &str, attribute: &str, value: &str) -> io::Result<Output> {
-  Command::new(COMMAND).args(&["create", "credential"])
-                       .args(&["--borrower", borrower])
+fn create_or_overwrite_credential(id: &str, attribute: &str, value: &str) -> io::Result<Output> {
+  Command::new(COMMAND).args(&["borrower", "--id", id])
+                       .arg("create_or_overwrite_credential")
                        .args(&["--attribute", attribute])
                        .args(&["--value", value])
                        .output()
@@ -84,9 +102,9 @@ fn create_loan(lender: &str,
                interest_per_mille: &str,
                duration: &str)
                -> io::Result<Output> {
-  Command::new(COMMAND).args(&["create", "loan"])
+  Command::new(COMMAND).args(&["borrower", "--id", borrower])
+                       .arg("create_loan")
                        .args(&["--lender", lender])
-                       .args(&["--borrower", borrower])
                        .args(&["--amount", amount])
                        .args(&["--interest_per_mille", interest_per_mille])
                        .args(&["--duration", duration])
@@ -95,8 +113,7 @@ fn create_loan(lender: &str,
 
 #[cfg(test)]
 fn create_txn_builder_no_path() -> io::Result<Output> {
-  Command::new(COMMAND).args(&["create", "txn_builder"])
-                       .output()
+  Command::new(COMMAND).arg("create_txn_builder").output()
 }
 
 #[cfg(test)]
@@ -163,14 +180,14 @@ fn remove_values_dir() {
 //
 #[cfg(test)]
 fn create_txn_builder_with_path(path: &str) -> io::Result<Output> {
-  Command::new(COMMAND).args(&["create", "txn_builder"])
+  Command::new(COMMAND).arg("create_txn_builder")
                        .args(&["--name", path])
                        .output()
 }
 
 #[cfg(test)]
 fn create_txn_builder_overwrite_path(path: &str) -> io::Result<Output> {
-  Command::new(COMMAND).args(&["create", "txn_builder"])
+  Command::new(COMMAND).arg("create_txn_builder")
                        .args(&["--name", path])
                        .arg("--force")
                        .output()
@@ -301,13 +318,13 @@ fn submit(txn_builder_path: &str) -> io::Result<Output> {
 #[cfg(test)]
 fn load_funds(txn_builder_path: &str,
               issuer_id: &str,
-              recipient_id: &str,
+              borrower_id: &str,
               amount: &str)
               -> io::Result<Output> {
   Command::new(COMMAND).args(&["--txn", txn_builder_path])
+                       .args(&["borrower", "--id", borrower_id])
                        .arg("load_funds")
                        .args(&["--issuer", issuer_id])
-                       .args(&["--recipient", recipient_id])
                        .args(&["--amount", amount])
                        .args(&["--http", "--localhost"])
                        .output()
@@ -315,8 +332,13 @@ fn load_funds(txn_builder_path: &str,
 
 // Helper functions: initiate and pay loan
 #[cfg(test)]
-fn activate_loan(txn_builder_path: &str, loan_id: &str, issuer_id: &str) -> io::Result<Output> {
+fn activate_loan(txn_builder_path: &str,
+                 lender_id: &str,
+                 loan_id: &str,
+                 issuer_id: &str)
+                 -> io::Result<Output> {
   Command::new(COMMAND).args(&["--txn", txn_builder_path])
+                       .args(&["lender", "--id", lender_id])
                        .arg("activate_loan")
                        .args(&["--loan", loan_id])
                        .args(&["--issuer", issuer_id])
@@ -325,8 +347,13 @@ fn activate_loan(txn_builder_path: &str, loan_id: &str, issuer_id: &str) -> io::
 }
 
 #[cfg(test)]
-fn pay_loan(txn_builder_path: &str, loan_id: &str, amount: &str) -> io::Result<Output> {
+fn pay_loan(txn_builder_path: &str,
+            borrower_id: &str,
+            loan_id: &str,
+            amount: &str)
+            -> io::Result<Output> {
   Command::new(COMMAND).args(&["--txn", txn_builder_path])
+                       .args(&["borrower", "--id", borrower_id])
                        .arg("pay_loan")
                        .args(&["--loan", loan_id])
                        .args(&["--amount", amount])
@@ -340,21 +367,21 @@ fn pay_loan(txn_builder_path: &str, loan_id: &str, amount: &str) -> io::Result<O
 #[test]
 fn test_create_users() {
   // Create an issuer
-  let output = create_issuer("Issuer I").expect("Failed to create an issuer");
+  let output = sign_up_issuer("Issuer I").expect("Failed to create an issuer");
   io::stdout().write_all(&output.stdout).unwrap();
   io::stdout().write_all(&output.stderr).unwrap();
 
   assert!(output.status.success());
 
   // Create a lender
-  let output = create_lender("Lender L", "550").expect("Failed to create a lender");
+  let output = sign_up_lender("Lender L", "550").expect("Failed to create a lender");
   io::stdout().write_all(&output.stdout).unwrap();
   io::stdout().write_all(&output.stderr).unwrap();
 
   assert!(output.status.success());
 
   // Create a borrower
-  let output = create_borrower("Borrower B").expect("Failed to create a borrower");
+  let output = sign_up_borrower("Borrower B").expect("Failed to create a borrower");
   io::stdout().write_all(&output.stdout).unwrap();
   io::stdout().write_all(&output.stderr).unwrap();
 
@@ -366,7 +393,7 @@ fn test_create_users() {
 #[test]
 fn test_create_or_update_credentials() {
   // Update the min_credit_score credential
-  let output = create_or_update_credential("0", "min_credit_score", "600").expect("Failed to create a min_credit_score credential");
+  let output = create_or_overwrite_credential("0", "min_credit_score", "600").expect("Failed to create a min_credit_score credential");
   io::stdout().write_all(&output.stdout).unwrap();
   io::stdout().write_all(&output.stderr).unwrap();
 
@@ -376,7 +403,7 @@ fn test_create_or_update_credentials() {
 
   // Create a min_income credential
   let output =
-  create_or_update_credential("0", "min_income", "1000").expect("Failed to create a min_income credential");
+  create_or_overwrite_credential("0", "min_income", "1000").expect("Failed to create a min_income credential");
   io::stdout().write_all(&output.stdout).unwrap();
   io::stdout().write_all(&output.stderr).unwrap();
 
@@ -386,7 +413,7 @@ fn test_create_or_update_credentials() {
 
   // Create a citizenshiip credential
   let output =
-  create_or_update_credential("0", "citizenship", "1").expect("Failed to create a citizenship credential");
+  create_or_overwrite_credential("0", "citizenship", "1").expect("Failed to create a citizenship credential");
   io::stdout().write_all(&output.stdout).unwrap();
   io::stdout().write_all(&output.stderr).unwrap();
 
@@ -406,6 +433,7 @@ fn test_no_path() {
   io::stdout().write_all(&output.stderr).unwrap();
 
   assert!(output.status.success());
+  println!("1");
 
   // Generate key pair
   let output = keygen_no_path().expect("Failed to execute process");
@@ -414,6 +442,7 @@ fn test_no_path() {
   io::stdout().write_all(&output.stderr).unwrap();
 
   assert!(output.status.success());
+  println!("2");
 
   // Generate public key
   let output = pubkeygen_no_path().expect("Failed to execute process");
@@ -422,6 +451,7 @@ fn test_no_path() {
   io::stdout().write_all(&output.stderr).unwrap();
 
   assert!(output.status.success());
+  println!("3");
 
   // Store sids
   let output = store_sids_no_path("1,2,4").expect("Failed to execute process");
@@ -430,6 +460,7 @@ fn test_no_path() {
   io::stdout().write_all(&output.stderr).unwrap();
 
   assert!(output.status.success());
+  println!("4");
 
   // Store blind asset record
   let pubkeygen_path = "pub_no_bar_path";
@@ -439,6 +470,7 @@ fn test_no_path() {
 
   io::stdout().write_all(&output.stdout).unwrap();
   io::stdout().write_all(&output.stderr).unwrap();
+  println!("5");
 
   fs::remove_file(pubkeygen_path).unwrap();
   assert!(output.status.success());
@@ -450,12 +482,12 @@ fn test_no_path() {
 }
 
 //
-// View records
+// Lender or borrower views loans or credentials
 //
 #[test]
-fn test_view_loans() {
-  // Add credentials
-  create_or_update_credential("0", "min_income", "1500").expect("Failed to create a credential");
+fn test_view() {
+  // Add a credential
+  create_or_overwrite_credential("0", "min_income", "1500").expect("Failed to create a credential");
 
   // Create loans
   create_loan("0", "0", "100", "100", "3").expect("Failed to create the loan");
@@ -465,21 +497,12 @@ fn test_view_loans() {
   // Activate some of the loans
   let txn_builder_path = "txn_builder_view_loans";
   create_txn_builder_with_path(txn_builder_path).expect("Failed to create transaction builder");
-  activate_loan(txn_builder_path, "0", "0").expect("Failed to activate the loan");
-  activate_loan(txn_builder_path, "1", "0").expect("Failed to activate the loan");
+  activate_loan(txn_builder_path, "0", "0", "0").expect("Failed to activate the loan");
+  activate_loan(txn_builder_path, "1", "1", "0").expect("Failed to activate the loan");
 
   // View loans
-  // 1. View a loan by loan id
-  let output = view_loan_no_filter("loan", "0").expect("Failed to view the loan");
-  io::stdout().write_all(&output.stdout).unwrap();
-  io::stdout().write_all(&output.stderr).unwrap();
-
-  assert!(output.status.success());
-  assert!(from_utf8(&output.stdout).unwrap()
-                                   .contains(&"Displaying 1 loan(s):".to_owned()));
-
-  // 2. View loans by lender id
-  let output = view_loan_no_filter("lender", "1").expect("Failed to view the loan");
+  // 1. View all loans of a lender
+  let output = view_loan_all("lender", "1").expect("Failed to view the loan");
   io::stdout().write_all(&output.stdout).unwrap();
   io::stdout().write_all(&output.stderr).unwrap();
 
@@ -487,8 +510,8 @@ fn test_view_loans() {
   assert!(from_utf8(&output.stdout).unwrap()
                                    .contains(&"Displaying 2 loan(s):".to_owned()));
 
-  // 3. View loans by borrower id
-  let output = view_loan_no_filter("borrower", "0").expect("Failed to view the loan");
+  // 2. View all loans of a borrower
+  let output = view_loan_all("borrower", "0").expect("Failed to view the loan");
   io::stdout().write_all(&output.stdout).unwrap();
   io::stdout().write_all(&output.stderr).unwrap();
 
@@ -496,7 +519,25 @@ fn test_view_loans() {
   assert!(from_utf8(&output.stdout).unwrap()
                                    .contains(&"Displaying 3 loan(s):".to_owned()));
 
-  // 4. View active loans by borrower id
+  // 3.   View a loan by its id
+  // 3.1  The loan is owned by the user
+  let output = view_loan_with_loan_id("lender", "0", "0").expect("Failed to view the loan");
+  io::stdout().write_all(&output.stdout).unwrap();
+  io::stdout().write_all(&output.stderr).unwrap();
+
+  assert!(output.status.success());
+  assert!(from_utf8(&output.stdout).unwrap()
+                                   .contains(&"Displaying loan".to_owned()));
+
+  // 3.2  The loan isn't owned by the user
+  let output = view_loan_with_loan_id("lender", "0", "1").expect("Failed to view the loan");
+  io::stdout().write_all(&output.stdout).unwrap();
+  io::stdout().write_all(&output.stderr).unwrap();
+
+  assert!(from_utf8(&output.stdout).unwrap()
+                                   .contains(&"doesn't own loan".to_owned()));
+
+  // 4. View active loans
   let output = view_loan_with_filter("borrower", "0", "active").expect("Failed to view the loan");
   io::stdout().write_all(&output.stdout).unwrap();
   io::stdout().write_all(&output.stderr).unwrap();
@@ -505,7 +546,7 @@ fn test_view_loans() {
   assert!(from_utf8(&output.stdout).unwrap()
                                    .contains(&"Displaying 1 loan(s):".to_owned()));
 
-  // 5. View inactive loans by borrower id
+  // 5. View inactive loans
   let output = view_loan_with_filter("borrower", "0", "inactive").expect("Failed to view the loan");
   io::stdout().write_all(&output.stdout).unwrap();
   io::stdout().write_all(&output.stderr).unwrap();
@@ -514,7 +555,7 @@ fn test_view_loans() {
   assert!(from_utf8(&output.stdout).unwrap()
                                    .contains(&"Displaying 2 loan(s):".to_owned()));
 
-  // 6. View unrejected loans by borrower id
+  // 6. View unrejected loans
   let output =
     view_loan_with_filter("borrower", "0", "unrejected").expect("Failed to view the loan");
   io::stdout().write_all(&output.stdout).unwrap();
@@ -525,23 +566,23 @@ fn test_view_loans() {
                                    .contains(&"Displaying 2 loan(s):".to_owned()));
 
   // View credentials
-  // 1. View a credential by credential id
-  let output = view_credential("credential", "0").expect("Failed to view the loan");
-  io::stdout().write_all(&output.stdout).unwrap();
-  io::stdout().write_all(&output.stderr).unwrap();
-
-  assert!(output.status.success());
-  assert!(from_utf8(&output.stdout).unwrap()
-                                   .contains(&"Displaying 1 credential(s):".to_owned()));
-
-  // 2. View credentials by borrower id
-  let output = view_credential("borrower", "0").expect("Failed to view the loan");
+  // 1. View all credentials of a borrower
+  let output = view_credential_all("0").expect("Failed to view the loan");
   io::stdout().write_all(&output.stdout).unwrap();
   io::stdout().write_all(&output.stderr).unwrap();
 
   assert!(output.status.success());
   assert!(from_utf8(&output.stdout).unwrap()
                                    .contains(&"Displaying 2 credential(s):".to_owned()));
+
+  // 2. View a credential by credential id
+  let output = view_credential_with_credential_id("0", "0").expect("Failed to view the loan");
+  io::stdout().write_all(&output.stdout).unwrap();
+  io::stdout().write_all(&output.stderr).unwrap();
+
+  assert!(output.status.success());
+  assert!(from_utf8(&output.stdout).unwrap()
+                                   .contains(&"Displaying credential".to_owned()));
 
   let _ = fs::remove_file(DATA_FILE);
   fs::remove_file(txn_builder_path).unwrap();
@@ -610,8 +651,8 @@ fn test_call_with_help() {
 }
 
 #[test]
-fn test_create_with_help() {
-  let output = Command::new(COMMAND).args(&["create", "--help"])
+fn test_create_txn_builder_with_help() {
+  let output = Command::new(COMMAND).args(&["create_txn_builder", "--help"])
                                     .output()
                                     .expect("failed to execute process");
 
@@ -997,7 +1038,7 @@ fn test_create_activate_and_pay_loan_with_args() {
   // Initiate the first loan
   // 1. First time
   //    Add the credential proof, then successfully initiate the loan
-  let output = activate_loan(txn_builder_file, "0", "0").expect("Failed to initiate the loan");
+  let output = activate_loan(txn_builder_file, "0", "0", "0").expect("Failed to initiate the loan");
 
   io::stdout().write_all(&output.stdout).unwrap();
   io::stdout().write_all(&output.stderr).unwrap();
@@ -1008,7 +1049,7 @@ fn test_create_activate_and_pay_loan_with_args() {
 
   // 2. Second time:
   //    Fail because the loan has been activated
-  let output = activate_loan(txn_builder_file, "0", "0").expect("Failed to initiate the loan");
+  let output = activate_loan(txn_builder_file, "0", "0", "0").expect("Failed to initiate the loan");
 
   io::stdout().write_all(&output.stdout).unwrap();
   io::stdout().write_all(&output.stderr).unwrap();
@@ -1020,7 +1061,7 @@ fn test_create_activate_and_pay_loan_with_args() {
   // Initiate the second loan
   // 1. First time:
   //    Get the credential proof, then fail to initiate the loan because the requirement isn't met
-  let output = activate_loan(txn_builder_file, "1", "0").expect("Failed to initiate the loan");
+  let output = activate_loan(txn_builder_file, "1", "1", "0").expect("Failed to initiate the loan");
 
   io::stdout().write_all(&output.stdout).unwrap();
   io::stdout().write_all(&output.stderr).unwrap();
@@ -1032,7 +1073,7 @@ fn test_create_activate_and_pay_loan_with_args() {
 
   // 2. Second time:
   //    Fail because the loan has been rejected
-  let output = activate_loan(txn_builder_file, "1", "0").expect("Failed to initiate the loan");
+  let output = activate_loan(txn_builder_file, "1", "1", "0").expect("Failed to initiate the loan");
 
   io::stdout().write_all(&output.stdout).unwrap();
   io::stdout().write_all(&output.stderr).unwrap();
@@ -1042,7 +1083,7 @@ fn test_create_activate_and_pay_loan_with_args() {
                                    .contains(&"has already been rejected.".to_owned()));
 
   // Pay loan
-  let output = pay_loan(txn_builder_file, "0", "300").expect("Failed to pay loan");
+  let output = pay_loan(txn_builder_file, "0", "0", "300").expect("Failed to pay loan");
 
   io::stdout().write_all(&output.stdout).unwrap();
   io::stdout().write_all(&output.stderr).unwrap();
