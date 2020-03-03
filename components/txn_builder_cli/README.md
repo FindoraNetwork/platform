@@ -113,7 +113,7 @@ To filter the loans, add `--filter` with `active`, `inactive` or `unrejected`, f
 ### Activate a loan
 * Create an empty transaction
 ```
-./txn_builder_cli create --name txn_activate
+./txn_builder_cli create_txn_builder --name txn_activate
 ```
 * Activate the loan
 ```
@@ -131,7 +131,7 @@ In the initial data, there's one borrower, Ben. To sign up a new borrower accoun
 ### Load funds
 * Create an empty transaction
 ```
-./txn_builder_cli create --name txn_load
+./txn_builder_cli create_txn_builder --name txn_load
 ```
 * Load funds
 ```
@@ -163,7 +163,7 @@ To filter the loans, add `--filter` with `active`, `inactive` or `unrejected`, f
 ### Pay off a loan
 * Create an empty transaction
 ```
-./txn_builder_cli create --name txn_pay
+./txn_builder_cli create_txn_builder --name txn_pay
 ```
 * Pay off the loan
 ```
