@@ -2102,9 +2102,9 @@ fn process_view_cmd(view_matches: &clap::ArgMatches) -> Result<(), PlatformError
           }
           _ => {
             let ids = data.borrowers[id as usize].credentials;
-            for i in 0..3 {
-              if let Some(id) = ids[i] {
-                credentials.push(data.credentials[id as usize].clone());
+            for id in ids.iter() {
+              if let Some(id) = id {
+                credentials.push(data.credentials[*id as usize].clone());
               }
             }
           }
