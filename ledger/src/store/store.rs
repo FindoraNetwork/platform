@@ -706,8 +706,8 @@ impl LedgerUpdate<ChaChaRng> for LedgerState {
 
     // Apply AIR updates
     for (addr, data) in block.air_updates.drain() {
-      debug_assert!(self.air.get(&addr.0).is_none());
-      self.air.set(&addr.0, Some(data));
+      debug_assert!(self.air.get(&addr).is_none());
+      self.air.set(&addr, Some(data));
     }
 
     // TODO(joe): asset tracing?

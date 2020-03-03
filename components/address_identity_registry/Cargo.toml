@@ -5,17 +5,36 @@ authors = ["Engineering <engineering@findora.org>"]
 edition = "2018"
 
 [[bin]]
-name = "address_identity_registry"
-path = "src/address_identity_registry.rs"
+name = "repl"
+path = "src/bin/repl.rs"
+
+[[bin]]
+name = "user"
+path = "src/bin/user.rs"
+
+[[bin]]
+name = "issuer"
+path = "src/bin/issuer.rs"
+
+[[bin]]
+name = "verifier"
+path = "src/bin/verifier.rs"
+
+[[bin]]
+name = "ledger"
+path = "src/bin/ledger.rs"
 
 [dependencies]
 air = { path = "../../libs/ads/air" }
+async-std = "1.5.0"
 clap = "2.33.0"
 colored = "1.9"
 cryptohash = { path = "../../libs/cryptohash" }
 env_logger = "0.7.1"
+futures = "0.3.1"
 hex = "0.3.2"
 lazy_static = { version = "1.2.0" }
+libp2p = "0.16.2"
 log = "0.4.0"
 rmp-serde = "0.13.7"
 rand_chacha = "0.2.0"

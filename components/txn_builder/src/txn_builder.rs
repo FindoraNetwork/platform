@@ -39,6 +39,11 @@ pub trait BuildsTransactions {
                                   input_records: &[OpenAssetRecord],
                                   output_records: &[AssetRecord])
                                   -> Result<&mut Self, PlatformError>;
+  fn add_operation_air_assign(&mut self,
+                              key_pair: &XfrKeyPair,
+                              addr: &str,
+                              data: &str)
+                              -> Result<&mut Self, PlatformError>;
   fn serialize(&self) -> Result<Vec<u8>, PlatformError>;
   fn serialize_str(&self) -> Result<String, PlatformError>;
 
@@ -157,6 +162,18 @@ impl BuildsTransactions for TransactionBuilder {
     xfr.sign(&keys);
 
     self.txn.add_operation(Operation::TransferAsset(xfr));
+    Ok(self)
+  }
+  fn add_operation_air_assign(&mut self,
+                              key_pair: &XfrKeyPair,
+                              addr: &str,
+                              data: &str)
+                              -> Result<&mut Self, PlatformError> {
+
+    let pub_key = &IssuerPublicKey { key: key_pair.get_pk() };
+    let priv_key = &key_pair.get_sk();
+    let xfr = AIRAssign::new(AIRAssignBody::new(String::from(addr), String::from(data))?, pub_key, priv_key)?;
+    self.txn.add_operation(Operation::AIRAssign(xfr));
     Ok(self)
   }
 

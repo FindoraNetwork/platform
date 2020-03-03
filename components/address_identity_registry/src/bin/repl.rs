@@ -111,23 +111,6 @@ struct User {
   secret_key: ACUserSecretKey,
 }
 
-// TypeName is used for hash salting
-trait TypeName {
-  fn type_string(&self) -> &'static str;
-}
-
-impl TypeName for ACUserPublicKey {
-  fn type_string(&self) -> &'static str {
-    "ACUserPublicKey"
-  }
-}
-
-impl TypeName for ACIssuerPublicKey {
-  fn type_string(&self) -> &'static str {
-    "ACIssuerPublicKey"
-  }
-}
-
 #[derive(Debug)]
 struct GlobalState {
   verbose: bool,
