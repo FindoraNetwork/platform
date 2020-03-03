@@ -42,13 +42,15 @@ const INIT_DATA: &str = r#"
       "id": 0,
       "name": "Lenny",
       "key_pair": "023f37203a2476c42566a61cc55c3ca875dbb4cc41c0deb789f8e7bf881836384d4b18062f8502598de045ca7b69f067f59f93b16e3af8733a988adc2341f5c8",
-      "min_credit_score": 500
+      "min_credit_score": 500,
+      "loans": []
     },
     {
       "id": 1,
       "name": "Luna",
       "key_pair": "023f37203a2476c42566a61cc55c3ca875dbb4cc41c0deb789f8e7bf881836384d4b18062f8502598de045ca7b69f067f59f93b16e3af8733a988adc2341f5c8",
-      "min_credit_score": 680
+      "min_credit_score": 680,
+      "loans": []
     }
   ],
   "borrowers": [
@@ -61,11 +63,11 @@ const INIT_DATA: &str = r#"
           null,
           null
       ],
+      "loans": [],
       "balance": 0,
       "utxo": null
     }
   ],
-  "loans": [],
   "credentials": [
     {
       "id": 0,
@@ -75,6 +77,7 @@ const INIT_DATA: &str = r#"
       "proof": null
     }
   ],
+  "loans": [],
   "fiat_code": null,
   "sequence_number": 1
 }"#;
@@ -87,7 +90,7 @@ const LEDGER_STANDALONE: &str = "../../target/debug/ledger_standalone";
 // Credentials
 //
 // TODO (Keyao): Support more attributes
-#[derive(Clone, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Deserialize, Debug, Eq, PartialEq, Serialize)]
 // Credential attributes and their corresponding indeces in the borrower's data
 enum CredentialIndex {
   MinCreditScore = 0,
@@ -95,7 +98,7 @@ enum CredentialIndex {
   Citizenship = 2,
 }
 
-#[derive(Clone, Deserialize, Serialize)]
+#[derive(Clone, Deserialize, Debug, Serialize)]
 struct Credential {
   id: u64,
   borrower: u64,
@@ -140,6 +143,7 @@ struct Lender {
   name: String,
   key_pair: String,
   min_credit_score: u64,
+  loans: Vec<u64>,
 }
 
 impl Lender {
@@ -149,7 +153,8 @@ impl Lender {
     Lender { id: id as u64,
              name,
              key_pair: key_pair_str,
-             min_credit_score }
+             min_credit_score,
+             loans: Vec::new() }
   }
 }
 
@@ -159,6 +164,7 @@ struct Borrower {
   name: String,
   key_pair: String,
   credentials: [Option<u64>; 3], // Credential ids, ordered by CredentialIndex
+  loans: Vec<u64>,
   balance: u64,
   utxo: Option<TxoSID>, // Fiat utxo sid
 }
@@ -174,6 +180,7 @@ impl Borrower {
                name,
                key_pair: key_pair_str,
                credentials: [None; 3],
+               loans: Vec::new(),
                balance: 0,
                utxo: None }
   }
@@ -182,7 +189,7 @@ impl Borrower {
 //
 // Loan
 //
-#[derive(Clone, Deserialize, Serialize)]
+#[derive(Clone, Deserialize, Debug, Serialize)]
 struct Loan {
   id: u64,                 // Loan id
   lender: u64,             // Lender id
@@ -255,6 +262,8 @@ impl Data {
     let id = self.loans.len();
     self.loans
         .push(Loan::new(id, lender, borrower, amount, interest_per_mille, duration));
+    self.lenders[lender as usize].loans.push(id as u64);
+    self.borrowers[borrower as usize].loans.push(id as u64);
     store_data_to_file(self.clone())
   }
 
@@ -1503,6 +1512,41 @@ fn main() {
       .value_name("FILE")
       .help("Use a name transaction file (will always be under findora_dir)")
       .takes_value(true))
+    .subcommand(SubCommand::with_name("view")
+      .subcommand(SubCommand::with_name("loan")
+        .arg(Arg::with_name("by")
+          .short("b")
+          .long("by")
+          .required(true)
+          .takes_value(true)
+          .possible_values(&["loan", "lender", "borrower"])
+          .help("Look up the loan by the id of loan, lender or borrower."))
+        .arg(Arg::with_name("id")
+          .short("i")
+          .long("id")
+          .required(true)
+          .takes_value(true)
+          .help("Id of the loan, lender or borrower."))
+        .arg(Arg::with_name("filter")
+          .short("f")
+          .long("filter")
+          .takes_value(true)
+          .possible_values(&["active","inactive","unrejected"])
+          .help("Display the loan with the specified status only. By default, all records will be shown.")))
+      .subcommand(SubCommand::with_name("credential")
+        .arg(Arg::with_name("by")
+          .short("b")
+          .long("by")
+          .required(true)
+          .takes_value(true)
+          .possible_values(&["credential", "borrower"])
+          .help("Look up the credential by the id of credential or borrower."))
+        .arg(Arg::with_name("id")
+          .short("i")
+          .long("id")
+          .required(true)
+          .takes_value(true)
+          .help("Id of the credential or borrower."))))
     .subcommand(SubCommand::with_name("create")
       .subcommand(SubCommand::with_name("user")
         .subcommand(SubCommand::with_name("issuer")
@@ -1913,6 +1957,7 @@ fn process_inputs(inputs: clap::ArgMatches) -> Result<(), PlatformError> {
   }
 
   match inputs.subcommand() {
+    ("view", Some(view_matches)) => process_view_cmd(view_matches),
     ("create", Some(create_matches)) => {
       process_create_cmd(create_matches, &transaction_file_name, &findora_dir)
     }
@@ -1977,6 +2022,101 @@ fn process_inputs(inputs: clap::ArgMatches) -> Result<(), PlatformError> {
     }
     ("pay_loan", Some(pay_loan_matches)) => {
       process_pay_loan_cmd(pay_loan_matches, &transaction_file_name)
+    }
+    _ => {
+      println!("Subcommand missing or not recognized. Try --help");
+      Err(PlatformError::InputsError)
+    }
+  }
+}
+
+fn process_view_cmd(view_matches: &clap::ArgMatches) -> Result<(), PlatformError> {
+  match view_matches.subcommand() {
+    ("loan", Some(loan_matches)) => {
+      let id = if let Some(id_arg) = loan_matches.value_of("id") {
+        parse_to_u64(id_arg)?
+      } else {
+        println!("Lookup id is required. Use --id.");
+        return Err(PlatformError::InputsError);
+      };
+      let data = load_data()?;
+      if let Some(by_arg) = loan_matches.value_of("by") {
+        let mut loan_ids = Vec::new();
+        match by_arg {
+          "loan" => {
+            loan_ids.push(id);
+          }
+          "lender" => {
+            loan_ids = data.lenders[id as usize].loans.clone();
+          }
+          _ => {
+            loan_ids = data.borrowers[id as usize].loans.clone();
+          }
+        }
+        let mut loans = Vec::new();
+        if let Some(filter) = loan_matches.value_of("filter") {
+          for id in loan_ids {
+            match filter {
+              "active" => {
+                if data.loans[id as usize].active {
+                  loans.push(data.loans[id as usize].clone());
+                }
+              }
+              "inactive" => {
+                if !data.loans[id as usize].active {
+                  loans.push(data.loans[id as usize].clone());
+                }
+              }
+              _ => {
+                if !data.loans[id as usize].rejected {
+                  loans.push(data.loans[id as usize].clone());
+                }
+              }
+            }
+          }
+        } else {
+          for id in loan_ids {
+            loans.push(data.loans[id as usize].clone());
+          }
+        }
+        println!("Displaying {} loan(s): {:?}", loans.len(), loans);
+      } else {
+        println!("Lookup source is required. Use --by.");
+        return Err(PlatformError::InputsError);
+      };
+      Ok(())
+    }
+    ("credential", Some(credential_matches)) => {
+      let id = if let Some(id_arg) = credential_matches.value_of("id") {
+        parse_to_u64(id_arg)?
+      } else {
+        println!("Lookup id is required. Use --id.");
+        return Err(PlatformError::InputsError);
+      };
+      let data = load_data()?;
+      if let Some(by_arg) = credential_matches.value_of("by") {
+        let mut credentials = Vec::new();
+        match by_arg {
+          "credential" => {
+            credentials.push(data.credentials[id as usize].clone());
+          }
+          _ => {
+            let ids = data.borrowers[id as usize].credentials;
+            for i in 0..3 {
+              if let Some(id) = ids[i] {
+                credentials.push(data.credentials[id as usize].clone());
+              }
+            }
+          }
+        }
+        println!("Displaying {} credential(s): {:?}",
+                 credentials.len(),
+                 credentials);
+      } else {
+        println!("Lookup source is required. Use --by.");
+        return Err(PlatformError::InputsError);
+      };
+      Ok(())
     }
     _ => {
       println!("Subcommand missing or not recognized. Try --help");
