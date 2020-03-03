@@ -29,6 +29,13 @@ use zei::xfr::sig::{XfrKeyPair, XfrPublicKey};
 use zei::xfr::structs::{AssetRecord, BlindAssetRecord, OpenAssetRecord};
 extern crate exitcode;
 
+// TODO (Keyao): Determine which commands is no longer useful, remove them, and update README
+// E.g. funds loading can be achieved by either of the following:
+//      (1) "add define_asset" + "submit" + "add issue_and_transfer_asset"
+//      (2) "borrower load_funds"
+// (2) seems better since it handles all the necessary steps.
+// Then do we still want to support "add define_asset", "submit" and "add issue_and_transfer_asset" commands?
+
 const INIT_DATA: &str = r#"
 {
   "issuers": [
@@ -947,7 +954,6 @@ fn merge_records(key_pair: &XfrKeyPair,
   store_txn_builder_to_file(&transaction_file_name, &txn_builder)
 }
 
-// Note: make sure fiat asset has been defined before calling this function
 fn load_funds(issuer_id: u64,
               recipient_id: u64,
               amount: u64,
@@ -961,12 +967,23 @@ fn load_funds(issuer_id: u64,
   let recipient = &data.borrowers.clone()[recipient_id as usize];
   let recipient_key_pair = &data.clone().get_borrower_key_pair(recipient_id)?;
 
-  // Check if fiat code has been defined
+  // Get or define fiat asset
   let token_code = if let Some(code) = &data.clone().fiat_code {
     AssetTypeCode::new_from_base64(code)?
   } else {
-    println!("Fiat code isn't defined. Use define_asset --fiat.");
-    return Err(PlatformError::InputsError);
+    let fiat_code = AssetTypeCode::gen_random();
+    define_asset(true,
+                 issuer_id,
+                 fiat_code,
+                 "Fiat asset",
+                 false,
+                 false,
+                 transaction_file_name)?;
+    // Store data before submitting the transaction to avoid data overwriting
+    let data = load_data()?;
+    submit(protocol, host, transaction_file_name)?;
+    store_data_to_file(data)?;
+    fiat_code
   };
 
   // Issue and transfer asset
@@ -1175,33 +1192,23 @@ fn activate_loan(loan_id: u64,
     data = load_data()?;
   }
 
-  // Define fiat asset
+  // Get or define fiat asset
   let fiat_code = if let Some(code) = data.fiat_code {
     println!("Fiat code: {}", code);
     AssetTypeCode::new_from_base64(&code)?
   } else {
-    // Define fiat asset
-    let mut txn_builder = TransactionBuilder::default();
     let fiat_code = AssetTypeCode::gen_random();
-    println!("Generated fiat code: {}",
-             serde_json::to_string(&fiat_code.val).or_else(|_| {
-                                                    Err(PlatformError::SerializationError)
-                                                  })?);
-    if let Err(e) = txn_builder.add_operation_create_asset(&issuer_key_pair,
-                                                           Some(fiat_code),
-                                                           false,
-                                                           false,
-                                                           "Define fiat asset.")
-    {
-      println!("Failed to add operation to transaction.");
-      return Err(e);
-    }
-    store_txn_builder_to_file(&transaction_file_name, &txn_builder)?;
+    define_asset(true,
+                 issuer_id,
+                 fiat_code,
+                 "Fiat asset",
+                 false,
+                 false,
+                 transaction_file_name)?;
     // Store data before submitting the transaction to avoid data overwriting
     let data = load_data()?;
     submit(protocol, host, transaction_file_name)?;
     store_data_to_file(data)?;
-
     fiat_code
   };
 
@@ -3130,8 +3137,6 @@ mod tests {
 
   #[test]
   #[ignore]
-  // 1. The issuer defines the asset
-  // 2. Load funds for the recipient
   fn test_load_funds() {
     run_ledger_standalone().unwrap();
 
@@ -3142,19 +3147,8 @@ mod tests {
     let txn_builder_path = "tb_load_funds";
     store_txn_builder_to_file(&txn_builder_path, &TransactionBuilder::default()).unwrap();
 
-    // Define amount and token code
+    // Define amount
     let amount = 1000;
-    let code = AssetTypeCode::gen_random();
-
-    // Define asset
-    define_asset(true,
-                 0,
-                 code,
-                 "Define a fiat asset",
-                 false,
-                 false,
-                 txn_builder_path).unwrap();
-    submit(PROTOCOL, HOST, txn_builder_path).unwrap();
 
     // Load funds
     load_funds(0, 0, amount, txn_builder_path, PROTOCOL, HOST).unwrap();

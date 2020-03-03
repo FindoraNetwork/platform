@@ -245,15 +245,6 @@ fn define_asset(txn_builder_path: &str,
 }
 
 #[cfg(test)]
-fn define_fiat_asset(txn_builder_path: &str, issuer_id: &str, memo: &str) -> io::Result<Output> {
-  Command::new(COMMAND).args(&["--txn", txn_builder_path])
-                       .args(&["add", "define_asset", "--fiat"])
-                       .args(&["--issuer", issuer_id])
-                       .args(&["--memo", memo])
-                       .output()
-}
-
-#[cfg(test)]
 fn issue_asset(txn_builder_path: &str,
                id: &str,
                token_code: &str,
@@ -991,13 +982,9 @@ fn test_issue_transfer_and_submit_with_args() {
 #[test]
 #[ignore]
 fn test_load_funds_with_args() {
-  // Create txn builder, key pairs, and public key
+  // Create txn builder
   let txn_builder_file = "tb_load_funds_args";
   create_txn_builder_with_path(txn_builder_file).expect("Failed to create transaction builder");
-
-  // Define fiat asset
-  define_fiat_asset(txn_builder_file, "0", "Define fiat asset.").expect("Failed to define fiat asset");
-  submit(txn_builder_file).expect("Failed to submit transaction");
 
   // Load funds
   let output = load_funds(txn_builder_file, "0", "0", "500").expect("Failed to load funds");
@@ -1005,6 +992,7 @@ fn test_load_funds_with_args() {
   io::stdout().write_all(&output.stdout).unwrap();
   io::stdout().write_all(&output.stderr).unwrap();
 
+  let _ = fs::remove_file(DATA_FILE);
   fs::remove_file(txn_builder_file).unwrap();
 
   assert!(output.status.success());
