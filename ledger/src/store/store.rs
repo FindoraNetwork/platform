@@ -1512,7 +1512,7 @@ mod tests {
     // TODO(joe): replace/update this test
 
     //     // Create values to be used to instantiate operations
-    //     let mut prng = rand_chacha::ChaChaRng::from_seed([0u8; 32]);
+    //     let mut prng = rand_chacha::ChaChaRng::from_entropy();
 
     //     let keypair = XfrKeyPair::generate(&mut prng);
     //     let message: &[u8] = b"test";
@@ -1746,7 +1746,7 @@ mod tests {
   // #[test]
   // fn test_add_txo() {
   //   // Instantiate a BlindAssetRecord
-  //   let mut prng = ChaChaRng::from_seed([0u8; 32]);
+  //   let mut prng = ChaChaRng::from_entropy();
   //   let pc_gens = PedersenGens::default();
 
   //   let sk = elgamal_generate_secret_key::<_, Scalar>(&mut prng);
@@ -1831,7 +1831,7 @@ mod tests {
   // #[test]
   // fn test_apply_asset_transfer_with_tracking() {
   //   // Instantiate a BlindAssetRecord
-  //   let mut prng = ChaChaRng::from_seed([0u8; 32]);
+  //   let mut prng = ChaChaRng::from_entropy();
   //   let pc_gens = PedersenGens::default();
 
   //   let sk = elgamal_generate_secret_key::<_, Scalar>(&mut prng);
@@ -1896,7 +1896,7 @@ mod tests {
   // #[test]
   // fn test_apply_asset_issuance() {
   //   // Instantiate an IssueAsset
-  //   let mut prng = ChaChaRng::from_seed([0u8; 32]);
+  //   let mut prng = ChaChaRng::from_entropy();
   //   let keypair = XfrKeyPair::generate(&mut prng);
   //   let message: &[u8] = b"test";
   //   let public_key = *keypair.get_pk_ref();
@@ -1945,7 +1945,7 @@ mod tests {
   // fn test_apply_asset_creation() {
   //   let mut ledger_state = LedgerState::test_ledger();
 
-  //   let mut prng = ChaChaRng::from_seed([0u8; 32]);
+  //   let mut prng = ChaChaRng::from_entropy();
   //   let keypair = XfrKeyPair::generate(&mut prng);
   //   let message: &[u8] = b"test";
   //   let public_key = *keypair.get_pk_ref();
@@ -1967,7 +1967,7 @@ mod tests {
   // #[test]
   // fn test_apply_operation() {
   //   // Create values to be used to instantiate operations
-  //   let mut prng = rand_chacha::ChaChaRng::from_seed([0u8; 32]);
+  //   let mut prng = rand_chacha::ChaChaRng::from_entropy();
 
   //   let keypair = XfrKeyPair::generate(&mut prng);
   //   let message: &[u8] = b"test";
@@ -2069,7 +2069,7 @@ mod tests {
 
   #[test]
   fn test_asset_creation_valid() {
-    let mut prng = ChaChaRng::from_seed([0u8; 32]);
+    let mut prng = ChaChaRng::from_entropy();
     let mut state = LedgerState::test_ledger();
     let mut tx = Transaction::default();
 
@@ -2101,7 +2101,7 @@ mod tests {
     // Create a valid asset creation operation.
     let mut tx = Transaction::default();
     let token_code1 = AssetTypeCode { val: [1; 16] };
-    let mut prng = ChaChaRng::from_seed([0u8; 32]);
+    let mut prng = ChaChaRng::from_entropy();
     let (public_key1, secret_key1) = build_keys(&mut prng);
     let asset_body = asset_creation_body(&token_code1, &public_key1, true, false, None, None);
     let mut asset_create = asset_creation_operation(&asset_body, &public_key1, &secret_key1);
@@ -2122,7 +2122,7 @@ mod tests {
     let params = PublicParams::new();
 
     let code = AssetTypeCode { val: [1; 16] };
-    let mut prng = ChaChaRng::from_seed([0u8; 32]);
+    let mut prng = ChaChaRng::from_entropy();
     let key_pair = XfrKeyPair::generate(&mut prng);
     let key_pair_adversary = XfrKeyPair::generate(ledger.get_prng());
 
@@ -2230,7 +2230,7 @@ mod tests {
     let mut tx = Transaction::default();
     let token_code1 = AssetTypeCode { val: [1; 16] };
 
-    let mut prng = ChaChaRng::from_seed([0u8; 32]);
+    let mut prng = ChaChaRng::from_entropy();
     let (public_key1, secret_key1) = build_keys(&mut prng);
 
     let asset_body = asset_creation_body(&token_code1, &public_key1, true, false, None, None);

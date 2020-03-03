@@ -610,7 +610,7 @@ impl Issuer {
   //  Then pass all the attributes to sign_min_credit_score and sign the lower bound of credit score only
   pub fn new(num_attr: usize) -> Issuer {
     let mut prng: ChaChaRng;
-    prng = ChaChaRng::from_seed([0u8; 32]);
+    prng = ChaChaRng::from_entropy();
     let (issuer_pk, issuer_sk) = ac_keygen_issuer::<_>(&mut prng, num_attr);
 
     Issuer { public_key: issuer_pk,
@@ -626,7 +626,7 @@ impl Issuer {
   // E.g. sign the lower bound of the credit score
   pub fn sign_attribute(&self, user_jsvalue: &JsValue, attribute: u64) -> JsValue {
     let mut prng: ChaChaRng;
-    prng = ChaChaRng::from_seed([0u8; 32]);
+    prng = ChaChaRng::from_entropy();
     let user: User = user_jsvalue.into_serde().unwrap();
 
     let attrs = [attribute.to_le_bytes()];
@@ -671,7 +671,7 @@ impl User {
                           -> JsValue {
     let issuer: Issuer = issuer_jsvalue.into_serde().unwrap();
     let sig: ACSignature = sig.into_serde().unwrap();
-    let mut prng = ChaChaRng::from_seed([0u8; 32]);
+    let mut prng = ChaChaRng::from_entropy();
 
     let attrs = [attribute.to_le_bytes()];
     let bitmap = [reveal_attribute];
