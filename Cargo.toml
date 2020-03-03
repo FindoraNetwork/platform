@@ -17,6 +17,7 @@ members = [
     "components/wasm",
     "findora",
     "ledger",
+    "libs/ads/air",
     "libs/ads/merkle_tree",
     "libs/ads/sparse_merkle_tree",
     "libs/bitmap",
