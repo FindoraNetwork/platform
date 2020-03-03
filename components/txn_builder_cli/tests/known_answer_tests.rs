@@ -759,6 +759,7 @@ fn test_define_issue_and_transfer_with_args() {
 // Compose transaction and submit
 //
 #[test]
+#[ignore]
 fn test_define_and_submit_with_args() {
   // Create txn builder and key pair
   let txn_builder_file = "tb_define_submit";

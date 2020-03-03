@@ -7,7 +7,6 @@ use bulletproofs::PedersenGens;
 use cryptohash::sha256;
 use curve25519_dalek::ristretto::RistrettoPoint;
 use curve25519_dalek::scalar::Scalar;
-use hex;
 use js_sys::Promise;
 use ledger::data_model::{
   AssetTypeCode, Operation, Serialized, TransferType, TxOutput, TxoRef, TxoSID,
