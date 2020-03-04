@@ -16,6 +16,7 @@ use std::path::{Path, PathBuf};
 use std::process::exit;
 use std::process::Command;
 use std::thread;
+use std::time::Duration;
 use submission_server::{TxnHandle, TxnStatus};
 use txn_builder::{BuildsTransactions, TransactionBuilder, TransferOperationBuilder};
 use zei::api::anon_creds::{
@@ -783,6 +784,12 @@ fn define_asset(fiat_asset: bool,
 }
 
 fn run_ledger_standalone() -> Result<(), PlatformError> {
+  // Kill any existing standalone ledger process
+  Command::new("killall").arg("ledger_standalone")
+                         .output()
+                         .expect("Failed to kill standalone ledger process.");
+
+  // Run the standalone ledger
   thread::spawn(move || {
     let status = Command::new(LEDGER_STANDALONE).status();
     if status.is_err() {
@@ -790,6 +797,9 @@ fn run_ledger_standalone() -> Result<(), PlatformError> {
     };
     Ok(())
   });
+
+  // Give some time to ensure the ledger is running
+  thread::sleep(Duration::from_secs(2));
   Ok(())
 }
 
@@ -2966,6 +2976,25 @@ mod tests {
   }
 
   #[test]
+  fn test_define_fiat_asset() {
+    let txn_builder_path = "tb_define";
+
+    // Define fiat asset
+    let res = define_asset(true,
+                           0,
+                           AssetTypeCode::gen_random(),
+                           "Define fiat asset",
+                           false,
+                           false,
+                           txn_builder_path);
+
+    let _ = fs::remove_file(DATA_FILE);
+    fs::remove_file(txn_builder_path).unwrap();
+
+    assert!(res.is_ok());
+  }
+
+  #[test]
   fn test_issue_and_transfer() {
     // Create txn builder and key pairs
     let txn_builder_path = "tb_issue_and_transfer";
@@ -3013,156 +3042,6 @@ mod tests {
   }
 
   #[test]
-  fn test_submit() {
-    let txn_builder_path = "tb_submit";
-    store_txn_builder_to_file(&txn_builder_path, &TransactionBuilder::default()).unwrap();
-    run_ledger_standalone().unwrap();
-    let res = submit(PROTOCOL, HOST, txn_builder_path);
-    fs::remove_file(txn_builder_path).unwrap();
-    assert!(res.is_ok());
-  }
-
-  #[test]
-  // Define fiat asset and submit the transaction
-  fn test_define_fiat_asset_and_submit() {
-    let txn_builder_path = "tb_define_and_submit";
-    store_txn_builder_to_file(&txn_builder_path, &TransactionBuilder::default()).unwrap();
-    let mut txn_builder = load_txn_builder_from_file(&txn_builder_path).unwrap();
-
-    let mut prng: ChaChaRng = ChaChaRng::from_seed([0u8; 32]);
-    let key_pair = XfrKeyPair::generate(&mut prng);
-    let token_code = AssetTypeCode::gen_random();
-
-    // Define fiat asset
-    define_asset(true,
-                 0,
-                 token_code,
-                 "Define fiat asset",
-                 false,
-                 false,
-                 txn_builder_path).unwrap();
-
-    txn_builder.add_operation_create_asset(&key_pair, Some(token_code), false, false, "")
-               .unwrap();
-    store_txn_builder_to_file(&txn_builder_path, &txn_builder).unwrap();
-
-    // Submit
-    run_ledger_standalone().unwrap();
-    let res = submit(PROTOCOL, HOST, txn_builder_path);
-    fs::remove_file(txn_builder_path).unwrap();
-    assert!(res.is_ok());
-  }
-
-  #[test]
-  // 1. The issuer defines the asset
-  // 2. The issuer issues and transfers two assets to the recipient
-  // 3. Merge the two records for the recipient
-  // 4. Submit the transaction
-  fn test_merge_and_submit() {
-    run_ledger_standalone().unwrap();
-
-    // Create txn builder and key pairs
-    let txn_builder_path = "tb_merge_and_submit";
-    store_txn_builder_to_file(&txn_builder_path, &TransactionBuilder::default()).unwrap();
-    let mut prng: ChaChaRng = ChaChaRng::from_seed([0u8; 32]);
-    let issuer_key_pair = XfrKeyPair::generate(&mut prng);
-    let recipient_key_pair = XfrKeyPair::generate(&mut prng);
-
-    // Define amounts and token code
-    let amount1 = 1000;
-    let amount2 = 500;
-    let code = AssetTypeCode::gen_random();
-
-    // Define asset
-    let mut txn_builder = load_txn_builder_from_file(&txn_builder_path).unwrap();
-    txn_builder.add_operation_create_asset(&issuer_key_pair, Some(code), false, false, "")
-               .unwrap()
-               .transaction();
-    store_txn_builder_to_file(&txn_builder_path, &txn_builder).unwrap();
-    let res = submit(PROTOCOL, HOST, txn_builder_path);
-    assert!(res.is_ok());
-
-    // Issue and transfer the first asset
-    issue_and_transfer(&issuer_key_pair,
-                       &recipient_key_pair,
-                       amount1,
-                       code,
-                       txn_builder_path).unwrap();
-
-    let sid1 = submit_and_get_sids(PROTOCOL, HOST, txn_builder_path).unwrap()[0];
-    let res = query(PROTOCOL,
-                    HOST,
-                    QUERY_PORT,
-                    "utxo_sid",
-                    &format!("{}", sid1.0)).unwrap();
-    let blind_asset_record_1 =
-      serde_json::from_str::<BlindAssetRecord>(&res).or_else(|_| {
-                                                      Err(PlatformError::DeserializationError)
-                                                    })
-                                                    .unwrap();
-
-    // Issue and transfer the second asset
-    issue_and_transfer(&issuer_key_pair,
-                       &recipient_key_pair,
-                       amount2,
-                       code,
-                       txn_builder_path).unwrap();
-    let sid2 = submit_and_get_sids(PROTOCOL, HOST, txn_builder_path).unwrap()[0];
-    let res = query(PROTOCOL,
-                    HOST,
-                    QUERY_PORT,
-                    "utxo_sid",
-                    &format!("{}", sid2.0)).unwrap();
-    let blind_asset_record_2 =
-      serde_json::from_str::<BlindAssetRecord>(&res).or_else(|_| {
-                                                      Err(PlatformError::DeserializationError)
-                                                    })
-                                                    .unwrap();
-
-    // Merge records
-    merge_records(&recipient_key_pair,
-                  TxoRef::Absolute(sid1),
-                  TxoRef::Absolute(sid2),
-                  blind_asset_record_1,
-                  blind_asset_record_2,
-                  code,
-                  txn_builder_path).unwrap();
-
-    // Submit transactions
-    let res = submit(PROTOCOL, HOST, txn_builder_path);
-
-    let _ = fs::remove_file(DATA_FILE);
-    fs::remove_file(txn_builder_path).unwrap();
-
-    assert!(res.is_ok());
-  }
-
-  #[test]
-  #[ignore]
-  fn test_load_funds() {
-    run_ledger_standalone().unwrap();
-
-    let data = load_data().unwrap();
-    let balance_pre = data.borrowers[0].balance;
-
-    // Create txn builder
-    let txn_builder_path = "tb_load_funds";
-    store_txn_builder_to_file(&txn_builder_path, &TransactionBuilder::default()).unwrap();
-
-    // Define amount
-    let amount = 1000;
-
-    // Load funds
-    load_funds(0, 0, amount, txn_builder_path, PROTOCOL, HOST).unwrap();
-    fs::remove_file(txn_builder_path).unwrap();
-
-    assert_eq!(load_data().unwrap().borrowers[0].balance,
-               balance_pre + amount);
-
-    let _ = fs::remove_file(DATA_FILE);
-  }
-
-  #[test]
   fn test_prove() {
     let mut prng: ChaChaRng = ChaChaRng::from_seed([0u8; 32]);
     let (issuer_pk, issuer_sk) = ac_keygen_issuer::<_>(&mut prng, 1);
@@ -3191,10 +3070,27 @@ mod tests {
   }
 
   #[test]
-  #[ignore]
-  // Request, fulfill and pay a loan
+  // Test funds loading, loan request, fulfilling and repayment
   fn test_request_fulfill_and_pay_loan() {
     run_ledger_standalone().unwrap();
+
+    let data = load_data().unwrap();
+    let balance_pre = data.borrowers[0].balance;
+
+    // Create txn builder
+    let txn_builder_path = "tb_load_funds";
+
+    // Set amount to load
+    let amount = 1000;
+
+    // Load funds
+    load_funds(0, 0, amount, txn_builder_path, PROTOCOL, HOST).unwrap();
+
+    assert_eq!(load_data().unwrap().borrowers[0].balance,
+               balance_pre + amount);
+
+    fs::remove_file(txn_builder_path).unwrap();
+    let _ = fs::remove_file(DATA_FILE);
 
     // Load data
     let mut data = load_data().unwrap();
@@ -3224,9 +3120,10 @@ mod tests {
              HOST).unwrap();
 
     let data = load_data().unwrap();
-    assert_eq!(data.loans[loan_id].payments, 1);
 
     let _ = fs::remove_file(DATA_FILE);
     fs::remove_file(txn_builder_path).unwrap();
+
+    assert_eq!(data.loans[loan_id].payments, 1);
   }
 }

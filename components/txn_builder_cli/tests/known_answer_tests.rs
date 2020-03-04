@@ -382,6 +382,7 @@ fn test_create_users() {
 }
 
 #[test]
+#[ignore]
 fn test_create_or_update_credentials() {
   // Update the min_credit_score credential
   let output = create_or_overwrite_credential("0", "min_credit_score", "600").expect("Failed to create a min_credit_score credential");
@@ -476,6 +477,7 @@ fn test_no_path() {
 // Lender or borrower views loans or credentials
 //
 #[test]
+#[ignore]
 fn test_view() {
   // Add a credential
   create_or_overwrite_credential("0", "min_income", "1500").expect("Failed to create a credential");
@@ -845,7 +847,6 @@ fn test_store_with_path() {
 // Define, issue and transfer
 //
 #[test]
-#[ignore]
 fn test_define_issue_and_transfer_with_args() {
   // Create transaction builder and key pair
   let txn_builder_file = "tb";
@@ -942,7 +943,6 @@ fn test_define_and_submit_with_args() {
 }
 
 #[test]
-#[ignore]
 fn test_issue_transfer_and_submit_with_args() {
   let _ = fs::remove_file(DATA_FILE);
 
