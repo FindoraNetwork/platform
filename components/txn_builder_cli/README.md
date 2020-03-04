@@ -1,19 +1,14 @@
 # Transaction Builder Command Line Interface
 
-The `txn_builder_cli` application creates transactions and submits
-them to the ledger server. The typical workflow is as follows
-* Generate a cryptographic key pair. Just once. See `txn_builder_cli keygen`
-* Create a new empty transaction. See `txn_builder_cli create txn_builder`.
-* Create a new user. See `txn_builder_cli create user`.
-* Create a new loan. See `txn_builder_cli create loan`.
-* Add operations to the transaction. See `txn_builder_cli add`.
-* Load funds. See `txn_builder_cli load funds`.
-* Activate a loan. See `txn_builder_cli activate_loan`.
-* Pay off a loan. See `txn_builder_cli pay_loan`.
-* Submit the transaction to the ledger. See `txn_builder_cli submit`
-  and note the transaction ID reported.
-* Query the ledger with the transaction ID to see if the transaction
-  was committed using a web browser or command line tool.
+The `txn_builder_cli` application creates transactions and submits them to the ledger server. The typical workflow is as follows
+* Create a new empty transaction. See `txn_builder_cli create_txn_builder`.
+* Create new users. See `txn_builder_cli issuer sign_up`, `txn_builder_cli lender sign_up` and `txn_builder_cli borrower sign_up`.
+* Borrower: adds or updates a credential record. See `txn_builder_cli borrower create_or_overwrite_credential`.
+* Borrower: requests a loan. See `txn_builder_cli borrower request_loan`.
+* Lender: fulfills the loan. See `txn_builder_cli lender fulfill_loan`.
+* Borrower: loads funds. See `txn_builder_cli borrower load_funds`.
+* Borrower: pays off the loan. See `txn_builder_cli borrower pay_loan`.
+* Query the ledger with the transaction ID to see if the transaction was committed using a web browser or command line tool.
 
 ## Command help
 
@@ -34,57 +29,10 @@ actual subcommands.
 * By default, all the generated files will be stored in `~./findora`, unless specified otherwise. For example, if the current directory is `platform/target/debug`, running `./txn_builder_cli keygen` will put the generated key pair in ~./findora, but `./txn_builder_cli keygen --name keys/key_pair` will store the key pair to `platform/target/debug/keys/key_pair`.
 * Examples below are assuming the current directory is `platform/target/debug`. If not, change `./txn_builder_cli` to the path to `./txn_builder_cli`.
 
-## View records
-### View loans
-```
-./txn_builder_cli view loan --by lender --id 0
-```
-To look up loans by loan id or borrower id instead, use `--by loan` or `--by borrower`.
-By default, all records with the specified id will be displayed. To filter the records, add `--filter` with `active`, `inactive` or `unrejected`, for loans that have been activate, haven't been activated, or have been rejected, respectively,
-
-### View credentials
-```
-./txn_builder_cli view credential --by borrower --id 0
-```
-To look up credentials by the credential id instead, use `--by loan`.
-
-## Create a user
-In the initial data, there are four users (one issuer Izzie, two lenders Lenny and Luna, and one borrower Ben). More users can be created.
-
-### Create an issuer
-```
-./txn_builder_cli create user issuer --name IssuerName
-```
-
-### Create a lender
-```
-./txn_builder_cli create user lender --name LenderName --min_credit_score 580
-```
-
-### Create a borrower
-```
-./txn_builder_cli create user borrower --name BorrowerName
-```
-
-## Create or overwrite a credential record
-Currently supported attributes are min_credit_score, min_income and citizenshiip.
-For example, to create a min_credit_score credential:
-```
-./txn_builder_cli create credential --borrower 0 --attribute min_credit_score --amount 650
-```
-If the credential already exists, the original record will be overwritten.
-
-## Create a loan
-In the initial data, there is one loan. More loans can be created:
-```
-./txn_builder_cli create loan --lender 0 --borrower 0 --amount 500 --duration 5
-```
-
 ## Compose a transaction
-
 ### Create an empty transaction
 ```
-./txn_builder_cli create --name tb
+./txn_builder_cli create_txn_builder --name tb
 ```
 
 ### Add operations to the transaction. Three operations can be added:
@@ -132,44 +80,114 @@ After a transaction is composed:
 ```
 By default, `https://testnet.findora.org` is used. To switch to `http://localhost`, add `--http --localhost`.
 
-## Load funds
-After users are created:
-### Create an empty transaction
+## Issuer account
+### Sign up an issuer account
+In the initial data, there's one issuer, Izzie. To sign up a new issuer account:
 ```
-./txn_builder_cli create --name tran
+./txn_builder_cli issuer sign_up --name 'Issuer Name'
 ```
 
-### Define fiat asset and submit
+## Lender account
+### Sign up a lender account
+In the initial data, there are two issuer, Lenny and Luna. To sign up a new lender account:
 ```
-./txn_builder_cli --txn tran add define_asset --issuer 0 --memo 'Define fiat asset.'
-./txn_builder_cli --txn tran submit
+./txn_builder_cli lender sign_up --name 'Lender Name' --min_credit_score 570
+```
+
+### View loans
+* View all loans of a lender
+```
+./txn_builder_cli lender --id 0 view_loan
+```
+* View a specific loan
+```
+./txn_builder_cli lender --id 0 view_loan --loan 0
+```
+Make sure the specified loan is owned by the lender.
+* View loans with a filter
+To filter the loans, add `--filter` with `active`, `inactive` or `unrejected`, for loans that have been activated (i.e., fulfilled by the lender), haven't been activated, or have been rejected, respectively. For example:
+```
+./txn_builder_cli lender --id 0 view_loan --filter active
+```
+
+### Fulfill a loan
+* Create an empty transaction
+```
+./txn_builder_cli create_txn_builder --name txn_fulfill
+```
+* Fulfill the loan
+```
+./txn_builder_cli --txn txn_fulfill lender --id 0 fulfill_loan --loan 0 --issuer 0
+```
+By default, `https://testnet.findora.org` is used. To switch to `http://localhost`, add `--http --localhost`.
+
+## Borrower account
+### Sign up a borrower account
+In the initial data, there's one borrower, Ben. To sign up a new borrower account:
+```
+./txn_builder_cli borrower sign_up --name 'Borrower Name'
 ```
 
 ### Load funds
-```
-./txn_builder_cli --txn tran load_funds --issuer 0 --recipient 0 --amount 500
-```
-By default, `https://testnet.findora.org` is used. To switch to `http://localhost`, add `--http --localhost`.
-
-## Activate and pay off a loan
-After users and a loan are created:
-### Activate the loan
 * Create an empty transaction
 ```
-./txn_builder_cli create txn_builder --name txn_loan
+./txn_builder_cli create_txn_builder --name txn_load
 ```
-* Activate the loan
+* Load funds
 ```
-./txn_builder_cli --txn txn_loan activate_loan --issuer 0 --loan 0
+./txn_builder_cli --txn txn_load borrower --id 0 load_funds --issuer 0 --amount 500
 ```
 By default, `https://testnet.findora.org` is used. To switch to `http://localhost`, add `--http --localhost`.
-Once the loan is activated or rejected, attempting to activate it again will fail.
 
-### Pay off the loan
+### View loans
+* View all loans of a borrower
 ```
-./txn_builder_cli --txn txn_loan pay_loan --loan 0 --amount 200
+./txn_builder_cli borrower --id 0 view_loan
+```
+* View a specific loan
+```
+./txn_builder_cli borrower --id 0 view_loan --loan 0
+```
+Make sure the specified loan is owned by the borrower.
+* View loans with a filter
+To filter the loans, add `--filter` with `active`, `inactive` or `unrejected`, for loans that have been activated (i.e., fulfilled by the lender), haven't been activated, or have been rejected, respectively. For example:
+```
+./txn_builder_cli borrower --id 0 view_loan --filter active
+```
+
+### Request a loan
+```
+./txn_builder_cli borrower --id 0 request_loan --lender 0 --amount 500 --interest_per_mille 80 --duration 5
+```
+
+### Pay off a loan
+* Create an empty transaction
+```
+./txn_builder_cli create_txn_builder --name txn_pay
+```
+* Pay off the loan
+```
+./txn_builder_cli --txn txn_pay borrower --id 0 pay_loan --loan 0 --amount 200
 ```
 By default, `https://testnet.findora.org` is used. To switch to `http://localhost`, add `--http --localhost`.
+
+### View credentials
+* View all credentials of a borrower
+```
+./txn_builder_cli borrower --id 0 view_credential
+```
+* View a specific credential
+```
+./txn_builder_cli borrower --id 0 view_credential --credential 0
+```
+
+### Create or overwrite a credential
+Currently supported attributes are min_credit_score, min_income and citizenshiip.
+For example, to create a min_credit_score credential:
+```
+./txn_builder_cli borrower --id 0 create_or_overwrite_credential --attribute min_credit_score --value 650
+```
+If the credential already exists, the original record will be overwritten.
 
 ## Querying the ledger server
 
