@@ -28,6 +28,15 @@ use zei::xfr::sig::{XfrKeyPair, XfrPublicKey};
 use zei::xfr::structs::{AssetRecord, BlindAssetRecord, OpenAssetRecord};
 extern crate exitcode;
 
+// TODO (Keyao): Determine which commands is no longer useful, remove them, and update README
+// E.g. funds loading can be achieved by either of the following:
+//      (1) "add define_asset" + "submit" + "add issue_and_transfer_asset"
+//      (2) "borrower load_funds"
+// (2) seems better since it handles all the necessary steps.
+// Then do we still want to support "add define_asset", "submit" and "add issue_and_transfer_asset" commands?
+
+// TODO (Keyao): Rename txn_builder_cli to txn_cli, and create_txn_builder to create_txn?
+
 const INIT_DATA: &str = r#"
 {
   "issuers": [
@@ -194,7 +203,7 @@ struct Loan {
   id: u64,                 // Loan id
   lender: u64,             // Lender id
   borrower: u64,           // Borrower id
-  active: bool,            // Whether the loan has been activated
+  active: bool,            // Whether the loan is active (i.e., fulfilled by the lender)
   rejected: bool,          // Whether the loan has been rejected
   amount: u64,             // Amount in total
   balance: u64,            // Loan balance
@@ -946,7 +955,6 @@ fn merge_records(key_pair: &XfrKeyPair,
   store_txn_builder_to_file(&transaction_file_name, &txn_builder)
 }
 
-// Note: make sure fiat asset has been defined before calling this function
 fn load_funds(issuer_id: u64,
               recipient_id: u64,
               amount: u64,
@@ -960,12 +968,23 @@ fn load_funds(issuer_id: u64,
   let recipient = &data.borrowers.clone()[recipient_id as usize];
   let recipient_key_pair = &data.clone().get_borrower_key_pair(recipient_id)?;
 
-  // Check if fiat code has been defined
+  // Get or define fiat asset
   let token_code = if let Some(code) = &data.clone().fiat_code {
     AssetTypeCode::new_from_base64(code)?
   } else {
-    println!("Fiat code isn't defined. Use define_asset --fiat.");
-    return Err(PlatformError::InputsError);
+    let fiat_code = AssetTypeCode::gen_random();
+    define_asset(true,
+                 issuer_id,
+                 fiat_code,
+                 "Fiat asset",
+                 false,
+                 false,
+                 transaction_file_name)?;
+    // Store data before submitting the transaction to avoid data overwriting
+    let data = load_data()?;
+    submit(protocol, host, transaction_file_name)?;
+    store_data_to_file(data)?;
+    fiat_code
   };
 
   // Issue and transfer asset
@@ -1083,19 +1102,19 @@ fn prove(reveal_sig: &ACRevealSig,
 }
 
 // Issues and transfers fiat and debt token to the lender and borrower, respectively
-// Then activate the loan
-fn activate_loan(loan_id: u64,
-                 issuer_id: u64,
-                 transaction_file_name: &str,
-                 protocol: &str,
-                 host: &str)
-                 -> Result<(), PlatformError> {
+// Then fulfill the loan
+fn fulfill_loan(loan_id: u64,
+                issuer_id: u64,
+                transaction_file_name: &str,
+                protocol: &str,
+                host: &str)
+                -> Result<(), PlatformError> {
   // Get data
   let mut data = load_data()?;
   let issuer_key_pair = &data.clone().get_issuer_key_pair(issuer_id)?;
   let loan = &data.loans.clone()[loan_id as usize];
   if loan.active {
-    println!("Loan {} has already been activated.", loan_id);
+    println!("Loan {} has already been fulfilled.", loan_id);
     return Err(PlatformError::InputsError);
   }
   if loan.rejected {
@@ -1174,33 +1193,23 @@ fn activate_loan(loan_id: u64,
     data = load_data()?;
   }
 
-  // Define fiat asset
+  // Get or define fiat asset
   let fiat_code = if let Some(code) = data.fiat_code {
     println!("Fiat code: {}", code);
     AssetTypeCode::new_from_base64(&code)?
   } else {
-    // Define fiat asset
-    let mut txn_builder = TransactionBuilder::default();
     let fiat_code = AssetTypeCode::gen_random();
-    println!("Generated fiat code: {}",
-             serde_json::to_string(&fiat_code.val).or_else(|_| {
-                                                    Err(PlatformError::SerializationError)
-                                                  })?);
-    if let Err(e) = txn_builder.add_operation_create_asset(&issuer_key_pair,
-                                                           Some(fiat_code),
-                                                           false,
-                                                           false,
-                                                           "Define fiat asset.")
-    {
-      println!("Failed to add operation to transaction.");
-      return Err(e);
-    }
-    store_txn_builder_to_file(&transaction_file_name, &txn_builder)?;
+    define_asset(true,
+                 issuer_id,
+                 fiat_code,
+                 "Fiat asset",
+                 false,
+                 false,
+                 transaction_file_name)?;
     // Store data before submitting the transaction to avoid data overwriting
     let data = load_data()?;
     submit(protocol, host, transaction_file_name)?;
     store_data_to_file(data)?;
-
     fiat_code
   };
 
@@ -1330,7 +1339,7 @@ fn pay_loan(loan_id: u64,
 
   // Check if the loan has been activated
   if !loan.active {
-    println!("Loan {} hasn't been activated yet. Use active_loan to activate the loan.",
+    println!("Loan {} hasn't been activated yet. Use fulfill_loan to activate the loan.",
              loan_id);
     return Err(PlatformError::InputsError);
   }
@@ -1368,13 +1377,13 @@ fn pay_loan(loan_id: u64,
   let fiat_sid = if let Some(sid) = borrower.utxo {
     sid
   } else {
-    println!("Missing fiat utxo in the borrower record. Try --activate_loan.");
+    println!("Missing fiat utxo in the borrower record. Try --fulfill_loan.");
     return Err(PlatformError::InputsError);
   };
   let debt_sid = if let Some(sid) = loan.utxo {
     sid
   } else {
-    println!("Missing debt utxo in the loan record. Try --activate_loan.");
+    println!("Missing debt utxo in the loan record. Try --fulfill_loan.");
     return Err(PlatformError::InputsError);
   };
   let fiat_open_asset_record = get_open_asset_record(protocol, host, fiat_sid, lender_key_pair)?;
@@ -1390,7 +1399,7 @@ fn pay_loan(loan_id: u64,
   let debt_code = if let Some(code) = &loan.code {
     AssetTypeCode::new_from_base64(&code)?
   } else {
-    println!("Missing debt code in the loan record. Try --activate_loan.");
+    println!("Missing debt code in the loan record. Try --fulfill_loan.");
     return Err(PlatformError::InputsError);
   };
 
@@ -1512,104 +1521,120 @@ fn main() {
       .value_name("FILE")
       .help("Use a name transaction file (will always be under findora_dir)")
       .takes_value(true))
-    .subcommand(SubCommand::with_name("view")
-      .subcommand(SubCommand::with_name("loan")
-        .arg(Arg::with_name("by")
-          .short("b")
-          .long("by")
+    .subcommand(SubCommand::with_name("issuer")
+      .subcommand(SubCommand::with_name("sign_up")
+        .arg(Arg::with_name("name")
+          .short("n")
+          .long("name")
           .required(true)
           .takes_value(true)
-          .possible_values(&["loan", "lender", "borrower"])
-          .help("Look up the loan by the id of loan, lender or borrower."))
-        .arg(Arg::with_name("id")
-          .short("i")
-          .long("id")
+          .help("Issuer's name."))))
+    .subcommand(SubCommand::with_name("lender")
+      .subcommand(SubCommand::with_name("sign_up")
+        .arg(Arg::with_name("name")
+          .short("n")
+          .long("name")
           .required(true)
           .takes_value(true)
-          .help("Id of the loan, lender or borrower."))
+          .help("Lender's name."))
+        .arg(Arg::with_name("min_credit_score")
+          .short("m")
+          .long("min_credit_score")
+          .required(true)
+          .takes_value(true)
+          .help("Minimum credit score requirement.")))
+      .arg(Arg::with_name("id")
+        .short("i")
+        .long("id")
+        .takes_value(true)
+        .help("Lender id."))
+      .subcommand(SubCommand::with_name("view_loan")
+        .arg(Arg::with_name("loan")
+          .short("l")
+          .long("loan")
+          .takes_value(true)
+          .help("Display the loan with the specified id only."))
         .arg(Arg::with_name("filter")
           .short("f")
           .long("filter")
           .takes_value(true)
-          .possible_values(&["active","inactive","unrejected"])
-          .help("Display the loan with the specified status only. By default, all records will be shown.")))
-      .subcommand(SubCommand::with_name("credential")
-        .arg(Arg::with_name("by")
-          .short("b")
-          .long("by")
+          .possible_values(&["active", "inactive", "unrejected"])
+          .help("Display the loan with the specified status only."))
+        .help("By default, display all loans of this lender."))
+      .subcommand(SubCommand::with_name("fulfill_loan")
+        .arg(Arg::with_name("loan")
+          .short("l")
+          .long("loan")
           .required(true)
           .takes_value(true)
-          .possible_values(&["credential", "borrower"])
-          .help("Look up the credential by the id of credential or borrower."))
-        .arg(Arg::with_name("id")
+          .help("Loan id."))
+        .arg(Arg::with_name("issuer")
           .short("i")
-          .long("id")
+          .long("issuer")
           .required(true)
           .takes_value(true)
-          .help("Id of the credential or borrower."))))
-    .subcommand(SubCommand::with_name("create")
-      .subcommand(SubCommand::with_name("user")
-        .subcommand(SubCommand::with_name("issuer")
-          .arg(Arg::with_name("name")
-            .short("n")
-            .long("name")
-            .required(true)
-            .takes_value(true)
-            .help("Name.")))
-        .subcommand(SubCommand::with_name("lender")
-          .arg(Arg::with_name("name")
-            .short("n")
-            .long("name")
-            .required(true)
-            .takes_value(true)
-            .help("Name."))
-          .arg(Arg::with_name("min_credit_score")
-            .short("c")
-            .long("min_credit_score")
-            .required(true)
-            .takes_value(true)
-            .help("Minimum credit score requirement.")))
-        .subcommand(SubCommand::with_name("borrower")
-          .arg(Arg::with_name("name")
-            .short("n")
-            .long("name")
-            .required(true)
-            .takes_value(true)
-            .help("Name."))))
-      .subcommand(SubCommand::with_name("credential")
-        .arg(Arg::with_name("borrower")
-          .short("b")
-          .long("borrower")
+          .help("Issuer id."))
+        .arg(Arg::with_name("protocol")
+          .long("http")
+          .takes_value(false)
+          .help("Specify that http, not https should be used."))
+        .arg(Arg::with_name("host")
+          .long("localhost")
+          .takes_value(false)
+          .help("Specify that localhost, not testnet.findora.org should be used."))))
+    .subcommand(SubCommand::with_name("borrower")
+      .subcommand(SubCommand::with_name("sign_up")
+        .arg(Arg::with_name("name")
+          .short("n")
+          .long("name")
           .required(true)
           .takes_value(true)
-          .help("Borrower id."))
-        .arg(Arg::with_name("attribute")
+          .help("Borrower's name.")))
+      .arg(Arg::with_name("id")
+        .short("i")
+        .long("id")
+        .takes_value(true)
+        .help("Borrower id."))
+      .subcommand(SubCommand::with_name("load_funds")
+        .arg(Arg::with_name("issuer")
+          .short("i")
+          .long("issuer")
+          .takes_value(true)
+          .help("Required: issuer id."))
+        .arg(Arg::with_name("amount")
           .short("a")
-          .long("attribute")
+          .long("amount")
           .required(true)
           .takes_value(true)
-          .possible_values(&["min_credit_score", "min_income", "citizenship"])
-          .help("Credential attribute."))
-        .arg(Arg::with_name("value")
-          .short("v")
-          .long("value")
-          .required(true)
+          .help("Amount to transfer to the recipient."))
+        .arg(Arg::with_name("protocol")
+          .long("http")
+          .takes_value(false)
+          .help("Specify that http, not https should be used."))
+        .arg(Arg::with_name("host")
+          .long("localhost")
+          .takes_value(false)
+          .help("Specify that localhost, not testnet.findora.org should be used.")))
+      .subcommand(SubCommand::with_name("view_loan")
+        .arg(Arg::with_name("loan")
+          .short("l")
+          .long("loan")
           .takes_value(true)
-          .help("Value of the credential record."))
-        .help("Create or overwrite a credential record."))
-      .subcommand(SubCommand::with_name("loan")
+          .help("Display the loan with the specified id only."))
+        .arg(Arg::with_name("filter")
+          .short("f")
+          .long("filter")
+          .takes_value(true)
+          .possible_values(&["active", "inactive", "unrejected", "completed"])
+          .help("Display the loan with the specified status only."))
+        .help("By default, display all loans of this borrower."))
+      .subcommand(SubCommand::with_name("request_loan")
         .arg(Arg::with_name("lender")
           .short("l")
           .long("lender")
           .required(true)
           .takes_value(true)
           .help("Lender id."))
-        .arg(Arg::with_name("borrower")
-          .short("b")
-          .long("borrower")
-          .required(true)
-          .takes_value(true)
-          .help("Borrower id."))
         .arg(Arg::with_name("amount")
           .short("a")
           .long("amount")
@@ -1628,19 +1653,62 @@ fn main() {
           .required(true)
           .takes_value(true)
           .help("Payment duration")))
-      .subcommand(SubCommand::with_name("txn_builder")
-        .about("By default, will rename previous file with a .<number> suffix")
-        .arg(Arg::with_name("name")
-          .short("n")
-          .long("name")
-          .value_name("FILE")
-          .help("Specify a name for newly created transaction file")
-          .takes_value(true))
-        .arg(Arg::with_name("overwrite")
-          .long("force")
-          .alias("overwrite")
-          .short("f")
-          .help("If specified, the existing file with the same name will be overwritten."))))
+      .subcommand(SubCommand::with_name("pay_loan")
+        .arg(Arg::with_name("loan")
+          .short("l")
+          .long("loan")
+          .required(true)
+          .takes_value(true)
+          .help("Loan id."))
+        .arg(Arg::with_name("amount")
+          .short("a")
+          .long("amount")
+          .required(true)
+          .takes_value(true)
+          .help("Payment amount."))
+        .arg(Arg::with_name("protocol")
+          .long("http")
+          .takes_value(false)
+          .help("Specify that http, not https should be used."))
+        .arg(Arg::with_name("host")
+          .long("localhost")
+          .takes_value(false)
+          .help("Specify that localhost, not testnet.findora.org should be used.")))
+      .subcommand(SubCommand::with_name("view_credential")
+        .arg(Arg::with_name("credential")
+          .short("c")
+          .long("credential")
+          .takes_value(true)
+          .help("Display the credential with the specified id only."))
+        .help("By default, display all credentials of this borrower."))
+      .subcommand(SubCommand::with_name("create_or_overwrite_credential")
+        .arg(Arg::with_name("attribute")
+          .short("a")
+          .long("attribute")
+          .required(true)
+          .takes_value(true)
+          .possible_values(&["min_credit_score", "min_income", "citizenship"])
+          .help("Credential attribute."))
+        .arg(Arg::with_name("value")
+          .short("v")
+          .long("value")
+          .required(true)
+          .takes_value(true)
+          .help("Value of the credential record."))
+        .help("Create or overwrite a credential record.")))
+    .subcommand(SubCommand::with_name("create_txn_builder")
+      .about("By default, will rename previous file with a .<number> suffix")
+      .arg(Arg::with_name("name")
+        .short("n")
+        .long("name")
+        .value_name("FILE")
+        .help("Specify a name for newly created transaction file")
+        .takes_value(true))
+      .arg(Arg::with_name("overwrite")
+        .long("force")
+        .alias("overwrite")
+        .short("f")
+        .help("If specified, the existing file with the same name will be overwritten.")))
     .subcommand(SubCommand::with_name("store")
       .subcommand(SubCommand::with_name("sids")
         .arg(Arg::with_name("path")
@@ -1849,74 +1917,6 @@ fn main() {
         .long("localhost")
         .takes_value(false)
         .help("Specify that localhost, not testnet.findora.org should be used.")))
-    .subcommand(SubCommand::with_name("load_funds")
-      .arg(Arg::with_name("issuer")
-        .short("i")
-        .long("issuer")
-        .takes_value(true)
-        .help("Required: issuer id."))
-      .arg(Arg::with_name("recipient")
-        .short("r")
-        .long("recipient")
-        .required(true)
-        .takes_value(true)
-        .help("Recipient's id."))
-      .arg(Arg::with_name("amount")
-        .short("a")
-        .long("amount")
-        .required(true)
-        .takes_value(true)
-        .help("Amount to transfer to the recipient."))
-      .arg(Arg::with_name("protocol")
-        .long("http")
-        .takes_value(false)
-        .help("Specify that http, not https should be used."))
-      .arg(Arg::with_name("host")
-        .long("localhost")
-        .takes_value(false)
-        .help("Specify that localhost, not testnet.findora.org should be used.")))
-    .subcommand(SubCommand::with_name("activate_loan")
-      .arg(Arg::with_name("loan")
-        .short("l")
-        .long("loan")
-        .required(true)
-        .takes_value(true)
-        .help("Loan id."))
-      .arg(Arg::with_name("issuer")
-        .short("i")
-        .long("issuer")
-        .required(true)
-        .takes_value(true)
-        .help("Issuer id."))
-      .arg(Arg::with_name("protocol")
-        .long("http")
-        .takes_value(false)
-        .help("Specify that http, not https should be used."))
-      .arg(Arg::with_name("host")
-        .long("localhost")
-        .takes_value(false)
-        .help("Specify that localhost, not testnet.findora.org should be used.")))
-    .subcommand(SubCommand::with_name("pay_loan")
-      .arg(Arg::with_name("loan")
-        .short("l")
-        .long("loan")
-        .required(true)
-        .takes_value(true)
-        .help("Loan id."))
-      .arg(Arg::with_name("amount")
-        .short("a")
-        .long("amount")
-        .required(true)
-        .takes_value(true)
-        .help("Payment amount."))
-      .arg(Arg::with_name("protocol")
-        .long("http")
-        .takes_value(false)
-        .help("Specify that http, not https should be used."))
-      .arg(Arg::with_name("host")
-        .long("localhost")
-        .takes_value(false)
-        .help("Specify that localhost, not testnet.findora.org should be used.")))
     .get_matches();
   if let Err(error) = process_inputs(inputs) {
     match_error_and_exit(error);
@@ -1957,9 +1957,15 @@ fn process_inputs(inputs: clap::ArgMatches) -> Result<(), PlatformError> {
   }
 
   match inputs.subcommand() {
-    ("view", Some(view_matches)) => process_view_cmd(view_matches),
-    ("create", Some(create_matches)) => {
-      process_create_cmd(create_matches, &transaction_file_name, &findora_dir)
+    ("issuer", Some(issuer_matches)) => process_issuer_cmd(issuer_matches),
+    ("lender", Some(issuer_matches)) => process_lender_cmd(issuer_matches, &transaction_file_name),
+    ("borrower", Some(issuer_matches)) => {
+      process_borrower_cmd(issuer_matches, &transaction_file_name)
+    }
+    ("create_txn_builder", Some(create_txn_builder_matches)) => {
+      process_create_txn_builder_cmd(create_txn_builder_matches,
+                                     &transaction_file_name,
+                                     &findora_dir)
     }
     ("store", Some(store_matches)) => process_store_cmd(store_matches, &findora_dir),
     ("add", Some(add_matches)) => process_add_cmd(add_matches, &transaction_file_name),
@@ -2014,15 +2020,6 @@ fn process_inputs(inputs: clap::ArgMatches) -> Result<(), PlatformError> {
       store_pub_key_to_file(&expand_str)
     }
     ("submit", Some(submit_matches)) => process_submit_cmd(submit_matches, &transaction_file_name),
-    ("load_funds", Some(load_funds_matches)) => {
-      process_load_funds_cmd(load_funds_matches, &transaction_file_name)
-    }
-    ("activate_loan", Some(activate_loan_matches)) => {
-      process_activate_loan_cmd(activate_loan_matches, &transaction_file_name)
-    }
-    ("pay_loan", Some(pay_loan_matches)) => {
-      process_pay_loan_cmd(pay_loan_matches, &transaction_file_name)
-    }
     _ => {
       println!("Subcommand missing or not recognized. Try --help");
       Err(PlatformError::InputsError)
@@ -2030,96 +2027,327 @@ fn process_inputs(inputs: clap::ArgMatches) -> Result<(), PlatformError> {
   }
 }
 
-fn process_view_cmd(view_matches: &clap::ArgMatches) -> Result<(), PlatformError> {
-  match view_matches.subcommand() {
-    ("loan", Some(loan_matches)) => {
-      let id = if let Some(id_arg) = loan_matches.value_of("id") {
-        parse_to_u64(id_arg)?
+fn process_issuer_cmd(issuer_matches: &clap::ArgMatches) -> Result<(), PlatformError> {
+  match issuer_matches.subcommand() {
+    ("sign_up", Some(sign_up_matches)) => {
+      let name = if let Some(name_arg) = sign_up_matches.value_of("name") {
+        name_arg.to_owned()
       } else {
-        println!("Lookup id is required. Use --id.");
+        println!("Name is required to sign up an issuer account. Use --name.");
         return Err(PlatformError::InputsError);
       };
-      let data = load_data()?;
-      if let Some(by_arg) = loan_matches.value_of("by") {
-        let mut loan_ids = Vec::new();
-        match by_arg {
-          "loan" => {
-            loan_ids.push(id);
-          }
-          "lender" => {
-            loan_ids = data.lenders[id as usize].loans.clone();
-          }
-          _ => {
-            loan_ids = data.borrowers[id as usize].loans.clone();
-          }
-        }
-        let mut loans = Vec::new();
-        if let Some(filter) = loan_matches.value_of("filter") {
-          for id in loan_ids {
-            match filter {
-              "active" => {
-                if data.loans[id as usize].active {
-                  loans.push(data.loans[id as usize].clone());
-                }
-              }
-              "inactive" => {
-                if !data.loans[id as usize].active {
-                  loans.push(data.loans[id as usize].clone());
-                }
-              }
-              _ => {
-                if !data.loans[id as usize].rejected {
-                  loans.push(data.loans[id as usize].clone());
-                }
-              }
-            }
-          }
-        } else {
-          for id in loan_ids {
-            loans.push(data.loans[id as usize].clone());
-          }
-        }
-        println!("Displaying {} loan(s): {:?}", loans.len(), loans);
-      } else {
-        println!("Lookup source is required. Use --by.");
-        return Err(PlatformError::InputsError);
-      };
-      Ok(())
-    }
-    ("credential", Some(credential_matches)) => {
-      let id = if let Some(id_arg) = credential_matches.value_of("id") {
-        parse_to_u64(id_arg)?
-      } else {
-        println!("Lookup id is required. Use --id.");
-        return Err(PlatformError::InputsError);
-      };
-      let data = load_data()?;
-      if let Some(by_arg) = credential_matches.value_of("by") {
-        let mut credentials = Vec::new();
-        match by_arg {
-          "credential" => {
-            credentials.push(data.credentials[id as usize].clone());
-          }
-          _ => {
-            let ids = data.borrowers[id as usize].credentials;
-            for id in ids.iter() {
-              if let Some(id) = id {
-                credentials.push(data.credentials[*id as usize].clone());
-              }
-            }
-          }
-        }
-        println!("Displaying {} credential(s): {:?}",
-                 credentials.len(),
-                 credentials);
-      } else {
-        println!("Lookup source is required. Use --by.");
-        return Err(PlatformError::InputsError);
-      };
-      Ok(())
+      let mut data = load_data()?;
+      data.add_issuer(name)
     }
     _ => {
-      println!("Subcommand missing or not recognized. Try --help");
+      println!("Subcommand missing or not recognized. Try lender --help");
+      Err(PlatformError::InputsError)
+    }
+  }
+}
+
+fn process_lender_cmd(lender_matches: &clap::ArgMatches,
+                      transaction_file_name: &str)
+                      -> Result<(), PlatformError> {
+  let mut data = load_data()?;
+  match lender_matches.subcommand() {
+    ("sign_up", Some(sign_up_matches)) => {
+      let name = if let Some(name_arg) = sign_up_matches.value_of("name") {
+        name_arg.to_owned()
+      } else {
+        println!("Name is required to sign up a lender account. Use --name.");
+        return Err(PlatformError::InputsError);
+      };
+      let min_credit_score = if let Some(min_credit_score_arg) =
+        sign_up_matches.value_of("min_credit_score")
+      {
+        parse_to_u64(min_credit_score_arg)?
+      } else {
+        println!("Minimum credit score requirement is required to sign up a lender account. Use --min_credit_score.");
+        return Err(PlatformError::InputsError);
+      };
+      data.add_lender(name, min_credit_score)
+    }
+    ("view_loan", Some(view_loan_matches)) => {
+      let lender_id = if let Some(id_arg) = lender_matches.value_of("id") {
+        parse_to_u64(id_arg)?
+      } else {
+        println!("Lender id is required to get loan information. Use lender --id.");
+        return Err(PlatformError::InputsError);
+      };
+      if let Some(loan_arg) = view_loan_matches.value_of("loan") {
+        let loan_id = parse_to_u64(loan_arg)?;
+        let loan = data.loans[loan_id as usize].clone();
+        if loan.lender != lender_id {
+          println!("Lender {} doesn't own loan {}.", lender_id, loan_id);
+          return Err(PlatformError::InputsError);
+        }
+        println!("Displaying loan {}: {:?}.", loan_id, loan);
+        return Ok(());
+      }
+      let mut loans = Vec::new();
+      let loan_ids = data.lenders[lender_id as usize].loans.clone();
+      if let Some(filter) = view_loan_matches.value_of("filter") {
+        for id in loan_ids {
+          match filter {
+            "active" => {
+              if data.loans[id as usize].active {
+                loans.push(data.loans[id as usize].clone());
+              }
+            }
+            "inactive" => {
+              if !data.loans[id as usize].active {
+                loans.push(data.loans[id as usize].clone());
+              }
+            }
+            _ => {
+              if !data.loans[id as usize].rejected {
+                loans.push(data.loans[id as usize].clone());
+              }
+            }
+          }
+        }
+      } else {
+        for id in loan_ids {
+          loans.push(data.loans[id as usize].clone());
+        }
+      }
+      println!("Displaying {} loan(s): {:?}", loans.len(), loans);
+      Ok(())
+    }
+    ("fulfill_loan", Some(fulfill_loan_matches)) => {
+      let loan_id = if let Some(loan_arg) = fulfill_loan_matches.value_of("loan") {
+        parse_to_u64(loan_arg)?
+      } else {
+        println!("Loan id is required to fulfill the loan. Use --loan.");
+        return Err(PlatformError::InputsError);
+      };
+      if let Some(id_arg) = lender_matches.value_of("id") {
+        let lender_id = parse_to_u64(id_arg)?;
+        let loan = data.loans[loan_id as usize].clone();
+        if loan.lender != lender_id {
+          println!("Lender {} doesn't own loan {}.", lender_id, loan_id);
+          return Err(PlatformError::InputsError);
+        }
+      } else {
+        println!("Lender id is required to fulfill a loan. Use lender --id.");
+        return Err(PlatformError::InputsError);
+      };
+      let issuer_id = if let Some(issuer_arg) = fulfill_loan_matches.value_of("issuer") {
+        parse_to_u64(issuer_arg)?
+      } else {
+        println!("Issuer id is required to fulfill the loan. Use --issuer.");
+        return Err(PlatformError::InputsError);
+      };
+      let protocol = if fulfill_loan_matches.is_present("http") {
+        // Allow HTTP which may be useful for running a ledger locally.
+        "http"
+      } else {
+        // Default to HTTPS
+        "https"
+      };
+      let host = if fulfill_loan_matches.is_present("localhost") {
+        // Use localhost
+        run_ledger_standalone()?;
+        "localhost"
+      } else {
+        // Default to testnet.findora.org
+        "testnet.findora.org"
+      };
+      fulfill_loan(loan_id, issuer_id, transaction_file_name, protocol, host)
+    }
+    _ => {
+      println!("Subcommand missing or not recognized. Try lender --help");
+      Err(PlatformError::InputsError)
+    }
+  }
+}
+
+fn process_borrower_cmd(borrower_matches: &clap::ArgMatches,
+                        transaction_file_name: &str)
+                        -> Result<(), PlatformError> {
+  let mut data = load_data()?;
+  match borrower_matches.subcommand() {
+    ("sign_up", Some(sign_up_matches)) => {
+      let name = if let Some(name_arg) = sign_up_matches.value_of("name") {
+        name_arg.to_owned()
+      } else {
+        println!("Name is required to sign up a lender account. Use --name.");
+        return Err(PlatformError::InputsError);
+      };
+      data.add_borrower(name)
+    }
+    ("load_funds", Some(load_funds_matches)) => {
+      let borrower_id = if let Some(id_arg) = borrower_matches.value_of("id") {
+        parse_to_u64(id_arg)?
+      } else {
+        println!("Borrower id is required to load funds. Use borrower --id.");
+        return Err(PlatformError::InputsError);
+      };
+      process_load_funds_cmd(borrower_id, load_funds_matches, transaction_file_name)
+    }
+    ("view_loan", Some(view_loan_matches)) => {
+      let borrower_id = if let Some(id_arg) = borrower_matches.value_of("id") {
+        parse_to_u64(id_arg)?
+      } else {
+        println!("Borrower id is required to get loan information. Use borrower --id.");
+        return Err(PlatformError::InputsError);
+      };
+      if let Some(loan_arg) = view_loan_matches.value_of("loan") {
+        let loan_id = parse_to_u64(loan_arg)?;
+        let loan = data.loans[loan_id as usize].clone();
+        if loan.borrower != borrower_id {
+          println!("Borrower {} doesn't own loan {}.", borrower_id, loan_id);
+          return Err(PlatformError::InputsError);
+        }
+        println!("Displaying loan {}: {:?}.", loan_id, loan);
+        return Ok(());
+      }
+      let mut loans = Vec::new();
+      let loan_ids = data.borrowers[borrower_id as usize].loans.clone();
+      if let Some(filter) = view_loan_matches.value_of("filter") {
+        for id in loan_ids {
+          match filter {
+            "active" => {
+              if data.loans[id as usize].active {
+                loans.push(data.loans[id as usize].clone());
+              }
+            }
+            "inactive" => {
+              if !data.loans[id as usize].active {
+                loans.push(data.loans[id as usize].clone());
+              }
+            }
+            _ => {
+              if !data.loans[id as usize].rejected {
+                loans.push(data.loans[id as usize].clone());
+              }
+            }
+          }
+        }
+      } else {
+        for id in loan_ids {
+          loans.push(data.loans[id as usize].clone());
+        }
+      }
+      println!("Displaying {} loan(s): {:?}", loans.len(), loans);
+      Ok(())
+    }
+    ("request_loan", Some(request_loan_matches)) => {
+      let borrower_id = if let Some(id_arg) = borrower_matches.value_of("id") {
+        parse_to_u64(id_arg)?
+      } else {
+        println!("Borrower id is required to request a loan. Use borrower --id.");
+        return Err(PlatformError::InputsError);
+      };
+      let lender_id = if let Some(lender_arg) = request_loan_matches.value_of("lender") {
+        parse_to_u64(lender_arg)?
+      } else {
+        println!("Lender id is required to request the loan. Use --lender.");
+        return Err(PlatformError::InputsError);
+      };
+      let amount = if let Some(amount_arg) = request_loan_matches.value_of("amount") {
+        parse_to_u64(amount_arg)?
+      } else {
+        println!("Amount is required to request the loan. Use --amount.");
+        return Err(PlatformError::InputsError);
+      };
+      let interest_per_mille =
+        if let Some(interest_per_mille_arg) = request_loan_matches.value_of("interest_per_mille") {
+          parse_to_u64(interest_per_mille_arg)?
+        } else {
+          println!("Interest per mille is required to request the loan. Use --interest_per_mille.");
+          return Err(PlatformError::InputsError);
+        };
+      let duration = if let Some(duration_arg) = request_loan_matches.value_of("duration") {
+        parse_to_u64(duration_arg)?
+      } else {
+        println!("Duration is required to request the loan. Use --amount.");
+        return Err(PlatformError::InputsError);
+      };
+      let mut data = load_data()?;
+      data.add_loan(lender_id, borrower_id, amount, interest_per_mille, duration)
+    }
+    ("pay_loan", Some(pay_loan_matches)) => {
+      let borrower_id = if let Some(id_arg) = borrower_matches.value_of("id") {
+        parse_to_u64(id_arg)?
+      } else {
+        println!("Borrower id is required to pay off the loan. Use borrower --id.");
+        return Err(PlatformError::InputsError);
+      };
+      if let Some(loan_arg) = pay_loan_matches.value_of("loan") {
+        let loan_id = parse_to_u64(loan_arg)?;
+        let loan = data.loans[loan_id as usize].clone();
+        if loan.borrower != borrower_id {
+          println!("Borrower {} doesn't own loan {}.", borrower_id, loan_id);
+          return Err(PlatformError::InputsError);
+        }
+      } else {
+        println!("Loan id is required to pay the loan.");
+        return Err(PlatformError::InputsError);
+      }
+      process_pay_loan_cmd(pay_loan_matches, transaction_file_name)
+    }
+    ("view_credential", Some(view_credential_matches)) => {
+      let borrower_id = if let Some(id_arg) = borrower_matches.value_of("id") {
+        parse_to_u64(id_arg)?
+      } else {
+        println!("Borrower id is required to get credential information. Use borrower --id.");
+        return Err(PlatformError::InputsError);
+      };
+      if let Some(credential_arg) = view_credential_matches.value_of("credential") {
+        let credential_id = parse_to_u64(credential_arg)?;
+        let credential = data.loans[credential_id as usize].clone();
+        if credential.borrower != borrower_id {
+          println!("Borrower {} doesn't own credential {}.",
+                   borrower_id, credential_id);
+          return Err(PlatformError::InputsError);
+        }
+        println!("Displaying credential {}: {:?}.", credential_id, credential);
+        return Ok(());
+      }
+      let mut credentials = Vec::new();
+      let credential_ids = data.borrowers[borrower_id as usize].credentials.clone();
+      for i in 0..3 {
+        if let Some(id) = credential_ids[i] {
+          credentials.push(data.credentials[id as usize].clone());
+        }
+      }
+      println!("Displaying {} credential(s): {:?}",
+               credentials.len(),
+               credentials);
+      Ok(())
+    }
+    ("create_or_overwrite_credential", Some(create_or_overwrite_credential_matches)) => {
+      let borrower_id = if let Some(id_arg) = borrower_matches.value_of("id") {
+        parse_to_u64(id_arg)?
+      } else {
+        println!("Borrower id is required to get credential information. Use borrower --id.");
+        return Err(PlatformError::InputsError);
+      };
+      let attribute =
+        if let Some(attribute_arg) = create_or_overwrite_credential_matches.value_of("attribute") {
+          match attribute_arg {
+            "min_credit_score" => CredentialIndex::MinCreditScore,
+            "min_income" => CredentialIndex::MinIncome,
+            _ => CredentialIndex::Citizenship,
+          }
+        } else {
+          println!("Credential attribute is required to create the credential. Use --attribute.");
+          return Err(PlatformError::InputsError);
+        };
+      let value = if let Some(value_arg) = create_or_overwrite_credential_matches.value_of("value")
+      {
+        parse_to_u64(value_arg)?
+      } else {
+        println!("Credential value is required to create the credential. Use --value.");
+        return Err(PlatformError::InputsError);
+      };
+      let mut data = load_data()?;
+      data.add_or_update_credential(borrower_id, attribute, value)
+    }
+    _ => {
+      println!("Subcommand missing or not recognized. Try borrower --help");
       Err(PlatformError::InputsError)
     }
   }
@@ -2136,134 +2364,21 @@ fn create_directory_and_rename_path(path_str: &str, overwrite: bool) -> Result<(
   Ok(())
 }
 
-fn process_create_cmd(create_matches: &clap::ArgMatches,
-                      transaction_file_name: &str,
-                      _findora_dir: &str)
-                      -> Result<(), PlatformError> {
-  match create_matches.subcommand() {
-    ("user", Some(user_matches)) => {
-      let mut data = load_data()?;
-      match user_matches.subcommand() {
-        ("issuer", Some(issuer_matches)) => {
-          let name = if let Some(name_arg) = issuer_matches.value_of("name") {
-            name_arg.to_owned()
-          } else {
-            println!("Name is required to create the issuer. Use --name.");
-            return Err(PlatformError::InputsError);
-          };
-          data.add_issuer(name)
-        }
-        ("lender", Some(lender_matches)) => {
-          let name = if let Some(name_arg) = lender_matches.value_of("name") {
-            name_arg.to_owned()
-          } else {
-            println!("Name is required to create the lender. Use --name.");
-            return Err(PlatformError::InputsError);
-          };
-          let min_credit_score = if let Some(min_credit_score_arg) =
-            lender_matches.value_of("min_credit_score")
-          {
-            parse_to_u64(min_credit_score_arg)?
-          } else {
-            println!("Minimum credit score requirement is required to create the lender. Use --min_credit_score.");
-            return Err(PlatformError::InputsError);
-          };
-          data.add_lender(name, min_credit_score)
-        }
-        ("borrower", Some(borrower_matches)) => {
-          let name = if let Some(name_arg) = borrower_matches.value_of("name") {
-            name_arg.to_owned()
-          } else {
-            println!("Name is required to create the borrower. Use --name.");
-            return Err(PlatformError::InputsError);
-          };
-          data.add_borrower(name)
-        }
-        _ => {
-          println!("Subcommand missing or not recognized. Try create user --help");
-          Err(PlatformError::InputsError)
-        }
-      }
-    }
-    ("credential", Some(credential_matches)) => {
-      let borrower = if let Some(borrower_arg) = credential_matches.value_of("borrower") {
-        parse_to_u64(borrower_arg)?
-      } else {
-        println!("Borrower id is required to create the credential. Use --borrower.");
-        return Err(PlatformError::InputsError);
-      };
-      let attribute = if let Some(attribute_arg) = credential_matches.value_of("attribute") {
-        match attribute_arg {
-          "min_credit_score" => CredentialIndex::MinCreditScore,
-          "min_income" => CredentialIndex::MinIncome,
-          _ => CredentialIndex::Citizenship,
-        }
-      } else {
-        println!("Credential attribute is required to create the credential. Use --attribute.");
-        return Err(PlatformError::InputsError);
-      };
-      let value = if let Some(value_arg) = credential_matches.value_of("value") {
-        parse_to_u64(value_arg)?
-      } else {
-        println!("Credential value is required to create the credential. Use --value.");
-        return Err(PlatformError::InputsError);
-      };
-      let mut data = load_data()?;
-      data.add_or_update_credential(borrower, attribute, value)
-    }
-    ("loan", Some(loan_matches)) => {
-      let lender = if let Some(lender_arg) = loan_matches.value_of("lender") {
-        parse_to_u64(lender_arg)?
-      } else {
-        println!("Lender id is required to create the loan. Use --lender.");
-        return Err(PlatformError::InputsError);
-      };
-      let borrower = if let Some(borrower_arg) = loan_matches.value_of("borrower") {
-        parse_to_u64(borrower_arg)?
-      } else {
-        println!("Borrower id is required to create the loan. Use --borrower.");
-        return Err(PlatformError::InputsError);
-      };
-      let amount = if let Some(amount_arg) = loan_matches.value_of("amount") {
-        parse_to_u64(amount_arg)?
-      } else {
-        println!("Amount is required to create the loan. Use --amount.");
-        return Err(PlatformError::InputsError);
-      };
-      let interest_per_mille =
-        if let Some(interest_per_mille_arg) = loan_matches.value_of("interest_per_mille") {
-          parse_to_u64(interest_per_mille_arg)?
-        } else {
-          println!("Interest per mille is required to create the loan. Use --interest_per_mille.");
-          return Err(PlatformError::InputsError);
-        };
-      let duration = if let Some(duration_arg) = loan_matches.value_of("duration") {
-        parse_to_u64(duration_arg)?
-      } else {
-        println!("Duration is required to create the loan. Use --amount.");
-        return Err(PlatformError::InputsError);
-      };
-      let mut data = load_data()?;
-      data.add_loan(lender, borrower, amount, interest_per_mille, duration)
-    }
-    ("txn_builder", Some(txn_builder_matches)) => {
-      let name = txn_builder_matches.value_of("name");
-      let overwrite = txn_builder_matches.is_present("overwrite");
-      let file_str = if let Some(name) = name {
-        name.to_string()
-      } else {
-        transaction_file_name.to_string()
-      };
-      let expand_str = shellexpand::tilde(&file_str).to_string();
-      create_directory_and_rename_path(&expand_str, overwrite)?;
-      let txn_builder = TransactionBuilder::default();
-      store_txn_builder_to_file(&expand_str, &txn_builder)
-    }
-    _ => {
-      println!("Subcommand missing or not recognized. Try create --help");
-      Err(PlatformError::InputsError)
-    }
-  }
+fn process_create_txn_builder_cmd(create_matches: &clap::ArgMatches,
+                                  transaction_file_name: &str,
+                                  _findora_dir: &str)
+                                  -> Result<(), PlatformError> {
+  let name = create_matches.value_of("name");
+  let overwrite = create_matches.is_present("overwrite");
+  let file_str = if let Some(name) = name {
+    name.to_string()
+  } else {
+    transaction_file_name.to_string()
+  };
+  let expand_str = shellexpand::tilde(&file_str).to_string();
+  create_directory_and_rename_path(&expand_str, overwrite)?;
+  let txn_builder = TransactionBuilder::default();
+  store_txn_builder_to_file(&expand_str, &txn_builder)
 }
 
 fn process_store_cmd(store_matches: &clap::ArgMatches,
@@ -2634,7 +2749,8 @@ fn process_submit_cmd(submit_matches: &clap::ArgMatches,
   submit(protocol, host, &transaction_file_name)
 }
 
-fn process_load_funds_cmd(load_funds_matches: &clap::ArgMatches,
+fn process_load_funds_cmd(borrower_id: u64,
+                          load_funds_matches: &clap::ArgMatches,
                           transaction_file_name: &str)
                           -> Result<(), PlatformError> {
   let issuer_id = if let Some(issuer_arg) = load_funds_matches.value_of("issuer") {
@@ -2646,12 +2762,6 @@ fn process_load_funds_cmd(load_funds_matches: &clap::ArgMatches,
     }
   } else {
     println!("Issuer id is required to load funds. Use --issuer.");
-    return Err(PlatformError::InputsError);
-  };
-  let recipient_id = if let Some(recipient_arg) = load_funds_matches.value_of("recipient") {
-    parse_to_u64(recipient_arg)?
-  } else {
-    println!("Recipient id is required to load funds. Use --recipient.");
     return Err(PlatformError::InputsError);
   };
   let amount = if let Some(amount_arg) = load_funds_matches.value_of("amount") {
@@ -2677,45 +2787,11 @@ fn process_load_funds_cmd(load_funds_matches: &clap::ArgMatches,
   };
 
   load_funds(issuer_id,
-             recipient_id,
+             borrower_id,
              amount,
              transaction_file_name,
              protocol,
              host)
-}
-
-fn process_activate_loan_cmd(activate_loan_matches: &clap::ArgMatches,
-                             transaction_file_name: &str)
-                             -> Result<(), PlatformError> {
-  let loan_id = if let Some(loan_arg) = activate_loan_matches.value_of("loan") {
-    parse_to_u64(loan_arg)?
-  } else {
-    println!("Loan id is required to activate the loan. Use --loan.");
-    return Err(PlatformError::InputsError);
-  };
-  let issuer_id = if let Some(issuer_arg) = activate_loan_matches.value_of("issuer") {
-    parse_to_u64(issuer_arg)?
-  } else {
-    println!("Issuer id is required to activate the loan. Use --issuer.");
-    return Err(PlatformError::InputsError);
-  };
-  let protocol = if activate_loan_matches.is_present("http") {
-    // Allow HTTP which may be useful for running a ledger locally.
-    "http"
-  } else {
-    // Default to HTTPS
-    "https"
-  };
-  let host = if activate_loan_matches.is_present("localhost") {
-    // Use localhost
-    run_ledger_standalone()?;
-    "localhost"
-  } else {
-    // Default to testnet.findora.org
-    "testnet.findora.org"
-  };
-
-  activate_loan(loan_id, issuer_id, transaction_file_name, protocol, host)
 }
 
 fn process_pay_loan_cmd(pay_loan_matches: &clap::ArgMatches,
@@ -3062,8 +3138,6 @@ mod tests {
 
   #[test]
   #[ignore]
-  // 1. The issuer defines the asset
-  // 2. Load funds for the recipient
   fn test_load_funds() {
     run_ledger_standalone().unwrap();
 
@@ -3074,19 +3148,8 @@ mod tests {
     let txn_builder_path = "tb_load_funds";
     store_txn_builder_to_file(&txn_builder_path, &TransactionBuilder::default()).unwrap();
 
-    // Define amount and token code
+    // Define amount
     let amount = 1000;
-    let code = AssetTypeCode::gen_random();
-
-    // Define asset
-    define_asset(true,
-                 0,
-                 code,
-                 "Define a fiat asset",
-                 false,
-                 false,
-                 txn_builder_path).unwrap();
-    submit(PROTOCOL, HOST, txn_builder_path).unwrap();
 
     // Load funds
     load_funds(0, 0, amount, txn_builder_path, PROTOCOL, HOST).unwrap();
@@ -3128,15 +3191,15 @@ mod tests {
 
   #[test]
   #[ignore]
-  // Create, activate and pay a loan
-  fn test_create_activate_and_pay_loan() {
+  // Request, fulfill and pay a loan
+  fn test_request_fulfill_and_pay_loan() {
     run_ledger_standalone().unwrap();
 
     // Load data
     let mut data = load_data().unwrap();
     let loan_id = data.loans.len();
 
-    // Create loan
+    // Request a loan
     let amount = 1200;
     data.add_loan(0, 0, amount, 100, 8).unwrap();
     assert_eq!(data.loans.len(), loan_id + 1);
@@ -3145,8 +3208,8 @@ mod tests {
     let txn_builder_path = "tb_loan";
     store_txn_builder_to_file(&txn_builder_path, &TransactionBuilder::default()).unwrap();
 
-    // Activate loan
-    activate_loan(loan_id as u64, 0, txn_builder_path, PROTOCOL, HOST).unwrap();
+    // Fulfill the loan request
+    fulfill_loan(loan_id as u64, 0, txn_builder_path, PROTOCOL, HOST).unwrap();
     let data = load_data().unwrap();
     assert_eq!(data.loans[loan_id].active, true);
     assert_eq!(data.loans[loan_id].balance, amount);
