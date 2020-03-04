@@ -96,14 +96,14 @@ fn create_or_overwrite_credential(id: &str, attribute: &str, value: &str) -> io:
 }
 
 #[cfg(test)]
-fn create_loan(lender: &str,
-               borrower: &str,
-               amount: &str,
-               interest_per_mille: &str,
-               duration: &str)
-               -> io::Result<Output> {
+fn request_loan(lender: &str,
+                borrower: &str,
+                amount: &str,
+                interest_per_mille: &str,
+                duration: &str)
+                -> io::Result<Output> {
   Command::new(COMMAND).args(&["borrower", "--id", borrower])
-                       .arg("create_loan")
+                       .arg("request_loan")
                        .args(&["--lender", lender])
                        .args(&["--amount", amount])
                        .args(&["--interest_per_mille", interest_per_mille])
@@ -323,14 +323,14 @@ fn load_funds(txn_builder_path: &str,
 
 // Helper functions: initiate and pay loan
 #[cfg(test)]
-fn activate_loan(txn_builder_path: &str,
-                 lender_id: &str,
-                 loan_id: &str,
-                 issuer_id: &str)
-                 -> io::Result<Output> {
+fn fulfill_loan(txn_builder_path: &str,
+                lender_id: &str,
+                loan_id: &str,
+                issuer_id: &str)
+                -> io::Result<Output> {
   Command::new(COMMAND).args(&["--txn", txn_builder_path])
                        .args(&["lender", "--id", lender_id])
-                       .arg("activate_loan")
+                       .arg("fulfill_loan")
                        .args(&["--loan", loan_id])
                        .args(&["--issuer", issuer_id])
                        .args(&["--http", "--localhost"])
@@ -481,15 +481,15 @@ fn test_view() {
   create_or_overwrite_credential("0", "min_income", "1500").expect("Failed to create a credential");
 
   // Create loans
-  create_loan("0", "0", "100", "100", "3").expect("Failed to create the loan");
-  create_loan("1", "0", "300", "200", "9").expect("Failed to create the loan");
-  create_loan("1", "0", "500", "300", "15").expect("Failed to create the loan");
+  request_loan("0", "0", "100", "100", "3").expect("Failed to request the loan");
+  request_loan("1", "0", "300", "200", "9").expect("Failed to request the loan");
+  request_loan("1", "0", "500", "300", "15").expect("Failed to request the loan");
 
-  // Activate some of the loans
+  // Fulfill some of the loans
   let txn_builder_path = "txn_builder_view_loans";
   create_txn_builder_with_path(txn_builder_path).expect("Failed to create transaction builder");
-  activate_loan(txn_builder_path, "0", "0", "0").expect("Failed to activate the loan");
-  activate_loan(txn_builder_path, "1", "1", "0").expect("Failed to activate the loan");
+  fulfill_loan(txn_builder_path, "0", "0", "0").expect("Failed to fulfill the loan");
+  fulfill_loan(txn_builder_path, "1", "1", "0").expect("Failed to fulfill the loan");
 
   // View loans
   // 1. View all loans of a lender
@@ -1000,19 +1000,19 @@ fn test_load_funds_with_args() {
 
 #[test]
 #[ignore]
-fn test_create_activate_and_pay_loan_with_args() {
+fn test_request_fulfill_and_pay_loan_with_args() {
   let _ = fs::remove_file(DATA_FILE);
 
-  // Create the first loan
-  let output = create_loan("0", "0", "1500", "100", "8").expect("Failed to create a loan");
+  // Request the first loan
+  let output = request_loan("0", "0", "1500", "100", "8").expect("Failed to request a loan");
 
   io::stdout().write_all(&output.stdout).unwrap();
   io::stdout().write_all(&output.stderr).unwrap();
 
   assert!(output.status.success());
 
-  // Create the second loan
-  let output = create_loan("1", "0", "1000", "80", "10").expect("Failed to create a loan");
+  // Request the second loan
+  let output = request_loan("1", "0", "1000", "80", "10").expect("Failed to request a loan");
 
   io::stdout().write_all(&output.stdout).unwrap();
   io::stdout().write_all(&output.stderr).unwrap();
@@ -1020,13 +1020,13 @@ fn test_create_activate_and_pay_loan_with_args() {
   assert!(output.status.success());
 
   // Create txn builder
-  let txn_builder_file = "tb_activate_loan_args";
+  let txn_builder_file = "tb_fulfill_loan_args";
   create_txn_builder_with_path(txn_builder_file).expect("Failed to create transaction builder");
 
-  // Initiate the first loan
+  // Fulfill the first loan
   // 1. First time
   //    Add the credential proof, then successfully initiate the loan
-  let output = activate_loan(txn_builder_file, "0", "0", "0").expect("Failed to initiate the loan");
+  let output = fulfill_loan(txn_builder_file, "0", "0", "0").expect("Failed to initiate the loan");
 
   io::stdout().write_all(&output.stdout).unwrap();
   io::stdout().write_all(&output.stderr).unwrap();
@@ -1036,20 +1036,20 @@ fn test_create_activate_and_pay_loan_with_args() {
                                    .contains(&"Proving before attesting.".to_owned()));
 
   // 2. Second time:
-  //    Fail because the loan has been activated
-  let output = activate_loan(txn_builder_file, "0", "0", "0").expect("Failed to initiate the loan");
+  //    Fail because the loan has been fulfilled
+  let output = fulfill_loan(txn_builder_file, "0", "0", "0").expect("Failed to initiate the loan");
 
   io::stdout().write_all(&output.stdout).unwrap();
   io::stdout().write_all(&output.stderr).unwrap();
 
   assert_eq!(output.status.code(), Some(exitcode::USAGE));
   assert!(from_utf8(&output.stdout).unwrap()
-                                   .contains(&"has already been activated.".to_owned()));
+                                   .contains(&"has already been fulfilled.".to_owned()));
 
-  // Initiate the second loan
+  // Fulfill the second loan
   // 1. First time:
   //    Get the credential proof, then fail to initiate the loan because the requirement isn't met
-  let output = activate_loan(txn_builder_file, "1", "1", "0").expect("Failed to initiate the loan");
+  let output = fulfill_loan(txn_builder_file, "1", "1", "0").expect("Failed to initiate the loan");
 
   io::stdout().write_all(&output.stdout).unwrap();
   io::stdout().write_all(&output.stderr).unwrap();
@@ -1061,7 +1061,7 @@ fn test_create_activate_and_pay_loan_with_args() {
 
   // 2. Second time:
   //    Fail because the loan has been rejected
-  let output = activate_loan(txn_builder_file, "1", "1", "0").expect("Failed to initiate the loan");
+  let output = fulfill_loan(txn_builder_file, "1", "1", "0").expect("Failed to initiate the loan");
 
   io::stdout().write_all(&output.stdout).unwrap();
   io::stdout().write_all(&output.stderr).unwrap();

@@ -4,8 +4,8 @@ The `txn_builder_cli` application creates transactions and submits them to the l
 * Create a new empty transaction. See `txn_builder_cli create_txn_builder`.
 * Create new users. See `txn_builder_cli issuer sign_up`, `txn_builder_cli lender sign_up` and `txn_builder_cli borrower sign_up`.
 * Borrower: adds or updates a credential record. See `txn_builder_cli borrower create_or_overwrite_credential`.
-* Borrower: creates a loan. See `txn_builder_cli borrower create_loan`.
-* Lender: activates the loan. See `txn_builder_cli lender activate_loan`.
+* Borrower: requests a loan. See `txn_builder_cli borrower request_loan`.
+* Lender: fulfills the loan. See `txn_builder_cli lender fulfill_loan`.
 * Borrower: loads funds. See `txn_builder_cli borrower load_funds`.
 * Borrower: pays off the loan. See `txn_builder_cli borrower pay_loan`.
 * Query the ledger with the transaction ID to see if the transaction was committed using a web browser or command line tool.
@@ -105,19 +105,19 @@ In the initial data, there are two issuer, Lenny and Luna. To sign up a new lend
 ```
 Make sure the specified loan is owned by the lender.
 * View loans with a filter
-To filter the loans, add `--filter` with `active`, `inactive` or `unrejected`, for loans that have been activate, haven't been activated, or have been rejected, respectively. For example:
+To filter the loans, add `--filter` with `active`, `inactive` or `unrejected`, for loans that have been activated (i.e., fulfilled by the lender), haven't been activated, or have been rejected, respectively. For example:
 ```
 ./txn_builder_cli lender --id 0 view_loan --filter active
 ```
 
-### Activate a loan
+### Fulfill a loan
 * Create an empty transaction
 ```
-./txn_builder_cli create_txn_builder --name txn_activate
+./txn_builder_cli create_txn_builder --name txn_fulfill
 ```
-* Activate the loan
+* Fulfill the loan
 ```
-./txn_builder_cli --txn txn_activate lender --id 0 activate_loan --loan 0 --issuer 0
+./txn_builder_cli --txn txn_fulfill lender --id 0 fulfill_loan --loan 0 --issuer 0
 ```
 By default, `https://testnet.findora.org` is used. To switch to `http://localhost`, add `--http --localhost`.
 
@@ -150,14 +150,14 @@ By default, `https://testnet.findora.org` is used. To switch to `http://localhos
 ```
 Make sure the specified loan is owned by the borrower.
 * View loans with a filter
-To filter the loans, add `--filter` with `active`, `inactive` or `unrejected`, for loans that have been activate, haven't been activated, or have been rejected, respectively. For example:
+To filter the loans, add `--filter` with `active`, `inactive` or `unrejected`, for loans that have been activated (i.e., fulfilled by the lender), haven't been activated, or have been rejected, respectively. For example:
 ```
 ./txn_builder_cli borrower --id 0 view_loan --filter active
 ```
 
-### Create a loan
+### Request a loan
 ```
-./txn_builder_cli borrower --id 0 create_loan --lender 0 --amount 500 --interest_per_mille 80 --duration 5
+./txn_builder_cli borrower --id 0 request_loan --lender 0 --amount 500 --interest_per_mille 80 --duration 5
 ```
 
 ### Pay off a loan

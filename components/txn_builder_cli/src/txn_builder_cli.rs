@@ -36,6 +36,8 @@ extern crate exitcode;
 // (2) seems better since it handles all the necessary steps.
 // Then do we still want to support "add define_asset", "submit" and "add issue_and_transfer_asset" commands?
 
+// TODO (Keyao): Rename txn_builder_cli to txn_cli, and create_txn_builder to create_txn?
+
 const INIT_DATA: &str = r#"
 {
   "issuers": [
@@ -202,7 +204,7 @@ struct Loan {
   id: u64,                 // Loan id
   lender: u64,             // Lender id
   borrower: u64,           // Borrower id
-  active: bool,            // Whether the loan has been activated
+  active: bool,            // Whether the loan is active (i.e., fulfilled by the lender)
   rejected: bool,          // Whether the loan has been rejected
   amount: u64,             // Amount in total
   balance: u64,            // Loan balance
@@ -1101,19 +1103,19 @@ fn prove(reveal_sig: &ACRevealSig,
 }
 
 // Issues and transfers fiat and debt token to the lender and borrower, respectively
-// Then activate the loan
-fn activate_loan(loan_id: u64,
-                 issuer_id: u64,
-                 transaction_file_name: &str,
-                 protocol: &str,
-                 host: &str)
-                 -> Result<(), PlatformError> {
+// Then fulfill the loan
+fn fulfill_loan(loan_id: u64,
+                issuer_id: u64,
+                transaction_file_name: &str,
+                protocol: &str,
+                host: &str)
+                -> Result<(), PlatformError> {
   // Get data
   let mut data = load_data()?;
   let issuer_key_pair = &data.clone().get_issuer_key_pair(issuer_id)?;
   let loan = &data.loans.clone()[loan_id as usize];
   if loan.active {
-    println!("Loan {} has already been activated.", loan_id);
+    println!("Loan {} has already been fulfilled.", loan_id);
     return Err(PlatformError::InputsError);
   }
   if loan.rejected {
@@ -1338,7 +1340,7 @@ fn pay_loan(loan_id: u64,
 
   // Check if the loan has been activated
   if !loan.active {
-    println!("Loan {} hasn't been activated yet. Use active_loan to activate the loan.",
+    println!("Loan {} hasn't been activated yet. Use fulfill_loan to activate the loan.",
              loan_id);
     return Err(PlatformError::InputsError);
   }
@@ -1376,13 +1378,13 @@ fn pay_loan(loan_id: u64,
   let fiat_sid = if let Some(sid) = borrower.utxo {
     sid
   } else {
-    println!("Missing fiat utxo in the borrower record. Try --activate_loan.");
+    println!("Missing fiat utxo in the borrower record. Try --fulfill_loan.");
     return Err(PlatformError::InputsError);
   };
   let debt_sid = if let Some(sid) = loan.utxo {
     sid
   } else {
-    println!("Missing debt utxo in the loan record. Try --activate_loan.");
+    println!("Missing debt utxo in the loan record. Try --fulfill_loan.");
     return Err(PlatformError::InputsError);
   };
   let fiat_open_asset_record = get_open_asset_record(protocol, host, fiat_sid, lender_key_pair)?;
@@ -1398,7 +1400,7 @@ fn pay_loan(loan_id: u64,
   let debt_code = if let Some(code) = &loan.code {
     AssetTypeCode::new_from_base64(&code)?
   } else {
-    println!("Missing debt code in the loan record. Try --activate_loan.");
+    println!("Missing debt code in the loan record. Try --fulfill_loan.");
     return Err(PlatformError::InputsError);
   };
 
@@ -1560,7 +1562,7 @@ fn main() {
           .possible_values(&["active", "inactive", "unrejected"])
           .help("Display the loan with the specified status only."))
         .help("By default, display all loans of this lender."))
-      .subcommand(SubCommand::with_name("activate_loan")
+      .subcommand(SubCommand::with_name("fulfill_loan")
         .arg(Arg::with_name("loan")
           .short("l")
           .long("loan")
@@ -1627,7 +1629,7 @@ fn main() {
           .possible_values(&["active", "inactive", "unrejected", "completed"])
           .help("Display the loan with the specified status only."))
         .help("By default, display all loans of this borrower."))
-      .subcommand(SubCommand::with_name("create_loan")
+      .subcommand(SubCommand::with_name("request_loan")
         .arg(Arg::with_name("lender")
           .short("l")
           .long("lender")
@@ -2114,11 +2116,11 @@ fn process_lender_cmd(lender_matches: &clap::ArgMatches,
       println!("Displaying {} loan(s): {:?}", loans.len(), loans);
       Ok(())
     }
-    ("activate_loan", Some(activate_loan_matches)) => {
-      let loan_id = if let Some(loan_arg) = activate_loan_matches.value_of("loan") {
+    ("fulfill_loan", Some(fulfill_loan_matches)) => {
+      let loan_id = if let Some(loan_arg) = fulfill_loan_matches.value_of("loan") {
         parse_to_u64(loan_arg)?
       } else {
-        println!("Loan id is required to activate the loan. Use --loan.");
+        println!("Loan id is required to fulfill the loan. Use --loan.");
         return Err(PlatformError::InputsError);
       };
       if let Some(id_arg) = lender_matches.value_of("id") {
@@ -2129,23 +2131,23 @@ fn process_lender_cmd(lender_matches: &clap::ArgMatches,
           return Err(PlatformError::InputsError);
         }
       } else {
-        println!("Lender id is required to activate a loan. Use lender --id.");
+        println!("Lender id is required to fulfill a loan. Use lender --id.");
         return Err(PlatformError::InputsError);
       };
-      let issuer_id = if let Some(issuer_arg) = activate_loan_matches.value_of("issuer") {
+      let issuer_id = if let Some(issuer_arg) = fulfill_loan_matches.value_of("issuer") {
         parse_to_u64(issuer_arg)?
       } else {
-        println!("Issuer id is required to activate the loan. Use --issuer.");
+        println!("Issuer id is required to fulfill the loan. Use --issuer.");
         return Err(PlatformError::InputsError);
       };
-      let protocol = if activate_loan_matches.is_present("http") {
+      let protocol = if fulfill_loan_matches.is_present("http") {
         // Allow HTTP which may be useful for running a ledger locally.
         "http"
       } else {
         // Default to HTTPS
         "https"
       };
-      let host = if activate_loan_matches.is_present("localhost") {
+      let host = if fulfill_loan_matches.is_present("localhost") {
         // Use localhost
         run_ledger_standalone()?;
         "localhost"
@@ -2153,7 +2155,7 @@ fn process_lender_cmd(lender_matches: &clap::ArgMatches,
         // Default to testnet.findora.org
         "testnet.findora.org"
       };
-      activate_loan(loan_id, issuer_id, transaction_file_name, protocol, host)
+      fulfill_loan(loan_id, issuer_id, transaction_file_name, protocol, host)
     }
     _ => {
       println!("Subcommand missing or not recognized. Try lender --help");
@@ -2232,36 +2234,36 @@ fn process_borrower_cmd(borrower_matches: &clap::ArgMatches,
       println!("Displaying {} loan(s): {:?}", loans.len(), loans);
       Ok(())
     }
-    ("create_loan", Some(create_loan_matches)) => {
+    ("request_loan", Some(request_loan_matches)) => {
       let borrower_id = if let Some(id_arg) = borrower_matches.value_of("id") {
         parse_to_u64(id_arg)?
       } else {
-        println!("Borrower id is required to create a loan. Use borrower --id.");
+        println!("Borrower id is required to request a loan. Use borrower --id.");
         return Err(PlatformError::InputsError);
       };
-      let lender_id = if let Some(lender_arg) = create_loan_matches.value_of("lender") {
+      let lender_id = if let Some(lender_arg) = request_loan_matches.value_of("lender") {
         parse_to_u64(lender_arg)?
       } else {
-        println!("Lender id is required to create the loan. Use --lender.");
+        println!("Lender id is required to request the loan. Use --lender.");
         return Err(PlatformError::InputsError);
       };
-      let amount = if let Some(amount_arg) = create_loan_matches.value_of("amount") {
+      let amount = if let Some(amount_arg) = request_loan_matches.value_of("amount") {
         parse_to_u64(amount_arg)?
       } else {
-        println!("Amount is required to create the loan. Use --amount.");
+        println!("Amount is required to request the loan. Use --amount.");
         return Err(PlatformError::InputsError);
       };
       let interest_per_mille =
-        if let Some(interest_per_mille_arg) = create_loan_matches.value_of("interest_per_mille") {
+        if let Some(interest_per_mille_arg) = request_loan_matches.value_of("interest_per_mille") {
           parse_to_u64(interest_per_mille_arg)?
         } else {
-          println!("Interest per mille is required to create the loan. Use --interest_per_mille.");
+          println!("Interest per mille is required to request the loan. Use --interest_per_mille.");
           return Err(PlatformError::InputsError);
         };
-      let duration = if let Some(duration_arg) = create_loan_matches.value_of("duration") {
+      let duration = if let Some(duration_arg) = request_loan_matches.value_of("duration") {
         parse_to_u64(duration_arg)?
       } else {
-        println!("Duration is required to create the loan. Use --amount.");
+        println!("Duration is required to request the loan. Use --amount.");
         return Err(PlatformError::InputsError);
       };
       let mut data = load_data()?;
@@ -3190,15 +3192,15 @@ mod tests {
 
   #[test]
   #[ignore]
-  // Create, activate and pay a loan
-  fn test_create_activate_and_pay_loan() {
+  // Request, fulfill and pay a loan
+  fn test_request_fulfill_and_pay_loan() {
     run_ledger_standalone().unwrap();
 
     // Load data
     let mut data = load_data().unwrap();
     let loan_id = data.loans.len();
 
-    // Create loan
+    // Request a loan
     let amount = 1200;
     data.add_loan(0, 0, amount, 100, 8).unwrap();
     assert_eq!(data.loans.len(), loan_id + 1);
@@ -3207,8 +3209,8 @@ mod tests {
     let txn_builder_path = "tb_loan";
     store_txn_builder_to_file(&txn_builder_path, &TransactionBuilder::default()).unwrap();
 
-    // Activate loan
-    activate_loan(loan_id as u64, 0, txn_builder_path, PROTOCOL, HOST).unwrap();
+    // Fulfill the loan request
+    fulfill_loan(loan_id as u64, 0, txn_builder_path, PROTOCOL, HOST).unwrap();
     let data = load_data().unwrap();
     assert_eq!(data.loans[loan_id].active, true);
     assert_eq!(data.loans[loan_id].balance, amount);
