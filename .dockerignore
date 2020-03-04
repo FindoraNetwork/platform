@@ -1,0 +1,9 @@
+.dockerignore
+.DS_Store
+.git
+.gitignore
+Dockerfile
+Jenkinsfile
+target
+hooks
+**/target
