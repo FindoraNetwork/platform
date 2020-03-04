@@ -43,7 +43,7 @@ impl<RNG, LU> QueryServer<RNG, LU>
   pub fn remove_spent_utxos(&mut self, transfer: &TransferAsset) -> Result<(), PlatformError> {
     for input in &transfer.body.inputs {
       match input {
-        TxoRef::Relative(_) => panic!("wtf"),
+        TxoRef::Relative(_) => {} // Relative utxos were never cached so no need to do anything here
         TxoRef::Absolute(txo_sid) => {
           let address = self.utxos_to_map_index
                             .get(&txo_sid)
@@ -126,5 +126,63 @@ impl<RNG, LU> QueryServer<RNG, LU>
       }
     }
     Ok(())
+  }
+}
+
+mod tests {
+  use super::*;
+  struct LedgerStandalone {
+    ledger: Popen,
+    submit_port: usize,
+    client: reqwest::Client,
+  }
+
+  impl Drop for LedgerStandalone {
+    fn drop(&mut self) {
+      self.ledger.terminate().unwrap();
+      if self.ledger
+             .wait_timeout(time::Duration::from_millis(10))
+             .is_err()
+      {
+        self.ledger.kill().unwrap();
+        self.ledger.wait().unwrap();
+      }
+    }
+  }
+  impl LedgerStandalone {
+    pub fn new() -> self {
+      LedgerStandaloneAccounts {
+        ledger: Popen::create(&["/usr/bin/env", "bash", "-c", "flock .test_standalone_lock cargo run"],
+                  PopenConfig {
+                    cwd: Some(OsString::from("../ledger_standalone/")),
+                    ..Default::default()
+                  }).unwrap(),
+        submit_port: 8669,
+        client: reqwest::Client::new() }
+    }
+
+    pub fn submit_transaction(&self, tx: Transaction) {
+      let host = "localhost";
+      let port = format!("{}", self.submit_port);
+      let query1 = format!("http://{}:{}/submit_transaction", host, port);
+      let query2 = format!("http://{}:{}/force_end_block", host, port);
+      self.client
+          .post(&query1)
+          .json(&tx)
+          .send()
+          .unwrap()
+          .error_for_status()
+          .unwrap()
+          .text()
+          .unwrap();
+      self.client
+          .post(&query2)
+          .send()
+          .unwrap()
+          .error_for_status()
+          .unwrap()
+          .text()
+          .unwrap();
+    }
   }
 }
