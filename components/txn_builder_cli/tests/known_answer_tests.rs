@@ -235,6 +235,20 @@ fn store_blind_asset_record_with_path(path: &str,
 // Helper functions: define, issue and transfer
 //
 #[cfg(test)]
+fn air_assign(txn_builder_path: &str,
+              issuer_id: &str,
+              address: &str,
+              data: &str)
+                -> io::Result<Output> {
+  Command::new(COMMAND).args(&["--txn", txn_builder_path])
+                       .args(&["add", "air_assign"])
+                       .args(&["--issuer", issuer_id])
+                       .args(&["--address", address])
+                       .args(&["--data", data])
+                       .output()
+}
+
+#[cfg(test)]
 fn define_asset(txn_builder_path: &str,
                 issuer_id: &str,
                 token_code: &str,
@@ -943,7 +957,34 @@ fn test_define_and_submit_with_args() {
   io::stdout().write_all(&output.stderr).unwrap();
 
   let _ = fs::remove_file(DATA_FILE);
-  fs::remove_file(txn_builder_file).unwrap();
+  // fs::remove_file(txn_builder_file).unwrap();
+
+  assert!(output.status.success());
+}
+
+//
+// Compose transaction and submit
+//
+#[test]
+fn test_air_assign() {
+  // Create txn builder and key pair
+  let txn_builder_file = "tb_air_assign";
+  create_txn_builder_with_path(txn_builder_file).expect("Failed to create transaction builder");
+
+  // Define asset
+  air_assign(txn_builder_file,
+             "0",
+             "Brian Rogoff",
+             "2519 Brannan Place").expect("Failed to define asset");
+
+  // Submit transaction
+  let output = submit(txn_builder_file).expect("Failed to submit transaction");
+
+  io::stdout().write_all(&output.stdout).unwrap();
+  io::stdout().write_all(&output.stderr).unwrap();
+
+  // let _ = fs::remove_file(DATA_FILE);
+  // fs::remove_file(txn_builder_file).unwrap();
 
   assert!(output.status.success());
 }

@@ -758,6 +758,19 @@ fn get_amounts(amounts_arg: &str) -> Result<Vec<u64>, PlatformError> {
   Ok(amounts)
 }
 
+fn air_assign(issuer_id: u64,
+              address: &str,
+              data: &str,
+              transaction_file_name: &str)
+              -> Result<(), PlatformError> {
+  let mut issuer_data = load_data()?;
+  let issuer_key_pair = issuer_data.get_issuer_key_pair(issuer_id)?;
+  let mut txn_builder = TransactionBuilder::default();
+  txn_builder.add_operation_air_assign(&issuer_key_pair, address, data)?;
+  store_txn_builder_to_file(&transaction_file_name, &txn_builder)?;
+  Ok(())
+}
+
 fn define_asset(fiat_asset: bool,
                 issuer_id: u64,
                 token_code: AssetTypeCode,
@@ -1828,6 +1841,22 @@ fn main() {
           .long("confidential_asset")
           .help("If specified, the asset will be confidential"))))
     .subcommand(SubCommand::with_name("add")
+      .subcommand(SubCommand::with_name("air_assign")
+        .arg(Arg::with_name("issuer")
+          .short("i")
+          .long("issuer")
+          .help("Required: issuer id.")
+          .takes_value(true))
+        .arg(Arg::with_name("address")
+          .short("k")
+          .long("address")
+          .help("Required: address or key of AIR entry")
+          .takes_value(true))
+        .arg(Arg::with_name("data")
+          .short("v")
+          .long("data")
+          .takes_value(true)
+          .help("Required: Data to be stored. The transaction will fail if no asset with the token code exists.")))
       .subcommand(SubCommand::with_name("define_asset")
         .arg(Arg::with_name("fiat")
           .short("f")
@@ -2130,6 +2159,42 @@ fn process_issuer_cmd(issuer_matches: &clap::ArgMatches,
       println!("Subcommand missing or not recognized. Try lender --help");
       Err(PlatformError::InputsError)
     }
+
+fn protocol_host(matches: &clap::ArgMatches) -> (&'static str, &'static str) {
+  let protocol = if matches.is_present("http") {
+    "http"
+  } else {
+    std::option_env!("PROTOCOL").unwrap_or("https")
+  };
+  let host = if matches.is_present("localhost") {
+    // Use localhost
+    "localhost"
+  } else {
+    // Default to testnet.findora.org
+    std::option_env!("SERVER_HOST").unwrap_or("testnet.findora.org")
+  };
+  (protocol, host)
+}
+
+fn process_submit_cmd(submit_matches: &clap::ArgMatches,
+                      transaction_file_name: &str)
+                      -> Result<(), PlatformError> {
+  // Get protocol and host.
+  let (protocol, host) = protocol_host(submit_matches);
+  if host == "localhost" {
+    run_ledger_standalone();
+  }
+
+  submit(protocol, host, &transaction_file_name)
+}
+
+// Create the specific file if missing
+// Rename the existing path if necessary
+fn create_directory_and_rename_path(path_str: &str, overwrite: bool) -> Result<(), PlatformError> {
+  let path = Path::new(&path_str);
+  create_directory_if_missing(&path_str);
+  if path.exists() && !overwrite {
+    rename_existing_path(&path)?;
   }
 }
 
@@ -2582,6 +2647,26 @@ fn process_add_cmd(add_matches: &clap::ArgMatches,
                    transaction_file_name: &str)
                    -> Result<(), PlatformError> {
   match add_matches.subcommand() {
+    ("air_assign", Some(air_assign_matches)) => {
+      let issuer_id = if let Some(issuer_arg) = air_assign_matches.value_of("issuer") {
+        if let Ok(id) = issuer_arg.parse::<u64>() {
+          id
+        } else {
+          println!("Improperly formatted issuer id.");
+          return Err(PlatformError::InputsError);
+        }
+      } else {
+        println!("User id is required to define asset. Use --issuer.");
+        return Err(PlatformError::InputsError);
+      };
+      match (air_assign_matches.value_of("address"), air_assign_matches.value_of("data")) {
+        (Some(address), Some(data)) => air_assign(issuer_id, address, data, transaction_file_name),
+        (_, _) => {
+          println!("Missing address or data.");
+          return Err(PlatformError::InputsError);
+        }
+      }
+    }
     ("define_asset", Some(define_asset_matches)) => {
       let fiat_asset = define_asset_matches.is_present("fiat");
       let issuer_id = if let Some(issuer_arg) = define_asset_matches.value_of("issuer") {
@@ -2805,25 +2890,42 @@ fn process_add_cmd(add_matches: &clap::ArgMatches,
   }
 }
 
-fn process_submit_cmd(submit_matches: &clap::ArgMatches,
-                      transaction_file_name: &str)
-                      -> Result<(), PlatformError> {
+fn process_load_funds_cmd(load_funds_matches: &clap::ArgMatches,
+                          transaction_file_name: &str)
+                          -> Result<(), PlatformError> {
+  let issuer_id = if let Some(issuer_arg) = load_funds_matches.value_of("issuer") {
+    if let Ok(id) = issuer_arg.parse::<u64>() {
+      id
+    } else {
+      println!("Improperly formatted issuer id.");
+      return Err(PlatformError::InputsError);
+    }
+  } else {
+    println!("Issuer id is required to load funds. Use --issuer.");
+    return Err(PlatformError::InputsError);
+  };
+  let recipient_id = if let Some(recipient_arg) = load_funds_matches.value_of("recipient") {
+    if let Ok(id) = recipient_arg.parse::<u64>() {
+      id
+    } else {
+      println!("Improperly formatted recipient id.");
+      return Err(PlatformError::InputsError);
+    }
+  } else {
+    println!("Recipient id is required to load funds. Use --recipient.");
+    return Err(PlatformError::InputsError);
+  };
+  let amount = if let Some(amount_arg) = load_funds_matches.value_of("amount") {
+    get_amount(amount_arg).unwrap()
+  } else {
+    println!("Amount is required to load funds. Use --amount.");
+    return Err(PlatformError::InputsError);
+  };
   // Get protocol and host.
-  let protocol = if submit_matches.is_present("http") {
-    // Allow HTTP which may be useful for running a ledger locally.
-    "http"
-  } else {
-    // Default to HTTPS
-    "https"
-  };
-  let host = if submit_matches.is_present("localhost") {
-    // Use localhost
-    run_ledger_standalone()?;
-    "localhost"
-  } else {
-    // Default to testnet.findora.org
-    "testnet.findora.org"
-  };
+  let (protocol, host) = protocol_host(load_funds_matches);
+  if host == "localhost" {
+    run_ledger_standalone();
+  }
 
   if submit_matches.is_present("get_sids") {
     let sids = submit_and_get_sids(protocol, host, &transaction_file_name)?;
@@ -2855,21 +2957,11 @@ fn process_load_funds_cmd(borrower_id: u64,
     println!("Amount is required to load funds. Use --amount.");
     return Err(PlatformError::InputsError);
   };
-  let protocol = if load_funds_matches.is_present("http") {
-    // Allow HTTP which may be useful for running a ledger locally.
-    "http"
-  } else {
-    // Default to HTTPS
-    "https"
-  };
-  let host = if load_funds_matches.is_present("localhost") {
-    // Use localhost
-    run_ledger_standalone()?;
-    "localhost"
-  } else {
-    // Default to testnet.findora.org
-    "testnet.findora.org"
-  };
+
+  let (protocol, host) = protocol_host(activate_loan_matches);
+  if host == "localhost" {
+    run_ledger_standalone();
+  }
 
   load_funds(issuer_id,
              borrower_id,
@@ -2894,22 +2986,10 @@ fn process_pay_loan_cmd(pay_loan_matches: &clap::ArgMatches,
     println!("Amount is required to pay the loan. Use --amount.");
     return Err(PlatformError::InputsError);
   };
-  let protocol = if pay_loan_matches.is_present("http") {
-    // Allow HTTP which may be useful for running a ledger locally.
-    "http"
-  } else {
-    // Default to HTTPS
-    "https"
-  };
-  let host = if pay_loan_matches.is_present("localhost") {
-    // Use localhost
-    run_ledger_standalone()?;
-    "localhost"
-  } else {
-    // Default to testnet.findora.org
-    "testnet.findora.org"
-  };
-
+  let (protocol, host) = protocol_host(pay_loan_matches);
+  if host == "localhost" {
+    run_ledger_standalone();
+  }
   pay_loan(loan_id, amount, transaction_file_name, protocol, host)
 }
 
