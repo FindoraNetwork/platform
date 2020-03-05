@@ -286,8 +286,8 @@ fn issue_and_transfer_asset(txn_builder_path: &str,
                             token_code: &str)
                             -> io::Result<Output> {
   Command::new(COMMAND).args(&["--txn", txn_builder_path])
-                       .args(&["add", "issue_and_transfer_asset"])
-                       .args(&["--issuer", issuer_id])
+                       .args(&["issuer", "--id", issuer_id])
+                       .arg("issue_and_transfer_asset")
                        .args(&["--recipient", recipient_id])
                        .args(&["--amount", amount])
                        .args(&["--token_code", token_code])
@@ -919,6 +919,7 @@ fn test_define_issue_and_transfer_with_args() {
 // Compose transaction and submit
 //
 #[test]
+#[ignore]
 fn test_define_and_submit_with_args() {
   // Create txn builder and key pair
   let txn_builder_file = "tb_define_submit";
@@ -943,6 +944,7 @@ fn test_define_and_submit_with_args() {
 }
 
 #[test]
+#[ignore]
 fn test_issue_transfer_and_submit_with_args() {
   let _ = fs::remove_file(DATA_FILE);
 

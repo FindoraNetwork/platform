@@ -1,7 +1,6 @@
 #![deny(warnings)]
 use clap::{App, Arg, SubCommand};
 use env_logger::{Env, Target};
-use hex;
 use ledger::data_model::errors::PlatformError;
 use ledger::data_model::{AccountAddress, AssetTypeCode, TransferType, TxOutput, TxoRef, TxoSID};
 use ledger::policies::{DebtMemo, Fraction};
@@ -280,7 +279,8 @@ impl Data {
 
   fn add_issuer(&mut self, name: String) -> Result<(), PlatformError> {
     let id = self.issuers.len();
-    self.issuers.push(Issuer::new(id, name));
+    self.issuers.push(Issuer::new(id, name.clone()));
+    println!("{}'s id is {}.", name, id);
     store_data_to_file(self.clone())
   }
 
@@ -293,7 +293,9 @@ impl Data {
 
   fn add_lender(&mut self, name: String, min_credit_score: u64) -> Result<(), PlatformError> {
     let id = self.lenders.len();
-    self.lenders.push(Lender::new(id, name, min_credit_score));
+    self.lenders
+        .push(Lender::new(id, name.clone(), min_credit_score));
+    println!("{}'s id is {}.", name, id);
     store_data_to_file(self.clone())
   }
 
@@ -306,7 +308,8 @@ impl Data {
 
   fn add_borrower(&mut self, name: String) -> Result<(), PlatformError> {
     let id = self.borrowers.len();
-    self.borrowers.push(Borrower::new(id, name));
+    self.borrowers.push(Borrower::new(id, name.clone()));
+    println!("{}'s id is {}.", name, id);
     store_data_to_file(self.clone())
   }
 
@@ -846,7 +849,7 @@ fn submit_and_get_sids(protocol: &str,
   println!("Submission response: {}", handle);
   println!("Submission status: {}", res.status());
 
-  // Store and return sid
+  // Return sid
   let res = query(protocol, host, SUBMIT_PORT, "txn_status", &handle.0)?;
   match serde_json::from_str::<TxnStatus>(&res).or_else(|_| {
                                                  Err(PlatformError::DeserializationError)
@@ -907,10 +910,15 @@ fn issue_and_transfer(issuer_key_pair: &XfrKeyPair,
                       recipient_key_pair: &XfrKeyPair,
                       amount: u64,
                       token_code: AssetTypeCode,
+                      confidential_amount: bool,
+                      confidential_asset: bool,
                       transaction_file_name: &str)
                       -> Result<TransactionBuilder, PlatformError> {
-  let blind_asset_record =
-    get_blind_asset_record(issuer_key_pair.get_pk(), amount, token_code, false, false)?;
+  let blind_asset_record = get_blind_asset_record(issuer_key_pair.get_pk(),
+                                                  amount,
+                                                  token_code,
+                                                  confidential_amount,
+                                                  confidential_asset)?;
 
   // Transfer Operation
   let xfr_op =
@@ -1005,6 +1013,8 @@ fn load_funds(issuer_id: u64,
                                        recipient_key_pair,
                                        amount,
                                        token_code,
+                                       false,
+                                       false,
                                        transaction_file_name)?;
 
   // Submit transaction and get the new record
@@ -1231,6 +1241,8 @@ fn fulfill_loan(loan_id: u64,
                                        lender_key_pair,
                                        amount,
                                        fiat_code,
+                                       false,
+                                       false,
                                        transaction_file_name)?;
   let fiat_sid = submit_and_get_sids(protocol, host, txn_builder)?[0];
   println!("Fiat sid: {}", fiat_sid.0);
@@ -1267,6 +1279,8 @@ fn fulfill_loan(loan_id: u64,
                                        borrower_key_pair,
                                        amount,
                                        debt_code,
+                                       false,
+                                       false,
                                        transaction_file_name)?;
   let debt_sid = submit_and_get_sids(protocol, host, txn_builder)?[0];
   println!("Fiat sid: {}", debt_sid.0);
@@ -1541,7 +1555,41 @@ fn main() {
           .long("name")
           .required(true)
           .takes_value(true)
-          .help("Issuer's name."))))
+          .help("Issuer's name.")))
+      .arg(Arg::with_name("id")
+        .short("i")
+        .long("id")
+        .takes_value(true)
+        .help("Issuer id."))
+      .subcommand(SubCommand::with_name("issue_and_transfer_asset")
+        .arg(Arg::with_name("recipient")
+          .short("r")
+          .long("recipient")
+          .required(true)
+          .takes_value(true)
+          .help("Recipient's id."))
+        .arg(Arg::with_name("amount")
+          .short("amt")
+          .long("amount")
+          .required(true)
+          .takes_value(true)
+          .help("Amount of tokens to issue and transfer."))
+        .arg(Arg::with_name("token_code")
+          .short("tc")
+          .long("token_code")
+          .required(true)
+          .takes_value(true)
+          .help("Token code of the asset."))
+        .arg(Arg::with_name("confidential_amount")
+          .short("m")
+          .long("confidential_amount")
+          .takes_value(false)
+          .help("If specified, the amount will be confidential."))
+        .arg(Arg::with_name("confidential_asset")
+          .short("s")
+          .long("confidential_asset")
+          .takes_value(false)
+          .help("If specified, the asset will be confidential."))))
     .subcommand(SubCommand::with_name("lender")
       .subcommand(SubCommand::with_name("sign_up")
         .arg(Arg::with_name("name")
@@ -1708,7 +1756,21 @@ fn main() {
           .required(true)
           .takes_value(true)
           .help("Value of the credential record."))
-        .help("Create or overwrite a credential record.")))
+        .help("Create or overwrite a credential record."))
+      .subcommand(SubCommand::with_name("get_asset_record")
+        .arg(Arg::with_name("sid")
+          .long("sid")
+          .short("s")
+          .takes_value(true)
+          .help("Asset sid."))
+        .arg(Arg::with_name("protocol")
+          .long("http")
+          .takes_value(false)
+          .help("Specify that http, not https should be used."))
+        .arg(Arg::with_name("host")
+          .long("localhost")
+          .takes_value(false)
+          .help("Specify that localhost, not testnet.findora.org should be used."))))
     .subcommand(SubCommand::with_name("create_txn_builder")
       .about("By default, will rename previous file with a .<number> suffix")
       .arg(Arg::with_name("name")
@@ -1871,32 +1933,7 @@ fn main() {
           .long("address_paths")
           .required(true)
           .takes_value(true)
-          .help("Path to the files where address keys are stored. If no such file, try pubkeygen subcommand.")))
-      .subcommand(SubCommand::with_name("issue_and_transfer_asset")
-        .arg(Arg::with_name("issuer")
-          .short("i")
-          .long("issuer")
-          .required(true)
-          .takes_value(true)
-          .help("Issuer id."))
-        .arg(Arg::with_name("recipient")
-          .short("r")
-          .long("recipient")
-          .required(true)
-          .takes_value(true)
-          .help("Recipient's id."))
-        .arg(Arg::with_name("amount")
-          .short("amt")
-          .long("amount")
-          .required(true)
-          .takes_value(true)
-          .help("Amount of tokens to issue and transfer."))
-        .arg(Arg::with_name("token_code")
-          .short("tc")
-          .long("token_code")
-          .required(true)
-          .takes_value(true)
-          .help("Token code of the asset."))))
+          .help("Path to the files where address keys are stored. If no such file, try pubkeygen subcommand."))))
     .subcommand(SubCommand::with_name("serialize"))
     .subcommand(SubCommand::with_name("drop"))
     .subcommand(SubCommand::with_name("keygen")
@@ -1922,6 +1959,11 @@ fn main() {
         .short("f")
         .help("If specified, the existing file with the same name will be overwritten.")))
     .subcommand(SubCommand::with_name("submit")
+      .arg(Arg::with_name("get_sids")
+        .long("get_sids")
+        .short("g")
+        .takes_value(false)
+        .help("If specified, will query the utxo sids."))
       .arg(Arg::with_name("protocol")
         .long("http")
         .takes_value(false)
@@ -1970,7 +2012,7 @@ fn process_inputs(inputs: clap::ArgMatches) -> Result<(), PlatformError> {
   }
 
   match inputs.subcommand() {
-    ("issuer", Some(issuer_matches)) => process_issuer_cmd(issuer_matches),
+    ("issuer", Some(issuer_matches)) => process_issuer_cmd(issuer_matches, &transaction_file_name),
     ("lender", Some(issuer_matches)) => process_lender_cmd(issuer_matches, &transaction_file_name),
     ("borrower", Some(issuer_matches)) => {
       process_borrower_cmd(issuer_matches, &transaction_file_name)
@@ -2040,7 +2082,9 @@ fn process_inputs(inputs: clap::ArgMatches) -> Result<(), PlatformError> {
   }
 }
 
-fn process_issuer_cmd(issuer_matches: &clap::ArgMatches) -> Result<(), PlatformError> {
+fn process_issuer_cmd(issuer_matches: &clap::ArgMatches,
+                      transaction_file_name: &str)
+                      -> Result<(), PlatformError> {
   match issuer_matches.subcommand() {
     ("sign_up", Some(sign_up_matches)) => {
       let name = if let Some(name_arg) = sign_up_matches.value_of("name") {
@@ -2051,6 +2095,48 @@ fn process_issuer_cmd(issuer_matches: &clap::ArgMatches) -> Result<(), PlatformE
       };
       let mut data = load_data()?;
       data.add_issuer(name)
+    }
+    ("issue_and_transfer_asset", Some(issue_and_transfer_matches)) => {
+      let mut data = load_data()?;
+      let issuer_key_pair = if let Some(id_arg) = issuer_matches.value_of("id") {
+        let issuer_id = parse_to_u64(id_arg)?;
+        data.get_issuer_key_pair(issuer_id)?
+      } else {
+        println!("Issuer id is required to issue and transfer asset. Use issuer --id.");
+        return Err(PlatformError::InputsError);
+      };
+      let recipient_key_pair =
+        if let Some(id_arg) = issue_and_transfer_matches.value_of("recipient") {
+          let recipient_id = parse_to_u64(id_arg)?;
+          data.get_borrower_key_pair(recipient_id)?
+        } else {
+          println!("Recipient id is required to issue and transfer asset. Use --recipient.");
+          return Err(PlatformError::InputsError);
+        };
+      let amount = if let Some(amount_arg) = issue_and_transfer_matches.value_of("amount") {
+        parse_to_u64(amount_arg)?
+      } else {
+        println!("Amount is required to issue and transfer asset. Use --amount.");
+        return Err(PlatformError::InputsError);
+      };
+      let token_code =
+        if let Some(token_code_arg) = issue_and_transfer_matches.value_of("token_code") {
+          AssetTypeCode::new_from_base64(token_code_arg)?
+        } else {
+          println!("Token code is required to issue asset. Use --token_code.");
+          return Err(PlatformError::InputsError);
+        };
+      let confidential_amount = issue_and_transfer_matches.is_present("confidential_amount");
+      let confidential_asset = issue_and_transfer_matches.is_present("confidential_asset");
+
+      issue_and_transfer(&issuer_key_pair,
+                         &recipient_key_pair,
+                         amount,
+                         token_code,
+                         confidential_amount,
+                         confidential_asset,
+                         transaction_file_name)?;
+      Ok(())
     }
     _ => {
       println!("Subcommand missing or not recognized. Try lender --help");
@@ -2358,6 +2444,45 @@ fn process_borrower_cmd(borrower_matches: &clap::ArgMatches,
       };
       let mut data = load_data()?;
       data.add_or_update_credential(borrower_id, attribute, value)
+    }
+    ("get_asset_record", Some(get_asset_record_matches)) => {
+      let borrower_id = if let Some(id_arg) = borrower_matches.value_of("id") {
+        parse_to_u64(id_arg)?
+      } else {
+        println!("Borrower id is required to get the asset record. Use borrower --id.");
+        return Err(PlatformError::InputsError);
+      };
+      let mut data = load_data()?;
+      let borrower_name = data.borrowers[borrower_id as usize].name.clone();
+      let key_pair = data.get_borrower_key_pair(borrower_id)?;
+      let sid = if let Some(sid_arg) = get_asset_record_matches.value_of("sid") {
+        TxoSID(parse_to_u64(sid_arg)?)
+      } else {
+        println!("Sid is required to get the asset record. Use borrower --sid.");
+        return Err(PlatformError::InputsError);
+      };
+      // Get protocol and host.
+      let protocol = if get_asset_record_matches.is_present("http") {
+        // Allow HTTP which may be useful for running a ledger locally.
+        "http"
+      } else {
+        // Default to HTTPS
+        "https"
+      };
+      let host = if get_asset_record_matches.is_present("localhost") {
+        // Use localhost
+        run_ledger_standalone()?;
+        "localhost"
+      } else {
+        // Default to testnet.findora.org
+        "testnet.findora.org"
+      };
+      let asset_record = get_open_asset_record(protocol, host, sid, &key_pair)?;
+      println!("{} owns {} of asset {:?}.",
+               borrower_name,
+               asset_record.get_amount(),
+               asset_record.get_asset_type());
+      Ok(())
     }
     _ => {
       println!("Subcommand missing or not recognized. Try borrower --help");
@@ -2681,53 +2806,6 @@ fn process_add_cmd(add_matches: &clap::ArgMatches,
       };
       store_txn_builder_to_file(&transaction_file_name, &txn_builder)
     }
-    ("issue_and_transfer_asset", Some(issue_and_transfer_matches)) => {
-      let mut data = load_data()?;
-      let issuer_key_pair = if let Some(issuer_arg) = issue_and_transfer_matches.value_of("issuer")
-      {
-        if let Ok(id) = issuer_arg.parse::<u64>() {
-          data.get_issuer_key_pair(id)?
-        } else {
-          println!("Improperly formatted issuer id.");
-          return Err(PlatformError::InputsError);
-        }
-      } else {
-        println!("Issuer id is required to issue asset. Use --issuer.");
-        return Err(PlatformError::InputsError);
-      };
-      let recipient_key_pair =
-        if let Some(recipient_arg) = issue_and_transfer_matches.value_of("recipient") {
-          if let Ok(id) = recipient_arg.parse::<u64>() {
-            data.get_borrower_key_pair(id)?
-          } else {
-            println!("Improperly formatted recipient's id.");
-            return Err(PlatformError::InputsError);
-          }
-        } else {
-          println!("Recipient id is required to issue asset. Use --issuer.");
-          return Err(PlatformError::InputsError);
-        };
-      let amount = if let Some(amount_arg) = issue_and_transfer_matches.value_of("amount") {
-        parse_to_u64(amount_arg)?
-      } else {
-        println!("Amount is required to issue and transfer asset. Use --amount.");
-        return Err(PlatformError::InputsError);
-      };
-      let token_code =
-        if let Some(token_code_arg) = issue_and_transfer_matches.value_of("token_code") {
-          AssetTypeCode::new_from_base64(token_code_arg)?
-        } else {
-          println!("Token code is required to issue asset. Use --token_code.");
-          return Err(PlatformError::InputsError);
-        };
-
-      issue_and_transfer(&issuer_key_pair,
-                         &recipient_key_pair,
-                         amount,
-                         token_code,
-                         transaction_file_name)?;
-      Ok(())
-    }
     _ => {
       println!("Subcommand missing or not recognized. Try add --help");
       Err(PlatformError::InputsError)
@@ -2756,7 +2834,13 @@ fn process_submit_cmd(submit_matches: &clap::ArgMatches,
   };
   let txn_builder = load_txn_builder_from_file(transaction_file_name)?;
 
-  submit(protocol, host, txn_builder)
+  if submit_matches.is_present("get_sids") {
+    let sids = submit_and_get_sids(protocol, host, txn_builder)?;
+    println!("Utxo: {:?}", sids);
+    Ok(())
+  } else {
+    submit(protocol, host, txn_builder)
+  }
 }
 
 fn process_load_funds_cmd(borrower_id: u64,
@@ -3008,6 +3092,8 @@ mod tests {
                                &recipient_key_pair,
                                amount,
                                code,
+                               false,
+                               false,
                                txn_builder_path).is_ok());
 
     let _ = fs::remove_file(DATA_FILE);

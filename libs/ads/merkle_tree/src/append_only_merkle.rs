@@ -158,6 +158,23 @@ pub struct Proof {
   pub hash_array: Vec<HashValue>,
 }
 
+impl Proof {
+  pub fn is_valid_proof(&self, leaf: HashValue) -> bool {
+    let mut result = leaf;
+    let mut id = self.tx_id;
+    for i in 0..self.hash_array.len() {
+      if id & 1 == 0 {
+        result = hash_partial(&result, &self.hash_array[i]);
+      } else {
+        result = hash_partial(&self.hash_array[i], &result);
+      }
+
+      id /= 2;
+    }
+
+    result == self.root_hash
+  }
+}
 //
 // Define a dictionary that will contain "completed"
 // blocks used when generating a proof.  The working

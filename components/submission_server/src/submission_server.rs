@@ -115,7 +115,10 @@ impl<RNG, LU> SubmissionServer<RNG, LU>
             .insert(handle, TxnStatus::Committed(committed_txn_info.clone()));
 
         // Log txn details
-        txn_log_info(&ledger.get_transaction(committed_txn_info.0).unwrap().txn);
+        txn_log_info(&ledger.get_transaction(committed_txn_info.0)
+                            .unwrap()
+                            .finalized_txn
+                            .txn);
       }
       info!("Block ended. Statuses of committed transactions are now updated");
       // Empty temp_sids after the block is finished

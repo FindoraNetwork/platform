@@ -375,7 +375,6 @@ const UPPER_LIMIT: u32 = (BLOCK_BITS - BITS_SIZE / INDEX_SIZE) as u32;
 
 // Define the layout of a block of a bitmap.  The on-disk
 // and in-memory layouts are the same.
-
 #[repr(C)]
 struct BitBlock {
   header: BlockHeader,
@@ -1010,6 +1009,10 @@ impl BitMap {
     debug!(Bitmap, "compute_checksum:  got final digest {:?}", digest);
     self.checksum = digest;
     digest
+  }
+
+  pub fn get_checksum(&self) -> Digest {
+    self.checksum
   }
 
   /// Serialize the entire bit map to a compressed representation.
