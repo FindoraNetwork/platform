@@ -1,6 +1,6 @@
 # Transaction Builder Command Line Interface
 
-The `txn_builder_cli` application creates transactions and submits them to the ledger server. The typical workflow is as follows
+The `txn_builder_cli` application creates transactions and submits them to the ledger server. The typical workflow of P2P lending is as follows
 * Create a new empty transaction. See `txn_builder_cli create_txn_builder`.
 * Create new users. See `txn_builder_cli issuer sign_up`, `txn_builder_cli lender sign_up` and `txn_builder_cli borrower sign_up`.
 * Borrower: adds or updates a credential record. See `txn_builder_cli borrower create_or_overwrite_credential`.
@@ -68,10 +68,6 @@ actual subcommands.
   ```
   ./txn_builder_cli --txn tb --key_pair kp add transfer_asset --sids_path s --blind_asset_record_paths bar1,bar2 --input_amounts 15,45 --output_amounts 10,20,30 --address_paths pko1,pko2,pko3
   ```
-* Issue and transfer units of an asset. See `txn_builder_cli add issue_and_transfer_asset`.
-  ```
-  ./txn_builder_cli --txn tb add issue_and_transfer_asset --issuer 0 --recipient 0 --amount 1000 --token_code ibIaBlHV-PdQkvSuEg6YSA==
-  ```
 
 ## Submit a transaction
 After a transaction is composed:
@@ -86,6 +82,17 @@ In the initial data, there's one issuer, Izzie. To sign up a new issuer account:
 ```
 ./txn_builder_cli issuer sign_up --name 'Issuer Name'
 ```
+### Issue and transfer units of an asset
+After an asset is defined and the transaction is submitted:
+* Create an empty transaction
+```
+./txn_builder_cli create_txn_builder --name txn_issue_and_transfer
+```
+* Issue and transfer the asset
+```
+./txn_builder_cli --txn txn_issue_and_transfer issuer --id 0 issue_and_transfer_asset --recipient 0 --amount 1000 --token_code ibIaBlHV-PdQkvSuEg6YSA==
+```
+Add `--confidential_amount` or `--confidential_asset` if needed.
 
 ## Lender account
 ### Sign up a lender account
@@ -225,4 +232,80 @@ $ curl https://testnet.findora.org:8669/block_log
 ```
 ![Table of blocks](./doc/block_log.png)
 
+# Example of confidential transfer
+## Sign up an issuer account for Ian
+```
+./txn_builder_cli issuer sign_up --name Ian
+```
+Note from the output that Ian's id is `1`: 
+```
+Ian's id is 1.
+```
 
+## Sign up a borrower account for Bill
+```
+./txn_builder_cli borrower sign_up --name Bill
+```
+Note from the output that Bill's id is `1`:
+```
+Bill's id is 1.
+```
+
+## Create some txn files to for defining asset, issuing and transferring asset, and verify asset record
+```
+./txn_builder_cli create_txn_builder --name txn_verify_asset
+```
+
+## Define a confidential asset
+### Create an empty transaction
+```
+./txn_builder_cli create_txn_builder --name txn_define
+```
+
+### Define an asset
+```
+./txn_builder_cli --txn txn_define add define_asset --issuer 1 --memo 'Define a confidential asset.' --confidential
+```
+Note from the output that the asset token code is `7hAA3TTJQHhDGs-_mpP12Q==`, or `[238, 16, 0, 221, 52, 201, 64, 120, 67, 26, 207, 191, 154, 147, 245, 217]`:
+```
+Creating asset with token code "7hAA3TTJQHhDGs-_mpP12Q==": [238, 16, 0, 221, 52, 201, 64, 120, 67, 26, 207, 191, 154, 147, 245, 217]
+```
+
+### Submit the transaction
+```
+./txn_builder_cli --txn txn_define submit
+```
+
+## Ian: issues and transfers the asset confidentially to Bill
+### Create an empty transaction
+```
+./txn_builder_cli create_txn_builder --name txn_issue_and_transfer
+```
+
+### Issue and transfer the asset
+```
+./txn_builder_cli --txn txn_issue_and_transfer issuer --id 1 issue_and_transfer_asset --recipient 1 --amount 100 --token_code 7hAA3TTJQHhDGs-_mpP12Q== --confidential_amount --confidential_asset
+```
+
+### Submit the transaction and get the utxo
+```
+./txn_builder_cli --txn txn_issue_and_transfer submit --get_sids
+```
+Note from the last line of the output that the utxo is `429`:
+```
+Utxo: [TxoSID(429)]
+```
+
+## Bill: verifies the transffered asset
+### Create an empty transaction
+```
+./txn_builder_cli create_txn_builder --name txn_verify_asset
+```
+### Get and verify the asset record
+```
+./txn_builder_cli --txn txn_verify_asset borrower --id 1 get_asset_record --sid 429
+```
+Note from the last line of the output that the asset token code is indeed `[238, 16, 0, 221, 52, 201, 64, 120, 67, 26, 207, 191, 154, 147, 245, 217]`, and the amount Bill owns is `100`.
+```
+Bill owns 100 of asset [238, 16, 0, 221, 52, 201, 64, 120, 67, 26, 207, 191, 154, 147, 245, 217].
+```

@@ -286,8 +286,8 @@ fn issue_and_transfer_asset(txn_builder_path: &str,
                             token_code: &str)
                             -> io::Result<Output> {
   Command::new(COMMAND).args(&["--txn", txn_builder_path])
-                       .args(&["add", "issue_and_transfer_asset"])
-                       .args(&["--issuer", issuer_id])
+                       .args(&["issuer", "--id", issuer_id])
+                       .arg("issue_and_transfer")
                        .args(&["--recipient", recipient_id])
                        .args(&["--amount", amount])
                        .args(&["--token_code", token_code])
