@@ -16,6 +16,7 @@ use rand_core::SeedableRng;
 use rustyline::error::ReadlineError;
 use rustyline::Editor;
 // use sha2::{Digest, Sha256};
+use air::AIR;
 use serde::{Deserialize, Serialize};
 use sha256::DIGESTBYTES;
 use std::collections::HashMap;
@@ -504,7 +505,7 @@ mod tests {
     let signature = ac_sign::<ChaChaRng, &[u8]>(&mut prng, &issuer_sk, &user_pk, &attributes[..]); // Done by Issuer
                                                                                                    // Enter the User
     let credential: Credential<&[u8]> = Credential { signature: signature.clone(),
-                                                     attributes,
+                                                     attributes: attributes,
                                                      issuer_pk: issuer_pk.clone() };
     let (commitment, _proof, key) =
       ac_commit::<ChaChaRng, &[u8]>(&mut prng, &user_sk, &credential, b"some addr").unwrap();
