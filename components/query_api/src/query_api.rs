@@ -1,9 +1,9 @@
-//#![deny(warnings)]
+#![deny(warnings)]
 use actix_cors::Cors;
-use actix_web::{error, middleware, web, App, HttpServer};
+use actix_web::{middleware, web, App, HttpServer};
 use ledger::data_model::TxoSID;
 use ledger::store::{ArchiveAccess, LedgerAccess, LedgerUpdate};
-use log::{error, info};
+use log::info;
 use query_server::QueryServer;
 use rand_core::{CryptoRng, RngCore};
 use std::io;
@@ -61,62 +61,3 @@ impl QueryApi {
     self.web_runtime.run()
   }
 }
-
-//#[cfg(test)]
-//mod tests {
-//  use super::*;
-//  use actix_web::dev::Service;
-//  use actix_web::{test, web, App};
-//  use ledger::data_model::AssetTypeCode;
-//  use ledger::data_model::{Operation, Transaction};
-//  use ledger::store::helpers::*;
-//  use ledger::store::{LedgerAccess, LedgerState};
-//  use rand_core::SeedableRng;
-//
-//  #[test]
-//  fn test_submit_transaction_standalone() {
-//    let mut prng = rand_chacha::ChaChaRng::from_seed([0u8; 32]);
-//    let ledger_state = LedgerState::test_ledger();
-//    let submission_server =
-//      Arc::new(RwLock::new(SubmissionServer::new(prng.clone(),
-//                                                 Arc::new(RwLock::new(ledger_state)),
-//                                                 8).unwrap()));
-//    let app_copy = Arc::clone(&submission_server);
-//    let mut tx = Transaction::default();
-//
-//    let token_code1 = AssetTypeCode { val: [1; 16] };
-//    let (public_key, secret_key) = build_keys(&mut prng);
-//
-//    let asset_body = asset_creation_body(&token_code1, &public_key, true, false, None, None);
-//    let asset_create = asset_creation_operation(&asset_body, &public_key, &secret_key);
-//    tx.operations.push(Operation::DefineAsset(asset_create));
-//
-//    let mut app =
-//      test::init_service(App::new().data(submission_server)
-//                                   .route("/submit_transaction",
-//                                          web::post().to(submit_transaction::<rand_chacha::ChaChaRng,
-//                                                                            LedgerState>))
-//                                  .route("/force_end_block",
-//                                          web::post().to(force_end_block::<rand_chacha::ChaChaRng,
-//                                                                            LedgerState>)));
-//
-//    let req = test::TestRequest::post().uri("/submit_transaction")
-//                                       .set_json(&tx)
-//                                       .to_request();
-//
-//    let submit_resp = test::block_on(app.call(req)).unwrap();
-//
-//    assert!(submit_resp.status().is_success());
-//    let req = test::TestRequest::post().uri("/force_end_block")
-//                                       .to_request();
-//    let submit_resp = test::block_on(app.call(req)).unwrap();
-//    assert!(submit_resp.status().is_success());
-//    assert!(app_copy.read()
-//                    .unwrap()
-//                    .borrowable_ledger_state()
-//                    .read()
-//                    .unwrap()
-//                    .get_asset_type(&token_code1)
-//                    .is_some());
-//  }
-//}

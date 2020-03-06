@@ -1,4 +1,4 @@
-//#![deny(warnings)]
+#![deny(warnings)]
 use ledger::data_model::errors::PlatformError;
 use ledger::data_model::{
   FinalizedTransaction, Operation, TransferAsset, TxoRef, TxoSID, XfrAddress,
@@ -7,6 +7,7 @@ use ledger::store::*;
 use log::info;
 use rand_core::{CryptoRng, RngCore};
 use std::collections::{HashMap, HashSet};
+use std::marker::PhantomData;
 use std::sync::{Arc, RwLock};
 
 pub struct QueryServer<RNG, LU>
@@ -16,18 +17,18 @@ pub struct QueryServer<RNG, LU>
   committed_state: Arc<RwLock<LU>>,
   addresses_to_utxos: HashMap<XfrAddress, HashSet<TxoSID>>,
   utxos_to_map_index: HashMap<TxoSID, XfrAddress>,
-  prng: RNG,
+  prng: PhantomData<RNG>,
 }
 
 impl<RNG, LU> QueryServer<RNG, LU>
   where RNG: RngCore + CryptoRng,
         LU: LedgerUpdate<RNG> + ArchiveAccess + LedgerAccess
 {
-  pub fn new(prng: RNG, ledger_state: Arc<RwLock<LU>>) -> QueryServer<RNG, LU> {
+  pub fn new(ledger_state: Arc<RwLock<LU>>) -> QueryServer<RNG, LU> {
     QueryServer { committed_state: ledger_state,
                   addresses_to_utxos: HashMap::new(),
                   utxos_to_map_index: HashMap::new(),
-                  prng }
+                  prng: PhantomData }
   }
 
   pub fn get_address_of_sid(&self, txo_sid: TxoSID) -> Option<XfrAddress> {
@@ -109,7 +110,7 @@ impl<RNG, LU> QueryServer<RNG, LU>
         // Remove spent utxos
         for op in &txn.operations {
           if let Operation::TransferAsset(transfer_asset) = op {
-            self.remove_spent_utxos(&transfer_asset);
+            self.remove_spent_utxos(&transfer_asset)?;
           };
         }
         // Add new utxos (this handles both transfers and issuances)
@@ -129,22 +130,19 @@ impl<RNG, LU> QueryServer<RNG, LU>
 #[cfg(test)]
 mod tests {
   use super::*;
-  use ledger::data_model::{AssetTypeCode, Transaction, TransferType};
+  use ledger::data_model::{AssetTypeCode, TransferType};
   use ledger_standalone::LedgerStandalone;
   use rand_chacha::ChaChaRng;
   use rand_core::SeedableRng;
-  use std::thread;
   use txn_builder::{BuildsTransactions, TransactionBuilder, TransferOperationBuilder};
   use zei::xfr::asset_record::open_asset_record;
   use zei::xfr::sig::XfrKeyPair;
-  use zei::xfr::structs::BlindAssetRecord;
 
   #[test]
   pub fn test_query_server() {
     let ledger_state = LedgerState::test_ledger();
-    let fake_prng = ChaChaRng::from_entropy();
     let mut prng = ChaChaRng::from_entropy();
-    let mut query_server = QueryServer::new(fake_prng, Arc::new(RwLock::new(ledger_state)));
+    let mut query_server = QueryServer::new(Arc::new(RwLock::new(ledger_state)));
     let token_code = AssetTypeCode::gen_random();
     let ledger_standalone = LedgerStandalone::new();
     ledger_standalone.poll_until_ready().unwrap();
@@ -173,7 +171,7 @@ mod tests {
     ledger_standalone.submit_transaction(&issuance_tx);
 
     // Query server will now fetch new blocks
-    query_server.poll_new_blocks();
+    query_server.poll_new_blocks().unwrap();
 
     // Ensure that query server is aware of issuances
     let alice_sids = query_server.get_owned_utxo_sids(&XfrAddress { key: *alice.get_pk_ref() })
@@ -201,7 +199,7 @@ mod tests {
                          .transaction();
     ledger_standalone.submit_transaction(&xfr_txn);
     // Query server will now fetch new blocks
-    query_server.poll_new_blocks();
+    query_server.poll_new_blocks().unwrap();
 
     // Ensure that query server is aware of ownership changes
     let alice_sids = query_server.get_owned_utxo_sids(&XfrAddress { key: *alice.get_pk_ref() })
