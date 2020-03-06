@@ -2161,6 +2161,8 @@ fn process_issuer_cmd(issuer_matches: &clap::ArgMatches,
       println!("Subcommand missing or not recognized. Try lender --help");
       Err(PlatformError::InputsError)
     }
+  }
+}
 
 fn protocol_host(matches: &clap::ArgMatches) -> (&'static str, &'static str) {
   let protocol = if matches.is_present("http") {
@@ -2196,25 +2198,6 @@ fn create_directory_and_rename_path(path_str: &str, overwrite: bool) -> Result<(
     rename_existing_path(&path)?;
   }
   Ok(())
-}
-
-fn process_issuer_cmd(issuer_matches: &clap::ArgMatches) -> Result<(), PlatformError> {
-  match issuer_matches.subcommand() {
-    ("sign_up", Some(sign_up_matches)) => {
-      let name = if let Some(name_arg) = sign_up_matches.value_of("name") {
-        name_arg.to_owned()
-      } else {
-        println!("Name is required to sign up an issuer account. Use --name.");
-        return Err(PlatformError::InputsError);
-      };
-      let mut data = load_data()?;
-      data.add_issuer(name)
-    }
-    _ => {
-      println!("Subcommand missing or not recognized. Try lender --help");
-      Err(PlatformError::InputsError)
-    }
-  }
 }
 
 fn process_lender_cmd(lender_matches: &clap::ArgMatches,
@@ -2521,21 +2504,7 @@ fn process_borrower_cmd(borrower_matches: &clap::ArgMatches,
         return Err(PlatformError::InputsError);
       };
       // Get protocol and host.
-      let protocol = if get_asset_record_matches.is_present("http") {
-        // Allow HTTP which may be useful for running a ledger locally.
-        "http"
-      } else {
-        // Default to HTTPS
-        "https"
-      };
-      let host = if get_asset_record_matches.is_present("localhost") {
-        // Use localhost
-        run_ledger_standalone()?;
-        "localhost"
-      } else {
-        // Default to testnet.findora.org
-        "testnet.findora.org"
-      };
+      let (protocol, host) = protocol_host(get_asset_record_matches);
       let asset_record = get_open_asset_record(protocol, host, sid, &key_pair)?;
       println!("{} owns {} of asset {:?}.",
                borrower_name,
@@ -2885,7 +2854,8 @@ fn process_add_cmd(add_matches: &clap::ArgMatches,
   }
 }
 
-fn process_load_funds_cmd(load_funds_matches: &clap::ArgMatches,
+fn process_load_funds_cmd(borrower_id: u64,
+                          load_funds_matches: &clap::ArgMatches,
                           transaction_file_name: &str)
                           -> Result<(), PlatformError> {
   let issuer_id = if let Some(issuer_arg) = load_funds_matches.value_of("issuer") {
@@ -2899,33 +2869,19 @@ fn process_load_funds_cmd(load_funds_matches: &clap::ArgMatches,
     println!("Issuer id is required to load funds. Use --issuer.");
     return Err(PlatformError::InputsError);
   };
-  let recipient_id = if let Some(recipient_arg) = load_funds_matches.value_of("recipient") {
-    if let Ok(id) = recipient_arg.parse::<u64>() {
-      id
-    } else {
-      println!("Improperly formatted recipient id.");
-      return Err(PlatformError::InputsError);
-    }
-  } else {
-    println!("Recipient id is required to load funds. Use --recipient.");
-    return Err(PlatformError::InputsError);
-  };
   let amount = if let Some(amount_arg) = load_funds_matches.value_of("amount") {
-    get_amount(amount_arg).unwrap()
+    parse_to_u64(amount_arg)?
   } else {
     println!("Amount is required to load funds. Use --amount.");
     return Err(PlatformError::InputsError);
   };
-  // Get protocol and host.
   let (protocol, host) = protocol_host(load_funds_matches);
-
-  if submit_matches.is_present("get_sids") {
-    let sids = submit_and_get_sids(protocol, host, &transaction_file_name)?;
-    println!("Utxo: {:?}", sids);
-    Ok(())
-  } else {
-    submit(protocol, host, &transaction_file_name)
-  }
+  load_funds(issuer_id,
+             borrower_id,
+             amount,
+             transaction_file_name,
+             protocol,
+             host)
 }
 
 fn process_pay_loan_cmd(pay_loan_matches: &clap::ArgMatches,
