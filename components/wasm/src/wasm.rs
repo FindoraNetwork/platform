@@ -167,6 +167,7 @@ pub struct WasmTransactionBuilder {
   transaction_builder: Serialized<TransactionBuilder>,
 }
 
+#[wasm_bindgen]
 impl WasmTransactionBuilder {
   /// Create a new transaction builder.
   pub fn new() -> Self {

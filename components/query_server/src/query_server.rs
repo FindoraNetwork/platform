@@ -46,13 +46,13 @@ impl<RNG, LU> QueryServer<RNG, LU>
         TxoRef::Absolute(txo_sid) => {
           let address = self.utxos_to_map_index
                             .get(&txo_sid)
-                            .ok_or(PlatformError::SubmissionServerError(Some("whoops".into())))?;
+                            .ok_or(PlatformError::QueryServerError(Some("Attempting to remove owned txo of address that isn't cached".into())))?;
           let hash_set = self.addresses_to_utxos
                              .get_mut(&address)
-                             .ok_or(PlatformError::SubmissionServerError(Some("whoops".into())))?;
+                             .ok_or(PlatformError::QueryServerError(Some("No txos stored for this address".into())))?;
           let removed = hash_set.remove(&txo_sid);
           if !removed {
-            return Err(PlatformError::SubmissionServerError(Some("whoops".into())));
+            return Err(PlatformError::QueryServerError(Some("Input txo not found".into())));
           }
         }
       }
@@ -72,7 +72,9 @@ impl<RNG, LU> QueryServer<RNG, LU>
                                                  "blocks_since",
                                                  &latest_block))
     {
-      Err(_) => return Err(PlatformError::SubmissionServerError(Some("whoops".into()))),
+      Err(_) => {
+        return Err(PlatformError::QueryServerError(Some("Cannot connect to ledger server".into())))
+      }
 
       Ok(mut bs) => match bs.json::<Vec<(usize, Vec<FinalizedTransaction>)>>() {
         Err(_) => return Err(PlatformError::DeserializationError),

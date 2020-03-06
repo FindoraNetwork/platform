@@ -8,9 +8,6 @@ edition = "2018"
 path = "src/query_server.rs"
 
 [dependencies]
-#actix-web = "1.0"
-#hex = "0.3.2"
-#cryptohash = { path = "../../libs/cryptohash" }
 ledger = { path = "../../ledger" }
 ledger_standalone = {path = "../ledger_standalone"}
 log = "0.4.8"

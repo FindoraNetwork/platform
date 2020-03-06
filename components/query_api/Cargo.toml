@@ -5,7 +5,12 @@ authors = ["Noah Golub <noah@findora.org>"]
 edition = "2018"
 
 [lib]
+name = "query_api"
 path = "src/query_api.rs"
+
+[[bin]]
+name = "query_server"
+path = "src/query_server_launch.rs"
 
 [dependencies]
 actix-cors = "0.1.0"
