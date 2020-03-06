@@ -112,7 +112,7 @@ In the initial data, there are two issuer, Lenny and Luna. To sign up a new lend
 ```
 Make sure the specified loan is owned by the lender.
 * View loans with a filter
-To filter the loans, add `--filter` with `active`, `inactive` or `unrejected`, for loans that have been activated (i.e., fulfilled by the lender), haven't been activated, or have been rejected, respectively. For example:
+To filter the loans, add `--filter` with `unrejected`, `active`, `inactive`, or `complete`, for loans that have been activated (i.e., fulfilled by the lender), haven't been activated, or have been rejected, respectively. For example:
 ```
 ./txn_builder_cli lender --id 0 view_loan --filter active
 ```
@@ -157,7 +157,7 @@ By default, `https://testnet.findora.org` is used. To switch to `http://localhos
 ```
 Make sure the specified loan is owned by the borrower.
 * View loans with a filter
-To filter the loans, add `--filter` with `active`, `inactive` or `unrejected`, for loans that have been activated (i.e., fulfilled by the lender), haven't been activated, or have been rejected, respectively. For example:
+To filter the loans, add `--filter` with `unrejected`, `active`, `inactive`, or `complete`, for loans that have been activated (i.e., fulfilled by the lender), haven't been activated, or have been rejected, respectively. For example:
 ```
 ./txn_builder_cli borrower --id 0 view_loan --filter active
 ```
@@ -251,12 +251,7 @@ Note from the output that Bill's id is `1`:
 Bill's id is 1.
 ```
 
-## Create some txn files to for defining asset, issuing and transferring asset, and verify asset record
-```
-./txn_builder_cli create_txn_builder --name txn_verify_asset
-```
-
-## Define a confidential asset
+## Ian: defines a confidential asset
 ### Create an empty transaction
 ```
 ./txn_builder_cli create_txn_builder --name txn_define
@@ -264,7 +259,7 @@ Bill's id is 1.
 
 ### Define an asset
 ```
-./txn_builder_cli --txn txn_define add define_asset --issuer 1 --memo 'Define a confidential asset.' --confidential
+./txn_builder_cli --txn txn_define issuer --id 1 define_asset --memo 'Define a confidential asset.' --confidential
 ```
 Note from the output that the asset token code is `7hAA3TTJQHhDGs-_mpP12Q==`, or `[238, 16, 0, 221, 52, 201, 64, 120, 67, 26, 207, 191, 154, 147, 245, 217]`:
 ```

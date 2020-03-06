@@ -12,6 +12,10 @@ extern crate exitcode;
 // Derive path and command name from cwd
 // Figure out how to colorize stdout and stderr
 
+// TODO (Keyao): Fix tests with #[ignore].
+// Those tests pass individually, but occasionally fail when run with other tests.
+// They take more time to complete, thus might cause data conflicts.
+
 const COMMAND: &str = "../../target/debug/txn_builder_cli";
 const DATA_FILE: &str = "data.json";
 
@@ -237,8 +241,8 @@ fn define_asset(txn_builder_path: &str,
                 memo: &str)
                 -> io::Result<Output> {
   Command::new(COMMAND).args(&["--txn", txn_builder_path])
-                       .args(&["add", "define_asset"])
-                       .args(&["--issuer", issuer_id])
+                       .args(&["issuer", "--id", issuer_id])
+                       .arg("define_asset")
                        .args(&["--token_code", token_code])
                        .args(&["--memo", memo])
                        .output()
@@ -693,7 +697,7 @@ fn test_add_with_help() {
 
 #[test]
 fn test_define_asset_with_help() {
-  let output = Command::new(COMMAND).args(&["add", "define_asset", "--help"])
+  let output = Command::new(COMMAND).args(&["issuer", "define_asset", "--help"])
                                     .output()
                                     .expect("failed to execute process");
 
@@ -944,7 +948,6 @@ fn test_define_and_submit_with_args() {
 }
 
 #[test]
-#[ignore]
 fn test_issue_transfer_and_submit_with_args() {
   let _ = fs::remove_file(DATA_FILE);
 
@@ -983,27 +986,17 @@ fn test_issue_transfer_and_submit_with_args() {
 
 #[test]
 #[ignore]
-fn test_load_funds_with_args() {
-  // Create txn builder
-  let txn_builder_file = "tb_load_funds_args";
-  create_txn_builder_with_path(txn_builder_file).expect("Failed to create transaction builder");
-
+// Test funds loading, loan request, fulfilling and repayment
+fn test_request_fulfill_and_pay_loan_with_args() {
   // Load funds
-  let output = load_funds(txn_builder_file, "0", "0", "500").expect("Failed to load funds");
+  let txn_builder_file = "tb_load_funds_args";
+  let output = load_funds(txn_builder_file, "0", "0", "5000").expect("Failed to load funds");
 
   io::stdout().write_all(&output.stdout).unwrap();
   io::stdout().write_all(&output.stderr).unwrap();
 
-  let _ = fs::remove_file(DATA_FILE);
   fs::remove_file(txn_builder_file).unwrap();
-
   assert!(output.status.success());
-}
-
-#[test]
-#[ignore]
-fn test_request_fulfill_and_pay_loan_with_args() {
-  let _ = fs::remove_file(DATA_FILE);
 
   // Request the first loan
   let output = request_loan("0", "0", "1500", "100", "8").expect("Failed to request a loan");
@@ -1021,13 +1014,10 @@ fn test_request_fulfill_and_pay_loan_with_args() {
 
   assert!(output.status.success());
 
-  // Create txn builder
-  let txn_builder_file = "tb_fulfill_loan_args";
-  create_txn_builder_with_path(txn_builder_file).expect("Failed to create transaction builder");
-
   // Fulfill the first loan
-  // 1. First time
+  // 1. First time:
   //    Add the credential proof, then successfully initiate the loan
+  let txn_builder_file = "tb_fulfill_loan_args";
   let output = fulfill_loan(txn_builder_file, "0", "0", "0").expect("Failed to initiate the loan");
 
   io::stdout().write_all(&output.stdout).unwrap();
@@ -1073,13 +1063,35 @@ fn test_request_fulfill_and_pay_loan_with_args() {
                                    .contains(&"has already been rejected.".to_owned()));
 
   // Pay loan
+  // 1. First time:
+  //    Burn part of the loan balance
   let output = pay_loan(txn_builder_file, "0", "0", "300").expect("Failed to pay loan");
 
   io::stdout().write_all(&output.stdout).unwrap();
   io::stdout().write_all(&output.stderr).unwrap();
 
-  let _ = fs::remove_file(DATA_FILE);
-  fs::remove_file(txn_builder_file).unwrap();
+  assert!(output.status.success());
+
+  // 2. Second time
+  //    Pay off the loan
+  let output = pay_loan(txn_builder_file, "0", "0", "2000").expect("Failed to pay loan");
+
+  io::stdout().write_all(&output.stdout).unwrap();
+  io::stdout().write_all(&output.stderr).unwrap();
 
   assert!(output.status.success());
+
+  // 3. Third time:
+  //    Fail because the loan has been paid off
+  let output = pay_loan(txn_builder_file, "0", "0", "3000").expect("Failed to pay loan");
+
+  io::stdout().write_all(&output.stdout).unwrap();
+  io::stdout().write_all(&output.stderr).unwrap();
+
+  assert_eq!(output.status.code(), Some(exitcode::USAGE));
+  assert!(from_utf8(&output.stdout).unwrap()
+                                   .contains(&"has been paid off.".to_owned()));
+
+  let _ = fs::remove_file(DATA_FILE);
+  fs::remove_file(txn_builder_file).unwrap();
 }

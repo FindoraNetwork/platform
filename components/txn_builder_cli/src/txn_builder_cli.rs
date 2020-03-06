@@ -15,7 +15,6 @@ use std::path::{Path, PathBuf};
 use std::process::exit;
 use std::process::Command;
 use std::thread;
-use std::time::Duration;
 use submission_server::{TxnHandle, TxnStatus};
 use txn_builder::{BuildsTransactions, TransactionBuilder, TransferOperationBuilder};
 use zei::api::anon_creds::{
@@ -199,13 +198,20 @@ impl Borrower {
 //
 // Loan
 //
+#[derive(Clone, Deserialize, Debug, PartialEq, Serialize)]
+enum LoanStatus {
+  Requested, // The borrower has requested the loan
+  Rejected,  // The lender has rejected the loan
+  Active,    // The lender has fulfilled the loan, but the borrower hasn't paid it off
+  Complete,  // The borrower has paid off the loan
+}
+
 #[derive(Clone, Deserialize, Debug, Serialize)]
 struct Loan {
   id: u64,                 // Loan id
   lender: u64,             // Lender id
   borrower: u64,           // Borrower id
-  active: bool,            // Whether the loan is active (i.e., fulfilled by the lender)
-  rejected: bool,          // Whether the loan has been rejected
+  status: LoanStatus,      // Loan status
   amount: u64,             // Amount in total
   balance: u64,            // Loan balance
   interest_per_mille: u64, // Interest per 1000. E.g. 120 means the interest rate is 0.12
@@ -226,8 +232,7 @@ impl Loan {
     Loan { id: id as u64,
            lender,
            borrower,
-           active: false,
-           rejected: false,
+           status: LoanStatus::Requested,
            amount,
            balance: amount,
            interest_per_mille,
@@ -760,17 +765,15 @@ fn get_amounts(amounts_arg: &str) -> Result<Vec<u64>, PlatformError> {
 }
 
 fn define_asset(fiat_asset: bool,
-                issuer_id: u64,
+                issuer_key_pair: &XfrKeyPair,
                 token_code: AssetTypeCode,
                 memo: &str,
                 allow_updates: bool,
                 traceable: bool,
                 transaction_file_name: &str)
                 -> Result<TransactionBuilder, PlatformError> {
-  let mut data = load_data()?;
-  let issuer_key_pair = data.get_issuer_key_pair(issuer_id)?;
   let mut txn_builder = TransactionBuilder::default();
-  txn_builder.add_operation_create_asset(&issuer_key_pair,
+  txn_builder.add_operation_create_asset(issuer_key_pair,
                                          Some(token_code),
                                          allow_updates,
                                          traceable,
@@ -778,6 +781,7 @@ fn define_asset(fiat_asset: bool,
   store_txn_builder_to_file(&transaction_file_name, &txn_builder)?;
 
   // Update data
+  let mut data = load_data()?;
   if fiat_asset {
     data.fiat_code = Some(token_code.to_base64());
     store_data_to_file(data)?;
@@ -786,11 +790,6 @@ fn define_asset(fiat_asset: bool,
 }
 
 fn run_ledger_standalone() -> Result<(), PlatformError> {
-  // Kill any existing standalone ledger process
-  Command::new("killall").arg("ledger_standalone")
-                         .output()
-                         .expect("Failed to kill standalone ledger process.");
-
   // Run the standalone ledger
   thread::spawn(move || {
     let status = Command::new(LEDGER_STANDALONE).status();
@@ -799,9 +798,6 @@ fn run_ledger_standalone() -> Result<(), PlatformError> {
     };
     Ok(())
   });
-
-  // Give some time to ensure the ledger is running
-  thread::sleep(Duration::from_secs(2));
   Ok(())
 }
 
@@ -995,7 +991,7 @@ fn load_funds(issuer_id: u64,
   } else {
     let fiat_code = AssetTypeCode::gen_random();
     let txn_builder = define_asset(true,
-                                   issuer_id,
+                                   issuer_key_pair,
                                    fiat_code,
                                    "Fiat asset",
                                    false,
@@ -1136,13 +1132,22 @@ fn fulfill_loan(loan_id: u64,
   let mut data = load_data()?;
   let issuer_key_pair = &data.clone().get_issuer_key_pair(issuer_id)?;
   let loan = &data.loans.clone()[loan_id as usize];
-  if loan.active {
-    println!("Loan {} has already been fulfilled.", loan_id);
-    return Err(PlatformError::InputsError);
-  }
-  if loan.rejected {
-    println!("Loan {} has already been rejected.", loan_id);
-    return Err(PlatformError::InputsError);
+
+  // Check if loan has been fulfilled
+  match loan.status {
+    LoanStatus::Rejected => {
+      println!("Loan {} has already been rejected.", loan_id);
+      return Err(PlatformError::InputsError);
+    }
+    LoanStatus::Active => {
+      println!("Loan {} has already been fulfilled.", loan_id);
+      return Err(PlatformError::InputsError);
+    }
+    LoanStatus::Complete => {
+      println!("Loan {} has already been paid off.", loan_id);
+      return Err(PlatformError::InputsError);
+    }
+    _ => {}
   }
 
   let lender_id = loan.lender;
@@ -1181,7 +1186,7 @@ fn fulfill_loan(loan_id: u64,
             RelationType::AtLeast)
     {
       // Update loans data
-      data.loans[loan_id as usize].rejected = true;
+      data.loans[loan_id as usize].status = LoanStatus::Rejected;
       store_data_to_file(data)?;
       return Err(error);
     }
@@ -1223,7 +1228,7 @@ fn fulfill_loan(loan_id: u64,
   } else {
     let fiat_code = AssetTypeCode::gen_random();
     let txn_builder = define_asset(true,
-                                   issuer_id,
+                                   issuer_key_pair,
                                    fiat_code,
                                    "Fiat asset",
                                    false,
@@ -1345,7 +1350,7 @@ fn fulfill_loan(loan_id: u64,
   // Update data
   let mut data = load_data()?;
   data.fiat_code = Some(fiat_code.to_base64());
-  data.loans[loan_id as usize].active = true;
+  data.loans[loan_id as usize].status = LoanStatus::Active;
   data.loans[loan_id as usize].code = Some(debt_code.to_base64());
   data.loans[loan_id as usize].utxo = Some(sids_new[0]);
   data.borrowers[borrower_id as usize].balance = borrower.balance + amount;
@@ -1364,12 +1369,24 @@ fn pay_loan(loan_id: u64,
   let mut data = load_data()?;
   let loan = &data.loans.clone()[loan_id as usize];
 
-  // Check if the loan has been activated
-  if !loan.active {
-    println!("Loan {} hasn't been activated yet. Use fulfill_loan to activate the loan.",
-             loan_id);
-    return Err(PlatformError::InputsError);
+  // Check if it's valid to pay
+  match loan.status {
+    LoanStatus::Requested => {
+      println!("Loan {} hasn't been fulfilled yet. Use issuer fulfill_loan.",
+               loan_id);
+      return Err(PlatformError::InputsError);
+    }
+    LoanStatus::Rejected => {
+      println!("Loan {} has been rejected.", loan_id);
+      return Err(PlatformError::InputsError);
+    }
+    LoanStatus::Complete => {
+      println!("Loan {} has been paid off.", loan_id);
+      return Err(PlatformError::InputsError);
+    }
+    _ => {}
   }
+
   let lender_id = loan.lender;
   let borrower_id = loan.borrower;
   let borrower = &data.borrowers.clone()[borrower_id as usize];
@@ -1445,13 +1462,14 @@ fn pay_loan(loan_id: u64,
                                           .add_output(amount_to_burn,
                                                       &XfrPublicKey::zei_from_bytes(&[0; 32]),
                                                       debt_code)?
-                                          .add_output(loan.amount - amount_to_burn,
+                                          .add_output(loan.balance - amount_to_burn,
                                                       lender_key_pair.get_pk_ref(),
                                                       debt_code)?
-                                          .add_output(loan.amount - amount_to_spend,
+                                          .add_output(borrower.balance - amount_to_spend,
                                                       borrower_key_pair.get_pk_ref(),
                                                       fiat_code)?
-                                          .create(TransferType::DebtSwap)?
+                                          .create(TransferType::DebtSwap)
+                                          .unwrap()
                                           .sign(borrower_key_pair)?
                                           .transaction()?;
   let mut txn_builder = TransactionBuilder::default();
@@ -1462,7 +1480,11 @@ fn pay_loan(loan_id: u64,
   let sids = submit_and_get_sids(protocol, host, txn_builder)?;
 
   data = load_data()?;
-  data.loans[loan_id as usize].balance = loan.balance - amount_to_burn;
+  let balance = loan.balance - amount_to_burn;
+  if balance == 0 {
+    data.loans[loan_id as usize].status = LoanStatus::Complete;
+  }
+  data.loans[loan_id as usize].balance = balance;
   data.loans[loan_id as usize].payments = loan.payments + 1;
   data.loans[loan_id as usize].utxo = Some(sids[2]);
   data.borrowers[borrower_id as usize].balance = borrower.balance - amount_to_spend;
@@ -1561,6 +1583,38 @@ fn main() {
         .long("id")
         .takes_value(true)
         .help("Issuer id."))
+      .subcommand(SubCommand::with_name("define_asset")
+        .arg(Arg::with_name("fiat")
+          .short("f")
+          .long("fiat")
+          .takes_value(false)
+          .help("Indicate the asset is a fiat asset."))
+        .arg(Arg::with_name("token_code")
+          .long("token_code")
+          .short("c")
+          .help("Explicit 16 character token code for the new asset; must be a unique name. If specified code is already in use, transaction will fail. If not specified, will display automatically generated token code.")
+          .takes_value(true))
+        .arg(Arg::with_name("allow_updates")
+          .short("u")
+          .long("allow_updates")
+          .help("If specified, updates may be made to asset memo"))
+        .arg(Arg::with_name("traceable")
+          .short("trace")
+          .long("traceable")
+          .help("If specified, asset transfers can be traced by the issuer "))
+        .arg(Arg::with_name("memo")
+          .short("m")
+          .long("memo")
+          .required(true)
+          .takes_value(true)
+          .help("Memo as Json, with escaped quotation marks"))
+        .arg(Arg::with_name("confidential")
+          .short("xx")
+          .long("confidential")
+          .help("Make memo confidential"))
+        .arg(Arg::with_name("with_policy")
+          .short("p")
+          .help("TODO: add support for policies")))
       .subcommand(SubCommand::with_name("issue_and_transfer_asset")
         .arg(Arg::with_name("recipient")
           .short("r")
@@ -1619,7 +1673,7 @@ fn main() {
           .short("f")
           .long("filter")
           .takes_value(true)
-          .possible_values(&["active", "inactive", "unrejected"])
+          .possible_values(&["unrejected", "active", "inactive", "complete"])
           .help("Display the loan with the specified status only."))
         .help("By default, display all loans of this lender."))
       .subcommand(SubCommand::with_name("fulfill_loan")
@@ -1686,7 +1740,7 @@ fn main() {
           .short("f")
           .long("filter")
           .takes_value(true)
-          .possible_values(&["active", "inactive", "unrejected", "completed"])
+          .possible_values(&["unrejected", "active", "inactive", "complete"])
           .help("Display the loan with the specified status only."))
         .help("By default, display all loans of this borrower."))
       .subcommand(SubCommand::with_name("request_loan")
@@ -1840,44 +1894,6 @@ fn main() {
           .long("confidential_asset")
           .help("If specified, the asset will be confidential"))))
     .subcommand(SubCommand::with_name("add")
-      .subcommand(SubCommand::with_name("define_asset")
-        .arg(Arg::with_name("fiat")
-          .short("f")
-          .long("fiat")
-          .takes_value(false)
-          .help("Indicate the asset is a fiat asset."))
-        .arg(Arg::with_name("issuer")
-          .short("i")
-          .long("issuer")
-          .required(true)
-          .takes_value(true)
-          .help("Issuer id."))
-        .arg(Arg::with_name("token_code")
-          .long("token_code")
-          .short("c")
-          .help("Explicit 16 character token code for the new asset; must be a unique name. If specified code is already in use, transaction will fail. If not specified, will display automatically generated token code.")
-          .takes_value(true))
-        .arg(Arg::with_name("allow_updates")
-          .short("u")
-          .long("allow_updates")
-          .help("If specified, updates may be made to asset memo"))
-        .arg(Arg::with_name("traceable")
-          .short("trace")
-          .long("traceable")
-          .help("If specified, asset transfers can be traced by the issuer "))
-        .arg(Arg::with_name("memo")
-          .short("m")
-          .long("memo")
-          .required(true)
-          .takes_value(true)
-          .help("Memo as Json, with escaped quotation marks"))
-        .arg(Arg::with_name("confidential")
-          .short("xx")
-          .long("confidential")
-          .help("Make memo confidential"))
-        .arg(Arg::with_name("with_policy")
-          .short("p")
-          .help("TODO: add support for policies")))
       .subcommand(SubCommand::with_name("issue_asset")
         .arg(Arg::with_name("issuer")
           .short("i")
@@ -2096,6 +2112,45 @@ fn process_issuer_cmd(issuer_matches: &clap::ArgMatches,
       let mut data = load_data()?;
       data.add_issuer(name)
     }
+    ("define_asset", Some(define_asset_matches)) => {
+      let fiat_asset = define_asset_matches.is_present("fiat");
+      let mut data = load_data()?;
+      let issuer_key_pair = if let Some(id_arg) = issuer_matches.value_of("id") {
+        let issuer_id = parse_to_u64(id_arg)?;
+        data.get_issuer_key_pair(issuer_id)?
+      } else {
+        println!("Issuer id is required to define an asset. Use issuer --id.");
+        return Err(PlatformError::InputsError);
+      };
+      let token_code = define_asset_matches.value_of("token_code");
+      let memo = if let Some(memo) = define_asset_matches.value_of("memo") {
+        memo
+      } else {
+        "{}"
+      };
+      let allow_updates = define_asset_matches.is_present("allow_updates");
+      let traceable = define_asset_matches.is_present("traceable");
+      let asset_token: AssetTypeCode;
+      if let Some(token_code) = token_code {
+        asset_token = AssetTypeCode::new_from_base64(token_code)?;
+      } else {
+        asset_token = AssetTypeCode::gen_random();
+        println!("Creating asset with token code {:?}: {:?}",
+                 asset_token.to_base64(),
+                 asset_token.val);
+      }
+      match define_asset(fiat_asset,
+                         &issuer_key_pair,
+                         asset_token,
+                         &memo,
+                         allow_updates,
+                         traceable,
+                         transaction_file_name)
+      {
+        Ok(_) => Ok(()),
+        Err(error) => Err(error),
+      }
+    }
     ("issue_and_transfer_asset", Some(issue_and_transfer_matches)) => {
       let mut data = load_data()?;
       let issuer_key_pair = if let Some(id_arg) = issuer_matches.value_of("id") {
@@ -2189,18 +2244,23 @@ fn process_lender_cmd(lender_matches: &clap::ArgMatches,
       if let Some(filter) = view_loan_matches.value_of("filter") {
         for id in loan_ids {
           match filter {
+            "unrejected" => {
+              if data.loans[id as usize].status != LoanStatus::Rejected {
+                loans.push(data.loans[id as usize].clone());
+              }
+            }
             "active" => {
-              if data.loans[id as usize].active {
+              if data.loans[id as usize].status == LoanStatus::Active {
                 loans.push(data.loans[id as usize].clone());
               }
             }
             "inactive" => {
-              if !data.loans[id as usize].active {
+              if data.loans[id as usize].status != LoanStatus::Active {
                 loans.push(data.loans[id as usize].clone());
               }
             }
             _ => {
-              if !data.loans[id as usize].rejected {
+              if data.loans[id as usize].status == LoanStatus::Complete {
                 loans.push(data.loans[id as usize].clone());
               }
             }
@@ -2307,18 +2367,23 @@ fn process_borrower_cmd(borrower_matches: &clap::ArgMatches,
       if let Some(filter) = view_loan_matches.value_of("filter") {
         for id in loan_ids {
           match filter {
+            "unrejected" => {
+              if data.loans[id as usize].status != LoanStatus::Rejected {
+                loans.push(data.loans[id as usize].clone());
+              }
+            }
             "active" => {
-              if data.loans[id as usize].active {
+              if data.loans[id as usize].status == LoanStatus::Active {
                 loans.push(data.loans[id as usize].clone());
               }
             }
             "inactive" => {
-              if !data.loans[id as usize].active {
+              if data.loans[id as usize].status != LoanStatus::Active {
                 loans.push(data.loans[id as usize].clone());
               }
             }
             _ => {
-              if !data.loans[id as usize].rejected {
+              if data.loans[id as usize].status == LoanStatus::Complete {
                 loans.push(data.loans[id as usize].clone());
               }
             }
@@ -2406,10 +2471,10 @@ fn process_borrower_cmd(borrower_matches: &clap::ArgMatches,
         return Ok(());
       }
       let mut credentials = Vec::new();
-      let credential_ids = data.borrowers[borrower_id as usize].credentials.clone();
-      for i in 0..3 {
-        if let Some(id) = credential_ids[i] {
-          credentials.push(data.credentials[id as usize].clone());
+      let credential_ids = data.borrowers[borrower_id as usize].credentials;
+      for credential_id in &credential_ids {
+        if let Some(id) = credential_id {
+          credentials.push(data.credentials[*id as usize].clone());
         }
       }
       println!("Displaying {} credential(s): {:?}",
@@ -2594,43 +2659,6 @@ fn process_add_cmd(add_matches: &clap::ArgMatches,
                    transaction_file_name: &str)
                    -> Result<(), PlatformError> {
   match add_matches.subcommand() {
-    ("define_asset", Some(define_asset_matches)) => {
-      let fiat_asset = define_asset_matches.is_present("fiat");
-      let issuer_id = if let Some(issuer_arg) = define_asset_matches.value_of("issuer") {
-        parse_to_u64(issuer_arg)?
-      } else {
-        println!("User id is required to define asset. Use --issuer.");
-        return Err(PlatformError::InputsError);
-      };
-      let token_code = define_asset_matches.value_of("token_code");
-      let memo = if let Some(memo) = define_asset_matches.value_of("memo") {
-        memo
-      } else {
-        "{}"
-      };
-      let allow_updates = define_asset_matches.is_present("allow_updates");
-      let traceable = define_asset_matches.is_present("traceable");
-      let asset_token: AssetTypeCode;
-      if let Some(token_code) = token_code {
-        asset_token = AssetTypeCode::new_from_base64(token_code)?;
-      } else {
-        asset_token = AssetTypeCode::gen_random();
-        println!("Creating asset with token code {:?}: {:?}",
-                 asset_token.to_base64(),
-                 asset_token.val);
-      }
-      match define_asset(fiat_asset,
-                         issuer_id,
-                         asset_token,
-                         &memo,
-                         allow_updates,
-                         traceable,
-                         transaction_file_name)
-      {
-        Ok(_) => Ok(()),
-        Err(error) => Err(error),
-      }
-    }
     ("issue_asset", Some(issue_asset_matches)) => {
       let mut data = load_data()?;
       let key_pair = if let Some(issuer_arg) = issue_asset_matches.value_of("issuer") {
@@ -3060,11 +3088,14 @@ mod tests {
 
   #[test]
   fn test_define_fiat_asset() {
+    // Create txn builder and key pair
     let txn_builder_path = "tb_define";
+    let mut prng: ChaChaRng = ChaChaRng::from_seed([0u8; 32]);
+    let issuer_key_pair = XfrKeyPair::generate(&mut prng);
 
     // Define fiat asset
     let res = define_asset(true,
-                           0,
+                           &issuer_key_pair,
                            AssetTypeCode::gen_random(),
                            "Define fiat asset",
                            false,
@@ -3190,7 +3221,7 @@ mod tests {
     // Fulfill the loan request
     fulfill_loan(loan_id as u64, 0, txn_builder_path, PROTOCOL, HOST).unwrap();
     let data = load_data().unwrap();
-    assert_eq!(data.loans[loan_id].active, true);
+    assert_eq!(data.loans[loan_id].status, LoanStatus::Active);
     assert_eq!(data.loans[loan_id].balance, amount);
 
     // Pay loan
