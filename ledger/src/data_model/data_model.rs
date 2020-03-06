@@ -2,7 +2,6 @@
 use super::errors;
 use chrono::prelude::*;
 use cryptohash::sha256;
-use cryptohash::sha256::Digest;
 use merkle_tree::append_only_merkle::HashValue;
 use rand_chacha::ChaChaRng;
 use rand_core::{CryptoRng, RngCore, SeedableRng};

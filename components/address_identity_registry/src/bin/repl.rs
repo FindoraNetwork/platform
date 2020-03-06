@@ -15,8 +15,6 @@ use rand_chacha::ChaChaRng;
 use rand_core::SeedableRng;
 use rustyline::error::ReadlineError;
 use rustyline::Editor;
-// use sha2::{Digest, Sha256};
-use air::AIR;
 use serde::{Deserialize, Serialize};
 use sha256::DIGESTBYTES;
 use std::collections::HashMap;
@@ -117,7 +115,7 @@ struct GlobalState {
   verbose: bool,
   prng: ChaChaRng,
   registry: Vec<String>, // Not used anymore, used to represent file storage
-  smt: AIR<String>,
+  smt: AIR,
   users: HashMap<String, User>,
   issuers: HashMap<String, Issuer>,
   user_sig: HashMap<String, ACSignature>, // Each user has at most a single credential issued to it
@@ -130,7 +128,7 @@ impl GlobalState {
     GlobalState { verbose: args.is_present("v"),
                   prng: ChaChaRng::from_seed([0u8; 32]),
                   registry: Vec::<String>::new(),
-                  smt: AIR::<String>::new(),
+                  smt: AIR::new(),
                   users: HashMap::new(),
                   issuers: HashMap::new(),
                   user_sig: HashMap::new(),
@@ -320,7 +318,7 @@ fn user_selectively_reveal(global_state: &mut GlobalState,
 }
 
 fn slice_to_attr(s: &[u8]) -> Option<&[u8]> {
-  if s == "".as_bytes() || s == "\"\"".as_bytes() {
+  if s == b"" || s == b"\"\"" {
     None
   } else {
     Some(s)
@@ -505,7 +503,7 @@ mod tests {
     let signature = ac_sign::<ChaChaRng, &[u8]>(&mut prng, &issuer_sk, &user_pk, &attributes[..]); // Done by Issuer
                                                                                                    // Enter the User
     let credential: Credential<&[u8]> = Credential { signature: signature.clone(),
-                                                     attributes: attributes,
+                                                     attributes,
                                                      issuer_pk: issuer_pk.clone() };
     let (commitment, _proof, key) =
       ac_commit::<ChaChaRng, &[u8]>(&mut prng, &user_sk, &credential, b"some addr").unwrap();

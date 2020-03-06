@@ -239,7 +239,7 @@ fn air_assign(txn_builder_path: &str,
               issuer_id: &str,
               address: &str,
               data: &str)
-                -> io::Result<Output> {
+              -> io::Result<Output> {
   Command::new(COMMAND).args(&["--txn", txn_builder_path])
                        .args(&["add", "air_assign"])
                        .args(&["--issuer", issuer_id])
@@ -374,6 +374,7 @@ fn pay_loan(txn_builder_path: &str,
 // No path
 //
 #[test]
+#[ignore]
 fn test_create_users() {
   // Create an issuer
   let output = sign_up_issuer("Issuer I").expect("Failed to create an issuer");
@@ -957,7 +958,7 @@ fn test_define_and_submit_with_args() {
   io::stdout().write_all(&output.stderr).unwrap();
 
   let _ = fs::remove_file(DATA_FILE);
-  // fs::remove_file(txn_builder_file).unwrap();
+  fs::remove_file(txn_builder_file).unwrap();
 
   assert!(output.status.success());
 }
@@ -966,16 +967,14 @@ fn test_define_and_submit_with_args() {
 // Compose transaction and submit
 //
 #[test]
+#[ignore]
 fn test_air_assign() {
   // Create txn builder and key pair
   let txn_builder_file = "tb_air_assign";
   create_txn_builder_with_path(txn_builder_file).expect("Failed to create transaction builder");
 
   // Define asset
-  air_assign(txn_builder_file,
-             "0",
-             "Brian Rogoff",
-             "2519 Brannan Place").expect("Failed to define asset");
+  air_assign(txn_builder_file, "0", "666", "Hell").expect("Failed to define asset");
 
   // Submit transaction
   let output = submit(txn_builder_file).expect("Failed to submit transaction");
@@ -983,8 +982,8 @@ fn test_air_assign() {
   io::stdout().write_all(&output.stdout).unwrap();
   io::stdout().write_all(&output.stderr).unwrap();
 
-  // let _ = fs::remove_file(DATA_FILE);
-  // fs::remove_file(txn_builder_file).unwrap();
+  let _ = fs::remove_file(DATA_FILE);
+  fs::remove_file(txn_builder_file).unwrap();
 
   assert!(output.status.success());
 }

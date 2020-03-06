@@ -1,29 +1,42 @@
 #![allow(dead_code)]
 use serde::{Deserialize, Serialize};
-use sparse_merkle_tree::{MerkleProof, SmtMap256, Hash256, hash_256, check_merkle_proof as smt_check_proof};
+use sparse_merkle_tree::{SmtMap256, Hash256, hash_256, MerkleProof, check_merkle_proof as smt_check_proof};
 use std::io::Error;
 use std::io::prelude::Read;
 use std::fs::File;
 
-#[derive(Clone, Default, Debug, Serialize, Deserialize)]
-pub struct AIR<Value: AsRef<[u8]>>(SmtMap256<Value>);
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct AIR(SmtMap256<String>);
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct AIRMerkleProof(MerkleProof);
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct AIRResult {
+  pub merkle_root: Hash256,
+  pub key: String,
+  pub value: Option<String>, 
+  pub merkle_proof: MerkleProof
+}
 
-impl <Value: AsRef<[u8]>> AIR<Value> {
+impl AIR {
   pub fn new() -> Self {
-    Self { 0: SmtMap256::<Value>::new()}
+    Self { 0: SmtMap256::<String>::new()}
   }
 
-  pub fn set(&mut self, key: impl AsRef<[u8]>, value: Option<Value>) -> Option<Value> {
+  pub fn key_of_byteref(key: impl AsRef<[u8]>) -> Hash256 {
+    hash_256(key.as_ref())
+  }
+
+  pub fn set(&mut self, key: impl AsRef<[u8]>, value: Option<String>) -> Option<String> {
     let hashed_key = hash_256(key.as_ref());
     self.0.set(&hashed_key, value)
   }
 
-  pub fn get(&self, key: impl AsRef<[u8]>) -> Option<&Value> {
+  pub fn get(&self, key: impl AsRef<[u8]>) -> Option<&String> {
     let hashed_key = hash_256(key.as_ref());
     self.0.get(&hashed_key)
   }
 
-  pub fn get_with_proof(&self, key: impl AsRef<[u8]>) -> (Option<&Value>, MerkleProof) {
+  pub fn get_with_proof(&self, key: impl AsRef<[u8]>) -> (Option<&String>, MerkleProof) {
     let hashed_key = hash_256(key.as_ref());
     self.0.get_with_proof(&hashed_key)
   }
@@ -32,27 +45,27 @@ impl <Value: AsRef<[u8]>> AIR<Value> {
     self.0.merkle_root()
   }
 
-  pub fn check_merkle_proof(&self, key: impl AsRef<[u8]>, value: Option<&Value>, proof: &MerkleProof) -> bool {
+  pub fn check_merkle_proof(&self, key: impl AsRef<[u8]>, value: Option<&String>, proof: &MerkleProof) -> bool {
     let hashed_key = hash_256(key.as_ref());
     self.0.check_merkle_proof(&hashed_key, value, proof)
   }
 }
 
-pub fn check_merkle_proof<Value: AsRef<[u8]>>(merkle_root: &Hash256,
-                                              key: impl AsRef<[u8]>,
-                                              value: Option<&Value>,
-                                              proof: &MerkleProof)
-                                              -> bool {
+pub fn check_merkle_proof<String: AsRef<[u8]>>(merkle_root: &Hash256,
+                                               key: impl AsRef<[u8]>,
+                                               value: Option<&String>,
+                                               proof: &MerkleProof)
+                                               -> bool {
   let hashed_key = hash_256(key.as_ref());
   smt_check_proof(merkle_root, &hashed_key, value, proof)
 }
 
-pub fn open(path: &str) -> Result<AIR<String>, Error> {
+pub fn open(path: &str) -> Result<AIR, Error> {
   let mut file = File::open(path)?;
   let mut contents = String::new();
   file.read_to_string(&mut contents)?;
 
   // Deserialize and print Rust data structure.
-  let result: AIR<String> = serde_json::from_str(&contents)?;
+  let result: AIR = serde_json::from_str(&contents)?;
   Ok(result)
 }

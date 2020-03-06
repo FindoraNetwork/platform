@@ -7,7 +7,7 @@ extern crate tempdir;
 use crate::data_model::errors::PlatformError;
 use crate::data_model::*;
 use crate::policies::{calculate_fee, DebtMemo};
-use air::AIR;
+use air::{AIR, AIRResult};
 use bitmap::{BitMap, SparseMap};
 use cryptohash::sha256;
 use cryptohash::sha256::Digest as BitDigest;
@@ -141,6 +141,9 @@ pub trait ArchiveAccess {
 
   // Get the hash of the most recent checkpoint, and its sequence number.
   fn get_state_commitment(&self) -> (BitDigest, u64);
+
+  // Key-value lookup in AIR
+  fn get_air_data(&self, address: &str) -> AIRResult;
 }
 
 #[repr(C)]
@@ -241,7 +244,7 @@ pub struct LedgerState {
   block_merkle: LoggedMerkle,
 
   // Sparse Merkle Tree for Addres Identity Registry
-  air: AIR<String>,
+  air: AIR,
 
   // Merkle tree tracking the sequence of all transaction hashes
   // Each appended hash is the hash of a transaction
@@ -864,10 +867,10 @@ impl LedgerState {
     Ok(LoggedMerkle::new(tree, writer))
   }
 
-  fn init_air_log(path: &str, create: bool) -> Result<AIR<String>, std::io::Error> {
+  fn init_air_log(path: &str, create: bool) -> Result<AIR, std::io::Error> {
     // Create a merkle tree or open an existing one.
     let result = if create {
-      Ok(AIR::<String>::new())
+      Ok(AIR::new())
     } else {
       air::open(path)
     };
@@ -1366,6 +1369,17 @@ impl ArchiveAccess for LedgerState {
       None => BitDigest { 0: [0_u8; DIGESTBYTES] },
     };
     (commitment, self.status.block_commit_count)
+  }
+
+  fn get_air_data(&self, key: &str) -> AIRResult {
+    let merkle_root = self.air.merkle_root();
+    let (value, merkle_proof) = self.air.get_with_proof(key);
+    AIRResult {
+      merkle_root:*merkle_root,
+      key:key.to_string(),
+      value:value.map(|s| s.to_string()), 
+      merkle_proof,
+    }
   }
 }
 

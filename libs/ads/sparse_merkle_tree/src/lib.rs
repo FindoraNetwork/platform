@@ -114,7 +114,7 @@ impl TreeNodeIndex {
 }
 
 /// Merkle proof of a certain triple (SMT-merkle-root, key, value).
-#[derive(PartialEq, Eq, Debug, Serialize, Deserialize)]
+#[derive(Clone, PartialEq, Eq, Debug, Serialize, Deserialize)]
 pub struct MerkleProof {
   /// Whether the siblings along the path to the root are non-default hashes.
   pub bitmap: [u8; 32],
