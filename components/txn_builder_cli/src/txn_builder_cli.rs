@@ -28,13 +28,6 @@ use zei::xfr::sig::{XfrKeyPair, XfrPublicKey};
 use zei::xfr::structs::{AssetRecord, BlindAssetRecord, OpenAssetRecord};
 extern crate exitcode;
 
-// TODO (Keyao): Determine which commands is no longer useful, remove them, and update README
-// E.g. funds loading can be achieved by either of the following:
-//      (1) "add define_asset" + "submit" + "add issue_and_transfer_asset"
-//      (2) "borrower load_funds"
-// (2) seems better since it handles all the necessary steps.
-// Then do we still want to support "add define_asset", "submit" and "add issue_and_transfer_asset" commands?
-
 // TODO (Keyao): Rename txn_builder_cli to txn_cli, and create_txn_builder to create_txn?
 
 const INIT_DATA: &str = r#"
@@ -1468,8 +1461,7 @@ fn pay_loan(loan_id: u64,
                                           .add_output(borrower.balance - amount_to_spend,
                                                       borrower_key_pair.get_pk_ref(),
                                                       fiat_code)?
-                                          .create(TransferType::DebtSwap)
-                                          .unwrap()
+                                          .create(TransferType::DebtSwap)?
                                           .sign(borrower_key_pair)?
                                           .transaction()?;
   let mut txn_builder = TransactionBuilder::default();
