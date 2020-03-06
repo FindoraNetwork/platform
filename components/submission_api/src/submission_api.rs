@@ -11,6 +11,11 @@ use std::marker::{Send, Sync};
 use std::sync::{Arc, RwLock};
 use submission_server::{SubmissionServer, TxnHandle};
 
+// Ping route to check for liveness of API
+fn ping() -> actix_web::Result<String> {
+  Ok("success".into())
+}
+
 fn submit_transaction<RNG, LU>(data: web::Data<Arc<RwLock<SubmissionServer<RNG, LU>>>>,
                                body: web::Json<Transaction>)
                                -> Result<web::Json<TxnHandle>, actix_web::error::Error>
@@ -103,6 +108,7 @@ impl SubmissionApi {
                        web::post().to(submit_transaction::<RNG, LU>))
                 .route("/submit_transaction_wasm/{tx}",
                        web::post().to(submit_transaction_wasm::<RNG, LU>))
+                .route("/ping", web::get().to(ping))
                 .route("/txn_status/{handle}", web::get().to(txn_status::<RNG, LU>))
                 .route("/force_end_block",
                        web::post().to(force_end_block::<RNG, LU>))

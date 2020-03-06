@@ -1,16 +1,12 @@
 //#![deny(warnings)]
 use ledger::data_model::errors::PlatformError;
 use ledger::data_model::{
-  FinalizedTransaction, Operation, Transaction, TransferAsset, TxnSID, TxnTempSID, TxoRef, TxoSID,
-  XfrAddress,
+  FinalizedTransaction, Operation, TransferAsset, TxoRef, TxoSID, XfrAddress,
 };
 use ledger::store::*;
-use log::{error, info};
+use log::info;
 use rand_core::{CryptoRng, RngCore};
-use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
-use std::fmt;
-use std::marker::PhantomData;
 use std::sync::{Arc, RwLock};
 
 pub struct QueryServer<RNG, LU>
@@ -27,17 +23,19 @@ impl<RNG, LU> QueryServer<RNG, LU>
   where RNG: RngCore + CryptoRng,
         LU: LedgerUpdate<RNG> + ArchiveAccess + LedgerAccess
 {
-  pub fn new(prng: RNG,
-             ledger_state: Arc<RwLock<LU>>)
-             -> Result<QueryServer<RNG, LU>, PlatformError> {
-    Ok(QueryServer { committed_state: ledger_state,
-                     addresses_to_utxos: HashMap::new(),
-                     utxos_to_map_index: HashMap::new(),
-                     prng })
+  pub fn new(prng: RNG, ledger_state: Arc<RwLock<LU>>) -> QueryServer<RNG, LU> {
+    QueryServer { committed_state: ledger_state,
+                  addresses_to_utxos: HashMap::new(),
+                  utxos_to_map_index: HashMap::new(),
+                  prng }
   }
 
   pub fn get_address_of_sid(&self, txo_sid: TxoSID) -> Option<XfrAddress> {
     self.utxos_to_map_index.get(&txo_sid).cloned()
+  }
+
+  pub fn get_owned_utxo_sids(&self, address: &XfrAddress) -> Option<HashSet<TxoSID>> {
+    self.addresses_to_utxos.get(&address).cloned()
   }
 
   pub fn remove_spent_utxos(&mut self, transfer: &TransferAsset) -> Result<(), PlatformError> {
@@ -48,12 +46,11 @@ impl<RNG, LU> QueryServer<RNG, LU>
           let address = self.utxos_to_map_index
                             .get(&txo_sid)
                             .ok_or(PlatformError::SubmissionServerError(Some("whoops".into())))?;
-          let mut hash_set =
-            self.addresses_to_utxos
-                .get_mut(&address)
-                .ok_or(PlatformError::SubmissionServerError(Some("whoops".into())))?;
+          let hash_set = self.addresses_to_utxos
+                             .get_mut(&address)
+                             .ok_or(PlatformError::SubmissionServerError(Some("whoops".into())))?;
           let removed = hash_set.remove(&txo_sid);
-          if (!removed) {
+          if !removed {
             return Err(PlatformError::SubmissionServerError(Some("whoops".into())));
           }
         }
@@ -74,7 +71,7 @@ impl<RNG, LU> QueryServer<RNG, LU>
                                                  "blocks_since",
                                                  &latest_block))
     {
-      Err(e) => return Err(PlatformError::SubmissionServerError(Some("whoops".into()))),
+      Err(_) => return Err(PlatformError::SubmissionServerError(Some("whoops".into()))),
 
       Ok(mut bs) => match bs.json::<Vec<(usize, Vec<FinalizedTransaction>)>>() {
         Err(_) => return Err(PlatformError::DeserializationError),
@@ -101,7 +98,7 @@ impl<RNG, LU> QueryServer<RNG, LU>
       for (_, (txn_sid, txo_sids)) in block.iter() {
         // get the transaction and ownership addresses associated with each transaction
         let (txn, addresses) = {
-          let mut ledger = self.committed_state.read().unwrap();
+          let ledger = self.committed_state.read().unwrap();
           let addresses: Vec<XfrAddress> =
             txo_sids.iter()
                     .map(|sid| XfrAddress { key: ledger.get_utxo(*sid).unwrap().0 .0.public_key })
@@ -129,60 +126,90 @@ impl<RNG, LU> QueryServer<RNG, LU>
   }
 }
 
+#[cfg(test)]
 mod tests {
   use super::*;
-  struct LedgerStandalone {
-    ledger: Popen,
-    submit_port: usize,
-    client: reqwest::Client,
-  }
+  use ledger::data_model::{AssetTypeCode, Transaction, TransferType};
+  use ledger_standalone::LedgerStandalone;
+  use rand_chacha::ChaChaRng;
+  use rand_core::SeedableRng;
+  use std::thread;
+  use txn_builder::{BuildsTransactions, TransactionBuilder, TransferOperationBuilder};
+  use zei::xfr::asset_record::open_asset_record;
+  use zei::xfr::sig::XfrKeyPair;
+  use zei::xfr::structs::BlindAssetRecord;
 
-  impl Drop for LedgerStandalone {
-    fn drop(&mut self) {
-      self.ledger.terminate().unwrap();
-      if self.ledger
-             .wait_timeout(time::Duration::from_millis(10))
-             .is_err()
-      {
-        self.ledger.kill().unwrap();
-        self.ledger.wait().unwrap();
-      }
-    }
-  }
-  impl LedgerStandalone {
-    pub fn new() -> self {
-      LedgerStandaloneAccounts {
-        ledger: Popen::create(&["/usr/bin/env", "bash", "-c", "flock .test_standalone_lock cargo run"],
-                  PopenConfig {
-                    cwd: Some(OsString::from("../ledger_standalone/")),
-                    ..Default::default()
-                  }).unwrap(),
-        submit_port: 8669,
-        client: reqwest::Client::new() }
-    }
+  #[test]
+  pub fn test_query_server() {
+    let ledger_state = LedgerState::test_ledger();
+    let fake_prng = ChaChaRng::from_entropy();
+    let mut prng = ChaChaRng::from_entropy();
+    let mut query_server = QueryServer::new(fake_prng, Arc::new(RwLock::new(ledger_state)));
+    let token_code = AssetTypeCode::gen_random();
+    let ledger_standalone = LedgerStandalone::new();
+    ledger_standalone.poll_until_ready().unwrap();
+    // Define keys
+    let alice = XfrKeyPair::generate(&mut prng);
+    let bob = XfrKeyPair::generate(&mut prng);
+    // Define asset
+    let mut builder = TransactionBuilder::default();
+    let define_tx =
+      builder.add_operation_create_asset(&alice, Some(token_code), false, false, "fiat".into())
+             .unwrap()
+             .transaction();
 
-    pub fn submit_transaction(&self, tx: Transaction) {
-      let host = "localhost";
-      let port = format!("{}", self.submit_port);
-      let query1 = format!("http://{}:{}/submit_transaction", host, port);
-      let query2 = format!("http://{}:{}/force_end_block", host, port);
-      self.client
-          .post(&query1)
-          .json(&tx)
-          .send()
-          .unwrap()
-          .error_for_status()
-          .unwrap()
-          .text()
-          .unwrap();
-      self.client
-          .post(&query2)
-          .send()
-          .unwrap()
-          .error_for_status()
-          .unwrap()
-          .text()
-          .unwrap();
-    }
+    ledger_standalone.submit_transaction(&define_tx);
+    let mut builder = TransactionBuilder::default();
+
+    //Issuance txn
+    let amt = 1000;
+    let issuance_tx = builder.add_basic_issue_asset(&alice, &None, &token_code, 0, amt)
+                             .unwrap()
+                             .add_basic_issue_asset(&alice, &None, &token_code, 1, amt)
+                             .unwrap()
+                             .add_basic_issue_asset(&alice, &None, &token_code, 2, amt)
+                             .unwrap()
+                             .transaction();
+    ledger_standalone.submit_transaction(&issuance_tx);
+
+    // Query server will now fetch new blocks
+    query_server.poll_new_blocks();
+
+    // Ensure that query server is aware of issuances
+    let alice_sids = query_server.get_owned_utxo_sids(&XfrAddress { key: *alice.get_pk_ref() })
+                                 .unwrap();
+
+    assert!(alice_sids.contains(&TxoSID(0)));
+    assert!(alice_sids.contains(&TxoSID(1)));
+    assert!(alice_sids.contains(&TxoSID(2)));
+
+    // Transfer to Bob
+    let transfer_sid = TxoSID(0);
+    let bar = ledger_standalone.fetch_blind_asset_record(transfer_sid);
+    let oar = open_asset_record(&bar, alice.get_sk_ref()).unwrap();
+    let mut xfr_builder = TransferOperationBuilder::new();
+    let xfr_op = xfr_builder.add_input(TxoRef::Absolute(transfer_sid), oar, amt)
+                            .unwrap()
+                            .add_output(amt, bob.get_pk_ref(), token_code)
+                            .unwrap()
+                            .create(TransferType::Standard)
+                            .unwrap()
+                            .sign(&alice)
+                            .unwrap();
+    let mut builder = TransactionBuilder::default();
+    let xfr_txn = builder.add_operation(xfr_op.transaction().unwrap())
+                         .transaction();
+    ledger_standalone.submit_transaction(&xfr_txn);
+    // Query server will now fetch new blocks
+    query_server.poll_new_blocks();
+
+    // Ensure that query server is aware of ownership changes
+    let alice_sids = query_server.get_owned_utxo_sids(&XfrAddress { key: *alice.get_pk_ref() })
+                                 .unwrap();
+    let bob_sids = query_server.get_owned_utxo_sids(&XfrAddress { key: *bob.get_pk_ref() })
+                               .unwrap();
+
+    assert!(!alice_sids.contains(&TxoSID(0)));
+    assert!(bob_sids.contains(&TxoSID(3)));
   }
 }
