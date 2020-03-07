@@ -3095,7 +3095,6 @@ mod tests {
   }
 
   #[test]
-  #[ignore]
   fn test_submit() {
     let txn_builder_path = "tb_submit";
     store_txn_builder_to_file(&txn_builder_path, &TransactionBuilder::default()).unwrap();

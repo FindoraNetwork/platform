@@ -374,7 +374,6 @@ fn pay_loan(txn_builder_path: &str,
 // No path
 //
 #[test]
-#[ignore]
 fn test_create_users() {
   // Create an issuer
   let output = sign_up_issuer("Issuer I").expect("Failed to create an issuer");
@@ -436,7 +435,6 @@ fn test_create_or_update_credentials() {
 }
 
 #[test]
-#[ignore]
 fn test_no_path() {
   // Create transaction builder
   let output = create_txn_builder_no_path().expect("Failed to execute process");
