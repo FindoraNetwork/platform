@@ -2186,7 +2186,13 @@ fn process_submit_cmd(submit_matches: &clap::ArgMatches,
   // Get protocol and host.
   let (protocol, host) = protocol_host(submit_matches);
 
-  submit(protocol, host, &transaction_file_name)
+  if submit_matches.is_present("get_sids") {
+    let sids = submit_and_get_sids(protocol, host, &transaction_file_name)?;
+    println!("Utxo: {:?}", sids);
+    Ok(())
+  } else {
+    submit(protocol, host, &transaction_file_name)
+  }
 }
 
 // Create the specific file if missing
