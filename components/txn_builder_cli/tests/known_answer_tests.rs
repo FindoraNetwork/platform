@@ -241,8 +241,8 @@ fn define_asset(txn_builder_path: &str,
                 memo: &str)
                 -> io::Result<Output> {
   Command::new(COMMAND).args(&["--txn", txn_builder_path])
-                       .args(&["add", "define_asset"])
-                       .args(&["--issuer", issuer_id])
+                       .args(&["issuer", "--id", issuer_id])
+                       .arg("define_asset")
                        .args(&["--token_code", token_code])
                        .args(&["--memo", memo])
                        .output()
@@ -289,6 +289,8 @@ fn issue_and_transfer_asset(txn_builder_path: &str,
                             amount: &str,
                             token_code: &str)
                             -> io::Result<Output> {
+  println!("here 292");
+
   Command::new(COMMAND).args(&["--txn", txn_builder_path])
                        .args(&["issuer", "--id", issuer_id])
                        .arg("issue_and_transfer_asset")
@@ -342,13 +344,8 @@ fn fulfill_loan(txn_builder_path: &str,
 }
 
 #[cfg(test)]
-fn pay_loan(txn_builder_path: &str,
-            borrower_id: &str,
-            loan_id: &str,
-            amount: &str)
-            -> io::Result<Output> {
-  Command::new(COMMAND).args(&["--txn", txn_builder_path])
-                       .args(&["borrower", "--id", borrower_id])
+fn pay_loan(borrower_id: &str, loan_id: &str, amount: &str) -> io::Result<Output> {
+  Command::new(COMMAND).args(&["borrower", "--id", borrower_id])
                        .arg("pay_loan")
                        .args(&["--loan", loan_id])
                        .args(&["--amount", amount])
@@ -697,7 +694,7 @@ fn test_add_with_help() {
 
 #[test]
 fn test_define_asset_with_help() {
-  let output = Command::new(COMMAND).args(&["add", "define_asset", "--help"])
+  let output = Command::new(COMMAND).args(&["issuer", "define_asset", "--help"])
                                     .output()
                                     .expect("failed to execute process");
 
@@ -1077,7 +1074,7 @@ fn test_request_fulfill_and_pay_loan_with_args() {
                                    .contains(&"has already been rejected.".to_owned()));
 
   // Pay loan
-  let output = pay_loan(txn_builder_file, "0", "0", "300").expect("Failed to pay loan");
+  let output = pay_loan("0", "0", "300").expect("Failed to pay loan");
 
   io::stdout().write_all(&output.stdout).unwrap();
   io::stdout().write_all(&output.stderr).unwrap();

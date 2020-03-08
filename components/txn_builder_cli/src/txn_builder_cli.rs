@@ -28,13 +28,6 @@ use zei::xfr::sig::{XfrKeyPair, XfrPublicKey};
 use zei::xfr::structs::{AssetRecord, BlindAssetRecord, OpenAssetRecord};
 extern crate exitcode;
 
-// TODO (Keyao): Determine which commands is no longer useful, remove them, and update README
-// E.g. funds loading can be achieved by either of the following:
-//      (1) "add define_asset" + "submit" + "add issue_and_transfer_asset"
-//      (2) "borrower load_funds"
-// (2) seems better since it handles all the necessary steps.
-// Then do we still want to support "add define_asset", "submit" and "add issue_and_transfer_asset" commands?
-
 // TODO (Keyao): Rename txn_builder_cli to txn_cli, and create_txn_builder to create_txn?
 
 const INIT_DATA: &str = r#"
@@ -198,13 +191,20 @@ impl Borrower {
 //
 // Loan
 //
+#[derive(Clone, Deserialize, Debug, PartialEq, Serialize)]
+enum LoanStatus {
+  Requested, // The borrower has requested the loan
+  Rejected,  // The lender has rejected the loan
+  Active,    // The lender has fulfilled the loan, but the borrower hasn't paid it off
+  Complete,  // The borrower has paid off the loan
+}
+
 #[derive(Clone, Deserialize, Debug, Serialize)]
 struct Loan {
   id: u64,                 // Loan id
   lender: u64,             // Lender id
   borrower: u64,           // Borrower id
-  active: bool,            // Whether the loan is active (i.e., fulfilled by the lender)
-  rejected: bool,          // Whether the loan has been rejected
+  status: LoanStatus,      // Loan status
   amount: u64,             // Amount in total
   balance: u64,            // Loan balance
   interest_per_mille: u64, // Interest per 1000. E.g. 120 means the interest rate is 0.12
@@ -225,8 +225,7 @@ impl Loan {
     Loan { id: id as u64,
            lender,
            borrower,
-           active: false,
-           rejected: false,
+           status: LoanStatus::Requested,
            amount,
            balance: amount,
            interest_per_mille,
@@ -759,17 +758,15 @@ fn get_amounts(amounts_arg: &str) -> Result<Vec<u64>, PlatformError> {
 }
 
 fn define_asset(fiat_asset: bool,
-                issuer_id: u64,
+                issuer_key_pair: &XfrKeyPair,
                 token_code: AssetTypeCode,
                 memo: &str,
                 allow_updates: bool,
                 traceable: bool,
                 transaction_file_name: &str)
-                -> Result<(), PlatformError> {
-  let mut data = load_data()?;
-  let issuer_key_pair = data.get_issuer_key_pair(issuer_id)?;
+                -> Result<TransactionBuilder, PlatformError> {
   let mut txn_builder = TransactionBuilder::default();
-  txn_builder.add_operation_create_asset(&issuer_key_pair,
+  txn_builder.add_operation_create_asset(issuer_key_pair,
                                          Some(token_code),
                                          allow_updates,
                                          traceable,
@@ -777,15 +774,16 @@ fn define_asset(fiat_asset: bool,
   store_txn_builder_to_file(&transaction_file_name, &txn_builder)?;
 
   // Update data
+  let mut data = load_data()?;
   if fiat_asset {
     data.fiat_code = Some(token_code.to_base64());
-    store_data_to_file(data)
-  } else {
-    Ok(())
-  }
+    store_data_to_file(data)?;
+  };
+  Ok(txn_builder)
 }
 
 fn run_ledger_standalone() -> Result<(), PlatformError> {
+  // Run the standalone ledger
   thread::spawn(move || {
     let status = Command::new(LEDGER_STANDALONE).status();
     if status.is_err() {
@@ -796,9 +794,11 @@ fn run_ledger_standalone() -> Result<(), PlatformError> {
   Ok(())
 }
 
-fn submit(protocol: &str, host: &str, transaction_file_name: &str) -> Result<(), PlatformError> {
+fn submit(protocol: &str,
+          host: &str,
+          txn_builder: TransactionBuilder)
+          -> Result<(), PlatformError> {
   // Submit transaction
-  let txn_builder = load_txn_builder_from_file(transaction_file_name)?;
   let client = reqwest::Client::new();
   let txn = txn_builder.transaction();
   let mut res =
@@ -818,10 +818,9 @@ fn submit(protocol: &str, host: &str, transaction_file_name: &str) -> Result<(),
 
 fn submit_and_get_sids(protocol: &str,
                        host: &str,
-                       transaction_file_name: &str)
+                       txn_builder: TransactionBuilder)
                        -> Result<Vec<TxoSID>, PlatformError> {
   // Submit transaction
-  let txn_builder = load_txn_builder_from_file(transaction_file_name)?;
 
   let client = reqwest::Client::new();
   let txn = txn_builder.transaction();
@@ -903,7 +902,7 @@ fn issue_and_transfer(issuer_key_pair: &XfrKeyPair,
                       confidential_amount: bool,
                       confidential_asset: bool,
                       transaction_file_name: &str)
-                      -> Result<(), PlatformError> {
+                      -> Result<TransactionBuilder, PlatformError> {
   let blind_asset_record = get_blind_asset_record(issuer_key_pair.get_pk(),
                                                   amount,
                                                   token_code,
@@ -931,7 +930,8 @@ fn issue_and_transfer(issuer_key_pair: &XfrKeyPair,
              .add_operation(xfr_op)
              .transaction();
 
-  store_txn_builder_to_file(&transaction_file_name, &txn_builder)
+  store_txn_builder_to_file(transaction_file_name, &txn_builder)?;
+  Ok(txn_builder)
 }
 
 fn merge_records(key_pair: &XfrKeyPair,
@@ -939,9 +939,8 @@ fn merge_records(key_pair: &XfrKeyPair,
                  sid2: TxoRef,
                  blind_asset_record1: BlindAssetRecord,
                  blind_asset_record2: BlindAssetRecord,
-                 token_code: AssetTypeCode,
-                 transaction_file_name: &str)
-                 -> Result<(), PlatformError> {
+                 token_code: AssetTypeCode)
+                 -> Result<TransactionBuilder, PlatformError> {
   let oar1 = open_asset_record(&blind_asset_record1, key_pair.get_sk_ref())?;
   let oar2 = open_asset_record(&blind_asset_record2, key_pair.get_sk_ref())?;
   let amount1 = *oar1.get_amount();
@@ -961,7 +960,7 @@ fn merge_records(key_pair: &XfrKeyPair,
   // Merge records
   let mut txn_builder = TransactionBuilder::default();
   txn_builder.add_operation(xfr_op).transaction();
-  store_txn_builder_to_file(&transaction_file_name, &txn_builder)
+  Ok(txn_builder)
 }
 
 fn load_funds(issuer_id: u64,
@@ -982,31 +981,31 @@ fn load_funds(issuer_id: u64,
     AssetTypeCode::new_from_base64(code)?
   } else {
     let fiat_code = AssetTypeCode::gen_random();
-    define_asset(true,
-                 issuer_id,
-                 fiat_code,
-                 "Fiat asset",
-                 false,
-                 false,
-                 transaction_file_name)?;
+    let txn_builder = define_asset(true,
+                                   issuer_key_pair,
+                                   fiat_code,
+                                   "Fiat asset",
+                                   false,
+                                   false,
+                                   transaction_file_name)?;
     // Store data before submitting the transaction to avoid data overwriting
     let data = load_data()?;
-    submit(protocol, host, transaction_file_name)?;
+    submit(protocol, host, txn_builder)?;
     store_data_to_file(data)?;
     fiat_code
   };
 
   // Issue and transfer asset
-  issue_and_transfer(issuer_key_pair,
-                     recipient_key_pair,
-                     amount,
-                     token_code,
-                     false,
-                     false,
-                     transaction_file_name)?;
+  let txn_builder = issue_and_transfer(issuer_key_pair,
+                                       recipient_key_pair,
+                                       amount,
+                                       token_code,
+                                       false,
+                                       false,
+                                       transaction_file_name)?;
 
   // Submit transaction and get the new record
-  let sid_new = submit_and_get_sids(protocol, host, transaction_file_name)?[0];
+  let sid_new = submit_and_get_sids(protocol, host, txn_builder)?[0];
   let res_new = query(protocol,
                       host,
                       QUERY_PORT,
@@ -1028,15 +1027,14 @@ fn load_funds(issuer_id: u64,
       serde_json::from_str::<BlindAssetRecord>(&res_pre).or_else(|_| {
                                                           Err(PlatformError::DeserializationError)
                                                         })?;
-    merge_records(recipient_key_pair,
-                  TxoRef::Absolute(sid_pre),
-                  TxoRef::Absolute(sid_new),
-                  blind_asset_record_pre,
-                  blind_asset_record_new,
-                  token_code,
-                  transaction_file_name)?;
+    let txn_builder = merge_records(recipient_key_pair,
+                                    TxoRef::Absolute(sid_pre),
+                                    TxoRef::Absolute(sid_new),
+                                    blind_asset_record_pre,
+                                    blind_asset_record_new,
+                                    token_code)?;
 
-    submit_and_get_sids(protocol, host, transaction_file_name)?[0]
+    submit_and_get_sids(protocol, host, txn_builder)?[0]
   } else {
     sid_new
   };
@@ -1124,13 +1122,22 @@ fn fulfill_loan(loan_id: u64,
   let mut data = load_data()?;
   let issuer_key_pair = &data.clone().get_issuer_key_pair(issuer_id)?;
   let loan = &data.loans.clone()[loan_id as usize];
-  if loan.active {
-    println!("Loan {} has already been fulfilled.", loan_id);
-    return Err(PlatformError::InputsError);
-  }
-  if loan.rejected {
-    println!("Loan {} has already been rejected.", loan_id);
-    return Err(PlatformError::InputsError);
+
+  // Check if loan has been fulfilled
+  match loan.status {
+    LoanStatus::Rejected => {
+      println!("Loan {} has already been rejected.", loan_id);
+      return Err(PlatformError::InputsError);
+    }
+    LoanStatus::Active => {
+      println!("Loan {} has already been fulfilled.", loan_id);
+      return Err(PlatformError::InputsError);
+    }
+    LoanStatus::Complete => {
+      println!("Loan {} has already been paid off.", loan_id);
+      return Err(PlatformError::InputsError);
+    }
+    _ => {}
   }
 
   let lender_id = loan.lender;
@@ -1169,7 +1176,7 @@ fn fulfill_loan(loan_id: u64,
             RelationType::AtLeast)
     {
       // Update loans data
-      data.loans[loan_id as usize].rejected = true;
+      data.loans[loan_id as usize].status = LoanStatus::Rejected;
       store_data_to_file(data)?;
       return Err(error);
     }
@@ -1210,29 +1217,29 @@ fn fulfill_loan(loan_id: u64,
     AssetTypeCode::new_from_base64(&code)?
   } else {
     let fiat_code = AssetTypeCode::gen_random();
-    define_asset(true,
-                 issuer_id,
-                 fiat_code,
-                 "Fiat asset",
-                 false,
-                 false,
-                 transaction_file_name)?;
+    let txn_builder = define_asset(true,
+                                   issuer_key_pair,
+                                   fiat_code,
+                                   "Fiat asset",
+                                   false,
+                                   false,
+                                   transaction_file_name)?;
     // Store data before submitting the transaction to avoid data overwriting
     let data = load_data()?;
-    submit(protocol, host, transaction_file_name)?;
+    submit(protocol, host, txn_builder)?;
     store_data_to_file(data)?;
     fiat_code
   };
 
   // Issue and transfer fiat token
-  issue_and_transfer(issuer_key_pair,
-                     lender_key_pair,
-                     amount,
-                     fiat_code,
-                     false,
-                     false,
-                     transaction_file_name)?;
-  let fiat_sid = submit_and_get_sids(protocol, host, transaction_file_name)?[0];
+  let txn_builder = issue_and_transfer(issuer_key_pair,
+                                       lender_key_pair,
+                                       amount,
+                                       fiat_code,
+                                       false,
+                                       false,
+                                       transaction_file_name)?;
+  let fiat_sid = submit_and_get_sids(protocol, host, txn_builder)?[0];
   println!("Fiat sid: {}", fiat_sid.0);
   let fiat_open_asset_record = get_open_asset_record(protocol, host, fiat_sid, lender_key_pair)?;
 
@@ -1256,21 +1263,20 @@ fn fulfill_loan(loan_id: u64,
     println!("Failed to add operation to transaction.");
     return Err(e);
   }
-  store_txn_builder_to_file(&transaction_file_name, &txn_builder)?;
   // Store data before submitting the transaction to avoid data overwriting
   let data = load_data()?;
-  submit(protocol, host, transaction_file_name)?;
+  submit(protocol, host, txn_builder)?;
   store_data_to_file(data)?;
 
   // Issue and transfer debt token
-  issue_and_transfer(borrower_key_pair,
-                     borrower_key_pair,
-                     amount,
-                     debt_code,
-                     false,
-                     false,
-                     transaction_file_name)?;
-  let debt_sid = submit_and_get_sids(protocol, host, transaction_file_name)?[0];
+  let txn_builder = issue_and_transfer(borrower_key_pair,
+                                       borrower_key_pair,
+                                       amount,
+                                       debt_code,
+                                       false,
+                                       false,
+                                       transaction_file_name)?;
+  let debt_sid = submit_and_get_sids(protocol, host, txn_builder)?[0];
   println!("Fiat sid: {}", debt_sid.0);
   let debt_open_asset_record = get_open_asset_record(protocol, host, debt_sid, borrower_key_pair)?;
 
@@ -1290,10 +1296,9 @@ fn fulfill_loan(loan_id: u64,
                                    .transaction()?;
   let mut txn_builder = TransactionBuilder::default();
   txn_builder.add_operation(xfr_op).transaction();
-  store_txn_builder_to_file(&transaction_file_name, &txn_builder)?;
 
   // Submit transaction and get the new record
-  let sids_new = submit_and_get_sids(protocol, host, transaction_file_name)?;
+  let sids_new = submit_and_get_sids(protocol, host, txn_builder)?;
   let res_new = query(protocol,
                       host,
                       QUERY_PORT,
@@ -1315,14 +1320,13 @@ fn fulfill_loan(loan_id: u64,
       serde_json::from_str::<BlindAssetRecord>(&res_pre).or_else(|_| {
                                                           Err(PlatformError::DeserializationError)
                                                         })?;
-    merge_records(borrower_key_pair,
-                  TxoRef::Absolute(sid_pre),
-                  TxoRef::Absolute(sids_new[1]),
-                  blind_asset_record_pre,
-                  blind_asset_record_new,
-                  fiat_code,
-                  transaction_file_name)?;
-    submit_and_get_sids(protocol, host, transaction_file_name)?[0]
+    let txn_builder = merge_records(borrower_key_pair,
+                                    TxoRef::Absolute(sid_pre),
+                                    TxoRef::Absolute(sids_new[1]),
+                                    blind_asset_record_pre,
+                                    blind_asset_record_new,
+                                    fiat_code)?;
+    submit_and_get_sids(protocol, host, txn_builder)?[0]
   } else {
     sids_new[1]
   };
@@ -1333,7 +1337,7 @@ fn fulfill_loan(loan_id: u64,
   // Update data
   let mut data = load_data()?;
   data.fiat_code = Some(fiat_code.to_base64());
-  data.loans[loan_id as usize].active = true;
+  data.loans[loan_id as usize].status = LoanStatus::Active;
   data.loans[loan_id as usize].code = Some(debt_code.to_base64());
   data.loans[loan_id as usize].utxo = Some(sids_new[0]);
   data.borrowers[borrower_id as usize].balance = borrower.balance + amount;
@@ -1342,22 +1346,29 @@ fn fulfill_loan(loan_id: u64,
 }
 
 // Pay loan with certain amount
-fn pay_loan(loan_id: u64,
-            amount: u64,
-            transaction_file_name: &str,
-            protocol: &str,
-            host: &str)
-            -> Result<(), PlatformError> {
+fn pay_loan(loan_id: u64, amount: u64, protocol: &str, host: &str) -> Result<(), PlatformError> {
   // Get data
   let mut data = load_data()?;
   let loan = &data.loans.clone()[loan_id as usize];
 
-  // Check if the loan has been activated
-  if !loan.active {
-    println!("Loan {} hasn't been activated yet. Use fulfill_loan to activate the loan.",
-             loan_id);
-    return Err(PlatformError::InputsError);
+  // Check if it's valid to pay
+  match loan.status {
+    LoanStatus::Requested => {
+      println!("Loan {} hasn't been fulfilled yet. Use issuer fulfill_loan.",
+               loan_id);
+      return Err(PlatformError::InputsError);
+    }
+    LoanStatus::Rejected => {
+      println!("Loan {} has been rejected.", loan_id);
+      return Err(PlatformError::InputsError);
+    }
+    LoanStatus::Complete => {
+      println!("Loan {} has been paid off.", loan_id);
+      return Err(PlatformError::InputsError);
+    }
+    _ => {}
   }
+
   let lender_id = loan.lender;
   let borrower_id = loan.borrower;
   let borrower = &data.borrowers.clone()[borrower_id as usize];
@@ -1433,10 +1444,10 @@ fn pay_loan(loan_id: u64,
                                           .add_output(amount_to_burn,
                                                       &XfrPublicKey::zei_from_bytes(&[0; 32]),
                                                       debt_code)?
-                                          .add_output(loan.amount - amount_to_burn,
+                                          .add_output(loan.balance - amount_to_burn,
                                                       lender_key_pair.get_pk_ref(),
                                                       debt_code)?
-                                          .add_output(loan.amount - amount_to_spend,
+                                          .add_output(borrower.balance - amount_to_spend,
                                                       borrower_key_pair.get_pk_ref(),
                                                       fiat_code)?
                                           .create(TransferType::DebtSwap)?
@@ -1444,13 +1455,16 @@ fn pay_loan(loan_id: u64,
                                           .transaction()?;
   let mut txn_builder = TransactionBuilder::default();
   txn_builder.add_operation(op).transaction();
-  store_txn_builder_to_file(&transaction_file_name, &txn_builder)?;
 
   // Submit transaction and update data
-  let sids = submit_and_get_sids(protocol, host, transaction_file_name)?;
+  let sids = submit_and_get_sids(protocol, host, txn_builder)?;
 
   data = load_data()?;
-  data.loans[loan_id as usize].balance = loan.balance - amount_to_burn;
+  let balance = loan.balance - amount_to_burn;
+  if balance == 0 {
+    data.loans[loan_id as usize].status = LoanStatus::Complete;
+  }
+  data.loans[loan_id as usize].balance = balance;
   data.loans[loan_id as usize].payments = loan.payments + 1;
   data.loans[loan_id as usize].utxo = Some(sids[2]);
   data.borrowers[borrower_id as usize].balance = borrower.balance - amount_to_spend;
@@ -1549,6 +1563,38 @@ fn main() {
         .long("id")
         .takes_value(true)
         .help("Issuer id."))
+      .subcommand(SubCommand::with_name("define_asset")
+        .arg(Arg::with_name("fiat")
+          .short("f")
+          .long("fiat")
+          .takes_value(false)
+          .help("Indicate the asset is a fiat asset."))
+        .arg(Arg::with_name("token_code")
+          .long("token_code")
+          .short("c")
+          .help("Explicit 16 character token code for the new asset; must be a unique name. If specified code is already in use, transaction will fail. If not specified, will display automatically generated token code.")
+          .takes_value(true))
+        .arg(Arg::with_name("allow_updates")
+          .short("u")
+          .long("allow_updates")
+          .help("If specified, updates may be made to asset memo"))
+        .arg(Arg::with_name("traceable")
+          .short("trace")
+          .long("traceable")
+          .help("If specified, asset transfers can be traced by the issuer "))
+        .arg(Arg::with_name("memo")
+          .short("m")
+          .long("memo")
+          .required(true)
+          .takes_value(true)
+          .help("Memo as Json, with escaped quotation marks"))
+        .arg(Arg::with_name("confidential")
+          .short("xx")
+          .long("confidential")
+          .help("Make memo confidential"))
+        .arg(Arg::with_name("with_policy")
+          .short("p")
+          .help("TODO: add support for policies")))
       .subcommand(SubCommand::with_name("issue_and_transfer_asset")
         .arg(Arg::with_name("recipient")
           .short("r")
@@ -1607,7 +1653,7 @@ fn main() {
           .short("f")
           .long("filter")
           .takes_value(true)
-          .possible_values(&["active", "inactive", "unrejected"])
+          .possible_values(&["unrejected", "active", "inactive", "complete"])
           .help("Display the loan with the specified status only."))
         .help("By default, display all loans of this lender."))
       .subcommand(SubCommand::with_name("fulfill_loan")
@@ -1674,7 +1720,7 @@ fn main() {
           .short("f")
           .long("filter")
           .takes_value(true)
-          .possible_values(&["active", "inactive", "unrejected", "completed"])
+          .possible_values(&["unrejected", "active", "inactive", "complete"])
           .help("Display the loan with the specified status only."))
         .help("By default, display all loans of this borrower."))
       .subcommand(SubCommand::with_name("request_loan")
@@ -1828,44 +1874,6 @@ fn main() {
           .long("confidential_asset")
           .help("If specified, the asset will be confidential"))))
     .subcommand(SubCommand::with_name("add")
-      .subcommand(SubCommand::with_name("define_asset")
-        .arg(Arg::with_name("fiat")
-          .short("f")
-          .long("fiat")
-          .takes_value(false)
-          .help("Indicate the asset is a fiat asset."))
-        .arg(Arg::with_name("issuer")
-          .short("i")
-          .long("issuer")
-          .required(true)
-          .takes_value(true)
-          .help("Issuer id."))
-        .arg(Arg::with_name("token_code")
-          .long("token_code")
-          .short("c")
-          .help("Explicit 16 character token code for the new asset; must be a unique name. If specified code is already in use, transaction will fail. If not specified, will display automatically generated token code.")
-          .takes_value(true))
-        .arg(Arg::with_name("allow_updates")
-          .short("u")
-          .long("allow_updates")
-          .help("If specified, updates may be made to asset memo"))
-        .arg(Arg::with_name("traceable")
-          .short("trace")
-          .long("traceable")
-          .help("If specified, asset transfers can be traced by the issuer "))
-        .arg(Arg::with_name("memo")
-          .short("m")
-          .long("memo")
-          .required(true)
-          .takes_value(true)
-          .help("Memo as Json, with escaped quotation marks"))
-        .arg(Arg::with_name("confidential")
-          .short("xx")
-          .long("confidential")
-          .help("Make memo confidential"))
-        .arg(Arg::with_name("with_policy")
-          .short("p")
-          .help("TODO: add support for policies")))
       .subcommand(SubCommand::with_name("issue_asset")
         .arg(Arg::with_name("issuer")
           .short("i")
@@ -2084,6 +2092,45 @@ fn process_issuer_cmd(issuer_matches: &clap::ArgMatches,
       let mut data = load_data()?;
       data.add_issuer(name)
     }
+    ("define_asset", Some(define_asset_matches)) => {
+      let fiat_asset = define_asset_matches.is_present("fiat");
+      let mut data = load_data()?;
+      let issuer_key_pair = if let Some(id_arg) = issuer_matches.value_of("id") {
+        let issuer_id = parse_to_u64(id_arg)?;
+        data.get_issuer_key_pair(issuer_id)?
+      } else {
+        println!("Issuer id is required to define an asset. Use issuer --id.");
+        return Err(PlatformError::InputsError);
+      };
+      let token_code = define_asset_matches.value_of("token_code");
+      let memo = if let Some(memo) = define_asset_matches.value_of("memo") {
+        memo
+      } else {
+        "{}"
+      };
+      let allow_updates = define_asset_matches.is_present("allow_updates");
+      let traceable = define_asset_matches.is_present("traceable");
+      let asset_token: AssetTypeCode;
+      if let Some(token_code) = token_code {
+        asset_token = AssetTypeCode::new_from_base64(token_code)?;
+      } else {
+        asset_token = AssetTypeCode::gen_random();
+        println!("Creating asset with token code {:?}: {:?}",
+                 asset_token.to_base64(),
+                 asset_token.val);
+      }
+      match define_asset(fiat_asset,
+                         &issuer_key_pair,
+                         asset_token,
+                         &memo,
+                         allow_updates,
+                         traceable,
+                         transaction_file_name)
+      {
+        Ok(_) => Ok(()),
+        Err(error) => Err(error),
+      }
+    }
     ("issue_and_transfer_asset", Some(issue_and_transfer_matches)) => {
       let mut data = load_data()?;
       let issuer_key_pair = if let Some(id_arg) = issuer_matches.value_of("id") {
@@ -2177,18 +2224,23 @@ fn process_lender_cmd(lender_matches: &clap::ArgMatches,
       if let Some(filter) = view_loan_matches.value_of("filter") {
         for id in loan_ids {
           match filter {
+            "unrejected" => {
+              if data.loans[id as usize].status != LoanStatus::Rejected {
+                loans.push(data.loans[id as usize].clone());
+              }
+            }
             "active" => {
-              if data.loans[id as usize].active {
+              if data.loans[id as usize].status == LoanStatus::Active {
                 loans.push(data.loans[id as usize].clone());
               }
             }
             "inactive" => {
-              if !data.loans[id as usize].active {
+              if data.loans[id as usize].status != LoanStatus::Active {
                 loans.push(data.loans[id as usize].clone());
               }
             }
             _ => {
-              if !data.loans[id as usize].rejected {
+              if data.loans[id as usize].status == LoanStatus::Complete {
                 loans.push(data.loans[id as usize].clone());
               }
             }
@@ -2295,18 +2347,23 @@ fn process_borrower_cmd(borrower_matches: &clap::ArgMatches,
       if let Some(filter) = view_loan_matches.value_of("filter") {
         for id in loan_ids {
           match filter {
+            "unrejected" => {
+              if data.loans[id as usize].status != LoanStatus::Rejected {
+                loans.push(data.loans[id as usize].clone());
+              }
+            }
             "active" => {
-              if data.loans[id as usize].active {
+              if data.loans[id as usize].status == LoanStatus::Active {
                 loans.push(data.loans[id as usize].clone());
               }
             }
             "inactive" => {
-              if !data.loans[id as usize].active {
+              if data.loans[id as usize].status != LoanStatus::Active {
                 loans.push(data.loans[id as usize].clone());
               }
             }
             _ => {
-              if !data.loans[id as usize].rejected {
+              if data.loans[id as usize].status == LoanStatus::Complete {
                 loans.push(data.loans[id as usize].clone());
               }
             }
@@ -2373,7 +2430,7 @@ fn process_borrower_cmd(borrower_matches: &clap::ArgMatches,
         println!("Loan id is required to pay the loan.");
         return Err(PlatformError::InputsError);
       }
-      process_pay_loan_cmd(pay_loan_matches, transaction_file_name)
+      process_pay_loan_cmd(pay_loan_matches)
     }
     ("view_credential", Some(view_credential_matches)) => {
       let borrower_id = if let Some(id_arg) = borrower_matches.value_of("id") {
@@ -2394,10 +2451,10 @@ fn process_borrower_cmd(borrower_matches: &clap::ArgMatches,
         return Ok(());
       }
       let mut credentials = Vec::new();
-      let credential_ids = data.borrowers[borrower_id as usize].credentials.clone();
-      for i in 0..3 {
-        if let Some(id) = credential_ids[i] {
-          credentials.push(data.credentials[id as usize].clone());
+      let credential_ids = data.borrowers[borrower_id as usize].credentials;
+      for credential_id in &credential_ids {
+        if let Some(id) = credential_id {
+          credentials.push(data.credentials[*id as usize].clone());
         }
       }
       println!("Displaying {} credential(s): {:?}",
@@ -2582,39 +2639,6 @@ fn process_add_cmd(add_matches: &clap::ArgMatches,
                    transaction_file_name: &str)
                    -> Result<(), PlatformError> {
   match add_matches.subcommand() {
-    ("define_asset", Some(define_asset_matches)) => {
-      let fiat_asset = define_asset_matches.is_present("fiat");
-      let issuer_id = if let Some(issuer_arg) = define_asset_matches.value_of("issuer") {
-        parse_to_u64(issuer_arg)?
-      } else {
-        println!("User id is required to define asset. Use --issuer.");
-        return Err(PlatformError::InputsError);
-      };
-      let token_code = define_asset_matches.value_of("token_code");
-      let memo = if let Some(memo) = define_asset_matches.value_of("memo") {
-        memo
-      } else {
-        "{}"
-      };
-      let allow_updates = define_asset_matches.is_present("allow_updates");
-      let traceable = define_asset_matches.is_present("traceable");
-      let asset_token: AssetTypeCode;
-      if let Some(token_code) = token_code {
-        asset_token = AssetTypeCode::new_from_base64(token_code)?;
-      } else {
-        asset_token = AssetTypeCode::gen_random();
-        println!("Creating asset with token code {:?}: {:?}",
-                 asset_token.to_base64(),
-                 asset_token.val);
-      }
-      define_asset(fiat_asset,
-                   issuer_id,
-                   asset_token,
-                   &memo,
-                   allow_updates,
-                   traceable,
-                   transaction_file_name)
-    }
     ("issue_asset", Some(issue_asset_matches)) => {
       let mut data = load_data()?;
       let key_pair = if let Some(issuer_arg) = issue_asset_matches.value_of("issuer") {
@@ -2641,11 +2665,7 @@ fn process_add_cmd(add_matches: &clap::ArgMatches,
         println!("Amount is required to issue asset. Use --amount.");
         return Err(PlatformError::InputsError);
       };
-      let mut txn_builder = load_txn_builder_from_file(&transaction_file_name).or_else(|e| {
-                              println!("Failed to load txn builder from file {}.",
-                                       transaction_file_name);
-                              Err(e)
-                            })?;
+      let mut txn_builder = TransactionBuilder::default();
       if let Err(e) = txn_builder.add_basic_issue_asset(&key_pair,
                                                         &None,
                                                         &asset_token,
@@ -2785,11 +2805,7 @@ fn process_add_cmd(add_matches: &clap::ArgMatches,
       }
 
       // Transfer asset
-      let mut txn_builder = load_txn_builder_from_file(&transaction_file_name).or_else(|e| {
-                              println!("Failed to load txn builder from file {}.",
-                                       transaction_file_name);
-                              Err(e)
-                            })?;
+      let mut txn_builder = TransactionBuilder::default();
       if let Err(e) =
         txn_builder.add_basic_transfer_asset(&issuer_key_pair, &transfer_from[..], &transfer_to[..])
       {
@@ -2824,13 +2840,14 @@ fn process_submit_cmd(submit_matches: &clap::ArgMatches,
     // Default to testnet.findora.org
     "testnet.findora.org"
   };
+  let txn_builder = load_txn_builder_from_file(transaction_file_name)?;
 
   if submit_matches.is_present("get_sids") {
-    let sids = submit_and_get_sids(protocol, host, &transaction_file_name)?;
+    let sids = submit_and_get_sids(protocol, host, txn_builder)?;
     println!("Utxo: {:?}", sids);
     Ok(())
   } else {
-    submit(protocol, host, &transaction_file_name)
+    submit(protocol, host, txn_builder)
   }
 }
 
@@ -2879,9 +2896,7 @@ fn process_load_funds_cmd(borrower_id: u64,
              host)
 }
 
-fn process_pay_loan_cmd(pay_loan_matches: &clap::ArgMatches,
-                        transaction_file_name: &str)
-                        -> Result<(), PlatformError> {
+fn process_pay_loan_cmd(pay_loan_matches: &clap::ArgMatches) -> Result<(), PlatformError> {
   let loan_id = if let Some(loan_arg) = pay_loan_matches.value_of("loan") {
     parse_to_u64(loan_arg)?
   } else {
@@ -2910,7 +2925,7 @@ fn process_pay_loan_cmd(pay_loan_matches: &clap::ArgMatches,
     "testnet.findora.org"
   };
 
-  pay_loan(loan_id, amount, transaction_file_name, protocol, host)
+  pay_loan(loan_id, amount, protocol, host)
 }
 
 #[cfg(test)]
@@ -3050,10 +3065,31 @@ mod tests {
   }
 
   #[test]
+  fn test_define_fiat_asset() {
+    // Create txn builder and key pair
+    let txn_builder_path = "tb_define";
+    let mut prng: ChaChaRng = ChaChaRng::from_seed([0u8; 32]);
+    let issuer_key_pair = XfrKeyPair::generate(&mut prng);
+
+    // Define fiat asset
+    let res = define_asset(true,
+                           &issuer_key_pair,
+                           AssetTypeCode::gen_random(),
+                           "Define fiat asset",
+                           false,
+                           false,
+                           txn_builder_path);
+
+    let _ = fs::remove_file(DATA_FILE);
+    fs::remove_file(txn_builder_path).unwrap();
+
+    assert!(res.is_ok());
+  }
+
+  #[test]
   fn test_issue_and_transfer() {
     // Create txn builder and key pairs
     let txn_builder_path = "tb_issue_and_transfer";
-    store_txn_builder_to_file(&txn_builder_path, &TransactionBuilder::default()).unwrap();
     let mut prng: ChaChaRng = ChaChaRng::from_seed([0u8; 32]);
     let issuer_key_pair = XfrKeyPair::generate(&mut prng);
     let recipient_key_pair = XfrKeyPair::generate(&mut prng);
@@ -3075,9 +3111,7 @@ mod tests {
 
   #[test]
   fn test_merge_records() {
-    // Create txn builder and key pair
-    let txn_builder_path = "tb_merge";
-    store_txn_builder_to_file(&txn_builder_path, &TransactionBuilder::default()).unwrap();
+    // Create key pair
     let mut prng: ChaChaRng = ChaChaRng::from_seed([0u8; 32]);
     let key_pair = XfrKeyPair::generate(&mut prng);
 
@@ -3092,164 +3126,7 @@ mod tests {
                           TxoRef::Absolute(TxoSID(2)),
                           bar1,
                           bar2,
-                          code,
-                          txn_builder_path).is_ok());
-
-    fs::remove_file(txn_builder_path).unwrap();
-  }
-
-  #[test]
-  fn test_submit() {
-    let txn_builder_path = "tb_submit";
-    store_txn_builder_to_file(&txn_builder_path, &TransactionBuilder::default()).unwrap();
-    run_ledger_standalone().unwrap();
-    let res = submit(PROTOCOL, HOST, txn_builder_path);
-    fs::remove_file(txn_builder_path).unwrap();
-    assert!(res.is_ok());
-  }
-
-  #[test]
-  // Define fiat asset and submit the transaction
-  fn test_define_fiat_asset_and_submit() {
-    let txn_builder_path = "tb_define_and_submit";
-    store_txn_builder_to_file(&txn_builder_path, &TransactionBuilder::default()).unwrap();
-    let mut txn_builder = load_txn_builder_from_file(&txn_builder_path).unwrap();
-
-    let mut prng: ChaChaRng = ChaChaRng::from_seed([0u8; 32]);
-    let key_pair = XfrKeyPair::generate(&mut prng);
-    let token_code = AssetTypeCode::gen_random();
-
-    // Define fiat asset
-    define_asset(true,
-                 0,
-                 token_code,
-                 "Define fiat asset",
-                 false,
-                 false,
-                 txn_builder_path).unwrap();
-
-    txn_builder.add_operation_create_asset(&key_pair, Some(token_code), false, false, "")
-               .unwrap();
-    store_txn_builder_to_file(&txn_builder_path, &txn_builder).unwrap();
-
-    // Submit
-    run_ledger_standalone().unwrap();
-    let res = submit(PROTOCOL, HOST, txn_builder_path);
-    fs::remove_file(txn_builder_path).unwrap();
-    assert!(res.is_ok());
-  }
-
-  #[test]
-  // 1. The issuer defines the asset
-  // 2. The issuer issues and transfers two assets to the recipient
-  // 3. Merge the two records for the recipient
-  // 4. Submit the transaction
-  fn test_merge_and_submit() {
-    run_ledger_standalone().unwrap();
-
-    // Create txn builder and key pairs
-    let txn_builder_path = "tb_merge_and_submit";
-    store_txn_builder_to_file(&txn_builder_path, &TransactionBuilder::default()).unwrap();
-    let mut prng: ChaChaRng = ChaChaRng::from_seed([0u8; 32]);
-    let issuer_key_pair = XfrKeyPair::generate(&mut prng);
-    let recipient_key_pair = XfrKeyPair::generate(&mut prng);
-
-    // Define amounts and token code
-    let amount1 = 1000;
-    let amount2 = 500;
-    let code = AssetTypeCode::gen_random();
-
-    // Define asset
-    let mut txn_builder = load_txn_builder_from_file(&txn_builder_path).unwrap();
-    txn_builder.add_operation_create_asset(&issuer_key_pair, Some(code), false, false, "")
-               .unwrap()
-               .transaction();
-    store_txn_builder_to_file(&txn_builder_path, &txn_builder).unwrap();
-    let res = submit(PROTOCOL, HOST, txn_builder_path);
-    assert!(res.is_ok());
-
-    // Issue and transfer the first asset
-    issue_and_transfer(&issuer_key_pair,
-                       &recipient_key_pair,
-                       amount1,
-                       code,
-                       false,
-                       false,
-                       txn_builder_path).unwrap();
-
-    let sid1 = submit_and_get_sids(PROTOCOL, HOST, txn_builder_path).unwrap()[0];
-    let res = query(PROTOCOL,
-                    HOST,
-                    QUERY_PORT,
-                    "utxo_sid",
-                    &format!("{}", sid1.0)).unwrap();
-    let blind_asset_record_1 =
-      serde_json::from_str::<BlindAssetRecord>(&res).or_else(|_| {
-                                                      Err(PlatformError::DeserializationError)
-                                                    })
-                                                    .unwrap();
-
-    // Issue and transfer the second asset
-    issue_and_transfer(&issuer_key_pair,
-                       &recipient_key_pair,
-                       amount2,
-                       code,
-                       false,
-                       false,
-                       txn_builder_path).unwrap();
-    let sid2 = submit_and_get_sids(PROTOCOL, HOST, txn_builder_path).unwrap()[0];
-    let res = query(PROTOCOL,
-                    HOST,
-                    QUERY_PORT,
-                    "utxo_sid",
-                    &format!("{}", sid2.0)).unwrap();
-    let blind_asset_record_2 =
-      serde_json::from_str::<BlindAssetRecord>(&res).or_else(|_| {
-                                                      Err(PlatformError::DeserializationError)
-                                                    })
-                                                    .unwrap();
-
-    // Merge records
-    merge_records(&recipient_key_pair,
-                  TxoRef::Absolute(sid1),
-                  TxoRef::Absolute(sid2),
-                  blind_asset_record_1,
-                  blind_asset_record_2,
-                  code,
-                  txn_builder_path).unwrap();
-
-    // Submit transactions
-    let res = submit(PROTOCOL, HOST, txn_builder_path);
-
-    let _ = fs::remove_file(DATA_FILE);
-    fs::remove_file(txn_builder_path).unwrap();
-
-    assert!(res.is_ok());
-  }
-
-  #[test]
-  #[ignore]
-  fn test_load_funds() {
-    run_ledger_standalone().unwrap();
-
-    let data = load_data().unwrap();
-    let balance_pre = data.borrowers[0].balance;
-
-    // Create txn builder
-    let txn_builder_path = "tb_load_funds";
-    store_txn_builder_to_file(&txn_builder_path, &TransactionBuilder::default()).unwrap();
-
-    // Define amount
-    let amount = 1000;
-
-    // Load funds
-    load_funds(0, 0, amount, txn_builder_path, PROTOCOL, HOST).unwrap();
-    fs::remove_file(txn_builder_path).unwrap();
-
-    assert_eq!(load_data().unwrap().borrowers[0].balance,
-               balance_pre + amount);
-
-    let _ = fs::remove_file(DATA_FILE);
+                          code).is_ok());
   }
 
   #[test]
@@ -3281,10 +3158,27 @@ mod tests {
   }
 
   #[test]
-  #[ignore]
-  // Request, fulfill and pay a loan
+  // Test funds loading, loan request, fulfilling and repayment
   fn test_request_fulfill_and_pay_loan() {
     run_ledger_standalone().unwrap();
+
+    let data = load_data().unwrap();
+    let balance_pre = data.borrowers[0].balance;
+
+    // Create txn builder
+    let txn_builder_path = "tb_load_funds";
+
+    // Set amount to load
+    let amount = 1000;
+
+    // Load funds
+    load_funds(0, 0, amount, txn_builder_path, PROTOCOL, HOST).unwrap();
+
+    assert_eq!(load_data().unwrap().borrowers[0].balance,
+               balance_pre + amount);
+
+    fs::remove_file(txn_builder_path).unwrap();
+    let _ = fs::remove_file(DATA_FILE);
 
     // Load data
     let mut data = load_data().unwrap();
@@ -3297,26 +3191,22 @@ mod tests {
 
     // Create txn builder
     let txn_builder_path = "tb_loan";
-    store_txn_builder_to_file(&txn_builder_path, &TransactionBuilder::default()).unwrap();
 
     // Fulfill the loan request
     fulfill_loan(loan_id as u64, 0, txn_builder_path, PROTOCOL, HOST).unwrap();
     let data = load_data().unwrap();
-    assert_eq!(data.loans[loan_id].active, true);
+    assert_eq!(data.loans[loan_id].status, LoanStatus::Active);
     assert_eq!(data.loans[loan_id].balance, amount);
 
     // Pay loan
     let payment_amount = 200;
-    pay_loan(loan_id as u64,
-             payment_amount,
-             txn_builder_path,
-             PROTOCOL,
-             HOST).unwrap();
+    pay_loan(loan_id as u64, payment_amount, PROTOCOL, HOST).unwrap();
 
     let data = load_data().unwrap();
-    assert_eq!(data.loans[loan_id].payments, 1);
 
     let _ = fs::remove_file(DATA_FILE);
     fs::remove_file(txn_builder_path).unwrap();
+
+    assert_eq!(data.loans[loan_id].payments, 1);
   }
 }
