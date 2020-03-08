@@ -112,7 +112,13 @@ In the initial data, there are two issuer, Lenny and Luna. To sign up a new lend
 ```
 Make sure the specified loan is owned by the lender.
 * View loans with a filter
-To filter the loans, add `--filter` with `unrejected`, `active`, `inactive`, or `complete`, for loans that have been activated (i.e., fulfilled by the lender), haven't been activated, or have been rejected, respectively. For example:
+To filter the loans, add `--filter` with one of the following:
+  * `requested`: loans that have been requested but not fulfilled
+  * `fulfilled`: loans that have been fulfilled, either paid off or not
+  * `declined`: loans that have been declined
+  * `active`: loans that have been fulfilled but not paid off
+  * `complete`: Loans that have been paid off
+For example:
 ```
 ./txn_builder_cli lender --id 0 view_loan --filter active
 ```
@@ -157,7 +163,13 @@ By default, `https://testnet.findora.org` is used. To switch to `http://localhos
 ```
 Make sure the specified loan is owned by the borrower.
 * View loans with a filter
-To filter the loans, add `--filter` with `unrejected`, `active`, `inactive`, or `complete`, for loans that have been activated (i.e., fulfilled by the lender), haven't been activated, or have been rejected, respectively. For example:
+To filter the loans, add `--filter` with one of the following:
+  * `requested`: loans that have been requested but not fulfilled
+  * `fulfilled`: loans that have been fulfilled, either paid off or not
+  * `declined`: loans that have been declined
+  * `active`: loans that have been fulfilled but not paid off
+  * `complete`: Loans that have been paid off
+For example:
 ```
 ./txn_builder_cli borrower --id 0 view_loan --filter active
 ```

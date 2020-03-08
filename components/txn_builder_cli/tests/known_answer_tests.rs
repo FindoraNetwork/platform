@@ -488,6 +488,7 @@ fn test_view() {
 
   // Create loans
   request_loan("0", "0", "100", "100", "3").expect("Failed to request the loan");
+  request_loan("0", "0", "200", "150", "6").expect("Failed to request the loan");
   request_loan("1", "0", "300", "200", "9").expect("Failed to request the loan");
   request_loan("1", "0", "500", "300", "15").expect("Failed to request the loan");
 
@@ -495,7 +496,8 @@ fn test_view() {
   let txn_builder_path = "txn_builder_view_loans";
   create_txn_builder_with_path(txn_builder_path).expect("Failed to create transaction builder");
   fulfill_loan(txn_builder_path, "0", "0", "0").expect("Failed to fulfill the loan");
-  fulfill_loan(txn_builder_path, "1", "1", "0").expect("Failed to fulfill the loan");
+  fulfill_loan(txn_builder_path, "0", "1", "0").expect("Failed to fulfill the loan");
+  fulfill_loan(txn_builder_path, "1", "2", "0").expect("Failed to fulfill the loan");
 
   // View loans
   // 1. View all loans of a lender
@@ -514,7 +516,7 @@ fn test_view() {
 
   assert!(output.status.success());
   assert!(from_utf8(&output.stdout).unwrap()
-                                   .contains(&"Displaying 3 loan(s):".to_owned()));
+                                   .contains(&"Displaying 4 loan(s):".to_owned()));
 
   // 3.   View a loan by its id
   // 3.1  The loan is owned by the user
@@ -527,15 +529,17 @@ fn test_view() {
                                    .contains(&"Displaying loan".to_owned()));
 
   // 3.2  The loan isn't owned by the user
-  let output = view_loan_with_loan_id("lender", "0", "1").expect("Failed to view the loan");
+  let output = view_loan_with_loan_id("lender", "0", "2").expect("Failed to view the loan");
   io::stdout().write_all(&output.stdout).unwrap();
   io::stdout().write_all(&output.stderr).unwrap();
 
   assert!(from_utf8(&output.stdout).unwrap()
                                    .contains(&"doesn't own loan".to_owned()));
 
-  // 4. View active loans
-  let output = view_loan_with_filter("borrower", "0", "active").expect("Failed to view the loan");
+  // 4. View loans with a filter
+  // 4.1 Requested but not fulfilled loan
+  let output =
+    view_loan_with_filter("borrower", "0", "requested").expect("Failed to view the loan");
   io::stdout().write_all(&output.stdout).unwrap();
   io::stdout().write_all(&output.stderr).unwrap();
 
@@ -543,24 +547,42 @@ fn test_view() {
   assert!(from_utf8(&output.stdout).unwrap()
                                    .contains(&"Displaying 1 loan(s):".to_owned()));
 
-  // 5. View inactive loans
-  let output = view_loan_with_filter("borrower", "0", "inactive").expect("Failed to view the loan");
-  io::stdout().write_all(&output.stdout).unwrap();
-  io::stdout().write_all(&output.stderr).unwrap();
-
-  assert!(output.status.success());
-  assert!(from_utf8(&output.stdout).unwrap()
-                                   .contains(&"Displaying 2 loan(s):".to_owned()));
-
-  // 6. View unrejected loans
+  // 4.2. View fulfilled loan
   let output =
-    view_loan_with_filter("borrower", "0", "unrejected").expect("Failed to view the loan");
+    view_loan_with_filter("borrower", "0", "fulfilled").expect("Failed to view the loan");
   io::stdout().write_all(&output.stdout).unwrap();
   io::stdout().write_all(&output.stderr).unwrap();
 
   assert!(output.status.success());
   assert!(from_utf8(&output.stdout).unwrap()
                                    .contains(&"Displaying 2 loan(s):".to_owned()));
+
+  // 4.3. View declined loan
+  let output = view_loan_with_filter("borrower", "0", "declined").expect("Failed to view the loan");
+  io::stdout().write_all(&output.stdout).unwrap();
+  io::stdout().write_all(&output.stderr).unwrap();
+
+  assert!(output.status.success());
+  assert!(from_utf8(&output.stdout).unwrap()
+                                   .contains(&"Displaying 1 loan(s):".to_owned()));
+
+  // 4.4. View active loan
+  let output = view_loan_with_filter("borrower", "0", "active").expect("Failed to view the loan");
+  io::stdout().write_all(&output.stdout).unwrap();
+  io::stdout().write_all(&output.stderr).unwrap();
+
+  assert!(output.status.success());
+  assert!(from_utf8(&output.stdout).unwrap()
+                                   .contains(&"Displaying 2 loan(s):".to_owned()));
+
+  // 4.5. View complete loan
+  let output = view_loan_with_filter("borrower", "0", "complete").expect("Failed to view the loan");
+  io::stdout().write_all(&output.stdout).unwrap();
+  io::stdout().write_all(&output.stderr).unwrap();
+
+  assert!(output.status.success());
+  assert!(from_utf8(&output.stdout).unwrap()
+                                   .contains(&"Displaying 0 loan(s):".to_owned()));
 
   // View credentials
   // 1. View all credentials of a borrower
@@ -1052,7 +1074,7 @@ fn test_request_fulfill_and_pay_loan_with_args() {
           && stdout.contains(&"Value should be at least:".to_owned()));
 
   // 2. Second time:
-  //    Fail because the loan has been rejected
+  //    Fail because the loan has been declined
   let output = fulfill_loan(txn_builder_file, "1", "1", "0").expect("Failed to initiate the loan");
 
   io::stdout().write_all(&output.stdout).unwrap();
@@ -1060,7 +1082,7 @@ fn test_request_fulfill_and_pay_loan_with_args() {
 
   assert_eq!(output.status.code(), Some(exitcode::USAGE));
   assert!(from_utf8(&output.stdout).unwrap()
-                                   .contains(&"has already been rejected.".to_owned()));
+                                   .contains(&"has already been declined.".to_owned()));
 
   // Pay loan
   // 1. First time:
