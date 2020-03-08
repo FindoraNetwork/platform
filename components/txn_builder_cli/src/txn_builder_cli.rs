@@ -193,8 +193,8 @@ impl Borrower {
 //
 #[derive(Clone, Deserialize, Debug, PartialEq, Serialize)]
 enum LoanStatus {
-  Requested, // The borrower has requested the loan
-  Rejected,  // The lender has rejected the loan
+  Requested, // The borrower has requested the loan, but the lender hasn't fulfill it
+  Declined,  // The lender has declined the loan
   Active,    // The lender has fulfilled the loan, but the borrower hasn't paid it off
   Complete,  // The borrower has paid off the loan
 }
@@ -1125,8 +1125,8 @@ fn fulfill_loan(loan_id: u64,
 
   // Check if loan has been fulfilled
   match loan.status {
-    LoanStatus::Rejected => {
-      println!("Loan {} has already been rejected.", loan_id);
+    LoanStatus::Declined => {
+      println!("Loan {} has already been declined.", loan_id);
       return Err(PlatformError::InputsError);
     }
     LoanStatus::Active => {
@@ -1176,7 +1176,7 @@ fn fulfill_loan(loan_id: u64,
             RelationType::AtLeast)
     {
       // Update loans data
-      data.loans[loan_id as usize].status = LoanStatus::Rejected;
+      data.loans[loan_id as usize].status = LoanStatus::Declined;
       store_data_to_file(data)?;
       return Err(error);
     }
@@ -1358,8 +1358,8 @@ fn pay_loan(loan_id: u64, amount: u64, protocol: &str, host: &str) -> Result<(),
                loan_id);
       return Err(PlatformError::InputsError);
     }
-    LoanStatus::Rejected => {
-      println!("Loan {} has been rejected.", loan_id);
+    LoanStatus::Declined => {
+      println!("Loan {} has been declined.", loan_id);
       return Err(PlatformError::InputsError);
     }
     LoanStatus::Complete => {
@@ -1653,7 +1653,7 @@ fn main() {
           .short("f")
           .long("filter")
           .takes_value(true)
-          .possible_values(&["unrejected", "active", "inactive", "complete"])
+          .possible_values(&["requested", "fulfilled", "declined", "active", "complete"])
           .help("Display the loan with the specified status only."))
         .help("By default, display all loans of this lender."))
       .subcommand(SubCommand::with_name("fulfill_loan")
@@ -1720,7 +1720,7 @@ fn main() {
           .short("f")
           .long("filter")
           .takes_value(true)
-          .possible_values(&["unrejected", "active", "inactive", "complete"])
+          .possible_values(&["requested", "fulfilled", "declined", "active", "complete"])
           .help("Display the loan with the specified status only."))
         .help("By default, display all loans of this borrower."))
       .subcommand(SubCommand::with_name("request_loan")
@@ -2224,8 +2224,20 @@ fn process_lender_cmd(lender_matches: &clap::ArgMatches,
       if let Some(filter) = view_loan_matches.value_of("filter") {
         for id in loan_ids {
           match filter {
-            "unrejected" => {
-              if data.loans[id as usize].status != LoanStatus::Rejected {
+            "requested" => {
+              if data.loans[id as usize].status == LoanStatus::Requested {
+                loans.push(data.loans[id as usize].clone());
+              }
+            }
+            "fulfilled" => {
+              if data.loans[id as usize].status == LoanStatus::Active
+                 || data.loans[id as usize].status == LoanStatus::Complete
+              {
+                loans.push(data.loans[id as usize].clone());
+              }
+            }
+            "declined" => {
+              if data.loans[id as usize].status == LoanStatus::Declined {
                 loans.push(data.loans[id as usize].clone());
               }
             }
@@ -2234,15 +2246,13 @@ fn process_lender_cmd(lender_matches: &clap::ArgMatches,
                 loans.push(data.loans[id as usize].clone());
               }
             }
-            "inactive" => {
-              if data.loans[id as usize].status != LoanStatus::Active {
+            "complete" => {
+              if data.loans[id as usize].status == LoanStatus::Complete {
                 loans.push(data.loans[id as usize].clone());
               }
             }
             _ => {
-              if data.loans[id as usize].status == LoanStatus::Complete {
-                loans.push(data.loans[id as usize].clone());
-              }
+              loans.push(data.loans[id as usize].clone());
             }
           }
         }
@@ -2347,8 +2357,20 @@ fn process_borrower_cmd(borrower_matches: &clap::ArgMatches,
       if let Some(filter) = view_loan_matches.value_of("filter") {
         for id in loan_ids {
           match filter {
-            "unrejected" => {
-              if data.loans[id as usize].status != LoanStatus::Rejected {
+            "requested" => {
+              if data.loans[id as usize].status == LoanStatus::Requested {
+                loans.push(data.loans[id as usize].clone());
+              }
+            }
+            "fulfilled" => {
+              if data.loans[id as usize].status == LoanStatus::Active
+                 || data.loans[id as usize].status == LoanStatus::Complete
+              {
+                loans.push(data.loans[id as usize].clone());
+              }
+            }
+            "declined" => {
+              if data.loans[id as usize].status == LoanStatus::Declined {
                 loans.push(data.loans[id as usize].clone());
               }
             }
@@ -2357,15 +2379,13 @@ fn process_borrower_cmd(borrower_matches: &clap::ArgMatches,
                 loans.push(data.loans[id as usize].clone());
               }
             }
-            "inactive" => {
-              if data.loans[id as usize].status != LoanStatus::Active {
+            "complete" => {
+              if data.loans[id as usize].status == LoanStatus::Complete {
                 loans.push(data.loans[id as usize].clone());
               }
             }
             _ => {
-              if data.loans[id as usize].status == LoanStatus::Complete {
-                loans.push(data.loans[id as usize].clone());
-              }
+              loans.push(data.loans[id as usize].clone());
             }
           }
         }
