@@ -10,6 +10,8 @@ use std::collections::{HashMap, HashSet};
 use std::marker::PhantomData;
 use std::sync::{Arc, RwLock};
 
+const PORT: usize = 8668;
+
 pub struct QueryServer<RNG, LU>
   where RNG: RngCore + CryptoRng,
         LU: LedgerUpdate<RNG> + ArchiveAccess + LedgerAccess
@@ -46,10 +48,10 @@ impl<RNG, LU> QueryServer<RNG, LU>
         TxoRef::Absolute(txo_sid) => {
           let address = self.utxos_to_map_index
                             .get(&txo_sid)
-                            .ok_or(PlatformError::QueryServerError(Some("Attempting to remove owned txo of address that isn't cached".into())))?;
+                            .ok_or_else(|| PlatformError::QueryServerError(Some("Attempting to remove owned txo of address that isn't cached".into())))?;
           let hash_set = self.addresses_to_utxos
                              .get_mut(&address)
-                             .ok_or(PlatformError::QueryServerError(Some("No txos stored for this address".into())))?;
+                             .ok_or_else(|| PlatformError::QueryServerError(Some("No txos stored for this address".into())))?;
           let removed = hash_set.remove(&txo_sid);
           if !removed {
             return Err(PlatformError::QueryServerError(Some("Input txo not found".into())));
@@ -61,8 +63,9 @@ impl<RNG, LU> QueryServer<RNG, LU>
   }
 
   pub fn poll_new_blocks(&mut self) -> Result<(), PlatformError> {
-    let ledger_url = std::env::var_os("LEDGER_URL").filter(|x| !x.is_empty())
-                                                   .unwrap_or_else(|| "localhost:8668".into());
+    let ledger_url =
+      std::env::var_os("LEDGER_URL").filter(|x| !x.is_empty())
+                                    .unwrap_or_else(|| format!("localhost:{}", PORT).into());
     let latest_block = {
       let ledger = self.committed_state.read().unwrap();
       (*ledger).get_block_count()
@@ -119,7 +122,7 @@ impl<RNG, LU> QueryServer<RNG, LU>
         for (txo_sid, address) in txo_sids.iter().zip(addresses.iter()) {
           self.addresses_to_utxos
               .entry(*address)
-              .or_insert(HashSet::new())
+              .or_insert_with(HashSet::new)
               .insert(*txo_sid);
           self.utxos_to_map_index.insert(*txo_sid, *address);
         }

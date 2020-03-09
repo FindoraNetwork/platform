@@ -104,6 +104,7 @@ pub struct XfrAddress {
   pub key: XfrPublicKey,
 }
 
+#[allow(clippy::derive_hash_xor_eq)]
 impl Hash for XfrAddress {
   fn hash<H: Hasher>(&self, state: &mut H) {
     self.key.as_bytes().hash(state);
