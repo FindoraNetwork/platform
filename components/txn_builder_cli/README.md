@@ -29,48 +29,8 @@ actual subcommands.
 * By default, all the generated files will be stored in `~./findora`, unless specified otherwise. For example, if the current directory is `platform/target/debug`, running `./txn_builder_cli keygen` will put the generated key pair in ~./findora, but `./txn_builder_cli keygen --name keys/key_pair` will store the key pair to `platform/target/debug/keys/key_pair`.
 * Examples below are assuming the current directory is `platform/target/debug`. If not, change `./txn_builder_cli` to the path to `./txn_builder_cli`.
 
-## Compose a transaction
-### Create an empty transaction
-```
-./txn_builder_cli create_txn_builder --name tb
-```
-
-### Add operations to the transaction. Three operations can be added:
-* Define a new asset. See `txn_builder_cli add define_asset`.
-  * In general
-  ```
-  ./txn_builder_cli --txn tb add define_asset --issuer 0 --token_code ibIaBlHV-PdQkvSuEg6YSA== --memo 'Define an asset.'
-  ```
-  * Fiat asset
-  ```
-  ./txn_builder_cli --txn tb add define_asset --fiat --issuer 0 --memo 'Define fiat asset.'
-  ```
-* Issue units of an asset. See `txn_builder_cli add issue_asset`.
-```
-./txn_builder_cli --txn tb --key_pair kp add issue_asset --token_code ibIaBlHV-PdQkvSuEg6YSA== --amount 100
-```
-* Transfer units of an asset. See `txn_builder_cli add transfer_asset`.
-  * Create input and output public keys
-  ```
-  ./txn_builder_cli pubkeygen --name pki1
-  ./txn_builder_cli pubkeygen --name pki2
-  ./txn_builder_cli pubkeygen --name pko1
-  ./txn_builder_cli pubkeygen --name pko2
-  ./txn_builder_cli pubkeygen --name pko3
-  ```
-  * Store sids and blind asset records
-  ```
-  ./txn_builder_cli store sids --path s --indices 2,4
-  ./txn_builder_cli store blind_asset_record --path bar1 --amount 100 --asset_type ibIaBlHV-PdQkvSuEg6YSA== --pub_key_path pki1
-  ./txn_builder_cli store blind_asset_record --path bar2 --amount 1000 --asset_type ibIaBlHV-PdQkvSuEg6YSA== --pub_key_path pki2
-  ```
-  * Transfer
-  ```
-  ./txn_builder_cli --txn tb --key_pair kp add transfer_asset --sids_path s --blind_asset_record_paths bar1,bar2 --input_amounts 15,45 --output_amounts 10,20,30 --address_paths pko1,pko2,pko3
-  ```
-
 ## Submit a transaction
-After a transaction is composed:
+After a transaction is composed by `define_asset`, `issue_asset`, `transfer_asset`, or `issue_and_transfer_asset`:
 ```
 ./txn_builder_cli --txn tb submit
 ```
@@ -82,6 +42,55 @@ In the initial data, there's one issuer, Izzie. To sign up a new issuer account:
 ```
 ./txn_builder_cli issuer sign_up --name 'Issuer Name'
 ```
+
+### Define an asset
+* Create an empty transaction
+```
+./txn_builder_cli create_txn_builder --name txn_define
+```
+* Define an asset
+```
+./txn_builder_cli --txn txn_define issuer --id 0 define_asset --memo 'Define an asset.'
+```
+By default, a randomly generated token code will be used. To specify a code, use `--token_code`.
+To define a fiat asset, add `--fiat`.
+
+* Submit the transaction
+```
+./txn_builder_cli --txn txn_define submit
+```
+
+### Issue units of an asset
+After an asset is defined and the transaction is submitted:
+* Create an empty transaction
+```
+./txn_builder_cli create_txn_builder --name txn_issue
+```
+* Issue the asset
+```
+./txn_builder_cli --txn txn_issue issuer --id 0 issue_asset --token_code ibIaBlHV-PdQkvSuEg6YSA== --amount 100
+```
+* Submit the transaction
+```
+./txn_builder_cli --txn txn_issue submit
+```
+To display the utxo sids, add `--get_sids`. To store the sids to a file, use `--sids_path`.
+
+### Transfer units of an asset. See `txn_builder_cli add transfer_asset`.
+After an asset is defined and issued, and transactions are submitted:
+* Create an empty transaction
+```
+./txn_builder_cli create_txn_builder --name txn_transfer
+```
+* Transfer
+```
+./txn_builder_cli --txn txn_transfer issuer --id 0 transfer_asset --sids_path s recipients 0,1 --input_amounts 45 --output_amounts 10,35
+```
+* Submit the transaction
+```
+./txn_builder_cli --txn txn_transfer submit
+```
+
 ### Issue and transfer units of an asset
 After an asset is defined and the transaction is submitted:
 * Create an empty transaction
@@ -93,6 +102,11 @@ After an asset is defined and the transaction is submitted:
 ./txn_builder_cli --txn txn_issue_and_transfer issuer --id 0 issue_and_transfer_asset --recipient 0 --amount 1000 --token_code ibIaBlHV-PdQkvSuEg6YSA==
 ```
 Add `--confidential_amount` or `--confidential_asset` if needed.
+* Submit the transaction
+```
+./txn_builder_cli --txn txn_issue_and_transfer submit
+```
+To get the utxo sids, add `--get_sids`.
 
 ## Lender account
 ### Sign up a lender account

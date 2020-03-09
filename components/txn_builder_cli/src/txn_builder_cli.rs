@@ -408,36 +408,11 @@ fn load_txn_builder_from_file(file_path: &str) -> Result<TransactionBuilder, Pla
   }
 }
 
-fn load_pub_key_from_file(file_path: &str) -> Result<XfrPublicKey, PlatformError> {
-  let mut file;
-  match File::open(file_path) {
-    Ok(f) => {
-      file = f;
-    }
-    Err(_) => {
-      return Err(PlatformError::IoError(format!("File doesn't exist: {}. Try subcommand pubkeygen.",
-               file_path)));
-    }
-  }
-
-  let key: XfrPublicKey;
-  let mut key_byte_buffer = Vec::new();
-  match file.read_to_end(&mut key_byte_buffer) {
-    Ok(_len) => {
-      key = XfrPublicKey::zei_from_bytes(&key_byte_buffer);
-    }
-    Err(_e) => {
-      return Err(PlatformError::IoError(format!("Failed to read file: {}", file_path)));
-    }
-  }
-  Ok(key)
-}
-
 fn split_arg(string: &str) -> Vec<&str> {
   string.split(',').collect::<Vec<&str>>()
 }
 
-fn load_sids_from_file(file_path: &str) -> Result<Vec<TxoRef>, PlatformError> {
+fn load_sids_from_file(file_path: &str) -> Result<Vec<u64>, PlatformError> {
   let mut file;
   match File::open(file_path) {
     Ok(f) => {
@@ -449,65 +424,19 @@ fn load_sids_from_file(file_path: &str) -> Result<Vec<TxoRef>, PlatformError> {
   }
 
   let mut sids_str = String::new();
-  if file.read_to_string(&mut sids_str).is_err() {
-    return Err(PlatformError::IoError(format!("Failed to read file: {}", file_path)));
+  if let Err(error) = file.read_to_string(&mut sids_str) {
+    return Err(PlatformError::IoError(format!("Failed to read file: {}: {}.", file_path, error)));
   }
 
-  let mut txo_refs = Vec::new();
+  let mut sids = Vec::new();
   for sid_str in split_arg(&sids_str) {
-    if let Ok(sid) = sid_str.trim().parse::<u64>() {
-      txo_refs.push(TxoRef::Absolute(TxoSID(sid)));
-    } else {
-      println!("Improperly formatted sid.");
-      return Err(PlatformError::InputsError);
+    if sid_str == "" {
+      break;
     }
+    sids.push(parse_to_u64(sid_str)?);
   }
 
-  Ok(txo_refs)
-}
-
-fn load_blind_asset_records_from_files(file_paths: &str)
-                                       -> Result<Vec<BlindAssetRecord>, PlatformError> {
-  let mut blind_asset_records = Vec::new();
-
-  for mut file_path in split_arg(file_paths) {
-    file_path = file_path.trim();
-    let mut file;
-    match File::open(file_path) {
-      Ok(f) => {
-        file = f;
-      }
-      Err(_) => {
-        return Err(PlatformError::IoError(format!("File doesn't exist: {}. Try subcommand store --blind_asset_record.",
-                 file_path)));
-      }
-    }
-
-    let mut blind_asset_record_str = String::new();
-    if file.read_to_string(&mut blind_asset_record_str).is_err() {
-      return Err(PlatformError::IoError(format!("Failed to read file: {}", file_path)));
-    }
-
-    if let Ok(blind_asset_record) = serde_json::from_str(&blind_asset_record_str) {
-      blind_asset_records.push(blind_asset_record);
-    } else {
-      println!("Improperly formatted blind asset record.");
-      return Err(PlatformError::InputsError);
-    }
-  }
-
-  Ok(blind_asset_records)
-}
-
-fn load_addresses_from_files(file_paths: &str) -> Result<Vec<AccountAddress>, PlatformError> {
-  let mut addresses = Vec::new();
-
-  for file_path in split_arg(file_paths) {
-    let address_key = load_pub_key_from_file(file_path.trim())?;
-    addresses.push(AccountAddress { key: address_key });
-  }
-
-  Ok(addresses)
+  Ok(sids)
 }
 
 //
@@ -594,47 +523,14 @@ fn store_pub_key_to_file(path_str: &str) -> Result<(), PlatformError> {
   Ok(())
 }
 
-fn store_sids_to_file(file_path: &str, sids: &str) -> Result<(), PlatformError> {
-  if let Err(error) = fs::write(file_path, sids) {
+fn store_sids_to_file(file_path: &str, sids: Vec<TxoSID>) -> Result<(), PlatformError> {
+  let mut sids_str = "".to_owned();
+  for sid in sids {
+    sids_str.push_str(&format!("{},", sid.0));
+  }
+  if let Err(error) = fs::write(file_path, sids_str) {
     return Err(PlatformError::IoError(format!("Failed to create file {}: {}.", file_path, error)));
   };
-  Ok(())
-}
-
-fn store_blind_asset_record(file_path: &str,
-                            amount: u64,
-                            asset_type: &str,
-                            pub_key_path: &str,
-                            confidential_amount: bool,
-                            confidential_asset: bool)
-                            -> Result<(), PlatformError> {
-  let mut asset_type_arr = [0u8; 16];
-  let bytes = asset_type.as_bytes();
-  asset_type_arr.copy_from_slice(&bytes[..16]);
-
-  let asset_record =
-    AssetRecord::new(amount,
-                     asset_type_arr,
-                     load_pub_key_from_file(pub_key_path)?).or_else(|error| {
-                                                             Err(PlatformError::ZeiError(error))
-                                                           })?;
-
-  let blind_asset_record =
-    build_blind_asset_record(&mut ChaChaRng::from_entropy(),
-                             &PublicParams::new().pc_gens,
-                             &asset_record,
-                             AssetRecordType::from_booleans(confidential_amount,
-                                                            confidential_asset),
-                             &None);
-
-  if let Ok(as_json) = serde_json::to_string(&blind_asset_record) {
-    if let Err(error) = fs::write(file_path, &as_json) {
-      return Err(PlatformError::IoError(format!("Failed to create file {}: {}.",
-                                                file_path, error)));
-    };
-    println!("Blind asset record stored to {}", file_path);
-  }
-
   Ok(())
 }
 
@@ -744,7 +640,7 @@ fn parse_to_u64(amount_arg: &str) -> Result<u64, PlatformError> {
   }
 }
 
-fn get_amounts(amounts_arg: &str) -> Result<Vec<u64>, PlatformError> {
+fn parse_to_u64_vec(amounts_arg: &str) -> Result<Vec<u64>, PlatformError> {
   let amounts_str = split_arg(amounts_arg);
   let mut amounts = Vec::new();
   for amount_str in amounts_str {
@@ -1595,6 +1491,52 @@ fn main() {
         .arg(Arg::with_name("with_policy")
           .short("p")
           .help("TODO: add support for policies")))
+      .subcommand(SubCommand::with_name("issue_asset")
+        .arg(Arg::with_name("token_code")
+          .short("c")
+          .long("token_code")
+          .required(true)
+          .takes_value(true)
+          .help("Token code of the asset to be issued. The transaction will fail if no asset with the token code exists."))
+        .arg(Arg::with_name("amount")
+          .short("amt")
+          .long("amount")
+          .required(true)
+          .takes_value(true)
+          .help("Amount of tokens to issue.")))
+      .subcommand(SubCommand::with_name("transfer_asset")
+        .arg(Arg::with_name("recipients")
+          .short("r")
+          .long("recipients")
+          .required(true)
+          .takes_value(true)
+          .help("Recipients' ids. Separate by comma (\",\")."))
+        .arg(Arg::with_name("sids_path")
+          .short("s")
+          .long("sids_path")
+          .required(true)
+          .takes_value(true)
+          .help("Path to the input sids."))
+        .arg(Arg::with_name("input_amounts")
+          .short("iamts")
+          .long("input_amounts")
+          .required(true)
+          .takes_value(true)
+          .help("Amount to transfer from each record. Separate by comma (\",\")."))
+        .arg(Arg::with_name("output_amounts")
+          .short("oamts")
+          .long("output_amounts")
+          .required(true)
+          .takes_value(true)
+          .help("Amount to transfer to each account. Separate by comma (\",\")."))
+        .arg(Arg::with_name("protocol")
+          .long("http")
+          .takes_value(false)
+          .help("Specify that http, not https should be used."))
+        .arg(Arg::with_name("host")
+          .long("localhost")
+          .takes_value(false)
+          .help("Specify that localhost, not testnet.findora.org should be used.")))
       .subcommand(SubCommand::with_name("issue_and_transfer_asset")
         .arg(Arg::with_name("recipient")
           .short("r")
@@ -1818,118 +1760,6 @@ fn main() {
         .alias("overwrite")
         .short("f")
         .help("If specified, the existing file with the same name will be overwritten.")))
-    .subcommand(SubCommand::with_name("store")
-      .subcommand(SubCommand::with_name("sids")
-        .arg(Arg::with_name("path")
-          .short("p")
-          .long("path")
-          .takes_value(true)
-          .help("Path to store the sids. If not specified, a default path will be given."))
-        .arg(Arg::with_name("overwrite")
-          .long("force")
-          .alias("overwrite")
-          .short("f")
-          .help("If specified, the existing file with the same name will be overwritten."))
-        .arg(Arg::with_name("indices")
-          .short("is")
-          .long("indices")
-          .required(true)
-          .takes_value(true)
-          .help("Input TxoSID indices. Separate by comma (\",\")")))
-      .subcommand(SubCommand::with_name("blind_asset_record")
-        .arg(Arg::with_name("path")
-          .short("p")
-          .long("path")
-          .takes_value(true)
-          .help("Path to store the blind asset record. If not specified, a default path will be given."))
-        .arg(Arg::with_name("overwrite")
-          .long("force")
-          .alias("overwrite")
-          .short("f")
-          .help("If specified, the existing file with the same name will be overwritten."))
-        .arg(Arg::with_name("amount")
-          .short("a")
-          .long("amount")
-          .required(true)
-          .takes_value(true)
-          .help("Asset amount"))
-        .arg(Arg::with_name("asset_type")
-          .short("t")
-          .long("asset_type")
-          .required(true)
-          .takes_value(true)
-          .help("String representation of the asset type"))
-        .arg(Arg::with_name("pub_key_path")
-          .short("k")
-          .long("pub_key_path")
-          .required(true)
-          .takes_value(true)
-          .help("Path to the public key"))
-        .arg(Arg::with_name("confidential_amount")
-          .short("m")
-          .long("confidential_amount")
-          .help("If specified, the amount will be confidential"))
-        .arg(Arg::with_name("confidential_asset")
-          .short("s")
-          .long("confidential_asset")
-          .help("If specified, the asset will be confidential"))))
-    .subcommand(SubCommand::with_name("add")
-      .subcommand(SubCommand::with_name("issue_asset")
-        .arg(Arg::with_name("issuer")
-          .short("i")
-          .long("issuer")
-          .required(true)
-          .takes_value(true)
-          .help("Issuer id."))
-        .arg(Arg::with_name("token_code")
-          .short("c")
-          .long("token_code")
-          .required(true)
-          .takes_value(true)
-          .help("Token code of the asset to be issued. The transaction will fail if no asset with the token code exists."))
-        .arg(Arg::with_name("amount")
-          .short("amt")
-          .long("amount")
-          .required(true)
-          .takes_value(true)
-          .help("Amount of tokens to issue.")))
-      .subcommand(SubCommand::with_name("transfer_asset")
-        .arg(Arg::with_name("issuer")
-          .short("d")
-          .long("issuer")
-          .required(true)
-          .takes_value(true)
-          .help("Issuer id."))
-        .arg(Arg::with_name("sids_path")
-          .short("ssp")
-          .long("sids_path")
-          .required(true)
-          .takes_value(true)
-          .help("Path to the file where input TxoSID indices are stored."))
-        .arg(Arg::with_name("blind_asset_record_paths")
-          .short("barps")
-          .long("blind_asset_record_paths")
-          .required(true)
-          .takes_value(true)
-          .help("Path to the files where blind asset records are stored. Separate by comma (\",\")."))
-        .arg(Arg::with_name("input_amounts")
-          .short("iamts")
-          .long("input_amounts")
-          .required(true)
-          .takes_value(true)
-          .help("Amount to transfer from each record. Separate by comma (\",\")."))
-        .arg(Arg::with_name("output_amounts")
-          .short("oamts")
-          .long("output_amounts")
-          .required(true)
-          .takes_value(true)
-          .help("Amount to transfer to each account. Separate by comma (\",\")."))
-        .arg(Arg::with_name("address_paths")
-          .short("asp")
-          .long("address_paths")
-          .required(true)
-          .takes_value(true)
-          .help("Path to the files where address keys are stored. If no such file, try pubkeygen subcommand."))))
     .subcommand(SubCommand::with_name("serialize"))
     .subcommand(SubCommand::with_name("drop"))
     .subcommand(SubCommand::with_name("keygen")
@@ -1960,6 +1790,11 @@ fn main() {
         .short("g")
         .takes_value(false)
         .help("If specified, will query the utxo sids."))
+      .arg(Arg::with_name("sids_path")
+        .long("sids_path")
+        .short("s")
+        .takes_value(true)
+        .help("If specified, will store the utxo sids to the file."))
       .arg(Arg::with_name("protocol")
         .long("http")
         .takes_value(false)
@@ -2018,8 +1853,6 @@ fn process_inputs(inputs: clap::ArgMatches) -> Result<(), PlatformError> {
                                      &transaction_file_name,
                                      &findora_dir)
     }
-    ("store", Some(store_matches)) => process_store_cmd(store_matches, &findora_dir),
-    ("add", Some(add_matches)) => process_add_cmd(add_matches, &transaction_file_name),
     ("serialize", Some(_serialize_matches)) => {
       let txn_builder = load_txn_builder_from_file(&transaction_file_name).or_else(|e| {
                           println!("Failed to load txn builder from file {}.",
@@ -2130,6 +1963,174 @@ fn process_issuer_cmd(issuer_matches: &clap::ArgMatches,
         Ok(_) => Ok(()),
         Err(error) => Err(error),
       }
+    }
+    ("issue_asset", Some(issue_asset_matches)) => {
+      let mut data = load_data()?;
+      let key_pair = if let Some(id_arg) = issuer_matches.value_of("id") {
+        let issuer_id = parse_to_u64(id_arg)?;
+        data.get_issuer_key_pair(issuer_id)?
+      } else {
+        println!("Issuer id is required to issue and transfer asset. Use issuer --id.");
+        return Err(PlatformError::InputsError);
+      };
+      let token_code = if let Some(token_code_arg) = issue_asset_matches.value_of("token_code") {
+        AssetTypeCode::new_from_base64(token_code_arg)?
+      } else {
+        println!("Token code is required to issue asset. Use --token_code.");
+        return Err(PlatformError::InputsError);
+      };
+      let amount = if let Some(amount_arg) = issue_asset_matches.value_of("amount") {
+        parse_to_u64(amount_arg)?
+      } else {
+        println!("Amount is required to issue asset. Use --amount.");
+        return Err(PlatformError::InputsError);
+      };
+      let mut txn_builder = TransactionBuilder::default();
+      if let Err(e) = txn_builder.add_basic_issue_asset(&key_pair,
+                                                        &None,
+                                                        &token_code,
+                                                        load_and_update_sequence_number()?,
+                                                        amount)
+      {
+        println!("Failed to add basic issue asset.");
+        return Err(e);
+      }
+      store_txn_builder_to_file(&transaction_file_name, &txn_builder)
+    }
+    ("transfer_asset", Some(transfer_asset_matches)) => {
+      let mut data = load_data()?;
+      let issuer_key_pair = if let Some(id_arg) = issuer_matches.value_of("id") {
+        let issuer_id = parse_to_u64(id_arg)?;
+        data.get_issuer_key_pair(issuer_id)?
+      } else {
+        println!("Issuer id is required to issue and transfer asset. Use issuer --id.");
+        return Err(PlatformError::InputsError);
+      };
+      // Compose transfer_from for add_basic_transfer_asset
+      let protocol = if transfer_asset_matches.is_present("http") {
+        // Allow HTTP which may be useful for running a ledger locally.
+        "http"
+      } else {
+        // Default to HTTPS
+        "https"
+      };
+      let host = if transfer_asset_matches.is_present("localhost") {
+        // Use localhost
+        run_ledger_standalone()?;
+        "localhost"
+      } else {
+        // Default to testnet.findora.org
+        "testnet.findora.org"
+      };
+      let mut txo_refs = Vec::new();
+      let mut blind_asset_records = Vec::new();
+      if let Some(sids_path_arg) = transfer_asset_matches.value_of("sids_path") {
+        for sid in load_sids_from_file(sids_path_arg)? {
+          txo_refs.push(TxoRef::Absolute(TxoSID(sid)));
+          let res = query(protocol, host, QUERY_PORT, "utxo_sid", &format!("{}", sid))?;
+          blind_asset_records.push( serde_json::from_str::<BlindAssetRecord>(&res).or_else(|_| {
+                                                            Err(PlatformError::DeserializationError)
+                                                          })?);
+        }
+      } else {
+        println!("Sids are required to transfer asset. Use --sids");
+        return Err(PlatformError::InputsError);
+      }
+      let input_amounts =
+        if let Some(input_amounts_arg) = transfer_asset_matches.value_of("input_amounts") {
+          parse_to_u64_vec(input_amounts_arg)?
+        } else {
+          println!("Input amounts are required to transfer asset. Use --input_amounts.");
+          return Err(PlatformError::InputsError);
+        };
+      let mut count = txo_refs.len();
+      if input_amounts.len() != count {
+        println!("Size of input sids and input amounts should match.");
+        return Err(PlatformError::InputsError);
+      }
+      let mut transfer_from = Vec::new();
+      let mut txo_refs_iter = txo_refs.iter();
+      let mut blind_asset_records_iter = blind_asset_records.iter();
+      let mut input_amounts_iter = input_amounts.iter();
+      while count > 0 {
+        let txo_refs_next = if let Some(txo_ref) = txo_refs_iter.next() {
+          txo_ref
+        } else {
+          println!("More txo ref expected.");
+          return Err(PlatformError::InputsError);
+        };
+        let blind_asset_records_next =
+          if let Some(blind_asset_record) = blind_asset_records_iter.next() {
+            blind_asset_record
+          } else {
+            println!("More blind asset record expected.");
+            return Err(PlatformError::InputsError);
+          };
+        let input_amount_next = if let Some(input_amount) = input_amounts_iter.next() {
+          *input_amount
+        } else {
+          println!("More input amount expected.");
+          return Err(PlatformError::InputsError);
+        };
+
+        let transfer_from_next = (txo_refs_next, blind_asset_records_next, input_amount_next);
+        transfer_from.push(transfer_from_next);
+        count -= 1;
+      }
+
+      // Compose transfer_to for add_basic_transfer_asset
+      let mut recipient_addresses = Vec::new();
+      if let Some(recipients) = transfer_asset_matches.value_of("recipients") {
+        let recipient_ids = parse_to_u64_vec(recipients)?;
+        for id in recipient_ids {
+          let recipient_pub_key = data.get_borrower_key_pair(id)?.get_pk();
+          recipient_addresses.push(AccountAddress { key: recipient_pub_key });
+        }
+      } else {
+        println!("Recipient ids are required to transfer asset. Use --recipients.");
+        return Err(PlatformError::InputsError);
+      }
+      let output_amounts =
+        if let Some(output_amounts_arg) = transfer_asset_matches.value_of("output_amounts") {
+          parse_to_u64_vec(output_amounts_arg)?
+        } else {
+          println!("Output amounts are required to transfer asset. Use --output_amounts.");
+          return Err(PlatformError::InputsError);
+        };
+      let mut count = output_amounts.len();
+      if recipient_addresses.len() != count {
+        println!("Size of output amounts and addresses should match.");
+        return Err(PlatformError::InputsError);
+      }
+      let mut transfer_to = Vec::new();
+      let mut output_amounts_iter = output_amounts.iter();
+      let mut addresses_iter = recipient_addresses.iter();
+      while count > 0 {
+        let output_amount_next = if let Some(output_amount) = output_amounts_iter.next() {
+          *output_amount
+        } else {
+          println!("More output amount expected.");
+          return Err(PlatformError::InputsError);
+        };
+        let address_next = if let Some(address) = addresses_iter.next() {
+          address
+        } else {
+          println!("More address expected.");
+          return Err(PlatformError::InputsError);
+        };
+        transfer_to.push((output_amount_next, address_next));
+        count -= 1;
+      }
+
+      // Transfer asset
+      let mut txn_builder = TransactionBuilder::default();
+      if let Err(e) =
+        txn_builder.add_basic_transfer_asset(&issuer_key_pair, &transfer_from[..], &transfer_to[..])
+      {
+        println!("Failed to add operation to transaction.");
+        return Err(e);
+      };
+      store_txn_builder_to_file(&transaction_file_name, &txn_builder)
     }
     ("issue_and_transfer_asset", Some(issue_and_transfer_matches)) => {
       let mut data = load_data()?;
@@ -2584,263 +2585,6 @@ fn process_create_txn_builder_cmd(create_matches: &clap::ArgMatches,
   store_txn_builder_to_file(&expand_str, &txn_builder)
 }
 
-fn process_store_cmd(store_matches: &clap::ArgMatches,
-                     findora_dir: &str)
-                     -> Result<(), PlatformError> {
-  match store_matches.subcommand() {
-    ("sids", Some(sids_matches)) => {
-      let path = if let Some(path_arg) = sids_matches.value_of("path") {
-        path_arg.to_string()
-      } else {
-        format!("{}/values/default.sids", &findora_dir)
-      };
-      let path_expand = shellexpand::tilde(&path).to_string();
-      println!("Storing sids to {}", path_expand);
-      let overwrite = sids_matches.is_present("overwrite");
-      create_directory_and_rename_path(&path_expand, overwrite)?;
-      let sids;
-      if let Some(sids_arg) = sids_matches.value_of("indices") {
-        sids = sids_arg
-      } else {
-        println!("TxoSID indices are required. Use --indices.");
-        return Err(PlatformError::InputsError);
-      }
-      store_sids_to_file(&path_expand, sids)
-    }
-
-    ("blind_asset_record", Some(blind_asset_record_path_matches)) => {
-      let path = if let Some(path_arg) = blind_asset_record_path_matches.value_of("path") {
-        path_arg.to_string()
-      } else {
-        format!("{}/values/default.blind_asset_record", &findora_dir)
-      };
-      let path_expand = shellexpand::tilde(&path).to_string();
-      println!("Storing blind asset records to {}", path_expand);
-      let overwrite = blind_asset_record_path_matches.is_present("overwrite");
-      create_directory_and_rename_path(&path_expand, overwrite)?;
-      let amount = if let Some(amount_arg) = blind_asset_record_path_matches.value_of("amount") {
-        parse_to_u64(amount_arg)?
-      } else {
-        println!("Amount is required. Use --amount.");
-        return Err(PlatformError::InputsError);
-      };
-      let asset_type;
-      if let Some(asset_type_arg) = blind_asset_record_path_matches.value_of("asset_type") {
-        asset_type = asset_type_arg
-      } else {
-        println!("Asset type is required. Use --asset_type.");
-        return Err(PlatformError::InputsError);
-      }
-      let pub_key_path;
-      if let Some(pub_key_path_arg) = blind_asset_record_path_matches.value_of("pub_key_path") {
-        pub_key_path = pub_key_path_arg
-      } else {
-        println!("File to public key is required. If no such file, try pubkeygen subcommand.");
-        return Err(PlatformError::InputsError);
-      }
-      let confidential_amount = blind_asset_record_path_matches.is_present("confidential_amount");
-      let confidential_asset = blind_asset_record_path_matches.is_present("confidential_asset");
-      store_blind_asset_record(&path_expand,
-                               amount,
-                               asset_type,
-                               pub_key_path,
-                               confidential_amount,
-                               confidential_asset)
-    }
-
-    _ => {
-      println!("Subcommand missing or not recognized. Try store --help");
-      Err(PlatformError::InputsError)
-    }
-  }
-}
-
-fn process_add_cmd(add_matches: &clap::ArgMatches,
-                   transaction_file_name: &str)
-                   -> Result<(), PlatformError> {
-  match add_matches.subcommand() {
-    ("issue_asset", Some(issue_asset_matches)) => {
-      let mut data = load_data()?;
-      let key_pair = if let Some(issuer_arg) = issue_asset_matches.value_of("issuer") {
-        if let Ok(id) = issuer_arg.parse::<u64>() {
-          data.get_issuer_key_pair(id)?
-        } else {
-          println!("Improperly formatted issuer id.");
-          return Err(PlatformError::InputsError);
-        }
-      } else {
-        println!("Issuer id is required to issue asset. Use --issuer.");
-        return Err(PlatformError::InputsError);
-      };
-      let asset_token: AssetTypeCode;
-      if let Some(token_code_arg) = issue_asset_matches.value_of("token_code") {
-        asset_token = AssetTypeCode::new_from_base64(token_code_arg)?;
-      } else {
-        println!("Token code is required to issue asset. Use --token_code.");
-        return Err(PlatformError::InputsError);
-      }
-      let amount = if let Some(amount_arg) = issue_asset_matches.value_of("amount") {
-        parse_to_u64(amount_arg)?
-      } else {
-        println!("Amount is required to issue asset. Use --amount.");
-        return Err(PlatformError::InputsError);
-      };
-      let mut txn_builder = TransactionBuilder::default();
-      if let Err(e) = txn_builder.add_basic_issue_asset(&key_pair,
-                                                        &None,
-                                                        &asset_token,
-                                                        load_and_update_sequence_number()?,
-                                                        amount)
-      {
-        println!("Failed to add basic issue asset.");
-        return Err(e);
-      }
-      store_txn_builder_to_file(&transaction_file_name, &txn_builder)
-    }
-    ("transfer_asset", Some(transfer_asset_matches)) => {
-      let mut data = load_data()?;
-      let issuer_key_pair = if let Some(issuer_arg) = transfer_asset_matches.value_of("issuer") {
-        if let Ok(id) = issuer_arg.parse::<u64>() {
-          data.get_issuer_key_pair(id)?
-        } else {
-          println!("Improperly formatted issuer id.");
-          return Err(PlatformError::InputsError);
-        }
-      } else {
-        println!("Issuer id is required to issue asset. Use --issuer.");
-        return Err(PlatformError::InputsError);
-      };
-      // Compose transfer_from for add_basic_transfer_asset
-      let txo_refs;
-      if let Some(sids_path) = transfer_asset_matches.value_of("sids_path") {
-        match load_sids_from_file(sids_path) {
-          Ok(result) => {
-            txo_refs = result;
-          }
-          Err(error) => {
-            println!("Error loading txo_refs from {}: {}", sids_path, error);
-            return Err(error);
-          }
-        }
-      } else {
-        println!("Path to sids file is required to transfer asset. Use --sids_path");
-        return Err(PlatformError::InputsError);
-      }
-      let blind_asset_records;
-      if let Some(blind_asset_record_paths) =
-        transfer_asset_matches.value_of("blind_asset_record_paths")
-      {
-        match load_blind_asset_records_from_files(blind_asset_record_paths) {
-          Ok(result) => {
-            blind_asset_records = result;
-          }
-          Err(error) => {
-            println!("Error loading blind_asset_records from {}: {}",
-                     blind_asset_record_paths, error);
-            return Err(error);
-          }
-        }
-      } else {
-        println!("Paths to blind asset records are required to transfer asset. Use --blind_asset_record_paths");
-        return Err(PlatformError::InputsError);
-      }
-      let input_amounts;
-      if let Some(input_amounts_arg) = transfer_asset_matches.value_of("input_amounts") {
-        input_amounts = get_amounts(input_amounts_arg)?;
-      } else {
-        println!("Input amounts are required to transfer asset. Use --input_amounts.");
-        return Err(PlatformError::InputsError);
-      }
-      let mut count = txo_refs.len();
-      if blind_asset_records.len() != count || input_amounts.len() != count {
-        println!("Size of input sids, blind asset records, and input amounts should match.");
-        return Err(PlatformError::InputsError);
-      }
-      let mut transfer_from = Vec::new();
-      let mut txo_refs_iter = txo_refs.iter();
-      let mut blind_asset_records_iter = blind_asset_records.iter();
-      let mut input_amounts_iter = input_amounts.iter();
-      while count > 0 {
-        let txo_ref_next = if let Some(txo_ref) = txo_refs_iter.next() {
-          txo_ref
-        } else {
-          println!("More txo ref expected.");
-          return Err(PlatformError::InputsError);
-        };
-        let blind_asset_record_next =
-          if let Some(blind_asset_record) = blind_asset_records_iter.next() {
-            blind_asset_record
-          } else {
-            println!("More blind asset record expected.");
-            return Err(PlatformError::InputsError);
-          };
-        let input_amount_next = if let Some(input_amount) = input_amounts_iter.next() {
-          *input_amount
-        } else {
-          println!("More input amount expected.");
-          return Err(PlatformError::InputsError);
-        };
-        transfer_from.push((txo_ref_next, blind_asset_record_next, input_amount_next));
-        count -= 1;
-      }
-
-      // Compose transfer_to for add_basic_transfer_asset
-      let output_amounts;
-      if let Some(output_amounts_arg) = transfer_asset_matches.value_of("output_amounts") {
-        output_amounts = get_amounts(output_amounts_arg)?;
-      } else {
-        println!("Output amounts are required to transfer asset. Use --output_amounts.");
-        return Err(PlatformError::InputsError);
-      }
-      let addresses;
-      if let Some(addresses_path) = transfer_asset_matches.value_of("address_paths") {
-        addresses = load_addresses_from_files(addresses_path)?;
-      } else {
-        println!("Paths to address keys are required to transfer asset. Use --address_paths");
-        return Err(PlatformError::InputsError);
-      }
-      let mut count = output_amounts.len();
-      if addresses.len() != count {
-        println!("Size of output amounts and addresses should match.");
-        return Err(PlatformError::InputsError);
-      }
-      let mut transfer_to = Vec::new();
-      let mut output_amounts_iter = output_amounts.iter();
-      let mut addresses_iter = addresses.iter();
-      while count > 0 {
-        let output_amount_next = if let Some(output_amount) = output_amounts_iter.next() {
-          *output_amount
-        } else {
-          println!("More output amount expected.");
-          return Err(PlatformError::InputsError);
-        };
-        let address_next = if let Some(address) = addresses_iter.next() {
-          address
-        } else {
-          println!("More address expected.");
-          return Err(PlatformError::InputsError);
-        };
-        transfer_to.push((output_amount_next, address_next));
-        count -= 1;
-      }
-
-      // Transfer asset
-      let mut txn_builder = TransactionBuilder::default();
-      if let Err(e) =
-        txn_builder.add_basic_transfer_asset(&issuer_key_pair, &transfer_from[..], &transfer_to[..])
-      {
-        println!("Failed to add operation to transaction.");
-        return Err(e);
-      };
-      store_txn_builder_to_file(&transaction_file_name, &txn_builder)
-    }
-    _ => {
-      println!("Subcommand missing or not recognized. Try add --help");
-      Err(PlatformError::InputsError)
-    }
-  }
-}
-
 fn process_submit_cmd(submit_matches: &clap::ArgMatches,
                       transaction_file_name: &str)
                       -> Result<(), PlatformError> {
@@ -2861,10 +2605,12 @@ fn process_submit_cmd(submit_matches: &clap::ArgMatches,
     "testnet.findora.org"
   };
   let txn_builder = load_txn_builder_from_file(transaction_file_name)?;
-
-  if submit_matches.is_present("get_sids") {
+  if submit_matches.is_present("get_sids") || submit_matches.is_present("sids_path") {
     let sids = submit_and_get_sids(protocol, host, txn_builder)?;
     println!("Utxo: {:?}", sids);
+    if let Some(path) = submit_matches.value_of("sids_path") {
+      store_sids_to_file(path, sids)?;
+    }
     Ok(())
   } else {
     submit(protocol, host, txn_builder)
@@ -2951,7 +2697,6 @@ fn process_pay_loan_cmd(pay_loan_matches: &clap::ArgMatches) -> Result<(), Platf
 #[cfg(test)]
 mod tests {
   use super::*;
-  use std::str::from_utf8;
 
   const PROTOCOL: &str = "http";
   const HOST: &str = "localhost";
@@ -3009,79 +2754,11 @@ mod tests {
   }
 
   #[test]
-  fn test_store_and_load_sids() {
-    let paths = vec!["sids1", "sids2", "sids3"];
-    let sids = vec!["1,2,4", "1,2, 4", "1,a,4"];
-
-    for i in 0..3 {
-      store_sids_to_file(paths[i], sids[i]).unwrap();
-    }
-
-    let expected_txo_refs = vec![TxoRef::Absolute(TxoSID(1)),
-                                 TxoRef::Absolute(TxoSID(2)),
-                                 TxoRef::Absolute(TxoSID(4))];
-
-    // Verify that load_sids_from_file succeeds with correctly formatted input
-    assert_eq!(load_sids_from_file(paths[0]).unwrap(), expected_txo_refs);
-    assert_eq!(load_sids_from_file(paths[1]).unwrap(), expected_txo_refs);
-
-    paths.into_iter()
-         .map(|path| fs::remove_file(path).unwrap())
-         .collect()
-  }
-
-  #[test]
-  fn test_store_and_load_blind_asset_records() {
-    // Set fields for constructing blind asset records
-    let paths = vec!["file1", "file2", "file3"];
-    let paths_str = "file1,file2, file3";
-    let pub_key_paths = vec!["pub1", "pub2", "pub3"];
-    let amounts = vec![100, 200, 300];
-    let asset_types = vec![[0u8; 16], [0u8; 16], [0u8; 16]];
-    let confidential_amount_bools = vec![false, false, true];
-    let confidential_asset_bools = vec![false, true, false];
-
-    // Store each blind asset record
-    for i in 0..3 {
-      store_pub_key_to_file(pub_key_paths[i]).unwrap();
-      store_blind_asset_record(paths[i],
-                               amounts[i],
-                               from_utf8(&asset_types[i]).unwrap(),
-                               pub_key_paths[i],
-                               confidential_amount_bools[i],
-                               confidential_asset_bools[i]).unwrap();
-    }
-
-    // Load all the blind asset records
-    let blind_asset_records = load_blind_asset_records_from_files(&paths_str).unwrap();
-
-    // Verify the field of the first blind asset record
-    assert_eq!(blind_asset_records[0].amount, Some(amounts[0]));
-    assert_eq!(blind_asset_records[0].asset_type, Some(asset_types[0]));
-    fs::remove_file(paths[0]).unwrap();
-    fs::remove_file(pub_key_paths[0]).unwrap();
-
-    // Verify the field of the second blind asset record
-    // Asset type should be None because it's set as confidential
-    assert_eq!(blind_asset_records[1].amount, Some(amounts[1]));
-    assert_eq!(blind_asset_records[1].asset_type, None);
-    fs::remove_file(paths[1]).unwrap();
-    fs::remove_file(pub_key_paths[1]).unwrap();
-
-    // Verify the field of the third blind asset record
-    // Amount should be None because the it's set as confidential
-    assert_eq!(blind_asset_records[2].amount, None);
-    assert_eq!(blind_asset_records[2].asset_type, Some(asset_types[2]));
-    fs::remove_file(paths[2]).unwrap();
-    fs::remove_file(pub_key_paths[2]).unwrap();
-  }
-
-  #[test]
-  fn test_get_amounts() {
+  fn test_parse_to_u64_vec() {
     let amounts_arg = "1, 2,4";
     let expected_amounts = vec![1, 2, 4];
 
-    assert_eq!(get_amounts(amounts_arg).unwrap(), expected_amounts);
+    assert_eq!(parse_to_u64_vec(amounts_arg).unwrap(), expected_amounts);
   }
 
   #[test]
