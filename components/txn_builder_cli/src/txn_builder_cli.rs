@@ -523,12 +523,8 @@ fn store_pub_key_to_file(path_str: &str) -> Result<(), PlatformError> {
   Ok(())
 }
 
-fn store_sids_to_file(file_path: &str, sids: Vec<TxoSID>) -> Result<(), PlatformError> {
-  let mut sids_str = "".to_owned();
-  for sid in sids {
-    sids_str.push_str(&format!("{},", sid.0));
-  }
-  if let Err(error) = fs::write(file_path, sids_str) {
+fn store_sids_to_file(file_path: &str, sids: &str) -> Result<(), PlatformError> {
+  if let Err(error) = fs::write(file_path, sids) {
     return Err(PlatformError::IoError(format!("Failed to create file {}: {}.", file_path, error)));
   };
   Ok(())
@@ -632,7 +628,7 @@ fn rename_existing_path(path: &Path) -> Result<(), PlatformError> {
 }
 
 fn parse_to_u64(amount_arg: &str) -> Result<u64, PlatformError> {
-  if let Ok(amount) = amount_arg.parse::<u64>() {
+  if let Ok(amount) = amount_arg.trim().parse::<u64>() {
     Ok(amount)
   } else {
     println!("Improperly formatted number.");
@@ -1459,6 +1455,19 @@ fn main() {
         .long("id")
         .takes_value(true)
         .help("Issuer id."))
+      .subcommand(SubCommand::with_name("store_sids")
+        .arg(Arg::with_name("path")
+          .short("p")
+          .long("path")
+          .required(true)
+          .takes_value(true)
+          .help("Path to store the sids."))
+        .arg(Arg::with_name("indices")
+          .short("i")
+          .long("indices")
+          .required(true)
+          .takes_value(true)
+          .help("Sids. Separate by comma (\",\").")))
       .subcommand(SubCommand::with_name("define_asset")
         .arg(Arg::with_name("fiat")
           .short("f")
@@ -1924,6 +1933,21 @@ fn process_issuer_cmd(issuer_matches: &clap::ArgMatches,
       };
       let mut data = load_data()?;
       data.add_issuer(name)
+    }
+    ("store_sids", Some(store_sids_matches)) => {
+      let path = if let Some(path_arg) = store_sids_matches.value_of("path") {
+        path_arg
+      } else {
+        println!("Path is required to store the sids. Use --path.");
+        return Err(PlatformError::InputsError);
+      };
+      let sids = if let Some(indices_arg) = store_sids_matches.value_of("indices") {
+        indices_arg
+      } else {
+        println!("Indices are required to store the sids. Use --indices.");
+        return Err(PlatformError::InputsError);
+      };
+      store_sids_to_file(path, sids)
     }
     ("define_asset", Some(define_asset_matches)) => {
       let fiat_asset = define_asset_matches.is_present("fiat");
@@ -2609,7 +2633,11 @@ fn process_submit_cmd(submit_matches: &clap::ArgMatches,
     let sids = submit_and_get_sids(protocol, host, txn_builder)?;
     println!("Utxo: {:?}", sids);
     if let Some(path) = submit_matches.value_of("sids_path") {
-      store_sids_to_file(path, sids)?;
+      let mut sids_str = "".to_owned();
+      for sid in sids {
+        sids_str.push_str(&format!("{},", sid.0));
+      }
+      store_sids_to_file(path, &sids_str)?;
     }
     Ok(())
   } else {
@@ -2751,6 +2779,27 @@ mod tests {
 
     check_next_path_typical("abc.0", "abc.1");
     check_next_path_nonextant("abc.0", "abc.0");
+  }
+
+  #[test]
+  fn test_store_and_load_sids() {
+    let paths = vec!["sids1", "sids2", "sids3"];
+    let sids = vec!["1,2,4", "1,2, 4", "1,a,4"];
+
+    for i in 0..3 {
+      store_sids_to_file(paths[i], sids[i]).unwrap();
+    }
+
+    let expected_txo_refs = vec![1, 2, 4];
+
+    assert_eq!(load_sids_from_file(paths[0]).unwrap(), expected_txo_refs);
+    assert_eq!(load_sids_from_file(paths[1]).unwrap(), expected_txo_refs);
+    assert_eq!(load_sids_from_file(paths[2]),
+               Err(PlatformError::InputsError));
+
+    paths.into_iter()
+         .map(|path| fs::remove_file(path).unwrap())
+         .collect()
   }
 
   #[test]

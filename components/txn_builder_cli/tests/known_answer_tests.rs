@@ -185,6 +185,14 @@ fn pubkeygen_with_path(path: &str) -> io::Result<Output> {
                        .output()
 }
 
+#[cfg(test)]
+fn store_sids_with_path(path: &str, indices: &str) -> io::Result<Output> {
+  Command::new(COMMAND).args(&["issuer", "store_sids"])
+                       .args(&["--path", path])
+                       .args(&["--indices", indices])
+                       .output()
+}
+
 //
 // Helper functions: define, issue and transfer
 //
@@ -726,6 +734,21 @@ fn test_create_txn_builder_with_name() {
   io::stdout().write_all(&output.stderr).unwrap();
 
   fs::remove_file("pub").unwrap();
+  assert!(output.status.success());
+}
+
+//
+// Store sids
+//
+#[test]
+fn test_store_sids_with_path() {
+  // Store sids
+  let output = store_sids_with_path("sids", "1,2,4").expect("Failed to store sids");
+
+  io::stdout().write_all(&output.stdout).unwrap();
+  io::stdout().write_all(&output.stderr).unwrap();
+
+  fs::remove_file("sids").unwrap();
   assert!(output.status.success());
 }
 
