@@ -389,7 +389,7 @@ mod tests {
 
   #[test]
   fn test_query_asset() {
-    let mut prng = ChaChaRng::from_seed([0u8; 32]);
+    let mut prng = ChaChaRng::from_entropy();
     let mut state = LedgerState::test_ledger();
     let mut tx = Transaction::default();
 

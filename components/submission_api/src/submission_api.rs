@@ -132,7 +132,7 @@ mod tests {
 
   #[test]
   fn test_submit_transaction_standalone() {
-    let mut prng = rand_chacha::ChaChaRng::from_seed([0u8; 32]);
+    let mut prng = rand_chacha::ChaChaRng::from_entropy();
     let ledger_state = LedgerState::test_ledger();
     let submission_server =
       Arc::new(RwLock::new(SubmissionServer::new(prng.clone(),

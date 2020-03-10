@@ -138,7 +138,7 @@ struct Issuer {
 
 impl Issuer {
   fn new(id: usize, name: String) -> Self {
-    let key_pair = XfrKeyPair::generate(&mut ChaChaRng::from_seed([0u8; 32]));
+    let key_pair = XfrKeyPair::generate(&mut ChaChaRng::from_entropy());
     let key_pair_str = hex::encode(key_pair.zei_to_bytes());
     Issuer { id: id as u64,
              name,
@@ -549,7 +549,7 @@ fn store_key_pair_to_file(path_str: &str) -> Result<(), PlatformError> {
   match fs::create_dir_all(parent_path) {
     Ok(()) => {
       let mut prng: ChaChaRng;
-      prng = ChaChaRng::from_seed([0u8; 32]);
+      prng = ChaChaRng::from_entropy();
       let key_pair = XfrKeyPair::generate(&mut prng);
       if let Err(error) = fs::write(&file_path, key_pair.zei_to_bytes()) {
         return Err(PlatformError::IoError(format!("Failed to create file {}: {}.",
@@ -578,7 +578,7 @@ fn store_pub_key_to_file(path_str: &str) -> Result<(), PlatformError> {
   };
   match fs::create_dir_all(parent_path) {
     Ok(()) => {
-      let mut prng = ChaChaRng::from_seed([0u8; 32]);
+      let mut prng = ChaChaRng::from_entropy();
       let key_pair = XfrKeyPair::generate(&mut prng);
       if let Err(error) = fs::write(&file_path, key_pair.get_pk_ref().as_bytes()) {
         return Err(PlatformError::IoError(format!("Failed to create file {}: {}.",
@@ -880,7 +880,7 @@ fn get_blind_asset_record(pub_key: XfrPublicKey,
                           confidential_amount: bool,
                           confidential_asset: bool)
                           -> Result<BlindAssetRecord, PlatformError> {
-  let mut prng = ChaChaRng::from_seed([0u8; 32]);
+  let mut prng = ChaChaRng::from_entropy();
   let params = PublicParams::new();
   let asset_record_type = AssetRecordType::from_booleans(confidential_amount, confidential_asset);
   let asset_record = match AssetRecord::new(amount, token_code.val, pub_key) {
@@ -1157,7 +1157,7 @@ fn fulfill_loan(loan_id: u64,
   // Otherwise, prove and attest the value
   if let Some(proof) = &credential.proof {
     println!("Attesting with the existing proof.");
-    let mut prng: ChaChaRng = ChaChaRng::from_seed([0u8; 32]);
+    let mut prng: ChaChaRng = ChaChaRng::from_entropy();
     let issuer_pk = ac_keygen_issuer::<_>(&mut prng, 1).0;
     if let Err(error) =
       prove(&serde_json::from_str::<ACRevealSig>(proof).or_else(|_| {
@@ -1175,7 +1175,7 @@ fn fulfill_loan(loan_id: u64,
     }
   } else {
     println!("Proving before attesting.");
-    let mut prng: ChaChaRng = ChaChaRng::from_seed([0u8; 32]);
+    let mut prng: ChaChaRng = ChaChaRng::from_entropy();
     let (issuer_pk, issuer_sk) = ac_keygen_issuer::<_>(&mut prng, 1);
     let (user_pk, user_sk) = ac_keygen_user::<_>(&mut prng, &issuer_pk.clone());
 
@@ -3054,7 +3054,7 @@ mod tests {
     // Create txn builder and key pairs
     let txn_builder_path = "tb_issue_and_transfer";
     store_txn_builder_to_file(&txn_builder_path, &TransactionBuilder::default()).unwrap();
-    let mut prng: ChaChaRng = ChaChaRng::from_seed([0u8; 32]);
+    let mut prng: ChaChaRng = ChaChaRng::from_entropy();
     let issuer_key_pair = XfrKeyPair::generate(&mut prng);
     let recipient_key_pair = XfrKeyPair::generate(&mut prng);
 
@@ -3078,7 +3078,7 @@ mod tests {
     // Create txn builder and key pair
     let txn_builder_path = "tb_merge";
     store_txn_builder_to_file(&txn_builder_path, &TransactionBuilder::default()).unwrap();
-    let mut prng: ChaChaRng = ChaChaRng::from_seed([0u8; 32]);
+    let mut prng: ChaChaRng = ChaChaRng::from_entropy();
     let key_pair = XfrKeyPair::generate(&mut prng);
 
     // Build blind asset records
@@ -3115,7 +3115,7 @@ mod tests {
     store_txn_builder_to_file(&txn_builder_path, &TransactionBuilder::default()).unwrap();
     let mut txn_builder = load_txn_builder_from_file(&txn_builder_path).unwrap();
 
-    let mut prng: ChaChaRng = ChaChaRng::from_seed([0u8; 32]);
+    let mut prng: ChaChaRng = ChaChaRng::from_entropy();
     let key_pair = XfrKeyPair::generate(&mut prng);
     let token_code = AssetTypeCode::gen_random();
 
@@ -3150,7 +3150,7 @@ mod tests {
     // Create txn builder and key pairs
     let txn_builder_path = "tb_merge_and_submit";
     store_txn_builder_to_file(&txn_builder_path, &TransactionBuilder::default()).unwrap();
-    let mut prng: ChaChaRng = ChaChaRng::from_seed([0u8; 32]);
+    let mut prng: ChaChaRng = ChaChaRng::from_entropy();
     let issuer_key_pair = XfrKeyPair::generate(&mut prng);
     let recipient_key_pair = XfrKeyPair::generate(&mut prng);
 
@@ -3254,7 +3254,7 @@ mod tests {
 
   #[test]
   fn test_prove() {
-    let mut prng: ChaChaRng = ChaChaRng::from_seed([0u8; 32]);
+    let mut prng: ChaChaRng = ChaChaRng::from_entropy();
     let (issuer_pk, issuer_sk) = ac_keygen_issuer::<_>(&mut prng, 1);
     let (user_pk, user_sk) = ac_keygen_user::<_>(&mut prng, &issuer_pk.clone());
 

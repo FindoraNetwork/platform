@@ -1,16 +1,18 @@
 #![allow(dead_code)]
 use serde::{Deserialize, Serialize};
-use sparse_merkle_tree::{MerkleProof, SmtMap256, Hash256, hash_256, check_merkle_proof as smt_check_proof};
-use std::io::Error;
-use std::io::prelude::Read;
+use sparse_merkle_tree::{
+  check_merkle_proof as smt_check_proof, hash_256, Hash256, MerkleProof, SmtMap256,
+};
 use std::fs::File;
+use std::io::prelude::Read;
+use std::io::Error;
 
 #[derive(Clone, Default, Debug, Serialize, Deserialize)]
 pub struct AIR<Value: AsRef<[u8]>>(SmtMap256<Value>);
 
-impl <Value: AsRef<[u8]>> AIR<Value> {
+impl<Value: AsRef<[u8]>> AIR<Value> {
   pub fn new() -> Self {
-    Self { 0: SmtMap256::<Value>::new()}
+    Self { 0: SmtMap256::<Value>::new() }
   }
 
   pub fn set(&mut self, key: impl AsRef<[u8]>, value: Option<Value>) -> Option<Value> {
@@ -32,7 +34,11 @@ impl <Value: AsRef<[u8]>> AIR<Value> {
     self.0.merkle_root()
   }
 
-  pub fn check_merkle_proof(&self, key: impl AsRef<[u8]>, value: Option<&Value>, proof: &MerkleProof) -> bool {
+  pub fn check_merkle_proof(&self,
+                            key: impl AsRef<[u8]>,
+                            value: Option<&Value>,
+                            proof: &MerkleProof)
+                            -> bool {
     let hashed_key = hash_256(key.as_ref());
     self.0.check_merkle_proof(&hashed_key, value, proof)
   }

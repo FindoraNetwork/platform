@@ -30,7 +30,7 @@ pub struct TxnEffect {
   // Debt swap information that must be externally validated
   pub debt_effects: HashMap<AssetTypeCode, DebtSwapEffect>,
   // Updates to the AIR
-  pub air_updates: HashMap<BitDigest, String>
+  pub air_updates: HashMap<BitDigest, String>,
 }
 
 // Internally validates the transaction as well.
@@ -48,7 +48,7 @@ impl TxnEffect {
     let mut issuance_keys: HashMap<AssetTypeCode, IssuerPublicKey> = HashMap::new();
     let mut debt_effects: HashMap<AssetTypeCode, DebtSwapEffect> = HashMap::new();
     let mut air_updates: HashMap<BitDigest, String> = HashMap::new();
-    
+
     // Sequentially go through the operations, validating intrinsic or
     // local-to-the-transaction properties, then recording effects and
     // external properties.
@@ -258,7 +258,7 @@ impl TxnEffect {
         Operation::AIRAssign(air_assign) => {
           // unimplemented!("AIRAssign {:?}", air_assign);
           air_updates.insert(air_assign.body.addr, air_assign.body.data.clone());
-         }
+        }
       } // end -- match op {
     } // end -- for op in txn.operations.iter() {
 
@@ -317,7 +317,7 @@ impl HasInvariants<PlatformError> for TxnEffect {
     // TODO(joe): other checks?
     {
       // Slightly cheating
-      let mut prng = rand_chacha::ChaChaRng::from_seed([0u8; 32]);
+      let mut prng = rand_chacha::ChaChaRng::from_entropy();
       if TxnEffect::compute_effect(&mut prng, self.txn.clone())? != *self {
         return Err(PlatformError::InvariantError(None));
       }

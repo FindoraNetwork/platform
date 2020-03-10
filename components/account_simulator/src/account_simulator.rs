@@ -1573,7 +1573,7 @@ mod test {
         submit_port: 8669,
         query_port: 8668,
         client: reqwest::Client::new(),
-        prng: rand_chacha::ChaChaRng::from_seed([0u8; 32]),
+        prng: rand_chacha::ChaChaRng::from_entropy(),
         accounts: HashMap::new(),
         utxos: HashMap::new(),
         units: HashMap::new(),
