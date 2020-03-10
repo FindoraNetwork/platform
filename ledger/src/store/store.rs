@@ -158,6 +158,7 @@ pub struct StateCommitmentData {
   pub txns_in_block_hash: BitDigest,            // The hash of the transactions in the block
   pub previous_state_commitment: BitDigest,     // The prior global block hash
   pub transaction_merkle_commitment: HashValue, // The root hash of the transaction Merkle tree
+  pub air_commitment: air::Digest,              // The root hash of the AIR sparse Merkle tree
   pub txo_count: u64, // Number of transaction outputs. Used to provide proof that a utxo does not exist
 }
 
@@ -833,6 +834,7 @@ impl LedgerState {
       Some(StateCommitmentData { bitmap: self.utxo_map.compute_checksum(),
                                  block_merkle: self.block_merkle.get_root_hash(),
                                  transaction_merkle_commitment: self.txn_merkle.get_root_hash(),
+                                 air_commitment: *self.air.merkle_root(),
                                  txns_in_block_hash: self.status.txns_in_block_hash,
                                  previous_state_commitment: prev_commitment,
                                  txo_count: self.status.next_txo.0 });
@@ -1630,6 +1632,7 @@ mod tests {
                                                                                 DIGESTBYTES] },
                                      transaction_merkle_commitment: ledger_state.txn_merkle
                                                                                 .get_root_hash(),
+                                     air_commitment: *ledger_state.air.merkle_root(),
                                      txo_count: 0 };
 
     let serialized = bincode::serialize(&data).unwrap();
