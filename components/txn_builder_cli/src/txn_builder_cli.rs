@@ -124,6 +124,7 @@ struct Credential {
   value: u64,
   /// Serialized credential proof, if exists
   proof: Option<String>,
+  /// Public key of the credential issuer, if exists
   credential_issuer_pub_key: Option<String>,
 }
 
