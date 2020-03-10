@@ -34,9 +34,6 @@ use zei::xfr::asset_record::{build_blind_asset_record, open_asset_record, AssetR
 use zei::xfr::sig::{XfrKeyPair, XfrPublicKey};
 use zei::xfr::structs::{AssetIssuerPubKeys, AssetRecord, BlindAssetRecord, OpenAssetRecord};
 
-const SUBMIT_PATH: &str = "./submit_server";
-const QUERY_PATH: &str = "./query_server";
-
 /////////// TRANSACTION BUILDING ////////////////
 
 //Random Helpers
@@ -167,6 +164,7 @@ pub struct WasmTransactionBuilder {
   transaction_builder: Serialized<TransactionBuilder>,
 }
 
+#[wasm_bindgen]
 impl WasmTransactionBuilder {
   /// Create a new transaction builder.
   pub fn new() -> Self {
@@ -507,15 +505,26 @@ pub fn get_tracked_amount(blind_asset_record: String,
 /// query the ledger by transaction ID.
 ///
 /// TODO Design and implement a notification mechanism.
-pub fn submit_transaction(transaction_str: String) -> Result<Promise, JsValue> {
+pub fn submit_transaction(path: String, transaction_str: String) -> Result<Promise, JsValue> {
   let mut opts = RequestInit::new();
   opts.method("POST");
   opts.mode(RequestMode::Cors);
   opts.body(Some(&JsValue::from_str(&transaction_str)));
 
-  let req_string = format!("{}/submit_transaction", SUBMIT_PATH);
+  let req_string = format!("{}/submit_transaction", path);
 
   create_query_promise(&opts, &req_string, true)
+}
+
+#[wasm_bindgen]
+pub fn get_txn_status(path: String, handle: String) -> Result<Promise, JsValue> {
+  let mut opts = RequestInit::new();
+  opts.method("GET");
+  opts.mode(RequestMode::Cors);
+
+  let req_string = format!("{}/txn_status/{}", path, handle);
+
+  create_query_promise(&opts, &req_string, false)
 }
 
 #[wasm_bindgen]
@@ -534,12 +543,12 @@ pub fn test_deserialize(str: String) -> bool {
 /// TODO Provide an example (test case) that demonstrates how to
 /// handle the error in the case of an invalid transaction index.
 /// TODO Rename this function get_utxo
-pub fn get_txo(index: u64) -> Result<Promise, JsValue> {
+pub fn get_txo(path: String, index: u64) -> Result<Promise, JsValue> {
   let mut opts = RequestInit::new();
   opts.method("GET");
   opts.mode(RequestMode::Cors);
 
-  let req_string = format!("{}/utxo_sid/{}", QUERY_PATH, format!("{}", index));
+  let req_string = format!("{}/utxo_sid/{}", path, format!("{}", index));
 
   create_query_promise(&opts, &req_string, false)
 }
@@ -552,23 +561,12 @@ pub fn get_txo(index: u64) -> Result<Promise, JsValue> {
 ///
 /// TODO Provide an example (test case) that demonstrates how to
 /// handle the error in the case of an undefined asset.
-pub fn get_asset_token(name: String) -> Result<Promise, JsValue> {
+pub fn get_asset_token(path: String, name: String) -> Result<Promise, JsValue> {
   let mut opts = RequestInit::new();
   opts.method("GET");
   opts.mode(RequestMode::Cors);
 
-  let req_string = format!("{}/asset_token/{}", QUERY_PATH, name);
-
-  create_query_promise(&opts, &req_string, false)
-}
-
-#[wasm_bindgen]
-pub fn get_txn_status(handle: String) -> Result<Promise, JsValue> {
-  let mut opts = RequestInit::new();
-  opts.method("GET");
-  opts.mode(RequestMode::Cors);
-
-  let req_string = format!("{}/txn_status/{}", SUBMIT_PATH, handle);
+  let req_string = format!("{}/asset_token/{}", path, name);
 
   create_query_promise(&opts, &req_string, false)
 }
@@ -610,7 +608,7 @@ impl Issuer {
   //  Then pass all the attributes to sign_min_credit_score and sign the lower bound of credit score only
   pub fn new(num_attr: usize) -> Issuer {
     let mut prng: ChaChaRng;
-    prng = ChaChaRng::from_seed([0u8; 32]);
+    prng = ChaChaRng::from_entropy();
     let (issuer_pk, issuer_sk) = ac_keygen_issuer::<_>(&mut prng, num_attr);
 
     Issuer { public_key: issuer_pk,
@@ -626,7 +624,7 @@ impl Issuer {
   // E.g. sign the lower bound of the credit score
   pub fn sign_attribute(&self, user_jsvalue: &JsValue, attribute: u64) -> JsValue {
     let mut prng: ChaChaRng;
-    prng = ChaChaRng::from_seed([0u8; 32]);
+    prng = ChaChaRng::from_entropy();
     let user: User = user_jsvalue.into_serde().unwrap();
 
     let attrs = [attribute.to_le_bytes()];
@@ -671,7 +669,7 @@ impl User {
                           -> JsValue {
     let issuer: Issuer = issuer_jsvalue.into_serde().unwrap();
     let sig: ACSignature = sig.into_serde().unwrap();
-    let mut prng = ChaChaRng::from_seed([0u8; 32]);
+    let mut prng = ChaChaRng::from_entropy();
 
     let attrs = [attribute.to_le_bytes()];
     let bitmap = [reveal_attribute];

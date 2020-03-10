@@ -4,6 +4,10 @@ version = "0.1.0"
 authors = ["ngolub <ngolub@stanford.edu>"]
 edition = "2018"
 
+# wasm-opt has a segfaulting issue. Disabling for now
+[package.metadata.wasm-pack.profile.release]
+wasm-opt = false
+
 [dependencies]
 base64 = "0.10"
 bincode = "1"
