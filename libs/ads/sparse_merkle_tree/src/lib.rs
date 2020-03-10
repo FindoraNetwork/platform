@@ -6,9 +6,9 @@ use cryptohash::sha256;
 use serde::{Deserialize, Serialize};
 use sha256::DIGESTBYTES;
 use std::collections::HashMap;
-use std::io::Error;
-use std::io::prelude::Read;
 use std::fs::File;
+use std::io::prelude::Read;
+use std::io::Error;
 
 pub fn hash_256(value: impl AsRef<[u8]>) -> Hash256 {
   sha256::hash(value.as_ref()).0

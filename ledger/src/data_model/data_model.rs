@@ -588,7 +588,7 @@ mod tests {
 
   #[test]
   fn test_verify() {
-    let mut prng = rand_chacha::ChaChaRng::from_seed([0u8; 32]);
+    let mut prng = rand_chacha::ChaChaRng::from_entropy();
 
     let keypair = XfrKeyPair::generate(&mut prng);
     let message: &[u8] = b"test";
@@ -612,7 +612,7 @@ mod tests {
     // Create values to be used to instantiate operations
     let mut transaction: Transaction = Default::default();
 
-    let mut prng = rand_chacha::ChaChaRng::from_seed([0u8; 32]);
+    let mut prng = rand_chacha::ChaChaRng::from_entropy();
 
     let keypair = XfrKeyPair::generate(&mut prng);
     let message: &[u8] = b"test";

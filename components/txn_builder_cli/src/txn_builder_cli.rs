@@ -76,7 +76,8 @@ const INIT_DATA: &str = r#"
       "borrower": 0,
       "attribute": "MinCreditScore",
       "value": 650,
-      "proof": null
+      "proof": null,
+      "credential_issuer_pub_key": null
     }
   ],
   "loans": [],
@@ -107,6 +108,7 @@ struct Credential {
   attribute: CredentialIndex,
   value: u64,
   proof: Option<String>,
+  credential_issuer_pub_key: Option<String>,
 }
 
 impl Credential {
@@ -115,7 +117,8 @@ impl Credential {
                  borrower,
                  attribute,
                  value,
-                 proof: None }
+                 proof: None,
+                 credential_issuer_pub_key: None }
   }
 }
 
@@ -131,7 +134,7 @@ struct Issuer {
 
 impl Issuer {
   fn new(id: usize, name: String) -> Self {
-    let key_pair = XfrKeyPair::generate(&mut ChaChaRng::from_seed([0u8; 32]));
+    let key_pair = XfrKeyPair::generate(&mut ChaChaRng::from_entropy());
     let key_pair_str = hex::encode(key_pair.zei_to_bytes());
     Issuer { id: id as u64,
              name,
@@ -150,7 +153,7 @@ struct Lender {
 
 impl Lender {
   fn new(id: usize, name: String, min_credit_score: u64) -> Self {
-    let key_pair = XfrKeyPair::generate(&mut ChaChaRng::from_seed([1u8; 32]));
+    let key_pair = XfrKeyPair::generate(&mut ChaChaRng::from_entropy());
     let key_pair_str = hex::encode(key_pair.zei_to_bytes());
     Lender { id: id as u64,
              name,
@@ -174,7 +177,7 @@ struct Borrower {
 impl Borrower {
   fn new(id: usize, name: String) -> Self {
     // Get the encoded key pair
-    let key_pair = XfrKeyPair::generate(&mut ChaChaRng::from_seed([2u8; 32]));
+    let key_pair = XfrKeyPair::generate(&mut ChaChaRng::from_entropy());
     let key_pair_str = hex::encode(key_pair.zei_to_bytes());
 
     // Construct the Borrower
@@ -477,7 +480,7 @@ fn store_key_pair_to_file(path_str: &str) -> Result<(), PlatformError> {
   match fs::create_dir_all(parent_path) {
     Ok(()) => {
       let mut prng: ChaChaRng;
-      prng = ChaChaRng::from_seed([0u8; 32]);
+      prng = ChaChaRng::from_entropy();
       let key_pair = XfrKeyPair::generate(&mut prng);
       if let Err(error) = fs::write(&file_path, key_pair.zei_to_bytes()) {
         return Err(PlatformError::IoError(format!("Failed to create file {}: {}.",
@@ -506,7 +509,7 @@ fn store_pub_key_to_file(path_str: &str) -> Result<(), PlatformError> {
   };
   match fs::create_dir_all(parent_path) {
     Ok(()) => {
-      let mut prng = ChaChaRng::from_seed([0u8; 32]);
+      let mut prng = ChaChaRng::from_entropy();
       let key_pair = XfrKeyPair::generate(&mut prng);
       if let Err(error) = fs::write(&file_path, key_pair.get_pk_ref().as_bytes()) {
         return Err(PlatformError::IoError(format!("Failed to create file {}: {}.",
@@ -771,7 +774,7 @@ fn get_blind_asset_record(pub_key: XfrPublicKey,
                           confidential_amount: bool,
                           confidential_asset: bool)
                           -> Result<BlindAssetRecord, PlatformError> {
-  let mut prng = ChaChaRng::from_seed([0u8; 32]);
+  let mut prng = ChaChaRng::from_entropy();
   let params = PublicParams::new();
   let asset_record_type = AssetRecordType::from_booleans(confidential_amount, confidential_asset);
   let asset_record = match AssetRecord::new(amount, token_code.val, pub_key) {
@@ -1056,8 +1059,14 @@ fn fulfill_loan(loan_id: u64,
   // Otherwise, prove and attest the value
   if let Some(proof) = &credential.proof {
     println!("Attesting with the existing proof.");
-    let mut prng: ChaChaRng = ChaChaRng::from_seed([0u8; 32]);
-    let issuer_pk = ac_keygen_issuer::<_>(&mut prng, 1).0;
+    let issuer_pk = if let Some(pk) = credential.credential_issuer_pub_key.clone() {
+      serde_json::from_str::<ACIssuerPublicKey>(&pk).or_else(|_| {
+                                                      Err(PlatformError::DeserializationError)
+                                                    })?
+    } else {
+      println!("Credential issuer's public key is required. Use create credential.");
+      return Err(PlatformError::InputsError);
+    };
     if let Err(error) =
       prove(&serde_json::from_str::<ACRevealSig>(proof).or_else(|_| {
                                                          Err(PlatformError::DeserializationError)
@@ -1074,7 +1083,7 @@ fn fulfill_loan(loan_id: u64,
     }
   } else {
     println!("Proving before attesting.");
-    let mut prng: ChaChaRng = ChaChaRng::from_seed([0u8; 32]);
+    let mut prng: ChaChaRng = ChaChaRng::from_entropy();
     let (issuer_pk, issuer_sk) = ac_keygen_issuer::<_>(&mut prng, 1);
     let (user_pk, user_sk) = ac_keygen_user::<_>(&mut prng, &issuer_pk.clone());
 
@@ -1099,6 +1108,8 @@ fn fulfill_loan(loan_id: u64,
     // Update credentials data
     data.credentials[credential_id as usize].proof =
       Some(serde_json::to_string(&reveal_sig).or_else(|_| Err(PlatformError::SerializationError))?);
+    data.credentials[credential_id as usize].credential_issuer_pub_key =
+      Some(serde_json::to_string(&issuer_pk).or_else(|_| Err(PlatformError::SerializationError))?);
     store_data_to_file(data)?;
     data = load_data()?;
   }
@@ -2814,7 +2825,7 @@ mod tests {
   fn test_define_fiat_asset() {
     // Create txn builder and key pair
     let txn_builder_path = "tb_define";
-    let mut prng: ChaChaRng = ChaChaRng::from_seed([0u8; 32]);
+    let mut prng: ChaChaRng = ChaChaRng::from_entropy();
     let issuer_key_pair = XfrKeyPair::generate(&mut prng);
 
     // Define fiat asset
@@ -2836,7 +2847,7 @@ mod tests {
   fn test_issue_and_transfer() {
     // Create txn builder and key pairs
     let txn_builder_path = "tb_issue_and_transfer";
-    let mut prng: ChaChaRng = ChaChaRng::from_seed([0u8; 32]);
+    let mut prng: ChaChaRng = ChaChaRng::from_entropy();
     let issuer_key_pair = XfrKeyPair::generate(&mut prng);
     let recipient_key_pair = XfrKeyPair::generate(&mut prng);
 
@@ -2858,7 +2869,7 @@ mod tests {
   #[test]
   fn test_merge_records() {
     // Create key pair
-    let mut prng: ChaChaRng = ChaChaRng::from_seed([0u8; 32]);
+    let mut prng: ChaChaRng = ChaChaRng::from_entropy();
     let key_pair = XfrKeyPair::generate(&mut prng);
 
     // Build blind asset records
@@ -2877,7 +2888,7 @@ mod tests {
 
   #[test]
   fn test_prove() {
-    let mut prng: ChaChaRng = ChaChaRng::from_seed([0u8; 32]);
+    let mut prng: ChaChaRng = ChaChaRng::from_entropy();
     let (issuer_pk, issuer_sk) = ac_keygen_issuer::<_>(&mut prng, 1);
     let (user_pk, user_sk) = ac_keygen_user::<_>(&mut prng, &issuer_pk.clone());
 

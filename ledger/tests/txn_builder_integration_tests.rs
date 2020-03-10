@@ -32,7 +32,7 @@ pub fn apply_transaction(ledger: &mut LedgerState, tx: Transaction) -> (TxnSID, 
 
 #[test]
 fn test_create_asset() -> Result<(), PlatformError> {
-  let mut prng = ChaChaRng::from_seed([0u8; 32]);
+  let mut prng = ChaChaRng::from_entropy();
   let mut ledger = LedgerState::test_ledger();
   let code = AssetTypeCode { val: [1; 16] };
   let keys = XfrKeyPair::generate(&mut prng);
@@ -76,7 +76,7 @@ fn test_loan_repayment(loan_amount: u64,
                        interest_num: u64,
                        interest_denom: u64)
                        -> Result<(), PlatformError> {
-  let mut prng = ChaChaRng::from_seed([0u8; 32]);
+  let mut prng = ChaChaRng::from_entropy();
   let mut ledger = LedgerState::test_ledger();
   let params = PublicParams::new();
 
