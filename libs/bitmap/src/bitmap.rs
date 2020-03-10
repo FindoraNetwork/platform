@@ -1724,7 +1724,14 @@ mod tests {
     bitmap.write().unwrap();
     assert!(bitmap.validate(true));
 
+    // Expand the bitmap to allow for more testing.
+
+    for _ in 0..4 * 1024 * 1024 {
+      bitmap.append().unwrap();
+    }
+
     let mut rng = rand::thread_rng();
+    let mut countdown = rng.gen_range(0, 50);
 
     // Manipulate some random bits and check the checksumming.
     for i in 0..4000 {
@@ -1742,8 +1749,11 @@ mod tests {
         bitmap.set(bit).unwrap();
       }
 
-      if i % 111 == 0 {
+      countdown -= 1;
+
+      if countdown <= 0 {
         validate_checksum(&mut bitmap, "random ".to_owned() + &i.to_string());
+        countdown = rng.gen_range(0, 50);
       }
     }
 
