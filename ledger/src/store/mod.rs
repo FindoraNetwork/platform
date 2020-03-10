@@ -1,4 +1,4 @@
-#![deny(warnings)]
+//#![deny(warnings)]
 mod effects;
 pub mod errors;
 #[allow(clippy::module_inception)]

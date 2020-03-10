@@ -1,9 +1,8 @@
-#![deny(warnings)]
+//#![deny(warnings)]
 use super::errors;
 use chrono::prelude::*;
-use cryptohash::sha256;
-use cryptohash::sha256::Digest;
-use merkle_tree::append_only_merkle::HashValue;
+use cryptohash::sha256::Digest as BitDigest;
+use cryptohash::{sha256, HashValue, Proof};
 use rand_chacha::ChaChaRng;
 use rand_core::{CryptoRng, RngCore, SeedableRng};
 use std::boxed::Box;
@@ -300,12 +299,12 @@ impl DefineAssetBody {
 }
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct AIRAssignBody {
-  pub addr: Digest,
+  pub addr: BitDigest,
   pub data: String,
 }
 
 impl AIRAssignBody {
-  pub fn new(addr: Digest, data: String) -> Result<AIRAssignBody, errors::PlatformError> {
+  pub fn new(addr: BitDigest, data: String) -> Result<AIRAssignBody, errors::PlatformError> {
     Ok(AIRAssignBody { addr, data })
   }
 }
@@ -453,6 +452,47 @@ pub struct FinalizedTransaction {
   pub merkle_id: u64,
 }
 
+#[derive(Serialize, Deserialize)]
+pub struct AuthenticatedTransaction {
+  pub finalized_txn: FinalizedTransaction,
+  pub txn_inclusion_proof: Proof,
+  pub state_commitment_data: StateCommitmentData,
+  pub state_commitment: BitDigest,
+}
+
+impl AuthenticatedTransaction {
+  // An authenticated txn result is valid if
+  // 1) The state commitment used in the proof matches what we pass in and the state commitment
+  //    data hashes to the state commitment
+  // 2) The transaction merkle proof is valid
+  // 3) The transaction merkle root matches the value in root_hash_data
+  pub fn is_valid(&self, state_commitment: BitDigest) -> bool {
+    //1)
+    if self.state_commitment != state_commitment
+       || self.state_commitment != self.state_commitment_data.compute_commitment()
+    {
+      return false;
+    }
+
+    //2)
+    let hash = self.finalized_txn.hash();
+
+    if !self.txn_inclusion_proof.is_valid_proof(hash) {
+      return false;
+    }
+
+    //3)
+    // TODO (jonathan/noah) we should be using digest everywhere
+    if self.state_commitment_data.transaction_merkle_commitment
+       != self.txn_inclusion_proof.root_hash
+    {
+      return false;
+    }
+
+    true
+  }
+}
+
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct FinalizedBlock {
   pub txns: Vec<FinalizedTransaction>,
@@ -489,6 +529,28 @@ impl Default for Transaction {
     Transaction { operations: Vec::new(),
                   credentials: Vec::new(),
                   memos: Vec::new() }
+  }
+}
+
+#[repr(C)]
+#[derive(Clone, Serialize, Deserialize, PartialEq)]
+// TODO (Keyao):
+// Are the four fields below all necessary?
+// Can we remove one of txns_in_block_hash and global_block_hash?
+// Both of them contain the information of the previous state
+pub struct StateCommitmentData {
+  pub bitmap: BitDigest,                        // The checksum of the utxo_map
+  pub block_merkle: HashValue,                  // The root hash of the block Merkle tree
+  pub txns_in_block_hash: BitDigest,            // The hash of the transactions in the block
+  pub previous_state_commitment: BitDigest,     // The prior global block hash
+  pub transaction_merkle_commitment: HashValue, // The root hash of the transaction Merkle tree
+  pub txo_count: u64, // Number of transaction outputs. Used to provide proof that a utxo does not exist
+}
+
+impl StateCommitmentData {
+  pub fn compute_commitment(&self) -> BitDigest {
+    let serialized = serde_json::to_string(&self).unwrap();
+    sha256::hash(&serialized.as_bytes())
   }
 }
 

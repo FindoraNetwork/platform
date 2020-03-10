@@ -3,6 +3,7 @@ const wasm = require('./pkg/wasm.js');
 const axios = require('axios');
 const HOST = "localhost";
 const SUBMISSION_PORT = "8669";
+const QUERY_PORT= "8668";
 
 // Create some keypairs
 let kp_alice = wasm.new_keypair();
@@ -14,21 +15,22 @@ let kp_auditor = wasm.new_keypair();
 let tracking_kp_auditor = wasm.generate_elgamal_keys();
 
 // Alice will define an asset
-let token_code = "abcd";
+let token_code = wasm.random_asset_type();
 let memo = "test memo";
 let definition_transaction = wasm.WasmTransactionBuilder.new().add_operation_create_asset(kp_alice, memo, token_code).transaction();
 
 let route = 'http://' + HOST + ':' + SUBMISSION_PORT;
+let ledger = 'http://' + HOST + ':' + QUERY_PORT;
 
-axios.post(route + '/submit_transaction', JSON.parse(definition_transaction))
-    .then(function(response) {
-        console.log("Successfully defined asset.");
-    })
-    .catch(function(e) {
-        console.log("Error defining asset. Perhaps the asset has already been created?");
-        console.log(e);
-    });
-
+//axios.post(route + '/submit_transaction', JSON.parse(definition_transaction))
+//    .then(function(response) {
+//        console.log("Successfully defined asset.");
+//    })
+//    .catch(function(e) {
+//        console.log("Error defining asset. Perhaps the asset has already been created?");
+//        console.log(e);
+//    });
+//
 // At this point, transaction would be submitted to the ledger
 // Once the definition transaction succeeds, Alice can issue and transfer 1000 units to herself
 // Sometimes, it is necessary to have a handle on the issuance output for complicated operations like issuances + transfers. 
@@ -55,11 +57,34 @@ let issue_and_transfer_txn = wasm.WasmTransactionBuilder.new()
     .add_operation(transfer_op)
     .transaction();
 
-axios.post(route + '/submit_transaction', JSON.parse(issue_and_transfer_txn))
+//axios.post(route + '/submit_transaction', JSON.parse(issue_and_transfer_txn))
+//    .then(function(response) {
+//        console.log("Issued and transferred asset.");
+//
+//    })
+//    .catch(function(_) {
+//        console.log("Error issuing and transferring asset");
+//    });
+
+axios.get(ledger + '/txn_sid/0')
     .then(function(response) {
-        console.log("Issued and transferred asset.");
+axios.get(ledger + '/global_state')
+    .then(function(response_2) {
+      console.log(response_2.data);
+      console.log(response.data);
+      console.log(wasm.verify_authenticated_txn(JSON.stringify(response_2.data), JSON.stringify(response.data)));
+        
+    })
+    .catch(function(e) {
+        console.log("Error state commitment");
+        console.log(e);
+    });
+
+        console.log("Txn sid recieved.");
+        console.log(response.data);
     })
     .catch(function(_) {
-        console.log("Error issuing and transferring asset");
+        console.log("Error getting sid");
     });
+
 
