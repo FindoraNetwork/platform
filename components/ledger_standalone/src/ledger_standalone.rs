@@ -18,7 +18,7 @@ fn main() {
     None => LedgerState::test_ledger(),
     Some(base_dir) => LedgerState::load_or_init(base_dir).unwrap(),
   };
-  let prng = ChaChaRng::from_seed([0u8; 32]);
+  let prng = ChaChaRng::from_entropy();
   let state_lock = Arc::new(RwLock::new(ledger_state));
   let cloned_lock = Arc::clone(&state_lock);
   let submission_server = SubmissionServer::new(prng, state_lock, 1).unwrap();

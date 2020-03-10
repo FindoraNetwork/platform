@@ -5,7 +5,7 @@ use rand_chacha::ChaChaRng;
 use rand_core::SeedableRng;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-  let mut prng = ChaChaRng::from_seed([0u8; 32]);
+  let mut prng = ChaChaRng::from_entropy();
   let mut tx = Transaction::default();
 
   let token_code1 = AssetTypeCode { val: [1; 16] };
