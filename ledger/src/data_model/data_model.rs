@@ -9,6 +9,7 @@ use rand_core::{CryptoRng, RngCore, SeedableRng};
 use std::boxed::Box;
 use std::collections::HashMap;
 use std::convert::TryFrom;
+use std::hash::{Hash, Hasher};
 use std::marker::PhantomData;
 use zei::xfr::lib::gen_xfr_body;
 use zei::xfr::sig::{XfrKeyPair, XfrPublicKey, XfrSecretKey, XfrSignature};
@@ -101,6 +102,13 @@ pub struct Commitment([u8; 32]);
 #[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 pub struct XfrAddress {
   pub key: XfrPublicKey,
+}
+
+#[allow(clippy::derive_hash_xor_eq)]
+impl Hash for XfrAddress {
+  fn hash<H: Hasher>(&self, state: &mut H) {
+    self.key.as_bytes().hash(state);
+  }
 }
 
 // TODO(joe): Better name! There's more than one thing that gets issued.
