@@ -101,7 +101,12 @@ const LEDGER_STANDALONE: &str = "../../target/debug/ledger_standalone";
 //
 // TODO (Keyao): Support more attributes
 #[derive(Clone, Deserialize, Debug, Eq, PartialEq, Serialize)]
-/// Credential attributes and their corresponding indeces in the borrower's data.
+/// Credential attributes and their corresponding indices in the borrower's data.
+/// # Examples
+/// * `"credentials": [1, 3, 4]` in a borrower's data indicates:
+///   * Credential ID of the borrower's MinCreditScore record is 1
+///   * Credential ID of the borrower's MinIncome record is 3
+///   * Credential ID of the borrower's Citizenship record is 4
 enum CredentialIndex {
   /// Lower bound of the credit score
   MinCreditScore = 0,
@@ -118,7 +123,7 @@ struct Credential {
   id: u64,
   /// Borrower id
   borrower: u64,
-  /// Credential attribute
+  /// Credential attribute, possible values defined in the enum `CredentialIndex`
   attribute: CredentialIndex,
   /// Credential value
   value: u64,
@@ -199,7 +204,12 @@ struct Borrower {
   name: String,
   /// Serialized key pair
   key_pair: String,
-  /// List of credential IDs, ordered by CredentialIndex
+  /// List of credential IDs, ordered by `CredentialIndex`
+  /// # Examples
+  /// * `"credentials": [1, 3, 4]` indicates:
+  ///   * Credential ID of the MinCreditScore record is 1
+  ///   * Credential ID of the MinIncome record is 3
+  ///   * Credential ID of the Citizenship record is 4
   credentials: [Option<u64>; 3],
   /// List of loan IDs
   loans: Vec<u64>,
@@ -247,11 +257,11 @@ enum LoanStatus {
 struct Loan {
   /// Loan ID
   id: u64,
-  /// Lener ID           
+  /// Lender ID           
   lender: u64,
   /// Borrower ID          
   borrower: u64,
-  /// Loan status      
+  /// Loan status, possible values defined in the enum `LoanStatus`
   status: LoanStatus,
   /// Total amount
   amount: u64,
@@ -513,7 +523,7 @@ fn load_sids_from_file(file_path: &str) -> Result<Vec<u64>, PlatformError> {
 //
 // Store functions
 //
-/// Stores data to file.
+/// Stores the program data to `DATA_FILE`, when the program starts or the data is updated.
 /// # Arguments
 /// * `data`: data to store.
 fn store_data_to_file(data: Data) -> Result<(), PlatformError> {
@@ -636,11 +646,15 @@ fn create_directory_if_missing(path_str: &str) -> Result<(), PlatformError> {
   Ok(())
 }
 
-/// Recursively find a backup file name not currently in use.
-/// Assumes the extension of path can be replaced by n.
-/// Assumes it is safe to check the existence of the path after doing so.
-/// This implies all path components of path must exist and be readable.
-/// Assumes recursion won't hurt us here.
+/// Recursively finds a backup file name not currently in use.
+///
+/// All path components of path must exist and be readable.
+///
+/// Assumes:
+/// * The extension of path can be replaced by n.
+/// * It is safe to check the existence of the path after doing so.
+/// * Recursion won't hurt us here.
+///
 /// # Arguments
 /// * `path`: base path to look at.
 /// * `n`: extension number to try and increment.
@@ -658,7 +672,10 @@ fn find_available_path(path: &Path, n: i32) -> Result<PathBuf, PlatformError> {
   }
 }
 
-/// Derives a backup file path. The path must not be empty and must not be dot (".").
+/// Derives a backup file path.
+///
+/// The path must not be empty and must not be dot (".").
+///
 /// # Arguments
 /// * `path`: path to derive from.
 fn next_path(path: &Path) -> Result<PathBuf, PlatformError> {
@@ -728,7 +745,7 @@ fn parse_to_u64(val_str: &str) -> Result<u64, PlatformError> {
   }
 }
 
-/// Parses a string to u64.
+/// Parses a string to a list of u64 values.
 /// # Arguments
 /// * `vals_str`: string representation of a list of values.
 fn parse_to_u64_vec(vals_str: &str) -> Result<Vec<u64>, PlatformError> {
@@ -745,6 +762,9 @@ fn parse_to_u64_vec(vals_str: &str) -> Result<Vec<u64>, PlatformError> {
 }
 
 /// Defines an asset.
+///
+/// Note: the transaction isn't submitted until `submit` or `submit_and_get_sids` is called.
+///
 /// # Arguments
 /// * `fiat_asset`: whether the asset is a fiat asset.
 /// * `issuer_key_pair`: issuer's key pair.
@@ -778,6 +798,54 @@ fn define_asset(fiat_asset: bool,
   Ok(txn_builder)
 }
 
+/// Issues and transfers asset.
+/// # Arguments
+/// * `issuer_key_pair`: issuer's key pair.
+/// * `recipient_key_pair`: rercipient's key pair.
+/// * `amount`: amount to issue and transfer.
+/// * `token_code`: asset token code.
+/// * `confidential_amount`: whether the amount is confidential.
+/// * `confidential_asset`: whether the asset is confidential.
+/// * `txn_file`: path to the transaction file.
+fn issue_and_transfer_asset(issuer_key_pair: &XfrKeyPair,
+                            recipient_key_pair: &XfrKeyPair,
+                            amount: u64,
+                            token_code: AssetTypeCode,
+                            confidential_amount: bool,
+                            confidential_asset: bool,
+                            txn_file: &str)
+                            -> Result<TransactionBuilder, PlatformError> {
+  let blind_asset_record = get_blind_asset_record(issuer_key_pair.get_pk(),
+                                                  amount,
+                                                  token_code,
+                                                  confidential_amount,
+                                                  confidential_asset)?;
+
+  // Transfer Operation
+  let xfr_op =
+    TransferOperationBuilder::new().add_input(TxoRef::Relative(0),
+                                              open_asset_record(&blind_asset_record,
+                                                                issuer_key_pair.get_sk_ref())?,
+                                              amount)?
+                                   .add_output(amount, recipient_key_pair.get_pk_ref(), token_code)?
+                                   .balance()?
+                                   .create(TransferType::Standard)?
+                                   .sign(issuer_key_pair)?
+                                   .transaction()?;
+
+  // Issue and Transfer transaction
+  let mut txn_builder = TransactionBuilder::default();
+  txn_builder.add_operation_issue_asset(issuer_key_pair,
+                                        &token_code,
+                                        get_and_update_sequence_number()?,
+                                        &[TxOutput(blind_asset_record)])?
+             .add_operation(xfr_op)
+             .transaction();
+
+  store_txn_to_file(txn_file, &txn_builder)?;
+  Ok(txn_builder)
+}
+
 /// Runs the standalone ledger
 fn run_ledger_standalone() -> Result<(), PlatformError> {
   // Run the standalone ledger
@@ -792,12 +860,14 @@ fn run_ledger_standalone() -> Result<(), PlatformError> {
 }
 
 /// Queries a value.
+///
 /// # Arguments
 /// * `protocol`: either `https` or `http`.
 /// * `host`: either `testnet.findora.org` or `localhost`.
 /// * `port`: either `QUERY_PORT` or `SUBMIT_PORT`.
 /// * `route`: route to query.
 /// * `value`: value to look up.
+///
 /// # Examples
 /// * To query the BlindAssetRecord with utxo_sid 100 from https://testnet.findora.org:
 /// ```
@@ -828,7 +898,14 @@ fn query(protocol: &str,
   Ok(text)
 }
 
-/// Submit a transaction
+/// Submits a transaction.
+///
+/// Either this function or `submit_and_get_sids` should be called after a transaction is composed by any of the following:
+/// * `define_asset`
+/// * `issue_asset`
+/// * `transfer_asset`
+/// * `issue_and_transfer_asset`
+///
 /// # Arguments
 /// * `protocol`: either `https` or `http`.
 /// * `host`: either `testnet.findora.org` or `localhost`.
@@ -855,7 +932,14 @@ fn submit(protocol: &str,
   Ok(())
 }
 
-/// Submit a transaction and get the UTXO (unspent transaction output) SIDs
+/// Submits a transaction and gets the UTXO (unspent transaction output) SIDs.
+///
+/// Either this function or `submit` should be called after a transaction is composed by any of the following:
+/// * `define_asset`
+/// * `issue_asset`
+/// * `transfer_asset`
+/// * `issue_and_transfer_asset`
+///
 /// # Arguments
 /// * `protocol`: either `https` or `http`.
 /// * `host`: either `testnet.findora.org` or `localhost`.
@@ -921,55 +1005,7 @@ fn get_blind_asset_record(pub_key: XfrPublicKey,
                               &None))
 }
 
-/// Issues and transfers asset.
-/// # Arguments
-/// * `issuer_key_pair`: issuer's key pair.
-/// * `recipient_key_pair`: rercipient's key pair.
-/// * `amount`: amount to issue and transfer.
-/// * `token_code`: asset token code.
-/// * `confidential_amount`: whether the amount is confidential.
-/// * `confidential_asset`: whether the asset is confidential.
-/// * `txn_file`: path to the transaction file.
-fn issue_and_transfer_asset(issuer_key_pair: &XfrKeyPair,
-                            recipient_key_pair: &XfrKeyPair,
-                            amount: u64,
-                            token_code: AssetTypeCode,
-                            confidential_amount: bool,
-                            confidential_asset: bool,
-                            txn_file: &str)
-                            -> Result<TransactionBuilder, PlatformError> {
-  let blind_asset_record = get_blind_asset_record(issuer_key_pair.get_pk(),
-                                                  amount,
-                                                  token_code,
-                                                  confidential_amount,
-                                                  confidential_asset)?;
-
-  // Transfer Operation
-  let xfr_op =
-    TransferOperationBuilder::new().add_input(TxoRef::Relative(0),
-                                              open_asset_record(&blind_asset_record,
-                                                                issuer_key_pair.get_sk_ref())?,
-                                              amount)?
-                                   .add_output(amount, recipient_key_pair.get_pk_ref(), token_code)?
-                                   .balance()?
-                                   .create(TransferType::Standard)?
-                                   .sign(issuer_key_pair)?
-                                   .transaction()?;
-
-  // Issue and Transfer transaction
-  let mut txn_builder = TransactionBuilder::default();
-  txn_builder.add_operation_issue_asset(issuer_key_pair,
-                                        &token_code,
-                                        get_and_update_sequence_number()?,
-                                        &[TxOutput(blind_asset_record)])?
-             .add_operation(xfr_op)
-             .transaction();
-
-  store_txn_to_file(txn_file, &txn_builder)?;
-  Ok(txn_builder)
-}
-
-/// Merge two asset records.
+/// Merges two asset records.
 /// # Arguments
 /// * `key_pair`: key pair of the two records.
 /// * `sid1`: SID of the first record.
@@ -1122,22 +1158,21 @@ fn get_open_asset_record(protocol: &str,
                                                                })
 }
 
-/// Relation types.
+/// Relation types, used to represent the credential requirement types.
 enum RelationType {
-  // // Requirement: attribute value == requirement
+  // /// Requirement: attribute value == requirement
   // Equal,
-
-  // Requirement: attribute value >= requirement
+  /// Requirement: attribute value >= requirement
   AtLeast,
 }
 
 /// Proves the credential value.
 /// # Arguments
-/// * `reveal_sig`: signature to verify.
-/// * `ac_issuer_pk`: credential issuer's public key.
+/// * `reveal_sig`: signature to verify, constructed by calling `ac_reveal`.
+/// * `ac_issuer_pk`: credential issuer's public key, constructed by calling `ac_keygen_issuer`.
 /// * `value`: credential value.
 /// * `requirement`: required value on the credential attribute.
-/// * `relation_type`: relation between the credenital and required values.
+/// * `relation_type`: relation between the credenital and required values, possible values defined in the enum `RelationType`.
 fn prove(reveal_sig: &ACRevealSig,
          ac_issuer_pk: &ACIssuerPublicKey,
          value: u64,
@@ -1406,7 +1441,6 @@ fn fulfill_loan(loan_id: u64,
   } else {
     sids_new[1]
   };
-
   println!("New debt utxo sid: {}, fiat utxo sid: {}.",
            sids_new[0].0, fiat_sid_merged.0);
 
@@ -1554,14 +1588,15 @@ fn pay_loan(loan_id: u64, amount: u64, protocol: &str, host: &str) -> Result<(),
   store_data_to_file(data)
 }
 
-/// Use environment variable RUST_LOG to select log level and filter output by module or regex.
+/// Uses environment variable RUST_LOG to select log level and filters output by module or regex.
+///
+/// By default, log everything "trace" level or greater to stdout.
+///
 /// # Examples
 /// ```
 /// RUST_LOG=ledger::data_model=info,main=trace/rec[ie]+ve ./main
 /// ```
 // TODO Verify that this comment is correct.
-//
-// By default, log everything "trace" level or greater to stdout.
 // TODO switch to using from_default_env()
 fn init_logging() {
   env_logger::from_env(Env::default().default_filter_or("trace")).target(Target::Stdout)
@@ -2107,6 +2142,15 @@ fn process_inputs(inputs: clap::ArgMatches) -> Result<(), PlatformError> {
 }
 
 /// Processes the `issuer` subcommand.
+///
+/// Subcommands under `issuer`
+/// * `sign_up`
+/// * `store_sids`
+/// * `define_asset`
+/// * `issue_asset`
+/// * `transfer_asset`
+/// * `issue_and_transfer_asset`
+///
 /// # Arguments
 /// * `asset_issuer_matches`: subcommands and arguments under the `asset_issuer` subcommand.
 /// * `txn_file`: path to store the transaction file.
@@ -2396,6 +2440,12 @@ fn process_asset_issuer_cmd(asset_issuer_matches: &clap::ArgMatches,
 }
 
 /// Processes the `lender` subcommand.
+///
+/// Subcommands under `lender`
+/// * `sign_up`
+/// * `view_loan`
+/// * `fulfill_loan`
+///
 /// # Arguments
 /// * `lender_matches`: subcommands and arguments under the `lender` subcommand.
 /// * `txn_file`: path to store the transaction file.
@@ -2532,6 +2582,17 @@ fn process_lender_cmd(lender_matches: &clap::ArgMatches,
 }
 
 /// Processes the `borrower` subcommand.
+///
+/// Subcommands under `borrower`
+/// * `sign_up`
+/// * `load_funds`
+/// * `view_loan`
+/// * `request_loan`
+/// * `pay_loan`
+/// * `view_credential`
+/// * `create_or_overwrite_credential`
+/// * `get_asset_record`
+///
 /// # Arguments
 /// * `borrower_matches`: subcommands and arguments under the `borrower` subcommand.
 /// * `txn_file`: path to store the transaction file.
@@ -2695,9 +2756,9 @@ fn process_borrower_cmd(borrower_matches: &clap::ArgMatches,
       }
       let mut credentials = Vec::new();
       let credential_ids = data.borrowers[borrower_id as usize].credentials;
-      for credential_id in &credential_ids {
-        if let Some(id) = credential_id {
-          credentials.push(data.credentials[*id as usize].clone());
+      for cred_id in credential_ids.iter() {
+        if let Some(id) = *cred_id {
+          credentials.push(data.credentials[id as usize].clone());
         }
       }
       println!("Displaying {} credential(s): {:?}",
@@ -3021,17 +3082,17 @@ mod tests {
   }
 
   #[test]
-  fn test_define_fiat_asset() {
+  fn test_define_asset() {
     // Create txn builder and key pair
     let txn_builder_path = "tb_define";
     let mut prng: ChaChaRng = ChaChaRng::from_entropy();
     let issuer_key_pair = XfrKeyPair::generate(&mut prng);
 
-    // Define fiat asset
-    let res = define_asset(true,
+    // Define asset
+    let res = define_asset(false,
                            &issuer_key_pair,
                            AssetTypeCode::gen_random(),
-                           "Define fiat asset",
+                           "Define asset",
                            false,
                            false,
                            txn_builder_path);
@@ -3114,55 +3175,44 @@ mod tests {
   }
 
   #[test]
+  #[ignore]
   // Test funds loading, loan request, fulfilling and repayment
   fn test_request_fulfill_and_pay_loan() {
     run_ledger_standalone().unwrap();
 
-    let data = load_data().unwrap();
-    let balance_pre = data.borrowers[0].balance;
-
     // Create txn builder
-    let txn_builder_path = "tb_load_funds";
-
-    // Set amount to load
-    let amount = 1000;
+    let load_funds_txn_path = "tb_load_funds";
+    let loan_txn_path = "tb_loan";
 
     // Load funds
-    load_funds(0, 0, amount, txn_builder_path, PROTOCOL, HOST).unwrap();
+    let funds_amount = 1000;
+    load_funds(0, 0, funds_amount, load_funds_txn_path, PROTOCOL, HOST).unwrap();
 
-    assert_eq!(load_data().unwrap().borrowers[0].balance,
-               balance_pre + amount);
-
-    fs::remove_file(txn_builder_path).unwrap();
-    let _ = fs::remove_file(DATA_FILE);
-
-    // Load data
     let mut data = load_data().unwrap();
-    let loan_id = data.loans.len();
+    assert_eq!(data.borrowers[0].balance, funds_amount);
 
     // Request a loan
-    let amount = 1200;
-    data.add_loan(0, 0, amount, 100, 8).unwrap();
-    assert_eq!(data.loans.len(), loan_id + 1);
+    let loan_amount = 1200;
+    data.add_loan(0, 0, loan_amount, 100, 8).unwrap();
 
-    // Create txn builder
-    let txn_builder_path = "tb_loan";
+    assert_eq!(data.loans.len(), 1);
 
     // Fulfill the loan request
-    fulfill_loan(loan_id as u64, 0, txn_builder_path, PROTOCOL, HOST).unwrap();
-    let data = load_data().unwrap();
-    assert_eq!(data.loans[loan_id].status, LoanStatus::Active);
-    assert_eq!(data.loans[loan_id].balance, amount);
+    fulfill_loan(0, 0, loan_txn_path, PROTOCOL, HOST).unwrap();
+    data = load_data().unwrap();
+
+    assert_eq!(data.loans[0].status, LoanStatus::Active);
+    assert_eq!(data.loans[0].balance, loan_amount);
 
     // Pay loan
     let payment_amount = 200;
-    pay_loan(loan_id as u64, payment_amount, PROTOCOL, HOST).unwrap();
-
-    let data = load_data().unwrap();
+    pay_loan(0, payment_amount, PROTOCOL, HOST).unwrap();
+    data = load_data().unwrap();
 
     let _ = fs::remove_file(DATA_FILE);
-    fs::remove_file(txn_builder_path).unwrap();
+    fs::remove_file(load_funds_txn_path).unwrap();
+    fs::remove_file(loan_txn_path).unwrap();
 
-    assert_eq!(data.loans[loan_id].payments, 1);
+    assert_eq!(data.loans[0].payments, 1);
   }
 }

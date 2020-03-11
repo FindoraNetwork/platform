@@ -22,15 +22,13 @@ fn main() {
   let state_lock = Arc::new(RwLock::new(ledger_state));
   let cloned_lock = Arc::clone(&state_lock);
   let submission_server = SubmissionServer::new(prng, state_lock, 1).unwrap();
-
   let host = std::env::var_os("SERVER_HOST").filter(|x| !x.is_empty())
                                             .unwrap_or_else(|| "localhost".into());
   let host2 = host.clone();
   let submission_port = std::env::var_os("SUBMISSION_PORT").filter(|x| !x.is_empty())
                                                            .unwrap_or_else(|| "8669".into());
-  let query_port = std::env::var_os("QUERY_PORT").filter(|x| !x.is_empty())
-                                                 .unwrap_or_else(|| "8668".into());
-
+  let ledger_port = std::env::var_os("LEDGER_PORT").filter(|x| !x.is_empty())
+                                                   .unwrap_or_else(|| "8668".into());
   thread::spawn(move || {
     let submission_api = SubmissionApi::create(Arc::new(RwLock::new(submission_server)),
                                                host.to_str().unwrap(),
@@ -42,11 +40,11 @@ fn main() {
     }
   });
 
-  let query_service = RestfulApiService::create(cloned_lock,
-                                                host2.to_str().unwrap(),
-                                                query_port.to_str().unwrap()).unwrap();
-  println!("Starting query service");
-  match query_service.run() {
+  let ledger_service = RestfulApiService::create(cloned_lock,
+                                                 host2.to_str().unwrap(),
+                                                 ledger_port.to_str().unwrap()).unwrap();
+  println!("Starting ledger service");
+  match ledger_service.run() {
     Ok(_) => println!("Successfully ran standalone"),
     Err(_) => println!("Error running standalone"),
   }
