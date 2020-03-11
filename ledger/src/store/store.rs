@@ -587,12 +587,6 @@ impl LedgerStatus {
     // issuance_keys should already have been checked
     block.issuance_keys.clear();
 
-    // debug_assert!(block.temp_sids.len() == block.txns.len());
-    // debug_assert!(block.txos.is_empty());
-    // debug_assert!(block.input_txos.is_empty());
-    // debug_assert!(block.new_asset_codes.is_empty());
-    // debug_assert!(block.new_issuance_nums.is_empty());
-    // debug_assert!(block.issuance_keys.is_empty());
     debug_assert_eq!(block.clone(), {
       let mut def: BlockEffect = Default::default();
       def.txns = block.txns.clone();
@@ -641,14 +635,7 @@ impl LedgerUpdate<ChaChaRng> for LedgerState {
     block.issuance_keys.clear();
     block.air_updates.clear();
 
-    debug_assert!(block.temp_sids.is_empty());
-    debug_assert!(block.txns.is_empty());
-    debug_assert!(block.txos.is_empty());
-    debug_assert!(block.input_txos.is_empty());
-    debug_assert!(block.new_asset_codes.is_empty());
-    debug_assert!(block.new_issuance_nums.is_empty());
-    debug_assert!(block.issuance_keys.is_empty());
-    debug_assert!(block.air_updates.is_empty());
+    debug_assert_eq!(block.clone(), Default::default());
 
     ret
   }
@@ -775,12 +762,7 @@ impl LedgerUpdate<ChaChaRng> for LedgerState {
 
     // TODO(joe): asset tracing?
 
-    debug_assert!(block.temp_sids.is_empty());
-    debug_assert!(block.txns.is_empty());
-    debug_assert!(block.txos.is_empty());
-    debug_assert!(block.input_txos.is_empty());
-    debug_assert!(block.new_asset_codes.is_empty());
-    debug_assert!(block.new_issuance_nums.is_empty());
+    debug_assert_eq!(block.clone(), Default::default());
 
     self.block_ctx = Some(block);
 
@@ -862,7 +844,6 @@ impl LedgerUpdate<ChaChaRng> for LedgerStateChecker {
     unimplemented!()
   }
 
-  #[allow(clippy::cognitive_complexity)]
   fn finish_block(&mut self,
                   block: BlockEffect)
                   -> Result<HashMap<TxnTempSID, (TxnSID, Vec<TxoSID>)>, std::io::Error> {
@@ -900,20 +881,7 @@ impl LedgerUpdate<ChaChaRng> for LedgerStateChecker {
     block.txns.clear();
     block.temp_sids.clear();
 
-    // debug_assert!(block.temp_sids.is_empty());
-    // debug_assert!(block.txns.is_empty());
-    // debug_assert!(block.txos.is_empty());
-    // debug_assert!(block.input_txos.is_empty());
-    // debug_assert!(block.new_asset_codes.is_empty());
-    // debug_assert!(block.new_issuance_nums.is_empty());
     debug_assert_eq!(block.clone(), Default::default());
-    // debug_assert_eq!(block.clone(),{
-    //   let mut def: BlockEffect = Default::default();
-    //   def.txns = block.txns.clone();
-    //   def.temp_sids = block.temp_sids.clone();
-
-    //   def
-    // });
 
     self.0.block_ctx = Some(block);
 
@@ -1100,7 +1068,7 @@ impl LedgerState {
     // dbg!(&block.txns);
     // dbg!(&bincode::serialize(&block.txns).unwrap());
     // dbg!(&bincode::serialize(&block.txns.clone()).unwrap());
-    dbg!(&txns_in_block_hash);
+    // dbg!(&txns_in_block_hash);
     debug_assert!(self.block_merkle
                       .get_proof(self.status.block_commit_count, 0)
                       .unwrap()
@@ -1506,7 +1474,7 @@ impl AuthenticatedBlock {
     let mut hash = HashValue::new();
     hash.hash.clone_from_slice(&digest.0);
 
-    if self.block_inclusion_proof.is_valid_proof(hash) {
+    if !self.block_inclusion_proof.is_valid_proof(hash) {
       return false;
     }
 
@@ -1644,6 +1612,7 @@ impl ArchiveAccess for LedgerState {
     match self.blocks.get(addr.0) {
       None => None,
       Some(finalized_block) => {
+        debug_assert_eq!(addr.0 as u64, finalized_block.merkle_id);
         let block_inclusion_proof = self.block_merkle
                                         .get_proof(finalized_block.merkle_id, 0)
                                         .unwrap();
