@@ -1555,7 +1555,7 @@ mod tests {
                                                                                 .get_root_hash(),
                                      txo_count: 0 };
 
-    let serialized = bincode::serialize(&data).unwrap();
+    let first_hash = data.compute_commitment();
     let count_original = ledger_state.status.block_commit_count;
 
     ledger_state.compute_and_save_state_commitment_data();
@@ -1564,7 +1564,7 @@ mod tests {
                            .state_commitment_data
                            .unwrap()
                            .compute_commitment(),
-               sha256::hash(&serialized));
+               first_hash);
     assert_eq!(ledger_state.status.block_commit_count, count_original + 1);
   }
 
