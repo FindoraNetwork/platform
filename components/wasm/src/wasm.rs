@@ -588,6 +588,7 @@ pub fn get_transaction(path: String, index: u64) -> Result<Promise, JsValue> {
   create_query_promise(&opts, &req_string, false)
 }
 
+#[wasm_bindgen]
 /// Returns a JSON-encoded version of the state commitment of a running ledger. This is used to
 /// check the authenticity of transactions and blocks.
 pub fn get_state_commitment(path: String) -> Result<Promise, JsValue> {

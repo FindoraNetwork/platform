@@ -1,4 +1,4 @@
-//#![deny(warnings)]
+#![deny(warnings)]
 use super::errors;
 use chrono::prelude::*;
 use cryptohash::sha256::Digest as BitDigest;
