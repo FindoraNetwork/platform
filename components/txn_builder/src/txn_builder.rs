@@ -169,10 +169,11 @@ impl BuildsTransactions for TransactionBuilder {
                               addr: &str,
                               data: &str)
                               -> Result<&mut Self, PlatformError> {
-
     let pub_key = &IssuerPublicKey { key: key_pair.get_pk() };
     let priv_key = &key_pair.get_sk();
-    let xfr = AIRAssign::new(AIRAssignBody::new(String::from(addr), String::from(data))?, pub_key, priv_key)?;
+    let xfr = AIRAssign::new(AIRAssignBody::new(String::from(addr), String::from(data))?,
+                             pub_key,
+                             priv_key)?;
     self.txn.add_operation(Operation::AIRAssign(xfr));
     Ok(self)
   }

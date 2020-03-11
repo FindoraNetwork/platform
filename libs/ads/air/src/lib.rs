@@ -1,9 +1,9 @@
 #![allow(dead_code)]
 use serde::{Deserialize, Serialize};
-use sparse_merkle_tree::{SmtMap256, digest, MerkleProof, check_merkle_proof as smt_check_proof};
-use std::io::Error;
-use std::io::prelude::Read;
+use sparse_merkle_tree::{check_merkle_proof as smt_check_proof, digest, MerkleProof, SmtMap256};
 use std::fs::File;
+use std::io::prelude::Read;
+use std::io::Error;
 
 pub use sparse_merkle_tree::Digest;
 
@@ -15,15 +15,17 @@ pub struct AIRMerkleProof(MerkleProof);
 pub struct AIRResult {
   pub merkle_root: Digest,
   pub key: String,
-  pub value: Option<String>, 
-  pub merkle_proof: MerkleProof
+  pub value: Option<String>,
+  pub merkle_proof: MerkleProof,
+}
+
+impl Default for AIR {
+  fn default() -> Self {
+    AIR { 0: SmtMap256::<String>::new() }
+  }
 }
 
 impl AIR {
-  pub fn new() -> Self {
-    Self { 0: SmtMap256::<String>::new()}
-  }
-
   pub fn key_of_byteref(key: impl AsRef<[u8]>) -> Digest {
     digest(key.as_ref())
   }
@@ -47,7 +49,11 @@ impl AIR {
     self.0.merkle_root()
   }
 
-  pub fn check_merkle_proof(&self, key: impl AsRef<[u8]>, value: Option<&String>, proof: &MerkleProof) -> bool {
+  pub fn check_merkle_proof(&self,
+                            key: impl AsRef<[u8]>,
+                            value: Option<&String>,
+                            proof: &MerkleProof)
+                            -> bool {
     let hashed_key = digest(key.as_ref());
     self.0.check_merkle_proof(&hashed_key, value, proof)
   }

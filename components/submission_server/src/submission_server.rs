@@ -196,8 +196,7 @@ pub fn txn_log_info(txn: &Transaction) {
       }
       Operation::AIRAssign(air_assign_op) => {
         info!("Assigning to AIR: AIR[{}] <- {}",
-              air_assign_op.body.addr,
-              air_assign_op.body.data);
+              air_assign_op.body.addr, air_assign_op.body.data);
       }
     };
   }

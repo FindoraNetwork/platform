@@ -128,7 +128,7 @@ impl GlobalState {
     GlobalState { verbose: args.is_present("v"),
                   prng: ChaChaRng::from_seed([0u8; 32]),
                   registry: Vec::<String>::new(),
-                  smt: AIR::new(),
+                  smt: AIR::default(),
                   users: HashMap::new(),
                   issuers: HashMap::new(),
                   user_sig: HashMap::new(),

@@ -30,7 +30,7 @@ pub struct TxnEffect {
   // Debt swap information that must be externally validated
   pub debt_effects: HashMap<AssetTypeCode, DebtSwapEffect>,
   // Updates to the AIR
-  pub air_updates: HashMap<String, String>
+  pub air_updates: HashMap<String, String>,
 }
 
 // Internally validates the transaction as well.
@@ -48,7 +48,7 @@ impl TxnEffect {
     let mut issuance_keys: HashMap<AssetTypeCode, IssuerPublicKey> = HashMap::new();
     let mut debt_effects: HashMap<AssetTypeCode, DebtSwapEffect> = HashMap::new();
     let mut air_updates: HashMap<String, String> = HashMap::new();
-    
+
     // Sequentially go through the operations, validating intrinsic or
     // local-to-the-transaction properties, then recording effects and
     // external properties.
@@ -258,7 +258,7 @@ impl TxnEffect {
         Operation::AIRAssign(air_assign) => {
           air_updates.insert(air_assign.body.addr.clone(), air_assign.body.data.clone());
           // Is this like DefineAsset, and doesn't increnettxo_count?
-         }
+        }
       } // end -- match op {
     } // end -- for op in txn.operations.iter() {
 

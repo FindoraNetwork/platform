@@ -7,7 +7,7 @@ extern crate tempdir;
 use crate::data_model::errors::PlatformError;
 use crate::data_model::*;
 use crate::policies::{calculate_fee, DebtMemo};
-use air::{AIR, AIRResult};
+use air::{AIRResult, AIR};
 use bitmap::{BitMap, SparseMap};
 use cryptohash::sha256;
 use cryptohash::sha256::Digest as BitDigest;
@@ -872,7 +872,7 @@ impl LedgerState {
   fn init_air_log(path: &str, create: bool) -> Result<AIR, std::io::Error> {
     // Create a merkle tree or open an existing one.
     let result = if create {
-      Ok(AIR::new())
+      Ok(AIR::default())
     } else {
       air::open(path)
     };
@@ -1376,12 +1376,10 @@ impl ArchiveAccess for LedgerState {
   fn get_air_data(&self, key: &str) -> AIRResult {
     let merkle_root = self.air.merkle_root();
     let (value, merkle_proof) = self.air.get_with_proof(key);
-    AIRResult {
-      merkle_root:*merkle_root,
-      key:key.to_string(),
-      value:value.map(|s| s.to_string()), 
-      merkle_proof,
-    }
+    AIRResult { merkle_root: *merkle_root,
+                key: key.to_string(),
+                value: value.map(|s| s.to_string()),
+                merkle_proof }
   }
 }
 

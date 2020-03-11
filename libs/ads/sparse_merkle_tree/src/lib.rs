@@ -6,9 +6,9 @@ use cryptohash::sha256;
 use serde::{Deserialize, Serialize};
 use sha256::DIGESTBYTES;
 use std::collections::HashMap;
-use std::io::Error;
-use std::io::prelude::Read;
 use std::fs::File;
+use std::io::prelude::Read;
+use std::io::Error;
 
 pub use sha256::Digest;
 
