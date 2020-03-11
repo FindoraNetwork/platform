@@ -94,6 +94,7 @@ fn sign_up_borrower(name: &str) -> io::Result<Output> {
 fn create_or_overwrite_credential(id: &str, attribute: &str, value: &str) -> io::Result<Output> {
   Command::new(COMMAND).args(&["borrower", "--id", id])
                        .arg("create_or_overwrite_credential")
+                       .args(&["--credential_issuer", "0"])
                        .args(&["--attribute", attribute])
                        .args(&["--value", value])
                        .output()

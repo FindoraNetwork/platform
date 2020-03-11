@@ -36,11 +36,11 @@ After a transaction is composed by `define_asset`, `issue_asset`, `transfer_asse
 ```
 By default, `https://testnet.findora.org` is used. To switch to `http://localhost`, add `--http --localhost`.
 
-## Issuer account
-### Sign up an issuer account
-In the initial data, there's one issuer, Izzie. To sign up a new issuer account:
+## AssetIssuer account
+### Sign up an AssetIssuer account
+In the initial data, there's one AssetIssuer, Izzie. To sign up a new AssetIssuer account:
 ```
-./txn_builder_cli issuer sign_up --name 'Issuer Name'
+./txn_builder_cli asset_issuer sign_up --name 'Issuer Name'
 ```
 
 ### Define an asset
@@ -107,6 +107,13 @@ Add `--confidential_amount` or `--confidential_asset` if needed.
 ./txn_builder_cli --txn txn_issue_and_transfer submit
 ```
 To get the utxo sids, add `--get_sids`.
+
+## CredentialIssuer account
+### Sign up a CredentialIssuer account
+In the initial data, there's one CredentialIssuer, Ivy. To sign up a new CredentialIssuer account:
+```
+./txn_builder_cli credential_issuer sign_up --name 'Issuer Name'
+```
 
 ## Lender account
 ### Sign up a lender account

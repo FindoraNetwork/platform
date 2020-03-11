@@ -18,8 +18,8 @@ use std::thread;
 use submission_server::{TxnHandle, TxnStatus};
 use txn_builder::{BuildsTransactions, TransactionBuilder, TransferOperationBuilder};
 use zei::api::anon_creds::{
-  ac_keygen_issuer, ac_keygen_user, ac_reveal, ac_sign, ac_verify, ACIssuerPublicKey, ACRevealSig,
-  Credential as ZeiCredential,
+  ac_keygen_issuer, ac_keygen_user, ac_reveal, ac_sign, ac_verify, ACIssuerPublicKey,
+  ACIssuerSecretKey, ACRevealSig, Credential as ZeiCredential,
 };
 use zei::serialization::ZeiFromToBytes;
 use zei::setup::PublicParams;
@@ -38,6 +38,13 @@ const INIT_DATA: &str = r#"
       "id": 0,
       "name": "Izzie",
       "key_pair": "76b8e0ada0f13d90405d6ae55386bd28bdd219b8a08ded1aa836efcc8b770dc720fdbac9b10b7587bba7b5bc163bce69e796d71e4ed44c10fcb4488689f7a144"
+    }
+  ],
+  "credential_issuers": [
+    {
+      "id": 0,
+      "name": "Ivy",
+      "key_pair": "5b7b2267656e32223a22696c47526c434b5f6a5263786d654b54674742326d66645266317a716a31695a6457513231526e48626c36695634674b52696a66516e52776243663742485a6446504b57476a4166727a3241683246513865594d33333037434f76384466574f43626442434562754638323957334574433739505977756874704c535f7a4c6b222c22787832223a22746b3349514d5f364c36466759726d3635494f3848424d547a307937783970654263394977784567354d48414b5f494e5a333150794e4130546a4a68444c534343494a65513547556a414c3537452d535430356876347a415a454b62396b48666e2d36704b667965446a555f3156776b4e5a76746f32754e6536687a317a4f47222c227a7a31223a22736236774947674d6a453257706e58704e72736b4732546c566d4738375872714456726a6a6f3641627a536242677633666277337474394a5370524147415f38222c227a7a32223a226c716136424a656a334d6662726c5677736d537076747a46664f316e6a4a396f727879703959343646387548366f716f79536e5053777472493537396c596876446e4b646c4b6c556c46684f7867563238734c6d66784a42335558643347674235736f535147304930457873416373495754706c6461456d3847424761675153222c22797932223a5b22676d476f4c7052676a6e4b426b4c6b766a493752317052534a655f4a7274784d412d34454d57663036737a544e4e61433530795437346e3874344b634b574366452d644a4435356d4c69554f31336b44646d497a3073466553566b5f4b6e7038587179566c634e51354b6a5a6f5858394e5730505554355266554a4f73435165225d7d2c7b2267656e31223a226b3133334d413766654f324471377a384837797a4a314d56415342486f66315a34684f33566874454b63322d7149685848366855526c36634531584159573248222c2278223a22784c774c4361354c303042494c5331475034464373474f39734b664964413741424b7667536251415672413d222c2279223a5b227455526f44353762325269486f766f6d4342797a3364796c564364792d6e71594a6379324e7472334a706b3d225d7d5d"
     }
   ],
   "lenders": [
@@ -75,10 +82,10 @@ const INIT_DATA: &str = r#"
     {
       "id": 0,
       "borrower": 0,
+      "credential_issuer": 0,
       "attribute": "MinCreditScore",
       "value": 650,
-      "proof": null,
-      "credential_issuer_pub_key": null
+      "proof": null
     }
   ],
   "loans": [],
@@ -119,28 +126,33 @@ enum CredentialIndex {
 #[derive(Clone, Deserialize, Debug, Serialize)]
 /// Borrower's credential record.
 struct Credential {
-  /// Credential id
+  /// Credential ID
   id: u64,
-  /// Borrower id
+  /// Borrower ID
   borrower: u64,
+  /// CredentialIssuer ID
+  credential_issuer: u64,
   /// Credential attribute, possible values defined in the enum `CredentialIndex`
   attribute: CredentialIndex,
   /// Credential value
   value: u64,
   /// Serialized credential proof, if exists
   proof: Option<String>,
-  /// Public key of the credential issuer, if exists
-  credential_issuer_pub_key: Option<String>,
 }
 
 impl Credential {
-  fn new(id: u64, borrower: u64, attribute: CredentialIndex, value: u64) -> Self {
+  fn new(id: u64,
+         borrower: u64,
+         credential_issuer: u64,
+         attribute: CredentialIndex,
+         value: u64)
+         -> Self {
     Credential { id,
                  borrower,
+                 credential_issuer,
                  attribute,
                  value,
-                 proof: None,
-                 credential_issuer_pub_key: None }
+                 proof: None }
   }
 }
 
@@ -165,6 +177,28 @@ impl AssetIssuer {
     AssetIssuer { id: id as u64,
                   name,
                   key_pair: key_pair_str }
+  }
+}
+
+#[derive(Clone, Deserialize, Serialize)]
+/// CredentialIssuer's account information.
+struct CredentialIssuer {
+  /// CredentialIssuer ID
+  id: u64,
+  /// Name
+  name: String,
+  /// Serialized key pair
+  key_pair: String,
+}
+
+impl CredentialIssuer {
+  fn new(id: usize, name: String) -> Result<Self, PlatformError> {
+    let key_pair = ac_keygen_issuer::<_>(&mut ChaChaRng::from_entropy(), 1);
+    let key_pair_str =
+      serde_json::to_vec(&key_pair).or_else(|_| Err(PlatformError::SerializationError))?;
+    Ok(CredentialIssuer { id: id as u64,
+                          name,
+                          key_pair: hex::encode(key_pair_str) })
   }
 }
 
@@ -311,6 +345,7 @@ impl Loan {
 struct Data {
   /// List of user records
   asset_issuers: Vec<AssetIssuer>,
+  credential_issuers: Vec<CredentialIssuer>,
   lenders: Vec<Lender>,
   borrowers: Vec<Borrower>,
 
@@ -350,11 +385,33 @@ impl Data {
     store_data_to_file(self.clone())
   }
 
-  fn get_issuer_key_pair(&mut self, id: u64) -> Result<XfrKeyPair, PlatformError> {
+  fn get_asset_issuer_key_pair(&mut self, id: u64) -> Result<XfrKeyPair, PlatformError> {
     let key_pair_str = &self.asset_issuers[id as usize].key_pair;
     Ok(XfrKeyPair::zei_from_bytes(&hex::decode(key_pair_str).or_else(|_| {
                                      Err(PlatformError::DeserializationError)
                                    })?))
+  }
+
+  fn add_credential_issuer(&mut self, name: String) -> Result<(), PlatformError> {
+    let id = self.credential_issuers.len();
+    self.credential_issuers
+        .push(CredentialIssuer::new(id, name.clone())?);
+    println!("{}'s id is {}.", name, id);
+    store_data_to_file(self.clone())
+  }
+
+  fn get_credential_issuer_key_pair(
+    &mut self,
+    id: u64)
+    -> Result<(ACIssuerPublicKey, ACIssuerSecretKey), PlatformError> {
+    let key_pair_str = &self.credential_issuers[id as usize].key_pair;
+    let key_pair_decode =
+      hex::decode(key_pair_str).or_else(|_| Err(PlatformError::DeserializationError))?;
+    let key_pair =
+      serde_json::from_slice(&key_pair_decode).or_else(|_| {
+                                                Err(PlatformError::DeserializationError)
+                                              })?;
+    Ok(key_pair)
   }
 
   fn add_lender(&mut self, name: String, min_credit_score: u64) -> Result<(), PlatformError> {
@@ -388,6 +445,7 @@ impl Data {
 
   fn add_or_update_credential(&mut self,
                               borrower_id: u64,
+                              credential_issuer_id: u64,
                               attribute: CredentialIndex,
                               value: u64)
                               -> Result<(), PlatformError> {
@@ -402,8 +460,11 @@ impl Data {
     } else {
       println!("Adding the credential record.");
       let credential_id = self.credentials.len();
-      self.credentials
-          .push(Credential::new(credential_id as u64, borrower_id, attribute.clone(), value));
+      self.credentials.push(Credential::new(credential_id as u64,
+                                            borrower_id,
+                                            credential_issuer_id,
+                                            attribute.clone(),
+                                            value));
       self.borrowers[borrower_id as usize].credentials[attribute as usize] =
         Some(credential_id as u64);
     }
@@ -767,7 +828,7 @@ fn parse_to_u64_vec(vals_str: &str) -> Result<Vec<u64>, PlatformError> {
 ///
 /// # Arguments
 /// * `fiat_asset`: whether the asset is a fiat asset.
-/// * `issuer_key_pair`: issuer's key pair.
+/// * `issuer_key_pair`: AssetIssuer's key pair.
 /// * `token_code`: asset token code.
 /// * `memo`: memo for defining the asset.
 /// * `allow_updates`: whether updates are allowed.
@@ -800,7 +861,7 @@ fn define_asset(fiat_asset: bool,
 
 /// Issues and transfers asset.
 /// # Arguments
-/// * `issuer_key_pair`: issuer's key pair.
+/// * `issuer_key_pair`: AssetIssuer's key pair.
 /// * `recipient_key_pair`: rercipient's key pair.
 /// * `amount`: amount to issue and transfer.
 /// * `token_code`: asset token code.
@@ -1059,7 +1120,7 @@ fn load_funds(issuer_id: u64,
               -> Result<(), PlatformError> {
   // Get data
   let mut data = load_data()?;
-  let issuer_key_pair = &data.clone().get_issuer_key_pair(issuer_id)?;
+  let issuer_key_pair = &data.clone().get_asset_issuer_key_pair(issuer_id)?;
   let recipient = &data.borrowers.clone()[recipient_id as usize];
   let recipient_key_pair = &data.clone().get_borrower_key_pair(recipient_id)?;
 
@@ -1223,7 +1284,7 @@ fn fulfill_loan(loan_id: u64,
                 -> Result<(), PlatformError> {
   // Get data
   let mut data = load_data()?;
-  let issuer_key_pair = &data.clone().get_issuer_key_pair(issuer_id)?;
+  let issuer_key_pair = &data.clone().get_asset_issuer_key_pair(issuer_id)?;
   let loan = &data.loans.clone()[loan_id as usize];
 
   // Check if loan has been fulfilled
@@ -1261,25 +1322,19 @@ fn fulfill_loan(loan_id: u64,
       return Err(PlatformError::InputsError);
     };
   let credential = &data.credentials.clone()[credential_id as usize];
+  let credential_issuer_id = credential.credential_issuer;
   let requirement = lender.min_credit_score;
 
   // If the proof exists and the proved value is valid, attest with the proof
   // Otherwise, prove and attest the value
   if let Some(proof) = &credential.proof {
     println!("Attesting with the existing proof.");
-    let issuer_pk = if let Some(pk) = credential.credential_issuer_pub_key.clone() {
-      serde_json::from_str::<ACIssuerPublicKey>(&pk).or_else(|_| {
-                                                      Err(PlatformError::DeserializationError)
-                                                    })?
-    } else {
-      println!("Credential issuer's public key is required. Use create credential.");
-      return Err(PlatformError::InputsError);
-    };
+    let credential_issuer_public_key = data.get_credential_issuer_key_pair(credential_issuer_id)?.0;
     if let Err(error) =
       prove(&serde_json::from_str::<ACRevealSig>(proof).or_else(|_| {
                                                          Err(PlatformError::DeserializationError)
                                                        })?,
-            &issuer_pk,
+            &credential_issuer_public_key,
             credential.value,
             requirement,
             RelationType::AtLeast)
@@ -1291,16 +1346,18 @@ fn fulfill_loan(loan_id: u64,
     }
   } else {
     println!("Proving before attesting.");
+    let credential_issuer_key_pair = data.get_credential_issuer_key_pair(credential_issuer_id)?;
     let mut prng: ChaChaRng = ChaChaRng::from_entropy();
-    let (issuer_pk, issuer_sk) = ac_keygen_issuer::<_>(&mut prng, 1);
-    let (user_pk, user_sk) = ac_keygen_user::<_>(&mut prng, &issuer_pk.clone());
-
+    let (user_pk, user_sk) = ac_keygen_user::<_>(&mut prng, &credential_issuer_key_pair.0.clone());
     let value = credential.value;
     let attributes = [value.to_le_bytes()].to_vec();
-    let signature = ac_sign(&mut prng, &issuer_sk, &user_pk, &attributes);
+    let signature = ac_sign(&mut prng,
+                            &credential_issuer_key_pair.1,
+                            &user_pk,
+                            &attributes);
     let zei_credential = ZeiCredential { signature,
                                          attributes,
-                                         issuer_pk: issuer_pk.clone() };
+                                         issuer_pk: credential_issuer_key_pair.0.clone() };
 
     let reveal_sig =
       ac_reveal(&mut prng, &user_sk, &zei_credential, &[true]).or_else(|error| {
@@ -1308,7 +1365,7 @@ fn fulfill_loan(loan_id: u64,
                                                               })?;
 
     prove(&reveal_sig,
-          &issuer_pk,
+          &credential_issuer_key_pair.0,
           value,
           requirement,
           RelationType::AtLeast)?;
@@ -1316,8 +1373,6 @@ fn fulfill_loan(loan_id: u64,
     // Update credentials data
     data.credentials[credential_id as usize].proof =
       Some(serde_json::to_string(&reveal_sig).or_else(|_| Err(PlatformError::SerializationError))?);
-    data.credentials[credential_id as usize].credential_issuer_pub_key =
-      Some(serde_json::to_string(&issuer_pk).or_else(|_| Err(PlatformError::SerializationError))?);
     store_data_to_file(data)?;
     data = load_data()?;
   }
@@ -1796,6 +1851,19 @@ fn main() {
           .long("confidential_asset")
           .takes_value(false)
           .help("If specified, the asset will be confidential."))))
+    .subcommand(SubCommand::with_name("credential_issuer")
+      .subcommand(SubCommand::with_name("sign_up")
+        .arg(Arg::with_name("name")
+          .short("n")
+          .long("name")
+          .required(true)
+          .takes_value(true)
+          .help("CredentialIssuer's name.")))
+      .arg(Arg::with_name("id")
+        .short("i")
+        .long("id")
+        .takes_value(true)
+        .help("CredentialIssuer id.")))
     .subcommand(SubCommand::with_name("lender")
       .subcommand(SubCommand::with_name("sign_up")
         .arg(Arg::with_name("name")
@@ -1949,6 +2017,12 @@ fn main() {
           .help("Display the credential with the specified id only."))
         .help("By default, display all credentials of this borrower."))
       .subcommand(SubCommand::with_name("create_or_overwrite_credential")
+        .arg(Arg::with_name("credential_issuer")
+          .short("c")
+          .long("credential_issuer")
+          .required(true)
+          .takes_value(true)
+          .help("CredentialIssuer id."))
         .arg(Arg::with_name("attribute")
           .short("a")
           .long("attribute")
@@ -2079,6 +2153,9 @@ fn process_inputs(inputs: clap::ArgMatches) -> Result<(), PlatformError> {
     ("asset_issuer", Some(asset_issuer_matches)) => {
       process_asset_issuer_cmd(asset_issuer_matches, &txn_file)
     }
+    ("credential_issuer", Some(credential_issuer_matches)) => {
+      process_credential_issuer_cmd(credential_issuer_matches)
+    }
     ("lender", Some(issuer_matches)) => process_lender_cmd(issuer_matches, &txn_file),
     ("borrower", Some(issuer_matches)) => process_borrower_cmd(issuer_matches, &txn_file),
     ("create_txn_builder", Some(create_txn_builder_matches)) => {
@@ -2141,9 +2218,9 @@ fn process_inputs(inputs: clap::ArgMatches) -> Result<(), PlatformError> {
   }
 }
 
-/// Processes the `issuer` subcommand.
+/// Processes the `asset_issuer` subcommand.
 ///
-/// Subcommands under `issuer`
+/// Subcommands under `asset_issuer`
 /// * `sign_up`
 /// * `store_sids`
 /// * `define_asset`
@@ -2188,7 +2265,7 @@ fn process_asset_issuer_cmd(asset_issuer_matches: &clap::ArgMatches,
       let mut data = load_data()?;
       let issuer_key_pair = if let Some(id_arg) = asset_issuer_matches.value_of("id") {
         let issuer_id = parse_to_u64(id_arg)?;
-        data.get_issuer_key_pair(issuer_id)?
+        data.get_asset_issuer_key_pair(issuer_id)?
       } else {
         println!("AssetIssuer id is required to define an asset. Use asset_issuer --id.");
         return Err(PlatformError::InputsError);
@@ -2226,7 +2303,7 @@ fn process_asset_issuer_cmd(asset_issuer_matches: &clap::ArgMatches,
       let mut data = load_data()?;
       let key_pair = if let Some(id_arg) = asset_issuer_matches.value_of("id") {
         let issuer_id = parse_to_u64(id_arg)?;
-        data.get_issuer_key_pair(issuer_id)?
+        data.get_asset_issuer_key_pair(issuer_id)?
       } else {
         println!("AssetIssuer id is required to issue and transfer asset. Use asset_issuer --id.");
         return Err(PlatformError::InputsError);
@@ -2259,7 +2336,7 @@ fn process_asset_issuer_cmd(asset_issuer_matches: &clap::ArgMatches,
       let mut data = load_data()?;
       let issuer_key_pair = if let Some(id_arg) = asset_issuer_matches.value_of("id") {
         let issuer_id = parse_to_u64(id_arg)?;
-        data.get_issuer_key_pair(issuer_id)?
+        data.get_asset_issuer_key_pair(issuer_id)?
       } else {
         println!("AssetIssuer id is required to issue and transfer asset. Use asset_issuer --id.");
         return Err(PlatformError::InputsError);
@@ -2394,7 +2471,7 @@ fn process_asset_issuer_cmd(asset_issuer_matches: &clap::ArgMatches,
       let mut data = load_data()?;
       let issuer_key_pair = if let Some(id_arg) = asset_issuer_matches.value_of("id") {
         let issuer_id = parse_to_u64(id_arg)?;
-        data.get_issuer_key_pair(issuer_id)?
+        data.get_asset_issuer_key_pair(issuer_id)?
       } else {
         println!("AssetIssuer id is required to issue and transfer asset. Use asset_issuer --id.");
         return Err(PlatformError::InputsError);
@@ -2433,7 +2510,34 @@ fn process_asset_issuer_cmd(asset_issuer_matches: &clap::ArgMatches,
       Ok(())
     }
     _ => {
-      println!("Subcommand missing or not recognized. Try lender --help");
+      println!("Subcommand missing or not recognized. Try asset_issuer --help");
+      Err(PlatformError::InputsError)
+    }
+  }
+}
+
+/// Processes the `credential_issuer` subcommand.
+///
+/// Subcommands under `credential_issuer`
+/// * `sign_up`
+///
+/// # Arguments
+/// * `credential_issuer_matches`: subcommands and arguments under the `credential_issuer` subcommand.
+fn process_credential_issuer_cmd(credential_issuer_matches: &clap::ArgMatches)
+                                 -> Result<(), PlatformError> {
+  match credential_issuer_matches.subcommand() {
+    ("sign_up", Some(sign_up_matches)) => {
+      let name = if let Some(name_arg) = sign_up_matches.value_of("name") {
+        name_arg.to_owned()
+      } else {
+        println!("Name is required to sign up a credential issuer account. Use --name.");
+        return Err(PlatformError::InputsError);
+      };
+      let mut data = load_data()?;
+      data.add_credential_issuer(name)
+    }
+    _ => {
+      println!("Subcommand missing or not recognized. Try credential_issuer --help");
       Err(PlatformError::InputsError)
     }
   }
@@ -2773,6 +2877,14 @@ fn process_borrower_cmd(borrower_matches: &clap::ArgMatches,
         println!("Borrower id is required to get credential information. Use borrower --id.");
         return Err(PlatformError::InputsError);
       };
+      let credential_issuer_id = if let Some(credential_issuer_arg) =
+        create_or_overwrite_credential_matches.value_of("credential_issuer")
+      {
+        parse_to_u64(credential_issuer_arg)?
+      } else {
+        println!("CredentialIssuer id is required to get credential information. Use --credential_issuer.");
+        return Err(PlatformError::InputsError);
+      };
       let attribute =
         if let Some(attribute_arg) = create_or_overwrite_credential_matches.value_of("attribute") {
           match attribute_arg {
@@ -2792,7 +2904,7 @@ fn process_borrower_cmd(borrower_matches: &clap::ArgMatches,
         return Err(PlatformError::InputsError);
       };
       let mut data = load_data()?;
-      data.add_or_update_credential(borrower_id, attribute, value)
+      data.add_or_update_credential(borrower_id, credential_issuer_id, attribute, value)
     }
     ("get_asset_record", Some(get_asset_record_matches)) => {
       let borrower_id = if let Some(id_arg) = borrower_matches.value_of("id") {
