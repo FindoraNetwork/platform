@@ -2495,9 +2495,9 @@ fn process_borrower_cmd(borrower_matches: &clap::ArgMatches,
       }
       let mut credentials = Vec::new();
       let credential_ids = data.borrowers[borrower_id as usize].credentials;
-      for credential_id in &credential_ids {
-        if let Some(id) = credential_id {
-          credentials.push(data.credentials[*id as usize].clone());
+      for cred_id in credential_ids.iter() {
+        if let Some(id) = *cred_id {
+          credentials.push(data.credentials[id as usize].clone());
         }
       }
       println!("Displaying {} credential(s): {:?}",
