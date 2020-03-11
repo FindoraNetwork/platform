@@ -3173,30 +3173,32 @@ mod tests {
   }
 
   #[test]
-  #[ignore]
   // Test funds loading, loan request, fulfilling and repayment
   fn test_request_fulfill_and_pay_loan() {
     run_ledger_standalone().unwrap();
 
     // Create txn builder
-    let load_funds_txn_path = "tb_load_funds";
-    let loan_txn_path = "tb_loan";
+    let txn_builder_path = "tb_load_funds";
 
     // Load funds
     let funds_amount = 1000;
-    load_funds(0, 0, funds_amount, load_funds_txn_path, PROTOCOL, HOST).unwrap();
+    load_funds(0, 0, funds_amount, txn_builder_path, PROTOCOL, HOST).unwrap();
+    let data = load_data().unwrap();
 
-    let mut data = load_data().unwrap();
     assert_eq!(data.borrowers[0].balance, funds_amount);
+
+    fs::remove_file(txn_builder_path).unwrap();
+    let _ = fs::remove_file(DATA_FILE);
 
     // Request a loan
     let loan_amount = 1200;
+    let mut data = load_data().unwrap();
     data.add_loan(0, 0, loan_amount, 100, 8).unwrap();
 
     assert_eq!(data.loans.len(), 1);
 
     // Fulfill the loan request
-    fulfill_loan(0, 0, loan_txn_path, PROTOCOL, HOST).unwrap();
+    fulfill_loan(0, 0, txn_builder_path, PROTOCOL, HOST).unwrap();
     data = load_data().unwrap();
 
     assert_eq!(data.loans[0].status, LoanStatus::Active);
@@ -3208,8 +3210,7 @@ mod tests {
     data = load_data().unwrap();
 
     let _ = fs::remove_file(DATA_FILE);
-    fs::remove_file(load_funds_txn_path).unwrap();
-    fs::remove_file(loan_txn_path).unwrap();
+    fs::remove_file(txn_builder_path).unwrap();
 
     assert_eq!(data.loans[0].payments, 1);
   }
