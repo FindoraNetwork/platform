@@ -43,7 +43,7 @@ fn get_owned_txos<RNG, LU>(data: web::Data<Arc<RwLock<QueryServer<RNG, LU>>>>,
   let key: XfrPublicKey = XfrPublicKey::zei_from_bytes(&b64dec(&*info).map_err(|_| actix_web::error::ErrorBadRequest("Could not deserialize public key"))?);
   let query_server = data.read().unwrap();
   let sids = query_server.get_owned_utxo_sids(&XfrAddress { key });
-  Ok(web::Json(sids.unwrap_or(HashSet::new())))
+  Ok(web::Json(sids.unwrap_or_default()))
 }
 
 pub struct QueryApi {
