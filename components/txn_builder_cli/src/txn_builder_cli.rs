@@ -3175,7 +3175,6 @@ mod tests {
   }
 
   #[test]
-  #[ignore]
   // Test funds loading, loan request, fulfilling and repayment
   fn test_request_fulfill_and_pay_loan() {
     run_ledger_standalone().unwrap();
@@ -3188,11 +3187,13 @@ mod tests {
     let funds_amount = 1000;
     load_funds(0, 0, funds_amount, load_funds_txn_path, PROTOCOL, HOST).unwrap();
 
-    let mut data = load_data().unwrap();
+    let data = load_data().unwrap();
+    let _ = fs::remove_file(DATA_FILE);
     assert_eq!(data.borrowers[0].balance, funds_amount);
 
     // Request a loan
     let loan_amount = 1200;
+    let mut data = load_data().unwrap();
     data.add_loan(0, 0, loan_amount, 100, 8).unwrap();
 
     assert_eq!(data.loans.len(), 1);
