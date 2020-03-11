@@ -29,48 +29,8 @@ actual subcommands.
 * By default, all the generated files will be stored in `~./findora`, unless specified otherwise. For example, if the current directory is `platform/target/debug`, running `./txn_builder_cli keygen` will put the generated key pair in ~./findora, but `./txn_builder_cli keygen --name keys/key_pair` will store the key pair to `platform/target/debug/keys/key_pair`.
 * Examples below are assuming the current directory is `platform/target/debug`. If not, change `./txn_builder_cli` to the path to `./txn_builder_cli`.
 
-## Compose a transaction
-### Create an empty transaction
-```
-./txn_builder_cli create_txn_builder --name tb
-```
-
-### Add operations to the transaction. Three operations can be added:
-* Define a new asset. See `txn_builder_cli add define_asset`.
-  * In general
-  ```
-  ./txn_builder_cli --txn tb add define_asset --issuer 0 --token_code ibIaBlHV-PdQkvSuEg6YSA== --memo 'Define an asset.'
-  ```
-  * Fiat asset
-  ```
-  ./txn_builder_cli --txn tb add define_asset --fiat --issuer 0 --memo 'Define fiat asset.'
-  ```
-* Issue units of an asset. See `txn_builder_cli add issue_asset`.
-```
-./txn_builder_cli --txn tb --key_pair kp add issue_asset --token_code ibIaBlHV-PdQkvSuEg6YSA== --amount 100
-```
-* Transfer units of an asset. See `txn_builder_cli add transfer_asset`.
-  * Create input and output public keys
-  ```
-  ./txn_builder_cli pubkeygen --name pki1
-  ./txn_builder_cli pubkeygen --name pki2
-  ./txn_builder_cli pubkeygen --name pko1
-  ./txn_builder_cli pubkeygen --name pko2
-  ./txn_builder_cli pubkeygen --name pko3
-  ```
-  * Store sids and blind asset records
-  ```
-  ./txn_builder_cli store sids --path s --indices 2,4
-  ./txn_builder_cli store blind_asset_record --path bar1 --amount 100 --asset_type ibIaBlHV-PdQkvSuEg6YSA== --pub_key_path pki1
-  ./txn_builder_cli store blind_asset_record --path bar2 --amount 1000 --asset_type ibIaBlHV-PdQkvSuEg6YSA== --pub_key_path pki2
-  ```
-  * Transfer
-  ```
-  ./txn_builder_cli --txn tb --key_pair kp add transfer_asset --sids_path s --blind_asset_record_paths bar1,bar2 --input_amounts 15,45 --output_amounts 10,20,30 --address_paths pko1,pko2,pko3
-  ```
-
 ## Submit a transaction
-After a transaction is composed:
+After a transaction is composed by `define_asset`, `issue_asset`, `transfer_asset`, or `issue_and_transfer_asset`:
 ```
 ./txn_builder_cli --txn tb submit
 ```
@@ -82,6 +42,55 @@ In the initial data, there's one issuer, Izzie. To sign up a new issuer account:
 ```
 ./txn_builder_cli issuer sign_up --name 'Issuer Name'
 ```
+
+### Define an asset
+* Create an empty transaction
+```
+./txn_builder_cli create_txn_builder --name txn_define
+```
+* Define an asset
+```
+./txn_builder_cli --txn txn_define issuer --id 0 define_asset --memo 'Define an asset.'
+```
+By default, a randomly generated token code will be used. To specify a code, use `--token_code`.
+To define a fiat asset, add `--fiat`.
+
+* Submit the transaction
+```
+./txn_builder_cli --txn txn_define submit
+```
+
+### Issue units of an asset
+After an asset is defined and the transaction is submitted:
+* Create an empty transaction
+```
+./txn_builder_cli create_txn_builder --name txn_issue
+```
+* Issue the asset
+```
+./txn_builder_cli --txn txn_issue issuer --id 0 issue_asset --token_code ibIaBlHV-PdQkvSuEg6YSA== --amount 100
+```
+* Submit the transaction
+```
+./txn_builder_cli --txn txn_issue submit
+```
+To display the utxo sids, add `--get_sids`. To store the sids to a file, use `--sids_path`.
+
+### Transfer units of an asset. See `txn_builder_cli add transfer_asset`.
+After an asset is defined and issued, and transactions are submitted:
+* Create an empty transaction
+```
+./txn_builder_cli create_txn_builder --name txn_transfer
+```
+* Transfer
+```
+./txn_builder_cli --txn txn_transfer issuer --id 0 transfer_asset --sids_path s recipients 0,1 --input_amounts 45 --output_amounts 10,35
+```
+* Submit the transaction
+```
+./txn_builder_cli --txn txn_transfer submit
+```
+
 ### Issue and transfer units of an asset
 After an asset is defined and the transaction is submitted:
 * Create an empty transaction
@@ -93,6 +102,11 @@ After an asset is defined and the transaction is submitted:
 ./txn_builder_cli --txn txn_issue_and_transfer issuer --id 0 issue_and_transfer_asset --recipient 0 --amount 1000 --token_code ibIaBlHV-PdQkvSuEg6YSA==
 ```
 Add `--confidential_amount` or `--confidential_asset` if needed.
+* Submit the transaction
+```
+./txn_builder_cli --txn txn_issue_and_transfer submit
+```
+To get the utxo sids, add `--get_sids`.
 
 ## Lender account
 ### Sign up a lender account
@@ -112,7 +126,13 @@ In the initial data, there are two issuer, Lenny and Luna. To sign up a new lend
 ```
 Make sure the specified loan is owned by the lender.
 * View loans with a filter
-To filter the loans, add `--filter` with `active`, `inactive` or `unrejected`, for loans that have been activated (i.e., fulfilled by the lender), haven't been activated, or have been rejected, respectively. For example:
+To filter the loans, add `--filter` with one of the following:
+  * `requested`: loans that have been requested but not fulfilled
+  * `fulfilled`: loans that have been fulfilled, either paid off or not
+  * `declined`: loans that have been declined
+  * `active`: loans that have been fulfilled but not paid off
+  * `complete`: Loans that have been paid off
+For example:
 ```
 ./txn_builder_cli lender --id 0 view_loan --filter active
 ```
@@ -157,7 +177,13 @@ By default, `https://testnet.findora.org` is used. To switch to `http://localhos
 ```
 Make sure the specified loan is owned by the borrower.
 * View loans with a filter
-To filter the loans, add `--filter` with `active`, `inactive` or `unrejected`, for loans that have been activated (i.e., fulfilled by the lender), haven't been activated, or have been rejected, respectively. For example:
+To filter the loans, add `--filter` with one of the following:
+  * `requested`: loans that have been requested but not fulfilled
+  * `fulfilled`: loans that have been fulfilled, either paid off or not
+  * `declined`: loans that have been declined
+  * `active`: loans that have been fulfilled but not paid off
+  * `complete`: Loans that have been paid off
+For example:
 ```
 ./txn_builder_cli borrower --id 0 view_loan --filter active
 ```
@@ -251,12 +277,7 @@ Note from the output that Bill's id is `1`:
 Bill's id is 1.
 ```
 
-## Create some txn files to for defining asset, issuing and transferring asset, and verify asset record
-```
-./txn_builder_cli create_txn_builder --name txn_verify_asset
-```
-
-## Define a confidential asset
+## Ian: defines a confidential asset
 ### Create an empty transaction
 ```
 ./txn_builder_cli create_txn_builder --name txn_define
@@ -264,7 +285,7 @@ Bill's id is 1.
 
 ### Define an asset
 ```
-./txn_builder_cli --txn txn_define add define_asset --issuer 1 --memo 'Define a confidential asset.' --confidential
+./txn_builder_cli --txn txn_define issuer --id 1 define_asset --memo 'Define a confidential asset.' --confidential
 ```
 Note from the output that the asset token code is `7hAA3TTJQHhDGs-_mpP12Q==`, or `[238, 16, 0, 221, 52, 201, 64, 120, 67, 26, 207, 191, 154, 147, 245, 217]`:
 ```

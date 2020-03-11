@@ -4,7 +4,6 @@ extern crate base64;
 extern crate serde;
 extern crate serde_derive;
 
-#[macro_use]
 extern crate itertools;
 extern crate zei;
 

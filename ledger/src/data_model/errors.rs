@@ -10,6 +10,7 @@ pub enum PlatformError {
   // later by removing Option
   InvariantError(Option<String>),
   SubmissionServerError(Option<String>),
+  QueryServerError(Option<String>),
   ZeiError(ZeiError),
   IoError(String),
 }
@@ -28,6 +29,10 @@ impl fmt::Display for PlatformError {
       }
       PlatformError::SubmissionServerError(msg) => {
         f.write_str(format!("Ledger Application Error: {}",
+                            msg.as_ref().unwrap_or(&"UNKNOWN".to_string())).as_str())
+      }
+      PlatformError::QueryServerError(msg) => {
+        f.write_str(format!("Query Server Error: {}",
                             msg.as_ref().unwrap_or(&"UNKNOWN".to_string())).as_str())
       }
       PlatformError::ZeiError(ze) => ze.fmt(f),
