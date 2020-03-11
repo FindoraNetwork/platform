@@ -33,7 +33,7 @@ extern crate exitcode;
 /// Initial data when the program starts.
 const INIT_DATA: &str = r#"
 {
-  "issuers": [
+  "asset_issuers": [
     {
       "id": 0,
       "name": "Izzie",
@@ -51,7 +51,7 @@ const INIT_DATA: &str = r#"
     {
       "id": 1,
       "name": "Luna",
-      "key_pair": "023f37203a2476c42566a61cc55c3ca875dbb4cc41c0deb789f8e7bf881836384d4b18062f8502598de045ca7b69f067f59f93b16e3af8733a988adc2341f5c8",
+      "key_pair": "65efc6564f1c5ee79f65635f249bb082ef5a89d077026c27479ae37db91e48dfe1e2cc04de1ba50705cb9cbba130ddc80f3c2646ddc865b7ab514e8ab77c2e7f",
       "min_credit_score": 680,
       "loans": []
     }
@@ -143,9 +143,9 @@ impl Credential {
 // Users
 //
 #[derive(Clone, Deserialize, Serialize)]
-/// Issuer's account information.
-struct Issuer {
-  /// Issuer ID
+/// AssetIssuer's account information.
+struct AssetIssuer {
+  /// AssetIssuer ID
   id: u64,
   /// Name
   name: String,
@@ -153,13 +153,13 @@ struct Issuer {
   key_pair: String,
 }
 
-impl Issuer {
+impl AssetIssuer {
   fn new(id: usize, name: String) -> Self {
     let key_pair = XfrKeyPair::generate(&mut ChaChaRng::from_entropy());
     let key_pair_str = hex::encode(key_pair.zei_to_bytes());
-    Issuer { id: id as u64,
-             name,
-             key_pair: key_pair_str }
+    AssetIssuer { id: id as u64,
+                  name,
+                  key_pair: key_pair_str }
   }
 }
 
@@ -300,7 +300,7 @@ impl Loan {
 /// Information of users, loans, fiat token code, and sequence number.
 struct Data {
   /// List of user records
-  issuers: Vec<Issuer>,
+  asset_issuers: Vec<AssetIssuer>,
   lenders: Vec<Lender>,
   borrowers: Vec<Borrower>,
 
@@ -333,15 +333,15 @@ impl Data {
     store_data_to_file(self.clone())
   }
 
-  fn add_issuer(&mut self, name: String) -> Result<(), PlatformError> {
-    let id = self.issuers.len();
-    self.issuers.push(Issuer::new(id, name.clone()));
+  fn add_asset_issuer(&mut self, name: String) -> Result<(), PlatformError> {
+    let id = self.asset_issuers.len();
+    self.asset_issuers.push(AssetIssuer::new(id, name.clone()));
     println!("{}'s id is {}.", name, id);
     store_data_to_file(self.clone())
   }
 
   fn get_issuer_key_pair(&mut self, id: u64) -> Result<XfrKeyPair, PlatformError> {
-    let key_pair_str = &self.issuers[id as usize].key_pair;
+    let key_pair_str = &self.asset_issuers[id as usize].key_pair;
     Ok(XfrKeyPair::zei_from_bytes(&hex::decode(key_pair_str).or_else(|_| {
                                      Err(PlatformError::DeserializationError)
                                    })?))
@@ -1628,19 +1628,19 @@ fn main() {
       .value_name("FILE")
       .help("Use a name transaction file (will always be under findora_dir)")
       .takes_value(true))
-    .subcommand(SubCommand::with_name("issuer")
+    .subcommand(SubCommand::with_name("asset_issuer")
       .subcommand(SubCommand::with_name("sign_up")
         .arg(Arg::with_name("name")
           .short("n")
           .long("name")
           .required(true)
           .takes_value(true)
-          .help("Issuer's name.")))
+          .help("AssetIssuer's name.")))
       .arg(Arg::with_name("id")
         .short("i")
         .long("id")
         .takes_value(true)
-        .help("Issuer id."))
+        .help("AssetIssuer id."))
       .subcommand(SubCommand::with_name("store_sids")
         .arg(Arg::with_name("path")
           .short("p")
@@ -1805,7 +1805,7 @@ fn main() {
           .long("issuer")
           .required(true)
           .takes_value(true)
-          .help("Issuer id."))
+          .help("AssetIssuer id."))
         .arg(Arg::with_name("protocol")
           .long("http")
           .takes_value(false)
@@ -2041,7 +2041,9 @@ fn process_inputs(inputs: clap::ArgMatches) -> Result<(), PlatformError> {
   }
 
   match inputs.subcommand() {
-    ("issuer", Some(issuer_matches)) => process_issuer_cmd(issuer_matches, &txn_file),
+    ("asset_issuer", Some(asset_issuer_matches)) => {
+      process_asset_issuer_cmd(asset_issuer_matches, &txn_file)
+    }
     ("lender", Some(issuer_matches)) => process_lender_cmd(issuer_matches, &txn_file),
     ("borrower", Some(issuer_matches)) => process_borrower_cmd(issuer_matches, &txn_file),
     ("create_txn_builder", Some(create_txn_builder_matches)) => {
@@ -2106,21 +2108,21 @@ fn process_inputs(inputs: clap::ArgMatches) -> Result<(), PlatformError> {
 
 /// Processes the `issuer` subcommand.
 /// # Arguments
-/// * `issuer_matches`: subcommands and arguments under the `issuer` subcommand.
+/// * `asset_issuer_matches`: subcommands and arguments under the `asset_issuer` subcommand.
 /// * `txn_file`: path to store the transaction file.
-fn process_issuer_cmd(issuer_matches: &clap::ArgMatches,
-                      txn_file: &str)
-                      -> Result<(), PlatformError> {
-  match issuer_matches.subcommand() {
+fn process_asset_issuer_cmd(asset_issuer_matches: &clap::ArgMatches,
+                            txn_file: &str)
+                            -> Result<(), PlatformError> {
+  match asset_issuer_matches.subcommand() {
     ("sign_up", Some(sign_up_matches)) => {
       let name = if let Some(name_arg) = sign_up_matches.value_of("name") {
         name_arg.to_owned()
       } else {
-        println!("Name is required to sign up an issuer account. Use --name.");
+        println!("Name is required to sign up an asset issuer account. Use --name.");
         return Err(PlatformError::InputsError);
       };
       let mut data = load_data()?;
-      data.add_issuer(name)
+      data.add_asset_issuer(name)
     }
     ("store_sids", Some(store_sids_matches)) => {
       let path = if let Some(path_arg) = store_sids_matches.value_of("path") {
@@ -2140,11 +2142,11 @@ fn process_issuer_cmd(issuer_matches: &clap::ArgMatches,
     ("define_asset", Some(define_asset_matches)) => {
       let fiat_asset = define_asset_matches.is_present("fiat");
       let mut data = load_data()?;
-      let issuer_key_pair = if let Some(id_arg) = issuer_matches.value_of("id") {
+      let issuer_key_pair = if let Some(id_arg) = asset_issuer_matches.value_of("id") {
         let issuer_id = parse_to_u64(id_arg)?;
         data.get_issuer_key_pair(issuer_id)?
       } else {
-        println!("Issuer id is required to define an asset. Use issuer --id.");
+        println!("AssetIssuer id is required to define an asset. Use asset_issuer --id.");
         return Err(PlatformError::InputsError);
       };
       let token_code = define_asset_matches.value_of("token_code");
@@ -2178,11 +2180,11 @@ fn process_issuer_cmd(issuer_matches: &clap::ArgMatches,
     }
     ("issue_asset", Some(issue_asset_matches)) => {
       let mut data = load_data()?;
-      let key_pair = if let Some(id_arg) = issuer_matches.value_of("id") {
+      let key_pair = if let Some(id_arg) = asset_issuer_matches.value_of("id") {
         let issuer_id = parse_to_u64(id_arg)?;
         data.get_issuer_key_pair(issuer_id)?
       } else {
-        println!("Issuer id is required to issue and transfer asset. Use issuer --id.");
+        println!("AssetIssuer id is required to issue and transfer asset. Use asset_issuer --id.");
         return Err(PlatformError::InputsError);
       };
       let token_code = if let Some(token_code_arg) = issue_asset_matches.value_of("token_code") {
@@ -2211,11 +2213,11 @@ fn process_issuer_cmd(issuer_matches: &clap::ArgMatches,
     }
     ("transfer_asset", Some(transfer_asset_matches)) => {
       let mut data = load_data()?;
-      let issuer_key_pair = if let Some(id_arg) = issuer_matches.value_of("id") {
+      let issuer_key_pair = if let Some(id_arg) = asset_issuer_matches.value_of("id") {
         let issuer_id = parse_to_u64(id_arg)?;
         data.get_issuer_key_pair(issuer_id)?
       } else {
-        println!("Issuer id is required to issue and transfer asset. Use issuer --id.");
+        println!("AssetIssuer id is required to issue and transfer asset. Use asset_issuer --id.");
         return Err(PlatformError::InputsError);
       };
       // Compose transfer_from for add_basic_transfer_asset
@@ -2346,11 +2348,11 @@ fn process_issuer_cmd(issuer_matches: &clap::ArgMatches,
     }
     ("issue_and_transfer_asset", Some(issue_and_transfer_matches)) => {
       let mut data = load_data()?;
-      let issuer_key_pair = if let Some(id_arg) = issuer_matches.value_of("id") {
+      let issuer_key_pair = if let Some(id_arg) = asset_issuer_matches.value_of("id") {
         let issuer_id = parse_to_u64(id_arg)?;
         data.get_issuer_key_pair(issuer_id)?
       } else {
-        println!("Issuer id is required to issue and transfer asset. Use issuer --id.");
+        println!("AssetIssuer id is required to issue and transfer asset. Use asset_issuer --id.");
         return Err(PlatformError::InputsError);
       };
       let recipient_key_pair =
@@ -2502,7 +2504,7 @@ fn process_lender_cmd(lender_matches: &clap::ArgMatches,
       let issuer_id = if let Some(issuer_arg) = fulfill_loan_matches.value_of("issuer") {
         parse_to_u64(issuer_arg)?
       } else {
-        println!("Issuer id is required to fulfill the loan. Use --issuer.");
+        println!("AssetIssuer id is required to fulfill the loan. Use --issuer.");
         return Err(PlatformError::InputsError);
       };
       let protocol = if fulfill_loan_matches.is_present("http") {
@@ -2867,7 +2869,7 @@ fn process_load_funds_cmd(borrower_id: u64,
       return Err(PlatformError::InputsError);
     }
   } else {
-    println!("Issuer id is required to load funds. Use --issuer.");
+    println!("AssetIssuer id is required to load funds. Use --issuer.");
     return Err(PlatformError::InputsError);
   };
   let amount = if let Some(amount_arg) = load_funds_matches.value_of("amount") {
