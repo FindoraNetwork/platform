@@ -2736,6 +2736,7 @@ fn process_pay_loan_cmd(pay_loan_matches: &clap::ArgMatches) -> Result<(), Platf
 #[cfg(test)]
 mod tests {
   use super::*;
+  use ledger_standalone::LedgerStandalone;
 
   const PROTOCOL: &str = "http";
   const HOST: &str = "localhost";
@@ -2917,10 +2918,10 @@ mod tests {
   #[test]
   // Test funds loading, loan request, fulfilling and repayment
   fn test_request_fulfill_and_pay_loan() {
-    run_ledger_standalone().unwrap();
-
     let data = load_data().unwrap();
     let balance_pre = data.borrowers[0].balance;
+    let ledger_standalone = LedgerStandalone::new();
+    ledger_standalone.poll_until_ready().unwrap();
 
     // Create txn builder
     let txn_builder_path = "tb_load_funds";
