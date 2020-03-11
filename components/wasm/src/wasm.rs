@@ -1,7 +1,7 @@
 // Interface for issuing transactions that can be compiled to Wasm.
 // Allows web clients to issue transactions from a browser contexts.
 // For now, forwards transactions to a ledger hosted locally.
-// To compile wasm package, run wasm-pack build in the wasm directory
+// To compile wasm package, run wasm-pack build in the wasm directory;
 #![deny(warnings)]
 use bulletproofs::PedersenGens;
 use cryptohash::sha256;
@@ -9,7 +9,7 @@ use curve25519_dalek::ristretto::RistrettoPoint;
 use curve25519_dalek::scalar::Scalar;
 use js_sys::Promise;
 use ledger::data_model::{
-  AssetTypeCode, Operation, Serialized, TransferType, TxOutput, TxoRef, TxoSID,
+  b64enc, AssetTypeCode, Operation, Serialized, TransferType, TxOutput, TxoRef, TxoSID,
 };
 use ledger::policies::{DebtMemo, Fraction};
 use rand_chacha::ChaChaRng;
@@ -415,6 +415,12 @@ pub fn get_priv_key_str(key_pair: &XfrKeyPair) -> String {
 pub fn new_keypair() -> XfrKeyPair {
   let mut small_rng = rand::thread_rng();
   XfrKeyPair::generate(&mut small_rng)
+}
+
+#[wasm_bindgen]
+/// Return base64 encoded representation of an XfrPublicKey
+pub fn public_key_to_base64(key: &XfrPublicKey) -> String {
+  b64enc(&XfrPublicKey::zei_to_bytes(&key))
 }
 
 #[wasm_bindgen]
