@@ -130,7 +130,7 @@ struct Credential {
   id: u64,
   /// Borrower ID
   borrower: u64,
-  /// CredentialIssuer ID
+  /// Credential issuer ID
   credential_issuer: u64,
   /// Credential attribute, possible values defined in the enum `CredentialIndex`
   attribute: CredentialIndex,
@@ -160,7 +160,7 @@ impl Credential {
 // Users
 //
 #[derive(Clone, Deserialize, Serialize)]
-/// AssetIssuer's account information.
+/// Asset issuer's account information.
 struct AssetIssuer {
   /// AssetIssuer ID
   id: u64,
@@ -181,9 +181,9 @@ impl AssetIssuer {
 }
 
 #[derive(Clone, Deserialize, Serialize)]
-/// CredentialIssuer's account information.
+/// Credential issuer's account information.
 struct CredentialIssuer {
-  /// CredentialIssuer ID
+  /// Credential issuer ID
   id: u64,
   /// Name
   name: String,
@@ -828,7 +828,7 @@ fn parse_to_u64_vec(vals_str: &str) -> Result<Vec<u64>, PlatformError> {
 ///
 /// # Arguments
 /// * `fiat_asset`: whether the asset is a fiat asset.
-/// * `issuer_key_pair`: AssetIssuer's key pair.
+/// * `issuer_key_pair`: asset issuer's key pair.
 /// * `token_code`: asset token code.
 /// * `memo`: memo for defining the asset.
 /// * `allow_updates`: whether updates are allowed.
@@ -861,7 +861,7 @@ fn define_asset(fiat_asset: bool,
 
 /// Issues and transfers asset.
 /// # Arguments
-/// * `issuer_key_pair`: AssetIssuer's key pair.
+/// * `issuer_key_pair`: asset issuer's key pair.
 /// * `recipient_key_pair`: rercipient's key pair.
 /// * `amount`: amount to issue and transfer.
 /// * `token_code`: asset token code.
@@ -1725,12 +1725,12 @@ fn main() {
           .long("name")
           .required(true)
           .takes_value(true)
-          .help("AssetIssuer's name.")))
+          .help("Asset issuer's name.")))
       .arg(Arg::with_name("id")
         .short("i")
         .long("id")
         .takes_value(true)
-        .help("AssetIssuer id."))
+        .help("Asset issuer id."))
       .subcommand(SubCommand::with_name("store_sids")
         .arg(Arg::with_name("path")
           .short("p")
@@ -1858,12 +1858,12 @@ fn main() {
           .long("name")
           .required(true)
           .takes_value(true)
-          .help("CredentialIssuer's name.")))
+          .help("Credential issuer's name.")))
       .arg(Arg::with_name("id")
         .short("i")
         .long("id")
         .takes_value(true)
-        .help("CredentialIssuer id.")))
+        .help("Credential issuer id.")))
     .subcommand(SubCommand::with_name("lender")
       .subcommand(SubCommand::with_name("sign_up")
         .arg(Arg::with_name("name")
@@ -1908,7 +1908,7 @@ fn main() {
           .long("issuer")
           .required(true)
           .takes_value(true)
-          .help("AssetIssuer id."))
+          .help("Asset issuer id."))
         .arg(Arg::with_name("protocol")
           .long("http")
           .takes_value(false)
@@ -2022,7 +2022,7 @@ fn main() {
           .long("credential_issuer")
           .required(true)
           .takes_value(true)
-          .help("CredentialIssuer id."))
+          .help("Credential issuer id."))
         .arg(Arg::with_name("attribute")
           .short("a")
           .long("attribute")
@@ -2267,7 +2267,7 @@ fn process_asset_issuer_cmd(asset_issuer_matches: &clap::ArgMatches,
         let issuer_id = parse_to_u64(id_arg)?;
         data.get_asset_issuer_key_pair(issuer_id)?
       } else {
-        println!("AssetIssuer id is required to define an asset. Use asset_issuer --id.");
+        println!("Asset issuer id is required to define an asset. Use asset_issuer --id.");
         return Err(PlatformError::InputsError);
       };
       let token_code = define_asset_matches.value_of("token_code");
@@ -2305,7 +2305,7 @@ fn process_asset_issuer_cmd(asset_issuer_matches: &clap::ArgMatches,
         let issuer_id = parse_to_u64(id_arg)?;
         data.get_asset_issuer_key_pair(issuer_id)?
       } else {
-        println!("AssetIssuer id is required to issue and transfer asset. Use asset_issuer --id.");
+        println!("Asset issuer id is required to issue and transfer asset. Use asset_issuer --id.");
         return Err(PlatformError::InputsError);
       };
       let token_code = if let Some(token_code_arg) = issue_asset_matches.value_of("token_code") {
@@ -2338,7 +2338,7 @@ fn process_asset_issuer_cmd(asset_issuer_matches: &clap::ArgMatches,
         let issuer_id = parse_to_u64(id_arg)?;
         data.get_asset_issuer_key_pair(issuer_id)?
       } else {
-        println!("AssetIssuer id is required to issue and transfer asset. Use asset_issuer --id.");
+        println!("Asset issuer id is required to issue and transfer asset. Use asset_issuer --id.");
         return Err(PlatformError::InputsError);
       };
       // Compose transfer_from for add_basic_transfer_asset
@@ -2473,7 +2473,7 @@ fn process_asset_issuer_cmd(asset_issuer_matches: &clap::ArgMatches,
         let issuer_id = parse_to_u64(id_arg)?;
         data.get_asset_issuer_key_pair(issuer_id)?
       } else {
-        println!("AssetIssuer id is required to issue and transfer asset. Use asset_issuer --id.");
+        println!("Asset issuer id is required to issue and transfer asset. Use asset_issuer --id.");
         return Err(PlatformError::InputsError);
       };
       let recipient_key_pair =
@@ -2658,7 +2658,7 @@ fn process_lender_cmd(lender_matches: &clap::ArgMatches,
       let issuer_id = if let Some(issuer_arg) = fulfill_loan_matches.value_of("issuer") {
         parse_to_u64(issuer_arg)?
       } else {
-        println!("AssetIssuer id is required to fulfill the loan. Use --issuer.");
+        println!("Asset issuer id is required to fulfill the loan. Use --issuer.");
         return Err(PlatformError::InputsError);
       };
       let protocol = if fulfill_loan_matches.is_present("http") {
@@ -2882,7 +2882,7 @@ fn process_borrower_cmd(borrower_matches: &clap::ArgMatches,
       {
         parse_to_u64(credential_issuer_arg)?
       } else {
-        println!("CredentialIssuer id is required to get credential information. Use --credential_issuer.");
+        println!("Credential issuer id is required to get credential information. Use --credential_issuer.");
         return Err(PlatformError::InputsError);
       };
       let attribute =
@@ -3042,7 +3042,7 @@ fn process_load_funds_cmd(borrower_id: u64,
       return Err(PlatformError::InputsError);
     }
   } else {
-    println!("AssetIssuer id is required to load funds. Use --issuer.");
+    println!("Asset issuer id is required to load funds. Use --issuer.");
     return Err(PlatformError::InputsError);
   };
   let amount = if let Some(amount_arg) = load_funds_matches.value_of("amount") {
