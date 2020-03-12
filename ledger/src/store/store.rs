@@ -147,7 +147,7 @@ pub trait ArchiveAccess {
 }
 
 #[repr(C)]
-#[derive(Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 // TODO (Keyao):
 // Are the four fields below all necessary?
 // Can we remove one of txns_in_block_hash and global_block_hash?
@@ -167,6 +167,12 @@ impl StateCommitmentData {
     let serialized = bincode::serialize(&self).unwrap();
     sha256::hash(&serialized)
   }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+pub struct LoggedBlock {
+  pub block: Vec<Transaction>,
+  pub state: StateCommitmentData,
 }
 
 const MAX_VERSION: usize = 100;
@@ -259,12 +265,12 @@ pub struct LedgerState {
   // Bitmap tracking all the live TXOs
   utxo_map: BitMap,
 
-  // TODO(joe): use this file handle to actually record transactions
-  #[allow(unused)]
   txn_log: Option<File>,
 
   block_ctx: Option<BlockEffect>,
 }
+
+struct LedgerStateChecker(pub LedgerState);
 
 // TODO(joe): fill these in
 impl HasInvariants<PlatformError> for LedgerStatus {
@@ -284,6 +290,45 @@ impl HasInvariants<PlatformError> for LedgerState {
   }
 
   fn deep_invariant_check(&self) -> Result<(), PlatformError> {
+    let mut txn_sid = 0;
+    for (ix, block) in self.blocks.iter().enumerate() {
+      let txns = block.txns
+                      .iter()
+                      .cloned()
+                      .map(|x| x.txn)
+                      .collect::<Vec<_>>();
+      let txns_in_block_hash = {
+        let serialized = bincode::serialize(&txns).unwrap();
+
+        let mut txns_in_block_hash = HashValue::new();
+        txns_in_block_hash.hash
+                          .clone_from_slice(&sha256::hash(&serialized).0);
+        txns_in_block_hash
+      };
+
+      dbg!(self.block_merkle.state());
+      let proof = self.block_merkle.get_proof(ix as u64, 0).unwrap();
+      dbg!(&proof);
+      // dbg!(&bincode::serialize(&block.txns).unwrap());
+      // dbg!(&bincode::serialize(&block.txns.clone()).unwrap());
+      // dbg!(&bincode::serialize(&block.txns.iter().collect::<Vec<_>>()).unwrap());
+      dbg!(&block.txns);
+      dbg!(&txns_in_block_hash);
+      // assert!(self.status.txns_in_block_hash == txns_in_block_hash);
+      if !proof.is_valid_proof(txns_in_block_hash.clone()) {
+        return Err(PlatformError::InvariantError(Some(format!("Bad block proof at {}", ix))));
+      }
+
+      for txn in txns.iter() {
+        let ix = txn_sid;
+        txn_sid += 1;
+        let proof = self.txn_merkle.get_proof(ix as u64, 0).unwrap();
+        if !proof.is_valid_proof(txn.hash(TxnSID(ix))) {
+          return Err(PlatformError::InvariantError(Some(format!("Bad txn proof at {}", ix))));
+        }
+      }
+    }
+
     if let Some(txn_log_fd) = &self.txn_log {
       txn_log_fd.sync_data().unwrap();
       let tmp_dir = {
@@ -491,15 +536,10 @@ impl LedgerStatus {
   // This drains every field of `block` except `txns` and `temp_sids`.
   #[allow(clippy::cognitive_complexity)]
   fn apply_block_effects(&mut self,
-                         utxo_map: &mut BitMap,
                          block: &mut BlockEffect)
                          -> HashMap<TxnTempSID, (TxnSID, Vec<TxoSID>)> {
     // Remove consumed UTXOs
     for (inp_sid, _) in block.input_txos.drain() {
-      // Remove from bitmap
-      debug_assert!(utxo_map.query(inp_sid.0 as usize).unwrap());
-      utxo_map.clear(inp_sid.0 as usize).unwrap();
-
       // Remove from ledger status
       debug_assert!(self.utxos.contains_key(&inp_sid));
       self.utxos.remove(&inp_sid);
@@ -551,12 +591,13 @@ impl LedgerStatus {
     // issuance_keys should already have been checked
     block.issuance_keys.clear();
 
-    debug_assert!(block.temp_sids.len() == block.txns.len());
-    debug_assert!(block.txos.is_empty());
-    debug_assert!(block.input_txos.is_empty());
-    debug_assert!(block.new_asset_codes.is_empty());
-    debug_assert!(block.new_issuance_nums.is_empty());
-    debug_assert!(block.issuance_keys.is_empty());
+    debug_assert_eq!(block.clone(), {
+      let mut def: BlockEffect = Default::default();
+      def.txns = block.txns.clone();
+      def.temp_sids = block.temp_sids.clone();
+
+      def
+    });
 
     new_utxo_sids
   }
@@ -598,14 +639,7 @@ impl LedgerUpdate<ChaChaRng> for LedgerState {
     block.issuance_keys.clear();
     block.air_updates.clear();
 
-    debug_assert!(block.temp_sids.is_empty());
-    debug_assert!(block.txns.is_empty());
-    debug_assert!(block.txos.is_empty());
-    debug_assert!(block.input_txos.is_empty());
-    debug_assert!(block.new_asset_codes.is_empty());
-    debug_assert!(block.new_issuance_nums.is_empty());
-    debug_assert!(block.issuance_keys.is_empty());
-    debug_assert!(block.air_updates.is_empty());
+    debug_assert_eq!(block.clone(), Default::default());
 
     ret
   }
@@ -619,14 +653,15 @@ impl LedgerUpdate<ChaChaRng> for LedgerState {
     let base_sid = self.status.next_txo.0;
     let txn_temp_sids = block.temp_sids.clone();
 
-    if let Some(txn_log_fd) = &self.txn_log {
-      bincode::serialize_into(txn_log_fd, &block.txns)
-            .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other,e))?;
-      txn_log_fd.sync_data()?;
+    let block_txns = block.txns.clone();
+
+    for (inp_sid, _) in block.input_txos.iter() {
+      // Remove from bitmap
+      debug_assert!(self.utxo_map.query(inp_sid.0 as usize).unwrap());
+      self.utxo_map.clear(inp_sid.0 as usize).unwrap();
     }
 
-    let temp_sid_map = self.status
-                           .apply_block_effects(&mut self.utxo_map, &mut block);
+    let temp_sid_map = self.status.apply_block_effects(&mut block);
     let max_sid = self.status.next_txo.0; // mutated by apply_txn_effects
 
     // debug_assert!(utxo_sids.is_sorted());
@@ -687,8 +722,12 @@ impl LedgerUpdate<ChaChaRng> for LedgerState {
 
     {
       let mut tx_block = Vec::new();
+
+      // TODO(joe/keyao): reorder these so that we can drain things
+
       // Update the transaction Merkle tree and transaction log
-      for (tmp_sid, txn) in block.temp_sids.drain(..).zip(block.txns.drain(..)) {
+      for (tmp_sid, txn) in block.temp_sids.iter().zip(block.txns.iter()) {
+        let txn = txn.clone();
         let txn_sid = temp_sid_map.get(&tmp_sid).unwrap().0;
 
         // TODO(joe/jonathan): Since errors in the merkle tree are things like
@@ -702,8 +741,19 @@ impl LedgerUpdate<ChaChaRng> for LedgerState {
       }
       // Checkpoint
       let block_merkle_id = self.checkpoint(&block);
+      block.temp_sids.clear();
+      block.txns.clear();
 
       //Add block to txn history
+      //TODO(joe/nathan): This ordering feels bad -- the txn log should probably be write-ahead,
+      //but the state commitment you need doesn't exist yet! maybe these should be two different
+      //logs, or the writing should be staggered in some way.
+      if let Some(txn_log_fd) = &self.txn_log {
+        bincode::serialize_into(txn_log_fd, &LoggedBlock { block: block_txns, state: self.status.state_commitment_data.clone().unwrap() })
+              .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other,e)).unwrap();
+        txn_log_fd.sync_data().unwrap();
+      }
+
       self.blocks.push(FinalizedBlock { txns: tx_block,
                                         merkle_id: block_merkle_id });
     }
@@ -716,16 +766,212 @@ impl LedgerUpdate<ChaChaRng> for LedgerState {
 
     // TODO(joe): asset tracing?
 
-    debug_assert!(block.temp_sids.is_empty());
-    debug_assert!(block.txns.is_empty());
-    debug_assert!(block.txos.is_empty());
-    debug_assert!(block.input_txos.is_empty());
-    debug_assert!(block.new_asset_codes.is_empty());
-    debug_assert!(block.new_issuance_nums.is_empty());
+    debug_assert_eq!(block.clone(), Default::default());
 
     self.block_ctx = Some(block);
 
     Ok(temp_sid_map)
+  }
+}
+
+impl LedgerUpdate<ChaChaRng> for LedgerStateChecker {
+  type Block = BlockEffect;
+
+  fn get_prng(&mut self) -> &mut ChaChaRng {
+    self.0.get_prng()
+  }
+
+  fn start_block(&mut self) -> Result<BlockEffect, PlatformError> {
+    self.0.start_block()
+  }
+
+  fn apply_transaction(&self,
+                       block: &mut BlockEffect,
+                       txn: TxnEffect)
+                       -> Result<TxnTempSID, PlatformError> {
+    // inputs must be listed as spent in the bitmap
+    for (inp_sid, _) in txn.input_txos.iter() {
+      if self.0.utxo_map.query(inp_sid.0 as usize).unwrap() {
+        return Err(PlatformError::CheckedReplayError(format!("{}:{}:{}",
+                                                             std::file!(),
+                                                             std::line!(),
+                                                             std::column!())));
+      }
+    }
+
+    let base_ix = self.0.status.next_txo.0 + (block.txos.len() as u64);
+
+    // internally-spent outputs must be listed as spent
+    for (ix, txo) in txn.txos.iter().enumerate() {
+      let live = self.0.utxo_map.query((base_ix + (ix as u64)) as usize)?;
+      if txo.is_none() && live {
+        return Err(PlatformError::CheckedReplayError(format!("{}:{}:{}",
+                                                             std::file!(),
+                                                             std::line!(),
+                                                             std::column!())));
+      }
+    }
+
+    /*
+     * NOTE: validity checking of the bitmap is a little bit subtle
+     *
+     * The approach this code takes is:
+     *  - Every TXO which is spent by some transaction is 0 in the bitmap
+     *  - Once the log has been replayed, every remaining unspent TXO is 1
+     *    in the bitmap
+     *
+     * This is basically the exact spec of bitmap correctness, but it
+     * relies on the UTXO set in `LedgerStatus` being authoritative -- if
+     * there is a bug in updating that set, then a bug in updating the UTXO
+     * bitmap won't be detected by this code.
+     */
+
+    // The transaction must match its spot in the txn merkle tree
+    let txn_sid = self.0.status.next_txn.0 + block.txns.len();
+    let proof = self.0.txn_merkle.get_proof(txn_sid as u64, 0)?;
+    dbg!(&txn_sid);
+    dbg!(&txn);
+    dbg!(&proof);
+    if !proof.is_valid_proof(txn.txn.hash(TxnSID(txn_sid))) {
+      return Err(PlatformError::CheckedReplayError(format!("{}:{}:{}",
+                                                           std::file!(),
+                                                           std::line!(),
+                                                           std::column!())));
+    }
+
+    self.0.apply_transaction(block, txn)
+  }
+
+  // this shouldn't ever be called, since this type should only be used for
+  // replaying a log, and there isn't a reason to abort
+  fn abort_block(&mut self, _block: BlockEffect) -> HashMap<TxnTempSID, Transaction> {
+    unimplemented!()
+  }
+
+  fn finish_block(&mut self,
+                  block: BlockEffect)
+                  -> Result<HashMap<TxnTempSID, (TxnSID, Vec<TxoSID>)>, std::io::Error> {
+    let mut block = block;
+
+    let block_id = self.0.blocks.len();
+
+    let temp_sid_map = self.0.status.apply_block_effects(&mut block);
+
+    // Apply AIR updates
+    for (addr, data) in block.air_updates.drain() {
+      debug_assert!(self.0.air.get(&addr.0).is_none());
+      self.0.air.set(&addr.0, Some(data));
+    }
+
+    {
+      let mut tx_block = Vec::new();
+
+      // TODO(joe/keyao): reorder these so that we can drain things
+
+      // Update the transaction Merkle tree and transaction log
+      for (tmp_sid, txn) in block.temp_sids.iter().zip(block.txns.iter()) {
+        let txn = txn.clone();
+        let txn_sid = temp_sid_map.get(&tmp_sid).unwrap().0;
+
+        tx_block.push(FinalizedTransaction { txn,
+                                             tx_id: txn_sid,
+                                             merkle_id: txn_sid.0 as u64 });
+      }
+
+      self.0.blocks.push(FinalizedBlock { txns: tx_block,
+                                          merkle_id: block_id as u64 });
+    }
+
+    block.txns.clear();
+    block.temp_sids.clear();
+
+    debug_assert_eq!(block.clone(), Default::default());
+
+    self.0.block_ctx = Some(block);
+
+    Ok(temp_sid_map)
+  }
+}
+
+impl LedgerStateChecker {
+  pub fn check_block(self, ix: u64, block: &BlockEffect) -> Result<Self, PlatformError> {
+    // The block must match its spot in the block merkle tree
+    let proof = self.0.block_merkle.get_proof(ix, 0)?;
+
+    let block = block;
+
+    let (block_merkle_hash, block_hash) = {
+      let block_hash = block.compute_txns_in_block_hash();
+      let mut txns_in_block_hash = HashValue::new();
+      txns_in_block_hash.hash.clone_from_slice(&block_hash.0);
+      (txns_in_block_hash, block_hash)
+    };
+
+    dbg!(&self.0.block_merkle.state());
+    dbg!(&proof);
+    dbg!(&block_merkle_hash);
+    if !proof.is_valid_proof(block_merkle_hash) {
+      return Err(PlatformError::CheckedReplayError(format!("{}:{}:{}",
+                                                           std::file!(),
+                                                           std::line!(),
+                                                           std::column!())));
+    }
+
+    let comm = (&self.0.status.state_commitment_data).as_ref().unwrap();
+    if comm.txns_in_block_hash != block_hash {
+      return Err(PlatformError::CheckedReplayError(format!("{}:{}:{}",
+                                                           std::file!(),
+                                                           std::line!(),
+                                                           std::column!())));
+    }
+
+    dbg!(&comm.txo_count);
+    dbg!(&self.0.status.next_txo.0);
+    if comm.txo_count != self.0.status.next_txo.0 + block.txos.iter().flatten().count() as u64 {
+      return Err(PlatformError::CheckedReplayError(format!("{}:{}:{}",
+                                                           std::file!(),
+                                                           std::line!(),
+                                                           std::column!())));
+    }
+
+    Ok(self)
+  }
+
+  pub fn finish_check(mut self) -> Result<LedgerState, PlatformError> {
+    // Check the UTXO set is all "on" in the bitmap, and check the top
+    // level state commitment.
+
+    for (ix, _) in self.0.status.utxos.iter() {
+      let live = self.0.utxo_map.query(ix.0 as usize)?;
+      if !live {
+        return Err(PlatformError::CheckedReplayError(format!("{}:{}:{}",
+                                                             std::file!(),
+                                                             std::line!(),
+                                                             std::column!())));
+      }
+    }
+
+    let comm = self.0.status.state_commitment_data.as_ref().unwrap();
+    if self.0.utxo_map.compute_checksum() != comm.bitmap {
+      return Err(PlatformError::CheckedReplayError(format!("{}:{}:{}",
+                                                           std::file!(),
+                                                           std::line!(),
+                                                           std::column!())));
+    }
+    if self.0.block_merkle.get_root_hash() != comm.block_merkle {
+      return Err(PlatformError::CheckedReplayError(format!("{}:{}:{}",
+                                                           std::file!(),
+                                                           std::line!(),
+                                                           std::column!())));
+    }
+    if self.0.txn_merkle.get_root_hash() != comm.transaction_merkle_commitment {
+      return Err(PlatformError::CheckedReplayError(format!("{}:{}:{}",
+                                                           std::file!(),
+                                                           std::line!(),
+                                                           std::column!())));
+    }
+
+    Ok(self.0)
   }
 }
 
@@ -786,12 +1032,12 @@ impl LedgerState {
 
   // TODO(joe): Make this an iterator of some sort so that we don't have to load the whole log
   // into memory
-  fn load_transaction_log(path: &str) -> Result<Vec<Vec<Transaction>>, std::io::Error> {
+  fn load_transaction_log(path: &str) -> Result<Vec<LoggedBlock>, std::io::Error> {
     let file = File::open(path)?;
     let mut reader = BufReader::new(file);
     let mut v = Vec::new();
     while let Ok(next_block) =
-      bincode::deserialize_from::<&mut BufReader<File>, Vec<Transaction>>(&mut reader)
+      bincode::deserialize_from::<&mut BufReader<File>, LoggedBlock>(&mut reader)
     {
       v.push(next_block);
     }
@@ -822,7 +1068,16 @@ impl LedgerState {
                       .clone_from_slice(&self.status.txns_in_block_hash.0);
 
     //  2.2 Update the block Merkle tree
-    self.block_merkle.append(&txns_in_block_hash).unwrap()
+    let ret = self.block_merkle.append(&txns_in_block_hash).unwrap();
+    // dbg!(&block.txns);
+    // dbg!(&bincode::serialize(&block.txns).unwrap());
+    // dbg!(&bincode::serialize(&block.txns.clone()).unwrap());
+    // dbg!(&txns_in_block_hash);
+    debug_assert!(self.block_merkle
+                      .get_proof(self.status.block_commit_count, 0)
+                      .unwrap()
+                      .is_valid_proof(txns_in_block_hash.clone()));
+    ret
   }
 
   fn compute_and_save_state_commitment_data(&mut self) {
@@ -935,6 +1190,68 @@ impl LedgerState {
     Ok(ledger)
   }
 
+  pub fn load_checked_from_log(block_merkle_path: &str,
+                               air_path: &str,
+                               txn_merkle_path: &str,
+                               txn_path: &str,
+                               utxo_map_path: &str,
+                               prng_seed: Option<[u8; 32]>)
+                               -> Result<LedgerState, PlatformError> {
+    let blocks = LedgerState::load_transaction_log(txn_path)?;
+    dbg!(&blocks);
+    let txn_log = std::fs::OpenOptions::new().append(true).open(txn_path)?;
+    dbg!(&txn_log);
+    let mut ledger =
+      LedgerStateChecker(LedgerState { status: LedgerStatus::new(block_merkle_path,
+                                              air_path,
+                                              txn_merkle_path,
+                                              txn_path,
+                                              utxo_map_path)?,
+                    // TODO(joe): is this safe?
+                    prng: rand_chacha::ChaChaRng::from_seed(prng_seed.unwrap_or([0u8; 32])),
+                    block_merkle: LedgerState::init_merkle_log(block_merkle_path, false)?,
+                    air: LedgerState::init_air_log(air_path, true)?,
+                    txn_merkle: LedgerState::init_merkle_log(txn_merkle_path, false)?,
+                    blocks: Vec::new(),
+                    utxo_map: LedgerState::init_utxo_map(utxo_map_path, false)?,
+                    txn_log: None,
+                    block_ctx: Some(BlockEffect::new()) });
+
+    dbg!(blocks.len());
+    for (ix, logged_block) in blocks.into_iter().enumerate() {
+      dbg!(&ix);
+      dbg!(&logged_block);
+      let (comm, block) = (logged_block.state, logged_block.block);
+      let prev_commitment = match &ledger.0.status.state_commitment_data {
+        Some(commitment_data) => commitment_data.compute_commitment(),
+        None => BitDigest { 0: [0_u8; DIGESTBYTES] },
+      };
+      if prev_commitment != comm.previous_state_commitment {
+        return Err(PlatformError::CheckedReplayError(format!("{}:{}:{}",
+                                                             std::file!(),
+                                                             std::line!(),
+                                                             std::column!())));
+      }
+
+      ledger.0.status.state_commitment_data = Some(comm);
+      ledger.0.status.block_commit_count += 1;
+
+      let mut block_builder = ledger.start_block().unwrap();
+      for txn in block {
+        let eff = TxnEffect::compute_effect(ledger.get_prng(), txn)
+                .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other,e))?;
+        ledger.apply_transaction(&mut block_builder, eff)
+              .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
+      }
+      ledger = ledger.check_block(ix as u64, &block_builder)?;
+      ledger.finish_block(block_builder).unwrap();
+    }
+
+    ledger.0.txn_log = Some(txn_log);
+
+    ledger.finish_check()
+  }
+
   pub fn load_from_log(block_merkle_path: &str,
                        air_path: &str,
                        txn_merkle_path: &str,
@@ -960,7 +1277,8 @@ impl LedgerState {
                     txn_log: None,
                     block_ctx: Some(BlockEffect::new()) };
 
-    for block in blocks {
+    for logged_block in blocks.into_iter() {
+      let block = logged_block.block;
       let mut block_builder = ledger.start_block().unwrap();
       for txn in block {
         let eff = TxnEffect::compute_effect(ledger.get_prng(), txn)
@@ -976,7 +1294,7 @@ impl LedgerState {
     Ok(ledger)
   }
 
-  pub fn load_or_init(base_dir: &Path) -> Result<LedgerState, std::io::Error> {
+  pub fn load_or_init(base_dir: &Path) -> Result<LedgerState, PlatformError> {
     let block_merkle = base_dir.join("block_merkle");
     let block_merkle = block_merkle.to_str().unwrap();
     let air = base_dir.join("air");
@@ -993,6 +1311,8 @@ impl LedgerState {
     LedgerState::load_from_log(&block_merkle, &air, &txn_merkle, &txn_log,
                 &utxo_map, None)
               .or_else(|_| LedgerState::new(&block_merkle, &air, &txn_merkle, &txn_log,
+                &utxo_map, None))
+    .or_else(|_| LedgerState::load_checked_from_log(&block_merkle, &air, &txn_merkle, &txn_log,
                 &utxo_map, None))
   }
 
@@ -1075,6 +1395,9 @@ impl LedgerState {
     self.save_utxo_map_version();
     let merkle_id = self.compute_and_append_txns_hash(&block);
     self.compute_and_save_state_commitment_data();
+    self.utxo_map.write().unwrap();
+    self.txn_merkle.flush().unwrap();
+    self.block_merkle.flush().unwrap();
     merkle_id
   }
 
@@ -1156,7 +1479,7 @@ impl AuthenticatedBlock {
     let mut hash = HashValue::new();
     hash.hash.clone_from_slice(&digest.0);
 
-    if self.block_inclusion_proof.is_valid_proof(hash) {
+    if !self.block_inclusion_proof.is_valid_proof(hash) {
       return false;
     }
 
@@ -1294,6 +1617,7 @@ impl ArchiveAccess for LedgerState {
     match self.blocks.get(addr.0) {
       None => None,
       Some(finalized_block) => {
+        debug_assert_eq!(addr.0 as u64, finalized_block.merkle_id);
         let block_inclusion_proof = self.block_merkle
                                         .get_proof(finalized_block.merkle_id, 0)
                                         .unwrap();
