@@ -7,7 +7,7 @@ extern crate tempdir;
 use crate::data_model::errors::PlatformError;
 use crate::data_model::*;
 use crate::policies::{calculate_fee, DebtMemo};
-use air::AIR;
+use air::{AIRResult, AIR};
 use bitmap::{BitMap, SparseMap};
 use cryptohash::sha256;
 use cryptohash::sha256::Digest as BitDigest;
@@ -141,6 +141,9 @@ pub trait ArchiveAccess {
 
   // Get the hash of the most recent checkpoint, and its sequence number.
   fn get_state_commitment(&self) -> (BitDigest, u64);
+
+  // Key-value lookup in AIR
+  fn get_air_data(&self, address: &str) -> AIRResult;
 }
 
 #[repr(C)]
@@ -155,6 +158,7 @@ pub struct StateCommitmentData {
   pub txns_in_block_hash: BitDigest,            // The hash of the transactions in the block
   pub previous_state_commitment: BitDigest,     // The prior global block hash
   pub transaction_merkle_commitment: HashValue, // The root hash of the transaction Merkle tree
+  pub air_commitment: air::Digest,              // The root hash of the AIR sparse Merkle tree
   pub txo_count: u64, // Number of transaction outputs. Used to provide proof that a utxo does not exist
 }
 
@@ -241,7 +245,7 @@ pub struct LedgerState {
   block_merkle: LoggedMerkle,
 
   // Sparse Merkle Tree for Addres Identity Registry
-  air: AIR<String>,
+  air: AIR,
 
   // Merkle tree tracking the sequence of all transaction hashes
   // Each appended hash is the hash of a transaction
@@ -706,8 +710,8 @@ impl LedgerUpdate<ChaChaRng> for LedgerState {
 
     // Apply AIR updates
     for (addr, data) in block.air_updates.drain() {
-      debug_assert!(self.air.get(&addr.0).is_none());
-      self.air.set(&addr.0, Some(data));
+      debug_assert!(self.air.get(&addr).is_none());
+      self.air.set(&addr, Some(data));
     }
 
     // TODO(joe): asset tracing?
@@ -830,6 +834,7 @@ impl LedgerState {
       Some(StateCommitmentData { bitmap: self.utxo_map.compute_checksum(),
                                  block_merkle: self.block_merkle.get_root_hash(),
                                  transaction_merkle_commitment: self.txn_merkle.get_root_hash(),
+                                 air_commitment: *self.air.merkle_root(),
                                  txns_in_block_hash: self.status.txns_in_block_hash,
                                  previous_state_commitment: prev_commitment,
                                  txo_count: self.status.next_txo.0 });
@@ -864,10 +869,10 @@ impl LedgerState {
     Ok(LoggedMerkle::new(tree, writer))
   }
 
-  fn init_air_log(path: &str, create: bool) -> Result<AIR<String>, std::io::Error> {
+  fn init_air_log(path: &str, create: bool) -> Result<AIR, std::io::Error> {
     // Create a merkle tree or open an existing one.
     let result = if create {
-      Ok(AIR::<String>::new())
+      Ok(AIR::default())
     } else {
       air::open(path)
     };
@@ -1367,6 +1372,15 @@ impl ArchiveAccess for LedgerState {
     };
     (commitment, self.status.block_commit_count)
   }
+
+  fn get_air_data(&self, key: &str) -> AIRResult {
+    let merkle_root = self.air.merkle_root();
+    let (value, merkle_proof) = self.air.get_with_proof(key);
+    AIRResult { merkle_root: *merkle_root,
+                key: key.to_string(),
+                value: value.map(|s| s.to_string()),
+                merkle_proof }
+  }
 }
 
 pub mod helpers {
@@ -1616,6 +1630,7 @@ mod tests {
                                                                                 DIGESTBYTES] },
                                      transaction_merkle_commitment: ledger_state.txn_merkle
                                                                                 .get_root_hash(),
+                                     air_commitment: *ledger_state.air.merkle_root(),
                                      txo_count: 0 };
 
     let serialized = bincode::serialize(&data).unwrap();
