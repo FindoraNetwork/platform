@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<module type="JAVA_MODULE" version="4">
+  <component name="NewModuleRootManager" inherit-compiler-output="true">
+    <exclude-output />
+    <content url="file://$MODULE_DIR$">
+      <sourceFolder url="file://$MODULE_DIR$/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/examples" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/tests" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/benches" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/../../libs/ads/air/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/../../libs/ads/air/examples" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/../../libs/ads/air/tests" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/../../libs/ads/air/benches" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/../../libs/ads/sparse_merkle_tree/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/../../libs/ads/sparse_merkle_tree/examples" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/../../libs/ads/sparse_merkle_tree/tests" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/../../libs/ads/sparse_merkle_tree/benches" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/../../libs/cryptohash/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/../../libs/cryptohash/examples" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/../../libs/cryptohash/tests" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/../../libs/cryptohash/benches" isTestSource="true" />
+      <excludeFolder url="file://$MODULE_DIR$/target" />
+      <excludeFolder url="file://$MODULE_DIR$/../../libs/ads/air/target" />
+      <excludeFolder url="file://$MODULE_DIR$/../../libs/ads/sparse_merkle_tree/target" />
+      <excludeFolder url="file://$MODULE_DIR$/../../libs/cryptohash/target" />
+    </content>
+    <orderEntry type="inheritedJdk" />
+    <orderEntry type="sourceFolder" forTests="false" />
+  </component>
+</module>
