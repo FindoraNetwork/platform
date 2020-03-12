@@ -859,8 +859,8 @@ impl LedgerUpdate<ChaChaRng> for LedgerStateChecker {
 
     // Apply AIR updates
     for (addr, data) in block.air_updates.drain() {
-      debug_assert!(self.0.air.get(&addr.0).is_none());
-      self.0.air.set(&addr.0, Some(data));
+      debug_assert!(self.0.air.get(&addr).is_none());
+      self.0.air.set(&addr, Some(data));
     }
 
     {
