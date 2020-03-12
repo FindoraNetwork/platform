@@ -173,7 +173,7 @@ mod handlers {
                                  update: Credential,
                                  db: Db)
                                  -> Result<impl warp::Reply, Infallible> {
-    let decoded_id = urldecode::decode(id); // Why can't I use it and call it as decode? (brian)
+    let decoded_id = urldecode::decode(id);
     log::debug!("update_credential: id={}, credential={:?}",
                 decoded_id,
                 update);
