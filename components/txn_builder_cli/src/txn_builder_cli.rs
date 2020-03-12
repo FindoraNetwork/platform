@@ -2282,7 +2282,7 @@ fn protocol_host(matches: &clap::ArgMatches) -> (&'static str, &'static str) {
   };
   (protocol, host)
 }
-
+/*
 fn process_submit_cmd(submit_matches: &clap::ArgMatches,
                       transaction_file_name: &str)
                       -> Result<(), PlatformError> {
@@ -2297,7 +2297,7 @@ fn process_submit_cmd(submit_matches: &clap::ArgMatches,
     submit(protocol, host, &transaction_file_name)
   }
 }
-
+*/
 // Create the specific file if missing
 // Rename the existing path if necessary
 fn create_directory_and_rename_path(path_str: &str, overwrite: bool) -> Result<(), PlatformError> {
@@ -2587,9 +2587,9 @@ fn process_borrower_cmd(borrower_matches: &clap::ArgMatches,
       }
       let mut credentials = Vec::new();
       let credential_ids = data.borrowers[borrower_id as usize].credentials;
-      for cred_id in credential_ids.into_iter() {
+      for cred_id in credential_ids.iter() {
         if let Some(id) = cred_id {
-          credentials.push(data.credentials[id as usize].clone());
+          credentials.push(data.credentials[*id as usize].clone());
         }
       }
       println!("Displaying {} credential(s): {:?}",
