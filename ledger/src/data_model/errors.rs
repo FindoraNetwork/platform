@@ -6,6 +6,7 @@ pub enum PlatformError {
   DeserializationError,
   SerializationError,
   InputsError,
+  CheckedReplayError(String),
   // Option(String) so I (joe) can be lazy about error descriptions but also catch the laziness
   // later by removing Option
   InvariantError(Option<String>),
@@ -22,6 +23,9 @@ impl fmt::Display for PlatformError {
     match self {
       PlatformError::DeserializationError => f.write_str("Could not deserialize object"),
       PlatformError::SerializationError => f.write_str("Could not serialize object"),
+      PlatformError::CheckedReplayError(msg) => {
+        f.write_str(&format!("Inconsistency found while replaying: {}", msg))
+      }
       PlatformError::InputsError => f.write_str("Invalid parameters"),
       PlatformError::InvariantError(msg) => {
         f.write_str(format!("Invariant violated: {}",

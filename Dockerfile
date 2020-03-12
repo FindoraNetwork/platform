@@ -1,4 +1,4 @@
-FROM nexus.findora.org/zei:master as zei
+FROM nexus.findora.org/zei:v0.0.1 as zei
 FROM rustlang/rust:nightly as builder
 RUN cargo install cargo-audit
 RUN cargo install wasm-pack
@@ -8,9 +8,8 @@ COPY --from=zei /app /src/zei
 COPY --from=zei /src/zcash-bn-fork /src/zcash-bn-fork
 COPY . /app/
 RUN cargo audit
-RUN cargo test --no-run
-RUN cargo test --no-fail-fast --workspace --exclude 'txn_builder_cli'
 RUN cargo build --release
+RUN cargo test --release --no-fail-fast --workspace --exclude 'txn_builder_cli'
 WORKDIR /app/components/wasm
 RUN wasm-pack build
 

@@ -15,7 +15,6 @@ use rand_chacha::ChaChaRng;
 use rand_core::SeedableRng;
 use rustyline::error::ReadlineError;
 use rustyline::Editor;
-// use sha2::{Digest, Sha256};
 use serde::{Deserialize, Serialize};
 use sha256::DIGESTBYTES;
 use std::collections::HashMap;
@@ -111,29 +110,12 @@ struct User {
   secret_key: ACUserSecretKey,
 }
 
-// TypeName is used for hash salting
-trait TypeName {
-  fn type_string(&self) -> &'static str;
-}
-
-impl TypeName for ACUserPublicKey {
-  fn type_string(&self) -> &'static str {
-    "ACUserPublicKey"
-  }
-}
-
-impl TypeName for ACIssuerPublicKey {
-  fn type_string(&self) -> &'static str {
-    "ACIssuerPublicKey"
-  }
-}
-
 #[derive(Debug)]
 struct GlobalState {
   verbose: bool,
   prng: ChaChaRng,
   registry: Vec<String>, // Not used anymore, used to represent file storage
-  smt: AIR<String>,
+  smt: AIR,
   users: HashMap<String, User>,
   issuers: HashMap<String, Issuer>,
   user_sig: HashMap<String, ACSignature>, // Each user has at most a single credential issued to it
@@ -146,7 +128,7 @@ impl GlobalState {
     GlobalState { verbose: args.is_present("v"),
                   prng: ChaChaRng::from_entropy(),
                   registry: Vec::<String>::new(),
-                  smt: AIR::<String>::new(),
+                  smt: AIR::default(),
                   users: HashMap::new(),
                   issuers: HashMap::new(),
                   user_sig: HashMap::new(),
@@ -336,7 +318,7 @@ fn user_selectively_reveal(global_state: &mut GlobalState,
 }
 
 fn slice_to_attr(s: &[u8]) -> Option<&[u8]> {
-  if s == "".as_bytes() || s == "\"\"".as_bytes() {
+  if s == b"" || s == b"\"\"" {
     None
   } else {
     Some(s)

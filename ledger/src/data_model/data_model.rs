@@ -308,12 +308,12 @@ impl DefineAssetBody {
 }
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct AIRAssignBody {
-  pub addr: BitDigest,
+  pub addr: String,
   pub data: String,
 }
 
 impl AIRAssignBody {
-  pub fn new(addr: BitDigest, data: String) -> Result<AIRAssignBody, errors::PlatformError> {
+  pub fn new(addr: String, data: String) -> Result<AIRAssignBody, errors::PlatformError> {
     Ok(AIRAssignBody { addr, data })
   }
 }
@@ -634,7 +634,7 @@ impl Default for Transaction {
 }
 
 #[repr(C)]
-#[derive(Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 // TODO (Keyao):
 // Are the four fields below all necessary?
 // Can we remove one of txns_in_block_hash and global_block_hash?
@@ -645,6 +645,7 @@ pub struct StateCommitmentData {
   pub txns_in_block_hash: BitDigest,            // The hash of the transactions in the block
   pub previous_state_commitment: BitDigest,     // The prior global block hash
   pub transaction_merkle_commitment: HashValue, // The root hash of the transaction Merkle tree
+  pub air_commitment: air::Digest,              // The root hash of the AIR sparse Merkle tree
   pub txo_count: u64, // Number of transaction outputs. Used to provide proof that a utxo does not exist
 }
 
@@ -817,17 +818,28 @@ mod tests {
 
     let asset_creation = DefineAsset { body: DefineAssetBody { asset },
                                        pubkey: IssuerPublicKey { key: public_key },
-                                       signature };
+                                       signature: signature.clone() };
 
     let creation_operation = Operation::DefineAsset(asset_creation.clone());
+
+    // Instantiate an AIRAssign operation
+    let air_assign_body = AIRAssignBody { addr: String::from(""),
+                                          data: String::from("") };
+
+    let air_assign = AIRAssign { body: air_assign_body,
+                                 pubkey: IssuerPublicKey { key: public_key },
+                                 signature: signature.clone() };
+
+    let air_assign_operation = Operation::AIRAssign(air_assign.clone());
 
     // Add operations to the transaction
     transaction.add_operation(transfer_operation);
     transaction.add_operation(issurance_operation);
     transaction.add_operation(creation_operation);
+    transaction.add_operation(air_assign_operation);
 
     // Verify operatoins
-    assert_eq!(transaction.operations.len(), 3);
+    assert_eq!(transaction.operations.len(), 4);
 
     assert_eq!(transaction.operations.get(0),
                Some(&Operation::TransferAsset(asset_transfer)));
@@ -835,6 +847,8 @@ mod tests {
                Some(&Operation::IssueAsset(asset_issurance)));
     assert_eq!(transaction.operations.get(2),
                Some(&Operation::DefineAsset(asset_creation)));
+    assert_eq!(transaction.operations.get(3),
+               Some(&Operation::AIRAssign(air_assign)));
   }
 
   // Verify that the hash values of two transactions:
