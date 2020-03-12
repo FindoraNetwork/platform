@@ -79,7 +79,7 @@ mod filters {
     db: Db)
     -> impl Filter<Extract = impl warp::Reply, Error = warp::Rejection> + Clone {
     warp::path!("keypair" / String / String).and(warp::put())
-//                                            .and(json_body())
+                                            //                                            .and(json_body())
                                             .and(with_db(db))
                                             .and_then(handlers::put_keypair)
   }
@@ -210,5 +210,4 @@ mod models {
 }
 
 #[cfg(test)]
-mod tests {
-}
+mod tests {}
