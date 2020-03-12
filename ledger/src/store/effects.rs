@@ -256,8 +256,8 @@ impl TxnEffect {
         }
 
         Operation::AIRAssign(air_assign) => {
+          // Is this like DefineAsset, and doesn't increment txo_count?
           air_updates.insert(air_assign.body.addr.clone(), air_assign.body.data.clone());
-          // Is this like DefineAsset, and doesn't increnettxo_count?
         }
       } // end -- match op {
     } // end -- for op in txn.operations.iter() {
@@ -317,7 +317,7 @@ impl HasInvariants<PlatformError> for TxnEffect {
     // TODO(joe): other checks?
     {
       // Slightly cheating
-      let mut prng = rand_chacha::ChaChaRng::from_seed([0u8; 32]);
+      let mut prng = rand_chacha::ChaChaRng::from_entropy();
       if TxnEffect::compute_effect(&mut prng, self.txn.clone())? != *self {
         return Err(PlatformError::InvariantError(None));
       }

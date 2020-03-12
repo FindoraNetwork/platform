@@ -56,7 +56,7 @@ pub trait BuildsTransactions {
                            seq_num: u64,
                            amount: u64)
                            -> Result<&mut Self, PlatformError> {
-    let mut prng = ChaChaRng::from_seed([0u8; 32]);
+    let mut prng = ChaChaRng::from_entropy();
     let params = PublicParams::new();
     let ar = AssetRecord::new(amount, token_code.val, key_pair.get_pk())?;
     let art = AssetRecordType::ConfidentialAmount_PublicAssetType;
@@ -153,7 +153,7 @@ impl BuildsTransactions for TransactionBuilder {
                                   -> Result<&mut Self, PlatformError> {
     // TODO(joe/noah): keep a prng around somewhere?
     let mut prng: ChaChaRng;
-    prng = ChaChaRng::from_seed([0u8; 32]);
+    prng = ChaChaRng::from_entropy();
     let mut xfr = TransferAsset::new(TransferAssetBody::new(&mut prng,
                                                             input_sids,
                                                             input_records,
@@ -295,7 +295,7 @@ impl TransferOperationBuilder {
   // Finalize the transaction and prepare for signing. Once called, the transaction cannot be
   // modified.
   pub fn create(&mut self, transfer_type: TransferType) -> Result<&mut Self, PlatformError> {
-    let mut prng = ChaChaRng::from_seed([0u8; 32]);
+    let mut prng = ChaChaRng::from_entropy();
     let body = TransferAssetBody::new(&mut prng,
                                       self.input_sids.clone(),
                                       &self.input_records,
@@ -466,7 +466,7 @@ mod tests {
                                outputs: Vec<OutputRecord>,
                                key_pair: KeyPair,
                                input_sids: Vec<TxoReference>) {
-    let mut prng = ChaChaRng::from_seed([0u8; 32]);
+    let mut prng = ChaChaRng::from_entropy();
     let params = PublicParams::new();
 
     //TODO: noah asset records should be buildable by reference
@@ -520,7 +520,7 @@ mod tests {
 
   #[test]
   fn test_transfer_op_builder() -> Result<(), PlatformError> {
-    let mut prng = ChaChaRng::from_seed([0u8; 32]);
+    let mut prng = ChaChaRng::from_entropy();
     let params = PublicParams::new();
     let code_1 = AssetTypeCode::gen_random();
     let code_2 = AssetTypeCode::gen_random();

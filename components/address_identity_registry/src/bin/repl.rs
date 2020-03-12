@@ -126,7 +126,7 @@ struct GlobalState {
 impl GlobalState {
   fn new(args: &ArgMatches /*<'static>*/) -> Self {
     GlobalState { verbose: args.is_present("v"),
-                  prng: ChaChaRng::from_seed([0u8; 32]),
+                  prng: ChaChaRng::from_entropy(),
                   registry: Vec::<String>::new(),
                   smt: AIR::default(),
                   users: HashMap::new(),
@@ -492,7 +492,7 @@ mod tests {
 
   // test_ac_functions tests the expected order of operations of the AIR as described in the README
   fn test_ac_functions() {
-    let mut prng = ChaChaRng::from_seed([0u8; 32]);
+    let mut prng = ChaChaRng::from_entropy();
     let num_attrs = 2;
     let (issuer_pk, issuer_sk) = ac_keygen_issuer::<ChaChaRng>(&mut prng, num_attrs);
     let (user_pk, user_sk) = ac_keygen_user::<ChaChaRng>(&mut prng, &issuer_pk);

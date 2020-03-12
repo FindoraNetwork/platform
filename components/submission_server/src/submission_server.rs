@@ -221,7 +221,7 @@ mod tests {
     // Create a SubmissionServer
     let block_capacity = 8;
     let ledger_state = LedgerState::test_ledger();
-    let mut prng = rand_chacha::ChaChaRng::from_seed([0u8; 32]);
+    let mut prng = rand_chacha::ChaChaRng::from_entropy();
     let mut submission_server = SubmissionServer::new(prng.clone(),
                                                       Arc::new(RwLock::new(ledger_state)),
                                                       block_capacity).unwrap();
@@ -266,7 +266,7 @@ mod tests {
     // Create a SubmissionServer
     let block_capacity = 8;
     let ledger_state = LedgerState::test_ledger();
-    let prng = rand_chacha::ChaChaRng::from_seed([0u8; 32]);
+    let prng = rand_chacha::ChaChaRng::from_entropy();
     let mut submission_server =
       SubmissionServer::new(prng, Arc::new(RwLock::new(ledger_state)), block_capacity).unwrap();
 
@@ -290,7 +290,7 @@ mod tests {
   fn test_txn_status() {
     let block_capacity = 2;
     let ledger_state = LedgerState::test_ledger();
-    let prng = rand_chacha::ChaChaRng::from_seed([0u8; 32]);
+    let prng = rand_chacha::ChaChaRng::from_entropy();
     let mut submission_server =
       SubmissionServer::new(prng, Arc::new(RwLock::new(ledger_state)), block_capacity).unwrap();
 

@@ -17,6 +17,11 @@ pub struct RestfulApiService {
   web_runtime: actix_rt::SystemRunner,
 }
 
+// Ping route to check for liveness of API
+fn ping() -> actix_web::Result<String> {
+  Ok("success".into())
+}
+
 // Future refactor:
 // Merge query functions
 //
@@ -361,6 +366,7 @@ impl RestfulApiService {
       App::new().wrap(middleware::Logger::default())
                 .wrap(Cors::new().supports_credentials())
                 .data(ledger_access.clone())
+                .route("/ping", web::get().to(ping))
                 .set_route::<LA>(ServiceInterface::LedgerAccess)
                 .set_route::<LA>(ServiceInterface::ArchiveAccess)
     }).bind(&format!("{}:{}", host, port))?
@@ -402,7 +408,7 @@ mod tests {
 
   #[test]
   fn test_query_asset() {
-    let mut prng = ChaChaRng::from_seed([0u8; 32]);
+    let mut prng = ChaChaRng::from_entropy();
     let mut state = LedgerState::test_ledger();
     let mut tx = Transaction::default();
 

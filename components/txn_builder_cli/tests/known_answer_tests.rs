@@ -131,25 +131,6 @@ fn pubkeygen_no_path() -> io::Result<Output> {
 }
 
 #[cfg(test)]
-fn store_sids_no_path(amount: &str) -> io::Result<Output> {
-  Command::new(COMMAND).args(&["store", "sids"])
-                       .args(&["--indices", amount])
-                       .output()
-}
-
-#[cfg(test)]
-fn store_blind_asset_record_no_path(amount: &str,
-                                    asset_type: &str,
-                                    pub_key_path: &str)
-                                    -> io::Result<Output> {
-  Command::new(COMMAND).args(&["store", "blind_asset_record"])
-                       .args(&["--amount", amount])
-                       .args(&["--asset_type", asset_type])
-                       .args(&["--pub_key_path", pub_key_path])
-                       .output()
-}
-
-#[cfg(test)]
 fn get_findora_dir() -> String {
   let findora_dir = {
     let home_dir = dirs::home_dir().unwrap_or_else(|| Path::new(".").to_path_buf());
@@ -172,11 +153,6 @@ fn remove_keypair_dir() {
 #[cfg(test)]
 fn remove_pubkey_dir() {
   fs::remove_dir_all(format!("{}/pubkey", get_findora_dir())).unwrap();
-}
-
-#[cfg(test)]
-fn remove_values_dir() {
-  fs::remove_dir_all(format!("{}/values", get_findora_dir())).unwrap();
 }
 
 //
@@ -210,24 +186,10 @@ fn pubkeygen_with_path(path: &str) -> io::Result<Output> {
 }
 
 #[cfg(test)]
-fn store_sids_with_path(path: &str, amount: &str) -> io::Result<Output> {
-  Command::new(COMMAND).args(&["store", "sids"])
+fn store_sids_with_path(path: &str, indices: &str) -> io::Result<Output> {
+  Command::new(COMMAND).args(&["issuer", "store_sids"])
                        .args(&["--path", path])
-                       .args(&["--indices", amount])
-                       .output()
-}
-
-#[cfg(test)]
-fn store_blind_asset_record_with_path(path: &str,
-                                      amount: &str,
-                                      asset_type: &str,
-                                      pub_key_path: &str)
-                                      -> io::Result<Output> {
-  Command::new(COMMAND).args(&["store", "blind_asset_record"])
-                       .args(&["--path", path])
-                       .args(&["--amount", amount])
-                       .args(&["--asset_type", asset_type])
-                       .args(&["--pub_key_path", pub_key_path])
+                       .args(&["--indices", indices])
                        .output()
 }
 
@@ -255,8 +217,8 @@ fn define_asset(txn_builder_path: &str,
                 memo: &str)
                 -> io::Result<Output> {
   Command::new(COMMAND).args(&["--txn", txn_builder_path])
-                       .args(&["add", "define_asset"])
-                       .args(&["--issuer", issuer_id])
+                       .args(&["issuer", "--id", issuer_id])
+                       .arg("define_asset")
                        .args(&["--token_code", token_code])
                        .args(&["--memo", memo])
                        .output()
@@ -269,8 +231,8 @@ fn issue_asset(txn_builder_path: &str,
                amount: &str)
                -> io::Result<Output> {
   Command::new(COMMAND).args(&["--txn", txn_builder_path])
-                       .args(&["add", "issue_asset"])
-                       .args(&["--issuer", id])
+                       .args(&["issuer", "--id", id])
+                       .arg("issue_asset")
                        .args(&["--token_code", token_code])
                        .args(&["--amount", amount])
                        .output()
@@ -278,21 +240,20 @@ fn issue_asset(txn_builder_path: &str,
 
 #[cfg(test)]
 fn transfer_asset(txn_builder_path: &str,
-                  id: &str,
+                  issuer_id: &str,
+                  recipient_ids: &str,
                   sids_path: &str,
-                  blind_asset_record_paths: &str,
                   input_amounts: &str,
-                  output_amounts: &str,
-                  address_paths: &str)
+                  output_amounts: &str)
                   -> io::Result<Output> {
   Command::new(COMMAND).args(&["--txn", txn_builder_path])
-                       .args(&["add", "transfer_asset"])
-                       .args(&["--issuer", id])
+                       .args(&["issuer", "--id", issuer_id])
+                       .arg("transfer_asset")
+                       .args(&["--recipients", recipient_ids])
                        .args(&["--sids_path", sids_path])
-                       .args(&["--blind_asset_record_paths", blind_asset_record_paths])
                        .args(&["--input_amounts", input_amounts])
                        .args(&["--output_amounts", output_amounts])
-                       .args(&["--address_paths", address_paths])
+                       .args(&["--http", "--localhost"])
                        .output()
 }
 
@@ -319,6 +280,15 @@ fn issue_and_transfer_asset(txn_builder_path: &str,
 fn submit(txn_builder_path: &str) -> io::Result<Output> {
   Command::new(COMMAND).args(&["--txn", txn_builder_path])
                        .arg("submit")
+                       .args(&["--http", "--localhost"])
+                       .output()
+}
+
+#[cfg(test)]
+fn submit_and_store_sids(txn_builder_path: &str, sids_path: &str) -> io::Result<Output> {
+  Command::new(COMMAND).args(&["--txn", txn_builder_path])
+                       .arg("submit")
+                       .args(&["--sids_path", sids_path])
                        .args(&["--http", "--localhost"])
                        .output()
 }
@@ -356,13 +326,8 @@ fn fulfill_loan(txn_builder_path: &str,
 }
 
 #[cfg(test)]
-fn pay_loan(txn_builder_path: &str,
-            borrower_id: &str,
-            loan_id: &str,
-            amount: &str)
-            -> io::Result<Output> {
-  Command::new(COMMAND).args(&["--txn", txn_builder_path])
-                       .args(&["borrower", "--id", borrower_id])
+fn pay_loan(borrower_id: &str, loan_id: &str, amount: &str) -> io::Result<Output> {
+  Command::new(COMMAND).args(&["borrower", "--id", borrower_id])
                        .arg("pay_loan")
                        .args(&["--loan", loan_id])
                        .args(&["--amount", amount])
@@ -443,7 +408,6 @@ fn test_no_path() {
   io::stdout().write_all(&output.stderr).unwrap();
 
   assert!(output.status.success());
-  println!("1");
 
   // Generate key pair
   let output = keygen_no_path().expect("Failed to execute process");
@@ -452,7 +416,6 @@ fn test_no_path() {
   io::stdout().write_all(&output.stderr).unwrap();
 
   assert!(output.status.success());
-  println!("2");
 
   // Generate public key
   let output = pubkeygen_no_path().expect("Failed to execute process");
@@ -461,34 +424,10 @@ fn test_no_path() {
   io::stdout().write_all(&output.stderr).unwrap();
 
   assert!(output.status.success());
-  println!("3");
-
-  // Store sids
-  let output = store_sids_no_path("1,2,4").expect("Failed to execute process");
-
-  io::stdout().write_all(&output.stdout).unwrap();
-  io::stdout().write_all(&output.stderr).unwrap();
-
-  assert!(output.status.success());
-  println!("4");
-
-  // Store blind asset record
-  let pubkeygen_path = "pub_no_bar_path";
-  pubkeygen_with_path(pubkeygen_path).expect("Failed to generate public key");
-
-  let output = store_blind_asset_record_no_path("10", "0000000000000000", pubkeygen_path).expect("Failed to execute process");
-
-  io::stdout().write_all(&output.stdout).unwrap();
-  io::stdout().write_all(&output.stderr).unwrap();
-  println!("5");
-
-  fs::remove_file(pubkeygen_path).unwrap();
-  assert!(output.status.success());
 
   remove_txn_dir();
   remove_keypair_dir();
   remove_pubkey_dir();
-  remove_values_dir();
 }
 
 //
@@ -502,6 +441,7 @@ fn test_view() {
 
   // Create loans
   request_loan("0", "0", "100", "100", "3").expect("Failed to request the loan");
+  request_loan("0", "0", "200", "150", "6").expect("Failed to request the loan");
   request_loan("1", "0", "300", "200", "9").expect("Failed to request the loan");
   request_loan("1", "0", "500", "300", "15").expect("Failed to request the loan");
 
@@ -509,7 +449,8 @@ fn test_view() {
   let txn_builder_path = "txn_builder_view_loans";
   create_txn_builder_with_path(txn_builder_path).expect("Failed to create transaction builder");
   fulfill_loan(txn_builder_path, "0", "0", "0").expect("Failed to fulfill the loan");
-  fulfill_loan(txn_builder_path, "1", "1", "0").expect("Failed to fulfill the loan");
+  fulfill_loan(txn_builder_path, "0", "1", "0").expect("Failed to fulfill the loan");
+  fulfill_loan(txn_builder_path, "1", "2", "0").expect("Failed to fulfill the loan");
 
   // View loans
   // 1. View all loans of a lender
@@ -528,7 +469,7 @@ fn test_view() {
 
   assert!(output.status.success());
   assert!(from_utf8(&output.stdout).unwrap()
-                                   .contains(&"Displaying 3 loan(s):".to_owned()));
+                                   .contains(&"Displaying 4 loan(s):".to_owned()));
 
   // 3.   View a loan by its id
   // 3.1  The loan is owned by the user
@@ -541,15 +482,17 @@ fn test_view() {
                                    .contains(&"Displaying loan".to_owned()));
 
   // 3.2  The loan isn't owned by the user
-  let output = view_loan_with_loan_id("lender", "0", "1").expect("Failed to view the loan");
+  let output = view_loan_with_loan_id("lender", "0", "2").expect("Failed to view the loan");
   io::stdout().write_all(&output.stdout).unwrap();
   io::stdout().write_all(&output.stderr).unwrap();
 
   assert!(from_utf8(&output.stdout).unwrap()
                                    .contains(&"doesn't own loan".to_owned()));
 
-  // 4. View active loans
-  let output = view_loan_with_filter("borrower", "0", "active").expect("Failed to view the loan");
+  // 4. View loans with a filter
+  // 4.1 Requested but not fulfilled loan
+  let output =
+    view_loan_with_filter("borrower", "0", "requested").expect("Failed to view the loan");
   io::stdout().write_all(&output.stdout).unwrap();
   io::stdout().write_all(&output.stderr).unwrap();
 
@@ -557,24 +500,42 @@ fn test_view() {
   assert!(from_utf8(&output.stdout).unwrap()
                                    .contains(&"Displaying 1 loan(s):".to_owned()));
 
-  // 5. View inactive loans
-  let output = view_loan_with_filter("borrower", "0", "inactive").expect("Failed to view the loan");
-  io::stdout().write_all(&output.stdout).unwrap();
-  io::stdout().write_all(&output.stderr).unwrap();
-
-  assert!(output.status.success());
-  assert!(from_utf8(&output.stdout).unwrap()
-                                   .contains(&"Displaying 2 loan(s):".to_owned()));
-
-  // 6. View unrejected loans
+  // 4.2. View fulfilled loan
   let output =
-    view_loan_with_filter("borrower", "0", "unrejected").expect("Failed to view the loan");
+    view_loan_with_filter("borrower", "0", "fulfilled").expect("Failed to view the loan");
   io::stdout().write_all(&output.stdout).unwrap();
   io::stdout().write_all(&output.stderr).unwrap();
 
   assert!(output.status.success());
   assert!(from_utf8(&output.stdout).unwrap()
                                    .contains(&"Displaying 2 loan(s):".to_owned()));
+
+  // 4.3. View declined loan
+  let output = view_loan_with_filter("borrower", "0", "declined").expect("Failed to view the loan");
+  io::stdout().write_all(&output.stdout).unwrap();
+  io::stdout().write_all(&output.stderr).unwrap();
+
+  assert!(output.status.success());
+  assert!(from_utf8(&output.stdout).unwrap()
+                                   .contains(&"Displaying 1 loan(s):".to_owned()));
+
+  // 4.4. View active loan
+  let output = view_loan_with_filter("borrower", "0", "active").expect("Failed to view the loan");
+  io::stdout().write_all(&output.stdout).unwrap();
+  io::stdout().write_all(&output.stderr).unwrap();
+
+  assert!(output.status.success());
+  assert!(from_utf8(&output.stdout).unwrap()
+                                   .contains(&"Displaying 2 loan(s):".to_owned()));
+
+  // 4.5. View complete loan
+  let output = view_loan_with_filter("borrower", "0", "complete").expect("Failed to view the loan");
+  io::stdout().write_all(&output.stdout).unwrap();
+  io::stdout().write_all(&output.stderr).unwrap();
+
+  assert!(output.status.success());
+  assert!(from_utf8(&output.stdout).unwrap()
+                                   .contains(&"Displaying 0 loan(s):".to_owned()));
 
   // View credentials
   // 1. View all credentials of a borrower
@@ -613,36 +574,6 @@ fn test_call_no_args() {
 
   assert_eq!(output.status.code(), Some(exitcode::USAGE));
   assert!(from_utf8(&output.stdout).unwrap().contains(&"Subcommand missing or not recognized. Try --help".to_owned()));
-}
-
-#[test]
-fn test_store_no_args() {
-  let output = Command::new(COMMAND).arg("store")
-                                    .output()
-                                    .expect("failed to execute process");
-
-  io::stdout().write_all(&output.stdout).unwrap();
-  io::stdout().write_all(&output.stderr).unwrap();
-
-  assert_eq!(output.status.code(), Some(exitcode::USAGE));
-  assert!(from_utf8(&output.stdout).unwrap().contains(&"Subcommand missing or not recognized. Try store --help".to_owned()));
-}
-
-#[test]
-fn test_add_no_args() {
-  keygen_no_path().expect("Failed to generate key pair");
-
-  let output = Command::new(COMMAND).arg("add")
-                                    .output()
-                                    .expect("Failed to execute process");
-
-  io::stdout().write_all(&output.stdout).unwrap();
-  io::stdout().write_all(&output.stderr).unwrap();
-
-  remove_keypair_dir();
-
-  assert_eq!(output.status.code(), Some(exitcode::USAGE));
-  assert!(from_utf8(&output.stdout).unwrap().contains(&"Subcommand missing or not recognized. Try add --help".to_owned()));
 }
 
 //
@@ -698,20 +629,8 @@ fn test_pubkeygen_with_help() {
 }
 
 #[test]
-fn test_add_with_help() {
-  let output = Command::new(COMMAND).args(&["add", "--help"])
-                                    .output()
-                                    .expect("failed to execute process");
-
-  io::stdout().write_all(&output.stdout).unwrap();
-  io::stdout().write_all(&output.stderr).unwrap();
-
-  assert!(output.status.success())
-}
-
-#[test]
 fn test_define_asset_with_help() {
-  let output = Command::new(COMMAND).args(&["add", "define_asset", "--help"])
+  let output = Command::new(COMMAND).args(&["issuer", "define_asset", "--help"])
                                     .output()
                                     .expect("failed to execute process");
 
@@ -723,7 +642,7 @@ fn test_define_asset_with_help() {
 
 #[test]
 fn test_issue_asset_with_help() {
-  let output = Command::new(COMMAND).args(&["add", "issue_asset", "--help"])
+  let output = Command::new(COMMAND).args(&["issuer", "issue_asset", "--help"])
                                     .output()
                                     .expect("failed to execute process");
 
@@ -735,7 +654,7 @@ fn test_issue_asset_with_help() {
 
 #[test]
 fn test_transfer_asset_with_help() {
-  let output = Command::new(COMMAND).args(&["add", "transfer_asset", "--help"])
+  let output = Command::new(COMMAND).args(&["issuer", "transfer_asset", "--help"])
                                     .output()
                                     .expect("failed to execute process");
 
@@ -833,10 +752,10 @@ fn test_create_txn_builder_with_name() {
 }
 
 //
-// Store (sids and blind asset record)
+// Store sids
 //
 #[test]
-fn test_store_with_path() {
+fn test_store_sids_with_path() {
   // Store sids
   let output = store_sids_with_path("sids", "1,2,4").expect("Failed to store sids");
 
@@ -845,38 +764,34 @@ fn test_store_with_path() {
 
   fs::remove_file("sids").unwrap();
   assert!(output.status.success());
-
-  // Store blind asset record
-  let pubkeygen_path = "pub_with_bar_path";
-  pubkeygen_with_path(pubkeygen_path).expect("Failed to generate public key");
-
-  let output = store_blind_asset_record_with_path("bar", "10", "0000000000000000", pubkeygen_path).expect("Failed to store blind asset record");
-
-  io::stdout().write_all(&output.stdout).unwrap();
-  io::stdout().write_all(&output.stderr).unwrap();
-
-  fs::remove_file(pubkeygen_path).unwrap();
-  fs::remove_file("bar").unwrap();
-
-  assert!(output.status.success());
 }
 
 //
-// Define, issue and transfer
+// Compose transaction and submit
 //
 #[test]
 #[ignore]
-fn test_define_issue_and_transfer_with_args() {
-  // Create transaction builder and key pair
-  let txn_builder_file = "tb";
+fn test_define_issue_transfer_and_submit_with_args() {
+  // Create users, txn builder and key pair
+  sign_up_borrower("Borrower 1").expect("Failed to create a borrower");
+  sign_up_borrower("Borrower 2").expect("Failed to create a borrower");
+  let txn_builder_file = "tb_define_issue_transfer_and_submit";
   create_txn_builder_with_path(txn_builder_file).expect("Failed to create transaction builder");
 
   // Define asset
   let token_code = AssetTypeCode::gen_random().to_base64();
   let output = define_asset(txn_builder_file,
-                            "0",
-                            &token_code,
-                            "define an asset").expect("Failed to define asset");
+               "0",
+               &token_code,
+               "Define an asset").expect("Failed to define asset");
+
+  io::stdout().write_all(&output.stdout).unwrap();
+  io::stdout().write_all(&output.stderr).unwrap();
+
+  assert!(output.status.success());
+
+  // Submit transaction
+  let output = submit(txn_builder_file).expect("Failed to submit transaction");
 
   io::stdout().write_all(&output.stdout).unwrap();
   io::stdout().write_all(&output.stderr).unwrap();
@@ -885,70 +800,30 @@ fn test_define_issue_and_transfer_with_args() {
 
   // Issue asset
   let output =
-    issue_asset(txn_builder_file, "0", &token_code, "10").expect("Failed to issue asset");
+    issue_asset(txn_builder_file, "0", &token_code, "100").expect("Failed to issue asset");
 
   io::stdout().write_all(&output.stdout).unwrap();
   io::stdout().write_all(&output.stderr).unwrap();
 
   assert!(output.status.success());
 
-  // Create files and generate public keys
-  let files = vec!["pub1", "pub2", "pub3", "addr1", "addr2", "addr3", "s", "bar1", "bar2", "bar3"];
-  for file in &files[0..6] {
-    pubkeygen_with_path(file).expect("Failed to generate public key");
-  }
+  // Submit transaction
+  let sids_file = "sids_define_issue_transfer_and_submit";
+  let output =
+    submit_and_store_sids(txn_builder_file, sids_file).expect("Failed to submit transaction");
 
-  // Store sids and blind asset records
-  store_sids_with_path(files[6], "1,2,4").expect("Failed to store sids");
-  store_blind_asset_record_with_path(files[7],
-                               "10",
-                               &token_code,
-                               files[0]).expect("Failed to store blind asset record");
-  store_blind_asset_record_with_path(files[8],
-                               "100",
-                               &token_code,
-                               files[1]).expect("Failed to store blind asset record");
-  store_blind_asset_record_with_path(files[9],
-                               "1000",
-                               &token_code,
-                               files[2]).expect("Failed to store blind asset record");
+  io::stdout().write_all(&output.stdout).unwrap();
+  io::stdout().write_all(&output.stderr).unwrap();
+
+  assert!(output.status.success());
 
   // Transfer asset
-  let output = transfer_asset(txn_builder_file,
-                              "0",
-                              files[6],
-                              "bar1,bar2,bar3",
-                              "1,2,3",
-                              "1,1,4",
-                              "addr1,addr2,addr3").expect("Failed to transfer asset");
+  let output = transfer_asset(txn_builder_file, "0", "1,2", sids_file, "50", "30,20").expect("Failed to transfer asset");
 
   io::stdout().write_all(&output.stdout).unwrap();
   io::stdout().write_all(&output.stderr).unwrap();
 
-  let _ = fs::remove_file(DATA_FILE);
-  fs::remove_file(txn_builder_file).unwrap();
-  for file in files {
-    fs::remove_file(file).unwrap();
-  }
-
   assert!(output.status.success());
-}
-
-//
-// Compose transaction and submit
-//
-#[test]
-#[ignore]
-fn test_define_and_submit_with_args() {
-  // Create txn builder and key pair
-  let txn_builder_file = "tb_define_submit";
-  create_txn_builder_with_path(txn_builder_file).expect("Failed to create transaction builder");
-
-  // Define asset
-  define_asset(txn_builder_file,
-               "0",
-               &AssetTypeCode::gen_random().to_base64(),
-               "Define an asset").expect("Failed to define asset");
 
   // Submit transaction
   let output = submit(txn_builder_file).expect("Failed to submit transaction");
@@ -958,6 +833,7 @@ fn test_define_and_submit_with_args() {
 
   let _ = fs::remove_file(DATA_FILE);
   fs::remove_file(txn_builder_file).unwrap();
+  fs::remove_file(sids_file).unwrap();
 
   assert!(output.status.success());
 }
@@ -989,8 +865,6 @@ fn test_air_assign() {
 
 #[test]
 fn test_issue_transfer_and_submit_with_args() {
-  let _ = fs::remove_file(DATA_FILE);
-
   // Create txn builder and key pairs
   let txn_builder_file = "tb_issue_transfer_args";
   create_txn_builder_with_path(txn_builder_file).expect("Failed to create transaction builder");
@@ -1026,27 +900,17 @@ fn test_issue_transfer_and_submit_with_args() {
 
 #[test]
 #[ignore]
-fn test_load_funds_with_args() {
-  // Create txn builder
-  let txn_builder_file = "tb_load_funds_args";
-  create_txn_builder_with_path(txn_builder_file).expect("Failed to create transaction builder");
-
+// Test funds loading, loan request, fulfilling and repayment
+fn test_request_fulfill_and_pay_loan_with_args() {
   // Load funds
-  let output = load_funds(txn_builder_file, "0", "0", "500").expect("Failed to load funds");
+  let txn_builder_file = "tb_load_funds_args";
+  let output = load_funds(txn_builder_file, "0", "0", "5000").expect("Failed to load funds");
 
   io::stdout().write_all(&output.stdout).unwrap();
   io::stdout().write_all(&output.stderr).unwrap();
 
-  let _ = fs::remove_file(DATA_FILE);
   fs::remove_file(txn_builder_file).unwrap();
-
   assert!(output.status.success());
-}
-
-#[test]
-#[ignore]
-fn test_request_fulfill_and_pay_loan_with_args() {
-  let _ = fs::remove_file(DATA_FILE);
 
   // Request the first loan
   let output = request_loan("0", "0", "1500", "100", "8").expect("Failed to request a loan");
@@ -1064,13 +928,10 @@ fn test_request_fulfill_and_pay_loan_with_args() {
 
   assert!(output.status.success());
 
-  // Create txn builder
-  let txn_builder_file = "tb_fulfill_loan_args";
-  create_txn_builder_with_path(txn_builder_file).expect("Failed to create transaction builder");
-
   // Fulfill the first loan
-  // 1. First time
+  // 1. First time:
   //    Add the credential proof, then successfully initiate the loan
+  let txn_builder_file = "tb_fulfill_loan_args";
   let output = fulfill_loan(txn_builder_file, "0", "0", "0").expect("Failed to initiate the loan");
 
   io::stdout().write_all(&output.stdout).unwrap();
@@ -1105,7 +966,7 @@ fn test_request_fulfill_and_pay_loan_with_args() {
           && stdout.contains(&"Value should be at least:".to_owned()));
 
   // 2. Second time:
-  //    Fail because the loan has been rejected
+  //    Fail because the loan has been declined
   let output = fulfill_loan(txn_builder_file, "1", "1", "0").expect("Failed to initiate the loan");
 
   io::stdout().write_all(&output.stdout).unwrap();
@@ -1113,16 +974,38 @@ fn test_request_fulfill_and_pay_loan_with_args() {
 
   assert_eq!(output.status.code(), Some(exitcode::USAGE));
   assert!(from_utf8(&output.stdout).unwrap()
-                                   .contains(&"has already been rejected.".to_owned()));
+                                   .contains(&"has already been declined.".to_owned()));
 
   // Pay loan
-  let output = pay_loan(txn_builder_file, "0", "0", "300").expect("Failed to pay loan");
+  // 1. First time:
+  //    Burn part of the loan balance
+  let output = pay_loan("0", "0", "300").expect("Failed to pay loan");
 
   io::stdout().write_all(&output.stdout).unwrap();
   io::stdout().write_all(&output.stderr).unwrap();
 
-  let _ = fs::remove_file(DATA_FILE);
-  fs::remove_file(txn_builder_file).unwrap();
+  assert!(output.status.success());
+
+  // 2. Second time
+  //    Pay off the loan
+  let output = pay_loan("0", "0", "2000").expect("Failed to pay loan");
+
+  io::stdout().write_all(&output.stdout).unwrap();
+  io::stdout().write_all(&output.stderr).unwrap();
 
   assert!(output.status.success());
+
+  // 3. Third time:
+  //    Fail because the loan has been paid off
+  let output = pay_loan("0", "0", "3000").expect("Failed to pay loan");
+
+  io::stdout().write_all(&output.stdout).unwrap();
+  io::stdout().write_all(&output.stderr).unwrap();
+
+  assert_eq!(output.status.code(), Some(exitcode::USAGE));
+  assert!(from_utf8(&output.stdout).unwrap()
+                                   .contains(&"has been paid off.".to_owned()));
+
+  let _ = fs::remove_file(DATA_FILE);
+  fs::remove_file(txn_builder_file).unwrap();
 }
