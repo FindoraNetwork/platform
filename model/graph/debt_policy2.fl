@@ -13,7 +13,7 @@ global_param loan_amount:       Amount;
 txn start_loan(out resource the_debt:  debt,
                out resource the_money: fiat,
                in  resource money_src: fiat,
-               credential   now: CurrentTime,
+               status       now: CurrentTime,
 )
   ensures the_debt.amount == the_money.amount;
   ensures the_debt.amount == loan_amount;
@@ -31,7 +31,7 @@ txn start_loan(out resource the_debt:  debt,
 }
 
 txn impose_interest(inout resource the_debt: debt,
-                    credential     now:      CurrentTime,
+                    status         now:      CurrentTime,
 )
 {
   require now is after the_debt.next_interest;
