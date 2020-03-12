@@ -765,13 +765,13 @@ fn parse_to_u64_vec(vals_str: &str) -> Result<Vec<u64>, PlatformError> {
 fn air_assign(issuer_id: u64,
               address: &str,
               data: &str,
-              transaction_file_name: &str)
+              txn_file: &str)
               -> Result<(), PlatformError> {
   let mut issuer_data = load_data()?;
   let issuer_key_pair = issuer_data.get_issuer_key_pair(issuer_id)?;
   let mut txn_builder = TransactionBuilder::default();
   txn_builder.add_operation_air_assign(&issuer_key_pair, address, data)?;
-  store_txn_builder_to_file(&transaction_file_name, &txn_builder)?;
+  store_txn_to_file(&txn_file, &txn_builder)?;
   Ok(())
 }
 
@@ -2225,7 +2225,7 @@ fn process_issuer_cmd(issuer_matches: &clap::ArgMatches,
         return Err(PlatformError::InputsError);
       };
       match (air_assign_matches.value_of("address"), air_assign_matches.value_of("data")) {
-        (Some(address), Some(data)) => air_assign(issuer_id, address, data, transaction_file_name),
+        (Some(address), Some(data)) => air_assign(issuer_id, address, data, txn_file),
         (_, _) => {
           println!("Missing address or data.");
           Err(PlatformError::InputsError)
@@ -2977,12 +2977,7 @@ fn process_load_funds_cmd(borrower_id: u64,
     return Err(PlatformError::InputsError);
   };
   let (protocol, host) = protocol_host(load_funds_matches);
-  load_funds(issuer_id,
-             borrower_id,
-             amount,
-             txn_file,
-             protocol,
-             host)
+  load_funds(issuer_id, borrower_id, amount, txn_file, protocol, host)
 }
 
 /// Processes the `borrower pay_loan` subcommand.
