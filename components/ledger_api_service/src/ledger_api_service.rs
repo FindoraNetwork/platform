@@ -6,6 +6,7 @@ extern crate serde_json;
 
 use actix_cors::Cors;
 use actix_web::{dev, error, middleware, web, App, HttpResponse, HttpServer};
+use air::AIRResult;
 use ledger::data_model::*;
 use ledger::store::{ArchiveAccess, LedgerAccess};
 use std::io;
@@ -173,6 +174,17 @@ fn query_blocks_since<AA>(data: web::Data<Arc<RwLock<AA>>>,
   web::Json(ret)
 }
 
+fn query_air<AA>(data: web::Data<Arc<RwLock<AA>>>,
+                 addr: web::Path<String>)
+                 -> actix_web::Result<web::Json<AIRResult>>
+  where AA: ArchiveAccess
+{
+  let reader = data.read().unwrap();
+  let key = addr.into_inner();
+  let air_result = reader.get_air_data(&key);
+  Ok(web::Json(air_result))
+}
+
 fn query_block_log<AA>(data: web::Data<Arc<RwLock<AA>>>) -> impl actix_web::Responder
   where AA: ArchiveAccess
 {
@@ -330,6 +342,7 @@ impl<T, B> Route for App<T, B>
   fn set_route_for_archive_access<AA: 'static + ArchiveAccess + Sync + Send>(self) -> Self {
     self.route("/txn_sid/{sid}", web::get().to(query_txn::<AA>))
         .route("/global_state", web::get().to(query_global_state::<AA>))
+        .route("/air_address/{key}", web::get().to(query_air::<AA>))
         .route("/block_log", web::get().to(query_block_log::<AA>))
         .route("/blocks_since/{block_sid}",
                web::get().to(query_blocks_since::<AA>))
