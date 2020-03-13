@@ -3,6 +3,7 @@ const wasm = require('./pkg/wasm.js');
 const axios = require('axios');
 const HOST = "localhost";
 const SUBMISSION_PORT = "8669";
+const QUERY_PORT= "8668";
 
 // Create some keypairs
 let kp_alice = wasm.new_keypair();
@@ -16,11 +17,12 @@ console.log(wasm.public_key_to_base64(kp_bob.get_pk()));
 let tracking_kp_auditor = wasm.generate_elgamal_keys();
 
 // Alice will define an asset
-let token_code = "abcd";
+let token_code = wasm.random_asset_type();
 let memo = "test memo";
 let definition_transaction = wasm.WasmTransactionBuilder.new().add_operation_create_asset(kp_alice, memo, token_code).transaction();
 
 let route = 'http://' + HOST + ':' + SUBMISSION_PORT;
+let ledger = 'http://' + HOST + ':' + QUERY_PORT;
 
 axios.post(route + '/submit_transaction', JSON.parse(definition_transaction))
     .then(function(response) {
@@ -60,8 +62,10 @@ let issue_and_transfer_txn = wasm.WasmTransactionBuilder.new()
 axios.post(route + '/submit_transaction', JSON.parse(issue_and_transfer_txn))
     .then(function(response) {
         console.log("Issued and transferred asset.");
+
     })
     .catch(function(_) {
         console.log("Error issuing and transferring asset");
     });
+
 

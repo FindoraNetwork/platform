@@ -7,6 +7,7 @@ extern crate serde_json;
 use actix_cors::Cors;
 use actix_web::{dev, error, middleware, web, App, HttpResponse, HttpServer};
 use air::AIRResult;
+use cryptohash::sha256::Digest as BitDigest;
 use ledger::data_model::*;
 use ledger::store::{ArchiveAccess, LedgerAccess};
 use std::io;
@@ -140,23 +141,12 @@ fn query_txn<AA>(data: web::Data<Arc<RwLock<AA>>>,
   }
 }
 
-fn stringer(data: &[u8; 32]) -> String {
-  let mut result = "".to_string();
-
-  for d in data.iter() {
-    result = result + &format!("{:02x}", *d);
-  }
-
-  result
-}
-
-fn query_global_state<AA>(data: web::Data<Arc<RwLock<AA>>>) -> actix_web::Result<String>
+fn query_global_state<AA>(data: web::Data<Arc<RwLock<AA>>>) -> web::Json<BitDigest>
   where AA: ArchiveAccess
 {
   let reader = data.read().unwrap();
-  let (hash, version) = reader.get_state_commitment();
-  let result = format!("{} {}", stringer(&hash.0), version);
-  Ok(result)
+  let (hash, _) = reader.get_state_commitment();
+  web::Json(hash)
 }
 
 fn query_blocks_since<AA>(data: web::Data<Arc<RwLock<AA>>>,
@@ -405,6 +395,41 @@ mod tests {
 
   #[test]
   fn test_query_contract() {}
+
+  #[test]
+  fn test_query_state_commitment() {
+    let mut prng = ChaChaRng::from_seed([0u8; 32]);
+    let mut state = LedgerState::test_ledger();
+    let mut tx = Transaction::default();
+
+    let token_code1 = AssetTypeCode { val: [1; 16] };
+    let (public_key, secret_key) = build_keys(&mut prng);
+
+    let asset_body = asset_creation_body(&token_code1, &public_key, true, false, None, None);
+    let asset_create = asset_creation_operation(&asset_body, &public_key, &secret_key);
+    tx.operations.push(Operation::DefineAsset(asset_create));
+
+    let effect = TxnEffect::compute_effect(state.get_prng(), tx).unwrap();
+    {
+      let mut block = state.start_block().unwrap();
+      state.apply_transaction(&mut block, effect).unwrap();
+      state.finish_block(block).unwrap();
+    }
+
+    let state_lock = Arc::new(RwLock::new(state));
+
+    let mut app =
+      test::init_service(App::new().data(state_lock.clone())
+                                   .route("/global_state",
+                                          web::get().to(query_global_state::<LedgerState>)));
+
+    let req = test::TestRequest::get().uri("/global_state".into())
+                                      .to_request();
+
+    let state_reader = state_lock.read().unwrap();
+    let result: BitDigest = test::read_response_json(&mut app, req);
+    assert!(result == state_reader.get_state_commitment().0);
+  }
 
   #[test]
   fn test_query_asset() {

@@ -5,11 +5,13 @@
 #![deny(warnings)]
 use bulletproofs::PedersenGens;
 use cryptohash::sha256;
+use cryptohash::sha256::Digest as BitDigest;
 use curve25519_dalek::ristretto::RistrettoPoint;
 use curve25519_dalek::scalar::Scalar;
 use js_sys::Promise;
 use ledger::data_model::{
-  b64enc, AssetTypeCode, Operation, Serialized, TransferType, TxOutput, TxoRef, TxoSID,
+  b64enc, AssetTypeCode, AuthenticatedTransaction, Operation, Serialized, TransferType, TxOutput,
+  TxoRef, TxoSID,
 };
 use ledger::policies::{DebtMemo, Fraction};
 use rand_chacha::ChaChaRng;
@@ -20,7 +22,6 @@ use txn_builder::{BuildsTransactions, TransactionBuilder, TransferOperationBuild
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::future_to_promise;
 use wasm_bindgen_futures::JsFuture;
-use wasm_bindgen_test::*;
 use web_sys::{Request, RequestInit, RequestMode};
 use zei::api::anon_creds::{
   ac_confidential_gen_encryption_keys, ac_keygen_issuer, ac_keygen_user, ac_reveal, ac_sign,
@@ -68,6 +69,21 @@ pub fn debt_transfer_type() -> String {
 /// Generates random base64 encoded asset type string
 pub fn random_asset_type() -> String {
   AssetTypeCode::gen_random().to_base64()
+}
+
+#[wasm_bindgen]
+/// Given a serialized state commitment and transation, returns true if the transaction correctly
+/// hashes up to the state commitment and false otherwise.
+pub fn verify_authenticated_txn(state_commitment: String,
+                                authenticated_txn: String)
+                                -> Result<bool, JsValue> {
+  let authenticated_txn = serde_json::from_str::<AuthenticatedTransaction>(&authenticated_txn).map_err(|_e| {
+                             JsValue::from_str("Could not deserialize transaction")
+                           })?;
+  let state_commitment = serde_json::from_str::<BitDigest>(&state_commitment).map_err(|_e| {
+                           JsValue::from_str("Could not deserialize state commitment")
+                         })?;
+  Ok(authenticated_txn.is_valid(state_commitment))
 }
 
 #[wasm_bindgen]
@@ -560,6 +576,38 @@ pub fn get_txo(path: String, index: u64) -> Result<Promise, JsValue> {
 }
 
 #[wasm_bindgen]
+/// If successful, return a promise that will eventually provide a
+/// JsValue describing a transaction.
+/// Otherwise, return 'not found'. The request fails if the transaction index does not correspond
+/// to a transaction.
+///
+/// TODO Provide an example (test case) that demonstrates how to
+/// handle the error in the case of an invalid transaction index.
+/// TODO Rename this function get_utxo
+pub fn get_transaction(path: String, index: u64) -> Result<Promise, JsValue> {
+  let mut opts = RequestInit::new();
+  opts.method("GET");
+  opts.mode(RequestMode::Cors);
+
+  let req_string = format!("{}/txn_sid/{}", path, format!("{}", index));
+
+  create_query_promise(&opts, &req_string, false)
+}
+
+#[wasm_bindgen]
+/// Returns a JSON-encoded version of the state commitment of a running ledger. This is used to
+/// check the authenticity of transactions and blocks.
+pub fn get_state_commitment(path: String) -> Result<Promise, JsValue> {
+  let mut opts = RequestInit::new();
+  opts.method("GET");
+  opts.mode(RequestMode::Cors);
+
+  let req_string = format!("{}/state_commitment", path);
+
+  create_query_promise(&opts, &req_string, false)
+}
+
+#[wasm_bindgen]
 /// If successful, returns a promise that will eventually provide a
 /// JsValue describing an asset token. Otherwise, returns 'not found'.
 /// The request fails if the given asset name does not correspond to
@@ -800,137 +848,4 @@ pub fn attest_without_proof(attribute: u64,
                           true,
                           requirement,
                           requirement_type)
-}
-
-//
-// Test section
-//
-// wasm-bindgen-test must be placed in the root of the crate or in a pub mod
-// To test, run wasm-pack test --node in the wasm directory
-//
-
-// Test to ensure that define transaction is being constructed correctly
-#[wasm_bindgen_test]
-// Test to ensure that "Equal" requirement is checked correctly
-// E.g. citizenship requirement
-fn test_citizenship_proof() {
-  let mut issuer = Issuer::new(10);
-  let issuer_jsvalue = issuer.jsvalue();
-  let mut user = User::new(&issuer, "user");
-  let user_jsvalue = user.jsvalue();
-
-  let citizenship_code = 1;
-  let fake_citizenship_code = 86;
-
-  let sig_jsvalue = issuer.sign_attribute(&user_jsvalue, citizenship_code);
-  let proof_jsvalue = user.commit_attribute(&issuer_jsvalue, &sig_jsvalue, citizenship_code, true);
-  let fake_proof_jsvalue =
-    user.commit_attribute(&issuer_jsvalue, &sig_jsvalue, fake_citizenship_code, true);
-
-  let requirement_usa = 1;
-  let requirement_china = 86;
-  let incorrect_credit_score = 11;
-
-  // Verify that prove_attribute succeedes
-  assert!(Prover::prove_attribute(&proof_jsvalue,
-                                  &issuer_jsvalue,
-                                  citizenship_code,
-                                  true,
-                                  requirement_usa,
-                                  RequirementType::Equal));
-
-  // Verify that prove_attribute fails if:
-  //  1. The attribute doesn't equal the requirement
-  assert!(!Prover::prove_attribute(&proof_jsvalue,
-                                   &issuer_jsvalue,
-                                   citizenship_code,
-                                   true,
-                                   requirement_china,
-                                   RequirementType::Equal));
-
-  // 2. The prover uses the incorrect credit score for the verification
-  assert!(!Prover::prove_attribute(&proof_jsvalue,
-                                   &issuer_jsvalue,
-                                   incorrect_credit_score,
-                                   true,
-                                   requirement_usa,
-                                   RequirementType::Equal));
-
-  // 3. The user provides a fake proof
-  assert!(!Prover::prove_attribute(&fake_proof_jsvalue,
-                                   &issuer_jsvalue,
-                                   citizenship_code,
-                                   true,
-                                   requirement_china,
-                                   RequirementType::Equal));
-
-  // 4. reveal_min_credit_score isn't consistant
-  assert!(!Prover::prove_attribute(&proof_jsvalue,
-                                   &issuer_jsvalue,
-                                   citizenship_code,
-                                   false,
-                                   requirement_usa,
-                                   RequirementType::Equal));
-}
-#[wasm_bindgen_test]
-// Test to ensure that "AtLeast" requirement is checked correctly
-// E.g. minimun credit score requirement
-fn test_min_credit_score_proof() {
-  let mut issuer = Issuer::new(10);
-  let issuer_jsvalue = issuer.jsvalue();
-  let mut user = User::new(&issuer, "user");
-  let user_jsvalue = user.jsvalue();
-
-  let min_credit_score = 520;
-  let fake_credit_score = 620;
-
-  let sig_jsvalue = issuer.sign_attribute(&user_jsvalue, min_credit_score);
-  let proof_jsvalue = user.commit_attribute(&issuer_jsvalue, &sig_jsvalue, min_credit_score, true);
-  let fake_proof_jsvalue =
-    user.commit_attribute(&issuer_jsvalue, &sig_jsvalue, fake_credit_score, true);
-
-  let requirement_low = 500;
-  let requirement_high = 600;
-  let incorrect_credit_score = 700;
-
-  // Verify that prove_attribute succeedes
-  assert!(Prover::prove_attribute(&proof_jsvalue,
-                                  &issuer_jsvalue,
-                                  min_credit_score,
-                                  true,
-                                  requirement_low,
-                                  RequirementType::AtLeast));
-
-  // Verify that prove_attribute fails if:
-  //  1. The lower bound of the credit score doesn't meet the requirement
-  assert!(!Prover::prove_attribute(&proof_jsvalue,
-                                   &issuer_jsvalue,
-                                   min_credit_score,
-                                   true,
-                                   requirement_high,
-                                   RequirementType::AtLeast));
-
-  // 2. The prover uses the incorrect credit score for the verification
-  assert!(!Prover::prove_attribute(&proof_jsvalue,
-                                   &issuer_jsvalue,
-                                   incorrect_credit_score,
-                                   true,
-                                   requirement_low,
-                                   RequirementType::AtLeast));
-
-  // 3. The user provides a fake proof
-  assert!(!Prover::prove_attribute(&fake_proof_jsvalue,
-                                   &issuer_jsvalue,
-                                   min_credit_score,
-                                   true,
-                                   requirement_high,
-                                   RequirementType::AtLeast));
-
-  // 4. reveal_min_credit_score isn't consistant
-  assert!(!Prover::prove_attribute(&proof_jsvalue,
-                                   &issuer_jsvalue,
-                                   min_credit_score,
-                                   false,
-                                   requirement_low,
-                                   RequirementType::AtLeast));
 }

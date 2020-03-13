@@ -1,8 +1,9 @@
 #![deny(warnings)]
 use super::errors;
+use bitmap::SparseMap;
 use chrono::prelude::*;
-use cryptohash::sha256;
-use merkle_tree::append_only_merkle::HashValue;
+use cryptohash::sha256::Digest as BitDigest;
+use cryptohash::{sha256, HashValue, Proof};
 use rand_chacha::ChaChaRng;
 use rand_core::{CryptoRng, RngCore, SeedableRng};
 use std::boxed::Box;
@@ -460,6 +461,139 @@ pub struct FinalizedTransaction {
   pub merkle_id: u64,
 }
 
+#[derive(Serialize, Deserialize)]
+pub struct AuthenticatedTransaction {
+  pub finalized_txn: FinalizedTransaction,
+  pub txn_inclusion_proof: Proof,
+  pub state_commitment_data: StateCommitmentData,
+  pub state_commitment: BitDigest,
+}
+
+impl AuthenticatedTransaction {
+  // An authenticated txn result is valid if
+  // 1) The state commitment used in the proof matches what we pass in and the state commitment
+  //    data hashes to the state commitment
+  // 2) The transaction merkle proof is valid
+  // 3) The transaction merkle root matches the value in root_hash_data
+  pub fn is_valid(&self, state_commitment: BitDigest) -> bool {
+    //1)
+    if self.state_commitment != state_commitment
+       || self.state_commitment != self.state_commitment_data.compute_commitment()
+    {
+      return false;
+    }
+
+    //2)
+    let hash = self.finalized_txn.hash();
+
+    if !self.txn_inclusion_proof.is_valid_proof(hash) {
+      return false;
+    }
+
+    //3)
+    // TODO (jonathan/noah) we should be using digest everywhere
+    if self.state_commitment_data.transaction_merkle_commitment
+       != self.txn_inclusion_proof.root_hash
+    {
+      return false;
+    }
+
+    true
+  }
+}
+
+pub struct AuthenticatedBlock {
+  pub block: FinalizedBlock,
+  pub block_inclusion_proof: Proof,
+  pub state_commitment_data: StateCommitmentData,
+  pub state_commitment: BitDigest,
+}
+
+impl AuthenticatedBlock {
+  // An authenticated block result is valid if
+  // 1) The block merkle proof is valid
+  // 2) The block merkle root matches the value in root_hash_data
+  // 3) root_hash_data hashes to root_hash
+  // 4) The state commitment of the proof matches the state commitment passed in
+  pub fn is_valid(&self, state_commitment: BitDigest) -> bool {
+    //1) compute block hash
+    let txns: Vec<Transaction> = self.block
+                                     .txns
+                                     .iter()
+                                     .map(|auth_tx| auth_tx.txn.clone())
+                                     .collect();
+    let serialized = bincode::serialize(&txns).unwrap();
+    let digest = sha256::hash(&serialized);
+    let mut hash = HashValue::new();
+    hash.hash.clone_from_slice(&digest.0);
+
+    if self.block_inclusion_proof.is_valid_proof(hash) {
+      return false;
+    }
+
+    //2)
+    if self.state_commitment_data.block_merkle != self.block_inclusion_proof.root_hash {
+      return false;
+    }
+
+    //3) 4)
+    if self.state_commitment != self.state_commitment_data.compute_commitment()
+       || state_commitment != self.state_commitment
+    {
+      return false;
+    }
+
+    true
+  }
+}
+
+pub struct AuthenticatedUtxoStatus {
+  pub status: UtxoStatus,
+  pub utxo_sid: TxoSID,
+  pub state_commitment_data: StateCommitmentData,
+  pub utxo_map: Option<SparseMap>, // BitMap only needed for proof if the txo_sid exists
+  pub state_commitment: BitDigest,
+}
+
+impl AuthenticatedUtxoStatus {
+  // An authenticated utxo status is valid (for txos that exist) if
+  // 1) The state commitment of the proof matches the state commitment passed in
+  // 2) The state commitment data hashes to the state commitment
+  // 3) The status matches the bit stored in the bitmap
+  // 4) The bitmap checksum matches digest in state commitment data
+  // 5) For txos that don't exist, simply show that the utxo_sid greater than max_sid
+  pub fn is_valid(&self, state_commitment: BitDigest) -> bool {
+    let state_commitment_data = &self.state_commitment_data;
+    let utxo_sid = self.utxo_sid.0;
+    // 1, 2) First, validate the state commitment
+    if state_commitment != self.state_commitment
+       || self.state_commitment != state_commitment_data.compute_commitment()
+    {
+      return false;
+    }
+    // If the txo exists, the proof must also contain a bitmap
+    let utxo_map = self.utxo_map.as_ref().unwrap();
+    // 3) The status matches the bit stored in the bitmap
+    let spent = !utxo_map.query(utxo_sid).unwrap();
+    if (self.status == UtxoStatus::Spent && !spent) || (self.status == UtxoStatus::Unspent && spent)
+    {
+      return false;
+    }
+    // 4)
+    if utxo_map.checksum() != self.state_commitment_data.bitmap {
+      println!("failed at bitmap checksum");
+      return false;
+    }
+
+    if self.status == UtxoStatus::Nonexistent {
+      // 5)
+      return utxo_sid >= state_commitment_data.txo_count;
+    }
+
+    true
+  }
+}
+
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct FinalizedBlock {
   pub txns: Vec<FinalizedTransaction>,
@@ -496,6 +630,29 @@ impl Default for Transaction {
     Transaction { operations: Vec::new(),
                   credentials: Vec::new(),
                   memos: Vec::new() }
+  }
+}
+
+#[repr(C)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+// TODO (Keyao):
+// Are the four fields below all necessary?
+// Can we remove one of txns_in_block_hash and global_block_hash?
+// Both of them contain the information of the previous state
+pub struct StateCommitmentData {
+  pub bitmap: BitDigest,                        // The checksum of the utxo_map
+  pub block_merkle: HashValue,                  // The root hash of the block Merkle tree
+  pub txns_in_block_hash: BitDigest,            // The hash of the transactions in the block
+  pub previous_state_commitment: BitDigest,     // The prior global block hash
+  pub transaction_merkle_commitment: HashValue, // The root hash of the transaction Merkle tree
+  pub air_commitment: air::Digest,              // The root hash of the AIR sparse Merkle tree
+  pub txo_count: u64, // Number of transaction outputs. Used to provide proof that a utxo does not exist
+}
+
+impl StateCommitmentData {
+  pub fn compute_commitment(&self) -> BitDigest {
+    let serialized = serde_json::to_string(&self).unwrap();
+    sha256::hash(&serialized.as_bytes())
   }
 }
 

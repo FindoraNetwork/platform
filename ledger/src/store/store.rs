@@ -9,11 +9,11 @@ use crate::data_model::*;
 use crate::policies::{calculate_fee, DebtMemo};
 use air::{AIRResult, AIR};
 use bitmap::{BitMap, SparseMap};
-use cryptohash::sha256;
 use cryptohash::sha256::Digest as BitDigest;
 use cryptohash::sha256::DIGESTBYTES;
+use cryptohash::{sha256, HashValue, Proof};
 use findora::HasInvariants;
-use merkle_tree::append_only_merkle::{AppendOnlyMerkle, HashValue, Proof};
+use merkle_tree::append_only_merkle::AppendOnlyMerkle;
 use merkle_tree::logged_merkle::LoggedMerkle;
 use rand_chacha::ChaChaRng;
 use rand_core::{CryptoRng, RngCore, SeedableRng};
@@ -144,29 +144,6 @@ pub trait ArchiveAccess {
 
   // Key-value lookup in AIR
   fn get_air_data(&self, address: &str) -> AIRResult;
-}
-
-#[repr(C)]
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
-// TODO (Keyao):
-// Are the four fields below all necessary?
-// Can we remove one of txns_in_block_hash and global_block_hash?
-// Both of them contain the information of the previous state
-pub struct StateCommitmentData {
-  pub bitmap: BitDigest,                        // The checksum of the utxo_map
-  pub block_merkle: HashValue,                  // The root hash of the block Merkle tree
-  pub txns_in_block_hash: BitDigest,            // The hash of the transactions in the block
-  pub previous_state_commitment: BitDigest,     // The prior global block hash
-  pub transaction_merkle_commitment: HashValue, // The root hash of the transaction Merkle tree
-  pub air_commitment: air::Digest,              // The root hash of the AIR sparse Merkle tree
-  pub txo_count: u64, // Number of transaction outputs. Used to provide proof that a utxo does not exist
-}
-
-impl StateCommitmentData {
-  pub fn compute_commitment(&self) -> BitDigest {
-    let serialized = bincode::serialize(&self).unwrap();
-    sha256::hash(&serialized)
-  }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
@@ -1546,47 +1523,6 @@ impl AuthenticatedUtxoStatus {
   }
 }
 
-#[derive(Serialize, Deserialize)]
-pub struct AuthenticatedTransaction {
-  pub finalized_txn: FinalizedTransaction,
-  pub txn_inclusion_proof: Proof,
-  pub state_commitment_data: StateCommitmentData,
-  pub state_commitment: BitDigest,
-}
-
-impl AuthenticatedTransaction {
-  // An authenticated txn result is valid if
-  // 1) The state commitment used in the proof matches what we pass in and the state commitment
-  //    data hashes to the state commitment
-  // 2) The transaction merkle proof is valid
-  // 3) The transaction merkle root matches the value in root_hash_data
-  pub fn is_valid(&self, state_commitment: BitDigest) -> bool {
-    //1)
-    if self.state_commitment != state_commitment
-       || self.state_commitment != self.state_commitment_data.compute_commitment()
-    {
-      return false;
-    }
-
-    //2)
-    let hash = self.finalized_txn.hash();
-
-    if !self.txn_inclusion_proof.is_valid_proof(hash) {
-      return false;
-    }
-
-    //3)
-    // TODO (jonathan/noah) we should be using digest everywhere
-    if self.state_commitment_data.transaction_merkle_commitment
-       != self.txn_inclusion_proof.root_hash
-    {
-      return false;
-    }
-
-    true
-  }
-}
-
 impl ArchiveAccess for LedgerState {
   fn get_transaction(&self, addr: TxnSID) -> Option<AuthenticatedTransaction> {
     let mut ix: usize = addr.0;
@@ -1957,7 +1893,7 @@ mod tests {
                                      air_commitment: *ledger_state.air.merkle_root(),
                                      txo_count: 0 };
 
-    let serialized = bincode::serialize(&data).unwrap();
+    let first_hash = data.compute_commitment();
     let count_original = ledger_state.status.block_commit_count;
 
     ledger_state.compute_and_save_state_commitment_data();
@@ -1966,7 +1902,7 @@ mod tests {
                            .state_commitment_data
                            .unwrap()
                            .compute_commitment(),
-               sha256::hash(&serialized));
+               first_hash);
     assert_eq!(ledger_state.status.block_commit_count, count_original + 1);
   }
 

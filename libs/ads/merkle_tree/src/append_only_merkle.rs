@@ -9,7 +9,7 @@
 //!
 
 use chrono::Utc;
-use cryptohash::sha256;
+use cryptohash::{hash_pair, hash_partial, sha256, HashValue, Proof, HASH_SIZE};
 use findora::{debug, er, log, log_impl, sde, se, Commas};
 use serde::Deserialize;
 use serde::Deserializer;
@@ -38,7 +38,6 @@ const HASHES_IN_BLOCK: usize = (1 << BLOCK_SHIFT) - 1;
 const LEAVES_IN_BLOCK: usize = (HASHES_IN_BLOCK + 1) / 2;
 const CHECK_SIZE: usize = 16;
 const HEADER_VALUE: u32 = 0xabcd_0123;
-const HASH_SIZE: usize = 32;
 const BLOCK_SIZE: usize = HASH_SIZE * (HASHES_IN_BLOCK + 1);
 const MAX_BLOCK_LEVELS: usize = 64;
 const PROOF_VERSION: u64 = 0;
@@ -109,72 +108,6 @@ impl BlockHeader {
   }
 }
 
-///
-/// Define the structure containing a hash value for the tree.
-///
-/// This structure must be HASH_SIZE bytes in size.  Each entry of this
-/// type corresponds to a node in the Merkle tree.
-///
-
-#[repr(C)]
-#[derive(Copy, Clone, Debug, Default, PartialEq, Deserialize, Serialize)]
-pub struct HashValue {
-  pub hash: [u8; HASH_SIZE],
-}
-
-impl HashValue {
-  pub fn new() -> HashValue {
-    HashValue { hash: [0; HASH_SIZE] }
-  }
-
-  pub fn desc(&self) -> String {
-    format!("[ {:3}, {:3}, {:3}, {:3} ]",
-            self.hash[0], self.hash[1], self.hash[2], self.hash[3])
-  }
-}
-
-///
-/// This structure describes what is passed to the upper layers
-/// for a proof of inclusion in the tree.
-///
-/// # Fields:
-///
-/// * version   a version for this proof structure
-/// * ledger    the id of the tree as given at open or create
-/// * state     a version id for the tree's state when the proof was created
-/// * time      the time at which the proof was generated, in POSIX time
-/// * tx_id     the transaction id to which this proof applies
-/// * hashes    the set of hashes up the tree
-///
-
-#[derive(Debug, Deserialize, Serialize)]
-pub struct Proof {
-  pub version: u64,
-  pub ledger: String,
-  pub state: u64,
-  pub time: i64,
-  pub tx_id: u64,
-  pub root_hash: HashValue,
-  pub hash_array: Vec<HashValue>,
-}
-
-impl Proof {
-  pub fn is_valid_proof(&self, leaf: HashValue) -> bool {
-    let mut result = leaf;
-    let mut id = self.tx_id;
-    for i in 0..self.hash_array.len() {
-      if id & 1 == 0 {
-        result = hash_partial(&result, &self.hash_array[i]);
-      } else {
-        result = hash_partial(&self.hash_array[i], &result);
-      }
-
-      id /= 2;
-    }
-
-    result == self.root_hash
-  }
-}
 //
 // Define a dictionary that will contain "completed"
 // blocks used when generating a proof.  The working
@@ -608,50 +541,6 @@ fn covered(numerator: u64, denominator: u64) -> u64 {
   assert!(numerator <= std::u64::MAX - denominator);
   assert!(denominator > 0);
   (numerator + denominator - 1) / denominator
-}
-
-// Compute the hash of two hashes.  This Merkle tree is a binary
-// representation, so this is a common operation.
-fn hash_pair(left: &HashValue, right: &HashValue) -> HashValue {
-  let mut data = [0_u8; 2 * HASH_SIZE];
-
-  data[0..HASH_SIZE].clone_from_slice(&left.hash[0..HASH_SIZE]);
-  data[HASH_SIZE..2 * HASH_SIZE].clone_from_slice(&right.hash[0..HASH_SIZE]);
-
-  let digest = sha256::hash(&data);
-  let mut result = HashValue::new();
-  result.hash.clone_from_slice(&digest[0..HASH_SIZE]);
-  result
-}
-
-// Compute the hash of a single hash value.  This function is used
-// when generating proofs.  Partially-filled nodes are constructed
-// using hashes of hashes.
-fn hash_single(hash: &HashValue) -> HashValue {
-  let digest = sha256::hash(&hash.hash[0..HASH_SIZE]);
-
-  let mut result = HashValue::new();
-
-  result.hash.clone_from_slice(&digest[0..HASH_SIZE]);
-  result
-}
-
-// Compute a hash value for a node in a partially-filled block.  The
-// right-hand side might not exist, in which case the value is just
-// the hash of the left side.
-fn hash_partial(left: &HashValue, right: &HashValue) -> HashValue {
-  let empty_hash = HashValue::new();
-  let left_present = *left != empty_hash;
-  let right_present = *right != empty_hash;
-
-  if left_present && right_present {
-    hash_pair(left, right)
-  } else if left_present {
-    hash_single(left)
-  } else {
-    assert!(!right_present);
-    empty_hash
-  }
 }
 
 // This structure is used only to pass data between internal

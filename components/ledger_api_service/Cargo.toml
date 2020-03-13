@@ -12,6 +12,7 @@ actix-cors = "0.1.0"
 actix-rt = "0.2"
 actix-service = "0.4.2"
 actix-web = "1.0.5"
+cryptohash = { path = "../../libs/cryptohash" }
 air = { path = "../../libs/ads/air" }
 ledger = { path = "../../ledger" }
 submission_server = {path = "../submission_server"}
