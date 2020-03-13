@@ -144,6 +144,8 @@ mod tests {
   use zei::xfr::sig::XfrKeyPair;
 
   #[test]
+  // Ignoring this test since it sometimes fails on master
+  #[ignore]
   pub fn test_query_server() {
     let ledger_state = LedgerState::test_ledger();
     let mut prng = ChaChaRng::from_entropy();

@@ -2,7 +2,7 @@
 
 The `txn_builder_cli` application creates transactions and submits them to the ledger server. The typical workflow of P2P lending is as follows
 * Create a new empty transaction. See `txn_builder_cli create_txn_builder`.
-* Create new users. See `txn_builder_cli issuer sign_up`, `txn_builder_cli lender sign_up` and `txn_builder_cli borrower sign_up`.
+* Create new users. See `txn_builder_cli asset_issuer sign_up`, `txn_builder_cli credential_issuer sign_up`, `txn_builder_cli lender sign_up` and `txn_builder_cli borrower sign_up`.
 * Borrower: adds or updates a credential record. See `txn_builder_cli borrower create_or_overwrite_credential`.
 * Borrower: requests a loan. See `txn_builder_cli borrower request_loan`.
 * Lender: fulfills the loan. See `txn_builder_cli lender fulfill_loan`.
@@ -36,11 +36,19 @@ After a transaction is composed by `define_asset`, `issue_asset`, `transfer_asse
 ```
 By default, `https://testnet.findora.org` is used. To switch to `http://localhost`, add `--http --localhost`.
 
-## AssetIssuer account
-### Sign up an AssetIssuer account
-In the initial data, there's one AssetIssuer, Izzie. To sign up a new AssetIssuer account:
+## Asset issuer account
+### Sign up an asset issuer account
+In the initial data, there's one asset issuer, Izzie. To sign up a new asset issuer account:
 ```
 ./txn_builder_cli asset_issuer sign_up --name 'Issuer Name'
+```
+
+### Store sids to file
+If only one utxo sid is needed for an asset transfer, there's no need to use the `store_sids` subcommand. When submitting the asset issuing transaction, simply use `--sids_path` to specify a file to store the utxo sid.
+
+Otherwise, add `--get_sids` when submitting asset issuing transactions, and note the utxo sids shown in the outputs. After all the transactions needed are submitted, store all the utxo sids to one file:
+```
+./txn_builder_cli asset_issuer store_sids --path s --indices 1,2,3
 ```
 
 ### Define an asset
@@ -77,7 +85,7 @@ After an asset is defined and the transaction is submitted:
 To display the utxo sids, add `--get_sids`. To store the sids to a file, use `--sids_path`.
 
 ### Transfer units of an asset. See `txn_builder_cli add transfer_asset`.
-After an asset is defined and issued, and transactions are submitted:
+After an asset is defined and issued, transactions are submitted, and utxo sids are stored.
 * Create an empty transaction
 ```
 ./txn_builder_cli create_txn_builder --name txn_transfer
@@ -108,9 +116,9 @@ Add `--confidential_amount` or `--confidential_asset` if needed.
 ```
 To get the utxo sids, add `--get_sids`.
 
-## CredentialIssuer account
-### Sign up a CredentialIssuer account
-In the initial data, there's one CredentialIssuer, Ivy. To sign up a new CredentialIssuer account:
+## Credential issuer account
+### Sign up a credential issuer account
+In the initial data, there's one credential issuer, Ivy. To sign up a new credential issuer account:
 ```
 ./txn_builder_cli credential_issuer sign_up --name 'Issuer Name'
 ```
@@ -266,9 +274,9 @@ $ curl https://testnet.findora.org:8669/block_log
 ![Table of blocks](./doc/block_log.png)
 
 # Example of confidential transfer
-## Sign up an issuer account for Ian
+## Sign up an asset issuer account for Ian
 ```
-./txn_builder_cli issuer sign_up --name Ian
+./txn_builder_cli asset_issuer sign_up --name Ian
 ```
 Note from the output that Ian's id is `1`: 
 ```

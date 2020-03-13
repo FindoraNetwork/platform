@@ -73,6 +73,13 @@ fn sign_up_asset_issuer(name: &str) -> io::Result<Output> {
 }
 
 #[cfg(test)]
+fn sign_up_credential_issuer(name: &str) -> io::Result<Output> {
+  Command::new(COMMAND).args(&["credential_issuer", "sign_up"])
+                       .args(&["--name", name])
+                       .output()
+}
+
+#[cfg(test)]
 fn sign_up_lender(name: &str, min_credit_score: &str) -> io::Result<Output> {
   Command::new(COMMAND).args(&["lender", "sign_up"])
                        .args(&["--name", name])
@@ -122,16 +129,6 @@ fn create_txn_builder_no_path() -> io::Result<Output> {
 }
 
 #[cfg(test)]
-fn keygen_no_path() -> io::Result<Output> {
-  Command::new(COMMAND).arg("keygen").output()
-}
-
-#[cfg(test)]
-fn pubkeygen_no_path() -> io::Result<Output> {
-  Command::new(COMMAND).arg("pubkeygen").output()
-}
-
-#[cfg(test)]
 fn get_findora_dir() -> String {
   let findora_dir = {
     let home_dir = dirs::home_dir().unwrap_or_else(|| Path::new(".").to_path_buf());
@@ -144,16 +141,6 @@ fn get_findora_dir() -> String {
 #[cfg(test)]
 fn remove_txn_dir() {
   fs::remove_dir_all(format!("{}/txn", get_findora_dir())).unwrap();
-}
-
-#[cfg(test)]
-fn remove_keypair_dir() {
-  fs::remove_dir_all(format!("{}/keypair", get_findora_dir())).unwrap();
-}
-
-#[cfg(test)]
-fn remove_pubkey_dir() {
-  fs::remove_dir_all(format!("{}/pubkey", get_findora_dir())).unwrap();
 }
 
 //
@@ -175,18 +162,6 @@ fn create_txn_builder_overwrite_path(path: &str) -> io::Result<Output> {
 }
 
 #[cfg(test)]
-fn keygen_with_path(path: &str) -> io::Result<Output> {
-  Command::new(COMMAND).args(&["keygen", "--name", path])
-                       .output()
-}
-
-#[cfg(test)]
-fn pubkeygen_with_path(path: &str) -> io::Result<Output> {
-  Command::new(COMMAND).args(&["pubkeygen", "--name", path])
-                       .output()
-}
-
-#[cfg(test)]
 fn store_sids_with_path(path: &str, indices: &str) -> io::Result<Output> {
   Command::new(COMMAND).args(&["asset_issuer", "store_sids"])
                        .args(&["--path", path])
@@ -204,7 +179,7 @@ fn air_assign(txn_builder_path: &str,
               data: &str)
               -> io::Result<Output> {
   Command::new(COMMAND).args(&["--txn", txn_builder_path])
-                       .args(&["add", "air_assign"])
+                       .args(&["asset_issuer", "air_assign"])
                        .args(&["--issuer", issuer_id])
                        .args(&["--address", address])
                        .args(&["--data", data])
@@ -341,8 +316,16 @@ fn pay_loan(borrower_id: &str, loan_id: &str, amount: &str) -> io::Result<Output
 //
 #[test]
 fn test_create_users() {
-  // Create an issuer
-  let output = sign_up_asset_issuer("Issuer I").expect("Failed to create an issuer");
+  // Create an asset issuer
+  let output = sign_up_asset_issuer("Issuer AI").expect("Failed to create an asset issuer");
+  io::stdout().write_all(&output.stdout).unwrap();
+  io::stdout().write_all(&output.stderr).unwrap();
+
+  assert!(output.status.success());
+
+  // Create a credential issuer
+  let output =
+    sign_up_credential_issuer("Issuer CI").expect("Failed to create a credential issuer");
   io::stdout().write_all(&output.stdout).unwrap();
   io::stdout().write_all(&output.stderr).unwrap();
 
@@ -401,7 +384,7 @@ fn test_create_or_update_credentials() {
 }
 
 #[test]
-fn test_no_path() {
+fn test_create_txn_builder_no_path() {
   // Create transaction builder
   let output = create_txn_builder_no_path().expect("Failed to execute process");
 
@@ -410,25 +393,7 @@ fn test_no_path() {
 
   assert!(output.status.success());
 
-  // Generate key pair
-  let output = keygen_no_path().expect("Failed to execute process");
-
-  io::stdout().write_all(&output.stdout).unwrap();
-  io::stdout().write_all(&output.stderr).unwrap();
-
-  assert!(output.status.success());
-
-  // Generate public key
-  let output = pubkeygen_no_path().expect("Failed to execute process");
-
-  io::stdout().write_all(&output.stdout).unwrap();
-  io::stdout().write_all(&output.stderr).unwrap();
-
-  assert!(output.status.success());
-
   remove_txn_dir();
-  remove_keypair_dir();
-  remove_pubkey_dir();
 }
 
 //
@@ -606,30 +571,6 @@ fn test_create_txn_builder_with_help() {
 }
 
 #[test]
-fn test_keygen_with_help() {
-  let output = Command::new(COMMAND).args(&["keygen", "--help"])
-                                    .output()
-                                    .expect("failed to execute process");
-
-  io::stdout().write_all(&output.stdout).unwrap();
-  io::stdout().write_all(&output.stderr).unwrap();
-
-  assert!(output.status.success());
-}
-
-#[test]
-fn test_pubkeygen_with_help() {
-  let output = Command::new(COMMAND).args(&["pubkeygen", "--help"])
-                                    .output()
-                                    .expect("failed to execute process");
-
-  io::stdout().write_all(&output.stdout).unwrap();
-  io::stdout().write_all(&output.stderr).unwrap();
-
-  assert!(output.status.success())
-}
-
-#[test]
 fn test_define_asset_with_help() {
   let output = Command::new(COMMAND).args(&["asset_issuer", "define_asset", "--help"])
                                     .output()
@@ -732,24 +673,6 @@ fn test_create_txn_builder_with_name() {
 
   fs::remove_file("txn_builder").unwrap();
   assert!(output.status.success());
-
-  // Generate key pair
-  let output = keygen_with_path("key_pair").expect("Failed to generate key pair");
-
-  io::stdout().write_all(&output.stdout).unwrap();
-  io::stdout().write_all(&output.stderr).unwrap();
-
-  fs::remove_file("key_pair").unwrap();
-  assert!(output.status.success());
-
-  // Generate public key
-  let output = pubkeygen_with_path("pub").expect("Failed to generate public key");
-
-  io::stdout().write_all(&output.stdout).unwrap();
-  io::stdout().write_all(&output.stderr).unwrap();
-
-  fs::remove_file("pub").unwrap();
-  assert!(output.status.success());
 }
 
 //
@@ -843,7 +766,6 @@ fn test_define_issue_transfer_and_submit_with_args() {
 // Compose transaction and submit
 //
 #[test]
-#[ignore]
 fn test_air_assign() {
   // Create txn builder and key pair
   let txn_builder_file = "tb_air_assign";
