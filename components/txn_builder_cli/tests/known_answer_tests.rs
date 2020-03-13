@@ -766,7 +766,6 @@ fn test_define_issue_transfer_and_submit_with_args() {
 // Compose transaction and submit
 //
 #[test]
-#[ignore]
 fn test_air_assign() {
   // Create txn builder and key pair
   let txn_builder_file = "tb_air_assign";
