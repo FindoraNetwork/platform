@@ -66,8 +66,8 @@ fn view_credential_with_credential_id(borrower_id: &str,
 // Helper functions: sign up an account
 //
 #[cfg(test)]
-fn sign_up_issuer(name: &str) -> io::Result<Output> {
-  Command::new(COMMAND).args(&["issuer", "sign_up"])
+fn sign_up_asset_issuer(name: &str) -> io::Result<Output> {
+  Command::new(COMMAND).args(&["asset_issuer", "sign_up"])
                        .args(&["--name", name])
                        .output()
 }
@@ -94,6 +94,7 @@ fn sign_up_borrower(name: &str) -> io::Result<Output> {
 fn create_or_overwrite_credential(id: &str, attribute: &str, value: &str) -> io::Result<Output> {
   Command::new(COMMAND).args(&["borrower", "--id", id])
                        .arg("create_or_overwrite_credential")
+                       .args(&["--credential_issuer", "0"])
                        .args(&["--attribute", attribute])
                        .args(&["--value", value])
                        .output()
@@ -187,7 +188,7 @@ fn pubkeygen_with_path(path: &str) -> io::Result<Output> {
 
 #[cfg(test)]
 fn store_sids_with_path(path: &str, indices: &str) -> io::Result<Output> {
-  Command::new(COMMAND).args(&["issuer", "store_sids"])
+  Command::new(COMMAND).args(&["asset_issuer", "store_sids"])
                        .args(&["--path", path])
                        .args(&["--indices", indices])
                        .output()
@@ -217,7 +218,7 @@ fn define_asset(txn_builder_path: &str,
                 memo: &str)
                 -> io::Result<Output> {
   Command::new(COMMAND).args(&["--txn", txn_builder_path])
-                       .args(&["issuer", "--id", issuer_id])
+                       .args(&["asset_issuer", "--id", issuer_id])
                        .arg("define_asset")
                        .args(&["--token_code", token_code])
                        .args(&["--memo", memo])
@@ -231,7 +232,7 @@ fn issue_asset(txn_builder_path: &str,
                amount: &str)
                -> io::Result<Output> {
   Command::new(COMMAND).args(&["--txn", txn_builder_path])
-                       .args(&["issuer", "--id", id])
+                       .args(&["asset_issuer", "--id", id])
                        .arg("issue_asset")
                        .args(&["--token_code", token_code])
                        .args(&["--amount", amount])
@@ -247,7 +248,7 @@ fn transfer_asset(txn_builder_path: &str,
                   output_amounts: &str)
                   -> io::Result<Output> {
   Command::new(COMMAND).args(&["--txn", txn_builder_path])
-                       .args(&["issuer", "--id", issuer_id])
+                       .args(&["asset_issuer", "--id", issuer_id])
                        .arg("transfer_asset")
                        .args(&["--recipients", recipient_ids])
                        .args(&["--sids_path", sids_path])
@@ -265,7 +266,7 @@ fn issue_and_transfer_asset(txn_builder_path: &str,
                             token_code: &str)
                             -> io::Result<Output> {
   Command::new(COMMAND).args(&["--txn", txn_builder_path])
-                       .args(&["issuer", "--id", issuer_id])
+                       .args(&["asset_issuer", "--id", issuer_id])
                        .arg("issue_and_transfer_asset")
                        .args(&["--recipient", recipient_id])
                        .args(&["--amount", amount])
@@ -341,7 +342,7 @@ fn pay_loan(borrower_id: &str, loan_id: &str, amount: &str) -> io::Result<Output
 #[test]
 fn test_create_users() {
   // Create an issuer
-  let output = sign_up_issuer("Issuer I").expect("Failed to create an issuer");
+  let output = sign_up_asset_issuer("Issuer I").expect("Failed to create an issuer");
   io::stdout().write_all(&output.stdout).unwrap();
   io::stdout().write_all(&output.stderr).unwrap();
 
@@ -630,7 +631,7 @@ fn test_pubkeygen_with_help() {
 
 #[test]
 fn test_define_asset_with_help() {
-  let output = Command::new(COMMAND).args(&["issuer", "define_asset", "--help"])
+  let output = Command::new(COMMAND).args(&["asset_issuer", "define_asset", "--help"])
                                     .output()
                                     .expect("failed to execute process");
 
@@ -642,7 +643,7 @@ fn test_define_asset_with_help() {
 
 #[test]
 fn test_issue_asset_with_help() {
-  let output = Command::new(COMMAND).args(&["issuer", "issue_asset", "--help"])
+  let output = Command::new(COMMAND).args(&["asset_issuer", "issue_asset", "--help"])
                                     .output()
                                     .expect("failed to execute process");
 
@@ -654,7 +655,7 @@ fn test_issue_asset_with_help() {
 
 #[test]
 fn test_transfer_asset_with_help() {
-  let output = Command::new(COMMAND).args(&["issuer", "transfer_asset", "--help"])
+  let output = Command::new(COMMAND).args(&["asset_issuer", "transfer_asset", "--help"])
                                     .output()
                                     .expect("failed to execute process");
 

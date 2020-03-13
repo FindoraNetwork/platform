@@ -11,6 +11,8 @@ let kp_bob = wasm.new_keypair();
 let kp_charlie = wasm.new_keypair();
 let kp_auditor = wasm.new_keypair();
 
+console.log(wasm.public_key_to_base64(kp_bob.get_pk()));
+
 // And a separate tracking key for the auditor
 let tracking_kp_auditor = wasm.generate_elgamal_keys();
 
