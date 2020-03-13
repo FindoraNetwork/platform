@@ -612,67 +612,6 @@ fn store_txn_to_file(path_str: &str, txn: &TransactionBuilder) -> Result<(), Pla
   Ok(())
 }
 
-/// Stores a new key pair to file. Assumes tilde expansion has already been done.
-/// # Arguments
-/// * `path_str`: file path to store the key pair.
-fn store_key_pair_to_file(path_str: &str) -> Result<(), PlatformError> {
-  let file_path = Path::new(path_str);
-  let parent_path = if let Some(path) = file_path.parent() {
-    path
-  } else {
-    return Err(PlatformError::IoError(format!("Failed to get the parent path of file {}.",
-                                              file_path.display())));
-  };
-  match fs::create_dir_all(parent_path) {
-    Ok(()) => {
-      let mut prng: ChaChaRng;
-      prng = ChaChaRng::from_entropy();
-      let key_pair = XfrKeyPair::generate(&mut prng);
-      if let Err(error) = fs::write(&file_path, key_pair.zei_to_bytes()) {
-        return Err(PlatformError::IoError(format!("Failed to create file {}: {}.",
-                                                  file_path.display(),
-                                                  error)));
-      };
-    }
-    Err(error) => {
-      return Err(PlatformError::IoError(format!("Failed to create file {}: {}.",
-                                                file_path.display(),
-                                                error)));
-    }
-  }
-  Ok(())
-}
-
-/// Stores a new public key to file. Assumes tilde expansion has already been done.
-/// # Arguments
-/// * `path_str`: file path to store the public key.
-fn store_pub_key_to_file(path_str: &str) -> Result<(), PlatformError> {
-  let file_path = Path::new(path_str);
-  let parent_path = if let Some(path) = file_path.parent() {
-    path
-  } else {
-    return Err(PlatformError::IoError(format!("Failed to get the parent path of file {}.",
-                                              file_path.display())));
-  };
-  match fs::create_dir_all(parent_path) {
-    Ok(()) => {
-      let mut prng = ChaChaRng::from_entropy();
-      let key_pair = XfrKeyPair::generate(&mut prng);
-      if let Err(error) = fs::write(&file_path, key_pair.get_pk_ref().as_bytes()) {
-        return Err(PlatformError::IoError(format!("Failed to create file {}: {}.",
-                                                  file_path.display(),
-                                                  error)));
-      };
-    }
-    Err(error) => {
-      return Err(PlatformError::IoError(format!("Failed to create directory for file {}: {}.",
-                                                file_path.display(),
-                                                error)));
-    }
-  }
-  Ok(())
-}
-
 /// Stores SIDs to file.
 /// # Arguments
 /// * `file_path`: file path to store the key pair.
@@ -2097,28 +2036,6 @@ fn main() {
         .help("If specified, the existing file with the same name will be overwritten.")))
     .subcommand(SubCommand::with_name("serialize"))
     .subcommand(SubCommand::with_name("drop"))
-    .subcommand(SubCommand::with_name("keygen")
-      .arg(Arg::with_name("create_key_pair_path")
-        .short("n")
-        .long("name")
-        .help("specify the path and name for the key pair file.")
-        .takes_value(true))
-      .arg(Arg::with_name("overwrite")
-        .long("force")
-        .alias("overwrite")
-        .short("f")
-        .help("If specified, the existing file with the same name will be overwritten.")))
-    .subcommand(SubCommand::with_name("pubkeygen")
-      .arg(Arg::with_name("create_pubkey_path")
-        .short("n")
-        .long("name")
-        .help("specify the path and name for the public key file.")
-        .takes_value(true))
-      .arg(Arg::with_name("overwrite")
-        .long("force")
-        .alias("overwrite")
-        .short("f")
-        .help("If specified, the existing file with the same name will be overwritten.")))
     .subcommand(SubCommand::with_name("submit")
       .arg(Arg::with_name("get_sids")
         .long("get_sids")
@@ -2215,32 +2132,6 @@ fn process_inputs(inputs: clap::ArgMatches) -> Result<(), PlatformError> {
       }
       Err(e) => Err(PlatformError::IoError(format!("Error deleting file: {:?} ", e))),
     },
-    ("keygen", Some(keygen_matches)) => {
-      let new_key_pair_path =
-        if let Some(new_key_pair_path_in) = keygen_matches.value_of("create_key_pair_path") {
-          new_key_pair_path_in.to_string()
-        } else {
-          format!("{}/keypair/default.keypair", &findora_dir)
-        };
-      let expand_str = shellexpand::tilde(&new_key_pair_path).to_string();
-      let overwrite = keygen_matches.is_present("overwrite");
-      println!("Storing key pair to {}", expand_str);
-      create_directory_and_rename_path(&expand_str, overwrite)?;
-      store_key_pair_to_file(&expand_str)
-    }
-    ("pubkeygen", Some(pubkeygen_matches)) => {
-      let new_key_path =
-        if let Some(new_key_path_in) = pubkeygen_matches.value_of("create_pubkey_path") {
-          new_key_path_in.to_string()
-        } else {
-          format!("{}/pubkey/default.pubkey", &findora_dir)
-        };
-      let expand_str = shellexpand::tilde(&new_key_path).to_string();
-      println!("Storing public key to {}", expand_str);
-      let overwrite = pubkeygen_matches.is_present("overwrite");
-      create_directory_and_rename_path(&expand_str, overwrite)?;
-      store_pub_key_to_file(&expand_str)
-    }
     ("submit", Some(submit_matches)) => process_submit_cmd(submit_matches, &txn_file),
     _ => {
       println!("Subcommand missing or not recognized. Try --help");
@@ -2393,21 +2284,7 @@ fn process_asset_issuer_cmd(asset_issuer_matches: &clap::ArgMatches,
         return Err(PlatformError::InputsError);
       };
       // Compose transfer_from for add_basic_transfer_asset
-      let protocol = if transfer_asset_matches.is_present("http") {
-        // Allow HTTP which may be useful for running a ledger locally.
-        "http"
-      } else {
-        // Default to HTTPS
-        "https"
-      };
-      let host = if transfer_asset_matches.is_present("localhost") {
-        // Use localhost
-        run_ledger_standalone()?;
-        "localhost"
-      } else {
-        // Default to testnet.findora.org
-        "testnet.findora.org"
-      };
+      let (protocol, host) = protocol_host(transfer_asset_matches);
       let mut txo_refs = Vec::new();
       let mut blind_asset_records = Vec::new();
       if let Some(sids_path_arg) = transfer_asset_matches.value_of("sids_path") {
@@ -2567,6 +2444,12 @@ fn process_asset_issuer_cmd(asset_issuer_matches: &clap::ArgMatches,
   }
 }
 
+/// Sets the protocol and host.
+///
+/// Environment variables `PROTOCOL` and `SERVER_HOST` set the protocol and host,
+/// which can be overwritten by CLI subcommands.
+///
+/// By default, the protocol is `https` and the host is `testnet.findora.org`.
 fn protocol_host(matches: &clap::ArgMatches) -> (&'static str, &'static str) {
   let protocol = if matches.is_present("http") {
     "http"
@@ -3031,22 +2914,7 @@ fn process_create_txn_builder_cmd(create_matches: &clap::ArgMatches,
 fn process_submit_cmd(submit_matches: &clap::ArgMatches,
                       txn_file: &str)
                       -> Result<(), PlatformError> {
-  // Get protocol and host.
-  let protocol = if submit_matches.is_present("http") {
-    // Allow HTTP which may be useful for running a ledger locally.
-    "http"
-  } else {
-    // Default to HTTPS
-    "https"
-  };
-  let host = if submit_matches.is_present("localhost") {
-    // Use localhost
-    run_ledger_standalone()?;
-    "localhost"
-  } else {
-    // Default to testnet.findora.org
-    "testnet.findora.org"
-  };
+  let (protocol, host) = protocol_host(submit_matches);
   let txn_builder = load_txn_from_file(txn_file)?;
   if submit_matches.is_present("get_sids") || submit_matches.is_present("sids_path") {
     let sids = submit_and_get_sids(protocol, host, txn_builder)?;
@@ -3110,21 +2978,7 @@ fn process_pay_loan_cmd(pay_loan_matches: &clap::ArgMatches) -> Result<(), Platf
     println!("Amount is required to pay the loan. Use --amount.");
     return Err(PlatformError::InputsError);
   };
-  let protocol = if pay_loan_matches.is_present("http") {
-    // Allow HTTP which may be useful for running a ledger locally.
-    "http"
-  } else {
-    // Default to HTTPS
-    "https"
-  };
-  let host = if pay_loan_matches.is_present("localhost") {
-    // Use localhost
-    run_ledger_standalone()?;
-    "localhost"
-  } else {
-    // Default to testnet.findora.org
-    "testnet.findora.org"
-  };
+  let (protocol, host) = protocol_host(pay_loan_matches);
 
   pay_loan(loan_id, amount, protocol, host)
 }
