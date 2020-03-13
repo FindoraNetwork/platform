@@ -143,6 +143,7 @@ mod tests {
   use zei::xfr::asset_record::open_asset_record;
   use zei::xfr::sig::XfrKeyPair;
 
+  #[ignore]
   #[test]
   pub fn test_query_server() {
     let ledger_state = LedgerState::test_ledger();
