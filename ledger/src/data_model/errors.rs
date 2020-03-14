@@ -7,10 +7,12 @@ pub enum PlatformError {
   SerializationError,
   InputsError,
   PolicyFailureError(Option<String>),
+  CheckedReplayError(String),
   // Option(String) so I (joe) can be lazy about error descriptions but also catch the laziness
   // later by removing Option
   InvariantError(Option<String>),
   SubmissionServerError(Option<String>),
+  QueryServerError(Option<String>),
   ZeiError(ZeiError),
   IoError(String),
 }
@@ -22,6 +24,9 @@ impl fmt::Display for PlatformError {
     match self {
       PlatformError::DeserializationError => f.write_str("Could not deserialize object"),
       PlatformError::SerializationError => f.write_str("Could not serialize object"),
+      PlatformError::CheckedReplayError(msg) => {
+        f.write_str(&format!("Inconsistency found while replaying: {}", msg))
+      }
       PlatformError::InputsError => f.write_str("Invalid parameters"),
       PlatformError::PolicyFailureError(None) => f.write_str("Failed policy check"),
       PlatformError::PolicyFailureError(Some(x)) => {
@@ -33,6 +38,10 @@ impl fmt::Display for PlatformError {
       }
       PlatformError::SubmissionServerError(msg) => {
         f.write_str(format!("Ledger Application Error: {}",
+                            msg.as_ref().unwrap_or(&"UNKNOWN".to_string())).as_str())
+      }
+      PlatformError::QueryServerError(msg) => {
+        f.write_str(format!("Query Server Error: {}",
                             msg.as_ref().unwrap_or(&"UNKNOWN".to_string())).as_str())
       }
       PlatformError::ZeiError(ze) => ze.fmt(f),

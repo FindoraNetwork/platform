@@ -1,23 +1,26 @@
 #![deny(warnings)]
 use super::errors;
 use crate::policy_script::{Policy, PolicyGlobals, TxnPolicyData};
+use bitmap::SparseMap;
 use chrono::prelude::*;
-use cryptohash::sha256::Digest;
+use cryptohash::sha256::Digest as BitDigest;
+use cryptohash::{sha256, HashValue, Proof};
 use errors::PlatformError;
 use rand_chacha::ChaChaRng;
 use rand_core::{CryptoRng, RngCore, SeedableRng};
 use std::boxed::Box;
 use std::collections::HashMap;
 use std::convert::TryFrom;
+use std::hash::{Hash, Hasher};
 use std::marker::PhantomData;
 use zei::xfr::lib::gen_xfr_body;
 use zei::xfr::sig::{XfrKeyPair, XfrPublicKey, XfrSecretKey, XfrSignature};
 use zei::xfr::structs::{AssetRecord, BlindAssetRecord, OpenAssetRecord, XfrBody};
 
-fn b64enc<T: ?Sized + AsRef<[u8]>>(input: &T) -> String {
+pub fn b64enc<T: ?Sized + AsRef<[u8]>>(input: &T) -> String {
   base64::encode_config(input, base64::URL_SAFE)
 }
-fn b64dec<T: ?Sized + AsRef<[u8]>>(input: &T) -> Result<Vec<u8>, base64::DecodeError> {
+pub fn b64dec<T: ?Sized + AsRef<[u8]>>(input: &T) -> Result<Vec<u8>, base64::DecodeError> {
   base64::decode_config(input, base64::URL_SAFE)
 }
 
@@ -101,6 +104,13 @@ pub struct Commitment([u8; 32]);
 #[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 pub struct XfrAddress {
   pub key: XfrPublicKey,
+}
+
+#[allow(clippy::derive_hash_xor_eq)]
+impl Hash for XfrAddress {
+  fn hash<H: Hasher>(&self, state: &mut H) {
+    self.key.as_bytes().hash(state);
+  }
 }
 
 // TODO(joe): Better name! There's more than one thing that gets issued.
@@ -195,6 +205,13 @@ pub struct TxnTempSID(pub usize);
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct TxOutput(pub BlindAssetRecord);
+
+#[derive(Eq, PartialEq, Debug)]
+pub enum UtxoStatus {
+  Spent,
+  Unspent,
+  Nonexistent,
+}
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct Utxo(pub TxOutput);
@@ -297,12 +314,12 @@ impl DefineAssetBody {
 }
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct AIRAssignBody {
-  pub addr: Digest,
+  pub addr: String,
   pub data: String,
 }
 
 impl AIRAssignBody {
-  pub fn new(addr: Digest, data: String) -> Result<AIRAssignBody, errors::PlatformError> {
+  pub fn new(addr: String, data: String) -> Result<AIRAssignBody, errors::PlatformError> {
     Ok(AIRAssignBody { addr, data })
   }
 }
@@ -454,6 +471,151 @@ pub struct FinalizedTransaction {
   pub merkle_id: u64,
 }
 
+#[derive(Serialize, Deserialize)]
+pub struct AuthenticatedTransaction {
+  pub finalized_txn: FinalizedTransaction,
+  pub txn_inclusion_proof: Proof,
+  pub state_commitment_data: StateCommitmentData,
+  pub state_commitment: BitDigest,
+}
+
+impl AuthenticatedTransaction {
+  // An authenticated txn result is valid if
+  // 1) The state commitment used in the proof matches what we pass in and the state commitment
+  //    data hashes to the state commitment
+  // 2) The transaction merkle proof is valid
+  // 3) The transaction merkle root matches the value in root_hash_data
+  pub fn is_valid(&self, state_commitment: BitDigest) -> bool {
+    //1)
+    if self.state_commitment != state_commitment
+       || self.state_commitment != self.state_commitment_data.compute_commitment()
+    {
+      return false;
+    }
+
+    //2)
+    let hash = self.finalized_txn.hash();
+
+    if !self.txn_inclusion_proof.is_valid_proof(hash) {
+      return false;
+    }
+
+    //3)
+    // TODO (jonathan/noah) we should be using digest everywhere
+    if self.state_commitment_data.transaction_merkle_commitment
+       != self.txn_inclusion_proof.root_hash
+    {
+      return false;
+    }
+
+    true
+  }
+}
+
+pub struct AuthenticatedBlock {
+  pub block: FinalizedBlock,
+  pub block_inclusion_proof: Proof,
+  pub state_commitment_data: StateCommitmentData,
+  pub state_commitment: BitDigest,
+}
+
+impl AuthenticatedBlock {
+  // An authenticated block result is valid if
+  // 1) The block merkle proof is valid
+  // 2) The block merkle root matches the value in root_hash_data
+  // 3) root_hash_data hashes to root_hash
+  // 4) The state commitment of the proof matches the state commitment passed in
+  pub fn is_valid(&self, state_commitment: BitDigest) -> bool {
+    //1) compute block hash
+    let txns: Vec<Transaction> = self.block
+                                     .txns
+                                     .iter()
+                                     .map(|auth_tx| auth_tx.txn.clone())
+                                     .collect();
+    let serialized = bincode::serialize(&txns).unwrap();
+    let digest = sha256::hash(&serialized);
+    let mut hash = HashValue::new();
+    hash.hash.clone_from_slice(&digest.0);
+
+    if self.block_inclusion_proof.is_valid_proof(hash) {
+      return false;
+    }
+
+    //2)
+    if self.state_commitment_data.block_merkle != self.block_inclusion_proof.root_hash {
+      return false;
+    }
+
+    //3) 4)
+    if self.state_commitment != self.state_commitment_data.compute_commitment()
+       || state_commitment != self.state_commitment
+    {
+      return false;
+    }
+
+    true
+  }
+}
+
+pub struct AuthenticatedUtxoStatus {
+  pub status: UtxoStatus,
+  pub utxo_sid: TxoSID,
+  pub state_commitment_data: StateCommitmentData,
+  pub utxo_map: Option<SparseMap>, // BitMap only needed for proof if the txo_sid exists
+  pub state_commitment: BitDigest,
+}
+
+impl AuthenticatedUtxoStatus {
+  // An authenticated utxo status is valid (for txos that exist) if
+  // 1) The state commitment of the proof matches the state commitment passed in
+  // 2) The state commitment data hashes to the state commitment
+  // 3) The status matches the bit stored in the bitmap
+  // 4) The bitmap checksum matches digest in state commitment data
+  // 5) For txos that don't exist, simply show that the utxo_sid greater than max_sid
+  pub fn is_valid(&self, state_commitment: BitDigest) -> bool {
+    let state_commitment_data = &self.state_commitment_data;
+    let utxo_sid = self.utxo_sid.0;
+    // 1, 2) First, validate the state commitment
+    if state_commitment != self.state_commitment
+       || self.state_commitment != state_commitment_data.compute_commitment()
+    {
+      return false;
+    }
+    // If the txo exists, the proof must also contain a bitmap
+    let utxo_map = self.utxo_map.as_ref().unwrap();
+    // 3) The status matches the bit stored in the bitmap
+    let spent = !utxo_map.query(utxo_sid).unwrap();
+    if (self.status == UtxoStatus::Spent && !spent) || (self.status == UtxoStatus::Unspent && spent)
+    {
+      return false;
+    }
+    // 4)
+    if utxo_map.checksum() != self.state_commitment_data.bitmap {
+      println!("failed at bitmap checksum");
+      return false;
+    }
+
+    if self.status == UtxoStatus::Nonexistent {
+      // 5)
+      return utxo_sid >= state_commitment_data.txo_count;
+    }
+
+    true
+  }
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct FinalizedBlock {
+  pub txns: Vec<FinalizedTransaction>,
+  pub merkle_id: u64,
+}
+
+impl FinalizedTransaction {
+  pub fn hash(&self) -> HashValue {
+    self.txn.hash(self.tx_id)
+  }
+}
+
 impl Transaction {
   pub fn add_operation(&mut self, op: Operation) {
     self.operations.push(op);
@@ -463,6 +625,13 @@ impl Transaction {
     let mut serialized = bincode::serialize(&self).unwrap();
     serialized.extend(bincode::serialize(&sid).unwrap());
     serialized
+  }
+
+  pub fn hash(&self, sid: TxnSID) -> HashValue {
+    let digest = sha256::hash(&self.serialize_bincode(sid));
+    let mut hash = HashValue::new();
+    hash.hash.clone_from_slice(&digest.0);
+    hash
   }
 
   fn serialize_without_sigs(&self) -> Vec<u8> {
@@ -507,6 +676,29 @@ impl Transaction {
       }
     }
     Err(PlatformError::InputsError)
+  }
+}
+
+#[repr(C)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+// TODO (Keyao):
+// Are the four fields below all necessary?
+// Can we remove one of txns_in_block_hash and global_block_hash?
+// Both of them contain the information of the previous state
+pub struct StateCommitmentData {
+  pub bitmap: BitDigest,                        // The checksum of the utxo_map
+  pub block_merkle: HashValue,                  // The root hash of the block Merkle tree
+  pub txns_in_block_hash: BitDigest,            // The hash of the transactions in the block
+  pub previous_state_commitment: BitDigest,     // The prior global block hash
+  pub transaction_merkle_commitment: HashValue, // The root hash of the transaction Merkle tree
+  pub air_commitment: air::Digest,              // The root hash of the AIR sparse Merkle tree
+  pub txo_count: u64, // Number of transaction outputs. Used to provide proof that a utxo does not exist
+}
+
+impl StateCommitmentData {
+  pub fn compute_commitment(&self) -> BitDigest {
+    let serialized = serde_json::to_string(&self).unwrap();
+    sha256::hash(&serialized.as_bytes())
   }
 }
 
@@ -606,7 +798,7 @@ mod tests {
 
   #[test]
   fn test_verify() {
-    let mut prng = rand_chacha::ChaChaRng::from_seed([0u8; 32]);
+    let mut prng = rand_chacha::ChaChaRng::from_entropy();
 
     let keypair = XfrKeyPair::generate(&mut prng);
     let message: &[u8] = b"test";
@@ -630,7 +822,7 @@ mod tests {
     // Create values to be used to instantiate operations
     let mut transaction: Transaction = Default::default();
 
-    let mut prng = rand_chacha::ChaChaRng::from_seed([0u8; 32]);
+    let mut prng = rand_chacha::ChaChaRng::from_entropy();
 
     let keypair = XfrKeyPair::generate(&mut prng);
     let message: &[u8] = b"test";
@@ -672,17 +864,28 @@ mod tests {
 
     let asset_creation = DefineAsset { body: DefineAssetBody { asset },
                                        pubkey: IssuerPublicKey { key: public_key },
-                                       signature };
+                                       signature: signature.clone() };
 
     let creation_operation = Operation::DefineAsset(asset_creation.clone());
+
+    // Instantiate an AIRAssign operation
+    let air_assign_body = AIRAssignBody { addr: String::from(""),
+                                          data: String::from("") };
+
+    let air_assign = AIRAssign { body: air_assign_body,
+                                 pubkey: IssuerPublicKey { key: public_key },
+                                 signature: signature.clone() };
+
+    let air_assign_operation = Operation::AIRAssign(air_assign.clone());
 
     // Add operations to the transaction
     transaction.add_operation(transfer_operation);
     transaction.add_operation(issurance_operation);
     transaction.add_operation(creation_operation);
+    transaction.add_operation(air_assign_operation);
 
     // Verify operatoins
-    assert_eq!(transaction.operations.len(), 3);
+    assert_eq!(transaction.operations.len(), 4);
 
     assert_eq!(transaction.operations.get(0),
                Some(&Operation::TransferAsset(asset_transfer)));
@@ -690,6 +893,8 @@ mod tests {
                Some(&Operation::IssueAsset(asset_issurance)));
     assert_eq!(transaction.operations.get(2),
                Some(&Operation::DefineAsset(asset_creation)));
+    assert_eq!(transaction.operations.get(3),
+               Some(&Operation::AIRAssign(air_assign)));
   }
 
   // Verify that the hash values of two transactions:

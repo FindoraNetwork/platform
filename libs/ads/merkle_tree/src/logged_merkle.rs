@@ -23,9 +23,9 @@
 //! files are append-only.  See the LogBuffer struct for the full
 //! details.
 //!
-use super::append_only_merkle::{AppendOnlyMerkle, HashValue, Proof};
+use super::append_only_merkle::AppendOnlyMerkle;
 
-use cryptohash::sha256;
+use cryptohash::{sha256, HashValue, Proof};
 use findora::{debug, er, log, log_impl, Commas};
 use serde::Deserialize;
 use serde::Deserializer;
@@ -558,9 +558,9 @@ impl Drop for LoggedMerkle {
 #[cfg(test)]
 mod tests {
   use crate::append_only_merkle::AppendOnlyMerkle;
-  use crate::append_only_merkle::HashValue;
   use crate::logged_merkle::LogBuffer;
   use crate::logged_merkle::LoggedMerkle;
+  use cryptohash::HashValue;
   use std::cmp::max;
   use std::fs::OpenOptions;
 

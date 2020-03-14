@@ -16,7 +16,7 @@ struct ABCISubmissionServer {
 impl ABCISubmissionServer {
   fn new() -> Result<ABCISubmissionServer, PlatformError> {
     let ledger = LedgerState::test_ledger();
-    let prng = rand_chacha::ChaChaRng::from_seed([0u8; 32]);
+    let prng = rand_chacha::ChaChaRng::from_entropy();
     Ok(ABCISubmissionServer { la: SubmissionServer::new(prng, Arc::new(RwLock::new(ledger)), 8)? })
   }
 }

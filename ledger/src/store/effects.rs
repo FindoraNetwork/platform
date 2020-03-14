@@ -34,7 +34,7 @@ pub struct TxnEffect {
   pub asset_types_involved: HashSet<AssetTypeCode>,
   pub custom_policy_asset_types: HashMap<AssetTypeCode, TxnCheckInputs>,
   // Updates to the AIR
-  pub air_updates: HashMap<BitDigest, String>,
+  pub air_updates: HashMap<String, String>,
 }
 
 // Internally validates the transaction as well.
@@ -60,7 +60,7 @@ impl TxnEffect {
                                        .drain(..)
                                        .collect::<HashMap<_, _>>();
 
-    let mut air_updates: HashMap<BitDigest, String> = HashMap::new();
+    let mut air_updates: HashMap<String, String> = HashMap::new();
 
     // Sequentially go through the operations, validating intrinsic or
     // local-to-the-transaction properties, then recording effects and
@@ -300,8 +300,8 @@ impl TxnEffect {
         }
 
         Operation::AIRAssign(air_assign) => {
-          // unimplemented!("AIRAssign {:?}", air_assign);
-          air_updates.insert(air_assign.body.addr, air_assign.body.data.clone());
+          // Is this like DefineAsset, and doesn't increment txo_count?
+          air_updates.insert(air_assign.body.addr.clone(), air_assign.body.data.clone());
         }
       } // end -- match op {
     } // end -- for op in txn.operations.iter() {
@@ -363,7 +363,7 @@ impl HasInvariants<PlatformError> for TxnEffect {
     // TODO(joe): other checks?
     {
       // Slightly cheating
-      let mut prng = rand_chacha::ChaChaRng::from_seed([0u8; 32]);
+      let mut prng = rand_chacha::ChaChaRng::from_entropy();
       if TxnEffect::compute_effect(&mut prng, self.txn.clone())? != *self {
         return Err(PlatformError::InvariantError(None));
       }
@@ -394,7 +394,7 @@ pub struct BlockEffect {
   // Which public key is being used to issue each asset type
   pub issuance_keys: HashMap<AssetTypeCode, IssuerPublicKey>,
   // Updates to the AIR
-  pub air_updates: HashMap<BitDigest, String>,
+  pub air_updates: HashMap<String, String>,
 }
 
 impl BlockEffect {
@@ -452,6 +452,7 @@ impl BlockEffect {
     self.txos.push(txn.txos);
 
     for (input_sid, record) in txn.input_txos {
+      // dbg!(&input_sid);
       debug_assert!(!self.input_txos.contains_key(&input_sid));
       self.input_txos.insert(input_sid, record);
     }

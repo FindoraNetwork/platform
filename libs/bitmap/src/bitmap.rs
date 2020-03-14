@@ -375,7 +375,6 @@ const UPPER_LIMIT: u32 = (BLOCK_BITS - BITS_SIZE / INDEX_SIZE) as u32;
 
 // Define the layout of a block of a bitmap.  The on-disk
 // and in-memory layouts are the same.
-
 #[repr(C)]
 struct BitBlock {
   header: BlockHeader,
@@ -483,7 +482,7 @@ fn show(data: &ChecksumData) -> String {
 /// Data kept per block:
 ///   blocks          the vector of data blocks in the map
 ///   checksum_data   the work area for computing the bitmap checksum
-///   checksum_valid  a bit indicating whether the checksum_data field
+///   checksum_valid  a bool indicating whether the checksum_data field
 ///                     a valid block checksum present
 ///   dirty           the modification time for the block, or zero
 ///                     if the block is clean (valid on disk)
@@ -885,20 +884,6 @@ impl BitMap {
     let mask_shift = bit_id % 8;
     let mask = 1 << mask_shift;
 
-    // We might need to create a new block.  If so,
-    // push the new block and all the metadata entries.
-    if block >= self.blocks.len() {
-      self.blocks.push(BitBlock::new(BIT_ARRAY, block as u64)?);
-      self.checksum_data.push(EMPTY_CHECKSUM);
-      self.dirty.push(time());
-      self.checksum_valid.push(false);
-      self.set_bits.push(0);
-    } else {
-      self.dirty[block] = time();
-      self.checksum_valid[block] = false;
-      self.first_invalid = min(self.first_invalid, block);
-    }
-
     // Check whether the bit map state actually is going to
     // be changed.  We can skip the store if not.  Also, we
     // don't want to update the "set" count if nothing is
@@ -912,6 +897,22 @@ impl BitMap {
     if !mutate {
       return Ok(());
     }
+
+    // We might need to create a new block.  If so,
+    // push the new block and all the metadata entries.
+    if block >= self.blocks.len() {
+      self.blocks.push(BitBlock::new(BIT_ARRAY, block as u64)?);
+      self.checksum_data.push(EMPTY_CHECKSUM);
+      self.dirty.push(time());
+      self.checksum_valid.push(false);
+      self.set_bits.push(0);
+    } else {
+      self.dirty[block] = time();
+      self.checksum_valid[block] = false;
+    }
+
+    // Update the first invalid spot in the checksum.
+    self.first_invalid = min(self.first_invalid, block);
 
     // Change the actual value in the block.  Also,
     // update the population count.
@@ -960,14 +961,22 @@ impl BitMap {
   /// exist in the bitmap.
   ///
   pub fn compute_checksum(&mut self) -> Digest {
+    if self.first_invalid >= self.blocks.len() {
+      debug!(Bitmap, "compute_checksum:  cached");
+      return self.checksum;
+    }
+
+    // This value should never be used.
     let mut digest = Digest { 0: [0_u8; DIGESTBYTES] };
-    let mut first = false;
 
     // For each block not yet computed.
     for i in self.first_invalid..self.blocks.len() {
-      if !first {
+      //
+      // Get the digest from the previous iteration into the data
+      // for our current hash, unless we don't have a previous iteration.
+      //
+      if i != self.first_invalid {
         self.checksum_data[i][CHECK_SIZE..].clone_from_slice(&digest[0..]);
-        first = false;
       }
 
       //
@@ -982,13 +991,9 @@ impl BitMap {
         self.checksum_valid[i] = true;
       }
 
-      //
-      // Get the previous digest into our checksum_data.
-      //
-      self.checksum_data[i][CHECK_SIZE..].clone_from_slice(digest.as_ref());
-
       // Compute the next sha256 digest.
       digest = sha256::hash(&self.checksum_data[i]);
+
       debug!(Bitmap,
              "compute_checksum:  checksum at block {} is {:?}", i, self.blocks[i].header.checksum);
       debug!(Bitmap,
@@ -999,9 +1004,25 @@ impl BitMap {
              "compute_checksum:  digest at block {} is {:?}", i, digest);
     }
 
+    self.first_invalid = self.blocks.len();
     debug!(Bitmap, "compute_checksum:  got final digest {:?}", digest);
     self.checksum = digest;
     digest
+  }
+
+  // This function is used in testing to force
+  // recomputation of the all of the checksum
+  // data.
+  pub fn clear_checksum_cache(&mut self) {
+    self.first_invalid = 0;
+
+    for i in 0..self.checksum_valid.len() {
+      self.checksum_valid[i] = false;
+    }
+  }
+
+  pub fn get_checksum(&self) -> Digest {
+    self.checksum
   }
 
   /// Serialize the entire bit map to a compressed representation.
@@ -1386,9 +1407,21 @@ impl BitMap {
 mod tests {
   use super::*;
   use cryptohash::sha256::{Digest, DIGESTBYTES};
+  use rand::Rng;
   use std::fs;
   use std::fs::OpenOptions;
   use std::mem;
+
+  fn validate_checksum(bitmap: &mut BitMap, location: String) {
+    let checksum1 = bitmap.compute_checksum();
+    bitmap.clear_checksum_cache();
+    let checksum2 = bitmap.compute_checksum();
+
+    if checksum1 != checksum2 {
+      panic!("validate_checksum: {} vs {}:  at {}",
+             checksum1.0[0], checksum2.0[0], location);
+    }
+  }
 
   #[test]
   fn test_header() {
@@ -1495,7 +1528,6 @@ mod tests {
 
   // Do a simple test of the bitmap-level functions.
   #[test]
-  #[ignore]
   fn test_basic_bitmap() {
     log!(Bitmap, "Run the basic bitmap test.");
     let path = "basic_bitmap";
@@ -1550,6 +1582,7 @@ mod tests {
       // Validate the data structure from time to time.
       if i % 4096 == 1 {
         assert!(bitmap.validate(false));
+        validate_checksum(&mut bitmap, "basic ".to_owned() + &i.to_string());
       }
 
       // Try a flush now and then.
@@ -1559,6 +1592,16 @@ mod tests {
         }
       }
     }
+
+    let checksum1 = bitmap.compute_checksum();
+    let checksum2 = bitmap.compute_checksum();
+    println!("Checksum 1: {:?}", checksum1);
+    println!("Checksum 2: {:?}", checksum2);
+    assert!(checksum1 == checksum2);
+
+    bitmap.clear_checksum_cache();
+    let checksum3 = bitmap.compute_checksum();
+    assert!(checksum1 == checksum3);
 
     // Serialize a part of the bitmap.
     let s1 = bitmap.serialize_partial(vec![0, BLOCK_BITS], 1);
@@ -1625,8 +1668,9 @@ mod tests {
         bitmap.clear(i).unwrap();
         assert!(bitmap.query(i).unwrap() == false);
 
-        if i % 4096 == 0 {
+        if i % 273 == 0 {
           assert!(bitmap.validate(false));
+          validate_checksum(&mut bitmap, "rewrite ".to_owned() + &i.to_string());
         }
       }
     }
@@ -1661,6 +1705,7 @@ mod tests {
     assert!(bits_initialized == bitmap.size());
     assert!(bits_initialized % BLOCK_BITS != 0);
     assert!(bitmap.validate(false));
+    validate_checksum(&mut bitmap, "reopen".to_owned());
 
     for i in 0..bits_initialized {
       assert!(bitmap.query(i).unwrap() == !(i & 1 == 0));
@@ -1678,6 +1723,39 @@ mod tests {
     assert!(bit == bits_initialized as u64 + 1);
     bitmap.write().unwrap();
     assert!(bitmap.validate(true));
+
+    // Expand the bitmap to allow for more testing.
+
+    for _ in 0..4 * 1024 * 1024 {
+      bitmap.append().unwrap();
+    }
+
+    let mut rng = rand::thread_rng();
+    let mut countdown = rng.gen_range(0, 50);
+
+    // Manipulate some random bits and check the checksumming.
+    for i in 0..4000 {
+      let bit = rng.gen_range(0, bitmap.size() + 1);
+      let current = if bit < bitmap.size {
+        bitmap.query(bit).unwrap()
+      } else {
+        false
+      };
+
+      // Now flip the bit, or append a "true" bit.
+      if current {
+        bitmap.clear(bit).unwrap();
+      } else {
+        bitmap.set(bit).unwrap();
+      }
+
+      countdown -= 1;
+
+      if countdown <= 0 {
+        validate_checksum(&mut bitmap, "random ".to_owned() + &i.to_string());
+        countdown = rng.gen_range(0, 50);
+      }
+    }
 
     drop(bitmap);
 

@@ -1,15 +1,17 @@
 // Interface for issuing transactions that can be compiled to Wasm.
 // Allows web clients to issue transactions from a browser contexts.
 // For now, forwards transactions to a ledger hosted locally.
-// To compile wasm package, run wasm-pack build in the wasm directory
+// To compile wasm package, run wasm-pack build in the wasm directory;
 #![deny(warnings)]
 use bulletproofs::PedersenGens;
 use cryptohash::sha256;
+use cryptohash::sha256::Digest as BitDigest;
 use curve25519_dalek::ristretto::RistrettoPoint;
 use curve25519_dalek::scalar::Scalar;
 use js_sys::Promise;
 use ledger::data_model::{
-  AssetTypeCode, Operation, Serialized, TransferType, TxOutput, TxoRef, TxoSID,
+  b64enc, AssetTypeCode, AuthenticatedTransaction, Operation, Serialized, TransferType, TxOutput,
+  TxoRef, TxoSID,
 };
 use ledger::policies::Fraction;
 use rand_chacha::ChaChaRng;
@@ -20,7 +22,6 @@ use txn_builder::{BuildsTransactions, PolicyChoice, TransactionBuilder, Transfer
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::future_to_promise;
 use wasm_bindgen_futures::JsFuture;
-use wasm_bindgen_test::*;
 use web_sys::{Request, RequestInit, RequestMode};
 use zei::api::anon_creds::{
   ac_confidential_gen_encryption_keys, ac_keygen_issuer, ac_keygen_user, ac_reveal, ac_sign,
@@ -33,11 +34,6 @@ use zei::setup::PublicParams;
 use zei::xfr::asset_record::{build_blind_asset_record, open_asset_record, AssetRecordType};
 use zei::xfr::sig::{XfrKeyPair, XfrPublicKey};
 use zei::xfr::structs::{AssetIssuerPubKeys, AssetRecord, BlindAssetRecord, OpenAssetRecord};
-
-// const SUBMIT_PATH: &str = "./submit_server";
-// const QUERY_PATH: &str = "./query_server";
-const SUBMIT_PATH: &str = "http://localhost:8669";
-const QUERY_PATH: &str = "http://localhost:8668";
 
 /////////// TRANSACTION BUILDING ////////////////
 
@@ -73,6 +69,21 @@ pub fn debt_transfer_type() -> String {
 /// Generates random base64 encoded asset type string
 pub fn random_asset_type() -> String {
   AssetTypeCode::gen_random().to_base64()
+}
+
+#[wasm_bindgen]
+/// Given a serialized state commitment and transation, returns true if the transaction correctly
+/// hashes up to the state commitment and false otherwise.
+pub fn verify_authenticated_txn(state_commitment: String,
+                                authenticated_txn: String)
+                                -> Result<bool, JsValue> {
+  let authenticated_txn = serde_json::from_str::<AuthenticatedTransaction>(&authenticated_txn).map_err(|_e| {
+                             JsValue::from_str("Could not deserialize transaction")
+                           })?;
+  let state_commitment = serde_json::from_str::<BitDigest>(&state_commitment).map_err(|_e| {
+                           JsValue::from_str("Could not deserialize state commitment")
+                         })?;
+  Ok(authenticated_txn.is_valid(state_commitment))
 }
 
 #[wasm_bindgen]
@@ -181,6 +192,7 @@ pub struct WasmTransactionBuilder {
   transaction_builder: Serialized<TransactionBuilder>,
 }
 
+#[wasm_bindgen]
 impl WasmTransactionBuilder {
   /// Create a new transaction builder.
   pub fn new() -> Self {
@@ -464,6 +476,12 @@ pub fn new_keypair() -> XfrKeyPair {
 }
 
 #[wasm_bindgen]
+/// Return base64 encoded representation of an XfrPublicKey
+pub fn public_key_to_base64(key: &XfrPublicKey) -> String {
+  b64enc(&XfrPublicKey::zei_to_bytes(&key))
+}
+
+#[wasm_bindgen]
 /// Express a transfer key pair as a string.
 pub fn keypair_to_str(key_pair: &XfrKeyPair) -> String {
   hex::encode(key_pair.zei_to_bytes())
@@ -551,15 +569,26 @@ pub fn get_tracked_amount(blind_asset_record: String,
 /// query the ledger by transaction ID.
 ///
 /// TODO Design and implement a notification mechanism.
-pub fn submit_transaction(transaction_str: String) -> Result<Promise, JsValue> {
+pub fn submit_transaction(path: String, transaction_str: String) -> Result<Promise, JsValue> {
   let mut opts = RequestInit::new();
   opts.method("POST");
   opts.mode(RequestMode::Cors);
   opts.body(Some(&JsValue::from_str(&transaction_str)));
 
-  let req_string = format!("{}/submit_transaction", SUBMIT_PATH);
+  let req_string = format!("{}/submit_transaction", path);
 
   create_query_promise(&opts, &req_string, true)
+}
+
+#[wasm_bindgen]
+pub fn get_txn_status(path: String, handle: String) -> Result<Promise, JsValue> {
+  let mut opts = RequestInit::new();
+  opts.method("GET");
+  opts.mode(RequestMode::Cors);
+
+  let req_string = format!("{}/txn_status/{}", path, handle);
+
+  create_query_promise(&opts, &req_string, false)
 }
 
 #[wasm_bindgen]
@@ -578,12 +607,44 @@ pub fn test_deserialize(str: String) -> bool {
 /// TODO Provide an example (test case) that demonstrates how to
 /// handle the error in the case of an invalid transaction index.
 /// TODO Rename this function get_utxo
-pub fn get_txo(index: u64) -> Result<Promise, JsValue> {
+pub fn get_txo(path: String, index: u64) -> Result<Promise, JsValue> {
   let mut opts = RequestInit::new();
   opts.method("GET");
   opts.mode(RequestMode::Cors);
 
-  let req_string = format!("{}/utxo_sid/{}", QUERY_PATH, format!("{}", index));
+  let req_string = format!("{}/utxo_sid/{}", path, format!("{}", index));
+
+  create_query_promise(&opts, &req_string, false)
+}
+
+#[wasm_bindgen]
+/// If successful, return a promise that will eventually provide a
+/// JsValue describing a transaction.
+/// Otherwise, return 'not found'. The request fails if the transaction index does not correspond
+/// to a transaction.
+///
+/// TODO Provide an example (test case) that demonstrates how to
+/// handle the error in the case of an invalid transaction index.
+/// TODO Rename this function get_utxo
+pub fn get_transaction(path: String, index: u64) -> Result<Promise, JsValue> {
+  let mut opts = RequestInit::new();
+  opts.method("GET");
+  opts.mode(RequestMode::Cors);
+
+  let req_string = format!("{}/txn_sid/{}", path, format!("{}", index));
+
+  create_query_promise(&opts, &req_string, false)
+}
+
+#[wasm_bindgen]
+/// Returns a JSON-encoded version of the state commitment of a running ledger. This is used to
+/// check the authenticity of transactions and blocks.
+pub fn get_state_commitment(path: String) -> Result<Promise, JsValue> {
+  let mut opts = RequestInit::new();
+  opts.method("GET");
+  opts.mode(RequestMode::Cors);
+
+  let req_string = format!("{}/state_commitment", path);
 
   create_query_promise(&opts, &req_string, false)
 }
@@ -596,23 +657,12 @@ pub fn get_txo(index: u64) -> Result<Promise, JsValue> {
 ///
 /// TODO Provide an example (test case) that demonstrates how to
 /// handle the error in the case of an undefined asset.
-pub fn get_asset_token(name: String) -> Result<Promise, JsValue> {
+pub fn get_asset_token(path: String, name: String) -> Result<Promise, JsValue> {
   let mut opts = RequestInit::new();
   opts.method("GET");
   opts.mode(RequestMode::Cors);
 
-  let req_string = format!("{}/asset_token/{}", QUERY_PATH, name);
-
-  create_query_promise(&opts, &req_string, false)
-}
-
-#[wasm_bindgen]
-pub fn get_txn_status(handle: String) -> Result<Promise, JsValue> {
-  let mut opts = RequestInit::new();
-  opts.method("GET");
-  opts.mode(RequestMode::Cors);
-
-  let req_string = format!("{}/txn_status/{}", SUBMIT_PATH, handle);
+  let req_string = format!("{}/asset_token/{}", path, name);
 
   create_query_promise(&opts, &req_string, false)
 }
@@ -654,7 +704,7 @@ impl Issuer {
   //  Then pass all the attributes to sign_min_credit_score and sign the lower bound of credit score only
   pub fn new(num_attr: usize) -> Issuer {
     let mut prng: ChaChaRng;
-    prng = ChaChaRng::from_seed([0u8; 32]);
+    prng = ChaChaRng::from_entropy();
     let (issuer_pk, issuer_sk) = ac_keygen_issuer::<_>(&mut prng, num_attr);
 
     Issuer { public_key: issuer_pk,
@@ -670,7 +720,7 @@ impl Issuer {
   // E.g. sign the lower bound of the credit score
   pub fn sign_attribute(&self, user_jsvalue: &JsValue, attribute: u64) -> JsValue {
     let mut prng: ChaChaRng;
-    prng = ChaChaRng::from_seed([0u8; 32]);
+    prng = ChaChaRng::from_entropy();
     let user: User = user_jsvalue.into_serde().unwrap();
 
     let attrs = [attribute.to_le_bytes()];
@@ -715,7 +765,7 @@ impl User {
                           -> JsValue {
     let issuer: Issuer = issuer_jsvalue.into_serde().unwrap();
     let sig: ACSignature = sig.into_serde().unwrap();
-    let mut prng = ChaChaRng::from_seed([0u8; 32]);
+    let mut prng = ChaChaRng::from_entropy();
 
     let attrs = [attribute.to_le_bytes()];
     let bitmap = [reveal_attribute];
@@ -840,137 +890,4 @@ pub fn attest_without_proof(attribute: u64,
                           true,
                           requirement,
                           requirement_type)
-}
-
-//
-// Test section
-//
-// wasm-bindgen-test must be placed in the root of the crate or in a pub mod
-// To test, run wasm-pack test --node in the wasm directory
-//
-
-// Test to ensure that define transaction is being constructed correctly
-#[wasm_bindgen_test]
-// Test to ensure that "Equal" requirement is checked correctly
-// E.g. citizenship requirement
-fn test_citizenship_proof() {
-  let mut issuer = Issuer::new(10);
-  let issuer_jsvalue = issuer.jsvalue();
-  let mut user = User::new(&issuer, "user");
-  let user_jsvalue = user.jsvalue();
-
-  let citizenship_code = 1;
-  let fake_citizenship_code = 86;
-
-  let sig_jsvalue = issuer.sign_attribute(&user_jsvalue, citizenship_code);
-  let proof_jsvalue = user.commit_attribute(&issuer_jsvalue, &sig_jsvalue, citizenship_code, true);
-  let fake_proof_jsvalue =
-    user.commit_attribute(&issuer_jsvalue, &sig_jsvalue, fake_citizenship_code, true);
-
-  let requirement_usa = 1;
-  let requirement_china = 86;
-  let incorrect_credit_score = 11;
-
-  // Verify that prove_attribute succeedes
-  assert!(Prover::prove_attribute(&proof_jsvalue,
-                                  &issuer_jsvalue,
-                                  citizenship_code,
-                                  true,
-                                  requirement_usa,
-                                  RequirementType::Equal));
-
-  // Verify that prove_attribute fails if:
-  //  1. The attribute doesn't equal the requirement
-  assert!(!Prover::prove_attribute(&proof_jsvalue,
-                                   &issuer_jsvalue,
-                                   citizenship_code,
-                                   true,
-                                   requirement_china,
-                                   RequirementType::Equal));
-
-  // 2. The prover uses the incorrect credit score for the verification
-  assert!(!Prover::prove_attribute(&proof_jsvalue,
-                                   &issuer_jsvalue,
-                                   incorrect_credit_score,
-                                   true,
-                                   requirement_usa,
-                                   RequirementType::Equal));
-
-  // 3. The user provides a fake proof
-  assert!(!Prover::prove_attribute(&fake_proof_jsvalue,
-                                   &issuer_jsvalue,
-                                   citizenship_code,
-                                   true,
-                                   requirement_china,
-                                   RequirementType::Equal));
-
-  // 4. reveal_min_credit_score isn't consistant
-  assert!(!Prover::prove_attribute(&proof_jsvalue,
-                                   &issuer_jsvalue,
-                                   citizenship_code,
-                                   false,
-                                   requirement_usa,
-                                   RequirementType::Equal));
-}
-#[wasm_bindgen_test]
-// Test to ensure that "AtLeast" requirement is checked correctly
-// E.g. minimun credit score requirement
-fn test_min_credit_score_proof() {
-  let mut issuer = Issuer::new(10);
-  let issuer_jsvalue = issuer.jsvalue();
-  let mut user = User::new(&issuer, "user");
-  let user_jsvalue = user.jsvalue();
-
-  let min_credit_score = 520;
-  let fake_credit_score = 620;
-
-  let sig_jsvalue = issuer.sign_attribute(&user_jsvalue, min_credit_score);
-  let proof_jsvalue = user.commit_attribute(&issuer_jsvalue, &sig_jsvalue, min_credit_score, true);
-  let fake_proof_jsvalue =
-    user.commit_attribute(&issuer_jsvalue, &sig_jsvalue, fake_credit_score, true);
-
-  let requirement_low = 500;
-  let requirement_high = 600;
-  let incorrect_credit_score = 700;
-
-  // Verify that prove_attribute succeedes
-  assert!(Prover::prove_attribute(&proof_jsvalue,
-                                  &issuer_jsvalue,
-                                  min_credit_score,
-                                  true,
-                                  requirement_low,
-                                  RequirementType::AtLeast));
-
-  // Verify that prove_attribute fails if:
-  //  1. The lower bound of the credit score doesn't meet the requirement
-  assert!(!Prover::prove_attribute(&proof_jsvalue,
-                                   &issuer_jsvalue,
-                                   min_credit_score,
-                                   true,
-                                   requirement_high,
-                                   RequirementType::AtLeast));
-
-  // 2. The prover uses the incorrect credit score for the verification
-  assert!(!Prover::prove_attribute(&proof_jsvalue,
-                                   &issuer_jsvalue,
-                                   incorrect_credit_score,
-                                   true,
-                                   requirement_low,
-                                   RequirementType::AtLeast));
-
-  // 3. The user provides a fake proof
-  assert!(!Prover::prove_attribute(&fake_proof_jsvalue,
-                                   &issuer_jsvalue,
-                                   min_credit_score,
-                                   true,
-                                   requirement_high,
-                                   RequirementType::AtLeast));
-
-  // 4. reveal_min_credit_score isn't consistant
-  assert!(!Prover::prove_attribute(&proof_jsvalue,
-                                   &issuer_jsvalue,
-                                   min_credit_score,
-                                   false,
-                                   requirement_low,
-                                   RequirementType::AtLeast));
 }

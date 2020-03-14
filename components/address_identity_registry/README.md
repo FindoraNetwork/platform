@@ -16,11 +16,16 @@ There reader should be aware that in the discussion below, there are two kinds o
 **ACSignature**, pok: a proof of knowledge, and rnd, the randomness used to generate it.
 
 ## Setup
-1. Credential issuers are initialized with the number of attributes they can handle.
+1. Credential issuers are initialized with the number of attributes they can handle. For each credential
+   type there is one issuer key pair, e.g. for U.S. passports there is exactly one issuer key pair. For
+   each specific credential (e.g., passport) there is exactly one of user key pair.
+
    The supported attributes are a feature of the issuer; e.g., United States Department of State issues
    U.S. passports, and they decide what's in them. Tricky issue: credential issuers may issue more
-   than one kind of credential, with varying numbers of fields.
+   than one kind of credential, with varying numbers of fields. So an issuing authority must maintain
+   a db of credential types for which it is responsible.
 2. User contacts an Issuer (which one?) and acquires issuer public key (Txn: User -> Issuer -> User)
+   for the credential
 3. The user generates its own user key pair using the issuer public key.
 
 ## Credential Generation
