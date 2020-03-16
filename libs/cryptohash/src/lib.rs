@@ -9,7 +9,17 @@ pub mod sha256 {
   use std::ops::{Index, Range, RangeFrom};
   pub const DIGESTBYTES: usize = 32;
 
-  #[derive(Clone, Copy, Debug, Default, Deserialize, Serialize, Eq, PartialEq)]
+  #[derive(Clone,
+             Copy,
+             Debug,
+             Default,
+             Deserialize,
+             Eq,
+             Hash,
+             Ord,
+             PartialEq,
+             PartialOrd,
+             Serialize)]
   pub struct Digest(pub [u8; DIGESTBYTES]);
 
   pub fn hash(m: &[u8]) -> Digest {
