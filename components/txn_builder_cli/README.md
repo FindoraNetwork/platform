@@ -30,7 +30,7 @@ actual subcommands.
 * Examples below are assuming the current directory is `platform/target/debug`. If not, change `./txn_builder_cli` to the path to `./txn_builder_cli`.
 
 ## Submit a transaction
-After a transaction is composed by `define_asset`, `issue_asset`, `transfer_asset`, or `issue_and_transfer_asset`:
+After a transaction is composed by `air_assign`, `define_asset`, `issue_asset`, `transfer_asset`, or `issue_and_transfer_asset`:
 ```
 ./txn_builder_cli --txn tb submit
 ```
@@ -49,6 +49,21 @@ If only one utxo sid is needed for an asset transfer, there's no need to use the
 Otherwise, add `--get_sids` when submitting asset issuing transactions, and note the utxo sids shown in the outputs. After all the transactions needed are submitted, store all the utxo sids to one file:
 ```
 ./txn_builder_cli asset_issuer store_sids --path s --indices 1,2,3
+```
+
+### Assign to AIR (Address Identity Registry)
+* Create an empty transaction
+```
+./txn_builder_cli create_txn_builder --name txn_air
+```
+* Assign to AIR
+```
+./txn_builder_cli --txn txn_define issuer --id 0 air_assign --address air_key --data 'Some data.'
+```
+
+* Submit the transaction
+```
+./txn_builder_cli --txn txn_air submit
 ```
 
 ### Define an asset

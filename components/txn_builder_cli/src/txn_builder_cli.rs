@@ -1699,11 +1699,6 @@ fn main() {
           .takes_value(true)
           .help("Sids. Separate by comma (\",\").")))
       .subcommand(SubCommand::with_name("air_assign")
-        .arg(Arg::with_name("issuer")
-          .short("i")
-          .long("issuer")
-          .help("Required: issuer id.")
-          .takes_value(true))
         .arg(Arg::with_name("address")
           .short("k")
           .long("address")
@@ -2183,15 +2178,10 @@ fn process_asset_issuer_cmd(asset_issuer_matches: &clap::ArgMatches,
       store_sids_to_file(path, sids)
     }
     ("air_assign", Some(air_assign_matches)) => {
-      let issuer_id = if let Some(issuer_arg) = air_assign_matches.value_of("issuer") {
-        if let Ok(id) = issuer_arg.parse::<u64>() {
-          id
-        } else {
-          println!("Improperly formatted issuer id.");
-          return Err(PlatformError::InputsError);
-        }
+      let issuer_id = if let Some(id_arg) = asset_issuer_matches.value_of("id") {
+        parse_to_u64(id_arg)?
       } else {
-        println!("User id is required to define asset. Use --issuer.");
+        println!("Asset issuer id is required for AIR assigning. Use asset_issuer --id.");
         return Err(PlatformError::InputsError);
       };
       match (air_assign_matches.value_of("address"), air_assign_matches.value_of("data")) {
