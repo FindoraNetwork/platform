@@ -35,7 +35,7 @@ There reader should be aware that in the discussion below, there are two kinds o
    and the *commitment key* used to generate the it, in a User wallet. The User generates a unique address (how?),
    and asks the Ledger to store the commitment in the AIR at that address. (Txn: User -> Ledger)
 
-## Credential Verificration
+## Credential Verification
 1. A Verifier asks the User to selectively reveal some attributes. (Txn: Verifier sends attributes -> User)
 2. The User runs **ac_open_commitment** using the committed signature and *commitment key* stored in his wallet, and the attributes
    supplied by the Verifier. The result is a reveal_sig: ACRevealSig. The User sends the proof of knowledge, reveal_sig.pok,
@@ -54,3 +54,15 @@ a hash of sk and credential id. Given this, it seems that having some sort of `c
 would make sense.
 
 2. When the Verifier completes, is there another party to which it is reporting the results?
+
+## Running the programs
+# repl
+To run the repl from the top level (i.e., the directory this README.md is in) execute the following line
+`cargo run --bin repl`
+When the repl starts with `>>>` type help for instructions
+# Server based test
+Start the servers. **Issuer** and either **Ledger** or **MockLedger** must be running before any of the other programs.
+`cargo run --bin issuer`
+After the issuer is running, a user process can be started
+`cargo run --bin user`
+
