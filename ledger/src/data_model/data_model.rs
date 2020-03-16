@@ -645,7 +645,7 @@ pub struct StateCommitmentData {
   pub txns_in_block_hash: BitDigest,            // The hash of the transactions in the block
   pub previous_state_commitment: BitDigest,     // The prior global block hash
   pub transaction_merkle_commitment: HashValue, // The root hash of the transaction Merkle tree
-  pub air_commitment: air::Digest,              // The root hash of the AIR sparse Merkle tree
+  pub air_commitment: BitDigest,                // The root hash of the AIR sparse Merkle tree
   pub txo_count: u64, // Number of transaction outputs. Used to provide proof that a utxo does not exist
 }
 
