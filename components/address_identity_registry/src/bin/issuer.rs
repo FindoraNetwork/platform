@@ -38,9 +38,9 @@ async fn main() {
 }
 
 mod filters {
-  use crate::shared::UserCreds;
   use super::handlers;
   use super::models::{CredentialKind, Db, ListOptions};
+  use crate::shared::UserCreds;
   use warp::Filter;
 
   /// The Issuer filters combined.
@@ -69,7 +69,7 @@ mod filters {
                                      .and_then(handlers::get_issuer_pk)
   }
 
-  /// PUT /sign/:credname -- We pass a 
+  /// PUT /sign/:credname -- We pass a
   pub fn sign_credential(
     db: Db)
     -> impl Filter<Extract = impl warp::Reply, Error = warp::Rejection> + Clone {
@@ -95,9 +95,9 @@ mod filters {
 /// with the exact arguments we'd expect from each filter in the chain.
 /// No tuples are needed, it's auto flattened for the functions.
 mod handlers {
-  use rand_chacha::ChaChaRng;
+  use super::models::{to_pubcreds, CredentialKind, Db, ListOptions};
   use crate::shared::{PubCreds, UserCreds};
-  use super::models::{CredentialKind, Db, ListOptions, to_pubcreds};
+  use rand_chacha::ChaChaRng;
   use std::convert::Infallible;
   use warp::http::StatusCode;
   use zei::api::anon_creds::ac_sign;
@@ -106,14 +106,13 @@ mod handlers {
   pub async fn get_credinfo(opts: ListOptions, db: Db) -> Result<impl warp::Reply, Infallible> {
     // Just return a JSON array of credentials, applying the limit and offset.
     let global_state = db.lock().await;
-    let credential_kinds: Vec<PubCreds> =
-      global_state.credkinds
-                  .values()
-                  .cloned()
-                  .skip(opts.offset.unwrap_or(0))
-                  .take(opts.limit.unwrap_or(std::usize::MAX))
-                  .map(|c| to_pubcreds(&c))
-                  .collect();
+    let credential_kinds: Vec<PubCreds> = global_state.credkinds
+                                                      .values()
+                                                      .cloned()
+                                                      .skip(opts.offset.unwrap_or(0))
+                                                      .take(opts.limit.unwrap_or(std::usize::MAX))
+                                                      .map(|c| to_pubcreds(&c))
+                                                      .collect();
 
     Ok(warp::reply::json(&credential_kinds))
   }
@@ -135,7 +134,7 @@ mod handlers {
   pub async fn sign_credential(credname: String,
                                user_creds: UserCreds,
                                db: Db)
-                           -> Result<impl warp::Reply, Infallible> {
+                               -> Result<impl warp::Reply, Infallible> {
     let mut global_state = db.lock().await;
     let credkinds = global_state.credkinds.clone();
     let cred_kind = credkinds.get(&credname).unwrap();
@@ -144,7 +143,7 @@ mod handlers {
                                           &cred_kind.issuer_sk,
                                           &user_creds.user_pk,
                                           &attrs);
-    
+
     Ok(warp::reply::json(&sig))
   }
 }
@@ -157,7 +156,9 @@ mod models {
   use std::collections::HashMap;
   use std::sync::Arc;
   use tokio::sync::Mutex;
-  use zei::api::anon_creds::{ ac_keygen_issuer, ACIssuerPublicKey, ACIssuerSecretKey, ACUserPublicKey };
+  use zei::api::anon_creds::{
+    ac_keygen_issuer, ACIssuerPublicKey, ACIssuerSecretKey, ACUserPublicKey,
+  };
   /// So we don't have to tackle how different database work, we'll just use
   /// a simple in-memory DB, a HashMap synchronized by a mutex.
   pub type Db = Arc<Mutex<GlobalState>>;
@@ -203,7 +204,7 @@ mod models {
     user_pk: ACUserPublicKey,
     attrs: Vec<String>,
   }
-  
+
   // The query parameters for list_credentials.
   #[derive(Debug, Deserialize)]
   pub struct ListOptions {

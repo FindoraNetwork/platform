@@ -1,7 +1,7 @@
 #![deny(warnings)]
-#[allow(clippy::module_inception)]
+#![allow(clippy::module_inception)]
 use serde_derive::{Deserialize, Serialize};
-use zei::api::anon_creds::{ACUserPublicKey, ACIssuerPublicKey};
+use zei::api::anon_creds::{ACIssuerPublicKey, ACUserPublicKey};
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct PubCreds {
