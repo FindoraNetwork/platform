@@ -13,8 +13,6 @@ use std::fs::{self, File};
 use std::io::prelude::*;
 use std::path::{Path, PathBuf};
 use std::process::exit;
-use std::process::Command;
-use std::thread;
 use submission_server::{TxnHandle, TxnStatus};
 use txn_builder::{BuildsTransactions, TransactionBuilder, TransferOperationBuilder};
 use zei::api::anon_creds::{
@@ -100,9 +98,6 @@ const BACKUP_COUNT_MAX: i32 = 10000;
 const QUERY_PORT: &str = "8668";
 /// Port for submitting transactions.
 const SUBMIT_PORT: &str = "8669";
-#[allow(dead_code)]
-/// Path to the standalone ledger.
-const LEDGER_STANDALONE: &str = "../../target/debug/ledger_standalone";
 
 //
 // Credentials
@@ -858,20 +853,6 @@ fn issue_and_transfer_asset(issuer_key_pair: &XfrKeyPair,
 
   store_txn_to_file(txn_file, &txn_builder)?;
   Ok(txn_builder)
-}
-
-/// Runs the standalone ledger
-#[allow(dead_code)]
-fn run_ledger_standalone() -> Result<(), PlatformError> {
-  // Run the standalone ledger
-  thread::spawn(move || {
-    let status = Command::new(LEDGER_STANDALONE).status();
-    if status.is_err() {
-      return Err(PlatformError::SubmissionServerError(Some("Failed to run ledger.".to_owned())));
-    };
-    Ok(())
-  });
-  Ok(())
 }
 
 /// Queries a value.
