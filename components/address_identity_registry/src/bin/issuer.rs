@@ -5,12 +5,11 @@
 #[macro_use]
 extern crate lazy_static;
 
-use rand_chacha::ChaChaRng;
-use rand_core::SeedableRng;
 use std::env;
 use std::sync::Mutex;
 use warp::Filter;
 
+mod shared;
 /// Provides a RESTful web server which manages credential types. Uses
 /// JSON as a data transportation format.
 ///
@@ -18,7 +17,7 @@ use warp::Filter;
 ///
 /// - `GET /credinfo`: return list of names with number of attributes.
 /// - `GET /issuer_pk/:credname`: return Issuer public key for named credential type.
-/// - `PUT /sign/:credname`: creates a signature for the credname, user_pk, attrs.
+/// - `PUT /sign/:uname`: creates a signature for the credname, user_pk, attrs.
 #[tokio::main]
 async fn main() {
   if env::var_os("RUST_LOG").is_none() {
@@ -39,6 +38,7 @@ async fn main() {
 }
 
 mod filters {
+  use crate::shared::UserCreds;
   use super::handlers;
   use super::models::{CredentialKind, Db, ListOptions};
   use warp::Filter;
@@ -83,7 +83,7 @@ mod filters {
     warp::any().map(move || db.clone())
   }
 
-  fn json_body() -> impl Filter<Extract = (CredentialKind,), Error = warp::Rejection> + Clone {
+  fn json_body() -> impl Filter<Extract = (UserCreds,), Error = warp::Rejection> + Clone {
     // When accepting a body, we want a JSON body
     // (and to reject huge payloads)...
     warp::body::content_length_limit(1024 * 16).and(warp::body::json())
@@ -95,76 +95,83 @@ mod filters {
 /// with the exact arguments we'd expect from each filter in the chain.
 /// No tuples are needed, it's auto flattened for the functions.
 mod handlers {
-  use super::models::{CredentialKind, Db, ListOptions, PubCreds, to_pubcreds};
+  use rand_chacha::ChaChaRng;
+  use crate::shared::{PubCreds, UserCreds};
+  use super::models::{CredentialKind, Db, ListOptions, to_pubcreds};
   use std::convert::Infallible;
   use warp::http::StatusCode;
+  use zei::api::anon_creds::ac_sign;
 
   /// GET /crednames?offset=3&limit=5
   pub async fn get_credinfo(opts: ListOptions, db: Db) -> Result<impl warp::Reply, Infallible> {
     // Just return a JSON array of credentials, applying the limit and offset.
     let global_state = db.lock().await;
     let credential_kinds: Vec<PubCreds> =
-      global_state.credkinds.clone()
-                            .into_iter()
-                            .skip(opts.offset.unwrap_or(0))
-                            .take(opts.limit.unwrap_or(std::usize::MAX))
-                            .map(to_pubcreds)
-                            .collect();
+      global_state.credkinds
+                  .values()
+                  .cloned()
+                  .skip(opts.offset.unwrap_or(0))
+                  .take(opts.limit.unwrap_or(std::usize::MAX))
+                  .map(|c| to_pubcreds(&c))
+                  .collect();
+
     Ok(warp::reply::json(&credential_kinds))
   }
 
-  /// GET /keypair/:uname/:credtype
   /// GET /issuer_pk/:credname
   pub async fn get_issuer_pk(credname: String, db: Db) -> Result<impl warp::Reply, Infallible> {
     let credname = urldecode::decode(credname);
     log::debug!("get_issuer_pk: credname={}", credname);
     let global_state = db.lock().await;
     // Look for the specified Credential...
-    for credkind in global_state.credkinds.clone().into_iter() {
-      if credkind.name == credname {
-        return Ok(warp::reply::json(&to_pubcreds(credkind)));
-      }
+    if let Some(credkind) = global_state.credkinds.get(&credname) {
+      Ok(warp::reply::json(&to_pubcreds(credkind)))
+    } else {
+      Ok(warp::reply::json(&"{}"))
     }
-
-    Ok(warp::reply::json(&"{}"))
   }
 
-  /// PUT /keypair/:uname/:credtype
-  pub async fn put_keypair(uname: String,
-                           credname: String,
-                           db: Db)
+  /// PUT /sign_credential/:credname
+  pub async fn sign_credential(credname: String,
+                               user_creds: UserCreds,
+                               db: Db)
                            -> Result<impl warp::Reply, Infallible> {
-    Ok(warp::reply::json(&"{}"))
+    let mut global_state = db.lock().await;
+    let credkinds = global_state.credkinds.clone();
+    let cred_kind = credkinds.get(&credname).unwrap();
+    let attrs: Vec<&[u8]> = user_creds.attrs.iter().map(|s| s.as_bytes()).collect();
+    let sig = ac_sign::<ChaChaRng, &[u8]>(&mut global_state.prng,
+                                          &cred_kind.issuer_sk,
+                                          &user_creds.user_pk,
+                                          &attrs);
+    
+    Ok(warp::reply::json(&sig))
   }
 }
 
 mod models {
+  use crate::shared::{PubCreds, UserCreds};
   use rand_chacha::ChaChaRng;
   use rand_core::SeedableRng;
   use serde_derive::{Deserialize, Serialize};
+  use std::collections::HashMap;
   use std::sync::Arc;
   use tokio::sync::Mutex;
-  use zei::api::anon_creds::{ ac_keygen_issuer, ACIssuerPublicKey, ACIssuerSecretKey, ACUserPublicKey, };
-  /*
-  use zei::api::anon_creds::{
-    ac_keygen_issuer, ac_keygen_user, ac_sign,
-    ACCommitment, ACCommitmentKey, ACIssuerPublicKey, ACIssuerSecretKey, ACPoK, ACSignature,
-    ACUserPublicKey, ACUserSecretKey,
-  };
-  */
+  use zei::api::anon_creds::{ ac_keygen_issuer, ACIssuerPublicKey, ACIssuerSecretKey, ACUserPublicKey };
   /// So we don't have to tackle how different database work, we'll just use
-  /// a simple in-memory DB, a vector synchronized by a mutex.
+  /// a simple in-memory DB, a HashMap synchronized by a mutex.
   pub type Db = Arc<Mutex<GlobalState>>;
   pub struct GlobalState {
     pub prng: ChaChaRng,
-    pub credkinds: Vec<CredentialKind>,
+    pub credkinds: HashMap<String, CredentialKind>,
   }
 
   pub fn make_db() -> Db {
     let mut prng = ChaChaRng::from_entropy();
-    let credkinds = vec![mk_credkind(&mut prng, "passport", 4),
-                         mk_credkind(&mut prng, "drivers license", 4),
-                         mk_credkind(&mut prng, "security clearance", 8)];
+    let a = [(String::from("passport"), mk_credkind(&mut prng, "passport", 4)),
+             (String::from("drivers license"), mk_credkind(&mut prng, "drivers license", 4)),
+             (String::from("security clearance"), mk_credkind(&mut prng, "security clearance", 8))];
+    let credkinds: HashMap<String, CredentialKind> = a.iter().cloned().collect();
     Arc::new(Mutex::new(GlobalState { prng, credkinds }))
   }
 
@@ -176,19 +183,10 @@ mod models {
     pub issuer_pk: ACIssuerPublicKey,
   }
 
-  #[derive(Debug, Deserialize, Serialize, Clone)]
-  pub struct PubCreds {
-    pub name: String,
-    pub num_attrs: u64,
-    pub issuer_pk: ACIssuerPublicKey,
-  }
-
-  pub fn to_pubcreds(credkind: CredentialKind) -> PubCreds {
-    PubCreds {
-      name: credkind.name.clone(),
-      num_attrs: credkind.num_attrs,
-      issuer_pk: credkind.issuer_pk.clone(),
-    }
+  pub fn to_pubcreds(credkind: &CredentialKind) -> PubCreds {
+    PubCreds { name: credkind.name.clone(),
+               num_attrs: credkind.num_attrs,
+               issuer_pk: credkind.issuer_pk.clone() }
   }
 
   fn mk_credkind(mut prng: &mut ChaChaRng, name: &str, num_attrs: u64) -> CredentialKind {
@@ -199,6 +197,7 @@ mod models {
                      issuer_pk }
   }
 
+  #[derive(Debug, Deserialize, Serialize, Clone)]
   pub struct SignatureParams {
     name: String, // credential name
     user_pk: ACUserPublicKey,

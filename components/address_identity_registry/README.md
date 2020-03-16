@@ -35,7 +35,7 @@ There reader should be aware that in the discussion below, there are two kinds o
    and the *commitment key* used to generate the it, in a User wallet. The User generates a unique address (how?),
    and asks the Ledger to store the commitment in the AIR at that address. (Txn: User -> Ledger)
 
-## Credential Verificration
+## Credential Verification
 1. A Verifier asks the User to selectively reveal some attributes. (Txn: Verifier sends attributes -> User)
 2. The User runs **ac_open_commitment** using the committed signature and *commitment key* stored in his wallet, and the attributes
    supplied by the Verifier. The result is a reveal_sig: ACRevealSig. The User sends the proof of knowledge, reveal_sig.pok,
