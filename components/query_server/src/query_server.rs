@@ -139,7 +139,9 @@ mod tests {
   use ledger_standalone::LedgerStandalone;
   use rand_chacha::ChaChaRng;
   use rand_core::SeedableRng;
-  use txn_builder::{BuildsTransactions, TransactionBuilder, TransferOperationBuilder};
+  use txn_builder::{
+    BuildsTransactions, PolicyChoice, TransactionBuilder, TransferOperationBuilder,
+  };
   use zei::xfr::asset_record::open_asset_record;
   use zei::xfr::sig::XfrKeyPair;
 
@@ -158,10 +160,14 @@ mod tests {
     let bob = XfrKeyPair::generate(&mut prng);
     // Define asset
     let mut builder = TransactionBuilder::default();
-    let define_tx =
-      builder.add_operation_create_asset(&alice, Some(token_code), false, false, "fiat".into())
-             .unwrap()
-             .transaction();
+    let define_tx = builder.add_operation_create_asset(&alice,
+                                                       Some(token_code),
+                                                       false,
+                                                       false,
+                                                       "fiat".into(),
+                                                       PolicyChoice::Fungible())
+                           .unwrap()
+                           .transaction();
 
     ledger_standalone.submit_transaction(&define_tx);
     let mut builder = TransactionBuilder::default();
