@@ -49,7 +49,8 @@ pub fn create_relative_txo_ref(idx: u64) -> String {
 
 #[wasm_bindgen]
 /// Create an absolute transaction reference as a JSON string.
-/// References are used when constructing a transaction because the absolute transaction number has not yet been assigned.
+/// References are used when constructing a transaction because the absolute transaction number
+/// has not yet been assigned.
 pub fn create_absolute_txo_ref(idx: u64) -> String {
   serde_json::to_string(&TxoRef::Absolute(TxoSID(idx))).unwrap()
 }
@@ -302,7 +303,8 @@ impl WasmTransactionBuilder {
                                             &[TxOutput(blind_asset_record)]).map_err(|_e| JsValue::from_str("could not build transaction"))?)})
   }
 
-  /// Wraps around TransactionBuilder to create operation expression constructed by [WasmTransferOperationBuilder](struct.WasmTransferOperationBuilder.html).
+  /// Wraps around TransactionBuilder to create operation expression constructed by
+  /// [WasmTransferOperationBuilder](struct.WasmTransferOperationBuilder.html).
   ///
   /// See txn_builder::TransactionBuilder::add_operation for details on adding an operation.
   ///
@@ -853,7 +855,6 @@ impl Prover {
 #[wasm_bindgen]
 /// Generate a proof that a user has committed to the given attribute
 /// value.
-// Create a proving secenario
 pub fn get_proof(attribute: u64) -> JsValue {
   let mut issuer = Issuer::new(1);
   let issuer_jsvalue = issuer.jsvalue();
@@ -864,13 +865,14 @@ pub fn get_proof(attribute: u64) -> JsValue {
   user.commit_attribute(&issuer_jsvalue, &sig_jsvalue, attribute, true)
 }
 
-// In the P2P Lending app, the user has the option to save the proof for future use
-// 1. If the proof exists, use attest_with_proof for credentialing
-// 2. Else, use attest_without_proof for credentialing
-
 #[wasm_bindgen]
-// 1. Create a credentialing secenario with proof as an input
+/// Attests credential attribute with proof as an input.
+///
 /// Proves in zero knowledge that a simple equality or greater than relation is true without revealing the terms.
+///
+/// In the P2P Lending app, the user has the option to save the proof for future use
+/// * If the proof exists, use this function for credentialing
+/// * Otherwise, use `attest_without_proof` for credentialing
 pub fn attest_with_proof(attribute: u64,
                          requirement: u64,
                          requirement_type: RelationType,
@@ -885,8 +887,14 @@ pub fn attest_with_proof(attribute: u64,
 }
 
 #[wasm_bindgen]
-// 2. Create a credentialing secenario without proof as an input
-/// Creates an issuer and user for the purpose of generating a proof in zero knowledge that a simple equality or greater than relationship is true.
+/// Attests credential attribute without proof as an input.
+///
+/// Creates an issuer and user for the purpose of generating a proof in zero knowledge
+/// that a simple equality or greater than relationship is true.
+///
+/// In the P2P Lending app, the user has the option to save the proof for future use
+/// * If the proof exists, use `attest_with_proof` for credentialing
+/// * Otherwise, use this function for credentialing
 pub fn attest_without_proof(attribute: u64,
                             requirement: u64,
                             requirement_type: RelationType)
