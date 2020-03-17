@@ -58,7 +58,7 @@ Otherwise, add `--get_sids` when submitting asset issuing transactions, and note
 ```
 * Assign to AIR
 ```
-./txn_builder_cli --txn txn_define issuer --id 0 air_assign --address air_key --data 'Some data.'
+./txn_builder_cli --txn txn_define asset_issuer --id 0 air_assign --address air_key --data 'Some data.'
 ```
 
 * Submit the transaction
@@ -73,7 +73,7 @@ Otherwise, add `--get_sids` when submitting asset issuing transactions, and note
 ```
 * Define an asset
 ```
-./txn_builder_cli --txn txn_define issuer --id 0 define_asset --memo 'Define an asset.'
+./txn_builder_cli --txn txn_define asset_issuer --id 0 define_asset --memo 'Define an asset.'
 ```
 By default, a randomly generated token code will be used. To specify a code, use `--token_code`.
 To define a fiat asset, add `--fiat`.
@@ -91,7 +91,7 @@ After an asset is defined and the transaction is submitted:
 ```
 * Issue the asset
 ```
-./txn_builder_cli --txn txn_issue issuer --id 0 issue_asset --token_code ibIaBlHV-PdQkvSuEg6YSA== --amount 100
+./txn_builder_cli --txn txn_issue asset_issuer --id 0 issue_asset --token_code ibIaBlHV-PdQkvSuEg6YSA== --amount 100
 ```
 * Submit the transaction
 ```
@@ -107,7 +107,7 @@ After an asset is defined and issued, transactions are submitted, and utxo sids 
 ```
 * Transfer
 ```
-./txn_builder_cli --txn txn_transfer issuer --id 0 transfer_asset --sids_path s recipients 0,1 --input_amounts 45 --output_amounts 10,35
+./txn_builder_cli --txn txn_transfer asset_issuer --id 0 transfer_asset --sids_path s recipients 0,1 --input_amounts 45 --output_amounts 10,35
 ```
 * Submit the transaction
 ```
@@ -122,7 +122,7 @@ After an asset is defined and the transaction is submitted:
 ```
 * Issue and transfer the asset
 ```
-./txn_builder_cli --txn txn_issue_and_transfer issuer --id 0 issue_and_transfer_asset --recipient 0 --amount 1000 --token_code ibIaBlHV-PdQkvSuEg6YSA==
+./txn_builder_cli --txn txn_issue_and_transfer asset_issuer --id 0 issue_and_transfer_asset --recipient 0 --amount 1000 --token_code ibIaBlHV-PdQkvSuEg6YSA==
 ```
 Add `--confidential_amount` or `--confidential_asset` if needed.
 * Submit the transaction
@@ -315,7 +315,7 @@ Bill's id is 1.
 
 ### Define an asset
 ```
-./txn_builder_cli --txn txn_define issuer --id 1 define_asset --memo 'Define a confidential asset.' --confidential
+./txn_builder_cli --txn txn_define asset_issuer --id 1 define_asset --memo 'Define a confidential asset.' --confidential
 ```
 Note from the output that the asset token code is `7hAA3TTJQHhDGs-_mpP12Q==`, or `[238, 16, 0, 221, 52, 201, 64, 120, 67, 26, 207, 191, 154, 147, 245, 217]`:
 ```
@@ -335,7 +335,7 @@ Creating asset with token code "7hAA3TTJQHhDGs-_mpP12Q==": [238, 16, 0, 221, 52,
 
 ### Issue and transfer the asset
 ```
-./txn_builder_cli --txn txn_issue_and_transfer issuer --id 1 issue_and_transfer_asset --recipient 1 --amount 100 --token_code 7hAA3TTJQHhDGs-_mpP12Q== --confidential_amount --confidential_asset
+./txn_builder_cli --txn txn_issue_and_transfer asset_issuer --id 1 issue_and_transfer_asset --recipient 1 --amount 100 --token_code 7hAA3TTJQHhDGs-_mpP12Q== --confidential_amount --confidential_asset
 ```
 
 ### Submit the transaction and get the utxo
