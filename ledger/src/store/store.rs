@@ -573,7 +573,7 @@ impl LedgerStatus {
       def.txns = block.txns.clone();
       def.temp_sids = block.temp_sids.clone();
       def.air_updates = block.air_updates.clone();
-    
+
       def
     });
 
