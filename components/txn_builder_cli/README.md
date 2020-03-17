@@ -1,6 +1,8 @@
 # Transaction Builder Command Line Interface
 
-The `txn_builder_cli` application creates transactions and submits them to the ledger server. The typical workflow of P2P lending is as follows
+The `txn_builder_cli` application is intended to help you experiment with the RESTful API and access the Ledger from scripts. The `txn_builder_cli` provides a command line interface for constructing and submitting requests to the Ledger. The `txn_builder_cli` application creates transactions and submits them to the ledger server.
+
+The typical workflow of P2P lending is as follows
 * Create a new empty transaction. See `txn_builder_cli create_txn_builder`.
 * Create new users. See `txn_builder_cli asset_issuer sign_up`, `txn_builder_cli credential_issuer sign_up`, `txn_builder_cli lender sign_up` and `txn_builder_cli borrower sign_up`.
 * Borrower: adds or updates a credential record. See `txn_builder_cli borrower create_or_overwrite_credential`.
@@ -13,7 +15,7 @@ The `txn_builder_cli` application creates transactions and submits them to the l
 ## Command help
 
 To get documentation on a specific command, use the keyword help
-followed by the the command. To get help on a subcommand, use help and
+followed by the command. To get help on a subcommand, use help and
 the command and subcommand.
 
 For example, for help defining an asset
@@ -125,7 +127,7 @@ In the initial data, there's one credential issuer, Ivy. To sign up a new creden
 
 ## Lender account
 ### Sign up a lender account
-In the initial data, there are two issuer, Lenny and Luna. To sign up a new lender account:
+In the initial data, there are two issuers, Lenny and Luna. To sign up a new lender account:
 ```
 ./txn_builder_cli lender sign_up --name 'Lender Name' --min_credit_score 570
 ```
@@ -230,7 +232,7 @@ By default, `https://testnet.findora.org` is used. To switch to `http://localhos
 ```
 
 ### Create or overwrite a credential
-Currently supported attributes are min_credit_score, min_income and citizenshiip.
+Currently supported attributes are min_credit_score, min_income and citizenship.
 For example, to create a min_credit_score credential:
 ```
 ./txn_builder_cli borrower --id 0 create_or_overwrite_credential --attribute min_credit_score --value 650
@@ -266,7 +268,7 @@ This looks nicer in a web browser that formats JSON nicely such as Firefox.
 ![Expanding outline](./doc/ledger_json.png)
 
 
-The `block_log` route returns all the transaction as tabular HTML.
+The `block_log` route returns all the transactions as tabular HTML.
 
 ```
 $ curl https://testnet.findora.org:8669/block_log
@@ -332,7 +334,7 @@ Note from the last line of the output that the utxo is `429`:
 Utxo: [TxoSID(429)]
 ```
 
-## Bill: verifies the transffered asset
+## Bill: verifies the transfered asset
 ### Create an empty transaction
 ```
 ./txn_builder_cli create_txn_builder --name txn_verify_asset
