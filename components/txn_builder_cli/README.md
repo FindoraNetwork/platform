@@ -230,7 +230,7 @@ By default, `https://testnet.findora.org` is used. To switch to `http://localhos
 ```
 
 ### Create or overwrite a credential
-Currently supported attributes are min_credit_score, min_income and citizenshiip.
+Currently supported attributes are min_credit_score, min_income and citizenship.
 For example, to create a min_credit_score credential:
 ```
 ./txn_builder_cli borrower --id 0 create_or_overwrite_credential --attribute min_credit_score --value 650
