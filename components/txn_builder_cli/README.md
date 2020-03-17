@@ -125,7 +125,7 @@ In the initial data, there's one credential issuer, Ivy. To sign up a new creden
 
 ## Lender account
 ### Sign up a lender account
-In the initial data, there are two issuer, Lenny and Luna. To sign up a new lender account:
+In the initial data, there are two issuers, Lenny and Luna. To sign up a new lender account:
 ```
 ./txn_builder_cli lender sign_up --name 'Lender Name' --min_credit_score 570
 ```
@@ -266,7 +266,7 @@ This looks nicer in a web browser that formats JSON nicely such as Firefox.
 ![Expanding outline](./doc/ledger_json.png)
 
 
-The `block_log` route returns all the transaction as tabular HTML.
+The `block_log` route returns all the transactions as tabular HTML.
 
 ```
 $ curl https://testnet.findora.org:8669/block_log
@@ -332,7 +332,7 @@ Note from the last line of the output that the utxo is `429`:
 Utxo: [TxoSID(429)]
 ```
 
-## Bill: verifies the transffered asset
+## Bill: verifies the transfered asset
 ### Create an empty transaction
 ```
 ./txn_builder_cli create_txn_builder --name txn_verify_asset
