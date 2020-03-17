@@ -1,6 +1,8 @@
 # Transaction Builder Command Line Interface
 
-The `txn_builder_cli` application creates transactions and submits them to the ledger server. The typical workflow of P2P lending is as follows
+The `txn_builder_cli` application is intended to help you experiment with the RESTful API and access the Ledger from scripts. The `txn_builder_cli` provides a command line interface for constructing and submitting requests to the Ledger. The `txn_builder_cli` application creates transactions and submits them to the ledger server.
+
+The typical workflow of P2P lending is as follows
 * Create a new empty transaction. See `txn_builder_cli create_txn_builder`.
 * Create new users. See `txn_builder_cli asset_issuer sign_up`, `txn_builder_cli credential_issuer sign_up`, `txn_builder_cli lender sign_up` and `txn_builder_cli borrower sign_up`.
 * Borrower: adds or updates a credential record. See `txn_builder_cli borrower create_or_overwrite_credential`.
