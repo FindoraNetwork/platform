@@ -897,6 +897,7 @@ fn query(protocol: &str,
 /// Submits a transaction.
 ///
 /// Either this function or `submit_and_get_sids` should be called after a transaction is composed by any of the following:
+/// * `air_assign`
 /// * `define_asset`
 /// * `issue_asset`
 /// * `transfer_asset`
@@ -931,6 +932,7 @@ fn submit(protocol: &str,
 /// Submits a transaction and gets the UTXO (unspent transaction output) SIDs.
 ///
 /// Either this function or `submit` should be called after a transaction is composed by any of the following:
+/// * `air_assign`
 /// * `define_asset`
 /// * `issue_asset`
 /// * `transfer_asset`

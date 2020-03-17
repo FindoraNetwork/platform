@@ -183,8 +183,6 @@ fn air_assign(txn_builder_path: &str,
                        .arg("air_assign")
                        .args(&["--address", address])
                        .args(&["--data", data])
-                       // Make sure a standalone ledger is running
-                       .args(&["--http", "--localhost"])
                        .output()
 }
 
