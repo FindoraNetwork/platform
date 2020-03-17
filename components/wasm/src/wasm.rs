@@ -51,6 +51,9 @@ pub fn create_relative_txo_ref(idx: u64) -> String {
 /// Create an absolute transaction reference as a JSON string.
 /// References are used when constructing a transaction because the absolute transaction number
 /// has not yet been assigned.
+///
+/// # Arguments
+/// `idx`: Txo (transaction ouput) SID.
 pub fn create_absolute_txo_ref(idx: u64) -> String {
   serde_json::to_string(&TxoRef::Absolute(TxoSID(idx))).unwrap()
 }
@@ -80,6 +83,9 @@ pub fn random_asset_type() -> String {
 #[wasm_bindgen]
 /// Given a serialized state commitment and transation, returns true if the transaction correctly
 /// hashes up to the state commitment and false otherwise.
+/// # Arguments
+/// * `state_commitment`: string representating the state commitment.
+/// * `authenticated_txn`: string representating the transaction.
 pub fn verify_authenticated_txn(state_commitment: String,
                                 authenticated_txn: String)
                                 -> Result<bool, JsValue> {
@@ -95,8 +101,8 @@ pub fn verify_authenticated_txn(state_commitment: String,
 #[wasm_bindgen]
 /// Performs a simple loan repayment fee calculation.
 ///
-/// The returned fee is a fraction of the outstanding balance
-/// where the interest rate is expressed as a fraction ir_numerator / ir_denominator.
+/// The returned fee is a fraction of the `outstanding_balance`
+/// where the interest rate is expressed as a fraction `ir_numerator` / `ir_denominator`.
 /// Used in the Lending Demo.
 ///
 /// # Arguments
@@ -104,6 +110,8 @@ pub fn verify_authenticated_txn(state_commitment: String,
 /// * `ir_numerator`: interest rate numerator
 /// * `ir_denominator`: interest rate denominator
 /// * `outstanding_balance`: amount of outstanding debt
+///
+/// See ledger::policies::calculate_fee for details on calculating repayment fee.
 pub fn calculate_fee(ir_numerator: u64, ir_denominator: u64, outstanding_balance: u64) -> u64 {
   ledger::policies::calculate_fee(outstanding_balance,
                                   Fraction::new(ir_numerator, ir_denominator))
@@ -122,7 +130,7 @@ pub fn get_null_pk() -> XfrPublicKey {
 /// * `ir_numerator` - interest rate numerator
 /// * `ir_denominator`- interest rate denominator
 /// * `fiat_code` - base64 string representing asset type used to pay off the loan
-/// * `amount` - loan amount
+/// * `loan_amount` - loan amount
 pub fn create_debt_memo(ir_numerator: u64,
                         ir_denominator: u64,
                         fiat_code: String,
@@ -172,6 +180,10 @@ pub fn create_blind_asset_record(amount: u64,
 /// * could not open asset record
 /// * could not encode open asset record
 ///
+/// # Arguments
+/// * `blind_asset_record`: string representating the blind asset record.
+/// * `key`: key pair of the asset record owner.
+///
 /// TODO Add advice for resolving the errors to the error messages when possible
 pub fn open_blind_asset_record(blind_asset_record: String,
                                key: &XfrKeyPair)
@@ -210,7 +222,7 @@ impl WasmTransactionBuilder {
   /// # Arguments
   /// * `key_pair` -  Issuer XfrKeyPair
   /// * `memo`-  Text field for asset definition
-  /// * `code`-  Optional Base64 string representing the token code of the asset to be issued. If empty,
+  /// * `token_code`-  Optional Base64 string representing the token code of the asset to be issued. If empty,
   /// a token code will be chosen at random
   pub fn add_operation_create_asset(&self,
                                     key_pair: &XfrKeyPair,
@@ -367,6 +379,7 @@ impl WasmTransferOperationBuilder {
   /// [create_absolute_txo_ref](fn.create_absolute_txo_ref.html)
   /// `oar` - Opened asset record to serve as transfer input. See
   /// [open_blind_asset_record](fn.open_blind_asset_record.html)
+  /// `amount` - Input amount to transfer
   pub fn add_input(&mut self,
                    txo_ref: String,
                    oar: String,
@@ -425,7 +438,7 @@ impl WasmTransferOperationBuilder {
   /// See txn_builder::TransferOperationBuilder::create for details on finalizing a transaction.
   ///
   /// # Arguments
-  /// * `transfer_type`: string representation of the transfer type.
+  /// * `transfer_type`: string representing the transfer type.
   ///   * See ledger::data_model::TransferType for transfer type options.
   pub fn create(&mut self, transfer_type: String) -> Result<WasmTransferOperationBuilder, JsValue> {
     let transfer_type =
@@ -585,6 +598,10 @@ pub fn get_tracked_amount(blind_asset_record: String,
 /// To determine whether or not the transaction has been committed to the ledger,
 /// query the ledger by transaction ID.
 ///
+/// # Arguments
+/// `path`: path to submit the transaction.
+/// `transaction_str`: string representing the transaction.
+///
 /// TODO Design and implement a notification mechanism.
 pub fn submit_transaction(path: String, transaction_str: String) -> Result<Promise, JsValue> {
   let mut opts = RequestInit::new();
@@ -622,6 +639,10 @@ pub fn test_deserialize(str: String) -> bool {
 /// has been spent or the transaction index does not correspond to a
 /// transaction.
 ///
+/// # Arguments
+/// * `path`: path to get the UTXO.
+/// * `index`: transaction index.
+///
 /// TODO Provide an example (test case) that demonstrates how to
 /// handle the error in the case of an invalid transaction index.
 /// TODO Rename this function get_utxo
@@ -640,6 +661,10 @@ pub fn get_txo(path: String, index: u64) -> Result<Promise, JsValue> {
 /// JsValue describing a transaction.
 /// Otherwise, return 'not found'. The request fails if the transaction index does not correspond
 /// to a transaction.
+///
+/// # Arguments
+/// * `path`: path to get the transaction.
+/// * `index`: transaction index.
 ///
 /// TODO Provide an example (test case) that demonstrates how to
 /// handle the error in the case of an invalid transaction index.
@@ -672,6 +697,10 @@ pub fn get_state_commitment(path: String) -> Result<Promise, JsValue> {
 /// JsValue describing an asset token. Otherwise, returns 'not found'.
 /// The request fails if the given asset name does not correspond to
 /// an asset.
+///
+/// # Arguments
+/// * `path`: path to get the asset token.
+/// * `name`: asset token name.
 ///
 /// TODO Provide an example (test case) that demonstrates how to
 /// handle the error in the case of an undefined asset.
@@ -706,6 +735,8 @@ fn create_query_promise(opts: &RequestInit,
 
 #[wasm_bindgen]
 #[derive(Debug, Serialize, Deserialize)]
+/// Issuer structure.
+/// In the credentialing process, an issuer must sign the credential attribute to get it proved.
 pub struct Issuer {
   public_key: ACIssuerPublicKey,
   secret_key: ACIssuerSecretKey,
@@ -750,6 +781,8 @@ impl Issuer {
 
 #[wasm_bindgen]
 #[derive(Debug, Serialize, Deserialize)]
+/// User structure.
+/// In the credentialing process, a user must commit the credential attribute to get it proved.
 pub struct User {
   public_key: ACUserPublicKey,
   secret_key: ACUserSecretKey,
@@ -809,6 +842,8 @@ pub enum RelationType {
 
 #[wasm_bindgen]
 #[derive(Debug, Serialize, Deserialize)]
+/// Prover structure.
+/// In the credentialing process, a credential attribute must be proved by a prover.
 pub struct Prover;
 
 #[wasm_bindgen]
@@ -870,9 +905,15 @@ pub fn get_proof(attribute: u64) -> JsValue {
 ///
 /// Proves in zero knowledge that a simple equality or greater than relation is true without revealing the terms.
 ///
-/// In the P2P Lending app, the user has the option to save the proof for future use
-/// * If the proof exists, use this function for credentialing
-/// * Otherwise, use `attest_without_proof` for credentialing
+/// In the P2P Lending app, the user has the option to save the proof for future use.
+/// * If the proof exists, use this function for credentialing.
+/// * Otherwise, use `attest_without_proof` for credentialing.
+///
+/// # Arguments
+/// * `attribute`: credential attribute value.
+/// * `requirement`: required value.
+/// * `requirement_type`: relation between the real and required values. See `RelationType` for options.
+/// * `proof_jsvalue`: JsValue representing the proof.
 pub fn attest_with_proof(attribute: u64,
                          requirement: u64,
                          requirement_type: RelationType,
@@ -892,9 +933,14 @@ pub fn attest_with_proof(attribute: u64,
 /// Creates an issuer and user for the purpose of generating a proof in zero knowledge
 /// that a simple equality or greater than relationship is true.
 ///
-/// In the P2P Lending app, the user has the option to save the proof for future use
-/// * If the proof exists, use `attest_with_proof` for credentialing
-/// * Otherwise, use this function for credentialing
+/// In the P2P Lending app, the user has the option to save the proof for future use.
+/// * If the proof exists, use `attest_with_proof` for credentialing.
+/// * Otherwise, use this function for credentialing.
+///
+/// # Arguments
+/// * `attribute`: credential attribute value.
+/// * `requirement`: required value.
+/// * `requirement_type`: relation between the real and required values. See `RelationType` for options.
 pub fn attest_without_proof(attribute: u64,
                             requirement: u64,
                             requirement_type: RelationType)
