@@ -13,7 +13,7 @@ The `txn_builder_cli` application creates transactions and submits them to the l
 ## Command help
 
 To get documentation on a specific command, use the keyword help
-followed by the the command. To get help on a subcommand, use help and
+followed by the command. To get help on a subcommand, use help and
 the command and subcommand.
 
 For example, for help defining an asset
