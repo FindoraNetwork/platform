@@ -48,7 +48,7 @@ use zei::xfr::structs::{AssetIssuerPubKeys, AssetRecord, BlindAssetRecord, OpenA
 /// has not yet been assigned.
 ///
 /// # Arguments
-/// `idx`: Relative Txo (transaction output) SID.
+/// @param {BigInt} idx -  Relative Txo (transaction output) SID.
 pub fn create_relative_txo_ref(idx: u64) -> String {
   serde_json::to_string(&TxoRef::Relative(idx)).unwrap()
 }
@@ -56,7 +56,7 @@ pub fn create_relative_txo_ref(idx: u64) -> String {
 #[wasm_bindgen]
 /// Create an absolute transaction reference as a JSON string.
 /// # Arguments
-/// `idx`: Txo (transaction output) SID.
+/// @param {BigInt} idx -  Txo (transaction output) SID.
 pub fn create_absolute_txo_ref(idx: u64) -> String {
   serde_json::to_string(&TxoRef::Absolute(TxoSID(idx))).unwrap()
 }
@@ -108,12 +108,9 @@ pub fn verify_authenticated_txn(state_commitment: String,
 /// The returned fee is a fraction of the `outstanding_balance`
 /// where the interest rate is expressed as a fraction `ir_numerator` / `ir_denominator`.
 /// Used in the Lending Demo.
-///
-/// # Arguments
-///
-/// * `ir_numerator`: interest rate numerator
-/// * `ir_denominator`: interest rate denominator
-/// * `outstanding_balance`: amount of outstanding debt
+/// @param {BigInt} ir_numerator - interest rate numerator
+/// @param {BigInt} ir_denominator - interest rate denominator
+/// @param {BigInt] outstanding_balance -  amount of outstanding debt
 pub fn calculate_fee(ir_numerator: u64, ir_denominator: u64, outstanding_balance: u64) -> u64 {
   ledger::policies::calculate_fee(outstanding_balance,
                                   Fraction::new(ir_numerator, ir_denominator))
@@ -127,12 +124,10 @@ pub fn get_null_pk() -> XfrPublicKey {
 #[wasm_bindgen]
 /// Create memo needed for debt token asset types. The memo will be parsed by the policy evalautor to ensure
 /// that all payment and fee amounts are correct.
-/// # Arguments
-///
-/// * `ir_numerator` - interest rate numerator
-/// * `ir_denominator`- interest rate denominator
-/// * `fiat_code` - base64 string representing asset type used to pay off the loan
-/// * `loan_amount` - loan amount
+/// @param {BigInt} ir_numerator  - interest rate numerator
+/// @param {BigInt} ir_denominator - interest rate denominator
+/// @param {string} fiat_code - base64 string representing asset type used to pay off the loan
+/// @param {BigInt} loan_amount - loan amount
 pub fn create_debt_memo(ir_numerator: u64,
                         ir_denominator: u64,
                         fiat_code: String,
@@ -148,14 +143,11 @@ pub fn create_debt_memo(ir_numerator: u64,
 
 #[wasm_bindgen]
 /// Create a blind asset record.
-///
-/// # Arguments
-/// * `amount` - asset amount to store in the record
-/// * `code`- base64 string representing the token code of the asset to be stored in the record
-/// * `pk`- XfrPublicKey representing the record owner
-/// * `conf_amount` - boolean indicating whether the asset amount should be private
-/// * `conf_amount` - boolean indicating whether the asset type should be private
-/// Use the result of this function in [add_operation_issue_asset](struct.WasmTransactionBuilder.html#method.add_operation_issue_asset) to construct issuance operations.
+/// @param {BigInt} amount - asset amount to store in the record
+/// @param {string} code -  base64 string representing the token code of the asset to be stored in the record
+/// @param {XfrPublicKey} pk -  XfrPublicKey representing the record owner
+/// @param {bool} conf_amount - boolean indicating whether the asset amount should be private
+/// @param {bool} conf_type - boolean indicating whether the asset type should be private
 /// @see {@link WasmTransactionBuilder#add_operation_issue_asset} for instructions on how to use
 /// blind asset records to issue assets on the ledger.
 pub fn create_blind_asset_record(amount: u64,
@@ -178,10 +170,8 @@ pub fn create_blind_asset_record(amount: u64,
 #[wasm_bindgen]
 /// Decode (open) a blind asset record expressed as a JSON string using the given key pair.
 /// If successful returns a JSON encoding of the serialized open asset record.
-///
-/// # Arguments
-/// * `blind_asset_record`: string representating the blind asset record.
-/// * `key`: key pair of the asset record owner.
+/// @param {string} blind_asset_record - String representating the blind asset record.
+/// @param {XfrKeyPair} key - Key pair of the asset record owner.
 ///
 /// TODO Add advice for resolving the errors to the error messages when possible
 /// @throws Could not deserialize blind asset record
@@ -214,11 +204,10 @@ impl WasmTransactionBuilder {
 
   /// Wraps around TransactionBuilder to add an asset definition operation to a transaction builder instance.
   ///
-  /// # Arguments
-  /// * `key_pair` -  Issuer XfrKeyPair
-  /// * `memo`-  Text field for asset definition
-  /// * `token_code`-  Optional Base64 string representing the token code of the asset to be issued. If empty,
-  /// a token code will be chosen at random
+  /// @param {XfrKeyPair} key_pair -  Issuer XfrKeyPair
+  /// @param {string} memo - Text field for asset definition
+  /// @param {string} token_code - Optional Base64 string representing the token code of the asset to be issued.
+  /// If empty, a token code will be chosen at random
   pub fn add_operation_create_asset(&self,
                                     key_pair: &XfrKeyPair,
                                     memo: String,
@@ -239,13 +228,11 @@ impl WasmTransactionBuilder {
   }
 
   /// Wraps around TransactionBuilder to add an asset issuance to a transaction builder instance.
-  ///
-  /// # Arguments
-  /// * `key_pair` - Issuer XfrKeyPair
-  /// * `elgamal_pub_key` - Optional tracking public key. Pass in serialized tracking key or ""
-  /// * `code`-  Base64 string representing the token code of the asset to be issued
-  /// * `seq_num` - Issuance sequence number. Every subsequent issuance of a given asset type must have a higher sequence number than before
-  /// * `amount`- Amount to be issued.
+  /// @param {XfrKeyPair} key_pair  - Issuer XfrKeyPair
+  /// @param {string} elgamal_pub_key  - Optional tracking public key. Pass in serialized tracking key or ""
+  /// @param {string} code - Base64 string representing the token code of the asset to be issued
+  /// @param {BigInt} seq_num - Issuance sequence number. Every subsequent issuance of a given asset type must have a higher sequence number than before
+  /// @param {BigInt} amount - Amount to be issued.
   pub fn add_basic_issue_asset(&self,
                                key_pair: &XfrKeyPair,
                                elgamal_pub_key: String,
@@ -278,18 +265,15 @@ impl WasmTransactionBuilder {
 
   /// Wraps around TransactionBuilder to add an asset issuance operation to a transaction builder instance.
   ///
-  /// See txn_builder::TransactionBuilder::add_operation_issue_asset for details on adding an issurance.
-  ///
   /// While add_basic_issue_asset constructs the blind asset record internally, this function
   /// allows an issuer to pass in an externally constructed blind asset record. For complicated
   /// transactions (e.g. issue and
   /// transfers) the client must have a handle on the issuance record for subsequent operations.
   ///
-  /// # Arguments
-  /// * `key_pair`- Issuer XfrKeyPair
-  /// * `code` -  Base64 string representing the token code of the asset to be issued
-  /// * `seq_num` -  Issuance sequence number. Every subsequent issuance of a given asset type must have a higher sequence number than before
-  /// * `record` -  Issunace output (serialized blind asset record)
+  /// @param {XfrKeyPair} key_pair - Issuer XfrKeyPair
+  /// @param {string} code - Base64 string representing the token code of the asset to be issued
+  /// @param {BigInt} seq_num - Issuance sequence number. Every subsequent issuance of a given asset type must have a higher sequence number than before
+  /// @param {string} record - Issunace output (serialized blind asset record)
   /// @see {@link create_blind_asset_record} for details on constructing blind asset records.
   /// @see {@link random_asset_type} for details on generating new asset types.
   pub fn add_operation_issue_asset(&self,
@@ -312,8 +296,7 @@ impl WasmTransactionBuilder {
   }
 
   /// Adds a serialized operation to a WasmTransactionBuilder instance
-  /// # Arguments
-  /// * `op`: a JSON-serialized operation (i.e. a transfer operation)
+  /// @param {string} op -  a JSON-serialized operation (i.e. a transfer operation)
   /// @see {@link WasmTransferOperationBuilder} for details on constructing a transfer operation
   pub fn add_operation(&mut self, op: String) -> Result<WasmTransactionBuilder, JsValue> {
     let op =
@@ -350,12 +333,10 @@ impl WasmTransferOperationBuilder {
   }
 
   /// Wraps around TransferOperationBuilder to add an input to a transfer operation builder.
-  ///
-  /// # Arguments
-  /// * `txo_ref` - Absolute or relative utxo reference
-  /// * `oar` - Opened asset record to serve as transfer input. This record must exist on the
-  /// ledger for the transfer to be valid.
-  /// * `amount` - Amount of input record to transfer
+  /// @param {string} txo_ref - Serialized Absolute or relative utxo reference
+  /// @param {string} oar - Serializez opened asset record to serve as transfer input. This record must exist on the
+  /// ledger for the transfer to be valid
+  /// @param {BigInt} amount - Amount of input record to transfer
   /// @see {@link create_absolute_txo_ref} or {@link create_relative_txo_ref} for details on txo
   /// references.
   /// @see {@link open_blind_asset_record} for details on opening blind asset records.
@@ -383,10 +364,9 @@ impl WasmTransferOperationBuilder {
 
   /// Wraps around TransferOperationBuilder to add an output to a transfer operation builder.
   ///
-  /// # Arguments
-  /// * `amount`: amount to transfer to the recipient.
-  /// * `recipient`: public key of the recipient.
-  /// * `code`: String representaiton of the asset token code.
+  /// @param {BigInt} amount - amount to transfer to the recipient
+  /// @param {XfrPublicKey} recipient - public key of the recipient
+  /// @param code {string} - String representaiton of the asset token code
   pub fn add_output(&mut self,
                     amount: u64,
                     recipient: &XfrPublicKey,
@@ -413,7 +393,7 @@ impl WasmTransferOperationBuilder {
   /// Wraps around TransferOperationBuilder to finalize the transaction.
   ///
   /// # Arguments
-  /// * `transfer_type`: string representing the transfer type.
+  /// @param {string} transfer_type - string representing the transfer type
   /// @see {@link standard_transfer_type} or {@link debt_transfer_types} for details on transfer
   /// types.
   pub fn create(&mut self, transfer_type: String) -> Result<WasmTransferOperationBuilder, JsValue> {
@@ -433,9 +413,7 @@ impl WasmTransferOperationBuilder {
   ///
   /// All input owners must sign.
   ///
-  /// # Arguments
-  /// * `kp`: key pair of one of the input owners.
-  ///   * Note: all input owners must sign eventually.
+  /// @param {XfrKeyPair} kp - key pair of one of the input owners.
   pub fn sign(&mut self, kp: &XfrKeyPair) -> Result<WasmTransferOperationBuilder, JsValue> {
     let new_builder = Serialized::new(&*self.op_builder
                                             .deserialize()
@@ -574,9 +552,8 @@ pub fn get_tracked_amount(blind_asset_record: String,
 ///
 /// Contained in the response of `submit_transaction` is a `TransactionHandle` that can be used to
 /// query the status of the transaction.
-/// # Arguments
-/// * `path`: Submission server path (e.g. `https://localhost:8669`)
-/// * `transaction_str`: JSON-encoded transaction string.
+/// @param {string} path - Submission server path (e.g. `https://localhost:8669`)
+/// @param {transaction_str} - JSON-encoded transaction string.
 ///
 /// @see {@link get_txn_status} for information about transaction statuses.
 /// TODO Design and implement a notification mechanism.
@@ -609,10 +586,8 @@ pub fn get_txn_status(path: String, handle: String) -> Result<Promise, JsValue> 
 /// Otherwise, return 'not found'. The request fails if the txo uid
 /// has been spent or the transaction index does not correspond to a
 /// transaction.
-///
-/// # Arguments
-/// * `path`: path to get the UTXO.
-/// * `index`: transaction index.
+/// @param {string} path - Address of ledger server
+/// @param {BigInt} index - UTXO index
 ///
 /// TODO Provide an example (test case) that demonstrates how to
 /// handle the error in the case of an invalid transaction index.
@@ -633,9 +608,8 @@ pub fn get_txo(path: String, index: u64) -> Result<Promise, JsValue> {
 /// Otherwise, return 'not found'. The request fails if the transaction index does not correspond
 /// to a transaction.
 ///
-/// # Arguments
-/// * `path`: path to get the transaction.
-/// * `index`: transaction index.
+/// @param {String} path - Ledger server path
+/// @param {BigInt} index - transaction index.
 ///
 /// TODO Provide an example (test case) that demonstrates how to
 /// handle the error in the case of an invalid transaction index.
@@ -667,10 +641,8 @@ pub fn get_state_commitment(path: String) -> Result<Promise, JsValue> {
 /// JsValue describing an asset token. Otherwise, returns 'not found'.
 /// The request fails if the given asset name does not correspond to
 /// an asset.
-///
-/// # Arguments
-/// * `path`: path to get the asset token.
-/// * `name`: asset token name.
+/// @param {string} path: Address of ledger server
+/// @param {string} name: base64-encoded asset token string
 ///
 /// TODO Provide an example (test case) that demonstrates how to
 /// handle the error in the case of an undefined asset.
