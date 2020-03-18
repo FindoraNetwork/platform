@@ -143,7 +143,6 @@ mod tests {
   use zei::xfr::asset_record::open_asset_record;
   use zei::xfr::sig::XfrKeyPair;
 
-  #[ignore]
   #[test]
   // Ignoring this test since it sometimes fails on master
   #[ignore]
