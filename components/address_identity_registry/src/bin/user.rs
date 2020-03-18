@@ -2,21 +2,60 @@
 
 mod shared;
 
+use ledger::data_model::errors::PlatformError;
+use percent_encoding::{utf8_percent_encode, NON_ALPHANUMERIC};
 use rand_chacha::ChaChaRng;
 use rand_core::SeedableRng;
-use shared::{PubCreds, UserCreds};
-use zei::api::anon_creds::{ac_commit, ac_keygen_user, ACSignature, Credential};
+use serde::{Deserialize, Serialize};
+use shared::{Bitmap, PubCreds, UserCreds};
+use submission_server::{TxnHandle, TxnStatus};
+use txn_builder::{BuildsTransactions, TransactionBuilder, TransferOperationBuilder};
+use warp::Filter;
+use zei::serialization::ZeiFromToBytes;
+use zei::xfr::sig::{XfrKeyPair, XfrPublicKey};
+use zei::api::anon_creds::{ac_commit, ac_keygen_user, ACCommitmentKey, ACPoK, ACSignature, Credential};
+
+/// https://url.spec.whatwg.org/#fragment-percent-encode-set
+const FRAGMENT: &AsciiSet = &CONTROLS.add(b' ').add(b'"').add(b'<').add(b'>').add(b'`');
+
+fn urlencode(s: &str) -> String {
+    utf8_percent_encode(s, NON_ALPHANUMERIC).to_string())
+}
+
+const PROTOCOL: &str = "http";
+const SERVER_HOST: &str = "localhost";
+
+/// Port for querying values.
+const QUERY_PORT: &str = "8668";
+/// Port for submitting transactions.
+const SUBMIT_PORT: &str = "8669";
+
+// From txn_builder_cli: need a working key pair String
+const KEY_PAIR_STR: &str = "76b8e0ada0f13d90405d6ae55386bd28bdd219b8a08ded1aa836efcc8b770dc720fdbac9b10b7587bba7b5bc163bce69e796d71e4ed44c10fcb4488689f7a144";
+
+fn air_assign(issuer_id: u64,
+              address: &str,
+              data: &str)
+              -> Result<(), PlatformError> {
+  Ok(())
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct InfallibleFailure {
+  pub msg: String,
+}
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-  // Setup
+  // Setup: At the outset, the User is a client of the Issuer
   // Step 1: Get the issuer_pk for the credential of interest
-  let credname = "passport";
+  let credname = utf8_percent_encode("passport", NON_ALPHANUMERIC).to_string();
   let resp1 =
     reqwest::get(&format!("http://localhost:3030/issuer_pk/{}", &credname)).await?
                                                                            .json::<PubCreds>()
                                                                            .await?;
-  println!("{}", serde_json::to_string(&resp1).unwrap());
+  println!("Response from issuer for public key is:\n{}", serde_json::to_string(&resp1).unwrap());
+
   // Step 2: generate user key pair for this credential
   let mut prng = ChaChaRng::from_entropy();
   let (user_pk, user_sk) = ac_keygen_user::<_>(&mut prng, &resp1.issuer_pk);
@@ -25,7 +64,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                 String::from("photo:https://bit.ly/gotohell"),
                                 String::from("dl:123456")];
   let user_creds = UserCreds { credname: credname.to_string(),
-                               user_pk,
+                               user_pk: user_pk.clone(),
                                attrs: attrs.clone() };
   let client = reqwest::Client::new();
   let resp2 = client.put("http://localhost:3030/sign/passport")
@@ -35,21 +74,148 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
   let resp_text = &resp2.bytes().await?;
 
-  println!("Response is {:?}", &resp_text);
+  println!("Response from issuer for signature is:\n{:?}", &resp_text);
   let sig: ACSignature = serde_json::from_str(std::str::from_utf8(resp_text).unwrap()).unwrap();
 
-  let credential: Credential<&[u8]> =
+  let credential: Credential<String> =
     Credential { signature: sig.clone(),
-                 attributes: attrs.iter().map(|s| s.as_bytes()).collect(),
+                 attributes: attrs,
                  issuer_pk: resp1.issuer_pk.clone() };
 
   if let Ok((commitment, _proof, key)) =
-    ac_commit::<ChaChaRng, &[u8]>(&mut prng, &user_sk, &credential, b"random message")
+    ac_commit::<ChaChaRng, String>(&mut prng, &user_sk, &credential, b"random message")
   {
-    println!("All good");
+    // Now we store the commitment to this credential at the AIR
+    // Build the transaction
+    let issuer_key_pair = XfrKeyPair::zei_from_bytes(&hex::decode(KEY_PAIR_STR)?);
+    
+    let mut txn_builder = TransactionBuilder::default();
+    let data = serde_json::to_string(&commitment).unwrap();
+    let address = serde_json::to_string(&user_creds.user_pk).unwrap();
+    txn_builder.add_operation_air_assign(&issuer_key_pair, &address, &data)?;
+
+    // Submit to ledger
+    let txn = txn_builder.transaction();
+    let mut res =
+      client.post(&format!("{}://{}:{}/{}",
+                          PROTOCOL, SERVER_HOST, SUBMIT_PORT, "submit_transaction"))
+            .json(&txn)
+            .send()
+            .await?;
+
+    println!("Awaiting requests from verifier at port {}", 3031);
+  // For the rest of the session, the User process behaves as a server w.r.t. the Verifier
+
+    let db = models::make_db(prng, user_sk, user_pk, credential, key);
+    let api = filters::user(db);
+
+    // View access logs by setting `RUST_LOG=user`.
+    let routes = api.with(warp::log("user"));
+    // Start up the server...
+    warp::serve(routes).run(([127, 0, 0, 1], 3031)).await;
+
+    // Log body
+    // let resp_json = res.json::<TxnHandle>().await?;
+    // println!("Submission response: {}", resp_json);
     Ok(())
   } else {
-    println!("Houston, we have a problem");
     Err("Commitment fails")?
+  }
+}
+
+mod filters {
+  use crate::shared::Bitmap;
+  use super::handlers;
+  use super::models::Db;
+  use warp::Filter;
+
+  /// The Issuer filters combined.
+  pub fn user(db: Db)
+                -> impl Filter<Extract = impl warp::Reply, Error = warp::Rejection> + Clone {
+    (selective_reveal(db))
+  }
+
+  pub fn selective_reveal(db: Db) -> impl Filter<Extract = impl warp::Reply, Error = warp::Rejection> + Clone {
+    warp::path!("reveal" / String ).and(warp::get())
+                                   .and(json_body())
+                                   .and(with_db(db))
+                                   .and_then(handlers::selective_reveal)
+  }
+
+  fn with_db(db: Db) -> impl Filter<Extract = (Db,), Error = std::convert::Infallible> + Clone {
+    warp::any().map(move || db.clone())
+  }
+
+  fn json_body() -> impl Filter<Extract = (Bitmap,), Error = warp::Rejection> + Clone {
+    // When accepting a body, we want a JSON body
+    // (and to reject huge payloads)...
+    warp::body::content_length_limit(1024 * 16).and(warp::body::json())
+  }
+}
+
+mod handlers {
+  use crate::shared::{AIRAddressAndPoK, Bitmap};
+  use super::models::{Db, GlobalState};
+  use rand_chacha::ChaChaRng;
+  use std::convert::Infallible;
+  use warp::Filter;
+  use warp::http::StatusCode;
+  use zei::api::anon_creds::{ac_open_commitment};
+
+  /// PUT //selective_reveal/:bitmap
+  pub async fn selective_reveal(credname: String,
+                                bitmap: Bitmap,
+                                db: Db)
+                                -> Result<impl warp::Reply, Infallible> {
+    let mut global_state = db.lock().await;
+    let cred = global_state.cred.clone();
+    let user_sk = global_state.user_sk.clone();
+    let user_pk = global_state.user_pk.clone();
+    let key = global_state.key.clone();
+
+    if let Ok(pok) = ac_open_commitment::<ChaChaRng, String>(&mut global_state.prng,
+                                                             &user_sk,
+                                                             &cred,
+                                                             &key,
+                                                             &bitmap.bits) {
+      let address = serde_json::to_string(&user_pk).unwrap();
+      let result = AIRAddressAndPoK { addr: address, pok };
+      Ok(warp::reply::json(&result))
+    } else {
+      let result = super::InfallibleFailure { msg: String::from("selective_reveal: open commitment failed") };
+      Ok(warp::reply::json(&result))
+    }
+  }
+}
+
+mod models {
+  use crate::shared::{};
+  use rand_chacha::ChaChaRng;
+  use rand_core::SeedableRng;
+  use serde_derive::{Deserialize, Serialize};
+  use std::collections::HashMap;
+  use std::sync::Arc;
+  use tokio::sync::Mutex;
+  use zei::api::anon_creds::{
+    ACCommitmentKey, ACPoK, ACUserPublicKey, ACUserSecretKey, Credential,
+  };
+  /// So we don't have to tackle how different database work, we'll just use
+  /// a simple in-memory DB, a HashMap synchronized by a mutex.
+  pub type Db = Arc<Mutex<GlobalState>>;
+
+  pub struct GlobalState {
+    pub prng: ChaChaRng,
+    pub user_sk: ACUserSecretKey,
+    pub user_pk: ACUserPublicKey,
+    pub cred: Credential<String>,
+    pub key: ACCommitmentKey,
+  }
+
+  pub fn make_db(prng: ChaChaRng,
+                 user_sk: ACUserSecretKey,
+                 user_pk: ACUserPublicKey,
+                 cred: Credential<String>,
+                 key: ACCommitmentKey) -> Db {
+    Arc::new(Mutex::new(GlobalState { prng, user_sk, user_pk, cred, key }))
   }
 }
