@@ -1,6 +1,8 @@
 # Transaction Builder Command Line Interface
 
-The `txn_builder_cli` application creates transactions and submits them to the ledger server. The typical workflow of P2P lending is as follows
+The `txn_builder_cli` application is intended to help you experiment with the RESTful API and access the Ledger from scripts. The `txn_builder_cli` provides a command line interface for constructing and submitting requests to the Ledger. The `txn_builder_cli` application creates transactions and submits them to the ledger server.
+
+The typical workflow of P2P lending is as follows
 * Create a new empty transaction. See `txn_builder_cli create_txn_builder`.
 * Create new users. See `txn_builder_cli asset_issuer sign_up`, `txn_builder_cli credential_issuer sign_up`, `txn_builder_cli lender sign_up` and `txn_builder_cli borrower sign_up`.
 * Borrower: adds or updates a credential record. See `txn_builder_cli borrower create_or_overwrite_credential`.
@@ -13,7 +15,7 @@ The `txn_builder_cli` application creates transactions and submits them to the l
 ## Command help
 
 To get documentation on a specific command, use the keyword help
-followed by the the command. To get help on a subcommand, use help and
+followed by the command. To get help on a subcommand, use help and
 the command and subcommand.
 
 For example, for help defining an asset
@@ -30,7 +32,7 @@ actual subcommands.
 * Examples below are assuming the current directory is `platform/target/debug`. If not, change `./txn_builder_cli` to the path to `./txn_builder_cli`.
 
 ## Submit a transaction
-After a transaction is composed by `define_asset`, `issue_asset`, `transfer_asset`, or `issue_and_transfer_asset`:
+After a transaction is composed by `air_assign`, `define_asset`, `issue_asset`, `transfer_asset`, or `issue_and_transfer_asset`:
 ```
 ./txn_builder_cli --txn tb submit
 ```
@@ -51,6 +53,21 @@ Otherwise, add `--get_sids` when submitting asset issuing transactions, and note
 ./txn_builder_cli asset_issuer store_sids --path s --indices 1,2,3
 ```
 
+### Assign to AIR (Address Identity Registry)
+* Create an empty transaction
+```
+./txn_builder_cli create_txn_builder --name txn_air
+```
+* Assign to AIR
+```
+./txn_builder_cli --txn txn_define asset_issuer --id 0 air_assign --address air_key --data 'Some data.'
+```
+
+* Submit the transaction
+```
+./txn_builder_cli --txn txn_air submit
+```
+
 ### Define an asset
 * Create an empty transaction
 ```
@@ -58,7 +75,7 @@ Otherwise, add `--get_sids` when submitting asset issuing transactions, and note
 ```
 * Define an asset
 ```
-./txn_builder_cli --txn txn_define issuer --id 0 define_asset --memo 'Define an asset.'
+./txn_builder_cli --txn txn_define asset_issuer --id 0 define_asset --memo 'Define an asset.'
 ```
 By default, a randomly generated token code will be used. To specify a code, use `--token_code`.
 To define a fiat asset, add `--fiat`.
@@ -76,7 +93,7 @@ After an asset is defined and the transaction is submitted:
 ```
 * Issue the asset
 ```
-./txn_builder_cli --txn txn_issue issuer --id 0 issue_asset --token_code ibIaBlHV-PdQkvSuEg6YSA== --amount 100
+./txn_builder_cli --txn txn_issue asset_issuer --id 0 issue_asset --token_code ibIaBlHV-PdQkvSuEg6YSA== --amount 100
 ```
 * Submit the transaction
 ```
@@ -92,7 +109,7 @@ After an asset is defined and issued, transactions are submitted, and utxo sids 
 ```
 * Transfer
 ```
-./txn_builder_cli --txn txn_transfer issuer --id 0 transfer_asset --sids_path s recipients 0,1 --input_amounts 45 --output_amounts 10,35
+./txn_builder_cli --txn txn_transfer asset_issuer --id 0 transfer_asset --sids_path s recipients 0,1 --input_amounts 45 --output_amounts 10,35
 ```
 * Submit the transaction
 ```
@@ -107,7 +124,7 @@ After an asset is defined and the transaction is submitted:
 ```
 * Issue and transfer the asset
 ```
-./txn_builder_cli --txn txn_issue_and_transfer issuer --id 0 issue_and_transfer_asset --recipient 0 --amount 1000 --token_code ibIaBlHV-PdQkvSuEg6YSA==
+./txn_builder_cli --txn txn_issue_and_transfer asset_issuer --id 0 issue_and_transfer_asset --recipient 0 --amount 1000 --token_code ibIaBlHV-PdQkvSuEg6YSA==
 ```
 Add `--confidential_amount` or `--confidential_asset` if needed.
 * Submit the transaction
@@ -125,7 +142,7 @@ In the initial data, there's one credential issuer, Ivy. To sign up a new creden
 
 ## Lender account
 ### Sign up a lender account
-In the initial data, there are two issuer, Lenny and Luna. To sign up a new lender account:
+In the initial data, there are two issuers, Lenny and Luna. To sign up a new lender account:
 ```
 ./txn_builder_cli lender sign_up --name 'Lender Name' --min_credit_score 570
 ```
@@ -230,7 +247,7 @@ By default, `https://testnet.findora.org` is used. To switch to `http://localhos
 ```
 
 ### Create or overwrite a credential
-Currently supported attributes are min_credit_score, min_income and citizenshiip.
+Currently supported attributes are min_credit_score, min_income and citizenship.
 For example, to create a min_credit_score credential:
 ```
 ./txn_builder_cli borrower --id 0 create_or_overwrite_credential --attribute min_credit_score --value 650
@@ -266,7 +283,7 @@ This looks nicer in a web browser that formats JSON nicely such as Firefox.
 ![Expanding outline](./doc/ledger_json.png)
 
 
-The `block_log` route returns all the transaction as tabular HTML.
+The `block_log` route returns all the transactions as tabular HTML.
 
 ```
 $ curl https://testnet.findora.org:8669/block_log
@@ -300,7 +317,7 @@ Bill's id is 1.
 
 ### Define an asset
 ```
-./txn_builder_cli --txn txn_define issuer --id 1 define_asset --memo 'Define a confidential asset.' --confidential
+./txn_builder_cli --txn txn_define asset_issuer --id 1 define_asset --memo 'Define a confidential asset.' --confidential
 ```
 Note from the output that the asset token code is `7hAA3TTJQHhDGs-_mpP12Q==`, or `[238, 16, 0, 221, 52, 201, 64, 120, 67, 26, 207, 191, 154, 147, 245, 217]`:
 ```
@@ -320,7 +337,7 @@ Creating asset with token code "7hAA3TTJQHhDGs-_mpP12Q==": [238, 16, 0, 221, 52,
 
 ### Issue and transfer the asset
 ```
-./txn_builder_cli --txn txn_issue_and_transfer issuer --id 1 issue_and_transfer_asset --recipient 1 --amount 100 --token_code 7hAA3TTJQHhDGs-_mpP12Q== --confidential_amount --confidential_asset
+./txn_builder_cli --txn txn_issue_and_transfer asset_issuer --id 1 issue_and_transfer_asset --recipient 1 --amount 100 --token_code 7hAA3TTJQHhDGs-_mpP12Q== --confidential_amount --confidential_asset
 ```
 
 ### Submit the transaction and get the utxo
@@ -332,7 +349,7 @@ Note from the last line of the output that the utxo is `429`:
 Utxo: [TxoSID(429)]
 ```
 
-## Bill: verifies the transffered asset
+## Bill: verifies the transfered asset
 ### Create an empty transaction
 ```
 ./txn_builder_cli create_txn_builder --name txn_verify_asset

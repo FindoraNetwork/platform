@@ -179,8 +179,8 @@ fn air_assign(txn_builder_path: &str,
               data: &str)
               -> io::Result<Output> {
   Command::new(COMMAND).args(&["--txn", txn_builder_path])
-                       .args(&["asset_issuer", "air_assign"])
-                       .args(&["--issuer", issuer_id])
+                       .args(&["asset_issuer", "--id", issuer_id])
+                       .arg("air_assign")
                        .args(&["--address", address])
                        .args(&["--data", data])
                        .output()
@@ -766,18 +766,18 @@ fn test_define_issue_transfer_and_submit_with_args() {
 // Compose transaction and submit
 //
 #[test]
-#[ignore]
 // Ignoring this test as it currently requires environment settings.
 // To run the test, make sure:
 // * Standalone ledger is running.
 // * PROTOCOL=http and SERVER_HOST=localhost.
+#[ignore]
 fn test_air_assign() {
   // Create txn builder and key pair
   let txn_builder_file = "tb_air_assign";
   create_txn_builder_with_path(txn_builder_file).expect("Failed to create transaction builder");
 
-  // Define asset
-  air_assign(txn_builder_file, "0", "666", "Hell").expect("Failed to define asset");
+  // Air assigning
+  air_assign(txn_builder_file, "0", "666", "Hell").expect("Failed to assign to AIR");
 
   // Submit transaction
   let output = submit(txn_builder_file).expect("Failed to submit transaction");
