@@ -738,7 +738,8 @@ impl LedgerUpdate<ChaChaRng> for LedgerState {
 
     // Apply AIR updates
     for (addr, data) in block.air_updates.drain() {
-      debug_assert!(self.air.get(&addr).is_none());
+      // debug_assert!(self.air.get(&addr).is_none());
+      // Should we allow an address to get overwritten? At least during testing, yes.
       self.air.set(&addr, Some(data));
     }
 
