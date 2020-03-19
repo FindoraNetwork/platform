@@ -40,7 +40,7 @@ use zei::xfr::structs::{AssetIssuerPubKeys, AssetRecord, BlindAssetRecord, OpenA
 //Random Helpers
 
 #[wasm_bindgen]
-/// Create a relative transaction reference as a JSON string. Relative txo references are offset
+/// Creates a relative transaction reference as a JSON string. Relative txo references are offset
 /// backwards from the operation they appear in -- 0 is the most recent, (n-1) is the first output
 /// of the transaction.
 ///
@@ -54,7 +54,7 @@ pub fn create_relative_txo_ref(idx: u64) -> String {
 }
 
 #[wasm_bindgen]
-/// Create an absolute transaction reference as a JSON string.
+/// Creates an absolute transaction reference as a JSON string.
 /// # Arguments
 /// @param {BigInt} idx -  Txo (transaction output) SID.
 pub fn create_absolute_txo_ref(idx: u64) -> String {
@@ -84,7 +84,7 @@ pub fn random_asset_type() -> String {
 }
 
 #[wasm_bindgen]
-/// Given a serialized state commitment and transation, returns true if the transaction correctly
+/// Given a serialized state commitment and transaction, returns true if the transaction correctly
 /// hashes up to the state commitment and false otherwise.
 /// @param {string} state_commitment - string representating the state commitment.
 /// @param {string} authenticated_txn - string representating the transaction.
@@ -122,7 +122,7 @@ pub fn get_null_pk() -> XfrPublicKey {
   XfrPublicKey::zei_from_bytes(&[0; 32])
 }
 #[wasm_bindgen]
-/// Create memo needed for debt token asset types. The memo will be parsed by the policy evalautor to ensure
+/// Creates memo needed for debt token asset types. The memo will be parsed by the policy evaluator to ensure
 /// that all payment and fee amounts are correct.
 /// @param {BigInt} ir_numerator  - interest rate numerator
 /// @param {BigInt} ir_denominator - interest rate denominator
@@ -142,7 +142,7 @@ pub fn create_debt_memo(ir_numerator: u64,
 }
 
 #[wasm_bindgen]
-/// Create a blind asset record.
+/// Creates a blind asset record.
 /// @param {BigInt} amount - asset amount to store in the record
 /// @param {string} code -  base64 string representing the token code of the asset to be stored in the record
 /// @param {XfrPublicKey} pk -  XfrPublicKey representing the record owner
@@ -168,7 +168,7 @@ pub fn create_blind_asset_record(amount: u64,
 }
 
 #[wasm_bindgen]
-/// Decode (open) a blind asset record expressed as a JSON string using the given key pair.
+/// Decodes (opens) a blind asset record expressed as a JSON string using the given key pair.
 /// If successful returns a JSON encoding of the serialized open asset record.
 /// @param {string} blind_asset_record - String representating the blind asset record.
 /// @param {XfrKeyPair} key - Key pair of the asset record owner.
@@ -308,7 +308,7 @@ impl WasmTransactionBuilder {
                                                                            .add_operation(op)) })
   }
 
-  /// Extract the serialized form of a transaction.
+  /// Extracts the serialized form of a transaction.
   ///
   /// TODO Develop standard terminology for Javascript functions that may throw errors.
   pub fn transaction(&mut self) -> Result<String, JsValue> {
@@ -437,39 +437,39 @@ impl WasmTransferOperationBuilder {
 ///////////// CRYPTO //////////////////////
 
 #[wasm_bindgen]
-/// Extract the public key as a string from a transfer key pair.
+/// Extracts the public key as a string from a transfer key pair.
 pub fn get_pub_key_str(key_pair: &XfrKeyPair) -> String {
   serde_json::to_string(key_pair.get_pk_ref()).unwrap()
 }
 
 #[wasm_bindgen]
-/// Extract the private key as a string from a transfer key pair.
+/// Extracts the private key as a string from a transfer key pair.
 pub fn get_priv_key_str(key_pair: &XfrKeyPair) -> String {
   serde_json::to_string(key_pair.get_sk_ref()).unwrap()
 }
 
 #[wasm_bindgen]
-/// Create a new transfer key pair.
+/// Creates a new transfer key pair.
 pub fn new_keypair() -> XfrKeyPair {
   let mut small_rng = rand::thread_rng();
   XfrKeyPair::generate(&mut small_rng)
 }
 
 #[wasm_bindgen]
-/// Return base64 encoded representation of an XfrPublicKey
+/// Returns base64 encoded representation of an XfrPublicKey.
 pub fn public_key_to_base64(key: &XfrPublicKey) -> String {
   b64enc(&XfrPublicKey::zei_to_bytes(&key))
 }
 
 #[wasm_bindgen]
-/// Express a transfer key pair as a hex-encoded string.
+/// Expresses a transfer key pair as a hex-encoded string.
 /// To decode the string, use `keypair_from_str` function.
 pub fn keypair_to_str(key_pair: &XfrKeyPair) -> String {
   hex::encode(key_pair.zei_to_bytes())
 }
 
 #[wasm_bindgen]
-/// Construct a transfer key pair from a hex-encoded string.
+/// Constructs a transfer key pair from a hex-encoded string.
 /// The encode a key pair, use `keypair_to_str`
 pub fn keypair_from_str(str: String) -> XfrKeyPair {
   XfrKeyPair::zei_from_bytes(&hex::decode(str).unwrap())
@@ -483,7 +483,7 @@ pub fn generate_elgamal_keys() -> String {
 }
 
 #[wasm_bindgen]
-/// Return the SHA256 signature of the given string as a hex-encoded
+/// Returns the SHA256 signature of the given string as a hex-encoded
 /// string.
 pub fn sha256str(str: &str) -> String {
   let digest = sha256::hash(&str.as_bytes());
@@ -491,7 +491,7 @@ pub fn sha256str(str: &str) -> String {
 }
 
 #[wasm_bindgen]
-/// Sign the given message using the given transfer key pair.
+/// Signs the given message using the given transfer key pair.
 pub fn sign(key_pair: &XfrKeyPair, message: String) -> Result<JsValue, JsValue> {
   let signature = key_pair.get_sk_ref()
                           .sign(&message.as_bytes(), key_pair.get_pk_ref());
@@ -581,9 +581,9 @@ pub fn get_txn_status(path: String, handle: String) -> Result<Promise, JsValue> 
 }
 
 #[wasm_bindgen]
-/// If successful, return a promise that will eventually provide a
+/// If successful, returns a promise that will eventually provide a
 /// JsValue describing an unspent transaction output (UTXO).
-/// Otherwise, return 'not found'. The request fails if the txo uid
+/// Otherwise, returns 'not found'. The request fails if the txo uid
 /// has been spent or the transaction index does not correspond to a
 /// transaction.
 /// @param {string} path - Address of ledger server
@@ -603,9 +603,9 @@ pub fn get_txo(path: String, index: u64) -> Result<Promise, JsValue> {
 }
 
 #[wasm_bindgen]
-/// If successful, return a promise that will eventually provide a
+/// If successful, returns a promise that will eventually provide a
 /// JsValue describing a transaction.
-/// Otherwise, return 'not found'. The request fails if the transaction index does not correspond
+/// Otherwise, returns 'not found'. The request fails if the transaction index does not correspond
 /// to a transaction.
 ///
 /// @param {String} path - Ledger server path
@@ -657,7 +657,7 @@ pub fn get_asset_token(path: String, name: String) -> Result<Promise, JsValue> {
 }
 
 // Given a request string and a request init object, constructs
-// the JS promise to be returned to the client
+// the JS promise to be returned to the client.
 fn create_query_promise(opts: &RequestInit,
                         req_string: &str,
                         is_json: bool)
@@ -686,7 +686,7 @@ pub struct Issuer {
 
 #[wasm_bindgen]
 impl Issuer {
-  /// Create a new issuer, generating the key pair with the knowledge of the number of attributes.
+  /// Creates a new issuer, generating the key pair with the knowledge of the number of attributes.
   ///
   /// TODO Add an overview description of the anonymous credential
   /// functions and how they work together.
@@ -702,12 +702,12 @@ impl Issuer {
              secret_key: issuer_sk }
   }
 
-  /// Convert an Issuer to JsValue.
+  /// Converts an Issuer to JsValue.
   pub fn jsvalue(&mut self) -> JsValue {
     JsValue::from_serde(&self).unwrap()
   }
 
-  /// Sign an attribute.
+  /// Signs an attribute.
   // E.g. sign the lower bound of the credit score
   pub fn sign_attribute(&self, user_jsvalue: &JsValue, attribute: u64) -> JsValue {
     let mut prng: ChaChaRng;
@@ -732,7 +732,7 @@ pub struct User {
 
 #[wasm_bindgen]
 impl User {
-  /// Create a new user, generating the key pair using the issuer's
+  /// Creates a new user, generating the key pair using the issuer's
   /// public key.
   pub fn new(issuer: &Issuer, rand_seed: &str) -> User {
     let mut prng: ChaChaRng;
@@ -743,12 +743,12 @@ impl User {
            secret_key: user_sk }
   }
 
-  /// Convert a User to JsValue.
+  /// Converts a User to JsValue.
   pub fn jsvalue(&mut self) -> JsValue {
     JsValue::from_serde(&self).unwrap()
   }
 
-  /// Commit an attribute with the issuer's signature.
+  /// Commits an attribute with the issuer's signature.
   // E.g. commit the lower bound of the credit score
   pub fn commit_attribute(&self,
                           issuer_jsvalue: &JsValue,
@@ -790,7 +790,7 @@ pub struct Prover;
 
 #[wasm_bindgen]
 impl Prover {
-  /// Prove that an attribute meets the requirement and is true.
+  /// Proves that an attribute meets the requirement and is true.
   pub fn prove_attribute(proof_jsvalue: &JsValue,
                          issuer_jsvalue: &JsValue,
                          attribute: u64,
@@ -830,7 +830,7 @@ impl Prover {
 }
 
 #[wasm_bindgen]
-/// Generate a proof that a user has committed to the given attribute
+/// Generates a proof that a user has committed to the given attribute
 /// value.
 pub fn get_proof(attribute: u64) -> JsValue {
   let mut issuer = Issuer::new(1);
