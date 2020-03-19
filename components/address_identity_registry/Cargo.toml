@@ -29,12 +29,14 @@ air = { path = "../../libs/ads/air" }
 async-std = "1.5.0"
 clap = "2.33.0"
 colored = "1.9"
+credentials = { path = "../../components/credentials" }
 cryptohash = { path = "../../libs/cryptohash" }
 env_logger = "0.7.1"
 futures = "0.3.1"
 hex = "0.3.2"
 lazy_static = { version = "1.2.0" }
 # libp2p = "0.16.2"
+linear-map = {version = "1.2.0", features = ["serde_impl"] }
 log = "0.4.0"
 pretty_env_logger = "0.3"
 rmp-serde = "0.13.7"

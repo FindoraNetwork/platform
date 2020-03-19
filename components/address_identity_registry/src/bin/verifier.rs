@@ -5,7 +5,7 @@ mod shared;
 use rand_chacha::ChaChaRng;
 use rand_core::SeedableRng;
 use shared::{PubCreds, UserCreds};
-use zei::api::anon_creds::ac_keygen_user;
+use credentials::credential_user_key_gen;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -19,11 +19,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
   println!("{}", serde_json::to_string(&resp).unwrap());
   // Step 2: generate user key pair for this credential
   let mut prng = ChaChaRng::from_entropy();
-  let (user_pk, _user_sk) = ac_keygen_user::<_>(&mut prng, &resp.issuer_pk);
-  let attrs: Vec<String> = vec![String::from("dob:08221964"),
-                                String::from("ss:666666666"),
-                                String::from("photo:https://bit.ly/gotohell"),
-                                String::from("dl:123456")];
+  let (user_pk, _user_sk) = credential_user_key_gen(&mut prng, &resp.issuer_pk);
+  let attrs = vec![(String::from("08221964"), String::from("08221964")),
+                                (String::from("ss"), String::from("666666666")),
+                                (String::from("photo"), String::from("photo:https://bit.ly/gotohell")),
+                                (String::from("dl"), String::from("dl:123456"))];
   let user_creds = UserCreds { credname: credname.to_string(),
                                user_pk,
                                attrs };
