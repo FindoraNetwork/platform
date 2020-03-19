@@ -61,8 +61,10 @@ To run the repl from the top level (i.e., the directory this README.md is in) ex
 `cargo run --bin repl`
 When the repl starts with `>>>` type help for instructions
 # Server based test
-Start the servers. **Issuer** and either **Ledger** or **MockLedger** must be running before any of the other programs.
+1. Start a standalone **Ledger** server. From <platform> top level directory, run
+`RUST_LOG=debug ./target/debug/ledger_standalone`
+2. In a separate terminal, in the platform/components/address_identity_registry, start a credential **Issuer**.
 `cargo run --bin issuer`
-After the issuer is running, a user process can be started
+3. After the issuer is running, a user process can be started
 `cargo run --bin user`
 
