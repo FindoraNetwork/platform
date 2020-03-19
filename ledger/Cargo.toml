@@ -35,7 +35,7 @@ tempfile = "3.1.0"
 time = "0.1"
 tiny-keccak = "1.4.2"
 wasm-bindgen = { version = "0.2.50", features = ["serde-serialize"]  }
-zei = { git = "ssh://git@github.com/findoraorg/zei", tag = "v0.0.1" }
+zei = { git = "ssh://git@github.com/findoraorg/zei" }
 log = "0.4.8"
 
 [features]

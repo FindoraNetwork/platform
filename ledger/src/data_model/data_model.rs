@@ -4,6 +4,7 @@ use bitmap::SparseMap;
 use chrono::prelude::*;
 use cryptohash::sha256::Digest as BitDigest;
 use cryptohash::{sha256, HashValue, Proof};
+use itertools::Itertools;
 use rand_chacha::ChaChaRng;
 use rand_core::{CryptoRng, RngCore, SeedableRng};
 use std::boxed::Box;
@@ -242,11 +243,14 @@ impl TransferAssetBody {
                                      input_records: &[OpenAssetRecord],
                                      output_records: &[AssetRecord])
                                      -> Result<TransferAssetBody, errors::PlatformError> {
-    let id_proofs = vec![];
     if input_records.is_empty() {
       return Err(errors::PlatformError::InputsError);
     }
-    let note = Box::new(gen_xfr_body(prng, input_records, output_records, &id_proofs)?);
+    let in_records =
+      input_records.iter()
+                   .map(|oar| AssetRecord::from_open_asset_record_no_asset_tracking(oar.clone()))
+                   .collect_vec();
+    let note = Box::new(gen_xfr_body(prng, in_records.as_slice(), output_records)?);
     Ok(TransferAssetBody { inputs: input_refs,
                            num_outputs: output_records.len(),
                            transfer: note })

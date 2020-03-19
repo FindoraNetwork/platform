@@ -1653,9 +1653,9 @@ pub mod helpers {
   use zei::serialization::ZeiFromToBytes;
   use zei::setup::PublicParams;
   use zei::xfr::asset_record::AssetRecordType;
-  use zei::xfr::asset_record::{build_blind_asset_record, open_asset_record};
+  use zei::xfr::asset_record::{build_blind_asset_record, open_blind_asset_record};
   use zei::xfr::sig::{XfrKeyPair, XfrPublicKey, XfrSecretKey};
-  use zei::xfr::structs::AssetRecord;
+  use zei::xfr::structs::{AssetRecord, AssetRecordTemplate};
 
   pub fn create_definition_transaction(code: &AssetTypeCode,
                                        public_key: &XfrPublicKey,
@@ -1736,9 +1736,9 @@ pub mod helpers {
     let _issuer_key_copy = XfrKeyPair::zei_from_bytes(&issuer_keys.zei_to_bytes());
 
     // issue operation
-    let ar = AssetRecord::new(amount, code.val, *issuer_keys.get_pk_ref()).unwrap();
-    let art = AssetRecordType::PublicAmount_PublicAssetType;
-    let ba = build_blind_asset_record(ledger.get_prng(), &params.pc_gens, &ar, art, &None);
+    let ar_template = AssetRecordTemplate::with_no_asset_tracking(amount, code.val, AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType, issuer_keys.get_pk());
+    let (ba, _tracer_memo, owner_memo) =
+      build_blind_asset_record(ledger.get_prng(), &params.pc_gens, &ar_template, None);
 
     let asset_issuance_body = IssueAssetBody::new(&code, 0, &[TxOutput(ba.clone())]).unwrap();
     let asset_issuance_operation = IssueAsset::new(asset_issuance_body,
@@ -1751,11 +1751,13 @@ pub mod helpers {
     tx.operations.push(issue_op);
 
     // transfer operation
-    let ar = AssetRecord::new(amount, code.val, *recipient_pk).unwrap();
+    let ar_template = AssetRecordTemplate::with_no_asset_tracking(amount, code.val, AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType, *recipient_pk);
+    let ar =
+      AssetRecord::from_template_no_identity_tracking(ledger.get_prng(), &ar_template).unwrap();
     let mut transfer =
       TransferAsset::new(TransferAssetBody::new(ledger.get_prng(),
                              vec![TxoRef::Relative(0)],
-                             &[open_asset_record(&ba, &issuer_keys.get_sk_ref()).unwrap()],
+                             &[open_blind_asset_record(&ba, &owner_memo, &issuer_keys.get_sk_ref()).unwrap()],
                              &[ar]).unwrap(), TransferType::Standard).unwrap();
 
     transfer.sign(&issuer_keys);
@@ -1775,7 +1777,9 @@ mod tests {
   use tempfile::tempdir;
   use zei::serialization::ZeiFromToBytes;
   use zei::setup::PublicParams;
-  use zei::xfr::asset_record::{build_blind_asset_record, open_asset_record, AssetRecordType};
+  use zei::xfr::asset_record::{
+    build_blind_asset_record, open_blind_asset_record, AssetRecordType,
+  };
   use zei::xfr::sig::{XfrKeyPair, XfrPublicKey};
   use zei::xfr::structs::AssetRecord;
 
@@ -2465,7 +2469,7 @@ mod tests {
     let mut transfer =
       TransferAsset::new(TransferAssetBody::new(ledger.get_prng(),
                              vec![TxoRef::Absolute(txo_sid)],
-                             &[open_asset_record(&bar, &key_pair.get_sk_ref()).unwrap()],
+                             &[open_blind_asset_record(&bar, &key_pair.get_sk_ref()).unwrap()],
                              &[ar]).unwrap(), TransferType::Standard).unwrap();
 
     let mut second_transfer = transfer.clone();
@@ -2733,8 +2737,8 @@ mod tests {
 
     let mut transfer = TransferAsset::new(TransferAssetBody::new(ledger.get_prng(),
                              vec![TxoRef::Absolute(fiat_sid), TxoRef::Absolute(debt_sid)],
-                             &[open_asset_record(&fiat_bar, &lender_key_pair.get_sk_ref()).unwrap(),
-                             open_asset_record(&debt_bar, &borrower_key_pair.get_sk_ref()).unwrap()],
+                             &[open_blind_asset_record(&fiat_bar, &lender_key_pair.get_sk_ref()).unwrap(),
+                             open_blind_asset_record(&debt_bar, &borrower_key_pair.get_sk_ref()).unwrap()],
                                &[fiat_transfer_record, loan_transfer_record]).unwrap(), TransferType::Standard).unwrap();
     transfer.sign(&lender_key_pair);
     transfer.sign(&borrower_key_pair);
@@ -2765,8 +2769,8 @@ mod tests {
 
     let transfer_body = TransferAssetBody::new(ledger.get_prng(),
                              vec![TxoRef::Absolute(debt_sid), TxoRef::Absolute(fiat_sid)],
-                             &[open_asset_record(&debt_bar, &lender_key_pair.get_sk_ref()).unwrap(),
-                               open_asset_record(&fiat_bar, &borrower_key_pair.get_sk_ref()).unwrap()],
+                             &[open_blind_asset_record(&debt_bar, &lender_key_pair.get_sk_ref()).unwrap(),
+                               open_blind_asset_record(&fiat_bar, &borrower_key_pair.get_sk_ref()).unwrap()],
                                &[payment_record, burned_debt_record, returned_debt_record, returned_fiat_record]).unwrap();
 
     tx.operations

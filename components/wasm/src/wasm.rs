@@ -28,12 +28,16 @@ use zei::api::anon_creds::{
   ac_verify, ACIssuerPublicKey, ACIssuerSecretKey, ACRevealSig, ACSignature, ACUserPublicKey,
   ACUserSecretKey, Credential,
 };
-use zei::basic_crypto::elgamal::{elgamal_keygen, ElGamalPublicKey};
+use zei::basic_crypto::elgamal::{elgamal_key_gen, ElGamalEncKey};
 use zei::serialization::ZeiFromToBytes;
 use zei::setup::PublicParams;
-use zei::xfr::asset_record::{build_blind_asset_record, open_asset_record, AssetRecordType};
+use zei::xfr::asset_record::{
+  build_blind_asset_record, open_blind_asset_record as open_bar, AssetRecordType,
+};
 use zei::xfr::sig::{XfrKeyPair, XfrPublicKey};
-use zei::xfr::structs::{AssetIssuerPubKeys, AssetRecord, BlindAssetRecord, OpenAssetRecord};
+use zei::xfr::structs::{
+  AssetRecordTemplate, AssetTracerEncKeys, BlindAssetRecord, OpenAssetRecord, OwnerMemo,
+};
 
 /////////// TRANSACTION BUILDING ////////////////
 
@@ -160,17 +164,19 @@ pub fn create_blind_asset_record(amount: u64,
   let code = AssetTypeCode::new_from_base64(&code).map_err(|_e| {
       JsValue::from_str("Could not deserialize asset token code")})?;
   let mut small_rng = ChaChaRng::from_entropy();
+  let ar_type = AssetRecordType::from_booleans(conf_amount, conf_type);
+  let template = AssetRecordTemplate::with_no_asset_tracking(amount, code.val, ar_type, *pk);
   Ok(serde_json::to_string(&build_blind_asset_record(&mut small_rng,
                                                      &params.pc_gens,
-                                                     &AssetRecord::new(amount, code.val, *pk).unwrap(),
-                                                     AssetRecordType::from_booleans(conf_amount, conf_type),
-                                                     &None)).unwrap())
+                                                     &template,
+                                                     None)).unwrap())
 }
 
 #[wasm_bindgen]
 /// Decode (open) a blind asset record expressed as a JSON string using the given key pair.
 /// If successful returns a JSON encoding of the serialized open asset record.
-/// @param {string} blind_asset_record - String representating the blind asset record.
+/// @param {string} blind_asset_record - String representing the blind asset record.
+/// @param {string} memo - String representing the blind asset record's owner's memo
 /// @param {XfrKeyPair} key - Key pair of the asset record owner.
 ///
 /// TODO Add advice for resolving the errors to the error messages when possible
@@ -179,12 +185,16 @@ pub fn create_blind_asset_record(amount: u64,
 /// @see {@link WasmTransferOperationBuilder#add_input) for instructions on how to construct transfers with opened asset
 /// records.
 pub fn open_blind_asset_record(blind_asset_record: String,
+                               memo: String,
                                key: &XfrKeyPair)
                                -> Result<String, JsValue> {
   let blind_asset_record = serde_json::from_str::<BlindAssetRecord>(&blind_asset_record).map_err(|_e| {
                              JsValue::from_str("Could not deserialize blind asset record")
                            })?;
-  let open_asset_record = open_asset_record(&blind_asset_record, key.get_sk_ref()).map_err(|_e| JsValue::from_str("Could not open asset record"))?;
+  let memo = serde_json::from_str::<Option<OwnerMemo>>(&memo).map_err(|_e| {
+    JsValue::from_str("Could not deserialize blind asset record")
+  })?;
+  let open_asset_record = open_bar(&blind_asset_record, &memo, key.get_sk_ref()).map_err(|_e| JsValue::from_str("Could not open asset record"))?;
   Ok(serde_json::to_string(&open_asset_record).unwrap())
 }
 
@@ -238,7 +248,9 @@ impl WasmTransactionBuilder {
                                elgamal_pub_key: String,
                                code: String,
                                seq_num: u64,
-                               amount: u64)
+                               amount: u64,
+                               conf_amount: bool,
+                               conf_asset_type: bool)
                                -> Result<WasmTransactionBuilder, JsValue> {
     let asset_token = AssetTypeCode::new_from_base64(&code).map_err(|_e| {
       JsValue::from_str("Could not deserialize asset token code")})?;
@@ -249,18 +261,20 @@ impl WasmTransactionBuilder {
     if elgamal_pub_key.is_empty() {
       issuer_keys = None
     } else {
-      let pk = serde_json::from_str::<ElGamalPublicKey<RistrettoPoint>>(&elgamal_pub_key).map_err(|_e| JsValue::from_str("could not deserialize elgamal key"))?;
+      let pk = serde_json::from_str::<ElGamalEncKey<RistrettoPoint>>(&elgamal_pub_key).map_err(|_e| JsValue::from_str("could not deserialize elgamal key"))?;
       let mut small_rng = ChaChaRng::from_entropy();
       let (_, id_reveal_pub_key) = ac_confidential_gen_encryption_keys(&mut small_rng);
-      issuer_keys = Some(AssetIssuerPubKeys { eg_ristretto_pub_key: pk,
-                                              eg_blsg1_pub_key: id_reveal_pub_key });
+      issuer_keys = Some(AssetTracerEncKeys { record_data_enc_key: pk,
+                                              attrs_enc_key: id_reveal_pub_key });
     }
 
+    let confidentiality_flags = AssetRecordType::from_booleans(conf_amount, conf_asset_type);
     Ok(WasmTransactionBuilder { transaction_builder: Serialized::new(&*txn_builder.add_basic_issue_asset(&key_pair,
                                             &issuer_keys,
                                             &asset_token,
                                             seq_num,
-                                            amount).map_err(|_e| JsValue::from_str("could not build transaction"))?)})
+                                            amount, confidentiality_flags
+    ).map_err(|_e| JsValue::from_str("could not build transaction"))?)})
   }
 
   /// Wraps around TransactionBuilder to add an asset issuance operation to a transaction builder instance.
@@ -367,17 +381,24 @@ impl WasmTransferOperationBuilder {
   /// @param {BigInt} amount - amount to transfer to the recipient
   /// @param {XfrPublicKey} recipient - public key of the recipient
   /// @param code {string} - String representaiton of the asset token code
+  /// @param conf_amount {bool} - Indicates whether output's amount is confidential
+  /// @param conf_type {bool} - Indicates whether output's asset type is confidential
   pub fn add_output(&mut self,
                     amount: u64,
                     recipient: &XfrPublicKey,
-                    code: String)
+                    code: String,
+                    conf_amount: bool,
+                    conf_type: bool)
                     -> Result<WasmTransferOperationBuilder, JsValue> {
     let code = AssetTypeCode::new_from_base64(&code).map_err(|_e| {
       JsValue::from_str("Could not deserialize asset token code")})?;
 
+    let asset_record_type = AssetRecordType::from_booleans(conf_amount, conf_type);
+    let template =
+      AssetRecordTemplate::with_no_asset_tracking(amount, code.val, asset_record_type, *recipient);
     let new_builder = Serialized::new(&*self.op_builder
                                             .deserialize()
-                                            .add_output(amount, recipient, code)
+                                            .add_output(&template)
                                             .map_err(|e| JsValue::from_str(&format!("{}", e)))?);
     Ok(WasmTransferOperationBuilder { op_builder: new_builder })
   }
@@ -479,7 +500,7 @@ pub fn keypair_from_str(str: String) -> XfrKeyPair {
 pub fn generate_elgamal_keys() -> String {
   let mut small_rng = rand::thread_rng();
   let pc_gens = PedersenGens::default();
-  serde_json::to_string(&elgamal_keygen::<_, Scalar, RistrettoPoint>(&mut small_rng, &pc_gens.B)).unwrap()
+  serde_json::to_string(&elgamal_key_gen::<_, Scalar, RistrettoPoint>(&mut small_rng, &pc_gens.B)).unwrap()
 }
 
 #[wasm_bindgen]
@@ -714,8 +735,8 @@ impl Issuer {
     prng = ChaChaRng::from_entropy();
     let user: User = user_jsvalue.into_serde().unwrap();
 
-    let attrs = [attribute.to_le_bytes()];
-    let sig = ac_sign(&mut prng, &self.secret_key, &user.public_key, &attrs);
+    let attrs = [(attribute & 0xFFFFFFFF) as u32, (attribute >> 32) as u32];
+    let sig = ac_sign(&mut prng, &self.secret_key, &user.public_key, &attrs).unwrap();
 
     JsValue::from_serde(&sig).unwrap()
   }
@@ -760,11 +781,11 @@ impl User {
     let sig: ACSignature = sig.into_serde().unwrap();
     let mut prng = ChaChaRng::from_entropy();
 
-    let attrs = [attribute.to_le_bytes()];
-    let bitmap = [reveal_attribute];
+    let attrs = [(attribute & 0xFFFFFFFF) as u32, (attribute >> 32) as u32];
+    let bitmap = [reveal_attribute, reveal_attribute];
     let credential = Credential { signature: sig,
                                   attributes: attrs.to_vec(),
-                                  issuer_pk: issuer.public_key };
+                                  issuer_pub_key: issuer.public_key };
     let proof = ac_reveal(&mut prng, &self.secret_key, &credential, &bitmap).unwrap();
 
     JsValue::from_serde(&proof).unwrap()
@@ -818,9 +839,10 @@ impl Prover {
 
     // 2. Prove that the attribute is true
     //    E.g. verify the lower bound of the credit score
-    let _bitmap = [reveal_attribute];
+    let _bitmap = [reveal_attribute, reveal_attribute];
     let issuer: Issuer = issuer_jsvalue.into_serde().unwrap();
-    let attrs = [Some(attribute.to_le_bytes())];
+    let attrs = [Some((attribute & 0xFFFFFFFF) as u32),
+                 Some((attribute >> 32) as u32)];
     let proof: ACRevealSig = proof_jsvalue.into_serde().unwrap();
     ac_verify(&issuer.public_key,
               &attrs,

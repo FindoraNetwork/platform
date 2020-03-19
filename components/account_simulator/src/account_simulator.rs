@@ -26,9 +26,9 @@ use subprocess::Popen;
 use subprocess::PopenConfig;
 use zei::serialization::ZeiFromToBytes;
 use zei::setup::PublicParams;
-use zei::xfr::asset_record::{build_blind_asset_record, open_asset_record, AssetRecordType};
+use zei::xfr::asset_record::{build_blind_asset_record, open_blind_asset_record, AssetRecordType};
 use zei::xfr::sig::XfrKeyPair;
-use zei::xfr::structs::{AssetRecord, OpenAssetRecord};
+use zei::xfr::structs::{AssetRecord, AssetRecordTemplate, OpenAssetRecord};
 
 #[derive(Clone, Debug, Eq, PartialEq, Hash)]
 pub struct UserName(pub String);
@@ -460,9 +460,10 @@ impl InterpretAccounts<PlatformError> for LedgerAccounts {
 
         let mut tx = Transaction::default();
 
-        let ar = AssetRecord::new(amt, code.val, *pubkey).unwrap();
+        let ar = AssetRecordTemplate::with_no_asset_tracking(amt, code.val, art, *pubkey);
         let params = PublicParams::new();
-        let ba = build_blind_asset_record(self.ledger.get_prng(), &params.pc_gens, &ar, art, &None);
+        let (ba, _, _memo) =
+          build_blind_asset_record(self.ledger.get_prng(), &params.pc_gens, &ar, None);
 
         let asset_issuance_body = IssueAssetBody::new(&code, new_seq_num, &[TxOutput(ba)]).unwrap();
 
@@ -516,7 +517,8 @@ impl InterpretAccounts<PlatformError> for LedgerAccounts {
         while total_sum < amt && !avail.is_empty() {
           let sid = avail.pop_front().unwrap();
           let blind_rec = &(self.ledger.get_utxo(sid).unwrap().0).0;
-          let open_rec = open_asset_record(&blind_rec, &src_priv).unwrap();
+          let memo = None; // TODO (fernando) where to get memo ?
+          let open_rec = open_blind_asset_record(&blind_rec, &memo, &src_priv).unwrap();
           dbg!(sid, open_rec.get_amount(), open_rec.get_asset_type());
           if *open_rec.get_asset_type() != unit_code.val {
             to_skip.push(sid);
@@ -536,22 +538,37 @@ impl InterpretAccounts<PlatformError> for LedgerAccounts {
         let mut src_outputs: Vec<AssetRecord> = Vec::new();
         let mut dst_outputs: Vec<AssetRecord> = Vec::new();
         let mut all_outputs: Vec<AssetRecord> = Vec::new();
-
         {
           // Simple output to dst
-          let ar = AssetRecord::new(amt, unit_code.val, *dst_pub).unwrap();
+          let template =
+            AssetRecordTemplate::with_no_asset_tracking(amt, unit_code.val, art, *dst_pub);
+          let ar = AssetRecord::from_template_no_identity_tracking(self.ledger.get_prng(),
+                                                                   &template).unwrap();
           dst_outputs.push(ar);
 
-          let ar = AssetRecord::new(amt, unit_code.val, *dst_pub).unwrap();
+          let template =
+            AssetRecordTemplate::with_no_asset_tracking(amt, unit_code.val, art, *dst_pub);
+          let ar = AssetRecord::from_template_no_identity_tracking(self.ledger.get_prng(),
+                                                                   &template).unwrap();
           all_outputs.push(ar);
         }
 
         if total_sum > amt {
           // Extras left over go back to src
-          let ar = AssetRecord::new(total_sum - amt, unit_code.val, *src_pub).unwrap();
+          let template = AssetRecordTemplate::with_no_asset_tracking(total_sum - amt,
+                                                                     unit_code.val,
+                                                                     art,
+                                                                     *src_pub);
+          let ar = AssetRecord::from_template_no_identity_tracking(self.ledger.get_prng(),
+                                                                   &template).unwrap();
           src_outputs.push(ar);
 
-          let ar = AssetRecord::new(total_sum - amt, unit_code.val, *src_pub).unwrap();
+          let template = AssetRecordTemplate::with_no_asset_tracking(total_sum - amt,
+                                                                     unit_code.val,
+                                                                     art,
+                                                                     *src_pub);
+          let ar = AssetRecord::from_template_no_identity_tracking(self.ledger.get_prng(),
+                                                                   &template).unwrap();
           all_outputs.push(ar);
         }
 
@@ -716,13 +733,10 @@ impl InterpretAccounts<PlatformError> for OneBigTxnAccounts {
              .get_mut(unit)
              .unwrap() += amt;
 
-        let ar = AssetRecord::new(amt, code.val, *pubkey).unwrap();
+        let ar = AssetRecordTemplate::with_no_asset_tracking(amt, code.val, art, *pubkey);
         let params = PublicParams::new();
-        let ba = build_blind_asset_record(self.base_ledger.get_prng(),
-                                          &params.pc_gens,
-                                          &ar,
-                                          art,
-                                          &None);
+        let (ba, _, _) =
+          build_blind_asset_record(self.base_ledger.get_prng(), &params.pc_gens, &ar, None);
 
         let asset_issuance_body = IssueAssetBody::new(&code, new_seq_num, &[TxOutput(ba)]).unwrap();
 
@@ -778,7 +792,8 @@ impl InterpretAccounts<PlatformError> for OneBigTxnAccounts {
         while total_sum < amt && !avail.is_empty() {
           let sid = avail.pop_front().unwrap();
           let blind_rec = &(self.txos.get(sid).unwrap().0);
-          let open_rec = open_asset_record(&blind_rec, &src_priv).unwrap();
+          let memo = None; // TODO (fernando) how to get the rigth memo
+          let open_rec = open_blind_asset_record(&blind_rec, &memo, &src_priv).unwrap();
           dbg!(sid, open_rec.get_amount(), open_rec.get_asset_type());
           if *open_rec.get_asset_type() != unit_code.val {
             to_skip.push(sid);
@@ -801,19 +816,33 @@ impl InterpretAccounts<PlatformError> for OneBigTxnAccounts {
 
         {
           // Simple output to dst
-          let ar = AssetRecord::new(amt, unit_code.val, *dst_pub).unwrap();
+          let ar = AssetRecordTemplate::with_no_asset_tracking(amt, unit_code.val, art, *dst_pub);
+          let ar = AssetRecord::from_template_no_identity_tracking(self.base_ledger.get_prng(),
+                                                                   &ar).unwrap();
           dst_outputs.push(ar);
 
-          let ar = AssetRecord::new(amt, unit_code.val, *dst_pub).unwrap();
+          let ar = AssetRecordTemplate::with_no_asset_tracking(amt, unit_code.val, art, *dst_pub);
+          let ar = AssetRecord::from_template_no_identity_tracking(self.base_ledger.get_prng(),
+                                                                   &ar).unwrap();
           all_outputs.push(ar);
         }
 
         if total_sum > amt {
           // Extras left over go back to src
-          let ar = AssetRecord::new(total_sum - amt, unit_code.val, *src_pub).unwrap();
+          let ar = AssetRecordTemplate::with_no_asset_tracking(total_sum - amt,
+                                                               unit_code.val,
+                                                               art,
+                                                               *src_pub);
+          let ar = AssetRecord::from_template_no_identity_tracking(self.base_ledger.get_prng(),
+                                                                   &ar).unwrap();
           src_outputs.push(ar);
 
-          let ar = AssetRecord::new(total_sum - amt, unit_code.val, *src_pub).unwrap();
+          let ar = AssetRecordTemplate::with_no_asset_tracking(total_sum - amt,
+                                                               unit_code.val,
+                                                               art,
+                                                               *src_pub);
+          let ar = AssetRecord::from_template_no_identity_tracking(self.base_ledger.get_prng(),
+                                                                   &ar).unwrap();
           all_outputs.push(ar);
         }
 
@@ -1053,9 +1082,9 @@ impl InterpretAccounts<PlatformError> for LedgerStandaloneAccounts {
 
         let mut tx = Transaction::default();
 
-        let ar = AssetRecord::new(amt, code.val, *pubkey).unwrap();
+        let ar = AssetRecordTemplate::with_no_asset_tracking(amt, code.val, art, *pubkey);
         let params = PublicParams::new();
-        let ba = build_blind_asset_record(&mut self.prng, &params.pc_gens, &ar, art, &None);
+        let (ba, _, _) = build_blind_asset_record(&mut self.prng, &params.pc_gens, &ar, None);
 
         let asset_issuance_body = IssueAssetBody::new(&code, new_seq_num, &[TxOutput(ba)]).unwrap();
 
@@ -1146,7 +1175,8 @@ impl InterpretAccounts<PlatformError> for LedgerStandaloneAccounts {
             let port = format!("{}",self.query_port);
             reqwest::get(&format!("http://{}:{}/utxo_sid/{}",host,port,sid.0)).unwrap().error_for_status().unwrap().text().unwrap()
           }).unwrap().0;
-          let open_rec = open_asset_record(&blind_rec, &src_priv).unwrap();
+          let memo = None; // TODO (fernando) get right memo
+          let open_rec = open_blind_asset_record(&blind_rec, &memo, &src_priv).unwrap();
           dbg!(sid, open_rec.get_amount(), open_rec.get_asset_type());
           if *open_rec.get_asset_type() != unit_code.val {
             to_skip.push(sid);
@@ -1169,19 +1199,29 @@ impl InterpretAccounts<PlatformError> for LedgerStandaloneAccounts {
 
         {
           // Simple output to dst
-          let ar = AssetRecord::new(amt, unit_code.val, *dst_pub).unwrap();
+          let ar = AssetRecordTemplate::with_no_asset_tracking(amt, unit_code.val, art, *dst_pub);
+          let ar = AssetRecord::from_template_no_identity_tracking(&mut self.prng, &ar).unwrap();
           dst_outputs.push(ar);
 
-          let ar = AssetRecord::new(amt, unit_code.val, *dst_pub).unwrap();
+          let ar = AssetRecordTemplate::with_no_asset_tracking(amt, unit_code.val, art, *dst_pub);
+          let ar = AssetRecord::from_template_no_identity_tracking(&mut self.prng, &ar).unwrap();
           all_outputs.push(ar);
         }
 
         if total_sum > amt {
           // Extras left over go back to src
-          let ar = AssetRecord::new(total_sum - amt, unit_code.val, *src_pub).unwrap();
+          let ar = AssetRecordTemplate::with_no_asset_tracking(total_sum - amt,
+                                                               unit_code.val,
+                                                               art,
+                                                               *src_pub);
+          let ar = AssetRecord::from_template_no_identity_tracking(&mut self.prng, &ar).unwrap();
           src_outputs.push(ar);
 
-          let ar = AssetRecord::new(total_sum - amt, unit_code.val, *src_pub).unwrap();
+          let ar = AssetRecordTemplate::with_no_asset_tracking(total_sum - amt,
+                                                               unit_code.val,
+                                                               art,
+                                                               *src_pub);
+          let ar = AssetRecord::from_template_no_identity_tracking(&mut self.prng, &ar).unwrap();
           all_outputs.push(ar);
         }
 

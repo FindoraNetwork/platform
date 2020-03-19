@@ -21,9 +21,13 @@ use zei::api::anon_creds::{
 };
 use zei::serialization::ZeiFromToBytes;
 use zei::setup::PublicParams;
-use zei::xfr::asset_record::{build_blind_asset_record, open_asset_record, AssetRecordType};
+use zei::xfr::asset_record::AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType;
+use zei::xfr::asset_record::{build_blind_asset_record, open_blind_asset_record, AssetRecordType};
 use zei::xfr::sig::{XfrKeyPair, XfrPublicKey};
-use zei::xfr::structs::{AssetRecord, BlindAssetRecord, OpenAssetRecord};
+use zei::xfr::structs::{
+  AssetRecordTemplate, AssetTracerMemo, BlindAssetRecord, OpenAssetRecord, OwnerMemo,
+};
+
 extern crate exitcode;
 
 // TODO (Keyao): Rename txn_builder_cli to txn_cli?
@@ -824,19 +828,22 @@ fn issue_and_transfer_asset(issuer_key_pair: &XfrKeyPair,
                             confidential_asset: bool,
                             txn_file: &str)
                             -> Result<TransactionBuilder, PlatformError> {
-  let blind_asset_record = get_blind_asset_record(issuer_key_pair.get_pk(),
-                                                  amount,
-                                                  token_code,
-                                                  confidential_amount,
-                                                  confidential_asset)?;
+  let record_type = AssetRecordType::from_booleans(confidential_amount, confidential_asset);
+  let (blind_asset_record, _tracing_memo, owner_memo) =
+    get_blind_asset_record(issuer_key_pair.get_pk(), amount, token_code, record_type)?;
 
   // Transfer Operation
+  let output_template = AssetRecordTemplate::with_no_asset_tracking(amount,
+                                                                    token_code.val,
+                                                                    record_type,
+                                                                    recipient_key_pair.get_pk());
   let xfr_op =
     TransferOperationBuilder::new().add_input(TxoRef::Relative(0),
-                                              open_asset_record(&blind_asset_record,
+                                              open_blind_asset_record(&blind_asset_record,
+                                                                &owner_memo,
                                                                 issuer_key_pair.get_sk_ref())?,
                                               amount)?
-                                   .add_output(amount, recipient_key_pair.get_pk_ref(), token_code)?
+                                   .add_output(&output_template)?
                                    .balance()?
                                    .create(TransferType::Standard)?
                                    .sign(issuer_key_pair)?
@@ -981,26 +988,17 @@ fn submit_and_get_sids(protocol: &str,
 /// * `token_code`: token code of the asset rercord.
 /// * `confidential_amount`: whether the amount is confidential.
 /// * `confidential_asset`: whether the asset is confidential.
-fn get_blind_asset_record(pub_key: XfrPublicKey,
-                          amount: u64,
-                          token_code: AssetTypeCode,
-                          confidential_amount: bool,
-                          confidential_asset: bool)
-                          -> Result<BlindAssetRecord, PlatformError> {
+fn get_blind_asset_record(
+  pub_key: XfrPublicKey,
+  amount: u64,
+  token_code: AssetTypeCode,
+  asset_record_type: AssetRecordType)
+  -> Result<(BlindAssetRecord, Option<AssetTracerMemo>, Option<OwnerMemo>), PlatformError> {
   let mut prng = ChaChaRng::from_entropy();
   let params = PublicParams::new();
-  let asset_record_type = AssetRecordType::from_booleans(confidential_amount, confidential_asset);
-  let asset_record = match AssetRecord::new(amount, token_code.val, pub_key) {
-    Ok(record) => record,
-    Err(error) => {
-      return Err(PlatformError::ZeiError(error));
-    }
-  };
-  Ok(build_blind_asset_record(&mut prng,
-                              &params.pc_gens,
-                              &asset_record,
-                              asset_record_type,
-                              &None))
+  let template =
+    AssetRecordTemplate::with_no_asset_tracking(amount, token_code.val, asset_record_type, pub_key);
+  Ok(build_blind_asset_record(&mut prng, &params.pc_gens, &template, None))
 }
 
 /// Merges two asset records.
@@ -1014,25 +1012,33 @@ fn get_blind_asset_record(pub_key: XfrPublicKey,
 fn merge_records(key_pair: &XfrKeyPair,
                  sid1: TxoRef,
                  sid2: TxoRef,
-                 blind_asset_record1: BlindAssetRecord,
-                 blind_asset_record2: BlindAssetRecord,
+                 blind_asset_record1: (BlindAssetRecord, Option<OwnerMemo>),
+                 blind_asset_record2: (BlindAssetRecord, Option<OwnerMemo>),
                  token_code: AssetTypeCode)
                  -> Result<TransactionBuilder, PlatformError> {
-  let oar1 = open_asset_record(&blind_asset_record1, key_pair.get_sk_ref())?;
-  let oar2 = open_asset_record(&blind_asset_record2, key_pair.get_sk_ref())?;
+  let oar1 = open_blind_asset_record(&blind_asset_record1.0,
+                                     &blind_asset_record1.1,
+                                     key_pair.get_sk_ref())?;
+  let oar2 = open_blind_asset_record(&blind_asset_record2.0,
+                                     &blind_asset_record2.1,
+                                     key_pair.get_sk_ref())?;
+  if oar1.get_record_type() != oar2.get_record_type() {
+    return Err(PlatformError::InputsError);
+  }
   let amount1 = *oar1.get_amount();
   let amount2 = *oar2.get_amount();
 
   // Transfer Operation
-  let xfr_op =
-    TransferOperationBuilder::new().add_input(sid1, oar1, amount1)?
-                                   .add_input(sid2, oar2, amount2)?
-                                   .add_output(amount1 + amount2,
-                                               key_pair.get_pk_ref(),
-                                               token_code)?
-                                   .create(TransferType::Standard)?
-                                   .sign(key_pair)?
-                                   .transaction()?;
+  let output_template = AssetRecordTemplate::with_no_asset_tracking(amount1 + amount2,
+                                                                    token_code.val,
+                                                                    oar1.get_record_type(),
+                                                                    key_pair.get_pk());
+  let xfr_op = TransferOperationBuilder::new().add_input(sid1, oar1, amount1)?
+                                              .add_input(sid2, oar2, amount2)?
+                                              .add_output(&output_template)?
+                                              .create(TransferType::Standard)?
+                                              .sign(key_pair)?
+                                              .transaction()?;
 
   // Merge records
   let mut txn_builder = TransactionBuilder::default();
@@ -1115,8 +1121,8 @@ fn load_funds(issuer_id: u64,
     let txn_builder = merge_records(recipient_key_pair,
                                     TxoRef::Absolute(sid_pre),
                                     TxoRef::Absolute(sid_new),
-                                    blind_asset_record_pre,
-                                    blind_asset_record_new,
+                                    (blind_asset_record_pre, None), // no associated owner memo with blind asset record
+                                    (blind_asset_record_new, None), // no associated owner memo with blind asset record
                                     token_code)?;
 
     submit_and_get_sids(protocol, host, txn_builder)?[0]
@@ -1137,10 +1143,12 @@ fn load_funds(issuer_id: u64,
 /// * `host`: either `testnet.findora.org` or `localhost`.
 /// * `sid`: UTXO SID.
 /// * `key_pair`: key pair of the asset record.
+/// * `owner_memo`: Memo associated with utxo
 fn get_open_asset_record(protocol: &str,
                          host: &str,
                          sid: TxoSID,
-                         key_pair: &XfrKeyPair)
+                         key_pair: &XfrKeyPair,
+                         owner_memo: &Option<OwnerMemo>)
                          -> Result<OpenAssetRecord, PlatformError> {
   let res = query(protocol,
                   host,
@@ -1151,7 +1159,7 @@ fn get_open_asset_record(protocol: &str,
     serde_json::from_str::<BlindAssetRecord>(&res).or_else(|_| {
                                                     Err(PlatformError::DeserializationError)
                                                   })?;
-  open_asset_record(&blind_asset_record, key_pair.get_sk_ref()).or_else(|error| {
+  open_blind_asset_record(&blind_asset_record, owner_memo,key_pair.get_sk_ref()).or_else(|error| {
                                                                  Err(PlatformError::ZeiError(error))
                                                                })
 }
@@ -1173,7 +1181,7 @@ enum RelationType {
 /// * `relation_type`: relation between the credenital and required values, possible values defined in the enum `RelationType`.
 fn prove(reveal_sig: &ACRevealSig,
          ac_issuer_pk: &ACIssuerPublicKey,
-         value: u64,
+         value: u32,
          requirement: u64,
          relation_type: RelationType)
          -> Result<(), PlatformError> {
@@ -1190,7 +1198,7 @@ fn prove(reveal_sig: &ACRevealSig,
     //    Case 2. "AtLeast" requirement
     //    E.g. prove that the credit score is at least the required value
     RelationType::AtLeast => {
-      if value < requirement {
+      if (value as u64) < requirement {
         println!("Value should be at least: {}.", requirement);
         return Err(PlatformError::InputsError);
       }
@@ -1199,7 +1207,7 @@ fn prove(reveal_sig: &ACRevealSig,
 
   // 2. Prove that the attribute is true
   //    E.g. verify the lower bound of the credit score
-  let attrs = [Some(value.to_le_bytes())];
+  let attrs = [Some(value)];
   ac_verify(ac_issuer_pk,
             &attrs,
             &reveal_sig.sig_commitment,
@@ -1272,7 +1280,7 @@ fn fulfill_loan(loan_id: u64,
                                                          Err(PlatformError::DeserializationError)
                                                        })?,
             &credential_issuer_public_key,
-            credential.value,
+            credential.value as u32,
             requirement,
             RelationType::AtLeast)
     {
@@ -1286,15 +1294,15 @@ fn fulfill_loan(loan_id: u64,
     let credential_issuer_key_pair = data.get_credential_issuer_key_pair(credential_issuer_id)?;
     let mut prng: ChaChaRng = ChaChaRng::from_entropy();
     let (user_pk, user_sk) = ac_keygen_user::<_>(&mut prng, &credential_issuer_key_pair.0.clone());
-    let value = credential.value;
-    let attributes = [value.to_le_bytes()].to_vec();
+    let value = credential.value as u32;
+    let attributes = [value].to_vec();
     let signature = ac_sign(&mut prng,
                             &credential_issuer_key_pair.1,
                             &user_pk,
-                            &attributes);
+                            &attributes).unwrap();
     let zei_credential = ZeiCredential { signature,
                                          attributes,
-                                         issuer_pk: credential_issuer_key_pair.0.clone() };
+                                         issuer_pub_key: credential_issuer_key_pair.0.clone() };
 
     let reveal_sig =
       ac_reveal(&mut prng, &user_sk, &zei_credential, &[true]).or_else(|error| {
@@ -1344,7 +1352,9 @@ fn fulfill_loan(loan_id: u64,
                                              txn_file)?;
   let fiat_sid = submit_and_get_sids(protocol, host, txn_builder)?[0];
   println!("Fiat sid: {}", fiat_sid.0);
-  let fiat_open_asset_record = get_open_asset_record(protocol, host, fiat_sid, lender_key_pair)?;
+  let owner_memo = None; // no owner memo
+  let fiat_open_asset_record =
+    get_open_asset_record(protocol, host, fiat_sid, lender_key_pair, &owner_memo)?;
 
   // Define debt asset
   let mut txn_builder = TransactionBuilder::default();
@@ -1381,22 +1391,33 @@ fn fulfill_loan(loan_id: u64,
                                              txn_file)?;
   let debt_sid = submit_and_get_sids(protocol, host, txn_builder)?[0];
   println!("Fiat sid: {}", debt_sid.0);
-  let debt_open_asset_record = get_open_asset_record(protocol, host, debt_sid, borrower_key_pair)?;
+  let owner_memo = None;
+  let debt_open_asset_record =
+    get_open_asset_record(protocol, host, debt_sid, borrower_key_pair, &owner_memo)?;
 
   // Initiate loan
-  let xfr_op =
-    TransferOperationBuilder::new().add_input(TxoRef::Absolute(fiat_sid),
-                                              fiat_open_asset_record,
-                                              amount)?
-                                   .add_input(TxoRef::Absolute(debt_sid),
-                                              debt_open_asset_record,
-                                              amount)?
-                                   .add_output(amount, lender_key_pair.get_pk_ref(), debt_code)?
-                                   .add_output(amount, borrower_key_pair.get_pk_ref(), fiat_code)?
-                                   .create(TransferType::Standard)?
-                                   .sign(lender_key_pair)?
-                                   .sign(borrower_key_pair)?
-                                   .transaction()?;
+  let lender_template =
+    AssetRecordTemplate::with_no_asset_tracking(amount,
+                                                debt_code.val,
+                                                NonConfidentialAmount_NonConfidentialAssetType,
+                                                lender_key_pair.get_pk());
+  let borrower_template =
+    AssetRecordTemplate::with_no_asset_tracking(amount,
+                                                fiat_code.val,
+                                                NonConfidentialAmount_NonConfidentialAssetType,
+                                                borrower_key_pair.get_pk());
+  let xfr_op = TransferOperationBuilder::new().add_input(TxoRef::Absolute(fiat_sid),
+                                                         fiat_open_asset_record,
+                                                         amount)?
+                                              .add_input(TxoRef::Absolute(debt_sid),
+                                                         debt_open_asset_record,
+                                                         amount)?
+                                              .add_output(&lender_template)?
+                                              .add_output(&borrower_template)?
+                                              .create(TransferType::Standard)?
+                                              .sign(lender_key_pair)?
+                                              .sign(borrower_key_pair)?
+                                              .transaction()?;
   let mut txn_builder = TransactionBuilder::default();
   txn_builder.add_operation(xfr_op).transaction();
 
@@ -1426,8 +1447,8 @@ fn fulfill_loan(loan_id: u64,
     let txn_builder = merge_records(borrower_key_pair,
                                     TxoRef::Absolute(sid_pre),
                                     TxoRef::Absolute(sids_new[1]),
-                                    blind_asset_record_pre,
-                                    blind_asset_record_new,
+                                    (blind_asset_record_pre, None),
+                                    (blind_asset_record_new, None),
                                     fiat_code)?;
     submit_and_get_sids(protocol, host, txn_builder)?[0]
   } else {
@@ -1519,8 +1540,10 @@ fn pay_loan(loan_id: u64, amount: u64, protocol: &str, host: &str) -> Result<(),
     println!("Missing debt utxo in the loan record. Try --fulfill_loan.");
     return Err(PlatformError::InputsError);
   };
-  let fiat_open_asset_record = get_open_asset_record(protocol, host, fiat_sid, lender_key_pair)?;
-  let debt_open_asset_record = get_open_asset_record(protocol, host, debt_sid, borrower_key_pair)?;
+  let fiat_open_asset_record =
+    get_open_asset_record(protocol, host, fiat_sid, lender_key_pair, &None)?;
+  let debt_open_asset_record =
+    get_open_asset_record(protocol, host, debt_sid, borrower_key_pair, &None)?;
 
   // Get fiat and debt codes
   let fiat_code = if let Some(code) = data.clone().fiat_code {
@@ -1539,24 +1562,36 @@ fn pay_loan(loan_id: u64, amount: u64, protocol: &str, host: &str) -> Result<(),
   println!("Fiat code: {}", serde_json::to_string(&fiat_code.val)?);
   println!("Debt code: {}", serde_json::to_string(&debt_code.val)?);
 
+  let spend_template =
+    AssetRecordTemplate::with_no_asset_tracking(amount_to_spend,
+                                                fiat_code.val,
+                                                NonConfidentialAmount_NonConfidentialAssetType,
+                                                lender_key_pair.get_pk());
+  let burn_template =
+    AssetRecordTemplate::with_no_asset_tracking(amount_to_burn,
+                                                debt_code.val,
+                                                NonConfidentialAmount_NonConfidentialAssetType,
+                                                XfrPublicKey::zei_from_bytes(&[0; 32]));
+  let lender_template =
+    AssetRecordTemplate::with_no_asset_tracking(loan.balance - amount_to_burn,
+                                                debt_code.val,
+                                                NonConfidentialAmount_NonConfidentialAssetType,
+                                                lender_key_pair.get_pk());
+  let borrower_template =
+    AssetRecordTemplate::with_no_asset_tracking(borrower.balance - amount_to_spend,
+                                                fiat_code.val,
+                                                NonConfidentialAmount_NonConfidentialAssetType,
+                                                borrower_key_pair.get_pk());
   let op = TransferOperationBuilder::new().add_input(TxoRef::Absolute(debt_sid),
                                                      debt_open_asset_record,
                                                      amount_to_burn)?
                                           .add_input(TxoRef::Absolute(fiat_sid),
                                                      fiat_open_asset_record,
                                                      amount_to_spend)?
-                                          .add_output(amount_to_spend,
-                                                      lender_key_pair.get_pk_ref(),
-                                                      fiat_code)?
-                                          .add_output(amount_to_burn,
-                                                      &XfrPublicKey::zei_from_bytes(&[0; 32]),
-                                                      debt_code)?
-                                          .add_output(loan.balance - amount_to_burn,
-                                                      lender_key_pair.get_pk_ref(),
-                                                      debt_code)?
-                                          .add_output(borrower.balance - amount_to_spend,
-                                                      borrower_key_pair.get_pk_ref(),
-                                                      fiat_code)?
+                                          .add_output(&spend_template)?
+                                          .add_output(&burn_template)?
+                                          .add_output(&lender_template)?
+                                          .add_output(&borrower_template)?
                                           .create(TransferType::DebtSwap)?
                                           .sign(borrower_key_pair)?
                                           .transaction()?;
@@ -2236,11 +2271,13 @@ fn process_asset_issuer_cmd(asset_issuer_matches: &clap::ArgMatches,
         return Err(PlatformError::InputsError);
       };
       let mut txn_builder = TransactionBuilder::default();
-      if let Err(e) = txn_builder.add_basic_issue_asset(&key_pair,
-                                                        &None,
-                                                        &token_code,
-                                                        get_and_update_sequence_number()?,
-                                                        amount)
+      if let Err(e) =
+        txn_builder.add_basic_issue_asset(&key_pair,
+                                          &None,
+                                          &token_code,
+                                          get_and_update_sequence_number()?,
+                                          amount,
+                                          NonConfidentialAmount_NonConfidentialAssetType)
       {
         println!("Failed to add basic issue asset.");
         return Err(e);
@@ -2260,6 +2297,7 @@ fn process_asset_issuer_cmd(asset_issuer_matches: &clap::ArgMatches,
       let (protocol, host) = protocol_host(transfer_asset_matches);
       let mut txo_refs = Vec::new();
       let mut blind_asset_records = Vec::new();
+      let mut owner_memos = Vec::new(); // TODO (fernando) fill this array with valid data
       if let Some(sids_path_arg) = transfer_asset_matches.value_of("sids_path") {
         for sid in load_sids_from_file(sids_path_arg)? {
           txo_refs.push(TxoRef::Absolute(TxoSID(sid)));
@@ -2267,6 +2305,7 @@ fn process_asset_issuer_cmd(asset_issuer_matches: &clap::ArgMatches,
           blind_asset_records.push( serde_json::from_str::<BlindAssetRecord>(&res).or_else(|_| {
                                                             Err(PlatformError::DeserializationError)
                                                           })?);
+          owner_memos.push(None); // TODO (fernando) fill this array with valid data
         }
       } else {
         println!("Sids are required to transfer asset. Use --sids");
@@ -2288,6 +2327,7 @@ fn process_asset_issuer_cmd(asset_issuer_matches: &clap::ArgMatches,
       let mut txo_refs_iter = txo_refs.iter();
       let mut blind_asset_records_iter = blind_asset_records.iter();
       let mut input_amounts_iter = input_amounts.iter();
+      let mut owner_memos_iter = owner_memos.iter();
       while count > 0 {
         let txo_refs_next = if let Some(txo_ref) = txo_refs_iter.next() {
           txo_ref
@@ -2308,8 +2348,14 @@ fn process_asset_issuer_cmd(asset_issuer_matches: &clap::ArgMatches,
           println!("More input amount expected.");
           return Err(PlatformError::InputsError);
         };
-
-        let transfer_from_next = (txo_refs_next, blind_asset_records_next, input_amount_next);
+        let owner_memo = if let Some(memo) = owner_memos_iter.next() {
+          memo
+        } else {
+          println!("More owner memos expected.");
+          return Err(PlatformError::InputsError);
+        };
+        let transfer_from_next =
+          (txo_refs_next, blind_asset_records_next, input_amount_next, owner_memo);
         transfer_from.push(transfer_from_next);
         count -= 1;
       }
@@ -2833,7 +2879,8 @@ fn process_borrower_cmd(borrower_matches: &clap::ArgMatches,
       };
       // Get protocol and host.
       let (protocol, host) = protocol_host(get_asset_record_matches);
-      let asset_record = get_open_asset_record(protocol, host, sid, &key_pair)?;
+      let owner_memo = None; // TODO (fernando) get valid owner memo
+      let asset_record = get_open_asset_record(protocol, host, sid, &key_pair, &owner_memo)?;
       println!("{} owns {} of asset {:?}.",
                borrower_name,
                asset_record.get_amount(),
@@ -3098,15 +3145,18 @@ mod tests {
 
     // Build blind asset records
     let code = AssetTypeCode::gen_random();
-    let bar1 = get_blind_asset_record(key_pair.get_pk(), 1000, code, false, false).unwrap();
-    let bar2 = get_blind_asset_record(key_pair.get_pk(), 500, code, false, false).unwrap();
+    let asset_record_type = NonConfidentialAmount_NonConfidentialAssetType;
+    let (bar1, _, memo1) =
+      get_blind_asset_record(key_pair.get_pk(), 1000, code, asset_record_type).unwrap();
+    let (bar2, _, memo2) =
+      get_blind_asset_record(key_pair.get_pk(), 500, code, asset_record_type).unwrap();
 
     // Merge records
     assert!(merge_records(&key_pair,
                           TxoRef::Absolute(TxoSID(1)),
                           TxoRef::Absolute(TxoSID(2)),
-                          bar1,
-                          bar2,
+                          (bar1, memo1),
+                          (bar2, memo2),
                           code).is_ok());
   }
 
@@ -3116,12 +3166,12 @@ mod tests {
     let (issuer_pk, issuer_sk) = ac_keygen_issuer::<_>(&mut prng, 1);
     let (user_pk, user_sk) = ac_keygen_user::<_>(&mut prng, &issuer_pk.clone());
 
-    let value: u64 = 200;
-    let attributes = [value.to_le_bytes()].to_vec();
-    let signature = ac_sign(&mut prng, &issuer_sk, &user_pk, &attributes);
+    let value = 200u32;
+    let attributes = [value].to_vec();
+    let signature = ac_sign(&mut prng, &issuer_sk, &user_pk, &attributes).unwrap();
     let zei_credential = ZeiCredential { signature,
                                          attributes,
-                                         issuer_pk: issuer_pk.clone() };
+                                         issuer_pub_key: issuer_pk.clone() };
 
     let reveal_sig =
       ac_reveal(&mut prng, &user_sk, &zei_credential, &[true]).or_else(|error| {
