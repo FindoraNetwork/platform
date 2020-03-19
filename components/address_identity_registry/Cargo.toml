@@ -20,10 +20,6 @@ path = "src/bin/issuer.rs"
 name = "verifier"
 path = "src/bin/verifier.rs"
 
-[[bin]]
-name = "mock_ledger"
-path = "src/bin/mock_ledger.rs"
-
 [dependencies]
 air = { path = "../../libs/ads/air" }
 async-std = "1.5.0"

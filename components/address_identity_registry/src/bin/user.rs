@@ -3,7 +3,7 @@
 mod shared;
 
 use ledger::data_model::errors::PlatformError;
-use percent_encoding::{utf8_percent_encode, NON_ALPHANUMERIC};
+use percent_encoding::{AsciiSet, CONTROLS, utf8_percent_encode };
 use rand_chacha::ChaChaRng;
 use rand_core::SeedableRng;
 use serde::{Deserialize, Serialize};
@@ -18,8 +18,9 @@ use zei::api::anon_creds::{ac_commit, ac_keygen_user, ACCommitmentKey, ACPoK, AC
 /// https://url.spec.whatwg.org/#fragment-percent-encode-set
 const FRAGMENT: &AsciiSet = &CONTROLS.add(b' ').add(b'"').add(b'<').add(b'>').add(b'`');
 
-fn urlencode(s: &str) -> String {
-    utf8_percent_encode(s, NON_ALPHANUMERIC).to_string())
+fn urlencode(input: &str) -> String {
+  let iter = utf8_percent_encode(input, FRAGMENT);
+  iter.collect()
 }
 
 const PROTOCOL: &str = "http";
@@ -49,7 +50,7 @@ pub struct InfallibleFailure {
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
   // Setup: At the outset, the User is a client of the Issuer
   // Step 1: Get the issuer_pk for the credential of interest
-  let credname = utf8_percent_encode("passport", NON_ALPHANUMERIC).to_string();
+  let credname = urlencode("passport");
   let resp1 =
     reqwest::get(&format!("http://localhost:3030/issuer_pk/{}", &credname)).await?
                                                                            .json::<PubCreds>()
@@ -103,20 +104,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             .send()
             .await?;
 
-    println!("Awaiting requests from verifier at port {}", 3031);
-  // For the rest of the session, the User process behaves as a server w.r.t. the Verifier
+    // For the rest of the session, the User process behaves as a server w.r.t. the Verifier
 
     let db = models::make_db(prng, user_sk, user_pk, credential, key);
     let api = filters::user(db);
+
+    println!("User: waiting for verifier on 3031");
 
     // View access logs by setting `RUST_LOG=user`.
     let routes = api.with(warp::log("user"));
     // Start up the server...
     warp::serve(routes).run(([127, 0, 0, 1], 3031)).await;
 
-    // Log body
-    // let resp_json = res.json::<TxnHandle>().await?;
-    // println!("Submission response: {}", resp_json);
     Ok(())
   } else {
     Err("Commitment fails")?
@@ -129,17 +128,23 @@ mod filters {
   use super::models::Db;
   use warp::Filter;
 
-  /// The Issuer filters combined.
+  /// The User filters combined.
   pub fn user(db: Db)
                 -> impl Filter<Extract = impl warp::Reply, Error = warp::Rejection> + Clone {
-    (selective_reveal(db))
+    reveal(db.clone()).or(ping(db))
   }
 
-  pub fn selective_reveal(db: Db) -> impl Filter<Extract = impl warp::Reply, Error = warp::Rejection> + Clone {
-    warp::path!("reveal" / String ).and(warp::get())
+  pub fn reveal(db: Db) -> impl Filter<Extract = impl warp::Reply, Error = warp::Rejection> + Clone {
+    warp::path!("reveal" / String ).and(warp::post())
                                    .and(json_body())
                                    .and(with_db(db))
-                                   .and_then(handlers::selective_reveal)
+                                   .and_then(handlers::reveal)
+  }
+
+  pub fn ping(db: Db) -> impl Filter<Extract = impl warp::Reply, Error = warp::Rejection> + Clone {
+    warp::path!("ping").and(warp::get())
+                       .and(with_db(db))
+                       .and_then(handlers::ping)
   }
 
   fn with_db(db: Db) -> impl Filter<Extract = (Db,), Error = std::convert::Infallible> + Clone {
@@ -162,16 +167,19 @@ mod handlers {
   use warp::http::StatusCode;
   use zei::api::anon_creds::{ac_open_commitment};
 
-  /// PUT //selective_reveal/:bitmap
-  pub async fn selective_reveal(credname: String,
-                                bitmap: Bitmap,
-                                db: Db)
-                                -> Result<impl warp::Reply, Infallible> {
+  /// POST //reveal/:credname/:bitmap
+  pub async fn reveal(credname: String,
+                      bitmap: Bitmap,
+                      db: Db)
+                      -> Result<impl warp::Reply, Infallible> {
+    println!("User:reveal credname = {}, bitmap = {:?}", &credname, &bitmap);
+
     let mut global_state = db.lock().await;
     let cred = global_state.cred.clone();
     let user_sk = global_state.user_sk.clone();
     let user_pk = global_state.user_pk.clone();
     let key = global_state.key.clone();
+
 
     if let Ok(pok) = ac_open_commitment::<ChaChaRng, String>(&mut global_state.prng,
                                                              &user_sk,
@@ -180,11 +188,20 @@ mod handlers {
                                                              &bitmap.bits) {
       let address = serde_json::to_string(&user_pk).unwrap();
       let result = AIRAddressAndPoK { addr: address, pok };
+      println!("User: reveal success with result = {:?}", &result);
+
       Ok(warp::reply::json(&result))
     } else {
-      let result = super::InfallibleFailure { msg: String::from("selective_reveal: open commitment failed") };
+      let result = super::InfallibleFailure { msg: String::from("reveal: open commitment failed") };
       Ok(warp::reply::json(&result))
     }
+  }
+
+  /// GET //ping
+  pub async fn ping(db: Db) -> Result<impl warp::Reply, Infallible> {
+    println!("User.ping: call received");
+    let result = super::InfallibleFailure { msg: String::from("PONG") };
+    Ok(warp::reply::json(&result))
   }
 }
 
