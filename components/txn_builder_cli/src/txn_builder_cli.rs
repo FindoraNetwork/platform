@@ -2532,6 +2532,7 @@ fn process_asset_issuer_cmd(asset_issuer_matches: &clap::ArgMatches,
       let mut txo_refs_iter = txo_refs.iter();
       let mut bars_and_memos_iter = bars_and_memos.iter();
       let mut input_amounts_iter = input_amounts.iter();
+      let mut owner_memos_iter = owner_memos.iter();
       while count > 0 {
         let txo_refs_next = if let Some(txo_ref) = txo_refs_iter.next() {
           txo_ref
