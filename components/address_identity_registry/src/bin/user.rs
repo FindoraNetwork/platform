@@ -38,13 +38,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
   println!("Response is {:?}", &resp_text);
   let sig: ACSignature = serde_json::from_str(std::str::from_utf8(resp_text).unwrap()).unwrap();
 
-  let credential: Credential<&[u8]> =
+  let credential =
     Credential { signature: sig.clone(),
                  attributes: attrs.iter().map(|s| s.as_bytes()).collect(),
-                 issuer_pk: resp1.issuer_pk.clone() };
+                 issuer_pub_key: resp1.issuer_pk.clone() };
 
   if let Ok((commitment, _proof, key)) =
-    ac_commit::<ChaChaRng, &[u8]>(&mut prng, &user_sk, &credential, b"random message")
+    ac_commit(&mut prng, &user_sk, &credential, b"random message")
   {
     println!("All good");
     Ok(())

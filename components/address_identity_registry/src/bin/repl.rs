@@ -212,10 +212,10 @@ fn issue_credential(global_state: &mut GlobalState,
                     -> Result<(), String> {
   match (global_state.issuers.get(issuer), global_state.users.get(user)) {
     (Some(issuer_keys), Some(user_keys)) => {
-      let sig = ac_sign::<ChaChaRng, &[u8]>(&mut global_state.prng,
+      let sig = ac_sign(&mut global_state.prng,
                                             &issuer_keys.secret_key,
                                             &user_keys.public_key,
-                                            &attrs);
+                                            &attrs).unwrap();
       println!("Issuer {}: credential issued to {}", issuer, user);
       global_state.user_sig.insert(user.to_string(), sig);
       global_state.user_attrs.insert(user.to_string(),
@@ -237,11 +237,11 @@ fn user_commit(global_state: &mut GlobalState, user: &str) -> Result<(), String>
       let a = global_state.user_attrs.get(user).unwrap();
       let attrs: Vec<&[u8]> = a.iter().map(|s| s.as_bytes()).collect();
       // println!("User {}: about to commit to attrs = {:?}", user, &attrs);
-      let credential: Credential<&[u8]> = Credential { signature: sig.clone(),
+      let credential = Credential { signature: sig.clone(),
                                                        attributes: attrs,
-                                                       issuer_pk: user_struct.issuer_pk.clone() };
+                                                       issuer_pub_key: user_struct.issuer_pk.clone() };
 
-      if let Ok((commitment, _proof, key)) = ac_commit::<ChaChaRng, &[u8]>(&mut global_state.prng,
+      if let Ok((commitment, _proof, key)) = ac_commit(&mut global_state.prng,
                                                                            &user_struct.secret_key,
                                                                            &credential,
                                                                            b"random message")
@@ -297,8 +297,8 @@ fn user_selectively_reveal(global_state: &mut GlobalState,
       let attributes: Vec<&[u8]> = attrs.iter().map(|s| s.as_bytes()).collect();
       let credential = Credential { signature: sig.clone(),
                                     attributes,
-                                    issuer_pk: user_struct.issuer_pk.clone() };
-      if let Ok(pok) = ac_open_commitment::<ChaChaRng, &[u8]>(&mut global_state.prng,
+                                    issuer_pub_key: user_struct.issuer_pk.clone() };
+      if let Ok(pok) = ac_open_commitment(&mut global_state.prng,
                                                               &user_struct.secret_key,
                                                               &credential,
                                                               &key,

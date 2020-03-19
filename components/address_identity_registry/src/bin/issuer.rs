@@ -139,10 +139,10 @@ mod handlers {
     let credkinds = global_state.credkinds.clone();
     let cred_kind = credkinds.get(&credname).unwrap();
     let attrs: Vec<&[u8]> = user_creds.attrs.iter().map(|s| s.as_bytes()).collect();
-    let sig = ac_sign::<ChaChaRng, &[u8]>(&mut global_state.prng,
+    let sig = ac_sign(&mut global_state.prng,
                                           &cred_kind.issuer_sk,
                                           &user_creds.user_pk,
-                                          &attrs);
+                                          &attrs).unwrap();
 
     Ok(warp::reply::json(&sig))
   }
