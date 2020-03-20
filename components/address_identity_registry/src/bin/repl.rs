@@ -243,7 +243,7 @@ fn user_commit(global_state: &mut GlobalState, user: &str) -> Result<(), String>
       let a = global_state.user_attrs.get(user).unwrap();
       let mut map = LinearMap::new();
       for attr in a.iter() {
-        map.insert(attr.0.clone(), attr.1.as_bytes());
+        map.insert(attr.0.clone(), attr.1.clone());
       }
       // println!("User {}: about to commit to attrs = {:?}", user, &attrs);
       let credential = Credential { signature: sig.clone(),
@@ -305,7 +305,7 @@ fn user_selectively_reveal(global_state: &mut GlobalState,
       // let attributes = attrs.to_vec(); //Vec<ACAttribute<String>> = attrs.to_vec().into_iter().map(string_to_attr).collect();
       let mut map = LinearMap::new();
       for attr in attrs.iter() {
-        map.insert(attr.0.clone(), attr.1.as_bytes());
+        map.insert(attr.0.clone(), attr.1.clone());
       }
       let credential = Credential { signature: sig.clone(),
                                     attributes: map,
@@ -328,7 +328,7 @@ fn user_selectively_reveal(global_state: &mut GlobalState,
     (_, _, None) => Err("Unable to find signature".to_string()),
   }
 }
-
+/* Never used
 fn slice_to_attr<'a>(attr: (&String, &'a[u8])) -> Option<(String,&'a[u8])> {
   if attr.1 == b"" || attr.1 == b"\"\"" {
     None
@@ -336,11 +336,11 @@ fn slice_to_attr<'a>(attr: (&String, &'a[u8])) -> Option<(String,&'a[u8])> {
     Some((attr.0.clone(), attr.1))
   }
 }
-
+*/
 // Verify is run by the verifier
 fn verify(global_state: &mut GlobalState, user: &str, attrs: &[(String, &[u8])]) -> Result<(), String> {
   let mut reveal_fields = vec![];
-  for (field, attr) in attrs {
+  for (field, _attr) in attrs {
       reveal_fields.push(field.clone());
   }
   // println!("verify: bitmap = {:?}", &bitmap);
@@ -401,6 +401,13 @@ fn parse_args() -> ArgMatches<'static> {
                        .get_matches()
 }
 
+fn split2(s: &str) -> Option<(String, &[u8])> {
+  match s.split(':').collect::<Vec<&str>>().as_slice() {
+    [s1, s2] => Some((String::from(*s1), (*s2).as_bytes())),
+    _ => None
+  }
+}
+
 fn exec_line(mut global_state: &mut GlobalState, line: &str) -> Result<(), String> {
   match line.trim().split(' ').collect::<Vec<&str>>().as_slice() {
     ["help"] => {
@@ -425,7 +432,7 @@ fn exec_line(mut global_state: &mut GlobalState, line: &str) -> Result<(), Strin
       user_exists(&global_state, &user)?;
       let attrs_vec: Vec<(String, &[u8])> = attrs.to_vec()
                                        .into_iter()
-                                       .map(|(field: &str, s: &str)| { (String::from(field), s.as_bytes()) })
+                                       .map(|s| split2(s).unwrap())
                                        .collect();
       issue_credential(&mut global_state, &issuer, &user, &attrs_vec)
     }
@@ -437,7 +444,7 @@ fn exec_line(mut global_state: &mut GlobalState, line: &str) -> Result<(), Strin
       user_exists(&global_state, &user)?;
       let attrs_vec: Vec<(String, &[u8])> = attrs.to_vec()
                                        .into_iter()
-                                       .map(|(field: String, s: &str)| -> (String, &[u8]) { (field, s.as_bytes()) })
+                                       .map(|s| split2(s).unwrap())
                                        .collect();
       // let bitmap: Vec<bool> = bits.to_vec().into_iter().map(str_to_bool).collect();
       verify(&mut global_state, &user, &attrs_vec)

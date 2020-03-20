@@ -41,7 +41,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
   let mut map = LinearMap::new();
   for attr in attrs {
-    map.insert(attr.0, attr.1.as_bytes());
+    map.insert(attr.0, attr.1);
   }
   let credential =
     Credential { signature: sig.clone(),
@@ -49,7 +49,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                  issuer_pub_key: resp1.issuer_pk.clone() };
 
   if let Ok((commitment, _proof, key)) =
-    credential(&mut prng, &user_sk, &credential, b"random message")
+    credential_commit(&mut prng, &user_sk, &credential, b"random message")
   {
     println!("All good");
     Ok(())

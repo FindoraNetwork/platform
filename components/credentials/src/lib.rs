@@ -28,13 +28,13 @@ pub type CredUserSecretKey = ACUserSecretKey;
 pub type CredSignature = ACSignature;
 pub type CredCommitmentKey = ACCommitmentKey;
 pub type CredCommitment = ACCommitment;
-pub struct Credential<'a> {
-  attributes: LinearMap<String, &'a [u8]>,
-  issuer_pub_key: CredIssuerPublicKey,
-  signature: CredSignature,
+pub struct Credential {
+  pub attributes: LinearMap<String, String>,
+  pub issuer_pub_key: CredIssuerPublicKey,
+  pub signature: CredSignature,
 }
 
-impl<'a> Credential<'a> {
+impl Credential {
   pub fn to_ac_credential(&self) -> Result<ZeiCredential, ZeiError> {
     let mut u32_attrs = vec![0u32; self.issuer_pub_key.num_attrs];
     for (key, attr) in &self.attributes {
@@ -42,7 +42,7 @@ impl<'a> Credential<'a> {
                            .map
                            .get(key)
                            .ok_or(ZeiError::ParameterError)?;
-      let u32_vec = attr_to_u32_array(*attr, *len);
+      let u32_vec = attr_to_u32_array(attr.as_bytes(), *len);
       for (i, u32_attr) in u32_vec.iter().enumerate() {
         u32_attrs[pos + i] = *u32_attr;
       }
