@@ -613,12 +613,28 @@ fn store_txn_to_file(path_str: &str, txn: &TransactionBuilder) -> Result<(), Pla
 
 /// Stores SIDs to file.
 /// # Arguments
-/// * `file_path`: file path to store the key pair.
+/// * `path_str`: file path to store the key pair.
 /// * `sids`: SIDs to store, separated by comma (`,`).
 fn store_sids_to_file(path_str: &str, sids: &str) -> Result<(), PlatformError> {
   if let Err(error) = fs::write(path_str, sids) {
     return Err(PlatformError::IoError(format!("Failed to create file {}: {}.", path_str, error)));
   };
+  Ok(())
+}
+
+/// Stores owner memo to file.
+/// # Arguments
+/// * `path_str`: file path to store the key pair.
+/// * `owner_memo`: memo to store.
+fn store_owner_memo_to_file(path_str: &str,
+                            owner_memo: Option<OwnerMemo>)
+                            -> Result<(), PlatformError> {
+  if let Ok(as_json) = serde_json::to_string(&owner_memo) {
+    if let Err(error) = fs::write(path_str, &as_json) {
+      return Err(PlatformError::IoError(format!("Failed to create file {}: {}.",
+                                                path_str, error)));
+    };
+  }
   Ok(())
 }
 
@@ -826,6 +842,7 @@ fn issue_and_transfer_asset(issuer_key_pair: &XfrKeyPair,
                             token_code: AssetTypeCode,
                             confidential_amount: bool,
                             confidential_asset: bool,
+                            memo_file: Option<&str>,
                             txn_file: &str)
                             -> Result<TransactionBuilder, PlatformError> {
   let record_type = AssetRecordType::from_booleans(confidential_amount, confidential_asset);
@@ -840,7 +857,7 @@ fn issue_and_transfer_asset(issuer_key_pair: &XfrKeyPair,
   let xfr_op =
     TransferOperationBuilder::new().add_input(TxoRef::Relative(0),
                                               open_blind_asset_record(&blind_asset_record,
-                                                                &owner_memo,
+                                                                &owner_memo.clone(),
                                                                 issuer_key_pair.get_sk_ref())?,
                                               amount)?
                                    .add_output(&output_template)?
@@ -858,6 +875,9 @@ fn issue_and_transfer_asset(issuer_key_pair: &XfrKeyPair,
              .add_operation(xfr_op)
              .transaction();
 
+  if let Some(file) = memo_file {
+    store_owner_memo_to_file(file, owner_memo)?;
+  }
   store_txn_to_file(txn_file, &txn_builder)?;
   Ok(txn_builder)
 }
@@ -1056,6 +1076,7 @@ fn merge_records(key_pair: &XfrKeyPair,
 fn load_funds(issuer_id: u64,
               recipient_id: u64,
               amount: u64,
+              memo_file: Option<&str>,
               txn_file: &str,
               protocol: &str,
               host: &str)
@@ -1092,6 +1113,7 @@ fn load_funds(issuer_id: u64,
                                              token_code,
                                              false,
                                              false,
+                                             memo_file,
                                              txn_file)?;
 
   // Submit transaction and get the new record
@@ -1222,6 +1244,7 @@ fn prove(reveal_sig: &ACRevealSig,
 /// * `host`: either `testnet.findora.org` or `locaohost`.
 fn fulfill_loan(loan_id: u64,
                 issuer_id: u64,
+                memo_file: Option<&str>,
                 txn_file: &str,
                 protocol: &str,
                 host: &str)
@@ -1348,6 +1371,7 @@ fn fulfill_loan(loan_id: u64,
                                              fiat_code,
                                              false,
                                              false,
+                                             memo_file,
                                              txn_file)?;
   let fiat_sid = submit_and_get_sids(protocol, host, txn_builder)?[0];
   println!("Fiat sid: {}", fiat_sid.0);
@@ -1387,6 +1411,7 @@ fn fulfill_loan(loan_id: u64,
                                              debt_code,
                                              false,
                                              false,
+                                             memo_file,
                                              txn_file)?;
   let debt_sid = submit_and_get_sids(protocol, host, txn_builder)?[0];
   println!("Fiat sid: {}", debt_sid.0);
@@ -1832,7 +1857,12 @@ fn main() {
           .short("s")
           .long("confidential_asset")
           .takes_value(false)
-          .help("If specified, the asset will be confidential."))))
+          .help("If specified, the asset will be confidential."))
+        .arg(Arg::with_name("memo_file")
+          .short("p")
+          .long("memo_file")
+          .takes_value(true)
+          .help("Path to store the owner memo."))))
     .subcommand(SubCommand::with_name("credential_issuer")
       .subcommand(SubCommand::with_name("sign_up")
         .arg(Arg::with_name("name")
@@ -1891,6 +1921,12 @@ fn main() {
           .required(true)
           .takes_value(true)
           .help("Asset issuer id."))
+        .arg(Arg::with_name("memo_file")
+          .short("f")
+          .long("memo_file")
+          .required(true)
+          .takes_value(true)
+          .help("Path to store the owner memo."))
         .arg(Arg::with_name("http")
           .long("http")
           .takes_value(false)
@@ -2445,6 +2481,7 @@ fn process_asset_issuer_cmd(asset_issuer_matches: &clap::ArgMatches,
         };
       let confidential_amount = issue_and_transfer_matches.is_present("confidential_amount");
       let confidential_asset = issue_and_transfer_matches.is_present("confidential_asset");
+      let memo_file = issue_and_transfer_matches.value_of("memo_file");
 
       issue_and_transfer_asset(&issuer_key_pair,
                                &recipient_key_pair,
@@ -2452,6 +2489,7 @@ fn process_asset_issuer_cmd(asset_issuer_matches: &clap::ArgMatches,
                                token_code,
                                confidential_amount,
                                confidential_asset,
+                               memo_file,
                                txn_file)?;
       Ok(())
     }
@@ -2629,8 +2667,9 @@ fn process_lender_cmd(lender_matches: &clap::ArgMatches,
         println!("Asset issuer id is required to fulfill the loan. Use --issuer.");
         return Err(PlatformError::InputsError);
       };
+      let memo_file = fulfill_loan_matches.value_of("memo_file");
       let (protocol, host) = protocol_host(fulfill_loan_matches);
-      fulfill_loan(loan_id, issuer_id, txn_file, protocol, host)
+      fulfill_loan(loan_id, issuer_id, memo_file, txn_file, protocol, host)
     }
     _ => {
       println!("Subcommand missing or not recognized. Try lender --help");
@@ -2977,8 +3016,15 @@ fn process_load_funds_cmd(borrower_id: u64,
     println!("Amount is required to load funds. Use --amount.");
     return Err(PlatformError::InputsError);
   };
+  let memo_file = load_funds_matches.value_of("memo_file");
   let (protocol, host) = protocol_host(load_funds_matches);
-  load_funds(issuer_id, borrower_id, amount, txn_file, protocol, host)
+  load_funds(issuer_id,
+             borrower_id,
+             amount,
+             memo_file,
+             txn_file,
+             protocol,
+             host)
 }
 
 /// Processes the `borrower pay_loan` subcommand.
@@ -3130,6 +3176,7 @@ mod tests {
                                      code,
                                      false,
                                      false,
+                                     None,
                                      txn_builder_path).is_ok());
 
     let _ = fs::remove_file(DATA_FILE);
@@ -3198,7 +3245,7 @@ mod tests {
 
     // Load funds
     let funds_amount = 1000;
-    load_funds(0, 0, funds_amount, txn_builder_path, PROTOCOL, HOST).unwrap();
+    load_funds(0, 0, funds_amount, None, txn_builder_path, PROTOCOL, HOST).unwrap();
     let data = load_data().unwrap();
 
     assert_eq!(data.borrowers[0].balance, funds_amount);
@@ -3215,7 +3262,7 @@ mod tests {
     assert_eq!(data.loans.len(), 1);
 
     // Fulfill the loan request
-    fulfill_loan(0, 0, txn_builder_path, PROTOCOL, HOST).unwrap();
+    fulfill_loan(0, 0, None, txn_builder_path, PROTOCOL, HOST).unwrap();
     data = load_data().unwrap();
 
     assert_eq!(data.loans[0].status, LoanStatus::Active);
