@@ -20,10 +20,6 @@ path = "src/bin/issuer.rs"
 name = "verifier"
 path = "src/bin/verifier.rs"
 
-[[bin]]
-name = "mock_ledger"
-path = "src/bin/mock_ledger.rs"
-
 [dependencies]
 air = { path = "../../libs/ads/air" }
 async-std = "1.5.0"
@@ -34,7 +30,8 @@ env_logger = "0.7.1"
 futures = "0.3.1"
 hex = "0.3.2"
 lazy_static = { version = "1.2.0" }
-# libp2p = "0.16.2"
+ledger = { path = "../../ledger" }
+ledger_standalone = { path = "../ledger_standalone" }
 log = "0.4.0"
 pretty_env_logger = "0.3"
 rmp-serde = "0.13.7"
@@ -46,8 +43,10 @@ serde = { version = "1.0.99", features = ["derive"] }
 serde_derive = "1.0"
 serde_json = "1.0.40"
 sha2 = "0.8.0"
+submission_server = { path = "../submission_server" }
 tokio = { version = "0.2", features = ["full", "macros"] }
-urldecode = "0.1.1"
+txn_builder = { path = "../txn_builder" }
+percent-encoding = "2.1.0"
 warp = "0.2"
 zei = { git = "ssh://git@github.com/findoraorg/zei" }
 
