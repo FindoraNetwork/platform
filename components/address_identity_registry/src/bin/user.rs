@@ -3,33 +3,16 @@
 mod shared;
 
 use ledger::data_model::errors::PlatformError;
-use percent_encoding::{AsciiSet, CONTROLS, utf8_percent_encode };
 use rand_chacha::ChaChaRng;
 use rand_core::SeedableRng;
 use serde::{Deserialize, Serialize};
-use shared::{Bitmap, PubCreds, UserCreds};
+use shared::{Bitmap, PubCreds, QUERY_PORT, SUBMIT_PORT, UserCreds, protocol_host, urlencode};
 use submission_server::{TxnHandle, TxnStatus};
 use txn_builder::{BuildsTransactions, TransactionBuilder, TransferOperationBuilder};
 use warp::Filter;
 use zei::serialization::ZeiFromToBytes;
 use zei::xfr::sig::{XfrKeyPair, XfrPublicKey};
 use zei::api::anon_creds::{ac_commit, ac_keygen_user, ACCommitmentKey, ACPoK, ACSignature, Credential};
-
-/// https://url.spec.whatwg.org/#fragment-percent-encode-set
-const FRAGMENT: &AsciiSet = &CONTROLS.add(b' ').add(b'"').add(b'<').add(b'>').add(b'`');
-
-fn urlencode(input: &str) -> String {
-  let iter = utf8_percent_encode(input, FRAGMENT);
-  iter.collect()
-}
-
-const PROTOCOL: &str = "http";
-const SERVER_HOST: &str = "localhost";
-
-/// Port for querying values.
-const QUERY_PORT: &str = "8668";
-/// Port for submitting transactions.
-const SUBMIT_PORT: &str = "8669";
 
 // From txn_builder_cli: need a working key pair String
 const KEY_PAIR_STR: &str = "76b8e0ada0f13d90405d6ae55386bd28bdd219b8a08ded1aa836efcc8b770dc720fdbac9b10b7587bba7b5bc163bce69e796d71e4ed44c10fcb4488689f7a144";
@@ -91,15 +74,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let issuer_key_pair = XfrKeyPair::zei_from_bytes(&hex::decode(KEY_PAIR_STR)?);
     
     let mut txn_builder = TransactionBuilder::default();
-    let data = serde_json::to_string(&commitment).unwrap();
-    let address = serde_json::to_string(&user_creds.user_pk).unwrap();
+    let data = &serde_json::to_string(&commitment).unwrap();
+    let address = &serde_json::to_string(&user_creds.user_pk).unwrap();
     txn_builder.add_operation_air_assign(&issuer_key_pair, &address, &data)?;
 
     // Submit to ledger
     let txn = txn_builder.transaction();
+    let (protocol, host) = protocol_host();
+    println!("User: submitting air_assign txn to ledger at {}://{}:{}/{}",
+             protocol, host, SUBMIT_PORT, "submit_transaction");
     let mut res =
       client.post(&format!("{}://{}:{}/{}",
-                          PROTOCOL, SERVER_HOST, SUBMIT_PORT, "submit_transaction"))
+                          protocol, host, SUBMIT_PORT, "submit_transaction"))
             .json(&txn)
             .send()
             .await?;
