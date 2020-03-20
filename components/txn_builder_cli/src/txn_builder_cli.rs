@@ -3418,32 +3418,32 @@ mod tests {
 
     assert_eq!(data.borrowers[0].balance, funds_amount);
 
-    // fs::remove_file(txn_builder_path).unwrap();
-    // let _ = fs::remove_file(DATA_FILE);
+    fs::remove_file(txn_builder_path).unwrap();
+    let _ = fs::remove_file(DATA_FILE);
 
-    // // Request a loan
-    // let txn_builder_path = "tb_loan";
-    // let loan_amount = 1200;
-    // let mut data = load_data().unwrap();
-    // data.add_loan(0, 0, loan_amount, 100, 8).unwrap();
+    // Request a loan
+    let txn_builder_path = "tb_loan";
+    let loan_amount = 1200;
+    let mut data = load_data().unwrap();
+    data.add_loan(0, 0, loan_amount, 100, 8).unwrap();
 
-    // assert_eq!(data.loans.len(), 1);
+    assert_eq!(data.loans.len(), 1);
 
-    // // Fulfill the loan request
-    // fulfill_loan(0, 0, txn_builder_path, PROTOCOL, HOST).unwrap();
-    // data = load_data().unwrap();
+    // Fulfill the loan request
+    fulfill_loan(0, 0, txn_builder_path, PROTOCOL, HOST).unwrap();
+    data = load_data().unwrap();
 
-    // assert_eq!(data.loans[0].status, LoanStatus::Active);
-    // assert_eq!(data.loans[0].balance, loan_amount);
+    assert_eq!(data.loans[0].status, LoanStatus::Active);
+    assert_eq!(data.loans[0].balance, loan_amount);
 
-    // // Pay loan
-    // let payment_amount = 200;
-    // pay_loan(0, payment_amount, PROTOCOL, HOST).unwrap();
-    // data = load_data().unwrap();
+    // Pay loan
+    let payment_amount = 200;
+    pay_loan(0, payment_amount, PROTOCOL, HOST).unwrap();
+    data = load_data().unwrap();
 
-    // let _ = fs::remove_file(DATA_FILE);
-    // fs::remove_file(txn_builder_path).unwrap();
+    let _ = fs::remove_file(DATA_FILE);
+    fs::remove_file(txn_builder_path).unwrap();
 
-    // assert_eq!(data.loans[0].payments, 1);
+    assert_eq!(data.loans[0].payments, 1);
   }
 }
