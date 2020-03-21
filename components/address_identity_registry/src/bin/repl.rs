@@ -214,7 +214,7 @@ fn show_user(global_state: &mut GlobalState, user_name: &str) -> Result<(), Stri
 fn issue_credential(global_state: &mut GlobalState,
                     issuer: &str,
                     user: &str,
-                    attrs: &[(String, &[u8])])
+                    attrs: &[(String, String)])
                     -> Result<(), String> {
   match (global_state.issuers.get(issuer), global_state.users.get(user)) {
     (Some(issuer_keys), Some(user_keys)) => {
@@ -224,10 +224,7 @@ fn issue_credential(global_state: &mut GlobalState,
                                             &attrs).unwrap();
       println!("Issuer {}: credential issued to {}", issuer, user);
       global_state.user_sig.insert(user.to_string(), sig);
-      global_state.user_attrs.insert(user.to_string(),
-                                     attrs.iter()
-                                          .map(|(field, attr)| (field.clone(), String::from_utf8(attr.to_vec()).unwrap()))
-                                          .collect());
+      global_state.user_attrs.insert(user.to_string(), attrs.to_vec());
       Ok(())
     }
     (None, None) => Err("Unable to find either issuer or user".to_string()),
@@ -338,7 +335,9 @@ fn slice_to_attr<'a>(attr: (&String, &'a[u8])) -> Option<(String,&'a[u8])> {
 }
 */
 // Verify is run by the verifier
-fn verify(global_state: &mut GlobalState, user: &str, attrs: &[(String, &[u8])]) -> Result<(), String> {
+fn verify(global_state: &mut GlobalState,
+          user: &str,
+          attrs: &[(String, String)]) -> Result<(), String> {
   let mut reveal_fields = vec![];
   for (field, _attr) in attrs {
       reveal_fields.push(field.clone());
@@ -401,9 +400,9 @@ fn parse_args() -> ArgMatches<'static> {
                        .get_matches()
 }
 
-fn split2(s: &str) -> Option<(String, &[u8])> {
+fn split2(s: &str) -> Option<(String, String)> {
   match s.split(':').collect::<Vec<&str>>().as_slice() {
-    [s1, s2] => Some((String::from(*s1), (*s2).as_bytes())),
+    [s1, s2] => Some((String::from(*s1), String::from(*s2))),
     _ => None
   }
 }
@@ -430,7 +429,7 @@ fn exec_line(mut global_state: &mut GlobalState, line: &str) -> Result<(), Strin
     ["issue_credential", issuer, user, attrs @ ..] => {
       issuer_exists(&global_state, &issuer)?;
       user_exists(&global_state, &user)?;
-      let attrs_vec: Vec<(String, &[u8])> = attrs.to_vec()
+      let attrs_vec: Vec<(String, String)> = attrs.to_vec()
                                        .into_iter()
                                        .map(|s| split2(s).unwrap())
                                        .collect();
@@ -442,7 +441,7 @@ fn exec_line(mut global_state: &mut GlobalState, line: &str) -> Result<(), Strin
     }
     ["verify", user, attrs @ ..] => {
       user_exists(&global_state, &user)?;
-      let attrs_vec: Vec<(String, &[u8])> = attrs.to_vec()
+      let attrs_vec: Vec<(String, String)> = attrs.to_vec()
                                        .into_iter()
                                        .map(|s| split2(s).unwrap())
                                        .collect();
