@@ -581,6 +581,39 @@ fn load_sids_from_file(file_path: &str) -> Result<Vec<u64>, PlatformError> {
   Ok(sids)
 }
 
+/// Loads owner memos from files
+/// # Arguments
+/// * `file_paths`: file paths to owner memos.
+fn load_owner_memos_from_files(file_paths: &str) -> Result<Vec<Option<OwnerMemo>>, PlatformError> {
+  let mut owner_memos = Vec::new();
+  for file_path in split_arg(file_paths) {
+    let mut file;
+    match File::open(file_path) {
+      Ok(f) => {
+        file = f;
+      }
+      Err(_) => {
+        return Err(PlatformError::IoError(format!("File doesn't exist: {}. Use --memo_file when transferring the asset.",
+                                         file_path)));
+      }
+    }
+    let mut owner_memo = String::new();
+    if file.read_to_string(&mut owner_memo).is_err() {
+      return Err(PlatformError::IoError(format!("Failed to read file: {}", file_path)));
+    }
+    println!("Parsing owner memo from file contents: \"{}\"", &owner_memo);
+    match serde_json::from_str::<Option<OwnerMemo>>(&owner_memo) {
+      Ok(memo) => {
+        owner_memos.push(memo);
+      }
+      Err(_) => {
+        return Err(PlatformError::DeserializationError);
+      }
+    }
+  }
+  Ok(owner_memos)
+}
+
 //
 // Store functions
 //
@@ -1803,12 +1836,18 @@ fn main() {
           .required(true)
           .takes_value(true)
           .help("Recipients' ids. Separate by comma (\",\")."))
-        .arg(Arg::with_name("sids_path")
+        .arg(Arg::with_name("sids_file")
           .short("s")
-          .long("sids_path")
+          .long("sids_file")
           .required(true)
           .takes_value(true)
           .help("Path to the input sids."))
+        .arg(Arg::with_name("memo_files")
+          .short("m")
+          .long("memo_files")
+          .required(true)
+          .takes_value(true)
+          .help("Paths to the owner memos."))
         .arg(Arg::with_name("input_amounts")
           .short("iamts")
           .long("input_amounts")
@@ -2061,6 +2100,12 @@ fn main() {
           .short("s")
           .takes_value(true)
           .help("Asset sid."))
+        .arg(Arg::with_name("memo_file")
+          .short("m")
+          .long("memo_file")
+          .required(true)
+          .takes_value(true)
+          .help("Path to the owner memo."))
         .arg(Arg::with_name("http")
           .long("http")
           .takes_value(false)
@@ -2332,18 +2377,16 @@ fn process_asset_issuer_cmd(asset_issuer_matches: &clap::ArgMatches,
       let (protocol, host) = protocol_host(transfer_asset_matches);
       let mut txo_refs = Vec::new();
       let mut blind_asset_records = Vec::new();
-      let mut owner_memos = Vec::new(); // TODO (fernando) fill this array with valid data
-      if let Some(sids_path_arg) = transfer_asset_matches.value_of("sids_path") {
-        for sid in load_sids_from_file(sids_path_arg)? {
+      if let Some(sids_file_arg) = transfer_asset_matches.value_of("sids_file") {
+        for sid in load_sids_from_file(sids_file_arg)? {
           txo_refs.push(TxoRef::Absolute(TxoSID(sid)));
           let res = query(protocol, host, QUERY_PORT, "utxo_sid", &format!("{}", sid))?;
           blind_asset_records.push( serde_json::from_str::<BlindAssetRecord>(&res).or_else(|_| {
                                                             Err(PlatformError::DeserializationError)
                                                           })?);
-          owner_memos.push(None); // TODO (fernando) fill this array with valid data
         }
       } else {
-        println!("Sids are required to transfer asset. Use --sids");
+        println!("Sids are required to transfer asset. Use --sids_file.");
         return Err(PlatformError::InputsError);
       }
       let input_amounts =
@@ -2353,8 +2396,15 @@ fn process_asset_issuer_cmd(asset_issuer_matches: &clap::ArgMatches,
           println!("Input amounts are required to transfer asset. Use --input_amounts.");
           return Err(PlatformError::InputsError);
         };
+      let owner_memos = if let Some(memo_files_arg) = transfer_asset_matches.value_of("memo_files")
+      {
+        load_owner_memos_from_files(memo_files_arg)?
+      } else {
+        println!("Owner memos are required to transfer asset. Use --memo_files.");
+        return Err(PlatformError::InputsError);
+      };
       let mut count = txo_refs.len();
-      if input_amounts.len() != count {
+      if input_amounts.len() != count || owner_memos.len() != count {
         println!("Size of input sids and input amounts should match.");
         return Err(PlatformError::InputsError);
       }
@@ -2915,10 +2965,16 @@ fn process_borrower_cmd(borrower_matches: &clap::ArgMatches,
         println!("Sid is required to get the asset record. Use borrower --sid.");
         return Err(PlatformError::InputsError);
       };
+      let owner_memos =
+        if let Some(memo_files_arg) = get_asset_record_matches.value_of("memo_files") {
+          load_owner_memos_from_files(memo_files_arg)?
+        } else {
+          println!("Owner memo is required to get the asset record. Use --memo_file.");
+          return Err(PlatformError::InputsError);
+        };
       // Get protocol and host.
       let (protocol, host) = protocol_host(get_asset_record_matches);
-      let owner_memo = None; // TODO (fernando) get valid owner memo
-      let asset_record = get_open_asset_record(protocol, host, sid, &key_pair, &owner_memo)?;
+      let asset_record = get_open_asset_record(protocol, host, sid, &key_pair, &owner_memos[0])?;
       println!("{} owns {} of asset {:?}.",
                borrower_name,
                asset_record.get_amount(),
