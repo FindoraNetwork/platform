@@ -1346,7 +1346,6 @@ fn prove(reveal_sig: &ACRevealSig,
 /// * `host`: either `testnet.findora.org` or `locaohost`.
 fn fulfill_loan(loan_id: u64,
                 issuer_id: u64,
-                memo_file: Option<&str>,
                 txn_file: &str,
                 protocol: &str,
                 host: &str)
@@ -1801,7 +1800,7 @@ fn main() {
     .arg(Arg::with_name("findora_dir")
       .short("d")
       .long("dir")
-      .value_name("PATH")
+      .value_name("file")
       .help("Directory for configuaration, security, and temporary files; must be writable")
       .takes_value(true)
       .env("FINDORA_DIR"))
@@ -2050,12 +2049,6 @@ fn main() {
           .required(true)
           .takes_value(true)
           .help("Asset issuer id."))
-        .arg(Arg::with_name("memo_file")
-          .short("f")
-          .long("memo_file")
-          .required(true)
-          .takes_value(true)
-          .help("Path to store the owner memo."))
         .arg(Arg::with_name("http")
           .long("http")
           .takes_value(false)
@@ -2539,7 +2532,6 @@ fn process_asset_issuer_cmd(asset_issuer_matches: &clap::ArgMatches,
       let mut txo_refs_iter = txo_refs.iter();
       let mut bars_and_memos_iter = bars_and_memos.iter();
       let mut input_amounts_iter = input_amounts.iter();
-      let mut owner_memos_iter = owner_memos.iter();
       while count > 0 {
         let txo_refs_next = if let Some(txo_ref) = txo_refs_iter.next() {
           txo_ref
@@ -2838,9 +2830,8 @@ fn process_lender_cmd(lender_matches: &clap::ArgMatches,
         println!("Asset issuer id is required to fulfill the loan. Use --issuer.");
         return Err(PlatformError::InputsError);
       };
-      let memo_file = fulfill_loan_matches.value_of("memo_file");
       let (protocol, host) = protocol_host(fulfill_loan_matches);
-      fulfill_loan(loan_id, issuer_id, memo_file, txn_file, protocol, host)
+      fulfill_loan(loan_id, issuer_id, txn_file, protocol, host)
     }
     _ => {
       println!("Subcommand missing or not recognized. Try lender --help");
@@ -3438,7 +3429,7 @@ mod tests {
     assert_eq!(data.loans.len(), 1);
 
     // Fulfill the loan request
-    fulfill_loan(0, 0, None, txn_builder_path, PROTOCOL, HOST).unwrap();
+    fulfill_loan(0, 0, txn_builder_path, PROTOCOL, HOST).unwrap();
     data = load_data().unwrap();
 
     assert_eq!(data.loans[0].status, LoanStatus::Active);
