@@ -16,7 +16,6 @@ use credentials::{
   CredUserSecretKey, Credential,
 };
 use cryptohash::sha256;
-use linear_map::LinearMap;
 use log::{info, warn};
 use rand_chacha::ChaChaRng;
 use rand_core::SeedableRng;
@@ -241,10 +240,10 @@ fn user_commit(global_state: &mut GlobalState, user: &str) -> Result<(), String>
   match (global_state.users.get(user), global_state.user_sig.get(user)) {
     (Some(user_struct), Some(sig)) => {
       let a = global_state.user_attrs.get(user).unwrap();
-      let mut map = LinearMap::new();
-      for attr in a.iter() {
-        map.insert(attr.0.clone(), attr.1.clone());
-      }
+      let map: Vec<(String, Vec<u8>)> = a.iter()
+                                         .map(|(k, v)| (k.clone(), v.as_bytes().to_vec()))
+                                         .collect();
+
       // println!("User {}: about to commit to attrs = {:?}", user, &attrs);
       let credential = Credential { signature: sig.clone(),
                                     attributes: map,
@@ -303,10 +302,9 @@ fn user_selectively_reveal(global_state: &mut GlobalState,
       // println!("user_selectively_reveal: commitment = {:?}", &commitment);
       let attrs = global_state.user_attrs.get(user).unwrap();
       // let attributes = attrs.to_vec(); //Vec<ACAttribute<String>> = attrs.to_vec().into_iter().map(string_to_attr).collect();
-      let mut map = LinearMap::new();
-      for attr in attrs.iter() {
-        map.insert(attr.0.clone(), attr.1.clone());
-      }
+      let map: Vec<(String, Vec<u8>)> = attrs.iter()
+                                             .map(|(k, v)| (k.clone(), v.as_bytes().to_vec()))
+                                             .collect();
       let credential = Credential { signature: sig.clone(),
                                     attributes: map,
                                     issuer_pub_key: user_struct.issuer_pk.clone() };
@@ -513,7 +511,6 @@ mod tests {
     credential_commit, credential_issuer_key_gen, credential_open_commitment, credential_sign,
     credential_user_key_gen, credential_verify, Credential,
   };
-  use linear_map::LinearMap;
   use rand_chacha::ChaChaRng;
   use rand_core::SeedableRng;
 
@@ -534,9 +531,9 @@ mod tests {
     let signature = credential_sign(&mut prng, &issuer_sk, &user_pk, &attributes).unwrap(); // Done by Issuer
 
     // Enter the User
-    let mut attr_map = LinearMap::new();
-    attr_map.insert(dob.clone(), String::from_utf8(attr1.to_vec()).unwrap());
-    attr_map.insert(ss.clone(), String::from_utf8(attr2.to_vec()).unwrap());
+    let mut attr_map = vec![];
+    attr_map.push((dob.clone(), attr1.to_vec()));
+    attr_map.push((ss.clone(), attr2.to_vec()));
     let credential = Credential { signature: signature.clone(),
                                   attributes: attr_map,
                                   issuer_pub_key: issuer_pk.clone() };

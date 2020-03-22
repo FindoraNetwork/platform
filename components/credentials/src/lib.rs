@@ -12,15 +12,15 @@ use zei::errors::ZeiError;
 #[derive(Clone, Serialize, Deserialize, Debug, Eq, PartialEq)]
 pub struct CredIssuerSecretKey {
   ac_sec_key: ACIssuerSecretKey,
-  map: LinearMap<String, (usize, usize)>,
-  num_attrs: usize,
+  map: LinearMap<String, ((usize, usize), usize)>, // key: (index, len in u32), len in bytes
+  num_internal_attrs: usize,
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug, Eq, PartialEq)]
 pub struct CredIssuerPublicKey {
   ac_pub_key: ACIssuerPublicKey,
-  map: LinearMap<String, (usize, usize)>,
-  num_attrs: usize,
+  map: LinearMap<String, ((usize, usize), usize)>, // key: (index, len in u32), len in bytes
+  num_internal_attrs: usize,
 }
 
 pub type CredUserPublicKey = ACUserPublicKey;
@@ -29,23 +29,21 @@ pub type CredSignature = ACSignature;
 pub type CredCommitmentKey = ACCommitmentKey;
 pub type CredCommitment = ACCommitment;
 pub struct Credential {
-  pub attributes: LinearMap<String, String>,
+  pub attributes: Vec<(String, Vec<u8>)>,
   pub issuer_pub_key: CredIssuerPublicKey,
   pub signature: CredSignature,
 }
 
 impl Credential {
   pub fn to_ac_credential(&self) -> Result<ZeiCredential, ZeiError> {
-    let mut u32_attrs = vec![0u32; self.issuer_pub_key.num_attrs];
+    let mut u32_attrs = vec![0u32; self.issuer_pub_key.num_internal_attrs];
     for (key, attr) in &self.attributes {
-      let (pos, len) = self.issuer_pub_key
-                           .map
-                           .get(key)
-                           .ok_or(ZeiError::ParameterError)?;
-      let u32_vec = u8_slice_to_u32_vec(attr.as_bytes(), *len);
-      for (i, u32_attr) in u32_vec.iter().enumerate() {
-        u32_attrs[pos + i] = *u32_attr;
-      }
+      let ((pos, len), _) = self.issuer_pub_key
+                                .map
+                                .get(key)
+                                .ok_or(ZeiError::ParameterError)?;
+      let u32_vec = u8_slice_to_u32_vec(attr, *len);
+      u32_attrs[*pos..*pos + *len].clone_from_slice(&u32_vec);
     }
     Ok(ZeiCredential { signature: self.signature.clone(),
                        attributes: u32_attrs,
@@ -63,22 +61,18 @@ pub fn credential_issuer_key_gen<R: CryptoRng + RngCore>(
   let mut map = LinearMap::new();
   let mut num_attrs = 0usize;
   for (key, len) in attributes {
-    let mut num_sub_attr = len / 4;
-    if len % 4 != 0 {
-      num_sub_attr += 1;
-    }
-    map.insert(key.clone(), (num_attrs, num_sub_attr));
+    let num_sub_attr = num_u32_per_u8(*len);
+    map.insert(key.clone(), ((num_attrs, num_sub_attr), *len));
     num_attrs += num_sub_attr;
   }
   let (issuer_pub_key, issuer_sec_key) = ac_keygen_issuer(prng, num_attrs);
 
   (CredIssuerPublicKey { ac_pub_key: issuer_pub_key,
-    map: map.clone(),
-    num_attrs },
-    CredIssuerSecretKey { ac_sec_key: issuer_sec_key,
+                         map: map.clone(),
+                         num_internal_attrs: num_attrs },
+   CredIssuerSecretKey { ac_sec_key: issuer_sec_key,
                          map,
-                         num_attrs },
-   )
+                         num_internal_attrs: num_attrs })
 }
 
 pub fn credential_user_key_gen<R: CryptoRng + RngCore>(
@@ -93,16 +87,26 @@ pub fn credential_sign<R: CryptoRng + RngCore>(prng: &mut R,
                                                user_pub_key: &CredUserPublicKey,
                                                attributes: &[(String, &[u8])])
                                                -> Result<CredSignature, ZeiError> {
-  let n_attrs = issuer_sec_key.num_attrs;
-  let mut attrs = vec![0u32; n_attrs];
-  for (key, attr) in attributes {
-    let (index, len) = issuer_sec_key.map
-                                     .get(key)
-                                     .ok_or(ZeiError::ParameterError)?;
-    let u32_attrs = u8_slice_to_u32_vec(attr, *len); // attr_to_u32_array(*attr, *len);
-    for (i, attr) in u32_attrs.iter().enumerate() {
-      attrs[index + i] = *attr;
+  // A. check that attributes fields to sign matches the attribute list
+  // A.1 lengths matches
+  let keys: Vec<&String> = attributes.iter().map(|(x, _)| x).collect();
+  if keys.len() != issuer_sec_key.map.len() {
+    return Err(ZeiError::ParameterError);
+  }
+
+  // B build list of u32 parameters
+  let n_u32_attrs = issuer_sec_key.num_internal_attrs;
+  let mut attrs = vec![0u32; n_u32_attrs];
+  for (attr_key, attr_value) in attributes {
+    let ((index, u32_len), byte_len) = issuer_sec_key.map
+                                                     .get(attr_key)
+                                                     .ok_or(ZeiError::ParameterError)?; // A.2 field is contained in secret key
+                                                                                        // C. check that attribute length matches secret key parameters
+    if attr_value.len() != *byte_len {
+      return Err(ZeiError::ParameterError);
     }
+    let u32_attrs = u8_slice_to_u32_vec(attr_value, *u32_len); // attr_to_u32_array(*attr, *len);
+    attrs[*index..*index + *u32_len].clone_from_slice(&u32_attrs);
   }
   ac_sign(prng, &issuer_sec_key.ac_sec_key, &user_pub_key, &attrs)
 }
@@ -146,7 +150,7 @@ pub fn credential_open_commitment<R: CryptoRng + RngCore>(prng: &mut R,
                                                           key: &CredCommitmentKey,
                                                           reveal_fields: &[String])
                                                           -> Result<CredPoK, ZeiError> {
-  let reveal_map = reveal_field_to_bitmap(&credential.issuer_pub_key, reveal_fields);
+  let reveal_map = reveal_field_to_bitmap(&credential.issuer_pub_key, reveal_fields)?;
   let ac_credential = credential.to_ac_credential()?;
   ac_open_commitment(prng, user_sk, &ac_credential, key, &reveal_map)
 }
@@ -156,7 +160,7 @@ pub fn credential_reveal<R: CryptoRng + RngCore>(prng: &mut R,
                                                  credential: &Credential,
                                                  reveal_fields: &[String])
                                                  -> Result<CredRevealSig, ZeiError> {
-  let reveal_map = reveal_field_to_bitmap(&credential.issuer_pub_key, reveal_fields);
+  let reveal_map = reveal_field_to_bitmap(&credential.issuer_pub_key, reveal_fields)?;
   let ac_credential = credential.to_ac_credential()?;
   ac_reveal(prng, user_sk, &ac_credential, &reveal_map)
 }
@@ -166,15 +170,14 @@ pub fn credential_verify(issuer_pub_key: &CredIssuerPublicKey,
                          sig_commitment: &CredCommitment,
                          reveal_proof: &ACRevealProof)
                          -> Result<(), ZeiError> {
-  let mut u32_attrs = vec![None; issuer_pub_key.num_attrs];
+  let mut u32_attrs = vec![None; issuer_pub_key.num_internal_attrs];
   for (field, attr) in attrs {
-    let (pos, len) = issuer_pub_key.map
-                                   .get(field)
-                                   .ok_or(ZeiError::ParameterError)?;
+    let ((pos, len), _byte_len) = issuer_pub_key.map
+                                                .get(field)
+                                                .ok_or(ZeiError::ParameterError)?;
     let u32_vec = u8_slice_to_u32_vec(attr, *len);
-    for (i, u32_attr) in u32_vec.iter().enumerate() {
-      u32_attrs[pos + i] = Some(*u32_attr);
-    }
+    let u32_vec_option: Vec<Option<u32>> = u32_vec.iter().map(|x| Some(*x)).collect();
+    u32_attrs[*pos..pos + len].clone_from_slice(&u32_vec_option);
   }
   ac_verify(&issuer_pub_key.ac_pub_key,
             &u32_attrs,
@@ -184,15 +187,21 @@ pub fn credential_verify(issuer_pub_key: &CredIssuerPublicKey,
 
 fn reveal_field_to_bitmap(issuer_pub_key: &CredIssuerPublicKey,
                           reveal_fields: &[String])
-                          -> Vec<bool> {
-  let mut reveal_map = vec![false; issuer_pub_key.num_attrs];
-  for (key, (pos, len)) in &issuer_pub_key.map {
+                          -> Result<Vec<bool>, ZeiError> {
+  // 1. check fields are in public key
+  for field in reveal_fields {
+    if !issuer_pub_key.map.contains_key(field) {
+      return Err(ZeiError::ParameterError);
+    }
+  }
+  let mut reveal_map = vec![false; issuer_pub_key.num_internal_attrs];
+  for (key, ((pos, len), _byte_len)) in &issuer_pub_key.map {
     let b = reveal_fields.contains(key);
     for i in *pos..*pos + *len {
       reveal_map[i] = b;
     }
   }
-  reveal_map
+  Ok(reveal_map)
 }
 
 // How many u32 are required to hold num_u8 u8s?
@@ -206,11 +215,13 @@ fn num_u32_per_u8(num_u8: usize) -> usize {
 
 /* Use the contents of u8 slice to fill a vector of u32 */
 fn u8_slice_to_u32_vec(attr: &[u8], len: usize) -> Vec<u32> {
-  println!("u8_slice_to_u32_vec: attr.len = {} and len = {}", attr.len(), len);
+  println!("u8_slice_to_u32_vec: attr.len = {} and len = {}",
+           attr.len(),
+           len);
   assert!(len >= num_u32_per_u8(attr.len()));
   let mut res = vec![0u32; len];
   for (i, byte) in attr.into_iter().enumerate() {
-    res[i/4] |= (*byte as u32) << 8 * (i % 4);
+    res[i / 4] |= (*byte as u32) << 8 * (i % 4);
   }
   res
 }

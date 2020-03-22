@@ -40,9 +40,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
   println!("Response is {:?}", &resp_text);
   let sig: CredSignature = serde_json::from_str(std::str::from_utf8(resp_text).unwrap()).unwrap();
 
-  let mut map = LinearMap::new();
+  let mut map = vec![];
   for attr in attrs {
-    map.insert(attr.0, attr.1);
+    map.push((attr.0, attr.1.as_bytes().to_vec()));
   }
   let credential = Credential { signature: sig.clone(),
                                 attributes: map,
