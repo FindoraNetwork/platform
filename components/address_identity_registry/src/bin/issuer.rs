@@ -97,11 +97,11 @@ mod filters {
 mod handlers {
   use super::models::{to_pubcreds, CredentialKind, Db, ListOptions};
   use crate::shared::{PubCreds, UserCreds};
+  use credentials::credential_sign;
   use rand_chacha::ChaChaRng;
   use std::convert::Infallible;
   use warp::http::StatusCode;
   use zei::api::anon_creds::ac_sign;
-  use credentials::credential_sign;
 
   /// GET /crednames?offset=3&limit=5
   pub async fn get_credinfo(opts: ListOptions, db: Db) -> Result<impl warp::Reply, Infallible> {
@@ -139,11 +139,15 @@ mod handlers {
     let mut global_state = db.lock().await;
     let credkinds = global_state.credkinds.clone();
     let cred_kind = credkinds.get(&credname).unwrap();
-    let attrs: Vec<(String, &[u8])> = user_creds.attrs.iter().map(|(field, attr)| (field.clone(), attr.as_bytes())).collect();
+    let attrs: Vec<(String, &[u8])> =
+      user_creds.attrs
+                .iter()
+                .map(|(field, attr)| (field.clone(), attr.as_bytes()))
+                .collect();
     let sig = credential_sign(&mut global_state.prng,
-                                          &cred_kind.issuer_sk,
-                                          &user_creds.user_pk,
-                                          &attrs).unwrap();
+                              &cred_kind.issuer_sk,
+                              &user_creds.user_pk,
+                              &attrs).unwrap();
 
     Ok(warp::reply::json(&sig))
   }
@@ -151,13 +155,16 @@ mod handlers {
 
 mod models {
   use crate::shared::{PubCreds, UserCreds};
+  use credentials::{
+    credential_issuer_key_gen, CredIssuerPublicKey, CredIssuerSecretKey, CredUserPublicKey,
+    CredUserSecretKey,
+  };
   use rand_chacha::ChaChaRng;
   use rand_core::SeedableRng;
   use serde_derive::{Deserialize, Serialize};
   use std::collections::HashMap;
   use std::sync::Arc;
   use tokio::sync::Mutex;
-  use credentials::{credential_issuer_key_gen, CredIssuerPublicKey, CredUserSecretKey, CredUserPublicKey, CredIssuerSecretKey};
   /// So we don't have to tackle how different database work, we'll just use
   /// a simple in-memory DB, a HashMap synchronized by a mutex.
   pub type Db = Arc<Mutex<GlobalState>>;
@@ -168,9 +175,16 @@ mod models {
 
   pub fn make_db() -> Db {
     let mut prng = ChaChaRng::from_entropy();
-    let a = [(String::from("passport"), mk_credkind(&mut prng, "passport", &[(String::from("num"), 4)])),
-             (String::from("drivers license"), mk_credkind(&mut prng, "drivers license", &[(String::from("id"), 4), (String::from("state"), 2)])),
-             (String::from("security clearance"), mk_credkind(&mut prng, "security clearance", &[(String::from("type"), 4)]))];
+    let a = [(String::from("passport"),
+              mk_credkind(&mut prng, "passport", &[(String::from("num"), 4)])),
+             (String::from("drivers license"),
+              mk_credkind(&mut prng,
+                          "drivers license",
+                          &[(String::from("id"), 4), (String::from("state"), 2)])),
+             (String::from("security clearance"),
+              mk_credkind(&mut prng,
+                          "security clearance",
+                          &[(String::from("type"), 4)]))];
     let credkinds: HashMap<String, CredentialKind> = a.iter().cloned().collect();
     Arc::new(Mutex::new(GlobalState { prng, credkinds }))
   }
@@ -188,7 +202,10 @@ mod models {
                issuer_pk: credkind.issuer_pk.clone() }
   }
 
-  fn mk_credkind(mut prng: &mut ChaChaRng, name: &str, attributes: &[(String, usize)]) -> CredentialKind {
+  fn mk_credkind(mut prng: &mut ChaChaRng,
+                 name: &str,
+                 attributes: &[(String, usize)])
+                 -> CredentialKind {
     let (issuer_pk, issuer_sk) = credential_issuer_key_gen::<_>(&mut prng, attributes);
     CredentialKind { name: String::from(name),
                      attrs_sizes: attributes.to_vec(),

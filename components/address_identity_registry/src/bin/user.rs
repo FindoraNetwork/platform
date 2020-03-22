@@ -2,11 +2,11 @@
 
 mod shared;
 
+use credentials::{credential_commit, credential_user_key_gen, CredSignature, Credential};
+use linear_map::LinearMap;
 use rand_chacha::ChaChaRng;
 use rand_core::SeedableRng;
 use shared::{PubCreds, UserCreds};
-use credentials::{credential_commit, credential_user_key_gen, CredSignature, Credential};
-use linear_map::LinearMap;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -22,9 +22,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
   let mut prng = ChaChaRng::from_entropy();
   let (user_pk, user_sk) = credential_user_key_gen::<_>(&mut prng, &resp1.issuer_pk);
   let attrs: Vec<(String, String)> = vec![(String::from("dob"), String::from("08221964")),
-                                (String::from("ss"), String::from("666666666")),
-                                (String::from("photo"), String::from("https://bit.ly/gotohell")),
-                                (String::from("dl"), String::from("dl:123456"))];
+                                          (String::from("ss"), String::from("666666666")),
+                                          (String::from("photo"),
+                                           String::from("https://bit.ly/gotohell")),
+                                          (String::from("dl"), String::from("dl:123456"))];
   let user_creds = UserCreds { credname: credname.to_string(),
                                user_pk,
                                attrs: attrs.clone() };
@@ -43,10 +44,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
   for attr in attrs {
     map.insert(attr.0, attr.1);
   }
-  let credential =
-    Credential { signature: sig.clone(),
-                 attributes: map,
-                 issuer_pub_key: resp1.issuer_pk.clone() };
+  let credential = Credential { signature: sig.clone(),
+                                attributes: map,
+                                issuer_pub_key: resp1.issuer_pk.clone() };
 
   if let Ok((commitment, _proof, key)) =
     credential_commit(&mut prng, &user_sk, &credential, b"random message")

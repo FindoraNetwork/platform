@@ -91,7 +91,7 @@ pub fn credential_user_key_gen<R: CryptoRng + RngCore>(
 pub fn credential_sign<R: CryptoRng + RngCore>(prng: &mut R,
                                                issuer_sec_key: &CredIssuerSecretKey,
                                                user_pub_key: &CredUserPublicKey,
-                                               attributes: &[(String, String)])
+                                               attributes: &[(String, &[u8])])
                                                -> Result<CredSignature, ZeiError> {
   let n_attrs = issuer_sec_key.num_attrs;
   let mut attrs = vec![0u32; n_attrs];
@@ -99,7 +99,7 @@ pub fn credential_sign<R: CryptoRng + RngCore>(prng: &mut R,
     let (index, len) = issuer_sec_key.map
                                      .get(key)
                                      .ok_or(ZeiError::ParameterError)?;
-    let u32_attrs = u8_slice_to_u32_vec(attr.as_bytes(), *len); // attr_to_u32_array(*attr, *len);
+    let u32_attrs = u8_slice_to_u32_vec(attr, *len); // attr_to_u32_array(*attr, *len);
     for (i, attr) in u32_attrs.iter().enumerate() {
       attrs[index + i] = *attr;
     }
@@ -162,7 +162,7 @@ pub fn credential_reveal<R: CryptoRng + RngCore>(prng: &mut R,
 }
 
 pub fn credential_verify(issuer_pub_key: &CredIssuerPublicKey,
-                         attrs: &[(String, String)],
+                         attrs: &[(String, &[u8])],
                          sig_commitment: &CredCommitment,
                          reveal_proof: &ACRevealProof)
                          -> Result<(), ZeiError> {
@@ -171,7 +171,7 @@ pub fn credential_verify(issuer_pub_key: &CredIssuerPublicKey,
     let (pos, len) = issuer_pub_key.map
                                    .get(field)
                                    .ok_or(ZeiError::ParameterError)?;
-    let u32_vec = u8_slice_to_u32_vec(attr.as_bytes(), *len);
+    let u32_vec = u8_slice_to_u32_vec(attr, *len);
     for (i, u32_attr) in u32_vec.iter().enumerate() {
       u32_attrs[pos + i] = Some(*u32_attr);
     }

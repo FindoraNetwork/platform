@@ -1,7 +1,7 @@
 #![deny(warnings)]
 #![allow(clippy::module_inception)]
-use serde_derive::{Deserialize, Serialize};
 use credentials::{CredIssuerPublicKey, CredUserPublicKey};
+use serde_derive::{Deserialize, Serialize};
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct PubCreds {

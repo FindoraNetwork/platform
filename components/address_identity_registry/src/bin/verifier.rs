@@ -2,10 +2,10 @@
 
 mod shared;
 
+use credentials::credential_user_key_gen;
 use rand_chacha::ChaChaRng;
 use rand_core::SeedableRng;
 use shared::{PubCreds, UserCreds};
-use credentials::credential_user_key_gen;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -21,9 +21,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
   let mut prng = ChaChaRng::from_entropy();
   let (user_pk, _user_sk) = credential_user_key_gen(&mut prng, &resp.issuer_pk);
   let attrs = vec![(String::from("08221964"), String::from("08221964")),
-                                (String::from("ss"), String::from("666666666")),
-                                (String::from("photo"), String::from("photo:https://bit.ly/gotohell")),
-                                (String::from("dl"), String::from("dl:123456"))];
+                   (String::from("ss"), String::from("666666666")),
+                   (String::from("photo"), String::from("photo:https://bit.ly/gotohell")),
+                   (String::from("dl"), String::from("dl:123456"))];
   let user_creds = UserCreds { credname: credname.to_string(),
                                user_pk,
                                attrs };
