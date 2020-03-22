@@ -16,6 +16,7 @@ use credentials::{
   CredUserSecretKey, Credential,
 };
 use cryptohash::sha256;
+use linear_map::LinearMap;
 use log::{info, warn};
 use rand_chacha::ChaChaRng;
 use rand_core::SeedableRng;

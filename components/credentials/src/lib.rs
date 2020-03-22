@@ -87,7 +87,7 @@ pub fn credential_user_key_gen<R: CryptoRng + RngCore>(
 pub fn credential_sign<R: CryptoRng + RngCore>(prng: &mut R,
                                                issuer_sec_key: &CredIssuerSecretKey,
                                                user_pub_key: &CredUserPublicKey,
-                                               attributes: &[(String, String)])
+                                               attributes: &[(String, &[u8])])
                                                -> Result<CredSignature, ZeiError> {
   // A. check that attributes fields to sign matches the attribute list
   // A.1 lengths matches
@@ -168,7 +168,7 @@ pub fn credential_reveal<R: CryptoRng + RngCore>(prng: &mut R,
 }
 
 pub fn credential_verify(issuer_pub_key: &CredIssuerPublicKey,
-                         attrs: &[(String, String)],
+                         attrs: &[(String, &[u8])],
                          sig_commitment: &CredCommitment,
                          reveal_proof: &ACRevealProof)
                          -> Result<(), ZeiError> {
