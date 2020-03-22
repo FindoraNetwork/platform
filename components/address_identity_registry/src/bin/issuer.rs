@@ -98,10 +98,19 @@ mod handlers {
   use super::models::{to_pubcreds, CredentialKind, Db, ListOptions};
   use crate::shared::{PubCreds, UserCreds};
   use credentials::credential_sign;
+  use percent_encoding::{percent_decode, AsciiSet, CONTROLS};
   use rand_chacha::ChaChaRng;
   use std::convert::Infallible;
   use warp::http::StatusCode;
   use zei::api::anon_creds::ac_sign;
+
+  /// https://url.spec.whatwg.org/#fragment-percent-encode-set
+  const FRAGMENT: &AsciiSet = &CONTROLS.add(b' ').add(b'"').add(b'<').add(b'>').add(b'`');
+
+  fn urldecode(s: &str) -> String {
+    let iter = percent_decode(s.as_bytes());
+    iter.decode_utf8().unwrap().to_string()
+  }
 
   /// GET /crednames?offset=3&limit=5
   pub async fn get_credinfo(opts: ListOptions, db: Db) -> Result<impl warp::Reply, Infallible> {
@@ -120,8 +129,8 @@ mod handlers {
 
   /// GET /issuer_pk/:credname
   pub async fn get_issuer_pk(credname: String, db: Db) -> Result<impl warp::Reply, Infallible> {
-    let credname = urldecode::decode(credname);
-    log::debug!("get_issuer_pk: credname={}", credname);
+    let credname = urldecode(&credname);
+    log::debug!("get_issuer_pk: credname={}", &credname);
     let global_state = db.lock().await;
     // Look for the specified Credential...
     if let Some(credkind) = global_state.credkinds.get(&credname) {

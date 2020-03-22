@@ -28,6 +28,8 @@ pub type CredUserSecretKey = ACUserSecretKey;
 pub type CredSignature = ACSignature;
 pub type CredCommitmentKey = ACCommitmentKey;
 pub type CredCommitment = ACCommitment;
+
+#[derive(Clone)]
 pub struct Credential {
   pub attributes: Vec<(String, Vec<u8>)>,
   pub issuer_pub_key: CredIssuerPublicKey,
