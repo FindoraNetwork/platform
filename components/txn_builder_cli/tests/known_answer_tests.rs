@@ -163,10 +163,24 @@ fn create_txn_builder_overwrite_path(path: &str) -> io::Result<Output> {
 }
 
 #[cfg(test)]
-fn store_sids_with_path(path: &str, indices: &str) -> io::Result<Output> {
+fn store_sids_with_path(file: &str, indices: &str) -> io::Result<Output> {
   Command::new(COMMAND).args(&["asset_issuer", "store_sids"])
-                       .args(&["--path", path])
+                       .args(&["--file", file])
                        .args(&["--indices", indices])
+                       .output()
+}
+
+#[cfg(test)]
+fn store_blind_asset_record_and_memos_nonconfidential(id: &str,
+                                                      amount: &str,
+                                                      token_code: &str,
+                                                      file: &str)
+                                                      -> io::Result<Output> {
+  Command::new(COMMAND).args(&["asset_issuer", "--id", id])
+                       .arg("store_blind_asset_record_and_memos")
+                       .args(&["--amount", amount])
+                       .args(&["--token_code", token_code])
+                       .args(&["--file", file])
                        .output()
 }
 
@@ -219,7 +233,8 @@ fn issue_asset(txn_builder_path: &str,
 fn transfer_asset(txn_builder_path: &str,
                   issuer_id: &str,
                   recipient_ids: &str,
-                  sids_path: &str,
+                  sids_file: &str,
+                  bar_and_memo_files: &str,
                   input_amounts: &str,
                   output_amounts: &str)
                   -> io::Result<Output> {
@@ -227,10 +242,10 @@ fn transfer_asset(txn_builder_path: &str,
                        .args(&["asset_issuer", "--id", issuer_id])
                        .arg("transfer_asset")
                        .args(&["--recipients", recipient_ids])
-                       .args(&["--sids_path", sids_path])
+                       .args(&["--sids_file", sids_file])
+                       .args(&["--blind_asset_record_and_memo_files", bar_and_memo_files])
                        .args(&["--input_amounts", input_amounts])
                        .args(&["--output_amounts", output_amounts])
-                       .args(&["--http", "--localhost"])
                        .output()
 }
 
@@ -268,10 +283,10 @@ fn submit(txn_builder_path: &str) -> io::Result<Output> {
 }
 
 #[cfg(test)]
-fn submit_and_store_sids(txn_builder_path: &str, sids_path: &str) -> io::Result<Output> {
+fn submit_and_store_sids(txn_builder_path: &str, sids_file: &str) -> io::Result<Output> {
   Command::new(COMMAND).args(&["--txn", txn_builder_path])
                        .arg("submit")
-                       .args(&["--sids_path", sids_path])
+                       .args(&["--sids_file", sids_file])
                        .args(&["--http", "--localhost"])
                        .output()
 }
@@ -710,7 +725,7 @@ fn test_store_sids_with_path() {
 fn test_define_issue_transfer_and_submit_with_args() {
   let ledger_standalone = LedgerStandalone::new();
 
-  // Create users, txn builder and key pair
+  // Create users and txn builder
   sign_up_borrower("Borrower 1").expect("Failed to create a borrower");
   sign_up_borrower("Borrower 2").expect("Failed to create a borrower");
   let txn_builder_file = "tb_define_issue_transfer_and_submit";
@@ -738,8 +753,9 @@ fn test_define_issue_transfer_and_submit_with_args() {
   assert!(output.status.success());
 
   // Issue asset
+  let amount_issue = "100";
   let output =
-    issue_asset(txn_builder_file, "0", &token_code, "100").expect("Failed to issue asset");
+    issue_asset(txn_builder_file, "0", &token_code, amount_issue).expect("Failed to issue asset");
 
   io::stdout().write_all(&output.stdout).unwrap();
   io::stdout().write_all(&output.stderr).unwrap();
@@ -757,8 +773,23 @@ fn test_define_issue_transfer_and_submit_with_args() {
 
   assert!(output.status.success());
 
+  // Store blind asset record and associated memos
+  let bar_and_memos_file = "bar_and_memos_define_issue_transfer_and_submit";
+  let output = store_blind_asset_record_and_memos_nonconfidential("0", amount_issue, &token_code, bar_and_memos_file).expect("Failed to store blind asset record and memos");
+
+  io::stdout().write_all(&output.stdout).unwrap();
+  io::stdout().write_all(&output.stderr).unwrap();
+
+  assert!(output.status.success());
+
   // Transfer asset
-  let output = transfer_asset(txn_builder_file, "0", "1,2", sids_file, "50", "30,20").expect("Failed to transfer asset");
+  let output = transfer_asset(txn_builder_file,
+                              "0",
+                              "1,2",
+                              sids_file,
+                              bar_and_memos_file,
+                              "50",
+                              "30,20").expect("Failed to transfer asset");
 
   io::stdout().write_all(&output.stdout).unwrap();
   io::stdout().write_all(&output.stderr).unwrap();
@@ -774,6 +805,7 @@ fn test_define_issue_transfer_and_submit_with_args() {
 
   let _ = fs::remove_file(DATA_FILE);
   fs::remove_file(txn_builder_file).unwrap();
+  fs::remove_file(bar_and_memos_file).unwrap();
   fs::remove_file(sids_file).unwrap();
 
   assert!(output.status.success());
