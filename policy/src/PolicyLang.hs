@@ -2,7 +2,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE DeriveFunctor     #-}
 {-# LANGUAGE FlexibleContexts  #-} -- TODO: check if I need this
-module Main where
+module PolicyLang where
 import qualified Data.Text as T
 import           Data.List (nub,isPrefixOf,sort)
 import qualified Data.Map.Lazy as M
@@ -1635,28 +1635,28 @@ pprintResTypeVar (PSResTypeVar n) = PP.text "ResourceTypeVar" PP.<> PP.parens (P
 pprintResVar (PSResVar n) = PP.text "ResourceVar" PP.<> PP.parens (PP.int n)
 pprintIdVar (PSIdVar n) = PP.text "IdVar" PP.<> PP.parens (PP.int n)
 
--- main = alloyish_main
-main = do
-  polf <- hGetContents stdin
+compile writeOut polf = do
   ast <- return $ P.parse parsePolicyFile "" polf
   case ast of
-    Left err -> putStrLn $ "parse error: " ++ show err
+    Left err -> do
+      writeOut $ "parse error: " ++ show err
+      return $ Left ()
     Right ast -> do
-      putStrLn $ show ast
-      putStrLn "\n\nPretty-printed:\n\n===============\n\n"
+      writeOut $ show ast
+      writeOut "\n\nPretty-printed:\n\n===============\n\n"
       rendered <- return $ PP.render $ pprintPolicyFile ast
-      putStrLn rendered
+      writeOut rendered
 
       case (P.parse parsePolicyFile "" rendered) of
-        Left err -> putStrLn $ "reparse error: " ++ show err
+        Left err -> writeOut $ "reparse error: " ++ show err
         Right ast' -> do
-          putStrLn $ "ASTs " ++ (if ast == ast' then "" else "don't ") ++ "match"
+          writeOut $ "ASTs " ++ (if ast == ast' then "" else "don't ") ++ "match"
 
       final_ast <- foldM (\ast (name,f) -> do
-        putStrLn $ "\n\n" ++ name ++ ":\n\n===============\n\n"
+        writeOut $ "\n\n" ++ name ++ ":\n\n===============\n\n"
         ast <- return $ f ast
         astRendered <- return $ PP.render $ pprintPolicyFile $ ast
-        putStrLn astRendered
+        writeOut astRendered
         return ast
         ) ast [ ("Explicit global_param init check", explicitGParamInit)
               , ("Explicit requires/ensures",over (polfTxns.traverse) explicitReqEns)
@@ -1675,8 +1675,8 @@ main = do
                  over (polfTxns.traverse.txnBody.traverse.txnStmt_bexpr) simplifyCompares)
               ]
 
-      putStrLn "\n\nFinal result:\n\n===============\n\n"
-      putStrLn $ PP.render $ pprintPolicyScript $ convertPolfToScript $ final_ast
+      writeOut "\n\nFinal result:\n\n===============\n\n"
+      writeOut $ PP.render $ pprintPolicyScript $ convertPolfToScript $ final_ast
 
-      return ()
+      return $ Right $ convertPolfToScript $ final_ast
 
