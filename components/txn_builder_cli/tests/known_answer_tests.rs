@@ -264,6 +264,8 @@ fn issue_and_transfer_asset(txn_builder_path: &str,
                        .args(&["--token_code", token_code])
                        .arg("--confidential_amount")
                        // TODO (Keyao): With the arg below, submitting issue_and_transfer_asset fails.
+    // (fernando: Yes, current code does not allow confidential asset_type issuance.
+    // store/effects.rs:110
                        //  .arg("--confidential_asset")
                        .output()
 }
