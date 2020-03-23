@@ -6,7 +6,7 @@ mod shared;
 //use rand_core::SeedableRng;
 use air::{check_merkle_proof, AIRResult, AIR};
 use percent_encoding::{utf8_percent_encode, AsciiSet, CONTROLS};
-use shared::{AIRAddressAndPoK, Bitmap, PubCreds};
+use shared::{protocol_host, AIRAddressAndPoK , Bitmap, PubCreds, QUERY_PORT};
 use zei::api::anon_creds::{ac_verify, ACCommitment};
 
 /// https://url.spec.whatwg.org/#fragment-percent-encode-set
@@ -54,7 +54,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
   // Step 2: Get value and Merkle proof from AIR address
 
-  let air_result: AIRResult = reqwest::get(&format!("http://localhost:8668/air_address/{}",
+  let (protocol, host) = protocol_host();
+  //  let air_result: AIRResult = reqwest::get(&format!("http://localhost:8668/air_address/{}", &addr_and_pok.addr))
+  println!("Looking up value at {}://{}:{}/air_address/{}",
+           protocol, host, QUERY_PORT, &addr_and_pok.addr);
+  let air_result: AIRResult = reqwest::get(&format!("{}://{}:{}/air_address/{}",
+                                                    protocol,
+                                                    host,
+                                                    QUERY_PORT,
                                                     &addr_and_pok.addr)).await?
                                                                         .json::<AIRResult>()
                                                                         .await?;
@@ -62,29 +69,27 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
   println!("Response from ledger is:\n{:?}", &air_result);
 
   let air_entry = air_result.value.clone();
-  // Ok(())
+
   if let Some(commitment_string) = air_entry {
     let commitment: ACCommitment = serde_json::from_str(&commitment_string[..]).unwrap();
     if check_merkle_proof(&air_result.merkle_root,
                           &air_result.key,
                           air_result.value.as_ref(),
-                          &air_result.merkle_proof)
-    {
-      if let Err(e) = ac_verify::<String>(&issuer_resp.issuer_pk,
-                                          &attributes[..],
-                                          &commitment,
-                                          &addr_and_pok.pok)
-      {
-        panic!(format!("smt merkle proof succeeds but ac_verify fails with {}", e));
+                          &air_result.merkle_proof) {
+        if let Err(e) = ac_verify::<String>(&issuer_resp.issuer_pk,
+                                            &attributes[..],
+                                            &commitment,
+                                            &addr_and_pok.pok) {
+        Err(format!("smt merkle proof succeeds but ac_verify fails with {}", e).into())
       } else {
-        println!("smt merkle proof and ac_verify succeed");
+        println!("smt merkle proof and ac_verify both succeed");
+        Ok(())
       }
     } else {
-      panic!("AIR merkle proof failed");
+      Err(format!("AIR merkle proof failed").into())
     }
   } else {
-    panic!(format!("No AIR entry at {}", &addr_and_pok.addr));
+    // panic!(format!("No AIR entry at {}", &addr_and_pok.addr));
+    Err(format!("No AIR entry at {}", &addr_and_pok.addr).into())
   }
-
-  Ok(())
 }
