@@ -263,8 +263,7 @@ fn issue_and_transfer_asset(txn_builder_path: &str,
                        .args(&["--amount", amount])
                        .args(&["--token_code", token_code])
                        .arg("--confidential_amount")
-                       // TODO (Keyao): With the arg below, submitting issue_and_transfer_asset fails.
-                       //  .arg("--confidential_asset")
+                       .arg("--confidential_asset")
                        .output()
 }
 
