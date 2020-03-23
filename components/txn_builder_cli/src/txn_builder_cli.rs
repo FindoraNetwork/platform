@@ -3139,6 +3139,7 @@ mod tests {
   }
 
   #[test]
+  #[ignore]
   // Test funds loading, loan request, fulfilling and repayment
   fn test_request_fulfill_and_pay_loan() {
     let ledger_standalone = LedgerStandalone::new();
