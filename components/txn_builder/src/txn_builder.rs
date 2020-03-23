@@ -38,8 +38,8 @@ fn debt_policy() -> Policy {
            num_amt_globals: 1,
            num_frac_globals: 1,
            init_check: TxnCheck { name: "init_txn".to_string(),
-                                  num_in_params: 0,
-                                  num_out_params: 0,
+                                  in_params: vec![],
+                                  out_params: vec![],
                                   id_ops: vec![],
                                   rt_ops: vec![],
                                   fraction_ops: vec![FractionOp::Const(Fraction::new(0, 1)),
@@ -78,8 +78,8 @@ fn debt_policy() -> Policy {
                                   txn_template: vec![] },
            txn_choices: vec![
                              TxnCheck { name: "setup_loan".to_string(),
-                                        num_in_params: 0,
-                                        num_out_params: 1,
+                                        in_params: vec![],
+                                        out_params: vec![ResourceTypeVar(0)],
                                         id_ops: vec![
     IdOp::OwnerOf(ResourceVar(0)),
     IdOp::Var(IdVar(0)),
@@ -99,8 +99,14 @@ fn debt_policy() -> Policy {
     ResourceVar(0),
   )], },
                              TxnCheck { name: "start_loan".to_string(),
-                                        num_in_params: 2,
-                                        num_out_params: 2,
+                                        in_params: vec![
+    ResourceTypeVar(0),
+    ResourceTypeVar(1),
+  ],
+                                        out_params: vec![
+    ResourceTypeVar(0),
+    ResourceTypeVar(1),
+  ],
                                         id_ops: vec![
     IdOp::OwnerOf(ResourceVar(0)),
     IdOp::Var(IdVar(0)),
@@ -142,8 +148,14 @@ fn debt_policy() -> Policy {
     TxnOp::Transfer(AmountVar(2), ResourceVar(0), Some(ResourceVar(2))),
   ], },
                              TxnCheck { name: "repay_loan".to_string(),
-                                        num_in_params: 2,
-                                        num_out_params: 2,
+                                        in_params: vec![
+    ResourceTypeVar(0),
+    ResourceTypeVar(1),
+  ],
+                                        out_params: vec![
+    ResourceTypeVar(0),
+    ResourceTypeVar(1),
+  ],
                                         id_ops: vec![
     IdOp::OwnerOf(ResourceVar(3)),
     IdOp::OwnerOf(ResourceVar(0)),

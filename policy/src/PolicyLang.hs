@@ -952,8 +952,8 @@ data PSTxnOp
 data PolicyTxnCheck = PolicyTxnCheck
   { _ptcTxnName      :: T.Text
 
-  , _ptcNumInParams  :: Int
-  , _ptcNumOutParams :: Int
+  , _ptcInParams  :: [PSResTypeVar]
+  , _ptcOutParams :: [PSResTypeVar]
 
   , _ptcIdOps        :: [PSIdOp]
   , _ptcRtOps        :: [PSResTypeOp]
@@ -1034,8 +1034,8 @@ convertPolfToScript (PolicyFile { _polfBats = bats
                             ]
                         , _ptcTxnSoFar = PolicyTxnCheck
                             { _ptcTxnName = txnName
-                            , _ptcNumInParams = length $ filter _txnparamIn params
-                            , _ptcNumOutParams = length $ filter _txnparamOut params
+                            , _ptcInParams = map (\t -> fromJust $ M.lookup (_txnparamType t) res_type_globals) $ filter _txnparamIn params
+                            , _ptcOutParams = map (\t -> fromJust $ M.lookup (_txnparamType t) res_type_globals) $ filter _txnparamOut params
                             , _ptcIdOps = []
                             , _ptcRtOps = []
                             , _ptcAmtOps = []
@@ -1496,6 +1496,15 @@ convertPolfToScript (PolicyFile { _polfBats = bats
     convertBexpr (LtExpr _ _) = undefined
     convertBexpr (LeExpr _ _) = undefined
 
+
+-- convertScriptToPolf (PolicyScript { _polNumIdGlobals = num_id_globals
+--                  , _polNumResTypeGlobals = num_res_type_globals
+--                  , _polNumAmtGlobals = num_amt_globals
+--                  , _polNumFracGlobals = num_frac_globals
+--                  , _polInitCheck = init_txn
+--                  , _polTxns = txns})
+--   = final_polf
+
 pprintPolicyScript ps =
   (PP.text "Policy" PP.<+>) $ ppBraces $ PP.nest 4 $ PP.vcat $ map (PP.<+> PP.comma)
     [ PP.text "num_id_globals:" PP.<+> PP.int (_polNumIdGlobals ps)
@@ -1511,37 +1520,25 @@ pprintPolicyScript ps =
 ppBrackets = (\x -> PP.lbrack PP.$+$ x PP.$+$ PP.rbrack)
 ppBraces = (\x -> PP.lbrace PP.$+$ x PP.$+$ PP.rbrace)
 
+pprintVec pprintItem items = (PP.text "vec!" PP.<+>)
+      $ ppBrackets $ PP.nest 4 $ PP.vcat $ map (PP.<+> PP.comma)
+      $ map pprintItem items
+
 pprintPolicyTxnCheck ptc =
   (PP.text "TxnCheck" PP.<+>) $ ppBraces $ PP.nest 4 $ PP.vcat $ map (PP.<+> PP.comma)
     [ PP.text "name:" PP.<+> PP.doubleQuotes (PP.text $ T.unpack $ _ptcTxnName ptc) PP.<> PP.text ".to_string()"
-    , PP.text "num_in_params:" PP.<+> PP.int (_ptcNumInParams ptc)
-    , PP.text "num_out_params:" PP.<+> PP.int (_ptcNumOutParams ptc)
+    , (PP.text "in_params:" PP.<+>) $ pprintVec pprintResTypeVar $ _ptcInParams ptc
+    , (PP.text "out_params:" PP.<+>) $ pprintVec pprintResTypeVar $ _ptcOutParams ptc
 
-    , (PP.text "id_ops:" PP.<+> PP.text "vec!" PP.<+>)
-      $ ppBrackets $ PP.nest 4 $ PP.vcat $ map (PP.<+> PP.comma)
-      $ map pprintIdOp $ _ptcIdOps ptc
-    , (PP.text "rt_ops:" PP.<+> PP.text "vec!" PP.<+>)
-      $ ppBrackets $ PP.nest 4 $ PP.vcat $ map (PP.<+> PP.comma)
-      $ map pprintResTypeOp $ _ptcRtOps ptc
-    , (PP.text "fraction_ops:" PP.<+> PP.text "vec!" PP.<+>)
-      $ ppBrackets $ PP.nest 4 $ PP.vcat $ map (PP.<+> PP.comma)
-      $ map pprintFracOp $ _ptcFracOps ptc
-    , (PP.text "amount_ops:" PP.<+> PP.text "vec!" PP.<+>)
-      $ ppBrackets $ PP.nest 4 $ PP.vcat $ map (PP.<+> PP.comma)
-      $ map pprintAmtOp $ _ptcAmtOps ptc
-    , (PP.text "bool_ops:" PP.<+> PP.text "vec!" PP.<+>)
-      $ ppBrackets $ PP.nest 4 $ PP.vcat $ map (PP.<+> PP.comma)
-      $ map pprintBoolOp $ _ptcBoolOps ptc
-    , (PP.text "assertions:" PP.<+> PP.text "vec!" PP.<+>)
-      $ ppBrackets $ PP.nest 4 $ PP.vcat $ map (PP.<+> PP.comma)
-      $ map pprintBoolVar $ _ptcAssertions ptc
-    , (PP.text "required_signatures:" PP.<+> PP.text "vec!" PP.<+>)
-      $ ppBrackets $ PP.nest 4 $ PP.vcat $ map (PP.<+> PP.comma)
-      $ map pprintIdVar $ _ptcSignatures ptc
+    , (PP.text "id_ops:" PP.<+>) $ pprintVec pprintIdOp $ _ptcIdOps ptc
+    , (PP.text "rt_ops:" PP.<+>) $ pprintVec pprintResTypeOp $ _ptcRtOps ptc
+    , (PP.text "fraction_ops:" PP.<+>) $ pprintVec pprintFracOp $ _ptcFracOps ptc
+    , (PP.text "amount_ops:" PP.<+>) $ pprintVec pprintAmtOp $ _ptcAmtOps ptc
+    , (PP.text "bool_ops:" PP.<+>) $ pprintVec pprintBoolOp $ _ptcBoolOps ptc
+    , (PP.text "assertions:" PP.<+>) $ pprintVec pprintBoolVar $ _ptcAssertions ptc
+    , (PP.text "required_signatures:" PP.<+>) $ pprintVec pprintIdVar $ _ptcSignatures ptc
 
-    , (PP.text "txn_template:" PP.<+> PP.text "vec!" PP.<+>)
-      $ ppBrackets $ PP.nest 4 $ PP.vcat $ map (PP.<+> PP.comma)
-      $ map pprintTxnOp $ _ptcTxnTemplate ptc
+    , (PP.text "txn_template:" PP.<+>) $ pprintVec pprintTxnOp $ _ptcTxnTemplate ptc
     ]
 
 pprintTxnOp (PSIssue amt restype res)

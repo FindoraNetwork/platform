@@ -88,8 +88,8 @@ pub enum RealTxnOp {
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 pub struct TxnCheck {
   pub name: String,
-  pub num_in_params: u64,
-  pub num_out_params: u64,
+  pub in_params: Vec<ResourceTypeVar>,
+  pub out_params: Vec<ResourceTypeVar>,
   pub id_ops: Vec<IdOp>,
   pub rt_ops: Vec<ResourceTypeOp>,
 
@@ -216,10 +216,26 @@ pub fn run_txn_check(check: &TxnCheck,
    *    (ie input or output) or more than one op.
    *  - Ensure that (at the end), resource indices completely cover
    *    0..(num_resources-1) inclusive
+   *  - Ensure that all the resources have matching asset types
+   *    - Specifically, issued resources must have a matching type, and
+   *      transferred resources must have equal types
    *
    * If all those things hold, then every "resource" in the script
    * corresponds one-to-one with an AssetRecord in the transaction.
    */
+
+  let resvar_types = check.in_params
+                          .iter()
+                          .chain(check.out_params.iter())
+                          .enumerate()
+                          .map(|(ix, tp)| (ResourceVar(ix as u64), tp))
+                          .collect::<HashMap<_, _>>();
+
+  // Record which types are used in issuances, and pairs of resource vars
+  // used in transfers.
+  // TODO(joe): evaluate using a union-find for transfer_types
+  // let mut issue_types = HashMap<ResourceVar, ResourceTypeVar>::new();
+  // let mut transfer_types = Vec<(ResourceVar, ResourceVar)>::new();
 
   let mut pending_inputs = HashSet::<ResourceVar>::new();
   let mut pending_outputs = HashSet::<ResourceVar>::new();
@@ -242,6 +258,10 @@ pub fn run_txn_check(check: &TxnCheck,
         if used_resources.contains(res) || pending_outputs.contains(res) {
           return Err(fail.clone());
         }
+
+        // // record its type as a requirement
+        // issue_types.insert(res.clone(), rt.clone());
+
         if let Some(ref mut pending) = pending_op {
           match pending {
             RealTxnOp::Transfer(_) => {
@@ -278,6 +298,9 @@ pub fn run_txn_check(check: &TxnCheck,
           if used_resources.contains(out_res) {
             return Err(fail.clone());
           }
+
+          // // record type equality as a requirement
+          // transfer_types.push((inp.clone(), out.clone()));
         }
 
         if let Some(ref mut pending) = pending_op {
@@ -356,7 +379,7 @@ pub fn run_txn_check(check: &TxnCheck,
 
   debug_assert!(pending_op.is_none());
   debug_assert!(num_inputs + num_outputs == used_resources.len() as u64);
-  if num_inputs != check.num_in_params || num_outputs != check.num_out_params {
+  if num_inputs != check.in_params.len() as u64 || num_outputs != check.out_params.len() as u64 {
     return Err(fail.clone());
   }
 
@@ -885,33 +908,63 @@ pub fn run_txn_check(check: &TxnCheck,
 
   /* Step 7: consistency checks with asset records.
    *  (a) Check that asset type vars of issuances match
-   *  (b) Check that amount sums of transfers match
+   *  (b) Check that asset types of transfers match
+   *  (c) Check that amount sums of transfers match
    */
 
-  // (a)
+  // (a), (b)
   for op in real_ops.iter() {
     dbg!("op check");
-    if let RealTxnOp::Issue(rt_ix, outs) = op {
-      // should never happen
-      if outs.is_empty() {
-        return Err(fail.clone());
-      }
-
-      let rt_ix: usize = rt_ix.0.try_into().map_err(|_| fail.clone())?;
-      let asset_type = rt_vars.get(rt_ix).ok_or_else(|| fail.clone())?;
-
-      for (_, rv) in outs.iter() {
-        let txo = res_vars.get(rv).ok_or_else(|| fail.clone())?;
-        // txo.0.asset_type should be established as non-None by the
-        // first two checking loops.
-        if *asset_type != txo.0.asset_type.unwrap() {
+    match op {
+      // (a)
+      RealTxnOp::Issue(rt_ix, outs) => {
+        // should never happen
+        if outs.is_empty() {
           return Err(fail.clone());
+        }
+
+        let rt_ix: usize = rt_ix.0.try_into().map_err(|_| fail.clone())?;
+        let asset_type = rt_vars.get(rt_ix).ok_or_else(|| fail.clone())?;
+
+        for (_, rv) in outs.iter() {
+          let txo = res_vars.get(rv).ok_or_else(|| fail.clone())?;
+          // txo.0.asset_type should be established as non-None by the
+          // first two checking loops.
+          if *asset_type != txo.0.asset_type.unwrap() {
+            return Err(fail.clone());
+          }
+        }
+      }
+      // (b)
+      RealTxnOp::Transfer(transfers) => {
+        for (_, inp, out) in transfers {
+          let inp_txo = res_vars.get(inp).ok_or_else(|| fail.clone())?;
+          let inp_asset_type = resvar_types.get(inp).ok_or_else(|| fail.clone())?;
+          let inp_asset_type = rt_vars.get(inp_asset_type.0 as usize)
+                                      .ok_or_else(|| fail.clone())?;
+          // txo.0.asset_type should be established as non-None by the
+          // first two checking loops.
+          if *inp_asset_type != inp_txo.0.asset_type.unwrap() {
+            return Err(fail.clone());
+          }
+
+          if let Some(real_out) = out {
+            let out_txo = res_vars.get(real_out).ok_or_else(|| fail.clone())?;
+            let out_asset_type = resvar_types.get(real_out).ok_or_else(|| fail.clone())?;
+            let out_asset_type = rt_vars.get(out_asset_type.0 as usize)
+                                        .ok_or_else(|| fail.clone())?;
+            // txo.0.asset_type should be established as non-None by the
+            // first two checking loops.
+            if *out_asset_type != out_txo.0.asset_type.unwrap() {
+              return Err(fail.clone());
+            }
+          }
         }
       }
     }
   }
 
-  // (b)
+  // (c)
   for (rv, tot_vars) in res_totals.iter() {
     dbg!("total check");
     if tot_vars.is_empty() {
