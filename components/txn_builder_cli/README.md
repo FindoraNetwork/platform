@@ -46,12 +46,19 @@ In the initial data, there's one asset issuer, Izzie. To sign up a new asset iss
 ```
 
 ### Store sids to file
-If only one utxo sid is needed for an asset transfer, there's no need to use the `store_sids` subcommand. When submitting the asset issuing transaction, simply use `--sids_path` to specify a file to store the utxo sid.
+If only one utxo sid is needed for an asset transfer, there's no need to use the `store_sids` subcommand. When submitting the asset issuing transaction, simply use `--sids_file` to specify a file to store the utxo sid.
 
 Otherwise, add `--get_sids` when submitting asset issuing transactions, and note the utxo sids shown in the outputs. After all the transactions needed are submitted, store all the utxo sids to one file:
 ```
-./txn_builder_cli asset_issuer store_sids --path s --indices 1,2,3
+./txn_builder_cli asset_issuer store_sids --file sids_file --indices 1,2,3
 ```
+
+### Store blind asset record ans associated memos
+Blind asset record and associated memos (tracer memo and owner memo) are necessary for asset transfer. To store them:
+```
+./txn_builder_cli asset_issuer --id 0 --file bar_and_memos_file --amount 100 --token_code ibIaBlHV-PdQkvSuEg6YSA==
+```
+Add `--confidential_amount` or `--confidential_asset` for confidential amount or asset, respectively.
 
 ### Assign to AIR (Address Identity Registry)
 * Create an empty transaction
@@ -99,7 +106,7 @@ After an asset is defined and the transaction is submitted:
 ```
 ./txn_builder_cli --txn txn_issue submit
 ```
-To display the utxo sids, add `--get_sids`. To store the sids to a file, use `--sids_path`.
+To display the utxo sids, add `--get_sids`. To store the sids to a file, use `--sids_file`.
 
 ### Transfer units of an asset. See `txn_builder_cli add transfer_asset`.
 After an asset is defined and issued, transactions are submitted, and utxo sids are stored.
@@ -108,8 +115,9 @@ After an asset is defined and issued, transactions are submitted, and utxo sids 
 ./txn_builder_cli create_txn_builder --name txn_transfer
 ```
 * Transfer
+After blind asset record and associated memos are stored:
 ```
-./txn_builder_cli --txn txn_transfer asset_issuer --id 0 transfer_asset --sids_path s recipients 0,1 --input_amounts 45 --output_amounts 10,35
+./txn_builder_cli --txn txn_transfer asset_issuer --id 0 transfer_asset --sids_path s recipients 0,1 --blind_asset_record_and_memo_files bar_and_memo_files --input_amounts 45 --output_amounts 10,35
 ```
 * Submit the transaction
 ```
@@ -126,7 +134,8 @@ After an asset is defined and the transaction is submitted:
 ```
 ./txn_builder_cli --txn txn_issue_and_transfer asset_issuer --id 0 issue_and_transfer_asset --recipient 0 --amount 1000 --token_code ibIaBlHV-PdQkvSuEg6YSA==
 ```
-Add `--confidential_amount` or `--confidential_asset` if needed.
+Add `--confidential_amount` or `--confidential_asset` for confidential amount or asset, respectively.
+Use `--memo_file` to store the owner memo.
 * Submit the transaction
 ```
 ./txn_builder_cli --txn txn_issue_and_transfer submit
@@ -197,6 +206,7 @@ In the initial data, there's one borrower, Ben. To sign up a new borrower accoun
 ./txn_builder_cli --txn txn_load borrower --id 0 load_funds --issuer 0 --amount 500
 ```
 By default, `https://testnet.findora.org` is used. To switch to `http://localhost`, add `--http --localhost`.
+Use `--memo_file` to store the owner memo.
 
 ### View loans
 * View all loans of a borrower
@@ -253,6 +263,13 @@ For example, to create a min_credit_score credential:
 ./txn_builder_cli borrower --id 0 create_or_overwrite_credential --attribute min_credit_score --value 650
 ```
 If the credential already exists, the original record will be overwritten.
+
+### Get asset record
+After the owner memo is stored:
+```
+./txn_builder_cli borrower --id 0 get_asset_record --sid 1 --memo_file m_file
+```
+By default, `https://testnet.findora.org` is used. To switch to `http://localhost`, add `--http --localhost`.
 
 ## Querying the ledger server
 
@@ -317,7 +334,7 @@ Bill's id is 1.
 
 ### Define an asset
 ```
-./txn_builder_cli --txn txn_define asset_issuer --id 1 define_asset --memo 'Define a confidential asset.' --confidential
+./txn_builder_cli --txn txn_define asset_issuer --id 1 define_asset --memo 'Define a confidential asset.'
 ```
 Note from the output that the asset token code is `7hAA3TTJQHhDGs-_mpP12Q==`, or `[238, 16, 0, 221, 52, 201, 64, 120, 67, 26, 207, 191, 154, 147, 245, 217]`:
 ```
@@ -337,7 +354,7 @@ Creating asset with token code "7hAA3TTJQHhDGs-_mpP12Q==": [238, 16, 0, 221, 52,
 
 ### Issue and transfer the asset
 ```
-./txn_builder_cli --txn txn_issue_and_transfer asset_issuer --id 1 issue_and_transfer_asset --recipient 1 --amount 100 --token_code 7hAA3TTJQHhDGs-_mpP12Q== --confidential_amount --confidential_asset
+./txn_builder_cli --txn txn_issue_and_transfer asset_issuer --id 1 issue_and_transfer_asset --recipient 1 --amount 100 --token_code 7hAA3TTJQHhDGs-_mpP12Q== --confidential_amount --confidential_asset --memo_file memo
 ```
 
 ### Submit the transaction and get the utxo
@@ -356,7 +373,7 @@ Utxo: [TxoSID(429)]
 ```
 ### Get and verify the asset record
 ```
-./txn_builder_cli --txn txn_verify_asset borrower --id 1 get_asset_record --sid 429
+./txn_builder_cli --txn txn_verify_asset borrower --id 1 get_asset_record --sid 429 --memo_file memo
 ```
 Note from the last line of the output that the asset token code is indeed `[238, 16, 0, 221, 52, 201, 64, 120, 67, 26, 207, 191, 154, 147, 245, 217]`, and the amount Bill owns is `100`.
 ```
