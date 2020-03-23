@@ -1214,7 +1214,7 @@ fn load_funds(issuer_id: u64,
                                              recipient_key_pair,
                                              amount,
                                              token_code,
-                                             AssetRecordType::from_booleans(false, false),
+                                             AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
                                              memo_file,
                                              txn_file)?;
 
@@ -1470,7 +1470,7 @@ fn fulfill_loan(loan_id: u64,
                                              lender_key_pair,
                                              amount,
                                              fiat_code,
-                                             AssetRecordType::from_booleans(false, false),
+                                             AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
                                              None,
                                              txn_file)?;
   let fiat_sid = submit_and_get_sids(protocol, host, txn_builder)?[0];
@@ -1509,7 +1509,7 @@ fn fulfill_loan(loan_id: u64,
                                              borrower_key_pair,
                                              amount,
                                              debt_code,
-                                             AssetRecordType::from_booleans(false, false),
+                                             AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
                                              None,
                                              txn_file)?;
   let debt_sid = submit_and_get_sids(protocol, host, txn_builder)?[0];
@@ -3339,7 +3339,7 @@ mod tests {
                                      &recipient_key_pair,
                                      amount,
                                      code,
-                                     AssetRecordType::from_booleans(false, false),
+                                     AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
                                      None,
                                      txn_builder_path).is_ok());
 
