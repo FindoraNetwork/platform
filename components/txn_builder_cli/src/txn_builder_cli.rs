@@ -1798,7 +1798,7 @@ fn main() {
     .arg(Arg::with_name("findora_dir")
       .short("d")
       .long("dir")
-      .value_name("file")
+      .value_name("PATH")
       .help("Directory for configuaration, security, and temporary files; must be writable")
       .takes_value(true)
       .env("FINDORA_DIR"))
