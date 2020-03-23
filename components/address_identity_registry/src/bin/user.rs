@@ -10,9 +10,7 @@ use shared::{Bitmap, PubCreds, QUERY_PORT, SUBMIT_PORT, UserCreds, protocol_host
 use submission_server::{TxnHandle, TxnStatus};
 use txn_builder::{BuildsTransactions, TransactionBuilder, TransferOperationBuilder};
 use warp::Filter;
-use zei::api::anon_creds::{
-  ac_commit, ac_keygen_user, ACCommitmentKey, ACPoK, ACSignature, Credential,
-};
+use zei::api::anon_creds::{ac_commit, ac_keygen_user, ACCommitmentKey, ACPoK, ACSignature, Credential};
 use zei::serialization::ZeiFromToBytes;
 use zei::xfr::sig::{XfrKeyPair, XfrPublicKey};
 
