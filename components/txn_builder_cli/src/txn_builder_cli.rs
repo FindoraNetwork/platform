@@ -13,8 +13,6 @@ use std::fs::{self, File};
 use std::io::prelude::*;
 use std::path::{Path, PathBuf};
 use std::process::exit;
-use std::process::Command;
-use std::thread;
 use submission_server::{TxnHandle, TxnStatus};
 use txn_builder::{BuildsTransactions, PolicyChoice, TransactionBuilder, TransferOperationBuilder};
 use zei::api::anon_creds::{
@@ -100,9 +98,6 @@ const BACKUP_COUNT_MAX: i32 = 10000;
 const QUERY_PORT: &str = "8668";
 /// Port for submitting transactions.
 const SUBMIT_PORT: &str = "8669";
-#[allow(dead_code)]
-/// Path to the standalone ledger.
-const LEDGER_STANDALONE: &str = "../../target/debug/ledger_standalone";
 
 //
 // Credentials
@@ -861,20 +856,6 @@ fn issue_and_transfer_asset(issuer_key_pair: &XfrKeyPair,
   Ok(txn_builder)
 }
 
-/// Runs the standalone ledger
-#[allow(dead_code)]
-fn run_ledger_standalone() -> Result<(), PlatformError> {
-  // Run the standalone ledger
-  thread::spawn(move || {
-    let status = Command::new(LEDGER_STANDALONE).status();
-    if status.is_err() {
-      return Err(PlatformError::SubmissionServerError(Some("Failed to run ledger.".to_owned())));
-    };
-    Ok(())
-  });
-  Ok(())
-}
-
 /// Queries a value.
 ///
 /// # Arguments
@@ -917,6 +898,7 @@ fn query(protocol: &str,
 /// Submits a transaction.
 ///
 /// Either this function or `submit_and_get_sids` should be called after a transaction is composed by any of the following:
+/// * `air_assign`
 /// * `define_asset`
 /// * `issue_asset`
 /// * `transfer_asset`
@@ -951,6 +933,7 @@ fn submit(protocol: &str,
 /// Submits a transaction and gets the UTXO (unspent transaction output) SIDs.
 ///
 /// Either this function or `submit` should be called after a transaction is composed by any of the following:
+/// * `air_assign`
 /// * `define_asset`
 /// * `issue_asset`
 /// * `transfer_asset`
@@ -1701,11 +1684,6 @@ fn main() {
           .takes_value(true)
           .help("Sids. Separate by comma (\",\").")))
       .subcommand(SubCommand::with_name("air_assign")
-        .arg(Arg::with_name("issuer")
-          .short("i")
-          .long("issuer")
-          .help("Required: issuer id.")
-          .takes_value(true))
         .arg(Arg::with_name("address")
           .short("k")
           .long("address")
@@ -2185,15 +2163,10 @@ fn process_asset_issuer_cmd(asset_issuer_matches: &clap::ArgMatches,
       store_sids_to_file(path, sids)
     }
     ("air_assign", Some(air_assign_matches)) => {
-      let issuer_id = if let Some(issuer_arg) = air_assign_matches.value_of("issuer") {
-        if let Ok(id) = issuer_arg.parse::<u64>() {
-          id
-        } else {
-          println!("Improperly formatted issuer id.");
-          return Err(PlatformError::InputsError);
-        }
+      let issuer_id = if let Some(id_arg) = asset_issuer_matches.value_of("id") {
+        parse_to_u64(id_arg)?
       } else {
-        println!("User id is required to define asset. Use --issuer.");
+        println!("Asset issuer id is required for AIR assigning. Use asset_issuer --id.");
         return Err(PlatformError::InputsError);
       };
       match (air_assign_matches.value_of("address"), air_assign_matches.value_of("data")) {
@@ -3168,6 +3141,7 @@ mod tests {
   }
 
   #[test]
+  #[ignore]
   // Test funds loading, loan request, fulfilling and repayment
   fn test_request_fulfill_and_pay_loan() {
     let ledger_standalone = LedgerStandalone::new();
