@@ -212,6 +212,7 @@ fn define_asset(txn_builder_path: &str,
                        .arg("define_asset")
                        .args(&["--token_code", token_code])
                        .args(&["--memo", memo])
+                       .arg("--traceable")
                        .output()
 }
 
