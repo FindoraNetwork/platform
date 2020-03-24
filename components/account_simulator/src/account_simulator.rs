@@ -28,7 +28,7 @@ use zei::serialization::ZeiFromToBytes;
 use zei::setup::PublicParams;
 use zei::xfr::asset_record::{build_blind_asset_record, open_blind_asset_record, AssetRecordType};
 use zei::xfr::sig::XfrKeyPair;
-use zei::xfr::structs::{AssetRecord, AssetRecordTemplate, OpenAssetRecord};
+use zei::xfr::structs::{AssetRecord, AssetRecordTemplate, OpenAssetRecord, OwnerMemo};
 
 #[derive(Clone, Debug, Eq, PartialEq, Hash)]
 pub struct UserName(pub String);
@@ -367,6 +367,7 @@ struct LedgerAccounts {
   balances: HashMap<UserName, HashMap<UnitName, u64>>,
   utxos: HashMap<UserName, VecDeque<TxoSID>>, // by account
   units: HashMap<UnitName, (UserName, AssetTypeCode)>, // user, data
+  owner_memos: HashMap<TxoSID, OwnerMemo>,
   // These only affect new issuances
   confidential_amounts: bool,
   #[allow(unused)]
@@ -462,7 +463,7 @@ impl InterpretAccounts<PlatformError> for LedgerAccounts {
 
         let ar = AssetRecordTemplate::with_no_asset_tracking(amt, code.val, art, *pubkey);
         let params = PublicParams::new();
-        let (ba, _, _memo) =
+        let (ba, _, owner_memo) =
           build_blind_asset_record(self.ledger.get_prng(), &params.pc_gens, &ar, None);
 
         let asset_issuance_body = IssueAssetBody::new(&code, new_seq_num, &[TxOutput(ba)]).unwrap();
@@ -488,6 +489,9 @@ impl InterpretAccounts<PlatformError> for LedgerAccounts {
                             .unwrap();
 
         assert!(txos.len() == 1);
+        if let Some(memo) = owner_memo {
+          self.owner_memos.insert(txos[0], memo);
+        }
         utxos.extend(txos.iter());
       }
       AccountsCommand::Send(src, amt, unit, dst) => {
@@ -517,7 +521,7 @@ impl InterpretAccounts<PlatformError> for LedgerAccounts {
         while total_sum < amt && !avail.is_empty() {
           let sid = avail.pop_front().unwrap();
           let blind_rec = &(self.ledger.get_utxo(sid).unwrap().0).0;
-          let memo = None; // TODO (fernando) where to get memo ?
+          let memo = self.owner_memos.get(&sid).cloned();
           let open_rec = open_blind_asset_record(&blind_rec, &memo, &src_priv).unwrap();
           dbg!(sid, open_rec.get_amount(), open_rec.get_asset_type());
           if *open_rec.get_asset_type() != unit_code.val {
@@ -595,6 +599,8 @@ impl InterpretAccounts<PlatformError> for LedgerAccounts {
                                  to_use.iter().cloned().map(TxoRef::Absolute).collect(),
                                  src_records.as_slice(),
                                  all_outputs.as_slice()).unwrap();
+
+        let mut owners_memos = transfer_body.transfer.owners_memos.clone();
         dbg!(&transfer_body);
         let transfer_sig =
           SignedAddress { address: XfrAddress { key: *src_pub },
@@ -628,6 +634,12 @@ impl InterpretAccounts<PlatformError> for LedgerAccounts {
             .get_mut(src)
             .unwrap()
             .extend(&txos[dst_outputs.len()..]);
+
+        for (txo_sid, owner_memo) in txos.iter().zip(owners_memos.drain(..)) {
+          if let Some(memo) = owner_memo {
+            self.owner_memos.insert(*txo_sid, memo);
+          }
+        }
       } // AccountsCommand::ToggleConfAmts() => {
         //     self.confidential_amounts = !conf_amts;
         // }
@@ -644,7 +656,7 @@ struct OneBigTxnAccounts {
   txn: Transaction,
   accounts: HashMap<UserName, XfrKeyPair>,
   balances: HashMap<UserName, HashMap<UnitName, u64>>,
-  txos: Vec<TxOutput>,
+  txos: Vec<(TxOutput, Option<OwnerMemo>)>,
   utxos: HashMap<UserName, VecDeque<usize>>, // by account
   units: HashMap<UnitName, (UserName, AssetTypeCode, u64)>, // user, data, issuance num
   // These only affect new issuances
@@ -735,7 +747,7 @@ impl InterpretAccounts<PlatformError> for OneBigTxnAccounts {
 
         let ar = AssetRecordTemplate::with_no_asset_tracking(amt, code.val, art, *pubkey);
         let params = PublicParams::new();
-        let (ba, _, _) =
+        let (ba, _, owner_memo) =
           build_blind_asset_record(self.base_ledger.get_prng(), &params.pc_gens, &ar, None);
 
         let asset_issuance_body = IssueAssetBody::new(&code, new_seq_num, &[TxOutput(ba)]).unwrap();
@@ -761,9 +773,8 @@ impl InterpretAccounts<PlatformError> for OneBigTxnAccounts {
         assert!(effect.txos.len() == self.txos.len() + 1);
         utxos.push_back(effect.txos.len() - 1);
 
-        self.txos.extend(effect.txos[self.txos.len()..].iter()
-                                                       .map(|x| x.as_ref().unwrap())
-                                                       .cloned());
+        self.txos
+            .push((effect.txos[self.txos.len()].as_ref().unwrap().clone(), owner_memo));
       }
       AccountsCommand::Send(src, amt, unit, dst) => {
         let amt = *amt as u64;
@@ -791,8 +802,8 @@ impl InterpretAccounts<PlatformError> for OneBigTxnAccounts {
 
         while total_sum < amt && !avail.is_empty() {
           let sid = avail.pop_front().unwrap();
-          let blind_rec = &(self.txos.get(sid).unwrap().0);
-          let memo = None; // TODO (fernando) how to get the rigth memo
+          let blind_rec = &((self.txos.get(sid).unwrap().0).0);
+          let memo = &(self.txos.get(sid).unwrap().1);
           let open_rec = open_blind_asset_record(&blind_rec, &memo, &src_priv).unwrap();
           dbg!(sid, open_rec.get_amount(), open_rec.get_asset_type());
           if *open_rec.get_asset_type() != unit_code.val {
@@ -871,6 +882,7 @@ impl InterpretAccounts<PlatformError> for OneBigTxnAccounts {
                                                          .collect(),
                                                    src_records.as_slice(),
                                                    all_outputs.as_slice()).unwrap();
+        let owners_memos = transfer_body.transfer.owners_memos.clone();
         dbg!(&transfer_body);
         let transfer_sig =
           SignedAddress { address: XfrAddress { key: *src_pub },
@@ -907,7 +919,10 @@ impl InterpretAccounts<PlatformError> for OneBigTxnAccounts {
             .get_mut(src)
             .unwrap()
             .extend(&txo_sids[dst_outputs.len()..]);
-        self.txos.extend(txos);
+        self.txos.extend(txos.iter()
+                             .zip(owners_memos.iter())
+                             .map(|(txo, memo)| (txo.clone(), memo.as_ref().cloned()))
+                             .collect::<Vec<(TxOutput, Option<OwnerMemo>)>>());
       } // AccountsCommand::ToggleConfAmts() => {
         //     self.confidential_amounts = !conf_amts;
         // }
@@ -1587,6 +1602,7 @@ mod test {
                                                utxos: HashMap::new(),
                                                units: HashMap::new(),
                                                balances: HashMap::new(),
+                                               owner_memos: HashMap::new(),
                                                confidential_amounts: cmds.confidential_amounts,
                                                confidential_types: cmds.confidential_types });
     let mut big_txn = Box::new(OneBigTxnAccounts { base_ledger: LedgerState::test_ledger(),
