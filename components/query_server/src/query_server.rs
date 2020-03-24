@@ -169,7 +169,7 @@ mod tests {
 
     //Issuance txn
     let amt = 1000;
-    let confidentiality_flag = NonConfidentialAmount_NonConfidentialAssetType; // TODO (fernando) get this right
+    let confidentiality_flag = NonConfidentialAmount_NonConfidentialAssetType;
     let issuance_tx =
       builder.add_basic_issue_asset(&alice, &None, &token_code, 0, amt, confidentiality_flag)
              .unwrap()
@@ -194,8 +194,8 @@ mod tests {
     // Transfer to Bob
     let transfer_sid = TxoSID(0);
     let bar = ledger_standalone.fetch_blind_asset_record(transfer_sid);
-    let memo = None; // TODO (fernando) need to fectch Owner memo associated with bar
-    let oar = open_blind_asset_record(&bar, &memo, alice.get_sk_ref()).unwrap();
+    let owner_memo = None; // TODO (fernando) need to fetch Owner memo associated with bar
+    let oar = open_blind_asset_record(&bar, &owner_memo, alice.get_sk_ref()).unwrap();
     let mut xfr_builder = TransferOperationBuilder::new();
     let out_template = AssetRecordTemplate::with_no_asset_tracking(amt,
                                                                    token_code.val,
