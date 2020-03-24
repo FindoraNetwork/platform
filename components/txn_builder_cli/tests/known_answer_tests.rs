@@ -805,6 +805,8 @@ fn test_define_issue_transfer_and_submit_with_args() {
 
   // Store blind asset record and associated memos
   let asset_file = "asset_define_issue_transfer_and_submit";
+  // TODO (Keyao): If replace store_blind_asset_record_and_memos_nonconfidential with store_blind_asset_record_and_memos_confidential,
+  // submitting the transfer transaction will fail due to "invalid JSON".
   let output = store_blind_asset_record_and_memos_nonconfidential("0", amount_issue, &token_code, asset_file).expect("Failed to store blind asset record and memos");
 
   io::stdout().write_all(&output.stdout).unwrap();
