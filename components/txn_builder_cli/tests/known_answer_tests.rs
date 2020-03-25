@@ -195,7 +195,7 @@ fn store_blind_asset_record_and_memos_confidential(id: &str,
                        .args(&["--amount", amount])
                        .args(&["--token_code", token_code])
                        .args(&["--file", file])
-                       .args(&["--confidential_amount", "--confidential_asset"])
+                       .arg("--confidential_amount")
                        .output()
 }
 
@@ -287,7 +287,7 @@ fn issue_and_transfer_asset_confidential(txn_builder_path: &str,
                        .args(&["--recipient", recipient_id])
                        .args(&["--amount", amount])
                        .args(&["--token_code", token_code])
-                       .args(&["--confidential_amount", "--confidential_asset"])
+                       .arg("--confidential_amount")
                        .output()
 }
 
