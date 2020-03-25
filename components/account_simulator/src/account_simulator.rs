@@ -944,6 +944,7 @@ struct LedgerStandaloneAccounts {
   balances: HashMap<UserName, HashMap<UnitName, u64>>,
   utxos: HashMap<UserName, VecDeque<TxoSID>>, // by account
   units: HashMap<UnitName, (UserName, AssetTypeCode)>, // user, data
+  owner_memos: HashMap<TxoSID, OwnerMemo>,
   // These only affect new issuances
   confidential_amounts: bool,
   #[allow(unused)]
@@ -1099,7 +1100,8 @@ impl InterpretAccounts<PlatformError> for LedgerStandaloneAccounts {
 
         let ar = AssetRecordTemplate::with_no_asset_tracking(amt, code.val, art, *pubkey);
         let params = PublicParams::new();
-        let (ba, _, _) = build_blind_asset_record(&mut self.prng, &params.pc_gens, &ar, None);
+        let (ba, _, owner_memo) =
+          build_blind_asset_record(&mut self.prng, &params.pc_gens, &ar, None);
 
         let asset_issuance_body = IssueAssetBody::new(&code, new_seq_num, &[TxOutput(ba)]).unwrap();
 
@@ -1157,6 +1159,9 @@ impl InterpretAccounts<PlatformError> for LedgerStandaloneAccounts {
         };
 
         assert!(txos.len() == 1);
+        if let Some(memo) = owner_memo {
+          self.owner_memos.insert(txos[0], memo);
+        }
         utxos.extend(txos.iter());
       }
       AccountsCommand::Send(src, amt, unit, dst) => {
@@ -1190,7 +1195,7 @@ impl InterpretAccounts<PlatformError> for LedgerStandaloneAccounts {
             let port = format!("{}",self.query_port);
             reqwest::get(&format!("http://{}:{}/utxo_sid/{}",host,port,sid.0)).unwrap().error_for_status().unwrap().text().unwrap()
           }).unwrap().0;
-          let memo = None; // TODO (fernando) get right memo
+          let memo = self.owner_memos.get(&sid).cloned();
           let open_rec = open_blind_asset_record(&blind_rec, &memo, &src_priv).unwrap();
           dbg!(sid, open_rec.get_amount(), open_rec.get_asset_type());
           if *open_rec.get_asset_type() != unit_code.val {
@@ -1263,6 +1268,8 @@ impl InterpretAccounts<PlatformError> for LedgerStandaloneAccounts {
                                  to_use.iter().cloned().map(TxoRef::Absolute).collect(),
                                  src_records.as_slice(),
                                  all_outputs.as_slice()).unwrap();
+
+        let mut owners_memos = transfer_body.transfer.owners_memos.clone();
         dbg!(&transfer_body);
         let transfer_sig =
           SignedAddress { address: XfrAddress { key: *src_pub },
@@ -1328,6 +1335,11 @@ impl InterpretAccounts<PlatformError> for LedgerStandaloneAccounts {
             .get_mut(src)
             .unwrap()
             .extend(&txos[dst_outputs.len()..]);
+        for (txo_sid, owner_memo) in txos.iter().zip(owners_memos.drain(..)) {
+          if let Some(memo) = owner_memo {
+            self.owner_memos.insert(*txo_sid, memo);
+          }
+        }
       } // AccountsCommand::ToggleConfAmts() => {
         //     self.confidential_amounts = !conf_amts;
         // }
@@ -1634,6 +1646,7 @@ mod test {
         utxos: HashMap::new(),
         units: HashMap::new(),
         balances: HashMap::new(),
+        owner_memos: HashMap::new(),
         confidential_amounts: cmds.confidential_amounts,
         confidential_types: cmds.confidential_types }))
     };

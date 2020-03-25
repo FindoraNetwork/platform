@@ -199,8 +199,8 @@ fn reveal_field_to_bitmap(issuer_pub_key: &CredIssuerPublicKey,
   let mut reveal_map = vec![false; issuer_pub_key.num_internal_attrs];
   for (key, ((pos, len), _byte_len)) in &issuer_pub_key.map {
     let b = reveal_fields.contains(key);
-    for i in *pos..*pos + *len {
-      reveal_map[i] = b;
+    for x in reveal_map[*pos..pos + len].iter_mut() {
+      *x = b
     }
   }
   Ok(reveal_map)
@@ -222,8 +222,8 @@ fn u8_slice_to_u32_vec(attr: &[u8], len: usize) -> Vec<u32> {
            len);
   assert!(len >= num_u32_per_u8(attr.len()));
   let mut res = vec![0u32; len];
-  for (i, byte) in attr.into_iter().enumerate() {
-    res[i / 4] |= (*byte as u32) << 8 * (i % 4);
+  for (i, byte) in attr.iter().enumerate() {
+    res[i / 4] |= (*byte as u32) << (8 * (i as u32 % 4));
   }
   res
 }

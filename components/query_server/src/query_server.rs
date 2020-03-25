@@ -141,7 +141,7 @@ mod tests {
   use rand_core::SeedableRng;
   use txn_builder::{BuildsTransactions, TransactionBuilder, TransferOperationBuilder};
   use zei::xfr::asset_record::open_blind_asset_record;
-  use zei::xfr::asset_record::AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType;
+  use zei::xfr::asset_record::AssetRecordType::ConfidentialAmount_NonConfidentialAssetType;
   use zei::xfr::sig::XfrKeyPair;
   use zei::xfr::structs::AssetRecordTemplate;
 
@@ -169,16 +169,16 @@ mod tests {
 
     //Issuance txn
     let amt = 1000;
-    let confidentiality_flag = NonConfidentialAmount_NonConfidentialAssetType;
+    let confidentiality_flag = ConfidentialAmount_NonConfidentialAssetType;
     let issuance_tx =
       builder.add_basic_issue_asset(&alice, &None, &token_code, 0, amt, confidentiality_flag)
              .unwrap()
              .add_basic_issue_asset(&alice, &None, &token_code, 1, amt, confidentiality_flag)
              .unwrap()
              .add_basic_issue_asset(&alice, &None, &token_code, 2, amt, confidentiality_flag)
-             .unwrap()
-             .transaction();
-    ledger_standalone.submit_transaction(&issuance_tx);
+             .unwrap();
+    let owner_memo = issuance_tx.owner_records[0].1.clone();
+    ledger_standalone.submit_transaction(&issuance_tx.transaction());
 
     // Query server will now fetch new blocks
     query_server.poll_new_blocks().unwrap();
@@ -194,7 +194,6 @@ mod tests {
     // Transfer to Bob
     let transfer_sid = TxoSID(0);
     let bar = ledger_standalone.fetch_blind_asset_record(transfer_sid);
-    let owner_memo = None; // TODO (fernando) need to fetch Owner memo associated with bar
     let oar = open_blind_asset_record(&bar, &owner_memo, alice.get_sk_ref()).unwrap();
     let mut xfr_builder = TransferOperationBuilder::new();
     let out_template = AssetRecordTemplate::with_no_asset_tracking(amt,

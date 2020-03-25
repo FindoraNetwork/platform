@@ -602,15 +602,14 @@ fn load_owner_memo_from_file(file_path: &str) -> Result<Option<OwnerMemo>, Platf
   println!("Parsing owner memo from file contents: \"{}\"", &owner_memo);
   match serde_json::from_str::<Option<OwnerMemo>>(&owner_memo) {
     Ok(memo) => Ok(memo),
-    Err(_) => {
-      return Err(PlatformError::DeserializationError);
-    }
+    Err(_) => Err(PlatformError::DeserializationError),
   }
 }
 
 /// Loads blind asset record and associated memos from files
 /// # Arguments
 /// * `file_paths`: file paths to the blind asset record and memos.
+#[allow(clippy::type_complexity)]
 fn load_blind_asset_record_and_memos_from_files(
   file_paths: &str)
   -> Result<Vec<(BlindAssetRecord, Option<AssetTracerMemo>, Option<OwnerMemo>)>, PlatformError> {
@@ -973,7 +972,7 @@ fn issue_and_transfer_asset(issuer_key_pair: &XfrKeyPair,
   txn_builder.add_operation_issue_asset(issuer_key_pair,
                                         &token_code,
                                         get_and_update_sequence_number()?,
-                                        &[TxOutput(blind_asset_record.clone())])?
+                                        &[(TxOutput(blind_asset_record), owner_memo.clone())])?
              .add_operation(xfr_op)
              .transaction();
 
@@ -1210,13 +1209,14 @@ fn load_funds(issuer_id: u64,
   };
 
   // Issue and transfer asset
-  let txn_builder = issue_and_transfer_asset(issuer_key_pair,
-                                             recipient_key_pair,
-                                             amount,
-                                             token_code,
-                                             AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
-                                             memo_file,
-                                             txn_file)?;
+  let txn_builder =
+    issue_and_transfer_asset(issuer_key_pair,
+                             recipient_key_pair,
+                             amount,
+                             token_code,
+                             AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
+                             memo_file,
+                             txn_file)?;
 
   // Submit transaction and get the new record
   let sid_new = submit_and_get_sids(protocol, host, txn_builder)?[0];
@@ -1466,13 +1466,14 @@ fn fulfill_loan(loan_id: u64,
   };
 
   // Issue and transfer fiat token
-  let txn_builder = issue_and_transfer_asset(issuer_key_pair,
-                                             lender_key_pair,
-                                             amount,
-                                             fiat_code,
-                                             AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
-                                             None,
-                                             txn_file)?;
+  let txn_builder =
+    issue_and_transfer_asset(issuer_key_pair,
+                             lender_key_pair,
+                             amount,
+                             fiat_code,
+                             AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
+                             None,
+                             txn_file)?;
   let fiat_sid = submit_and_get_sids(protocol, host, txn_builder)?[0];
   println!("Fiat sid: {}", fiat_sid.0);
   let owner_memo = None; // no owner memo
@@ -1505,13 +1506,14 @@ fn fulfill_loan(loan_id: u64,
   store_data_to_file(data)?;
 
   // Issue and transfer debt token
-  let txn_builder = issue_and_transfer_asset(borrower_key_pair,
-                                             borrower_key_pair,
-                                             amount,
-                                             debt_code,
-                                             AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
-                                             None,
-                                             txn_file)?;
+  let txn_builder =
+    issue_and_transfer_asset(borrower_key_pair,
+                             borrower_key_pair,
+                             amount,
+                             debt_code,
+                             AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
+                             None,
+                             txn_file)?;
   let debt_sid = submit_and_get_sids(protocol, host, txn_builder)?[0];
   println!("Fiat sid: {}", debt_sid.0);
   let owner_memo = None;

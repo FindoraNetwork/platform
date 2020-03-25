@@ -183,8 +183,11 @@ mod handlers {
     let user_pk = global_state.user_pk.clone();
     let key = global_state.key.clone();
 
-    if let Ok(pok) =
-      credential_open_commitment(&mut global_state.prng, &user_sk, &cred, &key, reveal_fields.as_slice())
+    if let Ok(pok) = credential_open_commitment(&mut global_state.prng,
+                                                &user_sk,
+                                                &cred,
+                                                &key,
+                                                reveal_fields.as_slice())
     {
       let address = serde_json::to_string(&user_pk).unwrap();
       let result = AIRAddressAndPoK { addr: address, pok };

@@ -50,7 +50,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
   let bitmap = Bitmap { bits: vec![true, true, false, false] };
   let req_string = format!("http://127.0.0.1:3031/reveal/{}/", &credname);
 
-
   let client = reqwest::Client::new();
   let addr_and_pok: AIRAddressAndPoK = client.post(&req_string)
                                              .json::<Bitmap>(&bitmap)

@@ -148,15 +148,14 @@ fn test_loan_repayment(loan_amount: u64,
 
   //  Mega transaction to do everything
   let mut builder = TransactionBuilder::default();
-  let tx =
-    builder.add_operation_issue_asset(&fiat_issuer_keys,
-                                      &fiat_code,
-                                      0,
-                                      &[TxOutput(fiat_ba.clone())])?
-           .add_operation_issue_asset(&borrower_keys,
-                                      &debt_code,
-                                      0,
-                                      &[TxOutput(debt_ba.clone())])?;
+  let tx = builder.add_operation_issue_asset(&fiat_issuer_keys,
+                                             &fiat_code,
+                                             0,
+                                             &[(TxOutput(fiat_ba.clone()), fiat_owner_memo)])?
+                  .add_operation_issue_asset(&borrower_keys,
+                                             &debt_code,
+                                             0,
+                                             &[(TxOutput(debt_ba.clone()), debt_owner_memo)])?;
   let mut xfr_builder = TransferOperationBuilder::new();
   let output_template =
     AssetRecordTemplate::with_no_asset_tracking(loan_amount,
