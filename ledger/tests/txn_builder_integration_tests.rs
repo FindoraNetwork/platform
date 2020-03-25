@@ -53,13 +53,15 @@ fn test_create_asset() -> Result<(), PlatformError> {
                                   &code,
                                   0,
                                   1000,
-                                  AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType)?
+                                  AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
+                                  None)?
            .add_basic_issue_asset(&keys,
                                   &None,
                                   &code,
                                   1,
                                   500,
-                                  AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType)?
+                                  AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
+                                  None)?
            .transaction();
   let (_, txos) = apply_transaction(&mut ledger, tx.clone());
 
