@@ -1242,7 +1242,11 @@ fn load_funds(issuer_id: u64,
                              amount,
                              token_code,
                              AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
+<<<<<<< HEAD
                              asset_file,
+=======
+                             memo_file,
+>>>>>>> more memo tracking (#227)
                              txn_file)?;
 
   // Submit transaction and get the new record
