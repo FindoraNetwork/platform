@@ -41,13 +41,12 @@ use zei::xfr::structs::{AssetIssuerPubKeys, AssetRecord, BlindAssetRecord, OpenA
 
 #[wasm_bindgen]
 /// Creates a relative txo reference as a JSON string. Relative txo references are offset
-/// backwards from the operation they appear in -- 0 is the most recent, (n-1) is the first output
+/// backwards from the operation they appear in - 0 is the most recent, (n-1) is the first output
 /// of the transaction.
 ///
 /// Use relative txo indexing when referring to outputs of intermediate operations (e.g. a
 /// transaction containing both an issuance and a transfer).
 ///
-/// # Arguments
 /// @param {BigInt} idx -  Relative Txo (transaction output) SID.
 pub fn create_relative_txo_ref(idx: u64) -> String {
   serde_json::to_string(&TxoRef::Relative(idx)).unwrap()
@@ -59,15 +58,14 @@ pub fn create_relative_txo_ref(idx: u64) -> String {
 /// Use absolute txo indexing when referring to an output that has been assigned a utxo index (i.e.
 /// when the utxo has been committed to the ledger in an earlier transaction).
 ///
-/// # Arguments
-/// @param {BigInt} idx -  Txo (transaction output) SID.
+/// @param {BigInt} idx - Txo (transaction output) SID.
 pub fn create_absolute_txo_ref(idx: u64) -> String {
   serde_json::to_string(&TxoRef::Absolute(TxoSID(idx))).unwrap()
 }
 
 #[wasm_bindgen]
 /// Standard TransferType variant for txn builder.
-/// Returns a token as a string signifying that the Standard policy should be used when evaluating the transaction.
+/// Returns a token as a string signifying that the standard policy should be used when evaluating the transaction.
 pub fn standard_transfer_type() -> String {
   serde_json::to_string(&TransferType::Standard).unwrap()
 }
@@ -75,6 +73,7 @@ pub fn standard_transfer_type() -> String {
 #[wasm_bindgen]
 /// Debt swap TransferType variant for txn builder.
 /// Returns a token as a string signifying that the DebtSwap policy should be used when evaluating the transaction.
+/// @ignore
 pub fn debt_transfer_type() -> String {
   serde_json::to_string(&TransferType::DebtSwap).unwrap()
 }
@@ -90,8 +89,8 @@ pub fn random_asset_type() -> String {
 #[wasm_bindgen]
 /// Given a serialized state commitment and transaction, returns true if the transaction correctly
 /// hashes up to the state commitment and false otherwise.
-/// @param {string} state_commitment - string representating the state commitment.
-/// @param {string} authenticated_txn - string representating the transaction.
+/// @param {string} state_commitment - String representing the state commitment.
+/// @param {string} authenticated_txn - String representing the transaction.
 /// @see {@link get_transaction} for instructions on fetching a transaction from the ledger.
 /// @see {@link get_state_commitment} for instructions on fetching a ledger state commitment.
 /// @throws Will throw an error if the state commitment or the transaction fail to deserialize.
@@ -111,10 +110,12 @@ pub fn verify_authenticated_txn(state_commitment: String,
 ///
 /// The returned fee is a fraction of the `outstanding_balance`
 /// where the interest rate is expressed as a fraction `ir_numerator` / `ir_denominator`.
-/// Used in the Lending Demo.
-/// @param {BigInt} ir_numerator - interest rate numerator.
-/// @param {BigInt} ir_denominator - interest rate denominator.
-/// @param {BigInt] outstanding_balance -  amount of outstanding debt.
+///
+/// This function is specific to the  Lending Demo.
+/// @param {BigInt} ir_numerator - Interest rate numerator.
+/// @param {BigInt} ir_denominator - Interest rate denominator.
+/// @param {BigInt} outstanding_balance - Amount of outstanding debt.
+/// @ignore
 pub fn calculate_fee(ir_numerator: u64, ir_denominator: u64, outstanding_balance: u64) -> u64 {
   ledger::policies::calculate_fee(outstanding_balance,
                                   Fraction::new(ir_numerator, ir_denominator))
@@ -122,17 +123,19 @@ pub fn calculate_fee(ir_numerator: u64, ir_denominator: u64, outstanding_balance
 
 #[wasm_bindgen]
 /// Returns an address to use for cancelling debt tokens in a debt swap.
+/// @ignore
 pub fn get_null_pk() -> XfrPublicKey {
   XfrPublicKey::zei_from_bytes(&[0; 32])
 }
 #[wasm_bindgen]
-/// Creates memo needed for debt token asset types. The memo will be parsed by the policy evaluator to ensure
+/// Creates the memo needed for debt token asset types. The memo will be parsed by the policy evaluator to ensure
 /// that all payment and fee amounts are correct.
-/// @param {BigInt} ir_numerator  - interest rate numerator.
-/// @param {BigInt} ir_denominator - interest rate denominator.
-/// @param {string} fiat_code - base64 string representing asset type used to pay off the loan.
-/// @param {BigInt} loan_amount - loan amount.
+/// @param {BigInt} ir_numerator  - Interest rate numerator.
+/// @param {BigInt} ir_denominator - Interest rate denominator.
+/// @param {string} fiat_code - Base64 string representing asset type used to pay off the loan.
+/// @param {BigInt} loan_amount - Loan amount.
 /// @throws Will throw an error if `fiat_code` fails to deserialize.
+/// @ignore
 pub fn create_debt_memo(ir_numerator: u64,
                         ir_denominator: u64,
                         fiat_code: String,
@@ -157,11 +160,11 @@ pub fn create_debt_memo(ir_numerator: u64,
 ///
 /// For simple operations, it is not necessary to construct blind asset records manually -  `WasmTransactionBuilder` will handle most of the heavy lifting.
 ///
-/// @param {BigInt} amount - asset amount to store in the record.
-/// @param {string} code -  base64 string representing the token code of the asset to be stored in the record.
+/// @param {BigInt} amount - Asset amount to store in the record.
+/// @param {string} code -  Base64 string representing the token code of the asset to be stored in the record.
 /// @param {XfrPublicKey} pk -  XfrPublicKey representing the record owner.
-/// @param {bool} conf_amount - boolean indicating whether the asset amount should be private.
-/// @param {bool} conf_type - boolean indicating whether the asset type should be private.
+/// @param {bool} conf_amount - Boolean indicating whether the asset amount should be private.
+/// @param {bool} conf_type - Boolean indicating whether the asset type should be private.
 /// @see {@link WasmTransactionBuilder#add_operation_issue_asset} for instructions on how to use
 /// blind asset records to issue assets on the ledger.
 pub fn create_blind_asset_record(amount: u64,
@@ -186,15 +189,15 @@ pub fn create_blind_asset_record(amount: u64,
 
 #[wasm_bindgen]
 /// Decodes (opens) a blind asset record expressed as a JSON string using the given key pair.
-/// If successful returns a JSON encoding of the serialized open asset record.
+/// If successful, returns a JSON encoding of the serialized open asset record.
 /// @param {string} blind_asset_record - String representating the blind asset record.
 /// @param {XfrKeyPair} key - Key pair of the asset record owner.
 ///
-/// TODO Add advice for resolving the errors to the error messages when possible
 /// @throws Could not deserialize blind asset record.
 /// @throws Could not open asset record.
 /// @see {@link WasmTransferOperationBuilder#add_input) for instructions on how to construct transfers with opened asset
 /// records.
+// TODO Add advice for resolving the errors to the error messages when possible
 pub fn open_blind_asset_record(blind_asset_record: String,
                                key: &XfrKeyPair)
                                -> Result<String, JsValue> {
@@ -346,7 +349,7 @@ impl WasmTransactionBuilder {
 
   /// Extracts the serialized form of a transaction.
   ///
-  /// TODO Develop standard terminology for Javascript functions that may throw errors.
+  // TODO Develop standard terminology for Javascript functions that may throw errors.
   pub fn transaction(&mut self) -> Result<String, JsValue> {
     Ok(self.transaction_builder
            .deserialize()
@@ -514,12 +517,15 @@ pub fn keypair_to_str(key_pair: &XfrKeyPair) -> String {
 
 #[wasm_bindgen]
 /// Constructs a transfer key pair from a hex-encoded string.
-/// The encode a key pair, use `keypair_to_str`
+/// The encode a key pair, use `keypair_to_str` function.
 pub fn keypair_from_str(str: String) -> XfrKeyPair {
   XfrKeyPair::zei_from_bytes(&hex::decode(str).unwrap())
 }
 
 #[wasm_bindgen]
+/// Generate tracking keys that can decrypt the asset type or amount of blinded records of a
+/// certain type.
+/// @ignore
 pub fn generate_elgamal_keys() -> String {
   let mut small_rng = rand::thread_rng();
   let pc_gens = PedersenGens::default();
@@ -533,6 +539,7 @@ pub fn generate_elgamal_keys() -> String {
 #[wasm_bindgen]
 /// Returns the SHA256 signature of the given string as a hex-encoded
 /// string.
+/// @ignore
 pub fn sha256str(str: &str) -> String {
   let digest = sha256::hash(&str.as_bytes());
   hex::encode(digest)
@@ -540,6 +547,7 @@ pub fn sha256str(str: &str) -> String {
 
 #[wasm_bindgen]
 /// Signs the given message using the given transfer key pair.
+/// @ignore
 pub fn sign(key_pair: &XfrKeyPair, message: String) -> Result<JsValue, JsValue> {
   let signature = key_pair.get_sk_ref()
                           .sign(&message.as_bytes(), key_pair.get_pk_ref());
@@ -604,7 +612,7 @@ pub fn get_tracked_amount(blind_asset_record: String,
 /// @param {transaction_str} - JSON-encoded transaction string.
 ///
 /// @see {@link get_txn_status} for information about transaction statuses.
-/// TODO Design and implement a notification mechanism.
+// TODO Design and implement a notification mechanism.
 pub fn submit_transaction(path: String, transaction_str: String) -> Result<Promise, JsValue> {
   let mut opts = RequestInit::new();
   opts.method("POST");
@@ -634,12 +642,11 @@ pub fn get_txn_status(path: String, handle: String) -> Result<Promise, JsValue> 
 /// Otherwise, returns 'not found'. The request fails if the txo uid
 /// has been spent or the transaction index does not correspond to a
 /// transaction.
-/// @param {string} path - Address of ledger server
-/// @param {BigInt} index - UTXO index
-///
-/// TODO Provide an example (test case) that demonstrates how to
-/// handle the error in the case of an invalid transaction index.
-/// TODO Rename this function get_utxo
+/// @param {string} path - Address of ledger server.
+/// @param {BigInt} index - UTXO index.
+// TODO Provide an example (test case) that demonstrates how to
+// handle the error in the case of an invalid transaction index.
+// TODO Rename this function get_utxo
 pub fn get_txo(path: String, index: u64) -> Result<Promise, JsValue> {
   let mut opts = RequestInit::new();
   opts.method("GET");
@@ -656,11 +663,11 @@ pub fn get_txo(path: String, index: u64) -> Result<Promise, JsValue> {
 /// Otherwise, returns 'not found'. The request fails if the transaction index does not correspond
 /// to a transaction.
 ///
-/// @param {String} path - Ledger server path
-/// @param {BigInt} index - transaction index.
+/// @param {String} path - Ledger server path.
+/// @param {BigInt} index - Transaction index.
 ///
-/// TODO Provide an example (test case) that demonstrates how to
-/// handle the error in the case of an invalid transaction index.
+// TODO Provide an example (test case) that demonstrates how to
+// handle the error in the case of an invalid transaction index.
 pub fn get_transaction(path: String, index: u64) -> Result<Promise, JsValue> {
   let mut opts = RequestInit::new();
   opts.method("GET");
@@ -689,11 +696,11 @@ pub fn get_state_commitment(path: String) -> Result<Promise, JsValue> {
 /// JsValue describing an asset token. Otherwise, returns 'not found'.
 /// The request fails if the given asset name does not correspond to
 /// an asset.
-/// @param {string} path: Address of ledger server
-/// @param {string} name: base64-encoded asset token string
+/// @param {string} path: Address of ledger server.
+/// @param {string} name: Base64-encoded asset token string.
 ///
-/// TODO Provide an example (test case) that demonstrates how to
-/// handle the error in the case of an undefined asset.
+// TODO Provide an example (test case) that demonstrates how to
+// handle the error in the case of an undefined asset.
 pub fn get_asset_token(path: String, name: String) -> Result<Promise, JsValue> {
   let mut opts = RequestInit::new();
   opts.method("GET");
@@ -706,6 +713,7 @@ pub fn get_asset_token(path: String, name: String) -> Result<Promise, JsValue> {
 
 // Given a request string and a request init object, constructs
 // the JS promise to be returned to the client.
+/// @ignore
 fn create_query_promise(opts: &RequestInit,
                         req_string: &str,
                         is_json: bool)
@@ -726,7 +734,8 @@ fn create_query_promise(opts: &RequestInit,
 #[wasm_bindgen]
 #[derive(Debug, Serialize, Deserialize)]
 /// Issuer structure.
-/// In the credentialing process, an issuer must sign the credential attribute to get it proved.
+/// Issuers generate these credentials, which are a set of attributes assigned to a user (i.e. a
+/// user credential key).
 pub struct Issuer {
   public_key: ACIssuerPublicKey,
   secret_key: ACIssuerSecretKey,
@@ -734,17 +743,16 @@ pub struct Issuer {
 
 #[wasm_bindgen]
 impl Issuer {
-  /// Creates a new issuer, generating the key pair with the knowledge of the number of attributes.
-  ///
-  /// TODO Add an overview description of the anonymous credential
-  /// functions and how they work together.
+  /// Creates a new issuer that can create credentials with a single attribute.
+  // TODO Add an overview description of the anonymous credential
+  // functions and how they work together.
   // TODO (Keyao):
   //  Make sure we can tell which attribute is which, possibly by fixing the order of attributes
   //  Then pass all the attributes to sign_min_credit_score and sign the lower bound of credit score only
-  pub fn new(num_attr: usize) -> Issuer {
+  pub fn new() -> Issuer {
     let mut prng: ChaChaRng;
     prng = ChaChaRng::from_entropy();
-    let (issuer_pk, issuer_sk) = ac_keygen_issuer::<_>(&mut prng, num_attr);
+    let (issuer_pk, issuer_sk) = ac_keygen_issuer::<_>(&mut prng, 1);
 
     Issuer { public_key: issuer_pk,
              secret_key: issuer_sk }
@@ -755,7 +763,10 @@ impl Issuer {
     JsValue::from_serde(&self).unwrap()
   }
 
-  /// Signs an attribute.
+  /// Generates a signature attesting to the value of one attrribute for a user.
+  /// @param {JsValue} user_jsvalue - User to generate signature for.
+  /// @param {BigInt} attribute - Value of the attribute being attested to (e.g. 760 for a credit
+  /// score).
   // E.g. sign the lower bound of the credit score
   pub fn sign_attribute(&self, user_jsvalue: &JsValue, attribute: u64) -> JsValue {
     let mut prng: ChaChaRng;
@@ -772,7 +783,7 @@ impl Issuer {
 #[wasm_bindgen]
 #[derive(Debug, Serialize, Deserialize)]
 /// User structure.
-/// In the credentialing process, a user must commit the credential attribute to get it proved.
+/// Users can selectively reveal attributes of their credentials without revealing their identity.
 pub struct User {
   public_key: ACUserPublicKey,
   secret_key: ACUserSecretKey,
@@ -780,11 +791,11 @@ pub struct User {
 
 #[wasm_bindgen]
 impl User {
-  /// Creates a new user, generating the key pair using the issuer's
-  /// public key.
-  pub fn new(issuer: &Issuer, rand_seed: &str) -> User {
+  /// Creates a new user.
+  /// @param {Issuer} issuer - Issuer that will be generating credentials for this user.
+  pub fn new(issuer: &Issuer) -> User {
     let mut prng: ChaChaRng;
-    prng = ChaChaRng::from_seed([rand_seed.as_bytes()[0]; 32]);
+    prng = ChaChaRng::from_entropy();
     let (user_pk, user_sk) = ac_keygen_user::<_>(&mut prng, &issuer.public_key);
 
     User { public_key: user_pk,
@@ -796,8 +807,8 @@ impl User {
     JsValue::from_serde(&self).unwrap()
   }
 
-  /// Commits an attribute with the issuer's signature.
-  // E.g. commit the lower bound of the credit score
+  /// Given a signature attesting to an attribute, generates a proof that the attribute value is
+  /// valid. Importantly, the proof does not reveal the identity of the user.
   pub fn commit_attribute(&self,
                           issuer_jsvalue: &JsValue,
                           sig: &JsValue,
@@ -821,7 +832,8 @@ impl User {
 
 #[wasm_bindgen]
 #[derive(PartialEq)]
-/// Relation types, used to represent the credential requirement types.
+/// Relation types, used to represent different facts about attributes that can be proved.
+/// Possible values are `Equal` and `AtLeast`.
 pub enum RelationType {
   // Requirement: attribute value == requirement
   Equal = 0,
@@ -834,18 +846,19 @@ pub enum RelationType {
 #[derive(Debug, Serialize, Deserialize)]
 /// Prover structure.
 /// In the credentialing process, a credential attribute must be proved by a prover.
-pub struct Prover;
+/// @ignore
+pub struct Verifier;
 
 #[wasm_bindgen]
-impl Prover {
+impl Verifier {
   /// Proves that an attribute meets the requirement and is true.
-  pub fn prove_attribute(proof_jsvalue: &JsValue,
-                         issuer_jsvalue: &JsValue,
-                         attribute: u64,
-                         reveal_attribute: bool,
-                         requirement: u64,
-                         requirement_type: RelationType)
-                         -> bool {
+  pub fn verify_attribute(proof_jsvalue: &JsValue,
+                          issuer_jsvalue: &JsValue,
+                          attribute: u64,
+                          reveal_attribute: bool,
+                          requirement: u64,
+                          requirement_type: RelationType)
+                          -> bool {
     // 1. Prove that the attribut meets the requirement
     match requirement_type {
       //    Case 1. "Equal" requirement
@@ -880,10 +893,11 @@ impl Prover {
 #[wasm_bindgen]
 /// Generates a proof that a user has committed to the given attribute
 /// value.
+/// @ignore
 pub fn get_proof(attribute: u64) -> JsValue {
-  let mut issuer = Issuer::new(1);
+  let mut issuer = Issuer::new();
   let issuer_jsvalue = issuer.jsvalue();
-  let mut user = User::new(&issuer, "user");
+  let mut user = User::new(&issuer);
   let user_jsvalue = user.jsvalue();
 
   let sig_jsvalue = issuer.sign_attribute(&user_jsvalue, attribute);
@@ -891,30 +905,24 @@ pub fn get_proof(attribute: u64) -> JsValue {
 }
 
 #[wasm_bindgen]
-/// Attests credential attribute with proof as an input.
+/// Verifies in zero knowledge that a relation involving a revealed attribute is true.
 ///
-/// Proves in zero knowledge that a simple equality or greater than relation is true without revealing the terms.
-///
-/// In the P2P Lending app, the user has the option to save the proof for future use.
-/// * If the proof exists, use this function for credentialing.
-/// * Otherwise, use `attest_without_proof` for credentialing.
-///
-/// # Arguments
-/// * `attribute`: credential attribute value.
-/// * `requirement`: required value.
-/// * `requirement_type`: relation between the real and required values. See `RelationType` for options.
-/// * `proof_jsvalue`: JsValue representing the proof.
+/// @param {BigInt} attribute - Credential attribute value.
+/// @param {BigInt} requirement: Value to be checked, depends on `requirement_type` (e.g. if requirement_type is
+/// verifies that the attribute equals the requirement).
+/// @param {RelationType} requirement_type: relation between the real and required values. See `RelationType` for options.
+/// @param {JsValue} proof_jsvalue: JsValue representing the proof.
 pub fn attest_with_proof(attribute: u64,
                          requirement: u64,
                          requirement_type: RelationType,
                          proof_jsvalue: JsValue)
                          -> bool {
-  Prover::prove_attribute(&proof_jsvalue,
-                          &Issuer::new(1).jsvalue(),
-                          attribute,
-                          true,
-                          requirement,
-                          requirement_type)
+  Verifier::verify_attribute(&proof_jsvalue,
+                             &Issuer::new().jsvalue(),
+                             attribute,
+                             true,
+                             requirement,
+                             requirement_type)
 }
 
 #[wasm_bindgen]
@@ -931,22 +939,23 @@ pub fn attest_with_proof(attribute: u64,
 /// * `attribute`: credential attribute value.
 /// * `requirement`: required value.
 /// * `requirement_type`: relation between the real and required values. See `RelationType` for options.
+/// @ignore
 pub fn attest_without_proof(attribute: u64,
                             requirement: u64,
                             requirement_type: RelationType)
                             -> bool {
-  let mut issuer = Issuer::new(1);
+  let mut issuer = Issuer::new();
   let issuer_jsvalue = issuer.jsvalue();
-  let mut user = User::new(&issuer, "user");
+  let mut user = User::new(&issuer);
   let user_jsvalue = user.jsvalue();
 
   let sig_jsvalue = issuer.sign_attribute(&user_jsvalue, attribute);
   let proof_jsvalue = user.commit_attribute(&issuer_jsvalue, &sig_jsvalue, attribute, true);
 
-  Prover::prove_attribute(&proof_jsvalue,
-                          &issuer_jsvalue,
-                          attribute,
-                          true,
-                          requirement,
-                          requirement_type)
+  Verifier::verify_attribute(&proof_jsvalue,
+                             &issuer_jsvalue,
+                             attribute,
+                             true,
+                             requirement,
+                             requirement_type)
 }
