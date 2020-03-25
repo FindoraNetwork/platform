@@ -108,6 +108,8 @@ const SUBMIT_PORT: &str = "8669";
 
 /// Tuple of blind asset record and associated tracer and owner memos. Memos are optional.
 pub type BlindAssetRecordAndMemos = (BlindAssetRecord, Option<AssetTracerMemo>, Option<OwnerMemo>);
+/// Tuple of tracer and owner memos, optional.
+pub type TracerAndOwnerMemos = (Option<AssetTracerMemo>, Option<OwnerMemo>);
 
 //
 // Credentials
@@ -611,9 +613,8 @@ fn load_sids_from_file(file_path: &str) -> Result<Vec<u64>, PlatformError> {
 /// Loads tracer and owner memos from files
 /// # Arguments
 /// * `file_paths`: file paths to the tracer and owner memos.
-fn load_tracer_and_owner_memos_from_files(
-  file_paths: &str)
-  -> Result<Vec<(Option<AssetTracerMemo>, Option<OwnerMemo>)>, PlatformError> {
+fn load_tracer_and_owner_memos_from_files(file_paths: &str)
+                                          -> Result<Vec<TracerAndOwnerMemos>, PlatformError> {
   let mut tracer_and_owner_memos = Vec::new();
   for file_path in split_arg(file_paths) {
     let mut file;
@@ -632,7 +633,7 @@ fn load_tracer_and_owner_memos_from_files(
     }
     println!("Parsing tracer and owner memos from file contents: \"{}\"",
              &memos);
-    match serde_json::from_str::<(Option<AssetTracerMemo>, Option<OwnerMemo>)>(&memos) {
+    match serde_json::from_str::<TracerAndOwnerMemos>(&memos) {
       Ok(memos) => {
         tracer_and_owner_memos.push(memos);
       }
@@ -669,8 +670,7 @@ fn load_blind_asset_records_and_memos_from_files(
     }
     println!("Parsing blind asset record and associated memos from file contents: \"{}\"",
              &blind_asset_record_and_memos);
-    match serde_json::from_str::<BlindAssetRecordAndMemos>(&blind_asset_record_and_memos)
-    {
+    match serde_json::from_str::<BlindAssetRecordAndMemos>(&blind_asset_record_and_memos) {
       Ok(blind_asset_record_and_memos) => {
         bars_and_memos.push(blind_asset_record_and_memos);
       }
@@ -994,8 +994,7 @@ fn issue_and_transfer_asset(issuer_key_pair: &XfrKeyPair,
   txn_builder.add_operation_issue_asset(issuer_key_pair,
                                         &token_code,
                                         get_and_update_sequence_number()?,
-                                        &[(TxOutput(blind_asset_record.clone()),
-                                           owner_memo.clone())])?
+                                        &[(TxOutput(blind_asset_record), owner_memo.clone())])?
              .add_operation(xfr_op)
              .transaction();
 
@@ -1132,13 +1131,12 @@ fn submit_and_get_sids(protocol: &str,
 /// * `token_code`: token code of the asset rercord.
 /// * `asset_record_type`: booleans representing whether the amount and asset are confidential.
 /// * `policy`: asset tracing policy, optional.
-fn get_blind_asset_record_and_memos(
-  pub_key: XfrPublicKey,
-  amount: u64,
-  token_code: AssetTypeCode,
-  asset_record_type: AssetRecordType,
-  policy: Option<AssetTracingPolicy>)
-  -> Result<BlindAssetRecordAndMemos, PlatformError> {
+fn get_blind_asset_record_and_memos(pub_key: XfrPublicKey,
+                                    amount: u64,
+                                    token_code: AssetTypeCode,
+                                    asset_record_type: AssetRecordType,
+                                    policy: Option<AssetTracingPolicy>)
+                                    -> Result<BlindAssetRecordAndMemos, PlatformError> {
   // Confidential asset is currently not supported
   let record_type =
     AssetRecordType::from_booleans(asset_record_type.is_confidential_amount(), false);
