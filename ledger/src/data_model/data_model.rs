@@ -677,7 +677,7 @@ mod tests {
   use super::*;
   use rand_core::SeedableRng;
   use std::cmp::min;
-  use zei::xfr::structs::{AssetAmountProof, XfrBody, XfrProofs};
+  use zei::xfr::structs::{AssetTypeAndAmountProof, XfrBody, XfrProofs};
 
   #[test]
   fn test_gen_random() {
@@ -791,9 +791,11 @@ mod tests {
     // Instantiate an TransferAsset operation
     let xfr_note = XfrBody { inputs: Vec::new(),
                              outputs: Vec::new(),
-                             proofs: XfrProofs { asset_amount_proof:
-                                                   AssetAmountProof::NoProof,
-                                                 asset_tracking_proof: Default::default() } };
+                             proofs: XfrProofs { asset_type_and_amount_proof:
+                                                   AssetTypeAndAmountProof::NoProof,
+                                                 asset_tracking_proof: Default::default() },
+                             asset_tracing_memos: vec![],
+                             owners_memos: vec![] };
 
     let assert_transfer_body = TransferAssetBody { inputs: Vec::new(),
                                                    num_outputs: 0,

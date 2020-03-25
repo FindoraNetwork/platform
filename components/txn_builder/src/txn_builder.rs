@@ -34,7 +34,7 @@ pub trait BuildsTransactions {
                                key_pair: &XfrKeyPair,
                                token_code: &AssetTypeCode,
                                seq_num: u64,
-                               records: &[TxOutput])
+                               records: &[(TxOutput, Option<OwnerMemo>)])
                                -> Result<&mut Self, PlatformError>;
   fn add_operation_transfer_asset(&mut self,
                                   keys: &XfrKeyPair,
@@ -80,8 +80,8 @@ pub trait BuildsTransactions {
                                                           confidentiality_flags,
                                                           key_pair.get_pk()),
     };
-    let (ba, _, _owner_memo) = build_blind_asset_record(&mut prng, &params.pc_gens, &ar, None);
-    self.add_operation_issue_asset(key_pair, token_code, seq_num, &[TxOutput(ba)])
+    let (ba, _, owner_memo) = build_blind_asset_record(&mut prng, &params.pc_gens, &ar, None);
+    self.add_operation_issue_asset(key_pair, token_code, seq_num, &[(TxOutput(ba), owner_memo)])
   }
 
   #[allow(clippy::comparison_chain)]
@@ -152,6 +152,7 @@ pub trait BuildsTransactions {
 #[derive(Debug, Default, Serialize, Deserialize)]
 pub struct TransactionBuilder {
   txn: Transaction,
+  pub owner_records: Vec<(TxOutput, Option<OwnerMemo>)>,
   outputs: u64,
 }
 
@@ -175,14 +176,19 @@ impl BuildsTransactions for TransactionBuilder {
                                key_pair: &XfrKeyPair,
                                token_code: &AssetTypeCode,
                                seq_num: u64,
-                               records: &[TxOutput])
+                               records_and_memos: &[(TxOutput, Option<OwnerMemo>)])
                                -> Result<&mut Self, PlatformError> {
     let pub_key = &IssuerPublicKey { key: key_pair.get_pk() };
     let priv_key = &key_pair.get_sk();
+    let mut records = vec![];
+    for (output, memo) in records_and_memos {
+      records.push(output.clone());
+      self.owner_records.push((output.clone(), memo.clone()));
+    }
     self.txn
         .add_operation(Operation::IssueAsset(IssueAsset::new(IssueAssetBody::new(token_code,
                                                                                  seq_num,
-                                                                                 records)?,
+                                                                                 &records)?,
                                                              pub_key,
                                                              priv_key)?));
     Ok(self)

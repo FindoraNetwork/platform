@@ -608,6 +608,7 @@ fn load_sids_from_file(file_path: &str) -> Result<Vec<u64>, PlatformError> {
 /// Loads blind asset record and associated memos from files
 /// # Arguments
 /// * `file_paths`: file paths to the blind asset record and memos.
+#[allow(clippy::type_complexity)]
 fn load_blind_asset_record_and_memos_from_files(
   file_paths: &str)
   -> Result<Vec<(BlindAssetRecord, Option<AssetTracerMemo>, Option<OwnerMemo>)>, PlatformError> {
@@ -957,7 +958,8 @@ fn issue_and_transfer_asset(issuer_key_pair: &XfrKeyPair,
   txn_builder.add_operation_issue_asset(issuer_key_pair,
                                         &token_code,
                                         get_and_update_sequence_number()?,
-                                        &[TxOutput(blind_asset_record.clone())])?
+                                        &[(TxOutput(blind_asset_record.clone()),
+                                           owner_memo.clone())])?
              .add_operation(xfr_op)
              .transaction();
 

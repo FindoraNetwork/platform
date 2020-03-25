@@ -263,6 +263,7 @@ impl WasmTransactionBuilder {
   /// @param {string} code - Base64 string representing the token code of the asset to be issued.
   /// @param {BigInt} seq_num - Issuance sequence number. Every subsequent issuance of a given asset type must have a higher sequence number than before.
   /// @param {BigInt} amount - Amount to be issued.
+  #[allow(clippy::too_many_arguments)]
   pub fn add_basic_issue_asset(&self,
                                key_pair: &XfrKeyPair,
                                elgamal_pub_key: String,
@@ -315,13 +316,23 @@ impl WasmTransactionBuilder {
                                    key_pair: &XfrKeyPair,
                                    code: String,
                                    seq_num: u64,
-                                   record: String)
+                                   record: String,
+                                   owner_memo: String)
                                    -> Result<WasmTransactionBuilder, JsValue> {
     let asset_token = AssetTypeCode::new_from_base64(&code)
             .map_err(|_e| JsValue::from_str("Could not deserialize asset token code"))?;
     let blind_asset_record = serde_json::from_str::<BlindAssetRecord>(&record).map_err(|_e| {
                                JsValue::from_str("could not deserialize blind asset record")
                              })?;
+    let memo;
+    if owner_memo.is_empty() {
+      memo = None
+    } else {
+      memo =
+        Some(serde_json::from_str::<OwnerMemo>(&owner_memo).map_err(|_e| {
+                                           JsValue::from_str("could not deserialize owner memo")
+                                         })?);
+    }
 
     let mut txn_builder = self.transaction_builder.deserialize();
     Ok(WasmTransactionBuilder {
@@ -331,7 +342,7 @@ impl WasmTransactionBuilder {
                         &key_pair,
                         &asset_token,
                         seq_num,
-                        &[TxOutput(blind_asset_record)],
+                        &[(TxOutput(blind_asset_record), memo)],
                     )
                     .map_err(|_e| JsValue::from_str("could not build transaction"))?,
             ),
@@ -773,7 +784,7 @@ impl Issuer {
     prng = ChaChaRng::from_entropy();
     let user: User = user_jsvalue.into_serde().unwrap();
 
-    let attrs = [(attribute & 0xFFFFFFFF) as u32, (attribute >> 32) as u32];
+    let attrs = [(attribute & 0xFFFF_FFFF) as u32, (attribute >> 32) as u32];
     let sig = ac_sign(&mut prng, &self.secret_key, &user.public_key, &attrs).unwrap();
 
     JsValue::from_serde(&sig).unwrap()
@@ -819,7 +830,7 @@ impl User {
     let sig: ACSignature = sig.into_serde().unwrap();
     let mut prng = ChaChaRng::from_entropy();
 
-    let attrs = [(attribute & 0xFFFFFFFF) as u32, (attribute >> 32) as u32];
+    let attrs = [(attribute & 0xFFFF_FFFF) as u32, (attribute >> 32) as u32];
     let bitmap = [reveal_attribute, reveal_attribute];
     let credential = Credential { signature: sig,
                                   attributes: attrs.to_vec(),
@@ -879,7 +890,7 @@ impl Prover {
     //    E.g. verify the lower bound of the credit score
     let _bitmap = [reveal_attribute, reveal_attribute];
     let issuer: Issuer = issuer_jsvalue.into_serde().unwrap();
-    let attrs = [Some((attribute & 0xFFFFFFFF) as u32),
+    let attrs = [Some((attribute & 0xFFFF_FFFF) as u32),
                  Some((attribute >> 32) as u32)];
     let proof: ACRevealSig = proof_jsvalue.into_serde().unwrap();
     ac_verify(&issuer.public_key,
