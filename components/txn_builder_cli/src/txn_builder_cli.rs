@@ -106,6 +106,11 @@ const QUERY_PORT: &str = "8668";
 /// Port for submitting transactions.
 const SUBMIT_PORT: &str = "8669";
 
+/// Tuple of blind asset record and associated tracer and owner memos. Memos are optional.
+pub type BlindAssetRecordAndMemos = (BlindAssetRecord, Option<AssetTracerMemo>, Option<OwnerMemo>);
+/// Tuple of tracer and owner memos, optional.
+pub type TracerAndOwnerMemos = (Option<AssetTracerMemo>, Option<OwnerMemo>);
+
 //
 // Credentials
 //
@@ -607,16 +612,34 @@ fn load_sids_from_file(file_path: &str) -> Result<Vec<u64>, PlatformError> {
 
 /// Loads owner memo from file
 /// # Arguments
-/// * `file_path`: file path to the owner memo.
-fn load_owner_memo_from_file(file_path: &str) -> Result<Option<OwnerMemo>, PlatformError> {
-  let mut file;
-  match File::open(file_path) {
-    Ok(f) => {
-      file = f;
+/// * `file_paths`: file paths to the tracer and owner memos.
+fn load_tracer_and_owner_memos_from_files(file_paths: &str)
+                                          -> Result<Vec<TracerAndOwnerMemos>, PlatformError> {
+  let mut tracer_and_owner_memos = Vec::new();
+  for file_path in split_arg(file_paths) {
+    let mut file;
+    match File::open(file_path) {
+      Ok(f) => {
+        file = f;
+      }
+      Err(_) => {
+        return Err(PlatformError::IoError(format!("File doesn't exist: {}. Use --store_memos.",
+                                                  file_path)));
+      }
     }
-    Err(_) => {
-      return Err(PlatformError::IoError(format!("File doesn't exist: {}. Use --store_owner_memo.",
-                                         file_path)));
+    let mut memos = String::new();
+    if file.read_to_string(&mut memos).is_err() {
+      return Err(PlatformError::IoError(format!("Failed to read file: {}", file_path)));
+    }
+    println!("Parsing tracer and owner memos from file contents: \"{}\"",
+             &memos);
+    match serde_json::from_str::<TracerAndOwnerMemos>(&memos) {
+      Ok(memos) => {
+        tracer_and_owner_memos.push(memos);
+      }
+      Err(_) => {
+        return Err(PlatformError::DeserializationError);
+      }
     }
   }
   let mut owner_memo = String::new();
@@ -657,10 +680,7 @@ fn load_blind_asset_record_and_memos_from_files(
     }
     println!("Parsing blind asset record and associated memos from file contents: \"{}\"",
              &blind_asset_record_and_memos);
-    match serde_json::from_str::<(BlindAssetRecord,
-                                Option<AssetTracerMemo>,
-                                Option<OwnerMemo>)>(&blind_asset_record_and_memos)
-    {
+    match serde_json::from_str::<BlindAssetRecordAndMemos>(&blind_asset_record_and_memos) {
       Ok(blind_asset_record_and_memos) => {
         bars_and_memos.push(blind_asset_record_and_memos);
       }
@@ -1121,13 +1141,12 @@ fn submit_and_get_sids(protocol: &str,
 /// * `token_code`: token code of the asset rercord.
 /// * `asset_record_type`: booleans representing whether the amount and asset are confidential.
 /// * `policy`: asset tracing policy, optional.
-fn get_blind_asset_record_and_memos(
-  pub_key: XfrPublicKey,
-  amount: u64,
-  token_code: AssetTypeCode,
-  asset_record_type: AssetRecordType,
-  policy: Option<AssetTracingPolicy>)
-  -> Result<(BlindAssetRecord, Option<AssetTracerMemo>, Option<OwnerMemo>), PlatformError> {
+fn get_blind_asset_record_and_memos(pub_key: XfrPublicKey,
+                                    amount: u64,
+                                    token_code: AssetTypeCode,
+                                    asset_record_type: AssetRecordType,
+                                    policy: Option<AssetTracingPolicy>)
+                                    -> Result<BlindAssetRecordAndMemos, PlatformError> {
   // Confidential asset is currently not supported
   let record_type =
     AssetRecordType::from_booleans(asset_record_type.is_confidential_amount(), false);

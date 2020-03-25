@@ -53,6 +53,7 @@ pub trait BuildsTransactions {
 
   fn add_operation(&mut self, op: Operation) -> &mut Self;
 
+  #[allow(clippy::too_many_arguments)]
   /// # Arguments
   /// * `asset_file`: file to store the blind asset record and associated memos, optional
   fn add_basic_issue_asset(&mut self,
