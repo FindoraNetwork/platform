@@ -605,7 +605,6 @@ fn load_sids_from_file(file_path: &str) -> Result<Vec<u64>, PlatformError> {
   Ok(sids)
 }
 
-<<<<<<< HEAD
 /// Loads owner memo from file
 /// # Arguments
 /// * `file_path`: file path to the owner memo.
@@ -631,8 +630,6 @@ fn load_owner_memo_from_file(file_path: &str) -> Result<Option<OwnerMemo>, Platf
   }
 }
 
-=======
->>>>>>> Modify AssetIssuer struct. Support tracing for nonconfidential records.
 /// Loads blind asset record and associated memos from files
 /// # Arguments
 /// * `file_paths`: file paths to the blind asset record and memos.
@@ -1242,11 +1239,7 @@ fn load_funds(issuer_id: u64,
                              amount,
                              token_code,
                              AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
-<<<<<<< HEAD
                              asset_file,
-=======
-                             memo_file,
->>>>>>> more memo tracking (#227)
                              txn_file)?;
 
   // Submit transaction and get the new record

@@ -171,27 +171,13 @@ fn store_sids_with_path(file: &str, indices: &str) -> io::Result<Output> {
 }
 
 #[cfg(test)]
-fn store_blind_asset_record_and_memos_nonconfidential(id: &str,
-                                                      amount: &str,
-                                                      token_code: &str,
-                                                      file: &str)
-                                                      -> io::Result<Output> {
+fn store_memos_confidential(id: &str,
+                            amount: &str,
+                            token_code: &str,
+                            file: &str)
+                            -> io::Result<Output> {
   Command::new(COMMAND).args(&["asset_issuer", "--id", id])
-                       .arg("store_blind_asset_record_and_memos")
-                       .args(&["--amount", amount])
-                       .args(&["--token_code", token_code])
-                       .args(&["--file", file])
-                       .output()
-}
-
-#[cfg(test)]
-fn store_blind_asset_record_and_memos_confidential(id: &str,
-                                                   amount: &str,
-                                                   token_code: &str,
-                                                   file: &str)
-                                                   -> io::Result<Output> {
-  Command::new(COMMAND).args(&["asset_issuer", "--id", id])
-                       .arg("store_blind_asset_record_and_memos")
+                       .arg("store_memos")
                        .args(&["--amount", amount])
                        .args(&["--token_code", token_code])
                        .args(&["--file", file])
@@ -200,10 +186,10 @@ fn store_blind_asset_record_and_memos_confidential(id: &str,
 }
 
 #[cfg(test)]
-fn trace_asset(id: &str, asset_file: &str, expected_amount: &str) -> io::Result<Output> {
+fn trace_and_verify_asset(id: &str, memo_file: &str, expected_amount: &str) -> io::Result<Output> {
   Command::new(COMMAND).args(&["asset_issuer", "--id", id])
-                       .arg("trace_asset")
-                       .args(&["--asset_file", asset_file])
+                       .arg("trace_and_verify_asset")
+                       .args(&["--memo_file", memo_file])
                        .args(&["--expected_amount", expected_amount])
                        .output()
 }
@@ -241,16 +227,19 @@ fn define_asset(txn_builder_path: &str,
 }
 
 #[cfg(test)]
-fn issue_asset(txn_builder_path: &str,
-               id: &str,
-               token_code: &str,
-               amount: &str)
-               -> io::Result<Output> {
+fn issue_asset_with_confidential_amount(txn_builder_path: &str,
+                                        id: &str,
+                                        token_code: &str,
+                                        amount: &str,
+                                        asset_file: &str)
+                                        -> io::Result<Output> {
   Command::new(COMMAND).args(&["--txn", txn_builder_path])
                        .args(&["asset_issuer", "--id", id])
                        .arg("issue_asset")
                        .args(&["--token_code", token_code])
                        .args(&["--amount", amount])
+                       .arg("--confidential_amount")
+                       .args(&["--asset_file", asset_file])
                        .output()
 }
 
@@ -784,8 +773,12 @@ fn test_define_issue_transfer_and_submit_with_args() {
 
   // Issue asset
   let amount_issue = "50";
-  let output =
-    issue_asset(txn_builder_file, "0", &token_code, amount_issue).expect("Failed to issue asset");
+  let asset_file = "asset_define_issue_transfer_and_submit";
+  let output = issue_asset_with_confidential_amount(txn_builder_file,
+                                                    "0",
+                                                    &token_code,
+                                                    amount_issue,
+                                                    asset_file).expect("Failed to issue asset");
 
   io::stdout().write_all(&output.stdout).unwrap();
   io::stdout().write_all(&output.stderr).unwrap();
@@ -802,12 +795,6 @@ fn test_define_issue_transfer_and_submit_with_args() {
   io::stdout().write_all(&output.stderr).unwrap();
 
   assert!(output.status.success());
-
-  // Store blind asset record and associated memos
-  let asset_file = "asset_define_issue_transfer_and_submit";
-  // TODO (Keyao): If replace store_blind_asset_record_and_memos_nonconfidential with store_blind_asset_record_and_memos_confidential,
-  // submitting the transfer transaction will fail due to "invalid JSON".
-  let output = store_blind_asset_record_and_memos_nonconfidential("0", amount_issue, &token_code, asset_file).expect("Failed to store blind asset record and memos");
 
   io::stdout().write_all(&output.stdout).unwrap();
   io::stdout().write_all(&output.stderr).unwrap();
@@ -896,9 +883,10 @@ fn test_issue_transfer_and_submit_with_args() {
                            amount,
                            &token_code).expect("Failed to issue and transfer asset");
 
-  // Store blind asset record and associated memos
+  // Store tracer and owner memos
   let asset_file = "asset_issue_transfer_and_submit";
-  let output = store_blind_asset_record_and_memos_confidential("0", amount, &token_code, asset_file).expect("Failed to store blind asset record and memos");
+  let output =
+    store_memos_confidential("0", amount, &token_code, asset_file).expect("Failed to store memos");
 
   io::stdout().write_all(&output.stdout).unwrap();
   io::stdout().write_all(&output.stderr).unwrap();
@@ -906,7 +894,7 @@ fn test_issue_transfer_and_submit_with_args() {
   assert!(output.status.success());
 
   // Trace the asset and verify the amount
-  let output = trace_asset("0", asset_file, amount).expect("Failed to trace the asset");
+  let output = trace_and_verify_asset("0", asset_file, amount).expect("Failed to trace the asset");
 
   io::stdout().write_all(&output.stdout).unwrap();
   io::stdout().write_all(&output.stderr).unwrap();

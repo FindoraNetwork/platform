@@ -148,6 +148,7 @@ mod tests {
   #[test]
   #[ignore]
   // Ignoring this test since it sometimes fails on master
+  #[ignore]
   pub fn test_query_server() {
     let ledger_state = LedgerState::test_ledger();
     let mut prng = ChaChaRng::from_entropy();
@@ -171,13 +172,30 @@ mod tests {
     //Issuance txn
     let amt = 1000;
     let confidentiality_flag = ConfidentialAmount_NonConfidentialAssetType;
-    let issuance_tx =
-      builder.add_basic_issue_asset(&alice, &None, &token_code, 0, amt, confidentiality_flag)
-             .unwrap()
-             .add_basic_issue_asset(&alice, &None, &token_code, 1, amt, confidentiality_flag)
-             .unwrap()
-             .add_basic_issue_asset(&alice, &None, &token_code, 2, amt, confidentiality_flag)
-             .unwrap();
+    let issuance_tx = builder.add_basic_issue_asset(&alice,
+                                                    &None,
+                                                    &token_code,
+                                                    0,
+                                                    amt,
+                                                    confidentiality_flag,
+                                                    None)
+                             .unwrap()
+                             .add_basic_issue_asset(&alice,
+                                                    &None,
+                                                    &token_code,
+                                                    1,
+                                                    amt,
+                                                    confidentiality_flag,
+                                                    None)
+                             .unwrap()
+                             .add_basic_issue_asset(&alice,
+                                                    &None,
+                                                    &token_code,
+                                                    2,
+                                                    amt,
+                                                    confidentiality_flag,
+                                                    None)
+                             .unwrap();
     let owner_memo = issuance_tx.owner_records[0].1.clone();
     ledger_standalone.submit_transaction(&issuance_tx.transaction());
 
