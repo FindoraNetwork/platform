@@ -1,34 +1,39 @@
-use percent_encoding::{utf8_percent_encode, AsciiSet, CONTROLS};
+use credentials::{CredIssuerPublicKey, CredPoK, CredUserPublicKey};
+use percent_encoding::{percent_decode, utf8_percent_encode, AsciiSet, CONTROLS};
 use serde_derive::{Deserialize, Serialize};
-use zei::api::anon_creds::{ACIssuerPublicKey, ACPoK, ACUserPublicKey};
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct PubCreds {
   pub name: String,
-  pub num_attrs: u64,
-  pub issuer_pk: ACIssuerPublicKey,
+  pub attrs_sizes: Vec<(String, usize)>,
+  pub issuer_pk: CredIssuerPublicKey,
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct UserCreds {
   pub credname: String,
-  pub user_pk: ACUserPublicKey,
-  pub attrs: Vec<String>,
+  pub user_pk: CredUserPublicKey,
+  pub attrs: Vec<(String, String)>,
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
-pub struct Bitmap {
-  pub bits: Vec<bool>,
+pub struct RevealFields {
+  pub fields: Vec<String>,
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct AIRAddressAndPoK {
   pub addr: String,
-  pub pok: ACPoK,
+  pub pok: CredPoK,
 }
 
 /// https://url.spec.whatwg.org/#fragment-percent-encode-set
 const FRAGMENT: &AsciiSet = &CONTROLS.add(b' ').add(b'"').add(b'<').add(b'>').add(b'`');
+
+pub fn urldecode(s: &str) -> String {
+  let iter = percent_decode(s.as_bytes());
+  iter.decode_utf8().unwrap().to_string()
+}
 
 pub fn urlencode(input: &str) -> String {
   let iter = utf8_percent_encode(input, FRAGMENT);

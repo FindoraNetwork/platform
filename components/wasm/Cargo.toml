@@ -28,7 +28,7 @@ txn_builder = {path = "../txn_builder"}
 wasm-bindgen = { version = "0.2.50", features = ["serde-serialize"]  }
 wasm-bindgen-futures = "0.3.27"
 wasm-bindgen-test = "0.2.50"
-zei = { git = "ssh://git@github.com/findoraorg/zei", tag = "v0.0.1" }
+zei = { git = "ssh://git@github.com/findoraorg/zei", tag = "v0.0.2" }
 
 [lib]
 crate-type = ["cdylib", "rlib"]

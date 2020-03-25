@@ -5,6 +5,7 @@ members = [
     "components/account_simulator",
     "components/ledger_api_service",
     "components/client",
+    "components/credentials",
     "components/check_merkle",
     "components/ledger_client",
     "components/ledger_standalone",
