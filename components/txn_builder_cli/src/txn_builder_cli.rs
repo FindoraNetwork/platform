@@ -955,7 +955,7 @@ fn define_asset(fiat_asset: bool,
 /// * `amount`: amount to issue and transfer.
 /// * `token_code`: asset token code.
 /// * `record_type`: booleans representing whether the amount and asset transfer are confidential.
-///   Asset issurance is always nonconfidential.
+///   Asset issuance is always nonconfidential.
 /// * `memo_file`: path to store the tracer and owner memos, optional.
 /// * `txn_file`: path to the transaction file.
 fn issue_and_transfer_asset(issuer_key_pair: &XfrKeyPair,
@@ -966,7 +966,7 @@ fn issue_and_transfer_asset(issuer_key_pair: &XfrKeyPair,
                             memo_file: Option<&str>,
                             txn_file: &str)
                             -> Result<TransactionBuilder, PlatformError> {
-  // Asset issurance is always nonconfidential
+  // Asset issuance is always nonconfidential
   let (blind_asset_record, tracer_memo, owner_memo) =
     get_blind_asset_record_and_memos(issuer_key_pair.get_pk(),
                                      amount,
