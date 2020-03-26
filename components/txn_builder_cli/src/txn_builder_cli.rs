@@ -1887,22 +1887,17 @@ fn main() {
           .required(true)
           .takes_value(true)
           .help("Asset amount."))
-        .arg(Arg::with_name("token_code")
-          .short("t")
-          .long("token_code")
-          .required(true)
-          .takes_value(true)
-          .help("Asset token code."))
         .arg(Arg::with_name("confidential_amount")
           .short("m")
           .long("confidential_amount")
           .takes_value(false)
           .help("If specified, the amount will be confidential."))
-        .arg(Arg::with_name("confidential_asset")
-          .short("s")
-          .long("confidential_asset")
-          .takes_value(false)
-          .help("If specified, the asset will be confidential.")))
+        .arg(Arg::with_name("token_code")
+          .short("t")
+          .long("token_code")
+          .required(true)
+          .takes_value(true)
+          .help("Asset token code.")))
       .subcommand(SubCommand::with_name("air_assign")
         .arg(Arg::with_name("address")
           .short("k")
@@ -2025,11 +2020,6 @@ fn main() {
           .long("confidential_amount")
           .takes_value(false)
           .help("If specified, the amount will be confidential."))
-        .arg(Arg::with_name("confidential_asset")
-          .short("s")
-          .long("confidential_asset")
-          .takes_value(false)
-          .help("If specified, the asset will be confidential."))
         .arg(Arg::with_name("memo_file")
           .short("f")
           .long("memo_file")
@@ -2440,6 +2430,8 @@ fn process_asset_issuer_cmd(asset_issuer_matches: &clap::ArgMatches,
         println!("Asset amount is required to store the blind asset record and associated memos. Use --amount.");
         return Err(PlatformError::InputsError);
       };
+      let confidential_amount = store_bar_and_memos_matches.is_present("confidential_amount");
+      let record_type = AssetRecordType::from_booleans(confidential_amount, false);
       let token_code = if let Some(token_code) = store_bar_and_memos_matches.value_of("token_code")
       {
         AssetTypeCode::new_from_base64(token_code)?
@@ -2447,9 +2439,6 @@ fn process_asset_issuer_cmd(asset_issuer_matches: &clap::ArgMatches,
         println!("Asset token code is required to store the blind asset record and associated memos. Use --token_code.");
         return Err(PlatformError::InputsError);
       };
-      let confidential_amount = store_bar_and_memos_matches.is_present("confidential_amount");
-      let confidential_asset = store_bar_and_memos_matches.is_present("confidential_asset");
-      let record_type = AssetRecordType::from_booleans(confidential_amount, confidential_asset);
       let file = if let Some(file_arg) = store_bar_and_memos_matches.value_of("file") {
         file_arg
       } else {
@@ -2716,8 +2705,7 @@ fn process_asset_issuer_cmd(asset_issuer_matches: &clap::ArgMatches,
           return Err(PlatformError::InputsError);
         };
       let confidential_amount = issue_and_transfer_matches.is_present("confidential_amount");
-      let confidential_asset = issue_and_transfer_matches.is_present("confidential_asset");
-      let record_type = AssetRecordType::from_booleans(confidential_amount, confidential_asset);
+      let record_type = AssetRecordType::from_booleans(confidential_amount, false);
       let asset_file = issue_and_transfer_matches.value_of("asset_file");
 
       issue_and_transfer_asset(&issuer_key_pair,
