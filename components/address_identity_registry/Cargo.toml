@@ -50,4 +50,8 @@ tokio = { version = "0.2", features = ["full", "macros"] }
 txn_builder = { path = "../txn_builder" }
 percent-encoding = "2.1.0"
 warp = "0.2"
+<<<<<<< HEAD
 zei = { git = "ssh://git@github.com/findoraorg/zei" }
+=======
+zei = { git = "ssh://git@github.com/findoraorg/zei", tag = "v0.0.2" }
+>>>>>>> master

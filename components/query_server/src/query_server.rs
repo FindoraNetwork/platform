@@ -146,6 +146,7 @@ mod tests {
   use zei::xfr::structs::AssetRecordTemplate;
 
   #[test]
+  #[ignore]
   // Ignoring this test since it sometimes fails on master
   #[ignore]
   pub fn test_query_server() {
@@ -171,6 +172,7 @@ mod tests {
     //Issuance txn
     let amt = 1000;
     let confidentiality_flag = ConfidentialAmount_NonConfidentialAssetType;
+<<<<<<< HEAD
     let issuance_tx = builder.add_basic_issue_asset(&alice,
                                                     &None,
                                                     &token_code,
@@ -195,6 +197,15 @@ mod tests {
                                                     confidentiality_flag,
                                                     None)
                              .unwrap();
+=======
+    let issuance_tx =
+      builder.add_basic_issue_asset(&alice, &None, &token_code, 0, amt, confidentiality_flag)
+             .unwrap()
+             .add_basic_issue_asset(&alice, &None, &token_code, 1, amt, confidentiality_flag)
+             .unwrap()
+             .add_basic_issue_asset(&alice, &None, &token_code, 2, amt, confidentiality_flag)
+             .unwrap();
+>>>>>>> master
     let owner_memo = issuance_tx.owner_records[0].1.clone();
     ledger_standalone.submit_transaction(&issuance_tx.transaction());
 

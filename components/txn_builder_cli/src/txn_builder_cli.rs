@@ -2596,6 +2596,14 @@ fn process_asset_issuer_cmd(asset_issuer_matches: &clap::ArgMatches,
           println!("Input amounts are required to transfer asset. Use --input_amounts.");
           return Err(PlatformError::InputsError);
         };
+      let bars_and_memos = if let Some(bar_and_memo_files_arg) =
+        transfer_asset_matches.value_of("blind_asset_record_and_memo_files")
+      {
+        load_blind_asset_record_and_memos_from_files(bar_and_memo_files_arg)?
+      } else {
+        println!("Blind asset records and associated memos are required to transfer asset. Use --blind_asset_record_and_memo_files.");
+        return Err(PlatformError::InputsError);
+      };
       let mut count = txo_refs.len();
       if input_amounts.len() != count || bars_and_memos.len() != count {
         println!("Size of input sids and input amounts should match.");
@@ -3469,6 +3477,7 @@ mod tests {
     // Build blind asset records
     let code = AssetTypeCode::gen_random();
     let asset_record_type = NonConfidentialAmount_NonConfidentialAssetType;
+<<<<<<< HEAD
     let (bar1, _, memo1) = get_blind_asset_record_and_memos(key_pair.get_pk(),
                                                             1000,
                                                             code,
@@ -3479,6 +3488,12 @@ mod tests {
                                                             code,
                                                             asset_record_type,
                                                             None).unwrap();
+=======
+    let (bar1, _, memo1) =
+      get_blind_asset_record_and_memos(key_pair.get_pk(), 1000, code, asset_record_type).unwrap();
+    let (bar2, _, memo2) =
+      get_blind_asset_record_and_memos(key_pair.get_pk(), 500, code, asset_record_type).unwrap();
+>>>>>>> master
 
     // Merge records
     assert!(merge_records(&key_pair,
@@ -3518,6 +3533,7 @@ mod tests {
   }
 
   #[test]
+  #[ignore]
   // Test funds loading, loan request, fulfilling and repayment
   fn test_request_fulfill_and_pay_loan() {
     let ledger_standalone = LedgerStandalone::new();

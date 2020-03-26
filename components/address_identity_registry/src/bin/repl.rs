@@ -521,19 +521,39 @@ mod tests {
     let mut prng = ChaChaRng::from_entropy();
     let dob = String::from("dob");
     let ss = String::from("ss");
+<<<<<<< HEAD
     let attrs_temp = [(dob.clone(), 4), (ss.clone(), 9)];
     let (issuer_pk, issuer_sk) = credential_issuer_key_gen::<ChaChaRng>(&mut prng, &attrs_temp);
     let (user_pk, user_sk) = credential_user_key_gen::<ChaChaRng>(&mut prng, &issuer_pk);
     let attr1 = b"0822";
     let attr2 = b"666666666";
     let attributes = [(dob.clone(), &attr1[..]), (ss.clone(), &attr2[..])];
+=======
+    let dob = String::from("dob");
+    let dl = String::from("dl");
+    let attrs_temp = [(dob.clone(), 8), (ss.clone(), 9), (dl.clone(), 8)]; // 4
+    let (issuer_pk, issuer_sk) = credential_issuer_key_gen::<ChaChaRng>(&mut prng, &attrs_temp);
+    let (user_pk, user_sk) = credential_user_key_gen::<ChaChaRng>(&mut prng, &issuer_pk);
+    let dob_attr = b"08221964";
+    let ss_attr = b"666666666";
+    let dl_attr = b"A1903479";
+    let attributes = [(dob.clone(), &dob_attr[..]),
+                      (ss.clone(), &ss_attr[..]),
+                      (dl.clone(), &dl_attr[..])];
+>>>>>>> master
     println!("verify: attributes = {:?}", &attributes);
     let signature = credential_sign(&mut prng, &issuer_sk, &user_pk, &attributes).unwrap(); // Done by Issuer
 
     // Enter the User
     let mut attr_map = vec![];
+<<<<<<< HEAD
     attr_map.push((dob.clone(), attr1.to_vec()));
     attr_map.push((ss.clone(), attr2.to_vec()));
+=======
+    attr_map.push((dob.clone(), dob_attr.to_vec()));
+    attr_map.push((ss.clone(), ss_attr.to_vec()));
+    attr_map.push((dl.clone(), dl_attr.to_vec()));
+>>>>>>> master
     let credential = Credential { signature: signature.clone(),
                                   attributes: attr_map,
                                   issuer_pub_key: issuer_pk.clone() };
@@ -560,16 +580,28 @@ mod tests {
       credential_open_commitment(&mut prng, &user_sk, &credential, &key, &bitmap).unwrap();
 
     // Enter the Verifier with user generated POK (and address in the AIR tests)
+<<<<<<< HEAD
     let attr_map = [(dob.clone(), &attr1[..])];
     // println!("verify: attr_map = {:?}", &attr_map);
     let result_verification_ok = credential_verify(&issuer_pk, &attr_map, &commitment, &reveal_pok);
     assert!(result_verification_ok.is_ok());
     let attr_map = [(ss.clone(), &attr2[..])];
+=======
+    let attr_map = [(dob.clone(), &dob_attr[..])];
+    // println!("verify: attr_map = {:?}", &attr_map);
+    let result_verification_ok = credential_verify(&issuer_pk, &attr_map, &commitment, &reveal_pok);
+    assert!(result_verification_ok.is_ok());
+    let attr_map = [(ss.clone(), &ss_attr[..])];
+>>>>>>> master
     let result_verification_err =
       credential_verify(&issuer_pk, &attr_map, &commitment, &reveal_pok);
     assert!(result_verification_err.is_err());
 
+<<<<<<< HEAD
     let attr_map = [(ss.clone(), &attr1[..])];
+=======
+    let attr_map = [(ss.clone(), &dob_attr[..])];
+>>>>>>> master
     let result_verification_err =
       credential_verify(&issuer_pk, &attr_map, &commitment, &reveal_pok);
     assert!(result_verification_err.is_err());

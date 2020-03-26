@@ -19,4 +19,8 @@ serde = "1.0"
 serde_derive = "1.0"
 serde_json = "1.0"
 txn_builder = {path = "../txn_builder"}
+<<<<<<< HEAD
 zei = { git = "ssh://git@github.com/findoraorg/zei"}
+=======
+zei = { git = "ssh://git@github.com/findoraorg/zei", tag = "v0.0.2" }
+>>>>>>> master

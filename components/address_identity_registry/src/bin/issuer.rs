@@ -153,12 +153,29 @@ mod handlers {
                 .iter()
                 .map(|(field, attr)| (field.clone(), attr.as_bytes()))
                 .collect();
+<<<<<<< HEAD
     let sig = credential_sign(&mut global_state.prng,
                               &cred_kind.issuer_sk,
                               &user_creds.user_pk,
                               &attrs).unwrap();
 
     Ok(warp::reply::json(&sig))
+=======
+    match credential_sign(&mut global_state.prng,
+                          &cred_kind.issuer_sk,
+                          &user_creds.user_pk,
+                          &attrs)
+    {
+      Ok(sig) => {
+        println!("Succesful credential signature in the issuer");
+        Ok(warp::reply::json(&sig))
+      }
+      Err(e) => {
+        println!("Credential signature FAILED in the issuer: {:?}", e);
+        Ok(warp::reply::json(&format!("Bad stuff happened")))
+      }
+    }
+>>>>>>> master
   }
 }
 
@@ -184,6 +201,7 @@ mod models {
 
   pub fn make_db() -> Db {
     let mut prng = ChaChaRng::from_entropy();
+<<<<<<< HEAD
     let a = [(String::from("passport"),
               mk_credkind(&mut prng, "passport", &[(String::from("num"), 4)])),
              (String::from("drivers license"),
@@ -194,6 +212,10 @@ mod models {
               mk_credkind(&mut prng,
                           "security clearance",
                           &[(String::from("type"), 4)]))];
+=======
+    let a = [(String::from("passport"), mk_passport_credkind(&mut prng)),
+             (String::from("drivers license"), mk_dl_credkind(&mut prng))];
+>>>>>>> master
     let credkinds: HashMap<String, CredentialKind> = a.iter().cloned().collect();
     Arc::new(Mutex::new(GlobalState { prng, credkinds }))
   }
@@ -208,6 +230,10 @@ mod models {
 
   pub fn to_pubcreds(credkind: &CredentialKind) -> PubCreds {
     PubCreds { name: credkind.name.clone(),
+<<<<<<< HEAD
+=======
+               attrs_sizes: credkind.attrs_sizes.clone(),
+>>>>>>> master
                issuer_pk: credkind.issuer_pk.clone() }
   }
 
@@ -234,6 +260,24 @@ mod models {
   pub struct ListOptions {
     pub offset: Option<usize>,
     pub limit: Option<usize>,
+  }
+
+  // Helper functions for making three different credential kinds
+  fn mk_passport_credkind(mut prng: &mut ChaChaRng) -> CredentialKind {
+    mk_credkind(&mut prng,
+                "passport",
+                &[(String::from("dob"), 8),
+                  (String::from("pob"), 3),
+                  (String::from("sex"), 1)])
+  }
+
+  fn mk_dl_credkind(mut prng: &mut ChaChaRng) -> CredentialKind {
+    mk_credkind(&mut prng,
+                "drivers license",
+                &[(String::from("dob"), 8),
+                  (String::from("hgt"), 3),
+                  (String::from("sex"), 1),
+                  (String::from("wgt"), 4)])
   }
 }
 

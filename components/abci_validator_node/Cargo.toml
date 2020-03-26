@@ -20,4 +20,8 @@ rand_core = { version = "0.5", default-features = false, features = ["alloc"] }
 serde = { version = "1.0.99", features = ["derive"] }
 serde_derive = "1.0"
 serde_json = "1.0.40"
+<<<<<<< HEAD
 zei = { git = "ssh://git@github.com/findoraorg/zei" }
+=======
+zei = { git = "ssh://git@github.com/findoraorg/zei", tag = "v0.0.2" }
+>>>>>>> master
