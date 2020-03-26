@@ -142,8 +142,10 @@ mod tests {
   use txn_builder::{
     BuildsTransactions, PolicyChoice, TransactionBuilder, TransferOperationBuilder,
   };
-  use zei::xfr::asset_record::open_asset_record;
+  use zei::xfr::asset_record::open_blind_asset_record;
+  use zei::xfr::asset_record::AssetRecordType::ConfidentialAmount_NonConfidentialAssetType;
   use zei::xfr::sig::XfrKeyPair;
+  use zei::xfr::structs::AssetRecordTemplate;
 
   #[test]
   #[ignore]
@@ -174,14 +176,16 @@ mod tests {
 
     //Issuance txn
     let amt = 1000;
-    let issuance_tx = builder.add_basic_issue_asset(&alice, &None, &token_code, 0, amt)
-                             .unwrap()
-                             .add_basic_issue_asset(&alice, &None, &token_code, 1, amt)
-                             .unwrap()
-                             .add_basic_issue_asset(&alice, &None, &token_code, 2, amt)
-                             .unwrap()
-                             .transaction();
-    ledger_standalone.submit_transaction(&issuance_tx);
+    let confidentiality_flag = ConfidentialAmount_NonConfidentialAssetType;
+    let issuance_tx =
+      builder.add_basic_issue_asset(&alice, &None, &token_code, 0, amt, confidentiality_flag)
+             .unwrap()
+             .add_basic_issue_asset(&alice, &None, &token_code, 1, amt, confidentiality_flag)
+             .unwrap()
+             .add_basic_issue_asset(&alice, &None, &token_code, 2, amt, confidentiality_flag)
+             .unwrap();
+    let owner_memo = issuance_tx.owner_records[0].1.clone();
+    ledger_standalone.submit_transaction(&issuance_tx.transaction());
 
     // Query server will now fetch new blocks
     query_server.poll_new_blocks().unwrap();
@@ -197,11 +201,15 @@ mod tests {
     // Transfer to Bob
     let transfer_sid = TxoSID(0);
     let bar = ledger_standalone.fetch_blind_asset_record(transfer_sid);
-    let oar = open_asset_record(&bar, alice.get_sk_ref()).unwrap();
+    let oar = open_blind_asset_record(&bar, &owner_memo, alice.get_sk_ref()).unwrap();
     let mut xfr_builder = TransferOperationBuilder::new();
+    let out_template = AssetRecordTemplate::with_no_asset_tracking(amt,
+                                                                   token_code.val,
+                                                                   oar.get_record_type(),
+                                                                   bob.get_pk());
     let xfr_op = xfr_builder.add_input(TxoRef::Absolute(transfer_sid), oar, amt)
                             .unwrap()
-                            .add_output(amt, bob.get_pk_ref(), token_code)
+                            .add_output(&out_template)
                             .unwrap()
                             .create(TransferType::Standard)
                             .unwrap()

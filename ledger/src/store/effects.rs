@@ -9,8 +9,8 @@ use findora::HasInvariants;
 use rand_core::{CryptoRng, RngCore, SeedableRng};
 use std::collections::{HashMap, HashSet};
 use zei::serialization::ZeiFromToBytes;
-use zei::xfr::lib::verify_xfr_body;
-use zei::xfr::structs::BlindAssetRecord;
+use zei::xfr::lib::verify_xfr_body_no_policies;
+use zei::xfr::structs::{BlindAssetRecord, XfrAssetType};
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct TxnEffect {
@@ -181,7 +181,7 @@ impl TxnEffect {
             }
 
             // (5)
-            if (output.0).asset_type != Some(code.val) {
+            if (output.0).asset_type != XfrAssetType::NonConfidential(code.val) {
               return Err(PlatformError::InputsError);
             }
 
@@ -232,7 +232,7 @@ impl TxnEffect {
               //      assets) have signed
               for record in &trn.body.transfer.inputs {
                 // skip signature checking for custom-policy assets
-                if let Some(inp_code) = record.asset_type {
+                if let Some(inp_code) = record.asset_type.get_asset_type() {
                   if custom_policy_asset_types.get(&AssetTypeCode { val: inp_code })
                                               .is_some()
                   {
@@ -247,12 +247,10 @@ impl TxnEffect {
           }
           // (3)
           // TODO: implement real policies
-          let null_policies = vec![];
-          let null_commitments = vec![];
-          verify_xfr_body(prng, &trn.body.transfer, &null_policies, &null_commitments)?;
+          verify_xfr_body_no_policies(prng, &trn.body.transfer)?;
 
           for (inp, record) in trn.body.inputs.iter().zip(trn.body.transfer.inputs.iter()) {
-            if let Some(inp_code) = record.asset_type {
+            if let Some(inp_code) = record.asset_type.get_asset_type() {
               asset_types_involved.insert(AssetTypeCode { val: inp_code });
             }
 
@@ -291,7 +289,7 @@ impl TxnEffect {
 
           txos.reserve(trn.body.transfer.outputs.len());
           for out in trn.body.transfer.outputs.iter() {
-            if let Some(out_code) = out.asset_type {
+            if let Some(out_code) = out.asset_type.get_asset_type() {
               asset_types_involved.insert(AssetTypeCode { val: out_code });
             }
             txos.push(Some(TxOutput(out.clone())));

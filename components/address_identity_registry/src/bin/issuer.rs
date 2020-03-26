@@ -97,6 +97,7 @@ mod filters {
 mod handlers {
   use super::models::{to_pubcreds, CredentialKind, Db, ListOptions};
   use crate::shared::{PubCreds, UserCreds};
+  use credentials::credential_sign;
   use percent_encoding::{percent_decode, AsciiSet, CONTROLS};
   use rand_chacha::ChaChaRng;
   use std::convert::Infallible;
@@ -147,27 +148,40 @@ mod handlers {
     let mut global_state = db.lock().await;
     let credkinds = global_state.credkinds.clone();
     let cred_kind = credkinds.get(&credname).unwrap();
-    let attrs: Vec<&[u8]> = user_creds.attrs.iter().map(|s| s.as_bytes()).collect();
-    let sig = ac_sign::<ChaChaRng, &[u8]>(&mut global_state.prng,
-                                          &cred_kind.issuer_sk,
-                                          &user_creds.user_pk,
-                                          &attrs);
-
-    Ok(warp::reply::json(&sig))
+    let attrs: Vec<(String, &[u8])> =
+      user_creds.attrs
+                .iter()
+                .map(|(field, attr)| (field.clone(), attr.as_bytes()))
+                .collect();
+    match credential_sign(&mut global_state.prng,
+                          &cred_kind.issuer_sk,
+                          &user_creds.user_pk,
+                          &attrs)
+    {
+      Ok(sig) => {
+        println!("Succesful credential signature in the issuer");
+        Ok(warp::reply::json(&sig))
+      }
+      Err(e) => {
+        println!("Credential signature FAILED in the issuer: {:?}", e);
+        Ok(warp::reply::json(&format!("Bad stuff happened")))
+      }
+    }
   }
 }
 
 mod models {
   use crate::shared::{PubCreds, UserCreds};
+  use credentials::{
+    credential_issuer_key_gen, CredIssuerPublicKey, CredIssuerSecretKey, CredUserPublicKey,
+    CredUserSecretKey,
+  };
   use rand_chacha::ChaChaRng;
   use rand_core::SeedableRng;
   use serde_derive::{Deserialize, Serialize};
   use std::collections::HashMap;
   use std::sync::Arc;
   use tokio::sync::Mutex;
-  use zei::api::anon_creds::{
-    ac_keygen_issuer, ACIssuerPublicKey, ACIssuerSecretKey, ACUserPublicKey,
-  };
   /// So we don't have to tackle how different database work, we'll just use
   /// a simple in-memory DB, a HashMap synchronized by a mutex.
   pub type Db = Arc<Mutex<GlobalState>>;
@@ -178,9 +192,8 @@ mod models {
 
   pub fn make_db() -> Db {
     let mut prng = ChaChaRng::from_entropy();
-    let a = [(String::from("passport"), mk_credkind(&mut prng, "passport", 4)),
-             (String::from("drivers license"), mk_credkind(&mut prng, "drivers license", 4)),
-             (String::from("security clearance"), mk_credkind(&mut prng, "security clearance", 8))];
+    let a = [(String::from("passport"), mk_passport_credkind(&mut prng)),
+             (String::from("drivers license"), mk_dl_credkind(&mut prng))];
     let credkinds: HashMap<String, CredentialKind> = a.iter().cloned().collect();
     Arc::new(Mutex::new(GlobalState { prng, credkinds }))
   }
@@ -188,21 +201,24 @@ mod models {
   #[derive(Debug, Deserialize, Serialize, Clone)]
   pub struct CredentialKind {
     pub name: String,
-    pub num_attrs: u64,
-    pub issuer_sk: ACIssuerSecretKey,
-    pub issuer_pk: ACIssuerPublicKey,
+    pub attrs_sizes: Vec<(String, usize)>,
+    pub issuer_sk: CredIssuerSecretKey,
+    pub issuer_pk: CredIssuerPublicKey,
   }
 
   pub fn to_pubcreds(credkind: &CredentialKind) -> PubCreds {
     PubCreds { name: credkind.name.clone(),
-               num_attrs: credkind.num_attrs,
+               attrs_sizes: credkind.attrs_sizes.clone(),
                issuer_pk: credkind.issuer_pk.clone() }
   }
 
-  fn mk_credkind(mut prng: &mut ChaChaRng, name: &str, num_attrs: u64) -> CredentialKind {
-    let (issuer_pk, issuer_sk) = ac_keygen_issuer::<_>(&mut prng, num_attrs as usize);
+  fn mk_credkind(mut prng: &mut ChaChaRng,
+                 name: &str,
+                 attributes: &[(String, usize)])
+                 -> CredentialKind {
+    let (issuer_pk, issuer_sk) = credential_issuer_key_gen::<_>(&mut prng, attributes);
     CredentialKind { name: String::from(name),
-                     num_attrs,
+                     attrs_sizes: attributes.to_vec(),
                      issuer_sk,
                      issuer_pk }
   }
@@ -210,7 +226,7 @@ mod models {
   #[derive(Debug, Deserialize, Serialize, Clone)]
   pub struct SignatureParams {
     name: String, // credential name
-    user_pk: ACUserPublicKey,
+    user_pk: CredUserPublicKey,
     attrs: Vec<String>,
   }
 
@@ -219,6 +235,24 @@ mod models {
   pub struct ListOptions {
     pub offset: Option<usize>,
     pub limit: Option<usize>,
+  }
+
+  // Helper functions for making three different credential kinds
+  fn mk_passport_credkind(mut prng: &mut ChaChaRng) -> CredentialKind {
+    mk_credkind(&mut prng,
+                "passport",
+                &[(String::from("dob"), 8),
+                  (String::from("pob"), 3),
+                  (String::from("sex"), 1)])
+  }
+
+  fn mk_dl_credkind(mut prng: &mut ChaChaRng) -> CredentialKind {
+    mk_credkind(&mut prng,
+                "drivers license",
+                &[(String::from("dob"), 8),
+                  (String::from("hgt"), 3),
+                  (String::from("sex"), 1),
+                  (String::from("wgt"), 4)])
   }
 }
 

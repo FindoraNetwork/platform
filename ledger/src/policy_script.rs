@@ -448,9 +448,9 @@ pub fn run_txn_check(check: &TxnCheck,
                           });
             res_totals.get_mut(inp).as_mut().unwrap().push(*amt);
 
-            debug_assert!(inp_txo.0.asset_type.is_some());
+            debug_assert!(!inp_txo.0.asset_type.is_confidential());
 
-            asset_type = inp_txo.0.asset_type.unwrap();
+            asset_type = inp_txo.0.asset_type.get_asset_type().unwrap();
           } else {
             debug_assert!(!res_totals.contains_key(inp));
 
@@ -459,7 +459,9 @@ pub fn run_txn_check(check: &TxnCheck,
                              .inputs
                              .get(inp_ix)
                              .ok_or_else(|| fail.clone())?;
-            asset_type = inp_txo.asset_type.ok_or_else(|| fail.clone())?;
+            asset_type = inp_txo.asset_type
+                                .get_asset_type()
+                                .ok_or_else(|| fail.clone())?;
 
             res_vars.insert(*inp, TxOutput(inp_txo.clone()));
             res_totals.insert(*inp, vec![*amt]);
@@ -473,9 +475,9 @@ pub fn run_txn_check(check: &TxnCheck,
               debug_assert!(!res_vars.contains_key(inp));
               res_totals.get_mut(out_res).as_mut().unwrap().push(*amt);
 
-              debug_assert!(out_txo.0.asset_type.is_some());
+              debug_assert!(!out_txo.0.asset_type.is_confidential());
 
-              if asset_type != out_txo.0.asset_type.unwrap() {
+              if asset_type != out_txo.0.asset_type.get_asset_type().unwrap() {
                 return Err(fail.clone());
               }
             } else {
@@ -487,7 +489,11 @@ pub fn run_txn_check(check: &TxnCheck,
                                .get(out_ix)
                                .ok_or_else(|| fail.clone())?;
 
-              if asset_type != out_txo.asset_type.ok_or_else(|| fail.clone())? {
+              if asset_type
+                 != out_txo.asset_type
+                           .get_asset_type()
+                           .ok_or_else(|| fail.clone())?
+              {
                 return Err(fail.clone());
               }
 
@@ -505,7 +511,11 @@ pub fn run_txn_check(check: &TxnCheck,
                              .ok_or_else(|| fail.clone())?;
 
             // TODO(joe): maybe move this later?
-            if out_txo.asset_type.ok_or_else(|| fail.clone())? != asset_type {
+            if out_txo.asset_type
+                      .get_asset_type()
+                      .ok_or_else(|| fail.clone())?
+               != asset_type
+            {
               return Err(fail.clone());
             }
 
@@ -562,6 +572,7 @@ pub fn run_txn_check(check: &TxnCheck,
                                                                       .ok_or_else(|| fail.clone())?
                                                                       .0
                                                                       .asset_type
+                                                                      .get_asset_type()
                                                                       .ok_or_else(|| fail.clone())?,
                  });
     dbg!(rt_vars.len());
@@ -643,6 +654,7 @@ pub fn run_txn_check(check: &TxnCheck,
                               .ok_or_else(|| fail.clone())?
                               .0
                               .amount
+                              .get_amount()
                               .ok_or_else(|| fail.clone())?;
               amt_vars.push(n);
               amt_ix += 1;
@@ -930,7 +942,7 @@ pub fn run_txn_check(check: &TxnCheck,
           let txo = res_vars.get(rv).ok_or_else(|| fail.clone())?;
           // txo.0.asset_type should be established as non-None by the
           // first two checking loops.
-          if *asset_type != txo.0.asset_type.unwrap() {
+          if *asset_type != txo.0.asset_type.get_asset_type().unwrap() {
             return Err(fail.clone());
           }
         }
@@ -944,7 +956,7 @@ pub fn run_txn_check(check: &TxnCheck,
                                       .ok_or_else(|| fail.clone())?;
           // txo.0.asset_type should be established as non-None by the
           // first two checking loops.
-          if *inp_asset_type != inp_txo.0.asset_type.unwrap() {
+          if *inp_asset_type != inp_txo.0.asset_type.get_asset_type().unwrap() {
             return Err(fail.clone());
           }
 
@@ -955,7 +967,7 @@ pub fn run_txn_check(check: &TxnCheck,
                                         .ok_or_else(|| fail.clone())?;
             // txo.0.asset_type should be established as non-None by the
             // first two checking loops.
-            if *out_asset_type != out_txo.0.asset_type.unwrap() {
+            if *out_asset_type != out_txo.0.asset_type.get_asset_type().unwrap() {
               return Err(fail.clone());
             }
           }
@@ -983,6 +995,7 @@ pub fn run_txn_check(check: &TxnCheck,
                   .ok_or_else(|| fail.clone())?
                   .0
                   .amount
+                  .get_amount()
                   .ok_or_else(|| fail.clone())?
     {
       return Err(fail.clone());
