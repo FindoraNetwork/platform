@@ -264,19 +264,19 @@ fn transfer_asset(txn_builder_path: &str,
 }
 
 #[cfg(test)]
-fn issue_and_transfer_asset_with_confidential_amount(txn_builder_path: &str,
-                                                     issuer_id: &str,
-                                                     recipient_id: &str,
-                                                     amount: &str,
-                                                     token_code: &str)
-                                                     -> io::Result<Output> {
+fn issue_and_transfer_asset_confidential(txn_builder_path: &str,
+                                         issuer_id: &str,
+                                         recipient_id: &str,
+                                         amount: &str,
+                                         token_code: &str)
+                                         -> io::Result<Output> {
   Command::new(COMMAND).args(&["--txn", txn_builder_path])
                        .args(&["asset_issuer", "--id", issuer_id])
                        .arg("issue_and_transfer_asset")
                        .args(&["--recipient", recipient_id])
                        .args(&["--amount", amount])
                        .args(&["--token_code", token_code])
-                       .arg("--confidential_amount")
+                       .args(&["--confidential_amount", "--confidential_asset"])
                        .output()
 }
 
@@ -874,7 +874,7 @@ fn test_issue_transfer_trace_and_submit_with_args() {
 
   // Issue and transfer
   let amount = "1000";
-  issue_and_transfer_asset_with_confidential_amount(txn_builder_file,
+  issue_and_transfer_asset_confidential(txn_builder_file,
                            "0",
                            "0",
                            amount,

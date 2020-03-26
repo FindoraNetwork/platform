@@ -954,7 +954,8 @@ fn define_asset(fiat_asset: bool,
 /// * `recipient_key_pair`: rercipient's key pair.
 /// * `amount`: amount to issue and transfer.
 /// * `token_code`: asset token code.
-/// * `record_type`: booleans representing whether the amount and asset are confidential.
+/// * `record_type`: booleans representing whether the amount and asset transfer are confidential.
+///   Asset issurance is always nonconfidential.
 /// * `memo_file`: path to store the tracer and owner memos, optional.
 /// * `txn_file`: path to the transaction file.
 fn issue_and_transfer_asset(issuer_key_pair: &XfrKeyPair,
@@ -965,11 +966,12 @@ fn issue_and_transfer_asset(issuer_key_pair: &XfrKeyPair,
                             memo_file: Option<&str>,
                             txn_file: &str)
                             -> Result<TransactionBuilder, PlatformError> {
+  // Asset issurance is always nonconfidential
   let (blind_asset_record, tracer_memo, owner_memo) =
     get_blind_asset_record_and_memos(issuer_key_pair.get_pk(),
                                      amount,
                                      token_code,
-                                     record_type,
+                                     AssetRecordType::from_booleans(record_type.is_confidential_amount(), false),
                                      None)?;
 
   // Transfer Operation
@@ -1137,17 +1139,14 @@ fn get_blind_asset_record_and_memos(pub_key: XfrPublicKey,
                                     asset_record_type: AssetRecordType,
                                     policy: Option<AssetTracingPolicy>)
                                     -> Result<BlindAssetRecordAndMemos, PlatformError> {
-  // Confidential asset is currently not supported
-  let record_type =
-    AssetRecordType::from_booleans(asset_record_type.is_confidential_amount(), false);
   let template = if let Some(tracing_policy) = policy {
     AssetRecordTemplate::with_asset_tracking(amount,
                                              token_code.val,
-                                             record_type,
+                                             asset_record_type,
                                              pub_key,
                                              tracing_policy)
   } else {
-    AssetRecordTemplate::with_no_asset_tracking(amount, token_code.val, record_type, pub_key)
+    AssetRecordTemplate::with_no_asset_tracking(amount, token_code.val, asset_record_type, pub_key)
   };
   let mut prng = ChaChaRng::from_entropy();
   let params = PublicParams::new();
@@ -2020,6 +2019,11 @@ fn main() {
           .long("confidential_amount")
           .takes_value(false)
           .help("If specified, the amount will be confidential."))
+        .arg(Arg::with_name("confidential_asset")
+          .short("s")
+          .long("confidential_asset")
+          .takes_value(false)
+          .help("If specified, the asset transfer will be confidential."))
         .arg(Arg::with_name("memo_file")
           .short("f")
           .long("memo_file")
