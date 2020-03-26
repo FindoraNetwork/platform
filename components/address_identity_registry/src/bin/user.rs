@@ -5,42 +5,15 @@ mod shared;
 use credentials::{credential_commit, credential_user_key_gen, CredSignature, Credential};
 use ledger::data_model::errors::PlatformError;
 use linear_map::LinearMap;
-<<<<<<< HEAD
-use percent_encoding::{utf8_percent_encode, AsciiSet, CONTROLS};
-use rand_chacha::ChaChaRng;
-use rand_core::SeedableRng;
-use serde::{Deserialize, Serialize};
-use shared::{PubCreds, UserCreds};
-=======
 use rand_chacha::ChaChaRng;
 use rand_core::SeedableRng;
 use serde::{Deserialize, Serialize};
 use shared::{protocol_host, urlencode, PubCreds, UserCreds, QUERY_PORT, SUBMIT_PORT};
->>>>>>> master
 use submission_server::{TxnHandle, TxnStatus};
 use txn_builder::{BuildsTransactions, TransactionBuilder, TransferOperationBuilder};
 use warp::Filter;
 use zei::serialization::ZeiFromToBytes;
 use zei::xfr::sig::{XfrKeyPair, XfrPublicKey};
-<<<<<<< HEAD
-
-/// https://url.spec.whatwg.org/#fragment-percent-encode-set
-const FRAGMENT: &AsciiSet = &CONTROLS.add(b' ').add(b'"').add(b'<').add(b'>').add(b'`');
-
-fn urlencode(input: &str) -> String {
-  let iter = utf8_percent_encode(input, FRAGMENT);
-  iter.collect()
-}
-
-const PROTOCOL: &str = "http";
-const SERVER_HOST: &str = "localhost";
-
-/// Port for querying values.
-const QUERY_PORT: &str = "8668";
-/// Port for submitting transactions.
-const SUBMIT_PORT: &str = "8669";
-=======
->>>>>>> master
 
 // From txn_builder_cli: need a working key pair String
 const KEY_PAIR_STR: &str = "76b8e0ada0f13d90405d6ae55386bd28bdd219b8a08ded1aa836efcc8b770dc720fdbac9b10b7587bba7b5bc163bce69e796d71e4ed44c10fcb4488689f7a144";
@@ -63,26 +36,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     reqwest::get(&format!("http://localhost:3030/issuer_pk/{}", &credname)).await?
                                                                            .json::<PubCreds>()
                                                                            .await?;
-<<<<<<< HEAD
-  println!("Response from issuer for public key is:\n{}",
-=======
   println!("Response from issuer for public credential info is:\n{}",
->>>>>>> master
            serde_json::to_string(&resp1).unwrap());
 
   // Step 2: generate user key pair for this credential
   let mut prng = ChaChaRng::from_entropy();
   let (user_pk, user_sk) = credential_user_key_gen::<_>(&mut prng, &resp1.issuer_pk);
   let attrs: Vec<(String, String)> = vec![(String::from("dob"), String::from("08221964")),
-<<<<<<< HEAD
-                                          (String::from("ss"), String::from("666666666")),
-                                          (String::from("photo"),
-                                           String::from("https://bit.ly/gotohell")),
-                                          (String::from("dl"), String::from("dl:123456"))];
-=======
                                           (String::from("pob"), String::from("666")),
                                           (String::from("sex"), String::from("M"))];
->>>>>>> master
   let user_creds = UserCreds { credname: credname.to_string(),
                                user_pk: user_pk.clone(),
                                attrs: attrs.clone() };
@@ -119,16 +81,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Submit to ledger
     let txn = txn_builder.transaction();
-<<<<<<< HEAD
-    let mut res = client.post(&format!("{}://{}:{}/{}",
-                                       PROTOCOL, SERVER_HOST, SUBMIT_PORT, "submit_transaction"))
-=======
     let (protocol, host) = protocol_host();
     println!("User: submitting air_assign txn to ledger at {}://{}:{}/{}",
              protocol, host, SUBMIT_PORT, "submit_transaction");
     let mut res = client.post(&format!("{}://{}:{}/{}",
                                        protocol, host, SUBMIT_PORT, "submit_transaction"))
->>>>>>> master
                         .json(&txn)
                         .send()
                         .await?;
@@ -154,11 +111,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 mod filters {
   use super::handlers;
   use super::models::Db;
-<<<<<<< HEAD
-  use crate::shared::Bitmap;
-=======
   use crate::shared::RevealFields;
->>>>>>> master
   use warp::Filter;
 
   /// The User filters combined.
@@ -184,11 +137,7 @@ mod filters {
     warp::any().map(move || db.clone())
   }
 
-<<<<<<< HEAD
-  fn json_body() -> impl Filter<Extract = (Vec<String>,), Error = warp::Rejection> + Clone {
-=======
   fn json_body() -> impl Filter<Extract = (RevealFields,), Error = warp::Rejection> + Clone {
->>>>>>> master
     // When accepting a body, we want a JSON body
     // (and to reject huge payloads)...
     warp::body::content_length_limit(1024 * 16).and(warp::body::json())
@@ -197,11 +146,7 @@ mod filters {
 
 mod handlers {
   use super::models::{Db, GlobalState};
-<<<<<<< HEAD
-  use crate::shared::{AIRAddressAndPoK, Bitmap};
-=======
   use crate::shared::{AIRAddressAndPoK, RevealFields};
->>>>>>> master
   use credentials::credential_open_commitment;
   use rand_chacha::ChaChaRng;
   use std::convert::Infallible;
@@ -210,11 +155,7 @@ mod handlers {
 
   /// POST //reveal/:credname/:bitmap
   pub async fn reveal(credname: String,
-<<<<<<< HEAD
-                      reveal_fields: Vec<String>,
-=======
                       reveal_fields: RevealFields,
->>>>>>> master
                       db: Db)
                       -> Result<impl warp::Reply, Infallible> {
     println!("User:reveal credname = {}, reveal fields = {:?}",
@@ -230,11 +171,7 @@ mod handlers {
                                                 &user_sk,
                                                 &cred,
                                                 &key,
-<<<<<<< HEAD
-                                                reveal_fields.as_slice())
-=======
                                                 reveal_fields.fields.as_slice())
->>>>>>> master
     {
       let address = serde_json::to_string(&user_pk).unwrap();
       let result = AIRAddressAndPoK { addr: address, pok };

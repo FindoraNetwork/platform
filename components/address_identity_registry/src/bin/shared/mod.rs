@@ -1,20 +1,11 @@
-<<<<<<< HEAD
-#![deny(warnings)]
-#![allow(clippy::module_inception)]
-use credentials::{CredIssuerPublicKey, CredPoK, CredUserPublicKey};
-=======
 use credentials::{CredIssuerPublicKey, CredPoK, CredUserPublicKey};
 use percent_encoding::{percent_decode, utf8_percent_encode, AsciiSet, CONTROLS};
->>>>>>> master
 use serde_derive::{Deserialize, Serialize};
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct PubCreds {
   pub name: String,
-<<<<<<< HEAD
-=======
   pub attrs_sizes: Vec<(String, usize)>,
->>>>>>> master
   pub issuer_pk: CredIssuerPublicKey,
 }
 
@@ -35,8 +26,6 @@ pub struct AIRAddressAndPoK {
   pub addr: String,
   pub pok: CredPoK,
 }
-<<<<<<< HEAD
-=======
 
 /// https://url.spec.whatwg.org/#fragment-percent-encode-set
 const FRAGMENT: &AsciiSet = &CONTROLS.add(b' ').add(b'"').add(b'<').add(b'>').add(b'`');
@@ -68,4 +57,3 @@ pub fn protocol_host() -> (&'static str, &'static str) {
   (std::option_env!("PROTOCOL").unwrap_or(PROTOCOL), // "https"
    std::option_env!("SERVER_HOST").unwrap_or(SERVER_HOST)) // "testnet.findora.org"
 }
->>>>>>> master

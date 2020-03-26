@@ -217,12 +217,6 @@ fn num_u32_per_u8(num_u8: usize) -> usize {
 
 /* Use the contents of u8 slice to fill a vector of u32 */
 fn u8_slice_to_u32_vec(attr: &[u8], len: usize) -> Vec<u32> {
-<<<<<<< HEAD
-  println!("u8_slice_to_u32_vec: attr.len = {} and len = {}",
-           attr.len(),
-           len);
-=======
->>>>>>> master
   assert!(len >= num_u32_per_u8(attr.len()));
   let mut res = vec![0u32; len];
   for (i, byte) in attr.iter().enumerate() {
@@ -230,32 +224,3 @@ fn u8_slice_to_u32_vec(attr: &[u8], len: usize) -> Vec<u32> {
   }
   res
 }
-<<<<<<< HEAD
-/*
-fn attr_to_u32_array(attr: &[u8], len: usize) -> Vec<u32> {
-  let mut i = 0;
-  let mut r = vec![0u32; len];
-  let mut k = 0;
-  while i + 3 < attr.len() {
-    r[k] = (attr[i] as u32)
-           + ((attr[i + 1] as u32) << 8)
-           + ((attr[i + 2] as u32) << 16)
-           + ((attr[i + 3] as u32) << 24);
-    i += 4;
-    k += 1;
-  }
-  if i < attr.len() {
-    let mut v = 0;
-    let mut j = 0;
-    while i < attr.len() {
-      v += (attr[i] as u32) << (8 * j);
-      j += 1;
-      i += 1;
-    }
-    r[k] = v;
-  }
-  r
-}
-*/
-=======
->>>>>>> master
