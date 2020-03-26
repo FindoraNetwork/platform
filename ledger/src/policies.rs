@@ -3,7 +3,7 @@ use crate::data_model::AssetTypeCode;
 use fixed::types::I20F12;
 use zei::serialization::ZeiFromToBytes;
 use zei::xfr::sig::XfrPublicKey;
-use zei::xfr::structs::XfrBody;
+use zei::xfr::structs::{XfrAmount, XfrAssetType, XfrBody};
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Serialize, Deserialize)]
 pub struct Fraction(pub I20F12);
@@ -91,8 +91,8 @@ pub fn compute_debt_swap_effect(transfer: &XfrBody)
     }
 
     // Ensure that debt output types are consistent
-    match (burned_debt_output.asset_type, returned_debt_output.asset_type) {
-      (Some(type_a), Some(type_b)) => {
+    match (&burned_debt_output.asset_type, &returned_debt_output.asset_type) {
+      (XfrAssetType::NonConfidential(type_a), XfrAssetType::NonConfidential(type_b)) => {
         if type_a != type_b {
           return Err(PlatformError::InputsError);
         }
@@ -101,23 +101,23 @@ pub fn compute_debt_swap_effect(transfer: &XfrBody)
     }
   }
 
-  match (debt_input.amount,
-         fiat_output.amount,
-         fiat_output.asset_type,
-         burned_debt_output.amount,
-         burned_debt_output.asset_type)
+  match (&debt_input.amount,
+         &fiat_output.amount,
+         &fiat_output.asset_type,
+         &burned_debt_output.amount,
+         &burned_debt_output.asset_type)
   {
-    (Some(initial_balance),
-     Some(fiat_paid),
-     Some(fiat_type),
-     Some(debt_burned),
-     Some(debt_burned_type)) => {
+    (XfrAmount::NonConfidential(initial_balance),
+     XfrAmount::NonConfidential(fiat_paid),
+     XfrAssetType::NonConfidential(fiat_type),
+     XfrAmount::NonConfidential(debt_burned),
+     XfrAssetType::NonConfidential(debt_burned_type)) => {
       // Return effect
-      Ok((AssetTypeCode { val: debt_burned_type },
-          DebtSwapEffect { fiat_code: AssetTypeCode { val: fiat_type },
-                           initial_balance,
-                           fiat_paid,
-                           debt_burned }))
+      Ok((AssetTypeCode { val: *debt_burned_type },
+          DebtSwapEffect { fiat_code: AssetTypeCode { val: *fiat_type },
+                           initial_balance: *initial_balance,
+                           fiat_paid: *fiat_paid,
+                           debt_burned: *debt_burned }))
     }
     (_, _, _, _, _) => Err(PlatformError::InputsError),
   }

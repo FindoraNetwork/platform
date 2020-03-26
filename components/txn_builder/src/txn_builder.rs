@@ -13,9 +13,12 @@ use std::cmp::Ordering;
 use std::collections::HashSet;
 use zei::serialization::ZeiFromToBytes;
 use zei::setup::PublicParams;
-use zei::xfr::asset_record::{build_blind_asset_record, open_asset_record, AssetRecordType};
-use zei::xfr::sig::{XfrKeyPair, XfrPublicKey};
-use zei::xfr::structs::{AssetIssuerPubKeys, AssetRecord, BlindAssetRecord, OpenAssetRecord};
+use zei::xfr::asset_record::{build_blind_asset_record, open_blind_asset_record, AssetRecordType};
+use zei::xfr::sig::XfrKeyPair;
+use zei::xfr::structs::{
+  AssetRecord, AssetRecordTemplate, AssetTracerEncKeys, AssetTracingPolicy, BlindAssetRecord,
+  OpenAssetRecord, OwnerMemo,
+};
 
 pub trait BuildsTransactions {
   fn transaction(&self) -> &Transaction;
@@ -31,7 +34,7 @@ pub trait BuildsTransactions {
                                key_pair: &XfrKeyPair,
                                token_code: &AssetTypeCode,
                                seq_num: u64,
-                               records: &[TxOutput])
+                               records: &[(TxOutput, Option<OwnerMemo>)])
                                -> Result<&mut Self, PlatformError>;
   fn add_operation_transfer_asset(&mut self,
                                   keys: &XfrKeyPair,
@@ -51,32 +54,60 @@ pub trait BuildsTransactions {
 
   fn add_basic_issue_asset(&mut self,
                            key_pair: &XfrKeyPair,
-                           tracking_keys: &Option<AssetIssuerPubKeys>,
+                           tracking_keys: &Option<AssetTracerEncKeys>,
                            token_code: &AssetTypeCode,
                            seq_num: u64,
-                           amount: u64)
+                           amount: u64,
+                           confidentiality_flags: AssetRecordType)
                            -> Result<&mut Self, PlatformError> {
     let mut prng = ChaChaRng::from_entropy();
     let params = PublicParams::new();
-    let ar = AssetRecord::new(amount, token_code.val, key_pair.get_pk())?;
-    let art = AssetRecordType::ConfidentialAmount_PublicAssetType;
-    let ba = build_blind_asset_record(&mut prng, &params.pc_gens, &ar, art, tracking_keys);
-    self.add_operation_issue_asset(key_pair, token_code, seq_num, &[TxOutput(ba)])
+    let ar = match tracking_keys {
+      Some(keys) => {
+        let policy = AssetTracingPolicy {
+          enc_keys: keys.clone(),
+          asset_tracking: true,
+          identity_tracking: None // TODO (fernando) no identity tracking specified. Instead of having tracking_keys, have the policy as input
+        };
+        AssetRecordTemplate::with_asset_tracking(amount,
+                                                 token_code.val,
+                                                 confidentiality_flags,
+                                                 key_pair.get_pk(),
+                                                 policy)
+      }
+      None => AssetRecordTemplate::with_no_asset_tracking(amount,
+                                                          token_code.val,
+                                                          confidentiality_flags,
+                                                          key_pair.get_pk()),
+    };
+    let (ba, _, owner_memo) = build_blind_asset_record(&mut prng, &params.pc_gens, &ar, None);
+    self.add_operation_issue_asset(key_pair, token_code, seq_num, &[(TxOutput(ba), owner_memo)])
   }
 
   #[allow(clippy::comparison_chain)]
   fn add_basic_transfer_asset(&mut self,
                               key_pair: &XfrKeyPair,
-                              transfer_from: &[(&TxoRef, &BlindAssetRecord, u64)],
+                              transfer_from: &[(&TxoRef,
+                                 &BlindAssetRecord,
+                                 u64,
+                                 &Option<OwnerMemo>)],
                               transfer_to: &[(u64, &AccountAddress)])
                               -> Result<&mut Self, PlatformError> {
+    // TODO(fernando): where to get prng
+    let mut prng: ChaChaRng;
+    prng = ChaChaRng::from_entropy();
+
     let input_sids: Vec<TxoRef> = transfer_from.iter()
-                                               .map(|(ref txo_sid, _, _)| *(*txo_sid))
+                                               .map(|(ref txo_sid, _, _, _)| *(*txo_sid))
                                                .collect();
-    let input_amounts: Vec<u64> = transfer_from.iter().map(|(_, _, amount)| *amount).collect();
+    let input_amounts: Vec<u64> = transfer_from.iter()
+                                               .map(|(_, _, amount, _)| *amount)
+                                               .collect();
     let input_oars: Result<Vec<OpenAssetRecord>, _> =
       transfer_from.iter()
-                   .map(|(_, ref ba, _)| open_asset_record(&ba, &key_pair.get_sk_ref()))
+                   .map(|(_, ref ba, _, owner_memo)| {
+                     open_blind_asset_record(&ba, owner_memo, &key_pair.get_sk_ref())
+                   })
                    .collect();
     let input_oars = input_oars?;
     let input_total: u64 = input_amounts.iter().sum();
@@ -85,9 +116,10 @@ pub trait BuildsTransactions {
       if input_amount > oar.get_amount() {
         return Err(PlatformError::InputsError);
       } else if input_amount < oar.get_amount() {
-        let ar = AssetRecord::new(oar.get_amount() - input_amount,
-                                  *oar.get_asset_type(),
-                                  *oar.get_pub_key())?;
+        let ar = AssetRecordTemplate::with_no_asset_tracking(oar.get_amount() - input_amount,
+                                                             *oar.get_asset_type(),
+                                                             oar.get_record_type(),
+                                                             *oar.get_pub_key());
         partially_consumed_inputs.push(ar);
       }
     }
@@ -96,12 +128,22 @@ pub trait BuildsTransactions {
       return Err(PlatformError::InputsError);
     }
     let asset_type = input_oars[0].get_asset_type();
-    let output_ars: Result<Vec<AssetRecord>, _> =
+    let asset_record_type = input_oars[0].get_record_type();
+    let mut output_ars_templates: Vec<AssetRecordTemplate> =
       transfer_to.iter()
-                 .map(|(amount, ref addr)| AssetRecord::new(*amount, *asset_type, addr.key))
+                 .map(|(amount, ref addr)| {
+                   AssetRecordTemplate::with_no_asset_tracking(*amount,
+                                                               *asset_type,
+                                                               asset_record_type,
+                                                               addr.key)
+                 })
                  .collect();
-    let mut output_ars = output_ars?;
-    output_ars.append(&mut partially_consumed_inputs);
+    output_ars_templates.append(&mut partially_consumed_inputs);
+    let output_ars: Result<Vec<AssetRecord>, _> =
+      output_ars_templates.iter()
+                          .map(|x| AssetRecord::from_template_no_identity_tracking(&mut prng, x))
+                          .collect();
+    let output_ars = output_ars?;
     self.add_operation_transfer_asset(&key_pair, input_sids, &input_oars, &output_ars)?;
     Ok(self)
   }
@@ -110,6 +152,7 @@ pub trait BuildsTransactions {
 #[derive(Debug, Default, Serialize, Deserialize)]
 pub struct TransactionBuilder {
   txn: Transaction,
+  pub owner_records: Vec<(TxOutput, Option<OwnerMemo>)>,
   outputs: u64,
 }
 
@@ -133,14 +176,19 @@ impl BuildsTransactions for TransactionBuilder {
                                key_pair: &XfrKeyPair,
                                token_code: &AssetTypeCode,
                                seq_num: u64,
-                               records: &[TxOutput])
+                               records_and_memos: &[(TxOutput, Option<OwnerMemo>)])
                                -> Result<&mut Self, PlatformError> {
     let pub_key = &IssuerPublicKey { key: key_pair.get_pk() };
     let priv_key = &key_pair.get_sk();
+    let mut records = vec![];
+    for (output, memo) in records_and_memos {
+      records.push(output.clone());
+      self.owner_records.push((output.clone(), memo.clone()));
+    }
     self.txn
         .add_operation(Operation::IssueAsset(IssueAsset::new(IssueAssetBody::new(token_code,
                                                                                  seq_num,
-                                                                                 records)?,
+                                                                                 &records)?,
                                                              pub_key,
                                                              priv_key)?));
     Ok(self)
@@ -209,7 +257,7 @@ impl BuildsTransactions for TransactionBuilder {
 //    let ba = build_blind_asset_record(&mut prng, &params.pc_gens, &ar_1, false, false, &None);
 //
 //    let builder = TransferOperationBuilder::new()..add_input(TxoRef::Relative(1),
-//                                       open_asset_record(&ba, alice.get_sk_ref()).unwrap(),
+//                                       open_blind_asset_record(&ba, alice.get_sk_ref()).unwrap(),
 //                                       20)?
 //                            .add_output(20, bob.get_pk_ref(), code_1)?
 //                            .balance()?
@@ -248,21 +296,22 @@ impl TransferOperationBuilder {
   }
 
   pub fn add_output(&mut self,
-                    amount: u64,
-                    recipient: &XfrPublicKey,
-                    code: AssetTypeCode)
+                    asset_record_template: &AssetRecordTemplate)
                     -> Result<&mut Self, PlatformError> {
+    let mut prng = ChaChaRng::from_entropy();
     if self.transfer.is_some() {
       return Err(PlatformError::InvariantError(Some("Cannot mutate a transfer that has been signed".to_string())));
     }
-    self.output_records
-        .push(AssetRecord::new(amount, code.val, *recipient).unwrap());
+    let ar =
+      AssetRecord::from_template_no_identity_tracking(&mut prng, asset_record_template).unwrap();
+    self.output_records.push(ar);
     Ok(self)
   }
 
   // Ensures that outputs and inputs are balanced by adding remainder outputs for leftover asset
   // amounts
   pub fn balance(&mut self) -> Result<&mut Self, PlatformError> {
+    let mut prng = ChaChaRng::from_entropy();
     if self.transfer.is_some() {
       return Err(PlatformError::InvariantError(Some("Cannot mutate a transfer that has been signed".to_string())));
     }
@@ -274,9 +323,13 @@ impl TransferOperationBuilder {
           return Err(PlatformError::InputsError);
         }
         Ordering::Less => {
-          let ar = AssetRecord::new(oar.get_amount() - spend_amount,
-                                    *oar.get_asset_type(),
-                                    *oar.get_pub_key())?;
+          let ar_template = AssetRecordTemplate::with_no_asset_tracking(oar.get_amount()
+                                                                        - spend_amount,
+                                                                        *oar.get_asset_type(),
+                                                                        oar.get_record_type(),
+                                                                        *oar.get_pub_key());
+          let ar =
+            AssetRecord::from_template_no_identity_tracking(&mut prng, &ar_template).unwrap();
           partially_consumed_inputs.push(ar);
         }
         _ => {}
@@ -284,7 +337,7 @@ impl TransferOperationBuilder {
     }
     let output_total = self.output_records
                            .iter()
-                           .fold(0, |acc, ar| acc + ar.amount);
+                           .fold(0, |acc, ar| acc + ar.open_asset_record.amount);
     if spend_total != output_total {
       return Err(PlatformError::InputsError);
     }
@@ -368,10 +421,11 @@ mod tests {
   use rand_core::SeedableRng;
   use zei::serialization::ZeiFromToBytes;
   use zei::setup::PublicParams;
-  use zei::xfr::asset_record::{build_blind_asset_record, open_asset_record};
-  use zei::xfr::lib::{gen_xfr_note, verify_xfr_note};
+  use zei::xfr::asset_record::AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType;
+  use zei::xfr::asset_record::{build_blind_asset_record, open_blind_asset_record};
+  use zei::xfr::lib::{gen_xfr_note, verify_xfr_note_no_policies};
   use zei::xfr::sig::XfrKeyPair;
-  use zei::xfr::structs::{AssetRecord, OpenAssetRecord};
+  use zei::xfr::structs::AssetRecord;
 
   // Defines an asset type
   #[derive(Clone, Debug, Eq, PartialEq)]
@@ -467,29 +521,20 @@ mod tests {
                                key_pair: KeyPair,
                                input_sids: Vec<TxoReference>) {
     let mut prng = ChaChaRng::from_entropy();
-    let params = PublicParams::new();
 
     //TODO: noah asset records should be buildable by reference
     let key_pair = XfrKeyPair::generate(&mut ChaChaRng::from_seed([key_pair.0; 32]));
     let key_pair_copy = XfrKeyPair::zei_from_bytes(&key_pair.zei_to_bytes());
 
     // Compose input records
-    let input_records: Result<Vec<OpenAssetRecord>, _> =
+    let input_records: Result<Vec<AssetRecord>, _> =
       inputs.iter()
             .map(|InputRecord(amount, asset_type, _conf_type, _conf_amount, _)| {
-                   let ar = AssetRecord::new(*amount,
+                   let template = AssetRecordTemplate::with_no_asset_tracking(*amount,
                                              [asset_type.0; 16],
-                                             *key_pair_copy.get_pk_ref()).unwrap();
-                   let art = AssetRecordType::PublicAmount_PublicAssetType;
-
-                   let ba = build_blind_asset_record(&mut prng,
-                                                     &params.pc_gens,
-                                                     &ar,
-                                                     art,
-                                                     // *conf_type,
-                                                     // *conf_amount,
-                                                     &None);
-                   return open_asset_record(&ba, &key_pair.get_sk_ref());
+                                             NonConfidentialAmount_NonConfidentialAssetType,
+                                             key_pair_copy.get_pk());
+                   AssetRecord::from_template_no_identity_tracking(&mut prng, &template)
                  })
             .collect();
 
@@ -498,23 +543,20 @@ mod tests {
       outputs.iter()
              .map(|OutputRecord(amount, asset_type, key_pair)| {
                let key_pair = XfrKeyPair::generate(&mut ChaChaRng::from_seed([key_pair.0; 32]));
-               AssetRecord::new(*amount, [asset_type.0; 16], *key_pair.get_pk_ref())
+               let template = AssetRecordTemplate::with_no_asset_tracking(*amount, [asset_type.0; 16], NonConfidentialAmount_NonConfidentialAssetType,  key_pair.get_pk());
+               AssetRecord::from_template_no_identity_tracking(&mut prng, &template)
              })
              .collect();
 
     let _input_sids: Vec<TxoRef> = input_sids.iter()
                                              .map(|TxoReference(sid)| TxoRef::Relative(*sid))
                                              .collect();
-    let id_proofs = vec![];
     let note = gen_xfr_note(&mut prng,
                             &input_records.unwrap(),
                             &output_records.unwrap(),
-                            &[key_pair],
-                            &id_proofs);
+                            &[&key_pair]);
     if let Ok(xfr_note) = note {
-      let null_policies = vec![];
-      let null_commitments = vec![];
-      assert!(verify_xfr_note(&mut prng, &xfr_note, &null_policies, &null_commitments).is_ok())
+      assert!(verify_xfr_note_no_policies(&mut prng, &xfr_note).is_ok())
     }
   }
 
@@ -529,41 +571,65 @@ mod tests {
     let charlie = XfrKeyPair::generate(&mut prng);
     let ben = XfrKeyPair::generate(&mut prng);
 
-    let ar_1 = AssetRecord::new(1000, code_1.val, *alice.get_pk_ref()).unwrap();
-    let ar_2 = AssetRecord::new(1000, code_2.val, *bob.get_pk_ref()).unwrap();
-    let art = AssetRecordType::PublicAmount_PublicAssetType;
-    let ba_1 = build_blind_asset_record(&mut prng, &params.pc_gens, &ar_1, art, &None);
-    let ba_2 = build_blind_asset_record(&mut prng, &params.pc_gens, &ar_2, art, &None);
+    let ar_1 =
+      AssetRecordTemplate::with_no_asset_tracking(1000,
+                                                  code_1.val,
+                                                  NonConfidentialAmount_NonConfidentialAssetType,
+                                                  alice.get_pk());
+    let ar_2 =
+      AssetRecordTemplate::with_no_asset_tracking(1000,
+                                                  code_2.val,
+                                                  NonConfidentialAmount_NonConfidentialAssetType,
+                                                  bob.get_pk());
+    let (ba_1, _, memo1) = build_blind_asset_record(&mut prng, &params.pc_gens, &ar_1, None);
+    let (ba_2, _, memo2) = build_blind_asset_record(&mut prng, &params.pc_gens, &ar_2, None);
 
     // Attempt to spend too much
     let mut invalid_outputs_transfer_op = TransferOperationBuilder::new();
+    let output_template =
+      AssetRecordTemplate::with_no_asset_tracking(25,
+                                                  code_1.val,
+                                                  NonConfidentialAmount_NonConfidentialAssetType,
+                                                  bob.get_pk());
     let res =
       invalid_outputs_transfer_op.add_input(TxoRef::Relative(1),
-                                            open_asset_record(&ba_1, alice.get_sk_ref()).unwrap(),
+                                            open_blind_asset_record(&ba_1,
+                                                                    &memo1,
+                                                                    alice.get_sk_ref()).unwrap(),
                                             20)?
-                                 .add_output(25, bob.get_pk_ref(), code_1)?
+                                 .add_output(&output_template)?
                                  .balance();
 
     assert!(res.is_err());
 
     // Change transaction after signing
     let mut invalid_sig_op = TransferOperationBuilder::new();
+    let output_template =
+      AssetRecordTemplate::with_no_asset_tracking(20,
+                                                  code_1.val,
+                                                  NonConfidentialAmount_NonConfidentialAssetType,
+                                                  bob.get_pk());
     let res = invalid_sig_op.add_input(TxoRef::Relative(1),
-                                       open_asset_record(&ba_1, alice.get_sk_ref()).unwrap(),
+                                       open_blind_asset_record(&ba_1, &memo1,alice.get_sk_ref()).unwrap(),
                                        20)?
-                            .add_output(20, bob.get_pk_ref(), code_1)?
+                            .add_output(&output_template)?
                             .balance()?
                             .create(TransferType::Standard)?
                             .sign(&alice)?
-                            .add_output(20, bob.get_pk_ref(), code_1);
+                            .add_output(&output_template);
     assert!(res.is_err());
 
     // Not all signatures present
     let mut missing_sig_op = TransferOperationBuilder::new();
+    let output_template =
+      AssetRecordTemplate::with_no_asset_tracking(20,
+                                                  code_1.val,
+                                                  NonConfidentialAmount_NonConfidentialAssetType,
+                                                  bob.get_pk());
     let res = missing_sig_op.add_input(TxoRef::Relative(1),
-                                       open_asset_record(&ba_1, alice.get_sk_ref()).unwrap(),
+                                       open_blind_asset_record(&ba_1, &memo1,alice.get_sk_ref()).unwrap(),
                                        20)?
-                            .add_output(20, bob.get_pk_ref(), code_1)?
+                            .add_output(&output_template)?
                             .balance()?
                             .create(TransferType::Standard)?
                             .validate_signatures();
@@ -571,22 +637,51 @@ mod tests {
     assert!(&res.is_err());
 
     // Finally, test a valid transfer
+    let output_bob5_code1_template =
+      AssetRecordTemplate::with_no_asset_tracking(5,
+                                                  code_1.val,
+                                                  NonConfidentialAmount_NonConfidentialAssetType,
+                                                  bob.get_pk());
+    let output_charlie13_code1_template =
+      AssetRecordTemplate::with_no_asset_tracking(13,
+                                                  code_1.val,
+                                                  NonConfidentialAmount_NonConfidentialAssetType,
+                                                  charlie.get_pk());
+    let output_ben2_code1_template =
+      AssetRecordTemplate::with_no_asset_tracking(2,
+                                                  code_1.val,
+                                                  NonConfidentialAmount_NonConfidentialAssetType,
+                                                  ben.get_pk());
+    let output_bob5_code2_template =
+      AssetRecordTemplate::with_no_asset_tracking(5,
+                                                  code_2.val,
+                                                  NonConfidentialAmount_NonConfidentialAssetType,
+                                                  bob.get_pk());
+    let output_charlie13_code2_template =
+      AssetRecordTemplate::with_no_asset_tracking(13,
+                                                  code_2.val,
+                                                  NonConfidentialAmount_NonConfidentialAssetType,
+                                                  charlie.get_pk());
+    let output_ben2_code2_template =
+      AssetRecordTemplate::with_no_asset_tracking(2,
+                                                  code_2.val,
+                                                  NonConfidentialAmount_NonConfidentialAssetType,
+                                                  ben.get_pk());
     let _valid_transfer_op =
       TransferOperationBuilder::new()
-      .add_input(TxoRef::Relative(1), open_asset_record(&ba_1, alice.get_sk_ref()).unwrap(), 20)?
-      .add_input(TxoRef::Relative(2), open_asset_record(&ba_2, bob.get_sk_ref()).unwrap(), 20)?
-      .add_output(5, bob.get_pk_ref(), code_1)?
-      .add_output(13, charlie.get_pk_ref(), code_1)?
-      .add_output(2, ben.get_pk_ref(), code_1)?
-      .add_output(5, bob.get_pk_ref(), code_2)?
-      .add_output(13, charlie.get_pk_ref(), code_2)?
-      .add_output(2, ben.get_pk_ref(), code_2)?
+      .add_input(TxoRef::Relative(1), open_blind_asset_record(&ba_1, &memo1, alice.get_sk_ref()).unwrap(), 20)?
+      .add_input(TxoRef::Relative(2), open_blind_asset_record(&ba_2, &memo2, bob.get_sk_ref()).unwrap(), 20)?
+      .add_output(&output_bob5_code1_template)?
+      .add_output(&output_charlie13_code1_template)?
+      .add_output(&output_ben2_code1_template)?
+      .add_output(&output_bob5_code2_template)?
+      .add_output(&output_charlie13_code2_template)?
+      .add_output(&output_ben2_code2_template)?
       .balance()?
       .create(TransferType::Standard)?
       .sign(&alice)?
       .sign(&bob)?
       .transaction()?;
-
     Ok(())
   }
 }
