@@ -224,4 +224,3 @@ fn u8_slice_to_u32_vec(attr: &[u8], len: usize) -> Vec<u32> {
   }
   res
 }
-*/
