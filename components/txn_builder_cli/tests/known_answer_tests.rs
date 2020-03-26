@@ -738,7 +738,7 @@ fn test_store_sids_with_path() {
 // Compose transaction and submit
 //
 #[test]
-// #[ignore]
+#[ignore]
 fn test_define_issue_transfer_and_submit_with_args() {
   let ledger_standalone = LedgerStandalone::new();
 
