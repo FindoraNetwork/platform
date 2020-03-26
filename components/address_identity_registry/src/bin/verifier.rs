@@ -16,14 +16,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     reqwest::get(&format!("http://localhost:3030/issuer_pk/{}", &credname)).await?
                                                                            .json::<PubCreds>()
                                                                            .await?;
-  println!("{}", serde_json::to_string(&issuer_resp).unwrap());
-  // Step 2: generate user key pair for this credential
-  let mut prng = ChaChaRng::from_entropy();
-  let (user_pk, _user_sk) = credential_user_key_gen(&mut prng, &issuer_resp.issuer_pk);
-  let attrs = vec![(String::from("08221964"), String::from("08221964")),
-                   (String::from("ss"), String::from("666666666")),
-                   (String::from("photo"), String::from("photo:https://bit.ly/gotohell")),
-                   (String::from("dl"), String::from("dl:123456"))];
   println!("Response from issuer is:\n{:?}", &issuer_resp);
 
   let attr_map = vec![(String::from("sex"), "M".as_bytes()),
@@ -58,6 +50,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
   println!("Response from ledger is:\n{:?}", &air_result);
 
   let air_entry = air_result.value.clone();
+
   if let Some(commitment_string) = air_entry {
     let commitment: CredCommitment = serde_json::from_str(&commitment_string[..]).unwrap();
     if check_merkle_proof(&air_result.merkle_root,
