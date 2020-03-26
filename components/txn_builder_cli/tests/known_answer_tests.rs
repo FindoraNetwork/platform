@@ -230,8 +230,7 @@ fn define_asset(txn_builder_path: &str,
 fn issue_asset_with_confidential_amount(txn_builder_path: &str,
                                         id: &str,
                                         token_code: &str,
-                                        amount: &str,
-                                        asset_file: &str)
+                                        amount: &str)
                                         -> io::Result<Output> {
   Command::new(COMMAND).args(&["--txn", txn_builder_path])
                        .args(&["asset_issuer", "--id", id])
@@ -239,7 +238,6 @@ fn issue_asset_with_confidential_amount(txn_builder_path: &str,
                        .args(&["--token_code", token_code])
                        .args(&["--amount", amount])
                        .arg("--confidential_amount")
-                       .args(&["--asset_file", asset_file])
                        .output()
 }
 
@@ -740,22 +738,23 @@ fn test_store_sids_with_path() {
 // Compose transaction and submit
 //
 #[test]
-#[ignore]
+// #[ignore]
 fn test_define_issue_transfer_and_submit_with_args() {
   let ledger_standalone = LedgerStandalone::new();
 
-  // Create users and txn builder
+  // Create users and txn builder files
   sign_up_borrower("Borrower 1").expect("Failed to create a borrower");
   sign_up_borrower("Borrower 2").expect("Failed to create a borrower");
-  let txn_builder_file = "tb_define_issue_transfer_and_submit";
-  create_txn_builder_with_path(txn_builder_file).expect("Failed to create transaction builder");
+  let creation_txn_builder_file = "tb_define_and_submit";
+  let issuance_txn_builder_file = "tb_issue_submit";
+  let transfer_txn_builder_file = "tb_transfer_submit";
 
   // Define asset
   let token_code = AssetTypeCode::gen_random().to_base64();
-  let output = define_asset(txn_builder_file,
-               "0",
-               &token_code,
-               "Define an asset").expect("Failed to define asset");
+  let output = define_asset(creation_txn_builder_file,
+                            "0",
+                            &token_code,
+                            "Define an asset").expect("Failed to define asset");
 
   io::stdout().write_all(&output.stdout).unwrap();
   io::stdout().write_all(&output.stderr).unwrap();
@@ -764,7 +763,7 @@ fn test_define_issue_transfer_and_submit_with_args() {
 
   // Submit transaction
   ledger_standalone.poll_until_ready().unwrap();
-  let output = submit(txn_builder_file).expect("Failed to submit transaction");
+  let output = submit(creation_txn_builder_file).expect("Failed to submit transaction");
 
   io::stdout().write_all(&output.stdout).unwrap();
   io::stdout().write_all(&output.stderr).unwrap();
@@ -773,12 +772,10 @@ fn test_define_issue_transfer_and_submit_with_args() {
 
   // Issue asset
   let amount_issue = "50";
-  let asset_file = "asset_define_issue_transfer_and_submit";
-  let output = issue_asset_with_confidential_amount(txn_builder_file,
+  let output = issue_asset_with_confidential_amount(issuance_txn_builder_file,
                                                     "0",
                                                     &token_code,
-                                                    amount_issue,
-                                                    asset_file).expect("Failed to issue asset");
+                                                    amount_issue).expect("Failed to issue asset");
 
   io::stdout().write_all(&output.stdout).unwrap();
   io::stdout().write_all(&output.stderr).unwrap();
@@ -789,7 +786,7 @@ fn test_define_issue_transfer_and_submit_with_args() {
   let sids_file = "sids_define_issue_transfer_and_submit";
   ledger_standalone.poll_until_ready().unwrap();
   let output =
-    submit_and_store_sids(txn_builder_file, sids_file).expect("Failed to submit transaction");
+    submit_and_store_sids(issuance_txn_builder_file, sids_file).expect("Failed to submit transaction");
 
   io::stdout().write_all(&output.stdout).unwrap();
   io::stdout().write_all(&output.stderr).unwrap();
@@ -802,11 +799,11 @@ fn test_define_issue_transfer_and_submit_with_args() {
   assert!(output.status.success());
 
   // Transfer asset
-  let output = transfer_asset(txn_builder_file,
+  let output = transfer_asset(transfer_txn_builder_file,
                               "0",
                               "1,2",
                               sids_file,
-                              asset_file,
+                              issuance_txn_builder_file,
                               "50",
                               "30,20").expect("Failed to transfer asset");
 
@@ -817,14 +814,15 @@ fn test_define_issue_transfer_and_submit_with_args() {
 
   // Submit transaction
   ledger_standalone.poll_until_ready().unwrap();
-  let output = submit(txn_builder_file).expect("Failed to submit transaction");
+  let output = submit(transfer_txn_builder_file).expect("Failed to submit transaction");
 
   io::stdout().write_all(&output.stdout).unwrap();
   io::stdout().write_all(&output.stderr).unwrap();
 
   let _ = fs::remove_file(DATA_FILE);
-  fs::remove_file(txn_builder_file).unwrap();
-  fs::remove_file(asset_file).unwrap();
+  fs::remove_file(creation_txn_builder_file).unwrap();
+  fs::remove_file(issuance_txn_builder_file).unwrap();
+  fs::remove_file(transfer_txn_builder_file).unwrap();
   fs::remove_file(sids_file).unwrap();
 
   assert!(output.status.success());
@@ -884,9 +882,9 @@ fn test_issue_transfer_and_submit_with_args() {
                            &token_code).expect("Failed to issue and transfer asset");
 
   // Store tracer and owner memos
-  let asset_file = "asset_issue_transfer_and_submit";
+  let memo_file = "memos_issue_transfer_and_submit";
   let output =
-    store_memos_confidential("0", amount, &token_code, asset_file).expect("Failed to store memos");
+    store_memos_confidential("0", amount, &token_code, memo_file).expect("Failed to store memos");
 
   io::stdout().write_all(&output.stdout).unwrap();
   io::stdout().write_all(&output.stderr).unwrap();
@@ -894,7 +892,7 @@ fn test_issue_transfer_and_submit_with_args() {
   assert!(output.status.success());
 
   // Trace the asset and verify the amount
-  let output = trace_and_verify_asset("0", asset_file, amount).expect("Failed to trace the asset");
+  let output = trace_and_verify_asset("0", memo_file, amount).expect("Failed to trace the asset");
 
   io::stdout().write_all(&output.stdout).unwrap();
   io::stdout().write_all(&output.stderr).unwrap();
@@ -910,7 +908,7 @@ fn test_issue_transfer_and_submit_with_args() {
 
   let _ = fs::remove_file(DATA_FILE);
   fs::remove_file(txn_builder_file).unwrap();
-  fs::remove_file(asset_file).unwrap();
+  fs::remove_file(memo_file).unwrap();
 
   assert!(output.status.success());
 }

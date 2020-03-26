@@ -11,7 +11,6 @@ use rand_chacha::ChaChaRng;
 use rand_core::SeedableRng;
 use std::cmp::Ordering;
 use std::collections::HashSet;
-use std::fs;
 use zei::serialization::ZeiFromToBytes;
 use zei::setup::PublicParams;
 use zei::xfr::asset_record::{build_blind_asset_record, open_blind_asset_record, AssetRecordType};
@@ -53,17 +52,13 @@ pub trait BuildsTransactions {
 
   fn add_operation(&mut self, op: Operation) -> &mut Self;
 
-  #[allow(clippy::too_many_arguments)]
-  /// # Arguments
-  /// * `asset_file`: file to store the blind asset record and associated memos, optional
   fn add_basic_issue_asset(&mut self,
                            key_pair: &XfrKeyPair,
                            tracking_keys: &Option<AssetTracerEncKeys>,
                            token_code: &AssetTypeCode,
                            seq_num: u64,
                            amount: u64,
-                           confidentiality_flags: AssetRecordType,
-                           asset_file: Option<&str>)
+                           confidentiality_flags: AssetRecordType)
                            -> Result<&mut Self, PlatformError> {
     let mut prng = ChaChaRng::from_entropy();
     let params = PublicParams::new();
@@ -85,24 +80,8 @@ pub trait BuildsTransactions {
                                                           confidentiality_flags,
                                                           key_pair.get_pk()),
     };
-    let blind_asset_record_and_memos =
-      build_blind_asset_record(&mut prng, &params.pc_gens, &ar, None);
-
-    // Store blind asset record and associated memos to file
-    if let Some(file) = asset_file {
-      if let Ok(as_json) = serde_json::to_string(&blind_asset_record_and_memos.clone()) {
-        if let Err(error) = fs::write(file, &as_json) {
-          return Err(PlatformError::IoError(format!("Failed to create file {}: {}.",
-                                                    file, error)));
-        }
-      }
-    }
-
-    self.add_operation_issue_asset(key_pair,
-                                   token_code,
-                                   seq_num,
-                                   &[(TxOutput(blind_asset_record_and_memos.0),
-                                      blind_asset_record_and_memos.2)])
+    let (ba, _, owner_memo) = build_blind_asset_record(&mut prng, &params.pc_gens, &ar, None);
+    self.add_operation_issue_asset(key_pair, token_code, seq_num, &[(TxOutput(ba), owner_memo)])
   }
 
   #[allow(clippy::comparison_chain)]
