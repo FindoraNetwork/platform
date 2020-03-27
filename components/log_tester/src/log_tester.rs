@@ -28,7 +28,7 @@ fn main() {
   };
 
   let logfile = Path::new(&args[1]);
-  let mut target_file = tmp_dir.clone().to_path_buf();
+  let mut target_file = tmp_dir.clone();
   target_file.push("txn_log");
   std::fs::copy(logfile, target_file.into_boxed_path()).unwrap();
 
