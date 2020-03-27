@@ -521,7 +521,6 @@ mod tests {
     let mut prng = ChaChaRng::from_entropy();
     let dob = String::from("dob");
     let ss = String::from("ss");
-    let dob = String::from("dob");
     let dl = String::from("dl");
     let attrs_temp = [(dob.clone(), 8), (ss.clone(), 9), (dl.clone(), 8)]; // 4
     let (issuer_pk, issuer_sk) = credential_issuer_key_gen::<ChaChaRng>(&mut prng, &attrs_temp);
