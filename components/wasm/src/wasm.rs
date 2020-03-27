@@ -2,8 +2,12 @@
 // Allows web clients to issue transactions from a browser contexts.
 // For now, forwards transactions to a ledger hosted locally.
 // To compile wasm package, run wasm-pack build in the wasm directory;
-#![deny(warnings)]
+//#![deny(warnings)]
 use bulletproofs::PedersenGens;
+use credentials::{
+  credential_issuer_key_gen, credential_user_key_gen, CredIssuerPublicKey, CredIssuerSecretKey,
+  CredUserPublicKey, CredUserSecretKey,
+};
 use cryptohash::sha256;
 use cryptohash::sha256::Digest as BitDigest;
 use curve25519_dalek::ristretto::RistrettoPoint;
@@ -972,4 +976,69 @@ pub fn attest_without_proof(attribute: u64,
                           true,
                           requirement,
                           requirement_type)
+}
+
+#[derive(Serialize, Deserialize)]
+struct AttributeDefinition {
+  pub name: String,
+  pub size: usize,
+}
+
+#[wasm_bindgen]
+#[derive(Serialize, Deserialize)]
+pub struct CredentialUserKeyPair {
+  pk: CredUserPublicKey,
+  sk: CredUserSecretKey,
+}
+
+#[wasm_bindgen]
+#[derive(Serialize, Deserialize)]
+pub struct CredentialIssuerKeyPair {
+  pk: CredIssuerPublicKey,
+  sk: CredIssuerSecretKey,
+}
+
+#[wasm_bindgen]
+impl CredentialIssuerKeyPair {
+  pub fn get_pk(&self) -> CredIssuerPublicKey {
+    self.pk.clone()
+  }
+  pub fn get_sk(&self) -> CredIssuerSecretKey {
+    self.sk.clone()
+  }
+  pub fn serialize(&self) -> String {
+    serde_json::to_string(&self).unwrap()
+  }
+}
+
+#[wasm_bindgen]
+impl CredentialUserKeyPair {
+  pub fn get_pk(&self) -> CredUserPublicKey {
+    self.pk.clone()
+  }
+  pub fn get_sk(&self) -> CredUserSecretKey {
+    self.sk.clone()
+  }
+  pub fn serialize(&self) -> String {
+    serde_json::to_string(&self).unwrap()
+  }
+}
+
+#[wasm_bindgen]
+pub fn wasm_credential_issuer_key_gen(attributes: JsValue) -> CredentialIssuerKeyPair {
+  let mut prng = ChaChaRng::from_entropy();
+  let mut attributes: Vec<AttributeDefinition> = attributes.into_serde().unwrap();
+  let attributes: Vec<(String, usize)> = attributes.drain(..)
+                                                   .map(|attr| (attr.name, attr.size))
+                                                   .collect();
+
+  let (pk, sk) = credential_issuer_key_gen(&mut prng, &attributes[..]);
+  CredentialIssuerKeyPair { pk, sk }
+}
+
+#[wasm_bindgen]
+pub fn wasm_credential_user_key_gen(issuer_pub_key: &CredIssuerPublicKey) -> CredentialUserKeyPair {
+  let mut prng = ChaChaRng::from_entropy();
+  let (pk, sk) = credential_user_key_gen(&mut prng, issuer_pub_key);
+  CredentialUserKeyPair { pk, sk }
 }

@@ -1,10 +1,11 @@
-#![deny(warnings)]
+//#![deny(warnings)]
 extern crate ledger;
 extern crate serde;
 extern crate zei;
 #[macro_use]
 extern crate serde_derive;
 
+use credentials::{CredCommitment, CredIssuerPublicKey, CredPoK};
 use ledger::data_model::errors::PlatformError;
 use ledger::data_model::*;
 use rand_chacha::ChaChaRng;
@@ -44,8 +45,9 @@ pub trait BuildsTransactions {
                                   -> Result<&mut Self, PlatformError>;
   fn add_operation_air_assign(&mut self,
                               key_pair: &XfrKeyPair,
-                              addr: &str,
-                              data: &str)
+                              addr: CredIssuerPublicKey,
+                              data: CredCommitment,
+                              pok: CredPoK)
                               -> Result<&mut Self, PlatformError>;
   fn serialize(&self) -> Result<Vec<u8>, PlatformError>;
   fn serialize_str(&self) -> Result<String, PlatformError>;
@@ -214,14 +216,11 @@ impl BuildsTransactions for TransactionBuilder {
   }
   fn add_operation_air_assign(&mut self,
                               key_pair: &XfrKeyPair,
-                              addr: &str,
-                              data: &str)
+                              addr: CredIssuerPublicKey,
+                              data: CredCommitment,
+                              pok: CredPoK)
                               -> Result<&mut Self, PlatformError> {
-    let pub_key = &IssuerPublicKey { key: key_pair.get_pk() };
-    let priv_key = &key_pair.get_sk();
-    let xfr = AIRAssign::new(AIRAssignBody::new(String::from(addr), String::from(data))?,
-                             pub_key,
-                             priv_key)?;
+    let xfr = AIRAssign::new(AIRAssignBody::new(addr, data, pok)?, key_pair)?;
     self.txn.add_operation(Operation::AIRAssign(xfr));
     Ok(self)
   }

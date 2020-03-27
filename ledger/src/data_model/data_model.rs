@@ -2,6 +2,7 @@
 use super::errors;
 use bitmap::SparseMap;
 use chrono::prelude::*;
+use credentials::{CredCommitment, CredIssuerPublicKey, CredPoK};
 use cryptohash::sha256::Digest as BitDigest;
 use cryptohash::{sha256, HashValue, Proof};
 use itertools::Itertools;
@@ -312,13 +313,17 @@ impl DefineAssetBody {
 }
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct AIRAssignBody {
-  pub addr: String,
-  pub data: String,
+  pub addr: CredIssuerPublicKey,
+  pub data: CredCommitment,
+  pub pok: CredPoK,
 }
 
 impl AIRAssignBody {
-  pub fn new(addr: String, data: String) -> Result<AIRAssignBody, errors::PlatformError> {
-    Ok(AIRAssignBody { addr, data })
+  pub fn new(addr: CredIssuerPublicKey,
+             data: CredCommitment,
+             pok: CredPoK)
+             -> Result<AIRAssignBody, errors::PlatformError> {
+    Ok(AIRAssignBody { addr, data, pok })
   }
 }
 
@@ -419,18 +424,17 @@ impl DefineAsset {
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct AIRAssign {
   pub body: AIRAssignBody,
-  pub pubkey: IssuerPublicKey,
+  pub pubkey: XfrPublicKey,
   pub signature: XfrSignature,
 }
 
 impl AIRAssign {
   pub fn new(creation_body: AIRAssignBody,
-             public_key: &IssuerPublicKey,
-             secret_key: &XfrSecretKey)
+             keypair: &XfrKeyPair)
              -> Result<AIRAssign, errors::PlatformError> {
-    let sign = compute_signature(&secret_key, &public_key.key, &creation_body);
+    let sign = compute_signature(keypair.get_sk_ref(), keypair.get_pk_ref(), &creation_body);
     Ok(AIRAssign { body: creation_body,
-                   pubkey: *public_key,
+                   pubkey: *keypair.get_pk_ref(),
                    signature: sign })
   }
 }

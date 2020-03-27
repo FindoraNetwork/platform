@@ -67,17 +67,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                 attributes: map,
                                 issuer_pub_key: resp1.issuer_pk.clone() };
 
-  if let Ok((commitment, _proof, key)) =
+  if let Ok((commitment, proof, key)) =
     credential_commit(&mut prng, &user_sk, &credential, b"random message")
   {
     // Now we store the commitment to this credential at the AIR
     // Build the transaction
-    let issuer_key_pair = XfrKeyPair::zei_from_bytes(&hex::decode(KEY_PAIR_STR)?);
+    let user_key_pair = XfrKeyPair::zei_from_bytes(&hex::decode(KEY_PAIR_STR)?);
 
     let mut txn_builder = TransactionBuilder::default();
-    let data = &serde_json::to_string(&commitment).unwrap();
-    let address = &serde_json::to_string(&user_creds.user_pk).unwrap();
-    txn_builder.add_operation_air_assign(&issuer_key_pair, &address, &data)?;
+    //let data = &serde_json::to_string(&commitment).unwrap();
+    //let address = &serde_json::to_string(&user_creds.user_pk).unwrap();
+    txn_builder.add_operation_air_assign(&user_key_pair, resp1.issuer_pk.clone(), commitment, proof)?;
 
     // Submit to ledger
     let txn = txn_builder.transaction();

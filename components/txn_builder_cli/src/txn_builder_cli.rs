@@ -883,12 +883,16 @@ fn parse_to_u64_vec(vals_str: &str) -> Result<Vec<u64>, PlatformError> {
 fn air_assign(issuer_id: u64,
               address: &str,
               data: &str,
+              pok: &str,
               txn_file: &str)
               -> Result<(), PlatformError> {
   let mut issuer_data = load_data()?;
   let issuer_key_pair = issuer_data.get_asset_issuer_key_pair(issuer_id)?;
   let mut txn_builder = TransactionBuilder::default();
-  txn_builder.add_operation_air_assign(&issuer_key_pair, address, data)?;
+  let address = serde_json::from_str(address)?;
+  let data = serde_json::from_str(data)?;
+  let pok = serde_json::from_str(pok)?;
+  txn_builder.add_operation_air_assign(&issuer_key_pair, address, data, pok)?;
   store_txn_to_file(&txn_file, &txn_builder)?;
   Ok(())
 }
@@ -2407,10 +2411,15 @@ fn process_asset_issuer_cmd(asset_issuer_matches: &clap::ArgMatches,
         println!("Asset issuer id is required for AIR assigning. Use asset_issuer --id.");
         return Err(PlatformError::InputsError);
       };
-      match (air_assign_matches.value_of("address"), air_assign_matches.value_of("data")) {
-        (Some(address), Some(data)) => air_assign(issuer_id, address, data, txn_file),
-        (_, _) => {
-          println!("Missing address or data.");
+      match (air_assign_matches.value_of("address"),
+             air_assign_matches.value_of("data"),
+             air_assign_matches.value_of("pok"))
+      {
+        (Some(address), Some(data), Some(pok)) => {
+          air_assign(issuer_id, address, data, pok, txn_file)
+        }
+        (_, _, _) => {
+          println!("Missing address, data, or proof.");
           Err(PlatformError::InputsError)
         }
       }
