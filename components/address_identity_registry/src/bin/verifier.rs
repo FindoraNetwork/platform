@@ -25,6 +25,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                                      .map(|(f, a)| f.clone())
                                                      .collect() };
   let req_string = format!("http://127.0.0.1:3031/reveal/{}/", &credname);
+  let reveal_fields_str = urlencode(&serde_json::to_string(&reveal_fields)?);
+  let req_string = format!("http://127.0.0.1:3031/reveal/{}/", &credname);
+
+  println!("req string is:\n{}, urlencoded reveal_fields string is {}",
+           &req_string, reveal_fields_str);
 
   let client = reqwest::Client::new();
   let addr_and_pok: AIRAddressAndPoK = client.post(&req_string)

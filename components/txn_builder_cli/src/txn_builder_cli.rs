@@ -1,5 +1,4 @@
 #![deny(warnings)]
-#![allow(clippy::verbose_file_reads)]
 // There appears to be a clippy bug that makes this necessary
 #![allow(clippy::redundant_clone)]
 use clap::{App, Arg, SubCommand};
@@ -952,7 +951,7 @@ fn issue_and_transfer_asset(issuer_key_pair: &XfrKeyPair,
                             txn_file: &str)
                             -> Result<TransactionBuilder, PlatformError> {
   let (blind_asset_record, _, owner_memo) =
-    get_blind_asset_record_and_memos(issuer_key_pair.get_pk(), amount, token_code, record_type)?;
+    get_blind_asset_record_and_memos(issuer_key_pair.get_pk(), amount, token_code, AssetRecordType::from_booleans(record_type.is_confidential_amount(), false))?;
 
   // Transfer Operation
   let output_template = AssetRecordTemplate::with_no_asset_tracking(amount,

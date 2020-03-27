@@ -1830,11 +1830,11 @@ mod tests {
     //                                                seq_num: 0,
     //                                                records: Vec::new() };
 
-    //     let asset_issurance = IssueAsset { body: asset_issuance_body,
+    //     let asset_issuance = IssueAsset { body: asset_issuance_body,
     //                                        pubkey: IssuerPublicKey { key: public_key },
     //                                        signature: signature.clone() };
 
-    //     let issurance_operation = Operation::IssueAsset(asset_issurance);
+    //     let issuance_operation = Operation::IssueAsset(asset_issuance);
 
     //     // Instantiate an DefineAsset operation
     //     let asset = Default::default();
@@ -1848,7 +1848,7 @@ mod tests {
     //     // Verify that loading transaction succeeds with correct path
     //     let transaction_0: Transaction = Default::default();
 
-    //     let transaction_1 = Transaction { operations: vec![issurance_operation.clone()],
+    //     let transaction_1 = Transaction { operations: vec![issuance_operation.clone()],
     //                                       variable_utxos: Vec::new(),
     //                                       credentials: Vec::new(),
     //                                       memos: Vec::new(),
@@ -1856,7 +1856,7 @@ mod tests {
     //                                       merkle_id: TXN_SEQ_ID_PLACEHOLDER,
     //                                       outputs: 1 };
 
-    //     let transaction_2 = Transaction { operations: vec![issurance_operation, creation_operation],
+    //     let transaction_2 = Transaction { operations: vec![issuance_operation, creation_operation],
     //                                       variable_utxos: Vec::new(),
     //                                       credentials: Vec::new(),
     //                                       memos: Vec::new(),
