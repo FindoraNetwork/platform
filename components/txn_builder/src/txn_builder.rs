@@ -16,8 +16,8 @@ use zei::setup::PublicParams;
 use zei::xfr::asset_record::{build_blind_asset_record, open_blind_asset_record, AssetRecordType};
 use zei::xfr::sig::XfrKeyPair;
 use zei::xfr::structs::{
-  AssetRecord, AssetRecordTemplate, AssetTracerEncKeys, AssetTracingPolicy, BlindAssetRecord,
-  OpenAssetRecord, OwnerMemo,
+  AssetRecord, AssetRecordTemplate, AssetTracingPolicy, BlindAssetRecord, OpenAssetRecord,
+  OwnerMemo,
 };
 
 pub trait BuildsTransactions {
@@ -54,7 +54,7 @@ pub trait BuildsTransactions {
 
   fn add_basic_issue_asset(&mut self,
                            key_pair: &XfrKeyPair,
-                           tracking_keys: &Option<AssetTracerEncKeys>,
+                           tracing_policy: Option<AssetTracingPolicy>,
                            token_code: &AssetTypeCode,
                            seq_num: u64,
                            amount: u64,
@@ -62,19 +62,12 @@ pub trait BuildsTransactions {
                            -> Result<&mut Self, PlatformError> {
     let mut prng = ChaChaRng::from_entropy();
     let params = PublicParams::new();
-    let ar = match tracking_keys {
-      Some(keys) => {
-        let policy = AssetTracingPolicy {
-          enc_keys: keys.clone(),
-          asset_tracking: true,
-          identity_tracking: None // TODO (fernando) no identity tracking specified. Instead of having tracking_keys, have the policy as input
-        };
-        AssetRecordTemplate::with_asset_tracking(amount,
-                                                 token_code.val,
-                                                 confidentiality_flags,
-                                                 key_pair.get_pk(),
-                                                 policy)
-      }
+    let ar = match tracing_policy {
+      Some(policy) => AssetRecordTemplate::with_asset_tracking(amount,
+                                                               token_code.val,
+                                                               confidentiality_flags,
+                                                               key_pair.get_pk(),
+                                                               policy),
       None => AssetRecordTemplate::with_no_asset_tracking(amount,
                                                           token_code.val,
                                                           confidentiality_flags,

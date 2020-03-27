@@ -2525,7 +2525,9 @@ fn process_asset_issuer_cmd(asset_issuer_matches: &clap::ArgMatches,
       let mut txn_builder = TransactionBuilder::default();
       if let Err(e) =
         txn_builder.add_basic_issue_asset(&key_pair,
-                                          &Some(tracer_enc_keys),
+                                          Some(AssetTracingPolicy { enc_keys: tracer_enc_keys,
+                                                                    asset_tracking: true,
+                                                                    identity_tracking: None }),
                                           &token_code,
                                           get_and_update_sequence_number()?,
                                           amount,
