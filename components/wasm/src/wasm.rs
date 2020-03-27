@@ -36,7 +36,8 @@ use zei::xfr::asset_record::{
 };
 use zei::xfr::sig::{XfrKeyPair, XfrPublicKey};
 use zei::xfr::structs::{
-  AssetRecordTemplate, AssetTracerEncKeys, BlindAssetRecord, OpenAssetRecord, OwnerMemo,
+  AssetRecordTemplate, AssetTracerEncKeys, AssetTracingPolicy, BlindAssetRecord, OpenAssetRecord,
+  OwnerMemo,
 };
 
 /////////// TRANSACTION BUILDING ////////////////
@@ -277,21 +278,23 @@ impl WasmTransactionBuilder {
             .map_err(|_e| JsValue::from_str("Could not deserialize asset token code"))?;
 
     let mut txn_builder = self.transaction_builder.deserialize();
-    // construct asset tracking keys
-    let issuer_keys;
-    if elgamal_pub_key.is_empty() {
-      issuer_keys = None
+    // construct asset tracing policy
+    let tracing_policy = if elgamal_pub_key.is_empty() {
+      None
     } else {
       let pk = serde_json::from_str::<ElGamalEncKey<RistrettoPoint>>(&elgamal_pub_key).map_err(|_e| JsValue::from_str("could not deserialize elgamal key"))?;
       let mut small_rng = ChaChaRng::from_entropy();
       let (_, id_reveal_pub_key) = ac_confidential_gen_encryption_keys(&mut small_rng);
-      issuer_keys = Some(AssetTracerEncKeys { record_data_enc_key: pk,
-                                              attrs_enc_key: id_reveal_pub_key });
-    }
+      let issuer_keys = AssetTracerEncKeys { record_data_enc_key: pk,
+                                             attrs_enc_key: id_reveal_pub_key };
+      Some(AssetTracingPolicy { enc_keys: issuer_keys,
+                                asset_tracking: true,
+                                identity_tracking: None })
+    };
 
     let confidentiality_flags = AssetRecordType::from_booleans(conf_amount, conf_asset_type);
     Ok(WasmTransactionBuilder { transaction_builder: Serialized::new(&*txn_builder.add_basic_issue_asset(&key_pair,
-                                            &issuer_keys,
+                                            tracing_policy,
                                             &asset_token,
                                             seq_num,
                                             amount, confidentiality_flags
