@@ -813,11 +813,11 @@ mod tests {
                                                num_outputs: 0,
                                                records: Vec::new() };
 
-    let asset_issurance = IssueAsset { body: asset_issuance_body,
-                                       pubkey: IssuerPublicKey { key: public_key },
-                                       signature: signature.clone() };
+    let asset_issuance = IssueAsset { body: asset_issuance_body,
+                                      pubkey: IssuerPublicKey { key: public_key },
+                                      signature: signature.clone() };
 
-    let issurance_operation = Operation::IssueAsset(asset_issurance.clone());
+    let issuance_operation = Operation::IssueAsset(asset_issuance.clone());
 
     // Instantiate an DefineAsset operation
     let asset = Default::default();
@@ -840,7 +840,7 @@ mod tests {
 
     // Add operations to the transaction
     transaction.add_operation(transfer_operation);
-    transaction.add_operation(issurance_operation);
+    transaction.add_operation(issuance_operation);
     transaction.add_operation(creation_operation);
     transaction.add_operation(air_assign_operation);
 
@@ -850,7 +850,7 @@ mod tests {
     assert_eq!(transaction.operations.get(0),
                Some(&Operation::TransferAsset(asset_transfer)));
     assert_eq!(transaction.operations.get(1),
-               Some(&Operation::IssueAsset(asset_issurance)));
+               Some(&Operation::IssueAsset(asset_issuance)));
     assert_eq!(transaction.operations.get(2),
                Some(&Operation::DefineAsset(asset_creation)));
     assert_eq!(transaction.operations.get(3),

@@ -1804,11 +1804,11 @@ mod tests {
     //                                                seq_num: 0,
     //                                                records: Vec::new() };
 
-    //     let asset_issurance = IssueAsset { body: asset_issuance_body,
+    //     let asset_issuance = IssueAsset { body: asset_issuance_body,
     //                                        pubkey: IssuerPublicKey { key: public_key },
     //                                        signature: signature.clone() };
 
-    //     let issurance_operation = Operation::IssueAsset(asset_issurance);
+    //     let issuance_operation = Operation::IssueAsset(asset_issuance);
 
     //     // Instantiate an DefineAsset operation
     //     let asset = Default::default();
@@ -1822,7 +1822,7 @@ mod tests {
     //     // Verify that loading transaction succeeds with correct path
     //     let transaction_0: Transaction = Default::default();
 
-    //     let transaction_1 = Transaction { operations: vec![issurance_operation.clone()],
+    //     let transaction_1 = Transaction { operations: vec![issuance_operation.clone()],
     //                                       variable_utxos: Vec::new(),
     //                                       credentials: Vec::new(),
     //                                       memos: Vec::new(),
@@ -1830,7 +1830,7 @@ mod tests {
     //                                       merkle_id: TXN_SEQ_ID_PLACEHOLDER,
     //                                       outputs: 1 };
 
-    //     let transaction_2 = Transaction { operations: vec![issurance_operation, creation_operation],
+    //     let transaction_2 = Transaction { operations: vec![issuance_operation, creation_operation],
     //                                       variable_utxos: Vec::new(),
     //                                       credentials: Vec::new(),
     //                                       memos: Vec::new(),
@@ -2187,20 +2187,20 @@ mod tests {
   //                                              num_outputs: 0
   //                                              records: Vec::new() };
 
-  //   let asset_issurance = IssueAsset { body: asset_issuance_body,
+  //   let asset_issuance = IssueAsset { body: asset_issuance_body,
   //                                      pubkey: IssuerPublicKey { key: public_key },
   //                                      signature: signature };
 
   //   // Instantiate a LedgerState and apply the IssueAsset
   //   let mut ledger_state = LedgerState::test_ledger();
-  //   ledger_state.apply_asset_issuance(&asset_issurance);
+  //   ledger_state.apply_asset_issuance(&asset_issuance);
 
   //   // Verify that apply_asset_issuance correctly adds each txo to tracked_sids
   //   // TODO(joe): fix this
-  //   // for output in asset_issurance.body
+  //   // for output in asset_issuance.body
   //   //                              .outputs
   //   //                              .iter()
-  //   //                              .zip(asset_issurance.body.records.iter().map(|ref o| (*o)))
+  //   //                              .zip(asset_issuance.body.records.iter().map(|ref o| (*o)))
   //   // {
   //   //   let record = &(output.0).0;
   //   //   match &output.1 {
@@ -2217,8 +2217,8 @@ mod tests {
   //   // }
 
   //   // Verify that issuance_num is correctly set
-  //   assert_eq!(ledger_state.issuance_num.get(&asset_issurance.body.code),
-  //              Some(&asset_issurance.body.seq_num));
+  //   assert_eq!(ledger_state.issuance_num.get(&asset_issuance.body.code),
+  //              Some(&asset_issuance.body.seq_num));
   // }
 
   // #[test]
@@ -2279,11 +2279,11 @@ mod tests {
   //                                              outputs: Vec::new(),
   //                                              records: Vec::new() };
 
-  //   let asset_issurance = IssueAsset { body: asset_issuance_body,
+  //   let asset_issuance = IssueAsset { body: asset_issuance_body,
   //                                      pubkey: IssuerPublicKey { key: public_key },
   //                                      signature: signature.clone() };
 
-  //   let issurance_operation = Operation::IssueAsset(asset_issurance.clone());
+  //   let issuance_operation = Operation::IssueAsset(asset_issuance.clone());
 
   //   // Instantiate an DefineAsset operation
   //   let asset = Default::default();
@@ -2299,8 +2299,8 @@ mod tests {
 
   //   assert_eq!(ledger_state.apply_operation(&transfer_operation),
   //              ledger_state.apply_asset_transfer(&asset_transfer));
-  //   assert_eq!(ledger_state.apply_operation(&issurance_operation),
-  //              ledger_state.apply_asset_issuance(&asset_issurance));
+  //   assert_eq!(ledger_state.apply_operation(&issuance_operation),
+  //              ledger_state.apply_asset_issuance(&asset_issuance));
   //   assert_eq!(ledger_state.apply_operation(&creation_operation),
   //              ledger_state.apply_asset_creation(&asset_creation));
   // }

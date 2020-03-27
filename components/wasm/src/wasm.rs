@@ -294,8 +294,7 @@ impl WasmTransactionBuilder {
                                             &issuer_keys,
                                             &asset_token,
                                             seq_num,
-                                            amount, confidentiality_flags,
-                                            None
+                                            amount, confidentiality_flags
     ).map_err(|_e| JsValue::from_str("could not build transaction"))?)})
   }
 
