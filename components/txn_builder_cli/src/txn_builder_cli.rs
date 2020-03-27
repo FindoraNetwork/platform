@@ -948,22 +948,24 @@ fn define_asset(fiat_asset: bool,
 /// * `recipient_key_pair`: rercipient's key pair.
 /// * `amount`: amount to issue and transfer.
 /// * `token_code`: asset token code.
-/// * `record_type`: booleans representing whether the amount and asset are confidential.
-/// * `asset_file`: path to store the blind asset record and associated memos, optional.
+/// * `record_type`: booleans representing whether the amount and asset transfer are confidential.
+///   Asset issuance is always nonconfidential.
+/// * `memo_file`: path to store the tracer and owner memos, optional.
 /// * `txn_file`: path to the transaction file.
 fn issue_and_transfer_asset(issuer_key_pair: &XfrKeyPair,
                             recipient_key_pair: &XfrKeyPair,
                             amount: u64,
                             token_code: AssetTypeCode,
                             record_type: AssetRecordType,
-                            asset_file: Option<&str>,
+                            memo_file: Option<&str>,
                             txn_file: &str)
                             -> Result<TransactionBuilder, PlatformError> {
+  // Asset issuance is always nonconfidential
   let (blind_asset_record, tracer_memo, owner_memo) =
     get_blind_asset_record_and_memos(issuer_key_pair.get_pk(),
                                      amount,
                                      token_code,
-                                     record_type,
+                                     AssetRecordType::from_booleans(record_type.is_confidential_amount(), false),
                                      None)?;
 
   // Transfer Operation
@@ -993,7 +995,7 @@ fn issue_and_transfer_asset(issuer_key_pair: &XfrKeyPair,
              .add_operation(xfr_op)
              .transaction();
 
-  if let Some(file) = asset_file {
+  if let Some(file) = memo_file {
     store_tracer_and_owner_memos_to_file(file, (tracer_memo, owner_memo))?;
   }
   store_txn_to_file(txn_file, &txn_builder)?;
@@ -1132,17 +1134,14 @@ fn get_blind_asset_record_and_memos(pub_key: XfrPublicKey,
                                     asset_record_type: AssetRecordType,
                                     policy: Option<AssetTracingPolicy>)
                                     -> Result<BlindAssetRecordAndMemos, PlatformError> {
-  // Confidential asset is currently not supported
-  let record_type =
-    AssetRecordType::from_booleans(asset_record_type.is_confidential_amount(), false);
   let template = if let Some(tracing_policy) = policy {
     AssetRecordTemplate::with_asset_tracking(amount,
                                              token_code.val,
-                                             record_type,
+                                             asset_record_type,
                                              pub_key,
                                              tracing_policy)
   } else {
-    AssetRecordTemplate::with_no_asset_tracking(amount, token_code.val, record_type, pub_key)
+    AssetRecordTemplate::with_no_asset_tracking(amount, token_code.val, asset_record_type, pub_key)
   };
   let mut prng = ChaChaRng::from_entropy();
   let params = PublicParams::new();
@@ -1199,14 +1198,14 @@ fn merge_records(key_pair: &XfrKeyPair,
 /// * `issuer_id`: issuer ID.
 /// * `recipient_id`: recipient's ID.
 /// * `amount`: amount to load.
-/// * `asset_file`: path to store the blind asset record and associated memos, optional.
+/// * `memo_file`: path to store the tracer and owner memos, optional.
 /// * `txn_file`: path to store the transaction file.
 /// * `protocol`: either `https` or `http`.
 /// * `host`: either `testnet.findora.org` or `localhost`.
 fn load_funds(issuer_id: u64,
               recipient_id: u64,
               amount: u64,
-              asset_file: Option<&str>,
+              memo_file: Option<&str>,
               txn_file: &str,
               protocol: &str,
               host: &str)
@@ -1243,7 +1242,7 @@ fn load_funds(issuer_id: u64,
                              amount,
                              token_code,
                              AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
-                             asset_file,
+                             memo_file,
                              txn_file)?;
 
   // Submit transaction and get the new record
@@ -1882,22 +1881,17 @@ fn main() {
           .required(true)
           .takes_value(true)
           .help("Asset amount."))
-        .arg(Arg::with_name("token_code")
-          .short("t")
-          .long("token_code")
-          .required(true)
-          .takes_value(true)
-          .help("Asset token code."))
         .arg(Arg::with_name("confidential_amount")
           .short("m")
           .long("confidential_amount")
           .takes_value(false)
           .help("If specified, the amount will be confidential."))
-        .arg(Arg::with_name("confidential_asset")
-          .short("s")
-          .long("confidential_asset")
-          .takes_value(false)
-          .help("If specified, the asset will be confidential.")))
+        .arg(Arg::with_name("token_code")
+          .short("t")
+          .long("token_code")
+          .required(true)
+          .takes_value(true)
+          .help("Asset token code.")))
       .subcommand(SubCommand::with_name("air_assign")
         .arg(Arg::with_name("address")
           .short("k")
@@ -2018,7 +2012,7 @@ fn main() {
           .short("s")
           .long("confidential_asset")
           .takes_value(false)
-          .help("If specified, the asset will be confidential."))
+          .help("If specified, the asset transfer will be confidential."))
         .arg(Arg::with_name("memo_file")
           .short("f")
           .long("memo_file")
@@ -2030,7 +2024,7 @@ fn main() {
           .long("memo_file")
           .required(true)
           .takes_value(true)
-          .help("Path to the blind asset record and associated memos."))
+          .help("Path to the tracer and owner memos."))
         .arg(Arg::with_name("expected_amount")
           .short("a")
           .long("expected_amount")
@@ -2235,7 +2229,7 @@ fn main() {
           .takes_value(true)
           .help("Asset sid."))
         .arg(Arg::with_name("memo_file")
-          .short("m")
+          .short("f")
           .long("memo_file")
           .required(true)
           .takes_value(true)
@@ -2413,12 +2407,12 @@ fn process_asset_issuer_cmd(asset_issuer_matches: &clap::ArgMatches,
       let mut data = load_data()?;
       let (issuer_pub_key, policy) = if let Some(id_arg) = asset_issuer_matches.value_of("id") {
         let issuer_id = parse_to_u64(id_arg)?;
-        let issuer_key_pair = data.get_asset_issuer_key_pair(issuer_id)?.get_pk();
+        let issuer_pub_key = data.get_asset_issuer_key_pair(issuer_id)?.get_pk();
         let tracer_enc_keys = data.get_asset_tracer_key_pair(issuer_id)?.enc_key;
         let policy = AssetTracingPolicy { enc_keys: tracer_enc_keys,
                                           asset_tracking: true,
                                           identity_tracking: None };
-        (issuer_key_pair, policy)
+        (issuer_pub_key, policy)
       } else {
         println!("Asset issuer id is required to store the tracer and owner memos. Use asset_issuer --id.");
         return Err(PlatformError::InputsError);
@@ -2429,6 +2423,8 @@ fn process_asset_issuer_cmd(asset_issuer_matches: &clap::ArgMatches,
         println!("Asset amount is required to store the tracer and owner memos. Use --amount.");
         return Err(PlatformError::InputsError);
       };
+      let confidential_amount = store_bar_and_memos_matches.is_present("confidential_amount");
+      let record_type = AssetRecordType::from_booleans(confidential_amount, false);
       let token_code = if let Some(token_code) = store_bar_and_memos_matches.value_of("token_code")
       {
         AssetTypeCode::new_from_base64(token_code)?
@@ -2436,9 +2432,6 @@ fn process_asset_issuer_cmd(asset_issuer_matches: &clap::ArgMatches,
         println!("Asset token code is required to store the tracer and owner memos. Use --token_code.");
         return Err(PlatformError::InputsError);
       };
-      let confidential_amount = store_bar_and_memos_matches.is_present("confidential_amount");
-      let confidential_asset = store_bar_and_memos_matches.is_present("confidential_asset");
-      let record_type = AssetRecordType::from_booleans(confidential_amount, confidential_asset);
       let file = if let Some(file_arg) = store_bar_and_memos_matches.value_of("file") {
         file_arg
       } else {
@@ -2508,9 +2501,10 @@ fn process_asset_issuer_cmd(asset_issuer_matches: &clap::ArgMatches,
     }
     ("issue_asset", Some(issue_asset_matches)) => {
       let mut data = load_data()?;
-      let key_pair = if let Some(id_arg) = asset_issuer_matches.value_of("id") {
+      let (key_pair, tracer_enc_keys) = if let Some(id_arg) = asset_issuer_matches.value_of("id") {
         let issuer_id = parse_to_u64(id_arg)?;
-        data.get_asset_issuer_key_pair(issuer_id)?
+        (data.get_asset_issuer_key_pair(issuer_id)?,
+         data.get_asset_tracer_key_pair(issuer_id)?.enc_key)
       } else {
         println!("Asset issuer id is required to issue and transfer asset. Use asset_issuer --id.");
         return Err(PlatformError::InputsError);
@@ -2531,7 +2525,7 @@ fn process_asset_issuer_cmd(asset_issuer_matches: &clap::ArgMatches,
       let mut txn_builder = TransactionBuilder::default();
       if let Err(e) =
         txn_builder.add_basic_issue_asset(&key_pair,
-                                          &None,
+                                          &Some(tracer_enc_keys),
                                           &token_code,
                                           get_and_update_sequence_number()?,
                                           amount,
@@ -2549,7 +2543,7 @@ fn process_asset_issuer_cmd(asset_issuer_matches: &clap::ArgMatches,
         let issuer_id = parse_to_u64(id_arg)?;
         data.get_asset_issuer_key_pair(issuer_id)?
       } else {
-        println!("Asset issuer id is required to issue and transfer asset. Use asset_issuer --id.");
+        println!("Asset issuer id is required to transfer asset. Use asset_issuer --id.");
         return Err(PlatformError::InputsError);
       };
       // Compose transfer_from for add_basic_transfer_asset
@@ -2697,16 +2691,15 @@ fn process_asset_issuer_cmd(asset_issuer_matches: &clap::ArgMatches,
           return Err(PlatformError::InputsError);
         };
       let confidential_amount = issue_and_transfer_matches.is_present("confidential_amount");
-      let confidential_asset = issue_and_transfer_matches.is_present("confidential_asset");
-      let record_type = AssetRecordType::from_booleans(confidential_amount, confidential_asset);
-      let memo_file = issue_and_transfer_matches.value_of("memo_file");
+      let record_type = AssetRecordType::from_booleans(confidential_amount, false);
+      let asset_file = issue_and_transfer_matches.value_of("asset_file");
 
       issue_and_transfer_asset(&issuer_key_pair,
                                &recipient_key_pair,
                                amount,
                                token_code,
                                record_type,
-                               memo_file,
+                               asset_file,
                                txn_file)?;
       Ok(())
     }

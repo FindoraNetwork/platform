@@ -58,7 +58,7 @@ Blind asset record and associated memos (tracer memo and owner memo) are necessa
 ```
 ./txn_builder_cli asset_issuer --id 0 --file bar_and_memos_file --amount 100 --token_code ibIaBlHV-PdQkvSuEg6YSA==
 ```
-Add `--confidential_amount` or `--confidential_asset` for confidential amount or asset, respectively.
+Add `--confidential_amount` for confidential amount.
 
 ### Assign to AIR (Address Identity Registry)
 * Create an empty transaction
@@ -134,7 +134,7 @@ After an asset is defined and the transaction is submitted:
 ```
 ./txn_builder_cli --txn txn_issue_and_transfer asset_issuer --id 0 issue_and_transfer_asset --recipient 0 --amount 1000 --token_code ibIaBlHV-PdQkvSuEg6YSA==
 ```
-Add `--confidential_amount` or `--confidential_asset` for confidential amount or asset, respectively.
+Add `--confidential_amount` for confidential amount.
 Use `--memo_file` to store the owner memo.
 * Submit the transaction
 ```
@@ -326,7 +326,7 @@ Note from the output that Bill's id is `1`:
 Bill's id is 1.
 ```
 
-## Ian: defines a confidential asset
+## Ian: defines an asset
 ### Create an empty transaction
 ```
 ./txn_builder_cli create_txn_builder --name txn_define
@@ -334,7 +334,7 @@ Bill's id is 1.
 
 ### Define an asset
 ```
-./txn_builder_cli --txn txn_define asset_issuer --id 1 define_asset --memo 'Define a confidential asset.'
+./txn_builder_cli --txn txn_define asset_issuer --id 1 define_asset --memo 'Define an asset.'
 ```
 Note from the output that the asset token code is `7hAA3TTJQHhDGs-_mpP12Q==`, or `[238, 16, 0, 221, 52, 201, 64, 120, 67, 26, 207, 191, 154, 147, 245, 217]`:
 ```
@@ -354,7 +354,7 @@ Creating asset with token code "7hAA3TTJQHhDGs-_mpP12Q==": [238, 16, 0, 221, 52,
 
 ### Issue and transfer the asset
 ```
-./txn_builder_cli --txn txn_issue_and_transfer asset_issuer --id 1 issue_and_transfer_asset --recipient 1 --amount 100 --token_code 7hAA3TTJQHhDGs-_mpP12Q== --confidential_amount --confidential_asset --memo_file memo
+./txn_builder_cli --txn txn_issue_and_transfer asset_issuer --id 1 issue_and_transfer_asset --recipient 1 --amount 100 --token_code 7hAA3TTJQHhDGs-_mpP12Q== --confidential_amount --memo_file memo
 ```
 
 ### Submit the transaction and get the utxo
