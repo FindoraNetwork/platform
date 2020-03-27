@@ -246,7 +246,7 @@ fn transfer_asset(txn_builder_path: &str,
                   issuer_id: &str,
                   recipient_ids: &str,
                   sids_file: &str,
-                  asset_files: &str,
+                  issuance_txn_files: &str,
                   input_amounts: &str,
                   output_amounts: &str)
                   -> io::Result<Output> {
@@ -255,7 +255,7 @@ fn transfer_asset(txn_builder_path: &str,
                        .arg("transfer_asset")
                        .args(&["--recipients", recipient_ids])
                        .args(&["--sids_file", sids_file])
-                       .args(&["--asset_files", asset_files])
+                       .args(&["--issuance_txn_files", issuance_txn_files])
                        .args(&["--input_amounts", input_amounts])
                        .args(&["--output_amounts", output_amounts])
                        .output()
