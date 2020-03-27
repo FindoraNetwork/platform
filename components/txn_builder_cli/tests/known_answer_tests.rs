@@ -435,7 +435,7 @@ fn test_create_txn_builder_no_path() {
 // Lender or borrower views loans or credentials
 //
 #[test]
-#[ignore]
+// #[ignore]
 fn test_view() {
   let ledger_standalone = LedgerStandalone::new();
 
@@ -452,11 +452,20 @@ fn test_view() {
   let txn_builder_path = "txn_builder_view_loans";
   create_txn_builder_with_path(txn_builder_path).expect("Failed to create transaction builder");
   ledger_standalone.poll_until_ready().unwrap();
-  fulfill_loan(txn_builder_path, "0", "0", "0").expect("Failed to fulfill the loan");
+  let output = fulfill_loan(txn_builder_path, "0", "0", "0").expect("Failed to fulfill the loan");
+  io::stdout().write_all(&output.stdout).unwrap();
+  io::stdout().write_all(&output.stderr).unwrap();
+  assert!(output.status.success());
   ledger_standalone.poll_until_ready().unwrap();
-  fulfill_loan(txn_builder_path, "0", "1", "0").expect("Failed to fulfill the loan");
+  let output = fulfill_loan(txn_builder_path, "0", "1", "0").expect("Failed to fulfill the loan");
+  io::stdout().write_all(&output.stdout).unwrap();
+  io::stdout().write_all(&output.stderr).unwrap();
+  assert!(output.status.success());
   ledger_standalone.poll_until_ready().unwrap();
-  fulfill_loan(txn_builder_path, "1", "2", "0").expect("Failed to fulfill the loan");
+  let output = fulfill_loan(txn_builder_path, "1", "2", "0").expect("Failed to fulfill the loan");
+  io::stdout().write_all(&output.stdout).unwrap();
+  io::stdout().write_all(&output.stderr).unwrap();
+  assert!(output.status.success());
 
   // View loans
   // 1. View all loans of a lender
