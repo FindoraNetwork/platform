@@ -142,7 +142,10 @@ fn main() -> Result<(), Box<dyn Error>> {
     task::block_on(future::poll_fn(move |cx: &mut Context| {
         loop {
             match stdin.try_poll_next_unpin(cx)? {
-                Poll::Ready(Some(line)) => swarm.floodsub.publish(floodsub_topic.clone(), line.as_bytes()),
+                Poll::Ready(Some(line)) => {
+                    let new_line = format!("Auditor: {}", line);
+                    swarm.floodsub.publish(floodsub_topic.clone(), new_line.as_bytes())
+                },
                 Poll::Ready(None) => panic!("Stdin closed"),
                 Poll::Pending => break
             }
