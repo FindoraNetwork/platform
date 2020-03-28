@@ -32,16 +32,16 @@
 use async_std::{io, task};
 use futures::{future, prelude::*};
 use libp2p::{
-  Multiaddr,
-  PeerId,
-  Swarm,
-  NetworkBehaviour,
-  identity,
   floodsub::{self, Floodsub, FloodsubEvent},
+  identity,
   mdns::{Mdns, MdnsEvent},
-  swarm::NetworkBehaviourEventProcess
+  swarm::NetworkBehaviourEventProcess,
+  Multiaddr, NetworkBehaviour, PeerId, Swarm,
 };
-use std::{error::Error, task::{Context, Poll}};
+use std::{
+  error::Error,
+  task::{Context, Poll},
+};
 
 fn main() -> Result<(), Box<dyn Error>> {
   env_logger::init();
@@ -70,101 +70,103 @@ fn main() -> Result<(), Box<dyn Error>> {
   // In the future, we want to improve libp2p to make this easier to do.
   // Use the derive to generate delegating NetworkBehaviour impl and require the
   // NetworkBehaviourEventProcess implementations below.
-    #[derive(NetworkBehaviour)]
-    struct MyBehaviour {
-        floodsub: Floodsub,
-        mdns: Mdns,
+  #[derive(NetworkBehaviour)]
+  struct MyBehaviour {
+    floodsub: Floodsub,
+    mdns: Mdns,
 
-        // Struct fields which do not implement NetworkBehaviour need to be ignored
-        #[behaviour(ignore)]
-        #[allow(dead_code)]
-        ignored_member: bool,
+    // Struct fields which do not implement NetworkBehaviour need to be ignored
+    #[behaviour(ignore)]
+    #[allow(dead_code)]
+    ignored_member: bool,
+  }
+
+  impl NetworkBehaviourEventProcess<FloodsubEvent> for MyBehaviour {
+    // Called when `floodsub` produces an event.
+    fn inject_event(&mut self, message: FloodsubEvent) {
+      if let FloodsubEvent::Message(message) = message {
+        println!("Received: '{:?}' from {:?}",
+                 String::from_utf8_lossy(&message.data),
+                 message.source);
+      }
     }
+  }
 
-    impl NetworkBehaviourEventProcess<FloodsubEvent> for MyBehaviour {
-        // Called when `floodsub` produces an event.
-        fn inject_event(&mut self, message: FloodsubEvent) {
-            if let FloodsubEvent::Message(message) = message {
-                println!("Received: '{:?}' from {:?}", String::from_utf8_lossy(&message.data), message.source);
-            }
+  impl NetworkBehaviourEventProcess<MdnsEvent> for MyBehaviour {
+    // Called when `mdns` produces an event.
+    fn inject_event(&mut self, event: MdnsEvent) {
+      match event {
+        MdnsEvent::Discovered(list) => {
+          for (peer, _) in list {
+            self.floodsub.add_node_to_partial_view(peer);
+          }
         }
-    }
-
-    impl NetworkBehaviourEventProcess<MdnsEvent> for MyBehaviour {
-        // Called when `mdns` produces an event.
-        fn inject_event(&mut self, event: MdnsEvent) {
-            match event {
-                MdnsEvent::Discovered(list) =>
-                    for (peer, _) in list {
-                        self.floodsub.add_node_to_partial_view(peer);
-                    }
-                MdnsEvent::Expired(list) =>
-                    for (peer, _) in list {
-                        if !self.mdns.has_node(&peer) {
-                            self.floodsub.remove_node_from_partial_view(&peer);
-                        }
-                    }
+        MdnsEvent::Expired(list) => {
+          for (peer, _) in list {
+            if !self.mdns.has_node(&peer) {
+              self.floodsub.remove_node_from_partial_view(&peer);
             }
+          }
         }
+      }
     }
-
+  }
 
   // Instantiating a Swarm with the transport, the network behaviour and the local peer ID from the previous steps.
 
-    // Create a Swarm to manage peers and events
-    let mut swarm = {
-        let mdns = Mdns::new()?;
-        let mut behaviour = MyBehaviour {
-            floodsub: Floodsub::new(local_peer_id.clone()),
-            mdns,
-            ignored_member: false,
-        };
+  // Create a Swarm to manage peers and events
+  let mut swarm = {
+    let mdns = Mdns::new()?;
+    let mut behaviour = MyBehaviour { floodsub: Floodsub::new(local_peer_id.clone()),
+                                      mdns,
+                                      ignored_member: false };
 
-        behaviour.floodsub.subscribe(floodsub_topic.clone());
-        Swarm::new(transport, behaviour, local_peer_id)
-    };
+    behaviour.floodsub.subscribe(floodsub_topic.clone());
+    Swarm::new(transport, behaviour, local_peer_id)
+  };
 
-    // Reach out to another node if specified
-    if let Some(to_dial) = std::env::args().nth(1) {
-        let addr: Multiaddr = to_dial.parse()?;
-        Swarm::dial_addr(&mut swarm, addr)?;
-        println!("Dialed {:?}", to_dial)
-    }
+  // Reach out to another node if specified
+  if let Some(to_dial) = std::env::args().nth(1) {
+    let addr: Multiaddr = to_dial.parse()?;
+    Swarm::dial_addr(&mut swarm, addr)?;
+    println!("Dialed {:?}", to_dial)
+  }
 
-    // Read full lines from stdin
-    let mut stdin = io::BufReader::new(io::stdin()).lines();
+  // Read full lines from stdin
+  let mut stdin = io::BufReader::new(io::stdin()).lines();
 
-    // Listen on all interfaces and whatever port the OS assigns
-    Swarm::listen_on(&mut swarm, "/ip4/0.0.0.0/tcp/0".parse()?)?;
+  // Listen on all interfaces and whatever port the OS assigns
+  Swarm::listen_on(&mut swarm, "/ip4/0.0.0.0/tcp/0".parse()?)?;
 
-    // Kick it off
-    let mut listening = false;
-    task::block_on(future::poll_fn(move |cx: &mut Context| {
-        loop {
-            match stdin.try_poll_next_unpin(cx)? {
-                Poll::Ready(Some(line)) => {
-                    let new_line = format!("Auditor: {}", line);
-                    swarm.floodsub.publish(floodsub_topic.clone(), new_line.as_bytes())
-                },
-                Poll::Ready(None) => panic!("Stdin closed"),
-                Poll::Pending => break
-            }
-        }
-        loop {
-            match swarm.poll_next_unpin(cx) {
-                Poll::Ready(Some(event)) => println!("{:?}", event),
-                Poll::Ready(None) => return Poll::Ready(Ok(())),
-                Poll::Pending => {
-                    if !listening {
-                        for addr in Swarm::listeners(&swarm) {
-                            println!("Listening on {:?}", addr);
-                            listening = true;
-                        }
-                    }
-                    break
-                }
-            }
-        }
-        Poll::Pending
-    }))
+  // Kick it off
+  let mut listening = false;
+  task::block_on(future::poll_fn(move |cx: &mut Context| {
+                   loop {
+                     match stdin.try_poll_next_unpin(cx)? {
+                       Poll::Ready(Some(line)) => {
+                         let new_line = format!("Auditor: {}", line);
+                         swarm.floodsub
+                              .publish(floodsub_topic.clone(), new_line.as_bytes())
+                       }
+                       Poll::Ready(None) => panic!("Stdin closed"),
+                       Poll::Pending => break,
+                     }
+                   }
+                   loop {
+                     match swarm.poll_next_unpin(cx) {
+                       Poll::Ready(Some(event)) => println!("{:?}", event),
+                       Poll::Ready(None) => return Poll::Ready(Ok(())),
+                       Poll::Pending => {
+                         if !listening {
+                           for addr in Swarm::listeners(&swarm) {
+                             println!("Listening on {:?}", addr);
+                             listening = true;
+                           }
+                         }
+                         break;
+                       }
+                     }
+                   }
+                   Poll::Pending
+                 }))
 }
