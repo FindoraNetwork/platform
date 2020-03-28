@@ -435,7 +435,7 @@ fn test_create_txn_builder_no_path() {
 // Lender or borrower views loans or credentials
 //
 #[test]
-#[ignore]
+// #[ignore]
 fn test_view() {
   let ledger_standalone = LedgerStandalone::new();
 
