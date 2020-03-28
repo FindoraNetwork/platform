@@ -980,8 +980,7 @@ fn test_request_fulfill_and_pay_loan_with_args() {
 
   assert_eq!(output.status.code(), Some(exitcode::USAGE));
   let stdout = from_utf8(&output.stdout).unwrap();
-  assert!(stdout.contains(&"Attesting with the existing proof.".to_owned())
-          && stdout.contains(&"Value should be at least:".to_owned()));
+  assert!(stdout.contains(&"should be at least:".to_owned()));
 
   // 2. Second time:
   //    Fail because the loan has been declined
