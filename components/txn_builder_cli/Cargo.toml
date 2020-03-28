@@ -10,6 +10,7 @@ path = "src/txn_builder_cli.rs"
 
 [dependencies]
 clap = "2.33.0"
+credentials = { path = "../credentials" }
 dirs = "2.0.2"
 env_logger = "0.6.2"
 exitcode = "1.1.2"

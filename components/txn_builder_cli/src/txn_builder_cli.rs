@@ -27,7 +27,7 @@ use zei::xfr::asset_tracer::gen_asset_tracer_keypair;
 use zei::xfr::sig::{XfrKeyPair, XfrPublicKey};
 use zei::xfr::structs::{
   AssetRecordTemplate, AssetTracerKeyPair, AssetTracerMemo, AssetTracingPolicy, BlindAssetRecord,
-  OpenAssetRecord, OwnerMemo,
+  IdentityRevealPolicy, OpenAssetRecord, OwnerMemo,
 };
 
 extern crate exitcode;
@@ -1431,9 +1431,10 @@ fn fulfill_loan(loan_id: u64,
 
   // If the proof exists and the proved value is valid, attest with the proof
   // Otherwise, prove and attest the value
+  let credential_issuer_key_pair = data.get_credential_issuer_key_pair(credential_issuer_id)?;
+  let credential_issuer_public_key = credential_issuer_key_pair.0.clone();
   if let Some(proof) = &credential.proof {
     println!("Attesting with the existing proof.");
-    let credential_issuer_public_key = data.get_credential_issuer_key_pair(credential_issuer_id)?.0;
     if let Err(error) =
       prove(&serde_json::from_str::<ACRevealSig>(proof).or_else(|_| {
                                                          Err(PlatformError::DeserializationError)
@@ -1450,7 +1451,6 @@ fn fulfill_loan(loan_id: u64,
     }
   } else {
     println!("Proving before attesting.");
-    let credential_issuer_key_pair = data.get_credential_issuer_key_pair(credential_issuer_id)?;
     let mut prng: ChaChaRng = ChaChaRng::from_entropy();
     let (user_pk, user_sk) = ac_keygen_user::<_>(&mut prng, &credential_issuer_key_pair.0.clone());
     let value = credential.value as u32;
@@ -1482,7 +1482,7 @@ fn fulfill_loan(loan_id: u64,
   }
 
   // Get or define fiat asset
-  let fiat_code = if let Some(code) = data.fiat_code {
+  let fiat_code = if let Some(code) = data.fiat_code.clone() {
     println!("Fiat code: {}", code);
     AssetTypeCode::new_from_base64(&code)?
   } else {
@@ -1492,7 +1492,7 @@ fn fulfill_loan(loan_id: u64,
                                    fiat_code,
                                    "Fiat asset",
                                    false,
-                                   false,
+                                   true,
                                    txn_file)?;
     // Store data before submitting the transaction to avoid data overwriting
     let data = load_data()?;
@@ -1502,6 +1502,12 @@ fn fulfill_loan(loan_id: u64,
   };
 
   // Issue and transfer fiat token
+  let tracer_enc_key = data.clone().get_asset_tracer_key_pair(issuer_id)?.enc_key;
+  let identity_policy = IdentityRevealPolicy { cred_issuer_pub_key: credential_issuer_public_key,
+                                               reveal_map: vec![true] };
+  let tracing_policy = AssetTracingPolicy { enc_keys: tracer_enc_key,
+                                            asset_tracking: true,
+                                            identity_tracking: Some(identity_policy) };
   let txn_builder =
     issue_and_transfer_asset(issuer_key_pair,
                              lender_key_pair,
@@ -1510,7 +1516,7 @@ fn fulfill_loan(loan_id: u64,
                              AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
                              None,
                              txn_file,
-                             None)?;
+                             Some(tracing_policy.clone()))?;
   let fiat_sid = submit_and_get_sids(protocol, host, txn_builder)?[0];
   println!("Fiat sid: {}", fiat_sid.0);
   let fiat_open_asset_record = get_open_asset_record(txn_file, lender_key_pair)?;
@@ -1549,22 +1555,29 @@ fn fulfill_loan(loan_id: u64,
                              AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
                              None,
                              txn_file,
-                             None)?;
+                             Some(tracing_policy.clone()))?;
   let debt_sid = submit_and_get_sids(protocol, host, txn_builder)?[0];
-  println!("Fiat sid: {}", debt_sid.0);
+  println!("Debt sid: {}", debt_sid.0);
   let debt_open_asset_record = get_open_asset_record(txn_file, borrower_key_pair)?;
+  println!("here 1562");
 
   // Initiate loan
   let lender_template =
-    AssetRecordTemplate::with_no_asset_tracking(amount,
-                                                debt_code.val,
-                                                NonConfidentialAmount_NonConfidentialAssetType,
-                                                lender_key_pair.get_pk());
+    AssetRecordTemplate::with_asset_tracking(amount,
+                                             debt_code.val,
+                                             NonConfidentialAmount_NonConfidentialAssetType,
+                                             lender_key_pair.get_pk(),
+                                             tracing_policy.clone());
+  println!("here 1571");
+
   let borrower_template =
-    AssetRecordTemplate::with_no_asset_tracking(amount,
-                                                fiat_code.val,
-                                                NonConfidentialAmount_NonConfidentialAssetType,
-                                                borrower_key_pair.get_pk());
+    AssetRecordTemplate::with_asset_tracking(amount,
+                                             fiat_code.val,
+                                             NonConfidentialAmount_NonConfidentialAssetType,
+                                             borrower_key_pair.get_pk(),
+                                             tracing_policy);
+  println!("here 1579");
+
   let xfr_op = TransferOperationBuilder::new().add_input(TxoRef::Absolute(fiat_sid),
                                                          fiat_open_asset_record,
                                                          amount)?
@@ -1577,9 +1590,11 @@ fn fulfill_loan(loan_id: u64,
                                               .sign(lender_key_pair)?
                                               .sign(borrower_key_pair)?
                                               .transaction()?;
+  println!("here 1589");
+
   let mut txn_builder = TransactionBuilder::default();
   txn_builder.add_operation(xfr_op).transaction();
-
+  println!("here 1590");
   // Submit transaction and get the new record
   let sids_new = submit_and_get_sids(protocol, host, txn_builder)?;
   let res_new = query(protocol,
@@ -1591,6 +1606,7 @@ fn fulfill_loan(loan_id: u64,
     serde_json::from_str::<BlindAssetRecord>(&res_new).or_else(|_| {
                                                         Err(PlatformError::DeserializationError)
                                                       })?;
+  println!("here 1602");
 
   // Merge records
   let fiat_sid_merged = if let Some(sid_pre) = borrower.fiat_utxo {
