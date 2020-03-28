@@ -49,13 +49,13 @@ fn test_create_asset() -> Result<(), PlatformError> {
   let mut builder = TransactionBuilder::default();
   let tx =
     builder.add_basic_issue_asset(&keys,
-                                  &None,
+                                  None,
                                   &code,
                                   0,
                                   1000,
                                   AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType)?
            .add_basic_issue_asset(&keys,
-                                  &None,
+                                  None,
                                   &code,
                                   1,
                                   500,
