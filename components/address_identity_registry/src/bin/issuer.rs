@@ -98,7 +98,6 @@ mod handlers {
   use super::models::{to_pubcreds, CredentialKind, Db, ListOptions};
   use crate::shared::{PubCreds, UserCreds};
   use credentials::credential_sign;
-  use credentials::credential_sign;
   use percent_encoding::{percent_decode, AsciiSet, CONTROLS};
   use rand_chacha::ChaChaRng;
   use std::convert::Infallible;
