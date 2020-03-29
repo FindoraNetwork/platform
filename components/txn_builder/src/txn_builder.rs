@@ -295,6 +295,7 @@ impl TransferOperationBuilder {
     if self.transfer.is_some() {
       return Err(PlatformError::InvariantError(Some("Cannot mutate a transfer that has been signed".to_string())));
     }
+    // TODO (Keyao): Support identity tracing
     let ar =
       AssetRecord::from_template_no_identity_tracking(&mut prng, asset_record_template).unwrap();
     self.output_records.push(ar);

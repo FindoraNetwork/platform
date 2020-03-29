@@ -18,7 +18,7 @@ pub struct CredIssuerSecretKey {
 
 #[derive(Clone, Serialize, Deserialize, Debug, Eq, PartialEq)]
 pub struct CredIssuerPublicKey {
-  ac_pub_key: ACIssuerPublicKey,
+  pub ac_pub_key: ACIssuerPublicKey,
   map: LinearMap<String, ((usize, usize), usize)>, // key: (index, len in u32), len in bytes
   num_internal_attrs: usize,
 }

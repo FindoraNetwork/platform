@@ -28,7 +28,7 @@ use zei::xfr::asset_tracer::gen_asset_tracer_keypair;
 use zei::xfr::sig::{XfrKeyPair, XfrPublicKey};
 use zei::xfr::structs::{
   AssetRecordTemplate, AssetTracerKeyPair, AssetTracerMemo, AssetTracingPolicy, BlindAssetRecord,
-  IdentityRevealPolicy, OpenAssetRecord, OwnerMemo,
+  /*IdentityRevealPolicy,*/ OpenAssetRecord, OwnerMemo,
 };
 
 extern crate exitcode;
@@ -990,13 +990,19 @@ fn issue_and_transfer_asset(issuer_key_pair: &XfrKeyPair,
                                      amount,
                                      token_code,
                                      AssetRecordType::from_booleans(record_type.is_confidential_amount(), false),
-                                     tracing_policy)?;
-
+                                     tracing_policy.clone())?;
   // Transfer Operation
-  let output_template = AssetRecordTemplate::with_no_asset_tracking(amount,
-                                                                    token_code.val,
-                                                                    record_type,
-                                                                    recipient_key_pair.get_pk());
+  let output_template = match tracing_policy {
+    Some(policy) => AssetRecordTemplate::with_asset_tracking(amount,
+                                                             token_code.val,
+                                                             record_type,
+                                                             recipient_key_pair.get_pk(),
+                                                             policy),
+    None => AssetRecordTemplate::with_no_asset_tracking(amount,
+                                                        token_code.val,
+                                                        record_type,
+                                                        recipient_key_pair.get_pk()),
+  };
   let xfr_op =
     TransferOperationBuilder::new().add_input(TxoRef::Relative(0),
                                               open_blind_asset_record(&blind_asset_record,
@@ -1118,7 +1124,6 @@ fn submit_and_get_sids(protocol: &str,
                        txn_builder: TransactionBuilder)
                        -> Result<Vec<TxoSID>, PlatformError> {
   // Submit transaction
-
   let client = reqwest::Client::new();
   let txn = txn_builder.transaction();
   let mut res =
@@ -1129,9 +1134,11 @@ fn submit_and_get_sids(protocol: &str,
           .or_else(|_| {
             Err(PlatformError::SubmissionServerError(Some("Failed to submit.".to_owned())))
           })?;
+  println!("here 1139");
 
   // Log body
   let handle = res.json::<TxnHandle>().expect("<Invalid JSON>");
+  println!("here 1142");
   println!("Submission response: {}", handle);
   println!("Submission status: {}", res.status());
 
@@ -1522,11 +1529,14 @@ fn fulfill_loan(loan_id: u64,
 
   // Issue and transfer fiat token
   let tracer_enc_key = data.clone().get_asset_tracer_key_pair(issuer_id)?.enc_key;
-  let identity_policy = IdentityRevealPolicy { cred_issuer_pub_key: credential_issuer_public_key,
-                                               reveal_map: vec![true] };
+  // TODO (Keyao): Support identity tracing
+  // let identity_policy = IdentityRevealPolicy { cred_issuer_pub_key:
+  //                                                credential_issuer_public_key.ac_pub_key,
+  //                                              reveal_map: vec![true] };
   let tracing_policy = AssetTracingPolicy { enc_keys: tracer_enc_key,
                                             asset_tracking: true,
-                                            identity_tracking: Some(identity_policy) };
+                                            // identity_tracking: Some(identity_policy) };
+                                            identity_tracking: None };
   let txn_builder =
     issue_and_transfer_asset(issuer_key_pair,
                              lender_key_pair,
@@ -1554,7 +1564,7 @@ fn fulfill_loan(loan_id: u64,
   if let Err(e) = txn_builder.add_operation_create_asset(&borrower_key_pair,
                                                          Some(debt_code),
                                                          false,
-                                                         false,
+                                                         true,
                                                          &memo_str)
   {
     println!("Failed to add operation to transaction.");
@@ -1578,7 +1588,6 @@ fn fulfill_loan(loan_id: u64,
   let debt_sid = submit_and_get_sids(protocol, host, txn_builder)?[0];
   println!("Debt sid: {}", debt_sid.0);
   let debt_open_asset_record = get_open_asset_record(txn_file, borrower_key_pair)?;
-  println!("here 1562");
 
   // Initiate loan
   let lender_template =
@@ -1587,16 +1596,12 @@ fn fulfill_loan(loan_id: u64,
                                              NonConfidentialAmount_NonConfidentialAssetType,
                                              lender_key_pair.get_pk(),
                                              tracing_policy.clone());
-  println!("here 1571");
-
   let borrower_template =
     AssetRecordTemplate::with_asset_tracking(amount,
                                              fiat_code.val,
                                              NonConfidentialAmount_NonConfidentialAssetType,
                                              borrower_key_pair.get_pk(),
                                              tracing_policy);
-  println!("here 1579");
-
   let xfr_op = TransferOperationBuilder::new().add_input(TxoRef::Absolute(fiat_sid),
                                                          fiat_open_asset_record,
                                                          amount)?
@@ -1616,6 +1621,7 @@ fn fulfill_loan(loan_id: u64,
   println!("here 1590");
   // Submit transaction and get the new record
   let sids_new = submit_and_get_sids(protocol, host, txn_builder)?;
+  println!("here 1621");
   let res_new = query(protocol,
                       host,
                       QUERY_PORT,
