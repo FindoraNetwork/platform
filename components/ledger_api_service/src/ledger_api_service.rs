@@ -13,6 +13,7 @@ use ledger::store::{ArchiveAccess, LedgerAccess};
 use std::io;
 use std::marker::{Send, Sync};
 use std::sync::{Arc, RwLock};
+use zei::xfr::sig::{XfrPublicKey, XfrSignature};
 
 pub struct RestfulApiService {
   web_runtime: actix_rt::SystemRunner,
@@ -141,12 +142,21 @@ fn query_txn<AA>(data: web::Data<Arc<RwLock<AA>>>,
   }
 }
 
-fn query_global_state<AA>(data: web::Data<Arc<RwLock<AA>>>) -> web::Json<BitDigest>
+fn query_public_key<AA>(data: web::Data<Arc<RwLock<AA>>>) -> web::Json<XfrPublicKey>
   where AA: ArchiveAccess
 {
   let reader = data.read().unwrap();
-  let (hash, _) = reader.get_state_commitment();
-  web::Json(hash)
+  web::Json(*reader.public_key())
+}
+
+fn query_global_state<AA>(data: web::Data<Arc<RwLock<AA>>>)
+                          -> web::Json<(BitDigest, u64, XfrSignature)>
+  where AA: ArchiveAccess
+{
+  let reader = data.read().unwrap();
+  let (hash, seq_id) = reader.get_state_commitment();
+  let sig = reader.sign_message(&serde_json::to_vec(&(hash, seq_id)).unwrap());
+  web::Json((hash, seq_id, sig))
 }
 
 fn query_blocks_since<AA>(data: web::Data<Arc<RwLock<AA>>>,
@@ -332,6 +342,7 @@ impl<T, B> Route for App<T, B>
   fn set_route_for_archive_access<AA: 'static + ArchiveAccess + Sync + Send>(self) -> Self {
     self.route("/txn_sid/{sid}", web::get().to(query_txn::<AA>))
         .route("/global_state", web::get().to(query_global_state::<AA>))
+        .route("/public_key", web::get().to(query_public_key::<AA>))
         .route("/air_address/{key}", web::get().to(query_air::<AA>))
         .route("/block_log", web::get().to(query_block_log::<AA>))
         .route("/blocks_since/{block_sid}",
@@ -427,8 +438,54 @@ mod tests {
                                       .to_request();
 
     let state_reader = state_lock.read().unwrap();
-    let result: BitDigest = test::read_response_json(&mut app, req);
-    assert!(result == state_reader.get_state_commitment().0);
+    let (comm, idx, _sig): (_, _, XfrSignature) = test::read_response_json(&mut app, req);
+    assert!((comm, idx) == state_reader.get_state_commitment());
+  }
+
+  #[test]
+  fn test_query_public_key() {
+    let mut prng = ChaChaRng::from_seed([0u8; 32]);
+    let mut state = LedgerState::test_ledger();
+    let mut tx = Transaction::default();
+
+    let orig_key = state.public_key().clone();
+
+    let token_code1 = AssetTypeCode { val: [1; 16] };
+    let (public_key, secret_key) = build_keys(&mut prng);
+
+    let asset_body = asset_creation_body(&token_code1, &public_key, true, false, None, None);
+    let asset_create = asset_creation_operation(&asset_body, &public_key, &secret_key);
+    tx.operations.push(Operation::DefineAsset(asset_create));
+
+    let effect = TxnEffect::compute_effect(state.get_prng(), tx).unwrap();
+    {
+      let mut block = state.start_block().unwrap();
+      state.apply_transaction(&mut block, effect).unwrap();
+      state.finish_block(block).unwrap();
+    }
+
+    let state_lock = Arc::new(RwLock::new(state));
+
+    let mut app =
+      test::init_service(App::new().data(state_lock.clone())
+                                   .route("/global_state",
+                                          web::get().to(query_global_state::<LedgerState>))
+                                   .route("/public_key",
+                                          web::get().to(query_public_key::<LedgerState>)));
+
+    let req_pk = test::TestRequest::get().uri("/public_key".into())
+                                         .to_request();
+    let req_comm = test::TestRequest::get().uri("/global_state".into())
+                                           .to_request();
+
+    let state_reader = state_lock.read().unwrap();
+    let k: XfrPublicKey = test::read_response_json(&mut app, req_pk);
+    let (comm, idx, sig): (BitDigest, u64, XfrSignature) =
+      test::read_response_json(&mut app, req_comm);
+    k.verify(&serde_json::to_vec(&(comm, idx)).unwrap(), &sig)
+     .unwrap();
+    assert!(k == orig_key);
+    assert!(k == state_reader.public_key().clone());
   }
 
   #[test]
