@@ -1633,7 +1633,7 @@ mod test {
     } else {
       Some(Box::new(
       LedgerStandaloneAccounts {
-        ledger: Popen::create(&["/usr/bin/env", "bash", "-c", "flock -F .test_standalone_lock cargo run"],
+        ledger: Popen::create(&["/usr/bin/env", "bash", "-c", "flock --no-fork .test_standalone_lock cargo run"],
                   PopenConfig {
                     cwd: Some(OsString::from("../ledger_standalone/")),
                     ..Default::default()
