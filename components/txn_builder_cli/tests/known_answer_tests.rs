@@ -452,20 +452,11 @@ fn test_view() {
   let txn_builder_path = "txn_builder_view_loans";
   create_txn_builder_with_path(txn_builder_path).expect("Failed to create transaction builder");
   ledger_standalone.poll_until_ready().unwrap();
-  let output = fulfill_loan(txn_builder_path, "0", "0", "0").expect("Failed to fulfill the loan");
-  io::stdout().write_all(&output.stdout).unwrap();
-  io::stdout().write_all(&output.stderr).unwrap();
-  assert!(output.status.success());
+  fulfill_loan(txn_builder_path, "0", "0", "0").expect("Failed to fulfill the loan");
   ledger_standalone.poll_until_ready().unwrap();
-  let output = fulfill_loan(txn_builder_path, "0", "1", "0").expect("Failed to fulfill the loan");
-  io::stdout().write_all(&output.stdout).unwrap();
-  io::stdout().write_all(&output.stderr).unwrap();
-  assert!(output.status.success());
+  fulfill_loan(txn_builder_path, "0", "1", "0").expect("Failed to fulfill the loan");
   ledger_standalone.poll_until_ready().unwrap();
-  let output = fulfill_loan(txn_builder_path, "1", "2", "0").expect("Failed to fulfill the loan");
-  io::stdout().write_all(&output.stdout).unwrap();
-  io::stdout().write_all(&output.stderr).unwrap();
-  assert!(output.status.success());
+  fulfill_loan(txn_builder_path, "1", "2", "0").expect("Failed to fulfill the loan");
 
   // View loans
   // 1. View all loans of a lender
@@ -573,6 +564,9 @@ fn test_view() {
 
   let _ = fs::remove_file(DATA_FILE);
   fs::remove_file(txn_builder_path).unwrap();
+  fs::remove_file("txn_builder_view_loans.fiat.0").unwrap();
+  fs::remove_file("txn_builder_view_loans.debt.0").unwrap();
+  fs::remove_file("txn_builder_view_loans.debt.1").unwrap();
 }
 
 //
@@ -1038,4 +1032,6 @@ fn test_request_fulfill_and_pay_loan_with_args() {
 
   let _ = fs::remove_file(DATA_FILE);
   fs::remove_file(txn_builder_file).unwrap();
+  fs::remove_file("tb_fulfill_loan_args.fiat.0").unwrap();
+  fs::remove_file("tb_fulfill_loan_args.debt.0").unwrap();
 }
