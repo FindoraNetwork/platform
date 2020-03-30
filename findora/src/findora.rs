@@ -8,6 +8,7 @@ extern crate serde_derive;
 
 use serde_derive::Deserialize;
 use serde_derive::Serialize;
+use std::path::PathBuf;
 use std::ptr::read_volatile;
 
 pub mod dw;
@@ -435,6 +436,28 @@ impl Commas for i8 {
   fn commas(self) -> String {
     crate::commas_i64(self as i64)
   }
+}
+
+pub fn fresh_tmp_dir() -> PathBuf {
+  let base_dir = std::env::temp_dir();
+  let base_dirname = "findora_ledger";
+  let mut i = 0;
+  let mut dirname = None;
+  while dirname.is_none() {
+    let name = std::format!("{}_{}", base_dirname, i);
+    let path = base_dir.join(name);
+    match std::fs::create_dir(&path) {
+      Ok(()) => {
+        dirname = Some(path);
+      }
+      Err(_) => {
+        i += 1;
+      }
+    }
+  }
+
+  // Safe unwrap -- the loop would never terminate if it stayed None
+  dirname.unwrap()
 }
 
 #[cfg(test)]

@@ -308,25 +308,7 @@ impl HasInvariants<PlatformError> for LedgerState {
 
     if let Some(txn_log_fd) = &self.txn_log {
       txn_log_fd.sync_data().unwrap();
-      let tmp_dir = {
-        let base_dir = std::env::temp_dir();
-        let base_dirname = "findora_ledger";
-        let mut i = 0;
-        let mut dirname = None;
-        while dirname.is_none() {
-          let name = std::format!("{}_{}", base_dirname, i);
-          let path = base_dir.join(name);
-          match std::fs::create_dir(&path) {
-            Ok(()) => {
-              dirname = Some(path);
-            }
-            Err(_) => {
-              i += 1;
-            }
-          }
-        }
-        dirname.unwrap()
-      };
+      let tmp_dir = findora::fresh_tmp_dir();
       let block_merkle_buf = tmp_dir.join("test_block_merkle");
       let other_block_merkle_path = block_merkle_buf.to_str().unwrap();
 
@@ -962,25 +944,7 @@ impl LedgerState {
 
   // Create a ledger for use by a unit test.
   pub fn test_ledger() -> LedgerState {
-    let tmp_dir = {
-      let base_dir = std::env::temp_dir();
-      let base_dirname = "findora_ledger";
-      let mut i = 0;
-      let mut dirname = None;
-      while dirname.is_none() {
-        let name = std::format!("{}_{}", base_dirname, i);
-        let path = base_dir.join(name);
-        match std::fs::create_dir(&path) {
-          Ok(()) => {
-            dirname = Some(path);
-          }
-          Err(_) => {
-            i += 1;
-          }
-        }
-      }
-      dirname.unwrap()
-    };
+    let tmp_dir = findora::fresh_tmp_dir();
 
     let block_merkle_buf = tmp_dir.join("test_block_merkle");
     let block_merkle_path = block_merkle_buf.to_str().unwrap();
