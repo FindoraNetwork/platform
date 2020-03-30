@@ -5,7 +5,7 @@ use std::ffi::OsString;
 use std::time::{Duration, SystemTime};
 use subprocess::{Popen, PopenConfig};
 use zei::xfr::structs::BlindAssetRecord;
-const POLL_TIME: u64 = 30000;
+const POLL_TIME: u64 = 40000;
 // Struct that spins a standalone server up and down. Useful for testing.
 // When instantiated, the struct will spin up a standalone ledger and submission server.
 // While the struct is in scope, helper methods can be called to make queries to the standalone

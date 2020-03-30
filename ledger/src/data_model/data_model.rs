@@ -832,24 +832,26 @@ mod tests {
 
     let creation_operation = Operation::DefineAsset(asset_creation.clone());
 
+    // TODO (noah)
+    // add air specific regression test
     // Instantiate an AIRAssign operation
-    let air_assign_body = AIRAssignBody { addr: String::from(""),
-                                          data: String::from("") };
+    //let air_assign_body = AIRAssignBody { addr: String::from(""),
+    //                                      data: String::from("") };
 
-    let air_assign = AIRAssign { body: air_assign_body,
-                                 pubkey: IssuerPublicKey { key: public_key },
-                                 signature: signature.clone() };
+    //let air_assign = AIRAssign { body: air_assign_body,
+    //                             pubkey: IssuerPublicKey { key: public_key },
+    //                             signature: signature.clone() };
 
-    let air_assign_operation = Operation::AIRAssign(air_assign.clone());
+    //let air_assign_operation = Operation::AIRAssign(air_assign.clone());
 
     // Add operations to the transaction
     transaction.add_operation(transfer_operation);
     transaction.add_operation(issurance_operation);
     transaction.add_operation(creation_operation);
-    transaction.add_operation(air_assign_operation);
+    //transaction.add_operation(air_assign_operation);
 
     // Verify operatoins
-    assert_eq!(transaction.operations.len(), 4);
+    assert_eq!(transaction.operations.len(), 3);
 
     assert_eq!(transaction.operations.get(0),
                Some(&Operation::TransferAsset(asset_transfer)));
@@ -857,8 +859,8 @@ mod tests {
                Some(&Operation::IssueAsset(asset_issurance)));
     assert_eq!(transaction.operations.get(2),
                Some(&Operation::DefineAsset(asset_creation)));
-    assert_eq!(transaction.operations.get(3),
-               Some(&Operation::AIRAssign(air_assign)));
+    // assert_eq!(transaction.operations.get(3),
+    //            Some(&Operation::AIRAssign(air_assign)));
   }
 
   // Verify that the hash values of two transactions:

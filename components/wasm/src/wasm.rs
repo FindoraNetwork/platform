@@ -4,9 +4,12 @@
 // To compile wasm package, run wasm-pack build in the wasm directory;
 //#![deny(warnings)]
 use bulletproofs::PedersenGens;
+use core::fmt::Display;
 use credentials::{
-  credential_issuer_key_gen, credential_user_key_gen, CredIssuerPublicKey, CredIssuerSecretKey,
-  CredUserPublicKey, CredUserSecretKey,
+  credential_commit, credential_issuer_key_gen, credential_reveal, credential_sign,
+  credential_user_key_gen, credential_verify, CredCommitment, CredIssuerPublicKey,
+  CredIssuerSecretKey, CredPoK, CredRevealSig, CredSignature, CredUserPublicKey, CredUserSecretKey,
+  Credential as PlatformCredential,
 };
 use cryptohash::sha256;
 use cryptohash::sha256::Digest as BitDigest;
@@ -27,11 +30,7 @@ use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::future_to_promise;
 use wasm_bindgen_futures::JsFuture;
 use web_sys::{Request, RequestInit, RequestMode};
-use zei::api::anon_creds::{
-  ac_confidential_gen_encryption_keys, ac_keygen_issuer, ac_keygen_user, ac_reveal, ac_sign,
-  ac_verify, ACIssuerPublicKey, ACIssuerSecretKey, ACRevealSig, ACSignature, ACUserPublicKey,
-  ACUserSecretKey, Credential,
-};
+use zei::api::anon_creds::ac_confidential_gen_encryption_keys;
 use zei::basic_crypto::elgamal::{elgamal_key_gen, ElGamalEncKey};
 use zei::serialization::ZeiFromToBytes;
 use zei::setup::PublicParams;
@@ -745,243 +744,16 @@ fn create_query_promise(opts: &RequestInit,
   Ok(future_to_promise(JsFuture::from(request_promise)))
 }
 
-//
-// Credentialing section
-//
-
-#[wasm_bindgen]
-#[derive(Debug, Serialize, Deserialize)]
-/// Issuer structure.
-/// In the credentialing process, an issuer must sign the credential attribute to get it proved.
-pub struct Issuer {
-  public_key: ACIssuerPublicKey,
-  secret_key: ACIssuerSecretKey,
-}
-
-#[wasm_bindgen]
-impl Issuer {
-  /// Creates a new issuer, generating the key pair with the knowledge of the number of attributes.
-  ///
-  /// TODO Add an overview description of the anonymous credential
-  /// functions and how they work together.
-  // TODO (Keyao):
-  //  Make sure we can tell which attribute is which, possibly by fixing the order of attributes
-  //  Then pass all the attributes to sign_min_credit_score and sign the lower bound of credit score only
-  pub fn new(num_attr: usize) -> Issuer {
-    let mut prng: ChaChaRng;
-    prng = ChaChaRng::from_entropy();
-    let (issuer_pk, issuer_sk) = ac_keygen_issuer::<_>(&mut prng, num_attr);
-
-    Issuer { public_key: issuer_pk,
-             secret_key: issuer_sk }
-  }
-
-  /// Converts an Issuer to JsValue.
-  pub fn jsvalue(&mut self) -> JsValue {
-    JsValue::from_serde(&self).unwrap()
-  }
-
-  /// Signs an attribute.
-  // E.g. sign the lower bound of the credit score
-  pub fn sign_attribute(&self, user_jsvalue: &JsValue, attribute: u64) -> JsValue {
-    let mut prng: ChaChaRng;
-    prng = ChaChaRng::from_entropy();
-    let user: User = user_jsvalue.into_serde().unwrap();
-
-    let attrs = [(attribute & 0xFFFF_FFFF) as u32, (attribute >> 32) as u32];
-    let sig = ac_sign(&mut prng, &self.secret_key, &user.public_key, &attrs).unwrap();
-
-    JsValue::from_serde(&sig).unwrap()
-  }
-}
-
-#[wasm_bindgen]
-#[derive(Debug, Serialize, Deserialize)]
-/// User structure.
-/// In the credentialing process, a user must commit the credential attribute to get it proved.
-pub struct User {
-  public_key: ACUserPublicKey,
-  secret_key: ACUserSecretKey,
-}
-
-#[wasm_bindgen]
-impl User {
-  /// Creates a new user, generating the key pair using the issuer's
-  /// public key.
-  pub fn new(issuer: &Issuer, rand_seed: &str) -> User {
-    let mut prng: ChaChaRng;
-    prng = ChaChaRng::from_seed([rand_seed.as_bytes()[0]; 32]);
-    let (user_pk, user_sk) = ac_keygen_user::<_>(&mut prng, &issuer.public_key);
-
-    User { public_key: user_pk,
-           secret_key: user_sk }
-  }
-
-  /// Converts a User to JsValue.
-  pub fn jsvalue(&mut self) -> JsValue {
-    JsValue::from_serde(&self).unwrap()
-  }
-
-  /// Commits an attribute with the issuer's signature.
-  // E.g. commit the lower bound of the credit score
-  pub fn commit_attribute(&self,
-                          issuer_jsvalue: &JsValue,
-                          sig: &JsValue,
-                          attribute: u64,
-                          reveal_attribute: bool)
-                          -> JsValue {
-    let issuer: Issuer = issuer_jsvalue.into_serde().unwrap();
-    let sig: ACSignature = sig.into_serde().unwrap();
-    let mut prng = ChaChaRng::from_entropy();
-
-    let attrs = [(attribute & 0xFFFF_FFFF) as u32, (attribute >> 32) as u32];
-    let bitmap = [reveal_attribute, reveal_attribute];
-    let credential = Credential { signature: sig,
-                                  attributes: attrs.to_vec(),
-                                  issuer_pub_key: issuer.public_key };
-    let proof = ac_reveal(&mut prng, &self.secret_key, &credential, &bitmap).unwrap();
-
-    JsValue::from_serde(&proof).unwrap()
-  }
-}
-
-#[wasm_bindgen]
-#[derive(PartialEq)]
-/// Relation types, used to represent the credential requirement types.
-pub enum RelationType {
-  // Requirement: attribute value == requirement
-  Equal = 0,
-
-  // Requirement: attribute value >= requirement
-  AtLeast = 1,
-}
-
-#[wasm_bindgen]
-#[derive(Debug, Serialize, Deserialize)]
-/// Prover structure.
-/// In the credentialing process, a credential attribute must be proved by a prover.
-pub struct Prover;
-
-#[wasm_bindgen]
-impl Prover {
-  /// Proves that an attribute meets the requirement and is true.
-  pub fn prove_attribute(proof_jsvalue: &JsValue,
-                         issuer_jsvalue: &JsValue,
-                         attribute: u64,
-                         reveal_attribute: bool,
-                         requirement: u64,
-                         requirement_type: RelationType)
-                         -> bool {
-    // 1. Prove that the attribut meets the requirement
-    match requirement_type {
-      //    Case 1. "Equal" requirement
-      //    E.g. prove that the country code is the same as the requirement
-      RelationType::Equal => {
-        if attribute != requirement {
-          return false;
-        }
-      }
-      //    Case 2. "AtLeast" requirement
-      //    E.g. prove that the credit score is at least the required value
-      RelationType::AtLeast => {
-        if attribute < requirement {
-          return false;
-        }
-      }
-    }
-
-    // 2. Prove that the attribute is true
-    //    E.g. verify the lower bound of the credit score
-    let _bitmap = [reveal_attribute, reveal_attribute];
-    let issuer: Issuer = issuer_jsvalue.into_serde().unwrap();
-    let attrs = [Some((attribute & 0xFFFF_FFFF) as u32),
-                 Some((attribute >> 32) as u32)];
-    let proof: ACRevealSig = proof_jsvalue.into_serde().unwrap();
-    ac_verify(&issuer.public_key,
-              &attrs,
-              &proof.sig_commitment,
-              &proof.pok).is_ok()
-  }
-}
-
-#[wasm_bindgen]
-/// Generates a proof that a user has committed to the given attribute
-/// value.
-pub fn get_proof(attribute: u64) -> JsValue {
-  let mut issuer = Issuer::new(1);
-  let issuer_jsvalue = issuer.jsvalue();
-  let mut user = User::new(&issuer, "user");
-  let user_jsvalue = user.jsvalue();
-
-  let sig_jsvalue = issuer.sign_attribute(&user_jsvalue, attribute);
-  user.commit_attribute(&issuer_jsvalue, &sig_jsvalue, attribute, true)
-}
-
-#[wasm_bindgen]
-/// Attests credential attribute with proof as an input.
-///
-/// Proves in zero knowledge that a simple equality or greater than relation is true without revealing the terms.
-///
-/// In the P2P Lending app, the user has the option to save the proof for future use.
-/// * If the proof exists, use this function for credentialing.
-/// * Otherwise, use `attest_without_proof` for credentialing.
-///
-/// # Arguments
-/// * `attribute`: credential attribute value.
-/// * `requirement`: required value.
-/// * `requirement_type`: relation between the real and required values. See `RelationType` for options.
-/// * `proof_jsvalue`: JsValue representing the proof.
-pub fn attest_with_proof(attribute: u64,
-                         requirement: u64,
-                         requirement_type: RelationType,
-                         proof_jsvalue: JsValue)
-                         -> bool {
-  Prover::prove_attribute(&proof_jsvalue,
-                          &Issuer::new(1).jsvalue(),
-                          attribute,
-                          true,
-                          requirement,
-                          requirement_type)
-}
-
-#[wasm_bindgen]
-/// Attests credential attribute without proof as an input.
-///
-/// Creates an issuer and user for the purpose of generating a proof in zero knowledge
-/// that a simple equality or greater than relationship is true.
-///
-/// In the P2P Lending app, the user has the option to save the proof for future use.
-/// * If the proof exists, use `attest_with_proof` for credentialing.
-/// * Otherwise, use this function for credentialing.
-///
-/// # Arguments
-/// * `attribute`: credential attribute value.
-/// * `requirement`: required value.
-/// * `requirement_type`: relation between the real and required values. See `RelationType` for options.
-pub fn attest_without_proof(attribute: u64,
-                            requirement: u64,
-                            requirement_type: RelationType)
-                            -> bool {
-  let mut issuer = Issuer::new(1);
-  let issuer_jsvalue = issuer.jsvalue();
-  let mut user = User::new(&issuer, "user");
-  let user_jsvalue = user.jsvalue();
-
-  let sig_jsvalue = issuer.sign_attribute(&user_jsvalue, attribute);
-  let proof_jsvalue = user.commit_attribute(&issuer_jsvalue, &sig_jsvalue, attribute, true);
-
-  Prover::prove_attribute(&proof_jsvalue,
-                          &issuer_jsvalue,
-                          attribute,
-                          true,
-                          requirement,
-                          requirement_type)
-}
-
 #[derive(Serialize, Deserialize)]
 struct AttributeDefinition {
   pub name: String,
   pub size: usize,
+}
+
+#[derive(Serialize, Deserialize)]
+struct AttributeAssignment {
+  pub name: String,
+  pub val: String,
 }
 
 #[wasm_bindgen]
@@ -996,6 +768,48 @@ pub struct CredentialUserKeyPair {
 pub struct CredentialIssuerKeyPair {
   pk: CredIssuerPublicKey,
   sk: CredIssuerSecretKey,
+}
+
+#[wasm_bindgen]
+#[derive(Serialize, Deserialize)]
+pub struct CredentialSignature {
+  sig: CredSignature,
+}
+
+#[wasm_bindgen]
+#[derive(Serialize, Deserialize)]
+pub struct CredentialRevealSig {
+  sig: CredRevealSig,
+}
+
+#[wasm_bindgen]
+#[derive(Serialize, Deserialize)]
+pub struct CredentialCommitment {
+  commitment: CredCommitment,
+}
+
+#[wasm_bindgen]
+#[derive(Serialize, Deserialize)]
+pub struct Credential {
+  credential: PlatformCredential,
+}
+
+impl CredentialSignature {
+  pub fn get_sig_ref(&self) -> &CredSignature {
+    &self.sig
+  }
+}
+
+impl Credential {
+  pub fn get_cred_ref(&self) -> &PlatformCredential {
+    &self.credential
+  }
+}
+
+impl CredentialRevealSig {
+  pub fn get_sig_ref(&self) -> &CredRevealSig {
+    &self.sig
+  }
 }
 
 #[wasm_bindgen]
@@ -1041,4 +855,85 @@ pub fn wasm_credential_user_key_gen(issuer_pub_key: &CredIssuerPublicKey) -> Cre
   let mut prng = ChaChaRng::from_entropy();
   let (pk, sk) = credential_user_key_gen(&mut prng, issuer_pub_key);
   CredentialUserKeyPair { pk, sk }
+}
+
+fn error_to_jsvalue<T: Display>(e: T) -> JsValue {
+  JsValue::from_str(&String::from(format!("{}", e)))
+}
+
+#[wasm_bindgen]
+pub fn wasm_credential_sign(issuer_secret_key: &CredIssuerSecretKey,
+                            user_public_key: &CredUserPublicKey,
+                            attributes: JsValue)
+                            -> Result<CredentialSignature, JsValue> {
+  let mut prng = ChaChaRng::from_entropy();
+  let attributes: Vec<AttributeAssignment> = attributes.into_serde().unwrap();
+  let attributes: Vec<(String, &[u8])> =
+    attributes.iter()
+              .map(|attr| (attr.name.clone(), attr.val.as_bytes()))
+              .collect();
+  let sig = credential_sign(&mut prng, &issuer_secret_key, &user_public_key, &attributes)
+    .map_err(|e| error_to_jsvalue(e))?;
+  Ok(CredentialSignature { sig })
+}
+
+#[wasm_bindgen]
+pub fn create_credential(issuer_public_key: &CredIssuerPublicKey,
+                         signature: &CredentialSignature,
+                         attributes: &JsValue)
+                         -> Credential {
+  let attributes: Vec<AttributeAssignment> = attributes.into_serde().unwrap();
+  let attributes: Vec<(String, Vec<u8>)> =
+    attributes.iter()
+              .map(|attr| (attr.name.clone(), attr.val.as_bytes().to_vec()))
+              .collect();
+  Credential { credential: PlatformCredential { attributes,
+                                                issuer_pub_key: issuer_public_key.clone(),
+                                                signature: signature.get_sig_ref().clone() } }
+}
+
+#[wasm_bindgen]
+pub fn wasm_credential_commit(user_secret_key: &CredUserSecretKey,
+                              user_public_key: &XfrPublicKey,
+                              credential: &Credential)
+                              -> Result<CredentialCommitment, JsValue> {
+  let mut prng = ChaChaRng::from_entropy();
+  let (commitment, _pok, _key) =
+    credential_commit(&mut prng,
+                      &user_secret_key,
+                      credential.get_cred_ref(),
+                      &user_public_key.as_bytes()).map_err(|e| error_to_jsvalue(e))?;
+  Ok(CredentialCommitment { commitment })
+}
+
+#[wasm_bindgen]
+pub fn wasm_credential_reveal(user_sk: &CredUserSecretKey,
+                              credential: &Credential,
+                              reveal_fields: JsValue)
+                              -> Result<CredentialRevealSig, JsValue> {
+  let mut prng = ChaChaRng::from_entropy();
+  let reveal_fields: Vec<String> = reveal_fields.into_serde().unwrap();
+  Ok(CredentialRevealSig { sig: credential_reveal(&mut prng,
+                                                  &user_sk,
+                                                  credential.get_cred_ref(),
+                                                  &reveal_fields[..]).map_err(|e| {
+                                                                       error_to_jsvalue(e)
+                                                                     })? })
+}
+
+#[wasm_bindgen]
+pub fn wasm_credential_verify(issuer_pub_key: &CredIssuerPublicKey,
+                              attributes: JsValue,
+                              reveal_sig: &CredentialRevealSig)
+                              -> Result<(), JsValue> {
+  let attributes: Vec<AttributeAssignment> = attributes.into_serde().unwrap();
+  let attributes: Vec<(String, &[u8])> =
+    attributes.iter()
+              .map(|attr| (attr.name.clone(), attr.val.as_bytes()))
+              .collect();
+  credential_verify(issuer_pub_key,
+                    &attributes,
+                    &reveal_sig.get_sig_ref().sig_commitment,
+                    &reveal_sig.get_sig_ref().pok).map_err(|e| error_to_jsvalue(e))?;
+  Ok(())
 }

@@ -50,7 +50,7 @@ impl CredUserSecretKey {
   }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct Credential {
   pub attributes: Vec<(String, Vec<u8>)>,
   pub issuer_pub_key: CredIssuerPublicKey,
