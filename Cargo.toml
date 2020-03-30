@@ -4,6 +4,7 @@ members = [
     "components/address_identity_registry",
     "components/account_simulator",
     "components/auditor",
+    "components/xfrnote",
     "components/ledger_api_service",
     "components/credentials",
     "components/check_merkle",
