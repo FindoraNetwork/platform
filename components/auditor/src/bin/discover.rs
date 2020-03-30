@@ -21,11 +21,8 @@
 use async_std::task;
 use libp2p::mdns::service::{build_query_response, MdnsPacket, MdnsService};
 use libp2p::{identity, PeerId};
+use std::error::Error;
 use std::time::Duration;
-use std::{
-  error::Error,
-  task::{Context, Poll},
-};
 
 fn main() -> Result<(), Box<dyn Error>> {
   // Creating an identity Keypair for the local node, obtaining the local PeerId from the PublicKey.
