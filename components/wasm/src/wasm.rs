@@ -443,7 +443,7 @@ impl WasmTransferOperationBuilder {
       AssetRecordTemplate::with_no_asset_tracking(amount, code.val, asset_record_type, *recipient);
     let new_builder = Serialized::new(&*self.op_builder
                                             .deserialize()
-                                            .add_output(&template)
+                                            .add_output(&template, None)
                                             .map_err(|e| JsValue::from_str(&format!("{}", e)))?);
     Ok(WasmTransferOperationBuilder { op_builder: new_builder })
   }

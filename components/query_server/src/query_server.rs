@@ -203,7 +203,7 @@ mod tests {
                                                                    bob.get_pk());
     let xfr_op = xfr_builder.add_input(TxoRef::Absolute(transfer_sid), oar, amt)
                             .unwrap()
-                            .add_output(&out_template)
+                            .add_output(&out_template, None)
                             .unwrap()
                             .create(TransferType::Standard)
                             .unwrap()
