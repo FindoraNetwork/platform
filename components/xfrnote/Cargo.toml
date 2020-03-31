@@ -1,20 +1,12 @@
 [package]
-name = "auditor"
+name = "xfrnote"
 version = "0.1.0"
 authors = ["Engineering <engineering@findora.org>"]
 edition = "2018"
 
 [[bin]]
-name = "auditor"
-path = "src/bin/auditor.rs"
-
-[[bin]]
-name = "gossipsub"
-path = "src/bin/gossipsub.rs"
-
-[[bin]]
-name = "discover"
-path = "src/bin/discover.rs"
+name = "xfrnote"
+path = "src/bin/xfrnote.rs"
 
 [dependencies]
 async-std = "1.5.0"

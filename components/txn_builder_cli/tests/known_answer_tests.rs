@@ -564,6 +564,9 @@ fn test_view() {
 
   let _ = fs::remove_file(DATA_FILE);
   fs::remove_file(txn_builder_path).unwrap();
+  fs::remove_file("txn_builder_view_loans.fiat.0").unwrap();
+  fs::remove_file("txn_builder_view_loans.debt.0").unwrap();
+  fs::remove_file("txn_builder_view_loans.debt.1").unwrap();
 }
 
 //
@@ -980,8 +983,7 @@ fn test_request_fulfill_and_pay_loan_with_args() {
 
   assert_eq!(output.status.code(), Some(exitcode::USAGE));
   let stdout = from_utf8(&output.stdout).unwrap();
-  assert!(stdout.contains(&"Attesting with the existing proof.".to_owned())
-          && stdout.contains(&"Value should be at least:".to_owned()));
+  assert!(stdout.contains(&"should be at least:".to_owned()));
 
   // 2. Second time:
   //    Fail because the loan has been declined
@@ -1030,4 +1032,6 @@ fn test_request_fulfill_and_pay_loan_with_args() {
 
   let _ = fs::remove_file(DATA_FILE);
   fs::remove_file(txn_builder_file).unwrap();
+  fs::remove_file("tb_fulfill_loan_args.fiat.0").unwrap();
+  fs::remove_file("tb_fulfill_loan_args.debt.0").unwrap();
 }
