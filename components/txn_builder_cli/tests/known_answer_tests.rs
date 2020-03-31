@@ -564,6 +564,9 @@ fn test_view() {
 
   let _ = fs::remove_file(DATA_FILE);
   fs::remove_file(txn_builder_path).unwrap();
+  fs::remove_file("txn_builder_view_loans.fiat.0").unwrap();
+  fs::remove_file("txn_builder_view_loans.debt.0").unwrap();
+  fs::remove_file("txn_builder_view_loans.debt.1").unwrap();
 }
 
 //
@@ -1029,4 +1032,6 @@ fn test_request_fulfill_and_pay_loan_with_args() {
 
   let _ = fs::remove_file(DATA_FILE);
   fs::remove_file(txn_builder_file).unwrap();
+  fs::remove_file("tb_fulfill_loan_args.fiat.0").unwrap();
+  fs::remove_file("tb_fulfill_loan_args.debt.0").unwrap();
 }
