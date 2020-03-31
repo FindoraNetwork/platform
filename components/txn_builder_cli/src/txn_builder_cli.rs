@@ -508,7 +508,7 @@ impl Data {
       self.credentials.push(Credential::new(credential_id as u64,
                                             borrower_id,
                                             credential_issuer_id,
-                                            vec![(attribute.clone(), value.to_string())]));
+                                            vec![(attribute, value.to_string())]));
       self.borrowers[borrower_id as usize].credentials = Some(credential_id as u64);
     }
 
@@ -981,6 +981,7 @@ fn define_asset(fiat_asset: bool,
   Ok(txn_builder)
 }
 
+#[allow(clippy::too_many_arguments)]
 /// Issues and transfers asset.
 /// # Arguments
 /// * `issuer_key_pair`: asset issuer's key pair.

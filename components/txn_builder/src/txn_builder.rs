@@ -614,11 +614,11 @@ mod tests {
     let res = invalid_sig_op.add_input(TxoRef::Relative(1),
                                        open_blind_asset_record(&ba_1, &memo1,alice.get_sk_ref()).unwrap(),
                                        20)?
-                            .add_output(&output_template,None)?
+                            .add_output(&output_template, None)?
                             .balance()?
                             .create(TransferType::Standard)?
                             .sign(&alice)?
-                            .add_output(&output_template,None);
+                            .add_output(&output_template, None);
     assert!(res.is_err());
 
     // Not all signatures present
@@ -631,7 +631,7 @@ mod tests {
     let res = missing_sig_op.add_input(TxoRef::Relative(1),
                                        open_blind_asset_record(&ba_1, &memo1,alice.get_sk_ref()).unwrap(),
                                        20)?
-                            .add_output(&output_template,None)?
+                            .add_output(&output_template, None)?
                             .balance()?
                             .create(TransferType::Standard)?
                             .validate_signatures();
@@ -673,12 +673,12 @@ mod tests {
       TransferOperationBuilder::new()
       .add_input(TxoRef::Relative(1), open_blind_asset_record(&ba_1, &memo1, alice.get_sk_ref()).unwrap(), 20)?
       .add_input(TxoRef::Relative(2), open_blind_asset_record(&ba_2, &memo2, bob.get_sk_ref()).unwrap(), 20)?
-      .add_output(&output_bob5_code1_template,None)?
-      .add_output(&output_charlie13_code1_template,None)?
-      .add_output(&output_ben2_code1_template,None)?
-      .add_output(&output_bob5_code2_template,None)?
-      .add_output(&output_charlie13_code2_template,None)?
-      .add_output(&output_ben2_code2_template,None)?
+      .add_output(&output_bob5_code1_template, None)?
+      .add_output(&output_charlie13_code1_template, None)?
+      .add_output(&output_ben2_code1_template, None)?
+      .add_output(&output_bob5_code2_template, None)?
+      .add_output(&output_charlie13_code2_template, None)?
+      .add_output(&output_ben2_code2_template, None)?
       .balance()?
       .create(TransferType::Standard)?
       .sign(&alice)?
