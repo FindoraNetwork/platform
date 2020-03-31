@@ -27,6 +27,8 @@ fn main() {
   let txn_log = txn_log.to_str().unwrap();
   let utxo_map = tmp_dir.join("utxo_map");
   let utxo_map = utxo_map.to_str().unwrap();
+  let sig_key_file_buf = tmp_dir.join("sig_key");
+  let sig_key_file = sig_key_file_buf.to_str().unwrap();
 
   {
     let st = LedgerState::load_from_log(&block_merkle,
@@ -34,6 +36,7 @@ fn main() {
                                         &txn_merkle,
                                         &txn_log,
                                         &utxo_map,
+                                        Some(sig_key_file),
                                         None).unwrap();
     let comm = st.get_state_commitment();
 
@@ -43,11 +46,12 @@ fn main() {
       comm_output.sync_all().unwrap();
     }
 
+    println!("{:?}", comm);
+
     if &args[3] != "-" {
       let comm_expected = bincode::deserialize_from::<_,(BitDigest,u64)>(std::fs::File::open(&args[3]).unwrap()).unwrap();
       assert!(comm == comm_expected);
     }
-    println!("{:?}", comm);
   }
 
   std::fs::remove_dir_all(tmp_dir).unwrap();

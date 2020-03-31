@@ -148,6 +148,7 @@ pub struct Asset {
   pub updatable: bool,
   pub traceable: bool,
   #[serde(default)]
+  #[serde(skip_serializing_if = "Option::is_none")]
   pub policy: Option<(Box<Policy>, PolicyGlobals)>,
 }
 
@@ -462,8 +463,11 @@ pub struct Transaction {
   pub operations: Vec<Operation>,
   pub credentials: Vec<CredentialProof>,
   #[serde(default)]
+  #[serde(skip_serializing_if = "Option::is_none")]
   pub policy_options: Option<TxnPolicyData>,
   pub memos: Vec<Memo>,
+  #[serde(default)]
+  #[serde(skip_serializing_if = "Vec::is_empty")]
   pub signatures: Vec<XfrSignature>,
 }
 
