@@ -46,11 +46,12 @@ fn main() {
       comm_output.sync_all().unwrap();
     }
 
+    println!("{:?}", comm);
+
     if &args[3] != "-" {
       let comm_expected = bincode::deserialize_from::<_,(BitDigest,u64)>(std::fs::File::open(&args[3]).unwrap()).unwrap();
       assert!(comm == comm_expected);
     }
-    println!("{:?}", comm);
   }
 
   std::fs::remove_dir_all(tmp_dir).unwrap();
