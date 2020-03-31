@@ -7,25 +7,7 @@ fn main() {
   let args = std::env::args().collect::<Vec<_>>();
   assert!(args.len() == 4);
 
-  let tmp_dir = {
-    let base_dir = std::env::temp_dir();
-    let base_dirname = "findora_log_test";
-    let mut i = 0;
-    let mut dirname = None;
-    while dirname.is_none() {
-      let name = std::format!("{}_{}", base_dirname, i);
-      let path = base_dir.join(name);
-      match std::fs::create_dir(&path) {
-        Ok(()) => {
-          dirname = Some(path);
-        }
-        Err(_) => {
-          i += 1;
-        }
-      }
-    }
-    dirname.unwrap()
-  };
+  let tmp_dir = findora::fresh_tmp_dir();
 
   let logfile = Path::new(&args[1]);
   let mut target_file = tmp_dir.clone();
