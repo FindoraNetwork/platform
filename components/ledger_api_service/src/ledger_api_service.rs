@@ -443,6 +443,10 @@ mod tests {
   }
 
   #[test]
+  // Tests that the server
+  //  (a) responds with the same public key across a transaction
+  //  (b) responds to /global_state with a response signed by the public
+  //      key from /public_key
   fn test_query_public_key() {
     let mut prng = ChaChaRng::from_seed([0u8; 32]);
     let mut state = LedgerState::test_ledger();
