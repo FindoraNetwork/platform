@@ -1,10 +1,12 @@
 #![deny(warnings)]
 use super::errors;
+use crate::policy_script::{Policy, PolicyGlobals, TxnPolicyData};
 use bitmap::SparseMap;
 use chrono::prelude::*;
 use credentials::{CredCommitment, CredIssuerPublicKey, CredPoK};
 use cryptohash::sha256::Digest as BitDigest;
 use cryptohash::{sha256, HashValue, Proof};
+use errors::PlatformError;
 use itertools::Itertools;
 use rand_chacha::ChaChaRng;
 use rand_core::{CryptoRng, RngCore, SeedableRng};
@@ -47,13 +49,13 @@ impl Code {
     let buf = <[u8; 16]>::try_from(as_vec.as_slice()).unwrap();
     Self { val: buf }
   }
-  pub fn new_from_base64(b64: &str) -> Result<Self, errors::PlatformError> {
+  pub fn new_from_base64(b64: &str) -> Result<Self, PlatformError> {
     if let Ok(mut bin) = b64dec(b64) {
       bin.resize(16, 0u8);
       let buf = <[u8; 16]>::try_from(bin.as_slice()).unwrap();
       Ok(Self { val: buf })
     } else {
-      Err(errors::PlatformError::DeserializationError)
+      Err(PlatformError::DeserializationError)
     }
   }
   pub fn to_base64(&self) -> String {
@@ -64,7 +66,7 @@ impl Code {
 // Wrapper around a serialized variable that maintains type semantics.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Serialized<T> {
-  val: String,
+  pub val: String,
   phantom: PhantomData<T>,
 }
 
@@ -146,6 +148,9 @@ pub struct Asset {
   pub confidential_memo: ConfidentialMemo,
   pub updatable: bool,
   pub traceable: bool,
+  #[serde(default)]
+  #[serde(skip_serializing_if = "Option::is_none")]
+  pub policy: Option<(Box<Policy>, PolicyGlobals)>,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
@@ -245,7 +250,7 @@ impl TransferAssetBody {
                                      output_records: &[AssetRecord])
                                      -> Result<TransferAssetBody, errors::PlatformError> {
     if input_records.is_empty() {
-      return Err(errors::PlatformError::InputsError);
+      return Err(PlatformError::InputsError);
     }
     let in_records =
       input_records.iter()
@@ -270,7 +275,7 @@ impl IssueAssetBody {
   pub fn new(token_code: &AssetTypeCode,
              seq_num: u64,
              records: &[TxOutput])
-             -> Result<IssueAssetBody, errors::PlatformError> {
+             -> Result<IssueAssetBody, PlatformError> {
     Ok(IssueAssetBody { code: *token_code,
                         seq_num,
                         num_outputs: records.len(),
@@ -289,13 +294,15 @@ impl DefineAssetBody {
              updatable: bool,
              traceable: bool,
              memo: Option<Memo>,
-             confidential_memo: Option<ConfidentialMemo>)
-             -> Result<DefineAssetBody, errors::PlatformError> {
+             confidential_memo: Option<ConfidentialMemo>,
+             policy: Option<(Box<Policy>, PolicyGlobals)>)
+             -> Result<DefineAssetBody, PlatformError> {
     let mut asset_def: Asset = Default::default();
     asset_def.code = *token_code;
     asset_def.issuer = *issuer_key;
     asset_def.updatable = updatable;
     asset_def.traceable = traceable;
+    asset_def.policy = policy;
 
     if let Some(memo) = memo {
       asset_def.memo = Memo(memo.0);
@@ -359,7 +366,7 @@ pub struct TransferAsset {
 impl TransferAsset {
   pub fn new(transfer_body: TransferAssetBody,
              transfer_type: TransferType)
-             -> Result<TransferAsset, errors::PlatformError> {
+             -> Result<TransferAsset, PlatformError> {
     Ok(TransferAsset { body: transfer_body,
                        body_signatures: Vec::new(),
                        transfer_type })
@@ -388,7 +395,7 @@ impl IssueAsset {
   pub fn new(issuance_body: IssueAssetBody,
              public_key: &IssuerPublicKey,
              secret_key: &XfrSecretKey)
-             -> Result<IssueAsset, errors::PlatformError> {
+             -> Result<IssueAsset, PlatformError> {
     let sign = compute_signature(&secret_key, &public_key.key, &issuance_body);
     Ok(IssueAsset { body: issuance_body,
                     pubkey: *public_key,
@@ -413,7 +420,7 @@ impl DefineAsset {
   pub fn new(creation_body: DefineAssetBody,
              public_key: &IssuerPublicKey,
              secret_key: &XfrSecretKey)
-             -> Result<DefineAsset, errors::PlatformError> {
+             -> Result<DefineAsset, PlatformError> {
     let sign = compute_signature(&secret_key, &public_key.key, &creation_body);
     Ok(DefineAsset { body: creation_body,
                      pubkey: *public_key,
@@ -455,17 +462,24 @@ pub struct TimeBounds {
   pub end: DateTime<Utc>,
 }
 
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize, Default)]
 pub struct Transaction {
   pub operations: Vec<Operation>,
   pub credentials: Vec<CredentialProof>,
+  #[serde(default)]
+  #[serde(skip_serializing_if = "Option::is_none")]
+  pub policy_options: Option<TxnPolicyData>,
   pub memos: Vec<Memo>,
+  #[serde(default)]
+  #[serde(skip_serializing_if = "Vec::is_empty")]
+  pub signatures: Vec<XfrSignature>,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct FinalizedTransaction {
   pub txn: Transaction,
   pub tx_id: TxnSID,
+
   pub merkle_id: u64,
 }
 
@@ -631,13 +645,49 @@ impl Transaction {
     hash.hash.clone_from_slice(&digest.0);
     hash
   }
-}
 
-impl Default for Transaction {
-  fn default() -> Self {
-    Transaction { operations: Vec::new(),
-                  credentials: Vec::new(),
-                  memos: Vec::new() }
+  fn serialize_without_sigs(&self) -> Vec<u8> {
+    // TODO(joe): do this without a clone?
+    let mut other_txn;
+    let base_txn = if self.signatures.is_empty() {
+      &self
+    } else {
+      other_txn = self.clone();
+      other_txn.signatures.clear();
+      &other_txn
+    };
+    serde_json::to_vec(base_txn).unwrap()
+  }
+
+  pub fn sign(&mut self, secret_key: &XfrSecretKey, public_key: &XfrPublicKey) {
+    let sig = secret_key.sign(&self.serialize_without_sigs(), &public_key);
+    self.signatures.push(sig);
+  }
+
+  pub fn check_signature(&self,
+                         public_key: &XfrPublicKey,
+                         sig: &XfrSignature)
+                         -> Result<(), PlatformError> {
+    public_key.verify(&self.serialize_without_sigs(), sig)?;
+    Ok(())
+  }
+
+  /// NOTE: this does *not* guarantee that a private key affiliated with
+  /// `public_key` has signed this transaction! If `public_key` is derived
+  /// from `self` somehow, then it is infeasible for someone to forge a
+  /// passing signature, but it is plausible for someone to generate an
+  /// unrelated `public_key` which can pass this signature check!
+  pub fn check_has_signature(&self, public_key: &XfrPublicKey) -> Result<(), PlatformError> {
+    let serialized = self.serialize_without_sigs();
+    for sig in self.signatures.iter() {
+      match public_key.verify(&serialized, sig) {
+        Err(_) => {}
+        Ok(_) => {
+          return Ok(());
+        }
+      }
+    }
+    Err(PlatformError::InputsError)
   }
 }
 

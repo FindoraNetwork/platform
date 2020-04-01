@@ -1,0 +1,134 @@
+bound_asset_type credit {
+  param borrower: Identity,
+  param interest_rate: Fraction
+    { interest_rate > 0; interest_rate < 1; };
+  param interest_timestep: Time;
+  var   state:             choice {
+    case Approval {
+      param start_date, end_date: Date;
+    };
+    case Loan {
+      var next_interest_date: Date;
+      var interest_total:     Amount;
+    };
+  };
+} issued_by lender;
+global param fiat: ResourceType;
+
+invariant for (c: credit) {
+  match c.state {
+    case Approval {
+      assert c.owner == c.borrower;
+    }
+    case Loan { ... } {
+      assert c.owner == c.lender;
+    }
+  }
+};
+
+txn approve_credit(out resource the_credit: credit,
+                   param start_date: Date,
+                   param end_date:   Date,
+                   param borrower: Identity,
+                   param interest_rate: Fraction
+                     { interest_rate > 0; interest_rate < 1; },
+                   param interest_timestep: Time,
+                   param limit:             Amount,
+)
+{
+  require end_date is after start_date;
+  require the_credit.owner == borrower;
+  require_signature borrower;
+  require_signature lender;
+
+  local resource issued_credit { owner = lender; };
+
+  issue limit of credit -> issued_credit {
+    borrower = borrower;
+    interest_rate = interest_rate;
+    interest_timestep = interest_timestep;
+    borrower = borrower;
+    state = Approval {
+      start_date = start_date;
+      end_date = end_date;
+    };
+  };
+
+
+  transfer ALL of issued_credit -> the_credit;
+}
+
+txn start_loan(inout resource credit_limit: credit,
+               out   resource the_loan:     credit,
+               out   resource the_money:    fiat,
+               in    resource money_src:    fiat,
+               credential     now:          CurrentTime,
+)
+  ensures the_loan.amount == the_money.amount;
+{
+  require_signature borrower;
+  require_signature lender;
+  assert the_money.owner == borrower;
+  local loan_amount = the_money.amount;
+
+  assert credit_limit.amount <= loan_amount;
+  assert the_loan.owner == lender;
+
+  require now is after  credit_limit.start_date;
+  require now is before credit_limit.end_date;
+
+  transfer loan_amount of money_src -> the_money;
+  transfer loan_amount of credit_limit -> the_loan {
+    state = Loan {
+      next_interest_date = now + credit_limit.interest_timestep;
+    };
+  };
+}
+
+txn impose_interest(inout resource the_loan: debt,
+                    credential     now:      CurrentTime,
+)
+{
+  match the_debt.state {
+    case Loan { interest_total, next_interest } {
+      require now is after next_interest;
+      local total_amt = the_debt.amount + interest_total;
+
+      transfer all of the_debt -> the_debt {
+        state = Loan {
+          interest_total = interest_total
+                         + round(the_debt.interest_rate*total_amt);
+          next_interest  = next_interest + the_debt.interest_timestep;
+        };
+      };
+    };
+    default { reject; }
+  };
+}
+
+txn repay_loan(inout resource the_debt:    credit,
+               in    resource payment_src: fiat,
+               out   resource payment_dst: fiat,
+)
+  ensures the_debt.amount <= old(the_debt.amount);
+{
+  assert payment_dst.owner == the_debt.owner;
+  match the_debt.state {
+    case Loan { interest_total, next_interest } {
+      local interest_amt = max(the_debt.interest_total,payment_src.amount);
+      local principle_amt = max(0,payment_src.amount - interest_amt);
+      assert principle_amt <= the_debt.amount;
+      local remainder = the_debt.amount - principle_amt;
+
+      transfer principle_amt of the_debt -> BURN_ADDRESS;
+      transfer remainder of the_debt -> the_debt {
+        next_interest  = next_interest;
+        interest_total = interest_total - interest_amt;
+      };
+      transfer ALL of payment_src -> payment_dst;
+    };
+    default { reject; }
+  };
+
+}
+

@@ -422,7 +422,9 @@ impl InterpretAccounts<PlatformError> for LedgerAccounts {
 
         let txn = Transaction { operations: vec![Operation::DefineAsset(op)],
                                 credentials: vec![],
-                                memos: vec![] };
+                                memos: vec![],
+                                signatures: vec![],
+                                policy_options: None };
 
         let eff = TxnEffect::compute_effect(self.ledger.get_prng(), txn).unwrap();
 
@@ -611,7 +613,9 @@ impl InterpretAccounts<PlatformError> for LedgerAccounts {
                                        transfer_type: TransferType::Standard };
         let txn = Transaction { operations: vec![Operation::TransferAsset(transfer)],
                                 credentials: vec![],
-                                memos: vec![] };
+                                memos: vec![],
+                                signatures: vec![],
+                                policy_options: None };
 
         let effect = TxnEffect::compute_effect(self.ledger.get_prng(), txn).unwrap();
 
@@ -1012,7 +1016,9 @@ impl InterpretAccounts<PlatformError> for LedgerStandaloneAccounts {
 
         let txn = Transaction { operations: vec![Operation::DefineAsset(op)],
                                 credentials: vec![],
-                                memos: vec![] };
+                                memos: vec![],
+                                signatures: vec![],
+                                policy_options: None };
 
         {
           // let serialize = serde_json::to_string(&tx).unwrap();
@@ -1280,7 +1286,9 @@ impl InterpretAccounts<PlatformError> for LedgerStandaloneAccounts {
                                        transfer_type: TransferType::Standard };
         let txn = Transaction { operations: vec![Operation::TransferAsset(transfer)],
                                 credentials: vec![],
-                                memos: vec![] };
+                                memos: vec![],
+                                signatures: vec![],
+                                policy_options: None };
 
         let txos = {
           // let serialize = serde_json::to_string(&tx).unwrap();
@@ -1408,13 +1416,13 @@ impl Arbitrary for AccountsScenario {
     }
 
     // And some activity.
-    for (roll, src, count, unit, dst) in Vec::<(u32,usize, usize, usize, usize)>::arbitrary(g) {
+    for (roll, src, count, unit, dst) in Vec::<(u32, usize, usize, usize, usize)>::arbitrary(g) {
       let src = user_vec[src % user_vec.len()].clone();
       let dst = user_vec[dst % user_vec.len()].clone();
       let unit_ix = unit % unit_vec.len();
       let unit = unit_vec[unit_ix].clone();
       let amt = unit_amounts.get_mut(&unit).unwrap();
-      let send_amt = if *amt/4 > 0 { *amt/4 } else { *amt };
+      let send_amt = if *amt / 4 > 0 { *amt / 4 } else { *amt };
       match roll % 11 {
         1..=10 => {
           let count = if send_amt != 0 { count % send_amt } else { 0 };

@@ -823,6 +823,7 @@ fn test_define_issue_transfer_and_submit_with_args() {
 //
 // Compose transaction and submit
 //
+#[ignore]
 #[test]
 fn test_air_assign() {
   // Create txn builder and key pair

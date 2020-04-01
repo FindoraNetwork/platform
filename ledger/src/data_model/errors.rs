@@ -6,6 +6,7 @@ pub enum PlatformError {
   DeserializationError,
   SerializationError,
   InputsError,
+  PolicyFailureError(Option<String>),
   CheckedReplayError(String),
   // Option(String) so I (joe) can be lazy about error descriptions but also catch the laziness
   // later by removing Option
@@ -27,6 +28,10 @@ impl fmt::Display for PlatformError {
         f.write_str(&format!("Inconsistency found while replaying: {}", msg))
       }
       PlatformError::InputsError => f.write_str("Invalid parameters"),
+      PlatformError::PolicyFailureError(None) => f.write_str("Failed policy check"),
+      PlatformError::PolicyFailureError(Some(x)) => {
+        f.write_str(&format!("Failed policy check: {}", x))
+      }
       PlatformError::InvariantError(msg) => {
         f.write_str(format!("Invariant violated: {}",
                             msg.as_ref().unwrap_or(&"UNKNOWN".to_string())).as_str())

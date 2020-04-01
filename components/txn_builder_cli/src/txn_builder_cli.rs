@@ -1,4 +1,6 @@
 #![deny(warnings)]
+// There appears to be a clippy bug that makes this necessary
+#![allow(clippy::redundant_clone)]
 use clap::{App, Arg, SubCommand};
 use credentials::{
   credential_issuer_key_gen, credential_keygen_commitment, credential_reveal, credential_sign,
@@ -20,7 +22,7 @@ use std::io::prelude::*;
 use std::path::{Path, PathBuf};
 use std::process::exit;
 use submission_server::{TxnHandle, TxnStatus};
-use txn_builder::{BuildsTransactions, TransactionBuilder, TransferOperationBuilder};
+use txn_builder::{BuildsTransactions, PolicyChoice, TransactionBuilder, TransferOperationBuilder};
 use zei::api::anon_creds::Credential as ZeiCredential;
 use zei::serialization::ZeiFromToBytes;
 use zei::setup::PublicParams;
@@ -973,7 +975,8 @@ fn define_asset(fiat_asset: bool,
                                          Some(token_code),
                                          allow_updates,
                                          traceable,
-                                         &memo)?;
+                                         &memo,
+                                         PolicyChoice::Fungible())?;
   store_txn_to_file(&txn_file, &txn_builder)?;
 
   // Update data
@@ -1034,7 +1037,7 @@ fn issue_and_transfer_asset(issuer_key_pair: &XfrKeyPair,
   let xfr_op =
     TransferOperationBuilder::new().add_input(TxoRef::Relative(0),
                                               open_blind_asset_record(&blind_asset_record,
-                                                                &owner_memo.clone(),
+                                                                &owner_memo,
                                                                 issuer_key_pair.get_sk_ref())?,
                                               amount)?
                                    .add_output(&output_template, credential_record)?

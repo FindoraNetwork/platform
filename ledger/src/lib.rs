@@ -12,6 +12,7 @@ extern crate findora;
 
 pub mod data_model;
 pub mod policies;
+pub mod policy_script;
 
 #[cfg(not(target_arch = "wasm32"))]
 pub mod permissions;
