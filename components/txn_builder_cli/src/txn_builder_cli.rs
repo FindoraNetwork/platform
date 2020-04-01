@@ -1620,7 +1620,7 @@ fn fulfill_loan(loan_id: u64,
   // Get tracing policy
   let tracer_enc_keys = data.get_asset_tracer_key_pair(issuer_id)?.enc_key;
   let identity_policy = IdentityRevealPolicy { cred_issuer_pub_key:
-                                                 credential_issuer_public_key.ac_pub_key,
+                                                 credential_issuer_public_key.get_ref().clone(),
                                                reveal_map: vec![true] };
   let tracing_policy = AssetTracingPolicy { enc_keys: tracer_enc_keys,
                                             asset_tracking: true,

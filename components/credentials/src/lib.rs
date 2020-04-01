@@ -38,8 +38,14 @@ pub struct CredUserPublicKey(ACUserPublicKey);
 #[derive(Clone, Serialize, Deserialize, Debug, Eq, PartialEq)]
 pub struct CredUserSecretKey(ACUserSecretKey);
 
+impl CredIssuerPublicKey {
+  pub fn get_ref(&self) -> &ACIssuerPublicKey {
+    &self.ac_pub_key
+  }
+}
+
 impl CredIssuerSecretKey {
-  pub fn get_sk_ref(&self) -> &ACIssuerSecretKey {
+  pub fn get_ref(&self) -> &ACIssuerSecretKey {
     &self.ac_sec_key
   }
 }

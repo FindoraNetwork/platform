@@ -5,14 +5,14 @@ extern crate zei;
 #[macro_use]
 extern crate serde_derive;
 
-use credentials::{CredCommitment, CredIssuerPublicKey, CredIssuerSecretKey, CredPoK};
+use credentials::{CredCommitment, CredIssuerPublicKey, CredPoK, CredUserSecretKey};
 use ledger::data_model::errors::PlatformError;
 use ledger::data_model::*;
 use rand_chacha::ChaChaRng;
 use rand_core::SeedableRng;
 use std::cmp::Ordering;
 use std::collections::HashSet;
-use zei::api::anon_creds::{ACCommitmentKey, ACUserSecretKey, Credential};
+use zei::api::anon_creds::{ACCommitmentKey, Credential};
 use zei::serialization::ZeiFromToBytes;
 use zei::setup::PublicParams;
 use zei::xfr::asset_record::{build_blind_asset_record, open_blind_asset_record, AssetRecordType};
@@ -290,7 +290,7 @@ impl TransferOperationBuilder {
 
   pub fn add_output(&mut self,
                     asset_record_template: &AssetRecordTemplate,
-                    credential_record: Option<(&CredIssuerSecretKey,
+                    credential_record: Option<(&CredUserSecretKey,
                             &Credential,
                             &ACCommitmentKey)>)
                     -> Result<&mut Self, PlatformError> {
@@ -301,7 +301,7 @@ impl TransferOperationBuilder {
     let ar = if let Some((user_secret_key, credential, commitment_key)) = credential_record {
       AssetRecord::from_template_with_identity_tracking(&mut prng,
                                                         asset_record_template,
-                                                        user_secret_key.get_sk_ref(),
+                                                        user_secret_key.get_ref(),
                                                         credential,
                                                         commitment_key).unwrap()
     } else {
