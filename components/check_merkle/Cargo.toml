@@ -12,7 +12,7 @@ path = "src/check_merkle.rs"
 ledger = { path = "../../ledger" }
 findora = { path = "../../findora" }
 merkle_tree = { path = "../../libs/ads/merkle_tree" }
-zei = { git = "ssh://git@github.com/findoraorg/zei", tag = "v0.0.2" }
+zei = { git = "ssh://git@github.com/findoraorg/zei", tag = "v0.0.2-3" }
 serde = "1.0"
 serde_derive = "1.0"
 serde_json = "1.0"
