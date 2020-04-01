@@ -128,6 +128,14 @@ pub type TracerAndOwnerMemos = (Option<AssetTracerMemo>, Option<OwnerMemo>);
 //
 // Credentials
 //
+/// Credential requirement types.
+enum RequirementType {
+  /// Requirement: attribute value == requirement
+  Equal,
+  /// Requirement: attribute value >= requirement
+  AtLeast,
+}
+
 #[derive(Clone, Copy, Deserialize, Debug, Eq, PartialEq, Serialize)]
 /// Credential attribute names and their corresponding indices in the credential's values data and lender's requirements data.
 /// # Examples
@@ -151,7 +159,7 @@ enum CredentialIndex {
 }
 
 impl CredentialIndex {
-  /// Get the attribute name
+  /// Gets the attribute name.
   fn get_name(&self) -> String {
     match self {
       CredentialIndex::MinCreditScore => "min_credit_score".to_string(),
@@ -160,7 +168,7 @@ impl CredentialIndex {
     }
   }
 
-  /// Get the attribute name and length
+  /// Gets the attribute name and length.
   fn get_name_and_length(&self) -> (String, usize) {
     match self {
       CredentialIndex::MinCreditScore => ("min_credit_score".to_string(), 3 as usize),
@@ -169,15 +177,27 @@ impl CredentialIndex {
     }
   }
 
-  /// Convertes an integer to CredentialIndex
-  fn to_credential_index(value: u64) -> Result<Self, PlatformError> {
-    match value {
+  /// Convertes the index in the credential record to CredentialIndex
+  fn get_credential_index(index: u64) -> Result<Self, PlatformError> {
+    match index {
       0 => Ok(CredentialIndex::MinCreditScore),
       1 => Ok(CredentialIndex::MinIncome),
+      2 => Ok(CredentialIndex::Citizenship),
       _ => {
-        println!("Unknown value: {}", value);
+        println!("Index too large: {}", index);
         Err(PlatformError::InputsError)
       }
+    }
+  }
+
+  /// Gets the requirement type based on the index in the credential record.
+  /// See the enum `RequirementType` for supported requirement types.
+  /// See the enum `CredentialIndex` for how the credential attributes are ordered.
+  fn get_requirement_type(index: u64) -> RequirementType {
+    if index <= 1 {
+      RequirementType::AtLeast
+    } else {
+      RequirementType::Equal
     }
   }
 }
@@ -1481,57 +1501,6 @@ fn query_open_asset_record(protocol: &str,
                                                                })
 }
 
-// TODO (Keyao): Restore commented-out code below when attributes besides minimum credit score are supported.
-
-// /// Relation types, used to represent the credential requirement types.
-// enum RelationType {
-//   // /// Requirement: attribute value == requirement
-//   // Equal,
-//   /// Requirement: attribute value >= requirement
-//   AtLeast,
-// }
-
-// /// Proves the credential value.
-// /// # Arguments
-// /// * `reveal_sig`: signature to verify, constructed by calling `ac_reveal`.
-// /// * `ac_issuer_pk`: credential issuer's public key, constructed by calling `ac_keygen_issuer`.
-// /// * `value`: credential value.
-// /// * `requirement`: required value on the credential attribute.
-// /// * `relation_type`: relation between the credenital and required values, possible values defined in the enum `RelationType`.
-// fn prove(reveal_sig: &ACRevealSig,
-//          cred_issuer_pk: &CredIssuerPublicKey,
-//          attributes: &[(String, &[u8])],
-//          requirement: u64,
-//          relation_type: RelationType)
-//          -> Result<(), PlatformError> {
-//   // 1. Prove that the attribut meets the requirement
-//   match relation_type {
-//     // //    Case 1. "Equal" requirement
-//     // //    E.g. prove that the country code is the same as the requirement
-//     // RelationType::Equal => {
-//     //   if value != requirement {
-//     //     println!("Value should be: {}.", requirement);
-//     //     return Err(PlatformError::InputsError);
-//     //   }
-//     // }
-//     //    Case 2. "AtLeast" requirement
-//     //    E.g. prove that the credit score is at least the required value
-//     RelationType::AtLeast => {
-//       if (attributes[0].1 as u64) < requirement {
-//         println!("Value should be at least: {}.", requirement);
-//         return Err(PlatformError::InputsError);
-//       }
-//     }
-//   }
-
-//   // 2. Prove that the attribute is true
-//   //    E.g. verify the lower bound of the credit score
-//   credential_verify(cred_issuer_pk,
-//                     &attributes,
-//                     &reveal_sig.sig_commitment,
-//                     &reveal_sig.pok).or_else(|error| Err(PlatformError::ZeiError(error)))
-// }
-
 /// Fulfills a loan.
 /// # Arguments
 /// * `loan_id`: loan ID.
@@ -1594,20 +1563,40 @@ fn fulfill_loan(loan_id: u64,
   let mut attributes = Vec::new();
   let mut attribute_names = Vec::new();
   let mut attibutes_with_value_as_vec = Vec::new();
+
+  // For each credential attribute:
+  // If the lender doesn't have a requirement, skip it
+  // Otherwise:
+  // * If the borrower doesn't provide the corresponding attribute value, return an error
+  // * Otherwise, check if the value meets the requirement
   while count < 3 {
     if let Some(requirement_next) = requirement_iter.next() {
       if let Some(requirement) = requirement_next {
         if let Some(value_next) = value_iter.next() {
           if let Some(value) = value_next {
             let requirement_u64 = parse_to_u64(requirement)?;
-            if parse_to_u64(value)? < requirement_u64 {
-              // Update loans data
-              data.loans[loan_id as usize].status = LoanStatus::Declined;
-              store_data_to_file(data)?;
-              println!("Credit score should be at least: {}.", requirement_u64);
-              return Err(PlatformError::InputsError);
+            let requirement_type = CredentialIndex::get_requirement_type(count);
+            match requirement_type {
+              RequirementType::AtLeast => {
+                if parse_to_u64(value)? < requirement_u64 {
+                  // Update loans data
+                  data.loans[loan_id as usize].status = LoanStatus::Declined;
+                  store_data_to_file(data)?;
+                  println!("Credential value should be at least: {}.", requirement_u64);
+                  return Err(PlatformError::InputsError);
+                }
+              }
+              _ => {
+                if parse_to_u64(value)? != requirement_u64 {
+                  // Update loans data
+                  data.loans[loan_id as usize].status = LoanStatus::Declined;
+                  store_data_to_file(data)?;
+                  println!("Credit score should be: {}.", requirement_u64);
+                  return Err(PlatformError::InputsError);
+                }
+              }
             }
-            let attribute = CredentialIndex::to_credential_index(count)?;
+            let attribute = CredentialIndex::get_credential_index(count)?;
             let value_bytes = value.as_bytes();
             attributes.push((attribute.get_name().to_string(), value_bytes));
             attribute_names.push(attribute.get_name().to_string());
