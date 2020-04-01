@@ -2677,6 +2677,7 @@ mod tests {
   }
 
   #[test]
+  /// Tests that a valid AIR credential can be appended to the AIR with the air_assign operation.
   pub fn test_air_assign_operation() {
     let mut ledger = LedgerState::test_ledger();
     let dl = String::from("dl");

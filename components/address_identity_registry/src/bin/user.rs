@@ -75,8 +75,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let user_key_pair = XfrKeyPair::zei_from_bytes(&hex::decode(KEY_PAIR_STR)?);
 
     let mut txn_builder = TransactionBuilder::default();
-    //let data = &serde_json::to_string(&commitment).unwrap();
-    //let address = &serde_json::to_string(&user_creds.user_pk).unwrap();
     txn_builder.add_operation_air_assign(&user_key_pair, resp1.issuer_pk.clone(), commitment, proof)?;
 
     // Submit to ledger
