@@ -351,6 +351,21 @@ impl WasmTransactionBuilder {
             ),
         })
   }
+  /// Adds an add air assign operation to a WasmTransactionBuilder instance.
+  pub fn add_operation_air_assign(&mut self,
+                                  key_pair: &XfrKeyPair,
+                                  issuer_public_key: &CredIssuerPublicKey,
+                                  commitment: &CredentialCommitment)
+                                  -> Result<WasmTransactionBuilder, JsValue> {
+    Ok(WasmTransactionBuilder { transaction_builder:
+                                  Serialized::new(&*self.transaction_builder
+                                                        .deserialize()
+                                                        .add_operation_air_assign(key_pair,
+                                                                                  issuer_public_key.clone(),
+                                                                                  commitment.get_commitment_ref().clone(),
+                                                                                  commitment.get_pok_ref().clone())
+                    .map_err(|_e| JsValue::from_str("could not build transaction"))?)})
+  }
 
   /// Adds a serialized operation to a WasmTransactionBuilder instance
   /// @param {string} op -  a JSON-serialized operation (i.e. a transfer operation).
@@ -786,12 +801,22 @@ pub struct CredentialRevealSig {
 #[derive(Serialize, Deserialize)]
 pub struct CredentialCommitment {
   commitment: CredCommitment,
+  pok: CredPoK,
 }
 
 #[wasm_bindgen]
 #[derive(Serialize, Deserialize)]
 pub struct Credential {
   credential: PlatformCredential,
+}
+
+impl CredentialCommitment {
+  pub fn get_commitment_ref(&self) -> &CredCommitment {
+    &self.commitment
+  }
+  pub fn get_pok_ref(&self) -> &CredPoK {
+    &self.pok
+  }
 }
 
 impl CredentialSignature {
@@ -838,6 +863,11 @@ impl CredentialUserKeyPair {
   }
 }
 
+/// Generates a new credential issuer key.
+/// @param {JsValue} attributes: Array of attribute types of the form `[{name: "credit_score",
+/// size: 3}]'. The size refers to byte-size of the credential. In this case, the "credit_score"
+/// attribute is represented as a 3 byte string "760". `attributes` is the list of attribute types
+/// that the issuer can sign off on.
 #[wasm_bindgen]
 pub fn wasm_credential_issuer_key_gen(attributes: JsValue) -> CredentialIssuerKeyPair {
   let mut prng = ChaChaRng::from_entropy();
@@ -850,6 +880,9 @@ pub fn wasm_credential_issuer_key_gen(attributes: JsValue) -> CredentialIssuerKe
   CredentialIssuerKeyPair { pk, sk }
 }
 
+/// Generates a new credential user key.
+/// @param {CredIssuerPublicKey} issuer_pub_key - The credential issuer that can sign off on this
+/// user's attributes.
 #[wasm_bindgen]
 pub fn wasm_credential_user_key_gen(issuer_pub_key: &CredIssuerPublicKey) -> CredentialUserKeyPair {
   let mut prng = ChaChaRng::from_entropy();
@@ -861,13 +894,19 @@ fn error_to_jsvalue<T: Display>(e: T) -> JsValue {
   JsValue::from_str(&String::from(format!("{}", e)))
 }
 
+/// Generates a signature on user attributes that can be used to create a credential.
+/// @param {CredIssuerSecretKey} issuer_secret_key - Secret key of credential issuer.
+/// @param {CredUserPublicKey} user_public_key - Public key of credential user.
+/// @param {JsValue} attributes - Array of attribute assignments of the form `[{name: "credit_score",
+/// val: "760"}]'.
+/// @throws Will throw an error if the signature cannot be generated.
 #[wasm_bindgen]
 pub fn wasm_credential_sign(issuer_secret_key: &CredIssuerSecretKey,
                             user_public_key: &CredUserPublicKey,
                             attributes: JsValue)
                             -> Result<CredentialSignature, JsValue> {
   let mut prng = ChaChaRng::from_entropy();
-  let attributes: Vec<AttributeAssignment> = attributes.into_serde().unwrap();
+  let attributes: Vec<AttributeAssignment> = attributes.into_serde().map_err(|_e| JsValue::from("Could not deserialize attributes. Please ensure that attribute definition is of the form [{name: string, val: string}]"))?;
   let attributes: Vec<(String, &[u8])> =
     attributes.iter()
               .map(|attr| (attr.name.clone(), attr.val.as_bytes()))
@@ -877,6 +916,11 @@ pub fn wasm_credential_sign(issuer_secret_key: &CredIssuerSecretKey,
   Ok(CredentialSignature { sig })
 }
 
+/// Generates a signature on user attributes that can be used to create a credential.
+/// @param {CredIssuerPublicKey} issuer_public_key - Public key of credential issuer.
+/// @param {CredentialSignature} signature - Credential issuer signature on attributes.
+/// @param {JsValue} attributes - Array of attribute assignments of the form `[{name: "credit_score",
+/// val: "760"}]'.
 #[wasm_bindgen]
 pub fn create_credential(issuer_public_key: &CredIssuerPublicKey,
                          signature: &CredentialSignature,
@@ -892,20 +936,30 @@ pub fn create_credential(issuer_public_key: &CredIssuerPublicKey,
                                                 signature: signature.get_sig_ref().clone() } }
 }
 
+/// Generates a credential commitment. A credential commitment can be used to selectively reveal
+/// attribute assignments.
+/// @param {CredUserSecretKey} user_secret_key - Secret key of credential user.
+/// @param {XfrPublicKey} user_public_key - Ledger signing key to link this credential to.
+/// @param {Credential} credential - Credential object.
 #[wasm_bindgen]
 pub fn wasm_credential_commit(user_secret_key: &CredUserSecretKey,
                               user_public_key: &XfrPublicKey,
                               credential: &Credential)
                               -> Result<CredentialCommitment, JsValue> {
   let mut prng = ChaChaRng::from_entropy();
-  let (commitment, _pok, _key) =
+  let (commitment, pok, _key) =
     credential_commit(&mut prng,
                       &user_secret_key,
                       credential.get_cred_ref(),
                       &user_public_key.as_bytes()).map_err(|e| error_to_jsvalue(e))?;
-  Ok(CredentialCommitment { commitment })
+  Ok(CredentialCommitment { commitment, pok })
 }
 
+/// Selectively reveals attributes committed to in a credential commitment
+/// @param {CredUserSecretKey} user_sk - Secret key of credential user.
+/// @param {Credential} credential - Credential object.
+/// @param {JsValue} reveal_fields - Array of string names representing credentials to reveal (i.e.
+/// `["credit_score"]`).
 #[wasm_bindgen]
 pub fn wasm_credential_reveal(user_sk: &CredUserSecretKey,
                               credential: &Credential,
@@ -921,6 +975,13 @@ pub fn wasm_credential_reveal(user_sk: &CredUserSecretKey,
                                                                      })? })
 }
 
+/// Verifies revealed attributes from a commitment.
+/// @param {CredIssuerPublicKey} issuer_pub_key - Public key of credential issuer.
+/// @param {JsValue} reveal_fields - Array of string names representing credentials to reveal (i.e.
+/// @param {JsValue} attributes - Array of attribute assignments to check of the form `[{name: "credit_score",
+/// val: "760"}]'.
+/// `["credit_score"]`).
+/// @param {CredentialRevealSig} reveal_sig - Credential reveal signature.
 #[wasm_bindgen]
 pub fn wasm_credential_verify(issuer_pub_key: &CredIssuerPublicKey,
                               attributes: JsValue,
