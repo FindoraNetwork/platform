@@ -891,7 +891,7 @@ pub fn wasm_credential_user_key_gen(issuer_pub_key: &CredIssuerPublicKey) -> Cre
 }
 
 fn error_to_jsvalue<T: Display>(e: T) -> JsValue {
-  JsValue::from_str(&String::from(format!("{}", e)))
+  JsValue::from_str(&format!("{}", e))
 }
 
 /// Generates a signature on user attributes that can be used to create a credential.
@@ -912,7 +912,7 @@ pub fn wasm_credential_sign(issuer_secret_key: &CredIssuerSecretKey,
               .map(|attr| (attr.name.clone(), attr.val.as_bytes()))
               .collect();
   let sig = credential_sign(&mut prng, &issuer_secret_key, &user_public_key, &attributes)
-    .map_err(|e| error_to_jsvalue(e))?;
+    .map_err(error_to_jsvalue)?;
   Ok(CredentialSignature { sig })
 }
 
@@ -951,7 +951,7 @@ pub fn wasm_credential_commit(user_secret_key: &CredUserSecretKey,
     credential_commit(&mut prng,
                       &user_secret_key,
                       credential.get_cred_ref(),
-                      &user_public_key.as_bytes()).map_err(|e| error_to_jsvalue(e))?;
+                      &user_public_key.as_bytes()).map_err(error_to_jsvalue)?;
   Ok(CredentialCommitment { commitment, pok })
 }
 
@@ -995,6 +995,6 @@ pub fn wasm_credential_verify(issuer_pub_key: &CredIssuerPublicKey,
   credential_verify(issuer_pub_key,
                     &attributes,
                     &reveal_sig.get_sig_ref().sig_commitment,
-                    &reveal_sig.get_sig_ref().pok).map_err(|e| error_to_jsvalue(e))?;
+                    &reveal_sig.get_sig_ref().pok).map_err(error_to_jsvalue)?;
   Ok(())
 }
