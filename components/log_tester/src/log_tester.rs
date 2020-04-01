@@ -7,25 +7,7 @@ fn main() {
   let args = std::env::args().collect::<Vec<_>>();
   assert!(args.len() == 4);
 
-  let tmp_dir = {
-    let base_dir = std::env::temp_dir();
-    let base_dirname = "findora_log_test";
-    let mut i = 0;
-    let mut dirname = None;
-    while dirname.is_none() {
-      let name = std::format!("{}_{}", base_dirname, i);
-      let path = base_dir.join(name);
-      match std::fs::create_dir(&path) {
-        Ok(()) => {
-          dirname = Some(path);
-        }
-        Err(_) => {
-          i += 1;
-        }
-      }
-    }
-    dirname.unwrap()
-  };
+  let tmp_dir = findora::fresh_tmp_dir();
 
   let logfile = Path::new(&args[1]);
   let mut target_file = tmp_dir.clone();
@@ -45,6 +27,8 @@ fn main() {
   let txn_log = txn_log.to_str().unwrap();
   let utxo_map = tmp_dir.join("utxo_map");
   let utxo_map = utxo_map.to_str().unwrap();
+  let sig_key_file_buf = tmp_dir.join("sig_key");
+  let sig_key_file = sig_key_file_buf.to_str().unwrap();
 
   {
     let st = LedgerState::load_from_log(&block_merkle,
@@ -52,6 +36,7 @@ fn main() {
                                         &txn_merkle,
                                         &txn_log,
                                         &utxo_map,
+                                        Some(sig_key_file),
                                         None).unwrap();
     let comm = st.get_state_commitment();
 
@@ -61,11 +46,12 @@ fn main() {
       comm_output.sync_all().unwrap();
     }
 
+    println!("{:?}", comm);
+
     if &args[3] != "-" {
       let comm_expected = bincode::deserialize_from::<_,(BitDigest,u64)>(std::fs::File::open(&args[3]).unwrap()).unwrap();
       assert!(comm == comm_expected);
     }
-    println!("{:?}", comm);
   }
 
   std::fs::remove_dir_all(tmp_dir).unwrap();
