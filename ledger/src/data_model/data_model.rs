@@ -836,7 +836,6 @@ mod tests {
     transaction.add_operation(transfer_operation);
     transaction.add_operation(issuance_operation);
     transaction.add_operation(creation_operation);
-    //transaction.add_operation(air_assign_operation);
 
     // Verify operatoins
     assert_eq!(transaction.operations.len(), 3);

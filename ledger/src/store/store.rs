@@ -2754,9 +2754,15 @@ mod tests {
     let air_assign_op =
       AIRAssign::new(AIRAssignBody::new(cred_issuer_key.0, commitment, pok).unwrap(),
                      &user_kp).unwrap();
+    let mut adversarial_op = air_assign_op.clone();
+    adversarial_op.pubkey = XfrKeyPair::generate(&mut ledger.get_prng()).get_pk();
     let mut tx = Transaction::default();
     tx.operations.push(Operation::AIRAssign(air_assign_op));
     apply_transaction(&mut ledger, tx);
+    let mut tx = Transaction::default();
+    tx.operations.push(Operation::AIRAssign(adversarial_op));
+    let effect = TxnEffect::compute_effect(&mut ledger.get_prng(), tx);
+    assert!(effect.is_err());
   }
 
   #[test]
