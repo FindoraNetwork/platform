@@ -925,24 +925,35 @@ impl LedgerStateChecker {
       }
     }
 
-    let comm = self.0.status.state_commitment_data.as_ref().unwrap();
-    if self.0.utxo_map.compute_checksum() != comm.bitmap {
-      return Err(PlatformError::CheckedReplayError(format!("{}:{}:{}",
-                                                           std::file!(),
-                                                           std::line!(),
-                                                           std::column!())));
-    }
-    if self.0.block_merkle.get_root_hash() != comm.block_merkle {
-      return Err(PlatformError::CheckedReplayError(format!("{}:{}:{}",
-                                                           std::file!(),
-                                                           std::line!(),
-                                                           std::column!())));
-    }
-    if self.0.txn_merkle.get_root_hash() != comm.transaction_merkle_commitment {
-      return Err(PlatformError::CheckedReplayError(format!("{}:{}:{}",
-                                                           std::file!(),
-                                                           std::line!(),
-                                                           std::column!())));
+    match self.0.status.state_commitment_data.as_ref() {
+      Some(comm) => {
+        if self.0.utxo_map.compute_checksum() != comm.bitmap {
+          return Err(PlatformError::CheckedReplayError(format!("{}:{}:{}",
+                                                               std::file!(),
+                                                               std::line!(),
+                                                               std::column!())));
+        }
+        if self.0.block_merkle.get_root_hash() != comm.block_merkle {
+          return Err(PlatformError::CheckedReplayError(format!("{}:{}:{}",
+                                                               std::file!(),
+                                                               std::line!(),
+                                                               std::column!())));
+        }
+        if self.0.txn_merkle.get_root_hash() != comm.transaction_merkle_commitment {
+          return Err(PlatformError::CheckedReplayError(format!("{}:{}:{}",
+                                                               std::file!(),
+                                                               std::line!(),
+                                                               std::column!())));
+        }
+      }
+      None => {
+        if self.0.status.block_commit_count != 0 {
+          return Err(PlatformError::CheckedReplayError(format!("{}:{}:{}",
+                                                               std::file!(),
+                                                               std::line!(),
+                                                               std::column!())));
+        }
+      }
     }
 
     Ok(self.0)
