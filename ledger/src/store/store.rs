@@ -20,7 +20,7 @@ use rand_core::{CryptoRng, RngCore, SeedableRng};
 use std::collections::{HashMap, VecDeque};
 use std::fs::File;
 use std::fs::OpenOptions;
-use std::io::{BufReader, BufWriter};
+use std::io::{BufRead, BufReader, BufWriter, Write};
 use std::path::Path;
 use std::u64;
 use zei::xfr::sig::{XfrKeyPair, XfrPublicKey, XfrSignature};
@@ -722,8 +722,8 @@ impl LedgerUpdate<ChaChaRng> for LedgerState {
       //TODO(joe/nathan): This ordering feels bad -- the txn log should probably be write-ahead,
       //but the state commitment you need doesn't exist yet! maybe these should be two different
       //logs, or the writing should be staggered in some way.
-      if let Some(txn_log_fd) = &self.txn_log {
-        bincode::serialize_into(txn_log_fd, &LoggedBlock { block: block_txns, state: self.status.state_commitment_data.clone().unwrap() })
+      if let Some(txn_log_fd) = &mut self.txn_log {
+        writeln!(txn_log_fd,"{}",serde_json::to_string(&LoggedBlock { block: block_txns, state: self.status.state_commitment_data.clone().unwrap() }).unwrap())
               .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other,e)).unwrap();
         txn_log_fd.sync_data().unwrap();
       }
@@ -1004,12 +1004,17 @@ impl LedgerState {
   // into memory
   fn load_transaction_log(path: &str) -> Result<Vec<LoggedBlock>, std::io::Error> {
     let file = File::open(path)?;
-    let mut reader = BufReader::new(file);
+    let reader = BufReader::new(file);
     let mut v = Vec::new();
-    while let Ok(next_block) =
-      bincode::deserialize_from::<&mut BufReader<File>, LoggedBlock>(&mut reader)
-    {
-      v.push(next_block);
+    for l in reader.lines() {
+      match { serde_json::from_str::<LoggedBlock>(&l?) } {
+        Ok(next_block) => {
+          v.push(next_block);
+        }
+        Err(_) => {
+          break;
+        }
+      }
     }
     Ok(v)
   }
@@ -1263,19 +1268,23 @@ impl LedgerState {
                             .unwrap_or_else(ChaChaRng::from_entropy);
     let signing_key = match signing_key_path {
       Some(path) => {
-        let ret = {
-          let file = File::open(path)?;
-          let mut reader = BufReader::new(file);
-          bincode::deserialize_from::<&mut BufReader<File>, XfrKeyPair>(&mut reader)
-        };
-        ret.or_else::<PlatformError,_>(|_| {
-          let key = XfrKeyPair::generate(&mut prng);
-          let file = File::create(path)?;
-          let mut writer = BufWriter::new(file);
+        let ret = File::open(path).and_then(|file| {
+                    let mut reader = BufReader::new(file);
+                    bincode::deserialize_from::<&mut BufReader<File>, XfrKeyPair>(&mut reader)
+            .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other,e))
+                  });
+        ret.or_else::<PlatformError, _>(|_| {
+             let key = XfrKeyPair::generate(&mut prng);
+             File::create(path).and_then(|file| {
+               let mut writer = BufWriter::new(file);
 
-          bincode::serialize_into::<&mut BufWriter<File>, XfrKeyPair>(&mut writer, &key).map_err(|_| PlatformError::SerializationError)?;
-          Ok(key)
-        }).map_err(|e| std::io::Error::new(std::io::ErrorKind::Other,e))?
+               bincode::serialize_into::<&mut BufWriter<File>, XfrKeyPair>(&mut writer, &key)
+              .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other,e))
+              .and_then(|_| Ok(key))
+             })
+             .map_err(|_| PlatformError::SerializationError)
+           })
+           .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?
       }
       None => XfrKeyPair::generate(&mut prng),
     };
