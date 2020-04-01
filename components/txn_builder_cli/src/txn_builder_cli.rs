@@ -993,6 +993,7 @@ fn define_asset(fiat_asset: bool,
 /// * `memo_file`: path to store the tracer and owner memos, optional.
 /// * `txn_file`: path to the transaction file.
 /// * `tracing_policy`: asset tracing policy, if any.
+#[allow(clippy::too_many_arguments)]
 fn issue_and_transfer_asset(issuer_key_pair: &XfrKeyPair,
                             recipient_key_pair: &XfrKeyPair,
                             amount: u64,
