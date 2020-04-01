@@ -20,9 +20,10 @@ use rand_core::{CryptoRng, RngCore, SeedableRng};
 use std::collections::{HashMap, VecDeque};
 use std::fs::File;
 use std::fs::OpenOptions;
-use std::io::BufReader;
+use std::io::{BufRead, BufReader, BufWriter, Write};
 use std::path::Path;
 use std::u64;
+use zei::xfr::sig::{XfrKeyPair, XfrPublicKey, XfrSignature};
 
 use super::effects::*;
 
@@ -107,6 +108,7 @@ pub trait LedgerUpdate<RNG: RngCore + CryptoRng> {
                   -> Result<HashMap<TxnTempSID, (TxnSID, Vec<TxoSID>)>, std::io::Error>;
 }
 
+// TODO(joe/keyao): which of these methods should be in `LedgerAccess`?
 pub trait ArchiveAccess {
   // Number of blocks committed
   fn get_block_count(&self) -> usize;
@@ -144,6 +146,12 @@ pub trait ArchiveAccess {
 
   // Key-value lookup in AIR
   fn get_air_data(&self, address: &str) -> AIRResult;
+
+  // The public signing key this ledger provides
+  fn public_key(&self) -> &XfrPublicKey;
+
+  // Sign a message with the ledger's signing key
+  fn sign_message(&self, msg: &[u8]) -> XfrSignature;
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
@@ -222,6 +230,10 @@ pub struct LedgerState {
 
   // PRNG used for transaction validation
   prng: ChaChaRng,
+
+  // Key pair used for signing the state commitment
+  // TODO(joe): update this to the generic zei signing API when it exists
+  signing_key: XfrKeyPair,
 
   // Merkle tree tracking the sequence of transaction hashes in the block
   // Each appended hash is the hash of transactions in the same block
@@ -308,39 +320,22 @@ impl HasInvariants<PlatformError> for LedgerState {
 
     if let Some(txn_log_fd) = &self.txn_log {
       txn_log_fd.sync_data().unwrap();
-      let tmp_dir = {
-        let base_dir = std::env::temp_dir();
-        let base_dirname = "findora_ledger";
-        let mut i = 0;
-        let mut dirname = None;
-        while dirname.is_none() {
-          let name = std::format!("{}_{}", base_dirname, i);
-          let path = base_dir.join(name);
-          match std::fs::create_dir(&path) {
-            Ok(()) => {
-              dirname = Some(path);
-            }
-            Err(_) => {
-              i += 1;
-            }
-          }
-        }
-        dirname.unwrap()
-      };
-      let block_merkle_buf = tmp_dir.join("test_block_merkle");
-      let other_block_merkle_path = block_merkle_buf.to_str().unwrap();
+      let tmp_dir = findora::fresh_tmp_dir();
 
-      let air_buf = tmp_dir.join("test_air");
-      let other_air_path = air_buf.to_str().unwrap();
+      let other_block_merkle_buf = tmp_dir.join("test_block_merkle");
+      let other_block_merkle_path = other_block_merkle_buf.to_str().unwrap();
 
-      let txn_merkle_buf = tmp_dir.join("test_txn_merkle");
-      let other_txn_merkle_path = txn_merkle_buf.to_str().unwrap();
+      let other_air_buf = tmp_dir.join("test_air");
+      let other_air_path = other_air_buf.to_str().unwrap();
 
-      let txn_buf = tmp_dir.join("test_txnlog");
-      let other_txn_path = txn_buf.to_str().unwrap();
+      let other_txn_merkle_buf = tmp_dir.join("test_txn_merkle");
+      let other_txn_merkle_path = other_txn_merkle_buf.to_str().unwrap();
 
-      let utxo_map_buf = tmp_dir.join("test_utxo_map");
-      let other_utxo_map_path = utxo_map_buf.to_str().unwrap();
+      let other_txn_buf = tmp_dir.join("test_txnlog");
+      let other_txn_path = other_txn_buf.to_str().unwrap();
+
+      let other_utxo_map_buf = tmp_dir.join("test_utxo_map");
+      let other_utxo_map_path = other_utxo_map_buf.to_str().unwrap();
 
       dbg!(&self.status.txn_path);
       dbg!(std::fs::metadata(&self.status.txn_path).unwrap());
@@ -352,6 +347,7 @@ impl HasInvariants<PlatformError> for LedgerState {
                                                        &other_txn_merkle_path,
                                                        &other_txn_path,
                                                        &other_utxo_map_path,
+                                                       None,
                                                        None).unwrap());
 
       let mut status2 = Box::new(state2.status);
@@ -726,8 +722,8 @@ impl LedgerUpdate<ChaChaRng> for LedgerState {
       //TODO(joe/nathan): This ordering feels bad -- the txn log should probably be write-ahead,
       //but the state commitment you need doesn't exist yet! maybe these should be two different
       //logs, or the writing should be staggered in some way.
-      if let Some(txn_log_fd) = &self.txn_log {
-        bincode::serialize_into(txn_log_fd, &LoggedBlock { block: block_txns, state: self.status.state_commitment_data.clone().unwrap() })
+      if let Some(txn_log_fd) = &mut self.txn_log {
+        writeln!(txn_log_fd,"{}",serde_json::to_string(&LoggedBlock { block: block_txns, state: self.status.state_commitment_data.clone().unwrap() }).unwrap())
               .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other,e)).unwrap();
         txn_log_fd.sync_data().unwrap();
       }
@@ -929,24 +925,35 @@ impl LedgerStateChecker {
       }
     }
 
-    let comm = self.0.status.state_commitment_data.as_ref().unwrap();
-    if self.0.utxo_map.compute_checksum() != comm.bitmap {
-      return Err(PlatformError::CheckedReplayError(format!("{}:{}:{}",
-                                                           std::file!(),
-                                                           std::line!(),
-                                                           std::column!())));
-    }
-    if self.0.block_merkle.get_root_hash() != comm.block_merkle {
-      return Err(PlatformError::CheckedReplayError(format!("{}:{}:{}",
-                                                           std::file!(),
-                                                           std::line!(),
-                                                           std::column!())));
-    }
-    if self.0.txn_merkle.get_root_hash() != comm.transaction_merkle_commitment {
-      return Err(PlatformError::CheckedReplayError(format!("{}:{}:{}",
-                                                           std::file!(),
-                                                           std::line!(),
-                                                           std::column!())));
+    match self.0.status.state_commitment_data.as_ref() {
+      Some(comm) => {
+        if self.0.utxo_map.compute_checksum() != comm.bitmap {
+          return Err(PlatformError::CheckedReplayError(format!("{}:{}:{}",
+                                                               std::file!(),
+                                                               std::line!(),
+                                                               std::column!())));
+        }
+        if self.0.block_merkle.get_root_hash() != comm.block_merkle {
+          return Err(PlatformError::CheckedReplayError(format!("{}:{}:{}",
+                                                               std::file!(),
+                                                               std::line!(),
+                                                               std::column!())));
+        }
+        if self.0.txn_merkle.get_root_hash() != comm.transaction_merkle_commitment {
+          return Err(PlatformError::CheckedReplayError(format!("{}:{}:{}",
+                                                               std::file!(),
+                                                               std::line!(),
+                                                               std::column!())));
+        }
+      }
+      None => {
+        if self.0.status.block_commit_count != 0 {
+          return Err(PlatformError::CheckedReplayError(format!("{}:{}:{}",
+                                                               std::file!(),
+                                                               std::line!(),
+                                                               std::column!())));
+        }
+      }
     }
 
     Ok(self.0)
@@ -962,25 +969,7 @@ impl LedgerState {
 
   // Create a ledger for use by a unit test.
   pub fn test_ledger() -> LedgerState {
-    let tmp_dir = {
-      let base_dir = std::env::temp_dir();
-      let base_dirname = "findora_ledger";
-      let mut i = 0;
-      let mut dirname = None;
-      while dirname.is_none() {
-        let name = std::format!("{}_{}", base_dirname, i);
-        let path = base_dir.join(name);
-        match std::fs::create_dir(&path) {
-          Ok(()) => {
-            dirname = Some(path);
-          }
-          Err(_) => {
-            i += 1;
-          }
-        }
-      }
-      dirname.unwrap()
-    };
+    let tmp_dir = findora::fresh_tmp_dir();
 
     let block_merkle_buf = tmp_dir.join("test_block_merkle");
     let block_merkle_path = block_merkle_buf.to_str().unwrap();
@@ -1000,24 +989,43 @@ impl LedgerState {
     let utxo_map_buf = tmp_dir.join("test_utxo_map");
     let utxo_map_path = utxo_map_buf.to_str().unwrap();
 
-    LedgerState::new(&block_merkle_path,
-                     &air_path,
-                     &txn_merkle_path,
-                     &txn_path,
-                     &utxo_map_path,
-                     None).unwrap()
+    let ret = LedgerState::new(&block_merkle_path,
+                               &air_path,
+                               &txn_merkle_path,
+                               &txn_path,
+                               &utxo_map_path,
+                               None,
+                               None).unwrap();
+
+    let key_buf = tmp_dir.join("test_sig_key");
+    let key_path = key_buf.to_str().unwrap();
+    {
+      let file = File::create(key_path).unwrap();
+      {
+        let mut writer = BufWriter::new(file);
+
+        bincode::serialize_into::<&mut BufWriter<File>, XfrKeyPair>(&mut writer, &ret.signing_key).unwrap();
+      }
+    }
+
+    ret
   }
 
   // TODO(joe): Make this an iterator of some sort so that we don't have to load the whole log
   // into memory
   fn load_transaction_log(path: &str) -> Result<Vec<LoggedBlock>, std::io::Error> {
     let file = File::open(path)?;
-    let mut reader = BufReader::new(file);
+    let reader = BufReader::new(file);
     let mut v = Vec::new();
-    while let Ok(next_block) =
-      bincode::deserialize_from::<&mut BufReader<File>, LoggedBlock>(&mut reader)
-    {
-      v.push(next_block);
+    for l in reader.lines() {
+      match { serde_json::from_str::<LoggedBlock>(&l?) } {
+        Ok(next_block) => {
+          v.push(next_block);
+        }
+        Err(_) => {
+          break;
+        }
+      }
     }
     Ok(v)
   }
@@ -1143,25 +1151,29 @@ impl LedgerState {
              txn_merkle_path: &str,
              txn_path: &str,
              utxo_map_path: &str,
+             keypair: Option<XfrKeyPair>,
              prng_seed: Option<[u8; 32]>)
              -> Result<LedgerState, std::io::Error> {
-    let ledger =
-      LedgerState { status: LedgerStatus::new(block_merkle_path,
-                                              air_path,
-                                              txn_merkle_path,
-                                              txn_path,
-                                              utxo_map_path)?,
-                    // TODO(joe): is this safe?
-                    prng: rand_chacha::ChaChaRng::from_seed(prng_seed.unwrap_or([0u8; 32])),
-                    block_merkle: LedgerState::init_merkle_log(block_merkle_path, true)?,
-                    air: LedgerState::init_air_log(air_path, true)?,
-                    txn_merkle: LedgerState::init_merkle_log(txn_merkle_path, true)?,
-                    blocks: Vec::new(),
-                    utxo_map: LedgerState::init_utxo_map(utxo_map_path, true)?,
-                    txn_log: Some(std::fs::OpenOptions::new().create_new(true)
-                                                             .append(true)
-                                                             .open(txn_path)?),
-                    block_ctx: Some(BlockEffect::new()) };
+    let mut prng = prng_seed.map(rand_chacha::ChaChaRng::from_seed)
+                            .unwrap_or_else(ChaChaRng::from_entropy);
+    let signing_key = keypair.unwrap_or_else(|| XfrKeyPair::generate(&mut prng));
+    let ledger = LedgerState { status: LedgerStatus::new(block_merkle_path,
+                                                         air_path,
+                                                         txn_merkle_path,
+                                                         txn_path,
+                                                         utxo_map_path)?,
+                               prng,
+                               signing_key,
+                               block_merkle: LedgerState::init_merkle_log(block_merkle_path,
+                                                                          true)?,
+                               air: LedgerState::init_air_log(air_path, true)?,
+                               txn_merkle: LedgerState::init_merkle_log(txn_merkle_path, true)?,
+                               blocks: Vec::new(),
+                               utxo_map: LedgerState::init_utxo_map(utxo_map_path, true)?,
+                               txn_log: Some(std::fs::OpenOptions::new().create_new(true)
+                                                                        .append(true)
+                                                                        .open(txn_path)?),
+                               block_ctx: Some(BlockEffect::new()) };
 
     ledger.txn_log.as_ref().unwrap().sync_all()?;
 
@@ -1173,27 +1185,52 @@ impl LedgerState {
                                txn_merkle_path: &str,
                                txn_path: &str,
                                utxo_map_path: &str,
+                               signing_key_path: Option<&str>,
                                prng_seed: Option<[u8; 32]>)
                                -> Result<LedgerState, PlatformError> {
+    let mut prng = prng_seed.map(rand_chacha::ChaChaRng::from_seed)
+                            .unwrap_or_else(ChaChaRng::from_entropy);
+    let signing_key = match signing_key_path {
+      Some(path) => {
+        let ret = {
+          let file = File::open(path)?;
+          let mut reader = BufReader::new(file);
+          bincode::deserialize_from::<&mut BufReader<File>, XfrKeyPair>(&mut reader)
+        };
+        ret.or_else::<PlatformError,_>(|_| {
+          let key = XfrKeyPair::generate(&mut prng);
+          let file = File::create(path)?;
+          let mut writer = BufWriter::new(file);
+
+          bincode::serialize_into::<&mut BufWriter<File>, XfrKeyPair>(&mut writer, &key).map_err(|_| PlatformError::SerializationError)?;
+          Ok(key)
+        })?
+      }
+      None => XfrKeyPair::generate(&mut prng),
+    };
+
     let blocks = LedgerState::load_transaction_log(txn_path)?;
     dbg!(&blocks);
     let txn_log = std::fs::OpenOptions::new().append(true).open(txn_path)?;
     dbg!(&txn_log);
     let mut ledger =
       LedgerStateChecker(LedgerState { status: LedgerStatus::new(block_merkle_path,
-                                              air_path,
-                                              txn_merkle_path,
-                                              txn_path,
-                                              utxo_map_path)?,
-                    // TODO(joe): is this safe?
-                    prng: rand_chacha::ChaChaRng::from_seed(prng_seed.unwrap_or([0u8; 32])),
-                    block_merkle: LedgerState::init_merkle_log(block_merkle_path, false)?,
-                    air: LedgerState::init_air_log(air_path, true)?,
-                    txn_merkle: LedgerState::init_merkle_log(txn_merkle_path, false)?,
-                    blocks: Vec::new(),
-                    utxo_map: LedgerState::init_utxo_map(utxo_map_path, false)?,
-                    txn_log: None,
-                    block_ctx: Some(BlockEffect::new()) });
+                                                                 air_path,
+                                                                 txn_merkle_path,
+                                                                 txn_path,
+                                                                 utxo_map_path)?,
+                                       prng,
+                                       signing_key,
+                                       block_merkle:
+                                         LedgerState::init_merkle_log(block_merkle_path, false)?,
+                                       air: LedgerState::init_air_log(air_path, true)?,
+                                       txn_merkle:
+                                         LedgerState::init_merkle_log(txn_merkle_path, false)?,
+                                       blocks: Vec::new(),
+                                       utxo_map: LedgerState::init_utxo_map(utxo_map_path,
+                                                                            false)?,
+                                       txn_log: None,
+                                       block_ctx: Some(BlockEffect::new()) });
 
     dbg!(blocks.len());
     for (ix, logged_block) in blocks.into_iter().enumerate() {
@@ -1235,8 +1272,34 @@ impl LedgerState {
                        txn_merkle_path: &str,
                        txn_path: &str,
                        utxo_map_path: &str,
+                       signing_key_path: Option<&str>,
                        prng_seed: Option<[u8; 32]>)
                        -> Result<LedgerState, std::io::Error> {
+    let mut prng = prng_seed.map(rand_chacha::ChaChaRng::from_seed)
+                            .unwrap_or_else(ChaChaRng::from_entropy);
+    let signing_key = match signing_key_path {
+      Some(path) => {
+        let ret = File::open(path).and_then(|file| {
+                    let mut reader = BufReader::new(file);
+                    bincode::deserialize_from::<&mut BufReader<File>, XfrKeyPair>(&mut reader)
+            .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other,e))
+                  });
+        ret.or_else::<PlatformError, _>(|_| {
+             let key = XfrKeyPair::generate(&mut prng);
+             File::create(path).and_then(|file| {
+               let mut writer = BufWriter::new(file);
+
+               bincode::serialize_into::<&mut BufWriter<File>, XfrKeyPair>(&mut writer, &key)
+              .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other,e))
+              .and_then(|_| Ok(key))
+             })
+             .map_err(|_| PlatformError::SerializationError)
+           })
+           .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?
+      }
+      None => XfrKeyPair::generate(&mut prng),
+    };
+
     let blocks = LedgerState::load_transaction_log(txn_path)?;
     let txn_log = std::fs::OpenOptions::new().append(true).open(txn_path)?;
     let mut ledger =
@@ -1245,8 +1308,8 @@ impl LedgerState {
                                               txn_merkle_path,
                                               txn_path,
                                               utxo_map_path)?,
-                    // TODO(joe): is this safe?
-                    prng: rand_chacha::ChaChaRng::from_seed(prng_seed.unwrap_or([0u8; 32])),
+                    prng,
+                    signing_key,
                     block_merkle: LedgerState::init_merkle_log(block_merkle_path, true)?,
                     air: LedgerState::init_air_log(air_path, true)?,
                     txn_merkle: LedgerState::init_merkle_log(txn_merkle_path, true)?,
@@ -1273,25 +1336,43 @@ impl LedgerState {
   }
 
   pub fn load_or_init(base_dir: &Path) -> Result<LedgerState, PlatformError> {
-    let block_merkle = base_dir.join("block_merkle");
-    let block_merkle = block_merkle.to_str().unwrap();
-    let air = base_dir.join("air");
-    let air = air.to_str().unwrap();
-    let txn_merkle = base_dir.join("txn_merkle");
-    let txn_merkle = txn_merkle.to_str().unwrap();
-    let txn_log = base_dir.join("txn_log");
-    let txn_log = txn_log.to_str().unwrap();
-    let utxo_map = base_dir.join("utxo_map");
-    let utxo_map = utxo_map.to_str().unwrap();
+    let block_buf = base_dir.join("block_merkle");
+    let block_merkle = block_buf.to_str().unwrap();
+
+    let air_buf = base_dir.join("air");
+    let air = air_buf.to_str().unwrap();
+
+    let txn_merkle_buf = base_dir.join("txn_merkle");
+    let txn_merkle = txn_merkle_buf.to_str().unwrap();
+
+    let txn_log_buf = base_dir.join("txn_log");
+    let txn_log = txn_log_buf.to_str().unwrap();
+
+    let utxo_map_buf = base_dir.join("utxo_map");
+    let utxo_map = utxo_map_buf.to_str().unwrap();
+
+    let sig_key_file_buf = base_dir.join("sig_key");
+    let sig_key_file = sig_key_file_buf.to_str().unwrap();
 
     // TODO(joe): distinguish between the transaction log not existing
     // and it being corrupted
     LedgerState::load_from_log(&block_merkle, &air, &txn_merkle, &txn_log,
-                &utxo_map, None)
-              .or_else(|_| LedgerState::new(&block_merkle, &air, &txn_merkle, &txn_log,
-                &utxo_map, None))
+                &utxo_map, Some(sig_key_file), None)
     .or_else(|_| LedgerState::load_checked_from_log(&block_merkle, &air, &txn_merkle, &txn_log,
-                &utxo_map, None))
+                &utxo_map, Some(sig_key_file), None))
+              .or_else(|_| {
+                let ret = LedgerState::new(&block_merkle, &air, &txn_merkle, &txn_log,
+                  &utxo_map, None, None)?;
+
+                {
+                  let file = File::create(sig_key_file)?;
+                  let mut writer = BufWriter::new(file);
+
+                  bincode::serialize_into::<&mut BufWriter<File>, XfrKeyPair>(&mut writer, &ret.signing_key).map_err(|_| PlatformError::SerializationError)?;
+                }
+
+                Ok(ret)
+              })
   }
 
   // Load a ledger given the paths to the various storage elements.
@@ -1634,6 +1715,14 @@ impl ArchiveAccess for LedgerState {
     (commitment, self.status.block_commit_count)
   }
 
+  fn public_key(&self) -> &XfrPublicKey {
+    self.signing_key.get_pk_ref()
+  }
+
+  fn sign_message(&self, msg: &[u8]) -> XfrSignature {
+    self.signing_key.sign(msg)
+  }
+
   fn get_air_data(&self, key: &str) -> AIRResult {
     let merkle_root = self.air.merkle_root();
     let (value, merkle_proof) = self.air.get_with_proof(key);
@@ -1770,9 +1859,12 @@ mod tests {
   use super::helpers::*;
   use super::*;
   use crate::policies::{calculate_fee, Fraction};
+  use credentials::{
+    credential_commit, credential_issuer_key_gen, credential_sign, credential_user_key_gen,
+    Credential,
+  };
   use rand_core::SeedableRng;
   use std::fs;
-  use tempdir::TempDir;
   use tempfile::tempdir;
   use zei::serialization::ZeiFromToBytes;
   use zei::setup::PublicParams;
@@ -2534,24 +2626,7 @@ mod tests {
 
   #[test]
   fn asset_issued() {
-    let tmp_dir = TempDir::new("test").unwrap();
-    let block_merkle_buf = tmp_dir.path().join("test_block_merkle");
-    let block_merkle_path = block_merkle_buf.to_str().unwrap();
-    let air_buf = tmp_dir.path().join("test_air");
-    let air_path = air_buf.to_str().unwrap();
-    let txn_merkle_buf = tmp_dir.path().join("test_txn_merkle");
-    let txn_merkle_path = txn_merkle_buf.to_str().unwrap();
-    let txn_buf = tmp_dir.path().join("test_txnlog");
-    let txn_path = txn_buf.to_str().unwrap();
-    let utxo_map_buf = tmp_dir.path().join("test_utxo_map");
-    let utxo_map_path = utxo_map_buf.to_str().unwrap();
-
-    let mut ledger = LedgerState::new(&block_merkle_path,
-                                      &air_path,
-                                      &txn_merkle_path,
-                                      &txn_path,
-                                      &utxo_map_path,
-                                      None).unwrap();
+    let mut ledger = LedgerState::test_ledger();
 
     let params = PublicParams::new();
 
@@ -2670,6 +2745,44 @@ mod tests {
         panic!("snapshot failed:  {}", x);
       }
     }
+  }
+
+  #[test]
+  /// Tests that a valid AIR credential can be appended to the AIR with the air_assign operation.
+  pub fn test_air_assign_operation() {
+    let mut ledger = LedgerState::test_ledger();
+    let dl = String::from("dl");
+    let cred_issuer_key = credential_issuer_key_gen(&mut ledger.get_prng(), &[(dl.clone(), 8)]);
+    let cred_user_key = credential_user_key_gen(&mut ledger.get_prng(), &cred_issuer_key.0);
+    let user_kp = XfrKeyPair::generate(&mut ledger.get_prng());
+
+    // Construct credential
+    let dl_attr = b"A1903479";
+    let attr_map = vec![(dl.clone(), dl_attr.to_vec())];
+    let attributes = [(dl.clone(), &dl_attr[..])];
+    let signature = credential_sign(&mut ledger.get_prng(),
+                                    &cred_issuer_key.1,
+                                    &cred_user_key.0,
+                                    &attributes).unwrap();
+    let credential = Credential { signature: signature.clone(),
+                                  attributes: attr_map,
+                                  issuer_pub_key: cred_issuer_key.0.clone() };
+    let (commitment, pok, _key) = credential_commit(&mut ledger.get_prng(),
+                                                    &cred_user_key.1,
+                                                    &credential,
+                                                    user_kp.get_pk_ref().as_bytes()).unwrap();
+    let air_assign_op =
+      AIRAssign::new(AIRAssignBody::new(cred_issuer_key.0, commitment, pok).unwrap(),
+                     &user_kp).unwrap();
+    let mut adversarial_op = air_assign_op.clone();
+    adversarial_op.pubkey = XfrKeyPair::generate(&mut ledger.get_prng()).get_pk();
+    let mut tx = Transaction::default();
+    tx.operations.push(Operation::AIRAssign(air_assign_op));
+    apply_transaction(&mut ledger, tx);
+    let mut tx = Transaction::default();
+    tx.operations.push(Operation::AIRAssign(adversarial_op));
+    let effect = TxnEffect::compute_effect(&mut ledger.get_prng(), tx);
+    assert!(effect.is_err());
   }
 
   #[test]

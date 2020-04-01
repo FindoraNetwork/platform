@@ -10,6 +10,7 @@ path = "src/txn_builder_cli.rs"
 
 [dependencies]
 clap = "2.33.0"
+credentials = { path = "../credentials" }
 dirs = "2.0.2"
 env_logger = "0.6.2"
 exitcode = "1.1.2"
@@ -28,7 +29,7 @@ shellexpand = "1.0.0"
 submission_server = { path = "../submission_server" }
 txn_builder = { path = "../txn_builder" }
 wasm = { path = "../wasm" }
-zei = { git = "ssh://git@github.com/findoraorg/zei", tag = "v0.0.2" }
+zei = { git = "ssh://git@github.com/findoraorg/zei", tag = "v0.0.2-3" }
 
 [dev-dependencies]
 quickcheck = "0.8"

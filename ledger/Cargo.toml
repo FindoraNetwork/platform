@@ -14,6 +14,7 @@ bulletproofs =  { version = "2.0.0" }
 byteorder = "1.0.0"
 chrono = "0.4"
 cryptohash = { path = "../libs/cryptohash" }
+credentials = { path = "../components/credentials"}
 curve25519-dalek = { version =  "1.2.1", features = ["serde"] }
 ed25519-dalek = "0.9.1"
 findora = { path = "../findora" }
@@ -35,7 +36,7 @@ tempfile = "3.1.0"
 time = "0.1"
 tiny-keccak = "1.4.2"
 wasm-bindgen = { version = "0.2.50", features = ["serde-serialize"]  }
-zei = { git = "ssh://git@github.com/findoraorg/zei", tag = "v0.0.2" }
+zei = { git = "ssh://git@github.com/findoraorg/zei", tag = "v0.0.2-3" }
 log = "0.4.8"
 
 [features]
