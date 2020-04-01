@@ -951,24 +951,35 @@ impl LedgerStateChecker {
       }
     }
 
-    let comm = self.0.status.state_commitment_data.as_ref().unwrap();
-    if self.0.utxo_map.compute_checksum() != comm.bitmap {
-      return Err(PlatformError::CheckedReplayError(format!("{}:{}:{}",
-                                                           std::file!(),
-                                                           std::line!(),
-                                                           std::column!())));
-    }
-    if self.0.block_merkle.get_root_hash() != comm.block_merkle {
-      return Err(PlatformError::CheckedReplayError(format!("{}:{}:{}",
-                                                           std::file!(),
-                                                           std::line!(),
-                                                           std::column!())));
-    }
-    if self.0.txn_merkle.get_root_hash() != comm.transaction_merkle_commitment {
-      return Err(PlatformError::CheckedReplayError(format!("{}:{}:{}",
-                                                           std::file!(),
-                                                           std::line!(),
-                                                           std::column!())));
+    match self.0.status.state_commitment_data.as_ref() {
+      Some(comm) => {
+        if self.0.utxo_map.compute_checksum() != comm.bitmap {
+          return Err(PlatformError::CheckedReplayError(format!("{}:{}:{}",
+                                                               std::file!(),
+                                                               std::line!(),
+                                                               std::column!())));
+        }
+        if self.0.block_merkle.get_root_hash() != comm.block_merkle {
+          return Err(PlatformError::CheckedReplayError(format!("{}:{}:{}",
+                                                               std::file!(),
+                                                               std::line!(),
+                                                               std::column!())));
+        }
+        if self.0.txn_merkle.get_root_hash() != comm.transaction_merkle_commitment {
+          return Err(PlatformError::CheckedReplayError(format!("{}:{}:{}",
+                                                               std::file!(),
+                                                               std::line!(),
+                                                               std::column!())));
+        }
+      }
+      None => {
+        if self.0.status.block_commit_count != 0 {
+          return Err(PlatformError::CheckedReplayError(format!("{}:{}:{}",
+                                                               std::file!(),
+                                                               std::line!(),
+                                                               std::column!())));
+        }
+      }
     }
 
     Ok(self.0)
@@ -1874,6 +1885,10 @@ mod tests {
   use super::helpers::*;
   use super::*;
   use crate::policies::{calculate_fee, Fraction};
+  use credentials::{
+    credential_commit, credential_issuer_key_gen, credential_sign, credential_user_key_gen,
+    Credential,
+  };
   use rand_core::SeedableRng;
   use std::fs;
   use tempfile::tempdir;
@@ -2474,6 +2489,44 @@ mod tests {
         panic!("snapshot failed:  {}", x);
       }
     }
+  }
+
+  #[test]
+  /// Tests that a valid AIR credential can be appended to the AIR with the air_assign operation.
+  pub fn test_air_assign_operation() {
+    let mut ledger = LedgerState::test_ledger();
+    let dl = String::from("dl");
+    let cred_issuer_key = credential_issuer_key_gen(&mut ledger.get_prng(), &[(dl.clone(), 8)]);
+    let cred_user_key = credential_user_key_gen(&mut ledger.get_prng(), &cred_issuer_key.0);
+    let user_kp = XfrKeyPair::generate(&mut ledger.get_prng());
+
+    // Construct credential
+    let dl_attr = b"A1903479";
+    let attr_map = vec![(dl.clone(), dl_attr.to_vec())];
+    let attributes = [(dl.clone(), &dl_attr[..])];
+    let signature = credential_sign(&mut ledger.get_prng(),
+                                    &cred_issuer_key.1,
+                                    &cred_user_key.0,
+                                    &attributes).unwrap();
+    let credential = Credential { signature: signature.clone(),
+                                  attributes: attr_map,
+                                  issuer_pub_key: cred_issuer_key.0.clone() };
+    let (commitment, pok, _key) = credential_commit(&mut ledger.get_prng(),
+                                                    &cred_user_key.1,
+                                                    &credential,
+                                                    user_kp.get_pk_ref().as_bytes()).unwrap();
+    let air_assign_op =
+      AIRAssign::new(AIRAssignBody::new(cred_issuer_key.0, commitment, pok).unwrap(),
+                     &user_kp).unwrap();
+    let mut adversarial_op = air_assign_op.clone();
+    adversarial_op.pubkey = XfrKeyPair::generate(&mut ledger.get_prng()).get_pk();
+    let mut tx = Transaction::default();
+    tx.operations.push(Operation::AIRAssign(air_assign_op));
+    apply_transaction(&mut ledger, tx);
+    let mut tx = Transaction::default();
+    tx.operations.push(Operation::AIRAssign(adversarial_op));
+    let effect = TxnEffect::compute_effect(&mut ledger.get_prng(), tx);
+    assert!(effect.is_err());
   }
 
   #[test]

@@ -3,6 +3,7 @@ use super::errors;
 use crate::policy_script::{Policy, PolicyGlobals, TxnPolicyData};
 use bitmap::SparseMap;
 use chrono::prelude::*;
+use credentials::{CredCommitment, CredIssuerPublicKey, CredPoK};
 use cryptohash::sha256::Digest as BitDigest;
 use cryptohash::{sha256, HashValue, Proof};
 use errors::PlatformError;
@@ -319,13 +320,17 @@ impl DefineAssetBody {
 }
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct AIRAssignBody {
-  pub addr: String,
-  pub data: String,
+  pub addr: CredIssuerPublicKey,
+  pub data: CredCommitment,
+  pub pok: CredPoK,
 }
 
 impl AIRAssignBody {
-  pub fn new(addr: String, data: String) -> Result<AIRAssignBody, errors::PlatformError> {
-    Ok(AIRAssignBody { addr, data })
+  pub fn new(addr: CredIssuerPublicKey,
+             data: CredCommitment,
+             pok: CredPoK)
+             -> Result<AIRAssignBody, errors::PlatformError> {
+    Ok(AIRAssignBody { addr, data, pok })
   }
 }
 
@@ -426,18 +431,17 @@ impl DefineAsset {
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct AIRAssign {
   pub body: AIRAssignBody,
-  pub pubkey: IssuerPublicKey,
+  pub pubkey: XfrPublicKey,
   pub signature: XfrSignature,
 }
 
 impl AIRAssign {
   pub fn new(creation_body: AIRAssignBody,
-             public_key: &IssuerPublicKey,
-             secret_key: &XfrSecretKey)
+             keypair: &XfrKeyPair)
              -> Result<AIRAssign, errors::PlatformError> {
-    let sign = compute_signature(&secret_key, &public_key.key, &creation_body);
+    let sign = compute_signature(keypair.get_sk_ref(), keypair.get_pk_ref(), &creation_body);
     Ok(AIRAssign { body: creation_body,
-                   pubkey: *public_key,
+                   pubkey: *keypair.get_pk_ref(),
                    signature: sign })
   }
 }
@@ -878,24 +882,13 @@ mod tests {
 
     let creation_operation = Operation::DefineAsset(asset_creation.clone());
 
-    // Instantiate an AIRAssign operation
-    let air_assign_body = AIRAssignBody { addr: String::from(""),
-                                          data: String::from("") };
-
-    let air_assign = AIRAssign { body: air_assign_body,
-                                 pubkey: IssuerPublicKey { key: public_key },
-                                 signature: signature.clone() };
-
-    let air_assign_operation = Operation::AIRAssign(air_assign.clone());
-
     // Add operations to the transaction
     transaction.add_operation(transfer_operation);
     transaction.add_operation(issuance_operation);
     transaction.add_operation(creation_operation);
-    transaction.add_operation(air_assign_operation);
 
     // Verify operatoins
-    assert_eq!(transaction.operations.len(), 4);
+    assert_eq!(transaction.operations.len(), 3);
 
     assert_eq!(transaction.operations.get(0),
                Some(&Operation::TransferAsset(asset_transfer)));
@@ -903,8 +896,6 @@ mod tests {
                Some(&Operation::IssueAsset(asset_issuance)));
     assert_eq!(transaction.operations.get(2),
                Some(&Operation::DefineAsset(asset_creation)));
-    assert_eq!(transaction.operations.get(3),
-               Some(&Operation::AIRAssign(air_assign)));
   }
 
   // Verify that the hash values of two transactions:

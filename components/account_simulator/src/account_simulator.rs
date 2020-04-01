@@ -1416,13 +1416,13 @@ impl Arbitrary for AccountsScenario {
     }
 
     // And some activity.
-    for (roll, src, count, unit, dst) in Vec::<(u32,usize, usize, usize, usize)>::arbitrary(g) {
+    for (roll, src, count, unit, dst) in Vec::<(u32, usize, usize, usize, usize)>::arbitrary(g) {
       let src = user_vec[src % user_vec.len()].clone();
       let dst = user_vec[dst % user_vec.len()].clone();
       let unit_ix = unit % unit_vec.len();
       let unit = unit_vec[unit_ix].clone();
       let amt = unit_amounts.get_mut(&unit).unwrap();
-      let send_amt = if *amt/4 > 0 { *amt/4 } else { *amt };
+      let send_amt = if *amt / 4 > 0 { *amt / 4 } else { *amt };
       match roll % 11 {
         1..=10 => {
           let count = if send_amt != 0 { count % send_amt } else { 0 };

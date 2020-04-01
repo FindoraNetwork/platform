@@ -386,34 +386,27 @@ fn test_create_users() {
 #[test]
 #[ignore]
 fn test_create_or_update_credentials() {
-  // Update the min_credit_score credential
-  let output = create_or_overwrite_credential("0", "min_credit_score", "600").expect("Failed to create a min_credit_score credential");
+  // Create a borrower
+  sign_up_borrower("Borrower B").expect("Failed to create a borrower");
+
+  // Create the credential with minimum credit score record
+  let output = create_or_overwrite_credential("1", "min_credit_score", "600").expect("Failed to create a min_credit_score credential");
+  io::stdout().write_all(&output.stdout).unwrap();
+  io::stdout().write_all(&output.stderr).unwrap();
+
+  assert!(output.status.success());
+  assert!(from_utf8(&output.stdout).unwrap()
+                                   .contains(&"Adding the credential record.".to_owned()));
+
+  // Update the credential with an additional record
+  let output =
+  create_or_overwrite_credential("1", "min_income", "1000").expect("Failed to create a min_income credential");
   io::stdout().write_all(&output.stdout).unwrap();
   io::stdout().write_all(&output.stderr).unwrap();
 
   assert!(output.status.success());
   assert!(from_utf8(&output.stdout).unwrap()
                                    .contains(&"Updating the credential record.".to_owned()));
-
-  // Create a min_income credential
-  let output =
-  create_or_overwrite_credential("0", "min_income", "1000").expect("Failed to create a min_income credential");
-  io::stdout().write_all(&output.stdout).unwrap();
-  io::stdout().write_all(&output.stderr).unwrap();
-
-  assert!(output.status.success());
-  assert!(from_utf8(&output.stdout).unwrap()
-                                   .contains(&"Adding the credential record.".to_owned()));
-
-  // Create a citizenshiip credential
-  let output =
-  create_or_overwrite_credential("0", "citizenship", "1").expect("Failed to create a citizenship credential");
-  io::stdout().write_all(&output.stdout).unwrap();
-  io::stdout().write_all(&output.stderr).unwrap();
-
-  assert!(output.status.success());
-  assert!(from_utf8(&output.stdout).unwrap()
-                                   .contains(&"Adding the credential record.".to_owned()));
 
   let _ = fs::remove_file(DATA_FILE);
 }
