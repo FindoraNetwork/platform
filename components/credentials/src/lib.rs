@@ -1,6 +1,7 @@
 use linear_map::LinearMap;
 use rand_core::{CryptoRng, RngCore};
 use serde::{Deserialize, Serialize};
+use wasm_bindgen::prelude::*;
 use zei::api::anon_creds::{
   ac_commit, ac_commit_with_key, ac_keygen_commitment, ac_keygen_issuer, ac_keygen_user,
   ac_open_commitment, ac_reveal, ac_sign, ac_verify, ac_verify_commitment, ACCommitment,
@@ -9,6 +10,7 @@ use zei::api::anon_creds::{
 };
 use zei::errors::ZeiError;
 
+#[wasm_bindgen]
 #[derive(Clone, Serialize, Deserialize, Debug, Eq, PartialEq)]
 pub struct CredIssuerSecretKey {
   ac_sec_key: ACIssuerSecretKey,
@@ -16,20 +18,51 @@ pub struct CredIssuerSecretKey {
   num_internal_attrs: usize,
 }
 
+#[wasm_bindgen]
 #[derive(Clone, Serialize, Deserialize, Debug, Eq, PartialEq)]
 pub struct CredIssuerPublicKey {
-  pub ac_pub_key: ACIssuerPublicKey,
+  ac_pub_key: ACIssuerPublicKey,
   map: LinearMap<String, ((usize, usize), usize)>, // key: (index, len in u32), len in bytes
   num_internal_attrs: usize,
 }
 
-pub type CredUserPublicKey = ACUserPublicKey;
-pub type CredUserSecretKey = ACUserSecretKey;
 pub type CredSignature = ACSignature;
 pub type CredCommitmentKey = ACCommitmentKey;
 pub type CredCommitment = ACCommitment;
 
-#[derive(Clone)]
+#[wasm_bindgen]
+#[derive(Clone, Serialize, Deserialize, Debug, Eq, PartialEq)]
+pub struct CredUserPublicKey(ACUserPublicKey);
+
+#[wasm_bindgen]
+#[derive(Clone, Serialize, Deserialize, Debug, Eq, PartialEq)]
+pub struct CredUserSecretKey(ACUserSecretKey);
+
+impl CredIssuerPublicKey {
+  pub fn get_ref(&self) -> &ACIssuerPublicKey {
+    &self.ac_pub_key
+  }
+}
+
+impl CredIssuerSecretKey {
+  pub fn get_ref(&self) -> &ACIssuerSecretKey {
+    &self.ac_sec_key
+  }
+}
+
+impl CredUserPublicKey {
+  pub fn get_ref(&self) -> &ACUserPublicKey {
+    &self.0
+  }
+}
+
+impl CredUserSecretKey {
+  pub fn get_ref(&self) -> &ACUserSecretKey {
+    &self.0
+  }
+}
+
+#[derive(Clone, Serialize, Deserialize)]
 pub struct Credential {
   pub attributes: Vec<(String, Vec<u8>)>,
   pub issuer_pub_key: CredIssuerPublicKey,
@@ -81,7 +114,8 @@ pub fn credential_user_key_gen<R: CryptoRng + RngCore>(
   prng: &mut R,
   issuer_pub_key: &CredIssuerPublicKey)
   -> (CredUserPublicKey, CredUserSecretKey) {
-  ac_keygen_user(prng, &issuer_pub_key.ac_pub_key)
+  let (pk, sk) = ac_keygen_user(prng, &issuer_pub_key.ac_pub_key);
+  (CredUserPublicKey(pk), CredUserSecretKey(sk))
 }
 
 pub fn credential_sign<R: CryptoRng + RngCore>(prng: &mut R,
@@ -110,7 +144,10 @@ pub fn credential_sign<R: CryptoRng + RngCore>(prng: &mut R,
     let u32_attrs = u8_slice_to_u32_vec(attr_value, *u32_len); // attr_to_u32_array(*attr, *len);
     attrs[*index..*index + *u32_len].clone_from_slice(&u32_attrs);
   }
-  ac_sign(prng, &issuer_sec_key.ac_sec_key, &user_pub_key, &attrs)
+  ac_sign(prng,
+          &issuer_sec_key.ac_sec_key,
+          &user_pub_key.get_ref(),
+          &attrs)
 }
 
 pub fn credential_keygen_commitment<R: CryptoRng + RngCore>(prng: &mut R) -> CredCommitmentKey {
@@ -124,7 +161,7 @@ pub fn credential_commit<R: CryptoRng + RngCore>(
   msg: &[u8])
   -> Result<(CredCommitment, CredPoK, CredCommitmentKey), ZeiError> {
   let ac_credential = credential.to_ac_credential()?;
-  ac_commit(prng, user_sec_key, &ac_credential, msg)
+  ac_commit(prng, user_sec_key.get_ref(), &ac_credential, msg)
 }
 
 pub fn credential_commit_with_key<R: CryptoRng + RngCore>(
@@ -135,7 +172,7 @@ pub fn credential_commit_with_key<R: CryptoRng + RngCore>(
   msg: &[u8])
   -> Result<(CredCommitment, CredPoK), ZeiError> {
   let ac_credential = credential.to_ac_credential()?;
-  ac_commit_with_key(prng, user_sk, &ac_credential, key, msg)
+  ac_commit_with_key(prng, user_sk.get_ref(), &ac_credential, key, msg)
 }
 
 pub fn credential_verify_commitment(issuer_pub_key: &CredIssuerPublicKey,
@@ -154,7 +191,7 @@ pub fn credential_open_commitment<R: CryptoRng + RngCore>(prng: &mut R,
                                                           -> Result<CredPoK, ZeiError> {
   let reveal_map = reveal_field_to_bitmap(&credential.issuer_pub_key, reveal_fields)?;
   let ac_credential = credential.to_ac_credential()?;
-  ac_open_commitment(prng, user_sk, &ac_credential, key, &reveal_map)
+  ac_open_commitment(prng, user_sk.get_ref(), &ac_credential, key, &reveal_map)
 }
 
 pub fn credential_reveal<R: CryptoRng + RngCore>(prng: &mut R,
@@ -164,7 +201,7 @@ pub fn credential_reveal<R: CryptoRng + RngCore>(prng: &mut R,
                                                  -> Result<CredRevealSig, ZeiError> {
   let reveal_map = reveal_field_to_bitmap(&credential.issuer_pub_key, reveal_fields)?;
   let ac_credential = credential.to_ac_credential()?;
-  ac_reveal(prng, user_sk, &ac_credential, &reveal_map)
+  ac_reveal(prng, user_sk.get_ref(), &ac_credential, &reveal_map)
 }
 
 pub fn credential_verify(issuer_pub_key: &CredIssuerPublicKey,

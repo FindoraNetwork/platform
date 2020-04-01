@@ -2,6 +2,7 @@
 use crate::data_model::errors::PlatformError;
 use crate::data_model::*;
 use crate::policies::{compute_debt_swap_effect, DebtSwapEffect};
+use credentials::credential_verify_commitment;
 use cryptohash::sha256;
 use cryptohash::sha256::Digest as BitDigest;
 use findora::HasInvariants;
@@ -253,9 +254,21 @@ impl TxnEffect {
           }
         }
 
+        // An AIR assignment is valid iff:
+        //     1)  The body signature is valid.
+        //     2)  The credential commitment is valid for the public key of the signer.
         Operation::AIRAssign(air_assign) => {
-          // Is this like DefineAsset, and doesn't increment txo_count?
-          air_updates.insert(air_assign.body.addr.clone(), air_assign.body.data.clone());
+          let commitment = &air_assign.body.data;
+          let addr = &air_assign.body.addr;
+          let pok = &air_assign.body.pok;
+          let pk = &air_assign.pubkey;
+          // 1)
+          pk.verify(&serde_json::to_vec(&air_assign.body).unwrap(),
+                    &air_assign.signature)?;
+          // 2)
+          credential_verify_commitment(addr, commitment, pok, pk.as_bytes())?;
+          air_updates.insert(serde_json::to_string(&air_assign.pubkey)?,
+                             serde_json::to_string(commitment)?);
         }
       } // end -- match op {
     } // end -- for op in txn.operations.iter() {

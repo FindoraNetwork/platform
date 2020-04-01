@@ -5,13 +5,14 @@ extern crate zei;
 #[macro_use]
 extern crate serde_derive;
 
+use credentials::{CredCommitment, CredIssuerPublicKey, CredPoK, CredUserSecretKey};
 use ledger::data_model::errors::PlatformError;
 use ledger::data_model::*;
 use rand_chacha::ChaChaRng;
 use rand_core::SeedableRng;
 use std::cmp::Ordering;
 use std::collections::HashSet;
-use zei::api::anon_creds::{ACCommitmentKey, ACUserSecretKey, Credential};
+use zei::api::anon_creds::{ACCommitmentKey, Credential};
 use zei::serialization::ZeiFromToBytes;
 use zei::setup::PublicParams;
 use zei::xfr::asset_record::{build_blind_asset_record, open_blind_asset_record, AssetRecordType};
@@ -45,8 +46,9 @@ pub trait BuildsTransactions {
                                   -> Result<&mut Self, PlatformError>;
   fn add_operation_air_assign(&mut self,
                               key_pair: &XfrKeyPair,
-                              addr: &str,
-                              data: &str)
+                              addr: CredIssuerPublicKey,
+                              data: CredCommitment,
+                              pok: CredPoK)
                               -> Result<&mut Self, PlatformError>;
   fn serialize(&self) -> Result<Vec<u8>, PlatformError>;
   fn serialize_str(&self) -> Result<String, PlatformError>;
@@ -208,14 +210,11 @@ impl BuildsTransactions for TransactionBuilder {
   }
   fn add_operation_air_assign(&mut self,
                               key_pair: &XfrKeyPair,
-                              addr: &str,
-                              data: &str)
+                              addr: CredIssuerPublicKey,
+                              data: CredCommitment,
+                              pok: CredPoK)
                               -> Result<&mut Self, PlatformError> {
-    let pub_key = &IssuerPublicKey { key: key_pair.get_pk() };
-    let priv_key = &key_pair.get_sk();
-    let xfr = AIRAssign::new(AIRAssignBody::new(String::from(addr), String::from(data))?,
-                             pub_key,
-                             priv_key)?;
+    let xfr = AIRAssign::new(AIRAssignBody::new(addr, data, pok)?, key_pair)?;
     self.txn.add_operation(Operation::AIRAssign(xfr));
     Ok(self)
   }
@@ -291,7 +290,9 @@ impl TransferOperationBuilder {
 
   pub fn add_output(&mut self,
                     asset_record_template: &AssetRecordTemplate,
-                    credential_record: Option<(&ACUserSecretKey, &Credential, &ACCommitmentKey)>)
+                    credential_record: Option<(&CredUserSecretKey,
+                            &Credential,
+                            &ACCommitmentKey)>)
                     -> Result<&mut Self, PlatformError> {
     let mut prng = ChaChaRng::from_entropy();
     if self.transfer.is_some() {
@@ -300,7 +301,7 @@ impl TransferOperationBuilder {
     let ar = if let Some((user_secret_key, credential, commitment_key)) = credential_record {
       AssetRecord::from_template_with_identity_tracking(&mut prng,
                                                         asset_record_template,
-                                                        user_secret_key,
+                                                        user_secret_key.get_ref(),
                                                         credential,
                                                         commitment_key).unwrap()
     } else {
