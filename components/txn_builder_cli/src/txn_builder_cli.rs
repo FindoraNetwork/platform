@@ -38,6 +38,11 @@ extern crate exitcode;
 // TODO (Keyao): Rename txn_builder_cli to txn_cli?
 
 /// Initial data when the program starts.
+// TODO (Keyao):
+// Make this data driven, not embedded in the Rust code.
+// The attribute names will be determined by the customer's application and will differ from customer to customer.
+// Or we'll develop a standard registry or dictionary of attributes.
+// Either way, this will be stored externally.
 const INIT_DATA: &str = r#"
 {
   "asset_issuers": [
@@ -128,11 +133,11 @@ pub type TracerAndOwnerMemos = (Option<AssetTracerMemo>, Option<OwnerMemo>);
 //
 // Credentials
 //
-/// Credential requirement types.
-enum RequirementType {
-  /// Requirement: attribute value == requirement
+/// Credential value comparison types.
+enum ComparisonType {
+  /// Requirement: attribute value == required value
   Equal,
-  /// Requirement: attribute value >= requirement
+  /// Requirement: attribute value >= required value
   AtLeast,
 }
 
@@ -191,13 +196,13 @@ impl CredentialIndex {
   }
 
   /// Gets the requirement type based on the index in the credential record.
-  /// See the enum `RequirementType` for supported requirement types.
+  /// See the enum `ComparisonType` for supported requirement types.
   /// See the enum `CredentialIndex` for how the credential attributes are ordered.
-  fn get_requirement_type(index: u64) -> RequirementType {
+  fn get_requirement_type(index: u64) -> ComparisonType {
     if index <= 1 {
-      RequirementType::AtLeast
+      ComparisonType::AtLeast
     } else {
-      RequirementType::Equal
+      ComparisonType::Equal
     }
   }
 }
@@ -1577,7 +1582,7 @@ fn fulfill_loan(loan_id: u64,
             let requirement_u64 = parse_to_u64(requirement)?;
             let requirement_type = CredentialIndex::get_requirement_type(count);
             match requirement_type {
-              RequirementType::AtLeast => {
+              ComparisonType::AtLeast => {
                 if parse_to_u64(value)? < requirement_u64 {
                   // Update loans data
                   data.loans[loan_id as usize].status = LoanStatus::Declined;
