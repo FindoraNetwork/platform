@@ -539,7 +539,7 @@ impl WasmTransferOperationBuilder {
                 &*self
                     .op_builder
                     .deserialize()
-                    .balance()
+                    .balance(&None)
                     .map_err(|_e| JsValue::from_str("Error balancing txn"))?,
             ),
         })

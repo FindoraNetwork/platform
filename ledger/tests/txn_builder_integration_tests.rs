@@ -224,7 +224,7 @@ fn test_loan_repayment(loan_amount: u64,
                                            fee + loan_repayment_amount)?
                                 .add_output(&loan_repayment_template, None)?
                                 .add_output(&burn_repayment_template, None)?
-                                .balance()?
+                                .balance(&None)?
                                 .create(TransferType::DebtSwap)?
                                 .sign(&borrower_keys)?;
 

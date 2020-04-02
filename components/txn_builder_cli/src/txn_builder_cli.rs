@@ -1168,7 +1168,7 @@ fn issue_and_transfer_asset(issuer_key_pair: &XfrKeyPair,
                                                                 issuer_key_pair.get_sk_ref())?,
                                               amount)?
                                    .add_output(&output_template, credential_record)?
-                                   .balance()?
+                                   .balance(&None)?
                                    .create(TransferType::Standard)?
                                    .sign(issuer_key_pair)?
                                    .transaction()?;
@@ -2945,8 +2945,10 @@ fn process_asset_issuer_cmd(asset_issuer_matches: &clap::ArgMatches,
 
       // Transfer asset
       let mut txn_builder = TransactionBuilder::default();
-      if let Err(e) =
-        txn_builder.add_basic_transfer_asset(&issuer_key_pair, &transfer_from[..], &transfer_to[..])
+      if let Err(e) = txn_builder.add_basic_transfer_asset(&issuer_key_pair,
+                                                           &None,
+                                                           &transfer_from[..],
+                                                           &transfer_to[..])
       {
         println!("Failed to add operation to transaction.");
         return Err(e);
