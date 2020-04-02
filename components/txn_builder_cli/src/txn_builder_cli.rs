@@ -3696,8 +3696,7 @@ mod tests {
 
     assert_eq!(load_sids_from_file(paths[0]).unwrap(), expected_txo_refs);
     assert_eq!(load_sids_from_file(paths[1]).unwrap(), expected_txo_refs);
-    assert_eq!(load_sids_from_file(paths[2]),
-               Err(PlatformError::InputsError(error_location!())));
+    assert!(load_sids_from_file(paths[2]).is_err());
 
     paths.into_iter()
          .map(|path| fs::remove_file(path).unwrap())

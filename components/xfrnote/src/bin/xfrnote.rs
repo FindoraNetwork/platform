@@ -31,6 +31,7 @@
 //!
 //! The two nodes then connect.
 
+#![deny(warnings)]
 use async_std::{io, task};
 use futures::{future, prelude::*};
 use itertools::Itertools;
@@ -78,7 +79,7 @@ pub fn make_xfr_note() -> XfrNote {
     let asset_record = AssetRecordTemplate::with_no_asset_tracking(x.0,
                                                                    x.1,
                                                                    asset_record_type,
-                                                                   keypair.get_pk_ref().clone());
+                                                                   *keypair.get_pk_ref());
 
     inputs.push(AssetRecord::from_template_no_identity_tracking(&mut prng, &asset_record).unwrap());
 
@@ -92,7 +93,7 @@ pub fn make_xfr_note() -> XfrNote {
     let ar = AssetRecordTemplate::with_no_asset_tracking(x.0,
                                                          x.1,
                                                          asset_record_type,
-                                                         keypair.get_pk_ref().clone());
+                                                         *keypair.get_pk_ref());
     let output = AssetRecord::from_template_no_identity_tracking(&mut prng, &ar).unwrap();
     outputs.push(output);
   }

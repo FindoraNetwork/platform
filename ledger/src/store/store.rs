@@ -454,7 +454,7 @@ impl LedgerStatus {
       let asset_type = self.asset_types
                            .get(&code)
                            .or_else(|| txn.new_asset_codes.get(&code))
-                           .ok_or(PlatformError::InputsError(error_location!()))?;
+                           .ok_or_else(|| PlatformError::InputsError(error_location!()))?;
       let proper_key = asset_type.properties.issuer;
       if *iss_key != proper_key {
         return Err(PlatformError::InputsError(error_location!()));
@@ -492,7 +492,7 @@ impl LedgerStatus {
       let debt_type = &self.asset_types
                            .get(&code)
                            .or_else(|| txn.new_asset_codes.get(&code))
-                           .ok_or(PlatformError::InputsError(error_location!()))?
+                           .ok_or_else(|| PlatformError::InputsError(error_location!()))?
                            .properties;
 
       let debt_memo = serde_json::from_str::<DebtMemo>(&debt_type.memo.0)?;
@@ -517,7 +517,7 @@ impl LedgerStatus {
       if txn.custom_policy_asset_types.contains_key(code) {
         let asset = self.asset_types
                         .get(code)
-                        .ok_or(PlatformError::InputsError(error_location!()))?;
+                        .ok_or_else(|| PlatformError::InputsError(error_location!()))?;
         if let Some((ref pol, ref globals)) = asset.properties.policy {
           let globals = globals.clone();
           policy_check_txn(code, globals, &pol, &txn.txn)?;

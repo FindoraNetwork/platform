@@ -64,16 +64,16 @@ pub fn compute_debt_swap_effect(transfer: &XfrBody)
                                 -> Result<(AssetTypeCode, DebtSwapEffect), PlatformError> {
   let fiat_output = &transfer.outputs
                              .get(DebtOutputIndices::Fiat as usize)
-                             .ok_or(PlatformError::InputsError(error_location!()))?;
+                             .ok_or_else(|| PlatformError::InputsError(error_location!()))?;
 
   let burned_debt_output = &transfer.outputs
                                     .get(DebtOutputIndices::BurnedDebt as usize)
-                                    .ok_or(PlatformError::InputsError(error_location!()))?;
+                                    .ok_or_else(|| PlatformError::InputsError(error_location!()))?;
   let returned_debt_output = &transfer.outputs
                                       .get(DebtOutputIndices::ReturnedDebt as usize);
   let debt_input = &transfer.inputs
                             .get(DebtInputIndices::Debt as usize)
-                            .ok_or(PlatformError::InputsError(error_location!()))?;
+                            .ok_or_else(|| PlatformError::InputsError(error_location!()))?;
 
   if transfer.inputs.len() > 2 {
     return Err(PlatformError::InputsError(error_location!()));

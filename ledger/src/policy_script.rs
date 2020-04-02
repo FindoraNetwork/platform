@@ -139,7 +139,7 @@ pub struct TxnPolicyData(pub Vec<(AssetTypeCode, TxnCheckInputs)>);
 pub fn policy_get_globals(asset: &Asset) -> Result<PolicyGlobals, PlatformError> {
   let (pol, mem) = asset.policy
                         .as_ref()
-                        .ok_or(PlatformError::InputsError(error_location!()))?;
+                        .ok_or_else(|| PlatformError::InputsError(error_location!()))?;
 
   let ret = mem.clone();
 
@@ -151,11 +151,11 @@ pub fn policy_get_globals(asset: &Asset) -> Result<PolicyGlobals, PlatformError>
      || ret.frac_vars.len() != pol.num_frac_globals
      || ret.id_vars
            .first()
-           .ok_or(PlatformError::InputsError(error_location!()))?
+           .ok_or_else(|| PlatformError::InputsError(error_location!()))?
         != &asset.issuer.key
      || ret.rt_vars
            .first()
-           .ok_or(PlatformError::InputsError(error_location!()))?
+           .ok_or_else(|| PlatformError::InputsError(error_location!()))?
         != &asset.code.val
   {
     Err(PlatformError::PolicyFailureError(Some("Incorrect number of variables for policy".to_string())))
@@ -171,11 +171,11 @@ pub fn policy_check_txn(type_code: &AssetTypeCode,
                         -> Result<(), PlatformError> {
   let pol_data =
     // serde_json::from_str::<TxnPolicyData>(&txn.memos.get(0).ok_or(PlatformError::InputsError)?.0)?.0.drain(..).collect::<HashMap<_,_>>();
-    txn.policy_options.as_ref().ok_or(PlatformError::InputsError(error_location!()))?.0.iter().cloned().collect::<HashMap<_,_>>();
+    txn.policy_options.as_ref().ok_or_else(|| PlatformError::InputsError(error_location!()))?.0.iter().cloned().collect::<HashMap<_,_>>();
   // serde_json::from_str::<TxnPolicyData>(&txn.memos.get(0).ok_or(PlatformError::InputsError)?.0)?.0.drain(..).collect::<HashMap<_,_>>();
 
   let inputs = pol_data.get(type_code)
-                       .ok_or(PlatformError::InputsError(error_location!()))?;
+                       .ok_or_else(|| PlatformError::InputsError(error_location!()))?;
 
   let the_check = {
     let mut check = Err(PlatformError::InputsError(error_location!()));
