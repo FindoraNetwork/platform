@@ -433,6 +433,8 @@ struct Loan {
   debt_utxo: Option<TxoSID>,
   /// Path to the most recent debt asset transaction file, if any
   debt_txn_file: Option<String>,
+  /// Serialized anon_creds::Credential, if exists
+  credential: Option<String>,
 }
 
 impl Loan {
@@ -454,7 +456,8 @@ impl Loan {
            payments: 0,
            code: None,
            debt_utxo: None,
-           debt_txn_file: None }
+           debt_txn_file: None,
+           credential: None }
   }
 }
 
@@ -498,6 +501,49 @@ impl Data {
     self.borrowers[borrower as usize].loans.push(id as u64);
     store_data_to_file(self.clone())
   }
+
+  // /// Gets the credential record associated with the loan
+  // fn get_credential_record(
+  //   &mut self,
+  //   borrower_id: u64,
+  //   loan_id: u64)
+  //   -> Result<Option<(&CredUserSecretKey, &ZeiCredential, &CredCommitmentKey)>, PlatformError> {
+  //   let credential_id = if let Some(id) = self.borrowers[borrower_id as usize].credentials {
+  //     id
+  //   } else {
+  //     return Ok(None);
+  //   };
+  //   let credential = &self.credentials[credential_id as usize].clone();
+  //   let loan = &self.loans[loan_id as usize].clone();
+  //   let user_secret_key = if let Some(key_str) = credential.user_secret_key.clone() {
+  //     let key_decode = hex::decode(key_str).or_else(|_| Err(PlatformError::DeserializationError))?;
+  //     serde_json::from_slice::<CredUserSecretKey>(&key_decode).or_else(|_| {
+  //                                                         Err(PlatformError::DeserializationError)
+  //                                                       })?
+  //   } else {
+  //     println!("Missing user secret key.");
+  //     return Err(PlatformError::InputsError);
+  //   };
+  //   let ac_credential = if let Some(credential_str) = loan.credential.clone() {
+  //     serde_json::from_str::<ZeiCredential>(&credential_str).or_else(|_| {
+  //       Err(PlatformError::DeserializationError)
+  //     })?
+  //   } else {
+  //     println!("Missing credential.");
+  //     return Err(PlatformError::InputsError);
+  //   };
+  //   let commitment_key = if let Some(key_str) = credential.commitment_key.clone() {
+  //     let key_decode = hex::decode(key_str).or_else(|_| Err(PlatformError::DeserializationError))?;
+  //     serde_json::from_slice::<CredCommitmentKey>(&key_decode).or_else(|_| {
+  //                                                         Err(PlatformError::DeserializationError)
+  //                                                       })?
+  //   } else {
+  //     println!("Missing commitment key.");
+  //     return Err(PlatformError::InputsError);
+  //   };
+  //   let credential_record = Some((&user_secret_key, &ac_credential, &commitment_key));
+  //   Ok(credential_record)
+  // }
 
   fn add_asset_issuer(&mut self, name: String) -> Result<(), PlatformError> {
     let id = self.asset_issuers.len();
@@ -803,9 +849,9 @@ fn load_blind_asset_records_and_owner_memos_from_files(
 fn load_open_asset_record_from_file(file_path: &str,
                                     key_pair: &XfrKeyPair)
                                     -> Result<OpenAssetRecord, PlatformError> {
-  let (blind_asset_record, _owner_memo) =
+  let (blind_asset_record, owner_memo) =
     load_blind_asset_record_and_owner_memo_from_file(file_path)?;
-  open_blind_asset_record(&blind_asset_record, &None, key_pair.get_sk_ref()).or_else(|error| {
+  open_blind_asset_record(&blind_asset_record, &owner_memo, key_pair.get_sk_ref()).or_else(|error| {
                                                                             Err(PlatformError::ZeiError(error))
                                                                           })
 }
@@ -1077,6 +1123,37 @@ fn air_assign(issuer_id: u64,
   Ok(())
 }
 
+// TODO (Keyao): Move this enum to data_model and make it public?
+#[allow(non_camel_case_types)]
+/// Represents whether an asset is updatable and/or traceable.
+enum AssetAccessType {
+  Updatable_Traceable,
+  Updatable_NotTraceable,
+  NotUpdatable_Traceable,
+  NotUpdatable_NotTraceable,
+}
+
+impl AssetAccessType {
+  /// Converts the asset access type
+  fn to_bools(self) -> (bool, bool) {
+    match self {
+      AssetAccessType::Updatable_Traceable => (true, true),
+      AssetAccessType::Updatable_NotTraceable => (true, false),
+      AssetAccessType::NotUpdatable_Traceable => (false, true),
+      AssetAccessType::NotUpdatable_NotTraceable => (false, false),
+    }
+  }
+
+  fn from_bools(updatable: bool, traceable: bool) -> Self {
+    match (updatable, traceable) {
+      (true, true) => AssetAccessType::Updatable_Traceable,
+      (true, false) => AssetAccessType::Updatable_NotTraceable,
+      (false, true) => AssetAccessType::NotUpdatable_Traceable,
+      (false, false) => AssetAccessType::NotUpdatable_NotTraceable,
+    }
+  }
+}
+
 /// Defines an asset.
 ///
 /// Note: the transaction isn't submitted until `submit` or `submit_and_get_sids` is called.
@@ -1086,21 +1163,20 @@ fn air_assign(issuer_id: u64,
 /// * `issuer_key_pair`: asset issuer's key pair.
 /// * `token_code`: asset token code.
 /// * `memo`: memo for defining the asset.
-/// * `allow_updates`: whether updates are allowed.
-/// * `traceable`: whether the asset is traceable.
+/// * `access_type`: whether the asset is updatable and/or traceable.
 /// * `txn_file`: path to store the transaction file.
 fn define_asset(fiat_asset: bool,
                 issuer_key_pair: &XfrKeyPair,
                 token_code: AssetTypeCode,
                 memo: &str,
-                allow_updates: bool,
-                traceable: bool,
+                access_type: AssetAccessType,
                 txn_file: &str)
                 -> Result<TransactionBuilder, PlatformError> {
   let mut txn_builder = TransactionBuilder::default();
+  let (updatable, traceable) = access_type.to_bools();
   txn_builder.add_operation_create_asset(issuer_key_pair,
                                          Some(token_code),
-                                         allow_updates,
+                                         updatable,
                                          traceable,
                                          &memo,
                                          PolicyChoice::Fungible())?;
@@ -1149,7 +1225,7 @@ fn issue_and_transfer_asset(issuer_key_pair: &XfrKeyPair,
                                      tracing_policy.clone())?;
 
   // Transfer Operation
-  let output_template = if let Some(policy) = tracing_policy {
+  let output_template = if let Some(policy) = tracing_policy.clone() {
     AssetRecordTemplate::with_asset_tracking(amount,
                                              token_code.val,
                                              record_type,
@@ -1168,7 +1244,7 @@ fn issue_and_transfer_asset(issuer_key_pair: &XfrKeyPair,
                                                                 issuer_key_pair.get_sk_ref())?,
                                               amount)?
                                    .add_output(&output_template, credential_record)?
-                                   .balance(&None)?
+                                   .balance(&tracing_policy)?
                                    .create(TransferType::Standard)?
                                    .sign(issuer_key_pair)?
                                    .transaction()?;
@@ -1421,8 +1497,7 @@ fn load_funds(issuer_id: u64,
                                    issuer_key_pair,
                                    fiat_code,
                                    "Fiat asset",
-                                   false,
-                                   false,
+                                   AssetAccessType::NotUpdatable_Traceable,
                                    txn_file)?;
     // Store data before submitting the transaction to avoid data overwriting
     let data = load_data()?;
@@ -1560,7 +1635,7 @@ fn fulfill_loan(loan_id: u64,
   let credential_id = if let Some(id) = borrower.credentials {
     id as usize
   } else {
-    println!("Minimum credit score is required. Use create_or_overwrite_credential.");
+    println!("Credential is required. Use create_or_overwrite_credential.");
     return Err(PlatformError::InputsError);
   };
   let credential = &data.credentials.clone()[credential_id as usize];
@@ -1734,8 +1809,7 @@ fn fulfill_loan(loan_id: u64,
                                    issuer_key_pair,
                                    fiat_code,
                                    "Fiat asset",
-                                   false,
-                                   true,
+                                   AssetAccessType::NotUpdatable_Traceable,
                                    txn_file)?;
     // Store data before submitting the transaction to avoid data overwriting
     let data = load_data()?;
@@ -1756,6 +1830,8 @@ fn fulfill_loan(loan_id: u64,
   // Issue and transfer fiat token
   let ac_credential = wrapper_credential.to_ac_credential()
                                         .or_else(|e| Err(PlatformError::ZeiError(e)))?;
+  let credential_str =
+    serde_json::to_string(&ac_credential).or_else(|_| Err(PlatformError::SerializationError))?;
   let credential_record = Some((&user_secret_key, &ac_credential, &commitment_key));
   let mut fiat_txn_file = txn_file.to_owned();
   fiat_txn_file.push_str(&format!(".fiat.{}", borrower_id));
@@ -1771,7 +1847,7 @@ fn fulfill_loan(loan_id: u64,
                              Some(tracing_policy.clone()))?;
   let fiat_sid = submit_and_get_sids(protocol, host, txn_builder)?[0];
   println!("Fiat sid: {}", fiat_sid.0);
-  let owner_memo = None; // no owner memo
+  let (_, owner_memo) = load_blind_asset_record_and_owner_memo_from_file(&fiat_txn_file)?;
   let fiat_open_asset_record =
     query_open_asset_record(protocol, host, fiat_sid, lender_key_pair, &owner_memo)?;
 
@@ -1789,8 +1865,7 @@ fn fulfill_loan(loan_id: u64,
                                  borrower_key_pair,
                                  debt_code,
                                  &memo_str,
-                                 false,
-                                 true,
+                                 AssetAccessType::NotUpdatable_Traceable,
                                  txn_file)?;
   // Store data before submitting the transaction to avoid data overwriting
   let data = load_data()?;
@@ -1826,7 +1901,7 @@ fn fulfill_loan(loan_id: u64,
                                              fiat_code.val,
                                              NonConfidentialAmount_NonConfidentialAssetType,
                                              borrower_key_pair.get_pk(),
-                                             tracing_policy);
+                                             tracing_policy.clone());
   let xfr_op = TransferOperationBuilder::new().add_input(TxoRef::Absolute(fiat_sid),
                                                          fiat_open_asset_record,
                                                          amount)?
@@ -1841,6 +1916,7 @@ fn fulfill_loan(loan_id: u64,
                                               .transaction()?;
   let mut txn_builder = TransactionBuilder::default();
   txn_builder.add_operation(xfr_op).transaction();
+  store_txn_to_file(&debt_txn_file, &txn_builder)?;
 
   // Submit transaction
   let sids_new = submit_and_get_sids(protocol, host, txn_builder)?;
@@ -1874,6 +1950,7 @@ fn fulfill_loan(loan_id: u64,
                                     (blind_asset_record_new, None),
                                     fiat_code,
                                     None)?;
+    store_txn_to_file(&fiat_txn_file, &txn_builder)?;
     submit_and_get_sids(protocol, host, txn_builder)?[0]
   } else {
     sids_new[1]
@@ -1888,6 +1965,7 @@ fn fulfill_loan(loan_id: u64,
   data.loans[loan_id as usize].code = Some(debt_code.to_base64());
   data.loans[loan_id as usize].debt_utxo = Some(sids_new[0]);
   data.loans[loan_id as usize].debt_txn_file = Some(debt_txn_file);
+  data.loans[loan_id as usize].credential = Some(credential_str);
   data.borrowers[borrower_id as usize].balance = borrower.balance + amount;
   data.borrowers[borrower_id as usize].fiat_utxo = Some(fiat_sid_merged);
   data.borrowers[borrower_id as usize].fiat_txn_file = Some(fiat_txn_file);
@@ -2190,9 +2268,9 @@ fn main() {
           .short("c")
           .help("Explicit 16 character token code for the new asset; must be a unique name. If specified code is already in use, transaction will fail. If not specified, will display automatically generated token code.")
           .takes_value(true))
-        .arg(Arg::with_name("allow_updates")
+        .arg(Arg::with_name("updatable")
           .short("u")
-          .long("allow_updates")
+          .long("updatable")
           .help("If specified, updates may be made to asset memo"))
         .arg(Arg::with_name("traceable")
           .short("trace")
@@ -2767,7 +2845,7 @@ fn process_asset_issuer_cmd(asset_issuer_matches: &clap::ArgMatches,
       } else {
         "{}"
       };
-      let allow_updates = define_asset_matches.is_present("allow_updates");
+      let updatable = define_asset_matches.is_present("updatable");
       let traceable = define_asset_matches.is_present("traceable");
       let asset_token: AssetTypeCode;
       if let Some(token_code) = token_code {
@@ -2782,8 +2860,7 @@ fn process_asset_issuer_cmd(asset_issuer_matches: &clap::ArgMatches,
                          &issuer_key_pair,
                          asset_token,
                          &memo,
-                         allow_updates,
-                         traceable,
+                         AssetAccessType::from_bools(updatable, traceable),
                          txn_file)
       {
         Ok(_) => Ok(()),
@@ -2797,7 +2874,7 @@ fn process_asset_issuer_cmd(asset_issuer_matches: &clap::ArgMatches,
         (data.get_asset_issuer_key_pair(issuer_id)?,
          data.get_asset_tracer_key_pair(issuer_id)?.enc_key)
       } else {
-        println!("Asset issuer id is required to issue and transfer asset. Use asset_issuer --id.");
+        println!("Asset issuer id is required to issue asset. Use asset_issuer --id.");
         return Err(PlatformError::InputsError);
       };
       let token_code = if let Some(token_code_arg) = issue_asset_matches.value_of("token_code") {
@@ -2832,13 +2909,15 @@ fn process_asset_issuer_cmd(asset_issuer_matches: &clap::ArgMatches,
     }
     ("transfer_asset", Some(transfer_asset_matches)) => {
       let mut data = load_data()?;
-      let issuer_key_pair = if let Some(id_arg) = asset_issuer_matches.value_of("id") {
-        let issuer_id = parse_to_u64(id_arg)?;
-        data.get_asset_issuer_key_pair(issuer_id)?
-      } else {
-        println!("Asset issuer id is required to transfer asset. Use asset_issuer --id.");
-        return Err(PlatformError::InputsError);
-      };
+      let (issuer_key_pair, tracer_enc_keys) =
+        if let Some(id_arg) = asset_issuer_matches.value_of("id") {
+          let issuer_id = parse_to_u64(id_arg)?;
+          (data.get_asset_issuer_key_pair(issuer_id)?,
+           data.get_asset_tracer_key_pair(issuer_id)?.enc_key)
+        } else {
+          println!("Asset issuer id is required to transfer asset. Use asset_issuer --id.");
+          return Err(PlatformError::InputsError);
+        };
       // Compose transfer_from for add_basic_transfer_asset
       let mut txo_refs = Vec::new();
       if let Some(sids_file_arg) = transfer_asset_matches.value_of("sids_file") {
@@ -2945,10 +3024,14 @@ fn process_asset_issuer_cmd(asset_issuer_matches: &clap::ArgMatches,
 
       // Transfer asset
       let mut txn_builder = TransactionBuilder::default();
-      if let Err(e) = txn_builder.add_basic_transfer_asset(&issuer_key_pair,
-                                                           &None,
-                                                           &transfer_from[..],
-                                                           &transfer_to[..])
+      if let Err(e) =
+        txn_builder.add_basic_transfer_asset(&issuer_key_pair,
+                                             &Some(AssetTracingPolicy { enc_keys:
+                                                                          tracer_enc_keys,
+                                                                        asset_tracking: true,
+                                                                        identity_tracking: None }),
+                                             &transfer_from[..],
+                                             &transfer_to[..])
       {
         println!("Failed to add operation to transaction.");
         return Err(e);
@@ -3725,8 +3808,7 @@ mod tests {
                            &issuer_key_pair,
                            AssetTypeCode::gen_random(),
                            "Define asset",
-                           false,
-                           false,
+                           AssetAccessType::NotUpdatable_Traceable,
                            txn_builder_path);
 
     let _ = fs::remove_file(DATA_FILE);

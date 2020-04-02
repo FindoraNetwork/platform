@@ -334,7 +334,7 @@ fn fulfill_loan(txn_builder_path: &str,
 }
 
 #[cfg(test)]
-fn pay_loan(borrower_id: &str, loan_id: &str, amount: &str) -> io::Result<Output> {
+fn _pay_loan(borrower_id: &str, loan_id: &str, amount: &str) -> io::Result<Output> {
   Command::new(COMMAND).args(&["borrower", "--id", borrower_id])
                        .arg("pay_loan")
                        .args(&["--loan", loan_id])
@@ -997,38 +997,38 @@ fn test_request_fulfill_and_pay_loan_with_args() {
   assert!(from_utf8(&output.stdout).unwrap()
                                    .contains(&"has already been declined.".to_owned()));
 
-  // Pay loan
-  // 1. First time:
-  //    Burn part of the loan balance
-  ledger_standalone.poll_until_ready().unwrap();
-  let output = pay_loan("0", "0", "300").expect("Failed to pay loan");
+  // // Pay loan
+  // // 1. First time:
+  // //    Burn part of the loan balance
+  // ledger_standalone.poll_until_ready().unwrap();
+  // let output = pay_loan("0", "0", "300").expect("Failed to pay loan");
 
-  io::stdout().write_all(&output.stdout).unwrap();
-  io::stdout().write_all(&output.stderr).unwrap();
+  // io::stdout().write_all(&output.stdout).unwrap();
+  // io::stdout().write_all(&output.stderr).unwrap();
 
-  assert!(output.status.success());
+  // assert!(output.status.success());
 
-  // 2. Second time
-  //    Pay off the loan
-  ledger_standalone.poll_until_ready().unwrap();
-  let output = pay_loan("0", "0", "2000").expect("Failed to pay loan");
+  // // 2. Second time
+  // //    Pay off the loan
+  // ledger_standalone.poll_until_ready().unwrap();
+  // let output = pay_loan("0", "0", "2000").expect("Failed to pay loan");
 
-  io::stdout().write_all(&output.stdout).unwrap();
-  io::stdout().write_all(&output.stderr).unwrap();
+  // io::stdout().write_all(&output.stdout).unwrap();
+  // io::stdout().write_all(&output.stderr).unwrap();
 
-  assert!(output.status.success());
+  // assert!(output.status.success());
 
-  // 3. Third time:
-  //    Fail because the loan has been paid off
-  ledger_standalone.poll_until_ready().unwrap();
-  let output = pay_loan("0", "0", "3000").expect("Failed to pay loan");
+  // // 3. Third time:
+  // //    Fail because the loan has been paid off
+  // ledger_standalone.poll_until_ready().unwrap();
+  // let output = pay_loan("0", "0", "3000").expect("Failed to pay loan");
 
-  io::stdout().write_all(&output.stdout).unwrap();
-  io::stdout().write_all(&output.stderr).unwrap();
+  // io::stdout().write_all(&output.stdout).unwrap();
+  // io::stdout().write_all(&output.stderr).unwrap();
 
-  assert_eq!(output.status.code(), Some(exitcode::USAGE));
-  assert!(from_utf8(&output.stdout).unwrap()
-                                   .contains(&"has been paid off.".to_owned()));
+  // assert_eq!(output.status.code(), Some(exitcode::USAGE));
+  // assert!(from_utf8(&output.stdout).unwrap()
+  //                                  .contains(&"has been paid off.".to_owned()));
 
   let _ = fs::remove_file(DATA_FILE);
   fs::remove_file(txn_builder_file).unwrap();
