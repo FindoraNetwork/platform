@@ -1,5 +1,6 @@
 #![deny(warnings)]
 use super::errors;
+use crate::error_location;
 use crate::policy_script::{Policy, PolicyGlobals, TxnPolicyData};
 use bitmap::SparseMap;
 use chrono::prelude::*;
@@ -250,7 +251,7 @@ impl TransferAssetBody {
                                      output_records: &[AssetRecord])
                                      -> Result<TransferAssetBody, errors::PlatformError> {
     if input_records.is_empty() {
-      return Err(PlatformError::InputsError);
+      return Err(PlatformError::InputsError(error_location!()));
     }
     let in_records =
       input_records.iter()
@@ -687,7 +688,7 @@ impl Transaction {
         }
       }
     }
-    Err(PlatformError::InputsError)
+    Err(PlatformError::InputsError(error_location!()))
   }
 }
 

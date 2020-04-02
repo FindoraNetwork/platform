@@ -11,6 +11,7 @@ use findora::HasInvariants;
 use ledger::data_model::compute_signature;
 use ledger::data_model::errors::PlatformError;
 use ledger::data_model::*;
+use ledger::error_location;
 use ledger::store::*;
 #[cfg(test)]
 use rand_core::SeedableRng;
@@ -386,7 +387,7 @@ impl InterpretAccounts<PlatformError> for LedgerAccounts {
 
         self.accounts
             .get(name)
-            .map_or_else(|| Ok(()), |_| Err(PlatformError::InputsError))?;
+            .map_or_else(|| Ok(()), |_| Err(PlatformError::InputsError(error_location!())))?;
 
         dbg!("New user", &name, &keypair);
 
@@ -397,12 +398,11 @@ impl InterpretAccounts<PlatformError> for LedgerAccounts {
       AccountsCommand::NewUnit(name, issuer) => {
         let keypair = self.accounts
                           .get(issuer)
-                          .ok_or(PlatformError::InputsError)?;
+                          .ok_or_else(|| PlatformError::InputsError(error_location!()))?;
         let (pubkey, privkey) = (keypair.get_pk_ref(), keypair.get_sk_ref());
 
-        self.units
-            .get(name)
-            .map_or_else(|| Ok(()), |_| Err(PlatformError::InputsError))?;
+        self.units.get(name).map_or_else(|| Ok(()),
+                                          |_| Err(PlatformError::InputsError(error_location!())))?;
 
         let code = AssetTypeCode::gen_random();
 
@@ -445,13 +445,15 @@ impl InterpretAccounts<PlatformError> for LedgerAccounts {
       }
       AccountsCommand::Mint(amt, unit) => {
         let amt = *amt as u64;
-        let (issuer, code) = self.units.get(unit).ok_or(PlatformError::InputsError)?;
+        let (issuer, code) = self.units
+                                 .get(unit)
+                                 .ok_or_else(|| PlatformError::InputsError(error_location!()))?;
 
         let new_seq_num = self.ledger.get_issuance_num(&code).unwrap();
 
         let keypair = self.accounts
                           .get(issuer)
-                          .ok_or(PlatformError::InputsError)?;
+                          .ok_or_else(|| PlatformError::InputsError(error_location!()))?;
         let (pubkey, privkey) = (keypair.get_pk_ref(), keypair.get_sk_ref());
         let utxos = self.utxos.get_mut(issuer).unwrap();
 
@@ -498,14 +500,20 @@ impl InterpretAccounts<PlatformError> for LedgerAccounts {
       }
       AccountsCommand::Send(src, amt, unit, dst) => {
         let amt = *amt as u64;
-        let src_keypair = self.accounts.get(src).ok_or(PlatformError::InputsError)?;
+        let src_keypair = self.accounts
+                              .get(src)
+                              .ok_or_else(|| PlatformError::InputsError(error_location!()))?;
         let (src_pub, src_priv) = (src_keypair.get_pk_ref(), src_keypair.get_sk_ref());
-        let dst_keypair = self.accounts.get(dst).ok_or(PlatformError::InputsError)?;
+        let dst_keypair = self.accounts
+                              .get(dst)
+                              .ok_or_else(|| PlatformError::InputsError(error_location!()))?;
         let (dst_pub, _) = (dst_keypair.get_pk_ref(), dst_keypair.get_sk_ref());
-        let (_, unit_code) = self.units.get(unit).ok_or(PlatformError::InputsError)?;
+        let (_, unit_code) = self.units
+                                 .get(unit)
+                                 .ok_or_else(|| PlatformError::InputsError(error_location!()))?;
 
         if *self.balances.get(src).unwrap().get(unit).unwrap() < amt {
-          return Err(PlatformError::InputsError);
+          return Err(PlatformError::InputsError(error_location!()));
         }
         if amt == 0 {
           return Ok(());
@@ -681,7 +689,7 @@ impl InterpretAccounts<PlatformError> for OneBigTxnAccounts {
 
         self.accounts
             .get(name)
-            .map_or_else(|| Ok(()), |_| Err(PlatformError::InputsError))?;
+            .map_or_else(|| Ok(()), |_| Err(PlatformError::InputsError(error_location!())))?;
 
         dbg!("New user", &name, &keypair);
 
@@ -692,12 +700,11 @@ impl InterpretAccounts<PlatformError> for OneBigTxnAccounts {
       AccountsCommand::NewUnit(name, issuer) => {
         let keypair = self.accounts
                           .get(issuer)
-                          .ok_or(PlatformError::InputsError)?;
+                          .ok_or_else(|| PlatformError::InputsError(error_location!()))?;
         let (pubkey, privkey) = (keypair.get_pk_ref(), keypair.get_sk_ref());
 
-        self.units
-            .get(name)
-            .map_or_else(|| Ok(()), |_| Err(PlatformError::InputsError))?;
+        self.units.get(name).map_or_else(|| Ok(()),
+                                          |_| Err(PlatformError::InputsError(error_location!())))?;
 
         let code = AssetTypeCode::gen_random();
 
@@ -733,13 +740,15 @@ impl InterpretAccounts<PlatformError> for OneBigTxnAccounts {
       AccountsCommand::Mint(amt, unit) => {
         let amt = *amt as u64;
         let (issuer, code, new_seq_num) =
-          self.units.get_mut(unit).ok_or(PlatformError::InputsError)?;
+          self.units
+              .get_mut(unit)
+              .ok_or_else(|| PlatformError::InputsError(error_location!()))?;
         *new_seq_num += 1;
         let new_seq_num = *new_seq_num - 1;
 
         let keypair = self.accounts
                           .get(issuer)
-                          .ok_or(PlatformError::InputsError)?;
+                          .ok_or_else(|| PlatformError::InputsError(error_location!()))?;
         let (pubkey, privkey) = (keypair.get_pk_ref(), keypair.get_sk_ref());
         let utxos = self.utxos.get_mut(issuer).unwrap();
 
@@ -782,14 +791,20 @@ impl InterpretAccounts<PlatformError> for OneBigTxnAccounts {
       }
       AccountsCommand::Send(src, amt, unit, dst) => {
         let amt = *amt as u64;
-        let src_keypair = self.accounts.get(src).ok_or(PlatformError::InputsError)?;
+        let src_keypair = self.accounts
+                              .get(src)
+                              .ok_or_else(|| PlatformError::InputsError(error_location!()))?;
         let (src_pub, src_priv) = (src_keypair.get_pk_ref(), src_keypair.get_sk_ref());
-        let dst_keypair = self.accounts.get(dst).ok_or(PlatformError::InputsError)?;
+        let dst_keypair = self.accounts
+                              .get(dst)
+                              .ok_or_else(|| PlatformError::InputsError(error_location!()))?;
         let (dst_pub, _) = (dst_keypair.get_pk_ref(), dst_keypair.get_sk_ref());
-        let (_, unit_code, _) = self.units.get(unit).ok_or(PlatformError::InputsError)?;
+        let (_, unit_code, _) = self.units
+                                    .get(unit)
+                                    .ok_or_else(|| PlatformError::InputsError(error_location!()))?;
 
         if *self.balances.get(src).unwrap().get(unit).unwrap() < amt {
-          return Err(PlatformError::InputsError);
+          return Err(PlatformError::InputsError(error_location!()));
         }
         if amt == 0 {
           return Ok(());
@@ -980,7 +995,7 @@ impl InterpretAccounts<PlatformError> for LedgerStandaloneAccounts {
 
         self.accounts
             .get(name)
-            .map_or_else(|| Ok(()), |_| Err(PlatformError::InputsError))?;
+            .map_or_else(|| Ok(()), |_| Err(PlatformError::InputsError(error_location!())))?;
 
         dbg!("New user", &name, &keypair);
 
@@ -991,12 +1006,11 @@ impl InterpretAccounts<PlatformError> for LedgerStandaloneAccounts {
       AccountsCommand::NewUnit(name, issuer) => {
         let keypair = self.accounts
                           .get(issuer)
-                          .ok_or(PlatformError::InputsError)?;
+                          .ok_or_else(|| PlatformError::InputsError(error_location!()))?;
         let (pubkey, privkey) = (keypair.get_pk_ref(), keypair.get_sk_ref());
 
-        self.units
-            .get(name)
-            .map_or_else(|| Ok(()), |_| Err(PlatformError::InputsError))?;
+        self.units.get(name).map_or_else(|| Ok(()),
+                                          |_| Err(PlatformError::InputsError(error_location!())))?;
 
         let code = AssetTypeCode::gen_random();
 
@@ -1071,7 +1085,9 @@ impl InterpretAccounts<PlatformError> for LedgerStandaloneAccounts {
       }
       AccountsCommand::Mint(amt, unit) => {
         let amt = *amt as u64;
-        let (issuer, code) = self.units.get(unit).ok_or(PlatformError::InputsError)?;
+        let (issuer, code) = self.units
+                                 .get(unit)
+                                 .ok_or_else(|| PlatformError::InputsError(error_location!()))?;
 
         let new_seq_num = {
           let host = "localhost";
@@ -1092,7 +1108,7 @@ impl InterpretAccounts<PlatformError> for LedgerStandaloneAccounts {
 
         let keypair = self.accounts
                           .get(issuer)
-                          .ok_or(PlatformError::InputsError)?;
+                          .ok_or_else(|| PlatformError::InputsError(error_location!()))?;
         let (pubkey, privkey) = (keypair.get_pk_ref(), keypair.get_sk_ref());
         let utxos = self.utxos.get_mut(issuer).unwrap();
 
@@ -1172,14 +1188,20 @@ impl InterpretAccounts<PlatformError> for LedgerStandaloneAccounts {
       }
       AccountsCommand::Send(src, amt, unit, dst) => {
         let amt = *amt as u64;
-        let src_keypair = self.accounts.get(src).ok_or(PlatformError::InputsError)?;
+        let src_keypair = self.accounts
+                              .get(src)
+                              .ok_or_else(|| PlatformError::InputsError(error_location!()))?;
         let (src_pub, src_priv) = (src_keypair.get_pk_ref(), src_keypair.get_sk_ref());
-        let dst_keypair = self.accounts.get(dst).ok_or(PlatformError::InputsError)?;
+        let dst_keypair = self.accounts
+                              .get(dst)
+                              .ok_or_else(|| PlatformError::InputsError(error_location!()))?;
         let (dst_pub, _) = (dst_keypair.get_pk_ref(), dst_keypair.get_sk_ref());
-        let (_, unit_code) = self.units.get(unit).ok_or(PlatformError::InputsError)?;
+        let (_, unit_code) = self.units
+                                 .get(unit)
+                                 .ok_or_else(|| PlatformError::InputsError(error_location!()))?;
 
         if *self.balances.get(src).unwrap().get(unit).unwrap() < amt {
-          return Err(PlatformError::InputsError);
+          return Err(PlatformError::InputsError(error_location!()));
         }
         if amt == 0 {
           return Ok(());
