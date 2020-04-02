@@ -1,6 +1,7 @@
 #![deny(warnings)]
 use crate::data_model::errors::PlatformError;
 use crate::data_model::*;
+use crate::error_location;
 use crate::policies::{compute_debt_swap_effect, DebtSwapEffect};
 use crate::policy_script::{run_txn_check, TxnCheckInputs, TxnPolicyData};
 use credentials::credential_verify_commitment;
@@ -106,7 +107,7 @@ impl TxnEffect {
 
           // (2), only within this transaction
           if new_asset_codes.contains_key(&code) || new_issuance_nums.contains_key(&code) {
-            return Err(PlatformError::InputsError);
+            return Err(PlatformError::InputsError(error_location!()));
           }
 
           // (3)
@@ -140,7 +141,7 @@ impl TxnEffect {
         //      TODO(joe): tracking!
         Operation::IssueAsset(iss) => {
           if iss.body.num_outputs != iss.body.records.len() {
-            return Err(PlatformError::InputsError);
+            return Err(PlatformError::InputsError(error_location!()));
           }
 
           assert!(iss.body.num_outputs == iss.body.records.len());
@@ -155,7 +156,7 @@ impl TxnEffect {
 
           if let Some(last_num) = iss_nums.last() {
             if seq_num <= *last_num {
-              return Err(PlatformError::InputsError);
+              return Err(PlatformError::InputsError(error_location!()));
             }
           }
           iss_nums.push(seq_num);
@@ -168,7 +169,7 @@ impl TxnEffect {
           // (3)
           if let Some(prior_key) = issuance_keys.get(&code) {
             if iss.pubkey != *prior_key {
-              return Err(PlatformError::InputsError);
+              return Err(PlatformError::InputsError(error_location!()));
             }
           } else {
             issuance_keys.insert(code, iss.pubkey.clone());
@@ -178,12 +179,12 @@ impl TxnEffect {
           for output in iss.body.records.iter() {
             // (4)
             if (output.0).public_key != iss.pubkey.key {
-              return Err(PlatformError::InputsError);
+              return Err(PlatformError::InputsError(error_location!()));
             }
 
             // (5)
             if (output.0).asset_type != XfrAssetType::NonConfidential(code.val) {
-              return Err(PlatformError::InputsError);
+              return Err(PlatformError::InputsError(error_location!()));
             }
 
             txos.push(Some(output.clone()));
@@ -202,10 +203,10 @@ impl TxnEffect {
         //          - Fully checked here
         Operation::TransferAsset(trn) => {
           if trn.body.inputs.len() != trn.body.transfer.inputs.len() {
-            return Err(PlatformError::InputsError);
+            return Err(PlatformError::InputsError(error_location!()));
           }
           if trn.body.num_outputs != trn.body.transfer.outputs.len() {
-            return Err(PlatformError::InputsError);
+            return Err(PlatformError::InputsError(error_location!()));
           }
           assert!(trn.body.inputs.len() == trn.body.transfer.inputs.len());
           assert!(trn.body.num_outputs == trn.body.transfer.outputs.len());
@@ -215,7 +216,7 @@ impl TxnEffect {
               let (debt_type, debt_swap_effect) = compute_debt_swap_effect(&trn.body.transfer)?;
 
               if debt_effects.contains_key(&debt_type) {
-                return Err(PlatformError::InputsError);
+                return Err(PlatformError::InputsError(error_location!()));
               }
               debt_effects.insert(debt_type, debt_swap_effect);
             }
@@ -224,7 +225,7 @@ impl TxnEffect {
               let mut sig_keys = HashSet::new();
               for sig in &trn.body_signatures {
                 if !sig.verify(&serde_json::to_vec(&trn.body).unwrap()) {
-                  return Err(PlatformError::InputsError);
+                  return Err(PlatformError::InputsError(error_location!()));
                 }
                 sig_keys.insert(sig.address.key.zei_to_bytes());
               }
@@ -241,7 +242,7 @@ impl TxnEffect {
                   }
                 }
                 if !sig_keys.contains(&record.public_key.zei_to_bytes()) {
-                  return Err(PlatformError::InputsError);
+                  return Err(PlatformError::InputsError(error_location!()));
                 }
               }
             }
@@ -261,17 +262,17 @@ impl TxnEffect {
               TxoRef::Relative(offs) => {
                 // (2).(a)
                 if offs as usize >= txo_count {
-                  return Err(PlatformError::InputsError);
+                  return Err(PlatformError::InputsError(error_location!()));
                 }
                 let ix = (txo_count - 1) - (offs as usize);
                 match &txos[ix] {
                   None => {
-                    return Err(PlatformError::InputsError);
+                    return Err(PlatformError::InputsError(error_location!()));
                   }
                   Some(TxOutput(inp_record)) => {
                     // (2).(b)
                     if inp_record != record {
-                      return Err(PlatformError::InputsError);
+                      return Err(PlatformError::InputsError(error_location!()));
                     }
                   }
                 }
@@ -280,7 +281,7 @@ impl TxnEffect {
               TxoRef::Absolute(txo_sid) => {
                 // (2).(a), partially
                 if input_txos.contains_key(&txo_sid) {
-                  return Err(PlatformError::InputsError);
+                  return Err(PlatformError::InputsError(error_location!()));
                 }
 
                 input_txos.insert(txo_sid, record.clone());
@@ -427,7 +428,7 @@ impl BlockEffect {
     // Check that no inputs are consumed twice
     for (input_sid, _) in txn.input_txos.iter() {
       if self.input_txos.contains_key(&input_sid) {
-        return Err(PlatformError::InputsError);
+        return Err(PlatformError::InputsError(error_location!()));
       }
     }
 
@@ -438,7 +439,7 @@ impl BlockEffect {
         if self.new_asset_codes.contains_key(&type_code)
            || self.new_issuance_nums.contains_key(&type_code)
         {
-          return Err(PlatformError::InputsError);
+          return Err(PlatformError::InputsError(error_location!()));
         }
       }
 
@@ -446,7 +447,7 @@ impl BlockEffect {
         if self.new_asset_codes.contains_key(&type_code)
            || self.new_issuance_nums.contains_key(&type_code)
         {
-          return Err(PlatformError::InputsError);
+          return Err(PlatformError::InputsError(error_location!()));
         }
 
         // Debug-check that issued assets are registered in `issuance_keys`

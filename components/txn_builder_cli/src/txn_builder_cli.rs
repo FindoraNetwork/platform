@@ -11,6 +11,7 @@ use credentials::{
 use env_logger::{Env, Target};
 use ledger::data_model::errors::PlatformError;
 use ledger::data_model::{AccountAddress, AssetTypeCode, TransferType, TxOutput, TxoRef, TxoSID};
+use ledger::error_location;
 use ledger::policies::{DebtMemo, Fraction};
 use log::trace; // Other options: debug, info, warn
 use rand_chacha::ChaChaRng;
@@ -192,7 +193,7 @@ impl CredentialIndex {
       2 => Ok(CredentialIndex::Citizenship),
       _ => {
         println!("Index too large: {}", index);
-        Err(PlatformError::InputsError)
+        Err(PlatformError::InputsError(error_location!()))
       }
     }
   }
@@ -1010,10 +1011,10 @@ fn next_path(path: &Path) -> Result<PathBuf, PlatformError> {
     // Doesn't have any extension.
     if path.components().next() == None {
       println!("Is empty: {:?}. Specify a file path.", path);
-      Err(PlatformError::InputsError)
+      Err(PlatformError::InputsError(error_location!()))
     } else if path.file_name() == None {
       println!("Is directory: {:?}. Specify a file path.", path);
-      Err(PlatformError::InputsError)
+      Err(PlatformError::InputsError(error_location!()))
     } else {
       find_available_path(&add_backup_extension(&path)?, 0)
     }
@@ -1040,7 +1041,7 @@ fn parse_to_u64(val_str: &str) -> Result<u64, PlatformError> {
     Ok(val)
   } else {
     println!("Improperly formatted number.");
-    Err(PlatformError::InputsError)
+    Err(PlatformError::InputsError(error_location!()))
   }
 }
 
@@ -1054,7 +1055,7 @@ fn parse_to_u64_vec(vals_str: &str) -> Result<Vec<u64>, PlatformError> {
     if let Ok(val) = val_str.trim().parse::<u64>() {
       vals.push(val);
     } else {
-      return Err(PlatformError::InputsError);
+      return Err(PlatformError::InputsError(error_location!()));
     }
   }
   Ok(vals)
@@ -1358,7 +1359,7 @@ fn merge_records(key_pair: &XfrKeyPair,
                                      &blind_asset_record2.1,
                                      key_pair.get_sk_ref())?;
   if oar1.get_record_type() != oar2.get_record_type() {
-    return Err(PlatformError::InputsError);
+    return Err(PlatformError::InputsError(error_location!()));
   }
   let amount1 = *oar1.get_amount();
   let amount2 = *oar2.get_amount();
@@ -1535,15 +1536,15 @@ fn fulfill_loan(loan_id: u64,
   match loan.status {
     LoanStatus::Declined => {
       println!("Loan {} has already been declined.", loan_id);
-      return Err(PlatformError::InputsError);
+      return Err(PlatformError::InputsError(error_location!()));
     }
     LoanStatus::Active => {
       println!("Loan {} has already been fulfilled.", loan_id);
-      return Err(PlatformError::InputsError);
+      return Err(PlatformError::InputsError(error_location!()));
     }
     LoanStatus::Complete => {
       println!("Loan {} has already been paid off.", loan_id);
-      return Err(PlatformError::InputsError);
+      return Err(PlatformError::InputsError(error_location!()));
     }
     _ => {}
   }
@@ -1561,7 +1562,7 @@ fn fulfill_loan(loan_id: u64,
     id as usize
   } else {
     println!("Minimum credit score is required. Use create_or_overwrite_credential.");
-    return Err(PlatformError::InputsError);
+    return Err(PlatformError::InputsError(error_location!()));
   };
   let credential = &data.credentials.clone()[credential_id as usize];
   let credential_issuer_id = credential.credential_issuer;
@@ -1595,7 +1596,7 @@ fn fulfill_loan(loan_id: u64,
                   data.loans[loan_id as usize].status = LoanStatus::Declined;
                   store_data_to_file(data)?;
                   println!("Credential value should be at least: {}.", requirement_u64);
-                  return Err(PlatformError::InputsError);
+                  return Err(PlatformError::InputsError(error_location!()));
                 }
               }
               _ => {
@@ -1604,7 +1605,7 @@ fn fulfill_loan(loan_id: u64,
                   data.loans[loan_id as usize].status = LoanStatus::Declined;
                   store_data_to_file(data)?;
                   println!("Credit score should be: {}.", requirement_u64);
-                  return Err(PlatformError::InputsError);
+                  return Err(PlatformError::InputsError(error_location!()));
                 }
               }
             }
@@ -1616,16 +1617,16 @@ fn fulfill_loan(loan_id: u64,
                                               value_bytes.to_vec()));
           } else {
             println!("Missing credential value. Use subcommand borrower create_or_overwrite_credential.");
-            return Err(PlatformError::InputsError);
+            return Err(PlatformError::InputsError(error_location!()));
           }
         } else {
           println!("More credential value expected.");
-          return Err(PlatformError::InputsError);
+          return Err(PlatformError::InputsError(error_location!()));
         }
       }
     } else {
       println!("More credential requirement expected.");
-      return Err(PlatformError::InputsError);
+      return Err(PlatformError::InputsError(error_location!()));
     }
     count += 1;
   }
@@ -1644,7 +1645,7 @@ fn fulfill_loan(loan_id: u64,
                                                        })?
     } else {
       println!("Missing user secret key.");
-      return Err(PlatformError::InputsError);
+      return Err(PlatformError::InputsError(error_location!()));
     };
     let reveal_sig =
       serde_json::from_str::<CredRevealSig>(proof).or_else(|_| {
@@ -1669,7 +1670,7 @@ fn fulfill_loan(loan_id: u64,
                           signature }
     } else {
       println!("Missing credential signature.");
-      return Err(PlatformError::InputsError);
+      return Err(PlatformError::InputsError(error_location!()));
     };
     let commitment_key = if let Some(key_str) = credential.commitment_key.clone() {
       let key_decode = hex::decode(key_str).or_else(|_| Err(PlatformError::DeserializationError))?;
@@ -1678,7 +1679,7 @@ fn fulfill_loan(loan_id: u64,
                                                        })?
     } else {
       println!("Missing commitment key.");
-      return Err(PlatformError::InputsError);
+      return Err(PlatformError::InputsError(error_location!()));
     };
     (user_secret_key, wrapper_credential, commitment_key)
   } else {
@@ -1910,15 +1911,15 @@ fn pay_loan(loan_id: u64, amount: u64, protocol: &str, host: &str) -> Result<(),
     LoanStatus::Requested => {
       println!("Loan {} hasn't been fulfilled yet. Use issuer fulfill_loan.",
                loan_id);
-      return Err(PlatformError::InputsError);
+      return Err(PlatformError::InputsError(error_location!()));
     }
     LoanStatus::Declined => {
       println!("Loan {} has been declined.", loan_id);
-      return Err(PlatformError::InputsError);
+      return Err(PlatformError::InputsError(error_location!()));
     }
     LoanStatus::Complete => {
       println!("Loan {} has been paid off.", loan_id);
-      return Err(PlatformError::InputsError);
+      return Err(PlatformError::InputsError(error_location!()));
     }
     _ => {}
   }
@@ -1932,7 +1933,7 @@ fn pay_loan(loan_id: u64, amount: u64, protocol: &str, host: &str) -> Result<(),
   // Check if funds are sufficient
   if amount > borrower.balance {
     println!("Insufficient funds. Use --load_funds to load more funds.");
-    return Err(PlatformError::InputsError);
+    return Err(PlatformError::InputsError(error_location!()));
   }
 
   // Check if the amount meets the minimum requirement, i.e., the fee
@@ -1940,7 +1941,7 @@ fn pay_loan(loan_id: u64, amount: u64, protocol: &str, host: &str) -> Result<(),
     ledger::policies::calculate_fee(loan.balance, Fraction::new(loan.interest_per_mille, 1000));
   if amount < fee {
     println!("Payment amount should be at least: {}", fee);
-    return Err(PlatformError::InputsError);
+    return Err(PlatformError::InputsError(error_location!()));
   }
 
   // Get the amount to burn the balance, and the total amount the borrow will spend
@@ -1958,13 +1959,13 @@ fn pay_loan(loan_id: u64, amount: u64, protocol: &str, host: &str) -> Result<(),
     sid
   } else {
     println!("Missing fiat utxo in the borrower record. Try --fulfill_loan.");
-    return Err(PlatformError::InputsError);
+    return Err(PlatformError::InputsError(error_location!()));
   };
   let debt_sid = if let Some(sid) = loan.debt_utxo {
     sid
   } else {
     println!("Missing debt utxo in the loan record. Try --fulfill_loan.");
-    return Err(PlatformError::InputsError);
+    return Err(PlatformError::InputsError(error_location!()));
   };
 
   // Get fiat and debt open asset records
@@ -1978,13 +1979,13 @@ fn pay_loan(loan_id: u64, amount: u64, protocol: &str, host: &str) -> Result<(),
     AssetTypeCode::new_from_base64(&code)?
   } else {
     println!("Missing fiat code. Try --active_loan.");
-    return Err(PlatformError::InputsError);
+    return Err(PlatformError::InputsError(error_location!()));
   };
   let debt_code = if let Some(code) = &loan.code {
     AssetTypeCode::new_from_base64(&code)?
   } else {
     println!("Missing debt code in the loan record. Try --fulfill_loan.");
-    return Err(PlatformError::InputsError);
+    return Err(PlatformError::InputsError(error_location!()));
   };
 
   println!("Fiat code: {}", serde_json::to_string(&fiat_code.val)?);
@@ -2642,7 +2643,7 @@ fn process_inputs(inputs: clap::ArgMatches) -> Result<(), PlatformError> {
     ("submit", Some(submit_matches)) => process_submit_cmd(submit_matches, &txn_file),
     _ => {
       println!("Subcommand missing or not recognized. Try --help");
-      Err(PlatformError::InputsError)
+      Err(PlatformError::InputsError(error_location!()))
     }
   }
 }
@@ -2669,7 +2670,7 @@ fn process_asset_issuer_cmd(asset_issuer_matches: &clap::ArgMatches,
         name_arg.to_owned()
       } else {
         println!("Name is required to sign up an asset issuer account. Use --name.");
-        return Err(PlatformError::InputsError);
+        return Err(PlatformError::InputsError(error_location!()));
       };
       let mut data = load_data()?;
       data.add_asset_issuer(name)
@@ -2679,13 +2680,13 @@ fn process_asset_issuer_cmd(asset_issuer_matches: &clap::ArgMatches,
         file_arg
       } else {
         println!("Path is required to store the sids. Use --path.");
-        return Err(PlatformError::InputsError);
+        return Err(PlatformError::InputsError(error_location!()));
       };
       let sids = if let Some(indices_arg) = store_sids_matches.value_of("indices") {
         indices_arg
       } else {
         println!("Indices are required to store the sids. Use --indices.");
-        return Err(PlatformError::InputsError);
+        return Err(PlatformError::InputsError(error_location!()));
       };
       store_sids_to_file(file, sids)
     }
@@ -2701,13 +2702,13 @@ fn process_asset_issuer_cmd(asset_issuer_matches: &clap::ArgMatches,
         (issuer_pub_key, policy)
       } else {
         println!("Asset issuer id is required to store the tracer and owner memos. Use asset_issuer --id.");
-        return Err(PlatformError::InputsError);
+        return Err(PlatformError::InputsError(error_location!()));
       };
       let amount = if let Some(amount_arg) = store_bar_and_memos_matches.value_of("amount") {
         parse_to_u64(amount_arg)?
       } else {
         println!("Asset amount is required to store the tracer and owner memos. Use --amount.");
-        return Err(PlatformError::InputsError);
+        return Err(PlatformError::InputsError(error_location!()));
       };
       let confidential_amount = store_bar_and_memos_matches.is_present("confidential_amount");
       let record_type = AssetRecordType::from_booleans(confidential_amount, false);
@@ -2716,13 +2717,13 @@ fn process_asset_issuer_cmd(asset_issuer_matches: &clap::ArgMatches,
         AssetTypeCode::new_from_base64(token_code)?
       } else {
         println!("Asset token code is required to store the tracer and owner memos. Use --token_code.");
-        return Err(PlatformError::InputsError);
+        return Err(PlatformError::InputsError(error_location!()));
       };
       let file = if let Some(file_arg) = store_bar_and_memos_matches.value_of("file") {
         file_arg
       } else {
         println!("Path is required to store the tracer and owner memos. Use --path.");
-        return Err(PlatformError::InputsError);
+        return Err(PlatformError::InputsError(error_location!()));
       };
       get_and_store_memos_to_file(file,
                                   issuer_pub_key,
@@ -2736,7 +2737,7 @@ fn process_asset_issuer_cmd(asset_issuer_matches: &clap::ArgMatches,
         parse_to_u64(id_arg)?
       } else {
         println!("Asset issuer id is required for AIR assigning. Use asset_issuer --id.");
-        return Err(PlatformError::InputsError);
+        return Err(PlatformError::InputsError(error_location!()));
       };
       match (air_assign_matches.value_of("address"),
              air_assign_matches.value_of("data"),
@@ -2747,7 +2748,7 @@ fn process_asset_issuer_cmd(asset_issuer_matches: &clap::ArgMatches,
         }
         (_, _, _) => {
           println!("Missing address, data, or proof.");
-          Err(PlatformError::InputsError)
+          Err(PlatformError::InputsError(error_location!()))
         }
       }
     }
@@ -2759,7 +2760,7 @@ fn process_asset_issuer_cmd(asset_issuer_matches: &clap::ArgMatches,
         data.get_asset_issuer_key_pair(issuer_id)?
       } else {
         println!("Asset issuer id is required to define an asset. Use asset_issuer --id.");
-        return Err(PlatformError::InputsError);
+        return Err(PlatformError::InputsError(error_location!()));
       };
       let token_code = define_asset_matches.value_of("token_code");
       let memo = if let Some(memo) = define_asset_matches.value_of("memo") {
@@ -2798,19 +2799,19 @@ fn process_asset_issuer_cmd(asset_issuer_matches: &clap::ArgMatches,
          data.get_asset_tracer_key_pair(issuer_id)?.enc_key)
       } else {
         println!("Asset issuer id is required to issue and transfer asset. Use asset_issuer --id.");
-        return Err(PlatformError::InputsError);
+        return Err(PlatformError::InputsError(error_location!()));
       };
       let token_code = if let Some(token_code_arg) = issue_asset_matches.value_of("token_code") {
         AssetTypeCode::new_from_base64(token_code_arg)?
       } else {
         println!("Token code is required to issue asset. Use --token_code.");
-        return Err(PlatformError::InputsError);
+        return Err(PlatformError::InputsError(error_location!()));
       };
       let amount = if let Some(amount_arg) = issue_asset_matches.value_of("amount") {
         parse_to_u64(amount_arg)?
       } else {
         println!("Amount is required to issue asset. Use --amount.");
-        return Err(PlatformError::InputsError);
+        return Err(PlatformError::InputsError(error_location!()));
       };
       let confidential_amount = issue_asset_matches.is_present("confidential_amount");
       let mut txn_builder = TransactionBuilder::default();
@@ -2837,7 +2838,7 @@ fn process_asset_issuer_cmd(asset_issuer_matches: &clap::ArgMatches,
         data.get_asset_issuer_key_pair(issuer_id)?
       } else {
         println!("Asset issuer id is required to transfer asset. Use asset_issuer --id.");
-        return Err(PlatformError::InputsError);
+        return Err(PlatformError::InputsError(error_location!()));
       };
       // Compose transfer_from for add_basic_transfer_asset
       let mut txo_refs = Vec::new();
@@ -2847,7 +2848,7 @@ fn process_asset_issuer_cmd(asset_issuer_matches: &clap::ArgMatches,
         }
       } else {
         println!("Sids are required to transfer asset. Use --sids_file.");
-        return Err(PlatformError::InputsError);
+        return Err(PlatformError::InputsError(error_location!()));
       }
       let bars_and_owner_memos = if let Some(issuance_txn_files_arg) =
         transfer_asset_matches.value_of("issuance_txn_files")
@@ -2855,19 +2856,19 @@ fn process_asset_issuer_cmd(asset_issuer_matches: &clap::ArgMatches,
         load_blind_asset_records_and_owner_memos_from_files(issuance_txn_files_arg)?
       } else {
         println!("Blind asset records and associated memos are required to transfer asset. Use --asset_files.");
-        return Err(PlatformError::InputsError);
+        return Err(PlatformError::InputsError(error_location!()));
       };
       let input_amounts =
         if let Some(input_amounts_arg) = transfer_asset_matches.value_of("input_amounts") {
           parse_to_u64_vec(input_amounts_arg)?
         } else {
           println!("Input amounts are required to transfer asset. Use --input_amounts.");
-          return Err(PlatformError::InputsError);
+          return Err(PlatformError::InputsError(error_location!()));
         };
       let mut count = txo_refs.len();
       if input_amounts.len() != count || bars_and_owner_memos.len() != count {
         println!("Size of input sids and input amounts should match.");
-        return Err(PlatformError::InputsError);
+        return Err(PlatformError::InputsError(error_location!()));
       }
       let mut transfer_from = Vec::new();
       let mut txo_refs_iter = txo_refs.iter();
@@ -2878,20 +2879,20 @@ fn process_asset_issuer_cmd(asset_issuer_matches: &clap::ArgMatches,
           txo_ref
         } else {
           println!("More txo ref expected.");
-          return Err(PlatformError::InputsError);
+          return Err(PlatformError::InputsError(error_location!()));
         };
         let (blind_asset_record_next, owner_memo_next) =
           if let Some(bar_and_owner_memo) = bars_and_owner_memos_iter.next() {
             bar_and_owner_memo
           } else {
             println!("More blind asset record and owner memo expected.");
-            return Err(PlatformError::InputsError);
+            return Err(PlatformError::InputsError(error_location!()));
           };
         let input_amount_next = if let Some(input_amount) = input_amounts_iter.next() {
           *input_amount
         } else {
           println!("More input amount expected.");
-          return Err(PlatformError::InputsError);
+          return Err(PlatformError::InputsError(error_location!()));
         };
         let transfer_from_next =
           (txo_refs_next, blind_asset_record_next, input_amount_next, owner_memo_next);
@@ -2909,19 +2910,19 @@ fn process_asset_issuer_cmd(asset_issuer_matches: &clap::ArgMatches,
         }
       } else {
         println!("Recipient ids are required to transfer asset. Use --recipients.");
-        return Err(PlatformError::InputsError);
+        return Err(PlatformError::InputsError(error_location!()));
       }
       let output_amounts =
         if let Some(output_amounts_arg) = transfer_asset_matches.value_of("output_amounts") {
           parse_to_u64_vec(output_amounts_arg)?
         } else {
           println!("Output amounts are required to transfer asset. Use --output_amounts.");
-          return Err(PlatformError::InputsError);
+          return Err(PlatformError::InputsError(error_location!()));
         };
       let mut count = output_amounts.len();
       if recipient_addresses.len() != count {
         println!("Size of output amounts and addresses should match.");
-        return Err(PlatformError::InputsError);
+        return Err(PlatformError::InputsError(error_location!()));
       }
       let mut transfer_to = Vec::new();
       let mut output_amounts_iter = output_amounts.iter();
@@ -2931,13 +2932,13 @@ fn process_asset_issuer_cmd(asset_issuer_matches: &clap::ArgMatches,
           *output_amount
         } else {
           println!("More output amount expected.");
-          return Err(PlatformError::InputsError);
+          return Err(PlatformError::InputsError(error_location!()));
         };
         let address_next = if let Some(address) = addresses_iter.next() {
           address
         } else {
           println!("More address expected.");
-          return Err(PlatformError::InputsError);
+          return Err(PlatformError::InputsError(error_location!()));
         };
         transfer_to.push((output_amount_next, address_next));
         count -= 1;
@@ -2960,7 +2961,7 @@ fn process_asset_issuer_cmd(asset_issuer_matches: &clap::ArgMatches,
         data.get_asset_issuer_key_pair(issuer_id)?
       } else {
         println!("Asset issuer id is required to issue and transfer asset. Use asset_issuer --id.");
-        return Err(PlatformError::InputsError);
+        return Err(PlatformError::InputsError(error_location!()));
       };
       let recipient_key_pair =
         if let Some(id_arg) = issue_and_transfer_matches.value_of("recipient") {
@@ -2968,20 +2969,20 @@ fn process_asset_issuer_cmd(asset_issuer_matches: &clap::ArgMatches,
           data.get_borrower_key_pair(recipient_id)?
         } else {
           println!("Recipient id is required to issue and transfer asset. Use --recipient.");
-          return Err(PlatformError::InputsError);
+          return Err(PlatformError::InputsError(error_location!()));
         };
       let amount = if let Some(amount_arg) = issue_and_transfer_matches.value_of("amount") {
         parse_to_u64(amount_arg)?
       } else {
         println!("Amount is required to issue and transfer asset. Use --amount.");
-        return Err(PlatformError::InputsError);
+        return Err(PlatformError::InputsError(error_location!()));
       };
       let token_code =
         if let Some(token_code_arg) = issue_and_transfer_matches.value_of("token_code") {
           AssetTypeCode::new_from_base64(token_code_arg)?
         } else {
           println!("Token code is required to issue asset. Use --token_code.");
-          return Err(PlatformError::InputsError);
+          return Err(PlatformError::InputsError(error_location!()));
         };
       let confidential_amount = issue_and_transfer_matches.is_present("confidential_amount");
       let record_type = AssetRecordType::from_booleans(confidential_amount, false);
@@ -3007,20 +3008,20 @@ fn process_asset_issuer_cmd(asset_issuer_matches: &clap::ArgMatches,
             .record_data_dec_key
       } else {
         println!("Asset issuer id is required to trace the asset. Use asset_issuer --id.");
-        return Err(PlatformError::InputsError);
+        return Err(PlatformError::InputsError(error_location!()));
       };
       let tracer_and_owner_memos =
         if let Some(memo_file_arg) = trace_and_verify_asset_matches.value_of("memo_file") {
           load_tracer_and_owner_memos_from_files(memo_file_arg)?
         } else {
           println!("Owner memo is required to trace the asset. Use --memo_file.");
-          return Err(PlatformError::InputsError);
+          return Err(PlatformError::InputsError(error_location!()));
         };
       let tracer_memo = if let Some(memo) = tracer_and_owner_memos[0].clone().0 {
         memo
       } else {
         println!("The asset isn't traceable.");
-        return Err(PlatformError::InputsError);
+        return Err(PlatformError::InputsError(error_location!()));
       };
       let expected_amount = if let Some(expected_amount_arg) =
         trace_and_verify_asset_matches.value_of("expected_amount")
@@ -3028,14 +3029,14 @@ fn process_asset_issuer_cmd(asset_issuer_matches: &clap::ArgMatches,
         parse_to_u64(expected_amount_arg)?
       } else {
         println!("Expected amount is required to verify the asset. Use --expected_amount.");
-        return Err(PlatformError::InputsError);
+        return Err(PlatformError::InputsError(error_location!()));
       };
       tracer_memo.verify_amount(&tracer_dec_keys, expected_amount)
                  .or_else(|error| Err(PlatformError::ZeiError(error)))
     }
     _ => {
       println!("Subcommand missing or not recognized. Try asset_issuer --help");
-      Err(PlatformError::InputsError)
+      Err(PlatformError::InputsError(error_location!()))
     }
   }
 }
@@ -3077,14 +3078,14 @@ fn process_credential_issuer_cmd(credential_issuer_matches: &clap::ArgMatches)
         name_arg.to_owned()
       } else {
         println!("Name is required to sign up a credential issuer account. Use --name.");
-        return Err(PlatformError::InputsError);
+        return Err(PlatformError::InputsError(error_location!()));
       };
       let mut data = load_data()?;
       data.add_credential_issuer(name)
     }
     _ => {
       println!("Subcommand missing or not recognized. Try credential_issuer --help");
-      Err(PlatformError::InputsError)
+      Err(PlatformError::InputsError(error_location!()))
     }
   }
 }
@@ -3109,7 +3110,7 @@ fn process_lender_cmd(lender_matches: &clap::ArgMatches,
         name_arg.to_owned()
       } else {
         println!("Name is required to sign up a lender account. Use --name.");
-        return Err(PlatformError::InputsError);
+        return Err(PlatformError::InputsError(error_location!()));
       };
       data.add_lender(name)
     }
@@ -3118,14 +3119,14 @@ fn process_lender_cmd(lender_matches: &clap::ArgMatches,
         parse_to_u64(id_arg)?
       } else {
         println!("Lender id is required to get loan information. Use lender --id.");
-        return Err(PlatformError::InputsError);
+        return Err(PlatformError::InputsError(error_location!()));
       };
       if let Some(loan_arg) = view_loan_matches.value_of("loan") {
         let loan_id = parse_to_u64(loan_arg)?;
         let loan = data.loans[loan_id as usize].clone();
         if loan.lender != lender_id {
           println!("Lender {} doesn't own loan {}.", lender_id, loan_id);
-          return Err(PlatformError::InputsError);
+          return Err(PlatformError::InputsError(error_location!()));
         }
         println!("Displaying loan {}: {:?}.", loan_id, loan);
         return Ok(());
@@ -3180,24 +3181,24 @@ fn process_lender_cmd(lender_matches: &clap::ArgMatches,
         parse_to_u64(loan_arg)?
       } else {
         println!("Loan id is required to fulfill the loan. Use --loan.");
-        return Err(PlatformError::InputsError);
+        return Err(PlatformError::InputsError(error_location!()));
       };
       if let Some(id_arg) = lender_matches.value_of("id") {
         let lender_id = parse_to_u64(id_arg)?;
         let loan = data.loans[loan_id as usize].clone();
         if loan.lender != lender_id {
           println!("Lender {} doesn't own loan {}.", lender_id, loan_id);
-          return Err(PlatformError::InputsError);
+          return Err(PlatformError::InputsError(error_location!()));
         }
       } else {
         println!("Lender id is required to fulfill a loan. Use lender --id.");
-        return Err(PlatformError::InputsError);
+        return Err(PlatformError::InputsError(error_location!()));
       };
       let issuer_id = if let Some(issuer_arg) = fulfill_loan_matches.value_of("issuer") {
         parse_to_u64(issuer_arg)?
       } else {
         println!("Asset issuer id is required to fulfill the loan. Use --issuer.");
-        return Err(PlatformError::InputsError);
+        return Err(PlatformError::InputsError(error_location!()));
       };
       let (protocol, host) = protocol_host(fulfill_loan_matches);
       fulfill_loan(loan_id, issuer_id, txn_file, protocol, host)
@@ -3207,7 +3208,7 @@ fn process_lender_cmd(lender_matches: &clap::ArgMatches,
         parse_to_u64(id_arg)?
       } else {
         println!("Lender id is required to get credential requirement information. Use lender --id.");
-        return Err(PlatformError::InputsError);
+        return Err(PlatformError::InputsError(error_location!()));
       };
       let attribute = if let Some(attribute_arg) =
         create_or_overwrite_requirement_matches.value_of("attribute")
@@ -3219,7 +3220,7 @@ fn process_lender_cmd(lender_matches: &clap::ArgMatches,
         }
       } else {
         println!("Credential attribute is required to create or overwrite the credential requirement. Use --attribute.");
-        return Err(PlatformError::InputsError);
+        return Err(PlatformError::InputsError(error_location!()));
       };
       let requirement = if let Some(requirement_arg) =
         create_or_overwrite_requirement_matches.value_of("requirement")
@@ -3227,14 +3228,14 @@ fn process_lender_cmd(lender_matches: &clap::ArgMatches,
         requirement_arg
       } else {
         println!("Credential value is required to create or overwrite the credential requirement. Use --requirement.");
-        return Err(PlatformError::InputsError);
+        return Err(PlatformError::InputsError(error_location!()));
       };
       let mut data = load_data()?;
       data.create_or_overwrite_requirement(lender_id, attribute, requirement)
     }
     _ => {
       println!("Subcommand missing or not recognized. Try lender --help");
-      Err(PlatformError::InputsError)
+      Err(PlatformError::InputsError(error_location!()))
     }
   }
 }
@@ -3264,7 +3265,7 @@ fn process_borrower_cmd(borrower_matches: &clap::ArgMatches,
         name_arg.to_owned()
       } else {
         println!("Name is required to sign up a lender account. Use --name.");
-        return Err(PlatformError::InputsError);
+        return Err(PlatformError::InputsError(error_location!()));
       };
       data.add_borrower(name)
     }
@@ -3273,7 +3274,7 @@ fn process_borrower_cmd(borrower_matches: &clap::ArgMatches,
         parse_to_u64(id_arg)?
       } else {
         println!("Borrower id is required to load funds. Use borrower --id.");
-        return Err(PlatformError::InputsError);
+        return Err(PlatformError::InputsError(error_location!()));
       };
       process_load_funds_cmd(borrower_id, load_funds_matches, txn_file)
     }
@@ -3282,14 +3283,14 @@ fn process_borrower_cmd(borrower_matches: &clap::ArgMatches,
         parse_to_u64(id_arg)?
       } else {
         println!("Borrower id is required to get loan information. Use borrower --id.");
-        return Err(PlatformError::InputsError);
+        return Err(PlatformError::InputsError(error_location!()));
       };
       if let Some(loan_arg) = view_loan_matches.value_of("loan") {
         let loan_id = parse_to_u64(loan_arg)?;
         let loan = data.loans[loan_id as usize].clone();
         if loan.borrower != borrower_id {
           println!("Borrower {} doesn't own loan {}.", borrower_id, loan_id);
-          return Err(PlatformError::InputsError);
+          return Err(PlatformError::InputsError(error_location!()));
         }
         println!("Displaying loan {}: {:?}.", loan_id, loan);
         return Ok(());
@@ -3344,32 +3345,32 @@ fn process_borrower_cmd(borrower_matches: &clap::ArgMatches,
         parse_to_u64(id_arg)?
       } else {
         println!("Borrower id is required to request a loan. Use borrower --id.");
-        return Err(PlatformError::InputsError);
+        return Err(PlatformError::InputsError(error_location!()));
       };
       let lender_id = if let Some(lender_arg) = request_loan_matches.value_of("lender") {
         parse_to_u64(lender_arg)?
       } else {
         println!("Lender id is required to request the loan. Use --lender.");
-        return Err(PlatformError::InputsError);
+        return Err(PlatformError::InputsError(error_location!()));
       };
       let amount = if let Some(amount_arg) = request_loan_matches.value_of("amount") {
         parse_to_u64(amount_arg)?
       } else {
         println!("Amount is required to request the loan. Use --amount.");
-        return Err(PlatformError::InputsError);
+        return Err(PlatformError::InputsError(error_location!()));
       };
       let interest_per_mille =
         if let Some(interest_per_mille_arg) = request_loan_matches.value_of("interest_per_mille") {
           parse_to_u64(interest_per_mille_arg)?
         } else {
           println!("Interest per mille is required to request the loan. Use --interest_per_mille.");
-          return Err(PlatformError::InputsError);
+          return Err(PlatformError::InputsError(error_location!()));
         };
       let duration = if let Some(duration_arg) = request_loan_matches.value_of("duration") {
         parse_to_u64(duration_arg)?
       } else {
         println!("Duration is required to request the loan. Use --amount.");
-        return Err(PlatformError::InputsError);
+        return Err(PlatformError::InputsError(error_location!()));
       };
       let mut data = load_data()?;
       data.add_loan(lender_id, borrower_id, amount, interest_per_mille, duration)
@@ -3379,18 +3380,18 @@ fn process_borrower_cmd(borrower_matches: &clap::ArgMatches,
         parse_to_u64(id_arg)?
       } else {
         println!("Borrower id is required to pay off the loan. Use borrower --id.");
-        return Err(PlatformError::InputsError);
+        return Err(PlatformError::InputsError(error_location!()));
       };
       if let Some(loan_arg) = pay_loan_matches.value_of("loan") {
         let loan_id = parse_to_u64(loan_arg)?;
         let loan = data.loans[loan_id as usize].clone();
         if loan.borrower != borrower_id {
           println!("Borrower {} doesn't own loan {}.", borrower_id, loan_id);
-          return Err(PlatformError::InputsError);
+          return Err(PlatformError::InputsError(error_location!()));
         }
       } else {
         println!("Loan id is required to pay the loan.");
-        return Err(PlatformError::InputsError);
+        return Err(PlatformError::InputsError(error_location!()));
       }
       process_pay_loan_cmd(pay_loan_matches)
     }
@@ -3399,7 +3400,7 @@ fn process_borrower_cmd(borrower_matches: &clap::ArgMatches,
         parse_to_u64(id_arg)?
       } else {
         println!("Borrower id is required to get credential information. Use borrower --id.");
-        return Err(PlatformError::InputsError);
+        return Err(PlatformError::InputsError(error_location!()));
       };
       let credential_id = if let Some(id) = data.borrowers[borrower_id as usize].credentials {
         id
@@ -3434,7 +3435,7 @@ fn process_borrower_cmd(borrower_matches: &clap::ArgMatches,
         parse_to_u64(id_arg)?
       } else {
         println!("Borrower id is required to get credential information. Use borrower --id.");
-        return Err(PlatformError::InputsError);
+        return Err(PlatformError::InputsError(error_location!()));
       };
       let credential_issuer_id = if let Some(credential_issuer_arg) =
         create_or_overwrite_credential_matches.value_of("credential_issuer")
@@ -3442,7 +3443,7 @@ fn process_borrower_cmd(borrower_matches: &clap::ArgMatches,
         parse_to_u64(credential_issuer_arg)?
       } else {
         println!("Credential issuer id is required to get credential information. Use --credential_issuer.");
-        return Err(PlatformError::InputsError);
+        return Err(PlatformError::InputsError(error_location!()));
       };
       let attribute = if let Some(attribute_arg) =
         create_or_overwrite_credential_matches.value_of("attribute")
@@ -3454,14 +3455,14 @@ fn process_borrower_cmd(borrower_matches: &clap::ArgMatches,
         }
       } else {
         println!("Credential attribute is required to create or overwrite the credential. Use --attribute.");
-        return Err(PlatformError::InputsError);
+        return Err(PlatformError::InputsError(error_location!()));
       };
       let value = if let Some(value_arg) = create_or_overwrite_credential_matches.value_of("value")
       {
         value_arg
       } else {
         println!("Credential value is required to create or overwrite the credential. Use --value.");
-        return Err(PlatformError::InputsError);
+        return Err(PlatformError::InputsError(error_location!()));
       };
       let mut data = load_data()?;
       data.create_or_overwrite_credential(borrower_id, credential_issuer_id, attribute, value)
@@ -3471,7 +3472,7 @@ fn process_borrower_cmd(borrower_matches: &clap::ArgMatches,
         parse_to_u64(id_arg)?
       } else {
         println!("Borrower id is required to get the asset record. Use borrower --id.");
-        return Err(PlatformError::InputsError);
+        return Err(PlatformError::InputsError(error_location!()));
       };
       let mut data = load_data()?;
       let borrower_name = data.borrowers[borrower_id as usize].name.clone();
@@ -3480,14 +3481,14 @@ fn process_borrower_cmd(borrower_matches: &clap::ArgMatches,
         TxoSID(parse_to_u64(sid_arg)?)
       } else {
         println!("Sid is required to get the asset record. Use borrower --sid.");
-        return Err(PlatformError::InputsError);
+        return Err(PlatformError::InputsError(error_location!()));
       };
       let tracer_and_owner_memos =
         if let Some(memo_file_arg) = get_asset_record_matches.value_of("memo_file") {
           load_tracer_and_owner_memos_from_files(memo_file_arg)?
         } else {
           println!("Owner memo is required to get the asset record. Use --memo_file.");
-          return Err(PlatformError::InputsError);
+          return Err(PlatformError::InputsError(error_location!()));
         };
       // Get protocol and host.
       let (protocol, host) = protocol_host(get_asset_record_matches);
@@ -3501,7 +3502,7 @@ fn process_borrower_cmd(borrower_matches: &clap::ArgMatches,
     }
     _ => {
       println!("Subcommand missing or not recognized. Try borrower --help");
-      Err(PlatformError::InputsError)
+      Err(PlatformError::InputsError(error_location!()))
     }
   }
 }
@@ -3578,17 +3579,17 @@ fn process_load_funds_cmd(borrower_id: u64,
       id
     } else {
       println!("Improperly formatted issuer id.");
-      return Err(PlatformError::InputsError);
+      return Err(PlatformError::InputsError(error_location!()));
     }
   } else {
     println!("Asset issuer id is required to load funds. Use --issuer.");
-    return Err(PlatformError::InputsError);
+    return Err(PlatformError::InputsError(error_location!()));
   };
   let amount = if let Some(amount_arg) = load_funds_matches.value_of("amount") {
     parse_to_u64(amount_arg)?
   } else {
     println!("Amount is required to load funds. Use --amount.");
-    return Err(PlatformError::InputsError);
+    return Err(PlatformError::InputsError(error_location!()));
   };
   let memo_file = load_funds_matches.value_of("memo_file");
   let (protocol, host) = protocol_host(load_funds_matches);
@@ -3609,13 +3610,13 @@ fn process_pay_loan_cmd(pay_loan_matches: &clap::ArgMatches) -> Result<(), Platf
     parse_to_u64(loan_arg)?
   } else {
     println!("Loan id is required to pay the loan. Use --loan.");
-    return Err(PlatformError::InputsError);
+    return Err(PlatformError::InputsError(error_location!()));
   };
   let amount = if let Some(amount_arg) = pay_loan_matches.value_of("amount") {
     parse_to_u64(amount_arg)?
   } else {
     println!("Amount is required to pay the loan. Use --amount.");
-    return Err(PlatformError::InputsError);
+    return Err(PlatformError::InputsError(error_location!()));
   };
   let (protocol, host) = protocol_host(pay_loan_matches);
 
@@ -3696,7 +3697,7 @@ mod tests {
     assert_eq!(load_sids_from_file(paths[0]).unwrap(), expected_txo_refs);
     assert_eq!(load_sids_from_file(paths[1]).unwrap(), expected_txo_refs);
     assert_eq!(load_sids_from_file(paths[2]),
-               Err(PlatformError::InputsError));
+               Err(PlatformError::InputsError(error_location!())));
 
     paths.into_iter()
          .map(|path| fs::remove_file(path).unwrap())

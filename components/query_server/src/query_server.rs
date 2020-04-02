@@ -1,8 +1,9 @@
-#![deny(warnings)]
+//#![deny(warnings)]
 use ledger::data_model::errors::PlatformError;
 use ledger::data_model::{
   FinalizedTransaction, Operation, TransferAsset, TxoRef, TxoSID, XfrAddress,
 };
+use ledger::error_location;
 use ledger::store::*;
 use log::info;
 use rand_core::{CryptoRng, RngCore};
