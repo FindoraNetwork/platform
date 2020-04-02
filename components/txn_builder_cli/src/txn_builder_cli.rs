@@ -502,49 +502,6 @@ impl Data {
     store_data_to_file(self.clone())
   }
 
-  // /// Gets the credential record associated with the loan
-  // fn get_credential_record(
-  //   &mut self,
-  //   borrower_id: u64,
-  //   loan_id: u64)
-  //   -> Result<Option<(&CredUserSecretKey, &ZeiCredential, &CredCommitmentKey)>, PlatformError> {
-  //   let credential_id = if let Some(id) = self.borrowers[borrower_id as usize].credentials {
-  //     id
-  //   } else {
-  //     return Ok(None);
-  //   };
-  //   let credential = &self.credentials[credential_id as usize].clone();
-  //   let loan = &self.loans[loan_id as usize].clone();
-  //   let user_secret_key = if let Some(key_str) = credential.user_secret_key.clone() {
-  //     let key_decode = hex::decode(key_str).or_else(|_| Err(PlatformError::DeserializationError))?;
-  //     serde_json::from_slice::<CredUserSecretKey>(&key_decode).or_else(|_| {
-  //                                                         Err(PlatformError::DeserializationError)
-  //                                                       })?
-  //   } else {
-  //     println!("Missing user secret key.");
-  //     return Err(PlatformError::InputsError);
-  //   };
-  //   let ac_credential = if let Some(credential_str) = loan.credential.clone() {
-  //     serde_json::from_str::<ZeiCredential>(&credential_str).or_else(|_| {
-  //       Err(PlatformError::DeserializationError)
-  //     })?
-  //   } else {
-  //     println!("Missing credential.");
-  //     return Err(PlatformError::InputsError);
-  //   };
-  //   let commitment_key = if let Some(key_str) = credential.commitment_key.clone() {
-  //     let key_decode = hex::decode(key_str).or_else(|_| Err(PlatformError::DeserializationError))?;
-  //     serde_json::from_slice::<CredCommitmentKey>(&key_decode).or_else(|_| {
-  //                                                         Err(PlatformError::DeserializationError)
-  //                                                       })?
-  //   } else {
-  //     println!("Missing commitment key.");
-  //     return Err(PlatformError::InputsError);
-  //   };
-  //   let credential_record = Some((&user_secret_key, &ac_credential, &commitment_key));
-  //   Ok(credential_record)
-  // }
-
   fn add_asset_issuer(&mut self, name: String) -> Result<(), PlatformError> {
     let id = self.asset_issuers.len();
     self.asset_issuers.push(AssetIssuer::new(id, name.clone())?);
