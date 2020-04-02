@@ -167,7 +167,7 @@ enum CredentialIndex {
 
 impl CredentialIndex {
   /// Gets the attribute name.
-  fn get_name(&self) -> String {
+  fn get_name(self) -> String {
     match self {
       CredentialIndex::MinCreditScore => "min_credit_score".to_string(),
       CredentialIndex::MinIncome => "min_income".to_string(),
@@ -176,7 +176,7 @@ impl CredentialIndex {
   }
 
   /// Gets the attribute name and length.
-  fn get_name_and_length(&self) -> (String, usize) {
+  fn get_name_and_length(self) -> (String, usize) {
     match self {
       CredentialIndex::MinCreditScore => ("min_credit_score".to_string(), 3 as usize),
       CredentialIndex::MinIncome => ("min_income".to_string(), 4 as usize),
