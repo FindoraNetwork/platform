@@ -25,7 +25,7 @@ air = { path = "../../libs/ads/air" }
 async-std = "1.5.0"
 clap = "2.33.0"
 colored = "1.9"
-credentials = { path = "../../components/credentials" }
+credentials = { path = "../../libs/credentials" }
 cryptohash = { path = "../../libs/cryptohash" }
 env_logger = "0.7.1"
 futures = "0.3.1"
