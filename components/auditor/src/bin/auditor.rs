@@ -30,7 +30,11 @@
 //! The two nodes then connect.
 
 use async_std::{io, task};
+use attohttpc;
+use clap::{App, Arg, ArgMatches};
+use cryptohash::sha256::Digest as BitDigest;
 use futures::{future, prelude::*};
+use lazy_static::lazy_static;
 use libp2p::{
   floodsub::{self, Floodsub, FloodsubEvent},
   identity,
@@ -38,14 +42,75 @@ use libp2p::{
   swarm::NetworkBehaviourEventProcess,
   Multiaddr, NetworkBehaviour, PeerId, Swarm,
 };
+use serde_derive::{Deserialize, Serialize};
 use std::{
+  collections::HashMap,
   error::Error,
+  sync::Mutex,
   task::{Context, Poll},
+  thread,
+  time::Duration,
 };
+use zei::xfr::sig::{XfrPublicKey, XfrSignature};
+
+#[derive(Debug, Deserialize, Serialize, Clone, Eq, PartialEq)]
+struct KeyAndState {
+  pub public_key: XfrPublicKey,
+  pub global_state: (BitDigest, u64, XfrSignature),
+}
+
+lazy_static! {
+  static ref MATCHES: Mutex<Vec<PeerId>> = Mutex::new(Vec::new());
+  static ref MISMATCHES: Mutex<HashMap<PeerId, KeyAndState>> = Mutex::new(HashMap::new());
+}
+
+fn poison(v: u64) -> u64 {
+  if v == 0 {
+    1
+  } else {
+    v - 1
+  }
+}
+
+fn print_type_of<T>(msg: &str, _: &T) {
+  println!("type of {}: {}", msg, std::any::type_name::<T>())
+}
+
+const PROTOCOL: &str = "http";
+const SERVER_HOST: &str = "localhost";
+
+/// Port for querying values.
+pub const QUERY_PORT: &str = "8668";
+/// Port for submitting transactions.
+pub const SUBMIT_PORT: &str = "8669";
+
+/// Sets the protocol and host.
+///
+/// Environment variables `PROTOCOL` and `SERVER_HOST` set the protocol and host,
+///
+/// By default, the protocol is `http` and the host is `testnet.findora.org`.
+pub fn protocol_host() -> (&'static str, &'static str) {
+  (std::option_env!("PROTOCOL").unwrap_or(PROTOCOL), // "https"
+   std::option_env!("SERVER_HOST").unwrap_or(SERVER_HOST)) // "testnet.findora.org"
+}
+
+fn parse_args() -> ArgMatches<'static> {
+  App::new("Ledger Auditor").version("0.1.0")
+                       .author("Brian Rogoff <brian@findora.org>")
+                       .about("Auditor consensus on ledger signed commitments")
+                       .arg(Arg::with_name("poison").short("p")
+                                                    .long("poison")
+                                                    .help("mess up a commitment"))
+                       .arg(Arg::with_name("dial").short("d")
+                                                  .takes_value(true)
+                                                  .help("address to dial"))
+                       .get_matches()
+}
 
 fn main() -> Result<(), Box<dyn Error>> {
   env_logger::init();
 
+  let args = parse_args();
   // Creating an identity Keypair for the local node, obtaining the local PeerId from the PublicKey.
   // Create a random PeerId
   let local_key = identity::Keypair::generate_ed25519();
@@ -62,7 +127,39 @@ fn main() -> Result<(), Box<dyn Error>> {
   let transport = libp2p::build_development_transport(local_key)?;
 
   // Create a Floodsub topic
-  let floodsub_topic = floodsub::Topic::new("chat");
+  let floodsub_topic = floodsub::Topic::new("ledger auditor");
+
+  // Read signed commitment from ledger
+  let (protocol, host) = protocol_host();
+  let resp_gs = attohttpc::get(&format!("{}://{}:{}/global_state", protocol, host, QUERY_PORT)).send()?;
+  let (comm, idx, sig): (BitDigest, u64, XfrSignature) = serde_json::from_str(&resp_gs.text()?[..]).unwrap();
+  let idx = if args.is_present("poison") { poison(idx) } else { idx };
+  println!("Got ({:?}, {}, {:?}) from global_state", comm, idx, sig);
+  
+  // Read signed commitment from ledger
+  let resp_pk = attohttpc::get(&format!("{}://{}:{}/public_key", protocol, host, QUERY_PORT)).send()?;
+  let pk: XfrPublicKey = serde_json::from_str(&resp_pk.text()?[..]).unwrap();
+  println!("Got {:?} from public_key", pk);
+  match pk.verify(&serde_json::to_vec(&(comm, idx)).unwrap(), &sig) {
+    Ok(()) => println!("Verification succeeded"),
+    Err(zei_err) => println!("Verification failed with error = {}", zei_err)
+  };
+
+  let key_and_state: KeyAndState = KeyAndState {
+    public_key : pk,
+    global_state : (comm, idx, sig)
+  };
+  let ks_str = serde_json::to_string(&key_and_state).unwrap();
+  static mut KS_OPT : Option<&KeyAndState> = None;
+
+  // OMG why are you using unsafe???
+  // The main reason is that the inject_event method defined below does not allow
+  // us to refer to variables in an enclosing scope, there is no closure API, and 
+  // I can't stuff the data in AuditorBehaviour.
+
+  unsafe {
+    KS_OPT = Some(&key_and_state);
+  }
 
   // Creating a struct that implements the NetworkBehaviour trait and combines all the desired network behaviours,
   // implementing the event handlers as per the desired application's networking logic.
@@ -71,28 +168,38 @@ fn main() -> Result<(), Box<dyn Error>> {
   // Use the derive to generate delegating NetworkBehaviour impl and require the
   // NetworkBehaviourEventProcess implementations below.
   #[derive(NetworkBehaviour)]
-  struct MyBehaviour {
+  struct AuditorBehaviour {
     floodsub: Floodsub,
     mdns: Mdns,
-
-    // Struct fields which do not implement NetworkBehaviour need to be ignored
-    #[behaviour(ignore)]
-    #[allow(dead_code)]
-    ignored_member: bool,
   }
 
-  impl NetworkBehaviourEventProcess<FloodsubEvent> for MyBehaviour {
+  impl NetworkBehaviourEventProcess<FloodsubEvent> for AuditorBehaviour {
     // Called when `floodsub` produces an event.
     fn inject_event(&mut self, message: FloodsubEvent) {
       if let FloodsubEvent::Message(message) = message {
-        println!("Received: '{:?}' from {:?}",
-                 String::from_utf8_lossy(&message.data),
-                 message.source);
+        let msg_str = String::from_utf8_lossy(&message.data);
+        let received = serde_json::from_str::<KeyAndState>(&msg_str);
+        match received {
+          Ok(ks) => { 
+            unsafe { 
+              if Some(&ks) == KS_OPT {
+                MATCHES.lock().unwrap().push(message.source.clone());
+                println!("we got a matching key and state from {:?}", message.source)
+              } else {
+                MISMATCHES.lock().unwrap().insert(message.source.clone(), ks.clone());
+                println!("We got a non-matching key and state {:?}", &ks)
+              }
+            }
+          },
+          _ => { println!("Received: '{:?}' from {:?}",
+                          msg_str,
+                          message.source); }
+        }
       }
     }
   }
 
-  impl NetworkBehaviourEventProcess<MdnsEvent> for MyBehaviour {
+  impl NetworkBehaviourEventProcess<MdnsEvent> for AuditorBehaviour {
     // Called when `mdns` produces an event.
     fn inject_event(&mut self, event: MdnsEvent) {
       match event {
@@ -117,16 +224,16 @@ fn main() -> Result<(), Box<dyn Error>> {
   // Create a Swarm to manage peers and events
   let mut swarm = {
     let mdns = Mdns::new()?;
-    let mut behaviour = MyBehaviour { floodsub: Floodsub::new(local_peer_id.clone()),
-                                      mdns,
-                                      ignored_member: false };
+    let mut behaviour =
+      AuditorBehaviour { floodsub: Floodsub::new(local_peer_id.clone()),
+                         mdns };
 
     behaviour.floodsub.subscribe(floodsub_topic.clone());
     Swarm::new(transport, behaviour, local_peer_id)
   };
 
   // Reach out to another node if specified
-  if let Some(to_dial) = std::env::args().nth(1) {
+  if let Some(to_dial) = args.value_of("dial") {
     let addr: Multiaddr = to_dial.parse()?;
     Swarm::dial_addr(&mut swarm, addr)?;
     println!("Dialed {:?}", to_dial)
@@ -140,13 +247,13 @@ fn main() -> Result<(), Box<dyn Error>> {
 
   // Kick it off
   let mut listening = false;
+  let pause_time = Duration::from_secs(3);
+  
   task::block_on(future::poll_fn(move |cx: &mut Context| {
                    loop {
                      match stdin.try_poll_next_unpin(cx)? {
                        Poll::Ready(Some(line)) => {
-                         let new_line = format!("Auditor: {}", line);
-                         swarm.floodsub
-                              .publish(floodsub_topic.clone(), new_line.as_bytes())
+                         swarm.floodsub.publish(floodsub_topic.clone(), line.as_bytes())
                        }
                        Poll::Ready(None) => panic!("Stdin closed"),
                        Poll::Pending => break,
@@ -154,7 +261,9 @@ fn main() -> Result<(), Box<dyn Error>> {
                    }
                    loop {
                      match swarm.poll_next_unpin(cx) {
-                       Poll::Ready(Some(event)) => println!("{:?}", event),
+                       Poll::Ready(Some(event)) => {
+                         println!("{:?}", event);
+                       },
                        Poll::Ready(None) => return Poll::Ready(Ok(())),
                        Poll::Pending => {
                          if !listening {
@@ -163,10 +272,17 @@ fn main() -> Result<(), Box<dyn Error>> {
                              listening = true;
                            }
                          }
+                         thread::sleep(pause_time);
+                         swarm.floodsub.publish(floodsub_topic.clone(), ks_str.as_bytes());
                          break;
                        }
                      }
                    }
+                   let len = MATCHES.lock().unwrap().len();
+                   for i in 0..len {
+                     println!("{:?} has matching commitment", MATCHES.lock().unwrap().get(i));
+                   }
+
                    Poll::Pending
                  }))
 }

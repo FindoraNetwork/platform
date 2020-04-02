@@ -18,10 +18,14 @@ path = "src/bin/discover.rs"
 
 [dependencies]
 async-std = "1.5.0"
+attohttpc = "0.12.0"
+clap = "2.33.0"
+cryptohash = { path = "../../libs/cryptohash" }
 env_logger = "0.7.1"
 futures = "0.3"
 itertools = "0.8.0"
 json = "0.12.4"
+lazy_static = { version = "1.4.0" }
 libp2p = "0.16.2"
 libp2p-secio = "0.16.1"
 log = "0.4.8"
