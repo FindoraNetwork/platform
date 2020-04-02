@@ -40,6 +40,11 @@ extern crate exitcode;
 // TODO (Keyao): Rename txn_builder_cli to txn_cli?
 
 /// Initial data when the program starts.
+// TODO (Keyao):
+// Make this data driven, not embedded in the Rust code.
+// The attribute names will be determined by the customer's application and will differ from customer to customer.
+// Or we'll develop a standard registry or dictionary of attributes.
+// Either way, this will be stored externally.
 const INIT_DATA: &str = r#"
 {
   "asset_issuers": [
@@ -62,14 +67,22 @@ const INIT_DATA: &str = r#"
       "id": 0,
       "name": "Lenny",
       "key_pair": "023f37203a2476c42566a61cc55c3ca875dbb4cc41c0deb789f8e7bf881836384d4b18062f8502598de045ca7b69f067f59f93b16e3af8733a988adc2341f5c8",
-      "min_credit_score": 500,
+      "requirements": [
+        "500",
+        null,
+        null
+      ],
       "loans": []
     },
     {
       "id": 1,
       "name": "Luna",
       "key_pair": "65efc6564f1c5ee79f65635f249bb082ef5a89d077026c27479ae37db91e48dfe1e2cc04de1ba50705cb9cbba130ddc80f3c2646ddc865b7ab514e8ab77c2e7f",
-      "min_credit_score": 680,
+      "requirements": [
+        "680",
+        null,
+        null
+      ],
       "loans": []
     }
   ],
@@ -90,11 +103,10 @@ const INIT_DATA: &str = r#"
       "id": 0,
       "borrower": 0,
       "credential_issuer": 0,
-      "attributes": [
-          [
-              "MinCreditScore",
-              "650"
-          ]
+      "values": [
+          "650",
+          null,
+          null
       ],
       "user_secret_key": null,
       "signature": null,
@@ -123,25 +135,82 @@ pub type TracerAndOwnerMemos = (Option<AssetTracerMemo>, Option<OwnerMemo>);
 //
 // Credentials
 //
-// TODO (Keyao): Support more attributes
-#[derive(Clone, Deserialize, Debug, Eq, PartialEq, Serialize)]
-/// Credential attributes and their corresponding indices in the borrower's data.
+/// Credential value comparison types.
+enum ComparisonType {
+  /// Requirement: attribute value == required value
+  Equal,
+  /// Requirement: attribute value >= required value
+  AtLeast,
+}
+
+#[derive(Clone, Copy, Deserialize, Debug, Eq, PartialEq, Serialize)]
+/// Credential attribute names and their corresponding indices in the credential's values data and lender's requirements data.
 /// # Examples
-/// * `"credentials": [1, 3, 4]` in a borrower's data indicates:
-///   * Credential ID of the borrower's MinCreditScore record is 1
-///   * Credential ID of the borrower's MinIncome record is 3
-///   * Credential ID of the borrower's Citizenship record is 4
+/// * `"values": ["630", null, "1"]` in a credential's data indicates:
+///   * Lower bound of the borrower's credit score is 630.
+///   * Lower bound of the borrower's income isn't provided.
+///   * The country code of the borrower's citizenship is 1.
+/// * `"requirements": [null, "900", "7"]` in a lender's requirements data indicates:
+///   * Lower bound of the credit score isn't required.
+///   * Lower bound of the borrower's income must be at least 900.
+///   * The country code of the borrower's citizenship must be 7.
+// Note: If this enum is modified, update the `create_or_overwrite_credential` command too.
 enum CredentialIndex {
   /// Lower bound of the credit score
   MinCreditScore = 0,
   /// lower bound of the income
   MinIncome = 1,
   /// Country code of citizenship
+  // TODO (Keyao): Add a reference for the country code definition.
   Citizenship = 2,
 }
 
+impl CredentialIndex {
+  /// Gets the attribute name.
+  fn get_name(&self) -> String {
+    match self {
+      CredentialIndex::MinCreditScore => "min_credit_score".to_string(),
+      CredentialIndex::MinIncome => "min_income".to_string(),
+      _ => "citizenship".to_string(),
+    }
+  }
+
+  /// Gets the attribute name and length.
+  fn get_name_and_length(&self) -> (String, usize) {
+    match self {
+      CredentialIndex::MinCreditScore => ("min_credit_score".to_string(), 3 as usize),
+      CredentialIndex::MinIncome => ("min_income".to_string(), 4 as usize),
+      _ => ("citizenship".to_string(), 3 as usize),
+    }
+  }
+
+  /// Convertes the index in the credential record to CredentialIndex
+  fn get_credential_index(index: u64) -> Result<Self, PlatformError> {
+    match index {
+      0 => Ok(CredentialIndex::MinCreditScore),
+      1 => Ok(CredentialIndex::MinIncome),
+      2 => Ok(CredentialIndex::Citizenship),
+      _ => {
+        println!("Index too large: {}", index);
+        Err(PlatformError::InputsError)
+      }
+    }
+  }
+
+  /// Gets the requirement type based on the index in the credential record.
+  /// See the enum `ComparisonType` for supported requirement types.
+  /// See the enum `CredentialIndex` for how the credential attributes are ordered.
+  fn get_requirement_type(index: u64) -> ComparisonType {
+    if index <= 1 {
+      ComparisonType::AtLeast
+    } else {
+      ComparisonType::Equal
+    }
+  }
+}
+
 #[derive(Clone, Deserialize, Debug, Serialize)]
-/// Borrower's credential record.
+/// Borrower's credential records.
 struct Credential {
   /// Credential ID
   id: u64,
@@ -149,8 +218,14 @@ struct Credential {
   borrower: u64,
   /// Credential issuer ID
   credential_issuer: u64,
-  /// Credential attributes and values. Possible attributes are defined in the enum `CredentialIndex`.
-  attributes: Vec<(CredentialIndex, String)>,
+  /// Credential values, in the order defined in the enum `CredentialIndex`.
+  /// Null value indicates the credential value isn't provided yet.
+  /// # Examples
+  /// * `"attributes": ["630", null, "1"]` indicates:
+  /// * Lower bound of the borrower's credit score is 630.
+  /// * Lower bound of the borrower's income isn't provided.
+  /// * The country code of the borrower's citizenship is 1.
+  values: Vec<Option<String>>,
   /// Serialized credential user secret key, if exists
   user_secret_key: Option<String>,
   /// Serialized credential signature, if exists
@@ -162,15 +237,17 @@ struct Credential {
 }
 
 impl Credential {
-  fn new(id: u64,
-         borrower: u64,
-         credential_issuer: u64,
-         attributes: Vec<(CredentialIndex, String)>)
-         -> Self {
+  /// Constructs a credential
+  /// # Arguments
+  /// `id`: credential ID
+  /// `borrower`: borrower ID
+  /// `credential_issuer`: credential issuer ID
+  /// `values`: credential values, in the order defined in the enum `CredentialIndex`.
+  fn new(id: u64, borrower: u64, credential_issuer: u64, values: Vec<Option<String>>) -> Self {
     Credential { id,
                  borrower,
                  credential_issuer,
-                 attributes,
+                 values,
                  user_secret_key: None,
                  signature: None,
                  proof: None,
@@ -225,10 +302,12 @@ struct CredentialIssuer {
 
 impl CredentialIssuer {
   /// Constructs a credential issuer for the credit score attribute.
-  // TODO (Keyao): Support more attributes, then replace the hard-coded credenital name and size with enums.
   fn new(id: usize, name: String) -> Result<Self, PlatformError> {
-    let key_pair = credential_issuer_key_gen(&mut ChaChaRng::from_entropy(),
-                                             &[("min_credit_score".to_string(), 3)]);
+    let key_pair =
+      credential_issuer_key_gen(&mut ChaChaRng::from_entropy(),
+                                &[CredentialIndex::MinCreditScore.get_name_and_length(),
+                                  CredentialIndex::MinIncome.get_name_and_length(),
+                                  CredentialIndex::Citizenship.get_name_and_length()]);
     let key_pair_str =
       serde_json::to_vec(&key_pair).or_else(|_| Err(PlatformError::SerializationError))?;
     Ok(CredentialIssuer { id: id as u64,
@@ -246,20 +325,26 @@ struct Lender {
   name: String,
   /// Serialized key pair
   key_pair: String,
-  /// Minimum requirement on borrower's credit score
-  min_credit_score: u64,
+  /// Credential requirements, in the order defined in the enum `CredentialIndex`.
+  /// Null value indicates the credential attribute isn't required.
+  /// # Examples  
+  /// * `"requirements": [null, "900", "7"]` indicates:
+  ///   * Lower bound of the credit score isn't requirement.
+  ///   * Lower bound of the borrower's income must be at least 900.
+  ///   * The country code of the borrower's citizenship must be 7.
+  requirements: Vec<Option<String>>,
   /// List of loan IDs
   loans: Vec<u64>,
 }
 
 impl Lender {
-  fn new(id: usize, name: String, min_credit_score: u64) -> Self {
+  fn new(id: usize, name: String) -> Self {
     let key_pair = XfrKeyPair::generate(&mut ChaChaRng::from_entropy());
     let key_pair_str = hex::encode(key_pair.zei_to_bytes());
     Lender { id: id as u64,
              name,
              key_pair: key_pair_str,
-             min_credit_score,
+             requirements: vec![None, None, None],
              loans: Vec::new() }
   }
 }
@@ -461,10 +546,9 @@ impl Data {
     Ok(key_pair)
   }
 
-  fn add_lender(&mut self, name: String, min_credit_score: u64) -> Result<(), PlatformError> {
+  fn add_lender(&mut self, name: String) -> Result<(), PlatformError> {
     let id = self.lenders.len();
-    self.lenders
-        .push(Lender::new(id, name.clone(), min_credit_score));
+    self.lenders.push(Lender::new(id, name.clone()));
     println!("{}'s id is {}.", name, id);
     store_data_to_file(self.clone())
   }
@@ -474,6 +558,31 @@ impl Data {
     Ok(XfrKeyPair::zei_from_bytes(&hex::decode(key_pair_str).or_else(|_| {
                                      Err(PlatformError::DeserializationError)
                                    })?))
+  }
+
+  /// Creates or overwrites a credential requirement.
+  /// * If the requirement attribute doesn't exist, add it to the requirements.
+  /// * Otherwise, overwrite the value.
+  ///
+  /// # Arguments
+  /// * `lender_id`: lender ID.
+  /// * `attribute`: credential attribute, possible names defined in the enum `CredentialIndex`.
+  /// * `requirement`: required value.
+  fn create_or_overwrite_requirement(&mut self,
+                                     lender_id: u64,
+                                     attribute: CredentialIndex,
+                                     requirement: &str)
+                                     -> Result<(), PlatformError> {
+    if self.lenders[lender_id as usize].requirements[attribute as usize] == None {
+      println!("Adding the credential requirement.");
+    } else {
+      println!("Overwriting the credential requirement.");
+    }
+    self.lenders[lender_id as usize].requirements[attribute as usize] =
+      Some(requirement.to_string());
+
+    // Update the data
+    store_data_to_file(self.clone())
   }
 
   fn add_borrower(&mut self, name: String) -> Result<(), PlatformError> {
@@ -490,27 +599,45 @@ impl Data {
                                    })?))
   }
 
-  fn add_or_update_credential(&mut self,
-                              borrower_id: u64,
-                              credential_issuer_id: u64,
-                              attribute: CredentialIndex,
-                              value: &str)
-                              -> Result<(), PlatformError> {
-    // If there's an existing record, update the value and remove the proof
-    // Otherwise, add the record directly
+  /// Creates or overwrites a credential data.
+  /// * If the credential attribute doesn't exist, add it to the credential data.
+  /// * Otherwise, overwrite the value and remove previous credential signature, proof, and commitment key.
+  ///
+  /// # Arguments
+  /// * `borrower_id`: borrower ID.
+  /// * `credential_issuer_id`: credential issuer ID.
+  /// * `attribute`: credential attribute, possible names defined in the enum `CredentialIndex`.
+  /// * `value`: credential value.
+  fn create_or_overwrite_credential(&mut self,
+                                    borrower_id: u64,
+                                    credential_issuer_id: u64,
+                                    attribute: CredentialIndex,
+                                    value: &str)
+                                    -> Result<(), PlatformError> {
+    // If the borrower has some credential data, update it
+    // Otherwise, create a new credential to the borrower's data
     if let Some(credential_id) = self.borrowers[borrower_id as usize].credentials {
-      println!("Updating the credential record.");
-      self.credentials[credential_id as usize].attributes
-                                              .push((attribute, value.to_string()));
+      if self.credentials[credential_id as usize].values[attribute as usize].clone() == None
+         && credential_issuer_id == self.credentials[credential_id as usize].credential_issuer
+      {
+        println!("Adding the credential attribute.");
+      } else {
+        println!("Overwriting the credential attribute.");
+      }
+      self.credentials[credential_id as usize].values[attribute as usize] = Some(value.to_string());
+      self.credentials[credential_id as usize].user_secret_key = None;
       self.credentials[credential_id as usize].signature = None;
       self.credentials[credential_id as usize].proof = None;
+      self.credentials[credential_id as usize].commitment_key = None;
     } else {
-      println!("Adding the credential record.");
+      println!("Creating the credential record.");
       let credential_id = self.credentials.len();
+      let mut values = vec![None, None, None];
+      values[attribute as usize] = Some(value.to_string());
       self.credentials.push(Credential::new(credential_id as u64,
                                             borrower_id,
                                             credential_issuer_id,
-                                            vec![(attribute, value.to_string())]));
+                                            values));
       self.borrowers[borrower_id as usize].credentials = Some(credential_id as u64);
     }
 
@@ -1386,57 +1513,6 @@ fn query_open_asset_record(protocol: &str,
                                                                })
 }
 
-// TODO (Keyao): Restore commented-out code below when attributes besides minimum credit score are supported.
-
-// /// Relation types, used to represent the credential requirement types.
-// enum RelationType {
-//   // /// Requirement: attribute value == requirement
-//   // Equal,
-//   /// Requirement: attribute value >= requirement
-//   AtLeast,
-// }
-
-// /// Proves the credential value.
-// /// # Arguments
-// /// * `reveal_sig`: signature to verify, constructed by calling `ac_reveal`.
-// /// * `ac_issuer_pk`: credential issuer's public key, constructed by calling `ac_keygen_issuer`.
-// /// * `value`: credential value.
-// /// * `requirement`: required value on the credential attribute.
-// /// * `relation_type`: relation between the credenital and required values, possible values defined in the enum `RelationType`.
-// fn prove(reveal_sig: &ACRevealSig,
-//          cred_issuer_pk: &CredIssuerPublicKey,
-//          attributes: &[(String, &[u8])],
-//          requirement: u64,
-//          relation_type: RelationType)
-//          -> Result<(), PlatformError> {
-//   // 1. Prove that the attribut meets the requirement
-//   match relation_type {
-//     // //    Case 1. "Equal" requirement
-//     // //    E.g. prove that the country code is the same as the requirement
-//     // RelationType::Equal => {
-//     //   if value != requirement {
-//     //     println!("Value should be: {}.", requirement);
-//     //     return Err(PlatformError::InputsError);
-//     //   }
-//     // }
-//     //    Case 2. "AtLeast" requirement
-//     //    E.g. prove that the credit score is at least the required value
-//     RelationType::AtLeast => {
-//       if (attributes[0].1 as u64) < requirement {
-//         println!("Value should be at least: {}.", requirement);
-//         return Err(PlatformError::InputsError);
-//       }
-//     }
-//   }
-
-//   // 2. Prove that the attribute is true
-//   //    E.g. verify the lower bound of the credit score
-//   credential_verify(cred_issuer_pk,
-//                     &attributes,
-//                     &reveal_sig.sig_commitment,
-//                     &reveal_sig.pok).or_else(|error| Err(PlatformError::ZeiError(error)))
-// }
-
 /// Fulfills a loan.
 /// # Arguments
 /// * `loan_id`: loan ID.
@@ -1481,35 +1557,83 @@ fn fulfill_loan(loan_id: u64,
   let amount = loan.amount;
 
   // Credential check
-  // TODO (Keyao): Add requirements about other credential attributes, and attest them too
   let credential_id = if let Some(id) = borrower.credentials {
     id as usize
   } else {
-    println!("Minimum credit score is required. Use create credential.");
+    println!("Minimum credit score is required. Use create_or_overwrite_credential.");
     return Err(PlatformError::InputsError);
   };
   let credential = &data.credentials.clone()[credential_id as usize];
   let credential_issuer_id = credential.credential_issuer;
-  let requirement = lender.min_credit_score;
 
-  // Check if the credential value meets the requirement
-  // TODO (Keyao): Support more attributes.
-  let value_str = credential.attributes[0].1.clone();
-  let value_u64 = parse_to_u64(&value_str)?;
-  if value_u64 < requirement {
-    // Update loans data
-    data.loans[loan_id as usize].status = LoanStatus::Declined;
-    store_data_to_file(data)?;
-    println!("Credit score should be at least: {}.", requirement);
-    return Err(PlatformError::InputsError);
+  // Check if the credential values meet the requirements
+  let values = credential.values.clone();
+  let mut value_iter = values.iter();
+  let requirements = lender.requirements.clone();
+  let mut requirement_iter = requirements.iter();
+  let mut count = 0;
+  let mut attributes = Vec::new();
+  let mut attribute_names = Vec::new();
+  let mut attibutes_with_value_as_vec = Vec::new();
+
+  // For each credential attribute:
+  // If the lender doesn't have a requirement, skip it
+  // Otherwise:
+  // * If the borrower doesn't provide the corresponding attribute value, return an error
+  // * Otherwise, check if the value meets the requirement
+  while count < 3 {
+    if let Some(requirement_next) = requirement_iter.next() {
+      if let Some(requirement) = requirement_next {
+        if let Some(value_next) = value_iter.next() {
+          if let Some(value) = value_next {
+            let requirement_u64 = parse_to_u64(requirement)?;
+            let requirement_type = CredentialIndex::get_requirement_type(count);
+            match requirement_type {
+              ComparisonType::AtLeast => {
+                if parse_to_u64(value)? < requirement_u64 {
+                  // Update loans data
+                  data.loans[loan_id as usize].status = LoanStatus::Declined;
+                  store_data_to_file(data)?;
+                  println!("Credential value should be at least: {}.", requirement_u64);
+                  return Err(PlatformError::InputsError);
+                }
+              }
+              _ => {
+                if parse_to_u64(value)? != requirement_u64 {
+                  // Update loans data
+                  data.loans[loan_id as usize].status = LoanStatus::Declined;
+                  store_data_to_file(data)?;
+                  println!("Credit score should be: {}.", requirement_u64);
+                  return Err(PlatformError::InputsError);
+                }
+              }
+            }
+            let attribute = CredentialIndex::get_credential_index(count)?;
+            let value_bytes = value.as_bytes();
+            attributes.push((attribute.get_name().to_string(), value_bytes));
+            attribute_names.push(attribute.get_name().to_string());
+            attibutes_with_value_as_vec.push((attribute.get_name().to_string(),
+                                              value_bytes.to_vec()));
+          } else {
+            println!("Missing credential value. Use subcommand borrower create_or_overwrite_credential.");
+            return Err(PlatformError::InputsError);
+          }
+        } else {
+          println!("More credential value expected.");
+          return Err(PlatformError::InputsError);
+        }
+      }
+    } else {
+      println!("More credential requirement expected.");
+      return Err(PlatformError::InputsError);
+    }
+    count += 1;
   }
 
   // If the proof exists and the proved value is valid, attest with the proof
   // Otherwise, prove and attest the value
   let (credential_issuer_public_key, credential_issuer_secret_key) =
     data.get_credential_issuer_key_pair(credential_issuer_id)?;
-  let value = value_str.as_bytes();
-  let attributes = [("min_credit_score".to_string(), value)];
   let (user_secret_key, wrapper_credential, commitment_key) = if let Some(proof) = &credential.proof
   {
     println!("Attesting with the existing proof.");
@@ -1540,7 +1664,7 @@ fn fulfill_loan(loan_id: u64,
       let signature = serde_json::from_str::<CredSignature>(&signature_str).or_else(|_| {
         Err(PlatformError::DeserializationError)
       })? ;
-      WrapperCredential { attributes: vec![("min_credit_score".to_string(), value.to_vec())],
+      WrapperCredential { attributes: attibutes_with_value_as_vec,
                           issuer_pub_key: credential_issuer_public_key.clone(),
                           signature }
     } else {
@@ -1570,15 +1694,15 @@ fn fulfill_loan(loan_id: u64,
                                     &attributes).unwrap();
     let signature_str =
       serde_json::to_string(&signature).or_else(|_| Err(PlatformError::SerializationError))?;
-    let wrapper_credential =
-      WrapperCredential { attributes: vec![("min_credit_score".to_string(), value.to_vec())],
-                          issuer_pub_key: credential_issuer_public_key.clone(),
-                          signature };
+    let wrapper_credential = WrapperCredential { attributes: attibutes_with_value_as_vec,
+                                                 issuer_pub_key:
+                                                   credential_issuer_public_key.clone(),
+                                                 signature };
     let reveal_sig =
       credential_reveal(&mut prng,
                         &user_sk,
                         &wrapper_credential,
-                        &["min_credit_score".to_string()]).or_else(|error| {
+                        &attribute_names).or_else(|error| {
                                                             Err(PlatformError::ZeiError(error))
                                                           })?;
     credential_verify(&credential_issuer_public_key,
@@ -2203,13 +2327,7 @@ fn main() {
           .long("name")
           .required(true)
           .takes_value(true)
-          .help("Lender's name."))
-        .arg(Arg::with_name("min_credit_score")
-          .short("m")
-          .long("min_credit_score")
-          .required(true)
-          .takes_value(true)
-          .help("Minimum credit score requirement.")))
+          .help("Lender's name.")))
       .arg(Arg::with_name("id")
         .short("i")
         .long("id")
@@ -2248,7 +2366,22 @@ fn main() {
         .arg(Arg::with_name("localhost")
           .long("localhost")
           .takes_value(false)
-          .help("Specify that localhost, not testnet.findora.org should be used."))))
+          .help("Specify that localhost, not testnet.findora.org should be used.")))
+      .subcommand(SubCommand::with_name("create_or_overwrite_requirement")
+        .arg(Arg::with_name("attribute")
+          .short("a")
+          .long("attribute")
+          .required(true)
+          .takes_value(true)
+          .possible_values(&["min_credit_score", "min_income", "citizenship"])
+          .help("Credential attribute."))
+        .arg(Arg::with_name("requirement")
+          .short("r")
+          .long("requirement")
+          .required(true)
+          .takes_value(true)
+          .help("Required value of the credential record."))
+        .help("Create or overwrite a credential requirement.")))
     .subcommand(SubCommand::with_name("borrower")
       .subcommand(SubCommand::with_name("sign_up")
         .arg(Arg::with_name("name")
@@ -2347,11 +2480,12 @@ fn main() {
           .takes_value(false)
           .help("Specify that localhost, not testnet.findora.org should be used.")))
       .subcommand(SubCommand::with_name("view_credential")
-        .arg(Arg::with_name("credential")
-          .short("c")
-          .long("credential")
+        .arg(Arg::with_name("attribute")
+          .short("a")
+          .long("attribute")
           .takes_value(true)
-          .help("Display the credential with the specified id only."))
+          .possible_values(&["min_credit_score", "min_income", "citizenship"])
+          .help("Display the specified credential attribute only."))
         .help("By default, display all credentials of this borrower."))
       .subcommand(SubCommand::with_name("create_or_overwrite_credential")
         .arg(Arg::with_name("credential_issuer")
@@ -2977,15 +3111,7 @@ fn process_lender_cmd(lender_matches: &clap::ArgMatches,
         println!("Name is required to sign up a lender account. Use --name.");
         return Err(PlatformError::InputsError);
       };
-      let min_credit_score = if let Some(min_credit_score_arg) =
-        sign_up_matches.value_of("min_credit_score")
-      {
-        parse_to_u64(min_credit_score_arg)?
-      } else {
-        println!("Minimum credit score requirement is required to sign up a lender account. Use --min_credit_score.");
-        return Err(PlatformError::InputsError);
-      };
-      data.add_lender(name, min_credit_score)
+      data.add_lender(name)
     }
     ("view_loan", Some(view_loan_matches)) => {
       let lender_id = if let Some(id_arg) = lender_matches.value_of("id") {
@@ -3075,6 +3201,36 @@ fn process_lender_cmd(lender_matches: &clap::ArgMatches,
       };
       let (protocol, host) = protocol_host(fulfill_loan_matches);
       fulfill_loan(loan_id, issuer_id, txn_file, protocol, host)
+    }
+    ("create_or_overwrite_requirement", Some(create_or_overwrite_requirement_matches)) => {
+      let lender_id = if let Some(id_arg) = lender_matches.value_of("id") {
+        parse_to_u64(id_arg)?
+      } else {
+        println!("Lender id is required to get credential requirement information. Use lender --id.");
+        return Err(PlatformError::InputsError);
+      };
+      let attribute = if let Some(attribute_arg) =
+        create_or_overwrite_requirement_matches.value_of("attribute")
+      {
+        match attribute_arg {
+          "min_credit_score" => CredentialIndex::MinCreditScore,
+          "min_income" => CredentialIndex::MinIncome,
+          _ => CredentialIndex::Citizenship,
+        }
+      } else {
+        println!("Credential attribute is required to create or overwrite the credential requirement. Use --attribute.");
+        return Err(PlatformError::InputsError);
+      };
+      let requirement = if let Some(requirement_arg) =
+        create_or_overwrite_requirement_matches.value_of("requirement")
+      {
+        requirement_arg
+      } else {
+        println!("Credential value is required to create or overwrite the credential requirement. Use --requirement.");
+        return Err(PlatformError::InputsError);
+      };
+      let mut data = load_data()?;
+      data.create_or_overwrite_requirement(lender_id, attribute, requirement)
     }
     _ => {
       println!("Subcommand missing or not recognized. Try lender --help");
@@ -3245,24 +3401,32 @@ fn process_borrower_cmd(borrower_matches: &clap::ArgMatches,
         println!("Borrower id is required to get credential information. Use borrower --id.");
         return Err(PlatformError::InputsError);
       };
-      if let Some(credential_arg) = view_credential_matches.value_of("credential") {
-        let credential_id = parse_to_u64(credential_arg)?;
-        let credential = data.loans[credential_id as usize].clone();
-        if credential.borrower != borrower_id {
-          println!("Borrower {} doesn't own credential {}.",
-                   borrower_id, credential_id);
-          return Err(PlatformError::InputsError);
-        }
-        println!("Displaying credential {}: {:?}.", credential_id, credential);
+      let credential_id = if let Some(id) = data.borrowers[borrower_id as usize].credentials {
+        id
+      } else {
+        println!("No credential is found. Use create_or_overwrite_credential to create a credential record.");
         return Ok(());
-      }
-      let mut credentials = Vec::new();
-      if let Some(id) = data.borrowers[borrower_id as usize].credentials {
-        credentials = data.credentials[id as usize].attributes.clone();
-      }
-      println!("Displaying {} credential(s): {:?}",
-               credentials.len(),
-               credentials);
+      };
+      if let Some(attribute_arg) = view_credential_matches.value_of("attribute") {
+        let attribute = match attribute_arg {
+          "min_credit_score" => CredentialIndex::MinCreditScore,
+          "min_income" => CredentialIndex::MinIncome,
+          _ => CredentialIndex::Citizenship,
+        };
+        let value = data.credentials[credential_id as usize].values[attribute as usize].clone();
+        println!("Displaying {:?}: {:?}", attribute.get_name(), value);
+      } else {
+        println!("Displaying credentials:");
+        let values = data.credentials[credential_id as usize].values.clone();
+        for attribute in [CredentialIndex::MinCreditScore,
+                          CredentialIndex::MinIncome,
+                          CredentialIndex::Citizenship].iter()
+        {
+          if let Some(value) = values[*attribute as usize].clone() {
+            println!("{}: {}.", attribute.get_name(), value);
+          }
+        }
+      };
       Ok(())
     }
     ("create_or_overwrite_credential", Some(create_or_overwrite_credential_matches)) => {
@@ -3280,26 +3444,27 @@ fn process_borrower_cmd(borrower_matches: &clap::ArgMatches,
         println!("Credential issuer id is required to get credential information. Use --credential_issuer.");
         return Err(PlatformError::InputsError);
       };
-      let attribute =
-        if let Some(attribute_arg) = create_or_overwrite_credential_matches.value_of("attribute") {
-          match attribute_arg {
-            "min_credit_score" => CredentialIndex::MinCreditScore,
-            "min_income" => CredentialIndex::MinIncome,
-            _ => CredentialIndex::Citizenship,
-          }
-        } else {
-          println!("Credential attribute is required to create the credential. Use --attribute.");
-          return Err(PlatformError::InputsError);
-        };
+      let attribute = if let Some(attribute_arg) =
+        create_or_overwrite_credential_matches.value_of("attribute")
+      {
+        match attribute_arg {
+          "min_credit_score" => CredentialIndex::MinCreditScore,
+          "min_income" => CredentialIndex::MinIncome,
+          _ => CredentialIndex::Citizenship,
+        }
+      } else {
+        println!("Credential attribute is required to create or overwrite the credential. Use --attribute.");
+        return Err(PlatformError::InputsError);
+      };
       let value = if let Some(value_arg) = create_or_overwrite_credential_matches.value_of("value")
       {
         value_arg
       } else {
-        println!("Credential value is required to create the credential. Use --value.");
+        println!("Credential value is required to create or overwrite the credential. Use --value.");
         return Err(PlatformError::InputsError);
       };
       let mut data = load_data()?;
-      data.add_or_update_credential(borrower_id, credential_issuer_id, attribute, value)
+      data.create_or_overwrite_credential(borrower_id, credential_issuer_id, attribute, value)
     }
     ("get_asset_record", Some(get_asset_record_matches)) => {
       let borrower_id = if let Some(id_arg) = borrower_matches.value_of("id") {
