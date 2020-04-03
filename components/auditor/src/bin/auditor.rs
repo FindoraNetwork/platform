@@ -162,6 +162,8 @@ fn main() -> Result<(), Box<dyn Error>> {
   // us to refer to variables in an enclosing scope, there is no closure API, and
   // I can't stuff the data in AuditorBehaviour.
 
+  // TODO (brian/noah) the unsafe code here was blocking my build
+
   // Creating a struct that implements the NetworkBehaviour trait and combines all the desired network behaviours,
   // implementing the event handlers as per the desired application's networking logic.
   // We create a custom network behaviour that combines floodsub and mDNS.
