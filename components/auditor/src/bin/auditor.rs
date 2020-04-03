@@ -1,12 +1,12 @@
-//! A basic chat application demonstrating libp2p and the mDNS and floodsub protocols.
+//! A program that tests consensus on the value of a signed ledger state
 //!
-//! Using two terminal windows, start two instances. If you local network allows mDNS,
-//! they will automatically connect. Type a message in either terminal and hit return: the
-//! message is sent and printed in the other terminal. Close with Ctrl-c.
-//!
-//! You can of course open more terminal windows and add more participants.
-//! Dialing any of the other peers will propagate the new participant to all
-//! chat members and everyone will receive all messages.
+//! Using N terminal windows, start N instances. If you local network allows mDNS,
+//! they will automatically connect. To demonstrate that consensus failure works, 
+//! we "poison" the received ledger value using the --poison option
+//! 
+//! ```sh
+//! cargo run --bin auditor -- --poison
+//! ```
 //!
 //! # If they don't automatically connect
 //!
@@ -15,7 +15,7 @@
 //! window, run:
 //!
 //! ```sh
-//! cargo run --example chat
+//! cargo run --bin auditor
 //! ```
 //!
 //! It will print the PeerId and the listening address, e.g. `Listening on
@@ -24,7 +24,7 @@
 //! In the second terminal window, start a new instance of the example with:
 //!
 //! ```sh
-//! cargo run --example chat -- /ip4/127.0.0.1/tcp/24915
+//! cargo run --bin auditor -- /ip4/127.0.0.1/tcp/24915
 //! ```
 //!
 //! The two nodes then connect.
