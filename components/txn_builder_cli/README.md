@@ -53,12 +53,12 @@ Otherwise, add `--get_sids` when submitting asset issuing transactions, and note
 ./txn_builder_cli asset_issuer store_sids --file sids_file --indices 1,2,3
 ```
 
-### Store blind asset record ans associated memos
-Blind asset record and associated memos (tracer memo and owner memo) are necessary for asset transfer. To store them:
+### Store asset tracer memo and owner memo
+Asset tracer memo and owner memo are necessary for asset tracing. To store them:
 ```
-./txn_builder_cli asset_issuer --id 0 --file bar_and_memos_file --amount 100 --token_code ibIaBlHV-PdQkvSuEg6YSA==
+./txn_builder_cli asset_issuer --id 0 store_memo --file memo_file --amount 100 --token_code ibIaBlHV-PdQkvSuEg6YSA==
 ```
-Add `--confidential_amount` for confidential amount.
+For confidential token amount, add `--confidential_amount`.
 
 ### Assign to AIR (Address Identity Registry)
 * Create an empty transaction
@@ -86,6 +86,7 @@ Add `--confidential_amount` for confidential amount.
 ```
 By default, a randomly generated token code will be used. To specify a code, use `--token_code`.
 To define a fiat asset, add `--fiat`.
+To allow update or tracing, add `--updatable` or `--traceable`, respectively.
 
 * Submit the transaction
 ```
@@ -102,6 +103,7 @@ After an asset is defined and the transaction is submitted:
 ```
 ./txn_builder_cli --txn txn_issue asset_issuer --id 0 issue_asset --token_code ibIaBlHV-PdQkvSuEg6YSA== --amount 100
 ```
+To make the token amount confidential, add `--confidential_amount`.
 * Submit the transaction
 ```
 ./txn_builder_cli --txn txn_issue submit
@@ -109,7 +111,7 @@ After an asset is defined and the transaction is submitted:
 To display the utxo sids, add `--get_sids`. To store the sids to a file, use `--sids_file`.
 
 ### Transfer units of an asset. See `txn_builder_cli add transfer_asset`.
-After an asset is defined and issued, transactions are submitted, and utxo sids are stored.
+After an asset is defined and issued, transactions are submitted, and utxo sids are stored:
 * Create an empty transaction
 ```
 ./txn_builder_cli create_txn_builder --name txn_transfer
@@ -117,7 +119,7 @@ After an asset is defined and issued, transactions are submitted, and utxo sids 
 * Transfer
 After blind asset record and associated memos are stored:
 ```
-./txn_builder_cli --txn txn_transfer asset_issuer --id 0 transfer_asset --sids_path s recipients 0,1 --blind_asset_record_and_memo_files bar_and_memo_files --input_amounts 45 --output_amounts 10,35
+./txn_builder_cli --txn txn_transfer asset_issuer --id 0 transfer_asset --sids_file s recipients 0,1 --issuance_txn_files txn_issue --input_amounts 45 --output_amounts 10,35
 ```
 * Submit the transaction
 ```
@@ -134,13 +136,19 @@ After an asset is defined and the transaction is submitted:
 ```
 ./txn_builder_cli --txn txn_issue_and_transfer asset_issuer --id 0 issue_and_transfer_asset --recipient 0 --amount 1000 --token_code ibIaBlHV-PdQkvSuEg6YSA==
 ```
-Add `--confidential_amount` for confidential amount.
-Use `--memo_file` to store the owner memo.
+To make the token amount confidential, add `--confidential_amount`.
+To store the asset tracer memo and owner memo, use `--memo_file`.
 * Submit the transaction
 ```
 ./txn_builder_cli --txn txn_issue_and_transfer submit
 ```
 To get the utxo sids, add `--get_sids`.
+
+### Trace and verify an asset
+After the asset tracer memo and owner memo are stored by `store_memo` or `issue_and_transfer_asset --memo_file`, trace the asset and verify the token amount.
+```
+./txn_builder_cli asset_issuer --id 0 trace_and_verify_asset --memo_file memos --expected_amount 50
+```
 
 ## Credential issuer account
 ### Sign up a credential issuer account
@@ -153,7 +161,7 @@ In the initial data, there's one credential issuer, Ivy. To sign up a new creden
 ### Sign up a lender account
 In the initial data, there are two issuers, Lenny and Luna. To sign up a new lender account:
 ```
-./txn_builder_cli lender sign_up --name 'Lender Name' --min_credit_score 570
+./txn_builder_cli lender sign_up --name 'Lender Name'
 ```
 
 ### View loans
@@ -189,6 +197,14 @@ For example:
 ```
 By default, `https://testnet.findora.org` is used. To switch to `http://localhost`, add `--http --localhost`.
 
+### Create or overwrite credential requirement
+Currently supported attributes are min_credit_score, min_income and citizenship.
+For example, to create a requirement on min_credit_score:
+```
+./txn_builder_cli lender --id 0 create_or_overwrite_requirement --attribute min_credit_score --requirement 650
+```
+If the requirement already exists, the previous value will be overwritten.
+
 ## Borrower account
 ### Sign up a borrower account
 In the initial data, there's one borrower, Ben. To sign up a new borrower account:
@@ -206,7 +222,7 @@ In the initial data, there's one borrower, Ben. To sign up a new borrower accoun
 ./txn_builder_cli --txn txn_load borrower --id 0 load_funds --issuer 0 --amount 500
 ```
 By default, `https://testnet.findora.org` is used. To switch to `http://localhost`, add `--http --localhost`.
-Use `--memo_file` to store the owner memo.
+To store the asset tracer memo and owner memo, use `--memo_file`.
 
 ### View loans
 * View all loans of a borrower
@@ -247,14 +263,10 @@ For example:
 By default, `https://testnet.findora.org` is used. To switch to `http://localhost`, add `--http --localhost`.
 
 ### View credentials
-* View all credentials of a borrower
 ```
 ./txn_builder_cli borrower --id 0 view_credential
 ```
-* View a specific credential
-```
-./txn_builder_cli borrower --id 0 view_credential --credential 0
-```
+To viea a specific credential attribute, use `--attribute`.
 
 ### Create or overwrite a credential
 Currently supported attributes are min_credit_score, min_income and citizenship.
@@ -366,16 +378,17 @@ Note from the last line of the output that the utxo is `429`:
 Utxo: [TxoSID(429)]
 ```
 
-## Bill: verifies the transfered asset
-### Create an empty transaction
+## Trace and verify the asset
+### Bill: verifies the received asset
 ```
-./txn_builder_cli create_txn_builder --name txn_verify_asset
-```
-### Get and verify the asset record
-```
-./txn_builder_cli --txn txn_verify_asset borrower --id 1 get_asset_record --sid 429 --memo_file memo
+./txn_builder_cli borrower --id 1 get_asset_record --sid 429 --memo_file memo
 ```
 Note from the last line of the output that the asset token code is indeed `[238, 16, 0, 221, 52, 201, 64, 120, 67, 26, 207, 191, 154, 147, 245, 217]`, and the amount Bill owns is `100`.
 ```
 Bill owns 100 of asset [238, 16, 0, 221, 52, 201, 64, 120, 67, 26, 207, 191, 154, 147, 245, 217].
+```
+
+### Ian: traces the asset transferred to Bill and verifies the amount
+```
+./txn_builder_cli asset_issuer --id 1 trace_and_verify_asset --memo_file memo --expected_amount 100
 ```

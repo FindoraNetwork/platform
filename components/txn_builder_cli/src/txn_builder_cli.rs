@@ -2855,7 +2855,7 @@ fn process_asset_issuer_cmd(asset_issuer_matches: &clap::ArgMatches,
       {
         load_blind_asset_records_and_owner_memos_from_files(issuance_txn_files_arg)?
       } else {
-        println!("Blind asset records and associated memos are required to transfer asset. Use --asset_files.");
+        println!("Blind asset records and associated memos are required to transfer asset. Use --issuance_txn_files.");
         return Err(PlatformError::InputsError(error_location!()));
       };
       let input_amounts =
@@ -2986,7 +2986,7 @@ fn process_asset_issuer_cmd(asset_issuer_matches: &clap::ArgMatches,
         };
       let confidential_amount = issue_and_transfer_matches.is_present("confidential_amount");
       let record_type = AssetRecordType::from_booleans(confidential_amount, false);
-      let asset_file = issue_and_transfer_matches.value_of("asset_file");
+      let memo_file = issue_and_transfer_matches.value_of("memo_file");
 
       issue_and_transfer_asset(&issuer_key_pair,
                                &recipient_key_pair,
@@ -2994,7 +2994,7 @@ fn process_asset_issuer_cmd(asset_issuer_matches: &clap::ArgMatches,
                                token_code,
                                record_type,
                                None,
-                               asset_file,
+                               memo_file,
                                txn_file,
                                None)?;
       Ok(())
