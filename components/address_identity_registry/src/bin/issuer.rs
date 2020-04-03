@@ -1,4 +1,4 @@
-// #![deny(warnings)]
+#![deny(warnings)]
 #![allow(dead_code)]
 #![allow(unused_imports)]
 #![allow(unused_variables)]
@@ -164,7 +164,7 @@ mod handlers {
       }
       Err(e) => {
         println!("Credential signature FAILED in the issuer: {:?}", e);
-        Ok(warp::reply::json(&format!("Bad stuff happened")))
+        Ok(warp::reply::json(&"Bad stuff happened".to_string()))
       }
     }
   }

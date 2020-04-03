@@ -8,6 +8,9 @@ extern crate serde_derive;
 use credentials::{CredCommitment, CredIssuerPublicKey, CredPoK, CredUserSecretKey};
 use ledger::data_model::errors::PlatformError;
 use ledger::data_model::*;
+use ledger::error_location;
+use ledger::policies::Fraction;
+use ledger::policy_script::{Policy, PolicyGlobals, TxnCheckInputs, TxnPolicyData};
 use rand_chacha::ChaChaRng;
 use rand_core::SeedableRng;
 use std::cmp::Ordering;
@@ -16,21 +19,237 @@ use zei::api::anon_creds::{ACCommitmentKey, Credential};
 use zei::serialization::ZeiFromToBytes;
 use zei::setup::PublicParams;
 use zei::xfr::asset_record::{build_blind_asset_record, open_blind_asset_record, AssetRecordType};
-use zei::xfr::sig::XfrKeyPair;
+use zei::xfr::sig::{XfrKeyPair, XfrPublicKey};
 use zei::xfr::structs::{
   AssetRecord, AssetRecordTemplate, AssetTracingPolicy, BlindAssetRecord, OpenAssetRecord,
   OwnerMemo,
 };
 
+#[derive(Deserialize, Serialize, PartialEq)]
+pub enum PolicyChoice {
+  Fungible(),
+  LoanToken(Fraction, AssetTypeCode, u64),
+}
+
+impl Default for PolicyChoice {
+  fn default() -> Self {
+    Self::Fungible()
+  }
+}
+
+fn debt_policy() -> Policy {
+  use ledger::policy_script::*;
+  Policy { num_id_globals: 1,
+           num_rt_globals: 2,
+           num_amt_globals: 1,
+           num_frac_globals: 1,
+           init_check: TxnCheck { name: "init_txn".to_string(),
+                                  in_params: vec![],
+                                  out_params: vec![],
+                                  id_ops: vec![],
+                                  rt_ops: vec![],
+                                  fraction_ops: vec![FractionOp::Const(Fraction::new(0, 1)),
+                                                     FractionOp::Var(FractionVar(0)),
+                                                     FractionOp::Const(Fraction::new(1, 1)),],
+                                  amount_ops: vec![AmountOp::Const(0),
+                                                   AmountOp::Var(AmountVar(0)),],
+                                  bool_ops: vec![BoolOp::FracGe(FractionVar(1),
+                                                                FractionVar(1)),
+                                                 BoolOp::FracGe(FractionVar(2),
+                                                                FractionVar(1)),
+                                                 BoolOp::FracEq(FractionVar(2),
+                                                                FractionVar(1)),
+                                                 BoolOp::Not(BoolVar(2)),
+                                                 BoolOp::FracGe(FractionVar(2),
+                                                                FractionVar(1)),
+                                                 BoolOp::And(BoolVar(3), BoolVar(4)),
+                                                 BoolOp::FracGe(FractionVar(3),
+                                                                FractionVar(1)),
+                                                 BoolOp::FracEq(FractionVar(3),
+                                                                FractionVar(2)),
+                                                 BoolOp::Not(BoolVar(7)),
+                                                 BoolOp::FracGe(FractionVar(3),
+                                                                FractionVar(2)),
+                                                 BoolOp::And(BoolVar(8), BoolVar(9)),
+                                                 BoolOp::AmtGe(AmountVar(1), AmountVar(1)),
+                                                 BoolOp::AmtGe(AmountVar(2), AmountVar(1)),],
+                                  assertions: vec![BoolVar(0),
+                                                   BoolVar(1),
+                                                   BoolVar(5),
+                                                   BoolVar(6),
+                                                   BoolVar(10),
+                                                   BoolVar(11),
+                                                   BoolVar(12),],
+                                  required_signatures: vec![],
+                                  txn_template: vec![] },
+           txn_choices: vec![
+                             TxnCheck { name: "setup_loan".to_string(),
+                                        in_params: vec![],
+                                        out_params: vec![ResourceTypeVar(0)],
+                                        id_ops: vec![
+    IdOp::OwnerOf(ResourceVar(0)),
+    IdOp::Var(IdVar(0)),
+  ],
+                                        rt_ops: vec![],
+                                        fraction_ops: vec![],
+                                        amount_ops: vec![AmountOp::Var(AmountVar(0))],
+                                        bool_ops: vec![
+    BoolOp::IdEq(IdVar(1), IdVar(2)),
+    BoolOp::AmtEq(AmountVar(1), AmountVar(1)),
+  ],
+                                        assertions: vec![BoolVar(0), BoolVar(1)],
+                                        required_signatures: vec![IdVar(0)],
+                                        txn_template: vec![TxnOp::Issue(
+    AmountVar(1),
+    ResourceTypeVar(0),
+    ResourceVar(0),
+  )], },
+                             TxnCheck { name: "start_loan".to_string(),
+                                        in_params: vec![
+    ResourceTypeVar(0),
+    ResourceTypeVar(1),
+  ],
+                                        out_params: vec![
+    ResourceTypeVar(0),
+    ResourceTypeVar(1),
+  ],
+                                        id_ops: vec![
+    IdOp::OwnerOf(ResourceVar(0)),
+    IdOp::Var(IdVar(0)),
+    IdOp::OwnerOf(ResourceVar(1)),
+    IdOp::OwnerOf(ResourceVar(2)),
+  ],
+                                        rt_ops: vec![],
+                                        fraction_ops: vec![],
+                                        amount_ops: vec![
+    AmountOp::AmountOf(ResourceVar(1)),
+    AmountOp::AmountOf(ResourceVar(0)),
+    AmountOp::Const(0),
+    AmountOp::Minus(AmountVar(1), AmountVar(2)),
+    AmountOp::Minus(AmountVar(2), AmountVar(2)),
+  ],
+                                        bool_ops: vec![
+    BoolOp::AmtGe(AmountVar(1), AmountVar(2)),
+    BoolOp::IdEq(IdVar(1), IdVar(2)),
+    BoolOp::IdEq(IdVar(4), IdVar(3)),
+    BoolOp::AmtEq(AmountVar(2), AmountVar(2)),
+    BoolOp::AmtGe(AmountVar(3), AmountVar(3)),
+    BoolOp::AmtEq(AmountVar(4), AmountVar(3)),
+    BoolOp::AmtGe(AmountVar(2), AmountVar(2)),
+    BoolOp::AmtEq(AmountVar(5), AmountVar(3)),
+  ],
+                                        assertions: vec![
+    BoolVar(0),
+    BoolVar(1),
+    BoolVar(2),
+    BoolVar(3),
+    BoolVar(4),
+    BoolVar(5),
+    BoolVar(6),
+    BoolVar(7),
+  ],
+                                        required_signatures: vec![IdVar(0), IdVar(3)],
+                                        txn_template: vec![
+    TxnOp::Transfer(AmountVar(2), ResourceVar(1), Some(ResourceVar(3))),
+    TxnOp::Transfer(AmountVar(2), ResourceVar(0), Some(ResourceVar(2))),
+  ], },
+                             TxnCheck { name: "repay_loan".to_string(),
+                                        in_params: vec![
+    ResourceTypeVar(0),
+    ResourceTypeVar(1),
+  ],
+                                        out_params: vec![
+    ResourceTypeVar(0),
+    ResourceTypeVar(1),
+  ],
+                                        id_ops: vec![
+    IdOp::OwnerOf(ResourceVar(3)),
+    IdOp::OwnerOf(ResourceVar(0)),
+  ],
+                                        rt_ops: vec![],
+                                        fraction_ops: vec![
+    FractionOp::Var(FractionVar(0)),
+    FractionOp::AmtTimes(AmountVar(1), FractionVar(1)),
+  ],
+                                        amount_ops: vec![
+    AmountOp::AmountOf(ResourceVar(0)),
+    AmountOp::AmountOf(ResourceVar(1)),
+    AmountOp::Round(FractionVar(2)),
+    AmountOp::Minus(AmountVar(2), AmountVar(3)),
+    AmountOp::Minus(AmountVar(1), AmountVar(4)),
+    AmountOp::Const(0),
+    AmountOp::Minus(AmountVar(2), AmountVar(2)),
+    AmountOp::Minus(AmountVar(5), AmountVar(5)),
+  ],
+                                        bool_ops: vec![
+    BoolOp::IdEq(IdVar(1), IdVar(2)),
+    BoolOp::AmtGe(AmountVar(2), AmountVar(3)),
+    BoolOp::AmtGe(AmountVar(1), AmountVar(4)),
+    BoolOp::AmtGe(AmountVar(1), AmountVar(5)),
+    BoolOp::AmtGe(AmountVar(6), AmountVar(6)),
+    BoolOp::AmtGe(AmountVar(2), AmountVar(2)),
+    BoolOp::AmtEq(AmountVar(7), AmountVar(6)),
+    BoolOp::AmtGe(AmountVar(5), AmountVar(5)),
+    BoolOp::AmtEq(AmountVar(8), AmountVar(6)),
+  ],
+                                        assertions: vec![
+    BoolVar(0),
+    BoolVar(1),
+    BoolVar(2),
+    BoolVar(3),
+    BoolVar(4),
+    BoolVar(5),
+    BoolVar(6),
+    BoolVar(7),
+    BoolVar(8),
+  ],
+                                        required_signatures: vec![],
+                                        txn_template: vec![
+    TxnOp::Transfer(AmountVar(4), ResourceVar(0), None),
+    TxnOp::Transfer(AmountVar(5), ResourceVar(0), Some(ResourceVar(2))),
+    TxnOp::Transfer(AmountVar(2), ResourceVar(1), Some(ResourceVar(3))),
+  ], },
+  ] }
+}
+
+fn debt_globals(code: &AssetTypeCode,
+                borrower: &XfrPublicKey,
+                interest_rate: Fraction,
+                fiat_type: AssetTypeCode,
+                amount: u64)
+                -> PolicyGlobals {
+  PolicyGlobals { id_vars: vec![*borrower],
+                  rt_vars: vec![(*code).val, fiat_type.val],
+                  amt_vars: vec![amount],
+                  frac_vars: vec![interest_rate] }
+}
+
+fn policy_from_choice(code: &AssetTypeCode,
+                      borrower: &XfrPublicKey,
+                      c: PolicyChoice)
+                      -> Option<(Box<Policy>, PolicyGlobals)> {
+  match c {
+    PolicyChoice::Fungible() => None,
+    PolicyChoice::LoanToken(interest_rate, fiat_type, amount) => {
+      Some((Box::new(debt_policy()),
+            debt_globals(code, borrower, interest_rate, fiat_type, amount)))
+    }
+  }
+}
+
 pub trait BuildsTransactions {
   fn transaction(&self) -> &Transaction;
+  fn sign(&mut self, kp: &XfrKeyPair) -> &mut Self;
+  fn add_memo(&mut self, memo: Memo) -> &mut Self;
+  fn add_policy_option(&mut self, token_code: AssetTypeCode, which_check: String) -> &mut Self;
   #[allow(clippy::too_many_arguments)]
   fn add_operation_create_asset(&mut self,
                                 key_pair: &XfrKeyPair,
                                 token_code: Option<AssetTypeCode>,
                                 updatable: bool,
                                 traceable: bool,
-                                memo: &str)
+                                memo: &str,
+                                policy_choice: PolicyChoice)
                                 -> Result<&mut Self, PlatformError>;
   fn add_operation_issue_asset(&mut self,
                                key_pair: &XfrKeyPair,
@@ -110,7 +329,7 @@ pub trait BuildsTransactions {
     let mut partially_consumed_inputs = Vec::new();
     for (input_amount, oar) in input_amounts.iter().zip(input_oars.iter()) {
       if input_amount > oar.get_amount() {
-        return Err(PlatformError::InputsError);
+        return Err(PlatformError::InputsError(error_location!()));
       } else if input_amount < oar.get_amount() {
         let ar = AssetRecordTemplate::with_no_asset_tracking(oar.get_amount() - input_amount,
                                                              *oar.get_asset_type(),
@@ -121,7 +340,7 @@ pub trait BuildsTransactions {
     }
     let output_total = transfer_to.iter().fold(0, |acc, (amount, _)| acc + amount);
     if input_total != output_total {
-      return Err(PlatformError::InputsError);
+      return Err(PlatformError::InputsError(error_location!()));
     }
     let asset_type = input_oars[0].get_asset_type();
     let asset_record_type = input_oars[0].get_record_type();
@@ -162,16 +381,36 @@ impl BuildsTransactions for TransactionBuilder {
   fn transaction(&self) -> &Transaction {
     &self.txn
   }
+  fn add_memo(&mut self, memo: Memo) -> &mut Self {
+    self.txn.memos.push(memo);
+    self
+  }
+
+  fn add_policy_option(&mut self, token_code: AssetTypeCode, which_check: String) -> &mut Self {
+    if self.txn.policy_options.is_none() {
+      self.txn.policy_options = Some(TxnPolicyData(vec![]));
+    }
+    self.txn
+        .policy_options
+        .as_mut()
+        .unwrap()
+        .0
+        .push((token_code, TxnCheckInputs { which_check }));
+    self
+  }
+
   fn add_operation_create_asset(&mut self,
                                 key_pair: &XfrKeyPair,
                                 token_code: Option<AssetTypeCode>,
                                 updatable: bool,
                                 traceable: bool,
-                                memo: &str)
+                                memo: &str,
+                                policy_choice: PolicyChoice)
                                 -> Result<&mut Self, PlatformError> {
     let pub_key = &IssuerPublicKey { key: key_pair.get_pk() };
     let priv_key = &key_pair.get_sk();
-    self.txn.add_operation(Operation::DefineAsset(DefineAsset::new(DefineAssetBody::new(&token_code.unwrap_or_else(AssetTypeCode::gen_random), pub_key, updatable, traceable, Some(Memo(memo.into())), Some(ConfidentialMemo {}))?, pub_key, priv_key)?));
+    let token_code = token_code.unwrap_or_else(AssetTypeCode::gen_random);
+    self.txn.add_operation(Operation::DefineAsset(DefineAsset::new(DefineAssetBody::new(&token_code, pub_key, updatable, traceable, Some(Memo(memo.into())), Some(ConfidentialMemo {}), policy_from_choice(&token_code,&pub_key.key,policy_choice))?, pub_key, priv_key)?));
     Ok(self)
   }
   fn add_operation_issue_asset(&mut self,
@@ -236,6 +475,11 @@ impl BuildsTransactions for TransactionBuilder {
 
   fn add_operation(&mut self, op: Operation) -> &mut Self {
     self.txn.add_operation(op);
+    self
+  }
+
+  fn sign(&mut self, kp: &XfrKeyPair) -> &mut Self {
+    self.txn.sign(kp.get_sk_ref(), kp.get_pk_ref());
     self
   }
 
@@ -338,7 +582,7 @@ impl TransferOperationBuilder {
     for (spend_amount, oar) in self.spend_amounts.iter().zip(self.input_records.iter()) {
       match spend_amount.cmp(oar.get_amount()) {
         Ordering::Greater => {
-          return Err(PlatformError::InputsError);
+          return Err(PlatformError::InputsError(error_location!()));
         }
         Ordering::Less => {
           let ar_template = AssetRecordTemplate::with_no_asset_tracking(oar.get_amount()
@@ -357,7 +601,7 @@ impl TransferOperationBuilder {
                            .iter()
                            .fold(0, |acc, ar| acc + ar.open_asset_record.amount);
     if spend_total != output_total {
-      return Err(PlatformError::InputsError);
+      return Err(PlatformError::InputsError(error_location!()));
     }
     self.output_records.append(&mut partially_consumed_inputs);
     Ok(self)

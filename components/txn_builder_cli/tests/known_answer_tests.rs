@@ -54,12 +54,10 @@ fn view_credential_all(borrower_id: &str) -> io::Result<Output> {
 }
 
 #[cfg(test)]
-fn view_credential_with_credential_id(borrower_id: &str,
-                                      credential_id: &str)
-                                      -> io::Result<Output> {
+fn view_credential_attribute(borrower_id: &str, attribute: &str) -> io::Result<Output> {
   Command::new(COMMAND).args(&["borrower", "--id", borrower_id])
                        .arg("view_credential")
-                       .args(&["--credential", credential_id])
+                       .args(&["--attribute", attribute])
                        .output()
 }
 
@@ -81,10 +79,9 @@ fn sign_up_credential_issuer(name: &str) -> io::Result<Output> {
 }
 
 #[cfg(test)]
-fn sign_up_lender(name: &str, min_credit_score: &str) -> io::Result<Output> {
+fn sign_up_lender(name: &str) -> io::Result<Output> {
   Command::new(COMMAND).args(&["lender", "sign_up"])
                        .args(&["--name", name])
-                       .args(&["--min_credit_score", min_credit_score])
                        .output()
 }
 
@@ -367,7 +364,7 @@ fn test_create_users() {
   assert!(output.status.success());
 
   // Create a lender
-  let output = sign_up_lender("Lender L", "550").expect("Failed to create a lender");
+  let output = sign_up_lender("Lender L").expect("Failed to create a lender");
   io::stdout().write_all(&output.stdout).unwrap();
   io::stdout().write_all(&output.stderr).unwrap();
 
@@ -385,7 +382,7 @@ fn test_create_users() {
 
 #[test]
 #[ignore]
-fn test_create_or_update_credentials() {
+fn test_create_or_overwrite_credentials() {
   // Create a borrower
   sign_up_borrower("Borrower B").expect("Failed to create a borrower");
 
@@ -396,9 +393,18 @@ fn test_create_or_update_credentials() {
 
   assert!(output.status.success());
   assert!(from_utf8(&output.stdout).unwrap()
-                                   .contains(&"Adding the credential record.".to_owned()));
+                                   .contains(&"Creating the credential record.".to_owned()));
 
-  // Update the credential with an additional record
+  // Overwrite the minimum credit score record
+  let output = create_or_overwrite_credential("1", "min_credit_score", "680").expect("Failed to overwrite the min_credit_score credential");
+  io::stdout().write_all(&output.stdout).unwrap();
+  io::stdout().write_all(&output.stderr).unwrap();
+
+  assert!(output.status.success());
+  assert!(from_utf8(&output.stdout).unwrap()
+                                   .contains(&"Overwriting the credential attribute.".to_owned()));
+
+  // Add the minimum income record to the credential
   let output =
   create_or_overwrite_credential("1", "min_income", "1000").expect("Failed to create a min_income credential");
   io::stdout().write_all(&output.stdout).unwrap();
@@ -406,7 +412,7 @@ fn test_create_or_update_credentials() {
 
   assert!(output.status.success());
   assert!(from_utf8(&output.stdout).unwrap()
-                                   .contains(&"Updating the credential record.".to_owned()));
+                                   .contains(&"Adding the credential attribute.".to_owned()));
 
   let _ = fs::remove_file(DATA_FILE);
 }
@@ -543,17 +549,17 @@ fn test_view() {
   io::stdout().write_all(&output.stderr).unwrap();
 
   assert!(output.status.success());
-  assert!(from_utf8(&output.stdout).unwrap()
-                                   .contains(&"Displaying 2 credential(s):".to_owned()));
+  assert!(!from_utf8(&output.stdout).unwrap()
+                                    .contains(&"citizenship".to_owned()));
 
-  // 2. View a credential by credential id
-  let output = view_credential_with_credential_id("0", "0").expect("Failed to view the loan");
+  // 2. View a credential attribute
+  let output = view_credential_attribute("0", "min_income").expect("Failed to view the attribute");
   io::stdout().write_all(&output.stdout).unwrap();
   io::stdout().write_all(&output.stderr).unwrap();
 
   assert!(output.status.success());
   assert!(from_utf8(&output.stdout).unwrap()
-                                   .contains(&"Displaying credential".to_owned()));
+                                   .contains(&"Displaying \"min_income\"".to_owned()));
 
   let _ = fs::remove_file(DATA_FILE);
   fs::remove_file(txn_builder_path).unwrap();
@@ -823,6 +829,7 @@ fn test_define_issue_transfer_and_submit_with_args() {
 //
 // Compose transaction and submit
 //
+#[ignore]
 #[test]
 fn test_air_assign() {
   // Create txn builder and key pair

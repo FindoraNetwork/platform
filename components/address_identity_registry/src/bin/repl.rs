@@ -515,7 +515,6 @@ mod tests {
   use rand_core::SeedableRng;
 
   #[test]
-
   // test_ac_functions tests the expected order of operations of the AIR as described in the README
   fn test_ac_functions() {
     let mut prng = ChaChaRng::from_entropy();

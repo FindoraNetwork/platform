@@ -10,7 +10,7 @@ use ledger::store::LedgerState;
 use ledger::store::*;
 use rand_chacha::ChaChaRng;
 use rand_core::SeedableRng;
-use txn_builder::{BuildsTransactions, TransactionBuilder, TransferOperationBuilder};
+use txn_builder::{BuildsTransactions, PolicyChoice, TransactionBuilder, TransferOperationBuilder};
 use zei::serialization::ZeiFromToBytes;
 use zei::setup::PublicParams;
 use zei::xfr::asset_record::AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType;
@@ -40,7 +40,12 @@ fn test_create_asset() -> Result<(), PlatformError> {
   let mut builder = TransactionBuilder::default();
 
   // Define
-  let tx = builder.add_operation_create_asset(&keys, Some(code), false, false, "test".into())?
+  let tx = builder.add_operation_create_asset(&keys,
+                                              Some(code),
+                                              false,
+                                              false,
+                                              "test".into(),
+                                              PolicyChoice::Fungible())?
                   .transaction();
   apply_transaction(&mut ledger, tx.clone());
   assert!(ledger.get_asset_type(&code).is_some());
@@ -114,12 +119,14 @@ fn test_loan_repayment(loan_amount: u64,
                                               Some(fiat_code),
                                               false,
                                               false,
-                                              "fiat".into())?
+                                              "fiat".into(),
+                                              PolicyChoice::Fungible())?
                   .add_operation_create_asset(&borrower_keys,
                                               Some(debt_code),
                                               false,
                                               false,
-                                              &serde_json::to_string(&debt_memo).unwrap())?
+                                              &serde_json::to_string(&debt_memo).unwrap(),
+                                              PolicyChoice::Fungible())?
                   .transaction();
 
   apply_transaction(&mut ledger, tx.clone());

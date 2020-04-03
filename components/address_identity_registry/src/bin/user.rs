@@ -12,6 +12,7 @@ use shared::{protocol_host, urlencode, PubCreds, UserCreds, QUERY_PORT, SUBMIT_P
 use submission_server::{TxnHandle, TxnStatus};
 use txn_builder::{BuildsTransactions, TransactionBuilder, TransferOperationBuilder};
 use warp::Filter;
+use zei::api::anon_creds::{ac_commit, ac_keygen_user, ACCommitmentKey, ACPoK, ACSignature};
 use zei::serialization::ZeiFromToBytes;
 use zei::xfr::sig::{XfrKeyPair, XfrPublicKey};
 
@@ -75,7 +76,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let user_key_pair = XfrKeyPair::zei_from_bytes(&hex::decode(KEY_PAIR_STR)?);
 
     let mut txn_builder = TransactionBuilder::default();
-    txn_builder.add_operation_air_assign(&user_key_pair, resp1.issuer_pk.clone(), commitment, proof)?;
+    txn_builder.add_operation_air_assign(&user_key_pair,
+                                         resp1.issuer_pk.clone(),
+                                         commitment,
+                                         proof)?;
 
     // Submit to ledger
     let txn = txn_builder.transaction();

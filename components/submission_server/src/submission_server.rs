@@ -213,7 +213,7 @@ mod tests {
   use super::*;
   use ledger::data_model::AssetTypeCode;
   use rand_core::SeedableRng;
-  use txn_builder::{BuildsTransactions, TransactionBuilder};
+  use txn_builder::{BuildsTransactions, PolicyChoice, TransactionBuilder};
   use zei::xfr::sig::XfrKeyPair;
 
   #[test]
@@ -241,10 +241,16 @@ mod tests {
                                              Some(asset_token),
                                              true,
                                              true,
-                                             &String::from("{}"))
+                                             &String::from("{}"),
+                                             PolicyChoice::Fungible())
                  .unwrap();
 
-    txn_builder_1.add_operation_create_asset(&keypair, None, true, true, "test")
+    txn_builder_1.add_operation_create_asset(&keypair,
+                                             None,
+                                             true,
+                                             true,
+                                             "test",
+                                             PolicyChoice::Fungible())
                  .unwrap();
 
     // Cache transactions
