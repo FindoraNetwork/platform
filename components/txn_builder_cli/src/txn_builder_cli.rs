@@ -737,7 +737,7 @@ fn load_sids_from_file(file_path: &str) -> Result<Vec<u64>, PlatformError> {
       file = f;
     }
     Err(_) => {
-      return Err(PlatformError::IoError(format!("File doesn't exist: {}. Try subcommand store --sids.",file_path)));
+      return Err(PlatformError::IoError(format!("File doesn't exist: {}. Try subcommand store --sids.", file_path)));
     }
   }
 
@@ -1083,6 +1083,7 @@ fn air_assign(issuer_id: u64,
 
 // TODO (Keyao): Move this enum to data_model and make it public?
 #[allow(non_camel_case_types)]
+#[allow(clippy::enum_variant_names)]
 /// Represents whether an asset is updatable and/or traceable.
 enum AssetAccessType {
   Updatable_Traceable,
@@ -1093,7 +1094,7 @@ enum AssetAccessType {
 
 impl AssetAccessType {
   /// Converts the asset access type
-  fn to_bools(self) -> (bool, bool) {
+  fn get_booleans(self) -> (bool, bool) {
     match self {
       AssetAccessType::Updatable_Traceable => (true, true),
       AssetAccessType::Updatable_NotTraceable => (true, false),
@@ -1102,7 +1103,7 @@ impl AssetAccessType {
     }
   }
 
-  fn from_bools(updatable: bool, traceable: bool) -> Self {
+  fn from_booleans(updatable: bool, traceable: bool) -> Self {
     match (updatable, traceable) {
       (true, true) => AssetAccessType::Updatable_Traceable,
       (true, false) => AssetAccessType::Updatable_NotTraceable,
@@ -1131,7 +1132,7 @@ fn define_asset(fiat_asset: bool,
                 txn_file: &str)
                 -> Result<TransactionBuilder, PlatformError> {
   let mut txn_builder = TransactionBuilder::default();
-  let (updatable, traceable) = access_type.to_bools();
+  let (updatable, traceable) = access_type.get_booleans();
   txn_builder.add_operation_create_asset(issuer_key_pair,
                                          Some(token_code),
                                          updatable,
@@ -1541,9 +1542,9 @@ fn query_open_asset_record(protocol: &str,
     serde_json::from_str::<BlindAssetRecord>(&res).or_else(|_| {
                                                     Err(PlatformError::DeserializationError)
                                                   })?;
-  open_blind_asset_record(&blind_asset_record, owner_memo,key_pair.get_sk_ref()).or_else(|error| {
-                                                                 Err(PlatformError::ZeiError(error))
-                                                               })
+  open_blind_asset_record(&blind_asset_record, owner_memo, key_pair.get_sk_ref()).or_else(|error| {
+                                                                                    Err(PlatformError::ZeiError(error))
+                                                                                  })
 }
 
 /// Fulfills a loan.
@@ -2818,7 +2819,7 @@ fn process_asset_issuer_cmd(asset_issuer_matches: &clap::ArgMatches,
                          &issuer_key_pair,
                          asset_token,
                          &memo,
-                         AssetAccessType::from_bools(updatable, traceable),
+                         AssetAccessType::from_booleans(updatable, traceable),
                          txn_file)
       {
         Ok(_) => Ok(()),
@@ -3789,9 +3790,9 @@ mod tests {
                                      &recipient_key_pair,
                                      amount,
                                      code,
-                                     AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,None,
+                                     AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType, None,
                                      None,
-                                     txn_builder_path,None).is_ok());
+                                     txn_builder_path, None).is_ok());
 
     let _ = fs::remove_file(DATA_FILE);
     fs::remove_file(txn_builder_path).unwrap();
