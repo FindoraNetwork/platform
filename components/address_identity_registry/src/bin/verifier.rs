@@ -6,7 +6,8 @@ use air::{check_merkle_proof, AIRResult, AIR};
 use credentials::{credential_user_key_gen, credential_verify, CredCommitment};
 use rand_chacha::ChaChaRng;
 use rand_core::SeedableRng;
-use shared::{protocol_host, urlencode, AIRAddressAndPoK, PubCreds, RevealFields, QUERY_PORT};
+use shared::{AIRAddressAndPoK, PubCreds, RevealFields};
+use utils::{protocol_host, urlencode, QUERY_PORT};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
