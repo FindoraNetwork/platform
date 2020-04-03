@@ -212,7 +212,7 @@ impl TransactionBuilder {
   /// @param {string} memo - Text field for asset definition.
   /// @param {string} token_code - Optional Base64 string representing the token code of the asset to be issued
   /// If empty, a token code will be chosen at random.
-  pub fn add_operation_create_asset(mut self,
+  pub fn add_operation_create_asset(self,
                                     key_pair: &XfrKeyPair,
 
                                     memo: String,
@@ -224,13 +224,13 @@ impl TransactionBuilder {
                                                 create_default_policy_info())
   }
 
-  pub fn add_operation_create_asset_with_policy(&self,
+  pub fn add_operation_create_asset_with_policy(mut self,
                                                 key_pair: &XfrKeyPair,
 
                                                 memo: String,
                                                 token_code: String,
                                                 policy_choice: String)
-                                                -> Result<WasmTransactionBuilder, JsValue> {
+                                                -> Result<TransactionBuilder, JsValue> {
     let asset_token = if token_code.is_empty() {
       AssetTypeCode::gen_random()
     } else {
@@ -254,7 +254,7 @@ impl TransactionBuilder {
   pub fn add_policy_option(mut self,
                            token_code: String,
                            which_check: String)
-                           -> Result<WasmTransactionBuilder, JsValue> {
+                           -> Result<TransactionBuilder, JsValue> {
     let token_code = AssetTypeCode::new_from_base64(&token_code).map_err(|e| {
                        JsValue::from_str(&format!("Could not deserialize asset type code: {}", e))
                      })?;
@@ -337,10 +337,9 @@ impl TransactionBuilder {
     Ok(self)
   }
 
-  pub fn sign(&mut self, kp: &XfrKeyPair) -> Result<WasmTransactionBuilder, JsValue> {
-    let new_builder = Serialized::new(&*self.transaction_builder.deserialize().sign(kp));
-
-    Ok(WasmTransactionBuilder { transaction_builder: new_builder })
+  pub fn sign(mut self, kp: &XfrKeyPair) -> Result<TransactionBuilder, JsValue> {
+    self.get_builder_mut().sign(kp);
+    Ok(self)
   }
 
   /// Extracts the serialized form of a transaction.
@@ -493,7 +492,7 @@ impl TransferOperationBuilder {
   }
 
   pub fn builder(&self) -> String {
-    serde_json::to_string(&self.op_builder.deserialize()).unwrap()
+    serde_json::to_string(self.get_builder()).unwrap()
   }
 
   /// Wraps around TransferOperationBuilder to extract an operation expression as JSON.
