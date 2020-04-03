@@ -8,6 +8,7 @@ extern crate serde_derive;
 use credentials::{CredCommitment, CredIssuerPublicKey, CredPoK, CredUserSecretKey};
 use ledger::data_model::errors::PlatformError;
 use ledger::data_model::*;
+use ledger::error_location;
 use ledger::policies::Fraction;
 use ledger::policy_script::{Policy, PolicyGlobals, TxnCheckInputs, TxnPolicyData};
 use rand_chacha::ChaChaRng;
@@ -329,7 +330,7 @@ pub trait BuildsTransactions {
     let mut partially_consumed_inputs = Vec::new();
     for (input_amount, oar) in input_amounts.iter().zip(input_oars.iter()) {
       if input_amount > oar.get_amount() {
-        return Err(PlatformError::InputsError);
+        return Err(PlatformError::InputsError(error_location!()));
       } else if input_amount < oar.get_amount() {
         let ar = match tracing_policy {
           Some(policy) => AssetRecordTemplate::with_asset_tracking(oar.get_amount() - input_amount,
@@ -347,7 +348,7 @@ pub trait BuildsTransactions {
     }
     let output_total = transfer_to.iter().fold(0, |acc, (amount, _)| acc + amount);
     if input_total != output_total {
-      return Err(PlatformError::InputsError);
+      return Err(PlatformError::InputsError(error_location!()));
     }
     let asset_type = input_oars[0].get_asset_type();
     let asset_record_type = input_oars[0].get_record_type();
@@ -579,7 +580,7 @@ impl TransferOperationBuilder {
     for (spend_amount, oar) in self.spend_amounts.iter().zip(self.input_records.iter()) {
       match spend_amount.cmp(oar.get_amount()) {
         Ordering::Greater => {
-          return Err(PlatformError::InputsError);
+          return Err(PlatformError::InputsError(error_location!()));
         }
         Ordering::Less => {
           let ar_template = AssetRecordTemplate::with_no_asset_tracking(oar.get_amount()
@@ -598,7 +599,7 @@ impl TransferOperationBuilder {
                            .iter()
                            .fold(0, |acc, ar| acc + ar.open_asset_record.amount);
     if spend_total != output_total {
-      return Err(PlatformError::InputsError);
+      return Err(PlatformError::InputsError(error_location!()));
     }
     self.output_records.append(&mut partially_consumed_inputs);
     Ok(self)

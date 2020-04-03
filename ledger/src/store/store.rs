@@ -6,6 +6,7 @@ extern crate tempdir;
 
 use crate::data_model::errors::PlatformError;
 use crate::data_model::*;
+use crate::error_location;
 use crate::policies::{calculate_fee, DebtMemo};
 use crate::policy_script::policy_check_txn;
 use air::{AIRResult, AIR};
@@ -413,10 +414,10 @@ impl LedgerStatus {
     for (inp_sid, inp_record) in txn.input_txos.iter() {
       let inp_utxo = self.utxos
                          .get(inp_sid)
-                         .map_or(Err(PlatformError::InputsError), Ok)?;
+                         .map_or(Err(PlatformError::InputsError(error_location!())), Ok)?;
       let record = &(inp_utxo.0).0;
       if record != inp_record {
-        return Err(PlatformError::InputsError);
+        return Err(PlatformError::InputsError(error_location!()));
       }
     }
 
@@ -425,10 +426,10 @@ impl LedgerStatus {
     // New asset types must not already exist
     for (code, _asset_type) in txn.new_asset_codes.iter() {
       if self.asset_types.contains_key(&code) {
-        return Err(PlatformError::InputsError);
+        return Err(PlatformError::InputsError(error_location!()));
       }
       if self.issuance_num.contains_key(&code) {
-        return Err(PlatformError::InputsError);
+        return Err(PlatformError::InputsError(error_location!()));
       }
       debug_assert!(txn.new_issuance_nums.contains_key(&code));
 
@@ -453,15 +454,15 @@ impl LedgerStatus {
       let asset_type = self.asset_types
                            .get(&code)
                            .or_else(|| txn.new_asset_codes.get(&code))
-                           .ok_or(PlatformError::InputsError)?;
+                           .ok_or_else(|| PlatformError::InputsError(error_location!()))?;
       let proper_key = asset_type.properties.issuer;
       if *iss_key != proper_key {
-        return Err(PlatformError::InputsError);
+        return Err(PlatformError::InputsError(error_location!()));
       }
 
       if seq_nums.is_empty() {
         if !txn.new_asset_codes.contains_key(&code) {
-          return Err(PlatformError::InputsError);
+          return Err(PlatformError::InputsError(error_location!()));
         }
       // We could re-check that self.issuance_num doesn't contain `code`,
       // but currently it's redundant with the new-asset-type checks
@@ -478,7 +479,7 @@ impl LedgerStatus {
                                      .unwrap();
         let min_seq_num = seq_nums.first().unwrap();
         if min_seq_num < curr_seq_num_limit {
-          return Err(PlatformError::InputsError);
+          return Err(PlatformError::InputsError(error_location!()));
         }
       }
     }
@@ -491,7 +492,7 @@ impl LedgerStatus {
       let debt_type = &self.asset_types
                            .get(&code)
                            .or_else(|| txn.new_asset_codes.get(&code))
-                           .ok_or(PlatformError::InputsError)?
+                           .ok_or_else(|| PlatformError::InputsError(error_location!()))?
                            .properties;
 
       let debt_memo = serde_json::from_str::<DebtMemo>(&debt_type.memo.0)?;
@@ -501,7 +502,7 @@ impl LedgerStatus {
       if debt_swap_effects.fiat_code != debt_memo.fiat_code
          || debt_swap_effects.fiat_paid != debt_swap_effects.debt_burned + correct_fee
       {
-        return Err(PlatformError::InputsError);
+        return Err(PlatformError::InputsError(error_location!()));
       }
     }
 
@@ -516,7 +517,7 @@ impl LedgerStatus {
       if txn.custom_policy_asset_types.contains_key(code) {
         let asset = self.asset_types
                         .get(code)
-                        .ok_or(PlatformError::InputsError)?;
+                        .ok_or_else(|| PlatformError::InputsError(error_location!()))?;
         if let Some((ref pol, ref globals)) = asset.properties.policy {
           let globals = globals.clone();
           policy_check_txn(code, globals, &pol, &txn.txn)?;
@@ -614,7 +615,7 @@ impl LedgerUpdate<ChaChaRng> for LedgerState {
     let mut block_ctx = None;
     std::mem::swap(&mut self.block_ctx, &mut block_ctx);
     match block_ctx {
-      None => Err(PlatformError::InputsError),
+      None => Err(PlatformError::InputsError(error_location!())),
       // Probably should be a more relevant error
       Some(block) => Ok(block),
     }

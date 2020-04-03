@@ -12,7 +12,7 @@ wasm-opt = false
 base64 = "0.10"
 bincode = "1"
 bulletproofs = { version = "2.0.0",  package = "bulletproofs", git = "https://github.com/dalek-cryptography/bulletproofs", branch = "develop", features = ["yoloproofs"] }
-credentials = { path = "../credentials" }
+credentials = { path = "../../libs/credentials" }
 cryptohash = { path = "../../libs/cryptohash" }
 curve25519-dalek = { version =  "2.0.0", features = ["serde"] }
 futures = "0.1.20"

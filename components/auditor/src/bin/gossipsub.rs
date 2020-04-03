@@ -26,6 +26,7 @@
 //!
 //! The two nodes should then connect.
 
+#![deny(warnings)]
 use async_std::{io, task};
 use env_logger::{Builder, Env};
 use futures::prelude::*;
@@ -106,20 +107,13 @@ fn main() -> Result<(), Box<dyn Error>> {
                        Poll::Pending => break,
                      };
                    }
-
-                   loop {
-                     match swarm.poll_next_unpin(cx) {
-                       Poll::Ready(Some(gossip_event)) => match gossip_event {
-                         GossipsubEvent::Message(peer_id, id, message) => {
-                           println!("Got message: {} with id: {} from peer: {:?}",
-                                    String::from_utf8_lossy(&message.data),
-                                    id,
-                                    peer_id)
-                         }
-                         _ => {}
-                       },
-                       Poll::Ready(None) | Poll::Pending => break,
-                     }
+                   while let Poll::Ready(Some(gossip_event)) = swarm.poll_next_unpin(cx) {
+                     if let GossipsubEvent::Message(peer_id, id, message) = gossip_event {
+                       println!("Got message: {} with id: {} from peer: {:?}",
+                                String::from_utf8_lossy(&message.data),
+                                id,
+                                peer_id);
+                     };
                    }
 
                    if !listening {

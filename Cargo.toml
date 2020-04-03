@@ -6,7 +6,6 @@ members = [
     "components/auditor",
     "components/xfrnote",
     "components/ledger_api_service",
-    "components/credentials",
     "components/check_merkle",
     "components/ledger_client",
     "components/ledger_standalone",
@@ -26,4 +25,5 @@ members = [
     "libs/ads/sparse_merkle_tree",
     "libs/bitmap",
     "libs/cryptohash",
+    "libs/credentials",
 ]
