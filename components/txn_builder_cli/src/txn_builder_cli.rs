@@ -1,4 +1,4 @@
-//#![deny(warnings)]
+#![deny(warnings)]
 use clap::{App, Arg, SubCommand};
 use credentials::{
   credential_issuer_key_gen, credential_keygen_commitment, credential_reveal, credential_sign,
