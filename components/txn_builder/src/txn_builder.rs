@@ -569,9 +569,7 @@ impl TransferOperationBuilder {
 
   // Ensures that outputs and inputs are balanced by adding remainder outputs for leftover asset
   // amounts
-  pub fn balance(&mut self,
-                 tracing_policy: &Option<AssetTracingPolicy>)
-                 -> Result<&mut Self, PlatformError> {
+  pub fn balance(&mut self) -> Result<&mut Self, PlatformError> {
     let mut prng = ChaChaRng::from_entropy();
     if self.transfer.is_some() {
       return Err(PlatformError::InvariantError(Some("Cannot mutate a transfer that has been signed".to_string())));
@@ -584,18 +582,11 @@ impl TransferOperationBuilder {
           return Err(PlatformError::InputsError);
         }
         Ordering::Less => {
-          let ar_template = match tracing_policy {
-            Some(policy) => AssetRecordTemplate::with_asset_tracking(oar.get_amount()
-                                                                     - spend_amount,
-                                                                     *oar.get_asset_type(),
-                                                                     oar.get_record_type(),
-                                                                     *oar.get_pub_key(),
-                                                                     policy.clone()),
-            _ => AssetRecordTemplate::with_no_asset_tracking(oar.get_amount() - spend_amount,
-                                                             *oar.get_asset_type(),
-                                                             oar.get_record_type(),
-                                                             *oar.get_pub_key()),
-          };
+          let ar_template = AssetRecordTemplate::with_no_asset_tracking(oar.get_amount()
+                                                                        - spend_amount,
+                                                                        *oar.get_asset_type(),
+                                                                        oar.get_record_type(),
+                                                                        *oar.get_pub_key());
           let ar =
             AssetRecord::from_template_no_identity_tracking(&mut prng, &ar_template).unwrap();
           partially_consumed_inputs.push(ar);
@@ -866,7 +857,7 @@ mod tests {
                                                                     alice.get_sk_ref()).unwrap(),
                                             20)?
                                  .add_output(&output_template, None)?
-                                 .balance(&None);
+                                 .balance();
 
     assert!(res.is_err());
 
@@ -881,7 +872,7 @@ mod tests {
                                        open_blind_asset_record(&ba_1, &memo1,alice.get_sk_ref()).unwrap(),
                                        20)?
                             .add_output(&output_template, None)?
-                            .balance(&None)?
+                            .balance()?
                             .create(TransferType::Standard)?
                             .sign(&alice)?
                             .add_output(&output_template, None);
@@ -898,7 +889,7 @@ mod tests {
                                        open_blind_asset_record(&ba_1, &memo1,alice.get_sk_ref()).unwrap(),
                                        20)?
                             .add_output(&output_template, None)?
-                            .balance(&None)?
+                            .balance()?
                             .create(TransferType::Standard)?
                             .validate_signatures();
 
@@ -945,7 +936,7 @@ mod tests {
       .add_output(&output_bob5_code2_template, None)?
       .add_output(&output_charlie13_code2_template, None)?
       .add_output(&output_ben2_code2_template, None)?
-      .balance(&None)?
+      .balance()?
       .create(TransferType::Standard)?
       .sign(&alice)?
       .sign(&bob)?
