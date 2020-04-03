@@ -2,7 +2,7 @@
 // Allows web clients to issue transactions from a browser contexts.
 // For now, forwards transactions to a ledger hosted locally.
 // To compile wasm package, run wasm-pack build in the wasm directory;
-//#![deny(warnings)]
+#![deny(warnings)]
 use bulletproofs::PedersenGens;
 use core::fmt::Display;
 use credentials::{
@@ -17,8 +17,8 @@ use curve25519_dalek::ristretto::RistrettoPoint;
 use curve25519_dalek::scalar::Scalar;
 use js_sys::Promise;
 use ledger::data_model::{
-  b64enc, AssetTypeCode, AuthenticatedTransaction, Operation, Serialized, TransferType, TxOutput,
-  TxoRef, TxoSID,
+  b64enc, AssetTypeCode, AuthenticatedTransaction, Operation, TransferType, TxOutput, TxoRef,
+  TxoSID,
 };
 use ledger::policies::{DebtMemo, Fraction};
 use rand_chacha::ChaChaRng;
@@ -36,14 +36,10 @@ use web_sys::{Request, RequestInit, RequestMode};
 use zei::api::anon_creds::ac_confidential_gen_encryption_keys;
 use zei::basic_crypto::elgamal::{elgamal_key_gen, ElGamalEncKey};
 use zei::serialization::ZeiFromToBytes;
-use zei::setup::PublicParams;
-use zei::xfr::asset_record::{
-  build_blind_asset_record, open_blind_asset_record as open_bar, AssetRecordType,
-};
+use zei::xfr::asset_record::{open_blind_asset_record as open_bar, AssetRecordType};
 use zei::xfr::sig::{XfrKeyPair, XfrPublicKey};
 use zei::xfr::structs::{
-  AssetRecordTemplate, AssetTracerEncKeys, AssetTracingPolicy, BlindAssetRecord, OpenAssetRecord,
-  OwnerMemo,
+  AssetRecordTemplate, AssetTracerEncKeys, AssetTracingPolicy, BlindAssetRecord, OwnerMemo,
 };
 
 /////////// TRANSACTION BUILDING ////////////////
@@ -158,68 +154,6 @@ pub fn create_debt_memo(ir_numerator: u64,
 }
 
 #[wasm_bindgen]
-/// Creates a blind asset record.
-///
-/// Blind asset records are records of asset ownership. Each blind asset record has a unique record
-/// owner, an asset type, and an amount. Asset types and amounts can be confidential.
-///
-/// Transaction outputs (TXOs) of issuance and transfer operations contain blind asset records.
-/// Transfer operation inputs also contain blind asset records.
-///
-/// For simple operations, it is not necessary to construct blind asset records manually -  `WasmTransactionBuilder` will handle most of the heavy lifting.
-///
-/// @param {BigInt} amount - asset amount to store in the record.
-/// @param {string} code -  base64 string representing the token code of the asset to be stored in the record.
-/// @param {XfrPublicKey} pk -  XfrPublicKey representing the record owner.
-/// @param {bool} conf_amount - boolean indicating whether the asset amount should be private.
-/// @param {bool} conf_type - boolean indicating whether the asset type should be private.
-/// @see {@link WasmTransactionBuilder#add_operation_issue_asset} for instructions on how to use
-/// blind asset records to issue assets on the ledger.
-pub fn create_blind_asset_record(amount: u64,
-                                 code: String,
-                                 pk: &XfrPublicKey,
-                                 conf_amount: bool,
-                                 conf_type: bool)
-                                 -> Result<String, JsValue> {
-  let params = PublicParams::new();
-  let code = AssetTypeCode::new_from_base64(&code)
-        .map_err(|_e| JsValue::from_str("Could not deserialize asset token code"))?;
-  let mut small_rng = ChaChaRng::from_entropy();
-  let ar_type = AssetRecordType::from_booleans(conf_amount, conf_type);
-  let template = AssetRecordTemplate::with_no_asset_tracking(amount, code.val, ar_type, *pk);
-  Ok(serde_json::to_string(&build_blind_asset_record(&mut small_rng,
-                                                     &params.pc_gens,
-                                                     &template,
-                                                     None)).unwrap())
-}
-
-#[wasm_bindgen]
-/// Decodes (opens) a blind asset record expressed as a JSON string using the given key pair.
-/// If successful returns a JSON encoding of the serialized open asset record.
-/// @param {string} blind_asset_record - String representing the blind asset record.
-/// @param {string} memo - String representing the blind asset record's owner's memo
-/// @param {XfrKeyPair} key - Key pair of the asset record owner.
-///
-/// TODO Add advice for resolving the errors to the error messages when possible
-/// @throws Could not deserialize blind asset record.
-/// @throws Could not open asset record.
-/// @see {@link WasmTransferOperationBuilder#add_input) for instructions on how to construct transfers with opened asset
-/// records.
-pub fn open_blind_asset_record(blind_asset_record: String,
-                               memo: String,
-                               key: &XfrKeyPair)
-                               -> Result<String, JsValue> {
-  let blind_asset_record = serde_json::from_str::<BlindAssetRecord>(&blind_asset_record).map_err(|_e| {
-                             JsValue::from_str("Could not deserialize blind asset record")
-                           })?;
-  let memo = serde_json::from_str::<Option<OwnerMemo>>(&memo).map_err(|_e| {
-    JsValue::from_str("Could not deserialize blind asset record")
-  })?;
-  let open_asset_record = open_bar(&blind_asset_record, &memo, key.get_sk_ref()).map_err(|_e| JsValue::from_str("Could not open asset record"))?;
-  Ok(serde_json::to_string(&open_asset_record).unwrap())
-}
-
-#[wasm_bindgen]
 /// Structure that allows users to construct arbitrary transactions.
 #[derive(Default)]
 pub struct TransactionBuilder {
@@ -314,45 +248,6 @@ impl TransactionBuilder {
     Ok(self)
   }
 
-  /// Wraps around TransactionBuilder to add an asset issuance operation to a transaction builder instance.
-  ///
-  /// While add_basic_issue_asset constructs the blind asset record internally, this function
-  /// allows an issuer to pass in an externally constructed blind asset record. For complicated
-  /// transactions (e.g. issue and
-  /// transfers) the client may want to have a handle on the issuance record for subsequent operations.
-  ///
-  /// @param {XfrKeyPair} key_pair - Issuer XfrKeyPair.
-  /// @param {string} code - Base64 string representing the token code of the asset to be issued.
-  /// @param {BigInt} seq_num - Issuance sequence number. Every subsequent issuance of a given asset type must have a higher sequence number than before.
-  /// @param {string} record - Issuance output (serialized blind asset record).
-  /// @see {@link create_blind_asset_record} for details on constructing blind asset records.
-  /// @see {@link random_asset_type} for details on generating new asset types.
-  /// @throws Will throw an error if `record` or `code` fail to deserialize.
-  pub fn add_operation_issue_asset(mut self,
-                                   key_pair: &XfrKeyPair,
-                                   code: String,
-                                   seq_num: u64,
-                                   record: String,
-                                   owner_memo: String)
-                                   -> Result<TransactionBuilder, JsValue> {
-    let asset_token = AssetTypeCode::new_from_base64(&code).map_err(error_to_jsvalue)?;
-    let blind_asset_record =
-      serde_json::from_str::<BlindAssetRecord>(&record).map_err(error_to_jsvalue)?;
-    let memo;
-    if owner_memo.is_empty() {
-      memo = None
-    } else {
-      memo = Some(serde_json::from_str::<OwnerMemo>(&owner_memo).map_err(error_to_jsvalue)?);
-    }
-
-    self.get_builder_mut()
-        .add_operation_issue_asset(&key_pair,
-                                   &asset_token,
-                                   seq_num,
-                                   &[(TxOutput(blind_asset_record), memo)])
-        .map_err(error_to_jsvalue)?;
-    Ok(self)
-  }
   /// Adds an add air assign operation to a WasmTransactionBuilder instance.
   pub fn add_operation_air_assign(mut self,
                                   key_pair: &XfrKeyPair,
@@ -385,6 +280,31 @@ impl TransactionBuilder {
     Ok(self.get_builder()
            .serialize_str()
            .map_err(error_to_jsvalue)?)
+  }
+
+  /// Fetches a client record from a transaction. A client record contains the ownership record and
+  /// parameters that can be used with a user key to decrypt parts of the ownership record.
+  /// @param {number} - Record to fetch. Records are added to the transaction builder sequentially.
+  pub fn get_owner_record_and_memo(&self, idx: usize) -> Option<ClientAssetRecord> {
+    self.get_builder()
+        .get_owner_record_and_memo(idx)
+        .cloned()
+        .map(|(output, memo)| ClientAssetRecord { output, memo })
+  }
+}
+#[wasm_bindgen]
+pub struct ClientAssetRecord {
+  output: TxOutput,
+  memo: Option<OwnerMemo>,
+}
+
+impl ClientAssetRecord {
+  pub fn get_bar_ref(&self) -> &BlindAssetRecord {
+    &self.output.0
+  }
+
+  pub fn get_memo_ref(&self) -> &Option<OwnerMemo> {
+    &self.memo
   }
 }
 
@@ -424,11 +344,15 @@ impl TransferOperationBuilder {
   /// @throws Will throw an error if `oar` or `txo_ref` fail to deserialize.
   pub fn add_input(mut self,
                    txo_ref: String,
-                   oar: String,
+                   asset_record: ClientAssetRecord,
+                   key: &XfrKeyPair,
                    amount: u64)
                    -> Result<TransferOperationBuilder, JsValue> {
     let txo_sid = serde_json::from_str::<TxoRef>(&txo_ref).map_err(error_to_jsvalue)?;
-    let oar = serde_json::from_str::<OpenAssetRecord>(&oar).map_err(error_to_jsvalue)?;
+    let oar =
+      open_bar(asset_record.get_bar_ref(),
+               asset_record.get_memo_ref(),
+               key.get_sk_ref()).map_err(|_e| JsValue::from_str("Could not open asset record"))?;
     self.get_builder_mut()
         .add_input(txo_sid, oar, amount)
         .map_err(error_to_jsvalue)?;

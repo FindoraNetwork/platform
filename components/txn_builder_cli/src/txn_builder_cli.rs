@@ -1,4 +1,4 @@
-#![deny(warnings)]
+//#![deny(warnings)]
 use clap::{App, Arg, SubCommand};
 use credentials::{
   credential_issuer_key_gen, credential_keygen_commitment, credential_reveal, credential_sign,
@@ -645,11 +645,13 @@ fn load_blind_asset_record_and_owner_memo_from_file(
     return Err(PlatformError::IoError(format!("Failed to read file: {}", file_path)));
   }
   println!("Parsing builder from file contents: \"{}\"", &txn);
-  let owner_records = match serde_json::from_str::<TransactionBuilder>(&txn) {
-    Ok(builder) => builder.owner_records,
+  match serde_json::from_str::<TransactionBuilder>(&txn) {
+    Ok(builder) => {
+      return Ok(((builder.get_owner_record_and_memo(0).unwrap().0.clone()).0,
+                 builder.get_owner_record_and_memo(1).unwrap().1.clone()))
+    }
     Err(_) => return Err(PlatformError::DeserializationError),
   };
-  Ok(((owner_records[0].0.clone()).0, owner_records[0].1.clone()))
 }
 
 /// Loads blind asset records and optional owner memos from transaction files.
