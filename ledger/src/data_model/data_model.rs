@@ -141,14 +141,44 @@ impl SignedAddress {
   }
 }
 
+#[allow(non_camel_case_types)]
+#[allow(clippy::enum_variant_names)]
+/// Represents whether an asset is updatable and/or traceable.
+pub enum AssetAccessType {
+  Updatable_Traceable,
+  Updatable_NotTraceable,
+  NotUpdatable_Traceable,
+  NotUpdatable_NotTraceable,
+}
+
+impl AssetAccessType {
+  /// Converts the asset access type
+  pub fn get_booleans(self) -> (bool, bool) {
+    match self {
+      AssetAccessType::Updatable_Traceable => (true, true),
+      AssetAccessType::Updatable_NotTraceable => (true, false),
+      AssetAccessType::NotUpdatable_Traceable => (false, true),
+      AssetAccessType::NotUpdatable_NotTraceable => (false, false),
+    }
+  }
+
+  pub fn from_booleans(updatable: bool, traceable: bool) -> Self {
+    match (updatable, traceable) {
+      (true, true) => AssetAccessType::Updatable_Traceable,
+      (true, false) => AssetAccessType::Updatable_NotTraceable,
+      (false, true) => AssetAccessType::NotUpdatable_Traceable,
+      (false, false) => AssetAccessType::NotUpdatable_NotTraceable,
+    }
+  }
+}
+
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 pub struct Asset {
   pub code: AssetTypeCode,
   pub issuer: IssuerPublicKey,
   pub memo: Memo,
   pub confidential_memo: ConfidentialMemo,
-  pub updatable: bool,
-  pub traceable: bool,
+  pub access_type: AssetAccessType,
   #[serde(default)]
   #[serde(skip_serializing_if = "Option::is_none")]
   pub policy: Option<(Box<Policy>, PolicyGlobals)>,
@@ -292,8 +322,7 @@ pub struct DefineAssetBody {
 impl DefineAssetBody {
   pub fn new(token_code: &AssetTypeCode,
              issuer_key: &IssuerPublicKey, // TODO: require private key check somehow?
-             updatable: bool,
-             traceable: bool,
+             access_type: AssetAccessType,
              memo: Option<Memo>,
              confidential_memo: Option<ConfidentialMemo>,
              policy: Option<(Box<Policy>, PolicyGlobals)>)
@@ -301,8 +330,7 @@ impl DefineAssetBody {
     let mut asset_def: Asset = Default::default();
     asset_def.code = *token_code;
     asset_def.issuer = *issuer_key;
-    asset_def.updatable = updatable;
-    asset_def.traceable = traceable;
+    asset_def.access_type = access_type;
     asset_def.policy = policy;
 
     if let Some(memo) = memo {

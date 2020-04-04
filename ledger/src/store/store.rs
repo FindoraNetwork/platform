@@ -1793,16 +1793,14 @@ pub mod helpers {
 
   pub fn asset_creation_body(token_code: &AssetTypeCode,
                              issuer_key: &XfrPublicKey,
-                             updatable: bool,
-                             traceable: bool,
+                             access_type: AssetAccessType,
                              memo: Option<Memo>,
                              confidential_memo: Option<ConfidentialMemo>)
                              -> DefineAssetBody {
     let mut token_properties: Asset = Default::default();
     token_properties.code = *token_code;
     token_properties.issuer = IssuerPublicKey { key: *issuer_key };
-    token_properties.updatable = updatable;
-    token_properties.traceable = traceable;
+    token_properties.access_type = access_type;
 
     if let Some(memo) = memo {
       token_properties.memo = memo;

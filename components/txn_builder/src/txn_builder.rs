@@ -246,8 +246,7 @@ pub trait BuildsTransactions {
   fn add_operation_create_asset(&mut self,
                                 key_pair: &XfrKeyPair,
                                 token_code: Option<AssetTypeCode>,
-                                updatable: bool,
-                                traceable: bool,
+                                access_type: AssetAccessType,
                                 memo: &str,
                                 policy_choice: PolicyChoice)
                                 -> Result<&mut Self, PlatformError>;
@@ -409,15 +408,14 @@ impl BuildsTransactions for TransactionBuilder {
   fn add_operation_create_asset(&mut self,
                                 key_pair: &XfrKeyPair,
                                 token_code: Option<AssetTypeCode>,
-                                updatable: bool,
-                                traceable: bool,
+                                access_type: AssetAccessType,
                                 memo: &str,
                                 policy_choice: PolicyChoice)
                                 -> Result<&mut Self, PlatformError> {
     let pub_key = &IssuerPublicKey { key: key_pair.get_pk() };
     let priv_key = &key_pair.get_sk();
     let token_code = token_code.unwrap_or_else(AssetTypeCode::gen_random);
-    self.txn.add_operation(Operation::DefineAsset(DefineAsset::new(DefineAssetBody::new(&token_code, pub_key, updatable, traceable, Some(Memo(memo.into())), Some(ConfidentialMemo {}), policy_from_choice(&token_code,&pub_key.key,policy_choice))?, pub_key, priv_key)?));
+    self.txn.add_operation(Operation::DefineAsset(DefineAsset::new(DefineAssetBody::new(&token_code, pub_key, access_type, Some(Memo(memo.into())), Some(ConfidentialMemo {}), policy_from_choice(&token_code,&pub_key.key,policy_choice))?, pub_key, priv_key)?));
     Ok(self)
   }
   fn add_operation_issue_asset(&mut self,

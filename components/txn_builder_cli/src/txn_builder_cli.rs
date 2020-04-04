@@ -10,7 +10,9 @@ use credentials::{
 };
 use env_logger::{Env, Target};
 use ledger::data_model::errors::PlatformError;
-use ledger::data_model::{AccountAddress, AssetTypeCode, TransferType, TxOutput, TxoRef, TxoSID};
+use ledger::data_model::{
+  AccountAddress, AssetAccessType, AssetTypeCode, TransferType, TxOutput, TxoRef, TxoSID,
+};
 use ledger::error_location;
 use ledger::policies::{DebtMemo, Fraction};
 use log::trace; // Other options: debug, info, warn
@@ -1081,38 +1083,6 @@ fn air_assign(issuer_id: u64,
   Ok(())
 }
 
-// TODO (Keyao): Move this enum to data_model and make it public?
-#[allow(non_camel_case_types)]
-#[allow(clippy::enum_variant_names)]
-/// Represents whether an asset is updatable and/or traceable.
-enum AssetAccessType {
-  Updatable_Traceable,
-  Updatable_NotTraceable,
-  NotUpdatable_Traceable,
-  NotUpdatable_NotTraceable,
-}
-
-impl AssetAccessType {
-  /// Converts the asset access type
-  fn get_booleans(self) -> (bool, bool) {
-    match self {
-      AssetAccessType::Updatable_Traceable => (true, true),
-      AssetAccessType::Updatable_NotTraceable => (true, false),
-      AssetAccessType::NotUpdatable_Traceable => (false, true),
-      AssetAccessType::NotUpdatable_NotTraceable => (false, false),
-    }
-  }
-
-  fn from_booleans(updatable: bool, traceable: bool) -> Self {
-    match (updatable, traceable) {
-      (true, true) => AssetAccessType::Updatable_Traceable,
-      (true, false) => AssetAccessType::Updatable_NotTraceable,
-      (false, true) => AssetAccessType::NotUpdatable_Traceable,
-      (false, false) => AssetAccessType::NotUpdatable_NotTraceable,
-    }
-  }
-}
-
 /// Defines an asset.
 ///
 /// Note: the transaction isn't submitted until `submit` or `submit_and_get_sids` is called.
@@ -1132,11 +1102,9 @@ fn define_asset(fiat_asset: bool,
                 txn_file: &str)
                 -> Result<TransactionBuilder, PlatformError> {
   let mut txn_builder = TransactionBuilder::default();
-  let (updatable, traceable) = access_type.get_booleans();
   txn_builder.add_operation_create_asset(issuer_key_pair,
                                          Some(token_code),
-                                         updatable,
-                                         traceable,
+                                         access_type,
                                          &memo,
                                          PolicyChoice::Fungible())?;
   store_txn_to_file(&txn_file, &txn_builder)?;
@@ -2892,7 +2860,7 @@ fn process_asset_issuer_cmd(asset_issuer_matches: &clap::ArgMatches,
       {
         load_blind_asset_records_and_owner_memos_from_files(issuance_txn_files_arg)?
       } else {
-        println!("Blind asset records and associated memos are required to transfer asset. Use --asset_files.");
+        println!("Blind asset records and associated memos are required to transfer asset. Use --issuance_txn_files.");
         return Err(PlatformError::InputsError(error_location!()));
       };
       let input_amounts =
@@ -3029,7 +2997,7 @@ fn process_asset_issuer_cmd(asset_issuer_matches: &clap::ArgMatches,
         };
       let confidential_amount = issue_and_transfer_matches.is_present("confidential_amount");
       let record_type = AssetRecordType::from_booleans(confidential_amount, false);
-      let asset_file = issue_and_transfer_matches.value_of("asset_file");
+      let memo_file = issue_and_transfer_matches.value_of("memo_file");
 
       issue_and_transfer_asset(&issuer_key_pair,
                                &recipient_key_pair,
@@ -3037,7 +3005,7 @@ fn process_asset_issuer_cmd(asset_issuer_matches: &clap::ArgMatches,
                                token_code,
                                record_type,
                                None,
-                               asset_file,
+                               memo_file,
                                txn_file,
                                None)?;
       Ok(())
