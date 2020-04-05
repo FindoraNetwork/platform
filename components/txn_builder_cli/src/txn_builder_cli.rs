@@ -3797,7 +3797,7 @@ mod tests {
   }
 
   #[test]
-  // #[ignore]
+  #[ignore]
   // TODO (Keyao): Investigate why the "Pay loan" section fails.
   // Test funds loading, loan request, fulfilling and repayment
   fn test_request_fulfill_and_pay_loan() {

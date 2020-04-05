@@ -143,6 +143,7 @@ impl SignedAddress {
 
 #[allow(non_camel_case_types)]
 #[allow(clippy::enum_variant_names)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 /// Represents whether an asset is updatable and/or traceable.
 pub enum AssetAccessType {
   Updatable_Traceable,
@@ -151,23 +152,29 @@ pub enum AssetAccessType {
   NotUpdatable_NotTraceable,
 }
 
+impl Default for AssetAccessType {
+  fn default() -> Self {
+    Self::NotUpdatable_NotTraceable
+  }
+}
+
 impl AssetAccessType {
   /// Converts the asset access type
   pub fn get_booleans(self) -> (bool, bool) {
     match self {
-      AssetAccessType::Updatable_Traceable => (true, true),
-      AssetAccessType::Updatable_NotTraceable => (true, false),
-      AssetAccessType::NotUpdatable_Traceable => (false, true),
-      AssetAccessType::NotUpdatable_NotTraceable => (false, false),
+      Self::Updatable_Traceable => (true, true),
+      Self::Updatable_NotTraceable => (true, false),
+      Self::NotUpdatable_Traceable => (false, true),
+      Self::NotUpdatable_NotTraceable => (false, false),
     }
   }
 
   pub fn from_booleans(updatable: bool, traceable: bool) -> Self {
     match (updatable, traceable) {
-      (true, true) => AssetAccessType::Updatable_Traceable,
-      (true, false) => AssetAccessType::Updatable_NotTraceable,
-      (false, true) => AssetAccessType::NotUpdatable_Traceable,
-      (false, false) => AssetAccessType::NotUpdatable_NotTraceable,
+      (true, true) => Self::Updatable_Traceable,
+      (true, false) => Self::Updatable_NotTraceable,
+      (false, true) => Self::NotUpdatable_Traceable,
+      (false, false) => Self::NotUpdatable_NotTraceable,
     }
   }
 }
