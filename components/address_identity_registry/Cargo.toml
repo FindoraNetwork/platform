@@ -48,6 +48,6 @@ sha2 = "0.8.0"
 submission_server = { path = "../submission_server" }
 tokio = { version = "0.2", features = ["full", "macros"] }
 txn_builder = { path = "../txn_builder" }
-percent-encoding = "2.1.0"
+utils = { path = "../../libs/utils" }
 warp = "0.2"
 zei = { git = "ssh://git@github.com/findoraorg/zei", tag = "v0.0.2-3" }
