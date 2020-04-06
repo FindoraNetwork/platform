@@ -17,7 +17,7 @@ use zei::api::anon_creds::{ac_commit, ac_keygen_user, ACCommitmentKey, ACPoK, AC
 use zei::serialization::ZeiFromToBytes;
 use zei::xfr::sig::{XfrKeyPair, XfrPublicKey};
 
-// From txn_builder_cli: need a working key pair String
+// From txn_cli: need a working key pair String
 const KEY_PAIR_STR: &str = "76b8e0ada0f13d90405d6ae55386bd28bdd219b8a08ded1aa836efcc8b770dc720fdbac9b10b7587bba7b5bc163bce69e796d71e4ed44c10fcb4488689f7a144";
 
 fn air_assign(issuer_id: u64, address: &str, data: &str) -> Result<(), PlatformError> {

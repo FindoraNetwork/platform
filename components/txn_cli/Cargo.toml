@@ -1,12 +1,12 @@
 [package]
-name = "txn_builder_cli"
+name = "txn_cli"
 version = "0.1.0"
 authors = ["Engineering <engineering@findora.org>"]
 edition = "2018"
 
 [[bin]]
-name = "txn_builder_cli"
-path = "src/txn_builder_cli.rs"
+name = "txn_cli"
+path = "src/txn_cli.rs"
 
 [dependencies]
 clap = "2.33.0"
