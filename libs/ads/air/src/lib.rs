@@ -1,8 +1,7 @@
 #![allow(dead_code)]
 use serde::{Deserialize, Serialize};
 use sparse_merkle_tree::{check_merkle_proof as smt_check_proof, digest, MerkleProof, SmtMap256};
-use std::fs::File;
-use std::io::prelude::Read;
+use std::fs;
 use std::io::Error;
 
 pub use sparse_merkle_tree::Digest;
@@ -69,9 +68,7 @@ pub fn check_merkle_proof<String: AsRef<[u8]>>(merkle_root: &Digest,
 }
 
 pub fn open(path: &str) -> Result<AIR, Error> {
-  let mut file = File::open(path)?;
-  let mut contents = String::new();
-  file.read_to_string(&mut contents)?;
+  let contents = fs::read_to_string(path)?;
 
   // Deserialize and print Rust data structure.
   let result: AIR = serde_json::from_str(&contents)?;
