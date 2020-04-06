@@ -1696,7 +1696,6 @@ fn fulfill_loan(loan_id: u64,
       Some(serde_json::to_string(&reveal_sig).or_else(|_| Err(PlatformError::SerializationError))?);
     data.credentials[credential_id as usize].commitment_key = Some(hex::encode(commitment_key_str));
     store_data_to_file(data.clone())?;
-    // data = load_data()?;
     (user_sk, wrapper_credential, commitment_key)
   };
 
