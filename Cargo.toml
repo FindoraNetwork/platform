@@ -14,7 +14,7 @@ members = [
     "components/submission_api",
     "components/submission_server",
     "components/txn_builder",
-    "components/txn_builder_cli",
+    "components/txn_cli",
     "components/query_api",
     "components/query_server",
     "components/wasm",
@@ -26,4 +26,5 @@ members = [
     "libs/bitmap",
     "libs/cryptohash",
     "libs/credentials",
+    "libs/utils",
 ]
