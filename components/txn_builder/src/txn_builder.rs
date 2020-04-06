@@ -302,6 +302,7 @@ pub trait BuildsTransactions {
   #[allow(clippy::comparison_chain)]
   fn add_basic_transfer_asset(&mut self,
                               key_pair: &XfrKeyPair,
+                              tracing_policy: &Option<AssetTracingPolicy>,
                               transfer_from: &[(&TxoRef,
                                  &BlindAssetRecord,
                                  u64,
@@ -331,10 +332,17 @@ pub trait BuildsTransactions {
       if input_amount > oar.get_amount() {
         return Err(PlatformError::InputsError(error_location!()));
       } else if input_amount < oar.get_amount() {
-        let ar = AssetRecordTemplate::with_no_asset_tracking(oar.get_amount() - input_amount,
-                                                             *oar.get_asset_type(),
-                                                             oar.get_record_type(),
-                                                             *oar.get_pub_key());
+        let ar = match tracing_policy {
+          Some(policy) => AssetRecordTemplate::with_asset_tracking(oar.get_amount() - input_amount,
+                                                                   *oar.get_asset_type(),
+                                                                   oar.get_record_type(),
+                                                                   *oar.get_pub_key(),
+                                                                   policy.clone()),
+          _ => AssetRecordTemplate::with_no_asset_tracking(oar.get_amount() - input_amount,
+                                                           *oar.get_asset_type(),
+                                                           oar.get_record_type(),
+                                                           *oar.get_pub_key()),
+        };
         partially_consumed_inputs.push(ar);
       }
     }
@@ -346,11 +354,16 @@ pub trait BuildsTransactions {
     let asset_record_type = input_oars[0].get_record_type();
     let mut output_ars_templates: Vec<AssetRecordTemplate> =
       transfer_to.iter()
-                 .map(|(amount, ref addr)| {
-                   AssetRecordTemplate::with_no_asset_tracking(*amount,
-                                                               *asset_type,
-                                                               asset_record_type,
-                                                               addr.key)
+                 .map(|(amount, ref addr)| match tracing_policy {
+                   Some(policy) => AssetRecordTemplate::with_asset_tracking(*amount,
+                                                                            *asset_type,
+                                                                            asset_record_type,
+                                                                            addr.key,
+                                                                            policy.clone()),
+                   _ => AssetRecordTemplate::with_no_asset_tracking(*amount,
+                                                                    *asset_type,
+                                                                    asset_record_type,
+                                                                    addr.key),
                  })
                  .collect();
     output_ars_templates.append(&mut partially_consumed_inputs);
