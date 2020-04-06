@@ -3862,16 +3862,16 @@ mod tests {
     assert_eq!(data.loans[0].status, LoanStatus::Active);
     assert_eq!(data.loans[0].balance, loan_amount);
 
-    // // Pay loan
-    // let payment_amount = 200;
-    // pay_loan(0, payment_amount, PROTOCOL, HOST).unwrap();
-    // data = load_data().unwrap();
+    // Pay loan
+    let payment_amount = 200;
+    pay_loan(0, payment_amount, PROTOCOL, HOST).unwrap();
+    data = load_data().unwrap();
 
     let _ = fs::remove_file(DATA_FILE);
     fs::remove_file(txn_builder_path).unwrap();
     fs::remove_file("tb_loan.debt.0").unwrap();
     fs::remove_file("tb_loan.fiat.0").unwrap();
 
-    // assert_eq!(data.loans[0].payments, 1);
+    assert_eq!(data.loans[0].payments, 1);
   }
 }
