@@ -1854,7 +1854,7 @@ compile writeOut polf = do
         Right ast' -> do
           writeOut $ "ASTs " ++ (if ast == ast' then "" else "don't ") ++ "match"
 
-      final_ast <- foldM (\ast (name,f) -> do
+      do_compile <- return $ \ast -> foldM (\ast (name,f) -> do
         writeOut $ "\n\n" ++ name ++ ":\n\n===============\n\n"
         ast <- return $ f ast
         astRendered <- return $ PP.render $ pprintPolicyFile $ ast
@@ -1877,9 +1877,22 @@ compile writeOut polf = do
                  over (polfTxns.traverse.txnBody.traverse.txnStmt_bexpr) simplifyCompares)
               ]
 
+
+      final_ast <- do_compile ast
+
       policy_script <- return $ convertPolfToScript $ final_ast
+      -- NOTE: currently this doesn't work right bc of "init_txn" and
+      -- some differences in deduplication behavior
+      -- policy_script2 <- convertPolfToScript <$> do_compile final_ast
+
       writeOut "\n\nResult:\n\n===============\n\n"
       writeOut $ PP.render $ pprintPolicyScript $ policy_script
+
+      -- writeOut "\n\nResult2:\n\n===============\n\n"
+      -- writeOut $ PP.render $ pprintPolicyScript $ policy_script2
+
+      -- True <- return $ policy_script == policy_script2
+
       writeOut "\n\nDecompile:\n\n===============\n\n"
       dec_polf <- return $ convertScriptToPolf $ policy_script
       writeOut $ PP.render $ pprintPolicyFile $ dec_polf
