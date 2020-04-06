@@ -17,7 +17,7 @@ extern crate exitcode;
 // Those tests pass individually, but occasionally fail when run with other tests.
 // They take more time to complete, thus might cause data conflicts.
 
-const COMMAND: &str = "../../target/debug/txn_builder_cli";
+const COMMAND: &str = "../../target/debug/txn_cli";
 const DATA_FILE: &str = "data.json";
 
 //

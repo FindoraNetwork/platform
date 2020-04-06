@@ -1045,7 +1045,7 @@ impl LedgerState {
     let reader = BufReader::new(file);
     let mut v = Vec::new();
     for l in reader.lines() {
-      match { serde_json::from_str::<LoggedBlock>(&l?) } {
+      match serde_json::from_str::<LoggedBlock>(&l?) {
         Ok(next_block) => {
           v.push(next_block);
         }

@@ -40,8 +40,6 @@ use zei::xfr::structs::{
 
 extern crate exitcode;
 
-// TODO (Keyao): Rename txn_builder_cli to txn_cli?
-
 /// Initial data when the program starts.
 // TODO (Keyao):
 // Make this data driven, not embedded in the Rust code.
@@ -3657,7 +3655,7 @@ mod tests {
   // and then removed.
   fn check_next_path_typical(input: &str, expected: &str) {
     trace!("check_next_path_typical({}, {})", input, expected);
-    if let Err(e) = fs::write(input, "txn_builder_cli next_path() test detritus") {
+    if let Err(e) = fs::write(input, "txn_cli next_path() test detritus") {
       panic!("write error: {:?}", e);
     }
     check_next_path(input, expected);
