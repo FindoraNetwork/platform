@@ -3,27 +3,23 @@
 // For now, forwards transactions to a ledger hosted locally.
 // To compile wasm package, run wasm-pack build in the wasm directory;
 #![deny(warnings)]
+use crate::wasm_data_model::*;
 use bulletproofs::PedersenGens;
 use core::fmt::Display;
 use credentials::{
   credential_commit, credential_issuer_key_gen, credential_reveal, credential_sign,
-  credential_user_key_gen, credential_verify, CredCommitment, CredIssuerPublicKey,
-  CredIssuerSecretKey, CredPoK, CredRevealSig, CredSignature, CredUserPublicKey, CredUserSecretKey,
-  Credential as PlatformCredential,
+  credential_user_key_gen, credential_verify, CredIssuerPublicKey, CredIssuerSecretKey,
+  CredUserPublicKey, CredUserSecretKey, Credential as PlatformCredential,
 };
 use cryptohash::sha256;
 use cryptohash::sha256::Digest as BitDigest;
 use curve25519_dalek::ristretto::RistrettoPoint;
 use curve25519_dalek::scalar::Scalar;
 use js_sys::Promise;
-use ledger::data_model::{
-  b64enc, AssetTypeCode, AuthenticatedTransaction, Operation, TransferType, TxOutput, TxoRef,
-  TxoSID,
-};
+use ledger::data_model::{b64enc, AssetTypeCode, AuthenticatedTransaction, Operation};
 use ledger::policies::{DebtMemo, Fraction};
 use rand_chacha::ChaChaRng;
 use rand_core::SeedableRng;
-use serde::{Deserialize, Serialize};
 use std::str;
 use txn_builder::{
   BuildsTransactions, PolicyChoice, TransactionBuilder as PlatformTransactionBuilder,
@@ -38,53 +34,13 @@ use zei::basic_crypto::elgamal::{elgamal_key_gen, ElGamalEncKey};
 use zei::serialization::ZeiFromToBytes;
 use zei::xfr::asset_record::{open_blind_asset_record as open_bar, AssetRecordType};
 use zei::xfr::sig::{XfrKeyPair, XfrPublicKey};
-use zei::xfr::structs::{
-  AssetRecordTemplate, AssetTracerEncKeys, AssetTracingPolicy, BlindAssetRecord, OwnerMemo,
-};
+use zei::xfr::structs::{AssetRecordTemplate, AssetTracerEncKeys, AssetTracingPolicy};
+
+mod wasm_data_model;
 
 /////////// TRANSACTION BUILDING ////////////////
 
 //Random Helpers
-
-#[wasm_bindgen]
-/// Creates a relative txo reference as a JSON string. Relative txo references are offset
-/// backwards from the operation they appear in -- 0 is the most recent, (n-1) is the first output
-/// of the transaction.
-///
-/// Use relative txo indexing when referring to outputs of intermediate operations (e.g. a
-/// transaction containing both an issuance and a transfer).
-///
-/// # Arguments
-/// @param {BigInt} idx -  Relative Txo (transaction output) SID.
-pub fn create_relative_txo_ref(idx: u64) -> String {
-  serde_json::to_string(&TxoRef::Relative(idx)).unwrap()
-}
-
-#[wasm_bindgen]
-/// Creates an absolute transaction reference as a JSON string.
-///
-/// Use absolute txo indexing when referring to an output that has been assigned a utxo index (i.e.
-/// when the utxo has been committed to the ledger in an earlier transaction).
-///
-/// # Arguments
-/// @param {BigInt} idx -  Txo (transaction output) SID.
-pub fn create_absolute_txo_ref(idx: u64) -> String {
-  serde_json::to_string(&TxoRef::Absolute(TxoSID(idx))).unwrap()
-}
-
-#[wasm_bindgen]
-/// Standard TransferType variant for txn builder.
-/// Returns a token as a string signifying that the Standard policy should be used when evaluating the transaction.
-pub fn standard_transfer_type() -> String {
-  serde_json::to_string(&TransferType::Standard).unwrap()
-}
-
-#[wasm_bindgen]
-/// Debt swap TransferType variant for txn builder.
-/// Returns a token as a string signifying that the DebtSwap policy should be used when evaluating the transaction.
-pub fn debt_transfer_type() -> String {
-  serde_json::to_string(&TransferType::DebtSwap).unwrap()
-}
 
 #[wasm_bindgen]
 /// Generates random base64 encoded asset type string. Used in asset definitions.
@@ -214,7 +170,6 @@ impl TransactionBuilder {
   /// If empty, a token code will be chosen at random.
   pub fn add_operation_create_asset(self,
                                     key_pair: &XfrKeyPair,
-
                                     memo: String,
                                     token_code: String)
                                     -> Result<TransactionBuilder, JsValue> {
@@ -226,7 +181,6 @@ impl TransactionBuilder {
 
   pub fn add_operation_create_asset_with_policy(mut self,
                                                 key_pair: &XfrKeyPair,
-
                                                 memo: String,
                                                 token_code: String,
                                                 policy_choice: String)
@@ -362,22 +316,6 @@ impl TransactionBuilder {
   }
 }
 #[wasm_bindgen]
-pub struct ClientAssetRecord {
-  output: TxOutput,
-  memo: Option<OwnerMemo>,
-}
-
-impl ClientAssetRecord {
-  pub fn get_bar_ref(&self) -> &BlindAssetRecord {
-    &self.output.0
-  }
-
-  pub fn get_memo_ref(&self) -> &Option<OwnerMemo> {
-    &self.memo
-  }
-}
-
-#[wasm_bindgen]
 #[derive(Default)]
 /// Structure that enables clients to construct complex transfers.
 pub struct TransferOperationBuilder {
@@ -402,7 +340,7 @@ impl TransferOperationBuilder {
   }
 
   /// Wraps around TransferOperationBuilder to add an input to a transfer operation builder.
-  /// @param {string} txo_ref - Serialized Absolute or relative utxo reference
+  /// @param {TxoRef} txo_ref - Absolute or relative utxo reference
   /// @param {string} oar - Serializez opened asset record to serve as transfer input. This record must exist on the
   /// ledger for the transfer to be valid
   /// @param {BigInt} amount - Amount of input record to transfer
@@ -412,18 +350,17 @@ impl TransferOperationBuilder {
   /// @see {@link get_txo} for details on fetching blind asset records.
   /// @throws Will throw an error if `oar` or `txo_ref` fail to deserialize.
   pub fn add_input(mut self,
-                   txo_ref: String,
+                   txo_ref: TxoRef,
                    asset_record: ClientAssetRecord,
                    key: &XfrKeyPair,
                    amount: u64)
                    -> Result<TransferOperationBuilder, JsValue> {
-    let txo_sid = serde_json::from_str::<TxoRef>(&txo_ref).map_err(error_to_jsvalue)?;
     let oar =
       open_bar(asset_record.get_bar_ref(),
                asset_record.get_memo_ref(),
                key.get_sk_ref()).map_err(|_e| JsValue::from_str("Could not open asset record"))?;
     self.get_builder_mut()
-        .add_input(txo_sid, oar, amount)
+        .add_input(*txo_ref.get_txo(), oar, amount)
         .map_err(error_to_jsvalue)?;
     Ok(self)
   }
@@ -466,17 +403,15 @@ impl TransferOperationBuilder {
 
   /// Wraps around TransferOperationBuilder to finalize the transaction.
   ///
-  /// @param {string} transfer_type - string representing the transfer type
-  /// @see {@link standard_transfer_type} or {@link debt_transfer_types} for details on transfer
-  /// types.
+  /// @param {TransferType} transfer_type - Transfer operation type.
   /// @throws Will throw an error if `transfer_type` fails to deserialize.
   /// @throws Will throw an error if input and output amounts do not add up.
   /// @throws Will throw an error if not all record owners have signed the transaction.
-  pub fn create(mut self, transfer_type: String) -> Result<TransferOperationBuilder, JsValue> {
-    let transfer_type =
-      serde_json::from_str::<TransferType>(&transfer_type).map_err(error_to_jsvalue)?;
+  pub fn create(mut self,
+                transfer_type: TransferType)
+                -> Result<TransferOperationBuilder, JsValue> {
     self.get_builder_mut()
-        .create(transfer_type)
+        .create(*transfer_type.get_type())
         .map_err(error_to_jsvalue)?;
     Ok(self)
   }
@@ -737,110 +672,6 @@ fn create_query_promise(opts: &RequestInit,
   let window = web_sys::window().unwrap();
   let request_promise = window.fetch_with_request(&request);
   Ok(future_to_promise(JsFuture::from(request_promise)))
-}
-
-#[derive(Serialize, Deserialize)]
-struct AttributeDefinition {
-  pub name: String,
-  pub size: usize,
-}
-
-#[derive(Serialize, Deserialize)]
-struct AttributeAssignment {
-  pub name: String,
-  pub val: String,
-}
-
-#[wasm_bindgen]
-#[derive(Serialize, Deserialize)]
-pub struct CredentialUserKeyPair {
-  pk: CredUserPublicKey,
-  sk: CredUserSecretKey,
-}
-
-#[wasm_bindgen]
-#[derive(Serialize, Deserialize)]
-pub struct CredentialIssuerKeyPair {
-  pk: CredIssuerPublicKey,
-  sk: CredIssuerSecretKey,
-}
-
-#[wasm_bindgen]
-#[derive(Serialize, Deserialize)]
-pub struct CredentialSignature {
-  sig: CredSignature,
-}
-
-#[wasm_bindgen]
-#[derive(Serialize, Deserialize)]
-pub struct CredentialRevealSig {
-  sig: CredRevealSig,
-}
-
-#[wasm_bindgen]
-#[derive(Serialize, Deserialize)]
-pub struct CredentialCommitment {
-  commitment: CredCommitment,
-  pok: CredPoK,
-}
-
-#[wasm_bindgen]
-#[derive(Serialize, Deserialize)]
-pub struct Credential {
-  credential: PlatformCredential,
-}
-
-impl CredentialCommitment {
-  pub fn get_commitment_ref(&self) -> &CredCommitment {
-    &self.commitment
-  }
-  pub fn get_pok_ref(&self) -> &CredPoK {
-    &self.pok
-  }
-}
-
-impl CredentialSignature {
-  pub fn get_sig_ref(&self) -> &CredSignature {
-    &self.sig
-  }
-}
-
-impl Credential {
-  pub fn get_cred_ref(&self) -> &PlatformCredential {
-    &self.credential
-  }
-}
-
-impl CredentialRevealSig {
-  pub fn get_sig_ref(&self) -> &CredRevealSig {
-    &self.sig
-  }
-}
-
-#[wasm_bindgen]
-impl CredentialIssuerKeyPair {
-  pub fn get_pk(&self) -> CredIssuerPublicKey {
-    self.pk.clone()
-  }
-  pub fn get_sk(&self) -> CredIssuerSecretKey {
-    self.sk.clone()
-  }
-  pub fn serialize(&self) -> String {
-    serde_json::to_string(&self).unwrap()
-  }
-}
-
-#[wasm_bindgen]
-impl CredentialUserKeyPair {
-  pub fn get_pk(&self) -> CredUserPublicKey {
-    self.pk.clone()
-  }
-  pub fn get_sk(&self) -> CredUserSecretKey {
-    self.sk.clone()
-  }
-  pub fn serialize(&self) -> String {
-    serde_json::to_string(&self).unwrap()
-  }
 }
 
 /// Generates a new credential issuer key.
