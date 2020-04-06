@@ -184,7 +184,7 @@ mod tests {
              .unwrap()
              .add_basic_issue_asset(&alice, None, &token_code, 2, amt, confidentiality_flag)
              .unwrap();
-    let owner_memo = issuance_tx.owner_records[0].1.clone();
+    let owner_memo = issuance_tx.get_owner_record_and_memo(0).unwrap().1.clone();
     ledger_standalone.submit_transaction(&issuance_tx.transaction());
 
     // Query server will now fetch new blocks

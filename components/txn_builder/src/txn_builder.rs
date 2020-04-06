@@ -380,8 +380,14 @@ pub trait BuildsTransactions {
 #[derive(Debug, Default, Serialize, Deserialize)]
 pub struct TransactionBuilder {
   txn: Transaction,
-  pub owner_records: Vec<(TxOutput, Option<OwnerMemo>)>,
+  owner_records: Vec<(TxOutput, Option<OwnerMemo>)>,
   outputs: u64,
+}
+
+impl TransactionBuilder {
+  pub fn get_owner_record_and_memo(&self, idx: usize) -> Option<&(TxOutput, Option<OwnerMemo>)> {
+    self.owner_records.get(idx)
+  }
 }
 
 impl BuildsTransactions for TransactionBuilder {
@@ -457,6 +463,15 @@ impl BuildsTransactions for TransactionBuilder {
                                      TransferType::Standard)?;
     xfr.sign(&keys);
 
+    for (output, memo) in xfr.body
+                             .transfer
+                             .outputs
+                             .iter()
+                             .zip(xfr.body.transfer.owners_memos.iter())
+    {
+      self.owner_records
+          .push((TxOutput(output.clone()), memo.clone()));
+    }
     self.txn.add_operation(Operation::TransferAsset(xfr));
     Ok(self)
   }
