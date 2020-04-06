@@ -29,7 +29,7 @@ Policies have some important functional design principles:
   - Policies should have simple, limited control flow. In particular,
     no mutable variables and no loops. This means:
     - Automated analysis (eg, reachability, safety preconditions) is
-      tractable
+      tractable (compare solidity analysis tools)
     - Estimating worst-case execution time is simple (and there are no
       infinite-loop policies)
     - The execution model can easily be handled by
@@ -50,8 +50,9 @@ blockchain systems, most notably ethereum. However, smart contract
 languages have various problems that can lead to major losses. There
 have been losses caused by unintended contract deletion (link);
 non-atomic actions and accounting errors leading to
-"virtual double-spending" (link to TheDAO bug); oracle programs
-shutting down due to changes in the price of Gas (link); and more.
+"virtual double-spending" (link to TheDAO bug -- ELABORATE); oracle
+programs shutting down due to changes in the price of Gas (link); and
+more.
 
 Findora policies avoid most of these by default. Since a policy can
 only change the validity of a transaction, and transactions are
@@ -64,4 +65,14 @@ owns them.
 There are all kinds of other bugs that can be caught/prevented by
 adding more sophisticated analyses, but the biggest wins come from
 *avoiding* these issues by design.
+
+
+Example:
+  - 2 banks trying to do a credit/equity swap for 2 years
+    - every 2 months, the system is obligated to update the asset
+      values
+    - If asset value under a threshold, people may be obligated to pay
+      more money
+
+  "meticulously produced language"
 
