@@ -17,15 +17,18 @@ use curve25519_dalek::ristretto::RistrettoPoint;
 use curve25519_dalek::scalar::Scalar;
 use js_sys::Promise;
 use ledger::data_model::{
-  b64enc, AssetAccessType, AssetTypeCode, AuthenticatedTransaction, Operation, Serialized,
-  TransferType, TxOutput, TxoRef, TxoSID,
+  b64enc, AssetAccessType, AssetTypeCode, AuthenticatedTransaction, Operation, TransferType,
+  TxOutput, TxoRef, TxoSID,
 };
 use ledger::policies::{DebtMemo, Fraction};
 use rand_chacha::ChaChaRng;
 use rand_core::SeedableRng;
 use serde::{Deserialize, Serialize};
 use std::str;
-use txn_builder::{BuildsTransactions, PolicyChoice, TransactionBuilder, TransferOperationBuilder};
+use txn_builder::{
+  BuildsTransactions, PolicyChoice, TransactionBuilder as PlatformTransactionBuilder,
+  TransferOperationBuilder as PlatformTransferOperationBuilder,
+};
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::future_to_promise;
 use wasm_bindgen_futures::JsFuture;
@@ -33,14 +36,10 @@ use web_sys::{Request, RequestInit, RequestMode};
 use zei::api::anon_creds::ac_confidential_gen_encryption_keys;
 use zei::basic_crypto::elgamal::{elgamal_key_gen, ElGamalEncKey};
 use zei::serialization::ZeiFromToBytes;
-use zei::setup::PublicParams;
-use zei::xfr::asset_record::{
-  build_blind_asset_record, open_blind_asset_record as open_bar, AssetRecordType,
-};
+use zei::xfr::asset_record::{open_blind_asset_record as open_bar, AssetRecordType};
 use zei::xfr::sig::{XfrKeyPair, XfrPublicKey};
 use zei::xfr::structs::{
-  AssetRecordTemplate, AssetTracerEncKeys, AssetTracingPolicy, BlindAssetRecord, OpenAssetRecord,
-  OwnerMemo,
+  AssetRecordTemplate, AssetTracerEncKeys, AssetTracingPolicy, BlindAssetRecord, OwnerMemo,
 };
 
 /////////// TRANSACTION BUILDING ////////////////
@@ -184,76 +183,24 @@ pub fn create_debt_memo(ir_numerator: u64,
 }
 
 #[wasm_bindgen]
-/// Creates a blind asset record.
-///
-/// Blind asset records are records of asset ownership. Each blind asset record has a unique record
-/// owner, an asset type, and an amount. Asset types and amounts can be confidential.
-///
-/// Transaction outputs (TXOs) of issuance and transfer operations contain blind asset records.
-/// Transfer operation inputs also contain blind asset records.
-///
-/// For simple operations, it is not necessary to construct blind asset records manually -  `WasmTransactionBuilder` will handle most of the heavy lifting.
-///
-/// @param {BigInt} amount - asset amount to store in the record.
-/// @param {string} code -  base64 string representing the token code of the asset to be stored in the record.
-/// @param {XfrPublicKey} pk -  XfrPublicKey representing the record owner.
-/// @param {bool} conf_amount - boolean indicating whether the asset amount should be private.
-/// @param {bool} conf_type - boolean indicating whether the asset type should be private.
-/// @see {@link WasmTransactionBuilder#add_operation_issue_asset} for instructions on how to use
-/// blind asset records to issue assets on the ledger.
-pub fn create_blind_asset_record(amount: u64,
-                                 code: String,
-                                 pk: &XfrPublicKey,
-                                 conf_amount: bool,
-                                 conf_type: bool)
-                                 -> Result<String, JsValue> {
-  let params = PublicParams::new();
-  let code = AssetTypeCode::new_from_base64(&code)
-        .map_err(|_e| JsValue::from_str("Could not deserialize asset token code"))?;
-  let mut small_rng = ChaChaRng::from_entropy();
-  let ar_type = AssetRecordType::from_booleans(conf_amount, conf_type);
-  let template = AssetRecordTemplate::with_no_asset_tracking(amount, code.val, ar_type, *pk);
-  Ok(serde_json::to_string(&build_blind_asset_record(&mut small_rng,
-                                                     &params.pc_gens,
-                                                     &template,
-                                                     None)).unwrap())
-}
-
-#[wasm_bindgen]
-/// Decodes (opens) a blind asset record expressed as a JSON string using the given key pair.
-/// If successful returns a JSON encoding of the serialized open asset record.
-/// @param {string} blind_asset_record - String representing the blind asset record.
-/// @param {string} memo - String representing the blind asset record's owner's memo
-/// @param {XfrKeyPair} key - Key pair of the asset record owner.
-///
-/// TODO Add advice for resolving the errors to the error messages when possible
-/// @throws Could not deserialize blind asset record.
-/// @throws Could not open asset record.
-/// @see {@link WasmTransferOperationBuilder#add_input) for instructions on how to construct transfers with opened asset
-/// records.
-pub fn open_blind_asset_record(blind_asset_record: String,
-                               memo: String,
-                               key: &XfrKeyPair)
-                               -> Result<String, JsValue> {
-  let blind_asset_record = serde_json::from_str::<BlindAssetRecord>(&blind_asset_record).map_err(|_e| {
-                             JsValue::from_str("Could not deserialize blind asset record")
-                           })?;
-  let memo = serde_json::from_str::<Option<OwnerMemo>>(&memo).map_err(|_e| {
-    JsValue::from_str("Could not deserialize blind asset record")
-  })?;
-  let open_asset_record = open_bar(&blind_asset_record, &memo, key.get_sk_ref()).map_err(|_e| JsValue::from_str("Could not open asset record"))?;
-  Ok(serde_json::to_string(&open_asset_record).unwrap())
-}
-
-#[wasm_bindgen]
 /// Structure that allows users to construct arbitrary transactions.
 #[derive(Default)]
-pub struct WasmTransactionBuilder {
-  transaction_builder: Serialized<TransactionBuilder>,
+pub struct TransactionBuilder {
+  transaction_builder: PlatformTransactionBuilder,
+}
+
+impl TransactionBuilder {
+  pub fn get_builder(&self) -> &PlatformTransactionBuilder {
+    &self.transaction_builder
+  }
+
+  pub fn get_builder_mut(&mut self) -> &mut PlatformTransactionBuilder {
+    &mut self.transaction_builder
+  }
 }
 
 #[wasm_bindgen]
-impl WasmTransactionBuilder {
+impl TransactionBuilder {
   /// Create a new transaction builder.
   pub fn new() -> Self {
     Self::default()
@@ -265,25 +212,25 @@ impl WasmTransactionBuilder {
   /// @param {string} memo - Text field for asset definition.
   /// @param {string} token_code - Optional Base64 string representing the token code of the asset to be issued
   /// If empty, a token code will be chosen at random.
-  pub fn add_operation_create_asset(&self,
+  pub fn add_operation_create_asset(self,
                                     key_pair: &XfrKeyPair,
 
                                     memo: String,
                                     token_code: String)
-                                    -> Result<WasmTransactionBuilder, JsValue> {
+                                    -> Result<TransactionBuilder, JsValue> {
     self.add_operation_create_asset_with_policy(key_pair,
                                                 memo,
                                                 token_code,
                                                 create_default_policy_info())
   }
 
-  pub fn add_operation_create_asset_with_policy(&self,
+  pub fn add_operation_create_asset_with_policy(mut self,
                                                 key_pair: &XfrKeyPair,
 
                                                 memo: String,
                                                 token_code: String,
                                                 policy_choice: String)
-                                                -> Result<WasmTransactionBuilder, JsValue> {
+                                                -> Result<TransactionBuilder, JsValue> {
     let asset_token = if token_code.is_empty() {
       AssetTypeCode::gen_random()
     } else {
@@ -293,26 +240,27 @@ impl WasmTransactionBuilder {
     let policy_choice = serde_json::from_str::<PolicyChoice>(&policy_choice).map_err(|e| {
                           JsValue::from_str(&format!("Could not deserialize PolicyChoice: {}", e))
                         })?;
-
-    Ok(WasmTransactionBuilder { transaction_builder: Serialized::new(&*self.transaction_builder.deserialize().add_operation_create_asset(&key_pair,
-                                              Some(asset_token),
-                                              AssetAccessType::NotUpdatable_NotTraceable,
-                                              &memo, policy_choice)
-                  .map_err(|_e| JsValue::from_str("Could not build transaction"))?)})
+    self.get_builder_mut()
+        .add_operation_create_asset(&key_pair,
+                                    Some(asset_token),
+                                    AssetAccessType::NotUpdatable_NotTraceable,
+                                    &memo,
+                                    policy_choice)
+        .map_err(error_to_jsvalue)?;
+    Ok(self)
   }
 
-  pub fn add_policy_option(&self,
+  pub fn add_policy_option(mut self,
                            token_code: String,
                            which_check: String)
-                           -> Result<WasmTransactionBuilder, JsValue> {
+                           -> Result<TransactionBuilder, JsValue> {
     let token_code = AssetTypeCode::new_from_base64(&token_code).map_err(|e| {
                        JsValue::from_str(&format!("Could not deserialize asset type code: {}", e))
                      })?;
 
-    Ok(WasmTransactionBuilder { transaction_builder:
-                                  Serialized::new(&*self.transaction_builder
-                                                        .deserialize()
-                                                        .add_policy_option(token_code, which_check)) })
+    self.get_builder_mut()
+        .add_policy_option(token_code, which_check);
+    Ok(self)
   }
 
   /// Wraps around TransactionBuilder to add an asset issuance to a transaction builder instance.
@@ -325,7 +273,7 @@ impl WasmTransactionBuilder {
   /// @param {BigInt} seq_num - Issuance sequence number. Every subsequent issuance of a given asset type must have a higher sequence number than before.
   /// @param {BigInt} amount - Amount to be issued.
   #[allow(clippy::too_many_arguments)]
-  pub fn add_basic_issue_asset(&self,
+  pub fn add_basic_issue_asset(mut self,
                                key_pair: &XfrKeyPair,
                                elgamal_pub_key: String,
                                code: String,
@@ -333,11 +281,10 @@ impl WasmTransactionBuilder {
                                amount: u64,
                                conf_amount: bool,
                                conf_asset_type: bool)
-                               -> Result<WasmTransactionBuilder, JsValue> {
+                               -> Result<TransactionBuilder, JsValue> {
     let asset_token = AssetTypeCode::new_from_base64(&code)
-            .map_err(|_e| JsValue::from_str("Could not deserialize asset token code"))?;
+             .map_err(|_e| JsValue::from_str("Could not deserialize asset token code"))?;
 
-    let mut txn_builder = self.transaction_builder.deserialize();
     // construct asset tracing policy
     let tracing_policy = if elgamal_pub_key.is_empty() {
       None
@@ -353,119 +300,101 @@ impl WasmTransactionBuilder {
     };
 
     let confidentiality_flags = AssetRecordType::from_booleans(conf_amount, conf_asset_type);
-    Ok(WasmTransactionBuilder { transaction_builder: Serialized::new(&*txn_builder.add_basic_issue_asset(&key_pair,
-                                            tracing_policy,
-                                            &asset_token,
-                                            seq_num,
-                                            amount, confidentiality_flags
-    ).map_err(|_e| JsValue::from_str("could not build transaction"))?)})
+    self.get_builder_mut()
+        .add_basic_issue_asset(&key_pair,
+                               tracing_policy,
+                               &asset_token,
+                               seq_num,
+                               amount,
+                               confidentiality_flags)
+        .map_err(error_to_jsvalue)?;
+    Ok(self)
   }
 
-  /// Wraps around TransactionBuilder to add an asset issuance operation to a transaction builder instance.
-  ///
-  /// While add_basic_issue_asset constructs the blind asset record internally, this function
-  /// allows an issuer to pass in an externally constructed blind asset record. For complicated
-  /// transactions (e.g. issue and
-  /// transfers) the client must have a handle on the issuance record for subsequent operations.
-  ///
-  /// @param {XfrKeyPair} key_pair - Issuer XfrKeyPair.
-  /// @param {string} code - Base64 string representing the token code of the asset to be issued.
-  /// @param {BigInt} seq_num - Issuance sequence number. Every subsequent issuance of a given asset type must have a higher sequence number than before.
-  /// @param {string} record - Issuance output (serialized blind asset record).
-  /// @see {@link create_blind_asset_record} for details on constructing blind asset records.
-  /// @see {@link random_asset_type} for details on generating new asset types.
-  /// @throws Will throw an error if `record` or `code` fail to deserialize.
-  pub fn add_operation_issue_asset(&self,
-                                   key_pair: &XfrKeyPair,
-                                   code: String,
-                                   seq_num: u64,
-                                   record: String,
-                                   owner_memo: String)
-                                   -> Result<WasmTransactionBuilder, JsValue> {
-    let asset_token = AssetTypeCode::new_from_base64(&code)
-            .map_err(|_e| JsValue::from_str("Could not deserialize asset token code"))?;
-    let blind_asset_record = serde_json::from_str::<BlindAssetRecord>(&record).map_err(|_e| {
-                               JsValue::from_str("could not deserialize blind asset record")
-                             })?;
-    let memo;
-    if owner_memo.is_empty() {
-      memo = None
-    } else {
-      memo =
-        Some(serde_json::from_str::<OwnerMemo>(&owner_memo).map_err(|_e| {
-                                           JsValue::from_str("could not deserialize owner memo")
-                                         })?);
-    }
-
-    let mut txn_builder = self.transaction_builder.deserialize();
-    Ok(WasmTransactionBuilder {
-            transaction_builder: Serialized::new(
-                &*txn_builder
-                    .add_operation_issue_asset(
-                        &key_pair,
-                        &asset_token,
-                        seq_num,
-                        &[(TxOutput(blind_asset_record), memo)],
-                    )
-                    .map_err(|_e| JsValue::from_str("could not build transaction"))?,
-            ),
-        })
-  }
   /// Adds an add air assign operation to a WasmTransactionBuilder instance.
-  pub fn add_operation_air_assign(&mut self,
+  pub fn add_operation_air_assign(mut self,
                                   key_pair: &XfrKeyPair,
                                   issuer_public_key: &CredIssuerPublicKey,
                                   commitment: &CredentialCommitment)
-                                  -> Result<WasmTransactionBuilder, JsValue> {
-    Ok(WasmTransactionBuilder { transaction_builder:
-                                  Serialized::new(&*self.transaction_builder
-                                                        .deserialize()
-                                                        .add_operation_air_assign(key_pair,
-                                                                                  issuer_public_key.clone(),
-                                                                                  commitment.get_commitment_ref().clone(),
-                                                                                  commitment.get_pok_ref().clone())
-                    .map_err(|_e| JsValue::from_str("could not build transaction"))?)})
+                                  -> Result<TransactionBuilder, JsValue> {
+    self.get_builder_mut()
+        .add_operation_air_assign(key_pair,
+                                  issuer_public_key.clone(),
+                                  commitment.get_commitment_ref().clone(),
+                                  commitment.get_pok_ref().clone())
+        .map_err(error_to_jsvalue)?;
+    Ok(self)
   }
 
   /// Adds a serialized operation to a WasmTransactionBuilder instance
   /// @param {string} op -  a JSON-serialized operation (i.e. a transfer operation).
   /// @see {@link WasmTransferOperationBuilder} for details on constructing a transfer operation.
   /// @throws Will throw an error if `op` fails to deserialize.
-  pub fn add_operation(&mut self, op: String) -> Result<WasmTransactionBuilder, JsValue> {
-    let op =
-      serde_json::from_str::<Operation>(&op).map_err(|_e| {
-                                              JsValue::from_str("Could not deserialize operation")
-                                            })?;
-    Ok(WasmTransactionBuilder { transaction_builder: Serialized::new(&*self.transaction_builder
-                                                                           .deserialize()
-                                                                           .add_operation(op)) })
+  pub fn add_operation(mut self, op: String) -> Result<TransactionBuilder, JsValue> {
+    let op = serde_json::from_str::<Operation>(&op).map_err(error_to_jsvalue)?;
+    self.get_builder_mut().add_operation(op);
+    Ok(self)
   }
 
-  pub fn sign(&mut self, kp: &XfrKeyPair) -> Result<WasmTransactionBuilder, JsValue> {
-    let new_builder = Serialized::new(&*self.transaction_builder.deserialize().sign(kp));
-
-    Ok(WasmTransactionBuilder { transaction_builder: new_builder })
+  pub fn sign(mut self, kp: &XfrKeyPair) -> Result<TransactionBuilder, JsValue> {
+    self.get_builder_mut().sign(kp);
+    Ok(self)
   }
 
   /// Extracts the serialized form of a transaction.
   ///
   /// TODO Develop standard terminology for Javascript functions that may throw errors.
-  pub fn transaction(&mut self) -> Result<String, JsValue> {
-    Ok(self.transaction_builder
-           .deserialize()
+  pub fn transaction(&self) -> Result<String, JsValue> {
+    Ok(self.get_builder()
            .serialize_str()
-           .map_err(|_e| JsValue::from_str("Could not serialize transaction"))?)
+           .map_err(error_to_jsvalue)?)
+  }
+
+  /// Fetches a client record from a transaction. A client record contains the ownership record and
+  /// parameters that can be used with a user key to decrypt parts of the ownership record.
+  /// @param {number} - Record to fetch. Records are added to the transaction builder sequentially.
+  pub fn get_owner_record_and_memo(&self, idx: usize) -> Option<ClientAssetRecord> {
+    self.get_builder()
+        .get_owner_record_and_memo(idx)
+        .cloned()
+        .map(|(output, memo)| ClientAssetRecord { output, memo })
+  }
+}
+#[wasm_bindgen]
+pub struct ClientAssetRecord {
+  output: TxOutput,
+  memo: Option<OwnerMemo>,
+}
+
+impl ClientAssetRecord {
+  pub fn get_bar_ref(&self) -> &BlindAssetRecord {
+    &self.output.0
+  }
+
+  pub fn get_memo_ref(&self) -> &Option<OwnerMemo> {
+    &self.memo
   }
 }
 
 #[wasm_bindgen]
 #[derive(Default)]
 /// Structure that enables clients to construct complex transfers.
-pub struct WasmTransferOperationBuilder {
-  op_builder: Serialized<TransferOperationBuilder>,
+pub struct TransferOperationBuilder {
+  op_builder: PlatformTransferOperationBuilder,
 }
+
+impl TransferOperationBuilder {
+  pub fn get_builder(&self) -> &PlatformTransferOperationBuilder {
+    &self.op_builder
+  }
+
+  pub fn get_builder_mut(&mut self) -> &mut PlatformTransferOperationBuilder {
+    &mut self.op_builder
+  }
+}
+
 #[wasm_bindgen]
-impl WasmTransferOperationBuilder {
+impl TransferOperationBuilder {
   /// Create a new transfer operation builder.
   pub fn new() -> Self {
     Self::default()
@@ -481,24 +410,21 @@ impl WasmTransferOperationBuilder {
   /// @see {@link open_blind_asset_record} for details on opening blind asset records.
   /// @see {@link get_txo} for details on fetching blind asset records.
   /// @throws Will throw an error if `oar` or `txo_ref` fail to deserialize.
-  pub fn add_input(&mut self,
+  pub fn add_input(mut self,
                    txo_ref: String,
-                   oar: String,
+                   asset_record: ClientAssetRecord,
+                   key: &XfrKeyPair,
                    amount: u64)
-                   -> Result<WasmTransferOperationBuilder, JsValue> {
-    let txo_sid =
-      serde_json::from_str::<TxoRef>(&txo_ref).map_err(|_e| {
-                                                JsValue::from_str("Could not deserialize txo sid")
-                                              })?;
-    let oar = serde_json::from_str::<OpenAssetRecord>(&oar)
-            .map_err(|_e| JsValue::from_str("Could not deserialize open asset record"))?;
-    Ok(WasmTransferOperationBuilder { op_builder:
-                                        Serialized::new(&*self.op_builder
-                                                              .deserialize()
-                                                              .add_input(txo_sid, oar, amount)
-                                                              .map_err(|e| {
-                                                                JsValue::from_str(&format!("{}", e))
-                                                              })?) })
+                   -> Result<TransferOperationBuilder, JsValue> {
+    let txo_sid = serde_json::from_str::<TxoRef>(&txo_ref).map_err(error_to_jsvalue)?;
+    let oar =
+      open_bar(asset_record.get_bar_ref(),
+               asset_record.get_memo_ref(),
+               key.get_sk_ref()).map_err(|_e| JsValue::from_str("Could not open asset record"))?;
+    self.get_builder_mut()
+        .add_input(txo_sid, oar, amount)
+        .map_err(error_to_jsvalue)?;
+    Ok(self)
   }
 
   /// Wraps around TransferOperationBuilder to add an output to a transfer operation builder.
@@ -509,39 +435,32 @@ impl WasmTransferOperationBuilder {
   /// @param conf_amount {bool} - Indicates whether output's amount is confidential
   /// @param conf_type {bool} - Indicates whether output's asset type is confidential
   /// @throws Will throw an error if `code` fails to deserialize.
-  pub fn add_output(&mut self,
+  pub fn add_output(mut self,
                     amount: u64,
                     recipient: &XfrPublicKey,
                     code: String,
                     conf_amount: bool,
                     conf_type: bool)
-                    -> Result<WasmTransferOperationBuilder, JsValue> {
-    let code = AssetTypeCode::new_from_base64(&code)
-            .map_err(|_e| JsValue::from_str("Could not deserialize asset token code"))?;
+                    -> Result<TransferOperationBuilder, JsValue> {
+    let code = AssetTypeCode::new_from_base64(&code).map_err(error_to_jsvalue)?;
 
     let asset_record_type = AssetRecordType::from_booleans(conf_amount, conf_type);
     let template =
       AssetRecordTemplate::with_no_asset_tracking(amount, code.val, asset_record_type, *recipient);
-    let new_builder = Serialized::new(&*self.op_builder
-                                            .deserialize()
-                                            .add_output(&template, None)
-                                            .map_err(|e| JsValue::from_str(&format!("{}", e)))?);
-    Ok(WasmTransferOperationBuilder { op_builder: new_builder })
+    self.get_builder_mut()
+        .add_output(&template, None)
+        .map_err(error_to_jsvalue)?;
+    Ok(self)
   }
 
   /// Wraps around TransferOperationBuilder to ensure the transfer inputs and outputs are balanced.
   /// This function will add change outputs for all unspent portions of input records.
   /// @throws Will throw an error if the transaction cannot be balanced.
-  pub fn balance(&mut self) -> Result<WasmTransferOperationBuilder, JsValue> {
-    Ok(WasmTransferOperationBuilder {
-            op_builder: Serialized::new(
-                &*self
-                    .op_builder
-                    .deserialize()
-                    .balance()
-                    .map_err(|_e| JsValue::from_str("Error balancing txn"))?,
-            ),
-        })
+  pub fn balance(mut self) -> Result<TransferOperationBuilder, JsValue> {
+    self.get_builder_mut()
+        .balance()
+        .map_err(|_e| JsValue::from_str("Error balancing txn"))?;
+    Ok(self)
   }
 
   /// Wraps around TransferOperationBuilder to finalize the transaction.
@@ -552,15 +471,13 @@ impl WasmTransferOperationBuilder {
   /// @throws Will throw an error if `transfer_type` fails to deserialize.
   /// @throws Will throw an error if input and output amounts do not add up.
   /// @throws Will throw an error if not all record owners have signed the transaction.
-  pub fn create(&mut self, transfer_type: String) -> Result<WasmTransferOperationBuilder, JsValue> {
-    let transfer_type = serde_json::from_str::<TransferType>(&transfer_type)
-            .map_err(|_e| JsValue::from_str("Could not deserialize transfer type"))?;
-    let new_builder = Serialized::new(&*self.op_builder
-                                            .deserialize()
-                                            .create(transfer_type)
-                                            .map_err(|e| JsValue::from_str(&format!("{}", e)))?);
-
-    Ok(WasmTransferOperationBuilder { op_builder: new_builder })
+  pub fn create(mut self, transfer_type: String) -> Result<TransferOperationBuilder, JsValue> {
+    let transfer_type =
+      serde_json::from_str::<TransferType>(&transfer_type).map_err(error_to_jsvalue)?;
+    self.get_builder_mut()
+        .create(transfer_type)
+        .map_err(error_to_jsvalue)?;
+    Ok(self)
   }
 
   /// Wraps around TransferOperationBuilder to add a signature to the transaction.
@@ -568,27 +485,19 @@ impl WasmTransferOperationBuilder {
   /// All input owners must sign.
   ///
   /// @param {XfrKeyPair} kp - key pair of one of the input owners.
-  pub fn sign(&mut self, kp: &XfrKeyPair) -> Result<WasmTransferOperationBuilder, JsValue> {
-    let new_builder = Serialized::new(&*self.op_builder
-                                            .deserialize()
-                                            .sign(&kp)
-                                            .map_err(|e| JsValue::from_str(&format!("{}", e)))?);
-
-    Ok(WasmTransferOperationBuilder { op_builder: new_builder })
+  pub fn sign(mut self, kp: &XfrKeyPair) -> Result<TransferOperationBuilder, JsValue> {
+    self.get_builder_mut().sign(&kp).map_err(error_to_jsvalue)?;
+    Ok(self)
   }
 
   pub fn builder(&self) -> String {
-    serde_json::to_string(&self.op_builder.deserialize()).unwrap()
+    serde_json::to_string(self.get_builder()).unwrap()
   }
 
   /// Wraps around TransferOperationBuilder to extract an operation expression as JSON.
   pub fn transaction(&self) -> Result<String, JsValue> {
-    let transaction = self.op_builder
-                          .deserialize()
-                          .transaction()
-                          .map_err(|e| JsValue::from_str(&format!("{}", e)))?;
-
-    Ok(serde_json::to_string(&transaction).unwrap())
+    let op = self.get_builder().transaction().map_err(error_to_jsvalue)?;
+    Ok(serde_json::to_string(&op).unwrap())
   }
 }
 

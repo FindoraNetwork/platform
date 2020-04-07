@@ -136,7 +136,6 @@ fn main() -> Result<(), Box<dyn Error>> {
   let key_and_state: KeyAndState = KeyAndState { public_key: pk,
                                                  global_state: (comm, idx, sig) };
   let ks_str = serde_json::to_string(&key_and_state).unwrap();
-
   let consensus_state = ConsensusState { this_state: key_and_state,
                                          matches: HashSet::new(),
                                          mismatches: HashMap::new() };
