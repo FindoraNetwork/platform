@@ -9,7 +9,7 @@ use credentials::{
 use env_logger::{Env, Target};
 use ledger::data_model::errors::PlatformError;
 use ledger::data_model::{
-  AccountAddress, AssetAccessType, AssetTypeCode, TransferType, TxOutput, TxoRef, TxoSID,
+  AccountAddress, AssetRules, AssetTypeCode, TransferType, TxOutput, TxoRef, TxoSID,
 };
 use ledger::error_location;
 use ledger::policies::{DebtMemo, Fraction};
@@ -1035,19 +1035,19 @@ fn air_assign(issuer_id: u64,
 /// * `issuer_key_pair`: asset issuer's key pair.
 /// * `token_code`: asset token code.
 /// * `memo`: memo for defining the asset.
-/// * `access_type`: whether the asset is updatable and/or traceable.
+/// * `asset_rules`: simple asset rules (e.g. traceable, transferable)
 /// * `txn_file`: path to store the transaction file.
 fn define_asset(fiat_asset: bool,
                 issuer_key_pair: &XfrKeyPair,
                 token_code: AssetTypeCode,
                 memo: &str,
-                access_type: AssetAccessType,
+                asset_rules: AssetRules,
                 txn_file: &str)
                 -> Result<TransactionBuilder, PlatformError> {
   let mut txn_builder = TransactionBuilder::default();
   txn_builder.add_operation_create_asset(issuer_key_pair,
                                          Some(token_code),
-                                         access_type,
+                                         asset_rules,
                                          &memo,
                                          PolicyChoice::Fungible())?;
   store_txn_to_file(&txn_file, &txn_builder)?;
@@ -1367,7 +1367,7 @@ fn load_funds(issuer_id: u64,
                                    issuer_key_pair,
                                    fiat_code,
                                    "Fiat asset",
-                                   AssetAccessType::NotUpdatable_Traceable,
+                                   AssetRules::default(),
                                    txn_file)?;
     // Store data before submitting the transaction to avoid data overwriting
     let data = load_data()?;
@@ -1677,7 +1677,7 @@ fn fulfill_loan(loan_id: u64,
                                    issuer_key_pair,
                                    fiat_code,
                                    "Fiat asset",
-                                   AssetAccessType::NotUpdatable_Traceable,
+                                   AssetRules::default(),
                                    txn_file)?;
     // Store data before submitting the transaction to avoid data overwriting
     let data = load_data()?;
@@ -1733,7 +1733,7 @@ fn fulfill_loan(loan_id: u64,
                                  borrower_key_pair,
                                  debt_code,
                                  &memo_str,
-                                 AssetAccessType::NotUpdatable_Traceable,
+                                 AssetRules::default(),
                                  txn_file)?;
   // Store data before submitting the transaction to avoid data overwriting
   let data = load_data()?;
@@ -2136,10 +2136,6 @@ fn main() {
           .short("c")
           .help("Explicit 16 character token code for the new asset; must be a unique name. If specified code is already in use, transaction will fail. If not specified, will display automatically generated token code.")
           .takes_value(true))
-        .arg(Arg::with_name("updatable")
-          .short("u")
-          .long("updatable")
-          .help("If specified, updates may be made to asset memo"))
         .arg(Arg::with_name("traceable")
           .short("trace")
           .long("traceable")
@@ -2713,7 +2709,6 @@ fn process_asset_issuer_cmd(asset_issuer_matches: &clap::ArgMatches,
       } else {
         "{}"
       };
-      let updatable = define_asset_matches.is_present("updatable");
       let traceable = define_asset_matches.is_present("traceable");
       let asset_token: AssetTypeCode;
       if let Some(token_code) = token_code {
@@ -2728,7 +2723,7 @@ fn process_asset_issuer_cmd(asset_issuer_matches: &clap::ArgMatches,
                          &issuer_key_pair,
                          asset_token,
                          &memo,
-                         AssetAccessType::from_booleans(updatable, traceable),
+                         *AssetRules::default().set_traceable(traceable),
                          txn_file)
       {
         Ok(_) => Ok(()),
