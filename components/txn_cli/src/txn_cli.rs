@@ -8,7 +8,9 @@ use credentials::{
 };
 use env_logger::{Env, Target};
 use ledger::data_model::errors::PlatformError;
-use ledger::data_model::{AccountAddress, AssetTypeCode, TransferType, TxOutput, TxoRef, TxoSID};
+use ledger::data_model::{
+  AccountAddress, AssetAccessType, AssetTypeCode, TransferType, TxOutput, TxoRef, TxoSID,
+};
 use ledger::error_location;
 use ledger::policies::{DebtMemo, Fraction};
 use log::trace; // Other options: debug, info, warn
@@ -1024,38 +1026,6 @@ fn air_assign(issuer_id: u64,
   Ok(())
 }
 
-// TODO (Keyao): Move this enum to data_model and make it public?
-#[allow(non_camel_case_types)]
-#[allow(clippy::enum_variant_names)]
-/// Represents whether an asset is updatable and/or traceable.
-enum AssetAccessType {
-  Updatable_Traceable,
-  Updatable_NotTraceable,
-  NotUpdatable_Traceable,
-  NotUpdatable_NotTraceable,
-}
-
-impl AssetAccessType {
-  /// Converts the asset access type
-  fn get_booleans(self) -> (bool, bool) {
-    match self {
-      AssetAccessType::Updatable_Traceable => (true, true),
-      AssetAccessType::Updatable_NotTraceable => (true, false),
-      AssetAccessType::NotUpdatable_Traceable => (false, true),
-      AssetAccessType::NotUpdatable_NotTraceable => (false, false),
-    }
-  }
-
-  fn from_booleans(updatable: bool, traceable: bool) -> Self {
-    match (updatable, traceable) {
-      (true, true) => AssetAccessType::Updatable_Traceable,
-      (true, false) => AssetAccessType::Updatable_NotTraceable,
-      (false, true) => AssetAccessType::NotUpdatable_Traceable,
-      (false, false) => AssetAccessType::NotUpdatable_NotTraceable,
-    }
-  }
-}
-
 /// Defines an asset.
 ///
 /// Note: the transaction isn't submitted until `submit` or `submit_and_get_sids` is called.
@@ -1075,11 +1045,9 @@ fn define_asset(fiat_asset: bool,
                 txn_file: &str)
                 -> Result<TransactionBuilder, PlatformError> {
   let mut txn_builder = TransactionBuilder::default();
-  let (updatable, traceable) = access_type.get_booleans();
   txn_builder.add_operation_create_asset(issuer_key_pair,
                                          Some(token_code),
-                                         updatable,
-                                         traceable,
+                                         access_type,
                                          &memo,
                                          PolicyChoice::Fungible())?;
   store_txn_to_file(&txn_file, &txn_builder)?;

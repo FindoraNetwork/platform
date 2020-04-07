@@ -1763,7 +1763,7 @@ impl ArchiveAccess for LedgerState {
 pub mod helpers {
   use super::*;
   use crate::data_model::{
-    Asset, ConfidentialMemo, DefineAsset, DefineAssetBody, IssuerPublicKey, Memo,
+    Asset, AssetAccessType, ConfidentialMemo, DefineAsset, DefineAssetBody, IssuerPublicKey, Memo,
   };
   use zei::serialization::ZeiFromToBytes;
   use zei::setup::PublicParams;
@@ -1779,7 +1779,12 @@ pub mod helpers {
                                        -> Result<Transaction, PlatformError> {
     let issuer_key = IssuerPublicKey { key: *public_key };
     let mut tx = Transaction::default();
-    let asset_body = DefineAssetBody::new(&code, &issuer_key, false, false, memo, None, None)?;
+    let asset_body = DefineAssetBody::new(&code,
+                                          &issuer_key,
+                                          AssetAccessType::NotUpdatable_NotTraceable,
+                                          memo,
+                                          None,
+                                          None)?;
     let asset_create = DefineAsset::new(asset_body, &issuer_key, &secret_key)?;
     tx.operations.push(Operation::DefineAsset(asset_create));
     Ok(tx)
@@ -1793,16 +1798,14 @@ pub mod helpers {
 
   pub fn asset_creation_body(token_code: &AssetTypeCode,
                              issuer_key: &XfrPublicKey,
-                             updatable: bool,
-                             traceable: bool,
+                             access_type: AssetAccessType,
                              memo: Option<Memo>,
                              confidential_memo: Option<ConfidentialMemo>)
                              -> DefineAssetBody {
     let mut token_properties: Asset = Default::default();
     token_properties.code = *token_code;
     token_properties.issuer = IssuerPublicKey { key: *issuer_key };
-    token_properties.updatable = updatable;
-    token_properties.traceable = traceable;
+    token_properties.access_type = access_type;
 
     if let Some(memo) = memo {
       token_properties.memo = memo;
@@ -2193,7 +2196,11 @@ mod tests {
     let token_code1 = AssetTypeCode { val: [1; 16] };
     let (public_key, secret_key) = build_keys(&mut prng);
 
-    let asset_body = asset_creation_body(&token_code1, &public_key, true, false, None, None);
+    let asset_body = asset_creation_body(&token_code1,
+                                         &public_key,
+                                         AssetAccessType::Updatable_NotTraceable,
+                                         None,
+                                         None);
     let asset_create = asset_creation_operation(&asset_body, &public_key, &secret_key);
     tx.operations.push(Operation::DefineAsset(asset_create));
 
@@ -2220,7 +2227,11 @@ mod tests {
     let token_code1 = AssetTypeCode { val: [1; 16] };
     let mut prng = ChaChaRng::from_entropy();
     let (public_key1, secret_key1) = build_keys(&mut prng);
-    let asset_body = asset_creation_body(&token_code1, &public_key1, true, false, None, None);
+    let asset_body = asset_creation_body(&token_code1,
+                                         &public_key1,
+                                         AssetAccessType::Updatable_NotTraceable,
+                                         None,
+                                         None);
     let mut asset_create = asset_creation_operation(&asset_body, &public_key1, &secret_key1);
 
     // Now re-sign the operation with the wrong key.
@@ -2356,7 +2367,11 @@ mod tests {
     let mut prng = ChaChaRng::from_entropy();
     let (public_key1, secret_key1) = build_keys(&mut prng);
 
-    let asset_body = asset_creation_body(&token_code1, &public_key1, true, false, None, None);
+    let asset_body = asset_creation_body(&token_code1,
+                                         &public_key1,
+                                         AssetAccessType::Updatable_NotTraceable,
+                                         None,
+                                         None);
     let mut asset_create = asset_creation_operation(&asset_body, &public_key1, &secret_key1);
 
     // Re-sign the operation with the wrong key.

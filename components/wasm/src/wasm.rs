@@ -16,7 +16,9 @@ use cryptohash::sha256::Digest as BitDigest;
 use curve25519_dalek::ristretto::RistrettoPoint;
 use curve25519_dalek::scalar::Scalar;
 use js_sys::Promise;
-use ledger::data_model::{b64enc, AssetTypeCode, AuthenticatedTransaction, Operation};
+use ledger::data_model::{
+  b64enc, AssetAccessType, AssetTypeCode, AuthenticatedTransaction, Operation,
+};
 use ledger::policies::{DebtMemo, Fraction};
 use rand_chacha::ChaChaRng;
 use rand_core::SeedableRng;
@@ -197,8 +199,7 @@ impl TransactionBuilder {
     self.get_builder_mut()
         .add_operation_create_asset(&key_pair,
                                     Some(asset_token),
-                                    false,
-                                    false,
+                                    AssetAccessType::NotUpdatable_NotTraceable,
                                     &memo,
                                     policy_choice)
         .map_err(error_to_jsvalue)?;

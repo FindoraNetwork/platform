@@ -3,7 +3,7 @@
 /// All P2P lending-related operations and transactions are tested.
 use ledger::data_model::errors::PlatformError;
 use ledger::data_model::{
-  AssetTypeCode, Transaction, TransferType, TxOutput, TxnSID, TxoRef, TxoSID,
+  AssetAccessType, AssetTypeCode, Transaction, TransferType, TxOutput, TxnSID, TxoRef, TxoSID,
 };
 use ledger::policies::{calculate_fee, DebtMemo, Fraction};
 use ledger::store::LedgerState;
@@ -42,8 +42,7 @@ fn test_create_asset() -> Result<(), PlatformError> {
   // Define
   let tx = builder.add_operation_create_asset(&keys,
                                               Some(code),
-                                              false,
-                                              false,
+                                              AssetAccessType::NotUpdatable_NotTraceable,
                                               "test".into(),
                                               PolicyChoice::Fungible())?
                   .transaction();
@@ -117,14 +116,12 @@ fn test_loan_repayment(loan_amount: u64,
   let mut builder = TransactionBuilder::default();
   let tx = builder.add_operation_create_asset(&fiat_issuer_keys,
                                               Some(fiat_code),
-                                              false,
-                                              false,
+                                              AssetAccessType::NotUpdatable_NotTraceable,
                                               "fiat".into(),
                                               PolicyChoice::Fungible())?
                   .add_operation_create_asset(&borrower_keys,
                                               Some(debt_code),
-                                              false,
-                                              false,
+                                              AssetAccessType::NotUpdatable_NotTraceable,
                                               &serde_json::to_string(&debt_memo).unwrap(),
                                               PolicyChoice::Fungible())?
                   .transaction();
