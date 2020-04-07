@@ -13,7 +13,7 @@ extern crate exitcode;
 // Derive path and command name from cwd
 // Figure out how to colorize stdout and stderr
 
-// TODO (Keyao): Fix tests with // #[ignore].
+// TODO (Keyao): Fix tests with #[ignore].
 // Those tests pass individually, but occasionally fail when run with other tests.
 // They take more time to complete, thus might cause data conflicts.
 
@@ -381,7 +381,7 @@ fn test_create_users() {
 }
 
 #[test]
-// #[ignore]
+#[ignore]
 fn test_create_or_overwrite_credentials() {
   // Create a borrower
   sign_up_borrower("Borrower B").expect("Failed to create a borrower");
@@ -434,7 +434,7 @@ fn test_create_txn_builder_no_path() {
 // Lender or borrower views loans or credentials
 //
 #[test]
-// #[ignore]
+#[ignore]
 fn test_view() {
   let ledger_standalone = LedgerStandalone::new();
 
@@ -736,7 +736,7 @@ fn test_store_sids_with_path() {
 // Compose transaction and submit
 //
 #[test]
-// #[ignore]
+#[ignore]
 fn test_define_issue_transfer_and_submit_with_args() {
   let ledger_standalone = LedgerStandalone::new();
 
@@ -829,7 +829,7 @@ fn test_define_issue_transfer_and_submit_with_args() {
 //
 // Compose transaction and submit
 //
-// #[ignore]
+#[ignore]
 #[test]
 fn test_air_assign() {
   // Create txn builder and key pair
@@ -854,7 +854,7 @@ fn test_air_assign() {
 }
 
 #[test]
-// #[ignore]
+#[ignore]
 fn test_issue_transfer_trace_and_submit_with_args() {
   let ledger_standalone = LedgerStandalone::new();
 
@@ -914,7 +914,7 @@ fn test_issue_transfer_trace_and_submit_with_args() {
 }
 
 #[test]
-// #[ignore]
+#[ignore]
 // TODO (Keyao): Investigate why the "Pay loan" section fails.
 // Test funds loading, loan request, fulfilling and repayment
 fn test_request_fulfill_and_pay_loan_with_args() {
