@@ -6,8 +6,7 @@ use cryptohash::sha256;
 use serde::{Deserialize, Serialize};
 use sha256::DIGESTBYTES;
 use std::collections::HashMap;
-use std::fs::File;
-use std::io::prelude::Read;
+use std::fs;
 use std::io::Error;
 
 pub use sha256::Digest;
@@ -252,9 +251,7 @@ pub fn check_merkle_proof<Value: AsRef<[u8]>>(merkle_root: &Digest,
 }
 
 pub fn open(path: &str) -> Result<SmtMap256<String>, Error> {
-  let mut file = File::open(path)?;
-  let mut contents = String::new();
-  file.read_to_string(&mut contents)?;
+  let contents: String = fs::read_to_string(path)?;
 
   // Deserialize and print Rust data structure.
   let result: SmtMap256<String> = serde_json::from_str(&contents)?;

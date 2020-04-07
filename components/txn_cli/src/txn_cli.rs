@@ -1,6 +1,4 @@
 #![deny(warnings)]
-// There appears to be a clippy bug that makes this necessary
-#![allow(clippy::redundant_clone)]
 use clap::{App, Arg, SubCommand};
 use credentials::{
   credential_issuer_key_gen, credential_keygen_commitment, credential_reveal, credential_sign,
@@ -18,8 +16,7 @@ use rand_chacha::ChaChaRng;
 use rand_core::SeedableRng;
 use serde::{Deserialize, Serialize};
 use std::env;
-use std::fs::{self, File};
-use std::io::prelude::*;
+use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::exit;
 use submission_server::{TxnHandle, TxnStatus};
@@ -508,14 +505,14 @@ impl Data {
     store_data_to_file(self.clone())
   }
 
-  fn get_asset_issuer_key_pair(&mut self, id: u64) -> Result<XfrKeyPair, PlatformError> {
+  fn get_asset_issuer_key_pair(&self, id: u64) -> Result<XfrKeyPair, PlatformError> {
     let key_pair_str = &self.asset_issuers[id as usize].key_pair;
     Ok(XfrKeyPair::zei_from_bytes(&hex::decode(key_pair_str).or_else(|_| {
                                      Err(PlatformError::DeserializationError)
                                    })?))
   }
 
-  fn get_asset_tracer_key_pair(&mut self, id: u64) -> Result<AssetTracerKeyPair, PlatformError> {
+  fn get_asset_tracer_key_pair(&self, id: u64) -> Result<AssetTracerKeyPair, PlatformError> {
     let tracer_key_pair_str = &self.asset_issuers[id as usize].tracer_key_pair;
     let tracer_key_pair_decode =
       hex::decode(tracer_key_pair_str).or_else(|_| Err(PlatformError::DeserializationError))?;
@@ -535,7 +532,7 @@ impl Data {
   }
 
   fn get_credential_issuer_key_pair(
-    &mut self,
+    &self,
     id: u64)
     -> Result<(CredIssuerPublicKey, CredIssuerSecretKey), PlatformError> {
     let key_pair_str = &self.credential_issuers[id as usize].key_pair;
@@ -555,7 +552,7 @@ impl Data {
     store_data_to_file(self.clone())
   }
 
-  fn get_lender_key_pair(&mut self, id: u64) -> Result<XfrKeyPair, PlatformError> {
+  fn get_lender_key_pair(&self, id: u64) -> Result<XfrKeyPair, PlatformError> {
     let key_pair_str = &self.lenders[id as usize].key_pair;
     Ok(XfrKeyPair::zei_from_bytes(&hex::decode(key_pair_str).or_else(|_| {
                                      Err(PlatformError::DeserializationError)
@@ -594,7 +591,7 @@ impl Data {
     store_data_to_file(self.clone())
   }
 
-  fn get_borrower_key_pair(&mut self, id: u64) -> Result<XfrKeyPair, PlatformError> {
+  fn get_borrower_key_pair(&self, id: u64) -> Result<XfrKeyPair, PlatformError> {
     let key_pair_str = &self.borrowers[id as usize].key_pair;
     Ok(XfrKeyPair::zei_from_bytes(&hex::decode(key_pair_str).or_else(|_| {
                                      Err(PlatformError::DeserializationError)
@@ -674,43 +671,24 @@ fn get_and_update_sequence_number() -> Result<u64, PlatformError> {
 /// * If the data file exists, loads data from it.
 /// * Otherwise, stores the initial data to file and returns the data.
 fn load_data() -> Result<Data, PlatformError> {
-  let mut file;
-  match File::open(DATA_FILE) {
-    Ok(f) => {
-      file = f;
-    }
+  let data = match fs::read_to_string(DATA_FILE) {
+    Ok(data) => data,
     Err(_) => {
-      let data = get_init_data()?;
-      store_data_to_file(data.clone())?;
-      return Ok(data);
+      let init_data = get_init_data()?;
+      store_data_to_file(init_data.clone())?;
+      return Ok(init_data);
     }
-  }
-  let mut data = String::new();
-  if file.read_to_string(&mut data).is_err() {
-    Err(PlatformError::IoError(format!("Failed to read file: {}", "data")))
-  } else {
-    serde_json::from_str::<Data>(&data).or(Err(PlatformError::DeserializationError))
-  }
+  };
+  serde_json::from_str::<Data>(&data).or(Err(PlatformError::DeserializationError))
 }
 
 /// Loads transaction record from file
 /// # Arguments
 /// * `file_path`: file path.
 fn load_txn_from_file(file_path: &str) -> Result<TransactionBuilder, PlatformError> {
-  let mut file;
-  match File::open(file_path) {
-    Ok(f) => {
-      file = f;
-    }
-    Err(_) => {
-      return Err(PlatformError::IoError(format!("File doesn't exist: {}. Try subcommand create.",
-                                         file_path)));
-    }
-  }
-  let mut txn = String::new();
-  if file.read_to_string(&mut txn).is_err() {
-    return Err(PlatformError::IoError(format!("Failed to read file: {}", file_path)));
-  }
+  let txn = fs::read_to_string(file_path).or_else(|_| {
+              Err(PlatformError::IoError(format!("Failed to read file: {}", file_path)))
+            })?;
   println!("Parsing builder from file contents: \"{}\"", &txn);
   match serde_json::from_str(&txn) {
     Ok(builder) => Ok(builder),
@@ -729,20 +707,9 @@ fn split_arg(string: &str) -> Vec<&str> {
 /// # Arguments
 /// * `file_path`: file path
 fn load_sids_from_file(file_path: &str) -> Result<Vec<u64>, PlatformError> {
-  let mut file;
-  match File::open(file_path) {
-    Ok(f) => {
-      file = f;
-    }
-    Err(_) => {
-      return Err(PlatformError::IoError(format!("File doesn't exist: {}. Try subcommand store --sids.", file_path)));
-    }
-  }
-
-  let mut sids_str = String::new();
-  if let Err(error) = file.read_to_string(&mut sids_str) {
-    return Err(PlatformError::IoError(format!("Failed to read file: {}: {}.", file_path, error)));
-  }
+  let sids_str = fs::read_to_string(file_path).or_else(|_| {
+                   Err(PlatformError::IoError(format!("Failed to read file: {}", file_path)))
+                 })?;
 
   let mut sids = Vec::new();
   for sid_str in split_arg(&sids_str) {
@@ -761,20 +728,9 @@ fn load_sids_from_file(file_path: &str) -> Result<Vec<u64>, PlatformError> {
 fn load_blind_asset_record_and_owner_memo_from_file(
   file_path: &str)
   -> Result<(BlindAssetRecord, Option<OwnerMemo>), PlatformError> {
-  let mut file;
-  match File::open(file_path) {
-    Ok(f) => {
-      file = f;
-    }
-    Err(_) => {
-      return Err(PlatformError::IoError(format!("File doesn't exist: {}. Try subcommand create.",
-                                         file_path)));
-    }
-  }
-  let mut txn = String::new();
-  if file.read_to_string(&mut txn).is_err() {
-    return Err(PlatformError::IoError(format!("Failed to read file: {}", file_path)));
-  }
+  let txn = fs::read_to_string(file_path).or_else(|_| {
+              Err(PlatformError::IoError(format!("Failed to read file: {}", file_path)))
+            })?;
   println!("Parsing builder from file contents: \"{}\"", &txn);
   match serde_json::from_str::<TransactionBuilder>(&txn) {
     Ok(builder) => Ok(((builder.get_owner_record_and_memo(0).unwrap().0.clone()).0,
@@ -819,20 +775,9 @@ fn load_tracer_and_owner_memos_from_files(file_paths: &str)
                                           -> Result<Vec<TracerAndOwnerMemos>, PlatformError> {
   let mut tracer_and_owner_memos = Vec::new();
   for file_path in split_arg(file_paths) {
-    let mut file;
-    match File::open(file_path) {
-      Ok(f) => {
-        file = f;
-      }
-      Err(_) => {
-        return Err(PlatformError::IoError(format!("File doesn't exist: {}. Use --store_memos.",
-                                                  file_path)));
-      }
-    }
-    let mut memos = String::new();
-    if file.read_to_string(&mut memos).is_err() {
-      return Err(PlatformError::IoError(format!("Failed to read file: {}", file_path)));
-    }
+    let memos = fs::read_to_string(file_path).or_else(|_| {
+                  Err(PlatformError::IoError(format!("Failed to read file: {}", file_path)))
+                })?;
     println!("Parsing tracer and owner memos from file contents: \"{}\"",
              &memos);
     match serde_json::from_str::<TracerAndOwnerMemos>(&memos) {
@@ -1068,7 +1013,7 @@ fn air_assign(issuer_id: u64,
               pok: &str,
               txn_file: &str)
               -> Result<(), PlatformError> {
-  let mut issuer_data = load_data()?;
+  let issuer_data = load_data()?;
   let issuer_key_pair = issuer_data.get_asset_issuer_key_pair(issuer_id)?;
   let mut txn_builder = TransactionBuilder::default();
   let address = serde_json::from_str(address)?;
@@ -1440,13 +1385,13 @@ fn load_funds(issuer_id: u64,
               host: &str)
               -> Result<(), PlatformError> {
   // Get data
-  let mut data = load_data()?;
-  let issuer_key_pair = &data.clone().get_asset_issuer_key_pair(issuer_id)?;
-  let recipient = &data.borrowers.clone()[recipient_id as usize];
+  let data = load_data()?;
+  let issuer_key_pair = &data.get_asset_issuer_key_pair(issuer_id)?;
+  let recipient = &data.borrowers[recipient_id as usize];
   let recipient_key_pair = &data.clone().get_borrower_key_pair(recipient_id)?;
 
   // Get or define fiat asset
-  let token_code = if let Some(code) = &data.clone().fiat_code {
+  let token_code = if let Some(code) = &data.fiat_code {
     AssetTypeCode::new_from_base64(code)?
   } else {
     let fiat_code = AssetTypeCode::gen_random();
@@ -1514,7 +1459,7 @@ fn load_funds(issuer_id: u64,
   };
 
   // Update data
-  data = load_data()?;
+  let mut data = load_data()?;
   data.borrowers[recipient_id as usize].balance = recipient.balance + amount;
   data.borrowers[recipient_id as usize].fiat_utxo = Some(sid_merged);
   store_data_to_file(data)
@@ -1560,8 +1505,8 @@ fn fulfill_loan(loan_id: u64,
                 -> Result<(), PlatformError> {
   // Get data
   let mut data = load_data()?;
-  let issuer_key_pair = &data.clone().get_asset_issuer_key_pair(issuer_id)?;
-  let loan = &data.loans.clone()[loan_id as usize];
+  let issuer_key_pair = &data.get_asset_issuer_key_pair(issuer_id)?;
+  let loan = &data.loans[loan_id as usize];
 
   // Check if loan has been fulfilled
   match loan.status {
@@ -1581,10 +1526,10 @@ fn fulfill_loan(loan_id: u64,
   }
 
   let lender_id = loan.lender;
-  let lender = &data.lenders.clone()[lender_id as usize];
+  let lender = &data.lenders[lender_id as usize];
   let lender_key_pair = &data.get_lender_key_pair(loan.lender)?;
   let borrower_id = loan.borrower;
-  let borrower = &data.borrowers.clone()[borrower_id as usize];
+  let borrower = &data.borrowers[borrower_id as usize];
   let borrower_key_pair = &data.get_borrower_key_pair(borrower_id)?;
   let amount = loan.amount;
 
@@ -1595,7 +1540,7 @@ fn fulfill_loan(loan_id: u64,
     println!("Credential is required. Use create_or_overwrite_credential.");
     return Err(PlatformError::InputsError(error_location!()));
   };
-  let credential = &data.credentials.clone()[credential_id as usize];
+  let credential = &data.credentials[credential_id as usize];
   let credential_issuer_id = credential.credential_issuer;
 
   // Check if the credential values meet the requirements
@@ -1716,8 +1661,7 @@ fn fulfill_loan(loan_id: u64,
   } else {
     println!("Proving before attesting.");
     let mut prng: ChaChaRng = ChaChaRng::from_entropy();
-    let (user_pk, user_sk) =
-      credential_user_key_gen(&mut prng, &credential_issuer_public_key.clone());
+    let (user_pk, user_sk) = credential_user_key_gen(&mut prng, &credential_issuer_public_key);
     let user_sk_str =
       serde_json::to_vec(&user_sk).or_else(|_| Err(PlatformError::SerializationError))?;
     let signature = credential_sign(&mut prng,
@@ -1751,8 +1695,7 @@ fn fulfill_loan(loan_id: u64,
     data.credentials[credential_id as usize].proof =
       Some(serde_json::to_string(&reveal_sig).or_else(|_| Err(PlatformError::SerializationError))?);
     data.credentials[credential_id as usize].commitment_key = Some(hex::encode(commitment_key_str));
-    store_data_to_file(data)?;
-    data = load_data()?;
+    store_data_to_file(data.clone())?;
     (user_sk, wrapper_credential, commitment_key)
   };
 
@@ -1858,7 +1801,7 @@ fn fulfill_loan(loan_id: u64,
                                              fiat_code.val,
                                              NonConfidentialAmount_NonConfidentialAssetType,
                                              borrower_key_pair.get_pk(),
-                                             tracing_policy.clone());
+                                             tracing_policy);
   let xfr_op = TransferOperationBuilder::new().add_input(TxoRef::Absolute(fiat_sid),
                                                          fiat_open_asset_record,
                                                          amount)?
@@ -1937,8 +1880,8 @@ fn fulfill_loan(loan_id: u64,
 /// * `host`: either `testnet.findora.org` or `localhost`.
 fn pay_loan(loan_id: u64, amount: u64, protocol: &str, host: &str) -> Result<(), PlatformError> {
   // Get data
-  let mut data = load_data()?;
-  let loan = &data.loans.clone()[loan_id as usize];
+  let data = load_data()?;
+  let loan = &data.loans[loan_id as usize];
 
   // Check if it's valid to pay
   match loan.status {
@@ -1960,7 +1903,7 @@ fn pay_loan(loan_id: u64, amount: u64, protocol: &str, host: &str) -> Result<(),
 
   let lender_id = loan.lender;
   let borrower_id = loan.borrower;
-  let borrower = &data.borrowers.clone()[borrower_id as usize];
+  let borrower = &data.borrowers[borrower_id as usize];
   let lender_key_pair = &data.get_lender_key_pair(lender_id)?;
   let borrower_key_pair = &data.get_borrower_key_pair(borrower_id)?;
 
@@ -2064,7 +2007,7 @@ fn pay_loan(loan_id: u64, amount: u64, protocol: &str, host: &str) -> Result<(),
   // Submit transaction and update data
   let sids = submit_and_get_sids(protocol, host, txn_builder)?;
 
-  data = load_data()?;
+  let mut data = load_data()?;
   let balance = loan.balance - amount_to_burn;
   if balance == 0 {
     data.loans[loan_id as usize].status = LoanStatus::Complete;
@@ -2725,7 +2668,7 @@ fn process_asset_issuer_cmd(asset_issuer_matches: &clap::ArgMatches,
       store_sids_to_file(file, sids)
     }
     ("store_memos", Some(store_bar_and_memos_matches)) => {
-      let mut data = load_data()?;
+      let data = load_data()?;
       let (issuer_pub_key, policy) = if let Some(id_arg) = asset_issuer_matches.value_of("id") {
         let issuer_id = parse_to_u64(id_arg)?;
         let issuer_pub_key = data.get_asset_issuer_key_pair(issuer_id)?.get_pk();
@@ -2788,7 +2731,7 @@ fn process_asset_issuer_cmd(asset_issuer_matches: &clap::ArgMatches,
     }
     ("define_asset", Some(define_asset_matches)) => {
       let fiat_asset = define_asset_matches.is_present("fiat");
-      let mut data = load_data()?;
+      let data = load_data()?;
       let issuer_key_pair = if let Some(id_arg) = asset_issuer_matches.value_of("id") {
         let issuer_id = parse_to_u64(id_arg)?;
         data.get_asset_issuer_key_pair(issuer_id)?
@@ -2825,7 +2768,7 @@ fn process_asset_issuer_cmd(asset_issuer_matches: &clap::ArgMatches,
       }
     }
     ("issue_asset", Some(issue_asset_matches)) => {
-      let mut data = load_data()?;
+      let data = load_data()?;
       let (key_pair, tracer_enc_keys) = if let Some(id_arg) = asset_issuer_matches.value_of("id") {
         let issuer_id = parse_to_u64(id_arg)?;
         (data.get_asset_issuer_key_pair(issuer_id)?,
@@ -2865,7 +2808,7 @@ fn process_asset_issuer_cmd(asset_issuer_matches: &clap::ArgMatches,
       store_txn_to_file(&txn_file, &txn_builder)
     }
     ("transfer_asset", Some(transfer_asset_matches)) => {
-      let mut data = load_data()?;
+      let data = load_data()?;
       let (issuer_key_pair, tracer_enc_keys) =
         if let Some(id_arg) = asset_issuer_matches.value_of("id") {
           let issuer_id = parse_to_u64(id_arg)?;
@@ -2996,7 +2939,7 @@ fn process_asset_issuer_cmd(asset_issuer_matches: &clap::ArgMatches,
       store_txn_to_file(&txn_file, &txn_builder)
     }
     ("issue_and_transfer_asset", Some(issue_and_transfer_matches)) => {
-      let mut data = load_data()?;
+      let data = load_data()?;
       let issuer_key_pair = if let Some(id_arg) = asset_issuer_matches.value_of("id") {
         let issuer_id = parse_to_u64(id_arg)?;
         data.get_asset_issuer_key_pair(issuer_id)?
@@ -3041,7 +2984,7 @@ fn process_asset_issuer_cmd(asset_issuer_matches: &clap::ArgMatches,
       Ok(())
     }
     ("trace_and_verify_asset", Some(trace_and_verify_asset_matches)) => {
-      let mut data = load_data()?;
+      let data = load_data()?;
       let tracer_dec_keys = if let Some(id_arg) = asset_issuer_matches.value_of("id") {
         let issuer_id = parse_to_u64(id_arg)?;
         data.get_asset_tracer_key_pair(issuer_id)?
@@ -3515,7 +3458,7 @@ fn process_borrower_cmd(borrower_matches: &clap::ArgMatches,
         println!("Borrower id is required to get the asset record. Use borrower --id.");
         return Err(PlatformError::InputsError(error_location!()));
       };
-      let mut data = load_data()?;
+      let data = load_data()?;
       let borrower_name = data.borrowers[borrower_id as usize].name.clone();
       let key_pair = data.get_borrower_key_pair(borrower_id)?;
       let sid = if let Some(sid_arg) = get_asset_record_matches.value_of("sid") {
