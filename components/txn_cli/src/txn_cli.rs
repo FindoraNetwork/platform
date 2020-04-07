@@ -405,6 +405,8 @@ enum LoanStatus {
 struct Loan {
   /// Loan ID
   id: u64,
+  /// Issuer ID, null if the loan isn't fulfilled          
+  issuer: Option<u64>,
   /// Lender ID           
   lender: u64,
   /// Borrower ID          
@@ -423,13 +425,13 @@ struct Loan {
   duration: u64,
   /// Number of payments that have been made
   payments: u64,
-  /// Serialized debt token code, if exists
+  /// Serialized debt token code, null if the loan isn't fulfilled     
   code: Option<String>,
-  /// Debt asset UTXO (unspent transaction output) SIDs, if exists
+  /// Debt asset UTXO (unspent transaction output) SIDs, null if the loan isn't fulfilled     
   debt_utxo: Option<TxoSID>,
-  /// Path to the most recent debt asset transaction file, if any
+  /// Path to the most recent debt asset transaction file, null if the loan isn't fulfilled     
   debt_txn_file: Option<String>,
-  /// Serialized anon_creds::Credential, if exists
+  /// Serialized anon_creds::Credential, null if the loan isn't fulfilled     
   credential: Option<String>,
 }
 
@@ -442,6 +444,7 @@ impl Loan {
          duration: u64)
          -> Self {
     Loan { id: id as u64,
+           issuer: None,
            lender,
            borrower,
            status: LoanStatus::Requested,
@@ -1718,7 +1721,7 @@ fn fulfill_loan(loan_id: u64,
     fiat_code
   };
 
-  // Get tracing policy
+  // Get tracing policies
   let tracer_enc_keys = data.get_asset_tracer_key_pair(issuer_id)?.enc_key;
   let identity_policy = IdentityRevealPolicy { cred_issuer_pub_key:
                                                  credential_issuer_public_key.get_ref().clone(),
@@ -1863,6 +1866,7 @@ fn fulfill_loan(loan_id: u64,
 
   // Update data
   let mut data = load_data()?;
+  data.loans[loan_id as usize].issuer = Some(issuer_id);
   data.fiat_code = Some(fiat_code.to_base64());
   data.loans[loan_id as usize].status = LoanStatus::Active;
   data.loans[loan_id as usize].code = Some(debt_code.to_base64());
@@ -1971,12 +1975,27 @@ fn pay_loan(loan_id: u64, amount: u64, protocol: &str, host: &str) -> Result<(),
   println!("Fiat code: {}", serde_json::to_string(&fiat_code.val)?);
   println!("Debt code: {}", serde_json::to_string(&debt_code.val)?);
 
-  // Get tracing policy
-  let tracer_enc_keys = data.get_asset_tracer_key_pair(0)?.enc_key;
-  let (credential_issuer_public_key, _) = data.get_credential_issuer_key_pair(0)?;
+  // Get tracing policies
+  let credential_id = if let Some(id) = borrower.credentials {
+    id
+  } else {
+    println!("Missing credentials.");
+    return Err(PlatformError::InputsError(error_location!()));
+  };
+  let credential = &data.credentials[credential_id as usize];
+  let credential_issuer_id = credential.credential_issuer;
+  let (credential_issuer_public_key, _) =
+    data.get_credential_issuer_key_pair(credential_issuer_id)?;
   let identity_policy = IdentityRevealPolicy { cred_issuer_pub_key:
                                                  credential_issuer_public_key.get_ref().clone(),
                                                reveal_map: vec![true] };
+  let issuer_id = if let Some(id) = loan.issuer {
+    id
+  } else {
+    println!("Missing issuer ID.");
+    return Err(PlatformError::InputsError(error_location!()));
+  };
+  let tracer_enc_keys = data.get_asset_tracer_key_pair(issuer_id)?.enc_key;
   let fiat_tracing_policy = AssetTracingPolicy { enc_keys: tracer_enc_keys.clone(),
                                                  asset_tracking: true,
                                                  identity_tracking: None };
@@ -2009,13 +2028,6 @@ fn pay_loan(loan_id: u64, amount: u64, protocol: &str, host: &str) -> Result<(),
                                              fiat_tracing_policy);
 
   // Get credential record
-  let credential_id = if let Some(id) = borrower.credentials {
-    id
-  } else {
-    println!("Missing credentials");
-    return Err(PlatformError::InputsError(error_location!()));
-  };
-  let credential = &data.credentials[credential_id as usize];
   let user_secret_key = if let Some(key_str) = credential.user_secret_key.clone() {
     let key_decode = hex::decode(key_str).or_else(|_| Err(PlatformError::DeserializationError))?;
     serde_json::from_slice::<CredUserSecretKey>(&key_decode).or_else(|_| {
