@@ -734,7 +734,7 @@ fn load_blind_asset_record_and_owner_memo_from_file(
   println!("Parsing builder from file contents: \"{}\"", &txn);
   match serde_json::from_str::<TransactionBuilder>(&txn) {
     Ok(builder) => Ok(((builder.get_owner_record_and_memo(0).unwrap().0.clone()).0,
-                       builder.get_owner_record_and_memo(1).unwrap().1.clone())),
+                       builder.get_owner_record_and_memo(0).unwrap().1.clone())),
     Err(_) => Err(PlatformError::DeserializationError),
   }
 }
