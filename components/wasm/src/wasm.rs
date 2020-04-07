@@ -17,8 +17,8 @@ use curve25519_dalek::ristretto::RistrettoPoint;
 use curve25519_dalek::scalar::Scalar;
 use js_sys::Promise;
 use ledger::data_model::{
-  b64enc, AssetAccessType, AssetTypeCode, AuthenticatedTransaction, Operation, Serialized,
-  TransferType, TxOutput, TxoRef, TxoSID,
+  b64enc, AssetAccessType, AssetTypeCode, AuthenticatedTransaction, Operation, TransferType,
+  TxOutput, TxoRef, TxoSID,
 };
 use ledger::policies::{DebtMemo, Fraction};
 use rand_chacha::ChaChaRng;
@@ -240,12 +240,14 @@ impl TransactionBuilder {
     let policy_choice = serde_json::from_str::<PolicyChoice>(&policy_choice).map_err(|e| {
                           JsValue::from_str(&format!("Could not deserialize PolicyChoice: {}", e))
                         })?;
-
-    Ok(WasmTransactionBuilder { transaction_builder: Serialized::new(&*self.transaction_builder.deserialize().add_operation_create_asset(&key_pair,
-                                              Some(asset_token),
-                                              AssetAccessType::NotUpdatable_NotTraceable,
-                                              &memo, policy_choice)
-                  .map_err(|_e| JsValue::from_str("Could not build transaction"))?)})
+    self.get_builder_mut()
+        .add_operation_create_asset(&key_pair,
+                                    Some(asset_token),
+                                    AssetAccessType::NotUpdatable_NotTraceable,
+                                    &memo,
+                                    policy_choice)
+        .map_err(error_to_jsvalue)?;
+    Ok(self)
   }
 
   pub fn add_policy_option(mut self,
