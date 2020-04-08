@@ -1,8 +1,3 @@
-{-# LANGUAGE LambdaCase        #-}
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE DeriveFunctor     #-}
-{-# LANGUAGE FlexibleContexts  #-} -- TODO: check if I need this
-{-# LANGUAGE RankNTypes        #-}
 module PolicyScript where
 import qualified Data.Text as T
 import qualified Text.PrettyPrint.Annotated as PP

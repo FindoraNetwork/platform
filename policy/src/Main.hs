@@ -1,6 +1,6 @@
 module Main where
 
-import PolicyLang
+import Compile
 import           System.IO (hGetContents,stdin)
 
 -- main = alloyish_main
