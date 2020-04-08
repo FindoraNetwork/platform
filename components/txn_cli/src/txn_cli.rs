@@ -1789,7 +1789,8 @@ fn fulfill_loan(loan_id: u64,
                                               .sign(borrower_key_pair)?
                                               .transaction()?;
   let mut txn_builder = TransactionBuilder::default();
-  txn_builder.add_operation(xfr_op).transaction();
+  txn_builder.add_operation(xfr_op)
+             .add_credential(ac_credential);
   store_txn_to_file(&debt_txn_file, &txn_builder)?;
 
   // Submit transaction
@@ -2038,7 +2039,9 @@ fn pay_loan(loan_id: u64, amount: u64, protocol: &str, host: &str) -> Result<(),
                                           .sign(borrower_key_pair)?
                                           .transaction()?;
   let mut txn_builder = TransactionBuilder::default();
-  txn_builder.add_operation(op).transaction();
+  txn_builder.add_operation(op)
+             .add_credential(ac_credential)
+             .transaction();
 
   // Submit transaction and update data
   let sids = submit_and_get_sids(protocol, host, txn_builder)?;
