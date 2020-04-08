@@ -1,13 +1,14 @@
 module Main where
 
 import PolicyLang
-import           System.IO (hGetContents,openFile,IOMode(..),hFlush,stdout,stdin)
+import           System.IO (hGetContents,stdin)
 
 -- main = alloyish_main
+main :: IO ()
 main = do
   polf <- hGetContents stdin
 
-  compile putStrLn polf
+  (Right _) <- compile putStrLn polf
 
   return ()
 

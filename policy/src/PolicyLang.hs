@@ -2,473 +2,56 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE DeriveFunctor     #-}
 {-# LANGUAGE FlexibleContexts  #-} -- TODO: check if I need this
+{-# LANGUAGE RankNTypes        #-}
 module PolicyLang where
 import qualified Data.Text as T
-import           Data.List (nub,isPrefixOf,sort)
 import qualified Data.Map.Lazy as M
 import qualified Control.Monad.State.Lazy as S
 import qualified Text.Parsec   as P
-import qualified Text.Parsec.Token as P
-import           Text.Parsec.Language (javaStyle)
 import           Data.Maybe (maybeToList,fromMaybe,fromJust)
-import           Control.Applicative ((<$>),(<*>),(*>))
-import           Control.Monad (join, filterM, foldM, forM_)
-import           System.Directory (getCurrentDirectory, getDirectoryContents, doesFileExist)
-import           System.IO (hGetContents,openFile,IOMode(..),hFlush,stdout,stdin)
-import           System.FilePath.Posix (takeBaseName)
+import           Control.Applicative ((<$>),(*>))
+import           Control.Monad (foldM, forM_)
 import qualified Text.PrettyPrint.Annotated as PP
 import           Control.Monad.Identity (runIdentity)
-import           Alloyish(alloyish_main)
 import           Data.Ratio(numerator,denominator)
-import           Debug.Trace(trace)
+-- import           Debug.Trace(trace)
+import Parser
 
-policy_lang = P.makeTokenParser $ javaStyle
-  { P.reservedNames = [ "param", "global_param", "local", "resource",
-                        "credential", "in", "out", "inout" ,
-                        "init_txn",
-                        "bound_asset_type", "issued_by", "asset",
-                        "txn", "assert", "ensures", "require",
-                        "require_signature",
-                        "of", "old", "new", "round",
-                        "transfer", "issue",
-                        "Fraction", "Amount", "Identity", "ResourceType",
-                        "ALL", "BURN_ADDRESS", "owner", "amount",
-                        "true", "false"
-                      ]
-  , P.reservedOpNames = [ "->", "*", "+", "-", "==", ">=", "<=", "<",
-                          ">", ":", "&&", "||"
-                        ]
-  , P.caseSensitive = True
-  }
-
-polReserved = P.reserved policy_lang
-polId = P.identifier policy_lang
-polOp = P.reservedOp policy_lang
-polBop op parseExpr = do
-  e1 <- parseExpr
-  polOp op
-  e2 <- parseExpr
-  return (e1,e2)
-
-data BoundAssetTypeStmt = BoundAssetTypeStmt { _batsType :: T.Text, _batsIssuer :: T.Text }
-  deriving (Eq,Show,Read)
-
-parseBats = do
-  polReserved "bound_asset_type"
-  tp <- polId
-  P.braces policy_lang (return ())
-  polReserved "issued_by"
-  issuer <- polId
-  P.semi policy_lang
-  return $ BoundAssetTypeStmt (T.pack tp) (T.pack issuer)
-
-pprintBats (BoundAssetTypeStmt tp iss) = PP.hsep
-  [ PP.text "bound_asset_type"
-  , PP.text (T.unpack tp)
-  , PP.braces PP.empty
-  , PP.text "issued_by"
-  , PP.text (T.unpack iss)
-  ]
-
-data DataType = FractionType
-              | ResourceTypeType
-              | IdentityType
-              | AmountType
-  deriving (Eq,Show,Read)
-
-parseDataType
-  = foldl1 (\x y -> P.try x P.<|> y) $
-  [ const FractionType <$> polReserved "Fraction"
-  , const ResourceTypeType <$> polReserved "ResourceType"
-  , const IdentityType <$> polReserved "Identity"
-  , const AmountType <$> polReserved "Amount"
-  ]
-
-pprintDataType FractionType = PP.text "Fraction"
-pprintDataType ResourceTypeType = PP.text "ResourceType"
-pprintDataType IdentityType = PP.text "Identity"
-pprintDataType AmountType = PP.text "Amount"
-
-data ArithExpr = ConstAmountExpr   Integer
-               | ConstFractionExpr Rational
-               | PlusExpr  ArithExpr ArithExpr
-               | MinusExpr ArithExpr ArithExpr
-               | TimesExpr ArithExpr ArithExpr
-               | RoundExpr ArithExpr
-               | OldExpr ArithExpr
-               | AllExpr
-               | ArithVar  T.Text
-               | AmountField T.Text
-               | OwnerField T.Text -- TODO: This isn't arithmetic!
-  deriving (Eq,Show,Read)
-
-parseSimpleArithExpr
-  = foldl1 (\x y -> P.try x P.<|> y) $
-  [ ConstFractionExpr . toRational <$> P.float policy_lang-- TODO: don't go through float maybe?
-  , ConstAmountExpr <$> P.integer policy_lang
-  , AmountField . T.pack <$> (polId <* (polOp "." >> polReserved "amount"))
-  , OwnerField  . T.pack <$> (polId <* (polOp "." >> polReserved "owner"))
-  , ArithVar    . T.pack <$> polId
-  , RoundExpr <$> (polReserved "round" >> P.parens policy_lang parseArithExpr)
-  , OldExpr <$> (polReserved "old" >> P.parens policy_lang parseArithExpr)
-  , const AllExpr <$> (polReserved "ALL")
-  , P.parens policy_lang parseArithExpr
-  ]
-
-parseArithExpr
-  = foldl1 (\x y -> P.try x P.<|> y) $
-  [ uncurry PlusExpr <$> polBop "+" parseSimpleArithExpr
-  , uncurry MinusExpr <$> polBop "-" parseSimpleArithExpr
-  , uncurry TimesExpr <$> polBop "*" parseSimpleArithExpr
-  , parseSimpleArithExpr
-  ]
-
-pprintArithExpr (ConstAmountExpr i) = PP.integer i
-pprintArithExpr (ConstFractionExpr f) = PP.double $ fromRational f
-pprintArithExpr (AllExpr) = PP.text "ALL"
-pprintArithExpr (ArithVar v) = PP.text $ T.unpack v
-pprintArithExpr (AmountField v) = (PP.text $ T.unpack v) PP.<> PP.text ".amount"
-pprintArithExpr (OwnerField v) = (PP.text $ T.unpack v) PP.<> PP.text ".owner"
-pprintArithExpr (OldExpr e) = PP.text "old" PP.<> PP.parens (pprintArithExpr e)
-pprintArithExpr (RoundExpr e) = PP.text "round" PP.<> PP.parens (pprintArithExpr e)
-pprintArithExpr (PlusExpr l r) = PP.parens (pprintArithExpr l) PP.<+> PP.text "+" PP.<+> PP.parens (pprintArithExpr r)
-pprintArithExpr (TimesExpr l r) = PP.parens (pprintArithExpr l) PP.<+> PP.text "*" PP.<+> PP.parens (pprintArithExpr r)
-pprintArithExpr (MinusExpr l r) = PP.parens (pprintArithExpr l) PP.<+> PP.text "-" PP.<+> PP.parens (pprintArithExpr r)
-
-traverseArithExpr f (ConstAmountExpr i) = f (ConstAmountExpr i)
-traverseArithExpr f (ConstFractionExpr fr) = f (ConstFractionExpr fr)
-traverseArithExpr f (AllExpr) = f AllExpr
-traverseArithExpr f (ArithVar v) = f $ ArithVar v
-traverseArithExpr f (AmountField v) = f $ AmountField v
-traverseArithExpr f (OwnerField v) = f $ OwnerField v
-traverseArithExpr f (OldExpr e) = OldExpr <$> f e
-traverseArithExpr f (RoundExpr e) = RoundExpr <$> f e
-traverseArithExpr f (PlusExpr l r) = PlusExpr <$> f l <*> f r
-traverseArithExpr f (TimesExpr l r) = TimesExpr <$> f l <*> f r
-traverseArithExpr f (MinusExpr l r) = MinusExpr <$> f l <*> f r
-
--- clumsy
-traverseNonOldArithExpr f (ConstAmountExpr i) = f (ConstAmountExpr i)
-traverseNonOldArithExpr f (ConstFractionExpr fr) = f (ConstFractionExpr fr)
-traverseNonOldArithExpr f (AllExpr) = f AllExpr
-traverseNonOldArithExpr f (ArithVar v) = f $ ArithVar v
-traverseNonOldArithExpr f (AmountField v) = f $ AmountField v
-traverseNonOldArithExpr f (OwnerField v) = f $ OwnerField v
-traverseNonOldArithExpr f (OldExpr e) = pure $ OldExpr e
-traverseNonOldArithExpr f (RoundExpr e) = RoundExpr <$> f e
-traverseNonOldArithExpr f (PlusExpr l r) = PlusExpr <$> f l <*> f r
-traverseNonOldArithExpr f (TimesExpr l r) = TimesExpr <$> f l <*> f r
-traverseNonOldArithExpr f (MinusExpr l r) = MinusExpr <$> f l <*> f r
-
-
-traverseArithSubExpr _ (ConstAmountExpr i) = pure (ConstAmountExpr i)
-traverseArithSubExpr _ (ConstFractionExpr f) = pure (ConstFractionExpr f)
-traverseArithSubExpr _ (AllExpr) = pure AllExpr
-traverseArithSubExpr _ (ArithVar v) = pure $ ArithVar v
-traverseArithSubExpr f (AmountField v) = pure $ AmountField v
-traverseArithSubExpr f (OwnerField v) = pure $ OwnerField v
-traverseArithSubExpr f (OldExpr e) = OldExpr <$> f e
-traverseArithSubExpr f (RoundExpr e) = RoundExpr <$> f e
-traverseArithSubExpr f (PlusExpr l r) = PlusExpr <$> f l <*> f r
-traverseArithSubExpr f (TimesExpr l r) = TimesExpr <$> f l <*> f r
-traverseArithSubExpr f (MinusExpr l r) = MinusExpr <$> f l <*> f r
-
-
-data ArithType = ArithAmount
-               | ArithAll
-               | ArithFraction
-               | ArithOwner
-  deriving (Eq,Show,Read)
-
--- arithExprArithVars :: ArithExpr -> [T.Text]
--- arithExprArithVars (ArithVar v) = [v]
--- arithExprArithVars (PlusExpr l r) = arithExprArithVars l ++ arithExprArithVars r
--- arithExprArithVars (MinusExpr l r) = arithExprArithVars l ++ arithExprArithVars r
--- arithExprArithVars (TimesExpr l r) = arithExprArithVars l ++ arithExprArithVars r
--- arithExprArithVars (RoundExpr e) = arithExprArithVars e
--- arithExprArithVars (OldExpr e) = arithExprArithVars e
--- arithExprArithVars _ = []
-
--- arithExprType :: ArithExpr -> Maybe ArithType
--- arithExprType (ConstAmountExpr _) = Just ArithAmount
--- arithExprType (ConstFractionExpr _) = Just ArithFraction
--- arithExprType (AllExpr) = Just ArithAll
--- arithExprType (AllExpr) = Just ArithAll
-
-data BoolExpr = TrueExpr
-              | FalseExpr
-              | NotExpr (BoolExpr)
-              | AndExpr (BoolExpr) (BoolExpr)
-              | OrExpr  (BoolExpr) (BoolExpr)
-              | EqExpr (ArithExpr) (ArithExpr)
-              | GtExpr (ArithExpr) (ArithExpr)
-              | GeExpr (ArithExpr) (ArithExpr)
-              | LtExpr (ArithExpr) (ArithExpr)
-              | LeExpr (ArithExpr) (ArithExpr)
-  deriving (Eq,Show,Read)
-
-simplifyCompares (NotExpr be) = NotExpr $ simplifyCompares be
-simplifyCompares (AndExpr l r) = AndExpr (simplifyCompares l) (simplifyCompares r)
-simplifyCompares (OrExpr l r) = OrExpr (simplifyCompares l) (simplifyCompares r)
-simplifyCompares (GtExpr l r) = AndExpr (NotExpr (EqExpr l r)) (GeExpr l r)
-simplifyCompares (GeExpr l r) = GeExpr l r
-simplifyCompares (LeExpr l r) = GeExpr r l
-simplifyCompares (LtExpr l r) = simplifyCompares (GtExpr r l)
-simplifyCompares x = x
-
-beTraverseArithExprs f (TrueExpr) = pure TrueExpr
-beTraverseArithExprs f (FalseExpr) = pure FalseExpr
-beTraverseArithExprs f (NotExpr be) = NotExpr <$> (beTraverseArithExprs f be)
-beTraverseArithExprs f (AndExpr bl br) = AndExpr <$> (beTraverseArithExprs f bl) <*> (beTraverseArithExprs f br)
-beTraverseArithExprs f (OrExpr bl br) = OrExpr <$> (beTraverseArithExprs f bl) <*> (beTraverseArithExprs f br)
-beTraverseArithExprs f (EqExpr bl br) = EqExpr <$> f bl <*> f br
-beTraverseArithExprs f (GtExpr bl br) = GtExpr <$> f bl <*> f br
-beTraverseArithExprs f (GeExpr bl br) = GeExpr <$> f bl <*> f br
-beTraverseArithExprs f (LtExpr bl br) = LtExpr <$> f bl <*> f br
-beTraverseArithExprs f (LeExpr bl br) = LeExpr <$> f bl <*> f br
-
-parseSimpleBoolExpr
-  = foldl1 (\x y -> P.try x P.<|> y) $
-  [ const TrueExpr <$> polReserved "true"
-  , const FalseExpr <$> polReserved "false"
-  , NotExpr <$> (polOp "!" >> parseSimpleBoolExpr)
-  , uncurry EqExpr <$> polBop "==" parseSimpleArithExpr
-  , uncurry GtExpr <$> polBop ">"  parseSimpleArithExpr
-  , uncurry GeExpr <$> polBop ">=" parseSimpleArithExpr
-  , uncurry LtExpr <$> polBop "<"  parseSimpleArithExpr
-  , uncurry LeExpr <$> polBop "<=" parseSimpleArithExpr
-  ]
-
-parseBoolExpr
-  = foldl1 (\x y -> P.try x P.<|> y) $
-  [ uncurry AndExpr <$> polBop "&&" parseSimpleBoolExpr
-  , uncurry OrExpr <$> polBop "||" parseSimpleBoolExpr
-  , parseSimpleBoolExpr
-  ]
-
-pprintBoolExpr (TrueExpr) = PP.text "true"
-pprintBoolExpr (FalseExpr) = PP.text "false"
-pprintBoolExpr (NotExpr e) = PP.text "!" PP.<> PP.parens (pprintBoolExpr e)
-pprintBoolExpr (AndExpr l r) = PP.parens (pprintBoolExpr l)  PP.<+> PP.text "&&" PP.<+> PP.parens (pprintBoolExpr r)
-pprintBoolExpr (OrExpr l r)  = PP.parens (pprintBoolExpr l)  PP.<+> PP.text "||" PP.<+> PP.parens (pprintBoolExpr r)
-pprintBoolExpr (EqExpr l r)  = PP.parens (pprintArithExpr l) PP.<+> PP.text "==" PP.<+> PP.parens (pprintArithExpr r)
-pprintBoolExpr (GtExpr l r)  = PP.parens (pprintArithExpr l) PP.<+> PP.text ">"  PP.<+> PP.parens (pprintArithExpr r)
-pprintBoolExpr (GeExpr l r)  = PP.parens (pprintArithExpr l) PP.<+> PP.text ">=" PP.<+> PP.parens (pprintArithExpr r)
-pprintBoolExpr (LtExpr l r)  = PP.parens (pprintArithExpr l) PP.<+> PP.text "<"  PP.<+> PP.parens (pprintArithExpr r)
-pprintBoolExpr (LeExpr l r)  = PP.parens (pprintArithExpr l) PP.<+> PP.text "<=" PP.<+> PP.parens (pprintArithExpr r)
-
-data GlobalParamDecl = GlobalParamDecl
-  { _gparamName :: T.Text, _gparamType :: DataType
-  , _gparamInvs :: [BoolExpr] }
-  deriving (Eq,Show,Read)
-
-parseGParamDecl = do
-  polReserved "global_param"
-  varname <- polId
-  polOp ":"
-  vartype <- parseDataType
-  invs <- ((fromMaybe [] <$>) $ P.optionMaybe $ P.braces policy_lang
-                              $ parseBoolExpr `P.endBy` P.semi policy_lang
-          )
-  return $ GlobalParamDecl (T.pack varname) vartype invs
-
-pprintGParamDecl (GlobalParamDecl name tp invs) =
-  ((PP.text "global_param" PP.<+> PP.text (T.unpack name) PP.<> PP.text ":"
-                          PP.<+> pprintDataType tp)
-   PP.$+$ (PP.nest 4 $ PP.braces $ PP.vcat
-                     $ map (\x -> pprintBoolExpr x PP.<> PP.semi) invs
-          )
-  )
-
--- Currently resources only
-data TxnParamDecl = TxnParamDecl
-  { _txnparamIn :: Bool, _txnparamOut :: Bool
-  , _txnparamName :: T.Text, _txnparamType :: T.Text }
-  deriving (Eq,Show,Read)
-
-parseTxnParamDecl = do
-  (isIn,isOut) <- P.choice [P.try (polReserved "in"    >> return (True,False))
-                           ,P.try (polReserved "out"   >> return (False,True))
-                           ,(polReserved "inout" >> return (True,True))
-                           ]
-  polReserved "resource"
-  paramname <- polId
-  polOp ":"
-  paramtype <- polId
-  return $ TxnParamDecl isIn isOut (T.pack paramname) (T.pack paramtype)
-
-pprintTxnParamDecl (TxnParamDecl isIn isOut name tp)
-  = PP.hsep [ (if isIn then PP.text "in" else PP.empty)
-              PP.<> (if isOut then PP.text "out" else PP.empty)
-            , PP.text "resource"
-            , (PP.text $ T.unpack name) PP.<> PP.colon
-            , PP.text $ T.unpack tp
-            ]
-
-data TxnStmt = AssertStmt BoolExpr
-             | RequireSignatureStmt T.Text
-             -- TODO: Currently only "arithmetic" locals
-             | LocalStmt T.Text (Maybe DataType) ArithExpr
-             | IssueStmt ArithExpr T.Text T.Text -- amount of asset-type to resource
-             -- amount from resource1 to resource2 (Nothing => burn address)
-             | TransferStmt ArithExpr T.Text (Maybe T.Text)
-  deriving (Eq,Show,Read)
-
-stmtVars ((LocalStmt var _ ae)) = [(var,ae)]
-stmtVars _ = []
-
-txnStmt_bexpr f (AssertStmt be) = AssertStmt <$> f be
-txnStmt_bexpr _ txnStmt = pure txnStmt
-
-parseTxnStmt
-  = foldl1 (\x y -> P.try x P.<|> y) $
-  [ AssertStmt <$> (polReserved "assert" >> parseBoolExpr)
-  , RequireSignatureStmt . T.pack <$> (polReserved "require_signature" >> polId)
-  , do
-      polReserved "local"
-      name <- polId
-      tp <- P.optionMaybe $ polOp ":" *> parseDataType
-      polOp "="
-      expr <- parseArithExpr
-      return $ LocalStmt (T.pack name) tp expr
-  , do
-      polReserved "issue"
-      amt <- parseSimpleArithExpr
-      polReserved "of"
-      asset_type <- polId
-      polOp "->"
-      dst <- polId
-      return $ IssueStmt amt (T.pack asset_type) (T.pack dst)
-  , do
-      polReserved "transfer"
-      amt <- parseSimpleArithExpr
-      polReserved "of"
-      src <- polId
-      polOp "->"
-      dst <- P.choice [polReserved "BURN_ADDRESS" >> return Nothing, Just <$> polId]
-      return $ TransferStmt amt (T.pack src) (T.pack <$> dst)
-  ]
-
-pprintTxnStmt (AssertStmt be) = PP.text "assert" PP.<+> pprintBoolExpr be
-pprintTxnStmt (RequireSignatureStmt name) = PP.text "require_signature" PP.<+> PP.text (T.unpack name)
-pprintTxnStmt (LocalStmt varname tp aexp) = PP.hsep
-  [ PP.text "local"
-  , PP.text (T.unpack varname)
-  , fromMaybe PP.empty $ (\tp -> PP.text ":" PP.<+> pprintDataType tp) <$> tp
-  , PP.text "="
-  , pprintArithExpr aexp
-  ]
-pprintTxnStmt (IssueStmt amt tp dst) = PP.hsep
-  [ PP.text "issue"
-  , PP.parens $ pprintArithExpr amt
-  , PP.text "of"
-  , PP.text $ T.unpack tp
-  , PP.text "->"
-  , PP.text $ T.unpack dst
-  ]
-pprintTxnStmt (TransferStmt amt src dst) = PP.hsep
-  [ PP.text "transfer"
-  , PP.parens $ pprintArithExpr amt
-  , PP.text "of"
-  , PP.text $ T.unpack src
-  , PP.text "->"
-  , PP.text $ fromMaybe "BURN_ADDRESS" $ T.unpack <$> dst
-  ]
-
-data TxnDecl = TxnDecl
-  { _txnName :: T.Text, _txnParams :: [TxnParamDecl], _txnRequires :: [BoolExpr]
-  , _txnEnsures :: [BoolExpr], _txnBody :: [TxnStmt] }
-  deriving (Eq,Show,Read)
-
-txnBody f decl = (\body' -> decl { _txnBody = body' }) <$> f (_txnBody decl)
-
-freeVars = foldl (++) [] . map stmtVars
-
-parseTxnDecl = do
-  polReserved "txn"
-  name <- polId
-  params <- P.parens policy_lang $ parseTxnParamDecl `P.sepEndBy` P.comma policy_lang
-  requires <- (polReserved "requires" >> parseBoolExpr) `P.endBy` P.semi policy_lang
-  ensures  <- (polReserved "ensures"  >> parseBoolExpr) `P.endBy` P.semi policy_lang
-  body <- P.braces policy_lang $ parseTxnStmt `P.endBy` P.semi policy_lang
-  return $ TxnDecl (T.pack name) params requires ensures body
-
-pprintTxnDecl (TxnDecl name params requires ensures body) = PP.vcat
-  [ PP.hsep [PP.text "txn", PP.text (T.unpack name),
-             PP.parens $ PP.hsep
-                       $ map (\x -> pprintTxnParamDecl x PP.<> PP.comma)
-                             params]
-  , PP.nest 4 $ PP.vcat
-              $ map (\x -> PP.text "requires" PP.<+> pprintBoolExpr x
-                                              PP.<> PP.semi)
-                    requires
-  , PP.nest 4 $ PP.vcat
-              $ map (\x -> PP.text "ensures" PP.<+> pprintBoolExpr x
-                                             PP.<> PP.semi)
-                    ensures
-  , PP.lbrace
-  , PP.nest 4 $ PP.vcat $ (\x -> [PP.text ""] ++ x ++ [PP.text ""])
-              $ map (\x -> pprintTxnStmt x PP.<> PP.semi) body
-  , PP.rbrace
-  ]
-
-data PolicyFile = PolicyFile
-  { _polfBats :: BoundAssetTypeStmt -- _bad_ name
-  , _polfGParams :: [GlobalParamDecl]
-  , _polfTxns :: [TxnDecl]
-  }
-  deriving (Eq,Show,Read)
-
--- TODO: makeLenses''
-polfTxns f ast = (\txns' -> ast { _polfTxns = txns' }) <$> (f $ _polfTxns ast)
-
-parsePolicyFile = do
-  bats    <- parseBats
-  gparams <- parseGParamDecl `P.endBy` P.semi policy_lang
-  txns    <- P.many1 parseTxnDecl
-  P.eof
-  return $ PolicyFile bats gparams txns
-
-pprintPolicyFile (PolicyFile bats gparams txns) = PP.vcat (
-  [ pprintBats bats PP.<> PP.semi
-  , PP.text ""
-  ] ++ (map (\x -> pprintGParamDecl x PP.<> PP.semi) gparams) ++
-  [ PP.text ""
-  ] ++ (map (\x -> PP.text "" PP.$+$ pprintTxnDecl x) txns) ++
-  [ PP.text ""
-  ])
-
+killAllExprs :: ArithExpr -> Maybe ArithExpr
 killAllExprs AllExpr = Nothing
 killAllExprs x = Just x
 
+fixAllExprs :: TxnStmt -> Maybe TxnStmt
 fixAllExprs (AssertStmt be) = AssertStmt <$> beTraverseArithExprs killAllExprs be
 fixAllExprs (RequireSignatureStmt i) = return $ (RequireSignatureStmt i)
 fixAllExprs (LocalStmt v tp ae) = LocalStmt v tp <$> (traverseArithExpr killAllExprs ae)
-fixAllExprs (IssueStmt amt tp dst) = (\amt -> IssueStmt amt tp dst)
+fixAllExprs (IssueStmt amt tp dst) = (\a -> IssueStmt a tp dst)
                                     <$> (traverseArithExpr killAllExprs amt)
-fixAllExprs (TransferStmt amt src dst) = (\amt -> TransferStmt amt src dst) <$> do
-  amt <- traverseArithSubExpr killAllExprs amt
-  return $ case amt of
+fixAllExprs (TransferStmt amt src dst) = (\a -> TransferStmt a src dst) <$> do
+  amt' <- traverseArithSubExpr killAllExprs amt
+  return $ case amt' of
     AllExpr -> AmountField src
-    _ -> amt
+    _ -> amt'
 
+freshname :: Integer -> M.Map T.Text a -> (T.Text,Integer)
 freshname ix vars = head $ do
     incr <- [0..]
-    ix <- return $ ix+incr
-    ix' <- return $ ix+1
-    varname <- return $ T.pack $ "__fresh" ++ show ix
-    if (M.member varname vars) then [] else return (varname,ix')
+    ix' <- return $ ix+incr
+    ix'' <- return $ ix'+1
+    varname <- return $ T.pack $ "__fresh" ++ show ix'
+    if (M.member varname vars) then [] else return (varname,ix'')
 
-
-newvar ix vars exp = (ix',varname,[LocalStmt varname Nothing exp])
+newvar :: Integer -> M.Map T.Text a -> ArithExpr -> (Integer,T.Text,[TxnStmt])
+newvar ix vars expr = (ix',varname,[LocalStmt varname Nothing expr])
   where (varname,ix') = freshname ix vars
 
 -- NOTE: assumes that vars-for-subexpressions transformation has been
 -- done
-addExprPreconds lines = do
-  l <- lines
+addExprPreconds :: [TxnStmt] -> [TxnStmt]
+addExprPreconds ls = do
+  l <- ls
   case l of
-    LocalStmt v _ ae -> case ae of
+    LocalStmt _ _ ae -> case ae of
       ConstAmountExpr i -> [AssertStmt (GeExpr (ConstAmountExpr i)
                                                (ConstAmountExpr 0)), l]
       ConstFractionExpr fr -> [AssertStmt (GeExpr (ConstFractionExpr fr)
@@ -479,12 +62,14 @@ addExprPreconds lines = do
       _ -> [l]
     _ -> return l
 
+unifyTypes :: DataType -> DataType -> Maybe DataType
 unifyTypes x y | x == y = Just x
 unifyTypes AmountType FractionType = Just FractionType
 unifyTypes FractionType AmountType = Just FractionType
 unifyTypes _ _ = Nothing
 
 -- TODO: Identity/AssetTypeType arithmetic??!
+typeForExpr :: M.Map T.Text DataType -> ArithExpr -> Maybe DataType
 typeForExpr _ (ConstAmountExpr _) = Just AmountType
 typeForExpr _ (ConstFractionExpr _) = Just FractionType
 typeForExpr _ (AmountField _) = Just AmountType
@@ -511,6 +96,7 @@ typeForExpr tpMap (RoundExpr e) = do
   return AmountType
 typeForExpr _ _ = Nothing
 
+typecheckBoolExpr :: M.Map T.Text DataType -> BoolExpr -> Maybe ()
 typecheckBoolExpr _ TrueExpr = Just ()
 typecheckBoolExpr _ FalseExpr = Just ()
 typecheckBoolExpr tpMap (NotExpr e) = typecheckBoolExpr tpMap e
@@ -551,6 +137,7 @@ typecheckBoolExpr tpMap (LtExpr l r) = do
     (FractionType,FractionType) -> Just ()
     _ -> Nothing
 
+typecheckTxnDecl :: M.Map T.Text DataType -> TxnDecl -> TxnDecl
 typecheckTxnDecl globalTps txn@(TxnDecl{ _txnBody = body })
   = txn {
     _txnBody = go globalTps body
@@ -574,17 +161,18 @@ typecheckTxnDecl globalTps txn@(TxnDecl{ _txnBody = body })
             return (M.insert v ae_tp tpMap,LocalStmt v (Just ae_tp) ae)
           LocalStmt v (Just tp) ae -> do
             ae_tp <- typeForExpr tpMap ae
-            unifyTypes tp ae_tp
+            _ <- unifyTypes tp ae_tp
             return (M.insert v tp tpMap,l)
           IssueStmt amt _ _ -> do
             amt_tp <- typeForExpr tpMap amt
-            unifyTypes AmountType amt_tp
+            _ <- unifyTypes AmountType amt_tp
             return (tpMap,l)
           TransferStmt amt _ _ -> do
             amt_tp <- typeForExpr tpMap amt
-            unifyTypes AmountType amt_tp
+            _ <- unifyTypes AmountType amt_tp
             return (tpMap,l)
 
+splitInouts :: TxnDecl -> TxnDecl
 splitInouts txn@(TxnDecl{ _txnParams = params, _txnBody = body })
   = txn {
     _txnParams = newParams,
@@ -611,10 +199,10 @@ splitInouts txn@(TxnDecl{ _txnParams = params, _txnBody = body })
     update _ _ x = x
 
     go _ _ [] = []
-    go recs outRecs (l:ls) = l' : go recs' outRecs ls
+    go recs oRecs (l:ls) = l' : go recs' oRecs ls
       where
         recs' = case l of
-          TransferStmt _ _ (Just v) -> M.insert v (fromJust $ M.lookup v outRecs) recs
+          TransferStmt _ _ (Just v) -> M.insert v (fromJust $ M.lookup v oRecs) recs
           _ -> recs
         l' = case l of
           AssertStmt be
@@ -629,26 +217,30 @@ splitInouts txn@(TxnDecl{ _txnParams = params, _txnBody = body })
         replaceResource = over traverseArithExpr $ \x ->
           case x of
             AmountField v -> AmountField $ case (M.lookup v recs) of
-              Nothing -> fromJust $ M.lookup v outRecs
+              Nothing -> fromJust $ M.lookup v oRecs
               Just val -> val
             OwnerField v  -> OwnerField  $ case (M.lookup v recs) of
-              Nothing -> fromJust $ M.lookup v outRecs
+              Nothing -> fromJust $ M.lookup v oRecs
               Just val -> val
             _ -> over traverseArithSubExpr (replaceResource) x
 
     inConsumed = flip map (snd <$> M.toList inRecs) $ \x ->
       AssertStmt $ EqExpr (AmountField x) (ConstAmountExpr 0)
 
+replaceVars :: M.Map T.Text ArithExpr -> ArithExpr -> ArithExpr
 replaceVars m = over traverseArithExpr $ \x -> case x of
   ArithVar v -> fromMaybe x $ M.lookup v m
   _ -> x
 
+replaceBeVars :: M.Map T.Text ArithExpr -> BoolExpr -> BoolExpr
 replaceBeVars m = over beTraverseArithExprs $ replaceVars m
 
+linLookup :: Eq t => t -> [(t, a)] -> Maybe a
 linLookup _ [] = Nothing
-linLookup x ((k,v):vs) | x == k = Just v
+linLookup x ((k,v):_) | x == k = Just v
 linLookup x (_:vs) = linLookup x vs
 
+deleteRedundantStmts :: [TxnStmt] -> [TxnStmt]
 deleteRedundantStmts = go [] [] (M.fromList [])
   where
     go _ _ _ [] = []
@@ -674,6 +266,7 @@ deleteRedundantStmts = go [] [] (M.fromList [])
                 knownExprs,knownAsserts,replacedVars)
           _ -> (Just l,knownExprs,knownAsserts,replacedVars)
 
+explicitAmounts :: [TxnStmt] -> [TxnStmt]
 explicitAmounts body = go body
   where
     go ls = ls'
@@ -689,34 +282,35 @@ explicitAmounts body = go body
         IssueStmt ae tp dst -> do
           ae' <- goAE ae
           updates <- S.get
-          updates <- return $ M.insert dst ae' updates
-          S.put updates
+          updates' <- return $ M.insert dst ae' updates
+          S.put updates'
           return $ IssueStmt ae' tp dst
         TransferStmt ae src dst -> do
           ae' <- goAE ae
           updates <- S.get
           oldSrcVal <- return $ fromMaybe (OldExpr (AmountField src))
                               $ M.lookup src updates
-          updates <- return $ M.insert src (MinusExpr oldSrcVal ae') updates
-          updates <- return $ case dst of
-            Nothing -> updates
-            Just dst -> M.insert dst ae' updates
-          S.put updates
+          updates' <- return $ M.insert src (MinusExpr oldSrcVal ae') updates
+          updates'' <- return $ case dst of
+            Nothing -> updates'
+            Just dst' -> M.insert dst' ae' updates'
+          S.put updates''
           return $ TransferStmt ae' src dst
         _ -> return l
       (l':) <$> goStmt ls
 
     goAE :: ArithExpr -> S.State (M.Map T.Text ArithExpr) ArithExpr
-    goAE ae = flip traverseNonOldArithExpr ae $ \ae -> do
-      case ae of
+    goAE ae = flip traverseNonOldArithExpr ae $ \e -> do
+      case e of
         AmountField v -> do
           updates <- S.get
-          return $ fromMaybe ae $ M.lookup v updates
-        _ -> return ae
+          return $ fromMaybe e $ M.lookup v updates
+        _ -> return e
 
-sortTxnStmts body = locals ++ nonops ++ ops
+sortTxnStmts :: [TxnStmt] -> [TxnStmt]
+sortTxnStmts body = let (locals,nonops,ops) = go body
+                  in locals ++ nonops ++ ops
   where
-    (locals,nonops,ops) = go body
     go [] = ([],[],[])
     go (l:ls) = let (locals,nonops,ops) = go ls in
       case l of
@@ -726,13 +320,14 @@ sortTxnStmts body = locals ++ nonops ++ ops
         (IssueStmt _ _ _) -> (locals,nonops,l:ops)
         (TransferStmt _ _ _) -> (locals,nonops,l:ops)
 
+moveOldExprs :: [TxnStmt] -> [TxnStmt]
 moveOldExprs body = go body
   where
     freshvar :: ArithExpr -> S.State (Integer,M.Map T.Text ArithExpr,[TxnStmt]) (T.Text,[TxnStmt])
-    freshvar exp = do
+    freshvar expr = do
       (ix,vars,stmts) <- S.get
-      (ix',varname,newstmts) <- return $ newvar ix vars exp
-      vars' <- return $ M.insert varname exp vars
+      (ix',varname,newstmts) <- return $ newvar ix vars expr
+      vars' <- return $ M.insert varname expr vars
       S.put (ix',vars',stmts)
       return (varname,newstmts)
 
@@ -762,14 +357,14 @@ moveOldExprs body = go body
           return $ ArithVar varname
         _ -> return ae'
 
-
+explicitSubExprs :: [TxnStmt] -> [TxnStmt]
 explicitSubExprs body = fst $ flip S.runState (0,(M.fromList $ freeVars body) :: M.Map T.Text ArithExpr) $ goStmt body
   where
     freshvar :: ArithExpr -> S.State (Integer,M.Map T.Text ArithExpr) (T.Text,[TxnStmt])
-    freshvar exp = do
+    freshvar expr = do
       (ix,vars) <- S.get
-      (ix',varname,newstmts) <- return $ newvar ix vars exp
-      vars' <- return $ M.insert varname exp vars
+      (ix',varname,newstmts) <- return $ newvar ix vars expr
+      vars' <- return $ M.insert varname expr vars
       S.put (ix',vars')
       return (varname,newstmts)
 
@@ -803,11 +398,11 @@ explicitSubExprs body = fst $ flip S.runState (0,(M.fromList $ freeVars body) ::
       (be',(ix',vars',vstmts)) <- return $ flip S.runState (ix,vars,[]) $ do
         be' <- beTraverseArithExprs goAEinner be
         flip beTraverseArithExprs be' $ \ae -> do
-          (ix,vars,vstmts) <- S.get
-          (ix',varname,newstmts) <- return $ newvar ix vars ae
-          vars' <- return $ M.insert varname ae vars
+          (ix',vars',vstmts) <- S.get
+          (ix'',varname,newstmts) <- return $ newvar ix' vars' ae
+          vars'' <- return $ M.insert varname ae vars'
           vstmts' <- return $ vstmts ++ newstmts
-          S.put (ix',vars',vstmts')
+          S.put (ix'',vars'',vstmts')
           return $ ArithVar varname
       S.put (ix',vars')
       return (vstmts,be')
@@ -820,25 +415,25 @@ explicitSubExprs body = fst $ flip S.runState (0,(M.fromList $ freeVars body) ::
       return (vstmts,ae')
 
     goAEinner :: ArithExpr -> S.State (Integer,M.Map T.Text ArithExpr,[TxnStmt]) ArithExpr
-    goAEinner exp@(ConstAmountExpr i) = do
+    goAEinner expr@(ConstAmountExpr _) = do
       (ix,vars,vstmts) <- S.get
-      (ix',varname,newstmts) <- return $ newvar ix vars exp
-      vars' <- return $ M.insert varname exp vars
+      (ix',varname,newstmts) <- return $ newvar ix vars expr
+      vars' <- return $ M.insert varname expr vars
       vstmts' <- return $ vstmts ++ newstmts
       S.put (ix',vars',vstmts')
       return $ ArithVar varname
-    goAEinner exp@(ConstFractionExpr i) = do
+    goAEinner expr@(ConstFractionExpr _) = do
       (ix,vars,vstmts) <- S.get
-      (ix',varname,newstmts) <- return $ newvar ix vars exp
-      vars' <- return $ M.insert varname exp vars
+      (ix',varname,newstmts) <- return $ newvar ix vars expr
+      vars' <- return $ M.insert varname expr vars
       vstmts' <- return $ vstmts ++ newstmts
       S.put (ix',vars',vstmts')
       return $ ArithVar varname
-    goAEinner ae = flip traverseArithSubExpr ae $ \exp -> do
-      exp' <- goAEinner exp
+    goAEinner ae = flip traverseArithSubExpr ae $ \expr -> do
+      expr' <- goAEinner expr
       (ix,vars,vstmts) <- S.get
-      (ix',varname,newstmts) <- return $ newvar ix vars exp'
-      vars' <- return $ M.insert varname exp' vars
+      (ix',varname,newstmts) <- return $ newvar ix vars expr'
+      vars' <- return $ M.insert varname expr' vars
       vstmts' <- return $ vstmts ++ newstmts
       S.put (ix',vars',vstmts')
       return $ ArithVar varname
@@ -846,10 +441,14 @@ explicitSubExprs body = fst $ flip S.runState (0,(M.fromList $ freeVars body) ::
 -- explicitSubExprsTxnDecl (TxnDecl name params requires ensures body)
 --   = TxnDecl name params requires ensures $ explicitSubExprs body
 
-over l f = runIdentity . l (return . f)
+over :: (forall f. Applicative f => (a1 -> f a2) -> a3 -> f c)
+                            -> (a1 -> a2) -> a3 -> c
+over l f = runIdentity . l (pure . f)
 
+explicitSubExprsTxnDecl :: TxnDecl -> TxnDecl
 explicitSubExprsTxnDecl = over txnBody explicitSubExprs
 
+explicitReqEns :: TxnDecl -> TxnDecl
 explicitReqEns (TxnDecl name params requires ensures body)
   = TxnDecl name params [] [] (reqAsserts ++ body ++ ensAsserts)
   where
@@ -862,6 +461,7 @@ data PolicyFileWithInit = PolicyFileWithInit
   }
   deriving (Eq,Show,Read)
 
+explicitGParamInit :: PolicyFile -> PolicyFile
 explicitGParamInit ast = ast'
   where
     ast' = ast {
@@ -882,6 +482,7 @@ explicitGParamInit ast = ast'
           return inv
       , _txnBody = [] }
 
+typecheck :: PolicyFile -> PolicyFile
 typecheck ast = over (polfTxns) (map $ typecheckTxnDecl globalTypes) ast
   where
     globalTypes = M.insert (_batsIssuer $ _polfBats ast) IdentityType
@@ -988,6 +589,10 @@ data PolicyTxnConversionState = PolicyTxnConversionState
   , _ptcTxnSoFar :: PolicyTxnCheck
   } deriving (Eq,Show,Read)
 
+convertPolfToScript :: PolicyFile -> PolicyScript
+convertPolfToScript (PolicyFile { _polfBats = _
+                                , _polfGParams = _
+                                , _polfTxns = [] }) = undefined
 convertPolfToScript (PolicyFile { _polfBats = bats
                                 , _polfGParams = gparams
                                 , _polfTxns = (init_txn:txns) })
@@ -1015,6 +620,8 @@ convertPolfToScript (PolicyFile { _polfBats = bats
       $ (\ (i,gparam) -> (_gparamName gparam, PSFracVar i))
       <$> zip [0..] (filter ((== FractionType) . _gparamType) gparams)
 
+    txnConvert (TxnDecl { _txnRequires = (_:_) }) = undefined
+    txnConvert (TxnDecl { _txnEnsures  = (_:_) }) = undefined
     txnConvert (TxnDecl { _txnName = txnName, _txnParams = params
                         , _txnRequires = [], _txnEnsures = []
                         , _txnBody = bodyStmts })
@@ -1070,7 +677,7 @@ convertPolfToScript (PolicyFile { _polfBats = bats
       let { (Just src_res) = M.lookup src $ _ptcResVars cx_state }
       let { (Just dst_res) = case dst of
         Nothing -> Just Nothing
-        Just dst -> fmap Just $ M.lookup dst $ _ptcResVars cx_state
+        Just dst' -> fmap Just $ M.lookup dst' $ _ptcResVars cx_state
       }
 
       S.put $ cx_state {
@@ -1090,14 +697,18 @@ convertPolfToScript (PolicyFile { _polfBats = bats
           }
         }
 
-    convertStmt (LocalStmt var tp exp) = do
-      (tp) <- return $ fromJust tp
+    convertStmt (LocalStmt var tp0 expr) = do
+      (tp) <- return $ fromJust tp0
       cx_state@(PolicyTxnConversionState { _ptcTxnSoFar = txn }) <- S.get
-      let Nothing = M.lookup var $ _ptcTypes cx_state
+      (case (M.lookup var $ _ptcTypes cx_state) of
+        Nothing -> return ()
+        _ -> undefined)
 
       let types' = M.insert var tp $ _ptcTypes cx_state
 
-      case exp of
+      case expr of
+        OldExpr _ -> undefined
+        AllExpr -> undefined
         ConstAmountExpr n -> do
           let ix = _polNumAmtGlobals final_script + length (_ptcAmtOps txn)
 
@@ -1170,12 +781,12 @@ convertPolfToScript (PolicyFile { _polfBats = bats
             }
           FractionType -> do
             let ix = _polNumFracGlobals final_script + length (_ptcFracOps txn)
-            let (ArithVar lv) = l
-            let (ArithVar rv) = r
-            case (M.lookup lv $ _ptcTypes cx_state, M.lookup rv $ _ptcTypes cx_state) of
+            let (ArithVar lv0) = l
+            let (ArithVar rv0) = r
+            case (M.lookup lv0 $ _ptcTypes cx_state, M.lookup rv0 $ _ptcTypes cx_state) of
               (Just FractionType,Just FractionType) -> do
-                lv <- return $ fromJust $ M.lookup lv $ _ptcFracVars cx_state
-                rv <- return $ fromJust $ M.lookup rv $ _ptcFracVars cx_state
+                lv <- return $ fromJust $ M.lookup lv0 $ _ptcFracVars cx_state
+                rv <- return $ fromJust $ M.lookup rv0 $ _ptcFracVars cx_state
 
                 S.put $ cx_state {
                   _ptcTypes = types',
@@ -1186,8 +797,8 @@ convertPolfToScript (PolicyFile { _polfBats = bats
                 }
 
               (Just FractionType,Just AmountType) -> do
-                lv <- return $ fromJust $ M.lookup lv $ _ptcFracVars cx_state
-                rv <- return $ fromJust $ M.lookup rv $ _ptcAmtVars cx_state
+                lv <- return $ fromJust $ M.lookup lv0 $ _ptcFracVars cx_state
+                rv <- return $ fromJust $ M.lookup rv0 $ _ptcAmtVars cx_state
 
                 S.put $ cx_state {
                   _ptcTypes = types',
@@ -1198,8 +809,8 @@ convertPolfToScript (PolicyFile { _polfBats = bats
                 }
 
               (Just AmountType,Just FractionType) -> do
-                lv <- return $ fromJust $ M.lookup lv $ _ptcAmtVars cx_state
-                rv <- return $ fromJust $ M.lookup rv $ _ptcFracVars cx_state
+                lv <- return $ fromJust $ M.lookup lv0 $ _ptcAmtVars cx_state
+                rv <- return $ fromJust $ M.lookup rv0 $ _ptcFracVars cx_state
 
                 S.put $ cx_state {
                   _ptcTypes = types',
@@ -1268,11 +879,11 @@ convertPolfToScript (PolicyFile { _polfBats = bats
             }
           })
 
-        ArithVar v ->
-          case (M.lookup v $ _ptcTypes cx_state) of
+        ArithVar v0 ->
+          case (M.lookup v0 $ _ptcTypes cx_state) of
             Just FractionType -> do
               ix <- return $ _polNumFracGlobals final_script + length (_ptcFracOps txn)
-              v <- return $ fromJust $ M.lookup v $ _ptcFracVars cx_state
+              v <- return $ fromJust $ M.lookup v0 $ _ptcFracVars cx_state
 
               S.put $ cx_state {
                 _ptcTypes = types',
@@ -1284,7 +895,7 @@ convertPolfToScript (PolicyFile { _polfBats = bats
 
             Just AmountType -> do
               ix <- return $ _polNumAmtGlobals final_script + length (_ptcAmtOps txn)
-              v <- return $ fromJust $ M.lookup v $ _ptcAmtVars cx_state
+              v <- return $ fromJust $ M.lookup v0 $ _ptcAmtVars cx_state
 
               S.put $ cx_state {
                 _ptcTypes = types',
@@ -1296,7 +907,7 @@ convertPolfToScript (PolicyFile { _polfBats = bats
 
             Just IdentityType -> do
               ix <- return $ _polNumIdGlobals final_script + length (_ptcIdOps txn)
-              v <- return $ fromJust $ M.lookup v $ _ptcIdVars cx_state
+              v <- return $ fromJust $ M.lookup v0 $ _ptcIdVars cx_state
 
               S.put $ cx_state {
                 _ptcTypes = types',
@@ -1308,7 +919,7 @@ convertPolfToScript (PolicyFile { _polfBats = bats
 
             Just ResourceTypeType -> do
               ix <- return $ _polNumResTypeGlobals final_script + length (_ptcRtOps txn)
-              v <- return $ fromJust $ M.lookup v $ _ptcResTypeVars cx_state
+              v <- return $ fromJust $ M.lookup v0 $ _ptcResTypeVars cx_state
 
               S.put $ cx_state {
                 _ptcTypes = types',
@@ -1330,7 +941,7 @@ convertPolfToScript (PolicyFile { _polfBats = bats
           --   }
           -- }
 
-    convertStmt stmt@(AssertStmt bexp) = do
+    convertStmt (AssertStmt bexp) = do
       bvar <- {-trace (show ctx) $-} {-trace (show stmt) $-} convertBexpr bexp
       cx_state@(PolicyTxnConversionState { _ptcTxnSoFar = txn }) <- S.get
 
@@ -1400,43 +1011,43 @@ convertPolfToScript (PolicyFile { _polfBats = bats
       }
       return ret
 
-    convertBexpr be@(GeExpr l r) = {-trace (show be) $-} do
+    convertBexpr (GeExpr l r) = {-trace (show be) $-} do
       cx_state@(PolicyTxnConversionState { _ptcTxnSoFar = txn }) <- S.get
-      let (ArithVar lv) = {-trace (show l) $-} l
-      let (ArithVar rv) = {-trace (show r) $-} r
+      let (ArithVar lv0) = {-trace (show l) $-} l
+      let (ArithVar rv0) = {-trace (show r) $-} r
       let ret = PSBoolVar $ length $ _ptcBoolOps txn
 
-      case (M.lookup lv $ _ptcTypes cx_state, M.lookup rv $ _ptcTypes cx_state) of
-        tps@(Just FractionType,Just FractionType) -> {-trace (show tps) $-} do
-          lv <- return $ fromJust $ {-(\x -> trace (show (lv,x)) x) $-} M.lookup lv $ _ptcFracVars cx_state
-          rv <- return $ fromJust $ {-(\x -> trace (show (rv,x)) x) $-} M.lookup rv $ _ptcFracVars cx_state
+      case (M.lookup lv0 $ _ptcTypes cx_state, M.lookup rv0 $ _ptcTypes cx_state) of
+        (Just FractionType,Just FractionType) -> {-trace (show tps) $-} do
+          lv <- return $ fromJust $ {-(\x -> trace (show (lv,x)) x) $-} M.lookup lv0 $ _ptcFracVars cx_state
+          rv <- return $ fromJust $ {-(\x -> trace (show (rv,x)) x) $-} M.lookup rv0 $ _ptcFracVars cx_state
 
           S.put $ cx_state {
             _ptcTxnSoFar = txn {
               _ptcBoolOps = _ptcBoolOps txn ++ [PSFracGe lv rv]
             }
           }
-        tps@(Just AmountType,Just AmountType) -> {-trace (show tps) $-} do
-          lv <- return $ fromJust $ {-(\x -> trace (show (lv,x)) x) $-} M.lookup lv $ _ptcAmtVars cx_state
-          rv <- return $ fromJust $ {-(\x -> trace (show (rv,x)) x) $-} M.lookup rv $ _ptcAmtVars cx_state
+        (Just AmountType,Just AmountType) -> {-trace (show tps) $-} do
+          lv <- return $ fromJust $ {-(\x -> trace (show (lv,x)) x) $-} M.lookup lv0 $ _ptcAmtVars cx_state
+          rv <- return $ fromJust $ {-(\x -> trace (show (rv,x)) x) $-} M.lookup rv0 $ _ptcAmtVars cx_state
 
           S.put $ cx_state {
             _ptcTxnSoFar = txn {
               _ptcBoolOps = _ptcBoolOps txn ++ [PSAmtGe lv rv]
             }
           }
-        tps@(Just AmountType,Just FractionType) -> {-trace (show tps) $-} do
-          lv <- return $ fromJust $ {-(\x -> trace (show (lv,x)) x) $-} M.lookup lv $ _ptcAmtVars cx_state
-          rv <- return $ fromJust $ {-(\x -> trace (show (rv,x)) x) $-} M.lookup rv $ _ptcFracVars cx_state
+        (Just AmountType,Just FractionType) -> {-trace (show tps) $-} do
+          lv <- return $ fromJust $ {-(\x -> trace (show (lv,x)) x) $-} M.lookup lv0 $ _ptcAmtVars cx_state
+          rv <- return $ fromJust $ {-(\x -> trace (show (rv,x)) x) $-} M.lookup rv0 $ _ptcFracVars cx_state
 
           S.put $ cx_state {
             _ptcTxnSoFar = txn {
               _ptcBoolOps = _ptcBoolOps txn ++ [PSAmtFracGe lv rv]
             }
           }
-        tps@(Just FractionType,Just AmountType) -> {-trace (show tps) $-} do
-          lv <- return $ fromJust $ {-(\x -> trace (show (lv,x)) x) $-} M.lookup lv $ _ptcFracVars cx_state
-          rv <- return $ fromJust $ {-(\x -> trace (show (rv,x)) x) $-} M.lookup rv $ _ptcAmtVars cx_state
+        (Just FractionType,Just AmountType) -> {-trace (show tps) $-} do
+          lv <- return $ fromJust $ {-(\x -> trace (show (lv,x)) x) $-} M.lookup lv0 $ _ptcFracVars cx_state
+          rv <- return $ fromJust $ {-(\x -> trace (show (rv,x)) x) $-} M.lookup rv0 $ _ptcAmtVars cx_state
 
           S.put $ cx_state {
             _ptcTxnSoFar = txn {
@@ -1496,7 +1107,7 @@ convertPolfToScript (PolicyFile { _polfBats = bats
     convertBexpr (LtExpr _ _) = undefined
     convertBexpr (LeExpr _ _) = undefined
 
-
+convertScriptToPolf :: PolicyScript -> PolicyFile
 convertScriptToPolf (PolicyScript { _polNumIdGlobals = num_id_globals
                  , _polNumResTypeGlobals = num_res_type_globals
                  , _polNumAmtGlobals = num_amt_globals
@@ -1538,7 +1149,7 @@ convertScriptToPolf (PolicyScript { _polNumIdGlobals = num_id_globals
 
                 , _ptcAssertions  = asserts
                 , _ptcSignatures  = sigs
-                , _ptcTxnTemplate = ops
+                , _ptcTxnTemplate = txn_ops
                 }) = decl
         where
           decl = TxnDecl { _txnName = name
@@ -1550,13 +1161,13 @@ convertScriptToPolf (PolicyScript { _polNumIdGlobals = num_id_globals
                             { _txnparamIn = True, _txnparamOut = False
                             , _txnparamName = T.pack $ "in" ++ show ix
                             , _txnparamType = rtglobals !! tp })
-                      $ zip [0..] inparams
+                      $ zip [(0::Integer)..] inparams
 
           namedOuts = map (\ (ix,PSResTypeVar tp) -> TxnParamDecl
                             { _txnparamIn = False, _txnparamOut = True
                             , _txnparamName = T.pack $ "out" ++ show ix
                             , _txnparamType = rtglobals !! tp })
-                      $ zip [0..] outparams
+                      $ zip [(0::Integer)..] outparams
 
           body = (>>= id)
             [id_ops, rt_ops, amt_frac_ops, assert_ops
@@ -1565,45 +1176,45 @@ convertScriptToPolf (PolicyScript { _polNumIdGlobals = num_id_globals
           bool_ops = go boolOps
             where
               go [] = []
-              go ((PSBoolConstOp True) :ops) = TrueExpr : go ops
-              go ((PSBoolConstOp False):ops) = FalseExpr : go ops
-              go ((PSIdEq (PSIdVar lv) (PSIdVar rv)):ops)
+              go ((PSBoolConstOp True) :ops') = TrueExpr : go ops'
+              go ((PSBoolConstOp False):ops') = FalseExpr : go ops'
+              go ((PSIdEq (PSIdVar lv) (PSIdVar rv)):ops')
                 = (EqExpr (ArithVar $ id_vars !! lv)
-                          (ArithVar $ id_vars !! rv)) : go ops
-              go ((PSAmtEq (PSAmtVar lv) (PSAmtVar rv)):ops)
+                          (ArithVar $ id_vars !! rv)) : go ops'
+              go ((PSAmtEq (PSAmtVar lv) (PSAmtVar rv)):ops')
                 = (EqExpr (ArithVar $ amt_vars !! lv)
-                          (ArithVar $ amt_vars !! rv)) : go ops
-              go ((PSFracEq (PSFracVar lv) (PSFracVar rv)):ops)
+                          (ArithVar $ amt_vars !! rv)) : go ops'
+              go ((PSFracEq (PSFracVar lv) (PSFracVar rv)):ops')
                 = (EqExpr (ArithVar $ frac_vars !! lv)
-                          (ArithVar $ frac_vars !! rv)) : go ops
-              go ((PSResTypeEq (PSResTypeVar lv) (PSResTypeVar rv)):ops)
+                          (ArithVar $ frac_vars !! rv)) : go ops'
+              go ((PSResTypeEq (PSResTypeVar lv) (PSResTypeVar rv)):ops')
                 = (EqExpr (ArithVar $ rt_vars !! lv)
-                          (ArithVar $ rt_vars !! rv)) : go ops
-              go ((PSAmtGe (PSAmtVar lv) (PSAmtVar rv)):ops)
+                          (ArithVar $ rt_vars !! rv)) : go ops'
+              go ((PSAmtGe (PSAmtVar lv) (PSAmtVar rv)):ops')
                 = (GeExpr (ArithVar $ amt_vars !! lv)
-                          (ArithVar $ amt_vars !! rv)) : go ops
-              go ((PSFracGe (PSFracVar lv) (PSFracVar rv)):ops)
+                          (ArithVar $ amt_vars !! rv)) : go ops'
+              go ((PSFracGe (PSFracVar lv) (PSFracVar rv)):ops')
                 = (GeExpr (ArithVar $ frac_vars !! lv)
-                          (ArithVar $ frac_vars !! rv)) : go ops
-              go ((PSFracAmtGe (PSFracVar lv) (PSAmtVar rv)):ops)
+                          (ArithVar $ frac_vars !! rv)) : go ops'
+              go ((PSFracAmtGe (PSFracVar lv) (PSAmtVar rv)):ops')
                 = (GeExpr (ArithVar $ frac_vars !! lv)
-                          (ArithVar $ amt_vars  !! rv)) : go ops
-              go ((PSAmtFracGe (PSAmtVar lv) (PSFracVar rv)):ops)
+                          (ArithVar $ amt_vars  !! rv)) : go ops'
+              go ((PSAmtFracGe (PSAmtVar lv) (PSFracVar rv)):ops')
                 = (GeExpr (ArithVar $ amt_vars  !! lv)
-                          (ArithVar $ frac_vars !! rv)) : go ops
-              go ((PSNot (PSBoolVar bv)):ops)
-                = (NotExpr $ bool_ops !! bv) : go ops
-              go ((PSAnd (PSBoolVar lv) (PSBoolVar rv)):ops)
-                = (AndExpr (bool_ops !! lv) (bool_ops !! rv)) : go ops
-              go ((PSOr (PSBoolVar lv) (PSBoolVar rv)):ops)
-                = (OrExpr (bool_ops !! lv) (bool_ops !! rv)) : go ops
+                          (ArithVar $ frac_vars !! rv)) : go ops'
+              go ((PSNot (PSBoolVar bv)):ops')
+                = (NotExpr $ bool_ops !! bv) : go ops'
+              go ((PSAnd (PSBoolVar lv) (PSBoolVar rv)):ops')
+                = (AndExpr (bool_ops !! lv) (bool_ops !! rv)) : go ops'
+              go ((PSOr (PSBoolVar lv) (PSBoolVar rv)):ops')
+                = (OrExpr (bool_ops !! lv) (bool_ops !! rv)) : go ops'
 
 
           assert_ops = map go asserts
             where go (PSBoolVar bv) = AssertStmt $ bool_ops !! bv
           sig_ops = map go sigs
             where go (PSIdVar iv) = RequireSignatureStmt $ id_vars !! iv
-          op_ops = map go ops
+          op_ops = map go txn_ops
             where
               go (PSIssue (PSAmtVar av) (PSResTypeVar rtv) (PSResVar rv))
                 = IssueStmt (ArithVar $ amt_vars !! av)
@@ -1619,43 +1230,44 @@ convertScriptToPolf (PolicyScript { _polNumIdGlobals = num_id_globals
                                (_txnparamName $ (namedIns ++ namedOuts) !! src_rv)
                                (Just $ _txnparamName $ (namedIns ++ namedOuts) !! dst_rv)
 
-          id_ops = map (\ (var,exp) -> LocalStmt var (Just IdentityType) exp) base_id_ops
+          id_ops = map (\ (var,expr) -> LocalStmt var (Just IdentityType) expr) base_id_ops
           id_vars = idglobals ++ map fst base_id_ops
-          base_id_ops = zip (map (\x -> T.pack $ "id_local" ++ show x) [0..]) $ map go idOps
+          base_id_ops = zip (map (\x -> T.pack $ "id_local" ++ show x) [(0::Integer)..]) $ map go idOps
             where go (PSOwnerOfOp (PSResVar rv)) = OwnerField $ _txnparamName $ (namedIns ++ namedOuts) !! rv
                   go (PSIdVarOp   (PSIdVar  iv)) = ArithVar   $ id_vars !! iv
 
-          rt_ops = map (\ (var,exp) -> LocalStmt var (Just ResourceTypeType) exp) base_rt_ops
+          rt_ops = map (\ (var,expr) -> LocalStmt var (Just ResourceTypeType) expr) base_rt_ops
           rt_vars = rtglobals ++ map fst base_rt_ops
-          base_rt_ops = zip (map (\x -> T.pack $ "rt_local" ++ show x) [0..]) $ map go rtOps
+          base_rt_ops = zip (map (\x -> T.pack $ "rt_local" ++ show x) [(0::Integer)..]) $ map go rtOps
             where go (PSTypeOfOp     (PSResVar     rv))  = ArithVar $ _txnparamType $ (namedIns ++ namedOuts) !! rv
                   go (PSResTypeVarOp (PSResTypeVar rtv)) = ArithVar $ rt_vars !! rtv
 
-          amt_frac_ops = map (\ (var,tp,exp) -> LocalStmt var tp exp) base_amt_frac_ops
+          amt_frac_ops = map (\ (var,tp,expr) -> LocalStmt var tp expr) base_amt_frac_ops
           amt_vars = amtglobals ++ map fst base_amt_ops
           frac_vars = fracglobals ++ map fst base_frac_ops
           (base_amt_frac_ops,base_amt_ops,base_frac_ops) = (op_types ops, op_lefts ops, op_rights ops)
             where
               op_types [] = []
-              op_types ((n, Left op):ops) = (n,Just AmountType,op) : op_types ops
-              op_types ((n, Right op):ops) = (n,Just FractionType,op) : op_types ops
+              op_types ((n, Left op):ops') = (n,Just AmountType,op) : op_types ops'
+              op_types ((n, Right op):ops') = (n,Just FractionType,op) : op_types ops'
 
               op_lefts [] = []
-              op_lefts ((n,Left op):ops) = (n,op):op_lefts ops
-              op_lefts ((n,_):ops) = op_lefts ops
+              op_lefts ((n,Left op):ops') = (n,op):op_lefts ops'
+              op_lefts (_:ops') = op_lefts ops'
 
               op_rights [] = []
-              op_rights ((n,Right op):ops) = (n,op):op_rights ops
-              op_rights ((n,_):ops) = op_rights ops
+              op_rights ((n,Right op):ops') = (n,op):op_rights ops'
+              op_rights (_:ops') = op_rights ops'
 
-              ops = zip (map (\x -> T.pack $ "val_local" ++ show x) [0..])
+              ops = zip (map (\x -> T.pack $ "val_local" ++ show x) [(0::Integer)..])
                   $ goAmt (length amtglobals) (length fracglobals) amtOps fracOps
 
-              goAmt a f [] [] = []
+              goAmt _ _ [] [] = []
               goAmt a f [] fs = goFrac a f [] fs
               goAmt a f ((PSAmtVarOp (PSAmtVar  av)):as) fs
                 | av < a
                 = (Left $ ArithVar $ amt_vars !! av) : goAmt (a+1) f as fs
+                | otherwise = undefined
               goAmt a f (aOp@(PSAmtRoundOp (PSFracVar fv)):as) fs
                 | fv < f = (Left $ RoundExpr $ ArithVar $ frac_vars !! fv)
                          : goAmt (a+1) f as fs
@@ -1670,18 +1282,21 @@ convertScriptToPolf (PolicyScript { _polNumIdGlobals = num_id_globals
                 = (Left $ PlusExpr (ArithVar $ amt_vars !! lv)
                                    (ArithVar $ amt_vars !! rv))
                   : goAmt (a+1) f as fs
+                | otherwise = undefined
               goAmt a f ((PSAmtMinusOp (PSAmtVar lv) (PSAmtVar rv)):as) fs
                 | lv < a && rv < a
                 = (Left $ MinusExpr (ArithVar $ amt_vars !! lv)
                                     (ArithVar $ amt_vars !! rv))
                   : goAmt (a+1) f as fs
+                | otherwise = undefined
               goAmt a f ((PSAmtTimesOp (PSAmtVar lv) (PSAmtVar rv)):as) fs
                 | lv < a && rv < a
                 = (Left $ TimesExpr (ArithVar $ amt_vars !! lv)
                                     (ArithVar $ amt_vars !! rv))
                   : goAmt (a+1) f as fs
+                | otherwise = undefined
 
-              goFrac a f [] [] = []
+              goFrac _ _ [] [] = []
               goFrac a f as [] = goAmt a f as []
               goFrac a f as ((PSFracVarOp (PSFracVar  fv)):fs)
                 = (Right $ ArithVar $ frac_vars !! fv) : goFrac a (f+1) as fs
@@ -1692,24 +1307,29 @@ convertScriptToPolf (PolicyScript { _polNumIdGlobals = num_id_globals
                 = (Right $ PlusExpr  (ArithVar $ frac_vars !! lv)
                                      (ArithVar $ frac_vars !! rv))
                   : goFrac a (f+1) as fs
+                | otherwise = undefined
               goFrac a f as ((PSFracTimesOp (PSFracVar lv) (PSFracVar rv)):fs)
                 | lv < f && rv < f
                 = (Right $ TimesExpr (ArithVar $ frac_vars !! lv)
                                      (ArithVar $ frac_vars !! rv))
                   : goFrac a (f+1) as fs
+                | otherwise = undefined
               goFrac a f as (fOp@(PSFracTimesAmtOp (PSFracVar lv) (PSAmtVar rv)):fs)
                 | lv < f && rv < a
                 = (Right $ TimesExpr (ArithVar $ frac_vars !! lv)
                                      (ArithVar $ amt_vars  !! rv))
                   : goFrac a (f+1) as fs
                 | lv < f = goAmt a f as (fOp:fs)
+                | otherwise = undefined
               goFrac a f as (fOp@(PSFracAmtTimesOp (PSAmtVar lv) (PSFracVar rv)):fs)
                 | lv < a && rv < f
                 = (Right $ TimesExpr (ArithVar $ amt_vars  !! lv)
                                      (ArithVar $ frac_vars !! rv))
                   : goFrac a (f+1) as fs
                 | rv < f = goAmt a f as (fOp:fs)
+                | otherwise = undefined
 
+pprintPolicyScript :: PolicyScript -> PP.Doc a
 pprintPolicyScript ps =
   (PP.text "Policy" PP.<+>) $ ppBraces $ PP.nest 4 $ PP.vcat $ map (PP.<+> PP.comma)
     [ PP.text "num_id_globals:" PP.<+> PP.int (_polNumIdGlobals ps)
@@ -1722,13 +1342,17 @@ pprintPolicyScript ps =
       $ map pprintPolicyTxnCheck (_polTxns ps)
     ]
 
+ppBrackets :: PP.Doc a -> PP.Doc a
 ppBrackets = (\x -> PP.lbrack PP.$+$ x PP.$+$ PP.rbrack)
+ppBraces :: PP.Doc a -> PP.Doc a
 ppBraces = (\x -> PP.lbrace PP.$+$ x PP.$+$ PP.rbrace)
 
+pprintVec :: (a1 -> PP.Doc a2) -> [a1] -> PP.Doc a2
 pprintVec pprintItem items = (PP.text "vec!" PP.<+>)
       $ ppBrackets $ PP.nest 4 $ PP.vcat $ map (PP.<+> PP.comma)
       $ map pprintItem items
 
+pprintPolicyTxnCheck :: PolicyTxnCheck -> PP.Doc a
 pprintPolicyTxnCheck ptc =
   (PP.text "TxnCheck" PP.<+>) $ ppBraces $ PP.nest 4 $ PP.vcat $ map (PP.<+> PP.comma)
     [ PP.text "name:" PP.<+> PP.doubleQuotes (PP.text $ T.unpack $ _ptcTxnName ptc) PP.<> PP.text ".to_string()"
@@ -1746,6 +1370,7 @@ pprintPolicyTxnCheck ptc =
     , (PP.text "txn_template:" PP.<+>) $ pprintVec pprintTxnOp $ _ptcTxnTemplate ptc
     ]
 
+pprintTxnOp :: PSTxnOp -> PP.Doc a
 pprintTxnOp (PSIssue amt restype res)
   = (PP.text "TxnOp::Issue" PP.<>) $ PP.parens $ PP.hsep
     $ map (PP.<> PP.comma) [pprintAmtVar amt, pprintResTypeVar restype, pprintResVar res]
@@ -1757,6 +1382,7 @@ pprintTxnOp (PSTransfer amt src dst)
               dst
         ]
 
+pprintBoolOp :: PSBoolOp -> PP.Doc a
 pprintBoolOp (PSBoolConstOp bc)
   = PP.text "BoolOp::Const" PP.<> PP.parens (PP.text $ if bc then "true" else "false")
 pprintBoolOp (PSIdEq l r)
@@ -1782,16 +1408,19 @@ pprintBoolOp (PSFracAmtGe l r)
 pprintBoolOp (PSAmtFracGe l r)
   = PP.text "BoolOp::AmtFracGe" PP.<> PP.parens (pprintAmtVar l PP.<> PP.comma PP.<+> pprintFracVar r)
 
+pprintResTypeOp :: PSResTypeOp -> PP.Doc a
 pprintResTypeOp (PSTypeOfOp res)
   = PP.text "ResourceTypeOp::TypeOfResource" PP.<> PP.parens (pprintResVar res)
 pprintResTypeOp (PSResTypeVarOp rt_var)
   = PP.text "ResourceTypeOp::Var" PP.<> PP.parens (pprintResTypeVar rt_var)
 
+pprintIdOp :: PSIdOp -> PP.Doc a
 pprintIdOp (PSIdVarOp idvar)
   = PP.text "IdOp::Var" PP.<> PP.parens (pprintIdVar idvar)
 pprintIdOp (PSOwnerOfOp res)
   = PP.text "IdOp::OwnerOf" PP.<> PP.parens (pprintResVar res)
 
+pprintFracOp :: PSFracOp -> PP.Doc a
 pprintFracOp (PSFracVarOp fv)
   = PP.text "FractionOp::Var" PP.<> PP.parens (pprintFracVar fv)
 pprintFracOp (PSFracConstOp fc)
@@ -1811,6 +1440,7 @@ pprintFracOp (PSFracAmtTimesOp l r)
   = (PP.text "FractionOp::AmtTimes" PP.<>)
     $ PP.parens $ pprintAmtVar l PP.<> PP.comma PP.<+> pprintFracVar r
 
+pprintAmtOp :: PSAmtOp -> PP.Doc a
 pprintAmtOp (PSAmtVarOp av)
   = PP.text "AmountOp::Var" PP.<> PP.parens (pprintAmtVar av)
 pprintAmtOp (PSAmtConstOp n)
@@ -1830,37 +1460,49 @@ pprintAmtOp (PSAmtRoundOp fv)
   = (PP.text "AmountOp::Round" PP.<>) $ PP.parens
     $ pprintFracVar fv
 
+pprintBoolVar :: PSBoolVar -> PP.Doc a
 pprintBoolVar (PSBoolVar n) = PP.text "BoolVar" PP.<> PP.parens (PP.int n)
+
+pprintAmtVar :: PSAmtVar -> PP.Doc a
 pprintAmtVar (PSAmtVar n) = PP.text "AmountVar" PP.<> PP.parens (PP.int n)
+
+pprintFracVar :: PSFracVar -> PP.Doc a
 pprintFracVar (PSFracVar n) = PP.text "FractionVar" PP.<> PP.parens (PP.int n)
+
+pprintResTypeVar :: PSResTypeVar -> PP.Doc a
 pprintResTypeVar (PSResTypeVar n) = PP.text "ResourceTypeVar" PP.<> PP.parens (PP.int n)
+
+pprintResVar :: PSResVar -> PP.Doc a
 pprintResVar (PSResVar n) = PP.text "ResourceVar" PP.<> PP.parens (PP.int n)
+
+pprintIdVar :: PSIdVar -> PP.Doc a
 pprintIdVar (PSIdVar n) = PP.text "IdVar" PP.<> PP.parens (PP.int n)
 
+compile :: (String -> IO ()) -> String -> IO (Either () PolicyScript)
 compile writeOut polf = do
   ast <- return $ P.parse parsePolicyFile "" polf
   case ast of
     Left err -> do
       writeOut $ "parse error: " ++ show err
       return $ Left ()
-    Right ast -> do
-      writeOut $ show ast
+    Right ast' -> do
+      writeOut $ show ast'
       writeOut "\n\nPretty-printed:\n\n===============\n\n"
-      rendered <- return $ PP.render $ pprintPolicyFile ast
+      rendered <- return $ PP.render $ pprintPolicyFile ast'
       writeOut rendered
 
       case (P.parse parsePolicyFile "" rendered) of
         Left err -> writeOut $ "reparse error: " ++ show err
-        Right ast' -> do
-          writeOut $ "ASTs " ++ (if ast == ast' then "" else "don't ") ++ "match"
+        Right ast'' -> do
+          writeOut $ "ASTs " ++ (if ast' == ast'' then "" else "don't ") ++ "match"
 
-      do_compile <- return $ \ast -> foldM (\ast (name,f) -> do
+      do_compile <- return $ \ast'' -> foldM (\ast''' (name,f) -> do
         writeOut $ "\n\n" ++ name ++ ":\n\n===============\n\n"
-        ast <- return $ f ast
-        astRendered <- return $ PP.render $ pprintPolicyFile $ ast
+        ast'''' <- return $ f ast'''
+        astRendered <- return $ PP.render $ pprintPolicyFile $ ast''''
         writeOut astRendered
-        return ast
-        ) ast [ ("Explicit global_param init check", explicitGParamInit)
+        return ast''''
+        ) ast'' [ ("Explicit global_param init check", explicitGParamInit)
               , ("Explicit requires/ensures",over (polfTxns.traverse) explicitReqEns)
               , ("Make ALL expressions explicit", (over (polfTxns.traverse.txnBody) $ map (fromJust . fixAllExprs)))
               , ("Move old(...) expressions",(over (polfTxns.traverse.txnBody) moveOldExprs))
@@ -1878,7 +1520,7 @@ compile writeOut polf = do
               ]
 
 
-      final_ast <- do_compile ast
+      final_ast <- do_compile ast'
 
       policy_script <- return $ convertPolfToScript $ final_ast
       -- NOTE: currently this doesn't work right bc of "init_txn" and
