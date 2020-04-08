@@ -407,6 +407,8 @@ enum LoanStatus {
 struct Loan {
   /// Loan ID
   id: u64,
+  /// Issuer ID, null if the loan isn't fulfilled          
+  issuer: Option<u64>,
   /// Lender ID           
   lender: u64,
   /// Borrower ID          
@@ -425,13 +427,13 @@ struct Loan {
   duration: u64,
   /// Number of payments that have been made
   payments: u64,
-  /// Serialized debt token code, if exists
+  /// Serialized debt token code, null if the loan isn't fulfilled     
   code: Option<String>,
-  /// Debt asset UTXO (unspent transaction output) SIDs, if exists
+  /// Debt asset UTXO (unspent transaction output) SIDs, null if the loan isn't fulfilled     
   debt_utxo: Option<TxoSID>,
-  /// Path to the most recent debt asset transaction file, if any
+  /// Path to the most recent debt asset transaction file, null if the loan isn't fulfilled     
   debt_txn_file: Option<String>,
-  /// Serialized anon_creds::Credential, if exists
+  /// Serialized anon_creds::Credential, null if the loan isn't fulfilled     
   credential: Option<String>,
 }
 
@@ -444,6 +446,7 @@ impl Loan {
          duration: u64)
          -> Self {
     Loan { id: id as u64,
+           issuer: None,
            lender,
            borrower,
            status: LoanStatus::Requested,
@@ -1686,14 +1689,17 @@ fn fulfill_loan(loan_id: u64,
     fiat_code
   };
 
-  // Get tracing policy
+  // Get tracing policies
   let tracer_enc_keys = data.get_asset_tracer_key_pair(issuer_id)?.enc_key;
   let identity_policy = IdentityRevealPolicy { cred_issuer_pub_key:
                                                  credential_issuer_public_key.get_ref().clone(),
                                                reveal_map: vec![true] };
-  let tracing_policy = AssetTracingPolicy { enc_keys: tracer_enc_keys,
-                                            asset_tracking: true,
-                                            identity_tracking: Some(identity_policy) };
+  let fiat_tracing_policy = AssetTracingPolicy { enc_keys: tracer_enc_keys.clone(),
+                                                 asset_tracking: true,
+                                                 identity_tracking: None };
+  let debt_tracing_policy = AssetTracingPolicy { enc_keys: tracer_enc_keys,
+                                                 asset_tracking: true,
+                                                 identity_tracking: Some(identity_policy) };
 
   // Issue and transfer fiat token
   let ac_credential = wrapper_credential.to_ac_credential()
@@ -1709,10 +1715,10 @@ fn fulfill_loan(loan_id: u64,
                              amount,
                              fiat_code,
                              AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
-                             credential_record,
+                             None,
                              None,
                              &fiat_txn_file,
-                             Some(tracing_policy.clone()))?;
+                             Some(fiat_tracing_policy.clone()))?;
   let fiat_sid = submit_and_get_sids(protocol, host, txn_builder)?[0];
   println!("Fiat sid: {}", fiat_sid.0);
   let (_, owner_memo) = load_blind_asset_record_and_owner_memo_from_file(&fiat_txn_file)?;
@@ -1752,7 +1758,7 @@ fn fulfill_loan(loan_id: u64,
                              credential_record,
                              None,
                              &debt_txn_file,
-                             Some(tracing_policy.clone()))?;
+                             Some(debt_tracing_policy.clone()))?;
   let debt_sid = submit_and_get_sids(protocol, host, txn_builder)?[0];
   println!("Debt sid: {}", debt_sid.0);
   let debt_open_asset_record = load_open_asset_record_from_file(&debt_txn_file, borrower_key_pair)?;
@@ -1763,13 +1769,13 @@ fn fulfill_loan(loan_id: u64,
                                              debt_code.val,
                                              NonConfidentialAmount_NonConfidentialAssetType,
                                              lender_key_pair.get_pk(),
-                                             tracing_policy.clone());
+                                             debt_tracing_policy.clone());
   let borrower_template =
     AssetRecordTemplate::with_asset_tracking(amount,
                                              fiat_code.val,
                                              NonConfidentialAmount_NonConfidentialAssetType,
                                              borrower_key_pair.get_pk(),
-                                             tracing_policy);
+                                             fiat_tracing_policy);
   let xfr_op = TransferOperationBuilder::new().add_input(TxoRef::Absolute(fiat_sid),
                                                          fiat_open_asset_record,
                                                          amount)?
@@ -1777,7 +1783,7 @@ fn fulfill_loan(loan_id: u64,
                                                          debt_open_asset_record,
                                                          amount)?
                                               .add_output(&lender_template, credential_record)?
-                                              .add_output(&borrower_template, credential_record)?
+                                              .add_output(&borrower_template, None)?
                                               .create(TransferType::Standard)?
                                               .sign(lender_key_pair)?
                                               .sign(borrower_key_pair)?
@@ -1828,6 +1834,7 @@ fn fulfill_loan(loan_id: u64,
 
   // Update data
   let mut data = load_data()?;
+  data.loans[loan_id as usize].issuer = Some(issuer_id);
   data.fiat_code = Some(fiat_code.to_base64());
   data.loans[loan_id as usize].status = LoanStatus::Active;
   data.loans[loan_id as usize].code = Some(debt_code.to_base64());
@@ -1936,6 +1943,35 @@ fn pay_loan(loan_id: u64, amount: u64, protocol: &str, host: &str) -> Result<(),
   println!("Fiat code: {}", serde_json::to_string(&fiat_code.val)?);
   println!("Debt code: {}", serde_json::to_string(&debt_code.val)?);
 
+  // Get tracing policies
+  let credential_id = if let Some(id) = borrower.credentials {
+    id
+  } else {
+    println!("Missing credentials.");
+    return Err(PlatformError::InputsError(error_location!()));
+  };
+  let credential = &data.credentials[credential_id as usize];
+  let credential_issuer_id = credential.credential_issuer;
+  let (credential_issuer_public_key, _) =
+    data.get_credential_issuer_key_pair(credential_issuer_id)?;
+  let identity_policy = IdentityRevealPolicy { cred_issuer_pub_key:
+                                                 credential_issuer_public_key.get_ref().clone(),
+                                               reveal_map: vec![true] };
+  let issuer_id = if let Some(id) = loan.issuer {
+    id
+  } else {
+    println!("Missing issuer ID.");
+    return Err(PlatformError::InputsError(error_location!()));
+  };
+  let tracer_enc_keys = data.get_asset_tracer_key_pair(issuer_id)?.enc_key;
+  let fiat_tracing_policy = AssetTracingPolicy { enc_keys: tracer_enc_keys.clone(),
+                                                 asset_tracking: true,
+                                                 identity_tracking: None };
+  let debt_tracing_policy = AssetTracingPolicy { enc_keys: tracer_enc_keys,
+                                                 asset_tracking: true,
+                                                 identity_tracking: Some(identity_policy) };
+
+  // Get templates
   let spend_template =
     AssetRecordTemplate::with_no_asset_tracking(amount_to_spend,
                                                 fiat_code.val,
@@ -1947,15 +1983,47 @@ fn pay_loan(loan_id: u64, amount: u64, protocol: &str, host: &str) -> Result<(),
                                                 NonConfidentialAmount_NonConfidentialAssetType,
                                                 XfrPublicKey::zei_from_bytes(&[0; 32]));
   let lender_template =
-    AssetRecordTemplate::with_no_asset_tracking(loan.balance - amount_to_burn,
-                                                debt_code.val,
-                                                NonConfidentialAmount_NonConfidentialAssetType,
-                                                lender_key_pair.get_pk());
+    AssetRecordTemplate::with_asset_tracking(loan.balance - amount_to_burn,
+                                             debt_code.val,
+                                             NonConfidentialAmount_NonConfidentialAssetType,
+                                             lender_key_pair.get_pk(),
+                                             debt_tracing_policy);
   let borrower_template =
-    AssetRecordTemplate::with_no_asset_tracking(borrower.balance - amount_to_spend,
-                                                fiat_code.val,
-                                                NonConfidentialAmount_NonConfidentialAssetType,
-                                                borrower_key_pair.get_pk());
+    AssetRecordTemplate::with_asset_tracking(borrower.balance - amount_to_spend,
+                                             fiat_code.val,
+                                             NonConfidentialAmount_NonConfidentialAssetType,
+                                             borrower_key_pair.get_pk(),
+                                             fiat_tracing_policy);
+
+  // Get credential record
+  let user_secret_key = if let Some(key_str) = credential.user_secret_key.clone() {
+    let key_decode = hex::decode(key_str).or_else(|_| Err(PlatformError::DeserializationError))?;
+    serde_json::from_slice::<CredUserSecretKey>(&key_decode).or_else(|_| {
+                                                       Err(PlatformError::DeserializationError)
+                                                     })?
+  } else {
+    println!("Missing user secret key.");
+    return Err(PlatformError::InputsError(error_location!()));
+  };
+  let ac_credential = if let Some(credential_str) = loan.credential.clone() {
+    serde_json::from_str::<ZeiCredential>(&credential_str).or_else(|_| {
+                                                            Err(PlatformError::DeserializationError)
+                                                          })?
+  } else {
+    println!("Missing loan credential.");
+    return Err(PlatformError::InputsError(error_location!()));
+  };
+  let commitment_key = if let Some(key_str) = credential.commitment_key.clone() {
+    let key_decode = hex::decode(key_str).or_else(|_| Err(PlatformError::DeserializationError))?;
+    serde_json::from_slice::<CredCommitmentKey>(&key_decode).or_else(|_| {
+                                                       Err(PlatformError::DeserializationError)
+                                                     })?
+  } else {
+    println!("Missing commitment key.");
+    return Err(PlatformError::InputsError(error_location!()));
+  };
+  let credential_record = Some((&user_secret_key, &ac_credential, &commitment_key));
+
   let op = TransferOperationBuilder::new().add_input(TxoRef::Absolute(debt_sid),
                                                      debt_open_asset_record,
                                                      amount_to_burn)?
@@ -1964,7 +2032,7 @@ fn pay_loan(loan_id: u64, amount: u64, protocol: &str, host: &str) -> Result<(),
                                                      amount_to_spend)?
                                           .add_output(&spend_template, None)?
                                           .add_output(&burn_template, None)?
-                                          .add_output(&lender_template, None)?
+                                          .add_output(&lender_template, credential_record)?
                                           .add_output(&borrower_template, None)?
                                           .create(TransferType::DebtSwap)?
                                           .sign(borrower_key_pair)?
