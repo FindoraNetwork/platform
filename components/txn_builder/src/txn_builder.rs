@@ -246,8 +246,7 @@ pub trait BuildsTransactions {
   fn add_operation_create_asset(&mut self,
                                 key_pair: &XfrKeyPair,
                                 token_code: Option<AssetTypeCode>,
-                                updatable: bool,
-                                traceable: bool,
+                                access_type: AssetAccessType,
                                 memo: &str,
                                 policy_choice: PolicyChoice)
                                 -> Result<&mut Self, PlatformError>;
@@ -302,6 +301,7 @@ pub trait BuildsTransactions {
   #[allow(clippy::comparison_chain)]
   fn add_basic_transfer_asset(&mut self,
                               key_pair: &XfrKeyPair,
+                              tracing_policy: &Option<AssetTracingPolicy>,
                               transfer_from: &[(&TxoRef,
                                  &BlindAssetRecord,
                                  u64,
@@ -331,10 +331,17 @@ pub trait BuildsTransactions {
       if input_amount > oar.get_amount() {
         return Err(PlatformError::InputsError(error_location!()));
       } else if input_amount < oar.get_amount() {
-        let ar = AssetRecordTemplate::with_no_asset_tracking(oar.get_amount() - input_amount,
-                                                             *oar.get_asset_type(),
-                                                             oar.get_record_type(),
-                                                             *oar.get_pub_key());
+        let ar = match tracing_policy {
+          Some(policy) => AssetRecordTemplate::with_asset_tracking(oar.get_amount() - input_amount,
+                                                                   *oar.get_asset_type(),
+                                                                   oar.get_record_type(),
+                                                                   *oar.get_pub_key(),
+                                                                   policy.clone()),
+          _ => AssetRecordTemplate::with_no_asset_tracking(oar.get_amount() - input_amount,
+                                                           *oar.get_asset_type(),
+                                                           oar.get_record_type(),
+                                                           *oar.get_pub_key()),
+        };
         partially_consumed_inputs.push(ar);
       }
     }
@@ -346,11 +353,16 @@ pub trait BuildsTransactions {
     let asset_record_type = input_oars[0].get_record_type();
     let mut output_ars_templates: Vec<AssetRecordTemplate> =
       transfer_to.iter()
-                 .map(|(amount, ref addr)| {
-                   AssetRecordTemplate::with_no_asset_tracking(*amount,
-                                                               *asset_type,
-                                                               asset_record_type,
-                                                               addr.key)
+                 .map(|(amount, ref addr)| match tracing_policy {
+                   Some(policy) => AssetRecordTemplate::with_asset_tracking(*amount,
+                                                                            *asset_type,
+                                                                            asset_record_type,
+                                                                            addr.key,
+                                                                            policy.clone()),
+                   _ => AssetRecordTemplate::with_no_asset_tracking(*amount,
+                                                                    *asset_type,
+                                                                    asset_record_type,
+                                                                    addr.key),
                  })
                  .collect();
     output_ars_templates.append(&mut partially_consumed_inputs);
@@ -367,8 +379,14 @@ pub trait BuildsTransactions {
 #[derive(Debug, Default, Serialize, Deserialize)]
 pub struct TransactionBuilder {
   txn: Transaction,
-  pub owner_records: Vec<(TxOutput, Option<OwnerMemo>)>,
+  owner_records: Vec<(TxOutput, Option<OwnerMemo>)>,
   outputs: u64,
+}
+
+impl TransactionBuilder {
+  pub fn get_owner_record_and_memo(&self, idx: usize) -> Option<&(TxOutput, Option<OwnerMemo>)> {
+    self.owner_records.get(idx)
+  }
 }
 
 impl BuildsTransactions for TransactionBuilder {
@@ -396,15 +414,14 @@ impl BuildsTransactions for TransactionBuilder {
   fn add_operation_create_asset(&mut self,
                                 key_pair: &XfrKeyPair,
                                 token_code: Option<AssetTypeCode>,
-                                updatable: bool,
-                                traceable: bool,
+                                access_type: AssetAccessType,
                                 memo: &str,
                                 policy_choice: PolicyChoice)
                                 -> Result<&mut Self, PlatformError> {
     let pub_key = &IssuerPublicKey { key: key_pair.get_pk() };
     let priv_key = &key_pair.get_sk();
     let token_code = token_code.unwrap_or_else(AssetTypeCode::gen_random);
-    self.txn.add_operation(Operation::DefineAsset(DefineAsset::new(DefineAssetBody::new(&token_code, pub_key, updatable, traceable, Some(Memo(memo.into())), Some(ConfidentialMemo {}), policy_from_choice(&token_code,&pub_key.key,policy_choice))?, pub_key, priv_key)?));
+    self.txn.add_operation(Operation::DefineAsset(DefineAsset::new(DefineAssetBody::new(&token_code, pub_key, access_type, Some(Memo(memo.into())), Some(ConfidentialMemo {}), policy_from_choice(&token_code,&pub_key.key,policy_choice))?, pub_key, priv_key)?));
     Ok(self)
   }
   fn add_operation_issue_asset(&mut self,
@@ -444,6 +461,15 @@ impl BuildsTransactions for TransactionBuilder {
                                      TransferType::Standard)?;
     xfr.sign(&keys);
 
+    for (output, memo) in xfr.body
+                             .transfer
+                             .outputs
+                             .iter()
+                             .zip(xfr.body.transfer.owners_memos.iter())
+    {
+      self.owner_records
+          .push((TxOutput(output.clone()), memo.clone()));
+    }
     self.txn.add_operation(Operation::TransferAsset(xfr));
     Ok(self)
   }

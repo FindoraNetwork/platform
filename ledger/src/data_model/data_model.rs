@@ -11,6 +11,7 @@ use errors::PlatformError;
 use itertools::Itertools;
 use rand_chacha::ChaChaRng;
 use rand_core::{CryptoRng, RngCore, SeedableRng};
+use serde::{de::Visitor, Deserialize, Deserializer, Serialize, Serializer};
 use std::boxed::Box;
 use std::collections::HashMap;
 use std::convert::TryFrom;
@@ -28,9 +29,13 @@ pub fn b64dec<T: ?Sized + AsRef<[u8]>>(input: &T) -> Result<Vec<u8>, base64::Dec
 }
 
 // Unique Identifier for ledger objects
-#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, Hash, PartialEq, Serialize)]
+#[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
 pub struct Code {
   pub val: [u8; 16],
+}
+
+fn is_default<T: Default + PartialEq>(x: &T) -> bool {
+  x == &T::default()
 }
 
 pub type AssetTypeCode = Code;
@@ -61,6 +66,57 @@ impl Code {
   }
   pub fn to_base64(&self) -> String {
     b64enc(&self.val)
+  }
+}
+
+impl Serialize for Code {
+  fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where S: Serializer
+  {
+    if serializer.is_human_readable() {
+      serializer.serialize_str(&b64enc(&self.val))
+    } else {
+      serializer.serialize_bytes(&self.val)
+    }
+  }
+}
+
+impl<'de> Deserialize<'de> for Code {
+  fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where D: Deserializer<'de>
+  {
+    struct CodeVisitor;
+
+    impl<'de> Visitor<'de> for CodeVisitor {
+      type Value = Code;
+
+      fn expecting(&self, formatter: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        formatter.write_str("an array of 16 bytes")
+      }
+
+      fn visit_bytes<E>(self, v: &[u8]) -> Result<Self::Value, E>
+        where E: serde::de::Error
+      {
+        if v.len() == 16 {
+          let mut val = [0u8; 16];
+          val.copy_from_slice(v);
+
+          Ok(Code { val })
+        } else {
+          Err(serde::de::Error::invalid_length(v.len(), &self))
+        }
+      }
+      fn visit_str<E>(self, s: &str) -> Result<Self::Value, E>
+        where E: serde::de::Error
+      {
+        self.visit_bytes(&b64dec(s).map_err(serde::de::Error::custom)?)
+      }
+    }
+    if deserializer.is_human_readable() {
+      deserializer.deserialize_str(CodeVisitor)
+    } else {
+      deserializer.deserialize_bytes(CodeVisitor)
+    }
   }
 }
 
@@ -141,16 +197,59 @@ impl SignedAddress {
   }
 }
 
+#[allow(non_camel_case_types)]
+#[allow(clippy::enum_variant_names)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+/// Represents whether an asset is updatable and/or traceable.
+pub enum AssetAccessType {
+  Updatable_Traceable,
+  Updatable_NotTraceable,
+  NotUpdatable_Traceable,
+  NotUpdatable_NotTraceable,
+}
+
+impl Default for AssetAccessType {
+  fn default() -> Self {
+    Self::NotUpdatable_NotTraceable
+  }
+}
+
+impl AssetAccessType {
+  /// Converts the asset access type
+  pub fn get_booleans(self) -> (bool, bool) {
+    match self {
+      Self::Updatable_Traceable => (true, true),
+      Self::Updatable_NotTraceable => (true, false),
+      Self::NotUpdatable_Traceable => (false, true),
+      Self::NotUpdatable_NotTraceable => (false, false),
+    }
+  }
+
+  pub fn from_booleans(updatable: bool, traceable: bool) -> Self {
+    match (updatable, traceable) {
+      (true, true) => Self::Updatable_Traceable,
+      (true, false) => Self::Updatable_NotTraceable,
+      (false, true) => Self::NotUpdatable_Traceable,
+      (false, false) => Self::NotUpdatable_NotTraceable,
+    }
+  }
+}
+
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 pub struct Asset {
   pub code: AssetTypeCode,
   pub issuer: IssuerPublicKey,
-  pub memo: Memo,
-  pub confidential_memo: ConfidentialMemo,
-  pub updatable: bool,
-  pub traceable: bool,
   #[serde(default)]
-  #[serde(skip_serializing_if = "Option::is_none")]
+  #[serde(skip_serializing_if = "is_default")]
+  pub memo: Memo,
+  #[serde(default)]
+  #[serde(skip_serializing_if = "is_default")]
+  pub confidential_memo: ConfidentialMemo,
+  #[serde(default)]
+  #[serde(skip_serializing_if = "is_default")]
+  pub access_type: AssetAccessType,
+  #[serde(default)]
+  #[serde(skip_serializing_if = "is_default")]
   pub policy: Option<(Box<Policy>, PolicyGlobals)>,
 }
 
@@ -292,8 +391,7 @@ pub struct DefineAssetBody {
 impl DefineAssetBody {
   pub fn new(token_code: &AssetTypeCode,
              issuer_key: &IssuerPublicKey, // TODO: require private key check somehow?
-             updatable: bool,
-             traceable: bool,
+             access_type: AssetAccessType,
              memo: Option<Memo>,
              confidential_memo: Option<ConfidentialMemo>,
              policy: Option<(Box<Policy>, PolicyGlobals)>)
@@ -301,8 +399,7 @@ impl DefineAssetBody {
     let mut asset_def: Asset = Default::default();
     asset_def.code = *token_code;
     asset_def.issuer = *issuer_key;
-    asset_def.updatable = updatable;
-    asset_def.traceable = traceable;
+    asset_def.access_type = access_type;
     asset_def.policy = policy;
 
     if let Some(memo) = memo {
@@ -466,13 +563,17 @@ pub struct TimeBounds {
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize, Default)]
 pub struct Transaction {
   pub operations: Vec<Operation>,
+  #[serde(default)]
+  #[serde(skip_serializing_if = "is_default")]
   pub credentials: Vec<CredentialProof>,
   #[serde(default)]
-  #[serde(skip_serializing_if = "Option::is_none")]
+  #[serde(skip_serializing_if = "is_default")]
   pub policy_options: Option<TxnPolicyData>,
+  #[serde(default)]
+  #[serde(skip_serializing_if = "is_default")]
   pub memos: Vec<Memo>,
   #[serde(default)]
-  #[serde(skip_serializing_if = "Vec::is_empty")]
+  #[serde(skip_serializing_if = "is_default")]
   pub signatures: Vec<XfrSignature>,
 }
 

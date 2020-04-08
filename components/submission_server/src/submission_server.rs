@@ -211,7 +211,7 @@ pub fn convert_tx(tx: &[u8]) -> Option<Transaction> {
 #[cfg(test)]
 mod tests {
   use super::*;
-  use ledger::data_model::AssetTypeCode;
+  use ledger::data_model::{AssetAccessType, AssetTypeCode};
   use rand_core::SeedableRng;
   use txn_builder::{BuildsTransactions, PolicyChoice, TransactionBuilder};
   use zei::xfr::sig::XfrKeyPair;
@@ -239,16 +239,14 @@ mod tests {
 
     txn_builder_0.add_operation_create_asset(&keypair,
                                              Some(asset_token),
-                                             true,
-                                             true,
+                                             AssetAccessType::Updatable_Traceable,
                                              &String::from("{}"),
                                              PolicyChoice::Fungible())
                  .unwrap();
 
     txn_builder_1.add_operation_create_asset(&keypair,
                                              None,
-                                             true,
-                                             true,
+                                             AssetAccessType::Updatable_Traceable,
                                              "test",
                                              PolicyChoice::Fungible())
                  .unwrap();

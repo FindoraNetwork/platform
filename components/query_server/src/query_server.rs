@@ -135,7 +135,7 @@ impl<RNG, LU> QueryServer<RNG, LU>
 #[cfg(test)]
 mod tests {
   use super::*;
-  use ledger::data_model::{AssetTypeCode, TransferType};
+  use ledger::data_model::{AssetAccessType, AssetTypeCode, TransferType};
   use ledger_standalone::LedgerStandalone;
   use rand_chacha::ChaChaRng;
   use rand_core::SeedableRng;
@@ -164,8 +164,7 @@ mod tests {
     let mut builder = TransactionBuilder::default();
     let define_tx = builder.add_operation_create_asset(&alice,
                                                        Some(token_code),
-                                                       false,
-                                                       false,
+                                                       AssetAccessType::NotUpdatable_NotTraceable,
                                                        "fiat".into(),
                                                        PolicyChoice::Fungible())
                            .unwrap()
@@ -184,7 +183,7 @@ mod tests {
              .unwrap()
              .add_basic_issue_asset(&alice, None, &token_code, 2, amt, confidentiality_flag)
              .unwrap();
-    let owner_memo = issuance_tx.owner_records[0].1.clone();
+    let owner_memo = issuance_tx.get_owner_record_and_memo(0).unwrap().1.clone();
     ledger_standalone.submit_transaction(&issuance_tx.transaction());
 
     // Query server will now fetch new blocks
