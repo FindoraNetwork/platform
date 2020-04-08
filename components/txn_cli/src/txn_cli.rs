@@ -3670,7 +3670,7 @@ mod tests {
                            &issuer_key_pair,
                            AssetTypeCode::gen_random(),
                            "Define asset",
-                           AssetAccessType::NotUpdatable_Traceable,
+                           AssetRules::default(),
                            txn_builder_path);
 
     let _ = fs::remove_file(DATA_FILE);

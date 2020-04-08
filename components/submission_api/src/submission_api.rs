@@ -131,7 +131,7 @@ mod tests {
   use super::*;
   use actix_web::dev::Service;
   use actix_web::{test, web, App};
-  use ledger::data_model::{AssetAccessType, AssetTypeCode, Operation, Transaction};
+  use ledger::data_model::{AssetRules, AssetTypeCode, Operation, Transaction};
   use ledger::store::helpers::*;
   use ledger::store::{LedgerAccess, LedgerState};
   use rand_core::SeedableRng;
@@ -150,11 +150,8 @@ mod tests {
     let token_code1 = AssetTypeCode { val: [1; 16] };
     let (public_key, secret_key) = build_keys(&mut prng);
 
-    let asset_body = asset_creation_body(&token_code1,
-                                         &public_key,
-                                         AssetAccessType::Updatable_NotTraceable,
-                                         None,
-                                         None);
+    let asset_body =
+      asset_creation_body(&token_code1, &public_key, AssetRules::default(), None, None);
     let asset_create = asset_creation_operation(&asset_body, &public_key, &secret_key);
     tx.operations.push(Operation::DefineAsset(asset_create));
 
