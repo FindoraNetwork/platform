@@ -19,7 +19,9 @@ use std::hash::{Hash, Hasher};
 use std::marker::PhantomData;
 use zei::xfr::lib::gen_xfr_body;
 use zei::xfr::sig::{XfrKeyPair, XfrPublicKey, XfrSecretKey, XfrSignature};
-use zei::xfr::structs::{AssetRecord, BlindAssetRecord, OpenAssetRecord, XfrBody};
+use zei::xfr::structs::{
+  AssetRecord, AssetTracingPolicy, BlindAssetRecord, OpenAssetRecord, XfrBody,
+};
 
 pub fn b64enc<T: ?Sized + AsRef<[u8]>>(input: &T) -> String {
   base64::encode_config(input, base64::URL_SAFE)
@@ -199,7 +201,7 @@ impl SignedAddress {
 
 #[allow(non_camel_case_types)]
 #[allow(clippy::enum_variant_names)]
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 /// Represents whether an asset is updatable and/or traceable.
 pub enum AssetAccessType {
   Updatable_Traceable,
@@ -369,17 +371,21 @@ pub struct IssueAssetBody {
   pub seq_num: u64,
   pub num_outputs: usize,
   pub records: Vec<TxOutput>,
+  /// Asset tracing policy, null iff the asset is not traceable
+  pub tracing_policy: Option<AssetTracingPolicy>,
 }
 
 impl IssueAssetBody {
   pub fn new(token_code: &AssetTypeCode,
              seq_num: u64,
-             records: &[TxOutput])
+             records: &[TxOutput],
+             tracing_policy: Option<AssetTracingPolicy>)
              -> Result<IssueAssetBody, PlatformError> {
     Ok(IssueAssetBody { code: *token_code,
                         seq_num,
                         num_outputs: records.len(),
-                        records: records.to_vec() })
+                        records: records.to_vec(),
+                        tracing_policy })
   }
 }
 
@@ -487,17 +493,21 @@ pub struct IssueAsset {
   pub body: IssueAssetBody,
   pub pubkey: IssuerPublicKey,
   pub signature: XfrSignature,
+  /// Asset access type, indicating whether the asset is updatable and/or traceable
+  pub access_type: AssetAccessType,
 }
 
 impl IssueAsset {
   pub fn new(issuance_body: IssueAssetBody,
              public_key: &IssuerPublicKey,
-             secret_key: &XfrSecretKey)
+             secret_key: &XfrSecretKey,
+             access_type: AssetAccessType)
              -> Result<IssueAsset, PlatformError> {
     let sign = compute_signature(&secret_key, &public_key.key, &issuance_body);
     Ok(IssueAsset { body: issuance_body,
                     pubkey: *public_key,
-                    signature: sign })
+                    signature: sign,
+                    access_type })
   }
 }
 
@@ -967,11 +977,13 @@ mod tests {
     let asset_issuance_body = IssueAssetBody { code: Default::default(),
                                                seq_num: 0,
                                                num_outputs: 0,
-                                               records: Vec::new() };
+                                               records: Vec::new(),
+                                               tracing_policy: None };
 
     let asset_issuance = IssueAsset { body: asset_issuance_body,
                                       pubkey: IssuerPublicKey { key: public_key },
-                                      signature: signature.clone() };
+                                      signature: signature.clone(),
+                                      access_type: AssetAccessType::NotUpdatable_NotTraceable };
 
     let issuance_operation = Operation::IssueAsset(asset_issuance.clone());
 

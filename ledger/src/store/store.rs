@@ -1858,11 +1858,12 @@ pub mod helpers {
     let (ba, _tracer_memo, owner_memo) =
       build_blind_asset_record(ledger.get_prng(), &params.pc_gens, &ar_template, None);
 
-    let asset_issuance_body = IssueAssetBody::new(&code, 0, &[TxOutput(ba.clone())]).unwrap();
-    let asset_issuance_operation = IssueAsset::new(asset_issuance_body,
-                                                   &IssuerPublicKey { key:
-                                                                        *issuer_keys.get_pk_ref() },
-                                                   issuer_keys.get_sk_ref()).unwrap();
+    let asset_issuance_body = IssueAssetBody::new(&code, 0, &[TxOutput(ba.clone())], None).unwrap();
+    let asset_issuance_operation =
+      IssueAsset::new(asset_issuance_body,
+                      &IssuerPublicKey { key: *issuer_keys.get_pk_ref() },
+                      issuer_keys.get_sk_ref(),
+                      AssetAccessType::NotUpdatable_NotTraceable).unwrap();
 
     let issue_op = Operation::IssueAsset(asset_issuance_operation);
 
@@ -2276,11 +2277,12 @@ mod tests {
     let second_ba = ba.clone();
 
     let asset_issuance_body =
-      IssueAssetBody::new(&code, 0, &[TxOutput(ba), TxOutput(second_ba)]).unwrap();
+      IssueAssetBody::new(&code, 0, &[TxOutput(ba), TxOutput(second_ba)], None).unwrap();
     let asset_issuance_operation =
       IssueAsset::new(asset_issuance_body,
                       &IssuerPublicKey { key: key_pair.get_pk_ref().clone() },
-                      key_pair.get_sk_ref()).unwrap();
+                      key_pair.get_sk_ref(),
+                      AssetAccessType::NotUpdatable_NotTraceable).unwrap();
 
     let issue_op = Operation::IssueAsset(asset_issuance_operation);
 
@@ -2408,10 +2410,12 @@ mod tests {
     let ar = AssetRecordTemplate::with_no_asset_tracking(100, token_code1.val, art, public_key);
 
     let (ba, _, _) = build_blind_asset_record(ledger.get_prng(), &params.pc_gens, &ar, None);
-    let asset_issuance_body = IssueAssetBody::new(&token_code1, 0, &[TxOutput(ba)]).unwrap();
-    let asset_issuance_operation = IssueAsset::new(asset_issuance_body,
-                                                   &IssuerPublicKey { key: public_key },
-                                                   &secret_key).unwrap();
+    let asset_issuance_body = IssueAssetBody::new(&token_code1, 0, &[TxOutput(ba)], None).unwrap();
+    let asset_issuance_operation =
+      IssueAsset::new(asset_issuance_body,
+                      &IssuerPublicKey { key: public_key },
+                      &secret_key,
+                      AssetAccessType::NotUpdatable_NotTraceable).unwrap();
 
     let issue_op = Operation::IssueAsset(asset_issuance_operation);
 

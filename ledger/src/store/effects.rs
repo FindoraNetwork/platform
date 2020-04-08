@@ -138,7 +138,9 @@ impl TxnEffect {
         //      5) The assets in the TxOutputs have a non-confidential
         //         asset type which agrees with the stated asset type.
         //          - Fully checked here
-        //      TODO(joe): tracking!
+        //      6) The asset_tracking flag of the tracing policy in
+        //         IssueAssetBody agrees with the stated asset access type.
+        //          - Fully checked here
         Operation::IssueAsset(iss) => {
           if iss.body.num_outputs != iss.body.records.len() {
             return Err(PlatformError::InputsError(error_location!()));
@@ -189,6 +191,22 @@ impl TxnEffect {
 
             txos.push(Some(output.clone()));
             txo_count += 1;
+          }
+
+          // (6)
+          // If the issuance body has a tracing policy, the asset_tracking flag of
+          //  the policy must be consistent with the access type of the issuance
+          // Otherwise, the access type of the issuance must indicate the asset is
+          //  not traceable.
+          let is_traceable = iss.access_type.get_booleans().1;
+          if let Some(policy) = iss.body.tracing_policy.clone() {
+            if policy.asset_tracking != is_traceable {
+              return Err(PlatformError::InputsError(error_location!()));
+            }
+          } else {
+            if is_traceable {
+              return Err(PlatformError::InputsError(error_location!()));
+            }
           }
         }
 

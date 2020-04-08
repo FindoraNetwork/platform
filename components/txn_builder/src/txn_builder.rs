@@ -254,7 +254,8 @@ pub trait BuildsTransactions {
                                key_pair: &XfrKeyPair,
                                token_code: &AssetTypeCode,
                                seq_num: u64,
-                               records: &[(TxOutput, Option<OwnerMemo>)])
+                               records: &[(TxOutput, Option<OwnerMemo>)],
+                               tracing_policy: Option<AssetTracingPolicy>)
                                -> Result<&mut Self, PlatformError>;
   fn add_operation_transfer_asset(&mut self,
                                   keys: &XfrKeyPair,
@@ -283,7 +284,7 @@ pub trait BuildsTransactions {
                            -> Result<&mut Self, PlatformError> {
     let mut prng = ChaChaRng::from_entropy();
     let params = PublicParams::new();
-    let ar = match tracing_policy {
+    let ar = match tracing_policy.clone() {
       Some(policy) => AssetRecordTemplate::with_asset_tracking(amount,
                                                                token_code.val,
                                                                confidentiality_flags,
@@ -295,7 +296,7 @@ pub trait BuildsTransactions {
                                                           key_pair.get_pk()),
     };
     let (ba, _, owner_memo) = build_blind_asset_record(&mut prng, &params.pc_gens, &ar, None);
-    self.add_operation_issue_asset(key_pair, token_code, seq_num, &[(TxOutput(ba), owner_memo)])
+    self.add_operation_issue_asset(key_pair, token_code, seq_num, &[(TxOutput(ba), owner_memo)], tracing_policy)
   }
 
   #[allow(clippy::comparison_chain)]
@@ -428,7 +429,8 @@ impl BuildsTransactions for TransactionBuilder {
                                key_pair: &XfrKeyPair,
                                token_code: &AssetTypeCode,
                                seq_num: u64,
-                               records_and_memos: &[(TxOutput, Option<OwnerMemo>)])
+                               records_and_memos: &[(TxOutput, Option<OwnerMemo>)], 
+                               tracing_policy: Option<AssetTracingPolicy>)
                                -> Result<&mut Self, PlatformError> {
     let pub_key = &IssuerPublicKey { key: key_pair.get_pk() };
     let priv_key = &key_pair.get_sk();
@@ -437,12 +439,23 @@ impl BuildsTransactions for TransactionBuilder {
       records.push(output.clone());
       self.owner_records.push((output.clone(), memo.clone()));
     }
+    let access_type = if let Some(policy) = tracing_policy.clone() {
+      if policy.asset_tracking {
+        AssetAccessType::NotUpdatable_Traceable
+      } else {
+        AssetAccessType::NotUpdatable_NotTraceable
+      }
+    } else {
+      AssetAccessType::NotUpdatable_NotTraceable
+    };
     self.txn
         .add_operation(Operation::IssueAsset(IssueAsset::new(IssueAssetBody::new(token_code,
                                                                                  seq_num,
-                                                                                 &records)?,
+                                                                                 &records,
+                                                                                 tracing_policy)?,
                                                              pub_key,
-                                                             priv_key)?));
+                                                             priv_key, 
+                                                             access_type)?));
     Ok(self)
   }
   fn add_operation_transfer_asset(&mut self,

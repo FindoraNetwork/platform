@@ -1095,7 +1095,7 @@ fn issue_and_transfer_asset(issuer_key_pair: &XfrKeyPair,
                                      tracing_policy.clone())?;
 
   // Transfer Operation
-  let output_template = if let Some(policy) = tracing_policy {
+  let output_template = if let Some(policy) = tracing_policy.clone() {
     AssetRecordTemplate::with_asset_tracking(amount,
                                              token_code.val,
                                              record_type,
@@ -1124,7 +1124,8 @@ fn issue_and_transfer_asset(issuer_key_pair: &XfrKeyPair,
   txn_builder.add_operation_issue_asset(issuer_key_pair,
                                         &token_code,
                                         get_and_update_sequence_number()?,
-                                        &[(TxOutput(blind_asset_record), owner_memo.clone())])?
+                                        &[(TxOutput(blind_asset_record), owner_memo.clone())],
+                                        tracing_policy)?
              .add_operation(xfr_op)
              .transaction();
 
