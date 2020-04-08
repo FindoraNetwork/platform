@@ -203,10 +203,8 @@ impl TxnEffect {
             if policy.asset_tracking != is_traceable {
               return Err(PlatformError::InputsError(error_location!()));
             }
-          } else {
-            if is_traceable {
-              return Err(PlatformError::InputsError(error_location!()));
-            }
+          } else if is_traceable {
+            return Err(PlatformError::InputsError(error_location!()));
           }
         }
 
