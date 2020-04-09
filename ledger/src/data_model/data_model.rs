@@ -493,21 +493,17 @@ pub struct IssueAsset {
   pub body: IssueAssetBody,
   pub pubkey: IssuerPublicKey,
   pub signature: XfrSignature,
-  /// Asset access type, indicating whether the asset is updatable and/or traceable
-  pub access_type: AssetAccessType,
 }
 
 impl IssueAsset {
   pub fn new(issuance_body: IssueAssetBody,
              public_key: &IssuerPublicKey,
-             secret_key: &XfrSecretKey,
-             access_type: AssetAccessType)
+             secret_key: &XfrSecretKey)
              -> Result<IssueAsset, PlatformError> {
     let sign = compute_signature(&secret_key, &public_key.key, &issuance_body);
     Ok(IssueAsset { body: issuance_body,
                     pubkey: *public_key,
-                    signature: sign,
-                    access_type })
+                    signature: sign })
   }
 }
 
@@ -982,8 +978,7 @@ mod tests {
 
     let asset_issuance = IssueAsset { body: asset_issuance_body,
                                       pubkey: IssuerPublicKey { key: public_key },
-                                      signature: signature.clone(),
-                                      access_type: AssetAccessType::NotUpdatable_NotTraceable };
+                                      signature: signature.clone() };
 
     let issuance_operation = Operation::IssueAsset(asset_issuance.clone());
 

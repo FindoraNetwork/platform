@@ -12,7 +12,7 @@ use rand_core::{CryptoRng, RngCore, SeedableRng};
 use std::collections::{HashMap, HashSet};
 use zei::serialization::ZeiFromToBytes;
 use zei::xfr::lib::verify_xfr_body_no_policies;
-use zei::xfr::structs::{BlindAssetRecord, XfrAssetType};
+use zei::xfr::structs::{AssetTracingPolicy, BlindAssetRecord, XfrAssetType};
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct TxnEffect {
@@ -30,6 +30,8 @@ pub struct TxnEffect {
   pub new_issuance_nums: HashMap<AssetTypeCode, Vec<u64>>,
   // Which public key is being used to issue each asset type
   pub issuance_keys: HashMap<AssetTypeCode, IssuerPublicKey>,
+  // Which asset tracing policy is being used to issue each asset type
+  pub tracing_policies: HashMap<AssetTypeCode, Option<AssetTracingPolicy>>,
   // Debt swap information that must be externally validated
   pub debt_effects: HashMap<AssetTypeCode, DebtSwapEffect>,
 
@@ -52,6 +54,7 @@ impl TxnEffect {
     let mut new_asset_codes: HashMap<AssetTypeCode, AssetType> = HashMap::new();
     let mut new_issuance_nums: HashMap<AssetTypeCode, Vec<u64>> = HashMap::new();
     let mut issuance_keys: HashMap<AssetTypeCode, IssuerPublicKey> = HashMap::new();
+    let mut tracing_policies: HashMap<AssetTypeCode, Option<AssetTracingPolicy>> = HashMap::new();
     let mut debt_effects: HashMap<AssetTypeCode, DebtSwapEffect> = HashMap::new();
     let mut asset_types_involved: HashSet<AssetTypeCode> = HashSet::new();
 
@@ -139,8 +142,8 @@ impl TxnEffect {
         //         asset type which agrees with the stated asset type.
         //          - Fully checked here
         //      6) The asset_tracking flag of the tracing policy in
-        //         IssueAssetBody agrees with the stated asset access type.
-        //          - Fully checked here
+        //         IssueAssetBody agrees with the asset definition.
+        //          - Fully checked in check_txn_effects
         Operation::IssueAsset(iss) => {
           if iss.body.num_outputs != iss.body.records.len() {
             return Err(PlatformError::InputsError(error_location!()));
@@ -194,18 +197,7 @@ impl TxnEffect {
           }
 
           // (6)
-          // If the issuance body has a tracing policy, the asset_tracking flag of
-          //  the policy must be consistent with the access type of the issuance
-          // Otherwise, the access type of the issuance must indicate the asset is
-          //  not traceable.
-          let is_traceable = iss.access_type.get_booleans().1;
-          if let Some(policy) = iss.body.tracing_policy.clone() {
-            if policy.asset_tracking != is_traceable {
-              return Err(PlatformError::InputsError(error_location!()));
-            }
-          } else if is_traceable {
-            return Err(PlatformError::InputsError(error_location!()));
-          }
+          tracing_policies.insert(code, iss.body.tracing_policy.clone());
         }
 
         // An asset transfer is valid iff:
@@ -340,6 +332,7 @@ impl TxnEffect {
                    new_asset_codes,
                    new_issuance_nums,
                    issuance_keys,
+                   tracing_policies,
                    debt_effects,
                    asset_types_involved,
                    custom_policy_asset_types,

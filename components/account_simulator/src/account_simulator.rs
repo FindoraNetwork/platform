@@ -477,9 +477,7 @@ impl InterpretAccounts<PlatformError> for LedgerAccounts {
 
         let asset_issuance_operation = IssueAsset { body: asset_issuance_body,
                                                     pubkey: IssuerPublicKey { key: *pubkey },
-                                                    signature: sign,
-                                                    access_type:
-                                                      AssetAccessType::NotUpdatable_NotTraceable };
+                                                    signature: sign };
 
         let issue_op = Operation::IssueAsset(asset_issuance_operation);
 
@@ -773,9 +771,7 @@ impl InterpretAccounts<PlatformError> for OneBigTxnAccounts {
 
         let asset_issuance_operation = IssueAsset { body: asset_issuance_body,
                                                     pubkey: IssuerPublicKey { key: *pubkey },
-                                                    signature: sign,
-                                                    access_type:
-                                                      AssetAccessType::NotUpdatable_NotTraceable };
+                                                    signature: sign };
 
         let issue_op = Operation::IssueAsset(asset_issuance_operation);
 
@@ -1138,9 +1134,7 @@ impl InterpretAccounts<PlatformError> for LedgerStandaloneAccounts {
 
         let asset_issuance_operation = IssueAsset { body: asset_issuance_body,
                                                     pubkey: IssuerPublicKey { key: *pubkey },
-                                                    signature: sign,
-                                                    access_type:
-                                                      AssetAccessType::NotUpdatable_NotTraceable };
+                                                    signature: sign };
 
         let issue_op = Operation::IssueAsset(asset_issuance_operation);
 

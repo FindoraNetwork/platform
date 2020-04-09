@@ -484,6 +484,25 @@ impl LedgerStatus {
       }
     }
 
+    // Asset tracing policies must has the asset_tracking flag consistent with the asset definition
+    for (code, tracing_policy) in txn.tracing_policies.iter() {
+      dbg!(&(code, tracing_policy));
+      let (_, traceability) = self.asset_types
+                                  .get(&code)
+                                  .or_else(|| txn.new_asset_codes.get(&code))
+                                  .ok_or_else(|| PlatformError::InputsError(error_location!()))?
+                                  .properties
+                                  .access_type
+                                  .get_booleans();
+      if let Some(policy) = tracing_policy {
+        if traceability != policy.asset_tracking {
+          return Err(PlatformError::InputsError(error_location!()));
+        }
+      } else if traceability {
+        return Err(PlatformError::InputsError(error_location!()));
+      }
+    }
+
     // Debt swaps
     // (1) Fiat code must match debt asset memo
     // (2) fee must be correct
@@ -1859,11 +1878,10 @@ pub mod helpers {
       build_blind_asset_record(ledger.get_prng(), &params.pc_gens, &ar_template, None);
 
     let asset_issuance_body = IssueAssetBody::new(&code, 0, &[TxOutput(ba.clone())], None).unwrap();
-    let asset_issuance_operation =
-      IssueAsset::new(asset_issuance_body,
-                      &IssuerPublicKey { key: *issuer_keys.get_pk_ref() },
-                      issuer_keys.get_sk_ref(),
-                      AssetAccessType::NotUpdatable_NotTraceable).unwrap();
+    let asset_issuance_operation = IssueAsset::new(asset_issuance_body,
+                                                   &IssuerPublicKey { key:
+                                                                        *issuer_keys.get_pk_ref() },
+                                                   issuer_keys.get_sk_ref()).unwrap();
 
     let issue_op = Operation::IssueAsset(asset_issuance_operation);
 
@@ -2281,8 +2299,7 @@ mod tests {
     let asset_issuance_operation =
       IssueAsset::new(asset_issuance_body,
                       &IssuerPublicKey { key: key_pair.get_pk_ref().clone() },
-                      key_pair.get_sk_ref(),
-                      AssetAccessType::NotUpdatable_NotTraceable).unwrap();
+                      key_pair.get_sk_ref()).unwrap();
 
     let issue_op = Operation::IssueAsset(asset_issuance_operation);
 
@@ -2411,11 +2428,9 @@ mod tests {
 
     let (ba, _, _) = build_blind_asset_record(ledger.get_prng(), &params.pc_gens, &ar, None);
     let asset_issuance_body = IssueAssetBody::new(&token_code1, 0, &[TxOutput(ba)], None).unwrap();
-    let asset_issuance_operation =
-      IssueAsset::new(asset_issuance_body,
-                      &IssuerPublicKey { key: public_key },
-                      &secret_key,
-                      AssetAccessType::NotUpdatable_NotTraceable).unwrap();
+    let asset_issuance_operation = IssueAsset::new(asset_issuance_body,
+                                                   &IssuerPublicKey { key: public_key },
+                                                   &secret_key).unwrap();
 
     let issue_op = Operation::IssueAsset(asset_issuance_operation);
 
