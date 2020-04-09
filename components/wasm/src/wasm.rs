@@ -509,7 +509,7 @@ fn u8_littleendian_slice_to_u32(array: &[u8]) -> u32 {
   | u32::from(array[3]) << 24
 }
 
-fn u32_pair_to_uSimplePolicies 64(x: (u32, u32)) -> u64 {
+fn u32_pair_to_u64(x: (u32, u32)) -> u64 {
   (x.1 as u64) << 32 ^ (x.0 as u64)
 }
 */

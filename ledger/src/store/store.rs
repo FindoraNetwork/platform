@@ -1937,7 +1937,7 @@ pub mod helpers {
     let (ba, _tracer_memo, _owner_memo) =
       build_blind_asset_record(ledger.get_prng(), &params.pc_gens, &ar_template, None);
 
-    let asset_issuance_body = IssueAssetBody::new(&code, seq_num, &[TxOutput(ba.clone())]).unwrap();
+    let asset_issuance_body = IssueAssetBody::new(&code, seq_num, &[TxOutput(ba)]).unwrap();
     let asset_issuance_operation = IssueAsset::new(asset_issuance_body,
                                                    &IssuerPublicKey { key:
                                                                         *issuer_keys.get_pk_ref() },

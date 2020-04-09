@@ -400,19 +400,6 @@ impl HasInvariants<PlatformError> for TxnEffect {
     Ok(())
   }
 }
-//// There are some restrictions for things that may accumulate in a block. Consider new net issuance
-//// amounts for an asset type. In this case, although each individual issuance may be valid against
-//// the current ledger state, accumulated issuances may exceed the asset cap. However, the Block
-//// needs to know how many more units it is allowed to issue, so we store it here.
-pub struct BlockRestrictions {
-  pub issuance_caps: HashMap<AssetTypeCode, u64>,
-}
-
-impl Default for BlockRestrictions {
-  fn default() -> Self {
-    BlockRestrictions { issuance_caps: HashMap::new() }
-  }
-}
 
 #[derive(Debug, Clone, Eq, PartialEq, Default, Serialize)]
 pub struct BlockEffect {

@@ -203,6 +203,8 @@ impl SignedAddress {
 /// 2) Transferable: Non-transferable assets can only be transferred once from the issuer to
 ///    another user.
 /// 3) Max units: Optional limit on total issuance amount.
+/// TODO (noah) implement validation for transferable
+/// TODO (keyao) implemenent validation for traceable
 pub struct AssetRules {
   pub traceable: bool,
   pub transferable: bool,
