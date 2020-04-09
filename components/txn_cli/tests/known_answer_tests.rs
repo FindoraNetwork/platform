@@ -191,6 +191,14 @@ fn trace_and_verify_asset(id: &str, memo_file: &str, expected_amount: &str) -> i
                        .output()
 }
 
+#[cfg(test)]
+fn trace_credential(id: &str, loan: &str) -> io::Result<Output> {
+  Command::new(COMMAND).args(&["asset_issuer", "--id", id])
+                       .arg("trace_credential")
+                       .args(&["--loan", loan])
+                       .output()
+}
+
 //
 // Helper functions: define, issue and transfer
 //
@@ -997,6 +1005,15 @@ fn test_request_fulfill_and_pay_loan_with_args() {
   assert_eq!(output.status.code(), Some(exitcode::USAGE));
   assert!(from_utf8(&output.stdout).unwrap()
                                    .contains(&"has already been declined.".to_owned()));
+
+  // Trace the credential associated with the first loan
+  ledger_standalone.poll_until_ready().unwrap();
+  let output = trace_credential("0", "0").expect("Failed to trace the credential");
+
+  io::stdout().write_all(&output.stdout).unwrap();
+  io::stdout().write_all(&output.stderr).unwrap();
+
+  assert!(output.status.success());
 
   // Pay loan
   // 1. First time:

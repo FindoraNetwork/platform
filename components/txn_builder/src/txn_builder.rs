@@ -390,6 +390,11 @@ impl TransactionBuilder {
   pub fn get_owner_record_and_memo(&self, idx: usize) -> Option<&(TxOutput, Option<OwnerMemo>)> {
     self.owner_records.get(idx)
   }
+
+  /// Gets the credential at a specified index
+  pub fn get_credential(&self, idx: usize) -> Option<&Credential> {
+    self.credentials.get(idx)
+  }
 }
 
 impl BuildsTransactions for TransactionBuilder {

@@ -797,6 +797,27 @@ fn load_tracer_and_owner_memos_from_files(file_paths: &str)
   Ok(tracer_and_owner_memos)
 }
 
+/// Loads credential from transaction file.
+/// # Arguments
+/// * `file_path`: file path to transaction record.
+fn load_credential_from_file(file_path: &str) -> Result<ZeiCredential, PlatformError> {
+  let txn = fs::read_to_string(file_path).or_else(|_| {
+              Err(PlatformError::IoError(format!("Failed to read file: {}", file_path)))
+            })?;
+  println!("Parsing builder from file contents: \"{}\"", &txn);
+  match serde_json::from_str::<TransactionBuilder>(&txn) {
+    Ok(builder) => {
+      if let Some(credential) = builder.get_credential(0) {
+        Ok(credential.clone())
+      } else {
+        println!("Missing credential record.");
+        Err(PlatformError::InputsError(error_location!()))
+      }
+    }
+    Err(_) => Err(PlatformError::DeserializationError),
+  }
+}
+
 //
 // Store functions
 //
@@ -2323,7 +2344,14 @@ fn main() {
           .long("expected_amount")
           .required(true)
           .takes_value(true)
-          .help("Expected asset amount to verify."))))
+          .help("Expected asset amount to verify.")))
+      .subcommand(SubCommand::with_name("trace_credential")
+        .arg(Arg::with_name("loan")
+          .short("l")
+          .long("loan")
+          .required(true)
+          .takes_value(true)
+          .help("Id of the loan associated with the traced credential."))))
     .subcommand(SubCommand::with_name("credential_issuer")
       .subcommand(SubCommand::with_name("sign_up")
         .arg(Arg::with_name("name")
@@ -3056,6 +3084,41 @@ fn process_asset_issuer_cmd(asset_issuer_matches: &clap::ArgMatches,
       };
       tracer_memo.verify_amount(&tracer_dec_keys, expected_amount)
                  .or_else(|error| Err(PlatformError::ZeiError(error)))
+    }
+    ("trace_credential", Some(trace_credential_matches)) => {
+      let data = load_data()?;
+      let issuer_id = if let Some(id_arg) = asset_issuer_matches.value_of("id") {
+        parse_to_u64(id_arg)?
+      } else {
+        println!("Asset issuer id is required to trace the credential. Use asset_issuer --id.");
+        return Err(PlatformError::InputsError(error_location!()));
+      };
+      let loan_id = if let Some(id_arg) = trace_credential_matches.value_of("loan") {
+        parse_to_u64(id_arg)?
+      } else {
+        println!("Loan id is required to trace the credential. Use loan.");
+        return Err(PlatformError::InputsError(error_location!()));
+      };
+      let loan = data.loans[loan_id as usize].clone();
+      let loan_issuer_id = if let Some(id) = loan.issuer {
+        id
+      } else {
+        println!("Missing issuer id in the loan's data.");
+        return Err(PlatformError::InputsError(error_location!()));
+      };
+      if loan_issuer_id != issuer_id {
+        println!("Loan {} wasn't issued by asset issuer {}.",
+                 loan_id, issuer_id);
+        return Err(PlatformError::InputsError(error_location!()));
+      }
+      if let Some(txn_file_arg) = loan.debt_txn_file {
+        let credential = load_credential_from_file(&txn_file_arg)?;
+        println!("Credential: {:?}", credential);
+      } else {
+        println!("Transaction file is required to trace the credential.");
+        return Err(PlatformError::InputsError(error_location!()));
+      };
+      Ok(())
     }
     _ => {
       println!("Subcommand missing or not recognized. Try asset_issuer --help");
