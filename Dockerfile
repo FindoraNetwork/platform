@@ -1,4 +1,4 @@
-FROM nexus.findora.org/zei:v0.0.2-3 as zei
+FROM nexus.findora.org/zei:v0.0.2-4 as zei
 FROM rustlang/rust:nightly-buster as builder
 RUN cargo install cargo-audit
 RUN cargo install wasm-pack
