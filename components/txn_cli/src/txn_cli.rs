@@ -1769,7 +1769,7 @@ fn fulfill_loan(loan_id: u64,
                                              debt_code.val,
                                              NonConfidentialAmount_NonConfidentialAssetType,
                                              lender_key_pair.get_pk(),
-                                             debt_tracing_policy.clone());
+                                             debt_tracing_policy);
   let borrower_template =
     AssetRecordTemplate::with_asset_tracking(amount,
                                              fiat_code.val,
