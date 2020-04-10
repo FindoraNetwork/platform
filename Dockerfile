@@ -11,7 +11,7 @@ RUN cargo audit
 RUN cargo build --release
 RUN cargo test --release --no-fail-fast --workspace --exclude 'txn_cli'
 WORKDIR /app/components/wasm
-RUN wasm-pack build
+RUN wasm-pack build --target nodejs
 RUN bash -c 'time /app/target/release/log_tester /app/components/log_tester/example_log - /app/components/log_tester/expected'
 
 FROM debian:buster
