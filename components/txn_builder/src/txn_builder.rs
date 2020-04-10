@@ -499,7 +499,7 @@ impl BuildsTransactions for TransactionBuilder {
 
   /// Adds a credential record to the transaction builder
   fn add_credential(&mut self, credential: Credential) -> &mut Self {
-    self.credentials.push(credential.clone());
+    self.credentials.push(credential);
     self
   }
 
