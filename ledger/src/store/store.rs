@@ -501,7 +501,10 @@ impl LedgerStatus {
                                  .get(code)
                                  .or_else(|| Some(&0))
                                  .unwrap();
-        if *current_amount + *amount > cap {
+        if current_amount.checked_add(*amount)
+                         .ok_or_else(|| PlatformError::InputsError(error_location!()))?
+           > cap
+        {
           return Err(PlatformError::InputsError(error_location!()));
         }
       }
