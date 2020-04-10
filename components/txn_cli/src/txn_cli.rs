@@ -1367,7 +1367,7 @@ fn load_funds(issuer_id: u64,
                                    issuer_key_pair,
                                    fiat_code,
                                    "Fiat asset",
-                                   AssetRules::default(),
+                                   *AssetRules::default().set_traceable(true),
                                    txn_file)?;
     // Store data before submitting the transaction to avoid data overwriting
     let data = load_data()?;
@@ -1677,7 +1677,7 @@ fn fulfill_loan(loan_id: u64,
                                    issuer_key_pair,
                                    fiat_code,
                                    "Fiat asset",
-                                   AssetRules::default(),
+                                   *AssetRules::default().set_traceable(true),
                                    txn_file)?;
     // Store data before submitting the transaction to avoid data overwriting
     let data = load_data()?;
@@ -1733,7 +1733,7 @@ fn fulfill_loan(loan_id: u64,
                                  borrower_key_pair,
                                  debt_code,
                                  &memo_str,
-                                 AssetRules::default(),
+                                 *AssetRules::default().set_traceable(true),
                                  txn_file)?;
   // Store data before submitting the transaction to avoid data overwriting
   let data = load_data()?;
