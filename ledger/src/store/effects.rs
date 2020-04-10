@@ -30,7 +30,7 @@ pub struct TxnEffect {
   pub new_issuance_nums: HashMap<AssetTypeCode, Vec<u64>>,
   // Which public key is being used to issue each asset type
   pub issuance_keys: HashMap<AssetTypeCode, IssuerPublicKey>,
-  // New issuance amounts, None indicates that the issuance amount is confidential
+  // New issuance amounts
   pub issuance_amounts: HashMap<AssetTypeCode, u64>,
   // Asset types that have issuances with confidential outputs. Issuances cannot be confidential
   // if there is an issuance cap
