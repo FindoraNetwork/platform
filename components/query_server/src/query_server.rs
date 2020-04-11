@@ -135,7 +135,7 @@ impl<RNG, LU> QueryServer<RNG, LU>
 #[cfg(test)]
 mod tests {
   use super::*;
-  use ledger::data_model::{AssetAccessType, AssetTypeCode, TransferType};
+  use ledger::data_model::{AssetRules, AssetTypeCode, TransferType};
   use ledger_standalone::LedgerStandalone;
   use rand_chacha::ChaChaRng;
   use rand_core::SeedableRng;
@@ -164,7 +164,7 @@ mod tests {
     let mut builder = TransactionBuilder::default();
     let define_tx = builder.add_operation_create_asset(&alice,
                                                        Some(token_code),
-                                                       AssetAccessType::NotUpdatable_NotTraceable,
+                                                       AssetRules::default(),
                                                        "fiat".into(),
                                                        PolicyChoice::Fungible())
                            .unwrap()
