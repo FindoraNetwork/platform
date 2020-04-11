@@ -487,25 +487,6 @@ impl LedgerStatus {
       }
     }
 
-    // Asset tracing policies must has the asset_tracking flag consistent with the asset definition
-    for (code, tracing_policy) in txn.tracing_policies.iter() {
-      dbg!(&(code, tracing_policy));
-      let (_, traceability) = self.asset_types
-                                  .get(&code)
-                                  .or_else(|| txn.new_asset_codes.get(&code))
-                                  .ok_or_else(|| PlatformError::InputsError(error_location!()))?
-                                  .properties
-                                  .access_type
-                                  .get_booleans();
-      if let Some(policy) = tracing_policy {
-        if traceability != policy.asset_tracking {
-          return Err(PlatformError::InputsError(error_location!()));
-        }
-      } else if traceability {
-        return Err(PlatformError::InputsError(error_location!()));
-      }
-    }
-
     // Asset Caps
     // (1) New issuance amounts cannot exceed asset cap
     // (2) No confidential issuances allowed for capped assets
@@ -536,6 +517,25 @@ impl LedgerStatus {
                            .or_else(|| txn.new_asset_codes.get(&code))
                            .ok_or_else(|| PlatformError::InputsError(error_location!()))?;
       if asset_type.properties.asset_rules.max_units.is_some() {
+        return Err(PlatformError::InputsError(error_location!()));
+      }
+    }
+
+    // Issuance tracing policies must has the asset_tracking flag consistent with the asset definition
+    for (code, tracing_policy) in txn.issuance_tracing_policies.iter() {
+      dbg!(&(code, tracing_policy));
+      let traceability = self.asset_types
+                             .get(&code)
+                             .or_else(|| txn.new_asset_codes.get(&code))
+                             .ok_or_else(|| PlatformError::InputsError(error_location!()))?
+                             .properties
+                             .asset_rules
+                             .traceable;
+      if let Some(policy) = tracing_policy {
+        if traceability != policy.asset_tracking {
+          return Err(PlatformError::InputsError(error_location!()));
+        }
+      } else if traceability {
         return Err(PlatformError::InputsError(error_location!()));
       }
     }
@@ -1959,7 +1959,7 @@ pub mod helpers {
     let (ba, _tracer_memo, _owner_memo) =
       build_blind_asset_record(ledger.get_prng(), &params.pc_gens, &ar_template, None);
 
-    let asset_issuance_body = IssueAssetBody::new(&code, seq_num, &[TxOutput(ba)]).unwrap();
+    let asset_issuance_body = IssueAssetBody::new(&code, seq_num, &[TxOutput(ba)], None).unwrap();
     let asset_issuance_operation = IssueAsset::new(asset_issuance_body,
                                                    &IssuerPublicKey { key:
                                                                         *issuer_keys.get_pk_ref() },

@@ -12,7 +12,7 @@ use rand_core::{CryptoRng, RngCore, SeedableRng};
 use std::collections::{HashMap, HashSet};
 use zei::serialization::ZeiFromToBytes;
 use zei::xfr::lib::verify_xfr_body_no_policies;
-use zei::xfr::structs::{BlindAssetRecord, XfrAmount, XfrAssetType};
+use zei::xfr::structs::{AssetTracingPolicy, BlindAssetRecord, XfrAmount, XfrAssetType};
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct TxnEffect {
@@ -30,13 +30,13 @@ pub struct TxnEffect {
   pub new_issuance_nums: HashMap<AssetTypeCode, Vec<u64>>,
   // Which public key is being used to issue each asset type
   pub issuance_keys: HashMap<AssetTypeCode, IssuerPublicKey>,
-  // Which asset tracing policy is being used to issue each asset type
-  pub tracing_policies: HashMap<AssetTypeCode, Option<AssetTracingPolicy>>,
   // New issuance amounts
   pub issuance_amounts: HashMap<AssetTypeCode, u64>,
   // Asset types that have issuances with confidential outputs. Issuances cannot be confidential
   // if there is an issuance cap
   pub confidential_issuance_types: HashSet<AssetTypeCode>,
+  // Which asset tracing policy is being used to issue each asset type
+  pub issuance_tracing_policies: HashMap<AssetTypeCode, Option<AssetTracingPolicy>>,
   // Debt swap information that must be externally validated
   pub debt_effects: HashMap<AssetTypeCode, DebtSwapEffect>,
 
@@ -59,8 +59,9 @@ impl TxnEffect {
     let mut new_asset_codes: HashMap<AssetTypeCode, AssetType> = HashMap::new();
     let mut new_issuance_nums: HashMap<AssetTypeCode, Vec<u64>> = HashMap::new();
     let mut issuance_keys: HashMap<AssetTypeCode, IssuerPublicKey> = HashMap::new();
-    let mut tracing_policies: HashMap<AssetTypeCode, Option<AssetTracingPolicy>> = HashMap::new();
     let mut issuance_amounts = HashMap::new();
+    let mut issuance_tracing_policies: HashMap<AssetTypeCode, Option<AssetTracingPolicy>> =
+      HashMap::new();
     let mut debt_effects: HashMap<AssetTypeCode, DebtSwapEffect> = HashMap::new();
     let mut asset_types_involved: HashSet<AssetTypeCode> = HashSet::new();
     let mut confidential_issuance_types = HashSet::new();
@@ -211,7 +212,7 @@ impl TxnEffect {
           }
 
           // (6)
-          tracing_policies.insert(code, iss.body.tracing_policy.clone());
+          issuance_tracing_policies.insert(code, iss.body.tracing_policy.clone());
         }
 
         // An asset transfer is valid iff:
@@ -344,11 +345,11 @@ impl TxnEffect {
                    txos,
                    input_txos,
                    new_asset_codes,
-                   issuance_amounts,
                    new_issuance_nums,
-                   confidential_issuance_types,
                    issuance_keys,
-                   tracing_policies,
+                   issuance_amounts,
+                   confidential_issuance_types,
+                   issuance_tracing_policies,
                    debt_effects,
                    asset_types_involved,
                    custom_policy_asset_types,
