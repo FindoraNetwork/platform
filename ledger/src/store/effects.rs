@@ -22,6 +22,8 @@ pub struct TxnEffect {
   pub txos: Vec<Option<TxOutput>>,
   // Which TXOs this consumes
   pub input_txos: HashMap<TxoSID, BlindAssetRecord>,
+  // List of internally-spent TXOs. This does not include input txos;
+  pub internally_spent_txos: Vec<BlindAssetRecord>,
   // Which new asset types this defines
   pub new_asset_codes: HashMap<AssetTypeCode, AssetType>,
   // Which new TXO issuance sequence numbers are used, in sorted order
@@ -53,6 +55,7 @@ impl TxnEffect {
                                                 -> Result<TxnEffect, PlatformError> {
     let mut txo_count: usize = 0;
     let mut txos: Vec<Option<TxOutput>> = Vec::new();
+    let mut internally_spent_txos = Vec::new();
     let mut input_txos: HashMap<TxoSID, BlindAssetRecord> = HashMap::new();
     let mut new_asset_codes: HashMap<AssetTypeCode, AssetType> = HashMap::new();
     let mut new_issuance_nums: HashMap<AssetTypeCode, Vec<u64>> = HashMap::new();
@@ -266,6 +269,12 @@ impl TxnEffect {
           verify_xfr_body_no_policies(prng, &trn.body.transfer)?;
 
           for (inp, record) in trn.body.inputs.iter().zip(trn.body.transfer.inputs.iter()) {
+            // Until we can distinguish assets that have policies that invoke transfer restrictions
+            // from those that don't, no confidential types are allowed
+            if record.asset_type.get_asset_type().is_none() {
+              return Err(PlatformError::InputsError(error_location!()));
+            }
+
             if let Some(inp_code) = record.asset_type.get_asset_type() {
               asset_types_involved.insert(AssetTypeCode { val: inp_code });
             }
@@ -288,6 +297,7 @@ impl TxnEffect {
                     if inp_record != record {
                       return Err(PlatformError::InputsError(error_location!()));
                     }
+                    internally_spent_txos.push(inp_record.clone());
                   }
                 }
                 txos[ix] = None;
@@ -305,6 +315,11 @@ impl TxnEffect {
 
           txos.reserve(trn.body.transfer.outputs.len());
           for out in trn.body.transfer.outputs.iter() {
+            // Until we can distinguish assets that have policies that invoke transfer restrictions
+            // from those that don't, no confidential types are allowed
+            if out.asset_type.get_asset_type().is_none() {
+              return Err(PlatformError::InputsError(error_location!()));
+            }
             if let Some(out_code) = out.asset_type.get_asset_type() {
               asset_types_involved.insert(AssetTypeCode { val: out_code });
             }
@@ -336,6 +351,7 @@ impl TxnEffect {
                    txos,
                    input_txos,
                    new_asset_codes,
+                   internally_spent_txos,
                    issuance_amounts,
                    new_issuance_nums,
                    confidential_issuance_types,
