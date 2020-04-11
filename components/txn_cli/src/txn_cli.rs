@@ -9,7 +9,7 @@ use credentials::{
 use env_logger::{Env, Target};
 use ledger::data_model::errors::PlatformError;
 use ledger::data_model::{
-  AccountAddress, AssetAccessType, AssetTypeCode, TransferType, TxOutput, TxoRef, TxoSID,
+  AccountAddress, AssetRules, AssetTypeCode, TransferType, TxOutput, TxoRef, TxoSID,
 };
 use ledger::error_location;
 use ledger::policies::{DebtMemo, Fraction};
@@ -407,6 +407,8 @@ enum LoanStatus {
 struct Loan {
   /// Loan ID
   id: u64,
+  /// Issuer ID, null if the loan isn't fulfilled          
+  issuer: Option<u64>,
   /// Lender ID           
   lender: u64,
   /// Borrower ID          
@@ -425,13 +427,13 @@ struct Loan {
   duration: u64,
   /// Number of payments that have been made
   payments: u64,
-  /// Serialized debt token code, if exists
+  /// Serialized debt token code, null if the loan isn't fulfilled     
   code: Option<String>,
-  /// Debt asset UTXO (unspent transaction output) SIDs, if exists
+  /// Debt asset UTXO (unspent transaction output) SIDs, null if the loan isn't fulfilled     
   debt_utxo: Option<TxoSID>,
-  /// Path to the most recent debt asset transaction file, if any
+  /// Path to the most recent debt asset transaction file, null if the loan isn't fulfilled     
   debt_txn_file: Option<String>,
-  /// Serialized anon_creds::Credential, if exists
+  /// Serialized anon_creds::Credential, null if the loan isn't fulfilled     
   credential: Option<String>,
 }
 
@@ -444,6 +446,7 @@ impl Loan {
          duration: u64)
          -> Self {
     Loan { id: id as u64,
+           issuer: None,
            lender,
            borrower,
            status: LoanStatus::Requested,
@@ -1035,19 +1038,19 @@ fn air_assign(issuer_id: u64,
 /// * `issuer_key_pair`: asset issuer's key pair.
 /// * `token_code`: asset token code.
 /// * `memo`: memo for defining the asset.
-/// * `access_type`: whether the asset is updatable and/or traceable.
+/// * `asset_rules`: simple asset rules (e.g. traceable, transferable)
 /// * `txn_file`: path to store the transaction file.
 fn define_asset(fiat_asset: bool,
                 issuer_key_pair: &XfrKeyPair,
                 token_code: AssetTypeCode,
                 memo: &str,
-                access_type: AssetAccessType,
+                asset_rules: AssetRules,
                 txn_file: &str)
                 -> Result<TransactionBuilder, PlatformError> {
   let mut txn_builder = TransactionBuilder::default();
   txn_builder.add_operation_create_asset(issuer_key_pair,
                                          Some(token_code),
-                                         access_type,
+                                         asset_rules,
                                          &memo,
                                          PolicyChoice::Fungible())?;
   store_txn_to_file(&txn_file, &txn_builder)?;
@@ -1368,7 +1371,7 @@ fn load_funds(issuer_id: u64,
                                    issuer_key_pair,
                                    fiat_code,
                                    "Fiat asset",
-                                   AssetAccessType::NotUpdatable_Traceable,
+                                   *AssetRules::default().set_traceable(true),
                                    txn_file)?;
     // Store data before submitting the transaction to avoid data overwriting
     let data = load_data()?;
@@ -1678,7 +1681,7 @@ fn fulfill_loan(loan_id: u64,
                                    issuer_key_pair,
                                    fiat_code,
                                    "Fiat asset",
-                                   AssetAccessType::NotUpdatable_Traceable,
+                                   *AssetRules::default().set_traceable(true),
                                    txn_file)?;
     // Store data before submitting the transaction to avoid data overwriting
     let data = load_data()?;
@@ -1687,14 +1690,17 @@ fn fulfill_loan(loan_id: u64,
     fiat_code
   };
 
-  // Get tracing policy
+  // Get tracing policies
   let tracer_enc_keys = data.get_asset_tracer_key_pair(issuer_id)?.enc_key;
   let identity_policy = IdentityRevealPolicy { cred_issuer_pub_key:
                                                  credential_issuer_public_key.get_ref().clone(),
                                                reveal_map: vec![true] };
-  let tracing_policy = AssetTracingPolicy { enc_keys: tracer_enc_keys,
-                                            asset_tracking: true,
-                                            identity_tracking: Some(identity_policy) };
+  let fiat_tracing_policy = AssetTracingPolicy { enc_keys: tracer_enc_keys.clone(),
+                                                 asset_tracking: true,
+                                                 identity_tracking: None };
+  let debt_tracing_policy = AssetTracingPolicy { enc_keys: tracer_enc_keys,
+                                                 asset_tracking: true,
+                                                 identity_tracking: Some(identity_policy) };
 
   // Issue and transfer fiat token
   let ac_credential = wrapper_credential.to_ac_credential()
@@ -1710,10 +1716,10 @@ fn fulfill_loan(loan_id: u64,
                              amount,
                              fiat_code,
                              AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
-                             credential_record,
+                             None,
                              None,
                              &fiat_txn_file,
-                             Some(tracing_policy.clone()))?;
+                             Some(fiat_tracing_policy.clone()))?;
   let fiat_sid = submit_and_get_sids(protocol, host, txn_builder)?[0];
   println!("Fiat sid: {}", fiat_sid.0);
   let (_, owner_memo) = load_blind_asset_record_and_owner_memo_from_file(&fiat_txn_file)?;
@@ -1734,7 +1740,7 @@ fn fulfill_loan(loan_id: u64,
                                  borrower_key_pair,
                                  debt_code,
                                  &memo_str,
-                                 AssetAccessType::NotUpdatable_Traceable,
+                                 *AssetRules::default().set_traceable(true),
                                  txn_file)?;
   // Store data before submitting the transaction to avoid data overwriting
   let data = load_data()?;
@@ -1753,7 +1759,7 @@ fn fulfill_loan(loan_id: u64,
                              credential_record,
                              None,
                              &debt_txn_file,
-                             Some(tracing_policy.clone()))?;
+                             Some(debt_tracing_policy.clone()))?;
   let debt_sid = submit_and_get_sids(protocol, host, txn_builder)?[0];
   println!("Debt sid: {}", debt_sid.0);
   let debt_open_asset_record = load_open_asset_record_from_file(&debt_txn_file, borrower_key_pair)?;
@@ -1764,13 +1770,13 @@ fn fulfill_loan(loan_id: u64,
                                              debt_code.val,
                                              NonConfidentialAmount_NonConfidentialAssetType,
                                              lender_key_pair.get_pk(),
-                                             tracing_policy.clone());
+                                             debt_tracing_policy.clone());
   let borrower_template =
     AssetRecordTemplate::with_asset_tracking(amount,
                                              fiat_code.val,
                                              NonConfidentialAmount_NonConfidentialAssetType,
                                              borrower_key_pair.get_pk(),
-                                             tracing_policy);
+                                             fiat_tracing_policy);
   let xfr_op = TransferOperationBuilder::new().add_input(TxoRef::Absolute(fiat_sid),
                                                          fiat_open_asset_record,
                                                          amount)?
@@ -1778,7 +1784,7 @@ fn fulfill_loan(loan_id: u64,
                                                          debt_open_asset_record,
                                                          amount)?
                                               .add_output(&lender_template, credential_record)?
-                                              .add_output(&borrower_template, credential_record)?
+                                              .add_output(&borrower_template, None)?
                                               .create(TransferType::Standard)?
                                               .sign(lender_key_pair)?
                                               .sign(borrower_key_pair)?
@@ -1829,6 +1835,7 @@ fn fulfill_loan(loan_id: u64,
 
   // Update data
   let mut data = load_data()?;
+  data.loans[loan_id as usize].issuer = Some(issuer_id);
   data.fiat_code = Some(fiat_code.to_base64());
   data.loans[loan_id as usize].status = LoanStatus::Active;
   data.loans[loan_id as usize].code = Some(debt_code.to_base64());
@@ -1937,6 +1944,35 @@ fn pay_loan(loan_id: u64, amount: u64, protocol: &str, host: &str) -> Result<(),
   println!("Fiat code: {}", serde_json::to_string(&fiat_code.val)?);
   println!("Debt code: {}", serde_json::to_string(&debt_code.val)?);
 
+  // Get tracing policies
+  let credential_id = if let Some(id) = borrower.credentials {
+    id
+  } else {
+    println!("Missing credentials.");
+    return Err(PlatformError::InputsError(error_location!()));
+  };
+  let credential = &data.credentials[credential_id as usize];
+  let credential_issuer_id = credential.credential_issuer;
+  let (credential_issuer_public_key, _) =
+    data.get_credential_issuer_key_pair(credential_issuer_id)?;
+  let identity_policy = IdentityRevealPolicy { cred_issuer_pub_key:
+                                                 credential_issuer_public_key.get_ref().clone(),
+                                               reveal_map: vec![true] };
+  let issuer_id = if let Some(id) = loan.issuer {
+    id
+  } else {
+    println!("Missing issuer ID.");
+    return Err(PlatformError::InputsError(error_location!()));
+  };
+  let tracer_enc_keys = data.get_asset_tracer_key_pair(issuer_id)?.enc_key;
+  let fiat_tracing_policy = AssetTracingPolicy { enc_keys: tracer_enc_keys.clone(),
+                                                 asset_tracking: true,
+                                                 identity_tracking: None };
+  let debt_tracing_policy = AssetTracingPolicy { enc_keys: tracer_enc_keys,
+                                                 asset_tracking: true,
+                                                 identity_tracking: Some(identity_policy) };
+
+  // Get templates
   let spend_template =
     AssetRecordTemplate::with_no_asset_tracking(amount_to_spend,
                                                 fiat_code.val,
@@ -1948,15 +1984,47 @@ fn pay_loan(loan_id: u64, amount: u64, protocol: &str, host: &str) -> Result<(),
                                                 NonConfidentialAmount_NonConfidentialAssetType,
                                                 XfrPublicKey::zei_from_bytes(&[0; 32]));
   let lender_template =
-    AssetRecordTemplate::with_no_asset_tracking(loan.balance - amount_to_burn,
-                                                debt_code.val,
-                                                NonConfidentialAmount_NonConfidentialAssetType,
-                                                lender_key_pair.get_pk());
+    AssetRecordTemplate::with_asset_tracking(loan.balance - amount_to_burn,
+                                             debt_code.val,
+                                             NonConfidentialAmount_NonConfidentialAssetType,
+                                             lender_key_pair.get_pk(),
+                                             debt_tracing_policy);
   let borrower_template =
-    AssetRecordTemplate::with_no_asset_tracking(borrower.balance - amount_to_spend,
-                                                fiat_code.val,
-                                                NonConfidentialAmount_NonConfidentialAssetType,
-                                                borrower_key_pair.get_pk());
+    AssetRecordTemplate::with_asset_tracking(borrower.balance - amount_to_spend,
+                                             fiat_code.val,
+                                             NonConfidentialAmount_NonConfidentialAssetType,
+                                             borrower_key_pair.get_pk(),
+                                             fiat_tracing_policy);
+
+  // Get credential record
+  let user_secret_key = if let Some(key_str) = credential.user_secret_key.clone() {
+    let key_decode = hex::decode(key_str).or_else(|_| Err(PlatformError::DeserializationError))?;
+    serde_json::from_slice::<CredUserSecretKey>(&key_decode).or_else(|_| {
+                                                       Err(PlatformError::DeserializationError)
+                                                     })?
+  } else {
+    println!("Missing user secret key.");
+    return Err(PlatformError::InputsError(error_location!()));
+  };
+  let ac_credential = if let Some(credential_str) = loan.credential.clone() {
+    serde_json::from_str::<ZeiCredential>(&credential_str).or_else(|_| {
+                                                            Err(PlatformError::DeserializationError)
+                                                          })?
+  } else {
+    println!("Missing loan credential.");
+    return Err(PlatformError::InputsError(error_location!()));
+  };
+  let commitment_key = if let Some(key_str) = credential.commitment_key.clone() {
+    let key_decode = hex::decode(key_str).or_else(|_| Err(PlatformError::DeserializationError))?;
+    serde_json::from_slice::<CredCommitmentKey>(&key_decode).or_else(|_| {
+                                                       Err(PlatformError::DeserializationError)
+                                                     })?
+  } else {
+    println!("Missing commitment key.");
+    return Err(PlatformError::InputsError(error_location!()));
+  };
+  let credential_record = Some((&user_secret_key, &ac_credential, &commitment_key));
+
   let op = TransferOperationBuilder::new().add_input(TxoRef::Absolute(debt_sid),
                                                      debt_open_asset_record,
                                                      amount_to_burn)?
@@ -1965,7 +2033,7 @@ fn pay_loan(loan_id: u64, amount: u64, protocol: &str, host: &str) -> Result<(),
                                                      amount_to_spend)?
                                           .add_output(&spend_template, None)?
                                           .add_output(&burn_template, None)?
-                                          .add_output(&lender_template, None)?
+                                          .add_output(&lender_template, credential_record)?
                                           .add_output(&borrower_template, None)?
                                           .create(TransferType::DebtSwap)?
                                           .sign(borrower_key_pair)?
@@ -2137,10 +2205,6 @@ fn main() {
           .short("c")
           .help("Explicit 16 character token code for the new asset; must be a unique name. If specified code is already in use, transaction will fail. If not specified, will display automatically generated token code.")
           .takes_value(true))
-        .arg(Arg::with_name("updatable")
-          .short("u")
-          .long("updatable")
-          .help("If specified, updates may be made to asset memo"))
         .arg(Arg::with_name("traceable")
           .short("trace")
           .long("traceable")
@@ -2714,7 +2778,6 @@ fn process_asset_issuer_cmd(asset_issuer_matches: &clap::ArgMatches,
       } else {
         "{}"
       };
-      let updatable = define_asset_matches.is_present("updatable");
       let traceable = define_asset_matches.is_present("traceable");
       let asset_token: AssetTypeCode;
       if let Some(token_code) = token_code {
@@ -2729,7 +2792,7 @@ fn process_asset_issuer_cmd(asset_issuer_matches: &clap::ArgMatches,
                          &issuer_key_pair,
                          asset_token,
                          &memo,
-                         AssetAccessType::from_booleans(updatable, traceable),
+                         *AssetRules::default().set_traceable(traceable),
                          txn_file)
       {
         Ok(_) => Ok(()),
@@ -3676,7 +3739,7 @@ mod tests {
                            &issuer_key_pair,
                            AssetTypeCode::gen_random(),
                            "Define asset",
-                           AssetAccessType::NotUpdatable_Traceable,
+                           AssetRules::default(),
                            txn_builder_path);
 
     let _ = fs::remove_file(DATA_FILE);
