@@ -12,7 +12,7 @@ use rand_core::{CryptoRng, RngCore, SeedableRng};
 use std::collections::{HashMap, HashSet};
 use zei::serialization::ZeiFromToBytes;
 use zei::xfr::lib::verify_xfr_body_no_policies;
-use zei::xfr::structs::{BlindAssetRecord, XfrAssetType};
+use zei::xfr::structs::{BlindAssetRecord, XfrAmount, XfrAssetType};
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct TxnEffect {
@@ -30,6 +30,11 @@ pub struct TxnEffect {
   pub new_issuance_nums: HashMap<AssetTypeCode, Vec<u64>>,
   // Which public key is being used to issue each asset type
   pub issuance_keys: HashMap<AssetTypeCode, IssuerPublicKey>,
+  // New issuance amounts
+  pub issuance_amounts: HashMap<AssetTypeCode, u64>,
+  // Asset types that have issuances with confidential outputs. Issuances cannot be confidential
+  // if there is an issuance cap
+  pub confidential_issuance_types: HashSet<AssetTypeCode>,
   // Debt swap information that must be externally validated
   pub debt_effects: HashMap<AssetTypeCode, DebtSwapEffect>,
 
@@ -52,8 +57,10 @@ impl TxnEffect {
     let mut new_asset_codes: HashMap<AssetTypeCode, AssetType> = HashMap::new();
     let mut new_issuance_nums: HashMap<AssetTypeCode, Vec<u64>> = HashMap::new();
     let mut issuance_keys: HashMap<AssetTypeCode, IssuerPublicKey> = HashMap::new();
+    let mut issuance_amounts = HashMap::new();
     let mut debt_effects: HashMap<AssetTypeCode, DebtSwapEffect> = HashMap::new();
     let mut asset_types_involved: HashSet<AssetTypeCode> = HashSet::new();
+    let mut confidential_issuance_types = HashSet::new();
 
     let custom_policy_asset_types = txn.policy_options
                                        .clone()
@@ -174,7 +181,7 @@ impl TxnEffect {
           } else {
             issuance_keys.insert(code, iss.pubkey.clone());
           }
-
+          // Increment amounts
           txos.reserve(iss.body.records.len());
           for output in iss.body.records.iter() {
             // (4)
@@ -185,6 +192,13 @@ impl TxnEffect {
             // (5)
             if (output.0).asset_type != XfrAssetType::NonConfidential(code.val) {
               return Err(PlatformError::InputsError(error_location!()));
+            }
+
+            if let XfrAmount::NonConfidential(amt) = (output.0).amount {
+              let issuance_amount = issuance_amounts.entry(code).or_insert(0);
+              *issuance_amount += amt;
+            } else {
+              confidential_issuance_types.insert(code);
             }
 
             txos.push(Some(output.clone()));
@@ -322,7 +336,9 @@ impl TxnEffect {
                    txos,
                    input_txos,
                    new_asset_codes,
+                   issuance_amounts,
                    new_issuance_nums,
+                   confidential_issuance_types,
                    issuance_keys,
                    debt_effects,
                    asset_types_involved,
@@ -403,6 +419,8 @@ pub struct BlockEffect {
   // The vec should be nonempty unless this asset code is being created in
   // this transaction.
   pub new_issuance_nums: HashMap<AssetTypeCode, Vec<u64>>,
+  // New issuance amounts
+  pub issuance_amounts: HashMap<AssetTypeCode, u64>,
   // Which public key is being used to issue each asset type
   pub issuance_keys: HashMap<AssetTypeCode, IssuerPublicKey>,
   // Updates to the AIR
@@ -477,6 +495,11 @@ impl BlockEffect {
     for (type_code, issuance_nums) in txn.new_issuance_nums {
       debug_assert!(!self.new_issuance_nums.contains_key(&type_code));
       self.new_issuance_nums.insert(type_code, issuance_nums);
+    }
+
+    for (type_code, amount) in txn.issuance_amounts.iter() {
+      let issuance_amount = self.issuance_amounts.entry(*type_code).or_insert(0);
+      *issuance_amount += amount;
     }
 
     for (addr, data) in txn.air_updates {
