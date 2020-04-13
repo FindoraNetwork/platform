@@ -16,7 +16,9 @@ use cryptohash::sha256::Digest as BitDigest;
 use curve25519_dalek::ristretto::RistrettoPoint;
 use curve25519_dalek::scalar::Scalar;
 use js_sys::Promise;
-use ledger::data_model::{b64enc, AssetRules, AssetTypeCode, AuthenticatedTransaction, Operation};
+use ledger::data_model::{
+  b64dec, b64enc, AssetRules, AssetTypeCode, AuthenticatedTransaction, Operation,
+};
 use ledger::policies::{DebtMemo, Fraction};
 use rand_chacha::ChaChaRng;
 use rand_core::SeedableRng;
@@ -304,14 +306,24 @@ impl TransactionBuilder {
            .map_err(error_to_jsvalue)?)
   }
 
-  /// Fetches a client record from a transaction. A client record contains the ownership record and
-  /// parameters that can be used with a user key to decrypt parts of the ownership record.
+  /// Fetches a client record from a transaction.
   /// @param {number} - Record to fetch. Records are added to the transaction builder sequentially.
-  pub fn get_owner_record_and_memo(&self, idx: usize) -> Option<ClientAssetRecord> {
-    self.get_builder()
-        .get_owner_record_and_memo(idx)
-        .cloned()
-        .map(|(output, memo)| ClientAssetRecord { output, memo })
+  pub fn get_owner_record(&self, idx: usize) -> Result<ClientAssetRecord, JsValue> {
+    Ok(self.get_builder()
+           .get_owner_record_and_memo(idx)
+           .cloned()
+           .map(|(output, _)| ClientAssetRecord { output })
+           .ok_or(JsValue::from_str("Index out of range"))?)
+  }
+
+  /// Fetches a client record from a transaction.
+  /// @param {number} - Record to fetch. Records are added to the transaction builder sequentially.
+  pub fn get_owner_memo(&self, idx: usize) -> Result<Option<OwnerMemo>, JsValue> {
+    Ok(self.get_builder()
+           .get_owner_record_and_memo(idx)
+           .cloned()
+           .map(|(_, memo)| (memo.map(|memo| OwnerMemo { memo })))
+           .ok_or(JsValue::from_str("Index out of range"))?)
   }
 }
 #[wasm_bindgen]
@@ -345,18 +357,18 @@ impl TransferOperationBuilder {
   /// @param {BigInt} amount - Amount of input record to transfer
   /// @see {@link create_absolute_txo_ref} or {@link create_relative_txo_ref} for details on txo
   /// references.
-  /// @see {@link open_blind_asset_record} for details on opening blind asset records.
   /// @see {@link get_txo} for details on fetching blind asset records.
   /// @throws Will throw an error if `oar` or `txo_ref` fail to deserialize.
   pub fn add_input(mut self,
                    txo_ref: TxoRef,
                    asset_record: ClientAssetRecord,
+                   owner_memo: Option<OwnerMemo>,
                    key: &XfrKeyPair,
                    amount: u64)
                    -> Result<TransferOperationBuilder, JsValue> {
     let oar =
       open_bar(asset_record.get_bar_ref(),
-               asset_record.get_memo_ref(),
+               &owner_memo.map(|memo| memo.get_memo_ref().clone()),
                key.get_sk_ref()).map_err(|_e| JsValue::from_str("Could not open asset record"))?;
     self.get_builder_mut()
         .add_input(*txo_ref.get_txo(), oar, amount)
@@ -437,13 +449,26 @@ impl TransferOperationBuilder {
 }
 
 ///////////// CRYPTO //////////////////////
+#[wasm_bindgen]
+/// Returns a JsValue containing decrypted owner record information.
+/// @param {ClientAssetRecord} record - Ownership record.
+/// @param {OwnerMemo} owner_memo - Opening parameters.
+pub fn open_client_asset_record(record: &ClientAssetRecord,
+                                owner_memo: Option<OwnerMemo>,
+                                key: &XfrKeyPair)
+                                -> Result<JsValue, JsValue> {
+  Ok(JsValue::from_serde(&open_bar(record.get_bar_ref(),
+                             &owner_memo.map(|memo| memo.get_memo_ref().clone()),
+                             key.get_sk_ref()).map_err(|_e| {
+                                                JsValue::from_str("Could not open asset record")
+                                              })?).unwrap())
+}
 
 #[wasm_bindgen]
 /// Extracts the public key as a string from a transfer key pair.
 pub fn get_pub_key_str(key_pair: &XfrKeyPair) -> String {
   serde_json::to_string(key_pair.get_pk_ref()).unwrap()
 }
-
 #[wasm_bindgen]
 /// Extracts the private key as a string from a transfer key pair.
 pub fn get_priv_key_str(key_pair: &XfrKeyPair) -> String {
@@ -461,6 +486,12 @@ pub fn new_keypair() -> XfrKeyPair {
 /// Returns base64 encoded representation of an XfrPublicKey.
 pub fn public_key_to_base64(key: &XfrPublicKey) -> String {
   b64enc(&XfrPublicKey::zei_to_bytes(&key))
+}
+
+#[wasm_bindgen]
+/// Converts a base64 encoded public key string to a public key.
+pub fn public_key_from_base64(key_pair: String) -> XfrPublicKey {
+  XfrPublicKey::zei_from_bytes(&b64dec(&key_pair).unwrap())
 }
 
 #[wasm_bindgen]
@@ -807,4 +838,11 @@ pub fn wasm_credential_verify(issuer_pub_key: &CredIssuerPublicKey,
                     &reveal_sig.get_sig_ref().sig_commitment,
                     &reveal_sig.get_sig_ref().pok).map_err(error_to_jsvalue)?;
   Ok(())
+}
+#[test]
+pub fn test() {
+  let kp = new_keypair();
+  let b64 = public_key_to_base64(kp.get_pk_ref());
+  let pk = public_key_from_base64(b64);
+  dbg!(pk);
 }
