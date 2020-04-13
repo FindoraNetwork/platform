@@ -797,27 +797,6 @@ fn load_tracer_and_owner_memos_from_files(file_paths: &str)
   Ok(tracer_and_owner_memos)
 }
 
-/// Loads credential from transaction file.
-/// # Arguments
-/// * `file_path`: file path to transaction record.
-fn load_credential_from_file(file_path: &str) -> Result<ZeiCredential, PlatformError> {
-  let txn = fs::read_to_string(file_path).or_else(|_| {
-              Err(PlatformError::IoError(format!("Failed to read file: {}", file_path)))
-            })?;
-  println!("Parsing builder from file contents: \"{}\"", &txn);
-  match serde_json::from_str::<TransactionBuilder>(&txn) {
-    Ok(builder) => {
-      if let Some(credential) = builder.get_credential(0) {
-        Ok(credential.clone())
-      } else {
-        println!("Missing credential record.");
-        Err(PlatformError::InputsError(error_location!()))
-      }
-    }
-    Err(_) => Err(PlatformError::DeserializationError),
-  }
-}
-
 //
 // Store functions
 //
@@ -1487,11 +1466,13 @@ fn query_open_asset_record(protocol: &str,
 /// * `loan_id`: loan ID.
 /// * `issuer_id`: issuer ID.
 /// * `txn_file`: path to store the transaction file.
+/// * `memo_file`: path to store the asset tracer memo and owner memo, optional.
 /// * `protocol`: either `https` or `http`.
 /// * `host`: either `testnet.findora.org` or `locaohost`.
 fn fulfill_loan(loan_id: u64,
                 issuer_id: u64,
                 txn_file: &str,
+                memo_file: Option<&str>,
                 protocol: &str,
                 host: &str)
                 -> Result<(), PlatformError> {
@@ -1715,9 +1696,6 @@ fn fulfill_loan(loan_id: u64,
   let identity_policy = IdentityRevealPolicy { cred_issuer_pub_key:
                                                  credential_issuer_public_key.get_ref().clone(),
                                                reveal_map: vec![true] };
-  let fiat_tracing_policy = AssetTracingPolicy { enc_keys: tracer_enc_keys.clone(),
-                                                 asset_tracking: true,
-                                                 identity_tracking: None };
   let debt_tracing_policy = AssetTracingPolicy { enc_keys: tracer_enc_keys,
                                                  asset_tracking: true,
                                                  identity_tracking: Some(identity_policy) };
@@ -1739,7 +1717,7 @@ fn fulfill_loan(loan_id: u64,
                              None,
                              None,
                              &fiat_txn_file,
-                             Some(fiat_tracing_policy.clone()))?;
+                             None)?;
   let fiat_sid = submit_and_get_sids(protocol, host, txn_builder)?[0];
   println!("Fiat sid: {}", fiat_sid.0);
   let (_, owner_memo) = load_blind_asset_record_and_owner_memo_from_file(&fiat_txn_file)?;
@@ -1790,13 +1768,12 @@ fn fulfill_loan(loan_id: u64,
                                              debt_code.val,
                                              NonConfidentialAmount_NonConfidentialAssetType,
                                              lender_key_pair.get_pk(),
-                                             debt_tracing_policy);
+                                             debt_tracing_policy.clone());
   let borrower_template =
-    AssetRecordTemplate::with_asset_tracking(amount,
-                                             fiat_code.val,
-                                             NonConfidentialAmount_NonConfidentialAssetType,
-                                             borrower_key_pair.get_pk(),
-                                             fiat_tracing_policy);
+    AssetRecordTemplate::with_no_asset_tracking(amount,
+                                                fiat_code.val,
+                                                NonConfidentialAmount_NonConfidentialAssetType,
+                                                borrower_key_pair.get_pk());
   let xfr_op = TransferOperationBuilder::new().add_input(TxoRef::Absolute(fiat_sid),
                                                          fiat_open_asset_record,
                                                          amount)?
@@ -1810,9 +1787,17 @@ fn fulfill_loan(loan_id: u64,
                                               .sign(borrower_key_pair)?
                                               .transaction()?;
   let mut txn_builder = TransactionBuilder::default();
-  txn_builder.add_operation(xfr_op)
-             .add_credential(ac_credential);
+  txn_builder.add_operation(xfr_op);
   store_txn_to_file(&debt_txn_file, &txn_builder)?;
+
+  if let Some(file) = memo_file {
+    get_and_store_memos_to_file(file,
+                                borrower_key_pair.get_pk(),
+                                amount,
+                                debt_code,
+                                AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
+                                Some(debt_tracing_policy))?;
+  }
 
   // Submit transaction
   let sids_new = submit_and_get_sids(protocol, host, txn_builder)?;
@@ -2060,9 +2045,7 @@ fn pay_loan(loan_id: u64, amount: u64, protocol: &str, host: &str) -> Result<(),
                                           .sign(borrower_key_pair)?
                                           .transaction()?;
   let mut txn_builder = TransactionBuilder::default();
-  txn_builder.add_operation(op)
-             .add_credential(ac_credential)
-             .transaction();
+  txn_builder.add_operation(op).transaction();
 
   // Submit transaction and update data
   let sids = submit_and_get_sids(protocol, host, txn_builder)?;
@@ -2342,12 +2325,18 @@ fn main() {
           .takes_value(true)
           .help("Expected asset amount to verify.")))
       .subcommand(SubCommand::with_name("trace_credential")
-        .arg(Arg::with_name("loan")
-          .short("l")
-          .long("loan")
+        .arg(Arg::with_name("memo_file")
+          .short("f")
+          .long("memo_file")
           .required(true)
           .takes_value(true)
-          .help("Id of the loan associated with the traced credential."))))
+          .help("Path to the tracer and owner memos."))
+        .arg(Arg::with_name("expected_credential")
+          .short("a")
+          .long("expected_attributes")
+          .required(true)
+          .takes_value(true)
+          .help("Expected credential attriibutes and values to verify."))))
     .subcommand(SubCommand::with_name("credential_issuer")
       .subcommand(SubCommand::with_name("sign_up")
         .arg(Arg::with_name("name")
@@ -2400,6 +2389,11 @@ fn main() {
           .required(true)
           .takes_value(true)
           .help("Asset issuer id."))
+        .arg(Arg::with_name("memo_file")
+          .short("f")
+          .long("memo_file")
+          .takes_value(true)
+          .help("If specified, will store the asset tracer memo and owner memo."))
         .arg(Arg::with_name("http")
           .long("http")
           .takes_value(false)
@@ -3082,38 +3076,40 @@ fn process_asset_issuer_cmd(asset_issuer_matches: &clap::ArgMatches,
     }
     ("trace_credential", Some(trace_credential_matches)) => {
       let data = load_data()?;
-      let issuer_id = if let Some(id_arg) = asset_issuer_matches.value_of("id") {
-        parse_to_u64(id_arg)?
+      let attrs_dec_key = if let Some(id_arg) = asset_issuer_matches.value_of("id") {
+        let issuer_id = parse_to_u64(id_arg)?;
+        data.get_asset_tracer_key_pair(issuer_id)?
+            .dec_key
+            .attrs_dec_key
       } else {
-        println!("Asset issuer id is required to trace the credential. Use asset_issuer --id.");
+        println!("Asset issuer id is required to trace the asset. Use asset_issuer --id.");
         return Err(PlatformError::InputsError(error_location!()));
       };
-      let loan_id = if let Some(id_arg) = trace_credential_matches.value_of("loan") {
-        parse_to_u64(id_arg)?
+      let tracer_and_owner_memos =
+        if let Some(memo_file_arg) = trace_credential_matches.value_of("memo_file") {
+          load_tracer_and_owner_memos_from_files(memo_file_arg)?
+        } else {
+          println!("Owner memo is required to trace the asset. Use --memo_file.");
+          return Err(PlatformError::InputsError(error_location!()));
+        };
+      let tracer_memo = if let Some(memo) = tracer_and_owner_memos[0].clone().0 {
+        memo
       } else {
-        println!("Loan id is required to trace the credential. Use loan.");
+        println!("The asset isn't traceable.");
         return Err(PlatformError::InputsError(error_location!()));
       };
-      let loan = data.loans[loan_id as usize].clone();
-      let loan_issuer_id = if let Some(id) = loan.issuer {
-        id
-      } else {
-        println!("Missing issuer id in the loan's data.");
-        return Err(PlatformError::InputsError(error_location!()));
-      };
-      if loan_issuer_id != issuer_id {
-        println!("Loan {} wasn't issued by asset issuer {}.",
-                 loan_id, issuer_id);
-        return Err(PlatformError::InputsError(error_location!()));
+      // let expected_amount = if let Some(expected_amount_arg) =
+      //   trace_credential_matches.value_of("expected_amount")
+      // {
+      //   parse_to_u64(expected_amount_arg)?
+      // } else {
+      //   println!("Expected amount is required to verify the asset. Use --expected_amount.");
+      //   return Err(PlatformError::InputsError(error_location!()));
+      // };
+      match tracer_memo.verify_identity_attributes(&attrs_dec_key, &[1u32]) {
+        Ok(_) => Ok(()),
+        Err(e) => Err(PlatformError::ZeiError(e)),
       }
-      if let Some(txn_file_arg) = loan.debt_txn_file {
-        let credential = load_credential_from_file(&txn_file_arg)?;
-        println!("Credential: {:?}", credential);
-      } else {
-        println!("Transaction file is required to trace the credential.");
-        return Err(PlatformError::InputsError(error_location!()));
-      };
-      Ok(())
     }
     _ => {
       println!("Subcommand missing or not recognized. Try asset_issuer --help");
@@ -3281,8 +3277,9 @@ fn process_lender_cmd(lender_matches: &clap::ArgMatches,
         println!("Asset issuer id is required to fulfill the loan. Use --issuer.");
         return Err(PlatformError::InputsError(error_location!()));
       };
+      let memo_file = fulfill_loan_matches.value_of("memo_file");
       let (protocol, host) = protocol_host(fulfill_loan_matches);
-      fulfill_loan(loan_id, issuer_id, txn_file, protocol, host)
+      fulfill_loan(loan_id, issuer_id, txn_file, memo_file, protocol, host)
     }
     ("create_or_overwrite_requirement", Some(create_or_overwrite_requirement_matches)) => {
       let lender_id = if let Some(id_arg) = lender_matches.value_of("id") {
@@ -3868,7 +3865,6 @@ mod tests {
 
   #[test]
   #[ignore]
-  // TODO (Keyao): Investigate why the "Pay loan" section fails.
   // Test funds loading, loan request, fulfilling and repayment
   fn test_request_fulfill_and_pay_loan() {
     let ledger_standalone = LedgerStandalone::new();
@@ -3896,7 +3892,7 @@ mod tests {
     assert_eq!(data.loans.len(), 1);
 
     // Fulfill the loan request
-    fulfill_loan(0, 0, txn_builder_path, PROTOCOL, HOST).unwrap();
+    fulfill_loan(0, 0, txn_builder_path, None, PROTOCOL, HOST).unwrap();
     data = load_data().unwrap();
 
     assert_eq!(data.loans[0].status, LoanStatus::Active);

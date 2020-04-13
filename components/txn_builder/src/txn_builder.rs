@@ -273,8 +273,6 @@ pub trait BuildsTransactions {
 
   fn add_operation(&mut self, op: Operation) -> &mut Self;
 
-  fn add_credential(&mut self, credential: Credential) -> &mut Self;
-
   fn add_basic_issue_asset(&mut self,
                            key_pair: &XfrKeyPair,
                            tracing_policy: Option<AssetTracingPolicy>,
@@ -382,18 +380,12 @@ pub trait BuildsTransactions {
 pub struct TransactionBuilder {
   txn: Transaction,
   owner_records: Vec<(TxOutput, Option<OwnerMemo>)>,
-  credentials: Vec<Credential>,
   outputs: u64,
 }
 
 impl TransactionBuilder {
   pub fn get_owner_record_and_memo(&self, idx: usize) -> Option<&(TxOutput, Option<OwnerMemo>)> {
     self.owner_records.get(idx)
-  }
-
-  /// Gets the credential at a specified index
-  pub fn get_credential(&self, idx: usize) -> Option<&Credential> {
-    self.credentials.get(idx)
   }
 }
 
@@ -494,12 +486,6 @@ impl BuildsTransactions for TransactionBuilder {
 
   fn add_operation(&mut self, op: Operation) -> &mut Self {
     self.txn.add_operation(op);
-    self
-  }
-
-  /// Adds a credential record to the transaction builder
-  fn add_credential(&mut self, credential: Credential) -> &mut Self {
-    self.credentials.push(credential);
     self
   }
 
