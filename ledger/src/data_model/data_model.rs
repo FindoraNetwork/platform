@@ -197,41 +197,41 @@ impl SignedAddress {
   }
 }
 
-#[allow(non_camel_case_types)]
-#[allow(clippy::enum_variant_names)]
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-/// Represents whether an asset is updatable and/or traceable.
-pub enum AssetAccessType {
-  Updatable_Traceable,
-  Updatable_NotTraceable,
-  NotUpdatable_Traceable,
-  NotUpdatable_NotTraceable,
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+/// Simple asset rules:
+/// 1) Traceable: Records of traceable assets can be decrypted by a provided tracking key
+/// 2) Transferable: Non-transferable assets can only be transferred once from the issuer to
+///    another user.
+/// 3) Max units: Optional limit on total issuance amount.
+/// TODO (noah) implement validation for transferable
+/// TODO (keyao) implemenent validation for traceable
+pub struct AssetRules {
+  pub traceable: bool,
+  pub transferable: bool,
+  pub max_units: Option<u64>,
 }
-
-impl Default for AssetAccessType {
+impl Default for AssetRules {
   fn default() -> Self {
-    Self::NotUpdatable_NotTraceable
+    AssetRules { traceable: false,
+                 transferable: true,
+                 max_units: None }
   }
 }
 
-impl AssetAccessType {
-  /// Converts the asset access type
-  pub fn get_booleans(self) -> (bool, bool) {
-    match self {
-      Self::Updatable_Traceable => (true, true),
-      Self::Updatable_NotTraceable => (true, false),
-      Self::NotUpdatable_Traceable => (false, true),
-      Self::NotUpdatable_NotTraceable => (false, false),
-    }
+impl AssetRules {
+  pub fn set_traceable(&mut self, traceable: bool) -> &mut Self {
+    self.traceable = traceable;
+    self
   }
 
-  pub fn from_booleans(updatable: bool, traceable: bool) -> Self {
-    match (updatable, traceable) {
-      (true, true) => Self::Updatable_Traceable,
-      (true, false) => Self::Updatable_NotTraceable,
-      (false, true) => Self::NotUpdatable_Traceable,
-      (false, false) => Self::NotUpdatable_NotTraceable,
-    }
+  pub fn set_max_units(&mut self, max_units: Option<u64>) -> &mut Self {
+    self.max_units = max_units;
+    self
+  }
+
+  pub fn set_transferable(&mut self, transferable: bool) -> &mut Self {
+    self.transferable = transferable;
+    self
   }
 }
 
@@ -247,7 +247,7 @@ pub struct Asset {
   pub confidential_memo: ConfidentialMemo,
   #[serde(default)]
   #[serde(skip_serializing_if = "is_default")]
-  pub access_type: AssetAccessType,
+  pub asset_rules: AssetRules,
   #[serde(default)]
   #[serde(skip_serializing_if = "is_default")]
   pub policy: Option<(Box<Policy>, PolicyGlobals)>,
@@ -261,20 +261,11 @@ pub struct AssetType {
   pub confidential_units: Commitment,
 }
 
-//impl AssetType {
-//    pub fn create_empty() -> AssetType {
-//        AssetType {
-//            code: AssetTypeCode{val:[0;16]},
-//            digest: [0;32],
-//            issuer: Address{key:[0;32]},
-//            memo: Memo{},
-//            confidential_memo: ConfidentialMemo{},
-//            updatable: false,
-//            units: 0,
-//            confidential_units: [0;32],
-//        }
-//    }
-//}
+impl AssetType {
+  pub fn has_issuance_restrictions(&self) -> bool {
+    self.properties.asset_rules.max_units.is_some()
+  }
+}
 
 #[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, Serialize)]
 pub struct CustomAssetPolicy {
@@ -391,7 +382,7 @@ pub struct DefineAssetBody {
 impl DefineAssetBody {
   pub fn new(token_code: &AssetTypeCode,
              issuer_key: &IssuerPublicKey, // TODO: require private key check somehow?
-             access_type: AssetAccessType,
+             asset_rules: AssetRules,
              memo: Option<Memo>,
              confidential_memo: Option<ConfidentialMemo>,
              policy: Option<(Box<Policy>, PolicyGlobals)>)
@@ -399,7 +390,7 @@ impl DefineAssetBody {
     let mut asset_def: Asset = Default::default();
     asset_def.code = *token_code;
     asset_def.issuer = *issuer_key;
-    asset_def.access_type = access_type;
+    asset_def.asset_rules = asset_rules;
     asset_def.policy = policy;
 
     if let Some(memo) = memo {

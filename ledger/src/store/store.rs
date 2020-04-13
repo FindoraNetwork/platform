@@ -211,6 +211,8 @@ pub struct LedgerStatus {
   // sequential.
   asset_types: HashMap<AssetTypeCode, AssetType>,
   issuance_num: HashMap<AssetTypeCode, u64>,
+  // Issuance amounts for assets with limits
+  issuance_amounts: HashMap<AssetTypeCode, u64>,
 
   // Should be equal to the count of transactions
   next_txn: TxnSID,
@@ -382,6 +384,7 @@ impl LedgerStatus {
                                 txn_path: txn_path.to_owned(),
                                 utxo_map_path: utxo_map_path.to_owned(),
                                 utxos: HashMap::new(),
+                                issuance_amounts: HashMap::new(),
                                 utxo_map_versions: VecDeque::new(),
                                 asset_types: HashMap::new(),
                                 issuance_num: HashMap::new(),
@@ -410,13 +413,41 @@ impl LedgerStatus {
   //  block.add_txn_effect(txn_effect);
   //
   fn check_txn_effects(&self, txn: TxnEffect) -> Result<TxnEffect, PlatformError> {
-    // Each input must be unspent and correspond to the claimed record
+    // 1. Each input must be unspent and correspond to the claimed record
+    // 2. Inputs with transfer restrictions can only be owned by the asset issuer
     for (inp_sid, inp_record) in txn.input_txos.iter() {
+      // (1)
       let inp_utxo = self.utxos
                          .get(inp_sid)
                          .map_or(Err(PlatformError::InputsError(error_location!())), Ok)?;
       let record = &(inp_utxo.0).0;
       if record != inp_record {
+        return Err(PlatformError::InputsError(error_location!()));
+      }
+      // (2)
+      debug_assert!(inp_record.asset_type.get_asset_type().is_some());
+      let code = AssetTypeCode { val: record.asset_type.get_asset_type().unwrap() };
+      let asset_type = self.asset_types
+                           .get(&code)
+                           .or_else(|| txn.new_asset_codes.get(&code))
+                           .ok_or_else(|| PlatformError::InputsError(error_location!()))?;
+      if !asset_type.properties.asset_rules.transferable
+         && asset_type.properties.issuer.key != record.public_key
+      {
+        return Err(PlatformError::InputsError(error_location!()));
+      }
+    }
+
+    // Internally spend inputs with transfer restrictions can only be owned by the asset issuer
+    for record in txn.internally_spent_txos.iter() {
+      let code = AssetTypeCode { val: record.asset_type.get_asset_type().unwrap() };
+      let asset_type = self.asset_types
+                           .get(&code)
+                           .or_else(|| txn.new_asset_codes.get(&code))
+                           .ok_or_else(|| PlatformError::InputsError(error_location!()))?;
+      if !asset_type.properties.asset_rules.transferable
+         && asset_type.properties.issuer.key != record.public_key
+      {
         return Err(PlatformError::InputsError(error_location!()));
       }
     }
@@ -481,6 +512,40 @@ impl LedgerStatus {
         if min_seq_num < curr_seq_num_limit {
           return Err(PlatformError::InputsError(error_location!()));
         }
+      }
+    }
+
+    // Asset Caps
+    // (1) New issuance amounts cannot exceed asset cap
+    // (2) No confidential issuances allowed for assets with issuance restrictions
+    for (code, amount) in txn.issuance_amounts.iter() {
+      let asset_type = self.asset_types
+                           .get(&code)
+                           .or_else(|| txn.new_asset_codes.get(&code))
+                           .ok_or_else(|| PlatformError::InputsError(error_location!()))?;
+      // (1)
+      if let Some(cap) = asset_type.properties.asset_rules.max_units {
+        let current_amount = self.issuance_amounts
+                                 .get(code)
+                                 .or_else(|| Some(&0))
+                                 .unwrap();
+        if current_amount.checked_add(*amount)
+                         .ok_or_else(|| PlatformError::InputsError(error_location!()))?
+           > cap
+        {
+          return Err(PlatformError::InputsError(error_location!()));
+        }
+      }
+    }
+
+    // (2)
+    for code in txn.confidential_issuance_types.iter() {
+      let asset_type = self.asset_types
+                           .get(&code)
+                           .or_else(|| txn.new_asset_codes.get(&code))
+                           .ok_or_else(|| PlatformError::InputsError(error_location!()))?;
+      if asset_type.has_issuance_restrictions() {
+        return Err(PlatformError::InputsError(error_location!()));
       }
     }
 
@@ -596,6 +661,7 @@ impl LedgerStatus {
       def.txns = block.txns.clone();
       def.temp_sids = block.temp_sids.clone();
       def.air_updates = block.air_updates.clone();
+      def.issuance_amounts = block.issuance_amounts.clone();
 
       def
     });
@@ -763,6 +829,11 @@ impl LedgerUpdate<ChaChaRng> for LedgerState {
     for (addr, data) in block.air_updates.drain() {
       // Should we allow an address to get overwritten? At least during testing, yes.
       self.air.set(&addr, Some(data));
+    }
+
+    for (code, amount) in block.issuance_amounts.drain() {
+      let amt = self.status.issuance_amounts.entry(code).or_insert(0);
+      *amt += amount;
     }
 
     // TODO(joe): asset tracing?
@@ -1763,7 +1834,7 @@ impl ArchiveAccess for LedgerState {
 pub mod helpers {
   use super::*;
   use crate::data_model::{
-    Asset, AssetAccessType, ConfidentialMemo, DefineAsset, DefineAssetBody, IssuerPublicKey, Memo,
+    Asset, AssetRules, ConfidentialMemo, DefineAsset, DefineAssetBody, IssuerPublicKey, Memo,
   };
   use zei::serialization::ZeiFromToBytes;
   use zei::setup::PublicParams;
@@ -1775,16 +1846,12 @@ pub mod helpers {
   pub fn create_definition_transaction(code: &AssetTypeCode,
                                        public_key: &XfrPublicKey,
                                        secret_key: &XfrSecretKey,
+                                       asset_rules: AssetRules,
                                        memo: Option<Memo>)
                                        -> Result<Transaction, PlatformError> {
     let issuer_key = IssuerPublicKey { key: *public_key };
     let mut tx = Transaction::default();
-    let asset_body = DefineAssetBody::new(&code,
-                                          &issuer_key,
-                                          AssetAccessType::NotUpdatable_NotTraceable,
-                                          memo,
-                                          None,
-                                          None)?;
+    let asset_body = DefineAssetBody::new(&code, &issuer_key, asset_rules, memo, None, None)?;
     let asset_create = DefineAsset::new(asset_body, &issuer_key, &secret_key)?;
     tx.operations.push(Operation::DefineAsset(asset_create));
     Ok(tx)
@@ -1798,14 +1865,14 @@ pub mod helpers {
 
   pub fn asset_creation_body(token_code: &AssetTypeCode,
                              issuer_key: &XfrPublicKey,
-                             access_type: AssetAccessType,
+                             asset_rules: AssetRules,
                              memo: Option<Memo>,
                              confidential_memo: Option<ConfidentialMemo>)
                              -> DefineAssetBody {
     let mut token_properties: Asset = Default::default();
     token_properties.code = *token_code;
     token_properties.issuer = IssuerPublicKey { key: *issuer_key };
-    token_properties.access_type = access_type;
+    token_properties.asset_rules = asset_rules;
 
     if let Some(memo) = memo {
       token_properties.memo = memo;
@@ -1848,8 +1915,9 @@ pub mod helpers {
                                        code: &AssetTypeCode,
                                        amount: u64,
                                        issuer_keys: &XfrKeyPair,
-                                       recipient_pk: &XfrPublicKey)
-                                       -> Transaction {
+                                       recipient_pk: &XfrPublicKey,
+                                       seq_num: u64)
+                                       -> (Transaction, AssetRecord) {
     let mut tx = Transaction::default();
     let _issuer_key_copy = XfrKeyPair::zei_from_bytes(&issuer_keys.zei_to_bytes());
 
@@ -1858,7 +1926,7 @@ pub mod helpers {
     let (ba, _tracer_memo, owner_memo) =
       build_blind_asset_record(ledger.get_prng(), &params.pc_gens, &ar_template, None);
 
-    let asset_issuance_body = IssueAssetBody::new(&code, 0, &[TxOutput(ba.clone())]).unwrap();
+    let asset_issuance_body = IssueAssetBody::new(&code, seq_num, &[TxOutput(ba.clone())]).unwrap();
     let asset_issuance_operation = IssueAsset::new(asset_issuance_body,
                                                    &IssuerPublicKey { key:
                                                                         *issuer_keys.get_pk_ref() },
@@ -1876,10 +1944,40 @@ pub mod helpers {
       TransferAsset::new(TransferAssetBody::new(ledger.get_prng(),
                              vec![TxoRef::Relative(0)],
                              &[open_blind_asset_record(&ba, &owner_memo, &issuer_keys.get_sk_ref()).unwrap()],
-                             &[ar]).unwrap(), TransferType::Standard).unwrap();
+                             &[ar.clone()]).unwrap(), TransferType::Standard).unwrap();
 
     transfer.sign(&issuer_keys);
     tx.operations.push(Operation::TransferAsset(transfer));
+    (tx, ar)
+  }
+
+  pub fn create_issuance_txn(ledger: &mut LedgerState,
+                             params: &PublicParams,
+                             code: &AssetTypeCode,
+                             amount: u64,
+                             seq_num: u64,
+                             record_type: AssetRecordType,
+                             issuer_keys: &XfrKeyPair)
+                             -> Transaction {
+    let mut tx = Transaction::default();
+
+    // issue operation
+    let ar_template = AssetRecordTemplate::with_no_asset_tracking(amount,
+                                                                  code.val,
+                                                                  record_type,
+                                                                  issuer_keys.get_pk());
+    let (ba, _tracer_memo, _owner_memo) =
+      build_blind_asset_record(ledger.get_prng(), &params.pc_gens, &ar_template, None);
+
+    let asset_issuance_body = IssueAssetBody::new(&code, seq_num, &[TxOutput(ba)]).unwrap();
+    let asset_issuance_operation = IssueAsset::new(asset_issuance_body,
+                                                   &IssuerPublicKey { key:
+                                                                        *issuer_keys.get_pk_ref() },
+                                                   issuer_keys.get_sk_ref()).unwrap();
+
+    let issue_op = Operation::IssueAsset(asset_issuance_operation);
+
+    tx.operations.push(issue_op);
     tx
   }
 }
@@ -2196,11 +2294,8 @@ mod tests {
     let token_code1 = AssetTypeCode { val: [1; 16] };
     let (public_key, secret_key) = build_keys(&mut prng);
 
-    let asset_body = asset_creation_body(&token_code1,
-                                         &public_key,
-                                         AssetAccessType::Updatable_NotTraceable,
-                                         None,
-                                         None);
+    let asset_body =
+      asset_creation_body(&token_code1, &public_key, AssetRules::default(), None, None);
     let asset_create = asset_creation_operation(&asset_body, &public_key, &secret_key);
     tx.operations.push(Operation::DefineAsset(asset_create));
 
@@ -2229,7 +2324,7 @@ mod tests {
     let (public_key1, secret_key1) = build_keys(&mut prng);
     let asset_body = asset_creation_body(&token_code1,
                                          &public_key1,
-                                         AssetAccessType::Updatable_NotTraceable,
+                                         AssetRules::default(),
                                          None,
                                          None);
     let mut asset_create = asset_creation_operation(&asset_body, &public_key1, &secret_key1);
@@ -2257,6 +2352,7 @@ mod tests {
     let tx = create_definition_transaction(&code,
                                            key_pair.get_pk_ref(),
                                            key_pair.get_sk_ref(),
+                                           AssetRules::default(),
                                            None).unwrap();
 
     let effect = TxnEffect::compute_effect(&mut ledger.get_prng(), tx).unwrap();
@@ -2369,7 +2465,7 @@ mod tests {
 
     let asset_body = asset_creation_body(&token_code1,
                                          &public_key1,
-                                         AssetAccessType::Updatable_NotTraceable,
+                                         AssetRules::default(),
                                          None,
                                          None);
     let mut asset_create = asset_creation_operation(&asset_body, &public_key1, &secret_key1);
@@ -2394,7 +2490,11 @@ mod tests {
     let token_code1 = AssetTypeCode { val: [1; 16] };
     let (public_key, secret_key) = build_keys(&mut ledger.get_prng());
 
-    let tx = create_definition_transaction(&token_code1, &public_key, &secret_key, None).unwrap();
+    let tx = create_definition_transaction(&token_code1,
+                                           &public_key,
+                                           &secret_key,
+                                           AssetRules::default(),
+                                           None).unwrap();
 
     let effect = TxnEffect::compute_effect(&mut ledger.get_prng(), tx).unwrap();
     {
@@ -2544,6 +2644,147 @@ mod tests {
     let effect = TxnEffect::compute_effect(&mut ledger.get_prng(), tx);
     assert!(effect.is_err());
   }
+  #[test]
+  pub fn test_transferable() {
+    let mut ledger = LedgerState::test_ledger();
+    let params = PublicParams::new();
+
+    let issuer = XfrKeyPair::generate(&mut ledger.get_prng());
+    let alice = XfrKeyPair::generate(&mut ledger.get_prng());
+    let bob = XfrKeyPair::generate(&mut ledger.get_prng());
+
+    // Define fiat token
+    let code = AssetTypeCode { val: [1; 16] };
+    let tx = create_definition_transaction(&code,
+                                           issuer.get_pk_ref(),
+                                           issuer.get_sk_ref(),
+                                           *AssetRules::default().set_transferable(false),
+                                           Some(Memo("test".to_string()))).unwrap();
+    apply_transaction(&mut ledger, tx);
+    let (tx, _) = create_issue_and_transfer_txn(&mut ledger,
+                                                &params,
+                                                &code,
+                                                100,
+                                                &issuer,
+                                                alice.get_pk_ref(),
+                                                0);
+    let (_, sids) = apply_transaction(&mut ledger, tx);
+    let sid = sids[0];
+
+    let bar = ((ledger.get_utxo(sid).unwrap().0).0).clone();
+
+    let mut tx = Transaction::default();
+    let transfer_template= AssetRecordTemplate::with_no_asset_tracking(100,
+                                                                             code.val,
+                                                                             AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
+                                                                             bob.get_pk_ref().clone());
+    let record = AssetRecord::from_template_no_identity_tracking(ledger.get_prng(),
+                                                                 &transfer_template).unwrap();
+
+    // Cant transfer non-transferable asset
+    let mut transfer = TransferAsset::new(TransferAssetBody::new(ledger.get_prng(),
+                             vec![TxoRef::Absolute(sid)],
+                             &[open_blind_asset_record(&bar, &None, &alice.get_sk_ref()).unwrap()],
+                               &[record.clone()]).unwrap(), TransferType::Standard).unwrap();
+    transfer.sign(&alice);
+    tx.operations.push(Operation::TransferAsset(transfer));
+    let effect = TxnEffect::compute_effect(ledger.get_prng(), tx.clone()).unwrap();
+
+    let mut block = ledger.start_block().unwrap();
+    let res = ledger.apply_transaction(&mut block, effect);
+    assert!(res.is_err());
+    // Cant transfer non-transferable asset through some intermediate operation
+    // In this case, alice attempts to spend her non-transferable asset in the same transaction it
+    // was issued.
+    let second_transfer_template= AssetRecordTemplate::with_no_asset_tracking(100,
+                                                                              code.val,
+                                                                              AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
+                                                                              bob.get_pk_ref().clone());
+    let second_record = AssetRecord::from_template_no_identity_tracking(ledger.get_prng(),
+                                                                  &second_transfer_template).unwrap();
+    let (mut tx, ar) = create_issue_and_transfer_txn(&mut ledger,
+                                                     &params,
+                                                     &code,
+                                                     100,
+                                                     &issuer,
+                                                     alice.get_pk_ref(),
+                                                     1);
+    let mut transfer = TransferAsset::new(TransferAssetBody::new(ledger.get_prng(),
+                                                                 vec![TxoRef::Relative(0)],
+                                                                 &[ar.open_asset_record],
+                                                                 &[second_record]).unwrap(),
+                                          TransferType::Standard).unwrap();
+    transfer.sign(&alice);
+    tx.operations.push(Operation::TransferAsset(transfer));
+    let effect = TxnEffect::compute_effect(ledger.get_prng(), tx).unwrap();
+    let res = ledger.apply_transaction(&mut block, effect);
+    assert!(res.is_err());
+  }
+
+  #[test]
+  pub fn test_max_units() {
+    let mut ledger = LedgerState::test_ledger();
+    let params = PublicParams::new();
+
+    let issuer = XfrKeyPair::generate(&mut ledger.get_prng());
+
+    // Define fiat token
+    let code = AssetTypeCode { val: [1; 16] };
+    let tx = create_definition_transaction(&code,
+                                           issuer.get_pk_ref(),
+                                           issuer.get_sk_ref(),
+                                           *AssetRules::default().set_max_units(Some(100)),
+                                           Some(Memo("test".to_string()))).unwrap();
+    apply_transaction(&mut ledger, tx);
+    let tx = create_issuance_txn(&mut ledger,
+                                 &params,
+                                 &code,
+                                 50,
+                                 0,
+                                 AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
+                                 &issuer);
+    apply_transaction(&mut ledger, tx);
+    {
+      // Ensure that a single overlfowing transaction fails
+      let tx = create_issuance_txn(&mut ledger,
+                                   &params,
+                                   &code,
+                                   51,
+                                   1,
+                                   AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
+                                   &issuer);
+      let effect = TxnEffect::compute_effect(ledger.get_prng(), tx).unwrap();
+
+      let mut block = ledger.start_block().unwrap();
+      let res = ledger.apply_transaction(&mut block, effect);
+      assert!(res.is_err());
+
+      // Ensure that cap can be reached
+      let tx = create_issuance_txn(&mut ledger,
+                                   &params,
+                                   &code,
+                                   50,
+                                   1,
+                                   AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
+                                   &issuer);
+      let effect = TxnEffect::compute_effect(ledger.get_prng(), tx).unwrap();
+      ledger.apply_transaction(&mut block, effect).unwrap();
+      ledger.finish_block(block).unwrap();
+
+      // Cant try to exceed asset cap by issuing confidentially
+      let tx = create_issuance_txn(&mut ledger,
+                                   &params,
+                                   &code,
+                                   1,
+                                   2,
+                                   AssetRecordType::ConfidentialAmount_NonConfidentialAssetType,
+                                   &issuer);
+      let effect = TxnEffect::compute_effect(ledger.get_prng(), tx).unwrap();
+      let mut block = ledger.start_block().unwrap();
+      let res = ledger.apply_transaction(&mut block, effect);
+      assert!(res.is_err());
+    }
+  }
 
   #[test]
   pub fn test_debt_transfer() {
@@ -2567,6 +2808,7 @@ mod tests {
     let tx = create_definition_transaction(&fiat_code,
                                            fiat_issuer_key_pair.get_pk_ref(),
                                            fiat_issuer_key_pair.get_sk_ref(),
+                                           AssetRules::default(),
                                            Some(Memo("fiat".to_string()))).unwrap();
     apply_transaction(&mut ledger, tx);
 
@@ -2579,27 +2821,30 @@ mod tests {
       create_definition_transaction(&debt_code,
                                     borrower_key_pair.get_pk_ref(),
                                     borrower_key_pair.get_sk_ref(),
+                                    AssetRules::default(),
                                     Some(Memo(serde_json::to_string(&debt_memo).unwrap()))).unwrap();
     apply_transaction(&mut ledger, tx);
 
     // Issue and transfer fiat tokens to lender
-    let tx = create_issue_and_transfer_txn(&mut ledger,
-                                           &params,
-                                           &fiat_code,
-                                           fiat_amount,
-                                           &fiat_issuer_key_pair,
-                                           lender_key_pair.get_pk_ref());
+    let (tx, _) = create_issue_and_transfer_txn(&mut ledger,
+                                                &params,
+                                                &fiat_code,
+                                                fiat_amount,
+                                                &fiat_issuer_key_pair,
+                                                lender_key_pair.get_pk_ref(),
+                                                0);
 
     let (_txn_sid, txo_sids) = apply_transaction(&mut ledger, tx);
     let fiat_sid = txo_sids[0];
 
     // Issue and transfer debt tokens to borrower
-    let tx = create_issue_and_transfer_txn(&mut ledger,
-                                           &params,
-                                           &debt_code,
-                                           loan_amount,
-                                           &borrower_key_pair,
-                                           borrower_key_pair.get_pk_ref());
+    let (tx, _) = create_issue_and_transfer_txn(&mut ledger,
+                                                &params,
+                                                &debt_code,
+                                                loan_amount,
+                                                &borrower_key_pair,
+                                                borrower_key_pair.get_pk_ref(),
+                                                0);
     let (_txn_sid, txo_sids) = apply_transaction(&mut ledger, tx);
     let debt_sid = txo_sids[0];
 
