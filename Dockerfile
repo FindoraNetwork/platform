@@ -13,6 +13,8 @@ RUN cargo test --release --no-fail-fast --workspace --exclude 'txn_cli'
 WORKDIR /app/components/wasm
 RUN wasm-pack build
 RUN bash -c 'time /app/target/release/log_tester /app/components/log_tester/example_log - /app/components/log_tester/expected'
+#Cleanup some big files in release directory
+RUN rm -r /app/target/release/build /app/target/release/deps
 
 FROM debian:buster
 COPY --from=builder /app/target/release /app
