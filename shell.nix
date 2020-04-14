@@ -26,7 +26,9 @@ stdenv.mkDerivation {
     zlib
     pkgconfig openssl binutils-unwrapped
     protobuf
-  ];
+  ] ++ stdenv.lib.optionals stdenv.isDarwin [
+        darwin.apple_sdk.frameworks.Security
+      ];
 
   # Set Environment Variables
   RUST_BACKTRACE  = 1;
