@@ -363,6 +363,8 @@ pub struct IssueAssetBody {
   pub num_outputs: usize,
   pub records: Vec<TxOutput>,
   /// Asset tracing policy, null iff the asset is not traceable
+  #[serde(default)]
+  #[serde(skip_serializing_if = "is_default")]
   pub tracing_policy: Option<AssetTracingPolicy>,
 }
 
