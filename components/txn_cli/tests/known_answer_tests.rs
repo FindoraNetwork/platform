@@ -192,11 +192,11 @@ fn trace_and_verify_asset(id: &str, memo_file: &str, expected_amount: &str) -> i
 }
 
 #[cfg(test)]
-fn trace_credential(id: &str, memo_file: &str, expected_attributes: &str) -> io::Result<Output> {
+fn trace_credential(id: &str, memo_file: &str, expected_values: &str) -> io::Result<Output> {
   Command::new(COMMAND).args(&["asset_issuer", "--id", id])
                        .arg("trace_credential")
                        .args(&["--memo_file", memo_file])
-                       .args(&["--expected_attributes", expected_attributes])
+                       .args(&["--expected_values", expected_values])
                        .output()
 }
 
@@ -982,8 +982,16 @@ fn test_request_fulfill_and_pay_loan_with_args() {
   io::stdout().write_all(&output.stderr).unwrap();
 
   assert!(output.status.success());
-  assert!(from_utf8(&output.stdout).unwrap()
-                                   .contains(&"Proving before attesting.".to_owned()));
+
+  // Trace the credential associated with the first loan
+  ledger_standalone.poll_until_ready().unwrap();
+  let output = trace_credential("0", memo_file, "650").expect("Failed to trace the credential");
+
+  io::stdout().write_all(&output.stdout).unwrap();
+  io::stdout().write_all(&output.stderr).unwrap();
+
+  fs::remove_file(memo_file).unwrap();
+  assert!(output.status.success());
 
   // 2. Second time:
   //    Fail because the loan has been fulfilled
@@ -1024,15 +1032,6 @@ fn test_request_fulfill_and_pay_loan_with_args() {
   assert_eq!(output.status.code(), Some(exitcode::USAGE));
   assert!(from_utf8(&output.stdout).unwrap()
                                    .contains(&"has already been declined.".to_owned()));
-
-  // Trace the credential associated with the first loan
-  ledger_standalone.poll_until_ready().unwrap();
-  let output = trace_credential("0", memo_file, "650").expect("Failed to trace the credential");
-
-  io::stdout().write_all(&output.stdout).unwrap();
-  io::stdout().write_all(&output.stderr).unwrap();
-
-  assert!(output.status.success());
 
   // Pay loan
   // 1. First time:
