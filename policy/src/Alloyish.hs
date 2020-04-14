@@ -5,19 +5,17 @@ module Alloyish where
 import qualified Data.Text as T
 import           Data.List (nub,isPrefixOf,sort)
 import qualified Data.Map.Lazy as M
-import qualified Control.Monad.State.Lazy as S
 import qualified Text.Parsec   as P
 import qualified Text.Parsec.Token as P
 import           Text.Parsec.Language (javaStyle)
-import           Data.Maybe (maybeToList,fromMaybe,fromJust)
+import           Data.Maybe (maybeToList,fromMaybe)
 import           Control.Applicative ((<$>),(<*>),(*>))
-import           Control.Monad (join, filterM, foldM)
+import           Control.Monad (join, filterM)
 import           System.Directory (getCurrentDirectory, getDirectoryContents, doesFileExist)
-import           System.IO (hGetContents,openFile,IOMode(..),hFlush,stdout,stdin)
+import           System.IO (hGetContents,openFile,IOMode(..),hFlush,stdout)
 import           System.FilePath.Posix (takeBaseName)
-import qualified Text.PrettyPrint.Annotated as PP
-import           Control.Monad.Identity (runIdentity)
 
+alloyish :: P.TokenParser ()
 alloyish = P.makeTokenParser $ javaStyle
   { P.reservedNames = [ "sig", "abstract", "extends"
                     , "in", "let", "fun", "pred", "fact", "check"
@@ -29,22 +27,26 @@ alloyish = P.makeTokenParser $ javaStyle
   , P.caseSensitive = True
   }
 
+parseOp :: String -> P.Parsec String () ()
 parseOp op = do
   theOp <- P.operator alloyish
   if theOp == op then return () else fail ("Expected '" ++ op ++ "'")
 
+setBop :: String -> P.Parsec String () (SetExp String,SetExp String)
 setBop op = do
   l <- parseLeftSetExp
   parseOp op
   r <- parseSetExp
   return (l,r)
 
+setLeftBop :: String -> P.Parsec String () (SetExp String,SetExp String)
 setLeftBop op = do
   l <- parseSimpleSetExp
   parseOp op
   r <- parseSimpleSetExp
   return (l,r)
 
+parseSimpleSetExp :: P.Parsec String () (SetExp String)
 parseSimpleSetExp
   = foldl1 (\x y -> P.try x P.<|> y) $
   [ P.parens alloyish parseSetExp
@@ -57,6 +59,7 @@ parseSimpleSetExp
   , const IdentSet <$> (P.reserved alloyish "ident")
   ]
 
+parseLeftSetExp :: P.Parsec String () (SetExp String)
 parseLeftSetExp
   = foldl1 (\x y -> P.try x P.<|> y) $
   [ uncurry (\x y -> JoinSet x (ClosureSet y)) <$> setLeftBop ".*"
@@ -64,6 +67,7 @@ parseLeftSetExp
   , parseSimpleSetExp
   ]
 
+parseSetExp :: P.Parsec String () (SetExp String)
 parseSetExp
   = foldl1 (\x y -> P.try x P.<|> y) $
   [ uncurry JoinSet <$> setBop "."
@@ -79,9 +83,9 @@ parseSetExp
     parseOp ":"
     baseexp <- parseSimpleSetExp
     relexp <- P.braces alloyish parseRelExp
-    relexp <- return $ flip fmap relexp $ \vname ->
+    relexp' <- return $ flip fmap relexp $ \vname ->
       if vname == var then Nothing else Just vname
-    return $ FilterSet baseexp relexp
+    return $ FilterSet baseexp relexp'
   , do
     -- ctor <- (const FilterSet <$> P.try (P.reserved alloyish "filter"))
     --         P.<|> (const MapSet <$> P.reserved alloyish "map")
@@ -90,18 +94,20 @@ parseSetExp
     parseOp ":"
     baseexp <- parseSimpleSetExp
     setexp <- P.braces alloyish parseSetExp
-    setexp <- return $ flip fmap setexp $ \vname ->
+    setexp' <- return $ flip fmap setexp $ \vname ->
       if vname == var then Nothing else Just vname
-    return $ MapSet baseexp setexp
+    return $ MapSet baseexp setexp'
   , parseLeftSetExp
   ]
 
+relBop :: String -> P.Parsec String () (RelExp String,RelExp String)
 relBop op = do
   l <- parseSimpleRelExp
   parseOp op
   r <- parseRelExp
   return (l,r)
 
+parseSimpleRelExp ::  P.Parsec String () (RelExp String)
 parseSimpleRelExp
   = foldl1 (\x y -> P.try x P.<|> y) $
   [ P.parens alloyish parseRelExp
@@ -119,16 +125,18 @@ parseSimpleRelExp
   , NotRel <$> (P.reserved alloyish "not" *> parseSimpleRelExp)
   ]
 
+parseQRel :: String -> P.Parsec String () (SetExp String,RelExp (Maybe String))
 parseQRel qstr = do
   P.reserved alloyish qstr
   var <- P.identifier alloyish
   parseOp ":"
   baseexp <- parseSimpleSetExp
   relexp <- P.braces alloyish parseRelExp
-  relexp <- return $ flip fmap relexp $ \vname ->
+  relexp' <- return $ flip fmap relexp $ \vname ->
     if vname == var then Nothing else Just vname
-  return (baseexp,relexp)
+  return (baseexp,relexp')
 
+parseRelExp ::  P.Parsec String () (RelExp String)
 parseRelExp
   = foldl1 (\x y -> P.try x P.<|> y) $
   [ uncurry AndRel <$> relBop "&&"
@@ -225,52 +233,60 @@ applyEntry (Entry name bases edges dat)
             then es else [name]:es
       ]
 
+newline :: P.Parsec String () ()
+newline = const () <$> P.newline
+
+parseEntry :: P.Parsec String () Entry
 parseEntry = do
   name <- (T.pack <$>) $ P.manyTill (P.alphaNum P.<|> P.oneOf "_") $ P.try $ P.oneOf ":"
   P.spaces
   baseSets <- (map T.pack <$>) $ P.sepBy (P.many1 $ P.alphaNum P.<|> P.oneOf "_") (P.many1 $ P.oneOf " ")
-  P.newline
-  P.many P.newline
-  P.string "Edges:" >> P.newline
+  newline
+  _ <- P.many newline
+  P.string "Edges:" >> newline
   edges <- (M.fromListWith (++) <$>) $ P.many $ P.try $ do
     edgeName <- (T.pack <$>) $ P.manyTill (P.alphaNum P.<|> P.oneOf "_") P.space
     P.spaces
     targetName <- (T.pack <$>) $ P.manyTill (P.alphaNum P.<|> P.oneOf "_") $ P.newline
     return (edgeName,[targetName])
-  P.many1 P.newline
-  P.string "Data:" >> P.newline
+  _ <- P.many1 newline
+  P.string "Data:" >> newline
   attrs <- (M.fromList <$>) $ P.many $ P.try $ do
     dataKey <- (T.pack <$>) $ P.manyTill (P.alphaNum P.<|> P.oneOf "_") $ P.char ':'
-    P.newline
+    newline
     dataData <- (T.pack <$>) $ P.manyTill (P.anyChar) $ P.try $ (P.newline >> P.newline >> return ()) P.<|> P.eof
     return (dataKey,dataData)
   return Entry{entName=name, entBaseSets=baseSets, entEdges=edges, entData=attrs}
 
+safeLast :: [a] -> Maybe a
 safeLast [] = Nothing
 safeLast (x:[]) = Just x
-safeLast (x:xs) = safeLast xs
+safeLast (_:xs) = safeLast xs
 
+allButLast :: [a] -> [a]
 allButLast [] = []
-allButLast (x:[]) = []
+allButLast (_:[]) = []
 allButLast (x:xs) = x:allButLast xs
 
+listJoin :: Eq a => [[a]] -> [[a]] -> [[a]]
 listJoin x y = do
   xRow <- x
   lastVal <- maybeToList $ safeLast xRow
   pref <- return $ allButLast xRow
   yRow <- y
   case yRow of
-    y:ys | y == lastVal -> return $ pref ++ ys
+    v:vs | v == lastVal -> return $ pref ++ vs
     _ -> []
 
+listOneClosure :: Eq a => [[a]] -> [[a]]
 listOneClosure x = go [] x x
   where
     go _ [] _ = []
-    go univ base x
+    go univ base v
       = base ++
         go (univ++base)
-           (filter (not . (`elem` (univ++base))) (listJoin base x))
-           x
+           (filter (not . (`elem` (univ++base))) (listJoin base v))
+           v
 
 evalSetExp :: Eq v => SetExp T.Text -> Env v dat -> Maybe [[v]]
 evalSetExp (AtomSet x) (Env vars _ _) = M.lookup x vars
@@ -301,14 +317,14 @@ evalSetExp (OneClosureSet x) e = do
 evalSetExp (ClosureSet x) e = evalSetExp (UnionSet IdentSet (OneClosureSet x)) e
 evalSetExp (TransposeSet x) e = map reverse <$> evalSetExp x e
 evalSetExp (FilterSet base rel) e = do
-  base <- evalSetExp base e
+  base' <- evalSetExp base e
   valName <- return $ freshEnvVar e
-  flip filterM base $ \val ->
+  flip filterM base' $ \val ->
     evalRelExp (fromMaybe valName <$> rel) e{envVars=M.insert valName [val] (envVars e)}
 evalSetExp (MapSet base rel) e = do
-  base <- evalSetExp base e
+  base' <- evalSetExp base e
   valName <- return $ freshEnvVar e
-  ret <- flip mapM base $ \val ->
+  ret <- flip mapM base' $ \val ->
     evalSetExp (fromMaybe valName <$> rel) e{envVars=M.insert valName [val] (envVars e)}
   return $ nub $ join ret
 
@@ -346,44 +362,46 @@ evalRelExp (OrRel x y) e = (||) <$> evalRelExp x e <*> evalRelExp y e
 evalRelExp (ImplyRel x y) e = (\a b -> not a || b) <$> evalRelExp x e <*> evalRelExp y e
 evalRelExp (IffRel x y) e = (==) <$> evalRelExp x e <*> evalRelExp y e
 evalRelExp (QAllRel base rel) e = do
-  base <- evalSetExp base e
+  base' <- evalSetExp base e
   valName <- return $ freshEnvVar e
-  (all id <$>) $ sequence $ base >>= \val ->
+  (all id <$>) $ sequence $ base' >>= \val ->
     return $ evalRelExp (fromMaybe valName <$> rel)
                         e{envVars=M.insert valName [val] (envVars e)}
 evalRelExp (QSomeRel base rel) e = do
-  base <- evalSetExp base e
+  base' <- evalSetExp base e
   valName <- return $ freshEnvVar e
-  (any id <$>) $ sequence $ base >>= \val ->
+  (any id <$>) $ sequence $ base' >>= \val ->
     return $ evalRelExp (fromMaybe valName <$> rel)
                         e{envVars=M.insert valName [val] (envVars e)}
 evalRelExp (QOneRel base rel) e = do
-  base <- evalSetExp base e
+  base' <- evalSetExp base e
   valName <- return $ freshEnvVar e
-  l <- fmap length $ filterM id $ base >>= \val ->
+  l <- fmap length $ filterM id $ base' >>= \val ->
     return $ evalRelExp (fromMaybe valName <$> rel)
                         e{envVars=M.insert valName [val] (envVars e)}
   return $ l == 1
 evalRelExp (QLoneRel base rel) e = do
-  base <- evalSetExp base e
+  base' <- evalSetExp base e
   valName <- return $ freshEnvVar e
-  l <- fmap length $ filterM id $ base >>= \val ->
+  l <- fmap length $ filterM id $ base' >>= \val ->
     return $ evalRelExp (fromMaybe valName <$> rel)
                         e{envVars=M.insert valName [val] (envVars e)}
   return $ l <= 1
 evalRelExp (QNoRel base rel) e = do
-  base <- evalSetExp base e
+  base' <- evalSetExp base e
   valName <- return $ freshEnvVar e
-  (not <$>) $ (any id <$>) $ sequence $ base >>= \val ->
+  (not <$>) $ (any id <$>) $ sequence $ base' >>= \val ->
     return $ evalRelExp (fromMaybe valName <$> rel)
                         e{envVars=M.insert valName [val] (envVars e)}
 
+defaultEnv :: Ord s => Env s a
 defaultEnv = Env
   { envVars = M.fromList []
   , envUniverse = []
   , envExtra = M.fromList []
   }
 
+testEnv :: Env String ()
 testEnv = Env
   { envVars = M.fromList
             [ ("this", [["goodbye"]])
@@ -396,6 +414,7 @@ testEnv = Env
   , envExtra = M.fromList $ zip (envUniverse testEnv) (repeat ())
   }
 
+getFiles :: IO [FilePath]
 getFiles = do
   currdir <- getCurrentDirectory
   contents <- getDirectoryContents currdir
@@ -408,21 +427,25 @@ whileEither_ cond lOp rOp = do
     Left lVal -> lOp lVal
     Right rVal -> rOp rVal >> whileEither_ cond lOp rOp
 
+lineJoin :: [T.Text] -> T.Text
 lineJoin [] = ""
 lineJoin ls = foldl1 (\x y -> x <> "\n" <> y) ls
 
+prefixWith :: T.Text -> T.Text -> T.Text
 prefixWith s = lineJoin . map (s <>) . T.lines
+
+indent :: T.Text -> T.Text
 indent = prefixWith "  "
 
 alloyish_main :: IO ()
 alloyish_main = do
-  files <- getFiles
+  files1 <- getFiles
   -- mapM putStrLn files
-  files <- sequence $ map (flip openFile ReadMode) files
-  files <- sequence $ map hGetContents files
-  entries <- return $ sequence $ map (P.parse parseEntry "") files
-  putStrLn $ show entries
-  (Right entries) <- return entries
+  files0 <- sequence $ map (flip openFile ReadMode) files1
+  files <- sequence $ map hGetContents files0
+  entries0 <- return $ sequence $ map (P.parse parseEntry "") files
+  putStrLn $ show entries0
+  (Right entries) <- return entries0
   env <- return $ foldl (flip applyEntry) defaultEnv entries
   putStrLn "\n\n-----------------\n"
   -- putStrLn $ show env
@@ -436,15 +459,15 @@ alloyish_main = do
     Right x -> do
       putStrLn $ show x
       case x of
-        Left x -> do
-          x <- return $ T.pack <$> x
-          putStrLn $ case evalSetExp x env of
+        Left v'' -> do
+          v' <- return $ T.pack <$> v''
+          putStrLn $ case evalSetExp v' env of
             Nothing -> "Error"
             Just items -> T.unpack $ T.unlines $ do
               [item] <- items
               foldl1 (++) $ [
                 return $ item <> ":"
-                              <> (foldl (\x y -> x <> " " <> y) ""
+                              <> (foldl (\a b -> a <> " " <> b) ""
                                         $ sort $ map fst $ filter (([item] `elem`) . snd)
                                         $ M.assocs $ envVars env)
                 , do
@@ -456,15 +479,15 @@ alloyish_main = do
                   dat <- return $ (\ (k,v) -> [k <> ":", indent $ prefixWith "-> " v]) =<< (sort $ map (\ (k,v) -> (k, lineJoin v)) $ edges)
                   map indent dat
                 , do
-                  (Just dat) <- return $ M.lookup item $ envExtra env
-                  dat <- return $ sort (M.assocs dat)
+                  (Just dat0) <- return $ M.lookup item $ envExtra env
+                  dat <- return $ sort (M.assocs dat0)
                                 >>= \ (k,v) -> [k <> ":",
                                                 indent v]
                   map indent dat
                 ]
-        Right x -> do
-          x <- return $ T.pack <$> x
-          putStrLn $ maybe "Error" show $ evalRelExp x env
+        Right v -> do
+          v' <- return $ T.pack <$> v
+          putStrLn $ maybe "Error" show $ evalRelExp v' env
   sequence_ $ repeat step
 
 

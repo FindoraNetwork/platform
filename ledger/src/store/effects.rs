@@ -12,7 +12,7 @@ use rand_core::{CryptoRng, RngCore, SeedableRng};
 use std::collections::{HashMap, HashSet};
 use zei::serialization::ZeiFromToBytes;
 use zei::xfr::lib::verify_xfr_body_no_policies;
-use zei::xfr::structs::{BlindAssetRecord, XfrAmount, XfrAssetType};
+use zei::xfr::structs::{AssetTracingPolicy, BlindAssetRecord, XfrAmount, XfrAssetType};
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct TxnEffect {
@@ -22,6 +22,8 @@ pub struct TxnEffect {
   pub txos: Vec<Option<TxOutput>>,
   // Which TXOs this consumes
   pub input_txos: HashMap<TxoSID, BlindAssetRecord>,
+  // List of internally-spent TXOs. This does not include input txos;
+  pub internally_spent_txos: Vec<BlindAssetRecord>,
   // Which new asset types this defines
   pub new_asset_codes: HashMap<AssetTypeCode, AssetType>,
   // Which new TXO issuance sequence numbers are used, in sorted order
@@ -35,6 +37,8 @@ pub struct TxnEffect {
   // Asset types that have issuances with confidential outputs. Issuances cannot be confidential
   // if there is an issuance cap
   pub confidential_issuance_types: HashSet<AssetTypeCode>,
+  // Which asset tracing policy is being used to issue each asset type
+  pub issuance_tracing_policies: HashMap<AssetTypeCode, Option<AssetTracingPolicy>>,
   // Debt swap information that must be externally validated
   pub debt_effects: HashMap<AssetTypeCode, DebtSwapEffect>,
 
@@ -53,11 +57,14 @@ impl TxnEffect {
                                                 -> Result<TxnEffect, PlatformError> {
     let mut txo_count: usize = 0;
     let mut txos: Vec<Option<TxOutput>> = Vec::new();
+    let mut internally_spent_txos = Vec::new();
     let mut input_txos: HashMap<TxoSID, BlindAssetRecord> = HashMap::new();
     let mut new_asset_codes: HashMap<AssetTypeCode, AssetType> = HashMap::new();
     let mut new_issuance_nums: HashMap<AssetTypeCode, Vec<u64>> = HashMap::new();
     let mut issuance_keys: HashMap<AssetTypeCode, IssuerPublicKey> = HashMap::new();
     let mut issuance_amounts = HashMap::new();
+    let mut issuance_tracing_policies: HashMap<AssetTypeCode, Option<AssetTracingPolicy>> =
+      HashMap::new();
     let mut debt_effects: HashMap<AssetTypeCode, DebtSwapEffect> = HashMap::new();
     let mut asset_types_involved: HashSet<AssetTypeCode> = HashSet::new();
     let mut confidential_issuance_types = HashSet::new();
@@ -145,7 +152,9 @@ impl TxnEffect {
         //      5) The assets in the TxOutputs have a non-confidential
         //         asset type which agrees with the stated asset type.
         //          - Fully checked here
-        //      TODO(joe): tracking!
+        //      6) The asset_tracking flag of the tracing policy in
+        //         IssueAssetBody agrees with the asset definition.
+        //          - Fully checked in check_txn_effects
         Operation::IssueAsset(iss) => {
           if iss.body.num_outputs != iss.body.records.len() {
             return Err(PlatformError::InputsError(error_location!()));
@@ -204,6 +213,9 @@ impl TxnEffect {
             txos.push(Some(output.clone()));
             txo_count += 1;
           }
+
+          // (6)
+          issuance_tracing_policies.insert(code, iss.body.tracing_policy.clone());
         }
 
         // An asset transfer is valid iff:
@@ -266,6 +278,12 @@ impl TxnEffect {
           verify_xfr_body_no_policies(prng, &trn.body.transfer)?;
 
           for (inp, record) in trn.body.inputs.iter().zip(trn.body.transfer.inputs.iter()) {
+            // Until we can distinguish assets that have policies that invoke transfer restrictions
+            // from those that don't, no confidential types are allowed
+            if record.asset_type.get_asset_type().is_none() {
+              return Err(PlatformError::InputsError(error_location!()));
+            }
+
             if let Some(inp_code) = record.asset_type.get_asset_type() {
               asset_types_involved.insert(AssetTypeCode { val: inp_code });
             }
@@ -288,6 +306,7 @@ impl TxnEffect {
                     if inp_record != record {
                       return Err(PlatformError::InputsError(error_location!()));
                     }
+                    internally_spent_txos.push(inp_record.clone());
                   }
                 }
                 txos[ix] = None;
@@ -305,6 +324,11 @@ impl TxnEffect {
 
           txos.reserve(trn.body.transfer.outputs.len());
           for out in trn.body.transfer.outputs.iter() {
+            // Until we can distinguish assets that have policies that invoke transfer restrictions
+            // from those that don't, no confidential types are allowed
+            if out.asset_type.get_asset_type().is_none() {
+              return Err(PlatformError::InputsError(error_location!()));
+            }
             if let Some(out_code) = out.asset_type.get_asset_type() {
               asset_types_involved.insert(AssetTypeCode { val: out_code });
             }
@@ -335,11 +359,13 @@ impl TxnEffect {
     Ok(TxnEffect { txn,
                    txos,
                    input_txos,
+                   internally_spent_txos,
                    new_asset_codes,
-                   issuance_amounts,
                    new_issuance_nums,
-                   confidential_issuance_types,
                    issuance_keys,
+                   issuance_amounts,
+                   confidential_issuance_types,
+                   issuance_tracing_policies,
                    debt_effects,
                    asset_types_involved,
                    custom_policy_asset_types,

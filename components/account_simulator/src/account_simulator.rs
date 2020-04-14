@@ -470,7 +470,8 @@ impl InterpretAccounts<PlatformError> for LedgerAccounts {
         let (ba, _, owner_memo) =
           build_blind_asset_record(self.ledger.get_prng(), &params.pc_gens, &ar, None);
 
-        let asset_issuance_body = IssueAssetBody::new(&code, new_seq_num, &[TxOutput(ba)]).unwrap();
+        let asset_issuance_body =
+          IssueAssetBody::new(&code, new_seq_num, &[TxOutput(ba)], None).unwrap();
 
         let sign = compute_signature(&privkey, &pubkey, &asset_issuance_body);
 
@@ -763,7 +764,8 @@ impl InterpretAccounts<PlatformError> for OneBigTxnAccounts {
         let (ba, _, owner_memo) =
           build_blind_asset_record(self.base_ledger.get_prng(), &params.pc_gens, &ar, None);
 
-        let asset_issuance_body = IssueAssetBody::new(&code, new_seq_num, &[TxOutput(ba)]).unwrap();
+        let asset_issuance_body =
+          IssueAssetBody::new(&code, new_seq_num, &[TxOutput(ba)], None).unwrap();
 
         let sign = compute_signature(&privkey, &pubkey, &asset_issuance_body);
 
@@ -1125,7 +1127,8 @@ impl InterpretAccounts<PlatformError> for LedgerStandaloneAccounts {
         let (ba, _, owner_memo) =
           build_blind_asset_record(&mut self.prng, &params.pc_gens, &ar, None);
 
-        let asset_issuance_body = IssueAssetBody::new(&code, new_seq_num, &[TxOutput(ba)]).unwrap();
+        let asset_issuance_body =
+          IssueAssetBody::new(&code, new_seq_num, &[TxOutput(ba)], None).unwrap();
 
         let sign = compute_signature(&privkey, &pubkey, &asset_issuance_body);
 

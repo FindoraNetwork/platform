@@ -19,7 +19,9 @@ use std::hash::{Hash, Hasher};
 use std::marker::PhantomData;
 use zei::xfr::lib::gen_xfr_body;
 use zei::xfr::sig::{XfrKeyPair, XfrPublicKey, XfrSecretKey, XfrSignature};
-use zei::xfr::structs::{AssetRecord, BlindAssetRecord, OpenAssetRecord, XfrBody};
+use zei::xfr::structs::{
+  AssetRecord, AssetTracingPolicy, BlindAssetRecord, OpenAssetRecord, XfrBody,
+};
 
 pub fn b64enc<T: ?Sized + AsRef<[u8]>>(input: &T) -> String {
   base64::encode_config(input, base64::URL_SAFE)
@@ -229,8 +231,8 @@ impl AssetRules {
     self
   }
 
-  pub fn set_transferable(&mut self, max_units: Option<u64>) -> &mut Self {
-    self.max_units = max_units;
+  pub fn set_transferable(&mut self, transferable: bool) -> &mut Self {
+    self.transferable = transferable;
     self
   }
 }
@@ -261,20 +263,11 @@ pub struct AssetType {
   pub confidential_units: Commitment,
 }
 
-//impl AssetType {
-//    pub fn create_empty() -> AssetType {
-//        AssetType {
-//            code: AssetTypeCode{val:[0;16]},
-//            digest: [0;32],
-//            issuer: Address{key:[0;32]},
-//            memo: Memo{},
-//            confidential_memo: ConfidentialMemo{},
-//            updatable: false,
-//            units: 0,
-//            confidential_units: [0;32],
-//        }
-//    }
-//}
+impl AssetType {
+  pub fn has_issuance_restrictions(&self) -> bool {
+    self.properties.asset_rules.max_units.is_some()
+  }
+}
 
 #[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, Serialize)]
 pub struct CustomAssetPolicy {
@@ -369,17 +362,23 @@ pub struct IssueAssetBody {
   pub seq_num: u64,
   pub num_outputs: usize,
   pub records: Vec<TxOutput>,
+  /// Asset tracing policy, null iff the asset is not traceable
+  #[serde(default)]
+  #[serde(skip_serializing_if = "is_default")]
+  pub tracing_policy: Option<AssetTracingPolicy>,
 }
 
 impl IssueAssetBody {
   pub fn new(token_code: &AssetTypeCode,
              seq_num: u64,
-             records: &[TxOutput])
+             records: &[TxOutput],
+             tracing_policy: Option<AssetTracingPolicy>)
              -> Result<IssueAssetBody, PlatformError> {
     Ok(IssueAssetBody { code: *token_code,
                         seq_num,
                         num_outputs: records.len(),
-                        records: records.to_vec() })
+                        records: records.to_vec(),
+                        tracing_policy })
   }
 }
 
@@ -967,7 +966,8 @@ mod tests {
     let asset_issuance_body = IssueAssetBody { code: Default::default(),
                                                seq_num: 0,
                                                num_outputs: 0,
-                                               records: Vec::new() };
+                                               records: Vec::new(),
+                                               tracing_policy: None };
 
     let asset_issuance = IssueAsset { body: asset_issuance_body,
                                       pubkey: IssuerPublicKey { key: public_key },
