@@ -307,23 +307,23 @@ impl TransactionBuilder {
   }
 
   /// Fetches a client record from a transaction.
-  /// @param {number} - Record to fetch. Records are added to the transaction builder sequentially.
+  /// @param {number} idx - Record to fetch. Records are added to the transaction builder sequentially.
   pub fn get_owner_record(&self, idx: usize) -> Result<ClientAssetRecord, JsValue> {
     Ok(self.get_builder()
            .get_owner_record_and_memo(idx)
            .cloned()
            .map(|(output, _)| ClientAssetRecord { output })
-           .ok_or(JsValue::from_str("Index out of range"))?)
+           .ok_or_else(|| JsValue::from_str("Index out of range"))?)
   }
 
-  /// Fetches a client record from a transaction.
-  /// @param {number} - Record to fetch. Records are added to the transaction builder sequentially.
+  /// Fetches an owner memo from a transaction
+  /// @param {number} idx - Record to fetch. Records are added to the transaction builder sequentially.
   pub fn get_owner_memo(&self, idx: usize) -> Result<Option<OwnerMemo>, JsValue> {
     Ok(self.get_builder()
            .get_owner_record_and_memo(idx)
            .cloned()
            .map(|(_, memo)| (memo.map(|memo| OwnerMemo { memo })))
-           .ok_or(JsValue::from_str("Index out of range"))?)
+           .ok_or_else(|| JsValue::from_str("Index out of range"))?)
   }
 }
 #[wasm_bindgen]
@@ -453,6 +453,7 @@ impl TransferOperationBuilder {
 /// Returns a JsValue containing decrypted owner record information.
 /// @param {ClientAssetRecord} record - Ownership record.
 /// @param {OwnerMemo} owner_memo - Opening parameters.
+/// @param {XfrKeyPair} key - Key of asset owner that is used to open the record.
 pub fn open_client_asset_record(record: &ClientAssetRecord,
                                 owner_memo: Option<OwnerMemo>,
                                 key: &XfrKeyPair)
