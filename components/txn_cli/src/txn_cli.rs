@@ -1098,7 +1098,7 @@ fn issue_and_transfer_asset(issuer_key_pair: &XfrKeyPair,
                                      tracing_policy.clone())?;
 
   // Transfer Operation
-  let output_template = if let Some(policy) = tracing_policy {
+  let output_template = if let Some(policy) = tracing_policy.clone() {
     AssetRecordTemplate::with_asset_tracking(amount,
                                              token_code.val,
                                              record_type,
@@ -1127,7 +1127,8 @@ fn issue_and_transfer_asset(issuer_key_pair: &XfrKeyPair,
   txn_builder.add_operation_issue_asset(issuer_key_pair,
                                         &token_code,
                                         get_and_update_sequence_number()?,
-                                        &[(TxOutput(blind_asset_record), owner_memo.clone())])?
+                                        &[(TxOutput(blind_asset_record), owner_memo.clone())],
+                                        tracing_policy)?
              .add_operation(xfr_op)
              .transaction();
 
@@ -1370,7 +1371,7 @@ fn load_funds(issuer_id: u64,
                                    issuer_key_pair,
                                    fiat_code,
                                    "Fiat asset",
-                                   *AssetRules::default().set_traceable(true),
+                                   AssetRules::default(),
                                    txn_file)?;
     // Store data before submitting the transaction to avoid data overwriting
     let data = load_data()?;
@@ -1680,7 +1681,7 @@ fn fulfill_loan(loan_id: u64,
                                    issuer_key_pair,
                                    fiat_code,
                                    "Fiat asset",
-                                   *AssetRules::default().set_traceable(true),
+                                   AssetRules::default(),
                                    txn_file)?;
     // Store data before submitting the transaction to avoid data overwriting
     let data = load_data()?;
@@ -1694,9 +1695,6 @@ fn fulfill_loan(loan_id: u64,
   let identity_policy = IdentityRevealPolicy { cred_issuer_pub_key:
                                                  credential_issuer_public_key.get_ref().clone(),
                                                reveal_map: vec![true] };
-  let fiat_tracing_policy = AssetTracingPolicy { enc_keys: tracer_enc_keys.clone(),
-                                                 asset_tracking: true,
-                                                 identity_tracking: None };
   let debt_tracing_policy = AssetTracingPolicy { enc_keys: tracer_enc_keys,
                                                  asset_tracking: true,
                                                  identity_tracking: Some(identity_policy) };
@@ -1718,7 +1716,7 @@ fn fulfill_loan(loan_id: u64,
                              None,
                              None,
                              &fiat_txn_file,
-                             Some(fiat_tracing_policy.clone()))?;
+                             None)?;
   let fiat_sid = submit_and_get_sids(protocol, host, txn_builder)?[0];
   println!("Fiat sid: {}", fiat_sid.0);
   let (_, owner_memo) = load_blind_asset_record_and_owner_memo_from_file(&fiat_txn_file)?;
@@ -1771,11 +1769,10 @@ fn fulfill_loan(loan_id: u64,
                                              lender_key_pair.get_pk(),
                                              debt_tracing_policy);
   let borrower_template =
-    AssetRecordTemplate::with_asset_tracking(amount,
-                                             fiat_code.val,
-                                             NonConfidentialAmount_NonConfidentialAssetType,
-                                             borrower_key_pair.get_pk(),
-                                             fiat_tracing_policy);
+    AssetRecordTemplate::with_no_asset_tracking(amount,
+                                                fiat_code.val,
+                                                NonConfidentialAmount_NonConfidentialAssetType,
+                                                borrower_key_pair.get_pk());
   let xfr_op = TransferOperationBuilder::new().add_input(TxoRef::Absolute(fiat_sid),
                                                          fiat_open_asset_record,
                                                          amount)?
@@ -1964,9 +1961,6 @@ fn pay_loan(loan_id: u64, amount: u64, protocol: &str, host: &str) -> Result<(),
     return Err(PlatformError::InputsError(error_location!()));
   };
   let tracer_enc_keys = data.get_asset_tracer_key_pair(issuer_id)?.enc_key;
-  let fiat_tracing_policy = AssetTracingPolicy { enc_keys: tracer_enc_keys.clone(),
-                                                 asset_tracking: true,
-                                                 identity_tracking: None };
   let debt_tracing_policy = AssetTracingPolicy { enc_keys: tracer_enc_keys,
                                                  asset_tracking: true,
                                                  identity_tracking: Some(identity_policy) };
@@ -1989,11 +1983,10 @@ fn pay_loan(loan_id: u64, amount: u64, protocol: &str, host: &str) -> Result<(),
                                              lender_key_pair.get_pk(),
                                              debt_tracing_policy);
   let borrower_template =
-    AssetRecordTemplate::with_asset_tracking(borrower.balance - amount_to_spend,
-                                             fiat_code.val,
-                                             NonConfidentialAmount_NonConfidentialAssetType,
-                                             borrower_key_pair.get_pk(),
-                                             fiat_tracing_policy);
+    AssetRecordTemplate::with_no_asset_tracking(borrower.balance - amount_to_spend,
+                                                fiat_code.val,
+                                                NonConfidentialAmount_NonConfidentialAssetType,
+                                                borrower_key_pair.get_pk());
 
   // Get credential record
   let user_secret_key = if let Some(key_str) = credential.user_secret_key.clone() {
