@@ -8,7 +8,7 @@ use ledger::data_model::{
 };
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
-use zei::xfr::structs::{BlindAssetRecord, OwnerMemo};
+use zei::xfr::structs::{BlindAssetRecord, OwnerMemo as ZeiOwnerMemo};
 
 #[wasm_bindgen]
 pub struct TxoRef {
@@ -77,15 +77,30 @@ impl TransferType {
 #[wasm_bindgen]
 pub struct ClientAssetRecord {
   pub(crate) output: TxOutput,
-  pub(crate) memo: Option<OwnerMemo>,
+}
+
+#[wasm_bindgen]
+pub struct OwnerMemo {
+  pub(crate) memo: ZeiOwnerMemo,
 }
 
 impl ClientAssetRecord {
   pub fn get_bar_ref(&self) -> &BlindAssetRecord {
     &self.output.0
   }
+}
 
-  pub fn get_memo_ref(&self) -> &Option<OwnerMemo> {
+#[wasm_bindgen]
+impl ClientAssetRecord {
+  /// Builds a client record from an asset record fetched from the ledger server.
+  /// @param {record} - JSON asset record fetched from server.
+  pub fn from_json_record(record: &JsValue) -> Self {
+    ClientAssetRecord { output: TxOutput(record.into_serde().unwrap()) }
+  }
+}
+
+impl OwnerMemo {
+  pub fn get_memo_ref(&self) -> &ZeiOwnerMemo {
     &self.memo
   }
 }
