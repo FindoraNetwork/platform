@@ -231,8 +231,8 @@ impl AssetRules {
     self
   }
 
-  pub fn set_transferable(&mut self, max_units: Option<u64>) -> &mut Self {
-    self.max_units = max_units;
+  pub fn set_transferable(&mut self, transferable: bool) -> &mut Self {
+    self.transferable = transferable;
     self
   }
 }
@@ -263,20 +263,11 @@ pub struct AssetType {
   pub confidential_units: Commitment,
 }
 
-//impl AssetType {
-//    pub fn create_empty() -> AssetType {
-//        AssetType {
-//            code: AssetTypeCode{val:[0;16]},
-//            digest: [0;32],
-//            issuer: Address{key:[0;32]},
-//            memo: Memo{},
-//            confidential_memo: ConfidentialMemo{},
-//            updatable: false,
-//            units: 0,
-//            confidential_units: [0;32],
-//        }
-//    }
-//}
+impl AssetType {
+  pub fn has_issuance_restrictions(&self) -> bool {
+    self.properties.asset_rules.max_units.is_some()
+  }
+}
 
 #[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, Serialize)]
 pub struct CustomAssetPolicy {
