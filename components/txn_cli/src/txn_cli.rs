@@ -1663,7 +1663,6 @@ fn fulfill_loan(loan_id: u64,
                                       &reveal_map,
                                       &[]).or_else(|e| Err(PlatformError::ZeiError(e)))?
                                           .ctexts;
-    println!("here {:?}", ciphertext);
     let tracer_memo = AssetTracerMemo { enc_key: tracer_enc_keys.clone(),
                                         lock_amount: None,
                                         lock_asset_type: None,
