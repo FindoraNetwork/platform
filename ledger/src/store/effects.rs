@@ -1,15 +1,18 @@
 #![deny(warnings)]
 use crate::data_model::errors::PlatformError;
 use crate::data_model::*;
+use crate::error_location;
 use crate::policies::{compute_debt_swap_effect, DebtSwapEffect};
+use crate::policy_script::{run_txn_check, TxnCheckInputs, TxnPolicyData};
+use credentials::credential_verify_commitment;
 use cryptohash::sha256;
 use cryptohash::sha256::Digest as BitDigest;
 use findora::HasInvariants;
 use rand_core::{CryptoRng, RngCore, SeedableRng};
 use std::collections::{HashMap, HashSet};
 use zei::serialization::ZeiFromToBytes;
-use zei::xfr::lib::verify_xfr_body;
-use zei::xfr::structs::BlindAssetRecord;
+use zei::xfr::lib::verify_xfr_body_no_policies;
+use zei::xfr::structs::{BlindAssetRecord, XfrAmount, XfrAssetType};
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct TxnEffect {
@@ -19,6 +22,8 @@ pub struct TxnEffect {
   pub txos: Vec<Option<TxOutput>>,
   // Which TXOs this consumes
   pub input_txos: HashMap<TxoSID, BlindAssetRecord>,
+  // List of internally-spent TXOs. This does not include input txos;
+  pub internally_spent_txos: Vec<BlindAssetRecord>,
   // Which new asset types this defines
   pub new_asset_codes: HashMap<AssetTypeCode, AssetType>,
   // Which new TXO issuance sequence numbers are used, in sorted order
@@ -27,8 +32,16 @@ pub struct TxnEffect {
   pub new_issuance_nums: HashMap<AssetTypeCode, Vec<u64>>,
   // Which public key is being used to issue each asset type
   pub issuance_keys: HashMap<AssetTypeCode, IssuerPublicKey>,
+  // New issuance amounts
+  pub issuance_amounts: HashMap<AssetTypeCode, u64>,
+  // Asset types that have issuances with confidential outputs. Issuances cannot be confidential
+  // if there is an issuance cap
+  pub confidential_issuance_types: HashSet<AssetTypeCode>,
   // Debt swap information that must be externally validated
   pub debt_effects: HashMap<AssetTypeCode, DebtSwapEffect>,
+
+  pub asset_types_involved: HashSet<AssetTypeCode>,
+  pub custom_policy_asset_types: HashMap<AssetTypeCode, TxnCheckInputs>,
   // Updates to the AIR
   pub air_updates: HashMap<String, String>,
 }
@@ -42,11 +55,23 @@ impl TxnEffect {
                                                 -> Result<TxnEffect, PlatformError> {
     let mut txo_count: usize = 0;
     let mut txos: Vec<Option<TxOutput>> = Vec::new();
+    let mut internally_spent_txos = Vec::new();
     let mut input_txos: HashMap<TxoSID, BlindAssetRecord> = HashMap::new();
     let mut new_asset_codes: HashMap<AssetTypeCode, AssetType> = HashMap::new();
     let mut new_issuance_nums: HashMap<AssetTypeCode, Vec<u64>> = HashMap::new();
     let mut issuance_keys: HashMap<AssetTypeCode, IssuerPublicKey> = HashMap::new();
+    let mut issuance_amounts = HashMap::new();
     let mut debt_effects: HashMap<AssetTypeCode, DebtSwapEffect> = HashMap::new();
+    let mut asset_types_involved: HashSet<AssetTypeCode> = HashSet::new();
+    let mut confidential_issuance_types = HashSet::new();
+
+    let custom_policy_asset_types = txn.policy_options
+                                       .clone()
+                                       .unwrap_or_else(TxnPolicyData::default)
+                                       .0
+                                       .drain(..)
+                                       .collect::<HashMap<_, _>>();
+
     let mut air_updates: HashMap<String, String> = HashMap::new();
 
     // Sequentially go through the operations, validating intrinsic or
@@ -76,6 +101,8 @@ impl TxnEffect {
         //         - Fully checked here
         //     2) The token id is available.
         //         - Partially checked here
+        //     3) The policy, if provided, passes its init check
+        //         - Fully checked here
         Operation::DefineAsset(def) => {
           // (1)
           // TODO(joe?): like the note in data_model, should the public key
@@ -90,7 +117,18 @@ impl TxnEffect {
 
           // (2), only within this transaction
           if new_asset_codes.contains_key(&code) || new_issuance_nums.contains_key(&code) {
-            return Err(PlatformError::InputsError);
+            return Err(PlatformError::InputsError(error_location!()));
+          }
+
+          // (3)
+          if let Some((ref pol, ref globals)) = def.body.asset.policy {
+            let globals = globals.clone();
+            run_txn_check(&pol.init_check,
+                          globals.id_vars,
+                          globals.rt_vars,
+                          globals.amt_vars,
+                          globals.frac_vars,
+                          &Transaction::default())?;
           }
 
           issuance_keys.insert(code, token.properties.issuer.clone());
@@ -113,7 +151,7 @@ impl TxnEffect {
         //      TODO(joe): tracking!
         Operation::IssueAsset(iss) => {
           if iss.body.num_outputs != iss.body.records.len() {
-            return Err(PlatformError::InputsError);
+            return Err(PlatformError::InputsError(error_location!()));
           }
 
           assert!(iss.body.num_outputs == iss.body.records.len());
@@ -121,12 +159,14 @@ impl TxnEffect {
           let code = iss.body.code;
           let seq_num = iss.body.seq_num;
 
+          asset_types_involved.insert(code);
+
           // (1), within this transaction
           let iss_nums = new_issuance_nums.entry(code).or_insert_with(|| vec![]);
 
           if let Some(last_num) = iss_nums.last() {
             if seq_num <= *last_num {
-              return Err(PlatformError::InputsError);
+              return Err(PlatformError::InputsError(error_location!()));
             }
           }
           iss_nums.push(seq_num);
@@ -139,22 +179,29 @@ impl TxnEffect {
           // (3)
           if let Some(prior_key) = issuance_keys.get(&code) {
             if iss.pubkey != *prior_key {
-              return Err(PlatformError::InputsError);
+              return Err(PlatformError::InputsError(error_location!()));
             }
           } else {
             issuance_keys.insert(code, iss.pubkey.clone());
           }
-
+          // Increment amounts
           txos.reserve(iss.body.records.len());
           for output in iss.body.records.iter() {
             // (4)
             if (output.0).public_key != iss.pubkey.key {
-              return Err(PlatformError::InputsError);
+              return Err(PlatformError::InputsError(error_location!()));
             }
 
             // (5)
-            if (output.0).asset_type != Some(code.val) {
-              return Err(PlatformError::InputsError);
+            if (output.0).asset_type != XfrAssetType::NonConfidential(code.val) {
+              return Err(PlatformError::InputsError(error_location!()));
+            }
+
+            if let XfrAmount::NonConfidential(amt) = (output.0).amount {
+              let issuance_amount = issuance_amounts.entry(code).or_insert(0);
+              *issuance_amount += amt;
+            } else {
+              confidential_issuance_types.insert(code);
             }
 
             txos.push(Some(output.clone()));
@@ -163,8 +210,8 @@ impl TxnEffect {
         }
 
         // An asset transfer is valid iff:
-        //     1) The signatures on the body all are valid and there is a signature for each input
-        //       key
+        //     1) The signatures on the body (a) all are valid and (b)
+        //        there is a signature for each non-custom-policy input key
         //          - Fully checked here
         //     2) The UTXOs (a) exist on the ledger and (b) match the zei transaction.
         //          - Partially checked here -- anything which hasn't
@@ -173,10 +220,10 @@ impl TxnEffect {
         //          - Fully checked here
         Operation::TransferAsset(trn) => {
           if trn.body.inputs.len() != trn.body.transfer.inputs.len() {
-            return Err(PlatformError::InputsError);
+            return Err(PlatformError::InputsError(error_location!()));
           }
           if trn.body.num_outputs != trn.body.transfer.outputs.len() {
-            return Err(PlatformError::InputsError);
+            return Err(PlatformError::InputsError(error_location!()));
           }
           assert!(trn.body.inputs.len() == trn.body.transfer.inputs.len());
           assert!(trn.body.num_outputs == trn.body.transfer.outputs.len());
@@ -186,7 +233,7 @@ impl TxnEffect {
               let (debt_type, debt_swap_effect) = compute_debt_swap_effect(&trn.body.transfer)?;
 
               if debt_effects.contains_key(&debt_type) {
-                return Err(PlatformError::InputsError);
+                return Err(PlatformError::InputsError(error_location!()));
               }
               debt_effects.insert(debt_type, debt_swap_effect);
             }
@@ -195,44 +242,62 @@ impl TxnEffect {
               let mut sig_keys = HashSet::new();
               for sig in &trn.body_signatures {
                 if !sig.verify(&serde_json::to_vec(&trn.body).unwrap()) {
-                  return Err(PlatformError::InputsError);
+                  return Err(PlatformError::InputsError(error_location!()));
                 }
                 sig_keys.insert(sig.address.key.zei_to_bytes());
               }
 
-              // (1b) all input record owners have signed
+              // (1b) all input record owners (for non-custom-policy
+              //      assets) have signed
               for record in &trn.body.transfer.inputs {
+                // skip signature checking for custom-policy assets
+                if let Some(inp_code) = record.asset_type.get_asset_type() {
+                  if custom_policy_asset_types.get(&AssetTypeCode { val: inp_code })
+                                              .is_some()
+                  {
+                    continue;
+                  }
+                }
                 if !sig_keys.contains(&record.public_key.zei_to_bytes()) {
-                  return Err(PlatformError::InputsError);
+                  return Err(PlatformError::InputsError(error_location!()));
                 }
               }
             }
           }
           // (3)
           // TODO: implement real policies
-          let null_policies = vec![];
-          let null_commitments = vec![];
-          verify_xfr_body(prng, &trn.body.transfer, &null_policies, &null_commitments)?;
+          verify_xfr_body_no_policies(prng, &trn.body.transfer)?;
 
           for (inp, record) in trn.body.inputs.iter().zip(trn.body.transfer.inputs.iter()) {
+            // Until we can distinguish assets that have policies that invoke transfer restrictions
+            // from those that don't, no confidential types are allowed
+            if record.asset_type.get_asset_type().is_none() {
+              return Err(PlatformError::InputsError(error_location!()));
+            }
+
+            if let Some(inp_code) = record.asset_type.get_asset_type() {
+              asset_types_involved.insert(AssetTypeCode { val: inp_code });
+            }
+
             // (2), checking within this transaction and recording
             // external UTXOs
             match *inp {
               TxoRef::Relative(offs) => {
                 // (2).(a)
                 if offs as usize >= txo_count {
-                  return Err(PlatformError::InputsError);
+                  return Err(PlatformError::InputsError(error_location!()));
                 }
                 let ix = (txo_count - 1) - (offs as usize);
                 match &txos[ix] {
                   None => {
-                    return Err(PlatformError::InputsError);
+                    return Err(PlatformError::InputsError(error_location!()));
                   }
                   Some(TxOutput(inp_record)) => {
                     // (2).(b)
                     if inp_record != record {
-                      return Err(PlatformError::InputsError);
+                      return Err(PlatformError::InputsError(error_location!()));
                     }
+                    internally_spent_txos.push(inp_record.clone());
                   }
                 }
                 txos[ix] = None;
@@ -240,7 +305,7 @@ impl TxnEffect {
               TxoRef::Absolute(txo_sid) => {
                 // (2).(a), partially
                 if input_txos.contains_key(&txo_sid) {
-                  return Err(PlatformError::InputsError);
+                  return Err(PlatformError::InputsError(error_location!()));
                 }
 
                 input_txos.insert(txo_sid, record.clone());
@@ -250,14 +315,34 @@ impl TxnEffect {
 
           txos.reserve(trn.body.transfer.outputs.len());
           for out in trn.body.transfer.outputs.iter() {
+            // Until we can distinguish assets that have policies that invoke transfer restrictions
+            // from those that don't, no confidential types are allowed
+            if out.asset_type.get_asset_type().is_none() {
+              return Err(PlatformError::InputsError(error_location!()));
+            }
+            if let Some(out_code) = out.asset_type.get_asset_type() {
+              asset_types_involved.insert(AssetTypeCode { val: out_code });
+            }
             txos.push(Some(TxOutput(out.clone())));
             txo_count += 1;
           }
         }
 
+        // An AIR assignment is valid iff:
+        //     1)  The body signature is valid.
+        //     2)  The credential commitment is valid for the public key of the signer.
         Operation::AIRAssign(air_assign) => {
-          // Is this like DefineAsset, and doesn't increment txo_count?
-          air_updates.insert(air_assign.body.addr.clone(), air_assign.body.data.clone());
+          let commitment = &air_assign.body.data;
+          let addr = &air_assign.body.addr;
+          let pok = &air_assign.body.pok;
+          let pk = &air_assign.pubkey;
+          // 1)
+          pk.verify(&serde_json::to_vec(&air_assign.body).unwrap(),
+                    &air_assign.signature)?;
+          // 2)
+          credential_verify_commitment(addr, commitment, pok, pk.as_bytes())?;
+          air_updates.insert(serde_json::to_string(&air_assign.pubkey)?,
+                             serde_json::to_string(commitment)?);
         }
       } // end -- match op {
     } // end -- for op in txn.operations.iter() {
@@ -266,9 +351,14 @@ impl TxnEffect {
                    txos,
                    input_txos,
                    new_asset_codes,
+                   internally_spent_txos,
+                   issuance_amounts,
                    new_issuance_nums,
+                   confidential_issuance_types,
                    issuance_keys,
                    debt_effects,
+                   asset_types_involved,
+                   custom_policy_asset_types,
                    air_updates })
   }
 }
@@ -345,6 +435,8 @@ pub struct BlockEffect {
   // The vec should be nonempty unless this asset code is being created in
   // this transaction.
   pub new_issuance_nums: HashMap<AssetTypeCode, Vec<u64>>,
+  // New issuance amounts
+  pub issuance_amounts: HashMap<AssetTypeCode, u64>,
   // Which public key is being used to issue each asset type
   pub issuance_keys: HashMap<AssetTypeCode, IssuerPublicKey>,
   // Updates to the AIR
@@ -370,7 +462,7 @@ impl BlockEffect {
     // Check that no inputs are consumed twice
     for (input_sid, _) in txn.input_txos.iter() {
       if self.input_txos.contains_key(&input_sid) {
-        return Err(PlatformError::InputsError);
+        return Err(PlatformError::InputsError(error_location!()));
       }
     }
 
@@ -381,7 +473,7 @@ impl BlockEffect {
         if self.new_asset_codes.contains_key(&type_code)
            || self.new_issuance_nums.contains_key(&type_code)
         {
-          return Err(PlatformError::InputsError);
+          return Err(PlatformError::InputsError(error_location!()));
         }
       }
 
@@ -389,7 +481,7 @@ impl BlockEffect {
         if self.new_asset_codes.contains_key(&type_code)
            || self.new_issuance_nums.contains_key(&type_code)
         {
-          return Err(PlatformError::InputsError);
+          return Err(PlatformError::InputsError(error_location!()));
         }
 
         // Debug-check that issued assets are registered in `issuance_keys`
@@ -419,6 +511,11 @@ impl BlockEffect {
     for (type_code, issuance_nums) in txn.new_issuance_nums {
       debug_assert!(!self.new_issuance_nums.contains_key(&type_code));
       self.new_issuance_nums.insert(type_code, issuance_nums);
+    }
+
+    for (type_code, amount) in txn.issuance_amounts.iter() {
+      let issuance_amount = self.issuance_amounts.entry(*type_code).or_insert(0);
+      *issuance_amount += amount;
     }
 
     for (addr, data) in txn.air_updates {

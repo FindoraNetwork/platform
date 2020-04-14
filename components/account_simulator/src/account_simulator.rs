@@ -11,6 +11,7 @@ use findora::HasInvariants;
 use ledger::data_model::compute_signature;
 use ledger::data_model::errors::PlatformError;
 use ledger::data_model::*;
+use ledger::error_location;
 use ledger::store::*;
 #[cfg(test)]
 use rand_core::SeedableRng;
@@ -26,9 +27,9 @@ use subprocess::Popen;
 use subprocess::PopenConfig;
 use zei::serialization::ZeiFromToBytes;
 use zei::setup::PublicParams;
-use zei::xfr::asset_record::{build_blind_asset_record, open_asset_record, AssetRecordType};
+use zei::xfr::asset_record::{build_blind_asset_record, open_blind_asset_record, AssetRecordType};
 use zei::xfr::sig::XfrKeyPair;
-use zei::xfr::structs::{AssetRecord, OpenAssetRecord};
+use zei::xfr::structs::{AssetRecord, AssetRecordTemplate, OpenAssetRecord, OwnerMemo};
 
 #[derive(Clone, Debug, Eq, PartialEq, Hash)]
 pub struct UserName(pub String);
@@ -367,6 +368,7 @@ struct LedgerAccounts {
   balances: HashMap<UserName, HashMap<UnitName, u64>>,
   utxos: HashMap<UserName, VecDeque<TxoSID>>, // by account
   units: HashMap<UnitName, (UserName, AssetTypeCode)>, // user, data
+  owner_memos: HashMap<TxoSID, OwnerMemo>,
   // These only affect new issuances
   confidential_amounts: bool,
   #[allow(unused)]
@@ -385,7 +387,7 @@ impl InterpretAccounts<PlatformError> for LedgerAccounts {
 
         self.accounts
             .get(name)
-            .map_or_else(|| Ok(()), |_| Err(PlatformError::InputsError))?;
+            .map_or_else(|| Ok(()), |_| Err(PlatformError::InputsError(error_location!())))?;
 
         dbg!("New user", &name, &keypair);
 
@@ -396,12 +398,11 @@ impl InterpretAccounts<PlatformError> for LedgerAccounts {
       AccountsCommand::NewUnit(name, issuer) => {
         let keypair = self.accounts
                           .get(issuer)
-                          .ok_or(PlatformError::InputsError)?;
+                          .ok_or_else(|| PlatformError::InputsError(error_location!()))?;
         let (pubkey, privkey) = (keypair.get_pk_ref(), keypair.get_sk_ref());
 
-        self.units
-            .get(name)
-            .map_or_else(|| Ok(()), |_| Err(PlatformError::InputsError))?;
+        self.units.get(name).map_or_else(|| Ok(()),
+                                          |_| Err(PlatformError::InputsError(error_location!())))?;
 
         let code = AssetTypeCode::gen_random();
 
@@ -421,7 +422,9 @@ impl InterpretAccounts<PlatformError> for LedgerAccounts {
 
         let txn = Transaction { operations: vec![Operation::DefineAsset(op)],
                                 credentials: vec![],
-                                memos: vec![] };
+                                memos: vec![],
+                                signatures: vec![],
+                                policy_options: None };
 
         let eff = TxnEffect::compute_effect(self.ledger.get_prng(), txn).unwrap();
 
@@ -442,13 +445,15 @@ impl InterpretAccounts<PlatformError> for LedgerAccounts {
       }
       AccountsCommand::Mint(amt, unit) => {
         let amt = *amt as u64;
-        let (issuer, code) = self.units.get(unit).ok_or(PlatformError::InputsError)?;
+        let (issuer, code) = self.units
+                                 .get(unit)
+                                 .ok_or_else(|| PlatformError::InputsError(error_location!()))?;
 
         let new_seq_num = self.ledger.get_issuance_num(&code).unwrap();
 
         let keypair = self.accounts
                           .get(issuer)
-                          .ok_or(PlatformError::InputsError)?;
+                          .ok_or_else(|| PlatformError::InputsError(error_location!()))?;
         let (pubkey, privkey) = (keypair.get_pk_ref(), keypair.get_sk_ref());
         let utxos = self.utxos.get_mut(issuer).unwrap();
 
@@ -460,9 +465,10 @@ impl InterpretAccounts<PlatformError> for LedgerAccounts {
 
         let mut tx = Transaction::default();
 
-        let ar = AssetRecord::new(amt, code.val, *pubkey).unwrap();
+        let ar = AssetRecordTemplate::with_no_asset_tracking(amt, code.val, art, *pubkey);
         let params = PublicParams::new();
-        let ba = build_blind_asset_record(self.ledger.get_prng(), &params.pc_gens, &ar, art, &None);
+        let (ba, _, owner_memo) =
+          build_blind_asset_record(self.ledger.get_prng(), &params.pc_gens, &ar, None);
 
         let asset_issuance_body = IssueAssetBody::new(&code, new_seq_num, &[TxOutput(ba)]).unwrap();
 
@@ -487,18 +493,27 @@ impl InterpretAccounts<PlatformError> for LedgerAccounts {
                             .unwrap();
 
         assert!(txos.len() == 1);
+        if let Some(memo) = owner_memo {
+          self.owner_memos.insert(txos[0], memo);
+        }
         utxos.extend(txos.iter());
       }
       AccountsCommand::Send(src, amt, unit, dst) => {
         let amt = *amt as u64;
-        let src_keypair = self.accounts.get(src).ok_or(PlatformError::InputsError)?;
+        let src_keypair = self.accounts
+                              .get(src)
+                              .ok_or_else(|| PlatformError::InputsError(error_location!()))?;
         let (src_pub, src_priv) = (src_keypair.get_pk_ref(), src_keypair.get_sk_ref());
-        let dst_keypair = self.accounts.get(dst).ok_or(PlatformError::InputsError)?;
+        let dst_keypair = self.accounts
+                              .get(dst)
+                              .ok_or_else(|| PlatformError::InputsError(error_location!()))?;
         let (dst_pub, _) = (dst_keypair.get_pk_ref(), dst_keypair.get_sk_ref());
-        let (_, unit_code) = self.units.get(unit).ok_or(PlatformError::InputsError)?;
+        let (_, unit_code) = self.units
+                                 .get(unit)
+                                 .ok_or_else(|| PlatformError::InputsError(error_location!()))?;
 
         if *self.balances.get(src).unwrap().get(unit).unwrap() < amt {
-          return Err(PlatformError::InputsError);
+          return Err(PlatformError::InputsError(error_location!()));
         }
         if amt == 0 {
           return Ok(());
@@ -516,7 +531,8 @@ impl InterpretAccounts<PlatformError> for LedgerAccounts {
         while total_sum < amt && !avail.is_empty() {
           let sid = avail.pop_front().unwrap();
           let blind_rec = &(self.ledger.get_utxo(sid).unwrap().0).0;
-          let open_rec = open_asset_record(&blind_rec, &src_priv).unwrap();
+          let memo = self.owner_memos.get(&sid).cloned();
+          let open_rec = open_blind_asset_record(&blind_rec, &memo, &src_priv).unwrap();
           dbg!(sid, open_rec.get_amount(), open_rec.get_asset_type());
           if *open_rec.get_asset_type() != unit_code.val {
             to_skip.push(sid);
@@ -536,22 +552,37 @@ impl InterpretAccounts<PlatformError> for LedgerAccounts {
         let mut src_outputs: Vec<AssetRecord> = Vec::new();
         let mut dst_outputs: Vec<AssetRecord> = Vec::new();
         let mut all_outputs: Vec<AssetRecord> = Vec::new();
-
         {
           // Simple output to dst
-          let ar = AssetRecord::new(amt, unit_code.val, *dst_pub).unwrap();
+          let template =
+            AssetRecordTemplate::with_no_asset_tracking(amt, unit_code.val, art, *dst_pub);
+          let ar = AssetRecord::from_template_no_identity_tracking(self.ledger.get_prng(),
+                                                                   &template).unwrap();
           dst_outputs.push(ar);
 
-          let ar = AssetRecord::new(amt, unit_code.val, *dst_pub).unwrap();
+          let template =
+            AssetRecordTemplate::with_no_asset_tracking(amt, unit_code.val, art, *dst_pub);
+          let ar = AssetRecord::from_template_no_identity_tracking(self.ledger.get_prng(),
+                                                                   &template).unwrap();
           all_outputs.push(ar);
         }
 
         if total_sum > amt {
           // Extras left over go back to src
-          let ar = AssetRecord::new(total_sum - amt, unit_code.val, *src_pub).unwrap();
+          let template = AssetRecordTemplate::with_no_asset_tracking(total_sum - amt,
+                                                                     unit_code.val,
+                                                                     art,
+                                                                     *src_pub);
+          let ar = AssetRecord::from_template_no_identity_tracking(self.ledger.get_prng(),
+                                                                   &template).unwrap();
           src_outputs.push(ar);
 
-          let ar = AssetRecord::new(total_sum - amt, unit_code.val, *src_pub).unwrap();
+          let template = AssetRecordTemplate::with_no_asset_tracking(total_sum - amt,
+                                                                     unit_code.val,
+                                                                     art,
+                                                                     *src_pub);
+          let ar = AssetRecord::from_template_no_identity_tracking(self.ledger.get_prng(),
+                                                                   &template).unwrap();
           all_outputs.push(ar);
         }
 
@@ -578,6 +609,8 @@ impl InterpretAccounts<PlatformError> for LedgerAccounts {
                                  to_use.iter().cloned().map(TxoRef::Absolute).collect(),
                                  src_records.as_slice(),
                                  all_outputs.as_slice()).unwrap();
+
+        let mut owners_memos = transfer_body.transfer.owners_memos.clone();
         dbg!(&transfer_body);
         let transfer_sig =
           SignedAddress { address: XfrAddress { key: *src_pub },
@@ -588,7 +621,9 @@ impl InterpretAccounts<PlatformError> for LedgerAccounts {
                                        transfer_type: TransferType::Standard };
         let txn = Transaction { operations: vec![Operation::TransferAsset(transfer)],
                                 credentials: vec![],
-                                memos: vec![] };
+                                memos: vec![],
+                                signatures: vec![],
+                                policy_options: None };
 
         let effect = TxnEffect::compute_effect(self.ledger.get_prng(), txn).unwrap();
 
@@ -611,6 +646,12 @@ impl InterpretAccounts<PlatformError> for LedgerAccounts {
             .get_mut(src)
             .unwrap()
             .extend(&txos[dst_outputs.len()..]);
+
+        for (txo_sid, owner_memo) in txos.iter().zip(owners_memos.drain(..)) {
+          if let Some(memo) = owner_memo {
+            self.owner_memos.insert(*txo_sid, memo);
+          }
+        }
       } // AccountsCommand::ToggleConfAmts() => {
         //     self.confidential_amounts = !conf_amts;
         // }
@@ -627,7 +668,7 @@ struct OneBigTxnAccounts {
   txn: Transaction,
   accounts: HashMap<UserName, XfrKeyPair>,
   balances: HashMap<UserName, HashMap<UnitName, u64>>,
-  txos: Vec<TxOutput>,
+  txos: Vec<(TxOutput, Option<OwnerMemo>)>,
   utxos: HashMap<UserName, VecDeque<usize>>, // by account
   units: HashMap<UnitName, (UserName, AssetTypeCode, u64)>, // user, data, issuance num
   // These only affect new issuances
@@ -648,7 +689,7 @@ impl InterpretAccounts<PlatformError> for OneBigTxnAccounts {
 
         self.accounts
             .get(name)
-            .map_or_else(|| Ok(()), |_| Err(PlatformError::InputsError))?;
+            .map_or_else(|| Ok(()), |_| Err(PlatformError::InputsError(error_location!())))?;
 
         dbg!("New user", &name, &keypair);
 
@@ -659,12 +700,11 @@ impl InterpretAccounts<PlatformError> for OneBigTxnAccounts {
       AccountsCommand::NewUnit(name, issuer) => {
         let keypair = self.accounts
                           .get(issuer)
-                          .ok_or(PlatformError::InputsError)?;
+                          .ok_or_else(|| PlatformError::InputsError(error_location!()))?;
         let (pubkey, privkey) = (keypair.get_pk_ref(), keypair.get_sk_ref());
 
-        self.units
-            .get(name)
-            .map_or_else(|| Ok(()), |_| Err(PlatformError::InputsError))?;
+        self.units.get(name).map_or_else(|| Ok(()),
+                                          |_| Err(PlatformError::InputsError(error_location!())))?;
 
         let code = AssetTypeCode::gen_random();
 
@@ -700,13 +740,15 @@ impl InterpretAccounts<PlatformError> for OneBigTxnAccounts {
       AccountsCommand::Mint(amt, unit) => {
         let amt = *amt as u64;
         let (issuer, code, new_seq_num) =
-          self.units.get_mut(unit).ok_or(PlatformError::InputsError)?;
+          self.units
+              .get_mut(unit)
+              .ok_or_else(|| PlatformError::InputsError(error_location!()))?;
         *new_seq_num += 1;
         let new_seq_num = *new_seq_num - 1;
 
         let keypair = self.accounts
                           .get(issuer)
-                          .ok_or(PlatformError::InputsError)?;
+                          .ok_or_else(|| PlatformError::InputsError(error_location!()))?;
         let (pubkey, privkey) = (keypair.get_pk_ref(), keypair.get_sk_ref());
         let utxos = self.utxos.get_mut(issuer).unwrap();
 
@@ -716,13 +758,10 @@ impl InterpretAccounts<PlatformError> for OneBigTxnAccounts {
              .get_mut(unit)
              .unwrap() += amt;
 
-        let ar = AssetRecord::new(amt, code.val, *pubkey).unwrap();
+        let ar = AssetRecordTemplate::with_no_asset_tracking(amt, code.val, art, *pubkey);
         let params = PublicParams::new();
-        let ba = build_blind_asset_record(self.base_ledger.get_prng(),
-                                          &params.pc_gens,
-                                          &ar,
-                                          art,
-                                          &None);
+        let (ba, _, owner_memo) =
+          build_blind_asset_record(self.base_ledger.get_prng(), &params.pc_gens, &ar, None);
 
         let asset_issuance_body = IssueAssetBody::new(&code, new_seq_num, &[TxOutput(ba)]).unwrap();
 
@@ -747,20 +786,25 @@ impl InterpretAccounts<PlatformError> for OneBigTxnAccounts {
         assert!(effect.txos.len() == self.txos.len() + 1);
         utxos.push_back(effect.txos.len() - 1);
 
-        self.txos.extend(effect.txos[self.txos.len()..].iter()
-                                                       .map(|x| x.as_ref().unwrap())
-                                                       .cloned());
+        self.txos
+            .push((effect.txos[self.txos.len()].as_ref().unwrap().clone(), owner_memo));
       }
       AccountsCommand::Send(src, amt, unit, dst) => {
         let amt = *amt as u64;
-        let src_keypair = self.accounts.get(src).ok_or(PlatformError::InputsError)?;
+        let src_keypair = self.accounts
+                              .get(src)
+                              .ok_or_else(|| PlatformError::InputsError(error_location!()))?;
         let (src_pub, src_priv) = (src_keypair.get_pk_ref(), src_keypair.get_sk_ref());
-        let dst_keypair = self.accounts.get(dst).ok_or(PlatformError::InputsError)?;
+        let dst_keypair = self.accounts
+                              .get(dst)
+                              .ok_or_else(|| PlatformError::InputsError(error_location!()))?;
         let (dst_pub, _) = (dst_keypair.get_pk_ref(), dst_keypair.get_sk_ref());
-        let (_, unit_code, _) = self.units.get(unit).ok_or(PlatformError::InputsError)?;
+        let (_, unit_code, _) = self.units
+                                    .get(unit)
+                                    .ok_or_else(|| PlatformError::InputsError(error_location!()))?;
 
         if *self.balances.get(src).unwrap().get(unit).unwrap() < amt {
-          return Err(PlatformError::InputsError);
+          return Err(PlatformError::InputsError(error_location!()));
         }
         if amt == 0 {
           return Ok(());
@@ -777,8 +821,9 @@ impl InterpretAccounts<PlatformError> for OneBigTxnAccounts {
 
         while total_sum < amt && !avail.is_empty() {
           let sid = avail.pop_front().unwrap();
-          let blind_rec = &(self.txos.get(sid).unwrap().0);
-          let open_rec = open_asset_record(&blind_rec, &src_priv).unwrap();
+          let blind_rec = &((self.txos.get(sid).unwrap().0).0);
+          let memo = &(self.txos.get(sid).unwrap().1);
+          let open_rec = open_blind_asset_record(&blind_rec, &memo, &src_priv).unwrap();
           dbg!(sid, open_rec.get_amount(), open_rec.get_asset_type());
           if *open_rec.get_asset_type() != unit_code.val {
             to_skip.push(sid);
@@ -801,19 +846,33 @@ impl InterpretAccounts<PlatformError> for OneBigTxnAccounts {
 
         {
           // Simple output to dst
-          let ar = AssetRecord::new(amt, unit_code.val, *dst_pub).unwrap();
+          let ar = AssetRecordTemplate::with_no_asset_tracking(amt, unit_code.val, art, *dst_pub);
+          let ar = AssetRecord::from_template_no_identity_tracking(self.base_ledger.get_prng(),
+                                                                   &ar).unwrap();
           dst_outputs.push(ar);
 
-          let ar = AssetRecord::new(amt, unit_code.val, *dst_pub).unwrap();
+          let ar = AssetRecordTemplate::with_no_asset_tracking(amt, unit_code.val, art, *dst_pub);
+          let ar = AssetRecord::from_template_no_identity_tracking(self.base_ledger.get_prng(),
+                                                                   &ar).unwrap();
           all_outputs.push(ar);
         }
 
         if total_sum > amt {
           // Extras left over go back to src
-          let ar = AssetRecord::new(total_sum - amt, unit_code.val, *src_pub).unwrap();
+          let ar = AssetRecordTemplate::with_no_asset_tracking(total_sum - amt,
+                                                               unit_code.val,
+                                                               art,
+                                                               *src_pub);
+          let ar = AssetRecord::from_template_no_identity_tracking(self.base_ledger.get_prng(),
+                                                                   &ar).unwrap();
           src_outputs.push(ar);
 
-          let ar = AssetRecord::new(total_sum - amt, unit_code.val, *src_pub).unwrap();
+          let ar = AssetRecordTemplate::with_no_asset_tracking(total_sum - amt,
+                                                               unit_code.val,
+                                                               art,
+                                                               *src_pub);
+          let ar = AssetRecord::from_template_no_identity_tracking(self.base_ledger.get_prng(),
+                                                                   &ar).unwrap();
           all_outputs.push(ar);
         }
 
@@ -842,6 +901,7 @@ impl InterpretAccounts<PlatformError> for OneBigTxnAccounts {
                                                          .collect(),
                                                    src_records.as_slice(),
                                                    all_outputs.as_slice()).unwrap();
+        let owners_memos = transfer_body.transfer.owners_memos.clone();
         dbg!(&transfer_body);
         let transfer_sig =
           SignedAddress { address: XfrAddress { key: *src_pub },
@@ -878,7 +938,10 @@ impl InterpretAccounts<PlatformError> for OneBigTxnAccounts {
             .get_mut(src)
             .unwrap()
             .extend(&txo_sids[dst_outputs.len()..]);
-        self.txos.extend(txos);
+        self.txos.extend(txos.iter()
+                             .zip(owners_memos.iter())
+                             .map(|(txo, memo)| (txo.clone(), memo.as_ref().cloned()))
+                             .collect::<Vec<(TxOutput, Option<OwnerMemo>)>>());
       } // AccountsCommand::ToggleConfAmts() => {
         //     self.confidential_amounts = !conf_amts;
         // }
@@ -900,6 +963,7 @@ struct LedgerStandaloneAccounts {
   balances: HashMap<UserName, HashMap<UnitName, u64>>,
   utxos: HashMap<UserName, VecDeque<TxoSID>>, // by account
   units: HashMap<UnitName, (UserName, AssetTypeCode)>, // user, data
+  owner_memos: HashMap<TxoSID, OwnerMemo>,
   // These only affect new issuances
   confidential_amounts: bool,
   #[allow(unused)]
@@ -914,8 +978,8 @@ impl Drop for LedgerStandaloneAccounts {
            .is_err()
     {
       self.ledger.kill().unwrap();
-      self.ledger.wait().unwrap();
     }
+    self.ledger.wait().unwrap();
   }
 }
 
@@ -931,7 +995,7 @@ impl InterpretAccounts<PlatformError> for LedgerStandaloneAccounts {
 
         self.accounts
             .get(name)
-            .map_or_else(|| Ok(()), |_| Err(PlatformError::InputsError))?;
+            .map_or_else(|| Ok(()), |_| Err(PlatformError::InputsError(error_location!())))?;
 
         dbg!("New user", &name, &keypair);
 
@@ -942,12 +1006,11 @@ impl InterpretAccounts<PlatformError> for LedgerStandaloneAccounts {
       AccountsCommand::NewUnit(name, issuer) => {
         let keypair = self.accounts
                           .get(issuer)
-                          .ok_or(PlatformError::InputsError)?;
+                          .ok_or_else(|| PlatformError::InputsError(error_location!()))?;
         let (pubkey, privkey) = (keypair.get_pk_ref(), keypair.get_sk_ref());
 
-        self.units
-            .get(name)
-            .map_or_else(|| Ok(()), |_| Err(PlatformError::InputsError))?;
+        self.units.get(name).map_or_else(|| Ok(()),
+                                          |_| Err(PlatformError::InputsError(error_location!())))?;
 
         let code = AssetTypeCode::gen_random();
 
@@ -967,7 +1030,9 @@ impl InterpretAccounts<PlatformError> for LedgerStandaloneAccounts {
 
         let txn = Transaction { operations: vec![Operation::DefineAsset(op)],
                                 credentials: vec![],
-                                memos: vec![] };
+                                memos: vec![],
+                                signatures: vec![],
+                                policy_options: None };
 
         {
           // let serialize = serde_json::to_string(&tx).unwrap();
@@ -1020,7 +1085,9 @@ impl InterpretAccounts<PlatformError> for LedgerStandaloneAccounts {
       }
       AccountsCommand::Mint(amt, unit) => {
         let amt = *amt as u64;
-        let (issuer, code) = self.units.get(unit).ok_or(PlatformError::InputsError)?;
+        let (issuer, code) = self.units
+                                 .get(unit)
+                                 .ok_or_else(|| PlatformError::InputsError(error_location!()))?;
 
         let new_seq_num = {
           let host = "localhost";
@@ -1041,7 +1108,7 @@ impl InterpretAccounts<PlatformError> for LedgerStandaloneAccounts {
 
         let keypair = self.accounts
                           .get(issuer)
-                          .ok_or(PlatformError::InputsError)?;
+                          .ok_or_else(|| PlatformError::InputsError(error_location!()))?;
         let (pubkey, privkey) = (keypair.get_pk_ref(), keypair.get_sk_ref());
         let utxos = self.utxos.get_mut(issuer).unwrap();
 
@@ -1053,9 +1120,10 @@ impl InterpretAccounts<PlatformError> for LedgerStandaloneAccounts {
 
         let mut tx = Transaction::default();
 
-        let ar = AssetRecord::new(amt, code.val, *pubkey).unwrap();
+        let ar = AssetRecordTemplate::with_no_asset_tracking(amt, code.val, art, *pubkey);
         let params = PublicParams::new();
-        let ba = build_blind_asset_record(&mut self.prng, &params.pc_gens, &ar, art, &None);
+        let (ba, _, owner_memo) =
+          build_blind_asset_record(&mut self.prng, &params.pc_gens, &ar, None);
 
         let asset_issuance_body = IssueAssetBody::new(&code, new_seq_num, &[TxOutput(ba)]).unwrap();
 
@@ -1113,18 +1181,27 @@ impl InterpretAccounts<PlatformError> for LedgerStandaloneAccounts {
         };
 
         assert!(txos.len() == 1);
+        if let Some(memo) = owner_memo {
+          self.owner_memos.insert(txos[0], memo);
+        }
         utxos.extend(txos.iter());
       }
       AccountsCommand::Send(src, amt, unit, dst) => {
         let amt = *amt as u64;
-        let src_keypair = self.accounts.get(src).ok_or(PlatformError::InputsError)?;
+        let src_keypair = self.accounts
+                              .get(src)
+                              .ok_or_else(|| PlatformError::InputsError(error_location!()))?;
         let (src_pub, src_priv) = (src_keypair.get_pk_ref(), src_keypair.get_sk_ref());
-        let dst_keypair = self.accounts.get(dst).ok_or(PlatformError::InputsError)?;
+        let dst_keypair = self.accounts
+                              .get(dst)
+                              .ok_or_else(|| PlatformError::InputsError(error_location!()))?;
         let (dst_pub, _) = (dst_keypair.get_pk_ref(), dst_keypair.get_sk_ref());
-        let (_, unit_code) = self.units.get(unit).ok_or(PlatformError::InputsError)?;
+        let (_, unit_code) = self.units
+                                 .get(unit)
+                                 .ok_or_else(|| PlatformError::InputsError(error_location!()))?;
 
         if *self.balances.get(src).unwrap().get(unit).unwrap() < amt {
-          return Err(PlatformError::InputsError);
+          return Err(PlatformError::InputsError(error_location!()));
         }
         if amt == 0 {
           return Ok(());
@@ -1146,7 +1223,8 @@ impl InterpretAccounts<PlatformError> for LedgerStandaloneAccounts {
             let port = format!("{}",self.query_port);
             reqwest::get(&format!("http://{}:{}/utxo_sid/{}",host,port,sid.0)).unwrap().error_for_status().unwrap().text().unwrap()
           }).unwrap().0;
-          let open_rec = open_asset_record(&blind_rec, &src_priv).unwrap();
+          let memo = self.owner_memos.get(&sid).cloned();
+          let open_rec = open_blind_asset_record(&blind_rec, &memo, &src_priv).unwrap();
           dbg!(sid, open_rec.get_amount(), open_rec.get_asset_type());
           if *open_rec.get_asset_type() != unit_code.val {
             to_skip.push(sid);
@@ -1169,19 +1247,29 @@ impl InterpretAccounts<PlatformError> for LedgerStandaloneAccounts {
 
         {
           // Simple output to dst
-          let ar = AssetRecord::new(amt, unit_code.val, *dst_pub).unwrap();
+          let ar = AssetRecordTemplate::with_no_asset_tracking(amt, unit_code.val, art, *dst_pub);
+          let ar = AssetRecord::from_template_no_identity_tracking(&mut self.prng, &ar).unwrap();
           dst_outputs.push(ar);
 
-          let ar = AssetRecord::new(amt, unit_code.val, *dst_pub).unwrap();
+          let ar = AssetRecordTemplate::with_no_asset_tracking(amt, unit_code.val, art, *dst_pub);
+          let ar = AssetRecord::from_template_no_identity_tracking(&mut self.prng, &ar).unwrap();
           all_outputs.push(ar);
         }
 
         if total_sum > amt {
           // Extras left over go back to src
-          let ar = AssetRecord::new(total_sum - amt, unit_code.val, *src_pub).unwrap();
+          let ar = AssetRecordTemplate::with_no_asset_tracking(total_sum - amt,
+                                                               unit_code.val,
+                                                               art,
+                                                               *src_pub);
+          let ar = AssetRecord::from_template_no_identity_tracking(&mut self.prng, &ar).unwrap();
           src_outputs.push(ar);
 
-          let ar = AssetRecord::new(total_sum - amt, unit_code.val, *src_pub).unwrap();
+          let ar = AssetRecordTemplate::with_no_asset_tracking(total_sum - amt,
+                                                               unit_code.val,
+                                                               art,
+                                                               *src_pub);
+          let ar = AssetRecord::from_template_no_identity_tracking(&mut self.prng, &ar).unwrap();
           all_outputs.push(ar);
         }
 
@@ -1208,6 +1296,8 @@ impl InterpretAccounts<PlatformError> for LedgerStandaloneAccounts {
                                  to_use.iter().cloned().map(TxoRef::Absolute).collect(),
                                  src_records.as_slice(),
                                  all_outputs.as_slice()).unwrap();
+
+        let mut owners_memos = transfer_body.transfer.owners_memos.clone();
         dbg!(&transfer_body);
         let transfer_sig =
           SignedAddress { address: XfrAddress { key: *src_pub },
@@ -1218,7 +1308,9 @@ impl InterpretAccounts<PlatformError> for LedgerStandaloneAccounts {
                                        transfer_type: TransferType::Standard };
         let txn = Transaction { operations: vec![Operation::TransferAsset(transfer)],
                                 credentials: vec![],
-                                memos: vec![] };
+                                memos: vec![],
+                                signatures: vec![],
+                                policy_options: None };
 
         let txos = {
           // let serialize = serde_json::to_string(&tx).unwrap();
@@ -1273,6 +1365,11 @@ impl InterpretAccounts<PlatformError> for LedgerStandaloneAccounts {
             .get_mut(src)
             .unwrap()
             .extend(&txos[dst_outputs.len()..]);
+        for (txo_sid, owner_memo) in txos.iter().zip(owners_memos.drain(..)) {
+          if let Some(memo) = owner_memo {
+            self.owner_memos.insert(*txo_sid, memo);
+          }
+        }
       } // AccountsCommand::ToggleConfAmts() => {
         //     self.confidential_amounts = !conf_amts;
         // }
@@ -1341,17 +1438,19 @@ impl Arbitrary for AccountsScenario {
     }
 
     // And some activity.
-    for (src, count, unit, dst) in Vec::<(usize, usize, usize, usize)>::arbitrary(g) {
+    for (roll, src, count, unit, dst) in Vec::<(u32, usize, usize, usize, usize)>::arbitrary(g) {
       let src = user_vec[src % user_vec.len()].clone();
       let dst = user_vec[dst % user_vec.len()].clone();
-      let unit = unit_vec[unit % unit_vec.len()].clone();
+      let unit_ix = unit % unit_vec.len();
+      let unit = unit_vec[unit_ix].clone();
       let amt = unit_amounts.get_mut(&unit).unwrap();
-      match g.next_u32() % 10 {
-        0..=7 => {
-          let count = if *amt != 0 { count % *amt } else { 0 };
+      let send_amt = if *amt / 4 > 0 { *amt / 4 } else { *amt };
+      match roll % 11 {
+        1..=10 => {
+          let count = if send_amt != 0 { count % send_amt } else { 0 };
           cmds.push(AccountsCommand::Send(src, count, unit, dst));
         }
-        8..=9 => {
+        0 => {
           *amt += count;
           cmds.push(AccountsCommand::Mint(count, unit));
         }
@@ -1547,6 +1646,7 @@ mod test {
                                                utxos: HashMap::new(),
                                                units: HashMap::new(),
                                                balances: HashMap::new(),
+                                               owner_memos: HashMap::new(),
                                                confidential_amounts: cmds.confidential_amounts,
                                                confidential_types: cmds.confidential_types });
     let mut big_txn = Box::new(OneBigTxnAccounts { base_ledger: LedgerState::test_ledger(),
@@ -1565,7 +1665,7 @@ mod test {
     } else {
       Some(Box::new(
       LedgerStandaloneAccounts {
-        ledger: Popen::create(&["/usr/bin/env", "bash", "-c", "flock .test_standalone_lock cargo run"],
+        ledger: Popen::create(&["/usr/bin/env", "bash", "-c", "flock --no-fork .test_standalone_lock cargo run"],
                   PopenConfig {
                     cwd: Some(OsString::from("../ledger_standalone/")),
                     ..Default::default()
@@ -1578,6 +1678,7 @@ mod test {
         utxos: HashMap::new(),
         units: HashMap::new(),
         balances: HashMap::new(),
+        owner_memos: HashMap::new(),
         confidential_amounts: cmds.confidential_amounts,
         confidential_types: cmds.confidential_types }))
     };

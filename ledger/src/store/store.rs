@@ -6,7 +6,9 @@ extern crate tempdir;
 
 use crate::data_model::errors::PlatformError;
 use crate::data_model::*;
+use crate::error_location;
 use crate::policies::{calculate_fee, DebtMemo};
+use crate::policy_script::policy_check_txn;
 use air::{AIRResult, AIR};
 use bitmap::{BitMap, SparseMap};
 use cryptohash::sha256::Digest as BitDigest;
@@ -20,9 +22,10 @@ use rand_core::{CryptoRng, RngCore, SeedableRng};
 use std::collections::{HashMap, VecDeque};
 use std::fs::File;
 use std::fs::OpenOptions;
-use std::io::BufReader;
+use std::io::{BufRead, BufReader, BufWriter, Write};
 use std::path::Path;
 use std::u64;
+use zei::xfr::sig::{XfrKeyPair, XfrPublicKey, XfrSignature};
 
 use super::effects::*;
 
@@ -107,6 +110,7 @@ pub trait LedgerUpdate<RNG: RngCore + CryptoRng> {
                   -> Result<HashMap<TxnTempSID, (TxnSID, Vec<TxoSID>)>, std::io::Error>;
 }
 
+// TODO(joe/keyao): which of these methods should be in `LedgerAccess`?
 pub trait ArchiveAccess {
   // Number of blocks committed
   fn get_block_count(&self) -> usize;
@@ -144,6 +148,12 @@ pub trait ArchiveAccess {
 
   // Key-value lookup in AIR
   fn get_air_data(&self, address: &str) -> AIRResult;
+
+  // The public signing key this ledger provides
+  fn public_key(&self) -> &XfrPublicKey;
+
+  // Sign a message with the ledger's signing key
+  fn sign_message(&self, msg: &[u8]) -> XfrSignature;
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
@@ -201,6 +211,8 @@ pub struct LedgerStatus {
   // sequential.
   asset_types: HashMap<AssetTypeCode, AssetType>,
   issuance_num: HashMap<AssetTypeCode, u64>,
+  // Issuance amounts for assets with limits
+  issuance_amounts: HashMap<AssetTypeCode, u64>,
 
   // Should be equal to the count of transactions
   next_txn: TxnSID,
@@ -222,6 +234,10 @@ pub struct LedgerState {
 
   // PRNG used for transaction validation
   prng: ChaChaRng,
+
+  // Key pair used for signing the state commitment
+  // TODO(joe): update this to the generic zei signing API when it exists
+  signing_key: XfrKeyPair,
 
   // Merkle tree tracking the sequence of transaction hashes in the block
   // Each appended hash is the hash of transactions in the same block
@@ -308,39 +324,22 @@ impl HasInvariants<PlatformError> for LedgerState {
 
     if let Some(txn_log_fd) = &self.txn_log {
       txn_log_fd.sync_data().unwrap();
-      let tmp_dir = {
-        let base_dir = std::env::temp_dir();
-        let base_dirname = "findora_ledger";
-        let mut i = 0;
-        let mut dirname = None;
-        while dirname.is_none() {
-          let name = std::format!("{}_{}", base_dirname, i);
-          let path = base_dir.join(name);
-          match std::fs::create_dir(&path) {
-            Ok(()) => {
-              dirname = Some(path);
-            }
-            Err(_) => {
-              i += 1;
-            }
-          }
-        }
-        dirname.unwrap()
-      };
-      let block_merkle_buf = tmp_dir.join("test_block_merkle");
-      let other_block_merkle_path = block_merkle_buf.to_str().unwrap();
+      let tmp_dir = findora::fresh_tmp_dir();
 
-      let air_buf = tmp_dir.join("test_air");
-      let other_air_path = air_buf.to_str().unwrap();
+      let other_block_merkle_buf = tmp_dir.join("test_block_merkle");
+      let other_block_merkle_path = other_block_merkle_buf.to_str().unwrap();
 
-      let txn_merkle_buf = tmp_dir.join("test_txn_merkle");
-      let other_txn_merkle_path = txn_merkle_buf.to_str().unwrap();
+      let other_air_buf = tmp_dir.join("test_air");
+      let other_air_path = other_air_buf.to_str().unwrap();
 
-      let txn_buf = tmp_dir.join("test_txnlog");
-      let other_txn_path = txn_buf.to_str().unwrap();
+      let other_txn_merkle_buf = tmp_dir.join("test_txn_merkle");
+      let other_txn_merkle_path = other_txn_merkle_buf.to_str().unwrap();
 
-      let utxo_map_buf = tmp_dir.join("test_utxo_map");
-      let other_utxo_map_path = utxo_map_buf.to_str().unwrap();
+      let other_txn_buf = tmp_dir.join("test_txnlog");
+      let other_txn_path = other_txn_buf.to_str().unwrap();
+
+      let other_utxo_map_buf = tmp_dir.join("test_utxo_map");
+      let other_utxo_map_path = other_utxo_map_buf.to_str().unwrap();
 
       dbg!(&self.status.txn_path);
       dbg!(std::fs::metadata(&self.status.txn_path).unwrap());
@@ -352,6 +351,7 @@ impl HasInvariants<PlatformError> for LedgerState {
                                                        &other_txn_merkle_path,
                                                        &other_txn_path,
                                                        &other_utxo_map_path,
+                                                       None,
                                                        None).unwrap());
 
       let mut status2 = Box::new(state2.status);
@@ -384,6 +384,7 @@ impl LedgerStatus {
                                 txn_path: txn_path.to_owned(),
                                 utxo_map_path: utxo_map_path.to_owned(),
                                 utxos: HashMap::new(),
+                                issuance_amounts: HashMap::new(),
                                 utxo_map_versions: VecDeque::new(),
                                 asset_types: HashMap::new(),
                                 issuance_num: HashMap::new(),
@@ -412,29 +413,61 @@ impl LedgerStatus {
   //  block.add_txn_effect(txn_effect);
   //
   fn check_txn_effects(&self, txn: TxnEffect) -> Result<TxnEffect, PlatformError> {
-    // Each input must be unspent and correspond to the claimed record
+    // 1. Each input must be unspent and correspond to the claimed record
+    // 2. Inputs with transfer restrictions can only be owned by the asset issuer
     for (inp_sid, inp_record) in txn.input_txos.iter() {
+      // (1)
       let inp_utxo = self.utxos
                          .get(inp_sid)
-                         .map_or(Err(PlatformError::InputsError), Ok)?;
+                         .map_or(Err(PlatformError::InputsError(error_location!())), Ok)?;
       let record = &(inp_utxo.0).0;
       if record != inp_record {
-        return Err(PlatformError::InputsError);
+        return Err(PlatformError::InputsError(error_location!()));
+      }
+      // (2)
+      debug_assert!(inp_record.asset_type.get_asset_type().is_some());
+      let code = AssetTypeCode { val: record.asset_type.get_asset_type().unwrap() };
+      let asset_type = self.asset_types
+                           .get(&code)
+                           .or_else(|| txn.new_asset_codes.get(&code))
+                           .ok_or_else(|| PlatformError::InputsError(error_location!()))?;
+      if !asset_type.properties.asset_rules.transferable
+         && asset_type.properties.issuer.key != record.public_key
+      {
+        return Err(PlatformError::InputsError(error_location!()));
       }
     }
+
+    // Internally spend inputs with transfer restrictions can only be owned by the asset issuer
+    for record in txn.internally_spent_txos.iter() {
+      let code = AssetTypeCode { val: record.asset_type.get_asset_type().unwrap() };
+      let asset_type = self.asset_types
+                           .get(&code)
+                           .or_else(|| txn.new_asset_codes.get(&code))
+                           .ok_or_else(|| PlatformError::InputsError(error_location!()))?;
+      if !asset_type.properties.asset_rules.transferable
+         && asset_type.properties.issuer.key != record.public_key
+      {
+        return Err(PlatformError::InputsError(error_location!()));
+      }
+    }
+
+    dbg!("records work");
 
     // New asset types must not already exist
     for (code, _asset_type) in txn.new_asset_codes.iter() {
       if self.asset_types.contains_key(&code) {
-        return Err(PlatformError::InputsError);
+        return Err(PlatformError::InputsError(error_location!()));
       }
       if self.issuance_num.contains_key(&code) {
-        return Err(PlatformError::InputsError);
+        return Err(PlatformError::InputsError(error_location!()));
       }
       debug_assert!(txn.new_issuance_nums.contains_key(&code));
 
       // Asset issuance should match the currently registered key
     }
+
+    dbg!("new types work");
 
     // New issuance numbers
     // (1) Must refer to a created asset type
@@ -446,20 +479,21 @@ impl LedgerStatus {
     //    order
     for (code, seq_nums) in txn.new_issuance_nums.iter() {
       debug_assert!(txn.issuance_keys.contains_key(&code));
+      dbg!(&(code, seq_nums));
 
       let iss_key = txn.issuance_keys.get(&code).unwrap();
       let asset_type = self.asset_types
                            .get(&code)
                            .or_else(|| txn.new_asset_codes.get(&code))
-                           .ok_or(PlatformError::InputsError)?;
+                           .ok_or_else(|| PlatformError::InputsError(error_location!()))?;
       let proper_key = asset_type.properties.issuer;
       if *iss_key != proper_key {
-        return Err(PlatformError::InputsError);
+        return Err(PlatformError::InputsError(error_location!()));
       }
 
       if seq_nums.is_empty() {
         if !txn.new_asset_codes.contains_key(&code) {
-          return Err(PlatformError::InputsError);
+          return Err(PlatformError::InputsError(error_location!()));
         }
       // We could re-check that self.issuance_num doesn't contain `code`,
       // but currently it's redundant with the new-asset-type checks
@@ -476,8 +510,42 @@ impl LedgerStatus {
                                      .unwrap();
         let min_seq_num = seq_nums.first().unwrap();
         if min_seq_num < curr_seq_num_limit {
-          return Err(PlatformError::InputsError);
+          return Err(PlatformError::InputsError(error_location!()));
         }
+      }
+    }
+
+    // Asset Caps
+    // (1) New issuance amounts cannot exceed asset cap
+    // (2) No confidential issuances allowed for assets with issuance restrictions
+    for (code, amount) in txn.issuance_amounts.iter() {
+      let asset_type = self.asset_types
+                           .get(&code)
+                           .or_else(|| txn.new_asset_codes.get(&code))
+                           .ok_or_else(|| PlatformError::InputsError(error_location!()))?;
+      // (1)
+      if let Some(cap) = asset_type.properties.asset_rules.max_units {
+        let current_amount = self.issuance_amounts
+                                 .get(code)
+                                 .or_else(|| Some(&0))
+                                 .unwrap();
+        if current_amount.checked_add(*amount)
+                         .ok_or_else(|| PlatformError::InputsError(error_location!()))?
+           > cap
+        {
+          return Err(PlatformError::InputsError(error_location!()));
+        }
+      }
+    }
+
+    // (2)
+    for code in txn.confidential_issuance_types.iter() {
+      let asset_type = self.asset_types
+                           .get(&code)
+                           .or_else(|| txn.new_asset_codes.get(&code))
+                           .ok_or_else(|| PlatformError::InputsError(error_location!()))?;
+      if asset_type.has_issuance_restrictions() {
+        return Err(PlatformError::InputsError(error_location!()));
       }
     }
 
@@ -485,10 +553,11 @@ impl LedgerStatus {
     // (1) Fiat code must match debt asset memo
     // (2) fee must be correct
     for (code, debt_swap_effects) in txn.debt_effects.iter() {
+      dbg!(&(code, debt_swap_effects));
       let debt_type = &self.asset_types
                            .get(&code)
                            .or_else(|| txn.new_asset_codes.get(&code))
-                           .ok_or(PlatformError::InputsError)?
+                           .ok_or_else(|| PlatformError::InputsError(error_location!()))?
                            .properties;
 
       let debt_memo = serde_json::from_str::<DebtMemo>(&debt_type.memo.0)?;
@@ -498,7 +567,26 @@ impl LedgerStatus {
       if debt_swap_effects.fiat_code != debt_memo.fiat_code
          || debt_swap_effects.fiat_paid != debt_swap_effects.debt_burned + correct_fee
       {
-        return Err(PlatformError::InputsError);
+        return Err(PlatformError::InputsError(error_location!()));
+      }
+    }
+
+    // Policy checking
+    // TODO(joe): Currently the policy language can't validate transactions
+    //   which include DefineAsset, so it's safe to assume that any valid
+    //   policy usage involves an asset whose definition is already in the
+    //   committed state. However, it may not always be that way, and this
+    //   code will lead to erroneous validation failures when that change
+    //   arrives.
+    for code in txn.asset_types_involved.iter() {
+      if txn.custom_policy_asset_types.contains_key(code) {
+        let asset = self.asset_types
+                        .get(code)
+                        .ok_or_else(|| PlatformError::InputsError(error_location!()))?;
+        if let Some((ref pol, ref globals)) = asset.properties.policy {
+          let globals = globals.clone();
+          policy_check_txn(code, globals, &pol, &txn.txn)?;
+        }
       }
     }
 
@@ -573,6 +661,7 @@ impl LedgerStatus {
       def.txns = block.txns.clone();
       def.temp_sids = block.temp_sids.clone();
       def.air_updates = block.air_updates.clone();
+      def.issuance_amounts = block.issuance_amounts.clone();
 
       def
     });
@@ -592,7 +681,7 @@ impl LedgerUpdate<ChaChaRng> for LedgerState {
     let mut block_ctx = None;
     std::mem::swap(&mut self.block_ctx, &mut block_ctx);
     match block_ctx {
-      None => Err(PlatformError::InputsError),
+      None => Err(PlatformError::InputsError(error_location!())),
       // Probably should be a more relevant error
       Some(block) => Ok(block),
     }
@@ -726,8 +815,8 @@ impl LedgerUpdate<ChaChaRng> for LedgerState {
       //TODO(joe/nathan): This ordering feels bad -- the txn log should probably be write-ahead,
       //but the state commitment you need doesn't exist yet! maybe these should be two different
       //logs, or the writing should be staggered in some way.
-      if let Some(txn_log_fd) = &self.txn_log {
-        bincode::serialize_into(txn_log_fd, &LoggedBlock { block: block_txns, state: self.status.state_commitment_data.clone().unwrap() })
+      if let Some(txn_log_fd) = &mut self.txn_log {
+        writeln!(txn_log_fd,"{}",serde_json::to_string(&LoggedBlock { block: block_txns, state: self.status.state_commitment_data.clone().unwrap() }).unwrap())
               .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other,e)).unwrap();
         txn_log_fd.sync_data().unwrap();
       }
@@ -742,9 +831,14 @@ impl LedgerUpdate<ChaChaRng> for LedgerState {
       self.air.set(&addr, Some(data));
     }
 
+    for (code, amount) in block.issuance_amounts.drain() {
+      let amt = self.status.issuance_amounts.entry(code).or_insert(0);
+      *amt += amount;
+    }
+
     // TODO(joe): asset tracing?
 
-    debug_assert_eq!(block.clone(), Default::default());
+    debug_assert_eq!(block, Default::default());
 
     self.block_ctx = Some(block);
 
@@ -863,7 +957,7 @@ impl LedgerUpdate<ChaChaRng> for LedgerStateChecker {
     block.txns.clear();
     block.temp_sids.clear();
 
-    debug_assert_eq!(block.clone(), Default::default());
+    debug_assert_eq!(block, Default::default());
 
     self.0.block_ctx = Some(block);
 
@@ -929,24 +1023,35 @@ impl LedgerStateChecker {
       }
     }
 
-    let comm = self.0.status.state_commitment_data.as_ref().unwrap();
-    if self.0.utxo_map.compute_checksum() != comm.bitmap {
-      return Err(PlatformError::CheckedReplayError(format!("{}:{}:{}",
-                                                           std::file!(),
-                                                           std::line!(),
-                                                           std::column!())));
-    }
-    if self.0.block_merkle.get_root_hash() != comm.block_merkle {
-      return Err(PlatformError::CheckedReplayError(format!("{}:{}:{}",
-                                                           std::file!(),
-                                                           std::line!(),
-                                                           std::column!())));
-    }
-    if self.0.txn_merkle.get_root_hash() != comm.transaction_merkle_commitment {
-      return Err(PlatformError::CheckedReplayError(format!("{}:{}:{}",
-                                                           std::file!(),
-                                                           std::line!(),
-                                                           std::column!())));
+    match self.0.status.state_commitment_data.as_ref() {
+      Some(comm) => {
+        if self.0.utxo_map.compute_checksum() != comm.bitmap {
+          return Err(PlatformError::CheckedReplayError(format!("{}:{}:{}",
+                                                               std::file!(),
+                                                               std::line!(),
+                                                               std::column!())));
+        }
+        if self.0.block_merkle.get_root_hash() != comm.block_merkle {
+          return Err(PlatformError::CheckedReplayError(format!("{}:{}:{}",
+                                                               std::file!(),
+                                                               std::line!(),
+                                                               std::column!())));
+        }
+        if self.0.txn_merkle.get_root_hash() != comm.transaction_merkle_commitment {
+          return Err(PlatformError::CheckedReplayError(format!("{}:{}:{}",
+                                                               std::file!(),
+                                                               std::line!(),
+                                                               std::column!())));
+        }
+      }
+      None => {
+        if self.0.status.block_commit_count != 0 {
+          return Err(PlatformError::CheckedReplayError(format!("{}:{}:{}",
+                                                               std::file!(),
+                                                               std::line!(),
+                                                               std::column!())));
+        }
+      }
     }
 
     Ok(self.0)
@@ -962,25 +1067,7 @@ impl LedgerState {
 
   // Create a ledger for use by a unit test.
   pub fn test_ledger() -> LedgerState {
-    let tmp_dir = {
-      let base_dir = std::env::temp_dir();
-      let base_dirname = "findora_ledger";
-      let mut i = 0;
-      let mut dirname = None;
-      while dirname.is_none() {
-        let name = std::format!("{}_{}", base_dirname, i);
-        let path = base_dir.join(name);
-        match std::fs::create_dir(&path) {
-          Ok(()) => {
-            dirname = Some(path);
-          }
-          Err(_) => {
-            i += 1;
-          }
-        }
-      }
-      dirname.unwrap()
-    };
+    let tmp_dir = findora::fresh_tmp_dir();
 
     let block_merkle_buf = tmp_dir.join("test_block_merkle");
     let block_merkle_path = block_merkle_buf.to_str().unwrap();
@@ -1000,24 +1087,43 @@ impl LedgerState {
     let utxo_map_buf = tmp_dir.join("test_utxo_map");
     let utxo_map_path = utxo_map_buf.to_str().unwrap();
 
-    LedgerState::new(&block_merkle_path,
-                     &air_path,
-                     &txn_merkle_path,
-                     &txn_path,
-                     &utxo_map_path,
-                     None).unwrap()
+    let ret = LedgerState::new(&block_merkle_path,
+                               &air_path,
+                               &txn_merkle_path,
+                               &txn_path,
+                               &utxo_map_path,
+                               None,
+                               None).unwrap();
+
+    let key_buf = tmp_dir.join("test_sig_key");
+    let key_path = key_buf.to_str().unwrap();
+    {
+      let file = File::create(key_path).unwrap();
+      {
+        let mut writer = BufWriter::new(file);
+
+        bincode::serialize_into::<&mut BufWriter<File>, XfrKeyPair>(&mut writer, &ret.signing_key).unwrap();
+      }
+    }
+
+    ret
   }
 
   // TODO(joe): Make this an iterator of some sort so that we don't have to load the whole log
   // into memory
   fn load_transaction_log(path: &str) -> Result<Vec<LoggedBlock>, std::io::Error> {
     let file = File::open(path)?;
-    let mut reader = BufReader::new(file);
+    let reader = BufReader::new(file);
     let mut v = Vec::new();
-    while let Ok(next_block) =
-      bincode::deserialize_from::<&mut BufReader<File>, LoggedBlock>(&mut reader)
-    {
-      v.push(next_block);
+    for l in reader.lines() {
+      match serde_json::from_str::<LoggedBlock>(&l?) {
+        Ok(next_block) => {
+          v.push(next_block);
+        }
+        Err(_) => {
+          break;
+        }
+      }
     }
     Ok(v)
   }
@@ -1143,25 +1249,29 @@ impl LedgerState {
              txn_merkle_path: &str,
              txn_path: &str,
              utxo_map_path: &str,
+             keypair: Option<XfrKeyPair>,
              prng_seed: Option<[u8; 32]>)
              -> Result<LedgerState, std::io::Error> {
-    let ledger =
-      LedgerState { status: LedgerStatus::new(block_merkle_path,
-                                              air_path,
-                                              txn_merkle_path,
-                                              txn_path,
-                                              utxo_map_path)?,
-                    // TODO(joe): is this safe?
-                    prng: rand_chacha::ChaChaRng::from_seed(prng_seed.unwrap_or([0u8; 32])),
-                    block_merkle: LedgerState::init_merkle_log(block_merkle_path, true)?,
-                    air: LedgerState::init_air_log(air_path, true)?,
-                    txn_merkle: LedgerState::init_merkle_log(txn_merkle_path, true)?,
-                    blocks: Vec::new(),
-                    utxo_map: LedgerState::init_utxo_map(utxo_map_path, true)?,
-                    txn_log: Some(std::fs::OpenOptions::new().create_new(true)
-                                                             .append(true)
-                                                             .open(txn_path)?),
-                    block_ctx: Some(BlockEffect::new()) };
+    let mut prng = prng_seed.map(rand_chacha::ChaChaRng::from_seed)
+                            .unwrap_or_else(ChaChaRng::from_entropy);
+    let signing_key = keypair.unwrap_or_else(|| XfrKeyPair::generate(&mut prng));
+    let ledger = LedgerState { status: LedgerStatus::new(block_merkle_path,
+                                                         air_path,
+                                                         txn_merkle_path,
+                                                         txn_path,
+                                                         utxo_map_path)?,
+                               prng,
+                               signing_key,
+                               block_merkle: LedgerState::init_merkle_log(block_merkle_path,
+                                                                          true)?,
+                               air: LedgerState::init_air_log(air_path, true)?,
+                               txn_merkle: LedgerState::init_merkle_log(txn_merkle_path, true)?,
+                               blocks: Vec::new(),
+                               utxo_map: LedgerState::init_utxo_map(utxo_map_path, true)?,
+                               txn_log: Some(std::fs::OpenOptions::new().create_new(true)
+                                                                        .append(true)
+                                                                        .open(txn_path)?),
+                               block_ctx: Some(BlockEffect::new()) };
 
     ledger.txn_log.as_ref().unwrap().sync_all()?;
 
@@ -1173,27 +1283,52 @@ impl LedgerState {
                                txn_merkle_path: &str,
                                txn_path: &str,
                                utxo_map_path: &str,
+                               signing_key_path: Option<&str>,
                                prng_seed: Option<[u8; 32]>)
                                -> Result<LedgerState, PlatformError> {
+    let mut prng = prng_seed.map(rand_chacha::ChaChaRng::from_seed)
+                            .unwrap_or_else(ChaChaRng::from_entropy);
+    let signing_key = match signing_key_path {
+      Some(path) => {
+        let ret = {
+          let file = File::open(path)?;
+          let mut reader = BufReader::new(file);
+          bincode::deserialize_from::<&mut BufReader<File>, XfrKeyPair>(&mut reader)
+        };
+        ret.or_else::<PlatformError,_>(|_| {
+          let key = XfrKeyPair::generate(&mut prng);
+          let file = File::create(path)?;
+          let mut writer = BufWriter::new(file);
+
+          bincode::serialize_into::<&mut BufWriter<File>, XfrKeyPair>(&mut writer, &key).map_err(|_| PlatformError::SerializationError)?;
+          Ok(key)
+        })?
+      }
+      None => XfrKeyPair::generate(&mut prng),
+    };
+
     let blocks = LedgerState::load_transaction_log(txn_path)?;
     dbg!(&blocks);
     let txn_log = std::fs::OpenOptions::new().append(true).open(txn_path)?;
     dbg!(&txn_log);
     let mut ledger =
       LedgerStateChecker(LedgerState { status: LedgerStatus::new(block_merkle_path,
-                                              air_path,
-                                              txn_merkle_path,
-                                              txn_path,
-                                              utxo_map_path)?,
-                    // TODO(joe): is this safe?
-                    prng: rand_chacha::ChaChaRng::from_seed(prng_seed.unwrap_or([0u8; 32])),
-                    block_merkle: LedgerState::init_merkle_log(block_merkle_path, false)?,
-                    air: LedgerState::init_air_log(air_path, true)?,
-                    txn_merkle: LedgerState::init_merkle_log(txn_merkle_path, false)?,
-                    blocks: Vec::new(),
-                    utxo_map: LedgerState::init_utxo_map(utxo_map_path, false)?,
-                    txn_log: None,
-                    block_ctx: Some(BlockEffect::new()) });
+                                                                 air_path,
+                                                                 txn_merkle_path,
+                                                                 txn_path,
+                                                                 utxo_map_path)?,
+                                       prng,
+                                       signing_key,
+                                       block_merkle:
+                                         LedgerState::init_merkle_log(block_merkle_path, false)?,
+                                       air: LedgerState::init_air_log(air_path, true)?,
+                                       txn_merkle:
+                                         LedgerState::init_merkle_log(txn_merkle_path, false)?,
+                                       blocks: Vec::new(),
+                                       utxo_map: LedgerState::init_utxo_map(utxo_map_path,
+                                                                            false)?,
+                                       txn_log: None,
+                                       block_ctx: Some(BlockEffect::new()) });
 
     dbg!(blocks.len());
     for (ix, logged_block) in blocks.into_iter().enumerate() {
@@ -1235,8 +1370,34 @@ impl LedgerState {
                        txn_merkle_path: &str,
                        txn_path: &str,
                        utxo_map_path: &str,
+                       signing_key_path: Option<&str>,
                        prng_seed: Option<[u8; 32]>)
                        -> Result<LedgerState, std::io::Error> {
+    let mut prng = prng_seed.map(rand_chacha::ChaChaRng::from_seed)
+                            .unwrap_or_else(ChaChaRng::from_entropy);
+    let signing_key = match signing_key_path {
+      Some(path) => {
+        let ret = File::open(path).and_then(|file| {
+                    let mut reader = BufReader::new(file);
+                    bincode::deserialize_from::<&mut BufReader<File>, XfrKeyPair>(&mut reader)
+            .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other,e))
+                  });
+        ret.or_else::<PlatformError, _>(|_| {
+             let key = XfrKeyPair::generate(&mut prng);
+             File::create(path).and_then(|file| {
+               let mut writer = BufWriter::new(file);
+
+               bincode::serialize_into::<&mut BufWriter<File>, XfrKeyPair>(&mut writer, &key)
+              .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other,e))
+              .and_then(|_| Ok(key))
+             })
+             .map_err(|_| PlatformError::SerializationError)
+           })
+           .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?
+      }
+      None => XfrKeyPair::generate(&mut prng),
+    };
+
     let blocks = LedgerState::load_transaction_log(txn_path)?;
     let txn_log = std::fs::OpenOptions::new().append(true).open(txn_path)?;
     let mut ledger =
@@ -1245,8 +1406,8 @@ impl LedgerState {
                                               txn_merkle_path,
                                               txn_path,
                                               utxo_map_path)?,
-                    // TODO(joe): is this safe?
-                    prng: rand_chacha::ChaChaRng::from_seed(prng_seed.unwrap_or([0u8; 32])),
+                    prng,
+                    signing_key,
                     block_merkle: LedgerState::init_merkle_log(block_merkle_path, true)?,
                     air: LedgerState::init_air_log(air_path, true)?,
                     txn_merkle: LedgerState::init_merkle_log(txn_merkle_path, true)?,
@@ -1273,25 +1434,43 @@ impl LedgerState {
   }
 
   pub fn load_or_init(base_dir: &Path) -> Result<LedgerState, PlatformError> {
-    let block_merkle = base_dir.join("block_merkle");
-    let block_merkle = block_merkle.to_str().unwrap();
-    let air = base_dir.join("air");
-    let air = air.to_str().unwrap();
-    let txn_merkle = base_dir.join("txn_merkle");
-    let txn_merkle = txn_merkle.to_str().unwrap();
-    let txn_log = base_dir.join("txn_log");
-    let txn_log = txn_log.to_str().unwrap();
-    let utxo_map = base_dir.join("utxo_map");
-    let utxo_map = utxo_map.to_str().unwrap();
+    let block_buf = base_dir.join("block_merkle");
+    let block_merkle = block_buf.to_str().unwrap();
+
+    let air_buf = base_dir.join("air");
+    let air = air_buf.to_str().unwrap();
+
+    let txn_merkle_buf = base_dir.join("txn_merkle");
+    let txn_merkle = txn_merkle_buf.to_str().unwrap();
+
+    let txn_log_buf = base_dir.join("txn_log");
+    let txn_log = txn_log_buf.to_str().unwrap();
+
+    let utxo_map_buf = base_dir.join("utxo_map");
+    let utxo_map = utxo_map_buf.to_str().unwrap();
+
+    let sig_key_file_buf = base_dir.join("sig_key");
+    let sig_key_file = sig_key_file_buf.to_str().unwrap();
 
     // TODO(joe): distinguish between the transaction log not existing
     // and it being corrupted
     LedgerState::load_from_log(&block_merkle, &air, &txn_merkle, &txn_log,
-                &utxo_map, None)
-              .or_else(|_| LedgerState::new(&block_merkle, &air, &txn_merkle, &txn_log,
-                &utxo_map, None))
+                &utxo_map, Some(sig_key_file), None)
     .or_else(|_| LedgerState::load_checked_from_log(&block_merkle, &air, &txn_merkle, &txn_log,
-                &utxo_map, None))
+                &utxo_map, Some(sig_key_file), None))
+              .or_else(|_| {
+                let ret = LedgerState::new(&block_merkle, &air, &txn_merkle, &txn_log,
+                  &utxo_map, None, None)?;
+
+                {
+                  let file = File::create(sig_key_file)?;
+                  let mut writer = BufWriter::new(file);
+
+                  bincode::serialize_into::<&mut BufWriter<File>, XfrKeyPair>(&mut writer, &ret.signing_key).map_err(|_| PlatformError::SerializationError)?;
+                }
+
+                Ok(ret)
+              })
   }
 
   // Load a ledger given the paths to the various storage elements.
@@ -1634,6 +1813,14 @@ impl ArchiveAccess for LedgerState {
     (commitment, self.status.block_commit_count)
   }
 
+  fn public_key(&self) -> &XfrPublicKey {
+    self.signing_key.get_pk_ref()
+  }
+
+  fn sign_message(&self, msg: &[u8]) -> XfrSignature {
+    self.signing_key.sign(msg)
+  }
+
   fn get_air_data(&self, key: &str) -> AIRResult {
     let merkle_root = self.air.merkle_root();
     let (value, merkle_proof) = self.air.get_with_proof(key);
@@ -1647,23 +1834,24 @@ impl ArchiveAccess for LedgerState {
 pub mod helpers {
   use super::*;
   use crate::data_model::{
-    Asset, ConfidentialMemo, DefineAsset, DefineAssetBody, IssuerPublicKey, Memo,
+    Asset, AssetRules, ConfidentialMemo, DefineAsset, DefineAssetBody, IssuerPublicKey, Memo,
   };
   use zei::serialization::ZeiFromToBytes;
   use zei::setup::PublicParams;
   use zei::xfr::asset_record::AssetRecordType;
-  use zei::xfr::asset_record::{build_blind_asset_record, open_asset_record};
+  use zei::xfr::asset_record::{build_blind_asset_record, open_blind_asset_record};
   use zei::xfr::sig::{XfrKeyPair, XfrPublicKey, XfrSecretKey};
-  use zei::xfr::structs::AssetRecord;
+  use zei::xfr::structs::{AssetRecord, AssetRecordTemplate};
 
   pub fn create_definition_transaction(code: &AssetTypeCode,
                                        public_key: &XfrPublicKey,
                                        secret_key: &XfrSecretKey,
+                                       asset_rules: AssetRules,
                                        memo: Option<Memo>)
                                        -> Result<Transaction, PlatformError> {
     let issuer_key = IssuerPublicKey { key: *public_key };
     let mut tx = Transaction::default();
-    let asset_body = DefineAssetBody::new(&code, &issuer_key, false, false, memo, None)?;
+    let asset_body = DefineAssetBody::new(&code, &issuer_key, asset_rules, memo, None, None)?;
     let asset_create = DefineAsset::new(asset_body, &issuer_key, &secret_key)?;
     tx.operations.push(Operation::DefineAsset(asset_create));
     Ok(tx)
@@ -1677,16 +1865,14 @@ pub mod helpers {
 
   pub fn asset_creation_body(token_code: &AssetTypeCode,
                              issuer_key: &XfrPublicKey,
-                             updatable: bool,
-                             traceable: bool,
+                             asset_rules: AssetRules,
                              memo: Option<Memo>,
                              confidential_memo: Option<ConfidentialMemo>)
                              -> DefineAssetBody {
     let mut token_properties: Asset = Default::default();
     token_properties.code = *token_code;
     token_properties.issuer = IssuerPublicKey { key: *issuer_key };
-    token_properties.updatable = updatable;
-    token_properties.traceable = traceable;
+    token_properties.asset_rules = asset_rules;
 
     if let Some(memo) = memo {
       token_properties.memo = memo;
@@ -1729,17 +1915,18 @@ pub mod helpers {
                                        code: &AssetTypeCode,
                                        amount: u64,
                                        issuer_keys: &XfrKeyPair,
-                                       recipient_pk: &XfrPublicKey)
-                                       -> Transaction {
+                                       recipient_pk: &XfrPublicKey,
+                                       seq_num: u64)
+                                       -> (Transaction, AssetRecord) {
     let mut tx = Transaction::default();
     let _issuer_key_copy = XfrKeyPair::zei_from_bytes(&issuer_keys.zei_to_bytes());
 
     // issue operation
-    let ar = AssetRecord::new(amount, code.val, *issuer_keys.get_pk_ref()).unwrap();
-    let art = AssetRecordType::PublicAmount_PublicAssetType;
-    let ba = build_blind_asset_record(ledger.get_prng(), &params.pc_gens, &ar, art, &None);
+    let ar_template = AssetRecordTemplate::with_no_asset_tracking(amount, code.val, AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType, issuer_keys.get_pk());
+    let (ba, _tracer_memo, owner_memo) =
+      build_blind_asset_record(ledger.get_prng(), &params.pc_gens, &ar_template, None);
 
-    let asset_issuance_body = IssueAssetBody::new(&code, 0, &[TxOutput(ba.clone())]).unwrap();
+    let asset_issuance_body = IssueAssetBody::new(&code, seq_num, &[TxOutput(ba.clone())]).unwrap();
     let asset_issuance_operation = IssueAsset::new(asset_issuance_body,
                                                    &IssuerPublicKey { key:
                                                                         *issuer_keys.get_pk_ref() },
@@ -1750,15 +1937,47 @@ pub mod helpers {
     tx.operations.push(issue_op);
 
     // transfer operation
-    let ar = AssetRecord::new(amount, code.val, *recipient_pk).unwrap();
+    let ar_template = AssetRecordTemplate::with_no_asset_tracking(amount, code.val, AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType, *recipient_pk);
+    let ar =
+      AssetRecord::from_template_no_identity_tracking(ledger.get_prng(), &ar_template).unwrap();
     let mut transfer =
       TransferAsset::new(TransferAssetBody::new(ledger.get_prng(),
                              vec![TxoRef::Relative(0)],
-                             &[open_asset_record(&ba, &issuer_keys.get_sk_ref()).unwrap()],
-                             &[ar]).unwrap(), TransferType::Standard).unwrap();
+                             &[open_blind_asset_record(&ba, &owner_memo, &issuer_keys.get_sk_ref()).unwrap()],
+                             &[ar.clone()]).unwrap(), TransferType::Standard).unwrap();
 
     transfer.sign(&issuer_keys);
     tx.operations.push(Operation::TransferAsset(transfer));
+    (tx, ar)
+  }
+
+  pub fn create_issuance_txn(ledger: &mut LedgerState,
+                             params: &PublicParams,
+                             code: &AssetTypeCode,
+                             amount: u64,
+                             seq_num: u64,
+                             record_type: AssetRecordType,
+                             issuer_keys: &XfrKeyPair)
+                             -> Transaction {
+    let mut tx = Transaction::default();
+
+    // issue operation
+    let ar_template = AssetRecordTemplate::with_no_asset_tracking(amount,
+                                                                  code.val,
+                                                                  record_type,
+                                                                  issuer_keys.get_pk());
+    let (ba, _tracer_memo, _owner_memo) =
+      build_blind_asset_record(ledger.get_prng(), &params.pc_gens, &ar_template, None);
+
+    let asset_issuance_body = IssueAssetBody::new(&code, seq_num, &[TxOutput(ba)]).unwrap();
+    let asset_issuance_operation = IssueAsset::new(asset_issuance_body,
+                                                   &IssuerPublicKey { key:
+                                                                        *issuer_keys.get_pk_ref() },
+                                                   issuer_keys.get_sk_ref()).unwrap();
+
+    let issue_op = Operation::IssueAsset(asset_issuance_operation);
+
+    tx.operations.push(issue_op);
     tx
   }
 }
@@ -1768,15 +1987,20 @@ mod tests {
   use super::helpers::*;
   use super::*;
   use crate::policies::{calculate_fee, Fraction};
+  use credentials::{
+    credential_commit, credential_issuer_key_gen, credential_sign, credential_user_key_gen,
+    Credential,
+  };
   use rand_core::SeedableRng;
   use std::fs;
-  use tempdir::TempDir;
   use tempfile::tempdir;
   use zei::serialization::ZeiFromToBytes;
   use zei::setup::PublicParams;
-  use zei::xfr::asset_record::{build_blind_asset_record, open_asset_record, AssetRecordType};
+  use zei::xfr::asset_record::{
+    build_blind_asset_record, open_blind_asset_record, AssetRecordType,
+  };
   use zei::xfr::sig::{XfrKeyPair, XfrPublicKey};
-  use zei::xfr::structs::AssetRecord;
+  use zei::xfr::structs::{AssetRecord, AssetRecordTemplate};
 
   #[test]
   fn test_load_transaction_log() {
@@ -1800,11 +2024,11 @@ mod tests {
     //                                                seq_num: 0,
     //                                                records: Vec::new() };
 
-    //     let asset_issurance = IssueAsset { body: asset_issuance_body,
+    //     let asset_issuance = IssueAsset { body: asset_issuance_body,
     //                                        pubkey: IssuerPublicKey { key: public_key },
     //                                        signature: signature.clone() };
 
-    //     let issurance_operation = Operation::IssueAsset(asset_issurance);
+    //     let issuance_operation = Operation::IssueAsset(asset_issuance);
 
     //     // Instantiate an DefineAsset operation
     //     let asset = Default::default();
@@ -1818,7 +2042,7 @@ mod tests {
     //     // Verify that loading transaction succeeds with correct path
     //     let transaction_0: Transaction = Default::default();
 
-    //     let transaction_1 = Transaction { operations: vec![issurance_operation.clone()],
+    //     let transaction_1 = Transaction { operations: vec![issuance_operation.clone()],
     //                                       variable_utxos: Vec::new(),
     //                                       credentials: Vec::new(),
     //                                       memos: Vec::new(),
@@ -1826,7 +2050,7 @@ mod tests {
     //                                       merkle_id: TXN_SEQ_ID_PLACEHOLDER,
     //                                       outputs: 1 };
 
-    //     let transaction_2 = Transaction { operations: vec![issurance_operation, creation_operation],
+    //     let transaction_2 = Transaction { operations: vec![issuance_operation, creation_operation],
     //                                       variable_utxos: Vec::new(),
     //                                       credentials: Vec::new(),
     //                                       memos: Vec::new(),
@@ -2018,288 +2242,6 @@ mod tests {
     assert_eq!(ledger_state.status.block_commit_count, count_original + 1);
   }
 
-  // TODO(joe): should this be replaced?
-  // #[test]
-  // fn test_add_txo() {
-  //   // Instantiate a BlindAssetRecord
-  //   let mut prng = ChaChaRng::from_entropy();
-  //   let pc_gens = PedersenGens::default();
-
-  //   let sk = elgamal_generate_secret_key::<_, Scalar>(&mut prng);
-  //   let xfr_pub_key = elgamal_derive_public_key(&pc_gens.B, &sk);
-  //   let elgamal_public_key = ElGamalPublicKey(RistPoint(xfr_pub_key.get_point()));
-
-  //   let sk = elgamal_generate_secret_key::<_, BLSScalar>(&mut prng);
-  //   let id_reveal_pub_key = elgamal_derive_public_key(&BLSG1::get_base(), &sk);
-
-  //   let asset_issuer_pub_key = AssetIssuerPubKeys { eg_ristretto_pub_key:
-  //                                                     elgamal_public_key.clone(),
-  //                                                   eg_blsg1_pub_key: id_reveal_pub_key };
-
-  //   let record = zei::xfr::structs::BlindAssetRecord { issuer_public_key:
-  //                                                        Some(asset_issuer_pub_key),
-  //                                                      issuer_lock_type: None,
-  //                                                      issuer_lock_amount: None,
-  //                                                      amount: None,
-  //                                                      asset_type: None,
-  //                                                      public_key: Default::default(),
-  //                                                      amount_commitments: None,
-  //                                                      asset_type_commitment: None,
-  //                                                      blind_share: Default::default(),
-  //                                                      lock: None };
-
-  //   // Instantiate a transaction output
-  //   let sid = TxoSID::default();
-  //   let txo = (&sid, TxOutput(record));
-
-  //   // Instantiate a LedgerState
-  //   let mut ledger_state = LedgerState::test_ledger();
-  //   ledger_state.add_txo(txo.clone());
-
-  //   // Verify that add_txo sets values correctly
-  //   let utxo_addr = TxoSID(0);
-
-  //   assert_eq!(ledger_state.tracked_sids.get(&elgamal_public_key),
-  //              Some(&vec![utxo_addr]));
-
-  //   let utxo_ref = Utxo { digest: sha256::hash(&serde_json::to_vec(&txo.1).unwrap()).0,
-  //                         output: txo.1 };
-  //   assert_eq!(ledger_state.utxos.get(&utxo_addr).unwrap(), &utxo_ref);
-
-  //   assert_eq!(ledger_state.max_applied_sid, utxo_addr)
-  // }
-
-  // TODO(joe): these tests with and without tracking should be fleshed out
-  // #[test]
-  // fn test_apply_asset_transfer_no_tracking() {
-  //   // Instantiate an TransferAsset
-  //   let xfr_note = XfrNote { body: XfrBody { inputs: Vec::new(),
-  //                                            outputs: Vec::new(),
-  //                                            proofs: XfrProofs { asset_amount_proof:
-  //                                                                  AssetAmountProof::NoProof,
-  //                                                                asset_tracking_proof:
-  //                                                                  Default::default() } },
-  //                            multisig: Default::default() };
-
-  //   let assert_transfer_body =
-  //     TransferAssetBody { inputs: vec![],
-  //                         num_outputs: 0,
-  //                         transfer: Box::new(xfr_note) };
-
-  //   let asset_transfer = TransferAsset { body: assert_transfer_body,
-  //                                        body_signatures: Vec::new() };
-
-  //   // Instantiate a LedgerState
-  //   let mut ledger_state = LedgerState::test_ledger();
-
-  //   let map_file = tempfile().unwrap();
-
-  //   let mut bitmap = BitMap::create(map_file).unwrap();
-  //   bitmap.append().unwrap();
-
-  //   ledger_state.utxo_map = bitmap;
-
-  //   ledger_state.apply_asset_transfer(&asset_transfer);
-
-  //   assert!(ledger_state.tracked_sids.is_empty());
-  // }
-
-  // #[test]
-  // fn test_apply_asset_transfer_with_tracking() {
-  //   // Instantiate a BlindAssetRecord
-  //   let mut prng = ChaChaRng::from_entropy();
-  //   let pc_gens = PedersenGens::default();
-
-  //   let sk = elgamal_generate_secret_key::<_, Scalar>(&mut prng);
-  //   let xfr_pub_key = elgamal_derive_public_key(&pc_gens.B, &sk);
-  //   let elgamal_public_key = ElGamalPublicKey(RistPoint(xfr_pub_key.get_point()));
-
-  //   let sk = elgamal_generate_secret_key::<_, BLSScalar>(&mut prng);
-  //   let id_reveal_pub_key = elgamal_derive_public_key(&BLSG1::get_base(), &sk);
-
-  //   let asset_issuer_pub_key = AssetIssuerPubKeys { eg_ristretto_pub_key:
-  //                                                     elgamal_public_key.clone(),
-  //                                                   eg_blsg1_pub_key: id_reveal_pub_key };
-
-  //   let record = zei::xfr::structs::BlindAssetRecord { issuer_public_key:
-  //                                                        Some(asset_issuer_pub_key),
-  //                                                      issuer_lock_type: None,
-  //                                                      issuer_lock_amount: None,
-  //                                                      amount: None,
-  //                                                      asset_type: None,
-  //                                                      public_key: Default::default(),
-  //                                                      amount_commitments: None,
-  //                                                      asset_type_commitment: None,
-  //                                                      blind_share: Default::default(),
-  //                                                      lock: None };
-
-  //   // Instantiate an TransferAsset
-  //   let xfr_note = XfrNote { body: XfrBody { inputs: Vec::new(),
-  //                                            outputs: vec![record],
-  //                                            proofs: XfrProofs { asset_amount_proof:
-  //                                                                  AssetAmountProof::NoProof,
-  //                                                                asset_tracking_proof:
-  //                                                                  Default::default() } },
-  //                            multisig: Default::default() };
-
-  //   let assert_transfer_body =
-  //     TransferAssetBody { inputs: vec![TxoSID { index: TXN_SEQ_ID_PLACEHOLDER }],
-  //                         outputs: vec![TxoSID { index: TXN_SEQ_ID_PLACEHOLDER }],
-  //                         transfer: Box::new(xfr_note) };
-
-  //   let asset_transfer = TransferAsset { body: assert_transfer_body,
-  //                                        body_signatures: Vec::new() };
-
-  //   // Instantiate a LedgerState
-  //   let mut ledger_state = LedgerState::test_ledger();
-
-  //   let map_file = tempfile().unwrap();
-
-  //   let mut bitmap = BitMap::create(map_file).unwrap();
-  //   bitmap.append().unwrap();
-
-  //   ledger_state.utxo_map = Some(bitmap);
-
-  //   ledger_state.apply_asset_transfer(&asset_transfer);
-
-  //   assert_eq!(ledger_state.tracked_sids.get(&elgamal_public_key),
-  //              Some(&vec![TxoSID { index: 0 }]));
-  // }
-
-  // TODO(joe): apply_* functions are no longer relevant, so need to be
-  // replaced with tests generating Transactions
-  //
-  // #[test]
-  // fn test_apply_asset_issuance() {
-  //   // Instantiate an IssueAsset
-  //   let mut prng = ChaChaRng::from_entropy();
-  //   let keypair = XfrKeyPair::generate(&mut prng);
-  //   let message: &[u8] = b"test";
-  //   let public_key = *keypair.get_pk_ref();
-  //   let signature = keypair.sign(message);
-
-  //   let asset_issuance_body = IssueAssetBody { code: Default::default(),
-  //                                              seq_num: 0,
-  //                                              num_outputs: 0
-  //                                              records: Vec::new() };
-
-  //   let asset_issurance = IssueAsset { body: asset_issuance_body,
-  //                                      pubkey: IssuerPublicKey { key: public_key },
-  //                                      signature: signature };
-
-  //   // Instantiate a LedgerState and apply the IssueAsset
-  //   let mut ledger_state = LedgerState::test_ledger();
-  //   ledger_state.apply_asset_issuance(&asset_issurance);
-
-  //   // Verify that apply_asset_issuance correctly adds each txo to tracked_sids
-  //   // TODO(joe): fix this
-  //   // for output in asset_issurance.body
-  //   //                              .outputs
-  //   //                              .iter()
-  //   //                              .zip(asset_issurance.body.records.iter().map(|ref o| (*o)))
-  //   // {
-  //   //   let record = &(output.0).0;
-  //   //   match &output.1 {
-  //   //     BlindAssetRecord(record) => {
-  //   //       assert!(ledger_state.tracked_sids
-  //   //                           .get(&record.issuer_public_key
-  //   //                                       .as_ref()
-  //   //                                       .unwrap()
-  //   //                                       .eg_ristretto_pub_key)
-  //   //                           .unwrap()
-  //   //                           .contains(output.0));
-  //   //     }
-  //   //   }
-  //   // }
-
-  //   // Verify that issuance_num is correctly set
-  //   assert_eq!(ledger_state.issuance_num.get(&asset_issurance.body.code),
-  //              Some(&asset_issurance.body.seq_num));
-  // }
-
-  // #[test]
-  // fn test_apply_asset_creation() {
-  //   let mut ledger_state = LedgerState::test_ledger();
-
-  //   let mut prng = ChaChaRng::from_entropy();
-  //   let keypair = XfrKeyPair::generate(&mut prng);
-  //   let message: &[u8] = b"test";
-  //   let public_key = *keypair.get_pk_ref();
-  //   let signature = keypair.sign(message);
-
-  //   let asset_creation = DefineAsset { body: DefineAssetBody { asset: Default::default() },
-  //                                      pubkey: IssuerPublicKey { key: public_key },
-  //                                      signature: signature };
-
-  //   let token = AssetType { properties: asset_creation.body.asset.clone(),
-  //                            ..Default::default() };
-
-  //   ledger_state.apply_asset_creation(&asset_creation);
-
-  //   assert_eq!(ledger_state.asset_types.get(&token.properties.code),
-  //              Some(&token));
-  // }
-
-  // #[test]
-  // fn test_apply_operation() {
-  //   // Create values to be used to instantiate operations
-  //   let mut prng = rand_chacha::ChaChaRng::from_entropy();
-
-  //   let keypair = XfrKeyPair::generate(&mut prng);
-  //   let message: &[u8] = b"test";
-
-  //   let public_key = *keypair.get_pk_ref();
-  //   let signature = keypair.sign(message);
-
-  //   // Instantiate an TransferAsset operation
-  //   let xfr_note = XfrNote { body: XfrBody { inputs: Vec::new(),
-  //                                            outputs: Vec::new(),
-  //                                            proofs: XfrProofs { asset_amount_proof:
-  //                                                                  AssetAmountProof::NoProof,
-  //                                                                asset_tracking_proof:
-  //                                                                  Default::default() } },
-  //                            multisig: Default::default() };
-
-  //   let assert_transfer_body = TransferAssetBody { inputs: Vec::new(),
-  //                                                  outputs: Vec::new(),
-  //                                                  transfer: Box::new(xfr_note) };
-
-  //   let asset_transfer = TransferAsset { body: assert_transfer_body,
-  //                                        body_signatures: Vec::new() };
-
-  //   let transfer_operation = Operation::TransferAsset(asset_transfer.clone());
-
-  //   // Instantiate an IssueAsset operation
-  //   let asset_issuance_body = IssueAssetBody { code: Default::default(),
-  //                                              seq_num: 0,
-  //                                              outputs: Vec::new(),
-  //                                              records: Vec::new() };
-
-  //   let asset_issurance = IssueAsset { body: asset_issuance_body,
-  //                                      pubkey: IssuerPublicKey { key: public_key },
-  //                                      signature: signature.clone() };
-
-  //   let issurance_operation = Operation::IssueAsset(asset_issurance.clone());
-
-  //   // Instantiate an DefineAsset operation
-  //   let asset = Default::default();
-
-  //   let asset_creation = DefineAsset { body: DefineAssetBody { asset },
-  //                                      pubkey: IssuerPublicKey { key: public_key },
-  //                                      signature: signature };
-
-  //   let creation_operation = Operation::DefineAsset(asset_creation.clone());
-
-  //   // Test apply_operation
-  //   let mut ledger_state = LedgerState::test_ledger();
-
-  //   assert_eq!(ledger_state.apply_operation(&transfer_operation),
-  //              ledger_state.apply_asset_transfer(&asset_transfer));
-  //   assert_eq!(ledger_state.apply_operation(&issurance_operation),
-  //              ledger_state.apply_asset_issuance(&asset_issurance));
-  //   assert_eq!(ledger_state.apply_operation(&creation_operation),
-  //              ledger_state.apply_asset_creation(&asset_creation));
-  // }
   #[test]
   fn test_create_merkle_log() {
     let tmp_dir = tempdir().unwrap();
@@ -2352,7 +2294,8 @@ mod tests {
     let token_code1 = AssetTypeCode { val: [1; 16] };
     let (public_key, secret_key) = build_keys(&mut prng);
 
-    let asset_body = asset_creation_body(&token_code1, &public_key, true, false, None, None);
+    let asset_body =
+      asset_creation_body(&token_code1, &public_key, AssetRules::default(), None, None);
     let asset_create = asset_creation_operation(&asset_body, &public_key, &secret_key);
     tx.operations.push(Operation::DefineAsset(asset_create));
 
@@ -2379,7 +2322,11 @@ mod tests {
     let token_code1 = AssetTypeCode { val: [1; 16] };
     let mut prng = ChaChaRng::from_entropy();
     let (public_key1, secret_key1) = build_keys(&mut prng);
-    let asset_body = asset_creation_body(&token_code1, &public_key1, true, false, None, None);
+    let asset_body = asset_creation_body(&token_code1,
+                                         &public_key1,
+                                         AssetRules::default(),
+                                         None,
+                                         None);
     let mut asset_create = asset_creation_operation(&asset_body, &public_key1, &secret_key1);
 
     // Now re-sign the operation with the wrong key.
@@ -2405,6 +2352,7 @@ mod tests {
     let tx = create_definition_transaction(&code,
                                            key_pair.get_pk_ref(),
                                            key_pair.get_sk_ref(),
+                                           AssetRules::default(),
                                            None).unwrap();
 
     let effect = TxnEffect::compute_effect(&mut ledger.get_prng(), tx).unwrap();
@@ -2417,9 +2365,10 @@ mod tests {
     // Issuance with two outputs
     let mut tx = Transaction::default();
 
-    let ar = AssetRecord::new(100, code.val, key_pair.get_pk_ref().clone()).unwrap();
-    let art = AssetRecordType::PublicAmount_PublicAssetType;
-    let ba = build_blind_asset_record(ledger.get_prng(), &params.pc_gens, &ar, art, &None);
+    let art = AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType;
+    let template =
+      AssetRecordTemplate::with_no_asset_tracking(100, code.val, art, key_pair.get_pk());
+    let (ba, _, _) = build_blind_asset_record(ledger.get_prng(), &params.pc_gens, &template, None);
     let second_ba = ba.clone();
 
     let asset_issuance_body =
@@ -2457,15 +2406,20 @@ mod tests {
     let second_txo_id = txos[1];
 
     // Construct transfer operation
-    let bar = ((ledger.get_utxo(txo_sid).unwrap().0).0).clone();
-    let ar = AssetRecord::new(100, code.val, key_pair_adversary.get_pk_ref().clone()).unwrap();
+    let input_bar = ((ledger.get_utxo(txo_sid).unwrap().0).0).clone();
+    let input_oar = open_blind_asset_record(&input_bar, &None, &key_pair.get_sk_ref()).unwrap();
+
+    let output_template =
+      AssetRecordTemplate::with_no_asset_tracking(100, code.val, art, key_pair_adversary.get_pk());
+    let output_ar =
+      AssetRecord::from_template_no_identity_tracking(ledger.get_prng(), &output_template).unwrap();
 
     let mut tx = Transaction::default();
-    let mut transfer =
-      TransferAsset::new(TransferAssetBody::new(ledger.get_prng(),
-                             vec![TxoRef::Absolute(txo_sid)],
-                             &[open_asset_record(&bar, &key_pair.get_sk_ref()).unwrap()],
-                             &[ar]).unwrap(), TransferType::Standard).unwrap();
+    let mut transfer = TransferAsset::new(TransferAssetBody::new(ledger.get_prng(),
+                                                                 vec![TxoRef::Absolute(txo_sid)],
+                                                                 &[input_oar],
+                                                                 &[output_ar]).unwrap(),
+                                          TransferType::Standard).unwrap();
 
     let mut second_transfer = transfer.clone();
     transfer.sign(&key_pair);
@@ -2509,7 +2463,11 @@ mod tests {
     let mut prng = ChaChaRng::from_entropy();
     let (public_key1, secret_key1) = build_keys(&mut prng);
 
-    let asset_body = asset_creation_body(&token_code1, &public_key1, true, false, None, None);
+    let asset_body = asset_creation_body(&token_code1,
+                                         &public_key1,
+                                         AssetRules::default(),
+                                         None,
+                                         None);
     let mut asset_create = asset_creation_operation(&asset_body, &public_key1, &secret_key1);
 
     // Re-sign the operation with the wrong key.
@@ -2524,24 +2482,7 @@ mod tests {
 
   #[test]
   fn asset_issued() {
-    let tmp_dir = TempDir::new("test").unwrap();
-    let block_merkle_buf = tmp_dir.path().join("test_block_merkle");
-    let block_merkle_path = block_merkle_buf.to_str().unwrap();
-    let air_buf = tmp_dir.path().join("test_air");
-    let air_path = air_buf.to_str().unwrap();
-    let txn_merkle_buf = tmp_dir.path().join("test_txn_merkle");
-    let txn_merkle_path = txn_merkle_buf.to_str().unwrap();
-    let txn_buf = tmp_dir.path().join("test_txnlog");
-    let txn_path = txn_buf.to_str().unwrap();
-    let utxo_map_buf = tmp_dir.path().join("test_utxo_map");
-    let utxo_map_path = utxo_map_buf.to_str().unwrap();
-
-    let mut ledger = LedgerState::new(&block_merkle_path,
-                                      &air_path,
-                                      &txn_merkle_path,
-                                      &txn_path,
-                                      &utxo_map_path,
-                                      None).unwrap();
+    let mut ledger = LedgerState::test_ledger();
 
     let params = PublicParams::new();
 
@@ -2549,7 +2490,11 @@ mod tests {
     let token_code1 = AssetTypeCode { val: [1; 16] };
     let (public_key, secret_key) = build_keys(&mut ledger.get_prng());
 
-    let tx = create_definition_transaction(&token_code1, &public_key, &secret_key, None).unwrap();
+    let tx = create_definition_transaction(&token_code1,
+                                           &public_key,
+                                           &secret_key,
+                                           AssetRules::default(),
+                                           None).unwrap();
 
     let effect = TxnEffect::compute_effect(&mut ledger.get_prng(), tx).unwrap();
     {
@@ -2559,9 +2504,10 @@ mod tests {
     }
 
     let mut tx = Transaction::default();
-    let ar = AssetRecord::new(100, token_code1.val, public_key).unwrap();
-    let art = AssetRecordType::PublicAmount_PublicAssetType;
-    let ba = build_blind_asset_record(ledger.get_prng(), &params.pc_gens, &ar, art, &None);
+    let art = AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType;
+    let ar = AssetRecordTemplate::with_no_asset_tracking(100, token_code1.val, art, public_key);
+
+    let (ba, _, _) = build_blind_asset_record(ledger.get_prng(), &params.pc_gens, &ar, None);
     let asset_issuance_body = IssueAssetBody::new(&token_code1, 0, &[TxOutput(ba)]).unwrap();
     let asset_issuance_operation = IssueAsset::new(asset_issuance_body,
                                                    &IssuerPublicKey { key: public_key },
@@ -2662,6 +2608,185 @@ mod tests {
   }
 
   #[test]
+  /// Tests that a valid AIR credential can be appended to the AIR with the air_assign operation.
+  pub fn test_air_assign_operation() {
+    let mut ledger = LedgerState::test_ledger();
+    let dl = String::from("dl");
+    let cred_issuer_key = credential_issuer_key_gen(&mut ledger.get_prng(), &[(dl.clone(), 8)]);
+    let cred_user_key = credential_user_key_gen(&mut ledger.get_prng(), &cred_issuer_key.0);
+    let user_kp = XfrKeyPair::generate(&mut ledger.get_prng());
+
+    // Construct credential
+    let dl_attr = b"A1903479";
+    let attr_map = vec![(dl.clone(), dl_attr.to_vec())];
+    let attributes = [(dl.clone(), &dl_attr[..])];
+    let signature = credential_sign(&mut ledger.get_prng(),
+                                    &cred_issuer_key.1,
+                                    &cred_user_key.0,
+                                    &attributes).unwrap();
+    let credential = Credential { signature: signature.clone(),
+                                  attributes: attr_map,
+                                  issuer_pub_key: cred_issuer_key.0.clone() };
+    let (commitment, pok, _key) = credential_commit(&mut ledger.get_prng(),
+                                                    &cred_user_key.1,
+                                                    &credential,
+                                                    user_kp.get_pk_ref().as_bytes()).unwrap();
+    let air_assign_op =
+      AIRAssign::new(AIRAssignBody::new(cred_issuer_key.0, commitment, pok).unwrap(),
+                     &user_kp).unwrap();
+    let mut adversarial_op = air_assign_op.clone();
+    adversarial_op.pubkey = XfrKeyPair::generate(&mut ledger.get_prng()).get_pk();
+    let mut tx = Transaction::default();
+    tx.operations.push(Operation::AIRAssign(air_assign_op));
+    apply_transaction(&mut ledger, tx);
+    let mut tx = Transaction::default();
+    tx.operations.push(Operation::AIRAssign(adversarial_op));
+    let effect = TxnEffect::compute_effect(&mut ledger.get_prng(), tx);
+    assert!(effect.is_err());
+  }
+  #[test]
+  pub fn test_transferable() {
+    let mut ledger = LedgerState::test_ledger();
+    let params = PublicParams::new();
+
+    let issuer = XfrKeyPair::generate(&mut ledger.get_prng());
+    let alice = XfrKeyPair::generate(&mut ledger.get_prng());
+    let bob = XfrKeyPair::generate(&mut ledger.get_prng());
+
+    // Define fiat token
+    let code = AssetTypeCode { val: [1; 16] };
+    let tx = create_definition_transaction(&code,
+                                           issuer.get_pk_ref(),
+                                           issuer.get_sk_ref(),
+                                           *AssetRules::default().set_transferable(false),
+                                           Some(Memo("test".to_string()))).unwrap();
+    apply_transaction(&mut ledger, tx);
+    let (tx, _) = create_issue_and_transfer_txn(&mut ledger,
+                                                &params,
+                                                &code,
+                                                100,
+                                                &issuer,
+                                                alice.get_pk_ref(),
+                                                0);
+    let (_, sids) = apply_transaction(&mut ledger, tx);
+    let sid = sids[0];
+
+    let bar = ((ledger.get_utxo(sid).unwrap().0).0).clone();
+
+    let mut tx = Transaction::default();
+    let transfer_template= AssetRecordTemplate::with_no_asset_tracking(100,
+                                                                             code.val,
+                                                                             AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
+                                                                             bob.get_pk_ref().clone());
+    let record = AssetRecord::from_template_no_identity_tracking(ledger.get_prng(),
+                                                                 &transfer_template).unwrap();
+
+    // Cant transfer non-transferable asset
+    let mut transfer = TransferAsset::new(TransferAssetBody::new(ledger.get_prng(),
+                             vec![TxoRef::Absolute(sid)],
+                             &[open_blind_asset_record(&bar, &None, &alice.get_sk_ref()).unwrap()],
+                               &[record.clone()]).unwrap(), TransferType::Standard).unwrap();
+    transfer.sign(&alice);
+    tx.operations.push(Operation::TransferAsset(transfer));
+    let effect = TxnEffect::compute_effect(ledger.get_prng(), tx.clone()).unwrap();
+
+    let mut block = ledger.start_block().unwrap();
+    let res = ledger.apply_transaction(&mut block, effect);
+    assert!(res.is_err());
+    // Cant transfer non-transferable asset through some intermediate operation
+    // In this case, alice attempts to spend her non-transferable asset in the same transaction it
+    // was issued.
+    let second_transfer_template= AssetRecordTemplate::with_no_asset_tracking(100,
+                                                                              code.val,
+                                                                              AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
+                                                                              bob.get_pk_ref().clone());
+    let second_record = AssetRecord::from_template_no_identity_tracking(ledger.get_prng(),
+                                                                  &second_transfer_template).unwrap();
+    let (mut tx, ar) = create_issue_and_transfer_txn(&mut ledger,
+                                                     &params,
+                                                     &code,
+                                                     100,
+                                                     &issuer,
+                                                     alice.get_pk_ref(),
+                                                     1);
+    let mut transfer = TransferAsset::new(TransferAssetBody::new(ledger.get_prng(),
+                                                                 vec![TxoRef::Relative(0)],
+                                                                 &[ar.open_asset_record],
+                                                                 &[second_record]).unwrap(),
+                                          TransferType::Standard).unwrap();
+    transfer.sign(&alice);
+    tx.operations.push(Operation::TransferAsset(transfer));
+    let effect = TxnEffect::compute_effect(ledger.get_prng(), tx).unwrap();
+    let res = ledger.apply_transaction(&mut block, effect);
+    assert!(res.is_err());
+  }
+
+  #[test]
+  pub fn test_max_units() {
+    let mut ledger = LedgerState::test_ledger();
+    let params = PublicParams::new();
+
+    let issuer = XfrKeyPair::generate(&mut ledger.get_prng());
+
+    // Define fiat token
+    let code = AssetTypeCode { val: [1; 16] };
+    let tx = create_definition_transaction(&code,
+                                           issuer.get_pk_ref(),
+                                           issuer.get_sk_ref(),
+                                           *AssetRules::default().set_max_units(Some(100)),
+                                           Some(Memo("test".to_string()))).unwrap();
+    apply_transaction(&mut ledger, tx);
+    let tx = create_issuance_txn(&mut ledger,
+                                 &params,
+                                 &code,
+                                 50,
+                                 0,
+                                 AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
+                                 &issuer);
+    apply_transaction(&mut ledger, tx);
+    {
+      // Ensure that a single overlfowing transaction fails
+      let tx = create_issuance_txn(&mut ledger,
+                                   &params,
+                                   &code,
+                                   51,
+                                   1,
+                                   AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
+                                   &issuer);
+      let effect = TxnEffect::compute_effect(ledger.get_prng(), tx).unwrap();
+
+      let mut block = ledger.start_block().unwrap();
+      let res = ledger.apply_transaction(&mut block, effect);
+      assert!(res.is_err());
+
+      // Ensure that cap can be reached
+      let tx = create_issuance_txn(&mut ledger,
+                                   &params,
+                                   &code,
+                                   50,
+                                   1,
+                                   AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
+                                   &issuer);
+      let effect = TxnEffect::compute_effect(ledger.get_prng(), tx).unwrap();
+      ledger.apply_transaction(&mut block, effect).unwrap();
+      ledger.finish_block(block).unwrap();
+
+      // Cant try to exceed asset cap by issuing confidentially
+      let tx = create_issuance_txn(&mut ledger,
+                                   &params,
+                                   &code,
+                                   1,
+                                   2,
+                                   AssetRecordType::ConfidentialAmount_NonConfidentialAssetType,
+                                   &issuer);
+      let effect = TxnEffect::compute_effect(ledger.get_prng(), tx).unwrap();
+      let mut block = ledger.start_block().unwrap();
+      let res = ledger.apply_transaction(&mut block, effect);
+      assert!(res.is_err());
+    }
+  }
+
+  #[test]
   pub fn test_debt_transfer() {
     // Setup
     let mut ledger = LedgerState::test_ledger();
@@ -2683,6 +2808,7 @@ mod tests {
     let tx = create_definition_transaction(&fiat_code,
                                            fiat_issuer_key_pair.get_pk_ref(),
                                            fiat_issuer_key_pair.get_sk_ref(),
+                                           AssetRules::default(),
                                            Some(Memo("fiat".to_string()))).unwrap();
     apply_transaction(&mut ledger, tx);
 
@@ -2695,36 +2821,48 @@ mod tests {
       create_definition_transaction(&debt_code,
                                     borrower_key_pair.get_pk_ref(),
                                     borrower_key_pair.get_sk_ref(),
+                                    AssetRules::default(),
                                     Some(Memo(serde_json::to_string(&debt_memo).unwrap()))).unwrap();
     apply_transaction(&mut ledger, tx);
 
     // Issue and transfer fiat tokens to lender
-    let tx = create_issue_and_transfer_txn(&mut ledger,
-                                           &params,
-                                           &fiat_code,
-                                           fiat_amount,
-                                           &fiat_issuer_key_pair,
-                                           lender_key_pair.get_pk_ref());
+    let (tx, _) = create_issue_and_transfer_txn(&mut ledger,
+                                                &params,
+                                                &fiat_code,
+                                                fiat_amount,
+                                                &fiat_issuer_key_pair,
+                                                lender_key_pair.get_pk_ref(),
+                                                0);
 
     let (_txn_sid, txo_sids) = apply_transaction(&mut ledger, tx);
     let fiat_sid = txo_sids[0];
 
     // Issue and transfer debt tokens to borrower
-    let tx = create_issue_and_transfer_txn(&mut ledger,
-                                           &params,
-                                           &debt_code,
-                                           loan_amount,
-                                           &borrower_key_pair,
-                                           borrower_key_pair.get_pk_ref());
+    let (tx, _) = create_issue_and_transfer_txn(&mut ledger,
+                                                &params,
+                                                &debt_code,
+                                                loan_amount,
+                                                &borrower_key_pair,
+                                                borrower_key_pair.get_pk_ref(),
+                                                0);
     let (_txn_sid, txo_sids) = apply_transaction(&mut ledger, tx);
     let debt_sid = txo_sids[0];
 
-    let loan_transfer_record = AssetRecord::new(loan_amount,
-                                                debt_code.val,
-                                                lender_key_pair.get_pk_ref().clone()).unwrap();
-    let fiat_transfer_record = AssetRecord::new(fiat_amount,
-                                                fiat_code.val,
-                                                borrower_key_pair.get_pk_ref().clone()).unwrap();
+    let loan_transfer_template = AssetRecordTemplate::with_no_asset_tracking(loan_amount,
+                                                                             debt_code.val,
+                                                                             AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
+                                                                             lender_key_pair.get_pk_ref().clone());
+    let fiat_transfer_template = AssetRecordTemplate::with_no_asset_tracking(fiat_amount,
+                                                                             fiat_code.val,
+                                                                             AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
+                                                                             borrower_key_pair.get_pk_ref().clone());
+
+    let loan_transfer_record = AssetRecord::from_template_no_identity_tracking(
+      ledger.get_prng(), &loan_transfer_template).unwrap();
+
+    let fiat_transfer_record = AssetRecord::from_template_no_identity_tracking(
+      ledger.get_prng(), &fiat_transfer_template).unwrap();
+
     let fiat_bar = ((ledger.get_utxo(fiat_sid).unwrap().0).0).clone();
     let debt_bar = ((ledger.get_utxo(debt_sid).unwrap().0).0).clone();
 
@@ -2732,8 +2870,8 @@ mod tests {
 
     let mut transfer = TransferAsset::new(TransferAssetBody::new(ledger.get_prng(),
                              vec![TxoRef::Absolute(fiat_sid), TxoRef::Absolute(debt_sid)],
-                             &[open_asset_record(&fiat_bar, &lender_key_pair.get_sk_ref()).unwrap(),
-                             open_asset_record(&debt_bar, &borrower_key_pair.get_sk_ref()).unwrap()],
+                             &[open_blind_asset_record(&fiat_bar, &None, &lender_key_pair.get_sk_ref()).unwrap(),
+                             open_blind_asset_record(&debt_bar, &None, &borrower_key_pair.get_sk_ref()).unwrap()],
                                &[fiat_transfer_record, loan_transfer_record]).unwrap(), TransferType::Standard).unwrap();
     transfer.sign(&lender_key_pair);
     transfer.sign(&borrower_key_pair);
@@ -2750,23 +2888,60 @@ mod tests {
     let fiat_bar = ((ledger.get_utxo(fiat_sid).unwrap().0).0).clone();
     let debt_bar = ((ledger.get_utxo(debt_sid).unwrap().0).0).clone();
 
-    let payment_record = AssetRecord::new(payment_amount,
-                                          fiat_code.val,
-                                          lender_key_pair.get_pk_ref().clone()).unwrap();
-    let burned_debt_record =
-      AssetRecord::new(loan_burn_amount, debt_code.val, null_public_key).unwrap();
-    let returned_debt_record = AssetRecord::new(loan_amount - loan_burn_amount,
-                                                debt_code.val,
-                                                lender_key_pair.get_pk_ref().clone()).unwrap();
-    let returned_fiat_record = AssetRecord::new(fiat_amount - payment_amount,
-                                                fiat_code.val,
-                                                borrower_key_pair.get_pk_ref().clone()).unwrap();
+    let payment_template = AssetRecordTemplate::with_no_asset_tracking(
+      payment_amount,
+      fiat_code.val,
+      AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
+      lender_key_pair.get_pk_ref().clone());
+    let payment_record = AssetRecord::from_template_no_identity_tracking(
+      ledger.get_prng(),
+      &payment_template
+    ).unwrap();
 
-    let transfer_body = TransferAssetBody::new(ledger.get_prng(),
+    let burned_debt_template = AssetRecordTemplate::with_no_asset_tracking(
+      loan_burn_amount,
+      debt_code.val,
+      AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
+      null_public_key);
+    let burned_debt_record = AssetRecord::from_template_no_identity_tracking(
+      ledger.get_prng(),
+      &burned_debt_template
+    ).unwrap();
+
+    let returned_debt_template = AssetRecordTemplate::with_no_asset_tracking(
+      loan_amount - loan_burn_amount,
+      debt_code.val,
+      AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
+      lender_key_pair.get_pk_ref().clone());
+    let returned_debt_record = AssetRecord::from_template_no_identity_tracking(
+      ledger.get_prng(),
+      &returned_debt_template
+    ).unwrap();
+
+    let returned_fiat_template = AssetRecordTemplate::with_no_asset_tracking(
+      fiat_amount - payment_amount,
+      fiat_code.val,
+      AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
+      borrower_key_pair.get_pk_ref().clone());
+
+    let returned_fiat_record = AssetRecord::from_template_no_identity_tracking(
+      ledger.get_prng(),
+      &returned_fiat_template
+    ).unwrap();
+
+    let transfer_body =
+      TransferAssetBody::new(ledger.get_prng(),
                              vec![TxoRef::Absolute(debt_sid), TxoRef::Absolute(fiat_sid)],
-                             &[open_asset_record(&debt_bar, &lender_key_pair.get_sk_ref()).unwrap(),
-                               open_asset_record(&fiat_bar, &borrower_key_pair.get_sk_ref()).unwrap()],
-                               &[payment_record, burned_debt_record, returned_debt_record, returned_fiat_record]).unwrap();
+                             &[open_blind_asset_record(&debt_bar,
+                                                       &None,
+                                                       &lender_key_pair.get_sk_ref()).unwrap(),
+                               open_blind_asset_record(&fiat_bar,
+                                                       &None,
+                                                       &borrower_key_pair.get_sk_ref()).unwrap()],
+                             &[payment_record,
+                               burned_debt_record,
+                               returned_debt_record,
+                               returned_fiat_record]).unwrap();
 
     tx.operations
       .push(Operation::TransferAsset(TransferAsset::new(transfer_body,

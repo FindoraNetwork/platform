@@ -1,15 +1,16 @@
 [package]
-name = "txn_builder_cli"
+name = "txn_cli"
 version = "0.1.0"
 authors = ["Engineering <engineering@findora.org>"]
 edition = "2018"
 
 [[bin]]
-name = "txn_builder_cli"
-path = "src/txn_builder_cli.rs"
+name = "txn_cli"
+path = "src/txn_cli.rs"
 
 [dependencies]
 clap = "2.33.0"
+credentials = { path = "../../libs/credentials" }
 dirs = "2.0.2"
 env_logger = "0.6.2"
 exitcode = "1.1.2"
@@ -28,7 +29,7 @@ shellexpand = "1.0.0"
 submission_server = { path = "../submission_server" }
 txn_builder = { path = "../txn_builder" }
 wasm = { path = "../wasm" }
-zei = { git = "ssh://git@github.com/findoraorg/zei", tag = "v0.0.1" }
+zei = { git = "ssh://git@github.com/findoraorg/zei", tag = "v0.0.2-4" }
 
 [dev-dependencies]
 quickcheck = "0.8"

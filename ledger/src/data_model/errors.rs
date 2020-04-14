@@ -1,11 +1,19 @@
 use std::fmt;
 use zei::errors::ZeiError;
 
+#[macro_export]
+macro_rules! error_location {
+  () => {
+    format!("{}:{}:{}", std::file!(), std::line!(), std::column!())
+  };
+}
+
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum PlatformError {
   DeserializationError,
   SerializationError,
-  InputsError,
+  InputsError(String),
+  PolicyFailureError(Option<String>),
   CheckedReplayError(String),
   // Option(String) so I (joe) can be lazy about error descriptions but also catch the laziness
   // later by removing Option
@@ -26,7 +34,11 @@ impl fmt::Display for PlatformError {
       PlatformError::CheckedReplayError(msg) => {
         f.write_str(&format!("Inconsistency found while replaying: {}", msg))
       }
-      PlatformError::InputsError => f.write_str("Invalid parameters"),
+      PlatformError::InputsError(location) => f.write_str(&format!("Error at: {}", location)),
+      PlatformError::PolicyFailureError(None) => f.write_str("Failed policy check"),
+      PlatformError::PolicyFailureError(Some(x)) => {
+        f.write_str(&format!("Failed policy check: {}", x))
+      }
       PlatformError::InvariantError(msg) => {
         f.write_str(format!("Invariant violated: {}",
                             msg.as_ref().unwrap_or(&"UNKNOWN".to_string())).as_str())

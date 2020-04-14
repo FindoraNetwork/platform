@@ -1,0 +1,87 @@
+bound_asset_type debt {
+  var next_interest: Date; // date of the next interest accrual
+  var interest_total: Amount; // how much interest so far
+} issued_by borrower;
+
+global_param interest_rate: Fraction
+  { interest_rate > 0; interest_rate < 1; };
+global_param interest_timestep: Time;
+global_param fiat:              ResourceType;
+global_param loan_amount:       Amount;
+
+
+// Date is a moment
+// Time is a delta
+// Date + Time => Date
+// Date - Date => Time
+
+// submitting txn T
+//  we run the policy at midnight
+//  we submit the txn to the submission server 12:03
+//
+// validator receives which evaluates against 12:00, but is signed
+//
+//
+//
+
+txn start_loan(out resource the_debt:  debt,
+               out resource the_money: fiat,
+               in  resource money_src: fiat,
+               status       now:       CurrentTime,
+)
+  ensures the_debt.amount == the_money.amount;
+  ensures the_debt.amount == loan_amount;
+{
+  require_signature borrower;
+  require_signature lender;
+  assert money_src.amount == loan_amount;
+  assert the_money.owner  == borrower;
+  assert the_debt.owner   == lender;
+
+  local_resource debt_temp { owner = borrower; };
+
+  issue loan_amount of debt -> debt_temp {
+    next_interest = now + interest_timestep;
+    interest_total = 0;
+  };
+
+  transfer ALL of money_src -> the_money;
+  transfer ALL of debt_temp -> the_debt;
+}
+
+txn impose_interest(inout resource the_debt: debt,
+                    status         now:      CurrentTime,
+)
+  ensures the_debt.next_interest is_after old(the_debt.next_interest);
+{
+  require now is_after the_debt.next_interest;
+  local total_amt = the_debt.amount + the_debt.interest_total;
+  transfer all of the_debt -> the_debt {
+    interest_total = the_debt.interest_total
+                   + round(interest_rate*total_amt);
+    next_interest  = the_debt.next_interest + interest_timestep;
+  };
+}
+
+txn repay_loan(inout resource the_debt:    debt,
+               in    resource payment_src: fiat,
+               out   resource payment_dst: fiat,
+)
+  ensures the_debt.amount <= old(the_debt.amount);
+{
+  assert payment_dst.owner == lender;
+
+  local interest_amt = max(the_debt.interest_total,payment_src.amount);
+  local principle_amt = max(0,payment_src.amount - interest_amt);
+  assert principle_amt <= the_debt.amount;
+  local remainder = the_debt.amount - principle_amt;
+
+  transfer principle_amt of the_debt -> BURN_ADDRESS;
+  transfer remainder of the_debt -> the_debt {
+    next_interest = the_debt.next_interest;
+    interest_total = the_debt.interest_total - interest_amt;
+  };
+  transfer ALL of payment_src -> payment_dst;
+}
+
+

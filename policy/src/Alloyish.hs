@@ -1,19 +1,22 @@
 {-# LANGUAGE LambdaCase        #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE DeriveFunctor     #-}
-module Main where
+module Alloyish where
 import qualified Data.Text as T
 import           Data.List (nub,isPrefixOf,sort)
 import qualified Data.Map.Lazy as M
+import qualified Control.Monad.State.Lazy as S
 import qualified Text.Parsec   as P
 import qualified Text.Parsec.Token as P
 import           Text.Parsec.Language (javaStyle)
-import           Data.Maybe (maybeToList,fromMaybe)
+import           Data.Maybe (maybeToList,fromMaybe,fromJust)
 import           Control.Applicative ((<$>),(<*>),(*>))
-import           Control.Monad (join, filterM)
+import           Control.Monad (join, filterM, foldM)
 import           System.Directory (getCurrentDirectory, getDirectoryContents, doesFileExist)
-import           System.IO (hGetContents,openFile,IOMode(..),hFlush,stdout)
+import           System.IO (hGetContents,openFile,IOMode(..),hFlush,stdout,stdin)
 import           System.FilePath.Posix (takeBaseName)
+import qualified Text.PrettyPrint.Annotated as PP
+import           Control.Monad.Identity (runIdentity)
 
 alloyish = P.makeTokenParser $ javaStyle
   { P.reservedNames = [ "sig", "abstract", "extends"
@@ -411,8 +414,8 @@ lineJoin ls = foldl1 (\x y -> x <> "\n" <> y) ls
 prefixWith s = lineJoin . map (s <>) . T.lines
 indent = prefixWith "  "
 
-main :: IO ()
-main = do
+alloyish_main :: IO ()
+alloyish_main = do
   files <- getFiles
   -- mapM putStrLn files
   files <- sequence $ map (flip openFile ReadMode) files
@@ -464,5 +467,4 @@ main = do
           putStrLn $ maybe "Error" show $ evalRelExp x env
   sequence_ $ repeat step
 
-  -- whileEither_ expLine (\_ -> putStrLn "Done.") $ 
 

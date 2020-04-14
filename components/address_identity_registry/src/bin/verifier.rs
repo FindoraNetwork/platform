@@ -2,25 +2,12 @@
 
 mod shared;
 
-//use rand_chacha::ChaChaRng;
-//use rand_core::SeedableRng;
 use air::{check_merkle_proof, AIRResult, AIR};
-use percent_encoding::{utf8_percent_encode, AsciiSet, CONTROLS};
-use shared::{protocol_host, AIRAddressAndPoK , Bitmap, PubCreds, QUERY_PORT};
-use zei::api::anon_creds::{ac_verify, ACCommitment};
-
-/// https://url.spec.whatwg.org/#fragment-percent-encode-set
-const FRAGMENT: &AsciiSet = &CONTROLS.add(b' ').add(b'"').add(b'<').add(b'>').add(b'`');
-/*
-fn urldecode(s: &str) -> String {
-  let iter = percent_decode(s.as_bytes());
-  iter.decode_utf8().unwrap().to_string()
-}
-*/
-fn urlencode(input: &str) -> String {
-  let iter = utf8_percent_encode(input, FRAGMENT);
-  iter.collect()
-}
+use credentials::{credential_user_key_gen, credential_verify, CredCommitment};
+use rand_chacha::ChaChaRng;
+use rand_core::SeedableRng;
+use shared::{AIRAddressAndPoK, PubCreds, RevealFields};
+use utils::{protocol_host, urlencode, QUERY_PORT};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -31,20 +18,23 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                                                            .json::<PubCreds>()
                                                                            .await?;
   println!("Response from issuer is:\n{:?}", &issuer_resp);
-  let attributes = vec![Some(String::from("dob:08221964")),
-                        Some(String::from("ss:666666666")),
-                        None,
-                        None];
-  let bitmap = Bitmap { bits: vec![true, true, false, false] };
-  let bitmap_str = urlencode(&serde_json::to_string(&bitmap)?);
+
+  let attr_map = vec![(String::from("sex"), "M".as_bytes()),
+                      (String::from("pob"), "666".as_bytes())];
+  let reveal_fields = RevealFields { fields: attr_map.clone()
+                                                     .into_iter()
+                                                     .map(|(f, a)| f.clone())
+                                                     .collect() };
+  let req_string = format!("http://127.0.0.1:3031/reveal/{}/", &credname);
+  let reveal_fields_str = urlencode(&serde_json::to_string(&reveal_fields)?);
   let req_string = format!("http://127.0.0.1:3031/reveal/{}/", &credname);
 
-  println!("req string is:\n{}, urlencoded bitmap string is {}",
-           &req_string, bitmap_str);
+  println!("req string is:\n{}, urlencoded reveal_fields string is {}",
+           &req_string, reveal_fields_str);
 
   let client = reqwest::Client::new();
   let addr_and_pok: AIRAddressAndPoK = client.post(&req_string)
-                                             .json::<Bitmap>(&bitmap)
+                                             .json::<RevealFields>(&reveal_fields)
                                              .send()
                                              .await?
                                              .json::<AIRAddressAndPoK>()
@@ -55,41 +45,39 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
   // Step 2: Get value and Merkle proof from AIR address
 
   let (protocol, host) = protocol_host();
-  //  let air_result: AIRResult = reqwest::get(&format!("http://localhost:8668/air_address/{}", &addr_and_pok.addr))
   println!("Looking up value at {}://{}:{}/air_address/{}",
            protocol, host, QUERY_PORT, &addr_and_pok.addr);
-  let air_result: AIRResult = reqwest::get(&format!("{}://{}:{}/air_address/{}",
-                                                    protocol,
-                                                    host,
-                                                    QUERY_PORT,
-                                                    &addr_and_pok.addr)).await?
-                                                                        .json::<AIRResult>()
-                                                                        .await?;
+  let air_result: AIRResult =
+    reqwest::get(&format!("{}://{}:{}/air_address/{}",
+                          protocol, host, QUERY_PORT, &addr_and_pok.addr)).await?
+                                                                          .json::<AIRResult>()
+                                                                          .await?;
 
   println!("Response from ledger is:\n{:?}", &air_result);
 
   let air_entry = air_result.value.clone();
 
   if let Some(commitment_string) = air_entry {
-    let commitment: ACCommitment = serde_json::from_str(&commitment_string[..]).unwrap();
+    let commitment: CredCommitment = serde_json::from_str(&commitment_string[..]).unwrap();
     if check_merkle_proof(&air_result.merkle_root,
                           &air_result.key,
                           air_result.value.as_ref(),
-                          &air_result.merkle_proof) {
-        if let Err(e) = ac_verify::<String>(&issuer_resp.issuer_pk,
-                                            &attributes[..],
-                                            &commitment,
-                                            &addr_and_pok.pok) {
+                          &air_result.merkle_proof)
+    {
+      if let Err(e) = credential_verify(&issuer_resp.issuer_pk,
+                                        &attr_map[..],
+                                        &commitment,
+                                        &addr_and_pok.pok)
+      {
         Err(format!("smt merkle proof succeeds but ac_verify fails with {}", e).into())
       } else {
-        println!("smt merkle proof and ac_verify both succeed");
+        println!("smt merkle proof and ac_verify succeed");
         Ok(())
       }
     } else {
       Err(format!("AIR merkle proof failed").into())
     }
   } else {
-    // panic!(format!("No AIR entry at {}", &addr_and_pok.addr));
     Err(format!("No AIR entry at {}", &addr_and_pok.addr).into())
   }
 }

@@ -1,11 +1,17 @@
 #![deny(warnings)]
 use super::errors;
+use crate::error_location;
+use crate::policy_script::{Policy, PolicyGlobals, TxnPolicyData};
 use bitmap::SparseMap;
 use chrono::prelude::*;
+use credentials::{CredCommitment, CredIssuerPublicKey, CredPoK};
 use cryptohash::sha256::Digest as BitDigest;
 use cryptohash::{sha256, HashValue, Proof};
+use errors::PlatformError;
+use itertools::Itertools;
 use rand_chacha::ChaChaRng;
 use rand_core::{CryptoRng, RngCore, SeedableRng};
+use serde::{de::Visitor, Deserialize, Deserializer, Serialize, Serializer};
 use std::boxed::Box;
 use std::collections::HashMap;
 use std::convert::TryFrom;
@@ -23,9 +29,13 @@ pub fn b64dec<T: ?Sized + AsRef<[u8]>>(input: &T) -> Result<Vec<u8>, base64::Dec
 }
 
 // Unique Identifier for ledger objects
-#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, Hash, PartialEq, Serialize)]
+#[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
 pub struct Code {
   pub val: [u8; 16],
+}
+
+fn is_default<T: Default + PartialEq>(x: &T) -> bool {
+  x == &T::default()
 }
 
 pub type AssetTypeCode = Code;
@@ -45,13 +55,13 @@ impl Code {
     let buf = <[u8; 16]>::try_from(as_vec.as_slice()).unwrap();
     Self { val: buf }
   }
-  pub fn new_from_base64(b64: &str) -> Result<Self, errors::PlatformError> {
+  pub fn new_from_base64(b64: &str) -> Result<Self, PlatformError> {
     if let Ok(mut bin) = b64dec(b64) {
       bin.resize(16, 0u8);
       let buf = <[u8; 16]>::try_from(bin.as_slice()).unwrap();
       Ok(Self { val: buf })
     } else {
-      Err(errors::PlatformError::DeserializationError)
+      Err(PlatformError::DeserializationError)
     }
   }
   pub fn to_base64(&self) -> String {
@@ -59,10 +69,61 @@ impl Code {
   }
 }
 
+impl Serialize for Code {
+  fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where S: Serializer
+  {
+    if serializer.is_human_readable() {
+      serializer.serialize_str(&b64enc(&self.val))
+    } else {
+      serializer.serialize_bytes(&self.val)
+    }
+  }
+}
+
+impl<'de> Deserialize<'de> for Code {
+  fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where D: Deserializer<'de>
+  {
+    struct CodeVisitor;
+
+    impl<'de> Visitor<'de> for CodeVisitor {
+      type Value = Code;
+
+      fn expecting(&self, formatter: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        formatter.write_str("an array of 16 bytes")
+      }
+
+      fn visit_bytes<E>(self, v: &[u8]) -> Result<Self::Value, E>
+        where E: serde::de::Error
+      {
+        if v.len() == 16 {
+          let mut val = [0u8; 16];
+          val.copy_from_slice(v);
+
+          Ok(Code { val })
+        } else {
+          Err(serde::de::Error::invalid_length(v.len(), &self))
+        }
+      }
+      fn visit_str<E>(self, s: &str) -> Result<Self::Value, E>
+        where E: serde::de::Error
+      {
+        self.visit_bytes(&b64dec(s).map_err(serde::de::Error::custom)?)
+      }
+    }
+    if deserializer.is_human_readable() {
+      deserializer.deserialize_str(CodeVisitor)
+    } else {
+      deserializer.deserialize_bytes(CodeVisitor)
+    }
+  }
+}
+
 // Wrapper around a serialized variable that maintains type semantics.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Serialized<T> {
-  val: String,
+  pub val: String,
   phantom: PhantomData<T>,
 }
 
@@ -136,14 +197,60 @@ impl SignedAddress {
   }
 }
 
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+/// Simple asset rules:
+/// 1) Traceable: Records of traceable assets can be decrypted by a provided tracking key
+/// 2) Transferable: Non-transferable assets can only be transferred once from the issuer to
+///    another user.
+/// 3) Max units: Optional limit on total issuance amount.
+/// TODO (noah) implement validation for transferable
+/// TODO (keyao) implemenent validation for traceable
+pub struct AssetRules {
+  pub traceable: bool,
+  pub transferable: bool,
+  pub max_units: Option<u64>,
+}
+impl Default for AssetRules {
+  fn default() -> Self {
+    AssetRules { traceable: false,
+                 transferable: true,
+                 max_units: None }
+  }
+}
+
+impl AssetRules {
+  pub fn set_traceable(&mut self, traceable: bool) -> &mut Self {
+    self.traceable = traceable;
+    self
+  }
+
+  pub fn set_max_units(&mut self, max_units: Option<u64>) -> &mut Self {
+    self.max_units = max_units;
+    self
+  }
+
+  pub fn set_transferable(&mut self, transferable: bool) -> &mut Self {
+    self.transferable = transferable;
+    self
+  }
+}
+
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 pub struct Asset {
   pub code: AssetTypeCode,
   pub issuer: IssuerPublicKey,
+  #[serde(default)]
+  #[serde(skip_serializing_if = "is_default")]
   pub memo: Memo,
+  #[serde(default)]
+  #[serde(skip_serializing_if = "is_default")]
   pub confidential_memo: ConfidentialMemo,
-  pub updatable: bool,
-  pub traceable: bool,
+  #[serde(default)]
+  #[serde(skip_serializing_if = "is_default")]
+  pub asset_rules: AssetRules,
+  #[serde(default)]
+  #[serde(skip_serializing_if = "is_default")]
+  pub policy: Option<(Box<Policy>, PolicyGlobals)>,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
@@ -154,20 +261,11 @@ pub struct AssetType {
   pub confidential_units: Commitment,
 }
 
-//impl AssetType {
-//    pub fn create_empty() -> AssetType {
-//        AssetType {
-//            code: AssetTypeCode{val:[0;16]},
-//            digest: [0;32],
-//            issuer: Address{key:[0;32]},
-//            memo: Memo{},
-//            confidential_memo: ConfidentialMemo{},
-//            updatable: false,
-//            units: 0,
-//            confidential_units: [0;32],
-//        }
-//    }
-//}
+impl AssetType {
+  pub fn has_issuance_restrictions(&self) -> bool {
+    self.properties.asset_rules.max_units.is_some()
+  }
+}
 
 #[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, Serialize)]
 pub struct CustomAssetPolicy {
@@ -242,11 +340,14 @@ impl TransferAssetBody {
                                      input_records: &[OpenAssetRecord],
                                      output_records: &[AssetRecord])
                                      -> Result<TransferAssetBody, errors::PlatformError> {
-    let id_proofs = vec![];
     if input_records.is_empty() {
-      return Err(errors::PlatformError::InputsError);
+      return Err(PlatformError::InputsError(error_location!()));
     }
-    let note = Box::new(gen_xfr_body(prng, input_records, output_records, &id_proofs)?);
+    let in_records =
+      input_records.iter()
+                   .map(|oar| AssetRecord::from_open_asset_record_no_asset_tracking(oar.clone()))
+                   .collect_vec();
+    let note = Box::new(gen_xfr_body(prng, in_records.as_slice(), output_records)?);
     Ok(TransferAssetBody { inputs: input_refs,
                            num_outputs: output_records.len(),
                            transfer: note })
@@ -265,7 +366,7 @@ impl IssueAssetBody {
   pub fn new(token_code: &AssetTypeCode,
              seq_num: u64,
              records: &[TxOutput])
-             -> Result<IssueAssetBody, errors::PlatformError> {
+             -> Result<IssueAssetBody, PlatformError> {
     Ok(IssueAssetBody { code: *token_code,
                         seq_num,
                         num_outputs: records.len(),
@@ -281,16 +382,16 @@ pub struct DefineAssetBody {
 impl DefineAssetBody {
   pub fn new(token_code: &AssetTypeCode,
              issuer_key: &IssuerPublicKey, // TODO: require private key check somehow?
-             updatable: bool,
-             traceable: bool,
+             asset_rules: AssetRules,
              memo: Option<Memo>,
-             confidential_memo: Option<ConfidentialMemo>)
-             -> Result<DefineAssetBody, errors::PlatformError> {
+             confidential_memo: Option<ConfidentialMemo>,
+             policy: Option<(Box<Policy>, PolicyGlobals)>)
+             -> Result<DefineAssetBody, PlatformError> {
     let mut asset_def: Asset = Default::default();
     asset_def.code = *token_code;
     asset_def.issuer = *issuer_key;
-    asset_def.updatable = updatable;
-    asset_def.traceable = traceable;
+    asset_def.asset_rules = asset_rules;
+    asset_def.policy = policy;
 
     if let Some(memo) = memo {
       asset_def.memo = Memo(memo.0);
@@ -308,13 +409,17 @@ impl DefineAssetBody {
 }
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct AIRAssignBody {
-  pub addr: String,
-  pub data: String,
+  pub addr: CredIssuerPublicKey,
+  pub data: CredCommitment,
+  pub pok: CredPoK,
 }
 
 impl AIRAssignBody {
-  pub fn new(addr: String, data: String) -> Result<AIRAssignBody, errors::PlatformError> {
-    Ok(AIRAssignBody { addr, data })
+  pub fn new(addr: CredIssuerPublicKey,
+             data: CredCommitment,
+             pok: CredPoK)
+             -> Result<AIRAssignBody, errors::PlatformError> {
+    Ok(AIRAssignBody { addr, data, pok })
   }
 }
 
@@ -350,7 +455,7 @@ pub struct TransferAsset {
 impl TransferAsset {
   pub fn new(transfer_body: TransferAssetBody,
              transfer_type: TransferType)
-             -> Result<TransferAsset, errors::PlatformError> {
+             -> Result<TransferAsset, PlatformError> {
     Ok(TransferAsset { body: transfer_body,
                        body_signatures: Vec::new(),
                        transfer_type })
@@ -379,7 +484,7 @@ impl IssueAsset {
   pub fn new(issuance_body: IssueAssetBody,
              public_key: &IssuerPublicKey,
              secret_key: &XfrSecretKey)
-             -> Result<IssueAsset, errors::PlatformError> {
+             -> Result<IssueAsset, PlatformError> {
     let sign = compute_signature(&secret_key, &public_key.key, &issuance_body);
     Ok(IssueAsset { body: issuance_body,
                     pubkey: *public_key,
@@ -404,7 +509,7 @@ impl DefineAsset {
   pub fn new(creation_body: DefineAssetBody,
              public_key: &IssuerPublicKey,
              secret_key: &XfrSecretKey)
-             -> Result<DefineAsset, errors::PlatformError> {
+             -> Result<DefineAsset, PlatformError> {
     let sign = compute_signature(&secret_key, &public_key.key, &creation_body);
     Ok(DefineAsset { body: creation_body,
                      pubkey: *public_key,
@@ -415,18 +520,17 @@ impl DefineAsset {
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct AIRAssign {
   pub body: AIRAssignBody,
-  pub pubkey: IssuerPublicKey,
+  pub pubkey: XfrPublicKey,
   pub signature: XfrSignature,
 }
 
 impl AIRAssign {
   pub fn new(creation_body: AIRAssignBody,
-             public_key: &IssuerPublicKey,
-             secret_key: &XfrSecretKey)
+             keypair: &XfrKeyPair)
              -> Result<AIRAssign, errors::PlatformError> {
-    let sign = compute_signature(&secret_key, &public_key.key, &creation_body);
+    let sign = compute_signature(keypair.get_sk_ref(), keypair.get_pk_ref(), &creation_body);
     Ok(AIRAssign { body: creation_body,
-                   pubkey: *public_key,
+                   pubkey: *keypair.get_pk_ref(),
                    signature: sign })
   }
 }
@@ -447,17 +551,28 @@ pub struct TimeBounds {
   pub end: DateTime<Utc>,
 }
 
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize, Default)]
 pub struct Transaction {
   pub operations: Vec<Operation>,
+  #[serde(default)]
+  #[serde(skip_serializing_if = "is_default")]
   pub credentials: Vec<CredentialProof>,
+  #[serde(default)]
+  #[serde(skip_serializing_if = "is_default")]
+  pub policy_options: Option<TxnPolicyData>,
+  #[serde(default)]
+  #[serde(skip_serializing_if = "is_default")]
   pub memos: Vec<Memo>,
+  #[serde(default)]
+  #[serde(skip_serializing_if = "is_default")]
+  pub signatures: Vec<XfrSignature>,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct FinalizedTransaction {
   pub txn: Transaction,
   pub tx_id: TxnSID,
+
   pub merkle_id: u64,
 }
 
@@ -623,13 +738,49 @@ impl Transaction {
     hash.hash.clone_from_slice(&digest.0);
     hash
   }
-}
 
-impl Default for Transaction {
-  fn default() -> Self {
-    Transaction { operations: Vec::new(),
-                  credentials: Vec::new(),
-                  memos: Vec::new() }
+  fn serialize_without_sigs(&self) -> Vec<u8> {
+    // TODO(joe): do this without a clone?
+    let mut other_txn;
+    let base_txn = if self.signatures.is_empty() {
+      &self
+    } else {
+      other_txn = self.clone();
+      other_txn.signatures.clear();
+      &other_txn
+    };
+    serde_json::to_vec(base_txn).unwrap()
+  }
+
+  pub fn sign(&mut self, secret_key: &XfrSecretKey, public_key: &XfrPublicKey) {
+    let sig = secret_key.sign(&self.serialize_without_sigs(), &public_key);
+    self.signatures.push(sig);
+  }
+
+  pub fn check_signature(&self,
+                         public_key: &XfrPublicKey,
+                         sig: &XfrSignature)
+                         -> Result<(), PlatformError> {
+    public_key.verify(&self.serialize_without_sigs(), sig)?;
+    Ok(())
+  }
+
+  /// NOTE: this does *not* guarantee that a private key affiliated with
+  /// `public_key` has signed this transaction! If `public_key` is derived
+  /// from `self` somehow, then it is infeasible for someone to forge a
+  /// passing signature, but it is plausible for someone to generate an
+  /// unrelated `public_key` which can pass this signature check!
+  pub fn check_has_signature(&self, public_key: &XfrPublicKey) -> Result<(), PlatformError> {
+    let serialized = self.serialize_without_sigs();
+    for sig in self.signatures.iter() {
+      match public_key.verify(&serialized, sig) {
+        Err(_) => {}
+        Ok(_) => {
+          return Ok(());
+        }
+      }
+    }
+    Err(PlatformError::InputsError(error_location!()))
   }
 }
 
@@ -673,7 +824,7 @@ mod tests {
   use super::*;
   use rand_core::SeedableRng;
   use std::cmp::min;
-  use zei::xfr::structs::{AssetAmountProof, XfrBody, XfrProofs};
+  use zei::xfr::structs::{AssetTypeAndAmountProof, XfrBody, XfrProofs};
 
   #[test]
   fn test_gen_random() {
@@ -787,9 +938,11 @@ mod tests {
     // Instantiate an TransferAsset operation
     let xfr_note = XfrBody { inputs: Vec::new(),
                              outputs: Vec::new(),
-                             proofs: XfrProofs { asset_amount_proof:
-                                                   AssetAmountProof::NoProof,
-                                                 asset_tracking_proof: Default::default() } };
+                             proofs: XfrProofs { asset_type_and_amount_proof:
+                                                   AssetTypeAndAmountProof::NoProof,
+                                                 asset_tracking_proof: Default::default() },
+                             asset_tracing_memos: vec![],
+                             owners_memos: vec![] };
 
     let assert_transfer_body = TransferAssetBody { inputs: Vec::new(),
                                                    num_outputs: 0,
@@ -807,11 +960,11 @@ mod tests {
                                                num_outputs: 0,
                                                records: Vec::new() };
 
-    let asset_issurance = IssueAsset { body: asset_issuance_body,
-                                       pubkey: IssuerPublicKey { key: public_key },
-                                       signature: signature.clone() };
+    let asset_issuance = IssueAsset { body: asset_issuance_body,
+                                      pubkey: IssuerPublicKey { key: public_key },
+                                      signature: signature.clone() };
 
-    let issurance_operation = Operation::IssueAsset(asset_issurance.clone());
+    let issuance_operation = Operation::IssueAsset(asset_issuance.clone());
 
     // Instantiate an DefineAsset operation
     let asset = Default::default();
@@ -822,33 +975,20 @@ mod tests {
 
     let creation_operation = Operation::DefineAsset(asset_creation.clone());
 
-    // Instantiate an AIRAssign operation
-    let air_assign_body = AIRAssignBody { addr: String::from(""),
-                                          data: String::from("") };
-
-    let air_assign = AIRAssign { body: air_assign_body,
-                                 pubkey: IssuerPublicKey { key: public_key },
-                                 signature: signature.clone() };
-
-    let air_assign_operation = Operation::AIRAssign(air_assign.clone());
-
     // Add operations to the transaction
     transaction.add_operation(transfer_operation);
-    transaction.add_operation(issurance_operation);
+    transaction.add_operation(issuance_operation);
     transaction.add_operation(creation_operation);
-    transaction.add_operation(air_assign_operation);
 
     // Verify operatoins
-    assert_eq!(transaction.operations.len(), 4);
+    assert_eq!(transaction.operations.len(), 3);
 
     assert_eq!(transaction.operations.get(0),
                Some(&Operation::TransferAsset(asset_transfer)));
     assert_eq!(transaction.operations.get(1),
-               Some(&Operation::IssueAsset(asset_issurance)));
+               Some(&Operation::IssueAsset(asset_issuance)));
     assert_eq!(transaction.operations.get(2),
                Some(&Operation::DefineAsset(asset_creation)));
-    assert_eq!(transaction.operations.get(3),
-               Some(&Operation::AIRAssign(air_assign)));
   }
 
   // Verify that the hash values of two transactions:

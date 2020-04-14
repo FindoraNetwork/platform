@@ -1,5 +1,6 @@
 #![deny(warnings)]
 use ledger::data_model::AssetTypeCode;
+use ledger_standalone::LedgerStandalone;
 use std::fs;
 use std::io::{self, Write};
 use std::path::Path;
@@ -16,7 +17,7 @@ extern crate exitcode;
 // Those tests pass individually, but occasionally fail when run with other tests.
 // They take more time to complete, thus might cause data conflicts.
 
-const COMMAND: &str = "../../target/debug/txn_builder_cli";
+const COMMAND: &str = "../../target/debug/txn_cli";
 const DATA_FILE: &str = "data.json";
 
 //
@@ -53,12 +54,10 @@ fn view_credential_all(borrower_id: &str) -> io::Result<Output> {
 }
 
 #[cfg(test)]
-fn view_credential_with_credential_id(borrower_id: &str,
-                                      credential_id: &str)
-                                      -> io::Result<Output> {
+fn view_credential_attribute(borrower_id: &str, attribute: &str) -> io::Result<Output> {
   Command::new(COMMAND).args(&["borrower", "--id", borrower_id])
                        .arg("view_credential")
-                       .args(&["--credential", credential_id])
+                       .args(&["--attribute", attribute])
                        .output()
 }
 
@@ -80,10 +79,9 @@ fn sign_up_credential_issuer(name: &str) -> io::Result<Output> {
 }
 
 #[cfg(test)]
-fn sign_up_lender(name: &str, min_credit_score: &str) -> io::Result<Output> {
+fn sign_up_lender(name: &str) -> io::Result<Output> {
   Command::new(COMMAND).args(&["lender", "sign_up"])
                        .args(&["--name", name])
-                       .args(&["--min_credit_score", min_credit_score])
                        .output()
 }
 
@@ -162,10 +160,34 @@ fn create_txn_builder_overwrite_path(path: &str) -> io::Result<Output> {
 }
 
 #[cfg(test)]
-fn store_sids_with_path(path: &str, indices: &str) -> io::Result<Output> {
+fn store_sids_with_path(file: &str, indices: &str) -> io::Result<Output> {
   Command::new(COMMAND).args(&["asset_issuer", "store_sids"])
-                       .args(&["--path", path])
+                       .args(&["--file", file])
                        .args(&["--indices", indices])
+                       .output()
+}
+
+#[cfg(test)]
+fn store_memos_with_confidential_amount(id: &str,
+                                        amount: &str,
+                                        token_code: &str,
+                                        file: &str)
+                                        -> io::Result<Output> {
+  Command::new(COMMAND).args(&["asset_issuer", "--id", id])
+                       .arg("store_memos")
+                       .args(&["--amount", amount])
+                       .arg("--confidential_amount")
+                       .args(&["--token_code", token_code])
+                       .args(&["--file", file])
+                       .output()
+}
+
+#[cfg(test)]
+fn trace_and_verify_asset(id: &str, memo_file: &str, expected_amount: &str) -> io::Result<Output> {
+  Command::new(COMMAND).args(&["asset_issuer", "--id", id])
+                       .arg("trace_and_verify_asset")
+                       .args(&["--memo_file", memo_file])
+                       .args(&["--expected_amount", expected_amount])
                        .output()
 }
 
@@ -197,20 +219,22 @@ fn define_asset(txn_builder_path: &str,
                        .arg("define_asset")
                        .args(&["--token_code", token_code])
                        .args(&["--memo", memo])
+                       .arg("--traceable")
                        .output()
 }
 
 #[cfg(test)]
-fn issue_asset(txn_builder_path: &str,
-               id: &str,
-               token_code: &str,
-               amount: &str)
-               -> io::Result<Output> {
+fn issue_asset_with_confidential_amount(txn_builder_path: &str,
+                                        id: &str,
+                                        token_code: &str,
+                                        amount: &str)
+                                        -> io::Result<Output> {
   Command::new(COMMAND).args(&["--txn", txn_builder_path])
                        .args(&["asset_issuer", "--id", id])
                        .arg("issue_asset")
                        .args(&["--token_code", token_code])
                        .args(&["--amount", amount])
+                       .arg("--confidential_amount")
                        .output()
 }
 
@@ -218,7 +242,8 @@ fn issue_asset(txn_builder_path: &str,
 fn transfer_asset(txn_builder_path: &str,
                   issuer_id: &str,
                   recipient_ids: &str,
-                  sids_path: &str,
+                  sids_file: &str,
+                  issuance_txn_files: &str,
                   input_amounts: &str,
                   output_amounts: &str)
                   -> io::Result<Output> {
@@ -226,31 +251,38 @@ fn transfer_asset(txn_builder_path: &str,
                        .args(&["asset_issuer", "--id", issuer_id])
                        .arg("transfer_asset")
                        .args(&["--recipients", recipient_ids])
-                       .args(&["--sids_path", sids_path])
+                       .args(&["--sids_file", sids_file])
+                       .args(&["--issuance_txn_files", issuance_txn_files])
                        .args(&["--input_amounts", input_amounts])
                        .args(&["--output_amounts", output_amounts])
-                       .args(&["--http", "--localhost"])
                        .output()
 }
 
 #[cfg(test)]
-fn issue_and_transfer_asset(txn_builder_path: &str,
-                            issuer_id: &str,
-                            recipient_id: &str,
-                            amount: &str,
-                            token_code: &str)
-                            -> io::Result<Output> {
+fn issue_and_transfer_asset_confidential(txn_builder_path: &str,
+                                         issuer_id: &str,
+                                         recipient_id: &str,
+                                         amount: &str,
+                                         token_code: &str)
+                                         -> io::Result<Output> {
   Command::new(COMMAND).args(&["--txn", txn_builder_path])
                        .args(&["asset_issuer", "--id", issuer_id])
                        .arg("issue_and_transfer_asset")
                        .args(&["--recipient", recipient_id])
                        .args(&["--amount", amount])
                        .args(&["--token_code", token_code])
+                       .args(&["--confidential_amount", "--confidential_asset"])
                        .output()
 }
 
 // Helper functions: submit transaction
-// Note: http://localhost is used instead of https://testnet.findora.org
+// Note:
+// Since http://localhost is used instead of https://testnet.findora.org,
+// make sure the standalone ledger is running before calling a function that will submit a transaction:
+// ```
+// let ledger_standalone = LedgerStandalone::new();
+// ledger_standalone.poll_until_ready().unwrap();
+// ```
 
 #[cfg(test)]
 fn submit(txn_builder_path: &str) -> io::Result<Output> {
@@ -261,10 +293,10 @@ fn submit(txn_builder_path: &str) -> io::Result<Output> {
 }
 
 #[cfg(test)]
-fn submit_and_store_sids(txn_builder_path: &str, sids_path: &str) -> io::Result<Output> {
+fn submit_and_store_sids(txn_builder_path: &str, sids_file: &str) -> io::Result<Output> {
   Command::new(COMMAND).args(&["--txn", txn_builder_path])
                        .arg("submit")
-                       .args(&["--sids_path", sids_path])
+                       .args(&["--sids_file", sids_file])
                        .args(&["--http", "--localhost"])
                        .output()
 }
@@ -332,7 +364,7 @@ fn test_create_users() {
   assert!(output.status.success());
 
   // Create a lender
-  let output = sign_up_lender("Lender L", "550").expect("Failed to create a lender");
+  let output = sign_up_lender("Lender L").expect("Failed to create a lender");
   io::stdout().write_all(&output.stdout).unwrap();
   io::stdout().write_all(&output.stderr).unwrap();
 
@@ -350,35 +382,37 @@ fn test_create_users() {
 
 #[test]
 #[ignore]
-fn test_create_or_update_credentials() {
-  // Update the min_credit_score credential
-  let output = create_or_overwrite_credential("0", "min_credit_score", "600").expect("Failed to create a min_credit_score credential");
+fn test_create_or_overwrite_credentials() {
+  // Create a borrower
+  sign_up_borrower("Borrower B").expect("Failed to create a borrower");
+
+  // Create the credential with minimum credit score record
+  let output = create_or_overwrite_credential("1", "min_credit_score", "600").expect("Failed to create a min_credit_score credential");
   io::stdout().write_all(&output.stdout).unwrap();
   io::stdout().write_all(&output.stderr).unwrap();
 
   assert!(output.status.success());
   assert!(from_utf8(&output.stdout).unwrap()
-                                   .contains(&"Updating the credential record.".to_owned()));
+                                   .contains(&"Creating the credential record.".to_owned()));
 
-  // Create a min_income credential
+  // Overwrite the minimum credit score record
+  let output = create_or_overwrite_credential("1", "min_credit_score", "680").expect("Failed to overwrite the min_credit_score credential");
+  io::stdout().write_all(&output.stdout).unwrap();
+  io::stdout().write_all(&output.stderr).unwrap();
+
+  assert!(output.status.success());
+  assert!(from_utf8(&output.stdout).unwrap()
+                                   .contains(&"Overwriting the credential attribute.".to_owned()));
+
+  // Add the minimum income record to the credential
   let output =
-  create_or_overwrite_credential("0", "min_income", "1000").expect("Failed to create a min_income credential");
+  create_or_overwrite_credential("1", "min_income", "1000").expect("Failed to create a min_income credential");
   io::stdout().write_all(&output.stdout).unwrap();
   io::stdout().write_all(&output.stderr).unwrap();
 
   assert!(output.status.success());
   assert!(from_utf8(&output.stdout).unwrap()
-                                   .contains(&"Adding the credential record.".to_owned()));
-
-  // Create a citizenshiip credential
-  let output =
-  create_or_overwrite_credential("0", "citizenship", "1").expect("Failed to create a citizenship credential");
-  io::stdout().write_all(&output.stdout).unwrap();
-  io::stdout().write_all(&output.stderr).unwrap();
-
-  assert!(output.status.success());
-  assert!(from_utf8(&output.stdout).unwrap()
-                                   .contains(&"Adding the credential record.".to_owned()));
+                                   .contains(&"Adding the credential attribute.".to_owned()));
 
   let _ = fs::remove_file(DATA_FILE);
 }
@@ -402,6 +436,8 @@ fn test_create_txn_builder_no_path() {
 #[test]
 #[ignore]
 fn test_view() {
+  let ledger_standalone = LedgerStandalone::new();
+
   // Add a credential
   create_or_overwrite_credential("0", "min_income", "1500").expect("Failed to create a credential");
 
@@ -414,8 +450,11 @@ fn test_view() {
   // Fulfill some of the loans
   let txn_builder_path = "txn_builder_view_loans";
   create_txn_builder_with_path(txn_builder_path).expect("Failed to create transaction builder");
+  ledger_standalone.poll_until_ready().unwrap();
   fulfill_loan(txn_builder_path, "0", "0", "0").expect("Failed to fulfill the loan");
+  ledger_standalone.poll_until_ready().unwrap();
   fulfill_loan(txn_builder_path, "0", "1", "0").expect("Failed to fulfill the loan");
+  ledger_standalone.poll_until_ready().unwrap();
   fulfill_loan(txn_builder_path, "1", "2", "0").expect("Failed to fulfill the loan");
 
   // View loans
@@ -510,20 +549,23 @@ fn test_view() {
   io::stdout().write_all(&output.stderr).unwrap();
 
   assert!(output.status.success());
-  assert!(from_utf8(&output.stdout).unwrap()
-                                   .contains(&"Displaying 2 credential(s):".to_owned()));
+  assert!(!from_utf8(&output.stdout).unwrap()
+                                    .contains(&"citizenship".to_owned()));
 
-  // 2. View a credential by credential id
-  let output = view_credential_with_credential_id("0", "0").expect("Failed to view the loan");
+  // 2. View a credential attribute
+  let output = view_credential_attribute("0", "min_income").expect("Failed to view the attribute");
   io::stdout().write_all(&output.stdout).unwrap();
   io::stdout().write_all(&output.stderr).unwrap();
 
   assert!(output.status.success());
   assert!(from_utf8(&output.stdout).unwrap()
-                                   .contains(&"Displaying credential".to_owned()));
+                                   .contains(&"Displaying \"min_income\"".to_owned()));
 
   let _ = fs::remove_file(DATA_FILE);
   fs::remove_file(txn_builder_path).unwrap();
+  fs::remove_file("txn_builder_view_loans.fiat.0").unwrap();
+  fs::remove_file("txn_builder_view_loans.debt.0").unwrap();
+  fs::remove_file("txn_builder_view_loans.debt.1").unwrap();
 }
 
 //
@@ -696,18 +738,21 @@ fn test_store_sids_with_path() {
 #[test]
 #[ignore]
 fn test_define_issue_transfer_and_submit_with_args() {
-  // Create users, txn builder and key pair
+  let ledger_standalone = LedgerStandalone::new();
+
+  // Create users and txn builder files
   sign_up_borrower("Borrower 1").expect("Failed to create a borrower");
   sign_up_borrower("Borrower 2").expect("Failed to create a borrower");
-  let txn_builder_file = "tb_define_issue_transfer_and_submit";
-  create_txn_builder_with_path(txn_builder_file).expect("Failed to create transaction builder");
+  let creation_txn_builder_file = "tb_define_and_submit";
+  let issuance_txn_builder_file = "tb_issue_submit";
+  let transfer_txn_builder_file = "tb_transfer_submit";
 
   // Define asset
   let token_code = AssetTypeCode::gen_random().to_base64();
-  let output = define_asset(txn_builder_file,
-               "0",
-               &token_code,
-               "Define an asset").expect("Failed to define asset");
+  let output = define_asset(creation_txn_builder_file,
+                            "0",
+                            &token_code,
+                            "Define an asset").expect("Failed to define asset");
 
   io::stdout().write_all(&output.stdout).unwrap();
   io::stdout().write_all(&output.stderr).unwrap();
@@ -715,7 +760,8 @@ fn test_define_issue_transfer_and_submit_with_args() {
   assert!(output.status.success());
 
   // Submit transaction
-  let output = submit(txn_builder_file).expect("Failed to submit transaction");
+  ledger_standalone.poll_until_ready().unwrap();
+  let output = submit(creation_txn_builder_file).expect("Failed to submit transaction");
 
   io::stdout().write_all(&output.stdout).unwrap();
   io::stdout().write_all(&output.stderr).unwrap();
@@ -723,8 +769,11 @@ fn test_define_issue_transfer_and_submit_with_args() {
   assert!(output.status.success());
 
   // Issue asset
-  let output =
-    issue_asset(txn_builder_file, "0", &token_code, "100").expect("Failed to issue asset");
+  let amount_issue = "50";
+  let output = issue_asset_with_confidential_amount(issuance_txn_builder_file,
+                                                    "0",
+                                                    &token_code,
+                                                    amount_issue).expect("Failed to issue asset");
 
   io::stdout().write_all(&output.stdout).unwrap();
   io::stdout().write_all(&output.stderr).unwrap();
@@ -733,8 +782,14 @@ fn test_define_issue_transfer_and_submit_with_args() {
 
   // Submit transaction
   let sids_file = "sids_define_issue_transfer_and_submit";
+  ledger_standalone.poll_until_ready().unwrap();
   let output =
-    submit_and_store_sids(txn_builder_file, sids_file).expect("Failed to submit transaction");
+    submit_and_store_sids(issuance_txn_builder_file, sids_file).expect("Failed to submit transaction");
+
+  io::stdout().write_all(&output.stdout).unwrap();
+  io::stdout().write_all(&output.stderr).unwrap();
+
+  assert!(output.status.success());
 
   io::stdout().write_all(&output.stdout).unwrap();
   io::stdout().write_all(&output.stderr).unwrap();
@@ -742,7 +797,13 @@ fn test_define_issue_transfer_and_submit_with_args() {
   assert!(output.status.success());
 
   // Transfer asset
-  let output = transfer_asset(txn_builder_file, "0", "1,2", sids_file, "50", "30,20").expect("Failed to transfer asset");
+  let output = transfer_asset(transfer_txn_builder_file,
+                              "0",
+                              "1,2",
+                              sids_file,
+                              issuance_txn_builder_file,
+                              "50",
+                              "30,20").expect("Failed to transfer asset");
 
   io::stdout().write_all(&output.stdout).unwrap();
   io::stdout().write_all(&output.stderr).unwrap();
@@ -750,13 +811,16 @@ fn test_define_issue_transfer_and_submit_with_args() {
   assert!(output.status.success());
 
   // Submit transaction
-  let output = submit(txn_builder_file).expect("Failed to submit transaction");
+  ledger_standalone.poll_until_ready().unwrap();
+  let output = submit(transfer_txn_builder_file).expect("Failed to submit transaction");
 
   io::stdout().write_all(&output.stdout).unwrap();
   io::stdout().write_all(&output.stderr).unwrap();
 
   let _ = fs::remove_file(DATA_FILE);
-  fs::remove_file(txn_builder_file).unwrap();
+  fs::remove_file(creation_txn_builder_file).unwrap();
+  fs::remove_file(issuance_txn_builder_file).unwrap();
+  fs::remove_file(transfer_txn_builder_file).unwrap();
   fs::remove_file(sids_file).unwrap();
 
   assert!(output.status.success());
@@ -765,12 +829,8 @@ fn test_define_issue_transfer_and_submit_with_args() {
 //
 // Compose transaction and submit
 //
-#[test]
-// Ignoring this test as it currently requires environment settings.
-// To run the test, make sure:
-// * Standalone ledger is running.
-// * PROTOCOL=http and SERVER_HOST=localhost.
 #[ignore]
+#[test]
 fn test_air_assign() {
   // Create txn builder and key pair
   let txn_builder_file = "tb_air_assign";
@@ -780,6 +840,8 @@ fn test_air_assign() {
   air_assign(txn_builder_file, "0", "666", "Hell").expect("Failed to assign to AIR");
 
   // Submit transaction
+  let ledger_standalone = LedgerStandalone::new();
+  ledger_standalone.poll_until_ready().unwrap();
   let output = submit(txn_builder_file).expect("Failed to submit transaction");
 
   io::stdout().write_all(&output.stdout).unwrap();
@@ -792,7 +854,10 @@ fn test_air_assign() {
 }
 
 #[test]
-fn test_issue_transfer_and_submit_with_args() {
+#[ignore]
+fn test_issue_transfer_trace_and_submit_with_args() {
+  let ledger_standalone = LedgerStandalone::new();
+
   // Create txn builder and key pairs
   let txn_builder_file = "tb_issue_transfer_args";
   create_txn_builder_with_path(txn_builder_file).expect("Failed to create transaction builder");
@@ -805,16 +870,37 @@ fn test_issue_transfer_and_submit_with_args() {
                "0",
                &token_code,
                "Define an asset").expect("Failed to define asset");
+  ledger_standalone.poll_until_ready().unwrap();
   submit(txn_builder_file).expect("Failed to submit transaction");
 
   // Issue and transfer
-  issue_and_transfer_asset(txn_builder_file,
+  let amount = "1000";
+  issue_and_transfer_asset_confidential(txn_builder_file,
                            "0",
                            "0",
-                           "1000",
+                           amount,
                            &token_code).expect("Failed to issue and transfer asset");
 
+  // Store tracer and owner memos
+  let memo_file = "memos_issue_transfer_and_submit";
+  let output =
+  store_memos_with_confidential_amount("0", amount, &token_code, memo_file).expect("Failed to store memos");
+
+  io::stdout().write_all(&output.stdout).unwrap();
+  io::stdout().write_all(&output.stderr).unwrap();
+
+  assert!(output.status.success());
+
+  // Trace the asset and verify the amount
+  let output = trace_and_verify_asset("0", memo_file, amount).expect("Failed to trace the asset");
+
+  io::stdout().write_all(&output.stdout).unwrap();
+  io::stdout().write_all(&output.stderr).unwrap();
+
+  assert!(output.status.success());
+
   // Submit transaction
+  ledger_standalone.poll_until_ready().unwrap();
   let output = submit(txn_builder_file).expect("Failed to submit transaction");
 
   io::stdout().write_all(&output.stdout).unwrap();
@@ -822,16 +908,21 @@ fn test_issue_transfer_and_submit_with_args() {
 
   let _ = fs::remove_file(DATA_FILE);
   fs::remove_file(txn_builder_file).unwrap();
+  fs::remove_file(memo_file).unwrap();
 
   assert!(output.status.success());
 }
 
 #[test]
 #[ignore]
+// TODO (Keyao): Investigate why the "Pay loan" section fails.
 // Test funds loading, loan request, fulfilling and repayment
 fn test_request_fulfill_and_pay_loan_with_args() {
+  let ledger_standalone = LedgerStandalone::new();
+
   // Load funds
   let txn_builder_file = "tb_load_funds_args";
+  ledger_standalone.poll_until_ready().unwrap();
   let output = load_funds(txn_builder_file, "0", "0", "5000").expect("Failed to load funds");
 
   io::stdout().write_all(&output.stdout).unwrap();
@@ -860,6 +951,7 @@ fn test_request_fulfill_and_pay_loan_with_args() {
   // 1. First time:
   //    Add the credential proof, then successfully initiate the loan
   let txn_builder_file = "tb_fulfill_loan_args";
+  ledger_standalone.poll_until_ready().unwrap();
   let output = fulfill_loan(txn_builder_file, "0", "0", "0").expect("Failed to initiate the loan");
 
   io::stdout().write_all(&output.stdout).unwrap();
@@ -871,6 +963,7 @@ fn test_request_fulfill_and_pay_loan_with_args() {
 
   // 2. Second time:
   //    Fail because the loan has been fulfilled
+  ledger_standalone.poll_until_ready().unwrap();
   let output = fulfill_loan(txn_builder_file, "0", "0", "0").expect("Failed to initiate the loan");
 
   io::stdout().write_all(&output.stdout).unwrap();
@@ -883,6 +976,7 @@ fn test_request_fulfill_and_pay_loan_with_args() {
   // Fulfill the second loan
   // 1. First time:
   //    Get the credential proof, then fail to initiate the loan because the requirement isn't met
+  ledger_standalone.poll_until_ready().unwrap();
   let output = fulfill_loan(txn_builder_file, "1", "1", "0").expect("Failed to initiate the loan");
 
   io::stdout().write_all(&output.stdout).unwrap();
@@ -890,11 +984,11 @@ fn test_request_fulfill_and_pay_loan_with_args() {
 
   assert_eq!(output.status.code(), Some(exitcode::USAGE));
   let stdout = from_utf8(&output.stdout).unwrap();
-  assert!(stdout.contains(&"Attesting with the existing proof.".to_owned())
-          && stdout.contains(&"Value should be at least:".to_owned()));
+  assert!(stdout.contains(&"should be at least:".to_owned()));
 
   // 2. Second time:
   //    Fail because the loan has been declined
+  ledger_standalone.poll_until_ready().unwrap();
   let output = fulfill_loan(txn_builder_file, "1", "1", "0").expect("Failed to initiate the loan");
 
   io::stdout().write_all(&output.stdout).unwrap();
@@ -907,6 +1001,7 @@ fn test_request_fulfill_and_pay_loan_with_args() {
   // Pay loan
   // 1. First time:
   //    Burn part of the loan balance
+  ledger_standalone.poll_until_ready().unwrap();
   let output = pay_loan("0", "0", "300").expect("Failed to pay loan");
 
   io::stdout().write_all(&output.stdout).unwrap();
@@ -916,6 +1011,7 @@ fn test_request_fulfill_and_pay_loan_with_args() {
 
   // 2. Second time
   //    Pay off the loan
+  ledger_standalone.poll_until_ready().unwrap();
   let output = pay_loan("0", "0", "2000").expect("Failed to pay loan");
 
   io::stdout().write_all(&output.stdout).unwrap();
@@ -925,6 +1021,7 @@ fn test_request_fulfill_and_pay_loan_with_args() {
 
   // 3. Third time:
   //    Fail because the loan has been paid off
+  ledger_standalone.poll_until_ready().unwrap();
   let output = pay_loan("0", "0", "3000").expect("Failed to pay loan");
 
   io::stdout().write_all(&output.stdout).unwrap();
@@ -936,4 +1033,6 @@ fn test_request_fulfill_and_pay_loan_with_args() {
 
   let _ = fs::remove_file(DATA_FILE);
   fs::remove_file(txn_builder_file).unwrap();
+  fs::remove_file("tb_fulfill_loan_args.fiat.0").unwrap();
+  fs::remove_file("tb_fulfill_loan_args.debt.0").unwrap();
 }
