@@ -3,8 +3,7 @@ use clap::{App, Arg, SubCommand};
 use credentials::{
   credential_issuer_key_gen, credential_keygen_commitment, credential_reveal, credential_sign,
   credential_user_key_gen, credential_verify, CredCommitmentKey, CredIssuerPublicKey,
-  CredIssuerSecretKey, CredRevealSig, CredSignature, CredUserSecretKey,
-  Credential as WrapperCredential,
+  CredIssuerSecretKey, CredUserSecretKey, Credential as WrapperCredential,
 };
 use env_logger::{Env, Target};
 use ledger::data_model::errors::PlatformError;
@@ -23,7 +22,7 @@ use std::path::{Path, PathBuf};
 use std::process::exit;
 use submission_server::{TxnHandle, TxnStatus};
 use txn_builder::{BuildsTransactions, PolicyChoice, TransactionBuilder, TransferOperationBuilder};
-use zei::api::anon_creds::Credential as ZeiCredential;
+use zei::api::anon_creds::{ac_confidential_open_commitment, Credential as ZeiCredential};
 use zei::serialization::ZeiFromToBytes;
 use zei::setup::PublicParams;
 use zei::xfr::asset_record::AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType;
@@ -105,11 +104,7 @@ const INIT_DATA: &str = r#"
           "650",
           null,
           null
-      ],
-      "user_secret_key": null,
-      "signature": null,
-      "proof": null,
-      "commitment_key": null
+      ]
     }
   ],
   "loans": [],
@@ -224,14 +219,6 @@ struct Credential {
   /// * Lower bound of the borrower's income isn't provided.
   /// * The country code of the borrower's citizenship is 1.
   values: Vec<Option<String>>,
-  /// Serialized credential user secret key, if exists
-  user_secret_key: Option<String>,
-  /// Serialized credential signature, if exists
-  signature: Option<String>,
-  /// Serialized credential proof, if exists
-  proof: Option<String>,
-  /// Serialized credential commitment key, if exists
-  commitment_key: Option<String>,
 }
 
 impl Credential {
@@ -245,11 +232,7 @@ impl Credential {
     Credential { id,
                  borrower,
                  credential_issuer,
-                 values,
-                 user_secret_key: None,
-                 signature: None,
-                 proof: None,
-                 commitment_key: None }
+                 values }
   }
 }
 
@@ -404,6 +387,7 @@ enum LoanStatus {
 
 #[derive(Clone, Deserialize, Debug, Serialize)]
 /// Loan information.
+// TODO (Keyao): Remove unused fields
 struct Loan {
   /// Loan ID
   id: u64,
@@ -435,6 +419,12 @@ struct Loan {
   debt_txn_file: Option<String>,
   /// Serialized anon_creds::Credential, null if the loan isn't fulfilled     
   credential: Option<String>,
+  /// Serialized credential user secret key, if exists
+  user_secret_key: Option<String>,
+  /// Serialized credential signature, if exists
+  signature: Option<String>,
+  /// Serialized credential commitment key, if exists
+  commitment_key: Option<String>,
 }
 
 impl Loan {
@@ -458,7 +448,10 @@ impl Loan {
            code: None,
            debt_utxo: None,
            debt_txn_file: None,
-           credential: None }
+           credential: None,
+           user_secret_key: None,
+           signature: None,
+           commitment_key: None }
   }
 }
 
@@ -605,7 +598,7 @@ impl Data {
 
   /// Creates or overwrites a credential data.
   /// * If the credential attribute doesn't exist, add it to the credential data.
-  /// * Otherwise, overwrite the value and remove previous credential signature, proof, and commitment key.
+  /// * Otherwise, overwrite the value.
   ///
   /// # Arguments
   /// * `borrower_id`: borrower ID.
@@ -629,10 +622,6 @@ impl Data {
         println!("Overwriting the credential attribute.");
       }
       self.credentials[credential_id as usize].values[attribute as usize] = Some(value.to_string());
-      self.credentials[credential_id as usize].user_secret_key = None;
-      self.credentials[credential_id as usize].signature = None;
-      self.credentials[credential_id as usize].proof = None;
-      self.credentials[credential_id as usize].commitment_key = None;
     } else {
       println!("Creating the credential record.");
       let credential_id = self.credentials.len();
@@ -773,6 +762,20 @@ fn load_open_asset_record_from_file(file_path: &str,
                                                                           })
 }
 
+/// Loads tracer memo from memo file
+/// # Arguments
+/// * `file_path`: file path to the tracer memo.
+fn load_tracer_memo_from_file(file_path: &str) -> Result<AssetTracerMemo, PlatformError> {
+  let tracer_memo = fs::read_to_string(file_path).or_else(|_| {
+                      Err(PlatformError::IoError(format!("Failed to read file: {}", file_path)))
+                    })?;
+  println!("Parsing tracer memo from file contents: \"{}\"",
+           &tracer_memo);
+  serde_json::from_str::<AssetTracerMemo>(&tracer_memo).or_else(|_| {
+                                                         Err(PlatformError::DeserializationError)
+                                                       })
+}
+
 /// Loads tracer and owner memos from memo files
 /// # Arguments
 /// * `file_paths`: file paths to the tracer and owner memos.
@@ -835,6 +838,22 @@ fn store_sids_to_file(path_str: &str, sids: &str) -> Result<(), PlatformError> {
   if let Err(error) = fs::write(path_str, sids) {
     return Err(PlatformError::IoError(format!("Failed to create file {}: {}.", path_str, error)));
   };
+  Ok(())
+}
+
+/// Stores tracer memo to file.
+/// # Arguments
+/// * `path_str`: file path to store the tracer memo.
+/// * `tracer_memo`: tracer memo to store.
+fn store_tracer_memo_to_file(path_str: &str,
+                             tracer_memo: AssetTracerMemo)
+                             -> Result<(), PlatformError> {
+  if let Ok(as_json) = serde_json::to_string(&tracer_memo) {
+    if let Err(error) = fs::write(path_str, &as_json) {
+      return Err(PlatformError::IoError(format!("Failed to create file {}: {}.",
+                                                path_str, error)));
+    };
+  }
   Ok(())
 }
 
@@ -1012,6 +1031,22 @@ fn parse_to_u64_vec(vals_str: &str) -> Result<Vec<u64>, PlatformError> {
   Ok(vals)
 }
 
+/// Parses a string to a list of u32 values.
+/// # Arguments
+/// * `vals_str`: string representation of a list of values.
+fn parse_to_u32_vec(vals_str: &str) -> Result<Vec<u32>, PlatformError> {
+  let vals_vec = split_arg(vals_str);
+  let mut vals = Vec::new();
+  for val_str in vals_vec {
+    if let Ok(val) = val_str.trim().parse::<u32>() {
+      vals.push(val);
+    } else {
+      return Err(PlatformError::InputsError(error_location!()));
+    }
+  }
+  Ok(vals)
+}
+
 fn air_assign(issuer_id: u64,
               address: &str,
               data: &str,
@@ -1085,12 +1120,11 @@ fn issue_and_transfer_asset(issuer_key_pair: &XfrKeyPair,
                             credential_record: Option<(&CredUserSecretKey,
                                     &ZeiCredential,
                                     &CredCommitmentKey)>,
-                            memo_file: Option<&str>,
                             txn_file: &str,
                             tracing_policy: Option<AssetTracingPolicy>)
                             -> Result<TransactionBuilder, PlatformError> {
   // Asset issuance is always nonconfidential
-  let (blind_asset_record, tracer_memo, owner_memo) =
+  let (blind_asset_record, _, owner_memo) =
     get_blind_asset_record_and_memos(issuer_key_pair.get_pk(),
                                      amount,
                                      token_code,
@@ -1127,14 +1161,11 @@ fn issue_and_transfer_asset(issuer_key_pair: &XfrKeyPair,
   txn_builder.add_operation_issue_asset(issuer_key_pair,
                                         &token_code,
                                         get_and_update_sequence_number()?,
-                                        &[(TxOutput(blind_asset_record), owner_memo.clone())],
+                                        &[(TxOutput(blind_asset_record), owner_memo)],
                                         tracing_policy)?
              .add_operation(xfr_op)
              .transaction();
 
-  if let Some(file) = memo_file {
-    store_tracer_and_owner_memos_to_file(file, (tracer_memo, owner_memo))?;
-  }
   store_txn_to_file(txn_file, &txn_builder)?;
   Ok(txn_builder)
 }
@@ -1351,7 +1382,6 @@ fn merge_records(key_pair: &XfrKeyPair,
 fn load_funds(issuer_id: u64,
               recipient_id: u64,
               amount: u64,
-              memo_file: Option<&str>,
               txn_file: &str,
               protocol: &str,
               host: &str)
@@ -1388,7 +1418,6 @@ fn load_funds(issuer_id: u64,
                              token_code,
                              AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
                              None,
-                             memo_file,
                              txn_file,
                              None)?;
 
@@ -1467,18 +1496,20 @@ fn query_open_asset_record(protocol: &str,
 /// * `loan_id`: loan ID.
 /// * `issuer_id`: issuer ID.
 /// * `txn_file`: path to store the transaction file.
+/// * `memo_file`: path to store the asset tracer memo and owner memo, optional.
 /// * `protocol`: either `https` or `http`.
 /// * `host`: either `testnet.findora.org` or `locaohost`.
 fn fulfill_loan(loan_id: u64,
                 issuer_id: u64,
                 txn_file: &str,
+                memo_file: Option<&str>,
                 protocol: &str,
                 host: &str)
                 -> Result<(), PlatformError> {
   // Get data
   let mut data = load_data()?;
   let issuer_key_pair = &data.get_asset_issuer_key_pair(issuer_id)?;
-  let loan = &data.loans[loan_id as usize];
+  let loan = &data.loans[loan_id as usize].clone();
 
   // Check if loan has been fulfilled
   match loan.status {
@@ -1497,6 +1528,7 @@ fn fulfill_loan(loan_id: u64,
     _ => {}
   }
 
+  let tracer_enc_keys = data.get_asset_tracer_key_pair(issuer_id)?.enc_key;
   let lender_id = loan.lender;
   let lender = &data.lenders[lender_id as usize];
   let lender_key_pair = &data.get_lender_key_pair(loan.lender)?;
@@ -1524,6 +1556,7 @@ fn fulfill_loan(loan_id: u64,
   let mut attributes = Vec::new();
   let mut attribute_names = Vec::new();
   let mut attibutes_with_value_as_vec = Vec::new();
+  let mut reveal_map = Vec::new();
 
   // For each credential attribute:
   // If the lender doesn't have a requirement, skip it
@@ -1563,6 +1596,7 @@ fn fulfill_loan(loan_id: u64,
             attribute_names.push(attribute.get_name().to_string());
             attibutes_with_value_as_vec.push((attribute.get_name().to_string(),
                                               value_bytes.to_vec()));
+            reveal_map.push(true);
           } else {
             println!("Missing credential value. Use subcommand borrower create_or_overwrite_credential.");
             return Err(PlatformError::InputsError(error_location!()));
@@ -1579,97 +1613,62 @@ fn fulfill_loan(loan_id: u64,
     count += 1;
   }
 
-  // If the proof exists and the proved value is valid, attest with the proof
-  // Otherwise, prove and attest the value
+  // Prove and attest the credential
   let (credential_issuer_public_key, credential_issuer_secret_key) =
     data.get_credential_issuer_key_pair(credential_issuer_id)?;
-  let (user_secret_key, wrapper_credential, commitment_key) = if let Some(proof) = &credential.proof
-  {
-    println!("Attesting with the existing proof.");
-    let user_secret_key = if let Some(key_str) = credential.user_secret_key.clone() {
-      let key_decode = hex::decode(key_str).or_else(|_| Err(PlatformError::DeserializationError))?;
-      serde_json::from_slice::<CredUserSecretKey>(&key_decode).or_else(|_| {
-                                                         Err(PlatformError::DeserializationError)
-                                                       })?
-    } else {
-      println!("Missing user secret key.");
-      return Err(PlatformError::InputsError(error_location!()));
-    };
-    let reveal_sig =
-      serde_json::from_str::<CredRevealSig>(proof).or_else(|_| {
-                                                    Err(PlatformError::DeserializationError)
-                                                  })?;
-    if let Err(error) = credential_verify(&credential_issuer_public_key,
-                                          &attributes,
-                                          &reveal_sig.sig_commitment,
-                                          &reveal_sig.pok)
-    {
-      // Update loans data
-      data.loans[loan_id as usize].status = LoanStatus::Declined;
-      store_data_to_file(data)?;
-      return Err(PlatformError::ZeiError(error));
-    }
-    let wrapper_credential = if let Some(signature_str) = credential.signature.clone() {
-      let signature = serde_json::from_str::<CredSignature>(&signature_str).or_else(|_| {
-        Err(PlatformError::DeserializationError)
-      })? ;
-      WrapperCredential { attributes: attibutes_with_value_as_vec,
-                          issuer_pub_key: credential_issuer_public_key.clone(),
-                          signature }
-    } else {
-      println!("Missing credential signature.");
-      return Err(PlatformError::InputsError(error_location!()));
-    };
-    let commitment_key = if let Some(key_str) = credential.commitment_key.clone() {
-      let key_decode = hex::decode(key_str).or_else(|_| Err(PlatformError::DeserializationError))?;
-      serde_json::from_slice::<CredCommitmentKey>(&key_decode).or_else(|_| {
-                                                         Err(PlatformError::DeserializationError)
-                                                       })?
-    } else {
-      println!("Missing commitment key.");
-      return Err(PlatformError::InputsError(error_location!()));
-    };
-    (user_secret_key, wrapper_credential, commitment_key)
-  } else {
-    println!("Proving before attesting.");
-    let mut prng: ChaChaRng = ChaChaRng::from_entropy();
-    let (user_pk, user_sk) = credential_user_key_gen(&mut prng, &credential_issuer_public_key);
-    let user_sk_str =
-      serde_json::to_vec(&user_sk).or_else(|_| Err(PlatformError::SerializationError))?;
-    let signature = credential_sign(&mut prng,
-                                    &credential_issuer_secret_key,
-                                    &user_pk,
-                                    &attributes).unwrap();
-    let signature_str =
-      serde_json::to_string(&signature).or_else(|_| Err(PlatformError::SerializationError))?;
-    let wrapper_credential = WrapperCredential { attributes: attibutes_with_value_as_vec,
-                                                 issuer_pub_key:
-                                                   credential_issuer_public_key.clone(),
-                                                 signature };
-    let reveal_sig =
-      credential_reveal(&mut prng,
-                        &user_sk,
-                        &wrapper_credential,
-                        &attribute_names).or_else(|error| {
-                                                            Err(PlatformError::ZeiError(error))
-                                                          })?;
-    credential_verify(&credential_issuer_public_key,
-                      &attributes,
-                      &reveal_sig.sig_commitment,
-                      &reveal_sig.pok).or_else(|error| Err(PlatformError::ZeiError(error)))?;
-    let commitment_key = credential_keygen_commitment(&mut prng);
-    let commitment_key_str =
-      serde_json::to_vec(&commitment_key).or_else(|_| Err(PlatformError::SerializationError))?;
+  let mut prng: ChaChaRng = ChaChaRng::from_entropy();
+  let (user_pk, user_secret_key) =
+    credential_user_key_gen(&mut prng, &credential_issuer_public_key);
+  let user_sk_str =
+    serde_json::to_vec(&user_secret_key).or_else(|_| Err(PlatformError::SerializationError))?;
+  let signature = credential_sign(&mut prng,
+                                  &credential_issuer_secret_key,
+                                  &user_pk,
+                                  &attributes).unwrap();
+  let signature_str =
+    serde_json::to_string(&signature).or_else(|_| Err(PlatformError::SerializationError))?;
+  let wrapper_credential = WrapperCredential { attributes: attibutes_with_value_as_vec,
+                                               issuer_pub_key:
+                                                 credential_issuer_public_key.clone(),
+                                               signature };
+  let ac_credential = wrapper_credential.to_ac_credential()
+                                        .or_else(|e| Err(PlatformError::ZeiError(e)))?;
+  let reveal_sig =
+    credential_reveal(&mut prng,
+                      &user_secret_key,
+                      &wrapper_credential,
+                      &attribute_names).or_else(|error| Err(PlatformError::ZeiError(error)))?;
+  credential_verify(&credential_issuer_public_key,
+                    &attributes,
+                    &reveal_sig.sig_commitment,
+                    &reveal_sig.pok).or_else(|error| Err(PlatformError::ZeiError(error)))?;
+  let commitment_key = credential_keygen_commitment(&mut prng);
+  let commitment_key_str =
+    serde_json::to_vec(&commitment_key).or_else(|_| Err(PlatformError::SerializationError))?;
 
-    // Update credentials data
-    data.credentials[credential_id as usize].user_secret_key = Some(hex::encode(user_sk_str));
-    data.credentials[credential_id as usize].signature = Some(signature_str);
-    data.credentials[credential_id as usize].proof =
-      Some(serde_json::to_string(&reveal_sig).or_else(|_| Err(PlatformError::SerializationError))?);
-    data.credentials[credential_id as usize].commitment_key = Some(hex::encode(commitment_key_str));
-    store_data_to_file(data.clone())?;
-    (user_sk, wrapper_credential, commitment_key)
-  };
+  // Update credential data
+  data.loans[loan_id as usize].user_secret_key = Some(hex::encode(user_sk_str));
+  data.loans[loan_id as usize].signature = Some(signature_str);
+  data.loans[loan_id as usize].commitment_key = Some(hex::encode(commitment_key_str));
+  store_data_to_file(data.clone())?;
+
+  // Store the tracer memo to file
+  if let Some(file) = memo_file {
+    let ciphertext =
+      ac_confidential_open_commitment(&mut prng,
+                                      &user_secret_key.get_ref(),
+                                      &ac_credential,
+                                      &commitment_key,
+                                      &tracer_enc_keys.attrs_enc_key,
+                                      &reveal_map,
+                                      &[]).or_else(|e| Err(PlatformError::ZeiError(e)))?
+                                          .ctexts;
+    let tracer_memo = AssetTracerMemo { enc_key: tracer_enc_keys.clone(),
+                                        lock_amount: None,
+                                        lock_asset_type: None,
+                                        lock_attributes: Some(ciphertext) };
+    store_tracer_memo_to_file(file, tracer_memo)?;
+  }
 
   // Get or define fiat asset
   let fiat_code = if let Some(code) = data.fiat_code.clone() {
@@ -1691,19 +1690,14 @@ fn fulfill_loan(loan_id: u64,
   };
 
   // Get tracing policies
-  let tracer_enc_keys = data.get_asset_tracer_key_pair(issuer_id)?.enc_key;
   let identity_policy = IdentityRevealPolicy { cred_issuer_pub_key:
                                                  credential_issuer_public_key.get_ref().clone(),
-                                               reveal_map: vec![true] };
+                                               reveal_map };
   let debt_tracing_policy = AssetTracingPolicy { enc_keys: tracer_enc_keys,
                                                  asset_tracking: true,
                                                  identity_tracking: Some(identity_policy) };
 
   // Issue and transfer fiat token
-  let ac_credential = wrapper_credential.to_ac_credential()
-                                        .or_else(|e| Err(PlatformError::ZeiError(e)))?;
-  let credential_str =
-    serde_json::to_string(&ac_credential).or_else(|_| Err(PlatformError::SerializationError))?;
   let credential_record = Some((&user_secret_key, &ac_credential, &commitment_key));
   let mut fiat_txn_file = txn_file.to_owned();
   fiat_txn_file.push_str(&format!(".fiat.{}", borrower_id));
@@ -1713,7 +1707,6 @@ fn fulfill_loan(loan_id: u64,
                              amount,
                              fiat_code,
                              AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
-                             None,
                              None,
                              &fiat_txn_file,
                              None)?;
@@ -1754,7 +1747,6 @@ fn fulfill_loan(loan_id: u64,
                              debt_code,
                              AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
                              credential_record,
-                             None,
                              &debt_txn_file,
                              Some(debt_tracing_policy.clone()))?;
   let debt_sid = submit_and_get_sids(protocol, host, txn_builder)?[0];
@@ -1786,7 +1778,7 @@ fn fulfill_loan(loan_id: u64,
                                               .sign(borrower_key_pair)?
                                               .transaction()?;
   let mut txn_builder = TransactionBuilder::default();
-  txn_builder.add_operation(xfr_op).transaction();
+  txn_builder.add_operation(xfr_op);
   store_txn_to_file(&debt_txn_file, &txn_builder)?;
 
   // Submit transaction
@@ -1830,6 +1822,8 @@ fn fulfill_loan(loan_id: u64,
            sids_new[0].0, fiat_sid_merged.0);
 
   // Update data
+  let credential_str =
+    serde_json::to_string(&ac_credential).or_else(|_| Err(PlatformError::SerializationError))?;
   let mut data = load_data()?;
   data.loans[loan_id as usize].issuer = Some(issuer_id);
   data.fiat_code = Some(fiat_code.to_base64());
@@ -1940,31 +1934,6 @@ fn pay_loan(loan_id: u64, amount: u64, protocol: &str, host: &str) -> Result<(),
   println!("Fiat code: {}", serde_json::to_string(&fiat_code.val)?);
   println!("Debt code: {}", serde_json::to_string(&debt_code.val)?);
 
-  // Get tracing policies
-  let credential_id = if let Some(id) = borrower.credentials {
-    id
-  } else {
-    println!("Missing credentials.");
-    return Err(PlatformError::InputsError(error_location!()));
-  };
-  let credential = &data.credentials[credential_id as usize];
-  let credential_issuer_id = credential.credential_issuer;
-  let (credential_issuer_public_key, _) =
-    data.get_credential_issuer_key_pair(credential_issuer_id)?;
-  let identity_policy = IdentityRevealPolicy { cred_issuer_pub_key:
-                                                 credential_issuer_public_key.get_ref().clone(),
-                                               reveal_map: vec![true] };
-  let issuer_id = if let Some(id) = loan.issuer {
-    id
-  } else {
-    println!("Missing issuer ID.");
-    return Err(PlatformError::InputsError(error_location!()));
-  };
-  let tracer_enc_keys = data.get_asset_tracer_key_pair(issuer_id)?.enc_key;
-  let debt_tracing_policy = AssetTracingPolicy { enc_keys: tracer_enc_keys,
-                                                 asset_tracking: true,
-                                                 identity_tracking: Some(identity_policy) };
-
   // Get templates
   let spend_template =
     AssetRecordTemplate::with_no_asset_tracking(amount_to_spend,
@@ -1977,45 +1946,15 @@ fn pay_loan(loan_id: u64, amount: u64, protocol: &str, host: &str) -> Result<(),
                                                 NonConfidentialAmount_NonConfidentialAssetType,
                                                 XfrPublicKey::zei_from_bytes(&[0; 32]));
   let lender_template =
-    AssetRecordTemplate::with_asset_tracking(loan.balance - amount_to_burn,
-                                             debt_code.val,
-                                             NonConfidentialAmount_NonConfidentialAssetType,
-                                             lender_key_pair.get_pk(),
-                                             debt_tracing_policy);
+    AssetRecordTemplate::with_no_asset_tracking(loan.balance - amount_to_burn,
+                                                debt_code.val,
+                                                NonConfidentialAmount_NonConfidentialAssetType,
+                                                lender_key_pair.get_pk());
   let borrower_template =
     AssetRecordTemplate::with_no_asset_tracking(borrower.balance - amount_to_spend,
                                                 fiat_code.val,
                                                 NonConfidentialAmount_NonConfidentialAssetType,
                                                 borrower_key_pair.get_pk());
-
-  // Get credential record
-  let user_secret_key = if let Some(key_str) = credential.user_secret_key.clone() {
-    let key_decode = hex::decode(key_str).or_else(|_| Err(PlatformError::DeserializationError))?;
-    serde_json::from_slice::<CredUserSecretKey>(&key_decode).or_else(|_| {
-                                                       Err(PlatformError::DeserializationError)
-                                                     })?
-  } else {
-    println!("Missing user secret key.");
-    return Err(PlatformError::InputsError(error_location!()));
-  };
-  let ac_credential = if let Some(credential_str) = loan.credential.clone() {
-    serde_json::from_str::<ZeiCredential>(&credential_str).or_else(|_| {
-                                                            Err(PlatformError::DeserializationError)
-                                                          })?
-  } else {
-    println!("Missing loan credential.");
-    return Err(PlatformError::InputsError(error_location!()));
-  };
-  let commitment_key = if let Some(key_str) = credential.commitment_key.clone() {
-    let key_decode = hex::decode(key_str).or_else(|_| Err(PlatformError::DeserializationError))?;
-    serde_json::from_slice::<CredCommitmentKey>(&key_decode).or_else(|_| {
-                                                       Err(PlatformError::DeserializationError)
-                                                     })?
-  } else {
-    println!("Missing commitment key.");
-    return Err(PlatformError::InputsError(error_location!()));
-  };
-  let credential_record = Some((&user_secret_key, &ac_credential, &commitment_key));
 
   let op = TransferOperationBuilder::new().add_input(TxoRef::Absolute(debt_sid),
                                                      debt_open_asset_record,
@@ -2025,7 +1964,7 @@ fn pay_loan(loan_id: u64, amount: u64, protocol: &str, host: &str) -> Result<(),
                                                      amount_to_spend)?
                                           .add_output(&spend_template, None)?
                                           .add_output(&burn_template, None)?
-                                          .add_output(&lender_template, credential_record)?
+                                          .add_output(&lender_template, None)?
                                           .add_output(&borrower_template, None)?
                                           .create(TransferType::DebtSwap)?
                                           .sign(borrower_key_pair)?
@@ -2221,6 +2160,10 @@ fn main() {
           .required(true)
           .takes_value(true)
           .help("Token code of the asset to be issued. The transaction will fail if no asset with the token code exists."))
+        .arg(Arg::with_name("traceable")
+          .short("t")
+          .long("traceable")
+          .help("If specified, the asset will be traceable."))
         .arg(Arg::with_name("amount")
           .short("amt")
           .long("amount")
@@ -2291,12 +2234,7 @@ fn main() {
           .short("s")
           .long("confidential_asset")
           .takes_value(false)
-          .help("If specified, the asset transfer will be confidential."))
-        .arg(Arg::with_name("memo_file")
-          .short("f")
-          .long("memo_file")
-          .takes_value(true)
-          .help("If specified, will store the tracer and owner memos to the path.")))
+          .help("If specified, the asset transfer will be confidential.")))
       .subcommand(SubCommand::with_name("trace_and_verify_asset")
         .arg(Arg::with_name("memo_file")
           .short("f")
@@ -2309,7 +2247,20 @@ fn main() {
           .long("expected_amount")
           .required(true)
           .takes_value(true)
-          .help("Expected asset amount to verify."))))
+          .help("Expected asset amount to verify.")))
+      .subcommand(SubCommand::with_name("trace_credential")
+        .arg(Arg::with_name("memo_file")
+          .short("f")
+          .long("memo_file")
+          .required(true)
+          .takes_value(true)
+          .help("Path to the tracer and owner memos."))
+        .arg(Arg::with_name("expected_values")
+          .short("v")
+          .long("expected_values")
+          .required(true)
+          .takes_value(true)
+          .help("Expected credential values to verify. Separate by comma (\",\")."))))
     .subcommand(SubCommand::with_name("credential_issuer")
       .subcommand(SubCommand::with_name("sign_up")
         .arg(Arg::with_name("name")
@@ -2362,6 +2313,11 @@ fn main() {
           .required(true)
           .takes_value(true)
           .help("Asset issuer id."))
+        .arg(Arg::with_name("memo_file")
+          .short("f")
+          .long("memo_file")
+          .takes_value(true)
+          .help("If specified, will store the asset tracer memo and owner memo."))
         .arg(Arg::with_name("http")
           .long("http")
           .takes_value(false)
@@ -2410,11 +2366,6 @@ fn main() {
           .required(true)
           .takes_value(true)
           .help("Amount to transfer to the recipient."))
-        .arg(Arg::with_name("memo_file")
-          .short("f")
-          .long("memo_file")
-          .takes_value(true)
-          .help("If specified, will store the tracer and owner memos to the path."))
         .arg(Arg::with_name("http")
           .long("http")
           .takes_value(false)
@@ -2815,11 +2766,16 @@ fn process_asset_issuer_cmd(asset_issuer_matches: &clap::ArgMatches,
       };
       let confidential_amount = issue_asset_matches.is_present("confidential_amount");
       let mut txn_builder = TransactionBuilder::default();
+      let policy = if issue_asset_matches.is_present("traceable") {
+        Some(AssetTracingPolicy { enc_keys: tracer_enc_keys,
+                                  asset_tracking: true,
+                                  identity_tracking: None })
+      } else {
+        None
+      };
       if let Err(e) =
         txn_builder.add_basic_issue_asset(&key_pair,
-                                          Some(AssetTracingPolicy { enc_keys: tracer_enc_keys,
-                                                                    asset_tracking: true,
-                                                                    identity_tracking: None }),
+                                          policy,
                                           &token_code,
                                           get_and_update_sequence_number()?,
                                           amount,
@@ -2994,7 +2950,6 @@ fn process_asset_issuer_cmd(asset_issuer_matches: &clap::ArgMatches,
         };
       let confidential_amount = issue_and_transfer_matches.is_present("confidential_amount");
       let record_type = AssetRecordType::from_booleans(confidential_amount, false);
-      let memo_file = issue_and_transfer_matches.value_of("memo_file");
 
       issue_and_transfer_asset(&issuer_key_pair,
                                &recipient_key_pair,
@@ -3002,7 +2957,6 @@ fn process_asset_issuer_cmd(asset_issuer_matches: &clap::ArgMatches,
                                token_code,
                                record_type,
                                None,
-                               memo_file,
                                txn_file,
                                None)?;
       Ok(())
@@ -3041,6 +2995,36 @@ fn process_asset_issuer_cmd(asset_issuer_matches: &clap::ArgMatches,
       };
       tracer_memo.verify_amount(&tracer_dec_keys, expected_amount)
                  .or_else(|error| Err(PlatformError::ZeiError(error)))
+    }
+    ("trace_credential", Some(trace_credential_matches)) => {
+      let data = load_data()?;
+      let attrs_dec_key = if let Some(id_arg) = asset_issuer_matches.value_of("id") {
+        let issuer_id = parse_to_u64(id_arg)?;
+        data.get_asset_tracer_key_pair(issuer_id)?
+            .dec_key
+            .attrs_dec_key
+      } else {
+        println!("Asset issuer id is required to trace the asset. Use asset_issuer --id.");
+        return Err(PlatformError::InputsError(error_location!()));
+      };
+      let tracer_memo = if let Some(memo_file_arg) = trace_credential_matches.value_of("memo_file")
+      {
+        load_tracer_memo_from_file(memo_file_arg)?
+      } else {
+        println!("Tracer memo is required to trace the credential. Use --memo_file.");
+        return Err(PlatformError::InputsError(error_location!()));
+      };
+      let expected_values =
+        if let Some(expected_values_arg) = trace_credential_matches.value_of("expected_values") {
+          parse_to_u32_vec(expected_values_arg)?
+        } else {
+          println!("Expected value is required to verify the credential. Use --expected_values.");
+          return Err(PlatformError::InputsError(error_location!()));
+        };
+      match tracer_memo.verify_identity_attributes(&attrs_dec_key, &expected_values.to_vec()) {
+        Ok(_) => Ok(()),
+        Err(e) => Err(PlatformError::ZeiError(e)),
+      }
     }
     _ => {
       println!("Subcommand missing or not recognized. Try asset_issuer --help");
@@ -3208,8 +3192,9 @@ fn process_lender_cmd(lender_matches: &clap::ArgMatches,
         println!("Asset issuer id is required to fulfill the loan. Use --issuer.");
         return Err(PlatformError::InputsError(error_location!()));
       };
+      let memo_file = fulfill_loan_matches.value_of("memo_file");
       let (protocol, host) = protocol_host(fulfill_loan_matches);
-      fulfill_loan(loan_id, issuer_id, txn_file, protocol, host)
+      fulfill_loan(loan_id, issuer_id, txn_file, memo_file, protocol, host)
     }
     ("create_or_overwrite_requirement", Some(create_or_overwrite_requirement_matches)) => {
       let lender_id = if let Some(id_arg) = lender_matches.value_of("id") {
@@ -3599,15 +3584,8 @@ fn process_load_funds_cmd(borrower_id: u64,
     println!("Amount is required to load funds. Use --amount.");
     return Err(PlatformError::InputsError(error_location!()));
   };
-  let memo_file = load_funds_matches.value_of("memo_file");
   let (protocol, host) = protocol_host(load_funds_matches);
-  load_funds(issuer_id,
-             borrower_id,
-             amount,
-             memo_file,
-             txn_file,
-             protocol,
-             host)
+  load_funds(issuer_id, borrower_id, amount, txn_file, protocol, host)
 }
 
 /// Processes the `borrower pay_loan` subcommand.
@@ -3756,8 +3734,8 @@ mod tests {
                                      amount,
                                      code,
                                      AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType, None,
-                                     None,
-                                     txn_builder_path, None).is_ok());
+                                     txn_builder_path,
+                                     None).is_ok());
 
     let _ = fs::remove_file(DATA_FILE);
     fs::remove_file(txn_builder_path).unwrap();
@@ -3795,7 +3773,6 @@ mod tests {
 
   #[test]
   #[ignore]
-  // TODO (Keyao): Investigate why the "Pay loan" section fails.
   // Test funds loading, loan request, fulfilling and repayment
   fn test_request_fulfill_and_pay_loan() {
     let ledger_standalone = LedgerStandalone::new();
@@ -3806,7 +3783,7 @@ mod tests {
 
     // Load funds
     let funds_amount = 1000;
-    load_funds(0, 0, funds_amount, None, txn_builder_path, PROTOCOL, HOST).unwrap();
+    load_funds(0, 0, funds_amount, txn_builder_path, PROTOCOL, HOST).unwrap();
     let data = load_data().unwrap();
 
     assert_eq!(data.borrowers[0].balance, funds_amount);
@@ -3823,7 +3800,7 @@ mod tests {
     assert_eq!(data.loans.len(), 1);
 
     // Fulfill the loan request
-    fulfill_loan(0, 0, txn_builder_path, PROTOCOL, HOST).unwrap();
+    fulfill_loan(0, 0, txn_builder_path, None, PROTOCOL, HOST).unwrap();
     data = load_data().unwrap();
 
     assert_eq!(data.loans[0].status, LoanStatus::Active);
