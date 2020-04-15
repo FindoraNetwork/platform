@@ -1,0 +1,16 @@
+[package]
+name = "solvency"
+version = "0.1.0"
+authors = ["Engineering <engineering@findora.org>"]
+
+[bin]
+name = "solvency"
+path = "src/solvency.rs"
+
+[dependencies]
+ledger = { path = "../../ledger" }
+zei = { git = "ssh://git@github.com/findoraorg/zei", tag = "v0.0.2-4" }
+
+[dev-dependencies]
+quickcheck = "0.8"
+quickcheck_macros = "0.8"

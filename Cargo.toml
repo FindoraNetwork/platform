@@ -11,6 +11,7 @@ members = [
     "components/ledger_standalone",
     "components/ledger_mirror",
     "components/log_tester",
+    "components/solvency",
     "components/submission_api",
     "components/submission_server",
     "components/txn_builder",
