@@ -13,7 +13,7 @@ use rand_chacha::ChaChaRng;
 use rand_core::{CryptoRng, RngCore, SeedableRng};
 use serde::{de::Visitor, Deserialize, Deserializer, Serialize, Serializer};
 use std::boxed::Box;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::convert::TryFrom;
 use std::hash::{Hash, Hasher};
 use std::marker::PhantomData;
@@ -188,35 +188,69 @@ pub struct AccountAddress {
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct SignedAddress {
+pub struct TransferBodySignature {
   pub address: XfrAddress,
   pub signature: XfrSignature,
+  pub input_idx: usize, // Specific transfer input being signed
 }
 
-impl SignedAddress {
+impl TransferBodySignature {
   pub fn verify(&self, message: &[u8]) -> bool {
     self.address.key.verify(message, &self.signature).is_ok()
   }
 }
 
-#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+/// Stores threshold and weights for a multisignature requirement.
+pub struct SignatureRules {
+  pub threshold: u64,
+  pub weights: Vec<(XfrPublicKey, u64)>, // Stored as a vector so that serialization is deterministic
+}
+
+impl SignatureRules {
+  // Returns Ok() if signature summed by weight reaches threshold
+  // Keyset must be XfrPublicKeys in byte form
+  pub fn check_signature_set(&self, keyset: &HashSet<Vec<u8>>) -> Result<(), PlatformError> {
+    let mut sum = 0;
+    let mut weight_map = HashMap::new();
+    // Convert to map
+    for (key, weight) in self.weights.iter() {
+      weight_map.insert(key.as_bytes(), *weight);
+    }
+    // Calculate weighted sum
+    for key in keyset.iter() {
+      sum += weight_map.get(&key[..]).unwrap_or(&0);
+    }
+
+    if sum < self.threshold {
+      return Err(PlatformError::InputsError(error_location!()));
+    }
+    Ok(())
+  }
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 /// Simple asset rules:
 /// 1) Traceable: Records of traceable assets can be decrypted by a provided tracking key
 /// 2) Transferable: Non-transferable assets can only be transferred once from the issuer to
 ///    another user.
 /// 3) Max units: Optional limit on total issuance amount.
-/// TODO (noah) implement validation for transferable
-/// TODO (keyao) implemenent validation for traceable
+/// 4) Transfer sig rules: Signature weights and threshold necessary for a valid transfer.
+/// 5) Issuance sig rules: Signature weights and threshold necessary for a valid issuance.
 pub struct AssetRules {
   pub traceable: bool,
   pub transferable: bool,
+  pub transfer_multisig_rules: Option<SignatureRules>,
+  pub issuance_multisig_rules: Option<SignatureRules>,
   pub max_units: Option<u64>,
 }
 impl Default for AssetRules {
   fn default() -> Self {
     AssetRules { traceable: false,
                  transferable: true,
-                 max_units: None }
+                 max_units: None,
+                 transfer_multisig_rules: None,
+                 issuance_multisig_rules: None }
   }
 }
 
@@ -233,6 +267,20 @@ impl AssetRules {
 
   pub fn set_transferable(&mut self, transferable: bool) -> &mut Self {
     self.transferable = transferable;
+    self
+  }
+
+  pub fn set_transfer_multisig_rules(&mut self,
+                                     multisig_rules: Option<SignatureRules>)
+                                     -> &mut Self {
+    self.transfer_multisig_rules = multisig_rules;
+    self
+  }
+
+  pub fn set_issuance_multisig_rules(&mut self,
+                                     multisig_rules: Option<SignatureRules>)
+                                     -> &mut Self {
+    self.issuance_multisig_rules = multisig_rules;
     self
   }
 }
@@ -354,6 +402,28 @@ impl TransferAssetBody {
                            num_outputs: output_records.len(),
                            transfer: note })
   }
+
+  /// Computes a body signature for an input index, indicating consent for an input to be spent.
+  pub fn compute_body_signature(&self,
+                                keypair: &XfrKeyPair,
+                                input_idx: usize)
+                                -> TransferBodySignature {
+    let secret_key = keypair.get_sk_ref();
+    let public_key = keypair.get_pk_ref();
+    let mut body_vec = serde_json::to_vec(&self).unwrap();
+    body_vec.extend(&input_idx.to_be_bytes());
+    let signature = secret_key.sign(&body_vec, public_key);
+    TransferBodySignature { signature,
+                            address: XfrAddress { key: *public_key },
+                            input_idx }
+  }
+
+  /// Verifies a body signature
+  pub fn verify_body_signature(&self, signature: &TransferBodySignature) -> bool {
+    let mut body_vec = serde_json::to_vec(&self).unwrap();
+    body_vec.extend(&signature.input_idx.to_be_bytes());
+    signature.verify(&body_vec)
+  }
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -457,7 +527,7 @@ impl Default for TransferType {
 pub struct TransferAsset {
   pub body: TransferAssetBody,
   pub transfer_type: TransferType,
-  pub body_signatures: Vec<SignedAddress>,
+  pub body_signatures: Vec<TransferBodySignature>,
 }
 
 impl TransferAsset {
@@ -469,14 +539,9 @@ impl TransferAsset {
                        transfer_type })
   }
 
-  pub fn sign(&mut self, keypair: &XfrKeyPair) {
-    let sig = keypair.get_sk_ref()
-                     .sign(&serde_json::to_vec(&self.body).unwrap(),
-                           keypair.get_pk_ref());
-
+  pub fn sign(&mut self, keypair: &XfrKeyPair, input_idx: usize) {
     self.body_signatures
-        .push(SignedAddress { signature: sig,
-                              address: XfrAddress { key: *keypair.get_pk_ref() } });
+        .push(self.body.compute_body_signature(&keypair, input_idx))
   }
 }
 
@@ -907,19 +972,6 @@ mod tests {
     let code = Code { val: [100, 101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111, 112,
                             113, 114, 115] };
     assert_eq!(code.to_base64(), "ZGVmZ2hpamtsbW5vcHFycw==");
-  }
-
-  #[test]
-  fn test_verify() {
-    let mut prng = rand_chacha::ChaChaRng::from_entropy();
-
-    let keypair = XfrKeyPair::generate(&mut prng);
-    let message: &[u8] = b"test";
-
-    let signed_address = SignedAddress { address: XfrAddress { key: *keypair.get_pk_ref() },
-                                         signature: keypair.sign(message) };
-
-    assert!(signed_address.verify(message));
   }
 
   // Test Transaction::add_operation

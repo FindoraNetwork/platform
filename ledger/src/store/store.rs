@@ -26,6 +26,7 @@ use std::io::{BufRead, BufReader, BufWriter, Write};
 use std::path::Path;
 use std::u64;
 use zei::xfr::sig::{XfrKeyPair, XfrPublicKey, XfrSignature};
+use zei::xfr::structs::XfrAssetType;
 
 use super::effects::*;
 
@@ -564,6 +565,29 @@ impl LedgerStatus {
           return Err(PlatformError::InputsError(error_location!()));
         }
       } else if traceability {
+        return Err(PlatformError::InputsError(error_location!()));
+      }
+    }
+
+    // Assets with cosignature requirements must have enough signatures
+    for ((op_idx, input_idx), key_set) in txn.xfr_sig_keys.iter() {
+      let op = &txn.txn.operations[*op_idx];
+      if let Operation::TransferAsset(xfr) = op {
+        if let XfrAssetType::NonConfidential(val) = xfr.body.transfer.inputs[*input_idx].asset_type
+        {
+          let code = AssetTypeCode { val };
+          let signature_rules = &self.asset_types
+                                     .get(&code)
+                                     .or_else(|| txn.new_asset_codes.get(&code))
+                                     .ok_or_else(|| PlatformError::InputsError(error_location!()))?
+                                     .properties
+                                     .asset_rules
+                                     .transfer_multisig_rules;
+          if let Some(rules) = signature_rules {
+            rules.check_signature_set(key_set)?;
+          }
+        }
+      } else {
         return Err(PlatformError::InputsError(error_location!()));
       }
     }
@@ -1966,7 +1990,7 @@ pub mod helpers {
                              &[open_blind_asset_record(&ba, &owner_memo, &issuer_keys.get_sk_ref()).unwrap()],
                              &[ar.clone()]).unwrap(), TransferType::Standard).unwrap();
 
-    transfer.sign(&issuer_keys);
+    transfer.sign(&issuer_keys, 0);
     tx.operations.push(Operation::TransferAsset(transfer));
     (tx, ar)
   }
@@ -2442,7 +2466,7 @@ mod tests {
                                           TransferType::Standard).unwrap();
 
     let mut second_transfer = transfer.clone();
-    transfer.sign(&key_pair);
+    transfer.sign(&key_pair, 0);
     tx.operations.push(Operation::TransferAsset(transfer));
 
     // Commit first transfer
@@ -2678,7 +2702,7 @@ mod tests {
     let tx = create_definition_transaction(&code,
                                            issuer.get_pk_ref(),
                                            issuer.get_sk_ref(),
-                                           *AssetRules::default().set_transferable(false),
+                                           AssetRules::default().set_transferable(false).clone(),
                                            Some(Memo("test".to_string()))).unwrap();
     apply_transaction(&mut ledger, tx);
     let (tx, _) = create_issue_and_transfer_txn(&mut ledger,
@@ -2706,7 +2730,7 @@ mod tests {
                              vec![TxoRef::Absolute(sid)],
                              &[open_blind_asset_record(&bar, &None, &alice.get_sk_ref()).unwrap()],
                                &[record.clone()]).unwrap(), TransferType::Standard).unwrap();
-    transfer.sign(&alice);
+    transfer.sign(&alice, 0);
     tx.operations.push(Operation::TransferAsset(transfer));
     let effect = TxnEffect::compute_effect(ledger.get_prng(), tx.clone()).unwrap();
 
@@ -2734,7 +2758,7 @@ mod tests {
                                                                  &[ar.open_asset_record],
                                                                  &[second_record]).unwrap(),
                                           TransferType::Standard).unwrap();
-    transfer.sign(&alice);
+    transfer.sign(&alice, 0);
     tx.operations.push(Operation::TransferAsset(transfer));
     let effect = TxnEffect::compute_effect(ledger.get_prng(), tx).unwrap();
     let res = ledger.apply_transaction(&mut block, effect);
@@ -2753,7 +2777,7 @@ mod tests {
     let tx = create_definition_transaction(&code,
                                            issuer.get_pk_ref(),
                                            issuer.get_sk_ref(),
-                                           *AssetRules::default().set_max_units(Some(100)),
+                                           AssetRules::default().set_max_units(Some(100)).clone(),
                                            Some(Memo("test".to_string()))).unwrap();
     apply_transaction(&mut ledger, tx);
     let tx = create_issuance_txn(&mut ledger,
@@ -2804,6 +2828,102 @@ mod tests {
       let res = ledger.apply_transaction(&mut block, effect);
       assert!(res.is_err());
     }
+  }
+
+  #[test]
+  fn test_cosignature_transfer() {
+    let mut ledger = LedgerState::test_ledger();
+    let params = PublicParams::new();
+
+    let code = AssetTypeCode { val: [1; 16] };
+    let mut prng = ChaChaRng::from_entropy();
+    let alice = XfrKeyPair::generate(&mut prng); // Asset owner
+    let bob = XfrKeyPair::generate(&mut prng); // Person to transfer to
+    let charlie = XfrKeyPair::generate(&mut prng); // One of Charlie or Dave must sign off on transfer
+    let dave = XfrKeyPair::generate(&mut prng);
+
+    let sig_rules = SignatureRules { threshold: 1,
+                                     weights: vec![(*dave.get_pk_ref(), 1),
+                                                   (*charlie.get_pk_ref(), 1)] };
+
+    let tx =
+      create_definition_transaction(&code,
+                                    alice.get_pk_ref(),
+                                    alice.get_sk_ref(),
+                                    AssetRules::default().set_transfer_multisig_rules(Some(sig_rules))
+                                                         .clone(),
+                                    None).unwrap();
+
+    let effect = TxnEffect::compute_effect(&mut ledger.get_prng(), tx).unwrap();
+    {
+      let mut block = ledger.start_block().unwrap();
+      ledger.apply_transaction(&mut block, effect).unwrap();
+      ledger.finish_block(block).unwrap();
+    }
+
+    // Issuance with two outputs
+    let mut tx = Transaction::default();
+
+    let art = AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType;
+    let template = AssetRecordTemplate::with_no_asset_tracking(100, code.val, art, alice.get_pk());
+    let (ba, _, _) = build_blind_asset_record(ledger.get_prng(), &params.pc_gens, &template, None);
+
+    let asset_issuance_body = IssueAssetBody::new(&code, 0, &[TxOutput(ba)], None).unwrap();
+    let asset_issuance_operation = IssueAsset::new(asset_issuance_body,
+                                                   &IssuerPublicKey { key: alice.get_pk_ref()
+                                                                                .clone() },
+                                                   alice.get_sk_ref()).unwrap();
+
+    let issue_op = Operation::IssueAsset(asset_issuance_operation);
+
+    tx.operations.push(issue_op);
+
+    // Commit issuance to block
+    let effect = TxnEffect::compute_effect(ledger.get_prng(), tx).unwrap();
+
+    let mut block = ledger.start_block().unwrap();
+    let temp_sid = ledger.apply_transaction(&mut block, effect).unwrap();
+
+    let (_txn_sid, txos) = ledger.finish_block(block)
+                                 .unwrap()
+                                 .remove(&temp_sid)
+                                 .unwrap();
+    let txo_sid = txos[0];
+
+    // Construct transfer operation
+    let input_bar = ((ledger.get_utxo(txo_sid).unwrap().0).0).clone();
+    let input_oar = open_blind_asset_record(&input_bar, &None, &alice.get_sk_ref()).unwrap();
+
+    let output_template =
+      AssetRecordTemplate::with_no_asset_tracking(100, code.val, art, bob.get_pk());
+    let output_ar =
+      AssetRecord::from_template_no_identity_tracking(ledger.get_prng(), &output_template).unwrap();
+
+    let mut tx = Transaction::default();
+    let mut transfer = TransferAsset::new(TransferAssetBody::new(ledger.get_prng(),
+                                                                 vec![TxoRef::Absolute(txo_sid)],
+                                                                 &[input_oar],
+                                                                 &[output_ar]).unwrap(),
+                                          TransferType::Standard).unwrap();
+
+    let mut second_transfer = transfer.clone();
+    transfer.sign(&alice, 0);
+    tx.operations.push(Operation::TransferAsset(transfer));
+
+    // Attempt to spend without consent of either Charlie or Dave
+    let effect = TxnEffect::compute_effect(ledger.get_prng(), tx).unwrap();
+    let mut block = ledger.start_block().unwrap();
+    let res = ledger.apply_transaction(&mut block, effect);
+    assert!(res.is_err());
+
+    // Try to submit transaction with enough cosignatures
+    let mut tx = Transaction::default();
+    second_transfer.sign(&alice, 0);
+    second_transfer.sign(&dave, 0);
+    tx.operations
+      .push(Operation::TransferAsset(second_transfer));
+    let effect = TxnEffect::compute_effect(ledger.get_prng(), tx).unwrap();
+    ledger.apply_transaction(&mut block, effect).unwrap();
   }
 
   #[test]
@@ -2893,8 +3013,8 @@ mod tests {
                              &[open_blind_asset_record(&fiat_bar, &None, &lender_key_pair.get_sk_ref()).unwrap(),
                              open_blind_asset_record(&debt_bar, &None, &borrower_key_pair.get_sk_ref()).unwrap()],
                                &[fiat_transfer_record, loan_transfer_record]).unwrap(), TransferType::Standard).unwrap();
-    transfer.sign(&lender_key_pair);
-    transfer.sign(&borrower_key_pair);
+    transfer.sign(&lender_key_pair, 0);
+    transfer.sign(&borrower_key_pair, 1);
     tx.operations.push(Operation::TransferAsset(transfer));
 
     let (_txn_sid, txo_sids) = apply_transaction(&mut ledger, tx);

@@ -239,14 +239,14 @@ mod tests {
 
     txn_builder_0.add_operation_create_asset(&keypair,
                                              Some(asset_token),
-                                             *AssetRules::default().set_traceable(true),
+                                             AssetRules::default().set_traceable(true).clone(),
                                              &String::from("{}"),
                                              PolicyChoice::Fungible())
                  .unwrap();
 
     txn_builder_1.add_operation_create_asset(&keypair,
                                              None,
-                                             *AssetRules::default().set_traceable(true),
+                                             AssetRules::default().set_traceable(true).clone(),
                                              "test",
                                              PolicyChoice::Fungible())
                  .unwrap();

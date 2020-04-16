@@ -432,8 +432,14 @@ impl TransferOperationBuilder {
   /// All input owners must sign.
   ///
   /// @param {XfrKeyPair} kp - key pair of one of the input owners.
-  pub fn sign(mut self, kp: &XfrKeyPair) -> Result<TransferOperationBuilder, JsValue> {
-    self.get_builder_mut().sign(&kp).map_err(error_to_jsvalue)?;
+  /// @param {number} input_idx - Transfer input index to sign off on.
+  pub fn sign(mut self,
+              kp: &XfrKeyPair,
+              input_idx: usize)
+              -> Result<TransferOperationBuilder, JsValue> {
+    self.get_builder_mut()
+        .sign(&kp, input_idx)
+        .map_err(error_to_jsvalue)?;
     Ok(self)
   }
 

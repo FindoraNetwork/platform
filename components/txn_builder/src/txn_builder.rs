@@ -466,7 +466,9 @@ impl BuildsTransactions for TransactionBuilder {
                                                             input_records,
                                                             output_records)?,
                                      TransferType::Standard)?;
-    xfr.sign(&keys);
+    for (ix, _) in input_records.iter().enumerate() {
+      xfr.sign(&keys, ix);
+    }
 
     for (output, memo) in xfr.body
                              .transfer
@@ -648,12 +650,12 @@ impl TransferOperationBuilder {
   }
 
   // All input owners must sign eventually for the transaction to be valid.
-  pub fn sign(&mut self, kp: &XfrKeyPair) -> Result<&mut Self, PlatformError> {
+  pub fn sign(&mut self, kp: &XfrKeyPair, input_idx: usize) -> Result<&mut Self, PlatformError> {
     if self.transfer.is_none() {
       return Err(PlatformError::InvariantError(Some("Transaction has not yet been finalized".to_string())));
     }
     let mut new_transfer = self.transfer.as_ref().unwrap().clone();
-    new_transfer.sign(&kp);
+    new_transfer.sign(&kp, input_idx);
     self.transfer = Some(new_transfer);
     Ok(self)
   }
@@ -895,7 +897,7 @@ mod tests {
                             .add_output(&output_template, None)?
                             .balance()?
                             .create(TransferType::Standard)?
-                            .sign(&alice)?
+                            .sign(&alice, 0)?
                             .add_output(&output_template, None);
     assert!(res.is_err());
 
@@ -959,8 +961,8 @@ mod tests {
       .add_output(&output_ben2_code2_template, None)?
       .balance()?
       .create(TransferType::Standard)?
-      .sign(&alice)?
-      .sign(&bob)?
+      .sign(&alice, 0)?
+      .sign(&bob, 0)?
       .transaction()?;
     Ok(())
   }
