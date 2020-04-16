@@ -148,14 +148,11 @@ pub trait ArchiveAccess {
   // there isn't anything to handle out-of-bounds indices from `list`
   // fn get_utxos        (&mut self, list: Vec<usize>) -> Option<Vec<u8>>;
 
-  // Get the hash of a checkpoint for a specific version.
-  //fn get_block_state_commitment(&self, version: u64) -> BitDigest;
-
   // Get the bitmap's hash at version `version`, if such a hash is
   // available.
   fn get_utxo_checksum(&self, version: u64) -> Option<BitDigest>;
 
-  // Get the ledger state commitment at a specific block height
+  // Get the ledger state commitment at a specific block height.
   fn get_state_commitment_at_block_height(&self, height: u64) -> Option<BitDigest>;
 
   // Key-value lookup in AIR
