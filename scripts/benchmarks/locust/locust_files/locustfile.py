@@ -30,6 +30,7 @@ class UserBehavior(TaskSet):
     def submit_txn(self):
         headers = {'content-type': 'application/json'}
         self.client.post(":8669/submit_transaction", data=self.js[self.curr], headers=headers)
+        self.client.post(":8669/force_end_block")
         self.curr += 1
         if self.curr >= self.count - 1:
             self.curr = 0
