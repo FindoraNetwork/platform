@@ -427,12 +427,14 @@ impl TransferOperationBuilder {
     Ok(self)
   }
 
-  /// Wraps around TransferOperationBuilder to add a signature to the transaction.
+  /// Wraps around TransferOperationBuilder to add a signature to the operation.
   ///
-  /// All input owners must sign.
+  /// All input owners must sign. Additional signatures can also be added if the asset has a
+  /// co-signature transfer requirement. Each signature must be signed with an input index, the
+  /// index of the transfer input that the user is consenting to be transferred.
   ///
   /// @param {XfrKeyPair} kp - key pair of one of the input owners.
-  /// @param {number} input_idx - Transfer input index to sign off on.
+  /// @param {number} input_idx - Transfer input index.
   pub fn sign(mut self,
               kp: &XfrKeyPair,
               input_idx: usize)

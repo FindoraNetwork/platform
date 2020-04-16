@@ -208,10 +208,10 @@ pub struct SignatureRules {
 }
 
 impl SignatureRules {
-  // Returns Ok() if signature summed by weight reaches threshold
-  // Keyset must be XfrPublicKeys in byte form
+  /// Returns Ok(()) if the sum of weights of the keys in keyset reaches the threshold.
+  /// Keyset must store XfrPublicKeys in byte form.
   pub fn check_signature_set(&self, keyset: &HashSet<Vec<u8>>) -> Result<(), PlatformError> {
-    let mut sum = 0;
+    let mut sum: u64 = 0;
     let mut weight_map = HashMap::new();
     // Convert to map
     for (key, weight) in self.weights.iter() {
@@ -219,7 +219,8 @@ impl SignatureRules {
     }
     // Calculate weighted sum
     for key in keyset.iter() {
-      sum += weight_map.get(&key[..]).unwrap_or(&0);
+      sum = sum.checked_add(*weight_map.get(&key[..]).unwrap_or(&0))
+               .ok_or_else(|| PlatformError::InputsError(error_location!()))?;
     }
 
     if sum < self.threshold {
@@ -235,13 +236,11 @@ impl SignatureRules {
 /// 2) Transferable: Non-transferable assets can only be transferred once from the issuer to
 ///    another user.
 /// 3) Max units: Optional limit on total issuance amount.
-/// 4) Transfer sig rules: Signature weights and threshold necessary for a valid transfer.
-/// 5) Issuance sig rules: Signature weights and threshold necessary for a valid issuance.
+/// 4) Transfer signature rules: Signature weights and threshold for a valid transfer.
 pub struct AssetRules {
   pub traceable: bool,
   pub transferable: bool,
   pub transfer_multisig_rules: Option<SignatureRules>,
-  pub issuance_multisig_rules: Option<SignatureRules>,
   pub max_units: Option<u64>,
 }
 impl Default for AssetRules {
@@ -249,8 +248,7 @@ impl Default for AssetRules {
     AssetRules { traceable: false,
                  transferable: true,
                  max_units: None,
-                 transfer_multisig_rules: None,
-                 issuance_multisig_rules: None }
+                 transfer_multisig_rules: None }
   }
 }
 
@@ -274,13 +272,6 @@ impl AssetRules {
                                      multisig_rules: Option<SignatureRules>)
                                      -> &mut Self {
     self.transfer_multisig_rules = multisig_rules;
-    self
-  }
-
-  pub fn set_issuance_multisig_rules(&mut self,
-                                     multisig_rules: Option<SignatureRules>)
-                                     -> &mut Self {
-    self.issuance_multisig_rules = multisig_rules;
     self
   }
 }
@@ -403,7 +394,8 @@ impl TransferAssetBody {
                            transfer: note })
   }
 
-  /// Computes a body signature for an input index, indicating consent for an input to be spent.
+  /// Computes a body signature. A body signature represents consent to the transfer of an input by
+  /// a public key.
   pub fn compute_body_signature(&self,
                                 keypair: &XfrKeyPair,
                                 input_idx: usize)

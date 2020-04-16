@@ -259,7 +259,7 @@ impl TxnEffect {
                   return Err(PlatformError::InputsError(error_location!()));
                 }
                 let sig_keys = xfr_sig_keys.entry((op_idx, sig.input_idx))
-                                           .or_insert(HashSet::new());
+                                           .or_insert_with(HashSet::new);
                 (*sig_keys).insert(sig.address.key.zei_to_bytes());
               }
 
