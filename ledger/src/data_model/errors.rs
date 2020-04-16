@@ -20,7 +20,7 @@ pub enum PlatformError {
   InvariantError(Option<String>),
   SubmissionServerError(Option<String>),
   QueryServerError(Option<String>),
-  ZeiError(ZeiError),
+  ZeiError(String, ZeiError),
   IoError(String),
 }
 
@@ -51,7 +51,8 @@ impl fmt::Display for PlatformError {
         f.write_str(format!("Query Server Error: {}",
                             msg.as_ref().unwrap_or(&"UNKNOWN".to_string())).as_str())
       }
-      PlatformError::ZeiError(ze) => ze.fmt(f),
+      PlatformError::ZeiError(msg, ze) => f.write_str(&format!("Zei error ({}): ", msg))
+                                           .and_then(|_| ze.fmt(f)),
       PlatformError::IoError(ioe) => f.write_str(&ioe),
     }
   }
@@ -63,11 +64,11 @@ impl From<serde_json::Error> for PlatformError {
   }
 }
 
-impl From<ZeiError> for PlatformError {
-  fn from(error: ZeiError) -> Self {
-    PlatformError::ZeiError(error)
-  }
-}
+// impl From<ZeiError> for PlatformError {
+//   fn from(error: ZeiError) -> Self {
+//     PlatformError::ZeiError("Unknown location".to_string(), error)
+//   }
+// }
 
 impl From<std::io::Error> for PlatformError {
   fn from(error: std::io::Error) -> Self {

@@ -758,7 +758,7 @@ fn load_open_asset_record_from_file(file_path: &str,
   let (blind_asset_record, owner_memo) =
     load_blind_asset_record_and_owner_memo_from_file(file_path)?;
   open_blind_asset_record(&blind_asset_record, &owner_memo, key_pair.get_sk_ref()).or_else(|error| {
-                                                                            Err(PlatformError::ZeiError(error))
+                                                                            Err(PlatformError::ZeiError(error_location!(), error))
                                                                           })
 }
 
@@ -1148,7 +1148,8 @@ fn issue_and_transfer_asset(issuer_key_pair: &XfrKeyPair,
     TransferOperationBuilder::new().add_input(TxoRef::Relative(0),
                                               open_blind_asset_record(&blind_asset_record,
                                                                 &owner_memo,
-                                                                issuer_key_pair.get_sk_ref())?,
+                                                                issuer_key_pair.get_sk_ref())
+                                              .map_err(|e| PlatformError::ZeiError(error_location!(),e))?,
                                               amount)?
                                    .add_output(&output_template, credential_record)?
                                    .balance()?
@@ -1332,12 +1333,18 @@ fn merge_records(key_pair: &XfrKeyPair,
                  token_code: AssetTypeCode,
                  tracing_policy: Option<AssetTracingPolicy>)
                  -> Result<TransactionBuilder, PlatformError> {
-  let oar1 = open_blind_asset_record(&blind_asset_record1.0,
-                                     &blind_asset_record1.1,
-                                     key_pair.get_sk_ref())?;
-  let oar2 = open_blind_asset_record(&blind_asset_record2.0,
-                                     &blind_asset_record2.1,
-                                     key_pair.get_sk_ref())?;
+  let oar1 =
+    open_blind_asset_record(&blind_asset_record1.0,
+                            &blind_asset_record1.1,
+                            key_pair.get_sk_ref()).map_err(|e| {
+                                                    PlatformError::ZeiError(error_location!(), e)
+                                                  })?;
+  let oar2 =
+    open_blind_asset_record(&blind_asset_record2.0,
+                            &blind_asset_record2.1,
+                            key_pair.get_sk_ref()).map_err(|e| {
+                                                    PlatformError::ZeiError(error_location!(), e)
+                                                  })?;
   if oar1.get_record_type() != oar2.get_record_type() {
     return Err(PlatformError::InputsError(error_location!()));
   }
@@ -1487,7 +1494,7 @@ fn query_open_asset_record(protocol: &str,
                                                     Err(PlatformError::DeserializationError)
                                                   })?;
   open_blind_asset_record(&blind_asset_record, owner_memo, key_pair.get_sk_ref()).or_else(|error| {
-                                                                                    Err(PlatformError::ZeiError(error))
+                                                                                    Err(PlatformError::ZeiError(error_location!(), error))
                                                                                   })
 }
 
@@ -1631,17 +1638,22 @@ fn fulfill_loan(loan_id: u64,
                                                issuer_pub_key:
                                                  credential_issuer_public_key.clone(),
                                                signature };
-  let ac_credential = wrapper_credential.to_ac_credential()
-                                        .or_else(|e| Err(PlatformError::ZeiError(e)))?;
+  let ac_credential =
+    wrapper_credential.to_ac_credential()
+                      .or_else(|e| Err(PlatformError::ZeiError(error_location!(), e)))?;
   let reveal_sig =
     credential_reveal(&mut prng,
                       &user_secret_key,
                       &wrapper_credential,
-                      &attribute_names).or_else(|error| Err(PlatformError::ZeiError(error)))?;
+                      &attribute_names).or_else(|error| {
+                                         Err(PlatformError::ZeiError(error_location!(), error))
+                                       })?;
   credential_verify(&credential_issuer_public_key,
                     &attributes,
                     &reveal_sig.sig_commitment,
-                    &reveal_sig.pok).or_else(|error| Err(PlatformError::ZeiError(error)))?;
+                    &reveal_sig.pok).or_else(|error| {
+                                      Err(PlatformError::ZeiError(error_location!(), error))
+                                    })?;
   let commitment_key = credential_keygen_commitment(&mut prng);
   let commitment_key_str =
     serde_json::to_vec(&commitment_key).or_else(|_| Err(PlatformError::SerializationError))?;
@@ -1661,7 +1673,9 @@ fn fulfill_loan(loan_id: u64,
                                       &commitment_key,
                                       &tracer_enc_keys.attrs_enc_key,
                                       &reveal_map,
-                                      &[]).or_else(|e| Err(PlatformError::ZeiError(e)))?
+                                      &[]).or_else(|e| {
+                                            Err(PlatformError::ZeiError(error_location!(), e))
+                                          })?
                                           .ctexts;
     let tracer_memo = AssetTracerMemo { enc_key: tracer_enc_keys.clone(),
                                         lock_amount: None,
@@ -2994,7 +3008,7 @@ fn process_asset_issuer_cmd(asset_issuer_matches: &clap::ArgMatches,
         return Err(PlatformError::InputsError(error_location!()));
       };
       tracer_memo.verify_amount(&tracer_dec_keys, expected_amount)
-                 .or_else(|error| Err(PlatformError::ZeiError(error)))
+                 .or_else(|error| Err(PlatformError::ZeiError(error_location!(), error)))
     }
     ("trace_credential", Some(trace_credential_matches)) => {
       let data = load_data()?;
@@ -3023,7 +3037,7 @@ fn process_asset_issuer_cmd(asset_issuer_matches: &clap::ArgMatches,
         };
       match tracer_memo.verify_identity_attributes(&attrs_dec_key, &expected_values.to_vec()) {
         Ok(_) => Ok(()),
-        Err(e) => Err(PlatformError::ZeiError(e)),
+        Err(e) => Err(PlatformError::ZeiError(error_location!(), e)),
       }
     }
     _ => {
