@@ -142,21 +142,31 @@ fn query_txn<AA>(data: web::Data<Arc<RwLock<AA>>>,
   }
 }
 
-fn query_public_key<AA>(data: web::Data<Arc<RwLock<AA>>>) -> web::Json<XfrPublicKey>
-  where AA: ArchiveAccess
+fn query_public_key<LA>(data: web::Data<Arc<RwLock<LA>>>) -> web::Json<XfrPublicKey>
+  where LA: LedgerAccess
 {
   let reader = data.read().unwrap();
   web::Json(*reader.public_key())
 }
 
-fn query_global_state<AA>(data: web::Data<Arc<RwLock<AA>>>)
+fn query_global_state<LA>(data: web::Data<Arc<RwLock<LA>>>)
                           -> web::Json<(BitDigest, u64, XfrSignature)>
-  where AA: ArchiveAccess
+  where LA: LedgerAccess
 {
   let reader = data.read().unwrap();
   let (hash, seq_id) = reader.get_state_commitment();
   let sig = reader.sign_message(&serde_json::to_vec(&(hash, seq_id)).unwrap());
   web::Json((hash, seq_id, sig))
+}
+
+fn query_global_state_version<AA>(data: web::Data<Arc<RwLock<AA>>>,
+                                  version: web::Path<u64>)
+                                  -> web::Json<Option<BitDigest>>
+  where AA: ArchiveAccess
+{
+  let reader = data.read().unwrap();
+  let hash = reader.get_state_commitment_at_block_height(*version);
+  web::Json(hash)
 }
 
 fn query_blocks_since<AA>(data: web::Data<Arc<RwLock<AA>>>,
@@ -334,17 +344,19 @@ impl<T, B> Route for App<T, B>
         .route("/asset_issuance_num/{token}",
                web::get().to(query_asset_issuance_num::<LA>))
         .route("/asset_token/{token}", web::get().to(query_asset::<LA>))
+        .route("/public_key", web::get().to(query_public_key::<LA>))
         .route("/policy_key/{key}", web::get().to(query_policy::<LA>))
         .route("/contract_key/{key}", web::get().to(query_contract::<LA>))
+        .route("/global_state", web::get().to(query_global_state::<LA>))
   }
 
   // Set routes for the ArchiveAccess interface
   fn set_route_for_archive_access<AA: 'static + ArchiveAccess + Sync + Send>(self) -> Self {
     self.route("/txn_sid/{sid}", web::get().to(query_txn::<AA>))
-        .route("/global_state", web::get().to(query_global_state::<AA>))
-        .route("/public_key", web::get().to(query_public_key::<AA>))
         .route("/air_address/{key}", web::get().to(query_air::<AA>))
         .route("/block_log", web::get().to(query_block_log::<AA>))
+        .route("/global_state_version/{version}",
+               web::get().to(query_global_state_version::<AA>))
         .route("/blocks_since/{block_sid}",
                web::get().to(query_blocks_since::<AA>))
         .route("/utxo_map", web::get().to(query_utxo_map::<AA>))
@@ -433,14 +445,21 @@ mod tests {
     let mut app =
       test::init_service(App::new().data(state_lock.clone())
                                    .route("/global_state",
-                                          web::get().to(query_global_state::<LedgerState>)));
+                                          web::get().to(query_global_state::<LedgerState>))
+                                   .route("/global_state_version/{version}",
+                                          web::get().to(query_global_state_version::<LedgerState>)));
 
     let req = test::TestRequest::get().uri("/global_state".into())
                                       .to_request();
 
+    let second_req = test::TestRequest::get().uri("/global_state_version/1".into())
+                                             .to_request();
+
     let state_reader = state_lock.read().unwrap();
-    let (comm, idx, _sig): (_, _, XfrSignature) = test::read_response_json(&mut app, req);
-    assert!((comm, idx) == state_reader.get_state_commitment());
+    let (comm1, idx, _sig): (_, _, XfrSignature) = test::read_response_json(&mut app, req);
+    let comm2 = test::read_response_json(&mut app, second_req);
+    assert!((comm1, idx) == state_reader.get_state_commitment());
+    assert!((comm2, idx) == state_reader.get_state_commitment());
   }
 
   #[test]
