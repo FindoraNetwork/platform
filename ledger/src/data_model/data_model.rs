@@ -349,7 +349,8 @@ impl TransferAssetBody {
       input_records.iter()
                    .map(|oar| AssetRecord::from_open_asset_record_no_asset_tracking(oar.clone()))
                    .collect_vec();
-    let note = Box::new(gen_xfr_body(prng, in_records.as_slice(), output_records)?);
+    let note = Box::new(gen_xfr_body(prng, in_records.as_slice(), output_records)
+        .map_err(|e| PlatformError::ZeiError(error_location!(),e))?);
     Ok(TransferAssetBody { inputs: input_refs,
                            num_outputs: output_records.len(),
                            transfer: note })
@@ -769,7 +770,8 @@ impl Transaction {
                          public_key: &XfrPublicKey,
                          sig: &XfrSignature)
                          -> Result<(), PlatformError> {
-    public_key.verify(&self.serialize_without_sigs(), sig)?;
+    public_key.verify(&self.serialize_without_sigs(), sig)
+              .map_err(|e| PlatformError::ZeiError(error_location!(), e))?;
     Ok(())
   }
 
