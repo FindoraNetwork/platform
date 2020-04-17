@@ -2830,21 +2830,25 @@ mod tests {
     }
   }
 
-  #[test]
-  fn test_cosignature_transfer() {
+  // Co_signers is a array of (signs, weight) pairs representing cosigners. If signs is true, that cosigner signs the
+  // transaction.
+  fn cosignature_transfer_succeeds(co_signers: &[(bool, u64)], threshold: u64) -> bool {
     let mut ledger = LedgerState::test_ledger();
     let params = PublicParams::new();
 
     let code = AssetTypeCode { val: [1; 16] };
     let mut prng = ChaChaRng::from_entropy();
+    let keys: Vec<XfrKeyPair> = (0..co_signers.len()).map(|_| XfrKeyPair::generate(&mut prng))
+                                                     .collect();
     let alice = XfrKeyPair::generate(&mut prng); // Asset owner
-    let bob = XfrKeyPair::generate(&mut prng); // Person to transfer to
-    let charlie = XfrKeyPair::generate(&mut prng); // One of Charlie or Dave must sign off on transfer
-    let dave = XfrKeyPair::generate(&mut prng);
+    let bob = XfrKeyPair::generate(&mut prng); // Asset recipient
 
-    let sig_rules = SignatureRules { threshold: 1,
-                                     weights: vec![(*dave.get_pk_ref(), 1),
-                                                   (*charlie.get_pk_ref(), 1)] };
+    let sig_rules =
+      SignatureRules { threshold,
+                       weights: co_signers.iter()
+                                          .zip(keys.iter())
+                                          .map(|((_, weight), kp)| (*kp.get_pk_ref(), *weight))
+                                          .collect() };
 
     let tx =
       create_definition_transaction(&code,
@@ -2891,6 +2895,7 @@ mod tests {
     let txo_sid = txos[0];
 
     // Construct transfer operation
+    let mut block = ledger.start_block().unwrap();
     let input_bar = ((ledger.get_utxo(txo_sid).unwrap().0).0).clone();
     let input_oar = open_blind_asset_record(&input_bar, &None, &alice.get_sk_ref()).unwrap();
 
@@ -2906,24 +2911,50 @@ mod tests {
                                                                  &[output_ar]).unwrap(),
                                           TransferType::Standard).unwrap();
 
-    let mut second_transfer = transfer.clone();
     transfer.sign(&alice, 0);
+    for (i, (signs, _)) in co_signers.iter().enumerate() {
+      if *signs {
+        transfer.sign(&keys[i], 0);
+      }
+    }
     tx.operations.push(Operation::TransferAsset(transfer));
-
-    // Attempt to spend without consent of either Charlie or Dave
     let effect = TxnEffect::compute_effect(ledger.get_prng(), tx).unwrap();
-    let mut block = ledger.start_block().unwrap();
-    let res = ledger.apply_transaction(&mut block, effect);
-    assert!(res.is_err());
+    ledger.apply_transaction(&mut block, effect).is_ok()
+  }
 
-    // Try to submit transaction with enough cosignatures
-    let mut tx = Transaction::default();
-    second_transfer.sign(&alice, 0);
-    second_transfer.sign(&dave, 0);
-    tx.operations
-      .push(Operation::TransferAsset(second_transfer));
-    let effect = TxnEffect::compute_effect(ledger.get_prng(), tx).unwrap();
-    ledger.apply_transaction(&mut block, effect).unwrap();
+  #[test]
+  pub fn test_cosignature_restrictions() {
+    //TODO (noah) use prop based testing here?
+    // Simple
+    assert!(!cosignature_transfer_succeeds(&[(false, 1), (false, 1)], 1));
+    assert!(cosignature_transfer_succeeds(&[(false, 1), (true, 1)], 1));
+    assert!(cosignature_transfer_succeeds(&[(true, 1)], 1));
+    assert!(cosignature_transfer_succeeds(&[], 0));
+
+    // More complex
+    assert!(!cosignature_transfer_succeeds(&[(false, 1),
+                                             (true, 1),
+                                             (false, 5),
+                                             (true, 10),
+                                             (false, 18)],
+                                           16));
+    assert!(cosignature_transfer_succeeds(&[(false, 1),
+                                            (true, 1),
+                                            (true, 5),
+                                            (true, 10),
+                                            (false, 18)],
+                                          16));
+    // Needlessly complex
+    assert!(cosignature_transfer_succeeds(&[(false, 18888888),
+                                            (true, 1),
+                                            (true, 5),
+                                            (false, 12320),
+                                            (true, 13220),
+                                            (true, 100000),
+                                            (true, 12320),
+                                            (true, 134440),
+                                            (false, 18)],
+                                          232323));
   }
 
   #[test]
