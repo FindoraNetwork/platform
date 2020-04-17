@@ -30,7 +30,6 @@
 //! The two nodes then connect.
 
 use async_std::{io, task};
-use attohttpc;
 use clap::{App, Arg, ArgMatches};
 use cryptohash::sha256::Digest as BitDigest;
 use futures::{future, prelude::*};
@@ -169,17 +168,15 @@ fn main() -> Result<(), Box<dyn Error>> {
                 println!("Received matching signed commitment from {:?}",
                          message.source);
               }
-            } else {
-              if !self.consensus_state
-                      .mismatches
-                      .contains_key(&message.source)
-              {
-                self.consensus_state
-                    .mismatches
-                    .insert(message.source.clone(), ks.clone());
-                println!("Received nonmatching signed commitment \n{:?}\nfrom {:?}",
-                         ks, message.source)
-              }
+            } else if !self.consensus_state
+                           .mismatches
+                           .contains_key(&message.source)
+            {
+              self.consensus_state
+                  .mismatches
+                  .insert(message.source.clone(), ks.clone());
+              println!("Received nonmatching signed commitment \n{:?}\nfrom {:?}",
+                       ks, message.source)
             }
           }
           _ => {

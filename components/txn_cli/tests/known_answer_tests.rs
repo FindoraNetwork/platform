@@ -191,6 +191,15 @@ fn trace_and_verify_asset(id: &str, memo_file: &str, expected_amount: &str) -> i
                        .output()
 }
 
+#[cfg(test)]
+fn trace_credential(id: &str, memo_file: &str, expected_values: &str) -> io::Result<Output> {
+  Command::new(COMMAND).args(&["asset_issuer", "--id", id])
+                       .arg("trace_credential")
+                       .args(&["--memo_file", memo_file])
+                       .args(&["--expected_values", expected_values])
+                       .output()
+}
+
 //
 // Helper functions: define, issue and transfer
 //
@@ -219,7 +228,6 @@ fn define_asset(txn_builder_path: &str,
                        .arg("define_asset")
                        .args(&["--token_code", token_code])
                        .args(&["--memo", memo])
-                       .arg("--traceable")
                        .output()
 }
 
@@ -322,15 +330,27 @@ fn load_funds(txn_builder_path: &str,
 fn fulfill_loan(txn_builder_path: &str,
                 lender_id: &str,
                 loan_id: &str,
-                issuer_id: &str)
+                issuer_id: &str,
+                memo_file: Option<&str>)
                 -> io::Result<Output> {
-  Command::new(COMMAND).args(&["--txn", txn_builder_path])
-                       .args(&["lender", "--id", lender_id])
-                       .arg("fulfill_loan")
-                       .args(&["--loan", loan_id])
-                       .args(&["--issuer", issuer_id])
-                       .args(&["--http", "--localhost"])
-                       .output()
+  if let Some(file) = memo_file {
+    Command::new(COMMAND).args(&["--txn", txn_builder_path])
+                         .args(&["lender", "--id", lender_id])
+                         .arg("fulfill_loan")
+                         .args(&["--loan", loan_id])
+                         .args(&["--issuer", issuer_id])
+                         .args(&["--memo_file", file])
+                         .args(&["--http", "--localhost"])
+                         .output()
+  } else {
+    Command::new(COMMAND).args(&["--txn", txn_builder_path])
+                         .args(&["lender", "--id", lender_id])
+                         .arg("fulfill_loan")
+                         .args(&["--loan", loan_id])
+                         .args(&["--issuer", issuer_id])
+                         .args(&["--http", "--localhost"])
+                         .output()
+  }
 }
 
 #[cfg(test)]
@@ -451,11 +471,11 @@ fn test_view() {
   let txn_builder_path = "txn_builder_view_loans";
   create_txn_builder_with_path(txn_builder_path).expect("Failed to create transaction builder");
   ledger_standalone.poll_until_ready().unwrap();
-  fulfill_loan(txn_builder_path, "0", "0", "0").expect("Failed to fulfill the loan");
+  fulfill_loan(txn_builder_path, "0", "0", "0", None).expect("Failed to fulfill the loan");
   ledger_standalone.poll_until_ready().unwrap();
-  fulfill_loan(txn_builder_path, "0", "1", "0").expect("Failed to fulfill the loan");
+  fulfill_loan(txn_builder_path, "0", "1", "0", None).expect("Failed to fulfill the loan");
   ledger_standalone.poll_until_ready().unwrap();
-  fulfill_loan(txn_builder_path, "1", "2", "0").expect("Failed to fulfill the loan");
+  fulfill_loan(txn_builder_path, "1", "2", "0", None).expect("Failed to fulfill the loan");
 
   // View loans
   // 1. View all loans of a lender
@@ -915,7 +935,6 @@ fn test_issue_transfer_trace_and_submit_with_args() {
 
 #[test]
 #[ignore]
-// TODO (Keyao): Investigate why the "Pay loan" section fails.
 // Test funds loading, loan request, fulfilling and repayment
 fn test_request_fulfill_and_pay_loan_with_args() {
   let ledger_standalone = LedgerStandalone::new();
@@ -951,20 +970,34 @@ fn test_request_fulfill_and_pay_loan_with_args() {
   // 1. First time:
   //    Add the credential proof, then successfully initiate the loan
   let txn_builder_file = "tb_fulfill_loan_args";
+  let memo_file = "memo_fulfill_loan_args";
   ledger_standalone.poll_until_ready().unwrap();
-  let output = fulfill_loan(txn_builder_file, "0", "0", "0").expect("Failed to initiate the loan");
+  let output = fulfill_loan(txn_builder_file,
+                            "0",
+                            "0",
+                            "0",
+                            Some(memo_file)).expect("Failed to initiate the loan");
 
   io::stdout().write_all(&output.stdout).unwrap();
   io::stdout().write_all(&output.stderr).unwrap();
 
   assert!(output.status.success());
-  assert!(from_utf8(&output.stdout).unwrap()
-                                   .contains(&"Proving before attesting.".to_owned()));
+
+  // Trace the credential associated with the first loan
+  ledger_standalone.poll_until_ready().unwrap();
+  let output = trace_credential("0", memo_file, "650").expect("Failed to trace the credential");
+
+  io::stdout().write_all(&output.stdout).unwrap();
+  io::stdout().write_all(&output.stderr).unwrap();
+
+  fs::remove_file(memo_file).unwrap();
+  assert!(output.status.success());
 
   // 2. Second time:
   //    Fail because the loan has been fulfilled
   ledger_standalone.poll_until_ready().unwrap();
-  let output = fulfill_loan(txn_builder_file, "0", "0", "0").expect("Failed to initiate the loan");
+  let output =
+    fulfill_loan(txn_builder_file, "0", "0", "0", None).expect("Failed to initiate the loan");
 
   io::stdout().write_all(&output.stdout).unwrap();
   io::stdout().write_all(&output.stderr).unwrap();
@@ -977,7 +1010,8 @@ fn test_request_fulfill_and_pay_loan_with_args() {
   // 1. First time:
   //    Get the credential proof, then fail to initiate the loan because the requirement isn't met
   ledger_standalone.poll_until_ready().unwrap();
-  let output = fulfill_loan(txn_builder_file, "1", "1", "0").expect("Failed to initiate the loan");
+  let output =
+    fulfill_loan(txn_builder_file, "1", "1", "0", None).expect("Failed to initiate the loan");
 
   io::stdout().write_all(&output.stdout).unwrap();
   io::stdout().write_all(&output.stderr).unwrap();
@@ -989,7 +1023,8 @@ fn test_request_fulfill_and_pay_loan_with_args() {
   // 2. Second time:
   //    Fail because the loan has been declined
   ledger_standalone.poll_until_ready().unwrap();
-  let output = fulfill_loan(txn_builder_file, "1", "1", "0").expect("Failed to initiate the loan");
+  let output =
+    fulfill_loan(txn_builder_file, "1", "1", "0", None).expect("Failed to initiate the loan");
 
   io::stdout().write_all(&output.stdout).unwrap();
   io::stdout().write_all(&output.stderr).unwrap();

@@ -19,7 +19,9 @@ use std::hash::{Hash, Hasher};
 use std::marker::PhantomData;
 use zei::xfr::lib::gen_xfr_body;
 use zei::xfr::sig::{XfrKeyPair, XfrPublicKey, XfrSecretKey, XfrSignature};
-use zei::xfr::structs::{AssetRecord, BlindAssetRecord, OpenAssetRecord, XfrBody};
+use zei::xfr::structs::{
+  AssetRecord, AssetTracingPolicy, BlindAssetRecord, OpenAssetRecord, XfrBody,
+};
 
 pub fn b64enc<T: ?Sized + AsRef<[u8]>>(input: &T) -> String {
   base64::encode_config(input, base64::URL_SAFE)
@@ -347,7 +349,8 @@ impl TransferAssetBody {
       input_records.iter()
                    .map(|oar| AssetRecord::from_open_asset_record_no_asset_tracking(oar.clone()))
                    .collect_vec();
-    let note = Box::new(gen_xfr_body(prng, in_records.as_slice(), output_records)?);
+    let note = Box::new(gen_xfr_body(prng, in_records.as_slice(), output_records)
+        .map_err(|e| PlatformError::ZeiError(error_location!(),e))?);
     Ok(TransferAssetBody { inputs: input_refs,
                            num_outputs: output_records.len(),
                            transfer: note })
@@ -360,17 +363,23 @@ pub struct IssueAssetBody {
   pub seq_num: u64,
   pub num_outputs: usize,
   pub records: Vec<TxOutput>,
+  /// Asset tracing policy, null iff the asset is not traceable
+  #[serde(default)]
+  #[serde(skip_serializing_if = "is_default")]
+  pub tracing_policy: Option<AssetTracingPolicy>,
 }
 
 impl IssueAssetBody {
   pub fn new(token_code: &AssetTypeCode,
              seq_num: u64,
-             records: &[TxOutput])
+             records: &[TxOutput],
+             tracing_policy: Option<AssetTracingPolicy>)
              -> Result<IssueAssetBody, PlatformError> {
     Ok(IssueAssetBody { code: *token_code,
                         seq_num,
                         num_outputs: records.len(),
-                        records: records.to_vec() })
+                        records: records.to_vec(),
+                        tracing_policy })
   }
 }
 
@@ -761,7 +770,8 @@ impl Transaction {
                          public_key: &XfrPublicKey,
                          sig: &XfrSignature)
                          -> Result<(), PlatformError> {
-    public_key.verify(&self.serialize_without_sigs(), sig)?;
+    public_key.verify(&self.serialize_without_sigs(), sig)
+              .map_err(|e| PlatformError::ZeiError(error_location!(), e))?;
     Ok(())
   }
 
@@ -958,7 +968,8 @@ mod tests {
     let asset_issuance_body = IssueAssetBody { code: Default::default(),
                                                seq_num: 0,
                                                num_outputs: 0,
-                                               records: Vec::new() };
+                                               records: Vec::new(),
+                                               tracing_policy: None };
 
     let asset_issuance = IssueAsset { body: asset_issuance_body,
                                       pubkey: IssuerPublicKey { key: public_key },

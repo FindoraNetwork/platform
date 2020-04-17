@@ -254,7 +254,8 @@ pub trait BuildsTransactions {
                                key_pair: &XfrKeyPair,
                                token_code: &AssetTypeCode,
                                seq_num: u64,
-                               records: &[(TxOutput, Option<OwnerMemo>)])
+                               records: &[(TxOutput, Option<OwnerMemo>)],
+                               tracing_policy: Option<AssetTracingPolicy>)
                                -> Result<&mut Self, PlatformError>;
   fn add_operation_transfer_asset(&mut self,
                                   keys: &XfrKeyPair,
@@ -283,7 +284,7 @@ pub trait BuildsTransactions {
                            -> Result<&mut Self, PlatformError> {
     let mut prng = ChaChaRng::from_entropy();
     let params = PublicParams::new();
-    let ar = match tracing_policy {
+    let ar = match tracing_policy.clone() {
       Some(policy) => AssetRecordTemplate::with_asset_tracking(amount,
                                                                token_code.val,
                                                                confidentiality_flags,
@@ -295,7 +296,11 @@ pub trait BuildsTransactions {
                                                           key_pair.get_pk()),
     };
     let (ba, _, owner_memo) = build_blind_asset_record(&mut prng, &params.pc_gens, &ar, None);
-    self.add_operation_issue_asset(key_pair, token_code, seq_num, &[(TxOutput(ba), owner_memo)])
+    self.add_operation_issue_asset(key_pair,
+                                   token_code,
+                                   seq_num,
+                                   &[(TxOutput(ba), owner_memo)],
+                                   tracing_policy)
   }
 
   #[allow(clippy::comparison_chain)]
@@ -324,7 +329,7 @@ pub trait BuildsTransactions {
                      open_blind_asset_record(&ba, owner_memo, &key_pair.get_sk_ref())
                    })
                    .collect();
-    let input_oars = input_oars?;
+    let input_oars = input_oars.map_err(|e| PlatformError::ZeiError(error_location!(), e))?;
     let input_total: u64 = input_amounts.iter().sum();
     let mut partially_consumed_inputs = Vec::new();
     for (input_amount, oar) in input_amounts.iter().zip(input_oars.iter()) {
@@ -370,7 +375,7 @@ pub trait BuildsTransactions {
       output_ars_templates.iter()
                           .map(|x| AssetRecord::from_template_no_identity_tracking(&mut prng, x))
                           .collect();
-    let output_ars = output_ars?;
+    let output_ars = output_ars.map_err(|e| PlatformError::ZeiError(error_location!(), e))?;
     self.add_operation_transfer_asset(&key_pair, input_sids, &input_oars, &output_ars)?;
     Ok(self)
   }
@@ -428,7 +433,8 @@ impl BuildsTransactions for TransactionBuilder {
                                key_pair: &XfrKeyPair,
                                token_code: &AssetTypeCode,
                                seq_num: u64,
-                               records_and_memos: &[(TxOutput, Option<OwnerMemo>)])
+                               records_and_memos: &[(TxOutput, Option<OwnerMemo>)],
+                               tracing_policy: Option<AssetTracingPolicy>)
                                -> Result<&mut Self, PlatformError> {
     let pub_key = &IssuerPublicKey { key: key_pair.get_pk() };
     let priv_key = &key_pair.get_sk();
@@ -440,7 +446,8 @@ impl BuildsTransactions for TransactionBuilder {
     self.txn
         .add_operation(Operation::IssueAsset(IssueAsset::new(IssueAssetBody::new(token_code,
                                                                                  seq_num,
-                                                                                 &records)?,
+                                                                                 &records,
+                                                                                 tracing_policy)?,
                                                              pub_key,
                                                              priv_key)?));
     Ok(self)

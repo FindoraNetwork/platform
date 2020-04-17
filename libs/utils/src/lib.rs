@@ -1,7 +1,7 @@
 use percent_encoding::{percent_decode, utf8_percent_encode, AsciiSet, CONTROLS};
 
 pub fn string_of_type<T>(_: &T) -> String {
-  format!("{}", std::any::type_name::<T>())
+  std::any::type_name::<T>().to_string()
 }
 
 pub fn print_type_of<T>(msg: &str, _: &T) {
