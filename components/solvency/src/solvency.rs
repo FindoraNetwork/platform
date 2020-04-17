@@ -20,7 +20,7 @@ pub type AssetConversionTable = LinearMap<Scalar, Scalar>;
 /// Converts a set of asset amount and code to a scalar set.
 /// This is used for proving and verifying solvency.
 pub fn amount_and_code_to_scalars(amount: u64, code: AssetTypeCode) -> AssetAmountAndCode {
-  (asset_type_to_scalar(&code.val), Scalar::from(amount))
+  (Scalar::from(amount), asset_type_to_scalar(&code.val))
 }
 
 /// Asset and liability information, and associated solvency proof if exists
@@ -206,9 +206,10 @@ impl SolvencyAudit {
 #[cfg(test)]
 mod tests {
   use super::*;
+  use zei::errors::ZeiError;
 
   #[test]
-  fn test_prove_and_verify_solvency() {
+  fn test_prove_solvency_fail() {
     // Generate asset codes
     let asset_1 = AssetTypeCode::gen_random();
     let asset_2 = AssetTypeCode::gen_random();
@@ -224,6 +225,91 @@ mod tests {
 
     // Adds hidden liabilities
     account.add_hidden_liability(10, asset_1);
+    account.add_hidden_liability(20, asset_2);
+
+    // Start a solvency audit process
+    let mut audit = SolvencyAudit::default();
+
+    // Set asset conversion rates, but miss one asset
+    audit.add_or_overwrite(asset_1, 1);
+    audit.add_or_overwrite(asset_2, 2);
+
+    // Prove the solvency
+    // Should fail with ZeiError::SolvencyProveError
+    let result = audit.prove_solvency_and_store(&mut account).map_err(|e| e);
+    assert_eq!(result,
+               Err(PlatformError::ZeiError(ZeiError::SolvencyProveError)));
+  }
+
+  #[test]
+  fn test_prove_and_verify_solvency_fail() {
+    // Generate asset codes
+    let asset_1 = AssetTypeCode::gen_random();
+    let asset_2 = AssetTypeCode::gen_random();
+    let asset_3 = AssetTypeCode::gen_random();
+
+    // Create a asset and liability account
+    let mut account = &mut AssetAndLiabilityAccount::default();
+
+    // Adds hidden assets
+    account.add_hidden_asset(10, asset_1);
+    account.add_hidden_asset(20, asset_2);
+    account.add_hidden_asset(30, asset_3);
+
+    // Adds hidden liabilities, which have more total values than the hidden assets do
+    account.add_hidden_liability(10, asset_1);
+    account.add_hidden_liability(20, asset_2);
+    account.add_hidden_liability(80, asset_2);
+
+    // Start a solvency audit process
+    let mut audit = SolvencyAudit::default();
+
+    // Set asset conversion rates
+    audit.add_or_overwrite(asset_1, 1);
+    audit.add_or_overwrite(asset_2, 2);
+    audit.add_or_overwrite(asset_3, 3);
+
+    // Prove the solvency
+    audit.prove_solvency_and_store(&mut account).unwrap();
+    assert!(account.hidden_assets_commitments.is_some());
+    assert!(account.hidden_liabilities_commitments.is_some());
+    assert!(account.proof.is_some());
+
+    // Verify the solvency proof
+    // Should fail with ZeiError::SolvencyVerificationError
+    let result = audit.verify_solvency(&account).map_err(|e| e);
+    assert_eq!(result,
+               Err(PlatformError::ZeiError(ZeiError::SolvencyVerificationError)));
+  }
+
+  #[test]
+  fn test_prove_and_verify_solvency_pass() {
+    // Generate asset codes
+    let asset_1 = AssetTypeCode::gen_random();
+    let asset_2 = AssetTypeCode::gen_random();
+    let asset_3 = AssetTypeCode::gen_random();
+
+    // Create a asset and liability account
+    let mut account = &mut AssetAndLiabilityAccount::default();
+
+    // Adds public assets
+    account.add_public_asset(100, asset_1);
+    account.add_public_asset(200, asset_2);
+    account.add_public_asset(300, asset_3);
+
+    // Adds hidden assets
+    account.add_hidden_asset(10, asset_1);
+    account.add_hidden_asset(20, asset_2);
+    account.add_hidden_asset(30, asset_3);
+
+    // Adds public liabilities
+    account.add_public_liability(10, asset_1);
+    account.add_public_liability(200, asset_2);
+    account.add_public_liability(300, asset_2);
+
+    // Adds hidden liabilities
+    account.add_hidden_liability(10, asset_1);
+    account.add_hidden_liability(20, asset_2);
     account.add_hidden_liability(20, asset_2);
 
     // Start a solvency audit process
