@@ -329,7 +329,7 @@ pub trait BuildsTransactions {
                      open_blind_asset_record(&ba, owner_memo, &key_pair.get_sk_ref())
                    })
                    .collect();
-    let input_oars = input_oars?;
+    let input_oars = input_oars.map_err(|e| PlatformError::ZeiError(error_location!(), e))?;
     let input_total: u64 = input_amounts.iter().sum();
     let mut partially_consumed_inputs = Vec::new();
     for (input_amount, oar) in input_amounts.iter().zip(input_oars.iter()) {
@@ -375,7 +375,7 @@ pub trait BuildsTransactions {
       output_ars_templates.iter()
                           .map(|x| AssetRecord::from_template_no_identity_tracking(&mut prng, x))
                           .collect();
-    let output_ars = output_ars?;
+    let output_ars = output_ars.map_err(|e| PlatformError::ZeiError(error_location!(), e))?;
     self.add_operation_transfer_asset(&key_pair, input_sids, &input_oars, &output_ars)?;
     Ok(self)
   }

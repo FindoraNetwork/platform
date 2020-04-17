@@ -66,21 +66,26 @@ impl<RNG, LU> QueryServer<RNG, LU>
     let ledger_url =
       std::env::var_os("LEDGER_URL").filter(|x| !x.is_empty())
                                     .unwrap_or_else(|| format!("localhost:{}", PORT).into());
+    let protocol = std::env::var_os("LEDGER_PROTOCOL").filter(|x| !x.is_empty())
+                                                      .unwrap_or_else(|| "http".into());
     let latest_block = {
       let ledger = self.committed_state.read().unwrap();
       (*ledger).get_block_count()
     };
-    let new_blocks = match reqwest::get(&format!("http://{}/{}/{}",
+    let new_blocks = match reqwest::get(&format!("{}://{}/{}/{}",
+                                                 protocol.to_str().unwrap(),
                                                  ledger_url.to_str().unwrap(),
                                                  "blocks_since",
                                                  &latest_block))
     {
       Err(_) => {
-        return Err(PlatformError::QueryServerError(Some("Cannot connect to ledger server".into())))
+        return Err(PlatformError::QueryServerError(Some("Cannot connect to ledger server".into())));
       }
 
       Ok(mut bs) => match bs.json::<Vec<(usize, Vec<FinalizedTransaction>)>>() {
-        Err(_) => return Err(PlatformError::DeserializationError),
+        Err(_) => {
+          return Err(PlatformError::DeserializationError);
+        }
         Ok(bs) => bs,
       },
     };

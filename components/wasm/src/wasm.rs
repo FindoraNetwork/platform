@@ -55,8 +55,8 @@ pub fn random_asset_type() -> String {
 #[wasm_bindgen]
 /// Given a serialized state commitment and transaction, returns true if the transaction correctly
 /// hashes up to the state commitment and false otherwise.
-/// @param {string} state_commitment - string representating the state commitment.
-/// @param {string} authenticated_txn - string representating the transaction.
+/// @param {string} state_commitment - String representing the state commitment.
+/// @param {string} authenticated_txn - String representing the transaction.
 /// @see {@link get_transaction} for instructions on fetching a transaction from the ledger.
 /// @see {@link get_state_commitment} for instructions on fetching a ledger state commitment.
 /// @throws Will throw an error if the state commitment or the transaction fail to deserialize.
@@ -76,10 +76,12 @@ pub fn verify_authenticated_txn(state_commitment: String,
 ///
 /// The returned fee is a fraction of the `outstanding_balance`
 /// where the interest rate is expressed as a fraction `ir_numerator` / `ir_denominator`.
-/// Used in the Lending Demo.
-/// @param {BigInt} ir_numerator - interest rate numerator.
-/// @param {BigInt} ir_denominator - interest rate denominator.
-/// @param {BigInt] outstanding_balance -  amount of outstanding debt.
+///
+/// This function is specific to the  Lending Demo.
+/// @param {BigInt} ir_numerator - Interest rate numerator.
+/// @param {BigInt} ir_denominator - Interest rate denominator.
+/// @param {BigInt} outstanding_balance - Amount of outstanding debt.
+/// @ignore
 pub fn calculate_fee(ir_numerator: u64, ir_denominator: u64, outstanding_balance: u64) -> u64 {
   ledger::policies::calculate_fee(outstanding_balance,
                                   Fraction::new(ir_numerator, ir_denominator))
@@ -87,6 +89,7 @@ pub fn calculate_fee(ir_numerator: u64, ir_denominator: u64, outstanding_balance
 
 #[wasm_bindgen]
 /// Returns an address to use for cancelling debt tokens in a debt swap.
+/// @ignore
 pub fn get_null_pk() -> XfrPublicKey {
   XfrPublicKey::zei_from_bytes(&[0; 32])
 }
@@ -120,13 +123,14 @@ pub fn create_debt_policy_info(ir_numerator: u64,
 }
 
 #[wasm_bindgen]
-/// Creates memo needed for debt token asset types. The memo will be parsed by the policy evaluator to ensure
+/// Creates the memo needed for debt token asset types. The memo will be parsed by the policy evaluator to ensure
 /// that all payment and fee amounts are correct.
-/// @param {BigInt} ir_numerator  - interest rate numerator.
-/// @param {BigInt} ir_denominator - interest rate denominator.
-/// @param {string} fiat_code - base64 string representing asset type used to pay off the loan.
-/// @param {BigInt} loan_amount - loan amount.
+/// @param {BigInt} ir_numerator  - Interest rate numerator.
+/// @param {BigInt} ir_denominator - Interest rate denominator.
+/// @param {string} fiat_code - Base64 string representing asset type used to pay off the loan.
+/// @param {BigInt} loan_amount - Loan amount.
 /// @throws Will throw an error if `fiat_code` fails to deserialize.
+/// @ignore
 pub fn create_debt_memo(ir_numerator: u64,
                         ir_denominator: u64,
                         fiat_code: String,
@@ -298,8 +302,7 @@ impl TransactionBuilder {
   }
 
   /// Extracts the serialized form of a transaction.
-  ///
-  /// TODO Develop standard terminology for Javascript functions that may throw errors.
+  // TODO Develop standard terminology for Javascript functions that may throw errors.
   pub fn transaction(&self) -> Result<String, JsValue> {
     Ok(self.get_builder()
            .serialize_str()
@@ -504,12 +507,15 @@ pub fn keypair_to_str(key_pair: &XfrKeyPair) -> String {
 
 #[wasm_bindgen]
 /// Constructs a transfer key pair from a hex-encoded string.
-/// The encode a key pair, use `keypair_to_str`
+/// The encode a key pair, use `keypair_to_str` function.
 pub fn keypair_from_str(str: String) -> XfrKeyPair {
   XfrKeyPair::zei_from_bytes(&hex::decode(str).unwrap())
 }
 
 #[wasm_bindgen]
+/// Generate tracking keys that can decrypt the asset type or amount of blinded records of a
+/// certain type.
+/// @ignore
 pub fn generate_elgamal_keys() -> String {
   let mut small_rng = rand::thread_rng();
   let pc_gens = PedersenGens::default();
@@ -519,6 +525,7 @@ pub fn generate_elgamal_keys() -> String {
 #[wasm_bindgen]
 /// Returns the SHA256 signature of the given string as a hex-encoded
 /// string.
+/// @ignore
 pub fn sha256str(str: &str) -> String {
   let digest = sha256::hash(&str.as_bytes());
   hex::encode(digest)
@@ -526,6 +533,7 @@ pub fn sha256str(str: &str) -> String {
 
 #[wasm_bindgen]
 /// Signs the given message using the given transfer key pair.
+/// @ignore
 pub fn sign(key_pair: &XfrKeyPair, message: String) -> Result<JsValue, JsValue> {
   let signature = key_pair.get_sk_ref()
                           .sign(&message.as_bytes(), key_pair.get_pk_ref());
@@ -590,7 +598,7 @@ pub fn get_tracked_amount(blind_asset_record: String,
 /// @param {transaction_str} - JSON-encoded transaction string.
 ///
 /// @see {@link get_txn_status} for information about transaction statuses.
-/// TODO Design and implement a notification mechanism.
+// TODO Design and implement a notification mechanism.
 pub fn submit_transaction(path: String, transaction_str: String) -> Result<Promise, JsValue> {
   let mut opts = RequestInit::new();
   opts.method("POST");
@@ -620,12 +628,11 @@ pub fn get_txn_status(path: String, handle: String) -> Result<Promise, JsValue> 
 /// Otherwise, returns 'not found'. The request fails if the txo uid
 /// has been spent or the transaction index does not correspond to a
 /// transaction.
-/// @param {string} path - Address of ledger server
-/// @param {BigInt} index - UTXO index
-///
-/// TODO Provide an example (test case) that demonstrates how to
-/// handle the error in the case of an invalid transaction index.
-/// TODO Rename this function get_utxo
+/// @param {string} path - Address of ledger server.
+/// @param {BigInt} index - UTXO index.
+// TODO Provide an example (test case) that demonstrates how to
+// handle the error in the case of an invalid transaction index.
+// TODO Rename this function get_utxo
 pub fn get_txo(path: String, index: u64) -> Result<Promise, JsValue> {
   let mut opts = RequestInit::new();
   opts.method("GET");
@@ -642,11 +649,11 @@ pub fn get_txo(path: String, index: u64) -> Result<Promise, JsValue> {
 /// Otherwise, returns 'not found'. The request fails if the transaction index does not correspond
 /// to a transaction.
 ///
-/// @param {String} path - Ledger server path
-/// @param {BigInt} index - transaction index.
+/// @param {String} path - Ledger server path.
+/// @param {BigInt} index - Transaction index.
 ///
-/// TODO Provide an example (test case) that demonstrates how to
-/// handle the error in the case of an invalid transaction index.
+// TODO Provide an example (test case) that demonstrates how to
+// handle the error in the case of an invalid transaction index.
 pub fn get_transaction(path: String, index: u64) -> Result<Promise, JsValue> {
   let mut opts = RequestInit::new();
   opts.method("GET");
@@ -675,11 +682,11 @@ pub fn get_state_commitment(path: String) -> Result<Promise, JsValue> {
 /// JsValue describing an asset token. Otherwise, returns 'not found'.
 /// The request fails if the given asset name does not correspond to
 /// an asset.
-/// @param {string} path: Address of ledger server
-/// @param {string} name: base64-encoded asset token string
+/// @param {string} path: Address of ledger server.
+/// @param {string} name: Base64-encoded asset token string.
 ///
-/// TODO Provide an example (test case) that demonstrates how to
-/// handle the error in the case of an undefined asset.
+// TODO Provide an example (test case) that demonstrates how to
+// handle the error in the case of an undefined asset.
 pub fn get_asset_token(path: String, name: String) -> Result<Promise, JsValue> {
   let mut opts = RequestInit::new();
   opts.method("GET");
@@ -692,6 +699,7 @@ pub fn get_asset_token(path: String, name: String) -> Result<Promise, JsValue> {
 
 // Given a request string and a request init object, constructs
 // the JS promise to be returned to the client.
+/// @ignore
 fn create_query_promise(opts: &RequestInit,
                         req_string: &str,
                         is_json: bool)
@@ -840,6 +848,7 @@ pub fn wasm_credential_verify(issuer_pub_key: &CredIssuerPublicKey,
                     &reveal_sig.get_sig_ref().pok).map_err(error_to_jsvalue)?;
   Ok(())
 }
+
 #[test]
 pub fn test() {
   let kp = new_keypair();

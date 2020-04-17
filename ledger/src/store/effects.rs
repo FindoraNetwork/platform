@@ -113,7 +113,8 @@ impl TxnEffect {
           // used here match `def.body.asset.issuer`?
           def.pubkey
              .key
-             .verify(&serde_json::to_vec(&def.body).unwrap(), &def.signature)?;
+             .verify(&serde_json::to_vec(&def.body).unwrap(), &def.signature)
+             .map_err(|e| PlatformError::ZeiError(error_location!(), e))?;
 
           let code = def.body.asset.code;
           let token = AssetType { properties: def.body.asset.clone(),
@@ -180,7 +181,8 @@ impl TxnEffect {
           // (2)
           iss.pubkey
              .key
-             .verify(&serde_json::to_vec(&iss.body).unwrap(), &iss.signature)?;
+             .verify(&serde_json::to_vec(&iss.body).unwrap(), &iss.signature)
+             .map_err(|e| PlatformError::ZeiError(error_location!(), e))?;
 
           // (3)
           if let Some(prior_key) = issuance_keys.get(&code) {
@@ -275,7 +277,8 @@ impl TxnEffect {
           }
           // (3)
           // TODO: implement real policies
-          verify_xfr_body_no_policies(prng, &trn.body.transfer)?;
+          verify_xfr_body_no_policies(prng, &trn.body.transfer)
+              .map_err(|e| PlatformError::ZeiError(error_location!(),e))?;
 
           for (inp, record) in trn.body.inputs.iter().zip(trn.body.transfer.inputs.iter()) {
             // Until we can distinguish assets that have policies that invoke transfer restrictions
@@ -347,9 +350,11 @@ impl TxnEffect {
           let pk = &air_assign.pubkey;
           // 1)
           pk.verify(&serde_json::to_vec(&air_assign.body).unwrap(),
-                    &air_assign.signature)?;
+                    &air_assign.signature)
+            .map_err(|e| PlatformError::ZeiError(error_location!(), e))?;
           // 2)
-          credential_verify_commitment(addr, commitment, pok, pk.as_bytes())?;
+          credential_verify_commitment(addr, commitment, pok, pk.as_bytes())
+              .map_err(|e| PlatformError::ZeiError(error_location!(),e))?;
           air_updates.insert(serde_json::to_string(&air_assign.pubkey)?,
                              serde_json::to_string(commitment)?);
         }
