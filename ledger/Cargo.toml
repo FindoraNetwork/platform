@@ -15,7 +15,7 @@ byteorder = "1.0.0"
 chrono = "0.4"
 cryptohash = { path = "../libs/cryptohash" }
 credentials = { path = "../libs/credentials"}
-curve25519-dalek = { version =  "1.2.1", features = ["serde"] }
+curve25519-dalek = { version =  "2.0.0", features = ["serde"] }
 ed25519-dalek = "0.9.1"
 findora = { path = "../findora" }
 hex = "0.3.2"
