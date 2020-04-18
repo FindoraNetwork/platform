@@ -1,10 +1,7 @@
+import os
+
 from json import dumps, loads
 from locust import HttpLocust, TaskSet, task, constant
-
-#print('UserBehavior: POST body[{}] = {}'.format(self.curr, self.js[self.curr]))
-# payload = {'some':'payload'}
-#print('submit_txn: result = {}'.format(r))
-#r = self.client.post(":8669/submit_transaction", data=self.js[self.curr], headers=headers, catch_response=True)
 
 class UserBehavior(TaskSet):
     def on_start(self):
@@ -12,7 +9,7 @@ class UserBehavior(TaskSet):
         self.js = []
         self.curr = 0
         self.count = 0
-        with open('log.csv') as log_file:
+        with open(os.environ.get('LOG_FILE', 'test_txnlog_full') as log_file:
             for line in log_file:
                 self.js.append(line.strip())
                 self.count += 1
@@ -37,4 +34,4 @@ class UserBehavior(TaskSet):
 
 class WebsiteUser(HttpLocust):
   task_set = UserBehavior
-  wait_time = constant(1)
+  wait_time = constant(0)
