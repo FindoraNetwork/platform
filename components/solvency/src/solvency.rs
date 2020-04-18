@@ -144,7 +144,9 @@ impl SolvencyAudit {
                      &account.hidden_liabilities,
                      &liabilities_blinds,
                      &account.public_liabilities,
-                     &self.conversion_rates).or_else(|error| Err(PlatformError::ZeiError(error)))?;
+                     &self.conversion_rates).or_else(|e| {
+                                              Err(PlatformError::ZeiError(error_location!(), e))
+                                            })?;
 
     // Commit the hidden assets and liabilities
     let pc_gens = PedersenGens::default();
@@ -199,7 +201,7 @@ impl SolvencyAudit {
                     hidden_liabilities_commitments,
                     &account.public_liabilities,
                     &self.conversion_rates,
-                    proof).or_else(|error| Err(PlatformError::ZeiError(error)))
+                    proof).or_else(|e| Err(PlatformError::ZeiError(error_location!(), e)))
   }
 }
 
@@ -236,9 +238,12 @@ mod tests {
 
     // Prove the solvency
     // Should fail with ZeiError::SolvencyProveError
-    let result = audit.prove_solvency_and_store(&mut account).map_err(|e| e);
-    assert_eq!(result,
-               Err(PlatformError::ZeiError(ZeiError::SolvencyProveError)));
+    match audit.prove_solvency_and_store(&mut account) {
+      Err(PlatformError::ZeiError(_, ZeiError::SolvencyProveError)) => {}
+      _ => {
+        panic!("Should fail with ZeiError::SolvencyProveError");
+      }
+    }
   }
 
   #[test]
@@ -256,7 +261,7 @@ mod tests {
     account.add_hidden_asset(20, asset_2);
     account.add_hidden_asset(30, asset_3);
 
-    // Adds hidden liabilities, which have more total values than the hidden assets do
+    // Adds hidden liabilities, which have higher total values than the hidden assets do
     account.add_hidden_liability(10, asset_1);
     account.add_hidden_liability(20, asset_2);
     account.add_hidden_liability(80, asset_2);
@@ -277,9 +282,13 @@ mod tests {
 
     // Verify the solvency proof
     // Should fail with ZeiError::SolvencyVerificationError
-    let result = audit.verify_solvency(&account).map_err(|e| e);
-    assert_eq!(result,
-               Err(PlatformError::ZeiError(ZeiError::SolvencyVerificationError)));
+    let result = audit.verify_solvency(&account);
+    match result {
+      Err(PlatformError::ZeiError(_, ZeiError::SolvencyVerificationError)) => {}
+      _ => {
+        panic!("Should fail with ZeiError::SolvencyVerificationError");
+      }
+    }
   }
 
   #[test]
