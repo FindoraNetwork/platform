@@ -200,6 +200,14 @@ impl SolvencyAudit {
   }
 }
 
+fn main() {
+  init_logging();
+  // TODO (Keyao): Determine the App name
+  let inputs = App::new("Solvency Proof").version("0.0.1")
+                                         .about("Copyright 2020 © Findora. All rights reserved.")
+                                         .get_matches();
+}
+
 #[cfg(test)]
 mod tests {
   use super::*;
@@ -444,7 +452,7 @@ mod tests {
     audit.verify_solvency(&account).unwrap();
 
     // Update the hidden liability
-    // so that liabilities' total value is greater than assets'
+    // to make the liabilities' total value greater than assets'
     account.add_hidden_liability(4000, codes.0);
 
     // Prove the solvency again
