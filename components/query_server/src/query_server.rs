@@ -212,7 +212,7 @@ mod tests {
                             .unwrap()
                             .create(TransferType::Standard)
                             .unwrap()
-                            .sign(&alice, 0)
+                            .sign(&alice)
                             .unwrap();
     let mut builder = TransactionBuilder::default();
     let xfr_txn = builder.add_operation(xfr_op.transaction().unwrap())

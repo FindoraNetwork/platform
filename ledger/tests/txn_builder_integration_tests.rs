@@ -77,8 +77,7 @@ fn test_create_asset() -> Result<(), PlatformError> {
                                           .add_input(TxoRef::Absolute(txos[1]), oar2, 500)?
                                           .add_output(&AssetRecordTemplate::with_no_asset_tracking(1500, code.val, NonConfidentialAmount_NonConfidentialAssetType, keys.get_pk()),None)?
                                           .create(TransferType::Standard)?
-                                          .sign(&keys, 0)?
-                                          .sign(&keys, 1)?
+                                          .sign(&keys)?
                                           .transaction()?;
 
   let mut builder = TransactionBuilder::default();
@@ -172,7 +171,7 @@ fn test_loan_repayment(loan_amount: u64,
   let fiat_to_lender_op = xfr_builder.add_input(TxoRef::Relative(1), fiat_oar, loan_amount)?
                                      .add_output(&output_template, None)?
                                      .create(TransferType::Standard)?
-                                     .sign(&fiat_issuer_keys, 0)?;
+                                     .sign(&fiat_issuer_keys)?;
 
   let fiat_to_borrower_input_ba = fiat_to_lender_op.get_output_record(0).unwrap();
   let fiat_to_borrower_input_oar =
@@ -195,8 +194,8 @@ fn test_loan_repayment(loan_amount: u64,
                .add_output(&borrower_output_template, None)?
                .add_output(&lender_output_template, None)?
                .create(TransferType::Standard)?
-               .sign(&lender_keys, 0)?
-               .sign(&borrower_keys, 1)?;
+               .sign(&lender_keys)?
+               .sign(&borrower_keys)?;
 
   let debt_burned_input_ba = debt_initiation_op.get_output_record(1).unwrap();
   let debt_burned_input_oar =
@@ -226,8 +225,7 @@ fn test_loan_repayment(loan_amount: u64,
                                 .add_output(&burn_repayment_template, None)?
                                 .balance()?
                                 .create(TransferType::DebtSwap)?
-                                .sign(&borrower_keys, 0)?
-                                .sign(&borrower_keys, 1)?;
+                                .sign(&borrower_keys)?;
 
   let tx = tx.add_operation(fiat_to_lender_op.transaction()?)
              .add_operation(debt_initiation_op.transaction()?)

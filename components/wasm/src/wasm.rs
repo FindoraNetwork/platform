@@ -429,19 +429,11 @@ impl TransferOperationBuilder {
 
   /// Wraps around TransferOperationBuilder to add a signature to the operation.
   ///
-  /// All input owners must sign. Additional signatures can also be added if the asset has a
-  /// co-signature transfer requirement. Each signature must be signed with an input index, the
-  /// index of the transfer input that the user is consenting to be transferred.
+  /// All input owners must sign.
   ///
   /// @param {XfrKeyPair} kp - key pair of one of the input owners.
-  /// @param {number} input_idx - Transfer input index.
-  pub fn sign(mut self,
-              kp: &XfrKeyPair,
-              input_idx: usize)
-              -> Result<TransferOperationBuilder, JsValue> {
-    self.get_builder_mut()
-        .sign(&kp, input_idx)
-        .map_err(error_to_jsvalue)?;
+  pub fn sign(mut self, kp: &XfrKeyPair) -> Result<TransferOperationBuilder, JsValue> {
+    self.get_builder_mut().sign(&kp).map_err(error_to_jsvalue)?;
     Ok(self)
   }
 

@@ -1119,7 +1119,7 @@ fn issue_and_transfer_asset(issuer_key_pair: &XfrKeyPair,
                                    .add_output(&output_template, credential_record)?
                                    .balance()?
                                    .create(TransferType::Standard)?
-                                   .sign(issuer_key_pair, 0)?
+                                   .sign(issuer_key_pair)?
                                    .transaction()?;
 
   // Issue and Transfer transaction
@@ -1330,8 +1330,7 @@ fn merge_records(key_pair: &XfrKeyPair,
                                               .add_input(sid2, oar2, amount2)?
                                               .add_output(&template, None)?
                                               .create(TransferType::Standard)?
-                                              .sign(key_pair, 0)?
-                                              .sign(key_pair, 1)?
+                                              .sign(key_pair)?
                                               .transaction()?;
 
   // Merge records
@@ -1783,8 +1782,8 @@ fn fulfill_loan(loan_id: u64,
                                               .add_output(&lender_template, credential_record)?
                                               .add_output(&borrower_template, None)?
                                               .create(TransferType::Standard)?
-                                              .sign(lender_key_pair, 0)?
-                                              .sign(borrower_key_pair, 1)?
+                                              .sign(lender_key_pair)?
+                                              .sign(borrower_key_pair)?
                                               .transaction()?;
   let mut txn_builder = TransactionBuilder::default();
   txn_builder.add_operation(xfr_op).transaction();
@@ -2029,8 +2028,7 @@ fn pay_loan(loan_id: u64, amount: u64, protocol: &str, host: &str) -> Result<(),
                                           .add_output(&lender_template, credential_record)?
                                           .add_output(&borrower_template, None)?
                                           .create(TransferType::DebtSwap)?
-                                          .sign(borrower_key_pair, 0)?
-                                          .sign(borrower_key_pair, 1)?
+                                          .sign(borrower_key_pair)?
                                           .transaction()?;
   let mut txn_builder = TransactionBuilder::default();
   txn_builder.add_operation(op).transaction();

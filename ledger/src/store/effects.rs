@@ -42,7 +42,7 @@ pub struct TxnEffect {
   // Mapping of (op index, xfr input idx) tuples to set of valid signature keys
   // i.e. (2, 1) -> { AlicePk, BobPk } means that Alice and Bob both have valid signatures on the 2nd input of the 1st
   // operation
-  pub xfr_sig_keys: HashMap<(usize, usize), HashSet<Vec<u8>>>,
+  pub cosig_keys: HashMap<(usize, usize), HashSet<Vec<u8>>>,
   // Debt swap information that must be externally validated
   pub debt_effects: HashMap<AssetTypeCode, DebtSwapEffect>,
 
@@ -65,7 +65,7 @@ impl TxnEffect {
     let mut internally_spent_txos = Vec::new();
     let mut input_txos: HashMap<TxoSID, BlindAssetRecord> = HashMap::new();
     let mut new_asset_codes: HashMap<AssetTypeCode, AssetType> = HashMap::new();
-    let mut xfr_sig_keys = HashMap::new();
+    let mut cosig_keys = HashMap::new();
     let mut new_issuance_nums: HashMap<AssetTypeCode, Vec<u64>> = HashMap::new();
     let mut issuance_keys: HashMap<AssetTypeCode, IssuerPublicKey> = HashMap::new();
     let mut issuance_amounts = HashMap::new();
@@ -253,14 +253,19 @@ impl TxnEffect {
               debt_effects.insert(debt_type, debt_swap_effect);
             }
             TransferType::Standard => {
+              let mut input_keys = HashSet::new();
               // (1a) all body signatures are valid
               for sig in &trn.body_signatures {
                 if !trn.body.verify_body_signature(sig) {
                   return Err(PlatformError::InputsError(error_location!()));
                 }
-                let sig_keys = xfr_sig_keys.entry((op_idx, sig.input_idx))
+                if let Some(input_idx) = sig.input_idx {
+                  let sig_keys = cosig_keys.entry((op_idx, input_idx))
                                            .or_insert_with(HashSet::new);
-                (*sig_keys).insert(sig.address.key.zei_to_bytes());
+                  (*sig_keys).insert(sig.address.key.zei_to_bytes());
+                } else {
+                  input_keys.insert(sig.address.key.zei_to_bytes());
+                }
               }
 
               // (1b) all input record owners (for non-custom-policy
@@ -274,13 +279,11 @@ impl TxnEffect {
                     continue;
                   }
                 }
-                if let Some(sig_keys) = xfr_sig_keys.get(&(op_idx, input_idx)) {
-                  if !sig_keys.contains(&record.public_key.zei_to_bytes()) {
-                    return Err(PlatformError::InputsError(error_location!()));
-                  }
-                } else {
+                if !input_keys.contains(&record.public_key.zei_to_bytes()) {
                   return Err(PlatformError::InputsError(error_location!()));
                 }
+                cosig_keys.entry((op_idx, input_idx))
+                          .or_insert_with(HashSet::new);
               }
             }
           }
@@ -371,7 +374,7 @@ impl TxnEffect {
     Ok(TxnEffect { txn,
                    txos,
                    input_txos,
-                   xfr_sig_keys,
+                   cosig_keys,
                    internally_spent_txos,
                    new_asset_codes,
                    new_issuance_nums,

@@ -191,7 +191,9 @@ pub struct AccountAddress {
 pub struct TransferBodySignature {
   pub address: XfrAddress,
   pub signature: XfrSignature,
-  pub input_idx: usize, // Specific transfer input being signed
+  #[serde(default)]
+  #[serde(skip_serializing_if = "is_default")]
+  pub input_idx: Option<usize>, // Some(idx) if a co-signature, None otherwise
 }
 
 impl TransferBodySignature {
@@ -394,16 +396,18 @@ impl TransferAssetBody {
                            transfer: note })
   }
 
-  /// Computes a body signature. A body signature represents consent to the transfer of an input by
-  /// a public key.
+  /// Computes a body signature. A body signature represents consent to some part of the asset transfer. If an
+  /// input_idx is specified, the signature is a co-signature.
   pub fn compute_body_signature(&self,
                                 keypair: &XfrKeyPair,
-                                input_idx: usize)
+                                input_idx: Option<usize>)
                                 -> TransferBodySignature {
     let secret_key = keypair.get_sk_ref();
     let public_key = keypair.get_pk_ref();
     let mut body_vec = serde_json::to_vec(&self).unwrap();
-    body_vec.extend(&input_idx.to_be_bytes());
+    if let Some(idx) = input_idx {
+      body_vec.extend(&idx.to_be_bytes());
+    }
     let signature = secret_key.sign(&body_vec, public_key);
     TransferBodySignature { signature,
                             address: XfrAddress { key: *public_key },
@@ -413,7 +417,9 @@ impl TransferAssetBody {
   /// Verifies a body signature
   pub fn verify_body_signature(&self, signature: &TransferBodySignature) -> bool {
     let mut body_vec = serde_json::to_vec(&self).unwrap();
-    body_vec.extend(&signature.input_idx.to_be_bytes());
+    if let Some(idx) = signature.input_idx {
+      body_vec.extend(&idx.to_be_bytes());
+    }
     signature.verify(&body_vec)
   }
 }
@@ -531,9 +537,14 @@ impl TransferAsset {
                        transfer_type })
   }
 
-  pub fn sign(&mut self, keypair: &XfrKeyPair, input_idx: usize) {
+  pub fn sign(&mut self, keypair: &XfrKeyPair) {
     self.body_signatures
-        .push(self.body.compute_body_signature(&keypair, input_idx))
+        .push(self.body.compute_body_signature(&keypair, None))
+  }
+
+  pub fn add_cosignature(&mut self, keypair: &XfrKeyPair, input_idx: usize) {
+    self.body_signatures
+        .push(self.body.compute_body_signature(&keypair, Some(input_idx)))
   }
 }
 
@@ -892,6 +903,7 @@ mod tests {
   use zei::xfr::structs::{AssetTypeAndAmountProof, XfrBody, XfrProofs};
 
   #[test]
+  #[ignore]
   fn test_gen_random() {
     let mut sum: u64 = 0;
     let mut sample_size = 0;

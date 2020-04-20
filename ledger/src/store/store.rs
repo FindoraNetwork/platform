@@ -570,7 +570,7 @@ impl LedgerStatus {
     }
 
     // Assets with cosignature requirements must have enough signatures
-    for ((op_idx, input_idx), key_set) in txn.xfr_sig_keys.iter() {
+    for ((op_idx, input_idx), key_set) in txn.cosig_keys.iter() {
       let op = &txn.txn.operations[*op_idx];
       if let Operation::TransferAsset(xfr) = op {
         if let XfrAssetType::NonConfidential(val) = xfr.body.transfer.inputs[*input_idx].asset_type
@@ -1990,7 +1990,7 @@ pub mod helpers {
                              &[open_blind_asset_record(&ba, &owner_memo, &issuer_keys.get_sk_ref()).unwrap()],
                              &[ar.clone()]).unwrap(), TransferType::Standard).unwrap();
 
-    transfer.sign(&issuer_keys, 0);
+    transfer.sign(&issuer_keys);
     tx.operations.push(Operation::TransferAsset(transfer));
     (tx, ar)
   }
@@ -2466,7 +2466,7 @@ mod tests {
                                           TransferType::Standard).unwrap();
 
     let mut second_transfer = transfer.clone();
-    transfer.sign(&key_pair, 0);
+    transfer.sign(&key_pair);
     tx.operations.push(Operation::TransferAsset(transfer));
 
     // Commit first transfer
@@ -2730,7 +2730,7 @@ mod tests {
                              vec![TxoRef::Absolute(sid)],
                              &[open_blind_asset_record(&bar, &None, &alice.get_sk_ref()).unwrap()],
                                &[record.clone()]).unwrap(), TransferType::Standard).unwrap();
-    transfer.sign(&alice, 0);
+    transfer.sign(&alice);
     tx.operations.push(Operation::TransferAsset(transfer));
     let effect = TxnEffect::compute_effect(ledger.get_prng(), tx.clone()).unwrap();
 
@@ -2758,7 +2758,7 @@ mod tests {
                                                                  &[ar.open_asset_record],
                                                                  &[second_record]).unwrap(),
                                           TransferType::Standard).unwrap();
-    transfer.sign(&alice, 0);
+    transfer.sign(&alice);
     tx.operations.push(Operation::TransferAsset(transfer));
     let effect = TxnEffect::compute_effect(ledger.get_prng(), tx).unwrap();
     let res = ledger.apply_transaction(&mut block, effect);
@@ -2911,10 +2911,10 @@ mod tests {
                                                                  &[output_ar]).unwrap(),
                                           TransferType::Standard).unwrap();
 
-    transfer.sign(&alice, 0);
+    transfer.sign(&alice);
     for (i, (signs, _)) in co_signers.iter().enumerate() {
       if *signs {
-        transfer.sign(&keys[i], 0);
+        transfer.add_cosignature(&keys[i], 0);
       }
     }
     tx.operations.push(Operation::TransferAsset(transfer));
@@ -3044,8 +3044,8 @@ mod tests {
                              &[open_blind_asset_record(&fiat_bar, &None, &lender_key_pair.get_sk_ref()).unwrap(),
                              open_blind_asset_record(&debt_bar, &None, &borrower_key_pair.get_sk_ref()).unwrap()],
                                &[fiat_transfer_record, loan_transfer_record]).unwrap(), TransferType::Standard).unwrap();
-    transfer.sign(&lender_key_pair, 0);
-    transfer.sign(&borrower_key_pair, 1);
+    transfer.sign(&lender_key_pair);
+    transfer.sign(&borrower_key_pair);
     tx.operations.push(Operation::TransferAsset(transfer));
 
     let (_txn_sid, txo_sids) = apply_transaction(&mut ledger, tx);
