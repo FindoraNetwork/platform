@@ -44,6 +44,18 @@ pub trait LedgerAccess {
   // Retrieve asset type metadata
   fn get_asset_type(&self, code: &AssetTypeCode) -> Option<&AssetType>;
 
+  // Get the hash of the most recent checkpoint, and its sequence number.
+  fn get_state_commitment(&self) -> (BitDigest, u64);
+
+  // Get the authenticated status of a UTXO (Spent, Unspent, NonExistent).
+  fn get_utxo_status(&mut self, addr: TxoSID) -> AuthenticatedUtxoStatus;
+
+  // The public signing key this ledger provides
+  fn public_key(&self) -> &XfrPublicKey;
+
+  // Sign a message with the ledger's signing key
+  fn sign_message(&self, msg: &[u8]) -> XfrSignature;
+
   // TODO(joe): figure out what to do for these.
   // See comments about asset policies and tracked SIDs in LedgerStatus
   // fn get_asset_policy(&self, key: &AssetPolicyKey) -> Option<CustomAssetPolicy>;
@@ -136,24 +148,15 @@ pub trait ArchiveAccess {
   // there isn't anything to handle out-of-bounds indices from `list`
   // fn get_utxos        (&mut self, list: Vec<usize>) -> Option<Vec<u8>>;
 
-  // Authenticated query of whether the txo is spent, unspent, or non-existent
-  fn get_utxo_status(&mut self, addr: TxoSID) -> AuthenticatedUtxoStatus;
-
   // Get the bitmap's hash at version `version`, if such a hash is
   // available.
   fn get_utxo_checksum(&self, version: u64) -> Option<BitDigest>;
 
-  // Get the hash of the most recent checkpoint, and its sequence number.
-  fn get_state_commitment(&self) -> (BitDigest, u64);
+  // Get the ledger state commitment at a specific block height.
+  fn get_state_commitment_at_block_height(&self, height: u64) -> Option<BitDigest>;
 
   // Key-value lookup in AIR
   fn get_air_data(&self, address: &str) -> AIRResult;
-
-  // The public signing key this ledger provides
-  fn public_key(&self) -> &XfrPublicKey;
-
-  // Sign a message with the ledger's signing key
-  fn sign_message(&self, msg: &[u8]) -> XfrSignature;
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
@@ -188,6 +191,9 @@ pub struct LedgerStatus {
   // the UTXO map
   // TODO(joe): should this be an ordered map of some sort?
   utxo_map_versions: VecDeque<(TxnSID, BitDigest)>,
+
+  // State commitment history. The BitDigest at index i is the state commitment of the ledger at block height  i + 1.
+  state_commitment_versions: Vec<BitDigest>,
 
   // TODO(joe): This field should probably exist, but since it is not
   // currently used by anything I'm leaving it commented out. We should
@@ -386,6 +392,7 @@ impl LedgerStatus {
                                 utxos: HashMap::new(),
                                 issuance_amounts: HashMap::new(),
                                 utxo_map_versions: VecDeque::new(),
+                                state_commitment_versions: Vec::new(),
                                 asset_types: HashMap::new(),
                                 issuance_num: HashMap::new(),
                                 next_txn: TxnSID(0),
@@ -1196,7 +1203,11 @@ impl LedgerState {
                                  txns_in_block_hash: self.status.txns_in_block_hash,
                                  previous_state_commitment: prev_commitment,
                                  txo_count: self.status.next_txo.0 });
-
+    self.status.state_commitment_versions.push(self.status
+                                                   .state_commitment_data
+                                                   .as_ref()
+                                                   .unwrap()
+                                                   .compute_commitment());
     self.status.block_commit_count += 1;
   }
 
@@ -1602,7 +1613,7 @@ impl LedgerState {
   }
 }
 
-impl LedgerAccess for LedgerStatus {
+impl LedgerStatus {
   fn get_utxo(&self, addr: TxoSID) -> Option<&Utxo> {
     self.utxos.get(&addr)
   }
@@ -1627,6 +1638,47 @@ impl LedgerAccess for LedgerState {
 
   fn get_asset_type(&self, code: &AssetTypeCode) -> Option<&AssetType> {
     self.status.get_asset_type(code)
+  }
+
+  fn get_state_commitment(&self) -> (BitDigest, u64) {
+    let block_count = self.status.block_commit_count;
+    let commitment = if block_count > 0 {
+      self.status.state_commitment_versions[(block_count - 1) as usize]
+    } else {
+      BitDigest { 0: [0_u8; DIGESTBYTES] }
+    };
+    (commitment, block_count)
+  }
+
+  fn public_key(&self) -> &XfrPublicKey {
+    self.signing_key.get_pk_ref()
+  }
+
+  fn sign_message(&self, msg: &[u8]) -> XfrSignature {
+    self.signing_key.sign(msg)
+  }
+
+  fn get_utxo_status(&mut self, addr: TxoSID) -> AuthenticatedUtxoStatus {
+    let state_commitment_data = self.status.state_commitment_data.as_ref().unwrap();
+    let utxo_map: Option<SparseMap>;
+    let status;
+    if addr.0 < state_commitment_data.txo_count {
+      utxo_map = Some(SparseMap::new(&self.utxo_map.serialize(0)).unwrap());
+      status = if utxo_map.as_ref().unwrap().query(addr.0).unwrap() {
+        UtxoStatus::Unspent
+      } else {
+        UtxoStatus::Spent
+      };
+    } else {
+      status = UtxoStatus::Nonexistent;
+      utxo_map = None;
+    }
+
+    AuthenticatedUtxoStatus { status,
+                              state_commitment_data: state_commitment_data.clone(),
+                              state_commitment: state_commitment_data.compute_commitment(),
+                              utxo_sid: addr,
+                              utxo_map }
   }
 }
 
@@ -1765,29 +1817,6 @@ impl ArchiveAccess for LedgerState {
     }
   }
 
-  fn get_utxo_status(&mut self, addr: TxoSID) -> AuthenticatedUtxoStatus {
-    let state_commitment_data = self.status.state_commitment_data.as_ref().unwrap();
-    let utxo_map: Option<SparseMap>;
-    let status;
-    if addr.0 < state_commitment_data.txo_count {
-      utxo_map = Some(SparseMap::new(&self.utxo_map.serialize(0)).unwrap());
-      status = if utxo_map.as_ref().unwrap().query(addr.0).unwrap() {
-        UtxoStatus::Unspent
-      } else {
-        UtxoStatus::Spent
-      };
-    } else {
-      status = UtxoStatus::Nonexistent;
-      utxo_map = None;
-    }
-
-    AuthenticatedUtxoStatus { status,
-                              state_commitment_data: state_commitment_data.clone(),
-                              state_commitment: state_commitment_data.compute_commitment(),
-                              utxo_sid: addr,
-                              utxo_map }
-  }
-
   fn get_block_count(&self) -> usize {
     self.blocks.len()
   }
@@ -1813,8 +1842,6 @@ impl ArchiveAccess for LedgerState {
   // }
 
   fn get_utxo_checksum(&self, version: u64) -> Option<BitDigest> {
-    // TODO:  This could be done via a hashmap to support more versions
-    // efficiently.
     for pair in self.status.utxo_map_versions.iter() {
       if (pair.0).0 as u64 == version {
         return Some(pair.1);
@@ -1824,20 +1851,11 @@ impl ArchiveAccess for LedgerState {
     None
   }
 
-  fn get_state_commitment(&self) -> (BitDigest, u64) {
-    let commitment = match &self.status.state_commitment_data {
-      Some(commitment_data) => commitment_data.compute_commitment(),
-      None => BitDigest { 0: [0_u8; DIGESTBYTES] },
-    };
-    (commitment, self.status.block_commit_count)
-  }
-
-  fn public_key(&self) -> &XfrPublicKey {
-    self.signing_key.get_pk_ref()
-  }
-
-  fn sign_message(&self, msg: &[u8]) -> XfrSignature {
-    self.signing_key.sign(msg)
+  fn get_state_commitment_at_block_height(&self, block_height: u64) -> Option<BitDigest> {
+    self.status
+        .state_commitment_versions
+        .get((block_height - 1) as usize)
+        .copied()
   }
 
   fn get_air_data(&self, key: &str) -> AIRResult {
@@ -2145,8 +2163,12 @@ mod tests {
 
     assert_eq!(ledger_state.status
                            .state_commitment_data
+                           .clone()
                            .unwrap()
                            .compute_commitment(),
+               first_hash);
+    assert_eq!(ledger_state.get_state_commitment_at_block_height(1)
+                           .unwrap(),
                first_hash);
     assert_eq!(ledger_state.status.block_commit_count, count_original + 1);
   }
@@ -2242,6 +2264,7 @@ mod tests {
     assert_eq!(ledger_state.status.utxo_map_versions.len(), MAX_VERSION);
 
     let count_original = ledger_state.status.block_commit_count;
+    let (commitment1, v1) = ledger_state.get_state_commitment();
 
     // Verify that end_commit doesn't change the size of utxo_map_versions if its length >= MAX_VERSION
     ledger_state.status
@@ -2250,6 +2273,7 @@ mod tests {
     assert_eq!(ledger_state.status.utxo_map_versions.len(), MAX_VERSION + 1);
     ledger_state.checkpoint(&BlockEffect::new());
     assert_eq!(ledger_state.status.utxo_map_versions.len(), MAX_VERSION + 1);
+    let (commitment2, v2) = ledger_state.get_state_commitment();
 
     // Verify that the element pushed to the back is as expected
     let back = ledger_state.status.utxo_map_versions.get(MAX_VERSION);
@@ -2260,6 +2284,13 @@ mod tests {
     assert_eq!(ledger_state.status.txns_in_block_hash,
                BlockEffect::new().compute_txns_in_block_hash());
     assert_eq!(ledger_state.status.block_commit_count, count_original + 1);
+    // Check state commitment history
+    assert_eq!(ledger_state.get_state_commitment_at_block_height(v1)
+                           .unwrap(),
+               commitment1);
+    assert_eq!(ledger_state.get_state_commitment_at_block_height(v2)
+                           .unwrap(),
+               commitment2);
   }
 
   #[test]

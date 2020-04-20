@@ -1,6 +1,6 @@
 #![deny(warnings)]
 use cryptohash::sha256::Digest as BitDigest;
-use ledger::store::{ArchiveAccess, LedgerState};
+use ledger::store::{LedgerAccess, LedgerState};
 use std::path::Path;
 
 fn main() {
