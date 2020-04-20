@@ -26,6 +26,7 @@ use std::io::{BufRead, BufReader, BufWriter, Write};
 use std::path::Path;
 use std::u64;
 use zei::xfr::sig::{XfrKeyPair, XfrPublicKey, XfrSignature};
+use zei::xfr::structs::XfrAssetType;
 
 use super::effects::*;
 
@@ -571,6 +572,29 @@ impl LedgerStatus {
           return Err(PlatformError::InputsError(error_location!()));
         }
       } else if traceability {
+        return Err(PlatformError::InputsError(error_location!()));
+      }
+    }
+
+    // Assets with cosignature requirements must have enough signatures
+    for ((op_idx, input_idx), key_set) in txn.cosig_keys.iter() {
+      let op = &txn.txn.operations[*op_idx];
+      if let Operation::TransferAsset(xfr) = op {
+        if let XfrAssetType::NonConfidential(val) = xfr.body.transfer.inputs[*input_idx].asset_type
+        {
+          let code = AssetTypeCode { val };
+          let signature_rules = &self.asset_types
+                                     .get(&code)
+                                     .or_else(|| txn.new_asset_codes.get(&code))
+                                     .ok_or_else(|| PlatformError::InputsError(error_location!()))?
+                                     .properties
+                                     .asset_rules
+                                     .transfer_multisig_rules;
+          if let Some(rules) = signature_rules {
+            rules.check_signature_set(key_set)?;
+          }
+        }
+      } else {
         return Err(PlatformError::InputsError(error_location!()));
       }
     }
@@ -2709,7 +2733,7 @@ mod tests {
     let tx = create_definition_transaction(&code,
                                            issuer.get_pk_ref(),
                                            issuer.get_sk_ref(),
-                                           *AssetRules::default().set_transferable(false),
+                                           AssetRules::default().set_transferable(false).clone(),
                                            Some(Memo("test".to_string()))).unwrap();
     apply_transaction(&mut ledger, tx);
     let (tx, _) = create_issue_and_transfer_txn(&mut ledger,
@@ -2784,7 +2808,7 @@ mod tests {
     let tx = create_definition_transaction(&code,
                                            issuer.get_pk_ref(),
                                            issuer.get_sk_ref(),
-                                           *AssetRules::default().set_max_units(Some(100)),
+                                           AssetRules::default().set_max_units(Some(100)).clone(),
                                            Some(Memo("test".to_string()))).unwrap();
     apply_transaction(&mut ledger, tx);
     let tx = create_issuance_txn(&mut ledger,
@@ -2835,6 +2859,133 @@ mod tests {
       let res = ledger.apply_transaction(&mut block, effect);
       assert!(res.is_err());
     }
+  }
+
+  // Co_signers is a array of (signs, weight) pairs representing cosigners. If signs is true, that cosigner signs the
+  // transaction.
+  fn cosignature_transfer_succeeds(co_signers: &[(bool, u64)], threshold: u64) -> bool {
+    let mut ledger = LedgerState::test_ledger();
+    let params = PublicParams::new();
+
+    let code = AssetTypeCode { val: [1; 16] };
+    let mut prng = ChaChaRng::from_entropy();
+    let keys: Vec<XfrKeyPair> = (0..co_signers.len()).map(|_| XfrKeyPair::generate(&mut prng))
+                                                     .collect();
+    let alice = XfrKeyPair::generate(&mut prng); // Asset owner
+    let bob = XfrKeyPair::generate(&mut prng); // Asset recipient
+
+    let sig_rules =
+      SignatureRules { threshold,
+                       weights: co_signers.iter()
+                                          .zip(keys.iter())
+                                          .map(|((_, weight), kp)| (*kp.get_pk_ref(), *weight))
+                                          .collect() };
+
+    let tx =
+      create_definition_transaction(&code,
+                                    alice.get_pk_ref(),
+                                    alice.get_sk_ref(),
+                                    AssetRules::default().set_transfer_multisig_rules(Some(sig_rules))
+                                                         .clone(),
+                                    None).unwrap();
+
+    let effect = TxnEffect::compute_effect(&mut ledger.get_prng(), tx).unwrap();
+    {
+      let mut block = ledger.start_block().unwrap();
+      ledger.apply_transaction(&mut block, effect).unwrap();
+      ledger.finish_block(block).unwrap();
+    }
+
+    // Issuance with two outputs
+    let mut tx = Transaction::default();
+
+    let art = AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType;
+    let template = AssetRecordTemplate::with_no_asset_tracking(100, code.val, art, alice.get_pk());
+    let (ba, _, _) = build_blind_asset_record(ledger.get_prng(), &params.pc_gens, &template, None);
+
+    let asset_issuance_body = IssueAssetBody::new(&code, 0, &[TxOutput(ba)], None).unwrap();
+    let asset_issuance_operation = IssueAsset::new(asset_issuance_body,
+                                                   &IssuerPublicKey { key: alice.get_pk_ref()
+                                                                                .clone() },
+                                                   alice.get_sk_ref()).unwrap();
+
+    let issue_op = Operation::IssueAsset(asset_issuance_operation);
+
+    tx.operations.push(issue_op);
+
+    // Commit issuance to block
+    let effect = TxnEffect::compute_effect(ledger.get_prng(), tx).unwrap();
+
+    let mut block = ledger.start_block().unwrap();
+    let temp_sid = ledger.apply_transaction(&mut block, effect).unwrap();
+
+    let (_txn_sid, txos) = ledger.finish_block(block)
+                                 .unwrap()
+                                 .remove(&temp_sid)
+                                 .unwrap();
+    let txo_sid = txos[0];
+
+    // Construct transfer operation
+    let mut block = ledger.start_block().unwrap();
+    let input_bar = ((ledger.get_utxo(txo_sid).unwrap().0).0).clone();
+    let input_oar = open_blind_asset_record(&input_bar, &None, &alice.get_sk_ref()).unwrap();
+
+    let output_template =
+      AssetRecordTemplate::with_no_asset_tracking(100, code.val, art, bob.get_pk());
+    let output_ar =
+      AssetRecord::from_template_no_identity_tracking(ledger.get_prng(), &output_template).unwrap();
+
+    let mut tx = Transaction::default();
+    let mut transfer = TransferAsset::new(TransferAssetBody::new(ledger.get_prng(),
+                                                                 vec![TxoRef::Absolute(txo_sid)],
+                                                                 &[input_oar],
+                                                                 &[output_ar]).unwrap(),
+                                          TransferType::Standard).unwrap();
+
+    transfer.sign(&alice);
+    for (i, (signs, _)) in co_signers.iter().enumerate() {
+      if *signs {
+        transfer.add_cosignature(&keys[i], 0);
+      }
+    }
+    tx.operations.push(Operation::TransferAsset(transfer));
+    let effect = TxnEffect::compute_effect(ledger.get_prng(), tx).unwrap();
+    ledger.apply_transaction(&mut block, effect).is_ok()
+  }
+
+  #[test]
+  pub fn test_cosignature_restrictions() {
+    //TODO (noah) use prop based testing here?
+    // Simple
+    assert!(!cosignature_transfer_succeeds(&[(false, 1), (false, 1)], 1));
+    assert!(cosignature_transfer_succeeds(&[(false, 1), (true, 1)], 1));
+    assert!(cosignature_transfer_succeeds(&[(true, 1)], 1));
+    assert!(cosignature_transfer_succeeds(&[], 0));
+
+    // More complex
+    assert!(!cosignature_transfer_succeeds(&[(false, 1),
+                                             (true, 1),
+                                             (false, 5),
+                                             (true, 10),
+                                             (false, 18)],
+                                           16));
+    assert!(cosignature_transfer_succeeds(&[(false, 1),
+                                            (true, 1),
+                                            (true, 5),
+                                            (true, 10),
+                                            (false, 18)],
+                                          16));
+    // Needlessly complex
+    assert!(cosignature_transfer_succeeds(&[(false, 18888888),
+                                            (true, 1),
+                                            (true, 5),
+                                            (false, 12320),
+                                            (true, 13220),
+                                            (true, 100000),
+                                            (true, 12320),
+                                            (true, 134440),
+                                            (false, 18)],
+                                          232323));
   }
 
   #[test]
