@@ -590,10 +590,14 @@ impl InterpretAccounts<PlatformError> for LedgerAccounts {
         let src_outputs = src_outputs;
         let dst_outputs = dst_outputs;
         let all_outputs = all_outputs;
-        let mut transfer_sigs = Vec::new();
-
         assert!(!src_records.is_empty());
         dbg!(unit_code.val);
+        for (ix, rec) in src_records.iter().enumerate() {
+          dbg!(ix,
+               rec.get_asset_type(),
+               rec.get_amount(),
+               rec.get_pub_key());
+        }
 
         let mut sig_keys: Vec<XfrKeyPair> = Vec::new();
 
@@ -607,19 +611,14 @@ impl InterpretAccounts<PlatformError> for LedgerAccounts {
                                  src_records.as_slice(),
                                  all_outputs.as_slice()).unwrap();
 
-        for (ix, rec) in src_records.iter().enumerate() {
-          transfer_sigs.push(transfer_body.compute_body_signature(&src_keypair, ix));
-
-          dbg!(ix,
-               rec.get_asset_type(),
-               rec.get_amount(),
-               rec.get_pub_key());
-        }
-
         let mut owners_memos = transfer_body.transfer.owners_memos.clone();
         dbg!(&transfer_body);
+        let transfer_sig =
+          SignedAddress { address: XfrAddress { key: *src_pub },
+                          signature: compute_signature(src_priv, src_pub, &transfer_body) };
+
         let transfer = TransferAsset { body: transfer_body,
-                                       body_signatures: transfer_sigs,
+                                       body_signatures: vec![transfer_sig],
                                        transfer_type: TransferType::Standard };
         let txn = Transaction { operations: vec![Operation::TransferAsset(transfer)],
                                 credentials: vec![],
@@ -882,9 +881,14 @@ impl InterpretAccounts<PlatformError> for OneBigTxnAccounts {
         let src_outputs = src_outputs;
         let dst_outputs = dst_outputs;
         let all_outputs = all_outputs;
-        let mut transfer_sigs = Vec::new();
         assert!(!src_records.is_empty());
         dbg!(unit_code.val);
+        for (ix, rec) in src_records.iter().enumerate() {
+          dbg!(ix,
+               rec.get_asset_type(),
+               rec.get_amount(),
+               rec.get_pub_key());
+        }
 
         let mut sig_keys: Vec<XfrKeyPair> = Vec::new();
 
@@ -899,20 +903,14 @@ impl InterpretAccounts<PlatformError> for OneBigTxnAccounts {
                                                          .collect(),
                                                    src_records.as_slice(),
                                                    all_outputs.as_slice()).unwrap();
-
-        for (ix, rec) in src_records.iter().enumerate() {
-          transfer_sigs.push(transfer_body.compute_body_signature(&src_keypair, ix));
-          dbg!(ix,
-               rec.get_asset_type(),
-               rec.get_amount(),
-               rec.get_pub_key());
-        }
-
         let owners_memos = transfer_body.transfer.owners_memos.clone();
         dbg!(&transfer_body);
+        let transfer_sig =
+          SignedAddress { address: XfrAddress { key: *src_pub },
+                          signature: compute_signature(src_priv, src_pub, &transfer_body) };
 
         let transfer = TransferAsset { body: transfer_body,
-                                       body_signatures: transfer_sigs,
+                                       body_signatures: vec![transfer_sig],
                                        transfer_type: TransferType::Standard };
 
         self.txn.operations.push(Operation::TransferAsset(transfer));
@@ -1281,9 +1279,14 @@ impl InterpretAccounts<PlatformError> for LedgerStandaloneAccounts {
         let src_outputs = src_outputs;
         let dst_outputs = dst_outputs;
         let all_outputs = all_outputs;
-        let mut transfer_sigs = Vec::new();
         assert!(!src_records.is_empty());
         dbg!(unit_code.val);
+        for (ix, rec) in src_records.iter().enumerate() {
+          dbg!(ix,
+               rec.get_asset_type(),
+               rec.get_amount(),
+               rec.get_pub_key());
+        }
 
         let mut sig_keys: Vec<XfrKeyPair> = Vec::new();
 
@@ -1297,18 +1300,14 @@ impl InterpretAccounts<PlatformError> for LedgerStandaloneAccounts {
                                  src_records.as_slice(),
                                  all_outputs.as_slice()).unwrap();
 
-        for (ix, rec) in src_records.iter().enumerate() {
-          transfer_sigs.push(transfer_body.compute_body_signature(&src_keypair, ix));
-          dbg!(ix,
-               rec.get_asset_type(),
-               rec.get_amount(),
-               rec.get_pub_key());
-        }
-
         let mut owners_memos = transfer_body.transfer.owners_memos.clone();
         dbg!(&transfer_body);
+        let transfer_sig =
+          SignedAddress { address: XfrAddress { key: *src_pub },
+                          signature: compute_signature(src_priv, src_pub, &transfer_body) };
+
         let transfer = TransferAsset { body: transfer_body,
-                                       body_signatures: transfer_sigs,
+                                       body_signatures: vec![transfer_sig],
                                        transfer_type: TransferType::Standard };
         let txn = Transaction { operations: vec![Operation::TransferAsset(transfer)],
                                 credentials: vec![],
