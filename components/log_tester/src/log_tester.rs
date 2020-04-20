@@ -3,18 +3,12 @@ use cryptohash::sha256::Digest as BitDigest;
 use ledger::store::{ArchiveAccess, LedgerState};
 use std::path::Path;
 
-fn main() {
-  let args = std::env::args().collect::<Vec<_>>();
-  assert!(args.len() == 4);
-
+fn log_test(logfile: &Path, outfile: Option<&str>, expected_file: Option<&str>) {
   let tmp_dir = findora::fresh_tmp_dir();
 
-  let logfile = Path::new(&args[1]);
   let mut target_file = tmp_dir.clone();
   target_file.push("txn_log");
   std::fs::copy(logfile, target_file.into_boxed_path()).unwrap();
-
-  env_logger::init();
 
   // from `load_or_init`
   let block_merkle = tmp_dir.join("block_merkle");
@@ -40,19 +34,47 @@ fn main() {
                                         None).unwrap();
     let comm = st.get_state_commitment();
 
-    if &args[2] != "-" {
-      let comm_output = std::fs::File::create(&args[2]).unwrap();
+    if let Some(outfile) = outfile {
+      let comm_output = std::fs::File::create(&outfile).unwrap();
       bincode::serialize_into(&comm_output, &comm).unwrap();
       comm_output.sync_all().unwrap();
     }
 
     println!("{:?}", comm);
 
-    if &args[3] != "-" {
-      let comm_expected = bincode::deserialize_from::<_,(BitDigest,u64)>(std::fs::File::open(&args[3]).unwrap()).unwrap();
+    if let Some(expected_file) = expected_file {
+      let comm_expected = bincode::deserialize_from::<_,(BitDigest,u64)>(std::fs::File::open(&expected_file).unwrap()).unwrap();
       assert!(comm == comm_expected);
     }
   }
 
   std::fs::remove_dir_all(tmp_dir).unwrap();
+}
+
+#[test]
+fn test_example_log() {
+  log_test(Path::new("example_log"), None, Some("expected"));
+}
+
+fn main() {
+  env_logger::init();
+
+  let args = std::env::args().collect::<Vec<_>>();
+  assert!(args.len() == 4);
+
+  let logfile = Path::new(&args[1]);
+
+  let outfile = if &args[2] != "-" {
+    Some(args[2].as_str())
+  } else {
+    None
+  };
+
+  let expected_file = if &args[3] != "-" {
+    Some(args[3].as_str())
+  } else {
+    None
+  };
+
+  log_test(logfile, outfile, expected_file);
 }
