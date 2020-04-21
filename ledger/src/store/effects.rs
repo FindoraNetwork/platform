@@ -39,6 +39,10 @@ pub struct TxnEffect {
   pub confidential_issuance_types: HashSet<AssetTypeCode>,
   // Which asset tracing policy is being used to issue each asset type
   pub issuance_tracing_policies: HashMap<AssetTypeCode, Option<AssetTracingPolicy>>,
+  // Mapping of (op index, xfr input idx) tuples to set of valid signature keys
+  // i.e. (2, 1) -> { AlicePk, BobPk } means that Alice and Bob both have valid signatures on the 2nd input of the 1st
+  // operation
+  pub cosig_keys: HashMap<(usize, usize), HashSet<Vec<u8>>>,
   // Debt swap information that must be externally validated
   pub debt_effects: HashMap<AssetTypeCode, DebtSwapEffect>,
 
@@ -56,10 +60,12 @@ impl TxnEffect {
                                                 txn: Transaction)
                                                 -> Result<TxnEffect, PlatformError> {
     let mut txo_count: usize = 0;
+    let mut op_idx: usize = 0;
     let mut txos: Vec<Option<TxOutput>> = Vec::new();
     let mut internally_spent_txos = Vec::new();
     let mut input_txos: HashMap<TxoSID, BlindAssetRecord> = HashMap::new();
     let mut new_asset_codes: HashMap<AssetTypeCode, AssetType> = HashMap::new();
+    let mut cosig_keys = HashMap::new();
     let mut new_issuance_nums: HashMap<AssetTypeCode, Vec<u64>> = HashMap::new();
     let mut issuance_keys: HashMap<AssetTypeCode, IssuerPublicKey> = HashMap::new();
     let mut issuance_amounts = HashMap::new();
@@ -249,18 +255,24 @@ impl TxnEffect {
               debt_effects.insert(debt_type, debt_swap_effect);
             }
             TransferType::Standard => {
+              let mut input_keys = HashSet::new();
               // (1a) all body signatures are valid
-              let mut sig_keys = HashSet::new();
               for sig in &trn.body_signatures {
-                if !sig.verify(&serde_json::to_vec(&trn.body).unwrap()) {
+                if !trn.body.verify_body_signature(sig) {
                   return Err(PlatformError::InputsError(error_location!()));
                 }
-                sig_keys.insert(sig.address.key.zei_to_bytes());
+                if let Some(input_idx) = sig.input_idx {
+                  let sig_keys = cosig_keys.entry((op_idx, input_idx))
+                                           .or_insert_with(HashSet::new);
+                  (*sig_keys).insert(sig.address.key.zei_to_bytes());
+                } else {
+                  input_keys.insert(sig.address.key.zei_to_bytes());
+                }
               }
 
               // (1b) all input record owners (for non-custom-policy
               //      assets) have signed
-              for record in &trn.body.transfer.inputs {
+              for (input_idx, record) in trn.body.transfer.inputs.iter().enumerate() {
                 // skip signature checking for custom-policy assets
                 if let Some(inp_code) = record.asset_type.get_asset_type() {
                   if custom_policy_asset_types.get(&AssetTypeCode { val: inp_code })
@@ -269,9 +281,11 @@ impl TxnEffect {
                     continue;
                   }
                 }
-                if !sig_keys.contains(&record.public_key.zei_to_bytes()) {
+                if !input_keys.contains(&record.public_key.zei_to_bytes()) {
                   return Err(PlatformError::InputsError(error_location!()));
                 }
+                cosig_keys.entry((op_idx, input_idx))
+                          .or_insert_with(HashSet::new);
               }
             }
           }
@@ -359,11 +373,13 @@ impl TxnEffect {
                              serde_json::to_string(commitment)?);
         }
       } // end -- match op {
+      op_idx += 1;
     } // end -- for op in txn.operations.iter() {
 
     Ok(TxnEffect { txn,
                    txos,
                    input_txos,
+                   cosig_keys,
                    internally_spent_txos,
                    new_asset_codes,
                    new_issuance_nums,

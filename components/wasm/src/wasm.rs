@@ -430,7 +430,7 @@ impl TransferOperationBuilder {
     Ok(self)
   }
 
-  /// Wraps around TransferOperationBuilder to add a signature to the transaction.
+  /// Wraps around TransferOperationBuilder to add a signature to the operation.
   ///
   /// All input owners must sign.
   ///

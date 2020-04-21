@@ -1744,7 +1744,7 @@ fn fulfill_loan(loan_id: u64,
                                  borrower_key_pair,
                                  debt_code,
                                  &memo_str,
-                                 *AssetRules::default().set_traceable(true),
+                                 AssetRules::default().set_traceable(true).clone(),
                                  txn_file)?;
   // Store data before submitting the transaction to avoid data overwriting
   let data = load_data()?;
@@ -2749,7 +2749,7 @@ fn process_asset_issuer_cmd(asset_issuer_matches: &clap::ArgMatches,
                          &issuer_key_pair,
                          asset_token,
                          &memo,
-                         *AssetRules::default().set_traceable(traceable),
+                         AssetRules::default().set_traceable(traceable).clone(),
                          txn_file)
       {
         Ok(_) => Ok(()),

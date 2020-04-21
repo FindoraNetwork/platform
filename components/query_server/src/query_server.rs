@@ -90,10 +90,10 @@ impl<RNG, LU> QueryServer<RNG, LU>
       },
     };
 
-    let mut finalized_blocks = vec![];
-    {
-      let mut ledger = self.committed_state.write().unwrap();
-      for (bid, block) in new_blocks {
+    for (bid, block) in new_blocks {
+      // First, we add block to local ledger state
+      let finalized_block = {
+        let mut ledger = self.committed_state.write().unwrap();
         info!("Received block {}", bid);
         let mut block_builder = ledger.start_block().unwrap();
         for txn in block {
@@ -101,12 +101,10 @@ impl<RNG, LU> QueryServer<RNG, LU>
           ledger.apply_transaction(&mut block_builder, eff).unwrap();
         }
 
-        finalized_blocks.push(ledger.finish_block(block_builder).unwrap());
-      }
-    }
-
-    for block in &finalized_blocks {
-      for (_, (txn_sid, txo_sids)) in block.iter() {
+        ledger.finish_block(block_builder).unwrap()
+      };
+      // Next, update ownership status
+      for (_, (txn_sid, txo_sids)) in finalized_block.iter() {
         // get the transaction and ownership addresses associated with each transaction
         let (txn, addresses) = {
           let ledger = self.committed_state.read().unwrap();

@@ -613,9 +613,11 @@ impl InterpretAccounts<PlatformError> for LedgerAccounts {
 
         let mut owners_memos = transfer_body.transfer.owners_memos.clone();
         dbg!(&transfer_body);
-        let transfer_sig =
-          SignedAddress { address: XfrAddress { key: *src_pub },
-                          signature: compute_signature(src_priv, src_pub, &transfer_body) };
+        let transfer_sig = TransferBodySignature { address: XfrAddress { key: *src_pub },
+                                                   signature: compute_signature(src_priv,
+                                                                                src_pub,
+                                                                                &transfer_body),
+                                                   input_idx: None };
 
         let transfer = TransferAsset { body: transfer_body,
                                        body_signatures: vec![transfer_sig],
@@ -905,9 +907,11 @@ impl InterpretAccounts<PlatformError> for OneBigTxnAccounts {
                                                    all_outputs.as_slice()).unwrap();
         let owners_memos = transfer_body.transfer.owners_memos.clone();
         dbg!(&transfer_body);
-        let transfer_sig =
-          SignedAddress { address: XfrAddress { key: *src_pub },
-                          signature: compute_signature(src_priv, src_pub, &transfer_body) };
+        let transfer_sig = TransferBodySignature { address: XfrAddress { key: *src_pub },
+                                                   signature: compute_signature(src_priv,
+                                                                                src_pub,
+                                                                                &transfer_body),
+                                                   input_idx: None };
 
         let transfer = TransferAsset { body: transfer_body,
                                        body_signatures: vec![transfer_sig],
@@ -1302,9 +1306,11 @@ impl InterpretAccounts<PlatformError> for LedgerStandaloneAccounts {
 
         let mut owners_memos = transfer_body.transfer.owners_memos.clone();
         dbg!(&transfer_body);
-        let transfer_sig =
-          SignedAddress { address: XfrAddress { key: *src_pub },
-                          signature: compute_signature(src_priv, src_pub, &transfer_body) };
+        let transfer_sig = TransferBodySignature { address: XfrAddress { key: *src_pub },
+                                                   signature: compute_signature(src_priv,
+                                                                                src_pub,
+                                                                                &transfer_body),
+                                                   input_idx: None };
 
         let transfer = TransferAsset { body: transfer_body,
                                        body_signatures: vec![transfer_sig],
