@@ -13,6 +13,7 @@ use rand_core::SeedableRng;
 use serde::{Deserialize, Serialize};
 use std::fs;
 use zei::crypto::solvency::{prove_solvency, verify_solvency};
+use zei::errors::ZeiError;
 use zei::xfr::structs::asset_type_to_scalar;
 
 /// Path to the data file.
@@ -295,8 +296,18 @@ fn process_inputs(inputs: clap::ArgMatches) -> Result<(), PlatformError> {
     ("prove_and_verify_solvency", _) => {
       data.solvency_audit
           .prove_solvency_and_store(&mut data.asset_and_liability_account)?;
-      data.solvency_audit
-          .verify_solvency(&mut data.asset_and_liability_account)?;
+      match data.solvency_audit
+                .verify_solvency(&data.asset_and_liability_account)
+      {
+        Ok(_) => {
+          println!("Solvency proof and verification succeeded.");
+        }
+        _ => {
+          println!("Solvency proof and verification failed.");
+          return Err(PlatformError::ZeiError(error_location!(),
+                                             ZeiError::SolvencyVerificationError));
+        }
+      }
       store_data_to_file(data)
     }
     _ => {
@@ -346,7 +357,6 @@ mod tests {
   use super::*;
   use std::io::{self, Write};
   use std::process::{Command, Output};
-  use zei::errors::ZeiError;
 
   const COMMAND: &str = "../../target/debug/solvency";
 
