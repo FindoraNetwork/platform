@@ -49,10 +49,10 @@ pub struct AssetAndLiabilityAccount {
   /// * Assets or liabilities have been updated
   pub hidden_liabilities_commitments: Option<Vec<LiabilityCommitment>>,
 
-  /// Solvency proof, null iff any of the following:
+  /// Serialized solvency proof, null iff any of the following:
   /// * Solvency hasn't been proved
   /// * Assets or liabilities have been updated
-  pub proof: Option<R1CSProof>,
+  pub proof: Option<Vec<u8>>,
 }
 
 impl AssetAndLiabilityAccount {
@@ -72,7 +72,7 @@ impl AssetAndLiabilityAccount {
                                    proof: R1CSProof) {
     self.hidden_assets_commitments = Some(hidden_assets_commitments);
     self.hidden_liabilities_commitments = Some(hidden_liabilities_commitments);
-    self.proof = Some(proof);
+    self.proof = Some(proof.to_bytes());
   }
 
   /// Adds a public asset and remove the solvency proof.
@@ -108,6 +108,12 @@ pub struct SolvencyAudit {
 }
 
 impl SolvencyAudit {
+  /// Sets conversion rate for the asset.
+  pub fn set_rate(&mut self, code: AssetTypeCode, rate: u64) {
+    self.conversion_rates
+        .push((asset_type_to_scalar(&code.val), Scalar::from(rate)));
+  }
+
   /// Geneartes a new asset and sets its conversion rate.
   /// Returns the generated asset code.
   pub fn set_asset_and_rate(&mut self, rate: u64) -> Scalar {
@@ -185,7 +191,7 @@ impl SolvencyAudit {
         return Err(PlatformError::InputsError(error_location!()));
       };
     let proof = if let Some(p) = &account.proof {
-      p
+      R1CSProof::from_bytes(p).or(Err(PlatformError::DeserializationError))?
     } else {
       println!("Prove the solvency first.");
       return Err(PlatformError::InputsError(error_location!()));
@@ -199,7 +205,7 @@ impl SolvencyAudit {
                     hidden_liabilities_commitments,
                     &account.public_liabilities,
                     &rates,
-                    proof).or_else(|e| Err(PlatformError::ZeiError(error_location!(), e)))
+                    &proof).or_else(|e| Err(PlatformError::ZeiError(error_location!(), e)))
   }
 }
 
@@ -616,7 +622,7 @@ mod tests {
     io::stdout().write_all(&output.stderr).unwrap();
     assert!(output.status.success());
 
-    // Add assets and liabilities
+    // Add assets and liabilities such that total asset amount > total liabiliity amount
     let output =
       add_asset_or_liability_cmd("hidden_asset", "0", "10").expect("Failed to add public asset.");
     io::stdout().write_all(&output.stdout).unwrap();
@@ -641,7 +647,38 @@ mod tests {
     io::stdout().write_all(&output.stderr).unwrap();
     assert!(output.status.success());
 
-    // Prove solvency
+    // Prove and verify solvency
+    let output = Command::new(COMMAND).arg("prove_and_verify_solvency")
+                                      .output()
+                                      .expect("Failed to prove and verify solvency.");
+    io::stdout().write_all(&output.stdout).unwrap();
+    io::stdout().write_all(&output.stderr).unwrap();
+    assert!(output.status.success());
+
+    // Add additional liabilities to make total asset amount < total liabiliity amount
+    let output = add_asset_or_liability_cmd("hidden_liability","1","160")
+    .expect("Failed to add hidden liability.");
+    io::stdout().write_all(&output.stdout).unwrap();
+    io::stdout().write_all(&output.stderr).unwrap();
+    assert!(output.status.success());
+
+    // Prove and verify solvency
+    // Should fail since total asset amount < total liabiliity amount
+    let output = Command::new(COMMAND).arg("prove_and_verify_solvency")
+                                      .output()
+                                      .expect("Failed to prove and verify solvency.");
+    io::stdout().write_all(&output.stdout).unwrap();
+    io::stdout().write_all(&output.stderr).unwrap();
+    assert!(!output.status.success());
+
+    // Add additional assets to make total asset amount > total liabiliity amount
+    let output =
+      add_asset_or_liability_cmd("public_asset", "0", "30").expect("Failed to add public asset.");
+    io::stdout().write_all(&output.stdout).unwrap();
+    io::stdout().write_all(&output.stderr).unwrap();
+    assert!(output.status.success());
+
+    // Prove and verify solvency
     let output = Command::new(COMMAND).arg("prove_and_verify_solvency")
                                       .output()
                                       .expect("Failed to prove and verify solvency.");
