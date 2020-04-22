@@ -369,7 +369,7 @@ impl TxnEffect {
           // 2)
           credential_verify_commitment(addr, commitment, pok, pk.as_bytes())
               .map_err(|e| PlatformError::ZeiError(error_location!(),e))?;
-          air_updates.insert(serde_json::to_string(&air_assign.pubkey)?,
+          air_updates.insert(serde_json::to_string(&pk)?,
                              serde_json::to_string(commitment)?);
         }
       } // end -- match op {
