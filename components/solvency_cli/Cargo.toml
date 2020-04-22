@@ -1,0 +1,17 @@
+[package]
+name = "solvency_cli"
+version = "0.1.0"
+authors = ["Engineering <engineering@findora.org>"]
+edition = "2018"
+
+[[bin]]
+name = "solvency_cli"
+path = "src/solvency_cli.rs"
+
+[dependencies]
+clap = "2.33.0"
+ledger = { path = "../../ledger" }
+serde = "1.0"
+serde_json = "1.0"
+solvency = { path = "../solvency" }
+zei = { git = "ssh://git@github.com/findoraorg/zei", tag = "v0.0.2-4" }
