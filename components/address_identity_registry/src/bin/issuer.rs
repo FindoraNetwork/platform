@@ -156,7 +156,7 @@ mod handlers {
 mod models {
   use crate::shared::PubCreds;
   use credentials::{
-    credential_issuer_key_gen, CredIssuerPublicKey, CredIssuerSecretKey, CredUserPublicKey
+    credential_issuer_key_gen, CredIssuerPublicKey, CredIssuerSecretKey, CredUserPublicKey,
   };
   use rand_chacha::ChaChaRng;
   use rand_core::SeedableRng;
