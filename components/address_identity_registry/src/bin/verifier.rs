@@ -1,11 +1,9 @@
-#![allow(warnings)]
+#![deny(warnings)]
 
 mod shared;
 
-use air::{check_merkle_proof, AIRResult, AIR};
-use credentials::{credential_user_key_gen, credential_verify, CredCommitment};
-use rand_chacha::ChaChaRng;
-use rand_core::SeedableRng;
+use air::{check_merkle_proof, AIRResult};
+use credentials::{credential_verify, CredCommitment};
 use shared::{AIRAddressAndPoK, PubCreds, RevealFields};
 use utils::{protocol_host, urlencode, QUERY_PORT};
 
@@ -23,9 +21,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                       (String::from("pob"), "666".as_bytes())];
   let reveal_fields = RevealFields { fields: attr_map.clone()
                                                      .into_iter()
-                                                     .map(|(f, a)| f.clone())
+                                                     .map(|(f, _)| f.clone())
                                                      .collect() };
-  let req_string = format!("http://127.0.0.1:3031/reveal/{}/", &credname);
   let reveal_fields_str = urlencode(&serde_json::to_string(&reveal_fields)?);
   let req_string = format!("http://127.0.0.1:3031/reveal/{}/", &credname);
 
