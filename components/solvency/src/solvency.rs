@@ -364,7 +364,10 @@ mod tests {
   use std::io::{self, Write};
   use std::process::{Command, Output};
 
+  #[cfg(debug_assertions)]
   const COMMAND: &str = "../../target/debug/solvency";
+  #[cfg(not(debug_assertions))]
+  const COMMAND: &str = "../../target/release/solvency";
 
   // Add three public assets
   fn add_public_assets(account: &mut AssetAndLiabilityAccount, codes: (Scalar, Scalar, Scalar)) {
