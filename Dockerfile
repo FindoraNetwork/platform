@@ -11,7 +11,8 @@ RUN cargo audit
 RUN cargo build --release
 RUN cargo test --release --no-fail-fast --workspace
 RUN cargo fmt -- --check
-RUN cargo clippy -- -D warnings
+#Disabled because it triggers a compile and also tests dependencies
+#RUN cargo clippy -- -D warnings
 WORKDIR /app/components/wasm
 RUN wasm-pack build --target nodejs
 RUN bash -c 'time /app/target/release/log_tester /app/components/log_tester/example_log - /app/components/log_tester/expected'
