@@ -62,8 +62,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                 attributes: map,
                                 issuer_pub_key: resp1.issuer_pk.clone() };
 
-  if let Ok((commitment, proof, key)) =
-    credential_commit(&mut prng, &user_sk, &credential, user_key_pair.get_pk_ref().as_bytes())
+  if let Ok((commitment, proof, key)) = credential_commit(&mut prng,
+                                                          &user_sk,
+                                                          &credential,
+                                                          user_key_pair.get_pk_ref().as_bytes())
   {
     // Now we store the commitment to this credential at the AIR
     // Build the transaction
@@ -78,13 +80,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Submit to ledger
     let txn = txn_builder.transaction();
     let (protocol, host) = protocol_host();
-    println!("User: submitting air_assign txn to ledger at {}://{}:{}/{}",
-             protocol, host, SUBMIT_PORT, "submit_transaction");
-    let res = client.post(&format!("{}://{}:{}/{}",
-                                   protocol, host, SUBMIT_PORT, "submit_transaction"))
-                        .json(&txn)
-                        .send()
-                        .await?;
+    println!("User: submitting air_assign txn to ledger at {}://{}:{}/submit_transaction",
+             protocol, host, SUBMIT_PORT);
+    let res = client.post(&format!("{}://{}:{}/submit_transaction", protocol, host, SUBMIT_PORT))
+                    .json(&txn)
+                    .send()
+                    .await?;
 
     match res.error_for_status() {
       Ok(_res) => (),
@@ -107,7 +108,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     Ok(())
   } else {
-    Err("Commitment fails")?
+    return Err("Commitment fails".into());
   }
 }
 
@@ -146,8 +147,8 @@ mod handlers {
   use crate::shared::{AIRAddressAndPoK, RevealFields};
   use credentials::credential_open_commitment;
   use std::convert::Infallible;
-  use zei::xfr::sig::XfrKeyPair;
   use zei::serialization::ZeiFromToBytes;
+  use zei::xfr::sig::XfrKeyPair;
 
   /// POST //reveal/:credname/:bitmap
   pub async fn reveal(credname: String,

@@ -17,12 +17,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                                                            .await?;
   println!("Response from issuer is:\n{:?}", &issuer_resp);
 
-  let attr_map = vec![(String::from("sex"), "M".as_bytes()),
-                      (String::from("pob"), "666".as_bytes())];
-  let reveal_fields = RevealFields { fields: attr_map.clone()
-                                                     .into_iter()
-                                                     .map(|(f, _)| f.clone())
-                                                     .collect() };
+  let attr_map = vec![(String::from("sex"), &b"M"[..]),
+                      (String::from("pob"), &b"666"[..])];
+  let reveal_fields =
+    RevealFields { fields: attr_map.clone().into_iter().map(|(f, _)| f).collect() };
   let reveal_fields_str = urlencode(&serde_json::to_string(&reveal_fields)?);
   let req_string = format!("http://127.0.0.1:3031/reveal/{}/", &credname);
 
@@ -72,7 +70,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         Ok(())
       }
     } else {
-      Err(format!("AIR merkle proof failed").into())
+      Err("AIR merkle proof failed".to_string().into())
     }
   } else {
     Err(format!("No AIR entry at {}", &addr_and_pok.addr).into())

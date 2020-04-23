@@ -1,7 +1,8 @@
 import os
 
 from json import dumps, loads
-from locust import HttpLocust, TaskSet, task, constant
+from locust import TaskSet, task, constant
+from locust.contrib.fasthttp import FastHttpLocust
 
 class UserBehavior(TaskSet):
     def on_start(self):
@@ -32,6 +33,6 @@ class UserBehavior(TaskSet):
         if self.curr >= self.count - 1:
             self.curr = 0
 
-class WebsiteUser(HttpLocust):
+class WebsiteUser(FastHttpLocust):
   task_set = UserBehavior
   wait_time = constant(0)

@@ -175,7 +175,9 @@ impl TxnEffect {
           asset_types_involved.insert(code);
 
           // (1), within this transaction
-          let iss_nums = new_issuance_nums.entry(code).or_insert_with(|| vec![]);
+          //let v = vec![];
+          let iss_nums = new_issuance_nums.entry(code)
+                                          .or_insert_with(std::vec::Vec::new);
 
           if let Some(last_num) = iss_nums.last() {
             if seq_num <= *last_num {
