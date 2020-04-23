@@ -19,7 +19,7 @@ rust_dirs       = $(shell find . -name target -prune -o    \
                               | sed -e "s:/Cargo.toml::")
 
 bin_files =                             \
-		./$(pick)/solvency       		\
+		./$(pick)/solvency_cli      	\
         ./$(pick)/txn_cli       		\
         ./$(pick)/abci_validator_node   \
         ./$(pick)/check_merkle          \
@@ -27,6 +27,7 @@ bin_files =                             \
 lib_files =                                    \
         ./$(pick)/libledger.rlib               \
         ./$(pick)/libledger_api_service.rlib   \
+		./$(pick)/libsolvency.rliib       	   \
         ./$(pick)/libtxn_builder.rlib          \
 
 release:  rust
