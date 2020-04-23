@@ -3,6 +3,7 @@ use ledger::data_model::errors::PlatformError;
 use ledger::data_model::{Transaction, TxoSID};
 use std::ffi::OsString;
 use std::time::{Duration, SystemTime};
+use submission_server::{TxnHandle, TxnStatus};
 use subprocess::{Popen, PopenConfig};
 use zei::xfr::structs::BlindAssetRecord;
 const POLL_TIME: u64 = 40000;
@@ -92,6 +93,51 @@ impl LedgerStandalone {
         .unwrap()
         .text()
         .unwrap();
+  }
+
+  // Submits a transaction to the standalone server and fetch the UTXO SIDs
+  pub fn submit_transaction_and_fetch_utxos(&self, tx: &Transaction) -> Vec<TxoSID> {
+    // Submit the transaction
+    let host = "localhost";
+    let port = format!("{}", self.submit_port);
+    let query1 = format!("http://{}:{}/submit_transaction", host, port);
+    let query2 = format!("http://{}:{}/force_end_block", host, port);
+    let text = self.client
+                   .post(&query1)
+                   .json(&tx)
+                   .send()
+                   .unwrap()
+                   .error_for_status()
+                   .unwrap()
+                   .text()
+                   .unwrap();
+    self.client
+        .post(&query2)
+        .send()
+        .unwrap()
+        .error_for_status()
+        .unwrap()
+        .text()
+        .unwrap();
+
+    // Fetch the UTXO SIDs
+    let handle = serde_json::from_str::<TxnHandle>(&text).unwrap_or_else(|e| {
+                                                           panic!("<Invalid JSON> ({}): \"{}\"",
+                                                                  &e, &text)
+                                                         });
+    let query3 = format!("http://{}:{}/txn_status/{}", host, port, &handle.0);
+    match serde_json::from_str::<TxnStatus>(&self.client
+                                                 .get(&query3)
+                                                 .send()
+                                                 .unwrap()
+                                                 .error_for_status()
+                                                 .unwrap()
+                                                 .text()
+                                                 .unwrap()).unwrap()
+    {
+      TxnStatus::Committed((_sid, txos)) => txos,
+      _ => panic!("Failed to fetch UTXO SIDs"),
+    }
   }
 
   // Fetch a blind asset record at a given index. Useful for building transfer operations.
