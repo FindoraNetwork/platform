@@ -80,10 +80,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Submit to ledger
     let txn = txn_builder.transaction();
     let (protocol, host) = protocol_host();
-    println!("User: submitting air_assign txn to ledger at {}://{}:{}/{}",
-             protocol, host, SUBMIT_PORT, "submit_transaction");
-    let res = client.post(&format!("{}://{}:{}/{}",
-                                   protocol, host, SUBMIT_PORT, "submit_transaction"))
+    println!("User: submitting air_assign txn to ledger at {}://{}:{}/submit_transaction",
+             protocol, host, SUBMIT_PORT);
+    let res = client.post(&format!("{}://{}:{}/submit_transaction", protocol, host, SUBMIT_PORT))
                     .json(&txn)
                     .send()
                     .await?;
@@ -109,7 +108,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     Ok(())
   } else {
-    Err("Commitment fails")?
+    return Err("Commitment fails".into());
   }
 }
 

@@ -12,6 +12,7 @@ mod shared;
 /// - `GET /credinfo`: return list of names with number of attributes.
 /// - `GET /issuer_pk/:credname`: return Issuer public key for named credential type.
 /// - `PUT /sign/:uname`: creates a signature for the credname, user_pk, attrs.
+
 #[tokio::main]
 async fn main() {
   if env::var_os("RUST_LOG").is_none() {
