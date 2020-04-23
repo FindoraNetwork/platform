@@ -1,11 +1,9 @@
-#![allow(warnings)]
+#![deny(warnings)]
 
 mod shared;
 
-use air::{check_merkle_proof, AIRResult, AIR};
-use credentials::{credential_user_key_gen, credential_verify, CredCommitment};
-use rand_chacha::ChaChaRng;
-use rand_core::SeedableRng;
+use air::{check_merkle_proof, AIRResult};
+use credentials::{credential_verify, CredCommitment};
 use shared::{AIRAddressAndPoK, PubCreds, RevealFields};
 use utils::{protocol_host, urlencode, QUERY_PORT};
 
@@ -19,13 +17,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                                                            .await?;
   println!("Response from issuer is:\n{:?}", &issuer_resp);
 
-  let attr_map = vec![(String::from("sex"), "M".as_bytes()),
-                      (String::from("pob"), "666".as_bytes())];
-  let reveal_fields = RevealFields { fields: attr_map.clone()
-                                                     .into_iter()
-                                                     .map(|(f, a)| f.clone())
-                                                     .collect() };
-  let req_string = format!("http://127.0.0.1:3031/reveal/{}/", &credname);
+  let attr_map = vec![(String::from("sex"), &b"M"[..]),
+                      (String::from("pob"), &b"666"[..])];
+  let reveal_fields =
+    RevealFields { fields: attr_map.clone().into_iter().map(|(f, _)| f).collect() };
   let reveal_fields_str = urlencode(&serde_json::to_string(&reveal_fields)?);
   let req_string = format!("http://127.0.0.1:3031/reveal/{}/", &credname);
 
@@ -75,7 +70,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         Ok(())
       }
     } else {
-      Err(format!("AIR merkle proof failed").into())
+      Err("AIR merkle proof failed".to_string().into())
     }
   } else {
     Err(format!("No AIR entry at {}", &addr_and_pok.addr).into())

@@ -1,12 +1,6 @@
 #![deny(warnings)]
-#![allow(dead_code)]
-#![allow(unused_imports)]
-#![allow(unused_variables)]
-#[macro_use]
-extern crate lazy_static;
 
 use std::env;
-use std::sync::Mutex;
 use warp::Filter;
 
 mod shared;
@@ -18,6 +12,7 @@ mod shared;
 /// - `GET /credinfo`: return list of names with number of attributes.
 /// - `GET /issuer_pk/:credname`: return Issuer public key for named credential type.
 /// - `PUT /sign/:uname`: creates a signature for the credname, user_pk, attrs.
+
 #[tokio::main]
 async fn main() {
   if env::var_os("RUST_LOG").is_none() {
@@ -39,7 +34,7 @@ async fn main() {
 
 mod filters {
   use super::handlers;
-  use super::models::{CredentialKind, Db, ListOptions};
+  use super::models::{Db, ListOptions};
   use crate::shared::UserCreds;
   use warp::Filter;
 
@@ -95,14 +90,11 @@ mod filters {
 /// with the exact arguments we'd expect from each filter in the chain.
 /// No tuples are needed, it's auto flattened for the functions.
 mod handlers {
-  use super::models::{to_pubcreds, CredentialKind, Db, ListOptions};
+  use super::models::{to_pubcreds, Db, ListOptions};
   use crate::shared::{PubCreds, UserCreds};
   use credentials::credential_sign;
-  use rand_chacha::ChaChaRng;
   use std::convert::Infallible;
   use utils::urldecode;
-  use warp::http::StatusCode;
-  use zei::api::anon_creds::ac_sign;
 
   /// GET /crednames?offset=3&limit=5
   pub async fn get_credinfo(opts: ListOptions, db: Db) -> Result<impl warp::Reply, Infallible> {
@@ -163,10 +155,9 @@ mod handlers {
 }
 
 mod models {
-  use crate::shared::{PubCreds, UserCreds};
+  use crate::shared::PubCreds;
   use credentials::{
     credential_issuer_key_gen, CredIssuerPublicKey, CredIssuerSecretKey, CredUserPublicKey,
-    CredUserSecretKey,
   };
   use rand_chacha::ChaChaRng;
   use rand_core::SeedableRng;

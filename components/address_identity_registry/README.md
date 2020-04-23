@@ -11,9 +11,9 @@ There are four roles implemented in the system:
 The Ledger holds the AIR, amongst other things. It must be able to add an (address, credentials) pair to an
 address and subsequently provide that address as well as a (Merkle) proof of inclusion or non-inclusion.
 
-There reader should be aware that in the discussion below, there are two kinds of signatures, **ACSignature** and 
-**ACRevealSig**. The latter, the result of calling reveal or commit functions, has three fields: sig, a randomized
-**ACSignature**, pok: a proof of knowledge, and rnd, the randomness used to generate it.
+There reader should be aware that in the discussion below, there are two kinds of signatures, **CredSignature** and 
+**CredRevealSig**. The latter, the result of calling reveal or commit functions, has three fields: sig, a randomized
+**CredSignature**, pok: a proof of knowledge, and rnd, the randomness used to generate it.
 
 ## Setup
 1. Credential issuers are initialized with the number of attributes they can handle. For each credential
@@ -29,21 +29,21 @@ There reader should be aware that in the discussion below, there are two kinds o
 3. The user generates its own user key pair using the issuer public key.
 
 ## Credential Generation
-1. The User asks the Issuer to **ac_sign** a set of credentials the user provides and receives a signature back.
+1. The User asks the Issuer to **credential_sign** a set of credentials the user provides and receives a signature back.
    (Txn : User -> Issuer -> User)
-2. The User generates a commitment to the signed attribute values using **ac_commit** and stores both the commitment
+2. The User generates a commitment to the signed attribute values using **credential_commit** and stores both the commitment
    and the *commitment key* used to generate the it, in a User wallet. The User generates a unique address (how?),
    and asks the Ledger to store the commitment in the AIR at that address. (Txn: User -> Ledger)
 
 ## Credential Verification
 1. A Verifier asks the User to selectively reveal some attributes. (Txn: Verifier sends attributes -> User)
-2. The User runs **ac_open_commitment** using the committed signature and *commitment key* stored in his wallet, and the attributes
+2. The User runs **credential_open_commitment** using the committed signature and *commitment key* stored in his wallet, and the attributes
    supplied by the Verifier. The result is a reveal_sig: ACRevealSig. The User sends the proof of knowledge, reveal_sig.pok,
    and the address, back to the verifier (Txn: User sends address, pok -> Verifier)
 3. The Verifier queries the SMT on the Ledger using the address, and retrieves the signature and a Merkle proof
-   of (non)inclusion. The Verifier checks the Merkle Proof, and if it is successful, runs **ac_verify** with the signature,
+   of (non)inclusion. The Verifier checks the Merkle Proof, and if it is successful, runs **credential_verify** with the signature,
    the attributes, and the proof of knowledge.
-   If neither the Merkle proof nor the **ac_verify** fail, the Verifier reports success, otherwise it reports failure.
+   If neither the Merkle proof nor the **credential_verify** fail, the Verifier reports success, otherwise it reports failure.
 
 ## Remaining issues
 1. A given user has more than one set of credentials that need to be on AIR, say {passport, driver's license, bank 

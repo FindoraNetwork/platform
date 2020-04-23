@@ -1,28 +1,20 @@
-#![allow(warnings)]
+#![deny(warnings)]
 
 mod shared;
 
 use credentials::{credential_commit, credential_user_key_gen, CredSignature, Credential};
-use ledger::data_model::errors::PlatformError;
-use linear_map::LinearMap;
 use rand_chacha::ChaChaRng;
 use rand_core::SeedableRng;
 use serde::{Deserialize, Serialize};
 use shared::{PubCreds, UserCreds};
-use submission_server::{TxnHandle, TxnStatus};
-use txn_builder::{BuildsTransactions, TransactionBuilder, TransferOperationBuilder};
-use utils::{protocol_host, urlencode, QUERY_PORT, SUBMIT_PORT};
+use txn_builder::{BuildsTransactions, TransactionBuilder};
+use utils::{protocol_host, urlencode, SUBMIT_PORT};
 use warp::Filter;
-use zei::api::anon_creds::{ac_commit, ac_keygen_user, ACCommitmentKey, ACPoK, ACSignature};
 use zei::serialization::ZeiFromToBytes;
-use zei::xfr::sig::{XfrKeyPair, XfrPublicKey};
+use zei::xfr::sig::XfrKeyPair;
 
 // From txn_cli: need a working key pair String
 const KEY_PAIR_STR: &str = "76b8e0ada0f13d90405d6ae55386bd28bdd219b8a08ded1aa836efcc8b770dc720fdbac9b10b7587bba7b5bc163bce69e796d71e4ed44c10fcb4488689f7a144";
-
-fn air_assign(issuer_id: u64, address: &str, data: &str) -> Result<(), PlatformError> {
-  Ok(())
-}
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct InfallibleFailure {
@@ -65,12 +57,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
   for attr in attrs {
     map.push((attr.0, attr.1.as_bytes().to_vec()));
   }
+  let user_key_pair = XfrKeyPair::zei_from_bytes(&hex::decode(KEY_PAIR_STR)?);
   let credential = Credential { signature: sig.clone(),
                                 attributes: map,
                                 issuer_pub_key: resp1.issuer_pk.clone() };
 
-  if let Ok((commitment, proof, key)) =
-    credential_commit(&mut prng, &user_sk, &credential, b"random message")
+  if let Ok((commitment, proof, key)) = credential_commit(&mut prng,
+                                                          &user_sk,
+                                                          &credential,
+                                                          user_key_pair.get_pk_ref().as_bytes())
   {
     // Now we store the commitment to this credential at the AIR
     // Build the transaction
@@ -85,14 +80,20 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Submit to ledger
     let txn = txn_builder.transaction();
     let (protocol, host) = protocol_host();
-    println!("User: submitting air_assign txn to ledger at {}://{}:{}/{}",
-             protocol, host, SUBMIT_PORT, "submit_transaction");
-    let mut res = client.post(&format!("{}://{}:{}/{}",
-                                       protocol, host, SUBMIT_PORT, "submit_transaction"))
-                        .json(&txn)
-                        .send()
-                        .await?;
+    println!("User: submitting air_assign txn to ledger at {}://{}:{}/submit_transaction",
+             protocol, host, SUBMIT_PORT);
+    let res = client.post(&format!("{}://{}:{}/submit_transaction", protocol, host, SUBMIT_PORT))
+                    .json(&txn)
+                    .send()
+                    .await?;
 
+    match res.error_for_status() {
+      Ok(_res) => (),
+      Err(err) => {
+        println!("User: ledger submission failed, error = {:?}", err);
+        panic!("Bye")
+      }
+    }
     // For the rest of the session, the User process behaves as a server w.r.t. the Verifier
 
     let db = models::make_db(prng, user_sk, user_pk, credential, key);
@@ -107,7 +108,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     Ok(())
   } else {
-    Err("Commitment fails")?
+    return Err("Commitment fails".into());
   }
 }
 
@@ -119,7 +120,7 @@ mod filters {
 
   /// The User filters combined.
   pub fn user(db: Db) -> impl Filter<Extract = impl warp::Reply, Error = warp::Rejection> + Clone {
-    reveal(db.clone()).or(ping(db))
+    reveal(db)
   }
 
   pub fn reveal(db: Db)
@@ -128,12 +129,6 @@ mod filters {
                                   .and(json_body())
                                   .and(with_db(db))
                                   .and_then(handlers::reveal)
-  }
-
-  pub fn ping(db: Db) -> impl Filter<Extract = impl warp::Reply, Error = warp::Rejection> + Clone {
-    warp::path!("ping").and(warp::get())
-                       .and(with_db(db))
-                       .and_then(handlers::ping)
   }
 
   fn with_db(db: Db) -> impl Filter<Extract = (Db,), Error = std::convert::Infallible> + Clone {
@@ -148,13 +143,12 @@ mod filters {
 }
 
 mod handlers {
-  use super::models::{Db, GlobalState};
+  use super::models::Db;
   use crate::shared::{AIRAddressAndPoK, RevealFields};
   use credentials::credential_open_commitment;
-  use rand_chacha::ChaChaRng;
   use std::convert::Infallible;
-  use warp::http::StatusCode;
-  use warp::Filter;
+  use zei::serialization::ZeiFromToBytes;
+  use zei::xfr::sig::XfrKeyPair;
 
   /// POST //reveal/:credname/:bitmap
   pub async fn reveal(credname: String,
@@ -167,8 +161,8 @@ mod handlers {
     let mut global_state = db.lock().await;
     let cred = global_state.cred.clone();
     let user_sk = global_state.user_sk.clone();
-    let user_pk = global_state.user_pk.clone();
     let key = global_state.key.clone();
+    let xfr_user_key_pair = XfrKeyPair::zei_from_bytes(&hex::decode(crate::KEY_PAIR_STR).unwrap());
 
     if let Ok(pok) = credential_open_commitment(&mut global_state.prng,
                                                 &user_sk,
@@ -176,7 +170,7 @@ mod handlers {
                                                 &key,
                                                 reveal_fields.fields.as_slice())
     {
-      let address = serde_json::to_string(&user_pk).unwrap();
+      let address = serde_json::to_string(xfr_user_key_pair.get_pk_ref()).unwrap();
       let result = AIRAddressAndPoK { addr: address, pok };
       println!("User: reveal success with result = {:?}", &result);
 
@@ -187,21 +181,11 @@ mod handlers {
       Ok(warp::reply::json(&result))
     }
   }
-
-  /// GET //ping
-  pub async fn ping(db: Db) -> Result<impl warp::Reply, Infallible> {
-    println!("User.ping: call received");
-    let result = super::InfallibleFailure { msg: String::from("PONG") };
-    Ok(warp::reply::json(&result))
-  }
 }
 
 mod models {
   use credentials::{CredCommitmentKey, CredUserPublicKey, CredUserSecretKey, Credential};
   use rand_chacha::ChaChaRng;
-  use rand_core::SeedableRng;
-  use serde_derive::{Deserialize, Serialize};
-  use std::collections::HashMap;
   use std::sync::Arc;
   use tokio::sync::Mutex;
 
