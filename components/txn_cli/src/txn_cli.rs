@@ -3748,13 +3748,16 @@ mod tests {
     // Issue and transfer asset
     let code = AssetTypeCode::gen_random();
     let amount = 1000;
-    assert!(issue_and_transfer_asset(&issuer_key_pair,
-                                     &recipient_key_pair,
-                                     amount,
-                                     code,
-                                     AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType, None,
-                                     txn_builder_path,
-                                     None).is_ok());
+    let res =
+      issue_and_transfer_asset(&issuer_key_pair,
+                               &recipient_key_pair,
+                               amount,
+                               code,
+                               AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
+                               None,
+                               txn_builder_path,
+                               None);
+    assert!(res.is_ok());
 
     let _ = fs::remove_file(DATA_FILE);
     fs::remove_file(txn_builder_path).unwrap();

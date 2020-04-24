@@ -930,7 +930,7 @@ pub fn wasm_credential_verify(issuer_pub_key: &CredIssuerPublicKey,
 // Asset Tracing
 
 #[wasm_bindgen]
-/// Returns information about traceable assets for a given transfere.
+/// Returns information about traceable assets for a given transfer.
 /// @param {JsValue} xfr_note - JSON of a transfer note from a transfer operation.
 /// @param {AssetTracerKeyPair} - Asset tracer keypair.
 /// @param {JsValue} candidate_assets - List of asset types traced by the tracer keypair.
@@ -946,10 +946,18 @@ pub fn trace_assets(xfr_body: JsValue,
                       AssetTypeCode::new_from_str(&asset_type_str.to_string()).val
                     })
                     .collect();
-  Ok(JsValue::from_serde(&zei_trace_assets(&XfrNote { body: xfr_body,
-                                                      multisig: XfrMultiSig::default() },
-                                           tracer_keypair.get_keys(),
-                                           &candidate_assets).map_err(error_to_jsvalue)?).unwrap())
+  let record_data = zei_trace_assets(&XfrNote { body: xfr_body,
+                                                multisig: XfrMultiSig::default() },
+                                     tracer_keypair.get_keys(),
+                                     &candidate_assets).map_err(error_to_jsvalue)?;
+  let record_data: Vec<(u64, String)> = record_data.iter()
+                                                   .map(|(amt, asset_type, _, _)| {
+                                                     let asset_type_code =
+                                                       AssetTypeCode { val: *asset_type };
+                                                     (*amt, asset_type_code.to_base64())
+                                                   })
+                                                   .collect();
+  Ok(JsValue::from_serde(&record_data).unwrap())
 }
 
 #[test]

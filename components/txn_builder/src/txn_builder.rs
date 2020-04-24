@@ -580,10 +580,10 @@ impl TransferOperationBuilder {
       return Err(PlatformError::InvariantError(Some("Cannot mutate a transfer that has been signed".to_string())));
     }
     let asset_record = if let Some(policy) = tracing_policy.clone() {
-      AssetRecord::from_open_asset_record_with_asset_tracking_but_no_identity(open_ar.clone(),
+      AssetRecord::from_open_asset_record_with_asset_tracking_but_no_identity(open_ar,
                                                                               policy).map_err(|e| PlatformError::ZeiError(error_location!(), e))?
     } else {
-      AssetRecord::from_open_asset_record_no_asset_tracking(open_ar.clone())
+      AssetRecord::from_open_asset_record_no_asset_tracking(open_ar)
     };
     self.input_sids.push(txo_sid);
     self.tracing_policies.push(tracing_policy);
@@ -629,7 +629,7 @@ impl TransferOperationBuilder {
                                                      .zip(self.input_records.iter())
                                                      .zip(self.tracing_policies.iter())
     {
-      let amt = ar.open_asset_record.get_amount() - spend_amount;
+      let amt = ar.open_asset_record.get_amount();
       match spend_amount.cmp(&amt) {
         Ordering::Greater => {
           return Err(PlatformError::InputsError(error_location!()));
@@ -639,13 +639,16 @@ impl TransferOperationBuilder {
           let record_type = ar.open_asset_record.get_record_type();
           let recipient = *ar.open_asset_record.get_pub_key();
           let ar_template = if let Some(policy) = tracking_policy {
-            AssetRecordTemplate::with_asset_tracking(amt,
+            AssetRecordTemplate::with_asset_tracking(amt - spend_amount,
                                                      asset_type,
                                                      record_type,
                                                      recipient,
                                                      policy.clone())
           } else {
-            AssetRecordTemplate::with_no_asset_tracking(amt, asset_type, record_type, recipient)
+            AssetRecordTemplate::with_no_asset_tracking(amt - spend_amount,
+                                                        asset_type,
+                                                        record_type,
+                                                        recipient)
           };
           let ar =
             AssetRecord::from_template_no_identity_tracking(&mut prng, &ar_template).unwrap();

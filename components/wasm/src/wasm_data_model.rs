@@ -98,6 +98,11 @@ impl AssetTracerKeyPair {
     AssetTracerKeyPair { keypair: gen_asset_tracer_keypair(&mut small_rng) }
   }
 }
+impl Default for AssetTracerKeyPair {
+  fn default() -> Self {
+    Self::new()
+  }
+}
 
 impl AssetTracerKeyPair {
   pub fn get_enc_key(&self) -> &AssetTracerEncKeys {
