@@ -4,17 +4,21 @@ use bulletproofs::PedersenGens;
 use curve25519_dalek::ristretto::CompressedRistretto;
 use curve25519_dalek::scalar::Scalar;
 use ledger::data_model::errors::PlatformError;
-use ledger::data_model::AssetTypeCode;
+use ledger::data_model::{AssetRules, AssetTypeCode, TransferType, TxOutput, TxoRef};
 use ledger::error_location;
+use ledger_standalone::LedgerStandalone;
 use linear_map::LinearMap;
 use rand_chacha::ChaChaRng;
 use rand_core::SeedableRng;
 use serde::{Deserialize, Serialize};
+use txn_builder::BuildsTransactions;
+use txn_builder::{PolicyChoice, TransactionBuilder, TransferOperationBuilder};
 use zei::crypto::solvency::{prove_solvency, verify_solvency};
 use zei::serialization::ZeiFromToBytes;
-use zei::xfr::asset_record::open_blind_asset_record;
+use zei::setup::PublicParams;
+use zei::xfr::asset_record::{build_blind_asset_record, open_blind_asset_record, AssetRecordType};
 use zei::xfr::sig::XfrKeyPair;
-use zei::xfr::structs::{asset_type_to_scalar, BlindAssetRecord};
+use zei::xfr::structs::{asset_type_to_scalar, AssetRecordTemplate, BlindAssetRecord};
 
 const PROTOCOL: &str = "http";
 const HOST: &str = "localhost";
@@ -177,14 +181,6 @@ impl SolvencyAudit {
         .push((asset_type_to_scalar(&code.val), Scalar::from(rate)));
   }
 
-  /// Geneartes a new asset and sets its conversion rate.
-  /// Returns the generated asset code.
-  pub fn set_asset_and_rate(&mut self, rate: u64) -> Scalar {
-    let code = asset_type_to_scalar(&AssetTypeCode::gen_random().val);
-    self.conversion_rates.push((code, Scalar::from(rate)));
-    code
-  }
-
   /// Proves the solvency and stores the commitments and proof.
   /// Must be used before `verify_solvency`.
   pub fn prove_solvency_and_store(&self,
@@ -272,96 +268,89 @@ impl SolvencyAudit {
   }
 }
 
+// For unit testing: define an asset and submit the transactions
+fn test_define_and_submit_one(issuer_key_pair: &XfrKeyPair,
+                              code: AssetTypeCode,
+                              ledger_standalone: &LedgerStandalone)
+                              -> Result<(), PlatformError> {
+  // Define the asset
+  let mut txn_builder = TransactionBuilder::default();
+  let txn = txn_builder.add_operation_create_asset(issuer_key_pair,
+                                                   Some(code),
+                                                   AssetRules::default(),
+                                                   "",
+                                                   PolicyChoice::Fungible())?
+                       .transaction();
+
+  // Submit the transaction
+  ledger_standalone.submit_transaction(&txn);
+
+  Ok(())
+}
+
+// For unit testing: define three assets and submit the transactions
+pub fn test_define_and_submit_multiple(issuer_key_pair: &XfrKeyPair,
+                                       codes: (AssetTypeCode, AssetTypeCode, AssetTypeCode),
+                                       ledger_standalone: &LedgerStandalone)
+                                       -> Result<(), PlatformError> {
+  test_define_and_submit_one(issuer_key_pair, codes.0, ledger_standalone)?;
+  test_define_and_submit_one(issuer_key_pair, codes.1, ledger_standalone)?;
+  test_define_and_submit_one(issuer_key_pair, codes.2, ledger_standalone)
+}
+
+// For unit testing: Issue and transfer an asset, submit the transaction, and get the UTXO
+pub fn test_issue_transfer_submit_and_get_utxo(issuer_key_pair: &XfrKeyPair,
+                                               recipient_key_pair: &XfrKeyPair,
+                                               code: AssetTypeCode,
+                                               amount: u64,
+                                               sequence_number: u64,
+                                               ledger_standalone: &LedgerStandalone)
+                                               -> Result<u64, PlatformError> {
+  // Issue and transfer the asset
+  let input_template = AssetRecordTemplate::with_no_asset_tracking(amount, code.val, AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType, issuer_key_pair.get_pk());
+  let blind_asset_record = build_blind_asset_record(&mut ChaChaRng::from_entropy(),
+                                                    &PublicParams::new().pc_gens,
+                                                    &input_template,
+                                                    None).0;
+
+  let output_template = AssetRecordTemplate::with_no_asset_tracking(amount,
+                              code.val,
+                              AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
+                              recipient_key_pair.get_pk());
+  let xfr_op =
+TransferOperationBuilder::new().add_input(TxoRef::Relative(0),
+      open_blind_asset_record(&blind_asset_record,
+                        &None,
+                        recipient_key_pair.get_sk_ref())
+      .map_err(|e| PlatformError::ZeiError(error_location!(),e))?,
+      amount)?
+.add_output(&output_template, None)?
+.balance()?
+.create(TransferType::Standard)?
+.sign(issuer_key_pair)?
+.transaction()?;
+
+  let mut txn_builder = TransactionBuilder::default();
+  let txn = txn_builder.add_operation_issue_asset(issuer_key_pair,
+                                                  &code,
+                                                  sequence_number,
+                                                  &[(TxOutput(blind_asset_record), None)],
+                                                  None)?
+                       .add_operation(xfr_op)
+                       .transaction();
+
+  // Submit the transaction
+  Ok(ledger_standalone.submit_transaction_and_fetch_utxos(&txn)[0].0)
+}
+
 #[cfg(test)]
 mod tests {
   use super::*;
-  use ledger::data_model::{AssetRules, TransferType, TxOutput, TxoRef};
-  use ledger_standalone::LedgerStandalone;
-  use txn_builder::BuildsTransactions;
-  use txn_builder::{PolicyChoice, TransactionBuilder, TransferOperationBuilder};
   use zei::errors::ZeiError;
-  use zei::setup::PublicParams;
-  use zei::xfr::asset_record::{build_blind_asset_record, AssetRecordType};
-  use zei::xfr::structs::AssetRecordTemplate;
 
   // Randomly generate three asset codes
   fn generate_codes() -> (AssetTypeCode, AssetTypeCode, AssetTypeCode) {
     (AssetTypeCode::gen_random(), AssetTypeCode::gen_random(), AssetTypeCode::gen_random())
-  }
-
-  // Define an asset and submit the transactions
-  fn define_and_submit_one(issuer_key_pair: &XfrKeyPair,
-                           code: AssetTypeCode,
-                           ledger_standalone: &LedgerStandalone)
-                           -> Result<(), PlatformError> {
-    // Define the asset
-    let mut txn_builder = TransactionBuilder::default();
-    let txn = txn_builder.add_operation_create_asset(issuer_key_pair,
-                                                     Some(code),
-                                                     AssetRules::default(),
-                                                     "",
-                                                     PolicyChoice::Fungible())?
-                         .transaction();
-
-    // Submit the transaction
-    ledger_standalone.submit_transaction(&txn);
-
-    Ok(())
-  }
-
-  // Define assets and submit the transactions
-  fn define_and_submit_multiple(issuer_key_pair: &XfrKeyPair,
-                                codes: (AssetTypeCode, AssetTypeCode, AssetTypeCode),
-                                ledger_standalone: &LedgerStandalone)
-                                -> Result<(), PlatformError> {
-    define_and_submit_one(issuer_key_pair, codes.0, ledger_standalone)?;
-    define_and_submit_one(issuer_key_pair, codes.1, ledger_standalone)?;
-    define_and_submit_one(issuer_key_pair, codes.2, ledger_standalone)
-  }
-
-  // Issue and transfer an asset, submit the transaction, and get the UTXO
-  fn issue_transfer_submit_and_get_utxo(issuer_key_pair: &XfrKeyPair,
-                                        recipient_key_pair: &XfrKeyPair,
-                                        code: AssetTypeCode,
-                                        amount: u64,
-                                        sequence_number: u64,
-                                        ledger_standalone: &LedgerStandalone)
-                                        -> Result<u64, PlatformError> {
-    // Issue and transfer the asset
-    let input_template = AssetRecordTemplate::with_no_asset_tracking(amount, code.val, AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType, issuer_key_pair.get_pk());
-    let blind_asset_record = build_blind_asset_record(&mut ChaChaRng::from_entropy(),
-                                                      &PublicParams::new().pc_gens,
-                                                      &input_template,
-                                                      None).0;
-
-    let output_template = AssetRecordTemplate::with_no_asset_tracking(amount,
-                                                                      code.val,
-                                                                      AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
-                                                                      recipient_key_pair.get_pk());
-    let xfr_op =
-    TransferOperationBuilder::new().add_input(TxoRef::Relative(0),
-                                              open_blind_asset_record(&blind_asset_record,
-                                                                &None,
-                                                                recipient_key_pair.get_sk_ref())
-                                              .map_err(|e| PlatformError::ZeiError(error_location!(),e))?,
-                                              amount)?
-                                   .add_output(&output_template, None)?
-                                   .balance()?
-                                   .create(TransferType::Standard)?
-                                   .sign(issuer_key_pair)?
-                                   .transaction()?;
-
-    let mut txn_builder = TransactionBuilder::default();
-    let txn = txn_builder.add_operation_issue_asset(issuer_key_pair,
-                                                    &code,
-                                                    sequence_number,
-                                                    &[(TxOutput(blind_asset_record), None)],
-                                                    None)?
-                         .add_operation(xfr_op)
-                         .transaction();
-
-    // Submit the transaction
-    Ok(ledger_standalone.submit_transaction_and_fetch_utxos(&txn)[0].0)
   }
 
   // Add three public assets
@@ -371,24 +360,24 @@ mod tests {
                        ledger_standalone: &LedgerStandalone)
                        -> Result<(), PlatformError> {
     let receipient_key_pair = &account.get_key_pair();
-    let utxo_0 = issue_transfer_submit_and_get_utxo(issuer_key_pair,
-                                                    receipient_key_pair,
-                                                    codes.0,
-                                                    100,
-                                                    0,
-                                                    ledger_standalone)?;
-    let utxo_1 = issue_transfer_submit_and_get_utxo(issuer_key_pair,
-                                                    receipient_key_pair,
-                                                    codes.1,
-                                                    200,
-                                                    0,
-                                                    ledger_standalone)?;
-    let utxo_2 = issue_transfer_submit_and_get_utxo(issuer_key_pair,
-                                                    receipient_key_pair,
-                                                    codes.2,
-                                                    300,
-                                                    0,
-                                                    ledger_standalone)?;
+    let utxo_0 = test_issue_transfer_submit_and_get_utxo(issuer_key_pair,
+                                                         receipient_key_pair,
+                                                         codes.0,
+                                                         100,
+                                                         0,
+                                                         ledger_standalone)?;
+    let utxo_1 = test_issue_transfer_submit_and_get_utxo(issuer_key_pair,
+                                                         receipient_key_pair,
+                                                         codes.1,
+                                                         200,
+                                                         0,
+                                                         ledger_standalone)?;
+    let utxo_2 = test_issue_transfer_submit_and_get_utxo(issuer_key_pair,
+                                                         receipient_key_pair,
+                                                         codes.2,
+                                                         300,
+                                                         0,
+                                                         ledger_standalone)?;
 
     account.add_public_asset(codes.0, utxo_0)?;
     account.add_public_asset(codes.1, utxo_1)?;
@@ -404,24 +393,24 @@ mod tests {
                        ledger_standalone: &LedgerStandalone)
                        -> Result<(), PlatformError> {
     let receipient_key_pair = &account.get_key_pair();
-    let utxo_0 = issue_transfer_submit_and_get_utxo(issuer_key_pair,
-                                                    receipient_key_pair,
-                                                    codes.0,
-                                                    10,
-                                                    1,
-                                                    ledger_standalone)?;
-    let utxo_1 = issue_transfer_submit_and_get_utxo(issuer_key_pair,
-                                                    receipient_key_pair,
-                                                    codes.1,
-                                                    20,
-                                                    1,
-                                                    ledger_standalone)?;
-    let utxo_2 = issue_transfer_submit_and_get_utxo(issuer_key_pair,
-                                                    receipient_key_pair,
-                                                    codes.2,
-                                                    30,
-                                                    1,
-                                                    ledger_standalone)?;
+    let utxo_0 = test_issue_transfer_submit_and_get_utxo(issuer_key_pair,
+                                                         receipient_key_pair,
+                                                         codes.0,
+                                                         10,
+                                                         1,
+                                                         ledger_standalone)?;
+    let utxo_1 = test_issue_transfer_submit_and_get_utxo(issuer_key_pair,
+                                                         receipient_key_pair,
+                                                         codes.1,
+                                                         20,
+                                                         1,
+                                                         ledger_standalone)?;
+    let utxo_2 = test_issue_transfer_submit_and_get_utxo(issuer_key_pair,
+                                                         receipient_key_pair,
+                                                         codes.2,
+                                                         30,
+                                                         1,
+                                                         ledger_standalone)?;
 
     account.add_hidden_asset(codes.0, utxo_0)?;
     account.add_hidden_asset(codes.1, utxo_1)?;
@@ -437,24 +426,24 @@ mod tests {
                             ledger_standalone: &LedgerStandalone)
                             -> Result<(), PlatformError> {
     let receipient_key_pair = &account.get_key_pair();
-    let utxo_0 = issue_transfer_submit_and_get_utxo(issuer_key_pair,
-                                                    receipient_key_pair,
-                                                    codes.0,
-                                                    100,
-                                                    2,
-                                                    ledger_standalone)?;
-    let utxo_1 = issue_transfer_submit_and_get_utxo(issuer_key_pair,
-                                                    receipient_key_pair,
-                                                    codes.1,
-                                                    200,
-                                                    2,
-                                                    ledger_standalone)?;
-    let utxo_2 = issue_transfer_submit_and_get_utxo(issuer_key_pair,
-                                                    receipient_key_pair,
-                                                    codes.2,
-                                                    200,
-                                                    2,
-                                                    ledger_standalone)?;
+    let utxo_0 = test_issue_transfer_submit_and_get_utxo(issuer_key_pair,
+                                                         receipient_key_pair,
+                                                         codes.0,
+                                                         100,
+                                                         2,
+                                                         ledger_standalone)?;
+    let utxo_1 = test_issue_transfer_submit_and_get_utxo(issuer_key_pair,
+                                                         receipient_key_pair,
+                                                         codes.1,
+                                                         200,
+                                                         2,
+                                                         ledger_standalone)?;
+    let utxo_2 = test_issue_transfer_submit_and_get_utxo(issuer_key_pair,
+                                                         receipient_key_pair,
+                                                         codes.2,
+                                                         200,
+                                                         2,
+                                                         ledger_standalone)?;
 
     account.add_public_liability(codes.0, utxo_0)?;
     account.add_public_liability(codes.1, utxo_1)?;
@@ -470,24 +459,24 @@ mod tests {
                                     ledger_standalone: &LedgerStandalone)
                                     -> Result<(), PlatformError> {
     let receipient_key_pair = &account.get_key_pair();
-    let utxo_0 = issue_transfer_submit_and_get_utxo(issuer_key_pair,
-                                                    receipient_key_pair,
-                                                    codes.0,
-                                                    10,
-                                                    3,
-                                                    ledger_standalone)?;
-    let utxo_1 = issue_transfer_submit_and_get_utxo(issuer_key_pair,
-                                                    receipient_key_pair,
-                                                    codes.1,
-                                                    20,
-                                                    3,
-                                                    ledger_standalone)?;
-    let utxo_2 = issue_transfer_submit_and_get_utxo(issuer_key_pair,
-                                                    receipient_key_pair,
-                                                    codes.2,
-                                                    20,
-                                                    3,
-                                                    ledger_standalone)?;
+    let utxo_0 = test_issue_transfer_submit_and_get_utxo(issuer_key_pair,
+                                                         receipient_key_pair,
+                                                         codes.0,
+                                                         10,
+                                                         3,
+                                                         ledger_standalone)?;
+    let utxo_1 = test_issue_transfer_submit_and_get_utxo(issuer_key_pair,
+                                                         receipient_key_pair,
+                                                         codes.1,
+                                                         20,
+                                                         3,
+                                                         ledger_standalone)?;
+    let utxo_2 = test_issue_transfer_submit_and_get_utxo(issuer_key_pair,
+                                                         receipient_key_pair,
+                                                         codes.2,
+                                                         20,
+                                                         3,
+                                                         ledger_standalone)?;
 
     account.add_hidden_liability(codes.0, utxo_0)?;
     account.add_hidden_liability(codes.1, utxo_1)?;
@@ -503,24 +492,24 @@ mod tests {
                                    ledger_standalone: &LedgerStandalone)
                                    -> Result<(), PlatformError> {
     let receipient_key_pair = &account.get_key_pair();
-    let utxo_0 = issue_transfer_submit_and_get_utxo(issuer_key_pair,
-                                                    receipient_key_pair,
-                                                    codes.0,
-                                                    10,
-                                                    4,
-                                                    ledger_standalone)?;
-    let utxo_1 = issue_transfer_submit_and_get_utxo(issuer_key_pair,
-                                                    receipient_key_pair,
-                                                    codes.1,
-                                                    20,
-                                                    4,
-                                                    ledger_standalone)?;
-    let utxo_2 = issue_transfer_submit_and_get_utxo(issuer_key_pair,
-                                                    receipient_key_pair,
-                                                    codes.2,
-                                                    40,
-                                                    4,
-                                                    ledger_standalone)?;
+    let utxo_0 = test_issue_transfer_submit_and_get_utxo(issuer_key_pair,
+                                                         receipient_key_pair,
+                                                         codes.0,
+                                                         10,
+                                                         4,
+                                                         ledger_standalone)?;
+    let utxo_1 = test_issue_transfer_submit_and_get_utxo(issuer_key_pair,
+                                                         receipient_key_pair,
+                                                         codes.1,
+                                                         20,
+                                                         4,
+                                                         ledger_standalone)?;
+    let utxo_2 = test_issue_transfer_submit_and_get_utxo(issuer_key_pair,
+                                                         receipient_key_pair,
+                                                         codes.2,
+                                                         40,
+                                                         4,
+                                                         ledger_standalone)?;
 
     account.add_hidden_liability(codes.0, utxo_0)?;
     account.add_hidden_liability(codes.1, utxo_1)?;
@@ -556,7 +545,7 @@ mod tests {
     // Generate and define assets
     let issuer_key_pair = &XfrKeyPair::generate(&mut ChaChaRng::from_entropy());
     let codes = generate_codes();
-    define_and_submit_multiple(issuer_key_pair, codes, ledger_standalone).unwrap();
+    test_define_and_submit_multiple(issuer_key_pair, codes, ledger_standalone).unwrap();
 
     // Set asset conversion rates, but miss one asset
     add_conversion_rate_incomplete(&mut audit, (codes.0, codes.1));
@@ -593,7 +582,7 @@ mod tests {
     // Generate and define assets
     let issuer_key_pair = &XfrKeyPair::generate(&mut ChaChaRng::from_entropy());
     let codes = generate_codes();
-    define_and_submit_multiple(issuer_key_pair, codes, ledger_standalone).unwrap();
+    test_define_and_submit_multiple(issuer_key_pair, codes, ledger_standalone).unwrap();
 
     // Set asset conversion rates
     add_conversion_rate_complete(&mut audit, codes);
@@ -629,7 +618,7 @@ mod tests {
     // Generate and define assets
     let issuer_key_pair = &XfrKeyPair::generate(&mut ChaChaRng::from_entropy());
     let codes = generate_codes();
-    define_and_submit_multiple(issuer_key_pair, codes, ledger_standalone).unwrap();
+    test_define_and_submit_multiple(issuer_key_pair, codes, ledger_standalone).unwrap();
 
     // Set asset conversion rates
     add_conversion_rate_complete(&mut audit, codes);
@@ -674,7 +663,7 @@ mod tests {
     // Generate and define assets
     let issuer_key_pair = &XfrKeyPair::generate(&mut ChaChaRng::from_entropy());
     let codes = generate_codes();
-    define_and_submit_multiple(issuer_key_pair, codes, ledger_standalone).unwrap();
+    test_define_and_submit_multiple(issuer_key_pair, codes, ledger_standalone).unwrap();
 
     // Set asset conversion rates
     add_conversion_rate_complete(&mut audit, codes);
@@ -712,7 +701,7 @@ mod tests {
     // Generate and define assets
     let issuer_key_pair = &XfrKeyPair::generate(&mut ChaChaRng::from_entropy());
     let codes = generate_codes();
-    define_and_submit_multiple(issuer_key_pair, codes, ledger_standalone).unwrap();
+    test_define_and_submit_multiple(issuer_key_pair, codes, ledger_standalone).unwrap();
 
     // Set asset conversion rates
     add_conversion_rate_complete(&mut audit, codes);
@@ -732,12 +721,12 @@ mod tests {
     audit.verify_solvency(&account).unwrap();
 
     // Update the public assets
-    let utxo = issue_transfer_submit_and_get_utxo(issuer_key_pair,
-                                                  &account.get_key_pair(),
-                                                  codes.0,
-                                                  40,
-                                                  5,
-                                                  ledger_standalone).unwrap();
+    let utxo = test_issue_transfer_submit_and_get_utxo(issuer_key_pair,
+                                                       &account.get_key_pair(),
+                                                       codes.0,
+                                                       40,
+                                                       5,
+                                                       ledger_standalone).unwrap();
     account.add_public_asset(codes.0, utxo).unwrap();
 
     // Verify the solvency without proving it again
@@ -767,7 +756,7 @@ mod tests {
     // Generate and define assets
     let issuer_key_pair = &XfrKeyPair::generate(&mut ChaChaRng::from_entropy());
     let codes = generate_codes();
-    define_and_submit_multiple(issuer_key_pair, codes, ledger_standalone).unwrap();
+    test_define_and_submit_multiple(issuer_key_pair, codes, ledger_standalone).unwrap();
 
     // Set asset conversion rates
     add_conversion_rate_complete(&mut audit, codes);
@@ -787,12 +776,12 @@ mod tests {
     audit.verify_solvency(&account).unwrap();
 
     // Update the hidden liabilities
-    let utxo = issue_transfer_submit_and_get_utxo(issuer_key_pair,
-                                                  &account.get_key_pair(),
-                                                  codes.0,
-                                                  4000,
-                                                  5,
-                                                  ledger_standalone).unwrap();
+    let utxo = test_issue_transfer_submit_and_get_utxo(issuer_key_pair,
+                                                       &account.get_key_pair(),
+                                                       codes.0,
+                                                       4000,
+                                                       5,
+                                                       ledger_standalone).unwrap();
     account.add_hidden_liability(codes.0, utxo).unwrap();
 
     // Prove the solvency again
