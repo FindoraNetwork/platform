@@ -8,7 +8,6 @@ use credentials::{CredCommitment, CredIssuerPublicKey, CredPoK};
 use cryptohash::sha256::Digest as BitDigest;
 use cryptohash::{sha256, HashValue, Proof};
 use errors::PlatformError;
-use itertools::Itertools;
 use rand_chacha::ChaChaRng;
 use rand_core::{CryptoRng, RngCore, SeedableRng};
 use serde::{de::Visitor, Deserialize, Deserializer, Serialize, Serializer};
@@ -19,9 +18,7 @@ use std::hash::{Hash, Hasher};
 use std::marker::PhantomData;
 use zei::xfr::lib::gen_xfr_body;
 use zei::xfr::sig::{XfrKeyPair, XfrPublicKey, XfrSecretKey, XfrSignature};
-use zei::xfr::structs::{
-  AssetRecord, AssetTracingPolicy, BlindAssetRecord, OpenAssetRecord, XfrBody,
-};
+use zei::xfr::structs::{AssetRecord, AssetTracingPolicy, BlindAssetRecord, XfrBody};
 
 pub fn b64enc<T: ?Sized + AsRef<[u8]>>(input: &T) -> String {
   base64::encode_config(input, base64::URL_SAFE)
@@ -380,17 +377,13 @@ pub struct TransferAssetBody {
 impl TransferAssetBody {
   pub fn new<R: CryptoRng + RngCore>(prng: &mut R,
                                      input_refs: Vec<TxoRef>,
-                                     input_records: &[OpenAssetRecord],
+                                     input_records: &[AssetRecord],
                                      output_records: &[AssetRecord])
                                      -> Result<TransferAssetBody, errors::PlatformError> {
     if input_records.is_empty() {
       return Err(PlatformError::InputsError(error_location!()));
     }
-    let in_records =
-      input_records.iter()
-                   .map(|oar| AssetRecord::from_open_asset_record_no_asset_tracking(oar.clone()))
-                   .collect_vec();
-    let note = Box::new(gen_xfr_body(prng, in_records.as_slice(), output_records)
+    let note = Box::new(gen_xfr_body(prng, input_records, output_records)
         .map_err(|e| PlatformError::ZeiError(error_location!(),e))?);
     Ok(TransferAssetBody { inputs: input_refs,
                            num_outputs: output_records.len(),

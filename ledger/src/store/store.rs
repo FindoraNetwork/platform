@@ -2005,7 +2005,7 @@ pub mod helpers {
     let mut transfer =
       TransferAsset::new(TransferAssetBody::new(ledger.get_prng(),
                              vec![TxoRef::Relative(0)],
-                             &[open_blind_asset_record(&ba, &owner_memo, &issuer_keys.get_sk_ref()).unwrap()],
+                             &[AssetRecord::from_open_asset_record_no_asset_tracking(open_blind_asset_record(&ba, &owner_memo, &issuer_keys.get_sk_ref()).unwrap())],
                              &[ar.clone()]).unwrap(), TransferType::Standard).unwrap();
 
     transfer.sign(&issuer_keys);
@@ -2488,11 +2488,12 @@ mod tests {
       AssetRecordTemplate::with_no_asset_tracking(100, code.val, art, key_pair_adversary.get_pk());
     let output_ar =
       AssetRecord::from_template_no_identity_tracking(ledger.get_prng(), &output_template).unwrap();
+    let input_ar = AssetRecord::from_open_asset_record_no_tracking(input_oar.clone());
 
     let mut tx = Transaction::default();
     let mut transfer = TransferAsset::new(TransferAssetBody::new(ledger.get_prng(),
                                                                  vec![TxoRef::Absolute(txo_sid)],
-                                                                 &[input_oar],
+                                                                 &[input_ar],
                                                                  &[output_ar]).unwrap(),
                                           TransferType::Standard).unwrap();
 
