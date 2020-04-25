@@ -2005,8 +2005,8 @@ pub mod helpers {
     let mut transfer =
       TransferAsset::new(TransferAssetBody::new(ledger.get_prng(),
                              vec![TxoRef::Relative(0)],
-                             &[open_blind_asset_record(&ba, &owner_memo, &issuer_keys.get_sk_ref()).unwrap()],
-                             &[ar.clone()]).unwrap(), TransferType::Standard).unwrap();
+                             &[open_blind_asset_record(&ba, &owner_memo, &issuer_keys.get_sk_ref()).unwrap()],Vec::new(),
+                             &[ar.clone()]).unwrap(), Vec::new(),TransferType::Standard).unwrap();
 
     transfer.sign(&issuer_keys);
     tx.operations.push(Operation::TransferAsset(transfer));

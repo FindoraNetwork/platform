@@ -11,8 +11,11 @@ use findora::HasInvariants;
 use rand_core::{CryptoRng, RngCore, SeedableRng};
 use std::collections::{HashMap, HashSet};
 use zei::serialization::ZeiFromToBytes;
-use zei::xfr::lib::verify_xfr_body_no_policies;
-use zei::xfr::structs::{AssetTracingPolicy, BlindAssetRecord, XfrAmount, XfrAssetType};
+use zei::setup::PublicParams;
+use zei::xfr::lib::verify_xfr_body;
+use zei::xfr::structs::{
+  AssetTracingPolicies, AssetTracingPolicy, BlindAssetRecord, XfrAmount, XfrAssetType,
+};
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct TxnEffect {
@@ -176,8 +179,7 @@ impl TxnEffect {
 
           // (1), within this transaction
           //let v = vec![];
-          let iss_nums = new_issuance_nums.entry(code)
-                                          .or_insert_with(std::vec::Vec::new);
+          let iss_nums = new_issuance_nums.entry(code).or_insert_with(Vec::new);
 
           if let Some(last_num) = iss_nums.last() {
             if seq_num <= *last_num {
@@ -293,8 +295,25 @@ impl TxnEffect {
           }
           // (3)
           // TODO: implement real policies
-          verify_xfr_body_no_policies(prng, &trn.body.transfer)
-              .map_err(|e| PlatformError::ZeiError(error_location!(),e))?;
+          let input_tracing_policies = Vec::new();
+          for input_tracing_policy in trn.body.input_tracing_policies.iter() {
+            if let Some(policy) = input_tracing_policy {
+              input_tracing_policies.push(AssetTracingPolicies::from_policy(policy));
+            }
+          }
+          let output_tracing_policies = Vec::new();
+          for output_tracing_policy in trn.body.output_tracing_policies.iter() {
+            if let Some(policy) = output_tracing_policy {
+              output_tracing_policies.push(AssetTracingPolicies::from_policy(policy));
+            }
+          }
+          verify_xfr_body(prng,
+                          PublicParams::new(),
+                          &trn.body.transfer,
+                          input_tracing_policies,
+                          Vec::new(),
+                          output_tracing_policies,
+                          Vec::new()).map_err(|e| PlatformError::ZeiError(error_location!(), e))?;
 
           for (inp, record) in trn.body.inputs.iter().zip(trn.body.transfer.inputs.iter()) {
             // Until we can distinguish assets that have policies that invoke transfer restrictions

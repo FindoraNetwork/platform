@@ -371,7 +371,11 @@ pub enum TxoRef {
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct TransferAssetBody {
   pub inputs: Vec<TxoRef>, // Ledger address of inputs
-  pub num_outputs: usize,  // How many output TXOs?
+  // Input asset tracing policies
+  pub input_tracing_policies: Vec<Option<AssetTracingPolicy>>,
+  pub num_outputs: usize, // How many output TXOs?
+  // Output asset tracing policies
+  pub output_tracing_policies: Vec<Option<AssetTracingPolicy>>,
   // TODO(joe): we probably don't need the whole XfrNote with input records
   // once it's on the chain
   pub transfer: Box<XfrBody>, // Encrypted transfer note
@@ -381,7 +385,9 @@ impl TransferAssetBody {
   pub fn new<R: CryptoRng + RngCore>(prng: &mut R,
                                      input_refs: Vec<TxoRef>,
                                      input_records: &[OpenAssetRecord],
-                                     output_records: &[AssetRecord])
+                                     input_tracing_policies: Vec<Option<AssetTracingPolicy>>,
+                                     output_records: &[AssetRecord],
+                                     output_tracing_policies: Vec<Option<AssetTracingPolicy>>)
                                      -> Result<TransferAssetBody, errors::PlatformError> {
     if input_records.is_empty() {
       return Err(PlatformError::InputsError(error_location!()));
@@ -393,7 +399,9 @@ impl TransferAssetBody {
     let note = Box::new(gen_xfr_body(prng, in_records.as_slice(), output_records)
         .map_err(|e| PlatformError::ZeiError(error_location!(),e))?);
     Ok(TransferAssetBody { inputs: input_refs,
+                           input_tracing_policies,
                            num_outputs: output_records.len(),
+                           output_tracing_policies,
                            transfer: note })
   }
 
