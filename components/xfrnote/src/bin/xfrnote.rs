@@ -81,7 +81,8 @@ pub fn make_xfr_note() -> XfrNote {
                                                                    asset_record_type,
                                                                    *keypair.get_pk_ref());
 
-    inputs.push(AssetRecord::from_template_no_identity_tracking(&mut prng, &asset_record).unwrap());
+    inputs.push(AssetRecord::from_template_no_identity_tracking(&mut prng, &asset_record).unwrap()
+                                                                                         .0);
 
     in_asset_records.push(asset_record);
     inkeys.push(keypair);
@@ -94,7 +95,8 @@ pub fn make_xfr_note() -> XfrNote {
                                                          x.1,
                                                          asset_record_type,
                                                          *keypair.get_pk_ref());
-    let output = AssetRecord::from_template_no_identity_tracking(&mut prng, &ar).unwrap();
+    let output = AssetRecord::from_template_no_identity_tracking(&mut prng, &ar).unwrap()
+                                                                                .0;
     outputs.push(output);
   }
 

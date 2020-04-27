@@ -6,6 +6,7 @@ extern crate zei;
 extern crate serde_derive;
 
 use credentials::{CredCommitment, CredIssuerPublicKey, CredPoK, CredUserSecretKey};
+use curve25519_dalek::scalar::Scalar;
 use ledger::data_model::errors::PlatformError;
 use ledger::data_model::*;
 use ledger::error_location;
@@ -371,11 +372,13 @@ pub trait BuildsTransactions {
                  })
                  .collect();
     output_ars_templates.append(&mut partially_consumed_inputs);
-    let output_ars: Result<Vec<AssetRecord>, _> =
+    let output_ars: Vec<AssetRecord> =
       output_ars_templates.iter()
-                          .map(|x| AssetRecord::from_template_no_identity_tracking(&mut prng, x))
+                          .map(|x| {
+                            AssetRecord::from_template_no_identity_tracking(&mut prng, x).unwrap()
+                                                                                         .0
+                          })
                           .collect();
-    let output_ars = output_ars.map_err(|e| PlatformError::ZeiError(error_location!(), e))?;
     self.add_operation_transfer_asset(&key_pair, input_sids, &input_oars, &output_ars)?;
     Ok(self)
   }
@@ -529,7 +532,7 @@ impl BuildsTransactions for TransactionBuilder {
 //    let builder = TransferOperationBuilder::new()..add_input(TxoRef::Relative(1),
 //                                       open_blind_asset_record(&ba, alice.get_sk_ref()).unwrap(),
 //                                       20)?
-//                            .add_output(20, bob.get_pk_ref(), code_1)?
+//                            .add_output(20, bob.get_pk_ref(), code_1, &mut ChaChaRng::from_entropy())?
 //                            .balance()?
 //                            .create(TransferType::Standard)?
 //                            .sign(&alice)?;
@@ -569,9 +572,9 @@ impl TransferOperationBuilder {
                     asset_record_template: &AssetRecordTemplate,
                     credential_record: Option<(&CredUserSecretKey,
                             &Credential,
-                            &ACCommitmentKey)>)
+                            &ACCommitmentKey)>,
+                    mut prng: &mut ChaChaRng)
                     -> Result<&mut Self, PlatformError> {
-    let mut prng = ChaChaRng::from_entropy();
     if self.transfer.is_some() {
       return Err(PlatformError::InvariantError(Some("Cannot mutate a transfer that has been signed".to_string())));
     }
@@ -584,8 +587,31 @@ impl TransferOperationBuilder {
     } else {
       AssetRecord::from_template_no_identity_tracking(&mut prng, asset_record_template).unwrap()
     };
-    self.output_records.push(ar);
+    self.output_records.push(ar.0);
     Ok(self)
+  }
+
+  pub fn add_output_and_get_type_blind(&mut self,
+                                       asset_record_template: &AssetRecordTemplate,
+                                       credential_record: Option<(&CredUserSecretKey,
+                                               &Credential,
+                                               &ACCommitmentKey)>,
+                                       mut prng: &mut ChaChaRng)
+                                       -> Result<Scalar, PlatformError> {
+    if self.transfer.is_some() {
+      return Err(PlatformError::InvariantError(Some("Cannot mutate a transfer that has been signed".to_string())));
+    }
+    let ar = if let Some((user_secret_key, credential, commitment_key)) = credential_record {
+      AssetRecord::from_template_with_identity_tracking(&mut prng,
+                                                        asset_record_template,
+                                                        user_secret_key.get_ref(),
+                                                        credential,
+                                                        commitment_key).unwrap()
+    } else {
+      AssetRecord::from_template_no_identity_tracking(&mut prng, asset_record_template).unwrap()
+    };
+    self.output_records.push(ar.0);
+    Ok(ar.1)
   }
 
   // Ensures that outputs and inputs are balanced by adding remainder outputs for leftover asset
@@ -610,7 +636,7 @@ impl TransferOperationBuilder {
                                                                         *oar.get_pub_key());
           let ar =
             AssetRecord::from_template_no_identity_tracking(&mut prng, &ar_template).unwrap();
-          partially_consumed_inputs.push(ar);
+          partially_consumed_inputs.push(ar.0);
         }
         _ => {}
       }
@@ -627,8 +653,10 @@ impl TransferOperationBuilder {
 
   // Finalize the transaction and prepare for signing. Once called, the transaction cannot be
   // modified.
-  pub fn create(&mut self, transfer_type: TransferType) -> Result<&mut Self, PlatformError> {
-    let mut prng = ChaChaRng::from_entropy();
+  pub fn create(&mut self,
+                transfer_type: TransferType,
+                mut prng: &mut ChaChaRng)
+                -> Result<&mut Self, PlatformError> {
     let body = TransferAssetBody::new(&mut prng,
                                       self.input_sids.clone(),
                                       &self.input_records,
@@ -807,34 +835,32 @@ mod tests {
     let key_pair_copy = XfrKeyPair::zei_from_bytes(&key_pair.zei_to_bytes());
 
     // Compose input records
-    let input_records: Result<Vec<AssetRecord>, _> =
+    let input_records: Vec<AssetRecord> =
       inputs.iter()
             .map(|InputRecord(amount, asset_type, _conf_type, _conf_amount, _)| {
                    let template = AssetRecordTemplate::with_no_asset_tracking(*amount,
                                              [asset_type.0; 16],
                                              NonConfidentialAmount_NonConfidentialAssetType,
                                              key_pair_copy.get_pk());
-                   AssetRecord::from_template_no_identity_tracking(&mut prng, &template)
+                   AssetRecord::from_template_no_identity_tracking(&mut prng, &template).unwrap()
+                                                                                        .0
                  })
             .collect();
 
     // Compose output records
-    let output_records: Result<Vec<AssetRecord>, _> =
+    let output_records: Vec<AssetRecord>=
       outputs.iter()
              .map(|OutputRecord(amount, asset_type, key_pair)| {
                let key_pair = XfrKeyPair::generate(&mut ChaChaRng::from_seed([key_pair.0; 32]));
                let template = AssetRecordTemplate::with_no_asset_tracking(*amount, [asset_type.0; 16], NonConfidentialAmount_NonConfidentialAssetType,  key_pair.get_pk());
-               AssetRecord::from_template_no_identity_tracking(&mut prng, &template)
+               AssetRecord::from_template_no_identity_tracking(&mut prng, &template).unwrap().0
              })
              .collect();
 
     let _input_sids: Vec<TxoRef> = input_sids.iter()
                                              .map(|TxoReference(sid)| TxoRef::Relative(*sid))
                                              .collect();
-    let note = gen_xfr_note(&mut prng,
-                            &input_records.unwrap(),
-                            &output_records.unwrap(),
-                            &[&key_pair]);
+    let note = gen_xfr_note(&mut prng, &input_records, &output_records, &[&key_pair]);
     if let Ok(xfr_note) = note {
       assert!(verify_xfr_note_no_policies(&mut prng, &xfr_note).is_ok())
     }
@@ -877,7 +903,7 @@ mod tests {
                                                                     &memo1,
                                                                     alice.get_sk_ref()).unwrap(),
                                             20)?
-                                 .add_output(&output_template, None)?
+                                 .add_output(&output_template, None, &mut prng)?
                                  .balance();
 
     assert!(res.is_err());
@@ -892,11 +918,11 @@ mod tests {
     let res = invalid_sig_op.add_input(TxoRef::Relative(1),
                                        open_blind_asset_record(&ba_1, &memo1,alice.get_sk_ref()).unwrap(),
                                        20)?
-                            .add_output(&output_template, None)?
+                            .add_output(&output_template, None, &mut prng)?
                             .balance()?
-                            .create(TransferType::Standard)?
+                            .create(TransferType::Standard, &mut prng)?
                             .sign(&alice)?
-                            .add_output(&output_template, None);
+                            .add_output(&output_template, None, &mut prng);
     assert!(res.is_err());
 
     // Not all signatures present
@@ -909,9 +935,9 @@ mod tests {
     let res = missing_sig_op.add_input(TxoRef::Relative(1),
                                        open_blind_asset_record(&ba_1, &memo1,alice.get_sk_ref()).unwrap(),
                                        20)?
-                            .add_output(&output_template, None)?
+                            .add_output(&output_template, None, &mut prng)?
                             .balance()?
-                            .create(TransferType::Standard)?
+                            .create(TransferType::Standard, &mut prng)?
                             .validate_signatures();
 
     assert!(&res.is_err());
@@ -951,14 +977,14 @@ mod tests {
       TransferOperationBuilder::new()
       .add_input(TxoRef::Relative(1), open_blind_asset_record(&ba_1, &memo1, alice.get_sk_ref()).unwrap(), 20)?
       .add_input(TxoRef::Relative(2), open_blind_asset_record(&ba_2, &memo2, bob.get_sk_ref()).unwrap(), 20)?
-      .add_output(&output_bob5_code1_template, None)?
-      .add_output(&output_charlie13_code1_template, None)?
-      .add_output(&output_ben2_code1_template, None)?
-      .add_output(&output_bob5_code2_template, None)?
-      .add_output(&output_charlie13_code2_template, None)?
-      .add_output(&output_ben2_code2_template, None)?
+      .add_output(&output_bob5_code1_template, None, &mut prng)?
+      .add_output(&output_charlie13_code1_template, None, &mut prng)?
+      .add_output(&output_ben2_code1_template, None, &mut prng)?
+      .add_output(&output_bob5_code2_template, None, &mut prng)?
+      .add_output(&output_charlie13_code2_template, None, &mut prng)?
+      .add_output(&output_ben2_code2_template, None, &mut prng)?
       .balance()?
-      .create(TransferType::Standard)?
+      .create(TransferType::Standard, &mut prng)?
       .sign(&alice)?
       .sign(&bob)?
       .transaction()?;

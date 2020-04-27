@@ -50,4 +50,4 @@ tokio = { version = "0.2", features = ["full", "macros"] }
 txn_builder = { path = "../txn_builder" }
 utils = { path = "../../libs/utils" }
 warp = "0.2"
-zei = { git = "ssh://git@github.com/findoraorg/zei", tag = "v0.0.2-4" }
+zei = { path = "/Users/keyaoshen/code/zei"}

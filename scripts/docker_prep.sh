@@ -9,7 +9,7 @@ GIT_ROOT="$(git rev-parse --show-toplevel)"
 pushd $GIT_ROOT >/dev/null
 
 # Find all git references in Cargo.toml files and change them to path based for dockers
-find . -iname Cargo.toml -print0 | xargs -0 sed -i 's?zei = { git = "ssh://git@github.com/findoraorg/zei", tag = "v0.0.2-4" }?zei = {path = "/src/zei"}?g'
+find . -iname Cargo.toml -print0 | xargs -0 sed -i 's?zei = { path = "/Users/keyaoshen/code/zei"}?zei = {path = "/src/zei"}?g'
 #If you need to reset this
 #find . -iname Cargo.toml -print0 | xargs -0 git checkout
 

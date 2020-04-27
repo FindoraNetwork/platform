@@ -1163,6 +1163,7 @@ pub mod txn_lib {
                                                   record_type,
                                                   recipient_key_pair.get_pk())
     };
+    let prng = &mut ChaChaRng::from_entropy();
     let xfr_op =
     TransferOperationBuilder::new().add_input(TxoRef::Relative(0),
                                               open_blind_asset_record(&blind_asset_record,
@@ -1170,9 +1171,9 @@ pub mod txn_lib {
                                                                 issuer_key_pair.get_sk_ref())
                                               .map_err(|e| PlatformError::ZeiError(error_location!(),e))?,
                                               amount)?
-                                   .add_output(&output_template, credential_record)?
+                                   .add_output(&output_template, credential_record, prng)?
                                    .balance()?
-                                   .create(TransferType::Standard)?
+                                   .create(TransferType::Standard, prng)?
                                    .sign(issuer_key_pair)?
                                    .transaction()?;
 
@@ -1386,10 +1387,11 @@ pub mod txn_lib {
                                                   oar1.get_record_type(),
                                                   key_pair.get_pk())
     };
+    let prng = &mut ChaChaRng::from_entropy();
     let xfr_op = TransferOperationBuilder::new().add_input(sid1, oar1, amount1)?
                                                 .add_input(sid2, oar2, amount2)?
-                                                .add_output(&template, None)?
-                                                .create(TransferType::Standard)?
+                                                .add_output(&template, None, prng)?
+                                                .create(TransferType::Standard, prng)?
                                                 .sign(key_pair)?
                                                 .transaction()?;
 
@@ -1803,18 +1805,20 @@ pub mod txn_lib {
                                                   fiat_code.val,
                                                   NonConfidentialAmount_NonConfidentialAssetType,
                                                   borrower_key_pair.get_pk());
-    let xfr_op = TransferOperationBuilder::new().add_input(TxoRef::Absolute(fiat_sid),
-                                                           fiat_open_asset_record,
-                                                           amount)?
-                                                .add_input(TxoRef::Absolute(debt_sid),
-                                                           debt_open_asset_record,
-                                                           amount)?
-                                                .add_output(&lender_template, credential_record)?
-                                                .add_output(&borrower_template, None)?
-                                                .create(TransferType::Standard)?
-                                                .sign(lender_key_pair)?
-                                                .sign(borrower_key_pair)?
-                                                .transaction()?;
+    let mut prng = &mut ChaChaRng::from_entropy();
+    let xfr_op =
+      TransferOperationBuilder::new().add_input(TxoRef::Absolute(fiat_sid),
+                                                fiat_open_asset_record,
+                                                amount)?
+                                     .add_input(TxoRef::Absolute(debt_sid),
+                                                debt_open_asset_record,
+                                                amount)?
+                                     .add_output(&lender_template, credential_record, &mut prng)?
+                                     .add_output(&borrower_template, None, &mut prng)?
+                                     .create(TransferType::Standard, &mut prng)?
+                                     .sign(lender_key_pair)?
+                                     .sign(borrower_key_pair)?
+                                     .transaction()?;
     let mut txn_builder = TransactionBuilder::default();
     txn_builder.add_operation(xfr_op);
     store_txn_to_file(&debt_txn_file, &txn_builder)?;
@@ -1997,18 +2001,18 @@ pub mod txn_lib {
                                                   fiat_code.val,
                                                   NonConfidentialAmount_NonConfidentialAssetType,
                                                   borrower_key_pair.get_pk());
-
+    let mut prng = &mut ChaChaRng::from_entropy();
     let op = TransferOperationBuilder::new().add_input(TxoRef::Absolute(debt_sid),
                                                        debt_open_asset_record,
                                                        amount_to_burn)?
                                             .add_input(TxoRef::Absolute(fiat_sid),
                                                        fiat_open_asset_record,
                                                        amount_to_spend)?
-                                            .add_output(&spend_template, None)?
-                                            .add_output(&burn_template, None)?
-                                            .add_output(&lender_template, None)?
-                                            .add_output(&borrower_template, None)?
-                                            .create(TransferType::DebtSwap)?
+                                            .add_output(&spend_template, None, &mut prng)?
+                                            .add_output(&burn_template, None, &mut prng)?
+                                            .add_output(&lender_template, None, &mut prng)?
+                                            .add_output(&borrower_template, None, &mut prng)?
+                                            .create(TransferType::DebtSwap, &mut prng)?
                                             .sign(borrower_key_pair)?
                                             .transaction()?;
     let mut txn_builder = TransactionBuilder::default();

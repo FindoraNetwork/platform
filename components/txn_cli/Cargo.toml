@@ -32,7 +32,7 @@ shellexpand = "1.0.0"
 submission_server = { path = "../submission_server" }
 txn_builder = { path = "../txn_builder" }
 wasm = { path = "../wasm" }
-zei = { git = "ssh://git@github.com/findoraorg/zei", tag = "v0.0.2-4" }
+zei = { path = "/Users/keyaoshen/code/zei"}
 
 [dev-dependencies]
 quickcheck = "0.8"

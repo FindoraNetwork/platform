@@ -209,11 +209,12 @@ mod tests {
                                                                    token_code.val,
                                                                    oar.get_record_type(),
                                                                    bob.get_pk());
+    let prng = &mut ChaChaRng::from_entropy();
     let xfr_op = xfr_builder.add_input(TxoRef::Absolute(transfer_sid), oar, amt)
                             .unwrap()
-                            .add_output(&out_template, None)
+                            .add_output(&out_template, None, prng)
                             .unwrap()
-                            .create(TransferType::Standard)
+                            .create(TransferType::Standard, prng)
                             .unwrap()
                             .sign(&alice)
                             .unwrap();

@@ -400,7 +400,7 @@ impl TransferOperationBuilder {
     let template =
       AssetRecordTemplate::with_no_asset_tracking(amount, code.val, asset_record_type, *recipient);
     self.get_builder_mut()
-        .add_output(&template, None)
+        .add_output(&template, None, &mut ChaChaRng::from_entropy())
         .map_err(error_to_jsvalue)?;
     Ok(self)
   }
@@ -425,7 +425,7 @@ impl TransferOperationBuilder {
                 transfer_type: TransferType)
                 -> Result<TransferOperationBuilder, JsValue> {
     self.get_builder_mut()
-        .create(*transfer_type.get_type())
+        .create(*transfer_type.get_type(), &mut ChaChaRng::from_entropy())
         .map_err(error_to_jsvalue)?;
     Ok(self)
   }

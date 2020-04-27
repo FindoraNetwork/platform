@@ -30,6 +30,7 @@ lib_files =                                    \
 		./$(pick)/libsolvency.rlib       	   \
         ./$(pick)/libtxn_builder.rlib          \
 		./$(pick)/libtxn_cli.rlib              \
+		./$(pick)/libwhitelist.rlib            \
 
 release:  rust
 	rm -rf $(release_dir)
