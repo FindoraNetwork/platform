@@ -930,7 +930,7 @@ mod tests {
              .map(|OutputRecord(amount, asset_type, key_pair)| {
                let key_pair = XfrKeyPair::generate(&mut ChaChaRng::from_seed([key_pair.0; 32]));
                let template = AssetRecordTemplate::with_no_asset_tracking(*amount, [asset_type.0; 16], NonConfidentialAmount_NonConfidentialAssetType,  key_pair.get_pk());
-               AssetRecord::from_template_no_identity_tracking(&mut prng, &template)     
+               AssetRecord::from_template_no_identity_tracking(&mut prng, &template)
              })
              .collect();
 
@@ -940,7 +940,7 @@ mod tests {
     let note = gen_xfr_note(&mut prng,
                             &input_records.unwrap(),
                             &output_records.unwrap(),
-                            &[&key_pair]);    
+                            &[&key_pair]);
     if let Ok(xfr_note) = note {
       assert!(verify_xfr_note_no_policies(&mut prng, &xfr_note).is_ok())
     }
