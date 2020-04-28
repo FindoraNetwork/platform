@@ -4,6 +4,9 @@ version = "0.1.0"
 authors = ["Engineering <engineering@findora.org>"]
 edition = "2018"
 
+[lib]
+path = "src/txn_lib.rs"
+
 [[bin]]
 name = "txn_cli"
 path = "src/txn_cli.rs"

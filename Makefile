@@ -27,8 +27,9 @@ bin_files =                             \
 lib_files =                                    \
         ./$(pick)/libledger.rlib               \
         ./$(pick)/libledger_api_service.rlib   \
-		./$(pick)/libsolvency.rliib       	   \
+		./$(pick)/libsolvency.rlib       	   \
         ./$(pick)/libtxn_builder.rlib          \
+		./$(pick)/libtxn_cli.rlib              \
 
 release:  rust
 	rm -rf $(release_dir)
