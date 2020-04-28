@@ -11,7 +11,7 @@ path = "src/account_simulator.rs"
 ledger = { path = "../../ledger", features = ["TESTING"] }
 submission_server = { path = "../submission_server" }
 findora = { path = "../../findora" }
-zei = { path = "/Users/keyaoshen/code/zei"}
+zei = { git = "ssh://git@github.com/findoraorg/zei", tag = "v0.0.2-4" }
 actix-web = "1.0.8"
 actix-service = "0.4.2"
 actix-rt = "0.2"
