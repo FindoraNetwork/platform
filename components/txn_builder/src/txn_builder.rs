@@ -734,10 +734,8 @@ impl TransferOperationBuilder {
 
   // Finalize the transaction and prepare for signing. Once called, the transaction cannot be
   // modified.
-  pub fn create(&mut self,
-                transfer_type: TransferType,
-                mut prng: &mut ChaChaRng)
-                -> Result<&mut Self, PlatformError> {
+  pub fn create(&mut self, transfer_type: TransferType) -> Result<&mut Self, PlatformError> {
+    let mut prng = ChaChaRng::from_entropy();
     let body = TransferAssetBody::new(&mut prng,
                                       self.input_sids.clone(),
                                       &self.input_records,
@@ -1000,7 +998,7 @@ mod tests {
                                        20)?
                             .add_output(&output_template, None, &mut prng)?
                             .balance()?
-                            .create(TransferType::Standard, &mut prng)?
+                            .create(TransferType::Standard)?
                             .sign(&alice)?
                             .add_output(&output_template, None, &mut prng);
     assert!(res.is_err());
@@ -1017,7 +1015,7 @@ mod tests {
                                        20)?
                             .add_output(&output_template, None, &mut prng)?
                             .balance()?
-                            .create(TransferType::Standard, &mut prng)?
+                            .create(TransferType::Standard)?
                             .validate_signatures();
 
     assert!(&res.is_err());
@@ -1064,7 +1062,7 @@ mod tests {
       .add_output(&output_charlie13_code2_template, None, &mut prng)?
       .add_output(&output_ben2_code2_template, None, &mut prng)?
       .balance()?
-      .create(TransferType::Standard, &mut prng)?
+      .create(TransferType::Standard)?
       .sign(&alice)?
       .sign(&bob)?
       .transaction()?;

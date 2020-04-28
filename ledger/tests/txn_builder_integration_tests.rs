@@ -73,11 +73,10 @@ fn test_create_asset() -> Result<(), PlatformError> {
   let oar1 = open_blind_asset_record(&bar1, &None, keys.get_sk_ref()).unwrap();
   let oar2 = open_blind_asset_record(&bar2, &None, keys.get_sk_ref()).unwrap();
 
-  let prng = &mut ChaChaRng::from_entropy();
   let op = TransferOperationBuilder::new().add_input(TxoRef::Absolute(txos[0]), oar1, 1000)?
                                           .add_input(TxoRef::Absolute(txos[1]), oar2, 500)?
-                                          .add_output(&AssetRecordTemplate::with_no_asset_tracking(1500, code.val, NonConfidentialAmount_NonConfidentialAssetType, keys.get_pk()), None, prng)?
-                                          .create(TransferType::Standard, prng)?
+                                          .add_output(&AssetRecordTemplate::with_no_asset_tracking(1500, code.val, NonConfidentialAmount_NonConfidentialAssetType, keys.get_pk()), None, &mut ChaChaRng::from_entropy())?
+                                          .create(TransferType::Standard)?
                                           .sign(&keys)?
                                           .transaction()?;
 
@@ -172,7 +171,7 @@ fn test_loan_repayment(loan_amount: u64,
   let prng = &mut ChaChaRng::from_entropy();
   let fiat_to_lender_op = xfr_builder.add_input(TxoRef::Relative(1), fiat_oar, loan_amount)?
                                      .add_output(&output_template, None, prng)?
-                                     .create(TransferType::Standard, prng)?
+                                     .create(TransferType::Standard)?
                                      .sign(&fiat_issuer_keys)?;
 
   let fiat_to_borrower_input_ba = fiat_to_lender_op.get_output_record(0).unwrap();
@@ -195,7 +194,7 @@ fn test_loan_repayment(loan_amount: u64,
                .add_input(TxoRef::Relative(1), debt_oar, loan_amount)?
                .add_output(&borrower_output_template, None, prng)?
                .add_output(&lender_output_template, None, prng)?
-               .create(TransferType::Standard, prng)?
+               .create(TransferType::Standard)?
                .sign(&lender_keys)?
                .sign(&borrower_keys)?;
 
@@ -226,7 +225,7 @@ fn test_loan_repayment(loan_amount: u64,
                                 .add_output(&loan_repayment_template, None, prng)?
                                 .add_output(&burn_repayment_template, None, prng)?
                                 .balance()?
-                                .create(TransferType::DebtSwap, prng)?
+                                .create(TransferType::DebtSwap)?
                                 .sign(&borrower_keys)?;
 
   let tx = tx.add_operation(fiat_to_lender_op.transaction()?)

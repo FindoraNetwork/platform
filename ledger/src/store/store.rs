@@ -3095,8 +3095,10 @@ mod tests {
       fiat_code.val,
       AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
       lender_key_pair.get_pk_ref().clone());
-    let payment_record = AssetRecord::from_template_no_identity_tracking(ledger.get_prng(),
-                                                                         &payment_template).unwrap();
+    let payment_record = AssetRecord::from_template_no_identity_tracking(
+      ledger.get_prng(),
+      &payment_template
+    ).unwrap();
 
     let burned_debt_template = AssetRecordTemplate::with_no_asset_tracking(
       loan_burn_amount,

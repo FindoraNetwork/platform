@@ -425,7 +425,7 @@ impl TransferOperationBuilder {
                 transfer_type: TransferType)
                 -> Result<TransferOperationBuilder, JsValue> {
     self.get_builder_mut()
-        .create(*transfer_type.get_type(), &mut ChaChaRng::from_entropy())
+        .create(*transfer_type.get_type())
         .map_err(error_to_jsvalue)?;
     Ok(self)
   }
