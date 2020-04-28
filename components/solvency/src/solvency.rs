@@ -14,10 +14,9 @@ use serde::{Deserialize, Serialize};
 use txn_builder::BuildsTransactions;
 use txn_builder::{PolicyChoice, TransactionBuilder, TransferOperationBuilder};
 use zei::crypto::solvency::{prove_solvency, verify_solvency};
-use zei::serialization::ZeiFromToBytes;
 use zei::setup::PublicParams;
 use zei::xfr::asset_record::{build_blind_asset_record, open_blind_asset_record, AssetRecordType};
-use zei::xfr::sig::XfrKeyPair;
+use zei::xfr::sig::{XfrKeyPair, XfrSecretKey};
 use zei::xfr::structs::{asset_type_to_scalar, AssetRecordTemplate, BlindAssetRecord};
 
 const PROTOCOL: &str = "http";
@@ -32,9 +31,6 @@ pub type LiabilityCommitment = (CompressedRistretto, CompressedRistretto);
 /// Asset and liability information, and associated solvency proof if exists
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 pub struct AssetAndLiabilityAccount {
-  /// Owner's key pair in bytes
-  key_pair: Vec<u8>,
-
   /// Amount and code of the public assets
   pub public_assets: Vec<AssetAmountAndCode>,
 
@@ -64,12 +60,6 @@ pub struct AssetAndLiabilityAccount {
 }
 
 impl AssetAndLiabilityAccount {
-  pub fn new(key_pair: XfrKeyPair) -> Self {
-    let mut account = AssetAndLiabilityAccount::default();
-    account.key_pair = key_pair.zei_to_bytes();
-    account
-  }
-
   /// Sets the commitments to hidden assets and liabilities, and the solvency proof to null.
   /// Used when the asset or liabilities are updated.
   fn remove_commitments_and_proof(&mut self) {
@@ -78,15 +68,14 @@ impl AssetAndLiabilityAccount {
     self.proof = None;
   }
 
-  fn get_key_pair(&mut self) -> XfrKeyPair {
-    XfrKeyPair::zei_from_bytes(&self.key_pair)
-  }
-
   /// Queries a UTXO SID to get the asset or liability amount.
   ///
   /// # Arguments
   /// * `utxo`: UTXO SID.
-  fn query_utxo_and_get_amount(&mut self, utxo: u64) -> Result<Scalar, PlatformError> {
+  fn query_utxo_and_get_amount(&mut self,
+                               secret_key: &XfrSecretKey,
+                               utxo: u64)
+                               -> Result<Scalar, PlatformError> {
     let response = if let Ok(mut res) =
       reqwest::get(&format!("{}://{}:{}/utxo_sid/{}", PROTOCOL, HOST, QUERY_PORT, utxo))
     {
@@ -102,11 +91,9 @@ impl AssetAndLiabilityAccount {
                                                            Err(PlatformError::DeserializationError)
                                                          })?;
 
-    let key_pair = self.get_key_pair();
-
     // TODO (Keyao): Set owner memo
     let open_asset_record =
-open_blind_asset_record(&blind_asset_record, &None, key_pair.get_sk_ref()).map_err(|e| {
+open_blind_asset_record(&blind_asset_record, &None, secret_key).map_err(|e| {
                                        PlatformError::ZeiError(error_location!(), e)
                                      })?;
 
@@ -125,8 +112,12 @@ open_blind_asset_record(&blind_asset_record, &None, key_pair.get_sk_ref()).map_e
   }
 
   /// Adds a public asset and remove the solvency proof.
-  pub fn add_public_asset(&mut self, code: AssetTypeCode, utxo: u64) -> Result<(), PlatformError> {
-    let amount = self.query_utxo_and_get_amount(utxo)?;
+  pub fn add_public_asset(&mut self,
+                          secret_key: &XfrSecretKey,
+                          code: AssetTypeCode,
+                          utxo: u64)
+                          -> Result<(), PlatformError> {
+    let amount = self.query_utxo_and_get_amount(secret_key, utxo)?;
     self.public_assets
         .push((amount, asset_type_to_scalar(&code.val)));
     self.remove_commitments_and_proof();
@@ -134,8 +125,12 @@ open_blind_asset_record(&blind_asset_record, &None, key_pair.get_sk_ref()).map_e
   }
 
   /// Adds a hidden asset and remove the solvency proof.
-  pub fn add_hidden_asset(&mut self, code: AssetTypeCode, utxo: u64) -> Result<(), PlatformError> {
-    let amount = self.query_utxo_and_get_amount(utxo)?;
+  pub fn add_hidden_asset(&mut self,
+                          secret_key: &XfrSecretKey,
+                          code: AssetTypeCode,
+                          utxo: u64)
+                          -> Result<(), PlatformError> {
+    let amount = self.query_utxo_and_get_amount(secret_key, utxo)?;
     self.hidden_assets
         .push((amount, asset_type_to_scalar(&code.val)));
     self.remove_commitments_and_proof();
@@ -144,10 +139,11 @@ open_blind_asset_record(&blind_asset_record, &None, key_pair.get_sk_ref()).map_e
 
   /// Adds a public liability and remove the solvency proof.
   pub fn add_public_liability(&mut self,
+                              secret_key: &XfrSecretKey,
                               code: AssetTypeCode,
                               utxo: u64)
                               -> Result<(), PlatformError> {
-    let amount = self.query_utxo_and_get_amount(utxo)?;
+    let amount = self.query_utxo_and_get_amount(secret_key, utxo)?;
     self.public_liabilities
         .push((amount, asset_type_to_scalar(&code.val)));
     self.remove_commitments_and_proof();
@@ -156,10 +152,11 @@ open_blind_asset_record(&blind_asset_record, &None, key_pair.get_sk_ref()).map_e
 
   /// Adds a hidden liability and remove the solvency proof.
   pub fn add_hidden_liability(&mut self,
+                              secret_key: &XfrSecretKey,
                               code: AssetTypeCode,
                               utxo: u64)
                               -> Result<(), PlatformError> {
-    let amount = self.query_utxo_and_get_amount(utxo)?;
+    let amount = self.query_utxo_and_get_amount(secret_key, utxo)?;
     self.hidden_liabilities
         .push((amount, asset_type_to_scalar(&code.val)));
     self.remove_commitments_and_proof();
@@ -355,11 +352,11 @@ mod tests {
 
   // Add three public assets
   fn add_public_assets(issuer_key_pair: &XfrKeyPair,
+                       receipient_key_pair: &XfrKeyPair,
                        account: &mut AssetAndLiabilityAccount,
                        codes: (AssetTypeCode, AssetTypeCode, AssetTypeCode),
                        ledger_standalone: &LedgerStandalone)
                        -> Result<(), PlatformError> {
-    let receipient_key_pair = &account.get_key_pair();
     let utxo_0 = test_issue_transfer_submit_and_get_utxo(issuer_key_pair,
                                                          receipient_key_pair,
                                                          codes.0,
@@ -379,20 +376,20 @@ mod tests {
                                                          0,
                                                          ledger_standalone)?;
 
-    account.add_public_asset(codes.0, utxo_0)?;
-    account.add_public_asset(codes.1, utxo_1)?;
-    account.add_public_asset(codes.2, utxo_2)?;
+    account.add_public_asset(receipient_key_pair.get_sk_ref(), codes.0, utxo_0)?;
+    account.add_public_asset(receipient_key_pair.get_sk_ref(), codes.1, utxo_1)?;
+    account.add_public_asset(receipient_key_pair.get_sk_ref(), codes.2, utxo_2)?;
 
     Ok(())
   }
 
   // Add three hidden assets
   fn add_hidden_assets(issuer_key_pair: &XfrKeyPair,
+                       receipient_key_pair: &XfrKeyPair,
                        account: &mut AssetAndLiabilityAccount,
                        codes: (AssetTypeCode, AssetTypeCode, AssetTypeCode),
                        ledger_standalone: &LedgerStandalone)
                        -> Result<(), PlatformError> {
-    let receipient_key_pair = &account.get_key_pair();
     let utxo_0 = test_issue_transfer_submit_and_get_utxo(issuer_key_pair,
                                                          receipient_key_pair,
                                                          codes.0,
@@ -412,20 +409,20 @@ mod tests {
                                                          1,
                                                          ledger_standalone)?;
 
-    account.add_hidden_asset(codes.0, utxo_0)?;
-    account.add_hidden_asset(codes.1, utxo_1)?;
-    account.add_hidden_asset(codes.2, utxo_2)?;
+    account.add_hidden_asset(receipient_key_pair.get_sk_ref(), codes.0, utxo_0)?;
+    account.add_hidden_asset(receipient_key_pair.get_sk_ref(), codes.1, utxo_1)?;
+    account.add_hidden_asset(receipient_key_pair.get_sk_ref(), codes.2, utxo_2)?;
 
     Ok(())
   }
 
   // Add three public liabilities
   fn add_public_liabilities(issuer_key_pair: &XfrKeyPair,
+                            receipient_key_pair: &XfrKeyPair,
                             account: &mut AssetAndLiabilityAccount,
                             codes: (AssetTypeCode, AssetTypeCode, AssetTypeCode),
                             ledger_standalone: &LedgerStandalone)
                             -> Result<(), PlatformError> {
-    let receipient_key_pair = &account.get_key_pair();
     let utxo_0 = test_issue_transfer_submit_and_get_utxo(issuer_key_pair,
                                                          receipient_key_pair,
                                                          codes.0,
@@ -445,20 +442,20 @@ mod tests {
                                                          2,
                                                          ledger_standalone)?;
 
-    account.add_public_liability(codes.0, utxo_0)?;
-    account.add_public_liability(codes.1, utxo_1)?;
-    account.add_public_liability(codes.2, utxo_2)?;
+    account.add_public_liability(receipient_key_pair.get_sk_ref(), codes.0, utxo_0)?;
+    account.add_public_liability(receipient_key_pair.get_sk_ref(), codes.1, utxo_1)?;
+    account.add_public_liability(receipient_key_pair.get_sk_ref(), codes.2, utxo_2)?;
 
     Ok(())
   }
 
   // Add three hidden liabilities, with total value smaller than hidden assets'
   fn add_hidden_liabilities_smaller(issuer_key_pair: &XfrKeyPair,
+                                    receipient_key_pair: &XfrKeyPair,
                                     account: &mut AssetAndLiabilityAccount,
                                     codes: (AssetTypeCode, AssetTypeCode, AssetTypeCode),
                                     ledger_standalone: &LedgerStandalone)
                                     -> Result<(), PlatformError> {
-    let receipient_key_pair = &account.get_key_pair();
     let utxo_0 = test_issue_transfer_submit_and_get_utxo(issuer_key_pair,
                                                          receipient_key_pair,
                                                          codes.0,
@@ -478,20 +475,20 @@ mod tests {
                                                          3,
                                                          ledger_standalone)?;
 
-    account.add_hidden_liability(codes.0, utxo_0)?;
-    account.add_hidden_liability(codes.1, utxo_1)?;
-    account.add_hidden_liability(codes.2, utxo_2)?;
+    account.add_hidden_liability(receipient_key_pair.get_sk_ref(), codes.0, utxo_0)?;
+    account.add_hidden_liability(receipient_key_pair.get_sk_ref(), codes.1, utxo_1)?;
+    account.add_hidden_liability(receipient_key_pair.get_sk_ref(), codes.2, utxo_2)?;
 
     Ok(())
   }
 
   // Add three hidden liabilities, with total value larger than hidden assets'
   fn add_hidden_liabilities_larger(issuer_key_pair: &XfrKeyPair,
+                                   receipient_key_pair: &XfrKeyPair,
                                    account: &mut AssetAndLiabilityAccount,
                                    codes: (AssetTypeCode, AssetTypeCode, AssetTypeCode),
                                    ledger_standalone: &LedgerStandalone)
                                    -> Result<(), PlatformError> {
-    let receipient_key_pair = &account.get_key_pair();
     let utxo_0 = test_issue_transfer_submit_and_get_utxo(issuer_key_pair,
                                                          receipient_key_pair,
                                                          codes.0,
@@ -511,9 +508,9 @@ mod tests {
                                                          4,
                                                          ledger_standalone)?;
 
-    account.add_hidden_liability(codes.0, utxo_0)?;
-    account.add_hidden_liability(codes.1, utxo_1)?;
-    account.add_hidden_liability(codes.2, utxo_2)?;
+    account.add_hidden_liability(receipient_key_pair.get_sk_ref(), codes.0, utxo_0)?;
+    account.add_hidden_liability(receipient_key_pair.get_sk_ref(), codes.1, utxo_1)?;
+    account.add_hidden_liability(receipient_key_pair.get_sk_ref(), codes.2, utxo_2)?;
 
     Ok(())
   }
@@ -551,12 +548,18 @@ mod tests {
     add_conversion_rate_incomplete(&mut audit, (codes.0, codes.1));
 
     // Create an asset and liability account
-    let mut account =
-      AssetAndLiabilityAccount::new(XfrKeyPair::generate(&mut ChaChaRng::from_entropy()));
-
-    // Adds hidden assets and liabilities
-    add_hidden_assets(issuer_key_pair, &mut account, codes, ledger_standalone).unwrap();
-    add_hidden_liabilities_smaller(issuer_key_pair, &mut account, codes, ledger_standalone).unwrap();
+    let mut account = AssetAndLiabilityAccount::default();
+    let receipient_key_pair = &XfrKeyPair::generate(&mut ChaChaRng::from_entropy());
+    add_hidden_assets(issuer_key_pair,
+                      receipient_key_pair,
+                      &mut account,
+                      codes,
+                      ledger_standalone).unwrap();
+    add_hidden_liabilities_smaller(issuer_key_pair,
+                                   receipient_key_pair,
+                                   &mut account,
+                                   codes,
+                                   ledger_standalone).unwrap();
 
     // Prove the solvency
     // Should fail with ZeiError::SolvencyProveError
@@ -588,12 +591,18 @@ mod tests {
     add_conversion_rate_complete(&mut audit, codes);
 
     // Create an asset and liability account
-    let mut account =
-      AssetAndLiabilityAccount::new(XfrKeyPair::generate(&mut ChaChaRng::from_entropy()));
-
-    // Adds hidden assets and liabilities
-    add_hidden_assets(issuer_key_pair, &mut account, codes, ledger_standalone).unwrap();
-    add_hidden_liabilities_smaller(issuer_key_pair, &mut account, codes, ledger_standalone).unwrap();
+    let mut account = AssetAndLiabilityAccount::default();
+    let receipient_key_pair = &XfrKeyPair::generate(&mut ChaChaRng::from_entropy());
+    add_hidden_assets(issuer_key_pair,
+                      receipient_key_pair,
+                      &mut account,
+                      codes,
+                      ledger_standalone).unwrap();
+    add_hidden_liabilities_smaller(issuer_key_pair,
+                                   receipient_key_pair,
+                                   &mut account,
+                                   codes,
+                                   ledger_standalone).unwrap();
 
     // Verify the solvency without a proof
     // Should fail with InputsError
@@ -624,14 +633,22 @@ mod tests {
     add_conversion_rate_complete(&mut audit, codes);
 
     // Create an asset and liability account
-    let mut account =
-      AssetAndLiabilityAccount::new(XfrKeyPair::generate(&mut ChaChaRng::from_entropy()));
+    let mut account = AssetAndLiabilityAccount::default();
 
     // Adds hidden assets
-    add_hidden_assets(issuer_key_pair, &mut account, codes, ledger_standalone).unwrap();
+    let receipient_key_pair = &XfrKeyPair::generate(&mut ChaChaRng::from_entropy());
+    add_hidden_assets(issuer_key_pair,
+                      receipient_key_pair,
+                      &mut account,
+                      codes,
+                      ledger_standalone).unwrap();
 
     // Adds hidden liabilities, with total value larger than hidden assets'
-    add_hidden_liabilities_larger(issuer_key_pair, &mut account, codes, ledger_standalone).unwrap();
+    add_hidden_liabilities_larger(issuer_key_pair,
+                                  receipient_key_pair,
+                                  &mut account,
+                                  codes,
+                                  ledger_standalone).unwrap();
 
     // Prove the solvency
     audit.prove_solvency_and_store(&mut account).unwrap();
@@ -669,14 +686,28 @@ mod tests {
     add_conversion_rate_complete(&mut audit, codes);
 
     // Create an asset and liability account
-    let mut account =
-      AssetAndLiabilityAccount::new(XfrKeyPair::generate(&mut ChaChaRng::from_entropy()));
-
-    // Adds assets and liabilities
-    add_public_assets(issuer_key_pair, &mut account, codes, ledger_standalone).unwrap();
-    add_hidden_assets(issuer_key_pair, &mut account, codes, ledger_standalone).unwrap();
-    add_public_liabilities(issuer_key_pair, &mut account, codes, ledger_standalone).unwrap();
-    add_hidden_liabilities_smaller(issuer_key_pair, &mut account, codes, ledger_standalone).unwrap();
+    let mut account = AssetAndLiabilityAccount::default();
+    let receipient_key_pair = &XfrKeyPair::generate(&mut ChaChaRng::from_entropy());
+    add_public_assets(issuer_key_pair,
+                      receipient_key_pair,
+                      &mut account,
+                      codes,
+                      ledger_standalone).unwrap();
+    add_hidden_assets(issuer_key_pair,
+                      receipient_key_pair,
+                      &mut account,
+                      codes,
+                      ledger_standalone).unwrap();
+    add_public_liabilities(issuer_key_pair,
+                           receipient_key_pair,
+                           &mut account,
+                           codes,
+                           ledger_standalone).unwrap();
+    add_hidden_liabilities_smaller(issuer_key_pair,
+                                   receipient_key_pair,
+                                   &mut account,
+                                   codes,
+                                   ledger_standalone).unwrap();
 
     // Prove the solvency
     audit.prove_solvency_and_store(&mut account).unwrap();
@@ -707,14 +738,28 @@ mod tests {
     add_conversion_rate_complete(&mut audit, codes);
 
     // Create an asset and liability account
-    let mut account =
-      AssetAndLiabilityAccount::new(XfrKeyPair::generate(&mut ChaChaRng::from_entropy()));
-
-    // Adds assets and liabilities
-    add_public_assets(issuer_key_pair, &mut account, codes, ledger_standalone).unwrap();
-    add_hidden_assets(issuer_key_pair, &mut account, codes, ledger_standalone).unwrap();
-    add_public_liabilities(issuer_key_pair, &mut account, codes, ledger_standalone).unwrap();
-    add_hidden_liabilities_smaller(issuer_key_pair, &mut account, codes, ledger_standalone).unwrap();
+    let mut account = AssetAndLiabilityAccount::default();
+    let receipient_key_pair = &XfrKeyPair::generate(&mut ChaChaRng::from_entropy());
+    add_public_assets(issuer_key_pair,
+                      receipient_key_pair,
+                      &mut account,
+                      codes,
+                      ledger_standalone).unwrap();
+    add_hidden_assets(issuer_key_pair,
+                      receipient_key_pair,
+                      &mut account,
+                      codes,
+                      ledger_standalone).unwrap();
+    add_public_liabilities(issuer_key_pair,
+                           receipient_key_pair,
+                           &mut account,
+                           codes,
+                           ledger_standalone).unwrap();
+    add_hidden_liabilities_smaller(issuer_key_pair,
+                                   receipient_key_pair,
+                                   &mut account,
+                                   codes,
+                                   ledger_standalone).unwrap();
 
     // Prove and verify the solvency
     audit.prove_solvency_and_store(&mut account).unwrap();
@@ -722,12 +767,13 @@ mod tests {
 
     // Update the public assets
     let utxo = test_issue_transfer_submit_and_get_utxo(issuer_key_pair,
-                                                       &account.get_key_pair(),
+                                                       receipient_key_pair,
                                                        codes.0,
                                                        40,
                                                        5,
                                                        ledger_standalone).unwrap();
-    account.add_public_asset(codes.0, utxo).unwrap();
+    account.add_public_asset(receipient_key_pair.get_sk_ref(), codes.0, utxo)
+           .unwrap();
 
     // Verify the solvency without proving it again
     // Should fail with InputsError
@@ -762,14 +808,28 @@ mod tests {
     add_conversion_rate_complete(&mut audit, codes);
 
     // Create an asset and liability account
-    let mut account =
-      AssetAndLiabilityAccount::new(XfrKeyPair::generate(&mut ChaChaRng::from_entropy()));
-
-    // Adds assets and liabilities
-    add_public_assets(issuer_key_pair, &mut account, codes, ledger_standalone).unwrap();
-    add_hidden_assets(issuer_key_pair, &mut account, codes, ledger_standalone).unwrap();
-    add_public_liabilities(issuer_key_pair, &mut account, codes, ledger_standalone).unwrap();
-    add_hidden_liabilities_smaller(issuer_key_pair, &mut account, codes, ledger_standalone).unwrap();
+    let mut account = AssetAndLiabilityAccount::default();
+    let receipient_key_pair = &XfrKeyPair::generate(&mut ChaChaRng::from_entropy());
+    add_public_assets(issuer_key_pair,
+                      receipient_key_pair,
+                      &mut account,
+                      codes,
+                      ledger_standalone).unwrap();
+    add_hidden_assets(issuer_key_pair,
+                      receipient_key_pair,
+                      &mut account,
+                      codes,
+                      ledger_standalone).unwrap();
+    add_public_liabilities(issuer_key_pair,
+                           receipient_key_pair,
+                           &mut account,
+                           codes,
+                           ledger_standalone).unwrap();
+    add_hidden_liabilities_smaller(issuer_key_pair,
+                                   receipient_key_pair,
+                                   &mut account,
+                                   codes,
+                                   ledger_standalone).unwrap();
 
     // Prove and verify the solvency
     audit.prove_solvency_and_store(&mut account).unwrap();
@@ -777,12 +837,13 @@ mod tests {
 
     // Update the hidden liabilities
     let utxo = test_issue_transfer_submit_and_get_utxo(issuer_key_pair,
-                                                       &account.get_key_pair(),
+                                                       receipient_key_pair,
                                                        codes.0,
                                                        4000,
                                                        5,
                                                        ledger_standalone).unwrap();
-    account.add_hidden_liability(codes.0, utxo).unwrap();
+    account.add_hidden_liability(receipient_key_pair.get_sk_ref(), codes.0, utxo)
+           .unwrap();
 
     // Prove the solvency again
     audit.prove_solvency_and_store(&mut account).unwrap();

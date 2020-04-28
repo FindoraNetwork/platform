@@ -7,6 +7,8 @@ use serde::{Deserialize, Serialize};
 use solvency::*;
 use std::fs;
 use zei::errors::ZeiError;
+use zei::serialization::ZeiFromToBytes;
+use zei::xfr::sig::XfrKeyPair;
 
 /// Path to the data file.
 const DATA_FILE: &str = "solvency_data.json";
@@ -61,6 +63,24 @@ fn parse_to_u64(val_str: &str) -> Result<u64, PlatformError> {
 fn process_inputs(inputs: clap::ArgMatches) -> Result<(), PlatformError> {
   let mut data = load_data()?;
   match inputs.subcommand() {
+    ("store_key_pair", Some(store_matches)) => {
+      let key_pair = if let Some(key_pair_arg) = store_matches.value_of("key_pair") {
+        key_pair_arg
+      } else {
+        println!("Missing encoded key pair string. Use --key_pair.");
+        return Err(PlatformError::InputsError(error_location!()));
+      };
+      if let Some(file_arg) = store_matches.value_of("file") {
+        if let Err(error) = fs::write(file_arg, &key_pair) {
+          return Err(PlatformError::IoError(format!("Failed to create file {}: {}.",
+                                                    file_arg, error)));
+        };
+      } else {
+        println!("Missing file path. Use --file.");
+        return Err(PlatformError::InputsError(error_location!()));
+      }
+      Ok(())
+    }
     ("set_rate", Some(set_matches)) => {
       let code = if let Some(code_arg) = set_matches.value_of("code") {
         AssetTypeCode::new_from_base64(code_arg)?
@@ -78,6 +98,20 @@ fn process_inputs(inputs: clap::ArgMatches) -> Result<(), PlatformError> {
       store_data_to_file(data)
     }
     ("add_asset_or_liability", Some(add_matches)) => {
+      let key_pair = if let Some(key_file_arg) = add_matches.value_of("key_file") {
+        let key_pair_str = match fs::read_to_string(key_file_arg) {
+          Ok(k) => k,
+          Err(_) => {
+            return Err(PlatformError::IoError(format!("Failed to read file: {}", key_file_arg)));
+          }
+        };
+        XfrKeyPair::zei_from_bytes(&hex::decode(key_pair_str).or_else(|_| {
+          Err(PlatformError::DeserializationError)
+        })?)
+      } else {
+        println!("Missing path to the key pair file. Use --key_file.");
+        return Err(PlatformError::InputsError(error_location!()));
+      };
       let code = if let Some(code_arg) = add_matches.value_of("code") {
         AssetTypeCode::new_from_base64(code_arg)?
       } else {
@@ -93,13 +127,13 @@ fn process_inputs(inputs: clap::ArgMatches) -> Result<(), PlatformError> {
       if let Some(type_arg) = add_matches.value_of("type") {
         match type_arg {
           "public_asset" => data.asset_and_liability_account
-                                .add_public_asset(code, utxo)?,
+                                .add_public_asset(key_pair.get_sk_ref(), code, utxo)?,
           "hidden_asset" => data.asset_and_liability_account
-                                .add_hidden_asset(code, utxo)?,
+                                .add_hidden_asset(key_pair.get_sk_ref(), code, utxo)?,
           "public_liability" => data.asset_and_liability_account
-                                    .add_public_liability(code, utxo)?,
+                                    .add_public_liability(key_pair.get_sk_ref(), code, utxo)?,
           _ => data.asset_and_liability_account
-                   .add_hidden_liability(code, utxo)?,
+                   .add_hidden_liability(key_pair.get_sk_ref(), code, utxo)?,
         }
       } else {
         println!("Missing asset or liability type. Use --type.");
@@ -133,6 +167,19 @@ fn process_inputs(inputs: clap::ArgMatches) -> Result<(), PlatformError> {
 
 fn main() -> Result<(), PlatformError> {
   let inputs = App::new("Solvency Proof").version("0.1.0").about("Copyright 2020 © Findora. All rights reserved.")
+    .subcommand(SubCommand::with_name("store_key_pair")
+      .arg(Arg::with_name("key_pair")
+        .short("k")
+        .long("key_pair")
+        .required(true)
+        .takes_value(true)
+        .help("Encoded key pair string."))
+      .arg(Arg::with_name("file")
+        .short("f")
+        .long("file")
+        .required(true)
+        .takes_value(true)
+        .help("File to store the generated key pair.")))
     .subcommand(SubCommand::with_name("set_rate")
       .arg(Arg::with_name("code")
         .short("c")
@@ -147,6 +194,12 @@ fn main() -> Result<(), PlatformError> {
         .takes_value(true)
         .help("Conversion rate of this asset.")))
     .subcommand(SubCommand::with_name("add_asset_or_liability")
+      .arg(Arg::with_name("key_file")
+        .short("k")
+        .long("key_file")
+        .required(true)
+        .takes_value(true)
+        .help("File storing the key pair."))
       .arg(Arg::with_name("type")
         .short("t")
         .long("type")
@@ -253,8 +306,13 @@ mod tests {
   }
 
   // Command to add an asset or a liability
-  fn add_asset_or_liability_cmd(add_type: &str, code: &str, utxo: &str) -> io::Result<Output> {
+  fn add_asset_or_liability_cmd(add_type: &str,
+                                key_file: &str,
+                                code: &str,
+                                utxo: &str)
+                                -> io::Result<Output> {
     Command::new(COMMAND).arg("add_asset_or_liability")
+                         .args(&["--key_file", key_file])
                          .args(&["--type", add_type])
                          .args(&["--code", code])
                          .args(&["--utxo", utxo])
@@ -267,11 +325,23 @@ mod tests {
     let ledger_standalone = &LedgerStandalone::new();
     ledger_standalone.poll_until_ready().unwrap();
 
-    // Generate assets and create an asset and liability account
+    // Generate asset codes and key pairs
     let codes =
       (AssetTypeCode::gen_random(), AssetTypeCode::gen_random(), AssetTypeCode::gen_random());
     let issuer_key_pair = &XfrKeyPair::generate(&mut ChaChaRng::from_entropy());
     let receipient_key_pair = XfrKeyPair::generate(&mut ChaChaRng::from_entropy());
+
+    // Store the receipient's key pair
+    let receipient_key_pair_str = hex::encode(receipient_key_pair.zei_to_bytes());
+    let key_file = "solvency_key_pair";
+    let output = Command::new(COMMAND).arg("store_key_pair")
+                                      .args(&["--key_pair", &receipient_key_pair_str])
+                                      .args(&["--file", key_file])
+                                      .output()
+                                      .expect("Failed to store the key pair.");
+    io::stdout().write_all(&output.stdout).unwrap();
+    io::stdout().write_all(&output.stderr).unwrap();
+    assert!(output.status.success());
 
     // Define, issue and transfer assets
     test_define_and_submit_multiple(issuer_key_pair, codes, ledger_standalone).unwrap();
@@ -301,35 +371,31 @@ mod tests {
     assert!(output.status.success());
 
     // Add assets and liabilities such that total asset amount > total liabiliity amount
-    let mut data = load_data().unwrap();
-    data.asset_and_liability_account = AssetAndLiabilityAccount::new(receipient_key_pair);
-    store_data_to_file(data.clone()).unwrap();
-
     let output =
-      add_asset_or_liability_cmd("public_asset", code_0, &utxo_0).expect("Failed to add public asset.");
+      add_asset_or_liability_cmd("public_asset", key_file, code_0, &utxo_0).expect("Failed to add public asset.");
     io::stdout().write_all(&output.stdout).unwrap();
     io::stdout().write_all(&output.stderr).unwrap();
     assert!(output.status.success());
 
     let output =
-      add_asset_or_liability_cmd("hidden_asset", code_1, &utxo_1).expect("Failed to add hidden asset.");
+      add_asset_or_liability_cmd("hidden_asset", key_file, code_1, &utxo_1).expect("Failed to add hidden asset.");
     io::stdout().write_all(&output.stdout).unwrap();
     io::stdout().write_all(&output.stderr).unwrap();
     assert!(output.status.success());
 
     let output =
-    add_asset_or_liability_cmd("hidden_asset", code_2, &utxo_2).expect("Failed to add hidden asset.");
+    add_asset_or_liability_cmd("hidden_asset", key_file, code_2, &utxo_2).expect("Failed to add hidden asset.");
     io::stdout().write_all(&output.stdout).unwrap();
     io::stdout().write_all(&output.stderr).unwrap();
     assert!(output.status.success());
 
-    let output = add_asset_or_liability_cmd("public_liability", code_0, &utxo_3)
+    let output = add_asset_or_liability_cmd("public_liability", key_file, code_0, &utxo_3)
                                       .expect("Failed to add public liability.");
     io::stdout().write_all(&output.stdout).unwrap();
     io::stdout().write_all(&output.stderr).unwrap();
     assert!(output.status.success());
 
-    let output = add_asset_or_liability_cmd("hidden_liability", code_1, &utxo_4)
+    let output = add_asset_or_liability_cmd("hidden_liability", key_file, code_1, &utxo_4)
                                       .expect("Failed to add hidden liability.");
     io::stdout().write_all(&output.stdout).unwrap();
     io::stdout().write_all(&output.stderr).unwrap();
@@ -344,7 +410,7 @@ mod tests {
     assert!(output.status.success());
 
     // Add additional liabilities to make total asset amount < total liabiliity amount
-    let output = add_asset_or_liability_cmd("hidden_liability", code_1, &utxo_5).expect("Failed to add hidden liability.");
+    let output = add_asset_or_liability_cmd("hidden_liability", key_file, code_1, &utxo_5).expect("Failed to add hidden liability.");
     io::stdout().write_all(&output.stdout).unwrap();
     io::stdout().write_all(&output.stderr).unwrap();
     assert!(output.status.success());
@@ -360,7 +426,7 @@ mod tests {
 
     // Add additional assets to make total asset amount > total liabiliity amount
     let output =
-      add_asset_or_liability_cmd("public_asset", code_0, &utxo_6).expect("Failed to add public asset.");
+      add_asset_or_liability_cmd("public_asset", key_file, code_0, &utxo_6).expect("Failed to add public asset.");
     io::stdout().write_all(&output.stdout).unwrap();
     io::stdout().write_all(&output.stderr).unwrap();
     assert!(output.status.success());
@@ -374,5 +440,6 @@ mod tests {
     assert!(output.status.success());
 
     fs::remove_file("solvency_data.json").unwrap();
+    fs::remove_file(key_file).unwrap();
   }
 }
