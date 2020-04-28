@@ -114,7 +114,7 @@ fn test_issue_transfer_and_get_utxo_and_blind(key_pair: &XfrKeyPair,
                       key_pair.get_sk_ref())
     .map_err(|e| PlatformError::ZeiError(error_location!(),e))?,
     amount)?;
-  let blind = txn_builder.add_output_and_get_type_blind(&transfer_template, None, prng)?;
+  let (_, type_blind) = txn_builder.add_output_and_get_blinds(&transfer_template, None, prng)?;
   let xfr_op = txn_builder.balance()?
                           .create(TransferType::Standard)?
                           .sign(key_pair)?
@@ -130,7 +130,7 @@ fn test_issue_transfer_and_get_utxo_and_blind(key_pair: &XfrKeyPair,
                        .transaction();
 
   // Submit the transaction and get the UTXO
-  Ok((ledger_standalone.submit_transaction_and_fetch_utxos(&txn)[0].0, blind))
+  Ok((ledger_standalone.submit_transaction_and_fetch_utxos(&txn)[0].0, type_blind))
 }
 
 /// For unit testing: defines, issues and transfers a confidential asset, submits the transactions, and get the UTXO SID and asset type blind.

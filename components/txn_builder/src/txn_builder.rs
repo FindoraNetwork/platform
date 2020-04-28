@@ -521,12 +521,12 @@ impl BuildsTransactions for TransactionBuilder {
 }
 
 /// Generates an asset record from an asset record template using optional identity proof.
-/// Returns the asset record and type blind.
-pub(crate) fn build_record_and_get_type_blind<R: CryptoRng + RngCore>(
+/// Returns the asset record, amount blinds, and type blind.
+pub(crate) fn build_record_and_get_blinds<R: CryptoRng + RngCore>(
   prng: &mut R,
   asset_record: &AssetRecordTemplate,
   identity_proof: Option<ConfidentialAC>)
-  -> Result<(AssetRecord, Scalar), PlatformError> {
+  -> Result<(AssetRecord, (Scalar, Scalar), Scalar), PlatformError> {
   // Check input consistency:
   // - if no policy, then no identity proof needed
   // - if policy and identity tracking, then identity proof is needed
@@ -567,6 +567,7 @@ pub(crate) fn build_record_and_get_type_blind<R: CryptoRng + RngCore>(
                     identity_proof: reveal_proof,
                     asset_tracer_memo: asset_tracing_memo,
                     owner_memo },
+      open_asset_record.amount_blinds,
       open_asset_record.type_blind))
 }
 
@@ -643,55 +644,57 @@ impl TransferOperationBuilder {
     Ok(self)
   }
 
-  pub fn add_output_and_get_type_blind(&mut self,
-                                       asset_record_template: &AssetRecordTemplate,
-                                       credential_record: Option<(&CredUserSecretKey,
-                                               &Credential,
-                                               &ACCommitmentKey)>,
-                                       prng: &mut ChaChaRng)
-                                       -> Result<Scalar, PlatformError> {
+  /// Adds output to the records, and gets the asset amount blinds and type blind.
+  pub fn add_output_and_get_blinds(&mut self,
+                                   asset_record_template: &AssetRecordTemplate,
+                                   credential_record: Option<(&CredUserSecretKey,
+                                           &Credential,
+                                           &ACCommitmentKey)>,
+                                   prng: &mut ChaChaRng)
+                                   -> Result<((Scalar, Scalar), Scalar), PlatformError> {
     if self.transfer.is_some() {
       return Err(PlatformError::InvariantError(Some("Cannot mutate a transfer that has been signed".to_string())));
     }
-    let (ar, blind) = if let Some((user_secret_key, credential, commitment_key)) = credential_record
-    {
-      match &asset_record_template.asset_tracking {
-        // identity tracking must have asset_tracking policy
-        None => {
-          return Err(PlatformError::InputsError(error_location!()));
-        }
-        Some(policy) => {
-          match &policy.identity_tracking {
-            // policy must have a identity tracking policy
-            None => {
-              return Err(PlatformError::InputsError(error_location!()));
-            }
-            Some(reveal_policy) => {
-              let conf_ac =
-                ac_confidential_open_commitment(prng,
-                                                user_secret_key.get_ref(),
-                                                credential,
-                                                commitment_key,
-                                                &policy.enc_keys.attrs_enc_key,
-                                                &reveal_policy.reveal_map,
-                                                &[]).map_err(|e| {
-                                                      PlatformError::ZeiError(error_location!(), e)
-                                                    })?;
-              build_record_and_get_type_blind(prng, &asset_record_template, Some(conf_ac))?
+    let (ar, amount_blinds, type_blind) =
+      if let Some((user_secret_key, credential, commitment_key)) = credential_record {
+        match &asset_record_template.asset_tracking {
+          // identity tracking must have asset_tracking policy
+          None => {
+            return Err(PlatformError::InputsError(error_location!()));
+          }
+          Some(policy) => {
+            match &policy.identity_tracking {
+              // policy must have a identity tracking policy
+              None => {
+                return Err(PlatformError::InputsError(error_location!()));
+              }
+              Some(reveal_policy) => {
+                let conf_ac =
+                  ac_confidential_open_commitment(prng,
+                                                  user_secret_key.get_ref(),
+                                                  credential,
+                                                  commitment_key,
+                                                  &policy.enc_keys.attrs_enc_key,
+                                                  &reveal_policy.reveal_map,
+                                                  &[]).map_err(|e| {
+                                                        PlatformError::ZeiError(error_location!(),
+                                                                                e)
+                                                      })?;
+                build_record_and_get_blinds(prng, &asset_record_template, Some(conf_ac))?
+              }
             }
           }
         }
-      }
-    } else {
-      if let Some(policy) = &asset_record_template.asset_tracking {
-        if policy.identity_tracking.is_some() {
-          return Err(PlatformError::InputsError(error_location!()));
+      } else {
+        if let Some(policy) = &asset_record_template.asset_tracking {
+          if policy.identity_tracking.is_some() {
+            return Err(PlatformError::InputsError(error_location!()));
+          }
         }
-      }
-      build_record_and_get_type_blind(prng, &asset_record_template, None)?
-    };
+        build_record_and_get_blinds(prng, &asset_record_template, None)?
+      };
     self.output_records.push(ar);
-    Ok(blind)
+    Ok((amount_blinds, type_blind))
   }
 
   // Ensures that outputs and inputs are balanced by adding remainder outputs for leftover asset
