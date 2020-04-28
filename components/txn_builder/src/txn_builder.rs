@@ -376,12 +376,11 @@ pub trait BuildsTransactions {
                  })
                  .collect();
     output_ars_templates.append(&mut partially_consumed_inputs);
-    let output_ars: Vec<AssetRecord> =
+    let output_ars: Result<Vec<AssetRecord>, _> =
       output_ars_templates.iter()
-                          .map(|x| {
-                            AssetRecord::from_template_no_identity_tracking(&mut prng, x).unwrap()
-                          })
+                          .map(|x| AssetRecord::from_template_no_identity_tracking(&mut prng, x))
                           .collect();
+    let output_ars = output_ars.map_err(|e| PlatformError::ZeiError(error_location!(), e))?;
     self.add_operation_transfer_asset(&key_pair, input_sids, &input_oars, &output_ars)?;
     Ok(self)
   }
@@ -626,19 +625,19 @@ impl TransferOperationBuilder {
                     credential_record: Option<(&CredUserSecretKey,
                             &Credential,
                             &ACCommitmentKey)>,
-                    mut prng: &mut ChaChaRng)
+                    prng: &mut ChaChaRng)
                     -> Result<&mut Self, PlatformError> {
     if self.transfer.is_some() {
       return Err(PlatformError::InvariantError(Some("Cannot mutate a transfer that has been signed".to_string())));
     }
     let ar = if let Some((user_secret_key, credential, commitment_key)) = credential_record {
-      AssetRecord::from_template_with_identity_tracking(&mut prng,
+      AssetRecord::from_template_with_identity_tracking(prng,
                                                         asset_record_template,
                                                         user_secret_key.get_ref(),
                                                         credential,
                                                         commitment_key).unwrap()
     } else {
-      AssetRecord::from_template_no_identity_tracking(&mut prng, asset_record_template).unwrap()
+      AssetRecord::from_template_no_identity_tracking(prng, asset_record_template).unwrap()
     };
     self.output_records.push(ar);
     Ok(self)
@@ -914,31 +913,34 @@ mod tests {
     let key_pair_copy = XfrKeyPair::zei_from_bytes(&key_pair.zei_to_bytes());
 
     // Compose input records
-    let input_records: Vec<AssetRecord> =
+    let input_records: Result<Vec<AssetRecord>, _> =
       inputs.iter()
             .map(|InputRecord(amount, asset_type, _conf_type, _conf_amount, _)| {
                    let template = AssetRecordTemplate::with_no_asset_tracking(*amount,
                                              [asset_type.0; 16],
                                              NonConfidentialAmount_NonConfidentialAssetType,
                                              key_pair_copy.get_pk());
-                   AssetRecord::from_template_no_identity_tracking(&mut prng, &template).unwrap()
+                   AssetRecord::from_template_no_identity_tracking(&mut prng, &template)
                  })
             .collect();
 
     // Compose output records
-    let output_records: Vec<AssetRecord>=
+    let output_records: Result<Vec<AssetRecord>, _> =
       outputs.iter()
              .map(|OutputRecord(amount, asset_type, key_pair)| {
                let key_pair = XfrKeyPair::generate(&mut ChaChaRng::from_seed([key_pair.0; 32]));
                let template = AssetRecordTemplate::with_no_asset_tracking(*amount, [asset_type.0; 16], NonConfidentialAmount_NonConfidentialAssetType,  key_pair.get_pk());
-               AssetRecord::from_template_no_identity_tracking(&mut prng, &template).unwrap()
+               AssetRecord::from_template_no_identity_tracking(&mut prng, &template)     
              })
              .collect();
 
     let _input_sids: Vec<TxoRef> = input_sids.iter()
                                              .map(|TxoReference(sid)| TxoRef::Relative(*sid))
                                              .collect();
-    let note = gen_xfr_note(&mut prng, &input_records, &output_records, &[&key_pair]);
+    let note = gen_xfr_note(&mut prng,
+                            &input_records.unwrap(),
+                            &output_records.unwrap(),
+                            &[&key_pair]);    
     if let Ok(xfr_note) = note {
       assert!(verify_xfr_note_no_policies(&mut prng, &xfr_note).is_ok())
     }

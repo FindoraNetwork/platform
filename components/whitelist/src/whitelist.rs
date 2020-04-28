@@ -1,5 +1,4 @@
 #![deny(warnings)]
-use bulletproofs::PedersenGens;
 use curve25519_dalek::ristretto::CompressedRistretto;
 use curve25519_dalek::scalar::Scalar;
 use ledger::data_model::errors::PlatformError;
@@ -11,6 +10,7 @@ use std::collections::HashMap;
 use txn_builder::{BuildsTransactions, PolicyChoice, TransactionBuilder, TransferOperationBuilder};
 use txn_cli::txn_lib::query;
 use zei::crypto::whitelist::{prove_array_membership, verify_array_membership, WhitelistProof};
+use zei::setup::PublicParams;
 use zei::xfr::asset_record::{build_blind_asset_record, open_blind_asset_record, AssetRecordType};
 use zei::xfr::sig::XfrKeyPair;
 use zei::xfr::structs::{asset_type_to_scalar, AssetRecordTemplate, BlindAssetRecord};
@@ -101,7 +101,7 @@ fn test_issue_transfer_and_get_utxo_and_blind(key_pair: &XfrKeyPair,
                                               mut prng: &mut ChaChaRng)
                                               -> Result<(u64, Scalar), PlatformError> {
   // Issue and transfer the asset
-  let pc_gens = PedersenGens::default();
+  let pc_gens = PublicParams::new().pc_gens;
   let amount = 10;
   let issue_template = AssetRecordTemplate::with_no_asset_tracking(amount, code.val, AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType, key_pair.get_pk());
   let issue_blind_asset_record =

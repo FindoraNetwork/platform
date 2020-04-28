@@ -8,7 +8,6 @@ edition = "2018"
 path = "src/whitelist.rs"
 
 [dependencies]
-bulletproofs = { version = "2.0.0",  package = "bulletproofs", git = "https://github.com/dalek-cryptography/bulletproofs", rev = "91218d4066af5d582631319c5ff0266402b9fff2", features = ["yoloproofs"]}
 curve25519-dalek = { version =  "2.0.0", features = ["serde"] }
 ledger = { path = "../../ledger" }
 ledger_standalone = { path = "../ledger_standalone" }
