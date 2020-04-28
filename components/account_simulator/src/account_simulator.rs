@@ -558,15 +558,13 @@ impl InterpretAccounts<PlatformError> for LedgerAccounts {
           let template =
             AssetRecordTemplate::with_no_asset_tracking(amt, unit_code.val, art, *dst_pub);
           let ar = AssetRecord::from_template_no_identity_tracking(self.ledger.get_prng(),
-                                                                   &template).unwrap()
-                                                                             .0;
+                                                                   &template).unwrap();
           dst_outputs.push(ar);
 
           let template =
             AssetRecordTemplate::with_no_asset_tracking(amt, unit_code.val, art, *dst_pub);
           let ar = AssetRecord::from_template_no_identity_tracking(self.ledger.get_prng(),
-                                                                   &template).unwrap()
-                                                                             .0;
+                                                                   &template).unwrap();
           all_outputs.push(ar);
         }
 
@@ -577,8 +575,7 @@ impl InterpretAccounts<PlatformError> for LedgerAccounts {
                                                                      art,
                                                                      *src_pub);
           let ar = AssetRecord::from_template_no_identity_tracking(self.ledger.get_prng(),
-                                                                   &template).unwrap()
-                                                                             .0;
+                                                                   &template).unwrap();
           src_outputs.push(ar);
 
           let template = AssetRecordTemplate::with_no_asset_tracking(total_sum - amt,
@@ -586,8 +583,7 @@ impl InterpretAccounts<PlatformError> for LedgerAccounts {
                                                                      art,
                                                                      *src_pub);
           let ar = AssetRecord::from_template_no_identity_tracking(self.ledger.get_prng(),
-                                                                   &template).unwrap()
-                                                                             .0;
+                                                                   &template).unwrap();
           all_outputs.push(ar);
         }
 
@@ -856,14 +852,12 @@ impl InterpretAccounts<PlatformError> for OneBigTxnAccounts {
           // Simple output to dst
           let ar = AssetRecordTemplate::with_no_asset_tracking(amt, unit_code.val, art, *dst_pub);
           let ar = AssetRecord::from_template_no_identity_tracking(self.base_ledger.get_prng(),
-                                                                   &ar).unwrap()
-                                                                       .0;
+                                                                   &ar).unwrap();
           dst_outputs.push(ar);
 
           let ar = AssetRecordTemplate::with_no_asset_tracking(amt, unit_code.val, art, *dst_pub);
           let ar = AssetRecord::from_template_no_identity_tracking(self.base_ledger.get_prng(),
-                                                                   &ar).unwrap()
-                                                                       .0;
+                                                                   &ar).unwrap();
           all_outputs.push(ar);
         }
 
@@ -874,8 +868,7 @@ impl InterpretAccounts<PlatformError> for OneBigTxnAccounts {
                                                                art,
                                                                *src_pub);
           let ar = AssetRecord::from_template_no_identity_tracking(self.base_ledger.get_prng(),
-                                                                   &ar).unwrap()
-                                                                       .0;
+                                                                   &ar).unwrap();
           src_outputs.push(ar);
 
           let ar = AssetRecordTemplate::with_no_asset_tracking(total_sum - amt,
@@ -883,8 +876,7 @@ impl InterpretAccounts<PlatformError> for OneBigTxnAccounts {
                                                                art,
                                                                *src_pub);
           let ar = AssetRecord::from_template_no_identity_tracking(self.base_ledger.get_prng(),
-                                                                   &ar).unwrap()
-                                                                       .0;
+                                                                   &ar).unwrap();
           all_outputs.push(ar);
         }
 
@@ -1263,13 +1255,11 @@ impl InterpretAccounts<PlatformError> for LedgerStandaloneAccounts {
         {
           // Simple output to dst
           let ar = AssetRecordTemplate::with_no_asset_tracking(amt, unit_code.val, art, *dst_pub);
-          let ar = AssetRecord::from_template_no_identity_tracking(&mut self.prng, &ar).unwrap()
-                                                                                       .0;
+          let ar = AssetRecord::from_template_no_identity_tracking(&mut self.prng, &ar).unwrap();
           dst_outputs.push(ar);
 
           let ar = AssetRecordTemplate::with_no_asset_tracking(amt, unit_code.val, art, *dst_pub);
-          let ar = AssetRecord::from_template_no_identity_tracking(&mut self.prng, &ar).unwrap()
-                                                                                       .0;
+          let ar = AssetRecord::from_template_no_identity_tracking(&mut self.prng, &ar).unwrap();
           all_outputs.push(ar);
         }
 
@@ -1279,16 +1269,14 @@ impl InterpretAccounts<PlatformError> for LedgerStandaloneAccounts {
                                                                unit_code.val,
                                                                art,
                                                                *src_pub);
-          let ar = AssetRecord::from_template_no_identity_tracking(&mut self.prng, &ar).unwrap()
-                                                                                       .0;
+          let ar = AssetRecord::from_template_no_identity_tracking(&mut self.prng, &ar).unwrap();
           src_outputs.push(ar);
 
           let ar = AssetRecordTemplate::with_no_asset_tracking(total_sum - amt,
                                                                unit_code.val,
                                                                art,
                                                                *src_pub);
-          let ar = AssetRecord::from_template_no_identity_tracking(&mut self.prng, &ar).unwrap()
-                                                                                       .0;
+          let ar = AssetRecord::from_template_no_identity_tracking(&mut self.prng, &ar).unwrap();
           all_outputs.push(ar);
         }
 

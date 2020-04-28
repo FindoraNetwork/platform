@@ -13,13 +13,17 @@ use ledger::error_location;
 use ledger::policies::Fraction;
 use ledger::policy_script::{Policy, PolicyGlobals, TxnCheckInputs, TxnPolicyData};
 use rand_chacha::ChaChaRng;
-use rand_core::SeedableRng;
+use rand_core::{CryptoRng, RngCore, SeedableRng};
 use std::cmp::Ordering;
 use std::collections::HashSet;
-use zei::api::anon_creds::{ACCommitmentKey, Credential};
+use zei::api::anon_creds::{
+  ac_confidential_open_commitment, ACCommitmentKey, ConfidentialAC, Credential,
+};
 use zei::serialization::ZeiFromToBytes;
 use zei::setup::PublicParams;
-use zei::xfr::asset_record::{build_blind_asset_record, open_blind_asset_record, AssetRecordType};
+use zei::xfr::asset_record::{
+  build_blind_asset_record, build_open_asset_record, open_blind_asset_record, AssetRecordType,
+};
 use zei::xfr::sig::{XfrKeyPair, XfrPublicKey};
 use zei::xfr::structs::{
   AssetRecord, AssetRecordTemplate, AssetTracingPolicy, BlindAssetRecord, OpenAssetRecord,
@@ -376,7 +380,6 @@ pub trait BuildsTransactions {
       output_ars_templates.iter()
                           .map(|x| {
                             AssetRecord::from_template_no_identity_tracking(&mut prng, x).unwrap()
-                                                                                         .0
                           })
                           .collect();
     self.add_operation_transfer_asset(&key_pair, input_sids, &input_oars, &output_ars)?;
@@ -518,6 +521,56 @@ impl BuildsTransactions for TransactionBuilder {
   }
 }
 
+/// Generates an asset record from an asset record template using optional identity proof.
+/// Returns the asset record and type blind.
+pub(crate) fn build_record_and_get_type_blind<R: CryptoRng + RngCore>(
+  prng: &mut R,
+  asset_record: &AssetRecordTemplate,
+  identity_proof: Option<ConfidentialAC>)
+  -> Result<(AssetRecord, Scalar), PlatformError> {
+  // Check input consistency:
+  // - if no policy, then no identity proof needed
+  // - if policy and identity tracking, then identity proof is needed
+  // - if policy but no identity tracking, then no identity proof is needed
+  if asset_record.asset_tracking.is_none() && identity_proof.is_some()
+     || asset_record.asset_tracking.is_some()
+        && (asset_record.asset_tracking
+                        .as_ref()
+                        .unwrap()
+                        .identity_tracking
+                        .is_some()
+            && identity_proof.is_none()
+            || asset_record.asset_tracking
+                           .as_ref()
+                           .unwrap()
+                           .identity_tracking
+                           .is_none()
+               && identity_proof.is_some())
+  {
+    return Err(PlatformError::InputsError(error_location!()));
+  }
+  // 1. get ciphertext and proofs from from identity proof structure
+  let pc_gens = PublicParams::new().pc_gens;
+  let (attr_ctext, reveal_proof) = match identity_proof {
+    None => (None, None),
+    Some(conf_ac) => {
+      let (c, p) = conf_ac.get_fields();
+      (Some(c), Some(p))
+    }
+  };
+  // 2. Use record template and ciphertexts to build open asset record
+  let (open_asset_record, asset_tracing_memo, owner_memo) =
+    build_open_asset_record(prng, &pc_gens, asset_record, attr_ctext);
+  // 3. Return record input containing open asset record, tracking policy, identity reveal proof,
+  //    asset_tracer_memo, and owner_memo
+  Ok((AssetRecord { open_asset_record: open_asset_record.clone(),
+                    tracking_policy: asset_record.asset_tracking.clone(),
+                    identity_proof: reveal_proof,
+                    asset_tracer_memo: asset_tracing_memo,
+                    owner_memo },
+      open_asset_record.type_blind))
+}
+
 // TransferOperationBuilder constructs transfer operations using the factory pattern
 // Inputs and outputs are added iteratively before being signed by all input record owners
 //
@@ -587,7 +640,7 @@ impl TransferOperationBuilder {
     } else {
       AssetRecord::from_template_no_identity_tracking(&mut prng, asset_record_template).unwrap()
     };
-    self.output_records.push(ar.0);
+    self.output_records.push(ar);
     Ok(self)
   }
 
@@ -596,22 +649,50 @@ impl TransferOperationBuilder {
                                        credential_record: Option<(&CredUserSecretKey,
                                                &Credential,
                                                &ACCommitmentKey)>,
-                                       mut prng: &mut ChaChaRng)
+                                       prng: &mut ChaChaRng)
                                        -> Result<Scalar, PlatformError> {
     if self.transfer.is_some() {
       return Err(PlatformError::InvariantError(Some("Cannot mutate a transfer that has been signed".to_string())));
     }
-    let ar = if let Some((user_secret_key, credential, commitment_key)) = credential_record {
-      AssetRecord::from_template_with_identity_tracking(&mut prng,
-                                                        asset_record_template,
-                                                        user_secret_key.get_ref(),
-                                                        credential,
-                                                        commitment_key).unwrap()
+    let (ar, blind) = if let Some((user_secret_key, credential, commitment_key)) = credential_record
+    {
+      match &asset_record_template.asset_tracking {
+        // identity tracking must have asset_tracking policy
+        None => {
+          return Err(PlatformError::InputsError(error_location!()));
+        }
+        Some(policy) => {
+          match &policy.identity_tracking {
+            // policy must have a identity tracking policy
+            None => {
+              return Err(PlatformError::InputsError(error_location!()));
+            }
+            Some(reveal_policy) => {
+              let conf_ac =
+                ac_confidential_open_commitment(prng,
+                                                user_secret_key.get_ref(),
+                                                credential,
+                                                commitment_key,
+                                                &policy.enc_keys.attrs_enc_key,
+                                                &reveal_policy.reveal_map,
+                                                &[]).map_err(|e| {
+                                                      PlatformError::ZeiError(error_location!(), e)
+                                                    })?;
+              build_record_and_get_type_blind(prng, &asset_record_template, Some(conf_ac))?
+            }
+          }
+        }
+      }
     } else {
-      AssetRecord::from_template_no_identity_tracking(&mut prng, asset_record_template).unwrap()
+      if let Some(policy) = &asset_record_template.asset_tracking {
+        if policy.identity_tracking.is_some() {
+          return Err(PlatformError::InputsError(error_location!()));
+        }
+      }
+      build_record_and_get_type_blind(prng, &asset_record_template, None)?
     };
-    self.output_records.push(ar.0);
-    Ok(ar.1)
+    self.output_records.push(ar);
+    Ok(blind)
   }
 
   // Ensures that outputs and inputs are balanced by adding remainder outputs for leftover asset
@@ -636,7 +717,7 @@ impl TransferOperationBuilder {
                                                                         *oar.get_pub_key());
           let ar =
             AssetRecord::from_template_no_identity_tracking(&mut prng, &ar_template).unwrap();
-          partially_consumed_inputs.push(ar.0);
+          partially_consumed_inputs.push(ar);
         }
         _ => {}
       }
@@ -843,7 +924,6 @@ mod tests {
                                              NonConfidentialAmount_NonConfidentialAssetType,
                                              key_pair_copy.get_pk());
                    AssetRecord::from_template_no_identity_tracking(&mut prng, &template).unwrap()
-                                                                                        .0
                  })
             .collect();
 
@@ -853,7 +933,7 @@ mod tests {
              .map(|OutputRecord(amount, asset_type, key_pair)| {
                let key_pair = XfrKeyPair::generate(&mut ChaChaRng::from_seed([key_pair.0; 32]));
                let template = AssetRecordTemplate::with_no_asset_tracking(*amount, [asset_type.0; 16], NonConfidentialAmount_NonConfidentialAssetType,  key_pair.get_pk());
-               AssetRecord::from_template_no_identity_tracking(&mut prng, &template).unwrap().0
+               AssetRecord::from_template_no_identity_tracking(&mut prng, &template).unwrap()
              })
              .collect();
 

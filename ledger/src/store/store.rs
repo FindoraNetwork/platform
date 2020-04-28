@@ -2001,8 +2001,7 @@ pub mod helpers {
     // transfer operation
     let ar_template = AssetRecordTemplate::with_no_asset_tracking(amount, code.val, AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType, *recipient_pk);
     let ar =
-      AssetRecord::from_template_no_identity_tracking(ledger.get_prng(), &ar_template).unwrap()
-                                                                                      .0;
+      AssetRecord::from_template_no_identity_tracking(ledger.get_prng(), &ar_template).unwrap();
     let mut transfer =
       TransferAsset::new(TransferAssetBody::new(ledger.get_prng(),
                              vec![TxoRef::Relative(0)],
@@ -2487,9 +2486,8 @@ mod tests {
 
     let output_template =
       AssetRecordTemplate::with_no_asset_tracking(100, code.val, art, key_pair_adversary.get_pk());
-    let output_ar = AssetRecord::from_template_no_identity_tracking(ledger.get_prng(),
-                                                                    &output_template).unwrap()
-                                                                                     .0;
+    let output_ar =
+      AssetRecord::from_template_no_identity_tracking(ledger.get_prng(), &output_template).unwrap();
 
     let mut tx = Transaction::default();
     let mut transfer = TransferAsset::new(TransferAssetBody::new(ledger.get_prng(),
@@ -2756,8 +2754,7 @@ mod tests {
                                                                              AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
                                                                              bob.get_pk_ref().clone());
     let record = AssetRecord::from_template_no_identity_tracking(ledger.get_prng(),
-                                                                 &transfer_template).unwrap()
-                                                                                    .0;
+                                                                 &transfer_template).unwrap();
 
     // Cant transfer non-transferable asset
     let mut transfer = TransferAsset::new(TransferAssetBody::new(ledger.get_prng(),
@@ -2779,7 +2776,7 @@ mod tests {
                                                                               AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
                                                                               bob.get_pk_ref().clone());
     let second_record = AssetRecord::from_template_no_identity_tracking(ledger.get_prng(),
-                                                                  &second_transfer_template).unwrap().0;
+                                                                  &second_transfer_template).unwrap();
     let (mut tx, ar) = create_issue_and_transfer_txn(&mut ledger,
                                                      &params,
                                                      &code,
@@ -2935,9 +2932,8 @@ mod tests {
 
     let output_template =
       AssetRecordTemplate::with_no_asset_tracking(100, code.val, art, bob.get_pk());
-    let output_ar = AssetRecord::from_template_no_identity_tracking(ledger.get_prng(),
-                                                                    &output_template).unwrap()
-                                                                                     .0;
+    let output_ar =
+      AssetRecord::from_template_no_identity_tracking(ledger.get_prng(), &output_template).unwrap();
 
     let mut tx = Transaction::default();
     let mut transfer = TransferAsset::new(TransferAssetBody::new(ledger.get_prng(),
@@ -3064,10 +3060,10 @@ mod tests {
                                                                              borrower_key_pair.get_pk_ref().clone());
 
     let loan_transfer_record = AssetRecord::from_template_no_identity_tracking(
-      ledger.get_prng(), &loan_transfer_template).unwrap().0;
+      ledger.get_prng(), &loan_transfer_template).unwrap();
 
     let fiat_transfer_record = AssetRecord::from_template_no_identity_tracking(
-      ledger.get_prng(), &fiat_transfer_template).unwrap().0;
+      ledger.get_prng(), &fiat_transfer_template).unwrap();
 
     let fiat_bar = ((ledger.get_utxo(fiat_sid).unwrap().0).0).clone();
     let debt_bar = ((ledger.get_utxo(debt_sid).unwrap().0).0).clone();
@@ -3100,8 +3096,7 @@ mod tests {
       AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
       lender_key_pair.get_pk_ref().clone());
     let payment_record = AssetRecord::from_template_no_identity_tracking(ledger.get_prng(),
-                                                                         &payment_template).unwrap()
-                                                                                           .0;
+                                                                         &payment_template).unwrap();
 
     let burned_debt_template = AssetRecordTemplate::with_no_asset_tracking(
       loan_burn_amount,
@@ -3111,7 +3106,7 @@ mod tests {
     let burned_debt_record = AssetRecord::from_template_no_identity_tracking(
       ledger.get_prng(),
       &burned_debt_template
-    ).unwrap().0;
+    ).unwrap();
 
     let returned_debt_template = AssetRecordTemplate::with_no_asset_tracking(
       loan_amount - loan_burn_amount,
@@ -3121,7 +3116,7 @@ mod tests {
     let returned_debt_record = AssetRecord::from_template_no_identity_tracking(
       ledger.get_prng(),
       &returned_debt_template
-    ).unwrap().0;
+    ).unwrap();
 
     let returned_fiat_template = AssetRecordTemplate::with_no_asset_tracking(
       fiat_amount - payment_amount,
@@ -3132,7 +3127,7 @@ mod tests {
     let returned_fiat_record = AssetRecord::from_template_no_identity_tracking(
       ledger.get_prng(),
       &returned_fiat_template
-    ).unwrap().0;
+    ).unwrap();
 
     let transfer_body =
       TransferAssetBody::new(ledger.get_prng(),
