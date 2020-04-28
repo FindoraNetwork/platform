@@ -274,13 +274,15 @@ impl TransactionBuilder {
   /// Adds an add air assign operation to a WasmTransactionBuilder instance.
   pub fn add_operation_air_assign(mut self,
                                   key_pair: &XfrKeyPair,
+                                  user_public_key: &CredUserPublicKey,
                                   issuer_public_key: &CredIssuerPublicKey,
                                   commitment: &CredentialCommitment)
                                   -> Result<TransactionBuilder, JsValue> {
     self.get_builder_mut()
         .add_operation_air_assign(key_pair,
-                                  issuer_public_key.clone(),
+                                  user_public_key.clone(),
                                   commitment.get_commitment_ref().clone(),
+                                  issuer_public_key.clone(),
                                   commitment.get_pok_ref().clone())
         .map_err(error_to_jsvalue)?;
     Ok(self)
