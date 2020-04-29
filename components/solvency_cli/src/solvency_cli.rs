@@ -250,55 +250,55 @@ mod tests {
 
   // Issue and transfer assets, and get the UTXOs
   fn issue_transfer_and_get_utxos(issuer_key_pair: &XfrKeyPair,
-                                  receipient_key_pair: &XfrKeyPair,
+                                  recipient_key_pair: &XfrKeyPair,
                                   codes: (AssetTypeCode, AssetTypeCode, AssetTypeCode),
                                   ledger_standalone: &LedgerStandalone)
                                   -> (String, String, String, String, String, String, String) {
     (format!("{}",
              test_issue_transfer_submit_and_get_utxo(issuer_key_pair,
-                                                     receipient_key_pair,
+                                                     recipient_key_pair,
                                                      codes.0,
                                                      10,
                                                      0,
                                                      ledger_standalone).unwrap()).to_string(),
      format!("{}",
              test_issue_transfer_submit_and_get_utxo(issuer_key_pair,
-                                                     receipient_key_pair,
+                                                     recipient_key_pair,
                                                      codes.1,
                                                      200,
                                                      1,
                                                      ledger_standalone).unwrap()).to_string(),
      format!("{}",
              test_issue_transfer_submit_and_get_utxo(issuer_key_pair,
-                                                     receipient_key_pair,
+                                                     recipient_key_pair,
                                                      codes.2,
                                                      3,
                                                      2,
                                                      ledger_standalone).unwrap()).to_string(),
      format!("{}",
              test_issue_transfer_submit_and_get_utxo(issuer_key_pair,
-                                                     receipient_key_pair,
+                                                     recipient_key_pair,
                                                      codes.0,
                                                      40,
                                                      3,
                                                      ledger_standalone).unwrap()).to_string(),
      format!("{}",
              test_issue_transfer_submit_and_get_utxo(issuer_key_pair,
-                                                     receipient_key_pair,
+                                                     recipient_key_pair,
                                                      codes.1,
                                                      50,
                                                      4,
                                                      ledger_standalone).unwrap()).to_string(),
      format!("{}",
              test_issue_transfer_submit_and_get_utxo(issuer_key_pair,
-                                                     receipient_key_pair,
+                                                     recipient_key_pair,
                                                      codes.1,
                                                      150,
                                                      5,
                                                      ledger_standalone).unwrap()).to_string(),
      format!("{}",
              test_issue_transfer_submit_and_get_utxo(issuer_key_pair,
-                                                     receipient_key_pair,
+                                                     recipient_key_pair,
                                                      codes.0,
                                                      30,
                                                      6,
@@ -329,13 +329,13 @@ mod tests {
     let codes =
       (AssetTypeCode::gen_random(), AssetTypeCode::gen_random(), AssetTypeCode::gen_random());
     let issuer_key_pair = &XfrKeyPair::generate(&mut ChaChaRng::from_entropy());
-    let receipient_key_pair = XfrKeyPair::generate(&mut ChaChaRng::from_entropy());
+    let recipient_key_pair = XfrKeyPair::generate(&mut ChaChaRng::from_entropy());
 
-    // Store the receipient's key pair
-    let receipient_key_pair_str = hex::encode(receipient_key_pair.zei_to_bytes());
+    // Store the recipient's key pair
+    let recipient_key_pair_str = hex::encode(recipient_key_pair.zei_to_bytes());
     let key_file = "solvency_key_pair";
     let output = Command::new(COMMAND).arg("store_key_pair")
-                                      .args(&["--key_pair", &receipient_key_pair_str])
+                                      .args(&["--key_pair", &recipient_key_pair_str])
                                       .args(&["--file", key_file])
                                       .output()
                                       .expect("Failed to store the key pair.");
@@ -350,7 +350,7 @@ mod tests {
     let code_2 = &codes.2.to_base64();
     let (utxo_0, utxo_1, utxo_2, utxo_3, utxo_4, utxo_5, utxo_6) =
       issue_transfer_and_get_utxos(issuer_key_pair,
-                                   &receipient_key_pair,
+                                   &recipient_key_pair,
                                    codes,
                                    ledger_standalone);
 

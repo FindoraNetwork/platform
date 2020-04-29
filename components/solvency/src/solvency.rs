@@ -273,7 +273,7 @@ mod tests {
 
   // Add three public assets
   fn add_public_assets<R: CryptoRng + RngCore>(issuer_key_pair: &XfrKeyPair,
-                                               receipient_key_pair: &XfrKeyPair,
+                                               recipient_key_pair: &XfrKeyPair,
                                                account: &mut AssetAndLiabilityAccount,
                                                codes: (AssetTypeCode,
                                                 AssetTypeCode,
@@ -283,7 +283,7 @@ mod tests {
                                                -> Result<(), PlatformError> {
     let (utxo_0, _) =
       test_issue_transfer_and_get_utxo_and_blinds(issuer_key_pair,
-                                                  receipient_key_pair,
+                                                  recipient_key_pair,
                                                   100,
                                                   codes.0,
                                                   AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
@@ -291,7 +291,7 @@ mod tests {
                                                   ledger_standalone)?;
     let (utxo_1, _) =
       test_issue_transfer_and_get_utxo_and_blinds(issuer_key_pair,
-                                                  receipient_key_pair,
+                                                  recipient_key_pair,
                                                   200,
                                                   codes.1,
                                                   AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
@@ -299,7 +299,7 @@ mod tests {
                                                   ledger_standalone)?;
     let (utxo_2, _) =
       test_issue_transfer_and_get_utxo_and_blinds(issuer_key_pair,
-                                                  receipient_key_pair,
+                                                  recipient_key_pair,
                                                   300,
                                                   codes.2,
                                                   AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
@@ -315,7 +315,7 @@ mod tests {
 
   // Add three hidden assets
   fn add_hidden_assets<R: CryptoRng + RngCore>(issuer_key_pair: &XfrKeyPair,
-                                               receipient_key_pair: &XfrKeyPair,
+                                               recipient_key_pair: &XfrKeyPair,
                                                account: &mut AssetAndLiabilityAccount,
                                                blinds: &mut Vec<(Scalar, Scalar)>,
                                                codes: (AssetTypeCode,
@@ -326,7 +326,7 @@ mod tests {
                                                -> Result<(), PlatformError> {
     let (utxo_0, blinds_0) =
       test_issue_transfer_and_get_utxo_and_blinds(issuer_key_pair,
-                                                  receipient_key_pair,
+                                                  recipient_key_pair,
                                                   10,
                                                   codes.0,
                                                   AssetRecordType::ConfidentialAmount_NonConfidentialAssetType,
@@ -334,7 +334,7 @@ mod tests {
                                                   ledger_standalone)?;
     let (utxo_1, blinds_1) =
       test_issue_transfer_and_get_utxo_and_blinds(issuer_key_pair,
-                                                  receipient_key_pair,
+                                                  recipient_key_pair,
                                                   20,
                                                   codes.1,
                                                   AssetRecordType::ConfidentialAmount_NonConfidentialAssetType,
@@ -342,7 +342,7 @@ mod tests {
                                                   ledger_standalone)?;
     let (utxo_2, blinds_2) =
       test_issue_transfer_and_get_utxo_and_blinds(issuer_key_pair,
-                                                  receipient_key_pair,
+                                                  recipient_key_pair,
                                                   30,
                                                   codes.2,
                                                   AssetRecordType::ConfidentialAmount_NonConfidentialAssetType,
@@ -362,7 +362,7 @@ mod tests {
 
   // Add three public liabilities
   fn add_public_liabilities<R: CryptoRng + RngCore>(issuer_key_pair: &XfrKeyPair,
-                                                    receipient_key_pair: &XfrKeyPair,
+                                                    recipient_key_pair: &XfrKeyPair,
                                                     account: &mut AssetAndLiabilityAccount,
                                                     codes: (AssetTypeCode,
                                                      AssetTypeCode,
@@ -372,7 +372,7 @@ mod tests {
                                                     -> Result<(), PlatformError> {
     let (utxo_0, _) =
       test_issue_transfer_and_get_utxo_and_blinds(issuer_key_pair,
-                                                  receipient_key_pair,
+                                                  recipient_key_pair,
                                                   100,
                                                   codes.0,
                                                   AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
@@ -380,7 +380,7 @@ mod tests {
                                                   ledger_standalone)?;
     let (utxo_1, _) =
       test_issue_transfer_and_get_utxo_and_blinds(issuer_key_pair,
-                                                  receipient_key_pair,
+                                                  recipient_key_pair,
                                                   200,
                                                   codes.1,
                                                   AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
@@ -388,7 +388,7 @@ mod tests {
                                                   ledger_standalone)?;
     let (utxo_2, _) =
       test_issue_transfer_and_get_utxo_and_blinds(issuer_key_pair,
-                                                  receipient_key_pair,
+                                                  recipient_key_pair,
                                                   200,
                                                   codes.2,
                                                   AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
@@ -419,7 +419,7 @@ mod tests {
 
   // Add three hidden liabilities, with total value smaller than hidden assets'
   fn add_hidden_liabilities_smaller<R: CryptoRng + RngCore>(issuer_key_pair: &XfrKeyPair,
-                                                            receipient_key_pair: &XfrKeyPair,
+                                                            recipient_key_pair: &XfrKeyPair,
                                                             account: &mut AssetAndLiabilityAccount,
                                                             blinds: &mut Vec<(Scalar, Scalar)>,
                                                             codes: (AssetTypeCode,
@@ -430,7 +430,7 @@ mod tests {
                                                             -> Result<(), PlatformError> {
     let (utxo_0, blinds_0) =
       test_issue_transfer_and_get_utxo_and_blinds(issuer_key_pair,
-                                                  receipient_key_pair,
+                                                  recipient_key_pair,
                                                   10,
                                                   codes.0,
                                                   AssetRecordType::ConfidentialAmount_NonConfidentialAssetType,
@@ -438,7 +438,7 @@ mod tests {
                                                   ledger_standalone)?;
     let (utxo_1, blinds_1) =
       test_issue_transfer_and_get_utxo_and_blinds(issuer_key_pair,
-                                                  receipient_key_pair,
+                                                  recipient_key_pair,
                                                   20,
                                                   codes.1,
                                                   AssetRecordType::ConfidentialAmount_NonConfidentialAssetType,
@@ -446,7 +446,7 @@ mod tests {
                                                   ledger_standalone)?;
     let (utxo_2, blinds_2) =
       test_issue_transfer_and_get_utxo_and_blinds(issuer_key_pair,
-                                                  receipient_key_pair,
+                                                  recipient_key_pair,
                                                   20,
                                                   codes.2,
                                                   AssetRecordType::ConfidentialAmount_NonConfidentialAssetType,
@@ -481,7 +481,7 @@ mod tests {
 
   // Add three hidden liabilities, with total value larger than hidden assets'
   fn add_hidden_liabilities_larger<R: CryptoRng + RngCore>(issuer_key_pair: &XfrKeyPair,
-                                                           receipient_key_pair: &XfrKeyPair,
+                                                           recipient_key_pair: &XfrKeyPair,
                                                            account: &mut AssetAndLiabilityAccount,
                                                            blinds: &mut Vec<(Scalar, Scalar)>,
                                                            codes: (AssetTypeCode,
@@ -492,7 +492,7 @@ mod tests {
                                                            -> Result<(), PlatformError> {
     let (utxo_0, blinds_0) =
       test_issue_transfer_and_get_utxo_and_blinds(issuer_key_pair,
-                                                  receipient_key_pair,
+                                                  recipient_key_pair,
                                                   10,
                                                   codes.0,
                                                   AssetRecordType::ConfidentialAmount_NonConfidentialAssetType,
@@ -500,7 +500,7 @@ mod tests {
                                                   ledger_standalone)?;
     let (utxo_1, blinds_1) =
       test_issue_transfer_and_get_utxo_and_blinds(issuer_key_pair,
-                                                  receipient_key_pair,
+                                                  recipient_key_pair,
                                                   20,
                                                   codes.1,
                                                   AssetRecordType::ConfidentialAmount_NonConfidentialAssetType,
@@ -508,7 +508,7 @@ mod tests {
                                                   ledger_standalone)?;
     let (utxo_2, blinds_2) =
       test_issue_transfer_and_get_utxo_and_blinds(issuer_key_pair,
-                                                  receipient_key_pair,
+                                                  recipient_key_pair,
                                                   40,
                                                   codes.2,
                                                   AssetRecordType::ConfidentialAmount_NonConfidentialAssetType,
@@ -575,19 +575,19 @@ mod tests {
 
     // Create an asset and liability account
     let mut account = AssetAndLiabilityAccount::default();
-    let receipient_key_pair = &XfrKeyPair::generate(&mut ChaChaRng::from_entropy());
+    let recipient_key_pair = &XfrKeyPair::generate(&mut ChaChaRng::from_entropy());
     let asset_blinds = &mut Vec::new();
     let liability_blinds = &mut Vec::new();
     let prng = &mut ChaChaRng::from_entropy();
     add_hidden_assets(issuer_key_pair,
-                      receipient_key_pair,
+                      recipient_key_pair,
                       &mut account,
                       asset_blinds,
                       codes,
                       prng,
                       ledger_standalone).unwrap();
     add_hidden_liabilities_smaller(issuer_key_pair,
-                                   receipient_key_pair,
+                                   recipient_key_pair,
                                    &mut account,
                                    liability_blinds,
                                    codes,
@@ -628,19 +628,19 @@ mod tests {
 
     // Create an asset and liability account
     let mut account = AssetAndLiabilityAccount::default();
-    let receipient_key_pair = &XfrKeyPair::generate(&mut ChaChaRng::from_entropy());
+    let recipient_key_pair = &XfrKeyPair::generate(&mut ChaChaRng::from_entropy());
     let asset_blinds = &mut Vec::new();
     let liability_blinds = &mut Vec::new();
     let prng = &mut ChaChaRng::from_entropy();
     add_hidden_assets(issuer_key_pair,
-                      receipient_key_pair,
+                      recipient_key_pair,
                       &mut account,
                       asset_blinds,
                       codes,
                       prng,
                       ledger_standalone).unwrap();
     add_hidden_liabilities_smaller(issuer_key_pair,
-                                   receipient_key_pair,
+                                   recipient_key_pair,
                                    &mut account,
                                    liability_blinds,
                                    codes,
@@ -679,12 +679,12 @@ mod tests {
     let mut account = AssetAndLiabilityAccount::default();
 
     // Adds hidden assets
-    let receipient_key_pair = &XfrKeyPair::generate(&mut ChaChaRng::from_entropy());
+    let recipient_key_pair = &XfrKeyPair::generate(&mut ChaChaRng::from_entropy());
     let asset_blinds = &mut Vec::new();
     let liability_blinds = &mut Vec::new();
     let prng = &mut ChaChaRng::from_entropy();
     add_hidden_assets(issuer_key_pair,
-                      receipient_key_pair,
+                      recipient_key_pair,
                       &mut account,
                       asset_blinds,
                       codes,
@@ -693,7 +693,7 @@ mod tests {
 
     // Adds hidden liabilities, with total value larger than hidden assets'
     add_hidden_liabilities_larger(issuer_key_pair,
-                                  receipient_key_pair,
+                                  recipient_key_pair,
                                   &mut account,
                                   liability_blinds,
                                   codes,
@@ -738,12 +738,12 @@ mod tests {
 
     // Create an asset and liability account
     let mut account = AssetAndLiabilityAccount::default();
-    let receipient_key_pair = &XfrKeyPair::generate(&mut ChaChaRng::from_entropy());
+    let recipient_key_pair = &XfrKeyPair::generate(&mut ChaChaRng::from_entropy());
     let asset_blinds = &mut Vec::new();
     let prng = &mut ChaChaRng::from_entropy();
     let (utxo, blinds) =
     test_issue_transfer_and_get_utxo_and_blinds(issuer_key_pair,
-                                                receipient_key_pair,
+                                                recipient_key_pair,
                                                 10,
                                                 code,
                                                 AssetRecordType::ConfidentialAmount_NonConfidentialAssetType,
@@ -786,32 +786,32 @@ mod tests {
 
     // Create an asset and liability account
     let mut account = AssetAndLiabilityAccount::default();
-    let receipient_key_pair = &XfrKeyPair::generate(&mut ChaChaRng::from_entropy());
+    let recipient_key_pair = &XfrKeyPair::generate(&mut ChaChaRng::from_entropy());
     let asset_blinds = &mut Vec::new();
     // let liability_blinds = &mut Vec::new();
     let liability_blinds: Vec<(Scalar, Scalar)> = Vec::new();
     let prng = &mut ChaChaRng::from_entropy();
     // add_public_assets(issuer_key_pair,
-    //                   receipient_key_pair,
+    //                   recipient_key_pair,
     //                   &mut account,
     //                   codes,
     //                   prng,
     //                   ledger_standalone).unwrap();
     add_hidden_assets(issuer_key_pair,
-                      receipient_key_pair,
+                      recipient_key_pair,
                       &mut account,
                       asset_blinds,
                       codes,
                       prng,
                       ledger_standalone).unwrap();
     // add_public_liabilities(issuer_key_pair,
-    //                        receipient_key_pair,
+    //                        recipient_key_pair,
     //                        &mut account,
     //                        codes,
     //                        prng,
     //                        ledger_standalone).unwrap();
     // add_hidden_liabilities_smaller(issuer_key_pair,
-    //                                receipient_key_pair,
+    //                                recipient_key_pair,
     //                                &mut account,
     //                                liability_blinds,
     //                                codes,prng,
@@ -848,31 +848,31 @@ mod tests {
 
     // Create an asset and liability account
     let mut account = AssetAndLiabilityAccount::default();
-    let receipient_key_pair = &XfrKeyPair::generate(&mut ChaChaRng::from_entropy());
+    let recipient_key_pair = &XfrKeyPair::generate(&mut ChaChaRng::from_entropy());
     let asset_blinds = &mut Vec::new();
     let liability_blinds = &mut Vec::new();
     let prng = &mut ChaChaRng::from_entropy();
     add_public_assets(issuer_key_pair,
-                      receipient_key_pair,
+                      recipient_key_pair,
                       &mut account,
                       codes,
                       prng,
                       ledger_standalone).unwrap();
     add_hidden_assets(issuer_key_pair,
-                      receipient_key_pair,
+                      recipient_key_pair,
                       &mut account,
                       asset_blinds,
                       codes,
                       prng,
                       ledger_standalone).unwrap();
     add_public_liabilities(issuer_key_pair,
-                           receipient_key_pair,
+                           recipient_key_pair,
                            &mut account,
                            codes,
                            prng,
                            ledger_standalone).unwrap();
     add_hidden_liabilities_smaller(issuer_key_pair,
-                                   receipient_key_pair,
+                                   recipient_key_pair,
                                    &mut account,
                                    liability_blinds,
                                    codes,
@@ -888,7 +888,7 @@ mod tests {
 
     // Update the public assets
     let (utxo, _) = test_issue_transfer_and_get_utxo_and_blinds(issuer_key_pair,
-                                                                     receipient_key_pair,
+                                                                     recipient_key_pair,
                                                                      40,
                                                                      codes.0,
                                                                      AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
@@ -934,31 +934,31 @@ mod tests {
 
     // Create an asset and liability account
     let mut account = AssetAndLiabilityAccount::default();
-    let receipient_key_pair = &XfrKeyPair::generate(&mut ChaChaRng::from_entropy());
+    let recipient_key_pair = &XfrKeyPair::generate(&mut ChaChaRng::from_entropy());
     let asset_blinds = &mut Vec::new();
     let liability_blinds = &mut Vec::new();
     let prng = &mut ChaChaRng::from_entropy();
     add_public_assets(issuer_key_pair,
-                      receipient_key_pair,
+                      recipient_key_pair,
                       &mut account,
                       codes,
                       prng,
                       ledger_standalone).unwrap();
     add_hidden_assets(issuer_key_pair,
-                      receipient_key_pair,
+                      recipient_key_pair,
                       &mut account,
                       asset_blinds,
                       codes,
                       prng,
                       ledger_standalone).unwrap();
     add_public_liabilities(issuer_key_pair,
-                           receipient_key_pair,
+                           recipient_key_pair,
                            &mut account,
                            codes,
                            prng,
                            ledger_standalone).unwrap();
     add_hidden_liabilities_smaller(issuer_key_pair,
-                                   receipient_key_pair,
+                                   recipient_key_pair,
                                    &mut account,
                                    liability_blinds,
                                    codes,
@@ -974,7 +974,7 @@ mod tests {
 
     // Update the hidden liabilities
     let (utxo, blinds) = test_issue_transfer_and_get_utxo_and_blinds(issuer_key_pair,
-                                                                     receipient_key_pair,
+                                                                     recipient_key_pair,
                                                                      4000,
                                                                      codes.0,
                                                                      AssetRecordType::ConfidentialAmount_NonConfidentialAssetType,
