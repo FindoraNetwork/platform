@@ -10,7 +10,6 @@ members = [
     "components/ledger_client",
     "components/ledger_standalone",
     "components/ledger_mirror",
-    "components/rust_locust",
     "components/log_tester",
     "components/solvency",
     "components/solvency_cli",
