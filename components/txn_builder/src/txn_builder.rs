@@ -6,19 +6,24 @@ extern crate zei;
 extern crate serde_derive;
 
 use credentials::{CredCommitment, CredIssuerPublicKey, CredPoK, CredUserSecretKey};
+use curve25519_dalek::scalar::Scalar;
 use ledger::data_model::errors::PlatformError;
 use ledger::data_model::*;
 use ledger::error_location;
 use ledger::policies::Fraction;
 use ledger::policy_script::{Policy, PolicyGlobals, TxnCheckInputs, TxnPolicyData};
 use rand_chacha::ChaChaRng;
-use rand_core::SeedableRng;
+use rand_core::{CryptoRng, RngCore, SeedableRng};
 use std::cmp::Ordering;
 use std::collections::HashSet;
-use zei::api::anon_creds::{ACCommitmentKey, Credential};
+use zei::api::anon_creds::{
+  ac_confidential_open_commitment, ACCommitmentKey, ConfidentialAC, Credential,
+};
 use zei::serialization::ZeiFromToBytes;
 use zei::setup::PublicParams;
-use zei::xfr::asset_record::{build_blind_asset_record, open_blind_asset_record, AssetRecordType};
+use zei::xfr::asset_record::{
+  build_blind_asset_record, build_open_asset_record, open_blind_asset_record, AssetRecordType,
+};
 use zei::xfr::sig::{XfrKeyPair, XfrPublicKey};
 use zei::xfr::structs::{
   AssetRecord, AssetRecordTemplate, AssetTracingPolicy, BlindAssetRecord, OpenAssetRecord,
@@ -515,6 +520,58 @@ impl BuildsTransactions for TransactionBuilder {
   }
 }
 
+/// Generates an asset record from an asset record template using optional identity proof.
+/// Returns the asset record, amount blinds, and type blind.
+pub(crate) fn build_record_and_get_blinds<R: CryptoRng + RngCore>(
+  prng: &mut R,
+  template: &AssetRecordTemplate,
+  identity_proof: Option<ConfidentialAC>)
+  -> Result<(AssetRecord, (Scalar, Scalar), Scalar), PlatformError> {
+  // Check input consistency:
+  // - if no policy, then no identity proof needed
+  // - if policy and identity tracking, then identity proof is needed
+  // - if policy but no identity tracking, then no identity proof is needed
+  if template.asset_tracking.is_none() && identity_proof.is_some()
+     || template.asset_tracking.is_some()
+        && (template.asset_tracking
+                    .as_ref()
+                    .unwrap()
+                    .identity_tracking
+                    .is_some()
+            && identity_proof.is_none()
+            || template.asset_tracking
+                       .as_ref()
+                       .unwrap()
+                       .identity_tracking
+                       .is_none()
+               && identity_proof.is_some())
+  {
+    return Err(PlatformError::InputsError(error_location!()));
+  }
+  // 1. get ciphertext and proofs from identity proof structure
+  let pc_gens = PublicParams::new().pc_gens;
+  let (attr_ctext, reveal_proof) = match identity_proof {
+    None => (None, None),
+    Some(conf_ac) => {
+      let (c, p) = conf_ac.get_fields();
+      (Some(c), Some(p))
+    }
+  };
+  // 2. Use record template and ciphertexts to build open asset record
+  let (open_asset_record, asset_tracing_memo, owner_memo) =
+    build_open_asset_record(prng, &pc_gens, template, attr_ctext);
+  // 3. Return record input containing open asset record, tracking policy, identity reveal proof,
+  //    asset_tracer_memo, and owner_memo
+
+  Ok((AssetRecord { open_asset_record: open_asset_record.clone(),
+                    tracking_policy: template.asset_tracking.clone(),
+                    identity_proof: reveal_proof,
+                    asset_tracer_memo: asset_tracing_memo,
+                    owner_memo },
+      open_asset_record.amount_blinds,
+      open_asset_record.type_blind))
+}
+
 // TransferOperationBuilder constructs transfer operations using the factory pattern
 // Inputs and outputs are added iteratively before being signed by all input record owners
 //
@@ -586,6 +643,58 @@ impl TransferOperationBuilder {
     };
     self.output_records.push(ar);
     Ok(self)
+  }
+
+  /// Adds output to the records, and gets the asset amount blinds and type blind.
+  pub fn add_output_and_get_blinds<R: CryptoRng + RngCore>(
+    &mut self,
+    asset_record_template: &AssetRecordTemplate,
+    credential_record: Option<(&CredUserSecretKey, &Credential, &ACCommitmentKey)>,
+    prng: &mut R)
+    -> Result<((Scalar, Scalar), Scalar), PlatformError> {
+    if self.transfer.is_some() {
+      return Err(PlatformError::InvariantError(Some("Cannot mutate a transfer that has been signed".to_string())));
+    }
+    let (ar, amount_blinds, type_blind) =
+      if let Some((user_secret_key, credential, commitment_key)) = credential_record {
+        match &asset_record_template.asset_tracking {
+          // identity tracking must have asset_tracking policy
+          None => {
+            return Err(PlatformError::InputsError(error_location!()));
+          }
+          Some(policy) => {
+            match &policy.identity_tracking {
+              // policy must have a identity tracking policy
+              None => {
+                return Err(PlatformError::InputsError(error_location!()));
+              }
+              Some(reveal_policy) => {
+                let conf_ac =
+                  ac_confidential_open_commitment(prng,
+                                                  user_secret_key.get_ref(),
+                                                  credential,
+                                                  commitment_key,
+                                                  &policy.enc_keys.attrs_enc_key,
+                                                  &reveal_policy.reveal_map,
+                                                  &[]).map_err(|e| {
+                                                        PlatformError::ZeiError(error_location!(),
+                                                                                e)
+                                                      })?;
+                build_record_and_get_blinds(prng, &asset_record_template, Some(conf_ac))?
+              }
+            }
+          }
+        }
+      } else {
+        if let Some(policy) = &asset_record_template.asset_tracking {
+          if policy.identity_tracking.is_some() {
+            return Err(PlatformError::InputsError(error_location!()));
+          }
+        }
+        build_record_and_get_blinds(prng, &asset_record_template, None)?
+      };
+    self.output_records.push(ar);
+    Ok((amount_blinds, type_blind))
   }
 
   // Ensures that outputs and inputs are balanced by adding remainder outputs for leftover asset
