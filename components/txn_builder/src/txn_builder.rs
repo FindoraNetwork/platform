@@ -585,7 +585,7 @@ pub(crate) fn build_record_and_get_blinds<R: CryptoRng + RngCore>(
 //    let builder = TransferOperationBuilder::new()..add_input(TxoRef::Relative(1),
 //                                       open_blind_asset_record(&ba, alice.get_sk_ref()).unwrap(),
 //                                       20)?
-//                            .add_output(20, bob.get_pk_ref(), code_1, &mut ChaChaRng::from_entropy())?
+//                            .add_output(20, bob.get_pk_ref(), code_1)?
 //                            .balance()?
 //                            .create(TransferType::Standard)?
 //                            .sign(&alice)?;
@@ -625,9 +625,9 @@ impl TransferOperationBuilder {
                     asset_record_template: &AssetRecordTemplate,
                     credential_record: Option<(&CredUserSecretKey,
                             &Credential,
-                            &ACCommitmentKey)>,
-                    prng: &mut ChaChaRng)
+                            &ACCommitmentKey)>)
                     -> Result<&mut Self, PlatformError> {
+    let prng = &mut ChaChaRng::from_entropy();
     if self.transfer.is_some() {
       return Err(PlatformError::InvariantError(Some("Cannot mutate a transfer that has been signed".to_string())));
     }
@@ -986,7 +986,7 @@ mod tests {
                                                                     &memo1,
                                                                     alice.get_sk_ref()).unwrap(),
                                             20)?
-                                 .add_output(&output_template, None, &mut prng)?
+                                 .add_output(&output_template, None)?
                                  .balance();
 
     assert!(res.is_err());
@@ -1001,11 +1001,11 @@ mod tests {
     let res = invalid_sig_op.add_input(TxoRef::Relative(1),
                                        open_blind_asset_record(&ba_1, &memo1,alice.get_sk_ref()).unwrap(),
                                        20)?
-                            .add_output(&output_template, None, &mut prng)?
+                            .add_output(&output_template, None)?
                             .balance()?
                             .create(TransferType::Standard)?
                             .sign(&alice)?
-                            .add_output(&output_template, None, &mut prng);
+                            .add_output(&output_template, None);
     assert!(res.is_err());
 
     // Not all signatures present
@@ -1018,7 +1018,7 @@ mod tests {
     let res = missing_sig_op.add_input(TxoRef::Relative(1),
                                        open_blind_asset_record(&ba_1, &memo1,alice.get_sk_ref()).unwrap(),
                                        20)?
-                            .add_output(&output_template, None, &mut prng)?
+                            .add_output(&output_template, None)?
                             .balance()?
                             .create(TransferType::Standard)?
                             .validate_signatures();
@@ -1060,12 +1060,12 @@ mod tests {
       TransferOperationBuilder::new()
       .add_input(TxoRef::Relative(1), open_blind_asset_record(&ba_1, &memo1, alice.get_sk_ref()).unwrap(), 20)?
       .add_input(TxoRef::Relative(2), open_blind_asset_record(&ba_2, &memo2, bob.get_sk_ref()).unwrap(), 20)?
-      .add_output(&output_bob5_code1_template, None, &mut prng)?
-      .add_output(&output_charlie13_code1_template, None, &mut prng)?
-      .add_output(&output_ben2_code1_template, None, &mut prng)?
-      .add_output(&output_bob5_code2_template, None, &mut prng)?
-      .add_output(&output_charlie13_code2_template, None, &mut prng)?
-      .add_output(&output_ben2_code2_template, None, &mut prng)?
+      .add_output(&output_bob5_code1_template, None)?
+      .add_output(&output_charlie13_code1_template, None)?
+      .add_output(&output_ben2_code1_template, None)?
+      .add_output(&output_bob5_code2_template, None)?
+      .add_output(&output_charlie13_code2_template, None)?
+      .add_output(&output_ben2_code2_template, None)?
       .balance()?
       .create(TransferType::Standard)?
       .sign(&alice)?
