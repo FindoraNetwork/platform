@@ -73,8 +73,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let mut txn_builder = TransactionBuilder::default();
     txn_builder.add_operation_air_assign(&user_key_pair,
-                                         resp1.issuer_pk.clone(),
+                                         user_pk.clone(),
                                          commitment,
+                                         resp1.issuer_pk.clone(),
                                          proof)?;
 
     // Submit to ledger

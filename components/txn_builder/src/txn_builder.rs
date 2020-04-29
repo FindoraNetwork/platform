@@ -5,7 +5,7 @@ extern crate zei;
 #[macro_use]
 extern crate serde_derive;
 
-use credentials::{CredCommitment, CredIssuerPublicKey, CredPoK, CredUserSecretKey};
+use credentials::{CredCommitment, CredIssuerPublicKey, CredPoK, CredUserPublicKey, CredUserSecretKey};
 use ledger::data_model::errors::PlatformError;
 use ledger::data_model::*;
 use ledger::error_location;
@@ -265,8 +265,9 @@ pub trait BuildsTransactions {
                                   -> Result<&mut Self, PlatformError>;
   fn add_operation_air_assign(&mut self,
                               key_pair: &XfrKeyPair,
-                              addr: CredIssuerPublicKey,
+                              addr: CredUserPublicKey,
                               data: CredCommitment,
+                              issuer_pk: CredIssuerPublicKey,
                               pok: CredPoK)
                               -> Result<&mut Self, PlatformError>;
   fn serialize(&self) -> Result<Vec<u8>, PlatformError>;
@@ -482,11 +483,12 @@ impl BuildsTransactions for TransactionBuilder {
   }
   fn add_operation_air_assign(&mut self,
                               key_pair: &XfrKeyPair,
-                              addr: CredIssuerPublicKey,
+                              addr: CredUserPublicKey,
                               data: CredCommitment,
+                              issuer_pk: CredIssuerPublicKey,
                               pok: CredPoK)
                               -> Result<&mut Self, PlatformError> {
-    let xfr = AIRAssign::new(AIRAssignBody::new(addr, data, pok)?, key_pair)?;
+    let xfr = AIRAssign::new(AIRAssignBody::new(addr, data, issuer_pk, pok)?, key_pair)?;
     self.txn.add_operation(Operation::AIRAssign(xfr));
     Ok(self)
   }

@@ -2,8 +2,8 @@
 pub mod txn_lib {
   use credentials::{
     credential_issuer_key_gen, credential_keygen_commitment, credential_reveal, credential_sign,
-    credential_user_key_gen, credential_verify, CredCommitmentKey, CredIssuerPublicKey,
-    CredIssuerSecretKey, CredUserSecretKey, Credential as WrapperCredential,
+    credential_user_key_gen, credential_verify, CredCommitment, CredCommitmentKey, CredIssuerPublicKey,
+    CredIssuerSecretKey, CredPoK, CredUserPublicKey, CredUserSecretKey, Credential as WrapperCredential,
   };
   use env_logger::{Env, Target};
   use ledger::data_model::errors::PlatformError;
@@ -1069,16 +1069,18 @@ pub mod txn_lib {
   pub(crate) fn air_assign(issuer_id: u64,
                            address: &str,
                            data: &str,
+                           issuer_pk: &str,
                            pok: &str,
                            txn_file: &str)
                            -> Result<(), PlatformError> {
     let issuer_data = load_data()?;
-    let issuer_key_pair = issuer_data.get_asset_issuer_key_pair(issuer_id)?;
+    let xfr_key_pair = issuer_data.get_asset_issuer_key_pair(issuer_id)?;
     let mut txn_builder = TransactionBuilder::default();
-    let address = serde_json::from_str(address)?;
-    let data = serde_json::from_str(data)?;
-    let pok = serde_json::from_str(pok)?;
-    txn_builder.add_operation_air_assign(&issuer_key_pair, address, data, pok)?;
+    let address = serde_json::from_str::<CredUserPublicKey>(address)?;
+    let data = serde_json::from_str::<CredCommitment>(data)?;
+    let issuer_pk = serde_json::from_str::<CredIssuerPublicKey>(issuer_pk)?;
+    let pok = serde_json::from_str::<CredPoK>(pok)?;
+    txn_builder.add_operation_air_assign(&xfr_key_pair, address, data, issuer_pk, pok)?;
     store_txn_to_file(&txn_file, &txn_builder)?;
     Ok(())
   }
@@ -2168,13 +2170,14 @@ pub mod txn_lib {
         };
         match (air_assign_matches.value_of("address"),
                air_assign_matches.value_of("data"),
+               air_assign_matches.value_of("issuer_pk"),
                air_assign_matches.value_of("pok"))
         {
-          (Some(address), Some(data), Some(pok)) => {
-            air_assign(issuer_id, address, data, pok, txn_file)
+          (Some(address), Some(data), Some(issuer_pk), Some(pok)) => {
+            air_assign(issuer_id, address, data, issuer_pk, pok, txn_file)
           }
-          (_, _, _) => {
-            println!("Missing address, data, or proof.");
+          (_, _, _, _) => {
+            println!("Missing address, data, issuer_pk, or proof.");
             Err(PlatformError::InputsError(error_location!()))
           }
         }
