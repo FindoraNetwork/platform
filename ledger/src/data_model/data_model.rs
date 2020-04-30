@@ -298,9 +298,6 @@ pub struct Asset {
   #[serde(default)]
   #[serde(skip_serializing_if = "is_default")]
   pub policy: Option<(Box<Policy>, PolicyGlobals)>,
-  #[serde(default)]
-  #[serde(skip_serializing_if = "is_default")]
-  pub memo_history: Vec<Memo>,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
