@@ -483,13 +483,13 @@ impl TransferOperationBuilder {
   /// @param conf_amount {bool} - Indicates whether output's amount is confidential
   /// @param conf_type {bool} - Indicates whether output's asset type is confidential
   /// @throws Will throw an error if `code` fails to deserialize.
-  pub fn add_output_without_tracking(self,
-                                     amount: u64,
-                                     recipient: &XfrPublicKey,
-                                     code: String,
-                                     conf_amount: bool,
-                                     conf_type: bool)
-                                     -> Result<TransferOperationBuilder, JsValue> {
+  pub fn add_output_no_tracking(self,
+                                amount: u64,
+                                recipient: &XfrPublicKey,
+                                code: String,
+                                conf_amount: bool,
+                                conf_type: bool)
+                                -> Result<TransferOperationBuilder, JsValue> {
     self.add_output(amount, recipient, None, code, conf_amount, conf_type)
   }
 

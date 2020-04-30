@@ -556,8 +556,8 @@ impl BuildsTransactions for TransactionBuilder {
 pub struct TransferOperationBuilder {
   input_sids: Vec<TxoRef>,
   spend_amounts: Vec<u64>, // Amount of each input record to spend, the rest will be refunded if user calls balance
-  output_records: Vec<AssetRecord>,
   input_records: Vec<AssetRecord>,
+  output_records: Vec<AssetRecord>,
   transfer: Option<TransferAsset>,
   transfer_type: TransferType,
   tracing_policies: Vec<Option<AssetTracingPolicy>>,
