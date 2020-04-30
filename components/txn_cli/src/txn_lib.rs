@@ -5,6 +5,8 @@ pub mod txn_lib {
     credential_user_key_gen, credential_verify, CredCommitmentKey, CredIssuerPublicKey,
     CredIssuerSecretKey, CredUserSecretKey, Credential as WrapperCredential,
   };
+  use curve25519_dalek::ristretto::CompressedRistretto;
+  use curve25519_dalek::scalar::Scalar;
   use env_logger::{Env, Target};
   use ledger::data_model::errors::PlatformError;
   use ledger::data_model::{
@@ -12,6 +14,7 @@ pub mod txn_lib {
   };
   use ledger::error_location;
   use ledger::policies::{DebtMemo, Fraction};
+  use ledger_standalone::LedgerStandalone;
   use log::trace; // Other options: debug, info, warn
   use rand_chacha::ChaChaRng;
   use rand_core::SeedableRng;
@@ -27,7 +30,6 @@ pub mod txn_lib {
   use zei::api::anon_creds::{ac_confidential_open_commitment, Credential as ZeiCredential};
   use zei::serialization::ZeiFromToBytes;
   use zei::setup::PublicParams;
-  use zei::xfr::asset_record::AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType;
   use zei::xfr::asset_record::{
     build_blind_asset_record, open_blind_asset_record, AssetRecordType,
   };
@@ -1190,6 +1192,79 @@ pub mod txn_lib {
     Ok(txn_builder)
   }
 
+  /// Issues and transfers an asset, submits the transactio with the standalone ledger, and get the UTXO SID and asset type blind.
+  pub fn issue_transfer_and_get_utxo_and_blind(issuer_key_pair: &XfrKeyPair,
+                                               recipient_key_pair: &XfrKeyPair,
+                                               amount: u64,
+                                               code: AssetTypeCode,
+                                               record_type: AssetRecordType,
+                                               ledger_standalone: &LedgerStandalone,
+                                               mut prng: &mut ChaChaRng)
+                                               -> Result<(u64, Scalar), PlatformError> {
+    // Issue and transfer the asset
+    let pc_gens = PublicParams::new().pc_gens;
+    let input_template = AssetRecordTemplate::with_no_asset_tracking(amount, code.val, AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType, issuer_key_pair.get_pk());
+    let input_blind_asset_record =
+      build_blind_asset_record(&mut prng, &pc_gens, &input_template, None).0;
+    let output_template = AssetRecordTemplate::with_no_asset_tracking(amount,
+                                                                      code.val,
+                                                                      record_type,
+                                                                      recipient_key_pair.get_pk());
+    let blinds = &mut ((Scalar::default(), Scalar::default()), Scalar::default());
+    let xfr_op = TransferOperationBuilder::new().add_input(TxoRef::Relative(0),
+open_blind_asset_record(&input_blind_asset_record,
+&None,
+issuer_key_pair.get_sk_ref())
+.map_err(|e| PlatformError::ZeiError(error_location!(),e))?,
+amount)?.add_output_and_store_blinds(&output_template, None, prng, blinds)?.balance()?
+.create(TransferType::Standard)?
+.sign(issuer_key_pair)?
+.transaction()?;
+
+    let mut txn_builder = TransactionBuilder::default();
+    let txn = txn_builder.add_operation_issue_asset(issuer_key_pair,
+                                                    &code,
+                                                    1,
+                                                    &[(TxOutput(input_blind_asset_record), None)],
+                                                    None)?
+                         .add_operation(xfr_op)
+                         .transaction();
+
+    // Submit the transaction, and get the UTXO and asset type blind
+    Ok((ledger_standalone.submit_transaction_and_fetch_utxos(&txn)[0].0, blinds.1))
+  }
+
+  /// Defines, issues and transfers an asset, submits the transactions with the standalone ledger, and get the UTXO SID and asset type blind.
+  #[allow(clippy::too_many_arguments)]
+  pub fn define_issue_transfer_and_get_utxo_and_blind(issuer_key_pair: &XfrKeyPair,
+                                                      recipient_key_pair: &XfrKeyPair,
+                                                      amount: u64,
+                                                      code: AssetTypeCode,
+                                                      rules: AssetRules,
+                                                      record_type: AssetRecordType,
+                                                      ledger_standalone: &LedgerStandalone,
+                                                      prng: &mut ChaChaRng)
+                                                      -> Result<(u64, Scalar), PlatformError> {
+    // Define the asset
+    let mut txn_builder = TransactionBuilder::default();
+    let txn = txn_builder.add_operation_create_asset(issuer_key_pair,
+                                                     Some(code),
+                                                     rules,
+                                                     "",
+                                                     PolicyChoice::Fungible())?
+                         .transaction();
+    ledger_standalone.submit_transaction(&txn);
+
+    // Issue and transfer the asset, and get the UTXO SID and asset type blind
+    issue_transfer_and_get_utxo_and_blind(issuer_key_pair,
+                                          recipient_key_pair,
+                                          amount,
+                                          code,
+                                          record_type,
+                                          ledger_standalone,
+                                          prng)
+  }
+
   /// Queries a value.
   ///
   /// # Arguments
@@ -1203,12 +1278,12 @@ pub mod txn_lib {
   /// * To query the BlindAssetRecord with utxo_sid 100 from https://testnet.findora.org:
   /// use txn_cli::txn_lib::query;
   /// query("https", "testnet.findora.org", QUERY_PORT, "utxo_sid", "100").unwrap();
-  pub fn query(protocol: &str,
-               host: &str,
-               port: &str,
-               route: &str,
-               value: &str)
-               -> Result<String, PlatformError> {
+  fn query(protocol: &str,
+           host: &str,
+           port: &str,
+           route: &str,
+           value: &str)
+           -> Result<String, PlatformError> {
     let mut res = if let Ok(response) =
       reqwest::get(&format!("{}://{}:{}/{}/{}", protocol, host, port, route, value))
     {
@@ -1226,6 +1301,27 @@ pub mod txn_lib {
     println!("Querying result: {}", text);
 
     Ok(text)
+  }
+
+  /// Queries the UTXO SID and gets the asset type commitment.
+  /// Asset should be confidential, otherwise the commitmemt will be null.
+  pub fn query_utxo_and_get_commitment(utxo: u64,
+                                       protocol: &str,
+                                       host: &str)
+                                       -> Result<CompressedRistretto, PlatformError> {
+    let res = query(protocol, host, QUERY_PORT, "utxo_sid", &format!("{}", utxo))?;
+    let blind_asset_record =
+      serde_json::from_str::<BlindAssetRecord>(&res).or_else(|_| {
+                                                      Err(PlatformError::DeserializationError)
+                                                    })?;
+    let asset_type = blind_asset_record.asset_type;
+    match asset_type.get_commitment() {
+      Some(c) => Ok(c),
+      None => {
+        println!("Found nonconfidential asset.");
+        Err(PlatformError::InputsError(error_location!()))
+      }
+    }
   }
 
   /// Submits a transaction.
@@ -1795,13 +1891,13 @@ pub mod txn_lib {
     let lender_template =
       AssetRecordTemplate::with_asset_tracking(amount,
                                                debt_code.val,
-                                               NonConfidentialAmount_NonConfidentialAssetType,
+                                               AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
                                                lender_key_pair.get_pk(),
                                                debt_tracing_policy);
     let borrower_template =
       AssetRecordTemplate::with_no_asset_tracking(amount,
                                                   fiat_code.val,
-                                                  NonConfidentialAmount_NonConfidentialAssetType,
+                                                  AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
                                                   borrower_key_pair.get_pk());
     let xfr_op = TransferOperationBuilder::new().add_input(TxoRef::Absolute(fiat_sid),
                                                            fiat_open_asset_record,
@@ -1980,22 +2076,22 @@ pub mod txn_lib {
     let spend_template =
       AssetRecordTemplate::with_no_asset_tracking(amount_to_spend,
                                                   fiat_code.val,
-                                                  NonConfidentialAmount_NonConfidentialAssetType,
+                                                  AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
                                                   lender_key_pair.get_pk());
     let burn_template =
       AssetRecordTemplate::with_no_asset_tracking(amount_to_burn,
                                                   debt_code.val,
-                                                  NonConfidentialAmount_NonConfidentialAssetType,
+                                                  AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
                                                   XfrPublicKey::zei_from_bytes(&[0; 32]));
     let lender_template =
       AssetRecordTemplate::with_no_asset_tracking(loan.balance - amount_to_burn,
                                                   debt_code.val,
-                                                  NonConfidentialAmount_NonConfidentialAssetType,
+                                                  AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
                                                   lender_key_pair.get_pk());
     let borrower_template =
       AssetRecordTemplate::with_no_asset_tracking(borrower.balance - amount_to_spend,
                                                   fiat_code.val,
-                                                  NonConfidentialAmount_NonConfidentialAssetType,
+                                                  AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
                                                   borrower_key_pair.get_pk());
     let op = TransferOperationBuilder::new().add_input(TxoRef::Absolute(debt_sid),
                                                        debt_open_asset_record,
@@ -3308,7 +3404,7 @@ pub mod txn_lib {
 
       // Build blind asset records
       let code = AssetTypeCode::gen_random();
-      let asset_record_type = NonConfidentialAmount_NonConfidentialAssetType;
+      let asset_record_type = AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType;
       let (bar1, _, memo1) = get_blind_asset_record_and_memos(key_pair.get_pk(),
                                                               1000,
                                                               code,
