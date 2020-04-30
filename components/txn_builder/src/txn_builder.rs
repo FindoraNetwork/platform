@@ -5,7 +5,9 @@ extern crate zei;
 #[macro_use]
 extern crate serde_derive;
 
-use credentials::{CredCommitment, CredIssuerPublicKey, CredPoK, CredUserPublicKey, CredUserSecretKey};
+use credentials::{
+  CredCommitment, CredIssuerPublicKey, CredPoK, CredUserPublicKey, CredUserSecretKey,
+};
 use ledger::data_model::errors::PlatformError;
 use ledger::data_model::*;
 use ledger::error_location;

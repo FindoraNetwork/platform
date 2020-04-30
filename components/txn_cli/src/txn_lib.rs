@@ -2,8 +2,9 @@
 pub mod txn_lib {
   use credentials::{
     credential_issuer_key_gen, credential_keygen_commitment, credential_reveal, credential_sign,
-    credential_user_key_gen, credential_verify, CredCommitment, CredCommitmentKey, CredIssuerPublicKey,
-    CredIssuerSecretKey, CredPoK, CredUserPublicKey, CredUserSecretKey, Credential as WrapperCredential,
+    credential_user_key_gen, credential_verify, CredCommitment, CredCommitmentKey,
+    CredIssuerPublicKey, CredIssuerSecretKey, CredPoK, CredUserPublicKey, CredUserSecretKey,
+    Credential as WrapperCredential,
   };
   use env_logger::{Env, Target};
   use ledger::data_model::errors::PlatformError;
