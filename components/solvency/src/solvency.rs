@@ -3,23 +3,15 @@ use bulletproofs::r1cs::R1CSProof;
 use curve25519_dalek::ristretto::{CompressedRistretto, RistrettoPoint};
 use curve25519_dalek::scalar::Scalar;
 use ledger::data_model::errors::PlatformError;
-use ledger::data_model::{AssetRules, AssetTypeCode, TransferType, TxOutput, TxoRef};
+use ledger::data_model::AssetTypeCode;
 use ledger::error_location;
-use ledger_standalone::LedgerStandalone;
 use linear_map::LinearMap;
-use rand_core::{CryptoRng, RngCore};
 use serde::{Deserialize, Serialize};
-use txn_builder::BuildsTransactions;
-use txn_builder::{PolicyChoice, TransactionBuilder, TransferOperationBuilder};
-use txn_cli::txn_lib::query;
+use txn_cli::txn_lib::query_utxo_and_get_amount;
 use zei::crypto::solvency::{prove_solvency, verify_solvency};
 use zei::errors::ZeiError;
 use zei::setup::PublicParams;
-use zei::xfr::asset_record::{build_blind_asset_record, open_blind_asset_record, AssetRecordType};
-use zei::xfr::sig::XfrKeyPair;
-use zei::xfr::structs::{asset_type_to_scalar, AssetRecordTemplate, BlindAssetRecord, XfrAmount};
-
-pub(crate) const QUERY_PORT: &str = "8668";
+use zei::xfr::structs::{asset_type_to_scalar, XfrAmount};
 
 pub(crate) type AssetAmountAndCode = (Scalar, Scalar);
 pub(crate) type AssetCodeAndRate = (Scalar, Scalar);
@@ -73,22 +65,18 @@ impl AssetAndLiabilityAccount {
   ///   * To get the commitment:
   ///     * Get the (amount_commitment_low, amount_commitment_high) from XfrAmount of the blind asset record.
   ///     * Calculate commitment = (amount_commitment_low + POW_2_32 * amount_commitment_high, code_commitment).
-  pub fn query_utxo_and_update_account(&mut self,
-                                       amount_type: AmountType,
-                                       amount: u64,
-                                       code: AssetTypeCode,
-                                       type_blind: Scalar,
-                                       utxo: u64,
-                                       protocol: &str,
-                                       host: &str)
-                                       -> Result<(), PlatformError> {
-    let res = query(protocol, host, QUERY_PORT, "utxo_sid", &format!("{}", utxo))?;
-    let blind_asset_record =
-      serde_json::from_str::<BlindAssetRecord>(&res).or_else(|_| {
-                                                      Err(PlatformError::DeserializationError)
-                                                    })?;
+  #[allow(clippy::too_many_arguments)]
+  pub fn update(&mut self,
+                amount_type: AmountType,
+                amount: u64,
+                code: AssetTypeCode,
+                type_blind: Scalar,
+                utxo: u64,
+                protocol: &str,
+                host: &str)
+                -> Result<(), PlatformError> {
     let code_scalar = asset_type_to_scalar(&code.val);
-    match blind_asset_record.amount {
+    match query_utxo_and_get_amount(utxo, protocol, host)? {
       XfrAmount::NonConfidential(fetched_amount) => {
         if fetched_amount != amount {
           println!("Incorrect amount.");
@@ -132,6 +120,18 @@ impl AssetAndLiabilityAccount {
   }
 }
 
+/// Gets the list of (amount_blind, type_blind) from the list of ((amount_blind_low, amount_blind_high), type_blind).
+/// amount_blind = (amount_blind_low + POW_2_32 * amount_blind_high, type_blind).
+pub fn get_amount_and_type_blinds(blinds: Vec<((Scalar, Scalar), Scalar)>)
+                                  -> Vec<(Scalar, Scalar)> {
+  let mut amount_and_type_blinds = Vec::new();
+  for ((amount_blind_low, amount_blind_high), type_blind) in blinds {
+    amount_and_type_blinds.push((amount_blind_low + Scalar::from(1u64 << 32) * amount_blind_high,
+                                 type_blind));
+  }
+  amount_and_type_blinds
+}
+
 /// Used to audit the solvency.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 pub struct SolvencyAudit {
@@ -150,8 +150,8 @@ impl SolvencyAudit {
   /// Must be used before `verify_solvency`.
   pub fn prove_solvency_and_store(&self,
                                   account: &mut AssetAndLiabilityAccount,
-                                  asset_blinds: Vec<(Scalar, Scalar)>,
-                                  liability_blinds: Vec<(Scalar, Scalar)>)
+                                  asset_blinds: Vec<((Scalar, Scalar), Scalar)>,
+                                  liability_blinds: Vec<((Scalar, Scalar), Scalar)>)
                                   -> Result<(), PlatformError> {
     // Prove the solvency
     let mut rates = LinearMap::new();
@@ -161,10 +161,10 @@ impl SolvencyAudit {
 
     let proof =
       prove_solvency(&account.hidden_assets,
-                     &asset_blinds,
+                     &get_amount_and_type_blinds(asset_blinds),
                      &account.public_assets,
                      &account.hidden_liabilities,
-                     &liability_blinds,
+                     &get_amount_and_type_blinds(liability_blinds),
                      &account.public_liabilities,
                      &rates).or_else(|e| Err(PlatformError::ZeiError(error_location!(), e)))?;
 
@@ -195,162 +195,87 @@ impl SolvencyAudit {
   }
 }
 
-/// For unit testing: defines an asset and submits the transaction.
-fn test_define_and_submit_one(issuer_key_pair: &XfrKeyPair,
-                              code: AssetTypeCode,
-                              ledger_standalone: &LedgerStandalone)
-                              -> Result<(), PlatformError> {
-  // Define the asset
-  let mut txn_builder = TransactionBuilder::default();
-  let txn = txn_builder.add_operation_create_asset(issuer_key_pair,
-                                                   Some(code),
-                                                   AssetRules::default(),
-                                                   "",
-                                                   PolicyChoice::Fungible())?
-                       .transaction();
-
-  // Submit the transaction
-  ledger_standalone.submit_transaction(&txn);
-
-  Ok(())
-}
-
-/// For unit testing: defines three assets and submits the transactions.
-pub fn test_define_and_submit_multiple(issuer_key_pair: &XfrKeyPair,
-                                       codes: (AssetTypeCode, AssetTypeCode, AssetTypeCode),
-                                       ledger_standalone: &LedgerStandalone)
-                                       -> Result<(), PlatformError> {
-  test_define_and_submit_one(issuer_key_pair, codes.0, ledger_standalone)?;
-  test_define_and_submit_one(issuer_key_pair, codes.1, ledger_standalone)?;
-  test_define_and_submit_one(issuer_key_pair, codes.2, ledger_standalone)
-}
-
-/// For unit testing: issues and transfers an asset, submits the transaction, and gets the UTXO SID and asset blinds.
-/// To get the returned values:
-/// * Get the ((amount_blind_low, amount_blind_high), type_blind) from `add_output_and_get_blinds`.
-/// * Calculate blinds = (amount_blind_low + POW_2_32 * amount_blind_high, type_blind).
-/// * Return (UTXO SID, blinds).
-pub fn test_issue_transfer_and_get_utxo_and_blinds<R: CryptoRng + RngCore>(
-  issuer_key_pair: &XfrKeyPair,
-  recipient_key_pair: &XfrKeyPair,
-  amount: u64,
-  code: AssetTypeCode,
-  record_type: AssetRecordType,
-  sequence_number: u64,
-  prng: &mut R,
-  ledger_standalone: &LedgerStandalone)
-  -> Result<(u64, (Scalar, Scalar)), PlatformError> {
-  // Issue and transfer the asset
-  let input_template =
-    AssetRecordTemplate::with_no_asset_tracking(amount,
-                                                code.val,
-                                                AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
-                                                issuer_key_pair.get_pk());
-  let (blind_asset_record, _, _) =
-    build_blind_asset_record(prng, &PublicParams::new().pc_gens, &input_template, None);
-
-  let output_template = AssetRecordTemplate::with_no_asset_tracking(amount,
-                                                                    code.val,
-                                                                    record_type,
-                                                                    recipient_key_pair.get_pk());
-  let mut txn_builder = TransferOperationBuilder::new();
-  txn_builder.add_input(TxoRef::Relative(0),
-      open_blind_asset_record(&blind_asset_record,
-                        &None,
-                        recipient_key_pair.get_sk_ref())
-      .map_err(|e| PlatformError::ZeiError(error_location!(),e))?,
-      amount)?;
-  let ((amount_blind_low, amount_blind_high), type_blind) =
-    txn_builder.add_output_and_get_blinds(&output_template, None, prng)?;
-  let blinds = (amount_blind_low + Scalar::from(1u64 << 32) * amount_blind_high, type_blind);
-  let xfr_op = txn_builder.balance()?
-                          .create(TransferType::Standard)?
-                          .sign(issuer_key_pair)?
-                          .transaction()?;
-
-  let mut txn_builder = TransactionBuilder::default();
-  let txn = txn_builder.add_operation_issue_asset(issuer_key_pair,
-                                                  &code,
-                                                  sequence_number,
-                                                  &[(TxOutput(blind_asset_record), None)],
-                                                  None)?
-                       .add_operation(xfr_op)
-                       .transaction();
-
-  // Submit the transaction
-  Ok((ledger_standalone.submit_transaction_and_fetch_utxos(&txn)[0].0, blinds))
-}
-
 #[cfg(test)]
 mod tests {
   use super::*;
+  use ledger::data_model::{AssetRules, AssetTypeCode};
+  use ledger_standalone::LedgerStandalone;
   use rand_chacha::ChaChaRng;
-  use rand_core::SeedableRng;
+  use rand_core::{CryptoRng, RngCore, SeedableRng};
+  use txn_cli::txn_lib::{define_and_submit, issue_transfer_and_get_utxo_and_blinds};
+  use zei::xfr::asset_record::AssetRecordType;
+  use zei::xfr::sig::XfrKeyPair;
 
   const PROTOCOL: &str = "http";
   const HOST: &str = "localhost";
 
-  // Randomly generate three asset codes
-  fn generate_codes() -> (AssetTypeCode, AssetTypeCode, AssetTypeCode) {
-    (AssetTypeCode::gen_random(), AssetTypeCode::gen_random(), AssetTypeCode::gen_random())
+  // Randomly generate a key pair and three asset codes
+  fn generate_key_pair_and_define_assets(ledger_standalone: &LedgerStandalone)
+                                         -> (XfrKeyPair, Vec<AssetTypeCode>) {
+    let codes = vec![AssetTypeCode::gen_random(),
+                     AssetTypeCode::gen_random(),
+                     AssetTypeCode::gen_random()];
+    let key_pair = XfrKeyPair::generate(&mut ChaChaRng::from_entropy());
+    for code in codes.iter() {
+      define_and_submit(&key_pair, *code, AssetRules::default(), ledger_standalone).unwrap();
+    }
+    (key_pair, codes)
   }
 
   // Add three public asset amounts
   fn add_public_asset_amounts<R: CryptoRng + RngCore>(issuer_key_pair: &XfrKeyPair,
                                                       recipient_key_pair: &XfrKeyPair,
                                                       account: &mut AssetAndLiabilityAccount,
-                                                      codes: (AssetTypeCode,
-                                                       AssetTypeCode,
-                                                       AssetTypeCode),
+                                                      codes: &Vec<AssetTypeCode>,
                                                       prng: &mut R,
                                                       ledger_standalone: &LedgerStandalone)
                                                       -> Result<(), PlatformError> {
-    let (utxo_0, _) =
-      test_issue_transfer_and_get_utxo_and_blinds(issuer_key_pair,
+    let (utxo_0, _, _) =
+      issue_transfer_and_get_utxo_and_blinds(issuer_key_pair,
                                                   recipient_key_pair,
                                                   100,
-                                                  codes.0,
+                                                  codes[0],
                                                   AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
                                                   0,prng,
                                                   ledger_standalone)?;
-    let (utxo_1, _) =
-      test_issue_transfer_and_get_utxo_and_blinds(issuer_key_pair,
+    let (utxo_1, _, _) =
+      issue_transfer_and_get_utxo_and_blinds(issuer_key_pair,
                                                   recipient_key_pair,
                                                   200,
-                                                  codes.1,
+                                                  codes[1],
                                                   AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
                                                   0,prng,
                                                   ledger_standalone)?;
-    let (utxo_2, _) =
-      test_issue_transfer_and_get_utxo_and_blinds(issuer_key_pair,
+    let (utxo_2, _, _) =
+      issue_transfer_and_get_utxo_and_blinds(issuer_key_pair,
                                                   recipient_key_pair,
                                                   300,
-                                                  codes.2,
+                                                  codes[2],
                                                   AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
                                                   0,prng,
                                                   ledger_standalone)?;
 
-    account.query_utxo_and_update_account(AmountType::Asset,
-                                          100,
-                                          codes.0,
-                                          Scalar::from(0u8),
-                                          utxo_0,
-                                          PROTOCOL,
-                                          HOST)?;
-    account.query_utxo_and_update_account(AmountType::Asset,
-                                          200,
-                                          codes.1,
-                                          Scalar::from(0u8),
-                                          utxo_1,
-                                          PROTOCOL,
-                                          HOST)?;
-    account.query_utxo_and_update_account(AmountType::Asset,
-                                          300,
-                                          codes.2,
-                                          Scalar::from(0u8),
-                                          utxo_2,
-                                          PROTOCOL,
-                                          HOST)?;
+    account.update(AmountType::Asset,
+                   100,
+                   codes[0],
+                   Scalar::from(0u8),
+                   utxo_0,
+                   PROTOCOL,
+                   HOST)?;
+    account.update(AmountType::Asset,
+                   200,
+                   codes[1],
+                   Scalar::from(0u8),
+                   utxo_1,
+                   PROTOCOL,
+                   HOST)?;
+    account.update(AmountType::Asset,
+                   300,
+                   codes[2],
+                   Scalar::from(0u8),
+                   utxo_2,
+                   PROTOCOL,
+                   HOST)?;
 
     Ok(())
   }
@@ -359,63 +284,62 @@ mod tests {
   fn add_hidden_asset_amounts<R: CryptoRng + RngCore>(issuer_key_pair: &XfrKeyPair,
                                                       recipient_key_pair: &XfrKeyPair,
                                                       account: &mut AssetAndLiabilityAccount,
-                                                      blinds: &mut Vec<(Scalar, Scalar)>,
-                                                      codes: (AssetTypeCode,
-                                                       AssetTypeCode,
-                                                       AssetTypeCode),
+                                                      blinds: &mut Vec<((Scalar, Scalar),
+                                                                Scalar)>,
+                                                      codes: &Vec<AssetTypeCode>,
                                                       prng: &mut R,
                                                       ledger_standalone: &LedgerStandalone)
                                                       -> Result<(), PlatformError> {
-    let (utxo_0, blinds_0) =
-      test_issue_transfer_and_get_utxo_and_blinds(issuer_key_pair,
+    let (utxo_0, amount_blinds_0, type_blind_0 ) =
+      issue_transfer_and_get_utxo_and_blinds(issuer_key_pair,
                                                   recipient_key_pair,
                                                   10,
-                                                  codes.0,
+                                                  codes[0],
                                                   AssetRecordType::ConfidentialAmount_NonConfidentialAssetType,
                                                   1,prng,
                                                   ledger_standalone)?;
-    let (utxo_1, blinds_1) =
-      test_issue_transfer_and_get_utxo_and_blinds(issuer_key_pair,
+    let (utxo_1, amount_blinds_1, type_blind_1) =
+      issue_transfer_and_get_utxo_and_blinds(issuer_key_pair,
                                                   recipient_key_pair,
                                                   20,
-                                                  codes.1,
+                                                  codes[1],
                                                   AssetRecordType::ConfidentialAmount_NonConfidentialAssetType,
                                                   1,prng,
                                                   ledger_standalone)?;
-    let (utxo_2, blinds_2) =
-      test_issue_transfer_and_get_utxo_and_blinds(issuer_key_pair,
+    let (utxo_2, amount_blinds_2, type_blind_2) =
+      issue_transfer_and_get_utxo_and_blinds(issuer_key_pair,
                                                   recipient_key_pair,
                                                   30,
-                                                  codes.2,
+                                                  codes[2],
                                                   AssetRecordType::ConfidentialAmount_NonConfidentialAssetType,
                                                   1,prng,
                                                   ledger_standalone)?;
 
-    account.query_utxo_and_update_account(AmountType::Asset,
-                                          10,
-                                          codes.0,
-                                          Scalar::from(0u8),
-                                          utxo_0,
-                                          PROTOCOL,
-                                          HOST)?;
-    account.query_utxo_and_update_account(AmountType::Asset,
-                                          20,
-                                          codes.1,
-                                          Scalar::from(0u8),
-                                          utxo_1,
-                                          PROTOCOL,
-                                          HOST)?;
-    account.query_utxo_and_update_account(AmountType::Asset,
-                                          30,
-                                          codes.2,
-                                          Scalar::from(0u8),
-                                          utxo_2,
-                                          PROTOCOL,
-                                          HOST)?;
+    account.update(AmountType::Asset,
+                   10,
+                   codes[0],
+                   Scalar::from(0u8),
+                   utxo_0,
+                   PROTOCOL,
+                   HOST)?;
+    account.update(AmountType::Asset,
+                   20,
+                   codes[1],
+                   Scalar::from(0u8),
+                   utxo_1,
+                   PROTOCOL,
+                   HOST)?;
+    account.update(AmountType::Asset,
+                   30,
+                   codes[2],
+                   Scalar::from(0u8),
+                   utxo_2,
+                   PROTOCOL,
+                   HOST)?;
 
-    blinds.push(blinds_0);
-    blinds.push(blinds_1);
-    blinds.push(blinds_2);
+    blinds.push((amount_blinds_0, type_blind_0));
+    blinds.push((amount_blinds_1, type_blind_1));
+    blinds.push((amount_blinds_2, type_blind_2));
 
     Ok(())
   }
@@ -424,58 +348,56 @@ mod tests {
   fn add_public_liability_amounts<R: CryptoRng + RngCore>(issuer_key_pair: &XfrKeyPair,
                                                           recipient_key_pair: &XfrKeyPair,
                                                           account: &mut AssetAndLiabilityAccount,
-                                                          codes: (AssetTypeCode,
-                                                           AssetTypeCode,
-                                                           AssetTypeCode),
+                                                          codes: &Vec<AssetTypeCode>,
                                                           prng: &mut R,
                                                           ledger_standalone: &LedgerStandalone)
                                                           -> Result<(), PlatformError> {
-    let (utxo_0, _) =
-      test_issue_transfer_and_get_utxo_and_blinds(issuer_key_pair,
+    let (utxo_0, _, _) =
+      issue_transfer_and_get_utxo_and_blinds(issuer_key_pair,
                                                   recipient_key_pair,
                                                   100,
-                                                  codes.0,
+                                                  codes[0],
                                                   AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
                                                   2,prng,
                                                   ledger_standalone)?;
-    let (utxo_1, _) =
-      test_issue_transfer_and_get_utxo_and_blinds(issuer_key_pair,
+    let (utxo_1, _, _) =
+      issue_transfer_and_get_utxo_and_blinds(issuer_key_pair,
                                                   recipient_key_pair,
                                                   200,
-                                                  codes.1,
+                                                  codes[1],
                                                   AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
                                                   2,prng,
                                                   ledger_standalone)?;
-    let (utxo_2, _) =
-      test_issue_transfer_and_get_utxo_and_blinds(issuer_key_pair,
+    let (utxo_2, _, _) =
+      issue_transfer_and_get_utxo_and_blinds(issuer_key_pair,
                                                   recipient_key_pair,
                                                   200,
-                                                  codes.2,
+                                                  codes[2],
                                                   AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
                                                   2,prng,
                                                   ledger_standalone)?;
 
-    account.query_utxo_and_update_account(AmountType::Liability,
-                                          100,
-                                          codes.0,
-                                          Scalar::from(0u8),
-                                          utxo_0,
-                                          PROTOCOL,
-                                          HOST)?;
-    account.query_utxo_and_update_account(AmountType::Liability,
-                                          200,
-                                          codes.1,
-                                          Scalar::from(0u8),
-                                          utxo_1,
-                                          PROTOCOL,
-                                          HOST)?;
-    account.query_utxo_and_update_account(AmountType::Liability,
-                                          200,
-                                          codes.2,
-                                          Scalar::from(0u8),
-                                          utxo_2,
-                                          PROTOCOL,
-                                          HOST)?;
+    account.update(AmountType::Liability,
+                   100,
+                   codes[0],
+                   Scalar::from(0u8),
+                   utxo_0,
+                   PROTOCOL,
+                   HOST)?;
+    account.update(AmountType::Liability,
+                   200,
+                   codes[1],
+                   Scalar::from(0u8),
+                   utxo_1,
+                   PROTOCOL,
+                   HOST)?;
+    account.update(AmountType::Liability,
+                   200,
+                   codes[2],
+                   Scalar::from(0u8),
+                   utxo_2,
+                   PROTOCOL,
+                   HOST)?;
 
     Ok(())
   }
@@ -484,64 +406,63 @@ mod tests {
   fn add_hidden_liability_amounts_smaller<R: CryptoRng + RngCore>(issuer_key_pair: &XfrKeyPair,
                                                                   recipient_key_pair: &XfrKeyPair,
                                                                   account: &mut AssetAndLiabilityAccount,
-                                                                  blinds: &mut Vec<(Scalar,
+                                                                  blinds: &mut Vec<((Scalar,
+                                                                             Scalar),
                                                                             Scalar)>,
-                                                                  codes: (AssetTypeCode,
-                                                                   AssetTypeCode,
-                                                                   AssetTypeCode),
+                                                                  codes: &Vec<AssetTypeCode>,
                                                                   prng: &mut R,
                                                                   ledger_standalone: &LedgerStandalone)
                                                                   -> Result<(), PlatformError> {
-    let (utxo_0, blinds_0) =
-      test_issue_transfer_and_get_utxo_and_blinds(issuer_key_pair,
+    let (utxo_0, amount_blinds_0, type_blind_0) =
+      issue_transfer_and_get_utxo_and_blinds(issuer_key_pair,
                                                   recipient_key_pair,
                                                   10,
-                                                  codes.0,
+                                                  codes[0],
                                                   AssetRecordType::ConfidentialAmount_NonConfidentialAssetType,
                                                   3,prng,
                                                   ledger_standalone)?;
-    let (utxo_1, blinds_1) =
-      test_issue_transfer_and_get_utxo_and_blinds(issuer_key_pair,
+    let (utxo_1, amount_blinds_1, type_blind_1) =
+      issue_transfer_and_get_utxo_and_blinds(issuer_key_pair,
                                                   recipient_key_pair,
                                                   20,
-                                                  codes.1,
+                                                  codes[1],
                                                   AssetRecordType::ConfidentialAmount_NonConfidentialAssetType,
                                                   3,prng,
                                                   ledger_standalone)?;
-    let (utxo_2, blinds_2) =
-      test_issue_transfer_and_get_utxo_and_blinds(issuer_key_pair,
+    let (utxo_2, amount_blinds_2, type_blind_2) =
+      issue_transfer_and_get_utxo_and_blinds(issuer_key_pair,
                                                   recipient_key_pair,
                                                   20,
-                                                  codes.2,
+                                                  codes[2],
                                                   AssetRecordType::ConfidentialAmount_NonConfidentialAssetType,
                                                   3,prng,
                                                   ledger_standalone)?;
 
-    account.query_utxo_and_update_account(AmountType::Liability,
-                                          10,
-                                          codes.0,
-                                          Scalar::from(0u8),
-                                          utxo_0,
-                                          PROTOCOL,
-                                          HOST)?;
-    account.query_utxo_and_update_account(AmountType::Liability,
-                                          20,
-                                          codes.1,
-                                          Scalar::from(0u8),
-                                          utxo_1,
-                                          PROTOCOL,
-                                          HOST)?;
-    account.query_utxo_and_update_account(AmountType::Liability,
-                                          20,
-                                          codes.2,
-                                          Scalar::from(0u8),
-                                          utxo_2,
-                                          PROTOCOL,
-                                          HOST)?;
+    account.update(AmountType::Liability,
+                   10,
+                   codes[0],
+                   Scalar::from(0u8),
+                   utxo_0,
+                   PROTOCOL,
+                   HOST)?;
+    account.update(AmountType::Liability,
+                   20,
+                   codes[1],
+                   Scalar::from(0u8),
+                   utxo_1,
+                   PROTOCOL,
+                   HOST)?;
+    account.update(AmountType::Liability,
+                   20,
+                   codes[2],
+                   Scalar::from(0u8),
+                   utxo_2,
+                   PROTOCOL,
+                   HOST)?;
 
-    blinds.push(blinds_0);
-    blinds.push(blinds_1);
-    blinds.push(blinds_2);
+    blinds.push((amount_blinds_0, type_blind_0));
+    blinds.push((amount_blinds_1, type_blind_1));
+    blinds.push((amount_blinds_2, type_blind_2));
 
     Ok(())
   }
@@ -550,81 +471,74 @@ mod tests {
   fn add_hidden_liability_amounts_larger<R: CryptoRng + RngCore>(issuer_key_pair: &XfrKeyPair,
                                                                  recipient_key_pair: &XfrKeyPair,
                                                                  account: &mut AssetAndLiabilityAccount,
-                                                                 blinds: &mut Vec<(Scalar,
+                                                                 blinds: &mut Vec<((Scalar,
+                                                                            Scalar),
                                                                            Scalar)>,
-                                                                 codes: (AssetTypeCode,
-                                                                  AssetTypeCode,
-                                                                  AssetTypeCode),
+                                                                 codes: &Vec<AssetTypeCode>,
                                                                  prng: &mut R,
                                                                  ledger_standalone: &LedgerStandalone)
                                                                  -> Result<(), PlatformError> {
-    let (utxo_0, blinds_0) =
-      test_issue_transfer_and_get_utxo_and_blinds(issuer_key_pair,
+    let (utxo_0, amount_blinds_0, type_blind_0) =
+      issue_transfer_and_get_utxo_and_blinds(issuer_key_pair,
                                                   recipient_key_pair,
                                                   10,
-                                                  codes.0,
+                                                  codes[0],
                                                   AssetRecordType::ConfidentialAmount_NonConfidentialAssetType,
                                                   4,prng,
                                                   ledger_standalone)?;
-    let (utxo_1, blinds_1) =
-      test_issue_transfer_and_get_utxo_and_blinds(issuer_key_pair,
+    let (utxo_1, amount_blinds_1, type_blind_1) =
+      issue_transfer_and_get_utxo_and_blinds(issuer_key_pair,
                                                   recipient_key_pair,
                                                   20,
-                                                  codes.1,
+                                                  codes[1],
                                                   AssetRecordType::ConfidentialAmount_NonConfidentialAssetType,
                                                   4,prng,
                                                   ledger_standalone)?;
-    let (utxo_2, blinds_2) =
-      test_issue_transfer_and_get_utxo_and_blinds(issuer_key_pair,
+    let (utxo_2, amount_blinds_2, type_blind_2) =
+      issue_transfer_and_get_utxo_and_blinds(issuer_key_pair,
                                                   recipient_key_pair,
                                                   40,
-                                                  codes.2,
+                                                  codes[2],
                                                   AssetRecordType::ConfidentialAmount_NonConfidentialAssetType,
                                                   4,prng,
                                                   ledger_standalone)?;
 
-    account.query_utxo_and_update_account(AmountType::Liability,
-                                          10,
-                                          codes.0,
-                                          Scalar::from(0u8),
-                                          utxo_0,
-                                          PROTOCOL,
-                                          HOST)?;
-    account.query_utxo_and_update_account(AmountType::Liability,
-                                          20,
-                                          codes.1,
-                                          Scalar::from(0u8),
-                                          utxo_1,
-                                          PROTOCOL,
-                                          HOST)?;
-    account.query_utxo_and_update_account(AmountType::Liability,
-                                          40,
-                                          codes.2,
-                                          Scalar::from(0u8),
-                                          utxo_2,
-                                          PROTOCOL,
-                                          HOST)?;
+    account.update(AmountType::Liability,
+                   10,
+                   codes[0],
+                   Scalar::from(0u8),
+                   utxo_0,
+                   PROTOCOL,
+                   HOST)?;
+    account.update(AmountType::Liability,
+                   20,
+                   codes[1],
+                   Scalar::from(0u8),
+                   utxo_1,
+                   PROTOCOL,
+                   HOST)?;
+    account.update(AmountType::Liability,
+                   40,
+                   codes[2],
+                   Scalar::from(0u8),
+                   utxo_2,
+                   PROTOCOL,
+                   HOST)?;
 
-    blinds.push(blinds_0);
-    blinds.push(blinds_1);
-    blinds.push(blinds_2);
+    blinds.push((amount_blinds_0, type_blind_0));
+    blinds.push((amount_blinds_1, type_blind_1));
+    blinds.push((amount_blinds_2, type_blind_2));
 
     Ok(())
   }
 
-  // Add asset conversion rates for all related assets
-  fn add_conversion_rate_complete(audit: &mut SolvencyAudit,
-                                  codes: (AssetTypeCode, AssetTypeCode, AssetTypeCode)) {
-    audit.set_rate(codes.0, 1);
-    audit.set_rate(codes.1, 2);
-    audit.set_rate(codes.2, 3);
-  }
-
-  // Add asset conversion rates with one missing asset
-  fn add_conversion_rate_incomplete(audit: &mut SolvencyAudit,
-                                    codes: (AssetTypeCode, AssetTypeCode)) {
-    audit.set_rate(codes.0, 1);
-    audit.set_rate(codes.1, 2);
+  // Add asset conversion rates
+  fn add_conversion_rates(audit: &mut SolvencyAudit, codes: Vec<AssetTypeCode>) {
+    let mut rate = 1;
+    for code in codes.iter() {
+      audit.set_rate(*code, rate);
+      rate += 1;
+    }
   }
 
   #[test]
@@ -637,13 +551,11 @@ mod tests {
     // Start a solvency audit process
     let mut audit = SolvencyAudit::default();
 
-    // Generate and define assets
-    let issuer_key_pair = &XfrKeyPair::generate(&mut ChaChaRng::from_entropy());
-    let codes = generate_codes();
-    test_define_and_submit_multiple(issuer_key_pair, codes, ledger_standalone).unwrap();
+    // Generate issuer key pair and define assets
+    let (issuer_key_pair, codes) = generate_key_pair_and_define_assets(ledger_standalone);
 
     // Set asset conversion rates, but miss one asset
-    add_conversion_rate_incomplete(&mut audit, (codes.0, codes.1));
+    add_conversion_rates(&mut audit, vec![codes[0].clone(), codes[1].clone()]);
 
     // Create an asset and liability account
     let mut account = AssetAndLiabilityAccount::default();
@@ -651,18 +563,18 @@ mod tests {
     let asset_blinds = &mut Vec::new();
     let liability_blinds = &mut Vec::new();
     let prng = &mut ChaChaRng::from_entropy();
-    add_hidden_asset_amounts(issuer_key_pair,
+    add_hidden_asset_amounts(&issuer_key_pair,
                              recipient_key_pair,
                              &mut account,
                              asset_blinds,
-                             codes,
+                             &codes,
                              prng,
                              ledger_standalone).unwrap();
-    add_hidden_liability_amounts_smaller(issuer_key_pair,
+    add_hidden_liability_amounts_smaller(&issuer_key_pair,
                                          recipient_key_pair,
                                          &mut account,
                                          liability_blinds,
-                                         codes,
+                                         &codes,
                                          prng,
                                          ledger_standalone).unwrap();
 
@@ -690,13 +602,11 @@ mod tests {
     // Start a solvency audit process
     let mut audit = SolvencyAudit::default();
 
-    // Generate and define assets
-    let issuer_key_pair = &XfrKeyPair::generate(&mut ChaChaRng::from_entropy());
-    let codes = generate_codes();
-    test_define_and_submit_multiple(issuer_key_pair, codes, ledger_standalone).unwrap();
+    // Generate issuer key pair and define assets
+    let (issuer_key_pair, codes) = generate_key_pair_and_define_assets(ledger_standalone);
 
     // Set asset conversion rates
-    add_conversion_rate_complete(&mut audit, codes);
+    add_conversion_rates(&mut audit, codes.clone());
 
     // Create an asset and liability account
     let mut account = AssetAndLiabilityAccount::default();
@@ -704,18 +614,18 @@ mod tests {
     let asset_blinds = &mut Vec::new();
     let liability_blinds = &mut Vec::new();
     let prng = &mut ChaChaRng::from_entropy();
-    add_hidden_asset_amounts(issuer_key_pair,
+    add_hidden_asset_amounts(&issuer_key_pair,
                              recipient_key_pair,
                              &mut account,
                              asset_blinds,
-                             codes,
+                             &codes,
                              prng,
                              ledger_standalone).unwrap();
-    add_hidden_liability_amounts_smaller(issuer_key_pair,
+    add_hidden_liability_amounts_smaller(&issuer_key_pair,
                                          recipient_key_pair,
                                          &mut account,
                                          liability_blinds,
-                                         codes,
+                                         &codes,
                                          prng,
                                          ledger_standalone).unwrap();
 
@@ -739,13 +649,11 @@ mod tests {
     // Start a solvency audit process
     let mut audit = SolvencyAudit::default();
 
-    // Generate and define assets
-    let issuer_key_pair = &XfrKeyPair::generate(&mut ChaChaRng::from_entropy());
-    let codes = generate_codes();
-    test_define_and_submit_multiple(issuer_key_pair, codes, ledger_standalone).unwrap();
+    // Generate issuer key pair and define assets
+    let (issuer_key_pair, codes) = generate_key_pair_and_define_assets(ledger_standalone);
 
     // Set asset conversion rates
-    add_conversion_rate_complete(&mut audit, codes);
+    add_conversion_rates(&mut audit, codes.clone());
 
     // Create an asset and liability account
     let mut account = AssetAndLiabilityAccount::default();
@@ -755,20 +663,20 @@ mod tests {
     let asset_blinds = &mut Vec::new();
     let liability_blinds = &mut Vec::new();
     let prng = &mut ChaChaRng::from_entropy();
-    add_hidden_asset_amounts(issuer_key_pair,
+    add_hidden_asset_amounts(&issuer_key_pair,
                              recipient_key_pair,
                              &mut account,
                              asset_blinds,
-                             codes,
+                             &codes,
                              prng,
                              ledger_standalone).unwrap();
 
     // Adds hidden liabilities, with total value larger than hidden assets'
-    add_hidden_liability_amounts_larger(issuer_key_pair,
+    add_hidden_liability_amounts_larger(&issuer_key_pair,
                                         recipient_key_pair,
                                         &mut account,
                                         liability_blinds,
-                                        codes,
+                                        &codes,
                                         prng,
                                         ledger_standalone).unwrap();
 
@@ -800,10 +708,13 @@ mod tests {
     // Start a solvency audit process
     let mut audit = SolvencyAudit::default();
 
-    // Generate and define assets
+    // Generate issuer key pair and define assets
     let issuer_key_pair = &XfrKeyPair::generate(&mut ChaChaRng::from_entropy());
     let code = AssetTypeCode::gen_random();
-    test_define_and_submit_one(issuer_key_pair, code, ledger_standalone).unwrap();
+    define_and_submit(issuer_key_pair,
+                      code,
+                      AssetRules::default(),
+                      ledger_standalone).unwrap();
 
     // Set asset conversion rates
     audit.set_rate(code, 1);
@@ -813,30 +724,30 @@ mod tests {
     let recipient_key_pair = &XfrKeyPair::generate(&mut ChaChaRng::from_entropy());
     let asset_blinds = &mut Vec::new();
     let prng = &mut ChaChaRng::from_entropy();
-    let (utxo, blinds) =
-    test_issue_transfer_and_get_utxo_and_blinds(issuer_key_pair,
-                                                recipient_key_pair,
-                                                10,
-                                                code,
-                                                AssetRecordType::ConfidentialAmount_NonConfidentialAssetType,
-                                                1,
-                                                prng,
-                                                ledger_standalone).unwrap();
+    let (utxo, amount_blinds, type_blind) =
+    issue_transfer_and_get_utxo_and_blinds(issuer_key_pair,
+                                           recipient_key_pair,
+                                           10,
+                                           code,
+                                           AssetRecordType::ConfidentialAmount_NonConfidentialAssetType,
+                                           1,
+                                           prng,
+                                           ledger_standalone).unwrap();
 
-    account.query_utxo_and_update_account(AmountType::Asset,
-                                          10,
-                                          code,
-                                          Scalar::from(0u8),
-                                          utxo,
-                                          PROTOCOL,
-                                          HOST)
+    account.update(AmountType::Asset,
+                   10,
+                   code,
+                   Scalar::from(0u8),
+                   utxo,
+                   PROTOCOL,
+                   HOST)
            .unwrap();
-    asset_blinds.push(blinds);
+    asset_blinds.push((amount_blinds, type_blind));
 
     // Prove the solvency
     audit.prove_solvency_and_store(&mut account,
                                    asset_blinds.to_vec(),
-                                   Vec::<(Scalar, Scalar)>::new())
+                                   Vec::<((Scalar, Scalar), Scalar)>::new())
          .unwrap();
     assert!(account.proof.is_some());
 
@@ -854,13 +765,11 @@ mod tests {
     // Start a solvency audit process
     let mut audit = SolvencyAudit::default();
 
-    // Generate and define assets
-    let issuer_key_pair = &XfrKeyPair::generate(&mut ChaChaRng::from_entropy());
-    let codes = generate_codes();
-    test_define_and_submit_multiple(issuer_key_pair, codes, ledger_standalone).unwrap();
+    // Generate issuer key pair and define assets
+    let (issuer_key_pair, codes) = generate_key_pair_and_define_assets(ledger_standalone);
 
     // Set asset conversion rates
-    add_conversion_rate_complete(&mut audit, codes);
+    add_conversion_rates(&mut audit, codes.clone());
 
     // Create an asset and liability account
     let mut account = AssetAndLiabilityAccount::default();
@@ -868,30 +777,30 @@ mod tests {
     let asset_blinds = &mut Vec::new();
     let liability_blinds = &mut Vec::new();
     let prng = &mut ChaChaRng::from_entropy();
-    add_public_asset_amounts(issuer_key_pair,
+    add_public_asset_amounts(&issuer_key_pair,
                              recipient_key_pair,
                              &mut account,
-                             codes,
+                             &codes,
                              prng,
                              ledger_standalone).unwrap();
-    add_hidden_asset_amounts(issuer_key_pair,
+    add_hidden_asset_amounts(&issuer_key_pair,
                              recipient_key_pair,
                              &mut account,
                              asset_blinds,
-                             codes,
+                             &codes,
                              prng,
                              ledger_standalone).unwrap();
-    add_public_liability_amounts(issuer_key_pair,
+    add_public_liability_amounts(&issuer_key_pair,
                                  recipient_key_pair,
                                  &mut account,
-                                 codes,
+                                 &codes,
                                  prng,
                                  ledger_standalone).unwrap();
-    add_hidden_liability_amounts_smaller(issuer_key_pair,
+    add_hidden_liability_amounts_smaller(&issuer_key_pair,
                                          recipient_key_pair,
                                          &mut account,
                                          liability_blinds,
-                                         codes,
+                                         &codes,
                                          prng,
                                          ledger_standalone).unwrap();
 
@@ -916,13 +825,11 @@ mod tests {
     // Start a solvency audit process
     let mut audit = SolvencyAudit::default();
 
-    // Generate and define assets
-    let issuer_key_pair = &XfrKeyPair::generate(&mut ChaChaRng::from_entropy());
-    let codes = generate_codes();
-    test_define_and_submit_multiple(issuer_key_pair, codes, ledger_standalone).unwrap();
+    // Generate issuer key pair and define assets
+    let (issuer_key_pair, codes) = generate_key_pair_and_define_assets(ledger_standalone);
 
     // Set asset conversion rates
-    add_conversion_rate_complete(&mut audit, codes);
+    add_conversion_rates(&mut audit, codes.clone());
 
     // Create an asset and liability account
     let mut account = AssetAndLiabilityAccount::default();
@@ -930,30 +837,30 @@ mod tests {
     let asset_blinds = &mut Vec::new();
     let liability_blinds = &mut Vec::new();
     let prng = &mut ChaChaRng::from_entropy();
-    add_public_asset_amounts(issuer_key_pair,
+    add_public_asset_amounts(&issuer_key_pair,
                              recipient_key_pair,
                              &mut account,
-                             codes,
+                             &codes,
                              prng,
                              ledger_standalone).unwrap();
-    add_hidden_asset_amounts(issuer_key_pair,
+    add_hidden_asset_amounts(&issuer_key_pair,
                              recipient_key_pair,
                              &mut account,
                              asset_blinds,
-                             codes,
+                             &codes,
                              prng,
                              ledger_standalone).unwrap();
-    add_public_liability_amounts(issuer_key_pair,
+    add_public_liability_amounts(&issuer_key_pair,
                                  recipient_key_pair,
                                  &mut account,
-                                 codes,
+                                 &codes,
                                  prng,
                                  ledger_standalone).unwrap();
-    add_hidden_liability_amounts_smaller(issuer_key_pair,
+    add_hidden_liability_amounts_smaller(&issuer_key_pair,
                                          recipient_key_pair,
                                          &mut account,
                                          liability_blinds,
-                                         codes,
+                                         &codes,
                                          prng,
                                          ledger_standalone).unwrap();
 
@@ -965,20 +872,21 @@ mod tests {
     audit.verify_solvency(&account).unwrap();
 
     // Update the public assets
-    let (utxo, _) = test_issue_transfer_and_get_utxo_and_blinds(issuer_key_pair,
-                                                                     recipient_key_pair,
-                                                                     40,
-                                                                     codes.0,
-                                                                     AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
-                                                                     5,prng,
-                                                                     ledger_standalone).unwrap();
-    account.query_utxo_and_update_account(AmountType::Liability,
-                                          40,
-                                          codes.0,
-                                          Scalar::from(0u8),
-                                          utxo,
-                                          PROTOCOL,
-                                          HOST)
+    let (utxo, _, _) = issue_transfer_and_get_utxo_and_blinds(&issuer_key_pair,
+                                                              recipient_key_pair,
+                                                              40,
+                                                              codes[0],
+                                                              AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
+                                                              5,
+                                                              prng,
+                                                              ledger_standalone).unwrap();
+    account.update(AmountType::Liability,
+                   40,
+                   codes[0],
+                   Scalar::from(0u8),
+                   utxo,
+                   PROTOCOL,
+                   HOST)
            .unwrap();
 
     // Verify the solvency without proving it again
@@ -1008,13 +916,11 @@ mod tests {
     // Start a solvency audit process
     let mut audit = SolvencyAudit::default();
 
-    // Generate and define assets
-    let issuer_key_pair = &XfrKeyPair::generate(&mut ChaChaRng::from_entropy());
-    let codes = generate_codes();
-    test_define_and_submit_multiple(issuer_key_pair, codes, ledger_standalone).unwrap();
+    // Generate issuer key pair and define assets
+    let (issuer_key_pair, codes) = generate_key_pair_and_define_assets(ledger_standalone);
 
     // Set asset conversion rates
-    add_conversion_rate_complete(&mut audit, codes);
+    add_conversion_rates(&mut audit, codes.clone());
 
     // Create an asset and liability account
     let mut account = AssetAndLiabilityAccount::default();
@@ -1022,30 +928,30 @@ mod tests {
     let asset_blinds = &mut Vec::new();
     let liability_blinds = &mut Vec::new();
     let prng = &mut ChaChaRng::from_entropy();
-    add_public_asset_amounts(issuer_key_pair,
+    add_public_asset_amounts(&issuer_key_pair,
                              recipient_key_pair,
                              &mut account,
-                             codes,
+                             &codes,
                              prng,
                              ledger_standalone).unwrap();
-    add_hidden_asset_amounts(issuer_key_pair,
+    add_hidden_asset_amounts(&issuer_key_pair,
                              recipient_key_pair,
                              &mut account,
                              asset_blinds,
-                             codes,
+                             &codes,
                              prng,
                              ledger_standalone).unwrap();
-    add_public_liability_amounts(issuer_key_pair,
+    add_public_liability_amounts(&issuer_key_pair,
                                  recipient_key_pair,
                                  &mut account,
-                                 codes,
+                                 &codes,
                                  prng,
                                  ledger_standalone).unwrap();
-    add_hidden_liability_amounts_smaller(issuer_key_pair,
+    add_hidden_liability_amounts_smaller(&issuer_key_pair,
                                          recipient_key_pair,
                                          &mut account,
                                          liability_blinds,
-                                         codes,
+                                         &codes,
                                          prng,
                                          ledger_standalone).unwrap();
 
@@ -1057,22 +963,22 @@ mod tests {
     audit.verify_solvency(&account).unwrap();
 
     // Update the hidden liabilities
-    let (utxo, blinds) = test_issue_transfer_and_get_utxo_and_blinds(issuer_key_pair,
+    let (utxo, amount_blinds, type_blind) = issue_transfer_and_get_utxo_and_blinds(&issuer_key_pair,
                                                                      recipient_key_pair,
                                                                      4000,
-                                                                     codes.0,
+                                                                     codes[0],
                                                                      AssetRecordType::ConfidentialAmount_NonConfidentialAssetType,
                                                                      5,prng,
                                                                      ledger_standalone).unwrap();
-    account.query_utxo_and_update_account(AmountType::Liability,
-                                          4000,
-                                          codes.0,
-                                          Scalar::from(0u8),
-                                          utxo,
-                                          PROTOCOL,
-                                          HOST)
+    account.update(AmountType::Liability,
+                   4000,
+                   codes[0],
+                   Scalar::from(0u8),
+                   utxo,
+                   PROTOCOL,
+                   HOST)
            .unwrap();
-    liability_blinds.push(blinds);
+    liability_blinds.push((amount_blinds, type_blind));
 
     // Prove the solvency again
     audit.prove_solvency_and_store(&mut account,

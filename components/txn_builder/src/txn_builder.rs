@@ -8,6 +8,7 @@ extern crate serde_derive;
 use credentials::{
   CredCommitment, CredIssuerPublicKey, CredPoK, CredUserPublicKey, CredUserSecretKey,
 };
+use curve25519_dalek::scalar::Scalar;
 use ledger::data_model::errors::PlatformError;
 use ledger::data_model::*;
 use ledger::error_location;
@@ -648,13 +649,14 @@ impl TransferOperationBuilder {
     Ok(self)
   }
 
-  /// Adds output to the records, and gets the asset amount blinds and type blind.
-  pub fn add_output_and_get_blinds<R: CryptoRng + RngCore>(
+  /// Adds output to the records, and stores the asset amount blinds and type blind in the blinds parameter passed in.
+  pub fn add_output_and_store_blinds<R: CryptoRng + RngCore>(
     &mut self,
     asset_record_template: &AssetRecordTemplate,
     credential_record: Option<(&CredUserSecretKey, &Credential, &ACCommitmentKey)>,
-    prng: &mut R)
-    -> Result<((Scalar, Scalar), Scalar), PlatformError> {
+    prng: &mut R,
+    blinds: &mut ((Scalar, Scalar), Scalar))
+    -> Result<&mut Self, PlatformError> {
     if self.transfer.is_some() {
       return Err(PlatformError::InvariantError(Some("Cannot mutate a transfer that has been signed".to_string())));
     }
@@ -696,8 +698,10 @@ impl TransferOperationBuilder {
         }
         build_record_and_get_blinds(prng, &asset_record_template, None)?
       };
+    blinds.0 = amount_blinds;
+    blinds.1 = type_blind;
     self.output_records.push(ar);
-    Ok((amount_blinds, type_blind))
+    Ok(self)
   }
 
   // Ensures that outputs and inputs are balanced by adding remainder outputs for leftover asset
