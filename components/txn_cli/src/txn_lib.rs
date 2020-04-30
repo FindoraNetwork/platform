@@ -2,8 +2,9 @@
 pub mod txn_lib {
   use credentials::{
     credential_issuer_key_gen, credential_keygen_commitment, credential_reveal, credential_sign,
-    credential_user_key_gen, credential_verify, CredCommitment, CredCommitmentKey, CredIssuerPublicKey,
-    CredIssuerSecretKey, CredPoK, CredUserPublicKey, CredUserSecretKey, Credential as WrapperCredential,
+    credential_user_key_gen, credential_verify, CredCommitment, CredCommitmentKey,
+    CredIssuerPublicKey, CredIssuerSecretKey, CredPoK, CredUserPublicKey, CredUserSecretKey,
+    Credential as WrapperCredential,
   };
   use env_logger::{Env, Target};
   use ledger::data_model::errors::PlatformError;
@@ -1171,6 +1172,7 @@ pub mod txn_lib {
                                                                 &owner_memo,
                                                                 issuer_key_pair.get_sk_ref())
                                               .map_err(|e| PlatformError::ZeiError(error_location!(),e))?,
+                                              None,
                                               amount)?
                                    .add_output(&output_template, credential_record)?
                                    .balance()?
@@ -1388,8 +1390,8 @@ pub mod txn_lib {
                                                   oar1.get_record_type(),
                                                   key_pair.get_pk())
     };
-    let xfr_op = TransferOperationBuilder::new().add_input(sid1, oar1, amount1)?
-                                                .add_input(sid2, oar2, amount2)?
+    let xfr_op = TransferOperationBuilder::new().add_input(sid1, oar1, None, amount1)?
+                                                .add_input(sid2, oar2, None, amount2)?
                                                 .add_output(&template, None)?
                                                 .create(TransferType::Standard)?
                                                 .sign(key_pair)?
@@ -1807,9 +1809,11 @@ pub mod txn_lib {
                                                   borrower_key_pair.get_pk());
     let xfr_op = TransferOperationBuilder::new().add_input(TxoRef::Absolute(fiat_sid),
                                                            fiat_open_asset_record,
+                                                           None,
                                                            amount)?
                                                 .add_input(TxoRef::Absolute(debt_sid),
                                                            debt_open_asset_record,
+                                                           None,
                                                            amount)?
                                                 .add_output(&lender_template, credential_record)?
                                                 .add_output(&borrower_template, None)?
@@ -2002,9 +2006,11 @@ pub mod txn_lib {
 
     let op = TransferOperationBuilder::new().add_input(TxoRef::Absolute(debt_sid),
                                                        debt_open_asset_record,
+                                                       None,
                                                        amount_to_burn)?
                                             .add_input(TxoRef::Absolute(fiat_sid),
                                                        fiat_open_asset_record,
+                                                       None,
                                                        amount_to_spend)?
                                             .add_output(&spend_template, None)?
                                             .add_output(&burn_template, None)?

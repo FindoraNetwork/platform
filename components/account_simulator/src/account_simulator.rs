@@ -605,6 +605,11 @@ impl InterpretAccounts<PlatformError> for LedgerAccounts {
           sig_keys.push(XfrKeyPair::zei_from_bytes(&src_keypair.zei_to_bytes()));
         }
 
+        let src_records: Vec<AssetRecord> =
+          src_records.iter()
+                     .map(|oar| AssetRecord::from_open_asset_record_no_asset_tracking(oar.clone()))
+                     .collect();
+
         let transfer_body =
           TransferAssetBody::new(self.ledger.get_prng(),
                                  to_use.iter().cloned().map(TxoRef::Absolute).collect(),
@@ -897,6 +902,11 @@ impl InterpretAccounts<PlatformError> for OneBigTxnAccounts {
         for _ in to_use.iter() {
           sig_keys.push(XfrKeyPair::zei_from_bytes(&src_keypair.zei_to_bytes()));
         }
+
+        let src_records: Vec<AssetRecord> =
+          src_records.iter()
+                     .map(|oar| AssetRecord::from_open_asset_record_no_asset_tracking(oar.clone()))
+                     .collect();
 
         let transfer_body = TransferAssetBody::new(self.base_ledger.get_prng(),
                                                    to_use.iter()
@@ -1297,6 +1307,11 @@ impl InterpretAccounts<PlatformError> for LedgerStandaloneAccounts {
         for _ in to_use.iter() {
           sig_keys.push(XfrKeyPair::zei_from_bytes(&src_keypair.zei_to_bytes()));
         }
+
+        let src_records: Vec<AssetRecord> =
+          src_records.iter()
+                     .map(|oar| AssetRecord::from_open_asset_record_no_asset_tracking(oar.clone()))
+                     .collect();
 
         let transfer_body =
           TransferAssetBody::new(&mut self.prng,
