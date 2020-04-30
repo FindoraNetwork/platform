@@ -1,23 +1,23 @@
 #![deny(warnings)]
 use bulletproofs::r1cs::R1CSProof;
-use curve25519_dalek::ristretto::CompressedRistretto;
+use curve25519_dalek::ristretto::{CompressedRistretto, RistrettoPoint};
 use curve25519_dalek::scalar::Scalar;
 use ledger::data_model::errors::PlatformError;
 use ledger::data_model::{AssetRules, AssetTypeCode, TransferType, TxOutput, TxoRef};
 use ledger::error_location;
 use ledger_standalone::LedgerStandalone;
 use linear_map::LinearMap;
-use rand_chacha::ChaChaRng;
-use rand_core::{CryptoRng, RngCore, SeedableRng};
+use rand_core::{CryptoRng, RngCore};
 use serde::{Deserialize, Serialize};
 use txn_builder::BuildsTransactions;
 use txn_builder::{PolicyChoice, TransactionBuilder, TransferOperationBuilder};
 use txn_cli::txn_lib::query;
 use zei::crypto::solvency::{prove_solvency, verify_solvency};
+use zei::errors::ZeiError;
 use zei::setup::PublicParams;
 use zei::xfr::asset_record::{build_blind_asset_record, open_blind_asset_record, AssetRecordType};
 use zei::xfr::sig::XfrKeyPair;
-use zei::xfr::structs::{asset_type_to_scalar, AssetRecordTemplate, BlindAssetRecord};
+use zei::xfr::structs::{asset_type_to_scalar, AssetRecordTemplate, BlindAssetRecord, XfrAmount};
 
 pub(crate) const QUERY_PORT: &str = "8668";
 
@@ -29,6 +29,14 @@ pub(crate) type LiabilityCommitment = (CompressedRistretto, CompressedRistretto)
 pub enum AmountType {
   Asset,
   Liability,
+}
+
+pub(crate) fn get_decompressed_commitment(commitment: CompressedRistretto)
+                                          -> Result<RistrettoPoint, PlatformError> {
+  match commitment.decompress() {
+    Some(decompressed_commitment) => Ok(decompressed_commitment),
+    _ => Err(PlatformError::ZeiError(error_location!(), ZeiError::DecompressElementError)),
+  }
 }
 
 /// Asset and liability information, and associated solvency proof if exists
@@ -62,10 +70,14 @@ impl AssetAndLiabilityAccount {
   /// Queries a UTXO SID to get the amount or amount blinds and updates the account.
   /// * If the amount is public, verifies it and updates the list of public assets or liabilities.
   /// * Otherwise, updates the list of hidden assets or liabilities, and the list of commitments.
+  ///   * To get the commitment:
+  ///     * Get the (amount_commitment_low, amount_commitment_high) from XfrAmount of the blind asset record.
+  ///     * Calculate commitment = (amount_commitment_low + POW_2_32 * amount_commitment_high, code_commitment).
   pub fn query_utxo_and_update_account(&mut self,
                                        amount_type: AmountType,
                                        amount: u64,
                                        code: AssetTypeCode,
+                                       type_blind: Scalar,
                                        utxo: u64,
                                        protocol: &str,
                                        host: &str)
@@ -75,40 +87,48 @@ impl AssetAndLiabilityAccount {
       serde_json::from_str::<BlindAssetRecord>(&res).or_else(|_| {
                                                       Err(PlatformError::DeserializationError)
                                                     })?;
-    if let Some(fetched_amount) = blind_asset_record.amount.get_amount() {
-      if fetched_amount != amount {
-        println!("Incorrect amount.");
-        return Err(PlatformError::InputsError(error_location!()));
-      }
-      match amount_type {
-        AmountType::Asset => {
-          self.public_assets
-              .push((Scalar::from(amount), asset_type_to_scalar(&code.val)));
+    let code_scalar = asset_type_to_scalar(&code.val);
+    match blind_asset_record.amount {
+      XfrAmount::NonConfidential(fetched_amount) => {
+        if fetched_amount != amount {
+          println!("Incorrect amount.");
+          return Err(PlatformError::InputsError(error_location!()));
         }
-        _ => {
-          self.public_liabilities
-              .push((Scalar::from(amount), asset_type_to_scalar(&code.val)));
-        }
-      }
-      Ok(())
-    } else if let Some(commitments) = blind_asset_record.amount.get_commitments() {
-      match amount_type {
-        AmountType::Asset => {
-          self.hidden_assets
-              .push((Scalar::from(amount), asset_type_to_scalar(&code.val)));
-          self.hidden_assets_commitments.push(commitments);
-        }
-        _ => {
-          self.hidden_liabilities
-              .push((Scalar::from(amount), asset_type_to_scalar(&code.val)));
-          self.hidden_liabilities_commitments.push(commitments);
+        match amount_type {
+          AmountType::Asset => {
+            self.public_assets.push((Scalar::from(amount), code_scalar));
+          }
+          _ => {
+            self.public_liabilities
+                .push((Scalar::from(amount), code_scalar));
+          }
         }
       }
-      Ok(())
-    } else {
-      println!("Amount commitments not found for confidential amount.");
-      Err(PlatformError::InputsError(error_location!()))
+      XfrAmount::Confidential((amount_commitment_low, amount_commitment_high)) => {
+        let amount_commitment = (get_decompressed_commitment(amount_commitment_low)?
+                                 + get_decompressed_commitment(amount_commitment_high)?
+                                   * Scalar::from(1u64 << 32)).compress();
+        let code_commitment = PublicParams::new().pc_gens
+                                                 .commit(code_scalar, type_blind)
+                                                 .compress();
+        let commitment = (amount_commitment, code_commitment);
+        match amount_type {
+          AmountType::Asset => {
+            self.hidden_assets
+                .push((Scalar::from(amount), asset_type_to_scalar(&code.val)));
+            self.hidden_assets_commitments.push(commitment);
+          }
+          _ => {
+            self.hidden_liabilities
+                .push((Scalar::from(amount), asset_type_to_scalar(&code.val)));
+            self.hidden_liabilities_commitments.push(commitment);
+          }
+        }
+      }
     }
+
+    self.proof = None;
+    Ok(())
   }
 }
 
@@ -138,9 +158,6 @@ impl SolvencyAudit {
     for (code, rate) in self.conversion_rates.clone() {
       rates.insert(code, rate);
     }
-    println!("Account {:?}", account.clone());
-    println!("Asset blinds {:?}", asset_blinds);
-    println!("Liability blinds {:?}", liability_blinds);
 
     let proof =
       prove_solvency(&account.hidden_assets,
@@ -208,7 +225,11 @@ pub fn test_define_and_submit_multiple(issuer_key_pair: &XfrKeyPair,
   test_define_and_submit_one(issuer_key_pair, codes.2, ledger_standalone)
 }
 
-/// For unit testing: issues and transfers an asset, submits the transaction, and gets the UTXO SID and asset amount blind.
+/// For unit testing: issues and transfers an asset, submits the transaction, and gets the UTXO SID and asset blinds.
+/// To get the returned values:
+/// * Get the ((amount_blind_low, amount_blind_high), type_blind) from `add_output_and_get_blinds`.
+/// * Calculate blinds = (amount_blind_low + POW_2_32 * amount_blind_high, type_blind).
+/// * Return (UTXO SID, blinds).
 pub fn test_issue_transfer_and_get_utxo_and_blinds<R: CryptoRng + RngCore>(
   issuer_key_pair: &XfrKeyPair,
   recipient_key_pair: &XfrKeyPair,
@@ -239,7 +260,9 @@ pub fn test_issue_transfer_and_get_utxo_and_blinds<R: CryptoRng + RngCore>(
                         recipient_key_pair.get_sk_ref())
       .map_err(|e| PlatformError::ZeiError(error_location!(),e))?,
       amount)?;
-  let (amount_blinds, _) = txn_builder.add_output_and_get_blinds(&output_template, None, prng)?;
+  let ((amount_blind_low, amount_blind_high), type_blind) =
+    txn_builder.add_output_and_get_blinds(&output_template, None, prng)?;
+  let blinds = (amount_blind_low + Scalar::from(1u64 << 32) * amount_blind_high, type_blind);
   let xfr_op = txn_builder.balance()?
                           .create(TransferType::Standard)?
                           .sign(issuer_key_pair)?
@@ -255,13 +278,14 @@ pub fn test_issue_transfer_and_get_utxo_and_blinds<R: CryptoRng + RngCore>(
                        .transaction();
 
   // Submit the transaction
-  Ok((ledger_standalone.submit_transaction_and_fetch_utxos(&txn)[0].0, amount_blinds))
+  Ok((ledger_standalone.submit_transaction_and_fetch_utxos(&txn)[0].0, blinds))
 }
 
 #[cfg(test)]
 mod tests {
   use super::*;
-  use zei::errors::ZeiError;
+  use rand_chacha::ChaChaRng;
+  use rand_core::SeedableRng;
 
   const PROTOCOL: &str = "http";
   const HOST: &str = "localhost";
@@ -271,16 +295,16 @@ mod tests {
     (AssetTypeCode::gen_random(), AssetTypeCode::gen_random(), AssetTypeCode::gen_random())
   }
 
-  // Add three public assets
-  fn add_public_assets<R: CryptoRng + RngCore>(issuer_key_pair: &XfrKeyPair,
-                                               recipient_key_pair: &XfrKeyPair,
-                                               account: &mut AssetAndLiabilityAccount,
-                                               codes: (AssetTypeCode,
-                                                AssetTypeCode,
-                                                AssetTypeCode),
-                                               prng: &mut R,
-                                               ledger_standalone: &LedgerStandalone)
-                                               -> Result<(), PlatformError> {
+  // Add three public asset amounts
+  fn add_public_asset_amounts<R: CryptoRng + RngCore>(issuer_key_pair: &XfrKeyPair,
+                                                      recipient_key_pair: &XfrKeyPair,
+                                                      account: &mut AssetAndLiabilityAccount,
+                                                      codes: (AssetTypeCode,
+                                                       AssetTypeCode,
+                                                       AssetTypeCode),
+                                                      prng: &mut R,
+                                                      ledger_standalone: &LedgerStandalone)
+                                                      -> Result<(), PlatformError> {
     let (utxo_0, _) =
       test_issue_transfer_and_get_utxo_and_blinds(issuer_key_pair,
                                                   recipient_key_pair,
@@ -306,24 +330,42 @@ mod tests {
                                                   0,prng,
                                                   ledger_standalone)?;
 
-    account.query_utxo_and_update_account(AmountType::Asset, 100, codes.0, utxo_0, PROTOCOL, HOST)?;
-    account.query_utxo_and_update_account(AmountType::Asset, 200, codes.1, utxo_1, PROTOCOL, HOST)?;
-    account.query_utxo_and_update_account(AmountType::Asset, 300, codes.2, utxo_2, PROTOCOL, HOST)?;
+    account.query_utxo_and_update_account(AmountType::Asset,
+                                          100,
+                                          codes.0,
+                                          Scalar::from(0u8),
+                                          utxo_0,
+                                          PROTOCOL,
+                                          HOST)?;
+    account.query_utxo_and_update_account(AmountType::Asset,
+                                          200,
+                                          codes.1,
+                                          Scalar::from(0u8),
+                                          utxo_1,
+                                          PROTOCOL,
+                                          HOST)?;
+    account.query_utxo_and_update_account(AmountType::Asset,
+                                          300,
+                                          codes.2,
+                                          Scalar::from(0u8),
+                                          utxo_2,
+                                          PROTOCOL,
+                                          HOST)?;
 
     Ok(())
   }
 
-  // Add three hidden assets
-  fn add_hidden_assets<R: CryptoRng + RngCore>(issuer_key_pair: &XfrKeyPair,
-                                               recipient_key_pair: &XfrKeyPair,
-                                               account: &mut AssetAndLiabilityAccount,
-                                               blinds: &mut Vec<(Scalar, Scalar)>,
-                                               codes: (AssetTypeCode,
-                                                AssetTypeCode,
-                                                AssetTypeCode),
-                                               prng: &mut R,
-                                               ledger_standalone: &LedgerStandalone)
-                                               -> Result<(), PlatformError> {
+  // Add three hidden asset amounts
+  fn add_hidden_asset_amounts<R: CryptoRng + RngCore>(issuer_key_pair: &XfrKeyPair,
+                                                      recipient_key_pair: &XfrKeyPair,
+                                                      account: &mut AssetAndLiabilityAccount,
+                                                      blinds: &mut Vec<(Scalar, Scalar)>,
+                                                      codes: (AssetTypeCode,
+                                                       AssetTypeCode,
+                                                       AssetTypeCode),
+                                                      prng: &mut R,
+                                                      ledger_standalone: &LedgerStandalone)
+                                                      -> Result<(), PlatformError> {
     let (utxo_0, blinds_0) =
       test_issue_transfer_and_get_utxo_and_blinds(issuer_key_pair,
                                                   recipient_key_pair,
@@ -349,9 +391,27 @@ mod tests {
                                                   1,prng,
                                                   ledger_standalone)?;
 
-    account.query_utxo_and_update_account(AmountType::Asset, 10, codes.0, utxo_0, PROTOCOL, HOST)?;
-    account.query_utxo_and_update_account(AmountType::Asset, 20, codes.1, utxo_1, PROTOCOL, HOST)?;
-    account.query_utxo_and_update_account(AmountType::Asset, 30, codes.2, utxo_2, PROTOCOL, HOST)?;
+    account.query_utxo_and_update_account(AmountType::Asset,
+                                          10,
+                                          codes.0,
+                                          Scalar::from(0u8),
+                                          utxo_0,
+                                          PROTOCOL,
+                                          HOST)?;
+    account.query_utxo_and_update_account(AmountType::Asset,
+                                          20,
+                                          codes.1,
+                                          Scalar::from(0u8),
+                                          utxo_1,
+                                          PROTOCOL,
+                                          HOST)?;
+    account.query_utxo_and_update_account(AmountType::Asset,
+                                          30,
+                                          codes.2,
+                                          Scalar::from(0u8),
+                                          utxo_2,
+                                          PROTOCOL,
+                                          HOST)?;
 
     blinds.push(blinds_0);
     blinds.push(blinds_1);
@@ -360,16 +420,16 @@ mod tests {
     Ok(())
   }
 
-  // Add three public liabilities
-  fn add_public_liabilities<R: CryptoRng + RngCore>(issuer_key_pair: &XfrKeyPair,
-                                                    recipient_key_pair: &XfrKeyPair,
-                                                    account: &mut AssetAndLiabilityAccount,
-                                                    codes: (AssetTypeCode,
-                                                     AssetTypeCode,
-                                                     AssetTypeCode),
-                                                    prng: &mut R,
-                                                    ledger_standalone: &LedgerStandalone)
-                                                    -> Result<(), PlatformError> {
+  // Add three public liability amounts
+  fn add_public_liability_amounts<R: CryptoRng + RngCore>(issuer_key_pair: &XfrKeyPair,
+                                                          recipient_key_pair: &XfrKeyPair,
+                                                          account: &mut AssetAndLiabilityAccount,
+                                                          codes: (AssetTypeCode,
+                                                           AssetTypeCode,
+                                                           AssetTypeCode),
+                                                          prng: &mut R,
+                                                          ledger_standalone: &LedgerStandalone)
+                                                          -> Result<(), PlatformError> {
     let (utxo_0, _) =
       test_issue_transfer_and_get_utxo_and_blinds(issuer_key_pair,
                                                   recipient_key_pair,
@@ -398,18 +458,21 @@ mod tests {
     account.query_utxo_and_update_account(AmountType::Liability,
                                           100,
                                           codes.0,
+                                          Scalar::from(0u8),
                                           utxo_0,
                                           PROTOCOL,
                                           HOST)?;
     account.query_utxo_and_update_account(AmountType::Liability,
                                           200,
                                           codes.1,
+                                          Scalar::from(0u8),
                                           utxo_1,
                                           PROTOCOL,
                                           HOST)?;
     account.query_utxo_and_update_account(AmountType::Liability,
                                           200,
                                           codes.2,
+                                          Scalar::from(0u8),
                                           utxo_2,
                                           PROTOCOL,
                                           HOST)?;
@@ -417,17 +480,18 @@ mod tests {
     Ok(())
   }
 
-  // Add three hidden liabilities, with total value smaller than hidden assets'
-  fn add_hidden_liabilities_smaller<R: CryptoRng + RngCore>(issuer_key_pair: &XfrKeyPair,
-                                                            recipient_key_pair: &XfrKeyPair,
-                                                            account: &mut AssetAndLiabilityAccount,
-                                                            blinds: &mut Vec<(Scalar, Scalar)>,
-                                                            codes: (AssetTypeCode,
-                                                             AssetTypeCode,
-                                                             AssetTypeCode),
-                                                            prng: &mut R,
-                                                            ledger_standalone: &LedgerStandalone)
-                                                            -> Result<(), PlatformError> {
+  // Add three hidden liability amounts, with total value smaller than hidden assets'
+  fn add_hidden_liability_amounts_smaller<R: CryptoRng + RngCore>(issuer_key_pair: &XfrKeyPair,
+                                                                  recipient_key_pair: &XfrKeyPair,
+                                                                  account: &mut AssetAndLiabilityAccount,
+                                                                  blinds: &mut Vec<(Scalar,
+                                                                            Scalar)>,
+                                                                  codes: (AssetTypeCode,
+                                                                   AssetTypeCode,
+                                                                   AssetTypeCode),
+                                                                  prng: &mut R,
+                                                                  ledger_standalone: &LedgerStandalone)
+                                                                  -> Result<(), PlatformError> {
     let (utxo_0, blinds_0) =
       test_issue_transfer_and_get_utxo_and_blinds(issuer_key_pair,
                                                   recipient_key_pair,
@@ -456,18 +520,21 @@ mod tests {
     account.query_utxo_and_update_account(AmountType::Liability,
                                           10,
                                           codes.0,
+                                          Scalar::from(0u8),
                                           utxo_0,
                                           PROTOCOL,
                                           HOST)?;
     account.query_utxo_and_update_account(AmountType::Liability,
                                           20,
                                           codes.1,
+                                          Scalar::from(0u8),
                                           utxo_1,
                                           PROTOCOL,
                                           HOST)?;
     account.query_utxo_and_update_account(AmountType::Liability,
                                           20,
                                           codes.2,
+                                          Scalar::from(0u8),
                                           utxo_2,
                                           PROTOCOL,
                                           HOST)?;
@@ -479,17 +546,18 @@ mod tests {
     Ok(())
   }
 
-  // Add three hidden liabilities, with total value larger than hidden assets'
-  fn add_hidden_liabilities_larger<R: CryptoRng + RngCore>(issuer_key_pair: &XfrKeyPair,
-                                                           recipient_key_pair: &XfrKeyPair,
-                                                           account: &mut AssetAndLiabilityAccount,
-                                                           blinds: &mut Vec<(Scalar, Scalar)>,
-                                                           codes: (AssetTypeCode,
-                                                            AssetTypeCode,
-                                                            AssetTypeCode),
-                                                           prng: &mut R,
-                                                           ledger_standalone: &LedgerStandalone)
-                                                           -> Result<(), PlatformError> {
+  // Add three hidden liability amounts, with total value larger than hidden assets'
+  fn add_hidden_liability_amounts_larger<R: CryptoRng + RngCore>(issuer_key_pair: &XfrKeyPair,
+                                                                 recipient_key_pair: &XfrKeyPair,
+                                                                 account: &mut AssetAndLiabilityAccount,
+                                                                 blinds: &mut Vec<(Scalar,
+                                                                           Scalar)>,
+                                                                 codes: (AssetTypeCode,
+                                                                  AssetTypeCode,
+                                                                  AssetTypeCode),
+                                                                 prng: &mut R,
+                                                                 ledger_standalone: &LedgerStandalone)
+                                                                 -> Result<(), PlatformError> {
     let (utxo_0, blinds_0) =
       test_issue_transfer_and_get_utxo_and_blinds(issuer_key_pair,
                                                   recipient_key_pair,
@@ -518,18 +586,21 @@ mod tests {
     account.query_utxo_and_update_account(AmountType::Liability,
                                           10,
                                           codes.0,
+                                          Scalar::from(0u8),
                                           utxo_0,
                                           PROTOCOL,
                                           HOST)?;
     account.query_utxo_and_update_account(AmountType::Liability,
                                           20,
                                           codes.1,
+                                          Scalar::from(0u8),
                                           utxo_1,
                                           PROTOCOL,
                                           HOST)?;
     account.query_utxo_and_update_account(AmountType::Liability,
                                           40,
                                           codes.2,
+                                          Scalar::from(0u8),
                                           utxo_2,
                                           PROTOCOL,
                                           HOST)?;
@@ -557,6 +628,7 @@ mod tests {
   }
 
   #[test]
+  #[ignore]
   fn test_prove_solvency_fail() {
     // Start the standalone ledger
     let ledger_standalone = &LedgerStandalone::new();
@@ -579,20 +651,20 @@ mod tests {
     let asset_blinds = &mut Vec::new();
     let liability_blinds = &mut Vec::new();
     let prng = &mut ChaChaRng::from_entropy();
-    add_hidden_assets(issuer_key_pair,
-                      recipient_key_pair,
-                      &mut account,
-                      asset_blinds,
-                      codes,
-                      prng,
-                      ledger_standalone).unwrap();
-    add_hidden_liabilities_smaller(issuer_key_pair,
-                                   recipient_key_pair,
-                                   &mut account,
-                                   liability_blinds,
-                                   codes,
-                                   prng,
-                                   ledger_standalone).unwrap();
+    add_hidden_asset_amounts(issuer_key_pair,
+                             recipient_key_pair,
+                             &mut account,
+                             asset_blinds,
+                             codes,
+                             prng,
+                             ledger_standalone).unwrap();
+    add_hidden_liability_amounts_smaller(issuer_key_pair,
+                                         recipient_key_pair,
+                                         &mut account,
+                                         liability_blinds,
+                                         codes,
+                                         prng,
+                                         ledger_standalone).unwrap();
 
     // Prove the solvency
     // Should fail with ZeiError::SolvencyProveError
@@ -632,20 +704,20 @@ mod tests {
     let asset_blinds = &mut Vec::new();
     let liability_blinds = &mut Vec::new();
     let prng = &mut ChaChaRng::from_entropy();
-    add_hidden_assets(issuer_key_pair,
-                      recipient_key_pair,
-                      &mut account,
-                      asset_blinds,
-                      codes,
-                      prng,
-                      ledger_standalone).unwrap();
-    add_hidden_liabilities_smaller(issuer_key_pair,
-                                   recipient_key_pair,
-                                   &mut account,
-                                   liability_blinds,
-                                   codes,
-                                   prng,
-                                   ledger_standalone).unwrap();
+    add_hidden_asset_amounts(issuer_key_pair,
+                             recipient_key_pair,
+                             &mut account,
+                             asset_blinds,
+                             codes,
+                             prng,
+                             ledger_standalone).unwrap();
+    add_hidden_liability_amounts_smaller(issuer_key_pair,
+                                         recipient_key_pair,
+                                         &mut account,
+                                         liability_blinds,
+                                         codes,
+                                         prng,
+                                         ledger_standalone).unwrap();
 
     // Verify the solvency without a proof
     // Should fail with InputsError
@@ -683,22 +755,22 @@ mod tests {
     let asset_blinds = &mut Vec::new();
     let liability_blinds = &mut Vec::new();
     let prng = &mut ChaChaRng::from_entropy();
-    add_hidden_assets(issuer_key_pair,
-                      recipient_key_pair,
-                      &mut account,
-                      asset_blinds,
-                      codes,
-                      prng,
-                      ledger_standalone).unwrap();
+    add_hidden_asset_amounts(issuer_key_pair,
+                             recipient_key_pair,
+                             &mut account,
+                             asset_blinds,
+                             codes,
+                             prng,
+                             ledger_standalone).unwrap();
 
     // Adds hidden liabilities, with total value larger than hidden assets'
-    add_hidden_liabilities_larger(issuer_key_pair,
-                                  recipient_key_pair,
-                                  &mut account,
-                                  liability_blinds,
-                                  codes,
-                                  prng,
-                                  ledger_standalone).unwrap();
+    add_hidden_liability_amounts_larger(issuer_key_pair,
+                                        recipient_key_pair,
+                                        &mut account,
+                                        liability_blinds,
+                                        codes,
+                                        prng,
+                                        ledger_standalone).unwrap();
 
     // Prove the solvency
     audit.prove_solvency_and_store(&mut account,
@@ -719,7 +791,7 @@ mod tests {
   }
 
   #[test]
-  //   #[ignore]
+  #[ignore]
   fn test_prove_and_verify_solvency_simple_pass() {
     // Start the standalone ledger
     let ledger_standalone = &LedgerStandalone::new();
@@ -751,7 +823,13 @@ mod tests {
                                                 prng,
                                                 ledger_standalone).unwrap();
 
-    account.query_utxo_and_update_account(AmountType::Asset, 10, code, utxo, PROTOCOL, HOST)
+    account.query_utxo_and_update_account(AmountType::Asset,
+                                          10,
+                                          code,
+                                          Scalar::from(0u8),
+                                          utxo,
+                                          PROTOCOL,
+                                          HOST)
            .unwrap();
     asset_blinds.push(blinds);
 
@@ -767,8 +845,8 @@ mod tests {
   }
 
   #[test]
-  //   #[ignore]
-  fn test_prove_and_verify_solvency_pass() {
+  #[ignore]
+  fn test_prove_and_verify_solvency_complex_pass() {
     // Start the standalone ledger
     let ledger_standalone = &LedgerStandalone::new();
     ledger_standalone.poll_until_ready().unwrap();
@@ -788,34 +866,34 @@ mod tests {
     let mut account = AssetAndLiabilityAccount::default();
     let recipient_key_pair = &XfrKeyPair::generate(&mut ChaChaRng::from_entropy());
     let asset_blinds = &mut Vec::new();
-    // let liability_blinds = &mut Vec::new();
-    let liability_blinds: Vec<(Scalar, Scalar)> = Vec::new();
+    let liability_blinds = &mut Vec::new();
     let prng = &mut ChaChaRng::from_entropy();
-    // add_public_assets(issuer_key_pair,
-    //                   recipient_key_pair,
-    //                   &mut account,
-    //                   codes,
-    //                   prng,
-    //                   ledger_standalone).unwrap();
-    add_hidden_assets(issuer_key_pair,
-                      recipient_key_pair,
-                      &mut account,
-                      asset_blinds,
-                      codes,
-                      prng,
-                      ledger_standalone).unwrap();
-    // add_public_liabilities(issuer_key_pair,
-    //                        recipient_key_pair,
-    //                        &mut account,
-    //                        codes,
-    //                        prng,
-    //                        ledger_standalone).unwrap();
-    // add_hidden_liabilities_smaller(issuer_key_pair,
-    //                                recipient_key_pair,
-    //                                &mut account,
-    //                                liability_blinds,
-    //                                codes,prng,
-    //                                ledger_standalone).unwrap();
+    add_public_asset_amounts(issuer_key_pair,
+                             recipient_key_pair,
+                             &mut account,
+                             codes,
+                             prng,
+                             ledger_standalone).unwrap();
+    add_hidden_asset_amounts(issuer_key_pair,
+                             recipient_key_pair,
+                             &mut account,
+                             asset_blinds,
+                             codes,
+                             prng,
+                             ledger_standalone).unwrap();
+    add_public_liability_amounts(issuer_key_pair,
+                                 recipient_key_pair,
+                                 &mut account,
+                                 codes,
+                                 prng,
+                                 ledger_standalone).unwrap();
+    add_hidden_liability_amounts_smaller(issuer_key_pair,
+                                         recipient_key_pair,
+                                         &mut account,
+                                         liability_blinds,
+                                         codes,
+                                         prng,
+                                         ledger_standalone).unwrap();
 
     // Prove the solvency
     audit.prove_solvency_and_store(&mut account,
@@ -829,7 +907,7 @@ mod tests {
   }
 
   #[test]
-  //   #[ignore]
+  #[ignore]
   fn test_update_asset_and_verify_solvency_mixed() {
     // Start the standalone ledger
     let ledger_standalone = &LedgerStandalone::new();
@@ -852,32 +930,32 @@ mod tests {
     let asset_blinds = &mut Vec::new();
     let liability_blinds = &mut Vec::new();
     let prng = &mut ChaChaRng::from_entropy();
-    add_public_assets(issuer_key_pair,
-                      recipient_key_pair,
-                      &mut account,
-                      codes,
-                      prng,
-                      ledger_standalone).unwrap();
-    add_hidden_assets(issuer_key_pair,
-                      recipient_key_pair,
-                      &mut account,
-                      asset_blinds,
-                      codes,
-                      prng,
-                      ledger_standalone).unwrap();
-    add_public_liabilities(issuer_key_pair,
-                           recipient_key_pair,
-                           &mut account,
-                           codes,
-                           prng,
-                           ledger_standalone).unwrap();
-    add_hidden_liabilities_smaller(issuer_key_pair,
-                                   recipient_key_pair,
-                                   &mut account,
-                                   liability_blinds,
-                                   codes,
-                                   prng,
-                                   ledger_standalone).unwrap();
+    add_public_asset_amounts(issuer_key_pair,
+                             recipient_key_pair,
+                             &mut account,
+                             codes,
+                             prng,
+                             ledger_standalone).unwrap();
+    add_hidden_asset_amounts(issuer_key_pair,
+                             recipient_key_pair,
+                             &mut account,
+                             asset_blinds,
+                             codes,
+                             prng,
+                             ledger_standalone).unwrap();
+    add_public_liability_amounts(issuer_key_pair,
+                                 recipient_key_pair,
+                                 &mut account,
+                                 codes,
+                                 prng,
+                                 ledger_standalone).unwrap();
+    add_hidden_liability_amounts_smaller(issuer_key_pair,
+                                         recipient_key_pair,
+                                         &mut account,
+                                         liability_blinds,
+                                         codes,
+                                         prng,
+                                         ledger_standalone).unwrap();
 
     // Prove and verify the solvency
     audit.prove_solvency_and_store(&mut account,
@@ -894,7 +972,13 @@ mod tests {
                                                                      AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
                                                                      5,prng,
                                                                      ledger_standalone).unwrap();
-    account.query_utxo_and_update_account(AmountType::Liability, 40, codes.0, utxo, PROTOCOL, HOST)
+    account.query_utxo_and_update_account(AmountType::Liability,
+                                          40,
+                                          codes.0,
+                                          Scalar::from(0u8),
+                                          utxo,
+                                          PROTOCOL,
+                                          HOST)
            .unwrap();
 
     // Verify the solvency without proving it again
@@ -915,7 +999,7 @@ mod tests {
   }
 
   #[test]
-  //   #[ignore]
+  #[ignore]
   fn test_update_liability_and_verify_solvency_fail() {
     // Start the standalone ledger
     let ledger_standalone = &LedgerStandalone::new();
@@ -938,32 +1022,32 @@ mod tests {
     let asset_blinds = &mut Vec::new();
     let liability_blinds = &mut Vec::new();
     let prng = &mut ChaChaRng::from_entropy();
-    add_public_assets(issuer_key_pair,
-                      recipient_key_pair,
-                      &mut account,
-                      codes,
-                      prng,
-                      ledger_standalone).unwrap();
-    add_hidden_assets(issuer_key_pair,
-                      recipient_key_pair,
-                      &mut account,
-                      asset_blinds,
-                      codes,
-                      prng,
-                      ledger_standalone).unwrap();
-    add_public_liabilities(issuer_key_pair,
-                           recipient_key_pair,
-                           &mut account,
-                           codes,
-                           prng,
-                           ledger_standalone).unwrap();
-    add_hidden_liabilities_smaller(issuer_key_pair,
-                                   recipient_key_pair,
-                                   &mut account,
-                                   liability_blinds,
-                                   codes,
-                                   prng,
-                                   ledger_standalone).unwrap();
+    add_public_asset_amounts(issuer_key_pair,
+                             recipient_key_pair,
+                             &mut account,
+                             codes,
+                             prng,
+                             ledger_standalone).unwrap();
+    add_hidden_asset_amounts(issuer_key_pair,
+                             recipient_key_pair,
+                             &mut account,
+                             asset_blinds,
+                             codes,
+                             prng,
+                             ledger_standalone).unwrap();
+    add_public_liability_amounts(issuer_key_pair,
+                                 recipient_key_pair,
+                                 &mut account,
+                                 codes,
+                                 prng,
+                                 ledger_standalone).unwrap();
+    add_hidden_liability_amounts_smaller(issuer_key_pair,
+                                         recipient_key_pair,
+                                         &mut account,
+                                         liability_blinds,
+                                         codes,
+                                         prng,
+                                         ledger_standalone).unwrap();
 
     // Prove and verify the solvency
     audit.prove_solvency_and_store(&mut account,
@@ -983,6 +1067,7 @@ mod tests {
     account.query_utxo_and_update_account(AmountType::Liability,
                                           4000,
                                           codes.0,
+                                          Scalar::from(0u8),
                                           utxo,
                                           PROTOCOL,
                                           HOST)
