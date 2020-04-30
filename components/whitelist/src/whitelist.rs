@@ -5,7 +5,7 @@ use ledger::data_model::errors::PlatformError;
 use ledger::data_model::AssetTypeCode;
 use ledger::error_location;
 use std::collections::HashMap;
-use txn_cli::txn_lib::query_utxo_and_get_commitment;
+use txn_cli::txn_lib::query_utxo_and_get_type_commitment;
 use zei::crypto::whitelist::{prove_array_membership, verify_array_membership, WhitelistProof};
 use zei::xfr::structs::asset_type_to_scalar;
 
@@ -55,7 +55,7 @@ impl Whitelist {
                                     utxo: u64,
                                     blind: Scalar)
                                     -> Result<(), PlatformError> {
-    let commitment = query_utxo_and_get_commitment(utxo, PROTOCOL, HOST)?;
+    let commitment = query_utxo_and_get_type_commitment(utxo, PROTOCOL, HOST)?;
     let proof = prove_array_membership(&self.members, index as usize, &commitment, &blind).or_else(|e| Err(PlatformError::ZeiError(error_location!(), e)))?;
     self.commitments_and_proofs
         .insert(CommitmentBytes::new(commitment), proof);
@@ -67,7 +67,7 @@ impl Whitelist {
   /// # Arguments
   /// * `sid`: SID of the transaction.
   pub fn verify_membership(&self, utxo: u64) -> Result<(), PlatformError> {
-    let commitment = query_utxo_and_get_commitment(utxo, PROTOCOL, HOST)?;
+    let commitment = query_utxo_and_get_type_commitment(utxo, PROTOCOL, HOST)?;
     let proof = match self.commitments_and_proofs
                           .get(&CommitmentBytes::new(commitment))
     {

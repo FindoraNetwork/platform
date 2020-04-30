@@ -2,8 +2,9 @@
 pub mod txn_lib {
   use credentials::{
     credential_issuer_key_gen, credential_keygen_commitment, credential_reveal, credential_sign,
-    credential_user_key_gen, credential_verify, CredCommitment, CredCommitmentKey, CredIssuerPublicKey,
-    CredIssuerSecretKey, CredPoK, CredUserPublicKey, CredUserSecretKey, Credential as WrapperCredential,
+    credential_user_key_gen, credential_verify, CredCommitment, CredCommitmentKey,
+    CredIssuerPublicKey, CredIssuerSecretKey, CredPoK, CredUserPublicKey, CredUserSecretKey,
+    Credential as WrapperCredential,
   };
   use curve25519_dalek::ristretto::CompressedRistretto;
   use curve25519_dalek::scalar::Scalar;
@@ -37,7 +38,7 @@ pub mod txn_lib {
   use zei::xfr::sig::{XfrKeyPair, XfrPublicKey};
   use zei::xfr::structs::{
     AssetRecordTemplate, AssetTracerKeyPair, AssetTracerMemo, AssetTracingPolicy, BlindAssetRecord,
-    IdentityRevealPolicy, OpenAssetRecord, OwnerMemo,
+    IdentityRevealPolicy, OpenAssetRecord, OwnerMemo, XfrAssetType,
   };
 
   extern crate exitcode;
@@ -1307,19 +1308,18 @@ amount)?.add_output_and_store_blinds(&output_template, None, prng, blinds)?.bala
 
   /// Queries the UTXO SID and gets the asset type commitment.
   /// Asset should be confidential, otherwise the commitmemt will be null.
-  pub fn query_utxo_and_get_commitment(utxo: u64,
-                                       protocol: &str,
-                                       host: &str)
-                                       -> Result<CompressedRistretto, PlatformError> {
+  pub fn query_utxo_and_get_type_commitment(utxo: u64,
+                                            protocol: &str,
+                                            host: &str)
+                                            -> Result<CompressedRistretto, PlatformError> {
     let res = query(protocol, host, QUERY_PORT, "utxo_sid", &format!("{}", utxo))?;
     let blind_asset_record =
       serde_json::from_str::<BlindAssetRecord>(&res).or_else(|_| {
                                                       Err(PlatformError::DeserializationError)
                                                     })?;
-    let asset_type = blind_asset_record.asset_type;
-    match asset_type.get_commitment() {
-      Some(c) => Ok(c),
-      None => {
+    match blind_asset_record.asset_type {
+      XfrAssetType::Confidential(commitment) => Ok(commitment),
+      _ => {
         println!("Found nonconfidential asset.");
         Err(PlatformError::InputsError(error_location!()))
       }

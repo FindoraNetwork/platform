@@ -351,9 +351,9 @@ impl TxnEffect {
             // * Run the tests in components/whitelist with -- --ignored
             // * Verify the test results
             // * Restore the validation below
-            // if let XfrAssetType::Confidential(_) = out.asset_type {
-            //   return Err(PlatformError::InputsError(error_location!()));
-            // }
+            if let XfrAssetType::Confidential(_) = out.asset_type {
+              return Err(PlatformError::InputsError(error_location!()));
+            }
             if let Some(out_code) = out.asset_type.get_asset_type() {
               asset_types_involved.insert(AssetTypeCode { val: out_code });
             }
