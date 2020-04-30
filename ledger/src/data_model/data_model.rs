@@ -4,7 +4,7 @@ use crate::error_location;
 use crate::policy_script::{Policy, PolicyGlobals, TxnPolicyData};
 use bitmap::SparseMap;
 use chrono::prelude::*;
-use credentials::{CredCommitment, CredIssuerPublicKey, CredPoK};
+use credentials::{CredCommitment, CredIssuerPublicKey, CredPoK, CredUserPublicKey};
 use cryptohash::sha256::Digest as BitDigest;
 use cryptohash::{sha256, HashValue, Proof};
 use errors::PlatformError;
@@ -486,17 +486,19 @@ impl DefineAssetBody {
 }
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct AIRAssignBody {
-  pub addr: CredIssuerPublicKey,
+  pub addr: CredUserPublicKey,
   pub data: CredCommitment,
+  pub issuer_pk: CredIssuerPublicKey,
   pub pok: CredPoK,
 }
 
 impl AIRAssignBody {
-  pub fn new(addr: CredIssuerPublicKey,
+  pub fn new(addr: CredUserPublicKey,
              data: CredCommitment,
+             issuer_pk: CredIssuerPublicKey,
              pok: CredPoK)
              -> Result<AIRAssignBody, errors::PlatformError> {
-    Ok(AIRAssignBody { addr, data, pok })
+    Ok(AIRAssignBody { addr, data, issuer_pk, pok })
   }
 }
 
