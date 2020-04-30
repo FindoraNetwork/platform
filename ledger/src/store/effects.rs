@@ -394,7 +394,7 @@ impl TxnEffect {
         //     2)  The credential commitment is valid for the public key of the signer.
         Operation::AIRAssign(air_assign) => {
           let commitment = &air_assign.body.data;
-          let addr = &air_assign.body.addr;
+          let issuer_pk = &air_assign.body.issuer_pk;
           let pok = &air_assign.body.pok;
           let pk = &air_assign.pubkey;
           // 1)
@@ -402,7 +402,7 @@ impl TxnEffect {
                     &air_assign.signature)
             .map_err(|e| PlatformError::ZeiError(error_location!(), e))?;
           // 2)
-          credential_verify_commitment(addr, commitment, pok, pk.as_bytes())
+          credential_verify_commitment(issuer_pk, commitment, pok, pk.as_bytes())
               .map_err(|e| PlatformError::ZeiError(error_location!(),e))?;
           air_updates.insert(serde_json::to_string(&pk)?,
                              serde_json::to_string(commitment)?);
