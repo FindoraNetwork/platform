@@ -320,6 +320,7 @@ mod tests {
   }
 
   #[test]
+  #[ignore]
   fn test_cmd() {
     // Start the standalone ledger
     let ledger_standalone = &LedgerStandalone::new();
