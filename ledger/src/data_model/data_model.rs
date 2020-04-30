@@ -491,7 +491,10 @@ impl AIRAssignBody {
              issuer_pk: CredIssuerPublicKey,
              pok: CredPoK)
              -> Result<AIRAssignBody, errors::PlatformError> {
-    Ok(AIRAssignBody { addr, data, issuer_pk, pok })
+    Ok(AIRAssignBody { addr,
+                       data,
+                       issuer_pk,
+                       pok })
   }
 }
 
