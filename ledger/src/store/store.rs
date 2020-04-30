@@ -315,7 +315,7 @@ impl HasInvariants<PlatformError> for LedgerState {
       dbg!(&block.txns);
       dbg!(&txns_in_block_hash);
       // assert!(self.status.txns_in_block_hash == txns_in_block_hash);
-      if !proof.is_valid_proof(txns_in_block_hash.clone()) {
+      if !proof.is_valid_proof(txns_in_block_hash) {
         return Err(PlatformError::InvariantError(Some(format!("Bad block proof at {}", ix))));
       }
 
@@ -1231,7 +1231,7 @@ impl LedgerState {
     debug_assert!(self.block_merkle
                       .get_proof(self.status.block_commit_count, 0)
                       .unwrap()
-                      .is_valid_proof(txns_in_block_hash.clone()));
+                      .is_valid_proof(txns_in_block_hash));
     ret
   }
 

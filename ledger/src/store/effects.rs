@@ -146,7 +146,7 @@ impl TxnEffect {
                           &Transaction::default())?;
           }
 
-          issuance_keys.insert(code, token.properties.issuer.clone());
+          issuance_keys.insert(code, token.properties.issuer);
           new_asset_codes.insert(code, token);
           new_issuance_nums.insert(code, vec![]);
         }
@@ -202,7 +202,7 @@ impl TxnEffect {
               return Err(PlatformError::InputsError(error_location!()));
             }
           } else {
-            issuance_keys.insert(code, iss.pubkey.clone());
+            issuance_keys.insert(code, iss.pubkey);
           }
           // Increment amounts
           txos.reserve(iss.body.records.len());
