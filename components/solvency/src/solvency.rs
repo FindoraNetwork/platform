@@ -320,6 +320,7 @@ TransferOperationBuilder::new().add_input(TxoRef::Relative(0),
                         &None,
                         recipient_key_pair.get_sk_ref())
       .map_err(|e| PlatformError::ZeiError(error_location!(),e))?,
+      None,
       amount)?
 .add_output(&output_template, None)?
 .balance()?
