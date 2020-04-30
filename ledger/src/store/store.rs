@@ -19,6 +19,7 @@ use merkle_tree::append_only_merkle::AppendOnlyMerkle;
 use merkle_tree::logged_merkle::LoggedMerkle;
 use rand_chacha::ChaChaRng;
 use rand_core::{CryptoRng, RngCore, SeedableRng};
+use sparse_merkle_tree::{check_merkle_proof, Key, MerkleProof, SmtMap256};
 use std::collections::{HashMap, VecDeque};
 use std::fs::File;
 use std::fs::OpenOptions;
@@ -50,6 +51,9 @@ pub trait LedgerAccess {
 
   // Get the authenticated status of a UTXO (Spent, Unspent, NonExistent).
   fn get_utxo_status(&mut self, addr: TxoSID) -> AuthenticatedUtxoStatus;
+
+  // Get the authenticated KV entry
+  fn get_kv_entry(&self, addr: Key) -> AuthenticatedKVLookup;
 
   // The public signing key this ledger provides
   fn public_key(&self) -> &XfrPublicKey;
@@ -195,6 +199,9 @@ pub struct LedgerStatus {
 
   // State commitment history. The BitDigest at index i is the state commitment of the ledger at block height  i + 1.
   state_commitment_versions: Vec<BitDigest>,
+
+  // Arbitrary custom data
+  custom_data: SmtMap256<Serialized<(u64, Option<KVEntry>)>>,
 
   // TODO(joe): This field should probably exist, but since it is not
   // currently used by anything I'm leaving it commented out. We should
@@ -391,6 +398,7 @@ impl LedgerStatus {
                                 txn_path: txn_path.to_owned(),
                                 utxo_map_path: utxo_map_path.to_owned(),
                                 utxos: HashMap::new(),
+                                custom_data: SmtMap256::new(),
                                 issuance_amounts: HashMap::new(),
                                 utxo_map_versions: VecDeque::new(),
                                 state_commitment_versions: Vec::new(),
@@ -420,7 +428,35 @@ impl LedgerStatus {
   //  ledger.check_txn_effects(txn_effect);
   //  block.add_txn_effect(txn_effect);
   //
+  #[allow(clippy::cognitive_complexity)]
   fn check_txn_effects(&self, txn: TxnEffect) -> Result<TxnEffect, PlatformError> {
+    // Key-Value updates must be
+    // 1. Signed by the previous owner of that key, if one exists
+    // 2. The generation number starts at 0 or increments
+    // 3. Signed by the new owner of that key, if one exists
+    // (2) is checked for all but the first value in local validation
+    // (3) is already handled in local validation
+    for (k, update) in txn.kv_updates.iter() {
+      let (sig, gen, update) = update.first().unwrap();
+      if let Some(ent) = self.custom_data.get(&k) {
+        let (ent_gen, ent) = ent.deserialize();
+        // (2)
+        if ent_gen + 1 != *gen {
+          return Err(PlatformError::InputsError(error_location!()));
+        }
+        if let Some(ent) = ent {
+          // (1)
+          KVUpdate { body: (*k, *gen, update.clone()),
+                     signature: sig.clone() }.check_signature(&ent.0)?;
+        }
+      } else {
+        // (2)
+        if *gen != 0 {
+          return Err(PlatformError::InputsError(error_location!()));
+        }
+      }
+    }
+
     // 1. Each input must be unspent and correspond to the claimed record
     // 2. Inputs with transfer restrictions can only be owned by the asset issuer
     for (inp_sid, inp_record) in txn.input_txos.iter() {
@@ -653,6 +689,14 @@ impl LedgerStatus {
   fn apply_block_effects(&mut self,
                          block: &mut BlockEffect)
                          -> HashMap<TxnTempSID, (TxnSID, Vec<TxoSID>)> {
+    // KV updates
+    for (k, ent) in block.kv_updates.drain() {
+      // safe unwrap since entries in kv_updates should be non-empty
+      let final_val = ent.last().unwrap();
+      self.custom_data.set(&k,
+                           Some(Serialized::new(&(final_val.1, final_val.2.clone()))));
+    }
+
     // Remove consumed UTXOs
     for (inp_sid, _) in block.input_txos.drain() {
       // Remove from ledger status
@@ -1226,7 +1270,8 @@ impl LedgerState {
                                  air_commitment: *self.air.merkle_root(),
                                  txns_in_block_hash: self.status.txns_in_block_hash,
                                  previous_state_commitment: prev_commitment,
-                                 txo_count: self.status.next_txo.0 });
+                                 txo_count: self.status.next_txo.0,
+                                 kv_store: *self.status.custom_data.merkle_root() });
     self.status.state_commitment_versions.push(self.status
                                                    .state_commitment_data
                                                    .as_ref()
@@ -1704,6 +1749,16 @@ impl LedgerAccess for LedgerState {
                               utxo_sid: addr,
                               utxo_map }
   }
+
+  fn get_kv_entry(&self, addr: Key) -> AuthenticatedKVLookup {
+    let (result, proof) = self.status.custom_data.get_with_proof(&addr);
+    AuthenticatedKVLookup { key: addr,
+                            result: result.cloned(),
+                            state_commitment_data: self.status.state_commitment_data.clone(),
+                            merkle_root: *self.status.custom_data.merkle_root(),
+                            merkle_proof: proof,
+                            state_commitment: self.get_state_commitment().0 }
+  }
 }
 
 pub struct AuthenticatedBlock {
@@ -1748,6 +1803,50 @@ impl AuthenticatedBlock {
     }
 
     true
+  }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+pub struct AuthenticatedKVLookup {
+  pub key: Key,
+  pub result: Option<Serialized<(u64, Option<KVEntry>)>>,
+  pub state_commitment_data: Option<StateCommitmentData>,
+  pub merkle_root: BitDigest,
+  pub merkle_proof: MerkleProof,
+  pub state_commitment: BitDigest,
+}
+
+impl AuthenticatedKVLookup {
+  pub fn is_valid(&self, state_commitment: BitDigest) -> bool {
+    match &self.state_commitment_data {
+      None => {
+        if self.result.is_some() {
+          return false;
+        }
+        if state_commitment != (BitDigest { 0: [0_u8; DIGESTBYTES] }) {
+          return false;
+        }
+        if self.merkle_root != (BitDigest { 0: [0_u8; DIGESTBYTES] }) {
+          return false;
+        }
+      }
+      Some(comm_data) => {
+        if self.state_commitment != comm_data.compute_commitment() {
+          return false;
+        }
+
+        if comm_data.kv_store != self.merkle_root {
+          return false;
+        }
+      }
+    }
+    if state_commitment != self.state_commitment {
+      return false;
+    }
+    check_merkle_proof(&self.merkle_root,
+                       &self.key,
+                       self.result.as_ref(),
+                       &self.merkle_proof)
   }
 }
 

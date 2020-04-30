@@ -9,10 +9,14 @@ use cryptohash::sha256;
 use cryptohash::sha256::Digest as BitDigest;
 use findora::HasInvariants;
 use rand_core::{CryptoRng, RngCore, SeedableRng};
+use sparse_merkle_tree::Key;
 use std::collections::{HashMap, HashSet};
 use zei::serialization::ZeiFromToBytes;
 use zei::xfr::lib::verify_xfr_body_no_policies;
+use zei::xfr::sig::XfrSignature;
 use zei::xfr::structs::{AssetTracingPolicy, BlindAssetRecord, XfrAmount, XfrAssetType};
+
+pub const KV_ENTRY_MAX_SIZE: usize = 1024;
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct TxnEffect {
@@ -50,6 +54,9 @@ pub struct TxnEffect {
   pub custom_policy_asset_types: HashMap<AssetTypeCode, TxnCheckInputs>,
   // Updates to the AIR
   pub air_updates: HashMap<String, String>,
+
+  // User-provided Key-Value store updates
+  pub kv_updates: HashMap<Key, Vec<(XfrSignature, u64, Option<KVEntry>)>>,
 }
 
 // Internally validates the transaction as well.
@@ -74,6 +81,7 @@ impl TxnEffect {
     let mut debt_effects: HashMap<AssetTypeCode, DebtSwapEffect> = HashMap::new();
     let mut asset_types_involved: HashSet<AssetTypeCode> = HashSet::new();
     let mut confidential_issuance_types = HashSet::new();
+    let mut kv_updates = HashMap::<Key, Vec<(XfrSignature, u64, Option<KVEntry>)>>::new();
 
     let custom_policy_asset_types = txn.policy_options
                                        .clone()
@@ -106,6 +114,31 @@ impl TxnEffect {
       assert!(txo_count == txos.len());
 
       match op {
+        Operation::KVStoreUpdate(update) => {
+          // If there is a prior update, this change must be signed by
+          // the key associated with that update, and must have the
+          // exactly-subsequent generation value.
+          if let Some((_, gen, Some(ent))) = kv_updates.get(&update.body.0).and_then(|x| x.last()) {
+            if gen + 1 != update.body.1 {
+              return Err(PlatformError::InputsError(error_location!()));
+            }
+            update.check_signature(&ent.0)?;
+          }
+          // When inserting a value, ensure that the owning key has
+          // signed this update
+          // TODO: figure out if this is really how it *should* work
+          if let Some(ent) = &update.body.2 {
+            if ent.1.len() > KV_ENTRY_MAX_SIZE {
+              return Err(PlatformError::InputsError(error_location!()));
+            }
+
+            update.check_signature(&ent.0)?;
+          }
+          kv_updates.entry(update.body.0)
+                    .or_insert_with(std::vec::Vec::new)
+                    .push((update.signature.clone(), update.body.1, update.body.2.clone()));
+        }
+
         // An asset creation is valid iff:
         //     1) The signature is valid.
         //         - Fully checked here
@@ -392,7 +425,8 @@ impl TxnEffect {
                    debt_effects,
                    asset_types_involved,
                    custom_policy_asset_types,
-                   air_updates })
+                   air_updates,
+                   kv_updates })
   }
 }
 
@@ -474,6 +508,9 @@ pub struct BlockEffect {
   pub issuance_keys: HashMap<AssetTypeCode, IssuerPublicKey>,
   // Updates to the AIR
   pub air_updates: HashMap<String, String>,
+
+  // User-provided Key-Value store updates
+  pub kv_updates: HashMap<Key, Vec<(XfrSignature, u64, Option<KVEntry>)>>,
 }
 
 impl BlockEffect {
@@ -492,6 +529,13 @@ impl BlockEffect {
   //       new temp SID representing the transaction.
   //   Otherwise, Err(...)
   pub fn add_txn_effect(&mut self, txn: TxnEffect) -> Result<TxnTempSID, PlatformError> {
+    // Check that KV updates are independent
+    for (k, _) in txn.kv_updates.iter() {
+      if self.kv_updates.contains_key(&k) {
+        return Err(PlatformError::InputsError(error_location!()));
+      }
+    }
+
     // Check that no inputs are consumed twice
     for (input_sid, _) in txn.input_txos.iter() {
       if self.input_txos.contains_key(&input_sid) {
@@ -525,6 +569,10 @@ impl BlockEffect {
     }
 
     // == All validation done, apply `txn` to this block ==
+    for (k, update) in txn.kv_updates {
+      self.kv_updates.insert(k, update);
+    }
+
     let temp_sid = TxnTempSID(self.txns.len());
     self.txns.push(txn.txn);
     self.temp_sids.push(temp_sid);

@@ -12,6 +12,9 @@ use itertools::Itertools;
 use rand_chacha::ChaChaRng;
 use rand_core::{CryptoRng, RngCore, SeedableRng};
 use serde::{de::Visitor, Deserialize, Deserializer, Serialize, Serializer};
+use sha256::Digest;
+use sha256::DIGESTBYTES;
+use sparse_merkle_tree::Key;
 use std::boxed::Box;
 use std::collections::{HashMap, HashSet};
 use std::convert::TryFrom;
@@ -34,6 +37,17 @@ pub fn b64dec<T: ?Sized + AsRef<[u8]>>(input: &T) -> Result<Vec<u8>, base64::Dec
 #[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
 pub struct Code {
   pub val: [u8; 16],
+}
+
+const ZERO_256: [u8; DIGESTBYTES] = [0; DIGESTBYTES];
+const ZERO_DIGEST: Digest = Digest { 0: ZERO_256 };
+
+fn default_digest() -> BitDigest {
+  ZERO_DIGEST
+}
+
+fn is_default_digest(x: &BitDigest) -> bool {
+  x == &ZERO_DIGEST
 }
 
 fn is_default<T: Default + PartialEq>(x: &T) -> bool {
@@ -129,6 +143,13 @@ pub struct Serialized<T> {
   phantom: PhantomData<T>,
 }
 
+impl<T> AsRef<[u8]> for Serialized<T> where T: serde::Serialize + serde::de::DeserializeOwned
+{
+  fn as_ref(&self) -> &[u8] {
+    self.val.as_ref()
+  }
+}
+
 impl<T> Default for Serialized<T> where T: Default + serde::Serialize + serde::de::DeserializeOwned
 {
   fn default() -> Self {
@@ -139,14 +160,24 @@ impl<T> Default for Serialized<T> where T: Default + serde::Serialize + serde::d
 impl<T> Serialized<T> where T: serde::Serialize + serde::de::DeserializeOwned
 {
   pub fn new(to_serialize: &T) -> Self {
-    Serialized { val: b64enc(&bincode::serialize(&to_serialize).unwrap()),
+    Serialized { val: serde_json::to_string(&to_serialize).unwrap(),
                  phantom: PhantomData }
   }
 
   pub fn deserialize(&self) -> T {
-    bincode::deserialize(&b64dec(&self.val).unwrap()).unwrap()
+    serde_json::from_str(&self.val).unwrap()
   }
 }
+
+impl<T> PartialEq for Serialized<T>
+  where T: PartialEq + serde::Serialize + serde::de::DeserializeOwned
+{
+  fn eq(&self, other: &Self) -> bool {
+    self.deserialize() == other.deserialize()
+  }
+}
+
+impl<T> Eq for Serialized<T> where T: Eq + serde::Serialize + serde::de::DeserializeOwned {}
 
 #[derive(Clone, Copy, Debug, Default, Deserialize, Eq, Hash, PartialEq, Serialize)]
 pub struct AssetDigest {
@@ -612,6 +643,38 @@ impl AIRAssign {
   }
 }
 
+// pub const KV_BLOCK_SIZE: usize = 4*(1<<10);
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct KVEntry(pub XfrPublicKey, pub Vec<u8>);
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct KVUpdate {
+  pub body: (Key, u64, Option<KVEntry>),
+  pub signature: XfrSignature,
+}
+
+impl KVUpdate {
+  pub fn new(creation_body: (Key, Option<Vec<u8>>),
+             seq_number: u64,
+             keypair: &XfrKeyPair)
+             -> KVUpdate {
+    let creation_body = match creation_body {
+      (k, None) => (k, seq_number, None),
+      (k, Some(data)) => (k, seq_number, Some(KVEntry(*keypair.get_pk_ref(), data))),
+    };
+    let sign = compute_signature(keypair.get_sk_ref(), keypair.get_pk_ref(), &creation_body);
+    KVUpdate { body: creation_body,
+               signature: sign }
+  }
+
+  pub fn check_signature(&self, public_key: &XfrPublicKey) -> Result<(), PlatformError> {
+    public_key.verify(&serde_json::to_vec(&self.body).unwrap(), &self.signature)
+              .map_err(|e| PlatformError::ZeiError(error_location!(), e))?;
+    Ok(())
+  }
+}
+
 #[allow(clippy::large_enum_variant)]
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub enum Operation {
@@ -619,6 +682,7 @@ pub enum Operation {
   IssueAsset(IssueAsset),
   DefineAsset(DefineAsset),
   AIRAssign(AIRAssign),
+  KVStoreUpdate(KVUpdate),
   // ... etc...
 }
 
@@ -876,6 +940,9 @@ pub struct StateCommitmentData {
   pub transaction_merkle_commitment: HashValue, // The root hash of the transaction Merkle tree
   pub air_commitment: BitDigest,                // The root hash of the AIR sparse Merkle tree
   pub txo_count: u64, // Number of transaction outputs. Used to provide proof that a utxo does not exist
+  #[serde(default = "default_digest")]
+  #[serde(skip_serializing_if = "is_default_digest")]
+  pub kv_store: BitDigest, // The root hash of the KV Store SMT
 }
 
 impl StateCommitmentData {

@@ -13,6 +13,7 @@ use ledger::policies::Fraction;
 use ledger::policy_script::{Policy, PolicyGlobals, TxnCheckInputs, TxnPolicyData};
 use rand_chacha::ChaChaRng;
 use rand_core::SeedableRng;
+use sparse_merkle_tree::Key;
 use std::cmp::Ordering;
 use std::collections::HashSet;
 use zei::api::anon_creds::{ACCommitmentKey, Credential};
@@ -269,6 +270,12 @@ pub trait BuildsTransactions {
                               data: CredCommitment,
                               pok: CredPoK)
                               -> Result<&mut Self, PlatformError>;
+  fn add_operation_kv_update(&mut self,
+                             auth_key_pair: &XfrKeyPair,
+                             index: &Key,
+                             seq_num: u64,
+                             data: Option<&Vec<u8>>)
+                             -> Result<&mut Self, PlatformError>;
   fn serialize(&self) -> Result<Vec<u8>, PlatformError>;
   fn serialize_str(&self) -> Result<String, PlatformError>;
 
@@ -478,6 +485,16 @@ impl BuildsTransactions for TransactionBuilder {
           .push((TxOutput(output.clone()), memo.clone()));
     }
     self.txn.add_operation(Operation::TransferAsset(xfr));
+    Ok(self)
+  }
+  fn add_operation_kv_update(&mut self,
+                             auth_key_pair: &XfrKeyPair,
+                             index: &Key,
+                             seq_num: u64,
+                             data: Option<&Vec<u8>>)
+                             -> Result<&mut Self, PlatformError> {
+    let update = KVUpdate::new((*index, data.cloned()), seq_num, auth_key_pair);
+    self.txn.add_operation(Operation::KVStoreUpdate(update));
     Ok(self)
   }
   fn add_operation_air_assign(&mut self,

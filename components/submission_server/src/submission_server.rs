@@ -179,6 +179,8 @@ impl<RNG, LU> SubmissionServer<RNG, LU>
 pub fn txn_log_info(txn: &Transaction) {
   for op in &txn.operations {
     match op {
+      Operation::KVStoreUpdate(update) => info!("Key-Value store update: {}",
+                                                &serde_json::to_string(update).unwrap()),
       Operation::DefineAsset(define_asset_op) => {
         info!("Asset Definition: New asset with code {} defined",
               define_asset_op.body.asset.code.to_base64())
