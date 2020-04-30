@@ -2707,9 +2707,11 @@ mod tests {
                                                     &cred_user_key.1,
                                                     &credential,
                                                     user_kp.get_pk_ref().as_bytes()).unwrap();
-    let air_assign_op =
-      AIRAssign::new(AIRAssignBody::new(cred_user_key.0, commitment, cred_issuer_key.0, pok).unwrap(),
-                     &user_kp).unwrap();
+    let air_assign_op = AIRAssign::new(AIRAssignBody::new(cred_user_key.0,
+                                                          commitment,
+                                                          cred_issuer_key.0,
+                                                          pok).unwrap(),
+                                       &user_kp).unwrap();
     let mut adversarial_op = air_assign_op.clone();
     adversarial_op.pubkey = XfrKeyPair::generate(&mut ledger.get_prng()).get_pk();
     let mut tx = Transaction::default();
