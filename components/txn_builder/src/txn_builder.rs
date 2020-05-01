@@ -460,6 +460,7 @@ impl BuildsTransactions for TransactionBuilder {
                                                              priv_key)?));
     Ok(self)
   }
+
   fn add_operation_transfer_asset(&mut self,
                                   keys: &XfrKeyPair,
                                   input_sids: Vec<TxoRef>,
@@ -469,9 +470,14 @@ impl BuildsTransactions for TransactionBuilder {
     // TODO(joe/noah): keep a prng around somewhere?
     let mut prng: ChaChaRng;
     prng = ChaChaRng::from_entropy();
+    let mut input_asset_records = vec![];
+    for oar in input_records.iter() {
+      input_asset_records.push(AssetRecord::from_open_asset_record_no_asset_tracking(oar.clone()))
+    }
+
     let mut xfr = TransferAsset::new(TransferAssetBody::new(&mut prng,
                                                             input_sids,
-                                                            input_records,
+                                                            &input_asset_records,
                                                             output_records)?,
                                      TransferType::Standard)?;
     xfr.sign(&keys);
@@ -501,6 +507,18 @@ impl BuildsTransactions for TransactionBuilder {
   }
 
   fn add_operation(&mut self, op: Operation) -> &mut Self {
+    if let Operation::TransferAsset(xfr) = op.clone() {
+      for (output, memo) in xfr.body
+                               .transfer
+                               .outputs
+                               .iter()
+                               .zip(xfr.body.transfer.owners_memos.iter())
+      {
+        self.owner_records
+            .push((TxOutput(output.clone()), memo.clone()));
+      }
+    }
+
     self.txn.add_operation(op);
     self
   }
@@ -589,6 +607,7 @@ pub(crate) fn build_record_and_get_blinds<R: CryptoRng + RngCore>(
 //
 //    let builder = TransferOperationBuilder::new()..add_input(TxoRef::Relative(1),
 //                                       open_blind_asset_record(&ba, alice.get_sk_ref()).unwrap(),
+//                                       None,
 //                                       20)?
 //                            .add_output(20, bob.get_pk_ref(), code_1)?
 //                            .balance()?
@@ -598,11 +617,12 @@ pub(crate) fn build_record_and_get_blinds<R: CryptoRng + RngCore>(
 #[derive(Serialize, Deserialize, Default)]
 pub struct TransferOperationBuilder {
   input_sids: Vec<TxoRef>,
-  input_records: Vec<OpenAssetRecord>,
-  spend_amounts: Vec<u64>, //Amount of each input record to spend, the rest will be refunded
+  spend_amounts: Vec<u64>, // Amount of each input record to spend, the rest will be refunded if user calls balance
+  input_records: Vec<AssetRecord>,
   output_records: Vec<AssetRecord>,
   transfer: Option<TransferAsset>,
   transfer_type: TransferType,
+  tracing_policies: Vec<Option<AssetTracingPolicy>>,
 }
 
 impl TransferOperationBuilder {
@@ -615,13 +635,21 @@ impl TransferOperationBuilder {
   pub fn add_input(&mut self,
                    txo_sid: TxoRef,
                    open_ar: OpenAssetRecord,
+                   tracing_policy: Option<AssetTracingPolicy>,
                    amount: u64)
                    -> Result<&mut Self, PlatformError> {
     if self.transfer.is_some() {
       return Err(PlatformError::InvariantError(Some("Cannot mutate a transfer that has been signed".to_string())));
     }
+    let asset_record = if let Some(policy) = tracing_policy.clone() {
+      AssetRecord::from_open_asset_record_with_asset_tracking_but_no_identity(open_ar,
+                                                                              policy).map_err(|e| PlatformError::ZeiError(error_location!(), e))?
+    } else {
+      AssetRecord::from_open_asset_record_no_asset_tracking(open_ar)
+    };
     self.input_sids.push(txo_sid);
-    self.input_records.push(open_ar);
+    self.tracing_policies.push(tracing_policy);
+    self.input_records.push(asset_record);
     self.spend_amounts.push(amount);
     Ok(self)
   }
@@ -713,17 +741,32 @@ impl TransferOperationBuilder {
     }
     let spend_total: u64 = self.spend_amounts.iter().sum();
     let mut partially_consumed_inputs = Vec::new();
-    for (spend_amount, oar) in self.spend_amounts.iter().zip(self.input_records.iter()) {
-      match spend_amount.cmp(oar.get_amount()) {
+    for ((spend_amount, ar), tracking_policy) in self.spend_amounts
+                                                     .iter()
+                                                     .zip(self.input_records.iter())
+                                                     .zip(self.tracing_policies.iter())
+    {
+      let amt = ar.open_asset_record.get_amount();
+      match spend_amount.cmp(&amt) {
         Ordering::Greater => {
           return Err(PlatformError::InputsError(error_location!()));
         }
         Ordering::Less => {
-          let ar_template = AssetRecordTemplate::with_no_asset_tracking(oar.get_amount()
-                                                                        - spend_amount,
-                                                                        *oar.get_asset_type(),
-                                                                        oar.get_record_type(),
-                                                                        *oar.get_pub_key());
+          let asset_type = *ar.open_asset_record.get_asset_type();
+          let record_type = ar.open_asset_record.get_record_type();
+          let recipient = *ar.open_asset_record.get_pub_key();
+          let ar_template = if let Some(policy) = tracking_policy {
+            AssetRecordTemplate::with_asset_tracking(amt - spend_amount,
+                                                     asset_type,
+                                                     record_type,
+                                                     recipient,
+                                                     policy.clone())
+          } else {
+            AssetRecordTemplate::with_no_asset_tracking(amt - spend_amount,
+                                                        asset_type,
+                                                        record_type,
+                                                        recipient)
+          };
           let ar =
             AssetRecord::from_template_no_identity_tracking(&mut prng, &ar_template).unwrap();
           partially_consumed_inputs.push(ar);
@@ -992,6 +1035,7 @@ mod tests {
                                             open_blind_asset_record(&ba_1,
                                                                     &memo1,
                                                                     alice.get_sk_ref()).unwrap(),
+                                            None,
                                             20)?
                                  .add_output(&output_template, None)?
                                  .balance();
@@ -1007,6 +1051,7 @@ mod tests {
                                                   bob.get_pk());
     let res = invalid_sig_op.add_input(TxoRef::Relative(1),
                                        open_blind_asset_record(&ba_1, &memo1,alice.get_sk_ref()).unwrap(),
+                                       None,
                                        20)?
                             .add_output(&output_template, None)?
                             .balance()?
@@ -1024,6 +1069,7 @@ mod tests {
                                                   bob.get_pk());
     let res = missing_sig_op.add_input(TxoRef::Relative(1),
                                        open_blind_asset_record(&ba_1, &memo1,alice.get_sk_ref()).unwrap(),
+                                       None,
                                        20)?
                             .add_output(&output_template, None)?
                             .balance()?
@@ -1065,8 +1111,8 @@ mod tests {
                                                   ben.get_pk());
     let _valid_transfer_op =
       TransferOperationBuilder::new()
-      .add_input(TxoRef::Relative(1), open_blind_asset_record(&ba_1, &memo1, alice.get_sk_ref()).unwrap(), 20)?
-      .add_input(TxoRef::Relative(2), open_blind_asset_record(&ba_2, &memo2, bob.get_sk_ref()).unwrap(), 20)?
+      .add_input(TxoRef::Relative(1), open_blind_asset_record(&ba_1, &memo1, alice.get_sk_ref()).unwrap(),None, 20)?
+      .add_input(TxoRef::Relative(2), open_blind_asset_record(&ba_2, &memo2, bob.get_sk_ref()).unwrap(), None,20)?
       .add_output(&output_bob5_code1_template, None)?
       .add_output(&output_charlie13_code1_template, None)?
       .add_output(&output_ben2_code1_template, None)?

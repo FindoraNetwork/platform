@@ -315,7 +315,7 @@ impl HasInvariants<PlatformError> for LedgerState {
       dbg!(&block.txns);
       dbg!(&txns_in_block_hash);
       // assert!(self.status.txns_in_block_hash == txns_in_block_hash);
-      if !proof.is_valid_proof(txns_in_block_hash.clone()) {
+      if !proof.is_valid_proof(txns_in_block_hash) {
         return Err(PlatformError::InvariantError(Some(format!("Bad block proof at {}", ix))));
       }
 
@@ -1210,7 +1210,7 @@ impl LedgerState {
     debug_assert!(self.block_merkle
                       .get_proof(self.status.block_commit_count, 0)
                       .unwrap()
-                      .is_valid_proof(txns_in_block_hash.clone()));
+                      .is_valid_proof(txns_in_block_hash));
     ret
   }
 
@@ -2005,7 +2005,7 @@ pub mod helpers {
     let mut transfer =
       TransferAsset::new(TransferAssetBody::new(ledger.get_prng(),
                              vec![TxoRef::Relative(0)],
-                             &[open_blind_asset_record(&ba, &owner_memo, &issuer_keys.get_sk_ref()).unwrap()],
+                             &[AssetRecord::from_open_asset_record_no_asset_tracking(open_blind_asset_record(&ba, &owner_memo, &issuer_keys.get_sk_ref()).unwrap())],
                              &[ar.clone()]).unwrap(), TransferType::Standard).unwrap();
 
     transfer.sign(&issuer_keys);
@@ -2488,11 +2488,12 @@ mod tests {
       AssetRecordTemplate::with_no_asset_tracking(100, code.val, art, key_pair_adversary.get_pk());
     let output_ar =
       AssetRecord::from_template_no_identity_tracking(ledger.get_prng(), &output_template).unwrap();
+    let input_ar = AssetRecord::from_open_asset_record_no_asset_tracking(input_oar.clone());
 
     let mut tx = Transaction::default();
     let mut transfer = TransferAsset::new(TransferAssetBody::new(ledger.get_prng(),
                                                                  vec![TxoRef::Absolute(txo_sid)],
-                                                                 &[input_oar],
+                                                                 &[input_ar],
                                                                  &[output_ar]).unwrap(),
                                           TransferType::Standard).unwrap();
 
@@ -2761,7 +2762,7 @@ mod tests {
     // Cant transfer non-transferable asset
     let mut transfer = TransferAsset::new(TransferAssetBody::new(ledger.get_prng(),
                              vec![TxoRef::Absolute(sid)],
-                             &[open_blind_asset_record(&bar, &None, &alice.get_sk_ref()).unwrap()],
+                             &[AssetRecord::from_open_asset_record_no_asset_tracking(open_blind_asset_record(&bar, &None, &alice.get_sk_ref()).unwrap())],
                                &[record.clone()]).unwrap(), TransferType::Standard).unwrap();
     transfer.sign(&alice);
     tx.operations.push(Operation::TransferAsset(transfer));
@@ -2788,7 +2789,7 @@ mod tests {
                                                      1);
     let mut transfer = TransferAsset::new(TransferAssetBody::new(ledger.get_prng(),
                                                                  vec![TxoRef::Relative(0)],
-                                                                 &[ar.open_asset_record],
+                                                                 &[AssetRecord::from_open_asset_record_no_asset_tracking(ar.open_asset_record)],
                                                                  &[second_record]).unwrap(),
                                           TransferType::Standard).unwrap();
     transfer.sign(&alice);
@@ -2940,7 +2941,7 @@ mod tests {
     let mut tx = Transaction::default();
     let mut transfer = TransferAsset::new(TransferAssetBody::new(ledger.get_prng(),
                                                                  vec![TxoRef::Absolute(txo_sid)],
-                                                                 &[input_oar],
+                                                                 &[AssetRecord::from_open_asset_record_no_asset_tracking(input_oar)],
                                                                  &[output_ar]).unwrap(),
                                           TransferType::Standard).unwrap();
 
@@ -3074,8 +3075,8 @@ mod tests {
 
     let mut transfer = TransferAsset::new(TransferAssetBody::new(ledger.get_prng(),
                              vec![TxoRef::Absolute(fiat_sid), TxoRef::Absolute(debt_sid)],
-                             &[open_blind_asset_record(&fiat_bar, &None, &lender_key_pair.get_sk_ref()).unwrap(),
-                             open_blind_asset_record(&debt_bar, &None, &borrower_key_pair.get_sk_ref()).unwrap()],
+                             &[AssetRecord::from_open_asset_record_no_asset_tracking(open_blind_asset_record(&fiat_bar, &None, &lender_key_pair.get_sk_ref()).unwrap()),
+                             AssetRecord::from_open_asset_record_no_asset_tracking(open_blind_asset_record(&debt_bar, &None, &borrower_key_pair.get_sk_ref()).unwrap())],
                                &[fiat_transfer_record, loan_transfer_record]).unwrap(), TransferType::Standard).unwrap();
     transfer.sign(&lender_key_pair);
     transfer.sign(&borrower_key_pair);
@@ -3136,12 +3137,12 @@ mod tests {
     let transfer_body =
       TransferAssetBody::new(ledger.get_prng(),
                              vec![TxoRef::Absolute(debt_sid), TxoRef::Absolute(fiat_sid)],
-                             &[open_blind_asset_record(&debt_bar,
+                             &[AssetRecord::from_open_asset_record_no_asset_tracking(open_blind_asset_record(&debt_bar,
                                                        &None,
-                                                       &lender_key_pair.get_sk_ref()).unwrap(),
-                               open_blind_asset_record(&fiat_bar,
+                                                       &lender_key_pair.get_sk_ref()).unwrap()),
+                               AssetRecord::from_open_asset_record_no_asset_tracking(open_blind_asset_record(&fiat_bar,
                                                        &None,
-                                                       &borrower_key_pair.get_sk_ref()).unwrap()],
+                                                       &borrower_key_pair.get_sk_ref()).unwrap())],
                              &[payment_record,
                                burned_debt_record,
                                returned_debt_record,
