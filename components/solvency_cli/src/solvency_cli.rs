@@ -70,21 +70,6 @@ fn parse_to_u64(val_str: &str) -> Result<u64, PlatformError> {
 fn process_inputs(inputs: clap::ArgMatches) -> Result<(), PlatformError> {
   let mut data = load_data()?;
   match inputs.subcommand() {
-    ("store_key_pair", Some(store_matches)) => {
-      let key_pair = if let Some(key_pair_arg) = store_matches.value_of("key_pair") {
-        key_pair_arg
-      } else {
-        println!("Missing encoded key pair string. Use --key_pair.");
-        return Err(PlatformError::InputsError(error_location!()));
-      };
-      if let Some(file_arg) = store_matches.value_of("file") {
-        store_string_to_file(key_pair, file_arg)?;
-      } else {
-        println!("Missing file path. Use --file.");
-        return Err(PlatformError::InputsError(error_location!()));
-      }
-      Ok(())
-    }
     ("set_rate", Some(set_matches)) => {
       let code = if let Some(code_arg) = set_matches.value_of("code") {
         AssetTypeCode::new_from_base64(code_arg)?
@@ -169,19 +154,6 @@ fn process_inputs(inputs: clap::ArgMatches) -> Result<(), PlatformError> {
 
 fn main() -> Result<(), PlatformError> {
   let inputs = App::new("Solvency Proof").version("0.1.0").about("Copyright 2020 © Findora. All rights reserved.")
-    .subcommand(SubCommand::with_name("store_key_pair")
-      .arg(Arg::with_name("key_pair")
-        .short("k")
-        .long("key_pair")
-        .required(true)
-        .takes_value(true)
-        .help("Encoded key pair string."))
-      .arg(Arg::with_name("file")
-        .short("f")
-        .long("file")
-        .required(true)
-        .takes_value(true)
-        .help("File to store the key pair.")))
     .subcommand(SubCommand::with_name("set_rate")
       .arg(Arg::with_name("code")
         .short("c")
@@ -243,7 +215,6 @@ mod tests {
   use std::io::{self, Write};
   use std::process::{Command, Output};
   use txn_cli::txn_lib::{define_and_submit, issue_transfer_and_get_utxo_and_blinds};
-  use zei::serialization::ZeiFromToBytes;
   use zei::xfr::asset_record::AssetRecordType;
   use zei::xfr::sig::XfrKeyPair;
 
@@ -382,18 +353,6 @@ mod tests {
     let issuer_key_pair = &XfrKeyPair::generate(&mut ChaChaRng::from_entropy());
     let recipient_key_pair = XfrKeyPair::generate(&mut ChaChaRng::from_entropy());
 
-    // Store the recipient's key pair
-    let recipient_key_pair_str = hex::encode(recipient_key_pair.zei_to_bytes());
-    let key_file = "solvency_key_pair";
-    let output = Command::new(COMMAND).arg("store_key_pair")
-                                      .args(&["--key_pair", &recipient_key_pair_str])
-                                      .args(&["--file", key_file])
-                                      .output()
-                                      .expect("Failed to store the key pair.");
-    io::stdout().write_all(&output.stdout).unwrap();
-    io::stdout().write_all(&output.stderr).unwrap();
-    assert!(output.status.success());
-
     // Define, issue and transfer assets
     for code in codes.iter() {
       define_and_submit(&issuer_key_pair,
@@ -496,6 +455,5 @@ mod tests {
     assert!(output.status.success());
 
     fs::remove_file("solvency_data.json").unwrap();
-    fs::remove_file(key_file).unwrap();
   }
 }
