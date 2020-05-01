@@ -1,57 +1,34 @@
 # Solvency Command Line Interface
+The `solvency_cli` is a command line interface for querying asset and liability information from the ledger and proving the solvency. 
+
+Note:
+* Examples below are assuming the current directory is `platform/target/debug` or `platform/target/release`. If not, change `./solvency_cli` to the path to `solvency_cli`.
+
+The typical workflow of solvency proof is:
+## Set a conversion rate
+See `set_rate`. E.g.:
+```
+./solvency_cli set_rate --code ibIaBlHV-PdQkvSuEg6YSA== --rate 2
+```
+
+## Add an asset or liability record
+See `add_asset_or_liability`. E.g.:
+```
+./solvency_cli add_asset_or_liability --type liability --amount 10 --code ibIaBlHV-PdQkvSuEg6YSA== --utxo 1234
+```
+* `--type` is either asset or liability.
+* `--blinds` is required if the asset or liability amount is confidential.
+* `--utxo` is the UTXO SID of the transfer transaction.
+
+## Prove and verify the solvency
+See `prove_and_verify_solvency`. E.g.: 
+```
+./solvency_cli prove_and_verify_solvency
+```
+Before proving and verifying the solvency, make sure the associated conversion rates have been set.
 
 # Example of solvency proof and verification
 If you need to rerun from the beginning, delete or rename the `solvency_data.json` file to restore the data.
 ```
 rm solvency_data.json
 ```
-
-## Generate three assets and set their conversion rates to 1, 2 and 300
-```
-./solvency set_asset_and_rate --rate 1
-./solvency set_asset_and_rate --rate 2
-./solvency set_asset_and_rate --rate 300
-```
-
-## Add assets and liabilities
-```
-./solvency add_asset_or_liability --type public_asset --id 0 --amount 10
-./solvency add_asset_or_liability --type hidden_asset --id 0 --amount 20
-./solvency add_asset_or_liability --type hidden_asset --id 1 --amount 30
-./solvency add_asset_or_liability --type hidden_asset --id 2 --amount 4
-./solvency add_asset_or_liability --type public_liability --id 1 --amount 100
-./solvency add_asset_or_liability --type hidden_liability --id 0 --amount 200
-./solvency add_asset_or_liability --type hidden_liability --id 1 --amount 300
-```
-* The total asset amount is 1x10 + 1x20 + 2x30 + 300x4 = 1290.
-* The total liability amount is 1x200 + 2x100 + 2x300 = 1000, less than the total asset amount.
-
-## Prove and verify the solvency
-```
-./solvency prove_and_verify_solvency
-```
-* Note from the output that the verification succeeded.
-
-## Add additional liabilities
-```
-./solvency add_asset_or_liability --type hidden_liability --id 2 --amount 1
-```
-* The total liability amount is now 1000 + 300x1 = 1300, greater than the total asset amount.
-
-## Prove and verify the solvency for the second time
-```
-./solvency prove_and_verify_solvency
-```
-* Note from the output that the verification failed.
-
-## Add additional assets
-```
-./solvency add_asset_or_liability --type public_asset --id 0 --amount 20
-```
-* The total asset amount is now 1290 + 1x20 = 1310, greater than the total liability amount.
-
-## Prove and verify the solvency for the third time
-```
-./solvency prove_and_verify_solvency
-```
-* Note from the output that the verification succeeded again.
