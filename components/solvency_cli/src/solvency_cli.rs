@@ -1,447 +1,501 @@
-// #![deny(warnings)]
-// use clap::{App, Arg, SubCommand};
-// use ledger::data_model::errors::PlatformError;
-// use ledger::data_model::AssetTypeCode;
-// use ledger::error_location;
-// use serde::{Deserialize, Serialize};
-// use solvency::*;
-// use std::fs;
-// use zei::errors::ZeiError;
-// use zei::serialization::ZeiFromToBytes;
-// use zei::xfr::sig::XfrKeyPair;
+#![deny(warnings)]
+use clap::{App, Arg, SubCommand};
+use curve25519_dalek::scalar::Scalar;
+use ledger::data_model::errors::PlatformError;
+use ledger::data_model::AssetTypeCode;
+use ledger::error_location;
+use serde::{Deserialize, Serialize};
+use solvency::*;
+use std::fs;
+use zei::errors::ZeiError;
 
-// /// Path to the data file.
-// const DATA_FILE: &str = "solvency_data.json";
+/// Path to the data file.
+const DATA_FILE: &str = "solvency_data.json";
+// TODO (Keyao): support protocol and host switch
+const PROTOCOL: &str = "http";
+const HOST: &str = "localhost";
 
-// // TODO (Keyao): Serialize codes
-// #[derive(Clone, Debug, Default, Deserialize, Serialize)]
-// /// Information of assets, liabilities and conversion rates.
-// struct AssetLiabilityAndRateData {
-//   /// Asset and liability account
-//   asset_and_liability_account: AssetAndLiabilityAccount,
+// TODO (Keyao): Serialize codes
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+/// Information of assets, liabilities and conversion rates.
+struct AssetLiabilityAndRateData {
+  /// Asset and liability account
+  asset_and_liability_account: AssetAndLiabilityAccount,
 
-//   /// Contains the asset conversion rate
-//   solvency_audit: SolvencyAudit,
-// }
+  /// Contains the asset conversion rate
+  solvency_audit: SolvencyAudit,
+}
 
-// /// Stores the program data to `DATA_FILE`, when the program starts or the data is updated.
-// fn store_data_to_file(data: AssetLiabilityAndRateData) -> Result<(), PlatformError> {
-//   if let Ok(as_json) = serde_json::to_string(&data) {
-//     if let Err(error) = fs::write(DATA_FILE, &as_json) {
-//       return Err(PlatformError::IoError(format!("Failed to create file {}: {}.",
-//                                                 DATA_FILE, error)));
-//     };
-//   } else {
-//   }
-//   Ok(())
-// }
+/// Stores a string to the specified file.
+fn store_string_to_file(string_data: &str, file: &str) -> Result<(), PlatformError> {
+  match fs::write(file, string_data) {
+    Ok(_) => Ok(()),
+    Err(e) => Err(PlatformError::IoError(format!("Failed to create file {}: {}.", file, e))),
+  }
+}
 
-// /// Loads data.
-// /// * If the data file exists, loads data from it.
-// /// * Otherwise, stores the initial data to file and returns the data.
-// fn load_data() -> Result<AssetLiabilityAndRateData, PlatformError> {
-//   let data = match fs::read_to_string(DATA_FILE) {
-//     Ok(data) => data,
-//     Err(_) => {
-//       let init_data = AssetLiabilityAndRateData::default();
-//       store_data_to_file(init_data.clone())?;
-//       return Ok(init_data);
-//     }
-//   };
+/// Stores the program data to `DATA_FILE`, when the program starts or the data is updated.
+fn store_data_to_file(data: AssetLiabilityAndRateData) -> Result<(), PlatformError> {
+  if let Ok(data_string) = serde_json::to_string(&data) {
+    store_string_to_file(&data_string, DATA_FILE)?;
+  } else {
+  }
+  Ok(())
+}
 
-//   serde_json::from_str::<AssetLiabilityAndRateData>(&data).or(Err(PlatformError::DeserializationError))
-// }
+/// Loads data.
+/// * If the data file exists, loads data from it.
+/// * Otherwise, stores the initial data to file and returns the data.
+fn load_data() -> Result<AssetLiabilityAndRateData, PlatformError> {
+  let data = match fs::read_to_string(DATA_FILE) {
+    Ok(data) => data,
+    Err(_) => {
+      let init_data = AssetLiabilityAndRateData::default();
+      store_data_to_file(init_data.clone())?;
+      return Ok(init_data);
+    }
+  };
 
-// /// Parses a string to u64.
-// fn parse_to_u64(val_str: &str) -> Result<u64, PlatformError> {
-//   val_str.trim()
-//          .parse::<u64>()
-//          .or_else(|_| Err(PlatformError::InputsError(error_location!())))
-// }
+  serde_json::from_str::<AssetLiabilityAndRateData>(&data).or(Err(PlatformError::DeserializationError))
+}
 
-// /// Processes input commands and arguments.
-// fn process_inputs(inputs: clap::ArgMatches) -> Result<(), PlatformError> {
-//   let mut data = load_data()?;
-//   match inputs.subcommand() {
-//     ("store_key_pair", Some(store_matches)) => {
-//       let key_pair = if let Some(key_pair_arg) = store_matches.value_of("key_pair") {
-//         key_pair_arg
-//       } else {
-//         println!("Missing encoded key pair string. Use --key_pair.");
-//         return Err(PlatformError::InputsError(error_location!()));
-//       };
-//       if let Some(file_arg) = store_matches.value_of("file") {
-//         if let Err(error) = fs::write(file_arg, &key_pair) {
-//           return Err(PlatformError::IoError(format!("Failed to create file {}: {}.",
-//                                                     file_arg, error)));
-//         };
-//       } else {
-//         println!("Missing file path. Use --file.");
-//         return Err(PlatformError::InputsError(error_location!()));
-//       }
-//       Ok(())
-//     }
-//     ("set_rate", Some(set_matches)) => {
-//       let code = if let Some(code_arg) = set_matches.value_of("code") {
-//         AssetTypeCode::new_from_base64(code_arg)?
-//       } else {
-//         println!("Missing asset code. Use --code.");
-//         return Err(PlatformError::InputsError(error_location!()));
-//       };
-//       let rate = if let Some(rate_arg) = set_matches.value_of("rate") {
-//         parse_to_u64(rate_arg)?
-//       } else {
-//         println!("Missing conversion rate. Use --rate.");
-//         return Err(PlatformError::InputsError(error_location!()));
-//       };
-//       data.solvency_audit.set_rate(code, rate);
-//       store_data_to_file(data)
-//     }
-//     ("add_asset_or_liability", Some(add_matches)) => {
-//       let key_pair = if let Some(key_file_arg) = add_matches.value_of("key_file") {
-//         let key_pair_str = match fs::read_to_string(key_file_arg) {
-//           Ok(k) => k,
-//           Err(_) => {
-//             return Err(PlatformError::IoError(format!("Failed to read file: {}", key_file_arg)));
-//           }
-//         };
-//         XfrKeyPair::zei_from_bytes(&hex::decode(key_pair_str).or_else(|_| {
-//           Err(PlatformError::DeserializationError)
-//         })?)
-//       } else {
-//         println!("Missing path to the key pair file. Use --key_file.");
-//         return Err(PlatformError::InputsError(error_location!()));
-//       };
-//       let code = if let Some(code_arg) = add_matches.value_of("code") {
-//         AssetTypeCode::new_from_base64(code_arg)?
-//       } else {
-//         println!("Missing asset code. Use --code.");
-//         return Err(PlatformError::InputsError(error_location!()));
-//       };
-//       let utxo = if let Some(utxo_arg) = add_matches.value_of("utxo") {
-//         parse_to_u64(utxo_arg)?
-//       } else {
-//         println!("Missing UTXO of the asset or liability. Use --utxo.");
-//         return Err(PlatformError::InputsError(error_location!()));
-//       };
-//       if let Some(type_arg) = add_matches.value_of("type") {
-//         match type_arg {
-//           "public_asset" => data.asset_and_liability_account
-//                                 .add_public_asset(key_pair.get_sk_ref(), code, utxo)?,
-//           "hidden_asset" => data.asset_and_liability_account
-//                                 .add_hidden_asset(key_pair.get_sk_ref(), code, utxo)?,
-//           "public_liability" => data.asset_and_liability_account
-//                                     .add_public_liability(key_pair.get_sk_ref(), code, utxo)?,
-//           _ => data.asset_and_liability_account
-//                    .add_hidden_liability(key_pair.get_sk_ref(), code, utxo)?,
-//         }
-//       } else {
-//         println!("Missing asset or liability type. Use --type.");
-//         return Err(PlatformError::InputsError(error_location!()));
-//       }
-//       store_data_to_file(data)
-//     }
-//     ("prove_and_verify_solvency", _) => {
-//       data.solvency_audit
-//           .prove_solvency_and_store(&mut data.asset_and_liability_account)?;
-//       match data.solvency_audit
-//                 .verify_solvency(&data.asset_and_liability_account)
-//       {
-//         Ok(_) => {
-//           println!("Solvency proof and verification succeeded.");
-//         }
-//         _ => {
-//           println!("Solvency proof and verification failed.");
-//           return Err(PlatformError::ZeiError(error_location!(),
-//                                              ZeiError::SolvencyVerificationError));
-//         }
-//       }
-//       store_data_to_file(data)
-//     }
-//     _ => {
-//       println!("Subcommand missing or not recognized. Try --help");
-//       Err(PlatformError::InputsError(error_location!()))
-//     }
-//   }
-// }
+/// Parses a string to u64.
+fn parse_to_u64(val_str: &str) -> Result<u64, PlatformError> {
+  val_str.trim()
+         .parse::<u64>()
+         .or_else(|_| Err(PlatformError::InputsError(error_location!())))
+}
 
-fn main() {}
-// fn main() -> Result<(), PlatformError> {
-//   let inputs = App::new("Solvency Proof").version("0.1.0").about("Copyright 2020 © Findora. All rights reserved.")
-//     .subcommand(SubCommand::with_name("store_key_pair")
-//       .arg(Arg::with_name("key_pair")
-//         .short("k")
-//         .long("key_pair")
-//         .required(true)
-//         .takes_value(true)
-//         .help("Encoded key pair string."))
-//       .arg(Arg::with_name("file")
-//         .short("f")
-//         .long("file")
-//         .required(true)
-//         .takes_value(true)
-//         .help("File to store the generated key pair.")))
-//     .subcommand(SubCommand::with_name("set_rate")
-//       .arg(Arg::with_name("code")
-//         .short("c")
-//         .long("code")
-//         .required(true)
-//         .takes_value(true)
-//         .help("Asset code."))
-//       .arg(Arg::with_name("rate")
-//         .short("r")
-//         .long("rate")
-//         .required(true)
-//         .takes_value(true)
-//         .help("Conversion rate of this asset.")))
-//     .subcommand(SubCommand::with_name("add_asset_or_liability")
-//       .arg(Arg::with_name("key_file")
-//         .short("k")
-//         .long("key_file")
-//         .required(true)
-//         .takes_value(true)
-//         .help("File storing the key pair."))
-//       .arg(Arg::with_name("type")
-//         .short("t")
-//         .long("type")
-//         .required(true)
-//         .takes_value(true)
-//         .possible_values(&["public_asset", "hidden_asset", "public_liability", "hidden_liability"])
-//         .help("Specify whether to add asset or liability, and whether the record is public or hidden."))
-//       .arg(Arg::with_name("code")
-//         .short("c")
-//         .long("code")
-//         .required(true)
-//         .takes_value(true)
-//         .help("Code of the asset or liability."))
-//       .arg(Arg::with_name("utxo")
-//         .short("u")
-//         .long("utxo")
-//         .required(true)
-//         .takes_value(true)
-//         .help("UTXO of the asset or liability.")))
-//     .subcommand(SubCommand::with_name("prove_and_verify_solvency"))
-//     .get_matches();
+/// Processes input commands and arguments.
+fn process_inputs(inputs: clap::ArgMatches) -> Result<(), PlatformError> {
+  let mut data = load_data()?;
+  match inputs.subcommand() {
+    ("store_key_pair", Some(store_matches)) => {
+      let key_pair = if let Some(key_pair_arg) = store_matches.value_of("key_pair") {
+        key_pair_arg
+      } else {
+        println!("Missing encoded key pair string. Use --key_pair.");
+        return Err(PlatformError::InputsError(error_location!()));
+      };
+      if let Some(file_arg) = store_matches.value_of("file") {
+        store_string_to_file(key_pair, file_arg)?;
+      } else {
+        println!("Missing file path. Use --file.");
+        return Err(PlatformError::InputsError(error_location!()));
+      }
+      Ok(())
+    }
+    ("set_rate", Some(set_matches)) => {
+      let code = if let Some(code_arg) = set_matches.value_of("code") {
+        AssetTypeCode::new_from_base64(code_arg)?
+      } else {
+        println!("Missing asset code. Use --code.");
+        return Err(PlatformError::InputsError(error_location!()));
+      };
+      let rate = if let Some(rate_arg) = set_matches.value_of("rate") {
+        parse_to_u64(rate_arg)?
+      } else {
+        println!("Missing conversion rate. Use --rate.");
+        return Err(PlatformError::InputsError(error_location!()));
+      };
+      data.solvency_audit.set_rate(code, rate);
+      store_data_to_file(data)
+    }
+    ("add_asset_or_liability", Some(add_matches)) => {
+      let amount_type = if let Some(type_arg) = add_matches.value_of("type") {
+        match type_arg {
+          "asset" => AmountType::Asset,
+          _ => AmountType::Liability,
+        }
+      } else {
+        println!("Missing asset or liability type. Use --type.");
+        return Err(PlatformError::InputsError(error_location!()));
+      };
+      let amount = if let Some(amount_arg) = add_matches.value_of("amount") {
+        parse_to_u64(amount_arg)?
+      } else {
+        println!("Missing amount of the asset or liability. Use --amount.");
+        return Err(PlatformError::InputsError(error_location!()));
+      };
+      let code = if let Some(code_arg) = add_matches.value_of("code") {
+        AssetTypeCode::new_from_base64(code_arg)?
+      } else {
+        println!("Missing asset code. Use --code.");
+        return Err(PlatformError::InputsError(error_location!()));
+      };
+      let blinds = if let Some(blinds_arg) = add_matches.value_of("blinds") {
+        Some(serde_json::from_str::<((Scalar, Scalar), Scalar)>(&blinds_arg).or(Err(PlatformError::DeserializationError))?)
+      } else {
+        None
+      };
+      let utxo = if let Some(utxo_arg) = add_matches.value_of("utxo") {
+        parse_to_u64(utxo_arg)?
+      } else {
+        println!("Missing UTXO of the asset or liability. Use --utxo.");
+        return Err(PlatformError::InputsError(error_location!()));
+      };
+      data.asset_and_liability_account.update(amount_type,
+                                               amount,
+                                               code,
+                                               blinds,
+                                               utxo,
+                                               PROTOCOL,
+                                               HOST)?;
+      store_data_to_file(data)
+    }
+    ("prove_and_verify_solvency", _) => {
+      data.solvency_audit
+          .prove_solvency_and_store(&mut data.asset_and_liability_account)?;
+      match data.solvency_audit
+                .verify_solvency(&data.asset_and_liability_account)
+      {
+        Ok(_) => {
+          println!("Solvency proof and verification succeeded.");
+        }
+        _ => {
+          println!("Solvency proof and verification failed.");
+          return Err(PlatformError::ZeiError(error_location!(),
+                                             ZeiError::SolvencyVerificationError));
+        }
+      }
+      store_data_to_file(data)
+    }
+    _ => {
+      println!("Subcommand missing or not recognized. Try --help");
+      Err(PlatformError::InputsError(error_location!()))
+    }
+  }
+}
 
-//   process_inputs(inputs)
-// }
+fn main() -> Result<(), PlatformError> {
+  let inputs = App::new("Solvency Proof").version("0.1.0").about("Copyright 2020 © Findora. All rights reserved.")
+    .subcommand(SubCommand::with_name("store_key_pair")
+      .arg(Arg::with_name("key_pair")
+        .short("k")
+        .long("key_pair")
+        .required(true)
+        .takes_value(true)
+        .help("Encoded key pair string."))
+      .arg(Arg::with_name("file")
+        .short("f")
+        .long("file")
+        .required(true)
+        .takes_value(true)
+        .help("File to store the key pair.")))
+    .subcommand(SubCommand::with_name("set_rate")
+      .arg(Arg::with_name("code")
+        .short("c")
+        .long("code")
+        .required(true)
+        .takes_value(true)
+        .help("Asset code."))
+      .arg(Arg::with_name("rate")
+        .short("r")
+        .long("rate")
+        .required(true)
+        .takes_value(true)
+        .help("Conversion rate of this asset.")))
+    .subcommand(SubCommand::with_name("add_asset_or_liability")
+      .arg(Arg::with_name("type")
+        .short("t")
+        .long("type")
+        .required(true)
+        .takes_value(true)
+        .possible_values(&["asset", "liability"])
+        .help("Specify whether to add asset or liability."))
+      .arg(Arg::with_name("amount")
+        .short("a")
+        .long("amount")
+        .required(true)
+        .takes_value(true)
+        .help("Amount of the asset or liability."))
+      .arg(Arg::with_name("code")
+        .short("c")
+        .long("code")
+        .required(true)
+        .takes_value(true)
+        .help("Code of the asset or liability."))
+      .arg(Arg::with_name("blinds")
+        .short("b")
+        .long("blinds")
+        .required(false)
+        .takes_value(true)
+        .help("Serialized ((low asset amount blind, high assset amount blind), asset code blind) for confidential amount."))
+      .arg(Arg::with_name("utxo")
+        .short("u")
+        .long("utxo")
+        .required(true)
+        .takes_value(true)
+        .help("UTXO of the asset or liability.")))
+    .subcommand(SubCommand::with_name("prove_and_verify_solvency"))
+    .get_matches();
 
-// #[cfg(test)]
-// mod tests {
-//   use super::*;
-//   use ledger_standalone::LedgerStandalone;
-//   use rand_chacha::ChaChaRng;
-//   use rand_core::SeedableRng;
-//   use std::io::{self, Write};
-//   use std::process::{Command, Output};
-//   use zei::xfr::sig::XfrKeyPair;
+  process_inputs(inputs)
+}
 
-//   #[cfg(debug_assertions)]
-//   const COMMAND: &str = "../../target/debug/solvency_cli";
-//   #[cfg(not(debug_assertions))]
-//   const COMMAND: &str = "../../target/release/solvency_cli";
+#[cfg(test)]
+mod tests {
+  use super::*;
+  use ledger::data_model::AssetRules;
+  use ledger_standalone::LedgerStandalone;
+  use rand_chacha::ChaChaRng;
+  use rand_core::{CryptoRng, RngCore, SeedableRng};
+  use std::io::{self, Write};
+  use std::process::{Command, Output};
+  use txn_cli::txn_lib::{define_and_submit, issue_transfer_and_get_utxo_and_blinds};
+  use zei::serialization::ZeiFromToBytes;
+  use zei::xfr::asset_record::AssetRecordType;
+  use zei::xfr::sig::XfrKeyPair;
 
-//   // Command to set asset conversion rates
-//   fn set_rate_cmd(code: &str, rate: &str) -> io::Result<Output> {
-//     Command::new(COMMAND).arg("set_rate")
-//                          .args(&["--code", code])
-//                          .args(&["--rate", rate])
-//                          .output()
-//   }
+  #[cfg(debug_assertions)]
+  const COMMAND: &str = "../../target/debug/solvency_cli";
+  #[cfg(not(debug_assertions))]
+  const COMMAND: &str = "../../target/release/solvency_cli";
 
-//   // Issue and transfer assets, and get the UTXOs
-//   fn issue_transfer_and_get_utxos(issuer_key_pair: &XfrKeyPair,
-//                                   recipient_key_pair: &XfrKeyPair,
-//                                   codes: (AssetTypeCode, AssetTypeCode, AssetTypeCode),
-//                                   ledger_standalone: &LedgerStandalone)
-//                                   -> (String, String, String, String, String, String, String) {
-//     (format!("{}",
-//              test_issue_transfer_submit_and_get_utxo(issuer_key_pair,
-//                                                      recipient_key_pair,
-//                                                      codes.0,
-//                                                      10,
-//                                                      0,
-//                                                      ledger_standalone).unwrap()).to_string(),
-//      format!("{}",
-//              test_issue_transfer_submit_and_get_utxo(issuer_key_pair,
-//                                                      recipient_key_pair,
-//                                                      codes.1,
-//                                                      200,
-//                                                      1,
-//                                                      ledger_standalone).unwrap()).to_string(),
-//      format!("{}",
-//              test_issue_transfer_submit_and_get_utxo(issuer_key_pair,
-//                                                      recipient_key_pair,
-//                                                      codes.2,
-//                                                      3,
-//                                                      2,
-//                                                      ledger_standalone).unwrap()).to_string(),
-//      format!("{}",
-//              test_issue_transfer_submit_and_get_utxo(issuer_key_pair,
-//                                                      recipient_key_pair,
-//                                                      codes.0,
-//                                                      40,
-//                                                      3,
-//                                                      ledger_standalone).unwrap()).to_string(),
-//      format!("{}",
-//              test_issue_transfer_submit_and_get_utxo(issuer_key_pair,
-//                                                      recipient_key_pair,
-//                                                      codes.1,
-//                                                      50,
-//                                                      4,
-//                                                      ledger_standalone).unwrap()).to_string(),
-//      format!("{}",
-//              test_issue_transfer_submit_and_get_utxo(issuer_key_pair,
-//                                                      recipient_key_pair,
-//                                                      codes.1,
-//                                                      150,
-//                                                      5,
-//                                                      ledger_standalone).unwrap()).to_string(),
-//      format!("{}",
-//              test_issue_transfer_submit_and_get_utxo(issuer_key_pair,
-//                                                      recipient_key_pair,
-//                                                      codes.0,
-//                                                      30,
-//                                                      6,
-//                                                      ledger_standalone).unwrap()).to_string())
-//   }
+  // Command to set asset conversion rates
+  fn set_rate_cmd(code: &str, rate: &str) -> io::Result<Output> {
+    Command::new(COMMAND).arg("set_rate")
+                         .args(&["--code", code])
+                         .args(&["--rate", rate])
+                         .output()
+  }
 
-//   // Command to add an asset or a liability
-//   fn add_asset_or_liability_cmd(add_type: &str,
-//                                 key_file: &str,
-//                                 code: &str,
-//                                 utxo: &str)
-//                                 -> io::Result<Output> {
-//     Command::new(COMMAND).arg("add_asset_or_liability")
-//                          .args(&["--key_file", key_file])
-//                          .args(&["--type", add_type])
-//                          .args(&["--code", code])
-//                          .args(&["--utxo", utxo])
-//                          .output()
-//   }
+  // Issue and transfer assets, and get the serialized UTXOs and blinds
+  fn issue_transfer_multiple<R: CryptoRng + RngCore>(issuer_key_pair: &XfrKeyPair,
+                                                     recipient_key_pair: &XfrKeyPair,
+                                                     codes: Vec<AssetTypeCode>,
+                                                     prng: &mut R,
+                                                     ledger_standalone: &LedgerStandalone)
+                                                     -> (Vec<String>, Vec<String>) {
+    let mut utxos = Vec::new();
+    let mut blinds = Vec::new();
+    let (utxo_0, _, _) = issue_transfer_and_get_utxo_and_blinds(issuer_key_pair,
+                                                     recipient_key_pair,
+                                                     10,
+                                                     codes[0],
+                                                     AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
+                                                     0,
+                                                     prng,
+                                                     ledger_standalone).unwrap();
+    utxos.push(format!("{}", utxo_0));
+    let (utxo_1, amount_blinds_1, code_blind_1) = issue_transfer_and_get_utxo_and_blinds(issuer_key_pair,
+                                                     recipient_key_pair,
+                                                     200,
+                                                     codes[1],
+                                                     AssetRecordType::ConfidentialAmount_NonConfidentialAssetType,
+                                                     1,
+                                                     prng,
+                                                     ledger_standalone).unwrap();
+    utxos.push(format!("{}", utxo_1));
+    blinds.push(serde_json::to_string(&(amount_blinds_1, code_blind_1)).unwrap());
+    let (utxo_2, amount_blinds_2, code_blind_2) = issue_transfer_and_get_utxo_and_blinds(issuer_key_pair,
+                                                     recipient_key_pair,
+                                                     3,
+                                                     codes[2],
+                                                     AssetRecordType::ConfidentialAmount_NonConfidentialAssetType,
+                                                     2,
+                                                     prng,
+                                                     ledger_standalone).unwrap();
+    utxos.push(format!("{}", utxo_2));
+    blinds.push(serde_json::to_string(&(amount_blinds_2, code_blind_2)).unwrap());
+    let (utxo_3, _, _) = issue_transfer_and_get_utxo_and_blinds(issuer_key_pair,
+                                                     recipient_key_pair,
+                                                     40,
+                                                     codes[0],
+                                                     AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
+                                                     3,
+                                                     prng,
+                                                     ledger_standalone).unwrap();
+    utxos.push(format!("{}", utxo_3));
+    let (utxo_4, amount_blinds_4, code_blind_4) =issue_transfer_and_get_utxo_and_blinds(issuer_key_pair,
+                                                     recipient_key_pair,
+                                                     50,
+                                                     codes[1],
+                                                     AssetRecordType::ConfidentialAmount_NonConfidentialAssetType,
+                                                     4,
+                                                     prng,
+                                                     ledger_standalone).unwrap();
+    utxos.push(format!("{}", utxo_4));
+    blinds.push(serde_json::to_string(&(amount_blinds_4, code_blind_4)).unwrap());
+    let (utxo_5, amount_blinds_5, code_blind_5) =issue_transfer_and_get_utxo_and_blinds(issuer_key_pair,
+                                                     recipient_key_pair,
+                                                     150,
+                                                     codes[1],
+                                                     AssetRecordType::ConfidentialAmount_NonConfidentialAssetType,
+                                                     5,
+                                                     prng,
+                                                     ledger_standalone).unwrap();
+    utxos.push(format!("{}", utxo_5));
+    blinds.push(serde_json::to_string(&(amount_blinds_5, code_blind_5)).unwrap());
+    let (utxo_6, _, _) =issue_transfer_and_get_utxo_and_blinds(issuer_key_pair,
+                                                     recipient_key_pair,
+                                                     30,
+                                                     codes[0],
+                                                     AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
+                                                     6,
+                                                     prng,
+                                                     ledger_standalone).unwrap();
+    utxos.push(format!("{}", utxo_6));
+    (utxos, blinds)
+  }
 
-//   #[test]
-//   #[ignore]
-//   fn test_cmd() {
-//     // Start the standalone ledger
-//     let ledger_standalone = &LedgerStandalone::new();
-//     ledger_standalone.poll_until_ready().unwrap();
+  // Command to add a confidential asset or liability
+  fn add_confidential_asset_or_liability_cmd(amount_type: &str,
+                                             amount: &str,
+                                             code: &str,
+                                             blinds: &str,
+                                             utxo: &str)
+                                             -> io::Result<Output> {
+    Command::new(COMMAND).arg("add_asset_or_liability")
+                         .args(&["--type", amount_type])
+                         .args(&["--amount", amount])
+                         .args(&["--code", code])
+                         .args(&["--blinds", blinds])
+                         .args(&["--utxo", utxo])
+                         .output()
+  }
 
-//     // Generate asset codes and key pairs
-//     let codes =
-//       (AssetTypeCode::gen_random(), AssetTypeCode::gen_random(), AssetTypeCode::gen_random());
-//     let issuer_key_pair = &XfrKeyPair::generate(&mut ChaChaRng::from_entropy());
-//     let recipient_key_pair = XfrKeyPair::generate(&mut ChaChaRng::from_entropy());
+  // Command to add a nonconfidential asset or liability
+  fn add_nonconfidential_asset_or_liability_cmd(amount_type: &str,
+                                                amount: &str,
+                                                code: &str,
+                                                utxo: &str)
+                                                -> io::Result<Output> {
+    Command::new(COMMAND).arg("add_asset_or_liability")
+                         .args(&["--type", amount_type])
+                         .args(&["--amount", amount])
+                         .args(&["--code", code])
+                         .args(&["--utxo", utxo])
+                         .output()
+  }
 
-//     // Store the recipient's key pair
-//     let recipient_key_pair_str = hex::encode(recipient_key_pair.zei_to_bytes());
-//     let key_file = "solvency_key_pair";
-//     let output = Command::new(COMMAND).arg("store_key_pair")
-//                                       .args(&["--key_pair", &recipient_key_pair_str])
-//                                       .args(&["--file", key_file])
-//                                       .output()
-//                                       .expect("Failed to store the key pair.");
-//     io::stdout().write_all(&output.stdout).unwrap();
-//     io::stdout().write_all(&output.stderr).unwrap();
-//     assert!(output.status.success());
+  #[test]
+  fn test_cmd() {
+    // Start the standalone ledger
+    let ledger_standalone = &LedgerStandalone::new();
+    ledger_standalone.poll_until_ready().unwrap();
 
-//     // Define, issue and transfer assets
-//     test_define_and_submit_multiple(issuer_key_pair, codes, ledger_standalone).unwrap();
-//     let code_0 = &codes.0.to_base64();
-//     let code_1 = &codes.1.to_base64();
-//     let code_2 = &codes.2.to_base64();
-//     let (utxo_0, utxo_1, utxo_2, utxo_3, utxo_4, utxo_5, utxo_6) =
-//       issue_transfer_and_get_utxos(issuer_key_pair,
-//                                    &recipient_key_pair,
-//                                    codes,
-//                                    ledger_standalone);
+    // Generate asset codes and key pairs
+    let codes = vec![AssetTypeCode::gen_random(),
+                     AssetTypeCode::gen_random(),
+                     AssetTypeCode::gen_random()];
+    let issuer_key_pair = &XfrKeyPair::generate(&mut ChaChaRng::from_entropy());
+    let recipient_key_pair = XfrKeyPair::generate(&mut ChaChaRng::from_entropy());
 
-//     // Set asset conversion rates
-//     let output = set_rate_cmd(code_0, "1").expect("Failed to set conversion rate.");
-//     io::stdout().write_all(&output.stdout).unwrap();
-//     io::stdout().write_all(&output.stderr).unwrap();
-//     assert!(output.status.success());
+    // Store the recipient's key pair
+    let recipient_key_pair_str = hex::encode(recipient_key_pair.zei_to_bytes());
+    let key_file = "solvency_key_pair";
+    let output = Command::new(COMMAND).arg("store_key_pair")
+                                      .args(&["--key_pair", &recipient_key_pair_str])
+                                      .args(&["--file", key_file])
+                                      .output()
+                                      .expect("Failed to store the key pair.");
+    io::stdout().write_all(&output.stdout).unwrap();
+    io::stdout().write_all(&output.stderr).unwrap();
+    assert!(output.status.success());
 
-//     let output = set_rate_cmd(code_1, "100").expect("Failed to set conversion rate.");
-//     io::stdout().write_all(&output.stdout).unwrap();
-//     io::stdout().write_all(&output.stderr).unwrap();
-//     assert!(output.status.success());
+    // Define, issue and transfer assets
+    for code in codes.iter() {
+      define_and_submit(&issuer_key_pair,
+                        *code,
+                        AssetRules::default(),
+                        ledger_standalone).unwrap();
+    }
+    let code_0 = &codes[0].to_base64();
+    let code_1 = &codes[1].to_base64();
+    let code_2 = &codes[2].to_base64();
+    let (utxos, blinds) = issue_transfer_multiple(issuer_key_pair,
+                                                  &recipient_key_pair,
+                                                  codes,
+                                                  &mut ChaChaRng::from_entropy(),
+                                                  ledger_standalone);
 
-//     let output = set_rate_cmd(code_2, "1").expect("Failed to set conversion rate.");
-//     io::stdout().write_all(&output.stdout).unwrap();
-//     io::stdout().write_all(&output.stderr).unwrap();
-//     assert!(output.status.success());
+    // Set asset conversion rates
+    let output = set_rate_cmd(code_0, "1").expect("Failed to set conversion rate.");
+    io::stdout().write_all(&output.stdout).unwrap();
+    io::stdout().write_all(&output.stderr).unwrap();
+    assert!(output.status.success());
 
-//     // Add assets and liabilities such that total asset amount > total liabiliity amount
-//     let output =
-//       add_asset_or_liability_cmd("public_asset", key_file, code_0, &utxo_0).expect("Failed to add public asset.");
-//     io::stdout().write_all(&output.stdout).unwrap();
-//     io::stdout().write_all(&output.stderr).unwrap();
-//     assert!(output.status.success());
+    let output = set_rate_cmd(code_1, "100").expect("Failed to set conversion rate.");
+    io::stdout().write_all(&output.stdout).unwrap();
+    io::stdout().write_all(&output.stderr).unwrap();
+    assert!(output.status.success());
 
-//     let output =
-//       add_asset_or_liability_cmd("hidden_asset", key_file, code_1, &utxo_1).expect("Failed to add hidden asset.");
-//     io::stdout().write_all(&output.stdout).unwrap();
-//     io::stdout().write_all(&output.stderr).unwrap();
-//     assert!(output.status.success());
+    let output = set_rate_cmd(code_2, "1").expect("Failed to set conversion rate.");
+    io::stdout().write_all(&output.stdout).unwrap();
+    io::stdout().write_all(&output.stderr).unwrap();
+    assert!(output.status.success());
 
-//     let output =
-//     add_asset_or_liability_cmd("hidden_asset", key_file, code_2, &utxo_2).expect("Failed to add hidden asset.");
-//     io::stdout().write_all(&output.stdout).unwrap();
-//     io::stdout().write_all(&output.stderr).unwrap();
-//     assert!(output.status.success());
+    // Add assets and liabilities such that total asset amount > total liabiliity amount
+    let output =
+    add_nonconfidential_asset_or_liability_cmd("asset", "10", code_0, &utxos[0]).expect("Failed to add public asset.");
+    io::stdout().write_all(&output.stdout).unwrap();
+    io::stdout().write_all(&output.stderr).unwrap();
+    assert!(output.status.success());
 
-//     let output = add_asset_or_liability_cmd("public_liability", key_file, code_0, &utxo_3)
-//                                       .expect("Failed to add public liability.");
-//     io::stdout().write_all(&output.stdout).unwrap();
-//     io::stdout().write_all(&output.stderr).unwrap();
-//     assert!(output.status.success());
+    let output =
+    add_confidential_asset_or_liability_cmd("asset", "200", code_1, &blinds[0], &utxos[1]).expect("Failed to add hidden asset.");
+    io::stdout().write_all(&output.stdout).unwrap();
+    io::stdout().write_all(&output.stderr).unwrap();
+    assert!(output.status.success());
 
-//     let output = add_asset_or_liability_cmd("hidden_liability", key_file, code_1, &utxo_4)
-//                                       .expect("Failed to add hidden liability.");
-//     io::stdout().write_all(&output.stdout).unwrap();
-//     io::stdout().write_all(&output.stderr).unwrap();
-//     assert!(output.status.success());
+    let output =
+    add_confidential_asset_or_liability_cmd("asset","3", code_2, &blinds[1], &utxos[2]).expect("Failed to add hidden asset.");
+    io::stdout().write_all(&output.stdout).unwrap();
+    io::stdout().write_all(&output.stderr).unwrap();
+    assert!(output.status.success());
 
-//     // Prove and verify solvency
-//     let output = Command::new(COMMAND).arg("prove_and_verify_solvency")
-//                                       .output()
-//                                       .expect("Failed to prove and verify solvency.");
-//     io::stdout().write_all(&output.stdout).unwrap();
-//     io::stdout().write_all(&output.stderr).unwrap();
-//     assert!(output.status.success());
+    let output = add_nonconfidential_asset_or_liability_cmd("liability","40", code_0, &utxos[3])
+                                      .expect("Failed to add public liability.");
+    io::stdout().write_all(&output.stdout).unwrap();
+    io::stdout().write_all(&output.stderr).unwrap();
+    assert!(output.status.success());
 
-//     // Add additional liabilities to make total asset amount < total liabiliity amount
-//     let output = add_asset_or_liability_cmd("hidden_liability", key_file, code_1, &utxo_5).expect("Failed to add hidden liability.");
-//     io::stdout().write_all(&output.stdout).unwrap();
-//     io::stdout().write_all(&output.stderr).unwrap();
-//     assert!(output.status.success());
+    let output = add_confidential_asset_or_liability_cmd("liability", "50", code_1, &blinds[2], &utxos[4])
+                                      .expect("Failed to add hidden liability.");
+    io::stdout().write_all(&output.stdout).unwrap();
+    io::stdout().write_all(&output.stderr).unwrap();
+    assert!(output.status.success());
 
-//     // Prove and verify solvency
-//     // Should fail since total asset amount < total liabiliity amount
-//     let output = Command::new(COMMAND).arg("prove_and_verify_solvency")
-//                                       .output()
-//                                       .expect("Failed to prove and verify solvency.");
-//     io::stdout().write_all(&output.stdout).unwrap();
-//     io::stdout().write_all(&output.stderr).unwrap();
-//     assert!(!output.status.success());
+    // Prove and verify solvency
+    let output = Command::new(COMMAND).arg("prove_and_verify_solvency")
+                                      .output()
+                                      .expect("Failed to prove and verify solvency.");
+    io::stdout().write_all(&output.stdout).unwrap();
+    io::stdout().write_all(&output.stderr).unwrap();
+    assert!(output.status.success());
 
-//     // Add additional assets to make total asset amount > total liabiliity amount
-//     let output =
-//       add_asset_or_liability_cmd("public_asset", key_file, code_0, &utxo_6).expect("Failed to add public asset.");
-//     io::stdout().write_all(&output.stdout).unwrap();
-//     io::stdout().write_all(&output.stderr).unwrap();
-//     assert!(output.status.success());
+    // Add additional liabilities to make total asset amount < total liabiliity amount
+    let output = add_confidential_asset_or_liability_cmd("liability", "150", code_1, &blinds[3], &utxos[5]).expect("Failed to add hidden liability.");
+    io::stdout().write_all(&output.stdout).unwrap();
+    io::stdout().write_all(&output.stderr).unwrap();
+    assert!(output.status.success());
 
-//     // Prove and verify solvency
-//     let output = Command::new(COMMAND).arg("prove_and_verify_solvency")
-//                                       .output()
-//                                       .expect("Failed to prove and verify solvency.");
-//     io::stdout().write_all(&output.stdout).unwrap();
-//     io::stdout().write_all(&output.stderr).unwrap();
-//     assert!(output.status.success());
+    // Prove and verify solvency
+    // Should fail since total asset amount < total liabiliity amount
+    let output = Command::new(COMMAND).arg("prove_and_verify_solvency")
+                                      .output()
+                                      .expect("Failed to prove and verify solvency.");
+    io::stdout().write_all(&output.stdout).unwrap();
+    io::stdout().write_all(&output.stderr).unwrap();
+    assert!(!output.status.success());
 
-//     fs::remove_file("solvency_data.json").unwrap();
-//     fs::remove_file(key_file).unwrap();
-//   }
-// }
+    // Add additional assets to make total asset amount > total liabiliity amount
+    let output =
+    add_nonconfidential_asset_or_liability_cmd("asset", "30", code_0, &utxos[6]).expect("Failed to add public asset.");
+    io::stdout().write_all(&output.stdout).unwrap();
+    io::stdout().write_all(&output.stderr).unwrap();
+    assert!(output.status.success());
+
+    // Prove and verify solvency
+    let output = Command::new(COMMAND).arg("prove_and_verify_solvency")
+                                      .output()
+                                      .expect("Failed to prove and verify solvency.");
+    io::stdout().write_all(&output.stdout).unwrap();
+    io::stdout().write_all(&output.stderr).unwrap();
+    assert!(output.status.success());
+
+    fs::remove_file("solvency_data.json").unwrap();
+    fs::remove_file(key_file).unwrap();
+  }
+}
