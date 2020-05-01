@@ -606,6 +606,7 @@ pub(crate) fn build_record_and_get_blinds<R: CryptoRng + RngCore>(
 //
 //    let builder = TransferOperationBuilder::new()..add_input(TxoRef::Relative(1),
 //                                       open_blind_asset_record(&ba, alice.get_sk_ref()).unwrap(),
+//                                       None,
 //                                       20)?
 //                            .add_output(20, bob.get_pk_ref(), code_1)?
 //                            .balance()?
