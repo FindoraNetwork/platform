@@ -660,18 +660,18 @@ impl TransferOperationBuilder {
                             &Credential,
                             &ACCommitmentKey)>)
                     -> Result<&mut Self, PlatformError> {
-    let mut prng = ChaChaRng::from_entropy();
+    let prng = &mut ChaChaRng::from_entropy();
     if self.transfer.is_some() {
       return Err(PlatformError::InvariantError(Some("Cannot mutate a transfer that has been signed".to_string())));
     }
     let ar = if let Some((user_secret_key, credential, commitment_key)) = credential_record {
-      AssetRecord::from_template_with_identity_tracking(&mut prng,
+      AssetRecord::from_template_with_identity_tracking(prng,
                                                         asset_record_template,
                                                         user_secret_key.get_ref(),
                                                         credential,
                                                         commitment_key).unwrap()
     } else {
-      AssetRecord::from_template_no_identity_tracking(&mut prng, asset_record_template).unwrap()
+      AssetRecord::from_template_no_identity_tracking(prng, asset_record_template).unwrap()
     };
     self.output_records.push(ar);
     Ok(self)

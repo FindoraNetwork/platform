@@ -1304,12 +1304,12 @@ pub mod txn_lib {
   /// * To query the BlindAssetRecord with utxo_sid 100 from https://testnet.findora.org:
   /// use txn_cli::txn_lib::query;
   /// query("https", "testnet.findora.org", QUERY_PORT, "utxo_sid", "100").unwrap();
-  pub(crate) fn query(protocol: &str,
-                      host: &str,
-                      port: &str,
-                      route: &str,
-                      value: &str)
-                      -> Result<String, PlatformError> {
+  fn query(protocol: &str,
+           host: &str,
+           port: &str,
+           route: &str,
+           value: &str)
+           -> Result<String, PlatformError> {
     let mut res = if let Ok(response) =
       reqwest::get(&format!("{}://{}:{}/{}/{}", protocol, host, port, route, value))
     {
@@ -2133,7 +2133,6 @@ pub mod txn_lib {
                                                   fiat_code.val,
                                                   AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
                                                   borrower_key_pair.get_pk());
-
     let op = TransferOperationBuilder::new().add_input(TxoRef::Absolute(debt_sid),
                                                        debt_open_asset_record,
                                                        None,
