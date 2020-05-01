@@ -187,25 +187,6 @@ impl SolvencyAudit {
                      &account.public_liabilities,
                      &rates).or_else(|e| Err(PlatformError::ZeiError(error_location!(), e)))?;
 
-    // Commit the hidden assets and liabilities
-    let pc_gens = PedersenGens::default();
-    let hidden_assets_commitments: Vec<AssetCommitment> =
-      account.hidden_assets
-             .iter()
-             .zip(asset_blinds.iter())
-             .map(|((a, t), (ba, bt))| {
-               (pc_gens.commit(*a, *ba).compress(), pc_gens.commit(*t, *bt).compress())
-             })
-             .collect();
-    let hidden_liabilities_commitments: Vec<LiabilityCommitment> =
-      account.hidden_liabilities
-             .iter()
-             .zip(liability_blinds.iter())
-             .map(|((a, t), (ba, bt))| {
-               (pc_gens.commit(*a, *ba).compress(), pc_gens.commit(*t, *bt).compress())
-             })
-             .collect();
-
     // Update data
     account.proof = Some(proof.to_bytes());
     Ok(())
