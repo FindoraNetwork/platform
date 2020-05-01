@@ -19,9 +19,10 @@ rust_dirs       = $(shell find . -name target -prune -o    \
                               | sed -e "s:/Cargo.toml::")
 
 bin_files =                             \
-        ./$(pick)/txn_cli       		\
         ./$(pick)/abci_validator_node   \
         ./$(pick)/check_merkle          \
+		./$(pick)/solvency_cli       	\
+	   	./$(pick)/txn_cli       		\
 
 lib_files =                                    \
         ./$(pick)/libledger.rlib               \
