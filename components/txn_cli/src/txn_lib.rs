@@ -1174,6 +1174,7 @@ pub mod txn_lib {
                                                                 &owner_memo,
                                                                 issuer_key_pair.get_sk_ref())
                                               .map_err(|e| PlatformError::ZeiError(error_location!(),e))?,
+                                              None,
                                               amount)?
                                    .add_output(&output_template, credential_record)?
                                    .balance()?
@@ -1484,8 +1485,8 @@ amount)?.add_output_and_store_blinds(&output_template, None, prng, blinds)?.bala
                                                   oar1.get_record_type(),
                                                   key_pair.get_pk())
     };
-    let xfr_op = TransferOperationBuilder::new().add_input(sid1, oar1, amount1)?
-                                                .add_input(sid2, oar2, amount2)?
+    let xfr_op = TransferOperationBuilder::new().add_input(sid1, oar1, None, amount1)?
+                                                .add_input(sid2, oar2, None, amount2)?
                                                 .add_output(&template, None)?
                                                 .create(TransferType::Standard)?
                                                 .sign(key_pair)?
@@ -1903,9 +1904,11 @@ amount)?.add_output_and_store_blinds(&output_template, None, prng, blinds)?.bala
                                                   borrower_key_pair.get_pk());
     let xfr_op = TransferOperationBuilder::new().add_input(TxoRef::Absolute(fiat_sid),
                                                            fiat_open_asset_record,
+                                                           None,
                                                            amount)?
                                                 .add_input(TxoRef::Absolute(debt_sid),
                                                            debt_open_asset_record,
+                                                           None,
                                                            amount)?
                                                 .add_output(&lender_template, credential_record)?
                                                 .add_output(&borrower_template, None)?
@@ -2097,9 +2100,11 @@ amount)?.add_output_and_store_blinds(&output_template, None, prng, blinds)?.bala
                                                   borrower_key_pair.get_pk());
     let op = TransferOperationBuilder::new().add_input(TxoRef::Absolute(debt_sid),
                                                        debt_open_asset_record,
+                                                       None,
                                                        amount_to_burn)?
                                             .add_input(TxoRef::Absolute(fiat_sid),
                                                        fiat_open_asset_record,
+                                                       None,
                                                        amount_to_spend)?
                                             .add_output(&spend_template, None)?
                                             .add_output(&burn_template, None)?
