@@ -198,6 +198,11 @@ pub fn txn_log_info(txn: &Transaction) {
         info!("Assigning to AIR: AIR[{:?}] <- {:?}",
               air_assign_op.body.addr, air_assign_op.body.data);
       }
+      Operation::UpdateMemo(update_memo) => {
+        info!("Updating memo of asset type {} to {}",
+              update_memo.body.asset_type.to_base64(),
+              update_memo.body.new_memo.0);
+      }
     };
   }
 }
