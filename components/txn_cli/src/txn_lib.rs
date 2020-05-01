@@ -1216,14 +1216,13 @@ pub mod txn_lib {
                                                                       recipient_key_pair.get_pk());
     let blinds = &mut ((Scalar::default(), Scalar::default()), Scalar::default());
     let xfr_op = TransferOperationBuilder::new().add_input(TxoRef::Relative(0),
-open_blind_asset_record(&input_blind_asset_record,
-&None,
-issuer_key_pair.get_sk_ref())
-.map_err(|e| PlatformError::ZeiError(error_location!(),e))?,
-amount)?.add_output_and_store_blinds(&output_template, None, prng, blinds)?.balance()?
-.create(TransferType::Standard)?
-.sign(issuer_key_pair)?
-.transaction()?;
+                                                           open_blind_asset_record(&input_blind_asset_record, &None, issuer_key_pair.get_sk_ref()).map_err(|e| PlatformError::ZeiError(error_location!(), e))?,
+                                                           None,
+                                                           amount)?
+                                                .add_output_and_store_blinds(&output_template, None, prng, blinds)?.balance()?
+                                                .create(TransferType::Standard)?
+                                                .sign(issuer_key_pair)?
+                                                .transaction()?;
 
     let mut txn_builder = TransactionBuilder::default();
     let txn = txn_builder.add_operation_issue_asset(issuer_key_pair,
