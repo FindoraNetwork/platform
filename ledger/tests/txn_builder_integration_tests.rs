@@ -73,9 +73,9 @@ fn test_create_asset() -> Result<(), PlatformError> {
   let oar1 = open_blind_asset_record(&bar1, &None, keys.get_sk_ref()).unwrap();
   let oar2 = open_blind_asset_record(&bar2, &None, keys.get_sk_ref()).unwrap();
 
-  let op = TransferOperationBuilder::new().add_input(TxoRef::Absolute(txos[0]), oar1,None, 1000)?
-                                          .add_input(TxoRef::Absolute(txos[1]), oar2, None,500)?
-                                          .add_output(&AssetRecordTemplate::with_no_asset_tracking(1500, code.val, NonConfidentialAmount_NonConfidentialAssetType, keys.get_pk()),None)?
+  let op = TransferOperationBuilder::new().add_input(TxoRef::Absolute(txos[0]), oar1, None, 1000)?
+                                          .add_input(TxoRef::Absolute(txos[1]), oar2, None, 500)?
+                                          .add_output(&AssetRecordTemplate::with_no_asset_tracking(1500, code.val, NonConfidentialAmount_NonConfidentialAssetType, keys.get_pk()), None)?
                                           .create(TransferType::Standard)?
                                           .sign(&keys)?
                                           .transaction()?;

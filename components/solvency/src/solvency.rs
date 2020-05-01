@@ -187,9 +187,9 @@ impl SolvencyAudit {
     let mut prng = ChaChaRng::from_seed([0u8; 32]);
     let hidden_assets_size = account.hidden_assets.len();
     let hidden_liabilities_size = account.hidden_liabilities.len();
-    let assets_hiddens =
+    let asset_blinds =
       vec![(Scalar::random(&mut prng), Scalar::random(&mut prng)); hidden_assets_size];
-    let liabilities_hiddens =
+    let liability_blinds =
       vec![(Scalar::random(&mut prng), Scalar::random(&mut prng)); hidden_liabilities_size];
     let mut rates = LinearMap::new();
     for (code, rate) in self.conversion_rates.clone() {
@@ -197,10 +197,10 @@ impl SolvencyAudit {
     }
     let proof =
       prove_solvency(&account.hidden_assets,
-                     &assets_hiddens,
+                     &asset_blinds,
                      &account.public_assets,
                      &account.hidden_liabilities,
-                     &liabilities_hiddens,
+                     &liability_blinds,
                      &account.public_liabilities,
                      &rates).or_else(|e| Err(PlatformError::ZeiError(error_location!(), e)))?;
 
@@ -209,7 +209,7 @@ impl SolvencyAudit {
     let hidden_assets_commitments: Vec<AssetCommitment> =
       account.hidden_assets
              .iter()
-             .zip(assets_hiddens.iter())
+             .zip(asset_blinds.iter())
              .map(|((a, t), (ba, bt))| {
                (pc_gens.commit(*a, *ba).compress(), pc_gens.commit(*t, *bt).compress())
              })
@@ -217,7 +217,7 @@ impl SolvencyAudit {
     let hidden_liabilities_commitments: Vec<LiabilityCommitment> =
       account.hidden_liabilities
              .iter()
-             .zip(liabilities_hiddens.iter())
+             .zip(liability_blinds.iter())
              .map(|((a, t), (ba, bt))| {
                (pc_gens.commit(*a, *ba).compress(), pc_gens.commit(*t, *bt).compress())
              })
