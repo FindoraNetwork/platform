@@ -3,7 +3,6 @@
 mod shared;
 
 use credentials::{credential_commit, credential_user_key_gen, CredSignature, Credential};
-// use log::info;
 use rand_chacha::ChaChaRng;
 use rand_core::SeedableRng;
 use serde::{Deserialize, Serialize};
@@ -151,8 +150,6 @@ mod handlers {
   use crate::shared::{AIRAddressAndPoK, RevealFields};
   use credentials::credential_open_commitment;
   use std::convert::Infallible;
-  // use zei::serialization::ZeiFromToBytes;
-  // use zei::xfr::sig::XfrKeyPair;
 
   /// POST //reveal/:credname/:bitmap
   pub async fn reveal(credname: String,

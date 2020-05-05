@@ -7,13 +7,8 @@ use credentials::{
 use rand_chacha::ChaChaRng;
 use rand_core::SeedableRng;
 use txn_builder::{BuildsTransactions, TransactionBuilder};
-// use utils::{protocol_host, urlencode, SUBMIT_PORT};
 use std::collections::HashMap;
-// use zei::serialization::ZeiFromToBytes;
 use zei::xfr::sig::XfrKeyPair;
-
-// From txn_cli: need a working key pair String
-// const KEY_PAIR_STR: &str = "76b8e0ada0f13d90405d6ae55386bd28bdd219b8a08ded1aa836efcc8b770dc720fdbac9b10b7587bba7b5bc163bce69e796d71e4ed44c10fcb4488689f7a144";
 
 /// Represents a file that can be searched
 
