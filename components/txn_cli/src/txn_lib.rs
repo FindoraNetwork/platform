@@ -1391,9 +1391,14 @@ pub mod txn_lib {
               Err(PlatformError::SubmissionServerError(Some("Failed to submit.".to_owned())))
             })?;
     // Log body
-    println!("Submission response: {}",
-             res.json::<TxnHandle>().expect("<Invalid JSON>"));
+    let txt = res.text().expect("no response");
+    let handle = serde_json::from_str::<TxnHandle>(&txt).unwrap_or_else(|e| {
+                                                          panic!("<Invalid JSON> ({}): \"{}\"",
+                                                                 &e, &txt)
+                                                        });
+    println!("Submission response: {}", handle);
     println!("Submission status: {}", res.status());
+
     Ok(())
   }
 
@@ -1427,7 +1432,11 @@ pub mod txn_lib {
             })?;
 
     // Log body
-    let handle = res.json::<TxnHandle>().expect("<Invalid JSON>");
+    let txt = res.text().expect("no response");
+    let handle = serde_json::from_str::<TxnHandle>(&txt).unwrap_or_else(|e| {
+                                                          panic!("<Invalid JSON> ({}): \"{}\"",
+                                                                 &e, &txt)
+                                                        });
     println!("Submission response: {}", handle);
     println!("Submission status: {}", res.status());
 
