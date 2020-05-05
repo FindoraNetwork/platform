@@ -532,6 +532,7 @@ mod tests {
   }
 
   #[test]
+  #[ignore]
   fn test_prove_solvency_fail() {
     // Start the standalone ledger
     let ledger_standalone = &LedgerStandalone::new();
