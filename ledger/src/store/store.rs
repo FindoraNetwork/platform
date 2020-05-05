@@ -24,6 +24,7 @@ use std::fs::File;
 use std::fs::OpenOptions;
 use std::io::{BufRead, BufReader, BufWriter, Write};
 use std::path::Path;
+use std::path::PathBuf;
 use std::u64;
 use zei::xfr::sig::{XfrKeyPair, XfrPublicKey, XfrSignature};
 use zei::xfr::structs::XfrAssetType;
@@ -265,7 +266,7 @@ pub struct LedgerState {
   // Bitmap tracking all the live TXOs
   utxo_map: BitMap,
 
-  txn_log: Option<File>,
+  txn_log: Option<(PathBuf, File)>,
 
   block_ctx: Option<BlockEffect>,
 }
@@ -306,14 +307,14 @@ impl HasInvariants<PlatformError> for LedgerState {
         txns_in_block_hash
       };
 
-      dbg!(self.block_merkle.state());
+      // dbg!(self.block_merkle.state());
       let proof = self.block_merkle.get_proof(ix as u64, 0).unwrap();
-      dbg!(&proof);
+      // dbg!(&proof);
       // dbg!(&bincode::serialize(&block.txns).unwrap());
       // dbg!(&bincode::serialize(&block.txns.clone()).unwrap());
       // dbg!(&bincode::serialize(&block.txns.iter().collect::<Vec<_>>()).unwrap());
-      dbg!(&block.txns);
-      dbg!(&txns_in_block_hash);
+      // dbg!(&block.txns);
+      // dbg!(&txns_in_block_hash);
       // assert!(self.status.txns_in_block_hash == txns_in_block_hash);
       if !proof.is_valid_proof(txns_in_block_hash) {
         return Err(PlatformError::InvariantError(Some(format!("Bad block proof at {}", ix))));
@@ -329,7 +330,7 @@ impl HasInvariants<PlatformError> for LedgerState {
       }
     }
 
-    if let Some(txn_log_fd) = &self.txn_log {
+    if let Some((_, txn_log_fd)) = &self.txn_log {
       txn_log_fd.sync_data().unwrap();
       let tmp_dir = findora::fresh_tmp_dir();
 
@@ -348,9 +349,9 @@ impl HasInvariants<PlatformError> for LedgerState {
       let other_utxo_map_buf = tmp_dir.join("test_utxo_map");
       let other_utxo_map_path = other_utxo_map_buf.to_str().unwrap();
 
-      dbg!(&self.status.txn_path);
-      dbg!(std::fs::metadata(&self.status.txn_path).unwrap());
-      dbg!(&other_txn_path);
+      // dbg!(&self.status.txn_path);
+      // dbg!(std::fs::metadata(&self.status.txn_path).unwrap());
+      // dbg!(&other_txn_path);
       std::fs::copy(&self.status.txn_path, &other_txn_path).unwrap();
 
       let state2 = Box::new(LedgerState::load_from_log(&other_block_merkle_path,
@@ -460,7 +461,7 @@ impl LedgerStatus {
       }
     }
 
-    dbg!("records work");
+    // dbg!("records work");
 
     // New asset types must not already exist
     for (code, _asset_type) in txn.new_asset_codes.iter() {
@@ -475,7 +476,7 @@ impl LedgerStatus {
       // Asset issuance should match the currently registered key
     }
 
-    dbg!("new types work");
+    // dbg!("new types work");
 
     // New issuance numbers
     // (1) Must refer to a created asset type
@@ -487,7 +488,7 @@ impl LedgerStatus {
     //    order
     for (code, seq_nums) in txn.new_issuance_nums.iter() {
       debug_assert!(txn.issuance_keys.contains_key(&code));
-      dbg!(&(code, seq_nums));
+      // dbg!(&(code, seq_nums));
 
       let iss_key = txn.issuance_keys.get(&code).unwrap();
       let asset_type = self.asset_types
@@ -559,7 +560,7 @@ impl LedgerStatus {
 
     // Issuance tracing policies must has the asset_tracking flag consistent with the asset definition
     for (code, tracing_policy) in txn.issuance_tracing_policies.iter() {
-      dbg!(&(code, tracing_policy));
+      // dbg!(&(code, tracing_policy));
       let traceability = self.asset_types
                              .get(&code)
                              .or_else(|| txn.new_asset_codes.get(&code))
@@ -603,7 +604,7 @@ impl LedgerStatus {
     // (1) Fiat code must match debt asset memo
     // (2) fee must be correct
     for (code, debt_swap_effects) in txn.debt_effects.iter() {
-      dbg!(&(code, debt_swap_effects));
+      // dbg!(&(code, debt_swap_effects));
       let debt_type = &self.asset_types
                            .get(&code)
                            .or_else(|| txn.new_asset_codes.get(&code))
@@ -880,7 +881,7 @@ impl LedgerUpdate<ChaChaRng> for LedgerState {
       //TODO(joe/nathan): This ordering feels bad -- the txn log should probably be write-ahead,
       //but the state commitment you need doesn't exist yet! maybe these should be two different
       //logs, or the writing should be staggered in some way.
-      if let Some(txn_log_fd) = &mut self.txn_log {
+      if let Some((_, txn_log_fd)) = &mut self.txn_log {
         writeln!(txn_log_fd,"{}",serde_json::to_string(&LoggedBlock { block: block_txns, state: self.status.state_commitment_data.clone().unwrap() }).unwrap())
               .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other,e)).unwrap();
         txn_log_fd.sync_data().unwrap();
@@ -972,9 +973,9 @@ impl LedgerUpdate<ChaChaRng> for LedgerStateChecker {
     // The transaction must match its spot in the txn merkle tree
     let txn_sid = self.0.status.next_txn.0 + block.txns.len();
     let proof = self.0.txn_merkle.get_proof(txn_sid as u64, 0)?;
-    dbg!(&txn_sid);
-    dbg!(&txn);
-    dbg!(&proof);
+    // dbg!(&txn_sid);
+    // dbg!(&txn);
+    // dbg!(&proof);
     if !proof.is_valid_proof(txn.txn.hash(TxnSID(txn_sid))) {
       return Err(PlatformError::CheckedReplayError(format!("{}:{}:{}",
                                                            std::file!(),
@@ -1050,9 +1051,9 @@ impl LedgerStateChecker {
       (txns_in_block_hash, block_hash)
     };
 
-    dbg!(&self.0.block_merkle.state());
-    dbg!(&proof);
-    dbg!(&block_merkle_hash);
+    // dbg!(&self.0.block_merkle.state());
+    // dbg!(&proof);
+    // dbg!(&block_merkle_hash);
     if !proof.is_valid_proof(block_merkle_hash) {
       return Err(PlatformError::CheckedReplayError(format!("{}:{}:{}",
                                                            std::file!(),
@@ -1068,8 +1069,8 @@ impl LedgerStateChecker {
                                                            std::column!())));
     }
 
-    dbg!(&comm.txo_count);
-    dbg!(&self.0.status.next_txo.0);
+    // dbg!(&comm.txo_count);
+    // dbg!(&self.0.status.next_txo.0);
     if comm.txo_count != self.0.status.next_txo.0 + block.txos.iter().flatten().count() as u64 {
       return Err(PlatformError::CheckedReplayError(format!("{}:{}:{}",
                                                            std::file!(),
@@ -1134,6 +1135,10 @@ impl LedgerState {
   #[allow(non_snake_case)]
   pub fn TESTING_get_status(&self) -> &LedgerStatus {
     &self.status
+  }
+
+  pub fn txn_log_path(&self) -> Option<PathBuf> {
+    Some(self.txn_log.as_ref()?.0.clone())
   }
 
   // Create a ledger for use by a unit test.
@@ -1343,12 +1348,13 @@ impl LedgerState {
                                txn_merkle: LedgerState::init_merkle_log(txn_merkle_path, true)?,
                                blocks: Vec::new(),
                                utxo_map: LedgerState::init_utxo_map(utxo_map_path, true)?,
-                               txn_log: Some(std::fs::OpenOptions::new().create_new(true)
-                                                                        .append(true)
-                                                                        .open(txn_path)?),
+                               txn_log: Some((txn_path.into(),
+                                              std::fs::OpenOptions::new().create_new(true)
+                                                                         .append(true)
+                                                                         .open(txn_path)?)),
                                block_ctx: Some(BlockEffect::new()) };
 
-    ledger.txn_log.as_ref().unwrap().sync_all()?;
+    ledger.txn_log.as_ref().unwrap().1.sync_all()?;
 
     Ok(ledger)
   }
@@ -1383,9 +1389,9 @@ impl LedgerState {
     };
 
     let blocks = LedgerState::load_transaction_log(txn_path)?;
-    dbg!(&blocks);
-    let txn_log = std::fs::OpenOptions::new().append(true).open(txn_path)?;
-    dbg!(&txn_log);
+    // dbg!(&blocks);
+    let txn_log = (txn_path.into(), std::fs::OpenOptions::new().append(true).open(txn_path)?);
+    // dbg!(&txn_log);
     let mut ledger =
       LedgerStateChecker(LedgerState { status: LedgerStatus::new(block_merkle_path,
                                                                  air_path,
@@ -1405,10 +1411,10 @@ impl LedgerState {
                                        txn_log: None,
                                        block_ctx: Some(BlockEffect::new()) });
 
-    dbg!(blocks.len());
+    // dbg!(blocks.len());
     for (ix, logged_block) in blocks.into_iter().enumerate() {
-      dbg!(&ix);
-      dbg!(&logged_block);
+      // dbg!(&ix);
+      // dbg!(&logged_block);
       let (comm, block) = (logged_block.state, logged_block.block);
       let prev_commitment = match &ledger.0.status.state_commitment_data {
         Some(commitment_data) => commitment_data.compute_commitment(),
@@ -1474,7 +1480,7 @@ impl LedgerState {
     };
 
     let blocks = LedgerState::load_transaction_log(txn_path)?;
-    let txn_log = std::fs::OpenOptions::new().append(true).open(txn_path)?;
+    let txn_log = (txn_path.into(), std::fs::OpenOptions::new().append(true).open(txn_path)?);
     let mut ledger =
       LedgerState { status: LedgerStatus::new(block_merkle_path,
                                               air_path,
