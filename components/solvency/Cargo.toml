@@ -20,4 +20,5 @@ serde = "1.0"
 serde_json = "1.0"
 submission_server = { path = "../submission_server" }
 txn_builder = { path = "../txn_builder" }
+txn_cli = { path = "../txn_cli" }
 zei = { git = "ssh://git@github.com/findoraorg/zei", tag = "v0.0.2-4" }

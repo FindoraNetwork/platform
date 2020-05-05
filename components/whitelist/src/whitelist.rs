@@ -51,7 +51,7 @@ mod tests {
   use ledger_standalone::LedgerStandalone;
   use rand_chacha::ChaChaRng;
   use rand_core::SeedableRng;
-  use txn_cli::txn_lib::define_issue_transfer_and_get_utxo_and_blind;
+  use txn_cli::txn_lib::define_issue_transfer_and_get_utxo_and_blinds;
   use zei::xfr::asset_record::AssetRecordType;
   use zei::xfr::sig::XfrKeyPair;
 
@@ -84,7 +84,7 @@ mod tests {
 
     // Transfer the third asset, and get the UTXO SID and asset type blind
     let prng = &mut ChaChaRng::from_entropy();
-    let (utxo_2, blind_2) = define_issue_transfer_and_get_utxo_and_blind(&XfrKeyPair::generate(&mut ChaChaRng::from_entropy()),
+    let (utxo_2, _, blind_2) = define_issue_transfer_and_get_utxo_and_blinds(&XfrKeyPair::generate(&mut ChaChaRng::from_entropy()),
                                                                       &XfrKeyPair::generate(&mut ChaChaRng::from_entropy()),
                                                                       10,
                                                                       codes[2],
@@ -116,7 +116,7 @@ mod tests {
 
     // Transfer the second and third asset, and get the UTXO SIDs and asset type blinds
     let prng = &mut ChaChaRng::from_entropy();
-    let (utxo_1, _) = define_issue_transfer_and_get_utxo_and_blind(&XfrKeyPair::generate(&mut ChaChaRng::from_entropy()),
+    let (utxo_1, _, _) = define_issue_transfer_and_get_utxo_and_blinds(&XfrKeyPair::generate(&mut ChaChaRng::from_entropy()),
     &XfrKeyPair::generate(&mut ChaChaRng::from_entropy()),
     10,
     codes[1],
@@ -124,7 +124,7 @@ mod tests {
     AssetRecordType::NonConfidentialAmount_ConfidentialAssetType,
     ledger_standalone,
     prng).unwrap();
-    let (_, blind_2) = define_issue_transfer_and_get_utxo_and_blind(&XfrKeyPair::generate(&mut ChaChaRng::from_entropy()),
+    let (_, _, blind_2) = define_issue_transfer_and_get_utxo_and_blinds(&XfrKeyPair::generate(&mut ChaChaRng::from_entropy()),
                                                                       &XfrKeyPair::generate(&mut ChaChaRng::from_entropy()),
                                                                       10,
                                                                       codes[2],
@@ -156,7 +156,7 @@ mod tests {
 
     // Transfer the second and third assets, and get the UTXO SIDs and asset type blinds
     let prng = &mut ChaChaRng::from_entropy();
-    let (_, blind_1) = define_issue_transfer_and_get_utxo_and_blind(&XfrKeyPair::generate(&mut ChaChaRng::from_entropy()),
+    let (_, _, blind_1) = define_issue_transfer_and_get_utxo_and_blinds(&XfrKeyPair::generate(&mut ChaChaRng::from_entropy()),
     &XfrKeyPair::generate(&mut ChaChaRng::from_entropy()),
     10,
     codes[1],
@@ -164,7 +164,7 @@ mod tests {
     AssetRecordType::NonConfidentialAmount_ConfidentialAssetType,
     ledger_standalone,
     prng).unwrap();
-    let (utxo_2, _) = define_issue_transfer_and_get_utxo_and_blind(&XfrKeyPair::generate(&mut ChaChaRng::from_entropy()),
+    let (utxo_2, _, _) = define_issue_transfer_and_get_utxo_and_blinds(&XfrKeyPair::generate(&mut ChaChaRng::from_entropy()),
                                                                       &XfrKeyPair::generate(&mut ChaChaRng::from_entropy()),
                                                                       10,
                                                                       codes[2],
@@ -204,7 +204,7 @@ mod tests {
 
     // Transfer the second and third assets, and get the UTXO SIDs and asset type blinds
     let prng = &mut ChaChaRng::from_entropy();
-    let (utxo_1, blind_1) = define_issue_transfer_and_get_utxo_and_blind(&issuer_key_pair,
+    let (utxo_1, _, blind_1) = define_issue_transfer_and_get_utxo_and_blinds(&issuer_key_pair,
                                                                      &recipient_key_pair,
                                                                      10,
                                                                      codes[1],
@@ -213,7 +213,7 @@ mod tests {
                                                                      ledger_standalone,
                                                                      prng).unwrap();
 
-    let (utxo_2, blind_2) = define_issue_transfer_and_get_utxo_and_blind(&issuer_key_pair,
+    let (utxo_2, _, blind_2) = define_issue_transfer_and_get_utxo_and_blinds(&issuer_key_pair,
                                                                       &recipient_key_pair,
                                                                       10,
                                                                       codes[2],
