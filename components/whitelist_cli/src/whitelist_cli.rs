@@ -6,9 +6,6 @@ use ledger::data_model::AssetTypeCode;
 use ledger::error_location;
 use std::fs;
 use whitelist::*;
-// use zei::errors::ZeiError;
-// use zei::serialization::ZeiFromToBytes;
-// use zei::xfr::sig::XfrKeyPair;
 
 /// Path to the data file.
 const WHITELIST_FILE: &str = "whitelist.json";
@@ -100,7 +97,7 @@ fn main() -> Result<(), PlatformError> {
         .required(true)
         .takes_value(true)
         .help("Asset type code to add to the whitelist.")))
-    .subcommand(SubCommand::with_name("prove_and_verify_whitelist")
+    .subcommand(SubCommand::with_name("prove_and_verify_membership")
       .arg(Arg::with_name("index")
         .short("i")
         .long("index")
@@ -127,11 +124,14 @@ fn main() -> Result<(), PlatformError> {
 #[cfg(test)]
 mod tests {
   use super::*;
+  use ledger::data_model::AssetRules;
   use ledger_standalone::LedgerStandalone;
-  // use rand_chacha::ChaChaRng;
-  // use rand_core::SeedableRng;
-  // use std::io::{self, Write};
+  use rand_chacha::ChaChaRng;
+  use rand_core::SeedableRng;
+  use std::io::{self, Write};
   use std::process::{Command, Output};
+  use txn_cli::txn_lib::define_issue_transfer_and_get_utxo_and_blinds;
+  use zei::xfr::asset_record::AssetRecordType;
   use zei::xfr::sig::XfrKeyPair;
 
   #[cfg(debug_assertions)]
@@ -140,138 +140,123 @@ mod tests {
   const COMMAND: &str = "../../target/release/whitelist_cli";
 
   // Command to add an asset type code to the whitelist
-  fn add_member_cmd(code: &str, rate: &str) -> io::Result<Output> {
+  fn add_member_cmd(code: &str) -> io::Result<Output> {
     Command::new(COMMAND).arg("add_member")
                          .args(&["--code", code])
                          .output()
   }
 
   // Command to add an asset or a liability
-  fn add_asset_or_liability_cmd(add_type: &str,
-                                key_file: &str,
-                                code: &str,
-                                utxo: &str)
-                                -> io::Result<Output> {
-    Command::new(COMMAND).arg("add_asset_or_liability")
-                         .args(&["--key_file", key_file])
-                         .args(&["--type", add_type])
-                         .args(&["--code", code])
+  fn prove_and_verify_membership(index: &str, utxo: &str, blind: &str) -> io::Result<Output> {
+    Command::new(COMMAND).arg("prove_and_verify_membership")
+                         .args(&["--index", index])
                          .args(&["--utxo", utxo])
+                         .args(&["--blind", blind])
                          .output()
   }
 
-  //   #[test]
-  //   fn test_cmd() {
-  //     // Start the standalone ledger
-  //     let ledger_standalone = &LedgerStandalone::new();
-  //     ledger_standalone.poll_until_ready().unwrap();
+  // Ignoring test below as it fail due to the below validation in ledger/src/store/effects.rs:
+  //
+  // if let XfrAssetType::Confidential(_) = out.asset_type {
+  //   return Err(PlatformError::InputsError(error_location!()));
+  // }
+  //
+  // To test the functionalities of whitelist proof:
+  // * Comment out the validation in ledger/src/store/effects.rs
+  // * Run the test with -- --ignored
+  // * Verify the test results
+  // * Restore the validation in ledger/src/store/effects.rs
 
-  //     // Generate asset codes and key pairs
-  //     let codes = vec![AssetTypeCode::gen_random(),
-  //                      AssetTypeCode::gen_random(),
-  //                      AssetTypeCode::gen_random(),
-  //                      AssetTypeCode::gen_random(),
-  //                      AssetTypeCode::gen_random()];
-  //     let issuer_key_pair = &XfrKeyPair::generate(&mut ChaChaRng::from_entropy());
-  //     let receipient_key_pair = XfrKeyPair::generate(&mut ChaChaRng::from_entropy());
+  #[test]
+  #[ignore]
+  fn test_cmd() {
+    // Start the standalone ledger
+    let ledger_standalone = &LedgerStandalone::new();
+    ledger_standalone.poll_until_ready().unwrap();
 
-  //     // Define, issue and transfer assets
-  //     test_define_and_submit_multiple(issuer_key_pair, codes, ledger_standalone).unwrap();
-  //     let code_0 = &codes.0.to_base64();
-  //     let code_1 = &codes.1.to_base64();
-  //     let code_2 = &codes.2.to_base64();
-  //     let (utxo_0, utxo_1, utxo_2, utxo_3, utxo_4, utxo_5, utxo_6) =
-  //       issue_transfer_and_get_utxos(issuer_key_pair,
-  //                                    &receipient_key_pair,
-  //                                    codes,
-  //                                    ledger_standalone);
+    // Generate asset codes and key pairs
+    let codes = vec![AssetTypeCode::gen_random(),
+                     AssetTypeCode::gen_random(),
+                     AssetTypeCode::gen_random()];
+    let issuer_key_pair = &XfrKeyPair::generate(&mut ChaChaRng::from_entropy());
+    let receipient_key_pair = XfrKeyPair::generate(&mut ChaChaRng::from_entropy());
 
-  //     // Set asset conversion rates
-  //     let output = set_rate_cmd(code_0, "1").expect("Failed to set conversion rate.");
-  //     io::stdout().write_all(&output.stdout).unwrap();
-  //     io::stdout().write_all(&output.stderr).unwrap();
-  //     assert!(output.status.success());
+    // Define, issue and transfer assets
+    let mut utxos = Vec::new();
+    let mut blinds = Vec::new();
+    for code in codes.iter() {
+      let (utxo, _, code_blind) = define_issue_transfer_and_get_utxo_and_blinds(&issuer_key_pair,
+                                                    &receipient_key_pair,
+                                                    10,
+                                                    *code,
+                                                    AssetRules::default(),
+                                                    AssetRecordType::NonConfidentialAmount_ConfidentialAssetType,
+                                                    &ledger_standalone,
+                                                    &mut ChaChaRng::from_entropy()).unwrap();
+      let utxo_str = format!("{}", utxo);
+      let blind_str =
+        serde_json::to_string(&code_blind).or_else(|_| Err(PlatformError::SerializationError))
+                                          .unwrap();
+      utxos.push(utxo_str);
+      blinds.push(blind_str);
+    }
 
-  //     let output = set_rate_cmd(code_1, "100").expect("Failed to set conversion rate.");
-  //     io::stdout().write_all(&output.stdout).unwrap();
-  //     io::stdout().write_all(&output.stderr).unwrap();
-  //     assert!(output.status.success());
+    // Adds the assets to the whitelist
+    let output = add_member_cmd(&codes[0].to_base64()).expect("Failed to set conversion rate.");
+    io::stdout().write_all(&output.stdout).unwrap();
+    io::stdout().write_all(&output.stderr).unwrap();
+    assert!(output.status.success());
 
-  //     let output = set_rate_cmd(code_2, "1").expect("Failed to set conversion rate.");
-  //     io::stdout().write_all(&output.stdout).unwrap();
-  //     io::stdout().write_all(&output.stderr).unwrap();
-  //     assert!(output.status.success());
+    let output = add_member_cmd(&codes[1].to_base64()).expect("Failed to set conversion rate.");
+    io::stdout().write_all(&output.stdout).unwrap();
+    io::stdout().write_all(&output.stderr).unwrap();
+    assert!(output.status.success());
 
-  //     // Add assets and liabilities such that total asset amount > total liabiliity amount
-  //     let output =
-  //       add_asset_or_liability_cmd("public_asset", key_file, code_0, &utxo_0).expect("Failed to add public asset.");
-  //     io::stdout().write_all(&output.stdout).unwrap();
-  //     io::stdout().write_all(&output.stderr).unwrap();
-  //     assert!(output.status.success());
+    let output = add_member_cmd(&codes[2].to_base64()).expect("Failed to set conversion rate.");
+    io::stdout().write_all(&output.stdout).unwrap();
+    io::stdout().write_all(&output.stderr).unwrap();
+    assert!(output.status.success());
 
-  //     let output =
-  //       add_asset_or_liability_cmd("hidden_asset", key_file, code_1, &utxo_1).expect("Failed to add hidden asset.");
-  //     io::stdout().write_all(&output.stdout).unwrap();
-  //     io::stdout().write_all(&output.stderr).unwrap();
-  //     assert!(output.status.success());
+    // Prove and verify the whitelist membership with the incorrect index
+    let output = prove_and_verify_membership("0", &utxos[1], &blinds[1])
+                           .expect("Failed to prove and verify the whitelist membership.");
+    io::stdout().write_all(&output.stdout).unwrap();
+    io::stdout().write_all(&output.stderr).unwrap();
+    assert!(!output.status.success());
 
-  //     let output =
-  //     add_asset_or_liability_cmd("hidden_asset", key_file, code_2, &utxo_2).expect("Failed to add hidden asset.");
-  //     io::stdout().write_all(&output.stdout).unwrap();
-  //     io::stdout().write_all(&output.stderr).unwrap();
-  //     assert!(output.status.success());
+    // Prove and verify the whitelist membership with the incorrect UTXO SID
+    let output = prove_and_verify_membership("1", &utxos[0], &blinds[1])
+                           .expect("Failed to prove and verify the whitelist membership.");
+    io::stdout().write_all(&output.stdout).unwrap();
+    io::stdout().write_all(&output.stderr).unwrap();
+    assert!(!output.status.success());
 
-  //     let output = add_asset_or_liability_cmd("public_liability", key_file, code_0, &utxo_3)
-  //                                       .expect("Failed to add public liability.");
-  //     io::stdout().write_all(&output.stdout).unwrap();
-  //     io::stdout().write_all(&output.stderr).unwrap();
-  //     assert!(output.status.success());
+    // Prove and verify the whitelist membership with the incorrect blinding factor for the asset type code
+    let output = prove_and_verify_membership("1", &utxos[1], &blinds[0])
+        .expect("Failed to prove and verify the whitelist membership.");
+    io::stdout().write_all(&output.stdout).unwrap();
+    io::stdout().write_all(&output.stderr).unwrap();
+    assert!(!output.status.success());
 
-  //     let output = add_asset_or_liability_cmd("hidden_liability", key_file, code_1, &utxo_4)
-  //                                       .expect("Failed to add hidden liability.");
-  //     io::stdout().write_all(&output.stdout).unwrap();
-  //     io::stdout().write_all(&output.stderr).unwrap();
-  //     assert!(output.status.success());
+    // Prove and verify the whitelist membership with the correct information
+    let output = prove_and_verify_membership("0", &utxos[0], &blinds[0])
+                           .expect("Failed to prove and verify the whitelist membership.");
+    io::stdout().write_all(&output.stdout).unwrap();
+    io::stdout().write_all(&output.stderr).unwrap();
+    assert!(output.status.success());
 
-  //     // Prove and verify solvency
-  //     let output = Command::new(COMMAND).arg("prove_and_verify_solvency")
-  //                                       .output()
-  //                                       .expect("Failed to prove and verify solvency.");
-  //     io::stdout().write_all(&output.stdout).unwrap();
-  //     io::stdout().write_all(&output.stderr).unwrap();
-  //     assert!(output.status.success());
+    let output = prove_and_verify_membership("1", &utxos[1], &blinds[1])
+                           .expect("Failed to prove and verify the whitelist membership.");
+    io::stdout().write_all(&output.stdout).unwrap();
+    io::stdout().write_all(&output.stderr).unwrap();
+    assert!(output.status.success());
 
-  //     // Add additional liabilities to make total asset amount < total liabiliity amount
-  //     let output = add_asset_or_liability_cmd("hidden_liability", key_file, code_1, &utxo_5).expect("Failed to add hidden liability.");
-  //     io::stdout().write_all(&output.stdout).unwrap();
-  //     io::stdout().write_all(&output.stderr).unwrap();
-  //     assert!(output.status.success());
+    let output = prove_and_verify_membership("2", &utxos[2], &blinds[2])
+                            .expect("Failed to prove and verify the whitelist membership.");
+    io::stdout().write_all(&output.stdout).unwrap();
+    io::stdout().write_all(&output.stderr).unwrap();
+    assert!(output.status.success());
 
-  //     // Prove and verify solvency
-  //     // Should fail since total asset amount < total liabiliity amount
-  //     let output = Command::new(COMMAND).arg("prove_and_verify_solvency")
-  //                                       .output()
-  //                                       .expect("Failed to prove and verify solvency.");
-  //     io::stdout().write_all(&output.stdout).unwrap();
-  //     io::stdout().write_all(&output.stderr).unwrap();
-  //     assert!(!output.status.success());
-
-  //     // Add additional assets to make total asset amount > total liabiliity amount
-  //     let output =
-  //       add_asset_or_liability_cmd("public_asset", key_file, code_0, &utxo_6).expect("Failed to add public asset.");
-  //     io::stdout().write_all(&output.stdout).unwrap();
-  //     io::stdout().write_all(&output.stderr).unwrap();
-  //     assert!(output.status.success());
-
-  //     // Prove and verify solvency
-  //     let output = Command::new(COMMAND).arg("prove_and_verify_solvency")
-  //                                       .output()
-  //                                       .expect("Failed to prove and verify solvency.");
-  //     io::stdout().write_all(&output.stdout).unwrap();
-  //     io::stdout().write_all(&output.stderr).unwrap();
-  //     assert!(output.status.success());
-
-  //     fs::remove_file("solvency_data.json").unwrap();
-  //     fs::remove_file(key_file).unwrap();
-  //   }
+    fs::remove_file(WHITELIST_FILE).unwrap();
+  }
 }
