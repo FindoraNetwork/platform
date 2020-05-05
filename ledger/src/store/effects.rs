@@ -12,6 +12,7 @@ use rand_core::{CryptoRng, RngCore, SeedableRng};
 use std::collections::{HashMap, HashSet};
 use zei::serialization::ZeiFromToBytes;
 use zei::xfr::lib::verify_xfr_body_no_policies;
+use zei::xfr::sig::XfrPublicKey;
 use zei::xfr::structs::{AssetTracingPolicy, BlindAssetRecord, XfrAmount, XfrAssetType};
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -50,6 +51,8 @@ pub struct TxnEffect {
   pub custom_policy_asset_types: HashMap<AssetTypeCode, TxnCheckInputs>,
   // Updates to the AIR
   pub air_updates: HashMap<String, String>,
+  // Memo updates
+  pub memo_updates: Vec<(AssetTypeCode, XfrPublicKey, Memo)>,
 }
 
 // Internally validates the transaction as well.
@@ -64,6 +67,7 @@ impl TxnEffect {
     let mut txos: Vec<Option<TxOutput>> = Vec::new();
     let mut internally_spent_txos = Vec::new();
     let mut input_txos: HashMap<TxoSID, BlindAssetRecord> = HashMap::new();
+    let mut memo_updates = Vec::new();
     let mut new_asset_codes: HashMap<AssetTypeCode, AssetType> = HashMap::new();
     let mut cosig_keys = HashMap::new();
     let mut new_issuance_nums: HashMap<AssetTypeCode, Vec<u64>> = HashMap::new();
@@ -142,7 +146,7 @@ impl TxnEffect {
                           &Transaction::default())?;
           }
 
-          issuance_keys.insert(code, token.properties.issuer.clone());
+          issuance_keys.insert(code, token.properties.issuer);
           new_asset_codes.insert(code, token);
           new_issuance_nums.insert(code, vec![]);
         }
@@ -198,7 +202,7 @@ impl TxnEffect {
               return Err(PlatformError::InputsError(error_location!()));
             }
           } else {
-            issuance_keys.insert(code, iss.pubkey.clone());
+            issuance_keys.insert(code, iss.pubkey);
           }
           // Increment amounts
           txos.reserve(iss.body.records.len());
@@ -345,7 +349,13 @@ impl TxnEffect {
           for out in trn.body.transfer.outputs.iter() {
             // Until we can distinguish assets that have policies that invoke transfer restrictions
             // from those that don't, no confidential types are allowed
-            if out.asset_type.get_asset_type().is_none() {
+            //
+            // To test the functionalities of whitelist proof:
+            // * Comment out the validation below
+            // * Run the tests in components/whitelist with -- --ignored
+            // * Verify the test results
+            // * Restore the validation below
+            if let XfrAssetType::Confidential(_) = out.asset_type {
               return Err(PlatformError::InputsError(error_location!()));
             }
             if let Some(out_code) = out.asset_type.get_asset_type() {
@@ -374,6 +384,19 @@ impl TxnEffect {
           air_updates.insert(serde_json::to_string(&pk)?,
                              serde_json::to_string(commitment)?);
         }
+        // A memo update is valid iff:
+        // 1) The signature is valid.
+        // 2) The asset type is updatable (checked later).
+        // 3) The signing key is the asset issuer key (checked later).
+        Operation::UpdateMemo(update_memo) => {
+          let pk = update_memo.pubkey;
+          // 1)
+          pk.verify(&serde_json::to_vec(&update_memo.body).unwrap(),
+                    &update_memo.signature)
+            .map_err(|e| PlatformError::ZeiError(error_location!(), e))?;
+
+          memo_updates.push((update_memo.body.asset_type, pk, update_memo.body.new_memo.clone()));
+        }
       } // end -- match op {
       op_idx += 1;
     } // end -- for op in txn.operations.iter() {
@@ -385,6 +408,7 @@ impl TxnEffect {
                    internally_spent_txos,
                    new_asset_codes,
                    new_issuance_nums,
+                   memo_updates,
                    issuance_keys,
                    issuance_amounts,
                    confidential_issuance_types,
@@ -474,6 +498,8 @@ pub struct BlockEffect {
   pub issuance_keys: HashMap<AssetTypeCode, IssuerPublicKey>,
   // Updates to the AIR
   pub air_updates: HashMap<String, String>,
+  // Memo updates
+  pub memo_updates: HashMap<AssetTypeCode, Memo>,
 }
 
 impl BlockEffect {
@@ -522,6 +548,12 @@ impl BlockEffect {
           debug_assert!(txn.issuance_keys.contains_key(&type_code));
         }
       }
+      // Ensure that each asset's memo can only be updated once per block
+      for (type_code, _, _) in txn.memo_updates.iter() {
+        if self.memo_updates.contains_key(&type_code) {
+          return Err(PlatformError::InputsError(error_location!()));
+        }
+      }
     }
 
     // == All validation done, apply `txn` to this block ==
@@ -554,6 +586,10 @@ impl BlockEffect {
     for (addr, data) in txn.air_updates {
       debug_assert!(!self.air_updates.contains_key(&addr));
       self.air_updates.insert(addr, data);
+    }
+
+    for (code, _, memo) in txn.memo_updates {
+      self.memo_updates.insert(code, memo);
     }
 
     Ok(temp_sid)

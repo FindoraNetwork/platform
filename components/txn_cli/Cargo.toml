@@ -14,6 +14,7 @@ path = "src/txn_cli.rs"
 [dependencies]
 clap = "2.33.0"
 credentials = { path = "../../libs/credentials" }
+curve25519-dalek = { version =  "2.0.0", features = ["serde"] }
 dirs = "2.0.2"
 env_logger = "0.6.2"
 exitcode = "1.1.2"
