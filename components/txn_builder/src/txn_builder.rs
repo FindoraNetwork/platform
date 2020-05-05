@@ -546,31 +546,31 @@ impl BuildsTransactions for TransactionBuilder {
 /// Returns the asset record, amount blinds, and type blind.
 pub(crate) fn build_record_and_get_blinds<R: CryptoRng + RngCore>(
   prng: &mut R,
-  asset_record: &AssetRecordTemplate,
+  template: &AssetRecordTemplate,
   identity_proof: Option<ConfidentialAC>)
   -> Result<(AssetRecord, (Scalar, Scalar), Scalar), PlatformError> {
   // Check input consistency:
   // - if no policy, then no identity proof needed
   // - if policy and identity tracking, then identity proof is needed
   // - if policy but no identity tracking, then no identity proof is needed
-  if asset_record.asset_tracking.is_none() && identity_proof.is_some()
-     || asset_record.asset_tracking.is_some()
-        && (asset_record.asset_tracking
-                        .as_ref()
-                        .unwrap()
-                        .identity_tracking
-                        .is_some()
+  if template.asset_tracking.is_none() && identity_proof.is_some()
+     || template.asset_tracking.is_some()
+        && (template.asset_tracking
+                    .as_ref()
+                    .unwrap()
+                    .identity_tracking
+                    .is_some()
             && identity_proof.is_none()
-            || asset_record.asset_tracking
-                           .as_ref()
-                           .unwrap()
-                           .identity_tracking
-                           .is_none()
+            || template.asset_tracking
+                       .as_ref()
+                       .unwrap()
+                       .identity_tracking
+                       .is_none()
                && identity_proof.is_some())
   {
     return Err(PlatformError::InputsError(error_location!()));
   }
-  // 1. get ciphertext and proofs from from identity proof structure
+  // 1. get ciphertext and proofs from identity proof structure
   let pc_gens = PublicParams::new().pc_gens;
   let (attr_ctext, reveal_proof) = match identity_proof {
     None => (None, None),
@@ -581,11 +581,12 @@ pub(crate) fn build_record_and_get_blinds<R: CryptoRng + RngCore>(
   };
   // 2. Use record template and ciphertexts to build open asset record
   let (open_asset_record, asset_tracing_memo, owner_memo) =
-    build_open_asset_record(prng, &pc_gens, asset_record, attr_ctext);
+    build_open_asset_record(prng, &pc_gens, template, attr_ctext);
   // 3. Return record input containing open asset record, tracking policy, identity reveal proof,
   //    asset_tracer_memo, and owner_memo
+
   Ok((AssetRecord { open_asset_record: open_asset_record.clone(),
-                    tracking_policy: asset_record.asset_tracking.clone(),
+                    tracking_policy: template.asset_tracking.clone(),
                     identity_proof: reveal_proof,
                     asset_tracer_memo: asset_tracing_memo,
                     owner_memo },
@@ -677,14 +678,13 @@ impl TransferOperationBuilder {
   }
 
   /// Adds output to the records, and stores the asset amount blinds and type blind in the blinds parameter passed in.
-  pub fn add_output_and_store_blinds(&mut self,
-                                     asset_record_template: &AssetRecordTemplate,
-                                     credential_record: Option<(&CredUserSecretKey,
-                                             &Credential,
-                                             &ACCommitmentKey)>,
-                                     prng: &mut ChaChaRng,
-                                     blinds: &mut ((Scalar, Scalar), Scalar))
-                                     -> Result<&mut Self, PlatformError> {
+  pub fn add_output_and_store_blinds<R: CryptoRng + RngCore>(
+    &mut self,
+    asset_record_template: &AssetRecordTemplate,
+    credential_record: Option<(&CredUserSecretKey, &Credential, &ACCommitmentKey)>,
+    prng: &mut R,
+    blinds: &mut ((Scalar, Scalar), Scalar))
+    -> Result<&mut Self, PlatformError> {
     if self.transfer.is_some() {
       return Err(PlatformError::InvariantError(Some("Cannot mutate a transfer that has been signed".to_string())));
     }

@@ -18,7 +18,7 @@ pub mod txn_lib {
   use ledger_standalone::LedgerStandalone;
   use log::trace; // Other options: debug, info, warn
   use rand_chacha::ChaChaRng;
-  use rand_core::SeedableRng;
+  use rand_core::{CryptoRng, RngCore, SeedableRng};
   use serde::{Deserialize, Serialize};
   use std::env;
   use std::fs;
@@ -38,7 +38,7 @@ pub mod txn_lib {
   use zei::xfr::sig::{XfrKeyPair, XfrPublicKey};
   use zei::xfr::structs::{
     AssetRecordTemplate, AssetTracerKeyPair, AssetTracerMemo, AssetTracingPolicy, BlindAssetRecord,
-    IdentityRevealPolicy, OpenAssetRecord, OwnerMemo, XfrAssetType,
+    IdentityRevealPolicy, OpenAssetRecord, OwnerMemo, XfrAmount, XfrAssetType,
   };
 
   extern crate exitcode;
@@ -1123,6 +1123,27 @@ pub mod txn_lib {
     Ok(txn_builder)
   }
 
+  /// Defines an asset and submits the transaction with the standalone ledger.
+  pub fn define_and_submit(issuer_key_pair: &XfrKeyPair,
+                           code: AssetTypeCode,
+                           rules: AssetRules,
+                           ledger_standalone: &LedgerStandalone)
+                           -> Result<(), PlatformError> {
+    // Define the asset
+    let mut txn_builder = TransactionBuilder::default();
+    let txn = txn_builder.add_operation_create_asset(issuer_key_pair,
+                                                     Some(code),
+                                                     rules,
+                                                     "",
+                                                     PolicyChoice::Fungible())?
+                         .transaction();
+
+    // Submit the transaction
+    ledger_standalone.submit_transaction(&txn);
+
+    Ok(())
+  }
+
   #[allow(clippy::too_many_arguments)]
   /// Issues and transfers asset.
   /// # Arguments
@@ -1196,15 +1217,18 @@ pub mod txn_lib {
     Ok(txn_builder)
   }
 
-  /// Issues and transfers an asset, submits the transactio with the standalone ledger, and get the UTXO SID and asset type blind.
-  pub fn issue_transfer_and_get_utxo_and_blind(issuer_key_pair: &XfrKeyPair,
-                                               recipient_key_pair: &XfrKeyPair,
-                                               amount: u64,
-                                               code: AssetTypeCode,
-                                               record_type: AssetRecordType,
-                                               ledger_standalone: &LedgerStandalone,
-                                               mut prng: &mut ChaChaRng)
-                                               -> Result<(u64, Scalar), PlatformError> {
+  /// Issues and transfers an asset, submits the transactio with the standalone ledger, and get the UTXO SID, amount blinds and type blind.
+  #[allow(clippy::too_many_arguments)]
+  pub fn issue_transfer_and_get_utxo_and_blinds<R: CryptoRng + RngCore>(
+    issuer_key_pair: &XfrKeyPair,
+    recipient_key_pair: &XfrKeyPair,
+    amount: u64,
+    code: AssetTypeCode,
+    record_type: AssetRecordType,
+    sequence_number: u64,
+    mut prng: &mut R,
+    ledger_standalone: &LedgerStandalone)
+    -> Result<(u64, (Scalar, Scalar), Scalar), PlatformError> {
     // Issue and transfer the asset
     let pc_gens = PublicParams::new().pc_gens;
     let input_template = AssetRecordTemplate::with_no_asset_tracking(amount, code.val, AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType, issuer_key_pair.get_pk());
@@ -1216,7 +1240,11 @@ pub mod txn_lib {
                                                                       recipient_key_pair.get_pk());
     let blinds = &mut ((Scalar::default(), Scalar::default()), Scalar::default());
     let xfr_op = TransferOperationBuilder::new().add_input(TxoRef::Relative(0),
-                                                           open_blind_asset_record(&input_blind_asset_record, &None, issuer_key_pair.get_sk_ref()).map_err(|e| PlatformError::ZeiError(error_location!(), e))?,
+                                                           open_blind_asset_record(&input_blind_asset_record,
+                                                                                   &None,
+                                                                                   issuer_key_pair.get_sk_ref()).map_err(|e| {
+                                                                                     PlatformError::ZeiError(error_location!(), e)
+                                                                                   })?,
                                                            None,
                                                            amount)?
                                                 .add_output_and_store_blinds(&output_template, None, prng, blinds)?.balance()?
@@ -1227,45 +1255,40 @@ pub mod txn_lib {
     let mut txn_builder = TransactionBuilder::default();
     let txn = txn_builder.add_operation_issue_asset(issuer_key_pair,
                                                     &code,
-                                                    1,
+                                                    sequence_number,
                                                     &[(TxOutput(input_blind_asset_record), None)],
                                                     None)?
                          .add_operation(xfr_op)
                          .transaction();
 
     // Submit the transaction, and get the UTXO and asset type blind
-    Ok((ledger_standalone.submit_transaction_and_fetch_utxos(&txn)[0].0, blinds.1))
+    Ok((ledger_standalone.submit_transaction_and_fetch_utxos(&txn)[0].0, blinds.0, blinds.1))
   }
 
   /// Defines, issues and transfers an asset, submits the transactions with the standalone ledger, and get the UTXO SID and asset type blind.
   #[allow(clippy::too_many_arguments)]
-  pub fn define_issue_transfer_and_get_utxo_and_blind(issuer_key_pair: &XfrKeyPair,
-                                                      recipient_key_pair: &XfrKeyPair,
-                                                      amount: u64,
-                                                      code: AssetTypeCode,
-                                                      rules: AssetRules,
-                                                      record_type: AssetRecordType,
-                                                      ledger_standalone: &LedgerStandalone,
-                                                      prng: &mut ChaChaRng)
-                                                      -> Result<(u64, Scalar), PlatformError> {
+  pub fn define_issue_transfer_and_get_utxo_and_blinds<R: CryptoRng + RngCore>(
+    issuer_key_pair: &XfrKeyPair,
+    recipient_key_pair: &XfrKeyPair,
+    amount: u64,
+    code: AssetTypeCode,
+    rules: AssetRules,
+    record_type: AssetRecordType,
+    ledger_standalone: &LedgerStandalone,
+    prng: &mut R)
+    -> Result<(u64, (Scalar, Scalar), Scalar), PlatformError> {
     // Define the asset
-    let mut txn_builder = TransactionBuilder::default();
-    let txn = txn_builder.add_operation_create_asset(issuer_key_pair,
-                                                     Some(code),
-                                                     rules,
-                                                     "",
-                                                     PolicyChoice::Fungible())?
-                         .transaction();
-    ledger_standalone.submit_transaction(&txn);
+    define_and_submit(issuer_key_pair, code, rules, ledger_standalone)?;
 
     // Issue and transfer the asset, and get the UTXO SID and asset type blind
-    issue_transfer_and_get_utxo_and_blind(issuer_key_pair,
-                                          recipient_key_pair,
-                                          amount,
-                                          code,
-                                          record_type,
-                                          ledger_standalone,
-                                          prng)
+    issue_transfer_and_get_utxo_and_blinds(issuer_key_pair,
+                                           recipient_key_pair,
+                                           amount,
+                                           code,
+                                           record_type,
+                                           1,
+                                           prng,
+                                           ledger_standalone)
   }
 
   /// Queries a value.
@@ -1324,6 +1347,19 @@ pub mod txn_lib {
         Err(PlatformError::InputsError(error_location!()))
       }
     }
+  }
+
+  /// Queries the UTXO SID to get the amount, either confidential or nonconfidential.
+  pub fn query_utxo_and_get_amount(utxo: u64,
+                                   protocol: &str,
+                                   host: &str)
+                                   -> Result<XfrAmount, PlatformError> {
+    let res = query(protocol, host, QUERY_PORT, "utxo_sid", &format!("{}", utxo))?;
+    let blind_asset_record =
+      serde_json::from_str::<BlindAssetRecord>(&res).or_else(|_| {
+                                                      Err(PlatformError::DeserializationError)
+                                                    })?;
+    Ok(blind_asset_record.amount)
   }
 
   /// Submits a transaction.
