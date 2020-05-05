@@ -196,11 +196,16 @@ fn trace_and_verify_asset(id: &str, memo_file: &str, expected_amount: &str) -> i
 }
 
 #[cfg(test)]
-fn trace_credential(id: &str, memo_file: &str, expected_values: &str) -> io::Result<Output> {
+fn trace_credential(id: &str,
+                    memo_file: &str,
+                    attribute: &str,
+                    expected_value: &str)
+                    -> io::Result<Output> {
   Command::new(COMMAND).args(&["asset_issuer", "--id", id])
                        .arg("trace_credential")
                        .args(&["--memo_file", memo_file])
-                       .args(&["--expected_values", expected_values])
+                       .args(&["--attribute", attribute])
+                       .args(&["--expected_value", expected_value])
                        .output()
 }
 
@@ -989,7 +994,16 @@ fn test_request_fulfill_and_pay_loan_with_args() {
 
   // Trace the credential associated with the first loan
   ledger_standalone.poll_until_ready().unwrap();
-  let output = trace_credential("0", memo_file, "650").expect("Failed to trace the credential");
+  let output =
+    trace_credential("0", memo_file, "min_income", "1000").expect("Failed to trace the credential");
+
+  io::stdout().write_all(&output.stdout).unwrap();
+  io::stdout().write_all(&output.stderr).unwrap();
+
+  assert!(!output.status.success());
+
+  ledger_standalone.poll_until_ready().unwrap();
+  let output = trace_credential("0", memo_file, "min_credit_score", "650").expect("Failed to trace the credential");
 
   io::stdout().write_all(&output.stdout).unwrap();
   io::stdout().write_all(&output.stderr).unwrap();
