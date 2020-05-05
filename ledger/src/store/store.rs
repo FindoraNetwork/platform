@@ -1187,17 +1187,20 @@ impl LedgerState {
 
   // TODO(joe): Make this an iterator of some sort so that we don't have to load the whole log
   // into memory
-  fn load_transaction_log(path: &str) -> Result<Vec<LoggedBlock>, std::io::Error> {
+  fn load_transaction_log(path: &str) -> Result<Vec<LoggedBlock>, PlatformError> {
     let file = File::open(path)?;
     let reader = BufReader::new(file);
     let mut v = Vec::new();
     for l in reader.lines() {
-      match serde_json::from_str::<LoggedBlock>(&l?) {
+      let l = l?;
+      match serde_json::from_str::<LoggedBlock>(&l) {
         Ok(next_block) => {
           v.push(next_block);
         }
         Err(_) => {
-          break;
+          if l != "" {
+            return Err(PlatformError::DeserializationError);
+          }
         }
       }
     }
@@ -1453,7 +1456,7 @@ impl LedgerState {
                        utxo_map_path: &str,
                        signing_key_path: Option<&str>,
                        prng_seed: Option<[u8; 32]>)
-                       -> Result<LedgerState, std::io::Error> {
+                       -> Result<LedgerState, PlatformError> {
     let mut prng = prng_seed.map(rand_chacha::ChaChaRng::from_seed)
                             .unwrap_or_else(ChaChaRng::from_entropy);
     let signing_key = match signing_key_path {
@@ -1537,21 +1540,24 @@ impl LedgerState {
     // and it being corrupted
     LedgerState::load_from_log(&block_merkle, &air, &txn_merkle, &txn_log,
                 &utxo_map, Some(sig_key_file), None)
-    .or_else(|_| LedgerState::load_checked_from_log(&block_merkle, &air, &txn_merkle, &txn_log,
-                &utxo_map, Some(sig_key_file), None))
-              .or_else(|_| {
-                let ret = LedgerState::new(&block_merkle, &air, &txn_merkle, &txn_log,
-                  &utxo_map, None, None)?;
+    .or_else(|e| {
+        log::info!("Replaying without merkle trees failed: {}",e);
+        LedgerState::load_checked_from_log(&block_merkle, &air, &txn_merkle, &txn_log,
+                &utxo_map, Some(sig_key_file), None)
+    }).or_else(|e| {
+        log::info!("Checking log against merkle trees failed: {}",e);
+        let ret = LedgerState::new(&block_merkle, &air, &txn_merkle, &txn_log,
+            &utxo_map, None, None)?;
 
-                {
-                  let file = File::create(sig_key_file)?;
-                  let mut writer = BufWriter::new(file);
+        {
+            let file = File::create(sig_key_file)?;
+            let mut writer = BufWriter::new(file);
 
-                  bincode::serialize_into::<&mut BufWriter<File>, XfrKeyPair>(&mut writer, &ret.signing_key).map_err(|_| PlatformError::SerializationError)?;
-                }
+            bincode::serialize_into::<&mut BufWriter<File>, XfrKeyPair>(&mut writer, &ret.signing_key).map_err(|_| PlatformError::SerializationError)?;
+        }
 
-                Ok(ret)
-              })
+        Ok(ret)
+    })
   }
 
   // Load a ledger given the paths to the various storage elements.
