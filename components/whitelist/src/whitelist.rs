@@ -66,10 +66,13 @@ mod tests {
   // * Run the tests with -- --ignored
   // * Verify the test results
   // * Restore the validation in ledger/src/store/effects.rs
+  //
+  // (Issue #320)
 
   #[should_panic]
   #[test]
   #[ignore]
+  // (Issue #320)
   fn test_prove_membership_incorrect_index() {
     // Start the standalone ledger
     let ledger_standalone = &LedgerStandalone::new();
@@ -102,6 +105,7 @@ mod tests {
   #[should_panic]
   #[test]
   #[ignore]
+  // (Issue #320)
   fn test_prove_membership_incorrect_utxo() {
     // Start the standalone ledger
     let ledger_standalone = &LedgerStandalone::new();
@@ -142,6 +146,7 @@ mod tests {
   #[should_panic]
   #[test]
   #[ignore]
+  // (Issue #320)
   fn test_prove_membership_incorrect_blind() {
     // Start the standalone ledger
     let ledger_standalone = &LedgerStandalone::new();
@@ -181,6 +186,7 @@ mod tests {
 
   #[test]
   #[ignore]
+  // (Issue #320)
   fn test_prove_and_verify_membership() {
     // Start the standalone ledger
     let ledger_standalone = &LedgerStandalone::new();

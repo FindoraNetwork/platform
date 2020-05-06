@@ -166,6 +166,8 @@ mod tests {
   // * Run the test with -- --ignored
   // * Verify the test results
   // * Restore the validation in ledger/src/store/effects.rs
+  //
+  // (Issue #320)
 
   #[test]
   #[ignore]
