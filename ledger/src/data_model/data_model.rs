@@ -4,11 +4,10 @@ use crate::error_location;
 use crate::policy_script::{Policy, PolicyGlobals, TxnPolicyData};
 use bitmap::SparseMap;
 use chrono::prelude::*;
-use credentials::{CredCommitment, CredIssuerPublicKey, CredPoK};
+use credentials::{CredCommitment, CredIssuerPublicKey, CredPoK, CredUserPublicKey};
 use cryptohash::sha256::Digest as BitDigest;
 use cryptohash::{sha256, HashValue, Proof};
 use errors::PlatformError;
-use itertools::Itertools;
 use rand_chacha::ChaChaRng;
 use rand_core::{CryptoRng, RngCore, SeedableRng};
 use serde::{de::Visitor, Deserialize, Deserializer, Serialize, Serializer};
@@ -19,9 +18,7 @@ use std::hash::{Hash, Hasher};
 use std::marker::PhantomData;
 use zei::xfr::lib::gen_xfr_body;
 use zei::xfr::sig::{XfrKeyPair, XfrPublicKey, XfrSecretKey, XfrSignature};
-use zei::xfr::structs::{
-  AssetRecord, AssetTracingPolicy, BlindAssetRecord, OpenAssetRecord, XfrBody,
-};
+use zei::xfr::structs::{AssetRecord, AssetTracingPolicy, BlindAssetRecord, XfrBody};
 
 pub fn b64enc<T: ?Sized + AsRef<[u8]>>(input: &T) -> String {
   base64::encode_config(input, base64::URL_SAFE)
@@ -242,6 +239,7 @@ impl SignatureRules {
 pub struct AssetRules {
   pub traceable: bool,
   pub transferable: bool,
+  pub updatable: bool,
   pub transfer_multisig_rules: Option<SignatureRules>,
   pub max_units: Option<u64>,
 }
@@ -249,6 +247,7 @@ impl Default for AssetRules {
   fn default() -> Self {
     AssetRules { traceable: false,
                  transferable: true,
+                 updatable: false,
                  max_units: None,
                  transfer_multisig_rules: None }
   }
@@ -267,6 +266,11 @@ impl AssetRules {
 
   pub fn set_transferable(&mut self, transferable: bool) -> &mut Self {
     self.transferable = transferable;
+    self
+  }
+
+  pub fn set_updatable(&mut self, updatable: bool) -> &mut Self {
+    self.updatable = updatable;
     self
   }
 
@@ -384,7 +388,7 @@ pub struct TransferAssetBody {
 impl TransferAssetBody {
   pub fn new<R: CryptoRng + RngCore>(prng: &mut R,
                                      input_refs: Vec<TxoRef>,
-                                     input_records: &[OpenAssetRecord],
+                                     input_records: &[AssetRecord],
                                      input_tracing_policies: Vec<Option<AssetTracingPolicy>>,
                                      output_records: &[AssetRecord],
                                      output_tracing_policies: Vec<Option<AssetTracingPolicy>>)
@@ -392,11 +396,7 @@ impl TransferAssetBody {
     if input_records.is_empty() {
       return Err(PlatformError::InputsError(error_location!()));
     }
-    let in_records =
-      input_records.iter()
-                   .map(|oar| AssetRecord::from_open_asset_record_no_asset_tracking(oar.clone()))
-                   .collect_vec();
-    let note = Box::new(gen_xfr_body(prng, in_records.as_slice(), output_records)
+    let note = Box::new(gen_xfr_body(prng, input_records, output_records)
         .map_err(|e| PlatformError::ZeiError(error_location!(),e))?);
     Ok(TransferAssetBody { inputs: input_refs,
                            input_tracing_policies,
@@ -492,19 +492,31 @@ impl DefineAssetBody {
     Ok(DefineAssetBody { asset: asset_def })
   }
 }
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct UpdateMemoBody {
+  pub new_memo: Memo,
+  pub asset_type: AssetTypeCode,
+}
+
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct AIRAssignBody {
-  pub addr: CredIssuerPublicKey,
+  pub addr: CredUserPublicKey,
   pub data: CredCommitment,
+  pub issuer_pk: CredIssuerPublicKey,
   pub pok: CredPoK,
 }
 
 impl AIRAssignBody {
-  pub fn new(addr: CredIssuerPublicKey,
+  pub fn new(addr: CredUserPublicKey,
              data: CredCommitment,
+             issuer_pk: CredIssuerPublicKey,
              pok: CredPoK)
              -> Result<AIRAssignBody, errors::PlatformError> {
-    Ok(AIRAssignBody { addr, data, pok })
+    Ok(AIRAssignBody { addr,
+                       data,
+                       issuer_pk,
+                       pok })
   }
 }
 
@@ -603,6 +615,24 @@ impl DefineAsset {
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct UpdateMemo {
+  pub body: UpdateMemoBody,
+  pub pubkey: XfrPublicKey,
+  pub signature: XfrSignature,
+}
+
+impl UpdateMemo {
+  pub fn new(update_memo_body: UpdateMemoBody, signing_key: &XfrKeyPair) -> UpdateMemo {
+    let sign = compute_signature(signing_key.get_sk_ref(),
+                                 signing_key.get_pk_ref(),
+                                 &update_memo_body);
+    UpdateMemo { body: update_memo_body,
+                 pubkey: *signing_key.get_pk_ref(),
+                 signature: sign }
+  }
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct AIRAssign {
   pub body: AIRAssignBody,
   pub pubkey: XfrPublicKey,
@@ -626,6 +656,7 @@ pub enum Operation {
   TransferAsset(TransferAsset),
   IssueAsset(IssueAsset),
   DefineAsset(DefineAsset),
+  UpdateMemo(UpdateMemo),
   AIRAssign(AIRAssign),
   // ... etc...
 }

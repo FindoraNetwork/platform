@@ -73,9 +73,9 @@ fn test_create_asset() -> Result<(), PlatformError> {
   let oar1 = open_blind_asset_record(&bar1, &None, keys.get_sk_ref()).unwrap();
   let oar2 = open_blind_asset_record(&bar2, &None, keys.get_sk_ref()).unwrap();
 
-  let op = TransferOperationBuilder::new().add_input(TxoRef::Absolute(txos[0]), oar1, 1000)?
-                                          .add_input(TxoRef::Absolute(txos[1]), oar2, 500)?
-                                          .add_output(&AssetRecordTemplate::with_no_asset_tracking(1500, code.val, NonConfidentialAmount_NonConfidentialAssetType, keys.get_pk()),None)?
+  let op = TransferOperationBuilder::new().add_input(TxoRef::Absolute(txos[0]), oar1, None, 1000)?
+                                          .add_input(TxoRef::Absolute(txos[1]), oar2, None, 500)?
+                                          .add_output(&AssetRecordTemplate::with_no_asset_tracking(1500, code.val, NonConfidentialAmount_NonConfidentialAssetType, keys.get_pk()), None)?
                                           .create(TransferType::Standard)?
                                           .sign(&keys)?
                                           .transaction()?;
@@ -168,7 +168,7 @@ fn test_loan_repayment(loan_amount: u64,
                                                 fiat_code.val,
                                                 NonConfidentialAmount_NonConfidentialAssetType,
                                                 lender_keys.get_pk());
-  let fiat_to_lender_op = xfr_builder.add_input(TxoRef::Relative(1), fiat_oar, loan_amount)?
+  let fiat_to_lender_op = xfr_builder.add_input(TxoRef::Relative(1), fiat_oar, None, loan_amount)?
                                      .add_output(&output_template, None)?
                                      .create(TransferType::Standard)?
                                      .sign(&fiat_issuer_keys)?;
@@ -188,14 +188,16 @@ fn test_loan_repayment(loan_amount: u64,
                                                 debt_code.val,
                                                 NonConfidentialAmount_NonConfidentialAssetType,
                                                 lender_keys.get_pk());
-  let debt_initiation_op =
-    xfr_builder.add_input(TxoRef::Relative(0), fiat_to_borrower_input_oar, loan_amount)?
-               .add_input(TxoRef::Relative(1), debt_oar, loan_amount)?
-               .add_output(&borrower_output_template, None)?
-               .add_output(&lender_output_template, None)?
-               .create(TransferType::Standard)?
-               .sign(&lender_keys)?
-               .sign(&borrower_keys)?;
+  let debt_initiation_op = xfr_builder.add_input(TxoRef::Relative(0),
+                                                 fiat_to_borrower_input_oar,
+                                                 None,
+                                                 loan_amount)?
+                                      .add_input(TxoRef::Relative(1), debt_oar, None, loan_amount)?
+                                      .add_output(&borrower_output_template, None)?
+                                      .add_output(&lender_output_template, None)?
+                                      .create(TransferType::Standard)?
+                                      .sign(&lender_keys)?
+                                      .sign(&borrower_keys)?;
 
   let debt_burned_input_ba = debt_initiation_op.get_output_record(1).unwrap();
   let debt_burned_input_oar =
@@ -217,9 +219,11 @@ fn test_loan_repayment(loan_amount: u64,
                                                 burn_address);
   let repayment_op = xfr_builder.add_input(TxoRef::Relative(0),
                                            debt_burned_input_oar,
+                                           None,
                                            loan_repayment_amount)?
                                 .add_input(TxoRef::Relative(1),
                                            fiat_payment_input_oar,
+                                           None,
                                            fee + loan_repayment_amount)?
                                 .add_output(&loan_repayment_template, None)?
                                 .add_output(&burn_repayment_template, None)?

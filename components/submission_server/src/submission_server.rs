@@ -195,8 +195,14 @@ pub fn txn_log_info(txn: &Transaction) {
               xfr_asset_op.body.num_outputs);
       }
       Operation::AIRAssign(air_assign_op) => {
-        info!("Assigning to AIR: AIR[{:?}] <- {:?}",
-              air_assign_op.body.addr, air_assign_op.body.data);
+        info!("Assigning to AIR: AIR[{}] <- {:?}",
+              serde_json::to_string(&air_assign_op.body.addr).unwrap(),
+              air_assign_op.body.data);
+      }
+      Operation::UpdateMemo(update_memo) => {
+        info!("Updating memo of asset type {} to {}",
+              update_memo.body.asset_type.to_base64(),
+              update_memo.body.new_memo.0);
       }
     };
   }

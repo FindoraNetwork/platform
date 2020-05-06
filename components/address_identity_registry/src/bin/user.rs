@@ -57,7 +57,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
   for attr in attrs {
     map.push((attr.0, attr.1.as_bytes().to_vec()));
   }
-  let user_key_pair = XfrKeyPair::zei_from_bytes(&hex::decode(KEY_PAIR_STR)?);
+  let xfr_key_pair = XfrKeyPair::zei_from_bytes(&hex::decode(KEY_PAIR_STR)?);
   let credential = Credential { signature: sig.clone(),
                                 attributes: map,
                                 issuer_pub_key: resp1.issuer_pk.clone() };
@@ -65,16 +65,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
   if let Ok((commitment, proof, key)) = credential_commit(&mut prng,
                                                           &user_sk,
                                                           &credential,
-                                                          user_key_pair.get_pk_ref().as_bytes())
+                                                          xfr_key_pair.get_pk_ref().as_bytes())
   {
     // Now we store the commitment to this credential at the AIR
     // Build the transaction
-    let user_key_pair = XfrKeyPair::zei_from_bytes(&hex::decode(KEY_PAIR_STR)?);
 
     let mut txn_builder = TransactionBuilder::default();
-    txn_builder.add_operation_air_assign(&user_key_pair,
-                                         resp1.issuer_pk.clone(),
+    txn_builder.add_operation_air_assign(&xfr_key_pair,
+                                         user_pk.clone(),
                                          commitment,
+                                         resp1.issuer_pk.clone(),
                                          proof)?;
 
     // Submit to ledger
@@ -88,7 +88,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     .await?;
 
     match res.error_for_status() {
-      Ok(_res) => (),
+      Ok(_res) => {
+        println!("User: ledger submission succeeded, addr = {}",
+                 serde_json::to_string(&user_pk).unwrap());
+      }
       Err(err) => {
         println!("User: ledger submission failed, error = {:?}", err);
         panic!("Bye")
@@ -147,8 +150,6 @@ mod handlers {
   use crate::shared::{AIRAddressAndPoK, RevealFields};
   use credentials::credential_open_commitment;
   use std::convert::Infallible;
-  use zei::serialization::ZeiFromToBytes;
-  use zei::xfr::sig::XfrKeyPair;
 
   /// POST //reveal/:credname/:bitmap
   pub async fn reveal(credname: String,
@@ -162,7 +163,6 @@ mod handlers {
     let cred = global_state.cred.clone();
     let user_sk = global_state.user_sk.clone();
     let key = global_state.key.clone();
-    let xfr_user_key_pair = XfrKeyPair::zei_from_bytes(&hex::decode(crate::KEY_PAIR_STR).unwrap());
 
     if let Ok(pok) = credential_open_commitment(&mut global_state.prng,
                                                 &user_sk,
@@ -170,7 +170,7 @@ mod handlers {
                                                 &key,
                                                 reveal_fields.fields.as_slice())
     {
-      let address = serde_json::to_string(xfr_user_key_pair.get_pk_ref()).unwrap();
+      let address = serde_json::to_string(&global_state.user_pk.clone()).unwrap();
       let result = AIRAddressAndPoK { addr: address, pok };
       println!("User: reveal success with result = {:?}", &result);
 

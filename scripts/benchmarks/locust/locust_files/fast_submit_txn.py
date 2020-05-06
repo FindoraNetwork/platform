@@ -1,7 +1,10 @@
 import os
 
 from json import dumps, loads
-from locust import HttpLocust, TaskSet, task, constant
+from locust import TaskSet, task, constant
+from locust.contrib.fasthttp import FastHttpLocust
+
+headers = {'content-type': 'application/json'}
 
 class UserBehavior(TaskSet):
     def on_start(self):
@@ -9,11 +12,16 @@ class UserBehavior(TaskSet):
         self.js = []
         self.curr = 0
         self.count = 0
+        self.batch_size = int(os.environ.get('BATCH_SIZE', 1))
         with open(os.environ.get('LOG_FILE', 'test_txnlog_full')) as log_file:
             for line in log_file:
                 self.js.append(line.strip())
                 self.count += 1
         print('UserBehavior: count = {}, json[0]={}'.format(self.count, self.js[0]))
+
+    def on_stop(self):
+        """ on_stop is called when a Locust stop after every task has been scheduled """
+        self.client.post(":8669/force_end_block")
 
     @task(1)
     def global_state(self):
@@ -24,14 +32,14 @@ class UserBehavior(TaskSet):
         self.client.get(":8668/public_key")
 
     @task(1)
-    def submit_txn(self):
-        headers = {'content-type': 'application/json'}
+    def txn_from_file(self):
         self.client.post(":8669/submit_transaction", data=self.js[self.curr], headers=headers)
-        self.client.post(":8669/force_end_block")
         self.curr += 1
+        if self.curr % self.batch_size == 0:
+            self.client.post(":8669/force_end_block")
         if self.curr >= self.count - 1:
             self.curr = 0
 
 class WebsiteUser(HttpLocust):
-  task_set = UserBehavior
-  wait_time = constant(0)
+    task_set = UserBehavior
+    wait_time = constant(0)

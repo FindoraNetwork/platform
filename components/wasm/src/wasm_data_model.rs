@@ -6,9 +6,15 @@ use credentials::{
 use ledger::data_model::{
   TransferType as PlatformTransferType, TxOutput, TxoRef as PlatformTxoRef, TxoSID,
 };
+use rand_chacha::ChaChaRng;
+use rand_core::SeedableRng;
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
-use zei::xfr::structs::{BlindAssetRecord, OwnerMemo as ZeiOwnerMemo};
+use zei::xfr::asset_tracer::gen_asset_tracer_keypair;
+use zei::xfr::structs::{
+  AssetTracerDecKeys, AssetTracerEncKeys, AssetTracerKeyPair as ZeiAssetTracerKeyPair,
+  BlindAssetRecord, OwnerMemo as ZeiOwnerMemo,
+};
 
 #[wasm_bindgen]
 pub struct TxoRef {
@@ -77,6 +83,39 @@ impl TransferType {
 #[wasm_bindgen]
 pub struct ClientAssetRecord {
   pub(crate) output: TxOutput,
+}
+
+#[wasm_bindgen]
+#[derive(Serialize, Deserialize)]
+pub struct AssetTracerKeyPair {
+  pub(crate) keypair: ZeiAssetTracerKeyPair,
+}
+
+#[wasm_bindgen]
+impl AssetTracerKeyPair {
+  pub fn new() -> Self {
+    let mut small_rng = ChaChaRng::from_entropy();
+    AssetTracerKeyPair { keypair: gen_asset_tracer_keypair(&mut small_rng) }
+  }
+}
+impl Default for AssetTracerKeyPair {
+  fn default() -> Self {
+    Self::new()
+  }
+}
+
+impl AssetTracerKeyPair {
+  pub fn get_enc_key(&self) -> &AssetTracerEncKeys {
+    &self.keypair.enc_key
+  }
+
+  pub fn get_dec_key(&self) -> &AssetTracerDecKeys {
+    &self.keypair.dec_key
+  }
+
+  pub fn get_keys(&self) -> &ZeiAssetTracerKeyPair {
+    &self.keypair
+  }
 }
 
 #[wasm_bindgen]
