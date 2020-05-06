@@ -11,12 +11,9 @@ use findora::HasInvariants;
 use rand_core::{CryptoRng, RngCore, SeedableRng};
 use std::collections::{HashMap, HashSet};
 use zei::serialization::ZeiFromToBytes;
-use zei::setup::PublicParams;
 use zei::xfr::lib::verify_xfr_body;
 use zei::xfr::sig::XfrPublicKey;
-use zei::xfr::structs::{
-  AssetTracingPolicies, AssetTracingPolicy, BlindAssetRecord, XfrAmount, XfrAssetType,
-};
+use zei::xfr::structs::{AssetTracingPolicy, BlindAssetRecord, XfrAmount, XfrAssetType};
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct TxnEffect {
@@ -299,25 +296,63 @@ impl TxnEffect {
           }
           // (3)
           // TODO: implement real policies
-          let input_tracing_policies = Vec::new();
+          let mut input_tracing_policies = Vec::new();
           for input_tracing_policy in trn.body.input_tracing_policies.iter() {
-            if let Some(policy) = input_tracing_policy {
-              input_tracing_policies.push(AssetTracingPolicies::from_policy(policy));
+            match input_tracing_policy {
+              Some(policy) => {
+                input_tracing_policies.push(Some(policy));
+              }
+              None => {
+                input_tracing_policies.push(None);
+              }
             }
           }
-          let output_tracing_policies = Vec::new();
+          let mut input_sig_commitments = Vec::new();
+          for input_sig_commitment in trn.body.input_sig_commitments.iter() {
+            match input_sig_commitment {
+              Some(commitment) => {
+                input_sig_commitments.push(Some(commitment));
+              }
+              None => {
+                input_sig_commitments.push(None);
+              }
+            }
+          }
+          let mut output_tracing_policies = Vec::new();
           for output_tracing_policy in trn.body.output_tracing_policies.iter() {
-            if let Some(policy) = output_tracing_policy {
-              output_tracing_policies.push(AssetTracingPolicies::from_policy(policy));
+            match output_tracing_policy {
+              Some(policy) => {
+                output_tracing_policies.push(Some(policy));
+              }
+              None => {
+                output_tracing_policies.push(None);
+              }
             }
           }
+          let mut output_sig_commitments = Vec::new();
+          for output_sig_commitment in trn.body.output_sig_commitments.iter() {
+            match output_sig_commitment {
+              Some(commitment) => {
+                output_sig_commitments.push(Some(commitment));
+              }
+              None => {
+                output_sig_commitments.push(None);
+              }
+            }
+          }
+          println!("here input {:?}", input_tracing_policies.clone());
+          println!("here output {:?}", output_tracing_policies.clone());
           verify_xfr_body(prng,
-                          PublicParams::new(),
                           &trn.body.transfer,
-                          input_tracing_policies,
-                          Vec::new(),
-                          output_tracing_policies,
-                          Vec::new()).map_err(|e| PlatformError::ZeiError(error_location!(), e))?;
+                          &input_tracing_policies[..],
+                          &input_sig_commitments[..],
+                          &output_tracing_policies[..],
+                          &output_sig_commitments[..]).map_err(|e| {
+                                                        PlatformError::ZeiError(error_location!(),
+                                                                                e)
+                                                      })?;
+
+          println!("here platform 355");
 
           for (inp, record) in trn.body.inputs.iter().zip(trn.body.transfer.inputs.iter()) {
             // Until we can distinguish assets that have policies that invoke transfer restrictions

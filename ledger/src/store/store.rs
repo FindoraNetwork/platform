@@ -2031,12 +2031,14 @@ pub mod helpers {
       AssetRecord::from_template_no_identity_tracking(ledger.get_prng(), &ar_template).unwrap();
     let mut transfer =
       TransferAsset::new(TransferAssetBody::new(ledger.get_prng(),
-                             vec![TxoRef::Relative(0)],
-                             &[AssetRecord::from_open_asset_record_no_asset_tracking(open_blind_asset_record(&ba, &owner_memo, &issuer_keys.get_sk_ref()).unwrap())],
-                             Vec::new(),
-                             &[ar.clone()]).unwrap(),
-                             Vec::new(),
-                             TransferType::Standard).unwrap();
+                                                vec![TxoRef::Relative(0)],
+                                                &[AssetRecord::from_open_asset_record_no_asset_tracking(open_blind_asset_record(&ba, &owner_memo, &issuer_keys.get_sk_ref()).unwrap())],
+                                                Vec::new(),
+                                                Vec::new(),
+                                                &[ar.clone()],
+                                                Vec::new(),
+                                                Vec::new()).unwrap(),
+                         TransferType::Standard).unwrap();
 
     transfer.sign(&issuer_keys);
     tx.operations.push(Operation::TransferAsset(transfer));
@@ -2524,7 +2526,11 @@ mod tests {
     let mut transfer = TransferAsset::new(TransferAssetBody::new(ledger.get_prng(),
                                                                  vec![TxoRef::Absolute(txo_sid)],
                                                                  &[input_ar],
-                                                                 &[output_ar]).unwrap(),
+                                                                 Vec::new(),
+                                                                 Vec::new(),
+                                                                 &[output_ar],
+                                                                 Vec::new(),
+                                                                 Vec::new()).unwrap(),
                                           TransferType::Standard).unwrap();
 
     let mut second_transfer = transfer.clone();
@@ -2791,9 +2797,14 @@ mod tests {
 
     // Cant transfer non-transferable asset
     let mut transfer = TransferAsset::new(TransferAssetBody::new(ledger.get_prng(),
-                             vec![TxoRef::Absolute(sid)],
-                             &[AssetRecord::from_open_asset_record_no_asset_tracking(open_blind_asset_record(&bar, &None, &alice.get_sk_ref()).unwrap())],
-                               &[record.clone()]).unwrap(), TransferType::Standard).unwrap();
+                                                                 vec![TxoRef::Absolute(sid)],
+                                                                 &[AssetRecord::from_open_asset_record_no_asset_tracking(open_blind_asset_record(&bar, &None, &alice.get_sk_ref()).unwrap())],
+                                                                 Vec::new(),
+                                                                 Vec::new(),
+                                                                 &[record.clone(),
+                                                                 Vec::new(),
+                                                                 Vec::new()]).unwrap(),
+                                          TransferType::Standard).unwrap();
     transfer.sign(&alice);
     tx.operations.push(Operation::TransferAsset(transfer));
     let effect = TxnEffect::compute_effect(ledger.get_prng(), tx.clone()).unwrap();
@@ -2820,7 +2831,11 @@ mod tests {
     let mut transfer = TransferAsset::new(TransferAssetBody::new(ledger.get_prng(),
                                                                  vec![TxoRef::Relative(0)],
                                                                  &[AssetRecord::from_open_asset_record_no_asset_tracking(ar.open_asset_record)],
-                                                                 &[second_record]).unwrap(),
+                                                                 Vec::new(),
+                                                                 Vec::new(),
+                                                                 &[second_record],
+                                                                 Vec::new(),
+                                                                 Vec::new()).unwrap(),
                                           TransferType::Standard).unwrap();
     transfer.sign(&alice);
     tx.operations.push(Operation::TransferAsset(transfer));
@@ -2972,7 +2987,11 @@ mod tests {
     let mut transfer = TransferAsset::new(TransferAssetBody::new(ledger.get_prng(),
                                                                  vec![TxoRef::Absolute(txo_sid)],
                                                                  &[AssetRecord::from_open_asset_record_no_asset_tracking(input_oar)],
-                                                                 &[output_ar]).unwrap(),
+                                                                 Vec::new(),
+                                                                 Vec::new(),
+                                                                 &[output_ar],
+                                                                 Vec::new(),
+                                                                 Vec::new()).unwrap(),
                                           TransferType::Standard).unwrap();
 
     transfer.sign(&alice);
@@ -3157,10 +3176,15 @@ mod tests {
     let mut tx = Transaction::default();
 
     let mut transfer = TransferAsset::new(TransferAssetBody::new(ledger.get_prng(),
-                             vec![TxoRef::Absolute(fiat_sid), TxoRef::Absolute(debt_sid)],
-                             &[AssetRecord::from_open_asset_record_no_asset_tracking(open_blind_asset_record(&fiat_bar, &None, &lender_key_pair.get_sk_ref()).unwrap()),
-                             AssetRecord::from_open_asset_record_no_asset_tracking(open_blind_asset_record(&debt_bar, &None, &borrower_key_pair.get_sk_ref()).unwrap())],
-                               &[fiat_transfer_record, loan_transfer_record]).unwrap(), TransferType::Standard).unwrap();
+                                          vec![TxoRef::Absolute(fiat_sid), TxoRef::Absolute(debt_sid)],
+                                          &[AssetRecord::from_open_asset_record_no_asset_tracking(open_blind_asset_record(&fiat_bar, &None, &lender_key_pair.get_sk_ref()).unwrap()),
+                                          AssetRecord::from_open_asset_record_no_asset_tracking(open_blind_asset_record(&debt_bar, &None, &borrower_key_pair.get_sk_ref()).unwrap())],
+                                          Vec::new(),
+                                          Vec::new(),
+                                          &[fiat_transfer_record, loan_transfer_record],
+                                          Vec::new(),
+                                          Vec::new()).unwrap(),
+                       TransferType::Standard).unwrap();
     transfer.sign(&lender_key_pair);
     transfer.sign(&borrower_key_pair);
     tx.operations.push(Operation::TransferAsset(transfer));
@@ -3226,10 +3250,14 @@ mod tests {
                                AssetRecord::from_open_asset_record_no_asset_tracking(open_blind_asset_record(&fiat_bar,
                                                        &None,
                                                        &borrower_key_pair.get_sk_ref()).unwrap())],
+                             Vec::new(),
+                             Vec::new(),
                              &[payment_record,
                                burned_debt_record,
                                returned_debt_record,
-                               returned_fiat_record]).unwrap();
+                               returned_fiat_record],
+                             Vec::new(),
+                             Vec::new()).unwrap();
 
     tx.operations
       .push(Operation::TransferAsset(TransferAsset::new(transfer_body,

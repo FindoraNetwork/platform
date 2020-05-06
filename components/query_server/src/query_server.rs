@@ -209,9 +209,9 @@ mod tests {
                                                                    token_code.val,
                                                                    oar.get_record_type(),
                                                                    bob.get_pk());
-    let xfr_op = xfr_builder.add_input(TxoRef::Absolute(transfer_sid), oar, None, amt)
+    let xfr_op = xfr_builder.add_input(TxoRef::Absolute(transfer_sid), oar, None, None, amt)
                             .unwrap()
-                            .add_output(&out_template, None)
+                            .add_output(&out_template, None, None, None)
                             .unwrap()
                             .create(TransferType::Standard)
                             .unwrap()

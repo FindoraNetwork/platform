@@ -16,6 +16,7 @@ use std::collections::{HashMap, HashSet};
 use std::convert::TryFrom;
 use std::hash::{Hash, Hasher};
 use std::marker::PhantomData;
+use zei::api::anon_creds::ACCommitment;
 use zei::xfr::lib::gen_xfr_body;
 use zei::xfr::sig::{XfrKeyPair, XfrPublicKey, XfrSecretKey, XfrSignature};
 use zei::xfr::structs::{AssetRecord, AssetTracingPolicy, BlindAssetRecord, XfrBody};
@@ -377,9 +378,13 @@ pub struct TransferAssetBody {
   pub inputs: Vec<TxoRef>, // Ledger address of inputs
   // Input asset tracing policies
   pub input_tracing_policies: Vec<Option<AssetTracingPolicy>>,
+  // Input signature commitments
+  pub input_sig_commitments: Vec<Option<ACCommitment>>,
   pub num_outputs: usize, // How many output TXOs?
   // Output asset tracing policies
   pub output_tracing_policies: Vec<Option<AssetTracingPolicy>>,
+  // Output signature commitments
+  pub output_sig_commitments: Vec<Option<ACCommitment>>,
   // TODO(joe): we probably don't need the whole XfrNote with input records
   // once it's on the chain
   pub transfer: Box<XfrBody>, // Encrypted transfer note
@@ -390,8 +395,10 @@ impl TransferAssetBody {
                                      input_refs: Vec<TxoRef>,
                                      input_records: &[AssetRecord],
                                      input_tracing_policies: Vec<Option<AssetTracingPolicy>>,
+                                     input_sig_commitments: Vec<Option<ACCommitment>>,
                                      output_records: &[AssetRecord],
-                                     output_tracing_policies: Vec<Option<AssetTracingPolicy>>)
+                                     output_tracing_policies: Vec<Option<AssetTracingPolicy>>,
+                                     output_sig_commitments: Vec<Option<ACCommitment>>)
                                      -> Result<TransferAssetBody, errors::PlatformError> {
     if input_records.is_empty() {
       return Err(PlatformError::InputsError(error_location!()));
@@ -400,9 +407,11 @@ impl TransferAssetBody {
         .map_err(|e| PlatformError::ZeiError(error_location!(),e))?);
     Ok(TransferAssetBody { inputs: input_refs,
                            input_tracing_policies,
+                           input_sig_commitments,
                            num_outputs: output_records.len(),
                            output_tracing_policies,
-                           transfer: note })
+                           transfer: note,
+                           output_sig_commitments })
   }
 
   /// Computes a body signature. A body signature represents consent to some part of the asset transfer. If an

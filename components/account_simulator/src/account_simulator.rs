@@ -609,7 +609,11 @@ impl InterpretAccounts<PlatformError> for LedgerAccounts {
           TransferAssetBody::new(self.ledger.get_prng(),
                                  to_use.iter().cloned().map(TxoRef::Absolute).collect(),
                                  src_records.as_slice(),
-                                 all_outputs.as_slice()).unwrap();
+                                 Vec::new(),
+                                 Vec::new(),
+                                 all_outputs.as_slice(),
+                                 Vec::new(),
+                                 Vec::new()).unwrap();
 
         let mut owners_memos = transfer_body.transfer.owners_memos.clone();
         // dbg!(&transfer_body);
@@ -909,7 +913,11 @@ impl InterpretAccounts<PlatformError> for OneBigTxnAccounts {
                                                          .map(|x| TxoRef::Relative(x as u64))
                                                          .collect(),
                                                    src_records.as_slice(),
-                                                   all_outputs.as_slice()).unwrap();
+                                                   Vec::new(),
+                                                   Vec::new(,
+                                                   all_outputs.as_slice(),
+                                                   Vec::new(),
+                                                   Vec::new().unwrap();
         let owners_memos = transfer_body.transfer.owners_memos.clone();
         // dbg!(&transfer_body);
         let transfer_sig = TransferBodySignature { address: XfrAddress { key: *src_pub },
@@ -1312,7 +1320,11 @@ impl InterpretAccounts<PlatformError> for LedgerStandaloneAccounts {
           TransferAssetBody::new(&mut self.prng,
                                  to_use.iter().cloned().map(TxoRef::Absolute).collect(),
                                  src_records.as_slice(),
-                                 all_outputs.as_slice()).unwrap();
+                                 Vec::new(),
+                                 Vec::new(),
+                                 all_outputs.as_slice(),
+                                 Vec::new(),
+                                 Vec::new()).unwrap();
 
         let mut owners_memos = transfer_body.transfer.owners_memos.clone();
         // dbg!(&transfer_body);
