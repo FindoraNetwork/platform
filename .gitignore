@@ -11,3 +11,4 @@
 .stack-work
 stack.yaml.lock
 **/history.txt
+**/__pycache__

@@ -35,13 +35,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                              .json::<AIRAddressAndPoK>()
                                              .await?;
 
-  println!("Response from user is:\n{:?}", &addr_and_pok);
+  println!("Response from user is: addr ={}",
+           serde_json::to_string(&addr_and_pok.addr).unwrap());
 
   // Step 2: Get value and Merkle proof from AIR address
 
   let (protocol, host) = protocol_host();
   println!("Looking up value at {}://{}:{}/air_address/{}",
-           protocol, host, QUERY_PORT, &addr_and_pok.addr);
+           protocol,
+           host,
+           QUERY_PORT,
+           serde_json::to_string(&addr_and_pok.addr).unwrap());
   let air_result: AIRResult =
     reqwest::get(&format!("{}://{}:{}/air_address/{}",
                           protocol, host, QUERY_PORT, &addr_and_pok.addr)).await?
