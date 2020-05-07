@@ -222,7 +222,6 @@ pub fn credential_verify(issuer_pub_key: &CredIssuerPublicKey,
                                                 .get(field)
                                                 .ok_or(ZeiError::ParameterError)?;
     let u32_vec = u8_slice_to_u32_vec(attr, *len);
-    println!("here u32 vec {:?}", u32_vec);
     let u32_vec_option: Vec<Option<u32>> = u32_vec.iter().map(|x| Some(*x)).collect();
     u32_attrs[*pos..pos + len].clone_from_slice(&u32_vec_option);
   }
