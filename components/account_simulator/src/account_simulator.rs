@@ -1,7 +1,6 @@
 #![deny(warnings)]
-#[cfg(test)]
-use quickcheck::{Arbitrary, Gen, QuickCheck};
-#[cfg(test)]
+#![allow(unused)]
+use quickcheck::{Arbitrary, Gen, QuickCheck, StdGen};
 use std::iter::repeat;
 #[cfg(test)]
 #[macro_use(quickcheck)]
@@ -13,14 +12,16 @@ use ledger::data_model::errors::PlatformError;
 use ledger::data_model::*;
 use ledger::error_location;
 use ledger::store::*;
-#[cfg(test)]
-use rand_core::SeedableRng;
+use rand_core::{RngCore, SeedableRng};
+use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet, VecDeque};
 #[cfg(test)]
 use std::ffi::OsString;
+use std::path::PathBuf;
 #[cfg(test)]
 use std::thread;
 use std::time;
+use structopt::StructOpt;
 use submission_server::{TxnHandle, TxnStatus};
 use subprocess::Popen;
 #[cfg(test)]
@@ -31,13 +32,12 @@ use zei::xfr::asset_record::{build_blind_asset_record, open_blind_asset_record, 
 use zei::xfr::sig::XfrKeyPair;
 use zei::xfr::structs::{AssetRecord, AssetRecordTemplate, OpenAssetRecord, OwnerMemo};
 
-#[derive(Clone, Debug, Eq, PartialEq, Hash)]
+#[derive(Clone, Debug, Eq, PartialEq, Hash, Serialize, Deserialize)]
 pub struct UserName(pub String);
 
-#[derive(Clone, Debug, Eq, PartialEq, Hash)]
+#[derive(Clone, Debug, Eq, PartialEq, Hash, Serialize, Deserialize)]
 pub struct UnitName(pub String);
 
-#[cfg(test)]
 impl Arbitrary for UserName {
   fn arbitrary<G: Gen>(g: &mut G) -> Self {
     UserName(String::arbitrary(g))
@@ -47,7 +47,6 @@ impl Arbitrary for UserName {
   }
 }
 
-#[cfg(test)]
 impl Arbitrary for UnitName {
   fn arbitrary<G: Gen>(g: &mut G) -> Self {
     UnitName(String::arbitrary(g))
@@ -57,7 +56,7 @@ impl Arbitrary for UnitName {
   }
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub enum AccountsCommand {
   NewUser(UserName),           // name
   NewUnit(UnitName, UserName), // name, issuer
@@ -67,7 +66,6 @@ pub enum AccountsCommand {
                                // ToggleConfAmts(),
 }
 
-#[cfg(test)]
 fn rename_user(old: &UserName, new: &UserName, ac: AccountsCommand) -> AccountsCommand {
   use AccountsCommand::*;
   match ac {
@@ -80,7 +78,6 @@ fn rename_user(old: &UserName, new: &UserName, ac: AccountsCommand) -> AccountsC
   }
 }
 
-#[cfg(test)]
 fn rename_unit(old: &UnitName, new: &UnitName, ac: AccountsCommand) -> AccountsCommand {
   use AccountsCommand::*;
   match ac {
@@ -94,7 +91,6 @@ fn rename_unit(old: &UnitName, new: &UnitName, ac: AccountsCommand) -> AccountsC
   }
 }
 
-#[cfg(test)]
 fn rename_by(old: &AccountsCommand, new: &AccountsCommand, ac: AccountsCommand) -> AccountsCommand {
   use AccountsCommand::*;
   match (old, new) {
@@ -110,7 +106,6 @@ fn rename_by(old: &AccountsCommand, new: &AccountsCommand, ac: AccountsCommand) 
 // https://docs.rs/quickcheck/0.9.0/quickcheck/) -- This lets us fuzz-test
 // anything that takes `AccountsCommand`s (or things built out of them
 // which also implement `Arbitrary`)
-#[cfg(test)]
 impl Arbitrary for AccountsCommand {
   fn arbitrary<G: Gen>(g: &mut G) -> Self {
     // Use a random number from `g` to select what kind of operation, then
@@ -151,22 +146,22 @@ impl Arbitrary for AccountsCommand {
                  amt.shrink()
                     .zip(repeat(unit.clone()))
                     // shrink unit
-                    .chain(repeat(amt.clone()).zip(unit.shrink()))
+                    .chain(repeat(*amt).zip(unit.shrink()))
                     .map(|(a, u)| Mint(a, u)))
       }
       Send(src, amt, unit, dst) => {
         Box::new(// shrink src
                  src.shrink()
-                    .zip(repeat(amt.clone()))
+                    .zip(repeat(*amt))
                     .zip(repeat(unit.clone()).zip(repeat(dst.clone())))
                     .chain(// shrink amt
                            repeat(src.clone()).zip(amt.shrink())
                                               .zip(repeat(unit.clone()).zip(repeat(dst.clone()))))
                     .chain(// shrink unit
-                           repeat(src.clone()).zip(repeat(amt.clone()))
+                           repeat(src.clone()).zip(repeat(*amt))
                                               .zip(unit.shrink().zip(repeat(dst.clone()))))
                     .chain(// shrink dst
-                           repeat(src.clone()).zip(repeat(amt.clone()))
+                           repeat(src.clone()).zip(repeat(*amt))
                                               .zip(repeat(unit.clone()).zip(dst.shrink())))
                     .map(|((src, amt), (unit, dst))| Send(src, amt, unit, dst)))
       }
@@ -380,7 +375,7 @@ impl InterpretAccounts<PlatformError> for LedgerAccounts {
     let conf_amts = self.confidential_amounts;
     let conf_types = false; // && self.confidential_types;
     let art = AssetRecordType::from_booleans(conf_amts, conf_types);
-    dbg!(cmd);
+    // dbg!(cmd);
     match cmd {
       AccountsCommand::NewUser(name) => {
         let keypair = XfrKeyPair::generate(self.ledger.get_prng());
@@ -389,7 +384,7 @@ impl InterpretAccounts<PlatformError> for LedgerAccounts {
             .get(name)
             .map_or_else(|| Ok(()), |_| Err(PlatformError::InputsError(error_location!())))?;
 
-        dbg!("New user", &name, &keypair);
+        // dbg!("New user", &name, &keypair);
 
         self.accounts.insert(name.clone(), keypair);
         self.utxos.insert(name.clone(), VecDeque::new());
@@ -406,7 +401,7 @@ impl InterpretAccounts<PlatformError> for LedgerAccounts {
 
         let code = AssetTypeCode::gen_random();
 
-        dbg!("New unit", &name, &issuer, &code);
+        // dbg!("New unit", &name, &issuer, &code);
 
         let mut properties: Asset = Default::default();
         properties.code = code;
@@ -534,7 +529,7 @@ impl InterpretAccounts<PlatformError> for LedgerAccounts {
           let blind_rec = &(self.ledger.get_utxo(sid).unwrap().0).0;
           let memo = self.owner_memos.get(&sid).cloned();
           let open_rec = open_blind_asset_record(&blind_rec, &memo, &src_priv).unwrap();
-          dbg!(sid, open_rec.get_amount(), open_rec.get_asset_type());
+          // dbg!(sid, open_rec.get_amount(), open_rec.get_asset_type());
           if *open_rec.get_asset_type() != unit_code.val {
             to_skip.push(sid);
             continue;
@@ -545,7 +540,7 @@ impl InterpretAccounts<PlatformError> for LedgerAccounts {
           total_sum += *open_rec.get_amount();
           src_records.push(open_rec);
         }
-        dbg!(&to_skip, &to_use);
+        // dbg!(&to_skip, &to_use);
         avail.extend(to_skip.into_iter());
 
         assert!(total_sum >= amt);
@@ -591,13 +586,13 @@ impl InterpretAccounts<PlatformError> for LedgerAccounts {
         let dst_outputs = dst_outputs;
         let all_outputs = all_outputs;
         assert!(!src_records.is_empty());
-        dbg!(unit_code.val);
-        for (ix, rec) in src_records.iter().enumerate() {
-          dbg!(ix,
-               rec.get_asset_type(),
-               rec.get_amount(),
-               rec.get_pub_key());
-        }
+        // dbg!(unit_code.val);
+        // for (ix, rec) in src_records.iter().enumerate() {
+        // dbg!(ix,
+        //      rec.get_asset_type(),
+        //      rec.get_amount(),
+        //      rec.get_pub_key());
+        // }
 
         let mut sig_keys: Vec<XfrKeyPair> = Vec::new();
 
@@ -617,7 +612,7 @@ impl InterpretAccounts<PlatformError> for LedgerAccounts {
                                  all_outputs.as_slice()).unwrap();
 
         let mut owners_memos = transfer_body.transfer.owners_memos.clone();
-        dbg!(&transfer_body);
+        // dbg!(&transfer_body);
         let transfer_sig = TransferBodySignature { address: XfrAddress { key: *src_pub },
                                                    signature: compute_signature(src_priv,
                                                                                 src_pub,
@@ -690,7 +685,7 @@ impl InterpretAccounts<PlatformError> for OneBigTxnAccounts {
     let conf_amts = self.confidential_amounts;
     let conf_types = false;
     let art = AssetRecordType::from_booleans(conf_amts, conf_types);
-    dbg!(cmd);
+    // dbg!(cmd);
     match cmd {
       AccountsCommand::NewUser(name) => {
         let keypair = XfrKeyPair::generate(self.base_ledger.get_prng());
@@ -699,7 +694,7 @@ impl InterpretAccounts<PlatformError> for OneBigTxnAccounts {
             .get(name)
             .map_or_else(|| Ok(()), |_| Err(PlatformError::InputsError(error_location!())))?;
 
-        dbg!("New user", &name, &keypair);
+        // dbg!("New user", &name, &keypair);
 
         self.accounts.insert(name.clone(), keypair);
         self.utxos.insert(name.clone(), VecDeque::new());
@@ -716,7 +711,7 @@ impl InterpretAccounts<PlatformError> for OneBigTxnAccounts {
 
         let code = AssetTypeCode::gen_random();
 
-        dbg!("New unit", &name, &issuer, &code);
+        // dbg!("New unit", &name, &issuer, &code);
 
         let mut properties: Asset = Default::default();
         properties.code = code;
@@ -833,7 +828,7 @@ impl InterpretAccounts<PlatformError> for OneBigTxnAccounts {
           let blind_rec = &((self.txos.get(sid).unwrap().0).0);
           let memo = &(self.txos.get(sid).unwrap().1);
           let open_rec = open_blind_asset_record(&blind_rec, &memo, &src_priv).unwrap();
-          dbg!(sid, open_rec.get_amount(), open_rec.get_asset_type());
+          // dbg!(sid, open_rec.get_amount(), open_rec.get_asset_type());
           if *open_rec.get_asset_type() != unit_code.val {
             to_skip.push(sid);
             continue;
@@ -844,7 +839,7 @@ impl InterpretAccounts<PlatformError> for OneBigTxnAccounts {
           total_sum += *open_rec.get_amount();
           src_records.push(open_rec);
         }
-        dbg!(&to_skip, &to_use);
+        // dbg!(&to_skip, &to_use);
         avail.extend(to_skip.into_iter());
 
         assert!(total_sum >= amt);
@@ -889,13 +884,13 @@ impl InterpretAccounts<PlatformError> for OneBigTxnAccounts {
         let dst_outputs = dst_outputs;
         let all_outputs = all_outputs;
         assert!(!src_records.is_empty());
-        dbg!(unit_code.val);
-        for (ix, rec) in src_records.iter().enumerate() {
-          dbg!(ix,
-               rec.get_asset_type(),
-               rec.get_amount(),
-               rec.get_pub_key());
-        }
+        // dbg!(unit_code.val);
+        // for (ix, rec) in src_records.iter().enumerate() {
+        // dbg!(ix,
+        //      rec.get_asset_type(),
+        //      rec.get_amount(),
+        //      rec.get_pub_key());
+        // }
 
         let mut sig_keys: Vec<XfrKeyPair> = Vec::new();
 
@@ -916,7 +911,7 @@ impl InterpretAccounts<PlatformError> for OneBigTxnAccounts {
                                                    src_records.as_slice(),
                                                    all_outputs.as_slice()).unwrap();
         let owners_memos = transfer_body.transfer.owners_memos.clone();
-        dbg!(&transfer_body);
+        // dbg!(&transfer_body);
         let transfer_sig = TransferBodySignature { address: XfrAddress { key: *src_pub },
                                                    signature: compute_signature(src_priv,
                                                                                 src_pub,
@@ -1004,7 +999,7 @@ impl InterpretAccounts<PlatformError> for LedgerStandaloneAccounts {
     let conf_amts = self.confidential_amounts;
     let conf_types = false;
     let art = AssetRecordType::from_booleans(conf_amts, conf_types);
-    dbg!(cmd);
+    // dbg!(cmd);
     match cmd {
       AccountsCommand::NewUser(name) => {
         let keypair = XfrKeyPair::generate(&mut self.prng);
@@ -1013,7 +1008,7 @@ impl InterpretAccounts<PlatformError> for LedgerStandaloneAccounts {
             .get(name)
             .map_or_else(|| Ok(()), |_| Err(PlatformError::InputsError(error_location!())))?;
 
-        dbg!("New user", &name, &keypair);
+        // dbg!("New user", &name, &keypair);
 
         self.accounts.insert(name.clone(), keypair);
         self.utxos.insert(name.clone(), VecDeque::new());
@@ -1030,7 +1025,7 @@ impl InterpretAccounts<PlatformError> for LedgerStandaloneAccounts {
 
         let code = AssetTypeCode::gen_random();
 
-        dbg!("New unit", &name, &issuer, &code);
+        // dbg!("New unit", &name, &issuer, &code);
 
         let mut properties: Asset = Default::default();
         properties.code = code;
@@ -1057,8 +1052,8 @@ impl InterpretAccounts<PlatformError> for LedgerStandaloneAccounts {
           let port = format!("{}", self.submit_port);
           let query1 = format!("http://{}:{}/submit_transaction", host, port);
           let query2 = format!("http://{}:{}/force_end_block", host, port);
-          dbg!(&query1);
-          dbg!(&query2);
+          // dbg!(&query1);
+          // dbg!(&query2);
           let h = serde_json::from_str::<TxnHandle>(&self.client
                                                          .post(&query1)
                                                          .json(&txn)
@@ -1112,14 +1107,14 @@ impl InterpretAccounts<PlatformError> for LedgerStandaloneAccounts {
                               host,
                               port,
                               code.to_base64());
-          dbg!(&query);
+          // dbg!(&query);
           reqwest::get(&query).unwrap()
                               .error_for_status()
                               .unwrap()
                               .text()
                               .unwrap()
         };
-        dbg!(&new_seq_num);
+        // dbg!(&new_seq_num);
         let new_seq_num = serde_json::from_str::<u64>(&new_seq_num).unwrap();
 
         let keypair = self.accounts
@@ -1161,8 +1156,8 @@ impl InterpretAccounts<PlatformError> for LedgerStandaloneAccounts {
           let port = format!("{}", self.submit_port);
           let query1 = format!("http://{}:{}/submit_transaction", host, port);
           let query2 = format!("http://{}:{}/force_end_block", host, port);
-          dbg!(&query1);
-          dbg!(&query2);
+          // dbg!(&query1);
+          // dbg!(&query2);
           let h = serde_json::from_str::<TxnHandle>(&self.client
                                                          .post(&query1)
                                                          .json(&tx)
@@ -1242,7 +1237,7 @@ impl InterpretAccounts<PlatformError> for LedgerStandaloneAccounts {
           }).unwrap().0;
           let memo = self.owner_memos.get(&sid).cloned();
           let open_rec = open_blind_asset_record(&blind_rec, &memo, &src_priv).unwrap();
-          dbg!(sid, open_rec.get_amount(), open_rec.get_asset_type());
+          // dbg!(sid, open_rec.get_amount(), open_rec.get_asset_type());
           if *open_rec.get_asset_type() != unit_code.val {
             to_skip.push(sid);
             continue;
@@ -1253,7 +1248,7 @@ impl InterpretAccounts<PlatformError> for LedgerStandaloneAccounts {
           total_sum += *open_rec.get_amount();
           src_records.push(open_rec);
         }
-        dbg!(&to_skip, &to_use);
+        // dbg!(&to_skip, &to_use);
         avail.extend(to_skip.into_iter());
 
         assert!(total_sum >= amt);
@@ -1294,13 +1289,13 @@ impl InterpretAccounts<PlatformError> for LedgerStandaloneAccounts {
         let dst_outputs = dst_outputs;
         let all_outputs = all_outputs;
         assert!(!src_records.is_empty());
-        dbg!(unit_code.val);
-        for (ix, rec) in src_records.iter().enumerate() {
-          dbg!(ix,
-               rec.get_asset_type(),
-               rec.get_amount(),
-               rec.get_pub_key());
-        }
+        // dbg!(unit_code.val);
+        // for (ix, rec) in src_records.iter().enumerate() {
+        // dbg!(ix,
+        //      rec.get_asset_type(),
+        //      rec.get_amount(),
+        //      rec.get_pub_key());
+        // }
 
         let mut sig_keys: Vec<XfrKeyPair> = Vec::new();
 
@@ -1320,7 +1315,7 @@ impl InterpretAccounts<PlatformError> for LedgerStandaloneAccounts {
                                  all_outputs.as_slice()).unwrap();
 
         let mut owners_memos = transfer_body.transfer.owners_memos.clone();
-        dbg!(&transfer_body);
+        // dbg!(&transfer_body);
         let transfer_sig = TransferBodySignature { address: XfrAddress { key: *src_pub },
                                                    signature: compute_signature(src_priv,
                                                                                 src_pub,
@@ -1343,8 +1338,8 @@ impl InterpretAccounts<PlatformError> for LedgerStandaloneAccounts {
           let port = format!("{}", self.submit_port);
           let query1 = format!("http://{}:{}/submit_transaction", host, port);
           let query2 = format!("http://{}:{}/force_end_block", host, port);
-          dbg!(&query1);
-          dbg!(&query2);
+          // dbg!(&query1);
+          // dbg!(&query2);
           let h = serde_json::from_str::<TxnHandle>(&self.client
                                                          .post(&query1)
                                                          .json(&txn)
@@ -1405,7 +1400,7 @@ impl InterpretAccounts<PlatformError> for LedgerStandaloneAccounts {
   }
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 struct AccountsScenario {
   // These only affect new issuances
   confidential_amounts: bool,
@@ -1413,80 +1408,110 @@ struct AccountsScenario {
   cmds: Vec<AccountsCommand>,
 }
 
-#[cfg(test)]
+#[derive(Clone, Debug, Eq, PartialEq, Default)]
+struct AccountsScenarioBuilder {
+  confidential_amounts: bool,
+  confidential_types: bool,
+  cmds: Vec<AccountsCommand>,
+  users: HashSet<UserName>,
+  user_vec: Vec<UserName>,
+  unit_amounts: HashMap<UnitName, usize>,
+  unit_users: HashMap<UnitName, UserName>,
+  unit_vec: Vec<UnitName>,
+}
+
+impl AccountsScenarioBuilder {
+  pub fn new(confidential_amounts: bool, confidential_types: bool) -> Self {
+    AccountsScenarioBuilder { confidential_amounts,
+                              confidential_types,
+                              ..Default::default() }
+  }
+  pub fn build(self) -> AccountsScenario {
+    AccountsScenario { confidential_amounts: self.confidential_amounts,
+                       confidential_types: self.confidential_types,
+                       cmds: self.cmds }
+  }
+
+  pub fn add_user(&mut self, name: UserName) {
+    if self.users.contains(&name) {
+      return;
+    }
+    self.users.insert(name.clone());
+    self.user_vec.push(name.clone());
+    self.cmds.push(AccountsCommand::NewUser(name));
+  }
+
+  pub fn add_unit(&mut self, name: UnitName, user_ix: usize, amt: usize) {
+    if self.unit_amounts.contains_key(&name) {
+      return;
+    }
+    self.unit_vec.push(name.clone());
+    self.unit_amounts.insert(name.clone(), amt);
+
+    let user = self.user_vec[user_ix % self.user_vec.len()].clone();
+    self.unit_users.insert(name.clone(), user.clone());
+
+    self.cmds.push(AccountsCommand::NewUnit(name.clone(), user));
+    self.cmds.push(AccountsCommand::Mint(amt, name));
+  }
+
+  pub fn add_activity(&mut self, roll: u32, src: usize, count: usize, unit: usize, dst: usize) {
+    let src = self.user_vec[src % self.user_vec.len()].clone();
+    let dst = self.user_vec[dst % self.user_vec.len()].clone();
+    let unit_ix = unit % self.unit_vec.len();
+    let unit = self.unit_vec[unit_ix].clone();
+    let amt = self.unit_amounts.get_mut(&unit).unwrap();
+    let send_amt = if *amt / self.user_vec.len() > 0 {
+      *amt / self.user_vec.len()
+    } else {
+      *amt
+    };
+    match roll % 23 {
+      1..=23 => {
+        let count = if send_amt != 0 { count % send_amt } else { 0 };
+        self.cmds.push(AccountsCommand::Send(src, count, unit, dst));
+      }
+      0 => {
+        *amt += count;
+        self.cmds.push(AccountsCommand::Mint(count, unit.clone()));
+        self.cmds
+            .push(AccountsCommand::Send(self.unit_users.get(&unit).unwrap().clone(),
+                                        count,
+                                        unit,
+                                        dst));
+      }
+      // 5|6|10 => { cmds.push(AccountsCommand::ToggleConfAmts()); }
+      // 7|11 => { cmds.push(AccountsCommand::ToggleConfTypes()); }
+      _ => panic!("A dice roll landed on an edge!"),
+    }
+  }
+}
+
 impl Arbitrary for AccountsScenario {
   fn arbitrary<G: Gen>(g: &mut G) -> Self {
+    let mut b = AccountsScenarioBuilder::new(bool::arbitrary(g), bool::arbitrary(g));
     // A random AccountsScenario has...
-    let mut cmds: Vec<AccountsCommand> = Vec::new();
-
     // Some users (at least one)...
-    let mut users: HashSet<UserName> = vec![UserName::arbitrary(g)].into_iter().collect();
+    b.add_user(UserName::arbitrary(g));
     for extra_user in Vec::<UserName>::arbitrary(g) {
-      if users.contains(&extra_user) {
-        continue;
-      }
-      users.insert(extra_user);
+      b.add_user(extra_user);
     }
-
-    for user in users.iter() {
-      cmds.push(AccountsCommand::NewUser(user.clone()));
-    }
-
-    let user_vec: Vec<UserName> = users.into_iter().collect();
 
     // Some defined units-of-some-asset (at least one) issued by those
     // users...
-    let mut units: HashSet<UnitName> = vec![UnitName::arbitrary(g)].into_iter().collect();
-    for extra_unit in Vec::<UnitName>::arbitrary(g) {
-      if units.contains(&extra_unit) {
-        continue;
-      }
-      units.insert(extra_unit);
-    }
-
-    let unit_vec: Vec<UnitName> = units.into_iter().collect();
-    let mut unit_amounts: HashMap<UnitName, usize> = HashMap::new();
-
-    // Initial quantities of assets...
-    for unit in unit_vec.iter() {
-      let user = user_vec[usize::arbitrary(g) % user_vec.len()].clone();
-      let amt = usize::arbitrary(g);
-      unit_amounts.insert(unit.clone(), amt);
-      // match g.next_u32() % 12 {
-      //     0..=2 => { cmds.push(AccountsCommand::ToggleConfAmts()); }
-      //     3..=4 => { cmds.push(AccountsCommand::ToggleConfTypes()); }
-      //     _ => {}
-      // }
-      cmds.push(AccountsCommand::NewUnit(unit.clone(), user.clone()));
-      cmds.push(AccountsCommand::Mint(amt, unit.clone()));
+    b.add_unit(UnitName::arbitrary(g),
+               usize::arbitrary(g),
+               usize::arbitrary(g));
+    for (name, ix1, ix2) in Vec::<(UnitName, usize, usize)>::arbitrary(g) {
+      b.add_unit(name, ix1, ix2);
     }
 
     // And some activity.
     for (roll, src, count, unit, dst) in Vec::<(u32, usize, usize, usize, usize)>::arbitrary(g) {
-      let src = user_vec[src % user_vec.len()].clone();
-      let dst = user_vec[dst % user_vec.len()].clone();
-      let unit_ix = unit % unit_vec.len();
-      let unit = unit_vec[unit_ix].clone();
-      let amt = unit_amounts.get_mut(&unit).unwrap();
-      let send_amt = if *amt / 4 > 0 { *amt / 4 } else { *amt };
-      match roll % 11 {
-        1..=10 => {
-          let count = if send_amt != 0 { count % send_amt } else { 0 };
-          cmds.push(AccountsCommand::Send(src, count, unit, dst));
-        }
-        0 => {
-          *amt += count;
-          cmds.push(AccountsCommand::Mint(count, unit));
-        }
-        // 5|6|10 => { cmds.push(AccountsCommand::ToggleConfAmts()); }
-        // 7|11 => { cmds.push(AccountsCommand::ToggleConfTypes()); }
-        _ => assert!(false),
-      }
+      b.add_activity(roll, src, count, unit, dst);
     }
 
-    AccountsScenario { confidential_amounts: bool::arbitrary(g),
-                       confidential_types: bool::arbitrary(g),
-                       cmds }
+    b.build()
   }
 
   fn shrink(&self) -> Box<dyn Iterator<Item = Self>> {
@@ -1527,7 +1552,7 @@ impl Arbitrary for AccountsScenario {
                                           });
 
       // then try shrinking each remaining command
-      let shrink_inside = repeat((conf_amounts.clone(),conf_types.clone())).zip(ix.clone())
+      let shrink_inside = repeat((conf_amounts,conf_types)).zip(ix)
         .zip(repeat(base_cmds.clone())).flat_map(
           |(((conf_amt,conf_type),i),base_cmds)|
           {
@@ -1538,7 +1563,7 @@ impl Arbitrary for AccountsScenario {
                   confidential_amounts: conf_amt,
                   confidential_types: conf_type,
                   cmds: base_cmds[..i].iter().chain(&vec![x.clone()]).cloned()
-                    .chain((base_cmds[(i+1)..]).into_iter()
+                    .chain((base_cmds[(i+1)..]).iter()
                       .map(|cmd| rename_by(&old_cmd,&x,cmd.clone())))
                     .collect()
                 }
@@ -1546,15 +1571,14 @@ impl Arbitrary for AccountsScenario {
           }
       );
       // then try "shrinking" the confidentiality parameters
-      let shrink_conf =
-        repeat(conf_amounts.clone()).zip(conf_types.shrink())
-                                    .chain(conf_amounts.shrink().zip(repeat(conf_types.clone())))
-                                    .zip(repeat(base_cmds.clone()))
-                                    .map(|((conf_amt, conf_type), base_cmds)| {
-                                      AccountsScenario { confidential_amounts: conf_amt,
-                                                         confidential_types: conf_type,
-                                                         cmds: base_cmds }
-                                    });
+      let shrink_conf = repeat(conf_amounts).zip(conf_types.shrink())
+                                            .chain(conf_amounts.shrink().zip(repeat(conf_types)))
+                                            .zip(repeat(base_cmds))
+                                            .map(|((conf_amt, conf_type), base_cmds)| {
+                                              AccountsScenario { confidential_amounts: conf_amt,
+                                                                 confidential_types: conf_type,
+                                                                 cmds: base_cmds }
+                                            });
 
       quartering.chain(if self.cmds.len() < 5 {
                          Box::new(shrink_inside.chain(splits))
@@ -1565,6 +1589,125 @@ impl Arbitrary for AccountsScenario {
                        })
                 .chain(shrink_conf)
     })
+  }
+}
+
+#[derive(StructOpt, Debug)]
+#[structopt(about = "Procedurally generate account-style transactions",
+            rename_all = "kebab-case")]
+enum Actions {
+  Generate {
+    /// RNG seed
+    #[structopt(short, long)]
+    seed: Option<u64>,
+    user_count: usize,
+    unit_count: usize,
+    activity_count: usize,
+    #[structopt(short, long)]
+    confidential: bool,
+    /// Only output commands that succeed
+    #[structopt(short, long)]
+    filter_success: bool,
+    /// Size of numbers generated
+    #[structopt(short, long, default_value = "1000")]
+    gen_size: usize,
+    /// Output file for the AccountsScenario
+    #[structopt(parse(from_os_str))]
+    scenario_out: PathBuf,
+    /// Output file for the transaction log
+    #[structopt(parse(from_os_str))]
+    log_output: PathBuf,
+  },
+  Replay {
+    /// File containing the AccountsScenario
+    #[structopt(parse(from_os_str))]
+    scenario_file: PathBuf,
+    /// Output file for the transaction log
+    #[structopt(parse(from_os_str))]
+    log_output: PathBuf,
+  },
+}
+
+fn main() {
+  let action = Actions::from_args();
+
+  use Actions::*;
+  let (scenario, filter_cmds, log_outfile) = match &action {
+    Generate { seed,
+               gen_size,
+               user_count,
+               unit_count,
+               activity_count,
+               confidential,
+               scenario_out,
+               log_output,
+               filter_success, } => {
+      let prng = seed.map(rand_chacha::ChaChaRng::seed_from_u64)
+                     .unwrap_or_else(rand_chacha::ChaChaRng::from_entropy);
+      let mut gen = StdGen::new(prng, *gen_size);
+      let g = &mut gen;
+
+      let mut b = AccountsScenarioBuilder::new(*confidential, false);
+      let user_count = if *user_count < 1 { 1 } else { *user_count };
+      let unit_count = if *unit_count < 1 { 1 } else { *unit_count };
+
+      for _ in 0..user_count {
+        b.add_user(UserName::arbitrary(g));
+      }
+
+      for _ in 0..unit_count {
+        b.add_unit(UnitName::arbitrary(g),
+                   usize::arbitrary(g),
+                   usize::arbitrary(g));
+      }
+      for _ in 0..*activity_count {
+        let (roll, src, count, unit, dst) = <(u32, usize, usize, usize, usize)>::arbitrary(g);
+        b.add_activity(roll, src, count, unit, dst);
+      }
+
+      let ret = b.build();
+      (ret, *filter_success, log_output.clone())
+    }
+
+    Replay { scenario_file,
+             log_output, } => {
+      let ret = serde_json::from_reader(std::fs::File::open(scenario_file).unwrap()).unwrap();
+      (ret, false, log_output.clone())
+    }
+  };
+
+  let mut final_scenario = AccountsScenario { cmds: vec![],
+                                              ..scenario };
+  let scenario_outfile = if let Generate { scenario_out, .. } = &action {
+    Some(std::fs::File::create(scenario_out).unwrap())
+  } else {
+    None
+  };
+
+  let mut ledger = Box::new(LedgerAccounts { ledger: LedgerState::test_ledger(),
+                                             accounts: HashMap::new(),
+                                             utxos: HashMap::new(),
+                                             units: HashMap::new(),
+                                             balances: HashMap::new(),
+                                             owner_memos: HashMap::new(),
+                                             confidential_amounts:
+                                               scenario.confidential_amounts,
+                                             confidential_types: scenario.confidential_types });
+
+  let txn_log_path = ledger.ledger.txn_log_path().unwrap();
+
+  for cmd in scenario.cmds.iter() {
+    let ledger_res = ledger.run_account_command(&cmd);
+
+    if !filter_cmds || ledger_res.is_ok() {
+      final_scenario.cmds.push(cmd.clone());
+    }
+  }
+
+  std::fs::copy(txn_log_path, log_outfile).unwrap();
+
+  if let Some(outfd) = scenario_outfile {
+    serde_json::to_writer(outfd, &final_scenario).unwrap();
   }
 }
 
@@ -1662,7 +1805,7 @@ mod test {
       None
     };
 
-    let with_one_big_txn = true; //cmds.cmds.len() < 20;
+    let with_one_big_txn = false; // true; //cmds.cmds.len() < 20;
 
     let wait_time = time::Duration::from_millis(1000);
     let mut ledger = Box::new(LedgerAccounts { ledger: LedgerState::test_ledger(),
@@ -1713,7 +1856,7 @@ mod test {
 
     let mut prev_simple: SimpleAccountsState = Default::default();
     let cmds = cmds.cmds;
-    dbg!(&cmds);
+    // dbg!(&cmds);
 
     let mut simple: SimpleAccountsState = Default::default();
     let mut normal: AccountsState = Default::default();
@@ -1740,7 +1883,7 @@ mod test {
       };
       if with_standalone {
         let active_ledger_res = active_ledger.as_mut().unwrap().run_account_command(&cmd);
-        dbg!(&active_ledger_res);
+        // dbg!(&active_ledger_res);
         assert!(active_ledger_res.is_ok() == normal_res.is_ok());
       }
 
@@ -1897,7 +2040,7 @@ mod test {
   #[test]
   #[ignore]
   fn quickcheck_ledger_simulates() {
-    QuickCheck::new().tests(5)
+    QuickCheck::new().tests(1)
                      // .quickcheck(ledger_simulates_accounts_with_standalone
                      .quickcheck(ledger_simulates_accounts_no_standalone
                                  as fn(AccountsScenario) -> ());
