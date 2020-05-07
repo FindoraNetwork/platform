@@ -761,6 +761,7 @@ impl TransferOperationBuilder {
     blinds.0 = amount_blinds;
     blinds.1 = type_blind;
     self.output_records.push(ar);
+    self.output_tracing_records.push((None, None));
     Ok(self)
   }
 
@@ -802,6 +803,7 @@ impl TransferOperationBuilder {
           let ar =
             AssetRecord::from_template_no_identity_tracking(&mut prng, &ar_template).unwrap();
           partially_consumed_inputs.push(ar);
+          self.output_tracing_records.push((None, None));
         }
         _ => {}
       }
