@@ -410,8 +410,8 @@ impl TransferAssetBody {
                            input_sig_commitments,
                            num_outputs: output_records.len(),
                            output_tracing_policies,
-                           transfer: note,
-                           output_sig_commitments })
+                           output_sig_commitments,
+                           transfer: note })
   }
 
   /// Computes a body signature. A body signature represents consent to some part of the asset transfer. If an
@@ -1059,7 +1059,11 @@ mod tests {
                              owners_memos: vec![] };
 
     let assert_transfer_body = TransferAssetBody { inputs: Vec::new(),
+                                                   input_tracing_policies: None,
+                                                   input_sig_commitments: None,
                                                    num_outputs: 0,
+                                                   output_tracing_policies: None,
+                                                   output_sig_commitments: None,
                                                    transfer: Box::new(xfr_note) };
 
     let asset_transfer = TransferAsset { body: assert_transfer_body,

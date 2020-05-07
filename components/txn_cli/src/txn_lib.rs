@@ -1,10 +1,9 @@
 #![deny(warnings)]
 pub mod txn_lib {
   use credentials::{
-    credential_issuer_key_gen, credential_keygen_commitment, credential_reveal, credential_sign,
-    credential_user_key_gen, credential_verify, CredCommitment, CredCommitmentKey,
-    CredIssuerPublicKey, CredIssuerSecretKey, CredPoK, CredUserPublicKey, CredUserSecretKey,
-    Credential as WrapperCredential,
+    credential_commit, credential_issuer_key_gen, credential_sign, credential_user_key_gen,
+    CredCommitment, CredCommitmentKey, CredIssuerPublicKey, CredIssuerSecretKey, CredPoK,
+    CredUserPublicKey, CredUserSecretKey, Credential as WrapperCredential,
   };
   use curve25519_dalek::ristretto::CompressedRistretto;
   use curve25519_dalek::scalar::Scalar;
@@ -1174,7 +1173,7 @@ pub mod txn_lib {
       get_blind_asset_record_and_memos(issuer_key_pair.get_pk(),
                                        amount,
                                        token_code,
-                                       AssetRecordType::from_booleans(false, false),
+                                       AssetRecordType::from_booleans(false, record_type.is_confidential_amount()),
                                        tracing_policy.clone())?;
 
     // Transfer Operation
@@ -1190,20 +1189,22 @@ pub mod txn_lib {
                                                   record_type,
                                                   recipient_key_pair.get_pk())
     };
-    let xfr_op =
-    TransferOperationBuilder::new().add_input(TxoRef::Relative(0),
-                                              open_blind_asset_record(&blind_asset_record,
-                                                                &owner_memo,
-                                                                issuer_key_pair.get_sk_ref())
-                                              .map_err(|e| PlatformError::ZeiError(error_location!(),e))?,
-                                              tracing_policy.clone(),
-                                              sig_commitment.clone(),
-                                              amount)?
-                                   .add_output(&output_template, tracing_policy.clone(), sig_commitment, credential_record)?
-                                   .balance()?
-                                   .create(TransferType::Standard)?
-                                   .sign(issuer_key_pair)?
-                                   .transaction()?;
+
+    let xfr_op = TransferOperationBuilder::new().add_input(TxoRef::Relative(0),
+                                                          open_blind_asset_record(&blind_asset_record,
+                                                                                  &owner_memo,
+                                                                                  issuer_key_pair.get_sk_ref()).map_err(|e| PlatformError::ZeiError(error_location!(),e))?,
+                                                          None,
+                                                          None,
+                                                          amount)?
+                                                 .add_output(&output_template,
+                                                             tracing_policy.clone(),
+                                                             sig_commitment,
+                                                             credential_record)?
+                                                 .balance()?
+                                                 .create(TransferType::Standard)?
+                                                 .sign(issuer_key_pair)?
+                                                 .transaction()?;
 
     // Issue and Transfer transaction
     let mut txn_builder = TransactionBuilder::default();
@@ -1809,20 +1810,22 @@ pub mod txn_lib {
     let ac_credential =
       wrapper_credential.to_ac_credential()
                         .or_else(|e| Err(PlatformError::ZeiError(error_location!(), e)))?;
-    let reveal_sig =
-      credential_reveal(&mut prng,
-                        &user_secret_key,
-                        &wrapper_credential,
-                        &attribute_names).or_else(|error| {
-                                           Err(PlatformError::ZeiError(error_location!(), error))
-                                         })?;
-    credential_verify(&credential_issuer_public_key,
-                      &attributes,
-                      &reveal_sig.sig_commitment,
-                      &reveal_sig.pok).or_else(|error| {
-                                        Err(PlatformError::ZeiError(error_location!(), error))
-                                      })?;
-    let commitment_key = credential_keygen_commitment(&mut prng);
+    let (sig_commitment, _, commitment_key) =
+      credential_commit(&mut prng, &user_secret_key, &wrapper_credential, b"").unwrap();
+    // let reveal_sig =
+    //   credential_reveal(&mut prng,
+    //                     &user_secret_key,
+    //                     &wrapper_credential,
+    //                     &attribute_names).or_else(|error| {
+    //                                        Err(PlatformError::ZeiError(error_location!(), error))
+    //                                      })?;
+    // credential_verify(&credential_issuer_public_key,
+    //                   &attributes,
+    //                   &reveal_sig.sig_commitment,
+    //                   &reveal_sig.pok).or_else(|error| {
+    //                                     Err(PlatformError::ZeiError(error_location!(), error))
+    //                                   })?;
+    // let commitment_key = credential_keygen_commitment(&mut prng);
     let commitment_key_str =
       serde_json::to_vec(&commitment_key).or_else(|_| Err(PlatformError::SerializationError))?;
 
@@ -1876,7 +1879,8 @@ pub mod txn_lib {
                                                    credential_issuer_public_key.get_ref().clone(),
                                                  reveal_map };
     let debt_tracing_policy = AssetTracingPolicy { enc_keys: tracer_enc_keys,
-                                                   asset_tracking: true,
+                                                   //  asset_tracking: true,
+                                                   asset_tracking: false,
                                                    identity_tracking: Some(identity_policy) };
 
     // Issue and transfer fiat token
@@ -1914,7 +1918,8 @@ pub mod txn_lib {
                                    borrower_key_pair,
                                    debt_code,
                                    &memo_str,
-                                   AssetRules::default().set_traceable(true).clone(),
+                                   //  AssetRules::default().set_traceable(true).clone(),
+                                   AssetRules::default(),
                                    txn_file)?;
     // Store data before submitting the transaction to avoid data overwriting
     let data = load_data()?;
@@ -1933,7 +1938,7 @@ pub mod txn_lib {
                                credential_record,
                                &debt_txn_file,
                                Some(debt_tracing_policy.clone()),
-                               Some(reveal_sig.sig_commitment.clone()))?;
+                               Some(sig_commitment.clone()))?;
     let debt_sid = submit_and_get_sids(protocol, host, txn_builder)?[0];
     println!("Debt sid: {}", debt_sid.0);
     let debt_open_asset_record =
@@ -1963,7 +1968,7 @@ pub mod txn_lib {
                                                            amount)?
                                                 .add_output(&lender_template,
                                                             Some(debt_tracing_policy),
-                                                            Some(reveal_sig.sig_commitment),
+                                                            Some(sig_commitment),
                                                             credential_record)?
                                                 .add_output(&borrower_template, None, None, None)?
                                                 .create(TransferType::Standard)?
@@ -2450,6 +2455,13 @@ pub mod txn_lib {
           println!("Blind asset records and associated memos are required to transfer asset. Use --issuance_txn_files.");
           return Err(PlatformError::InputsError(error_location!()));
         };
+        let tracing_policy = if transfer_asset_matches.is_present("traceable") {
+          Some(AssetTracingPolicy { enc_keys: tracer_enc_keys,
+                                    asset_tracking: true,
+                                    identity_tracking: None })
+        } else {
+          None
+        };
         let input_amounts =
           if let Some(input_amounts_arg) = transfer_asset_matches.value_of("input_amounts") {
             parse_to_u64_vec(input_amounts_arg)?
@@ -2466,9 +2478,6 @@ pub mod txn_lib {
         let mut txo_refs_iter = txo_refs.iter();
         let mut bars_and_owner_memos_iter = bars_and_owner_memos.iter();
         let mut input_amounts_iter = input_amounts.iter();
-        let tracing_policy = Some(AssetTracingPolicy { enc_keys: tracer_enc_keys,
-                                                       asset_tracking: true,
-                                                       identity_tracking: None });
         let mut input_tracing_policies = Vec::new();
         let mut input_sig_commitments = Vec::new();
         while count > 0 {

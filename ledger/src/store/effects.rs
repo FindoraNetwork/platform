@@ -340,8 +340,6 @@ impl TxnEffect {
               }
             }
           }
-          println!("here input {:?}", input_tracing_policies.clone());
-          println!("here output {:?}", output_tracing_policies.clone());
           verify_xfr_body(prng,
                           &trn.body.transfer,
                           &input_tracing_policies[..],
@@ -351,8 +349,6 @@ impl TxnEffect {
                                                         PlatformError::ZeiError(error_location!(),
                                                                                 e)
                                                       })?;
-
-          println!("here platform 355");
 
           for (inp, record) in trn.body.inputs.iter().zip(trn.body.transfer.inputs.iter()) {
             // Until we can distinguish assets that have policies that invoke transfer restrictions

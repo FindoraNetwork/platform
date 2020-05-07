@@ -13,7 +13,7 @@ extern crate exitcode;
 // Derive path and command name from cwd
 // Figure out how to colorize stdout and stderr
 
-// TODO (Keyao): Fix tests with // #[ignore].
+// TODO (Keyao): Fix tests with #[ignore].
 // Those tests pass individually, but occasionally fail when run with other tests.
 // They take more time to complete, thus might cause data conflicts.
 #[cfg(debug_assertions)]
@@ -405,7 +405,7 @@ fn test_create_users() {
 }
 
 #[test]
-// #[ignore]
+#[ignore]
 fn test_create_or_overwrite_credentials() {
   // Create a borrower
   sign_up_borrower("Borrower B").expect("Failed to create a borrower");
@@ -458,7 +458,7 @@ fn test_create_txn_builder_no_path() {
 // Lender or borrower views loans or credentials
 //
 #[test]
-// #[ignore]
+#[ignore]
 fn test_view() {
   let ledger_standalone = LedgerStandalone::new();
 
@@ -475,12 +475,7 @@ fn test_view() {
   let txn_builder_path = "txn_builder_view_loans";
   create_txn_builder_with_path(txn_builder_path).expect("Failed to create transaction builder");
   ledger_standalone.poll_until_ready().unwrap();
-  let output =
-    fulfill_loan(txn_builder_path, "0", "0", "0", None).expect("Failed to fulfill the loan");
-  io::stdout().write_all(&output.stdout).unwrap();
-  io::stdout().write_all(&output.stderr).unwrap();
-
-  assert!(output.status.success());
+  fulfill_loan(txn_builder_path, "0", "0", "0", None).expect("Failed to fulfill the loan");
   ledger_standalone.poll_until_ready().unwrap();
   fulfill_loan(txn_builder_path, "0", "1", "0", None).expect("Failed to fulfill the loan");
   ledger_standalone.poll_until_ready().unwrap();
@@ -765,7 +760,7 @@ fn test_store_sids_with_path() {
 // Compose transaction and submit
 //
 #[test]
-// #[ignore]
+#[ignore]
 fn test_define_issue_transfer_and_submit_with_args() {
   let ledger_standalone = LedgerStandalone::new();
 
@@ -858,7 +853,7 @@ fn test_define_issue_transfer_and_submit_with_args() {
 //
 // Compose transaction and submit
 //
-// #[ignore]
+#[ignore]
 #[test]
 fn test_air_assign() {
   // Create txn builder and key pair
@@ -883,7 +878,7 @@ fn test_air_assign() {
 }
 
 #[test]
-// #[ignore]
+#[ignore]
 fn test_issue_transfer_trace_and_submit_with_args() {
   let ledger_standalone = LedgerStandalone::new();
 
@@ -943,7 +938,7 @@ fn test_issue_transfer_trace_and_submit_with_args() {
 }
 
 #[test]
-// #[ignore]
+#[ignore]
 // Test funds loading, loan request, fulfilling and repayment
 fn test_request_fulfill_and_pay_loan_with_args() {
   let ledger_standalone = LedgerStandalone::new();

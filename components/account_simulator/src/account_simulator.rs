@@ -914,10 +914,10 @@ impl InterpretAccounts<PlatformError> for OneBigTxnAccounts {
                                                          .collect(),
                                                    src_records.as_slice(),
                                                    Vec::new(),
-                                                   Vec::new(,
+                                                   Vec::new(),
                                                    all_outputs.as_slice(),
                                                    Vec::new(),
-                                                   Vec::new().unwrap();
+                                                   Vec::new()).unwrap();
         let owners_memos = transfer_body.transfer.owners_memos.clone();
         // dbg!(&transfer_body);
         let transfer_sig = TransferBodySignature { address: XfrAddress { key: *src_pub },
