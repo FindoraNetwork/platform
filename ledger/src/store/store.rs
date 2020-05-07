@@ -2796,8 +2796,8 @@ mod tests {
                                                                  vec![TxoRef::Absolute(sid)],
                                                                  &[AssetRecord::from_open_asset_record_no_asset_tracking(open_blind_asset_record(&bar, &None, &alice.get_sk_ref()).unwrap())],
                                                                  Vec::new(),
-                                                                 &[record.clone(),
-                                                                 Vec::new()]).unwrap(),
+                                                                 &[record.clone()],
+                                                                 Vec::new()).unwrap(),
                                           TransferType::Standard).unwrap();
     transfer.sign(&alice);
     tx.operations.push(Operation::TransferAsset(transfer));

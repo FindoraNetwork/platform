@@ -1158,7 +1158,7 @@ pub mod txn_lib {
       get_blind_asset_record_and_memos(issuer_key_pair.get_pk(),
                                        amount,
                                        token_code,
-                                       AssetRecordType::from_booleans(false, record_type.is_confidential_amount()),
+                                       AssetRecordType::from_booleans(record_type.is_confidential_amount(), false),
                                        tracing_policy.clone())?;
 
     // Transfer Operation
