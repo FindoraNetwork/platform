@@ -382,7 +382,7 @@ impl TxnEffect {
           // 2)
           credential_verify_commitment(issuer_pk, commitment, pok, pk.as_bytes())
               .map_err(|e| PlatformError::ZeiError(error_location!(),e))?;
-          air_updates.insert(serde_json::to_string(&pk)?,
+          air_updates.insert(serde_json::to_string(&air_assign.body.addr)?,
                              serde_json::to_string(commitment)?);
         }
         // A memo update is valid iff:

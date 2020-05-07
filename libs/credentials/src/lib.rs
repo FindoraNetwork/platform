@@ -42,6 +42,13 @@ impl CredIssuerPublicKey {
   pub fn get_ref(&self) -> &ACIssuerPublicKey {
     &self.ac_pub_key
   }
+
+  pub fn get_len(&self, key: &str) -> Result<usize, ZeiError> {
+    match self.map.get(key) {
+      Some(((_, len), _)) => Ok(*len),
+      None => Err(ZeiError::ParameterError),
+    }
+  }
 }
 
 impl CredIssuerSecretKey {
@@ -253,7 +260,7 @@ fn num_u32_per_u8(num_u8: usize) -> usize {
 }
 
 /* Use the contents of u8 slice to fill a vector of u32 */
-fn u8_slice_to_u32_vec(attr: &[u8], len: usize) -> Vec<u32> {
+pub fn u8_slice_to_u32_vec(attr: &[u8], len: usize) -> Vec<u32> {
   assert!(len >= num_u32_per_u8(attr.len()));
   let mut res = vec![0u32; len];
   for (i, byte) in attr.iter().enumerate() {
