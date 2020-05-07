@@ -2,8 +2,9 @@
 pub mod txn_lib {
   use credentials::{
     credential_commit, credential_issuer_key_gen, credential_sign, credential_user_key_gen,
-    CredCommitment, CredCommitmentKey, CredIssuerPublicKey, CredIssuerSecretKey, CredPoK,
-    CredUserPublicKey, CredUserSecretKey, Credential as WrapperCredential,
+    u8_slice_to_u32_vec, CredCommitment, CredCommitmentKey, CredIssuerPublicKey,
+    CredIssuerSecretKey, CredPoK, CredUserPublicKey, CredUserSecretKey,
+    Credential as WrapperCredential,
   };
   use curve25519_dalek::ristretto::CompressedRistretto;
   use curve25519_dalek::scalar::Scalar;
@@ -1052,22 +1053,6 @@ pub mod txn_lib {
     Ok(vals)
   }
 
-  /// Parses a string to a list of u32 values.
-  /// # Arguments
-  /// * `vals_str`: string representation of a list of values.
-  pub(crate) fn parse_to_u32_vec(vals_str: &str) -> Result<Vec<u32>, PlatformError> {
-    let vals_vec = split_arg(vals_str);
-    let mut vals = Vec::new();
-    for val_str in vals_vec {
-      if let Ok(val) = val_str.trim().parse::<u32>() {
-        vals.push(val);
-      } else {
-        return Err(PlatformError::InputsError(error_location!()));
-      }
-    }
-    Ok(vals)
-  }
-
   pub(crate) fn air_assign(issuer_id: u64,
                            address: &str,
                            data: &str,
@@ -1812,20 +1797,6 @@ pub mod txn_lib {
                         .or_else(|e| Err(PlatformError::ZeiError(error_location!(), e)))?;
     let (sig_commitment, _, commitment_key) =
       credential_commit(&mut prng, &user_secret_key, &wrapper_credential, b"").unwrap();
-    // let reveal_sig =
-    //   credential_reveal(&mut prng,
-    //                     &user_secret_key,
-    //                     &wrapper_credential,
-    //                     &attribute_names).or_else(|error| {
-    //                                        Err(PlatformError::ZeiError(error_location!(), error))
-    //                                      })?;
-    // credential_verify(&credential_issuer_public_key,
-    //                   &attributes,
-    //                   &reveal_sig.sig_commitment,
-    //                   &reveal_sig.pok).or_else(|error| {
-    //                                     Err(PlatformError::ZeiError(error_location!(), error))
-    //                                   })?;
-    // let commitment_key = credential_keygen_commitment(&mut prng);
     let commitment_key_str =
       serde_json::to_vec(&commitment_key).or_else(|_| Err(PlatformError::SerializationError))?;
 
@@ -2648,9 +2619,8 @@ pub mod txn_lib {
         let data = load_data()?;
         let attrs_dec_key = if let Some(id_arg) = asset_issuer_matches.value_of("id") {
           let issuer_id = parse_to_u64(id_arg)?;
-          data.get_asset_tracer_key_pair(issuer_id)?
-              .dec_key
-              .attrs_dec_key
+          let asset_tracer_key_pair = data.get_asset_tracer_key_pair(issuer_id)?;
+          asset_tracer_key_pair.dec_key.attrs_dec_key
         } else {
           println!("Asset issuer id is required to trace the asset. Use asset_issuer --id.");
           return Err(PlatformError::InputsError(error_location!()));
@@ -2662,15 +2632,33 @@ pub mod txn_lib {
             println!("Tracer memo is required to trace the credential. Use --memo_file.");
             return Err(PlatformError::InputsError(error_location!()));
           };
-        let expected_values =
-          if let Some(expected_values_arg) = trace_credential_matches.value_of("expected_values") {
-            parse_to_u32_vec(expected_values_arg)?
+        let len = if let Some(attribute_arg) = trace_credential_matches.value_of("attribute") {
+          let credential_issuer_public_key = data.get_credential_issuer_key_pair(0)?.0;
+          credential_issuer_public_key.get_len(attribute_arg)
+                                      .or_else(|e| {
+                                        Err(PlatformError::ZeiError(error_location!(), e))
+                                      })?
+        } else {
+          println!("Credential attribute is required to verify the credential. Use --attribute.");
+          return Err(PlatformError::InputsError(error_location!()));
+        };
+        let expected_value =
+          if let Some(expected_value_arg) = trace_credential_matches.value_of("expected_value") {
+            u8_slice_to_u32_vec(expected_value_arg.as_bytes(), len)
           } else {
-            println!("Expected value is required to verify the credential. Use --expected_values.");
+            println!("Expected value is required to verify the credential. Use --expected_value.");
             return Err(PlatformError::InputsError(error_location!()));
           };
-        match tracer_memo.verify_identity_attributes(&attrs_dec_key, &expected_values.to_vec()) {
-          Ok(_) => Ok(()),
+        match tracer_memo.verify_identity_attributes(&attrs_dec_key, &expected_value) {
+          Ok(res) => {
+            if res[0] {
+              println!("Credential verification succeeded.");
+            } else {
+              println!("Credential value isn't as expected.");
+              return Err(PlatformError::InputsError(error_location!()));
+            }
+            Ok(())
+          }
           Err(e) => Err(PlatformError::ZeiError(error_location!(), e)),
         }
       }

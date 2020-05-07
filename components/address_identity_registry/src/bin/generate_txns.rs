@@ -6,8 +6,8 @@ use credentials::{
 };
 use rand_chacha::ChaChaRng;
 use rand_core::SeedableRng;
-use txn_builder::{BuildsTransactions, TransactionBuilder};
 use std::collections::HashMap;
+use txn_builder::{BuildsTransactions, TransactionBuilder};
 use zei::xfr::sig::XfrKeyPair;
 
 /// Represents a file that can be searched
