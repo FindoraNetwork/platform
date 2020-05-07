@@ -355,6 +355,7 @@ impl TxnEffect {
             // * Run the tests in components/whitelist with -- --ignored
             // * Verify the test results
             // * Restore the validation below
+            // (Issue #320)
             if let XfrAssetType::Confidential(_) = out.asset_type {
               return Err(PlatformError::InputsError(error_location!()));
             }

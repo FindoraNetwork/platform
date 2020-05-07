@@ -1249,7 +1249,8 @@ pub mod txn_lib {
     Ok((ledger_standalone.submit_transaction_and_fetch_utxos(&txn)[0].0, blinds.0, blinds.1))
   }
 
-  /// Defines, issues and transfers an asset, submits the transactions with the standalone ledger, and get the UTXO SID and asset type blind.
+  /// Defines, issues and transfers an asset, and submits the transactions with the standalone ledger.
+  /// Returns the UTXO SID, the blinding factors for the asset amount, and the blinding factor for the asset type code.
   #[allow(clippy::too_many_arguments)]
   pub fn define_issue_transfer_and_get_utxo_and_blinds<R: CryptoRng + RngCore>(
     issuer_key_pair: &XfrKeyPair,

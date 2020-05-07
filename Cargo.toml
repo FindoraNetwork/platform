@@ -21,6 +21,7 @@ members = [
     "components/query_server",
     "components/wasm",
     "components/whitelist",
+    "components/whitelist_cli",
     "findora",
     "ledger",
     "libs/ads/air",
