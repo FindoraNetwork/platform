@@ -377,9 +377,13 @@ pub enum TxoRef {
 pub struct TransferAssetBody {
   pub inputs: Vec<TxoRef>, // Ledger address of inputs
   // Input asset tracing policies and signature commitments
+  #[serde(default)]
+  #[serde(skip_serializing_if = "is_default")]
   pub input_tracing_records: Vec<(Option<AssetTracingPolicy>, Option<ACCommitment>)>,
   pub num_outputs: usize, // How many output TXOs?
   // Output asset tracing policies and signature commitments
+  #[serde(default)]
+  #[serde(skip_serializing_if = "is_default")]
   pub output_tracing_records: Vec<(Option<AssetTracingPolicy>, Option<ACCommitment>)>,
   // TODO(joe): we probably don't need the whole XfrNote with input records
   // once it's on the chain
