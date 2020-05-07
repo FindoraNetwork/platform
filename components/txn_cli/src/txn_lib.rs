@@ -2478,8 +2478,7 @@ pub mod txn_lib {
         let mut txo_refs_iter = txo_refs.iter();
         let mut bars_and_owner_memos_iter = bars_and_owner_memos.iter();
         let mut input_amounts_iter = input_amounts.iter();
-        let mut input_tracing_policies = Vec::new();
-        let mut input_sig_commitments = Vec::new();
+        let mut input_tracing_records = Vec::new();
         while count > 0 {
           let txo_refs_next = if let Some(txo_ref) = txo_refs_iter.next() {
             txo_ref
@@ -2503,8 +2502,7 @@ pub mod txn_lib {
           let transfer_from_next =
             (txo_refs_next, blind_asset_record_next, input_amount_next, owner_memo_next);
           transfer_from.push(transfer_from_next);
-          input_tracing_policies.push(tracing_policy.clone());
-          input_sig_commitments.push(None);
+          input_tracing_records.push((tracing_policy.clone(), None));
           count -= 1;
         }
 
@@ -2535,8 +2533,7 @@ pub mod txn_lib {
         let mut transfer_to = Vec::new();
         let mut output_amounts_iter = output_amounts.iter();
         let mut addresses_iter = recipient_addresses.iter();
-        let mut output_tracing_policies = Vec::new();
-        let mut output_sig_commitments = Vec::new();
+        let mut output_tracing_records = Vec::new();
         while count > 0 {
           let output_amount_next = if let Some(output_amount) = output_amounts_iter.next() {
             *output_amount
@@ -2551,8 +2548,7 @@ pub mod txn_lib {
             return Err(PlatformError::InputsError(error_location!()));
           };
           transfer_to.push((output_amount_next, address_next));
-          output_tracing_policies.push(tracing_policy.clone());
-          output_sig_commitments.push(None);
+          output_tracing_records.push((tracing_policy.clone(), None));
           count -= 1;
         }
 
@@ -2560,11 +2556,9 @@ pub mod txn_lib {
         let mut txn_builder = TransactionBuilder::default();
         if let Err(e) = txn_builder.add_basic_transfer_asset(&issuer_key_pair,
                                                              &transfer_from[..],
-                                                             input_tracing_policies,
-                                                             input_sig_commitments,
+                                                             input_tracing_records,
                                                              &transfer_to[..],
-                                                             output_tracing_policies,
-                                                             output_sig_commitments)
+                                                             output_tracing_records)
         {
           println!("Failed to add operation to transaction.");
           return Err(e);

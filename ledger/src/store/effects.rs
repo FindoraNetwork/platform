@@ -58,6 +58,7 @@ pub struct TxnEffect {
 // Internally validates the transaction as well.
 // If the transaction is invalid, it is dropped, so if you need to inspect
 // the transaction in order to diagnose the error, clone it first!
+#[allow(clippy::cognitive_complexity)]
 impl TxnEffect {
   pub fn compute_effect<R: CryptoRng + RngCore>(prng: &mut R,
                                                 txn: Transaction)
@@ -297,7 +298,9 @@ impl TxnEffect {
           // (3)
           // TODO: implement real policies
           let mut input_tracing_policies = Vec::new();
-          for input_tracing_policy in trn.body.input_tracing_policies.iter() {
+          let mut input_sig_commitments = Vec::new();
+          for (input_tracing_policy, input_sig_commitment) in trn.body.input_tracing_records.iter()
+          {
             match input_tracing_policy {
               Some(policy) => {
                 input_tracing_policies.push(Some(policy));
@@ -306,9 +309,6 @@ impl TxnEffect {
                 input_tracing_policies.push(None);
               }
             }
-          }
-          let mut input_sig_commitments = Vec::new();
-          for input_sig_commitment in trn.body.input_sig_commitments.iter() {
             match input_sig_commitment {
               Some(commitment) => {
                 input_sig_commitments.push(Some(commitment));
@@ -319,7 +319,10 @@ impl TxnEffect {
             }
           }
           let mut output_tracing_policies = Vec::new();
-          for output_tracing_policy in trn.body.output_tracing_policies.iter() {
+          let mut output_sig_commitments = Vec::new();
+          for (output_tracing_policy, output_sig_commitment) in
+            trn.body.output_tracing_records.iter()
+          {
             match output_tracing_policy {
               Some(policy) => {
                 output_tracing_policies.push(Some(policy));
@@ -328,9 +331,6 @@ impl TxnEffect {
                 output_tracing_policies.push(None);
               }
             }
-          }
-          let mut output_sig_commitments = Vec::new();
-          for output_sig_commitment in trn.body.output_sig_commitments.iter() {
             match output_sig_commitment {
               Some(commitment) => {
                 output_sig_commitments.push(Some(commitment));

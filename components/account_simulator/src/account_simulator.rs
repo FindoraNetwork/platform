@@ -610,9 +610,7 @@ impl InterpretAccounts<PlatformError> for LedgerAccounts {
                                  to_use.iter().cloned().map(TxoRef::Absolute).collect(),
                                  src_records.as_slice(),
                                  Vec::new(),
-                                 Vec::new(),
                                  all_outputs.as_slice(),
-                                 Vec::new(),
                                  Vec::new()).unwrap();
 
         let mut owners_memos = transfer_body.transfer.owners_memos.clone();
@@ -914,9 +912,7 @@ impl InterpretAccounts<PlatformError> for OneBigTxnAccounts {
                                                          .collect(),
                                                    src_records.as_slice(),
                                                    Vec::new(),
-                                                   Vec::new(),
                                                    all_outputs.as_slice(),
-                                                   Vec::new(),
                                                    Vec::new()).unwrap();
         let owners_memos = transfer_body.transfer.owners_memos.clone();
         // dbg!(&transfer_body);
@@ -1321,9 +1317,7 @@ impl InterpretAccounts<PlatformError> for LedgerStandaloneAccounts {
                                  to_use.iter().cloned().map(TxoRef::Absolute).collect(),
                                  src_records.as_slice(),
                                  Vec::new(),
-                                 Vec::new(),
                                  all_outputs.as_slice(),
-                                 Vec::new(),
                                  Vec::new()).unwrap();
 
         let mut owners_memos = transfer_body.transfer.owners_memos.clone();

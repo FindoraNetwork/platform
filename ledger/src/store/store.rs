@@ -2034,9 +2034,7 @@ pub mod helpers {
                                                 vec![TxoRef::Relative(0)],
                                                 &[AssetRecord::from_open_asset_record_no_asset_tracking(open_blind_asset_record(&ba, &owner_memo, &issuer_keys.get_sk_ref()).unwrap())],
                                                 Vec::new(),
-                                                Vec::new(),
                                                 &[ar.clone()],
-                                                Vec::new(),
                                                 Vec::new()).unwrap(),
                          TransferType::Standard).unwrap();
 
@@ -2527,9 +2525,7 @@ mod tests {
                                                                  vec![TxoRef::Absolute(txo_sid)],
                                                                  &[input_ar],
                                                                  Vec::new(),
-                                                                 Vec::new(),
                                                                  &[output_ar],
-                                                                 Vec::new(),
                                                                  Vec::new()).unwrap(),
                                           TransferType::Standard).unwrap();
 
@@ -2800,9 +2796,7 @@ mod tests {
                                                                  vec![TxoRef::Absolute(sid)],
                                                                  &[AssetRecord::from_open_asset_record_no_asset_tracking(open_blind_asset_record(&bar, &None, &alice.get_sk_ref()).unwrap())],
                                                                  Vec::new(),
-                                                                 Vec::new(),
                                                                  &[record.clone(),
-                                                                 Vec::new(),
                                                                  Vec::new()]).unwrap(),
                                           TransferType::Standard).unwrap();
     transfer.sign(&alice);
@@ -2832,9 +2826,7 @@ mod tests {
                                                                  vec![TxoRef::Relative(0)],
                                                                  &[AssetRecord::from_open_asset_record_no_asset_tracking(ar.open_asset_record)],
                                                                  Vec::new(),
-                                                                 Vec::new(),
                                                                  &[second_record],
-                                                                 Vec::new(),
                                                                  Vec::new()).unwrap(),
                                           TransferType::Standard).unwrap();
     transfer.sign(&alice);
@@ -2988,9 +2980,7 @@ mod tests {
                                                                  vec![TxoRef::Absolute(txo_sid)],
                                                                  &[AssetRecord::from_open_asset_record_no_asset_tracking(input_oar)],
                                                                  Vec::new(),
-                                                                 Vec::new(),
                                                                  &[output_ar],
-                                                                 Vec::new(),
                                                                  Vec::new()).unwrap(),
                                           TransferType::Standard).unwrap();
 
@@ -3180,9 +3170,7 @@ mod tests {
                                           &[AssetRecord::from_open_asset_record_no_asset_tracking(open_blind_asset_record(&fiat_bar, &None, &lender_key_pair.get_sk_ref()).unwrap()),
                                           AssetRecord::from_open_asset_record_no_asset_tracking(open_blind_asset_record(&debt_bar, &None, &borrower_key_pair.get_sk_ref()).unwrap())],
                                           Vec::new(),
-                                          Vec::new(),
                                           &[fiat_transfer_record, loan_transfer_record],
-                                          Vec::new(),
                                           Vec::new()).unwrap(),
                        TransferType::Standard).unwrap();
     transfer.sign(&lender_key_pair);
@@ -3251,12 +3239,10 @@ mod tests {
                                                        &None,
                                                        &borrower_key_pair.get_sk_ref()).unwrap())],
                              Vec::new(),
-                             Vec::new(),
                              &[payment_record,
                                burned_debt_record,
                                returned_debt_record,
                                returned_fiat_record],
-                             Vec::new(),
                              Vec::new()).unwrap();
 
     tx.operations
