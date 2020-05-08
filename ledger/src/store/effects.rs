@@ -10,10 +10,11 @@ use cryptohash::sha256::Digest as BitDigest;
 use findora::HasInvariants;
 use rand_core::{CryptoRng, RngCore, SeedableRng};
 use std::collections::{HashMap, HashSet};
+use zei::api::anon_creds::ACCommitment;
 use zei::serialization::ZeiFromToBytes;
 use zei::xfr::lib::verify_xfr_body;
 use zei::xfr::sig::XfrPublicKey;
-use zei::xfr::structs::{AssetTracingPolicy, BlindAssetRecord, XfrAmount, XfrAssetType};
+use zei::xfr::structs::{AssetTracingPolicy, BlindAssetRecord, XfrAmount, XfrAssetType, XfrBody};
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct TxnEffect {
@@ -44,6 +45,12 @@ pub struct TxnEffect {
   // i.e. (2, 1) -> { AlicePk, BobPk } means that Alice and Bob both have valid signatures on the 2nd input of the 1st
   // operation
   pub cosig_keys: HashMap<(usize, usize), HashSet<Vec<u8>>>,
+  // Asset tracing records of transfer inputs
+  pub transfer_input_tracing_records: Vec<(Option<AssetTracingPolicy>, Option<ACCommitment>)>,
+  // Asset tracing records of transfer outputs
+  pub transfer_output_tracing_records: Vec<(Option<AssetTracingPolicy>, Option<ACCommitment>)>,
+  // Encrypted transfer body
+  pub transfer_body: Option<Box<XfrBody>>,
   // Debt swap information that must be externally validated
   pub debt_effects: HashMap<AssetTypeCode, DebtSwapEffect>,
 
@@ -76,6 +83,9 @@ impl TxnEffect {
     let mut issuance_amounts = HashMap::new();
     let mut issuance_tracing_policies: HashMap<AssetTypeCode, Option<AssetTracingPolicy>> =
       HashMap::new();
+    let mut transfer_input_tracing_records = Vec::new();
+    let mut transfer_output_tracing_records = Vec::new();
+    let mut transfer_body: Option<Box<XfrBody>> = None;
     let mut debt_effects: HashMap<AssetTypeCode, DebtSwapEffect> = HashMap::new();
     let mut asset_types_involved: HashSet<AssetTypeCode> = HashSet::new();
     let mut confidential_issuance_types = HashSet::new();
@@ -240,7 +250,7 @@ impl TxnEffect {
         //          - Partially checked here -- anything which hasn't
         //            been checked will appear in `input_txos`
         //     3) The zei transaction is valid.
-        //          - Fully checked here
+        //          - Checked here and in check_txn_effects
         Operation::TransferAsset(trn) => {
           if trn.body.inputs.len() != trn.body.transfer.inputs.len() {
             return Err(PlatformError::InputsError(error_location!()));
@@ -297,58 +307,62 @@ impl TxnEffect {
           }
           // (3)
           // TODO: implement real policies
-          let mut input_tracing_policies = Vec::new();
-          let mut input_sig_commitments = Vec::new();
-          for (input_tracing_policy, input_sig_commitment) in trn.body.input_tracing_records.iter()
+          let mut transfer_input_policies = Vec::new();
+          let mut transfer_input_commitments = Vec::new();
+          for (input_tracing_policy, input_indentity_commitment) in
+            trn.body.input_tracing_records.iter()
           {
             match input_tracing_policy {
               Some(policy) => {
-                input_tracing_policies.push(Some(policy));
+                transfer_input_policies.push(Some(policy));
               }
               None => {
-                input_tracing_policies.push(None);
+                transfer_input_policies.push(None);
               }
             }
-            match input_sig_commitment {
+            match input_indentity_commitment {
               Some(commitment) => {
-                input_sig_commitments.push(Some(commitment));
+                transfer_input_commitments.push(Some(commitment));
               }
               None => {
-                input_sig_commitments.push(None);
+                transfer_input_commitments.push(None);
               }
             }
           }
-          let mut output_tracing_policies = Vec::new();
-          let mut output_sig_commitments = Vec::new();
-          for (output_tracing_policy, output_sig_commitment) in
+          let mut transfer_output_policies = Vec::new();
+          let mut transfer_output_commitments = Vec::new();
+          for (output_tracing_policy, output_indentity_commitment) in
             trn.body.output_tracing_records.iter()
           {
             match output_tracing_policy {
               Some(policy) => {
-                output_tracing_policies.push(Some(policy));
+                transfer_output_policies.push(Some(policy));
               }
               None => {
-                output_tracing_policies.push(None);
+                transfer_output_policies.push(None);
               }
             }
-            match output_sig_commitment {
+            match output_indentity_commitment {
               Some(commitment) => {
-                output_sig_commitments.push(Some(commitment));
+                transfer_output_commitments.push(Some(commitment));
               }
               None => {
-                output_sig_commitments.push(None);
+                transfer_output_commitments.push(None);
               }
             }
           }
           verify_xfr_body(prng,
                           &trn.body.transfer,
-                          &input_tracing_policies[..],
-                          &input_sig_commitments[..],
-                          &output_tracing_policies[..],
-                          &output_sig_commitments[..]).map_err(|e| {
+                          &transfer_input_policies[..],
+                          &transfer_input_commitments[..],
+                          &transfer_output_policies[..],
+                          &transfer_output_commitments[..]).map_err(|e| {
                                                         PlatformError::ZeiError(error_location!(),
                                                                                 e)
                                                       })?;
+          transfer_input_tracing_records = trn.body.input_tracing_records.clone();
+          transfer_output_tracing_records = trn.body.output_tracing_records.clone();
+          transfer_body = Some(trn.body.transfer.clone());
 
           for (inp, record) in trn.body.inputs.iter().zip(trn.body.transfer.inputs.iter()) {
             // Until we can distinguish assets that have policies that invoke transfer restrictions
@@ -463,6 +477,9 @@ impl TxnEffect {
                    issuance_amounts,
                    confidential_issuance_types,
                    issuance_tracing_policies,
+                   transfer_input_tracing_records,
+                   transfer_output_tracing_records,
+                   transfer_body,
                    debt_effects,
                    asset_types_involved,
                    custom_policy_asset_types,

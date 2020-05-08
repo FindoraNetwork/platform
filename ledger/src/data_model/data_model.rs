@@ -233,12 +233,16 @@ impl SignatureRules {
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 /// Simple asset rules:
 /// 1) Traceable: Records of traceable assets can be decrypted by a provided tracking key
-/// 2) Transferable: Non-transferable assets can only be transferred once from the issuer to
+/// 2) Identity traceable: Records of identity traceable assets can be decrypted by a provided tracking key
+/// 3) Transferable: Non-transferable assets can only be transferred once from the issuer to
 ///    another user.
-/// 3) Max units: Optional limit on total issuance amount.
-/// 4) Transfer signature rules: Signature weights and threshold for a valid transfer.
+/// 4) Max units: Optional limit on total issuance amount.
+/// 5) Transfer signature rules: Signature weights and threshold for a valid transfer.
 pub struct AssetRules {
   pub traceable: bool,
+  #[serde(default)]
+  #[serde(skip_serializing_if = "is_default")]
+  pub identity_traceable: bool,
   pub transferable: bool,
   pub updatable: bool,
   pub transfer_multisig_rules: Option<SignatureRules>,
@@ -247,6 +251,7 @@ pub struct AssetRules {
 impl Default for AssetRules {
   fn default() -> Self {
     AssetRules { traceable: false,
+                 identity_traceable: false,
                  transferable: true,
                  updatable: false,
                  max_units: None,
@@ -257,6 +262,11 @@ impl Default for AssetRules {
 impl AssetRules {
   pub fn set_traceable(&mut self, traceable: bool) -> &mut Self {
     self.traceable = traceable;
+    self
+  }
+
+  pub fn set_identity_traceable(&mut self, identity_traceable: bool) -> &mut Self {
+    self.identity_traceable = identity_traceable;
     self
   }
 

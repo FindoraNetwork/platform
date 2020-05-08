@@ -421,6 +421,7 @@ impl LedgerStatus {
   //  ledger.check_txn_effects(txn_effect);
   //  block.add_txn_effect(txn_effect);
   //
+  #[allow(clippy::cognitive_complexity)]
   fn check_txn_effects(&self, txn: TxnEffect) -> Result<TxnEffect, PlatformError> {
     // 1. Each input must be unspent and correspond to the claimed record
     // 2. Inputs with transfer restrictions can only be owned by the asset issuer
@@ -597,6 +598,54 @@ impl LedgerStatus {
         }
       } else {
         return Err(PlatformError::InputsError(error_location!()));
+      }
+    }
+
+    // Asset transfer body must be consistent with the tracing policies
+    if let Some(xfr_body) = txn.transfer_body.clone() {
+      for (output_blind_asset_record, (output_tracing_policy, _)) in
+        xfr_body.outputs
+                .iter()
+                .zip(txn.transfer_output_tracing_records.clone())
+      {
+        match output_blind_asset_record.asset_type {
+          XfrAssetType::NonConfidential(asset_type) => {
+            let code = AssetTypeCode { val: asset_type };
+            let rules = &self.asset_types
+                             .get(&code)
+                             .or_else(|| txn.new_asset_codes.get(&code))
+                             .ok_or_else(|| PlatformError::InputsError(error_location!()))?
+                             .properties
+                             .asset_rules;
+            let asset_traceability = rules.traceable;
+            let identity_traceability = rules.identity_traceable;
+            match output_tracing_policy {
+              Some(tracing_policy) => {
+                if tracing_policy.asset_tracking != asset_traceability {
+                  return Err(PlatformError::InputsError(error_location!()));
+                }
+                if tracing_policy.identity_tracking.is_some() != identity_traceability {
+                  return Err(PlatformError::InputsError(error_location!()));
+                }
+              }
+              None => {
+                if asset_traceability {
+                  return Err(PlatformError::InputsError(error_location!()));
+                }
+              }
+            }
+          }
+          _ => match output_tracing_policy {
+            Some(tracing_policy) => {
+              if tracing_policy.identity_tracking.is_none() {
+                return Err(PlatformError::InputsError(error_location!()));
+              }
+            }
+            _ => {
+              return Err(PlatformError::InputsError(error_location!()));
+            }
+          },
+        }
       }
     }
 
@@ -2795,9 +2844,9 @@ mod tests {
     let mut transfer = TransferAsset::new(TransferAssetBody::new(ledger.get_prng(),
                                                                  vec![TxoRef::Absolute(sid)],
                                                                  &[AssetRecord::from_open_asset_record_no_asset_tracking(open_blind_asset_record(&bar, &None, &alice.get_sk_ref()).unwrap())],
-                                                                 Vec::new(),
+                                                                 vec![None],
                                                                  &[record.clone()],
-                                                                 Vec::new()).unwrap(),
+                                                                 vec![None]).unwrap(),
                                           TransferType::Standard).unwrap();
     transfer.sign(&alice);
     tx.operations.push(Operation::TransferAsset(transfer));
@@ -2825,9 +2874,9 @@ mod tests {
     let mut transfer = TransferAsset::new(TransferAssetBody::new(ledger.get_prng(),
                                                                  vec![TxoRef::Relative(0)],
                                                                  &[AssetRecord::from_open_asset_record_no_asset_tracking(ar.open_asset_record)],
-                                                                 Vec::new(),
+                                                                 vec![None],
                                                                  &[second_record],
-                                                                 Vec::new()).unwrap(),
+                                                                 vec![None]).unwrap(),
                                           TransferType::Standard).unwrap();
     transfer.sign(&alice);
     tx.operations.push(Operation::TransferAsset(transfer));
@@ -2979,9 +3028,9 @@ mod tests {
     let mut transfer = TransferAsset::new(TransferAssetBody::new(ledger.get_prng(),
                                                                  vec![TxoRef::Absolute(txo_sid)],
                                                                  &[AssetRecord::from_open_asset_record_no_asset_tracking(input_oar)],
-                                                                 Vec::new(),
+                                                                 vec![None],
                                                                  &[output_ar],
-                                                                 Vec::new()).unwrap(),
+                                                                 vec![None]).unwrap(),
                                           TransferType::Standard).unwrap();
 
     transfer.sign(&alice);
@@ -3169,9 +3218,9 @@ mod tests {
                                           vec![TxoRef::Absolute(fiat_sid), TxoRef::Absolute(debt_sid)],
                                           &[AssetRecord::from_open_asset_record_no_asset_tracking(open_blind_asset_record(&fiat_bar, &None, &lender_key_pair.get_sk_ref()).unwrap()),
                                           AssetRecord::from_open_asset_record_no_asset_tracking(open_blind_asset_record(&debt_bar, &None, &borrower_key_pair.get_sk_ref()).unwrap())],
-                                          Vec::new(),
+                                          vec![None; 2],
                                           &[fiat_transfer_record, loan_transfer_record],
-                                          Vec::new()).unwrap(),
+                                          vec![None; 2]).unwrap(),
                        TransferType::Standard).unwrap();
     transfer.sign(&lender_key_pair);
     transfer.sign(&borrower_key_pair);
@@ -3238,12 +3287,12 @@ mod tests {
                                AssetRecord::from_open_asset_record_no_asset_tracking(open_blind_asset_record(&fiat_bar,
                                                        &None,
                                                        &borrower_key_pair.get_sk_ref()).unwrap())],
-                             Vec::new(),
+                             vec![None; 2],
                              &[payment_record,
                                burned_debt_record,
                                returned_debt_record,
                                returned_fiat_record],
-                             Vec::new()).unwrap();
+                             vec![None; 4]).unwrap();
 
     tx.operations
       .push(Operation::TransferAsset(TransferAsset::new(transfer_body,

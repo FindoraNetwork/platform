@@ -1151,7 +1151,7 @@ pub mod txn_lib {
                                                  &CredCommitmentKey)>,
                                          txn_file: &str,
                                          tracing_policy: Option<AssetTracingPolicy>,
-                                         sig_commitment: Option<CredCommitment>)
+                                         identity_commitment: Option<CredCommitment>)
                                          -> Result<TransactionBuilder, PlatformError> {
     // Asset issuance is always nonconfidential
     let (blind_asset_record, _, owner_memo) =
@@ -1184,7 +1184,7 @@ pub mod txn_lib {
                                                           amount)?
                                                  .add_output(&output_template,
                                                              tracing_policy.clone(),
-                                                             sig_commitment,
+                                                             identity_commitment,
                                                              credential_record)?
                                                  .balance()?
                                                  .create(TransferType::Standard)?
@@ -1795,7 +1795,7 @@ pub mod txn_lib {
     let ac_credential =
       wrapper_credential.to_ac_credential()
                         .or_else(|e| Err(PlatformError::ZeiError(error_location!(), e)))?;
-    let (sig_commitment, _, commitment_key) =
+    let (identity_commitment, _, commitment_key) =
       credential_commit(&mut prng, &user_secret_key, &wrapper_credential, b"").unwrap();
     let commitment_key_str =
       serde_json::to_vec(&commitment_key).or_else(|_| Err(PlatformError::SerializationError))?;
@@ -1850,7 +1850,6 @@ pub mod txn_lib {
                                                    credential_issuer_public_key.get_ref().clone(),
                                                  reveal_map };
     let debt_tracing_policy = AssetTracingPolicy { enc_keys: tracer_enc_keys,
-                                                   //  asset_tracking: true,
                                                    asset_tracking: false,
                                                    identity_tracking: Some(identity_policy) };
 
@@ -1889,8 +1888,7 @@ pub mod txn_lib {
                                    borrower_key_pair,
                                    debt_code,
                                    &memo_str,
-                                   //  AssetRules::default().set_traceable(true).clone(),
-                                   AssetRules::default(),
+                                   AssetRules::default().set_identity_traceable(true).clone(),
                                    txn_file)?;
     // Store data before submitting the transaction to avoid data overwriting
     let data = load_data()?;
@@ -1909,7 +1907,7 @@ pub mod txn_lib {
                                credential_record,
                                &debt_txn_file,
                                Some(debt_tracing_policy.clone()),
-                               Some(sig_commitment.clone()))?;
+                               Some(identity_commitment.clone()))?;
     let debt_sid = submit_and_get_sids(protocol, host, txn_builder)?[0];
     println!("Debt sid: {}", debt_sid.0);
     let debt_open_asset_record =
@@ -1939,7 +1937,7 @@ pub mod txn_lib {
                                                            amount)?
                                                 .add_output(&lender_template,
                                                             Some(debt_tracing_policy),
-                                                            Some(sig_commitment),
+                                                            Some(identity_commitment),
                                                             credential_record)?
                                                 .add_output(&borrower_template, None, None, None)?
                                                 .create(TransferType::Standard)?

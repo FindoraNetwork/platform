@@ -943,7 +943,7 @@ fn test_issue_transfer_trace_and_submit_with_args() {
 }
 
 #[test]
-#[ignore]
+// #[ignore]
 // Test funds loading, loan request, fulfilling and repayment
 fn test_request_fulfill_and_pay_loan_with_args() {
   let ledger_standalone = LedgerStandalone::new();
