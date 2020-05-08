@@ -8,7 +8,6 @@ pub mod txn_lib {
   };
   use curve25519_dalek::ristretto::CompressedRistretto;
   use curve25519_dalek::scalar::Scalar;
-  use env_logger::{Env, Target};
   use ledger::data_model::errors::PlatformError;
   use ledger::data_model::{
     AccountAddress, AssetRules, AssetTypeCode, TransferType, TxOutput, TxoRef, TxoSID,
@@ -2171,8 +2170,8 @@ pub mod txn_lib {
   // TODO Verify that this comment is correct.
   // TODO switch to using from_default_env()
   pub fn init_logging() {
-    env_logger::from_env(Env::default().default_filter_or("trace")).target(Target::Stdout)
-                                                                   .init();
+    flexi_logger::Logger::with_env_or_str("trace").start()
+                                                  .unwrap();
   }
 
   /// Matches the PlatformError with an exitcode and exits.
