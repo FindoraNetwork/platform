@@ -343,6 +343,8 @@ mod tests {
   #[test]
   #[ignore]
   fn test_cmd() {
+    let _ = fs::remove_file("solvency_data.json");
+
     // Start the standalone ledger
     let ledger_standalone = &LedgerStandalone::new();
     ledger_standalone.poll_until_ready().unwrap();

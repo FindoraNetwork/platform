@@ -98,8 +98,7 @@ pub mod txn_lib {
       "credentials": 0,
       "loans": [],
       "balance": 0,
-      "fiat_utxo": null,
-      "fiat_txn_file": null
+      "fiat_utxo": null
     }
   ],
   "credentials": [
@@ -361,8 +360,6 @@ pub mod txn_lib {
     balance: u64,
     /// Fiat asset UTXO (unspent transaction output) SIDs, if any
     fiat_utxo: Option<TxoSID>,
-    /// Path to the most recent fiat asset transaction file, if any
-    fiat_txn_file: Option<String>,
   }
 
   impl Borrower {
@@ -378,8 +375,7 @@ pub mod txn_lib {
                  credentials: None,
                  loans: Vec::new(),
                  balance: 0,
-                 fiat_utxo: None,
-                 fiat_txn_file: None }
+                 fiat_utxo: None }
     }
   }
 
@@ -429,8 +425,6 @@ pub mod txn_lib {
     code: Option<String>,
     /// Debt asset UTXO (unspent transaction output) SIDs, null if the loan isn't fulfilled     
     debt_utxo: Option<TxoSID>,
-    /// Path to the most recent debt asset transaction file, null if the loan isn't fulfilled     
-    debt_txn_file: Option<String>,
     /// Serialized anon_creds::Credential, null if the loan isn't fulfilled     
     credential: Option<String>,
     /// Serialized credential user secret key, if exists
@@ -461,7 +455,6 @@ pub mod txn_lib {
              payments: 0,
              code: None,
              debt_utxo: None,
-             debt_txn_file: None,
              credential: None,
              user_secret_key: None,
              signature: None,
@@ -742,6 +735,7 @@ pub mod txn_lib {
     let txn = fs::read_to_string(file_path).or_else(|_| {
                 Err(PlatformError::IoError(format!("Failed to read file: {}", file_path)))
               })?;
+    let _ = fs::remove_file(file_path);
     println!("Parsing builder from file contents: \"{}\"", &txn);
     match serde_json::from_str::<TransactionBuilder>(&txn) {
       Ok(builder) => Ok(((builder.get_owner_record_and_memo(0).unwrap().0.clone()).0,
@@ -765,7 +759,7 @@ pub mod txn_lib {
     Ok(bars_and_owner_memos)
   }
 
-  /// Loads the open asset record by getting the blind asset record and owner memo from transaction file.
+  /// Loads the open asset record by getting the blind asset record and owner memo from transaction file and removes the file.
   /// # Arguments
   /// * `file_path`: path to the transaction file.
   /// * `key_pair`: key pair of the asset record.
@@ -1088,7 +1082,7 @@ pub mod txn_lib {
                              token_code: AssetTypeCode,
                              memo: &str,
                              asset_rules: AssetRules,
-                             txn_file: &str)
+                             txn_file: Option<&str>)
                              -> Result<TransactionBuilder, PlatformError> {
     let mut txn_builder = TransactionBuilder::default();
     txn_builder.add_operation_create_asset(issuer_key_pair,
@@ -1096,7 +1090,9 @@ pub mod txn_lib {
                                            asset_rules,
                                            &memo,
                                            PolicyChoice::Fungible())?;
-    store_txn_to_file(&txn_file, &txn_builder)?;
+    if let Some(file) = txn_file {
+      store_txn_to_file(&file, &txn_builder)?;
+    }
 
     // Update data
     let mut data = load_data()?;
@@ -1149,7 +1145,7 @@ pub mod txn_lib {
                                          credential_record: Option<(&CredUserSecretKey,
                                                  &ZeiCredential,
                                                  &CredCommitmentKey)>,
-                                         txn_file: &str,
+                                         txn_file: Option<&str>,
                                          tracing_policy: Option<AssetTracingPolicy>)
                                          -> Result<TransactionBuilder, PlatformError> {
     // Asset issuance is always nonconfidential
@@ -1197,7 +1193,10 @@ pub mod txn_lib {
                .add_operation(xfr_op)
                .transaction();
 
-    store_txn_to_file(txn_file, &txn_builder)?;
+    if let Some(file) = txn_file {
+      store_txn_to_file(file, &txn_builder)?;
+    }
+
     Ok(txn_builder)
   }
 
@@ -1533,13 +1532,11 @@ pub mod txn_lib {
   /// * `recipient_id`: recipient's ID.
   /// * `amount`: amount to load.
   /// * `memo_file`: path to store the tracer and owner memos, optional.
-  /// * `txn_file`: path to store the transaction file.
   /// * `protocol`: either `https` or `http`.
   /// * `host`: either `testnet.findora.org` or `localhost`.
   pub(crate) fn load_funds(issuer_id: u64,
                            recipient_id: u64,
                            amount: u64,
-                           txn_file: &str,
                            protocol: &str,
                            host: &str)
                            -> Result<(), PlatformError> {
@@ -1559,7 +1556,7 @@ pub mod txn_lib {
                                      fiat_code,
                                      "Fiat asset",
                                      AssetRules::default(),
-                                     txn_file)?;
+                                     None)?;
       // Store data before submitting the transaction to avoid data overwriting
       let data = load_data()?;
       submit(protocol, host, txn_builder)?;
@@ -1575,7 +1572,7 @@ pub mod txn_lib {
                                token_code,
                                AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
                                None,
-                               txn_file,
+                               None,
                                None)?;
 
     // Submit transaction and get the new record
@@ -1609,8 +1606,6 @@ pub mod txn_lib {
                                       token_code,
                                       None)?;
 
-      // Store the transaction to file so that the merged blind asset record and owner memo can be retrieved
-      store_txn_to_file(txn_file, &txn_builder)?;
       submit_and_get_sids(protocol, host, txn_builder)?[0]
     } else {
       sid_new
@@ -1652,13 +1647,11 @@ pub mod txn_lib {
   /// # Arguments
   /// * `loan_id`: loan ID.
   /// * `issuer_id`: issuer ID.
-  /// * `txn_file`: path to store the transaction file.
   /// * `memo_file`: path to store the asset tracer memo and owner memo, optional.
   /// * `protocol`: either `https` or `http`.
   /// * `host`: either `testnet.findora.org` or `locaohost`.
   pub(crate) fn fulfill_loan(loan_id: u64,
                              issuer_id: u64,
-                             txn_file: &str,
                              memo_file: Option<&str>,
                              protocol: &str,
                              host: &str)
@@ -1845,7 +1838,7 @@ pub mod txn_lib {
                                      fiat_code,
                                      "Fiat asset",
                                      AssetRules::default(),
-                                     txn_file)?;
+                                     None)?;
       // Store data before submitting the transaction to avoid data overwriting
       let data = load_data()?;
       submit(protocol, host, txn_builder)?;
@@ -1863,8 +1856,7 @@ pub mod txn_lib {
 
     // Issue and transfer fiat token
     let credential_record = Some((&user_secret_key, &ac_credential, &commitment_key));
-    let mut fiat_txn_file = txn_file.to_owned();
-    fiat_txn_file.push_str(&format!(".fiat.{}", borrower_id));
+    let fiat_txn_file = "fiat_txn_file";
     let txn_builder =
       issue_and_transfer_asset(issuer_key_pair,
                                lender_key_pair,
@@ -1872,11 +1864,11 @@ pub mod txn_lib {
                                fiat_code,
                                AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
                                None,
-                               &fiat_txn_file,
+                               Some(fiat_txn_file),
                                None)?;
     let fiat_sid = submit_and_get_sids(protocol, host, txn_builder)?[0];
     println!("Fiat sid: {}", fiat_sid.0);
-    let (_, owner_memo) = load_blind_asset_record_and_owner_memo_from_file(&fiat_txn_file)?;
+    let (_, owner_memo) = load_blind_asset_record_and_owner_memo_from_file(fiat_txn_file)?;
     let fiat_open_asset_record =
       query_open_asset_record(protocol, host, fiat_sid, lender_key_pair, &owner_memo)?;
 
@@ -1896,15 +1888,14 @@ pub mod txn_lib {
                                    debt_code,
                                    &memo_str,
                                    AssetRules::default().set_traceable(true).clone(),
-                                   txn_file)?;
+                                   None)?;
     // Store data before submitting the transaction to avoid data overwriting
     let data = load_data()?;
     submit(protocol, host, txn_builder)?;
     store_data_to_file(data)?;
 
     // Issue and transfer debt token
-    let mut debt_txn_file = txn_file.to_owned();
-    debt_txn_file.push_str(&format!(".debt.{}", loan_id));
+    let debt_txn_file = "debt_txn_file";
     let txn_builder =
       issue_and_transfer_asset(borrower_key_pair,
                                borrower_key_pair,
@@ -1912,12 +1903,12 @@ pub mod txn_lib {
                                debt_code,
                                AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
                                credential_record,
-                               &debt_txn_file,
+                               Some(debt_txn_file),
                                Some(debt_tracing_policy.clone()))?;
     let debt_sid = submit_and_get_sids(protocol, host, txn_builder)?[0];
     println!("Debt sid: {}", debt_sid.0);
     let debt_open_asset_record =
-      load_open_asset_record_from_file(&debt_txn_file, borrower_key_pair)?;
+      load_open_asset_record_from_file(debt_txn_file, borrower_key_pair)?;
 
     // Initiate loan
     let lender_template =
@@ -1947,7 +1938,6 @@ pub mod txn_lib {
                                                 .transaction()?;
     let mut txn_builder = TransactionBuilder::default();
     txn_builder.add_operation(xfr_op);
-    store_txn_to_file(&debt_txn_file, &txn_builder)?;
 
     // Submit transaction
     let sids_new = submit_and_get_sids(protocol, host, txn_builder)?;
@@ -1981,7 +1971,6 @@ pub mod txn_lib {
                                       (blind_asset_record_new, None),
                                       fiat_code,
                                       None)?;
-      store_txn_to_file(&fiat_txn_file, &txn_builder)?;
       submit_and_get_sids(protocol, host, txn_builder)?[0]
     } else {
       sids_new[1]
@@ -1998,11 +1987,9 @@ pub mod txn_lib {
     data.loans[loan_id as usize].status = LoanStatus::Active;
     data.loans[loan_id as usize].code = Some(debt_code.to_base64());
     data.loans[loan_id as usize].debt_utxo = Some(sids_new[0]);
-    data.loans[loan_id as usize].debt_txn_file = Some(debt_txn_file);
     data.loans[loan_id as usize].credential = Some(credential_str);
     data.borrowers[borrower_id as usize].balance = borrower.balance + amount;
     data.borrowers[borrower_id as usize].fiat_utxo = Some(fiat_sid_merged);
-    data.borrowers[borrower_id as usize].fiat_txn_file = Some(fiat_txn_file);
     store_data_to_file(data)
   }
 
@@ -2342,7 +2329,7 @@ pub mod txn_lib {
                            asset_token,
                            &memo,
                            AssetRules::default().set_traceable(traceable).clone(),
-                           txn_file)
+                           Some(txn_file))
         {
           Ok(_) => Ok(()),
           Err(error) => Err(error),
@@ -2565,7 +2552,7 @@ pub mod txn_lib {
                                  token_code,
                                  record_type,
                                  None,
-                                 txn_file,
+                                 Some(txn_file),
                                  None)?;
         Ok(())
       }
@@ -2716,10 +2703,7 @@ pub mod txn_lib {
   ///
   /// # Arguments
   /// * `lender_matches`: subcommands and arguments under the `lender` subcommand.
-  /// * `txn_file`: path to store the transaction file.
-  pub(crate) fn process_lender_cmd(lender_matches: &clap::ArgMatches,
-                                   txn_file: &str)
-                                   -> Result<(), PlatformError> {
+  pub(crate) fn process_lender_cmd(lender_matches: &clap::ArgMatches) -> Result<(), PlatformError> {
     let mut data = load_data()?;
     match lender_matches.subcommand() {
       ("sign_up", Some(sign_up_matches)) => {
@@ -2819,7 +2803,7 @@ pub mod txn_lib {
         };
         let memo_file = fulfill_loan_matches.value_of("memo_file");
         let (protocol, host) = protocol_host(fulfill_loan_matches);
-        fulfill_loan(loan_id, issuer_id, txn_file, memo_file, protocol, host)
+        fulfill_loan(loan_id, issuer_id, memo_file, protocol, host)
       }
       ("create_or_overwrite_requirement", Some(create_or_overwrite_requirement_matches)) => {
         let lender_id = if let Some(id_arg) = lender_matches.value_of("id") {
@@ -2872,9 +2856,7 @@ pub mod txn_lib {
   ///
   /// # Arguments
   /// * `borrower_matches`: subcommands and arguments under the `borrower` subcommand.
-  /// * `txn_file`: path to store the transaction file.
-  pub(crate) fn process_borrower_cmd(borrower_matches: &clap::ArgMatches,
-                                     txn_file: &str)
+  pub(crate) fn process_borrower_cmd(borrower_matches: &clap::ArgMatches)
                                      -> Result<(), PlatformError> {
     let mut data = load_data()?;
     match borrower_matches.subcommand() {
@@ -2894,7 +2876,7 @@ pub mod txn_lib {
           println!("Borrower id is required to load funds. Use borrower --id.");
           return Err(PlatformError::InputsError(error_location!()));
         };
-        process_load_funds_cmd(borrower_id, load_funds_matches, txn_file)
+        process_load_funds_cmd(borrower_id, load_funds_matches)
       }
       ("view_loan", Some(view_loan_matches)) => {
         let borrower_id = if let Some(id_arg) = borrower_matches.value_of("id") {
@@ -3191,10 +3173,8 @@ pub mod txn_lib {
   /// # Arguments
   /// * `borrower_id`: borrower ID.
   /// * `load_funds_matches`: subcommands and arguments under the `load_funds` subcommand.
-  /// * `txn_file`: path to store the transaction file.
   pub(crate) fn process_load_funds_cmd(borrower_id: u64,
-                                       load_funds_matches: &clap::ArgMatches,
-                                       txn_file: &str)
+                                       load_funds_matches: &clap::ArgMatches)
                                        -> Result<(), PlatformError> {
     let issuer_id = if let Some(issuer_arg) = load_funds_matches.value_of("issuer") {
       if let Ok(id) = issuer_arg.parse::<u64>() {
@@ -3214,7 +3194,7 @@ pub mod txn_lib {
       return Err(PlatformError::InputsError(error_location!()));
     };
     let (protocol, host) = protocol_host(load_funds_matches);
-    load_funds(issuer_id, borrower_id, amount, txn_file, protocol, host)
+    load_funds(issuer_id, borrower_id, amount, protocol, host)
   }
 
   /// Processes the `borrower pay_loan` subcommand.
@@ -3282,8 +3262,8 @@ pub mod txn_lib {
       ("credential_issuer", Some(credential_issuer_matches)) => {
         process_credential_issuer_cmd(credential_issuer_matches)
       }
-      ("lender", Some(issuer_matches)) => process_lender_cmd(issuer_matches, &txn_file),
-      ("borrower", Some(issuer_matches)) => process_borrower_cmd(issuer_matches, &txn_file),
+      ("lender", Some(issuer_matches)) => process_lender_cmd(issuer_matches),
+      ("borrower", Some(issuer_matches)) => process_borrower_cmd(issuer_matches),
       ("create_txn_builder", Some(create_txn_builder_matches)) => {
         process_create_txn_builder_cmd(create_txn_builder_matches, &txn_file)
       }
@@ -3408,8 +3388,7 @@ pub mod txn_lib {
 
     #[test]
     fn test_define_asset() {
-      // Create txn builder and key pair
-      let txn_builder_path = "tb_define";
+      // Create key pair
       let mut prng: ChaChaRng = ChaChaRng::from_entropy();
       let issuer_key_pair = XfrKeyPair::generate(&mut prng);
 
@@ -3419,18 +3398,15 @@ pub mod txn_lib {
                              AssetTypeCode::gen_random(),
                              "Define asset",
                              AssetRules::default(),
-                             txn_builder_path);
+                             None);
 
       let _ = fs::remove_file(DATA_FILE);
-      fs::remove_file(txn_builder_path).unwrap();
-
       assert!(res.is_ok());
     }
 
     #[test]
     fn test_issue_and_transfer_asset() {
-      // Create txn builder and key pairs
-      let txn_builder_path = "tb_issue_and_transfer";
+      // Create key pairs
       let mut prng: ChaChaRng = ChaChaRng::from_entropy();
       let issuer_key_pair = XfrKeyPair::generate(&mut prng);
       let recipient_key_pair = XfrKeyPair::generate(&mut prng);
@@ -3438,16 +3414,18 @@ pub mod txn_lib {
       // Issue and transfer asset
       let code = AssetTypeCode::gen_random();
       let amount = 1000;
-      assert!(issue_and_transfer_asset(&issuer_key_pair,
-                                     &recipient_key_pair,
-                                     amount,
-                                     code,
-                                     AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType, None,
-                                     txn_builder_path,
-                                     None).is_ok());
+      let res =
+        issue_and_transfer_asset(&issuer_key_pair,
+                                 &recipient_key_pair,
+                                 amount,
+                                 code,
+                                 AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
+                                 None,
+                                 None,
+                                 None);
 
       let _ = fs::remove_file(DATA_FILE);
-      fs::remove_file(txn_builder_path).unwrap();
+      assert!(res.is_ok());
     }
 
     #[test]
@@ -3481,27 +3459,22 @@ pub mod txn_lib {
     }
 
     #[test]
-    #[ignore]
     // Test funds loading, loan request, fulfilling and repayment
     fn test_request_fulfill_and_pay_loan() {
+      let _ = fs::remove_file(DATA_FILE);
       let ledger_standalone = LedgerStandalone::new();
       ledger_standalone.poll_until_ready().unwrap();
 
-      // Create txn builder
-      let txn_builder_path = "tb_load_funds";
-
       // Load funds
       let funds_amount = 1000;
-      load_funds(0, 0, funds_amount, txn_builder_path, PROTOCOL, HOST).unwrap();
+      load_funds(0, 0, funds_amount, PROTOCOL, HOST).unwrap();
       let data = load_data().unwrap();
 
       assert_eq!(data.borrowers[0].balance, funds_amount);
 
-      fs::remove_file(txn_builder_path).unwrap();
       let _ = fs::remove_file(DATA_FILE);
 
       // Request a loan
-      let txn_builder_path = "tb_loan";
       let loan_amount = 1200;
       let mut data = load_data().unwrap();
       data.add_loan(0, 0, loan_amount, 100, 8).unwrap();
@@ -3509,7 +3482,7 @@ pub mod txn_lib {
       assert_eq!(data.loans.len(), 1);
 
       // Fulfill the loan request
-      fulfill_loan(0, 0, txn_builder_path, None, PROTOCOL, HOST).unwrap();
+      fulfill_loan(0, 0, None, PROTOCOL, HOST).unwrap();
       data = load_data().unwrap();
 
       assert_eq!(data.loans[0].status, LoanStatus::Active);
@@ -3521,10 +3494,6 @@ pub mod txn_lib {
       data = load_data().unwrap();
 
       let _ = fs::remove_file(DATA_FILE);
-      fs::remove_file(txn_builder_path).unwrap();
-      fs::remove_file("tb_loan.debt.0").unwrap();
-      fs::remove_file("tb_loan.fiat.0").unwrap();
-
       assert_eq!(data.loans[0].payments, 1);
     }
   }
