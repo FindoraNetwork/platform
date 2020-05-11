@@ -105,7 +105,7 @@ pub fn make_xfr_note() -> XfrNote {
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
-  env_logger::init();
+  flexi_logger::Logger::with_env().start().unwrap();
 
   // Creating an identity Keypair for the local node, obtaining the local PeerId from the PublicKey.
   // Create a random PeerId

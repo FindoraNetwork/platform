@@ -10,7 +10,7 @@ path = "src/bin/xfrnote.rs"
 
 [dependencies]
 async-std = "1.5.0"
-env_logger = "0.7.1"
+flexi_logger = "0.15.2"
 futures = "0.3"
 itertools = "0.8.0"
 json = "0.12.4"

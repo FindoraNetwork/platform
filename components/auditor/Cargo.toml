@@ -9,10 +9,6 @@ name = "auditor"
 path = "src/bin/auditor.rs"
 
 [[bin]]
-name = "gossipsub"
-path = "src/bin/gossipsub.rs"
-
-[[bin]]
 name = "discover"
 path = "src/bin/discover.rs"
 
@@ -21,7 +17,7 @@ async-std = "1.5.0"
 attohttpc = "0.12.0"
 clap = "2.33.0"
 cryptohash = { path = "../../libs/cryptohash" }
-env_logger = "0.7.1"
+flexi_logger = "0.15.2"
 futures = "0.3"
 itertools = "0.8.0"
 json = "0.12.4"

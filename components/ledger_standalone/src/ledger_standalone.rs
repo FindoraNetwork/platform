@@ -12,7 +12,7 @@ use submission_server::SubmissionServer;
 fn main() {
   let base_dir = std::env::var_os("LEDGER_DIR").filter(|x| !x.is_empty());
   let base_dir = base_dir.as_ref().map(Path::new);
-  env_logger::init();
+  flexi_logger::Logger::with_env().start().unwrap();
   dbg!(&base_dir);
   let ledger_state = match base_dir {
     None => LedgerState::test_ledger(),
