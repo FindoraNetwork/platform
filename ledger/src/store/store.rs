@@ -26,8 +26,9 @@ use std::io::{BufRead, BufReader, BufWriter, Write};
 use std::path::Path;
 use std::path::PathBuf;
 use std::u64;
+use zei::xfr::lib::verify_xfr_body;
 use zei::xfr::sig::{XfrKeyPair, XfrPublicKey, XfrSignature};
-use zei::xfr::structs::XfrAssetType;
+use zei::xfr::structs::{AssetTracingPolicy, XfrAssetType};
 
 use super::effects::*;
 
@@ -96,7 +97,7 @@ pub trait LedgerUpdate<RNG: RngCore + CryptoRng> {
   // internally consistent, and matches its internal Transaction
   // object, so any caller of this *must* validate the TxnEffect
   // properly first.
-  fn apply_transaction(&self,
+  fn apply_transaction(&mut self,
                        block: &mut Self::Block,
                        txn: TxnEffect)
                        -> Result<TxnTempSID, PlatformError>;
@@ -218,6 +219,7 @@ pub struct LedgerStatus {
   // prevent replays, but (as far as I know -joe) need not be strictly
   // sequential.
   asset_types: HashMap<AssetTypeCode, AssetType>,
+  tracing_policies: HashMap<AssetTypeCode, Option<AssetTracingPolicy>>,
   issuance_num: HashMap<AssetTypeCode, u64>,
   // Issuance amounts for assets with limits
   issuance_amounts: HashMap<AssetTypeCode, u64>,
@@ -396,6 +398,7 @@ impl LedgerStatus {
                                 utxo_map_versions: VecDeque::new(),
                                 state_commitment_versions: Vec::new(),
                                 asset_types: HashMap::new(),
+                                tracing_policies: HashMap::new(),
                                 issuance_num: HashMap::new(),
                                 next_txn: TxnSID(0),
                                 next_txo: TxoSID(0),
@@ -408,8 +411,8 @@ impl LedgerStatus {
 
   #[cfg(feature = "TESTING")]
   #[allow(non_snake_case)]
-  pub fn TESTING_check_txn_effects(&self, txn: TxnEffect) -> Result<TxnEffect, PlatformError> {
-    self.check_txn_effects(txn)
+  pub fn TESTING_check_txn_effects(&mut self, txn: TxnEffect) -> Result<TxnEffect, PlatformError> {
+    self.check_txn_effects(txn, &mut ChaChaRng::from_entropy())
   }
 
   // Check that `txn` can be safely applied to the current ledger.
@@ -422,7 +425,10 @@ impl LedgerStatus {
   //  block.add_txn_effect(txn_effect);
   //
   #[allow(clippy::cognitive_complexity)]
-  fn check_txn_effects(&self, txn: TxnEffect) -> Result<TxnEffect, PlatformError> {
+  fn check_txn_effects<R: CryptoRng + RngCore>(&self,
+                                               txn: TxnEffect,
+                                               prng: &mut R)
+                                               -> Result<TxnEffect, PlatformError> {
     // 1. Each input must be unspent and correspond to the claimed record
     // 2. Inputs with transfer restrictions can only be owned by the asset issuer
     for (inp_sid, inp_record) in txn.input_txos.iter() {
@@ -602,51 +608,144 @@ impl LedgerStatus {
     }
 
     // Asset transfer body must be consistent with the tracing policies
+    let mut transfer_input_policies = Vec::new();
+    let mut transfer_input_commitments = Vec::new();
+    let mut transfer_output_policies = Vec::new();
+    let mut transfer_output_commitments = Vec::new();
     if let Some(xfr_body) = txn.transfer_body.clone() {
-      for (output_blind_asset_record, (output_tracing_policy, _)) in
-        xfr_body.outputs
+      for (input_blind_asset_record, input_commitment) in
+        xfr_body.inputs
                 .iter()
-                .zip(txn.transfer_output_tracing_records.clone())
+                .zip(txn.transfer_input_commitments.iter())
       {
-        match output_blind_asset_record.asset_type {
+        match input_blind_asset_record.asset_type {
+          // If the asset is nonconfidential, get its tracing policy
           XfrAssetType::NonConfidential(asset_type) => {
             let code = AssetTypeCode { val: asset_type };
-            let rules = &self.asset_types
-                             .get(&code)
-                             .or_else(|| txn.new_asset_codes.get(&code))
-                             .ok_or_else(|| PlatformError::InputsError(error_location!()))?
-                             .properties
-                             .asset_rules;
-            let asset_traceability = rules.traceable;
-            let identity_traceability = rules.identity_traceable;
-            match output_tracing_policy {
-              Some(tracing_policy) => {
-                if tracing_policy.asset_tracking != asset_traceability {
-                  return Err(PlatformError::InputsError(error_location!()));
-                }
-                if tracing_policy.identity_tracking.is_some() != identity_traceability {
-                  return Err(PlatformError::InputsError(error_location!()));
+            let tracing_policy =
+              &self.tracing_policies
+                   .get(&code)
+                   .ok_or_else(|| PlatformError::InputsError(error_location!()))?;
+            match tracing_policy {
+              Some(policy) => {
+                match policy.identity_tracking {
+                  Some(_) => {
+                    transfer_input_policies.push(Some(&AssetTracingPolicy { enc_keys:
+                                                                          policy.enc_keys.clone(),
+                                                                        asset_tracking:
+                                                                          policy.asset_tracking,
+                                                                        identity_tracking:
+                                                                          policy.identity_tracking
+                                                                                .clone() }));
+                    transfer_input_commitments.push(Some(input_commitment.as_ref()
+                                                                         .clone()
+                                                                         .unwrap()));
+                  }
+                  None => {
+                    match input_commitment {
+                      // If the identity isn't traceable, there shouldn't be an identity commitment
+                      Some(_) => {
+                        return Err(PlatformError::InputsError(error_location!()));
+                      }
+                      None => {
+                        transfer_input_policies.push(None);
+                        transfer_input_commitments.push(None);
+                      }
+                    }
+                  }
                 }
               }
               None => {
-                if asset_traceability {
-                  return Err(PlatformError::InputsError(error_location!()));
+                match input_commitment {
+                  // If the asset isn't traceable, there shouldn't be an identity commitment
+                  Some(_) => {
+                    return Err(PlatformError::InputsError(error_location!()));
+                  }
+                  None => {
+                    transfer_input_policies.push(None);
+                    transfer_input_commitments.push(None);
+                  }
                 }
               }
             }
           }
-          _ => match output_tracing_policy {
-            Some(tracing_policy) => {
-              if tracing_policy.identity_tracking.is_none() {
-                return Err(PlatformError::InputsError(error_location!()));
+          // Until we can distinguish assets that have policies that invoke transfer restrictions
+          // from those that don't, no confidential types are allowed
+          _ => {
+            return Err(PlatformError::InputsError(error_location!()));
+          }
+        }
+      }
+      if let Some(xfr_body) = txn.transfer_body.clone() {
+        for (output_blind_asset_record, output_commitment) in
+          xfr_body.outputs
+                  .iter()
+                  .zip(txn.transfer_output_commitments.iter())
+        {
+          match output_blind_asset_record.asset_type {
+            // If the asset is nonconfidential, get its tracing policy
+            XfrAssetType::NonConfidential(asset_type) => {
+              let code = AssetTypeCode { val: asset_type };
+              let tracing_policy =
+                &self.tracing_policies
+                     .get(&code)
+                     .ok_or_else(|| PlatformError::InputsError(error_location!()))?;
+              match tracing_policy {
+                Some(policy) => {
+                  match policy.identity_tracking {
+                    Some(_) => {
+                      transfer_output_policies.push(Some(&AssetTracingPolicy { enc_keys: policy.enc_keys.clone(),
+                                                 asset_tracking: policy.asset_tracking,
+                                                 identity_tracking: policy.identity_tracking.clone() }));
+                      transfer_output_commitments.push(Some(output_commitment.as_ref()
+                                                                             .clone()
+                                                                             .unwrap()));
+                    }
+                    None => {
+                      match output_commitment {
+                        // If the identity isn't traceable, there shouldn't be an identity commitment
+                        Some(_) => {
+                          return Err(PlatformError::InputsError(error_location!()));
+                        }
+                        None => {
+                          transfer_output_policies.push(None);
+                          transfer_output_commitments.push(None);
+                        }
+                      }
+                    }
+                  }
+                }
+                None => {
+                  match output_commitment {
+                    // If the asset isn't traceable, there shouldn't be an identity commitment
+                    Some(_) => {
+                      return Err(PlatformError::InputsError(error_location!()));
+                    }
+                    None => {
+                      transfer_output_policies.push(None);
+                      transfer_output_commitments.push(None);
+                    }
+                  }
+                }
               }
             }
+            // Until we can distinguish assets that have policies that invoke transfer restrictions
+            // from those that don't, no confidential types are allowed
             _ => {
               return Err(PlatformError::InputsError(error_location!()));
             }
-          },
+          }
         }
       }
+      verify_xfr_body(prng,
+                      &xfr_body,
+                      &transfer_input_policies[..],
+                      &transfer_input_commitments[..],
+                      &transfer_output_policies[..],
+                      &transfer_output_commitments[..]).map_err(|e| {
+                                                         PlatformError::ZeiError(error_location!(),
+                                                                                 e)
+                                                       })?;
     }
 
     // Debt swaps
@@ -802,11 +901,11 @@ impl LedgerUpdate<ChaChaRng> for LedgerState {
     }
   }
 
-  fn apply_transaction(&self,
+  fn apply_transaction(&mut self,
                        block: &mut BlockEffect,
                        txn: TxnEffect)
                        -> Result<TxnTempSID, PlatformError> {
-    block.add_txn_effect(self.status.check_txn_effects(txn)?)
+    block.add_txn_effect(self.status.check_txn_effects(txn, self.get_prng())?)
   }
 
   fn abort_block(&mut self, block: BlockEffect) -> HashMap<TxnTempSID, Transaction> {
@@ -978,7 +1077,7 @@ impl LedgerUpdate<ChaChaRng> for LedgerStateChecker {
     self.0.start_block()
   }
 
-  fn apply_transaction(&self,
+  fn apply_transaction(&mut self,
                        block: &mut BlockEffect,
                        txn: TxnEffect)
                        -> Result<TxnTempSID, PlatformError> {
@@ -1481,8 +1580,9 @@ impl LedgerState {
 
       let mut block_builder = ledger.start_block().unwrap();
       for txn in block {
-        let eff = TxnEffect::compute_effect(ledger.get_prng(), txn)
-                .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other,e))?;
+        let eff = TxnEffect::compute_effect(txn).map_err(|e| {
+                                                  std::io::Error::new(std::io::ErrorKind::Other, e)
+                                                })?;
         ledger.apply_transaction(&mut block_builder, eff)
               .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
       }
@@ -1550,8 +1650,9 @@ impl LedgerState {
       let block = logged_block.block;
       let mut block_builder = ledger.start_block().unwrap();
       for txn in block {
-        let eff = TxnEffect::compute_effect(ledger.get_prng(), txn)
-                .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other,e))?;
+        let eff = TxnEffect::compute_effect(txn).map_err(|e| {
+                                                  std::io::Error::new(std::io::ErrorKind::Other, e)
+                                                })?;
         ledger.apply_transaction(&mut block_builder, eff)
               .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
       }
@@ -2037,7 +2138,7 @@ pub mod helpers {
   }
 
   pub fn apply_transaction(ledger: &mut LedgerState, tx: Transaction) -> (TxnSID, Vec<TxoSID>) {
-    let effect = TxnEffect::compute_effect(&mut ledger.get_prng(), tx).unwrap();
+    let effect = TxnEffect::compute_effect(tx).unwrap();
 
     let mut block = ledger.start_block().unwrap();
     let temp_sid = ledger.apply_transaction(&mut block, effect).unwrap();
@@ -2082,9 +2183,9 @@ pub mod helpers {
       TransferAsset::new(TransferAssetBody::new(ledger.get_prng(),
                                                 vec![TxoRef::Relative(0)],
                                                 &[AssetRecord::from_open_asset_record_no_asset_tracking(open_blind_asset_record(&ba, &owner_memo, &issuer_keys.get_sk_ref()).unwrap())],
-                                                vec![(None, None)],
+                                                vec![None],
                                                 &[ar.clone()],
-                                                vec![(None, None)],).unwrap(),
+                                                vec![None]).unwrap(),
                          TransferType::Standard).unwrap();
 
     transfer.sign(&issuer_keys);
@@ -2453,7 +2554,7 @@ mod tests {
     let asset_create = asset_creation_operation(&asset_body, &public_key, &secret_key);
     tx.operations.push(Operation::DefineAsset(asset_create));
 
-    let effect = TxnEffect::compute_effect(&mut prng, tx).unwrap();
+    let effect = TxnEffect::compute_effect(tx).unwrap();
     {
       let mut block = state.start_block().unwrap();
       state.apply_transaction(&mut block, effect).unwrap();
@@ -2490,7 +2591,7 @@ mod tests {
     asset_create.pubkey.key = public_key2;
     tx.operations.push(Operation::DefineAsset(asset_create));
 
-    assert!(TxnEffect::compute_effect(&mut prng, tx).is_err());
+    assert!(TxnEffect::compute_effect(tx).is_err());
   }
 
   #[test]
@@ -2509,7 +2610,7 @@ mod tests {
                                            AssetRules::default(),
                                            None).unwrap();
 
-    let effect = TxnEffect::compute_effect(&mut ledger.get_prng(), tx).unwrap();
+    let effect = TxnEffect::compute_effect(tx).unwrap();
     {
       let mut block = ledger.start_block().unwrap();
       ledger.apply_transaction(&mut block, effect).unwrap();
@@ -2537,7 +2638,7 @@ mod tests {
     tx.operations.push(issue_op);
 
     // Commit issuance to block
-    let effect = TxnEffect::compute_effect(ledger.get_prng(), tx).unwrap();
+    let effect = TxnEffect::compute_effect(tx).unwrap();
 
     let mut block = ledger.start_block().unwrap();
     let temp_sid = ledger.apply_transaction(&mut block, effect).unwrap();
@@ -2573,9 +2674,9 @@ mod tests {
     let mut transfer = TransferAsset::new(TransferAssetBody::new(ledger.get_prng(),
                                                                  vec![TxoRef::Absolute(txo_sid)],
                                                                  &[input_ar],
-                                                                 vec![(None, None)],
+                                                                 vec![None],
                                                                  &[output_ar],
-                                                                 vec![(None, None)]).unwrap(),
+                                                                 vec![None]).unwrap(),
                                           TransferType::Standard).unwrap();
 
     let mut second_transfer = transfer.clone();
@@ -2583,7 +2684,7 @@ mod tests {
     tx.operations.push(Operation::TransferAsset(transfer));
 
     // Commit first transfer
-    let effect = TxnEffect::compute_effect(ledger.get_prng(), tx).unwrap();
+    let effect = TxnEffect::compute_effect(tx).unwrap();
     let mut block = ledger.start_block().unwrap();
     let temp_sid = ledger.apply_transaction(&mut block, effect).unwrap();
 
@@ -2606,7 +2707,7 @@ mod tests {
     tx.operations
       .push(Operation::TransferAsset(second_transfer));
 
-    let effect = TxnEffect::compute_effect(ledger.get_prng(), tx);
+    let effect = TxnEffect::compute_effect(tx);
     assert!(effect.is_err());
   }
 
@@ -2634,7 +2735,7 @@ mod tests {
     asset_create.pubkey.key = public_key2;
     tx.operations.push(Operation::DefineAsset(asset_create));
 
-    assert!(TxnEffect::compute_effect(&mut prng, tx).is_err());
+    assert!(TxnEffect::compute_effect(tx).is_err());
   }
 
   #[test]
@@ -2653,7 +2754,7 @@ mod tests {
                                            AssetRules::default(),
                                            None).unwrap();
 
-    let effect = TxnEffect::compute_effect(&mut ledger.get_prng(), tx).unwrap();
+    let effect = TxnEffect::compute_effect(tx).unwrap();
     {
       let mut block = ledger.start_block().unwrap();
       ledger.apply_transaction(&mut block, effect).unwrap();
@@ -2675,7 +2776,7 @@ mod tests {
     tx.operations.push(issue_op);
     let second_tx = tx.clone();
 
-    let effect = TxnEffect::compute_effect(ledger.get_prng(), tx).unwrap();
+    let effect = TxnEffect::compute_effect(tx).unwrap();
 
     let mut block = ledger.start_block().unwrap();
     let temp_sid = ledger.apply_transaction(&mut block, effect).unwrap();
@@ -2686,7 +2787,7 @@ mod tests {
                                 .unwrap();
 
     // shouldn't be able to replay issuance
-    let effect = TxnEffect::compute_effect(ledger.get_prng(), second_tx).unwrap();
+    let effect = TxnEffect::compute_effect(second_tx).unwrap();
     let mut block = ledger.start_block().unwrap();
     let result = ledger.apply_transaction(&mut block, effect);
     assert!(result.is_err());
@@ -2800,7 +2901,7 @@ mod tests {
     apply_transaction(&mut ledger, tx);
     let mut tx = Transaction::default();
     tx.operations.push(Operation::AIRAssign(adversarial_op));
-    let effect = TxnEffect::compute_effect(&mut ledger.get_prng(), tx);
+    let effect = TxnEffect::compute_effect(tx);
     assert!(effect.is_err());
   }
   #[test]
@@ -2844,13 +2945,13 @@ mod tests {
     let mut transfer = TransferAsset::new(TransferAssetBody::new(ledger.get_prng(),
                                                                  vec![TxoRef::Absolute(sid)],
                                                                  &[AssetRecord::from_open_asset_record_no_asset_tracking(open_blind_asset_record(&bar, &None, &alice.get_sk_ref()).unwrap())],
-                                                                 vec![(None, None)],
+                                                                 vec![None],
                                                                  &[record.clone()],
-                                                                 vec![(None, None)]).unwrap(),
+                                                                 vec![None]).unwrap(),
                                           TransferType::Standard).unwrap();
     transfer.sign(&alice);
     tx.operations.push(Operation::TransferAsset(transfer));
-    let effect = TxnEffect::compute_effect(ledger.get_prng(), tx.clone()).unwrap();
+    let effect = TxnEffect::compute_effect(tx.clone()).unwrap();
 
     let mut block = ledger.start_block().unwrap();
     let res = ledger.apply_transaction(&mut block, effect);
@@ -2874,13 +2975,13 @@ mod tests {
     let mut transfer = TransferAsset::new(TransferAssetBody::new(ledger.get_prng(),
                                                                  vec![TxoRef::Relative(0)],
                                                                  &[AssetRecord::from_open_asset_record_no_asset_tracking(ar.open_asset_record)],
-                                                                 vec![(None, None)],
+                                                                 vec![None],
                                                                  &[second_record],
-                                                                 vec![(None, None)]).unwrap(),
+                                                                 vec![None]).unwrap(),
                                           TransferType::Standard).unwrap();
     transfer.sign(&alice);
     tx.operations.push(Operation::TransferAsset(transfer));
-    let effect = TxnEffect::compute_effect(ledger.get_prng(), tx).unwrap();
+    let effect = TxnEffect::compute_effect(tx).unwrap();
     let res = ledger.apply_transaction(&mut block, effect);
     assert!(res.is_err());
   }
@@ -2917,7 +3018,7 @@ mod tests {
                                    1,
                                    AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
                                    &issuer);
-      let effect = TxnEffect::compute_effect(ledger.get_prng(), tx).unwrap();
+      let effect = TxnEffect::compute_effect(tx).unwrap();
 
       let mut block = ledger.start_block().unwrap();
       let res = ledger.apply_transaction(&mut block, effect);
@@ -2931,7 +3032,7 @@ mod tests {
                                    1,
                                    AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
                                    &issuer);
-      let effect = TxnEffect::compute_effect(ledger.get_prng(), tx).unwrap();
+      let effect = TxnEffect::compute_effect(tx).unwrap();
       ledger.apply_transaction(&mut block, effect).unwrap();
       ledger.finish_block(block).unwrap();
 
@@ -2943,7 +3044,7 @@ mod tests {
                                    2,
                                    AssetRecordType::ConfidentialAmount_NonConfidentialAssetType,
                                    &issuer);
-      let effect = TxnEffect::compute_effect(ledger.get_prng(), tx).unwrap();
+      let effect = TxnEffect::compute_effect(tx).unwrap();
       let mut block = ledger.start_block().unwrap();
       let res = ledger.apply_transaction(&mut block, effect);
       assert!(res.is_err());
@@ -2978,7 +3079,7 @@ mod tests {
                                                          .clone(),
                                     None).unwrap();
 
-    let effect = TxnEffect::compute_effect(&mut ledger.get_prng(), tx).unwrap();
+    let effect = TxnEffect::compute_effect(tx).unwrap();
     {
       let mut block = ledger.start_block().unwrap();
       ledger.apply_transaction(&mut block, effect).unwrap();
@@ -3003,7 +3104,7 @@ mod tests {
     tx.operations.push(issue_op);
 
     // Commit issuance to block
-    let effect = TxnEffect::compute_effect(ledger.get_prng(), tx).unwrap();
+    let effect = TxnEffect::compute_effect(tx).unwrap();
 
     let mut block = ledger.start_block().unwrap();
     let temp_sid = ledger.apply_transaction(&mut block, effect).unwrap();
@@ -3028,9 +3129,9 @@ mod tests {
     let mut transfer = TransferAsset::new(TransferAssetBody::new(ledger.get_prng(),
                                                                  vec![TxoRef::Absolute(txo_sid)],
                                                                  &[AssetRecord::from_open_asset_record_no_asset_tracking(input_oar)],
-                                                                 vec![(None, None)],
+                                                                 vec![None],
                                                                  &[output_ar],
-                                                                 vec![(None, None)]).unwrap(),
+                                                                 vec![None]).unwrap(),
                                           TransferType::Standard).unwrap();
 
     transfer.sign(&alice);
@@ -3040,7 +3141,7 @@ mod tests {
       }
     }
     tx.operations.push(Operation::TransferAsset(transfer));
-    let effect = TxnEffect::compute_effect(ledger.get_prng(), tx).unwrap();
+    let effect = TxnEffect::compute_effect(tx).unwrap();
     ledger.apply_transaction(&mut block, effect).is_ok()
   }
 
@@ -3070,7 +3171,7 @@ mod tests {
     memo_update.pubkey = adversary.get_pk();
     tx.operations
       .push(Operation::UpdateMemo(memo_update.clone()));
-    assert!(TxnEffect::compute_effect(ledger.get_prng(), tx).is_err());
+    assert!(TxnEffect::compute_effect(tx).is_err());
 
     // Only the asset creator can change the memo
     let mut tx = Transaction::default();
@@ -3079,7 +3180,7 @@ mod tests {
                                                     &adversary);
     tx.operations
       .push(Operation::UpdateMemo(memo_update_wrong_creator));
-    let effect = TxnEffect::compute_effect(ledger.get_prng(), tx).unwrap();
+    let effect = TxnEffect::compute_effect(tx).unwrap();
     assert!(ledger.apply_transaction(&mut block, effect).is_err());
 
     // Cant change memo more than once in the same block
@@ -3087,7 +3188,7 @@ mod tests {
     memo_update.pubkey = creator.get_pk();
     tx.operations
       .push(Operation::UpdateMemo(memo_update.clone()));
-    let effect = TxnEffect::compute_effect(ledger.get_prng(), tx).unwrap();
+    let effect = TxnEffect::compute_effect(tx).unwrap();
     ledger.apply_transaction(&mut block, effect.clone())
           .unwrap();
     assert!(ledger.apply_transaction(&mut block, effect).is_err());
@@ -3218,9 +3319,9 @@ mod tests {
                                           vec![TxoRef::Absolute(fiat_sid), TxoRef::Absolute(debt_sid)],
                                           &[AssetRecord::from_open_asset_record_no_asset_tracking(open_blind_asset_record(&fiat_bar, &None, &lender_key_pair.get_sk_ref()).unwrap()),
                                           AssetRecord::from_open_asset_record_no_asset_tracking(open_blind_asset_record(&debt_bar, &None, &borrower_key_pair.get_sk_ref()).unwrap())],
-                                          vec![(None, None); 2],
+                                          vec![None; 2],
                                           &[fiat_transfer_record, loan_transfer_record],
-                                          vec![(None, None); 2]).unwrap(),
+                                          vec![None; 2]).unwrap(),
                        TransferType::Standard).unwrap();
     transfer.sign(&lender_key_pair);
     transfer.sign(&borrower_key_pair);
@@ -3287,18 +3388,18 @@ mod tests {
                                AssetRecord::from_open_asset_record_no_asset_tracking(open_blind_asset_record(&fiat_bar,
                                                        &None,
                                                        &borrower_key_pair.get_sk_ref()).unwrap())],
-                             vec![(None, None); 2],
+                             vec![None; 2],
                              &[payment_record,
                                burned_debt_record,
                                returned_debt_record,
                                returned_fiat_record],
-                             vec![(None, None); 4]).unwrap();
+                             vec![None; 4]).unwrap();
 
     tx.operations
       .push(Operation::TransferAsset(TransferAsset::new(transfer_body,
                                                         TransferType::DebtSwap).unwrap()));
 
-    let effect = TxnEffect::compute_effect(ledger.get_prng(), tx).unwrap();
+    let effect = TxnEffect::compute_effect(tx).unwrap();
     let result = ledger.apply_transaction(&mut block, effect);
     assert!(result.is_ok());
   }

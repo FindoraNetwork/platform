@@ -8,11 +8,9 @@ use credentials::credential_verify_commitment;
 use cryptohash::sha256;
 use cryptohash::sha256::Digest as BitDigest;
 use findora::HasInvariants;
-use rand_core::{CryptoRng, RngCore, SeedableRng};
 use std::collections::{HashMap, HashSet};
 use zei::api::anon_creds::ACCommitment;
 use zei::serialization::ZeiFromToBytes;
-use zei::xfr::lib::verify_xfr_body;
 use zei::xfr::sig::XfrPublicKey;
 use zei::xfr::structs::{AssetTracingPolicy, BlindAssetRecord, XfrAmount, XfrAssetType, XfrBody};
 
@@ -45,10 +43,10 @@ pub struct TxnEffect {
   // i.e. (2, 1) -> { AlicePk, BobPk } means that Alice and Bob both have valid signatures on the 2nd input of the 1st
   // operation
   pub cosig_keys: HashMap<(usize, usize), HashSet<Vec<u8>>>,
-  // Asset tracing records of transfer inputs
-  pub transfer_input_tracing_records: Vec<(Option<AssetTracingPolicy>, Option<ACCommitment>)>,
-  // Asset tracing records of transfer outputs
-  pub transfer_output_tracing_records: Vec<(Option<AssetTracingPolicy>, Option<ACCommitment>)>,
+  // Identity tracing commitments of transfer inputs
+  pub transfer_input_commitments: Vec<Option<ACCommitment>>,
+  // Identity tracing commitments of transfer outputs
+  pub transfer_output_commitments: Vec<Option<ACCommitment>>,
   // Encrypted transfer body
   pub transfer_body: Option<Box<XfrBody>>,
   // Debt swap information that must be externally validated
@@ -67,9 +65,7 @@ pub struct TxnEffect {
 // the transaction in order to diagnose the error, clone it first!
 #[allow(clippy::cognitive_complexity)]
 impl TxnEffect {
-  pub fn compute_effect<R: CryptoRng + RngCore>(prng: &mut R,
-                                                txn: Transaction)
-                                                -> Result<TxnEffect, PlatformError> {
+  pub fn compute_effect(txn: Transaction) -> Result<TxnEffect, PlatformError> {
     let mut txo_count: usize = 0;
     let mut op_idx: usize = 0;
     let mut txos: Vec<Option<TxOutput>> = Vec::new();
@@ -83,8 +79,8 @@ impl TxnEffect {
     let mut issuance_amounts = HashMap::new();
     let mut issuance_tracing_policies: HashMap<AssetTypeCode, Option<AssetTracingPolicy>> =
       HashMap::new();
-    let mut transfer_input_tracing_records = Vec::new();
-    let mut transfer_output_tracing_records = Vec::new();
+    let mut transfer_input_commitments = Vec::new();
+    let mut transfer_output_commitments = Vec::new();
     let mut transfer_body: Option<Box<XfrBody>> = None;
     let mut debt_effects: HashMap<AssetTypeCode, DebtSwapEffect> = HashMap::new();
     let mut asset_types_involved: HashSet<AssetTypeCode> = HashSet::new();
@@ -307,61 +303,8 @@ impl TxnEffect {
           }
           // (3)
           // TODO: implement real policies
-          let mut transfer_input_policies = Vec::new();
-          let mut transfer_input_commitments = Vec::new();
-          for (input_tracing_policy, input_indentity_commitment) in
-            trn.body.input_tracing_records.iter()
-          {
-            match input_tracing_policy {
-              Some(policy) => {
-                transfer_input_policies.push(Some(policy));
-              }
-              None => {
-                transfer_input_policies.push(None);
-              }
-            }
-            match input_indentity_commitment {
-              Some(commitment) => {
-                transfer_input_commitments.push(Some(commitment));
-              }
-              None => {
-                transfer_input_commitments.push(None);
-              }
-            }
-          }
-          let mut transfer_output_policies = Vec::new();
-          let mut transfer_output_commitments = Vec::new();
-          for (output_tracing_policy, output_indentity_commitment) in
-            trn.body.output_tracing_records.iter()
-          {
-            match output_tracing_policy {
-              Some(policy) => {
-                transfer_output_policies.push(Some(policy));
-              }
-              None => {
-                transfer_output_policies.push(None);
-              }
-            }
-            match output_indentity_commitment {
-              Some(commitment) => {
-                transfer_output_commitments.push(Some(commitment));
-              }
-              None => {
-                transfer_output_commitments.push(None);
-              }
-            }
-          }
-          verify_xfr_body(prng,
-                          &trn.body.transfer,
-                          &transfer_input_policies[..],
-                          &transfer_input_commitments[..],
-                          &transfer_output_policies[..],
-                          &transfer_output_commitments[..]).map_err(|e| {
-                                                        PlatformError::ZeiError(error_location!(),
-                                                                                e)
-                                                      })?;
-          transfer_input_tracing_records = trn.body.input_tracing_records.clone();
-          transfer_output_tracing_records = trn.body.output_tracing_records.clone();
+          transfer_input_commitments = trn.body.input_identity_commitments.clone();
+          transfer_output_commitments = trn.body.output_identity_commitments.clone();
           transfer_body = Some(trn.body.transfer.clone());
 
           for (inp, record) in trn.body.inputs.iter().zip(trn.body.transfer.inputs.iter()) {
@@ -477,8 +420,8 @@ impl TxnEffect {
                    issuance_amounts,
                    confidential_issuance_types,
                    issuance_tracing_policies,
-                   transfer_input_tracing_records,
-                   transfer_output_tracing_records,
+                   transfer_input_commitments,
+                   transfer_output_commitments,
                    transfer_body,
                    debt_effects,
                    asset_types_involved,
@@ -531,8 +474,7 @@ impl HasInvariants<PlatformError> for TxnEffect {
     // TODO(joe): other checks?
     {
       // Slightly cheating
-      let mut prng = rand_chacha::ChaChaRng::from_entropy();
-      if TxnEffect::compute_effect(&mut prng, self.txn.clone())? != *self {
+      if TxnEffect::compute_effect(self.txn.clone())? != *self {
         return Err(PlatformError::InvariantError(None));
       }
     }
@@ -563,6 +505,8 @@ pub struct BlockEffect {
   pub issuance_amounts: HashMap<AssetTypeCode, u64>,
   // Which public key is being used to issue each asset type
   pub issuance_keys: HashMap<AssetTypeCode, IssuerPublicKey>,
+  // Which new tracing policy is being added
+  pub new_tracing_policies: HashMap<AssetTypeCode, Option<AssetTracingPolicy>>,
   // Updates to the AIR
   pub air_updates: HashMap<String, String>,
   // Memo updates
@@ -648,6 +592,19 @@ impl BlockEffect {
     for (type_code, amount) in txn.issuance_amounts.iter() {
       let issuance_amount = self.issuance_amounts.entry(*type_code).or_insert(0);
       *issuance_amount += amount;
+    }
+
+    for (type_code, tracing_policy) in txn.issuance_tracing_policies.iter() {
+      debug_assert!(!self.new_tracing_policies.contains_key(type_code));
+      match tracing_policy {
+        Some(policy) => {
+          self.new_tracing_policies
+              .insert(*type_code, Some(policy.clone()));
+        }
+        None => {
+          self.new_tracing_policies.insert(*type_code, None);
+        }
+      }
     }
 
     for (addr, data) in txn.air_updates {

@@ -97,7 +97,7 @@ impl<RNG, LU> QueryServer<RNG, LU>
         info!("Received block {}", bid);
         let mut block_builder = ledger.start_block().unwrap();
         for txn in block {
-          let eff = TxnEffect::compute_effect(ledger.get_prng(), txn.txn.clone()).unwrap();
+          let eff = TxnEffect::compute_effect(txn.txn.clone()).unwrap();
           ledger.apply_transaction(&mut block_builder, eff).unwrap();
         }
 

@@ -389,12 +389,12 @@ pub struct TransferAssetBody {
   // Input asset tracing policies and signature commitments
   #[serde(default)]
   #[serde(skip_serializing_if = "is_default")]
-  pub input_tracing_records: Vec<(Option<AssetTracingPolicy>, Option<ACCommitment>)>,
+  pub input_identity_commitments: Vec<Option<ACCommitment>>,
   pub num_outputs: usize, // How many output TXOs?
   // Output asset tracing policies and signature commitments
   #[serde(default)]
   #[serde(skip_serializing_if = "is_default")]
-  pub output_tracing_records: Vec<(Option<AssetTracingPolicy>, Option<ACCommitment>)>,
+  pub output_identity_commitments: Vec<Option<ACCommitment>>,
   // TODO(joe): we probably don't need the whole XfrNote with input records
   // once it's on the chain
   pub transfer: Box<XfrBody>, // Encrypted transfer note
@@ -404,11 +404,9 @@ impl TransferAssetBody {
   pub fn new<R: CryptoRng + RngCore>(prng: &mut R,
                                      input_refs: Vec<TxoRef>,
                                      input_records: &[AssetRecord],
-                                     input_tracing_records: Vec<(Option<AssetTracingPolicy>,
-                                          Option<ACCommitment>)>,
+                                     input_identity_commitments: Vec<Option<ACCommitment>>,
                                      output_records: &[AssetRecord],
-                                     output_tracing_records: Vec<(Option<AssetTracingPolicy>,
-                                          Option<ACCommitment>)>)
+                                     output_identity_commitments: Vec<Option<ACCommitment>>)
                                      -> Result<TransferAssetBody, errors::PlatformError> {
     if input_records.is_empty() {
       return Err(PlatformError::InputsError(error_location!()));
@@ -416,9 +414,9 @@ impl TransferAssetBody {
     let note = Box::new(gen_xfr_body(prng, input_records, output_records)
         .map_err(|e| PlatformError::ZeiError(error_location!(),e))?);
     Ok(TransferAssetBody { inputs: input_refs,
-                           input_tracing_records,
+                           input_identity_commitments,
                            num_outputs: output_records.len(),
-                           output_tracing_records,
+                           output_identity_commitments,
                            transfer: note })
   }
 
@@ -1067,9 +1065,9 @@ mod tests {
                              owners_memos: vec![] };
 
     let assert_transfer_body = TransferAssetBody { inputs: Vec::new(),
-                                                   input_tracing_records: Vec::new(),
+                                                   input_identity_commitments: Vec::new(),
                                                    num_outputs: 0,
-                                                   output_tracing_records: Vec::new(),
+                                                   output_identity_commitments: Vec::new(),
                                                    transfer: Box::new(xfr_note) };
 
     let asset_transfer = TransferAsset { body: assert_transfer_body,

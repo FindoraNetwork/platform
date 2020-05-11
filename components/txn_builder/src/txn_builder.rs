@@ -268,11 +268,11 @@ pub trait BuildsTransactions {
                                   keys: &XfrKeyPair,
                                   input_sids: Vec<TxoRef>,
                                   input_records: &[OpenAssetRecord],
-                                  input_tracing_records: Vec<(Option<AssetTracingPolicy>,
-                                       Option<ACCommitment>)>,
+                                  input_tracing_policies: Vec<Option<AssetTracingPolicy>>,
+                                  input_identity_commitments: Vec<Option<ACCommitment>>,
                                   output_records: &[AssetRecord],
-                                  output_tracing_records: Vec<(Option<AssetTracingPolicy>,
-                                       Option<ACCommitment>)>)
+                                  output_tracing_policies: Vec<Option<AssetTracingPolicy>>,
+                                  output_identity_commitments: Vec<Option<ACCommitment>>,)
                                   -> Result<&mut Self, PlatformError>;
   fn add_operation_air_assign(&mut self,
                               key_pair: &XfrKeyPair,
@@ -322,8 +322,8 @@ pub trait BuildsTransactions {
                                  &BlindAssetRecord,
                                  u64,
                                  &Option<OwnerMemo>)],
-                              input_tracing_records: Vec<(Option<AssetTracingPolicy>,
-                                   Option<ACCommitment>)>,
+                              input_tracing_policies: Vec<Option<AssetTracingPolicy>>,
+                              input_identity_commitments: Vec<Option<ACCommitment>>,
                               transfer_to: &[(u64, &AccountAddress)],
                               output_tracing_records: Vec<(Option<AssetTracingPolicy>,
                                    Option<ACCommitment>)>)
@@ -347,10 +347,10 @@ pub trait BuildsTransactions {
     let input_oars = input_oars.map_err(|e| PlatformError::ZeiError(error_location!(), e))?;
     let input_total: u64 = input_amounts.iter().sum();
     let mut partially_consumed_inputs = Vec::new();
-    for ((input_amount, oar), (input_tracing_policy, _)) in
+    for ((input_amount, oar), input_tracing_policy) in
       input_amounts.iter()
                    .zip(input_oars.iter())
-                   .zip(input_tracing_records.iter())
+                   .zip(input_tracing_policies.iter())
     {
       if input_amount > oar.get_amount() {
         return Err(PlatformError::InputsError(error_location!()));
@@ -376,8 +376,8 @@ pub trait BuildsTransactions {
     let asset_type = input_oars[0].get_asset_type();
     let asset_record_type = input_oars[0].get_record_type();
     let mut output_ars_templates = Vec::new();
-    for ((amount, ref addr), (output_tracing_policy, _)) in
-      transfer_to.iter().zip(output_tracing_records.iter())
+    for ((amount, ref addr), output_tracing_policy) in
+      transfer_to.iter().zip(output_tracing_policies.iter())
     {
       let template = match output_tracing_policy {
         Some(policy) => AssetRecordTemplate::with_asset_tracking(*amount,
@@ -401,9 +401,11 @@ pub trait BuildsTransactions {
     self.add_operation_transfer_asset(&key_pair,
                                       input_sids,
                                       &input_oars,
-                                      input_tracing_records,
+                                      input_tracing_policies,
+                                      input_identity_commitments,
                                       &output_ars,
-                                      output_tracing_records)?;
+                                      output_tracing_policies,
+                                      output_identity_commitments)?;
     Ok(self)
   }
 }
@@ -484,26 +486,29 @@ impl BuildsTransactions for TransactionBuilder {
                                   keys: &XfrKeyPair,
                                   input_sids: Vec<TxoRef>,
                                   input_records: &[OpenAssetRecord],
-                                  input_tracing_records: Vec<(Option<AssetTracingPolicy>,
-                                       Option<ACCommitment>)>,
+                                  input_tracing_policies: Vec<Option<AssetTracingPolicy>>,
+                                  input_identity_commitments: Vec<Option<ACCommitment>>,
                                   output_records: &[AssetRecord],
-                                  output_tracing_records: Vec<(Option<AssetTracingPolicy>,
-                                       Option<ACCommitment>)>)
+                                  output_identity_commitments: Vec<Option<ACCommitment>>)
                                   -> Result<&mut Self, PlatformError> {
     // TODO(joe/noah): keep a prng around somewhere?
-    let mut prng: ChaChaRng;
+    let mut prng: ChaChaRng
     prng = ChaChaRng::from_entropy();
     let mut input_asset_records = vec![];
-    for oar in input_records.iter() {
-      input_asset_records.push(AssetRecord::from_open_asset_record_no_asset_tracking(oar.clone()))
+    for (oar, tracing_policy) in input_records.iter().zip(input_tracing_policies.iter()) {
+      if let Some(policy) = tracing_policy {
+        input_asset_records.push(AssetRecord::from_open_asset_record_with_asset_tracking_but_no_identity(oar.clone(), policy))
+      } else {
+        input_asset_records.push(AssetRecord::from_open_asset_record_no_asset_tracking(oar.clone()))
+      }
     }
 
     let mut xfr = TransferAsset::new(TransferAssetBody::new(&mut prng,
                                                             input_sids,
                                                             &input_asset_records,
-                                                            input_tracing_records,
+                                                            input_identity_commitments,
                                                             output_records,
-                                                            output_tracing_records)?,
+                                                            output_identity_commitments)?,
                                      TransferType::Standard)?;
     xfr.sign(&keys);
 
@@ -644,10 +649,11 @@ pub struct TransferOperationBuilder {
   input_sids: Vec<TxoRef>,
   spend_amounts: Vec<u64>, // Amount of each input record to spend, the rest will be refunded if user calls balance
   input_records: Vec<AssetRecord>,
-  input_tracing_records: Vec<(Option<AssetTracingPolicy>, Option<ACCommitment>)>,
+  input_tracing_policies: Vec<Option<AssetTracingPolicy>>,
+  input_identity_commitments: Vec<Option<ACCommitment>>,
   output_records: Vec<AssetRecord>,
-  output_tracing_records: Vec<(Option<AssetTracingPolicy>, Option<ACCommitment>)>,
-  transfer: Option<TransferAsset>,
+  output_tracing_policies: Vec<Option<AssetTracingPolicy>>,
+  output_identity_commitments: Vec<Option<ACCommitment>>,  transfer: Option<TransferAsset>,
   transfer_type: TransferType,
 }
 
@@ -662,7 +668,7 @@ impl TransferOperationBuilder {
                    txo_sid: TxoRef,
                    open_ar: OpenAssetRecord,
                    tracing_policy: Option<AssetTracingPolicy>,
-                   sig_commitment: Option<ACCommitment>,
+                   identity_commitments: Option<ACCommitment>,
                    amount: u64)
                    -> Result<&mut Self, PlatformError> {
     if self.transfer.is_some() {
@@ -676,8 +682,8 @@ impl TransferOperationBuilder {
     };
     self.input_sids.push(txo_sid);
     self.input_records.push(asset_record);
-    self.input_tracing_records
-        .push((tracing_policy, sig_commitment));
+    self.input_tracing_policies.push(tracing_policy);
+    self.input_identity_commitments.push(identity_commitment);
     self.spend_amounts.push(amount);
     Ok(self)
   }
@@ -685,6 +691,7 @@ impl TransferOperationBuilder {
   pub fn add_output(&mut self,
                     asset_record_template: &AssetRecordTemplate,
                     tracing_policy: Option<AssetTracingPolicy>,
+                    identity_commitments: Option<ACCommitment>,       
                     sig_commitment: Option<ACCommitment>,
                     credential_record: Option<(&CredUserSecretKey,
                             &Credential,
@@ -704,8 +711,8 @@ impl TransferOperationBuilder {
       AssetRecord::from_template_no_identity_tracking(prng, asset_record_template).unwrap()
     };
     self.output_records.push(ar);
-    self.output_tracing_records
-        .push((tracing_policy, sig_commitment));
+    self.output_tracing_policies.push(tracing_policy);
+    self.output_identity_commitments.push(identity_commitment);
     Ok(self)
   }
 
@@ -774,10 +781,10 @@ impl TransferOperationBuilder {
     }
     let spend_total: u64 = self.spend_amounts.iter().sum();
     let mut partially_consumed_inputs = Vec::new();
-    for ((spend_amount, ar), (tracking_policy, _)) in self.spend_amounts
+    for ((spend_amount, ar), tracking_policy) in self.spend_amounts
                                                           .iter()
                                                           .zip(self.input_records.iter())
-                                                          .zip(self.input_tracing_records.iter())
+                                                          .zip(self.input_tracing_policies.iter())
     {
       let amt = ar.open_asset_record.get_amount();
       match spend_amount.cmp(&amt) {
@@ -825,9 +832,9 @@ impl TransferOperationBuilder {
     let body = TransferAssetBody::new(&mut prng,
                                       self.input_sids.clone(),
                                       &self.input_records,
-                                      self.input_tracing_records.clone(),
+                                      self.input_identity_commitments.clone(),
                                       &self.output_records,
-                                      self.output_tracing_records.clone())?;
+                                      self.output_identity_commitments.clone())?;
     self.transfer = Some(TransferAsset::new(body, transfer_type)?);
     Ok(self)
   }

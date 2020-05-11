@@ -19,8 +19,7 @@ use zei::xfr::sig::{XfrKeyPair, XfrPublicKey};
 use zei::xfr::structs::AssetRecordTemplate;
 
 pub fn apply_transaction(ledger: &mut LedgerState, tx: Transaction) -> (TxnSID, Vec<TxoSID>) {
-  let effect =
-    TxnEffect::compute_effect(&mut ledger.get_prng(), tx).expect("compute effect failed");
+  let effect = TxnEffect::compute_effect(tx).expect("compute effect failed");
 
   let mut block = ledger.start_block().expect("starting block failed");
   let temp_sid = ledger.apply_transaction(&mut block, effect)
