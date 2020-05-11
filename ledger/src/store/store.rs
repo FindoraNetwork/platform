@@ -425,7 +425,7 @@ impl LedgerStatus {
   //  block.add_txn_effect(txn_effect);
   //
   #[allow(clippy::cognitive_complexity)]
-  fn check_txn_effects<R: CryptoRng + RngCore>(&self,
+  fn check_txn_effects<R: CryptoRng + RngCore>(&mut self,
                                                txn: TxnEffect,
                                                prng: &mut R)
                                                -> Result<TxnEffect, PlatformError> {
@@ -630,13 +630,7 @@ impl LedgerStatus {
               Some(policy) => {
                 match policy.identity_tracking {
                   Some(_) => {
-                    transfer_input_policies.push(Some(&AssetTracingPolicy { enc_keys:
-                                                                          policy.enc_keys.clone(),
-                                                                        asset_tracking:
-                                                                          policy.asset_tracking,
-                                                                        identity_tracking:
-                                                                          policy.identity_tracking
-                                                                                .clone() }));
+                    transfer_input_policies.push(Some(tracing_policy.clone().as_ref().unwrap()));
                     transfer_input_commitments.push(Some(input_commitment.as_ref()
                                                                          .clone()
                                                                          .unwrap()));
@@ -694,9 +688,7 @@ impl LedgerStatus {
                 Some(policy) => {
                   match policy.identity_tracking {
                     Some(_) => {
-                      transfer_output_policies.push(Some(&AssetTracingPolicy { enc_keys: policy.enc_keys.clone(),
-                                                 asset_tracking: policy.asset_tracking,
-                                                 identity_tracking: policy.identity_tracking.clone() }));
+                      transfer_output_policies.push(Some(tracing_policy.as_ref().clone().unwrap()));
                       transfer_output_commitments.push(Some(output_commitment.as_ref()
                                                                              .clone()
                                                                              .unwrap()));
@@ -905,7 +897,8 @@ impl LedgerUpdate<ChaChaRng> for LedgerState {
                        block: &mut BlockEffect,
                        txn: TxnEffect)
                        -> Result<TxnTempSID, PlatformError> {
-    block.add_txn_effect(self.status.check_txn_effects(txn, self.get_prng())?)
+    let prng = &mut self.prng;
+    block.add_txn_effect(self.status.check_txn_effects(txn, prng)?)
   }
 
   fn abort_block(&mut self, block: BlockEffect) -> HashMap<TxnTempSID, Transaction> {
