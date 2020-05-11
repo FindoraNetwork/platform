@@ -10,7 +10,7 @@ extern crate exitcode;
 
 // TODO (Keyao): Fix tests with #[ignore].
 // Those tests pass individually, but occasionally fail when run with other tests.
-// They take more time to complete, thus might cause data conflicts.
+// Issue: #324
 #[cfg(debug_assertions)]
 const COMMAND: &str = "../../target/debug/txn_cli";
 
