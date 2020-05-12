@@ -312,6 +312,11 @@ impl AssetType {
   pub fn has_issuance_restrictions(&self) -> bool {
     self.properties.asset_rules.max_units.is_some()
   }
+
+  pub fn has_transfer_restrictions(&self) -> bool {
+    let rules = &self.properties.asset_rules;
+    rules.traceable || rules.transfer_multisig_rules.is_some() || rules.transferable
+  }
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, Serialize)]
