@@ -17,7 +17,9 @@ impl ABCISubmissionServer {
   fn new() -> Result<ABCISubmissionServer, PlatformError> {
     let ledger = LedgerState::test_ledger();
     let prng = rand_chacha::ChaChaRng::from_entropy();
-    Ok(ABCISubmissionServer { la: SubmissionServer::new(prng, Arc::new(RwLock::new(ledger)), 8)? })
+    Ok(ABCISubmissionServer { la:
+                                SubmissionServer::new_no_auto_commit(prng,
+                                                                     Arc::new(RwLock::new(ledger)))? })
   }
 }
 

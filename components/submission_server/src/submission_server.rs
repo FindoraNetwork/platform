@@ -70,15 +70,14 @@ impl<RNG, LU> SubmissionServer<RNG, LU>
                           commit_mode: CommitMode::FullBlock })
   }
   pub fn new_no_auto_commit(prng: RNG,
-                            ledger_state: Arc<RwLock<LU>>,
-                            block_capacity: usize)
+                            ledger_state: Arc<RwLock<LU>>)
                             -> Result<SubmissionServer<RNG, LU>, PlatformError> {
     Ok(SubmissionServer { committed_state: ledger_state,
                           block: None,
                           txn_status: HashMap::new(),
                           pending_txns: vec![],
                           prng,
-                          block_capacity,
+                          block_capacity: 0,
                           commit_mode: CommitMode::Manual })
   }
 
