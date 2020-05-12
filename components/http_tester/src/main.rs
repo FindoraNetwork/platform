@@ -4,10 +4,13 @@ use credentials::{
   credential_commit, credential_issuer_key_gen, credential_sign, credential_user_key_gen,
   CredCommitment, CredCommitmentKey, CredIssuerPublicKey, CredIssuerSecretKey, Credential,
 };
+use ledger::data_model::Transaction;
 use rand_chacha::ChaChaRng;
 use rand_core::SeedableRng;
 use std::collections::HashMap;
+use std::time::{Duration, Instant};
 use txn_builder::{BuildsTransactions, TransactionBuilder};
+use utils::{protocol_host, SUBMIT_PORT};
 use zei::xfr::sig::XfrKeyPair;
 
 /// Represents a file that can be searched
@@ -33,7 +36,7 @@ impl AIR {
   }
 
   /// Return a JSON txn corresponding to this request
-  pub fn make_assign_txn(&mut self) -> Option<String> {
+  pub fn add_assign_txn(&mut self, builder: &mut TransactionBuilder) {
     let (user_pk, user_sk) = credential_user_key_gen(&mut self.prng, &self.issuer_pk);
     let attr_vals: Vec<(String, &[u8])> = vec![(String::from("dob"), b"08221964"),
                                                (String::from("pob"), b"666"),
@@ -50,24 +53,50 @@ impl AIR {
                                                      &user_sk,
                                                      &credential,
                                                      xfr_key_pair.get_pk_ref().as_bytes()).unwrap();
-    let mut txn_builder = TransactionBuilder::default();
     let user_pk_s = serde_json::to_string(&user_pk).unwrap();
     self.user_commitment
         .insert(user_pk_s, (commitment.clone(), key));
-    if let Err(e) = txn_builder.add_operation_air_assign(&xfr_key_pair,
-                                                         user_pk,
-                                                         commitment,
-                                                         self.issuer_pk.clone(),
-                                                         proof)
-    {
-      println!("add_operation_air_assign failed with {:?}", e);
-      None
-    } else {
-      let txn = txn_builder.transaction();
-      let result = serde_json::to_string(&txn).unwrap();
-      Some(result)
+    if let Err(e) = builder.add_operation_air_assign(&xfr_key_pair,
+                                                 user_pk,
+                                                 commitment,
+                                                 self.issuer_pk.clone(),
+                                                 proof) {
+      panic!(format!("Something went wrong: {:#?}", e));
     }
   }
+}
+
+fn run_txns(n: usize, batch_size: usize) -> Result<(), Box<dyn std::error::Error>> {
+  let mut air = AIR::new();
+  let client = reqwest::blocking::Client::new();
+  let (protocol, host) = protocol_host();
+  let mut min: Duration = Duration::new(1000000000, 999999999);
+  let mut max: Duration = Duration::new(0, 0);
+  let mut total: Duration = Duration::new(0,0);
+  for i in 0..n {
+    let mut builder = TransactionBuilder::default();
+    air.add_assign_txn(&mut builder);
+    let txn = builder.transaction();
+    let instant = Instant::now();
+    let _ = client.post(&format!("{}://{}:{}/submit_transaction", protocol, host, SUBMIT_PORT))
+      .json::<Transaction>(&txn)
+      .send()?;
+
+    if (i + 1) % batch_size == 0 {
+      let _resp = client.post(&format!("{}://{}:{}/force_end_block", protocol, host, SUBMIT_PORT))
+        .send(); 
+    }
+
+    total += instant.elapsed();
+    if instant.elapsed() < min {
+      min = instant.elapsed();
+    }
+    if instant.elapsed() > max {
+      max = instant.elapsed();
+    }
+  }
+  println!("total = {:#?}, mean = {:#?}, min = {:#?}, max = {:#?}", total, total / (n as u32), min, max);
+  Ok(()) // println!("{}", txn);
 }
 
 fn parse_args() -> ArgMatches<'static> {
@@ -75,27 +104,20 @@ fn parse_args() -> ArgMatches<'static> {
                        .author("Brian Rogoff <brian@findora.org>")
                        .about("REPL with argument parsing")
                        .arg(Arg::with_name("num_txns").short("n")
-                                                      .long("num_txns")
-                                                      .takes_value(true)
-                                                      .help("number of txns generated"))
+                            .long("num_txns")
+                            .takes_value(true)
+                            .help("number of txns generated"))
+                       .arg(Arg::with_name("batch_size").short("bs")
+                            .long("batch_size")
+                            .takes_value(true)
+                            .help("Number of txns before a force_end_block"))
                        .get_matches()
 }
 
-fn main() {
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+  flexi_logger::Logger::with_env().start().unwrap();
   let args = parse_args();
-  let num_str = args.value_of("num_txns");
-  let mut air = AIR::new();
-  match num_str {
-    None => println!("Missing '--num_txns <number>'"),
-    Some(s) => match s.parse::<usize>() {
-      Ok(n) => {
-        for _ in 0..n {
-          if let Some(txn) = air.make_assign_txn() {
-            println!("{}", txn);
-          }
-        }
-      }
-      Err(_) => println!("That's not a number! {}", s),
-    },
-  }
+  let num_txns = args.value_of("num_txns").map_or(1, |s| s.parse::<usize>().unwrap());
+  let batch_size = args.value_of("batch_size").map_or(1, |s| s.parse::<usize>().unwrap());
+  run_txns(num_txns, batch_size)
 }
