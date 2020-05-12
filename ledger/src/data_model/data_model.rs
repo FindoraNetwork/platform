@@ -314,8 +314,20 @@ impl AssetType {
   }
 
   pub fn has_transfer_restrictions(&self) -> bool {
-    let rules = &self.properties.asset_rules;
-    rules.traceable || rules.transfer_multisig_rules.is_some() || rules.transferable
+    let simple_asset: Asset = {
+      let mut ret: Asset = Default::default();
+      let asset = &self.properties;
+
+      ret.code = asset.code;
+      ret.issuer = asset.issuer;
+      ret.memo = asset.memo.clone();
+      ret.confidential_memo = asset.confidential_memo;
+      // Only relevant for issue operations
+      ret.asset_rules.max_units = asset.asset_rules.max_units;
+
+      ret
+    };
+    self.properties != simple_asset
   }
 }
 

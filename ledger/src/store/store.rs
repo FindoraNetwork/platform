@@ -2819,8 +2819,8 @@ mod tests {
     assert!(res.is_err());
     // Cant transfer by making asset confidential
     let mut tx = Transaction::default();
-    let transfer_template= AssetRecordTemplate::with_no_asset_tracking(100,
-                                                                             code.val,
+
+    let transfer_template = AssetRecordTemplate::with_no_asset_tracking(100, code.val,
                                                                              AssetRecordType::ConfidentialAmount_ConfidentialAssetType,
                                                                              bob.get_pk_ref().clone());
     let record = AssetRecord::from_template_no_identity_tracking(ledger.get_prng(),
