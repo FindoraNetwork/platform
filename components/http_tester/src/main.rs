@@ -57,10 +57,11 @@ impl AIR {
     self.user_commitment
         .insert(user_pk_s, (commitment.clone(), key));
     if let Err(e) = builder.add_operation_air_assign(&xfr_key_pair,
-                                                 user_pk,
-                                                 commitment,
-                                                 self.issuer_pk.clone(),
-                                                 proof) {
+                                                     user_pk,
+                                                     commitment,
+                                                     self.issuer_pk.clone(),
+                                                     proof)
+    {
       panic!(format!("Something went wrong: {:#?}", e));
     }
   }
@@ -72,19 +73,19 @@ fn run_txns(n: usize, batch_size: usize) -> Result<(), Box<dyn std::error::Error
   let (protocol, host) = protocol_host();
   let mut min: Duration = Duration::new(1000000000, 999999999);
   let mut max: Duration = Duration::new(0, 0);
-  let mut total: Duration = Duration::new(0,0);
+  let mut total: Duration = Duration::new(0, 0);
   for i in 0..n {
     let mut builder = TransactionBuilder::default();
     air.add_assign_txn(&mut builder);
     let txn = builder.transaction();
     let instant = Instant::now();
     let _ = client.post(&format!("{}://{}:{}/submit_transaction", protocol, host, SUBMIT_PORT))
-      .json::<Transaction>(&txn)
-      .send()?;
+                  .json::<Transaction>(&txn)
+                  .send()?;
 
     if (i + 1) % batch_size == 0 {
       let _resp = client.post(&format!("{}://{}:{}/force_end_block", protocol, host, SUBMIT_PORT))
-        .send(); 
+                        .send();
     }
 
     total += instant.elapsed();
@@ -95,7 +96,11 @@ fn run_txns(n: usize, batch_size: usize) -> Result<(), Box<dyn std::error::Error
       max = instant.elapsed();
     }
   }
-  println!("total = {:#?}, mean = {:#?}, min = {:#?}, max = {:#?}", total, total / (n as u32), min, max);
+  println!("total = {:#?}, mean = {:#?}, min = {:#?}, max = {:#?}",
+           total,
+           total / (n as u32),
+           min,
+           max);
   Ok(()) // println!("{}", txn);
 }
 
@@ -117,7 +122,9 @@ fn parse_args() -> ArgMatches<'static> {
 fn main() -> Result<(), Box<dyn std::error::Error>> {
   flexi_logger::Logger::with_env().start().unwrap();
   let args = parse_args();
-  let num_txns = args.value_of("num_txns").map_or(1, |s| s.parse::<usize>().unwrap());
-  let batch_size = args.value_of("batch_size").map_or(1, |s| s.parse::<usize>().unwrap());
+  let num_txns = args.value_of("num_txns")
+                     .map_or(1, |s| s.parse::<usize>().unwrap());
+  let batch_size = args.value_of("batch_size")
+                       .map_or(1, |s| s.parse::<usize>().unwrap());
   run_txns(num_txns, batch_size)
 }
