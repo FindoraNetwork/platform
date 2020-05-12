@@ -2472,7 +2472,7 @@ pub mod txn_lib {
           let transfer_from_next =
             (txo_refs_next, blind_asset_record_next, input_amount_next, owner_memo_next);
           transfer_from.push(transfer_from_next);
-          input_tracing_policies.push((tracing_policy.clone());
+          input_tracing_policies.push(tracing_policy.clone());
           input_identity_commitments.push(None);
           count -= 1;
         }
@@ -2505,7 +2505,7 @@ pub mod txn_lib {
         let mut output_amounts_iter = output_amounts.iter();
         let mut addresses_iter = recipient_addresses.iter();
         let mut output_tracing_policies = Vec::new();
-        let mut output_identity_commitments = Vec::new();        
+        let mut output_identity_commitments = Vec::new();
         while count > 0 {
           let output_amount_next = if let Some(output_amount) = output_amounts_iter.next() {
             *output_amount
@@ -2520,7 +2520,7 @@ pub mod txn_lib {
             return Err(PlatformError::InputsError(error_location!()));
           };
           transfer_to.push((output_amount_next, address_next));
-          output_tracing_policies.push((tracing_policy.clone());
+          output_tracing_policies.push(tracing_policy.clone());
           output_identity_commitments.push(None);
           count -= 1;
         }
@@ -2530,7 +2530,7 @@ pub mod txn_lib {
         if let Err(e) = txn_builder.add_basic_transfer_asset(&issuer_key_pair,
                                                              &transfer_from[..],
                                                              input_tracing_policies,
-                                                             input_identity_commitments
+                                                             input_identity_commitments,
                                                              &transfer_to[..],
                                                              output_tracing_policies,
                                                              output_identity_commitments)
@@ -3497,7 +3497,6 @@ pub mod txn_lib {
     }
 
     #[test]
-    #[ignore]
     // Test funds loading, loan request, fulfilling and repayment
     fn test_request_fulfill_and_pay_loan() {
       let ledger_standalone = LedgerStandalone::new();

@@ -97,7 +97,7 @@ pub trait LedgerUpdate<RNG: RngCore + CryptoRng> {
   // internally consistent, and matches its internal Transaction
   // object, so any caller of this *must* validate the TxnEffect
   // properly first.
-  fn apply_transaction(&mut self,
+  fn apply_transaction(&self,
                        block: &mut Self::Block,
                        txn: TxnEffect)
                        -> Result<TxnTempSID, PlatformError>;
@@ -219,7 +219,11 @@ pub struct LedgerStatus {
   // prevent replays, but (as far as I know -joe) need not be strictly
   // sequential.
   asset_types: HashMap<AssetTypeCode, AssetType>,
-  tracing_policies: HashMap<AssetTypeCode, Option<AssetTracingPolicy>>,
+  // We store two tracing policies for each asset type
+  // * The first policy contains the encryption keys, asset tracing flag, and identity tracing poicy
+  // * The second policy doesn't inclue an identity tracing policy
+  // This allows us to transfer an asset when there's no identity requirement
+  tracing_policies: HashMap<AssetTypeCode, Option<(AssetTracingPolicy, AssetTracingPolicy)>>,
   issuance_num: HashMap<AssetTypeCode, u64>,
   // Issuance amounts for assets with limits
   issuance_amounts: HashMap<AssetTypeCode, u64>,
@@ -411,8 +415,8 @@ impl LedgerStatus {
 
   #[cfg(feature = "TESTING")]
   #[allow(non_snake_case)]
-  pub fn TESTING_check_txn_effects(&mut self, txn: TxnEffect) -> Result<TxnEffect, PlatformError> {
-    self.check_txn_effects(txn, &mut ChaChaRng::from_entropy())
+  pub fn TESTING_check_txn_effects(&self, txn: TxnEffect) -> Result<TxnEffect, PlatformError> {
+    self.check_txn_effects(txn)
   }
 
   // Check that `txn` can be safely applied to the current ledger.
@@ -424,11 +428,9 @@ impl LedgerStatus {
   //  ledger.check_txn_effects(txn_effect);
   //  block.add_txn_effect(txn_effect);
   //
+  #[allow(clippy::clone_double_ref)]
   #[allow(clippy::cognitive_complexity)]
-  fn check_txn_effects<R: CryptoRng + RngCore>(&mut self,
-                                               txn: TxnEffect,
-                                               prng: &mut R)
-                                               -> Result<TxnEffect, PlatformError> {
+  fn check_txn_effects(&self, txn: TxnEffect) -> Result<TxnEffect, PlatformError> {
     // 1. Each input must be unspent and correspond to the claimed record
     // 2. Inputs with transfer restrictions can only be owned by the asset issuer
     for (inp_sid, inp_record) in txn.input_txos.iter() {
@@ -566,7 +568,7 @@ impl LedgerStatus {
     }
 
     // Issuance tracing policies must has the asset_tracking flag consistent with the asset definition
-    for (code, tracing_policy) in txn.issuance_tracing_policies.iter() {
+    for (code, tracing_policies) in txn.issuance_tracing_policies.iter() {
       // dbg!(&(code, tracing_policy));
       let traceability = self.asset_types
                              .get(&code)
@@ -575,7 +577,7 @@ impl LedgerStatus {
                              .properties
                              .asset_rules
                              .traceable;
-      if let Some(policy) = tracing_policy {
+      if let Some((policy, _)) = tracing_policies {
         if traceability != policy.asset_tracking {
           return Err(PlatformError::InputsError(error_location!()));
         }
@@ -622,19 +624,32 @@ impl LedgerStatus {
           // If the asset is nonconfidential, get its tracing policy
           XfrAssetType::NonConfidential(asset_type) => {
             let code = AssetTypeCode { val: asset_type };
-            let tracing_policy =
+            let tracing_policies =
               &self.tracing_policies
                    .get(&code)
+                   .or_else(|| txn.issuance_tracing_policies.get(&code))
                    .ok_or_else(|| PlatformError::InputsError(error_location!()))?;
-            match tracing_policy {
-              Some(policy) => {
+            match tracing_policies {
+              Some((policy, _)) => {
                 match policy.identity_tracking {
-                  Some(_) => {
-                    transfer_input_policies.push(Some(tracing_policy.clone().as_ref().unwrap()));
-                    transfer_input_commitments.push(Some(input_commitment.as_ref()
-                                                                         .clone()
-                                                                         .unwrap()));
-                  }
+                  Some(_) => match input_commitment {
+                    Some(_) => {
+                      transfer_input_policies.push(Some(&tracing_policies.clone()
+                                                                         .as_ref()
+                                                                         .unwrap()
+                                                                         .0));
+                      transfer_input_commitments.push(Some(input_commitment.as_ref()
+                                                                           .clone()
+                                                                           .unwrap()));
+                    }
+                    None => {
+                      transfer_input_policies.push(Some(&tracing_policies.clone()
+                                                                         .as_ref()
+                                                                         .unwrap()
+                                                                         .1));
+                      transfer_input_commitments.push(None);
+                    }
+                  },
                   None => {
                     match input_commitment {
                       // If the identity isn't traceable, there shouldn't be an identity commitment
@@ -680,19 +695,32 @@ impl LedgerStatus {
             // If the asset is nonconfidential, get its tracing policy
             XfrAssetType::NonConfidential(asset_type) => {
               let code = AssetTypeCode { val: asset_type };
-              let tracing_policy =
+              let tracing_policies =
                 &self.tracing_policies
                      .get(&code)
+                     .or_else(|| txn.issuance_tracing_policies.get(&code))
                      .ok_or_else(|| PlatformError::InputsError(error_location!()))?;
-              match tracing_policy {
-                Some(policy) => {
+              match tracing_policies {
+                Some((policy, _)) => {
                   match policy.identity_tracking {
-                    Some(_) => {
-                      transfer_output_policies.push(Some(tracing_policy.as_ref().clone().unwrap()));
-                      transfer_output_commitments.push(Some(output_commitment.as_ref()
-                                                                             .clone()
-                                                                             .unwrap()));
-                    }
+                    Some(_) => match output_commitment {
+                      Some(_) => {
+                        transfer_output_policies.push(Some(&tracing_policies.clone()
+                                                                            .as_ref()
+                                                                            .unwrap()
+                                                                            .0));
+                        transfer_output_commitments.push(Some(output_commitment.as_ref()
+                                                                               .clone()
+                                                                               .unwrap()));
+                      }
+                      None => {
+                        transfer_output_policies.push(Some(&tracing_policies.clone()
+                                                                            .as_ref()
+                                                                            .unwrap()
+                                                                            .1));
+                        transfer_output_commitments.push(None);
+                      }
+                    },
                     None => {
                       match output_commitment {
                         // If the identity isn't traceable, there shouldn't be an identity commitment
@@ -729,7 +757,7 @@ impl LedgerStatus {
           }
         }
       }
-      verify_xfr_body(prng,
+      verify_xfr_body(&mut ChaChaRng::from_seed([1u8; 32]),
                       &xfr_body,
                       &transfer_input_policies[..],
                       &transfer_input_commitments[..],
@@ -858,6 +886,11 @@ impl LedgerStatus {
       self.asset_types.insert(code, asset_type.clone());
     }
 
+    // Register new tracing policies
+    for (code, tracing_policies) in block.new_tracing_policies.drain() {
+      self.tracing_policies.insert(code, tracing_policies.clone());
+    }
+
     // issuance_keys should already have been checked
     block.issuance_keys.clear();
 
@@ -893,12 +926,11 @@ impl LedgerUpdate<ChaChaRng> for LedgerState {
     }
   }
 
-  fn apply_transaction(&mut self,
+  fn apply_transaction(&self,
                        block: &mut BlockEffect,
                        txn: TxnEffect)
                        -> Result<TxnTempSID, PlatformError> {
-    let prng = &mut self.prng;
-    block.add_txn_effect(self.status.check_txn_effects(txn, prng)?)
+    block.add_txn_effect(self.status.check_txn_effects(txn)?)
   }
 
   fn abort_block(&mut self, block: BlockEffect) -> HashMap<TxnTempSID, Transaction> {
@@ -1070,7 +1102,7 @@ impl LedgerUpdate<ChaChaRng> for LedgerStateChecker {
     self.0.start_block()
   }
 
-  fn apply_transaction(&mut self,
+  fn apply_transaction(&self,
                        block: &mut BlockEffect,
                        txn: TxnEffect)
                        -> Result<TxnTempSID, PlatformError> {

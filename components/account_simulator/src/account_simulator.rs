@@ -522,7 +522,7 @@ impl InterpretAccounts<PlatformError> for LedgerAccounts {
         *self.balances.get_mut(dst).unwrap().get_mut(unit).unwrap() += amt;
 
         let mut src_records: Vec<OpenAssetRecord> = Vec::new();
-        let mut input_identity_commitments: Vec<(Option<ACCommitment>> = Vec::new();
+        let mut input_identity_commitments: Vec<Option<ACCommitment>> = Vec::new();
         let mut total_sum = 0u64;
         let avail = self.utxos.get_mut(src).unwrap();
         let mut to_use: Vec<TxoSID> = Vec::new();
@@ -553,8 +553,7 @@ impl InterpretAccounts<PlatformError> for LedgerAccounts {
         let mut src_outputs: Vec<AssetRecord> = Vec::new();
         let mut dst_outputs: Vec<AssetRecord> = Vec::new();
         let mut all_outputs: Vec<AssetRecord> = Vec::new();
-        let mut output_identity_commitments: Vec<Option<ACCommitment>> =
-          Vec::new();
+        let mut output_identity_commitments: Vec<Option<ACCommitment>> = Vec::new();
         {
           // Simple output to dst
           let template =
@@ -789,8 +788,7 @@ impl InterpretAccounts<PlatformError> for OneBigTxnAccounts {
         let issue_op = Operation::IssueAsset(asset_issuance_operation);
 
         self.txn.operations.push(issue_op);
-        let effect =
-          TxnEffect::compute_effect(self.txn.clone()).unwrap();
+        let effect = TxnEffect::compute_effect(self.txn.clone()).unwrap();
         let effect = self.base_ledger
                          .TESTING_get_status()
                          .TESTING_check_txn_effects(effect)
@@ -829,8 +827,7 @@ impl InterpretAccounts<PlatformError> for OneBigTxnAccounts {
         *self.balances.get_mut(dst).unwrap().get_mut(unit).unwrap() += amt;
 
         let mut src_records: Vec<OpenAssetRecord> = Vec::new();
-        let mut input_identity_commitments: Vec<Option<ACCommitment>> =
-          Vec::new();
+        let mut input_identity_commitments: Vec<Option<ACCommitment>> = Vec::new();
         let mut total_sum = 0u64;
         let avail = self.utxos.get_mut(src).unwrap();
         let mut to_use: Vec<usize> = Vec::new();
@@ -861,8 +858,7 @@ impl InterpretAccounts<PlatformError> for OneBigTxnAccounts {
         let mut src_outputs: Vec<AssetRecord> = Vec::new();
         let mut dst_outputs: Vec<AssetRecord> = Vec::new();
         let mut all_outputs: Vec<AssetRecord> = Vec::new();
-        let mut output_identity_commitments: Vec<Option<ACCommitment>> =
-          Vec::new();
+        let mut output_identity_commitments: Vec<Option<ACCommitment>> = Vec::new();
 
         {
           // Simple output to dst
@@ -944,8 +940,7 @@ impl InterpretAccounts<PlatformError> for OneBigTxnAccounts {
 
         self.txn.operations.push(Operation::TransferAsset(transfer));
 
-        let effect =
-          TxnEffect::compute_effect(self.txn.clone()).unwrap();
+        let effect = TxnEffect::compute_effect(self.txn.clone()).unwrap();
         let effect = self.base_ledger
                          .TESTING_get_status()
                          .TESTING_check_txn_effects(effect)
@@ -1243,8 +1238,7 @@ impl InterpretAccounts<PlatformError> for LedgerStandaloneAccounts {
         *self.balances.get_mut(dst).unwrap().get_mut(unit).unwrap() += amt;
 
         let mut src_records: Vec<OpenAssetRecord> = Vec::new();
-        let mut input_identity_commitments: Vec<Option<ACCommitment>> =
-          Vec::new();
+        let mut input_identity_commitments: Vec<Option<ACCommitment>> = Vec::new();
         let mut total_sum = 0u64;
         let avail = self.utxos.get_mut(src).unwrap();
         let mut to_use: Vec<TxoSID> = Vec::new();
@@ -1279,8 +1273,7 @@ impl InterpretAccounts<PlatformError> for LedgerStandaloneAccounts {
         let mut src_outputs: Vec<AssetRecord> = Vec::new();
         let mut dst_outputs: Vec<AssetRecord> = Vec::new();
         let mut all_outputs: Vec<AssetRecord> = Vec::new();
-        let mut output_identity_commitments: Vec<Option<ACCommitment>> =
-          Vec::new();
+        let mut output_identity_commitments: Vec<Option<ACCommitment>> = Vec::new();
 
         {
           // Simple output to dst
