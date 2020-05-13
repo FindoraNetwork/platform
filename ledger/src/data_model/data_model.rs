@@ -312,6 +312,23 @@ impl AssetType {
   pub fn has_issuance_restrictions(&self) -> bool {
     self.properties.asset_rules.max_units.is_some()
   }
+
+  pub fn has_transfer_restrictions(&self) -> bool {
+    let simple_asset: Asset = {
+      let mut ret: Asset = Default::default();
+      let asset = &self.properties;
+
+      ret.code = asset.code;
+      ret.issuer = asset.issuer;
+      ret.memo = asset.memo.clone();
+      ret.confidential_memo = asset.confidential_memo;
+      // Only relevant for issue operations
+      ret.asset_rules.max_units = asset.asset_rules.max_units;
+
+      ret
+    };
+    self.properties != simple_asset
+  }
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, Serialize)]
