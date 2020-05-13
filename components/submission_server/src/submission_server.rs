@@ -34,6 +34,12 @@ pub enum TxnStatus {
   Pending,
 }
 
+pub enum CommitMode {
+  FullBlock,
+  EveryTransaction, // Every submission is committed as soon as it arrives.
+  Manual,           // Somebody else calls commit. Not this code.
+}
+
 pub struct SubmissionServer<RNG, LU>
   where RNG: RngCore + CryptoRng,
         LU: LedgerUpdate<RNG> + LedgerAccess + ArchiveAccess
@@ -44,6 +50,7 @@ pub struct SubmissionServer<RNG, LU>
   txn_status: HashMap<TxnHandle, TxnStatus>,
   block_capacity: usize,
   prng: RNG,
+  commit_mode: CommitMode,
 }
 
 impl<RNG, LU> SubmissionServer<RNG, LU>
@@ -59,7 +66,19 @@ impl<RNG, LU> SubmissionServer<RNG, LU>
                           txn_status: HashMap::new(),
                           pending_txns: vec![],
                           prng,
-                          block_capacity })
+                          block_capacity,
+                          commit_mode: CommitMode::FullBlock })
+  }
+  pub fn new_no_auto_commit(prng: RNG,
+                            ledger_state: Arc<RwLock<LU>>)
+                            -> Result<SubmissionServer<RNG, LU>, PlatformError> {
+    Ok(SubmissionServer { committed_state: ledger_state,
+                          block: None,
+                          txn_status: HashMap::new(),
+                          pending_txns: vec![],
+                          prng,
+                          block_capacity: 0,
+                          commit_mode: CommitMode::Manual })
   }
 
   pub fn get_txn_status(&self, txn_handle: &TxnHandle) -> Option<TxnStatus> {
@@ -70,10 +89,12 @@ impl<RNG, LU> SubmissionServer<RNG, LU>
     self.block.is_none()
   }
 
-  // TODO (Keyao): Determine the condition
-  // Commit for a certain number of transactions or time duration?
   pub fn eligible_to_commit(&self) -> bool {
-    self.pending_txns.len() == self.block_capacity
+    match self.commit_mode {
+      CommitMode::FullBlock => self.pending_txns.len() == self.block_capacity,
+      CommitMode::EveryTransaction => true,
+      CommitMode::Manual => false,
+    }
   }
 
   pub fn get_prng(&mut self) -> &mut RNG {
