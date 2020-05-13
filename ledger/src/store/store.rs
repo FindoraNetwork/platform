@@ -3159,9 +3159,9 @@ mod tests {
     let mut tx = Transaction::default();
 
     let art = if let true = confidential {
-      AssetRecordType::ConfidentialAmount_ConfidentialAssetType
+      AssetRecordType::ConfidentialAmount_NonConfidentialAssetType
     } else {
-      AssetRecordType::NonConfidentialAmount_ConfidentialAssetType
+      AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType
     };
     let template = AssetRecordTemplate::with_no_asset_tracking(100, code.val, AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType, alice.get_pk());
     let (ba, _, _) = build_blind_asset_record(ledger.get_prng(), &params.pc_gens, &template, None);
