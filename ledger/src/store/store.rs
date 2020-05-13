@@ -3013,10 +3013,12 @@ mod tests {
     let mut transfer = TransferAsset::new(TransferAssetBody::new(ledger.get_prng(),
                              vec![TxoRef::Absolute(sid)],
                              &[AssetRecord::from_open_asset_record_no_asset_tracking(open_blind_asset_record(&bar, &None, &alice.get_sk_ref()).unwrap())],
-                               &[record.clone()]).unwrap(), TransferType::Standard).unwrap();
+                             vec![None],
+                             &[record.clone()],
+                             vec![None]).unwrap(), TransferType::Standard).unwrap();
     transfer.sign(&alice);
     tx.operations.push(Operation::TransferAsset(transfer));
-    let effect = TxnEffect::compute_effect(ledger.get_prng(), tx.clone()).unwrap();
+    let effect = TxnEffect::compute_effect(tx.clone()).unwrap();
 
     let res = ledger.apply_transaction(&mut block, effect);
     assert!(res.is_err());
