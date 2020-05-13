@@ -57,7 +57,7 @@ fn test_example_log() {
 }
 
 fn main() {
-  env_logger::init();
+  flexi_logger::Logger::with_env().start().unwrap();
 
   let args = std::env::args().collect::<Vec<_>>();
   assert!(args.len() == 4);

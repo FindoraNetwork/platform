@@ -13,7 +13,7 @@ path = "src/ledger_standalone.rs"
 
 [dependencies]
 findora = { path = "../../findora" }
-env_logger = "0.7.1"
+flexi_logger = "0.15.2"
 ledger_api_service = { path = "../ledger_api_service" }
 ledger = { path = "../../ledger" }
 rand_chacha = "0.2.0"

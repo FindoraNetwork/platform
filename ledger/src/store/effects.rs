@@ -56,6 +56,8 @@ pub struct TxnEffect {
   pub transfer_body: Option<Box<XfrBody>>,
   // Debt swap information that must be externally validated
   pub debt_effects: HashMap<AssetTypeCode, DebtSwapEffect>,
+  // Non-confidential asset types involved in confidential transfers
+  pub confidential_transfer_inputs: HashSet<AssetTypeCode>,
 
   pub asset_types_involved: HashSet<AssetTypeCode>,
   pub custom_policy_asset_types: HashMap<AssetTypeCode, TxnCheckInputs>,
@@ -91,6 +93,7 @@ impl TxnEffect {
     let mut debt_effects: HashMap<AssetTypeCode, DebtSwapEffect> = HashMap::new();
     let mut asset_types_involved: HashSet<AssetTypeCode> = HashSet::new();
     let mut confidential_issuance_types = HashSet::new();
+    let mut confidential_transfer_inputs = HashSet::new();
 
     let custom_policy_asset_types = txn.policy_options
                                        .clone()
@@ -320,6 +323,7 @@ impl TxnEffect {
           transfer_output_commitments = trn.body.output_identity_commitments.clone();
           transfer_body = Some(trn.body.transfer.clone());
 
+          let mut input_types = HashSet::new();
           for (inp, record) in trn.body.inputs.iter().zip(trn.body.transfer.inputs.iter()) {
             // Until we can distinguish assets that have policies that invoke transfer restrictions
             // from those that don't, no confidential types are allowed
@@ -328,7 +332,8 @@ impl TxnEffect {
             }
 
             if let Some(inp_code) = record.asset_type.get_asset_type() {
-              asset_types_involved.insert(AssetTypeCode { val: inp_code });
+              input_types.insert(AssetTypeCode { val: inp_code });
+              //asset_types_involved.insert(AssetTypeCode { val: inp_code });
             }
 
             // (2), checking within this transaction and recording
@@ -366,23 +371,23 @@ impl TxnEffect {
           }
 
           txos.reserve(trn.body.transfer.outputs.len());
+          let mut conf_transfer = false;
           for out in trn.body.transfer.outputs.iter() {
-            // Until we can distinguish assets that have policies that invoke transfer restrictions
-            // from those that don't, no confidential types are allowed
-            //
-            // To test the functionalities of whitelist proof:
-            // * Comment out the validation below
-            // * Run the tests in components/whitelist with -- --ignored
-            // * Verify the test results
-            // * Restore the validation below
             if let XfrAssetType::Confidential(_) = out.asset_type {
-              return Err(PlatformError::InputsError(error_location!()));
+              conf_transfer = true;
             }
             if let Some(out_code) = out.asset_type.get_asset_type() {
               asset_types_involved.insert(AssetTypeCode { val: out_code });
             }
             txos.push(Some(TxOutput(out.clone())));
             txo_count += 1;
+          }
+          // Until we can distinguish assets that have policies that invoke transfer restrictions
+          // from those that don't, make note of all non-confidential inputs of confidential
+          // transfers
+          asset_types_involved.extend(&input_types);
+          if conf_transfer {
+            confidential_transfer_inputs.extend(&input_types);
           }
         }
 
@@ -430,6 +435,7 @@ impl TxnEffect {
                    new_issuance_nums,
                    memo_updates,
                    issuance_keys,
+                   confidential_transfer_inputs,
                    issuance_amounts,
                    confidential_issuance_types,
                    issuance_tracing_policies,

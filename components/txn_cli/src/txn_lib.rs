@@ -8,7 +8,6 @@ pub mod txn_lib {
   };
   use curve25519_dalek::ristretto::CompressedRistretto;
   use curve25519_dalek::scalar::Scalar;
-  use env_logger::{Env, Target};
   use ledger::data_model::errors::PlatformError;
   use ledger::data_model::{
     AccountAddress, AssetRules, AssetTypeCode, TransferType, TxOutput, TxoRef, TxoSID,
@@ -1254,7 +1253,8 @@ pub mod txn_lib {
     Ok((ledger_standalone.submit_transaction_and_fetch_utxos(&txn)[0].0, blinds.0, blinds.1))
   }
 
-  /// Defines, issues and transfers an asset, submits the transactions with the standalone ledger, and get the UTXO SID and asset type blind.
+  /// Defines, issues and transfers an asset, and submits the transactions with the standalone ledger.
+  /// Returns the UTXO SID, the blinding factors for the asset amount, and the blinding factor for the asset type code.
   #[allow(clippy::too_many_arguments)]
   pub fn define_issue_transfer_and_get_utxo_and_blinds<R: CryptoRng + RngCore>(
     issuer_key_pair: &XfrKeyPair,
@@ -1387,6 +1387,7 @@ pub mod txn_lib {
                                                         });
     println!("Submission response: {}", handle);
     println!("Submission status: {}", res.status());
+
     Ok(())
   }
 
@@ -2172,8 +2173,8 @@ pub mod txn_lib {
   // TODO Verify that this comment is correct.
   // TODO switch to using from_default_env()
   pub fn init_logging() {
-    env_logger::from_env(Env::default().default_filter_or("trace")).target(Target::Stdout)
-                                                                   .init();
+    flexi_logger::Logger::with_env_or_str("trace").start()
+                                                  .unwrap();
   }
 
   /// Matches the PlatformError with an exitcode and exits.

@@ -804,6 +804,19 @@ impl LedgerStatus {
       }
     }
 
+    // Until we can distinguish assets that have policies that invoke transfer restrictions
+    // from those that don't, prevent any non-confidential assets with transfer restrictions
+    // from becoming confidnetial
+    for code in txn.confidential_transfer_inputs.iter() {
+      let asset_type = self.asset_types
+                           .get(&code)
+                           .or_else(|| txn.new_asset_codes.get(&code))
+                           .ok_or_else(|| PlatformError::InputsError(error_location!()))?;
+      if asset_type.has_transfer_restrictions() {
+        PlatformError::InputsError(error_location!());
+      }
+    }
+
     // Policy checking
     // TODO(joe): Currently the policy language can't validate transactions
     //   which include DefineAsset, so it's safe to assume that any valid
@@ -1360,17 +1373,20 @@ impl LedgerState {
 
   // TODO(joe): Make this an iterator of some sort so that we don't have to load the whole log
   // into memory
-  fn load_transaction_log(path: &str) -> Result<Vec<LoggedBlock>, std::io::Error> {
+  fn load_transaction_log(path: &str) -> Result<Vec<LoggedBlock>, PlatformError> {
     let file = File::open(path)?;
     let reader = BufReader::new(file);
     let mut v = Vec::new();
     for l in reader.lines() {
-      match serde_json::from_str::<LoggedBlock>(&l?) {
+      let l = l?;
+      match serde_json::from_str::<LoggedBlock>(&l) {
         Ok(next_block) => {
           v.push(next_block);
         }
         Err(_) => {
-          break;
+          if l != "" {
+            return Err(PlatformError::DeserializationError);
+          }
         }
       }
     }
@@ -1627,7 +1643,7 @@ impl LedgerState {
                        utxo_map_path: &str,
                        signing_key_path: Option<&str>,
                        prng_seed: Option<[u8; 32]>)
-                       -> Result<LedgerState, std::io::Error> {
+                       -> Result<LedgerState, PlatformError> {
     let mut prng = prng_seed.map(rand_chacha::ChaChaRng::from_seed)
                             .unwrap_or_else(ChaChaRng::from_entropy);
     let signing_key = match signing_key_path {
@@ -1712,21 +1728,24 @@ impl LedgerState {
     // and it being corrupted
     LedgerState::load_from_log(&block_merkle, &air, &txn_merkle, &txn_log,
                 &utxo_map, Some(sig_key_file), None)
-    .or_else(|_| LedgerState::load_checked_from_log(&block_merkle, &air, &txn_merkle, &txn_log,
-                &utxo_map, Some(sig_key_file), None))
-              .or_else(|_| {
-                let ret = LedgerState::new(&block_merkle, &air, &txn_merkle, &txn_log,
-                  &utxo_map, None, None)?;
+    .or_else(|e| {
+        log::info!("Replaying without merkle trees failed: {}",e);
+        LedgerState::load_checked_from_log(&block_merkle, &air, &txn_merkle, &txn_log,
+                &utxo_map, Some(sig_key_file), None)
+    }).or_else(|e| {
+        log::info!("Checking log against merkle trees failed: {}",e);
+        let ret = LedgerState::new(&block_merkle, &air, &txn_merkle, &txn_log,
+            &utxo_map, None, None)?;
 
-                {
-                  let file = File::create(sig_key_file)?;
-                  let mut writer = BufWriter::new(file);
+        {
+            let file = File::create(sig_key_file)?;
+            let mut writer = BufWriter::new(file);
 
-                  bincode::serialize_into::<&mut BufWriter<File>, XfrKeyPair>(&mut writer, &ret.signing_key).map_err(|_| PlatformError::SerializationError)?;
-                }
+            bincode::serialize_into::<&mut BufWriter<File>, XfrKeyPair>(&mut writer, &ret.signing_key).map_err(|_| PlatformError::SerializationError)?;
+        }
 
-                Ok(ret)
-              })
+        Ok(ret)
+    })
   }
 
   // Load a ledger given the paths to the various storage elements.
@@ -2981,6 +3000,26 @@ mod tests {
     let mut block = ledger.start_block().unwrap();
     let res = ledger.apply_transaction(&mut block, effect);
     assert!(res.is_err());
+    // Cant transfer by making asset confidential
+    let mut tx = Transaction::default();
+
+    let transfer_template = AssetRecordTemplate::with_no_asset_tracking(100, code.val,
+                                                                             AssetRecordType::ConfidentialAmount_ConfidentialAssetType,
+                                                                             bob.get_pk_ref().clone());
+    let record = AssetRecord::from_template_no_identity_tracking(ledger.get_prng(),
+                                                                 &transfer_template).unwrap();
+
+    // Cant transfer non-transferable asset
+    let mut transfer = TransferAsset::new(TransferAssetBody::new(ledger.get_prng(),
+                             vec![TxoRef::Absolute(sid)],
+                             &[AssetRecord::from_open_asset_record_no_asset_tracking(open_blind_asset_record(&bar, &None, &alice.get_sk_ref()).unwrap())],
+                               &[record.clone()]).unwrap(), TransferType::Standard).unwrap();
+    transfer.sign(&alice);
+    tx.operations.push(Operation::TransferAsset(transfer));
+    let effect = TxnEffect::compute_effect(ledger.get_prng(), tx.clone()).unwrap();
+
+    let res = ledger.apply_transaction(&mut block, effect);
+    assert!(res.is_err());
     // Cant transfer non-transferable asset through some intermediate operation
     // In this case, alice attempts to spend her non-transferable asset in the same transaction it
     // was issued.
@@ -3078,7 +3117,10 @@ mod tests {
 
   // Co_signers is a array of (signs, weight) pairs representing cosigners. If signs is true, that cosigner signs the
   // transaction.
-  fn cosignature_transfer_succeeds(co_signers: &[(bool, u64)], threshold: u64) -> bool {
+  fn cosignature_transfer_succeeds(co_signers: &[(bool, u64)],
+                                   threshold: u64,
+                                   confidential: bool)
+                                   -> bool {
     let mut ledger = LedgerState::test_ledger();
     let params = PublicParams::new();
 
@@ -3114,8 +3156,12 @@ mod tests {
     // Issuance with two outputs
     let mut tx = Transaction::default();
 
-    let art = AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType;
-    let template = AssetRecordTemplate::with_no_asset_tracking(100, code.val, art, alice.get_pk());
+    let art = if let true = confidential {
+      AssetRecordType::ConfidentialAmount_ConfidentialAssetType
+    } else {
+      AssetRecordType::NonConfidentialAmount_ConfidentialAssetType
+    };
+    let template = AssetRecordTemplate::with_no_asset_tracking(100, code.val, AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType, alice.get_pk());
     let (ba, _, _) = build_blind_asset_record(ledger.get_prng(), &params.pc_gens, &template, None);
 
     let asset_issuance_body = IssueAssetBody::new(&code, 0, &[TxOutput(ba)], None).unwrap();
@@ -3227,10 +3273,11 @@ mod tests {
   pub fn test_cosignature_restrictions() {
     //TODO (noah) use prop based testing here?
     // Simple
-    assert!(!cosignature_transfer_succeeds(&[(false, 1), (false, 1)], 1));
-    assert!(cosignature_transfer_succeeds(&[(false, 1), (true, 1)], 1));
-    assert!(cosignature_transfer_succeeds(&[(true, 1)], 1));
-    assert!(cosignature_transfer_succeeds(&[], 0));
+    assert!(!cosignature_transfer_succeeds(&[(false, 1), (false, 1)], 1, false));
+    assert!(!cosignature_transfer_succeeds(&[(false, 1), (false, 1)], 1, true));
+    assert!(cosignature_transfer_succeeds(&[(false, 1), (true, 1)], 1, false));
+    assert!(cosignature_transfer_succeeds(&[(true, 1)], 1, false));
+    assert!(cosignature_transfer_succeeds(&[], 0, false));
 
     // More complex
     assert!(!cosignature_transfer_succeeds(&[(false, 1),
@@ -3238,13 +3285,15 @@ mod tests {
                                              (false, 5),
                                              (true, 10),
                                              (false, 18)],
-                                           16));
+                                           16,
+                                           false));
     assert!(cosignature_transfer_succeeds(&[(false, 1),
                                             (true, 1),
                                             (true, 5),
                                             (true, 10),
                                             (false, 18)],
-                                          16));
+                                          16,
+                                          false));
     // Needlessly complex
     assert!(cosignature_transfer_succeeds(&[(false, 18888888),
                                             (true, 1),
@@ -3255,7 +3304,8 @@ mod tests {
                                             (true, 12320),
                                             (true, 134440),
                                             (false, 18)],
-                                          232323));
+                                          232323,
+                                          false));
   }
 
   #[test]

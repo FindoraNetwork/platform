@@ -1,12 +1,11 @@
 #![deny(warnings)]
-use curve25519_dalek::ristretto::CompressedRistretto;
 use curve25519_dalek::scalar::Scalar;
 use ledger::data_model::errors::PlatformError;
 use ledger::data_model::AssetTypeCode;
 use ledger::error_location;
-use std::collections::HashMap;
+use serde::{Deserialize, Serialize};
 use txn_cli::txn_lib::query_utxo_and_get_type_commitment;
-use zei::crypto::whitelist::{prove_array_membership, verify_array_membership, WhitelistProof};
+use zei::crypto::whitelist::{prove_array_membership, verify_array_membership};
 use zei::xfr::structs::asset_type_to_scalar;
 
 const PROTOCOL: &str = "http";
@@ -15,27 +14,12 @@ const HOST: &str = "localhost";
 /// Code of whitelisted assets
 pub type WhiteListedCode = Scalar;
 
-/// Bytes of CompressedRistretto commitment
-#[derive(Eq, Hash, PartialEq)]
-pub struct CommitmentBytes {
-  bytes: [u8; 32],
-}
-
-impl CommitmentBytes {
-  pub fn new(commitment: CompressedRistretto) -> Self {
-    CommitmentBytes { bytes: commitment.to_bytes() }
-  }
-}
-
 /// Asset whitelist
-#[derive(Default)]
+#[derive(Default, Deserialize, Serialize)]
 pub struct Whitelist {
   /// List of whitelisted asset codes
   // TODO (Keyao): Make this a merkle tree instead?
   pub members: Vec<WhiteListedCode>,
-
-  /// Map from bytes of the asset type commitments, to their associated whitelist proofs
-  pub commitments_and_proofs: HashMap<CommitmentBytes, WhitelistProof>,
 }
 
 impl Whitelist {
@@ -44,39 +28,18 @@ impl Whitelist {
     self.members.push(asset_type_to_scalar(&code.val));
   }
 
-  /// Proves whitelist membership of a confidential asset transferred in a transaction, and stores the proof.
-  /// Must be used before `verify_membership`.
+  /// Proves and verifies the whitelist membership of a confidential asset transferred in a transaction.
   /// # Arguments
   /// * `index`: index in the whitelist.
   /// * `utxo`: UTXO SID of the transaction.
   /// * `blind`: blinding factor for the asset type commitment.
-  pub fn prove_membership_and_store(&mut self,
-                                    index: u64,
-                                    utxo: u64,
-                                    blind: Scalar)
-                                    -> Result<(), PlatformError> {
+  pub fn prove_and_verify_membership(&mut self,
+                                     index: u64,
+                                     utxo: u64,
+                                     blind: Scalar)
+                                     -> Result<(), PlatformError> {
     let commitment = query_utxo_and_get_type_commitment(utxo, PROTOCOL, HOST)?;
     let proof = prove_array_membership(&self.members, index as usize, &commitment, &blind).or_else(|e| Err(PlatformError::ZeiError(error_location!(), e)))?;
-    self.commitments_and_proofs
-        .insert(CommitmentBytes::new(commitment), proof);
-    Ok(())
-  }
-
-  /// Verifies the whitelist membership of an asset transferred in a transaction.
-  /// Must not be used before `prove_membership`.
-  /// # Arguments
-  /// * `sid`: SID of the transaction.
-  pub fn verify_membership(&self, utxo: u64) -> Result<(), PlatformError> {
-    let commitment = query_utxo_and_get_type_commitment(utxo, PROTOCOL, HOST)?;
-    let proof = match self.commitments_and_proofs
-                          .get(&CommitmentBytes::new(commitment))
-    {
-      Some(p) => p,
-      None => {
-        println!("Whitelist proof not found.");
-        return Err(PlatformError::InputsError(error_location!()));
-      }
-    };
     verify_array_membership(&self.members, &commitment, &proof).or_else(|e| Err(PlatformError::ZeiError(error_location!(), e)))
   }
 }
@@ -103,10 +66,13 @@ mod tests {
   // * Run the tests with -- --ignored
   // * Verify the test results
   // * Restore the validation in ledger/src/store/effects.rs
+  //
+  // (Issue #320)
 
   #[should_panic]
   #[test]
   #[ignore]
+  // (Issue #320)
   fn test_prove_membership_incorrect_index() {
     // Start the standalone ledger
     let ledger_standalone = &LedgerStandalone::new();
@@ -132,13 +98,14 @@ mod tests {
 
     // Prove the whitelist memberships of the second asset with the incorrect index
     // Should panic
-    whitelist.prove_membership_and_store(1, utxo_2, blind_2)
+    whitelist.prove_and_verify_membership(1, utxo_2, blind_2)
              .unwrap();
   }
 
   #[should_panic]
   #[test]
   #[ignore]
+  // (Issue #320)
   fn test_prove_membership_incorrect_utxo() {
     // Start the standalone ledger
     let ledger_standalone = &LedgerStandalone::new();
@@ -172,13 +139,14 @@ mod tests {
 
     // Prove the whitelist memberships of the second asset with the incorrect UTXO SID
     // Should panic
-    whitelist.prove_membership_and_store(2, utxo_1, blind_2)
+    whitelist.prove_and_verify_membership(2, utxo_1, blind_2)
              .unwrap();
   }
 
   #[should_panic]
   #[test]
   #[ignore]
+  // (Issue #320)
   fn test_prove_membership_incorrect_blind() {
     // Start the standalone ledger
     let ledger_standalone = &LedgerStandalone::new();
@@ -212,12 +180,13 @@ mod tests {
 
     // Prove the whitelist memberships of the second asset with the incorrect UTXO SID
     // Should panic
-    whitelist.prove_membership_and_store(2, utxo_2, blind_1)
+    whitelist.prove_and_verify_membership(2, utxo_2, blind_1)
              .unwrap();
   }
 
   #[test]
   #[ignore]
+  // (Issue #320)
   fn test_prove_and_verify_membership() {
     // Start the standalone ledger
     let ledger_standalone = &LedgerStandalone::new();
@@ -259,14 +228,10 @@ mod tests {
                                                                       ledger_standalone,
                                                                       prng).unwrap();
 
-    // Prove the whitelist memberships of the second and third assets
-    assert!(whitelist.prove_membership_and_store(1, utxo_1, blind_1)
+    // Prove and verify the whitelist memberships of the second and third assets
+    assert!(whitelist.prove_and_verify_membership(1, utxo_1, blind_1)
                      .is_ok());
-    assert!(whitelist.prove_membership_and_store(2, utxo_2, blind_2)
+    assert!(whitelist.prove_and_verify_membership(2, utxo_2, blind_2)
                      .is_ok());
-
-    // Verify the whitelist memberships
-    assert!(whitelist.verify_membership(utxo_1).is_ok());
-    assert!(whitelist.verify_membership(utxo_2).is_ok());
   }
 }
