@@ -240,9 +240,6 @@ impl SignatureRules {
 /// 5) Transfer signature rules: Signature weights and threshold for a valid transfer.
 pub struct AssetRules {
   pub traceable: bool,
-  #[serde(default)]
-  #[serde(skip_serializing_if = "is_default")]
-  pub identity_traceable: bool,
   pub transferable: bool,
   pub updatable: bool,
   pub transfer_multisig_rules: Option<SignatureRules>,
@@ -251,7 +248,6 @@ pub struct AssetRules {
 impl Default for AssetRules {
   fn default() -> Self {
     AssetRules { traceable: false,
-                 identity_traceable: false,
                  transferable: true,
                  updatable: false,
                  max_units: None,
@@ -262,11 +258,6 @@ impl Default for AssetRules {
 impl AssetRules {
   pub fn set_traceable(&mut self, traceable: bool) -> &mut Self {
     self.traceable = traceable;
-    self
-  }
-
-  pub fn set_identity_traceable(&mut self, identity_traceable: bool) -> &mut Self {
-    self.identity_traceable = identity_traceable;
     self
   }
 

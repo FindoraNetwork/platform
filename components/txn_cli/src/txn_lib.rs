@@ -1888,7 +1888,7 @@ pub mod txn_lib {
                                    borrower_key_pair,
                                    debt_code,
                                    &memo_str,
-                                   AssetRules::default().set_identity_traceable(true).clone(),
+                                   AssetRules::default(),
                                    txn_file)?;
     // Store data before submitting the transaction to avoid data overwriting
     let data = load_data()?;
