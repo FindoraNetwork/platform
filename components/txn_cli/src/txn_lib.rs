@@ -1,10 +1,10 @@
 #![deny(warnings)]
 pub mod txn_lib {
   use credentials::{
-    credential_issuer_key_gen, credential_keygen_commitment, credential_reveal, credential_sign,
-    credential_user_key_gen, credential_verify, u8_slice_to_u32_vec, CredCommitment,
-    CredCommitmentKey, CredIssuerPublicKey, CredIssuerSecretKey, CredPoK, CredUserPublicKey,
-    CredUserSecretKey, Credential as WrapperCredential,
+    credential_commit, credential_issuer_key_gen, credential_sign, credential_user_key_gen,
+    u8_slice_to_u32_vec, CredCommitment, CredCommitmentKey, CredIssuerPublicKey,
+    CredIssuerSecretKey, CredPoK, CredUserPublicKey, CredUserSecretKey,
+    Credential as WrapperCredential,
   };
   use curve25519_dalek::ristretto::CompressedRistretto;
   use curve25519_dalek::scalar::Scalar;
@@ -1162,15 +1162,16 @@ pub mod txn_lib {
                                                  &ZeiCredential,
                                                  &CredCommitmentKey)>,
                                          txn_file: Option<&str>,
-                                         tracing_policy: Option<AssetTracingPolicy>)
+                                         tracing_policy: Option<AssetTracingPolicy>,
+                                         identity_commitment: Option<CredCommitment>)
                                          -> Result<TransactionBuilder, PlatformError> {
     // Asset issuance is always nonconfidential
     let (blind_asset_record, _, owner_memo) =
-    get_blind_asset_record_and_memos(issuer_key_pair.get_pk(),
-                                     amount,
-                                     token_code,
-                                     AssetRecordType::from_booleans(record_type.is_confidential_amount(), false),
-                                     tracing_policy.clone())?;
+      get_blind_asset_record_and_memos(issuer_key_pair.get_pk(),
+                                       amount,
+                                       token_code,
+                                       AssetRecordType::from_booleans(record_type.is_confidential_amount(), false),
+                                       tracing_policy.clone())?;
 
     // Transfer Operation
     let output_template = if let Some(policy) = tracing_policy.clone() {
@@ -1185,19 +1186,22 @@ pub mod txn_lib {
                                                   record_type,
                                                   recipient_key_pair.get_pk())
     };
-    let xfr_op =
-    TransferOperationBuilder::new().add_input(TxoRef::Relative(0),
-                                              open_blind_asset_record(&blind_asset_record,
-                                                                &owner_memo,
-                                                                issuer_key_pair.get_sk_ref())
-                                              .map_err(|e| PlatformError::ZeiError(error_location!(),e))?,
-                                              None,
-                                              amount)?
-                                   .add_output(&output_template, credential_record)?
-                                   .balance()?
-                                   .create(TransferType::Standard)?
-                                   .sign(issuer_key_pair)?
-                                   .transaction()?;
+
+    let xfr_op = TransferOperationBuilder::new().add_input(TxoRef::Relative(0),
+                                                          open_blind_asset_record(&blind_asset_record,
+                                                                                  &owner_memo,
+                                                                                  issuer_key_pair.get_sk_ref()).map_err(|e| PlatformError::ZeiError(error_location!(),e))?,
+                                                          None,
+                                                          None,
+                                                          amount)?
+                                                 .add_output(&output_template,
+                                                             tracing_policy.clone(),
+                                                             identity_commitment,
+                                                             credential_record)?
+                                                 .balance()?
+                                                 .create(TransferType::Standard)?
+                                                 .sign(issuer_key_pair)?
+                                                 .transaction()?;
 
     // Issue and Transfer transaction
     let mut txn_builder = TransactionBuilder::default();
@@ -1244,6 +1248,7 @@ pub mod txn_lib {
                                                                                    issuer_key_pair.get_sk_ref()).map_err(|e| {
                                                                                      PlatformError::ZeiError(error_location!(), e)
                                                                                    })?,
+                                                           None,
                                                            None,
                                                            amount)?
                                                 .add_output_and_store_blinds(&output_template, None, prng, blinds)?.balance()?
@@ -1529,9 +1534,9 @@ pub mod txn_lib {
                                                   oar1.get_record_type(),
                                                   key_pair.get_pk())
     };
-    let xfr_op = TransferOperationBuilder::new().add_input(sid1, oar1, None, amount1)?
-                                                .add_input(sid2, oar2, None, amount2)?
-                                                .add_output(&template, None)?
+    let xfr_op = TransferOperationBuilder::new().add_input(sid1, oar1, None, None, amount1)?
+                                                .add_input(sid2, oar2, None, None, amount2)?
+                                                .add_output(&template, None, None, None)?
                                                 .create(TransferType::Standard)?
                                                 .sign(key_pair)?
                                                 .transaction()?;
@@ -1590,6 +1595,7 @@ pub mod txn_lib {
                                amount,
                                token_code,
                                AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
+                               None,
                                None,
                                None,
                                None)?;
@@ -1804,20 +1810,8 @@ pub mod txn_lib {
     let ac_credential =
       wrapper_credential.to_ac_credential()
                         .or_else(|e| Err(PlatformError::ZeiError(error_location!(), e)))?;
-    let reveal_sig =
-      credential_reveal(&mut prng,
-                        &user_secret_key,
-                        &wrapper_credential,
-                        &attribute_names).or_else(|error| {
-                                           Err(PlatformError::ZeiError(error_location!(), error))
-                                         })?;
-    credential_verify(&credential_issuer_public_key,
-                      &attributes,
-                      &reveal_sig.sig_commitment,
-                      &reveal_sig.pok).or_else(|error| {
-                                        Err(PlatformError::ZeiError(error_location!(), error))
-                                      })?;
-    let commitment_key = credential_keygen_commitment(&mut prng);
+    let (identity_commitment, _, commitment_key) =
+      credential_commit(&mut prng, &user_secret_key, &wrapper_credential, b"").unwrap();
     let commitment_key_str =
       serde_json::to_vec(&commitment_key).or_else(|_| Err(PlatformError::SerializationError))?;
 
@@ -1872,7 +1866,7 @@ pub mod txn_lib {
                                                    credential_issuer_public_key.get_ref().clone(),
                                                  reveal_map };
     let debt_tracing_policy = AssetTracingPolicy { enc_keys: tracer_enc_keys,
-                                                   asset_tracking: true,
+                                                   asset_tracking: false,
                                                    identity_tracking: Some(identity_policy) };
 
     // Issue and transfer fiat token
@@ -1887,6 +1881,7 @@ pub mod txn_lib {
                                AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
                                None,
                                Some(fiat_txn_file),
+                               None,
                                None)?;
     let fiat_sid = submit_and_get_sids(protocol, host, txn_builder)?[0];
     println!("Fiat sid: {}", fiat_sid.0);
@@ -1910,7 +1905,7 @@ pub mod txn_lib {
                                    borrower_key_pair,
                                    debt_code,
                                    &memo_str,
-                                   AssetRules::default().set_traceable(true).clone(),
+                                   AssetRules::default(),
                                    None)?;
     // Store data before submitting the transaction to avoid data overwriting
     let data = load_data(data_dir)?;
@@ -1928,7 +1923,8 @@ pub mod txn_lib {
                                AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
                                credential_record,
                                Some(debt_txn_file),
-                               Some(debt_tracing_policy.clone()))?;
+                               Some(debt_tracing_policy.clone()),
+                               Some(identity_commitment.clone()))?;
     let debt_sid = submit_and_get_sids(protocol, host, txn_builder)?[0];
     println!("Debt sid: {}", debt_sid.0);
     let debt_open_asset_record =
@@ -1940,7 +1936,7 @@ pub mod txn_lib {
                                                debt_code.val,
                                                AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
                                                lender_key_pair.get_pk(),
-                                               debt_tracing_policy);
+                                               debt_tracing_policy.clone());
     let borrower_template =
       AssetRecordTemplate::with_no_asset_tracking(amount,
                                                   fiat_code.val,
@@ -1949,13 +1945,18 @@ pub mod txn_lib {
     let xfr_op = TransferOperationBuilder::new().add_input(TxoRef::Absolute(fiat_sid),
                                                            fiat_open_asset_record,
                                                            None,
+                                                           None,
                                                            amount)?
                                                 .add_input(TxoRef::Absolute(debt_sid),
                                                            debt_open_asset_record,
                                                            None,
+                                                           None,
                                                            amount)?
-                                                .add_output(&lender_template, credential_record)?
-                                                .add_output(&borrower_template, None)?
+                                                .add_output(&lender_template,
+                                                            Some(debt_tracing_policy),
+                                                            Some(identity_commitment),
+                                                            credential_record)?
+                                                .add_output(&borrower_template, None, None, None)?
                                                 .create(TransferType::Standard)?
                                                 .sign(lender_key_pair)?
                                                 .sign(borrower_key_pair)?
@@ -2142,15 +2143,17 @@ pub mod txn_lib {
     let op = TransferOperationBuilder::new().add_input(TxoRef::Absolute(debt_sid),
                                                        debt_open_asset_record,
                                                        None,
+                                                       None,
                                                        amount_to_burn)?
                                             .add_input(TxoRef::Absolute(fiat_sid),
                                                        fiat_open_asset_record,
                                                        None,
+                                                       None,
                                                        amount_to_spend)?
-                                            .add_output(&spend_template, None)?
-                                            .add_output(&burn_template, None)?
-                                            .add_output(&lender_template, None)?
-                                            .add_output(&borrower_template, None)?
+                                            .add_output(&spend_template, None, None, None)?
+                                            .add_output(&burn_template, None, None, None)?
+                                            .add_output(&lender_template, None, None, None)?
+                                            .add_output(&borrower_template, None, None, None)?
                                             .create(TransferType::DebtSwap)?
                                             .sign(borrower_key_pair)?
                                             .transaction()?;
@@ -2437,6 +2440,13 @@ pub mod txn_lib {
           println!("Blind asset records and associated memos are required to transfer asset. Use --issuance_txn_files.");
           return Err(PlatformError::InputsError(error_location!()));
         };
+        let tracing_policy = if transfer_asset_matches.is_present("traceable") {
+          Some(AssetTracingPolicy { enc_keys: tracer_enc_keys,
+                                    asset_tracking: true,
+                                    identity_tracking: None })
+        } else {
+          None
+        };
         let input_amounts =
           if let Some(input_amounts_arg) = transfer_asset_matches.value_of("input_amounts") {
             parse_to_u64_vec(input_amounts_arg)?
@@ -2453,6 +2463,8 @@ pub mod txn_lib {
         let mut txo_refs_iter = txo_refs.iter();
         let mut bars_and_owner_memos_iter = bars_and_owner_memos.iter();
         let mut input_amounts_iter = input_amounts.iter();
+        let mut input_tracing_policies = Vec::new();
+        let mut input_identity_commitments = Vec::new();
         while count > 0 {
           let txo_refs_next = if let Some(txo_ref) = txo_refs_iter.next() {
             txo_ref
@@ -2476,6 +2488,8 @@ pub mod txn_lib {
           let transfer_from_next =
             (txo_refs_next, blind_asset_record_next, input_amount_next, owner_memo_next);
           transfer_from.push(transfer_from_next);
+          input_tracing_policies.push(tracing_policy.clone());
+          input_identity_commitments.push(None);
           count -= 1;
         }
 
@@ -2506,6 +2520,8 @@ pub mod txn_lib {
         let mut transfer_to = Vec::new();
         let mut output_amounts_iter = output_amounts.iter();
         let mut addresses_iter = recipient_addresses.iter();
+        let mut output_tracing_policies = Vec::new();
+        let mut output_identity_commitments = Vec::new();
         while count > 0 {
           let output_amount_next = if let Some(output_amount) = output_amounts_iter.next() {
             *output_amount
@@ -2520,20 +2536,20 @@ pub mod txn_lib {
             return Err(PlatformError::InputsError(error_location!()));
           };
           transfer_to.push((output_amount_next, address_next));
+          output_tracing_policies.push(tracing_policy.clone());
+          output_identity_commitments.push(None);
           count -= 1;
         }
 
         // Transfer asset
         let mut txn_builder = TransactionBuilder::default();
-        if let Err(e) =
-          txn_builder.add_basic_transfer_asset(&issuer_key_pair,
-                                               &Some(AssetTracingPolicy { enc_keys:
-                                                                            tracer_enc_keys,
-                                                                          asset_tracking: true,
-                                                                          identity_tracking:
-                                                                            None }),
-                                               &transfer_from[..],
-                                               &transfer_to[..])
+        if let Err(e) = txn_builder.add_basic_transfer_asset(&issuer_key_pair,
+                                                             &transfer_from[..],
+                                                             input_tracing_policies,
+                                                             input_identity_commitments,
+                                                             &transfer_to[..],
+                                                             output_tracing_policies,
+                                                             output_identity_commitments)
         {
           println!("Failed to add operation to transaction.");
           return Err(e);
@@ -2581,6 +2597,7 @@ pub mod txn_lib {
                                  record_type,
                                  None,
                                  Some(txn_file),
+                                 None,
                                  None)?;
         Ok(())
       }
@@ -3473,6 +3490,7 @@ pub mod txn_lib {
                                  amount,
                                  code,
                                  AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
+                                 None,
                                  None,
                                  None,
                                  None);

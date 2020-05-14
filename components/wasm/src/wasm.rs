@@ -357,6 +357,7 @@ impl TransferOperationBuilder {
                                                                            .clone(),
                                                               asset_tracking: true,
                                                               identity_tracking: None }),
+                   None,
                    amount)
         .map_err(error_to_jsvalue)?;
     Ok(self)
@@ -387,7 +388,7 @@ impl TransferOperationBuilder {
       AssetRecordTemplate::with_no_asset_tracking(amount, code.val, asset_record_type, *recipient)
     };
     self.get_builder_mut()
-        .add_output(&template, None)
+        .add_output(&template, None, None, None)
         .map_err(error_to_jsvalue)?;
     Ok(self)
   }

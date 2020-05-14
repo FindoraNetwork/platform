@@ -156,7 +156,7 @@ impl<RNG, LU> SubmissionServer<RNG, LU>
     if let Some(block) = &mut self.block {
       if let Ok(ledger) = self.committed_state.read() {
         let handle = TxnHandle::new(&txn);
-        let txn_effect = TxnEffect::compute_effect(&mut self.prng, txn)?;
+        let txn_effect = TxnEffect::compute_effect(txn)?;
         self.pending_txns
             .push((ledger.apply_transaction(block, txn_effect)?, handle.clone()));
         self.txn_status.insert(handle.clone(), TxnStatus::Pending);

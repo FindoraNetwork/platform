@@ -16,6 +16,7 @@ use std::collections::{HashMap, HashSet};
 use std::convert::TryFrom;
 use std::hash::{Hash, Hasher};
 use std::marker::PhantomData;
+use zei::api::anon_creds::ACCommitment;
 use zei::xfr::lib::gen_xfr_body;
 use zei::xfr::sig::{XfrKeyPair, XfrPublicKey, XfrSecretKey, XfrSignature};
 use zei::xfr::structs::{AssetRecord, AssetTracingPolicy, BlindAssetRecord, XfrBody};
@@ -232,10 +233,11 @@ impl SignatureRules {
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 /// Simple asset rules:
 /// 1) Traceable: Records of traceable assets can be decrypted by a provided tracking key
-/// 2) Transferable: Non-transferable assets can only be transferred once from the issuer to
+/// 2) Identity traceable: Records of identity traceable assets can be decrypted by a provided tracking key
+/// 3) Transferable: Non-transferable assets can only be transferred once from the issuer to
 ///    another user.
-/// 3) Max units: Optional limit on total issuance amount.
-/// 4) Transfer signature rules: Signature weights and threshold for a valid transfer.
+/// 4) Max units: Optional limit on total issuance amount.
+/// 5) Transfer signature rules: Signature weights and threshold for a valid transfer.
 pub struct AssetRules {
   pub traceable: bool,
   pub transferable: bool,
@@ -392,7 +394,15 @@ pub enum TxoRef {
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct TransferAssetBody {
   pub inputs: Vec<TxoRef>, // Ledger address of inputs
-  pub num_outputs: usize,  // How many output TXOs?
+  // Input asset tracing policies and signature commitments
+  #[serde(default)]
+  #[serde(skip_serializing_if = "is_default")]
+  pub input_identity_commitments: Vec<Option<ACCommitment>>,
+  pub num_outputs: usize, // How many output TXOs?
+  // Output asset tracing policies and signature commitments
+  #[serde(default)]
+  #[serde(skip_serializing_if = "is_default")]
+  pub output_identity_commitments: Vec<Option<ACCommitment>>,
   // TODO(joe): we probably don't need the whole XfrNote with input records
   // once it's on the chain
   pub transfer: Box<XfrBody>, // Encrypted transfer note
@@ -402,7 +412,9 @@ impl TransferAssetBody {
   pub fn new<R: CryptoRng + RngCore>(prng: &mut R,
                                      input_refs: Vec<TxoRef>,
                                      input_records: &[AssetRecord],
-                                     output_records: &[AssetRecord])
+                                     input_identity_commitments: Vec<Option<ACCommitment>>,
+                                     output_records: &[AssetRecord],
+                                     output_identity_commitments: Vec<Option<ACCommitment>>)
                                      -> Result<TransferAssetBody, errors::PlatformError> {
     if input_records.is_empty() {
       return Err(PlatformError::InputsError(error_location!()));
@@ -410,7 +422,9 @@ impl TransferAssetBody {
     let note = Box::new(gen_xfr_body(prng, input_records, output_records)
         .map_err(|e| PlatformError::ZeiError(error_location!(),e))?);
     Ok(TransferAssetBody { inputs: input_refs,
+                           input_identity_commitments,
                            num_outputs: output_records.len(),
+                           output_identity_commitments,
                            transfer: note })
   }
 
@@ -1059,7 +1073,9 @@ mod tests {
                              owners_memos: vec![] };
 
     let assert_transfer_body = TransferAssetBody { inputs: Vec::new(),
+                                                   input_identity_commitments: Vec::new(),
                                                    num_outputs: 0,
+                                                   output_identity_commitments: Vec::new(),
                                                    transfer: Box::new(xfr_note) };
 
     let asset_transfer = TransferAsset { body: assert_transfer_body,

@@ -32,8 +32,8 @@ impl abci::Application for ABCISubmissionServer {
     let mut resp = ResponseCheckTx::new();
 
     if let Some(tx) = convert_tx(req.get_tx()) {
-      if let Ok(mut state) = self.la.get_committed_state().write() {
-        if TxnEffect::compute_effect(state.get_prng(), tx).is_err() {
+      if self.la.get_committed_state().write().is_ok() {
+        if TxnEffect::compute_effect(tx).is_err() {
           resp.set_code(1);
           resp.set_log(String::from("Check failed"));
         }
