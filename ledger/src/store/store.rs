@@ -678,8 +678,7 @@ impl LedgerStatus {
               }
             }
           }
-          // Until we can distinguish assets that have policies that invoke transfer restrictions
-          // from those that don't, no confidential types are allowed
+          // Until we can support confidential issuance, tracing with confidential type isn't allowed
           _ => match input_commitment {
             Some(_) => {
               return Err(PlatformError::InputsError(error_location!()));
@@ -755,8 +754,7 @@ impl LedgerStatus {
                 }
               }
             }
-            // Until we can distinguish assets that have policies that invoke transfer restrictions
-            // from those that don't, no confidential types are allowed
+            // Until we can support confidential issuance, tracing with confidential type isn't allowed
             _ => match output_commitment {
               Some(_) => {
                 return Err(PlatformError::InputsError(error_location!()));
