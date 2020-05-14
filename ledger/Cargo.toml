@@ -21,6 +21,7 @@ findora = { path = "../findora" }
 hex = "0.3.2"
 itertools = "0.8.0"
 lazy_static = { version = "1.2.0" }
+log = "0.4.8"
 merkle_tree = { path = "../libs/ads/merkle_tree" }
 quickcheck = "0.9.0"
 rand = "0.5"
@@ -37,7 +38,6 @@ time = "0.1"
 tiny-keccak = "1.4.2"
 wasm-bindgen = { version = "0.2.50", features = ["serde-serialize"]  }
 zei = { git = "ssh://git@github.com/findoraorg/zei", tag = "v0.0.2-4" }
-log = "0.4.8"
 
 [features]
 TESTING = []

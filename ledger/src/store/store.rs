@@ -1,7 +1,6 @@
 #![deny(warnings)]
 extern crate bincode;
 extern crate byteorder;
-extern crate findora;
 extern crate tempdir;
 
 use crate::data_model::errors::PlatformError;
@@ -15,6 +14,7 @@ use cryptohash::sha256::Digest as BitDigest;
 use cryptohash::sha256::DIGESTBYTES;
 use cryptohash::{sha256, HashValue, Proof};
 use findora::HasInvariants;
+use log::info;
 use merkle_tree::append_only_merkle::AppendOnlyMerkle;
 use merkle_tree::logged_merkle::LoggedMerkle;
 use rand_chacha::ChaChaRng;
@@ -1478,7 +1478,7 @@ impl LedgerState {
       AppendOnlyMerkle::open(path)
     };
 
-    log!(Store, "Using path {} for the Merkle tree.", path);
+    info!("Using path {} for the Merkle tree.", path);
 
     let tree = match result {
       Err(x) => {
@@ -1502,9 +1502,7 @@ impl LedgerState {
       air::open(path)
     };
 
-    log!(Store,
-         "Using path {} for the Address Identity Registry.",
-         path);
+    info!("Using path {} for the Address Identity Registry.", path);
 
     let tree = match result {
       Err(x) => {

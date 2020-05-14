@@ -1,4 +1,6 @@
+#![deny(warnings)]
 use percent_encoding::{percent_decode, utf8_percent_encode, AsciiSet, CONTROLS};
+use std::io::{Error, ErrorKind};
 
 pub fn string_of_type<T>(_: &T) -> String {
   std::any::type_name::<T>().to_string()
@@ -37,4 +39,16 @@ pub const SUBMIT_PORT: &str = "8669";
 pub fn protocol_host() -> (&'static str, &'static str) {
   (std::option_env!("PROTOCOL").unwrap_or(PROTOCOL),
    std::option_env!("SERVER_HOST").unwrap_or(SERVER_HOST))
+}
+
+pub fn se<T>(s: String) -> Option<Error> {
+  Some(Error::new(ErrorKind::Other, s))
+}
+
+pub fn er<T>(s: String) -> Result<T, Error> {
+  Err(Error::new(ErrorKind::Other, s))
+}
+
+pub fn sde<T>(s: String) -> Result<T, Error> {
+  Err(Error::new(ErrorKind::Other, s))
 }

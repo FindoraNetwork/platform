@@ -718,7 +718,7 @@ impl AppendOnlyMerkle {
     let save = path.to_owned() + &ext;
 
     if std::path::Path::new(&save).exists() {
-      return er!("Rebuild path {} already exists.", save);
+      return utils::er(format!("Rebuild path {} already exists.", save));
     }
 
     // Rename the level zero file out of the way and then create
