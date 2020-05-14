@@ -41,7 +41,7 @@ use libp2p::{
   swarm::NetworkBehaviourEventProcess,
   Multiaddr, NetworkBehaviour, PeerId, Swarm,
 };
-use log::{info, warn, error};
+use log::{error, info, warn};
 use serde_derive::{Deserialize, Serialize};
 use std::{
   collections::{HashMap, HashSet},
@@ -116,8 +116,8 @@ fn main() -> Result<(), Box<dyn Error>> {
 
   // Read signed commitment from ledger
   let (protocol, host) = protocol_host();
-  let resp_gs =
-    client.get(&format!("{}://{}:{}/global_state", protocol, host, QUERY_PORT)).send()?;
+  let resp_gs = client.get(&format!("{}://{}:{}/global_state", protocol, host, QUERY_PORT))
+                      .send()?;
   let (comm, idx, sig): (BitDigest, u64, XfrSignature) =
     serde_json::from_str(&resp_gs.text()?[..]).unwrap();
   let idx = if args.is_present("poison") {
@@ -127,8 +127,8 @@ fn main() -> Result<(), Box<dyn Error>> {
   };
   info!("Got ({:?}, {}, {:?}) from global_state", comm, idx, sig);
   // Read signed commitment from ledger
-  let resp_pk =
-    client.get(&format!("{}://{}:{}/public_key", protocol, host, QUERY_PORT)).send()?;
+  let resp_pk = client.get(&format!("{}://{}:{}/public_key", protocol, host, QUERY_PORT))
+                      .send()?;
   let pk: XfrPublicKey = serde_json::from_str(&resp_pk.text()?[..]).unwrap();
   info!("Got {:?} from public_key", pk);
 
@@ -167,39 +167,48 @@ fn main() -> Result<(), Box<dyn Error>> {
         let msg_str = String::from_utf8_lossy(&message.data);
         let received = serde_json::from_str::<KeyAndState>(&msg_str);
         match received {
-          // 
+          //
           Ok(ks) => {
             if ks == self.consensus_state.this_state {
               if !self.consensus_state.matches.contains(&message.source) {
                 self.consensus_state.matches.insert(message.source.clone());
                 info!("Received matching signed commitment from {:?}",
-                         message.source);
+                      message.source);
               }
             } else {
               let (comm, idx, sig) = ks.global_state.clone();
               let (_, this_idx, _) = self.consensus_state.this_state.global_state;
               if idx != this_idx {
-                match self.consensus_state.this_state.public_key.verify(&serde_json::to_vec(&(comm, idx)).unwrap(), &sig) {
+                match self.consensus_state
+                          .this_state
+                          .public_key
+                          .verify(&serde_json::to_vec(&(comm, idx)).unwrap(), &sig)
+                {
                   Ok(()) => {
                     if !self.consensus_state.valid.contains_key(&message.source) {
-                      self.consensus_state.valid.insert(message.source.clone(), ks.clone());
+                      self.consensus_state
+                          .valid
+                          .insert(message.source.clone(), ks);
                       info!("Received valid non-matching signed commitment from {:?}",
                             message.source);
                     }
-                  },
+                  }
                   Err(zei_err) => {
                     if !self.consensus_state.invalid.contains_key(&message.source) {
-                      self.consensus_state.invalid.insert(message.source.clone(), ks.clone());
-                      info!("Received invalid signed commitment {:?} from {}, err = {:?}", ks, message.source, zei_err);
+                      self.consensus_state
+                          .invalid
+                          .insert(message.source.clone(), ks.clone());
+                      info!("Received invalid signed commitment {:?} from {}, err = {:?}",
+                            ks, message.source, zei_err);
                     }
-                  },
+                  }
                 };
-              } else {
-                if !self.consensus_state.invalid.contains_key(&message.source) {
-                  self.consensus_state.invalid.insert(message.source.clone(), ks.clone());
-                  warn!("Received invalid signed commitment \n{:?}\nfrom {:?}",
-                       ks, message.source);
-                }
+              } else if !self.consensus_state.invalid.contains_key(&message.source) {
+                self.consensus_state
+                    .invalid
+                    .insert(message.source.clone(), ks.clone());
+                warn!("Received invalid signed commitment \n{:?}\nfrom {:?}",
+                      ks, message.source);
               }
             }
           }
