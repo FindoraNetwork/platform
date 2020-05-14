@@ -680,9 +680,15 @@ impl LedgerStatus {
           }
           // Until we can distinguish assets that have policies that invoke transfer restrictions
           // from those that don't, no confidential types are allowed
-          _ => {
-            return Err(PlatformError::InputsError(error_location!()));
-          }
+          _ => match input_commitment {
+            Some(_) => {
+              return Err(PlatformError::InputsError(error_location!()));
+            }
+            None => {
+              transfer_input_policies.push(None);
+              transfer_input_commitments.push(None);
+            }
+          },
         }
       }
       if let Some(xfr_body) = txn.transfer_body.clone() {
@@ -751,9 +757,15 @@ impl LedgerStatus {
             }
             // Until we can distinguish assets that have policies that invoke transfer restrictions
             // from those that don't, no confidential types are allowed
-            _ => {
-              return Err(PlatformError::InputsError(error_location!()));
-            }
+            _ => match output_commitment {
+              Some(_) => {
+                return Err(PlatformError::InputsError(error_location!()));
+              }
+              None => {
+                transfer_output_policies.push(None);
+                transfer_output_commitments.push(None);
+              }
+            },
           }
         }
       }
@@ -3159,9 +3171,9 @@ mod tests {
     let mut tx = Transaction::default();
 
     let art = if let true = confidential {
-      AssetRecordType::ConfidentialAmount_NonConfidentialAssetType
+      AssetRecordType::ConfidentialAmount_ConfidentialAssetType
     } else {
-      AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType
+      AssetRecordType::NonConfidentialAmount_ConfidentialAssetType
     };
     let template = AssetRecordTemplate::with_no_asset_tracking(100, code.val, AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType, alice.get_pk());
     let (ba, _, _) = build_blind_asset_record(ledger.get_prng(), &params.pc_gens, &template, None);
