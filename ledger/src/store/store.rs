@@ -443,30 +443,37 @@ impl LedgerStatus {
         return Err(PlatformError::InputsError(error_location!()));
       }
       // (2)
-      debug_assert!(inp_record.asset_type.get_asset_type().is_some());
-      let code = AssetTypeCode { val: record.asset_type.get_asset_type().unwrap() };
-      let asset_type = self.asset_types
-                           .get(&code)
-                           .or_else(|| txn.new_asset_codes.get(&code))
-                           .ok_or_else(|| PlatformError::InputsError(error_location!()))?;
-      if !asset_type.properties.asset_rules.transferable
-         && asset_type.properties.issuer.key != record.public_key
+      if let Some(code) = record.asset_type
+                                .get_asset_type()
+                                .map(|v| AssetTypeCode { val: v })
       {
-        return Err(PlatformError::InputsError(error_location!()));
+        let asset_type = self.asset_types
+                             .get(&code)
+                             .or_else(|| txn.new_asset_codes.get(&code))
+                             .ok_or_else(|| PlatformError::InputsError(error_location!()))?;
+        if !asset_type.properties.asset_rules.transferable
+           && asset_type.properties.issuer.key != record.public_key
+        {
+          return Err(PlatformError::InputsError(error_location!()));
+        }
       }
     }
 
     // Internally spend inputs with transfer restrictions can only be owned by the asset issuer
     for record in txn.internally_spent_txos.iter() {
-      let code = AssetTypeCode { val: record.asset_type.get_asset_type().unwrap() };
-      let asset_type = self.asset_types
-                           .get(&code)
-                           .or_else(|| txn.new_asset_codes.get(&code))
-                           .ok_or_else(|| PlatformError::InputsError(error_location!()))?;
-      if !asset_type.properties.asset_rules.transferable
-         && asset_type.properties.issuer.key != record.public_key
+      if let Some(code) = record.asset_type
+                                .get_asset_type()
+                                .map(|v| AssetTypeCode { val: v })
       {
-        return Err(PlatformError::InputsError(error_location!()));
+        let asset_type = self.asset_types
+                             .get(&code)
+                             .or_else(|| txn.new_asset_codes.get(&code))
+                             .ok_or_else(|| PlatformError::InputsError(error_location!()))?;
+        if !asset_type.properties.asset_rules.transferable
+           && asset_type.properties.issuer.key != record.public_key
+        {
+          return Err(PlatformError::InputsError(error_location!()));
+        }
       }
     }
 

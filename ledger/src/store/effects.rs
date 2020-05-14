@@ -325,12 +325,8 @@ impl TxnEffect {
 
           let mut input_types = HashSet::new();
           for (inp, record) in trn.body.inputs.iter().zip(trn.body.transfer.inputs.iter()) {
-            // Until we can distinguish assets that have policies that invoke transfer restrictions
-            // from those that don't, no confidential types are allowed
-            if record.asset_type.get_asset_type().is_none() {
-              return Err(PlatformError::InputsError(error_location!()));
-            }
-
+            // NOTE: We assume that any confidential-type asset records
+            // have no atypical transfer restrictions. Be careful!
             if let Some(inp_code) = record.asset_type.get_asset_type() {
               input_types.insert(AssetTypeCode { val: inp_code });
               //asset_types_involved.insert(AssetTypeCode { val: inp_code });
