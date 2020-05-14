@@ -58,12 +58,12 @@ impl Arbitrary for UnitName {
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub enum AccountsCommand {
-  NewUser(UserName),           // name
-  NewUnit(UnitName, UserName), // name, issuer
-  Mint(usize, UnitName),       // count, unit
+  NewUser(UserName),                         // name
+  NewUnit(UnitName, UserName),               // name, issuer
+  Mint(usize, UnitName),                     // count, unit
   Send(UserName, usize, UnitName, UserName), // source,count,unit,dest
-                               // ToggleConfTypes(),
-                               // ToggleConfAmts(),
+  ToggleConfTypes(),
+  ToggleConfAmts(),
 }
 
 fn rename_user(old: &UserName, new: &UserName, ac: AccountsCommand) -> AccountsCommand {
@@ -165,8 +165,8 @@ impl Arbitrary for AccountsCommand {
                                               .zip(repeat(unit.clone()).zip(dst.shrink())))
                     .map(|((src, amt), (unit, dst))| Send(src, amt, unit, dst)))
       }
-      // ToggleConfAmts() => Box::new(std::iter::empty()),
-      // ToggleConfTypes() => Box::new(std::iter::empty()),
+      ToggleConfAmts() => Box::new(std::iter::empty()),
+      ToggleConfTypes() => Box::new(std::iter::empty()),
     }
   }
 }
@@ -285,8 +285,8 @@ impl InterpretAccounts<()> for SimpleAccountsState {
         self.accounts.get(dst).ok_or(())?;
         self.units_to_users.get(unit).ok_or(())?;
       }
-      // AccountsCommand::ToggleConfAmts() => {},
-      // AccountsCommand::ToggleConfTypes() => {},
+      AccountsCommand::ToggleConfAmts() => {}
+      AccountsCommand::ToggleConfTypes() => {}
     }
     Ok(())
   }
@@ -350,8 +350,8 @@ impl InterpretAccounts<()> for AccountsState {
           *dst_column += amt;
         }
       }
-      // AccountsCommand::ToggleConfAmts() => {},
-      // AccountsCommand::ToggleConfTypes() => {},
+      AccountsCommand::ToggleConfAmts() => {}
+      AccountsCommand::ToggleConfTypes() => {}
     }
     Ok(())
   }
@@ -366,14 +366,14 @@ struct LedgerAccounts {
   owner_memos: HashMap<TxoSID, OwnerMemo>,
   // These only affect new issuances
   confidential_amounts: bool,
-  #[allow(unused)]
   confidential_types: bool,
 }
 
 impl InterpretAccounts<PlatformError> for LedgerAccounts {
   fn run_account_command(&mut self, cmd: &AccountsCommand) -> Result<(), PlatformError> {
     let conf_amts = self.confidential_amounts;
-    let conf_types = false; // && self.confidential_types;
+    let conf_types = self.confidential_types;
+    let iss_art = AssetRecordType::from_booleans(conf_amts, false);
     let art = AssetRecordType::from_booleans(conf_amts, conf_types);
     // dbg!(cmd);
     match cmd {
@@ -460,7 +460,7 @@ impl InterpretAccounts<PlatformError> for LedgerAccounts {
 
         let mut tx = Transaction::default();
 
-        let ar = AssetRecordTemplate::with_no_asset_tracking(amt, code.val, art, *pubkey);
+        let ar = AssetRecordTemplate::with_no_asset_tracking(amt, code.val, iss_art, *pubkey);
         let params = PublicParams::new();
         let (ba, _, owner_memo) =
           build_blind_asset_record(self.ledger.get_prng(), &params.pc_gens, &ar, None);
@@ -655,12 +655,13 @@ impl InterpretAccounts<PlatformError> for LedgerAccounts {
             self.owner_memos.insert(*txo_sid, memo);
           }
         }
-      } // AccountsCommand::ToggleConfAmts() => {
-        //     self.confidential_amounts = !conf_amts;
-        // }
-        // AccountsCommand::ToggleConfTypes() => {
-        //     self.confidential_types = !conf_types;
-        // }
+      }
+      AccountsCommand::ToggleConfAmts() => {
+        self.confidential_amounts = !conf_amts;
+      }
+      AccountsCommand::ToggleConfTypes() => {
+        self.confidential_types = !conf_types;
+      }
     }
     Ok(())
   }
@@ -676,14 +677,14 @@ struct OneBigTxnAccounts {
   units: HashMap<UnitName, (UserName, AssetTypeCode, u64)>, // user, data, issuance num
   // These only affect new issuances
   confidential_amounts: bool,
-  #[allow(unused)]
   confidential_types: bool,
 }
 
 impl InterpretAccounts<PlatformError> for OneBigTxnAccounts {
   fn run_account_command(&mut self, cmd: &AccountsCommand) -> Result<(), PlatformError> {
     let conf_amts = self.confidential_amounts;
-    let conf_types = false;
+    let conf_types = self.confidential_types;
+    let iss_art = AssetRecordType::from_booleans(conf_amts, false);
     let art = AssetRecordType::from_booleans(conf_amts, conf_types);
     // dbg!(cmd);
     match cmd {
@@ -761,7 +762,7 @@ impl InterpretAccounts<PlatformError> for OneBigTxnAccounts {
              .get_mut(unit)
              .unwrap() += amt;
 
-        let ar = AssetRecordTemplate::with_no_asset_tracking(amt, code.val, art, *pubkey);
+        let ar = AssetRecordTemplate::with_no_asset_tracking(amt, code.val, iss_art, *pubkey);
         let params = PublicParams::new();
         let (ba, _, owner_memo) =
           build_blind_asset_record(self.base_ledger.get_prng(), &params.pc_gens, &ar, None);
@@ -953,12 +954,13 @@ impl InterpretAccounts<PlatformError> for OneBigTxnAccounts {
                              .zip(owners_memos.iter())
                              .map(|(txo, memo)| (txo.clone(), memo.as_ref().cloned()))
                              .collect::<Vec<(TxOutput, Option<OwnerMemo>)>>());
-      } // AccountsCommand::ToggleConfAmts() => {
-        //     self.confidential_amounts = !conf_amts;
-        // }
-        // AccountsCommand::ToggleConfTypes() => {
-        //     self.confidential_types = !conf_types;
-        // }
+      }
+      AccountsCommand::ToggleConfAmts() => {
+        self.confidential_amounts = !conf_amts;
+      }
+      AccountsCommand::ToggleConfTypes() => {
+        self.confidential_types = !conf_types;
+      }
     }
     Ok(())
   }
@@ -977,7 +979,6 @@ struct LedgerStandaloneAccounts {
   owner_memos: HashMap<TxoSID, OwnerMemo>,
   // These only affect new issuances
   confidential_amounts: bool,
-  #[allow(unused)]
   confidential_types: bool,
 }
 
@@ -997,7 +998,8 @@ impl Drop for LedgerStandaloneAccounts {
 impl InterpretAccounts<PlatformError> for LedgerStandaloneAccounts {
   fn run_account_command(&mut self, cmd: &AccountsCommand) -> Result<(), PlatformError> {
     let conf_amts = self.confidential_amounts;
-    let conf_types = false;
+    let conf_types = self.confidential_types;
+    let iss_art = AssetRecordType::from_booleans(conf_amts, false);
     let art = AssetRecordType::from_booleans(conf_amts, conf_types);
     // dbg!(cmd);
     match cmd {
@@ -1131,7 +1133,7 @@ impl InterpretAccounts<PlatformError> for LedgerStandaloneAccounts {
 
         let mut tx = Transaction::default();
 
-        let ar = AssetRecordTemplate::with_no_asset_tracking(amt, code.val, art, *pubkey);
+        let ar = AssetRecordTemplate::with_no_asset_tracking(amt, code.val, iss_art, *pubkey);
         let params = PublicParams::new();
         let (ba, _, owner_memo) =
           build_blind_asset_record(&mut self.prng, &params.pc_gens, &ar, None);
@@ -1389,12 +1391,13 @@ impl InterpretAccounts<PlatformError> for LedgerStandaloneAccounts {
             self.owner_memos.insert(*txo_sid, memo);
           }
         }
-      } // AccountsCommand::ToggleConfAmts() => {
-        //     self.confidential_amounts = !conf_amts;
-        // }
-        // AccountsCommand::ToggleConfTypes() => {
-        //     self.confidential_types = !conf_types;
-        // }
+      }
+      AccountsCommand::ToggleConfAmts() => {
+        self.confidential_amounts = !conf_amts;
+      }
+      AccountsCommand::ToggleConfTypes() => {
+        self.confidential_types = !conf_types;
+      }
     }
     Ok(())
   }
@@ -1467,7 +1470,7 @@ impl AccountsScenarioBuilder {
       *amt
     };
     match roll % 23 {
-      1..=23 => {
+      1..=19 => {
         let count = if send_amt != 0 { count % send_amt } else { 0 };
         self.cmds.push(AccountsCommand::Send(src, count, unit, dst));
       }
@@ -1480,8 +1483,12 @@ impl AccountsScenarioBuilder {
                                         unit,
                                         dst));
       }
-      // 5|6|10 => { cmds.push(AccountsCommand::ToggleConfAmts()); }
-      // 7|11 => { cmds.push(AccountsCommand::ToggleConfTypes()); }
+      20 | 21 => {
+        self.cmds.push(AccountsCommand::ToggleConfAmts());
+      }
+      22 => {
+        self.cmds.push(AccountsCommand::ToggleConfTypes());
+      }
       _ => panic!("A dice roll landed on an edge!"),
     }
   }
@@ -1805,7 +1812,7 @@ mod test {
       None
     };
 
-    let with_one_big_txn = false; // true; //cmds.cmds.len() < 20;
+    let with_one_big_txn = cmds.cmds.len() < 20;
 
     let wait_time = time::Duration::from_millis(1000);
     let mut ledger = Box::new(LedgerAccounts { ledger: LedgerState::test_ledger(),
@@ -1916,114 +1923,118 @@ mod test {
 
   fn regression_quickcheck_found(with_standalone: bool) {
     use AccountsCommand::*;
-    ledger_simulates_accounts(AccountsScenario { cmds: vec![NewUser(UserName("".into())),
-                                                            NewUnit(UnitName("".into()),
-                                                                    UserName("".into())),
-                                                            Send(UserName("".into()),
-                                                                 0,
-                                                                 UnitName("".into()),
-                                                                 UserName("".into()))],
-                                                 confidential_types: false,
-                                                 confidential_amounts: false },
-                              with_standalone);
-    ledger_simulates_accounts(AccountsScenario { cmds: vec![NewUser(UserName("".into())),
-                                                            NewUnit(UnitName("".into()),
-                                                                    UserName("".into())),
-                                                            Mint(1, UnitName("".into())),
-                                                            Send(UserName("".into()),
-                                                                 1,
-                                                                 UnitName("".into()),
-                                                                 UserName("".into()))],
-                                                 confidential_types: false,
-                                                 confidential_amounts: false },
-                              with_standalone);
+    for conf_amts in vec![false, true] {
+      for conf_types in vec![false, true] {
+        ledger_simulates_accounts(AccountsScenario { cmds: vec![NewUser(UserName("".into())),
+                                                                NewUnit(UnitName("".into()),
+                                                                        UserName("".into())),
+                                                                Send(UserName("".into()),
+                                                                     0,
+                                                                     UnitName("".into()),
+                                                                     UserName("".into()))],
+                                                     confidential_types: conf_types,
+                                                     confidential_amounts: conf_amts },
+                                  with_standalone);
+        ledger_simulates_accounts(AccountsScenario { cmds: vec![NewUser(UserName("".into())),
+                                                                NewUnit(UnitName("".into()),
+                                                                        UserName("".into())),
+                                                                Mint(1, UnitName("".into())),
+                                                                Send(UserName("".into()),
+                                                                     1,
+                                                                     UnitName("".into()),
+                                                                     UserName("".into()))],
+                                                     confidential_types: conf_types,
+                                                     confidential_amounts: conf_amts },
+                                  with_standalone);
 
-    ledger_simulates_accounts(AccountsScenario { cmds: vec![NewUser(UserName("".into())),
-                                                            NewUnit(UnitName("".into()),
-                                                                    UserName("".into())),
-                                                            Mint(1, UnitName("".into())),
-                                                            // ToggleConfTypes(),
-                                                            Mint(1, UnitName("".into())),
-                                                            Send(UserName("".into()),
-                                                                 2,
-                                                                 UnitName("".into()),
-                                                                 UserName("".into()))],
-                                                 confidential_types: false,
-                                                 confidential_amounts: false },
-                              with_standalone);
+        ledger_simulates_accounts(AccountsScenario { cmds: vec![NewUser(UserName("".into())),
+                                                                NewUnit(UnitName("".into()),
+                                                                        UserName("".into())),
+                                                                Mint(1, UnitName("".into())),
+                                                                // ToggleConfTypes(),
+                                                                Mint(1, UnitName("".into())),
+                                                                Send(UserName("".into()),
+                                                                     2,
+                                                                     UnitName("".into()),
+                                                                     UserName("".into()))],
+                                                     confidential_types: conf_types,
+                                                     confidential_amounts: conf_amts },
+                                  with_standalone);
 
-    ledger_simulates_accounts(AccountsScenario { cmds: vec![NewUser(UserName("".into())),
-                                                            NewUnit(UnitName("".into()),
-                                                                    UserName("".into())),
-                                                            Mint(1, UnitName("".into())),
-                                                            Send(UserName("".into()),
-                                                                 1,
-                                                                 UnitName("".into()),
-                                                                 UserName("".into()))],
-                                                 confidential_types: false,
-                                                 confidential_amounts: false },
-                              with_standalone);
-    ledger_simulates_accounts(AccountsScenario { cmds: vec![NewUser(UserName("".into())),
-                                                            NewUnit(UnitName("".into()),
-                                                                    UserName("".into())),
-                                                            Mint(1, UnitName("".into())),
-                                                            Send(UserName("".into()),
-                                                                 1,
-                                                                 UnitName("".into()),
-                                                                 UserName("".into()))],
-                                                 confidential_types: false,
-                                                 confidential_amounts: true },
-                              with_standalone);
+        ledger_simulates_accounts(AccountsScenario { cmds: vec![NewUser(UserName("".into())),
+                                                                NewUnit(UnitName("".into()),
+                                                                        UserName("".into())),
+                                                                Mint(1, UnitName("".into())),
+                                                                Send(UserName("".into()),
+                                                                     1,
+                                                                     UnitName("".into()),
+                                                                     UserName("".into()))],
+                                                     confidential_types: conf_types,
+                                                     confidential_amounts: conf_amts },
+                                  with_standalone);
+        ledger_simulates_accounts(AccountsScenario { cmds: vec![NewUser(UserName("".into())),
+                                                                NewUnit(UnitName("".into()),
+                                                                        UserName("".into())),
+                                                                Mint(1, UnitName("".into())),
+                                                                Send(UserName("".into()),
+                                                                     1,
+                                                                     UnitName("".into()),
+                                                                     UserName("".into()))],
+                                                     confidential_types: conf_types,
+                                                     confidential_amounts: conf_amts },
+                                  with_standalone);
 
-    ledger_simulates_accounts(AccountsScenario { confidential_amounts: false,
-                                                 confidential_types: false,
-                                                 cmds: vec![NewUser(UserName("".into())),
-                                                            NewUser(UserName("\u{0}".into())),
-                                                            NewUnit(UnitName("".into()),
-                                                                    UserName("\u{0}".into())),
-                                                            Mint(34, UnitName("".into())),
-                                                            Send(UserName("\u{0}".into()),
-                                                                 1,
-                                                                 UnitName("".into()),
-                                                                 UserName("".into())),
-                                                            Send(UserName("".into()),
-                                                                 1,
-                                                                 UnitName("".into()),
-                                                                 UserName("".into()))] },
-                              with_standalone);
-
-    ledger_simulates_accounts(AccountsScenario { confidential_amounts: true,
-                                                 confidential_types: false,
-                                                 cmds: vec![NewUser(UserName("".into())),
-                                                            NewUser(UserName("\u{0}".into())),
-                                                            NewUnit(UnitName("".into()),
-                                                                    UserName("\u{0}".into())),
-                                                            Mint(34, UnitName("".into())),
-                                                            Send(UserName("\u{0}".into()),
-                                                                 1,
-                                                                 UnitName("".into()),
-                                                                 UserName("".into())),
-                                                            Send(UserName("".into()),
-                                                                 1,
-                                                                 UnitName("".into()),
-                                                                 UserName("".into()))] },
-                              with_standalone);
-
-    ledger_simulates_accounts(AccountsScenario { confidential_amounts: false,
-                                                 confidential_types: false,
-                                                 cmds: vec![NewUser(UserName("".into())),
-                                                            NewUnit(UnitName("".into()),
+        ledger_simulates_accounts(AccountsScenario { confidential_amounts: conf_types,
+                                                     confidential_types: conf_amts,
+                                                     cmds: vec![NewUser(UserName("".into())),
+                                                                NewUser(UserName("\u{0}".into())),
+                                                                NewUnit(UnitName("".into()),
+                                                                        UserName("\u{0}".into())),
+                                                                Mint(34, UnitName("".into())),
+                                                                Send(UserName("\u{0}".into()),
+                                                                    1,
+                                                                    UnitName("".into()),
                                                                     UserName("".into())),
-                                                            Mint(32, UnitName("".into())),
-                                                            Send(UserName("".into()),
-                                                                 1,
-                                                                 UnitName("".into()),
-                                                                 UserName("".into())),
-                                                            Send(UserName("".into()),
-                                                                 2,
-                                                                 UnitName("".into()),
-                                                                 UserName("".into()))] },
-                              with_standalone);
+                                                                Send(UserName("".into()),
+                                                                    1,
+                                                                    UnitName("".into()),
+                                                                    UserName("".into()))] },
+                                  with_standalone);
+
+        ledger_simulates_accounts(AccountsScenario { confidential_amounts: conf_types,
+                                                     confidential_types: conf_amts,
+                                                     cmds: vec![NewUser(UserName("".into())),
+                                                                NewUser(UserName("\u{0}".into())),
+                                                                NewUnit(UnitName("".into()),
+                                                                        UserName("\u{0}".into())),
+                                                                Mint(34, UnitName("".into())),
+                                                                Send(UserName("\u{0}".into()),
+                                                                    1,
+                                                                    UnitName("".into()),
+                                                                    UserName("".into())),
+                                                                Send(UserName("".into()),
+                                                                    1,
+                                                                    UnitName("".into()),
+                                                                    UserName("".into()))] },
+                                  with_standalone);
+
+        ledger_simulates_accounts(AccountsScenario { confidential_amounts: conf_types,
+                                                     confidential_types: conf_amts,
+                                                     cmds: vec![NewUser(UserName("".into())),
+                                                                NewUnit(UnitName("".into()),
+                                                                        UserName("".into())),
+                                                                Mint(32, UnitName("".into())),
+                                                                Send(UserName("".into()),
+                                                                     1,
+                                                                     UnitName("".into()),
+                                                                     UserName("".into())),
+                                                                Send(UserName("".into()),
+                                                                     2,
+                                                                     UnitName("".into()),
+                                                                     UserName("".into()))] },
+                                  with_standalone);
+      }
+    }
   }
 
   #[test]
