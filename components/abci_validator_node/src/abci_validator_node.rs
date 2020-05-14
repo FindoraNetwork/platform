@@ -1,5 +1,7 @@
 #![deny(warnings)]
 use abci::*;
+use cryptohash::sha256::Digest as BitDigest;
+use cryptohash::sha256::DIGESTBYTES;
 use ledger::data_model::errors::PlatformError;
 use ledger::store::*;
 use ledger_api_service::RestfulApiService;
@@ -17,7 +19,9 @@ impl ABCISubmissionServer {
   fn new() -> Result<ABCISubmissionServer, PlatformError> {
     let ledger = LedgerState::test_ledger();
     let prng = rand_chacha::ChaChaRng::from_entropy();
-    Ok(ABCISubmissionServer { la: SubmissionServer::new(prng, Arc::new(RwLock::new(ledger)), 8)? })
+    Ok(ABCISubmissionServer { la:
+                                SubmissionServer::new_no_auto_commit(prng,
+                                                                     Arc::new(RwLock::new(ledger)))? })
   }
 }
 
@@ -69,10 +73,18 @@ impl abci::Application for ABCISubmissionServer {
   }
 
   fn commit(&mut self, _req: &RequestCommit) -> ResponseCommit {
+    // Tendermint does not accept an error return type here.
+    let error_commitment = (BitDigest { 0: [0_u8; DIGESTBYTES] }, 0);
     self.la.begin_commit();
-    // TODO: anything not handled by the general SubmissionServer (publishing notifications?) should go here.
+    let commitment = if let Ok(state) = self.la.get_committed_state().read() {
+      state.get_state_commitment()
+    } else {
+      error_commitment
+    };
     self.la.end_commit();
-    ResponseCommit::new()
+    let mut r = ResponseCommit::new();
+    r.data = commitment.0.as_ref().to_vec();
+    r
   }
 
   fn query(&mut self, req: &RequestQuery) -> ResponseQuery {
