@@ -78,7 +78,7 @@ fn main() {
       let mut block_builder = ledger.start_block().unwrap();
       for txn in block {
         let txn = txn.txn;
-        let eff = TxnEffect::compute_effect(ledger.get_prng(), txn).unwrap();
+        let eff = TxnEffect::compute_effect(txn).unwrap();
         ledger.apply_transaction(&mut block_builder, eff).unwrap();
       }
       ledger.finish_block(block_builder).unwrap();

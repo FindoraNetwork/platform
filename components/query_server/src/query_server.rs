@@ -97,7 +97,7 @@ impl<RNG, LU> QueryServer<RNG, LU>
         info!("Received block {}", bid);
         let mut block_builder = ledger.start_block().unwrap();
         for txn in block {
-          let eff = TxnEffect::compute_effect(ledger.get_prng(), txn.txn.clone()).unwrap();
+          let eff = TxnEffect::compute_effect(txn.txn.clone()).unwrap();
           ledger.apply_transaction(&mut block_builder, eff).unwrap();
         }
 
@@ -209,9 +209,9 @@ mod tests {
                                                                    token_code.val,
                                                                    oar.get_record_type(),
                                                                    bob.get_pk());
-    let xfr_op = xfr_builder.add_input(TxoRef::Absolute(transfer_sid), oar, None, amt)
+    let xfr_op = xfr_builder.add_input(TxoRef::Absolute(transfer_sid), oar, None, None, amt)
                             .unwrap()
-                            .add_output(&out_template, None)
+                            .add_output(&out_template, None, None, None)
                             .unwrap()
                             .create(TransferType::Standard)
                             .unwrap()
