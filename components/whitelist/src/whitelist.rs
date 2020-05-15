@@ -4,12 +4,8 @@ use ledger::data_model::errors::PlatformError;
 use ledger::data_model::AssetTypeCode;
 use ledger::error_location;
 use serde::{Deserialize, Serialize};
-use txn_cli::txn_lib::query_utxo_and_get_type_commitment;
 use zei::crypto::whitelist::{prove_array_membership, verify_array_membership};
 use zei::xfr::structs::asset_type_to_scalar;
-
-const PROTOCOL: &str = "http";
-const HOST: &str = "localhost";
 
 /// Code of whitelisted assets
 pub type WhiteListedCode = Scalar;
@@ -28,18 +24,29 @@ impl Whitelist {
     self.members.push(asset_type_to_scalar(&code.val));
   }
 
-  /// Proves and verifies the whitelist membership of a confidential asset transferred in a transaction.
+  /// Proves the whitelist membership of a confidential asset transferred in a transaction.
   /// # Arguments
   /// * `index`: index in the whitelist.
-  /// * `utxo`: UTXO SID of the transaction.
+  /// * `commitment`: asset type commitment.
   /// * `blind`: blinding factor for the asset type commitment.
-  pub fn prove_and_verify_membership(&mut self,
-                                     index: u64,
-                                     utxo: u64,
-                                     blind: Scalar)
-                                     -> Result<(), PlatformError> {
-    let commitment = query_utxo_and_get_type_commitment(utxo, PROTOCOL, HOST)?;
-    let proof = prove_array_membership(&self.members, index as usize, &commitment, &blind).or_else(|e| Err(PlatformError::ZeiError(error_location!(), e)))?;
+  pub fn prove_membership(&mut self,
+                          index: u64,
+                          commitment: CompressedRistretto,
+                          blind: Scalar)
+                          -> Result<WhitelistProof, PlatformError> {
+    let proof = prove_array_membership(&self.members, index as usize, &commitment, &blind).or_else(|e| Err(PlatformError::ZeiError(error_location!(), e)))
+  }
+
+  /// Verifies the whitelist membership of a confidential asset transferred in a transaction.
+  /// # Arguments
+  /// * `index`: index in the whitelist.
+  /// * `commitment`: asset type commitment.
+  /// * `proof`: whitelist proof.
+  pub fn verify_membership(&mut self,
+                           index: u64,
+                           commitment: CompressedRistretto,
+                           proof: WhitelistProof)
+                           -> Result<(), PlatformError> {
     verify_array_membership(&self.members, &commitment, &proof).or_else(|e| Err(PlatformError::ZeiError(error_location!(), e)))
   }
 }
