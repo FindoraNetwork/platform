@@ -10,6 +10,15 @@ use zei::serialization::ZeiFromToBytes;
 use zei::xfr::sig::XfrPublicKey;
 use zei::xfr::structs::AssetType;
 
+macro_rules! fail {
+  () => {
+    PlatformError::PolicyFailureError(error_location!())
+  };
+  ($s:expr) => {
+    PlatformError::PolicyFailureError(format!("[{}] {}", &error_location!(), &$s))
+  };
+}
+
 #[derive(Clone, Copy, Debug, Default, Deserialize, Eq, Hash, PartialEq, Serialize)]
 pub struct IdVar(pub u64);
 #[derive(Clone, Copy, Debug, Default, Deserialize, Eq, Hash, PartialEq, Serialize)]
@@ -158,7 +167,7 @@ pub fn policy_get_globals(asset: &Asset) -> Result<PolicyGlobals, PlatformError>
            .ok_or_else(|| PlatformError::InputsError(error_location!()))?
         != &asset.code.val
   {
-    Err(PlatformError::PolicyFailureError(Some("Incorrect number of variables for policy".to_string())))
+    Err(fail!("Incorrect number of variables for policy".to_string()))
   } else {
     Ok(ret)
   }
@@ -214,8 +223,6 @@ pub fn run_txn_check(check: &TxnCheck,
   dbg!(&frac_vars);
   dbg!(txn);
 
-  let fail = &PlatformError::PolicyFailureError(None);
-
   /*
    * To convert the TxnOps into RealTxnOps, we need to:
    *  - gather any operations that share an input resource (necessarily
@@ -266,7 +273,7 @@ pub fn run_txn_check(check: &TxnCheck,
       TxnOp::Issue(amt, rt, res) => {
         // If it's already accounted for, error.
         if used_resources.contains(res) || pending_outputs.contains(res) {
-          return Err(fail.clone());
+          return Err(fail!());
         }
 
         // // record its type as a requirement
@@ -302,11 +309,11 @@ pub fn run_txn_check(check: &TxnCheck,
       TxnOp::Transfer(amt, inp, out) => {
         // If inp or out are already accounted for, error.
         if used_resources.contains(inp) {
-          return Err(fail.clone());
+          return Err(fail!());
         }
         if let Some(out_res) = out {
           if used_resources.contains(out_res) {
-            return Err(fail.clone());
+            return Err(fail!());
           }
 
           // // record type equality as a requirement
@@ -317,11 +324,11 @@ pub fn run_txn_check(check: &TxnCheck,
           match pending {
             RealTxnOp::Issue(_, _) => {
               if pending_outputs.contains(inp) {
-                return Err(fail.clone());
+                return Err(fail!());
               }
               if let Some(out_res) = out {
                 if pending_outputs.contains(out_res) {
-                  return Err(fail.clone());
+                  return Err(fail!());
                 }
               }
               real_ops.push(pending.clone());
@@ -334,11 +341,11 @@ pub fn run_txn_check(check: &TxnCheck,
               // if an input gets used as an output or
               // vice-versa, error.
               if pending_outputs.contains(inp) {
-                return Err(fail.clone());
+                return Err(fail!());
               }
               if let Some(out_res) = out {
                 if pending_inputs.contains(out_res) {
-                  return Err(fail.clone());
+                  return Err(fail!());
                 }
               }
 
@@ -352,7 +359,7 @@ pub fn run_txn_check(check: &TxnCheck,
               if pending_inputs.contains(inp) {
                 if let Some(out_res) = out {
                   if pending_outputs.contains(out_res) {
-                    return Err(fail.clone());
+                    return Err(fail!());
                   }
                 }
               }
@@ -390,14 +397,14 @@ pub fn run_txn_check(check: &TxnCheck,
   debug_assert!(pending_op.is_none());
   debug_assert!(num_inputs + num_outputs == used_resources.len() as u64);
   if num_inputs != check.in_params.len() as u64 || num_outputs != check.out_params.len() as u64 {
-    return Err(fail.clone());
+    return Err(fail!());
   }
 
   dbg!("Resource check");
   // check that all resources in the index range are used
-  for ix in 0..used_resources.len().try_into().map_err(|_| fail.clone())? {
+  for ix in 0..used_resources.len().try_into().map_err(|_| fail!())? {
     if !used_resources.contains(&ResourceVar(ix)) {
-      return Err(fail.clone());
+      return Err(fail!());
     }
   }
 
@@ -406,7 +413,7 @@ pub fn run_txn_check(check: &TxnCheck,
    */
 
   if real_ops.len() != txn.operations.len() {
-    return Err(fail.clone());
+    return Err(fail!());
   }
 
   // freeze real_ops
@@ -435,7 +442,7 @@ pub fn run_txn_check(check: &TxnCheck,
         // NOTE: This relies on the no-repeated-outputs invariant
         // from before
         if outs.len() != iss.body.records.len() {
-          return Err(fail.clone());
+          return Err(fail!());
         }
 
         res_vars.extend(outs.iter()
@@ -468,10 +475,8 @@ pub fn run_txn_check(check: &TxnCheck,
                              .transfer
                              .inputs
                              .get(inp_ix)
-                             .ok_or_else(|| fail.clone())?;
-            asset_type = inp_txo.asset_type
-                                .get_asset_type()
-                                .ok_or_else(|| fail.clone())?;
+                             .ok_or_else(|| fail!())?;
+            asset_type = inp_txo.asset_type.get_asset_type().ok_or_else(|| fail!())?;
 
             res_vars.insert(*inp, TxOutput(inp_txo.clone()));
             res_totals.insert(*inp, vec![*amt]);
@@ -488,7 +493,7 @@ pub fn run_txn_check(check: &TxnCheck,
               debug_assert!(!out_txo.0.asset_type.is_confidential());
 
               if asset_type != out_txo.0.asset_type.get_asset_type().unwrap() {
-                return Err(fail.clone());
+                return Err(fail!());
               }
             } else {
               debug_assert!(!res_totals.contains_key(out_res));
@@ -497,14 +502,10 @@ pub fn run_txn_check(check: &TxnCheck,
                                .transfer
                                .outputs
                                .get(out_ix)
-                               .ok_or_else(|| fail.clone())?;
+                               .ok_or_else(|| fail!())?;
 
-              if asset_type
-                 != out_txo.asset_type
-                           .get_asset_type()
-                           .ok_or_else(|| fail.clone())?
-              {
-                return Err(fail.clone());
+              if asset_type != out_txo.asset_type.get_asset_type().ok_or_else(|| fail!())? {
+                return Err(fail!());
               }
 
               res_vars.insert(*out_res, TxOutput(out_txo.clone()));
@@ -518,19 +519,15 @@ pub fn run_txn_check(check: &TxnCheck,
                              .transfer
                              .outputs
                              .get(out_ix)
-                             .ok_or_else(|| fail.clone())?;
+                             .ok_or_else(|| fail!())?;
 
             // TODO(joe): maybe move this later?
-            if out_txo.asset_type
-                      .get_asset_type()
-                      .ok_or_else(|| fail.clone())?
-               != asset_type
-            {
-              return Err(fail.clone());
+            if out_txo.asset_type.get_asset_type().ok_or_else(|| fail!())? != asset_type {
+              return Err(fail!());
             }
 
             if out_txo.public_key != null_public_key {
-              return Err(fail.clone());
+              return Err(fail!());
             }
 
             out_ix += 1;
@@ -538,14 +535,14 @@ pub fn run_txn_check(check: &TxnCheck,
         }
 
         if inp_ix < trn.body.transfer.inputs.len() {
-          return Err(fail.clone());
+          return Err(fail!());
         }
         if out_ix < trn.body.transfer.outputs.len() {
-          return Err(fail.clone());
+          return Err(fail!());
         }
       }
       _ => {
-        return Err(fail.clone());
+        return Err(fail!());
       }
     }
   }
@@ -574,16 +571,16 @@ pub fn run_txn_check(check: &TxnCheck,
     dbg!("RT op");
     rt_vars.push(match rt_op {
                    ResourceTypeOp::Var(rv) => {
-                     let ix: usize = rv.0.try_into().map_err(|_| fail.clone())?;
-                     let asset_type: &AssetType = rt_vars.get(ix).ok_or_else(|| fail.clone())?;
+                     let ix: usize = rv.0.try_into().map_err(|_| fail!())?;
+                     let asset_type: &AssetType = rt_vars.get(ix).ok_or_else(|| fail!())?;
                      *asset_type
                    }
                    ResourceTypeOp::TypeOfResource(res_var) => res_vars.get(res_var)
-                                                                      .ok_or_else(|| fail.clone())?
+                                                                      .ok_or_else(|| fail!())?
                                                                       .0
                                                                       .asset_type
                                                                       .get_asset_type()
-                                                                      .ok_or_else(|| fail.clone())?,
+                                                                      .ok_or_else(|| fail!())?,
                  });
     dbg!(rt_vars.len());
     dbg!(rt_vars.last());
@@ -594,15 +591,12 @@ pub fn run_txn_check(check: &TxnCheck,
     dbg!("ID op");
     id_vars.push(match id_op {
                    IdOp::Var(iv) => {
-                     let ix: usize = iv.0.try_into().map_err(|_| fail.clone())?;
-                     let id: &XfrPublicKey = id_vars.get(ix).ok_or_else(|| fail.clone())?;
+                     let ix: usize = iv.0.try_into().map_err(|_| fail!())?;
+                     let id: &XfrPublicKey = id_vars.get(ix).ok_or_else(|| fail!())?;
                      *id
                    }
                    IdOp::OwnerOf(res_var) => {
-                     res_vars.get(res_var)
-                             .ok_or_else(|| fail.clone())?
-                             .0
-                             .public_key
+                     res_vars.get(res_var).ok_or_else(|| fail!())?.0.public_key
                    }
                  })
   }
@@ -647,8 +641,8 @@ pub fn run_txn_check(check: &TxnCheck,
               continue;
             }
             Some(AmountOp::Var(ix)) => {
-              let ix: usize = ix.0.try_into().map_err(|_| fail.clone())?;
-              amt_vars.push(*(amt_vars.get(ix).ok_or_else(|| fail.clone())?));
+              let ix: usize = ix.0.try_into().map_err(|_| fail!())?;
+              amt_vars.push(*(amt_vars.get(ix).ok_or_else(|| fail!())?));
               amt_ix += 1;
             }
             Some(AmountOp::Const(n)) => {
@@ -657,51 +651,51 @@ pub fn run_txn_check(check: &TxnCheck,
             }
             Some(AmountOp::AmountOf(res_var)) => {
               if !res_var_inputs.contains(res_var) {
-                return Err(fail.clone());
+                return Err(fail!());
               }
 
               let n = res_vars.get(res_var)
-                              .ok_or_else(|| fail.clone())?
+                              .ok_or_else(|| fail!())?
                               .0
                               .amount
                               .get_amount()
-                              .ok_or_else(|| fail.clone())?;
+                              .ok_or_else(|| fail!())?;
               amt_vars.push(n);
               amt_ix += 1;
             }
             Some(AmountOp::Plus(l, r)) => {
-              let l: usize = l.0.try_into().map_err(|_| fail.clone())?;
-              let r: usize = r.0.try_into().map_err(|_| fail.clone())?;
-              let lv: u64 = *(amt_vars.get(l).ok_or_else(|| fail.clone())?);
-              let rv: u64 = *(amt_vars.get(r).ok_or_else(|| fail.clone())?);
-              amt_vars.push(lv.checked_add(rv).ok_or_else(|| fail.clone())?);
+              let l: usize = l.0.try_into().map_err(|_| fail!())?;
+              let r: usize = r.0.try_into().map_err(|_| fail!())?;
+              let lv: u64 = *(amt_vars.get(l).ok_or_else(|| fail!())?);
+              let rv: u64 = *(amt_vars.get(r).ok_or_else(|| fail!())?);
+              amt_vars.push(lv.checked_add(rv).ok_or_else(|| fail!())?);
               amt_ix += 1;
             }
             Some(AmountOp::Minus(l, r)) => {
-              let l: usize = l.0.try_into().map_err(|_| fail.clone())?;
-              let r: usize = r.0.try_into().map_err(|_| fail.clone())?;
-              let lv: u64 = *(amt_vars.get(l).ok_or_else(|| fail.clone())?);
-              let rv: u64 = *(amt_vars.get(r).ok_or_else(|| fail.clone())?);
-              amt_vars.push(lv.checked_sub(rv).ok_or_else(|| fail.clone())?);
+              let l: usize = l.0.try_into().map_err(|_| fail!())?;
+              let r: usize = r.0.try_into().map_err(|_| fail!())?;
+              let lv: u64 = *(amt_vars.get(l).ok_or_else(|| fail!())?);
+              let rv: u64 = *(amt_vars.get(r).ok_or_else(|| fail!())?);
+              amt_vars.push(lv.checked_sub(rv).ok_or_else(|| fail!())?);
               amt_ix += 1;
             }
             Some(AmountOp::Times(l, r)) => {
-              let l: usize = l.0.try_into().map_err(|_| fail.clone())?;
-              let r: usize = r.0.try_into().map_err(|_| fail.clone())?;
-              let lv: u64 = *(amt_vars.get(l).ok_or_else(|| fail.clone())?);
-              let rv: u64 = *(amt_vars.get(r).ok_or_else(|| fail.clone())?);
-              amt_vars.push(lv.checked_mul(rv).ok_or_else(|| fail.clone())?);
+              let l: usize = l.0.try_into().map_err(|_| fail!())?;
+              let r: usize = r.0.try_into().map_err(|_| fail!())?;
+              let lv: u64 = *(amt_vars.get(l).ok_or_else(|| fail!())?);
+              let rv: u64 = *(amt_vars.get(r).ok_or_else(|| fail!())?);
+              amt_vars.push(lv.checked_mul(rv).ok_or_else(|| fail!())?);
               amt_ix += 1;
             }
             Some(AmountOp::Round(round_ix)) => {
-              let round_ix = round_ix.0.try_into().map_err(|_| fail.clone())?;
+              let round_ix = round_ix.0.try_into().map_err(|_| fail!())?;
               dbg!(&round_ix);
               dbg!(frac_vars.get(round_ix));
               match frac_vars.get(round_ix) {
                 Some(fv) => {
                   let fv: &Fraction = fv;
                   let fv: I20F12 = fv.0;
-                  amt_vars.push(fv.round().checked_to_num().ok_or_else(|| fail.clone())?);
+                  amt_vars.push(fv.round().checked_to_num().ok_or_else(|| fail!())?);
                   amt_ix += 1;
                 }
                 None => {
@@ -710,13 +704,13 @@ pub fn run_txn_check(check: &TxnCheck,
                   // there's a circular dependency.
                   // Error.
                   if amt_vars.get(needed_amt_ix).is_none() {
-                    return Err(fail.clone());
+                    return Err(fail!());
                   }
 
                   // If the needed fraction index can't
                   // possibly be available, error.
                   if round_ix >= frac_vars.len() + (check.fraction_ops.len() - frac_ix) {
-                    return Err(fail.clone());
+                    return Err(fail!());
                   }
 
                   needed_frac_ix = round_ix;
@@ -737,8 +731,8 @@ pub fn run_txn_check(check: &TxnCheck,
               continue;
             }
             Some(FractionOp::Var(ix)) => {
-              let ix: usize = ix.0.try_into().map_err(|_| fail.clone())?;
-              frac_vars.push(*(frac_vars.get(ix).ok_or_else(|| fail.clone())?));
+              let ix: usize = ix.0.try_into().map_err(|_| fail!())?;
+              frac_vars.push(*(frac_vars.get(ix).ok_or_else(|| fail!())?));
               frac_ix += 1;
             }
             Some(FractionOp::Const(v)) => {
@@ -746,24 +740,24 @@ pub fn run_txn_check(check: &TxnCheck,
               frac_ix += 1;
             }
             Some(FractionOp::Plus(l, r)) => {
-              let l: usize = l.0.try_into().map_err(|_| fail.clone())?;
-              let r: usize = r.0.try_into().map_err(|_| fail.clone())?;
-              let lv: Fraction = *(frac_vars.get(l).ok_or_else(|| fail.clone())?);
-              let rv: Fraction = *(frac_vars.get(r).ok_or_else(|| fail.clone())?);
-              frac_vars.push(Fraction(lv.0.checked_add(rv.0).ok_or_else(|| fail.clone())?));
+              let l: usize = l.0.try_into().map_err(|_| fail!())?;
+              let r: usize = r.0.try_into().map_err(|_| fail!())?;
+              let lv: Fraction = *(frac_vars.get(l).ok_or_else(|| fail!())?);
+              let rv: Fraction = *(frac_vars.get(r).ok_or_else(|| fail!())?);
+              frac_vars.push(Fraction(lv.0.checked_add(rv.0).ok_or_else(|| fail!())?));
               frac_ix += 1;
             }
             Some(FractionOp::Times(l, r)) => {
-              let l: usize = l.0.try_into().map_err(|_| fail.clone())?;
-              let r: usize = r.0.try_into().map_err(|_| fail.clone())?;
-              let lv: Fraction = *(frac_vars.get(l).ok_or_else(|| fail.clone())?);
-              let rv: Fraction = *(frac_vars.get(r).ok_or_else(|| fail.clone())?);
-              frac_vars.push(Fraction(lv.0.checked_mul(rv.0).ok_or_else(|| fail.clone())?));
+              let l: usize = l.0.try_into().map_err(|_| fail!())?;
+              let r: usize = r.0.try_into().map_err(|_| fail!())?;
+              let lv: Fraction = *(frac_vars.get(l).ok_or_else(|| fail!())?);
+              let rv: Fraction = *(frac_vars.get(r).ok_or_else(|| fail!())?);
+              frac_vars.push(Fraction(lv.0.checked_mul(rv.0).ok_or_else(|| fail!())?));
               frac_ix += 1;
             }
             Some(FractionOp::AmtTimes(a, f)) => {
-              let a: usize = a.0.try_into().map_err(|_| fail.clone())?;
-              let f: usize = f.0.try_into().map_err(|_| fail.clone())?;
+              let a: usize = a.0.try_into().map_err(|_| fail!())?;
+              let f: usize = f.0.try_into().map_err(|_| fail!())?;
               match amt_vars.get(a) {
                 None => {
                   // if the amount ops are waiting on a
@@ -771,30 +765,29 @@ pub fn run_txn_check(check: &TxnCheck,
                   // there's a circular dependency.
                   // Error.
                   if frac_vars.get(needed_frac_ix).is_none() {
-                    return Err(fail.clone());
+                    return Err(fail!());
                   }
                   // If the needed amount index can't
                   // possibly be available, error.
                   if amt_ix >= amt_vars.len() + (check.amount_ops.len() - amt_ix) {
-                    return Err(fail.clone());
+                    return Err(fail!());
                   }
 
                   needed_amt_ix = a;
                   phase = FracAmtPhase::Amt;
                 }
                 Some(amt_val) => {
-                  let fv: Fraction = *(frac_vars.get(f).ok_or_else(|| fail.clone())?);
+                  let fv: Fraction = *(frac_vars.get(f).ok_or_else(|| fail!())?);
                   let fv: I20F12 = fv.0;
-                  let av: I20F12 = Fraction::checked_new(*amt_val, 1).ok_or_else(|| fail.clone())?
-                                                                     .0;
-                  frac_vars.push(Fraction(av.checked_mul(fv).ok_or_else(|| fail.clone())?));
+                  let av: I20F12 = Fraction::checked_new(*amt_val, 1).ok_or_else(|| fail!())?.0;
+                  frac_vars.push(Fraction(av.checked_mul(fv).ok_or_else(|| fail!())?));
                   frac_ix += 1;
                 }
               }
             }
             Some(FractionOp::TimesAmt(f, a)) => {
-              let a: usize = a.0.try_into().map_err(|_| fail.clone())?;
-              let f: usize = f.0.try_into().map_err(|_| fail.clone())?;
+              let a: usize = a.0.try_into().map_err(|_| fail!())?;
+              let f: usize = f.0.try_into().map_err(|_| fail!())?;
               match amt_vars.get(a) {
                 None => {
                   // if the amount ops are waiting on a
@@ -802,23 +795,22 @@ pub fn run_txn_check(check: &TxnCheck,
                   // there's a circular dependency.
                   // Error.
                   if frac_vars.get(needed_frac_ix).is_none() {
-                    return Err(fail.clone());
+                    return Err(fail!());
                   }
                   // If the needed amount index can't
                   // possibly be available, error.
                   if amt_ix >= amt_vars.len() + (check.amount_ops.len() - amt_ix) {
-                    return Err(fail.clone());
+                    return Err(fail!());
                   }
 
                   needed_amt_ix = a;
                   phase = FracAmtPhase::Amt;
                 }
                 Some(amt_val) => {
-                  let fv: Fraction = *(frac_vars.get(f).ok_or_else(|| fail.clone())?);
+                  let fv: Fraction = *(frac_vars.get(f).ok_or_else(|| fail!())?);
                   let fv: I20F12 = fv.0;
-                  let av: I20F12 = Fraction::checked_new(*amt_val, 1).ok_or_else(|| fail.clone())?
-                                                                     .0;
-                  frac_vars.push(Fraction(fv.checked_mul(av).ok_or_else(|| fail.clone())?));
+                  let av: I20F12 = Fraction::checked_new(*amt_val, 1).ok_or_else(|| fail!())?.0;
+                  frac_vars.push(Fraction(fv.checked_mul(av).ok_or_else(|| fail!())?));
                   frac_ix += 1;
                 }
               }
@@ -849,60 +841,60 @@ pub fn run_txn_check(check: &TxnCheck,
         bool_vars.push(*v);
       }
       BoolOp::IdEq(l, r) => {
-        let l: usize = l.0.try_into().map_err(|_| fail.clone())?;
-        let r: usize = r.0.try_into().map_err(|_| fail.clone())?;
-        bool_vars.push(id_vars.get(l).ok_or_else(|| fail.clone())?
-                       == id_vars.get(r).ok_or_else(|| fail.clone())?);
+        let l: usize = l.0.try_into().map_err(|_| fail!())?;
+        let r: usize = r.0.try_into().map_err(|_| fail!())?;
+        bool_vars.push(id_vars.get(l).ok_or_else(|| fail!())?
+                       == id_vars.get(r).ok_or_else(|| fail!())?);
       }
       BoolOp::AmtEq(l, r) => {
-        let l: usize = l.0.try_into().map_err(|_| fail.clone())?;
-        let r: usize = r.0.try_into().map_err(|_| fail.clone())?;
-        bool_vars.push(amt_vars.get(l).ok_or_else(|| fail.clone())?
-                       == amt_vars.get(r).ok_or_else(|| fail.clone())?);
+        let l: usize = l.0.try_into().map_err(|_| fail!())?;
+        let r: usize = r.0.try_into().map_err(|_| fail!())?;
+        bool_vars.push(amt_vars.get(l).ok_or_else(|| fail!())?
+                       == amt_vars.get(r).ok_or_else(|| fail!())?);
       }
       BoolOp::FracEq(l, r) => {
-        let l: usize = l.0.try_into().map_err(|_| fail.clone())?;
-        let r: usize = r.0.try_into().map_err(|_| fail.clone())?;
-        bool_vars.push(frac_vars.get(l).ok_or_else(|| fail.clone())?
-                       == frac_vars.get(r).ok_or_else(|| fail.clone())?);
+        let l: usize = l.0.try_into().map_err(|_| fail!())?;
+        let r: usize = r.0.try_into().map_err(|_| fail!())?;
+        bool_vars.push(frac_vars.get(l).ok_or_else(|| fail!())?
+                       == frac_vars.get(r).ok_or_else(|| fail!())?);
       }
       BoolOp::ResourceTypeEq(l, r) => {
-        let l: usize = l.0.try_into().map_err(|_| fail.clone())?;
-        let r: usize = r.0.try_into().map_err(|_| fail.clone())?;
-        bool_vars.push(rt_vars.get(l).ok_or_else(|| fail.clone())?
-                       == rt_vars.get(r).ok_or_else(|| fail.clone())?);
+        let l: usize = l.0.try_into().map_err(|_| fail!())?;
+        let r: usize = r.0.try_into().map_err(|_| fail!())?;
+        bool_vars.push(rt_vars.get(l).ok_or_else(|| fail!())?
+                       == rt_vars.get(r).ok_or_else(|| fail!())?);
       }
       BoolOp::Not(bv) => {
-        let bv: usize = bv.0.try_into().map_err(|_| fail.clone())?;
-        let v: bool = *(bool_vars.get(bv).ok_or_else(|| fail.clone())?);
+        let bv: usize = bv.0.try_into().map_err(|_| fail!())?;
+        let v: bool = *(bool_vars.get(bv).ok_or_else(|| fail!())?);
         bool_vars.push(!v);
       }
       BoolOp::And(l, r) => {
-        let l: usize = l.0.try_into().map_err(|_| fail.clone())?;
-        let r: usize = r.0.try_into().map_err(|_| fail.clone())?;
-        let lv = *(bool_vars.get(l).ok_or_else(|| fail.clone())?);
-        let rv = *(bool_vars.get(r).ok_or_else(|| fail.clone())?);
+        let l: usize = l.0.try_into().map_err(|_| fail!())?;
+        let r: usize = r.0.try_into().map_err(|_| fail!())?;
+        let lv = *(bool_vars.get(l).ok_or_else(|| fail!())?);
+        let rv = *(bool_vars.get(r).ok_or_else(|| fail!())?);
         bool_vars.push(lv && rv);
       }
       BoolOp::Or(l, r) => {
-        let l: usize = l.0.try_into().map_err(|_| fail.clone())?;
-        let r: usize = r.0.try_into().map_err(|_| fail.clone())?;
-        let lv = *(bool_vars.get(l).ok_or_else(|| fail.clone())?);
-        let rv = *(bool_vars.get(r).ok_or_else(|| fail.clone())?);
+        let l: usize = l.0.try_into().map_err(|_| fail!())?;
+        let r: usize = r.0.try_into().map_err(|_| fail!())?;
+        let lv = *(bool_vars.get(l).ok_or_else(|| fail!())?);
+        let rv = *(bool_vars.get(r).ok_or_else(|| fail!())?);
         bool_vars.push(lv || rv);
       }
       BoolOp::AmtGe(l, r) => {
-        let l: usize = l.0.try_into().map_err(|_| fail.clone())?;
-        let r: usize = r.0.try_into().map_err(|_| fail.clone())?;
-        let lv = *(amt_vars.get(l).ok_or_else(|| fail.clone())?);
-        let rv = *(amt_vars.get(r).ok_or_else(|| fail.clone())?);
+        let l: usize = l.0.try_into().map_err(|_| fail!())?;
+        let r: usize = r.0.try_into().map_err(|_| fail!())?;
+        let lv = *(amt_vars.get(l).ok_or_else(|| fail!())?);
+        let rv = *(amt_vars.get(r).ok_or_else(|| fail!())?);
         bool_vars.push(lv >= rv);
       }
       BoolOp::FracGe(l, r) => {
-        let l: usize = l.0.try_into().map_err(|_| fail.clone())?;
-        let r: usize = r.0.try_into().map_err(|_| fail.clone())?;
-        let lv = *(frac_vars.get(l).ok_or_else(|| fail.clone())?);
-        let rv = *(frac_vars.get(r).ok_or_else(|| fail.clone())?);
+        let l: usize = l.0.try_into().map_err(|_| fail!())?;
+        let r: usize = r.0.try_into().map_err(|_| fail!())?;
+        let lv = *(frac_vars.get(l).ok_or_else(|| fail!())?);
+        let rv = *(frac_vars.get(r).ok_or_else(|| fail!())?);
         bool_vars.push(lv.0 >= rv.0);
       }
     }
@@ -911,21 +903,21 @@ pub fn run_txn_check(check: &TxnCheck,
   /* Step 5: check assertions */
   for bv in check.assertions.iter() {
     dbg!("assertion");
-    let bv: usize = bv.0.try_into().map_err(|_| fail.clone())?;
-    let v: &bool = bool_vars.get(bv).ok_or_else(|| fail.clone())?;
+    let bv: usize = bv.0.try_into().map_err(|_| fail!())?;
+    let v: &bool = bool_vars.get(bv).ok_or_else(|| fail!())?;
     if !*v {
-      return Err(fail.clone());
+      return Err(fail!());
     }
   }
 
   /* Step 6: check for signatures */
   for iv in check.required_signatures.iter() {
     dbg!("signature");
-    let iv: usize = iv.0.try_into().map_err(|_| fail.clone())?;
-    let v: &XfrPublicKey = id_vars.get(iv).ok_or_else(|| fail.clone())?;
+    let iv: usize = iv.0.try_into().map_err(|_| fail!())?;
+    let v: &XfrPublicKey = id_vars.get(iv).ok_or_else(|| fail!())?;
     dbg!("has signature?");
     dbg!(v);
-    txn.check_has_signature(v).map_err(|_| fail.clone())?;
+    txn.check_has_signature(v).map_err(|_| fail!())?;
   }
 
   /* Step 7: consistency checks with asset records.
@@ -942,43 +934,43 @@ pub fn run_txn_check(check: &TxnCheck,
       RealTxnOp::Issue(rt_ix, outs) => {
         // should never happen
         if outs.is_empty() {
-          return Err(fail.clone());
+          return Err(fail!());
         }
 
-        let rt_ix: usize = rt_ix.0.try_into().map_err(|_| fail.clone())?;
-        let asset_type = rt_vars.get(rt_ix).ok_or_else(|| fail.clone())?;
+        let rt_ix: usize = rt_ix.0.try_into().map_err(|_| fail!())?;
+        let asset_type = rt_vars.get(rt_ix).ok_or_else(|| fail!())?;
 
         for (_, rv) in outs.iter() {
-          let txo = res_vars.get(rv).ok_or_else(|| fail.clone())?;
+          let txo = res_vars.get(rv).ok_or_else(|| fail!())?;
           // txo.0.asset_type should be established as non-None by the
           // first two checking loops.
           if *asset_type != txo.0.asset_type.get_asset_type().unwrap() {
-            return Err(fail.clone());
+            return Err(fail!());
           }
         }
       }
       // (b)
       RealTxnOp::Transfer(transfers) => {
         for (_, inp, out) in transfers {
-          let inp_txo = res_vars.get(inp).ok_or_else(|| fail.clone())?;
-          let inp_asset_type = resvar_types.get(inp).ok_or_else(|| fail.clone())?;
+          let inp_txo = res_vars.get(inp).ok_or_else(|| fail!())?;
+          let inp_asset_type = resvar_types.get(inp).ok_or_else(|| fail!())?;
           let inp_asset_type = rt_vars.get(inp_asset_type.0 as usize)
-                                      .ok_or_else(|| fail.clone())?;
+                                      .ok_or_else(|| fail!())?;
           // txo.0.asset_type should be established as non-None by the
           // first two checking loops.
           if *inp_asset_type != inp_txo.0.asset_type.get_asset_type().unwrap() {
-            return Err(fail.clone());
+            return Err(fail!());
           }
 
           if let Some(real_out) = out {
-            let out_txo = res_vars.get(real_out).ok_or_else(|| fail.clone())?;
-            let out_asset_type = resvar_types.get(real_out).ok_or_else(|| fail.clone())?;
+            let out_txo = res_vars.get(real_out).ok_or_else(|| fail!())?;
+            let out_asset_type = resvar_types.get(real_out).ok_or_else(|| fail!())?;
             let out_asset_type = rt_vars.get(out_asset_type.0 as usize)
-                                        .ok_or_else(|| fail.clone())?;
+                                        .ok_or_else(|| fail!())?;
             // txo.0.asset_type should be established as non-None by the
             // first two checking loops.
             if *out_asset_type != out_txo.0.asset_type.get_asset_type().unwrap() {
-              return Err(fail.clone());
+              return Err(fail!());
             }
           }
         }
@@ -990,25 +982,25 @@ pub fn run_txn_check(check: &TxnCheck,
   for (rv, tot_vars) in res_totals.iter() {
     dbg!("total check");
     if tot_vars.is_empty() {
-      return Err(fail.clone());
+      return Err(fail!());
     }
     let mut total: u64 = 0;
 
     for av in tot_vars.iter() {
-      let av: usize = av.0.try_into().map_err(|_| fail.clone())?;
-      let val: u64 = *(amt_vars.get(av).ok_or_else(|| fail.clone())?);
-      total = total.checked_add(val).ok_or_else(|| fail.clone())?;
+      let av: usize = av.0.try_into().map_err(|_| fail!())?;
+      let val: u64 = *(amt_vars.get(av).ok_or_else(|| fail!())?);
+      total = total.checked_add(val).ok_or_else(|| fail!())?;
     }
 
     if total
        != res_vars.get(rv)
-                  .ok_or_else(|| fail.clone())?
+                  .ok_or_else(|| fail!())?
                   .0
                   .amount
                   .get_amount()
-                  .ok_or_else(|| fail.clone())?
+                  .ok_or_else(|| fail!())?
     {
-      return Err(fail.clone());
+      return Err(fail!());
     }
   }
 
