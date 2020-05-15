@@ -11,7 +11,6 @@ path = "src/log_tester.rs"
 [dependencies]
 bincode = "1"
 cryptohash = { path = "../../libs/cryptohash" }
-findora = { path = "../../findora" }
 flexi_logger = "0.15.2"
 ledger_api_service = { path = "../ledger_api_service" }
 ledger = { path = "../../ledger" }
@@ -24,5 +23,6 @@ serde_json = "1.0"
 subprocess = "0.1.18"
 submission_api = { path = "../submission_api" }
 submission_server = { path = "../submission_server" }
+utils = { path = "../../libs/utils" }
 zei = { git = "ssh://git@github.com/findoraorg/zei", tag = "v0.0.2-4" }
 

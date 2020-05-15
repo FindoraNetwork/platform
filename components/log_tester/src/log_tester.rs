@@ -4,7 +4,7 @@ use ledger::store::{LedgerAccess, LedgerState};
 use std::path::Path;
 
 fn log_test(logfile: &Path, outfile: Option<&str>, expected_file: Option<&str>) {
-  let tmp_dir = findora::fresh_tmp_dir();
+  let tmp_dir = utils::fresh_tmp_dir();
 
   let mut target_file = tmp_dir.clone();
   target_file.push("txn_log");

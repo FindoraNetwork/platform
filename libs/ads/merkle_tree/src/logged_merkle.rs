@@ -26,7 +26,7 @@
 use super::append_only_merkle::AppendOnlyMerkle;
 
 use cryptohash::{sha256, HashValue, Proof};
-use findora::{debug, er, log, log_impl, Commas};
+use log::{debug, info};
 use serde::Deserialize;
 use serde::Deserializer;
 use serde::Serialize;
@@ -45,6 +45,7 @@ use std::mem::MaybeUninit;
 use std::ptr::copy_nonoverlapping;
 use std::slice::from_raw_parts;
 use std::slice::from_raw_parts_mut;
+use utils::{er, Commas};
 
 const BUFFER_SIZE: usize = 32 * 1024;
 const CHECK_SIZE: usize = 16;
@@ -167,24 +168,24 @@ impl LogBuffer {
   // error if it does not.
   fn validate(&self) -> Result<(), Error> {
     if self.marker != BUFFER_MARKER {
-      return er!("The buffer marker ({:x} was invalid.", self.marker);
+      return er(format!("The buffer marker ({:x} was invalid.", self.marker));
     }
 
     if self.entry_count != BUFFER_ENTRIES {
-      return er!("The entry count ({}) in a log buffer was invalid.",
-                 self.entry_count);
+      return er(format!("The entry count ({}) in a log buffer was invalid.",
+                        self.entry_count));
     }
 
     if self.valid == 0 || self.valid > self.entry_count {
-      return er!("The valid count ({}) in a log buffer was invalid.",
-                 self.valid);
+      return er(format!("The valid count ({}) in a log buffer was invalid.",
+                        self.valid));
     }
 
     let checksum = self.checksum();
 
     if checksum != self.check {
-      return er!("The checksum ({:?}) in a log buffer was invalid.",
-                 self.check);
+      return er(format!("The checksum ({:?}) in a log buffer was invalid.",
+                        self.check));
     }
 
     Ok(())
@@ -256,7 +257,7 @@ impl LoggedMerkle {
   ///   };
   pub fn append(&mut self, hash: &HashValue) -> Result<u64, Error> {
     if self.closed {
-      return er!("This LoggedMerkle object is closed.");
+      return er("This LoggedMerkle object is closed.".to_string());
     }
 
     let id = self.tree.append_hash(hash)?;
@@ -307,13 +308,13 @@ impl LoggedMerkle {
     };
 
     if transaction >= proof_state {
-      return er!("That id ({}) is not valid for state {}.",
-                 transaction.commas(),
-                 state);
+      return er(format!("That id ({}) is not valid for state {}.",
+                        transaction.commas(),
+                        state));
     }
 
     if !self.tree.validate_transaction_id(transaction) {
-      return er!("That id ({}) is not valid.", transaction.commas());
+      return er(format!("That id ({}) is not valid.", transaction.commas()));
     }
 
     self.tree.generate_proof(transaction, proof_state)
@@ -351,8 +352,8 @@ impl LoggedMerkle {
 
     // Try to seek to a relevant part of the log file.
     if let Err(e) = self.find_relevant(&mut file) {
-      log!(ApplyLog, "Seek operations failed:  {}", e);
-      log!(ApplyLog, "Reverting to sequential I/O");
+      info!("Seek operations failed:  {}", e);
+      info!("Reverting to sequential I/O");
     }
 
     // Loop reading buffers.  Return on EOF.  This code will
@@ -380,7 +381,7 @@ impl LoggedMerkle {
       }
 
       if buffer.id > self.state() {
-        return er!("This log file starts too far in the future.");
+        return er("This log file starts too far in the future.".to_string());
       }
 
       // If there are entries in the current buffer that are not in
@@ -449,7 +450,7 @@ impl LoggedMerkle {
     let mut top = buffer_count;
     let mut current = base;
 
-    debug!(FindRelevant, "find_relevant:  state {}, top {}", state, top);
+    debug!("find_relevant:  state {}, top {}", state, top);
 
     // Do a binary search to find the first relevant buffer, if
     // any.  In theory, we could use a more sophisticated
@@ -459,8 +460,7 @@ impl LoggedMerkle {
       file.read_exact(buffer.as_mut_bytes())?;
       buffer.validate()?;
 
-      debug!(FindRelevant,
-             "current: {}, id: {}, state {}",
+      debug!("current: {}, id: {}, state {}",
              current,
              buffer.id.commas(),
              state);
@@ -470,37 +470,34 @@ impl LoggedMerkle {
         let gap = current - base;
 
         if gap <= 1 {
-          debug!(FindRelevant, "exit:  current {}, base {}", current, base);
+          debug!("exit:  current {}, base {}", current, base);
           break;
         }
 
         top = current;
         current -= gap / 2;
-        debug!(FindRelevant, "move back {} to {}", gap / 2, current);
+        debug!("move back {} to {}", gap / 2, current);
       } else if buffer.id + u64::from(buffer.valid) <= state {
         // The buffer is in the past.  Move forward!
         let gap = top - current;
 
         if gap <= 1 {
-          debug!(FindRelevant, "exit:  current {}, top {}", current, top);
+          debug!("exit:  current {}, top {}", current, top);
           break;
         }
 
         base = current;
         current += gap / 2;
-        debug!(FindRelevant, "move forward {} to {}", gap / 2, current);
+        debug!("move forward {} to {}", gap / 2, current);
       } else {
-        debug!(FindRelevant,
-               "found id {}, valid {}",
-               buffer.id.commas(),
-               buffer.valid);
+        debug!("found id {}, valid {}", buffer.id.commas(), buffer.valid);
         break;
       }
 
       file.seek(Start(current * BUFFER_SIZE as u64))?;
     }
 
-    debug!(FindRelevant, "find_relevant:  return {}", current);
+    debug!("find_relevant:  return {}", current);
     file.seek(Start(current * BUFFER_SIZE as u64))?;
     Ok(())
   }

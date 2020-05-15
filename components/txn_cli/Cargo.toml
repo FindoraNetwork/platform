@@ -17,7 +17,6 @@ credentials = { path = "../../libs/credentials" }
 curve25519-dalek = { version =  "2.0.0", features = ["serde"] }
 dirs = "2.0.2"
 exitcode = "1.1.2"
-findora = { path = "../../findora" }
 flexi_logger = "0.15.2"
 hex = "0.3.2"
 ledger = { path = "../../ledger" }

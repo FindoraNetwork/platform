@@ -10,7 +10,7 @@
 
 use chrono::Utc;
 use cryptohash::{hash_pair, hash_partial, sha256, HashValue, Proof, HASH_SIZE};
-use findora::{debug, er, log, log_impl, sde, se, Commas};
+use log::{debug, info};
 use serde::Deserialize;
 use serde::Deserializer;
 use serde::Serialize;
@@ -31,6 +31,7 @@ use std::mem::MaybeUninit;
 use std::ptr::copy_nonoverlapping;
 use std::slice::from_raw_parts;
 use std::slice::from_raw_parts_mut;
+use utils::{er, se, Commas};
 
 const BLOCK_SHIFT: u16 = 9;
 const LEVELS_IN_BLOCK: usize = BLOCK_SHIFT as usize;
@@ -77,31 +78,23 @@ impl BlockHeader {
   // Do a simple consistency check on some fields in the header.
   fn check(&self, level: usize, id: u64) -> Option<Error> {
     if self.header_mark != HEADER_VALUE {
-      return se!("Block {} at level {} has a bad header ({:x}).",
-                 id,
-                 level,
-                 self.header_mark);
+      return se(format!("Block {} at level {} has a bad header ({:x}).",
+                        id, level, self.header_mark));
     }
 
     if self.level != level as u16 {
-      return se!("Block {} at level {} has a bad level ({}).",
-                 id,
-                 level,
-                 self.level);
+      return se(format!("Block {} at level {} has a bad level ({}).",
+                        id, level, self.level));
     }
 
     if self.id != id {
-      return se!("Block {} at level {} has a bad id ({}).",
-                 id,
-                 level,
-                 self.id);
+      return se(format!("Block {} at level {} has a bad id ({}).",
+                        id, level, self.id));
     }
 
     if self.valid_leaves > LEAVES_IN_BLOCK as u16 {
-      return se!("The entry count for block {} at level {} is too large ({}).",
-                 id,
-                 level,
-                 self.valid_leaves);
+      return se(format!("The entry count for block {} at level {} is too large ({}).",
+                        id, level, self.valid_leaves));
     }
 
     None
@@ -146,8 +139,7 @@ impl Dictionary {
 
   // Add an entry to the dictionary.
   pub fn insert(&mut self, level: usize, entry: Entry) {
-    debug!(Proof,
-           "add dictionary block {} at level {}", entry.id, level);
+    debug!("add dictionary block {} at level {}", entry.id, level);
     self.map.insert(level, entry);
 
     if level > self.max_level {
@@ -203,8 +195,7 @@ impl Entry {
         hash_partial(&self.hashes[block], &self.hashes[partner])
       };
 
-      debug!(Proof,
-             "entry  push hashes[{:3}] = {}, pair = {}, combine = {}",
+      debug!("entry  push hashes[{:3}] = {}, pair = {}, combine = {}",
              partner,
              self.hashes[partner].desc(),
              self.hashes[block].desc(),
@@ -254,7 +245,8 @@ fn deserialize_array<'de, D>(deserializer: D) -> Result<[HashValue; HASHES_IN_BL
   let slice: Vec<HashValue> = Deserialize::deserialize(deserializer)?;
 
   if slice.len() != HASHES_IN_BLOCK {
-    return sde!("The input slice has the wrong length:  {}", slice.len());
+    return Err(serde::de::Error::custom(format!("The input slice has the wrong length:  {}",
+                                                slice.len())));
   }
 
   let result: [HashValue; HASHES_IN_BLOCK] = unsafe {
@@ -406,10 +398,10 @@ impl Block {
       let hash = self.compute_checksum();
 
       if hash != self.header.check_bits.bits {
-        return se!("The header checksum for block {} ({} entries) at level {} is invalid.",
-                   id,
-                   self.valid_leaves(),
-                   level);
+        return se(format!("The header checksum for block {} ({} entries) at level {} is invalid.",
+                          id,
+                          self.valid_leaves(),
+                          level));
       }
     }
 
@@ -429,21 +421,19 @@ impl Block {
 
     for i in 0..limit {
       if self.hashes[i] == HashValue::new() {
-        return se!("Hash entry {} for block {} at level {} is invalid.",
-                   i,
-                   id,
-                   level);
+        return se(format!("Hash entry {} for block {} at level {} is invalid.",
+                          i, id, level));
       }
     }
 
     // The rest of the hashes should be in their initial state.
     for i in limit..HASHES_IN_BLOCK {
       if self.hashes[i] != HashValue::new() {
-        return se!("Hash entry {} for block {} at level {} was set, valid leaves {}.",
-                   i,
-                   id,
-                   level,
-                   self.valid_leaves());
+        return se(format!("Hash entry {} for block {} at level {} was set, valid leaves {}.",
+                          i,
+                          id,
+                          level,
+                          self.valid_leaves()));
       }
     }
 
@@ -469,10 +459,10 @@ impl Block {
       let hash = hash_pair(left, right);
 
       if hash != self.hashes[i] {
-        return se!("hash[{}] in block {} at level {} is invalid.",
-                   i,
-                   self.id(),
-                   self.level());
+        return se(format!("hash[{}] in block {} at level {} is invalid.",
+                          i,
+                          self.id(),
+                          self.level()));
       }
 
       input += 2;
@@ -490,7 +480,7 @@ impl Block {
     let mut base = 0;
     let mut interval = LEAVES_IN_BLOCK;
 
-    debug!(Proof, "Subtree for id {} (from a full block)", id);
+    debug!("Subtree for id {} (from a full block)", id);
 
     for i in 0..LEVELS_IN_BLOCK - 1 {
       let block = base + index;
@@ -503,8 +493,7 @@ impl Block {
         hash_partial(&self.hashes[block], &self.hashes[partner])
       };
 
-      debug!(Proof,
-             "block  push hashes[{:3}] = {}, pair = {}, combine = {}",
+      debug!("block  push hashes[{:3}] = {}, pair = {}, combine = {}",
              partner,
              hash.desc(),
              self.hashes[block].desc(),
@@ -521,7 +510,7 @@ impl Block {
       interval /= 2;
     }
 
-    debug!(Proof, "hashes now has {} elements.", hashes.len());
+    debug!("hashes now has {} elements.", hashes.len());
   }
 
   pub fn root(&self) -> HashValue {
@@ -718,7 +707,7 @@ impl AppendOnlyMerkle {
     let save = path.to_owned() + &ext;
 
     if std::path::Path::new(&save).exists() {
-      return utils::er(format!("Rebuild path {} already exists.", save));
+      return er(format!("Rebuild path {} already exists.", save));
     }
 
     // Rename the level zero file out of the way and then create
@@ -767,10 +756,9 @@ impl AppendOnlyMerkle {
           block = b;
         }
         Err(x) => {
-          log!(Append, "Error reading block {}:  {}", block_id.commas(), x);
-          log!(Append,
-               "I will discard the following {} blocks.",
-               (block_count - block_id - 1).commas());
+          info!("Error reading block {}:  {}", block_id.commas(), x);
+          info!("I will discard the following {} blocks.",
+                (block_count - block_id - 1).commas());
           break;
         }
       }
@@ -782,7 +770,7 @@ impl AppendOnlyMerkle {
 
     if entries == 0 {
       let _ = std::fs::remove_file(self.file_path(0));
-      return er!("The level 0 file contains no valid leaves.");
+      return er("The level 0 file contains no valid leaves.".to_string());
     }
 
     // Set the size of the tree.
@@ -852,10 +840,8 @@ impl AppendOnlyMerkle {
           block = b;
         }
         Err(x) => {
-          return er!("Reconstruction of block {} at level {} failed:  {}",
-                     block_id,
-                     level,
-                     x);
+          return er(format!("Reconstruction of block {} at level {} failed:  {}",
+                            block_id, level, x));
         }
       }
 
@@ -937,7 +923,7 @@ impl AppendOnlyMerkle {
           self.blocks_on_disk.push(0);
         }
         Err(e) => {
-          return se!("Open failed for {}:  {}", self.file_path(i), e);
+          return se(format!("Open failed for {}:  {}", self.file_path(i), e));
         }
       }
     }
@@ -970,7 +956,7 @@ impl AppendOnlyMerkle {
 
       // Enforce an arbitrary limit to the number of levels we can support.
       if i > MAX_BLOCK_LEVELS {
-        return er!("The tree at {} has more than {} levels.", self.path, i - 1);
+        return er(format!("The tree at {} has more than {} levels.", self.path, i - 1));
       }
     }
   }
@@ -1006,7 +992,7 @@ impl AppendOnlyMerkle {
 
     // Read the file for each level of the tree.
     for level in 0..self.files.len() {
-      debug!(Append, "Reading level {}.", level);
+      debug!("Reading level {}.", level);
       state.level = level;
       self.read_level(&mut state)?;
     }
@@ -1030,21 +1016,19 @@ impl AppendOnlyMerkle {
     let file_size = match self.files[level].seek(End(0)) {
       Ok(n) => n,
       Err(x) => {
-        log!(Append, "seek failed:  {}", x);
+        info!("seek failed:  {}", x);
         return self.recover_file(level);
       }
     };
 
     if file_size % BLOCK_SIZE as u64 != 0 {
-      log!(Append,
-           "The file contains a partial block (size {}) at level {}",
-           file_size,
-           level);
+      info!("The file contains a partial block (size {}) at level {}",
+            file_size, level);
       return self.recover_file(level);
     }
 
     if let Err(x) = self.files[level].seek(Start(0)) {
-      log!(Append, "Seek failed:  {}", x);
+      info!("Seek failed:  {}", x);
       return self.recover_file(level);
     }
 
@@ -1055,15 +1039,14 @@ impl AppendOnlyMerkle {
     let expected = covered(state.leaves_at_this_level, LEAVES_IN_BLOCK as u64);
 
     if level != 0 && block_count != expected {
-      log!(Append,
-           "Level {} has {} blocks on disk, but should have {}, \
+      info!("Level {} has {} blocks on disk, but should have {}, \
             leaves {}, previous leaves {}, previous blocks {}",
-           level,
-           block_count,
-           expected,
-           state.leaves_at_this_level,
-           state.previous_leaves,
-           state.previous_blocks);
+            level,
+            block_count,
+            expected,
+            state.leaves_at_this_level,
+            state.previous_leaves,
+            state.previous_blocks);
       return self.recover_file(level);
     }
 
@@ -1118,22 +1101,18 @@ impl AppendOnlyMerkle {
     }
 
     if rebuilds > 1 {
-      log!(Append,
-           "Rebuilt {} blocks at level {}",
-           rebuilds.commas(),
-           level);
+      info!("Rebuilt {} blocks at level {}", rebuilds.commas(), level);
     } else if rebuilds == 1 {
-      log!(Append, "Rebuilt 1 block at level {}", level);
+      info!("Rebuilt 1 block at level {}", level);
     }
 
     // If the size doesn't match the expected number of
     // leaves, try a recovery.
     if level > 0 && entries != state.leaves_at_this_level {
-      log!(Append,
-           "Level {} has {} entries, but {} were expected.",
-           level,
-           entries.commas(),
-           state.leaves_at_this_level.commas());
+      info!("Level {} has {} entries, but {} were expected.",
+            level,
+            entries.commas(),
+            state.leaves_at_this_level.commas());
       return self.recover_file(level);
     }
 
@@ -1157,9 +1136,8 @@ impl AppendOnlyMerkle {
     let last_level = level == self.files.len() - 1;
 
     if last_level && state.leaves_at_this_level > 0 {
-      log!(Append,
-           "There is at least one missing file (missing level {}).",
-           level + 1);
+      info!("There is at least one missing file (missing level {}).",
+            level + 1);
       return self.recover_file(level + 1);
     }
 
@@ -1170,7 +1148,7 @@ impl AppendOnlyMerkle {
   // represents.  Open and truncate the file, as necessary.
   fn recover_file(&mut self, level: usize) -> Result<(), Error> {
     if level == 0 {
-      return er!("The level 0 file is corrupted.");
+      return er("The level 0 file is corrupted.".to_string());
     }
 
     let path = self.file_path(level);
@@ -1222,21 +1200,19 @@ impl AppendOnlyMerkle {
       Ok(n) => {
         if n != offset {
           // Log error.
-          log!(Append,
-               "Seek failed at level {}, block {} for rewrite:  {} vs {}",
-               level,
-               block.id().commas(),
-               n,
-               offset);
+          info!("Seek failed at level {}, block {} for rewrite:  {} vs {}",
+                level,
+                block.id().commas(),
+                n,
+                offset);
           return;
         }
       }
       Err(x) => {
-        log!(Append,
-             "Seek failed  at level {}, block {} for rewrite:  {}",
-             level,
-             block.id().commas(),
-             x);
+        info!("Seek failed  at level {}, block {} for rewrite:  {}",
+              level,
+              block.id().commas(),
+              x);
         return;
       }
     }
@@ -1246,11 +1222,10 @@ impl AppendOnlyMerkle {
         // TODO self.rewrites++;
       }
       Err(x) => {
-        log!(Append,
-             "I/O failed for rewrite at level {}, block {}:  {}",
-             level,
-             block.id().commas(),
-             x);
+        info!("I/O failed for rewrite at level {}, block {}:  {}",
+              level,
+              block.id().commas(),
+              x);
       }
     }
   }
@@ -1259,7 +1234,7 @@ impl AppendOnlyMerkle {
   // from the disk when we support paging, so allow an error return.
   fn reconstruct(&mut self, level: usize, block_id: u64) -> Result<Block, Error> {
     if level == 0 {
-      return er!("Level zero cannot be reconstructed.");
+      return er("Level zero cannot be reconstructed.".to_string());
     }
 
     let mut lower_index = block_id as usize * LEAVES_IN_BLOCK * 2;
@@ -1310,8 +1285,8 @@ impl AppendOnlyMerkle {
   pub fn append_hash(&mut self, hash_value: &HashValue) -> Result<u64, Error> {
     if self.entry_count == 0 {
       if !self.blocks[0].is_empty() {
-        return er!("Level zero should be empty, but it has {} blocks",
-                   self.blocks[0].len());
+        return er(format!("Level zero should be empty, but it has {} blocks",
+                          self.blocks[0].len()));
       }
 
       self.blocks[0].push(Block::new(0, 0));
@@ -1359,7 +1334,7 @@ impl AppendOnlyMerkle {
           let top_hash = match block_list[index - 1].top_hash() {
             Some(x) => *x,
             None => {
-              return er!("No top hash for block {} at level {}", index - 1, level);
+              return er(format!("No top hash for block {} at level {}", index - 1, level));
             }
           };
 
@@ -1374,7 +1349,7 @@ impl AppendOnlyMerkle {
       let (block, prev) = items;
 
       if let Some(x) = block.set_hash(&current_hash) {
-        return er!("The tree is corrupted:  set_hash:  {}", x);
+        return er(format!("The tree is corrupted:  set_hash:  {}", x));
       }
 
       // If the block is full, and all the previous blocks are
@@ -1497,15 +1472,15 @@ impl AppendOnlyMerkle {
   ///
   pub fn generate_proof(&self, transaction_id: u64, version: u64) -> Result<Proof, Error> {
     if transaction_id >= self.entry_count {
-      return er!("That transaction id ({}) does not exist.", transaction_id);
+      return er(format!("That transaction id ({}) does not exist.", transaction_id));
     }
 
     if version != self.entry_count {
-      return er!("Versioning is not yet supported.");
+      return er("Versioning is not yet supported.".to_string());
     }
 
-    debug!(Proof,
-           "Generate proof for tid {} at state {}", transaction_id, self.entry_count);
+    debug!("Generate proof for tid {} at state {}",
+           transaction_id, self.entry_count);
 
     // Generate a dictionary of all the blocks that
     // would change or be added to make a complete
@@ -1565,8 +1540,7 @@ impl AppendOnlyMerkle {
       hash_partial(&block_hash, &partner_hash)
     };
 
-    debug!(Proof,
-           "partner push level {}, block {} = {}, partner {} = {}, combine = {}",
+    debug!("partner push level {}, block {} = {}, partner {} = {}, combine = {}",
            level,
            block_id,
            block_hash.desc(),
@@ -1580,7 +1554,7 @@ impl AppendOnlyMerkle {
   // block might be in the dictionary, or not.
   fn find_block_root(&self, dictionary: &Dictionary, level: usize, block_id: usize) -> HashValue {
     let empty_hash = HashValue::new();
-    debug!(Proof, "find_block_root(level {}, id {})", level, block_id);
+    debug!("find_block_root(level {}, id {})", level, block_id);
 
     match dictionary.get(level, block_id) {
       Some(entry) => {
@@ -1589,8 +1563,7 @@ impl AppendOnlyMerkle {
       }
       None => {
         if level >= self.blocks.len() || block_id >= self.blocks[level].len() {
-          debug!(Proof,
-                 "find_block_root(level {}, id {}) -> len {}",
+          debug!("find_block_root(level {}, id {}) -> len {}",
                  level,
                  block_id,
                  self.blocks[level].len());
@@ -1616,7 +1589,7 @@ impl AppendOnlyMerkle {
   // created) by this rippling.
   //
   fn generate_tree_completion(&self) -> Dictionary {
-    debug!(Proof, "Generating a tree completion");
+    debug!("Generating a tree completion");
     let empty_hash = HashValue::new();
 
     let mut dictionary = Dictionary::new();
@@ -1649,8 +1622,7 @@ impl AppendOnlyMerkle {
       //      root of the last block in this chain.
       //
       if count != LEAVES_IN_BLOCK {
-        debug!(Proof,
-               "Level {}:  partial block {} ({} entries), carried_hash = {}",
+        debug!("Level {}:  partial block {} ({} entries), carried_hash = {}",
                level,
                last_block.id(),
                count,
@@ -1677,8 +1649,7 @@ impl AppendOnlyMerkle {
           carried_hash = hash_partial(&left, &carried_hash);
         }
       } else if carried_hash != empty_hash {
-        debug!(Proof,
-               "Level {}:  full block, carried_hash = {}",
+        debug!("Level {}:  full block, carried_hash = {}",
                level,
                carried_hash.desc());
         let mut entry = Entry::new(level, length);
@@ -1700,14 +1671,14 @@ impl AppendOnlyMerkle {
           carried_hash = hash_partial(&left, &carried_hash);
         }
       } else if !carried && length % 2 == 1 {
-        debug!(Proof,
-               "Level {}:  full block, create carry, size {}", level, self.entry_count);
+        debug!("Level {}:  full block, create carry, size {}",
+               level, self.entry_count);
         carried = true;
         carried_hash = hash_partial(&last_block.root(), &empty_hash);
         solitary_block = false;
       } else if !carried {
-        debug!(Proof,
-               "Level {}:  full block, no carry, size {}", level, self.entry_count);
+        debug!("Level {}:  full block, no carry, size {}",
+               level, self.entry_count);
 
         // This should happen only if this block is paired and all the
         // blocks below this are paired, recursively.
@@ -1736,8 +1707,7 @@ impl AppendOnlyMerkle {
       // to do.  The hash of the root of this block is the
       // hash of the completed tree.
     } else if carried_hash != empty_hash {
-      debug!(Proof,
-             "Level {}:  create block 0 with {}",
+      debug!("Level {}:  create block 0 with {}",
              level,
              carried_hash.desc());
       let mut entry = Entry::new(level, 0);
@@ -1774,7 +1744,7 @@ impl AppendOnlyMerkle {
     let last = HASHES_IN_BLOCK - 1;
     let block_root_hash;
 
-    debug!(Proof, "Appending hashes for level {}, id {}", level, id);
+    debug!("Appending hashes for level {}, id {}", level, id);
 
     match dictionary.get(level, block_id) {
       Some(entry) => {
@@ -1842,10 +1812,10 @@ impl AppendOnlyMerkle {
       let total_blocks = covered(entries_at_this_level, LEAVES_IN_BLOCK as u64);
 
       if total_blocks != self.blocks[level].len() as u64 {
-        return se!("Level {} has {} blocks, but {} were expected",
-                   level,
-                   self.blocks[level].len(),
-                   total_blocks);
+        return se(format!("Level {} has {} blocks, but {} were expected",
+                          level,
+                          self.blocks[level].len(),
+                          total_blocks));
       }
 
       assert!(total_blocks >= self.blocks_on_disk[level]);
@@ -1872,7 +1842,7 @@ impl AppendOnlyMerkle {
         }
         Ok(n) => {
           if n != start_offset {
-            return se!("A seek to {} returned {}.", start_offset, n);
+            return se(format!("A seek to {} returned {}.", start_offset, n));
           }
         }
       }
@@ -1894,7 +1864,7 @@ impl AppendOnlyMerkle {
         }
 
         if i < total_blocks - 1 && !block.full() {
-          return se!("Block {} at level {} should be full.", i, level);
+          return se(format!("Block {} at level {} should be full.", i, level));
         }
 
         let result = self.files[level].write_all(block.as_bytes());
@@ -1946,7 +1916,7 @@ impl AppendOnlyMerkle {
       let disk_bytes = match self.files[level].seek(End(0)) {
         Ok(n) => n,
         Err(x) => {
-          return se!("check_disk:  The  size seek failed:  {}", x);
+          return se(format!("check_disk:  The  size seek failed:  {}", x));
         }
       };
 
@@ -1954,10 +1924,8 @@ impl AppendOnlyMerkle {
       let expected_size = blocks_on_disk * BLOCK_SIZE as u64;
 
       if disk_bytes != expected_size {
-        return se!("check_disk:  The file size ({}) at level {} should be {}.",
-                   disk_bytes,
-                   level,
-                   expected_size);
+        return se(format!("check_disk:  The file size ({}) at level {} should be {}.",
+                          disk_bytes, level, expected_size));
       }
 
       // If the disk image is up to date, check that the number
@@ -1965,14 +1933,12 @@ impl AppendOnlyMerkle {
       let list_length = self.blocks[level].len() as u64;
 
       if flushed && blocks_on_disk != list_length {
-        return se!("check_disk:  The count {} at level {} should be {}.",
-                   blocks_on_disk,
-                   level,
-                   list_length);
+        return se(format!("check_disk:  The count {} at level {} should be {}.",
+                          blocks_on_disk, level, list_length));
       }
 
       if let Err(x) = self.files[level].seek(Start(0)) {
-        return se!("check_disk:  The read seek failed:  {}", x);
+        return se(format!("check_disk:  The read seek failed:  {}", x));
       }
 
       let mut entry_count = 0_u64;
@@ -2002,7 +1968,7 @@ impl AppendOnlyMerkle {
             current.push(block);
           }
           Err(x) => {
-            return se!("check_disk:  A read failed:  {}", x);
+            return se(format!("check_disk:  A read failed:  {}", x));
           }
         }
       }
@@ -2012,11 +1978,9 @@ impl AppendOnlyMerkle {
       // Check that the disk contents match the in-memory
       // contents if the memory has been flushed.
       if flushed && entry_count != entries_at_this_level {
-        return se!("check_disk:  The entry counts ({}, {}) \
-                    at level {} didn't match.",
-                   entry_count,
-                   entries_at_this_level,
-                   level);
+        return se(format!("check_disk:  The entry counts ({}, {}) \
+                           at level {} didn't match.",
+                          entry_count, entries_at_this_level, level));
       }
 
       // The first time through, we compare the in-memory entry count to the
@@ -2029,8 +1993,8 @@ impl AppendOnlyMerkle {
       let last_level = level == self.blocks.len() - 1;
 
       if last_level && entries_at_this_level > 0 {
-        return se!("There is at least one missing file (for level {}).",
-                   level + 1);
+        return se(format!("There is at least one missing file (for level {}).",
+                          level + 1));
       }
     }
 
@@ -2100,14 +2064,11 @@ impl AppendOnlyMerkle {
       let list_length = self.blocks[level].len();
 
       if list_length != blocks_at_this_level {
-        return se!("check:  The expected block count ({}) at level {} \
+        return se(format!(
+          "check:  The expected block count ({}) at level {} \
                     should be {}, last {}, full {}, entries {}",
-                   blocks_at_this_level,
-                   level,
-                   list_length,
-                   last_blocks,
-                   last_block_full,
-                   self.entry_count);
+          blocks_at_this_level, level, list_length, last_blocks, last_block_full, self.entry_count
+        ));
       }
 
       let mut leaf_count = 0;
@@ -2120,9 +2081,8 @@ impl AppendOnlyMerkle {
         last_block_full = block.full();
 
         if !last && !last_block_full {
-          return se!("check:  Block {} at level {} should be full.",
-                     block_id,
-                     level);
+          return se(format!("check:  Block {} at level {} should be full.",
+                            block_id, level));
         }
 
         if let Some(x) = block.check(level, block_id as u64, false) {
@@ -2144,10 +2104,8 @@ impl AppendOnlyMerkle {
       }
 
       if leaf_count != leaves_at_this_level {
-        return se!("check:  The entry counts ({}, {}) at level {} did not match",
-                   leaf_count,
-                   leaves_at_this_level,
-                   level);
+        return se(format!("check:  The entry counts ({}, {}) at level {} did not match",
+                          leaf_count, leaves_at_this_level, level));
       }
 
       // Advance to the next level of the  tree.  Compute the number
@@ -2160,11 +2118,11 @@ impl AppendOnlyMerkle {
       let last_level = level == self.blocks.len() - 1;
 
       if last_level && leaves_at_this_level > 0 {
-        return se!("Level {} has {} blocks, with {} upper leaves, \
+        return se(format!(
+          "Level {} has {} blocks, with {} upper leaves, \
                     but no levels remain.",
-                   level,
-                   last_blocks,
-                   leaves_at_this_level);
+          level, last_blocks, leaves_at_this_level
+        ));
       }
     }
 
@@ -2178,27 +2136,27 @@ impl AppendOnlyMerkle {
 
     for i in 0..block.valid_leaves() as usize {
       if block_index + 1 >= lower.len() {
-        return se!("Block {} at level {} has too many hashes:  {} vs {}.",
-                   block.id(),
-                   block.level(),
-                   block.valid_leaves(),
-                   lower.len());
+        return se(format!("Block {} at level {} has too many hashes:  {} vs {}.",
+                          block.id(),
+                          block.level(),
+                          block.valid_leaves(),
+                          lower.len()));
       }
 
       let left = match lower[block_index].top_hash() {
         None => {
-          return se!("The left lower hash at {}, level {} is missing.",
-                     block_index,
-                     block.level());
+          return se(format!("The left lower hash at {}, level {} is missing.",
+                            block_index,
+                            block.level()));
         }
         Some(x) => x,
       };
 
       let right = match lower[block_index + 1].top_hash() {
         None => {
-          return se!("The right lower hash at {}, level {} is missing.",
-                     block_index + 1,
-                     block.level());
+          return se(format!("The right lower hash at {}, level {} is missing.",
+                            block_index + 1,
+                            block.level()));
         }
         Some(x) => x,
       };
@@ -2206,10 +2164,10 @@ impl AppendOnlyMerkle {
       let hash = hash_pair(left, right);
 
       if hash != block.hashes[i] {
-        return se!("hash[{}] for block {} at level {} didn't match.",
-                   i,
-                   block.id(),
-                   block.level());
+        return se(format!("hash[{}] for block {} at level {} didn't match.",
+                          i,
+                          block.id(),
+                          block.level()));
       }
 
       block_index += 2;
@@ -2970,7 +2928,7 @@ mod tests {
     // on up the list.
     //
     let mut result = tree.leaf(tx_id as usize);
-    debug!(Proof, "Leaf hash is {}", result.desc());
+    debug!("Leaf hash is {}", result.desc());
 
     for i in 0..proof.hash_array.len() {
       if id & 1 == 0 {
@@ -2979,8 +2937,7 @@ mod tests {
         result = hash_partial(&proof.hash_array[i], &result);
       }
 
-      debug!(Proof,
-             "check_proof:  result at {:3} = {} from {}",
+      debug!("check_proof:  result at {:3} = {} from {}",
              i,
              result.desc(),
              proof.hash_array[i].desc());
@@ -2988,15 +2945,14 @@ mod tests {
       id /= 2;
     }
 
-    debug!(Proof, "result = {}", result.desc());
-    debug!(Proof, "root   = {}", proof.root_hash.desc());
+    debug!("result = {}", result.desc());
+    debug!("root   = {}", proof.root_hash.desc());
 
     // The result now had better match the root of the tree
     // at the time the proof was generated.
     if result != proof.root_hash {
       let empty_hash = HashValue::new();
-      debug!(Proof,
-             "more   = {}",
+      debug!("more   = {}",
              hash_partial(&proof.root_hash, &empty_hash).desc());
       panic!("Proof hash mismatch:  {} vs {}, id = {}, size = {}",
              result.desc(),
@@ -3104,7 +3060,7 @@ mod tests {
   }
 
   fn check_all_proofs(tree: &AppendOnlyMerkle) {
-    log!(Proof, "Check all proofs at tree size {}", tree.total_size());
+    info!("Check all proofs at tree size {}", tree.total_size());
 
     for i in 0..tree.total_size() {
       match tree.generate_proof(i, tree.total_size()) {
@@ -3118,7 +3074,7 @@ mod tests {
       }
     }
 
-    log!(Proof, "All proofs verified for size {}", tree.total_size());
+    info!("All proofs verified for size {}", tree.total_size());
   }
 
   #[test]
