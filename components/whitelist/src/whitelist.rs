@@ -1,10 +1,11 @@
 #![deny(warnings)]
+use curve25519_dalek::ristretto::CompressedRistretto;
 use curve25519_dalek::scalar::Scalar;
 use ledger::data_model::errors::PlatformError;
 use ledger::data_model::AssetTypeCode;
 use ledger::error_location;
 use serde::{Deserialize, Serialize};
-use zei::crypto::whitelist::{prove_array_membership, verify_array_membership};
+use zei::crypto::whitelist::{prove_array_membership, verify_array_membership, WhitelistProof};
 use zei::xfr::structs::asset_type_to_scalar;
 
 /// Code of whitelisted assets
@@ -34,7 +35,7 @@ impl Whitelist {
                           commitment: CompressedRistretto,
                           blind: Scalar)
                           -> Result<WhitelistProof, PlatformError> {
-    let proof = prove_array_membership(&self.members, index as usize, &commitment, &blind).or_else(|e| Err(PlatformError::ZeiError(error_location!(), e)))
+    prove_array_membership(&self.members, index as usize, &commitment, &blind).or_else(|e| Err(PlatformError::ZeiError(error_location!(), e)))
   }
 
   /// Verifies the whitelist membership of a confidential asset transferred in a transaction.
@@ -43,7 +44,6 @@ impl Whitelist {
   /// * `commitment`: asset type commitment.
   /// * `proof`: whitelist proof.
   pub fn verify_membership(&mut self,
-                           index: u64,
                            commitment: CompressedRistretto,
                            proof: WhitelistProof)
                            -> Result<(), PlatformError> {
@@ -59,8 +59,12 @@ mod tests {
   use rand_chacha::ChaChaRng;
   use rand_core::SeedableRng;
   use txn_cli::txn_lib::define_issue_transfer_and_get_utxo_and_blinds;
+  use txn_cli::txn_lib::query_utxo_and_get_type_commitment;
   use zei::xfr::asset_record::AssetRecordType;
   use zei::xfr::sig::XfrKeyPair;
+
+  const PROTOCOL: &str = "http";
+  const HOST: &str = "localhost";
 
   // Ignoring this test due to race conditions.
   // When running it together with test_prove_and_verify_membership, test_prove_and_verify_membership occasionally fails.
@@ -81,7 +85,7 @@ mod tests {
       whitelist.add_member(*code);
     }
 
-    // Transfer the third asset, and get the UTXO SID and asset type blind
+    // Transfer the second asset, and get the UTXO SID, asset type blind, and the asset type commitment
     let prng = &mut ChaChaRng::from_entropy();
     let (utxo_1, _, blind_1) = define_issue_transfer_and_get_utxo_and_blinds(&XfrKeyPair::generate(&mut ChaChaRng::from_entropy()),
                                                                       &XfrKeyPair::generate(&mut ChaChaRng::from_entropy()),
@@ -91,10 +95,11 @@ mod tests {
                                                                       AssetRecordType::NonConfidentialAmount_ConfidentialAssetType,
                                                                       ledger_standalone,
                                                                       prng).unwrap();
+    let commitment_1 = query_utxo_and_get_type_commitment(utxo_1, PROTOCOL, HOST).unwrap();
 
     // Prove the whitelist memberships of the second asset with the incorrect index
     // Should panic
-    whitelist.prove_and_verify_membership(0, utxo_1, blind_1)
+    whitelist.prove_membership(0, commitment_1, blind_1)
              .unwrap();
   }
 
@@ -117,7 +122,8 @@ mod tests {
       whitelist.add_member(*code);
     }
 
-    // Transfer the second and third asset, and get the UTXO SIDs and asset type blinds
+    // Transfer the assets
+    // Get the UTXO SID and asset type commitment of the first asset, and asset type blind of the second asset
     let prng = &mut ChaChaRng::from_entropy();
     let (utxo_0, _, _) = define_issue_transfer_and_get_utxo_and_blinds(&XfrKeyPair::generate(&mut ChaChaRng::from_entropy()),
     &XfrKeyPair::generate(&mut ChaChaRng::from_entropy()),
@@ -127,6 +133,7 @@ mod tests {
     AssetRecordType::NonConfidentialAmount_ConfidentialAssetType,
     ledger_standalone,
     prng).unwrap();
+    let commitment_0 = query_utxo_and_get_type_commitment(utxo_0, PROTOCOL, HOST).unwrap();
     let (_, _, blind_1) = define_issue_transfer_and_get_utxo_and_blinds(&XfrKeyPair::generate(&mut ChaChaRng::from_entropy()),
                                                                       &XfrKeyPair::generate(&mut ChaChaRng::from_entropy()),
                                                                       10,
@@ -138,7 +145,7 @@ mod tests {
 
     // Prove the whitelist memberships of the second asset with the incorrect UTXO SID
     // Should panic
-    whitelist.prove_and_verify_membership(1, utxo_0, blind_1)
+    whitelist.prove_membership(1, commitment_0, blind_1)
              .unwrap();
   }
 
@@ -161,7 +168,8 @@ mod tests {
       whitelist.add_member(*code);
     }
 
-    // Transfer the second and third assets, and get the UTXO SIDs and asset type blinds
+    // Transfer assets
+    // Get the UTXO SID of the first asset, and asset type blind and commitment of the second asset
     let prng = &mut ChaChaRng::from_entropy();
     let (_, _, blind_0) = define_issue_transfer_and_get_utxo_and_blinds(&XfrKeyPair::generate(&mut ChaChaRng::from_entropy()),
     &XfrKeyPair::generate(&mut ChaChaRng::from_entropy()),
@@ -179,10 +187,11 @@ mod tests {
                                                                       AssetRecordType::NonConfidentialAmount_ConfidentialAssetType,
                                                                       ledger_standalone,
                                                                       prng).unwrap();
+    let commitment_1 = query_utxo_and_get_type_commitment(utxo_1, PROTOCOL, HOST).unwrap();
 
     // Prove the whitelist memberships of the second asset with the incorrect UTXO SID
     // Should panic
-    whitelist.prove_and_verify_membership(1, utxo_1, blind_0)
+    whitelist.prove_membership(1, commitment_1, blind_0)
              .unwrap();
   }
 
@@ -208,7 +217,8 @@ mod tests {
     }
     assert_eq!(whitelist.members.len(), 5);
 
-    // Transfer the second and third assets, and get the UTXO SIDs and asset type blinds
+    // Transfer the second and third assets
+    // Get the UTXO SIDs, asset type blinds, and asset type commitments
     let prng = &mut ChaChaRng::from_entropy();
     let (utxo_1, _, blind_1) = define_issue_transfer_and_get_utxo_and_blinds(&issuer_key_pair,
                                                                      &recipient_key_pair,
@@ -218,6 +228,7 @@ mod tests {
                                                                      AssetRecordType::NonConfidentialAmount_ConfidentialAssetType,
                                                                      ledger_standalone,
                                                                      prng).unwrap();
+    let commitment_1 = query_utxo_and_get_type_commitment(utxo_1, PROTOCOL, HOST).unwrap();
 
     let (utxo_2, _, blind_2) = define_issue_transfer_and_get_utxo_and_blinds(&issuer_key_pair,
                                                                       &recipient_key_pair,
@@ -227,11 +238,18 @@ mod tests {
                                                                       AssetRecordType::NonConfidentialAmount_ConfidentialAssetType,
                                                                       ledger_standalone,
                                                                       prng).unwrap();
+    let commitment_2 = query_utxo_and_get_type_commitment(utxo_2, PROTOCOL, HOST).unwrap();
 
-    // Prove and verify the whitelist memberships of the second and third assets
-    assert!(whitelist.prove_and_verify_membership(1, utxo_1, blind_1)
+    // Prove the whitelist memberships of the second and third assets
+    let proof_1 = whitelist.prove_membership(1, commitment_1, blind_1);
+    let proof_2 = whitelist.prove_membership(2, commitment_2, blind_2);
+    assert!(proof_1.is_ok());
+    assert!(proof_2.is_ok());
+
+    // Verify the whitelist memberships of the second and third assets
+    assert!(whitelist.verify_membership(commitment_1, proof_1.unwrap())
                      .is_ok());
-    assert!(whitelist.prove_and_verify_membership(2, utxo_2, blind_2)
+    assert!(whitelist.verify_membership(commitment_2, proof_2.unwrap())
                      .is_ok());
   }
 }

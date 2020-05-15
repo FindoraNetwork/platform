@@ -10,6 +10,7 @@ use whitelist::*;
 
 const PROTOCOL: &str = "http";
 const HOST: &str = "localhost";
+
 /// Path to the data file.
 const WHITELIST_FILE: &str = "whitelist.json";
 
@@ -84,7 +85,7 @@ fn process_inputs(inputs: clap::ArgMatches) -> Result<(), PlatformError> {
       };
       let commitment = query_utxo_and_get_type_commitment(utxo, PROTOCOL, HOST)?;
       let proof = whitelist.prove_membership(index, commitment, blind)?;
-      whitelist.verify_membership(index, commitment, proof)
+      whitelist.verify_membership(commitment, proof)
     }
     _ => {
       println!("Subcommand missing or not recognized. Try --help");
