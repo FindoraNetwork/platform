@@ -71,7 +71,7 @@ fn run_txns(n: usize, batch_size: usize) -> Result<(), Box<dyn std::error::Error
   let mut air = AIR::new();
   let client = reqwest::blocking::Client::new();
   let (protocol, host) = protocol_host();
-  let mut min: Duration = Duration::new(1000000000, 999999999);
+  let mut min: Duration = Duration::new(1_000_000_000, 999_999_999);
   let mut max: Duration = Duration::new(0, 0);
   let mut total: Duration = Duration::new(0, 0);
   for i in 0..n {

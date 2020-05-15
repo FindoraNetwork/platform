@@ -35,9 +35,12 @@ fn store_string_to_file(string_data: &str, file: &str) -> Result<(), PlatformErr
 }
 
 /// Stores the program data to `DATA_FILE`, when the program starts or the data is updated.
-fn store_data_to_file(data: AssetLiabilityAndRateData) -> Result<(), PlatformError> {
+fn store_data_to_file(data_dir: &str,
+                      data: AssetLiabilityAndRateData)
+                      -> Result<(), PlatformError> {
+  let data_file_path = format!("{}/{}", data_dir, DATA_FILE);
   if let Ok(data_string) = serde_json::to_string(&data) {
-    store_string_to_file(&data_string, DATA_FILE)?;
+    store_string_to_file(&data_string, &data_file_path)?;
   } else {
   }
   Ok(())
@@ -46,12 +49,13 @@ fn store_data_to_file(data: AssetLiabilityAndRateData) -> Result<(), PlatformErr
 /// Loads data.
 /// * If the data file exists, loads data from it.
 /// * Otherwise, stores the initial data to file and returns the data.
-fn load_data() -> Result<AssetLiabilityAndRateData, PlatformError> {
-  let data = match fs::read_to_string(DATA_FILE) {
+fn load_data(data_dir: &str) -> Result<AssetLiabilityAndRateData, PlatformError> {
+  let data_file_path = format!("{}/{}", data_dir, DATA_FILE);
+  let data = match fs::read_to_string(data_file_path) {
     Ok(data) => data,
     Err(_) => {
       let init_data = AssetLiabilityAndRateData::default();
-      store_data_to_file(init_data.clone())?;
+      store_data_to_file(data_dir, init_data.clone())?;
       return Ok(init_data);
     }
   };
@@ -68,7 +72,13 @@ fn parse_to_u64(val_str: &str) -> Result<u64, PlatformError> {
 
 /// Processes input commands and arguments.
 fn process_inputs(inputs: clap::ArgMatches) -> Result<(), PlatformError> {
-  let mut data = load_data()?;
+  let dir = if let Some(d) = inputs.value_of("dir") {
+    d
+  } else {
+    println!("Missing directory to store data. Use --dir.");
+    return Err(PlatformError::InputsError(error_location!()));
+  };
+  let mut data = load_data(dir)?;
   match inputs.subcommand() {
     ("set_rate", Some(set_matches)) => {
       let code = if let Some(code_arg) = set_matches.value_of("code") {
@@ -84,7 +94,7 @@ fn process_inputs(inputs: clap::ArgMatches) -> Result<(), PlatformError> {
         return Err(PlatformError::InputsError(error_location!()));
       };
       data.solvency_audit.set_rate(code, rate);
-      store_data_to_file(data)
+      store_data_to_file(dir, data)
     }
     ("add_asset_or_liability", Some(add_matches)) => {
       let amount_type = if let Some(type_arg) = add_matches.value_of("type") {
@@ -126,7 +136,7 @@ fn process_inputs(inputs: clap::ArgMatches) -> Result<(), PlatformError> {
                                                utxo,
                                                PROTOCOL,
                                                HOST)?;
-      store_data_to_file(data)
+      store_data_to_file(dir, data)
     }
     ("prove_and_verify_solvency", _) => {
       data.solvency_audit
@@ -143,7 +153,7 @@ fn process_inputs(inputs: clap::ArgMatches) -> Result<(), PlatformError> {
                                              ZeiError::SolvencyVerificationError));
         }
       }
-      store_data_to_file(data)
+      store_data_to_file(dir, data)
     }
     _ => {
       println!("Subcommand missing or not recognized. Try --help");
@@ -154,6 +164,13 @@ fn process_inputs(inputs: clap::ArgMatches) -> Result<(), PlatformError> {
 
 fn main() -> Result<(), PlatformError> {
   let inputs = App::new("Solvency Proof").version("0.1.0").about("Copyright 2020 © Findora. All rights reserved.")
+    .arg(Arg::with_name("dir")
+      .short("d")
+      .long("dir")
+      .value_name("PATH")
+      .required(true)
+      .takes_value(true)
+      .help("Directory to store data"))
     .subcommand(SubCommand::with_name("set_rate")
       .arg(Arg::with_name("code")
         .short("c")
@@ -214,6 +231,7 @@ mod tests {
   use rand_core::{CryptoRng, RngCore, SeedableRng};
   use std::io::{self, Write};
   use std::process::{Command, Output};
+  use tempfile::tempdir;
   use txn_cli::txn_lib::{define_and_submit, issue_transfer_and_get_utxo_and_blinds};
   use zei::xfr::asset_record::AssetRecordType;
   use zei::xfr::sig::XfrKeyPair;
@@ -224,8 +242,9 @@ mod tests {
   const COMMAND: &str = "../../target/release/solvency_cli";
 
   // Command to set asset conversion rates
-  fn set_rate_cmd(code: &str, rate: &str) -> io::Result<Output> {
-    Command::new(COMMAND).arg("set_rate")
+  fn set_rate_cmd(dir: &str, code: &str, rate: &str) -> io::Result<Output> {
+    Command::new(COMMAND).args(&["--dir", dir])
+                         .arg("set_rate")
                          .args(&["--code", code])
                          .args(&["--rate", rate])
                          .output()
@@ -311,13 +330,15 @@ mod tests {
   }
 
   // Command to add a confidential asset or liability
-  fn add_confidential_asset_or_liability_cmd(amount_type: &str,
+  fn add_confidential_asset_or_liability_cmd(dir: &str,
+                                             amount_type: &str,
                                              amount: &str,
                                              code: &str,
                                              blinds: &str,
                                              utxo: &str)
                                              -> io::Result<Output> {
-    Command::new(COMMAND).arg("add_asset_or_liability")
+    Command::new(COMMAND).args(&["--dir", dir])
+                         .arg("add_asset_or_liability")
                          .args(&["--type", amount_type])
                          .args(&["--amount", amount])
                          .args(&["--code", code])
@@ -327,12 +348,14 @@ mod tests {
   }
 
   // Command to add a nonconfidential asset or liability
-  fn add_nonconfidential_asset_or_liability_cmd(amount_type: &str,
+  fn add_nonconfidential_asset_or_liability_cmd(dir: &str,
+                                                amount_type: &str,
                                                 amount: &str,
                                                 code: &str,
                                                 utxo: &str)
                                                 -> io::Result<Output> {
-    Command::new(COMMAND).arg("add_asset_or_liability")
+    Command::new(COMMAND).args(&["--dir", dir])
+                         .arg("add_asset_or_liability")
                          .args(&["--type", amount_type])
                          .args(&["--amount", amount])
                          .args(&["--code", code])
@@ -343,6 +366,9 @@ mod tests {
   #[test]
   #[ignore]
   fn test_cmd() {
+    let tmp_dir = tempdir().unwrap();
+    let dir = tmp_dir.path().to_str().unwrap();
+
     // Start the standalone ledger
     let ledger_standalone = &LedgerStandalone::new();
     ledger_standalone.poll_until_ready().unwrap();
@@ -371,54 +397,60 @@ mod tests {
                                                   ledger_standalone);
 
     // Set asset conversion rates
-    let output = set_rate_cmd(code_0, "1").expect("Failed to set conversion rate.");
+    let output = set_rate_cmd(dir, code_0, "1").expect("Failed to set conversion rate.");
     io::stdout().write_all(&output.stdout).unwrap();
     io::stdout().write_all(&output.stderr).unwrap();
     assert!(output.status.success());
 
-    let output = set_rate_cmd(code_1, "100").expect("Failed to set conversion rate.");
+    let output = set_rate_cmd(dir, code_1, "100").expect("Failed to set conversion rate.");
     io::stdout().write_all(&output.stdout).unwrap();
     io::stdout().write_all(&output.stderr).unwrap();
     assert!(output.status.success());
 
-    let output = set_rate_cmd(code_2, "1").expect("Failed to set conversion rate.");
+    let output = set_rate_cmd(dir, code_2, "1").expect("Failed to set conversion rate.");
     io::stdout().write_all(&output.stdout).unwrap();
     io::stdout().write_all(&output.stderr).unwrap();
     assert!(output.status.success());
 
     // Add assets and liabilities such that total asset amount > total liabiliity amount
     let output =
-    add_nonconfidential_asset_or_liability_cmd("asset", "10", code_0, &utxos[0]).expect("Failed to add public asset.");
+    add_nonconfidential_asset_or_liability_cmd(dir, "asset", "10", code_0, &utxos[0]).expect("Failed to add public asset.");
     io::stdout().write_all(&output.stdout).unwrap();
     io::stdout().write_all(&output.stderr).unwrap();
     assert!(output.status.success());
 
     let output =
-    add_confidential_asset_or_liability_cmd("asset", "200", code_1, &blinds[0], &utxos[1]).expect("Failed to add hidden asset.");
+    add_confidential_asset_or_liability_cmd(dir, "asset", "200", code_1, &blinds[0], &utxos[1]).expect("Failed to add hidden asset.");
     io::stdout().write_all(&output.stdout).unwrap();
     io::stdout().write_all(&output.stderr).unwrap();
     assert!(output.status.success());
 
     let output =
-    add_confidential_asset_or_liability_cmd("asset","3", code_2, &blinds[1], &utxos[2]).expect("Failed to add hidden asset.");
+    add_confidential_asset_or_liability_cmd(dir, "asset","3", code_2, &blinds[1], &utxos[2]).expect("Failed to add hidden asset.");
     io::stdout().write_all(&output.stdout).unwrap();
     io::stdout().write_all(&output.stderr).unwrap();
     assert!(output.status.success());
 
-    let output = add_nonconfidential_asset_or_liability_cmd("liability","40", code_0, &utxos[3])
+    let output = add_nonconfidential_asset_or_liability_cmd(dir, "liability","40", code_0, &utxos[3])
                                       .expect("Failed to add public liability.");
     io::stdout().write_all(&output.stdout).unwrap();
     io::stdout().write_all(&output.stderr).unwrap();
     assert!(output.status.success());
 
-    let output = add_confidential_asset_or_liability_cmd("liability", "50", code_1, &blinds[2], &utxos[4])
-                                      .expect("Failed to add hidden liability.");
+    let output =
+      add_confidential_asset_or_liability_cmd(dir,
+                                              "liability",
+                                              "50",
+                                              code_1,
+                                              &blinds[2],
+                                              &utxos[4]).expect("Failed to add hidden liability.");
     io::stdout().write_all(&output.stdout).unwrap();
     io::stdout().write_all(&output.stderr).unwrap();
     assert!(output.status.success());
 
     // Prove and verify solvency
-    let output = Command::new(COMMAND).arg("prove_and_verify_solvency")
+    let output = Command::new(COMMAND).args(&["--dir", dir])
+                                      .arg("prove_and_verify_solvency")
                                       .output()
                                       .expect("Failed to prove and verify solvency.");
     io::stdout().write_all(&output.stdout).unwrap();
@@ -426,14 +458,21 @@ mod tests {
     assert!(output.status.success());
 
     // Add additional liabilities to make total asset amount < total liabiliity amount
-    let output = add_confidential_asset_or_liability_cmd("liability", "150", code_1, &blinds[3], &utxos[5]).expect("Failed to add hidden liability.");
+    let output =
+      add_confidential_asset_or_liability_cmd(dir,
+                                              "liability",
+                                              "150",
+                                              code_1,
+                                              &blinds[3],
+                                              &utxos[5]).expect("Failed to add hidden liability.");
     io::stdout().write_all(&output.stdout).unwrap();
     io::stdout().write_all(&output.stderr).unwrap();
     assert!(output.status.success());
 
     // Prove and verify solvency
     // Should fail since total asset amount < total liabiliity amount
-    let output = Command::new(COMMAND).arg("prove_and_verify_solvency")
+    let output = Command::new(COMMAND).args(&["--dir", dir])
+                                      .arg("prove_and_verify_solvency")
                                       .output()
                                       .expect("Failed to prove and verify solvency.");
     io::stdout().write_all(&output.stdout).unwrap();
@@ -442,19 +481,20 @@ mod tests {
 
     // Add additional assets to make total asset amount > total liabiliity amount
     let output =
-    add_nonconfidential_asset_or_liability_cmd("asset", "30", code_0, &utxos[6]).expect("Failed to add public asset.");
+    add_nonconfidential_asset_or_liability_cmd(dir, "asset", "30", code_0, &utxos[6]).expect("Failed to add public asset.");
     io::stdout().write_all(&output.stdout).unwrap();
     io::stdout().write_all(&output.stderr).unwrap();
     assert!(output.status.success());
 
     // Prove and verify solvency
-    let output = Command::new(COMMAND).arg("prove_and_verify_solvency")
+    let output = Command::new(COMMAND).args(&["--dir", dir])
+                                      .arg("prove_and_verify_solvency")
                                       .output()
                                       .expect("Failed to prove and verify solvency.");
     io::stdout().write_all(&output.stdout).unwrap();
     io::stdout().write_all(&output.stderr).unwrap();
     assert!(output.status.success());
 
-    fs::remove_file("solvency_data.json").unwrap();
+    tmp_dir.close().unwrap();
   }
 }

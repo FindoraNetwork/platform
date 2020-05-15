@@ -19,7 +19,7 @@ use rand_core::{CryptoRng, RngCore, SeedableRng};
 use std::cmp::Ordering;
 use std::collections::HashSet;
 use zei::api::anon_creds::{
-  ac_confidential_open_commitment, ACCommitmentKey, ConfidentialAC, Credential,
+  ac_confidential_open_commitment, ACCommitment, ACCommitmentKey, ConfidentialAC, Credential,
 };
 use zei::serialization::ZeiFromToBytes;
 use zei::setup::PublicParams;
@@ -264,11 +264,15 @@ pub trait BuildsTransactions {
                                records: &[(TxOutput, Option<OwnerMemo>)],
                                tracing_policy: Option<AssetTracingPolicy>)
                                -> Result<&mut Self, PlatformError>;
+  #[allow(clippy::too_many_arguments)]
   fn add_operation_transfer_asset(&mut self,
                                   keys: &XfrKeyPair,
                                   input_sids: Vec<TxoRef>,
                                   input_records: &[OpenAssetRecord],
-                                  output_records: &[AssetRecord])
+                                  input_tracing_policies: Vec<Option<AssetTracingPolicy>>,
+                                  input_identity_commitments: Vec<Option<ACCommitment>>,
+                                  output_records: &[AssetRecord],
+                                  output_identity_commitments: Vec<Option<ACCommitment>>)
                                   -> Result<&mut Self, PlatformError>;
   fn add_operation_air_assign(&mut self,
                               key_pair: &XfrKeyPair,
@@ -312,14 +316,18 @@ pub trait BuildsTransactions {
   }
 
   #[allow(clippy::comparison_chain)]
+  #[allow(clippy::too_many_arguments)]
   fn add_basic_transfer_asset(&mut self,
                               key_pair: &XfrKeyPair,
-                              tracing_policy: &Option<AssetTracingPolicy>,
                               transfer_from: &[(&TxoRef,
                                  &BlindAssetRecord,
                                  u64,
                                  &Option<OwnerMemo>)],
-                              transfer_to: &[(u64, &AccountAddress)])
+                              input_tracing_policies: Vec<Option<AssetTracingPolicy>>,
+                              input_identity_commitments: Vec<Option<ACCommitment>>,
+                              transfer_to: &[(u64, &AccountAddress)],
+                              output_tracing_policies: Vec<Option<AssetTracingPolicy>>,
+                              output_identity_commitments: Vec<Option<ACCommitment>>)
                               -> Result<&mut Self, PlatformError> {
     // TODO(fernando): where to get prng
     let mut prng: ChaChaRng;
@@ -340,11 +348,15 @@ pub trait BuildsTransactions {
     let input_oars = input_oars.map_err(|e| PlatformError::ZeiError(error_location!(), e))?;
     let input_total: u64 = input_amounts.iter().sum();
     let mut partially_consumed_inputs = Vec::new();
-    for (input_amount, oar) in input_amounts.iter().zip(input_oars.iter()) {
+    for ((input_amount, oar), input_tracing_policy) in
+      input_amounts.iter()
+                   .zip(input_oars.iter())
+                   .zip(input_tracing_policies.iter())
+    {
       if input_amount > oar.get_amount() {
         return Err(PlatformError::InputsError(error_location!()));
       } else if input_amount < oar.get_amount() {
-        let ar = match tracing_policy {
+        let ar = match input_tracing_policy {
           Some(policy) => AssetRecordTemplate::with_asset_tracking(oar.get_amount() - input_amount,
                                                                    *oar.get_asset_type(),
                                                                    oar.get_record_type(),
@@ -364,27 +376,36 @@ pub trait BuildsTransactions {
     }
     let asset_type = input_oars[0].get_asset_type();
     let asset_record_type = input_oars[0].get_record_type();
-    let mut output_ars_templates: Vec<AssetRecordTemplate> =
-      transfer_to.iter()
-                 .map(|(amount, ref addr)| match tracing_policy {
-                   Some(policy) => AssetRecordTemplate::with_asset_tracking(*amount,
-                                                                            *asset_type,
-                                                                            asset_record_type,
-                                                                            addr.key,
-                                                                            policy.clone()),
-                   _ => AssetRecordTemplate::with_no_asset_tracking(*amount,
-                                                                    *asset_type,
-                                                                    asset_record_type,
-                                                                    addr.key),
-                 })
-                 .collect();
+    let mut output_ars_templates = Vec::new();
+    for ((amount, ref addr), output_tracing_policy) in
+      transfer_to.iter().zip(output_tracing_policies.iter())
+    {
+      let template = match output_tracing_policy {
+        Some(policy) => AssetRecordTemplate::with_asset_tracking(*amount,
+                                                                 *asset_type,
+                                                                 asset_record_type,
+                                                                 addr.key,
+                                                                 policy.clone()),
+        _ => AssetRecordTemplate::with_no_asset_tracking(*amount,
+                                                         *asset_type,
+                                                         asset_record_type,
+                                                         addr.key),
+      };
+      output_ars_templates.push(template);
+    }
     output_ars_templates.append(&mut partially_consumed_inputs);
     let output_ars: Result<Vec<AssetRecord>, _> =
       output_ars_templates.iter()
                           .map(|x| AssetRecord::from_template_no_identity_tracking(&mut prng, x))
                           .collect();
     let output_ars = output_ars.map_err(|e| PlatformError::ZeiError(error_location!(), e))?;
-    self.add_operation_transfer_asset(&key_pair, input_sids, &input_oars, &output_ars)?;
+    self.add_operation_transfer_asset(&key_pair,
+                                      input_sids,
+                                      &input_oars,
+                                      input_tracing_policies,
+                                      input_identity_commitments,
+                                      &output_ars,
+                                      output_identity_commitments)?;
     Ok(self)
   }
 }
@@ -465,20 +486,29 @@ impl BuildsTransactions for TransactionBuilder {
                                   keys: &XfrKeyPair,
                                   input_sids: Vec<TxoRef>,
                                   input_records: &[OpenAssetRecord],
-                                  output_records: &[AssetRecord])
+                                  input_tracing_policies: Vec<Option<AssetTracingPolicy>>,
+                                  input_identity_commitments: Vec<Option<ACCommitment>>,
+                                  output_records: &[AssetRecord],
+                                  output_identity_commitments: Vec<Option<ACCommitment>>)
                                   -> Result<&mut Self, PlatformError> {
     // TODO(joe/noah): keep a prng around somewhere?
     let mut prng: ChaChaRng;
     prng = ChaChaRng::from_entropy();
     let mut input_asset_records = vec![];
-    for oar in input_records.iter() {
-      input_asset_records.push(AssetRecord::from_open_asset_record_no_asset_tracking(oar.clone()))
+    for (oar, tracing_policy) in input_records.iter().zip(input_tracing_policies.iter()) {
+      if let Some(policy) = tracing_policy {
+        input_asset_records.push(AssetRecord::from_open_asset_record_with_asset_tracking_but_no_identity(oar.clone(), policy.clone()).map_err(|e| PlatformError::ZeiError(error_location!(), e))?)
+      } else {
+        input_asset_records.push(AssetRecord::from_open_asset_record_no_asset_tracking(oar.clone()))
+      }
     }
 
     let mut xfr = TransferAsset::new(TransferAssetBody::new(&mut prng,
                                                             input_sids,
-                                                            &input_asset_records,
-                                                            output_records)?,
+                                                            &input_asset_records[..],
+                                                            input_identity_commitments,
+                                                            output_records,
+                                                            output_identity_commitments)?,
                                      TransferType::Standard)?;
     xfr.sign(&keys);
 
@@ -619,10 +649,13 @@ pub struct TransferOperationBuilder {
   input_sids: Vec<TxoRef>,
   spend_amounts: Vec<u64>, // Amount of each input record to spend, the rest will be refunded if user calls balance
   input_records: Vec<AssetRecord>,
+  input_tracing_policies: Vec<Option<AssetTracingPolicy>>,
+  input_identity_commitments: Vec<Option<ACCommitment>>,
   output_records: Vec<AssetRecord>,
+  output_tracing_policies: Vec<Option<AssetTracingPolicy>>,
+  output_identity_commitments: Vec<Option<ACCommitment>>,
   transfer: Option<TransferAsset>,
   transfer_type: TransferType,
-  tracing_policies: Vec<Option<AssetTracingPolicy>>,
 }
 
 impl TransferOperationBuilder {
@@ -636,6 +669,7 @@ impl TransferOperationBuilder {
                    txo_sid: TxoRef,
                    open_ar: OpenAssetRecord,
                    tracing_policy: Option<AssetTracingPolicy>,
+                   identity_commitment: Option<ACCommitment>,
                    amount: u64)
                    -> Result<&mut Self, PlatformError> {
     if self.transfer.is_some() {
@@ -648,14 +682,17 @@ impl TransferOperationBuilder {
       AssetRecord::from_open_asset_record_no_asset_tracking(open_ar)
     };
     self.input_sids.push(txo_sid);
-    self.tracing_policies.push(tracing_policy);
     self.input_records.push(asset_record);
+    self.input_tracing_policies.push(tracing_policy);
+    self.input_identity_commitments.push(identity_commitment);
     self.spend_amounts.push(amount);
     Ok(self)
   }
 
   pub fn add_output(&mut self,
                     asset_record_template: &AssetRecordTemplate,
+                    tracing_policy: Option<AssetTracingPolicy>,
+                    identity_commitment: Option<ACCommitment>,
                     credential_record: Option<(&CredUserSecretKey,
                             &Credential,
                             &ACCommitmentKey)>)
@@ -674,6 +711,8 @@ impl TransferOperationBuilder {
       AssetRecord::from_template_no_identity_tracking(prng, asset_record_template).unwrap()
     };
     self.output_records.push(ar);
+    self.output_tracing_policies.push(tracing_policy);
+    self.output_identity_commitments.push(identity_commitment);
     Ok(self)
   }
 
@@ -729,6 +768,8 @@ impl TransferOperationBuilder {
     blinds.0 = amount_blinds;
     blinds.1 = type_blind;
     self.output_records.push(ar);
+    self.output_tracing_policies.push(None);
+    self.output_identity_commitments.push(None);
     Ok(self)
   }
 
@@ -744,7 +785,7 @@ impl TransferOperationBuilder {
     for ((spend_amount, ar), tracking_policy) in self.spend_amounts
                                                      .iter()
                                                      .zip(self.input_records.iter())
-                                                     .zip(self.tracing_policies.iter())
+                                                     .zip(self.input_tracing_policies.iter())
     {
       let amt = ar.open_asset_record.get_amount();
       match spend_amount.cmp(&amt) {
@@ -770,6 +811,8 @@ impl TransferOperationBuilder {
           let ar =
             AssetRecord::from_template_no_identity_tracking(&mut prng, &ar_template).unwrap();
           partially_consumed_inputs.push(ar);
+          self.output_tracing_policies.push(None);
+          self.output_identity_commitments.push(None);
         }
         _ => {}
       }
@@ -791,7 +834,9 @@ impl TransferOperationBuilder {
     let body = TransferAssetBody::new(&mut prng,
                                       self.input_sids.clone(),
                                       &self.input_records,
-                                      &self.output_records)?;
+                                      self.input_identity_commitments.clone(),
+                                      &self.output_records,
+                                      self.output_identity_commitments.clone())?;
     self.transfer = Some(TransferAsset::new(body, transfer_type)?);
     Ok(self)
   }
@@ -1036,8 +1081,9 @@ mod tests {
                                                                     &memo1,
                                                                     alice.get_sk_ref()).unwrap(),
                                             None,
+                                            None,
                                             20)?
-                                 .add_output(&output_template, None)?
+                                 .add_output(&output_template, None, None, None)?
                                  .balance();
 
     assert!(res.is_err());
@@ -1052,12 +1098,13 @@ mod tests {
     let res = invalid_sig_op.add_input(TxoRef::Relative(1),
                                        open_blind_asset_record(&ba_1, &memo1,alice.get_sk_ref()).unwrap(),
                                        None,
+                                       None,
                                        20)?
-                            .add_output(&output_template, None)?
+                            .add_output(&output_template, None, None, None)?
                             .balance()?
                             .create(TransferType::Standard)?
                             .sign(&alice)?
-                            .add_output(&output_template, None);
+                            .add_output(&output_template, None, None, None);
     assert!(res.is_err());
 
     // Not all signatures present
@@ -1070,8 +1117,9 @@ mod tests {
     let res = missing_sig_op.add_input(TxoRef::Relative(1),
                                        open_blind_asset_record(&ba_1, &memo1,alice.get_sk_ref()).unwrap(),
                                        None,
+                                       None,
                                        20)?
-                            .add_output(&output_template, None)?
+                            .add_output(&output_template, None, None, None)?
                             .balance()?
                             .create(TransferType::Standard)?
                             .validate_signatures();
@@ -1111,14 +1159,14 @@ mod tests {
                                                   ben.get_pk());
     let _valid_transfer_op =
       TransferOperationBuilder::new()
-      .add_input(TxoRef::Relative(1), open_blind_asset_record(&ba_1, &memo1, alice.get_sk_ref()).unwrap(),None, 20)?
-      .add_input(TxoRef::Relative(2), open_blind_asset_record(&ba_2, &memo2, bob.get_sk_ref()).unwrap(), None,20)?
-      .add_output(&output_bob5_code1_template, None)?
-      .add_output(&output_charlie13_code1_template, None)?
-      .add_output(&output_ben2_code1_template, None)?
-      .add_output(&output_bob5_code2_template, None)?
-      .add_output(&output_charlie13_code2_template, None)?
-      .add_output(&output_ben2_code2_template, None)?
+      .add_input(TxoRef::Relative(1), open_blind_asset_record(&ba_1, &memo1, alice.get_sk_ref()).unwrap(), None, None, 20)?
+      .add_input(TxoRef::Relative(2), open_blind_asset_record(&ba_2, &memo2, bob.get_sk_ref()).unwrap(), None, None, 20)?
+      .add_output(&output_bob5_code1_template, None, None, None)?
+      .add_output(&output_charlie13_code1_template, None, None, None)?
+      .add_output(&output_ben2_code1_template, None, None, None)?
+      .add_output(&output_bob5_code2_template, None, None, None)?
+      .add_output(&output_charlie13_code2_template, None, None, None)?
+      .add_output(&output_ben2_code2_template, None, None, None)?
       .balance()?
       .create(TransferType::Standard)?
       .sign(&alice)?
