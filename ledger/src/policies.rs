@@ -1,7 +1,9 @@
+#![deny(warnings)]
 use crate::data_model::errors::PlatformError;
 use crate::data_model::AssetTypeCode;
 use crate::error_location;
 use fixed::types::I20F12;
+use serde::{Deserialize, Serialize};
 use zei::serialization::ZeiFromToBytes;
 use zei::xfr::sig::XfrPublicKey;
 use zei::xfr::structs::{XfrAmount, XfrAssetType, XfrBody};
