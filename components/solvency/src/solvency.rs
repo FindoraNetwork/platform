@@ -45,9 +45,6 @@ pub struct AssetAndLiabilityAccount {
   /// Hidden asset amounts and associated codes
   pub hidden_assets: Vec<AmountAndCodeScalar>,
 
-  /// Blinding values of hidden asset amounts and associated codes
-  pub hidden_assets_blinds: Vec<AmountAndCodeBlinds>,
-
   /// Commitments to hidden asset amounts and associated codes
   pub hidden_assets_commitments: Vec<AmountAndCodeCommitment>,
 
@@ -56,9 +53,6 @@ pub struct AssetAndLiabilityAccount {
 
   /// Hidden liability amounts and associated codes
   pub hidden_liabilities: Vec<AmountAndCodeScalar>,
-
-  /// Blinding values of hidden liability amounts and associated codes
-  pub hidden_liabilities_blinds: Vec<AmountAndCodeBlinds>,
 
   /// Commitments to hidden liability amounts and associated codes
   pub hidden_liabilities_commitments: Vec<AmountAndCodeCommitment>,
@@ -125,13 +119,11 @@ impl AssetAndLiabilityAccount {
           AmountType::Asset => {
             self.hidden_assets
                 .push((Scalar::from(amount), asset_type_to_scalar(&code.val)));
-            self.hidden_assets_blinds.push(amount_and_code_blinds);
             self.hidden_assets_commitments.push(commitment);
           }
           _ => {
             self.hidden_liabilities
                 .push((Scalar::from(amount), asset_type_to_scalar(&code.val)));
-            self.hidden_liabilities_blinds.push(amount_and_code_blinds);
             self.hidden_liabilities_commitments.push(commitment);
           }
         }
@@ -180,10 +172,8 @@ impl SolvencyAudit {
 
     let proof =
       prove_solvency(&account.hidden_assets,
-                     &account.hidden_assets_blinds,
                      &account.public_assets,
                      &account.hidden_liabilities,
-                     &account.hidden_liabilities_blinds,
                      &account.public_liabilities,
                      &rates).or_else(|e| Err(PlatformError::ZeiError(error_location!(), e)))?;
 
