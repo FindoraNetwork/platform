@@ -1,9 +1,11 @@
 #![deny(warnings)]
+use crate::utils::error_to_jsvalue;
 use credentials::{
   CredCommitment, CredIssuerPublicKey, CredIssuerSecretKey, CredPoK, CredRevealSig, CredSignature,
   CredUserPublicKey, CredUserSecretKey, Credential as PlatformCredential,
 };
 use ledger::data_model::{
+  AssetRules as PlatformAssetRules, SignatureRules as PlatformSignatureRules,
   TransferType as PlatformTransferType, TxOutput, TxoRef as PlatformTxoRef, TxoSID,
 };
 use rand_chacha::ChaChaRng;
@@ -11,6 +13,7 @@ use rand_core::SeedableRng;
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
 use zei::xfr::asset_tracer::gen_asset_tracer_keypair;
+use zei::xfr::sig::XfrPublicKey;
 use zei::xfr::structs::{
   AssetTracerDecKeys, AssetTracerEncKeys, AssetTracerKeyPair as ZeiAssetTracerKeyPair,
   BlindAssetRecord, OwnerMemo as ZeiOwnerMemo,
@@ -254,5 +257,65 @@ impl CredentialUserKeyPair {
   }
   pub fn from_jsvalue(val: &JsValue) -> Self {
     val.into_serde().unwrap()
+  }
+}
+
+#[wasm_bindgen]
+pub struct SignatureRules {
+  pub(crate) sig_rules: PlatformSignatureRules,
+}
+
+#[wasm_bindgen]
+impl SignatureRules {
+  pub fn new(threshold: u64, weights: JsValue) -> Result<SignatureRules, JsValue> {
+    let weights: Vec<(String, u64)> = weights.into_serde().map_err(error_to_jsvalue)?;
+    let weights: Vec<(XfrPublicKey, u64)> =
+      weights.iter()
+             .map(|(b64_key, weight)| {
+               let parsed = crate::utils::public_key_from_base64(b64_key.clone());
+               match parsed {
+                 Err(err) => Err(err),
+                 Ok(pk) => Ok((pk, *weight)),
+               }
+             })
+             .collect::<Result<Vec<(XfrPublicKey, u64)>, JsValue>>()?;
+    let sig_rules = PlatformSignatureRules { threshold, weights };
+    Ok(SignatureRules { sig_rules })
+  }
+}
+
+#[wasm_bindgen]
+pub struct AssetRules {
+  pub(crate) rules: PlatformAssetRules,
+}
+
+#[wasm_bindgen]
+impl AssetRules {
+  pub fn new() -> AssetRules {
+    AssetRules { rules: PlatformAssetRules::default() }
+  }
+  pub fn set_traceable(mut self, traceable: bool) -> AssetRules {
+    self.rules.traceable = traceable;
+    self
+  }
+
+  pub fn set_max_units(mut self, max_units: u64) -> AssetRules {
+    self.rules.max_units = Some(max_units);
+    self
+  }
+
+  pub fn set_transferable(mut self, transferable: bool) -> AssetRules {
+    self.rules.transferable = transferable;
+    self
+  }
+
+  pub fn set_updatable(mut self, updatable: bool) -> AssetRules {
+    self.rules.updatable = updatable;
+    self
+  }
+
+  pub fn set_transfer_multisig_rules(mut self, multisig_rules: SignatureRules) -> AssetRules {
+    self.rules.transfer_multisig_rules = Some(multisig_rules.sig_rules);
+    self
   }
 }
