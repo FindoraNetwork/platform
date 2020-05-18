@@ -1001,6 +1001,6 @@ pub fn trace_assets(xfr_body: JsValue,
 pub fn test() {
   let kp = new_keypair();
   let b64 = public_key_to_base64(kp.get_pk_ref());
-  let pk = public_key_from_base64(b64);
+  let pk = public_key_from_base64(b64).unwrap();
   dbg!(pk);
 }
