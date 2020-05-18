@@ -10,16 +10,16 @@ macro_rules! error_location {
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum PlatformError {
-  DeserializationError,
-  SerializationError,
+  DeserializationError(String),
+  SerializationError(String),
   InputsError(String),
-  PolicyFailureError(Option<String>),
+  PolicyFailureError(String),
   CheckedReplayError(String),
   // Option(String) so I (joe) can be lazy about error descriptions but also catch the laziness
   // later by removing Option
-  InvariantError(Option<String>),
-  SubmissionServerError(Option<String>),
-  QueryServerError(Option<String>),
+  InvariantError(String),
+  SubmissionServerError(String),
+  QueryServerError(String),
   ZeiError(String, ZeiError),
   IoError(String),
 }
@@ -29,28 +29,22 @@ impl std::error::Error for PlatformError {}
 impl fmt::Display for PlatformError {
   fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
     match self {
-      PlatformError::DeserializationError => f.write_str("Could not deserialize object"),
-      PlatformError::SerializationError => f.write_str("Could not serialize object"),
+      PlatformError::DeserializationError(s) => {
+        f.write_str(&format!("Could not deserialize object: {}", s))
+      }
+      PlatformError::SerializationError(s) => {
+        f.write_str(&format!("Could not serialize object: {}", s))
+      }
       PlatformError::CheckedReplayError(msg) => {
         f.write_str(&format!("Inconsistency found while replaying: {}", msg))
       }
       PlatformError::InputsError(location) => f.write_str(&format!("Error at: {}", location)),
-      PlatformError::PolicyFailureError(None) => f.write_str("Failed policy check"),
-      PlatformError::PolicyFailureError(Some(x)) => {
-        f.write_str(&format!("Failed policy check: {}", x))
-      }
-      PlatformError::InvariantError(msg) => {
-        f.write_str(format!("Invariant violated: {}",
-                            msg.as_ref().unwrap_or(&"UNKNOWN".to_string())).as_str())
-      }
+      PlatformError::PolicyFailureError(x) => f.write_str(&format!("Failed policy check: {}", x)),
+      PlatformError::InvariantError(msg) => f.write_str(&format!("Invariant violated: {}", msg)),
       PlatformError::SubmissionServerError(msg) => {
-        f.write_str(format!("Ledger Application Error: {}",
-                            msg.as_ref().unwrap_or(&"UNKNOWN".to_string())).as_str())
+        f.write_str(&format!("Ledger Application Error: {}", msg))
       }
-      PlatformError::QueryServerError(msg) => {
-        f.write_str(format!("Query Server Error: {}",
-                            msg.as_ref().unwrap_or(&"UNKNOWN".to_string())).as_str())
-      }
+      PlatformError::QueryServerError(msg) => f.write_str(&format!("Query Server Error: {}", msg)),
       PlatformError::ZeiError(msg, ze) => f.write_str(&format!("Zei error ({}): ", msg))
                                            .and_then(|_| ze.fmt(f)),
       PlatformError::IoError(ioe) => f.write_str(&ioe),
@@ -58,9 +52,39 @@ impl fmt::Display for PlatformError {
   }
 }
 
+#[macro_export]
+macro_rules! ser_fail {
+  () => {
+    PlatformError::SerializationError(error_location!())
+  };
+  ($s:expr) => {
+    PlatformError::SerializationError(format!("[{}] {}", &error_location!(), &$s))
+  };
+}
+
+#[macro_export]
+macro_rules! des_fail {
+  () => {
+    PlatformError::DeserializationError(error_location!())
+  };
+  ($s:expr) => {
+    PlatformError::DeserializationError(format!("[{}] {}", &error_location!(), &$s))
+  };
+}
+
+#[macro_export]
+macro_rules! inv_fail {
+  () => {
+    PlatformError::InvariantError(error_location!())
+  };
+  ($s:expr) => {
+    PlatformError::InvariantError(format!("[{}] {}", &error_location!(), &$s))
+  };
+}
+
 impl From<serde_json::Error> for PlatformError {
-  fn from(_error: serde_json::Error) -> Self {
-    PlatformError::DeserializationError
+  fn from(error: serde_json::Error) -> Self {
+    PlatformError::DeserializationError(format!("{:?}", &error))
   }
 }
 

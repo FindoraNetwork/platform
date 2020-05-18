@@ -3,7 +3,7 @@ use clap::{App, Arg, SubCommand};
 use curve25519_dalek::scalar::Scalar;
 use ledger::data_model::errors::PlatformError;
 use ledger::data_model::AssetTypeCode;
-use ledger::error_location;
+use ledger::{des_fail, error_location};
 use std::fs;
 use whitelist::*;
 
@@ -12,13 +12,16 @@ const WHITELIST_FILE: &str = "whitelist.json";
 
 /// Stores the whitelist data to `WHITELIST_FILE`, when the program starts or the whitelist is updated.
 fn store_whitelist_to_file(whitelist: &Whitelist) -> Result<(), PlatformError> {
-  if let Ok(whitelist_str) = serde_json::to_string(whitelist) {
-    if let Err(error) = fs::write(WHITELIST_FILE, &whitelist_str) {
-      return Err(PlatformError::IoError(format!("Failed to create file {}: {}.",
-                                                WHITELIST_FILE, error)));
-    };
-  } else {
-    return Err(PlatformError::SerializationError);
+  match serde_json::to_string(whitelist) {
+    Ok(whitelist_str) => {
+      if let Err(error) = fs::write(WHITELIST_FILE, &whitelist_str) {
+        return Err(PlatformError::IoError(format!("Failed to create file {}: {}.",
+                                                  WHITELIST_FILE, error)));
+      };
+    }
+    Err(e) => {
+      return Err(des_fail!(e));
+    }
   }
   Ok(())
 }
@@ -36,7 +39,7 @@ fn load_whitelist() -> Result<Whitelist, PlatformError> {
     }
   };
 
-  serde_json::from_str::<Whitelist>(&whitelist).or(Err(PlatformError::DeserializationError))
+  serde_json::from_str::<Whitelist>(&whitelist).or_else(|e| Err(des_fail!(e)))
 }
 
 /// Parses a string to u64.
@@ -74,7 +77,7 @@ fn process_inputs(inputs: clap::ArgMatches) -> Result<(), PlatformError> {
         return Err(PlatformError::InputsError(error_location!()));
       };
       let blind = if let Some(blind_arg) = prove_and_verify_matches.value_of("blind") {
-        serde_json::from_str::<Scalar>(&blind_arg).or(Err(PlatformError::DeserializationError))?
+        serde_json::from_str::<Scalar>(&blind_arg).or_else(|e| Err(des_fail!(e)))?
       } else {
         println!("Missing serialized blinding factor for the asset type code commitment. Use --blind.");
         return Err(PlatformError::InputsError(error_location!()));
@@ -125,6 +128,7 @@ fn main() -> Result<(), PlatformError> {
 mod tests {
   use super::*;
   use ledger::data_model::AssetRules;
+  use ledger::ser_fail;
   use ledger_standalone::LedgerStandalone;
   use rand_chacha::ChaChaRng;
   use rand_core::SeedableRng;
@@ -181,9 +185,8 @@ mod tests {
                                                     &ledger_standalone,
                                                     &mut ChaChaRng::from_entropy()).unwrap();
       let utxo_str = format!("{}", utxo);
-      let blind_str =
-        serde_json::to_string(&code_blind).or_else(|_| Err(PlatformError::SerializationError))
-                                          .unwrap();
+      let blind_str = serde_json::to_string(&code_blind).or_else(|e| Err(ser_fail!(e)))
+                                                        .unwrap();
       utxos.push(utxo_str);
       blinds.push(blind_str);
     }

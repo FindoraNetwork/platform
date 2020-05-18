@@ -3,7 +3,7 @@ use clap::{App, Arg, SubCommand};
 use curve25519_dalek::scalar::Scalar;
 use ledger::data_model::errors::PlatformError;
 use ledger::data_model::AssetTypeCode;
-use ledger::error_location;
+use ledger::{des_fail, error_location};
 use serde::{Deserialize, Serialize};
 use solvency::*;
 use std::fs;
@@ -60,7 +60,7 @@ fn load_data(data_dir: &str) -> Result<AssetLiabilityAndRateData, PlatformError>
     }
   };
 
-  serde_json::from_str::<AssetLiabilityAndRateData>(&data).or(Err(PlatformError::DeserializationError))
+  serde_json::from_str::<AssetLiabilityAndRateData>(&data).or_else(|e| Err(des_fail!(e)))
 }
 
 /// Parses a string to u64.
@@ -119,7 +119,9 @@ fn process_inputs(inputs: clap::ArgMatches) -> Result<(), PlatformError> {
         return Err(PlatformError::InputsError(error_location!()));
       };
       let blinds = if let Some(blinds_arg) = add_matches.value_of("blinds") {
-        Some(serde_json::from_str::<((Scalar, Scalar), Scalar)>(&blinds_arg).or(Err(PlatformError::DeserializationError))?)
+        Some(serde_json::from_str::<((Scalar, Scalar), Scalar)>(&blinds_arg).or_else(|e| {
+                                                                              Err(des_fail!(e))
+                                                                            })?)
       } else {
         None
       };
