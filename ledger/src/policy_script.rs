@@ -4,6 +4,7 @@ use crate::data_model::{Asset, AssetTypeCode, Operation, Transaction, TxOutput};
 use crate::error_location;
 use crate::policies::Fraction;
 use fixed::types::I20F12;
+use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::convert::TryInto;
 use zei::serialization::ZeiFromToBytes;

@@ -24,9 +24,8 @@
 //!  rebuild method, and returns the result of that procedure.
 //!
 extern crate ledger;
-#[macro_use]
-extern crate findora;
 
+use log::info;
 use merkle_tree::append_only_merkle::AppendOnlyMerkle;
 use std::env;
 use std::path::Path;
@@ -34,15 +33,13 @@ use std::process::exit;
 
 fn main() {
   let (path, do_repairs) = parse_arguments();
-  log!(CheckMerkle, "Opening the Merkle tree at \"{}\".", path);
+  flexi_logger::Logger::with_env().start().unwrap();
+  info!("Opening the Merkle tree at \"{}\".", path);
 
   let mut tree = match AppendOnlyMerkle::open(&path) {
     Ok(tree) => tree,
     Err(e) => {
-      log!(CheckMerkle,
-           "check_merkle failed to open \"{}\":  {}",
-           path,
-           e);
+      info!("check_merkle failed to open \"{}\":  {}", path, e);
 
       // The open failed, so try a rebuild if asked.
       if do_repairs {
@@ -56,24 +53,19 @@ fn main() {
   // The open succeeded.  Flush any reconstructed blocks to the
   // disk.
   if let Some(e) = tree.write() {
-    log!(CheckMerkle,
-         "The Merkle tree write returned an error:  {}",
-         e);
-    log!(CheckMerkle, "Continuing.");
+    info!("The Merkle tree write returned an error:  {}", e);
+    info!("Continuing.");
   }
 
-  log!(CheckMerkle, "Performing the initial check.");
+  info!("Performing the initial check.");
 
   // Perform the full check.
   if let Some(e) = tree.check_disk(true) {
-    log!(CheckMerkle,
-         "The Merkle tree check returned an error:  {}",
-         e);
+    info!("The Merkle tree check returned an error:  {}", e);
   } else {
-    log!(CheckMerkle,
-         "The Merkle tree at \"{}\" is valid with {} entries.",
-         path,
-         tree.total_size());
+    info!("The Merkle tree at \"{}\" is valid with {} entries.",
+          path,
+          tree.total_size());
     return;
   }
 
@@ -83,7 +75,7 @@ fn main() {
 
   // The check didn't pass, so try rebuilding the interior blocks
   // (level 1 and up).
-  log!(CheckMerkle, "Rewriting the Merkle tree.");
+  info!("Rewriting the Merkle tree.");
 
   // Try to save the level 0 data file.  We will operate
   // on the in-memory copy.
@@ -94,8 +86,8 @@ fn main() {
   // Tell the tree to assume that the disk image is
   // invalid.
   if let Some(e) = tree.reset_disk() {
-    log!(CheckMerkle, "The disk reset failed:  {}", e);
-    log!(CheckMerkle, "Continuing");
+    info!("The disk reset failed:  {}", e);
+    info!("Continuing");
   }
 
   // Rewrite the entire image, if possible.  If we fail at
@@ -103,20 +95,19 @@ fn main() {
   // is in bad shape.  There's no point to a rebuild since
   // we got a valid image into memory.
   if let Some(e) = tree.write() {
-    log!(CheckMerkle, "The rewrite failed:  {}", e);
+    info!("The rewrite failed:  {}", e);
     exit(1);
   }
 
   // Try the full check again.
   if let Some(e) = tree.check_disk(true) {
-    log!(CheckMerkle, "The final check failed:  {}", e);
+    info!("The final check failed:  {}", e);
     exit(1);
   }
 
-  log!(CheckMerkle,
-       "The Merkle tree at \"{}\" is now valid with {} entries.",
-       path,
-       tree.total_size());
+  info!("The Merkle tree at \"{}\" is now valid with {} entries.",
+        path,
+        tree.total_size());
 }
 
 fn parse_arguments() -> (String, bool) {
@@ -152,20 +143,19 @@ fn try_rebuild(path: &str) {
     exit(1);
   }
 
-  log!(RebuildMerkle, "Trying to rebuild the Merkle tree.");
+  info!("Trying to rebuild the Merkle tree.");
 
   let tree = match AppendOnlyMerkle::rebuild(path) {
     Ok(tree) => tree,
     Err(e) => {
-      log!(RebuildMerkle, "The rebuild failed:  {}", e);
+      info!("The rebuild failed:  {}", e);
       exit(1);
     }
   };
 
-  log!(RebuildMerkle,
-       "The Merkle tree at \"{}\" has been rebuilt with {} entries.",
-       path,
-       tree.total_size());
+  info!("The Merkle tree at \"{}\" has been rebuilt with {} entries.",
+        path,
+        tree.total_size());
   exit(0);
 }
 

@@ -8,9 +8,6 @@ extern crate itertools;
 extern crate zei;
 
 #[macro_use]
-extern crate findora;
-
-#[macro_use]
 pub mod data_model;
 pub mod policies;
 pub mod policy_script;

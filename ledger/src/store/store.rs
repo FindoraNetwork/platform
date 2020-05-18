@@ -1,7 +1,6 @@
 #![deny(warnings)]
 extern crate bincode;
 extern crate byteorder;
-extern crate findora;
 extern crate tempdir;
 
 use crate::data_model::errors::PlatformError;
@@ -14,11 +13,12 @@ use bitmap::{BitMap, SparseMap};
 use cryptohash::sha256::Digest as BitDigest;
 use cryptohash::sha256::DIGESTBYTES;
 use cryptohash::{sha256, HashValue, Proof};
-use findora::HasInvariants;
+use log::info;
 use merkle_tree::append_only_merkle::AppendOnlyMerkle;
 use merkle_tree::logged_merkle::LoggedMerkle;
 use rand_chacha::ChaChaRng;
 use rand_core::{CryptoRng, RngCore, SeedableRng};
+use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, VecDeque};
 use std::fs::File;
 use std::fs::OpenOptions;
@@ -26,6 +26,7 @@ use std::io::{BufRead, BufReader, BufWriter, Write};
 use std::path::Path;
 use std::path::PathBuf;
 use std::u64;
+use utils::HasInvariants;
 use zei::xfr::lib::verify_xfr_body;
 use zei::xfr::sig::{XfrKeyPair, XfrPublicKey, XfrSignature};
 use zei::xfr::structs::{AssetTracingPolicy, XfrAssetType};
@@ -355,7 +356,7 @@ impl HasInvariants<PlatformError> for LedgerState {
 
     if let Some((_, txn_log_fd)) = &self.txn_log {
       txn_log_fd.sync_data().unwrap();
-      let tmp_dir = findora::fresh_tmp_dir();
+      let tmp_dir = utils::fresh_tmp_dir();
 
       let other_block_merkle_buf = tmp_dir.join("test_block_merkle");
       let other_block_merkle_path = other_block_merkle_buf.to_str().unwrap();
@@ -1382,7 +1383,7 @@ impl LedgerState {
 
   // Create a ledger for use by a unit test.
   pub fn test_ledger() -> LedgerState {
-    let tmp_dir = findora::fresh_tmp_dir();
+    let tmp_dir = utils::fresh_tmp_dir();
 
     let block_merkle_buf = tmp_dir.join("test_block_merkle");
     let block_merkle_path = block_merkle_buf.to_str().unwrap();
@@ -1516,7 +1517,7 @@ impl LedgerState {
       AppendOnlyMerkle::open(path)
     };
 
-    log!(Store, "Using path {} for the Merkle tree.", path);
+    info!("Using path {} for the Merkle tree.", path);
 
     let tree = match result {
       Err(x) => {
@@ -1540,9 +1541,7 @@ impl LedgerState {
       air::open(path)
     };
 
-    log!(Store,
-         "Using path {} for the Address Identity Registry.",
-         path);
+    info!("Using path {} for the Address Identity Registry.", path);
 
     let tree = match result {
       Err(x) => {

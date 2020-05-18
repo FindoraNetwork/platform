@@ -159,22 +159,7 @@ mod tests {
                          .output()
   }
 
-  // Ignoring test below as it fail due to the below validation in ledger/src/store/effects.rs:
-  //
-  // if let XfrAssetType::Confidential(_) = out.asset_type {
-  //   return Err(PlatformError::InputsError(error_location!()));
-  // }
-  //
-  // To test the functionalities of whitelist proof:
-  // * Comment out the validation in ledger/src/store/effects.rs
-  // * Run the test with -- --ignored
-  // * Verify the test results
-  // * Restore the validation in ledger/src/store/effects.rs
-  //
-  // (Issue #320)
-
   #[test]
-  #[ignore]
   fn test_cmd() {
     // Start the standalone ledger
     let ledger_standalone = &LedgerStandalone::new();

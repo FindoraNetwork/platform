@@ -10,7 +10,8 @@ COPY . /app/
 RUN cargo audit
 RUN cargo build --release
 RUN cargo test --release --no-fail-fast --workspace
-RUN cargo fmt -- --check
+#Disabled pending fix to rustfmt https://github.com/rust-lang/rustfmt/pull/4177
+#RUN cargo fmt -- --check
 #Disabled because it triggers a compile and also tests dependencies
 #RUN cargo clippy -- -D warnings
 WORKDIR /app/components/wasm

@@ -55,24 +55,13 @@ mod tests {
   use zei::xfr::asset_record::AssetRecordType;
   use zei::xfr::sig::XfrKeyPair;
 
-  // Ignoring tests below as they fail due to the below validation in ledger/src/store/effects.rs:
-  //
-  // if let XfrAssetType::Confidential(_) = out.asset_type {
-  //   return Err(PlatformError::InputsError(error_location!()));
-  // }
-  //
-  // To test the functionalities of whitelist proof:
-  // * Comment out the validation in ledger/src/store/effects.rs
-  // * Run the tests with -- --ignored
-  // * Verify the test results
-  // * Restore the validation in ledger/src/store/effects.rs
-  //
-  // (Issue #320)
-
-  #[should_panic]
+  // Ignoring this test due to race conditions.
+  // When running it together with test_prove_and_verify_membership, test_prove_and_verify_membership occasionally fails.
+  // test_prove_and_verify_membership is a positive test while this test is expected to fail, so ignoring this one.
+  // (Issue #335)
+  #[should_panic(expected = "assertion failed: com_elem == *elem")]
   #[test]
   #[ignore]
-  // (Issue #320)
   fn test_prove_membership_incorrect_index() {
     // Start the standalone ledger
     let ledger_standalone = &LedgerStandalone::new();
@@ -87,10 +76,10 @@ mod tests {
 
     // Transfer the third asset, and get the UTXO SID and asset type blind
     let prng = &mut ChaChaRng::from_entropy();
-    let (utxo_2, _, blind_2) = define_issue_transfer_and_get_utxo_and_blinds(&XfrKeyPair::generate(&mut ChaChaRng::from_entropy()),
+    let (utxo_1, _, blind_1) = define_issue_transfer_and_get_utxo_and_blinds(&XfrKeyPair::generate(&mut ChaChaRng::from_entropy()),
                                                                       &XfrKeyPair::generate(&mut ChaChaRng::from_entropy()),
                                                                       10,
-                                                                      codes[2],
+                                                                      codes[1],
                                                                       AssetRules::default(),
                                                                       AssetRecordType::NonConfidentialAmount_ConfidentialAssetType,
                                                                       ledger_standalone,
@@ -98,14 +87,17 @@ mod tests {
 
     // Prove the whitelist memberships of the second asset with the incorrect index
     // Should panic
-    whitelist.prove_and_verify_membership(1, utxo_2, blind_2)
+    whitelist.prove_and_verify_membership(0, utxo_1, blind_1)
              .unwrap();
   }
 
-  #[should_panic]
+  // Ignoring this test due to race conditions.
+  // When running it together with test_prove_and_verify_membership, test_prove_and_verify_membership occasionally fails.
+  // test_prove_and_verify_membership is a positive test while this test is expected to fail, so ignoring this one.
+  // (Issue #335)
+  #[should_panic(expected = "assertion failed: com_elem == *elem")]
   #[test]
   #[ignore]
-  // (Issue #320)
   fn test_prove_membership_incorrect_utxo() {
     // Start the standalone ledger
     let ledger_standalone = &LedgerStandalone::new();
@@ -120,18 +112,18 @@ mod tests {
 
     // Transfer the second and third asset, and get the UTXO SIDs and asset type blinds
     let prng = &mut ChaChaRng::from_entropy();
-    let (utxo_1, _, _) = define_issue_transfer_and_get_utxo_and_blinds(&XfrKeyPair::generate(&mut ChaChaRng::from_entropy()),
+    let (utxo_0, _, _) = define_issue_transfer_and_get_utxo_and_blinds(&XfrKeyPair::generate(&mut ChaChaRng::from_entropy()),
     &XfrKeyPair::generate(&mut ChaChaRng::from_entropy()),
     10,
-    codes[1],
+    codes[0],
     AssetRules::default(),
     AssetRecordType::NonConfidentialAmount_ConfidentialAssetType,
     ledger_standalone,
     prng).unwrap();
-    let (_, _, blind_2) = define_issue_transfer_and_get_utxo_and_blinds(&XfrKeyPair::generate(&mut ChaChaRng::from_entropy()),
+    let (_, _, blind_1) = define_issue_transfer_and_get_utxo_and_blinds(&XfrKeyPair::generate(&mut ChaChaRng::from_entropy()),
                                                                       &XfrKeyPair::generate(&mut ChaChaRng::from_entropy()),
                                                                       10,
-                                                                      codes[2],
+                                                                      codes[1],
                                                                       AssetRules::default(),
                                                                       AssetRecordType::NonConfidentialAmount_ConfidentialAssetType,
                                                                       ledger_standalone,
@@ -139,14 +131,17 @@ mod tests {
 
     // Prove the whitelist memberships of the second asset with the incorrect UTXO SID
     // Should panic
-    whitelist.prove_and_verify_membership(2, utxo_1, blind_2)
+    whitelist.prove_and_verify_membership(1, utxo_0, blind_1)
              .unwrap();
   }
 
-  #[should_panic]
+  // Ignoring this test due to race conditions.
+  // When running it together with test_prove_and_verify_membership, test_prove_and_verify_membership occasionally fails.
+  // test_prove_and_verify_membership is a positive test while this test is expected to fail, so ignoring this one.
+  // (Issue #335)
+  #[should_panic(expected = "assertion failed: com_elem == *elem")]
   #[test]
   #[ignore]
-  // (Issue #320)
   fn test_prove_membership_incorrect_blind() {
     // Start the standalone ledger
     let ledger_standalone = &LedgerStandalone::new();
@@ -161,18 +156,18 @@ mod tests {
 
     // Transfer the second and third assets, and get the UTXO SIDs and asset type blinds
     let prng = &mut ChaChaRng::from_entropy();
-    let (_, _, blind_1) = define_issue_transfer_and_get_utxo_and_blinds(&XfrKeyPair::generate(&mut ChaChaRng::from_entropy()),
+    let (_, _, blind_0) = define_issue_transfer_and_get_utxo_and_blinds(&XfrKeyPair::generate(&mut ChaChaRng::from_entropy()),
     &XfrKeyPair::generate(&mut ChaChaRng::from_entropy()),
     10,
-    codes[1],
+    codes[0],
     AssetRules::default(),
     AssetRecordType::NonConfidentialAmount_ConfidentialAssetType,
     ledger_standalone,
     prng).unwrap();
-    let (utxo_2, _, _) = define_issue_transfer_and_get_utxo_and_blinds(&XfrKeyPair::generate(&mut ChaChaRng::from_entropy()),
+    let (utxo_1, _, _) = define_issue_transfer_and_get_utxo_and_blinds(&XfrKeyPair::generate(&mut ChaChaRng::from_entropy()),
                                                                       &XfrKeyPair::generate(&mut ChaChaRng::from_entropy()),
                                                                       10,
-                                                                      codes[2],
+                                                                      codes[1],
                                                                       AssetRules::default(),
                                                                       AssetRecordType::NonConfidentialAmount_ConfidentialAssetType,
                                                                       ledger_standalone,
@@ -180,13 +175,11 @@ mod tests {
 
     // Prove the whitelist memberships of the second asset with the incorrect UTXO SID
     // Should panic
-    whitelist.prove_and_verify_membership(2, utxo_2, blind_1)
+    whitelist.prove_and_verify_membership(1, utxo_1, blind_0)
              .unwrap();
   }
 
   #[test]
-  #[ignore]
-  // (Issue #320)
   fn test_prove_and_verify_membership() {
     // Start the standalone ledger
     let ledger_standalone = &LedgerStandalone::new();

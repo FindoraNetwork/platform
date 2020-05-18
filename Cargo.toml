@@ -23,7 +23,6 @@ members = [
     "components/whitelist",
     "components/whitelist_cli",
     "components/xfrnote",
-    "findora",
     "ledger",
     "libs/ads/air",
     "libs/ads/merkle_tree",
