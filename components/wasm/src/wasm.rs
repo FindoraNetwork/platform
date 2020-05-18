@@ -229,7 +229,7 @@ impl TransactionBuilder {
   /// Use this function for simple one-shot issuances.
   ///
   /// @param {XfrKeyPair} key_pair  - Issuer XfrKeyPair.
-  /// @param {AssetTracerKeyPair} tracer keypair - Tracking public key. Pass in tracing key or null. Used to decrypt amounts
+  /// @param {AssetTracerKeyPair} tracer keypair - Tracking public key. Used to decrypt amounts
   /// and types of traced assets.
   /// @param {string} code - Base64 string representing the token code of the asset to be issued.
   /// @param {BigInt} seq_num - Issuance sequence number. Every subsequent issuance of a given asset type must have a higher sequence number than before.

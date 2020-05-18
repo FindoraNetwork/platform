@@ -266,6 +266,13 @@ pub struct SignatureRules {
 }
 
 #[wasm_bindgen]
+/// Creates a new set of co-signature rules.
+///
+/// @param {BigInt} threshold - Minimum sum of signature weights that is required for an asset
+/// transfer.
+/// @param {JsValue} weights - Array of public key weights of the form `[["kAb...", BigInt(5)]]', where the
+/// first element of each tuple is a base64 encoded public key and the second is the key's
+/// associated weight.
 impl SignatureRules {
   pub fn new(threshold: u64, weights: JsValue) -> Result<SignatureRules, JsValue> {
     let weights: Vec<(String, u64)> = weights.into_serde().map_err(error_to_jsvalue)?;
@@ -285,35 +292,50 @@ impl SignatureRules {
 }
 
 #[wasm_bindgen]
+#[derive(Default)]
 pub struct AssetRules {
   pub(crate) rules: PlatformAssetRules,
 }
 
 #[wasm_bindgen]
 impl AssetRules {
+  /// Create a default set of asset rules.
   pub fn new() -> AssetRules {
-    AssetRules { rules: PlatformAssetRules::default() }
+    AssetRules::default()
   }
+
+  /// Toggles asset traceability.
+  /// @param {bool} traceable - Boolean indicating whether asset can be traced by an issuer tracing key.
   pub fn set_traceable(mut self, traceable: bool) -> AssetRules {
     self.rules.traceable = traceable;
     self
   }
 
+  /// Set a cap on the number of units of this asset that can be issued.
+  /// @param {BigInt} max_units - Maximum number of units that can be issued.
   pub fn set_max_units(mut self, max_units: u64) -> AssetRules {
     self.rules.max_units = Some(max_units);
     self
   }
 
+  /// Transferability toggle. Assets that are not transferable can only be transferred by the asset
+  /// issuer.
+  /// @param {bool} transferable - Boolean indicating whether asset can be transferred.
   pub fn set_transferable(mut self, transferable: bool) -> AssetRules {
     self.rules.transferable = transferable;
     self
   }
 
+  /// The updatable flag determines whether the asset memo can be updated after issuance.
+  /// @param {bool} updatable - Boolean indicating whether asset memo can be updated.
   pub fn set_updatable(mut self, updatable: bool) -> AssetRules {
     self.rules.updatable = updatable;
     self
   }
 
+  /// Co-signature rules. Assets with co-signatue rules require additional weighted signatures to
+  /// be transferred.
+  /// @param {SignatureRules} multisig_rules - Co-signature restrictions.
   pub fn set_transfer_multisig_rules(mut self, multisig_rules: SignatureRules) -> AssetRules {
     self.rules.transfer_multisig_rules = Some(multisig_rules.sig_rules);
     self
