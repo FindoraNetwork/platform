@@ -9,10 +9,10 @@ use rand_chacha::ChaChaRng;
 use rand_core::SeedableRng;
 use std::sync::{Arc, RwLock};
 use std::thread;
-use submission_server::{convert_tx, SubmissionServer};
+use submission_server::{convert_tx, NoTF, SubmissionServer}; // , TxnForward
 
 struct ABCISubmissionServer {
-  la: SubmissionServer<ChaChaRng, LedgerState>,
+  la: SubmissionServer<ChaChaRng, LedgerState, NoTF>,
 }
 
 impl ABCISubmissionServer {
@@ -21,7 +21,8 @@ impl ABCISubmissionServer {
     let prng = rand_chacha::ChaChaRng::from_entropy();
     Ok(ABCISubmissionServer { la:
                                 SubmissionServer::new_no_auto_commit(prng,
-                                                                     Arc::new(RwLock::new(ledger)))? })
+                                                                     Arc::new(RwLock::new(ledger)),
+                                                                     None)? })
   }
 }
 

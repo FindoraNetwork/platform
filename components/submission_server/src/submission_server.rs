@@ -50,9 +50,24 @@ pub enum CommitMode {
   Manual,           // Somebody else calls commit. Not this code.
 }
 
-pub struct SubmissionServer<RNG, LU>
+pub trait TxnForward {
+  fn forward_txn(&self, txn: Transaction) -> Result<(), PlatformError>;
+}
+
+/// Don't forward transactions; handle them in the default way.
+pub struct NoTF;
+
+impl TxnForward for NoTF {
+  fn forward_txn(&self, _: Transaction) -> Result<(), PlatformError> {
+    // Need implementation for the None case even though never used.
+    unimplemented!();
+  }
+}
+
+pub struct SubmissionServer<RNG, LU, TF>
   where RNG: RngCore + CryptoRng,
-        LU: LedgerUpdate<RNG> + LedgerAccess + ArchiveAccess
+        LU: LedgerUpdate<RNG> + LedgerAccess + ArchiveAccess,
+        TF: TxnForward
 {
   committed_state: Arc<RwLock<LU>>,
   block: Option<LU::Block>,
@@ -61,34 +76,39 @@ pub struct SubmissionServer<RNG, LU>
   block_capacity: usize,
   prng: RNG,
   commit_mode: CommitMode,
+  txn_forwarder: Option<TF>,
 }
 
-impl<RNG, LU> SubmissionServer<RNG, LU>
+impl<RNG, LU, TF> SubmissionServer<RNG, LU, TF>
   where RNG: RngCore + CryptoRng,
-        LU: LedgerUpdate<RNG> + LedgerAccess + ArchiveAccess
+        LU: LedgerUpdate<RNG> + LedgerAccess + ArchiveAccess,
+        TF: TxnForward
 {
   pub fn new(prng: RNG,
              ledger_state: Arc<RwLock<LU>>,
              block_capacity: usize)
-             -> Result<SubmissionServer<RNG, LU>, PlatformError> {
+             -> Result<SubmissionServer<RNG, LU, TF>, PlatformError> {
     Ok(SubmissionServer { committed_state: ledger_state,
                           block: None,
                           txn_status: HashMap::new(),
                           pending_txns: vec![],
                           prng,
                           block_capacity,
-                          commit_mode: CommitMode::FullBlock })
+                          commit_mode: CommitMode::FullBlock,
+                          txn_forwarder: None })
   }
   pub fn new_no_auto_commit(prng: RNG,
-                            ledger_state: Arc<RwLock<LU>>)
-                            -> Result<SubmissionServer<RNG, LU>, PlatformError> {
+                            ledger_state: Arc<RwLock<LU>>,
+                            txn_forwarder: Option<TF>)
+                            -> Result<SubmissionServer<RNG, LU, TF>, PlatformError> {
     Ok(SubmissionServer { committed_state: ledger_state,
                           block: None,
                           txn_status: HashMap::new(),
                           pending_txns: vec![],
                           prng,
                           block_capacity: 0,
-                          commit_mode: CommitMode::Manual })
+                          commit_mode: CommitMode::Manual,
+                          txn_forwarder })
   }
 
   pub fn get_txn_status(&self, txn_handle: &TxnHandle) -> Option<TxnStatus> {
@@ -190,23 +210,33 @@ impl<RNG, LU> SubmissionServer<RNG, LU>
 
   // Handle the whole process when there's a new transaction
   pub fn handle_transaction(&mut self, txn: Transaction) -> Result<TxnHandle, PlatformError> {
-    // Begin a block if the previous one has been commited
-    if self.all_commited() {
-      self.begin_block();
-    }
+    match self.txn_forwarder {
+      None => {
+        // Begin a block if the previous one has been commited
+        if self.all_commited() {
+          self.begin_block();
+        }
 
-    let handle = self.cache_transaction(txn)?;
-    info!("Transaction added to cache and will be committed in the next block");
-    // End the current block if it's eligible to commit
-    if self.eligible_to_commit() {
-      // If the ledger is eligible for a commit, end block will not return an error
-      self.end_block().unwrap();
+        let handle = self.cache_transaction(txn)?;
+        info!("Transaction added to cache and will be committed in the next block");
+        // End the current block if it's eligible to commit
+        if self.eligible_to_commit() {
+          // If the ledger is eligible for a commit, end block will not return an error
+          self.end_block().unwrap();
 
-      // If begin_commit and end_commit are no longer empty, call them here
+          // If begin_commit and end_commit are no longer empty, call them here
+        }
+        Ok(handle)
+      }
+      Some(ref forwarder) => {
+        let txn_handle = TxnHandle::new(&txn);
+        forwarder.forward_txn(txn)?;
+        Ok(txn_handle)
+      }
     }
-    Ok(handle)
   }
 }
+
 pub fn txn_log_info(txn: &Transaction) {
   for op in &txn.operations {
     match op {
@@ -259,9 +289,10 @@ mod tests {
     let block_capacity = 8;
     let ledger_state = LedgerState::test_ledger();
     let mut prng = rand_chacha::ChaChaRng::from_entropy();
-    let mut submission_server = SubmissionServer::new(prng.clone(),
-                                                      Arc::new(RwLock::new(ledger_state)),
-                                                      block_capacity).unwrap();
+    let mut submission_server =
+      SubmissionServer::<_, _, NoTF>::new(prng.clone(),
+                                          Arc::new(RwLock::new(ledger_state)),
+                                          block_capacity).unwrap();
 
     submission_server.begin_block();
 
@@ -309,7 +340,9 @@ mod tests {
     let ledger_state = LedgerState::test_ledger();
     let prng = rand_chacha::ChaChaRng::from_entropy();
     let mut submission_server =
-      SubmissionServer::new(prng, Arc::new(RwLock::new(ledger_state)), block_capacity).unwrap();
+      SubmissionServer::<_, _, NoTF>::new(prng,
+                                          Arc::new(RwLock::new(ledger_state)),
+                                          block_capacity).unwrap();
 
     submission_server.begin_block();
 
@@ -333,7 +366,9 @@ mod tests {
     let ledger_state = LedgerState::test_ledger();
     let prng = rand_chacha::ChaChaRng::from_entropy();
     let mut submission_server =
-      SubmissionServer::new(prng, Arc::new(RwLock::new(ledger_state)), block_capacity).unwrap();
+      SubmissionServer::<_, _, NoTF>::new(prng,
+                                          Arc::new(RwLock::new(ledger_state)),
+                                          block_capacity).unwrap();
 
     // Submit the first transcation. Ensure that the txn is pending.
     let transaction = Transaction::default();
