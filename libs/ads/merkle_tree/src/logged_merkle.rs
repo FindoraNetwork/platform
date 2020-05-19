@@ -47,7 +47,7 @@ use std::slice::from_raw_parts;
 use std::slice::from_raw_parts_mut;
 use utils::{er, Commas};
 
-const BUFFER_SIZE: usize = 32 * 1024;
+const BUFFER_SIZE: usize = 4 * 1024;
 const CHECK_SIZE: usize = 16;
 const HASH_SIZE: usize = std::mem::size_of::<HashValue>();
 const BUFFER_ENTRIES: u16 = ((BUFFER_SIZE / HASH_SIZE) - 1) as u16;
