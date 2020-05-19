@@ -1,11 +1,22 @@
 #![deny(warnings)]
 use ledger::data_model::errors::PlatformError;
 use ledger::data_model::{Transaction, TxoSID};
+use ledger::error_location;
 use std::ffi::OsString;
 use std::time::{Duration, SystemTime};
 use submission_server::{TxnHandle, TxnStatus};
 use subprocess::{Popen, PopenConfig};
 use zei::xfr::structs::BlindAssetRecord;
+
+macro_rules! fail {
+  () => {
+    PlatformError::SubmissionServerError(error_location!())
+  };
+  ($s:expr) => {
+    PlatformError::SubmissionServerError(format!("[{}] {}", &error_location!(), &$s))
+  };
+}
+
 const POLL_TIME: u64 = 40000;
 // Struct that spins a standalone server up and down. Useful for testing.
 // When instantiated, the struct will spin up a standalone ledger and submission server.
@@ -67,7 +78,7 @@ impl LedgerStandalone {
       }
       poll_duration += Duration::from_secs(now.elapsed().unwrap().as_secs());
     }
-    Err(PlatformError::SubmissionServerError(None))
+    Err(fail!())
   }
 
   // Submits a transaction to the standalone server

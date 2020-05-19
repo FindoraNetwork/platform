@@ -12,8 +12,8 @@ pub mod txn_lib {
   use ledger::data_model::{
     AccountAddress, AssetRules, AssetTypeCode, TransferType, TxOutput, TxoRef, TxoSID,
   };
-  use ledger::error_location;
   use ledger::policies::{DebtMemo, Fraction};
+  use ledger::{des_fail, error_location, ser_fail};
   use ledger_standalone::LedgerStandalone;
   use log::trace; // Other options: debug, info, warn
   use rand_chacha::ChaChaRng;
@@ -271,9 +271,7 @@ pub mod txn_lib {
       // Generate asset tracer key pair
       let tracer_key_pair = gen_asset_tracer_keypair(&mut ChaChaRng::from_entropy());
       let tracer_key_pair_str =
-        serde_json::to_string(&tracer_key_pair).or_else(|_| {
-                                                 Err(PlatformError::SerializationError)
-                                               })?;
+        serde_json::to_string(&tracer_key_pair).or_else(|e| Err(ser_fail!(e)))?;
 
       Ok(AssetIssuer { id: id as u64,
                        name,
@@ -301,8 +299,7 @@ pub mod txn_lib {
                                   &[CredentialIndex::MinCreditScore.get_name_and_length(),
                                     CredentialIndex::MinIncome.get_name_and_length(),
                                     CredentialIndex::Citizenship.get_name_and_length()]);
-      let key_pair_str =
-        serde_json::to_vec(&key_pair).or_else(|_| Err(PlatformError::SerializationError))?;
+      let key_pair_str = serde_json::to_vec(&key_pair).or_else(|e| Err(ser_fail!(e)))?;
       Ok(CredentialIssuer { id: id as u64,
                             name,
                             key_pair: hex::encode(key_pair_str) })
@@ -515,21 +512,16 @@ pub mod txn_lib {
 
     pub(crate) fn get_asset_issuer_key_pair(&self, id: u64) -> Result<XfrKeyPair, PlatformError> {
       let key_pair_str = &self.asset_issuers[id as usize].key_pair;
-      Ok(XfrKeyPair::zei_from_bytes(&hex::decode(key_pair_str).or_else(|_| {
-                                     Err(PlatformError::DeserializationError)
-                                   })?))
+      Ok(XfrKeyPair::zei_from_bytes(&hex::decode(key_pair_str).or_else(|e| Err(ser_fail!(e)))?))
     }
 
     pub(crate) fn get_asset_tracer_key_pair(&self,
                                             id: u64)
                                             -> Result<AssetTracerKeyPair, PlatformError> {
       let tracer_key_pair_str = &self.asset_issuers[id as usize].tracer_key_pair;
-      let tracer_key_pair_decode =
-        hex::decode(tracer_key_pair_str).or_else(|_| Err(PlatformError::DeserializationError))?;
+      let tracer_key_pair_decode = hex::decode(tracer_key_pair_str).or_else(|e| Err(des_fail!(e)))?;
       let tracer_key_pair =
-        serde_json::from_slice(&tracer_key_pair_decode).or_else(|_| {
-                                                         Err(PlatformError::DeserializationError)
-                                                       })?;
+        serde_json::from_slice(&tracer_key_pair_decode).or_else(|e| Err(des_fail!(e)))?;
       Ok(tracer_key_pair)
     }
 
@@ -549,12 +541,8 @@ pub mod txn_lib {
       id: u64)
       -> Result<(CredIssuerPublicKey, CredIssuerSecretKey), PlatformError> {
       let key_pair_str = &self.credential_issuers[id as usize].key_pair;
-      let key_pair_decode =
-        hex::decode(key_pair_str).or_else(|_| Err(PlatformError::DeserializationError))?;
-      let key_pair =
-        serde_json::from_slice(&key_pair_decode).or_else(|_| {
-                                                  Err(PlatformError::DeserializationError)
-                                                })?;
+      let key_pair_decode = hex::decode(key_pair_str).or_else(|e| Err(des_fail!(e)))?;
+      let key_pair = serde_json::from_slice(&key_pair_decode).or_else(|e| Err(des_fail!(e)))?;
       Ok(key_pair)
     }
 
@@ -567,9 +555,7 @@ pub mod txn_lib {
 
     pub(crate) fn get_lender_key_pair(&self, id: u64) -> Result<XfrKeyPair, PlatformError> {
       let key_pair_str = &self.lenders[id as usize].key_pair;
-      Ok(XfrKeyPair::zei_from_bytes(&hex::decode(key_pair_str).or_else(|_| {
-                                     Err(PlatformError::DeserializationError)
-                                   })?))
+      Ok(XfrKeyPair::zei_from_bytes(&hex::decode(key_pair_str).or_else(|e| Err(des_fail!(e)))?))
     }
 
     /// Creates or overwrites a credential requirement.
@@ -610,9 +596,7 @@ pub mod txn_lib {
 
     pub(crate) fn get_borrower_key_pair(&self, id: u64) -> Result<XfrKeyPair, PlatformError> {
       let key_pair_str = &self.borrowers[id as usize].key_pair;
-      Ok(XfrKeyPair::zei_from_bytes(&hex::decode(key_pair_str).or_else(|_| {
-                                     Err(PlatformError::DeserializationError)
-                                   })?))
+      Ok(XfrKeyPair::zei_from_bytes(&hex::decode(key_pair_str).or_else(|e| Err(des_fail!(e)))?))
     }
 
     /// Creates or overwrites a credential data.
@@ -662,7 +646,7 @@ pub mod txn_lib {
 
   /// Gets the initial data for the CLI.
   pub(crate) fn get_init_data() -> Result<Data, PlatformError> {
-    serde_json::from_str::<Data>(INIT_DATA).or(Err(PlatformError::DeserializationError))
+    serde_json::from_str::<Data>(INIT_DATA).or_else(|e| Err(des_fail!(e)))
   }
 
   /// Gets the sequence number and increments it.
@@ -695,7 +679,7 @@ pub mod txn_lib {
         return Ok(init_data);
       }
     };
-    serde_json::from_str::<Data>(&data).or(Err(PlatformError::DeserializationError))
+    serde_json::from_str::<Data>(&data).or_else(|e| Err(des_fail!(e)))
   }
 
   /// Loads transaction record from file
@@ -708,7 +692,7 @@ pub mod txn_lib {
     println!("Parsing builder from file contents: \"{}\"", &txn);
     match serde_json::from_str(&txn) {
       Ok(builder) => Ok(builder),
-      Err(_) => Err(PlatformError::DeserializationError),
+      Err(e) => Err(des_fail!(e)),
     }
   }
 
@@ -752,7 +736,7 @@ pub mod txn_lib {
     match serde_json::from_str::<TransactionBuilder>(&txn) {
       Ok(builder) => Ok(((builder.get_owner_record_and_memo(0).unwrap().0.clone()).0,
                          builder.get_owner_record_and_memo(0).unwrap().1.clone())),
-      Err(_) => Err(PlatformError::DeserializationError),
+      Err(e) => Err(des_fail!(e)),
     }
   }
 
@@ -795,9 +779,7 @@ pub mod txn_lib {
                       })?;
     println!("Parsing tracer memo from file contents: \"{}\"",
              &tracer_memo);
-    serde_json::from_str::<AssetTracerMemo>(&tracer_memo).or_else(|_| {
-                                                           Err(PlatformError::DeserializationError)
-                                                         })
+    serde_json::from_str::<AssetTracerMemo>(&tracer_memo).or_else(|e| Err(des_fail!(e)))
   }
 
   /// Loads tracer and owner memos from memo files
@@ -817,8 +799,8 @@ pub mod txn_lib {
         Ok(memos) => {
           tracer_and_owner_memos.push(memos);
         }
-        Err(_) => {
-          return Err(PlatformError::DeserializationError);
+        Err(e) => {
+          return Err(des_fail!(e));
         }
       }
     }
@@ -1320,15 +1302,18 @@ pub mod txn_lib {
     {
       response
     } else {
-      return Err(PlatformError::SubmissionServerError(Some("Failed to query.".to_owned())));
+      return Err(PlatformError::SubmissionServerError(format!("[{}] {}",
+                                                              &error_location!(),
+                                                              &"Failed to query.")));
     };
 
     // Log body
     println!("Querying status: {}", res.status());
-    let text =
-      res.text().or_else(|_| {
-                   Err(PlatformError::SubmissionServerError(Some("Failed to query.".to_owned())))
-                 })?;
+    let text = res.text().or_else(|_| {
+                            Err(PlatformError::SubmissionServerError(format!("[{}] {}",
+                                                                             &error_location!(),
+                                                                             &"Failed to query.")))
+                          })?;
     println!("Querying result: {}", text);
 
     Ok(text)
@@ -1342,9 +1327,7 @@ pub mod txn_lib {
                                             -> Result<CompressedRistretto, PlatformError> {
     let res = query(protocol, host, QUERY_PORT, "utxo_sid", &format!("{}", utxo))?;
     let blind_asset_record =
-      serde_json::from_str::<BlindAssetRecord>(&res).or_else(|_| {
-                                                      Err(PlatformError::DeserializationError)
-                                                    })?;
+      serde_json::from_str::<BlindAssetRecord>(&res).or_else(|_| Err(des_fail!()))?;
     match blind_asset_record.asset_type {
       XfrAssetType::Confidential(commitment) => Ok(commitment),
       _ => {
@@ -1361,9 +1344,7 @@ pub mod txn_lib {
                                    -> Result<XfrAmount, PlatformError> {
     let res = query(protocol, host, QUERY_PORT, "utxo_sid", &format!("{}", utxo))?;
     let blind_asset_record =
-      serde_json::from_str::<BlindAssetRecord>(&res).or_else(|_| {
-                                                      Err(PlatformError::DeserializationError)
-                                                    })?;
+      serde_json::from_str::<BlindAssetRecord>(&res).or_else(|_| Err(des_fail!()))?;
     Ok(blind_asset_record.amount)
   }
 
@@ -1387,14 +1368,15 @@ pub mod txn_lib {
     // Submit transaction
     let client = reqwest::Client::new();
     let txn = txn_builder.transaction();
-    let mut res =
-      client.post(&format!("{}://{}:{}/{}",
-                           protocol, host, SUBMIT_PORT, "submit_transaction"))
-            .json(&txn)
-            .send()
-            .or_else(|_| {
-              Err(PlatformError::SubmissionServerError(Some("Failed to submit.".to_owned())))
-            })?;
+    let mut res = client.post(&format!("{}://{}:{}/{}",
+                                       protocol, host, SUBMIT_PORT, "submit_transaction"))
+                        .json(&txn)
+                        .send()
+                        .or_else(|_| {
+                          Err(PlatformError::SubmissionServerError(format!("[{}] {}",
+                                                                           &error_location!(),
+                                                                           &"Failed to submit.")))
+                        })?;
     // Log body
     let txt = res.text().expect("no response");
     let handle = serde_json::from_str::<TxnHandle>(&txt).unwrap_or_else(|e| {
@@ -1427,14 +1409,15 @@ pub mod txn_lib {
     // Submit transaction
     let client = reqwest::Client::new();
     let txn = txn_builder.transaction();
-    let mut res =
-      client.post(&format!("{}://{}:{}/{}",
-                           protocol, host, SUBMIT_PORT, "submit_transaction"))
-            .json(&txn)
-            .send()
-            .or_else(|_| {
-              Err(PlatformError::SubmissionServerError(Some("Failed to submit.".to_owned())))
-            })?;
+    let mut res = client.post(&format!("{}://{}:{}/{}",
+                                       protocol, host, SUBMIT_PORT, "submit_transaction"))
+                        .json(&txn)
+                        .send()
+                        .or_else(|_| {
+                          Err(PlatformError::SubmissionServerError(format!("[{}] {}",
+                                                                           &error_location!(),
+                                                                           &"Failed to submit.")))
+                        })?;
 
     // Log body
     let txt = res.text().expect("no response");
@@ -1447,11 +1430,9 @@ pub mod txn_lib {
 
     // Return sid
     let res = query(protocol, host, SUBMIT_PORT, "txn_status", &handle.0)?;
-    match serde_json::from_str::<TxnStatus>(&res).or_else(|_| {
-                                                   Err(PlatformError::DeserializationError)
-                                                 })? {
+    match serde_json::from_str::<TxnStatus>(&res).or_else(|_| Err(des_fail!()))? {
       TxnStatus::Committed((_sid, txos)) => Ok(txos),
-      _ => Err(PlatformError::DeserializationError),
+      _ => Err(des_fail!()),
     }
   }
 
@@ -1608,9 +1589,7 @@ pub mod txn_lib {
                         "utxo_sid",
                         &format!("{}", sid_new.0))?;
     let blind_asset_record_new =
-      serde_json::from_str::<BlindAssetRecord>(&res_new).or_else(|_| {
-                                                          Err(PlatformError::DeserializationError)
-                                                        })?;
+      serde_json::from_str::<BlindAssetRecord>(&res_new).or_else(|_| Err(des_fail!()))?;
 
     // Merge records
     let sid_merged = if let Some(sid_pre) = recipient.fiat_utxo {
@@ -1620,9 +1599,7 @@ pub mod txn_lib {
                           "utxo_sid",
                           &format!("{}", sid_pre.0))?;
       let blind_asset_record_pre =
-        serde_json::from_str::<BlindAssetRecord>(&res_pre).or_else(|_| {
-                                                            Err(PlatformError::DeserializationError)
-                                                          })?;
+        serde_json::from_str::<BlindAssetRecord>(&res_pre).or_else(|_| Err(des_fail!()))?;
       let txn_builder = merge_records(recipient_key_pair,
                                       TxoRef::Absolute(sid_pre),
                                       TxoRef::Absolute(sid_new),
@@ -1660,9 +1637,7 @@ pub mod txn_lib {
                     "utxo_sid",
                     &format!("{}", sid.0))?;
     let blind_asset_record =
-      serde_json::from_str::<BlindAssetRecord>(&res).or_else(|_| {
-                                                      Err(PlatformError::DeserializationError)
-                                                    })?;
+      serde_json::from_str::<BlindAssetRecord>(&res).or_else(|_| Err(des_fail!()))?;
     open_blind_asset_record(&blind_asset_record, owner_memo, key_pair.get_sk_ref()).or_else(|error| {
                                                                                     Err(PlatformError::ZeiError(error_location!(), error))
                                                                                   })
@@ -1795,14 +1770,12 @@ pub mod txn_lib {
     let mut prng: ChaChaRng = ChaChaRng::from_entropy();
     let (user_pk, user_secret_key) =
       credential_user_key_gen(&mut prng, &credential_issuer_public_key);
-    let user_sk_str =
-      serde_json::to_vec(&user_secret_key).or_else(|_| Err(PlatformError::SerializationError))?;
+    let user_sk_str = serde_json::to_vec(&user_secret_key).or_else(|_| Err(ser_fail!()))?;
     let signature = credential_sign(&mut prng,
                                     &credential_issuer_secret_key,
                                     &user_pk,
                                     &attributes).unwrap();
-    let signature_str =
-      serde_json::to_string(&signature).or_else(|_| Err(PlatformError::SerializationError))?;
+    let signature_str = serde_json::to_string(&signature).or_else(|_| Err(ser_fail!()))?;
     let wrapper_credential = WrapperCredential { attributes: attibutes_with_value_as_vec,
                                                  issuer_pub_key:
                                                    credential_issuer_public_key.clone(),
@@ -1812,8 +1785,7 @@ pub mod txn_lib {
                         .or_else(|e| Err(PlatformError::ZeiError(error_location!(), e)))?;
     let (identity_commitment, _, commitment_key) =
       credential_commit(&mut prng, &user_secret_key, &wrapper_credential, b"").unwrap();
-    let commitment_key_str =
-      serde_json::to_vec(&commitment_key).or_else(|_| Err(PlatformError::SerializationError))?;
+    let commitment_key_str = serde_json::to_vec(&commitment_key).or_else(|_| Err(ser_fail!()))?;
 
     // Update credential data
     data.loans[loan_id as usize].user_secret_key = Some(hex::encode(user_sk_str));
@@ -1892,14 +1864,11 @@ pub mod txn_lib {
     // Define debt asset
     let debt_code = AssetTypeCode::gen_random();
     println!("Generated debt code: {}",
-             serde_json::to_string(&debt_code.val).or_else(|_| {
-                                                    Err(PlatformError::SerializationError)
-                                                  })?);
+             serde_json::to_string(&debt_code.val).or_else(|_| { Err(ser_fail!()) })?);
     let memo = DebtMemo { interest_rate: Fraction::new(loan.interest_per_mille, 1000),
                           fiat_code,
                           loan_amount: amount };
-    let memo_str =
-      serde_json::to_string(&memo).or_else(|_| Err(PlatformError::SerializationError))?;
+    let memo_str = serde_json::to_string(&memo).or_else(|_| Err(ser_fail!()))?;
     let txn_builder = define_asset(data_dir,
                                    false,
                                    borrower_key_pair,
@@ -1976,9 +1945,7 @@ pub mod txn_lib {
                           "utxo_sid",
                           &format!("{}", sid_pre.0))?;
       let blind_asset_record_pre =
-        serde_json::from_str::<BlindAssetRecord>(&res_pre).or_else(|_| {
-                                                            Err(PlatformError::DeserializationError)
-                                                          })?;
+        serde_json::from_str::<BlindAssetRecord>(&res_pre).or_else(|_| Err(des_fail!()))?;
       // Get the new fiat record
       let res_new = query(protocol,
                           host,
@@ -1986,9 +1953,7 @@ pub mod txn_lib {
                           "utxo_sid",
                           &format!("{}", sids_new[1].0))?;
       let blind_asset_record_new =
-        serde_json::from_str::<BlindAssetRecord>(&res_new).or_else(|_| {
-                                                            Err(PlatformError::DeserializationError)
-                                                          })?;
+        serde_json::from_str::<BlindAssetRecord>(&res_new).or_else(|_| Err(des_fail!()))?;
       let txn_builder = merge_records(borrower_key_pair,
                                       TxoRef::Absolute(sid_pre),
                                       TxoRef::Absolute(sids_new[1]),
@@ -2004,8 +1969,7 @@ pub mod txn_lib {
              sids_new[0].0, fiat_sid_merged.0);
 
     // Update data
-    let credential_str =
-      serde_json::to_string(&ac_credential).or_else(|_| Err(PlatformError::SerializationError))?;
+    let credential_str = serde_json::to_string(&ac_credential).or_else(|_| Err(ser_fail!()))?;
     let mut data = load_data(data_dir)?;
     data.loans[loan_id as usize].issuer = Some(issuer_id);
     data.fiat_code = Some(fiat_code.to_base64());
@@ -2182,9 +2146,7 @@ pub mod txn_lib {
   /// By default, log everything "trace" level or greater to stdout.
   ///
   /// # Examples
-  /// RUST_LOG=ledger::data_model=info,main=trace/rec[ie]+ve ./main
-  // TODO Verify that this comment is correct.
-  // TODO switch to using from_default_env()
+  /// RUST_LOG="info,txn_cli=trace" ../../target/debug/txn_cli create_txn_builder
   pub fn init_logging() {
     flexi_logger::Logger::with_env_or_str("trace").start()
                                                   .unwrap();
@@ -2205,8 +2167,8 @@ pub mod txn_lib {
   /// * Otherwise: exits with code `USAGE`.
   pub fn match_error_and_exit(error: PlatformError) {
     match error {
-      PlatformError::SerializationError => exit(exitcode::DATAERR),
-      PlatformError::DeserializationError => exit(exitcode::DATAERR),
+      PlatformError::SerializationError(_) => exit(exitcode::DATAERR),
+      PlatformError::DeserializationError(_) => exit(exitcode::DATAERR),
       PlatformError::IoError(io_error) => {
         if io_error.contains("File doesn't exist:") || io_error.contains("Failed to read") {
           exit(exitcode::NOINPUT)
@@ -3339,7 +3301,7 @@ pub mod txn_lib {
           }
           Err(_) => {
             println!("Failed to serialize txn.");
-            Err(PlatformError::SerializationError)
+            Err(ser_fail!())
           }
         }
       }

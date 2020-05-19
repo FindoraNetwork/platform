@@ -9,13 +9,15 @@ name = "check_merkle"
 path = "src/check_merkle.rs"
 
 [dependencies]
+flexi_logger = "0.15.2"
 ledger = { path = "../../ledger" }
-findora = { path = "../../findora" }
+log = "0.4.8"
 merkle_tree = { path = "../../libs/ads/merkle_tree" }
 zei = { git = "ssh://git@github.com/findoraorg/zei", tag = "v0.0.2-4" }
 serde = "1.0"
 serde_derive = "1.0"
 serde_json = "1.0"
+utils = { path = "../../libs/utils" }
 
 [dev-dependencies]
 quickcheck = "0.8"

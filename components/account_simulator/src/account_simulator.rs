@@ -6,7 +6,6 @@ use std::iter::repeat;
 #[macro_use(quickcheck)]
 extern crate quickcheck_macros;
 
-use findora::HasInvariants;
 use ledger::data_model::compute_signature;
 use ledger::data_model::errors::PlatformError;
 use ledger::data_model::*;
@@ -26,6 +25,7 @@ use submission_server::{TxnHandle, TxnStatus};
 use subprocess::Popen;
 #[cfg(test)]
 use subprocess::PopenConfig;
+use utils::HasInvariants;
 use zei::api::anon_creds::ACCommitment;
 use zei::serialization::ZeiFromToBytes;
 use zei::setup::PublicParams;

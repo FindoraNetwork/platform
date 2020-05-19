@@ -1,24 +1,24 @@
 #![deny(warnings)]
 extern crate bincode;
 extern crate byteorder;
-extern crate findora;
 extern crate tempdir;
 
 use crate::data_model::errors::PlatformError;
 use crate::data_model::*;
-use crate::error_location;
 use crate::policies::{calculate_fee, DebtMemo};
 use crate::policy_script::policy_check_txn;
+use crate::{error_location, inv_fail};
 use air::{AIRResult, AIR};
 use bitmap::{BitMap, SparseMap};
 use cryptohash::sha256::Digest as BitDigest;
 use cryptohash::sha256::DIGESTBYTES;
 use cryptohash::{sha256, HashValue, Proof};
-use findora::HasInvariants;
+use log::info;
 use merkle_tree::append_only_merkle::AppendOnlyMerkle;
 use merkle_tree::logged_merkle::LoggedMerkle;
 use rand_chacha::ChaChaRng;
 use rand_core::{CryptoRng, RngCore, SeedableRng};
+use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, VecDeque};
 use std::fs::File;
 use std::fs::OpenOptions;
@@ -26,6 +26,7 @@ use std::io::{BufRead, BufReader, BufWriter, Write};
 use std::path::Path;
 use std::path::PathBuf;
 use std::u64;
+use utils::HasInvariants;
 use zei::xfr::lib::verify_xfr_body;
 use zei::xfr::sig::{XfrKeyPair, XfrPublicKey, XfrSignature};
 use zei::xfr::structs::{AssetTracingPolicy, XfrAssetType};
@@ -172,7 +173,7 @@ const MAX_VERSION: usize = 100;
 
 // Parts of the current ledger state which can be restored from a snapshot
 // without replaying a log
-#[derive(Deserialize, Serialize, PartialEq)]
+#[derive(Deserialize, Serialize, PartialEq, Debug)]
 pub struct LedgerStatus {
   // Paths to archival logs for the merkle tree and transaction history
   block_merkle_path: String,
@@ -282,10 +283,24 @@ struct LedgerStateChecker(pub LedgerState);
 // TODO(joe): fill these in
 impl HasInvariants<PlatformError> for LedgerStatus {
   fn fast_invariant_check(&self) -> Result<(), PlatformError> {
+    if self.block_commit_count != self.state_commitment_versions.len() as u64 {
+      println!("{}: {}",
+               self.block_commit_count,
+               self.state_commitment_versions.len());
+      return Err(inv_fail!());
+    }
+    if self.state_commitment_data
+           .as_ref()
+           .map(|x| x.compute_commitment())
+       != self.state_commitment_versions.last().cloned()
+    {
+      return Err(inv_fail!());
+    }
     Ok(())
   }
 
   fn deep_invariant_check(&self) -> Result<(), PlatformError> {
+    self.fast_invariant_check()?;
     Ok(())
   }
 }
@@ -293,10 +308,13 @@ impl HasInvariants<PlatformError> for LedgerStatus {
 // TODO(joe): fill these in
 impl HasInvariants<PlatformError> for LedgerState {
   fn fast_invariant_check(&self) -> Result<(), PlatformError> {
+    self.status.fast_invariant_check()?;
     Ok(())
   }
 
   fn deep_invariant_check(&self) -> Result<(), PlatformError> {
+    self.fast_invariant_check()?;
+    self.status.deep_invariant_check()?;
     let mut txn_sid = 0;
     for (ix, block) in self.blocks.iter().enumerate() {
       let txns = block.txns
@@ -323,7 +341,7 @@ impl HasInvariants<PlatformError> for LedgerState {
       // dbg!(&txns_in_block_hash);
       // assert!(self.status.txns_in_block_hash == txns_in_block_hash);
       if !proof.is_valid_proof(txns_in_block_hash) {
-        return Err(PlatformError::InvariantError(Some(format!("Bad block proof at {}", ix))));
+        return Err(inv_fail!(format!("Bad block proof at {}", ix)));
       }
 
       for txn in txns.iter() {
@@ -331,14 +349,14 @@ impl HasInvariants<PlatformError> for LedgerState {
         txn_sid += 1;
         let proof = self.txn_merkle.get_proof(ix as u64, 0).unwrap();
         if !proof.is_valid_proof(txn.hash(TxnSID(ix))) {
-          return Err(PlatformError::InvariantError(Some(format!("Bad txn proof at {}", ix))));
+          return Err(inv_fail!(format!("Bad txn proof at {}", ix)));
         }
       }
     }
 
     if let Some((_, txn_log_fd)) = &self.txn_log {
       txn_log_fd.sync_data().unwrap();
-      let tmp_dir = findora::fresh_tmp_dir();
+      let tmp_dir = utils::fresh_tmp_dir();
 
       let other_block_merkle_buf = tmp_dir.join("test_block_merkle");
       let other_block_merkle_path = other_block_merkle_buf.to_str().unwrap();
@@ -359,14 +377,17 @@ impl HasInvariants<PlatformError> for LedgerState {
       // dbg!(std::fs::metadata(&self.status.txn_path).unwrap());
       // dbg!(&other_txn_path);
       std::fs::copy(&self.status.txn_path, &other_txn_path).unwrap();
+      std::fs::copy(&self.status.block_merkle_path, &other_block_merkle_path).unwrap();
+      std::fs::copy(&self.status.txn_merkle_path, &other_txn_merkle_path).unwrap();
+      std::fs::copy(&self.status.utxo_map_path, &other_utxo_map_path).unwrap();
 
-      let state2 = Box::new(LedgerState::load_from_log(&other_block_merkle_path,
-                                                       &other_air_path,
-                                                       &other_txn_merkle_path,
-                                                       &other_txn_path,
-                                                       &other_utxo_map_path,
-                                                       None,
-                                                       None).unwrap());
+      let state2 = Box::new(LedgerState::load_checked_from_log(&other_block_merkle_path,
+                                                               &other_air_path,
+                                                               &other_txn_merkle_path,
+                                                               &other_txn_path,
+                                                               &other_utxo_map_path,
+                                                               None,
+                                                               None).unwrap());
 
       let mut status2 = Box::new(state2.status);
       status2.block_merkle_path = self.status.block_merkle_path.clone();
@@ -374,7 +395,10 @@ impl HasInvariants<PlatformError> for LedgerState {
       status2.txn_merkle_path = self.status.txn_merkle_path.clone();
       status2.txn_path = self.status.txn_path.clone();
       status2.utxo_map_path = self.status.utxo_map_path.clone();
+      status2.utxo_map_versions = self.status.utxo_map_versions.clone();
 
+      // dbg!(&status2);
+      // dbg!(&self.status);
       assert!(*status2 == self.status);
 
       std::fs::remove_dir_all(tmp_dir).unwrap();
@@ -1210,6 +1234,17 @@ impl LedgerUpdate<ChaChaRng> for LedgerStateChecker {
       self.0.air.set(&addr, Some(data));
     }
 
+    // Apply memo updates
+    for (code, memo) in block.memo_updates.drain() {
+      let mut asset = self.0.status.asset_types.get_mut(&code).unwrap();
+      (*asset).properties.memo = memo;
+    }
+
+    for (code, amount) in block.issuance_amounts.drain() {
+      let amt = self.0.status.issuance_amounts.entry(code).or_insert(0);
+      *amt += amount;
+    }
+
     {
       let mut tx_block = Vec::new();
 
@@ -1329,6 +1364,8 @@ impl LedgerStateChecker {
       }
     }
 
+    self.0.fast_invariant_check().unwrap();
+
     Ok(self.0)
   }
 }
@@ -1346,7 +1383,7 @@ impl LedgerState {
 
   // Create a ledger for use by a unit test.
   pub fn test_ledger() -> LedgerState {
-    let tmp_dir = findora::fresh_tmp_dir();
+    let tmp_dir = utils::fresh_tmp_dir();
 
     let block_merkle_buf = tmp_dir.join("test_block_merkle");
     let block_merkle_path = block_merkle_buf.to_str().unwrap();
@@ -1400,9 +1437,11 @@ impl LedgerState {
         Ok(next_block) => {
           v.push(next_block);
         }
-        Err(_) => {
+        Err(e) => {
           if l != "" {
-            return Err(PlatformError::DeserializationError);
+            return Err(PlatformError::DeserializationError(format!("[{}]: {:?}",
+                                                                   &error_location!(),
+                                                                   e)));
           }
         }
       }
@@ -1478,7 +1517,7 @@ impl LedgerState {
       AppendOnlyMerkle::open(path)
     };
 
-    log!(Store, "Using path {} for the Merkle tree.", path);
+    info!("Using path {} for the Merkle tree.", path);
 
     let tree = match result {
       Err(x) => {
@@ -1502,9 +1541,7 @@ impl LedgerState {
       air::open(path)
     };
 
-    log!(Store,
-         "Using path {} for the Address Identity Registry.",
-         path);
+    info!("Using path {} for the Address Identity Registry.", path);
 
     let tree = match result {
       Err(x) => {
@@ -1587,7 +1624,8 @@ impl LedgerState {
           let file = File::create(path)?;
           let mut writer = BufWriter::new(file);
 
-          bincode::serialize_into::<&mut BufWriter<File>, XfrKeyPair>(&mut writer, &key).map_err(|_| PlatformError::SerializationError)?;
+          bincode::serialize_into::<&mut BufWriter<File>, XfrKeyPair>(&mut writer, &key)
+            .map_err(|e| PlatformError::SerializationError(format!("[{}]: {:?}",&error_location!(),e)))?;
           Ok(key)
         })?
       }
@@ -1633,8 +1671,14 @@ impl LedgerState {
                                                              std::column!())));
       }
 
-      ledger.0.status.state_commitment_data = Some(comm);
+      ledger.0.status.txns_in_block_hash = comm.txns_in_block_hash;
+      ledger.0
+            .status
+            .state_commitment_versions
+            .push(comm.compute_commitment());
       ledger.0.status.block_commit_count += 1;
+
+      ledger.0.status.state_commitment_data = Some(comm);
 
       let mut block_builder = ledger.start_block().unwrap();
       for txn in block {
@@ -1646,6 +1690,8 @@ impl LedgerState {
       }
       ledger = ledger.check_block(ix as u64, &block_builder)?;
       ledger.finish_block(block_builder).unwrap();
+
+      ledger.0.fast_invariant_check()?;
     }
 
     ledger.0.txn_log = Some(txn_log);
@@ -1679,7 +1725,9 @@ impl LedgerState {
               .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other,e))
               .and_then(|_| Ok(key))
              })
-             .map_err(|_| PlatformError::SerializationError)
+             .map_err(|e| {
+               PlatformError::SerializationError(format!("[{}]: {:?}", &error_location!(), e))
+             })
            })
            .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?
       }
@@ -1718,6 +1766,7 @@ impl LedgerState {
     }
 
     ledger.txn_log = Some(txn_log);
+    ledger.fast_invariant_check()?;
 
     Ok(ledger)
   }
@@ -1758,7 +1807,8 @@ impl LedgerState {
             let file = File::create(sig_key_file)?;
             let mut writer = BufWriter::new(file);
 
-            bincode::serialize_into::<&mut BufWriter<File>, XfrKeyPair>(&mut writer, &ret.signing_key).map_err(|_| PlatformError::SerializationError)?;
+            bincode::serialize_into::<&mut BufWriter<File>, XfrKeyPair>(&mut writer, &ret.signing_key)
+              .map_err(|e| PlatformError::SerializationError(format!("[{}]: {:?}",&error_location!(),e)))?;
         }
 
         Ok(ret)

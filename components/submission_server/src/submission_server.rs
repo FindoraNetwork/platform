@@ -2,6 +2,7 @@
 use cryptohash::sha256;
 use ledger::data_model::errors::PlatformError;
 use ledger::data_model::{Operation, Transaction, TxnSID, TxnTempSID, TxoSID};
+use ledger::error_location;
 use ledger::store::*;
 use log::info;
 use rand_core::{CryptoRng, RngCore};
@@ -9,6 +10,15 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fmt;
 use std::sync::{Arc, RwLock};
+
+macro_rules! fail {
+  () => {
+    PlatformError::SubmissionServerError(error_location!())
+  };
+  ($s:expr) => {
+    PlatformError::SubmissionServerError(format!("[{}] {}", &error_location!(), &$s))
+  };
+}
 
 // Query handle for user
 #[derive(Debug, Hash, Eq, PartialEq, Clone, Serialize, Deserialize)]
@@ -149,7 +159,7 @@ impl<RNG, LU> SubmissionServer<RNG, LU>
       assert!(self.block.is_none());
       return Ok(());
     }
-    Err(PlatformError::SubmissionServerError(Some("Cannot finish block because there are no pending txns".into())))
+    Err(fail!("Cannot finish block because there are no pending txns"))
   }
 
   pub fn cache_transaction(&mut self, txn: Transaction) -> Result<TxnHandle, PlatformError> {
@@ -165,7 +175,7 @@ impl<RNG, LU> SubmissionServer<RNG, LU>
       }
     }
 
-    Err(PlatformError::SubmissionServerError(Some("Transaction is invalid and cannot be added to pending txn list.".into())))
+    Err(fail!("Transaction is invalid and cannot be added to pending txn list."))
   }
 
   pub fn abort_block(&mut self) {

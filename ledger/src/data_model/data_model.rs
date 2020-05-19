@@ -61,7 +61,7 @@ impl Code {
       let buf = <[u8; 16]>::try_from(bin.as_slice()).unwrap();
       Ok(Self { val: buf })
     } else {
-      Err(PlatformError::DeserializationError)
+      Err(PlatformError::DeserializationError(error_location!()))
     }
   }
   pub fn to_base64(&self) -> String {

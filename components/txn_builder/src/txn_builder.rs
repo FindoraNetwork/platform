@@ -11,9 +11,9 @@ use credentials::{
 use curve25519_dalek::scalar::Scalar;
 use ledger::data_model::errors::PlatformError;
 use ledger::data_model::*;
-use ledger::error_location;
 use ledger::policies::Fraction;
 use ledger::policy_script::{Policy, PolicyGlobals, TxnCheckInputs, TxnPolicyData};
+use ledger::{error_location, inv_fail};
 use rand_chacha::ChaChaRng;
 use rand_core::{CryptoRng, RngCore, SeedableRng};
 use std::cmp::Ordering;
@@ -564,11 +564,11 @@ impl BuildsTransactions for TransactionBuilder {
   }
 
   fn serialize_str(&self) -> Result<String, PlatformError> {
-    if let Ok(serialized) = serde_json::to_string(&self.txn) {
-      Ok(serialized)
-    } else {
-      Err(PlatformError::SerializationError)
-    }
+    serde_json::to_string(&self.txn).map_err(|e| {
+                                      PlatformError::SerializationError(format!("[{}]: {:?}",
+                                                                                &error_location!(),
+                                                                                e))
+                                    })
   }
 }
 
@@ -673,7 +673,7 @@ impl TransferOperationBuilder {
                    amount: u64)
                    -> Result<&mut Self, PlatformError> {
     if self.transfer.is_some() {
-      return Err(PlatformError::InvariantError(Some("Cannot mutate a transfer that has been signed".to_string())));
+      return Err(inv_fail!("Cannot mutate a transfer that has been signed".to_string()));
     }
     let asset_record = if let Some(policy) = tracing_policy.clone() {
       AssetRecord::from_open_asset_record_with_asset_tracking_but_no_identity(open_ar,
@@ -699,7 +699,7 @@ impl TransferOperationBuilder {
                     -> Result<&mut Self, PlatformError> {
     let prng = &mut ChaChaRng::from_entropy();
     if self.transfer.is_some() {
-      return Err(PlatformError::InvariantError(Some("Cannot mutate a transfer that has been signed".to_string())));
+      return Err(inv_fail!("Cannot mutate a transfer that has been signed".to_string()));
     }
     let ar = if let Some((user_secret_key, credential, commitment_key)) = credential_record {
       AssetRecord::from_template_with_identity_tracking(prng,
@@ -725,7 +725,7 @@ impl TransferOperationBuilder {
     blinds: &mut ((Scalar, Scalar), Scalar))
     -> Result<&mut Self, PlatformError> {
     if self.transfer.is_some() {
-      return Err(PlatformError::InvariantError(Some("Cannot mutate a transfer that has been signed".to_string())));
+      return Err(inv_fail!("Cannot mutate a transfer that has been signed".to_string()));
     }
     let (ar, amount_blinds, type_blind) =
       if let Some((user_secret_key, credential, commitment_key)) = credential_record {
@@ -778,7 +778,7 @@ impl TransferOperationBuilder {
   pub fn balance(&mut self) -> Result<&mut Self, PlatformError> {
     let mut prng = ChaChaRng::from_entropy();
     if self.transfer.is_some() {
-      return Err(PlatformError::InvariantError(Some("Cannot mutate a transfer that has been signed".to_string())));
+      return Err(inv_fail!("Cannot mutate a transfer that has been signed".to_string()));
     }
     let spend_total: u64 = self.spend_amounts.iter().sum();
     let mut partially_consumed_inputs = Vec::new();
@@ -854,7 +854,7 @@ impl TransferOperationBuilder {
   // All input owners must sign eventually for the transaction to be valid.
   pub fn sign(&mut self, kp: &XfrKeyPair) -> Result<&mut Self, PlatformError> {
     if self.transfer.is_none() {
-      return Err(PlatformError::InvariantError(Some("Transaction has not yet been finalized".to_string())));
+      return Err(inv_fail!("Transaction has not yet been finalized".to_string()));
     }
     let mut new_transfer = self.transfer.as_ref().unwrap().clone();
     new_transfer.sign(&kp);
@@ -865,7 +865,7 @@ impl TransferOperationBuilder {
   // Return the transaction operation
   pub fn transaction(&self) -> Result<Operation, PlatformError> {
     if self.transfer.is_none() {
-      return Err(PlatformError::InvariantError(Some("Must create transfer".to_string())));
+      return Err(inv_fail!("Must create transfer".to_string()));
     }
     Ok(Operation::TransferAsset(self.transfer.clone().unwrap()))
   }
@@ -873,21 +873,21 @@ impl TransferOperationBuilder {
   // Checks to see whether all necessary signatures are present and valid
   pub fn validate_signatures(&mut self) -> Result<&mut Self, PlatformError> {
     if self.transfer.is_none() {
-      return Err(PlatformError::InvariantError(Some("Transaction has not yet been finalized".to_string())));
+      return Err(inv_fail!("Transaction has not yet been finalized".to_string()));
     }
 
     let trn = self.transfer.as_ref().unwrap();
     let mut sig_keys = HashSet::new();
     for sig in &trn.body_signatures {
       if !sig.verify(&serde_json::to_vec(&trn.body).unwrap()) {
-        return Err(PlatformError::InvariantError(Some("Invalid signature".to_string())));
+        return Err(inv_fail!("Invalid signature".to_string()));
       }
       sig_keys.insert(sig.address.key.zei_to_bytes());
     }
 
     for record in &trn.body.transfer.inputs {
       if !sig_keys.contains(&record.public_key.zei_to_bytes()) {
-        return Err(PlatformError::InvariantError(Some("Not all signatures present".to_string())));
+        return Err(inv_fail!("Not all signatures present".to_string()));
       }
     }
     Ok(self)
