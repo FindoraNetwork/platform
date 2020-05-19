@@ -2382,7 +2382,7 @@ pub mod txn_lib {
                            &issuer_key_pair,
                            asset_token,
                            &memo,
-                           asset_rules.clone(),
+                           asset_rules,
                            Some(txn_file))
         {
           Ok(_) => Ok(()),
