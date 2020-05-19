@@ -3,13 +3,25 @@ use abci::*;
 use cryptohash::sha256::Digest as BitDigest;
 use cryptohash::sha256::DIGESTBYTES;
 use ledger::data_model::errors::PlatformError;
+use ledger::data_model::Transaction;
 use ledger::store::*;
 use ledger_api_service::RestfulApiService;
+use log::info;
 use rand_chacha::ChaChaRng;
 use rand_core::SeedableRng;
 use std::sync::{Arc, RwLock};
 use std::thread;
-use submission_server::{convert_tx, NoTF, SubmissionServer}; // , TxnForward
+use submission_server::{convert_tx, NoTF, SubmissionServer, TxnForward};
+
+pub struct TendermintForward;
+
+impl TxnForward for TendermintForward {
+  fn forward_txn(&self, txn: Transaction) -> Result<(), PlatformError> {
+    // TODO (Nathan/John): Something useful.
+    info!("forward_txn: {}", serde_json::to_string(&txn)?);
+    Ok(())
+  }
+}
 
 struct ABCISubmissionServer {
   la: SubmissionServer<ChaChaRng, LedgerState, NoTF>,
