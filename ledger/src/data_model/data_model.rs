@@ -781,7 +781,7 @@ impl AuthenticatedBlock {
     let mut hash = HashValue::new();
     hash.hash.clone_from_slice(&digest.0);
 
-    if self.block_inclusion_proof.is_valid_proof(hash) {
+    if !self.block_inclusion_proof.is_valid_proof(hash) {
       return false;
     }
 
