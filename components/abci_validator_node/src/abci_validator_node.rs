@@ -9,22 +9,30 @@ use ledger_api_service::RestfulApiService;
 use log::info;
 use rand_chacha::ChaChaRng;
 use rand_core::SeedableRng;
+use std::process::Command;
 use std::sync::{Arc, RwLock};
 use std::thread;
-use submission_server::{convert_tx, NoTF, SubmissionServer, TxnForward};
+use submission_server::{convert_tx, SubmissionServer, TxnForward};
 
+#[derive(Default)]
 pub struct TendermintForward;
 
 impl TxnForward for TendermintForward {
   fn forward_txn(&self, txn: Transaction) -> Result<(), PlatformError> {
-    // TODO (Nathan/John): Something useful.
-    info!("forward_txn: {}", serde_json::to_string(&txn)?);
+    let txn_json = serde_json::to_string(&txn)?;
+    info!("forward_txn: {}", txn_json);
+    // TODO (Nathan/John): send txn_json to tendermint
+    let arg = format!("http://localhost:26657/broadcast_tx_commit?tx=\"{}\"",
+                      txn_json);
+    let result = Command::new("curl").args(&[arg]).output()?;
+    info!("stdout output: {:?}", result.stdout);
+    info!("stderr output: {:?}", result.stderr);
     Ok(())
   }
 }
 
 struct ABCISubmissionServer {
-  la: SubmissionServer<ChaChaRng, LedgerState, NoTF>,
+  la: SubmissionServer<ChaChaRng, LedgerState, TendermintForward>,
 }
 
 impl ABCISubmissionServer {
@@ -34,7 +42,7 @@ impl ABCISubmissionServer {
     Ok(ABCISubmissionServer { la:
                                 SubmissionServer::new_no_auto_commit(prng,
                                                                      Arc::new(RwLock::new(ledger)),
-                                                                     None)? })
+                                                                     Some(TendermintForward::default()))? })
   }
 }
 
