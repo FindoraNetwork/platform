@@ -1,9 +1,9 @@
 #![deny(warnings)]
 use crate::data_model::errors::PlatformError;
 use crate::data_model::*;
-use crate::error_location;
 use crate::policies::{compute_debt_swap_effect, DebtSwapEffect};
 use crate::policy_script::{run_txn_check, TxnCheckInputs, TxnPolicyData};
+use crate::{error_location, inv_fail};
 use credentials::credential_verify_commitment;
 use cryptohash::sha256;
 use cryptohash::sha256::Digest as BitDigest;
@@ -460,27 +460,27 @@ impl HasInvariants<PlatformError> for TxnEffect {
       for op in self.txn.operations.iter() {
         if let Operation::TransferAsset(trn) = op {
           if trn.body.inputs.len() != trn.body.transfer.inputs.len() {
-            return Err(PlatformError::InvariantError(None));
+            return Err(inv_fail!());
           }
           for (ix, inp_record) in trn.body.inputs.iter().zip(trn.body.transfer.inputs.iter()) {
             if let TxoRef::Absolute(input_tid) = ix {
               if input_tid == txo_sid {
                 if inp_record != record {
-                  return Err(PlatformError::InvariantError(None));
+                  return Err(inv_fail!());
                 }
                 if found {
-                  return Err(PlatformError::InvariantError(None));
+                  return Err(inv_fail!());
                 }
                 found = true;
               }
             } else if inp_record == record {
-              return Err(PlatformError::InvariantError(None));
+              return Err(inv_fail!());
             }
           }
         }
       }
       if !found {
-        return Err(PlatformError::InvariantError(None));
+        return Err(inv_fail!());
       }
     }
 
@@ -491,7 +491,7 @@ impl HasInvariants<PlatformError> for TxnEffect {
     {
       // Slightly cheating
       if TxnEffect::compute_effect(self.txn.clone())? != *self {
-        return Err(PlatformError::InvariantError(None));
+        return Err(inv_fail!());
       }
     }
 

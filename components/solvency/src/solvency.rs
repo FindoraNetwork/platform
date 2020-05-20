@@ -4,7 +4,7 @@ use curve25519_dalek::ristretto::{CompressedRistretto, RistrettoPoint};
 use curve25519_dalek::scalar::Scalar;
 use ledger::data_model::errors::PlatformError;
 use ledger::data_model::AssetTypeCode;
-use ledger::error_location;
+use ledger::{des_fail, error_location};
 use linear_map::LinearMap;
 use serde::{Deserialize, Serialize};
 use txn_cli::txn_lib::query_utxo_and_get_amount;
@@ -220,7 +220,7 @@ impl SolvencyAudit {
   /// Must not be used before `prove_solvency_and_store`.
   pub fn verify_solvency(&self, account: &AssetAndLiabilityAccount) -> Result<(), PlatformError> {
     let proof = if let Some(p) = &account.proof {
-      R1CSProof::from_bytes(p).or(Err(PlatformError::DeserializationError))?
+      R1CSProof::from_bytes(p).or_else(|e| Err(des_fail!(e)))?
     } else {
       println!("Prove the solvency first.");
       return Err(PlatformError::InputsError(error_location!()));

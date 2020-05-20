@@ -61,7 +61,7 @@ impl Code {
       let buf = <[u8; 16]>::try_from(bin.as_slice()).unwrap();
       Ok(Self { val: buf })
     } else {
-      Err(PlatformError::DeserializationError)
+      Err(PlatformError::DeserializationError(error_location!()))
     }
   }
   pub fn to_base64(&self) -> String {
@@ -781,7 +781,7 @@ impl AuthenticatedBlock {
     let mut hash = HashValue::new();
     hash.hash.clone_from_slice(&digest.0);
 
-    if self.block_inclusion_proof.is_valid_proof(hash) {
+    if !self.block_inclusion_proof.is_valid_proof(hash) {
       return false;
     }
 
