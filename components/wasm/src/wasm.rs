@@ -4,7 +4,6 @@
 // To compile wasm package, run wasm-pack build in the wasm directory;
 #![deny(warnings)]
 use crate::wasm_data_model::*;
-use core::fmt::Display;
 use credentials::{
   credential_commit, credential_issuer_key_gen, credential_reveal, credential_sign,
   credential_user_key_gen, credential_verify, CredIssuerPublicKey, CredIssuerSecretKey,
@@ -12,9 +11,7 @@ use credentials::{
 };
 use cryptohash::sha256;
 use js_sys::Promise;
-use ledger::data_model::{
-  b64dec, b64enc, AssetRules, AssetTypeCode, AuthenticatedTransaction, Operation,
-};
+use ledger::data_model::{b64enc, AssetTypeCode, AuthenticatedTransaction, Operation};
 use ledger::policies::{DebtMemo, Fraction};
 use rand_chacha::ChaChaRng;
 use rand_core::SeedableRng;
@@ -23,6 +20,7 @@ use txn_builder::{
   BuildsTransactions, PolicyChoice, TransactionBuilder as PlatformTransactionBuilder,
   TransferOperationBuilder as PlatformTransferOperationBuilder,
 };
+use util::error_to_jsvalue;
 use utils::HashOf;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::future_to_promise;
@@ -35,6 +33,7 @@ use zei::xfr::lib::trace_assets as zei_trace_assets;
 use zei::xfr::sig::{XfrKeyPair, XfrMultiSig, XfrPublicKey};
 use zei::xfr::structs::{AssetRecordTemplate, AssetTracingPolicy, XfrBody, XfrNote};
 
+mod util;
 mod wasm_data_model;
 
 /////////// TRANSACTION BUILDING ////////////////
@@ -170,23 +169,28 @@ impl TransactionBuilder {
   /// @param {XfrKeyPair} key_pair -  Issuer XfrKeyPair.
   /// @param {string} memo - Text field for asset definition.
   /// @param {string} token_code - Optional Base64 string representing the token code of the asset to be issued
+  /// @param {AssetRules} asset_rules - Asset rules object specifying which simple policies apply
+  /// to the asset.
   /// If empty, a token code will be chosen at random.
   pub fn add_operation_create_asset(self,
                                     key_pair: &XfrKeyPair,
                                     memo: String,
-                                    token_code: String)
+                                    token_code: String,
+                                    asset_rules: AssetRules)
                                     -> Result<TransactionBuilder, JsValue> {
     self.add_operation_create_asset_with_policy(key_pair,
                                                 memo,
                                                 token_code,
-                                                create_default_policy_info())
+                                                create_default_policy_info(),
+                                                asset_rules)
   }
 
   pub fn add_operation_create_asset_with_policy(mut self,
                                                 key_pair: &XfrKeyPair,
                                                 memo: String,
                                                 token_code: String,
-                                                policy_choice: String)
+                                                policy_choice: String,
+                                                asset_rules: AssetRules)
                                                 -> Result<TransactionBuilder, JsValue> {
     let asset_token = if token_code.is_empty() {
       AssetTypeCode::gen_random()
@@ -200,7 +204,7 @@ impl TransactionBuilder {
     self.get_builder_mut()
         .add_operation_create_asset(&key_pair,
                                     Some(asset_token),
-                                    AssetRules::default().set_traceable(true).clone(),
+                                    asset_rules.rules,
                                     &memo,
                                     policy_choice)
         .map_err(error_to_jsvalue)?;
@@ -225,20 +229,20 @@ impl TransactionBuilder {
   /// Use this function for simple one-shot issuances.
   ///
   /// @param {XfrKeyPair} key_pair  - Issuer XfrKeyPair.
-  /// @param {AssetTracerKeyPair} tracer keypair - Optional tracking public key. Pass in tracing key or null. Used to decrypt amounts
+  /// @param {AssetTracerKeyPair} tracer keypair - Tracking public key. Used to decrypt amounts
   /// and types of traced assets.
   /// @param {string} code - Base64 string representing the token code of the asset to be issued.
   /// @param {BigInt} seq_num - Issuance sequence number. Every subsequent issuance of a given asset type must have a higher sequence number than before.
   /// @param {BigInt} amount - Amount to be issued.
   #[allow(clippy::too_many_arguments)]
-  pub fn add_basic_issue_asset(mut self,
-                               key_pair: &XfrKeyPair,
-                               tracing_key: &AssetTracerKeyPair,
-                               code: String,
-                               seq_num: u64,
-                               amount: u64,
-                               conf_amount: bool)
-                               -> Result<TransactionBuilder, JsValue> {
+  pub fn add_basic_issue_asset_with_tracking(mut self,
+                                             key_pair: &XfrKeyPair,
+                                             tracing_key: &AssetTracerKeyPair,
+                                             code: String,
+                                             seq_num: u64,
+                                             amount: u64,
+                                             conf_amount: bool)
+                                             -> Result<TransactionBuilder, JsValue> {
     let asset_token = AssetTypeCode::new_from_base64(&code)
              .map_err(|_e| JsValue::from_str("Could not deserialize asset token code"))?;
 
@@ -252,6 +256,40 @@ impl TransactionBuilder {
     self.get_builder_mut()
         .add_basic_issue_asset(&key_pair,
                                tracing_policy,
+                               &asset_token,
+                               seq_num,
+                               amount,
+                               confidentiality_flags)
+        .map_err(error_to_jsvalue)?;
+    Ok(self)
+  }
+
+  /// Wraps around TransactionBuilder to add an asset issuance to a transaction builder instance.
+  ///
+  /// Use this function for simple one-shot issuances.
+  ///
+  /// @param {XfrKeyPair} key_pair  - Issuer XfrKeyPair.
+  /// and types of traced assets.
+  /// @param {string} code - Base64 string representing the token code of the asset to be issued.
+  /// @param {BigInt} seq_num - Issuance sequence number. Every subsequent issuance of a given asset type must have a higher sequence number than before.
+  /// @param {BigInt} amount - Amount to be issued.
+  #[allow(clippy::too_many_arguments)]
+  pub fn add_basic_issue_asset_without_tracking(mut self,
+                                                key_pair: &XfrKeyPair,
+                                                code: String,
+                                                seq_num: u64,
+                                                amount: u64,
+                                                conf_amount: bool)
+                                                -> Result<TransactionBuilder, JsValue> {
+    let asset_token = AssetTypeCode::new_from_base64(&code)
+             .map_err(|_e| JsValue::from_str("Could not deserialize asset token code"))?;
+
+    // TODO: (keyao/noah) enable client support for identity
+    // tracking?
+    let confidentiality_flags = AssetRecordType::from_booleans(conf_amount, false);
+    self.get_builder_mut()
+        .add_basic_issue_asset(&key_pair,
+                               None,
                                &asset_token,
                                seq_num,
                                amount,
@@ -585,8 +623,8 @@ pub fn public_key_to_base64(key: &XfrPublicKey) -> String {
 
 #[wasm_bindgen]
 /// Converts a base64 encoded public key string to a public key.
-pub fn public_key_from_base64(key_pair: String) -> XfrPublicKey {
-  XfrPublicKey::zei_from_bytes(&b64dec(&key_pair).unwrap())
+pub fn public_key_from_base64(key_pair: String) -> Result<XfrPublicKey, JsValue> {
+  util::public_key_from_base64(key_pair)
 }
 
 #[wasm_bindgen]
@@ -821,10 +859,6 @@ pub fn wasm_credential_user_key_gen(issuer_pub_key: &CredIssuerPublicKey) -> Cre
   CredentialUserKeyPair { pk, sk }
 }
 
-fn error_to_jsvalue<T: Display>(e: T) -> JsValue {
-  JsValue::from_str(&format!("{}", e))
-}
-
 /// Generates a signature on user attributes that can be used to create a credential.
 /// @param {CredIssuerSecretKey} issuer_secret_key - Secret key of credential issuer.
 /// @param {CredUserPublicKey} user_public_key - Public key of credential user.
@@ -967,6 +1001,6 @@ pub fn trace_assets(xfr_body: JsValue,
 pub fn test() {
   let kp = new_keypair();
   let b64 = public_key_to_base64(kp.get_pk_ref());
-  let pk = public_key_from_base64(b64);
+  let pk = public_key_from_base64(b64).unwrap();
   dbg!(pk);
 }
