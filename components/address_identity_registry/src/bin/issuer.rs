@@ -20,7 +20,8 @@ async fn main() {
     // this only shows access logs.
     env::set_var("RUST_LOG", "issuer=info");
   }
-  pretty_env_logger::init();
+
+  flexi_logger::Logger::with_env().start().unwrap();
 
   let db = models::make_db();
 

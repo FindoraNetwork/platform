@@ -1,20 +1,20 @@
 #![deny(warnings)]
 use crate::data_model::errors::PlatformError;
 use crate::data_model::*;
-use crate::error_location;
 use crate::policies::{compute_debt_swap_effect, DebtSwapEffect};
 use crate::policy_script::{run_txn_check, TxnCheckInputs, TxnPolicyData};
+use crate::{error_location, inv_fail};
 use credentials::credential_verify_commitment;
 use cryptohash::sha256;
 use cryptohash::sha256::Digest as BitDigest;
-use findora::HasInvariants;
-use rand_core::{CryptoRng, RngCore, SeedableRng};
+use serde::Serialize;
 use sparse_merkle_tree::Key;
 use std::collections::{HashMap, HashSet};
+use utils::HasInvariants;
+use zei::api::anon_creds::ACCommitment;
 use zei::serialization::ZeiFromToBytes;
-use zei::xfr::lib::verify_xfr_body_no_policies;
-use zei::xfr::sig::XfrSignature;
-use zei::xfr::structs::{AssetTracingPolicy, BlindAssetRecord, XfrAmount, XfrAssetType};
+use zei::xfr::sig::{XfrPublicKey, XfrSignature};
+use zei::xfr::structs::{AssetTracingPolicy, BlindAssetRecord, XfrAmount, XfrAssetType, XfrBody};
 
 pub const KV_ENTRY_MAX_SIZE: usize = 1024;
 
@@ -42,46 +42,65 @@ pub struct TxnEffect {
   // if there is an issuance cap
   pub confidential_issuance_types: HashSet<AssetTypeCode>,
   // Which asset tracing policy is being used to issue each asset type
-  pub issuance_tracing_policies: HashMap<AssetTypeCode, Option<AssetTracingPolicy>>,
+  // We store two tracing policies for each asset type
+  // * The first policy contains the encryption keys, asset tracing flag, and identity tracing poicy
+  // * The second policy doesn't inclue an identity tracing policy
+  // This allows us to transfer an asset when there's no identity requirement
+  pub issuance_tracing_policies:
+    HashMap<AssetTypeCode, Option<(AssetTracingPolicy, AssetTracingPolicy)>>,
   // Mapping of (op index, xfr input idx) tuples to set of valid signature keys
   // i.e. (2, 1) -> { AlicePk, BobPk } means that Alice and Bob both have valid signatures on the 2nd input of the 1st
   // operation
   pub cosig_keys: HashMap<(usize, usize), HashSet<Vec<u8>>>,
+  // Identity tracing commitments of transfer inputs
+  pub transfer_input_commitments: Vec<Option<ACCommitment>>,
+  // Identity tracing commitments of transfer outputs
+  pub transfer_output_commitments: Vec<Option<ACCommitment>>,
+  // Encrypted transfer body
+  pub transfer_body: Option<Box<XfrBody>>,
   // Debt swap information that must be externally validated
   pub debt_effects: HashMap<AssetTypeCode, DebtSwapEffect>,
+  // Non-confidential asset types involved in confidential transfers
+  pub confidential_transfer_inputs: HashSet<AssetTypeCode>,
 
   pub asset_types_involved: HashSet<AssetTypeCode>,
   pub custom_policy_asset_types: HashMap<AssetTypeCode, TxnCheckInputs>,
   // Updates to the AIR
   pub air_updates: HashMap<String, String>,
-
   // User-provided Key-Value store updates
   pub kv_updates: HashMap<Key, Vec<(XfrSignature, u64, Option<KVEntry>)>>,
+  // Memo updates
+  pub memo_updates: Vec<(AssetTypeCode, XfrPublicKey, Memo)>,
 }
 
 // Internally validates the transaction as well.
 // If the transaction is invalid, it is dropped, so if you need to inspect
 // the transaction in order to diagnose the error, clone it first!
+#[allow(clippy::cognitive_complexity)]
 impl TxnEffect {
-  pub fn compute_effect<R: CryptoRng + RngCore>(prng: &mut R,
-                                                txn: Transaction)
-                                                -> Result<TxnEffect, PlatformError> {
+  pub fn compute_effect(txn: Transaction) -> Result<TxnEffect, PlatformError> {
     let mut txo_count: usize = 0;
     let mut op_idx: usize = 0;
     let mut txos: Vec<Option<TxOutput>> = Vec::new();
     let mut internally_spent_txos = Vec::new();
     let mut input_txos: HashMap<TxoSID, BlindAssetRecord> = HashMap::new();
+    let mut memo_updates = Vec::new();
     let mut new_asset_codes: HashMap<AssetTypeCode, AssetType> = HashMap::new();
     let mut cosig_keys = HashMap::new();
     let mut new_issuance_nums: HashMap<AssetTypeCode, Vec<u64>> = HashMap::new();
     let mut issuance_keys: HashMap<AssetTypeCode, IssuerPublicKey> = HashMap::new();
     let mut issuance_amounts = HashMap::new();
-    let mut issuance_tracing_policies: HashMap<AssetTypeCode, Option<AssetTracingPolicy>> =
+    let mut issuance_tracing_policies: HashMap<AssetTypeCode,
+                                               Option<(AssetTracingPolicy, AssetTracingPolicy)>> =
       HashMap::new();
+    let mut transfer_input_commitments = Vec::new();
+    let mut transfer_output_commitments = Vec::new();
+    let mut transfer_body: Option<Box<XfrBody>> = None;
     let mut debt_effects: HashMap<AssetTypeCode, DebtSwapEffect> = HashMap::new();
     let mut asset_types_involved: HashSet<AssetTypeCode> = HashSet::new();
     let mut confidential_issuance_types = HashSet::new();
     let mut kv_updates = HashMap::<Key, Vec<(XfrSignature, u64, Option<KVEntry>)>>::new();
+    let mut confidential_transfer_inputs = HashSet::new();
 
     let custom_policy_asset_types = txn.policy_options
                                        .clone()
@@ -175,7 +194,7 @@ impl TxnEffect {
                           &Transaction::default())?;
           }
 
-          issuance_keys.insert(code, token.properties.issuer.clone());
+          issuance_keys.insert(code, token.properties.issuer);
           new_asset_codes.insert(code, token);
           new_issuance_nums.insert(code, vec![]);
         }
@@ -209,8 +228,7 @@ impl TxnEffect {
 
           // (1), within this transaction
           //let v = vec![];
-          let iss_nums = new_issuance_nums.entry(code)
-                                          .or_insert_with(std::vec::Vec::new);
+          let iss_nums = new_issuance_nums.entry(code).or_insert_with(Vec::new);
 
           if let Some(last_num) = iss_nums.last() {
             if seq_num <= *last_num {
@@ -231,7 +249,7 @@ impl TxnEffect {
               return Err(PlatformError::InputsError(error_location!()));
             }
           } else {
-            issuance_keys.insert(code, iss.pubkey.clone());
+            issuance_keys.insert(code, iss.pubkey);
           }
           // Increment amounts
           txos.reserve(iss.body.records.len());
@@ -258,7 +276,14 @@ impl TxnEffect {
           }
 
           // (6)
-          issuance_tracing_policies.insert(code, iss.body.tracing_policy.clone());
+          let policies = match &iss.body.tracing_policy {
+            Some(policy) => Some((policy.clone(),
+                                  AssetTracingPolicy { enc_keys: policy.enc_keys.clone(),
+                                                       asset_tracking: policy.asset_tracking,
+                                                       identity_tracking: None })),
+            None => None,
+          };
+          issuance_tracing_policies.insert(code, policies);
         }
 
         // An asset transfer is valid iff:
@@ -269,7 +294,7 @@ impl TxnEffect {
         //          - Partially checked here -- anything which hasn't
         //            been checked will appear in `input_txos`
         //     3) The zei transaction is valid.
-        //          - Fully checked here
+        //          - Checked here and in check_txn_effects
         Operation::TransferAsset(trn) => {
           if trn.body.inputs.len() != trn.body.transfer.inputs.len() {
             return Err(PlatformError::InputsError(error_location!()));
@@ -326,18 +351,17 @@ impl TxnEffect {
           }
           // (3)
           // TODO: implement real policies
-          verify_xfr_body_no_policies(prng, &trn.body.transfer)
-              .map_err(|e| PlatformError::ZeiError(error_location!(),e))?;
+          transfer_input_commitments = trn.body.input_identity_commitments.clone();
+          transfer_output_commitments = trn.body.output_identity_commitments.clone();
+          transfer_body = Some(trn.body.transfer.clone());
 
+          let mut input_types = HashSet::new();
           for (inp, record) in trn.body.inputs.iter().zip(trn.body.transfer.inputs.iter()) {
-            // Until we can distinguish assets that have policies that invoke transfer restrictions
-            // from those that don't, no confidential types are allowed
-            if record.asset_type.get_asset_type().is_none() {
-              return Err(PlatformError::InputsError(error_location!()));
-            }
-
+            // NOTE: We assume that any confidential-type asset records
+            // have no atypical transfer restrictions. Be careful!
             if let Some(inp_code) = record.asset_type.get_asset_type() {
-              asset_types_involved.insert(AssetTypeCode { val: inp_code });
+              input_types.insert(AssetTypeCode { val: inp_code });
+              //asset_types_involved.insert(AssetTypeCode { val: inp_code });
             }
 
             // (2), checking within this transaction and recording
@@ -375,17 +399,23 @@ impl TxnEffect {
           }
 
           txos.reserve(trn.body.transfer.outputs.len());
+          let mut conf_transfer = false;
           for out in trn.body.transfer.outputs.iter() {
-            // Until we can distinguish assets that have policies that invoke transfer restrictions
-            // from those that don't, no confidential types are allowed
-            if out.asset_type.get_asset_type().is_none() {
-              return Err(PlatformError::InputsError(error_location!()));
+            if let XfrAssetType::Confidential(_) = out.asset_type {
+              conf_transfer = true;
             }
             if let Some(out_code) = out.asset_type.get_asset_type() {
               asset_types_involved.insert(AssetTypeCode { val: out_code });
             }
             txos.push(Some(TxOutput(out.clone())));
             txo_count += 1;
+          }
+          // Until we can distinguish assets that have policies that invoke transfer restrictions
+          // from those that don't, make note of all non-confidential inputs of confidential
+          // transfers
+          asset_types_involved.extend(&input_types);
+          if conf_transfer {
+            confidential_transfer_inputs.extend(&input_types);
           }
         }
 
@@ -404,8 +434,21 @@ impl TxnEffect {
           // 2)
           credential_verify_commitment(issuer_pk, commitment, pok, pk.as_bytes())
               .map_err(|e| PlatformError::ZeiError(error_location!(),e))?;
-          air_updates.insert(serde_json::to_string(&pk)?,
+          air_updates.insert(serde_json::to_string(&air_assign.body.addr)?,
                              serde_json::to_string(commitment)?);
+        }
+        // A memo update is valid iff:
+        // 1) The signature is valid.
+        // 2) The asset type is updatable (checked later).
+        // 3) The signing key is the asset issuer key (checked later).
+        Operation::UpdateMemo(update_memo) => {
+          let pk = update_memo.pubkey;
+          // 1)
+          pk.verify(&serde_json::to_vec(&update_memo.body).unwrap(),
+                    &update_memo.signature)
+            .map_err(|e| PlatformError::ZeiError(error_location!(), e))?;
+
+          memo_updates.push((update_memo.body.asset_type, pk, update_memo.body.new_memo.clone()));
         }
       } // end -- match op {
       op_idx += 1;
@@ -418,10 +461,15 @@ impl TxnEffect {
                    internally_spent_txos,
                    new_asset_codes,
                    new_issuance_nums,
+                   memo_updates,
                    issuance_keys,
+                   confidential_transfer_inputs,
                    issuance_amounts,
                    confidential_issuance_types,
                    issuance_tracing_policies,
+                   transfer_input_commitments,
+                   transfer_output_commitments,
+                   transfer_body,
                    debt_effects,
                    asset_types_involved,
                    custom_policy_asset_types,
@@ -444,27 +492,27 @@ impl HasInvariants<PlatformError> for TxnEffect {
       for op in self.txn.operations.iter() {
         if let Operation::TransferAsset(trn) = op {
           if trn.body.inputs.len() != trn.body.transfer.inputs.len() {
-            return Err(PlatformError::InvariantError(None));
+            return Err(inv_fail!());
           }
           for (ix, inp_record) in trn.body.inputs.iter().zip(trn.body.transfer.inputs.iter()) {
             if let TxoRef::Absolute(input_tid) = ix {
               if input_tid == txo_sid {
                 if inp_record != record {
-                  return Err(PlatformError::InvariantError(None));
+                  return Err(inv_fail!());
                 }
                 if found {
-                  return Err(PlatformError::InvariantError(None));
+                  return Err(inv_fail!());
                 }
                 found = true;
               }
             } else if inp_record == record {
-              return Err(PlatformError::InvariantError(None));
+              return Err(inv_fail!());
             }
           }
         }
       }
       if !found {
-        return Err(PlatformError::InvariantError(None));
+        return Err(inv_fail!());
       }
     }
 
@@ -474,9 +522,8 @@ impl HasInvariants<PlatformError> for TxnEffect {
     // TODO(joe): other checks?
     {
       // Slightly cheating
-      let mut prng = rand_chacha::ChaChaRng::from_entropy();
-      if TxnEffect::compute_effect(&mut prng, self.txn.clone())? != *self {
-        return Err(PlatformError::InvariantError(None));
+      if TxnEffect::compute_effect(self.txn.clone())? != *self {
+        return Err(inv_fail!());
       }
     }
 
@@ -506,11 +553,15 @@ pub struct BlockEffect {
   pub issuance_amounts: HashMap<AssetTypeCode, u64>,
   // Which public key is being used to issue each asset type
   pub issuance_keys: HashMap<AssetTypeCode, IssuerPublicKey>,
+  // Which new tracing policies are being added
+  pub new_tracing_policies:
+    HashMap<AssetTypeCode, Option<(AssetTracingPolicy, AssetTracingPolicy)>>,
   // Updates to the AIR
   pub air_updates: HashMap<String, String>,
-
   // User-provided Key-Value store updates
   pub kv_updates: HashMap<Key, Vec<(XfrSignature, u64, Option<KVEntry>)>>,
+  // Memo updates
+  pub memo_updates: HashMap<AssetTypeCode, Memo>,
 }
 
 impl BlockEffect {
@@ -528,6 +579,7 @@ impl BlockEffect {
   //   if `txn` would not interfere with any transaction in the block, the
   //       new temp SID representing the transaction.
   //   Otherwise, Err(...)
+  #[allow(clippy::cognitive_complexity)]
   pub fn add_txn_effect(&mut self, txn: TxnEffect) -> Result<TxnTempSID, PlatformError> {
     // Check that KV updates are independent
     for (k, _) in txn.kv_updates.iter() {
@@ -566,6 +618,12 @@ impl BlockEffect {
           debug_assert!(txn.issuance_keys.contains_key(&type_code));
         }
       }
+      // Ensure that each asset's memo can only be updated once per block
+      for (type_code, _, _) in txn.memo_updates.iter() {
+        if self.memo_updates.contains_key(&type_code) {
+          return Err(PlatformError::InputsError(error_location!()));
+        }
+      }
     }
 
     // == All validation done, apply `txn` to this block ==
@@ -599,9 +657,26 @@ impl BlockEffect {
       *issuance_amount += amount;
     }
 
+    for (type_code, tracing_policies) in txn.issuance_tracing_policies.iter() {
+      debug_assert!(!self.new_tracing_policies.contains_key(type_code));
+      match tracing_policies {
+        Some(_) => {
+          self.new_tracing_policies
+              .insert(*type_code, tracing_policies.clone());
+        }
+        None => {
+          self.new_tracing_policies.insert(*type_code, None);
+        }
+      }
+    }
+
     for (addr, data) in txn.air_updates {
       debug_assert!(!self.air_updates.contains_key(&addr));
       self.air_updates.insert(addr, data);
+    }
+
+    for (code, _, memo) in txn.memo_updates {
+      self.memo_updates.insert(code, memo);
     }
 
     Ok(temp_sid)

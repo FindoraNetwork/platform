@@ -2,6 +2,7 @@
 use cryptohash::sha256;
 use ledger::data_model::errors::PlatformError;
 use ledger::data_model::{Operation, Transaction, TxnSID, TxnTempSID, TxoSID};
+use ledger::error_location;
 use ledger::store::*;
 use log::info;
 use rand_core::{CryptoRng, RngCore};
@@ -9,6 +10,15 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fmt;
 use std::sync::{Arc, RwLock};
+
+macro_rules! fail {
+  () => {
+    PlatformError::SubmissionServerError(error_location!())
+  };
+  ($s:expr) => {
+    PlatformError::SubmissionServerError(format!("[{}] {}", &error_location!(), &$s))
+  };
+}
 
 // Query handle for user
 #[derive(Debug, Hash, Eq, PartialEq, Clone, Serialize, Deserialize)]
@@ -34,6 +44,12 @@ pub enum TxnStatus {
   Pending,
 }
 
+pub enum CommitMode {
+  FullBlock,
+  EveryTransaction, // Every submission is committed as soon as it arrives.
+  Manual,           // Somebody else calls commit. Not this code.
+}
+
 pub struct SubmissionServer<RNG, LU>
   where RNG: RngCore + CryptoRng,
         LU: LedgerUpdate<RNG> + LedgerAccess + ArchiveAccess
@@ -44,6 +60,7 @@ pub struct SubmissionServer<RNG, LU>
   txn_status: HashMap<TxnHandle, TxnStatus>,
   block_capacity: usize,
   prng: RNG,
+  commit_mode: CommitMode,
 }
 
 impl<RNG, LU> SubmissionServer<RNG, LU>
@@ -59,7 +76,19 @@ impl<RNG, LU> SubmissionServer<RNG, LU>
                           txn_status: HashMap::new(),
                           pending_txns: vec![],
                           prng,
-                          block_capacity })
+                          block_capacity,
+                          commit_mode: CommitMode::FullBlock })
+  }
+  pub fn new_no_auto_commit(prng: RNG,
+                            ledger_state: Arc<RwLock<LU>>)
+                            -> Result<SubmissionServer<RNG, LU>, PlatformError> {
+    Ok(SubmissionServer { committed_state: ledger_state,
+                          block: None,
+                          txn_status: HashMap::new(),
+                          pending_txns: vec![],
+                          prng,
+                          block_capacity: 0,
+                          commit_mode: CommitMode::Manual })
   }
 
   pub fn get_txn_status(&self, txn_handle: &TxnHandle) -> Option<TxnStatus> {
@@ -70,10 +99,12 @@ impl<RNG, LU> SubmissionServer<RNG, LU>
     self.block.is_none()
   }
 
-  // TODO (Keyao): Determine the condition
-  // Commit for a certain number of transactions or time duration?
   pub fn eligible_to_commit(&self) -> bool {
-    self.pending_txns.len() == self.block_capacity
+    match self.commit_mode {
+      CommitMode::FullBlock => self.pending_txns.len() == self.block_capacity,
+      CommitMode::EveryTransaction => true,
+      CommitMode::Manual => false,
+    }
   }
 
   pub fn get_prng(&mut self) -> &mut RNG {
@@ -128,14 +159,14 @@ impl<RNG, LU> SubmissionServer<RNG, LU>
       assert!(self.block.is_none());
       return Ok(());
     }
-    Err(PlatformError::SubmissionServerError(Some("Cannot finish block because there are no pending txns".into())))
+    Err(fail!("Cannot finish block because there are no pending txns"))
   }
 
   pub fn cache_transaction(&mut self, txn: Transaction) -> Result<TxnHandle, PlatformError> {
     if let Some(block) = &mut self.block {
       if let Ok(ledger) = self.committed_state.read() {
         let handle = TxnHandle::new(&txn);
-        let txn_effect = TxnEffect::compute_effect(&mut self.prng, txn)?;
+        let txn_effect = TxnEffect::compute_effect(txn)?;
         self.pending_txns
             .push((ledger.apply_transaction(block, txn_effect)?, handle.clone()));
         self.txn_status.insert(handle.clone(), TxnStatus::Pending);
@@ -144,7 +175,7 @@ impl<RNG, LU> SubmissionServer<RNG, LU>
       }
     }
 
-    Err(PlatformError::SubmissionServerError(Some("Transaction is invalid and cannot be added to pending txn list.".into())))
+    Err(fail!("Transaction is invalid and cannot be added to pending txn list."))
   }
 
   pub fn abort_block(&mut self) {
@@ -197,8 +228,14 @@ pub fn txn_log_info(txn: &Transaction) {
               xfr_asset_op.body.num_outputs);
       }
       Operation::AIRAssign(air_assign_op) => {
-        info!("Assigning to AIR: AIR[{:?}] <- {:?}",
-              air_assign_op.body.addr, air_assign_op.body.data);
+        info!("Assigning to AIR: AIR[{}] <- {:?}",
+              serde_json::to_string(&air_assign_op.body.addr).unwrap(),
+              air_assign_op.body.data);
+      }
+      Operation::UpdateMemo(update_memo) => {
+        info!("Updating memo of asset type {} to {}",
+              update_memo.body.asset_type.to_base64(),
+              update_memo.body.new_memo.0);
       }
     };
   }

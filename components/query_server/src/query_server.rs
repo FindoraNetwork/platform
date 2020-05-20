@@ -3,12 +3,22 @@ use ledger::data_model::errors::PlatformError;
 use ledger::data_model::{
   FinalizedTransaction, Operation, TransferAsset, TxoRef, TxoSID, XfrAddress,
 };
+use ledger::error_location;
 use ledger::store::*;
 use log::info;
 use rand_core::{CryptoRng, RngCore};
 use std::collections::{HashMap, HashSet};
 use std::marker::PhantomData;
 use std::sync::{Arc, RwLock};
+
+macro_rules! fail {
+  () => {
+    PlatformError::QueryServerError(error_location!())
+  };
+  ($s:expr) => {
+    PlatformError::QueryServerError(format!("[{}] {}", &error_location!(), &$s))
+  };
+}
 
 const PORT: usize = 8668;
 
@@ -48,13 +58,13 @@ impl<RNG, LU> QueryServer<RNG, LU>
         TxoRef::Absolute(txo_sid) => {
           let address = self.utxos_to_map_index
                             .get(&txo_sid)
-                            .ok_or_else(|| PlatformError::QueryServerError(Some("Attempting to remove owned txo of address that isn't cached".into())))?;
+                            .ok_or_else(|| fail!("Attempting to remove owned txo of address that isn't cached"))?;
           let hash_set = self.addresses_to_utxos
                              .get_mut(&address)
-                             .ok_or_else(|| PlatformError::QueryServerError(Some("No txos stored for this address".into())))?;
+                             .ok_or_else(|| fail!("No txos stored for this address"))?;
           let removed = hash_set.remove(&txo_sid);
           if !removed {
-            return Err(PlatformError::QueryServerError(Some("Input txo not found".into())));
+            return Err(fail!("Input txo not found"));
           }
         }
       }
@@ -79,12 +89,14 @@ impl<RNG, LU> QueryServer<RNG, LU>
                                                  &latest_block))
     {
       Err(_) => {
-        return Err(PlatformError::QueryServerError(Some("Cannot connect to ledger server".into())));
+        return Err(fail!("Cannot connect to ledger server"));
       }
 
       Ok(mut bs) => match bs.json::<Vec<(usize, Vec<FinalizedTransaction>)>>() {
-        Err(_) => {
-          return Err(PlatformError::DeserializationError);
+        Err(e) => {
+          return Err(PlatformError::DeserializationError(format!("[{}]: {:?}",
+                                                                 &error_location!(),
+                                                                 e)));
         }
         Ok(bs) => bs,
       },
@@ -97,7 +109,7 @@ impl<RNG, LU> QueryServer<RNG, LU>
         info!("Received block {}", bid);
         let mut block_builder = ledger.start_block().unwrap();
         for txn in block {
-          let eff = TxnEffect::compute_effect(ledger.get_prng(), txn.txn.clone()).unwrap();
+          let eff = TxnEffect::compute_effect(txn.txn.clone()).unwrap();
           ledger.apply_transaction(&mut block_builder, eff).unwrap();
         }
 
@@ -209,9 +221,9 @@ mod tests {
                                                                    token_code.val,
                                                                    oar.get_record_type(),
                                                                    bob.get_pk());
-    let xfr_op = xfr_builder.add_input(TxoRef::Absolute(transfer_sid), oar, amt)
+    let xfr_op = xfr_builder.add_input(TxoRef::Absolute(transfer_sid), oar, None, None, amt)
                             .unwrap()
-                            .add_output(&out_template, None)
+                            .add_output(&out_template, None, None, None)
                             .unwrap()
                             .create(TransferType::Standard)
                             .unwrap()

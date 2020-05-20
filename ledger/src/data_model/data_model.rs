@@ -8,7 +8,6 @@ use credentials::{CredCommitment, CredIssuerPublicKey, CredPoK, CredUserPublicKe
 use cryptohash::sha256::Digest as BitDigest;
 use cryptohash::{sha256, HashValue, Proof};
 use errors::PlatformError;
-use itertools::Itertools;
 use rand_chacha::ChaChaRng;
 use rand_core::{CryptoRng, RngCore, SeedableRng};
 use serde::{de::Visitor, Deserialize, Deserializer, Serialize, Serializer};
@@ -20,11 +19,10 @@ use std::collections::{HashMap, HashSet};
 use std::convert::TryFrom;
 use std::hash::{Hash, Hasher};
 use std::marker::PhantomData;
+use zei::api::anon_creds::ACCommitment;
 use zei::xfr::lib::gen_xfr_body;
 use zei::xfr::sig::{XfrKeyPair, XfrPublicKey, XfrSecretKey, XfrSignature};
-use zei::xfr::structs::{
-  AssetRecord, AssetTracingPolicy, BlindAssetRecord, OpenAssetRecord, XfrBody,
-};
+use zei::xfr::structs::{AssetRecord, AssetTracingPolicy, BlindAssetRecord, XfrBody};
 
 pub fn b64enc<T: ?Sized + AsRef<[u8]>>(input: &T) -> String {
   base64::encode_config(input, base64::URL_SAFE)
@@ -77,7 +75,7 @@ impl Code {
       let buf = <[u8; 16]>::try_from(bin.as_slice()).unwrap();
       Ok(Self { val: buf })
     } else {
-      Err(PlatformError::DeserializationError)
+      Err(PlatformError::DeserializationError(error_location!()))
     }
   }
   pub fn to_base64(&self) -> String {
@@ -266,13 +264,15 @@ impl SignatureRules {
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 /// Simple asset rules:
 /// 1) Traceable: Records of traceable assets can be decrypted by a provided tracking key
-/// 2) Transferable: Non-transferable assets can only be transferred once from the issuer to
+/// 2) Identity traceable: Records of identity traceable assets can be decrypted by a provided tracking key
+/// 3) Transferable: Non-transferable assets can only be transferred once from the issuer to
 ///    another user.
-/// 3) Max units: Optional limit on total issuance amount.
-/// 4) Transfer signature rules: Signature weights and threshold for a valid transfer.
+/// 4) Max units: Optional limit on total issuance amount.
+/// 5) Transfer signature rules: Signature weights and threshold for a valid transfer.
 pub struct AssetRules {
   pub traceable: bool,
   pub transferable: bool,
+  pub updatable: bool,
   pub transfer_multisig_rules: Option<SignatureRules>,
   pub max_units: Option<u64>,
 }
@@ -280,6 +280,7 @@ impl Default for AssetRules {
   fn default() -> Self {
     AssetRules { traceable: false,
                  transferable: true,
+                 updatable: false,
                  max_units: None,
                  transfer_multisig_rules: None }
   }
@@ -298,6 +299,11 @@ impl AssetRules {
 
   pub fn set_transferable(&mut self, transferable: bool) -> &mut Self {
     self.transferable = transferable;
+    self
+  }
+
+  pub fn set_updatable(&mut self, updatable: bool) -> &mut Self {
+    self.updatable = updatable;
     self
   }
 
@@ -338,6 +344,23 @@ pub struct AssetType {
 impl AssetType {
   pub fn has_issuance_restrictions(&self) -> bool {
     self.properties.asset_rules.max_units.is_some()
+  }
+
+  pub fn has_transfer_restrictions(&self) -> bool {
+    let simple_asset: Asset = {
+      let mut ret: Asset = Default::default();
+      let asset = &self.properties;
+
+      ret.code = asset.code;
+      ret.issuer = asset.issuer;
+      ret.memo = asset.memo.clone();
+      ret.confidential_memo = asset.confidential_memo;
+      // Only relevant for issue operations
+      ret.asset_rules.max_units = asset.asset_rules.max_units;
+
+      ret
+    };
+    self.properties != simple_asset
   }
 }
 
@@ -402,7 +425,15 @@ pub enum TxoRef {
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct TransferAssetBody {
   pub inputs: Vec<TxoRef>, // Ledger address of inputs
-  pub num_outputs: usize,  // How many output TXOs?
+  // Input asset tracing policies and signature commitments
+  #[serde(default)]
+  #[serde(skip_serializing_if = "is_default")]
+  pub input_identity_commitments: Vec<Option<ACCommitment>>,
+  pub num_outputs: usize, // How many output TXOs?
+  // Output asset tracing policies and signature commitments
+  #[serde(default)]
+  #[serde(skip_serializing_if = "is_default")]
+  pub output_identity_commitments: Vec<Option<ACCommitment>>,
   // TODO(joe): we probably don't need the whole XfrNote with input records
   // once it's on the chain
   pub transfer: Box<XfrBody>, // Encrypted transfer note
@@ -411,20 +442,20 @@ pub struct TransferAssetBody {
 impl TransferAssetBody {
   pub fn new<R: CryptoRng + RngCore>(prng: &mut R,
                                      input_refs: Vec<TxoRef>,
-                                     input_records: &[OpenAssetRecord],
-                                     output_records: &[AssetRecord])
+                                     input_records: &[AssetRecord],
+                                     input_identity_commitments: Vec<Option<ACCommitment>>,
+                                     output_records: &[AssetRecord],
+                                     output_identity_commitments: Vec<Option<ACCommitment>>)
                                      -> Result<TransferAssetBody, errors::PlatformError> {
     if input_records.is_empty() {
       return Err(PlatformError::InputsError(error_location!()));
     }
-    let in_records =
-      input_records.iter()
-                   .map(|oar| AssetRecord::from_open_asset_record_no_asset_tracking(oar.clone()))
-                   .collect_vec();
-    let note = Box::new(gen_xfr_body(prng, in_records.as_slice(), output_records)
+    let note = Box::new(gen_xfr_body(prng, input_records, output_records)
         .map_err(|e| PlatformError::ZeiError(error_location!(),e))?);
     Ok(TransferAssetBody { inputs: input_refs,
+                           input_identity_commitments,
                            num_outputs: output_records.len(),
+                           output_identity_commitments,
                            transfer: note })
   }
 
@@ -515,6 +546,13 @@ impl DefineAssetBody {
     Ok(DefineAssetBody { asset: asset_def })
   }
 }
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct UpdateMemoBody {
+  pub new_memo: Memo,
+  pub asset_type: AssetTypeCode,
+}
+
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct AIRAssignBody {
   pub addr: CredUserPublicKey,
@@ -529,7 +567,10 @@ impl AIRAssignBody {
              issuer_pk: CredIssuerPublicKey,
              pok: CredPoK)
              -> Result<AIRAssignBody, errors::PlatformError> {
-    Ok(AIRAssignBody { addr, data, issuer_pk, pok })
+    Ok(AIRAssignBody { addr,
+                       data,
+                       issuer_pk,
+                       pok })
   }
 }
 
@@ -628,6 +669,24 @@ impl DefineAsset {
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct UpdateMemo {
+  pub body: UpdateMemoBody,
+  pub pubkey: XfrPublicKey,
+  pub signature: XfrSignature,
+}
+
+impl UpdateMemo {
+  pub fn new(update_memo_body: UpdateMemoBody, signing_key: &XfrKeyPair) -> UpdateMemo {
+    let sign = compute_signature(signing_key.get_sk_ref(),
+                                 signing_key.get_pk_ref(),
+                                 &update_memo_body);
+    UpdateMemo { body: update_memo_body,
+                 pubkey: *signing_key.get_pk_ref(),
+                 signature: sign }
+  }
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct AIRAssign {
   pub body: AIRAssignBody,
   pub pubkey: XfrPublicKey,
@@ -648,7 +707,7 @@ impl AIRAssign {
 // pub const KV_BLOCK_SIZE: usize = 4*(1<<10);
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct KVEntry(pub XfrPublicKey, pub Vec<u8>);
+pub struct KVEntry(pub XfrPublicKey, pub Vec<u8>); // TODO replace Vec<u8> with hash
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct KVUpdate {
@@ -683,6 +742,7 @@ pub enum Operation {
   TransferAsset(TransferAsset),
   IssueAsset(IssueAsset),
   DefineAsset(DefineAsset),
+  UpdateMemo(UpdateMemo),
   AIRAssign(AIRAssign),
   KVStoreUpdate(KVUpdate),
   // ... etc...
@@ -1080,7 +1140,9 @@ mod tests {
                              owners_memos: vec![] };
 
     let assert_transfer_body = TransferAssetBody { inputs: Vec::new(),
+                                                   input_identity_commitments: Vec::new(),
                                                    num_outputs: 0,
+                                                   output_identity_commitments: Vec::new(),
                                                    transfer: Box::new(xfr_note) };
 
     let asset_transfer = TransferAsset { body: assert_transfer_body,

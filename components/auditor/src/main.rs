@@ -29,6 +29,7 @@
 //!
 //! The two nodes then connect.
 
+#![deny(warnings)]
 use async_std::{io, task};
 use clap::{App, Arg, ArgMatches};
 use cryptohash::sha256::Digest as BitDigest;
@@ -40,6 +41,7 @@ use libp2p::{
   swarm::NetworkBehaviourEventProcess,
   Multiaddr, NetworkBehaviour, PeerId, Swarm,
 };
+use log::{error, info, warn};
 use serde_derive::{Deserialize, Serialize};
 use std::{
   collections::{HashMap, HashSet},
@@ -85,18 +87,19 @@ fn parse_args() -> ArgMatches<'static> {
 struct ConsensusState {
   this_state: KeyAndState,
   matches: HashSet<PeerId>,
-  mismatches: HashMap<PeerId, KeyAndState>,
+  valid: HashMap<PeerId, KeyAndState>,
+  invalid: HashMap<PeerId, KeyAndState>,
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
-  env_logger::init();
+  flexi_logger::Logger::with_env().start().unwrap();
 
   let args = parse_args();
   // Creating an identity Keypair for the local node, obtaining the local PeerId from the PublicKey.
   // Create a random PeerId
   let local_key = identity::Keypair::generate_ed25519();
   let local_peer_id = PeerId::from(local_key.public());
-  println!("Local peer id: {:?}", local_peer_id);
+  info!("Local peer id: {:?}", local_peer_id);
 
   // Creating an instance of a base Transport, e.g. TcpConfig, upgrading it with all the desired protocols,
   // such as for transport security and multiplexing. In order to be usable with a Swarm later, the Output
@@ -107,13 +110,14 @@ fn main() -> Result<(), Box<dyn Error>> {
   // Set up a an encrypted DNS-enabled TCP Transport over the Mplex and Yamux protocols
   let transport = libp2p::build_development_transport(local_key)?;
 
+  let client = reqwest::blocking::Client::new();
   // Create a Floodsub topic
   let floodsub_topic = floodsub::Topic::new("ledger auditor");
 
   // Read signed commitment from ledger
   let (protocol, host) = protocol_host();
-  let resp_gs =
-    attohttpc::get(&format!("{}://{}:{}/global_state", protocol, host, QUERY_PORT)).send()?;
+  let resp_gs = client.get(&format!("{}://{}:{}/global_state", protocol, host, QUERY_PORT))
+                      .send()?;
   let (comm, idx, sig): (BitDigest, u64, XfrSignature) =
     serde_json::from_str(&resp_gs.text()?[..]).unwrap();
   let idx = if args.is_present("poison") {
@@ -121,15 +125,16 @@ fn main() -> Result<(), Box<dyn Error>> {
   } else {
     idx
   };
-  println!("Got ({:?}, {}, {:?}) from global_state", comm, idx, sig);
+  info!("Got ({:?}, {}, {:?}) from global_state", comm, idx, sig);
   // Read signed commitment from ledger
-  let resp_pk =
-    attohttpc::get(&format!("{}://{}:{}/public_key", protocol, host, QUERY_PORT)).send()?;
+  let resp_pk = client.get(&format!("{}://{}:{}/public_key", protocol, host, QUERY_PORT))
+                      .send()?;
   let pk: XfrPublicKey = serde_json::from_str(&resp_pk.text()?[..]).unwrap();
-  println!("Got {:?} from public_key", pk);
+  info!("Got {:?} from public_key", pk);
+
   match pk.verify(&serde_json::to_vec(&(comm, idx)).unwrap(), &sig) {
-    Ok(()) => println!("Verification succeeded"),
-    Err(zei_err) => println!("Verification failed with error = {}", zei_err),
+    Ok(()) => info!("Verification succeeded"),
+    Err(zei_err) => error!("Verification failed with error = {}", zei_err),
   };
 
   let key_and_state: KeyAndState = KeyAndState { public_key: pk,
@@ -137,7 +142,8 @@ fn main() -> Result<(), Box<dyn Error>> {
   let ks_str = serde_json::to_string(&key_and_state).unwrap();
   let consensus_state = ConsensusState { this_state: key_and_state,
                                          matches: HashSet::new(),
-                                         mismatches: HashMap::new() };
+                                         valid: HashMap::new(),
+                                         invalid: HashMap::new() };
   // Creating a struct that implements the NetworkBehaviour trait and combines all the desired network behaviours,
   // implementing the event handlers as per the desired application's networking logic.
   // We create a custom network behaviour that combines floodsub and mDNS.
@@ -161,26 +167,53 @@ fn main() -> Result<(), Box<dyn Error>> {
         let msg_str = String::from_utf8_lossy(&message.data);
         let received = serde_json::from_str::<KeyAndState>(&msg_str);
         match received {
+          //
           Ok(ks) => {
             if ks == self.consensus_state.this_state {
               if !self.consensus_state.matches.contains(&message.source) {
                 self.consensus_state.matches.insert(message.source.clone());
-                println!("Received matching signed commitment from {:?}",
-                         message.source);
+                info!("Received matching signed commitment from {:?}",
+                      message.source);
               }
-            } else if !self.consensus_state
-                           .mismatches
-                           .contains_key(&message.source)
-            {
-              self.consensus_state
-                  .mismatches
-                  .insert(message.source.clone(), ks.clone());
-              println!("Received nonmatching signed commitment \n{:?}\nfrom {:?}",
-                       ks, message.source)
+            } else {
+              let (comm, idx, sig) = ks.global_state.clone();
+              let (_, this_idx, _) = self.consensus_state.this_state.global_state;
+              if idx != this_idx {
+                match self.consensus_state
+                          .this_state
+                          .public_key
+                          .verify(&serde_json::to_vec(&(comm, idx)).unwrap(), &sig)
+                {
+                  Ok(()) => {
+                    if !self.consensus_state.valid.contains_key(&message.source) {
+                      self.consensus_state
+                          .valid
+                          .insert(message.source.clone(), ks);
+                      info!("Received valid non-matching signed commitment from {:?}",
+                            message.source);
+                    }
+                  }
+                  Err(zei_err) => {
+                    if !self.consensus_state.invalid.contains_key(&message.source) {
+                      self.consensus_state
+                          .invalid
+                          .insert(message.source.clone(), ks.clone());
+                      info!("Received invalid signed commitment {:?} from {}, err = {:?}",
+                            ks, message.source, zei_err);
+                    }
+                  }
+                };
+              } else if !self.consensus_state.invalid.contains_key(&message.source) {
+                self.consensus_state
+                    .invalid
+                    .insert(message.source.clone(), ks.clone());
+                warn!("Received invalid signed commitment \n{:?}\nfrom {:?}",
+                      ks, message.source);
+              }
             }
           }
           _ => {
-            println!("Received: '{:?}' from {:?}", msg_str, message.source);
+            error!("Received: '{:?}' from {:?}", msg_str, message.source);
           }
         }
       }
@@ -224,7 +257,7 @@ fn main() -> Result<(), Box<dyn Error>> {
   if let Some(to_dial) = args.value_of("dial") {
     let addr: Multiaddr = to_dial.parse()?;
     Swarm::dial_addr(&mut swarm, addr)?;
-    println!("Dialed {:?}", to_dial)
+    info!("Dialed {:?}", to_dial)
   }
 
   // Read full lines from stdin
@@ -256,16 +289,16 @@ fn main() -> Result<(), Box<dyn Error>> {
                    loop {
                      match swarm.poll_next_unpin(cx) {
                        Poll::Ready(Some(event)) => {
-                         println!("{:?}", event);
+                         info!("{:?}", event);
                        }
                        Poll::Ready(None) => return Poll::Ready(Ok(())),
                        Poll::Pending => {
                          if !listening {
                            for addr in Swarm::listeners(&swarm) {
-                             println!("Listening on {:?}", addr);
+                             info!("Listening on {:?}", addr);
                            }
                            listening = true;
-                           println!("********************************************************************************\n");
+                           info!("********************************************************************************\n");
                          }
                          thread::sleep(pause_time);
                          swarm.floodsub

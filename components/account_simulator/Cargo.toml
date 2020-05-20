@@ -4,13 +4,13 @@ version = "0.1.0"
 authors = ["Nathan Yospe <nathan@eian.io>"]
 edition = "2018"
 
-[lib]
+[[bin]]
+name = "account_simulator"
 path = "src/account_simulator.rs"
 
 [dependencies]
 ledger = { path = "../../ledger", features = ["TESTING"] }
 submission_server = { path = "../submission_server" }
-findora = { path = "../../findora" }
 zei = { git = "ssh://git@github.com/findoraorg/zei", tag = "v0.0.2-4" }
 actix-web = "1.0.8"
 actix-service = "0.4.2"
@@ -24,8 +24,9 @@ percent-encoding = "2.1.0"
 reqwest = "0.9.24"
 lazy_static = "1.4.0"
 subprocess = "0.1.18"
-
+structopt = { version = "0.3" }
+quickcheck = "0.9"
+utils = { path = "../../libs/utils" }
 [dev-dependencies]
-quickcheck = "0.8"
-quickcheck_macros = "0.8"
+quickcheck_macros = "0.9"
 

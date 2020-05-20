@@ -454,7 +454,7 @@ mod tests {
     let asset_create = asset_creation_operation(&asset_body, &public_key, &secret_key);
     tx.operations.push(Operation::DefineAsset(asset_create));
 
-    let effect = TxnEffect::compute_effect(state.get_prng(), tx).unwrap();
+    let effect = TxnEffect::compute_effect(tx).unwrap();
     {
       let mut block = state.start_block().unwrap();
       state.apply_transaction(&mut block, effect).unwrap();
@@ -503,7 +503,7 @@ mod tests {
     let asset_create = asset_creation_operation(&asset_body, &public_key, &secret_key);
     tx.operations.push(Operation::DefineAsset(asset_create));
 
-    let effect = TxnEffect::compute_effect(state.get_prng(), tx).unwrap();
+    let effect = TxnEffect::compute_effect(tx).unwrap();
     {
       let mut block = state.start_block().unwrap();
       state.apply_transaction(&mut block, effect).unwrap();
@@ -548,7 +548,7 @@ mod tests {
     let asset_create = asset_creation_operation(&asset_body, &public_key, &secret_key);
     tx.operations.push(Operation::DefineAsset(asset_create));
 
-    let effect = TxnEffect::compute_effect(state.get_prng(), tx).unwrap();
+    let effect = TxnEffect::compute_effect(tx).unwrap();
     {
       let mut block = state.start_block().unwrap();
       state.apply_transaction(&mut block, effect).unwrap();

@@ -1,9 +1,10 @@
+#![deny(warnings)]
 use fs2::FileExt;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs::File;
-use std::io::Error;
-use std::io::ErrorKind;
 use std::io::Result;
+use utils::er;
 
 /// Define a type for a key for the hashmap.  A version of a
 /// transaction has a name and a sequence number.
@@ -56,7 +57,7 @@ impl TransactionDictionary {
     let result = match bincode::deserialize_from(data) {
       Ok(result) => result,
       Err(e) => {
-        return er!("{}", e);
+        return er(format!("{}", e));
       }
     };
 
@@ -69,7 +70,7 @@ impl TransactionDictionary {
     let copy = data.duplicate();
 
     if let Err(e) = bincode::serialize_into(data, &self) {
-      return er!("{}", e);
+      return er(format!("{}", e));
     }
 
     if let Ok(file) = copy {

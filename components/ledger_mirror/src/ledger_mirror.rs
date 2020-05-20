@@ -19,7 +19,7 @@ fn main() {
 
   let base_dir = std::env::var_os("LEDGER_DIR").filter(|x| !x.is_empty());
   let base_dir = base_dir.as_ref().map(Path::new);
-  env_logger::init();
+  flexi_logger::Logger::with_env().start().unwrap();
   let ledger_state = match base_dir {
     None => LedgerState::test_ledger(),
     Some(base_dir) => LedgerState::load_or_init(base_dir).unwrap(),
@@ -78,7 +78,7 @@ fn main() {
       let mut block_builder = ledger.start_block().unwrap();
       for txn in block {
         let txn = txn.txn;
-        let eff = TxnEffect::compute_effect(ledger.get_prng(), txn).unwrap();
+        let eff = TxnEffect::compute_effect(txn).unwrap();
         ledger.apply_transaction(&mut block_builder, eff).unwrap();
       }
       ledger.finish_block(block_builder).unwrap();

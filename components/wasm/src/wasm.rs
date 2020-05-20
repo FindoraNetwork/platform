@@ -4,7 +4,6 @@
 // To compile wasm package, run wasm-pack build in the wasm directory;
 #![deny(warnings)]
 use crate::wasm_data_model::*;
-use bulletproofs::PedersenGens;
 use core::fmt::Display;
 use credentials::{
   credential_commit, credential_issuer_key_gen, credential_reveal, credential_sign,
@@ -13,8 +12,6 @@ use credentials::{
 };
 use cryptohash::sha256;
 use cryptohash::sha256::Digest as BitDigest;
-use curve25519_dalek::ristretto::RistrettoPoint;
-use curve25519_dalek::scalar::Scalar;
 use js_sys::Promise;
 use ledger::data_model::{
   b64dec, b64enc, AssetRules, AssetTypeCode, AuthenticatedTransaction, Operation,
@@ -31,12 +28,12 @@ use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::future_to_promise;
 use wasm_bindgen_futures::JsFuture;
 use web_sys::{Request, RequestInit, RequestMode};
-use zei::api::anon_creds::ac_confidential_gen_encryption_keys;
-use zei::basic_crypto::elgamal::{elgamal_key_gen, ElGamalEncKey};
+
 use zei::serialization::ZeiFromToBytes;
 use zei::xfr::asset_record::{open_blind_asset_record as open_bar, AssetRecordType};
-use zei::xfr::sig::{XfrKeyPair, XfrPublicKey};
-use zei::xfr::structs::{AssetRecordTemplate, AssetTracerEncKeys, AssetTracingPolicy};
+use zei::xfr::lib::trace_assets as zei_trace_assets;
+use zei::xfr::sig::{XfrKeyPair, XfrMultiSig, XfrPublicKey};
+use zei::xfr::structs::{AssetRecordTemplate, AssetTracingPolicy, XfrBody, XfrNote};
 
 mod wasm_data_model;
 
@@ -203,7 +200,7 @@ impl TransactionBuilder {
     self.get_builder_mut()
         .add_operation_create_asset(&key_pair,
                                     Some(asset_token),
-                                    AssetRules::default(),
+                                    AssetRules::default().set_traceable(true).clone(),
                                     &memo,
                                     policy_choice)
         .map_err(error_to_jsvalue)?;
@@ -228,38 +225,30 @@ impl TransactionBuilder {
   /// Use this function for simple one-shot issuances.
   ///
   /// @param {XfrKeyPair} key_pair  - Issuer XfrKeyPair.
-  /// @param {string} elgamal_pub_key  - Optional tracking public key. Pass in serialized tracking key or "".
+  /// @param {AssetTracerKeyPair} tracer keypair - Optional tracking public key. Pass in tracing key or null. Used to decrypt amounts
+  /// and types of traced assets.
   /// @param {string} code - Base64 string representing the token code of the asset to be issued.
   /// @param {BigInt} seq_num - Issuance sequence number. Every subsequent issuance of a given asset type must have a higher sequence number than before.
   /// @param {BigInt} amount - Amount to be issued.
   #[allow(clippy::too_many_arguments)]
   pub fn add_basic_issue_asset(mut self,
                                key_pair: &XfrKeyPair,
-                               elgamal_pub_key: String,
+                               tracing_key: &AssetTracerKeyPair,
                                code: String,
                                seq_num: u64,
                                amount: u64,
-                               conf_amount: bool,
-                               conf_asset_type: bool)
+                               conf_amount: bool)
                                -> Result<TransactionBuilder, JsValue> {
     let asset_token = AssetTypeCode::new_from_base64(&code)
              .map_err(|_e| JsValue::from_str("Could not deserialize asset token code"))?;
 
-    // construct asset tracing policy
-    let tracing_policy = if elgamal_pub_key.is_empty() {
-      None
-    } else {
-      let pk = serde_json::from_str::<ElGamalEncKey<RistrettoPoint>>(&elgamal_pub_key).map_err(|_e| JsValue::from_str("could not deserialize elgamal key"))?;
-      let mut small_rng = ChaChaRng::from_entropy();
-      let (_, id_reveal_pub_key) = ac_confidential_gen_encryption_keys(&mut small_rng);
-      let issuer_keys = AssetTracerEncKeys { record_data_enc_key: pk,
-                                             attrs_enc_key: id_reveal_pub_key };
-      Some(AssetTracingPolicy { enc_keys: issuer_keys,
-                                asset_tracking: true,
-                                identity_tracking: None })
-    };
+    // TODO: (keyao/noah) enable client support for identity
+    // tracking?
+    let tracing_policy = Some(AssetTracingPolicy { enc_keys: tracing_key.get_enc_key().clone(),
+                                                   asset_tracking: true,
+                                                   identity_tracking: None });
 
-    let confidentiality_flags = AssetRecordType::from_booleans(conf_amount, conf_asset_type);
+    let confidentiality_flags = AssetRecordType::from_booleans(conf_amount, false);
     self.get_builder_mut()
         .add_basic_issue_asset(&key_pair,
                                tracing_policy,
@@ -348,26 +337,12 @@ impl TransferOperationBuilder {
   }
 }
 
-#[wasm_bindgen]
 impl TransferOperationBuilder {
-  /// Create a new transfer operation builder.
-  pub fn new() -> Self {
-    Self::default()
-  }
-
-  /// Wraps around TransferOperationBuilder to add an input to a transfer operation builder.
-  /// @param {TxoRef} txo_ref - Absolute or relative utxo reference
-  /// @param {string} oar - Serializez opened asset record to serve as transfer input. This record must exist on the
-  /// ledger for the transfer to be valid
-  /// @param {BigInt} amount - Amount of input record to transfer
-  /// @see {@link create_absolute_txo_ref} or {@link create_relative_txo_ref} for details on txo
-  /// references.
-  /// @see {@link get_txo} for details on fetching blind asset records.
-  /// @throws Will throw an error if `oar` or `txo_ref` fail to deserialize.
   pub fn add_input(mut self,
                    txo_ref: TxoRef,
                    asset_record: ClientAssetRecord,
                    owner_memo: Option<OwnerMemo>,
+                   tracing_key: Option<&AssetTracerKeyPair>,
                    key: &XfrKeyPair,
                    amount: u64)
                    -> Result<TransferOperationBuilder, JsValue> {
@@ -376,9 +351,131 @@ impl TransferOperationBuilder {
                &owner_memo.map(|memo| memo.get_memo_ref().clone()),
                key.get_sk_ref()).map_err(|_e| JsValue::from_str("Could not open asset record"))?;
     self.get_builder_mut()
-        .add_input(*txo_ref.get_txo(), oar, amount)
+        .add_input(*txo_ref.get_txo(),
+                   oar,
+                   tracing_key.map(|key| AssetTracingPolicy { enc_keys: key.get_enc_key()
+                                                                           .clone(),
+                                                              asset_tracking: true,
+                                                              identity_tracking: None }),
+                   None,
+                   amount)
         .map_err(error_to_jsvalue)?;
     Ok(self)
+  }
+
+  pub fn add_output(mut self,
+                    amount: u64,
+                    recipient: &XfrPublicKey,
+                    tracing_key: Option<&AssetTracerKeyPair>,
+                    code: String,
+                    conf_amount: bool,
+                    conf_type: bool)
+                    -> Result<TransferOperationBuilder, JsValue> {
+    let code = AssetTypeCode::new_from_base64(&code).map_err(error_to_jsvalue)?;
+
+    let asset_record_type = AssetRecordType::from_booleans(conf_amount, conf_type);
+    // TODO (noah/keyao) support identity tracing (issue #298)
+    let template = if let Some(key) = tracing_key {
+      AssetRecordTemplate::with_asset_tracking(amount,
+                                               code.val,
+                                               asset_record_type,
+                                               *recipient,
+                                               AssetTracingPolicy { enc_keys: key.get_enc_key()
+                                                                                 .clone(),
+                                                                    asset_tracking: true,
+                                                                    identity_tracking: None })
+    } else {
+      AssetRecordTemplate::with_no_asset_tracking(amount, code.val, asset_record_type, *recipient)
+    };
+    self.get_builder_mut()
+        .add_output(&template, None, None, None)
+        .map_err(error_to_jsvalue)?;
+    Ok(self)
+  }
+}
+
+#[wasm_bindgen]
+impl TransferOperationBuilder {
+  /// Create a new transfer operation builder.
+  pub fn new() -> Self {
+    Self::default()
+  }
+
+  pub fn debug(&self) -> String {
+    serde_json::to_string(&self.op_builder).unwrap()
+  }
+
+  /// Wraps around TransferOperationBuilder to add an input to a transfer operation builder.
+  /// @param {TxoRef} txo_ref - Absolute or relative utxo reference
+  /// @param {string} oar - Serialized opened asset record to serve as transfer input. This record must exist on the
+  /// ledger for the transfer to be valid
+  /// @param {BigInt} amount - Amount of input record to transfer
+  /// @param tracing_key {AssetTracerKeyPair} - Tracing key, must be added to traceable
+  /// assets.
+  /// @see {@link create_absolute_txo_ref} or {@link create_relative_txo_ref} for details on txo
+  /// references.
+  /// @see {@link get_txo} for details on fetching blind asset records.
+  /// @throws Will throw an error if `oar` or `txo_ref` fail to deserialize.
+  pub fn add_input_with_tracking(self,
+                                 txo_ref: TxoRef,
+                                 asset_record: ClientAssetRecord,
+                                 owner_memo: Option<OwnerMemo>,
+                                 tracing_key: &AssetTracerKeyPair,
+                                 key: &XfrKeyPair,
+                                 amount: u64)
+                                 -> Result<TransferOperationBuilder, JsValue> {
+    self.add_input(txo_ref,
+                   asset_record,
+                   owner_memo,
+                   Some(tracing_key),
+                   key,
+                   amount)
+  }
+  /// Wraps around TransferOperationBuilder to add an input to a transfer operation builder.
+  /// @param {TxoRef} txo_ref - Absolute or relative utxo reference
+  /// @param {string} oar - Serialized opened asset record to serve as transfer input. This record must exist on the
+  /// ledger for the transfer to be valid
+  /// @param {BigInt} amount - Amount of input record to transfer
+  /// @see {@link create_absolute_txo_ref} or {@link create_relative_txo_ref} for details on txo
+  /// references.
+  /// @see {@link get_txo} for details on fetching blind asset records.
+  /// @throws Will throw an error if `oar` or `txo_ref` fail to deserialize.
+  // Note: these two functions are necessary because Wasm cannot handle optional references and I
+  // don't want any of the functions to take ownership of the tracing key.
+  pub fn add_input_no_tracking(self,
+                               txo_ref: TxoRef,
+                               asset_record: ClientAssetRecord,
+                               owner_memo: Option<OwnerMemo>,
+                               key: &XfrKeyPair,
+                               amount: u64)
+                               -> Result<TransferOperationBuilder, JsValue> {
+    self.add_input(txo_ref, asset_record, owner_memo, None, key, amount)
+  }
+
+  /// Wraps around TransferOperationBuilder to add an output to a transfer operation builder.
+  ///
+  /// @param {BigInt} amount - amount to transfer to the recipient
+  /// @param {XfrPublicKey} recipient - public key of the recipient
+  /// @param code {string} - String representaiton of the asset token code
+  /// @param conf_amount {bool} - Indicates whether output's amount is confidential
+  /// @param conf_type {bool} - Indicates whether output's asset type is confidential
+  /// @param tracing_key {AssetTracerKeyPair} - Optional tracing key, must be added to traced
+  /// assets.
+  /// @throws Will throw an error if `code` fails to deserialize.
+  pub fn add_output_with_tracking(self,
+                                  amount: u64,
+                                  recipient: &XfrPublicKey,
+                                  tracing_key: &AssetTracerKeyPair,
+                                  code: String,
+                                  conf_amount: bool,
+                                  conf_type: bool)
+                                  -> Result<TransferOperationBuilder, JsValue> {
+    self.add_output(amount,
+                    recipient,
+                    Some(&tracing_key),
+                    code,
+                    conf_amount,
+                    conf_type)
   }
 
   /// Wraps around TransferOperationBuilder to add an output to a transfer operation builder.
@@ -389,22 +486,14 @@ impl TransferOperationBuilder {
   /// @param conf_amount {bool} - Indicates whether output's amount is confidential
   /// @param conf_type {bool} - Indicates whether output's asset type is confidential
   /// @throws Will throw an error if `code` fails to deserialize.
-  pub fn add_output(mut self,
-                    amount: u64,
-                    recipient: &XfrPublicKey,
-                    code: String,
-                    conf_amount: bool,
-                    conf_type: bool)
-                    -> Result<TransferOperationBuilder, JsValue> {
-    let code = AssetTypeCode::new_from_base64(&code).map_err(error_to_jsvalue)?;
-
-    let asset_record_type = AssetRecordType::from_booleans(conf_amount, conf_type);
-    let template =
-      AssetRecordTemplate::with_no_asset_tracking(amount, code.val, asset_record_type, *recipient);
-    self.get_builder_mut()
-        .add_output(&template, None)
-        .map_err(error_to_jsvalue)?;
-    Ok(self)
+  pub fn add_output_no_tracking(self,
+                                amount: u64,
+                                recipient: &XfrPublicKey,
+                                code: String,
+                                conf_amount: bool,
+                                conf_type: bool)
+                                -> Result<TransferOperationBuilder, JsValue> {
+    self.add_output(amount, recipient, None, code, conf_amount, conf_type)
   }
 
   /// Wraps around TransferOperationBuilder to ensure the transfer inputs and outputs are balanced.
@@ -512,16 +601,6 @@ pub fn keypair_to_str(key_pair: &XfrKeyPair) -> String {
 /// The encode a key pair, use `keypair_to_str` function.
 pub fn keypair_from_str(str: String) -> XfrKeyPair {
   XfrKeyPair::zei_from_bytes(&hex::decode(str).unwrap())
-}
-
-#[wasm_bindgen]
-/// Generate tracking keys that can decrypt the asset type or amount of blinded records of a
-/// certain type.
-/// @ignore
-pub fn generate_elgamal_keys() -> String {
-  let mut small_rng = rand::thread_rng();
-  let pc_gens = PedersenGens::default();
-  serde_json::to_string(&elgamal_key_gen::<_, Scalar, RistrettoPoint>(&mut small_rng, &pc_gens.B)).unwrap()
 }
 
 #[wasm_bindgen]
@@ -849,6 +928,39 @@ pub fn wasm_credential_verify(issuer_pub_key: &CredIssuerPublicKey,
                     &reveal_sig.get_sig_ref().sig_commitment,
                     &reveal_sig.get_sig_ref().pok).map_err(error_to_jsvalue)?;
   Ok(())
+}
+
+// Asset Tracing
+
+#[wasm_bindgen]
+/// Returns information about traceable assets for a given transfer.
+/// @param {JsValue} xfr_note - JSON of a transfer note from a transfer operation.
+/// @param {AssetTracerKeyPair} - Asset tracer keypair.
+/// @param {JsValue} candidate_assets - List of asset types traced by the tracer keypair.
+pub fn trace_assets(xfr_body: JsValue,
+                    tracer_keypair: &AssetTracerKeyPair,
+                    candidate_assets: JsValue)
+                    -> Result<JsValue, JsValue> {
+  let candidate_assets: Vec<String> = candidate_assets.into_serde().map_err(error_to_jsvalue)?;
+  let xfr_body: XfrBody = xfr_body.into_serde().map_err(error_to_jsvalue)?;
+  let candidate_assets: Vec<[u8; 16]> =
+    candidate_assets.iter()
+                    .map(|asset_type_str| {
+                      AssetTypeCode::new_from_str(&asset_type_str.to_string()).val
+                    })
+                    .collect();
+  let record_data = zei_trace_assets(&XfrNote { body: xfr_body,
+                                                multisig: XfrMultiSig::default() },
+                                     tracer_keypair.get_keys(),
+                                     &candidate_assets).map_err(error_to_jsvalue)?;
+  let record_data: Vec<(u64, String)> = record_data.iter()
+                                                   .map(|(amt, asset_type, _, _)| {
+                                                     let asset_type_code =
+                                                       AssetTypeCode { val: *asset_type };
+                                                     (*amt, asset_type_code.to_base64())
+                                                   })
+                                                   .collect();
+  Ok(JsValue::from_serde(&record_data).unwrap())
 }
 
 #[test]

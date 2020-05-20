@@ -1,20 +1,23 @@
 #![deny(warnings)]
 pub mod txn_lib {
   use credentials::{
-    credential_issuer_key_gen, credential_keygen_commitment, credential_reveal, credential_sign,
-    credential_user_key_gen, credential_verify, CredCommitment, CredCommitmentKey, CredIssuerPublicKey,
-    CredIssuerSecretKey, CredPoK, CredUserPublicKey, CredUserSecretKey, Credential as WrapperCredential,
+    credential_commit, credential_issuer_key_gen, credential_sign, credential_user_key_gen,
+    u8_slice_to_u32_vec, CredCommitment, CredCommitmentKey, CredIssuerPublicKey,
+    CredIssuerSecretKey, CredPoK, CredUserPublicKey, CredUserSecretKey,
+    Credential as WrapperCredential,
   };
-  use env_logger::{Env, Target};
+  use curve25519_dalek::ristretto::CompressedRistretto;
+  use curve25519_dalek::scalar::Scalar;
   use ledger::data_model::errors::PlatformError;
   use ledger::data_model::{
     b64dec, AccountAddress, AssetRules, AssetTypeCode, TransferType, TxOutput, TxoRef, TxoSID,
   };
-  use ledger::error_location;
   use ledger::policies::{DebtMemo, Fraction};
+  use ledger::{des_fail, error_location, ser_fail};
+  use ledger_standalone::LedgerStandalone;
   use log::trace; // Other options: debug, info, warn
   use rand_chacha::ChaChaRng;
-  use rand_core::SeedableRng;
+  use rand_core::{CryptoRng, RngCore, SeedableRng};
   use serde::{Deserialize, Serialize};
   use sparse_merkle_tree::Key;
   use std::env;
@@ -28,7 +31,6 @@ pub mod txn_lib {
   use zei::api::anon_creds::{ac_confidential_open_commitment, Credential as ZeiCredential};
   use zei::serialization::ZeiFromToBytes;
   use zei::setup::PublicParams;
-  use zei::xfr::asset_record::AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType;
   use zei::xfr::asset_record::{
     build_blind_asset_record, open_blind_asset_record, AssetRecordType,
   };
@@ -36,7 +38,7 @@ pub mod txn_lib {
   use zei::xfr::sig::{XfrKeyPair, XfrPublicKey};
   use zei::xfr::structs::{
     AssetRecordTemplate, AssetTracerKeyPair, AssetTracerMemo, AssetTracingPolicy, BlindAssetRecord,
-    IdentityRevealPolicy, OpenAssetRecord, OwnerMemo,
+    IdentityRevealPolicy, OpenAssetRecord, OwnerMemo, XfrAmount, XfrAssetType,
   };
 
   extern crate exitcode;
@@ -96,8 +98,7 @@ pub mod txn_lib {
       "credentials": 0,
       "loans": [],
       "balance": 0,
-      "fiat_utxo": null,
-      "fiat_txn_file": null
+      "fiat_utxo": null
     }
   ],
   "credentials": [
@@ -271,9 +272,7 @@ pub mod txn_lib {
       // Generate asset tracer key pair
       let tracer_key_pair = gen_asset_tracer_keypair(&mut ChaChaRng::from_entropy());
       let tracer_key_pair_str =
-        serde_json::to_string(&tracer_key_pair).or_else(|_| {
-                                                 Err(PlatformError::SerializationError)
-                                               })?;
+        serde_json::to_string(&tracer_key_pair).or_else(|e| Err(ser_fail!(e)))?;
 
       Ok(AssetIssuer { id: id as u64,
                        name,
@@ -301,8 +300,7 @@ pub mod txn_lib {
                                   &[CredentialIndex::MinCreditScore.get_name_and_length(),
                                     CredentialIndex::MinIncome.get_name_and_length(),
                                     CredentialIndex::Citizenship.get_name_and_length()]);
-      let key_pair_str =
-        serde_json::to_vec(&key_pair).or_else(|_| Err(PlatformError::SerializationError))?;
+      let key_pair_str = serde_json::to_vec(&key_pair).or_else(|e| Err(ser_fail!(e)))?;
       Ok(CredentialIssuer { id: id as u64,
                             name,
                             key_pair: hex::encode(key_pair_str) })
@@ -359,8 +357,6 @@ pub mod txn_lib {
     balance: u64,
     /// Fiat asset UTXO (unspent transaction output) SIDs, if any
     fiat_utxo: Option<TxoSID>,
-    /// Path to the most recent fiat asset transaction file, if any
-    fiat_txn_file: Option<String>,
   }
 
   impl Borrower {
@@ -376,8 +372,7 @@ pub mod txn_lib {
                  credentials: None,
                  loans: Vec::new(),
                  balance: 0,
-                 fiat_utxo: None,
-                 fiat_txn_file: None }
+                 fiat_utxo: None }
     }
   }
 
@@ -427,8 +422,6 @@ pub mod txn_lib {
     code: Option<String>,
     /// Debt asset UTXO (unspent transaction output) SIDs, null if the loan isn't fulfilled     
     debt_utxo: Option<TxoSID>,
-    /// Path to the most recent debt asset transaction file, null if the loan isn't fulfilled     
-    debt_txn_file: Option<String>,
     /// Serialized anon_creds::Credential, null if the loan isn't fulfilled     
     credential: Option<String>,
     /// Serialized credential user secret key, if exists
@@ -459,7 +452,6 @@ pub mod txn_lib {
              payments: 0,
              code: None,
              debt_utxo: None,
-             debt_txn_file: None,
              credential: None,
              user_secret_key: None,
              signature: None,
@@ -494,6 +486,7 @@ pub mod txn_lib {
 
   impl Data {
     pub(crate) fn add_loan(&mut self,
+                           data_dir: &str,
                            lender: u64,
                            borrower: u64,
                            amount: u64,
@@ -505,42 +498,43 @@ pub mod txn_lib {
           .push(Loan::new(id, lender, borrower, amount, interest_per_mille, duration));
       self.lenders[lender as usize].loans.push(id as u64);
       self.borrowers[borrower as usize].loans.push(id as u64);
-      store_data_to_file(self.clone())
+      store_data_to_file(self.clone(), data_dir)
     }
 
-    pub(crate) fn add_asset_issuer(&mut self, name: String) -> Result<(), PlatformError> {
+    pub(crate) fn add_asset_issuer(&mut self,
+                                   data_dir: &str,
+                                   name: String)
+                                   -> Result<(), PlatformError> {
       let id = self.asset_issuers.len();
       self.asset_issuers.push(AssetIssuer::new(id, name.clone())?);
       println!("{}'s id is {}.", name, id);
-      store_data_to_file(self.clone())
+      store_data_to_file(self.clone(), data_dir)
     }
 
     pub(crate) fn get_asset_issuer_key_pair(&self, id: u64) -> Result<XfrKeyPair, PlatformError> {
       let key_pair_str = &self.asset_issuers[id as usize].key_pair;
-      Ok(XfrKeyPair::zei_from_bytes(&hex::decode(key_pair_str).or_else(|_| {
-                                     Err(PlatformError::DeserializationError)
-                                   })?))
+      Ok(XfrKeyPair::zei_from_bytes(&hex::decode(key_pair_str).or_else(|e| Err(ser_fail!(e)))?))
     }
 
     pub(crate) fn get_asset_tracer_key_pair(&self,
                                             id: u64)
                                             -> Result<AssetTracerKeyPair, PlatformError> {
       let tracer_key_pair_str = &self.asset_issuers[id as usize].tracer_key_pair;
-      let tracer_key_pair_decode =
-        hex::decode(tracer_key_pair_str).or_else(|_| Err(PlatformError::DeserializationError))?;
+      let tracer_key_pair_decode = hex::decode(tracer_key_pair_str).or_else(|e| Err(des_fail!(e)))?;
       let tracer_key_pair =
-        serde_json::from_slice(&tracer_key_pair_decode).or_else(|_| {
-                                                         Err(PlatformError::DeserializationError)
-                                                       })?;
+        serde_json::from_slice(&tracer_key_pair_decode).or_else(|e| Err(des_fail!(e)))?;
       Ok(tracer_key_pair)
     }
 
-    pub(crate) fn add_credential_issuer(&mut self, name: String) -> Result<(), PlatformError> {
+    pub(crate) fn add_credential_issuer(&mut self,
+                                        data_dir: &str,
+                                        name: String)
+                                        -> Result<(), PlatformError> {
       let id = self.credential_issuers.len();
       self.credential_issuers
           .push(CredentialIssuer::new(id, name.clone())?);
       println!("{}'s id is {}.", name, id);
-      store_data_to_file(self.clone())
+      store_data_to_file(self.clone(), data_dir)
     }
 
     pub(crate) fn get_credential_issuer_key_pair(
@@ -548,27 +542,21 @@ pub mod txn_lib {
       id: u64)
       -> Result<(CredIssuerPublicKey, CredIssuerSecretKey), PlatformError> {
       let key_pair_str = &self.credential_issuers[id as usize].key_pair;
-      let key_pair_decode =
-        hex::decode(key_pair_str).or_else(|_| Err(PlatformError::DeserializationError))?;
-      let key_pair =
-        serde_json::from_slice(&key_pair_decode).or_else(|_| {
-                                                  Err(PlatformError::DeserializationError)
-                                                })?;
+      let key_pair_decode = hex::decode(key_pair_str).or_else(|e| Err(des_fail!(e)))?;
+      let key_pair = serde_json::from_slice(&key_pair_decode).or_else(|e| Err(des_fail!(e)))?;
       Ok(key_pair)
     }
 
-    pub(crate) fn add_lender(&mut self, name: String) -> Result<(), PlatformError> {
+    pub(crate) fn add_lender(&mut self, data_dir: &str, name: String) -> Result<(), PlatformError> {
       let id = self.lenders.len();
       self.lenders.push(Lender::new(id, name.clone()));
       println!("{}'s id is {}.", name, id);
-      store_data_to_file(self.clone())
+      store_data_to_file(self.clone(), data_dir)
     }
 
     pub(crate) fn get_lender_key_pair(&self, id: u64) -> Result<XfrKeyPair, PlatformError> {
       let key_pair_str = &self.lenders[id as usize].key_pair;
-      Ok(XfrKeyPair::zei_from_bytes(&hex::decode(key_pair_str).or_else(|_| {
-                                     Err(PlatformError::DeserializationError)
-                                   })?))
+      Ok(XfrKeyPair::zei_from_bytes(&hex::decode(key_pair_str).or_else(|e| Err(des_fail!(e)))?))
     }
 
     /// Creates or overwrites a credential requirement.
@@ -580,6 +568,7 @@ pub mod txn_lib {
     /// * `attribute`: credential attribute, possible names defined in the enum `CredentialIndex`.
     /// * `requirement`: required value.
     pub(crate) fn create_or_overwrite_requirement(&mut self,
+                                                  data_dir: &str,
                                                   lender_id: u64,
                                                   attribute: CredentialIndex,
                                                   requirement: &str)
@@ -593,21 +582,22 @@ pub mod txn_lib {
         Some(requirement.to_string());
 
       // Update the data
-      store_data_to_file(self.clone())
+      store_data_to_file(self.clone(), data_dir)
     }
 
-    pub(crate) fn add_borrower(&mut self, name: String) -> Result<(), PlatformError> {
+    pub(crate) fn add_borrower(&mut self,
+                               data_dir: &str,
+                               name: String)
+                               -> Result<(), PlatformError> {
       let id = self.borrowers.len();
       self.borrowers.push(Borrower::new(id, name.clone()));
       println!("{}'s id is {}.", name, id);
-      store_data_to_file(self.clone())
+      store_data_to_file(self.clone(), data_dir)
     }
 
     pub(crate) fn get_borrower_key_pair(&self, id: u64) -> Result<XfrKeyPair, PlatformError> {
       let key_pair_str = &self.borrowers[id as usize].key_pair;
-      Ok(XfrKeyPair::zei_from_bytes(&hex::decode(key_pair_str).or_else(|_| {
-                                     Err(PlatformError::DeserializationError)
-                                   })?))
+      Ok(XfrKeyPair::zei_from_bytes(&hex::decode(key_pair_str).or_else(|e| Err(des_fail!(e)))?))
     }
 
     /// Creates or overwrites a credential data.
@@ -620,6 +610,7 @@ pub mod txn_lib {
     /// * `attribute`: credential attribute, possible names defined in the enum `CredentialIndex`.
     /// * `value`: credential value.
     pub(crate) fn create_or_overwrite_credential(&mut self,
+                                                 data_dir: &str,
                                                  borrower_id: u64,
                                                  credential_issuer_id: u64,
                                                  attribute: CredentialIndex,
@@ -650,25 +641,25 @@ pub mod txn_lib {
       }
 
       // Update the data
-      store_data_to_file(self.clone())
+      store_data_to_file(self.clone(), data_dir)
     }
   }
 
   /// Gets the initial data for the CLI.
   pub(crate) fn get_init_data() -> Result<Data, PlatformError> {
-    serde_json::from_str::<Data>(INIT_DATA).or(Err(PlatformError::DeserializationError))
+    serde_json::from_str::<Data>(INIT_DATA).or_else(|e| Err(des_fail!(e)))
   }
 
   /// Gets the sequence number and increments it.
-  pub(crate) fn get_and_update_sequence_number() -> Result<u64, PlatformError> {
+  pub(crate) fn get_and_update_sequence_number(data_dir: &str) -> Result<u64, PlatformError> {
     // Get the sequence number
-    let mut data = load_data()?;
+    let mut data = load_data(data_dir)?;
     let sequence_number = data.sequence_number;
     println!("Sequence number: {}", sequence_number);
 
     // Increment the sequence number
     data.sequence_number += 1;
-    store_data_to_file(data)?;
+    store_data_to_file(data, data_dir)?;
 
     Ok(sequence_number)
   }
@@ -679,16 +670,17 @@ pub mod txn_lib {
   /// Loads data.
   /// * If the data file exists, loads data from it.
   /// * Otherwise, stores the initial data to file and returns the data.
-  pub(crate) fn load_data() -> Result<Data, PlatformError> {
-    let data = match fs::read_to_string(DATA_FILE) {
+  pub(crate) fn load_data(data_dir: &str) -> Result<Data, PlatformError> {
+    let data_file_path = format!("{}/{}", data_dir, DATA_FILE);
+    let data = match fs::read_to_string(data_file_path) {
       Ok(data) => data,
       Err(_) => {
         let init_data = get_init_data()?;
-        store_data_to_file(init_data.clone())?;
+        store_data_to_file(init_data.clone(), data_dir)?;
         return Ok(init_data);
       }
     };
-    serde_json::from_str::<Data>(&data).or(Err(PlatformError::DeserializationError))
+    serde_json::from_str::<Data>(&data).or_else(|e| Err(des_fail!(e)))
   }
 
   /// Loads transaction record from file
@@ -701,7 +693,7 @@ pub mod txn_lib {
     println!("Parsing builder from file contents: \"{}\"", &txn);
     match serde_json::from_str(&txn) {
       Ok(builder) => Ok(builder),
-      Err(_) => Err(PlatformError::DeserializationError),
+      Err(e) => Err(des_fail!(e)),
     }
   }
 
@@ -740,11 +732,12 @@ pub mod txn_lib {
     let txn = fs::read_to_string(file_path).or_else(|_| {
                 Err(PlatformError::IoError(format!("Failed to read file: {}", file_path)))
               })?;
+    let _ = fs::remove_file(file_path);
     println!("Parsing builder from file contents: \"{}\"", &txn);
     match serde_json::from_str::<TransactionBuilder>(&txn) {
       Ok(builder) => Ok(((builder.get_owner_record_and_memo(0).unwrap().0.clone()).0,
                          builder.get_owner_record_and_memo(0).unwrap().1.clone())),
-      Err(_) => Err(PlatformError::DeserializationError),
+      Err(e) => Err(des_fail!(e)),
     }
   }
 
@@ -763,7 +756,7 @@ pub mod txn_lib {
     Ok(bars_and_owner_memos)
   }
 
-  /// Loads the open asset record by getting the blind asset record and owner memo from transaction file.
+  /// Loads the open asset record by getting the blind asset record and owner memo from transaction file and removes the file.
   /// # Arguments
   /// * `file_path`: path to the transaction file.
   /// * `key_pair`: key pair of the asset record.
@@ -787,9 +780,7 @@ pub mod txn_lib {
                       })?;
     println!("Parsing tracer memo from file contents: \"{}\"",
              &tracer_memo);
-    serde_json::from_str::<AssetTracerMemo>(&tracer_memo).or_else(|_| {
-                                                           Err(PlatformError::DeserializationError)
-                                                         })
+    serde_json::from_str::<AssetTracerMemo>(&tracer_memo).or_else(|e| Err(des_fail!(e)))
   }
 
   /// Loads tracer and owner memos from memo files
@@ -809,8 +800,8 @@ pub mod txn_lib {
         Ok(memos) => {
           tracer_and_owner_memos.push(memos);
         }
-        Err(_) => {
-          return Err(PlatformError::DeserializationError);
+        Err(e) => {
+          return Err(des_fail!(e));
         }
       }
     }
@@ -823,9 +814,10 @@ pub mod txn_lib {
   /// Stores the program data to `DATA_FILE`, when the program starts or the data is updated.
   /// # Arguments
   /// * `data`: data to store.
-  pub(crate) fn store_data_to_file(data: Data) -> Result<(), PlatformError> {
+  pub(crate) fn store_data_to_file(data: Data, data_dir: &str) -> Result<(), PlatformError> {
+    let data_file_path = format!("{}/{}", data_dir, DATA_FILE);
     if let Ok(as_json) = serde_json::to_string(&data) {
-      if let Err(error) = fs::write(DATA_FILE, &as_json) {
+      if let Err(error) = fs::write(data_file_path, &as_json) {
         return Err(PlatformError::IoError(format!("Failed to create file {}: {}.",
                                                   DATA_FILE, error)));
       };
@@ -1051,30 +1043,15 @@ pub mod txn_lib {
     Ok(vals)
   }
 
-  /// Parses a string to a list of u32 values.
-  /// # Arguments
-  /// * `vals_str`: string representation of a list of values.
-  pub(crate) fn parse_to_u32_vec(vals_str: &str) -> Result<Vec<u32>, PlatformError> {
-    let vals_vec = split_arg(vals_str);
-    let mut vals = Vec::new();
-    for val_str in vals_vec {
-      if let Ok(val) = val_str.trim().parse::<u32>() {
-        vals.push(val);
-      } else {
-        return Err(PlatformError::InputsError(error_location!()));
-      }
-    }
-    Ok(vals)
-  }
-
-  pub(crate) fn air_assign(issuer_id: u64,
+  pub(crate) fn air_assign(data_dir: &str,
+                           issuer_id: u64,
                            address: &str,
                            data: &str,
                            issuer_pk: &str,
                            pok: &str,
                            txn_file: &str)
                            -> Result<(), PlatformError> {
-    let issuer_data = load_data()?;
+    let issuer_data = load_data(data_dir)?;
     let xfr_key_pair = issuer_data.get_asset_issuer_key_pair(issuer_id)?;
     let mut txn_builder = TransactionBuilder::default();
     let address = serde_json::from_str::<CredUserPublicKey>(address)?;
@@ -1097,12 +1074,13 @@ pub mod txn_lib {
   /// * `memo`: memo for defining the asset.
   /// * `asset_rules`: simple asset rules (e.g. traceable, transferable)
   /// * `txn_file`: path to store the transaction file.
-  pub(crate) fn define_asset(fiat_asset: bool,
+  pub(crate) fn define_asset(data_dir: &str,
+                             fiat_asset: bool,
                              issuer_key_pair: &XfrKeyPair,
                              token_code: AssetTypeCode,
                              memo: &str,
                              asset_rules: AssetRules,
-                             txn_file: &str)
+                             txn_file: Option<&str>)
                              -> Result<TransactionBuilder, PlatformError> {
     let mut txn_builder = TransactionBuilder::default();
     txn_builder.add_operation_create_asset(issuer_key_pair,
@@ -1110,15 +1088,38 @@ pub mod txn_lib {
                                            asset_rules,
                                            &memo,
                                            PolicyChoice::Fungible())?;
-    store_txn_to_file(&txn_file, &txn_builder)?;
+    if let Some(file) = txn_file {
+      store_txn_to_file(&file, &txn_builder)?;
+    }
 
     // Update data
-    let mut data = load_data()?;
+    let mut data = load_data(data_dir)?;
     if fiat_asset {
       data.fiat_code = Some(token_code.to_base64());
-      store_data_to_file(data)?;
+      store_data_to_file(data, data_dir)?;
     };
     Ok(txn_builder)
+  }
+
+  /// Defines an asset and submits the transaction with the standalone ledger.
+  pub fn define_and_submit(issuer_key_pair: &XfrKeyPair,
+                           code: AssetTypeCode,
+                           rules: AssetRules,
+                           ledger_standalone: &LedgerStandalone)
+                           -> Result<(), PlatformError> {
+    // Define the asset
+    let mut txn_builder = TransactionBuilder::default();
+    let txn = txn_builder.add_operation_create_asset(issuer_key_pair,
+                                                     Some(code),
+                                                     rules,
+                                                     "",
+                                                     PolicyChoice::Fungible())?
+                         .transaction();
+
+    // Submit the transaction
+    ledger_standalone.submit_transaction(&txn);
+
+    Ok(())
   }
 
   #[allow(clippy::too_many_arguments)]
@@ -1134,7 +1135,8 @@ pub mod txn_lib {
   /// * `txn_file`: path to the transaction file.
   /// * `tracing_policy`: asset tracing policy, if any.
   #[allow(clippy::too_many_arguments)]
-  pub(crate) fn issue_and_transfer_asset(issuer_key_pair: &XfrKeyPair,
+  pub(crate) fn issue_and_transfer_asset(data_dir: &str,
+                                         issuer_key_pair: &XfrKeyPair,
                                          recipient_key_pair: &XfrKeyPair,
                                          amount: u64,
                                          token_code: AssetTypeCode,
@@ -1142,16 +1144,17 @@ pub mod txn_lib {
                                          credential_record: Option<(&CredUserSecretKey,
                                                  &ZeiCredential,
                                                  &CredCommitmentKey)>,
-                                         txn_file: &str,
-                                         tracing_policy: Option<AssetTracingPolicy>)
+                                         txn_file: Option<&str>,
+                                         tracing_policy: Option<AssetTracingPolicy>,
+                                         identity_commitment: Option<CredCommitment>)
                                          -> Result<TransactionBuilder, PlatformError> {
     // Asset issuance is always nonconfidential
     let (blind_asset_record, _, owner_memo) =
-    get_blind_asset_record_and_memos(issuer_key_pair.get_pk(),
-                                     amount,
-                                     token_code,
-                                     AssetRecordType::from_booleans(record_type.is_confidential_amount(), false),
-                                     tracing_policy.clone())?;
+      get_blind_asset_record_and_memos(issuer_key_pair.get_pk(),
+                                       amount,
+                                       token_code,
+                                       AssetRecordType::from_booleans(record_type.is_confidential_amount(), false),
+                                       tracing_policy.clone())?;
 
     // Transfer Operation
     let output_template = if let Some(policy) = tracing_policy.clone() {
@@ -1166,31 +1169,114 @@ pub mod txn_lib {
                                                   record_type,
                                                   recipient_key_pair.get_pk())
     };
-    let xfr_op =
-    TransferOperationBuilder::new().add_input(TxoRef::Relative(0),
-                                              open_blind_asset_record(&blind_asset_record,
-                                                                &owner_memo,
-                                                                issuer_key_pair.get_sk_ref())
-                                              .map_err(|e| PlatformError::ZeiError(error_location!(),e))?,
-                                              amount)?
-                                   .add_output(&output_template, credential_record)?
-                                   .balance()?
-                                   .create(TransferType::Standard)?
-                                   .sign(issuer_key_pair)?
-                                   .transaction()?;
+
+    let xfr_op = TransferOperationBuilder::new().add_input(TxoRef::Relative(0),
+                                                          open_blind_asset_record(&blind_asset_record,
+                                                                                  &owner_memo,
+                                                                                  issuer_key_pair.get_sk_ref()).map_err(|e| PlatformError::ZeiError(error_location!(),e))?,
+                                                          None,
+                                                          None,
+                                                          amount)?
+                                                 .add_output(&output_template,
+                                                             tracing_policy.clone(),
+                                                             identity_commitment,
+                                                             credential_record)?
+                                                 .balance()?
+                                                 .create(TransferType::Standard)?
+                                                 .sign(issuer_key_pair)?
+                                                 .transaction()?;
 
     // Issue and Transfer transaction
     let mut txn_builder = TransactionBuilder::default();
     txn_builder.add_operation_issue_asset(issuer_key_pair,
                                           &token_code,
-                                          get_and_update_sequence_number()?,
+                                          get_and_update_sequence_number(data_dir)?,
                                           &[(TxOutput(blind_asset_record), owner_memo)],
                                           tracing_policy)?
                .add_operation(xfr_op)
                .transaction();
 
-    store_txn_to_file(txn_file, &txn_builder)?;
+    if let Some(file) = txn_file {
+      store_txn_to_file(file, &txn_builder)?;
+    }
+
     Ok(txn_builder)
+  }
+
+  /// Issues and transfers an asset, submits the transactio with the standalone ledger, and get the UTXO SID, amount blinds and type blind.
+  #[allow(clippy::too_many_arguments)]
+  pub fn issue_transfer_and_get_utxo_and_blinds<R: CryptoRng + RngCore>(
+    issuer_key_pair: &XfrKeyPair,
+    recipient_key_pair: &XfrKeyPair,
+    amount: u64,
+    code: AssetTypeCode,
+    record_type: AssetRecordType,
+    sequence_number: u64,
+    mut prng: &mut R,
+    ledger_standalone: &LedgerStandalone)
+    -> Result<(u64, (Scalar, Scalar), Scalar), PlatformError> {
+    // Issue and transfer the asset
+    let pc_gens = PublicParams::new().pc_gens;
+    let input_template = AssetRecordTemplate::with_no_asset_tracking(amount, code.val, AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType, issuer_key_pair.get_pk());
+    let input_blind_asset_record =
+      build_blind_asset_record(&mut prng, &pc_gens, &input_template, None).0;
+    let output_template = AssetRecordTemplate::with_no_asset_tracking(amount,
+                                                                      code.val,
+                                                                      record_type,
+                                                                      recipient_key_pair.get_pk());
+    let blinds = &mut ((Scalar::default(), Scalar::default()), Scalar::default());
+    let xfr_op = TransferOperationBuilder::new().add_input(TxoRef::Relative(0),
+                                                           open_blind_asset_record(&input_blind_asset_record,
+                                                                                   &None,
+                                                                                   issuer_key_pair.get_sk_ref()).map_err(|e| {
+                                                                                     PlatformError::ZeiError(error_location!(), e)
+                                                                                   })?,
+                                                           None,
+                                                           None,
+                                                           amount)?
+                                                .add_output_and_store_blinds(&output_template, None, prng, blinds)?.balance()?
+                                                .create(TransferType::Standard)?
+                                                .sign(issuer_key_pair)?
+                                                .transaction()?;
+
+    let mut txn_builder = TransactionBuilder::default();
+    let txn = txn_builder.add_operation_issue_asset(issuer_key_pair,
+                                                    &code,
+                                                    sequence_number,
+                                                    &[(TxOutput(input_blind_asset_record), None)],
+                                                    None)?
+                         .add_operation(xfr_op)
+                         .transaction();
+
+    // Submit the transaction, and get the UTXO and asset type blind
+    Ok((ledger_standalone.submit_transaction_and_fetch_utxos(&txn)[0].0, blinds.0, blinds.1))
+  }
+
+  /// Defines, issues and transfers an asset, and submits the transactions with the standalone ledger.
+  /// Returns the UTXO SID, the blinding factors for the asset amount, and the blinding factor for the asset type code.
+  #[allow(clippy::too_many_arguments)]
+  pub fn define_issue_transfer_and_get_utxo_and_blinds<R: CryptoRng + RngCore>(
+    issuer_key_pair: &XfrKeyPair,
+    recipient_key_pair: &XfrKeyPair,
+    amount: u64,
+    code: AssetTypeCode,
+    rules: AssetRules,
+    record_type: AssetRecordType,
+    ledger_standalone: &LedgerStandalone,
+    prng: &mut R)
+    -> Result<(u64, (Scalar, Scalar), Scalar), PlatformError> {
+    // Define the asset
+    define_and_submit(issuer_key_pair, code, rules, ledger_standalone)?;
+
+    // Issue and transfer the asset, and get the UTXO SID and asset type blind
+    issue_transfer_and_get_utxo_and_blinds(issuer_key_pair,
+                                           recipient_key_pair,
+                                           amount,
+                                           code,
+                                           record_type,
+                                           1,
+                                           prng,
+                                           ledger_standalone)
   }
 
   /// Queries a value.
@@ -1206,29 +1292,61 @@ pub mod txn_lib {
   /// * To query the BlindAssetRecord with utxo_sid 100 from https://testnet.findora.org:
   /// use txn_cli::txn_lib::query;
   /// query("https", "testnet.findora.org", QUERY_PORT, "utxo_sid", "100").unwrap();
-  pub fn query(protocol: &str,
-               host: &str,
-               port: &str,
-               route: &str,
-               value: &str)
-               -> Result<String, PlatformError> {
+  fn query(protocol: &str,
+           host: &str,
+           port: &str,
+           route: &str,
+           value: &str)
+           -> Result<String, PlatformError> {
     let mut res = if let Ok(response) =
       reqwest::get(&format!("{}://{}:{}/{}/{}", protocol, host, port, route, value))
     {
       response
     } else {
-      return Err(PlatformError::SubmissionServerError(Some("Failed to query.".to_owned())));
+      return Err(PlatformError::SubmissionServerError(format!("[{}] {}",
+                                                              &error_location!(),
+                                                              &"Failed to query.")));
     };
 
     // Log body
     println!("Querying status: {}", res.status());
-    let text =
-      res.text().or_else(|_| {
-                   Err(PlatformError::SubmissionServerError(Some("Failed to query.".to_owned())))
-                 })?;
+    let text = res.text().or_else(|_| {
+                            Err(PlatformError::SubmissionServerError(format!("[{}] {}",
+                                                                             &error_location!(),
+                                                                             &"Failed to query.")))
+                          })?;
     println!("Querying result: {}", text);
 
     Ok(text)
+  }
+
+  /// Queries the UTXO SID and gets the asset type commitment.
+  /// Asset should be confidential, otherwise the commitmemt will be null.
+  pub fn query_utxo_and_get_type_commitment(utxo: u64,
+                                            protocol: &str,
+                                            host: &str)
+                                            -> Result<CompressedRistretto, PlatformError> {
+    let res = query(protocol, host, QUERY_PORT, "utxo_sid", &format!("{}", utxo))?;
+    let blind_asset_record =
+      serde_json::from_str::<BlindAssetRecord>(&res).or_else(|_| Err(des_fail!()))?;
+    match blind_asset_record.asset_type {
+      XfrAssetType::Confidential(commitment) => Ok(commitment),
+      _ => {
+        println!("Found nonconfidential asset.");
+        Err(PlatformError::InputsError(error_location!()))
+      }
+    }
+  }
+
+  /// Queries the UTXO SID to get the amount, either confidential or nonconfidential.
+  pub fn query_utxo_and_get_amount(utxo: u64,
+                                   protocol: &str,
+                                   host: &str)
+                                   -> Result<XfrAmount, PlatformError> {
+    let res = query(protocol, host, QUERY_PORT, "utxo_sid", &format!("{}", utxo))?;
+    let blind_asset_record =
+      serde_json::from_str::<BlindAssetRecord>(&res).or_else(|_| Err(des_fail!()))?;
+    Ok(blind_asset_record.amount)
   }
 
   /// Submits a transaction.
@@ -1251,18 +1369,24 @@ pub mod txn_lib {
     // Submit transaction
     let client = reqwest::Client::new();
     let txn = txn_builder.transaction();
-    let mut res =
-      client.post(&format!("{}://{}:{}/{}",
-                           protocol, host, SUBMIT_PORT, "submit_transaction"))
-            .json(&txn)
-            .send()
-            .or_else(|_| {
-              Err(PlatformError::SubmissionServerError(Some("Failed to submit.".to_owned())))
-            })?;
+    let mut res = client.post(&format!("{}://{}:{}/{}",
+                                       protocol, host, SUBMIT_PORT, "submit_transaction"))
+                        .json(&txn)
+                        .send()
+                        .or_else(|_| {
+                          Err(PlatformError::SubmissionServerError(format!("[{}] {}",
+                                                                           &error_location!(),
+                                                                           &"Failed to submit.")))
+                        })?;
     // Log body
-    println!("Submission response: {}",
-             res.json::<TxnHandle>().expect("<Invalid JSON>"));
+    let txt = res.text().expect("no response");
+    let handle = serde_json::from_str::<TxnHandle>(&txt).unwrap_or_else(|e| {
+                                                          panic!("<Invalid JSON> ({}): \"{}\"",
+                                                                 &e, &txt)
+                                                        });
+    println!("Submission response: {}", handle);
     println!("Submission status: {}", res.status());
+
     Ok(())
   }
 
@@ -1286,27 +1410,30 @@ pub mod txn_lib {
     // Submit transaction
     let client = reqwest::Client::new();
     let txn = txn_builder.transaction();
-    let mut res =
-      client.post(&format!("{}://{}:{}/{}",
-                           protocol, host, SUBMIT_PORT, "submit_transaction"))
-            .json(&txn)
-            .send()
-            .or_else(|_| {
-              Err(PlatformError::SubmissionServerError(Some("Failed to submit.".to_owned())))
-            })?;
+    let mut res = client.post(&format!("{}://{}:{}/{}",
+                                       protocol, host, SUBMIT_PORT, "submit_transaction"))
+                        .json(&txn)
+                        .send()
+                        .or_else(|_| {
+                          Err(PlatformError::SubmissionServerError(format!("[{}] {}",
+                                                                           &error_location!(),
+                                                                           &"Failed to submit.")))
+                        })?;
 
     // Log body
-    let handle = res.json::<TxnHandle>().expect("<Invalid JSON>");
+    let txt = res.text().expect("no response");
+    let handle = serde_json::from_str::<TxnHandle>(&txt).unwrap_or_else(|e| {
+                                                          panic!("<Invalid JSON> ({}): \"{}\"",
+                                                                 &e, &txt)
+                                                        });
     println!("Submission response: {}", handle);
     println!("Submission status: {}", res.status());
 
     // Return sid
     let res = query(protocol, host, SUBMIT_PORT, "txn_status", &handle.0)?;
-    match serde_json::from_str::<TxnStatus>(&res).or_else(|_| {
-                                                   Err(PlatformError::DeserializationError)
-                                                 })? {
+    match serde_json::from_str::<TxnStatus>(&res).or_else(|_| Err(des_fail!()))? {
       TxnStatus::Committed((_sid, txos)) => Ok(txos),
-      _ => Err(PlatformError::DeserializationError),
+      _ => Err(des_fail!()),
     }
   }
 
@@ -1389,9 +1516,9 @@ pub mod txn_lib {
                                                   oar1.get_record_type(),
                                                   key_pair.get_pk())
     };
-    let xfr_op = TransferOperationBuilder::new().add_input(sid1, oar1, amount1)?
-                                                .add_input(sid2, oar2, amount2)?
-                                                .add_output(&template, None)?
+    let xfr_op = TransferOperationBuilder::new().add_input(sid1, oar1, None, None, amount1)?
+                                                .add_input(sid2, oar2, None, None, amount2)?
+                                                .add_output(&template, None, None, None)?
                                                 .create(TransferType::Standard)?
                                                 .sign(key_pair)?
                                                 .transaction()?;
@@ -1408,18 +1535,17 @@ pub mod txn_lib {
   /// * `recipient_id`: recipient's ID.
   /// * `amount`: amount to load.
   /// * `memo_file`: path to store the tracer and owner memos, optional.
-  /// * `txn_file`: path to store the transaction file.
   /// * `protocol`: either `https` or `http`.
   /// * `host`: either `testnet.findora.org` or `localhost`.
-  pub(crate) fn load_funds(issuer_id: u64,
+  pub(crate) fn load_funds(data_dir: &str,
+                           issuer_id: u64,
                            recipient_id: u64,
                            amount: u64,
-                           txn_file: &str,
                            protocol: &str,
                            host: &str)
                            -> Result<(), PlatformError> {
     // Get data
-    let data = load_data()?;
+    let data = load_data(data_dir)?;
     let issuer_key_pair = &data.get_asset_issuer_key_pair(issuer_id)?;
     let recipient = &data.borrowers[recipient_id as usize];
     let recipient_key_pair = &data.clone().get_borrower_key_pair(recipient_id)?;
@@ -1429,28 +1555,31 @@ pub mod txn_lib {
       AssetTypeCode::new_from_base64(code)?
     } else {
       let fiat_code = AssetTypeCode::gen_random();
-      let txn_builder = define_asset(true,
+      let txn_builder = define_asset(data_dir,
+                                     true,
                                      issuer_key_pair,
                                      fiat_code,
                                      "Fiat asset",
                                      AssetRules::default(),
-                                     txn_file)?;
+                                     None)?;
       // Store data before submitting the transaction to avoid data overwriting
-      let data = load_data()?;
+      let data = load_data(data_dir)?;
       submit(protocol, host, txn_builder)?;
-      store_data_to_file(data)?;
+      store_data_to_file(data, data_dir)?;
       fiat_code
     };
 
     // Issue and transfer asset
     let txn_builder =
-      issue_and_transfer_asset(issuer_key_pair,
+      issue_and_transfer_asset(data_dir,
+                               issuer_key_pair,
                                recipient_key_pair,
                                amount,
                                token_code,
                                AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
                                None,
-                               txn_file,
+                               None,
+                               None,
                                None)?;
 
     // Submit transaction and get the new record
@@ -1461,9 +1590,7 @@ pub mod txn_lib {
                         "utxo_sid",
                         &format!("{}", sid_new.0))?;
     let blind_asset_record_new =
-      serde_json::from_str::<BlindAssetRecord>(&res_new).or_else(|_| {
-                                                          Err(PlatformError::DeserializationError)
-                                                        })?;
+      serde_json::from_str::<BlindAssetRecord>(&res_new).or_else(|_| Err(des_fail!()))?;
 
     // Merge records
     let sid_merged = if let Some(sid_pre) = recipient.fiat_utxo {
@@ -1473,9 +1600,7 @@ pub mod txn_lib {
                           "utxo_sid",
                           &format!("{}", sid_pre.0))?;
       let blind_asset_record_pre =
-        serde_json::from_str::<BlindAssetRecord>(&res_pre).or_else(|_| {
-                                                            Err(PlatformError::DeserializationError)
-                                                          })?;
+        serde_json::from_str::<BlindAssetRecord>(&res_pre).or_else(|_| Err(des_fail!()))?;
       let txn_builder = merge_records(recipient_key_pair,
                                       TxoRef::Absolute(sid_pre),
                                       TxoRef::Absolute(sid_new),
@@ -1484,18 +1609,16 @@ pub mod txn_lib {
                                       token_code,
                                       None)?;
 
-      // Store the transaction to file so that the merged blind asset record and owner memo can be retrieved
-      store_txn_to_file(txn_file, &txn_builder)?;
       submit_and_get_sids(protocol, host, txn_builder)?[0]
     } else {
       sid_new
     };
 
     // Update data
-    let mut data = load_data()?;
+    let mut data = load_data(data_dir)?;
     data.borrowers[recipient_id as usize].balance = recipient.balance + amount;
     data.borrowers[recipient_id as usize].fiat_utxo = Some(sid_merged);
-    store_data_to_file(data)
+    store_data_to_file(data, data_dir)
   }
 
   /// Querys the blind asset record by querying the UTXO (unspent transaction output) SID.
@@ -1515,9 +1638,7 @@ pub mod txn_lib {
                     "utxo_sid",
                     &format!("{}", sid.0))?;
     let blind_asset_record =
-      serde_json::from_str::<BlindAssetRecord>(&res).or_else(|_| {
-                                                      Err(PlatformError::DeserializationError)
-                                                    })?;
+      serde_json::from_str::<BlindAssetRecord>(&res).or_else(|_| Err(des_fail!()))?;
     open_blind_asset_record(&blind_asset_record, owner_memo, key_pair.get_sk_ref()).or_else(|error| {
                                                                                     Err(PlatformError::ZeiError(error_location!(), error))
                                                                                   })
@@ -1527,19 +1648,18 @@ pub mod txn_lib {
   /// # Arguments
   /// * `loan_id`: loan ID.
   /// * `issuer_id`: issuer ID.
-  /// * `txn_file`: path to store the transaction file.
   /// * `memo_file`: path to store the asset tracer memo and owner memo, optional.
   /// * `protocol`: either `https` or `http`.
   /// * `host`: either `testnet.findora.org` or `locaohost`.
-  pub(crate) fn fulfill_loan(loan_id: u64,
+  pub(crate) fn fulfill_loan(data_dir: &str,
+                             loan_id: u64,
                              issuer_id: u64,
-                             txn_file: &str,
                              memo_file: Option<&str>,
                              protocol: &str,
                              host: &str)
                              -> Result<(), PlatformError> {
     // Get data
-    let mut data = load_data()?;
+    let mut data = load_data(data_dir)?;
     let issuer_key_pair = &data.get_asset_issuer_key_pair(issuer_id)?;
     let loan = &data.loans[loan_id as usize].clone();
 
@@ -1607,7 +1727,7 @@ pub mod txn_lib {
                   if parse_to_u64(value)? < requirement_u64 {
                     // Update loans data
                     data.loans[loan_id as usize].status = LoanStatus::Declined;
-                    store_data_to_file(data)?;
+                    store_data_to_file(data, data_dir)?;
                     println!("Credential value should be at least: {}.", requirement_u64);
                     return Err(PlatformError::InputsError(error_location!()));
                   }
@@ -1616,7 +1736,7 @@ pub mod txn_lib {
                   if parse_to_u64(value)? != requirement_u64 {
                     // Update loans data
                     data.loans[loan_id as usize].status = LoanStatus::Declined;
-                    store_data_to_file(data)?;
+                    store_data_to_file(data, data_dir)?;
                     println!("Credit score should be: {}.", requirement_u64);
                     return Err(PlatformError::InputsError(error_location!()));
                   }
@@ -1651,14 +1771,12 @@ pub mod txn_lib {
     let mut prng: ChaChaRng = ChaChaRng::from_entropy();
     let (user_pk, user_secret_key) =
       credential_user_key_gen(&mut prng, &credential_issuer_public_key);
-    let user_sk_str =
-      serde_json::to_vec(&user_secret_key).or_else(|_| Err(PlatformError::SerializationError))?;
+    let user_sk_str = serde_json::to_vec(&user_secret_key).or_else(|_| Err(ser_fail!()))?;
     let signature = credential_sign(&mut prng,
                                     &credential_issuer_secret_key,
                                     &user_pk,
                                     &attributes).unwrap();
-    let signature_str =
-      serde_json::to_string(&signature).or_else(|_| Err(PlatformError::SerializationError))?;
+    let signature_str = serde_json::to_string(&signature).or_else(|_| Err(ser_fail!()))?;
     let wrapper_credential = WrapperCredential { attributes: attibutes_with_value_as_vec,
                                                  issuer_pub_key:
                                                    credential_issuer_public_key.clone(),
@@ -1666,28 +1784,15 @@ pub mod txn_lib {
     let ac_credential =
       wrapper_credential.to_ac_credential()
                         .or_else(|e| Err(PlatformError::ZeiError(error_location!(), e)))?;
-    let reveal_sig =
-      credential_reveal(&mut prng,
-                        &user_secret_key,
-                        &wrapper_credential,
-                        &attribute_names).or_else(|error| {
-                                           Err(PlatformError::ZeiError(error_location!(), error))
-                                         })?;
-    credential_verify(&credential_issuer_public_key,
-                      &attributes,
-                      &reveal_sig.sig_commitment,
-                      &reveal_sig.pok).or_else(|error| {
-                                        Err(PlatformError::ZeiError(error_location!(), error))
-                                      })?;
-    let commitment_key = credential_keygen_commitment(&mut prng);
-    let commitment_key_str =
-      serde_json::to_vec(&commitment_key).or_else(|_| Err(PlatformError::SerializationError))?;
+    let (identity_commitment, _, commitment_key) =
+      credential_commit(&mut prng, &user_secret_key, &wrapper_credential, b"").unwrap();
+    let commitment_key_str = serde_json::to_vec(&commitment_key).or_else(|_| Err(ser_fail!()))?;
 
     // Update credential data
     data.loans[loan_id as usize].user_secret_key = Some(hex::encode(user_sk_str));
     data.loans[loan_id as usize].signature = Some(signature_str);
     data.loans[loan_id as usize].commitment_key = Some(hex::encode(commitment_key_str));
-    store_data_to_file(data.clone())?;
+    store_data_to_file(data.clone(), data_dir)?;
 
     // Store the tracer memo to file
     if let Some(file) = memo_file {
@@ -1715,16 +1820,17 @@ pub mod txn_lib {
       AssetTypeCode::new_from_base64(&code)?
     } else {
       let fiat_code = AssetTypeCode::gen_random();
-      let txn_builder = define_asset(true,
+      let txn_builder = define_asset(data_dir,
+                                     true,
                                      issuer_key_pair,
                                      fiat_code,
                                      "Fiat asset",
                                      AssetRules::default(),
-                                     txn_file)?;
+                                     None)?;
       // Store data before submitting the transaction to avoid data overwriting
-      let data = load_data()?;
+      let data = load_data(data_dir)?;
       submit(protocol, host, txn_builder)?;
-      store_data_to_file(data)?;
+      store_data_to_file(data, data_dir)?;
       fiat_code
     };
 
@@ -1733,94 +1839,100 @@ pub mod txn_lib {
                                                    credential_issuer_public_key.get_ref().clone(),
                                                  reveal_map };
     let debt_tracing_policy = AssetTracingPolicy { enc_keys: tracer_enc_keys,
-                                                   asset_tracking: true,
+                                                   asset_tracking: false,
                                                    identity_tracking: Some(identity_policy) };
 
     // Issue and transfer fiat token
     let credential_record = Some((&user_secret_key, &ac_credential, &commitment_key));
-    let mut fiat_txn_file = txn_file.to_owned();
-    fiat_txn_file.push_str(&format!(".fiat.{}", borrower_id));
+    let fiat_txn_file = "fiat_txn_file";
     let txn_builder =
-      issue_and_transfer_asset(issuer_key_pair,
+      issue_and_transfer_asset(data_dir,
+                               issuer_key_pair,
                                lender_key_pair,
                                amount,
                                fiat_code,
                                AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
                                None,
-                               &fiat_txn_file,
+                               Some(fiat_txn_file),
+                               None,
                                None)?;
     let fiat_sid = submit_and_get_sids(protocol, host, txn_builder)?[0];
     println!("Fiat sid: {}", fiat_sid.0);
-    let (_, owner_memo) = load_blind_asset_record_and_owner_memo_from_file(&fiat_txn_file)?;
+    let (_, owner_memo) = load_blind_asset_record_and_owner_memo_from_file(fiat_txn_file)?;
     let fiat_open_asset_record =
       query_open_asset_record(protocol, host, fiat_sid, lender_key_pair, &owner_memo)?;
 
     // Define debt asset
     let debt_code = AssetTypeCode::gen_random();
     println!("Generated debt code: {}",
-             serde_json::to_string(&debt_code.val).or_else(|_| {
-                                                    Err(PlatformError::SerializationError)
-                                                  })?);
+             serde_json::to_string(&debt_code.val).or_else(|_| { Err(ser_fail!()) })?);
     let memo = DebtMemo { interest_rate: Fraction::new(loan.interest_per_mille, 1000),
                           fiat_code,
                           loan_amount: amount };
-    let memo_str =
-      serde_json::to_string(&memo).or_else(|_| Err(PlatformError::SerializationError))?;
-    let txn_builder = define_asset(false,
+    let memo_str = serde_json::to_string(&memo).or_else(|_| Err(ser_fail!()))?;
+    let txn_builder = define_asset(data_dir,
+                                   false,
                                    borrower_key_pair,
                                    debt_code,
                                    &memo_str,
-                                   AssetRules::default().set_traceable(true).clone(),
-                                   txn_file)?;
+                                   AssetRules::default(),
+                                   None)?;
     // Store data before submitting the transaction to avoid data overwriting
-    let data = load_data()?;
+    let data = load_data(data_dir)?;
     submit(protocol, host, txn_builder)?;
-    store_data_to_file(data)?;
+    store_data_to_file(data, data_dir)?;
 
     // Issue and transfer debt token
-    let mut debt_txn_file = txn_file.to_owned();
-    debt_txn_file.push_str(&format!(".debt.{}", loan_id));
+    let debt_txn_file = "debt_txn_file";
     let txn_builder =
-      issue_and_transfer_asset(borrower_key_pair,
+      issue_and_transfer_asset(data_dir,
+                               borrower_key_pair,
                                borrower_key_pair,
                                amount,
                                debt_code,
                                AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
                                credential_record,
-                               &debt_txn_file,
-                               Some(debt_tracing_policy.clone()))?;
+                               Some(debt_txn_file),
+                               Some(debt_tracing_policy.clone()),
+                               Some(identity_commitment.clone()))?;
     let debt_sid = submit_and_get_sids(protocol, host, txn_builder)?[0];
     println!("Debt sid: {}", debt_sid.0);
     let debt_open_asset_record =
-      load_open_asset_record_from_file(&debt_txn_file, borrower_key_pair)?;
+      load_open_asset_record_from_file(debt_txn_file, borrower_key_pair)?;
 
     // Initiate loan
     let lender_template =
       AssetRecordTemplate::with_asset_tracking(amount,
                                                debt_code.val,
-                                               NonConfidentialAmount_NonConfidentialAssetType,
+                                               AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
                                                lender_key_pair.get_pk(),
-                                               debt_tracing_policy);
+                                               debt_tracing_policy.clone());
     let borrower_template =
       AssetRecordTemplate::with_no_asset_tracking(amount,
                                                   fiat_code.val,
-                                                  NonConfidentialAmount_NonConfidentialAssetType,
+                                                  AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
                                                   borrower_key_pair.get_pk());
     let xfr_op = TransferOperationBuilder::new().add_input(TxoRef::Absolute(fiat_sid),
                                                            fiat_open_asset_record,
+                                                           None,
+                                                           None,
                                                            amount)?
                                                 .add_input(TxoRef::Absolute(debt_sid),
                                                            debt_open_asset_record,
+                                                           None,
+                                                           None,
                                                            amount)?
-                                                .add_output(&lender_template, credential_record)?
-                                                .add_output(&borrower_template, None)?
+                                                .add_output(&lender_template,
+                                                            Some(debt_tracing_policy),
+                                                            Some(identity_commitment),
+                                                            credential_record)?
+                                                .add_output(&borrower_template, None, None, None)?
                                                 .create(TransferType::Standard)?
                                                 .sign(lender_key_pair)?
                                                 .sign(borrower_key_pair)?
                                                 .transaction()?;
     let mut txn_builder = TransactionBuilder::default();
     txn_builder.add_operation(xfr_op);
-    store_txn_to_file(&debt_txn_file, &txn_builder)?;
 
     // Submit transaction
     let sids_new = submit_and_get_sids(protocol, host, txn_builder)?;
@@ -1834,9 +1946,7 @@ pub mod txn_lib {
                           "utxo_sid",
                           &format!("{}", sid_pre.0))?;
       let blind_asset_record_pre =
-        serde_json::from_str::<BlindAssetRecord>(&res_pre).or_else(|_| {
-                                                            Err(PlatformError::DeserializationError)
-                                                          })?;
+        serde_json::from_str::<BlindAssetRecord>(&res_pre).or_else(|_| Err(des_fail!()))?;
       // Get the new fiat record
       let res_new = query(protocol,
                           host,
@@ -1844,9 +1954,7 @@ pub mod txn_lib {
                           "utxo_sid",
                           &format!("{}", sids_new[1].0))?;
       let blind_asset_record_new =
-        serde_json::from_str::<BlindAssetRecord>(&res_new).or_else(|_| {
-                                                            Err(PlatformError::DeserializationError)
-                                                          })?;
+        serde_json::from_str::<BlindAssetRecord>(&res_new).or_else(|_| Err(des_fail!()))?;
       let txn_builder = merge_records(borrower_key_pair,
                                       TxoRef::Absolute(sid_pre),
                                       TxoRef::Absolute(sids_new[1]),
@@ -1854,7 +1962,6 @@ pub mod txn_lib {
                                       (blind_asset_record_new, None),
                                       fiat_code,
                                       None)?;
-      store_txn_to_file(&fiat_txn_file, &txn_builder)?;
       submit_and_get_sids(protocol, host, txn_builder)?[0]
     } else {
       sids_new[1]
@@ -1863,20 +1970,17 @@ pub mod txn_lib {
              sids_new[0].0, fiat_sid_merged.0);
 
     // Update data
-    let credential_str =
-      serde_json::to_string(&ac_credential).or_else(|_| Err(PlatformError::SerializationError))?;
-    let mut data = load_data()?;
+    let credential_str = serde_json::to_string(&ac_credential).or_else(|_| Err(ser_fail!()))?;
+    let mut data = load_data(data_dir)?;
     data.loans[loan_id as usize].issuer = Some(issuer_id);
     data.fiat_code = Some(fiat_code.to_base64());
     data.loans[loan_id as usize].status = LoanStatus::Active;
     data.loans[loan_id as usize].code = Some(debt_code.to_base64());
     data.loans[loan_id as usize].debt_utxo = Some(sids_new[0]);
-    data.loans[loan_id as usize].debt_txn_file = Some(debt_txn_file);
     data.loans[loan_id as usize].credential = Some(credential_str);
     data.borrowers[borrower_id as usize].balance = borrower.balance + amount;
     data.borrowers[borrower_id as usize].fiat_utxo = Some(fiat_sid_merged);
-    data.borrowers[borrower_id as usize].fiat_txn_file = Some(fiat_txn_file);
-    store_data_to_file(data)
+    store_data_to_file(data, data_dir)
   }
 
   /// Pays loan.
@@ -1885,13 +1989,14 @@ pub mod txn_lib {
   /// * `amount`: amount to pay.
   /// * `protocol`: either `https` or `http`.
   /// * `host`: either `testnet.findora.org` or `localhost`.
-  pub(crate) fn pay_loan(loan_id: u64,
+  pub(crate) fn pay_loan(data_dir: &str,
+                         loan_id: u64,
                          amount: u64,
                          protocol: &str,
                          host: &str)
                          -> Result<(), PlatformError> {
     // Get data
-    let data = load_data()?;
+    let data = load_data(data_dir)?;
     let loan = &data.loans[loan_id as usize];
 
     // Check if it's valid to pay
@@ -1983,34 +2088,37 @@ pub mod txn_lib {
     let spend_template =
       AssetRecordTemplate::with_no_asset_tracking(amount_to_spend,
                                                   fiat_code.val,
-                                                  NonConfidentialAmount_NonConfidentialAssetType,
+                                                  AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
                                                   lender_key_pair.get_pk());
     let burn_template =
       AssetRecordTemplate::with_no_asset_tracking(amount_to_burn,
                                                   debt_code.val,
-                                                  NonConfidentialAmount_NonConfidentialAssetType,
+                                                  AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
                                                   XfrPublicKey::zei_from_bytes(&[0; 32]));
     let lender_template =
       AssetRecordTemplate::with_no_asset_tracking(loan.balance - amount_to_burn,
                                                   debt_code.val,
-                                                  NonConfidentialAmount_NonConfidentialAssetType,
+                                                  AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
                                                   lender_key_pair.get_pk());
     let borrower_template =
       AssetRecordTemplate::with_no_asset_tracking(borrower.balance - amount_to_spend,
                                                   fiat_code.val,
-                                                  NonConfidentialAmount_NonConfidentialAssetType,
+                                                  AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
                                                   borrower_key_pair.get_pk());
-
     let op = TransferOperationBuilder::new().add_input(TxoRef::Absolute(debt_sid),
                                                        debt_open_asset_record,
+                                                       None,
+                                                       None,
                                                        amount_to_burn)?
                                             .add_input(TxoRef::Absolute(fiat_sid),
                                                        fiat_open_asset_record,
+                                                       None,
+                                                       None,
                                                        amount_to_spend)?
-                                            .add_output(&spend_template, None)?
-                                            .add_output(&burn_template, None)?
-                                            .add_output(&lender_template, None)?
-                                            .add_output(&borrower_template, None)?
+                                            .add_output(&spend_template, None, None, None)?
+                                            .add_output(&burn_template, None, None, None)?
+                                            .add_output(&lender_template, None, None, None)?
+                                            .add_output(&borrower_template, None, None, None)?
                                             .create(TransferType::DebtSwap)?
                                             .sign(borrower_key_pair)?
                                             .transaction()?;
@@ -2020,7 +2128,7 @@ pub mod txn_lib {
     // Submit transaction and update data
     let sids = submit_and_get_sids(protocol, host, txn_builder)?;
 
-    let mut data = load_data()?;
+    let mut data = load_data(data_dir)?;
     let balance = loan.balance - amount_to_burn;
     if balance == 0 {
       data.loans[loan_id as usize].status = LoanStatus::Complete;
@@ -2031,7 +2139,7 @@ pub mod txn_lib {
     data.borrowers[borrower_id as usize].balance = borrower.balance - amount_to_spend;
     data.borrowers[borrower_id as usize].fiat_utxo = Some(sids[3]);
 
-    store_data_to_file(data)
+    store_data_to_file(data, data_dir)
   }
 
   /// Uses environment variable RUST_LOG to select log level and filters output by module or regex.
@@ -2043,8 +2151,8 @@ pub mod txn_lib {
   // TODO Verify that this comment is correct.
   // TODO switch to using from_default_env()
   pub fn init_logging() {
-    env_logger::from_env(Env::default().default_filter_or("trace")).target(Target::Stdout)
-                                                                   .init();
+    flexi_logger::Logger::with_env_or_str("trace").start()
+                                                  .unwrap();
   }
 
   /// Matches the PlatformError with an exitcode and exits.
@@ -2063,8 +2171,8 @@ pub mod txn_lib {
   pub fn match_error_and_exit(error: PlatformError) {
     println!("Error: {}", error);
     match error {
-      PlatformError::SerializationError => exit(exitcode::DATAERR),
-      PlatformError::DeserializationError => exit(exitcode::DATAERR),
+      PlatformError::SerializationError(_) => exit(exitcode::DATAERR),
+      PlatformError::DeserializationError(_) => exit(exitcode::DATAERR),
       PlatformError::IoError(io_error) => {
         if io_error.contains("File doesn't exist:") || io_error.contains("Failed to read") {
           exit(exitcode::NOINPUT)
@@ -2094,6 +2202,7 @@ pub mod txn_lib {
   /// * `asset_issuer_matches`: subcommands and arguments under the `asset_issuer` subcommand.
   /// * `txn_file`: path to store the transaction file.
   pub(crate) fn process_asset_issuer_cmd(asset_issuer_matches: &clap::ArgMatches,
+                                         data_dir: &str,
                                          txn_file: &str)
                                          -> Result<(), PlatformError> {
     match asset_issuer_matches.subcommand() {
@@ -2104,8 +2213,8 @@ pub mod txn_lib {
           println!("Name is required to sign up an asset issuer account. Use --name.");
           return Err(PlatformError::InputsError(error_location!()));
         };
-        let mut data = load_data()?;
-        data.add_asset_issuer(name)
+        let mut data = load_data(data_dir)?;
+        data.add_asset_issuer(data_dir, name)
       }
       ("store_sids", Some(store_sids_matches)) => {
         let file = if let Some(file_arg) = store_sids_matches.value_of("file") {
@@ -2123,7 +2232,7 @@ pub mod txn_lib {
         store_sids_to_file(file, sids)
       }
       ("store_memos", Some(store_bar_and_memos_matches)) => {
-        let data = load_data()?;
+        let data = load_data(data_dir)?;
         let (issuer_pub_key, policy) = if let Some(id_arg) = asset_issuer_matches.value_of("id") {
           let issuer_id = parse_to_u64(id_arg)?;
           let issuer_pub_key = data.get_asset_issuer_key_pair(issuer_id)?.get_pk();
@@ -2178,7 +2287,7 @@ pub mod txn_lib {
                air_assign_matches.value_of("pok"))
         {
           (Some(address), Some(data), Some(issuer_pk), Some(pok)) => {
-            air_assign(issuer_id, address, data, issuer_pk, pok, txn_file)
+            air_assign(data_dir, issuer_id, address, data, issuer_pk, pok, txn_file)
           }
           (_, _, _, _) => {
             println!("Missing address, data, issuer_pk, or proof.");
@@ -2188,7 +2297,7 @@ pub mod txn_lib {
       }
       ("define_asset", Some(define_asset_matches)) => {
         let fiat_asset = define_asset_matches.is_present("fiat");
-        let data = load_data()?;
+        let data = load_data(data_dir)?;
         let issuer_key_pair = if let Some(id_arg) = asset_issuer_matches.value_of("id") {
           let issuer_id = parse_to_u64(id_arg)?;
           data.get_asset_issuer_key_pair(issuer_id)?
@@ -2212,19 +2321,20 @@ pub mod txn_lib {
                    asset_token.to_base64(),
                    asset_token.val);
         }
-        match define_asset(fiat_asset,
+        match define_asset(data_dir,
+                           fiat_asset,
                            &issuer_key_pair,
                            asset_token,
                            &memo,
                            AssetRules::default().set_traceable(traceable).clone(),
-                           txn_file)
+                           Some(txn_file))
         {
           Ok(_) => Ok(()),
           Err(error) => Err(error),
         }
       }
       ("set_kv", Some(kv_matches)) => {
-        let data = load_data()?;
+        let data = load_data(data_dir)?;
         let issuer_id =
           parse_to_u64(asset_issuer_matches.value_of("id")
                                            .ok_or_else(|| PlatformError::InputsError(error_location!()))?)?;
@@ -2245,7 +2355,7 @@ pub mod txn_lib {
         store_txn_to_file(&txn_file, &txn_builder)
       }
       ("clear_kv", Some(kv_matches)) => {
-        let data = load_data()?;
+        let data = load_data(data_dir)?;
         let issuer_id =
           parse_to_u64(asset_issuer_matches.value_of("id")
                                            .ok_or_else(|| PlatformError::InputsError(error_location!()))?)?;
@@ -2263,7 +2373,7 @@ pub mod txn_lib {
         store_txn_to_file(&txn_file, &txn_builder)
       }
       ("issue_asset", Some(issue_asset_matches)) => {
-        let data = load_data()?;
+        let data = load_data(data_dir)?;
         let (key_pair, tracer_enc_keys) = if let Some(id_arg) = asset_issuer_matches.value_of("id")
         {
           let issuer_id = parse_to_u64(id_arg)?;
@@ -2298,7 +2408,7 @@ pub mod txn_lib {
           txn_builder.add_basic_issue_asset(&key_pair,
                                             policy,
                                             &token_code,
-                                            get_and_update_sequence_number()?,
+                                            get_and_update_sequence_number(data_dir)?,
                                             amount,
                                             AssetRecordType::from_booleans(confidential_amount,
                                                                            false))
@@ -2309,7 +2419,7 @@ pub mod txn_lib {
         store_txn_to_file(&txn_file, &txn_builder)
       }
       ("transfer_asset", Some(transfer_asset_matches)) => {
-        let data = load_data()?;
+        let data = load_data(data_dir)?;
         let (issuer_key_pair, tracer_enc_keys) =
           if let Some(id_arg) = asset_issuer_matches.value_of("id") {
             let issuer_id = parse_to_u64(id_arg)?;
@@ -2337,6 +2447,13 @@ pub mod txn_lib {
           println!("Blind asset records and associated memos are required to transfer asset. Use --issuance_txn_files.");
           return Err(PlatformError::InputsError(error_location!()));
         };
+        let tracing_policy = if transfer_asset_matches.is_present("traceable") {
+          Some(AssetTracingPolicy { enc_keys: tracer_enc_keys,
+                                    asset_tracking: true,
+                                    identity_tracking: None })
+        } else {
+          None
+        };
         let input_amounts =
           if let Some(input_amounts_arg) = transfer_asset_matches.value_of("input_amounts") {
             parse_to_u64_vec(input_amounts_arg)?
@@ -2353,6 +2470,8 @@ pub mod txn_lib {
         let mut txo_refs_iter = txo_refs.iter();
         let mut bars_and_owner_memos_iter = bars_and_owner_memos.iter();
         let mut input_amounts_iter = input_amounts.iter();
+        let mut input_tracing_policies = Vec::new();
+        let mut input_identity_commitments = Vec::new();
         while count > 0 {
           let txo_refs_next = if let Some(txo_ref) = txo_refs_iter.next() {
             txo_ref
@@ -2376,6 +2495,8 @@ pub mod txn_lib {
           let transfer_from_next =
             (txo_refs_next, blind_asset_record_next, input_amount_next, owner_memo_next);
           transfer_from.push(transfer_from_next);
+          input_tracing_policies.push(tracing_policy.clone());
+          input_identity_commitments.push(None);
           count -= 1;
         }
 
@@ -2406,6 +2527,8 @@ pub mod txn_lib {
         let mut transfer_to = Vec::new();
         let mut output_amounts_iter = output_amounts.iter();
         let mut addresses_iter = recipient_addresses.iter();
+        let mut output_tracing_policies = Vec::new();
+        let mut output_identity_commitments = Vec::new();
         while count > 0 {
           let output_amount_next = if let Some(output_amount) = output_amounts_iter.next() {
             *output_amount
@@ -2420,20 +2543,20 @@ pub mod txn_lib {
             return Err(PlatformError::InputsError(error_location!()));
           };
           transfer_to.push((output_amount_next, address_next));
+          output_tracing_policies.push(tracing_policy.clone());
+          output_identity_commitments.push(None);
           count -= 1;
         }
 
         // Transfer asset
         let mut txn_builder = TransactionBuilder::default();
-        if let Err(e) =
-          txn_builder.add_basic_transfer_asset(&issuer_key_pair,
-                                               &Some(AssetTracingPolicy { enc_keys:
-                                                                            tracer_enc_keys,
-                                                                          asset_tracking: true,
-                                                                          identity_tracking:
-                                                                            None }),
-                                               &transfer_from[..],
-                                               &transfer_to[..])
+        if let Err(e) = txn_builder.add_basic_transfer_asset(&issuer_key_pair,
+                                                             &transfer_from[..],
+                                                             input_tracing_policies,
+                                                             input_identity_commitments,
+                                                             &transfer_to[..],
+                                                             output_tracing_policies,
+                                                             output_identity_commitments)
         {
           println!("Failed to add operation to transaction.");
           return Err(e);
@@ -2441,7 +2564,7 @@ pub mod txn_lib {
         store_txn_to_file(&txn_file, &txn_builder)
       }
       ("issue_and_transfer_asset", Some(issue_and_transfer_matches)) => {
-        let data = load_data()?;
+        let data = load_data(data_dir)?;
         let issuer_key_pair = if let Some(id_arg) = asset_issuer_matches.value_of("id") {
           let issuer_id = parse_to_u64(id_arg)?;
           data.get_asset_issuer_key_pair(issuer_id)?
@@ -2473,18 +2596,20 @@ pub mod txn_lib {
         let confidential_amount = issue_and_transfer_matches.is_present("confidential_amount");
         let record_type = AssetRecordType::from_booleans(confidential_amount, false);
 
-        issue_and_transfer_asset(&issuer_key_pair,
+        issue_and_transfer_asset(data_dir,
+                                 &issuer_key_pair,
                                  &recipient_key_pair,
                                  amount,
                                  token_code,
                                  record_type,
                                  None,
-                                 txn_file,
+                                 Some(txn_file),
+                                 None,
                                  None)?;
         Ok(())
       }
       ("trace_and_verify_asset", Some(trace_and_verify_asset_matches)) => {
-        let data = load_data()?;
+        let data = load_data(data_dir)?;
         let tracer_dec_keys = if let Some(id_arg) = asset_issuer_matches.value_of("id") {
           let issuer_id = parse_to_u64(id_arg)?;
           data.get_asset_tracer_key_pair(issuer_id)?
@@ -2519,12 +2644,11 @@ pub mod txn_lib {
                    .or_else(|error| Err(PlatformError::ZeiError(error_location!(), error)))
       }
       ("trace_credential", Some(trace_credential_matches)) => {
-        let data = load_data()?;
+        let data = load_data(data_dir)?;
         let attrs_dec_key = if let Some(id_arg) = asset_issuer_matches.value_of("id") {
           let issuer_id = parse_to_u64(id_arg)?;
-          data.get_asset_tracer_key_pair(issuer_id)?
-              .dec_key
-              .attrs_dec_key
+          let asset_tracer_key_pair = data.get_asset_tracer_key_pair(issuer_id)?;
+          asset_tracer_key_pair.dec_key.attrs_dec_key
         } else {
           println!("Asset issuer id is required to trace the asset. Use asset_issuer --id.");
           return Err(PlatformError::InputsError(error_location!()));
@@ -2536,15 +2660,33 @@ pub mod txn_lib {
             println!("Tracer memo is required to trace the credential. Use --memo_file.");
             return Err(PlatformError::InputsError(error_location!()));
           };
-        let expected_values =
-          if let Some(expected_values_arg) = trace_credential_matches.value_of("expected_values") {
-            parse_to_u32_vec(expected_values_arg)?
+        let len = if let Some(attribute_arg) = trace_credential_matches.value_of("attribute") {
+          let credential_issuer_public_key = data.get_credential_issuer_key_pair(0)?.0;
+          credential_issuer_public_key.get_len(attribute_arg)
+                                      .or_else(|e| {
+                                        Err(PlatformError::ZeiError(error_location!(), e))
+                                      })?
+        } else {
+          println!("Credential attribute is required to verify the credential. Use --attribute.");
+          return Err(PlatformError::InputsError(error_location!()));
+        };
+        let expected_value =
+          if let Some(expected_value_arg) = trace_credential_matches.value_of("expected_value") {
+            u8_slice_to_u32_vec(expected_value_arg.as_bytes(), len)
           } else {
-            println!("Expected value is required to verify the credential. Use --expected_values.");
+            println!("Expected value is required to verify the credential. Use --expected_value.");
             return Err(PlatformError::InputsError(error_location!()));
           };
-        match tracer_memo.verify_identity_attributes(&attrs_dec_key, &expected_values.to_vec()) {
-          Ok(_) => Ok(()),
+        match tracer_memo.verify_identity_attributes(&attrs_dec_key, &expected_value) {
+          Ok(res) => {
+            if res[0] {
+              println!("Credential verification succeeded.");
+            } else {
+              println!("Credential value isn't as expected.");
+              return Err(PlatformError::InputsError(error_location!()));
+            }
+            Ok(())
+          }
           Err(e) => Err(PlatformError::ZeiError(error_location!(), e)),
         }
       }
@@ -2584,7 +2726,8 @@ pub mod txn_lib {
   ///
   /// # Arguments
   /// * `credential_issuer_matches`: subcommands and arguments under the `credential_issuer` subcommand.
-  pub(crate) fn process_credential_issuer_cmd(credential_issuer_matches: &clap::ArgMatches)
+  pub(crate) fn process_credential_issuer_cmd(credential_issuer_matches: &clap::ArgMatches,
+                                              data_dir: &str)
                                               -> Result<(), PlatformError> {
     match credential_issuer_matches.subcommand() {
       ("sign_up", Some(sign_up_matches)) => {
@@ -2594,8 +2737,8 @@ pub mod txn_lib {
           println!("Name is required to sign up a credential issuer account. Use --name.");
           return Err(PlatformError::InputsError(error_location!()));
         };
-        let mut data = load_data()?;
-        data.add_credential_issuer(name)
+        let mut data = load_data(data_dir)?;
+        data.add_credential_issuer(data_dir, name)
       }
       _ => {
         println!("Subcommand missing or not recognized. Try credential_issuer --help");
@@ -2613,11 +2756,10 @@ pub mod txn_lib {
   ///
   /// # Arguments
   /// * `lender_matches`: subcommands and arguments under the `lender` subcommand.
-  /// * `txn_file`: path to store the transaction file.
   pub(crate) fn process_lender_cmd(lender_matches: &clap::ArgMatches,
-                                   txn_file: &str)
+                                   data_dir: &str)
                                    -> Result<(), PlatformError> {
-    let mut data = load_data()?;
+    let mut data = load_data(data_dir)?;
     match lender_matches.subcommand() {
       ("sign_up", Some(sign_up_matches)) => {
         let name = if let Some(name_arg) = sign_up_matches.value_of("name") {
@@ -2626,7 +2768,7 @@ pub mod txn_lib {
           println!("Name is required to sign up a lender account. Use --name.");
           return Err(PlatformError::InputsError(error_location!()));
         };
-        data.add_lender(name)
+        data.add_lender(data_dir, name)
       }
       ("view_loan", Some(view_loan_matches)) => {
         let lender_id = if let Some(id_arg) = lender_matches.value_of("id") {
@@ -2716,7 +2858,7 @@ pub mod txn_lib {
         };
         let memo_file = fulfill_loan_matches.value_of("memo_file");
         let (protocol, host) = protocol_host(fulfill_loan_matches);
-        fulfill_loan(loan_id, issuer_id, txn_file, memo_file, protocol, host)
+        fulfill_loan(data_dir, loan_id, issuer_id, memo_file, protocol, host)
       }
       ("create_or_overwrite_requirement", Some(create_or_overwrite_requirement_matches)) => {
         let lender_id = if let Some(id_arg) = lender_matches.value_of("id") {
@@ -2745,8 +2887,8 @@ pub mod txn_lib {
           println!("Credential value is required to create or overwrite the credential requirement. Use --requirement.");
           return Err(PlatformError::InputsError(error_location!()));
         };
-        let mut data = load_data()?;
-        data.create_or_overwrite_requirement(lender_id, attribute, requirement)
+        let mut data = load_data(data_dir)?;
+        data.create_or_overwrite_requirement(data_dir, lender_id, attribute, requirement)
       }
       _ => {
         println!("Subcommand missing or not recognized. Try lender --help");
@@ -2769,11 +2911,10 @@ pub mod txn_lib {
   ///
   /// # Arguments
   /// * `borrower_matches`: subcommands and arguments under the `borrower` subcommand.
-  /// * `txn_file`: path to store the transaction file.
   pub(crate) fn process_borrower_cmd(borrower_matches: &clap::ArgMatches,
-                                     txn_file: &str)
+                                     data_dir: &str)
                                      -> Result<(), PlatformError> {
-    let mut data = load_data()?;
+    let mut data = load_data(data_dir)?;
     match borrower_matches.subcommand() {
       ("sign_up", Some(sign_up_matches)) => {
         let name = if let Some(name_arg) = sign_up_matches.value_of("name") {
@@ -2782,7 +2923,7 @@ pub mod txn_lib {
           println!("Name is required to sign up a lender account. Use --name.");
           return Err(PlatformError::InputsError(error_location!()));
         };
-        data.add_borrower(name)
+        data.add_borrower(data_dir, name)
       }
       ("load_funds", Some(load_funds_matches)) => {
         let borrower_id = if let Some(id_arg) = borrower_matches.value_of("id") {
@@ -2791,7 +2932,7 @@ pub mod txn_lib {
           println!("Borrower id is required to load funds. Use borrower --id.");
           return Err(PlatformError::InputsError(error_location!()));
         };
-        process_load_funds_cmd(borrower_id, load_funds_matches, txn_file)
+        process_load_funds_cmd(load_funds_matches, data_dir, borrower_id)
       }
       ("view_loan", Some(view_loan_matches)) => {
         let borrower_id = if let Some(id_arg) = borrower_matches.value_of("id") {
@@ -2888,8 +3029,13 @@ pub mod txn_lib {
           println!("Duration is required to request the loan. Use --amount.");
           return Err(PlatformError::InputsError(error_location!()));
         };
-        let mut data = load_data()?;
-        data.add_loan(lender_id, borrower_id, amount, interest_per_mille, duration)
+        let mut data = load_data(data_dir)?;
+        data.add_loan(data_dir,
+                      lender_id,
+                      borrower_id,
+                      amount,
+                      interest_per_mille,
+                      duration)
       }
       ("pay_loan", Some(pay_loan_matches)) => {
         let borrower_id = if let Some(id_arg) = borrower_matches.value_of("id") {
@@ -2909,7 +3055,7 @@ pub mod txn_lib {
           println!("Loan id is required to pay the loan.");
           return Err(PlatformError::InputsError(error_location!()));
         }
-        process_pay_loan_cmd(pay_loan_matches)
+        process_pay_loan_cmd(pay_loan_matches, data_dir)
       }
       ("view_credential", Some(view_credential_matches)) => {
         let borrower_id = if let Some(id_arg) = borrower_matches.value_of("id") {
@@ -2981,8 +3127,12 @@ pub mod txn_lib {
           println!("Credential value is required to create or overwrite the credential. Use --value.");
           return Err(PlatformError::InputsError(error_location!()));
         };
-        let mut data = load_data()?;
-        data.create_or_overwrite_credential(borrower_id, credential_issuer_id, attribute, value)
+        let mut data = load_data(data_dir)?;
+        data.create_or_overwrite_credential(data_dir,
+                                            borrower_id,
+                                            credential_issuer_id,
+                                            attribute,
+                                            value)
       }
       ("get_asset_record", Some(get_asset_record_matches)) => {
         let borrower_id = if let Some(id_arg) = borrower_matches.value_of("id") {
@@ -2991,7 +3141,7 @@ pub mod txn_lib {
           println!("Borrower id is required to get the asset record. Use borrower --id.");
           return Err(PlatformError::InputsError(error_location!()));
         };
-        let data = load_data()?;
+        let data = load_data(data_dir)?;
         let borrower_name = data.borrowers[borrower_id as usize].name.clone();
         let key_pair = data.get_borrower_key_pair(borrower_id)?;
         let sid = if let Some(sid_arg) = get_asset_record_matches.value_of("sid") {
@@ -3088,10 +3238,9 @@ pub mod txn_lib {
   /// # Arguments
   /// * `borrower_id`: borrower ID.
   /// * `load_funds_matches`: subcommands and arguments under the `load_funds` subcommand.
-  /// * `txn_file`: path to store the transaction file.
-  pub(crate) fn process_load_funds_cmd(borrower_id: u64,
-                                       load_funds_matches: &clap::ArgMatches,
-                                       txn_file: &str)
+  pub(crate) fn process_load_funds_cmd(load_funds_matches: &clap::ArgMatches,
+                                       data_dir: &str,
+                                       borrower_id: u64)
                                        -> Result<(), PlatformError> {
     let issuer_id = if let Some(issuer_arg) = load_funds_matches.value_of("issuer") {
       if let Ok(id) = issuer_arg.parse::<u64>() {
@@ -3111,13 +3260,14 @@ pub mod txn_lib {
       return Err(PlatformError::InputsError(error_location!()));
     };
     let (protocol, host) = protocol_host(load_funds_matches);
-    load_funds(issuer_id, borrower_id, amount, txn_file, protocol, host)
+    load_funds(data_dir, issuer_id, borrower_id, amount, protocol, host)
   }
 
   /// Processes the `borrower pay_loan` subcommand.
   /// # Arguments
   /// * `pay_loan_matches`: subcommands and arguments under the `pay_loan` subcommand.
-  pub(crate) fn process_pay_loan_cmd(pay_loan_matches: &clap::ArgMatches)
+  pub(crate) fn process_pay_loan_cmd(pay_loan_matches: &clap::ArgMatches,
+                                     data_dir: &str)
                                      -> Result<(), PlatformError> {
     let loan_id = if let Some(loan_arg) = pay_loan_matches.value_of("loan") {
       parse_to_u64(loan_arg)?
@@ -3133,7 +3283,7 @@ pub mod txn_lib {
     };
     let (protocol, host) = protocol_host(pay_loan_matches);
 
-    pay_loan(loan_id, amount, protocol, host)
+    pay_loan(data_dir, loan_id, amount, protocol, host)
   }
 
   /// Processes input commands and arguments.
@@ -3142,7 +3292,7 @@ pub mod txn_lib {
   pub fn process_inputs(inputs: clap::ArgMatches) -> Result<(), PlatformError> {
     let _config_file_path: String;
     let txn_file: String;
-    let findora_dir = if let Some(dir) = inputs.value_of("findora_dir") {
+    let dir = if let Some(dir) = inputs.value_of("dir") {
       dir.to_string()
     } else if let Ok(dir) = env::var("FINDORA_DIR") {
       dir
@@ -3163,24 +3313,24 @@ pub mod txn_lib {
     if let Some(cfg) = inputs.value_of("config") {
       _config_file_path = cfg.to_string();
     } else {
-      _config_file_path = format!("{}/config.toml", findora_dir);
+      _config_file_path = format!("{}/config.toml", dir);
     }
 
     if let Some(txn_store) = inputs.value_of("txn") {
       txn_file = txn_store.to_string();
     } else {
-      txn_file = format!("{}/txn/default.txn", findora_dir);
+      txn_file = format!("{}/txn/default.txn", dir);
     }
 
     match inputs.subcommand() {
       ("asset_issuer", Some(asset_issuer_matches)) => {
-        process_asset_issuer_cmd(asset_issuer_matches, &txn_file)
+        process_asset_issuer_cmd(asset_issuer_matches, &dir, &txn_file)
       }
       ("credential_issuer", Some(credential_issuer_matches)) => {
-        process_credential_issuer_cmd(credential_issuer_matches)
+        process_credential_issuer_cmd(credential_issuer_matches, &dir)
       }
-      ("lender", Some(issuer_matches)) => process_lender_cmd(issuer_matches, &txn_file),
-      ("borrower", Some(issuer_matches)) => process_borrower_cmd(issuer_matches, &txn_file),
+      ("lender", Some(issuer_matches)) => process_lender_cmd(issuer_matches, &dir),
+      ("borrower", Some(issuer_matches)) => process_borrower_cmd(issuer_matches, &dir),
       ("create_txn_builder", Some(create_txn_builder_matches)) => {
         process_create_txn_builder_cmd(create_txn_builder_matches, &txn_file)
       }
@@ -3196,7 +3346,7 @@ pub mod txn_lib {
           }
           Err(_) => {
             println!("Failed to serialize txn.");
-            Err(PlatformError::SerializationError)
+            Err(ser_fail!())
           }
         }
       }
@@ -3219,6 +3369,7 @@ pub mod txn_lib {
   mod tests {
     use super::*;
     use ledger_standalone::LedgerStandalone;
+    use tempfile::tempdir;
 
     const PROTOCOL: &str = "http";
     const HOST: &str = "localhost";
@@ -3305,29 +3456,33 @@ pub mod txn_lib {
 
     #[test]
     fn test_define_asset() {
-      // Create txn builder and key pair
-      let txn_builder_path = "tb_define";
+      let tmp_dir = tempdir().unwrap();
+      let data_dir = tmp_dir.path().to_str().unwrap();
+
+      // Create key pair
       let mut prng: ChaChaRng = ChaChaRng::from_entropy();
       let issuer_key_pair = XfrKeyPair::generate(&mut prng);
 
       // Define asset
-      let res = define_asset(false,
+      let res = define_asset(data_dir,
+                             false,
                              &issuer_key_pair,
                              AssetTypeCode::gen_random(),
                              "Define asset",
                              AssetRules::default(),
-                             txn_builder_path);
-
-      let _ = fs::remove_file(DATA_FILE);
-      fs::remove_file(txn_builder_path).unwrap();
+                             None);
 
       assert!(res.is_ok());
+
+      tmp_dir.close().unwrap();
     }
 
     #[test]
     fn test_issue_and_transfer_asset() {
-      // Create txn builder and key pairs
-      let txn_builder_path = "tb_issue_and_transfer";
+      let tmp_dir = tempdir().unwrap();
+      let data_dir = tmp_dir.path().to_str().unwrap();
+
+      // Create key pairs
       let mut prng: ChaChaRng = ChaChaRng::from_entropy();
       let issuer_key_pair = XfrKeyPair::generate(&mut prng);
       let recipient_key_pair = XfrKeyPair::generate(&mut prng);
@@ -3335,16 +3490,21 @@ pub mod txn_lib {
       // Issue and transfer asset
       let code = AssetTypeCode::gen_random();
       let amount = 1000;
-      assert!(issue_and_transfer_asset(&issuer_key_pair,
-                                     &recipient_key_pair,
-                                     amount,
-                                     code,
-                                     AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType, None,
-                                     txn_builder_path,
-                                     None).is_ok());
+      let res =
+        issue_and_transfer_asset(data_dir,
+                                 &issuer_key_pair,
+                                 &recipient_key_pair,
+                                 amount,
+                                 code,
+                                 AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
+                                 None,
+                                 None,
+                                 None,
+                                 None);
 
-      let _ = fs::remove_file(DATA_FILE);
-      fs::remove_file(txn_builder_path).unwrap();
+      assert!(res.is_ok());
+
+      tmp_dir.close().unwrap();
     }
 
     #[test]
@@ -3355,7 +3515,7 @@ pub mod txn_lib {
 
       // Build blind asset records
       let code = AssetTypeCode::gen_random();
-      let asset_record_type = NonConfidentialAmount_NonConfidentialAssetType;
+      let asset_record_type = AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType;
       let (bar1, _, memo1) = get_blind_asset_record_and_memos(key_pair.get_pk(),
                                                               1000,
                                                               code,
@@ -3378,51 +3538,48 @@ pub mod txn_lib {
     }
 
     #[test]
-    #[ignore]
     // Test funds loading, loan request, fulfilling and repayment
     fn test_request_fulfill_and_pay_loan() {
       let ledger_standalone = LedgerStandalone::new();
       ledger_standalone.poll_until_ready().unwrap();
 
-      // Create txn builder
-      let txn_builder_path = "tb_load_funds";
-
       // Load funds
+      let tmp_dir = tempdir().unwrap();
+      let data_dir = tmp_dir.path().to_str().unwrap();
+
       let funds_amount = 1000;
-      load_funds(0, 0, funds_amount, txn_builder_path, PROTOCOL, HOST).unwrap();
-      let data = load_data().unwrap();
+      load_funds(data_dir, 0, 0, funds_amount, PROTOCOL, HOST).unwrap();
+      let data = load_data(data_dir).unwrap();
 
       assert_eq!(data.borrowers[0].balance, funds_amount);
 
-      fs::remove_file(txn_builder_path).unwrap();
-      let _ = fs::remove_file(DATA_FILE);
+      tmp_dir.close().unwrap();
 
       // Request a loan
-      let txn_builder_path = "tb_loan";
+      let tmp_dir = tempdir().unwrap();
+      let data_dir = tmp_dir.path().to_str().unwrap();
+
       let loan_amount = 1200;
-      let mut data = load_data().unwrap();
-      data.add_loan(0, 0, loan_amount, 100, 8).unwrap();
+      let mut data = load_data(data_dir).unwrap();
+      data.add_loan(data_dir, 0, 0, loan_amount, 100, 8).unwrap();
 
       assert_eq!(data.loans.len(), 1);
 
       // Fulfill the loan request
-      fulfill_loan(0, 0, txn_builder_path, None, PROTOCOL, HOST).unwrap();
-      data = load_data().unwrap();
+      fulfill_loan(data_dir, 0, 0, None, PROTOCOL, HOST).unwrap();
+      data = load_data(data_dir).unwrap();
 
       assert_eq!(data.loans[0].status, LoanStatus::Active);
       assert_eq!(data.loans[0].balance, loan_amount);
 
       // Pay loan
       let payment_amount = 200;
-      pay_loan(0, payment_amount, PROTOCOL, HOST).unwrap();
-      data = load_data().unwrap();
-
-      let _ = fs::remove_file(DATA_FILE);
-      fs::remove_file(txn_builder_path).unwrap();
-      fs::remove_file("tb_loan.debt.0").unwrap();
-      fs::remove_file("tb_loan.fiat.0").unwrap();
+      pay_loan(data_dir, 0, payment_amount, PROTOCOL, HOST).unwrap();
+      data = load_data(data_dir).unwrap();
 
       assert_eq!(data.loans[0].payments, 1);
+
+      tmp_dir.close().unwrap();
     }
   }
 }

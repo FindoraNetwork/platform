@@ -14,10 +14,10 @@ path = "src/txn_cli.rs"
 [dependencies]
 clap = "2.33.0"
 credentials = { path = "../../libs/credentials" }
+curve25519-dalek = { version =  "2.0.0", features = ["serde"] }
 dirs = "2.0.2"
-env_logger = "0.6.2"
 exitcode = "1.1.2"
-findora = { path = "../../findora" }
+flexi_logger = "0.15.2"
 hex = "0.3.2"
 ledger = { path = "../../ledger" }
 ledger_standalone = { path = "../ledger_standalone" }
@@ -31,6 +31,7 @@ serde_derive = "1.0"
 serde_json = "1.0"
 shellexpand = "1.0.0"
 submission_server = { path = "../submission_server" }
+tempfile = "3.1.0"
 txn_builder = { path = "../txn_builder" }
 wasm = { path = "../wasm" }
 zei = { git = "ssh://git@github.com/findoraorg/zei", tag = "v0.0.2-4" }
