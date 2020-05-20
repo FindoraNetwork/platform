@@ -141,31 +141,34 @@ fn process_inputs(inputs: clap::ArgMatches) -> Result<(), PlatformError> {
       store_data_to_file(dir, data)
     }
     ("prove_and_verify_solvency", Some(prove_and_verify_matches)) => {
-      let mut hidden_assets = if let Some(hidden_assets_arg) =
-        prove_and_verify_matches.value_of("hidden_assets")
-      {
-        serde_json::from_str::<Vec<AmountAndCodeScalar>>(&hidden_assets_arg).or(Err(PlatformError::DeserializationError))?
-      } else {
-        Vec::new()
-      };
+      let mut hidden_assets =
+        if let Some(hidden_assets_arg) = prove_and_verify_matches.value_of("hidden_assets") {
+          serde_json::from_str::<Vec<AmountAndCodeScalar>>(&hidden_assets_arg).or_else(|e| {
+                                                                                Err(des_fail!(e))
+                                                                              })?
+        } else {
+          Vec::new()
+        };
       let mut hidden_assets_blinds = if let Some(hidden_assets_blinds_arg) =
         prove_and_verify_matches.value_of("hidden_assets_blinds")
       {
-        serde_json::from_str::<Vec<AmountAndCodeBlinds>>(&hidden_assets_blinds_arg).or(Err(PlatformError::DeserializationError))?
+        serde_json::from_str::<Vec<AmountAndCodeBlinds>>(&hidden_assets_blinds_arg).or_else(|e| Err(des_fail!(e)))?
       } else {
         Vec::new()
       };
       let mut hidden_liabilities = if let Some(hidden_liabilities_arg) =
         prove_and_verify_matches.value_of("hidden_liabilities")
       {
-        serde_json::from_str::<Vec<AmountAndCodeScalar>>(&hidden_liabilities_arg).or(Err(PlatformError::DeserializationError))?
+        serde_json::from_str::<Vec<AmountAndCodeScalar>>(&hidden_liabilities_arg).or_else(|e| {
+                                                                                   Err(des_fail!(e))
+                                                                                 })?
       } else {
         Vec::new()
       };
       let mut hidden_liabilities_blinds = if let Some(hidden_liabilities_blinds_arg) =
         prove_and_verify_matches.value_of("hidden_liabilities_blinds")
       {
-        serde_json::from_str::<Vec<AmountAndCodeBlinds>>(&hidden_liabilities_blinds_arg).or(Err(PlatformError::DeserializationError))?
+        serde_json::from_str::<Vec<AmountAndCodeBlinds>>(&hidden_liabilities_blinds_arg).or_else(|e| Err(des_fail!(e)))?
       } else {
         Vec::new()
       };

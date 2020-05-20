@@ -49,11 +49,7 @@ pub fn calculate_amount_blinds(amount_blind_low: Scalar, amount_blind_high: Scal
 pub fn calculate_amount_and_code_blinds(blinds_str: &str)
                                         -> Result<AmountAndCodeBlinds, PlatformError> {
   let ((amount_blind_low, amount_blind_high), code_blind) =
-    if let Ok(blinds) = serde_json::from_str::<((Scalar, Scalar), Scalar)>(&blinds_str) {
-      blinds
-    } else {
-      return Err(PlatformError::DeserializationError);
-    };
+    serde_json::from_str::<((Scalar, Scalar), Scalar)>(&blinds_str).or_else(|e| Err(des_fail!(e)))?;
   Ok((amount_blind_low + Scalar::from(1u64 << 32) * amount_blind_high, code_blind))
 }
 
