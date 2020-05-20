@@ -130,5 +130,8 @@ fn main() {
     query_service.run()
   });
 
-  abci::run_local(app);
+  // TODO: pass the address and port in on the command line
+  let addr = "0.0.0.0:26658".parse().unwrap();
+
+  abci::run(addr, app);
 }
