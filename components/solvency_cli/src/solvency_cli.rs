@@ -365,6 +365,9 @@ mod tests {
                          .output()
   }
 
+  // This test passes individually, but we ignore it since it occasionally fails with SubmissionServerError
+  // when run with other tests which also use the standalone ledger
+  // Redmine issue: #38
   #[test]
   #[ignore]
   fn test_cmd() {

@@ -162,9 +162,11 @@ mod tests {
   use zei::xfr::sig::XfrKeyPair;
   use zei::xfr::structs::AssetRecordTemplate;
 
+  // This test passes individually, but we ignore it since it occasionally fails with SubmissionServerError
+  // when run with other tests which also use the standalone ledger
+  // Redmine issue: #38
   #[test]
   #[ignore]
-  // Ignoring this test since it sometimes fails on master
   pub fn test_query_server() {
     let ledger_state = LedgerState::test_ledger();
     let mut prng = ChaChaRng::from_entropy();
