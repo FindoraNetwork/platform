@@ -149,6 +149,7 @@ fn query_public_key<LA>(data: web::Data<Arc<RwLock<LA>>>) -> web::Json<XfrPublic
   web::Json(*reader.public_key())
 }
 
+#[allow(clippy::type_complexity)]
 fn query_global_state<LA>(
   data: web::Data<Arc<RwLock<LA>>>)
   -> web::Json<(HashOf<Option<StateCommitmentData>>,
