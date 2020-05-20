@@ -9,7 +9,6 @@ name = "log_tester"
 path = "src/log_tester.rs"
 
 [dependencies]
-bincode = "1"
 cryptohash = { path = "../../libs/cryptohash" }
 flexi_logger = "0.15.2"
 ledger_api_service = { path = "../ledger_api_service" }

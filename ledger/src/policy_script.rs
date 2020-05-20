@@ -179,10 +179,14 @@ pub fn policy_check_txn(type_code: &AssetTypeCode,
                         pol: &Policy,
                         txn: &Transaction)
                         -> Result<(), PlatformError> {
-  let pol_data =
-    // serde_json::from_str::<TxnPolicyData>(&txn.memos.get(0).ok_or(PlatformError::InputsError)?.0)?.0.drain(..).collect::<HashMap<_,_>>();
-    txn.policy_options.as_ref().ok_or_else(|| PlatformError::InputsError(error_location!()))?.0.iter().cloned().collect::<HashMap<_,_>>();
-  // serde_json::from_str::<TxnPolicyData>(&txn.memos.get(0).ok_or(PlatformError::InputsError)?.0)?.0.drain(..).collect::<HashMap<_,_>>();
+  let pol_data = txn.body
+                    .policy_options
+                    .as_ref()
+                    .ok_or_else(|| PlatformError::InputsError(error_location!()))?
+                    .0
+                    .iter()
+                    .cloned()
+                    .collect::<HashMap<_, _>>();
 
   let inputs = pol_data.get(type_code)
                        .ok_or_else(|| PlatformError::InputsError(error_location!()))?;
@@ -413,7 +417,7 @@ pub fn run_txn_check(check: &TxnCheck,
    * -------- Match the RealTxnOps to the AssetRecords -----
    */
 
-  if real_ops.len() != txn.operations.len() {
+  if real_ops.len() != txn.body.operations.len() {
     return Err(fail!());
   }
 
@@ -435,7 +439,7 @@ pub fn run_txn_check(check: &TxnCheck,
 
   dbg!(&real_ops);
 
-  for (target, real) in real_ops.iter().zip(txn.operations.iter()) {
+  for (target, real) in real_ops.iter().zip(txn.body.operations.iter()) {
     dbg!("Txn match step");
     match (target, real) {
       (RealTxnOp::Issue(_, outs), Operation::IssueAsset(iss)) => {
