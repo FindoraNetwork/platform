@@ -11,7 +11,6 @@ use credentials::{
   CredUserPublicKey, CredUserSecretKey, Credential as PlatformCredential,
 };
 use cryptohash::sha256;
-use cryptohash::sha256::Digest as BitDigest;
 use js_sys::Promise;
 use ledger::data_model::{
   b64dec, b64enc, AssetRules, AssetTypeCode, AuthenticatedTransaction, Operation,
@@ -24,6 +23,7 @@ use txn_builder::{
   BuildsTransactions, PolicyChoice, TransactionBuilder as PlatformTransactionBuilder,
   TransferOperationBuilder as PlatformTransferOperationBuilder,
 };
+use utils::HashOf;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::future_to_promise;
 use wasm_bindgen_futures::JsFuture;
@@ -62,7 +62,7 @@ pub fn verify_authenticated_txn(state_commitment: String,
                                 -> Result<bool, JsValue> {
   let authenticated_txn = serde_json::from_str::<AuthenticatedTransaction>(&authenticated_txn)
         .map_err(|_e| JsValue::from_str("Could not deserialize transaction"))?;
-  let state_commitment = serde_json::from_str::<BitDigest>(&state_commitment).map_err(|_e| {
+  let state_commitment = serde_json::from_str::<HashOf<_>>(&state_commitment).map_err(|_e| {
                            JsValue::from_str("Could not deserialize state commitment")
                          })?;
   Ok(authenticated_txn.is_valid(state_commitment))

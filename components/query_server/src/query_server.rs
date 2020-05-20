@@ -128,7 +128,7 @@ impl<RNG, LU> QueryServer<RNG, LU>
         };
 
         // Remove spent utxos
-        for op in &txn.operations {
+        for op in &txn.body.operations {
           if let Operation::TransferAsset(transfer_asset) = op {
             self.remove_spent_utxos(&transfer_asset)?;
           };

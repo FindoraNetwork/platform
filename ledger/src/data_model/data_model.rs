@@ -6,7 +6,7 @@ use bitmap::SparseMap;
 use chrono::prelude::*;
 use credentials::{CredCommitment, CredIssuerPublicKey, CredPoK, CredUserPublicKey};
 use cryptohash::sha256::Digest as BitDigest;
-use cryptohash::{sha256, HashValue, Proof};
+use cryptohash::HashValue;
 use errors::PlatformError;
 use rand_chacha::ChaChaRng;
 use rand_core::{CryptoRng, RngCore, SeedableRng};
@@ -15,10 +15,10 @@ use std::boxed::Box;
 use std::collections::{HashMap, HashSet};
 use std::convert::TryFrom;
 use std::hash::{Hash, Hasher};
-use std::marker::PhantomData;
+use utils::{HashOf, ProofOf, Serialized, SignatureOf};
 use zei::api::anon_creds::ACCommitment;
 use zei::xfr::lib::gen_xfr_body;
-use zei::xfr::sig::{XfrKeyPair, XfrPublicKey, XfrSecretKey, XfrSignature};
+use zei::xfr::sig::{XfrKeyPair, XfrPublicKey};
 use zei::xfr::structs::{AssetRecord, AssetTracingPolicy, BlindAssetRecord, XfrBody};
 
 pub fn b64enc<T: ?Sized + AsRef<[u8]>>(input: &T) -> String {
@@ -120,32 +120,6 @@ impl<'de> Deserialize<'de> for Code {
   }
 }
 
-// Wrapper around a serialized variable that maintains type semantics.
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct Serialized<T> {
-  pub val: String,
-  phantom: PhantomData<T>,
-}
-
-impl<T> Default for Serialized<T> where T: Default + serde::Serialize + serde::de::DeserializeOwned
-{
-  fn default() -> Self {
-    Self::new(&T::default())
-  }
-}
-
-impl<T> Serialized<T> where T: serde::Serialize + serde::de::DeserializeOwned
-{
-  pub fn new(to_serialize: &T) -> Self {
-    Serialized { val: b64enc(&bincode::serialize(&to_serialize).unwrap()),
-                 phantom: PhantomData }
-  }
-
-  pub fn deserialize(&self) -> T {
-    bincode::deserialize(&b64dec(&self.val).unwrap()).unwrap()
-  }
-}
-
 #[derive(Clone, Copy, Debug, Default, Deserialize, Eq, Hash, PartialEq, Serialize)]
 pub struct AssetDigest {
   // Generated from the asset definition, also unique
@@ -180,6 +154,11 @@ pub struct IssuerPublicKey {
   // eg. encryption key
 }
 
+#[derive(Debug)]
+pub struct IssuerKeyPair<'a> {
+  pub keypair: &'a XfrKeyPair,
+}
+
 #[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 pub struct AccountAddress {
   pub key: XfrPublicKey,
@@ -188,15 +167,18 @@ pub struct AccountAddress {
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct TransferBodySignature {
   pub address: XfrAddress,
-  pub signature: XfrSignature,
+  pub signature: SignatureOf<Serialized<(TransferAssetBody, Option<usize>)>>,
   #[serde(default)]
   #[serde(skip_serializing_if = "is_default")]
   pub input_idx: Option<usize>, // Some(idx) if a co-signature, None otherwise
 }
 
 impl TransferBodySignature {
-  pub fn verify(&self, message: &[u8]) -> bool {
-    self.address.key.verify(message, &self.signature).is_ok()
+  pub fn verify(&self, message: &TransferAssetBody) -> bool {
+    self.signature
+        .verify(&self.address.key,
+                &Serialized::new(&(message.clone(), self.input_idx)))
+        .is_ok()
   }
 }
 
@@ -406,6 +388,8 @@ pub struct TransferAssetBody {
   // TODO(joe): we probably don't need the whole XfrNote with input records
   // once it's on the chain
   pub transfer: Box<XfrBody>, // Encrypted transfer note
+
+  pub transfer_type: TransferType,
 }
 
 impl TransferAssetBody {
@@ -414,7 +398,8 @@ impl TransferAssetBody {
                                      input_records: &[AssetRecord],
                                      input_identity_commitments: Vec<Option<ACCommitment>>,
                                      output_records: &[AssetRecord],
-                                     output_identity_commitments: Vec<Option<ACCommitment>>)
+                                     output_identity_commitments: Vec<Option<ACCommitment>>,
+                                     transfer_type: TransferType)
                                      -> Result<TransferAssetBody, errors::PlatformError> {
     if input_records.is_empty() {
       return Err(PlatformError::InputsError(error_location!()));
@@ -425,7 +410,8 @@ impl TransferAssetBody {
                            input_identity_commitments,
                            num_outputs: output_records.len(),
                            output_identity_commitments,
-                           transfer: note })
+                           transfer: note,
+                           transfer_type })
   }
 
   /// Computes a body signature. A body signature represents consent to some part of the asset transfer. If an
@@ -434,25 +420,17 @@ impl TransferAssetBody {
                                 keypair: &XfrKeyPair,
                                 input_idx: Option<usize>)
                                 -> TransferBodySignature {
-    let secret_key = keypair.get_sk_ref();
     let public_key = keypair.get_pk_ref();
-    let mut body_vec = serde_json::to_vec(&self).unwrap();
-    if let Some(idx) = input_idx {
-      body_vec.extend(&idx.to_be_bytes());
-    }
-    let signature = secret_key.sign(&body_vec, public_key);
-    TransferBodySignature { signature,
+    TransferBodySignature { signature: SignatureOf::new(keypair,
+                                                        &Serialized::new(&(self.clone(),
+                                                                           input_idx))),
                             address: XfrAddress { key: *public_key },
                             input_idx }
   }
 
   /// Verifies a body signature
   pub fn verify_body_signature(&self, signature: &TransferBodySignature) -> bool {
-    let mut body_vec = serde_json::to_vec(&self).unwrap();
-    if let Some(idx) = signature.input_idx {
-      body_vec.extend(&idx.to_be_bytes());
-    }
-    signature.verify(&body_vec)
+    signature.verify(&self)
   }
 }
 
@@ -543,15 +521,6 @@ impl AIRAssignBody {
   }
 }
 
-pub fn compute_signature<T>(secret_key: &XfrSecretKey,
-                            public_key: &XfrPublicKey,
-                            operation_body: &T)
-                            -> XfrSignature
-  where T: serde::Serialize
-{
-  secret_key.sign(&serde_json::to_vec(&operation_body).unwrap(), &public_key)
-}
-
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub enum TransferType {
   Standard,
@@ -568,17 +537,13 @@ impl Default for TransferType {
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct TransferAsset {
   pub body: TransferAssetBody,
-  pub transfer_type: TransferType,
   pub body_signatures: Vec<TransferBodySignature>,
 }
 
 impl TransferAsset {
-  pub fn new(transfer_body: TransferAssetBody,
-             transfer_type: TransferType)
-             -> Result<TransferAsset, PlatformError> {
+  pub fn new(transfer_body: TransferAssetBody) -> Result<TransferAsset, PlatformError> {
     Ok(TransferAsset { body: transfer_body,
-                       body_signatures: Vec::new(),
-                       transfer_type })
+                       body_signatures: Vec::new() })
   }
 
   pub fn sign(&mut self, keypair: &XfrKeyPair) {
@@ -597,18 +562,17 @@ impl TransferAsset {
 pub struct IssueAsset {
   pub body: IssueAssetBody,
   pub pubkey: IssuerPublicKey,
-  pub signature: XfrSignature,
+  pub signature: SignatureOf<Serialized<IssueAssetBody>>,
 }
 
 impl IssueAsset {
   pub fn new(issuance_body: IssueAssetBody,
-             public_key: &IssuerPublicKey,
-             secret_key: &XfrSecretKey)
+             keypair: &IssuerKeyPair)
              -> Result<IssueAsset, PlatformError> {
-    let sign = compute_signature(&secret_key, &public_key.key, &issuance_body);
+    let signature = SignatureOf::new(&keypair.keypair, &Serialized::new(&issuance_body));
     Ok(IssueAsset { body: issuance_body,
-                    pubkey: *public_key,
-                    signature: sign })
+                    pubkey: IssuerPublicKey { key: *keypair.keypair.get_pk_ref() },
+                    signature })
   }
 }
 
@@ -622,18 +586,17 @@ pub struct DefineAsset {
   // to have a distinct public key for this? Is it *beneficial* to have a
   // distinct public key?
   pub pubkey: IssuerPublicKey,
-  pub signature: XfrSignature,
+  pub signature: SignatureOf<Serialized<DefineAssetBody>>,
 }
 
 impl DefineAsset {
   pub fn new(creation_body: DefineAssetBody,
-             public_key: &IssuerPublicKey,
-             secret_key: &XfrSecretKey)
+             keypair: &IssuerKeyPair)
              -> Result<DefineAsset, PlatformError> {
-    let sign = compute_signature(&secret_key, &public_key.key, &creation_body);
+    let signature = SignatureOf::new(&keypair.keypair, &Serialized::new(&creation_body));
     Ok(DefineAsset { body: creation_body,
-                     pubkey: *public_key,
-                     signature: sign })
+                     pubkey: IssuerPublicKey { key: *keypair.keypair.get_pk_ref() },
+                     signature })
   }
 }
 
@@ -641,17 +604,15 @@ impl DefineAsset {
 pub struct UpdateMemo {
   pub body: UpdateMemoBody,
   pub pubkey: XfrPublicKey,
-  pub signature: XfrSignature,
+  pub signature: SignatureOf<Serialized<UpdateMemoBody>>,
 }
 
 impl UpdateMemo {
   pub fn new(update_memo_body: UpdateMemoBody, signing_key: &XfrKeyPair) -> UpdateMemo {
-    let sign = compute_signature(signing_key.get_sk_ref(),
-                                 signing_key.get_pk_ref(),
-                                 &update_memo_body);
+    let signature = SignatureOf::new(signing_key, &Serialized::new(&update_memo_body));
     UpdateMemo { body: update_memo_body,
                  pubkey: *signing_key.get_pk_ref(),
-                 signature: sign }
+                 signature }
   }
 }
 
@@ -659,17 +620,17 @@ impl UpdateMemo {
 pub struct AIRAssign {
   pub body: AIRAssignBody,
   pub pubkey: XfrPublicKey,
-  pub signature: XfrSignature,
+  pub signature: SignatureOf<Serialized<AIRAssignBody>>,
 }
 
 impl AIRAssign {
   pub fn new(creation_body: AIRAssignBody,
              keypair: &XfrKeyPair)
              -> Result<AIRAssign, errors::PlatformError> {
-    let sign = compute_signature(keypair.get_sk_ref(), keypair.get_pk_ref(), &creation_body);
+    let signature = SignatureOf::new(keypair, &Serialized::new(&creation_body));
     Ok(AIRAssign { body: creation_body,
                    pubkey: *keypair.get_pk_ref(),
-                   signature: sign })
+                   signature })
   }
 }
 
@@ -691,7 +652,7 @@ pub struct TimeBounds {
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize, Default)]
-pub struct Transaction {
+pub struct TransactionBody {
   pub operations: Vec<Operation>,
   #[serde(default)]
   #[serde(skip_serializing_if = "is_default")]
@@ -702,9 +663,14 @@ pub struct Transaction {
   #[serde(default)]
   #[serde(skip_serializing_if = "is_default")]
   pub memos: Vec<Memo>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize, Default)]
+pub struct Transaction {
+  pub body: TransactionBody,
   #[serde(default)]
   #[serde(skip_serializing_if = "is_default")]
-  pub signatures: Vec<XfrSignature>,
+  pub signatures: Vec<SignatureOf<Serialized<TransactionBody>>>,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -718,9 +684,9 @@ pub struct FinalizedTransaction {
 #[derive(Serialize, Deserialize)]
 pub struct AuthenticatedTransaction {
   pub finalized_txn: FinalizedTransaction,
-  pub txn_inclusion_proof: Proof,
+  pub txn_inclusion_proof: ProofOf<Serialized<(TxnSID, Transaction)>>,
   pub state_commitment_data: StateCommitmentData,
-  pub state_commitment: BitDigest,
+  pub state_commitment: HashOf<Serialized<Option<StateCommitmentData>>>,
 }
 
 impl AuthenticatedTransaction {
@@ -729,7 +695,9 @@ impl AuthenticatedTransaction {
   //    data hashes to the state commitment
   // 2) The transaction merkle proof is valid
   // 3) The transaction merkle root matches the value in root_hash_data
-  pub fn is_valid(&self, state_commitment: BitDigest) -> bool {
+  pub fn is_valid(&self,
+                  state_commitment: HashOf<Serialized<Option<StateCommitmentData>>>)
+                  -> bool {
     //1)
     if self.state_commitment != state_commitment
        || self.state_commitment != self.state_commitment_data.compute_commitment()
@@ -740,14 +708,14 @@ impl AuthenticatedTransaction {
     //2)
     let hash = self.finalized_txn.hash();
 
-    if !self.txn_inclusion_proof.is_valid_proof(hash) {
+    if !self.txn_inclusion_proof.verify(hash) {
       return false;
     }
 
     //3)
     // TODO (jonathan/noah) we should be using digest everywhere
     if self.state_commitment_data.transaction_merkle_commitment
-       != self.txn_inclusion_proof.root_hash
+       != self.txn_inclusion_proof.proof.root_hash
     {
       return false;
     }
@@ -758,9 +726,9 @@ impl AuthenticatedTransaction {
 
 pub struct AuthenticatedBlock {
   pub block: FinalizedBlock,
-  pub block_inclusion_proof: Proof,
+  pub block_inclusion_proof: ProofOf<Serialized<Vec<Transaction>>>,
   pub state_commitment_data: StateCommitmentData,
-  pub state_commitment: BitDigest,
+  pub state_commitment: HashOf<Serialized<Option<StateCommitmentData>>>,
 }
 
 impl AuthenticatedBlock {
@@ -769,24 +737,24 @@ impl AuthenticatedBlock {
   // 2) The block merkle root matches the value in root_hash_data
   // 3) root_hash_data hashes to root_hash
   // 4) The state commitment of the proof matches the state commitment passed in
-  pub fn is_valid(&self, state_commitment: BitDigest) -> bool {
+  pub fn is_valid(&self,
+                  state_commitment: HashOf<Serialized<Option<StateCommitmentData>>>)
+                  -> bool {
     //1) compute block hash
     let txns: Vec<Transaction> = self.block
                                      .txns
                                      .iter()
                                      .map(|auth_tx| auth_tx.txn.clone())
                                      .collect();
-    let serialized = bincode::serialize(&txns).unwrap();
-    let digest = sha256::hash(&serialized);
-    let mut hash = HashValue::new();
-    hash.hash.clone_from_slice(&digest.0);
 
-    if !self.block_inclusion_proof.is_valid_proof(hash) {
+    let hash = HashOf::new(&Serialized::new(&txns));
+
+    if !self.block_inclusion_proof.verify(hash) {
       return false;
     }
 
     //2)
-    if self.state_commitment_data.block_merkle != self.block_inclusion_proof.root_hash {
+    if self.state_commitment_data.block_merkle != self.block_inclusion_proof.proof.root_hash {
       return false;
     }
 
@@ -806,7 +774,7 @@ pub struct AuthenticatedUtxoStatus {
   pub utxo_sid: TxoSID,
   pub state_commitment_data: StateCommitmentData,
   pub utxo_map: Option<SparseMap>, // BitMap only needed for proof if the txo_sid exists
-  pub state_commitment: BitDigest,
+  pub state_commitment: HashOf<Serialized<Option<StateCommitmentData>>>,
 }
 
 impl AuthenticatedUtxoStatus {
@@ -816,7 +784,9 @@ impl AuthenticatedUtxoStatus {
   // 3) The status matches the bit stored in the bitmap
   // 4) The bitmap checksum matches digest in state commitment data
   // 5) For txos that don't exist, simply show that the utxo_sid greater than max_sid
-  pub fn is_valid(&self, state_commitment: BitDigest) -> bool {
+  pub fn is_valid(&self,
+                  state_commitment: HashOf<Serialized<Option<StateCommitmentData>>>)
+                  -> bool {
     let state_commitment_data = &self.state_commitment_data;
     let utxo_sid = self.utxo_sid.0;
     // 1, 2) First, validate the state commitment
@@ -855,53 +825,31 @@ pub struct FinalizedBlock {
 }
 
 impl FinalizedTransaction {
-  pub fn hash(&self) -> HashValue {
+  pub fn hash(&self) -> HashOf<Serialized<(TxnSID, Transaction)>> {
     self.txn.hash(self.tx_id)
   }
 }
 
 impl Transaction {
+  pub fn hash(&self, id: TxnSID) -> HashOf<Serialized<(TxnSID, Transaction)>> {
+    HashOf::new(&Serialized::new(&(id, self.clone())))
+  }
+
   pub fn add_operation(&mut self, op: Operation) {
-    self.operations.push(op);
+    self.body.operations.push(op);
   }
 
-  pub fn serialize_bincode(&self, sid: TxnSID) -> Vec<u8> {
-    let mut serialized = bincode::serialize(&self).unwrap();
-    serialized.extend(bincode::serialize(&sid).unwrap());
-    serialized
-  }
-
-  pub fn hash(&self, sid: TxnSID) -> HashValue {
-    let digest = sha256::hash(&self.serialize_bincode(sid));
-    let mut hash = HashValue::new();
-    hash.hash.clone_from_slice(&digest.0);
-    hash
-  }
-
-  fn serialize_without_sigs(&self) -> Vec<u8> {
-    // TODO(joe): do this without a clone?
-    let mut other_txn;
-    let base_txn = if self.signatures.is_empty() {
-      &self
-    } else {
-      other_txn = self.clone();
-      other_txn.signatures.clear();
-      &other_txn
-    };
-    serde_json::to_vec(base_txn).unwrap()
-  }
-
-  pub fn sign(&mut self, secret_key: &XfrSecretKey, public_key: &XfrPublicKey) {
-    let sig = secret_key.sign(&self.serialize_without_sigs(), &public_key);
-    self.signatures.push(sig);
+  pub fn sign(&mut self, keypair: &XfrKeyPair) {
+    self.signatures
+        .push(SignatureOf::new(keypair, &Serialized::new(&self.body)));
   }
 
   pub fn check_signature(&self,
                          public_key: &XfrPublicKey,
-                         sig: &XfrSignature)
+                         sig: &SignatureOf<Serialized<TransactionBody>>)
                          -> Result<(), PlatformError> {
-    public_key.verify(&self.serialize_without_sigs(), sig)
-              .map_err(|e| PlatformError::ZeiError(error_location!(), e))?;
+    sig.verify(public_key, &Serialized::new(&self.body))
+       .map_err(|e| PlatformError::ZeiError(error_location!(), e))?;
     Ok(())
   }
 
@@ -911,9 +859,9 @@ impl Transaction {
   /// passing signature, but it is plausible for someone to generate an
   /// unrelated `public_key` which can pass this signature check!
   pub fn check_has_signature(&self, public_key: &XfrPublicKey) -> Result<(), PlatformError> {
-    let serialized = self.serialize_without_sigs();
+    let serialized = Serialized::new(&self.body);
     for sig in self.signatures.iter() {
-      match public_key.verify(&serialized, sig) {
+      match sig.verify(public_key, &serialized) {
         Err(_) => {}
         Ok(_) => {
           return Ok(());
@@ -931,19 +879,18 @@ impl Transaction {
 // Can we remove one of txns_in_block_hash and global_block_hash?
 // Both of them contain the information of the previous state
 pub struct StateCommitmentData {
-  pub bitmap: BitDigest,                        // The checksum of the utxo_map
-  pub block_merkle: HashValue,                  // The root hash of the block Merkle tree
-  pub txns_in_block_hash: BitDigest,            // The hash of the transactions in the block
-  pub previous_state_commitment: BitDigest,     // The prior global block hash
+  pub bitmap: BitDigest,       // The checksum of the utxo_map
+  pub block_merkle: HashValue, // The root hash of the block Merkle tree
+  pub txns_in_block_hash: HashOf<Serialized<Vec<Transaction>>>, // The hash of the transactions in the block
+  pub previous_state_commitment: HashOf<Serialized<Option<StateCommitmentData>>>, // The prior global block hash
   pub transaction_merkle_commitment: HashValue, // The root hash of the transaction Merkle tree
   pub air_commitment: BitDigest,                // The root hash of the AIR sparse Merkle tree
   pub txo_count: u64, // Number of transaction outputs. Used to provide proof that a utxo does not exist
 }
 
 impl StateCommitmentData {
-  pub fn compute_commitment(&self) -> BitDigest {
-    let serialized = serde_json::to_string(&self).unwrap();
-    sha256::hash(&serialized.as_bytes())
+  pub fn compute_commitment(&self) -> HashOf<Serialized<Option<Self>>> {
+    HashOf::new(&Serialized::new(&Some(self).cloned()))
   }
 }
 
@@ -1058,10 +1005,6 @@ mod tests {
     let mut prng = rand_chacha::ChaChaRng::from_entropy();
 
     let keypair = XfrKeyPair::generate(&mut prng);
-    let message: &[u8] = b"test";
-
-    let public_key = *keypair.get_pk_ref();
-    let signature = keypair.sign(message);
 
     // Instantiate an TransferAsset operation
     let xfr_note = XfrBody { inputs: Vec::new(),
@@ -1076,11 +1019,14 @@ mod tests {
                                                    input_identity_commitments: Vec::new(),
                                                    num_outputs: 0,
                                                    output_identity_commitments: Vec::new(),
-                                                   transfer: Box::new(xfr_note) };
+                                                   transfer: Box::new(xfr_note),
+                                                   transfer_type: TransferType::Standard };
 
-    let asset_transfer = TransferAsset { body: assert_transfer_body,
-                                         body_signatures: Vec::new(),
-                                         transfer_type: TransferType::Standard };
+    let asset_transfer = {
+      let mut ret = TransferAsset::new(assert_transfer_body).unwrap();
+      ret.sign(&keypair);
+      ret
+    };
 
     let transfer_operation = Operation::TransferAsset(asset_transfer.clone());
 
@@ -1091,18 +1037,16 @@ mod tests {
                                                records: Vec::new(),
                                                tracing_policy: None };
 
-    let asset_issuance = IssueAsset { body: asset_issuance_body,
-                                      pubkey: IssuerPublicKey { key: public_key },
-                                      signature: signature.clone() };
+    let asset_issuance =
+      IssueAsset::new(asset_issuance_body, &IssuerKeyPair { keypair: &keypair }).unwrap();
 
     let issuance_operation = Operation::IssueAsset(asset_issuance.clone());
 
     // Instantiate an DefineAsset operation
     let asset = Default::default();
 
-    let asset_creation = DefineAsset { body: DefineAssetBody { asset },
-                                       pubkey: IssuerPublicKey { key: public_key },
-                                       signature: signature.clone() };
+    let asset_creation = DefineAsset::new(DefineAssetBody { asset },
+                                          &IssuerKeyPair { keypair: &keypair }).unwrap();
 
     let creation_operation = Operation::DefineAsset(asset_creation.clone());
 
@@ -1112,13 +1056,13 @@ mod tests {
     transaction.add_operation(creation_operation);
 
     // Verify operatoins
-    assert_eq!(transaction.operations.len(), 3);
+    assert_eq!(transaction.body.operations.len(), 3);
 
-    assert_eq!(transaction.operations.get(0),
+    assert_eq!(transaction.body.operations.get(0),
                Some(&Operation::TransferAsset(asset_transfer)));
-    assert_eq!(transaction.operations.get(1),
+    assert_eq!(transaction.body.operations.get(1),
                Some(&Operation::IssueAsset(asset_issuance)));
-    assert_eq!(transaction.operations.get(2),
+    assert_eq!(transaction.body.operations.get(2),
                Some(&Operation::DefineAsset(asset_creation)));
   }
 

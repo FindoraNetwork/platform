@@ -7,13 +7,13 @@ extern crate serde_json;
 use actix_cors::Cors;
 use actix_web::{dev, error, middleware, web, App, HttpResponse, HttpServer};
 use air::AIRResult;
-use cryptohash::sha256::Digest as BitDigest;
 use ledger::data_model::*;
 use ledger::store::{ArchiveAccess, LedgerAccess};
 use std::io;
 use std::marker::{Send, Sync};
 use std::sync::{Arc, RwLock};
-use zei::xfr::sig::{XfrPublicKey, XfrSignature};
+use utils::{HashOf, Serialized, SignatureOf};
+use zei::xfr::sig::XfrPublicKey;
 
 pub struct RestfulApiService {
   web_runtime: actix_rt::SystemRunner,
@@ -149,19 +149,24 @@ fn query_public_key<LA>(data: web::Data<Arc<RwLock<LA>>>) -> web::Json<XfrPublic
   web::Json(*reader.public_key())
 }
 
-fn query_global_state<LA>(data: web::Data<Arc<RwLock<LA>>>)
-                          -> web::Json<(BitDigest, u64, XfrSignature)>
+#[allow(clippy::type_complexity)]
+fn query_global_state<LA>(
+  data: web::Data<Arc<RwLock<LA>>>)
+  -> web::Json<(HashOf<Serialized<Option<StateCommitmentData>>>,
+                u64,
+                SignatureOf<Serialized<(HashOf<Serialized<Option<StateCommitmentData>>>, u64)>>)>
   where LA: LedgerAccess
 {
   let reader = data.read().unwrap();
   let (hash, seq_id) = reader.get_state_commitment();
-  let sig = reader.sign_message(&serde_json::to_vec(&(hash, seq_id)).unwrap());
+  let sig = reader.sign_message(&Serialized::new(&(hash.clone(), seq_id)));
   web::Json((hash, seq_id, sig))
 }
 
-fn query_global_state_version<AA>(data: web::Data<Arc<RwLock<AA>>>,
-                                  version: web::Path<u64>)
-                                  -> web::Json<Option<BitDigest>>
+fn query_global_state_version<AA>(
+  data: web::Data<Arc<RwLock<AA>>>,
+  version: web::Path<u64>)
+  -> web::Json<Option<HashOf<Serialized<Option<StateCommitmentData>>>>>
   where AA: ArchiveAccess
 {
   let reader = data.read().unwrap();
@@ -224,7 +229,7 @@ fn query_block_log<AA>(data: web::Data<Arc<RwLock<AA>>>) -> impl actix_web::Resp
       res.push_str(&format!("<td>{}</td>", txn.merkle_id));
       res.push_str("<td>");
       res.push_str("<table border=\"1\">");
-      for op in txn.txn.operations.iter() {
+      for op in txn.txn.body.operations.iter() {
         res.push_str(&format!("<tr><td><pre>{}</pre></td></tr>",
                               serde_json::to_string_pretty(&op).unwrap()));
       }
@@ -426,12 +431,17 @@ mod tests {
     let mut tx = Transaction::default();
 
     let token_code1 = AssetTypeCode { val: [1; 16] };
-    let (public_key, secret_key) = build_keys(&mut prng);
+    let keypair = build_keys(&mut prng);
 
-    let asset_body =
-      asset_creation_body(&token_code1, &public_key, AssetRules::default(), None, None);
-    let asset_create = asset_creation_operation(&asset_body, &public_key, &secret_key);
-    tx.operations.push(Operation::DefineAsset(asset_create));
+    let asset_body = asset_creation_body(&token_code1,
+                                         keypair.get_pk_ref(),
+                                         AssetRules::default(),
+                                         None,
+                                         None);
+    let asset_create = asset_creation_operation(&asset_body, &keypair);
+    tx.body
+      .operations
+      .push(Operation::DefineAsset(asset_create));
 
     let effect = TxnEffect::compute_effect(tx).unwrap();
     {
@@ -456,7 +466,7 @@ mod tests {
                                              .to_request();
 
     let state_reader = state_lock.read().unwrap();
-    let (comm1, idx, _sig): (_, _, XfrSignature) = test::read_response_json(&mut app, req);
+    let (comm1, idx, _sig): (_, _, SignatureOf<Serialized<(HashOf<Serialized<Option<StateCommitmentData>>>, u64)>>) = test::read_response_json(&mut app, req);
     let comm2 = test::read_response_json(&mut app, second_req);
     assert!((comm1, idx) == state_reader.get_state_commitment());
     assert!((comm2, idx) == state_reader.get_state_commitment());
@@ -475,12 +485,17 @@ mod tests {
     let orig_key = state.public_key().clone();
 
     let token_code1 = AssetTypeCode { val: [1; 16] };
-    let (public_key, secret_key) = build_keys(&mut prng);
+    let keypair = build_keys(&mut prng);
 
-    let asset_body =
-      asset_creation_body(&token_code1, &public_key, AssetRules::default(), None, None);
-    let asset_create = asset_creation_operation(&asset_body, &public_key, &secret_key);
-    tx.operations.push(Operation::DefineAsset(asset_create));
+    let asset_body = asset_creation_body(&token_code1,
+                                         keypair.get_pk_ref(),
+                                         AssetRules::default(),
+                                         None,
+                                         None);
+    let asset_create = asset_creation_operation(&asset_body, &keypair);
+    tx.body
+      .operations
+      .push(Operation::DefineAsset(asset_create));
 
     let effect = TxnEffect::compute_effect(tx).unwrap();
     {
@@ -505,10 +520,9 @@ mod tests {
 
     let state_reader = state_lock.read().unwrap();
     let k: XfrPublicKey = test::read_response_json(&mut app, req_pk);
-    let (comm, idx, sig): (BitDigest, u64, XfrSignature) =
+    let (comm, idx, sig): (HashOf<Serialized<Option<StateCommitmentData>>>, u64, SignatureOf<Serialized<(HashOf<Serialized<Option<StateCommitmentData>>>, u64)>>) =
       test::read_response_json(&mut app, req_comm);
-    k.verify(&serde_json::to_vec(&(comm, idx)).unwrap(), &sig)
-     .unwrap();
+    sig.verify(&k, &Serialized::new(&(comm, idx))).unwrap();
     assert!(k == orig_key);
     assert!(k == state_reader.public_key().clone());
   }
@@ -520,12 +534,17 @@ mod tests {
     let mut tx = Transaction::default();
 
     let token_code1 = AssetTypeCode { val: [1; 16] };
-    let (public_key, secret_key) = build_keys(&mut prng);
+    let keypair = build_keys(&mut prng);
 
-    let asset_body =
-      asset_creation_body(&token_code1, &public_key, AssetRules::default(), None, None);
-    let asset_create = asset_creation_operation(&asset_body, &public_key, &secret_key);
-    tx.operations.push(Operation::DefineAsset(asset_create));
+    let asset_body = asset_creation_body(&token_code1,
+                                         keypair.get_pk_ref(),
+                                         AssetRules::default(),
+                                         None,
+                                         None);
+    let asset_create = asset_creation_operation(&asset_body, &keypair);
+    tx.body
+      .operations
+      .push(Operation::DefineAsset(asset_create));
 
     let effect = TxnEffect::compute_effect(tx).unwrap();
     {

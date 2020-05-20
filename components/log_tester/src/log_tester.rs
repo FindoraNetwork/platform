@@ -1,7 +1,7 @@
 #![deny(warnings)]
-use cryptohash::sha256::Digest as BitDigest;
 use ledger::store::{LedgerAccess, LedgerState};
 use std::path::Path;
+use utils::HashOf;
 
 fn log_test(logfile: &Path, outfile: Option<&str>, expected_file: Option<&str>) {
   let tmp_dir = utils::fresh_tmp_dir();
@@ -36,14 +36,14 @@ fn log_test(logfile: &Path, outfile: Option<&str>, expected_file: Option<&str>) 
 
     if let Some(outfile) = outfile {
       let comm_output = std::fs::File::create(&outfile).unwrap();
-      bincode::serialize_into(&comm_output, &comm).unwrap();
+      serde_json::to_writer(&comm_output, &comm).unwrap();
       comm_output.sync_all().unwrap();
     }
 
     println!("{:?}", comm);
 
     if let Some(expected_file) = expected_file {
-      let comm_expected = bincode::deserialize_from::<_,(BitDigest,u64)>(std::fs::File::open(&expected_file).unwrap()).unwrap();
+      let comm_expected = serde_json::from_reader::<_,(HashOf<_>,u64)>(std::fs::File::open(&expected_file).unwrap()).unwrap();
       assert!(comm == comm_expected);
     }
   }

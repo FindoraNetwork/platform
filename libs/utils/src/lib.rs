@@ -1,7 +1,13 @@
 #![deny(warnings)]
+use cryptohash::sha256::Digest;
+use cryptohash::{sha256, Proof};
 use percent_encoding::{percent_decode, utf8_percent_encode, AsciiSet, CONTROLS};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::io::{Error, ErrorKind};
+use std::marker::PhantomData;
 use std::path::PathBuf;
+use zei::errors::ZeiError;
+use zei::xfr::sig::{XfrKeyPair, XfrPublicKey, XfrSignature};
 
 pub fn string_of_type<T>(_: &T) -> String {
   std::any::type_name::<T>().to_string()
@@ -183,6 +189,162 @@ impl Commas for i16 {
 impl Commas for i8 {
   fn commas(self) -> String {
     crate::commas_i64(self as i64)
+  }
+}
+
+// Wrapper around a serialized variable that maintains type semantics.
+#[derive(Clone, Debug)]
+pub struct Serialized<T> {
+  pub val: String,
+  phantom: PhantomData<T>,
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub struct HashOf<T> {
+  pub hash: Digest,
+  phantom: PhantomData<T>,
+}
+
+#[derive(Debug)]
+pub struct ProofOf<T> {
+  pub proof: Proof,
+  phantom: PhantomData<T>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct SignatureOf<T> {
+  pub sig: XfrSignature,
+  phantom: PhantomData<T>,
+}
+
+impl<T> Serialized<T> where T: serde::Serialize + serde::de::DeserializeOwned
+{
+  pub fn new(to_serialize: &T) -> Self {
+    Serialized { val: serde_json::to_string(&to_serialize).unwrap(),
+                 phantom: PhantomData }
+  }
+
+  pub fn deserialize(&self) -> T {
+    serde_json::from_str(&self.val).unwrap()
+  }
+}
+
+impl<T> AsRef<[u8]> for Serialized<T> where T: serde::Serialize + serde::de::DeserializeOwned
+{
+  fn as_ref(&self) -> &[u8] {
+    self.val.as_ref()
+  }
+}
+
+impl<T> Default for Serialized<T> where T: Default + serde::Serialize + serde::de::DeserializeOwned
+{
+  fn default() -> Self {
+    Self::new(&T::default())
+  }
+}
+
+impl<T> Serialize for Serialized<T> where T: serde::Serialize + serde::de::DeserializeOwned
+{
+  fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+    self.deserialize().serialize(serializer)
+  }
+}
+
+impl<'a, T> Deserialize<'a> for Serialized<T>
+  where T: serde::Serialize + serde::de::DeserializeOwned
+{
+  fn deserialize<D: Deserializer<'a>>(deserializer: D) -> Result<Self, D::Error> {
+    T::deserialize(deserializer).map(|x| Self::new(&x))
+  }
+}
+
+impl<T> PartialEq for Serialized<T>
+  where T: PartialEq + serde::Serialize + serde::de::DeserializeOwned
+{
+  fn eq(&self, other: &Self) -> bool {
+    self.deserialize() == other.deserialize()
+  }
+}
+
+impl<T> Eq for Serialized<T> where T: Eq + serde::Serialize + serde::de::DeserializeOwned {}
+
+impl<T> HashOf<T> where T: AsRef<[u8]>
+{
+  pub fn new(to_hash: &T) -> Self {
+    Self { hash: sha256::hash(to_hash.as_ref()),
+           phantom: PhantomData }
+  }
+}
+
+impl<T> AsRef<[u8]> for HashOf<T> {
+  fn as_ref(&self) -> &[u8] {
+    self.hash.as_ref()
+  }
+}
+
+impl<T> Serialize for HashOf<T> {
+  fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+    self.hash.serialize(serializer)
+  }
+}
+
+impl<'a, T> Deserialize<'a> for HashOf<T> {
+  fn deserialize<D: Deserializer<'a>>(deserializer: D) -> Result<Self, D::Error> {
+    // NOTE: doesn't guarantee that there *is* a T that has this hash
+    Digest::deserialize(deserializer).map(|hash| Self { hash,
+                                                        phantom: PhantomData })
+  }
+}
+
+impl<T> ProofOf<T> where T: AsRef<[u8]>
+{
+  pub fn new(proof: Proof) -> Self {
+    Self { proof,
+           phantom: PhantomData }
+  }
+
+  pub fn verify(&self, leaf: HashOf<T>) -> bool {
+    self.proof.is_valid_proof(leaf.hash.into())
+  }
+}
+
+impl<T> Serialize for ProofOf<T> {
+  fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+    self.proof.serialize(serializer)
+  }
+}
+
+impl<'a, T> Deserialize<'a> for ProofOf<T> {
+  fn deserialize<D: Deserializer<'a>>(deserializer: D) -> Result<Self, D::Error> {
+    // NOTE: doesn't guarantee that there *is* a T that has this proof
+    Proof::deserialize(deserializer).map(|proof| Self { proof,
+                                                        phantom: PhantomData })
+  }
+}
+
+impl<T> SignatureOf<T> where T: AsRef<[u8]>
+{
+  pub fn new(xfr: &XfrKeyPair, to_sign: &T) -> Self {
+    Self { sig: xfr.get_sk_ref().sign(to_sign.as_ref(), xfr.get_pk_ref()),
+           phantom: PhantomData }
+  }
+
+  pub fn verify(&self, pubkey: &XfrPublicKey, val: &T) -> Result<(), ZeiError> {
+    pubkey.verify(val.as_ref(), &self.sig)
+  }
+}
+
+impl<T> Serialize for SignatureOf<T> {
+  fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+    self.sig.serialize(serializer)
+  }
+}
+
+impl<'a, T> Deserialize<'a> for SignatureOf<T> {
+  fn deserialize<D: Deserializer<'a>>(deserializer: D) -> Result<Self, D::Error> {
+    // NOTE: doesn't guarantee that there *is* a T that this is a signature for
+    XfrSignature::deserialize(deserializer).map(|sig| Self { sig,
+                                                             phantom: PhantomData })
   }
 }
 

@@ -53,6 +53,26 @@ impl fmt::Display for PlatformError {
 }
 
 #[macro_export]
+macro_rules! zei_fail {
+  ($e:expr) => {
+    PlatformError::ZeiError(error_location!(), $e)
+  };
+  ($e: expr, $s:expr) => {
+    PlatformError::ZeiError(format!("[{}] {}", &error_location!(), &$s), $e)
+  };
+}
+
+#[macro_export]
+macro_rules! inp_fail {
+  () => {
+    PlatformError::InputsError(error_location!())
+  };
+  ($s:expr) => {
+    PlatformError::InputsError(format!("[{}] {}", &error_location!(), &$s))
+  };
+}
+
+#[macro_export]
 macro_rules! ser_fail {
   () => {
     PlatformError::SerializationError(error_location!())
