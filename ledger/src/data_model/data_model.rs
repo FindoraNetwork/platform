@@ -167,7 +167,7 @@ pub struct AccountAddress {
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct TransferBodySignature {
   pub address: XfrAddress,
-  pub signature: SignatureOf<Serialized<(TransferAssetBody, Option<usize>)>>,
+  pub signature: SignatureOf<(TransferAssetBody, Option<usize>)>,
   #[serde(default)]
   #[serde(skip_serializing_if = "is_default")]
   pub input_idx: Option<usize>, // Some(idx) if a co-signature, None otherwise
@@ -176,8 +176,7 @@ pub struct TransferBodySignature {
 impl TransferBodySignature {
   pub fn verify(&self, message: &TransferAssetBody) -> bool {
     self.signature
-        .verify(&self.address.key,
-                &Serialized::new(&(message.clone(), self.input_idx)))
+        .verify(&self.address.key, &(message.clone(), self.input_idx))
         .is_ok()
   }
 }
@@ -421,9 +420,7 @@ impl TransferAssetBody {
                                 input_idx: Option<usize>)
                                 -> TransferBodySignature {
     let public_key = keypair.get_pk_ref();
-    TransferBodySignature { signature: SignatureOf::new(keypair,
-                                                        &Serialized::new(&(self.clone(),
-                                                                           input_idx))),
+    TransferBodySignature { signature: SignatureOf::new(keypair, &(self.clone(), input_idx)),
                             address: XfrAddress { key: *public_key },
                             input_idx }
   }
@@ -562,14 +559,14 @@ impl TransferAsset {
 pub struct IssueAsset {
   pub body: IssueAssetBody,
   pub pubkey: IssuerPublicKey,
-  pub signature: SignatureOf<Serialized<IssueAssetBody>>,
+  pub signature: SignatureOf<IssueAssetBody>,
 }
 
 impl IssueAsset {
   pub fn new(issuance_body: IssueAssetBody,
              keypair: &IssuerKeyPair)
              -> Result<IssueAsset, PlatformError> {
-    let signature = SignatureOf::new(&keypair.keypair, &Serialized::new(&issuance_body));
+    let signature = SignatureOf::new(&keypair.keypair, &issuance_body);
     Ok(IssueAsset { body: issuance_body,
                     pubkey: IssuerPublicKey { key: *keypair.keypair.get_pk_ref() },
                     signature })
@@ -586,14 +583,14 @@ pub struct DefineAsset {
   // to have a distinct public key for this? Is it *beneficial* to have a
   // distinct public key?
   pub pubkey: IssuerPublicKey,
-  pub signature: SignatureOf<Serialized<DefineAssetBody>>,
+  pub signature: SignatureOf<DefineAssetBody>,
 }
 
 impl DefineAsset {
   pub fn new(creation_body: DefineAssetBody,
              keypair: &IssuerKeyPair)
              -> Result<DefineAsset, PlatformError> {
-    let signature = SignatureOf::new(&keypair.keypair, &Serialized::new(&creation_body));
+    let signature = SignatureOf::new(&keypair.keypair, &creation_body);
     Ok(DefineAsset { body: creation_body,
                      pubkey: IssuerPublicKey { key: *keypair.keypair.get_pk_ref() },
                      signature })
@@ -604,12 +601,12 @@ impl DefineAsset {
 pub struct UpdateMemo {
   pub body: UpdateMemoBody,
   pub pubkey: XfrPublicKey,
-  pub signature: SignatureOf<Serialized<UpdateMemoBody>>,
+  pub signature: SignatureOf<UpdateMemoBody>,
 }
 
 impl UpdateMemo {
   pub fn new(update_memo_body: UpdateMemoBody, signing_key: &XfrKeyPair) -> UpdateMemo {
-    let signature = SignatureOf::new(signing_key, &Serialized::new(&update_memo_body));
+    let signature = SignatureOf::new(signing_key, &update_memo_body);
     UpdateMemo { body: update_memo_body,
                  pubkey: *signing_key.get_pk_ref(),
                  signature }
@@ -620,14 +617,14 @@ impl UpdateMemo {
 pub struct AIRAssign {
   pub body: AIRAssignBody,
   pub pubkey: XfrPublicKey,
-  pub signature: SignatureOf<Serialized<AIRAssignBody>>,
+  pub signature: SignatureOf<AIRAssignBody>,
 }
 
 impl AIRAssign {
   pub fn new(creation_body: AIRAssignBody,
              keypair: &XfrKeyPair)
              -> Result<AIRAssign, errors::PlatformError> {
-    let signature = SignatureOf::new(keypair, &Serialized::new(&creation_body));
+    let signature = SignatureOf::new(keypair, &creation_body);
     Ok(AIRAssign { body: creation_body,
                    pubkey: *keypair.get_pk_ref(),
                    signature })
@@ -670,7 +667,7 @@ pub struct Transaction {
   pub body: TransactionBody,
   #[serde(default)]
   #[serde(skip_serializing_if = "is_default")]
-  pub signatures: Vec<SignatureOf<Serialized<TransactionBody>>>,
+  pub signatures: Vec<SignatureOf<TransactionBody>>,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -684,9 +681,9 @@ pub struct FinalizedTransaction {
 #[derive(Serialize, Deserialize)]
 pub struct AuthenticatedTransaction {
   pub finalized_txn: FinalizedTransaction,
-  pub txn_inclusion_proof: ProofOf<Serialized<(TxnSID, Transaction)>>,
+  pub txn_inclusion_proof: ProofOf<(TxnSID, Transaction)>,
   pub state_commitment_data: StateCommitmentData,
-  pub state_commitment: HashOf<Serialized<Option<StateCommitmentData>>>,
+  pub state_commitment: HashOf<Option<StateCommitmentData>>,
 }
 
 impl AuthenticatedTransaction {
@@ -695,9 +692,7 @@ impl AuthenticatedTransaction {
   //    data hashes to the state commitment
   // 2) The transaction merkle proof is valid
   // 3) The transaction merkle root matches the value in root_hash_data
-  pub fn is_valid(&self,
-                  state_commitment: HashOf<Serialized<Option<StateCommitmentData>>>)
-                  -> bool {
+  pub fn is_valid(&self, state_commitment: HashOf<Option<StateCommitmentData>>) -> bool {
     //1)
     if self.state_commitment != state_commitment
        || self.state_commitment != self.state_commitment_data.compute_commitment()
@@ -708,14 +703,14 @@ impl AuthenticatedTransaction {
     //2)
     let hash = self.finalized_txn.hash();
 
-    if !self.txn_inclusion_proof.verify(hash) {
+    if !self.txn_inclusion_proof.0.verify(hash.0) {
       return false;
     }
 
     //3)
     // TODO (jonathan/noah) we should be using digest everywhere
     if self.state_commitment_data.transaction_merkle_commitment
-       != self.txn_inclusion_proof.proof.root_hash
+       != self.txn_inclusion_proof.0.proof.root_hash
     {
       return false;
     }
@@ -726,9 +721,9 @@ impl AuthenticatedTransaction {
 
 pub struct AuthenticatedBlock {
   pub block: FinalizedBlock,
-  pub block_inclusion_proof: ProofOf<Serialized<Vec<Transaction>>>,
+  pub block_inclusion_proof: ProofOf<Vec<Transaction>>,
   pub state_commitment_data: StateCommitmentData,
-  pub state_commitment: HashOf<Serialized<Option<StateCommitmentData>>>,
+  pub state_commitment: HashOf<Option<StateCommitmentData>>,
 }
 
 impl AuthenticatedBlock {
@@ -737,9 +732,7 @@ impl AuthenticatedBlock {
   // 2) The block merkle root matches the value in root_hash_data
   // 3) root_hash_data hashes to root_hash
   // 4) The state commitment of the proof matches the state commitment passed in
-  pub fn is_valid(&self,
-                  state_commitment: HashOf<Serialized<Option<StateCommitmentData>>>)
-                  -> bool {
+  pub fn is_valid(&self, state_commitment: HashOf<Option<StateCommitmentData>>) -> bool {
     //1) compute block hash
     let txns: Vec<Transaction> = self.block
                                      .txns
@@ -747,14 +740,12 @@ impl AuthenticatedBlock {
                                      .map(|auth_tx| auth_tx.txn.clone())
                                      .collect();
 
-    let hash = HashOf::new(&Serialized::new(&txns));
-
-    if !self.block_inclusion_proof.verify(hash) {
+    if !self.block_inclusion_proof.verify(&txns) {
       return false;
     }
 
     //2)
-    if self.state_commitment_data.block_merkle != self.block_inclusion_proof.proof.root_hash {
+    if self.state_commitment_data.block_merkle != self.block_inclusion_proof.0.proof.root_hash {
       return false;
     }
 
@@ -774,7 +765,7 @@ pub struct AuthenticatedUtxoStatus {
   pub utxo_sid: TxoSID,
   pub state_commitment_data: StateCommitmentData,
   pub utxo_map: Option<SparseMap>, // BitMap only needed for proof if the txo_sid exists
-  pub state_commitment: HashOf<Serialized<Option<StateCommitmentData>>>,
+  pub state_commitment: HashOf<Option<StateCommitmentData>>,
 }
 
 impl AuthenticatedUtxoStatus {
@@ -784,9 +775,7 @@ impl AuthenticatedUtxoStatus {
   // 3) The status matches the bit stored in the bitmap
   // 4) The bitmap checksum matches digest in state commitment data
   // 5) For txos that don't exist, simply show that the utxo_sid greater than max_sid
-  pub fn is_valid(&self,
-                  state_commitment: HashOf<Serialized<Option<StateCommitmentData>>>)
-                  -> bool {
+  pub fn is_valid(&self, state_commitment: HashOf<Option<StateCommitmentData>>) -> bool {
     let state_commitment_data = &self.state_commitment_data;
     let utxo_sid = self.utxo_sid.0;
     // 1, 2) First, validate the state commitment
@@ -825,14 +814,14 @@ pub struct FinalizedBlock {
 }
 
 impl FinalizedTransaction {
-  pub fn hash(&self) -> HashOf<Serialized<(TxnSID, Transaction)>> {
+  pub fn hash(&self) -> HashOf<(TxnSID, Transaction)> {
     self.txn.hash(self.tx_id)
   }
 }
 
 impl Transaction {
-  pub fn hash(&self, id: TxnSID) -> HashOf<Serialized<(TxnSID, Transaction)>> {
-    HashOf::new(&Serialized::new(&(id, self.clone())))
+  pub fn hash(&self, id: TxnSID) -> HashOf<(TxnSID, Transaction)> {
+    HashOf::new(&(id, self.clone()))
   }
 
   pub fn add_operation(&mut self, op: Operation) {
@@ -840,15 +829,14 @@ impl Transaction {
   }
 
   pub fn sign(&mut self, keypair: &XfrKeyPair) {
-    self.signatures
-        .push(SignatureOf::new(keypair, &Serialized::new(&self.body)));
+    self.signatures.push(SignatureOf::new(keypair, &self.body));
   }
 
   pub fn check_signature(&self,
                          public_key: &XfrPublicKey,
-                         sig: &SignatureOf<Serialized<TransactionBody>>)
+                         sig: &SignatureOf<TransactionBody>)
                          -> Result<(), PlatformError> {
-    sig.verify(public_key, &Serialized::new(&self.body))
+    sig.verify(public_key, &self.body)
        .map_err(|e| PlatformError::ZeiError(error_location!(), e))?;
     Ok(())
   }
@@ -861,7 +849,7 @@ impl Transaction {
   pub fn check_has_signature(&self, public_key: &XfrPublicKey) -> Result<(), PlatformError> {
     let serialized = Serialized::new(&self.body);
     for sig in self.signatures.iter() {
-      match sig.verify(public_key, &serialized) {
+      match sig.0.verify(public_key, &serialized) {
         Err(_) => {}
         Ok(_) => {
           return Ok(());
@@ -881,16 +869,16 @@ impl Transaction {
 pub struct StateCommitmentData {
   pub bitmap: BitDigest,       // The checksum of the utxo_map
   pub block_merkle: HashValue, // The root hash of the block Merkle tree
-  pub txns_in_block_hash: HashOf<Serialized<Vec<Transaction>>>, // The hash of the transactions in the block
-  pub previous_state_commitment: HashOf<Serialized<Option<StateCommitmentData>>>, // The prior global block hash
+  pub txns_in_block_hash: HashOf<Vec<Transaction>>, // The hash of the transactions in the block
+  pub previous_state_commitment: HashOf<Option<StateCommitmentData>>, // The prior global block hash
   pub transaction_merkle_commitment: HashValue, // The root hash of the transaction Merkle tree
-  pub air_commitment: BitDigest,                // The root hash of the AIR sparse Merkle tree
+  pub air_commitment: BitDigest, // The root hash of the AIR sparse Merkle tree
   pub txo_count: u64, // Number of transaction outputs. Used to provide proof that a utxo does not exist
 }
 
 impl StateCommitmentData {
-  pub fn compute_commitment(&self) -> HashOf<Serialized<Option<Self>>> {
-    HashOf::new(&Serialized::new(&Some(self).cloned()))
+  pub fn compute_commitment(&self) -> HashOf<Option<Self>> {
+    HashOf::new(&Some(self).cloned())
   }
 }
 

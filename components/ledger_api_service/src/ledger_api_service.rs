@@ -12,7 +12,7 @@ use ledger::store::{ArchiveAccess, LedgerAccess};
 use std::io;
 use std::marker::{Send, Sync};
 use std::sync::{Arc, RwLock};
-use utils::{HashOf, Serialized, SignatureOf};
+use utils::{HashOf, SignatureOf};
 use zei::xfr::sig::XfrPublicKey;
 
 pub struct RestfulApiService {
@@ -149,24 +149,22 @@ fn query_public_key<LA>(data: web::Data<Arc<RwLock<LA>>>) -> web::Json<XfrPublic
   web::Json(*reader.public_key())
 }
 
-#[allow(clippy::type_complexity)]
 fn query_global_state<LA>(
   data: web::Data<Arc<RwLock<LA>>>)
-  -> web::Json<(HashOf<Serialized<Option<StateCommitmentData>>>,
+  -> web::Json<(HashOf<Option<StateCommitmentData>>,
                 u64,
-                SignatureOf<Serialized<(HashOf<Serialized<Option<StateCommitmentData>>>, u64)>>)>
+                SignatureOf<(HashOf<Option<StateCommitmentData>>, u64)>)>
   where LA: LedgerAccess
 {
   let reader = data.read().unwrap();
   let (hash, seq_id) = reader.get_state_commitment();
-  let sig = reader.sign_message(&Serialized::new(&(hash.clone(), seq_id)));
+  let sig = reader.sign_message(&(hash.clone(), seq_id));
   web::Json((hash, seq_id, sig))
 }
 
-fn query_global_state_version<AA>(
-  data: web::Data<Arc<RwLock<AA>>>,
-  version: web::Path<u64>)
-  -> web::Json<Option<HashOf<Serialized<Option<StateCommitmentData>>>>>
+fn query_global_state_version<AA>(data: web::Data<Arc<RwLock<AA>>>,
+                                  version: web::Path<u64>)
+                                  -> web::Json<Option<HashOf<Option<StateCommitmentData>>>>
   where AA: ArchiveAccess
 {
   let reader = data.read().unwrap();
@@ -466,7 +464,8 @@ mod tests {
                                              .to_request();
 
     let state_reader = state_lock.read().unwrap();
-    let (comm1, idx, _sig): (_, _, SignatureOf<Serialized<(HashOf<Serialized<Option<StateCommitmentData>>>, u64)>>) = test::read_response_json(&mut app, req);
+    let (comm1, idx, _sig): (_, _, SignatureOf<(HashOf<Option<StateCommitmentData>>, u64)>) =
+      test::read_response_json(&mut app, req);
     let comm2 = test::read_response_json(&mut app, second_req);
     assert!((comm1, idx) == state_reader.get_state_commitment());
     assert!((comm2, idx) == state_reader.get_state_commitment());
@@ -520,9 +519,11 @@ mod tests {
 
     let state_reader = state_lock.read().unwrap();
     let k: XfrPublicKey = test::read_response_json(&mut app, req_pk);
-    let (comm, idx, sig): (HashOf<Serialized<Option<StateCommitmentData>>>, u64, SignatureOf<Serialized<(HashOf<Serialized<Option<StateCommitmentData>>>, u64)>>) =
+    let (comm, idx, sig): (HashOf<Option<StateCommitmentData>>,
+                           u64,
+                           SignatureOf<(HashOf<Option<StateCommitmentData>>, u64)>) =
       test::read_response_json(&mut app, req_comm);
-    sig.verify(&k, &Serialized::new(&(comm, idx))).unwrap();
+    sig.verify(&k, &(comm, idx)).unwrap();
     assert!(k == orig_key);
     assert!(k == state_reader.public_key().clone());
   }

@@ -8,7 +8,7 @@ use rand_core::SeedableRng;
 use std::sync::{Arc, RwLock};
 use std::thread;
 use submission_server::{convert_tx, SubmissionServer};
-use utils::{HashOf, Serialized};
+use utils::HashOf;
 
 struct ABCISubmissionServer {
   la: SubmissionServer<ChaChaRng, LedgerState>,
@@ -73,7 +73,7 @@ impl abci::Application for ABCISubmissionServer {
 
   fn commit(&mut self, _req: &RequestCommit) -> ResponseCommit {
     // Tendermint does not accept an error return type here.
-    let error_commitment = (HashOf::new(&Serialized::new(&None)), 0);
+    let error_commitment = (HashOf::new(&None), 0);
     self.la.begin_commit();
     let commitment = if let Ok(state) = self.la.get_committed_state().read() {
       state.get_state_commitment()

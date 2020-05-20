@@ -7,7 +7,7 @@ use crate::{error_location, inp_fail, inv_fail, zei_fail};
 use credentials::credential_verify_commitment;
 use serde::Serialize;
 use std::collections::{HashMap, HashSet};
-use utils::{HasInvariants, HashOf, Serialized};
+use utils::{HasInvariants, HashOf};
 use zei::api::anon_creds::ACCommitment;
 use zei::serialization::ZeiFromToBytes;
 use zei::xfr::sig::XfrPublicKey;
@@ -138,7 +138,7 @@ impl TxnEffect {
           // TODO(joe?): like the note in data_model, should the public key
           // used here match `def.body.asset.issuer`?
           def.signature
-             .verify(&def.pubkey.key, &Serialized::new(&def.body))
+             .verify(&def.pubkey.key, &def.body)
              .map_err(|e| zei_fail!(e))?;
 
           let code = def.body.asset.code;
@@ -206,7 +206,7 @@ impl TxnEffect {
 
           // (2)
           iss.signature
-             .verify(&iss.pubkey.key, &Serialized::new(&iss.body))
+             .verify(&iss.pubkey.key, &iss.body)
              .map_err(|e| zei_fail!(e))?;
 
           // (3)
@@ -395,7 +395,7 @@ impl TxnEffect {
           let pk = &air_assign.pubkey;
           // 1)
           air_assign.signature
-                    .verify(&pk, &Serialized::new(&air_assign.body))
+                    .verify(&pk, &air_assign.body)
                     .map_err(|e| zei_fail!(e))?;
           // 2)
           credential_verify_commitment(issuer_pk, commitment, pok, pk.as_bytes()).map_err(|e| {
@@ -412,7 +412,7 @@ impl TxnEffect {
           let pk = update_memo.pubkey;
           // 1)
           update_memo.signature
-                     .verify(&pk, &Serialized::new(&update_memo.body))
+                     .verify(&pk, &update_memo.body)
                      .map_err(|e| zei_fail!(e))?;
 
           memo_updates.push((update_memo.body.asset_type, pk, update_memo.body.new_memo.clone()));
@@ -635,7 +635,7 @@ impl BlockEffect {
     Ok(temp_sid)
   }
 
-  pub fn compute_txns_in_block_hash(&self) -> HashOf<Serialized<Vec<Transaction>>> {
-    HashOf::new(&Serialized::new(&self.txns))
+  pub fn compute_txns_in_block_hash(&self) -> HashOf<Vec<Transaction>> {
+    HashOf::new(&self.txns)
   }
 }

@@ -199,23 +199,81 @@ pub struct Serialized<T> {
   phantom: PhantomData<T>,
 }
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
-pub struct HashOf<T> {
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct SignatureOf<T>(pub SignatureOfBytes<Serialized<T>>);
+
+impl<T> SignatureOf<T> where T: Serialize + serde::de::DeserializeOwned
+{
+  pub fn new(xfr: &XfrKeyPair, to_sign: &T) -> Self {
+    Self(SignatureOfBytes::new(xfr, &Serialized::new(to_sign)))
+  }
+
+  pub fn verify(&self, pubkey: &XfrPublicKey, val: &T) -> Result<(), ZeiError> {
+    self.0.verify(pubkey, &Serialized::new(val))
+  }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct HashOf<T>(pub HashOfBytes<Serialized<T>>);
+
+impl<T> HashOf<T> where T: Serialize + serde::de::DeserializeOwned
+{
+  pub fn new(to_hash: &T) -> Self {
+    Self(HashOfBytes::new(&Serialized::new(to_hash)))
+  }
+}
+
+impl<T> AsRef<[u8]> for HashOf<T> {
+  fn as_ref(&self) -> &[u8] {
+    self.0.as_ref()
+  }
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ProofOf<T>(pub ProofOfBytes<Serialized<T>>);
+
+impl<T> ProofOf<T> where T: Serialize + serde::de::DeserializeOwned
+{
+  pub fn new(proof: Proof) -> Self {
+    Self(ProofOfBytes::new(proof))
+  }
+
+  pub fn verify(&self, leaf: &T) -> bool {
+    self.0.verify(HashOf::new(leaf).0)
+  }
+}
+
+#[derive(Copy, Clone, Debug)]
+pub struct HashOfBytes<T> {
   pub hash: Digest,
   phantom: PhantomData<T>,
 }
 
 #[derive(Debug)]
-pub struct ProofOf<T> {
+pub struct ProofOfBytes<T> {
   pub proof: Proof,
   phantom: PhantomData<T>,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct SignatureOf<T> {
+#[derive(Clone, Debug)]
+pub struct SignatureOfBytes<T> {
   pub sig: XfrSignature,
   phantom: PhantomData<T>,
 }
+
+impl<T> PartialEq for HashOfBytes<T> {
+  fn eq(&self, rhs: &Self) -> bool {
+    self.hash == rhs.hash
+  }
+}
+impl<T> Eq for HashOfBytes<T> {}
+
+impl<T> PartialEq for SignatureOfBytes<T> {
+  fn eq(&self, rhs: &Self) -> bool {
+    self.sig == rhs.sig
+  }
+}
+impl<T> Eq for SignatureOfBytes<T> {}
 
 impl<T> Serialized<T> where T: serde::Serialize + serde::de::DeserializeOwned
 {
@@ -268,7 +326,7 @@ impl<T> PartialEq for Serialized<T>
 
 impl<T> Eq for Serialized<T> where T: Eq + serde::Serialize + serde::de::DeserializeOwned {}
 
-impl<T> HashOf<T> where T: AsRef<[u8]>
+impl<T> HashOfBytes<T> where T: AsRef<[u8]>
 {
   pub fn new(to_hash: &T) -> Self {
     Self { hash: sha256::hash(to_hash.as_ref()),
@@ -276,19 +334,19 @@ impl<T> HashOf<T> where T: AsRef<[u8]>
   }
 }
 
-impl<T> AsRef<[u8]> for HashOf<T> {
+impl<T> AsRef<[u8]> for HashOfBytes<T> {
   fn as_ref(&self) -> &[u8] {
     self.hash.as_ref()
   }
 }
 
-impl<T> Serialize for HashOf<T> {
+impl<T> Serialize for HashOfBytes<T> {
   fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
     self.hash.serialize(serializer)
   }
 }
 
-impl<'a, T> Deserialize<'a> for HashOf<T> {
+impl<'a, T> Deserialize<'a> for HashOfBytes<T> {
   fn deserialize<D: Deserializer<'a>>(deserializer: D) -> Result<Self, D::Error> {
     // NOTE: doesn't guarantee that there *is* a T that has this hash
     Digest::deserialize(deserializer).map(|hash| Self { hash,
@@ -296,25 +354,25 @@ impl<'a, T> Deserialize<'a> for HashOf<T> {
   }
 }
 
-impl<T> ProofOf<T> where T: AsRef<[u8]>
+impl<T> ProofOfBytes<T> where T: AsRef<[u8]>
 {
   pub fn new(proof: Proof) -> Self {
     Self { proof,
            phantom: PhantomData }
   }
 
-  pub fn verify(&self, leaf: HashOf<T>) -> bool {
+  pub fn verify(&self, leaf: HashOfBytes<T>) -> bool {
     self.proof.is_valid_proof(leaf.hash.into())
   }
 }
 
-impl<T> Serialize for ProofOf<T> {
+impl<T> Serialize for ProofOfBytes<T> {
   fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
     self.proof.serialize(serializer)
   }
 }
 
-impl<'a, T> Deserialize<'a> for ProofOf<T> {
+impl<'a, T> Deserialize<'a> for ProofOfBytes<T> {
   fn deserialize<D: Deserializer<'a>>(deserializer: D) -> Result<Self, D::Error> {
     // NOTE: doesn't guarantee that there *is* a T that has this proof
     Proof::deserialize(deserializer).map(|proof| Self { proof,
@@ -322,7 +380,7 @@ impl<'a, T> Deserialize<'a> for ProofOf<T> {
   }
 }
 
-impl<T> SignatureOf<T> where T: AsRef<[u8]>
+impl<T> SignatureOfBytes<T> where T: AsRef<[u8]>
 {
   pub fn new(xfr: &XfrKeyPair, to_sign: &T) -> Self {
     Self { sig: xfr.get_sk_ref().sign(to_sign.as_ref(), xfr.get_pk_ref()),
@@ -334,13 +392,13 @@ impl<T> SignatureOf<T> where T: AsRef<[u8]>
   }
 }
 
-impl<T> Serialize for SignatureOf<T> {
+impl<T> Serialize for SignatureOfBytes<T> {
   fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
     self.sig.serialize(serializer)
   }
 }
 
-impl<'a, T> Deserialize<'a> for SignatureOf<T> {
+impl<'a, T> Deserialize<'a> for SignatureOfBytes<T> {
   fn deserialize<D: Deserializer<'a>>(deserializer: D) -> Result<Self, D::Error> {
     // NOTE: doesn't guarantee that there *is* a T that this is a signature for
     XfrSignature::deserialize(deserializer).map(|sig| Self { sig,

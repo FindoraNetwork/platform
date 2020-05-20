@@ -24,7 +24,7 @@ use std::path::Path;
 use std::path::PathBuf;
 use std::u64;
 use utils::HasInvariants;
-use utils::{HashOf, ProofOf, Serialized, SignatureOf};
+use utils::{HashOf, ProofOf, SignatureOf};
 use zei::xfr::lib::verify_xfr_body;
 use zei::xfr::sig::{XfrKeyPair, XfrPublicKey};
 use zei::xfr::structs::{AssetTracingPolicy, XfrAssetType};
@@ -47,7 +47,7 @@ pub trait LedgerAccess {
   fn get_asset_type(&self, code: &AssetTypeCode) -> Option<&AssetType>;
 
   // Get the hash of the most recent checkpoint, and its sequence number.
-  fn get_state_commitment(&self) -> (HashOf<Serialized<Option<StateCommitmentData>>>, u64);
+  fn get_state_commitment(&self) -> (HashOf<Option<StateCommitmentData>>, u64);
 
   // Get the authenticated status of a UTXO (Spent, Unspent, NonExistent).
   fn get_utxo_status(&mut self, addr: TxoSID) -> AuthenticatedUtxoStatus;
@@ -56,7 +56,7 @@ pub trait LedgerAccess {
   fn public_key(&self) -> &XfrPublicKey;
 
   // Sign a message with the ledger's signing key
-  fn sign_message<T: AsRef<[u8]>>(&self, msg: &T) -> SignatureOf<T>;
+  fn sign_message<T: Serialize + serde::de::DeserializeOwned>(&self, msg: &T) -> SignatureOf<T>;
 
   // TODO(joe): figure out what to do for these.
   // See comments about asset policies and tracked SIDs in LedgerStatus
@@ -155,10 +155,9 @@ pub trait ArchiveAccess {
   fn get_utxo_checksum(&self, version: u64) -> Option<BitDigest>;
 
   // Get the ledger state commitment at a specific block height.
-  fn get_state_commitment_at_block_height(
-    &self,
-    height: u64)
-    -> Option<HashOf<Serialized<Option<StateCommitmentData>>>>;
+  fn get_state_commitment_at_block_height(&self,
+                                          height: u64)
+                                          -> Option<HashOf<Option<StateCommitmentData>>>;
 
   // Key-value lookup in AIR
   fn get_air_data(&self, address: &str) -> AIRResult;
@@ -198,7 +197,7 @@ pub struct LedgerStatus {
   utxo_map_versions: VecDeque<(TxnSID, BitDigest)>,
 
   // State commitment history. The BitDigest at index i is the state commitment of the ledger at block height  i + 1.
-  state_commitment_versions: Vec<HashOf<Serialized<Option<StateCommitmentData>>>>,
+  state_commitment_versions: Vec<HashOf<Option<StateCommitmentData>>>,
 
   // TODO(joe): This field should probably exist, but since it is not
   // currently used by anything I'm leaving it commented out. We should
@@ -242,7 +241,7 @@ pub struct LedgerStatus {
   block_commit_count: u64, // TODO (Keyao): Remove this if not needed
 
   // Hash of the transactions in the most recent block
-  txns_in_block_hash: Option<HashOf<Serialized<Vec<Transaction>>>>,
+  txns_in_block_hash: Option<HashOf<Vec<Transaction>>>,
 }
 
 pub struct LedgerState {
@@ -324,13 +323,10 @@ impl HasInvariants<PlatformError> for LedgerState {
                       .cloned()
                       .map(|x| x.txn)
                       .collect::<Vec<_>>();
-      let txns_in_block_hash = HashOf::new(&Serialized::new(&txns));
 
-      let proof = ProofOf::<Serialized<Vec<Transaction>>>::new(self.block_merkle
-                                                                   .get_proof(ix as u64, 0)
-                                                                   .unwrap());
-      // assert!(self.status.txns_in_block_hash == txns_in_block_hash);
-      if !proof.verify(txns_in_block_hash) {
+      let proof =
+        ProofOf::<Vec<Transaction>>::new(self.block_merkle.get_proof(ix as u64, 0).unwrap());
+      if !proof.verify(&txns) {
         return Err(inv_fail!(format!("Bad block proof at {}", ix)));
       }
 
@@ -340,10 +336,9 @@ impl HasInvariants<PlatformError> for LedgerState {
           return Err(inv_fail!());
         }
         txn_sid += 1;
-        let proof = ProofOf::<Serialized<(TxnSID, Transaction)>>::new(self.txn_merkle
-                                                                          .get_proof(ix as u64, 0)
-                                                                          .unwrap());
-        if !proof.verify(fin_txn.hash()) {
+        let proof =
+          ProofOf::<(TxnSID, Transaction)>::new(self.txn_merkle.get_proof(ix as u64, 0).unwrap());
+        if !proof.0.verify(fin_txn.hash().0) {
           return Err(inv_fail!(format!("Bad txn proof at {}", ix)));
         }
       }
@@ -1089,7 +1084,7 @@ impl LedgerUpdate<ChaChaRng> for LedgerState {
         // corruption and I/O failure, we don't have a good recovery story. Is
         // panicking acceptable?
         let merkle_id = self.txn_merkle
-                            .append(&txn.hash(txn_sid).hash.into())
+                            .append(&txn.hash(txn_sid).0.hash.into())
                             .unwrap();
 
         tx_block.push(FinalizedTransaction { txn,
@@ -1196,12 +1191,10 @@ impl LedgerUpdate<ChaChaRng> for LedgerStateChecker {
 
     // The transaction must match its spot in the txn merkle tree
     let txn_sid = self.0.status.next_txn.0 + block.txns.len();
-    let proof = ProofOf::<Serialized<(TxnSID, Transaction)>>::new(self.0
-                                                                      .txn_merkle
-                                                                      .get_proof(txn_sid as u64,
-                                                                                 0)?);
+    let proof =
+      ProofOf::<(TxnSID, Transaction)>::new(self.0.txn_merkle.get_proof(txn_sid as u64, 0)?);
 
-    if !proof.verify(txn.txn.hash(TxnSID(txn_sid))) {
+    if !proof.0.verify(txn.txn.hash(TxnSID(txn_sid)).0) {
       return Err(PlatformError::CheckedReplayError(format!("{}:{}:{}",
                                                            std::file!(),
                                                            std::line!(),
@@ -1276,8 +1269,7 @@ impl LedgerUpdate<ChaChaRng> for LedgerStateChecker {
 impl LedgerStateChecker {
   pub fn check_block(self, ix: u64, block: &BlockEffect) -> Result<Self, PlatformError> {
     // The block must match its spot in the block merkle tree
-    let proof =
-      ProofOf::<Serialized<Vec<Transaction>>>::new(self.0.block_merkle.get_proof(ix, 0)?);
+    let proof = ProofOf::<Vec<Transaction>>::new(self.0.block_merkle.get_proof(ix, 0)?);
 
     let block = block;
 
@@ -1286,7 +1278,7 @@ impl LedgerStateChecker {
     // dbg!(&self.0.block_merkle.state());
     // dbg!(&proof);
     // dbg!(&block_merkle_hash);
-    if !proof.verify(block_merkle_hash.clone()) {
+    if !proof.0.verify(block_merkle_hash.clone().0) {
       return Err(PlatformError::CheckedReplayError(format!("{}:{}:{}",
                                                            std::file!(),
                                                            std::line!(),
@@ -1464,19 +1456,19 @@ impl LedgerState {
     // 2. Append txns_in_block_hash to block_merkle
     //  2.1 Update the block Merkle tree
     let ret = self.block_merkle
-                  .append(&txns_in_block_hash.hash.into())
+                  .append(&txns_in_block_hash.0.hash.into())
                   .unwrap();
     // dbg!(&block.txns);
     // dbg!(&txns_in_block_hash);
-    debug_assert!(ProofOf::<Serialized<Vec<Transaction>>>::new(self.block_merkle
-                      .get_proof(self.status.block_commit_count, 0)
-                      .unwrap())
-                      .verify(txns_in_block_hash));
+    debug_assert!(ProofOf::<Vec<Transaction>>::new(self.block_merkle
+                                                       .get_proof(self.status.block_commit_count, 0)
+                                                       .unwrap()).0
+                                                                 .verify(txns_in_block_hash.0));
     ret
   }
 
   fn compute_and_save_state_commitment_data(&mut self) {
-    let prev_commitment = HashOf::new(&Serialized::new(&self.status.state_commitment_data));
+    let prev_commitment = HashOf::new(&self.status.state_commitment_data);
     self.status.state_commitment_data =
       Some(StateCommitmentData { bitmap: self.utxo_map.compute_checksum(),
                                  block_merkle: self.block_merkle.get_root_hash(),
@@ -1651,7 +1643,7 @@ impl LedgerState {
       // dbg!(&ix);
       // dbg!(&logged_block);
       let (comm, block) = (logged_block.state, logged_block.block);
-      let prev_commitment = HashOf::new(&Serialized::new(&ledger.0.status.state_commitment_data));
+      let prev_commitment = HashOf::new(&ledger.0.status.state_commitment_data);
       if prev_commitment != comm.previous_state_commitment {
         return Err(PlatformError::CheckedReplayError(format!("{}:{}:{}",
                                                              std::file!(),
@@ -1940,13 +1932,13 @@ impl LedgerAccess for LedgerState {
     self.status.get_asset_type(code)
   }
 
-  fn get_state_commitment(&self) -> (HashOf<Serialized<Option<StateCommitmentData>>>, u64) {
+  fn get_state_commitment(&self) -> (HashOf<Option<StateCommitmentData>>, u64) {
     let block_count = self.status.block_commit_count;
     let commitment = self.status
                          .state_commitment_versions
                          .last()
                          .cloned()
-                         .unwrap_or_else(|| HashOf::new(&Serialized::new(&None)));
+                         .unwrap_or_else(|| HashOf::new(&None));
     (commitment, block_count)
   }
 
@@ -1954,7 +1946,7 @@ impl LedgerAccess for LedgerState {
     self.signing_key.get_pk_ref()
   }
 
-  fn sign_message<T: AsRef<[u8]>>(&self, msg: &T) -> SignatureOf<T> {
+  fn sign_message<T: Serialize + serde::de::DeserializeOwned>(&self, msg: &T) -> SignatureOf<T> {
     SignatureOf::new(&self.signing_key, msg)
   }
 
@@ -2059,10 +2051,9 @@ impl ArchiveAccess for LedgerState {
     None
   }
 
-  fn get_state_commitment_at_block_height(
-    &self,
-    block_height: u64)
-    -> Option<HashOf<Serialized<Option<StateCommitmentData>>>> {
+  fn get_state_commitment_at_block_height(&self,
+                                          block_height: u64)
+                                          -> Option<HashOf<Option<StateCommitmentData>>> {
     self.status
         .state_commitment_versions
         .get((block_height - 1) as usize)
@@ -2139,7 +2130,7 @@ pub mod helpers {
   pub fn asset_creation_operation(asset_body: &DefineAssetBody,
                                   iss_key: &XfrKeyPair)
                                   -> DefineAsset {
-    let signature = SignatureOf::new(iss_key, &Serialized::new(asset_body));
+    let signature = SignatureOf::new(iss_key, asset_body);
     DefineAsset { body: asset_body.clone(),
                   pubkey: IssuerPublicKey { key: *iss_key.get_pk_ref() },
                   signature }
@@ -2288,9 +2279,8 @@ mod tests {
 
     let mut data = StateCommitmentData { bitmap: ledger_state.utxo_map.compute_checksum(),
                                          block_merkle: ledger_state.block_merkle.get_root_hash(),
-                                         txns_in_block_hash: HashOf::new(&Serialized::new(&vec![])),
-                                         previous_state_commitment:
-                                           HashOf::new(&Serialized::new(&None)),
+                                         txns_in_block_hash: HashOf::new(&vec![]),
+                                         previous_state_commitment: HashOf::new(&None),
                                          transaction_merkle_commitment:
                                            ledger_state.txn_merkle.get_root_hash(),
                                          air_commitment: *ledger_state.air.merkle_root(),
@@ -2690,7 +2680,7 @@ mod tests {
 
     let params = PublicParams::new();
 
-    assert!(ledger.get_state_commitment() == (HashOf::new(&Serialized::new(&None)), 0));
+    assert!(ledger.get_state_commitment() == (HashOf::new(&None), 0));
     let token_code1 = AssetTypeCode { val: [1; 16] };
     let keypair = build_keys(&mut ledger.get_prng());
 
@@ -2757,7 +2747,7 @@ mod tests {
 
     match ledger.get_transaction(txn_id) {
       Some(authenticated_txn) => {
-        assert!(authenticated_txn.txn_inclusion_proof.proof.tx_id
+        assert!(authenticated_txn.txn_inclusion_proof.0.proof.tx_id
                 == authenticated_txn.finalized_txn.merkle_id);
         assert!(authenticated_txn.is_valid(state_commitment_and_version.0.clone()));
         assert!(transaction.finalized_txn == authenticated_txn.finalized_txn);
