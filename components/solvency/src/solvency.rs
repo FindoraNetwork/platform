@@ -75,7 +75,7 @@ pub struct AssetAndLiabilityAccount {
 }
 
 impl AssetAndLiabilityAccount {
-  /// Queries a UTXO SID to get the amount or amount blinds, updates the account, and added new records to the passed in asset and liability lsts.
+  /// Queries a UTXO SID to get the amount or amount blinds, updates the account, and added new records to the passed in asset and liability lists.
   /// * If the amount is public, verifies it and updates the list of public assets or liabilities.
   /// * Otherwise, updates the list of hidden assets or liabilities, the list of blinds, and the list of commitments.
   ///   * To add the commitment:
