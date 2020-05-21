@@ -15,7 +15,7 @@ pub type WhiteListedCode = Scalar;
 #[derive(Default, Deserialize, Serialize)]
 pub struct Whitelist {
   /// List of whitelisted asset codes
-  // TODO (Keyao): Make this a merkle tree instead?
+  // TODO (Keyao): Redmine issue #45: Allow storing whitelist members in a Merkle tree
   pub members: Vec<WhiteListedCode>,
 }
 
