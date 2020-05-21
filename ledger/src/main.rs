@@ -133,33 +133,33 @@ fn main() -> Result<(), std::io::Error> {
     }
   }
 
-  tree.write();
+  tree.write()?;
   println!("Done with {} entries.", tree.total_size().commas());
   println!("The test passed.");
   Ok(())
 }
 
 fn check_tree(tree: &AppendOnlyMerkle) {
-  if let Some(x) = tree.check() {
-    panic!("Got check error:  {}", x);
+  if let Err(e) = tree.check() {
+    panic!("Got check error:  {}", e);
   }
 }
 
 fn check_disk_tree(tree: &mut AppendOnlyMerkle, flushed: bool) {
-  if let Some(x) = tree.check_disk(flushed) {
-    panic!("Got disk check error:  {}", x);
+  if let Err(e) = tree.check_disk(flushed) {
+    panic!("Got disk check error:  {}", e);
   }
 }
 
 fn write_tree(tree: &mut AppendOnlyMerkle) {
-  if let Some(x) = tree.write() {
-    panic!("tree.write failed:  {}", x);
+  if let Err(e) = tree.write() {
+    panic!("tree.write failed:  {}", e);
   }
 }
 
 fn reset_tree(tree: &mut AppendOnlyMerkle) {
-  if let Some(x) = tree.reset_disk() {
-    panic!("tree.reset_disk failed:  {}", x);
+  if let Err(e) = tree.reset_disk() {
+    panic!("tree.reset_disk failed:  {}", e);
   }
 }
 
