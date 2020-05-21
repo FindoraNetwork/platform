@@ -7,7 +7,7 @@ use ledger::data_model::AssetTypeCode;
 use ledger::{des_fail, error_location};
 use linear_map::LinearMap;
 use serde::{Deserialize, Serialize};
-use txn_cli::txn_lib::query_utxo_and_get_amount;
+use txn_cli::txn_lib::{query_utxo_and_get_amount, ProtocolHost};
 use zei::crypto::solvency::{prove_solvency, verify_solvency};
 use zei::errors::ZeiError;
 use zei::setup::PublicParams;
@@ -78,18 +78,16 @@ impl AssetAndLiabilityAccount {
   ///   * To add the commitment:
   ///     * Get the (amount_commitment_low, amount_commitment_high) from XfrAmount of the blind asset record.
   ///     * Calculate commitment = (amount_commitment_low + POW_2_32 * amount_commitment_high, code_commitment).
-  #[allow(clippy::too_many_arguments)]
   pub fn update(&mut self,
                 amount_type: AmountType,
                 amount: u64,
                 code: AssetTypeCode,
                 blinds: Option<((Scalar, Scalar), Scalar)>,
                 utxo: u64,
-                protocol: &str,
-                host: &str)
+                protocol_host: &ProtocolHost)
                 -> Result<(), PlatformError> {
     let code_scalar = asset_type_to_scalar(&code.val);
-    match query_utxo_and_get_amount(utxo, protocol, host)? {
+    match query_utxo_and_get_amount(utxo, protocol_host)? {
       XfrAmount::NonConfidential(fetched_amount) => {
         if fetched_amount != amount {
           println!("Incorrect amount.");
@@ -274,27 +272,25 @@ mod tests {
                                                   0,prng,
                                                   ledger_standalone)?;
 
+    let protocol_host = &ProtocolHost(PROTOCOL.to_owned(), HOST.to_owned());
     account.update(AmountType::Asset,
                    100,
                    codes[0],
                    Some((amount_blinds_0, code_blind_0)),
                    utxo_0,
-                   PROTOCOL,
-                   HOST)?;
+                   protocol_host)?;
     account.update(AmountType::Asset,
                    200,
                    codes[1],
                    Some((amount_blinds_1, code_blind_1)),
                    utxo_1,
-                   PROTOCOL,
-                   HOST)?;
+                   protocol_host)?;
     account.update(AmountType::Asset,
                    300,
                    codes[2],
                    Some((amount_blinds_2, code_blind_2)),
                    utxo_2,
-                   PROTOCOL,
-                   HOST)?;
+                   protocol_host)?;
 
     Ok(())
   }
@@ -332,27 +328,25 @@ mod tests {
                                                   1,prng,
                                                   ledger_standalone)?;
 
+    let protocol_host = &ProtocolHost(PROTOCOL.to_owned(), HOST.to_owned());
     account.update(AmountType::Asset,
                    10,
                    codes[0],
                    Some((amount_blinds_0, code_blind_0)),
                    utxo_0,
-                   PROTOCOL,
-                   HOST)?;
+                   protocol_host)?;
     account.update(AmountType::Asset,
                    20,
                    codes[1],
                    Some((amount_blinds_1, code_blind_1)),
                    utxo_1,
-                   PROTOCOL,
-                   HOST)?;
+                   protocol_host)?;
     account.update(AmountType::Asset,
                    30,
                    codes[2],
                    Some((amount_blinds_2, code_blind_2)),
                    utxo_2,
-                   PROTOCOL,
-                   HOST)?;
+                   protocol_host)?;
 
     Ok(())
   }
@@ -390,27 +384,25 @@ mod tests {
                                                   2,prng,
                                                   ledger_standalone)?;
 
+    let protocol_host = &ProtocolHost(PROTOCOL.to_owned(), HOST.to_owned());
     account.update(AmountType::Liability,
                    100,
                    codes[0],
                    Some((amount_blinds_0, code_blind_0)),
                    utxo_0,
-                   PROTOCOL,
-                   HOST)?;
+                   protocol_host)?;
     account.update(AmountType::Liability,
                    200,
                    codes[1],
                    Some((amount_blinds_1, code_blind_1)),
                    utxo_1,
-                   PROTOCOL,
-                   HOST)?;
+                   protocol_host)?;
     account.update(AmountType::Liability,
                    200,
                    codes[2],
                    Some((amount_blinds_2, code_blind_2)),
                    utxo_2,
-                   PROTOCOL,
-                   HOST)?;
+                   protocol_host)?;
 
     Ok(())
   }
@@ -448,27 +440,25 @@ mod tests {
                                                   3,prng,
                                                   ledger_standalone)?;
 
+    let protocol_host = &ProtocolHost(PROTOCOL.to_owned(), HOST.to_owned());
     account.update(AmountType::Liability,
                    10,
                    codes[0],
                    Some((amount_blinds_0, code_blind_0)),
                    utxo_0,
-                   PROTOCOL,
-                   HOST)?;
+                   protocol_host)?;
     account.update(AmountType::Liability,
                    20,
                    codes[1],
                    Some((amount_blinds_1, code_blind_1)),
                    utxo_1,
-                   PROTOCOL,
-                   HOST)?;
+                   protocol_host)?;
     account.update(AmountType::Liability,
                    20,
                    codes[2],
                    Some((amount_blinds_2, code_blind_2)),
                    utxo_2,
-                   PROTOCOL,
-                   HOST)?;
+                   protocol_host)?;
 
     Ok(())
   }
@@ -506,27 +496,25 @@ mod tests {
                                                   4,prng,
                                                   ledger_standalone)?;
 
+    let protocol_host = &ProtocolHost(PROTOCOL.to_owned(), HOST.to_owned());
     account.update(AmountType::Liability,
                    10,
                    codes[0],
                    Some((amount_blinds_0, code_blind_0)),
                    utxo_0,
-                   PROTOCOL,
-                   HOST)?;
+                   protocol_host)?;
     account.update(AmountType::Liability,
                    20,
                    codes[1],
                    Some((amount_blinds_1, code_blind_1)),
                    utxo_1,
-                   PROTOCOL,
-                   HOST)?;
+                   protocol_host)?;
     account.update(AmountType::Liability,
                    40,
                    codes[2],
                    Some((amount_blinds_2, code_blind_2)),
                    utxo_2,
-                   PROTOCOL,
-                   HOST)?;
+                   protocol_host)?;
 
     Ok(())
   }
@@ -719,8 +707,7 @@ mod tests {
                    code,
                    Some((amount_blinds, code_blind)),
                    utxo,
-                   PROTOCOL,
-                   HOST)
+                   &ProtocolHost(PROTOCOL.to_owned(), HOST.to_owned()))
            .unwrap();
 
     // Prove the solvency
@@ -847,8 +834,7 @@ mod tests {
                    codes[0],
                    Some((amount_blinds, code_blind)),
                    utxo,
-                   PROTOCOL,
-                   HOST)
+                   &ProtocolHost(PROTOCOL.to_owned(), HOST.to_owned()))
            .unwrap();
 
     // Verify the solvency without proving it again
@@ -927,8 +913,7 @@ mod tests {
                    codes[0],
                    Some((amount_blinds, code_blind)),
                    utxo,
-                   PROTOCOL,
-                   HOST)
+                   &ProtocolHost(PROTOCOL.to_owned(), HOST.to_owned()))
            .unwrap();
 
     // Prove the solvency again

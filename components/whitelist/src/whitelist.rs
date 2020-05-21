@@ -58,8 +58,9 @@ mod tests {
   use ledger_standalone::LedgerStandalone;
   use rand_chacha::ChaChaRng;
   use rand_core::SeedableRng;
-  use txn_cli::txn_lib::define_issue_transfer_and_get_utxo_and_blinds;
-  use txn_cli::txn_lib::query_utxo_and_get_type_commitment;
+  use txn_cli::txn_lib::{
+    define_issue_transfer_and_get_utxo_and_blinds, query_utxo_and_get_type_commitment, ProtocolHost,
+  };
   use zei::xfr::asset_record::AssetRecordType;
   use zei::xfr::sig::XfrKeyPair;
 
@@ -95,7 +96,9 @@ mod tests {
                                                                       AssetRecordType::NonConfidentialAmount_ConfidentialAssetType,
                                                                       ledger_standalone,
                                                                       prng).unwrap();
-    let commitment_1 = query_utxo_and_get_type_commitment(utxo_1, PROTOCOL, HOST).unwrap();
+    let commitment_1 = query_utxo_and_get_type_commitment(utxo_1,
+                                                          &ProtocolHost(PROTOCOL.to_owned(),
+                                                                        HOST.to_owned())).unwrap();
 
     // Prove the whitelist memberships of the second asset with the incorrect index
     // Should panic
@@ -133,7 +136,9 @@ mod tests {
     AssetRecordType::NonConfidentialAmount_ConfidentialAssetType,
     ledger_standalone,
     prng).unwrap();
-    let commitment_0 = query_utxo_and_get_type_commitment(utxo_0, PROTOCOL, HOST).unwrap();
+    let commitment_0 = query_utxo_and_get_type_commitment(utxo_0,
+                                                          &ProtocolHost(PROTOCOL.to_owned(),
+                                                                        HOST.to_owned())).unwrap();
     let (_, _, blind_1) = define_issue_transfer_and_get_utxo_and_blinds(&XfrKeyPair::generate(&mut ChaChaRng::from_entropy()),
                                                                       &XfrKeyPair::generate(&mut ChaChaRng::from_entropy()),
                                                                       10,
@@ -187,7 +192,9 @@ mod tests {
                                                                       AssetRecordType::NonConfidentialAmount_ConfidentialAssetType,
                                                                       ledger_standalone,
                                                                       prng).unwrap();
-    let commitment_1 = query_utxo_and_get_type_commitment(utxo_1, PROTOCOL, HOST).unwrap();
+    let commitment_1 = query_utxo_and_get_type_commitment(utxo_1,
+                                                          &ProtocolHost(PROTOCOL.to_owned(),
+                                                                        HOST.to_owned())).unwrap();
 
     // Prove the whitelist memberships of the second asset with the incorrect UTXO SID
     // Should panic
@@ -219,6 +226,7 @@ mod tests {
 
     // Transfer the second and third assets
     // Get the UTXO SIDs, asset type blinds, and asset type commitments
+    let protocol_host = &ProtocolHost(PROTOCOL.to_owned(), HOST.to_owned());
     let prng = &mut ChaChaRng::from_entropy();
     let (utxo_1, _, blind_1) = define_issue_transfer_and_get_utxo_and_blinds(&issuer_key_pair,
                                                                      &recipient_key_pair,
@@ -228,7 +236,7 @@ mod tests {
                                                                      AssetRecordType::NonConfidentialAmount_ConfidentialAssetType,
                                                                      ledger_standalone,
                                                                      prng).unwrap();
-    let commitment_1 = query_utxo_and_get_type_commitment(utxo_1, PROTOCOL, HOST).unwrap();
+    let commitment_1 = query_utxo_and_get_type_commitment(utxo_1, protocol_host).unwrap();
 
     let (utxo_2, _, blind_2) = define_issue_transfer_and_get_utxo_and_blinds(&issuer_key_pair,
                                                                       &recipient_key_pair,
@@ -238,7 +246,7 @@ mod tests {
                                                                       AssetRecordType::NonConfidentialAmount_ConfidentialAssetType,
                                                                       ledger_standalone,
                                                                       prng).unwrap();
-    let commitment_2 = query_utxo_and_get_type_commitment(utxo_2, PROTOCOL, HOST).unwrap();
+    let commitment_2 = query_utxo_and_get_type_commitment(utxo_2, protocol_host).unwrap();
 
     // Prove the whitelist memberships of the second and third assets
     let proof_1 = whitelist.prove_membership(1, commitment_1, blind_1);

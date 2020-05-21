@@ -1278,11 +1278,15 @@ pub mod txn_lib {
                                            ledger_standalone)
   }
 
+  /// protocol and host information
+  pub struct ProtocolHost(pub String, pub String);
+
   /// Queries a value.
   ///
   /// # Arguments
-  /// * `protocol`: either `https` or `http`.
-  /// * `host`: either `testnet.findora.org` or `localhost`.
+  /// * `protocol_host`:
+  ///   * protocol: either `https` or `http`
+  ///   * host: either `testnet.findora.org` or `localhost`.
   /// * `port`: either `QUERY_PORT` or `SUBMIT_PORT`.
   /// * `route`: route to query.
   /// * `value`: value to look up.
@@ -1291,14 +1295,14 @@ pub mod txn_lib {
   /// * To query the BlindAssetRecord with utxo_sid 100 from https://testnet.findora.org:
   /// use txn_cli::txn_lib::query;
   /// query("https", "testnet.findora.org", QUERY_PORT, "utxo_sid", "100").unwrap();
-  fn query(protocol: &str,
-           host: &str,
+  fn query(protocol_host: &ProtocolHost,
            port: &str,
            route: &str,
            value: &str)
            -> Result<String, PlatformError> {
     let mut res = if let Ok(response) =
-      reqwest::get(&format!("{}://{}:{}/{}/{}", protocol, host, port, route, value))
+      reqwest::get(&format!("{}://{}:{}/{}/{}",
+                            &protocol_host.0, &protocol_host.1, port, route, value))
     {
       response
     } else {
@@ -1322,10 +1326,9 @@ pub mod txn_lib {
   /// Queries the UTXO SID and gets the asset type commitment.
   /// Asset should be confidential, otherwise the commitmemt will be null.
   pub fn query_utxo_and_get_type_commitment(utxo: u64,
-                                            protocol: &str,
-                                            host: &str)
+                                            protocol_host: &ProtocolHost)
                                             -> Result<CompressedRistretto, PlatformError> {
-    let res = query(protocol, host, QUERY_PORT, "utxo_sid", &format!("{}", utxo))?;
+    let res = query(protocol_host, QUERY_PORT, "utxo_sid", &format!("{}", utxo))?;
     let blind_asset_record =
       serde_json::from_str::<BlindAssetRecord>(&res).or_else(|_| Err(des_fail!()))?;
     match blind_asset_record.asset_type {
@@ -1339,10 +1342,9 @@ pub mod txn_lib {
 
   /// Queries the UTXO SID to get the amount, either confidential or nonconfidential.
   pub fn query_utxo_and_get_amount(utxo: u64,
-                                   protocol: &str,
-                                   host: &str)
+                                   protocol_host: &ProtocolHost)
                                    -> Result<XfrAmount, PlatformError> {
-    let res = query(protocol, host, QUERY_PORT, "utxo_sid", &format!("{}", utxo))?;
+    let res = query(protocol_host, QUERY_PORT, "utxo_sid", &format!("{}", utxo))?;
     let blind_asset_record =
       serde_json::from_str::<BlindAssetRecord>(&res).or_else(|_| Err(des_fail!()))?;
     Ok(blind_asset_record.amount)
@@ -1361,22 +1363,22 @@ pub mod txn_lib {
   /// * `protocol`: either `https` or `http`.
   /// * `host`: either `testnet.findora.org` or `localhost`.
   /// * `txn_builder`: transation builder.
-  pub(crate) fn submit(protocol: &str,
-                       host: &str,
+  pub(crate) fn submit(protocol_host: &ProtocolHost,
                        txn_builder: TransactionBuilder)
                        -> Result<(), PlatformError> {
     // Submit transaction
     let client = reqwest::Client::new();
     let txn = txn_builder.transaction();
-    let mut res = client.post(&format!("{}://{}:{}/{}",
-                                       protocol, host, SUBMIT_PORT, "submit_transaction"))
-                        .json(&txn)
-                        .send()
-                        .or_else(|_| {
-                          Err(PlatformError::SubmissionServerError(format!("[{}] {}",
-                                                                           &error_location!(),
-                                                                           &"Failed to submit.")))
-                        })?;
+    let mut res =
+      client.post(&format!("{}://{}:{}/{}",
+                           protocol_host.0, protocol_host.1, SUBMIT_PORT, "submit_transaction"))
+            .json(&txn)
+            .send()
+            .or_else(|_| {
+              Err(PlatformError::SubmissionServerError(format!("[{}] {}",
+                                                               &error_location!(),
+                                                               &"Failed to submit.")))
+            })?;
     // Log body
     let txt = res.text().expect("no response");
     let handle = serde_json::from_str::<TxnHandle>(&txt).unwrap_or_else(|e| {
@@ -1399,25 +1401,26 @@ pub mod txn_lib {
   /// * `issue_and_transfer_asset`
   ///
   /// # Arguments
-  /// * `protocol`: either `https` or `http`.
-  /// * `host`: either `testnet.findora.org` or `localhost`.
+  /// * `protocol_host`:
+  ///   * protocol: either `https` or `http`.
+  ///   * host: either `testnet.findora.org` or `localhost`.
   /// * `txn_builder`: transation builder.
-  pub(crate) fn submit_and_get_sids(protocol: &str,
-                                    host: &str,
+  pub(crate) fn submit_and_get_sids(protocol_host: &ProtocolHost,
                                     txn_builder: TransactionBuilder)
                                     -> Result<Vec<TxoSID>, PlatformError> {
     // Submit transaction
     let client = reqwest::Client::new();
     let txn = txn_builder.transaction();
-    let mut res = client.post(&format!("{}://{}:{}/{}",
-                                       protocol, host, SUBMIT_PORT, "submit_transaction"))
-                        .json(&txn)
-                        .send()
-                        .or_else(|_| {
-                          Err(PlatformError::SubmissionServerError(format!("[{}] {}",
-                                                                           &error_location!(),
-                                                                           &"Failed to submit.")))
-                        })?;
+    let mut res =
+      client.post(&format!("{}://{}:{}/{}",
+                           protocol_host.0, protocol_host.1, SUBMIT_PORT, "submit_transaction"))
+            .json(&txn)
+            .send()
+            .or_else(|_| {
+              Err(PlatformError::SubmissionServerError(format!("[{}] {}",
+                                                               &error_location!(),
+                                                               &"Failed to submit.")))
+            })?;
 
     // Log body
     let txt = res.text().expect("no response");
@@ -1429,7 +1432,7 @@ pub mod txn_lib {
     println!("Submission status: {}", res.status());
 
     // Return sid
-    let res = query(protocol, host, SUBMIT_PORT, "txn_status", &handle.0)?;
+    let res = query(protocol_host, SUBMIT_PORT, "txn_status", &handle.0)?;
     match serde_json::from_str::<TxnStatus>(&res).or_else(|_| Err(des_fail!()))? {
       TxnStatus::Committed((_sid, txos)) => Ok(txos),
       _ => Err(des_fail!()),
@@ -1540,8 +1543,7 @@ pub mod txn_lib {
                            issuer_id: u64,
                            recipient_id: u64,
                            amount: u64,
-                           protocol: &str,
-                           host: &str)
+                           protocol_host: &ProtocolHost)
                            -> Result<(), PlatformError> {
     // Get data
     let data = load_data(data_dir)?;
@@ -1563,7 +1565,7 @@ pub mod txn_lib {
                                      None)?;
       // Store data before submitting the transaction to avoid data overwriting
       let data = load_data(data_dir)?;
-      submit(protocol, host, txn_builder)?;
+      submit(protocol_host, txn_builder)?;
       store_data_to_file(data, data_dir)?;
       fiat_code
     };
@@ -1582,9 +1584,8 @@ pub mod txn_lib {
                                None)?;
 
     // Submit transaction and get the new record
-    let sid_new = submit_and_get_sids(protocol, host, txn_builder)?[0];
-    let res_new = query(protocol,
-                        host,
+    let sid_new = submit_and_get_sids(protocol_host, txn_builder)?[0];
+    let res_new = query(protocol_host,
                         QUERY_PORT,
                         "utxo_sid",
                         &format!("{}", sid_new.0))?;
@@ -1593,8 +1594,7 @@ pub mod txn_lib {
 
     // Merge records
     let sid_merged = if let Some(sid_pre) = recipient.fiat_utxo {
-      let res_pre = query(protocol,
-                          host,
+      let res_pre = query(protocol_host,
                           QUERY_PORT,
                           "utxo_sid",
                           &format!("{}", sid_pre.0))?;
@@ -1608,7 +1608,7 @@ pub mod txn_lib {
                                       token_code,
                                       None)?;
 
-      submit_and_get_sids(protocol, host, txn_builder)?[0]
+      submit_and_get_sids(protocol_host, txn_builder)?[0]
     } else {
       sid_new
     };
@@ -1625,17 +1625,12 @@ pub mod txn_lib {
   /// * `txn_file`: path to the transaction file.
   /// * `key_pair`: key pair of the asset record.
   /// * `owner_memo`: Memo associated with utxo.
-  pub(crate) fn query_open_asset_record(protocol: &str,
-                                        host: &str,
+  pub(crate) fn query_open_asset_record(protocol_host: &ProtocolHost,
                                         sid: TxoSID,
                                         key_pair: &XfrKeyPair,
                                         owner_memo: &Option<OwnerMemo>)
                                         -> Result<OpenAssetRecord, PlatformError> {
-    let res = query(protocol,
-                    host,
-                    QUERY_PORT,
-                    "utxo_sid",
-                    &format!("{}", sid.0))?;
+    let res = query(protocol_host, QUERY_PORT, "utxo_sid", &format!("{}", sid.0))?;
     let blind_asset_record =
       serde_json::from_str::<BlindAssetRecord>(&res).or_else(|_| Err(des_fail!()))?;
     open_blind_asset_record(&blind_asset_record, owner_memo, key_pair.get_sk_ref()).or_else(|error| {
@@ -1648,14 +1643,14 @@ pub mod txn_lib {
   /// * `loan_id`: loan ID.
   /// * `issuer_id`: issuer ID.
   /// * `memo_file`: path to store the asset tracer memo and owner memo, optional.
-  /// * `protocol`: either `https` or `http`.
-  /// * `host`: either `testnet.findora.org` or `locaohost`.
+  /// * `protocol_host`:
+  ///   * protocol: either `https` or `http`.
+  ///   * host: either `testnet.findora.org` or `locaohost`.
   pub(crate) fn fulfill_loan(data_dir: &str,
                              loan_id: u64,
                              issuer_id: u64,
                              memo_file: Option<&str>,
-                             protocol: &str,
-                             host: &str)
+                             protocol_host: &ProtocolHost)
                              -> Result<(), PlatformError> {
     // Get data
     let mut data = load_data(data_dir)?;
@@ -1828,7 +1823,7 @@ pub mod txn_lib {
                                      None)?;
       // Store data before submitting the transaction to avoid data overwriting
       let data = load_data(data_dir)?;
-      submit(protocol, host, txn_builder)?;
+      submit(protocol_host, txn_builder)?;
       store_data_to_file(data, data_dir)?;
       fiat_code
     };
@@ -1855,11 +1850,11 @@ pub mod txn_lib {
                                Some(fiat_txn_file),
                                None,
                                None)?;
-    let fiat_sid = submit_and_get_sids(protocol, host, txn_builder)?[0];
+    let fiat_sid = submit_and_get_sids(protocol_host, txn_builder)?[0];
     println!("Fiat sid: {}", fiat_sid.0);
     let (_, owner_memo) = load_blind_asset_record_and_owner_memo_from_file(fiat_txn_file)?;
     let fiat_open_asset_record =
-      query_open_asset_record(protocol, host, fiat_sid, lender_key_pair, &owner_memo)?;
+      query_open_asset_record(protocol_host, fiat_sid, lender_key_pair, &owner_memo)?;
 
     // Define debt asset
     let debt_code = AssetTypeCode::gen_random();
@@ -1878,7 +1873,7 @@ pub mod txn_lib {
                                    None)?;
     // Store data before submitting the transaction to avoid data overwriting
     let data = load_data(data_dir)?;
-    submit(protocol, host, txn_builder)?;
+    submit(protocol_host, txn_builder)?;
     store_data_to_file(data, data_dir)?;
 
     // Issue and transfer debt token
@@ -1894,7 +1889,7 @@ pub mod txn_lib {
                                Some(debt_txn_file),
                                Some(debt_tracing_policy.clone()),
                                Some(identity_commitment.clone()))?;
-    let debt_sid = submit_and_get_sids(protocol, host, txn_builder)?[0];
+    let debt_sid = submit_and_get_sids(protocol_host, txn_builder)?[0];
     println!("Debt sid: {}", debt_sid.0);
     let debt_open_asset_record =
       load_open_asset_record_from_file(debt_txn_file, borrower_key_pair)?;
@@ -1934,21 +1929,19 @@ pub mod txn_lib {
     txn_builder.add_operation(xfr_op);
 
     // Submit transaction
-    let sids_new = submit_and_get_sids(protocol, host, txn_builder)?;
+    let sids_new = submit_and_get_sids(protocol_host, txn_builder)?;
 
     // Merge records
     let fiat_sid_merged = if let Some(sid_pre) = borrower.fiat_utxo {
       // Get the original fiat record
-      let res_pre = query(protocol,
-                          host,
+      let res_pre = query(protocol_host,
                           QUERY_PORT,
                           "utxo_sid",
                           &format!("{}", sid_pre.0))?;
       let blind_asset_record_pre =
         serde_json::from_str::<BlindAssetRecord>(&res_pre).or_else(|_| Err(des_fail!()))?;
       // Get the new fiat record
-      let res_new = query(protocol,
-                          host,
+      let res_new = query(protocol_host,
                           QUERY_PORT,
                           "utxo_sid",
                           &format!("{}", sids_new[1].0))?;
@@ -1961,7 +1954,7 @@ pub mod txn_lib {
                                       (blind_asset_record_new, None),
                                       fiat_code,
                                       None)?;
-      submit_and_get_sids(protocol, host, txn_builder)?[0]
+      submit_and_get_sids(protocol_host, txn_builder)?[0]
     } else {
       sids_new[1]
     };
@@ -1986,13 +1979,13 @@ pub mod txn_lib {
   /// # Arguments
   /// * `loan_id`: loan ID.
   /// * `amount`: amount to pay.
-  /// * `protocol`: either `https` or `http`.
-  /// * `host`: either `testnet.findora.org` or `localhost`.
+  /// * `protocol_host`:
+  ///   * protocol: either `https` or `http`.
+  ///   * host: either `testnet.findora.org` or `localhost`.
   pub(crate) fn pay_loan(data_dir: &str,
                          loan_id: u64,
                          amount: u64,
-                         protocol: &str,
-                         host: &str)
+                         protocol_host: &ProtocolHost)
                          -> Result<(), PlatformError> {
     // Get data
     let data = load_data(data_dir)?;
@@ -2062,9 +2055,9 @@ pub mod txn_lib {
 
     // Get fiat and debt open asset records
     let fiat_open_asset_record =
-      query_open_asset_record(protocol, host, fiat_sid, lender_key_pair, &None)?;
+      query_open_asset_record(protocol_host, fiat_sid, lender_key_pair, &None)?;
     let debt_open_asset_record =
-      query_open_asset_record(protocol, host, debt_sid, borrower_key_pair, &None)?;
+      query_open_asset_record(protocol_host, debt_sid, borrower_key_pair, &None)?;
 
     // Get fiat and debt codes
     let fiat_code = if let Some(code) = data.clone().fiat_code {
@@ -2125,7 +2118,7 @@ pub mod txn_lib {
     txn_builder.add_operation(op).transaction();
 
     // Submit transaction and update data
-    let sids = submit_and_get_sids(protocol, host, txn_builder)?;
+    let sids = submit_and_get_sids(protocol_host, txn_builder)?;
 
     let mut data = load_data(data_dir)?;
     let balance = loan.balance - amount_to_burn;
@@ -2658,7 +2651,7 @@ pub mod txn_lib {
   /// which can be overwritten by CLI subcommands.
   ///
   /// By default, the protocol is `https` and the host is `testnet.findora.org`.
-  pub(crate) fn protocol_host(matches: &clap::ArgMatches) -> (&'static str, &'static str) {
+  pub(crate) fn protocol_host(matches: &clap::ArgMatches) -> ProtocolHost {
     let protocol = if matches.is_present("http") {
       "http"
     } else {
@@ -2671,7 +2664,7 @@ pub mod txn_lib {
       // Default to testnet.findora.org
       std::option_env!("SERVER_HOST").unwrap_or("testnet.findora.org")
     };
-    (protocol, host)
+    ProtocolHost(protocol.to_owned(), host.to_owned())
   }
 
   /// Processes the `credential_issuer` subcommand.
@@ -2812,8 +2805,8 @@ pub mod txn_lib {
           return Err(PlatformError::InputsError(error_location!()));
         };
         let memo_file = fulfill_loan_matches.value_of("memo_file");
-        let (protocol, host) = protocol_host(fulfill_loan_matches);
-        fulfill_loan(data_dir, loan_id, issuer_id, memo_file, protocol, host)
+        let protocol_host = protocol_host(fulfill_loan_matches);
+        fulfill_loan(data_dir, loan_id, issuer_id, memo_file, &protocol_host)
       }
       ("create_or_overwrite_requirement", Some(create_or_overwrite_requirement_matches)) => {
         let lender_id = if let Some(id_arg) = lender_matches.value_of("id") {
@@ -3113,9 +3106,9 @@ pub mod txn_lib {
             return Err(PlatformError::InputsError(error_location!()));
           };
         // Get protocol and host.
-        let (protocol, host) = protocol_host(get_asset_record_matches);
+        let protocol_host = protocol_host(get_asset_record_matches);
         let asset_record =
-          query_open_asset_record(protocol, host, sid, &key_pair, &tracer_and_owner_memos[0].1)?;
+          query_open_asset_record(&protocol_host, sid, &key_pair, &tracer_and_owner_memos[0].1)?;
         println!("{} owns {} of asset {:?}.",
                  borrower_name,
                  asset_record.get_amount(),
@@ -3171,10 +3164,10 @@ pub mod txn_lib {
   pub(crate) fn process_submit_cmd(submit_matches: &clap::ArgMatches,
                                    txn_file: &str)
                                    -> Result<(), PlatformError> {
-    let (protocol, host) = protocol_host(submit_matches);
+    let protocol_host = &protocol_host(submit_matches);
     let txn_builder = load_txn_from_file(txn_file)?;
     if submit_matches.is_present("get_sids") || submit_matches.is_present("sids_file") {
-      let sids = submit_and_get_sids(protocol, host, txn_builder)?;
+      let sids = submit_and_get_sids(protocol_host, txn_builder)?;
       println!("Utxo: {:?}", sids);
       if let Some(path) = submit_matches.value_of("sids_file") {
         let mut sids_str = "".to_owned();
@@ -3185,7 +3178,7 @@ pub mod txn_lib {
       }
       Ok(())
     } else {
-      submit(protocol, host, txn_builder)
+      submit(protocol_host, txn_builder)
     }
   }
 
@@ -3214,8 +3207,8 @@ pub mod txn_lib {
       println!("Amount is required to load funds. Use --amount.");
       return Err(PlatformError::InputsError(error_location!()));
     };
-    let (protocol, host) = protocol_host(load_funds_matches);
-    load_funds(data_dir, issuer_id, borrower_id, amount, protocol, host)
+    let protocol_host = protocol_host(load_funds_matches);
+    load_funds(data_dir, issuer_id, borrower_id, amount, &protocol_host)
   }
 
   /// Processes the `borrower pay_loan` subcommand.
@@ -3236,9 +3229,9 @@ pub mod txn_lib {
       println!("Amount is required to pay the loan. Use --amount.");
       return Err(PlatformError::InputsError(error_location!()));
     };
-    let (protocol, host) = protocol_host(pay_loan_matches);
+    let protocol_host = protocol_host(pay_loan_matches);
 
-    pay_loan(data_dir, loan_id, amount, protocol, host)
+    pay_loan(data_dir, loan_id, amount, &protocol_host)
   }
 
   /// Processes input commands and arguments.
@@ -3498,12 +3491,14 @@ pub mod txn_lib {
       let ledger_standalone = LedgerStandalone::new();
       ledger_standalone.poll_until_ready().unwrap();
 
+      let protocol_host = &ProtocolHost(PROTOCOL.to_owned(), HOST.to_owned());
+
       // Load funds
       let tmp_dir = tempdir().unwrap();
       let data_dir = tmp_dir.path().to_str().unwrap();
 
       let funds_amount = 1000;
-      load_funds(data_dir, 0, 0, funds_amount, PROTOCOL, HOST).unwrap();
+      load_funds(data_dir, 0, 0, funds_amount, protocol_host).unwrap();
       let data = load_data(data_dir).unwrap();
 
       assert_eq!(data.borrowers[0].balance, funds_amount);
@@ -3521,7 +3516,7 @@ pub mod txn_lib {
       assert_eq!(data.loans.len(), 1);
 
       // Fulfill the loan request
-      fulfill_loan(data_dir, 0, 0, None, PROTOCOL, HOST).unwrap();
+      fulfill_loan(data_dir, 0, 0, None, protocol_host).unwrap();
       data = load_data(data_dir).unwrap();
 
       assert_eq!(data.loans[0].status, LoanStatus::Active);
@@ -3529,7 +3524,7 @@ pub mod txn_lib {
 
       // Pay loan
       let payment_amount = 200;
-      pay_loan(data_dir, 0, payment_amount, PROTOCOL, HOST).unwrap();
+      pay_loan(data_dir, 0, payment_amount, protocol_host).unwrap();
       data = load_data(data_dir).unwrap();
 
       assert_eq!(data.loans[0].payments, 1);
