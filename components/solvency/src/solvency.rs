@@ -13,6 +13,14 @@ use zei::errors::ZeiError;
 use zei::setup::PublicParams;
 use zei::xfr::structs::{asset_type_to_scalar, XfrAmount};
 
+// TODO (Keyao): Redmine issue #39: Refactor solvency.rs after the API is improved in Zei
+//
+// The current solvency API in Zei is low level, where the prover inputs and values and blindings,
+// and verifier inputs are commitments, so in Platform we have to handle blinds and commitments.
+//
+// After the solvency API is improved in Zei, we should update solvency.rs in Platform to use the
+// higher-level API.
+
 /// Scalar values of the amount and type code of an asset or liability.
 pub type AmountAndCodeScalar = (Scalar, Scalar);
 /// Commitment to the amount and associated type code of an asset or liability.
