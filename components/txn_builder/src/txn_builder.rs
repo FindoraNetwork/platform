@@ -899,18 +899,12 @@ impl TransferOperationBuilder {
 mod tests {
   use super::*;
   use ledger::data_model::TxoRef;
-  use quickcheck::{Arbitrary, Gen};
-  use quickcheck_macros::quickcheck;
-  use rand::Rng;
   use rand_chacha::ChaChaRng;
   use rand_core::SeedableRng;
-  use zei::serialization::ZeiFromToBytes;
   use zei::setup::PublicParams;
   use zei::xfr::asset_record::AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType;
   use zei::xfr::asset_record::{build_blind_asset_record, open_blind_asset_record};
-  use zei::xfr::lib::{gen_xfr_note, verify_xfr_note_no_policies};
   use zei::xfr::sig::XfrKeyPair;
-  use zei::xfr::structs::AssetRecord;
 
   // Defines an asset type
   #[derive(Clone, Debug, Eq, PartialEq)]
@@ -931,119 +925,6 @@ mod tests {
   // (amount, asset type, keypair)
   #[derive(Clone, Debug, Eq, PartialEq)]
   struct OutputRecord(pub u64, pub AssetType, pub KeyPair);
-
-  impl Arbitrary for OutputRecord {
-    fn arbitrary<G: Gen>(g: &mut G) -> Self {
-      OutputRecord(u64::arbitrary(g),
-                   AssetType::arbitrary(g),
-                   KeyPair::arbitrary(g))
-    }
-    fn shrink(&self) -> Box<dyn Iterator<Item = Self>> {
-      Box::new(self.0
-                   .shrink()
-                   .zip(self.1.shrink())
-                   .zip(self.2.shrink())
-                   .map(|((amount, asset_type), key_pair)| {
-                     OutputRecord(amount, asset_type, key_pair)
-                   }))
-    }
-  }
-
-  impl Arbitrary for InputRecord {
-    fn arbitrary<G: Gen>(g: &mut G) -> Self {
-      InputRecord(u64::arbitrary(g),
-                  AssetType::arbitrary(g),
-                  bool::arbitrary(g),
-                  bool::arbitrary(g),
-                  bool::arbitrary(g))
-    }
-    fn shrink(&self) -> Box<dyn Iterator<Item = Self>> {
-      Box::new(self.0
-                   .shrink()
-                   .zip(self.1.shrink())
-                   .zip(self.2.shrink())
-                   .zip(self.3.shrink())
-                   .zip(self.4.shrink())
-                   .map(|((((amount, asset_type), conf_type), conf_amount), traceable)| {
-                          InputRecord(amount, asset_type, conf_type, conf_amount, traceable)
-                        }))
-    }
-  }
-
-  impl Arbitrary for AssetType {
-    fn arbitrary<G: Gen>(g: &mut G) -> Self {
-      AssetType(u8::arbitrary(g))
-    }
-    fn shrink(&self) -> Box<dyn Iterator<Item = Self>> {
-      Box::new(self.0.shrink().map(AssetType))
-    }
-  }
-
-  impl Arbitrary for TxoReference {
-    fn arbitrary<G: Gen>(g: &mut G) -> Self {
-      TxoReference(g.gen::<u64>() % 10)
-    }
-    fn shrink(&self) -> Box<dyn Iterator<Item = Self>> {
-      Box::new(self.0.shrink().map(TxoReference))
-    }
-  }
-
-  impl Arbitrary for KeyPair {
-    fn arbitrary<G: Gen>(g: &mut G) -> Self {
-      // We can generate 10 possible key pairs
-      KeyPair(g.gen::<u8>() % 10)
-    }
-
-    fn shrink(&self) -> Box<dyn Iterator<Item = Self>> {
-      Box::new(self.0.shrink().map(KeyPair))
-    }
-  }
-
-  #[quickcheck]
-  #[ignore]
-  fn test_compose_transfer_txn(inputs: Vec<InputRecord>,
-                               outputs: Vec<OutputRecord>,
-                               key_pair: KeyPair,
-                               input_sids: Vec<TxoReference>) {
-    let mut prng = ChaChaRng::from_entropy();
-
-    //TODO: noah asset records should be buildable by reference
-    let key_pair = XfrKeyPair::generate(&mut ChaChaRng::from_seed([key_pair.0; 32]));
-    let key_pair_copy = XfrKeyPair::zei_from_bytes(&key_pair.zei_to_bytes());
-
-    // Compose input records
-    let input_records: Result<Vec<AssetRecord>, _> =
-      inputs.iter()
-            .map(|InputRecord(amount, asset_type, _conf_type, _conf_amount, _)| {
-                   let template = AssetRecordTemplate::with_no_asset_tracking(*amount,
-                                             [asset_type.0; 16],
-                                             NonConfidentialAmount_NonConfidentialAssetType,
-                                             key_pair_copy.get_pk());
-                   AssetRecord::from_template_no_identity_tracking(&mut prng, &template)
-                 })
-            .collect();
-
-    // Compose output records
-    let output_records: Result<Vec<AssetRecord>, _> =
-      outputs.iter()
-             .map(|OutputRecord(amount, asset_type, key_pair)| {
-               let key_pair = XfrKeyPair::generate(&mut ChaChaRng::from_seed([key_pair.0; 32]));
-               let template = AssetRecordTemplate::with_no_asset_tracking(*amount, [asset_type.0; 16], NonConfidentialAmount_NonConfidentialAssetType,  key_pair.get_pk());
-               AssetRecord::from_template_no_identity_tracking(&mut prng, &template)
-             })
-             .collect();
-
-    let _input_sids: Vec<TxoRef> = input_sids.iter()
-                                             .map(|TxoReference(sid)| TxoRef::Relative(*sid))
-                                             .collect();
-    let note = gen_xfr_note(&mut prng,
-                            &input_records.unwrap(),
-                            &output_records.unwrap(),
-                            &[&key_pair]);
-    if let Ok(xfr_note) = note {
-      assert!(verify_xfr_note_no_policies(&mut prng, &xfr_note).is_ok())
-    }
-  }
 
   #[test]
   fn test_transfer_op_builder() -> Result<(), PlatformError> {

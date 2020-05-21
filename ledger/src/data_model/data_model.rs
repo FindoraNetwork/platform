@@ -901,6 +901,8 @@ mod tests {
   use std::cmp::min;
   use zei::xfr::structs::{AssetTypeAndAmountProof, XfrBody, XfrProofs};
 
+  // Ignoring this test as it is a statistical test that sometimes fails (but very rarely)
+  // It uses the central limit theorem, but essentially testing the rand crate
   #[test]
   #[ignore]
   fn test_gen_random() {
