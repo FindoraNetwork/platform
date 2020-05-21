@@ -2,7 +2,6 @@
 
 set -e
 
-./scripts/clean_with_prejudice.sh
 ./scripts/incur fmt -- --check
 cargo clippy --workspace
 cargo build --workspace
