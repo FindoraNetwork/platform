@@ -1,15 +1,13 @@
 #![deny(warnings)]
 use crate::data_model::errors::PlatformError;
 use crate::data_model::*;
-use crate::error_location;
 use crate::policies::{compute_debt_swap_effect, DebtSwapEffect};
 use crate::policy_script::{run_txn_check, TxnCheckInputs, TxnPolicyData};
+use crate::{error_location, inp_fail, inv_fail, zei_fail};
 use credentials::credential_verify_commitment;
-use cryptohash::sha256;
-use cryptohash::sha256::Digest as BitDigest;
 use serde::Serialize;
 use std::collections::{HashMap, HashSet};
-use utils::HasInvariants;
+use utils::{HasInvariants, HashOf};
 use zei::api::anon_creds::ACCommitment;
 use zei::serialization::ZeiFromToBytes;
 use zei::xfr::sig::XfrPublicKey;
@@ -96,7 +94,8 @@ impl TxnEffect {
     let mut confidential_issuance_types = HashSet::new();
     let mut confidential_transfer_inputs = HashSet::new();
 
-    let custom_policy_asset_types = txn.policy_options
+    let custom_policy_asset_types = txn.body
+                                       .policy_options
                                        .clone()
                                        .unwrap_or_else(TxnPolicyData::default)
                                        .0
@@ -123,7 +122,7 @@ impl TxnEffect {
     // `input_txos` and that Transfer should be valid if all those TXO SIDs
     // exist unspent in the ledger and correspond to the correct
     // BlindAssetRecord).
-    for op in txn.operations.iter() {
+    for op in txn.body.operations.iter() {
       assert!(txo_count == txos.len());
 
       match op {
@@ -138,10 +137,9 @@ impl TxnEffect {
           // (1)
           // TODO(joe?): like the note in data_model, should the public key
           // used here match `def.body.asset.issuer`?
-          def.pubkey
-             .key
-             .verify(&serde_json::to_vec(&def.body).unwrap(), &def.signature)
-             .map_err(|e| PlatformError::ZeiError(error_location!(), e))?;
+          def.signature
+             .verify(&def.pubkey.key, &def.body)
+             .map_err(|e| zei_fail!(e))?;
 
           let code = def.body.asset.code;
           let token = AssetType { properties: def.body.asset.clone(),
@@ -149,7 +147,7 @@ impl TxnEffect {
 
           // (2), only within this transaction
           if new_asset_codes.contains_key(&code) || new_issuance_nums.contains_key(&code) {
-            return Err(PlatformError::InputsError(error_location!()));
+            return Err(inp_fail!());
           }
 
           // (3)
@@ -185,7 +183,7 @@ impl TxnEffect {
         //          - Fully checked in check_txn_effects
         Operation::IssueAsset(iss) => {
           if iss.body.num_outputs != iss.body.records.len() {
-            return Err(PlatformError::InputsError(error_location!()));
+            return Err(inp_fail!());
           }
 
           assert!(iss.body.num_outputs == iss.body.records.len());
@@ -201,21 +199,20 @@ impl TxnEffect {
 
           if let Some(last_num) = iss_nums.last() {
             if seq_num <= *last_num {
-              return Err(PlatformError::InputsError(error_location!()));
+              return Err(inp_fail!());
             }
           }
           iss_nums.push(seq_num);
 
           // (2)
-          iss.pubkey
-             .key
-             .verify(&serde_json::to_vec(&iss.body).unwrap(), &iss.signature)
-             .map_err(|e| PlatformError::ZeiError(error_location!(), e))?;
+          iss.signature
+             .verify(&iss.pubkey.key, &iss.body)
+             .map_err(|e| zei_fail!(e))?;
 
           // (3)
           if let Some(prior_key) = issuance_keys.get(&code) {
             if iss.pubkey != *prior_key {
-              return Err(PlatformError::InputsError(error_location!()));
+              return Err(inp_fail!());
             }
           } else {
             issuance_keys.insert(code, iss.pubkey);
@@ -225,12 +222,12 @@ impl TxnEffect {
           for output in iss.body.records.iter() {
             // (4)
             if (output.0).public_key != iss.pubkey.key {
-              return Err(PlatformError::InputsError(error_location!()));
+              return Err(inp_fail!());
             }
 
             // (5)
             if (output.0).asset_type != XfrAssetType::NonConfidential(code.val) {
-              return Err(PlatformError::InputsError(error_location!()));
+              return Err(inp_fail!());
             }
 
             if let XfrAmount::NonConfidential(amt) = (output.0).amount {
@@ -266,20 +263,20 @@ impl TxnEffect {
         //          - Checked here and in check_txn_effects
         Operation::TransferAsset(trn) => {
           if trn.body.inputs.len() != trn.body.transfer.inputs.len() {
-            return Err(PlatformError::InputsError(error_location!()));
+            return Err(inp_fail!());
           }
           if trn.body.num_outputs != trn.body.transfer.outputs.len() {
-            return Err(PlatformError::InputsError(error_location!()));
+            return Err(inp_fail!());
           }
           assert!(trn.body.inputs.len() == trn.body.transfer.inputs.len());
           assert!(trn.body.num_outputs == trn.body.transfer.outputs.len());
 
-          match trn.transfer_type {
+          match trn.body.transfer_type {
             TransferType::DebtSwap => {
               let (debt_type, debt_swap_effect) = compute_debt_swap_effect(&trn.body.transfer)?;
 
               if debt_effects.contains_key(&debt_type) {
-                return Err(PlatformError::InputsError(error_location!()));
+                return Err(inp_fail!());
               }
               debt_effects.insert(debt_type, debt_swap_effect);
             }
@@ -288,7 +285,7 @@ impl TxnEffect {
               // (1a) all body signatures are valid
               for sig in &trn.body_signatures {
                 if !trn.body.verify_body_signature(sig) {
-                  return Err(PlatformError::InputsError(error_location!()));
+                  return Err(inp_fail!());
                 }
                 if let Some(input_idx) = sig.input_idx {
                   let sig_keys = cosig_keys.entry((op_idx, input_idx))
@@ -311,7 +308,7 @@ impl TxnEffect {
                   }
                 }
                 if !input_keys.contains(&record.public_key.zei_to_bytes()) {
-                  return Err(PlatformError::InputsError(error_location!()));
+                  return Err(inp_fail!());
                 }
                 cosig_keys.entry((op_idx, input_idx))
                           .or_insert_with(HashSet::new);
@@ -339,17 +336,17 @@ impl TxnEffect {
               TxoRef::Relative(offs) => {
                 // (2).(a)
                 if offs as usize >= txo_count {
-                  return Err(PlatformError::InputsError(error_location!()));
+                  return Err(inp_fail!());
                 }
                 let ix = (txo_count - 1) - (offs as usize);
                 match &txos[ix] {
                   None => {
-                    return Err(PlatformError::InputsError(error_location!()));
+                    return Err(inp_fail!());
                   }
                   Some(TxOutput(inp_record)) => {
                     // (2).(b)
                     if inp_record != record {
-                      return Err(PlatformError::InputsError(error_location!()));
+                      return Err(inp_fail!());
                     }
                     internally_spent_txos.push(inp_record.clone());
                   }
@@ -359,7 +356,7 @@ impl TxnEffect {
               TxoRef::Absolute(txo_sid) => {
                 // (2).(a), partially
                 if input_txos.contains_key(&txo_sid) {
-                  return Err(PlatformError::InputsError(error_location!()));
+                  return Err(inp_fail!());
                 }
 
                 input_txos.insert(txo_sid, record.clone());
@@ -397,12 +394,13 @@ impl TxnEffect {
           let pok = &air_assign.body.pok;
           let pk = &air_assign.pubkey;
           // 1)
-          pk.verify(&serde_json::to_vec(&air_assign.body).unwrap(),
-                    &air_assign.signature)
-            .map_err(|e| PlatformError::ZeiError(error_location!(), e))?;
+          air_assign.signature
+                    .verify(&pk, &air_assign.body)
+                    .map_err(|e| zei_fail!(e))?;
           // 2)
-          credential_verify_commitment(issuer_pk, commitment, pok, pk.as_bytes())
-              .map_err(|e| PlatformError::ZeiError(error_location!(),e))?;
+          credential_verify_commitment(issuer_pk, commitment, pok, pk.as_bytes()).map_err(|e| {
+                                                                                   zei_fail!(e)
+                                                                                 })?;
           air_updates.insert(serde_json::to_string(&air_assign.body.addr)?,
                              serde_json::to_string(commitment)?);
         }
@@ -413,15 +411,15 @@ impl TxnEffect {
         Operation::UpdateMemo(update_memo) => {
           let pk = update_memo.pubkey;
           // 1)
-          pk.verify(&serde_json::to_vec(&update_memo.body).unwrap(),
-                    &update_memo.signature)
-            .map_err(|e| PlatformError::ZeiError(error_location!(), e))?;
+          update_memo.signature
+                     .verify(&pk, &update_memo.body)
+                     .map_err(|e| zei_fail!(e))?;
 
           memo_updates.push((update_memo.body.asset_type, pk, update_memo.body.new_memo.clone()));
         }
       } // end -- match op {
       op_idx += 1;
-    } // end -- for op in txn.operations.iter() {
+    } // end -- for op in txn.body.operations.iter() {
 
     Ok(TxnEffect { txn,
                    txos,
@@ -457,30 +455,30 @@ impl HasInvariants<PlatformError> for TxnEffect {
     // TransferAsset which consumes it.
     for (txo_sid, record) in self.input_txos.iter() {
       let mut found = false;
-      for op in self.txn.operations.iter() {
+      for op in self.txn.body.operations.iter() {
         if let Operation::TransferAsset(trn) = op {
           if trn.body.inputs.len() != trn.body.transfer.inputs.len() {
-            return Err(PlatformError::InvariantError(None));
+            return Err(inv_fail!());
           }
           for (ix, inp_record) in trn.body.inputs.iter().zip(trn.body.transfer.inputs.iter()) {
             if let TxoRef::Absolute(input_tid) = ix {
               if input_tid == txo_sid {
                 if inp_record != record {
-                  return Err(PlatformError::InvariantError(None));
+                  return Err(inv_fail!());
                 }
                 if found {
-                  return Err(PlatformError::InvariantError(None));
+                  return Err(inv_fail!());
                 }
                 found = true;
               }
             } else if inp_record == record {
-              return Err(PlatformError::InvariantError(None));
+              return Err(inv_fail!());
             }
           }
         }
       }
       if !found {
-        return Err(PlatformError::InvariantError(None));
+        return Err(inv_fail!());
       }
     }
 
@@ -491,7 +489,7 @@ impl HasInvariants<PlatformError> for TxnEffect {
     {
       // Slightly cheating
       if TxnEffect::compute_effect(self.txn.clone())? != *self {
-        return Err(PlatformError::InvariantError(None));
+        return Err(inv_fail!());
       }
     }
 
@@ -550,7 +548,7 @@ impl BlockEffect {
     // Check that no inputs are consumed twice
     for (input_sid, _) in txn.input_txos.iter() {
       if self.input_txos.contains_key(&input_sid) {
-        return Err(PlatformError::InputsError(error_location!()));
+        return Err(inp_fail!());
       }
     }
 
@@ -561,7 +559,7 @@ impl BlockEffect {
         if self.new_asset_codes.contains_key(&type_code)
            || self.new_issuance_nums.contains_key(&type_code)
         {
-          return Err(PlatformError::InputsError(error_location!()));
+          return Err(inp_fail!());
         }
       }
 
@@ -569,7 +567,7 @@ impl BlockEffect {
         if self.new_asset_codes.contains_key(&type_code)
            || self.new_issuance_nums.contains_key(&type_code)
         {
-          return Err(PlatformError::InputsError(error_location!()));
+          return Err(inp_fail!());
         }
 
         // Debug-check that issued assets are registered in `issuance_keys`
@@ -580,7 +578,7 @@ impl BlockEffect {
       // Ensure that each asset's memo can only be updated once per block
       for (type_code, _, _) in txn.memo_updates.iter() {
         if self.memo_updates.contains_key(&type_code) {
-          return Err(PlatformError::InputsError(error_location!()));
+          return Err(inp_fail!());
         }
       }
     }
@@ -637,9 +635,7 @@ impl BlockEffect {
     Ok(temp_sid)
   }
 
-  pub fn compute_txns_in_block_hash(&self) -> BitDigest {
-    let serialized = bincode::serialize(&self.txns).unwrap();
-
-    sha256::hash(&serialized)
+  pub fn compute_txns_in_block_hash(&self) -> HashOf<Vec<Transaction>> {
+    HashOf::new(&self.txns)
   }
 }

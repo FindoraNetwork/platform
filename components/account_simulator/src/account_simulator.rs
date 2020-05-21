@@ -6,7 +6,6 @@ use std::iter::repeat;
 #[macro_use(quickcheck)]
 extern crate quickcheck_macros;
 
-use ledger::data_model::compute_signature;
 use ledger::data_model::errors::PlatformError;
 use ledger::data_model::*;
 use ledger::error_location;
@@ -412,17 +411,14 @@ impl InterpretAccounts<PlatformError> for LedgerAccounts {
 
         let body = DefineAssetBody { asset: properties };
 
-        let sig = compute_signature(privkey, pubkey, &body);
+        let op = DefineAsset::new(body, &IssuerKeyPair { keypair: &keypair }).unwrap();
 
-        let op = DefineAsset { body,
-                               pubkey: IssuerPublicKey { key: *pubkey },
-                               signature: sig };
-
-        let txn = Transaction { operations: vec![Operation::DefineAsset(op)],
-                                credentials: vec![],
-                                memos: vec![],
-                                signatures: vec![],
-                                policy_options: None };
+        let txn = Transaction { body: TransactionBody { operations:
+                                                          vec![Operation::DefineAsset(op)],
+                                                        credentials: vec![],
+                                                        memos: vec![],
+                                                        policy_options: None },
+                                signatures: vec![] };
 
         let eff = TxnEffect::compute_effect(txn).unwrap();
 
@@ -471,15 +467,12 @@ impl InterpretAccounts<PlatformError> for LedgerAccounts {
         let asset_issuance_body =
           IssueAssetBody::new(&code, new_seq_num, &[TxOutput(ba)], None).unwrap();
 
-        let sign = compute_signature(&privkey, &pubkey, &asset_issuance_body);
-
-        let asset_issuance_operation = IssueAsset { body: asset_issuance_body,
-                                                    pubkey: IssuerPublicKey { key: *pubkey },
-                                                    signature: sign };
+        let asset_issuance_operation =
+          IssueAsset::new(asset_issuance_body, &IssuerKeyPair { keypair: &keypair }).unwrap();
 
         let issue_op = Operation::IssueAsset(asset_issuance_operation);
 
-        tx.operations.push(issue_op);
+        tx.body.operations.push(issue_op);
         let effect = TxnEffect::compute_effect(tx).unwrap();
 
         let mut block = self.ledger.start_block().unwrap();
@@ -619,24 +612,21 @@ impl InterpretAccounts<PlatformError> for LedgerAccounts {
                                  src_records.as_slice(),
                                  input_identity_commitments,
                                  all_outputs.as_slice(),
-                                 output_identity_commitments).unwrap();
+                                 output_identity_commitments,
+                                 TransferType::Standard).unwrap();
 
         let mut owners_memos = transfer_body.transfer.owners_memos.clone();
         // dbg!(&transfer_body);
-        let transfer_sig = TransferBodySignature { address: XfrAddress { key: *src_pub },
-                                                   signature: compute_signature(src_priv,
-                                                                                src_pub,
-                                                                                &transfer_body),
-                                                   input_idx: None };
+        let transfer_sig = transfer_body.compute_body_signature(&src_keypair, None);
 
         let transfer = TransferAsset { body: transfer_body,
-                                       body_signatures: vec![transfer_sig],
-                                       transfer_type: TransferType::Standard };
-        let txn = Transaction { operations: vec![Operation::TransferAsset(transfer)],
-                                credentials: vec![],
-                                memos: vec![],
-                                signatures: vec![],
-                                policy_options: None };
+                                       body_signatures: vec![transfer_sig] };
+        let txn = Transaction { body: TransactionBody { operations:
+                                                          vec![Operation::TransferAsset(transfer)],
+                                                        credentials: vec![],
+                                                        memos: vec![],
+                                                        policy_options: None },
+                                signatures: vec![] };
 
         let effect = TxnEffect::compute_effect(txn).unwrap();
 
@@ -730,13 +720,9 @@ impl InterpretAccounts<PlatformError> for OneBigTxnAccounts {
 
         let body = DefineAssetBody { asset: properties };
 
-        let sig = compute_signature(privkey, pubkey, &body);
+        let op = DefineAsset::new(body, &IssuerKeyPair { keypair: &keypair }).unwrap();
 
-        let op = DefineAsset { body,
-                               pubkey: IssuerPublicKey { key: *pubkey },
-                               signature: sig };
-
-        self.txn.operations.push(Operation::DefineAsset(op));
+        self.txn.body.operations.push(Operation::DefineAsset(op));
         let eff = TxnEffect::compute_effect(self.txn.clone()).unwrap();
         let eff = self.base_ledger
                       .TESTING_get_status()
@@ -780,15 +766,12 @@ impl InterpretAccounts<PlatformError> for OneBigTxnAccounts {
         let asset_issuance_body =
           IssueAssetBody::new(&code, new_seq_num, &[TxOutput(ba)], None).unwrap();
 
-        let sign = compute_signature(&privkey, &pubkey, &asset_issuance_body);
-
-        let asset_issuance_operation = IssueAsset { body: asset_issuance_body,
-                                                    pubkey: IssuerPublicKey { key: *pubkey },
-                                                    signature: sign };
+        let asset_issuance_operation =
+          IssueAsset::new(asset_issuance_body, &IssuerKeyPair { keypair: &keypair }).unwrap();
 
         let issue_op = Operation::IssueAsset(asset_issuance_operation);
 
-        self.txn.operations.push(issue_op);
+        self.txn.body.operations.push(issue_op);
         let effect = TxnEffect::compute_effect(self.txn.clone()).unwrap();
         let effect = self.base_ledger
                          .TESTING_get_status()
@@ -926,20 +909,19 @@ impl InterpretAccounts<PlatformError> for OneBigTxnAccounts {
                                                    src_records.as_slice(),
                                                    input_identity_commitments,
                                                    all_outputs.as_slice(),
-                                                   output_identity_commitments).unwrap();
+                                                   output_identity_commitments,
+                                                   TransferType::Standard).unwrap();
         let owners_memos = transfer_body.transfer.owners_memos.clone();
         // dbg!(&transfer_body);
-        let transfer_sig = TransferBodySignature { address: XfrAddress { key: *src_pub },
-                                                   signature: compute_signature(src_priv,
-                                                                                src_pub,
-                                                                                &transfer_body),
-                                                   input_idx: None };
+        let transfer_sig = transfer_body.compute_body_signature(&src_keypair, None);
 
         let transfer = TransferAsset { body: transfer_body,
-                                       body_signatures: vec![transfer_sig],
-                                       transfer_type: TransferType::Standard };
+                                       body_signatures: vec![transfer_sig] };
 
-        self.txn.operations.push(Operation::TransferAsset(transfer));
+        self.txn
+            .body
+            .operations
+            .push(Operation::TransferAsset(transfer));
 
         let effect = TxnEffect::compute_effect(self.txn.clone()).unwrap();
         let effect = self.base_ledger
@@ -1050,17 +1032,14 @@ impl InterpretAccounts<PlatformError> for LedgerStandaloneAccounts {
 
         let body = DefineAssetBody { asset: properties };
 
-        let sig = compute_signature(privkey, pubkey, &body);
+        let op = DefineAsset::new(body, &IssuerKeyPair { keypair: &keypair }).unwrap();
 
-        let op = DefineAsset { body,
-                               pubkey: IssuerPublicKey { key: *pubkey },
-                               signature: sig };
-
-        let txn = Transaction { operations: vec![Operation::DefineAsset(op)],
-                                credentials: vec![],
-                                memos: vec![],
-                                signatures: vec![],
-                                policy_options: None };
+        let txn = Transaction { body: TransactionBody { operations:
+                                                          vec![Operation::DefineAsset(op)],
+                                                        credentials: vec![],
+                                                        memos: vec![],
+                                                        policy_options: None },
+                                signatures: vec![] };
 
         {
           // let serialize = serde_json::to_string(&tx).unwrap();
@@ -1156,15 +1135,12 @@ impl InterpretAccounts<PlatformError> for LedgerStandaloneAccounts {
         let asset_issuance_body =
           IssueAssetBody::new(&code, new_seq_num, &[TxOutput(ba)], None).unwrap();
 
-        let sign = compute_signature(&privkey, &pubkey, &asset_issuance_body);
-
-        let asset_issuance_operation = IssueAsset { body: asset_issuance_body,
-                                                    pubkey: IssuerPublicKey { key: *pubkey },
-                                                    signature: sign };
+        let asset_issuance_operation =
+          IssueAsset::new(asset_issuance_body, &IssuerKeyPair { keypair: &keypair }).unwrap();
 
         let issue_op = Operation::IssueAsset(asset_issuance_operation);
 
-        tx.operations.push(issue_op);
+        tx.body.operations.push(issue_op);
 
         let txos = {
           // let serialize = serde_json::to_string(&tx).unwrap();
@@ -1336,24 +1312,21 @@ impl InterpretAccounts<PlatformError> for LedgerStandaloneAccounts {
                                  src_records.as_slice(),
                                  input_identity_commitments,
                                  all_outputs.as_slice(),
-                                 output_identity_commitments).unwrap();
+                                 output_identity_commitments,
+                                 TransferType::Standard).unwrap();
 
         let mut owners_memos = transfer_body.transfer.owners_memos.clone();
         // dbg!(&transfer_body);
-        let transfer_sig = TransferBodySignature { address: XfrAddress { key: *src_pub },
-                                                   signature: compute_signature(src_priv,
-                                                                                src_pub,
-                                                                                &transfer_body),
-                                                   input_idx: None };
+        let transfer_sig = transfer_body.compute_body_signature(&src_keypair, None);
 
         let transfer = TransferAsset { body: transfer_body,
-                                       body_signatures: vec![transfer_sig],
-                                       transfer_type: TransferType::Standard };
-        let txn = Transaction { operations: vec![Operation::TransferAsset(transfer)],
-                                credentials: vec![],
-                                memos: vec![],
-                                signatures: vec![],
-                                policy_options: None };
+                                       body_signatures: vec![transfer_sig] };
+        let txn = Transaction { body: TransactionBody { operations:
+                                                          vec![Operation::TransferAsset(transfer)],
+                                                        credentials: vec![],
+                                                        memos: vec![],
+                                                        policy_options: None },
+                                signatures: vec![] };
 
         let txos = {
           // let serialize = serde_json::to_string(&tx).unwrap();

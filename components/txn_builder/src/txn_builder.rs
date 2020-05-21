@@ -11,9 +11,9 @@ use credentials::{
 use curve25519_dalek::scalar::Scalar;
 use ledger::data_model::errors::PlatformError;
 use ledger::data_model::*;
-use ledger::error_location;
 use ledger::policies::Fraction;
 use ledger::policy_script::{Policy, PolicyGlobals, TxnCheckInputs, TxnPolicyData};
+use ledger::{error_location, inv_fail};
 use rand_chacha::ChaChaRng;
 use rand_core::{CryptoRng, RngCore, SeedableRng};
 use std::cmp::Ordering;
@@ -428,15 +428,16 @@ impl BuildsTransactions for TransactionBuilder {
     &self.txn
   }
   fn add_memo(&mut self, memo: Memo) -> &mut Self {
-    self.txn.memos.push(memo);
+    self.txn.body.memos.push(memo);
     self
   }
 
   fn add_policy_option(&mut self, token_code: AssetTypeCode, which_check: String) -> &mut Self {
-    if self.txn.policy_options.is_none() {
-      self.txn.policy_options = Some(TxnPolicyData(vec![]));
+    if self.txn.body.policy_options.is_none() {
+      self.txn.body.policy_options = Some(TxnPolicyData(vec![]));
     }
     self.txn
+        .body
         .policy_options
         .as_mut()
         .unwrap()
@@ -452,10 +453,10 @@ impl BuildsTransactions for TransactionBuilder {
                                 memo: &str,
                                 policy_choice: PolicyChoice)
                                 -> Result<&mut Self, PlatformError> {
-    let pub_key = &IssuerPublicKey { key: key_pair.get_pk() };
-    let priv_key = &key_pair.get_sk();
     let token_code = token_code.unwrap_or_else(AssetTypeCode::gen_random);
-    self.txn.add_operation(Operation::DefineAsset(DefineAsset::new(DefineAssetBody::new(&token_code, pub_key, asset_rules, Some(Memo(memo.into())), Some(ConfidentialMemo {}), policy_from_choice(&token_code,&pub_key.key,policy_choice))?, pub_key, priv_key)?));
+    let pol = policy_from_choice(&token_code, key_pair.get_pk_ref(), policy_choice);
+    let iss_keypair = IssuerKeyPair { keypair: &key_pair };
+    self.txn.add_operation(Operation::DefineAsset(DefineAsset::new(DefineAssetBody::new(&token_code, &IssuerPublicKey { key: *key_pair.get_pk_ref() }, asset_rules, Some(Memo(memo.into())), Some(ConfidentialMemo {}), pol)?, &iss_keypair)?));
     Ok(self)
   }
   fn add_operation_issue_asset(&mut self,
@@ -465,8 +466,8 @@ impl BuildsTransactions for TransactionBuilder {
                                records_and_memos: &[(TxOutput, Option<OwnerMemo>)],
                                tracing_policy: Option<AssetTracingPolicy>)
                                -> Result<&mut Self, PlatformError> {
-    let pub_key = &IssuerPublicKey { key: key_pair.get_pk() };
-    let priv_key = &key_pair.get_sk();
+    let iss_keypair = IssuerKeyPair { keypair: &key_pair };
+
     let mut records = vec![];
     for (output, memo) in records_and_memos {
       records.push(output.clone());
@@ -477,8 +478,7 @@ impl BuildsTransactions for TransactionBuilder {
                                                                                  seq_num,
                                                                                  &records,
                                                                                  tracing_policy)?,
-                                                             pub_key,
-                                                             priv_key)?));
+                                                             &iss_keypair)?));
     Ok(self)
   }
 
@@ -508,8 +508,8 @@ impl BuildsTransactions for TransactionBuilder {
                                                             &input_asset_records[..],
                                                             input_identity_commitments,
                                                             output_records,
-                                                            output_identity_commitments)?,
-                                     TransferType::Standard)?;
+                                                            output_identity_commitments,
+                                                            TransferType::Standard)?)?;
     xfr.sign(&keys);
 
     for (output, memo) in xfr.body
@@ -554,7 +554,7 @@ impl BuildsTransactions for TransactionBuilder {
   }
 
   fn sign(&mut self, kp: &XfrKeyPair) -> &mut Self {
-    self.txn.sign(kp.get_sk_ref(), kp.get_pk_ref());
+    self.txn.sign(kp);
     self
   }
 
@@ -564,11 +564,11 @@ impl BuildsTransactions for TransactionBuilder {
   }
 
   fn serialize_str(&self) -> Result<String, PlatformError> {
-    if let Ok(serialized) = serde_json::to_string(&self.txn) {
-      Ok(serialized)
-    } else {
-      Err(PlatformError::SerializationError)
-    }
+    serde_json::to_string(&self.txn).map_err(|e| {
+                                      PlatformError::SerializationError(format!("[{}]: {:?}",
+                                                                                &error_location!(),
+                                                                                e))
+                                    })
   }
 }
 
@@ -673,7 +673,7 @@ impl TransferOperationBuilder {
                    amount: u64)
                    -> Result<&mut Self, PlatformError> {
     if self.transfer.is_some() {
-      return Err(PlatformError::InvariantError(Some("Cannot mutate a transfer that has been signed".to_string())));
+      return Err(inv_fail!("Cannot mutate a transfer that has been signed".to_string()));
     }
     let asset_record = if let Some(policy) = tracing_policy.clone() {
       AssetRecord::from_open_asset_record_with_asset_tracking_but_no_identity(open_ar,
@@ -699,7 +699,7 @@ impl TransferOperationBuilder {
                     -> Result<&mut Self, PlatformError> {
     let prng = &mut ChaChaRng::from_entropy();
     if self.transfer.is_some() {
-      return Err(PlatformError::InvariantError(Some("Cannot mutate a transfer that has been signed".to_string())));
+      return Err(inv_fail!("Cannot mutate a transfer that has been signed".to_string()));
     }
     let ar = if let Some((user_secret_key, credential, commitment_key)) = credential_record {
       AssetRecord::from_template_with_identity_tracking(prng,
@@ -725,7 +725,7 @@ impl TransferOperationBuilder {
     blinds: &mut ((Scalar, Scalar), Scalar))
     -> Result<&mut Self, PlatformError> {
     if self.transfer.is_some() {
-      return Err(PlatformError::InvariantError(Some("Cannot mutate a transfer that has been signed".to_string())));
+      return Err(inv_fail!("Cannot mutate a transfer that has been signed".to_string()));
     }
     let (ar, amount_blinds, type_blind) =
       if let Some((user_secret_key, credential, commitment_key)) = credential_record {
@@ -778,7 +778,7 @@ impl TransferOperationBuilder {
   pub fn balance(&mut self) -> Result<&mut Self, PlatformError> {
     let mut prng = ChaChaRng::from_entropy();
     if self.transfer.is_some() {
-      return Err(PlatformError::InvariantError(Some("Cannot mutate a transfer that has been signed".to_string())));
+      return Err(inv_fail!("Cannot mutate a transfer that has been signed".to_string()));
     }
     let spend_total: u64 = self.spend_amounts.iter().sum();
     let mut partially_consumed_inputs = Vec::new();
@@ -836,8 +836,9 @@ impl TransferOperationBuilder {
                                       &self.input_records,
                                       self.input_identity_commitments.clone(),
                                       &self.output_records,
-                                      self.output_identity_commitments.clone())?;
-    self.transfer = Some(TransferAsset::new(body, transfer_type)?);
+                                      self.output_identity_commitments.clone(),
+                                      transfer_type)?;
+    self.transfer = Some(TransferAsset::new(body)?);
     Ok(self)
   }
 
@@ -854,7 +855,7 @@ impl TransferOperationBuilder {
   // All input owners must sign eventually for the transaction to be valid.
   pub fn sign(&mut self, kp: &XfrKeyPair) -> Result<&mut Self, PlatformError> {
     if self.transfer.is_none() {
-      return Err(PlatformError::InvariantError(Some("Transaction has not yet been finalized".to_string())));
+      return Err(inv_fail!("Transaction has not yet been finalized".to_string()));
     }
     let mut new_transfer = self.transfer.as_ref().unwrap().clone();
     new_transfer.sign(&kp);
@@ -865,7 +866,7 @@ impl TransferOperationBuilder {
   // Return the transaction operation
   pub fn transaction(&self) -> Result<Operation, PlatformError> {
     if self.transfer.is_none() {
-      return Err(PlatformError::InvariantError(Some("Must create transfer".to_string())));
+      return Err(inv_fail!("Must create transfer".to_string()));
     }
     Ok(Operation::TransferAsset(self.transfer.clone().unwrap()))
   }
@@ -873,21 +874,21 @@ impl TransferOperationBuilder {
   // Checks to see whether all necessary signatures are present and valid
   pub fn validate_signatures(&mut self) -> Result<&mut Self, PlatformError> {
     if self.transfer.is_none() {
-      return Err(PlatformError::InvariantError(Some("Transaction has not yet been finalized".to_string())));
+      return Err(inv_fail!("Transaction has not yet been finalized".to_string()));
     }
 
     let trn = self.transfer.as_ref().unwrap();
     let mut sig_keys = HashSet::new();
     for sig in &trn.body_signatures {
-      if !sig.verify(&serde_json::to_vec(&trn.body).unwrap()) {
-        return Err(PlatformError::InvariantError(Some("Invalid signature".to_string())));
+      if !sig.verify(&trn.body) {
+        return Err(inv_fail!("Invalid signature".to_string()));
       }
       sig_keys.insert(sig.address.key.zei_to_bytes());
     }
 
     for record in &trn.body.transfer.inputs {
       if !sig_keys.contains(&record.public_key.zei_to_bytes()) {
-        return Err(PlatformError::InvariantError(Some("Not all signatures present".to_string())));
+        return Err(inv_fail!("Not all signatures present".to_string()));
       }
     }
     Ok(self)

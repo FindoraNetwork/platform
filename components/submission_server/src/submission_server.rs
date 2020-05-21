@@ -1,7 +1,7 @@
 #![deny(warnings)]
-use cryptohash::sha256;
 use ledger::data_model::errors::PlatformError;
 use ledger::data_model::{Operation, Transaction, TxnSID, TxnTempSID, TxoSID};
+use ledger::error_location;
 use ledger::store::*;
 use log::info;
 use rand_core::{CryptoRng, RngCore};
@@ -10,13 +10,22 @@ use std::collections::HashMap;
 use std::fmt;
 use std::sync::{Arc, RwLock};
 
+macro_rules! fail {
+  () => {
+    PlatformError::SubmissionServerError(error_location!())
+  };
+  ($s:expr) => {
+    PlatformError::SubmissionServerError(format!("[{}] {}", &error_location!(), &$s))
+  };
+}
+
 // Query handle for user
 #[derive(Debug, Hash, Eq, PartialEq, Clone, Serialize, Deserialize)]
 pub struct TxnHandle(pub String);
 
 impl TxnHandle {
   pub fn new(txn: &Transaction) -> Self {
-    let digest = sha256::hash(&txn.serialize_bincode(TxnSID(0)));
+    let digest = txn.hash(TxnSID(0));
     TxnHandle(hex::encode(digest))
   }
 }
@@ -149,7 +158,7 @@ impl<RNG, LU> SubmissionServer<RNG, LU>
       assert!(self.block.is_none());
       return Ok(());
     }
-    Err(PlatformError::SubmissionServerError(Some("Cannot finish block because there are no pending txns".into())))
+    Err(fail!("Cannot finish block because there are no pending txns"))
   }
 
   pub fn cache_transaction(&mut self, txn: Transaction) -> Result<TxnHandle, PlatformError> {
@@ -165,7 +174,7 @@ impl<RNG, LU> SubmissionServer<RNG, LU>
       }
     }
 
-    Err(PlatformError::SubmissionServerError(Some("Transaction is invalid and cannot be added to pending txn list.".into())))
+    Err(fail!("Transaction is invalid and cannot be added to pending txn list."))
   }
 
   pub fn abort_block(&mut self) {
@@ -198,7 +207,7 @@ impl<RNG, LU> SubmissionServer<RNG, LU>
   }
 }
 pub fn txn_log_info(txn: &Transaction) {
-  for op in &txn.operations {
+  for op in &txn.body.operations {
     match op {
       Operation::DefineAsset(define_asset_op) => {
         info!("Asset Definition: New asset with code {} defined",
