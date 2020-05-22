@@ -52,7 +52,7 @@ fn main() {
 
   // The open succeeded.  Flush any reconstructed blocks to the
   // disk.
-  if let Some(e) = tree.write() {
+  if let Err(e) = tree.write() {
     info!("The Merkle tree write returned an error:  {}", e);
     info!("Continuing.");
   }
@@ -60,7 +60,7 @@ fn main() {
   info!("Performing the initial check.");
 
   // Perform the full check.
-  if let Some(e) = tree.check_disk(true) {
+  if let Err(e) = tree.check_disk(true) {
     info!("The Merkle tree check returned an error:  {}", e);
   } else {
     info!("The Merkle tree at \"{}\" is valid with {} entries.",
@@ -85,7 +85,7 @@ fn main() {
 
   // Tell the tree to assume that the disk image is
   // invalid.
-  if let Some(e) = tree.reset_disk() {
+  if let Err(e) = tree.reset_disk() {
     info!("The disk reset failed:  {}", e);
     info!("Continuing");
   }
@@ -94,13 +94,13 @@ fn main() {
   // this point, there's no more to do.  The disk probably
   // is in bad shape.  There's no point to a rebuild since
   // we got a valid image into memory.
-  if let Some(e) = tree.write() {
+  if let Err(e) = tree.write() {
     info!("The rewrite failed:  {}", e);
     exit(1);
   }
 
   // Try the full check again.
-  if let Some(e) = tree.check_disk(true) {
+  if let Err(e) = tree.check_disk(true) {
     info!("The final check failed:  {}", e);
     exit(1);
   }

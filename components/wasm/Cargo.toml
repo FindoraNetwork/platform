@@ -10,7 +10,6 @@ wasm-opt = false
 
 [dependencies]
 base64 = "0.10"
-bincode = "1"
 credentials = { path = "../../libs/credentials" }
 cryptohash = { path = "../../libs/cryptohash" }
 futures = "0.1.20"
@@ -28,6 +27,7 @@ wasm-bindgen = { version = "0.2.50", features = ["serde-serialize"]  }
 wasm-bindgen-futures = "0.3.27"
 wasm-bindgen-test = "0.2.50"
 zei = { git = "ssh://git@github.com/findoraorg/zei", tag = "v0.0.2-4" }
+utils = { path = "../../libs/utils" }
 
 [lib]
 crate-type = ["cdylib", "rlib"]

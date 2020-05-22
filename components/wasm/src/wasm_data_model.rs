@@ -1,5 +1,5 @@
 #![deny(warnings)]
-use crate::utils::error_to_jsvalue;
+use crate::util::error_to_jsvalue;
 use credentials::{
   CredCommitment, CredIssuerPublicKey, CredIssuerSecretKey, CredPoK, CredRevealSig, CredSignature,
   CredUserPublicKey, CredUserSecretKey, Credential as PlatformCredential,
@@ -279,7 +279,7 @@ impl SignatureRules {
     let weights: Vec<(XfrPublicKey, u64)> =
       weights.iter()
              .map(|(b64_key, weight)| {
-               let parsed = crate::utils::public_key_from_base64(b64_key.clone());
+               let parsed = crate::util::public_key_from_base64(b64_key.clone());
                match parsed {
                  Err(err) => Err(err),
                  Ok(pk) => Ok((pk, *weight)),
