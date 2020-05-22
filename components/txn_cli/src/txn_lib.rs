@@ -1821,7 +1821,7 @@ pub mod txn_lib {
 
     // Issue and transfer fiat token
     let credential_record = Some((&user_secret_key, &ac_credential, &commitment_key));
-    let fiat_txn_file = "fiat_txn_file";
+    let fiat_txn_file = &format!("{}/{}", data_dir, "fiat_txn_file");
     let txn_builder =
       issue_and_transfer_asset(data_dir,
                                issuer_key_pair,
@@ -1860,7 +1860,7 @@ pub mod txn_lib {
     store_data_to_file(data, data_dir)?;
 
     // Issue and transfer debt token
-    let debt_txn_file = "debt_txn_file";
+    let debt_txn_file = &format!("{}/{}", data_dir, "debt_txn_file");
     let txn_builder =
       issue_and_transfer_asset(data_dir,
                                borrower_key_pair,
