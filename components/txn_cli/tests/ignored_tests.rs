@@ -624,7 +624,7 @@ fn test_define_issue_transfer_and_submit_with_args() {
   tmp_dir.close().unwrap();
 }
 
-// This test passes individually, but we ignore it since it occasionally fails with SubmissionServerError when run with other tests
+// This test passes individually, but we ignore it since it occasionally fails when run with other tests
 // which also use the standalone ledger
 // GitHub issue: #324
 // Redmind issue: #38
