@@ -676,6 +676,8 @@ pub struct KVUpdate {
   pub signature: SignatureOf<(Key, u64, Option<KVEntry>)>,
 }
 
+pub type KVEntrySignature = SignatureOf<(Key, u64, Option<KVEntry>)>;
+
 impl KVUpdate {
   pub fn new(creation_body: (Key, Option<KVHash>),
              seq_number: u64,

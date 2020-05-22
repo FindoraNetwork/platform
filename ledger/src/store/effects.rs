@@ -14,8 +14,6 @@ use zei::serialization::ZeiFromToBytes;
 use zei::xfr::sig::XfrPublicKey;
 use zei::xfr::structs::{AssetTracingPolicy, BlindAssetRecord, XfrAmount, XfrAssetType, XfrBody};
 
-pub const KV_ENTRY_MAX_SIZE: usize = 1024;
-
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct TxnEffect {
   // The Transaction object this represents
@@ -66,8 +64,7 @@ pub struct TxnEffect {
   // Updates to the AIR
   pub air_updates: HashMap<String, String>,
   // User-provided Key-Value store updates
-  pub kv_updates:
-    HashMap<Key, Vec<(SignatureOf<(Key, u64, Option<KVEntry>)>, u64, Option<KVEntry>)>>,
+  pub kv_updates: HashMap<Key, Vec<(KVEntrySignature, u64, Option<KVEntry>)>>,
   // Memo updates
   pub memo_updates: Vec<(AssetTypeCode, XfrPublicKey, Memo)>,
 }
@@ -560,8 +557,7 @@ pub struct BlockEffect {
   // Updates to the AIR
   pub air_updates: HashMap<String, String>,
   // User-provided Key-Value store updates
-  pub kv_updates:
-    HashMap<Key, Vec<(SignatureOf<(Key, u64, Option<KVEntry>)>, u64, Option<KVEntry>)>>,
+  pub kv_updates: HashMap<Key, Vec<(KVEntrySignature, u64, Option<KVEntry>)>>,
   // Memo updates
   pub memo_updates: HashMap<AssetTypeCode, Memo>,
 }

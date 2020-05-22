@@ -11,27 +11,20 @@
 use chrono::Utc;
 use cryptohash::{hash_pair, hash_partial, sha256, HashValue, Proof, HASH_SIZE};
 use log::{debug, info};
-use serde::Deserialize;
-use serde::Deserializer;
-use serde::Serialize;
-use serde::Serializer;
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::collections::HashMap;
 use std::fmt;
 use std::fs::File;
 use std::fs::OpenOptions;
-use std::io::Error;
-use std::io::ErrorKind;
-use std::io::Read;
-use std::io::Seek;
-use std::io::SeekFrom::End;
-use std::io::SeekFrom::Start;
-use std::io::Write;
+use std::io;
+use std::io::{Error, ErrorKind, Read, Seek, Write};
+use std::io::{SeekFrom::End, SeekFrom::Start};
 use std::mem;
 use std::mem::MaybeUninit;
 use std::ptr::copy_nonoverlapping;
 use std::slice::from_raw_parts;
 use std::slice::from_raw_parts_mut;
-use utils::{er, se, Commas};
+use utils::{er, Commas};
 
 const BLOCK_SHIFT: u16 = 9;
 const LEVELS_IN_BLOCK: usize = BLOCK_SHIFT as usize;
@@ -76,28 +69,28 @@ impl BlockHeader {
   }
 
   // Do a simple consistency check on some fields in the header.
-  fn check(&self, level: usize, id: u64) -> Option<Error> {
+  fn check(&self, level: usize, id: u64) -> io::Result<()> {
     if self.header_mark != HEADER_VALUE {
-      return se(format!("Block {} at level {} has a bad header ({:x}).",
+      return er(format!("Block {} at level {} has a bad header ({:x}).",
                         id, level, self.header_mark));
     }
 
     if self.level != level as u16 {
-      return se(format!("Block {} at level {} has a bad level ({}).",
+      return er(format!("Block {} at level {} has a bad level ({}).",
                         id, level, self.level));
     }
 
     if self.id != id {
-      return se(format!("Block {} at level {} has a bad id ({}).",
+      return er(format!("Block {} at level {} has a bad id ({}).",
                         id, level, self.id));
     }
 
     if self.valid_leaves > LEAVES_IN_BLOCK as u16 {
-      return se(format!("The entry count for block {} at level {} is too large ({}).",
+      return er(format!("The entry count for block {} at level {} is too large ({}).",
                         id, level, self.valid_leaves));
     }
 
-    None
+    Ok(())
   }
 }
 
@@ -300,15 +293,15 @@ impl Block {
   // Set the hash value for a leaf for a block.  When the last
   // available slot for leaves is full, form the upper levels of
   // the tree that fit in this block, and then set the checksum.
-  fn set_hash(&mut self, hash_value: &HashValue) -> Option<Error> {
+  fn set_hash(&mut self, hash_value: &HashValue) -> io::Result<()> {
     let index = self.header.valid_leaves as usize;
 
     if index >= LEAVES_IN_BLOCK {
-      return Some(Error::new(ErrorKind::NotFound, "This block is full."));
+      return Err(Error::new(ErrorKind::NotFound, "This block is full."));
     }
 
     if self.hashes[index] != HashValue::new() {
-      return Some(Error::new(ErrorKind::NotFound, "That hash block is not empty."));
+      return Err(Error::new(ErrorKind::NotFound, "That hash block is not empty."));
     }
 
     self.hashes[index] = *hash_value;
@@ -321,7 +314,7 @@ impl Block {
       self.set_checksum();
     }
 
-    None
+    Ok(())
   }
 
   // Compute the hashes that form the subtree represented by this
@@ -391,14 +384,14 @@ impl Block {
   }
 
   // Check the integrity of a block given an expected level and id.
-  fn check(&self, level: usize, id: u64, disk_format: bool) -> Option<Error> {
+  fn check(&self, level: usize, id: u64, disk_format: bool) -> io::Result<()> {
     // Check the checksum first, since a bad disk read would usually lead
     // to a bad checksum.
     if disk_format || self.full() {
       let hash = self.compute_checksum();
 
       if hash != self.header.check_bits.bits {
-        return se(format!("The header checksum for block {} ({} entries) at level {} is invalid.",
+        return er(format!("The header checksum for block {} ({} entries) at level {} is invalid.",
                           id,
                           self.valid_leaves(),
                           level));
@@ -407,9 +400,7 @@ impl Block {
 
     // Validate the header so that we know that the overall
     // description is coherent.
-    if let Some(x) = self.header.check(level, id) {
-      return Some(x);
-    }
+    self.header.check(level, id)?;
 
     // Check that the appropriate number of hash values has
     // been set.
@@ -421,7 +412,7 @@ impl Block {
 
     for i in 0..limit {
       if self.hashes[i] == HashValue::new() {
-        return se(format!("Hash entry {} for block {} at level {} is invalid.",
+        return er(format!("Hash entry {} for block {} at level {} is invalid.",
                           i, id, level));
       }
     }
@@ -429,7 +420,7 @@ impl Block {
     // The rest of the hashes should be in their initial state.
     for i in limit..HASHES_IN_BLOCK {
       if self.hashes[i] != HashValue::new() {
-        return se(format!("Hash entry {} for block {} at level {} was set, valid leaves {}.",
+        return er(format!("Hash entry {} for block {} at level {} was set, valid leaves {}.",
                           i,
                           id,
                           level,
@@ -440,17 +431,15 @@ impl Block {
     // If this level is full, the subtree should be valid.  This check
     // is by far the most expensive.
     if self.full() {
-      if let Some(x) = self.check_subtree() {
-        return Some(x);
-      }
+      self.check_subtree()?;
     }
 
-    None
+    Ok(())
   }
 
   // Check the hashes of nodes formed inside this block.  The block
   // must be full.
-  fn check_subtree(&self) -> Option<Error> {
+  fn check_subtree(&self) -> io::Result<()> {
     let mut input = 0;
 
     for i in LEAVES_IN_BLOCK..HASHES_IN_BLOCK {
@@ -459,7 +448,7 @@ impl Block {
       let hash = hash_pair(left, right);
 
       if hash != self.hashes[i] {
-        return se(format!("hash[{}] in block {} at level {} is invalid.",
+        return er(format!("hash[{}] in block {} at level {} is invalid.",
                           i,
                           self.id(),
                           self.level()));
@@ -468,7 +457,7 @@ impl Block {
       input += 2;
     }
 
-    None
+    Ok(())
   }
 
   // Add the subtree for the given block into the proof.  This code
@@ -574,7 +563,9 @@ pub struct AppendOnlyMerkle {
 // When a tree is dropped, write it to disk.
 impl Drop for AppendOnlyMerkle {
   fn drop(&mut self) {
-    self.write();
+    if let Err(e) = self.write() {
+      panic!("AppendOnlyMerkle: drop failed, err = {}", e);
+    }
   }
 }
 
@@ -619,7 +610,7 @@ impl AppendOnlyMerkle {
   /// # drop(tree);
   /// # let _ = std::fs::remove_file(&path);
   ///````
-  pub fn open(path: &str) -> Result<AppendOnlyMerkle, Error> {
+  pub fn open(path: &str) -> io::Result<AppendOnlyMerkle> {
     let check_path = OpenOptions::new().read(true).write(true).open(path);
 
     match check_path {
@@ -661,7 +652,7 @@ impl AppendOnlyMerkle {
   /// # drop(tree);
   /// # let _ = std::fs::remove_file(&path);
   ///````
-  pub fn create(path: &str) -> Result<AppendOnlyMerkle, Error> {
+  pub fn create(path: &str) -> io::Result<AppendOnlyMerkle> {
     let check_path = OpenOptions::new().read(true)
                                        .write(true)
                                        .create_new(true)
@@ -701,7 +692,7 @@ impl AppendOnlyMerkle {
   /// returned, and this tree is guaranteed to be fully synchronized
   /// to disk.
   ///
-  pub fn rebuild(path: &str) -> Result<AppendOnlyMerkle, Error> {
+  pub fn rebuild(path: &str) -> io::Result<AppendOnlyMerkle> {
     let input = OpenOptions::new().read(true).open(&path)?;
     let ext = AppendOnlyMerkle::rebuild_ext();
     let save = path.to_owned() + &ext;
@@ -735,7 +726,7 @@ impl AppendOnlyMerkle {
 
   // The rebuild method creates a skeleton tree that is empty.  Now do
   // the work of recreating all the blocks for all the files.
-  fn rebuild_internal(&mut self, mut input: File) -> Result<(), Error> {
+  fn rebuild_internal(&mut self, mut input: File) -> io::Result<()> {
     // Compute the number of complete blocks there.
     let file_size = input.seek(End(0))?;
     let block_count = file_size / BLOCK_SIZE as u64;
@@ -817,19 +808,14 @@ impl AppendOnlyMerkle {
                                       .truncate(true)
                                       .open(&self.path)?;
 
-    if let Some(x) = self.check() {
-      return Err(x);
-    }
-
-    if let Some(x) = self.write() {
-      return Err(x);
-    }
+    self.check()?;
+    self.write()?;
 
     Ok(())
   }
 
   // Rebuild all the blocks for the given level of the tree.
-  fn rebuild_level(&mut self, level: usize, block_count: u64) -> Result<bool, Error> {
+  fn rebuild_level(&mut self, level: usize, block_count: u64) -> io::Result<bool> {
     let mut last_block_full = false;
 
     for block_id in 0..block_count {
@@ -896,18 +882,18 @@ impl AppendOnlyMerkle {
   ///         }
   ///     };
   ///
-  /// if let Some(e) = tree.finish_deserialize() {
+  /// if let Err(e) = tree.finish_deserialize() {
   ///     panic!("finish_deserialize failed:  {}", e);
   /// }
   ///
-  /// if let Some(e) = tree.check() {
-  ///     panic!("deserialize failed.");
+  /// if let Err(e) = tree.check() {
+  ///     panic!("deserialize failed: {}.", e);
   /// }
   ///
   /// # drop(tree);
   /// # let _ = std::fs::remove_file(&path);
   ///````
-  pub fn finish_deserialize(&mut self) -> Option<Error> {
+  pub fn finish_deserialize(&mut self) -> io::Result<()> {
     self.blocks_on_disk = Vec::new();
     self.files = Vec::new();
 
@@ -923,16 +909,16 @@ impl AppendOnlyMerkle {
           self.blocks_on_disk.push(0);
         }
         Err(e) => {
-          return se(format!("Open failed for {}:  {}", self.file_path(i), e));
+          return er(format!("Open failed for {}:  {}", self.file_path(i), e));
         }
       }
     }
 
-    None
+    Ok(())
   }
 
   // Open the files for each level of the tree from 1 upward.
-  fn open_files(&mut self) -> Result<(), Error> {
+  fn open_files(&mut self) -> io::Result<()> {
     let mut i = 1;
 
     loop {
@@ -983,7 +969,7 @@ impl AppendOnlyMerkle {
   }
 
   // Read the disk data into the Merkle tree.
-  fn read_files(&mut self, check_lower: bool) -> Result<(), Error> {
+  fn read_files(&mut self, check_lower: bool) -> io::Result<()> {
     let mut state = LevelState { level: 0,
                                  leaves_at_this_level: 0,
                                  previous_leaves: 0,
@@ -1010,7 +996,7 @@ impl AppendOnlyMerkle {
   // Read all the blocks from a single data file.  Each data file
   // represents one level of the tree.
   #[allow(clippy::comparison_chain)]
-  fn read_level(&mut self, state: &mut LevelState) -> Result<(), Error> {
+  fn read_level(&mut self, state: &mut LevelState) -> io::Result<()> {
     let level = state.level;
 
     let file_size = match self.files[level].seek(End(0)) {
@@ -1070,9 +1056,7 @@ impl AppendOnlyMerkle {
             let lower_index = i as usize * LEAVES_IN_BLOCK * 2;
             let lower_list = &self.blocks[level - 1];
 
-            if let Some(x) = self.check_lower(&block, lower_list, lower_index) {
-              return Err(x);
-            }
+            self.check_lower(&block, lower_list, lower_index)?;
           }
 
           self.blocks[level].push(block);
@@ -1087,7 +1071,7 @@ impl AppendOnlyMerkle {
           match self.reconstruct(level, i) {
             Ok(block) => {
               rebuilds += 1;
-              self.rewrite_block(&block);
+              self.rewrite_block(&block)?;
               last_block_full = block.full();
               entries += block.valid_leaves();
               self.blocks[level].push(block);
@@ -1146,7 +1130,7 @@ impl AppendOnlyMerkle {
 
   // Recover the contents of a file by rebuilding the level it
   // represents.  Open and truncate the file, as necessary.
-  fn recover_file(&mut self, level: usize) -> Result<(), Error> {
+  fn recover_file(&mut self, level: usize) -> io::Result<()> {
     if level == 0 {
       return er("The level 0 file is corrupted.".to_string());
     }
@@ -1189,9 +1173,7 @@ impl AppendOnlyMerkle {
   // operation fails and the block has been reconstructed.  If this routine
   // returns success, it leaves the file offset pointing at the next block
   // in the file.
-  fn rewrite_block(&mut self, block: &Block) {
-    // TODO:  Log errors?  Either log the errors or return
-    // them.  Doing a log! is nearly useless.
+  fn rewrite_block(&mut self, block: &Block) -> io::Result<()> {
     let offset = block.id() as u64 * BLOCK_SIZE as u64;
     let level = block.level();
 
@@ -1200,33 +1182,27 @@ impl AppendOnlyMerkle {
       Ok(n) => {
         if n != offset {
           // Log error.
-          info!("Seek failed at level {}, block {} for rewrite:  {} vs {}",
-                level,
-                block.id().commas(),
-                n,
-                offset);
-          return;
+          return er(format!("Seek failed at level {}, block {} for rewrite:  {} vs {}",
+                            level,
+                            block.id().commas(),
+                            n,
+                            offset));
         }
       }
       Err(x) => {
-        info!("Seek failed  at level {}, block {} for rewrite:  {}",
-              level,
-              block.id().commas(),
-              x);
-        return;
+        return er(format!("Seek failed  at level {}, block {} for rewrite:  {}",
+                          level,
+                          block.id().commas(),
+                          x));
       }
     }
 
     match self.files[level].write_all(block.as_bytes()) {
-      Ok(_) => {
-        // TODO self.rewrites++;
-      }
-      Err(x) => {
-        info!("I/O failed for rewrite at level {}, block {}:  {}",
-              level,
-              block.id().commas(),
-              x);
-      }
+      Ok(_) => Ok(()),
+      Err(x) => er(format!("I/O failed for rewrite at level {}, block {}:  {}",
+                           level,
+                           block.id().commas(),
+                           x)),
     }
   }
 
@@ -1250,7 +1226,7 @@ impl AppendOnlyMerkle {
       let right = self.blocks[level - 1][lower_index + 1].top_hash();
 
       if let (Some(left), Some(right)) = (left, right) {
-        block.set_hash(&hash_pair(left, right));
+        block.set_hash(&hash_pair(left, right))?;
       } else {
         break;
       }
@@ -1290,7 +1266,7 @@ impl AppendOnlyMerkle {
       }
 
       self.blocks[0].push(Block::new(0, 0));
-      self.blocks[0][0].set_hash(&hash_value);
+      self.blocks[0][0].set_hash(&hash_value)?;
       self.entry_count = 1;
       return Ok(0);
     }
@@ -1305,11 +1281,7 @@ impl AppendOnlyMerkle {
 
     for level in 0..levels {
       if level == levels - 1 {
-        let result = self.add_level();
-
-        if let Some(x) = result {
-          return Err(x);
-        }
+        self.add_level()?;
       }
 
       // Pull what we need from the tree.  That's the current
@@ -1348,7 +1320,7 @@ impl AppendOnlyMerkle {
 
       let (block, prev) = items;
 
-      if let Some(x) = block.set_hash(&current_hash) {
+      if let Err(x) = block.set_hash(&current_hash) {
         return er(format!("The tree is corrupted:  set_hash:  {}", x));
       }
 
@@ -1360,8 +1332,6 @@ impl AppendOnlyMerkle {
       // tree.reset_disk method has been invoked, we can't write
       // this block without adding a lot of logic, so just wait
       // for the next tree.write invocation.
-      //
-      // TODO:  Record the errors?
       if block.full() && self.blocks_on_disk[level] >= block.id() as u64 {
         assert!(self.blocks_on_disk[level] <= block.id() as u64 + 1);
 
@@ -1397,27 +1367,20 @@ impl AppendOnlyMerkle {
 
   // Add a new level to the tree.  This routine is called only
   // when there's data for the new layer, so allocate a block here.
-  fn add_level(&mut self) -> Option<Error> {
+  fn add_level(&mut self) -> io::Result<()> {
     let level = self.blocks.len();
     let path = self.file_path(level);
 
-    let result = OpenOptions::new().read(true)
-                                   .write(true)
-                                   .create(true)
-                                   .open(path);
+    let file = OpenOptions::new().read(true)
+                                 .write(true)
+                                 .create(true)
+                                 .open(path)?;
 
-    match result {
-      Err(x) => {
-        return Some(x);
-      }
-      Ok(file) => {
-        self.push_file(file);
-      }
-    }
+    self.push_file(file);
 
     self.blocks[level].push(Block::new(level as u32, 0));
     assert!(self.blocks[level].len() == 1 && self.blocks.len() == level + 1);
-    None
+    Ok(())
   }
 
   /// Append a transaction to the Merkle tree.  It is encoded
@@ -1804,7 +1767,7 @@ impl AppendOnlyMerkle {
   ///     return Some(x);
   /// }
   ///
-  pub fn write(&mut self) -> Option<Error> {
+  pub fn write(&mut self) -> io::Result<()> {
     let mut entries_at_this_level = self.entry_count;
 
     // Write each block level of the tree to its file.
@@ -1812,7 +1775,7 @@ impl AppendOnlyMerkle {
       let total_blocks = covered(entries_at_this_level, LEAVES_IN_BLOCK as u64);
 
       if total_blocks != self.blocks[level].len() as u64 {
-        return se(format!("Level {} has {} blocks, but {} were expected",
+        return er(format!("Level {} has {} blocks, but {} were expected",
                           level,
                           self.blocks[level].len(),
                           total_blocks));
@@ -1838,11 +1801,11 @@ impl AppendOnlyMerkle {
 
       match self.files[level].seek(Start(start_offset)) {
         Err(x) => {
-          return Some(x);
+          return er(x.to_string());
         }
         Ok(n) => {
           if n != start_offset {
-            return se(format!("A seek to {} returned {}.", start_offset, n));
+            return er(format!("A seek to {} returned {}.", start_offset, n));
           }
         }
       }
@@ -1859,18 +1822,18 @@ impl AppendOnlyMerkle {
         }
 
         // Check consistency before writing the block to disk.
-        if let Some(x) = block.check(level, i, true) {
-          return Some(x);
+        if let Err(x) = block.check(level, i, true) {
+          return Err(x);
         }
 
         if i < total_blocks - 1 && !block.full() {
-          return se(format!("Block {} at level {} should be full.", i, level));
+          return er(format!("Block {} at level {} should be full.", i, level));
         }
 
         let result = self.files[level].write_all(block.as_bytes());
 
         if let Err(x) = result {
-          return Some(x);
+          return Err(x);
         }
 
         last_block_full = block.full();
@@ -1885,7 +1848,7 @@ impl AppendOnlyMerkle {
       if let Err(x) = result {
         let _ = self.files[level].set_len(0);
         self.blocks_on_disk[level] = 0;
-        return Some(x);
+        return Err(x);
       }
 
       // Save the number of blocks we have written to disk and
@@ -1895,7 +1858,7 @@ impl AppendOnlyMerkle {
     }
 
     self.entries_on_disk = self.entry_count;
-    None
+    Ok(())
   }
 
   /// Peform a consistency check of the disk representation of the tree.
@@ -1906,25 +1869,20 @@ impl AppendOnlyMerkle {
   ///     // Recover from the error.
   /// }
   ///
-  pub fn check_disk(&mut self, flushed: bool) -> Option<Error> {
+  pub fn check_disk(&mut self, flushed: bool) -> io::Result<()> {
     let mut entries_at_this_level = self.entry_count;
     let mut lower = Vec::new();
 
     // Check the blocks at each level.
     for level in 0..self.blocks.len() {
       // First, get the file size check it against expectations.
-      let disk_bytes = match self.files[level].seek(End(0)) {
-        Ok(n) => n,
-        Err(x) => {
-          return se(format!("check_disk:  The  size seek failed:  {}", x));
-        }
-      };
+      let disk_bytes = self.files[level].seek(End(0))?;
 
       let blocks_on_disk = self.blocks_on_disk[level];
       let expected_size = blocks_on_disk * BLOCK_SIZE as u64;
 
       if disk_bytes != expected_size {
-        return se(format!("check_disk:  The file size ({}) at level {} should be {}.",
+        return er(format!("check_disk:  The file size ({}) at level {} should be {}.",
                           disk_bytes, level, expected_size));
       }
 
@@ -1933,12 +1891,12 @@ impl AppendOnlyMerkle {
       let list_length = self.blocks[level].len() as u64;
 
       if flushed && blocks_on_disk != list_length {
-        return se(format!("check_disk:  The count {} at level {} should be {}.",
+        return er(format!("check_disk:  The count {} at level {} should be {}.",
                           blocks_on_disk, level, list_length));
       }
 
       if let Err(x) = self.files[level].seek(Start(0)) {
-        return se(format!("check_disk:  The read seek failed:  {}", x));
+        return er(format!("check_disk:  The read seek failed:  {}", x));
       }
 
       let mut entry_count = 0_u64;
@@ -1960,15 +1918,13 @@ impl AppendOnlyMerkle {
             if !lower.is_empty() {
               let lower_index = i as usize * LEAVES_IN_BLOCK * 2;
 
-              if let Some(x) = self.check_lower(&block, &lower, lower_index) {
-                return Some(x);
-              }
+              self.check_lower(&block, &lower, lower_index)?;
             }
 
             current.push(block);
           }
           Err(x) => {
-            return se(format!("check_disk:  A read failed:  {}", x));
+            return er(format!("check_disk:  A read failed:  {}", x));
           }
         }
       }
@@ -1978,7 +1934,7 @@ impl AppendOnlyMerkle {
       // Check that the disk contents match the in-memory
       // contents if the memory has been flushed.
       if flushed && entry_count != entries_at_this_level {
-        return se(format!("check_disk:  The entry counts ({}, {}) \
+        return er(format!("check_disk:  The entry counts ({}, {}) \
                            at level {} didn't match.",
                           entry_count, entries_at_this_level, level));
       }
@@ -1993,12 +1949,12 @@ impl AppendOnlyMerkle {
       let last_level = level == self.blocks.len() - 1;
 
       if last_level && entries_at_this_level > 0 {
-        return se(format!("There is at least one missing file (for level {}).",
+        return er(format!("There is at least one missing file (for level {}).",
                           level + 1));
       }
     }
 
-    None
+    Ok(())
   }
 
   // Read a block from disk and return its memory representation.  Currently,
@@ -2012,7 +1968,7 @@ impl AppendOnlyMerkle {
       }
     };
 
-    if let Some(x) = block.check(level, id, true) {
+    if let Err(x) = block.check(level, id, true) {
       return Err(Error::new(ErrorKind::Other,
                             format!("Invalid disk block {}:  {}", id.commas(), x)));
     }
@@ -2053,7 +2009,7 @@ impl AppendOnlyMerkle {
   ///     return Some(x); // signal an error
   /// }
   ///
-  pub fn check(&self) -> Option<Error> {
+  pub fn check(&self) -> io::Result<()> {
     let mut leaves_at_this_level = self.entry_count;
     let mut last_blocks = 0;
     let mut last_block_full = true;
@@ -2064,7 +2020,7 @@ impl AppendOnlyMerkle {
       let list_length = self.blocks[level].len();
 
       if list_length != blocks_at_this_level {
-        return se(format!(
+        return er(format!(
           "check:  The expected block count ({}) at level {} \
                     should be {}, last {}, full {}, entries {}",
           blocks_at_this_level, level, list_length, last_blocks, last_block_full, self.entry_count
@@ -2081,13 +2037,11 @@ impl AppendOnlyMerkle {
         last_block_full = block.full();
 
         if !last && !last_block_full {
-          return se(format!("check:  Block {} at level {} should be full.",
+          return er(format!("check:  Block {} at level {} should be full.",
                             block_id, level));
         }
 
-        if let Some(x) = block.check(level, block_id as u64, false) {
-          return Some(x);
-        }
+        block.check(level, block_id as u64, false)?;
 
         // If we are above level zero, check the hashes in the block
         // against the values in the lower level.
@@ -2095,16 +2049,14 @@ impl AppendOnlyMerkle {
           let lower_index = block_id * LEAVES_IN_BLOCK * 2;
           let lower_list = &self.blocks[level - 1];
 
-          if let Some(x) = self.check_lower(block, lower_list, lower_index) {
-            return Some(x);
-          }
+          self.check_lower(block, lower_list, lower_index)?;
         }
 
         leaf_count += block.valid_leaves() as u64;
       }
 
       if leaf_count != leaves_at_this_level {
-        return se(format!("check:  The entry counts ({}, {}) at level {} did not match",
+        return er(format!("check:  The entry counts ({}, {}) at level {} did not match",
                           leaf_count, leaves_at_this_level, level));
       }
 
@@ -2118,7 +2070,7 @@ impl AppendOnlyMerkle {
       let last_level = level == self.blocks.len() - 1;
 
       if last_level && leaves_at_this_level > 0 {
-        return se(format!(
+        return er(format!(
           "Level {} has {} blocks, with {} upper leaves, \
                     but no levels remain.",
           level, last_blocks, leaves_at_this_level
@@ -2126,17 +2078,17 @@ impl AppendOnlyMerkle {
       }
     }
 
-    None
+    Ok(())
   }
 
   // Check that a block contains the correct hashes based on the lower-level
   // blocks.
-  fn check_lower(&self, block: &Block, lower: &[Block], start_block: usize) -> Option<Error> {
+  fn check_lower(&self, block: &Block, lower: &[Block], start_block: usize) -> io::Result<()> {
     let mut block_index = start_block;
 
     for i in 0..block.valid_leaves() as usize {
       if block_index + 1 >= lower.len() {
-        return se(format!("Block {} at level {} has too many hashes:  {} vs {}.",
+        return er(format!("Block {} at level {} has too many hashes:  {} vs {}.",
                           block.id(),
                           block.level(),
                           block.valid_leaves(),
@@ -2145,7 +2097,7 @@ impl AppendOnlyMerkle {
 
       let left = match lower[block_index].top_hash() {
         None => {
-          return se(format!("The left lower hash at {}, level {} is missing.",
+          return er(format!("The left lower hash at {}, level {} is missing.",
                             block_index,
                             block.level()));
         }
@@ -2154,7 +2106,7 @@ impl AppendOnlyMerkle {
 
       let right = match lower[block_index + 1].top_hash() {
         None => {
-          return se(format!("The right lower hash at {}, level {} is missing.",
+          return er(format!("The right lower hash at {}, level {} is missing.",
                             block_index + 1,
                             block.level()));
         }
@@ -2164,7 +2116,7 @@ impl AppendOnlyMerkle {
       let hash = hash_pair(left, right);
 
       if hash != block.hashes[i] {
-        return se(format!("hash[{}] for block {} at level {} didn't match.",
+        return er(format!("hash[{}] for block {} at level {} didn't match.",
                           i,
                           block.id(),
                           block.level()));
@@ -2173,7 +2125,7 @@ impl AppendOnlyMerkle {
       block_index += 2;
     }
 
-    None
+    Ok(())
   }
 
   ///
@@ -2190,29 +2142,20 @@ impl AppendOnlyMerkle {
   ///     /// Schedule a retry or panic.
   /// }
   ///
-  pub fn reset_disk(&mut self) -> Option<Error> {
+  pub fn reset_disk(&mut self) -> io::Result<()> {
     for i in 0..self.files.len() {
       self.blocks_on_disk[i] = 0;
 
       let path = self.file_path(i);
       let _ = std::fs::remove_file(&path);
 
-      let result = OpenOptions::new().read(true)
-                                     .write(true)
-                                     .create(true)
-                                     .open(path);
-
-      match result {
-        Err(x) => {
-          return Some(x);
-        }
-        Ok(f) => {
-          self.files[i] = f;
-        }
-      }
+      self.files[i] = OpenOptions::new().read(true)
+                                        .write(true)
+                                        .create(true)
+                                        .open(path)?;
     }
 
-    None
+    Ok(())
   }
 
   /// Return the path for the tree as given to open.
@@ -2246,41 +2189,41 @@ mod tests {
   fn test_header() {
     let mut header = BlockHeader::new(3, 5);
 
-    if let Some(x) = header.check(3, 5) {
-      panic!("new() returned an invalid header:  {}", x);
+    if let Err(e) = header.check(3, 5) {
+      panic!("new() returned an invalid header:  {}", e);
     }
 
     header.header_mark ^= 1;
 
-    if let None = header.check(3, 5) {
+    if let Ok(_) = header.check(3, 5) {
       panic!("check didn't detect an invalid header.");
     }
 
     header = BlockHeader::new(3, 5);
     header.level += 1;
 
-    if let None = header.check(3, 5) {
+    if let Ok(_) = header.check(3, 5) {
       panic!("check didn't detect an invalid level.");
     }
 
     header = BlockHeader::new(3, 5);
     header.id += 1;
 
-    if let None = header.check(3, 5) {
+    if let Ok(_) = header.check(3, 5) {
       panic!("check didn't detect an invalid id.");
     }
 
     header = BlockHeader::new(3, 5);
     header.valid_leaves = LEAVES_IN_BLOCK as u16 + 1;
 
-    if let None = header.check(3, 5) {
+    if let Ok(()) = header.check(3, 5) {
       panic!("check didn't detect an invalid leaf count.");
     }
   }
 
   fn check_block(block: &Block, level: usize, id: u64, disk_format: bool) {
-    if let Some(x) = block.check(level, id, disk_format) {
-      panic!("Unexpected block check error:  {}", x);
+    if let Err(e) = block.check(level, id, disk_format) {
+      panic!("Unexpected block check error:  {}", e);
     }
   }
 
@@ -2310,16 +2253,14 @@ mod tests {
       hash.hash[0] = 1;
       hash.hash[1] = (i & 0xff) as u8;
 
-      let error = block.set_hash(&hash);
-
-      if let Some(x) = error {
-        panic!("Unexpected set_hash error:  {} at {}", x, i);
+      if let Err(e) = block.set_hash(&hash) {
+        panic!("Unexpected set_hash error:  {} at {}", e, i);
       }
 
       block.set_checksum();
 
-      if let Some(x) = block.check(1, 2, false) {
-        panic!("Block check failure at iteration {}:  {}", i, x);
+      if let Err(e) = block.check(1, 2, false) {
+        panic!("Block check failure at iteration {}:  {}", i, e);
       }
 
       // If the block is not full, there will still be hash entries
@@ -2330,7 +2271,7 @@ mod tests {
         block.hashes[i + 1].hash[0] ^= 1;
         block.set_checksum();
 
-        if let None = block.check(1, 2, false) {
+        if let Ok(_) = block.check(1, 2, false) {
           panic!("check didn't see a corrupted empty hash:  {:?}",
                  block.hashes[i + 1].hash);
         }
@@ -2350,7 +2291,7 @@ mod tests {
       block.hashes[index] = HashValue::new();
       block.set_checksum();
 
-      if let None = block.check(1, 2, false) {
+      if let Ok(_) = block.check(1, 2, false) {
         panic!("check didn't see a corrupted full hash");
       }
 
@@ -2374,7 +2315,7 @@ mod tests {
     for i in 0..4 {
       let error = block.set_hash(&hash);
 
-      if let None = error {
+      if let Ok(()) = error {
         panic!("Missing error at iteration {}.", i);
       }
     }
@@ -2385,56 +2326,56 @@ mod tests {
 
     // Now check that mismatched block ids and levels are
     // caught.  First, make sure that the block is valid.
-    if let Some(x) = block.check(1, 2, false) {
-      panic!("The block was corrupted by set_hash:  {}", x);
+    if let Err(e) = block.check(1, 2, false) {
+      panic!("The block was corrupted by set_hash:  {}", e);
     }
 
-    if let None = block.check(0, 2, false) {
+    if let Ok(_) = block.check(0, 2, false) {
       panic!("Bad block id passed");
     }
 
-    if let None = block.check(1, 3, false) {
+    if let Ok(_) = block.check(1, 3, false) {
       panic!("Bad level passed");
     }
 
     // Corrupt checksum[0] and see whether that's caught.
     block.header.check_bits.bits[0] ^= 1;
 
-    if let None = block.check(1, 2, false) {
+    if let Ok(_) = block.check(1, 2, false) {
       panic!("Bad hash[0] passed");
     }
 
     block.header.check_bits.bits[0] ^= 1;
 
-    if let Some(x) = block.check(1, 2, false) {
-      panic!("Testing error:  {}", x);
+    if let Err(e) = block.check(1, 2, false) {
+      panic!("Testing error:  {}", e);
     }
 
     // Now corrupt checksum[last] and do the checks.
     block.header.check_bits.bits[CHECK_SIZE - 1] ^= 1;
 
-    if let None = block.check(1, 2, false) {
+    if let Ok(_) = block.check(1, 2, false) {
       panic!("Bad hash[last] passed");
     }
 
     block.header.check_bits.bits[CHECK_SIZE - 1] ^= 1;
 
-    if let Some(x) = block.check(1, 2, false) {
-      panic!("Testing error:  {}", x);
+    if let Err(e) = block.check(1, 2, false) {
+      panic!("Testing error:  {}", e);
     }
 
     // Okay, corrupt a hash in the subtree.
     block.hashes[LEAVES_IN_BLOCK].hash[0] ^= 1;
 
-    if let None = block.check(1, 2, true) {
-      panic!("A corrupted subtree passed.");
+    if let Ok(_) = block.check(1, 2, true) {
+      panic!("A corrupted subtree passed");
     }
 
     // Try redoing an insertion...
     block.header.valid_leaves = 0;
 
-    if let None = block.set_hash(&hash) {
-      panic!("set_hash overwrote a full hash.");
+    if let Ok(_) = block.set_hash(&hash) {
+      panic!("set_hash overwrote a full hash");
     }
   }
 
@@ -2581,7 +2522,7 @@ mod tests {
 
     // Now make sure that the new write path deals well with
     // disk reset operations.
-    if let Some(e) = tree.reset_disk() {
+    if let Err(e) = tree.reset_disk() {
       panic!("Unexpected error:  {}", e);
     }
 
@@ -2620,26 +2561,26 @@ mod tests {
   }
 
   fn check_tree(tree: &AppendOnlyMerkle) {
-    if let Some(x) = tree.check() {
-      panic!("Got check error:  {}", x);
+    if let Err(e) = tree.check() {
+      panic!("Got check error:  {}", e);
     }
   }
 
   fn check_disk_tree(tree: &mut AppendOnlyMerkle, flushed: bool) {
-    if let Some(x) = tree.check_disk(flushed) {
-      panic!("Got disk check error:  {}", x);
+    if let Err(e) = tree.check_disk(flushed) {
+      panic!("Got disk check error:  {}", e);
     }
   }
 
   fn write_tree(tree: &mut AppendOnlyMerkle) {
-    if let Some(x) = tree.write() {
-      panic!("tree.write failed:  {}", x);
+    if let Err(e) = tree.write() {
+      panic!("tree.write failed:  {}", e);
     }
   }
 
   fn reset_tree(tree: &mut AppendOnlyMerkle) {
-    if let Some(x) = tree.reset_disk() {
-      panic!("tree.reset_disk failed:  {}", x);
+    if let Err(e) = tree.reset_disk() {
+      panic!("tree.reset_disk failed:  {}", e);
     }
   }
 
@@ -2746,8 +2687,8 @@ mod tests {
         panic!("reconstruct failed:  {}", x);
       }
       Ok(block) => {
-        if let Some(x) = block.check(1, 0, true) {
-          panic!("The reconstruct block is bad:  {}", x);
+        if let Err(e) = block.check(1, 0, true) {
+          panic!("The reconstruct block is bad:  {}", e);
         }
 
         for i in 0..HASHES_IN_BLOCK {
@@ -2844,8 +2785,8 @@ mod tests {
     }
 
     // Okay, do a minimal test of the rewrite function.
-    if let Some(x) = tree.reset_disk() {
-      panic!("Unexpected error on reset:  {}", x);
+    if let Err(e) = tree.reset_disk() {
+      panic!("test_tree: failed at tree.reset_disk with error {}", e);
     }
 
     println!("Syncing and checking the reopened tree.");
@@ -3215,20 +3156,20 @@ mod tests {
       }
     };
 
-    if let Some(e) = tree.finish_deserialize() {
-      panic!("finish_deserialize failed:  {}", e);
+    if let Err(e) = tree.finish_deserialize() {
+      panic!("test_serde: tree.finish_deserialize failed with err {}", e);
     }
 
-    if let Some(e) = tree.check() {
-      panic!("check failed:  {}", e);
+    if let Err(e) = tree.check() {
+      panic!("test_serde: tree.check failed with err {}", e);
     }
 
-    if let Some(e) = tree.write() {
-      panic!("write failed:  {}", e);
+    if let Err(e) = tree.write() {
+      panic!("test_serde: tree.write failed with err {}", e);
     }
 
-    if let Some(e) = tree.check_disk(true) {
-      panic!("check_disk failed:  {}", e);
+    if let Err(e) = tree.check_disk(true) {
+      panic!("test_serde: tree.check_disk failed with err {}", e);
     }
 
     if tree.total_size() != size as u64 {
@@ -3236,8 +3177,6 @@ mod tests {
     }
 
     drop(tree);
-
-    // TODO:  Check the entries.
 
     let _ = std::fs::remove_file(&path);
 
@@ -3280,8 +3219,8 @@ mod tests {
         panic!("Reconstruct failed:  {}", x);
       }
       Ok(block) => {
-        if let Some(x) = block.check(1, 0, true) {
-          panic!("Block check failed:  {}", x);
+        if let Err(e) = block.check(1, 0, true) {
+          panic!("block.check failed with {}", e);
         }
 
         for i in 0..HASHES_IN_BLOCK {
@@ -3349,8 +3288,8 @@ mod tests {
       test_append(&mut tree, tid as u64, false);
     }
 
-    if let Some(x) = tree.write() {
-      panic!("write for rebuild failed:  {}", x);
+    if let Err(e) = tree.write() {
+      panic!("test_basic_rebuild: tree.write failed with {}", e);
     }
 
     let fake = path.to_owned() + "." + &tree.files.len().to_string();
