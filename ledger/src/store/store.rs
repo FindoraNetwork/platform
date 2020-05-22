@@ -2549,18 +2549,19 @@ mod tests {
   fn test_kv_store() {
     let mut prng = ChaChaRng::from_entropy();
     let mut ledger = LedgerState::test_ledger();
-    let kp = XfrKeyPair::generate(&mut prng);
+    let kp1 = XfrKeyPair::generate(&mut prng);
+    let kp2 = XfrKeyPair::generate(&mut prng);
 
     let data1 = [0u8, 16];
 
-    let key1 = l256("02");
+    let key1 = l256("01");
 
-    let update = KVUpdate::new((key1, Some(data1.to_vec())), 0, &kp);
+    let hash = KVHash::new(&data1, None);
+    let update = KVUpdate::new((key1, Some(hash)), 0, &kp1);
     let tx = Transaction::from_operation(Operation::KVStoreUpdate(update.clone()));
 
-    let effect = TxnEffect::compute_effect(tx).unwrap();
-
     {
+      let effect = TxnEffect::compute_effect(tx).unwrap();
       let mut block = ledger.start_block().unwrap();
       ledger.apply_transaction(&mut block, effect).unwrap();
       ledger.finish_block(block).unwrap();
@@ -2572,7 +2573,41 @@ mod tests {
     let entry = auth_entry.result.unwrap().deserialize().1;
     assert!(&entry == update.get_entry());
 
-    // Assert that nobody else can update that key
+    // Assert that nobody else can update that key and that reply isn't possible
+    let bad_seq_update = KVUpdate::new((key1, None), 0, &kp1);
+    let bad_seq_tx = Transaction::from_operation(Operation::KVStoreUpdate(bad_seq_update.clone()));
+    let wrong_key_update = KVUpdate::new((key1, None), 1, &kp2);
+    let wrong_key_tx =
+      Transaction::from_operation(Operation::KVStoreUpdate(wrong_key_update.clone()));
+
+    let mut block = ledger.start_block().unwrap();
+    {
+      let effect = TxnEffect::compute_effect(bad_seq_tx).unwrap();
+      let res = ledger.apply_transaction(&mut block, effect);
+      assert!(res.is_err());
+
+      let effect = TxnEffect::compute_effect(wrong_key_tx).unwrap();
+      let res = ledger.apply_transaction(&mut block, effect);
+      assert!(res.is_err());
+    }
+
+    // Now update, this time with a blind
+    let data2 = [0u8, 16];
+    let hash = KVHash::new(&data2, Some(&KVBlind::gen_random()));
+    let update = KVUpdate::new((key1, Some(hash)), 1, &kp1);
+    let tx = Transaction::from_operation(Operation::KVStoreUpdate(update.clone()));
+
+    {
+      let effect = TxnEffect::compute_effect(tx).unwrap();
+      ledger.apply_transaction(&mut block, effect).unwrap();
+      ledger.finish_block(block).unwrap();
+    }
+
+    let auth_entry = ledger.get_kv_entry(key1);
+    assert!(auth_entry.is_valid(ledger.get_state_commitment().0));
+
+    let entry = auth_entry.result.unwrap().deserialize().1;
+    assert!(&entry == update.get_entry());
   }
 
   // Change the signature to have the wrong public key

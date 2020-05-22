@@ -148,9 +148,10 @@ impl TxnEffect {
           // signed this update
           // TODO: figure out if this is really how it *should* work
           if let Some(ent) = &update.body.2 {
-            if ent.1.len() > KV_ENTRY_MAX_SIZE {
-              return Err(PlatformError::InputsError(error_location!()));
-            }
+            // TODO put this in the query server when we eventually store the data
+            // if ent.1.len() > KV_ENTRY_MAX_SIZE {
+            //   return Err(PlatformError::InputsError(error_location!()));
+            // }
 
             update.check_signature(&ent.0)?;
           }

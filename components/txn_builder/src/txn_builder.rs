@@ -286,7 +286,7 @@ pub trait BuildsTransactions {
                              auth_key_pair: &XfrKeyPair,
                              index: &Key,
                              seq_num: u64,
-                             data: Option<&Vec<u8>>)
+                             data: Option<&KVHash>)
                              -> Result<&mut Self, PlatformError>;
   fn serialize(&self) -> Result<Vec<u8>, PlatformError>;
   fn serialize_str(&self) -> Result<String, PlatformError>;
@@ -535,9 +535,9 @@ impl BuildsTransactions for TransactionBuilder {
                              auth_key_pair: &XfrKeyPair,
                              index: &Key,
                              seq_num: u64,
-                             data: Option<&Vec<u8>>)
+                             hash: Option<&KVHash>)
                              -> Result<&mut Self, PlatformError> {
-    let update = KVUpdate::new((*index, data.cloned()), seq_num, auth_key_pair);
+    let update = KVUpdate::new((*index, hash.cloned()), seq_num, auth_key_pair);
     self.txn.add_operation(Operation::KVStoreUpdate(update));
     Ok(self)
   }

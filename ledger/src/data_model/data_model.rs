@@ -647,7 +647,28 @@ impl AIRAssign {
 // pub const KV_BLOCK_SIZE: usize = 4*(1<<10);
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct KVEntry(pub XfrPublicKey, pub Vec<u8>); // TODO replace Vec<u8> with hash
+pub struct KVHash(pub HashOf<(Vec<u8>, Option<KVBlind>)>);
+
+impl KVHash {
+  pub fn new(data: &dyn AsRef<[u8]>, blind: Option<&KVBlind>) -> Self {
+    KVHash(HashOf::new(&(data.as_ref().to_vec(), blind.cloned())))
+  }
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct KVBlind(pub [u8; 16]);
+
+impl KVBlind {
+  pub fn gen_random() -> Self {
+    let mut small_rng = ChaChaRng::from_entropy();
+    let mut buf: [u8; 16] = [0u8; 16];
+    small_rng.fill_bytes(&mut buf);
+    Self(buf)
+  }
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct KVEntry(pub XfrPublicKey, KVHash);
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct KVUpdate {
@@ -656,7 +677,7 @@ pub struct KVUpdate {
 }
 
 impl KVUpdate {
-  pub fn new(creation_body: (Key, Option<Vec<u8>>),
+  pub fn new(creation_body: (Key, Option<KVHash>),
              seq_number: u64,
              keypair: &XfrKeyPair)
              -> KVUpdate {

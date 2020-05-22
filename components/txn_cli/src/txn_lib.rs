@@ -10,7 +10,8 @@ pub mod txn_lib {
   use curve25519_dalek::scalar::Scalar;
   use ledger::data_model::errors::PlatformError;
   use ledger::data_model::{
-    b64dec, AccountAddress, AssetRules, AssetTypeCode, TransferType, TxOutput, TxoRef, TxoSID,
+    b64dec, AccountAddress, AssetRules, AssetTypeCode, KVHash, TransferType, TxOutput, TxoRef,
+    TxoSID,
   };
   use ledger::policies::{DebtMemo, Fraction};
   use ledger::{des_fail, error_location, ser_fail};
@@ -2348,8 +2349,8 @@ pub mod txn_lib {
           .ok_or_else(|| PlatformError::InputsError(error_location!()))?)
           .map_err(|e| PlatformError::InputsError(format!("{}:{}",e,error_location!())))?;
         let mut txn_builder = TransactionBuilder::default();
-
-        txn_builder.add_operation_kv_update(&key_pair, &key, gen, Some(&value))?;
+        let hash = KVHash::new(&value, None);
+        txn_builder.add_operation_kv_update(&key_pair, &key, gen, Some(&hash))?;
         store_txn_to_file(&txn_file, &txn_builder)
       }
       ("clear_kv", Some(kv_matches)) => {

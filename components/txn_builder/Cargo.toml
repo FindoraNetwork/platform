@@ -11,6 +11,7 @@ path = "src/txn_builder.rs"
 ledger = { path = "../../ledger" }
 credentials = { path = "../../libs/credentials" }
 sparse_merkle_tree = { path = "../../libs/ads/sparse_merkle_tree" }
+utils = { path = "../../libs/utils" }
 curve25519-dalek = { version =  "2.0.0", features = ["serde"] }
 serde = "1.0"
 serde_derive = "1.0"
