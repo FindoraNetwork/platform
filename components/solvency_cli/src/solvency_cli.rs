@@ -140,9 +140,44 @@ fn process_inputs(inputs: clap::ArgMatches) -> Result<(), PlatformError> {
                                                HOST)?;
       store_data_to_file(dir, data)
     }
-    ("prove_and_verify_solvency", _) => {
+    ("prove_and_verify_solvency", Some(prove_and_verify_matches)) => {
+      let mut hidden_assets =
+        if let Some(hidden_assets_arg) = prove_and_verify_matches.value_of("hidden_assets") {
+          serde_json::from_str::<Vec<AmountAndCodeScalar>>(&hidden_assets_arg).or_else(|e| {
+                                                                                Err(des_fail!(e))
+                                                                              })?
+        } else {
+          Vec::new()
+        };
+      let mut hidden_assets_blinds = if let Some(hidden_assets_blinds_arg) =
+        prove_and_verify_matches.value_of("hidden_assets_blinds")
+      {
+        serde_json::from_str::<Vec<AmountAndCodeBlinds>>(&hidden_assets_blinds_arg).or_else(|e| Err(des_fail!(e)))?
+      } else {
+        Vec::new()
+      };
+      let mut hidden_liabilities = if let Some(hidden_liabilities_arg) =
+        prove_and_verify_matches.value_of("hidden_liabilities")
+      {
+        serde_json::from_str::<Vec<AmountAndCodeScalar>>(&hidden_liabilities_arg).or_else(|e| {
+                                                                                   Err(des_fail!(e))
+                                                                                 })?
+      } else {
+        Vec::new()
+      };
+      let mut hidden_liabilities_blinds = if let Some(hidden_liabilities_blinds_arg) =
+        prove_and_verify_matches.value_of("hidden_liabilities_blinds")
+      {
+        serde_json::from_str::<Vec<AmountAndCodeBlinds>>(&hidden_liabilities_blinds_arg).or_else(|e| Err(des_fail!(e)))?
+      } else {
+        Vec::new()
+      };
       data.solvency_audit
-          .prove_solvency_and_store(&mut data.asset_and_liability_account)?;
+          .prove_solvency_and_store(&mut data.asset_and_liability_account,
+                                    &mut hidden_assets,
+                                    &mut hidden_assets_blinds,
+                                    &mut hidden_liabilities,
+                                    &mut hidden_liabilities_blinds)?;
       match data.solvency_audit
                 .verify_solvency(&data.asset_and_liability_account)
       {
@@ -218,7 +253,27 @@ fn main() -> Result<(), PlatformError> {
         .required(true)
         .takes_value(true)
         .help("UTXO of the asset or liability.")))
-    .subcommand(SubCommand::with_name("prove_and_verify_solvency"))
+    .subcommand(SubCommand::with_name("prove_and_verify_solvency")
+      .arg(Arg::with_name("hidden_assets")
+        .short("a")
+        .long("hidden_assets")
+        .takes_value(true)
+        .help("Serialized asset amounts and codes in Scalar."))
+      .arg(Arg::with_name("hidden_assets_blinds")
+        .short("s")
+        .long("hidden_assets_blinds")
+        .takes_value(true)
+        .help("Serialized blinding values of asset amounts and codes."))
+      .arg(Arg::with_name("hidden_liabilities")
+        .short("l")
+        .long("hidden_liabilities")
+        .takes_value(true)
+        .help("Serialized liability amounts and codes in Scalar."))
+      .arg(Arg::with_name("hidden_liabilities_blinds")
+        .short("i")
+        .long("hidden_liabilities_blinds")
+        .takes_value(true)
+        .help("Serialized blinding values of liability amounts and codes.")))
     .get_matches();
 
   process_inputs(inputs)
@@ -365,6 +420,28 @@ mod tests {
                          .output()
   }
 
+  // Command to prove and verify solvency
+  fn prove_and_verify_solvency_cmd(dir: &str,
+                                   hidden_assets: Vec<AmountAndCodeScalar>,
+                                   hidden_assets_blinds: Vec<AmountAndCodeBlinds>,
+                                   hidden_liabilities: Vec<AmountAndCodeScalar>,
+                                   hidden_liabilities_blinds: Vec<AmountAndCodeBlinds>)
+                                   -> io::Result<Output> {
+    let hidden_assets_str = serde_json::to_string(&hidden_assets).unwrap();
+    let hidden_assets_blinds_str = serde_json::to_string(&hidden_assets_blinds).unwrap();
+    let hidden_liabilities_str = serde_json::to_string(&hidden_liabilities).unwrap();
+    let hidden_liabilities_blinds_str = serde_json::to_string(&hidden_liabilities_blinds).unwrap();
+
+    Command::new(COMMAND).args(&["--dir", dir])
+                         .arg("prove_and_verify_solvency")
+                         .args(&["--hidden_assets", &hidden_assets_str])
+                         .args(&["--hidden_assets_blinds", &hidden_assets_blinds_str])
+                         .args(&["--hidden_liabilities", &hidden_liabilities_str])
+                         .args(&["--hidden_liabilities_blinds",
+                                 &hidden_liabilities_blinds_str])
+                         .output()
+  }
+
   #[test]
   #[ignore]
   fn test_cmd() {
@@ -394,7 +471,7 @@ mod tests {
     let code_2 = &codes[2].to_base64();
     let (utxos, blinds) = issue_transfer_multiple(issuer_key_pair,
                                                   &recipient_key_pair,
-                                                  codes,
+                                                  codes.clone(),
                                                   &mut ChaChaRng::from_entropy(),
                                                   ledger_standalone);
 
@@ -415,6 +492,11 @@ mod tests {
     assert!(output.status.success());
 
     // Add assets and liabilities such that total asset amount > total liabiliity amount
+    let hidden_assets: &mut Vec<AmountAndCodeScalar> = &mut Vec::new();
+    let hidden_assets_blinds: &mut Vec<AmountAndCodeBlinds> = &mut Vec::new();
+    let hidden_liabilities: &mut Vec<AmountAndCodeScalar> = &mut Vec::new();
+    let hidden_liabilities_blinds: &mut Vec<AmountAndCodeBlinds> = &mut Vec::new();
+
     let output =
     add_nonconfidential_asset_or_liability_cmd(dir, "asset", "10", code_0, &utxos[0]).expect("Failed to add public asset.");
     io::stdout().write_all(&output.stdout).unwrap();
@@ -422,13 +504,18 @@ mod tests {
     assert!(output.status.success());
 
     let output =
-    add_confidential_asset_or_liability_cmd(dir, "asset", "200", code_1, &blinds[0], &utxos[1]).expect("Failed to add hidden asset.");
+      add_confidential_asset_or_liability_cmd(dir,
+                                              "asset",
+                                              "200",
+                                              code_1,
+                                              &blinds[0],
+                                              &utxos[1]).expect("Failed to add hidden asset.");
     io::stdout().write_all(&output.stdout).unwrap();
     io::stdout().write_all(&output.stderr).unwrap();
     assert!(output.status.success());
 
     let output =
-    add_confidential_asset_or_liability_cmd(dir, "asset","3", code_2, &blinds[1], &utxos[2]).expect("Failed to add hidden asset.");
+    add_confidential_asset_or_liability_cmd(dir, "asset", "3", code_2, &blinds[1], &utxos[2]).expect("Failed to add hidden asset.");
     io::stdout().write_all(&output.stdout).unwrap();
     io::stdout().write_all(&output.stderr).unwrap();
     assert!(output.status.success());
@@ -451,10 +538,13 @@ mod tests {
     assert!(output.status.success());
 
     // Prove and verify solvency
-    let output = Command::new(COMMAND).args(&["--dir", dir])
-                                      .arg("prove_and_verify_solvency")
-                                      .output()
-                                      .expect("Failed to prove and verify solvency.");
+    hidden_assets.push(get_amount_and_code_scalars(200, codes[1]));
+    hidden_assets_blinds.push(calculate_amount_and_code_blinds(&blinds[0]).unwrap());
+    hidden_assets.push(get_amount_and_code_scalars(3, codes[2]));
+    hidden_assets_blinds.push(calculate_amount_and_code_blinds(&blinds[1]).unwrap());
+    hidden_liabilities.push(get_amount_and_code_scalars(50, codes[1]));
+    hidden_liabilities_blinds.push(calculate_amount_and_code_blinds(&blinds[2]).unwrap());
+    let output = prove_and_verify_solvency_cmd(dir, hidden_assets.to_vec(), hidden_assets_blinds.to_vec(), hidden_liabilities.to_vec(), hidden_liabilities_blinds.to_vec()).expect("Failed to prove and verify solvency.");
     io::stdout().write_all(&output.stdout).unwrap();
     io::stdout().write_all(&output.stderr).unwrap();
     assert!(output.status.success());
@@ -473,10 +563,9 @@ mod tests {
 
     // Prove and verify solvency
     // Should fail since total asset amount < total liabiliity amount
-    let output = Command::new(COMMAND).args(&["--dir", dir])
-                                      .arg("prove_and_verify_solvency")
-                                      .output()
-                                      .expect("Failed to prove and verify solvency.");
+    hidden_liabilities.push(get_amount_and_code_scalars(150, codes[1]));
+    hidden_liabilities_blinds.push(calculate_amount_and_code_blinds(&blinds[3]).unwrap());
+    let output = prove_and_verify_solvency_cmd(dir, hidden_assets.to_vec(), hidden_assets_blinds.to_vec(), hidden_liabilities.to_vec(), hidden_liabilities_blinds.to_vec()).expect("Failed to prove and verify solvency.");
     io::stdout().write_all(&output.stdout).unwrap();
     io::stdout().write_all(&output.stderr).unwrap();
     assert!(!output.status.success());
@@ -489,10 +578,7 @@ mod tests {
     assert!(output.status.success());
 
     // Prove and verify solvency
-    let output = Command::new(COMMAND).args(&["--dir", dir])
-                                      .arg("prove_and_verify_solvency")
-                                      .output()
-                                      .expect("Failed to prove and verify solvency.");
+    let output = prove_and_verify_solvency_cmd(dir, hidden_assets.to_vec(), hidden_assets_blinds.to_vec(), hidden_liabilities.to_vec(), hidden_liabilities_blinds.to_vec()).expect("Failed to prove and verify solvency.");
     io::stdout().write_all(&output.stdout).unwrap();
     io::stdout().write_all(&output.stderr).unwrap();
     assert!(output.status.success());
