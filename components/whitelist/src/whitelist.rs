@@ -68,9 +68,10 @@ mod tests {
   const HOST: &str = "localhost";
 
   // Ignoring this test due to race conditions.
-  // When running it together with test_prove_and_verify_membership, test_prove_and_verify_membership occasionally fails.
+  // When running it together with test_prove_and_verify_membership, test_prove_and_verify_membership occasionally fails with SubmissionServerError.
   // test_prove_and_verify_membership is a positive test while this test is expected to fail, so ignoring this one.
-  // (Issue #335)
+  // GitHub issue: #335
+  // Redmine issue: #38
   #[should_panic(expected = "assertion failed: com_elem == *elem")]
   #[test]
   #[ignore]
@@ -107,9 +108,10 @@ mod tests {
   }
 
   // Ignoring this test due to race conditions.
-  // When running it together with test_prove_and_verify_membership, test_prove_and_verify_membership occasionally fails.
+  // When running it together with test_prove_and_verify_membership, test_prove_and_verify_membership occasionally fails with SubmissionServerError.
   // test_prove_and_verify_membership is a positive test while this test is expected to fail, so ignoring this one.
-  // (Issue #335)
+  // GitHub issue: #335
+  // Redmine issue: #38
   #[should_panic(expected = "assertion failed: com_elem == *elem")]
   #[test]
   #[ignore]
@@ -155,9 +157,10 @@ mod tests {
   }
 
   // Ignoring this test due to race conditions.
-  // When running it together with test_prove_and_verify_membership, test_prove_and_verify_membership occasionally fails.
+  // When running it together with test_prove_and_verify_membership, test_prove_and_verify_membership occasionally fails with SubmissionServerError.
   // test_prove_and_verify_membership is a positive test while this test is expected to fail, so ignoring this one.
-  // (Issue #335)
+  // GitHub issue: #335
+  // Redmine issue: #38
   #[should_panic(expected = "assertion failed: com_elem == *elem")]
   #[test]
   #[ignore]

@@ -10,7 +10,8 @@ pub mod txn_lib {
   use curve25519_dalek::scalar::Scalar;
   use ledger::data_model::errors::PlatformError;
   use ledger::data_model::{
-    AccountAddress, AssetRules, AssetTypeCode, TransferType, TxOutput, TxoRef, TxoSID,
+    AccountAddress, AssetRules, AssetTypeCode, SignatureRules, TransferType, TxOutput, TxoRef,
+    TxoSID,
   };
   use ledger::policies::{DebtMemo, Fraction};
   use ledger::{des_fail, error_location, ser_fail};
@@ -2298,7 +2299,66 @@ pub mod txn_lib {
         } else {
           "{}"
         };
-        let traceable = define_asset_matches.is_present("traceable");
+
+        // Define asset rules
+        let mut asset_rules = AssetRules::default();
+
+        if define_asset_matches.is_present("traceable") {
+          asset_rules.set_traceable(true);
+        }
+
+        if define_asset_matches.is_present("non_transferable") {
+          asset_rules.set_transferable(false);
+        }
+
+        if define_asset_matches.is_present("updatable") {
+          asset_rules.set_transferable(true);
+        }
+
+        if let Some(units) = define_asset_matches.value_of("max_units") {
+          let max_units = parse_to_u64(units)?;
+          asset_rules.set_max_units(Some(max_units));
+        }
+
+        if let Some(co_signer_ids) = define_asset_matches.value_of("cosigners") {
+          let recipient_ids = parse_to_u64_vec(co_signer_ids)?;
+          let mut cosigners = vec![];
+          let weights;
+          let threshold;
+          for id in recipient_ids {
+            // TODO (redmine issue #35) should be a generic key not a borrower
+            let co_signer_key = data.get_borrower_key_pair(id)?.get_pk();
+            cosigners.push(co_signer_key);
+          }
+
+          let num_cosigners = cosigners.len();
+
+          if let Some(cosignature_weights) = define_asset_matches.value_of("cosignature_weights") {
+            weights = parse_to_u64_vec(cosignature_weights)?;
+            if weights.len() != num_cosigners {
+              return Err(PlatformError::InputsError(error_location!()));
+            }
+          } else {
+            weights = vec![1; num_cosigners];
+          }
+
+          if let Some(thresh) = define_asset_matches.value_of("threshold") {
+            threshold = parse_to_u64(thresh)?;
+          } else {
+            threshold = num_cosigners as u64;
+          }
+
+          let signature_rules = Some(SignatureRules { threshold,
+                                                      weights:
+                                                        cosigners.iter()
+                                                                 .cloned()
+                                                                 .zip(weights.iter().cloned())
+                                                                 .collect() });
+
+          asset_rules.set_transfer_multisig_rules(signature_rules);
+        }
+
+        // Get token code
         let asset_token: AssetTypeCode;
         if let Some(token_code) = token_code {
           asset_token = AssetTypeCode::new_from_base64(token_code)?;
@@ -2313,7 +2373,7 @@ pub mod txn_lib {
                            &issuer_key_pair,
                            asset_token,
                            &memo,
-                           AssetRules::default().set_traceable(traceable).clone(),
+                           asset_rules,
                            Some(txn_file))
         {
           Ok(_) => Ok(()),
@@ -2367,6 +2427,8 @@ pub mod txn_lib {
         store_txn_to_file(&txn_file, &txn_builder)
       }
       ("transfer_asset", Some(transfer_asset_matches)) => {
+        // TODO (redmine issue #36) to support co-signatures we need to use
+        // TransferOperationBuilder
         let data = load_data(data_dir)?;
         let (issuer_key_pair, tracer_enc_keys) =
           if let Some(id_arg) = asset_issuer_matches.value_of("id") {
