@@ -8,9 +8,6 @@ use tempfile::tempdir;
 
 extern crate exitcode;
 
-// TODO (Keyao): Fix tests with #[ignore].
-// Those tests pass individually, but occasionally fail when run with other tests.
-// Issue: #324
 #[cfg(debug_assertions)]
 const COMMAND: &str = "../../target/debug/txn_cli";
 
@@ -341,6 +338,10 @@ fn pay_loan(dir: &str, borrower_id: &str, loan_id: &str, amount: &str) -> io::Re
                        .output()
 }
 
+// This test passes individually, but we ignore it since it occasionally fails with SubmissionServerError when run with other tests
+// which also use the standalone ledger
+// GitHub issue: #324
+// Redmind issue: #38
 #[test]
 #[ignore]
 fn test_create_or_overwrite_credentials() {
@@ -384,6 +385,11 @@ fn test_create_or_overwrite_credentials() {
 //
 // Lender or borrower views loans or credentials
 //
+
+// This test passes individually, but we ignore it since it occasionally fails with SubmissionServerError when run with other tests
+// which also use the standalone ledger
+// GitHub issue: #324
+// Redmind issue: #38
 #[test]
 #[ignore]
 fn test_view() {
@@ -522,6 +528,11 @@ fn test_view() {
 //
 // Compose transaction and submit
 //
+
+// This test passes individually, but we ignore it since it occasionally fails with SubmissionServerError when run with other tests
+// which also use the standalone ledger
+// GitHub issue: #324
+// Redmind issue: #38
 #[test]
 #[ignore]
 fn test_define_issue_transfer_and_submit_with_args() {
@@ -613,6 +624,10 @@ fn test_define_issue_transfer_and_submit_with_args() {
   tmp_dir.close().unwrap();
 }
 
+// This test passes individually, but we ignore it since it occasionally fails with SubmissionServerError when run with other tests
+// which also use the standalone ledger
+// GitHub issue: #324
+// Redmind issue: #38
 #[ignore]
 #[test]
 fn test_issue_transfer_trace_and_submit_with_args() {
@@ -678,6 +693,14 @@ fn test_issue_transfer_trace_and_submit_with_args() {
   tmp_dir.close().unwrap();
 }
 
+//
+// Compose transaction and submit
+//
+
+// This test passes individually, but we ignore it since it occasionally fails with SubmissionServerError when run with other tests
+// which also use the standalone ledger
+// GitHub issue: #324
+// Redmind issue: #38
 #[ignore]
 #[test]
 fn test_air_assign() {
@@ -704,6 +727,10 @@ fn test_air_assign() {
   tmp_dir.close().unwrap();
 }
 
+// This test passes individually, but we ignore it since it occasionally fails with SubmissionServerError when run with other tests
+// which also use the standalone ledger
+// GitHub issue: #324
+// Redmind issue: #38
 #[test]
 #[ignore]
 // Test funds loading, loan request, fulfilling and repayment
