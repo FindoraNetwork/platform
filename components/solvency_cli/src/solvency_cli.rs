@@ -7,6 +7,7 @@ use ledger::{des_fail, error_location};
 use serde::{Deserialize, Serialize};
 use solvency::*;
 use std::fs;
+use txn_cli::txn_lib::ProtocolHost;
 use zei::errors::ZeiError;
 
 /// Path to the data file.
@@ -136,8 +137,8 @@ fn process_inputs(inputs: clap::ArgMatches) -> Result<(), PlatformError> {
                                                code,
                                                blinds,
                                                utxo,
-                                               PROTOCOL,
-                                               HOST)?;
+                                               &ProtocolHost(PROTOCOL.to_owned(),
+                                                             HOST.to_owned()))?;
       store_data_to_file(dir, data)
     }
     ("prove_and_verify_solvency", Some(prove_and_verify_matches)) => {

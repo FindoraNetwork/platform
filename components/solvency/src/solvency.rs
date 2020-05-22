@@ -101,7 +101,6 @@ impl AssetAndLiabilityAccount {
   /// # Returns
   /// * If the asset or liability is public: None.
   /// * Otherwise: scalar values of the amount and type code, and associated blinds.
-  #[allow(clippy::too_many_arguments)]
   pub fn update(&mut self,
                 amount_type: AmountType,
                 amount: u64,
