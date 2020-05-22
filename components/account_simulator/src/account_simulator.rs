@@ -1729,6 +1729,8 @@ mod test {
   // the input if it fails).
   #[quickcheck]
   #[allow(non_snake_case)]
+  // This test passes, but we ignore it since it's slow
+  // Redmine issue: #47
   #[ignore]
   fn SimpleAccounts_simplifies(cmds: AccountsScenario) {
     let cmds = cmds.cmds;
@@ -1765,6 +1767,8 @@ mod test {
 
   #[quickcheck]
   #[allow(non_snake_case)]
+  // This test passes, but we ignore it since it's slow
+  // Redmine issue: #47
   #[ignore]
   fn SimpleAccounts_simplifies_with_amounts(cmds: AccountsScenario) {
     let cmds = cmds.cmds;
@@ -2038,12 +2042,17 @@ mod test {
   }
 
   #[test]
+  // This test passes, but we ignore it since it's slow
+  // Redmine issue: #47
   #[ignore]
   fn regression_quickcheck_found_with_standalone() {
     regression_quickcheck_found(true)
   }
 
   #[test]
+  // This test passes individually, but we ignore it since it occasionally fails
+  // when run with other tests which also use the standalone ledger
+  // Redmine issue: #38
   #[ignore]
   fn quickcheck_ledger_simulates() {
     QuickCheck::new().tests(1)
