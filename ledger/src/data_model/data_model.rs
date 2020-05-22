@@ -918,6 +918,12 @@ impl Transaction {
     HashOf::new(&(id, self.clone()))
   }
 
+  pub fn from_operation(op: Operation) -> Self {
+    let mut tx = Transaction::default();
+    tx.add_operation(op);
+    tx
+  }
+
   pub fn add_operation(&mut self, op: Operation) {
     self.body.operations.push(op);
   }

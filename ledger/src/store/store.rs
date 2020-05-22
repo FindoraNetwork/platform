@@ -2129,7 +2129,6 @@ pub mod helpers {
   use crate::data_model::{
     Asset, AssetRules, ConfidentialMemo, DefineAsset, DefineAssetBody, IssuerPublicKey, Memo,
   };
-  use zei::serialization::ZeiFromToBytes;
   use zei::setup::PublicParams;
   use zei::xfr::asset_record::AssetRecordType;
   use zei::xfr::asset_record::{build_blind_asset_record, open_blind_asset_record};
@@ -2142,13 +2141,9 @@ pub mod helpers {
                                        memo: Option<Memo>)
                                        -> Result<Transaction, PlatformError> {
     let issuer_key = IssuerPublicKey { key: *keypair.get_pk_ref() };
-    let mut tx = Transaction::default();
     let asset_body = DefineAssetBody::new(&code, &issuer_key, asset_rules, memo, None, None)?;
     let asset_create = DefineAsset::new(asset_body, &IssuerKeyPair { keypair: &keypair })?;
-    tx.body
-      .operations
-      .push(Operation::DefineAsset(asset_create));
-    Ok(tx)
+    Ok(Transaction::from_operation(Operation::DefineAsset(asset_create)))
   }
 
   pub fn build_keys<R: CryptoRng + RngCore>(prng: &mut R) -> XfrKeyPair {
@@ -2209,9 +2204,6 @@ pub mod helpers {
                                        recipient_pk: &XfrPublicKey,
                                        seq_num: u64)
                                        -> (Transaction, AssetRecord) {
-    let mut tx = Transaction::default();
-    let _issuer_key_copy = XfrKeyPair::zei_from_bytes(&issuer_keys.zei_to_bytes());
-
     // issue operation
     let ar_template = AssetRecordTemplate::with_no_asset_tracking(amount, code.val, AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType, issuer_keys.get_pk());
     let (ba, _tracer_memo, owner_memo) =
@@ -2224,8 +2216,6 @@ pub mod helpers {
                       &IssuerKeyPair { keypair: &issuer_keys }).unwrap();
 
     let issue_op = Operation::IssueAsset(asset_issuance_operation);
-
-    tx.body.operations.push(issue_op);
 
     // transfer operation
     let ar_template = AssetRecordTemplate::with_no_asset_tracking(amount, code.val, AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType, *recipient_pk);
@@ -2241,7 +2231,8 @@ pub mod helpers {
                          ).unwrap();
 
     transfer.sign(&issuer_keys);
-    tx.body.operations.push(Operation::TransferAsset(transfer));
+    let mut tx = Transaction::from_operation(issue_op);
+    tx.add_operation(Operation::TransferAsset(transfer));
     (tx, ar)
   }
 
@@ -2253,8 +2244,6 @@ pub mod helpers {
                              record_type: AssetRecordType,
                              issuer_keys: &XfrKeyPair)
                              -> Transaction {
-    let mut tx = Transaction::default();
-
     // issue operation
     let ar_template = AssetRecordTemplate::with_no_asset_tracking(amount,
                                                                   code.val,
@@ -2269,9 +2258,7 @@ pub mod helpers {
                       &IssuerKeyPair { keypair: &issuer_keys }).unwrap();
 
     let issue_op = Operation::IssueAsset(asset_issuance_operation);
-
-    tx.body.operations.push(issue_op);
-    tx
+    Transaction::from_operation(issue_op)
   }
 }
 
@@ -2531,7 +2518,6 @@ mod tests {
   fn test_asset_creation_valid() {
     let mut prng = ChaChaRng::from_entropy();
     let mut state = LedgerState::test_ledger();
-    let mut tx = Transaction::default();
 
     let token_code1 = AssetTypeCode { val: [1; 16] };
     let keypair = build_keys(&mut prng);
@@ -2542,9 +2528,7 @@ mod tests {
                                          None,
                                          None);
     let asset_create = asset_creation_operation(&asset_body, &keypair);
-    tx.body
-      .operations
-      .push(Operation::DefineAsset(asset_create));
+    let tx = Transaction::from_operation(Operation::DefineAsset(asset_create));
 
     let effect = TxnEffect::compute_effect(tx).unwrap();
     {
@@ -2572,12 +2556,10 @@ mod tests {
     let key1 = l256("02");
 
     let update = KVUpdate::new((key1, Some(data1.to_vec())), 0, &kp);
-    let mut tx = Transaction::default();
-    tx.body
-      .operations
-      .push(Operation::KVStoreUpdate(update.clone()));
+    let tx = Transaction::from_operation(Operation::KVStoreUpdate(update.clone()));
 
     let effect = TxnEffect::compute_effect(tx).unwrap();
+
     {
       let mut block = ledger.start_block().unwrap();
       ledger.apply_transaction(&mut block, effect).unwrap();
@@ -2585,17 +2567,18 @@ mod tests {
     }
 
     let auth_entry = ledger.get_kv_entry(key1);
-    assert!(auth_entry.is_valid(ledger.get_state_commitment().0) == true);
+    assert!(auth_entry.is_valid(ledger.get_state_commitment().0));
 
     let entry = auth_entry.result.unwrap().deserialize().1;
     assert!(&entry == update.get_entry());
+
+    // Assert that nobody else can update that key
   }
 
   // Change the signature to have the wrong public key
   #[test]
   fn test_asset_creation_invalid_public_key() {
     // Create a valid asset creation operation.
-    let mut tx = Transaction::default();
     let token_code1 = AssetTypeCode { val: [1; 16] };
     let mut prng = ChaChaRng::from_entropy();
     let keypair = build_keys(&mut prng);
@@ -2611,9 +2594,7 @@ mod tests {
     let keypair = build_keys(&mut prng);
 
     asset_create.pubkey.key = *keypair.get_pk_ref();
-    tx.body
-      .operations
-      .push(Operation::DefineAsset(asset_create));
+    let tx = Transaction::from_operation(Operation::DefineAsset(asset_create));
 
     assert!(TxnEffect::compute_effect(tx).is_err());
   }
@@ -2638,8 +2619,6 @@ mod tests {
     }
 
     // Issuance with two outputs
-    let mut tx = Transaction::default();
-
     let art = AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType;
     let template =
       AssetRecordTemplate::with_no_asset_tracking(100, code.val, art, key_pair.get_pk());
@@ -2653,7 +2632,7 @@ mod tests {
 
     let issue_op = Operation::IssueAsset(asset_issuance_operation);
 
-    tx.body.operations.push(issue_op);
+    let tx = Transaction::from_operation(issue_op);
 
     // Commit issuance to block
     let effect = TxnEffect::compute_effect(tx).unwrap();
@@ -2688,7 +2667,6 @@ mod tests {
       AssetRecord::from_template_no_identity_tracking(ledger.get_prng(), &output_template).unwrap();
     let input_ar = AssetRecord::from_open_asset_record_no_asset_tracking(input_oar.clone());
 
-    let mut tx = Transaction::default();
     let mut transfer =
       TransferAsset::new(TransferAssetBody::new(ledger.get_prng(),
                                                 vec![TxoRef::Absolute(txo_sid)],
@@ -2700,7 +2678,7 @@ mod tests {
 
     let mut second_transfer = transfer.clone();
     transfer.sign(&key_pair);
-    tx.body.operations.push(Operation::TransferAsset(transfer));
+    let tx = Transaction::from_operation(Operation::TransferAsset(transfer));
 
     // Commit first transfer
     let effect = TxnEffect::compute_effect(tx).unwrap();
@@ -2718,14 +2696,11 @@ mod tests {
     assert!(utxo_status.status == UtxoStatus::Spent);
 
     // Adversary will attempt to spend the same blind asset record at another index
-    let mut tx = Transaction::default();
     second_transfer.body.inputs = vec![TxoRef::Absolute(second_txo_id)];
 
     // Submit spend of same asset at second sid without signature
     second_transfer.body_signatures = Vec::new();
-    tx.body
-      .operations
-      .push(Operation::TransferAsset(second_transfer));
+    let tx = Transaction::from_operation(Operation::TransferAsset(second_transfer));
 
     let effect = TxnEffect::compute_effect(tx);
     assert!(effect.is_err());
@@ -2735,7 +2710,6 @@ mod tests {
   #[test]
   fn test_asset_creation_invalid_signature() {
     // Create a valid operation.
-    let mut tx = Transaction::default();
     let token_code1 = AssetTypeCode { val: [1; 16] };
 
     let mut prng = ChaChaRng::from_entropy();
@@ -2753,9 +2727,7 @@ mod tests {
     let keypair2 = build_keys(&mut prng);
 
     asset_create.pubkey.key = *keypair2.get_pk_ref();
-    tx.body
-      .operations
-      .push(Operation::DefineAsset(asset_create));
+    let tx = Transaction::from_operation(Operation::DefineAsset(asset_create));
 
     assert!(TxnEffect::compute_effect(tx).is_err());
   }
@@ -2780,7 +2752,6 @@ mod tests {
       ledger.finish_block(block).unwrap();
     }
 
-    let mut tx = Transaction::default();
     let art = AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType;
     let ar =
       AssetRecordTemplate::with_no_asset_tracking(100, token_code1.val, art, *keypair.get_pk_ref());
@@ -2792,7 +2763,7 @@ mod tests {
 
     let issue_op = Operation::IssueAsset(asset_issuance_operation);
 
-    tx.body.operations.push(issue_op);
+    let tx = Transaction::from_operation(issue_op);
     let second_tx = tx.clone();
 
     let effect = TxnEffect::compute_effect(tx).unwrap();
@@ -2915,13 +2886,9 @@ mod tests {
                                        &user_kp).unwrap();
     let mut adversarial_op = air_assign_op.clone();
     adversarial_op.pubkey = XfrKeyPair::generate(&mut ledger.get_prng()).get_pk();
-    let mut tx = Transaction::default();
-    tx.body.operations.push(Operation::AIRAssign(air_assign_op));
+    let tx = Transaction::from_operation(Operation::AIRAssign(air_assign_op));
     apply_transaction(&mut ledger, tx);
-    let mut tx = Transaction::default();
-    tx.body
-      .operations
-      .push(Operation::AIRAssign(adversarial_op));
+    let tx = Transaction::from_operation(Operation::AIRAssign(adversarial_op));
     let effect = TxnEffect::compute_effect(tx);
     assert!(effect.is_err());
   }
@@ -2954,7 +2921,6 @@ mod tests {
 
     let bar = ((ledger.get_utxo(sid).unwrap().0).0).clone();
 
-    let mut tx = Transaction::default();
     let transfer_template= AssetRecordTemplate::with_no_asset_tracking(100,
                                                                              code.val,
                                                                              AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
@@ -2971,15 +2937,13 @@ mod tests {
                                                                  vec![None], TransferType::Standard).unwrap()
                                           ).unwrap();
     transfer.sign(&alice);
-    tx.body.operations.push(Operation::TransferAsset(transfer));
+    let tx = Transaction::from_operation(Operation::TransferAsset(transfer));
     let effect = TxnEffect::compute_effect(tx.clone()).unwrap();
 
     let mut block = ledger.start_block().unwrap();
     let res = ledger.apply_transaction(&mut block, effect);
     assert!(res.is_err());
     // Cant transfer by making asset confidential
-    let mut tx = Transaction::default();
-
     let transfer_template = AssetRecordTemplate::with_no_asset_tracking(100, code.val,
                                                                              AssetRecordType::ConfidentialAmount_ConfidentialAssetType,
                                                                              bob.get_pk_ref().clone());
@@ -2994,7 +2958,7 @@ mod tests {
                              &[record.clone()],
                              vec![None], TransferType::Standard).unwrap()).unwrap();
     transfer.sign(&alice);
-    tx.body.operations.push(Operation::TransferAsset(transfer));
+    let tx = Transaction::from_operation(Operation::TransferAsset(transfer));
     let effect = TxnEffect::compute_effect(tx.clone()).unwrap();
 
     let res = ledger.apply_transaction(&mut block, effect);
@@ -3131,8 +3095,6 @@ mod tests {
     }
 
     // Issuance with two outputs
-    let mut tx = Transaction::default();
-
     let art = if let true = confidential {
       AssetRecordType::ConfidentialAmount_ConfidentialAssetType
     } else {
@@ -3147,7 +3109,7 @@ mod tests {
 
     let issue_op = Operation::IssueAsset(asset_issuance_operation);
 
-    tx.body.operations.push(issue_op);
+    let tx = Transaction::from_operation(issue_op);
 
     // Commit issuance to block
     let effect = TxnEffect::compute_effect(tx).unwrap();
@@ -3171,7 +3133,6 @@ mod tests {
     let output_ar =
       AssetRecord::from_template_no_identity_tracking(ledger.get_prng(), &output_template).unwrap();
 
-    let mut tx = Transaction::default();
     let mut transfer = TransferAsset::new(TransferAssetBody::new(ledger.get_prng(),
                                                                  vec![TxoRef::Absolute(txo_sid)],
                                                                  &[AssetRecord::from_open_asset_record_no_asset_tracking(input_oar)],
@@ -3186,7 +3147,7 @@ mod tests {
         transfer.add_cosignature(&keys[i], 0);
       }
     }
-    tx.body.operations.push(Operation::TransferAsset(transfer));
+    let tx = Transaction::from_operation(Operation::TransferAsset(transfer));
     let effect = TxnEffect::compute_effect(tx).unwrap();
     ledger.apply_transaction(&mut block, effect).is_ok()
   }
@@ -3212,30 +3173,21 @@ mod tests {
                                                            asset_type: code },
                                           &creator);
     // Ensure that invalid signature fails
-    let mut tx = Transaction::default();
     memo_update.pubkey = adversary.get_pk();
-    tx.body
-      .operations
-      .push(Operation::UpdateMemo(memo_update.clone()));
+    let tx = Transaction::from_operation(Operation::UpdateMemo(memo_update.clone()));
     assert!(TxnEffect::compute_effect(tx).is_err());
 
     // Only the asset creator can change the memo
-    let mut tx = Transaction::default();
     let memo_update_wrong_creator = UpdateMemo::new(UpdateMemoBody { new_memo: new_memo.clone(),
                                                                      asset_type: code },
                                                     &adversary);
-    tx.body
-      .operations
-      .push(Operation::UpdateMemo(memo_update_wrong_creator));
+    let tx = Transaction::from_operation(Operation::UpdateMemo(memo_update_wrong_creator));
     let effect = TxnEffect::compute_effect(tx).unwrap();
     assert!(ledger.apply_transaction(&mut block, effect).is_err());
 
     // Cant change memo more than once in the same block
-    let mut tx = Transaction::default();
     memo_update.pubkey = creator.get_pk();
-    tx.body
-      .operations
-      .push(Operation::UpdateMemo(memo_update.clone()));
+    let tx = Transaction::from_operation(Operation::UpdateMemo(memo_update.clone()));
     let effect = TxnEffect::compute_effect(tx).unwrap();
     ledger.apply_transaction(&mut block, effect.clone())
           .unwrap();
@@ -3363,8 +3315,6 @@ mod tests {
     let fiat_bar = ((ledger.get_utxo(fiat_sid).unwrap().0).0).clone();
     let debt_bar = ((ledger.get_utxo(debt_sid).unwrap().0).0).clone();
 
-    let mut tx = Transaction::default();
-
     let mut transfer = TransferAsset::new(TransferAssetBody::new(ledger.get_prng(),
                                           vec![TxoRef::Absolute(fiat_sid), TxoRef::Absolute(debt_sid)],
                                           &[AssetRecord::from_open_asset_record_no_asset_tracking(open_blind_asset_record(&fiat_bar, &None, &lender_key_pair.get_sk_ref()).unwrap()),
@@ -3375,7 +3325,7 @@ mod tests {
                        TransferType::Standard).unwrap()).unwrap();
     transfer.sign(&lender_key_pair);
     transfer.sign(&borrower_key_pair);
-    tx.body.operations.push(Operation::TransferAsset(transfer));
+    let tx = Transaction::from_operation(Operation::TransferAsset(transfer));
 
     let (_txn_sid, txo_sids) = apply_transaction(&mut ledger, tx);
     let fiat_sid = txo_sids[0];
@@ -3383,7 +3333,6 @@ mod tests {
 
     // Attempt to pay off debt with correct interest payment
     let null_public_key = XfrPublicKey::zei_from_bytes(&[0; 32]);
-    let mut tx = Transaction::default();
     let mut block = ledger.start_block().unwrap();
     let fiat_bar = ((ledger.get_utxo(fiat_sid).unwrap().0).0).clone();
     let debt_bar = ((ledger.get_utxo(debt_sid).unwrap().0).0).clone();
@@ -3446,9 +3395,7 @@ mod tests {
                              vec![None; 4],
                                                         TransferType::DebtSwap).unwrap();
 
-    tx.body
-      .operations
-      .push(Operation::TransferAsset(TransferAsset::new(transfer_body).unwrap()));
+    let tx = Transaction::from_operation(Operation::TransferAsset(TransferAsset::new(transfer_body).unwrap()));
 
     let effect = TxnEffect::compute_effect(tx).unwrap();
     let result = ledger.apply_transaction(&mut block, effect);
