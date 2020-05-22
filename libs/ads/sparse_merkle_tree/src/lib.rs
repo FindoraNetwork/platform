@@ -258,6 +258,30 @@ pub fn open(path: &str) -> Result<SmtMap256<String>, Error> {
   Ok(result)
 }
 
+pub mod helpers {
+  use super::*;
+  use hex::FromHex;
+
+  // `hex` must be a 64-byte long hex string.
+  pub fn b256(hex: &str) -> Digest {
+    Digest { 0: <[u8; 32]>::from_hex(hex).unwrap() }
+  }
+
+  // `hex` is the first a few bytes of the desired 32 bytes (the rest bytes are zeros).
+  pub fn l256(hex: &str) -> Digest {
+    assert!(hex.len() % 2 == 0 && hex.len() <= 64);
+    let hex = hex.to_string() + &"0".repeat(64 - hex.len());
+    Digest { 0: <[u8; 32]>::from_hex(&hex).unwrap() }
+  }
+
+  // `hex` is the last a few bytes of the desired 32 bytes (the rest bytes are zeros).
+  pub fn r256(hex: &str) -> Digest {
+    assert!(hex.len() % 2 == 0 && hex.len() <= 64);
+    let hex = "0".repeat(64 - hex.len()) + hex;
+    Digest { 0: <[u8; 32]>::from_hex(&hex).unwrap() }
+  }
+}
+
 #[cfg(test)]
 mod tests {
   use super::*;

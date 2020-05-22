@@ -2147,9 +2147,7 @@ pub mod txn_lib {
   /// By default, log everything "trace" level or greater to stdout.
   ///
   /// # Examples
-  /// RUST_LOG=ledger::data_model=info,main=trace/rec[ie]+ve ./main
-  // TODO Verify that this comment is correct.
-  // TODO switch to using from_default_env()
+  /// RUST_LOG="info,txn_cli=trace" ../../target/debug/txn_cli create_txn_builder
   pub fn init_logging() {
     flexi_logger::Logger::with_env_or_str("trace").start()
                                                   .unwrap();
