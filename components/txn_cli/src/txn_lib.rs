@@ -44,11 +44,10 @@ pub mod txn_lib {
   extern crate exitcode;
 
   /// Initial data when the program starts.
-  // TODO (Keyao):
+  // TODO (Keyao): Redmine issue: #42: Store txn_cli data externally
   // Make this data driven, not embedded in the Rust code.
   // The attribute names will be determined by the customer's application and will differ from customer to customer.
   // Or we'll develop a standard registry or dictionary of attributes.
-  // Either way, this will be stored externally.
   const INIT_DATA: &str = r#"
 {
   "asset_issuers": [
@@ -161,7 +160,7 @@ pub mod txn_lib {
     /// lower bound of the income
     MinIncome = 1,
     /// Country code of citizenship
-    // TODO (Keyao): Add a reference for the country code definition.
+    /// See https://countrycode.org/ for country code definition.
     Citizenship = 2,
   }
 
@@ -394,7 +393,6 @@ pub mod txn_lib {
 
   #[derive(Clone, Deserialize, Debug, Serialize)]
   /// Loan information.
-  // TODO (Keyao): Remove unused fields
   pub(crate) struct Loan {
     /// Loan ID
     id: u64,
@@ -422,14 +420,6 @@ pub mod txn_lib {
     code: Option<String>,
     /// Debt asset UTXO (unspent transaction output) SIDs, null if the loan isn't fulfilled     
     debt_utxo: Option<TxoSID>,
-    /// Serialized anon_creds::Credential, null if the loan isn't fulfilled     
-    credential: Option<String>,
-    /// Serialized credential user secret key, if exists
-    user_secret_key: Option<String>,
-    /// Serialized credential signature, if exists
-    signature: Option<String>,
-    /// Serialized credential commitment key, if exists
-    commitment_key: Option<String>,
   }
 
   impl Loan {
@@ -451,11 +441,7 @@ pub mod txn_lib {
              duration,
              payments: 0,
              code: None,
-             debt_utxo: None,
-             credential: None,
-             user_secret_key: None,
-             signature: None,
-             commitment_key: None }
+             debt_utxo: None }
     }
   }
 
@@ -1771,12 +1757,10 @@ pub mod txn_lib {
     let mut prng: ChaChaRng = ChaChaRng::from_entropy();
     let (user_pk, user_secret_key) =
       credential_user_key_gen(&mut prng, &credential_issuer_public_key);
-    let user_sk_str = serde_json::to_vec(&user_secret_key).or_else(|_| Err(ser_fail!()))?;
     let signature = credential_sign(&mut prng,
                                     &credential_issuer_secret_key,
                                     &user_pk,
                                     &attributes).unwrap();
-    let signature_str = serde_json::to_string(&signature).or_else(|_| Err(ser_fail!()))?;
     let wrapper_credential = WrapperCredential { attributes: attibutes_with_value_as_vec,
                                                  issuer_pub_key:
                                                    credential_issuer_public_key.clone(),
@@ -1786,13 +1770,6 @@ pub mod txn_lib {
                         .or_else(|e| Err(PlatformError::ZeiError(error_location!(), e)))?;
     let (identity_commitment, _, commitment_key) =
       credential_commit(&mut prng, &user_secret_key, &wrapper_credential, b"").unwrap();
-    let commitment_key_str = serde_json::to_vec(&commitment_key).or_else(|_| Err(ser_fail!()))?;
-
-    // Update credential data
-    data.loans[loan_id as usize].user_secret_key = Some(hex::encode(user_sk_str));
-    data.loans[loan_id as usize].signature = Some(signature_str);
-    data.loans[loan_id as usize].commitment_key = Some(hex::encode(commitment_key_str));
-    store_data_to_file(data.clone(), data_dir)?;
 
     // Store the tracer memo to file
     if let Some(file) = memo_file {
@@ -1844,7 +1821,7 @@ pub mod txn_lib {
 
     // Issue and transfer fiat token
     let credential_record = Some((&user_secret_key, &ac_credential, &commitment_key));
-    let fiat_txn_file = "fiat_txn_file";
+    let fiat_txn_file = &format!("{}/{}", data_dir, "fiat_txn_file");
     let txn_builder =
       issue_and_transfer_asset(data_dir,
                                issuer_key_pair,
@@ -1883,7 +1860,7 @@ pub mod txn_lib {
     store_data_to_file(data, data_dir)?;
 
     // Issue and transfer debt token
-    let debt_txn_file = "debt_txn_file";
+    let debt_txn_file = &format!("{}/{}", data_dir, "debt_txn_file");
     let txn_builder =
       issue_and_transfer_asset(data_dir,
                                borrower_key_pair,
@@ -1970,14 +1947,12 @@ pub mod txn_lib {
              sids_new[0].0, fiat_sid_merged.0);
 
     // Update data
-    let credential_str = serde_json::to_string(&ac_credential).or_else(|_| Err(ser_fail!()))?;
     let mut data = load_data(data_dir)?;
     data.loans[loan_id as usize].issuer = Some(issuer_id);
     data.fiat_code = Some(fiat_code.to_base64());
     data.loans[loan_id as usize].status = LoanStatus::Active;
     data.loans[loan_id as usize].code = Some(debt_code.to_base64());
     data.loans[loan_id as usize].debt_utxo = Some(sids_new[0]);
-    data.loans[loan_id as usize].credential = Some(credential_str);
     data.borrowers[borrower_id as usize].balance = borrower.balance + amount;
     data.borrowers[borrower_id as usize].fiat_utxo = Some(fiat_sid_merged);
     store_data_to_file(data, data_dir)
