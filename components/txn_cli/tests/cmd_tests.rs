@@ -105,37 +105,6 @@ fn store_sids_with_path(file: &str, indices: &str) -> io::Result<Output> {
 }
 
 #[cfg(test)]
-fn store_memos_with_confidential_amount(dir: &str,
-                                        id: &str,
-                                        amount: &str,
-                                        token_code: &str,
-                                        file: &str)
-                                        -> io::Result<Output> {
-  Command::new(COMMAND).args(&["--dir", dir])
-                       .args(&["asset_issuer", "--id", id])
-                       .arg("store_memos")
-                       .args(&["--amount", amount])
-                       .arg("--confidential_amount")
-                       .args(&["--token_code", token_code])
-                       .args(&["--file", file])
-                       .output()
-}
-
-#[cfg(test)]
-fn trace_and_verify_asset(dir: &str,
-                          id: &str,
-                          memo_file: &str,
-                          expected_amount: &str)
-                          -> io::Result<Output> {
-  Command::new(COMMAND).args(&["--dir", dir])
-                       .args(&["asset_issuer", "--id", id])
-                       .arg("trace_and_verify_asset")
-                       .args(&["--memo_file", memo_file])
-                       .args(&["--expected_amount", expected_amount])
-                       .output()
-}
-
-#[cfg(test)]
 fn define_asset(dir: &str,
                 txn_builder_path: &str,
                 issuer_id: &str,
@@ -176,23 +145,6 @@ fn define_asset(dir: &str,
   }
 
   command.output()
-}
-
-#[cfg(test)]
-fn issue_and_transfer_asset_confidential(txn_builder_path: &str,
-                                         issuer_id: &str,
-                                         recipient_id: &str,
-                                         amount: &str,
-                                         token_code: &str)
-                                         -> io::Result<Output> {
-  Command::new(COMMAND).args(&["--txn", txn_builder_path])
-                       .args(&["asset_issuer", "--id", issuer_id])
-                       .arg("issue_and_transfer_asset")
-                       .args(&["--recipient", recipient_id])
-                       .args(&["--amount", amount])
-                       .args(&["--token_code", token_code])
-                       .args(&["--confidential_amount", "--confidential_asset"])
-                       .output()
 }
 
 // Helper functions: submit transaction
@@ -464,73 +416,4 @@ fn test_define_asset_simple_policies() {
   assert!(output.status.success());
   ledger_standalone.poll_until_ready().unwrap();
   submit(txn_builder_file).expect("Failed to submit transaction");
-}
-
-#[test]
-fn test_issue_transfer_trace_and_submit_with_args() {
-  let tmp_dir = tempdir().unwrap();
-  let dir = tmp_dir.path().to_str().unwrap();
-  let txn_builder_buf = tmp_dir.path().join("tb_issue_transfer_args");
-  let txn_builder_file = txn_builder_buf.to_str().unwrap();
-
-  let ledger_standalone = LedgerStandalone::new();
-
-  // Create txn builder and key pairs
-  create_txn_builder_with_path(txn_builder_file).expect("Failed to create transaction builder");
-
-  // Define token code
-  let token_code = AssetTypeCode::gen_random().to_base64();
-
-  // Define asset
-  define_asset(dir,
-               txn_builder_file,
-               "0",
-               &token_code,
-               "Define an asset",
-               None,
-               None,
-               false,
-               false,
-               false).expect("Failed to define asset");
-  ledger_standalone.poll_until_ready().unwrap();
-  submit(txn_builder_file).expect("Failed to submit transaction");
-
-  // Issue and transfer
-  let amount = "1000";
-  issue_and_transfer_asset_confidential(txn_builder_file,
-                           "0",
-                           "0",
-                           amount,
-                           &token_code).expect("Failed to issue and transfer asset");
-
-  // Store tracer and owner memos
-  let memo_file = "memos_issue_transfer_and_submit";
-  let output =
-  store_memos_with_confidential_amount(dir, "0", amount, &token_code, memo_file).expect("Failed to store memos");
-
-  io::stdout().write_all(&output.stdout).unwrap();
-  io::stdout().write_all(&output.stderr).unwrap();
-
-  assert!(output.status.success());
-
-  // Trace the asset and verify the amount
-  let output =
-    trace_and_verify_asset(dir, "0", memo_file, amount).expect("Failed to trace the asset");
-
-  io::stdout().write_all(&output.stdout).unwrap();
-  io::stdout().write_all(&output.stderr).unwrap();
-
-  fs::remove_file(memo_file).unwrap();
-  assert!(output.status.success());
-
-  // Submit transaction
-  ledger_standalone.poll_until_ready().unwrap();
-  let output = submit(txn_builder_file).expect("Failed to submit transaction");
-
-  io::stdout().write_all(&output.stdout).unwrap();
-  io::stdout().write_all(&output.stderr).unwrap();
-
-  assert!(output.status.success());
-
-  tmp_dir.close().unwrap();
 }
