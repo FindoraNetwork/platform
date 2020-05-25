@@ -14,6 +14,7 @@ use rand_core::{CryptoRng, RngCore};
 use std::process::exit;
 use submission_server::{TxnHandle, TxnStatus};
 use txn_builder::{BuildsTransactions, PolicyChoice, TransactionBuilder, TransferOperationBuilder};
+use utils::{QUERY_PORT, SUBMIT_PORT};
 use zei::api::anon_creds::Credential as ZeiCredential;
 use zei::setup::PublicParams;
 use zei::xfr::asset_record::{build_blind_asset_record, open_blind_asset_record, AssetRecordType};
@@ -25,19 +26,14 @@ use zei::xfr::structs::{
 
 extern crate exitcode;
 
-/// Port for querying values.
-const QUERY_PORT: &str = "8668";
-/// Port for submitting transactions.
-const SUBMIT_PORT: &str = "8669";
-
-pub(crate) fn air_assign(data_dir: &str,
-                         issuer_id: u64,
-                         address: &str,
-                         data: &str,
-                         issuer_pk: &str,
-                         pok: &str,
-                         txn_file: &str)
-                         -> Result<(), PlatformError> {
+pub fn air_assign(data_dir: &str,
+                  issuer_id: u64,
+                  address: &str,
+                  data: &str,
+                  issuer_pk: &str,
+                  pok: &str,
+                  txn_file: &str)
+                  -> Result<(), PlatformError> {
   let issuer_data = load_data(data_dir)?;
   let xfr_key_pair = issuer_data.get_asset_issuer_key_pair(issuer_id)?;
   let mut txn_builder = TransactionBuilder::default();
@@ -61,14 +57,14 @@ pub(crate) fn air_assign(data_dir: &str,
 /// * `memo`: memo for defining the asset.
 /// * `asset_rules`: simple asset rules (e.g. traceable, transferable)
 /// * `txn_file`: path to store the transaction file.
-pub(crate) fn define_asset(data_dir: &str,
-                           fiat_asset: bool,
-                           issuer_key_pair: &XfrKeyPair,
-                           token_code: AssetTypeCode,
-                           memo: &str,
-                           asset_rules: AssetRules,
-                           txn_file: Option<&str>)
-                           -> Result<TransactionBuilder, PlatformError> {
+pub fn define_asset(data_dir: &str,
+                    fiat_asset: bool,
+                    issuer_key_pair: &XfrKeyPair,
+                    token_code: AssetTypeCode,
+                    memo: &str,
+                    asset_rules: AssetRules,
+                    txn_file: Option<&str>)
+                    -> Result<TransactionBuilder, PlatformError> {
   let mut txn_builder = TransactionBuilder::default();
   txn_builder.add_operation_create_asset(issuer_key_pair,
                                          Some(token_code),
@@ -122,19 +118,19 @@ pub fn define_and_submit(issuer_key_pair: &XfrKeyPair,
 /// * `txn_file`: path to the transaction file.
 /// * `tracing_policy`: asset tracing policy, if any.
 #[allow(clippy::too_many_arguments)]
-pub(crate) fn issue_and_transfer_asset(data_dir: &str,
-                                       issuer_key_pair: &XfrKeyPair,
-                                       recipient_key_pair: &XfrKeyPair,
-                                       amount: u64,
-                                       token_code: AssetTypeCode,
-                                       record_type: AssetRecordType,
-                                       credential_record: Option<(&CredUserSecretKey,
-                                               &ZeiCredential,
-                                               &CredCommitmentKey)>,
-                                       txn_file: Option<&str>,
-                                       tracing_policy: Option<AssetTracingPolicy>,
-                                       identity_commitment: Option<CredCommitment>)
-                                       -> Result<TransactionBuilder, PlatformError> {
+pub fn issue_and_transfer_asset(data_dir: &str,
+                                issuer_key_pair: &XfrKeyPair,
+                                recipient_key_pair: &XfrKeyPair,
+                                amount: u64,
+                                token_code: AssetTypeCode,
+                                record_type: AssetRecordType,
+                                credential_record: Option<(&CredUserSecretKey,
+                                        &ZeiCredential,
+                                        &CredCommitmentKey)>,
+                                txn_file: Option<&str>,
+                                tracing_policy: Option<AssetTracingPolicy>,
+                                identity_commitment: Option<CredCommitment>)
+                                -> Result<TransactionBuilder, PlatformError> {
   // Asset issuance is always nonconfidential
   let (blind_asset_record, _, owner_memo) =
       get_blind_asset_record_and_memos(issuer_key_pair.get_pk(),
@@ -279,12 +275,12 @@ pub fn define_issue_transfer_and_get_utxo_and_blinds<R: CryptoRng + RngCore>(
 /// * To query the BlindAssetRecord with utxo_sid 100 from https://testnet.findora.org:
 /// use txn_cli::txn_lib::query;
 /// query("https", "testnet.findora.org", QUERY_PORT, "utxo_sid", "100").unwrap();
-fn query(protocol: &str,
-         host: &str,
-         port: &str,
-         route: &str,
-         value: &str)
-         -> Result<String, PlatformError> {
+pub fn query(protocol: &str,
+             host: &str,
+             port: &str,
+             route: &str,
+             value: &str)
+             -> Result<String, PlatformError> {
   let mut res = if let Ok(response) =
     reqwest::get(&format!("{}://{}:{}/{}/{}", protocol, host, port, route, value))
   {
@@ -349,10 +345,10 @@ pub fn query_utxo_and_get_amount(utxo: u64,
 /// * `protocol`: either `https` or `http`.
 /// * `host`: either `testnet.findora.org` or `localhost`.
 /// * `txn_builder`: transation builder.
-pub(crate) fn submit(protocol: &str,
-                     host: &str,
-                     txn_builder: TransactionBuilder)
-                     -> Result<(), PlatformError> {
+pub fn submit(protocol: &str,
+              host: &str,
+              txn_builder: TransactionBuilder)
+              -> Result<(), PlatformError> {
   // Submit transaction
   let client = reqwest::Client::new();
   let txn = txn_builder.transaction();
@@ -390,10 +386,10 @@ pub(crate) fn submit(protocol: &str,
 /// * `protocol`: either `https` or `http`.
 /// * `host`: either `testnet.findora.org` or `localhost`.
 /// * `txn_builder`: transation builder.
-pub(crate) fn submit_and_get_sids(protocol: &str,
-                                  host: &str,
-                                  txn_builder: TransactionBuilder)
-                                  -> Result<Vec<TxoSID>, PlatformError> {
+pub fn submit_and_get_sids(protocol: &str,
+                           host: &str,
+                           txn_builder: TransactionBuilder)
+                           -> Result<Vec<TxoSID>, PlatformError> {
   // Submit transaction
   let client = reqwest::Client::new();
   let txn = txn_builder.transaction();
@@ -429,12 +425,12 @@ pub(crate) fn submit_and_get_sids(protocol: &str,
 /// * `txn_file`: path to the transaction file.
 /// * `key_pair`: key pair of the asset record.
 /// * `owner_memo`: Memo associated with utxo.
-pub(crate) fn query_open_asset_record(protocol: &str,
-                                      host: &str,
-                                      sid: TxoSID,
-                                      key_pair: &XfrKeyPair,
-                                      owner_memo: &Option<OwnerMemo>)
-                                      -> Result<OpenAssetRecord, PlatformError> {
+pub fn query_open_asset_record(protocol: &str,
+                               host: &str,
+                               sid: TxoSID,
+                               key_pair: &XfrKeyPair,
+                               owner_memo: &Option<OwnerMemo>)
+                               -> Result<OpenAssetRecord, PlatformError> {
   let res = query(protocol,
                   host,
                   QUERY_PORT,
@@ -463,11 +459,11 @@ pub fn init_logging() {
 /// * DeserializationError: exits with code `DATAERR`.
 /// * IoError:
 ///   * If the input file doesn't exist: exits with code `NOINPUT`.
-///     * Note: make sure the error message contains "File doesn't exist:" when conpub(crate) structing the PlatformError.
+///     * Note: make sure the error message contains "File doesn't exist:" when constructing the PlatformError.
 ///   * If the input file isn't readable: exits with code `NOINPUT`.
-///     * Note: make sure the error message contains "Failed to read" when conpub(crate) structing the PlatformError.
+///     * Note: make sure the error message contains "Failed to read" when constructing the PlatformError.
 ///   * If the output file or directory can't be created: exits with code `CANTCREAT`.
-///     * Note: make sure the error message contains "Failed to create" when conpub(crate) structing the PlatformError.
+///     * Note: make sure the error message contains "Failed to create" when constructing the PlatformError.
 ///   * Otherwise: exits with code `IOERR`.
 /// * SubmissionServerError: exits with code `UNAVAILABLE`.
 /// * Otherwise: exits with code `USAGE`.
@@ -494,9 +490,6 @@ mod tests {
   use rand_chacha::ChaChaRng;
   use rand_core::SeedableRng;
   use tempfile::tempdir;
-
-  const PROTOCOL: &str = "http";
-  const HOST: &str = "localhost";
 
   #[test]
   fn test_define_asset() {

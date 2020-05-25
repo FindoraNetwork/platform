@@ -96,10 +96,6 @@ const INIT_DATA: &str = r#"
 const DATA_FILE: &str = "data.json";
 /// Arbitrary choice of the maximum backup extension number.
 const BACKUP_COUNT_MAX: i32 = 10000;
-/// Port for querying values.
-const QUERY_PORT: &str = "8668";
-/// Port for submitting transactions.
-const SUBMIT_PORT: &str = "8669";
 
 /// Tuple of blind asset record and associated tracer and owner memos. Memos are optional.
 pub(crate) type BlindAssetRecordAndMemos =
@@ -130,7 +126,7 @@ pub(crate) enum ComparisonType {
 ///   * Lower bound of the borrower's income must be at least 900.
 ///   * The country code of the borrower's citizenship must be 7.
 // Note: If this pub(crate) enum is modified, update the `create_or_overwrite_credential` command too.
-pub(crate) enum CredentialIndex {
+pub enum CredentialIndex {
   /// Lower bound of the credit score
   MinCreditScore = 0,
   /// lower bound of the income
@@ -142,7 +138,7 @@ pub(crate) enum CredentialIndex {
 
 impl CredentialIndex {
   /// Gets the attribute name.
-  pub(crate) fn get_name(self) -> String {
+  pub fn get_name(self) -> String {
     match self {
       CredentialIndex::MinCreditScore => "min_credit_score".to_string(),
       CredentialIndex::MinIncome => "min_income".to_string(),
@@ -186,13 +182,13 @@ impl CredentialIndex {
 
 #[derive(Clone, Deserialize, Debug, Serialize)]
 /// Borrower's credential records.
-pub(crate) struct Credential {
+pub struct Credential {
   /// Credential ID
   id: u64,
   /// Borrower ID
   borrower: u64,
   /// Credential issuer ID
-  credential_issuer: u64,
+  pub credential_issuer: u64,
   /// Credential values, in the order defined in the enum `CredentialIndex`.
   /// Null value indicates the credential value isn't provided yet.
   /// # Examples
@@ -200,7 +196,7 @@ pub(crate) struct Credential {
   /// * Lower bound of the borrower's credit score is 630.
   /// * Lower bound of the borrower's income isn't provided.
   /// * The country code of the borrower's citizenship is 1.
-  values: Vec<Option<String>>,
+  pub values: Vec<Option<String>>,
 }
 
 impl Credential {
@@ -210,11 +206,7 @@ impl Credential {
   /// `borrower`: borrower ID
   /// `credential_issuer`: credential issuer ID
   /// `values`: credential values, in the order defined in the enum `CredentialIndex`.
-  pub(crate) fn new(id: u64,
-                    borrower: u64,
-                    credential_issuer: u64,
-                    values: Vec<Option<String>>)
-                    -> Self {
+  pub fn new(id: u64, borrower: u64, credential_issuer: u64, values: Vec<Option<String>>) -> Self {
     Credential { id,
                  borrower,
                  credential_issuer,
@@ -239,7 +231,7 @@ pub(crate) struct AssetIssuer {
 }
 
 impl AssetIssuer {
-  pub(crate) fn new(id: usize, name: String) -> Result<Self, PlatformError> {
+  pub fn new(id: usize, name: String) -> Result<Self, PlatformError> {
     // Generate asset issuer key pair
     let key_pair = XfrKeyPair::generate(&mut ChaChaRng::from_entropy());
     let key_pair_str = hex::encode(key_pair.zei_to_bytes());
@@ -258,7 +250,7 @@ impl AssetIssuer {
 
 #[derive(Clone, Deserialize, Serialize)]
 /// Credential issuer's account information.
-pub(crate) struct CredentialIssuer {
+pub struct CredentialIssuer {
   /// Credential issuer ID
   id: u64,
   /// Name
@@ -269,7 +261,7 @@ pub(crate) struct CredentialIssuer {
 
 impl CredentialIssuer {
   /// Conpub(crate) structs a credential issuer for the credit score attribute.
-  pub(crate) fn new(id: usize, name: String) -> Result<Self, PlatformError> {
+  pub fn new(id: usize, name: String) -> Result<Self, PlatformError> {
     let key_pair =
       credential_issuer_key_gen(&mut ChaChaRng::from_entropy(),
                                 &[CredentialIndex::MinCreditScore.get_name_and_length(),
@@ -284,7 +276,7 @@ impl CredentialIssuer {
 
 #[derive(Clone, Deserialize, Serialize)]
 /// Lender's account information.
-pub(crate) struct Lender {
+pub struct Lender {
   /// Lender ID
   id: u64,
   /// Name
@@ -298,13 +290,13 @@ pub(crate) struct Lender {
   ///   * Lower bound of the credit score isn't requirement.
   ///   * Lower bound of the borrower's income must be at least 900.
   ///   * The country code of the borrower's citizenship must be 7.
-  requirements: Vec<Option<String>>,
+  pub requirements: Vec<Option<String>>,
   /// List of loan IDs
-  loans: Vec<u64>,
+  pub loans: Vec<u64>,
 }
 
 impl Lender {
-  pub(crate) fn new(id: usize, name: String) -> Self {
+  pub fn new(id: usize, name: String) -> Self {
     let key_pair = XfrKeyPair::generate(&mut ChaChaRng::from_entropy());
     let key_pair_str = hex::encode(key_pair.zei_to_bytes());
     Lender { id: id as u64,
@@ -317,25 +309,25 @@ impl Lender {
 
 #[derive(Clone, Deserialize, Serialize)]
 /// Borrower's account information.
-pub(crate) struct Borrower {
+pub struct Borrower {
   /// Borrower ID
   id: u64,
   /// Name
-  name: String,
+  pub name: String,
   /// Serialized key pair
   key_pair: String,
   /// Credential ID, if exists
-  credentials: Option<u64>,
+  pub credentials: Option<u64>,
   /// List of loan IDs
-  loans: Vec<u64>,
+  pub loans: Vec<u64>,
   /// Balance
-  balance: u64,
+  pub balance: u64,
   /// Fiat asset UTXO (unspent transaction output) SIDs, if any
-  fiat_utxo: Option<TxoSID>,
+  pub fiat_utxo: Option<TxoSID>,
 }
 
 impl Borrower {
-  pub(crate) fn new(id: usize, name: String) -> Self {
+  pub fn new(id: usize, name: String) -> Self {
     // Get the encoded key pair
     let key_pair = XfrKeyPair::generate(&mut ChaChaRng::from_entropy());
     let key_pair_str = hex::encode(key_pair.zei_to_bytes());
@@ -356,7 +348,7 @@ impl Borrower {
 //
 #[derive(Clone, Deserialize, Debug, PartialEq, Serialize)]
 /// Loan statuses.
-pub(crate) enum LoanStatus {
+pub enum LoanStatus {
   /// The borrower has requested the loan, but the lender hasn't fulfill it
   Requested,
   /// The lender has declined the loan
@@ -369,43 +361,43 @@ pub(crate) enum LoanStatus {
 
 #[derive(Clone, Deserialize, Debug, Serialize)]
 /// Loan information.
-pub(crate) struct Loan {
+pub struct Loan {
   /// Loan ID
   id: u64,
   /// Issuer ID, null if the loan isn't fulfilled          
-  issuer: Option<u64>,
+  pub issuer: Option<u64>,
   /// Lender ID           
-  lender: u64,
+  pub lender: u64,
   /// Borrower ID          
-  borrower: u64,
+  pub borrower: u64,
   /// Loan status, possible values defined in the enum `LoanStatus`
-  status: LoanStatus,
+  pub status: LoanStatus,
   /// Total amount
-  amount: u64,
+  pub amount: u64,
   /// Outstanding balance
-  balance: u64,
+  pub balance: u64,
   /// Interest per 1000
   /// # Examples
   /// * `120`: interest rate is 0.12        
-  interest_per_mille: u64,
+  pub interest_per_mille: u64,
   /// Loan duration
   duration: u64,
   /// Number of payments that have been made
-  payments: u64,
+  pub payments: u64,
   /// Serialized debt token code, null if the loan isn't fulfilled     
-  code: Option<String>,
+  pub code: Option<String>,
   /// Debt asset UTXO (unspent transaction output) SIDs, null if the loan isn't fulfilled     
-  debt_utxo: Option<TxoSID>,
+  pub debt_utxo: Option<TxoSID>,
 }
 
 impl Loan {
-  pub(crate) fn new(id: usize,
-                    lender: u64,
-                    borrower: u64,
-                    amount: u64,
-                    interest_per_mille: u64,
-                    duration: u64)
-                    -> Self {
+  pub fn new(id: usize,
+             lender: u64,
+             borrower: u64,
+             amount: u64,
+             interest_per_mille: u64,
+             duration: u64)
+             -> Self {
     Loan { id: id as u64,
            issuer: None,
            lender,
@@ -429,15 +421,15 @@ impl Loan {
 pub struct Data {
   /// List of user records
   asset_issuers: Vec<AssetIssuer>,
-  credential_issuers: Vec<CredentialIssuer>,
-  lenders: Vec<Lender>,
+  pub credential_issuers: Vec<CredentialIssuer>,
+  pub lenders: Vec<Lender>,
   pub borrowers: Vec<Borrower>,
 
   /// List of loan records
-  loans: Vec<Loan>,
+  pub loans: Vec<Loan>,
 
   /// List of credential records
-  credentials: Vec<Credential>,
+  pub credentials: Vec<Credential>,
 
   /// Serialized token code of fiat asset, if defined
   pub fiat_code: Option<String>,
@@ -447,14 +439,14 @@ pub struct Data {
 }
 
 impl Data {
-  pub(crate) fn add_loan(&mut self,
-                         data_dir: &str,
-                         lender: u64,
-                         borrower: u64,
-                         amount: u64,
-                         interest_per_mille: u64,
-                         duration: u64)
-                         -> Result<(), PlatformError> {
+  pub fn add_loan(&mut self,
+                  data_dir: &str,
+                  lender: u64,
+                  borrower: u64,
+                  amount: u64,
+                  interest_per_mille: u64,
+                  duration: u64)
+                  -> Result<(), PlatformError> {
     let id = self.loans.len();
     self.loans
         .push(Loan::new(id, lender, borrower, amount, interest_per_mille, duration));
@@ -463,24 +455,19 @@ impl Data {
     store_data_to_file(self.clone(), data_dir)
   }
 
-  pub(crate) fn add_asset_issuer(&mut self,
-                                 data_dir: &str,
-                                 name: String)
-                                 -> Result<(), PlatformError> {
+  pub fn add_asset_issuer(&mut self, data_dir: &str, name: String) -> Result<(), PlatformError> {
     let id = self.asset_issuers.len();
     self.asset_issuers.push(AssetIssuer::new(id, name.clone())?);
     println!("{}'s id is {}.", name, id);
     store_data_to_file(self.clone(), data_dir)
   }
 
-  pub(crate) fn get_asset_issuer_key_pair(&self, id: u64) -> Result<XfrKeyPair, PlatformError> {
+  pub fn get_asset_issuer_key_pair(&self, id: u64) -> Result<XfrKeyPair, PlatformError> {
     let key_pair_str = &self.asset_issuers[id as usize].key_pair;
     Ok(XfrKeyPair::zei_from_bytes(&hex::decode(key_pair_str).or_else(|e| Err(ser_fail!(e)))?))
   }
 
-  pub(crate) fn get_asset_tracer_key_pair(&self,
-                                          id: u64)
-                                          -> Result<AssetTracerKeyPair, PlatformError> {
+  pub fn get_asset_tracer_key_pair(&self, id: u64) -> Result<AssetTracerKeyPair, PlatformError> {
     let tracer_key_pair_str = &self.asset_issuers[id as usize].tracer_key_pair;
     let tracer_key_pair_decode = hex::decode(tracer_key_pair_str).or_else(|e| Err(des_fail!(e)))?;
     let tracer_key_pair =
@@ -488,10 +475,10 @@ impl Data {
     Ok(tracer_key_pair)
   }
 
-  pub(crate) fn add_credential_issuer(&mut self,
-                                      data_dir: &str,
-                                      name: String)
-                                      -> Result<(), PlatformError> {
+  pub fn add_credential_issuer(&mut self,
+                               data_dir: &str,
+                               name: String)
+                               -> Result<(), PlatformError> {
     let id = self.credential_issuers.len();
     self.credential_issuers
         .push(CredentialIssuer::new(id, name.clone())?);
@@ -499,7 +486,7 @@ impl Data {
     store_data_to_file(self.clone(), data_dir)
   }
 
-  pub(crate) fn get_credential_issuer_key_pair(
+  pub fn get_credential_issuer_key_pair(
     &self,
     id: u64)
     -> Result<(CredIssuerPublicKey, CredIssuerSecretKey), PlatformError> {
@@ -509,7 +496,7 @@ impl Data {
     Ok(key_pair)
   }
 
-  pub(crate) fn add_lender(&mut self, data_dir: &str, name: String) -> Result<(), PlatformError> {
+  pub fn add_lender(&mut self, data_dir: &str, name: String) -> Result<(), PlatformError> {
     let id = self.lenders.len();
     self.lenders.push(Lender::new(id, name.clone()));
     println!("{}'s id is {}.", name, id);
@@ -529,12 +516,12 @@ impl Data {
   /// * `lender_id`: lender ID.
   /// * `attribute`: credential attribute, possible names defined in the enum `CredentialIndex`.
   /// * `requirement`: required value.
-  pub(crate) fn create_or_overwrite_requirement(&mut self,
-                                                data_dir: &str,
-                                                lender_id: u64,
-                                                attribute: CredentialIndex,
-                                                requirement: &str)
-                                                -> Result<(), PlatformError> {
+  pub fn create_or_overwrite_requirement(&mut self,
+                                         data_dir: &str,
+                                         lender_id: u64,
+                                         attribute: CredentialIndex,
+                                         requirement: &str)
+                                         -> Result<(), PlatformError> {
     if self.lenders[lender_id as usize].requirements[attribute as usize] == None {
       println!("Adding the credential requirement.");
     } else {
@@ -547,14 +534,14 @@ impl Data {
     store_data_to_file(self.clone(), data_dir)
   }
 
-  pub(crate) fn add_borrower(&mut self, data_dir: &str, name: String) -> Result<(), PlatformError> {
+  pub fn add_borrower(&mut self, data_dir: &str, name: String) -> Result<(), PlatformError> {
     let id = self.borrowers.len();
     self.borrowers.push(Borrower::new(id, name.clone()));
     println!("{}'s id is {}.", name, id);
     store_data_to_file(self.clone(), data_dir)
   }
 
-  pub(crate) fn get_borrower_key_pair(&self, id: u64) -> Result<XfrKeyPair, PlatformError> {
+  pub fn get_borrower_key_pair(&self, id: u64) -> Result<XfrKeyPair, PlatformError> {
     let key_pair_str = &self.borrowers[id as usize].key_pair;
     Ok(XfrKeyPair::zei_from_bytes(&hex::decode(key_pair_str).or_else(|e| Err(des_fail!(e)))?))
   }
@@ -568,13 +555,13 @@ impl Data {
   /// * `credential_issuer_id`: credential issuer ID.
   /// * `attribute`: credential attribute, possible names defined in the enum `CredentialIndex`.
   /// * `value`: credential value.
-  pub(crate) fn create_or_overwrite_credential(&mut self,
-                                               data_dir: &str,
-                                               borrower_id: u64,
-                                               credential_issuer_id: u64,
-                                               attribute: CredentialIndex,
-                                               value: &str)
-                                               -> Result<(), PlatformError> {
+  pub fn create_or_overwrite_credential(&mut self,
+                                        data_dir: &str,
+                                        borrower_id: u64,
+                                        credential_issuer_id: u64,
+                                        attribute: CredentialIndex,
+                                        value: &str)
+                                        -> Result<(), PlatformError> {
     // If the borrower has some credential data, update it
     // Otherwise, create a new credential to the borrower's data
     if let Some(credential_id) = self.borrowers[borrower_id as usize].credentials {
@@ -609,7 +596,7 @@ pub(crate) fn get_init_data() -> Result<Data, PlatformError> {
 }
 
 /// Gets the sequence number and increments it.
-pub(crate) fn get_and_update_sequence_number(data_dir: &str) -> Result<u64, PlatformError> {
+pub fn get_and_update_sequence_number(data_dir: &str) -> Result<u64, PlatformError> {
   // Get the sequence number
   let mut data = load_data(data_dir)?;
   let sequence_number = data.sequence_number;
@@ -625,7 +612,7 @@ pub(crate) fn get_and_update_sequence_number(data_dir: &str) -> Result<u64, Plat
 /// Parses a string to u64.
 /// # Arguments
 /// * `val_str`: string representation of a value.
-pub(crate) fn parse_to_u64(val_str: &str) -> Result<u64, PlatformError> {
+pub fn parse_to_u64(val_str: &str) -> Result<u64, PlatformError> {
   if let Ok(val) = val_str.trim().parse::<u64>() {
     Ok(val)
   } else {
@@ -637,7 +624,7 @@ pub(crate) fn parse_to_u64(val_str: &str) -> Result<u64, PlatformError> {
 /// Parses a string to a list of u64 values.
 /// # Arguments
 /// * `vals_str`: string representation of a list of values.
-pub(crate) fn parse_to_u64_vec(vals_str: &str) -> Result<Vec<u64>, PlatformError> {
+pub fn parse_to_u64_vec(vals_str: &str) -> Result<Vec<u64>, PlatformError> {
   let vals_vec = split_arg(vals_str);
   let mut vals = Vec::new();
   for val_str in vals_vec {
@@ -672,7 +659,7 @@ pub fn load_data(data_dir: &str) -> Result<Data, PlatformError> {
 /// Loads transaction record from file
 /// # Arguments
 /// * `file_path`: file path.
-pub(crate) fn load_txn_from_file(file_path: &str) -> Result<TransactionBuilder, PlatformError> {
+pub fn load_txn_from_file(file_path: &str) -> Result<TransactionBuilder, PlatformError> {
   let txn = fs::read_to_string(file_path).or_else(|_| {
               Err(PlatformError::IoError(format!("Failed to read file: {}", file_path)))
             })?;
@@ -686,14 +673,14 @@ pub(crate) fn load_txn_from_file(file_path: &str) -> Result<TransactionBuilder, 
 /// Split a string by comma (`,`).
 /// # Arguments
 /// * `string`: string to split
-pub(crate) fn split_arg(string: &str) -> Vec<&str> {
+pub fn split_arg(string: &str) -> Vec<&str> {
   string.split(',').collect::<Vec<&str>>()
 }
 
 /// Loads UTXO (unspent transaction output) SIDs from file.
 /// # Arguments
 /// * `file_path`: file path
-pub(crate) fn load_sids_from_file(file_path: &str) -> Result<Vec<u64>, PlatformError> {
+pub fn load_sids_from_file(file_path: &str) -> Result<Vec<u64>, PlatformError> {
   let sids_str = fs::read_to_string(file_path).or_else(|_| {
                    Err(PlatformError::IoError(format!("Failed to read file: {}", file_path)))
                  })?;
@@ -730,7 +717,7 @@ pub(crate) fn load_blind_asset_record_and_owner_memo_from_file(
 /// Loads blind asset records and optional owner memos from transaction files.
 /// # Arguments
 /// * `file_paths`: file paths to transaction records.
-pub(crate) fn load_blind_asset_records_and_owner_memos_from_files(
+pub fn load_blind_asset_records_and_owner_memos_from_files(
   file_paths: &str)
   -> Result<Vec<(BlindAssetRecord, Option<OwnerMemo>)>, PlatformError> {
   let mut bars_and_owner_memos = Vec::new();
@@ -759,8 +746,7 @@ pub(crate) fn load_open_asset_record_from_file(file_path: &str,
 /// Loads tracer memo from memo file
 /// # Arguments
 /// * `file_path`: file path to the tracer memo.
-pub(crate) fn load_tracer_memo_from_file(file_path: &str)
-                                         -> Result<AssetTracerMemo, PlatformError> {
+pub fn load_tracer_memo_from_file(file_path: &str) -> Result<AssetTracerMemo, PlatformError> {
   let tracer_memo = fs::read_to_string(file_path).or_else(|_| {
                       Err(PlatformError::IoError(format!("Failed to read file: {}", file_path)))
                     })?;
@@ -772,7 +758,7 @@ pub(crate) fn load_tracer_memo_from_file(file_path: &str)
 /// Loads tracer and owner memos from memo files
 /// # Arguments
 /// * `file_paths`: file paths to the tracer and owner memos.
-pub(crate) fn load_tracer_and_owner_memos_from_files(
+pub fn load_tracer_and_owner_memos_from_files(
   file_paths: &str)
   -> Result<Vec<TracerAndOwnerMemos>, PlatformError> {
   let mut tracer_and_owner_memos = Vec::new();
@@ -815,9 +801,7 @@ pub(crate) fn store_data_to_file(data: Data, data_dir: &str) -> Result<(), Platf
 /// # Arguments
 /// * `path_str`: file path to store the transaction record.
 /// * `txn`: transaction builder.
-pub(crate) fn store_txn_to_file(path_str: &str,
-                                txn: &TransactionBuilder)
-                                -> Result<(), PlatformError> {
+pub fn store_txn_to_file(path_str: &str, txn: &TransactionBuilder) -> Result<(), PlatformError> {
   if let Ok(as_json) = serde_json::to_string(txn) {
     if let Err(error) = fs::write(path_str, &as_json) {
       return Err(PlatformError::IoError(format!("Failed to create file {}: {}.",
@@ -831,7 +815,7 @@ pub(crate) fn store_txn_to_file(path_str: &str,
 /// # Arguments
 /// * `path_str`: file path to store the key pair.
 /// * `sids`: SIDs to store, separated by comma (`,`).
-pub(crate) fn store_sids_to_file(path_str: &str, sids: &str) -> Result<(), PlatformError> {
+pub fn store_sids_to_file(path_str: &str, sids: &str) -> Result<(), PlatformError> {
   if let Err(error) = fs::write(path_str, sids) {
     return Err(PlatformError::IoError(format!("Failed to create file {}: {}.", path_str, error)));
   };
@@ -858,9 +842,9 @@ pub(crate) fn store_tracer_memo_to_file(path_str: &str,
 /// # Arguments
 /// * `path_str`: file path to store the tracer and owner memos.
 /// * `tracer_and_owner_memos`: tracer and owner memos to store.
-pub(crate) fn store_tracer_and_owner_memos_to_file(path_str: &str,
-                                                   tracer_and_owner_memos: TracerAndOwnerMemos)
-                                                   -> Result<(), PlatformError> {
+pub fn store_tracer_and_owner_memos_to_file(path_str: &str,
+                                            tracer_and_owner_memos: TracerAndOwnerMemos)
+                                            -> Result<(), PlatformError> {
   if let Ok(as_json) = serde_json::to_string(&tracer_and_owner_memos) {
     if let Err(error) = fs::write(path_str, &as_json) {
       return Err(PlatformError::IoError(format!("Failed to create file {}: {}.",
@@ -904,13 +888,13 @@ pub fn get_blind_asset_record_and_memos(pub_key: XfrPublicKey,
 /// * `amount`: asset amount.
 /// * `token_code`: asset token code.
 /// * `record_type`: booleans representing whether the amount and asset are confidential.
-pub(crate) fn get_and_store_memos_to_file(path_str: &str,
-                                          pub_key: XfrPublicKey,
-                                          amount: u64,
-                                          token_code: AssetTypeCode,
-                                          record_type: AssetRecordType,
-                                          policy: Option<AssetTracingPolicy>)
-                                          -> Result<(), PlatformError> {
+pub fn get_and_store_memos_to_file(path_str: &str,
+                                   pub_key: XfrPublicKey,
+                                   amount: u64,
+                                   token_code: AssetTypeCode,
+                                   record_type: AssetRecordType,
+                                   policy: Option<AssetTracingPolicy>)
+                                   -> Result<(), PlatformError> {
   let (_, tracer_memo, owner_memo) =
     get_blind_asset_record_and_memos(pub_key, amount, token_code, record_type, policy)?;
   store_tracer_and_owner_memos_to_file(path_str, (tracer_memo, owner_memo))
@@ -937,6 +921,21 @@ pub(crate) fn create_directory_if_missing(path_str: &str) -> Result<(), Platform
     }
   }
 
+  Ok(())
+}
+
+/// Creates the directory for the file, and renames the file with the same path if it exists.
+/// # Arguments
+/// * `path_str`: string representation of the file path.
+/// * `overwrite`: whether to overwrite or find the available path if the file exists.
+pub fn create_directory_and_rename_path(path_str: &str,
+                                        overwrite: bool)
+                                        -> Result<(), PlatformError> {
+  let path = Path::new(&path_str);
+  create_directory_if_missing(&path_str)?;
+  if path.exists() && !overwrite {
+    rename_existing_path(&path)?;
+  }
   Ok(())
 }
 
@@ -1018,7 +1017,7 @@ pub(crate) fn next_path(path: &Path) -> Result<PathBuf, PlatformError> {
 /// Renames the file
 /// # Arguments
 /// * `path`: file path.
-pub(crate) fn rename_existing_path(path: &Path) -> Result<(), PlatformError> {
+pub fn rename_existing_path(path: &Path) -> Result<(), PlatformError> {
   let next = next_path(path)?;
   trace!("Next path for {:?} is {:?}", &path, &next);
   if let Err(error) = fs::rename(path, next.as_path()) {
@@ -1030,9 +1029,6 @@ pub(crate) fn rename_existing_path(path: &Path) -> Result<(), PlatformError> {
 #[cfg(test)]
 mod tests {
   use super::*;
-
-  const PROTOCOL: &str = "http";
-  const HOST: &str = "localhost";
 
   fn check_next_path(input: &str, expected: &str) {
     let as_path = Path::new(input);
