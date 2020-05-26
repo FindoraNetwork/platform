@@ -10,7 +10,6 @@ use credentials::{
   CredUserPublicKey, CredUserSecretKey, Credential as PlatformCredential,
 };
 use cryptohash::sha256;
-use cryptohash::sha256::Digest as BitDigest;
 use js_sys::Promise;
 use ledger::data_model::{b64enc, AssetTypeCode, AuthenticatedTransaction, Operation};
 use ledger::policies::{DebtMemo, Fraction};
@@ -21,7 +20,8 @@ use txn_builder::{
   BuildsTransactions, PolicyChoice, TransactionBuilder as PlatformTransactionBuilder,
   TransferOperationBuilder as PlatformTransferOperationBuilder,
 };
-use utils::error_to_jsvalue;
+use util::error_to_jsvalue;
+use utils::HashOf;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::future_to_promise;
 use wasm_bindgen_futures::JsFuture;
@@ -33,7 +33,7 @@ use zei::xfr::lib::trace_assets as zei_trace_assets;
 use zei::xfr::sig::{XfrKeyPair, XfrMultiSig, XfrPublicKey};
 use zei::xfr::structs::{AssetRecordTemplate, AssetTracingPolicy, XfrBody, XfrNote};
 
-mod utils;
+mod util;
 mod wasm_data_model;
 
 /////////// TRANSACTION BUILDING ////////////////
@@ -61,7 +61,7 @@ pub fn verify_authenticated_txn(state_commitment: String,
                                 -> Result<bool, JsValue> {
   let authenticated_txn = serde_json::from_str::<AuthenticatedTransaction>(&authenticated_txn)
         .map_err(|_e| JsValue::from_str("Could not deserialize transaction"))?;
-  let state_commitment = serde_json::from_str::<BitDigest>(&state_commitment).map_err(|_e| {
+  let state_commitment = serde_json::from_str::<HashOf<_>>(&state_commitment).map_err(|_e| {
                            JsValue::from_str("Could not deserialize state commitment")
                          })?;
   Ok(authenticated_txn.is_valid(state_commitment))
@@ -248,6 +248,7 @@ impl TransactionBuilder {
 
     // TODO: (keyao/noah) enable client support for identity
     // tracking?
+    // Redmine issue: #44
     let tracing_policy = Some(AssetTracingPolicy { enc_keys: tracing_key.get_enc_key().clone(),
                                                    asset_tracking: true,
                                                    identity_tracking: None });
@@ -286,6 +287,7 @@ impl TransactionBuilder {
 
     // TODO: (keyao/noah) enable client support for identity
     // tracking?
+    // Redmine issue: #44
     let confidentiality_flags = AssetRecordType::from_booleans(conf_amount, false);
     self.get_builder_mut()
         .add_basic_issue_asset(&key_pair,
@@ -624,7 +626,7 @@ pub fn public_key_to_base64(key: &XfrPublicKey) -> String {
 #[wasm_bindgen]
 /// Converts a base64 encoded public key string to a public key.
 pub fn public_key_from_base64(key_pair: String) -> Result<XfrPublicKey, JsValue> {
-  utils::public_key_from_base64(key_pair)
+  util::public_key_from_base64(key_pair)
 }
 
 #[wasm_bindgen]

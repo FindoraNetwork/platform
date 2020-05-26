@@ -82,6 +82,12 @@ impl HashValue {
   }
 }
 
+impl From<sha256::Digest> for HashValue {
+  fn from(d: sha256::Digest) -> Self {
+    Self { hash: d.0 }
+  }
+}
+
 ///
 /// This structure describes what is passed to the upper layers
 /// for a proof of inclusion in the tree.

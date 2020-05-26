@@ -148,12 +148,17 @@ mod tests {
     let mut tx = Transaction::default();
 
     let token_code1 = AssetTypeCode { val: [1; 16] };
-    let (public_key, secret_key) = build_keys(&mut prng);
+    let keypair = build_keys(&mut prng);
 
-    let asset_body =
-      asset_creation_body(&token_code1, &public_key, AssetRules::default(), None, None);
-    let asset_create = asset_creation_operation(&asset_body, &public_key, &secret_key);
-    tx.operations.push(Operation::DefineAsset(asset_create));
+    let asset_body = asset_creation_body(&token_code1,
+                                         keypair.get_pk_ref(),
+                                         AssetRules::default(),
+                                         None,
+                                         None);
+    let asset_create = asset_creation_operation(&asset_body, &keypair);
+    tx.body
+      .operations
+      .push(Operation::DefineAsset(asset_create));
 
     let mut app =
       test::init_service(App::new().data(submission_server)
