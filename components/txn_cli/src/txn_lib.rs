@@ -74,13 +74,19 @@ pub fn define_asset(data_dir: &str,
   if let Some(file) = txn_file {
     store_txn_to_file(&file, &txn_builder)?;
   }
+  println!("here 78");
 
   // Update data
   let mut data = load_data(data_dir)?;
+  println!("here 82");
+
   if fiat_asset {
     data.fiat_code = Some(token_code.to_base64());
     store_data_to_file(data, data_dir)?;
+    println!("here 87");
   };
+  println!("here 89");
+
   Ok(txn_builder)
 }
 

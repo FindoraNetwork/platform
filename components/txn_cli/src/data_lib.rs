@@ -19,79 +19,12 @@ use zei::xfr::structs::{
   OpenAssetRecord, OwnerMemo,
 };
 
-/// Initial data when the program starts.
+/// Path to the initial data when the program starts.
 // TODO (Keyao): Redmine issue: #42: Store txn_cli data externally
 // Make this data driven, not embedded in the Rust code.
 // The attribute names will be determined by the customer's application and will differ from customer to customer.
 // Or we'll develop a standard registry or dictionary of attributes.
-const INIT_DATA: &str = r#"
-{
-  "asset_issuers": [
-    {
-      "id": 0,
-      "name": "Izzie",
-      "key_pair": "6bcd6c7421aca7df38f5be361ba2fad5affff287da0730ca14235abd23269991ed11ea990324e0f573cd11c5ad0af2be94d8856600e626b62e49b526eb36ca08",
-      "tracer_key_pair": "7b22656e635f6b6579223a7b227265636f72645f646174615f656e635f6b6579223a5b3135362c3130322c3136332c35372c3230302c35322c37392c3134362c34372c3139352c33322c3130382c3138312c3231382c3233322c32302c3136352c3134382c3139322c32332c3132352c3231312c33352c39322c33372c37372c3135362c36342c3135342c3130312c3138342c385d2c2261747472735f656e635f6b6579223a22755874716e546532556474444d575a4c4779546336736c4d4439393136476c6d45324c615f373356574f5942345f6c63455254456c7956305966417176304758227d2c226465635f6b6579223a7b227265636f72645f646174615f6465635f6b6579223a5b37342c38332c3139352c3235312c3138382c38392c3135312c31342c3232392c3234382c39302c3234382c31392c3133352c39332c3235352c3139332c35382c3134342c37342c34362c38332c3137342c3132362c3130312c3235302c31332c3233342c3131302c39382c3230312c315d2c2261747472735f6465635f6b6579223a225a67356b4543754b735f2d7a784a54616a535f67336643574b52506234387443597a3037746c46623133383d227d7d"
-    }
-  ],
-  "credential_issuers": [
-    {
-      "id": 0,
-      "name": "Ivy",
-      "key_pair": "5b7b2261635f7075625f6b6579223a7b2267656e32223a227136457444736c6f78684f5f757075704669444e6836774f77384b6134375a316663706b794a4c56486c52785454444d75673934787432636e4b5f35584c4b424247305679326370384b53686f5a4b48784a46505f78563837663239363358446f475447616a62717130382d336f5265597970756a6e2d776754565832555836222c22787832223a226c5a7557726f70446b30563835347149754377696f7564466a7275584144336d7158454e4559566a3249302d46717367537335655653646d367235326562375646336c5f46654831734436774b347a67383274576946485a714245317456485731705649454e4d57783652324d38594a476b324355314b6f36636f334e597179222c227a7a31223a22746e553179643133744a4742386b5469782d30785647573754717a31472d51667a726a5944746f6a74755f49494b6a69784237456553616e6274665a714c3930222c227a7a32223a2267474558547672795f39506d376461685442387134654e755037344f307a572d304b73747a3755456233415f616b3230764c5a624969474d37653579556e3636457939335673515a5056505976544c736a4d634f36775f42505a3142372d4b4d594d5f70356f4841445953632d6f3565636968423141487047774542365f357a222c22797932223a5b227044365265596a684d7071354f354934787038417a435a32594a634d49564545664138575972665371612d64615354574b756d414e6363456f4a31315a616a564446517275714c424866314c5a344e6c6b636b5534705a4656466c62766955745432364f61305272717a495563725652485750506645625247667665734a6a35225d7d2c226d6170223a7b226d696e5f6372656469745f73636f7265223a5b5b302c315d2c335d7d2c226e756d5f696e7465726e616c5f6174747273223a317d2c7b2261635f7365635f6b6579223a7b2267656e31223a22714c305a7a446c5a4f30683571487743376b4b2d57796e615a4d754b4152416c2d37424f31434f413475596b5f5538463349776871754e346b324168625f6637222c2278223a227533706f7071506979646e50627a4c69426b395935535a45514a727568766c6e4948504a305953587353453d222c2279223a5b226e615f3552763146706264384856454f57766e387a382d38747646354337546a416575376856467a674b513d225d7d2c226d6170223a7b226d696e5f6372656469745f73636f7265223a5b5b302c315d2c335d7d2c226e756d5f696e7465726e616c5f6174747273223a317d5d"
-    }
-  ],
-  "lenders": [
-    {
-      "id": 0,
-      "name": "Lenny",
-      "key_pair": "023f37203a2476c42566a61cc55c3ca875dbb4cc41c0deb789f8e7bf881836384d4b18062f8502598de045ca7b69f067f59f93b16e3af8733a988adc2341f5c8",
-      "requirements": [
-        "500",
-        null,
-        null
-      ],
-      "loans": []
-    },
-    {
-      "id": 1,
-      "name": "Luna",
-      "key_pair": "65efc6564f1c5ee79f65635f249bb082ef5a89d077026c27479ae37db91e48dfe1e2cc04de1ba50705cb9cbba130ddc80f3c2646ddc865b7ab514e8ab77c2e7f",
-      "requirements": [
-        "680",
-        null,
-        null
-      ],
-      "loans": []
-    }
-  ],
-  "borrowers": [
-    {
-      "id": 0,
-      "name": "Ben",
-      "key_pair": "f6a12ca8ffc30a66ca140ccc7276336115819361186d3f535dd99f8eaaca8fce7d177f1e71b490ad0ce380f9578ab12bb0fc00a98de8f6a555c81d48c2039249",
-      "credentials": 0,
-      "loans": [],
-      "balance": 0,
-      "fiat_utxo": null
-    }
-  ],
-  "credentials": [
-    {
-      "id": 0,
-      "borrower": 0,
-      "credential_issuer": 0,
-      "values": [
-          "650",
-          null,
-          null
-      ]
-    }
-  ],
-  "loans": [],
-  "fiat_code": null,
-  "sequence_number": 1
-}"#;
+const INIT_DATA_PATH: &str = "init_data.json";
 /// Path to the data file.
 const DATA_FILE: &str = "data.json";
 /// Arbitrary choice of the maximum backup extension number.
@@ -590,11 +523,6 @@ impl Data {
   }
 }
 
-/// Gets the initial data for the CLI.
-pub(crate) fn get_init_data() -> Result<Data, PlatformError> {
-  serde_json::from_str::<Data>(INIT_DATA).or_else(|e| Err(des_fail!(e)))
-}
-
 /// Gets the sequence number and increments it.
 pub fn get_and_update_sequence_number(data_dir: &str) -> Result<u64, PlatformError> {
   // Get the sequence number
@@ -642,18 +570,20 @@ pub fn parse_to_u64_vec(vals_str: &str) -> Result<Vec<u64>, PlatformError> {
 //
 /// Loads data.
 /// * If the data file exists, loads data from it.
-/// * Otherwise, stores the initial data to file and returns the data.
+/// * Otherwise, loads the initial data.
 pub fn load_data(data_dir: &str) -> Result<Data, PlatformError> {
   let data_file_path = format!("{}/{}", data_dir, DATA_FILE);
-  let data = match fs::read_to_string(data_file_path) {
-    Ok(data) => data,
-    Err(_) => {
-      let init_data = get_init_data()?;
-      store_data_to_file(init_data.clone(), data_dir)?;
-      return Ok(init_data);
-    }
-  };
-  serde_json::from_str::<Data>(&data).or_else(|e| Err(des_fail!(e)))
+  match fs::read_to_string(data_file_path) {
+    Ok(data) => serde_json::from_str::<Data>(&data).or_else(|e| Err(des_fail!(e))),
+    Err(_) => match fs::read_to_string(INIT_DATA_PATH) {
+      Ok(init_data) => {
+        let data = serde_json::from_str::<Data>(&init_data).or_else(|e| Err(des_fail!(e)))?;
+        store_data_to_file(data.clone(), data_dir)?;
+        Ok(data)
+      }
+      Err(_) => Err(PlatformError::IoError(format!("Failed to read file: {}", INIT_DATA_PATH))),
+    },
+  }
 }
 
 /// Loads transaction record from file
