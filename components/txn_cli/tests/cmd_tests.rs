@@ -1,6 +1,4 @@
 #![deny(warnings)]
-use ledger::data_model::AssetTypeCode;
-use ledger_standalone::LedgerStandalone;
 use std::fs;
 use std::io::{self, Write};
 use std::path::Path;
@@ -101,66 +99,6 @@ fn store_sids_with_path(file: &str, indices: &str) -> io::Result<Output> {
   Command::new(COMMAND).args(&["asset_issuer", "store_sids"])
                        .args(&["--file", file])
                        .args(&["--indices", indices])
-                       .output()
-}
-
-#[cfg(test)]
-fn define_asset(dir: &str,
-                txn_builder_path: &str,
-                issuer_id: &str,
-                token_code: &str,
-                memo: &str,
-                co_signer_ids: Option<&str>,
-                max_units: Option<&str>,
-                traceable: bool,
-                non_transferable: bool,
-                updatable: bool)
-                -> io::Result<Output> {
-  let mut command = Command::new(COMMAND);
-  command.args(&["--dir", dir])
-         .args(&["--txn", txn_builder_path])
-         .args(&["asset_issuer", "--id", issuer_id])
-         .arg("define_asset")
-         .args(&["--token_code", token_code])
-         .args(&["--memo", memo]);
-
-  if let Some(cosigners) = co_signer_ids {
-    command.args(&["--cosigners", cosigners]);
-  }
-
-  if let Some(max_units) = max_units {
-    command.args(&["--max_units", max_units]);
-  }
-
-  if traceable {
-    command.arg("--traceable");
-  }
-
-  if non_transferable {
-    command.arg("--non_transferable");
-  }
-
-  if updatable {
-    command.arg("--updatable");
-  }
-
-  command.output()
-}
-
-// Helper functions: submit transaction
-// Note:
-// Since http://localhost is used instead of https://testnet.findora.org,
-// make sure the standalone ledger is running before calling a function that will submit a transaction:
-// ```
-// let ledger_standalone = LedgerStandalone::new();
-// ledger_standalone.poll_until_ready().unwrap();
-// ```
-
-#[cfg(test)]
-fn submit(txn_builder_path: &str) -> io::Result<Output> {
-  Command::new(COMMAND).args(&["--txn", txn_builder_path])
-                       .arg("submit")
-                       .args(&["--http", "--localhost"])
                        .output()
 }
 
@@ -379,41 +317,4 @@ fn test_store_sids_with_path() {
 
   fs::remove_file("sids").unwrap();
   assert!(output.status.success());
-}
-
-#[test]
-fn test_define_asset_simple_policies() {
-  let tmp_dir = tempdir().unwrap();
-  let dir = tmp_dir.path().to_str().unwrap();
-  let txn_builder_buf = tmp_dir.path().join("tb_issue_transfer_args");
-  let txn_builder_file = txn_builder_buf.to_str().unwrap();
-  let output = sign_up_borrower(dir, "Borrower B").expect("Failed to create a borrower");
-
-  io::stdout().write_all(&output.stdout).unwrap();
-  io::stdout().write_all(&output.stderr).unwrap();
-
-  assert!(output.status.success());
-
-  let ledger_standalone = LedgerStandalone::new();
-
-  // Create txn builder and key pairs
-  create_txn_builder_with_path(txn_builder_file).expect("Failed to create transaction builder");
-
-  // Define token code
-  let token_code = AssetTypeCode::gen_random().to_base64();
-
-  // Define asset
-  let output = define_asset(dir,
-                            txn_builder_file,
-                            "0",
-                            &token_code,
-                            "Define an asset",
-                            Some("1"),
-                            Some("500"),
-                            true,
-                            true,
-                            false).expect("Failed to define asset");
-  assert!(output.status.success());
-  ledger_standalone.poll_until_ready().unwrap();
-  submit(txn_builder_file).expect("Failed to submit transaction");
 }

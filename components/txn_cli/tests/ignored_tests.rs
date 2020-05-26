@@ -529,6 +529,57 @@ fn test_view() {
 // Compose transaction and submit
 //
 
+// This test passes individually, but we ignore it since it occasionally fails when run with other tests
+// which also use the standalone ledger
+// GitHub issue: #324
+// Redmind issue: #38
+#[ignore]
+#[test]
+fn test_define_asset_simple_policies() {
+  let ledger_standalone = LedgerStandalone::new();
+
+  let tmp_dir = tempdir().unwrap();
+  let dir = tmp_dir.path().to_str().unwrap();
+  let txn_builder_buf = tmp_dir.path().join("tb_define_policies");
+  let txn_builder_file = txn_builder_buf.to_str().unwrap();
+  sign_up_borrower(dir, "Borrower B").expect("Failed to create a borrower");
+
+  // Create txn builder and key pairs
+  create_txn_builder_with_path(txn_builder_file).expect("Failed to create transaction builder");
+
+  // Define token code
+  let token_code = AssetTypeCode::gen_random().to_base64();
+
+  // Define asset
+  let output = Command::new(COMMAND).args(&["--dir", dir])
+                                    .args(&["--txn", txn_builder_file])
+                                    .args(&["asset_issuer", "--id", "0"])
+                                    .arg("define_asset")
+                                    .args(&["--token_code", &token_code])
+                                    .args(&["--memo", "Define an asset"])
+                                    .args(&["--cosigners", "1"])
+                                    .args(&["--max_units", "500"])
+                                    .arg("--traceable")
+                                    .arg("--non_transferable")
+                                    .output()
+                                    .expect("Failed to define asset");
+
+  io::stdout().write_all(&output.stdout).unwrap();
+  io::stdout().write_all(&output.stderr).unwrap();
+
+  assert!(output.status.success());
+
+  ledger_standalone.poll_until_ready().unwrap();
+  let output = submit(txn_builder_file).expect("Failed to submit transaction");
+
+  io::stdout().write_all(&output.stdout).unwrap();
+  io::stdout().write_all(&output.stderr).unwrap();
+
+  assert!(output.status.success());
+
+  tmp_dir.close().unwrap();
+}
+
 // This test passes individually, but we ignore it since it occasionally fails with SubmissionServerError when run with other tests
 // which also use the standalone ledger
 // GitHub issue: #324
