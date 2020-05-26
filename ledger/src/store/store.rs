@@ -2811,6 +2811,7 @@ mod tests {
     let effect = TxnEffect::compute_effect(tx);
     assert!(effect.is_err());
   }
+
   #[test]
   pub fn test_transferable() {
     let mut ledger = LedgerState::test_ledger();
