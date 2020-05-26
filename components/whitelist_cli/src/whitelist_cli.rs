@@ -165,6 +165,10 @@ mod tests {
                          .output()
   }
 
+  // This test passes individually, but we ignore it since it occasionally fails when run with other tests
+  // which also use the standalone ledger
+  // Redmind issue: #38
+  #[ignore]
   #[test]
   fn test_cmd() {
     // Start the standalone ledger
