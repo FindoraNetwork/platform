@@ -5,7 +5,7 @@ authors = ["Engineering <engineering@findora.org>"]
 edition = "2018"
 
 [lib]
-path = "src/txn_lib.rs"
+path = "src/lib.rs"
 
 [[bin]]
 name = "txn_cli"
@@ -33,6 +33,7 @@ shellexpand = "1.0.0"
 submission_server = { path = "../submission_server" }
 tempfile = "3.1.0"
 txn_builder = { path = "../txn_builder" }
+utils = { path = "../../libs/utils" }
 wasm = { path = "../wasm" }
 zei = { git = "ssh://git@github.com/findoraorg/zei", tag = "v0.0.2-4" }
 

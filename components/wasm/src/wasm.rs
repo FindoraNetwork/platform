@@ -248,6 +248,7 @@ impl TransactionBuilder {
 
     // TODO: (keyao/noah) enable client support for identity
     // tracking?
+    // Redmine issue: #44
     let tracing_policy = Some(AssetTracingPolicy { enc_keys: tracing_key.get_enc_key().clone(),
                                                    asset_tracking: true,
                                                    identity_tracking: None });
@@ -286,6 +287,7 @@ impl TransactionBuilder {
 
     // TODO: (keyao/noah) enable client support for identity
     // tracking?
+    // Redmine issue: #44
     let confidentiality_flags = AssetRecordType::from_booleans(conf_amount, false);
     self.get_builder_mut()
         .add_basic_issue_asset(&key_pair,

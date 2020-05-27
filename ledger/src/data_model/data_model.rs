@@ -668,7 +668,7 @@ impl KVBlind {
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct KVEntry(pub XfrPublicKey, KVHash);
+pub struct KVEntry(pub XfrPublicKey, pub KVHash);
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct KVUpdate {
@@ -985,10 +985,6 @@ impl Transaction {
 
 #[repr(C)]
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-// TODO (Keyao):
-// Are the four fields below all necessary?
-// Can we remove one of txns_in_block_hash and global_block_hash?
-// Both of them contain the information of the previous state
 pub struct StateCommitmentData {
   pub bitmap: BitDigest,       // The checksum of the utxo_map
   pub block_merkle: HashValue, // The root hash of the block Merkle tree
