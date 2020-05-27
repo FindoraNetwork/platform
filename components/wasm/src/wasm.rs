@@ -15,6 +15,7 @@ use ledger::data_model::{b64enc, AssetTypeCode, AuthenticatedTransaction, Operat
 use ledger::policies::{DebtMemo, Fraction};
 use rand_chacha::ChaChaRng;
 use rand_core::SeedableRng;
+use sparse_merkle_tree::Key;
 use std::str;
 use txn_builder::{
   BuildsTransactions, PolicyChoice, TransactionBuilder as PlatformTransactionBuilder,
@@ -313,6 +314,22 @@ impl TransactionBuilder {
                                   commitment.get_commitment_ref().clone(),
                                   issuer_public_key.clone(),
                                   commitment.get_pok_ref().clone())
+        .map_err(error_to_jsvalue)?;
+    Ok(self)
+  }
+
+  /// Adds an add kv update operation to a WasmTransactionBuilder instance.
+  pub fn add_operation_kv_update(mut self,
+                                 auth_key_pair: &XfrKeyPair,
+                                 index: &Key,
+                                 seq_num: u64,
+                                 kv_hash: Option<&KVHash>)
+                                 -> Result<TransactionBuilder, JsValue> {
+    self.get_builder_mut()
+        .add_operation_kv_update(auth_key_pair,
+                                 index,
+                                 seq_num,
+                                 kv_hash.map(|hash| &hash.get_hash_ref().clone()))
         .map_err(error_to_jsvalue)?;
     Ok(self)
   }
