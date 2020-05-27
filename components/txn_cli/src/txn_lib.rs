@@ -10,8 +10,8 @@ pub mod txn_lib {
   use curve25519_dalek::scalar::Scalar;
   use ledger::data_model::errors::PlatformError;
   use ledger::data_model::{
-    b64dec, AccountAddress, AssetRules, AssetTypeCode, KVHash, SignatureRules, TransferType,
-    TxOutput, TxoRef, TxoSID,
+    b64dec, b64enc, AccountAddress, AssetRules, AssetTypeCode, KVBlind, KVHash, SignatureRules,
+    TransferType, TxOutput, TxoRef, TxoSID,
   };
   use ledger::policies::{DebtMemo, Fraction};
   use ledger::{des_fail, error_location, ser_fail};
@@ -20,7 +20,7 @@ pub mod txn_lib {
   use rand_chacha::ChaChaRng;
   use rand_core::{CryptoRng, RngCore, SeedableRng};
   use serde::{Deserialize, Serialize};
-  use sparse_merkle_tree::Key;
+  use sparse_merkle_tree::{random_key, Key};
   use std::env;
   use std::fs;
   use std::path::{Path, PathBuf};
@@ -122,7 +122,9 @@ pub mod txn_lib {
   /// Arbitrary choice of the maximum backup extension number.
   const BACKUP_COUNT_MAX: i32 = 10000;
   /// Port for querying values.
-  const QUERY_PORT: &str = "8668";
+  const LEDGER_PORT: &str = "8668";
+  /// Query server port.
+  const QUERY_PORT: &str = "8667";
   /// Port for submitting transactions.
   const SUBMIT_PORT: &str = "8669";
 
@@ -1271,14 +1273,14 @@ pub mod txn_lib {
   /// # Arguments
   /// * `protocol`: either `https` or `http`.
   /// * `host`: either `testnet.findora.org` or `localhost`.
-  /// * `port`: either `QUERY_PORT` or `SUBMIT_PORT`.
+  /// * `port`: either `LEDGER_PORT` or `SUBMIT_PORT`.
   /// * `route`: route to query.
   /// * `value`: value to look up.
   ///
   /// # Examples
   /// * To query the BlindAssetRecord with utxo_sid 100 from https://testnet.findora.org:
   /// use txn_cli::txn_lib::query;
-  /// query("https", "testnet.findora.org", QUERY_PORT, "utxo_sid", "100").unwrap();
+  /// query("https", "testnet.findora.org", LEDGER_PORT, "utxo_sid", "100").unwrap();
   fn query(protocol: &str,
            host: &str,
            port: &str,
@@ -1313,7 +1315,11 @@ pub mod txn_lib {
                                             protocol: &str,
                                             host: &str)
                                             -> Result<CompressedRistretto, PlatformError> {
-    let res = query(protocol, host, QUERY_PORT, "utxo_sid", &format!("{}", utxo))?;
+    let res = query(protocol,
+                    host,
+                    LEDGER_PORT,
+                    "utxo_sid",
+                    &format!("{}", utxo))?;
     let blind_asset_record =
       serde_json::from_str::<BlindAssetRecord>(&res).or_else(|_| Err(des_fail!()))?;
     match blind_asset_record.asset_type {
@@ -1330,7 +1336,11 @@ pub mod txn_lib {
                                    protocol: &str,
                                    host: &str)
                                    -> Result<XfrAmount, PlatformError> {
-    let res = query(protocol, host, QUERY_PORT, "utxo_sid", &format!("{}", utxo))?;
+    let res = query(protocol,
+                    host,
+                    LEDGER_PORT,
+                    "utxo_sid",
+                    &format!("{}", utxo))?;
     let blind_asset_record =
       serde_json::from_str::<BlindAssetRecord>(&res).or_else(|_| Err(des_fail!()))?;
     Ok(blind_asset_record.amount)
@@ -1573,7 +1583,7 @@ pub mod txn_lib {
     let sid_new = submit_and_get_sids(protocol, host, txn_builder)?[0];
     let res_new = query(protocol,
                         host,
-                        QUERY_PORT,
+                        LEDGER_PORT,
                         "utxo_sid",
                         &format!("{}", sid_new.0))?;
     let blind_asset_record_new =
@@ -1583,7 +1593,7 @@ pub mod txn_lib {
     let sid_merged = if let Some(sid_pre) = recipient.fiat_utxo {
       let res_pre = query(protocol,
                           host,
-                          QUERY_PORT,
+                          LEDGER_PORT,
                           "utxo_sid",
                           &format!("{}", sid_pre.0))?;
       let blind_asset_record_pre =
@@ -1621,7 +1631,7 @@ pub mod txn_lib {
                                         -> Result<OpenAssetRecord, PlatformError> {
     let res = query(protocol,
                     host,
-                    QUERY_PORT,
+                    LEDGER_PORT,
                     "utxo_sid",
                     &format!("{}", sid.0))?;
     let blind_asset_record =
@@ -1920,7 +1930,7 @@ pub mod txn_lib {
       // Get the original fiat record
       let res_pre = query(protocol,
                           host,
-                          QUERY_PORT,
+                          LEDGER_PORT,
                           "utxo_sid",
                           &format!("{}", sid_pre.0))?;
       let blind_asset_record_pre =
@@ -1928,7 +1938,7 @@ pub mod txn_lib {
       // Get the new fiat record
       let res_new = query(protocol,
                           host,
-                          QUERY_PORT,
+                          LEDGER_PORT,
                           "utxo_sid",
                           &format!("{}", sids_new[1].0))?;
       let blind_asset_record_new =
@@ -2370,21 +2380,28 @@ pub mod txn_lib {
         let data = load_data(data_dir)?;
         let issuer_id =
           parse_to_u64(asset_issuer_matches.value_of("id")
-                                           .ok_or_else(|| PlatformError::InputsError(error_location!()))?)?;
+                                 .ok_or_else(|| PlatformError::InputsError(error_location!()))?)?;
         let key_pair = data.get_asset_issuer_key_pair(issuer_id)?;
-        let key = Key::from_slice(&b64dec(kv_matches.value_of("key")
-          .ok_or_else(|| PlatformError::InputsError(error_location!()))?)
+        //let key = Key::from_slice(&b64dec(kv_matches.value_of("key")
+        //  .ok_or_else(|| PlatformError::InputsError(error_location!()))?)
+        //  .map_err(|e| PlatformError::InputsError(format!("{}:{}",e,error_location!())))?)
+        //  .ok_or_else(|| PlatformError::InputsError(error_location!()))?;
+        let key = if let Some(key_str) = kv_matches.value_of("key") {
+          Key::from_slice(&b64dec(key_str)
           .map_err(|e| PlatformError::InputsError(format!("{}:{}",e,error_location!())))?)
-          .ok_or_else(|| PlatformError::InputsError(error_location!()))?;
+          .ok_or_else(|| PlatformError::InputsError(error_location!()))?
+        } else {
+          random_key()
+        };
         let gen = parse_to_u64(kv_matches.value_of("gen")
           .ok_or_else(|| PlatformError::InputsError(error_location!()))?)
           .map_err(|e| PlatformError::InputsError(format!("{}:{}",e,error_location!())))?;
-        let value = b64dec(kv_matches.value_of("value")
-          .ok_or_else(|| PlatformError::InputsError(error_location!()))?)
-          .map_err(|e| PlatformError::InputsError(format!("{}:{}",e,error_location!())))?;
+        let value = kv_matches.value_of("value")
+                              .ok_or_else(|| PlatformError::InputsError(error_location!()))?;
         let mut txn_builder = TransactionBuilder::default();
         let hash = KVHash::new(&value, None);
         txn_builder.add_operation_kv_update(&key_pair, &key, gen, Some(&hash))?;
+        println!("Hash of data will be stored at key {}", b64enc(&key));
         store_txn_to_file(&txn_file, &txn_builder)
       }
       ("clear_kv", Some(kv_matches)) => {
@@ -3393,11 +3410,52 @@ pub mod txn_lib {
         Err(e) => Err(PlatformError::IoError(format!("Error deleting file: {:?} ", e))),
       },
       ("submit", Some(submit_matches)) => process_submit_cmd(submit_matches, &txn_file),
+      ("custom_data", Some(custom_data_matches)) => process_custom_data_cmds(custom_data_matches),
       _ => {
         println!("Subcommand missing or not recognized. Try --help");
         Err(PlatformError::InputsError(error_location!()))
       }
     }
+  }
+
+  pub(crate) fn process_custom_data_cmds(custom_data_matches: &clap::ArgMatches)
+                                         -> Result<(), PlatformError> {
+    match custom_data_matches.subcommand() {
+      ("fetch", Some(fetch_matches)) => {
+        let key = fetch_matches.value_of("key")
+                               .ok_or_else(|| PlatformError::InputsError(error_location!()))?;
+        let (protocol, host) = protocol_host(fetch_matches);
+        let res = query(protocol, host, QUERY_PORT, "get_custom_data", key)?;
+        dbg!(res);
+      }
+      ("store", Some(store_matches)) => {
+        let key = Key::from_slice(&b64dec(store_matches.value_of("key")
+          .ok_or_else(|| PlatformError::InputsError(error_location!()))?)
+          .map_err(|e| PlatformError::InputsError(format!("{}:{}",e,error_location!())))?)
+          .ok_or_else(|| PlatformError::InputsError(error_location!()))?;
+        let data = store_matches.value_of("data").unwrap();
+        let (protocol, host) = protocol_host(store_matches);
+        let client = reqwest::Client::new();
+        let blind: Option<KVBlind> = None;
+        let res = client.post(&format!("{}://{}:{}/{}",
+                                       protocol, host, QUERY_PORT, "store_custom_data"))
+                        .json(&(key, data.as_bytes().to_vec(), blind))
+                        .send()
+                        .or_else(|_| {
+                          Err(PlatformError::QueryServerError(format!("[{}] {}",
+                                                                      &error_location!(),
+                                                                      &"Failed to submit.")))
+                        })?;
+        // Log body
+        println!("Submission status: {}", res.status());
+      }
+      _ => {
+        println!("Subcommand missing or not recognized. Try --help");
+        return Err(PlatformError::InputsError(error_location!()));
+      }
+    }
+
+    Ok(())
   }
 
   #[cfg(test)]
