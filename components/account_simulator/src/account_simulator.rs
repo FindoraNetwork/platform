@@ -10,6 +10,7 @@ use ledger::data_model::errors::PlatformError;
 use ledger::data_model::*;
 use ledger::error_location;
 use ledger::store::*;
+use rand_chacha::ChaChaRng;
 use rand_core::{RngCore, SeedableRng};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet, VecDeque};
@@ -401,7 +402,7 @@ impl InterpretAccounts<PlatformError> for LedgerAccounts {
         self.units.get(name).map_or_else(|| Ok(()),
                                           |_| Err(PlatformError::InputsError(error_location!())))?;
 
-        let code = AssetTypeCode::gen_random();
+        let code = AssetTypeCode::gen_random(&mut ChaChaRng::from_entropy());
 
         // dbg!("New unit", &name, &issuer, &code);
 
@@ -710,7 +711,7 @@ impl InterpretAccounts<PlatformError> for OneBigTxnAccounts {
         self.units.get(name).map_or_else(|| Ok(()),
                                           |_| Err(PlatformError::InputsError(error_location!())))?;
 
-        let code = AssetTypeCode::gen_random();
+        let code = AssetTypeCode::gen_random(&mut ChaChaRng::from_entropy());
 
         // dbg!("New unit", &name, &issuer, &code);
 
@@ -1022,7 +1023,7 @@ impl InterpretAccounts<PlatformError> for LedgerStandaloneAccounts {
         self.units.get(name).map_or_else(|| Ok(()),
                                           |_| Err(PlatformError::InputsError(error_location!())))?;
 
-        let code = AssetTypeCode::gen_random();
+        let code = AssetTypeCode::gen_random(&mut ChaChaRng::from_entropy());
 
         // dbg!("New unit", &name, &issuer, &code);
 

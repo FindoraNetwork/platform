@@ -176,7 +176,7 @@ mod tests {
     let mut ledger_state = LedgerState::test_ledger();
     let mut prng = ChaChaRng::from_entropy();
     let mut query_server = QueryServer::new(Arc::new(RwLock::new(query_server_ledger_state)));
-    let token_code = AssetTypeCode::gen_random();
+    let token_code = AssetTypeCode::gen_random(&mut ChaChaRng::from_entropy());
     // Define keys
     let alice = XfrKeyPair::generate(&mut prng);
     let bob = XfrKeyPair::generate(&mut prng);

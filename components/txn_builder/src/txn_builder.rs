@@ -453,7 +453,10 @@ impl BuildsTransactions for TransactionBuilder {
                                 memo: &str,
                                 policy_choice: PolicyChoice)
                                 -> Result<&mut Self, PlatformError> {
-    let token_code = token_code.unwrap_or_else(AssetTypeCode::gen_random);
+    let token_code = match token_code {
+      Some(code) => code,
+      None => AssetTypeCode::gen_random(&mut ChaChaRng::from_entropy()),
+    };
     let pol = policy_from_choice(&token_code, key_pair.get_pk_ref(), policy_choice);
     let iss_keypair = IssuerKeyPair { keypair: &key_pair };
     self.txn.add_operation(Operation::DefineAsset(DefineAsset::new(DefineAssetBody::new(&token_code, &IssuerPublicKey { key: *key_pair.get_pk_ref() }, asset_rules, Some(Memo(memo.into())), Some(ConfidentialMemo {}), pol)?, &iss_keypair)?));
@@ -930,8 +933,8 @@ mod tests {
   fn test_transfer_op_builder() -> Result<(), PlatformError> {
     let mut prng = ChaChaRng::from_entropy();
     let params = PublicParams::new();
-    let code_1 = AssetTypeCode::gen_random();
-    let code_2 = AssetTypeCode::gen_random();
+    let code_1 = AssetTypeCode::gen_random(&mut ChaChaRng::from_entropy());
+    let code_2 = AssetTypeCode::gen_random(&mut ChaChaRng::from_entropy());
     let alice = XfrKeyPair::generate(&mut prng);
     let bob = XfrKeyPair::generate(&mut prng);
     let charlie = XfrKeyPair::generate(&mut prng);

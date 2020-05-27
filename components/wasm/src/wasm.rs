@@ -45,7 +45,7 @@ mod wasm_data_model;
 /// @see {@link WasmTransactionBuilder#add_operation_create_asset} for instructions on how to define an asset with a new
 /// asset type
 pub fn random_asset_type() -> String {
-  AssetTypeCode::gen_random().to_base64()
+  AssetTypeCode::gen_random(&mut ChaChaRng::from_entropy()).to_base64()
 }
 
 #[wasm_bindgen]
@@ -193,7 +193,7 @@ impl TransactionBuilder {
                                                 asset_rules: AssetRules)
                                                 -> Result<TransactionBuilder, JsValue> {
     let asset_token = if token_code.is_empty() {
-      AssetTypeCode::gen_random()
+      AssetTypeCode::gen_random(&mut ChaChaRng::from_entropy())
     } else {
       AssetTypeCode::new_from_base64(&token_code).unwrap()
     };

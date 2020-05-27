@@ -80,7 +80,8 @@ mod tests {
     ledger_standalone.poll_until_ready().unwrap();
 
     // Generate asset codes and add codes to the whitelist
-    let codes = vec![AssetTypeCode::gen_random(), AssetTypeCode::gen_random()];
+    let codes = vec![AssetTypeCode::gen_random(&mut ChaChaRng::from_entropy()),
+                     AssetTypeCode::gen_random(&mut ChaChaRng::from_entropy())];
     let whitelist = &mut Whitelist::default();
     for code in &codes {
       whitelist.add_member(*code);
@@ -118,7 +119,8 @@ mod tests {
     ledger_standalone.poll_until_ready().unwrap();
 
     // Generate asset codes and add codes to the whitelist
-    let codes = vec![AssetTypeCode::gen_random(), AssetTypeCode::gen_random()];
+    let codes = vec![AssetTypeCode::gen_random(&mut ChaChaRng::from_entropy()),
+                     AssetTypeCode::gen_random(&mut ChaChaRng::from_entropy())];
     let whitelist = &mut Whitelist::default();
     for code in &codes {
       whitelist.add_member(*code);
@@ -165,7 +167,8 @@ mod tests {
     ledger_standalone.poll_until_ready().unwrap();
 
     // Generate asset codes and add codes to the whitelist
-    let codes = vec![AssetTypeCode::gen_random(), AssetTypeCode::gen_random()];
+    let codes = vec![AssetTypeCode::gen_random(&mut ChaChaRng::from_entropy()),
+                     AssetTypeCode::gen_random(&mut ChaChaRng::from_entropy())];
     let whitelist = &mut Whitelist::default();
     for code in &codes {
       whitelist.add_member(*code);
@@ -207,11 +210,11 @@ mod tests {
     // Generate key pair and asset codes
     let issuer_key_pair = XfrKeyPair::generate(&mut ChaChaRng::from_entropy());
     let recipient_key_pair = XfrKeyPair::generate(&mut ChaChaRng::from_entropy());
-    let codes = vec![AssetTypeCode::gen_random(),
-                     AssetTypeCode::gen_random(),
-                     AssetTypeCode::gen_random(),
-                     AssetTypeCode::gen_random(),
-                     AssetTypeCode::gen_random()];
+    let codes = vec![AssetTypeCode::gen_random(&mut ChaChaRng::from_entropy()),
+                     AssetTypeCode::gen_random(&mut ChaChaRng::from_entropy()),
+                     AssetTypeCode::gen_random(&mut ChaChaRng::from_entropy()),
+                     AssetTypeCode::gen_random(&mut ChaChaRng::from_entropy()),
+                     AssetTypeCode::gen_random(&mut ChaChaRng::from_entropy())];
 
     // Add codes to the whitelist
     let whitelist = &mut Whitelist::default();

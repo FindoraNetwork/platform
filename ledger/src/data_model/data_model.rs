@@ -43,8 +43,8 @@ pub type AssetPolicyKey = Code;
 pub type SmartContractKey = Code;
 
 impl Code {
-  pub fn gen_random() -> Self {
-    let mut small_rng = ChaChaRng::from_entropy();
+  pub fn gen_random(prng: &mut ChaChaRng) -> Self {
+    let mut small_rng = ChaChaRng::from_rng(prng).unwrap();
     let mut buf: [u8; 16] = [0u8; 16];
     small_rng.fill_bytes(&mut buf);
     Self { val: buf }
@@ -897,16 +897,16 @@ mod tests {
   use std::cmp::min;
   use zei::xfr::structs::{AssetTypeAndAmountProof, XfrBody, XfrProofs};
 
-  // Ignoring this test as it is a statistical test that sometimes fails (but very rarely)
+  // This test may fail as it is a statistical test that sometimes fails (but very rarely)
   // It uses the central limit theorem, but essentially testing the rand crate
   #[test]
-  #[ignore]
   fn test_gen_random() {
     let mut sum: u64 = 0;
     let mut sample_size = 0;
 
+    let prng = &mut ChaChaRng::from_entropy();
     for _ in 0..1000 {
-      let code = AssetTypeCode::gen_random();
+      let code = AssetTypeCode::gen_random(prng);
       let mut failed = true;
 
       for byte in code.val.iter() {
@@ -930,8 +930,8 @@ mod tests {
     let average = sum as f64 / sample_size as f64;
     let stddev = (uniform_stddev * 255.0) / (sample_size as f64).sqrt();
     println!("Average {}, stddev {}", average, stddev);
-    assert!(average > 127.5 - 3.0 * stddev);
-    assert!(average < 127.5 + 3.0 * stddev);
+    assert!(average > 127.5 - 5.0 * stddev);
+    assert!(average < 127.5 + 5.0 * stddev);
   }
 
   #[test]

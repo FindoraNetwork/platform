@@ -1540,7 +1540,7 @@ pub mod txn_lib {
     let token_code = if let Some(code) = &data.fiat_code {
       AssetTypeCode::new_from_base64(code)?
     } else {
-      let fiat_code = AssetTypeCode::gen_random();
+      let fiat_code = AssetTypeCode::gen_random(&mut ChaChaRng::from_entropy());
       let txn_builder = define_asset(data_dir,
                                      true,
                                      issuer_key_pair,
@@ -1796,7 +1796,7 @@ pub mod txn_lib {
       println!("Fiat code: {}", code);
       AssetTypeCode::new_from_base64(&code)?
     } else {
-      let fiat_code = AssetTypeCode::gen_random();
+      let fiat_code = AssetTypeCode::gen_random(&mut ChaChaRng::from_entropy());
       let txn_builder = define_asset(data_dir,
                                      true,
                                      issuer_key_pair,
@@ -1840,7 +1840,7 @@ pub mod txn_lib {
       query_open_asset_record(protocol, host, fiat_sid, lender_key_pair, &owner_memo)?;
 
     // Define debt asset
-    let debt_code = AssetTypeCode::gen_random();
+    let debt_code = AssetTypeCode::gen_random(&mut ChaChaRng::from_entropy());
     println!("Generated debt code: {}",
              serde_json::to_string(&debt_code.val).or_else(|_| { Err(ser_fail!()) })?);
     let memo = DebtMemo { interest_rate: Fraction::new(loan.interest_per_mille, 1000),
@@ -2345,7 +2345,7 @@ pub mod txn_lib {
         if let Some(token_code) = token_code {
           asset_token = AssetTypeCode::new_from_base64(token_code)?;
         } else {
-          asset_token = AssetTypeCode::gen_random();
+          asset_token = AssetTypeCode::gen_random(&mut ChaChaRng::from_entropy());
           println!("Creating asset with token code {:?}: {:?}",
                    asset_token.to_base64(),
                    asset_token.val);
@@ -3459,7 +3459,7 @@ pub mod txn_lib {
       let res = define_asset(data_dir,
                              false,
                              &issuer_key_pair,
-                             AssetTypeCode::gen_random(),
+                             AssetTypeCode::gen_random(&mut ChaChaRng::from_entropy()),
                              "Define asset",
                              AssetRules::default(),
                              None);
@@ -3480,7 +3480,7 @@ pub mod txn_lib {
       let recipient_key_pair = XfrKeyPair::generate(&mut prng);
 
       // Issue and transfer asset
-      let code = AssetTypeCode::gen_random();
+      let code = AssetTypeCode::gen_random(&mut ChaChaRng::from_entropy());
       let amount = 1000;
       let res =
         issue_and_transfer_asset(data_dir,
@@ -3506,7 +3506,7 @@ pub mod txn_lib {
       let key_pair = XfrKeyPair::generate(&mut prng);
 
       // Build blind asset records
-      let code = AssetTypeCode::gen_random();
+      let code = AssetTypeCode::gen_random(&mut ChaChaRng::from_entropy());
       let asset_record_type = AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType;
       let (bar1, _, memo1) = get_blind_asset_record_and_memos(key_pair.get_pk(),
                                                               1000,
