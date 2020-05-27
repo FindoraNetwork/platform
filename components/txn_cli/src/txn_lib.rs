@@ -10,8 +10,8 @@ pub mod txn_lib {
   use curve25519_dalek::scalar::Scalar;
   use ledger::data_model::errors::PlatformError;
   use ledger::data_model::{
-    AccountAddress, AssetRules, AssetTypeCode, SignatureRules, TransferType, TxOutput, TxoRef,
-    TxoSID,
+    b64dec, AccountAddress, AssetRules, AssetTypeCode, KVHash, SignatureRules, TransferType,
+    TxOutput, TxoRef, TxoSID,
   };
   use ledger::policies::{DebtMemo, Fraction};
   use ledger::{des_fail, error_location, ser_fail};
@@ -20,6 +20,7 @@ pub mod txn_lib {
   use rand_chacha::ChaChaRng;
   use rand_core::{CryptoRng, RngCore, SeedableRng};
   use serde::{Deserialize, Serialize};
+  use sparse_merkle_tree::Key;
   use std::env;
   use std::fs;
   use std::path::{Path, PathBuf};
@@ -2142,6 +2143,7 @@ pub mod txn_lib {
   /// * SubmissionServerError: exits with code `UNAVAILABLE`.
   /// * Otherwise: exits with code `USAGE`.
   pub fn match_error_and_exit(error: PlatformError) {
+    println!("Error: {}", error);
     match error {
       PlatformError::SerializationError(_) => exit(exitcode::DATAERR),
       PlatformError::DeserializationError(_) => exit(exitcode::DATAERR),
@@ -2154,7 +2156,9 @@ pub mod txn_lib {
         }
         exit(exitcode::IOERR)
       }
-      _ => exit(exitcode::USAGE),
+      _ => {
+        exit(exitcode::USAGE);
+      }
     }
   }
 
@@ -2361,6 +2365,45 @@ pub mod txn_lib {
           Ok(_) => Ok(()),
           Err(error) => Err(error),
         }
+      }
+      ("set_kv", Some(kv_matches)) => {
+        let data = load_data(data_dir)?;
+        let issuer_id =
+          parse_to_u64(asset_issuer_matches.value_of("id")
+                                           .ok_or_else(|| PlatformError::InputsError(error_location!()))?)?;
+        let key_pair = data.get_asset_issuer_key_pair(issuer_id)?;
+        let key = Key::from_slice(&b64dec(kv_matches.value_of("key")
+          .ok_or_else(|| PlatformError::InputsError(error_location!()))?)
+          .map_err(|e| PlatformError::InputsError(format!("{}:{}",e,error_location!())))?)
+          .ok_or_else(|| PlatformError::InputsError(error_location!()))?;
+        let gen = parse_to_u64(kv_matches.value_of("gen")
+          .ok_or_else(|| PlatformError::InputsError(error_location!()))?)
+          .map_err(|e| PlatformError::InputsError(format!("{}:{}",e,error_location!())))?;
+        let value = b64dec(kv_matches.value_of("value")
+          .ok_or_else(|| PlatformError::InputsError(error_location!()))?)
+          .map_err(|e| PlatformError::InputsError(format!("{}:{}",e,error_location!())))?;
+        let mut txn_builder = TransactionBuilder::default();
+        let hash = KVHash::new(&value, None);
+        txn_builder.add_operation_kv_update(&key_pair, &key, gen, Some(&hash))?;
+        store_txn_to_file(&txn_file, &txn_builder)
+      }
+      ("clear_kv", Some(kv_matches)) => {
+        let data = load_data(data_dir)?;
+        let issuer_id =
+          parse_to_u64(asset_issuer_matches.value_of("id")
+                                           .ok_or_else(|| PlatformError::InputsError(error_location!()))?)?;
+        let key = Key::from_slice(&b64dec(kv_matches.value_of("key")
+          .ok_or_else(|| PlatformError::InputsError(error_location!()))?)
+          .map_err(|e| PlatformError::InputsError(format!("{}:{}",e,error_location!())))?)
+          .ok_or_else(|| PlatformError::InputsError(error_location!()))?;
+        let key_pair = data.get_asset_issuer_key_pair(issuer_id)?;
+        let gen = parse_to_u64(kv_matches.value_of("gen")
+          .ok_or_else(|| PlatformError::InputsError(error_location!()))?)
+          .map_err(|e| PlatformError::InputsError(format!("{}:{}",e,error_location!())))?;
+        let mut txn_builder = TransactionBuilder::default();
+
+        txn_builder.add_operation_kv_update(&key_pair, &key, gen, None)?;
+        store_txn_to_file(&txn_file, &txn_builder)
       }
       ("issue_asset", Some(issue_asset_matches)) => {
         let data = load_data(data_dir)?;
