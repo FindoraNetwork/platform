@@ -5,12 +5,15 @@ use crate::policies::{compute_debt_swap_effect, DebtSwapEffect};
 use crate::policy_script::{run_txn_check, TxnCheckInputs, TxnPolicyData};
 use crate::{error_location, inp_fail, inv_fail, zei_fail};
 use credentials::credential_verify_commitment;
+use rand_chacha::ChaChaRng;
+use rand_core::SeedableRng;
 use serde::Serialize;
 use sparse_merkle_tree::Key;
 use std::collections::{HashMap, HashSet};
 use utils::{HasInvariants, HashOf, SignatureOf};
 use zei::api::anon_creds::ACCommitment;
 use zei::serialization::ZeiFromToBytes;
+use zei::xfr::lib::verify_xfr_body_no_policies;
 use zei::xfr::sig::XfrPublicKey;
 use zei::xfr::structs::{AssetTracingPolicy, BlindAssetRecord, XfrAmount, XfrAssetType, XfrBody};
 
@@ -75,6 +78,8 @@ pub struct TxnEffect {
 #[allow(clippy::cognitive_complexity)]
 impl TxnEffect {
   pub fn compute_effect(txn: Transaction) -> Result<TxnEffect, PlatformError> {
+    let mut prng = ChaChaRng::from_entropy();
+
     let mut txo_count: usize = 0;
     let mut op_idx: usize = 0;
     let mut txos: Vec<Option<TxOutput>> = Vec::new();
@@ -345,6 +350,10 @@ impl TxnEffect {
           transfer_input_commitments = trn.body.input_identity_commitments.clone();
           transfer_output_commitments = trn.body.output_identity_commitments.clone();
           transfer_body = Some(trn.body.transfer.clone());
+
+          // patch for https://github.com/findoraorg/platform/issues/363
+          verify_xfr_body_no_policies(&mut prng, &trn.body.transfer)
+            .map_err(|e| PlatformError::ZeiError(error_location!(),e))?;
 
           let mut input_types = HashSet::new();
           for (inp, record) in trn.body.inputs.iter().zip(trn.body.transfer.inputs.iter()) {

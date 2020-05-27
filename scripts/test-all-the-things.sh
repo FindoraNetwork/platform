@@ -2,7 +2,7 @@
 
 set -e
 
-./scripts/incur fmt -- --check
+./scripts/incur fmt
 cargo clippy --workspace
 cargo build --workspace
 cargo build --release --workspace
