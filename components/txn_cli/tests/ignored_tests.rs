@@ -1,6 +1,8 @@
 #![deny(warnings)]
 use ledger::data_model::AssetTypeCode;
 use ledger_standalone::LedgerStandalone;
+use rand_chacha::ChaChaRng;
+use rand_core::SeedableRng;
 use std::io::{self, Write};
 use std::process::{Command, Output};
 use std::str::from_utf8;
