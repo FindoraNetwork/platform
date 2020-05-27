@@ -9,6 +9,7 @@ use ledger_api_service::RestfulApiService;
 use log::info;
 use rand_chacha::ChaChaRng;
 use rand_core::SeedableRng;
+use std::net::SocketAddr;
 use std::process::Command;
 use std::sync::{Arc, RwLock};
 use std::thread;
@@ -125,13 +126,19 @@ fn main() {
   let ledger_state = app.la.borrowable_ledger_state();
   let host = std::option_env!("SERVER_HOST").unwrap_or("localhost");
   let port = std::option_env!("SERVER_PORT").unwrap_or("8668");
+
   let _join = thread::spawn(move || {
     let query_service = RestfulApiService::create(ledger_state, host, port)?;
     query_service.run()
   });
 
+
+  let abci_host = std::option_env!("ABCI_HOST").unwrap_or("0.0.0.0");
+  let abci_port = std::option_env!("ABCI_PORT").unwrap_or("26658");
+
   // TODO: pass the address and port in on the command line
-  let addr = "0.0.0.0:26658".parse().unwrap();
+  let addr_str = format!("{}:{}", abci_host, abci_port);
+  let addr: SocketAddr = addr_str.parse().expect("Unable to parse socket address");
 
   abci::run(addr, app);
 }
