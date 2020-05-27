@@ -1,7 +1,5 @@
 #![deny(warnings)]
 use abci::*;
-use cryptohash::sha256::Digest as BitDigest;
-use cryptohash::sha256::DIGESTBYTES;
 use ledger::data_model::errors::PlatformError;
 use ledger::data_model::Transaction;
 use ledger::store::*;
@@ -14,6 +12,7 @@ use std::process::Command;
 use std::sync::{Arc, RwLock};
 use std::thread;
 use submission_server::{convert_tx, SubmissionServer, TxnForward};
+use utils::HashOf;
 
 #[derive(Default)]
 pub struct TendermintForward;
@@ -96,7 +95,7 @@ impl abci::Application for ABCISubmissionServer {
 
   fn commit(&mut self, _req: &RequestCommit) -> ResponseCommit {
     // Tendermint does not accept an error return type here.
-    let error_commitment = (BitDigest { 0: [0_u8; DIGESTBYTES] }, 0);
+    let error_commitment = (HashOf::new(&None), 0);
     self.la.begin_commit();
     let commitment = if let Ok(state) = self.la.get_committed_state().read() {
       state.get_state_commitment()

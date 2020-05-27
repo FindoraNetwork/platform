@@ -22,3 +22,4 @@ serde = { version = "1.0.99", features = ["derive"] }
 serde_derive = "1.0"
 serde_json = "1.0.40"
 zei = { git = "ssh://git@github.com/findoraorg/zei", tag = "v0.0.2-4" }
+utils = { path = "../../libs/utils" }

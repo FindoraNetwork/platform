@@ -8,9 +8,6 @@ use tempfile::tempdir;
 
 extern crate exitcode;
 
-// TODO (Keyao): Fix tests with #[ignore].
-// Those tests pass individually, but occasionally fail when run with other tests.
-// Issue: #324
 #[cfg(debug_assertions)]
 const COMMAND: &str = "../../target/debug/txn_cli";
 
@@ -127,6 +124,37 @@ fn create_txn_builder_with_path(path: &str) -> io::Result<Output> {
 }
 
 #[cfg(test)]
+fn store_memos_with_confidential_amount(dir: &str,
+                                        id: &str,
+                                        amount: &str,
+                                        token_code: &str,
+                                        file: &str)
+                                        -> io::Result<Output> {
+  Command::new(COMMAND).args(&["--dir", dir])
+                       .args(&["asset_issuer", "--id", id])
+                       .arg("store_memos")
+                       .args(&["--amount", amount])
+                       .arg("--confidential_amount")
+                       .args(&["--token_code", token_code])
+                       .args(&["--file", file])
+                       .output()
+}
+
+#[cfg(test)]
+fn trace_and_verify_asset(dir: &str,
+                          id: &str,
+                          memo_file: &str,
+                          expected_amount: &str)
+                          -> io::Result<Output> {
+  Command::new(COMMAND).args(&["--dir", dir])
+                       .args(&["asset_issuer", "--id", id])
+                       .arg("trace_and_verify_asset")
+                       .args(&["--memo_file", memo_file])
+                       .args(&["--expected_amount", expected_amount])
+                       .output()
+}
+
+#[cfg(test)]
 fn trace_credential(dir: &str,
                     id: &str,
                     memo_file: &str,
@@ -216,6 +244,23 @@ fn transfer_asset(dir: &str,
                        .output()
 }
 
+#[cfg(test)]
+fn issue_and_transfer_asset_confidential(txn_builder_path: &str,
+                                         issuer_id: &str,
+                                         recipient_id: &str,
+                                         amount: &str,
+                                         token_code: &str)
+                                         -> io::Result<Output> {
+  Command::new(COMMAND).args(&["--txn", txn_builder_path])
+                       .args(&["asset_issuer", "--id", issuer_id])
+                       .arg("issue_and_transfer_asset")
+                       .args(&["--recipient", recipient_id])
+                       .args(&["--amount", amount])
+                       .args(&["--token_code", token_code])
+                       .args(&["--confidential_amount", "--confidential_asset"])
+                       .output()
+}
+
 // Helper functions: submit transaction
 // Note:
 // Since http://localhost is used instead of https://testnet.findora.org,
@@ -293,6 +338,10 @@ fn pay_loan(dir: &str, borrower_id: &str, loan_id: &str, amount: &str) -> io::Re
                        .output()
 }
 
+// This test passes individually, but we ignore it since it occasionally fails with SubmissionServerError when run with other tests
+// which also use the standalone ledger
+// GitHub issue: #324
+// Redmind issue: #38
 #[test]
 #[ignore]
 fn test_create_or_overwrite_credentials() {
@@ -336,6 +385,11 @@ fn test_create_or_overwrite_credentials() {
 //
 // Lender or borrower views loans or credentials
 //
+
+// This test passes individually, but we ignore it since it occasionally fails with SubmissionServerError when run with other tests
+// which also use the standalone ledger
+// GitHub issue: #324
+// Redmind issue: #38
 #[test]
 #[ignore]
 fn test_view() {
@@ -474,6 +528,62 @@ fn test_view() {
 //
 // Compose transaction and submit
 //
+
+// This test passes individually, but we ignore it since it occasionally fails when run with other tests
+// which also use the standalone ledger
+// GitHub issue: #324
+// Redmind issue: #38
+#[ignore]
+#[test]
+fn test_define_asset_simple_policies() {
+  let ledger_standalone = LedgerStandalone::new();
+
+  let tmp_dir = tempdir().unwrap();
+  let dir = tmp_dir.path().to_str().unwrap();
+  let txn_builder_buf = tmp_dir.path().join("tb_define_policies");
+  let txn_builder_file = txn_builder_buf.to_str().unwrap();
+  sign_up_borrower(dir, "Borrower B").expect("Failed to create a borrower");
+
+  // Create txn builder and key pairs
+  create_txn_builder_with_path(txn_builder_file).expect("Failed to create transaction builder");
+
+  // Define token code
+  let token_code = AssetTypeCode::gen_random().to_base64();
+
+  // Define asset
+  let output = Command::new(COMMAND).args(&["--dir", dir])
+                                    .args(&["--txn", txn_builder_file])
+                                    .args(&["asset_issuer", "--id", "0"])
+                                    .arg("define_asset")
+                                    .args(&["--token_code", &token_code])
+                                    .args(&["--memo", "Define an asset"])
+                                    .args(&["--cosigners", "1"])
+                                    .args(&["--max_units", "500"])
+                                    .arg("--traceable")
+                                    .arg("--non_transferable")
+                                    .output()
+                                    .expect("Failed to define asset");
+
+  io::stdout().write_all(&output.stdout).unwrap();
+  io::stdout().write_all(&output.stderr).unwrap();
+
+  assert!(output.status.success());
+
+  ledger_standalone.poll_until_ready().unwrap();
+  let output = submit(txn_builder_file).expect("Failed to submit transaction");
+
+  io::stdout().write_all(&output.stdout).unwrap();
+  io::stdout().write_all(&output.stderr).unwrap();
+
+  assert!(output.status.success());
+
+  tmp_dir.close().unwrap();
+}
+
+// This test passes individually, but we ignore it since it occasionally fails with SubmissionServerError when run with other tests
+// which also use the standalone ledger
+// GitHub issue: #324
+// Redmind issue: #38
 #[test]
 #[ignore]
 fn test_define_issue_transfer_and_submit_with_args() {
@@ -565,9 +675,83 @@ fn test_define_issue_transfer_and_submit_with_args() {
   tmp_dir.close().unwrap();
 }
 
+// This test passes individually, but we ignore it since it occasionally fails when run with other tests
+// which also use the standalone ledger
+// GitHub issue: #324
+// Redmind issue: #38
+#[ignore]
+#[test]
+fn test_issue_transfer_trace_and_submit_with_args() {
+  let tmp_dir = tempdir().unwrap();
+  let dir = tmp_dir.path().to_str().unwrap();
+  let txn_builder_buf = tmp_dir.path().join("tb_issue_transfer_args");
+  let txn_builder_file = txn_builder_buf.to_str().unwrap();
+  let memo_buf = tmp_dir.path().join("memos_issue_transfer_and_submit");
+  let memo_file = memo_buf.to_str().unwrap();
+
+  let ledger_standalone = LedgerStandalone::new();
+
+  // Create txn builder and key pairs
+  create_txn_builder_with_path(txn_builder_file).expect("Failed to create transaction builder");
+
+  // Define token code
+  let token_code = AssetTypeCode::gen_random().to_base64();
+
+  // Define asset
+  define_asset(dir,
+               txn_builder_file,
+               "0",
+               &token_code,
+               "Define an asset").expect("Failed to define asset");
+  ledger_standalone.poll_until_ready().unwrap();
+  submit(txn_builder_file).expect("Failed to submit transaction");
+
+  // Issue and transfer
+  let amount = "1000";
+  issue_and_transfer_asset_confidential(txn_builder_file,
+                           "0",
+                           "0",
+                           amount,
+                           &token_code).expect("Failed to issue and transfer asset");
+
+  // Store tracer and owner memos
+  let output =
+  store_memos_with_confidential_amount(dir, "0", amount, &token_code, memo_file).expect("Failed to store memos");
+
+  io::stdout().write_all(&output.stdout).unwrap();
+  io::stdout().write_all(&output.stderr).unwrap();
+
+  assert!(output.status.success());
+
+  // Trace the asset and verify the amount
+  let output =
+    trace_and_verify_asset(dir, "0", memo_file, amount).expect("Failed to trace the asset");
+
+  io::stdout().write_all(&output.stdout).unwrap();
+  io::stdout().write_all(&output.stderr).unwrap();
+
+  assert!(output.status.success());
+
+  // Submit transaction
+  ledger_standalone.poll_until_ready().unwrap();
+  let output = submit(txn_builder_file).expect("Failed to submit transaction");
+
+  io::stdout().write_all(&output.stdout).unwrap();
+  io::stdout().write_all(&output.stderr).unwrap();
+
+  assert!(output.status.success());
+
+  tmp_dir.close().unwrap();
+}
+
 //
 // Compose transaction and submit
 //
+
+// This test passes individually, but we ignore it since it occasionally fails with SubmissionServerError when run with other tests
+// which also use the standalone ledger
+// GitHub issue: #324
+// Redmind issue: #38
 #[ignore]
 #[test]
 fn test_air_assign() {
@@ -594,6 +778,10 @@ fn test_air_assign() {
   tmp_dir.close().unwrap();
 }
 
+// This test passes individually, but we ignore it since it occasionally fails with SubmissionServerError when run with other tests
+// which also use the standalone ledger
+// GitHub issue: #324
+// Redmind issue: #38
 #[test]
 #[ignore]
 // Test funds loading, loan request, fulfilling and repayment

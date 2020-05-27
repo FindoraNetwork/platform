@@ -13,6 +13,4 @@ pub mod policies;
 pub mod policy_script;
 
 #[cfg(not(target_arch = "wasm32"))]
-pub mod permissions;
-#[cfg(not(target_arch = "wasm32"))]
 pub mod store;

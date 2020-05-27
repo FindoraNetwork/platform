@@ -1,9 +1,11 @@
 #![deny(warnings)]
+use crate::util::error_to_jsvalue;
 use credentials::{
   CredCommitment, CredIssuerPublicKey, CredIssuerSecretKey, CredPoK, CredRevealSig, CredSignature,
   CredUserPublicKey, CredUserSecretKey, Credential as PlatformCredential,
 };
 use ledger::data_model::{
+  AssetRules as PlatformAssetRules, SignatureRules as PlatformSignatureRules,
   TransferType as PlatformTransferType, TxOutput, TxoRef as PlatformTxoRef, TxoSID,
 };
 use rand_chacha::ChaChaRng;
@@ -11,6 +13,7 @@ use rand_core::SeedableRng;
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
 use zei::xfr::asset_tracer::gen_asset_tracer_keypair;
+use zei::xfr::sig::XfrPublicKey;
 use zei::xfr::structs::{
   AssetTracerDecKeys, AssetTracerEncKeys, AssetTracerKeyPair as ZeiAssetTracerKeyPair,
   BlindAssetRecord, OwnerMemo as ZeiOwnerMemo,
@@ -254,5 +257,87 @@ impl CredentialUserKeyPair {
   }
   pub fn from_jsvalue(val: &JsValue) -> Self {
     val.into_serde().unwrap()
+  }
+}
+
+#[wasm_bindgen]
+pub struct SignatureRules {
+  pub(crate) sig_rules: PlatformSignatureRules,
+}
+
+#[wasm_bindgen]
+/// Creates a new set of co-signature rules.
+///
+/// @param {BigInt} threshold - Minimum sum of signature weights that is required for an asset
+/// transfer.
+/// @param {JsValue} weights - Array of public key weights of the form `[["kAb...", BigInt(5)]]', where the
+/// first element of each tuple is a base64 encoded public key and the second is the key's
+/// associated weight.
+impl SignatureRules {
+  pub fn new(threshold: u64, weights: JsValue) -> Result<SignatureRules, JsValue> {
+    let weights: Vec<(String, u64)> = weights.into_serde().map_err(error_to_jsvalue)?;
+    let weights: Vec<(XfrPublicKey, u64)> =
+      weights.iter()
+             .map(|(b64_key, weight)| {
+               let parsed = crate::util::public_key_from_base64(b64_key.clone());
+               match parsed {
+                 Err(err) => Err(err),
+                 Ok(pk) => Ok((pk, *weight)),
+               }
+             })
+             .collect::<Result<Vec<(XfrPublicKey, u64)>, JsValue>>()?;
+    let sig_rules = PlatformSignatureRules { threshold, weights };
+    Ok(SignatureRules { sig_rules })
+  }
+}
+
+#[wasm_bindgen]
+#[derive(Default)]
+pub struct AssetRules {
+  pub(crate) rules: PlatformAssetRules,
+}
+
+#[wasm_bindgen]
+impl AssetRules {
+  /// Create a default set of asset rules.
+  pub fn new() -> AssetRules {
+    AssetRules::default()
+  }
+
+  /// Toggles asset traceability.
+  /// @param {bool} traceable - Boolean indicating whether asset can be traced by an issuer tracing key.
+  pub fn set_traceable(mut self, traceable: bool) -> AssetRules {
+    self.rules.traceable = traceable;
+    self
+  }
+
+  /// Set a cap on the number of units of this asset that can be issued.
+  /// @param {BigInt} max_units - Maximum number of units that can be issued.
+  pub fn set_max_units(mut self, max_units: u64) -> AssetRules {
+    self.rules.max_units = Some(max_units);
+    self
+  }
+
+  /// Transferability toggle. Assets that are not transferable can only be transferred by the asset
+  /// issuer.
+  /// @param {bool} transferable - Boolean indicating whether asset can be transferred.
+  pub fn set_transferable(mut self, transferable: bool) -> AssetRules {
+    self.rules.transferable = transferable;
+    self
+  }
+
+  /// The updatable flag determines whether the asset memo can be updated after issuance.
+  /// @param {bool} updatable - Boolean indicating whether asset memo can be updated.
+  pub fn set_updatable(mut self, updatable: bool) -> AssetRules {
+    self.rules.updatable = updatable;
+    self
+  }
+
+  /// Co-signature rules. Assets with co-signatue rules require additional weighted signatures to
+  /// be transferred.
+  /// @param {SignatureRules} multisig_rules - Co-signature restrictions.
+  pub fn set_transfer_multisig_rules(mut self, multisig_rules: SignatureRules) -> AssetRules {
+    self.rules.transfer_multisig_rules = Some(multisig_rules.sig_rules);
+    self
   }
 }

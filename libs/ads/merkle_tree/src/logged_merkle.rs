@@ -32,6 +32,7 @@ use serde::Deserializer;
 use serde::Serialize;
 use serde::Serializer;
 use std::fs::File;
+use std::io;
 use std::io::BufWriter;
 use std::io::Error;
 use std::io::ErrorKind;
@@ -47,7 +48,7 @@ use std::slice::from_raw_parts;
 use std::slice::from_raw_parts_mut;
 use utils::{er, Commas};
 
-const BUFFER_SIZE: usize = 32 * 1024;
+const BUFFER_SIZE: usize = 4 * 1024;
 const CHECK_SIZE: usize = 16;
 const HASH_SIZE: usize = std::mem::size_of::<HashValue>();
 const BUFFER_ENTRIES: u16 = ((BUFFER_SIZE / HASH_SIZE) - 1) as u16;
@@ -262,8 +263,10 @@ impl LoggedMerkle {
 
     let id = self.tree.append_hash(hash)?;
 
-    assert!(id == self.next_id);
-    // TODO:  Handle assertion failures in some way.
+    if id != self.next_id {
+      return er("id != self.next_id".to_string());
+    }
+
     self.next_id += 1;
 
     self.buffer.hashes[self.buffer.valid as usize] = *hash;
@@ -272,8 +275,12 @@ impl LoggedMerkle {
     // If this buffer is full, give it to the BufWriter code.
     if self.buffer.valid == self.buffer.entry_count {
       self.write()?;
-      assert!(self.buffer.id == self.next_id);
-      assert!(self.buffer.valid == 0);
+      if self.buffer.id != self.next_id {
+        return er("self.buffer.id != self.next_id".to_string());
+      }
+      if self.buffer.valid != 0 {
+        return er("self.buffer.valid != 0".to_string());
+      }
     }
 
     Ok(id)
@@ -282,11 +289,8 @@ impl LoggedMerkle {
   /// Flush the current state to disk, generally for a snapshot.  It's
   /// valid to call this at any time, though.  The log and the tree will
   /// be preserved on disk with the state as of the current point in time.
-  pub fn flush(&mut self) -> Result<(), Error> {
-    if let Some(x) = self.tree.write() {
-      return Err(x);
-    }
-
+  pub fn flush(&mut self) -> io::Result<()> {
+    self.tree.write()?;
     self.write()?;
     self.writer.flush()?;
     Ok(())
@@ -300,7 +304,7 @@ impl LoggedMerkle {
   /// * `transaction` - the Merkle tree id for the transaction
   /// * `state` - the Merkle tree state for which the proof is wanted,
   ///              or zero, for the current state.
-  pub fn get_proof(&self, transaction: u64, state: u64) -> Result<Proof, Error> {
+  pub fn get_proof(&self, transaction: u64, state: u64) -> io::Result<Proof> {
     let proof_state = if state != 0 {
       state
     } else {
@@ -326,7 +330,7 @@ impl LoggedMerkle {
   /// # Argument
   ///
   /// * `file` - a file to which to write the log
-  pub fn snapshot(&mut self, file: File) -> Result<(), Error> {
+  pub fn snapshot(&mut self, file: File) -> io::Result<()> {
     self.flush()?;
     self.buffer = LogBuffer::new(self.next_id);
     self.writer = BufWriter::new(file);
@@ -345,7 +349,7 @@ impl LoggedMerkle {
   /// applied in order, from the oldest to the newest.  A log
   /// file that contains only transactions too new to append
   /// (beyond the end of the tree + 1)  will cause an error.
-  pub fn apply_log(&mut self, mut file: File) -> Result<u64, Error> {
+  pub fn apply_log(&mut self, mut file: File) -> io::Result<u64> {
     let mut state = self.tree.total_size();
     let mut buffer = LogBuffer::new(0);
     let mut processed = 0;
@@ -358,7 +362,7 @@ impl LoggedMerkle {
 
     // Loop reading buffers.  Return on EOF.  This code will
     // return an error on a partial buffer read, as well.
-    // TODO:  Should we convert a partial buffer read into
+    // Question:  Should we convert a partial buffer read into
     // a warning of some sort?
     loop {
       if let Err(x) = file.read_exact(buffer.as_mut_bytes()) {
@@ -376,8 +380,7 @@ impl LoggedMerkle {
       // A buffer always should have some valid entries, but let such
       // errors pass for now.
       if buffer.valid == 0 {
-        // TODO:  report an error.
-        continue;
+        return er("The buffer should have some valid entries".to_string());
       }
 
       if buffer.id > self.state() {
@@ -386,8 +389,8 @@ impl LoggedMerkle {
 
       // If there are entries in the current buffer that are not in
       // the tree, process them.
-      // TODO:  Consider checking any hashes that allegedly are in
-      // the tree to see that they match...
+      // Question:  Should we check any hashes that allegedly are in
+      // the tree to see that they match?
       let mut current = buffer.id;
 
       if current <= state && current + u64::from(buffer.valid) > state {
@@ -426,7 +429,7 @@ impl LoggedMerkle {
   }
 
   /// Close the LoggedMerkle object.
-  pub fn close(&mut self) -> Result<(), Error> {
+  pub fn close(&mut self) -> io::Result<()> {
     self.flush()?;
     self.closed = true;
     Ok(())
@@ -434,7 +437,7 @@ impl LoggedMerkle {
 
   // Find a buffer in the log file that has records just past
   // the end of the tree, if possible.
-  fn find_relevant(&mut self, file: &mut File) -> Result<(), Error> {
+  fn find_relevant(&mut self, file: &mut File) -> io::Result<()> {
     // Get the state of the tree and the number of complete
     // buffers in the file.  Ignore any partial write at the
     // end of the file.
@@ -503,7 +506,7 @@ impl LoggedMerkle {
   }
 
   // Get the size of the given file.
-  fn file_size(&self, file: &mut File) -> Result<u64, Error> {
+  fn file_size(&self, file: &mut File) -> io::Result<u64> {
     let start = file.seek(Current(0))?;
     let size = file.seek(End(0))?;
     file.seek(Start(start))?;
@@ -563,6 +566,7 @@ mod tests {
 
   #[test]
   #[ignore]
+  // This test runs takes a long time to run. Run it with `cargo test -- --ignored`
   fn test_basic() {
     let tree_path = "logged_tree";
     let (mut logged, mut logs) = create_test_tree(&tree_path);
@@ -640,6 +644,7 @@ mod tests {
 
   #[test]
   #[ignore]
+  // This test runs takes a long time to run. Run it with `cargo test -- --ignored`
   fn test_apply_log() {
     let offsets =
       [0, 1, 217, 1021, 1022, 1023, 1024, 4817, 2048, 8190, 8191, 8192, 8193, 8194, 16322];

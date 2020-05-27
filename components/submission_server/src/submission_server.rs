@@ -1,5 +1,4 @@
 #![deny(warnings)]
-use cryptohash::sha256;
 use ledger::data_model::errors::PlatformError;
 use ledger::data_model::{Operation, Transaction, TxnSID, TxnTempSID, TxoSID};
 use ledger::error_location;
@@ -26,7 +25,7 @@ pub struct TxnHandle(pub String);
 
 impl TxnHandle {
   pub fn new(txn: &Transaction) -> Self {
-    let digest = sha256::hash(&txn.serialize_bincode(TxnSID(0)));
+    let digest = txn.hash(TxnSID(0));
     TxnHandle(hex::encode(digest))
   }
 }
@@ -238,8 +237,10 @@ impl<RNG, LU, TF> SubmissionServer<RNG, LU, TF>
 }
 
 pub fn txn_log_info(txn: &Transaction) {
-  for op in &txn.operations {
+  for op in &txn.body.operations {
     match op {
+      Operation::KVStoreUpdate(update) => info!("Key-Value store update: {}",
+                                                &serde_json::to_string(update).unwrap()),
       Operation::DefineAsset(define_asset_op) => {
         info!("Asset Definition: New asset with code {} defined",
               define_asset_op.body.asset.code.to_base64())

@@ -1,5 +1,5 @@
 FROM nexus.findora.org/zei:v0.0.2-4 as zei
-FROM rustlang/rust:nightly-buster as builder
+FROM nexus.findora.org/rust:2020-03-11 as builder
 RUN cargo install cargo-audit
 RUN cargo install wasm-pack
 RUN mkdir /app
@@ -10,8 +10,7 @@ COPY . /app/
 RUN cargo audit
 RUN cargo build --release
 RUN cargo test --release --no-fail-fast --workspace
-#Disabled pending fix to rustfmt https://github.com/rust-lang/rustfmt/pull/4177
-#RUN cargo fmt -- --check
+RUN cargo fmt -- --check
 #Disabled because it triggers a compile and also tests dependencies
 #RUN cargo clippy -- -D warnings
 WORKDIR /app/components/wasm

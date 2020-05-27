@@ -5,7 +5,11 @@ use ledger::data_model::errors::PlatformError;
 use ledger::data_model::AssetTypeCode;
 use ledger::{des_fail, error_location};
 use std::fs;
+use txn_cli::txn_lib::query_utxo_and_get_type_commitment;
 use whitelist::*;
+
+const PROTOCOL: &str = "http";
+const HOST: &str = "localhost";
 
 /// Path to the data file.
 const WHITELIST_FILE: &str = "whitelist.json";
@@ -82,7 +86,9 @@ fn process_inputs(inputs: clap::ArgMatches) -> Result<(), PlatformError> {
         println!("Missing serialized blinding factor for the asset type code commitment. Use --blind.");
         return Err(PlatformError::InputsError(error_location!()));
       };
-      whitelist.prove_and_verify_membership(index, utxo, blind)
+      let commitment = query_utxo_and_get_type_commitment(utxo, PROTOCOL, HOST)?;
+      let proof = whitelist.prove_membership(index, commitment, blind)?;
+      whitelist.verify_membership(commitment, proof)
     }
     _ => {
       println!("Subcommand missing or not recognized. Try --help");
@@ -159,6 +165,10 @@ mod tests {
                          .output()
   }
 
+  // This test passes individually, but we ignore it since it occasionally fails when run with other tests
+  // which also use the standalone ledger
+  // Redmind issue: #38
+  #[ignore]
   #[test]
   fn test_cmd() {
     // Start the standalone ledger
