@@ -35,17 +35,19 @@ fn get_address<RNG, LU>(data: web::Data<Arc<RwLock<QueryServer<RNG, LU>>>>,
 
 fn key_from_base64(b64_str: &str) -> Result<Key, actix_web::error::Error> {
   Ok(Key::from_slice(&b64dec(b64_str).map_err(|_| {
-                        actix_web::error::ErrorBadRequest("Could not deserialize key")
+                        actix_web::error::ErrorBadRequest("Could not deserialize key(1)")
                       })?).ok_or_else(|| {
                             actix_web::error::ErrorBadRequest("Could not deserialize key")
                           })?)
 }
 
+type CustomDataResult = (Vec<u8>, KVHash);
+
 // Returns custom data at a given location
 fn get_custom_data<RNG, LU>(
   data: web::Data<Arc<RwLock<QueryServer<RNG, LU>>>>,
   info: web::Path<String>)
-  -> actix_web::Result<web::Json<Option<(Vec<u8>, KVHash)>>, actix_web::error::Error>
+  -> actix_web::Result<web::Json<Option<CustomDataResult>>, actix_web::error::Error>
   where RNG: RngCore + CryptoRng,
         LU: LedgerUpdate<RNG> + LedgerAccess + ArchiveAccess + Sync + Send
 {

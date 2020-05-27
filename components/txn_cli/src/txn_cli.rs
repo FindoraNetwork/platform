@@ -228,10 +228,6 @@ pub(crate) fn process_asset_issuer_cmd(asset_issuer_matches: &clap::ArgMatches,
           parse_to_u64(asset_issuer_matches.value_of("id")
                                  .ok_or_else(|| PlatformError::InputsError(error_location!()))?)?;
       let key_pair = data.get_asset_issuer_key_pair(issuer_id)?;
-      //let key = Key::from_slice(&b64dec(kv_matches.value_of("key")
-      //  .ok_or_else(|| PlatformError::InputsError(error_location!()))?)
-      //  .map_err(|e| PlatformError::InputsError(format!("{}:{}",e,error_location!())))?)
-      //  .ok_or_else(|| PlatformError::InputsError(error_location!()))?;
       let key = if let Some(key_str) = kv_matches.value_of("key") {
         Key::from_slice(&b64dec(key_str)
           .map_err(|e| PlatformError::InputsError(format!("{}:{}",e,error_location!())))?)
@@ -1466,7 +1462,7 @@ fn main() {
           .short("k")
           .long("key")
           .takes_value(true)
-          .help("Which KV-store entry to set. Will attempt to set at a random location if none provided"))
+          .help("Which KV-store entry to set. Will use a random location if none provided."))
         .arg(Arg::with_name("gen")
           .short("g")
           .long("gen")

@@ -362,8 +362,6 @@ pub fn submit(protocol: &str,
   // Submit transaction
   let client = reqwest::Client::new();
   let txn = txn_builder.transaction();
-  dbg!(protocol);
-  dbg!(host);
   let mut res = client.post(&format!("{}://{}:{}/{}",
                                      protocol, host, SUBMIT_PORT, "submit_transaction"))
                       .json(&txn)
