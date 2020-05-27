@@ -2598,6 +2598,7 @@ mod tests {
   // Test a larger tree.
   #[test]
   #[ignore]
+  // This test runs takes a long time to run. Run it with `cargo test -- --ignored`
   fn test_tree() {
     let path = "test_tree".to_string();
     let _ = std::fs::remove_file(&path);
@@ -3020,6 +3021,7 @@ mod tests {
 
   #[test]
   #[ignore]
+  // This test runs takes a long time to run. Run it with `cargo test -- --ignored`
   fn test_proof() {
     println!("Starting the proof test.");
 
@@ -3116,7 +3118,6 @@ mod tests {
   extern crate serde_json;
 
   #[test]
-  #[ignore]
   fn test_serde() {
     let path = "serde_tree".to_string();
     let _ = std::fs::remove_file(&path);
