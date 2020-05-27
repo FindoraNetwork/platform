@@ -6,8 +6,9 @@ let src = fetchFromGitHub {
       sha256 = "08fvzb8w80bkkabc1iyhzd15f4sm7ra10jn32kfch5klgl0gj3j3";
    };
    moz_overlay = import (builtins.fetchTarball https://github.com/mozilla/nixpkgs-mozilla/archive/master.tar.gz);
+   NIGHTLY_DATE="2020-05-15";
    nixpkgs = import <nixpkgs> { overlays = [ moz_overlay ]; };
-   rustNightly = (nixpkgs.rustChannelOf { date = "2020-03-11"; channel = "nightly"; }).rust.override {
+   rustNightly = (nixpkgs.rustChannelOf { date = "${NIGHTLY_DATE}"; channel = "nightly"; }).rust.override {
      extensions = [
        "clippy-preview"
        "rustfmt-preview"
