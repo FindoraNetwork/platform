@@ -668,7 +668,7 @@ impl KVBlind {
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct KVEntry(pub XfrPublicKey, KVHash);
+pub struct KVEntry(pub XfrPublicKey, pub KVHash);
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct KVUpdate {
