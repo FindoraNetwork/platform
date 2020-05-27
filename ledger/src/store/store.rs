@@ -238,7 +238,7 @@ pub struct LedgerStatus {
   // ledger -- committing to the whole ledger history up to the most recent
   // such checkpoint.
   state_commitment_data: Option<StateCommitmentData>,
-  block_commit_count: u64, // TODO (Keyao): Remove this if not needed
+  block_commit_count: u64,
 
   // Hash of the transactions in the most recent block
   txns_in_block_hash: Option<HashOf<Vec<Transaction>>>,
@@ -2443,34 +2443,6 @@ mod tests {
     tmp_dir.close().unwrap();
   }
 
-  // TODO (Keyao): Add unit tests for
-  //   TxnContext::new
-  //   TxnContext::apply_operation
-  //   LedgerAccess for TxnContext
-  //     LedgerAccess::check_utxo
-  //     LedgerAccess::get_asset_token
-  //     LedgerAccess::get_asset_policy
-  //     LedgerAccess::get_smart_contract
-  //     LedgerAccess::get_issuance_num
-  //     LedgerAccess::get_tracked_sids
-  //   LedgerUpdate for LedgerState
-  //     LedgerUpdate::apply_transaction
-  //   ArchiveUpdate for LedgerState
-  //     ArchiveUpdate::append_transaction
-  //   LedgerAccess for LedgerState
-  //     LedgerAccess::check_utxo
-  //     LedgerAccess::get_asset_token
-  //     LedgerAccess::get_asset_policy
-  //     LedgerAccess::get_smart_contract
-  //     LedgerAccess::get_issuance_num
-  //     LedgerAccess::get_tracked_sids
-  //   ArchiveAccess for LedgerState
-  //     ArchiveAccess::get_transaction
-  //     ArchiveAccess::get_utxo_map
-  //     ArchiveAccess::get_utxos
-  //     ArchiveAccess::get_utxo_checksum
-  //     ArchiveAccess::get_global_block_hash
-
   #[test]
   fn test_asset_creation_valid() {
     let mut prng = ChaChaRng::from_entropy();
@@ -2839,6 +2811,7 @@ mod tests {
     let effect = TxnEffect::compute_effect(tx);
     assert!(effect.is_err());
   }
+
   #[test]
   pub fn test_transferable() {
     let mut ledger = LedgerState::test_ledger();
