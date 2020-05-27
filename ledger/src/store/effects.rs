@@ -6,8 +6,9 @@ use crate::policy_script::{run_txn_check, TxnCheckInputs, TxnPolicyData};
 use crate::{error_location, inp_fail, inv_fail, zei_fail};
 use credentials::credential_verify_commitment;
 use serde::Serialize;
+use sparse_merkle_tree::Key;
 use std::collections::{HashMap, HashSet};
-use utils::{HasInvariants, HashOf};
+use utils::{HasInvariants, HashOf, SignatureOf};
 use zei::api::anon_creds::ACCommitment;
 use zei::serialization::ZeiFromToBytes;
 use zei::xfr::sig::XfrPublicKey;
@@ -62,6 +63,8 @@ pub struct TxnEffect {
   pub custom_policy_asset_types: HashMap<AssetTypeCode, TxnCheckInputs>,
   // Updates to the AIR
   pub air_updates: HashMap<String, String>,
+  // User-provided Key-Value store updates
+  pub kv_updates: HashMap<Key, Vec<(KVEntrySignature, u64, Option<KVEntry>)>>,
   // Memo updates
   pub memo_updates: Vec<(AssetTypeCode, XfrPublicKey, Memo)>,
 }
@@ -92,6 +95,8 @@ impl TxnEffect {
     let mut debt_effects: HashMap<AssetTypeCode, DebtSwapEffect> = HashMap::new();
     let mut asset_types_involved: HashSet<AssetTypeCode> = HashSet::new();
     let mut confidential_issuance_types = HashSet::new();
+    let mut kv_updates =
+      HashMap::<Key, Vec<(SignatureOf<(Key, u64, Option<KVEntry>)>, u64, Option<KVEntry>)>>::new();
     let mut confidential_transfer_inputs = HashSet::new();
 
     let custom_policy_asset_types = txn.body
@@ -126,6 +131,26 @@ impl TxnEffect {
       assert!(txo_count == txos.len());
 
       match op {
+        Operation::KVStoreUpdate(update) => {
+          // If there is a prior update, this change must be signed by
+          // the key associated with that update, and must have the
+          // exactly-subsequent generation value.
+          if let Some((_, gen, Some(ent))) = kv_updates.get(&update.body.0).and_then(|x| x.last()) {
+            if gen + 1 != update.body.1 {
+              return Err(PlatformError::InputsError(error_location!()));
+            }
+            update.check_signature(&ent.0)?;
+          }
+          // When inserting a value, ensure that the owning key has
+          // signed this update
+          if let Some(ent) = &update.body.2 {
+            update.check_signature(&ent.0)?;
+          }
+          kv_updates.entry(update.body.0)
+                    .or_insert_with(std::vec::Vec::new)
+                    .push((update.signature.clone(), update.body.1, update.body.2.clone()));
+        }
+
         // An asset creation is valid iff:
         //     1) The signature is valid.
         //         - Fully checked here
@@ -440,7 +465,8 @@ impl TxnEffect {
                    debt_effects,
                    asset_types_involved,
                    custom_policy_asset_types,
-                   air_updates })
+                   air_updates,
+                   kv_updates })
   }
 }
 
@@ -524,6 +550,8 @@ pub struct BlockEffect {
     HashMap<AssetTypeCode, Option<(AssetTracingPolicy, AssetTracingPolicy)>>,
   // Updates to the AIR
   pub air_updates: HashMap<String, String>,
+  // User-provided Key-Value store updates
+  pub kv_updates: HashMap<Key, Vec<(KVEntrySignature, u64, Option<KVEntry>)>>,
   // Memo updates
   pub memo_updates: HashMap<AssetTypeCode, Memo>,
 }
@@ -545,6 +573,13 @@ impl BlockEffect {
   //   Otherwise, Err(...)
   #[allow(clippy::cognitive_complexity)]
   pub fn add_txn_effect(&mut self, txn: TxnEffect) -> Result<TxnTempSID, PlatformError> {
+    // Check that KV updates are independent
+    for (k, _) in txn.kv_updates.iter() {
+      if self.kv_updates.contains_key(&k) {
+        return Err(PlatformError::InputsError(error_location!()));
+      }
+    }
+
     // Check that no inputs are consumed twice
     for (input_sid, _) in txn.input_txos.iter() {
       if self.input_txos.contains_key(&input_sid) {
@@ -584,6 +619,10 @@ impl BlockEffect {
     }
 
     // == All validation done, apply `txn` to this block ==
+    for (k, update) in txn.kv_updates {
+      self.kv_updates.insert(k, update);
+    }
+
     let temp_sid = TxnTempSID(self.txns.len());
     self.txns.push(txn.txn);
     self.temp_sids.push(temp_sid);

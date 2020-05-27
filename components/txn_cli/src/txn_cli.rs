@@ -3,9 +3,10 @@ use clap::{App, Arg, SubCommand};
 use credentials::u8_slice_to_u32_vec;
 use ledger::data_model::errors::PlatformError;
 use ledger::data_model::{
-  AccountAddress, AssetRules, AssetTypeCode, SignatureRules, TxoRef, TxoSID,
+  b64dec, AccountAddress, AssetRules, AssetTypeCode, KVHash, SignatureRules, TxoRef, TxoSID,
 };
 use ledger::{error_location, ser_fail};
+use sparse_merkle_tree::Key;
 use std::env;
 use txn_builder::{BuildsTransactions, TransactionBuilder};
 use txn_cli::data_lib::*;
@@ -218,6 +219,45 @@ pub(crate) fn process_asset_issuer_cmd(asset_issuer_matches: &clap::ArgMatches,
         Ok(_) => Ok(()),
         Err(error) => Err(error),
       }
+    }
+    ("set_kv", Some(kv_matches)) => {
+      let data = load_data(data_dir)?;
+      let issuer_id =
+          parse_to_u64(asset_issuer_matches.value_of("id")
+                                           .ok_or_else(|| PlatformError::InputsError(error_location!()))?)?;
+      let key_pair = data.get_asset_issuer_key_pair(issuer_id)?;
+      let key = Key::from_slice(&b64dec(kv_matches.value_of("key")
+          .ok_or_else(|| PlatformError::InputsError(error_location!()))?)
+          .map_err(|e| PlatformError::InputsError(format!("{}:{}",e,error_location!())))?)
+          .ok_or_else(|| PlatformError::InputsError(error_location!()))?;
+      let gen = parse_to_u64(kv_matches.value_of("gen")
+          .ok_or_else(|| PlatformError::InputsError(error_location!()))?)
+          .map_err(|e| PlatformError::InputsError(format!("{}:{}",e,error_location!())))?;
+      let value = b64dec(kv_matches.value_of("value")
+          .ok_or_else(|| PlatformError::InputsError(error_location!()))?)
+          .map_err(|e| PlatformError::InputsError(format!("{}:{}",e,error_location!())))?;
+      let mut txn_builder = TransactionBuilder::default();
+      let hash = KVHash::new(&value, None);
+      txn_builder.add_operation_kv_update(&key_pair, &key, gen, Some(&hash))?;
+      store_txn_to_file(&txn_file, &txn_builder)
+    }
+    ("clear_kv", Some(kv_matches)) => {
+      let data = load_data(data_dir)?;
+      let issuer_id =
+          parse_to_u64(asset_issuer_matches.value_of("id")
+                                           .ok_or_else(|| PlatformError::InputsError(error_location!()))?)?;
+      let key = Key::from_slice(&b64dec(kv_matches.value_of("key")
+          .ok_or_else(|| PlatformError::InputsError(error_location!()))?)
+          .map_err(|e| PlatformError::InputsError(format!("{}:{}",e,error_location!())))?)
+          .ok_or_else(|| PlatformError::InputsError(error_location!()))?;
+      let key_pair = data.get_asset_issuer_key_pair(issuer_id)?;
+      let gen = parse_to_u64(kv_matches.value_of("gen")
+          .ok_or_else(|| PlatformError::InputsError(error_location!()))?)
+          .map_err(|e| PlatformError::InputsError(format!("{}:{}",e,error_location!())))?;
+      let mut txn_builder = TransactionBuilder::default();
+
+      txn_builder.add_operation_kv_update(&key_pair, &key, gen, None)?;
+      store_txn_to_file(&txn_file, &txn_builder)
     }
     ("issue_asset", Some(issue_asset_matches)) => {
       let data = load_data(data_dir)?;
@@ -1353,6 +1393,40 @@ fn main() {
           .long("confidential_amount")
           .takes_value(false)
           .help("If specified, the amount will be confidential.")))
+      .subcommand(SubCommand::with_name("clear_kv")
+        .arg(Arg::with_name("key")
+          .short("k")
+          .long("key")
+          .required(true)
+          .takes_value(true)
+          .help("Which KV-store entry to clear"))
+        .arg(Arg::with_name("gen")
+          .short("g")
+          .long("gen")
+          .required(true)
+          .takes_value(true)
+          .help("Which generation of `key` this is"))
+        )
+      .subcommand(SubCommand::with_name("set_kv")
+        .arg(Arg::with_name("key")
+          .short("k")
+          .long("key")
+          .required(true)
+          .takes_value(true)
+          .help("Which KV-store entry to set"))
+        .arg(Arg::with_name("gen")
+          .short("g")
+          .long("gen")
+          .required(true)
+          .takes_value(true)
+          .help("Which generation of `key` this is"))
+        .arg(Arg::with_name("value")
+          .short("v")
+          .long("value")
+          .required(true)
+          .takes_value(true)
+          .help("What to set that entry to (base64)"))
+        )
       .subcommand(SubCommand::with_name("transfer_asset")
         .arg(Arg::with_name("recipients")
           .short("r")

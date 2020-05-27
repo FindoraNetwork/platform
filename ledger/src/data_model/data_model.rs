@@ -1,16 +1,18 @@
 #![deny(warnings)]
 use super::errors;
-use crate::error_location;
 use crate::policy_script::{Policy, PolicyGlobals, TxnPolicyData};
+use crate::{error_location, zei_fail};
 use bitmap::SparseMap;
 use chrono::prelude::*;
 use credentials::{CredCommitment, CredIssuerPublicKey, CredPoK, CredUserPublicKey};
 use cryptohash::sha256::Digest as BitDigest;
+use cryptohash::sha256::DIGESTBYTES;
 use cryptohash::HashValue;
 use errors::PlatformError;
 use rand_chacha::ChaChaRng;
 use rand_core::{CryptoRng, RngCore, SeedableRng};
 use serde::{de::Visitor, Deserialize, Deserializer, Serialize, Serializer};
+use sparse_merkle_tree::{check_merkle_proof, Key, MerkleProof};
 use std::boxed::Box;
 use std::collections::{HashMap, HashSet};
 use std::convert::TryFrom;
@@ -32,6 +34,17 @@ pub fn b64dec<T: ?Sized + AsRef<[u8]>>(input: &T) -> Result<Vec<u8>, base64::Dec
 #[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
 pub struct Code {
   pub val: [u8; 16],
+}
+
+const ZERO_256: [u8; DIGESTBYTES] = [0; DIGESTBYTES];
+const ZERO_DIGEST: BitDigest = BitDigest { 0: ZERO_256 };
+
+fn default_digest() -> BitDigest {
+  ZERO_DIGEST
+}
+
+fn is_default_digest(x: &BitDigest) -> bool {
+  x == &ZERO_DIGEST
 }
 
 fn is_default<T: Default + PartialEq>(x: &T) -> bool {
@@ -631,6 +644,65 @@ impl AIRAssign {
   }
 }
 
+// pub const KV_BLOCK_SIZE: usize = 4*(1<<10);
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct KVHash(pub HashOf<(Vec<u8>, Option<KVBlind>)>);
+
+impl KVHash {
+  pub fn new(data: &dyn AsRef<[u8]>, blind: Option<&KVBlind>) -> Self {
+    KVHash(HashOf::new(&(data.as_ref().to_vec(), blind.cloned())))
+  }
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct KVBlind(pub [u8; 16]);
+
+impl KVBlind {
+  pub fn gen_random() -> Self {
+    let mut small_rng = ChaChaRng::from_entropy();
+    let mut buf: [u8; 16] = [0u8; 16];
+    small_rng.fill_bytes(&mut buf);
+    Self(buf)
+  }
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct KVEntry(pub XfrPublicKey, pub KVHash);
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct KVUpdate {
+  pub body: (Key, u64, Option<KVEntry>),
+  pub signature: SignatureOf<(Key, u64, Option<KVEntry>)>,
+}
+
+pub type KVEntrySignature = SignatureOf<(Key, u64, Option<KVEntry>)>;
+
+impl KVUpdate {
+  pub fn new(creation_body: (Key, Option<KVHash>),
+             seq_number: u64,
+             keypair: &XfrKeyPair)
+             -> KVUpdate {
+    let creation_body = match creation_body {
+      (k, None) => (k, seq_number, None),
+      (k, Some(data)) => (k, seq_number, Some(KVEntry(*keypair.get_pk_ref(), data))),
+    };
+    let signature = SignatureOf::new(&keypair, &creation_body);
+    KVUpdate { body: creation_body,
+               signature }
+  }
+
+  pub fn get_entry(&self) -> &Option<KVEntry> {
+    &self.body.2
+  }
+
+  pub fn check_signature(&self, public_key: &XfrPublicKey) -> Result<(), PlatformError> {
+    self.signature
+        .verify(public_key, &self.body)
+        .map_err(|e| zei_fail!(e))
+  }
+}
+
 #[allow(clippy::large_enum_variant)]
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub enum Operation {
@@ -639,6 +711,7 @@ pub enum Operation {
   DefineAsset(DefineAsset),
   UpdateMemo(UpdateMemo),
   AIRAssign(AIRAssign),
+  KVStoreUpdate(KVUpdate),
   // ... etc...
 }
 
@@ -760,6 +833,50 @@ impl AuthenticatedBlock {
   }
 }
 
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+pub struct AuthenticatedKVLookup {
+  pub key: Key,
+  pub result: Option<Serialized<(u64, Option<KVEntry>)>>,
+  pub state_commitment_data: Option<StateCommitmentData>,
+  pub merkle_root: BitDigest,
+  pub merkle_proof: MerkleProof,
+  pub state_commitment: HashOf<Option<StateCommitmentData>>,
+}
+
+impl AuthenticatedKVLookup {
+  pub fn is_valid(&self, state_commitment: HashOf<Option<StateCommitmentData>>) -> bool {
+    match &self.state_commitment_data {
+      None => {
+        if self.result.is_some() {
+          return false;
+        }
+        if state_commitment != HashOf::new(&None) {
+          return false;
+        }
+        if self.merkle_root != (BitDigest { 0: [0_u8; DIGESTBYTES] }) {
+          return false;
+        }
+      }
+      Some(comm_data) => {
+        if self.state_commitment != comm_data.compute_commitment() {
+          return false;
+        }
+
+        if comm_data.kv_store != self.merkle_root {
+          return false;
+        }
+      }
+    }
+    if state_commitment != self.state_commitment {
+      return false;
+    }
+    check_merkle_proof(&self.merkle_root,
+                       &self.key,
+                       self.result.as_ref(),
+                       &self.merkle_proof)
+  }
+}
+
 pub struct AuthenticatedUtxoStatus {
   pub status: UtxoStatus,
   pub utxo_sid: TxoSID,
@@ -824,6 +941,12 @@ impl Transaction {
     HashOf::new(&(id, self.clone()))
   }
 
+  pub fn from_operation(op: Operation) -> Self {
+    let mut tx = Transaction::default();
+    tx.add_operation(op);
+    tx
+  }
+
   pub fn add_operation(&mut self, op: Operation) {
     self.body.operations.push(op);
   }
@@ -870,6 +993,9 @@ pub struct StateCommitmentData {
   pub transaction_merkle_commitment: HashValue, // The root hash of the transaction Merkle tree
   pub air_commitment: BitDigest, // The root hash of the AIR sparse Merkle tree
   pub txo_count: u64, // Number of transaction outputs. Used to provide proof that a utxo does not exist
+  #[serde(default = "default_digest")]
+  #[serde(skip_serializing_if = "is_default_digest")]
+  pub kv_store: BitDigest, // The root hash of the KV Store SMT
 }
 
 impl StateCommitmentData {

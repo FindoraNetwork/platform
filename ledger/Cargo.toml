@@ -37,6 +37,7 @@ tiny-keccak = "1.4.2"
 utils = { path = "../libs/utils" }
 wasm-bindgen = { version = "0.2.50", features = ["serde-serialize"]  }
 zei = { git = "ssh://git@github.com/findoraorg/zei", tag = "v0.0.2-4" }
+sparse_merkle_tree = { path = "../libs/ads/sparse_merkle_tree" }
 
 [features]
 TESTING = []
