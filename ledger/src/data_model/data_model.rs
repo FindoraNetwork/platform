@@ -1281,6 +1281,7 @@ mod tests {
                                                    num_outputs: 0,
                                                    output_identity_commitments: Vec::new(),
                                                    note: Box::new(xfr_note),
+                                                   lien_assignments: vec![],
                                                    transfer_type: TransferType::Standard };
 
     let asset_transfer = {

@@ -5,7 +5,7 @@ use credentials::{
   credential_commit, credential_sign, credential_user_key_gen, Credential as WrapperCredential,
 };
 use ledger::data_model::errors::PlatformError;
-use ledger::data_model::{AssetRules, AssetTypeCode, TransferType, TxoRef};
+use ledger::data_model::{AssetRules, AssetTypeCode, TransferType, TxOutput, TxoRef};
 use ledger::policies::{DebtMemo, Fraction};
 use ledger::{des_fail, error_location, ser_fail};
 use rand_chacha::ChaChaRng;
@@ -143,7 +143,8 @@ pub fn load_funds(data_dir: &str,
                       "utxo_sid",
                       &format!("{}", sid_new.0))?;
   let blind_asset_record_new =
-    serde_json::from_str::<BlindAssetRecord>(&res_new).or_else(|_| Err(des_fail!()))?;
+    serde_json::from_str::<TxOutput>(&res_new).or_else(|_| Err(des_fail!()))?
+                                              .record;
 
   // Merge records
   let sid_merged = if let Some(sid_pre) = recipient.fiat_utxo {
@@ -153,7 +154,8 @@ pub fn load_funds(data_dir: &str,
                         "utxo_sid",
                         &format!("{}", sid_pre.0))?;
     let blind_asset_record_pre =
-      serde_json::from_str::<BlindAssetRecord>(&res_pre).or_else(|_| Err(des_fail!()))?;
+      serde_json::from_str::<TxOutput>(&res_pre).or_else(|_| Err(des_fail!()))?
+                                                .record;
     let txn_builder = merge_records(recipient_key_pair,
                                     TxoRef::Absolute(sid_pre),
                                     TxoRef::Absolute(sid_new),
@@ -466,7 +468,8 @@ AssetRecordTemplate::with_no_asset_tracking(amount,
                         "utxo_sid",
                         &format!("{}", sid_pre.0))?;
     let blind_asset_record_pre =
-      serde_json::from_str::<BlindAssetRecord>(&res_pre).or_else(|_| Err(des_fail!()))?;
+      serde_json::from_str::<TxOutput>(&res_pre).or_else(|_| Err(des_fail!()))?
+                                                .record;
     // Get the new fiat record
     let res_new = query(protocol,
                         host,
@@ -474,7 +477,8 @@ AssetRecordTemplate::with_no_asset_tracking(amount,
                         "utxo_sid",
                         &format!("{}", sids_new[1].0))?;
     let blind_asset_record_new =
-      serde_json::from_str::<BlindAssetRecord>(&res_new).or_else(|_| Err(des_fail!()))?;
+      serde_json::from_str::<TxOutput>(&res_new).or_else(|_| Err(des_fail!()))?
+                                                .record;
     let txn_builder = merge_records(borrower_key_pair,
                                     TxoRef::Absolute(sid_pre),
                                     TxoRef::Absolute(sids_new[1]),

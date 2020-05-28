@@ -67,8 +67,8 @@ fn test_create_asset() -> Result<(), PlatformError> {
   let (_, txos) = apply_transaction(&mut ledger, tx.clone());
 
   // Basic transfer
-  let bar1 = ((ledger.get_utxo(txos[0]).unwrap().0).0).clone();
-  let bar2 = ((ledger.get_utxo(txos[1]).unwrap().0).0).clone();
+  let bar1 = ((ledger.get_utxo(txos[0]).unwrap().0).record).clone();
+  let bar2 = ((ledger.get_utxo(txos[1]).unwrap().0).record).clone();
   let oar1 = open_blind_asset_record(&bar1, &None, keys.get_sk_ref()).unwrap();
   let oar2 = open_blind_asset_record(&bar2, &None, keys.get_sk_ref()).unwrap();
 
@@ -154,12 +154,16 @@ fn test_loan_repayment(loan_amount: u64,
   let tx = builder.add_operation_issue_asset(&fiat_issuer_keys,
                                              &fiat_code,
                                              0,
-                                             &[(TxOutput(fiat_ba.clone()), fiat_owner_memo)],
+                                             &[(TxOutput { record: fiat_ba.clone(),
+                                                           lien: None },
+                                                fiat_owner_memo)],
                                              None)?
                   .add_operation_issue_asset(&borrower_keys,
                                              &debt_code,
                                              0,
-                                             &[(TxOutput(debt_ba.clone()), debt_owner_memo)],
+                                             &[(TxOutput { record: debt_ba.clone(),
+                                                           lien: None },
+                                                debt_owner_memo)],
                                              None)?;
   let mut xfr_builder = TransferOperationBuilder::new();
   let output_template =

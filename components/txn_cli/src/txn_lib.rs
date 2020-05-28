@@ -20,8 +20,7 @@ use zei::setup::PublicParams;
 use zei::xfr::asset_record::{build_blind_asset_record, open_blind_asset_record, AssetRecordType};
 use zei::xfr::sig::XfrKeyPair;
 use zei::xfr::structs::{
-  AssetRecordTemplate, AssetTracingPolicy, BlindAssetRecord, OpenAssetRecord, OwnerMemo, XfrAmount,
-  XfrAssetType,
+  AssetRecordTemplate, AssetTracingPolicy, OpenAssetRecord, OwnerMemo, XfrAmount, XfrAssetType,
 };
 
 extern crate exitcode;
@@ -317,8 +316,8 @@ pub fn query_utxo_and_get_type_commitment(utxo: u64,
                                           host: &str)
                                           -> Result<CompressedRistretto, PlatformError> {
   let res = query(protocol, host, QUERY_PORT, "utxo_sid", &format!("{}", utxo))?;
-  let blind_asset_record =
-    serde_json::from_str::<BlindAssetRecord>(&res).or_else(|_| Err(des_fail!()))?;
+  let blind_asset_record = serde_json::from_str::<TxOutput>(&res).or_else(|_| Err(des_fail!()))?
+                                                                 .record;
   match blind_asset_record.asset_type {
     XfrAssetType::Confidential(commitment) => Ok(commitment),
     _ => {
@@ -334,8 +333,8 @@ pub fn query_utxo_and_get_amount(utxo: u64,
                                  host: &str)
                                  -> Result<XfrAmount, PlatformError> {
   let res = query(protocol, host, QUERY_PORT, "utxo_sid", &format!("{}", utxo))?;
-  let blind_asset_record =
-    serde_json::from_str::<BlindAssetRecord>(&res).or_else(|_| Err(des_fail!()))?;
+  let blind_asset_record = serde_json::from_str::<TxOutput>(&res).or_else(|_| Err(des_fail!()))?
+                                                                 .record;
   Ok(blind_asset_record.amount)
 }
 
@@ -443,8 +442,8 @@ pub fn query_open_asset_record(protocol: &str,
                   QUERY_PORT,
                   "utxo_sid",
                   &format!("{}", sid.0))?;
-  let blind_asset_record =
-    serde_json::from_str::<BlindAssetRecord>(&res).or_else(|_| Err(des_fail!()))?;
+  let blind_asset_record = serde_json::from_str::<TxOutput>(&res).or_else(|_| Err(des_fail!()))?
+                                                                 .record;
   open_blind_asset_record(&blind_asset_record, owner_memo, key_pair.get_sk_ref()).or_else(|error| {
                       Err(PlatformError::ZeiError(error_location!(), error))
                     })

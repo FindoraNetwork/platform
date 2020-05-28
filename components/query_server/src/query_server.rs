@@ -213,7 +213,7 @@ mod tests {
 
     // Transfer to Bob
     let transfer_sid = TxoSID(0);
-    let bar = &(ledger_state.get_utxo(transfer_sid).unwrap().0).0;
+    let bar = &(ledger_state.get_utxo(transfer_sid).unwrap().0).record;
     let oar = open_blind_asset_record(&bar, &None, alice.get_sk_ref()).unwrap();
     let mut xfr_builder = TransferOperationBuilder::new();
     let out_template = AssetRecordTemplate::with_no_asset_tracking(amt,

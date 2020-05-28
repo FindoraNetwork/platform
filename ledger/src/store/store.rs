@@ -2522,7 +2522,7 @@ mod tests {
 
     assert!(state.get_asset_type(&token_code1).is_some());
 
-    assert_eq!(asset_body.asset,
+    assert_eq!(*asset_body.asset,
                state.get_asset_type(&token_code1).unwrap().properties);
 
     assert_eq!(0, state.get_asset_type(&token_code1).unwrap().units);
@@ -2681,7 +2681,7 @@ mod tests {
     let second_txo_id = txos[1];
 
     // Construct transfer operation
-    let input_bar = ((ledger.get_utxo(txo_sid).unwrap().0).0).clone();
+    let input_bar = ((ledger.get_utxo(txo_sid).unwrap().0).record).clone();
     let input_oar = open_blind_asset_record(&input_bar, &None, &key_pair.get_sk_ref()).unwrap();
 
     let output_template =
@@ -2697,6 +2697,7 @@ mod tests {
                                                 vec![None],
                                                 &[output_ar],
                                                 vec![None],
+                                                vec![],
                                                 TransferType::Standard).unwrap()).unwrap();
 
     let mut second_transfer = transfer.clone();
@@ -2946,7 +2947,7 @@ mod tests {
     let (_, sids) = apply_transaction(&mut ledger, tx);
     let sid = sids[0];
 
-    let bar = ((ledger.get_utxo(sid).unwrap().0).0).clone();
+    let bar = ((ledger.get_utxo(sid).unwrap().0).record).clone();
 
     let transfer_template= AssetRecordTemplate::with_no_asset_tracking(100,
                                                                              code.val,
@@ -2961,7 +2962,7 @@ mod tests {
                                                                  &[AssetRecord::from_open_asset_record_no_asset_tracking(open_blind_asset_record(&bar, &None, &alice.get_sk_ref()).unwrap())],
                                                                  vec![None],
                                                                  &[record.clone()],
-                                                                 vec![None], TransferType::Standard).unwrap()
+                                                                 vec![None], vec![], TransferType::Standard).unwrap()
                                           ).unwrap();
     transfer.sign(&alice);
     let tx = Transaction::from_operation(Operation::TransferAsset(transfer));
@@ -2983,7 +2984,7 @@ mod tests {
                              &[AssetRecord::from_open_asset_record_no_asset_tracking(open_blind_asset_record(&bar, &None, &alice.get_sk_ref()).unwrap())],
                              vec![None],
                              &[record.clone()],
-                             vec![None], TransferType::Standard).unwrap()).unwrap();
+                             vec![None], vec![], TransferType::Standard).unwrap()).unwrap();
     transfer.sign(&alice);
     let tx = Transaction::from_operation(Operation::TransferAsset(transfer));
     let effect = TxnEffect::compute_effect(tx.clone()).unwrap();
@@ -3012,7 +3013,7 @@ mod tests {
                                                                  vec![None],
                                                                  &[second_record],
                                                                  vec![None],
-                                          TransferType::Standard).unwrap()).unwrap();
+                                          vec![], TransferType::Standard).unwrap()).unwrap();
     transfer.sign(&alice);
     tx.body.operations.push(Operation::TransferAsset(transfer));
     let effect = TxnEffect::compute_effect(tx).unwrap();
@@ -3156,7 +3157,7 @@ mod tests {
 
     // Construct transfer operation
     let mut block = ledger.start_block().unwrap();
-    let input_bar = ((ledger.get_utxo(txo_sid).unwrap().0).0).clone();
+    let input_bar = ((ledger.get_utxo(txo_sid).unwrap().0).record).clone();
     let input_oar = open_blind_asset_record(&input_bar, &None, &alice.get_sk_ref()).unwrap();
 
     let output_template =
@@ -3170,7 +3171,7 @@ mod tests {
                                                                  vec![None],
                                                                  &[output_ar],
                                                                  vec![None],
-                                          TransferType::Standard).unwrap()).unwrap();
+                                          vec![], TransferType::Standard).unwrap()).unwrap();
 
     transfer.sign(&alice);
     for (i, (signs, _)) in co_signers.iter().enumerate() {
@@ -3343,8 +3344,8 @@ mod tests {
     let fiat_transfer_record = AssetRecord::from_template_no_identity_tracking(
       ledger.get_prng(), &fiat_transfer_template).unwrap();
 
-    let fiat_bar = ((ledger.get_utxo(fiat_sid).unwrap().0).0).clone();
-    let debt_bar = ((ledger.get_utxo(debt_sid).unwrap().0).0).clone();
+    let fiat_bar = ((ledger.get_utxo(fiat_sid).unwrap().0).record).clone();
+    let debt_bar = ((ledger.get_utxo(debt_sid).unwrap().0).record).clone();
 
     let mut transfer = TransferAsset::new(TransferAssetBody::new(ledger.get_prng(),
                                           vec![TxoRef::Absolute(fiat_sid), TxoRef::Absolute(debt_sid)],
@@ -3353,7 +3354,7 @@ mod tests {
                                           vec![None; 2],
                                           &[fiat_transfer_record, loan_transfer_record],
                                           vec![None; 2],
-                       TransferType::Standard).unwrap()).unwrap();
+                       vec![], TransferType::Standard).unwrap()).unwrap();
     transfer.sign(&lender_key_pair);
     transfer.sign(&borrower_key_pair);
     let tx = Transaction::from_operation(Operation::TransferAsset(transfer));
@@ -3365,8 +3366,8 @@ mod tests {
     // Attempt to pay off debt with correct interest payment
     let null_public_key = XfrPublicKey::zei_from_bytes(&[0; 32]);
     let mut block = ledger.start_block().unwrap();
-    let fiat_bar = ((ledger.get_utxo(fiat_sid).unwrap().0).0).clone();
-    let debt_bar = ((ledger.get_utxo(debt_sid).unwrap().0).0).clone();
+    let fiat_bar = ((ledger.get_utxo(fiat_sid).unwrap().0).record).clone();
+    let debt_bar = ((ledger.get_utxo(debt_sid).unwrap().0).record).clone();
 
     let payment_template = AssetRecordTemplate::with_no_asset_tracking(
       payment_amount,
@@ -3424,7 +3425,7 @@ mod tests {
                                returned_debt_record,
                                returned_fiat_record],
                              vec![None; 4],
-                                                        TransferType::DebtSwap).unwrap();
+                                                        vec![], TransferType::DebtSwap).unwrap();
 
     let tx = Transaction::from_operation(Operation::TransferAsset(TransferAsset::new(transfer_body).unwrap()));
 
