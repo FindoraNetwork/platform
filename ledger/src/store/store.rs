@@ -16,7 +16,8 @@ use merkle_tree::logged_merkle::LoggedMerkle;
 use rand_chacha::ChaChaRng;
 use rand_core::{CryptoRng, RngCore, SeedableRng};
 use serde::{Deserialize, Serialize};
-use sparse_merkle_tree::{Key, SmtMap256};
+use sparse_merkle_tree::Key;
+use sparse_merkle_tree::SmtMap256;
 use std::collections::{HashMap, VecDeque};
 use std::fs::File;
 use std::fs::OpenOptions;
@@ -231,7 +232,9 @@ pub struct LedgerStatus {
   // * The first policy contains the encryption keys, asset tracing flag, and identity tracing poicy
   // * The second policy doesn't inclue an identity tracing policy
   // This allows us to transfer an asset when there's no identity requirement
-  tracing_policies: HashMap<AssetTypeCode, Option<(AssetTracingPolicy, AssetTracingPolicy)>>,
+  #[allow(clippy::type_complexity)]
+  tracing_policies:
+    HashMap<AssetTypeCode, Option<(Box<AssetTracingPolicy>, Box<AssetTracingPolicy>)>>,
   issuance_num: HashMap<AssetTypeCode, u64>,
   // Issuance amounts for assets with limits
   issuance_amounts: HashMap<AssetTypeCode, u64>,
@@ -487,12 +490,13 @@ impl LedgerStatus {
       let inp_utxo = self.utxos
                          .get(inp_sid)
                          .map_or(Err(PlatformError::InputsError(error_location!())), Ok)?;
-      let record = &(inp_utxo.0).0;
+      let record = &(inp_utxo.0);
       if record != inp_record {
         return Err(PlatformError::InputsError(error_location!()));
       }
       // (2)
-      if let Some(code) = record.asset_type
+      if let Some(code) = record.record
+                                .asset_type
                                 .get_asset_type()
                                 .map(|v| AssetTypeCode { val: v })
       {
@@ -501,7 +505,7 @@ impl LedgerStatus {
                              .or_else(|| txn.new_asset_codes.get(&code))
                              .ok_or_else(|| PlatformError::InputsError(error_location!()))?;
         if !asset_type.properties.asset_rules.transferable
-           && asset_type.properties.issuer.key != record.public_key
+           && asset_type.properties.issuer.key != record.record.public_key
         {
           return Err(PlatformError::InputsError(error_location!()));
         }
@@ -510,7 +514,8 @@ impl LedgerStatus {
 
     // Internally spend inputs with transfer restrictions can only be owned by the asset issuer
     for record in txn.internally_spent_txos.iter() {
-      if let Some(code) = record.asset_type
+      if let Some(code) = record.record
+                                .asset_type
                                 .get_asset_type()
                                 .map(|v| AssetTypeCode { val: v })
       {
@@ -519,7 +524,7 @@ impl LedgerStatus {
                              .or_else(|| txn.new_asset_codes.get(&code))
                              .ok_or_else(|| PlatformError::InputsError(error_location!()))?;
         if !asset_type.properties.asset_rules.transferable
-           && asset_type.properties.issuer.key != record.public_key
+           && asset_type.properties.issuer.key != record.record.public_key
         {
           return Err(PlatformError::InputsError(error_location!()));
         }
@@ -646,8 +651,7 @@ impl LedgerStatus {
     for ((op_idx, input_idx), key_set) in txn.cosig_keys.iter() {
       let op = &txn.txn.body.operations[*op_idx];
       if let Operation::TransferAsset(xfr) = op {
-        if let XfrAssetType::NonConfidential(val) = xfr.body.transfer.inputs[*input_idx].asset_type
-        {
+        if let XfrAssetType::NonConfidential(val) = xfr.body.note.inputs[*input_idx].asset_type {
           let code = AssetTypeCode { val };
           let signature_rules = &self.asset_types
                                      .get(&code)
@@ -666,10 +670,10 @@ impl LedgerStatus {
     }
 
     // Asset transfer body must be consistent with the tracing policies
-    let mut transfer_input_policies = Vec::new();
-    let mut transfer_input_commitments = Vec::new();
-    let mut transfer_output_policies = Vec::new();
-    let mut transfer_output_commitments = Vec::new();
+    let mut transfer_input_policies = Vec::<Option<&AssetTracingPolicy>>::new();
+    let mut transfer_input_commitments = Vec::<Option<&_>>::new();
+    let mut transfer_output_policies = Vec::<Option<&AssetTracingPolicy>>::new();
+    let mut transfer_output_commitments = Vec::<Option<&_>>::new();
     if let Some(xfr_body) = txn.transfer_body.clone() {
       for (input_blind_asset_record, input_commitment) in
         xfr_body.inputs
@@ -2173,7 +2177,7 @@ pub mod helpers {
       token_properties.confidential_memo = ConfidentialMemo {};
     }
 
-    DefineAssetBody { asset: token_properties }
+    DefineAssetBody { asset: Box::new(token_properties) }
   }
 
   pub fn asset_creation_operation(asset_body: &DefineAssetBody,
@@ -2209,8 +2213,11 @@ pub mod helpers {
     let (ba, _tracer_memo, owner_memo) =
       build_blind_asset_record(ledger.get_prng(), &params.pc_gens, &ar_template, None);
 
-    let asset_issuance_body =
-      IssueAssetBody::new(&code, seq_num, &[TxOutput(ba.clone())], None).unwrap();
+    let asset_issuance_body = IssueAssetBody::new(&code,
+                                                  seq_num,
+                                                  &[TxOutput { record: ba.clone(),
+                                                               lien: None }],
+                                                  None).unwrap();
     let asset_issuance_operation =
       IssueAsset::new(asset_issuance_body,
                       &IssuerKeyPair { keypair: &issuer_keys }).unwrap();
@@ -2227,7 +2234,7 @@ pub mod helpers {
                                                 &[AssetRecord::from_open_asset_record_no_asset_tracking(open_blind_asset_record(&ba, &owner_memo, &issuer_keys.get_sk_ref()).unwrap())],
                                                 vec![None],
                                                 &[ar.clone()],
-                                                vec![None],TransferType::Standard).unwrap()
+                                                vec![None],vec![],TransferType::Standard).unwrap()
                          ).unwrap();
 
     transfer.sign(&issuer_keys);
@@ -2252,7 +2259,11 @@ pub mod helpers {
     let (ba, _tracer_memo, _owner_memo) =
       build_blind_asset_record(ledger.get_prng(), &params.pc_gens, &ar_template, None);
 
-    let asset_issuance_body = IssueAssetBody::new(&code, seq_num, &[TxOutput(ba)], None).unwrap();
+    let asset_issuance_body = IssueAssetBody::new(&code,
+                                                  seq_num,
+                                                  &[TxOutput { record: ba,
+                                                               lien: None }],
+                                                  None).unwrap();
     let asset_issuance_operation =
       IssueAsset::new(asset_issuance_body,
                       &IssuerKeyPair { keypair: &issuer_keys }).unwrap();
@@ -2632,8 +2643,13 @@ mod tests {
     let (ba, _, _) = build_blind_asset_record(ledger.get_prng(), &params.pc_gens, &template, None);
     let second_ba = ba.clone();
 
-    let asset_issuance_body =
-      IssueAssetBody::new(&code, 0, &[TxOutput(ba), TxOutput(second_ba)], None).unwrap();
+    let asset_issuance_body = IssueAssetBody::new(&code,
+                                                  0,
+                                                  &[TxOutput { record: ba,
+                                                               lien: None },
+                                                    TxOutput { record: second_ba,
+                                                               lien: None }],
+                                                  None).unwrap();
     let asset_issuance_operation =
       IssueAsset::new(asset_issuance_body, &IssuerKeyPair { keypair: &key_pair }).unwrap();
 
@@ -2764,7 +2780,11 @@ mod tests {
       AssetRecordTemplate::with_no_asset_tracking(100, token_code1.val, art, *keypair.get_pk_ref());
 
     let (ba, _, _) = build_blind_asset_record(ledger.get_prng(), &params.pc_gens, &ar, None);
-    let asset_issuance_body = IssueAssetBody::new(&token_code1, 0, &[TxOutput(ba)], None).unwrap();
+    let asset_issuance_body = IssueAssetBody::new(&token_code1,
+                                                  0,
+                                                  &[TxOutput { record: ba,
+                                                               lien: None }],
+                                                  None).unwrap();
     let asset_issuance_operation =
       IssueAsset::new(asset_issuance_body, &IssuerKeyPair { keypair: &keypair }).unwrap();
 
@@ -3110,7 +3130,11 @@ mod tests {
     let template = AssetRecordTemplate::with_no_asset_tracking(100, code.val, AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType, alice.get_pk());
     let (ba, _, _) = build_blind_asset_record(ledger.get_prng(), &params.pc_gens, &template, None);
 
-    let asset_issuance_body = IssueAssetBody::new(&code, 0, &[TxOutput(ba)], None).unwrap();
+    let asset_issuance_body = IssueAssetBody::new(&code,
+                                                  0,
+                                                  &[TxOutput { record: ba,
+                                                               lien: None }],
+                                                  None).unwrap();
     let asset_issuance_operation =
       IssueAsset::new(asset_issuance_body, &IssuerKeyPair { keypair: &alice }).unwrap();
 

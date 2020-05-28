@@ -318,7 +318,9 @@ pub trait BuildsTransactions {
     self.add_operation_issue_asset(key_pair,
                                    token_code,
                                    seq_num,
-                                   &[(TxOutput(ba), owner_memo)],
+                                   &[(TxOutput { record: ba,
+                                                 lien: None },
+                                      owner_memo)],
                                    tracing_policy)
   }
 
@@ -516,17 +518,19 @@ impl BuildsTransactions for TransactionBuilder {
                                                             input_identity_commitments,
                                                             output_records,
                                                             output_identity_commitments,
+                                                            vec![],
                                                             TransferType::Standard)?)?;
     xfr.sign(&keys);
 
     for (output, memo) in xfr.body
-                             .transfer
+                             .note
                              .outputs
                              .iter()
-                             .zip(xfr.body.transfer.owners_memos.iter())
+                             .zip(xfr.body.note.owners_memos.iter())
     {
-      self.owner_records
-          .push((TxOutput(output.clone()), memo.clone()));
+      self.owner_records.push((TxOutput { record: output.clone(),
+                                          lien: None },
+                               memo.clone()));
     }
     self.txn.add_operation(Operation::TransferAsset(xfr));
     Ok(self)
@@ -556,13 +560,14 @@ impl BuildsTransactions for TransactionBuilder {
   fn add_operation(&mut self, op: Operation) -> &mut Self {
     if let Operation::TransferAsset(xfr) = op.clone() {
       for (output, memo) in xfr.body
-                               .transfer
+                               .note
                                .outputs
                                .iter()
-                               .zip(xfr.body.transfer.owners_memos.iter())
+                               .zip(xfr.body.note.owners_memos.iter())
       {
-        self.owner_records
-            .push((TxOutput(output.clone()), memo.clone()));
+        self.owner_records.push((TxOutput { record: output.clone(),
+                                            lien: None },
+                                 memo.clone()));
       }
     }
 
@@ -854,19 +859,14 @@ impl TransferOperationBuilder {
                                       self.input_identity_commitments.clone(),
                                       &self.output_records,
                                       self.output_identity_commitments.clone(),
+                                      vec![],
                                       transfer_type)?;
     self.transfer = Some(TransferAsset::new(body)?);
     Ok(self)
   }
 
   pub fn get_output_record(&self, idx: usize) -> Option<BlindAssetRecord> {
-    self.transfer
-        .as_ref()?
-        .body
-        .transfer
-        .outputs
-        .get(idx)
-        .cloned()
+    self.transfer.as_ref()?.body.note.outputs.get(idx).cloned()
   }
 
   // All input owners must sign eventually for the transaction to be valid.
@@ -903,7 +903,7 @@ impl TransferOperationBuilder {
       sig_keys.insert(sig.address.key.zei_to_bytes());
     }
 
-    for record in &trn.body.transfer.inputs {
+    for record in &trn.body.note.inputs {
       if !sig_keys.contains(&record.public_key.zei_to_bytes()) {
         return Err(inv_fail!("Not all signatures present".to_string()));
       }

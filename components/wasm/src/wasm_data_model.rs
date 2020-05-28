@@ -128,7 +128,7 @@ pub struct OwnerMemo {
 
 impl ClientAssetRecord {
   pub fn get_bar_ref(&self) -> &BlindAssetRecord {
-    &self.output.0
+    &self.output.record
   }
 }
 
@@ -137,7 +137,8 @@ impl ClientAssetRecord {
   /// Builds a client record from an asset record fetched from the ledger server.
   /// @param {record} - JSON asset record fetched from server.
   pub fn from_json_record(record: &JsValue) -> Self {
-    ClientAssetRecord { output: TxOutput(record.into_serde().unwrap()) }
+    ClientAssetRecord { output: TxOutput { record: record.into_serde().unwrap(),
+                                           lien: None } }
   }
 }
 

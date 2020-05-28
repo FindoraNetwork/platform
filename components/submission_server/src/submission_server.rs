@@ -226,6 +226,16 @@ pub fn txn_log_info(txn: &Transaction) {
               xfr_asset_op.body.inputs.len(),
               xfr_asset_op.body.num_outputs);
       }
+      Operation::BindAssets(bind_assets_op) => {
+        info!("Asset Bind: Bind of {} inputs",
+              bind_assets_op.body.inputs.len());
+      }
+      Operation::ReleaseAssets(release_assets_op) => {
+        info!("Asset Release: Release of lien {:?} ({} inputs) into {} outputs",
+              release_assets_op.body.lien,
+              release_assets_op.body.note.inputs.len(),
+              release_assets_op.body.note.outputs.len(),);
+      }
       Operation::AIRAssign(air_assign_op) => {
         info!("Assigning to AIR: AIR[{}] <- {:?}",
               serde_json::to_string(&air_assign_op.body.addr).unwrap(),

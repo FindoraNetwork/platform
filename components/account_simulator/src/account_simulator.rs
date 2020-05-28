@@ -409,7 +409,7 @@ impl InterpretAccounts<PlatformError> for LedgerAccounts {
         properties.code = code;
         properties.issuer.key = *pubkey;
 
-        let body = DefineAssetBody { asset: properties };
+        let body = DefineAssetBody { asset: Box::new(properties) };
 
         let op = DefineAsset::new(body, &IssuerKeyPair { keypair: &keypair }).unwrap();
 
@@ -464,8 +464,11 @@ impl InterpretAccounts<PlatformError> for LedgerAccounts {
         let (ba, _, owner_memo) =
           build_blind_asset_record(self.ledger.get_prng(), &params.pc_gens, &ar, None);
 
-        let asset_issuance_body =
-          IssueAssetBody::new(&code, new_seq_num, &[TxOutput(ba)], None).unwrap();
+        let asset_issuance_body = IssueAssetBody::new(&code,
+                                                      new_seq_num,
+                                                      &[TxOutput { record: ba,
+                                                                   lien: None }],
+                                                      None).unwrap();
 
         let asset_issuance_operation =
           IssueAsset::new(asset_issuance_body, &IssuerKeyPair { keypair: &keypair }).unwrap();
@@ -523,7 +526,7 @@ impl InterpretAccounts<PlatformError> for LedgerAccounts {
 
         while total_sum < amt && !avail.is_empty() {
           let sid = avail.pop_front().unwrap();
-          let blind_rec = &(self.ledger.get_utxo(sid).unwrap().0).0;
+          let blind_rec = &(self.ledger.get_utxo(sid).unwrap().0).record;
           let memo = self.owner_memos.get(&sid).cloned();
           let open_rec = open_blind_asset_record(&blind_rec, &memo, &src_priv).unwrap();
           // dbg!(sid, open_rec.get_amount(), open_rec.get_asset_type());
@@ -613,9 +616,10 @@ impl InterpretAccounts<PlatformError> for LedgerAccounts {
                                  input_identity_commitments,
                                  all_outputs.as_slice(),
                                  output_identity_commitments,
+                                 vec![],
                                  TransferType::Standard).unwrap();
 
-        let mut owners_memos = transfer_body.transfer.owners_memos.clone();
+        let mut owners_memos = transfer_body.note.owners_memos.clone();
         // dbg!(&transfer_body);
         let transfer_sig = transfer_body.compute_body_signature(&src_keypair, None);
 
@@ -718,7 +722,7 @@ impl InterpretAccounts<PlatformError> for OneBigTxnAccounts {
         properties.code = code;
         properties.issuer.key = *pubkey;
 
-        let body = DefineAssetBody { asset: properties };
+        let body = DefineAssetBody { asset: Box::new(properties) };
 
         let op = DefineAsset::new(body, &IssuerKeyPair { keypair: &keypair }).unwrap();
 
@@ -763,8 +767,11 @@ impl InterpretAccounts<PlatformError> for OneBigTxnAccounts {
         let (ba, _, owner_memo) =
           build_blind_asset_record(self.base_ledger.get_prng(), &params.pc_gens, &ar, None);
 
-        let asset_issuance_body =
-          IssueAssetBody::new(&code, new_seq_num, &[TxOutput(ba)], None).unwrap();
+        let asset_issuance_body = IssueAssetBody::new(&code,
+                                                      new_seq_num,
+                                                      &[TxOutput { record: ba,
+                                                                   lien: None }],
+                                                      None).unwrap();
 
         let asset_issuance_operation =
           IssueAsset::new(asset_issuance_body, &IssuerKeyPair { keypair: &keypair }).unwrap();
@@ -819,7 +826,7 @@ impl InterpretAccounts<PlatformError> for OneBigTxnAccounts {
 
         while total_sum < amt && !avail.is_empty() {
           let sid = avail.pop_front().unwrap();
-          let blind_rec = &((self.txos.get(sid).unwrap().0).0);
+          let blind_rec = &((self.txos.get(sid).unwrap().0).record);
           let memo = &(self.txos.get(sid).unwrap().1);
           let open_rec = open_blind_asset_record(&blind_rec, &memo, &src_priv).unwrap();
           // dbg!(sid, open_rec.get_amount(), open_rec.get_asset_type());
@@ -910,8 +917,9 @@ impl InterpretAccounts<PlatformError> for OneBigTxnAccounts {
                                                    input_identity_commitments,
                                                    all_outputs.as_slice(),
                                                    output_identity_commitments,
+                                                   vec![],
                                                    TransferType::Standard).unwrap();
-        let owners_memos = transfer_body.transfer.owners_memos.clone();
+        let owners_memos = transfer_body.note.owners_memos.clone();
         // dbg!(&transfer_body);
         let transfer_sig = transfer_body.compute_body_signature(&src_keypair, None);
 
@@ -1030,7 +1038,7 @@ impl InterpretAccounts<PlatformError> for LedgerStandaloneAccounts {
         properties.code = code;
         properties.issuer.key = *pubkey;
 
-        let body = DefineAssetBody { asset: properties };
+        let body = DefineAssetBody { asset: Box::new(properties) };
 
         let op = DefineAsset::new(body, &IssuerKeyPair { keypair: &keypair }).unwrap();
 
@@ -1132,8 +1140,11 @@ impl InterpretAccounts<PlatformError> for LedgerStandaloneAccounts {
         let (ba, _, owner_memo) =
           build_blind_asset_record(&mut self.prng, &params.pc_gens, &ar, None);
 
-        let asset_issuance_body =
-          IssueAssetBody::new(&code, new_seq_num, &[TxOutput(ba)], None).unwrap();
+        let asset_issuance_body = IssueAssetBody::new(&code,
+                                                      new_seq_num,
+                                                      &[TxOutput { record: ba,
+                                                                   lien: None }],
+                                                      None).unwrap();
 
         let asset_issuance_operation =
           IssueAsset::new(asset_issuance_body, &IssuerKeyPair { keypair: &keypair }).unwrap();
@@ -1228,7 +1239,7 @@ impl InterpretAccounts<PlatformError> for LedgerStandaloneAccounts {
             let host = "localhost";
             let port = format!("{}",self.query_port);
             reqwest::get(&format!("http://{}:{}/utxo_sid/{}",host,port,sid.0)).unwrap().error_for_status().unwrap().text().unwrap()
-          }).unwrap().0;
+          }).unwrap().record;
           let memo = self.owner_memos.get(&sid).cloned();
           let open_rec = open_blind_asset_record(&blind_rec, &memo, &src_priv).unwrap();
           // dbg!(sid, open_rec.get_amount(), open_rec.get_asset_type());
@@ -1313,9 +1324,10 @@ impl InterpretAccounts<PlatformError> for LedgerStandaloneAccounts {
                                  input_identity_commitments,
                                  all_outputs.as_slice(),
                                  output_identity_commitments,
+                                 vec![],
                                  TransferType::Standard).unwrap();
 
-        let mut owners_memos = transfer_body.transfer.owners_memos.clone();
+        let mut owners_memos = transfer_body.note.owners_memos.clone();
         // dbg!(&transfer_body);
         let transfer_sig = transfer_body.compute_body_signature(&src_keypair, None);
 

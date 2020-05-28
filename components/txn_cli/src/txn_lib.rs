@@ -176,7 +176,9 @@ pub fn issue_and_transfer_asset(data_dir: &str,
   txn_builder.add_operation_issue_asset(issuer_key_pair,
                                         &token_code,
                                         get_and_update_sequence_number(data_dir)?,
-                                        &[(TxOutput(blind_asset_record), owner_memo)],
+                                        &[(TxOutput { record: blind_asset_record,
+                                                      lien: None },
+                                           owner_memo)],
                                         tracing_policy)?
              .add_operation(xfr_op)
              .transaction();
@@ -228,7 +230,10 @@ pub fn issue_transfer_and_get_utxo_and_blinds<R: CryptoRng + RngCore>(
   let txn = txn_builder.add_operation_issue_asset(issuer_key_pair,
                                                   &code,
                                                   sequence_number,
-                                                  &[(TxOutput(input_blind_asset_record), None)],
+                                                  &[(TxOutput { record:
+                                                                  input_blind_asset_record,
+                                                                lien: None },
+                                                     None)],
                                                   None)?
                        .add_operation(xfr_op)
                        .transaction();

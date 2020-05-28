@@ -93,7 +93,11 @@ impl<RNG, LU> QueryServer<RNG, LU>
         let ledger = self.committed_state.read().unwrap();
         let addresses: Vec<XfrAddress> =
           txo_sids.iter()
-                  .map(|sid| XfrAddress { key: ledger.get_utxo(*sid).unwrap().0 .0.public_key })
+                  .map(|sid| XfrAddress { key: ledger.get_utxo(*sid)
+                                                     .unwrap()
+                                                     .0
+                                                     .record
+                                                     .public_key })
                   .collect();
         (ledger.get_transaction(*txn_sid).unwrap().finalized_txn.txn, addresses)
       };

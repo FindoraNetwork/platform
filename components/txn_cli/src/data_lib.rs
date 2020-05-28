@@ -638,7 +638,7 @@ pub(crate) fn load_blind_asset_record_and_owner_memo_from_file(
   let _ = fs::remove_file(file_path);
   println!("Parsing builder from file contents: \"{}\"", &txn);
   match serde_json::from_str::<TransactionBuilder>(&txn) {
-    Ok(builder) => Ok(((builder.get_owner_record_and_memo(0).unwrap().0.clone()).0,
+    Ok(builder) => Ok(((builder.get_owner_record_and_memo(0).unwrap().0.clone()).record,
                        builder.get_owner_record_and_memo(0).unwrap().1.clone())),
     Err(e) => Err(des_fail!(e)),
   }
