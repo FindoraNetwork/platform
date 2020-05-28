@@ -670,7 +670,7 @@ impl KVBlind {
     b64enc(&self.0)
   }
 
-  pub fn new_from_base64(b64: &str) -> Result<Self, PlatformError> {
+  pub fn from_base64(b64: &str) -> Result<Self, PlatformError> {
     if let Ok(mut bin) = b64dec(b64) {
       bin.resize(16, 0u8);
       let buf = <[u8; 16]>::try_from(bin.as_slice()).unwrap();
