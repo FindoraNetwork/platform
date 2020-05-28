@@ -374,17 +374,18 @@ pub struct KVHash {
 
 #[wasm_bindgen]
 impl KVHash {
-  pub fn new(data: &str, kv_blind: Option<&KVBlind>) -> Self {
+  pub fn new_no_blind(data: &str) -> Self {
+    KVHash { hash: PlatformKVHash(HashOf::new(&(b64dec(data).as_ref().unwrap().to_vec(), None))) }
+  }
+
+  pub fn new_with_blind(data: &str, kv_blind: &KVBlind) -> Self {
     KVHash { hash: PlatformKVHash(HashOf::new(&(b64dec(data).as_ref().unwrap().to_vec(),
-                                                kv_blind.map(|blind| {
-                                                          &blind.get_blind_ref().clone()
-                                                        })
-                                                        .cloned()))) }
+                                                Some(kv_blind.get_blind_ref().clone())))) }
   }
 }
 
 impl KVHash {
-  pub fn get_hash_ref(&self) -> &PlatformKVHash {
-    &self.hash
+  pub fn get_hash(self) -> PlatformKVHash {
+    self.hash
   }
 }
