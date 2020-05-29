@@ -664,9 +664,7 @@ AssetRecordTemplate::with_no_asset_tracking(borrower.balance - amount_to_spend,
 mod tests {
   use super::*;
   use ledger::data_model::TxoSID;
-  use ledger_standalone::LedgerStandalone;
   use rand_chacha::ChaChaRng;
-  use tempfile::tempdir;
 
   const PROTOCOL: &str = "http";
   const HOST: &str = "localhost";
@@ -699,53 +697,5 @@ mod tests {
                           (bar2, memo2),
                           code,
                           None).is_ok());
-  }
-
-  #[test]
-  #[ignore]
-  // FIXME: This test fails repeatedly on the line `ledger_standalone.poll_until_ready().unwrap();`
-  // Run it with `cargo test -- --ignored`
-  // Test funds loading, loan request, fulfilling and repayment
-  fn test_request_fulfill_and_pay_loan() {
-    let ledger_standalone = LedgerStandalone::new();
-    ledger_standalone.poll_until_ready().unwrap();
-
-    // Load funds
-    let tmp_dir = tempdir().unwrap();
-    let data_dir = tmp_dir.path().to_str().unwrap();
-
-    let funds_amount = 1000;
-    load_funds(data_dir, 0, 0, funds_amount, PROTOCOL, HOST).unwrap();
-    let data = load_data(data_dir).unwrap();
-
-    assert_eq!(data.borrowers[0].balance, funds_amount);
-
-    tmp_dir.close().unwrap();
-
-    // Request a loan
-    let tmp_dir = tempdir().unwrap();
-    let data_dir = tmp_dir.path().to_str().unwrap();
-
-    let loan_amount = 1200;
-    let mut data = load_data(data_dir).unwrap();
-    data.add_loan(data_dir, 0, 0, loan_amount, 100, 8).unwrap();
-
-    assert_eq!(data.loans.len(), 1);
-
-    // Fulfill the loan request
-    fulfill_loan(data_dir, 0, 0, None, PROTOCOL, HOST).unwrap();
-    data = load_data(data_dir).unwrap();
-
-    assert_eq!(data.loans[0].status, LoanStatus::Active);
-    assert_eq!(data.loans[0].balance, loan_amount);
-
-    // Pay loan
-    let payment_amount = 200;
-    pay_loan(data_dir, 0, payment_amount, PROTOCOL, HOST).unwrap();
-    data = load_data(data_dir).unwrap();
-
-    assert_eq!(data.loans[0].payments, 1);
-
-    tmp_dir.close().unwrap();
   }
 }
