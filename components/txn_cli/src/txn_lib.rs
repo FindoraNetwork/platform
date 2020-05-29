@@ -506,7 +506,7 @@ mod tests {
     let res = define_asset(data_dir,
                            false,
                            &issuer_key_pair,
-                           AssetTypeCode::gen_random(&mut ChaChaRng::from_entropy()),
+                           AssetTypeCode::gen_random(),
                            "Define asset",
                            AssetRules::default(),
                            None);
@@ -527,7 +527,7 @@ mod tests {
     let recipient_key_pair = XfrKeyPair::generate(&mut prng);
 
     // Issue and transfer asset
-    let code = AssetTypeCode::gen_random(&mut ChaChaRng::from_entropy());
+    let code = AssetTypeCode::gen_random();
     let amount = 1000;
     let res =
       issue_and_transfer_asset(data_dir,

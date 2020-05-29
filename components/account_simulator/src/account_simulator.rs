@@ -402,7 +402,7 @@ impl InterpretAccounts<PlatformError> for LedgerAccounts {
         self.units.get(name).map_or_else(|| Ok(()),
                                           |_| Err(PlatformError::InputsError(error_location!())))?;
 
-        let code = AssetTypeCode::gen_random(&mut ChaChaRng::from_entropy());
+        let code = AssetTypeCode::gen_random();
 
         // dbg!("New unit", &name, &issuer, &code);
 
@@ -711,7 +711,7 @@ impl InterpretAccounts<PlatformError> for OneBigTxnAccounts {
         self.units.get(name).map_or_else(|| Ok(()),
                                           |_| Err(PlatformError::InputsError(error_location!())))?;
 
-        let code = AssetTypeCode::gen_random(&mut ChaChaRng::from_entropy());
+        let code = AssetTypeCode::gen_random();
 
         // dbg!("New unit", &name, &issuer, &code);
 
@@ -1023,7 +1023,7 @@ impl InterpretAccounts<PlatformError> for LedgerStandaloneAccounts {
         self.units.get(name).map_or_else(|| Ok(()),
                                           |_| Err(PlatformError::InputsError(error_location!())))?;
 
-        let code = AssetTypeCode::gen_random(&mut ChaChaRng::from_entropy());
+        let code = AssetTypeCode::gen_random();
 
         // dbg!("New unit", &name, &issuer, &code);
 

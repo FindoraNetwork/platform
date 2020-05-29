@@ -107,7 +107,7 @@ pub fn load_funds(data_dir: &str,
   let token_code = if let Some(code) = &data.fiat_code {
     AssetTypeCode::new_from_base64(code)?
   } else {
-    let fiat_code = AssetTypeCode::gen_random(&mut ChaChaRng::from_entropy());
+    let fiat_code = AssetTypeCode::gen_random();
     let txn_builder = define_asset(data_dir,
                                    true,
                                    issuer_key_pair,
@@ -340,7 +340,7 @@ pub fn fulfill_loan(data_dir: &str,
     println!("Fiat code: {}", code);
     AssetTypeCode::new_from_base64(&code)?
   } else {
-    let fiat_code = AssetTypeCode::gen_random(&mut ChaChaRng::from_entropy());
+    let fiat_code = AssetTypeCode::gen_random();
     let txn_builder = define_asset(data_dir,
                                    true,
                                    issuer_key_pair,
@@ -384,7 +384,7 @@ pub fn fulfill_loan(data_dir: &str,
     query_open_asset_record(protocol, host, fiat_sid, lender_key_pair, &owner_memo)?;
 
   // Define debt asset
-  let debt_code = AssetTypeCode::gen_random(&mut ChaChaRng::from_entropy());
+  let debt_code = AssetTypeCode::gen_random();
   println!("Generated debt code: {}",
            serde_json::to_string(&debt_code.val).or_else(|_| { Err(ser_fail!()) })?);
   let memo = DebtMemo { interest_rate: Fraction::new(loan.interest_per_mille, 1000),
@@ -677,7 +677,7 @@ mod tests {
     let key_pair = XfrKeyPair::generate(&mut prng);
 
     // Build blind asset records
-    let code = AssetTypeCode::gen_random(&mut ChaChaRng::from_entropy());
+    let code = AssetTypeCode::gen_random();
     let asset_record_type = AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType;
     let (bar1, _, memo1) = get_blind_asset_record_and_memos(key_pair.get_pk(),
                                                             1000,

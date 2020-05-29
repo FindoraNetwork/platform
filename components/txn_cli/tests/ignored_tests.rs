@@ -550,7 +550,7 @@ fn test_define_asset_simple_policies() {
   create_txn_builder_with_path(txn_builder_file).expect("Failed to create transaction builder");
 
   // Define token code
-  let token_code = AssetTypeCode::gen_random(&mut ChaChaRng::from_entropy()).to_base64();
+  let token_code = AssetTypeCode::gen_random().to_base64();
 
   // Define asset
   let output = Command::new(COMMAND).args(&["--dir", dir])
@@ -606,7 +606,7 @@ fn test_define_issue_transfer_and_submit_with_args() {
   let sids_file = sids_buf.to_str().unwrap();
 
   // Define asset
-  let token_code = AssetTypeCode::gen_random(&mut ChaChaRng::from_entropy()).to_base64();
+  let token_code = AssetTypeCode::gen_random().to_base64();
   let output = define_asset(dir,
                             creation_txn_builder_file,
                             "0",
@@ -697,7 +697,7 @@ fn test_issue_transfer_trace_and_submit_with_args() {
   create_txn_builder_with_path(txn_builder_file).expect("Failed to create transaction builder");
 
   // Define token code
-  let token_code = AssetTypeCode::gen_random(&mut ChaChaRng::from_entropy()).to_base64();
+  let token_code = AssetTypeCode::gen_random().to_base64();
 
   // Define asset
   define_asset(dir,

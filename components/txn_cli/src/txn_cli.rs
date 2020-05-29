@@ -6,8 +6,6 @@ use ledger::data_model::{
   AccountAddress, AssetRules, AssetTypeCode, SignatureRules, TxoRef, TxoSID,
 };
 use ledger::{error_location, ser_fail};
-use rand_chacha::ChaChaRng;
-use rand_core::SeedableRng;
 use std::env;
 use txn_builder::{BuildsTransactions, TransactionBuilder};
 use txn_cli::data_lib::*;
@@ -204,7 +202,7 @@ pub(crate) fn process_asset_issuer_cmd(asset_issuer_matches: &clap::ArgMatches,
       if let Some(token_code) = token_code {
         asset_token = AssetTypeCode::new_from_base64(token_code)?;
       } else {
-        asset_token = AssetTypeCode::gen_random(&mut ChaChaRng::from_entropy());
+        asset_token = AssetTypeCode::gen_random();
         println!("Creating asset with token code {:?}: {:?}",
                  asset_token.to_base64(),
                  asset_token.val);

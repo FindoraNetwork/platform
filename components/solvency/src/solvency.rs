@@ -259,9 +259,9 @@ mod tests {
   // Randomly generate a key pair and three asset codes
   fn generate_key_pair_and_define_assets(ledger_standalone: &LedgerStandalone)
                                          -> (XfrKeyPair, Vec<AssetTypeCode>) {
-    let codes = vec![AssetTypeCode::gen_random(&mut ChaChaRng::from_entropy()),
-                     AssetTypeCode::gen_random(&mut ChaChaRng::from_entropy()),
-                     AssetTypeCode::gen_random(&mut ChaChaRng::from_entropy())];
+    let codes = vec![AssetTypeCode::gen_random(),
+                     AssetTypeCode::gen_random(),
+                     AssetTypeCode::gen_random()];
     let key_pair = XfrKeyPair::generate(&mut ChaChaRng::from_entropy());
     for code in codes.iter() {
       define_and_submit(&key_pair, *code, AssetRules::default(), ledger_standalone).unwrap();
@@ -757,7 +757,7 @@ mod tests {
 
     // Generate issuer key pair and define assets
     let issuer_key_pair = &XfrKeyPair::generate(&mut ChaChaRng::from_entropy());
-    let code = AssetTypeCode::gen_random(&mut ChaChaRng::from_entropy());
+    let code = AssetTypeCode::gen_random();
     define_and_submit(issuer_key_pair,
                       code,
                       AssetRules::default(),

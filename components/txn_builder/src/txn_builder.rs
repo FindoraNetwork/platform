@@ -455,7 +455,7 @@ impl BuildsTransactions for TransactionBuilder {
                                 -> Result<&mut Self, PlatformError> {
     let token_code = match token_code {
       Some(code) => code,
-      None => AssetTypeCode::gen_random(&mut ChaChaRng::from_entropy()),
+      None => AssetTypeCode::gen_random(),
     };
     let pol = policy_from_choice(&token_code, key_pair.get_pk_ref(), policy_choice);
     let iss_keypair = IssuerKeyPair { keypair: &key_pair };
@@ -933,8 +933,8 @@ mod tests {
   fn test_transfer_op_builder() -> Result<(), PlatformError> {
     let mut prng = ChaChaRng::from_entropy();
     let params = PublicParams::new();
-    let code_1 = AssetTypeCode::gen_random(&mut ChaChaRng::from_entropy());
-    let code_2 = AssetTypeCode::gen_random(&mut ChaChaRng::from_entropy());
+    let code_1 = AssetTypeCode::gen_random();
+    let code_2 = AssetTypeCode::gen_random();
     let alice = XfrKeyPair::generate(&mut prng);
     let bob = XfrKeyPair::generate(&mut prng);
     let charlie = XfrKeyPair::generate(&mut prng);

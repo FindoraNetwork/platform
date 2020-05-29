@@ -456,9 +456,9 @@ mod tests {
     ledger_standalone.poll_until_ready().unwrap();
 
     // Generate asset codes and key pairs
-    let codes = vec![AssetTypeCode::gen_random(&mut ChaChaRng::from_entropy()),
-                     AssetTypeCode::gen_random(&mut ChaChaRng::from_entropy()),
-                     AssetTypeCode::gen_random(&mut ChaChaRng::from_entropy())];
+    let codes = vec![AssetTypeCode::gen_random(),
+                     AssetTypeCode::gen_random(),
+                     AssetTypeCode::gen_random()];
     let issuer_key_pair = &XfrKeyPair::generate(&mut ChaChaRng::from_entropy());
     let recipient_key_pair = XfrKeyPair::generate(&mut ChaChaRng::from_entropy());
 
