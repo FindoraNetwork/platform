@@ -664,7 +664,9 @@ AssetRecordTemplate::with_no_asset_tracking(borrower.balance - amount_to_spend,
 mod tests {
   use super::*;
   use ledger::data_model::TxoSID;
+  use ledger_standalone::LedgerStandalone;
   use rand_chacha::ChaChaRng;
+  use tempfile::tempdir;
 
   const PROTOCOL: &str = "http";
   const HOST: &str = "localhost";
@@ -698,8 +700,9 @@ mod tests {
                           code,
                           None).is_ok());
   }
-
   #[test]
+  #[ignore]
+  // Redmine issue: #38
   // Test funds loading, loan request, fulfilling and repayment
   fn test_request_fulfill_and_pay_loan() {
     let ledger_standalone = LedgerStandalone::new();
