@@ -46,6 +46,14 @@ pub mod sha256 {
       self.0.index(_index)
     }
   }
+
+  impl Digest {
+    pub fn from_slice(slice: &[u8]) -> Option<Self> {
+      let mut buf = [0_u8; DIGESTBYTES];
+      buf[0..DIGESTBYTES].clone_from_slice(slice);
+      Some(Digest(buf))
+    }
+  }
 }
 
 #[cfg(not(target_arch = "wasm32"))]

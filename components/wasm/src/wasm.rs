@@ -11,9 +11,7 @@ use credentials::{
 };
 use cryptohash::sha256;
 use js_sys::Promise;
-#[cfg(target_arch = "wasm32")]
-use ledger::data_model::b64dec;
-use ledger::data_model::{b64enc, AssetTypeCode, AuthenticatedTransaction, Operation};
+use ledger::data_model::{b64dec, b64enc, AssetTypeCode, AuthenticatedTransaction, Operation};
 use ledger::policies::{DebtMemo, Fraction};
 use rand_chacha::ChaChaRng;
 use rand_core::SeedableRng;
@@ -319,36 +317,32 @@ impl TransactionBuilder {
   }
 
   /// Adds an add kv update operation to a WasmTransactionBuilder instance without kv hash.
-  #[cfg(target_arch = "wasm32")]
   pub fn add_operation_kv_update_no_hash(mut self,
                                          auth_key_pair: &XfrKeyPair,
                                          index: &str,
-                                         seq_num: u64,
-                                         kv_hash: KVHash)
+                                         seq_num: u64)
                                          -> Result<TransactionBuilder, JsValue> {
-    let mut index_digest = [0_u8; sha256::DIGESTBYTES];
-    index_digest[0..sha256::DIGESTBYTES].clone_from_slice(&b64dec(index).unwrap());
-    let digest = sha256::Digest(index_digest);
-
     self.get_builder_mut()
-        .add_operation_kv_update(auth_key_pair, &digest, seq_num, Some(&kv_hash.get_hash()))
+        .add_operation_kv_update(auth_key_pair,
+                                 &sha256::Digest::from_slice(&b64dec(index).unwrap()).unwrap(),
+                                 seq_num,
+                                 None)
         .map_err(error_to_jsvalue)?;
     Ok(self)
   }
 
   /// Adds an add kv update operation to a WasmTransactionBuilder instance with kv hash.
-  #[cfg(target_arch = "wasm32")]
   pub fn add_operation_kv_update_with_hash(mut self,
                                            auth_key_pair: &XfrKeyPair,
                                            index: &str,
-                                           seq_num: u64)
+                                           seq_num: u64,
+                                           kv_hash: KVHash)
                                            -> Result<TransactionBuilder, JsValue> {
-    let mut index_digest = [0_u8; sha256::DIGESTBYTES];
-    index_digest[0..sha256::DIGESTBYTES].clone_from_slice(&b64dec(index).unwrap());
-    let digest = sha256::Digest(index_digest);
-
     self.get_builder_mut()
-        .add_operation_kv_update(auth_key_pair, &digest, seq_num, None)
+        .add_operation_kv_update(auth_key_pair,
+                                 &sha256::Digest::from_slice(&b64dec(index).unwrap()).unwrap(),
+                                 seq_num,
+                                 Some(&kv_hash.get_hash()))
         .map_err(error_to_jsvalue)?;
     Ok(self)
   }
