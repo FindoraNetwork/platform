@@ -198,7 +198,6 @@ mod tests {
              .unwrap();
   }
 
-
   #[test]
   #[ignore]
   // Redmine issue 38
