@@ -8,6 +8,7 @@ use ledger::data_model::{
   Transaction, TxoSID, Utxo,
 };
 use ledger::store::{LedgerAccess, LedgerState};
+use ledger_api_service::query_utxo;
 use rand_chacha::ChaChaRng;
 use rand_core::SeedableRng;
 use serde::{Deserialize, Serialize};
@@ -102,6 +103,16 @@ impl SubmitsTransactions for MockRestClient {
 
 impl LedgerAccess for MockRestClient {
   fn get_utxo(&self, addr: TxoSID) -> Option<&Utxo> {
+    //let mut app =
+    //  test::init_service(App::new().data(Arc::clone(&self.mock_ledger))
+    //                               .route("/utxo_sid/{sid}",
+    //                                      web::get().to(txn_status::<rand_chacha::ChaChaRng,
+    //                                                               LedgerState>)));
+    //// TODO Factor this out and factor out routes
+    //let req = test::TestRequest::get().uri(format!("/utxo_sid/{}", addr).as_str())
+    //                                  .to_request();
+    //let status: TxnStatus = test::read_response_json(&mut app, req);
+    //status
     unimplemented!();
   }
 

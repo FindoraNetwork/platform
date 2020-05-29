@@ -35,9 +35,9 @@ fn ping() -> actix_web::Result<String> {
 //   query_contract
 // If we add more functions with the similar pattern, it will be good to merge them
 
-fn query_utxo<LA>(data: web::Data<Arc<RwLock<LA>>>,
-                  info: web::Path<String>)
-                  -> actix_web::Result<web::Json<Utxo>>
+pub fn query_utxo<LA>(data: web::Data<Arc<RwLock<LA>>>,
+                      info: web::Path<String>)
+                      -> actix_web::Result<web::Json<Utxo>>
   where LA: LedgerAccess
 {
   let reader = data.read().unwrap();
@@ -52,9 +52,9 @@ fn query_utxo<LA>(data: web::Data<Arc<RwLock<LA>>>,
   }
 }
 
-fn query_asset_issuance_num<LA>(data: web::Data<Arc<RwLock<LA>>>,
-                                info: web::Path<String>)
-                                -> actix_web::Result<web::Json<u64>>
+pub fn query_asset_issuance_num<LA>(data: web::Data<Arc<RwLock<LA>>>,
+                                    info: web::Path<String>)
+                                    -> actix_web::Result<web::Json<u64>>
   where LA: LedgerAccess
 {
   let reader = data.read().unwrap();
@@ -69,9 +69,9 @@ fn query_asset_issuance_num<LA>(data: web::Data<Arc<RwLock<LA>>>,
   }
 }
 
-fn query_asset<LA>(data: web::Data<Arc<RwLock<LA>>>,
-                   info: web::Path<String>)
-                   -> actix_web::Result<web::Json<AssetType>>
+pub fn query_asset<LA>(data: web::Data<Arc<RwLock<LA>>>,
+                       info: web::Path<String>)
+                       -> actix_web::Result<web::Json<AssetType>>
   where LA: LedgerAccess
 {
   let reader = data.read().unwrap();
@@ -86,50 +86,9 @@ fn query_asset<LA>(data: web::Data<Arc<RwLock<LA>>>,
   }
 }
 
-#[allow(unused)]
-fn query_policy<LA>(data: web::Data<Arc<RwLock<LA>>>,
-                    info: web::Path<String>)
-                    -> actix_web::Result<web::Json<CustomAssetPolicy>>
-  where LA: LedgerAccess
-{
-  // TODO(joe?): Implement this
-  Err(actix_web::error::ErrorBadRequest("unimplemented"))
-  // let reader = data.read().unwrap();
-  // if let Ok(asset_policy_key) = AssetPolicyKey::new_from_base64(&*info) {
-  //   if let Some(policy) = reader.get_asset_policy(&asset_policy_key) {
-  //     Ok(web::Json(policy))
-  //   } else {
-  //     Err(actix_web::error::ErrorNotFound("Specified asset policy does not currently exist."))
-  //   }
-  // } else {
-  //   Err(actix_web::error::ErrorBadRequest("Invalid asset policy encoding."))
-  // }
-}
-
-#[allow(unused)]
-fn query_contract<LA>(data: web::Data<Arc<RwLock<LA>>>,
-                      info: web::Path<String>)
-                      -> actix_web::Result<web::Json<SmartContract>>
-  where LA: LedgerAccess
-{
-  // TODO(joe?): Implement this
-  Err(actix_web::error::ErrorBadRequest("unimplemented"))
-
-  // let reader = data.read().unwrap();
-  // if let Ok(smart_contract_key) = SmartContractKey::new_from_base64(&*info) {
-  //   if let Some(contract) = reader.get_smart_contract(&smart_contract_key) {
-  //     Ok(web::Json(contract))
-  //   } else {
-  //     Err(actix_web::error::ErrorNotFound("Specified smart contract does not currently exist."))
-  //   }
-  // } else {
-  //   Err(actix_web::error::ErrorBadRequest("Invalid smart contract encoding."))
-  // }
-}
-
-fn query_txn<AA>(data: web::Data<Arc<RwLock<AA>>>,
-                 info: web::Path<String>)
-                 -> actix_web::Result<String>
+pub fn query_txn<AA>(data: web::Data<Arc<RwLock<AA>>>,
+                     info: web::Path<String>)
+                     -> actix_web::Result<String>
   where AA: ArchiveAccess
 {
   let reader = data.read().unwrap();
@@ -144,7 +103,7 @@ fn query_txn<AA>(data: web::Data<Arc<RwLock<AA>>>,
   }
 }
 
-fn query_public_key<LA>(data: web::Data<Arc<RwLock<LA>>>) -> web::Json<XfrPublicKey>
+pub fn query_public_key<LA>(data: web::Data<Arc<RwLock<LA>>>) -> web::Json<XfrPublicKey>
   where LA: LedgerAccess
 {
   let reader = data.read().unwrap();
@@ -152,7 +111,7 @@ fn query_public_key<LA>(data: web::Data<Arc<RwLock<LA>>>) -> web::Json<XfrPublic
 }
 
 #[allow(clippy::type_complexity)]
-fn query_global_state<LA>(
+pub fn query_global_state<LA>(
   data: web::Data<Arc<RwLock<LA>>>)
   -> web::Json<(HashOf<Option<StateCommitmentData>>,
                 u64,
@@ -165,9 +124,9 @@ fn query_global_state<LA>(
   web::Json((hash, seq_id, sig))
 }
 
-fn query_global_state_version<AA>(data: web::Data<Arc<RwLock<AA>>>,
-                                  version: web::Path<u64>)
-                                  -> web::Json<Option<HashOf<Option<StateCommitmentData>>>>
+pub fn query_global_state_version<AA>(data: web::Data<Arc<RwLock<AA>>>,
+                                      version: web::Path<u64>)
+                                      -> web::Json<Option<HashOf<Option<StateCommitmentData>>>>
   where AA: ArchiveAccess
 {
   let reader = data.read().unwrap();
@@ -190,9 +149,9 @@ fn query_blocks_since<AA>(data: web::Data<Arc<RwLock<AA>>>,
   web::Json(ret)
 }
 
-fn query_air<AA>(data: web::Data<Arc<RwLock<AA>>>,
-                 addr: web::Path<String>)
-                 -> actix_web::Result<web::Json<AIRResult>>
+pub fn query_air<AA>(data: web::Data<Arc<RwLock<AA>>>,
+                     addr: web::Path<String>)
+                     -> actix_web::Result<web::Json<AIRResult>>
   where AA: ArchiveAccess
 {
   let reader = data.read().unwrap();
@@ -201,9 +160,9 @@ fn query_air<AA>(data: web::Data<Arc<RwLock<AA>>>,
   Ok(web::Json(air_result))
 }
 
-fn query_kv<LA>(data: web::Data<Arc<RwLock<LA>>>,
-                addr: web::Path<String>)
-                -> actix_web::Result<web::Json<AuthenticatedKVLookup>>
+pub fn query_kv<LA>(data: web::Data<Arc<RwLock<LA>>>,
+                    addr: web::Path<String>)
+                    -> actix_web::Result<web::Json<AuthenticatedKVLookup>>
   where LA: LedgerAccess
 {
   let reader = data.read().unwrap();
@@ -370,8 +329,6 @@ impl<T, B> Route for App<T, B>
                web::get().to(query_asset_issuance_num::<LA>))
         .route("/asset_token/{token}", web::get().to(query_asset::<LA>))
         .route("/public_key", web::get().to(query_public_key::<LA>))
-        .route("/policy_key/{key}", web::get().to(query_policy::<LA>))
-        .route("/contract_key/{key}", web::get().to(query_contract::<LA>))
         .route("/global_state", web::get().to(query_global_state::<LA>))
         .route("/kv_lookup/{addr}", web::get().to(query_kv::<LA>))
   }
