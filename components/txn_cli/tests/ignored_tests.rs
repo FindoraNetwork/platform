@@ -921,7 +921,6 @@ fn test_request_fulfill_and_pay_loan_with_args() {
 
 #[test]
 #[ignore]
-// FIXME: This test fails repeatedly on the line `ledger_standalone.poll_until_ready().unwrap();`
 // Redmine issue: #38
 // Test funds loading, loan request, fulfilling and repayment
 fn test_request_fulfill_and_pay_loan() {
