@@ -17,9 +17,9 @@ fn ping() -> actix_web::Result<String> {
   Ok("success".into())
 }
 
-fn submit_transaction<RNG, LU>(data: web::Data<Arc<RwLock<SubmissionServer<RNG, LU>>>>,
-                               body: web::Json<Transaction>)
-                               -> Result<web::Json<TxnHandle>, actix_web::error::Error>
+pub fn submit_transaction<RNG, LU>(data: web::Data<Arc<RwLock<SubmissionServer<RNG, LU>>>>,
+                                   body: web::Json<Transaction>)
+                                   -> Result<web::Json<TxnHandle>, actix_web::error::Error>
   where RNG: RngCore + CryptoRng,
         LU: LedgerUpdate<RNG> + Sync + Send
 {
@@ -41,8 +41,8 @@ fn submit_transaction<RNG, LU>(data: web::Data<Arc<RwLock<SubmissionServer<RNG, 
 // txns to the ledger as soon as possible.
 //
 // When a block is successfully finalized, returns HashMap<TxnTempSID, (TxnSID, Vec<TxoSID>)>
-fn force_end_block<RNG, LU>(data: web::Data<Arc<RwLock<SubmissionServer<RNG, LU>>>>)
-                            -> Result<String, actix_web::error::Error>
+pub fn force_end_block<RNG, LU>(data: web::Data<Arc<RwLock<SubmissionServer<RNG, LU>>>>)
+                                -> Result<String, actix_web::error::Error>
   where RNG: RngCore + CryptoRng,
         LU: LedgerUpdate<RNG> + Sync + Send
 {
@@ -56,9 +56,9 @@ fn force_end_block<RNG, LU>(data: web::Data<Arc<RwLock<SubmissionServer<RNG, LU>
 
 // Queries the status of a transaction by its handle. Returns either a not committed message or a
 // serialized TxnStatus.
-fn txn_status<RNG, LU>(data: web::Data<Arc<RwLock<SubmissionServer<RNG, LU>>>>,
-                       info: web::Path<String>)
-                       -> Result<String, actix_web::error::Error>
+pub fn txn_status<RNG, LU>(data: web::Data<Arc<RwLock<SubmissionServer<RNG, LU>>>>,
+                           info: web::Path<String>)
+                           -> Result<String, actix_web::error::Error>
   where RNG: RngCore + CryptoRng,
         LU: LedgerUpdate<RNG> + Sync + Send
 {
@@ -103,25 +103,6 @@ impl SubmissionApi {
     info!("Submission server started");
 
     Ok(SubmissionApi { web_runtime })
-  }
-
-  pub fn create_mock(ledger_state: Arc<RwLock<LedgerState>>,
-                     block_capacity: usize)
-                     -> impl actix_service::Service {
-    let mut prng = rand_chacha::ChaChaRng::from_entropy();
-    let submission_server = Arc::new(RwLock::new(SubmissionServer::new(prng.clone(),
-                                                                       ledger_state,
-                                                                       block_capacity).unwrap()));
-    test::init_service(App::new().data(submission_server)
-                                 .route("/submit_transaction",
-                                        web::post().to(submit_transaction::<rand_chacha::ChaChaRng,
-                                                                          LedgerState>))
-                                 .route("/txn_status/{handle}",
-                                        web::get().to(txn_status::<rand_chacha::ChaChaRng,
-                                                                 LedgerState>))
-                                 .route("/force_end_block",
-                                        web::post().to(force_end_block::<rand_chacha::ChaChaRng,
-                                                                       LedgerState>)))
   }
 
   // call from a thread; this will block.

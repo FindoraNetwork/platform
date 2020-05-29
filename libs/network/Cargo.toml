@@ -8,11 +8,19 @@ edition = "2018"
 path = "src/lib.rs"
 
 [dependencies]
-futures = "0.3"
-ledger = { path = "../../ledger" }
-reqwest = "0.9.24"
-submission_server = {path = "../../components/submission_server"}
-submission_api = {path = "../../components/submission_api"}
 actix-web = "1.0.5"
 actix-service = "0.4.2"
 actix-http = "0.2.3"
+futures = "0.3"
+ledger = { path = "../../ledger" }
+rand_chacha = "0.2.0"
+rand_core = { version = "0.5", default-features = false, features = ["alloc"] }
+reqwest = "0.9.24"
+serde = { version = "1.0.99", features = ["derive"] }
+serde_derive = "^1.0.59"
+serde_json = "1.0"
+sparse_merkle_tree = { path = "../ads/sparse_merkle_tree" }
+submission_server = {path = "../../components/submission_server"}
+submission_api = {path = "../../components/submission_api"}
+utils = { path = "../utils" }
+zei = { git = "ssh://git@github.com/findoraorg/zei", tag = "v0.0.2-4" }
