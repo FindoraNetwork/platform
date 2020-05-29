@@ -53,17 +53,27 @@ impl ABCISubmissionServer {
 
 // TODO: implement abci hooks
 impl abci::Application for ABCISubmissionServer {
+  fn info(&mut self, _req: &RequestInfo) -> ResponseInfo {
+    let mut resp = ResponseInfo::new();
+    if let Ok(la) = self.la.read() {
+      if let Ok(state) = la.get_committed_state().read() {
+        let commitment = state.get_state_commitment();
+        resp.set_last_block_height(commitment.1 as i64);
+        resp.set_last_block_app_hash(commitment.0.as_ref().to_vec());
+      }
+    }
+    resp
+  }
+
   fn check_tx(&mut self, req: &RequestCheckTx) -> ResponseCheckTx {
     // Get the Tx [u8] and convert to u64
     let mut resp = ResponseCheckTx::new();
 
     if let Some(tx) = convert_tx(req.get_tx()) {
       if let Ok(la) = self.la.read() {
-        if la.get_committed_state().write().is_ok() {
-          if TxnEffect::compute_effect(tx).is_err() {
-            resp.set_code(1);
-            resp.set_log(String::from("Check failed"));
-          }
+        if la.get_committed_state().write().is_ok() && TxnEffect::compute_effect(tx).is_err() {
+          resp.set_code(1);
+          resp.set_log(String::from("Check failed"));
         }
       } else {
         resp.set_code(1);
