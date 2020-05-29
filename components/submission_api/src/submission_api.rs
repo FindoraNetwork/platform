@@ -1,10 +1,11 @@
-#![deny(warnings)]
+//#![deny(warnings)]
 use actix_cors::Cors;
-use actix_web::{error, middleware, web, App, HttpServer};
+use actix_web::{error, middleware, test, web, App, HttpServer};
 use ledger::data_model::Transaction;
-use ledger::store::{ArchiveAccess, LedgerAccess, LedgerUpdate};
+use ledger::store::{LedgerAccess, LedgerState, LedgerUpdate};
 use log::{error, info};
 use percent_encoding::percent_decode_str;
+use rand_core::SeedableRng;
 use rand_core::{CryptoRng, RngCore};
 use std::io;
 use std::marker::{Send, Sync};
@@ -20,7 +21,7 @@ fn submit_transaction<RNG, LU>(data: web::Data<Arc<RwLock<SubmissionServer<RNG, 
                                body: web::Json<Transaction>)
                                -> Result<web::Json<TxnHandle>, actix_web::error::Error>
   where RNG: RngCore + CryptoRng,
-        LU: LedgerUpdate<RNG> + LedgerAccess + ArchiveAccess + Sync + Send
+        LU: LedgerUpdate<RNG> + Sync + Send
 {
   let mut submission_server = data.write().unwrap();
   let tx = body.into_inner();
@@ -36,20 +37,6 @@ fn submit_transaction<RNG, LU>(data: web::Data<Arc<RwLock<SubmissionServer<RNG, 
   }
 }
 
-fn submit_transaction_wasm<RNG, LU>(data: web::Data<Arc<RwLock<SubmissionServer<RNG, LU>>>>,
-                                    info: web::Path<String>)
-                                    -> Result<web::Json<TxnHandle>, actix_web::error::Error>
-  where RNG: RngCore + CryptoRng,
-        LU: LedgerUpdate<RNG> + LedgerAccess + ArchiveAccess + Sync + Send
-{
-  let mut submission_server = data.write().unwrap();
-  let uri_string = percent_decode_str(&*info).decode_utf8().unwrap();
-  let tx = serde_json::from_str(&uri_string).unwrap();
-  let handle = submission_server.handle_transaction(tx)
-                                .map_err(error::ErrorBadRequest)?;
-  Ok(web::Json(handle))
-}
-
 // Force the validator node to end the block. Useful for testing when it is desirable to commmit
 // txns to the ledger as soon as possible.
 //
@@ -57,7 +44,7 @@ fn submit_transaction_wasm<RNG, LU>(data: web::Data<Arc<RwLock<SubmissionServer<
 fn force_end_block<RNG, LU>(data: web::Data<Arc<RwLock<SubmissionServer<RNG, LU>>>>)
                             -> Result<String, actix_web::error::Error>
   where RNG: RngCore + CryptoRng,
-        LU: LedgerUpdate<RNG> + LedgerAccess + ArchiveAccess + Sync + Send
+        LU: LedgerUpdate<RNG> + Sync + Send
 {
   let mut submission_server = data.write().unwrap();
   if submission_server.end_block().is_ok() {
@@ -73,7 +60,7 @@ fn txn_status<RNG, LU>(data: web::Data<Arc<RwLock<SubmissionServer<RNG, LU>>>>,
                        info: web::Path<String>)
                        -> Result<String, actix_web::error::Error>
   where RNG: RngCore + CryptoRng,
-        LU: LedgerUpdate<RNG> + LedgerAccess + ArchiveAccess + Sync + Send
+        LU: LedgerUpdate<RNG> + Sync + Send
 {
   let submission_server = data.write().unwrap();
   let txn_status = submission_server.get_txn_status(&TxnHandle(info.clone()));
@@ -93,7 +80,7 @@ pub struct SubmissionApi {
 
 impl SubmissionApi {
   pub fn create<RNG: 'static + RngCore + CryptoRng + Sync + Send,
-                  LU: 'static + LedgerUpdate<RNG> + LedgerAccess + ArchiveAccess + Sync + Send>(
+                  LU: 'static + LedgerUpdate<RNG> + Sync + Send>(
     submission_server: Arc<RwLock<SubmissionServer<RNG, LU>>>,
     host: &str,
     port: &str)
@@ -106,8 +93,6 @@ impl SubmissionApi {
                 .data(submission_server.clone())
                 .route("/submit_transaction",
                        web::post().to(submit_transaction::<RNG, LU>))
-                .route("/submit_transaction_wasm/{tx}",
-                       web::post().to(submit_transaction_wasm::<RNG, LU>))
                 .route("/ping", web::get().to(ping))
                 .route("/txn_status/{handle}", web::get().to(txn_status::<RNG, LU>))
                 .route("/force_end_block",
@@ -120,6 +105,25 @@ impl SubmissionApi {
     Ok(SubmissionApi { web_runtime })
   }
 
+  pub fn create_mock(ledger_state: Arc<RwLock<LedgerState>>,
+                     block_capacity: usize)
+                     -> impl actix_service::Service {
+    let mut prng = rand_chacha::ChaChaRng::from_entropy();
+    let submission_server = Arc::new(RwLock::new(SubmissionServer::new(prng.clone(),
+                                                                       ledger_state,
+                                                                       block_capacity).unwrap()));
+    test::init_service(App::new().data(submission_server)
+                                 .route("/submit_transaction",
+                                        web::post().to(submit_transaction::<rand_chacha::ChaChaRng,
+                                                                          LedgerState>))
+                                 .route("/txn_status/{handle}",
+                                        web::get().to(txn_status::<rand_chacha::ChaChaRng,
+                                                                 LedgerState>))
+                                 .route("/force_end_block",
+                                        web::post().to(force_end_block::<rand_chacha::ChaChaRng,
+                                                                       LedgerState>)))
+  }
+
   // call from a thread; this will block.
   pub fn run(self) -> io::Result<()> {
     self.web_runtime.run()
@@ -130,11 +134,8 @@ impl SubmissionApi {
 mod tests {
   use super::*;
   use actix_web::dev::Service;
-  use actix_web::{test, web, App};
   use ledger::data_model::{AssetRules, AssetTypeCode, Operation, Transaction};
   use ledger::store::helpers::*;
-  use ledger::store::{LedgerAccess, LedgerState};
-  use rand_core::SeedableRng;
 
   #[test]
   fn test_submit_transaction_standalone() {

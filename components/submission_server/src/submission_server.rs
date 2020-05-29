@@ -51,7 +51,7 @@ pub enum CommitMode {
 
 pub struct SubmissionServer<RNG, LU>
   where RNG: RngCore + CryptoRng,
-        LU: LedgerUpdate<RNG> + LedgerAccess + ArchiveAccess
+        LU: LedgerUpdate<RNG>
 {
   committed_state: Arc<RwLock<LU>>,
   block: Option<LU::Block>,
@@ -64,7 +64,7 @@ pub struct SubmissionServer<RNG, LU>
 
 impl<RNG, LU> SubmissionServer<RNG, LU>
   where RNG: RngCore + CryptoRng,
-        LU: LedgerUpdate<RNG> + LedgerAccess + ArchiveAccess
+        LU: LedgerUpdate<RNG>
 {
   pub fn new(prng: RNG,
              ledger_state: Arc<RwLock<LU>>,
@@ -144,11 +144,11 @@ impl<RNG, LU> SubmissionServer<RNG, LU>
         self.txn_status
             .insert(handle, TxnStatus::Committed(committed_txn_info.clone()));
 
-        // Log txn details
-        txn_log_info(&ledger.get_transaction(committed_txn_info.0)
-                            .unwrap()
-                            .finalized_txn
-                            .txn);
+        // TODO add back Log txn details
+        //txn_log_info(&ledger.get_transaction(committed_txn_info.0)
+        //                    .unwrap()
+        //                    .finalized_txn
+        //                    .txn);
       }
       info!("Block ended. Statuses of committed transactions are now updated");
       // Empty temp_sids after the block is finished
