@@ -5,10 +5,10 @@ use ledger::data_model::Transaction;
 use ledger::store::*;
 use ledger_api_service::RestfulApiService;
 use log::info;
-use std::path::Path;
 use rand_chacha::ChaChaRng;
 use rand_core::SeedableRng;
 use std::net::SocketAddr;
+use std::path::Path;
 use std::process::Command;
 use std::sync::{Arc, RwLock};
 use std::thread;
@@ -39,10 +39,10 @@ struct ABCISubmissionServer {
 
 impl ABCISubmissionServer {
   fn new(base_dir: Option<&Path>) -> Result<ABCISubmissionServer, PlatformError> {
-  let ledger_state = match base_dir {
-    None => LedgerState::test_ledger(),
-    Some(base_dir) => LedgerState::load_or_init(base_dir).unwrap(),
-  };
+    let ledger_state = match base_dir {
+      None => LedgerState::test_ledger(),
+      Some(base_dir) => LedgerState::load_or_init(base_dir).unwrap(),
+    };
     let prng = rand_chacha::ChaChaRng::from_entropy();
     Ok(ABCISubmissionServer { la:
                                 Arc::new(RwLock::new(SubmissionServer::new_no_auto_commit(prng,
@@ -60,11 +60,11 @@ impl abci::Application for ABCISubmissionServer {
     if let Some(tx) = convert_tx(req.get_tx()) {
       if let Ok(la) = self.la.read() {
         if la.get_committed_state().write().is_ok() {
-        if TxnEffect::compute_effect(tx).is_err() {
-          resp.set_code(1);
-          resp.set_log(String::from("Check failed"));
+          if TxnEffect::compute_effect(tx).is_err() {
+            resp.set_code(1);
+            resp.set_log(String::from("Check failed"));
+          }
         }
-      }
       } else {
         resp.set_code(1);
         resp.set_log(String::from("Could not access ledger"));
@@ -81,23 +81,28 @@ impl abci::Application for ABCISubmissionServer {
     // Get the Tx [u8]
     let mut resp = ResponseDeliverTx::new();
     if let Some(tx) = convert_tx(req.get_tx()) {
-      if let Ok(mut la) = self.la.write() { if la.cache_transaction(tx).is_ok() {
-        return resp;
+      if let Ok(mut la) = self.la.write() {
+        if la.cache_transaction(tx).is_ok() {
+          return resp;
+        }
       }
-    }
     }
     resp.set_code(1);
     resp
   }
 
   fn begin_block(&mut self, _req: &RequestBeginBlock) -> ResponseBeginBlock {
-    if let Ok(mut la) = self.la.write() { la.begin_block(); }
+    if let Ok(mut la) = self.la.write() {
+      la.begin_block();
+    }
     ResponseBeginBlock::new()
   }
 
   fn end_block(&mut self, _req: &RequestEndBlock) -> ResponseEndBlock {
     // TODO: this should propagate errors instead of panicking
-    if let Ok(mut la) = self.la.write() { la.end_block().unwrap(); }
+    if let Ok(mut la) = self.la.write() {
+      la.end_block().unwrap();
+    }
     ResponseEndBlock::new()
   }
 
@@ -106,15 +111,15 @@ impl abci::Application for ABCISubmissionServer {
     let error_commitment = (HashOf::new(&None), 0);
     let mut r = ResponseCommit::new();
     if let Ok(mut la) = self.la.write() {
-    la.begin_commit();
-    let commitment = if let Ok(state) = la.get_committed_state().read() {
-      state.get_state_commitment()
-    } else {
-      error_commitment
-    };
-    la.end_commit();
-    r.data = commitment.0.as_ref().to_vec();
-  }
+      la.begin_commit();
+      let commitment = if let Ok(state) = la.get_committed_state().read() {
+        state.get_state_commitment()
+      } else {
+        error_commitment
+      };
+      la.end_commit();
+      r.data = commitment.0.as_ref().to_vec();
+    }
     r
   }
 
@@ -145,7 +150,7 @@ fn main() {
                                                            .unwrap_or_else(|| "8669".into());
   let ledger_port = std::env::var_os("LEDGER_PORT").filter(|x| !x.is_empty())
                                                    .unwrap_or_else(|| "8668".into());
-  thread::spawn(move || {
+  let submission_thread = thread::spawn(move || {
     let submission_api = SubmissionApi::create(submission_server,
                                                host.to_str().unwrap(),
                                                submission_port.to_str().unwrap()).unwrap();
@@ -156,15 +161,15 @@ fn main() {
     }
   });
 
-  let _join = thread::spawn(move || {
+  let query_thread = thread::spawn(move || {
     let query_service = RestfulApiService::create(cloned_lock,
-                                                 host2.to_str().unwrap(),
-                                                 ledger_port.to_str().unwrap()).unwrap();
-  println!("Starting ledger service");
-  match query_service.run() {
-    Ok(_) => println!("Successfully ran standalone"),
-    Err(_) => println!("Error running standalone"),
-  }
+                                                  host2.to_str().unwrap(),
+                                                  ledger_port.to_str().unwrap()).unwrap();
+    println!("Starting ledger service");
+    match query_service.run() {
+      Ok(_) => println!("Successfully ran standalone"),
+      Err(_) => println!("Error running standalone"),
+    }
   });
 
   let abci_host = std::option_env!("ABCI_HOST").unwrap_or("0.0.0.0");
@@ -174,5 +179,9 @@ fn main() {
   let addr_str = format!("{}:{}", abci_host, abci_port);
   let addr: SocketAddr = addr_str.parse().expect("Unable to parse socket address");
 
+  println!("Starting ABCI service");
   abci::run(addr, app);
+  submission_thread.join()
+                   .expect("The submission thread has panicked");
+  query_thread.join().expect("The query thread has panicked");
 }
