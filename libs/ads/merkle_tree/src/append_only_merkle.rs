@@ -1484,6 +1484,35 @@ impl AppendOnlyMerkle {
     Ok(result)
   }
 
+
+  /// Get a proof for the given transaction id from the underlying
+  /// AppendOnlyMerkle object.
+  ///
+  /// # Arguments
+  ///
+  /// * `transaction` - the Merkle tree id for the transaction
+  /// * `state` - the Merkle tree state for which the proof is wanted,
+  ///              or zero, for the current state.
+  pub fn get_proof(&self, transaction: u64, state: u64) -> io::Result<Proof> {
+    let proof_state = if state != 0 {
+      state
+    } else {
+      self.total_size()
+    };
+
+    if transaction >= proof_state {
+      return er(format!("That id ({}) is not valid for state {}.",
+                        transaction.commas(),
+                        state));
+    }
+
+    if !self.validate_transaction_id(transaction) {
+      return er(format!("That id ({}) is not valid.", transaction.commas()));
+    }
+
+    self.generate_proof(transaction, proof_state)
+  }
+
   // Append the hash of the partner of the current block, or
   // the empty hash, if this block has no sibling in the tree.
   fn push_partner_hash(&self,
@@ -1753,6 +1782,10 @@ impl AppendOnlyMerkle {
   /// let total_transactions = tree.total_size();
   ///
   pub fn total_size(&self) -> u64 {
+    self.entry_count
+  }
+
+  pub fn state(&self) -> u64 {
     self.entry_count
   }
 
