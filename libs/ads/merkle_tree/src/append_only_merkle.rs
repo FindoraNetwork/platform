@@ -1484,7 +1484,6 @@ impl AppendOnlyMerkle {
     Ok(result)
   }
 
-
   /// Get a proof for the given transaction id from the underlying
   /// AppendOnlyMerkle object.
   ///
@@ -1494,11 +1493,7 @@ impl AppendOnlyMerkle {
   /// * `state` - the Merkle tree state for which the proof is wanted,
   ///              or zero, for the current state.
   pub fn get_proof(&self, transaction: u64, state: u64) -> io::Result<Proof> {
-    let proof_state = if state != 0 {
-      state
-    } else {
-      self.total_size()
-    };
+    let proof_state = if state != 0 { state } else { self.total_size() };
 
     if transaction >= proof_state {
       return er(format!("That id ({}) is not valid for state {}.",
