@@ -11,6 +11,7 @@ use std::io;
 use std::marker::{Send, Sync};
 use std::sync::{Arc, RwLock};
 use submission_server::{SubmissionServer, TxnHandle};
+use utils::NetworkRoute;
 
 // Ping route to check for liveness of API
 fn ping() -> actix_web::Result<String> {
@@ -71,11 +72,31 @@ pub fn txn_status<RNG, LU>(data: web::Data<Arc<RwLock<SubmissionServer<RNG, LU>>
     res = format!("No transaction with handle {} found. Please retry with a new handle.",
                   &info);
   }
+
   Ok(res)
 }
 
 pub struct SubmissionApi {
   web_runtime: actix_rt::SystemRunner,
+}
+
+pub enum SubmissionRoutes {
+  SubmitTransaction,
+  TxnStatus,
+  Ping,
+  ForceEndBlock,
+}
+
+impl NetworkRoute for SubmissionRoutes {
+  fn route(&self) -> String {
+    let endpoint = match self {
+      &SubmissionRoutes::SubmitTransaction => "submit_transaction",
+      &SubmissionRoutes::TxnStatus => "txn_status",
+      &SubmissionRoutes::Ping => "ping",
+      &SubmissionRoutes::ForceEndBlock => "force_end_block",
+    };
+    "/".to_owned() + endpoint
+  }
 }
 
 impl SubmissionApi {
@@ -91,11 +112,12 @@ impl SubmissionApi {
       App::new().wrap(middleware::Logger::default())
                 .wrap(Cors::new().supports_credentials())
                 .data(submission_server.clone())
-                .route("/submit_transaction",
+                .route(&SubmissionRoutes::SubmitTransaction.route(),
                        web::post().to(submit_transaction::<RNG, LU>))
-                .route("/ping", web::get().to(ping))
-                .route("/txn_status/{handle}", web::get().to(txn_status::<RNG, LU>))
-                .route("/force_end_block",
+                .route(&SubmissionRoutes::Ping.route(), web::get().to(ping))
+                .route(&SubmissionRoutes::TxnStatus.with_arg_template("handle"),
+                       web::get().to(txn_status::<RNG, LU>))
+                .route(&SubmissionRoutes::ForceEndBlock.route(),
                        web::post().to(force_end_block::<RNG, LU>))
     }).bind(&format!("{}:{}", host, port))?
       .start();

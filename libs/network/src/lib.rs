@@ -1,6 +1,7 @@
 use actix_http::Request;
 use actix_service::Service;
 use actix_web::dev::ServiceResponse;
+use actix_web::test::TestRequest;
 use actix_web::{test, web, App};
 use ledger::data_model::errors::PlatformError;
 use ledger::data_model::{
@@ -14,13 +15,15 @@ use rand_core::SeedableRng;
 use serde::{Deserialize, Serialize};
 use sparse_merkle_tree::Key;
 use std::sync::{Arc, RwLock};
-use submission_api::{force_end_block, submit_transaction, txn_status, SubmissionApi};
+use submission_api::{
+  force_end_block, submit_transaction, txn_status, SubmissionApi, SubmissionRoutes,
+};
 use submission_server::{SubmissionServer, TxnHandle, TxnStatus};
-use utils::{HashOf, ProofOf, Serialized, SignatureOf};
+use utils::{HashOf, NetworkRoute, ProofOf, Serialized, SignatureOf};
 use zei::xfr::sig::XfrPublicKey;
 
 // Trait for rest clients that can submit transactions
-trait SubmitsTransactions {
+trait RestfulLedgerUpdate {
   // Forward transaction to a transaction submission server, returning a handle to the transaction
   fn submit_transaction(&mut self, txn: &Transaction) -> Result<TxnHandle, PlatformError>;
   // Forces the the validator to end the block. Useful for testing when it is desirable to commit
@@ -28,6 +31,24 @@ trait SubmitsTransactions {
   fn force_end_block(&mut self) -> Result<(), PlatformError>;
   // Get txn status from a handle
   fn txn_status(&self, handle: &TxnHandle) -> TxnStatus;
+}
+
+trait RestfulLedgerAccess {
+  fn get_utxo(&self, addr: TxoSID) -> Utxo;
+
+  fn get_issuance_num(&self, code: &AssetTypeCode) -> u64;
+
+  fn get_asset_type(&self, code: &AssetTypeCode) -> AssetType;
+
+  fn get_state_commitment(&self) -> (HashOf<Option<StateCommitmentData>>, u64);
+
+  fn get_utxo_status(&mut self, addr: TxoSID) -> AuthenticatedUtxoStatus;
+
+  fn get_kv_entry(&self, addr: Key) -> AuthenticatedKVLookup;
+
+  fn public_key(&self) -> XfrPublicKey;
+
+  fn sign_message<T: Serialize + serde::de::DeserializeOwned>(&self, msg: &T) -> SignatureOf<T>;
 }
 
 // this will do all the actix stuff
@@ -62,28 +83,27 @@ impl MockRestClient {
   }
 }
 
-impl SubmitsTransactions for MockRestClient {
+impl RestfulLedgerUpdate for MockRestClient {
   fn submit_transaction(&mut self, txn: &Transaction) -> Result<TxnHandle, PlatformError> {
+    let route = SubmissionRoutes::SubmitTransaction.route();
     let mut app =
       test::init_service(App::new().data(Arc::clone(&self.mock_submission_server))
-                                   .route("/submit_transaction",
+                                   .route(&route,
                                           web::post().to(submit_transaction::<rand_chacha::ChaChaRng,
                                                                             LedgerState>)));
-    let req = test::TestRequest::post().uri("/submit_transaction")
-                                       .set_json(&txn)
-                                       .to_request();
+    let req = TestRequest::post().uri(&route).set_json(&txn).to_request();
     let handle: TxnHandle = test::read_response_json(&mut app, req);
     Ok(handle)
   }
 
   fn force_end_block(&mut self) -> Result<(), PlatformError> {
+    let route = SubmissionRoutes::ForceEndBlock.route();
     let mut app =
       test::init_service(App::new().data(Arc::clone(&self.mock_submission_server))
-                                   .route("/force_end_block",
+                                   .route(&route,
                                           web::post().to(force_end_block::<rand_chacha::ChaChaRng,
                                                                             LedgerState>)));
-    let req = test::TestRequest::post().uri("/force_end_block")
-                                       .to_request();
+    let req = TestRequest::post().uri(&route).to_request();
     let submit_resp = test::block_on(app.call(req)).unwrap();
     Ok(())
   }
@@ -91,36 +111,32 @@ impl SubmitsTransactions for MockRestClient {
   fn txn_status(&self, handle: &TxnHandle) -> TxnStatus {
     let mut app =
       test::init_service(App::new().data(Arc::clone(&self.mock_submission_server))
-                                   .route("/txn_status/{handle}",
+                                   .route(&SubmissionRoutes::TxnStatus.with_arg_template("handle"),
                                           web::get().to(txn_status::<rand_chacha::ChaChaRng,
                                                                    LedgerState>)));
-    let req = test::TestRequest::get().uri(format!("/txn_status/{}", handle.0).as_str())
+    let req = test::TestRequest::get().uri(&SubmissionRoutes::TxnStatus.with_arg(&handle.0))
                                       .to_request();
     let status: TxnStatus = test::read_response_json(&mut app, req);
     status
   }
 }
 
-impl LedgerAccess for MockRestClient {
-  fn get_utxo(&self, addr: TxoSID) -> Option<&Utxo> {
-    //let mut app =
-    //  test::init_service(App::new().data(Arc::clone(&self.mock_ledger))
-    //                               .route("/utxo_sid/{sid}",
-    //                                      web::get().to(txn_status::<rand_chacha::ChaChaRng,
-    //                                                               LedgerState>)));
-    //// TODO Factor this out and factor out routes
-    //let req = test::TestRequest::get().uri(format!("/utxo_sid/{}", addr).as_str())
-    //                                  .to_request();
-    //let status: TxnStatus = test::read_response_json(&mut app, req);
-    //status
+impl RestfulLedgerAccess for MockRestClient {
+  fn get_utxo(&self, addr: TxoSID) -> Utxo {
+    let mut app = test::init_service(App::new().data(Arc::clone(&self.mock_ledger))
+                                               .route("/utxo_sid/{sid}",
+                                                      web::get().to(query_utxo::<LedgerState>)));
+    let req = test::TestRequest::get().uri(format!("/utxo_sid/{}", addr.0).as_str())
+                                      .to_request();
+    let utxo: Utxo = test::read_response_json(&mut app, req);
+    utxo
+  }
+
+  fn get_issuance_num(&self, code: &AssetTypeCode) -> u64 {
     unimplemented!();
   }
 
-  fn get_issuance_num(&self, code: &AssetTypeCode) -> Option<u64> {
-    unimplemented!();
-  }
-
-  fn get_asset_type(&self, code: &AssetTypeCode) -> Option<&AssetType> {
+  fn get_asset_type(&self, code: &AssetTypeCode) -> AssetType {
     unimplemented!();
   }
 
@@ -136,7 +152,7 @@ impl LedgerAccess for MockRestClient {
     unimplemented!();
   }
 
-  fn public_key(&self) -> &XfrPublicKey {
+  fn public_key(&self) -> XfrPublicKey {
     unimplemented!();
   }
 

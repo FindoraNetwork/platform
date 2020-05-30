@@ -14,7 +14,7 @@ use ledger::store::{ArchiveAccess, LedgerAccess};
 use std::io;
 use std::marker::{Send, Sync};
 use std::sync::{Arc, RwLock};
-use utils::{HashOf, SignatureOf};
+use utils::{HashOf, NetworkRoute, SignatureOf};
 use zei::xfr::sig::XfrPublicKey;
 
 pub struct RestfulApiService {
@@ -294,6 +294,56 @@ enum ServiceInterface {
   ArchiveAccess,
 }
 
+pub enum LedgerAccessRoutes {
+  UtxoSid,
+  AssetIssuanceNum,
+  AssetToken,
+  PublicKey,
+  GlobalState,
+  KVLookup,
+}
+
+impl NetworkRoute for LedgerAccessRoutes {
+  fn route(&self) -> String {
+    let endpoint = match self {
+      &LedgerAccessRoutes::UtxoSid => "utxo_sid",
+      &LedgerAccessRoutes::AssetIssuanceNum => "asset_issuance_num",
+      &LedgerAccessRoutes::AssetToken => "asset_token",
+      &LedgerAccessRoutes::PublicKey => "public_key",
+      &LedgerAccessRoutes::GlobalState => "global_state",
+      &LedgerAccessRoutes::KVLookup => "kv_lookup",
+    };
+    "/".to_owned() + endpoint
+  }
+}
+
+pub enum LedgerArchiveRoutes {
+  TxnSid,
+  AirAddress,
+  BlockLog,
+  GlobalStateVersion,
+  BlocksSince,
+  UtxoMap,
+  UtxoMapChecksum,
+  UtxoPartialMap,
+}
+
+impl NetworkRoute for LedgerArchiveRoutes {
+  fn route(&self) -> String {
+    let endpoint = match self {
+      &LedgerArchiveRoutes::TxnSid => "txn_sid",
+      &LedgerArchiveRoutes::AirAddress => "air_address",
+      &LedgerArchiveRoutes::BlockLog => "block_log",
+      &LedgerArchiveRoutes::BlocksSince => "blocks_since",
+      &LedgerArchiveRoutes::GlobalStateVersion => "global_state_version",
+      &LedgerArchiveRoutes::UtxoMap => "utxo_map",
+      &LedgerArchiveRoutes::UtxoMapChecksum => "utxo_map_checksum",
+      &LedgerArchiveRoutes::UtxoPartialMap => "utxo_partial_map",
+    };
+    "/".to_owned() + endpoint
+  }
+}
+
 trait Route {
   fn set_route<LA: 'static + LedgerAccess + ArchiveAccess + Sync + Send>(self,
                                                                          service_interface: ServiceInterface)
@@ -324,18 +374,25 @@ impl<T, B> Route for App<T, B>
 
   // Set routes for the LedgerAccess interface
   fn set_route_for_ledger_access<LA: 'static + LedgerAccess + Sync + Send>(self) -> Self {
-    self.route("/utxo_sid/{sid}", web::get().to(query_utxo::<LA>))
-        .route("/asset_issuance_num/{token}",
+    self.route(&LedgerAccessRoutes::UtxoSid.with_arg_template("sid"),
+               web::get().to(query_utxo::<LA>))
+        .route(&LedgerAccessRoutes::AssetIssuanceNum.with_arg_template("code"),
                web::get().to(query_asset_issuance_num::<LA>))
-        .route("/asset_token/{token}", web::get().to(query_asset::<LA>))
-        .route("/public_key", web::get().to(query_public_key::<LA>))
-        .route("/global_state", web::get().to(query_global_state::<LA>))
-        .route("/kv_lookup/{addr}", web::get().to(query_kv::<LA>))
+        .route(&LedgerAccessRoutes::AssetToken.with_arg_template("code"),
+               web::get().to(query_asset::<LA>))
+        .route(&LedgerAccessRoutes::PublicKey.route(),
+               web::get().to(query_public_key::<LA>))
+        .route(&LedgerAccessRoutes::GlobalState.route(),
+               web::get().to(query_global_state::<LA>))
+        .route(&LedgerAccessRoutes::KVLookup.with_arg_template("addr"),
+               web::get().to(query_kv::<LA>))
   }
 
   // Set routes for the ArchiveAccess interface
   fn set_route_for_archive_access<AA: 'static + ArchiveAccess + Sync + Send>(self) -> Self {
-    self.route("/txn_sid/{sid}", web::get().to(query_txn::<AA>))
+    self.route(&LedgerAccessRoutes::PublicKey.route(),
+               web::get().to(query_public_key::<LA>))
+        .route("/txn_sid/{sid}", web::get().to(query_txn::<AA>))
         .route("/air_address/{key}", web::get().to(query_air::<AA>))
         .route("/block_log", web::get().to(query_block_log::<AA>))
         .route("/global_state_version/{version}",
