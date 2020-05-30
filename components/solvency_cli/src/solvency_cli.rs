@@ -12,11 +12,11 @@ use zei::errors::ZeiError;
 
 /// Path to the data file.
 const DATA_FILE: &str = "solvency_data.json";
-// TODO (Keyao): support protocol and host switch
+// TODO (Keyao): Redmine issue #43: Support switching protocol and host in solvency_cli
+// We should support https://testnet.findora.org as well.
 const PROTOCOL: &str = "http";
 const HOST: &str = "localhost";
 
-// TODO (Keyao): Serialize codes
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 /// Information of assets, liabilities and conversion rates.
 struct AssetLiabilityAndRateData {

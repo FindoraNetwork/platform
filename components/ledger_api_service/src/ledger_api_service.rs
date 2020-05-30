@@ -7,6 +7,8 @@ extern crate serde_json;
 use actix_cors::Cors;
 use actix_web::{dev, error, middleware, web, App, HttpResponse, HttpServer};
 use air::AIRResult;
+use cryptohash::sha256::Digest as BitDigest;
+use cryptohash::sha256::DIGESTBYTES;
 use ledger::data_model::*;
 use ledger::store::{ArchiveAccess, LedgerAccess};
 use std::io;
@@ -199,6 +201,25 @@ fn query_air<AA>(data: web::Data<Arc<RwLock<AA>>>,
   Ok(web::Json(air_result))
 }
 
+fn query_kv<LA>(data: web::Data<Arc<RwLock<LA>>>,
+                addr: web::Path<String>)
+                -> actix_web::Result<web::Json<AuthenticatedKVLookup>>
+  where LA: LedgerAccess
+{
+  let reader = data.read().unwrap();
+  let mut key = BitDigest { 0: [0u8; DIGESTBYTES] };
+  let key_str = b64dec(&addr.into_inner()).map_err(actix_web::error::ErrorBadRequest)?;
+  if key.0.len() != key_str.len() {
+    return Err(actix_web::error::ErrorBadRequest(format!("KV keys must be {} bytes.",
+                                                         key.0.len())));
+  }
+
+  key.0.clone_from_slice(&key_str);
+
+  let result = reader.get_kv_entry(key);
+  Ok(web::Json(result))
+}
+
 fn query_block_log<AA>(data: web::Data<Arc<RwLock<AA>>>) -> impl actix_web::Responder
   where AA: ArchiveAccess
 {
@@ -352,6 +373,7 @@ impl<T, B> Route for App<T, B>
         .route("/policy_key/{key}", web::get().to(query_policy::<LA>))
         .route("/contract_key/{key}", web::get().to(query_contract::<LA>))
         .route("/global_state", web::get().to(query_global_state::<LA>))
+        .route("/kv_lookup/{addr}", web::get().to(query_kv::<LA>))
   }
 
   // Set routes for the ArchiveAccess interface
