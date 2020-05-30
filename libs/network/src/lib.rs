@@ -26,7 +26,7 @@ use utils::{HashOf, NetworkRoute, ProofOf, Serialized, SignatureOf};
 use zei::xfr::sig::XfrPublicKey;
 
 // Trait for rest clients that can submit transactions
-trait RestfulLedgerUpdate {
+pub trait RestfulLedgerUpdate {
   // Forward transaction to a transaction submission server, returning a handle to the transaction
   fn submit_transaction(&mut self, txn: &Transaction) -> Result<TxnHandle, PlatformError>;
   // Forces the the validator to end the block. Useful for testing when it is desirable to commit
@@ -36,7 +36,7 @@ trait RestfulLedgerUpdate {
   fn txn_status(&self, handle: &TxnHandle) -> TxnStatus;
 }
 
-trait RestfulLedgerAccess {
+pub trait RestfulLedgerAccess {
   fn get_utxo(&self, addr: TxoSID) -> Utxo;
 
   fn get_issuance_num(&self, code: &AssetTypeCode) -> u64;
