@@ -697,7 +697,7 @@ mod tests {
   }
 
   #[test]
-  #[ignore]	
+  #[ignore]
   // Redmine issue: #38. Do NOT reenable this test if it fails
   // TODO (keyao)
   // Test funds loading, loan request, fulfilling and repayment
