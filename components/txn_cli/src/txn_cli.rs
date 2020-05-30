@@ -13,7 +13,7 @@ use txn_cli::data_lib::*;
 use txn_cli::lending_lib::{fulfill_loan, load_funds, pay_loan};
 use txn_cli::txn_lib::{
   air_assign, define_asset, init_logging, issue_and_transfer_asset, match_error_and_exit,
-  query_open_asset_record, submit, submit_and_get_sids,
+  query_open_asset_record, submit, submit_and_get_sids, ProtocolHost,
 };
 use zei::xfr::asset_record::AssetRecordType;
 use zei::xfr::structs::AssetTracingPolicy;
@@ -746,7 +746,11 @@ pub(crate) fn process_lender_cmd(lender_matches: &clap::ArgMatches,
       };
       let memo_file = fulfill_loan_matches.value_of("memo_file");
       let (protocol, host) = protocol_host(fulfill_loan_matches);
-      fulfill_loan(data_dir, loan_id, issuer_id, memo_file, protocol, host)
+      fulfill_loan(data_dir,
+                   loan_id,
+                   issuer_id,
+                   memo_file,
+                   &ProtocolHost(protocol.to_owned(), host.to_owned()))
     }
     ("create_or_overwrite_requirement", Some(create_or_overwrite_requirement_matches)) => {
       let lender_id = if let Some(id_arg) = lender_matches.value_of("id") {
@@ -1045,8 +1049,11 @@ pub(crate) fn process_borrower_cmd(borrower_matches: &clap::ArgMatches,
         };
       // Get protocol and host.
       let (protocol, host) = protocol_host(get_asset_record_matches);
-      let asset_record =
-        query_open_asset_record(protocol, host, sid, &key_pair, &tracer_and_owner_memos[0].1)?;
+      let asset_record = query_open_asset_record(&ProtocolHost(protocol.to_owned(),
+                                                               host.to_owned()),
+                                                 sid,
+                                                 &key_pair,
+                                                 &tracer_and_owner_memos[0].1)?;
       println!("{} owns {} of asset {:?}.",
                borrower_name,
                asset_record.get_amount(),
@@ -1090,7 +1097,8 @@ pub(crate) fn process_submit_cmd(submit_matches: &clap::ArgMatches,
   let (protocol, host) = protocol_host(submit_matches);
   let txn_builder = load_txn_from_file(txn_file)?;
   if submit_matches.is_present("get_sids") || submit_matches.is_present("sids_file") {
-    let sids = submit_and_get_sids(protocol, host, txn_builder)?;
+    let sids = submit_and_get_sids(&ProtocolHost(protocol.to_owned(), host.to_owned()),
+                                   txn_builder)?;
     println!("Utxo: {:?}", sids);
     if let Some(path) = submit_matches.value_of("sids_file") {
       let mut sids_str = "".to_owned();
@@ -1101,7 +1109,8 @@ pub(crate) fn process_submit_cmd(submit_matches: &clap::ArgMatches,
     }
     Ok(())
   } else {
-    submit(protocol, host, txn_builder)
+    submit(&ProtocolHost(protocol.to_owned(), host.to_owned()),
+           txn_builder)
   }
 }
 
@@ -1131,7 +1140,11 @@ pub(crate) fn process_load_funds_cmd(load_funds_matches: &clap::ArgMatches,
     return Err(PlatformError::InputsError(error_location!()));
   };
   let (protocol, host) = protocol_host(load_funds_matches);
-  load_funds(data_dir, issuer_id, borrower_id, amount, protocol, host)
+  load_funds(data_dir,
+             issuer_id,
+             borrower_id,
+             amount,
+             &ProtocolHost(protocol.to_owned(), host.to_owned()))
 }
 
 /// Processes the `borrower pay_loan` subcommand.
@@ -1154,7 +1167,10 @@ pub(crate) fn process_pay_loan_cmd(pay_loan_matches: &clap::ArgMatches,
   };
   let (protocol, host) = protocol_host(pay_loan_matches);
 
-  pay_loan(data_dir, loan_id, amount, protocol, host)
+  pay_loan(data_dir,
+           loan_id,
+           amount,
+           &ProtocolHost(protocol.to_owned(), host.to_owned()))
 }
 
 /// Processes input commands and arguments.
