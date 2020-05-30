@@ -9,7 +9,10 @@ use ledger::data_model::{
   Transaction, TxoSID, Utxo,
 };
 use ledger::store::{LedgerAccess, LedgerState};
-use ledger_api_service::query_utxo;
+use ledger_api_service::{
+  query_asset, query_asset_issuance_num, query_global_state, query_utxo, LedgerAccessRoutes,
+  LedgerArchiveRoutes,
+};
 use rand_chacha::ChaChaRng;
 use rand_core::SeedableRng;
 use serde::{Deserialize, Serialize};
@@ -41,8 +44,6 @@ trait RestfulLedgerAccess {
   fn get_asset_type(&self, code: &AssetTypeCode) -> AssetType;
 
   fn get_state_commitment(&self) -> (HashOf<Option<StateCommitmentData>>, u64);
-
-  fn get_utxo_status(&mut self, addr: TxoSID) -> AuthenticatedUtxoStatus;
 
   fn get_kv_entry(&self, addr: Key) -> AuthenticatedKVLookup;
 
@@ -116,36 +117,51 @@ impl RestfulLedgerUpdate for MockRestClient {
                                                                    LedgerState>)));
     let req = test::TestRequest::get().uri(&SubmissionRoutes::TxnStatus.with_arg(&handle.0))
                                       .to_request();
-    let status: TxnStatus = test::read_response_json(&mut app, req);
-    status
+    test::read_response_json(&mut app, req)
   }
 }
 
 impl RestfulLedgerAccess for MockRestClient {
   fn get_utxo(&self, addr: TxoSID) -> Utxo {
-    let mut app = test::init_service(App::new().data(Arc::clone(&self.mock_ledger))
-                                               .route("/utxo_sid/{sid}",
-                                                      web::get().to(query_utxo::<LedgerState>)));
-    let req = test::TestRequest::get().uri(format!("/utxo_sid/{}", addr.0).as_str())
+    let mut app =
+      test::init_service(App::new().data(Arc::clone(&self.mock_ledger))
+                                   .route(&LedgerAccessRoutes::UtxoSid.with_arg_template("sid"),
+                                          web::get().to(query_utxo::<LedgerState>)));
+    let req = test::TestRequest::get().uri(&LedgerAccessRoutes::UtxoSid.with_arg(&addr.0))
                                       .to_request();
-    let utxo: Utxo = test::read_response_json(&mut app, req);
-    utxo
+    test::read_response_json(&mut app, req)
   }
 
   fn get_issuance_num(&self, code: &AssetTypeCode) -> u64 {
-    unimplemented!();
+    let mut app =
+      test::init_service(App::new().data(Arc::clone(&self.mock_ledger))
+                                   .route(&LedgerAccessRoutes::AssetIssuanceNum.with_arg_template("code"),
+                                          web::get().to(query_asset_issuance_num::<LedgerState>)));
+    let req =
+      test::TestRequest::get().uri(&LedgerAccessRoutes::AssetIssuanceNum.with_arg(&code.to_base64()))
+                              .to_request();
+    test::read_response_json(&mut app, req)
   }
 
   fn get_asset_type(&self, code: &AssetTypeCode) -> AssetType {
-    unimplemented!();
+    let mut app =
+      test::init_service(App::new().data(Arc::clone(&self.mock_ledger))
+                                   .route(&LedgerAccessRoutes::AssetToken.with_arg_template("code"),
+                                          web::get().to(query_asset::<LedgerState>)));
+    let req =
+      test::TestRequest::get().uri(&LedgerAccessRoutes::AssetToken.with_arg(&code.to_base64()))
+                              .to_request();
+    test::read_response_json(&mut app, req)
   }
 
   fn get_state_commitment(&self) -> (HashOf<Option<StateCommitmentData>>, u64) {
-    unimplemented!();
-  }
-
-  fn get_utxo_status(&mut self, addr: TxoSID) -> AuthenticatedUtxoStatus {
-    unimplemented!();
+    let mut app =
+      test::init_service(App::new().data(Arc::clone(&self.mock_ledger))
+                                   .route(&LedgerAccessRoutes::GlobalState.route(),
+                                          web::get().to(query_global_state::<LedgerState>)));
+    let req = test::TestRequest::get().uri(&LedgerAccessRoutes::GlobalState.route())
+                                      .to_request();
+    test::read_response_json(&mut app, req)
   }
 
   fn get_kv_entry(&self, addr: Key) -> AuthenticatedKVLookup {

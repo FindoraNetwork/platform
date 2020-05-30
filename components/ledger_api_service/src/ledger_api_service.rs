@@ -390,19 +390,21 @@ impl<T, B> Route for App<T, B>
 
   // Set routes for the ArchiveAccess interface
   fn set_route_for_archive_access<AA: 'static + ArchiveAccess + Sync + Send>(self) -> Self {
-    self.route(&LedgerAccessRoutes::PublicKey.route(),
-               web::get().to(query_public_key::<LA>))
-        .route("/txn_sid/{sid}", web::get().to(query_txn::<AA>))
-        .route("/air_address/{key}", web::get().to(query_air::<AA>))
-        .route("/block_log", web::get().to(query_block_log::<AA>))
-        .route("/global_state_version/{version}",
+    self.route(&LedgerArchiveRoutes::TxnSid.with_arg_template("sid"),
+               web::get().to(query_txn::<AA>))
+        .route(&LedgerArchiveRoutes::AirAddress.with_arg_template("key"),
+               web::get().to(query_air::<AA>))
+        .route(&LedgerArchiveRoutes::BlockLog.route(),
+               web::get().to(query_block_log::<AA>))
+        .route(&LedgerArchiveRoutes::GlobalStateVersion.with_arg_template("version"),
                web::get().to(query_global_state_version::<AA>))
-        .route("/blocks_since/{block_sid}",
+        .route(&LedgerArchiveRoutes::BlocksSince.with_arg_template("block_sid"),
                web::get().to(query_blocks_since::<AA>))
-        .route("/utxo_map", web::get().to(query_utxo_map::<AA>))
-        .route("/utxo_map_checksum",
+        .route(&LedgerArchiveRoutes::UtxoMap.route(),
+               web::get().to(query_utxo_map::<AA>))
+        .route(&LedgerArchiveRoutes::UtxoMapChecksum.route(),
                web::get().to(query_utxo_map_checksum::<AA>))
-        .route("/utxo_partial_map/{sidlist}",
+        .route(&LedgerArchiveRoutes::UtxoPartialMap.with_arg_template("sidlist"),
                web::get().to(query_utxo_partial_map::<AA>))
   }
 }
