@@ -349,7 +349,7 @@ impl HasInvariants<PlatformError> for LedgerState {
         }
       }
     }
-    /* FIXME: These tests of logging are unnecessary but are being left here as we decide what to do about logging, archival, etc.
+    /* TODO: These tests of logging are unnecessary but are being left here as we decide what to do about logging, archival, etc.
        See https://github.com/findoraorg/platform/issues/307
         if let Some((_, txn_log_fd)) = &self.txn_log {
           txn_log_fd.sync_data().unwrap();
@@ -1556,10 +1556,10 @@ impl LedgerState {
 
     // Create a log for the tree.  The tree size ("state") is appended to
     // the end of the path.
-    // FIXME: START https://github.com/findoraorg/platform/issues/307
+    // TODO: START https://github.com/findoraorg/platform/issues/307
     // let next_id = tree.total_size();
     // let writer = LedgerState::create_merkle_log(path.to_owned(), next_id)?;
-    // FIXME: END This is being disabled as we decide what to do about about logging, archival, etc
+    // TODO: END This is being disabled as we decide what to do about about logging, archival, etc
     Ok(tree)
     // Ok(LoggedMerkle::new(tree, writer))
   }
@@ -1894,10 +1894,10 @@ impl LedgerState {
   // Snapshot the block ledger state
   pub fn snapshot_block(&mut self) -> Result<SnapshotId, std::io::Error> {
     let state = self.block_merkle.state();
-    // FIXME: START https://github.com/findoraorg/platform/issues/307
+    // TODO: START https://github.com/findoraorg/platform/issues/307
     // let writer = LedgerState::create_merkle_log(self.status.block_merkle_path.clone(), state)?;
     // self.block_merkle.snapshot(writer)?;
-    // FIXME: END This is being disabled as we decide what to do about about logging, archival, etc
+    // TODO: END This is being disabled as we decide what to do about about logging, archival, etc
     Ok(SnapshotId { id: state })
   }
 
@@ -1908,10 +1908,10 @@ impl LedgerState {
   // TODO(joe): Actually serialize the active ledger state.
   pub fn snapshot_txns(&mut self) -> Result<SnapshotId, std::io::Error> {
     let state = self.txn_merkle.state();
-    // FIXME: START https://github.com/findoraorg/platform/issues/307
+    // TODO: START https://github.com/findoraorg/platform/issues/307
     // let writer = LedgerState::create_merkle_log(self.status.txn_merkle_path.clone(), state)?;
     // self.txn_merkle.snapshot(writer)?;
-    // FIXME: END This is being disabled as we decide what to do about about logging, archival, etc
+    // TODO: END This is being disabled as we decide what to do about about logging, archival, etc
 
     Ok(SnapshotId { id: state })
   }
@@ -1926,10 +1926,10 @@ impl LedgerState {
     let merkle_id = self.compute_and_append_txns_hash(&block);
     self.compute_and_save_state_commitment_data();
     self.utxo_map.write().unwrap();
-    // FIXME: START https://github.com/findoraorg/platform/issues/307
+    // TODO: START https://github.com/findoraorg/platform/issues/307
     // self.txn_merkle.flush().unwrap();
     // self.block_merkle.flush().unwrap();
-    // FIXME: END This is being disabled as we decide what to do about about logging, archival, etc
+    // TODO: END This is being disabled as we decide what to do about about logging, archival, etc
     merkle_id
   }
 
@@ -1938,7 +1938,7 @@ impl LedgerState {
   //
   //     <tree_path>-log-<Merkle tree state>
   //
-  /* FIXME: Leaving this code here while https://github.com/findoraorg/platform/issues/307 gets worked out
+  /* TODO: Leaving this code here while https://github.com/findoraorg/platform/issues/307 gets worked out
   fn create_merkle_log(base_path: String, next_id: u64) -> Result<File, std::io::Error> {
     let log_path = base_path + "-log-" + &next_id.to_string();
     println!("merkle log:  {}", log_path);
