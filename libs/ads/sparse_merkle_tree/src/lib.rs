@@ -3,6 +3,8 @@
 //!
 //!
 use cryptohash::sha256;
+use rand::prelude::thread_rng;
+use rand::Rng;
 use serde::{Deserialize, Serialize};
 use sha256::DIGESTBYTES;
 use std::collections::HashMap;
@@ -53,6 +55,12 @@ pub fn flip_bit(b: &mut [u8; 32], index: usize) {
 // we've given different types to these.
 
 pub type Key = Digest; // [u8; DIGESTBYTES];
+
+// Method to generate a random key by hashing some random bits
+pub fn random_key() -> Key {
+  let rand = thread_rng().gen::<u64>();
+  digest(rand.to_be_bytes())
+}
 
 // We apply the following optimization. Assuming 'H' is our hash function, we set H(leaf) = 0u256
 // and H(0u256, 0u256) = 0u256.

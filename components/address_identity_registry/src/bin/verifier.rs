@@ -5,7 +5,7 @@ mod shared;
 use air::{check_merkle_proof, AIRResult};
 use credentials::{credential_verify, CredCommitment};
 use shared::{AIRAddressAndPoK, PubCreds, RevealFields};
-use utils::{protocol_host, urlencode, QUERY_PORT};
+use utils::{protocol_host, urlencode, LEDGER_PORT};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -44,11 +44,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
   println!("Looking up value at {}://{}:{}/air_address/{}",
            protocol,
            host,
-           QUERY_PORT,
+           LEDGER_PORT,
            serde_json::to_string(&addr_and_pok.addr).unwrap());
   let air_result: AIRResult =
     reqwest::get(&format!("{}://{}:{}/air_address/{}",
-                          protocol, host, QUERY_PORT, &addr_and_pok.addr)).await?
+                          protocol, host, LEDGER_PORT, &addr_and_pok.addr)).await?
                                                                           .json::<AIRResult>()
                                                                           .await?;
 

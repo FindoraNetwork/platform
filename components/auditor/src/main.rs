@@ -50,7 +50,7 @@ use std::{
   thread,
   time::Duration,
 };
-use utils::{protocol_host, QUERY_PORT};
+use utils::{protocol_host, LEDGER_PORT};
 use zei::xfr::sig::{XfrPublicKey, XfrSignature};
 
 #[derive(Debug, Deserialize, Serialize, Clone, Eq, PartialEq)]
@@ -116,7 +116,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
   // Read signed commitment from ledger
   let (protocol, host) = protocol_host();
-  let resp_gs = client.get(&format!("{}://{}:{}/global_state", protocol, host, QUERY_PORT))
+  let resp_gs = client.get(&format!("{}://{}:{}/global_state", protocol, host, LEDGER_PORT))
                       .send()?;
   let (comm, idx, sig): (BitDigest, u64, XfrSignature) =
     serde_json::from_str(&resp_gs.text()?[..]).unwrap();
@@ -127,7 +127,7 @@ fn main() -> Result<(), Box<dyn Error>> {
   };
   info!("Got ({:?}, {}, {:?}) from global_state", comm, idx, sig);
   // Read signed commitment from ledger
-  let resp_pk = client.get(&format!("{}://{}:{}/public_key", protocol, host, QUERY_PORT))
+  let resp_pk = client.get(&format!("{}://{}:{}/public_key", protocol, host, LEDGER_PORT))
                       .send()?;
   let pk: XfrPublicKey = serde_json::from_str(&resp_pk.text()?[..]).unwrap();
   info!("Got {:?} from public_key", pk);

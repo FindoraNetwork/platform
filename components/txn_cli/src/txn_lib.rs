@@ -14,7 +14,7 @@ use rand_core::{CryptoRng, RngCore};
 use std::process::exit;
 use submission_server::{TxnHandle, TxnStatus};
 use txn_builder::{BuildsTransactions, PolicyChoice, TransactionBuilder, TransferOperationBuilder};
-use utils::{QUERY_PORT, SUBMIT_PORT};
+use utils::{LEDGER_PORT, SUBMIT_PORT};
 use zei::api::anon_creds::Credential as ZeiCredential;
 use zei::setup::PublicParams;
 use zei::xfr::asset_record::{build_blind_asset_record, open_blind_asset_record, AssetRecordType};
@@ -273,14 +273,14 @@ pub struct ProtocolHost(pub String, pub String);
 /// * `protocol_host`:
 ///   * protocol: either `https` or `http`
 ///   * host: either `testnet.findora.org` or `localhost`.
-/// * `port`: either `QUERY_PORT` or `SUBMIT_PORT`.
+/// * `port`: either `LEDGER_PORT` or `SUBMIT_PORT`.
 /// * `route`: route to query.
 /// * `value`: value to look up.
 ///
 /// # Examples
 /// * To query the BlindAssetRecord with utxo_sid 100 from https://testnet.findora.org:
 /// use txn_cli::txn_lib::query;
-/// query("https", "testnet.findora.org", QUERY_PORT, "utxo_sid", "100").unwrap();
+/// query("https", "testnet.findora.org", LEDGER_PORT, "utxo_sid", "100").unwrap();
 pub fn query(protocol_host: &ProtocolHost,
              port: &str,
              route: &str,
@@ -314,7 +314,7 @@ pub fn query(protocol_host: &ProtocolHost,
 pub fn query_utxo_and_get_type_commitment(utxo: u64,
                                           protocol_host: &ProtocolHost)
                                           -> Result<CompressedRistretto, PlatformError> {
-  let res = query(protocol_host, QUERY_PORT, "utxo_sid", &format!("{}", utxo))?;
+  let res = query(protocol_host, LEDGER_PORT, "utxo_sid", &format!("{}", utxo))?;
   let blind_asset_record =
     serde_json::from_str::<BlindAssetRecord>(&res).or_else(|_| Err(des_fail!()))?;
   match blind_asset_record.asset_type {
@@ -330,7 +330,7 @@ pub fn query_utxo_and_get_type_commitment(utxo: u64,
 pub fn query_utxo_and_get_amount(utxo: u64,
                                  protocol_host: &ProtocolHost)
                                  -> Result<XfrAmount, PlatformError> {
-  let res = query(protocol_host, QUERY_PORT, "utxo_sid", &format!("{}", utxo))?;
+  let res = query(protocol_host, LEDGER_PORT, "utxo_sid", &format!("{}", utxo))?;
   let blind_asset_record =
     serde_json::from_str::<BlindAssetRecord>(&res).or_else(|_| Err(des_fail!()))?;
   Ok(blind_asset_record.amount)
@@ -434,7 +434,10 @@ pub fn query_open_asset_record(protocol_host: &ProtocolHost,
                                key_pair: &XfrKeyPair,
                                owner_memo: &Option<OwnerMemo>)
                                -> Result<OpenAssetRecord, PlatformError> {
-  let res = query(protocol_host, QUERY_PORT, "utxo_sid", &format!("{}", sid.0))?;
+  let res = query(protocol_host,
+                  LEDGER_PORT,
+                  "utxo_sid",
+                  &format!("{}", sid.0))?;
   let blind_asset_record =
     serde_json::from_str::<BlindAssetRecord>(&res).or_else(|_| Err(des_fail!()))?;
   open_blind_asset_record(&blind_asset_record, owner_memo, key_pair.get_sk_ref()).or_else(|error| {
