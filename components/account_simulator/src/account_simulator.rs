@@ -1,4 +1,4 @@
-//#![deny(warnings)]
+#![deny(warnings)]
 #![allow(unused)]
 use quickcheck::{Arbitrary, Gen, QuickCheck, StdGen};
 use std::iter::repeat;
@@ -1033,7 +1033,7 @@ impl<T> InterpretAccounts<PlatformError> for LedgerStandaloneAccounts<T>
         {
           let txn_handle = self.client.submit_transaction(&txn).unwrap();
           self.client.force_end_block().unwrap();
-          match self.client.txn_status(&txn_handle) {
+          match self.client.txn_status(&txn_handle).unwrap() {
             TxnStatus::Committed((_sid, txos)) => {}
             _ => panic!("Pending status found when Committed expected"),
           }
@@ -1051,7 +1051,7 @@ impl<T> InterpretAccounts<PlatformError> for LedgerStandaloneAccounts<T>
                                  .get(unit)
                                  .ok_or_else(|| PlatformError::InputsError(error_location!()))?;
 
-        let new_seq_num = self.client.get_issuance_num(&code);
+        let new_seq_num = self.client.get_issuance_num(&code).unwrap();
 
         let keypair = self.accounts
                           .get(issuer)
@@ -1085,7 +1085,7 @@ impl<T> InterpretAccounts<PlatformError> for LedgerStandaloneAccounts<T>
         let txos = {
           let txn_handle = self.client.submit_transaction(&tx).unwrap();
           self.client.force_end_block().unwrap();
-          match self.client.txn_status(&txn_handle) {
+          match self.client.txn_status(&txn_handle).unwrap() {
             TxnStatus::Committed((_sid, txos)) => txos,
             _ => panic!("Pending status found when Committed expected"),
           }
@@ -1130,7 +1130,7 @@ impl<T> InterpretAccounts<PlatformError> for LedgerStandaloneAccounts<T>
 
         while total_sum < amt && !avail.is_empty() {
           let sid = avail.pop_front().unwrap();
-          let blind_rec = (self.client.get_utxo(sid).0).0;
+          let blind_rec = (self.client.get_utxo(sid).unwrap().0).0;
           let memo = self.owner_memos.get(&sid).cloned();
           let open_rec = open_blind_asset_record(&blind_rec, &memo, &src_priv).unwrap();
           // dbg!(sid, open_rec.get_amount(), open_rec.get_asset_type());
@@ -1233,7 +1233,7 @@ impl<T> InterpretAccounts<PlatformError> for LedgerStandaloneAccounts<T>
         let txos = {
           let txn_handle = self.client.submit_transaction(&txn).unwrap();
           self.client.force_end_block().unwrap();
-          match self.client.txn_status(&txn_handle) {
+          match self.client.txn_status(&txn_handle).unwrap() {
             TxnStatus::Committed((_sid, txos)) => txos,
             _ => panic!("Pending status found when Committed expected"),
           }
@@ -1903,19 +1903,17 @@ mod test {
   #[test]
   // This test passes, but we ignore it since it's slow
   // Redmine issue: #47
+  #[ignore]
   fn regression_quickcheck_found_with_standalone() {
     regression_quickcheck_found(true)
   }
 
   #[test]
-  // This test passes individually, but we ignore it since it occasionally fails
-  // when run with other tests which also use the standalone ledger
-  // Redmine issue: #38
-  #[ignore]
   fn quickcheck_ledger_simulates() {
-    QuickCheck::new().tests(1)
-                     // .quickcheck(ledger_simulates_accounts_with_standalone
-                     .quickcheck(ledger_simulates_accounts_no_standalone
-                                 as fn(AccountsScenario) -> ());
+    QuickCheck::new().tests(1).quickcheck(
+                                          ledger_simulates_accounts_with_standalone
+                     //.quickcheck(ledger_simulates_accounts_no_standalone
+                                 as fn(AccountsScenario) -> (),
+    );
   }
 }

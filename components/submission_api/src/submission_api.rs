@@ -1,11 +1,9 @@
-//#![deny(warnings)]
+#![deny(warnings)]
 use actix_cors::Cors;
-use actix_web::{error, middleware, test, web, App, HttpServer};
+use actix_web::{error, middleware, web, App, HttpServer};
 use ledger::data_model::Transaction;
-use ledger::store::{LedgerAccess, LedgerState, LedgerUpdate};
+use ledger::store::LedgerUpdate;
 use log::{error, info};
-use percent_encoding::percent_decode_str;
-use rand_core::SeedableRng;
 use rand_core::{CryptoRng, RngCore};
 use std::io;
 use std::marker::{Send, Sync};
@@ -89,11 +87,11 @@ pub enum SubmissionRoutes {
 
 impl NetworkRoute for SubmissionRoutes {
   fn route(&self) -> String {
-    let endpoint = match self {
-      &SubmissionRoutes::SubmitTransaction => "submit_transaction",
-      &SubmissionRoutes::TxnStatus => "txn_status",
-      &SubmissionRoutes::Ping => "ping",
-      &SubmissionRoutes::ForceEndBlock => "force_end_block",
+    let endpoint = match *self {
+      SubmissionRoutes::SubmitTransaction => "submit_transaction",
+      SubmissionRoutes::TxnStatus => "txn_status",
+      SubmissionRoutes::Ping => "ping",
+      SubmissionRoutes::ForceEndBlock => "force_end_block",
     };
     "/".to_owned() + endpoint
   }
@@ -137,8 +135,11 @@ impl SubmissionApi {
 mod tests {
   use super::*;
   use actix_web::dev::Service;
+  use actix_web::{test, web, App};
   use ledger::data_model::{AssetRules, AssetTypeCode, Operation, Transaction};
   use ledger::store::helpers::*;
+  use ledger::store::{LedgerAccess, LedgerState};
+  use rand_core::SeedableRng;
 
   #[test]
   fn test_submit_transaction_standalone() {

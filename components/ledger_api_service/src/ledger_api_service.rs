@@ -80,6 +80,7 @@ pub fn query_asset<LA>(data: web::Data<Arc<RwLock<LA>>>,
       Ok(web::Json(asset.clone()))
     } else {
       Err(actix_web::error::ErrorNotFound("Specified asset definition does not currently exist."))
+      // TODO which of these should be returning 404s?
     }
   } else {
     Err(actix_web::error::ErrorBadRequest("Invalid asset definition encoding."))
@@ -305,13 +306,13 @@ pub enum LedgerAccessRoutes {
 
 impl NetworkRoute for LedgerAccessRoutes {
   fn route(&self) -> String {
-    let endpoint = match self {
-      &LedgerAccessRoutes::UtxoSid => "utxo_sid",
-      &LedgerAccessRoutes::AssetIssuanceNum => "asset_issuance_num",
-      &LedgerAccessRoutes::AssetToken => "asset_token",
-      &LedgerAccessRoutes::PublicKey => "public_key",
-      &LedgerAccessRoutes::GlobalState => "global_state",
-      &LedgerAccessRoutes::KVLookup => "kv_lookup",
+    let endpoint = match *self {
+      LedgerAccessRoutes::UtxoSid => "utxo_sid",
+      LedgerAccessRoutes::AssetIssuanceNum => "asset_issuance_num",
+      LedgerAccessRoutes::AssetToken => "asset_token",
+      LedgerAccessRoutes::PublicKey => "public_key",
+      LedgerAccessRoutes::GlobalState => "global_state",
+      LedgerAccessRoutes::KVLookup => "kv_lookup",
     };
     "/".to_owned() + endpoint
   }
@@ -330,15 +331,15 @@ pub enum LedgerArchiveRoutes {
 
 impl NetworkRoute for LedgerArchiveRoutes {
   fn route(&self) -> String {
-    let endpoint = match self {
-      &LedgerArchiveRoutes::TxnSid => "txn_sid",
-      &LedgerArchiveRoutes::AirAddress => "air_address",
-      &LedgerArchiveRoutes::BlockLog => "block_log",
-      &LedgerArchiveRoutes::BlocksSince => "blocks_since",
-      &LedgerArchiveRoutes::GlobalStateVersion => "global_state_version",
-      &LedgerArchiveRoutes::UtxoMap => "utxo_map",
-      &LedgerArchiveRoutes::UtxoMapChecksum => "utxo_map_checksum",
-      &LedgerArchiveRoutes::UtxoPartialMap => "utxo_partial_map",
+    let endpoint = match *self {
+      LedgerArchiveRoutes::TxnSid => "txn_sid",
+      LedgerArchiveRoutes::AirAddress => "air_address",
+      LedgerArchiveRoutes::BlockLog => "block_log",
+      LedgerArchiveRoutes::BlocksSince => "blocks_since",
+      LedgerArchiveRoutes::GlobalStateVersion => "global_state_version",
+      LedgerArchiveRoutes::UtxoMap => "utxo_map",
+      LedgerArchiveRoutes::UtxoMapChecksum => "utxo_map_checksum",
+      LedgerArchiveRoutes::UtxoPartialMap => "utxo_partial_map",
     };
     "/".to_owned() + endpoint
   }
