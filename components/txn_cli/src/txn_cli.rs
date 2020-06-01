@@ -7,7 +7,7 @@ use ledger::data_model::{
   TxoRef, TxoSID,
 };
 use ledger::{error_location, ser_fail};
-use sparse_merkle_tree::{random_key, Key};
+use sparse_merkle_tree::{digest, Key};
 use std::env;
 use txn_builder::{BuildsTransactions, TransactionBuilder};
 use txn_cli::data_lib::*;
@@ -228,13 +228,7 @@ pub(crate) fn process_asset_issuer_cmd(asset_issuer_matches: &clap::ArgMatches,
           parse_to_u64(asset_issuer_matches.value_of("id")
                                  .ok_or_else(|| PlatformError::InputsError(error_location!()))?)?;
       let key_pair = data.get_asset_issuer_key_pair(issuer_id)?;
-      let key = if let Some(key_str) = kv_matches.value_of("key") {
-        Key::from_slice(&b64dec(key_str)
-          .map_err(|e| PlatformError::InputsError(format!("{}:{}",e,error_location!())))?)
-          .ok_or_else(|| PlatformError::InputsError(error_location!()))?
-      } else {
-        random_key()
-      };
+      let key = digest(kv_matches.value_of("key").unwrap());
       let gen = parse_to_u64(kv_matches.value_of("gen")
           .ok_or_else(|| PlatformError::InputsError(error_location!()))?)
           .map_err(|e| PlatformError::InputsError(format!("{}:{}",e,error_location!())))?;
@@ -1461,8 +1455,9 @@ fn main() {
         .arg(Arg::with_name("key")
           .short("k")
           .long("key")
+          .required(true)
           .takes_value(true)
-          .help("Which KV-store entry to set. Will use a random location if none provided."))
+          .help("Which KV-store entry to set. String passed in will be converted to a base-64 encoded key."))
         .arg(Arg::with_name("gen")
           .short("g")
           .long("gen")
