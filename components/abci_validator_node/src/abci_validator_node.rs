@@ -2,6 +2,7 @@
 use abci::*;
 use ledger::data_model::errors::PlatformError;
 use ledger::data_model::Transaction;
+use ledger::error_location;
 use ledger::store::*;
 use ledger_api_service::RestfulApiService;
 use log::info;
@@ -9,7 +10,6 @@ use rand_chacha::ChaChaRng;
 use rand_core::SeedableRng;
 use std::net::SocketAddr;
 use std::path::Path;
-use std::process::Command;
 use std::sync::{Arc, RwLock};
 use std::thread;
 use submission_api::SubmissionApi;
@@ -23,12 +23,22 @@ impl TxnForward for TendermintForward {
   fn forward_txn(&self, txn: Transaction) -> Result<(), PlatformError> {
     let txn_json = serde_json::to_string(&txn)?;
     info!("forward_txn: {}", txn_json);
+
+    // POST is supported with base64 encoding, presumably web
+    // curl --data-binary '{"jsonrpc":"2.0","id":"anything","method":"broadcast_tx_commit","params": {"tx": "AQIDBA=="}}' -H 'content-type:text/plain;' http://localhost:26657
+
     // TODO (Nathan/John): send txn_json to tendermint
     let arg = format!("http://localhost:26657/broadcast_tx_commit?tx=\"{}\"",
                       txn_json);
-    let result = Command::new("curl").args(&[arg]).output()?;
-    info!("stdout output: {:?}", result.stdout);
-    info!("stderr output: {:?}", result.stderr);
+    info!("forward_txn: \'{}\'", &arg);
+    let client = reqwest::blocking::Client::new();
+    let _response =
+      client.get(&arg)
+            .send()
+            .or_else(|_| Err(PlatformError::SubmissionServerError(error_location!())))?;
+    // let result = Command::new("curl").args(&[arg]).output()?;
+    // info!("stdout output: {:?}", result.stdout);
+    // info!("stderr output: {:?}", result.stderr);
     Ok(())
   }
 }
