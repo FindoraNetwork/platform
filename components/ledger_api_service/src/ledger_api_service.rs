@@ -80,7 +80,6 @@ pub fn query_asset<LA>(data: web::Data<Arc<RwLock<LA>>>,
       Ok(web::Json(asset.clone()))
     } else {
       Err(actix_web::error::ErrorNotFound("Specified asset definition does not currently exist."))
-      // TODO which of these should be returning 404s?
     }
   } else {
     Err(actix_web::error::ErrorBadRequest("Invalid asset definition encoding."))

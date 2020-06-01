@@ -9,6 +9,7 @@ use cryptohash::sha256::Digest as BitDigest;
 use cryptohash::sha256::DIGESTBYTES;
 use cryptohash::HashValue;
 use errors::PlatformError;
+use rand::Rng;
 use rand_chacha::ChaChaRng;
 use rand_core::{CryptoRng, RngCore, SeedableRng};
 use serde::{de::Visitor, Deserialize, Deserializer, Serialize, Serializer};
@@ -61,6 +62,10 @@ impl Code {
     let mut buf: [u8; 16] = [0u8; 16];
     small_rng.fill_bytes(&mut buf);
     Self { val: buf }
+  }
+  pub fn gen_random_with_rng<R: Rng>(mut prng: R) -> Self {
+    let val: [u8; 16] = prng.gen();
+    Self { val }
   }
   pub fn new_from_str(s: &str) -> Self {
     let mut as_vec = s.to_string().into_bytes();
@@ -1023,14 +1028,16 @@ mod tests {
   use std::cmp::min;
   use zei::xfr::structs::{AssetTypeAndAmountProof, XfrBody, XfrProofs};
 
+  // This test may fail as it is a statistical test that sometimes fails (but very rarely)
+  // It uses the central limit theorem, but essentially testing the rand crate
   #[test]
-  #[ignore]
-  fn test_gen_random() {
+  fn test_gen_random_with_rng() {
     let mut sum: u64 = 0;
     let mut sample_size = 0;
 
+    let rng = rand::thread_rng();
     for _ in 0..1000 {
-      let code = AssetTypeCode::gen_random();
+      let code = AssetTypeCode::gen_random_with_rng(rng.clone());
       let mut failed = true;
 
       for byte in code.val.iter() {
@@ -1054,8 +1061,8 @@ mod tests {
     let average = sum as f64 / sample_size as f64;
     let stddev = (uniform_stddev * 255.0) / (sample_size as f64).sqrt();
     println!("Average {}, stddev {}", average, stddev);
-    assert!(average > 127.5 - 3.0 * stddev);
-    assert!(average < 127.5 + 3.0 * stddev);
+    assert!(average > 127.5 - 5.0 * stddev);
+    assert!(average < 127.5 + 5.0 * stddev);
   }
 
   #[test]

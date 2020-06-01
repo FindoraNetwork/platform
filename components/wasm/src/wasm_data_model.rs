@@ -5,12 +5,14 @@ use credentials::{
   CredUserPublicKey, CredUserSecretKey, Credential as PlatformCredential,
 };
 use ledger::data_model::{
-  AssetRules as PlatformAssetRules, SignatureRules as PlatformSignatureRules,
-  TransferType as PlatformTransferType, TxOutput, TxoRef as PlatformTxoRef, TxoSID,
+  b64dec, AssetRules as PlatformAssetRules, KVBlind as PlatformKVBlind, KVHash as PlatformKVHash,
+  SignatureRules as PlatformSignatureRules, TransferType as PlatformTransferType, TxOutput,
+  TxoRef as PlatformTxoRef, TxoSID,
 };
 use rand_chacha::ChaChaRng;
-use rand_core::SeedableRng;
+use rand_core::{RngCore, SeedableRng};
 use serde::{Deserialize, Serialize};
+use utils::HashOf;
 use wasm_bindgen::prelude::*;
 use zei::xfr::asset_tracer::gen_asset_tracer_keypair;
 use zei::xfr::sig::XfrPublicKey;
@@ -339,5 +341,51 @@ impl AssetRules {
   pub fn set_transfer_multisig_rules(mut self, multisig_rules: SignatureRules) -> AssetRules {
     self.rules.transfer_multisig_rules = Some(multisig_rules.sig_rules);
     self
+  }
+}
+
+#[wasm_bindgen]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct KVBlind {
+  pub(crate) blind: PlatformKVBlind,
+}
+
+#[wasm_bindgen]
+impl KVBlind {
+  pub fn gen_random() -> Self {
+    let mut small_rng = ChaChaRng::from_entropy();
+    let mut buf: [u8; 16] = [0u8; 16];
+    small_rng.fill_bytes(&mut buf);
+    KVBlind { blind: PlatformKVBlind(buf) }
+  }
+}
+
+impl KVBlind {
+  pub fn get_blind_ref(&self) -> &PlatformKVBlind {
+    &self.blind
+  }
+}
+
+#[wasm_bindgen]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct KVHash {
+  pub(crate) hash: PlatformKVHash,
+}
+
+#[wasm_bindgen]
+impl KVHash {
+  pub fn new_no_blind(data: &str) -> Self {
+    KVHash { hash: PlatformKVHash(HashOf::new(&(b64dec(data).as_ref().unwrap().to_vec(), None))) }
+  }
+
+  pub fn new_with_blind(data: &str, kv_blind: &KVBlind) -> Self {
+    KVHash { hash: PlatformKVHash(HashOf::new(&(b64dec(data).as_ref().unwrap().to_vec(),
+                                                Some(kv_blind.get_blind_ref().clone())))) }
+  }
+}
+
+impl KVHash {
+  pub fn get_hash(self) -> PlatformKVHash {
+    self.hash
   }
 }

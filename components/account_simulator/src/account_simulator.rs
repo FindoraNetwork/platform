@@ -11,6 +11,7 @@ use ledger::data_model::*;
 use ledger::error_location;
 use ledger::store::*;
 use network::{MockRestClient, RestfulLedgerAccess, RestfulLedgerUpdate};
+use rand_chacha::ChaChaRng;
 use rand_core::{RngCore, SeedableRng};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet, VecDeque};
