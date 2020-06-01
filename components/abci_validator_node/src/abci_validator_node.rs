@@ -58,8 +58,11 @@ impl abci::Application for ABCISubmissionServer {
     if let Ok(la) = self.la.read() {
       if let Ok(state) = la.get_committed_state().read() {
         let commitment = state.get_state_commitment();
-        resp.set_last_block_height(commitment.1 as i64);
-        resp.set_last_block_app_hash(commitment.0.as_ref().to_vec());
+        if commitment.1 > 0 {
+          resp.set_last_block_height(commitment.1 as i64);
+          resp.set_last_block_app_hash(commitment.0.as_ref().to_vec());
+        }
+        info!("app hash: {:?}", resp.get_last_block_app_hash());
       }
     }
     resp
