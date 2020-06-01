@@ -10,6 +10,7 @@ use ledger::data_model::errors::PlatformError;
 use ledger::data_model::*;
 use ledger::error_location;
 use ledger::store::*;
+use rand_chacha::ChaChaRng;
 use rand_core::{RngCore, SeedableRng};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet, VecDeque};

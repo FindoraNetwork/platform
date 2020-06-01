@@ -5,7 +5,7 @@ use ledger::data_model::errors::PlatformError;
 use ledger::data_model::AssetTypeCode;
 use ledger::{des_fail, error_location};
 use std::fs;
-use txn_cli::txn_lib::query_utxo_and_get_type_commitment;
+use txn_cli::txn_lib::{query_utxo_and_get_type_commitment, ProtocolHost};
 use whitelist::*;
 
 const PROTOCOL: &str = "http";
@@ -86,7 +86,9 @@ fn process_inputs(inputs: clap::ArgMatches) -> Result<(), PlatformError> {
         println!("Missing serialized blinding factor for the asset type code commitment. Use --blind.");
         return Err(PlatformError::InputsError(error_location!()));
       };
-      let commitment = query_utxo_and_get_type_commitment(utxo, PROTOCOL, HOST)?;
+      let commitment = query_utxo_and_get_type_commitment(utxo,
+                                                          &ProtocolHost(PROTOCOL.to_owned(),
+                                                                        HOST.to_owned()))?;
       let proof = whitelist.prove_membership(index, commitment, blind)?;
       whitelist.verify_membership(commitment, proof)
     }

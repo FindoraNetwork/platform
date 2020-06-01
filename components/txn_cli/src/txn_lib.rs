@@ -264,11 +264,15 @@ pub fn define_issue_transfer_and_get_utxo_and_blinds<R: CryptoRng + RngCore>(
                                          ledger_standalone)
 }
 
+/// protocol and host information
+pub struct ProtocolHost(pub String, pub String);
+
 /// Queries a value.
 ///
 /// # Arguments
-/// * `protocol`: either `https` or `http`.
-/// * `host`: either `testnet.findora.org` or `localhost`.
+/// * `protocol_host`:
+///   * protocol: either `https` or `http`
+///   * host: either `testnet.findora.org` or `localhost`.
 /// * `port`: either `LEDGER_PORT` or `SUBMIT_PORT`.
 /// * `route`: route to query.
 /// * `value`: value to look up.
@@ -277,14 +281,14 @@ pub fn define_issue_transfer_and_get_utxo_and_blinds<R: CryptoRng + RngCore>(
 /// * To query the BlindAssetRecord with utxo_sid 100 from https://testnet.findora.org:
 /// use txn_cli::txn_lib::query;
 /// query("https", "testnet.findora.org", LEDGER_PORT, "utxo_sid", "100").unwrap();
-pub fn query(protocol: &str,
-             host: &str,
+pub fn query(protocol_host: &ProtocolHost,
              port: &str,
              route: &str,
              value: &str)
              -> Result<String, PlatformError> {
   let mut res = if let Ok(response) =
-    reqwest::get(&format!("{}://{}:{}/{}/{}", protocol, host, port, route, value))
+    reqwest::get(&format!("{}://{}:{}/{}/{}",
+                          &protocol_host.0, &protocol_host.1, port, route, value))
   {
     response
   } else {
@@ -308,14 +312,9 @@ pub fn query(protocol: &str,
 /// Queries the UTXO SID and gets the asset type commitment.
 /// Asset should be confidential, otherwise the commitmemt will be null.
 pub fn query_utxo_and_get_type_commitment(utxo: u64,
-                                          protocol: &str,
-                                          host: &str)
+                                          protocol_host: &ProtocolHost)
                                           -> Result<CompressedRistretto, PlatformError> {
-  let res = query(protocol,
-                  host,
-                  LEDGER_PORT,
-                  "utxo_sid",
-                  &format!("{}", utxo))?;
+  let res = query(protocol_host, LEDGER_PORT, "utxo_sid", &format!("{}", utxo))?;
   let blind_asset_record =
     serde_json::from_str::<BlindAssetRecord>(&res).or_else(|_| Err(des_fail!()))?;
   match blind_asset_record.asset_type {
@@ -329,14 +328,9 @@ pub fn query_utxo_and_get_type_commitment(utxo: u64,
 
 /// Queries the UTXO SID to get the amount, either confidential or nonconfidential.
 pub fn query_utxo_and_get_amount(utxo: u64,
-                                 protocol: &str,
-                                 host: &str)
+                                 protocol_host: &ProtocolHost)
                                  -> Result<XfrAmount, PlatformError> {
-  let res = query(protocol,
-                  host,
-                  LEDGER_PORT,
-                  "utxo_sid",
-                  &format!("{}", utxo))?;
+  let res = query(protocol_host, LEDGER_PORT, "utxo_sid", &format!("{}", utxo))?;
   let blind_asset_record =
     serde_json::from_str::<BlindAssetRecord>(&res).or_else(|_| Err(des_fail!()))?;
   Ok(blind_asset_record.amount)
@@ -355,22 +349,22 @@ pub fn query_utxo_and_get_amount(utxo: u64,
 /// * `protocol`: either `https` or `http`.
 /// * `host`: either `testnet.findora.org` or `localhost`.
 /// * `txn_builder`: transation builder.
-pub fn submit(protocol: &str,
-              host: &str,
+pub fn submit(protocol_host: &ProtocolHost,
               txn_builder: TransactionBuilder)
               -> Result<(), PlatformError> {
   // Submit transaction
   let client = reqwest::Client::new();
   let txn = txn_builder.transaction();
-  let mut res = client.post(&format!("{}://{}:{}/{}",
-                                     protocol, host, SUBMIT_PORT, "submit_transaction"))
-                      .json(&txn)
-                      .send()
-                      .or_else(|_| {
-                        Err(PlatformError::SubmissionServerError(format!("[{}] {}",
-                                                                         &error_location!(),
-                                                                         &"Failed to submit.")))
-                      })?;
+  let mut res =
+    client.post(&format!("{}://{}:{}/{}",
+                         protocol_host.0, protocol_host.1, SUBMIT_PORT, "submit_transaction"))
+          .json(&txn)
+          .send()
+          .or_else(|_| {
+            Err(PlatformError::SubmissionServerError(format!("[{}] {}",
+                                                             &error_location!(),
+                                                             &"Failed to submit.")))
+          })?;
   // Log body
   let txt = res.text().expect("no response");
   let handle = serde_json::from_str::<TxnHandle>(&txt).unwrap_or_else(|e| {
@@ -379,7 +373,6 @@ pub fn submit(protocol: &str,
                                                       });
   println!("Submission response: {}", handle);
   println!("Submission status: {}", res.status());
-
   Ok(())
 }
 
@@ -393,25 +386,26 @@ pub fn submit(protocol: &str,
 /// * `issue_and_transfer_asset`
 ///
 /// # Arguments
-/// * `protocol`: either `https` or `http`.
-/// * `host`: either `testnet.findora.org` or `localhost`.
+/// * `protocol_host`:
+///   * protocol: either `https` or `http`.
+///   * host: either `testnet.findora.org` or `localhost`.
 /// * `txn_builder`: transation builder.
-pub fn submit_and_get_sids(protocol: &str,
-                           host: &str,
+pub fn submit_and_get_sids(protocol_host: &ProtocolHost,
                            txn_builder: TransactionBuilder)
                            -> Result<Vec<TxoSID>, PlatformError> {
   // Submit transaction
   let client = reqwest::Client::new();
   let txn = txn_builder.transaction();
-  let mut res = client.post(&format!("{}://{}:{}/{}",
-                                     protocol, host, SUBMIT_PORT, "submit_transaction"))
-                      .json(&txn)
-                      .send()
-                      .or_else(|_| {
-                        Err(PlatformError::SubmissionServerError(format!("[{}] {}",
-                                                                         &error_location!(),
-                                                                         &"Failed to submit.")))
-                      })?;
+  let mut res =
+    client.post(&format!("{}://{}:{}/{}",
+                         protocol_host.0, protocol_host.1, SUBMIT_PORT, "submit_transaction"))
+          .json(&txn)
+          .send()
+          .or_else(|_| {
+            Err(PlatformError::SubmissionServerError(format!("[{}] {}",
+                                                             &error_location!(),
+                                                             &"Failed to submit.")))
+          })?;
 
   // Log body
   let txt = res.text().expect("no response");
@@ -423,7 +417,7 @@ pub fn submit_and_get_sids(protocol: &str,
   println!("Submission status: {}", res.status());
 
   // Return sid
-  let res = query(protocol, host, SUBMIT_PORT, "txn_status", &handle.0)?;
+  let res = query(protocol_host, SUBMIT_PORT, "txn_status", &handle.0)?;
   match serde_json::from_str::<TxnStatus>(&res).or_else(|_| Err(des_fail!()))? {
     TxnStatus::Committed((_sid, txos)) => Ok(txos),
     _ => Err(des_fail!()),
@@ -435,22 +429,20 @@ pub fn submit_and_get_sids(protocol: &str,
 /// * `txn_file`: path to the transaction file.
 /// * `key_pair`: key pair of the asset record.
 /// * `owner_memo`: Memo associated with utxo.
-pub fn query_open_asset_record(protocol: &str,
-                               host: &str,
+pub fn query_open_asset_record(protocol_host: &ProtocolHost,
                                sid: TxoSID,
                                key_pair: &XfrKeyPair,
                                owner_memo: &Option<OwnerMemo>)
                                -> Result<OpenAssetRecord, PlatformError> {
-  let res = query(protocol,
-                  host,
+  let res = query(protocol_host,
                   LEDGER_PORT,
                   "utxo_sid",
                   &format!("{}", sid.0))?;
   let blind_asset_record =
     serde_json::from_str::<BlindAssetRecord>(&res).or_else(|_| Err(des_fail!()))?;
   open_blind_asset_record(&blind_asset_record, owner_memo, key_pair.get_sk_ref()).or_else(|error| {
-                      Err(PlatformError::ZeiError(error_location!(), error))
-                    })
+                                                Err(PlatformError::ZeiError(error_location!(), error))
+                                              })
 }
 
 /// Uses environment variable RUST_LOG to select log level and filters output by module or regex.

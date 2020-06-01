@@ -94,8 +94,7 @@ pub fn load_funds(data_dir: &str,
                   issuer_id: u64,
                   recipient_id: u64,
                   amount: u64,
-                  protocol: &str,
-                  host: &str)
+                  protocol_host: &ProtocolHost)
                   -> Result<(), PlatformError> {
   // Get data
   let data = load_data(data_dir)?;
@@ -117,7 +116,7 @@ pub fn load_funds(data_dir: &str,
                                    None)?;
     // Store data before submitting the transaction to avoid data overwriting
     let data = load_data(data_dir)?;
-    submit(protocol, host, txn_builder)?;
+    submit(protocol_host, txn_builder)?;
     store_data_to_file(data, data_dir)?;
     fiat_code
   };
@@ -136,9 +135,8 @@ pub fn load_funds(data_dir: &str,
                              None)?;
 
   // Submit transaction and get the new record
-  let sid_new = submit_and_get_sids(protocol, host, txn_builder)?[0];
-  let res_new = query(protocol,
-                      host,
+  let sid_new = submit_and_get_sids(protocol_host, txn_builder)?[0];
+  let res_new = query(protocol_host,
                       LEDGER_PORT,
                       "utxo_sid",
                       &format!("{}", sid_new.0))?;
@@ -147,8 +145,7 @@ pub fn load_funds(data_dir: &str,
 
   // Merge records
   let sid_merged = if let Some(sid_pre) = recipient.fiat_utxo {
-    let res_pre = query(protocol,
-                        host,
+    let res_pre = query(protocol_host,
                         LEDGER_PORT,
                         "utxo_sid",
                         &format!("{}", sid_pre.0))?;
@@ -162,7 +159,7 @@ pub fn load_funds(data_dir: &str,
                                     token_code,
                                     None)?;
 
-    submit_and_get_sids(protocol, host, txn_builder)?[0]
+    submit_and_get_sids(protocol_host, txn_builder)?[0]
   } else {
     sid_new
   };
@@ -179,14 +176,14 @@ pub fn load_funds(data_dir: &str,
 /// * `loan_id`: loan ID.
 /// * `issuer_id`: issuer ID.
 /// * `memo_file`: path to store the asset tracer memo and owner memo, optional.
-/// * `protocol`: either `https` or `http`.
-/// * `host`: either `testnet.findora.org` or `locaohost`.
+/// * `protocol_host`:
+///   * protocol: either `https` or `http`.
+///   * host: either `testnet.findora.org` or `locaohost`.
 pub fn fulfill_loan(data_dir: &str,
                     loan_id: u64,
                     issuer_id: u64,
                     memo_file: Option<&str>,
-                    protocol: &str,
-                    host: &str)
+                    protocol_host: &ProtocolHost)
                     -> Result<(), PlatformError> {
   // Get data
   let mut data = load_data(data_dir)?;
@@ -350,7 +347,7 @@ pub fn fulfill_loan(data_dir: &str,
                                    None)?;
     // Store data before submitting the transaction to avoid data overwriting
     let data = load_data(data_dir)?;
-    submit(protocol, host, txn_builder)?;
+    submit(protocol_host, txn_builder)?;
     store_data_to_file(data, data_dir)?;
     fiat_code
   };
@@ -377,11 +374,11 @@ pub fn fulfill_loan(data_dir: &str,
                              Some(fiat_txn_file),
                              None,
                              None)?;
-  let fiat_sid = submit_and_get_sids(protocol, host, txn_builder)?[0];
+  let fiat_sid = submit_and_get_sids(protocol_host, txn_builder)?[0];
   println!("Fiat sid: {}", fiat_sid.0);
   let (_, owner_memo) = load_blind_asset_record_and_owner_memo_from_file(fiat_txn_file)?;
   let fiat_open_asset_record =
-    query_open_asset_record(protocol, host, fiat_sid, lender_key_pair, &owner_memo)?;
+    query_open_asset_record(protocol_host, fiat_sid, lender_key_pair, &owner_memo)?;
 
   // Define debt asset
   let debt_code = AssetTypeCode::gen_random();
@@ -400,11 +397,11 @@ pub fn fulfill_loan(data_dir: &str,
                                  None)?;
   // Store data before submitting the transaction to avoid data overwriting
   let data = load_data(data_dir)?;
-  submit(protocol, host, txn_builder)?;
+  submit(protocol_host, txn_builder)?;
   store_data_to_file(data, data_dir)?;
 
   // Issue and transfer debt token
-  let debt_txn_file = &format!("{}/{}", data_dir, "debt_txn_file");
+  let debt_txn_file = "debt_txn_file";
   let txn_builder =
     issue_and_transfer_asset(data_dir,
                              borrower_key_pair,
@@ -416,22 +413,22 @@ pub fn fulfill_loan(data_dir: &str,
                              Some(debt_txn_file),
                              Some(debt_tracing_policy.clone()),
                              Some(identity_commitment.clone()))?;
-  let debt_sid = submit_and_get_sids(protocol, host, txn_builder)?[0];
+  let debt_sid = submit_and_get_sids(protocol_host, txn_builder)?[0];
   println!("Debt sid: {}", debt_sid.0);
   let debt_open_asset_record = load_open_asset_record_from_file(debt_txn_file, borrower_key_pair)?;
 
   // Initiate loan
   let lender_template =
-AssetRecordTemplate::with_asset_tracking(amount,
-                     debt_code.val,
-                     AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
-                     lender_key_pair.get_pk(),
-                     debt_tracing_policy.clone());
+      AssetRecordTemplate::with_asset_tracking(amount,
+                                               debt_code.val,
+                                               AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
+                                               lender_key_pair.get_pk(),
+                                               debt_tracing_policy.clone());
   let borrower_template =
-AssetRecordTemplate::with_no_asset_tracking(amount,
-                        fiat_code.val,
-                        AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
-                        borrower_key_pair.get_pk());
+      AssetRecordTemplate::with_no_asset_tracking(amount,
+                                                  fiat_code.val,
+                                                  AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
+                                                  borrower_key_pair.get_pk());
   let xfr_op = TransferOperationBuilder::new().add_input(TxoRef::Absolute(fiat_sid),
                                                          fiat_open_asset_record,
                                                          None,
@@ -455,21 +452,19 @@ AssetRecordTemplate::with_no_asset_tracking(amount,
   txn_builder.add_operation(xfr_op);
 
   // Submit transaction
-  let sids_new = submit_and_get_sids(protocol, host, txn_builder)?;
+  let sids_new = submit_and_get_sids(protocol_host, txn_builder)?;
 
   // Merge records
   let fiat_sid_merged = if let Some(sid_pre) = borrower.fiat_utxo {
     // Get the original fiat record
-    let res_pre = query(protocol,
-                        host,
+    let res_pre = query(protocol_host,
                         LEDGER_PORT,
                         "utxo_sid",
                         &format!("{}", sid_pre.0))?;
     let blind_asset_record_pre =
       serde_json::from_str::<BlindAssetRecord>(&res_pre).or_else(|_| Err(des_fail!()))?;
     // Get the new fiat record
-    let res_new = query(protocol,
-                        host,
+    let res_new = query(protocol_host,
                         LEDGER_PORT,
                         "utxo_sid",
                         &format!("{}", sids_new[1].0))?;
@@ -482,7 +477,7 @@ AssetRecordTemplate::with_no_asset_tracking(amount,
                                     (blind_asset_record_new, None),
                                     fiat_code,
                                     None)?;
-    submit_and_get_sids(protocol, host, txn_builder)?[0]
+    submit_and_get_sids(protocol_host, txn_builder)?[0]
   } else {
     sids_new[1]
   };
@@ -505,13 +500,13 @@ AssetRecordTemplate::with_no_asset_tracking(amount,
 /// # Arguments
 /// * `loan_id`: loan ID.
 /// * `amount`: amount to pay.
-/// * `protocol`: either `https` or `http`.
-/// * `host`: either `testnet.findora.org` or `localhost`.
+/// * `protocol_host`:
+///   * protocol: either `https` or `http`.
+///   * host: either `testnet.findora.org` or `localhost`.
 pub fn pay_loan(data_dir: &str,
                 loan_id: u64,
                 amount: u64,
-                protocol: &str,
-                host: &str)
+                protocol_host: &ProtocolHost)
                 -> Result<(), PlatformError> {
   // Get data
   let data = load_data(data_dir)?;
@@ -581,9 +576,9 @@ pub fn pay_loan(data_dir: &str,
 
   // Get fiat and debt open asset records
   let fiat_open_asset_record =
-    query_open_asset_record(protocol, host, fiat_sid, lender_key_pair, &None)?;
+    query_open_asset_record(protocol_host, fiat_sid, lender_key_pair, &None)?;
   let debt_open_asset_record =
-    query_open_asset_record(protocol, host, debt_sid, borrower_key_pair, &None)?;
+    query_open_asset_record(protocol_host, debt_sid, borrower_key_pair, &None)?;
 
   // Get fiat and debt codes
   let fiat_code = if let Some(code) = data.clone().fiat_code {
@@ -605,24 +600,24 @@ pub fn pay_loan(data_dir: &str,
   // Get templates
   let spend_template =
 AssetRecordTemplate::with_no_asset_tracking(amount_to_spend,
-                        fiat_code.val,
-                        AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
-                        lender_key_pair.get_pk());
+                             fiat_code.val,
+                             AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
+                             lender_key_pair.get_pk());
   let burn_template =
 AssetRecordTemplate::with_no_asset_tracking(amount_to_burn,
-                        debt_code.val,
-                        AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
-                        XfrPublicKey::zei_from_bytes(&[0; 32]));
+                             debt_code.val,
+                             AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
+                             XfrPublicKey::zei_from_bytes(&[0; 32]));
   let lender_template =
 AssetRecordTemplate::with_no_asset_tracking(loan.balance - amount_to_burn,
-                        debt_code.val,
-                        AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
-                        lender_key_pair.get_pk());
+                             debt_code.val,
+                             AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
+                             lender_key_pair.get_pk());
   let borrower_template =
 AssetRecordTemplate::with_no_asset_tracking(borrower.balance - amount_to_spend,
-                        fiat_code.val,
-                        AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
-                        borrower_key_pair.get_pk());
+                             fiat_code.val,
+                             AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
+                             borrower_key_pair.get_pk());
   let op = TransferOperationBuilder::new().add_input(TxoRef::Absolute(debt_sid),
                                                      debt_open_asset_record,
                                                      None,
@@ -644,7 +639,7 @@ AssetRecordTemplate::with_no_asset_tracking(borrower.balance - amount_to_spend,
   txn_builder.add_operation(op).transaction();
 
   // Submit transaction and update data
-  let sids = submit_and_get_sids(protocol, host, txn_builder)?;
+  let sids = submit_and_get_sids(protocol_host, txn_builder)?;
 
   let mut data = load_data(data_dir)?;
   let balance = loan.balance - amount_to_burn;
@@ -665,7 +660,6 @@ mod tests {
   use super::*;
   use ledger::data_model::TxoSID;
   use ledger_standalone::LedgerStandalone;
-  use rand_chacha::ChaChaRng;
   use tempfile::tempdir;
 
   const PROTOCOL: &str = "http";
@@ -702,17 +696,22 @@ mod tests {
   }
 
   #[test]
+  #[ignore]
+  // Redmine issue: #38. Do NOT reenable this test if it fails
+  // TODO (keyao)
   // Test funds loading, loan request, fulfilling and repayment
   fn test_request_fulfill_and_pay_loan() {
     let ledger_standalone = LedgerStandalone::new();
     ledger_standalone.poll_until_ready().unwrap();
+
+    let protocol_host = &ProtocolHost(PROTOCOL.to_owned(), HOST.to_owned());
 
     // Load funds
     let tmp_dir = tempdir().unwrap();
     let data_dir = tmp_dir.path().to_str().unwrap();
 
     let funds_amount = 1000;
-    load_funds(data_dir, 0, 0, funds_amount, PROTOCOL, HOST).unwrap();
+    load_funds(data_dir, 0, 0, funds_amount, protocol_host).unwrap();
     let data = load_data(data_dir).unwrap();
 
     assert_eq!(data.borrowers[0].balance, funds_amount);
@@ -730,7 +729,7 @@ mod tests {
     assert_eq!(data.loans.len(), 1);
 
     // Fulfill the loan request
-    fulfill_loan(data_dir, 0, 0, None, PROTOCOL, HOST).unwrap();
+    fulfill_loan(data_dir, 0, 0, None, protocol_host).unwrap();
     data = load_data(data_dir).unwrap();
 
     assert_eq!(data.loans[0].status, LoanStatus::Active);
@@ -738,7 +737,7 @@ mod tests {
 
     // Pay loan
     let payment_amount = 200;
-    pay_loan(data_dir, 0, payment_amount, PROTOCOL, HOST).unwrap();
+    pay_loan(data_dir, 0, payment_amount, protocol_host).unwrap();
     data = load_data(data_dir).unwrap();
 
     assert_eq!(data.loans[0].payments, 1);
