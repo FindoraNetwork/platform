@@ -132,7 +132,7 @@ pub struct MerkleProof {
 /// The hash of the leaf node is a 256 bit zero value. The hash of an non-leaf
 /// node is calculated by hashing (using keccak-256) the concatenation of the
 /// hashes of its two sub-nodes.
-#[derive(Clone, Default, Debug, Serialize, Deserialize)]
+#[derive(Clone, Default, Debug, Serialize, Deserialize, PartialEq)]
 pub struct SmtMap256<Value: AsRef<[u8]>> {
   kvs: HashMap<Key, Value>,
 
@@ -256,6 +256,30 @@ pub fn open(path: &str) -> Result<SmtMap256<String>, Error> {
   // Deserialize and print Rust data structure.
   let result: SmtMap256<String> = serde_json::from_str(&contents)?;
   Ok(result)
+}
+
+pub mod helpers {
+  use super::*;
+  use hex::FromHex;
+
+  // `hex` must be a 64-byte long hex string.
+  pub fn b256(hex: &str) -> Digest {
+    Digest { 0: <[u8; 32]>::from_hex(hex).unwrap() }
+  }
+
+  // `hex` is the first a few bytes of the desired 32 bytes (the rest bytes are zeros).
+  pub fn l256(hex: &str) -> Digest {
+    assert!(hex.len() % 2 == 0 && hex.len() <= 64);
+    let hex = hex.to_string() + &"0".repeat(64 - hex.len());
+    Digest { 0: <[u8; 32]>::from_hex(&hex).unwrap() }
+  }
+
+  // `hex` is the last a few bytes of the desired 32 bytes (the rest bytes are zeros).
+  pub fn r256(hex: &str) -> Digest {
+    assert!(hex.len() % 2 == 0 && hex.len() <= 64);
+    let hex = "0".repeat(64 - hex.len()) + hex;
+    Digest { 0: <[u8; 32]>::from_hex(&hex).unwrap() }
+  }
 }
 
 #[cfg(test)]
