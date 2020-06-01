@@ -660,7 +660,6 @@ mod tests {
   use super::*;
   use ledger::data_model::TxoSID;
   use ledger_standalone::LedgerStandalone;
-  use rand_chacha::ChaChaRng;
   use tempfile::tempdir;
 
   const PROTOCOL: &str = "http";
