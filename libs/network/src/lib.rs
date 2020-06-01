@@ -186,6 +186,3 @@ mod tests {
     }
   }
 }
-
-//impl LedgerAccess for MockRestClient {}
-//impl ArchiveAccess for MockRestClient {}
