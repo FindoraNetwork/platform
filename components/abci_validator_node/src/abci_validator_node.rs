@@ -33,9 +33,6 @@ impl TxnForward for TendermintForward {
             .body(json_rpc)
             .send()
             .or_else(|_| Err(PlatformError::SubmissionServerError(error_location!())))?;
-    // let result = Command::new("curl").args(&[arg]).output()?;
-    // info!("stdout output: {:?}", result.stdout);
-    // info!("stderr output: {:?}", result.stderr);
     Ok(())
   }
 }
@@ -158,9 +155,6 @@ impl abci::Application for ABCISubmissionServer {
 
 fn main() {
   // Tendermint ABCI port
-  // let addr = "127.0.0.1:26658".parse().unwrap();
-
-  // abci::run(addr, ABCISubmissionServer::default());
   flexi_logger::Logger::with_env().start().unwrap();
   let base_dir = std::env::var_os("LEDGER_DIR").filter(|x| !x.is_empty());
   let base_dir = base_dir.as_ref().map(Path::new);
