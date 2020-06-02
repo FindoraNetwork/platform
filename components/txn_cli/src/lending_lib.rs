@@ -7,11 +7,11 @@ use credentials::{
 use ledger::data_model::errors::PlatformError;
 use ledger::data_model::{AssetRules, AssetTypeCode, TransferType, TxoRef};
 use ledger::policies::{DebtMemo, Fraction};
-use ledger::{des_fail, error_location, ser_fail};
+use ledger::{error_location, ser_fail};
+use network::{RestfulLedgerAccess, RestfulLedgerUpdate};
 use rand_chacha::ChaChaRng;
 use rand_core::SeedableRng;
 use txn_builder::{BuildsTransactions, TransactionBuilder, TransferOperationBuilder};
-use utils::LEDGER_PORT;
 use zei::api::anon_creds::ac_confidential_open_commitment;
 use zei::serialization::ZeiFromToBytes;
 use zei::xfr::asset_record::{open_blind_asset_record, AssetRecordType};
@@ -88,14 +88,15 @@ pub(crate) fn merge_records(key_pair: &XfrKeyPair,
 /// * `recipient_id`: recipient's ID.
 /// * `amount`: amount to load.
 /// * `memo_file`: path to store the tracer and owner memos, optional.
-/// * `protocol`: either `https` or `http`.
-/// * `host`: either `testnet.findora.org` or `localhost`.
-pub fn load_funds(data_dir: &str,
-                  issuer_id: u64,
-                  recipient_id: u64,
-                  amount: u64,
-                  protocol_host: &ProtocolHost)
-                  -> Result<(), PlatformError> {
+/// * `rest_client`: http client
+pub fn load_funds<T>(data_dir: &str,
+                     issuer_id: u64,
+                     recipient_id: u64,
+                     amount: u64,
+                     rest_client: &mut T)
+                     -> Result<(), PlatformError>
+  where T: RestfulLedgerAccess + RestfulLedgerUpdate
+{
   // Get data
   let data = load_data(data_dir)?;
   let issuer_key_pair = &data.get_asset_issuer_key_pair(issuer_id)?;
@@ -116,7 +117,7 @@ pub fn load_funds(data_dir: &str,
                                    None)?;
     // Store data before submitting the transaction to avoid data overwriting
     let data = load_data(data_dir)?;
-    submit(protocol_host, txn_builder)?;
+    rest_client.submit_transaction(&txn_builder.transaction())?;
     store_data_to_file(data, data_dir)?;
     fiat_code
   };
@@ -135,22 +136,11 @@ pub fn load_funds(data_dir: &str,
                              None)?;
 
   // Submit transaction and get the new record
-  let sid_new = submit_and_get_sids(protocol_host, txn_builder)?[0];
-  let res_new = query(protocol_host,
-                      LEDGER_PORT,
-                      "utxo_sid",
-                      &format!("{}", sid_new.0))?;
-  let blind_asset_record_new =
-    serde_json::from_str::<BlindAssetRecord>(&res_new).or_else(|_| Err(des_fail!()))?;
-
+  let sid_new = submit_and_get_sids(rest_client, txn_builder)?[0];
+  let blind_asset_record_new = (rest_client.get_utxo(sid_new).unwrap().0).0;
   // Merge records
   let sid_merged = if let Some(sid_pre) = recipient.fiat_utxo {
-    let res_pre = query(protocol_host,
-                        LEDGER_PORT,
-                        "utxo_sid",
-                        &format!("{}", sid_pre.0))?;
-    let blind_asset_record_pre =
-      serde_json::from_str::<BlindAssetRecord>(&res_pre).or_else(|_| Err(des_fail!()))?;
+    let blind_asset_record_pre = (rest_client.get_utxo(sid_pre).unwrap().0).0;
     let txn_builder = merge_records(recipient_key_pair,
                                     TxoRef::Absolute(sid_pre),
                                     TxoRef::Absolute(sid_new),
@@ -159,7 +149,7 @@ pub fn load_funds(data_dir: &str,
                                     token_code,
                                     None)?;
 
-    submit_and_get_sids(protocol_host, txn_builder)?[0]
+    submit_and_get_sids(rest_client, txn_builder)?[0]
   } else {
     sid_new
   };
@@ -175,16 +165,15 @@ pub fn load_funds(data_dir: &str,
 /// # Arguments
 /// * `loan_id`: loan ID.
 /// * `issuer_id`: issuer ID.
-/// * `memo_file`: path to store the asset tracer memo and owner memo, optional.
-/// * `protocol_host`:
-///   * protocol: either `https` or `http`.
-///   * host: either `testnet.findora.org` or `locaohost`.
-pub fn fulfill_loan(data_dir: &str,
-                    loan_id: u64,
-                    issuer_id: u64,
-                    memo_file: Option<&str>,
-                    protocol_host: &ProtocolHost)
-                    -> Result<(), PlatformError> {
+/// * `rest_client`: path to store the asset tracer memo and owner memo, optional.
+pub fn fulfill_loan<T>(data_dir: &str,
+                       loan_id: u64,
+                       issuer_id: u64,
+                       memo_file: Option<&str>,
+                       rest_client: &mut T)
+                       -> Result<(), PlatformError>
+  where T: RestfulLedgerUpdate + RestfulLedgerAccess
+{
   // Get data
   let mut data = load_data(data_dir)?;
   let issuer_key_pair = &data.get_asset_issuer_key_pair(issuer_id)?;
@@ -212,7 +201,7 @@ pub fn fulfill_loan(data_dir: &str,
   let lender = &data.lenders[lender_id as usize];
   let lender_key_pair = &data.get_lender_key_pair(loan.lender)?;
   let borrower_id = loan.borrower;
-  let borrower = &data.borrowers[borrower_id as usize];
+  let borrower = &data.borrowers[borrower_id as usize].clone();
   let borrower_key_pair = &data.get_borrower_key_pair(borrower_id)?;
   let amount = loan.amount;
 
@@ -347,7 +336,7 @@ pub fn fulfill_loan(data_dir: &str,
                                    None)?;
     // Store data before submitting the transaction to avoid data overwriting
     let data = load_data(data_dir)?;
-    submit(protocol_host, txn_builder)?;
+    rest_client.submit_transaction(&txn_builder.transaction())?;
     store_data_to_file(data, data_dir)?;
     fiat_code
   };
@@ -374,11 +363,11 @@ pub fn fulfill_loan(data_dir: &str,
                              Some(fiat_txn_file),
                              None,
                              None)?;
-  let fiat_sid = submit_and_get_sids(protocol_host, txn_builder)?[0];
+  let fiat_sid = submit_and_get_sids(rest_client, txn_builder)?[0];
   println!("Fiat sid: {}", fiat_sid.0);
   let (_, owner_memo) = load_blind_asset_record_and_owner_memo_from_file(fiat_txn_file)?;
   let fiat_open_asset_record =
-    query_open_asset_record(protocol_host, fiat_sid, lender_key_pair, &owner_memo)?;
+    query_open_asset_record(rest_client, fiat_sid, lender_key_pair, &owner_memo)?;
 
   // Define debt asset
   let debt_code = AssetTypeCode::gen_random();
@@ -396,8 +385,7 @@ pub fn fulfill_loan(data_dir: &str,
                                  AssetRules::default(),
                                  None)?;
   // Store data before submitting the transaction to avoid data overwriting
-  let data = load_data(data_dir)?;
-  submit(protocol_host, txn_builder)?;
+  rest_client.submit_transaction(&txn_builder.transaction())?;
   store_data_to_file(data, data_dir)?;
 
   // Issue and transfer debt token
@@ -413,7 +401,7 @@ pub fn fulfill_loan(data_dir: &str,
                              Some(debt_txn_file),
                              Some(debt_tracing_policy.clone()),
                              Some(identity_commitment.clone()))?;
-  let debt_sid = submit_and_get_sids(protocol_host, txn_builder)?[0];
+  let debt_sid = submit_and_get_sids(rest_client, txn_builder)?[0];
   println!("Debt sid: {}", debt_sid.0);
   let debt_open_asset_record = load_open_asset_record_from_file(debt_txn_file, borrower_key_pair)?;
 
@@ -452,24 +440,12 @@ pub fn fulfill_loan(data_dir: &str,
   txn_builder.add_operation(xfr_op);
 
   // Submit transaction
-  let sids_new = submit_and_get_sids(protocol_host, txn_builder)?;
+  let sids_new = submit_and_get_sids(rest_client, txn_builder)?;
 
   // Merge records
   let fiat_sid_merged = if let Some(sid_pre) = borrower.fiat_utxo {
-    // Get the original fiat record
-    let res_pre = query(protocol_host,
-                        LEDGER_PORT,
-                        "utxo_sid",
-                        &format!("{}", sid_pre.0))?;
-    let blind_asset_record_pre =
-      serde_json::from_str::<BlindAssetRecord>(&res_pre).or_else(|_| Err(des_fail!()))?;
-    // Get the new fiat record
-    let res_new = query(protocol_host,
-                        LEDGER_PORT,
-                        "utxo_sid",
-                        &format!("{}", sids_new[1].0))?;
-    let blind_asset_record_new =
-      serde_json::from_str::<BlindAssetRecord>(&res_new).or_else(|_| Err(des_fail!()))?;
+    let blind_asset_record_pre = (rest_client.get_utxo(sid_pre)?.0).0;
+    let blind_asset_record_new = (rest_client.get_utxo(sids_new[1])?.0).0;
     let txn_builder = merge_records(borrower_key_pair,
                                     TxoRef::Absolute(sid_pre),
                                     TxoRef::Absolute(sids_new[1]),
@@ -477,7 +453,7 @@ pub fn fulfill_loan(data_dir: &str,
                                     (blind_asset_record_new, None),
                                     fiat_code,
                                     None)?;
-    submit_and_get_sids(protocol_host, txn_builder)?[0]
+    submit_and_get_sids(rest_client, txn_builder)?[0]
   } else {
     sids_new[1]
   };
@@ -500,14 +476,14 @@ pub fn fulfill_loan(data_dir: &str,
 /// # Arguments
 /// * `loan_id`: loan ID.
 /// * `amount`: amount to pay.
-/// * `protocol_host`:
-///   * protocol: either `https` or `http`.
-///   * host: either `testnet.findora.org` or `localhost`.
-pub fn pay_loan(data_dir: &str,
-                loan_id: u64,
-                amount: u64,
-                protocol_host: &ProtocolHost)
-                -> Result<(), PlatformError> {
+/// * `rest_client`: http client
+pub fn pay_loan<T>(data_dir: &str,
+                   loan_id: u64,
+                   amount: u64,
+                   rest_client: &mut T)
+                   -> Result<(), PlatformError>
+  where T: RestfulLedgerAccess + RestfulLedgerUpdate
+{
   // Get data
   let data = load_data(data_dir)?;
   let loan = &data.loans[loan_id as usize];
@@ -576,9 +552,9 @@ pub fn pay_loan(data_dir: &str,
 
   // Get fiat and debt open asset records
   let fiat_open_asset_record =
-    query_open_asset_record(protocol_host, fiat_sid, lender_key_pair, &None)?;
+    query_open_asset_record(rest_client, fiat_sid, lender_key_pair, &None)?;
   let debt_open_asset_record =
-    query_open_asset_record(protocol_host, debt_sid, borrower_key_pair, &None)?;
+    query_open_asset_record(rest_client, debt_sid, borrower_key_pair, &None)?;
 
   // Get fiat and debt codes
   let fiat_code = if let Some(code) = data.clone().fiat_code {
@@ -639,7 +615,7 @@ AssetRecordTemplate::with_no_asset_tracking(borrower.balance - amount_to_spend,
   txn_builder.add_operation(op).transaction();
 
   // Submit transaction and update data
-  let sids = submit_and_get_sids(protocol_host, txn_builder)?;
+  let sids = submit_and_get_sids(rest_client, txn_builder)?;
 
   let mut data = load_data(data_dir)?;
   let balance = loan.balance - amount_to_burn;

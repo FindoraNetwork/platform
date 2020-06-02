@@ -11,6 +11,7 @@ path = "src/query_server.rs"
 ledger = { path = "../../ledger" }
 ledger_standalone = {path = "../ledger_standalone"}
 log = "0.4.8"
+network = { path = "../../libs/network" }
 rand_chacha = "0.2.0"
 rand_core = { version = "0.5", default-features = false, features = ["alloc"] }
 reqwest = "0.9.24"

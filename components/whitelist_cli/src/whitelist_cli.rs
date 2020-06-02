@@ -4,12 +4,10 @@ use curve25519_dalek::scalar::Scalar;
 use ledger::data_model::errors::PlatformError;
 use ledger::data_model::AssetTypeCode;
 use ledger::{des_fail, error_location};
+use network::{MockRestClient, RestfulLedgerAccess};
 use std::fs;
-use txn_cli::txn_lib::{query_utxo_and_get_type_commitment, ProtocolHost};
+use txn_cli::txn_lib::query_utxo_and_get_type_commitment;
 use whitelist::*;
-
-const PROTOCOL: &str = "http";
-const HOST: &str = "localhost";
 
 /// Path to the data file.
 const WHITELIST_FILE: &str = "whitelist.json";
@@ -54,7 +52,9 @@ fn parse_to_u64(val_str: &str) -> Result<u64, PlatformError> {
 }
 
 /// Processes input commands and arguments.
-fn process_inputs(inputs: clap::ArgMatches) -> Result<(), PlatformError> {
+fn process_inputs<T>(inputs: clap::ArgMatches, rest_client: &T) -> Result<(), PlatformError>
+  where T: RestfulLedgerAccess
+{
   let mut whitelist = load_whitelist()?;
   match inputs.subcommand() {
     ("add_member", Some(add_matches)) => {
@@ -86,9 +86,7 @@ fn process_inputs(inputs: clap::ArgMatches) -> Result<(), PlatformError> {
         println!("Missing serialized blinding factor for the asset type code commitment. Use --blind.");
         return Err(PlatformError::InputsError(error_location!()));
       };
-      let commitment = query_utxo_and_get_type_commitment(utxo,
-                                                          &ProtocolHost(PROTOCOL.to_owned(),
-                                                                        HOST.to_owned()))?;
+      let commitment = query_utxo_and_get_type_commitment(utxo, rest_client)?;
       let proof = whitelist.prove_membership(index, commitment, blind)?;
       whitelist.verify_membership(commitment, proof)
     }
@@ -100,6 +98,8 @@ fn process_inputs(inputs: clap::ArgMatches) -> Result<(), PlatformError> {
 }
 
 fn main() -> Result<(), PlatformError> {
+  // TODO this lets us compile for now, swich out with real one later
+  let mock_rest_client = MockRestClient::new(1);
   let inputs = App::new("Solvency Proof").version("0.1.0").about("Copyright 2020 © Findora. All rights reserved.")
     .subcommand(SubCommand::with_name("add_member")
       .arg(Arg::with_name("code")
@@ -129,7 +129,7 @@ fn main() -> Result<(), PlatformError> {
         .help("Serialized blinding factor for the asset type code commitment.")))
     .get_matches();
 
-  process_inputs(inputs)
+  process_inputs(inputs, &mock_rest_client)
 }
 
 #[cfg(test)]

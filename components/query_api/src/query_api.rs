@@ -70,6 +70,11 @@ fn store_custom_data<RNG, LU>(data: web::Data<Arc<RwLock<QueryServer<RNG, LU>>>>
               .map_err(|e| error::ErrorBadRequest(format!("{}", e)))?;
   Ok(())
 }
+// Forces the query server to fetch new blocks and cache new transaction data
+fn force_fetch_new_blocks<RNG, LU>(data: web::Data<Arc<RwLock<QueryServer<RNG, LU>>>>)
+                                   -> Result<(), actix_web::error::Error> {
+  let mut query_server = data.write.unwrap();
+}
 
 // Returns an array of the utxo sids currently spendable by a given address
 fn get_owned_txos<RNG, LU>(data: web::Data<Arc<RwLock<QueryServer<RNG, LU>>>>,

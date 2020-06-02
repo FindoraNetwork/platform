@@ -13,8 +13,8 @@ use txn_builder::{BuildsTransactions, TransactionBuilder};
 use txn_cli::data_lib::*;
 use txn_cli::lending_lib::{fulfill_loan, load_funds, pay_loan};
 use txn_cli::txn_lib::{
-  air_assign, define_asset, init_logging, issue_and_transfer_asset, match_error_and_exit, query,
-  query_open_asset_record, submit, submit_and_get_sids, ProtocolHost,
+  air_assign, define_asset, init_logging, issue_and_transfer_asset, match_error_and_exit,
+  query_open_asset_record, submit_and_get_sids,
 };
 use utils::QUERY_PORT;
 use zei::xfr::asset_record::AssetRecordType;
@@ -582,28 +582,6 @@ pub(crate) fn process_asset_issuer_cmd(asset_issuer_matches: &clap::ArgMatches,
       Err(PlatformError::InputsError(error_location!()))
     }
   }
-}
-
-/// Sets the protocol and host.
-///
-/// Environment variables `PROTOCOL` and `SERVER_HOST` set the protocol and host,
-/// which can be overwritten by CLI subcommands.
-///
-/// By default, the protocol is `https` and the host is `testnet.findora.org`.
-pub(crate) fn protocol_host(matches: &clap::ArgMatches) -> (&'static str, &'static str) {
-  let protocol = if matches.is_present("http") {
-    "http"
-  } else {
-    std::option_env!("PROTOCOL").unwrap_or("https")
-  };
-  let host = if matches.is_present("localhost") {
-    // Use localhost
-    "localhost"
-  } else {
-    // Default to testnet.findora.org
-    std::option_env!("SERVER_HOST").unwrap_or("testnet.findora.org")
-  };
-  (protocol, host)
 }
 
 /// Processes the `credential_issuer` subcommand.

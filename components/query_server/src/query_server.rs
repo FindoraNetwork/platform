@@ -7,10 +7,10 @@ use ledger::data_model::{
 use ledger::error_location;
 use ledger::store::*;
 use log::info;
+use network::LedgerArchiveAccess;
 use rand_core::{CryptoRng, RngCore};
 use sparse_merkle_tree::Key;
 use std::collections::{HashMap, HashSet};
-use std::marker::PhantomData;
 use std::sync::{Arc, RwLock};
 
 macro_rules! fail {
@@ -22,25 +22,16 @@ macro_rules! fail {
   };
 }
 
-const PORT: usize = 8668;
-
-pub struct QueryServer<RNG, LU>
-  where RNG: RngCore + CryptoRng,
-        LU: LedgerUpdate<RNG> + ArchiveAccess + LedgerAccess
-{
-  committed_state: Arc<RwLock<LU>>,
+pub struct QueryServer {
+  committed_state: LedgerState,
   addresses_to_utxos: HashMap<XfrAddress, HashSet<TxoSID>>,
   utxos_to_map_index: HashMap<TxoSID, XfrAddress>,
   custom_data_store: HashMap<Key, (Vec<u8>, KVHash)>,
-  prng: PhantomData<RNG>,
 }
 
-impl<RNG, LU> QueryServer<RNG, LU>
-  where RNG: RngCore + CryptoRng,
-        LU: LedgerUpdate<RNG> + ArchiveAccess + LedgerAccess
-{
-  pub fn new(ledger_state: Arc<RwLock<LU>>) -> QueryServer<RNG, LU> {
-    QueryServer { committed_state: ledger_state,
+impl QueryServer {
+  pub fn new() -> QueryServer {
+    QueryServer { committed_state: LedgerState::test_ledger(),
                   addresses_to_utxos: HashMap::new(),
                   custom_data_store: HashMap::new(),
                   utxos_to_map_index: HashMap::new(),

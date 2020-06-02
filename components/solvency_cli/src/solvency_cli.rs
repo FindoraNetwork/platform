@@ -7,15 +7,10 @@ use ledger::{des_fail, error_location};
 use serde::{Deserialize, Serialize};
 use solvency::*;
 use std::fs;
-use txn_cli::txn_lib::ProtocolHost;
 use zei::errors::ZeiError;
 
 /// Path to the data file.
 const DATA_FILE: &str = "solvency_data.json";
-// TODO (Keyao): Redmine issue #43: Support switching protocol and host in solvency_cli
-// We should support https://testnet.findora.org as well.
-const PROTOCOL: &str = "http";
-const HOST: &str = "localhost";
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 /// Information of assets, liabilities and conversion rates.

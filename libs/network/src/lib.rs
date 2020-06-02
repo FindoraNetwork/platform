@@ -4,7 +4,8 @@ use actix_web::test::TestRequest;
 use actix_web::{test, web, App};
 use ledger::data_model::errors::PlatformError;
 use ledger::data_model::{
-  AssetType, AssetTypeCode, AuthenticatedKVLookup, StateCommitmentData, Transaction, TxoSID, Utxo,
+  AssetType, AssetTypeCode, AuthenticatedKVLookup, FinalizedTransaction, StateCommitmentData,
+  Transaction, TxoSID, Utxo,
 };
 use ledger::store::LedgerState;
 use ledger_api_service::{
@@ -31,6 +32,9 @@ pub trait RestfulLedgerUpdate {
   fn txn_status(&self, handle: &TxnHandle) -> Result<TxnStatus, PlatformError>;
 }
 
+// Trait for rest clients that can access the query server
+pub trait RestfulQueryServerAccess {}
+
 pub trait RestfulLedgerAccess {
   fn get_utxo(&self, addr: TxoSID) -> Result<Utxo, PlatformError>;
 
@@ -51,10 +55,17 @@ pub trait RestfulLedgerAccess {
     -> Result<SignatureOf<T>, PlatformError>;
 }
 
+pub trait RestfulArchiveAccess {
+  fn get_blocks_since(&self,
+                      addr: BlockSID)
+                      -> Result<Vec<(usize, Vec<FinalizedTransaction>)>, PlatformError>;
+}
+
 /// Mock rest client that simulates http requests, no ports required
 pub struct MockRestClient {
   mock_submission_server: Arc<RwLock<SubmissionServer<ChaChaRng, LedgerState>>>,
   mock_ledger: Arc<RwLock<LedgerState>>,
+  mock_query_server: Arc<RwLock<QueryServer<ChaChaRng, LedgerState>>>,
 }
 
 impl MockRestClient {
@@ -63,12 +74,24 @@ impl MockRestClient {
     let ledger_state = LedgerState::test_ledger();
     let state_lock = Arc::new(RwLock::new(ledger_state));
     let mock_ledger = Arc::clone(&state_lock);
+    let query_server_ledger_state = LedgerState::test_ledger();
 
     let mock_submission_server =
       Arc::new(RwLock::new(SubmissionServer::new(prng, state_lock, block_capacity).unwrap()));
 
+    let mock_query_server = Arc::new(RwLock::new(QueryServer::new().unwrap()));
+
     MockRestClient { mock_submission_server,
+                     mock_query_server,
                      mock_ledger }
+  }
+}
+
+impl RestfulArchiveAccess for MockRestClient {
+  fn get_blocks_since(&self,
+                      addr: BlockSID)
+                      -> Result<Vec<(usize, Vec<FinalizedTransaction>)>, PlatformError> {
+    unimplemented!();
   }
 }
 

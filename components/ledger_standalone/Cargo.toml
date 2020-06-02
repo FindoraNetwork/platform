@@ -4,9 +4,6 @@ version = "0.1.0"
 authors = ["Engineering <engineering@findora.org>"]
 edition = "2018"
 
-[lib]
-path = "src/standalone_lib.rs"
-
 [[bin]]
 name = "ledger_standalone"
 path = "src/ledger_standalone.rs"

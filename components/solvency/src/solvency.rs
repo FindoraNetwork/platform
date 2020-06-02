@@ -6,8 +6,9 @@ use ledger::data_model::errors::PlatformError;
 use ledger::data_model::AssetTypeCode;
 use ledger::{des_fail, error_location};
 use linear_map::LinearMap;
+use network::RestfulLedgerAccess;
 use serde::{Deserialize, Serialize};
-use txn_cli::txn_lib::{query_utxo_and_get_amount, ProtocolHost};
+use txn_cli::txn_lib::query_utxo_and_get_amount;
 use zei::crypto::solvency::{prove_solvency, verify_solvency};
 use zei::errors::ZeiError;
 use zei::setup::PublicParams;
@@ -96,24 +97,26 @@ impl AssetAndLiabilityAccount {
   /// * `code`: type code of the asset or liability.
   /// * `blinds`: blinding values of the amount and type code.
   /// * `utxo`: UTXO of the asset or liability transfer transaction.
-  /// * `protocol`: protocol and host to query the UTXO.
+  /// * `rest_client`: http client
   ///
   /// # Returns
   /// * If the asset or liability is public: None.
   /// * Otherwise: scalar values of the amount and type code, and associated blinds.
-  pub fn update(&mut self,
-                amount_type: AmountType,
-                amount: u64,
-                code: AssetTypeCode,
-                blinds: Option<((Scalar, Scalar), Scalar)>,
-                utxo: u64,
-                protocol_host: &ProtocolHost)
-                -> Result<Option<(AmountAndCodeScalar, AmountAndCodeBlinds)>, PlatformError> {
+  pub fn update<T>(&mut self,
+                   amount_type: AmountType,
+                   amount: u64,
+                   code: AssetTypeCode,
+                   blinds: Option<((Scalar, Scalar), Scalar)>,
+                   utxo: u64,
+                   rest_client: &T)
+                   -> Result<Option<(AmountAndCodeScalar, AmountAndCodeBlinds)>, PlatformError>
+    where T: RestfulLedgerAccess
+  {
     // Remove existing proof
     self.proof = None;
 
     let code_scalar = asset_type_to_scalar(&code.val);
-    match query_utxo_and_get_amount(utxo, protocol_host)? {
+    match query_utxo_and_get_amount(utxo, rest_client)? {
       XfrAmount::NonConfidential(fetched_amount) => {
         if fetched_amount != amount {
           println!("Incorrect amount.");
