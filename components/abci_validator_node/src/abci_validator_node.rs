@@ -22,18 +22,15 @@ pub struct TendermintForward;
 impl TxnForward for TendermintForward {
   fn forward_txn(&self, txn: Transaction) -> Result<(), PlatformError> {
     let txn_json = serde_json::to_string(&txn)?;
-    info!("forward_txn: {}", txn_json);
+    info!("raw txn: {}", &txn_json);
+    let txn_b64 = base64::encode_config(&txn_json.as_str(), base64::URL_SAFE);
+    let json_rpc = format!("{{\"jsonrpc\":\"2.0\",\"id\":\"anything\",\"method\":\"broadcast_tx_sync\",\"params\": {{\"tx\": \"{}}}\"}}}}", &txn_b64);
 
-    // POST is supported with base64 encoding, presumably web
-    // curl --data-binary '{"jsonrpc":"2.0","id":"anything","method":"broadcast_tx_commit","params": {"tx": "AQIDBA=="}}' -H 'content-type:text/plain;' http://localhost:26657
-
-    // TODO (Nathan/John): send txn_json to tendermint
-    let arg = format!("http://localhost:26657/broadcast_tx_commit?tx=\"{}\"",
-                      txn_json);
-    info!("forward_txn: \'{}\'", &arg);
+    info!("forward_txn: \'{}\'", &json_rpc);
     let client = reqwest::blocking::Client::new();
     let _response =
-      client.get(&arg)
+      client.post("http://localhost:26657")
+            .body(json_rpc)
             .send()
             .or_else(|_| Err(PlatformError::SubmissionServerError(error_location!())))?;
     // let result = Command::new("curl").args(&[arg]).output()?;
@@ -81,6 +78,7 @@ impl abci::Application for ABCISubmissionServer {
   fn check_tx(&mut self, req: &RequestCheckTx) -> ResponseCheckTx {
     // Get the Tx [u8] and convert to u64
     let mut resp = ResponseCheckTx::new();
+    info!("Transaction to check: \"{}\"", &std::str::from_utf8(req.get_tx()).unwrap_or("invalid format"));
 
     if let Some(tx) = convert_tx(req.get_tx()) {
       if let Ok(la) = self.la.read() {
@@ -102,6 +100,8 @@ impl abci::Application for ABCISubmissionServer {
 
   fn deliver_tx(&mut self, req: &RequestDeliverTx) -> ResponseDeliverTx {
     // Get the Tx [u8]
+    info!("Transaction to cache: \"{}\"", &std::str::from_utf8(req.get_tx()).unwrap_or("invalid format"));
+
     let mut resp = ResponseDeliverTx::new();
     if let Some(tx) = convert_tx(req.get_tx()) {
       if let Ok(mut la) = self.la.write() {
