@@ -3,18 +3,20 @@ use clap::{App, Arg, SubCommand};
 use credentials::u8_slice_to_u32_vec;
 use ledger::data_model::errors::PlatformError;
 use ledger::data_model::{
-  b64dec, AccountAddress, AssetRules, AssetTypeCode, KVHash, SignatureRules, TxoRef, TxoSID,
+  b64dec, b64enc, AccountAddress, AssetRules, AssetTypeCode, KVBlind, KVHash, SignatureRules,
+  TxoRef, TxoSID,
 };
 use ledger::{error_location, ser_fail};
-use sparse_merkle_tree::Key;
+use sparse_merkle_tree::{digest, Key};
 use std::env;
 use txn_builder::{BuildsTransactions, TransactionBuilder};
 use txn_cli::data_lib::*;
 use txn_cli::lending_lib::{fulfill_loan, load_funds, pay_loan};
 use txn_cli::txn_lib::{
-  air_assign, define_asset, init_logging, issue_and_transfer_asset, match_error_and_exit,
+  air_assign, define_asset, init_logging, issue_and_transfer_asset, match_error_and_exit, query,
   query_open_asset_record, submit, submit_and_get_sids, ProtocolHost,
 };
+use utils::QUERY_PORT;
 use zei::xfr::asset_record::AssetRecordType;
 use zei::xfr::structs::AssetTracingPolicy;
 
@@ -224,21 +226,18 @@ pub(crate) fn process_asset_issuer_cmd(asset_issuer_matches: &clap::ArgMatches,
       let data = load_data(data_dir)?;
       let issuer_id =
           parse_to_u64(asset_issuer_matches.value_of("id")
-                                           .ok_or_else(|| PlatformError::InputsError(error_location!()))?)?;
+                                 .ok_or_else(|| PlatformError::InputsError(error_location!()))?)?;
       let key_pair = data.get_asset_issuer_key_pair(issuer_id)?;
-      let key = Key::from_slice(&b64dec(kv_matches.value_of("key")
-          .ok_or_else(|| PlatformError::InputsError(error_location!()))?)
-          .map_err(|e| PlatformError::InputsError(format!("{}:{}",e,error_location!())))?)
-          .ok_or_else(|| PlatformError::InputsError(error_location!()))?;
+      let key = digest(kv_matches.value_of("key").unwrap());
       let gen = parse_to_u64(kv_matches.value_of("gen")
           .ok_or_else(|| PlatformError::InputsError(error_location!()))?)
           .map_err(|e| PlatformError::InputsError(format!("{}:{}",e,error_location!())))?;
-      let value = b64dec(kv_matches.value_of("value")
-          .ok_or_else(|| PlatformError::InputsError(error_location!()))?)
-          .map_err(|e| PlatformError::InputsError(format!("{}:{}",e,error_location!())))?;
+      let value = kv_matches.value_of("value")
+                            .ok_or_else(|| PlatformError::InputsError(error_location!()))?;
       let mut txn_builder = TransactionBuilder::default();
       let hash = KVHash::new(&value, None);
       txn_builder.add_operation_kv_update(&key_pair, &key, gen, Some(&hash))?;
+      println!("Hash of data will be stored at key {}", b64enc(&key));
       store_txn_to_file(&txn_file, &txn_builder)
     }
     ("clear_kv", Some(kv_matches)) => {
@@ -1245,11 +1244,59 @@ pub fn process_inputs(inputs: clap::ArgMatches) -> Result<(), PlatformError> {
       Err(e) => Err(PlatformError::IoError(format!("Error deleting file: {:?} ", e))),
     },
     ("submit", Some(submit_matches)) => process_submit_cmd(submit_matches, &txn_file),
+    ("custom_data", Some(custom_data_matches)) => process_custom_data_cmds(custom_data_matches),
     _ => {
       println!("Subcommand missing or not recognized. Try --help");
       Err(PlatformError::InputsError(error_location!()))
     }
   }
+}
+
+pub(crate) fn process_custom_data_cmds(custom_data_matches: &clap::ArgMatches)
+                                       -> Result<(), PlatformError> {
+  match custom_data_matches.subcommand() {
+    ("fetch", Some(fetch_matches)) => {
+      let key = fetch_matches.value_of("key")
+                             .ok_or_else(|| PlatformError::InputsError(error_location!()))?;
+      let (protocol, host) = protocol_host(fetch_matches);
+      let res = query(&ProtocolHost(protocol.to_owned(), host.to_owned()),
+                      QUERY_PORT,
+                      "get_custom_data",
+                      key)?;
+      println!("Data is: {}", res);
+    }
+    ("store", Some(store_matches)) => {
+      let key = Key::from_slice(&b64dec(store_matches.value_of("key")
+          .ok_or_else(|| PlatformError::InputsError(error_location!()))?)
+          .map_err(|e| PlatformError::InputsError(format!("{}:{}",e,error_location!())))?)
+          .ok_or_else(|| PlatformError::InputsError(error_location!()))?;
+      let data = store_matches.value_of("data").unwrap();
+      let (protocol, host) = protocol_host(store_matches);
+      let client = reqwest::Client::new();
+      let blind: Option<KVBlind> = None;
+      let res = client.post(&format!("{}://{}:{}/{}",
+                                     protocol, host, QUERY_PORT, "store_custom_data"))
+                      .json(&(key, data.as_bytes().to_vec(), blind))
+                      .send()
+                      .or_else(|_| {
+                        Err(PlatformError::QueryServerError(format!("[{}] {}",
+                                                                    &error_location!(),
+                                                                    &"Failed to submit.")))
+                      })?;
+      // Log body
+      if res.status() == reqwest::StatusCode::OK {
+        println!("Data stored successfuly!");
+      } else {
+        println!("Unable to store data. Please ensure query server is running and data matches the commitment stored in the ledger");
+      }
+    }
+    _ => {
+      println!("Subcommand missing or not recognized. Try --help");
+      return Err(PlatformError::InputsError(error_location!()));
+    }
+  }
+
+  Ok(())
 }
 
 /// If `process_inputs` returns an error, calls `match_error_and_exit` and exits with appropriate code.
@@ -1429,7 +1476,7 @@ fn main() {
           .long("key")
           .required(true)
           .takes_value(true)
-          .help("Which KV-store entry to set"))
+          .help("Which KV-store entry to set. String passed in will be converted to a base-64 encoded key."))
         .arg(Arg::with_name("gen")
           .short("g")
           .long("gen")
@@ -1441,7 +1488,7 @@ fn main() {
           .long("value")
           .required(true)
           .takes_value(true)
-          .help("What to set that entry to (base64)"))
+          .help("Data to commit to."))
         )
       .subcommand(SubCommand::with_name("transfer_asset")
         .arg(Arg::with_name("recipients")
@@ -1795,6 +1842,43 @@ fn main() {
         .long("localhost")
         .takes_value(false)
         .help("Specify that localhost, not testnet.findora.org should be used.")))
+    .subcommand(SubCommand::with_name("custom_data")
+        .subcommand(SubCommand::with_name("store")
+            .arg(Arg::with_name("key")
+               .long("key")
+               .short("k")
+               .required(true)
+               .takes_value(true)
+               .help("Key specifying location to store data at (base64 encoded)."))
+            .arg(Arg::with_name("data")
+               .long("data")
+               .short("d")
+               .required(true)
+               .takes_value(true)
+               .help("Custom data to store in query server."))
+            .arg(Arg::with_name("http")
+              .long("http")
+              .takes_value(false)
+              .help("Specify that http, not https should be used."))
+            .arg(Arg::with_name("localhost")
+              .long("localhost")
+              .takes_value(false)
+              .help("Specify that localhost, not testnet.findora.org should be used.")))
+        .subcommand(SubCommand::with_name("fetch")
+            .arg(Arg::with_name("key")
+               .long("key")
+               .short("k")
+               .required(true)
+               .takes_value(true)
+               .help("Key specifying location of data to fetch (base64 encoded)."))
+            .arg(Arg::with_name("http")
+              .long("http")
+              .takes_value(false)
+              .help("Specify that http, not https should be used."))
+            .arg(Arg::with_name("localhost")
+              .long("localhost")
+              .takes_value(false)
+              .help("Specify that localhost, not testnet.findora.org should be used."))))
     .get_matches();
   if let Err(error) = process_inputs(inputs) {
     match_error_and_exit(error);

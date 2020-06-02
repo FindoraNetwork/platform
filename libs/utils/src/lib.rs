@@ -33,10 +33,12 @@ pub fn urlencode(input: &str) -> String {
 const PROTOCOL: &str = "http";
 const SERVER_HOST: &str = "localhost";
 
-/// Port for querying values.
-pub const QUERY_PORT: &str = "8668";
+/// Query server port
+pub const QUERY_PORT: &str = "8667";
 /// Port for submitting transactions.
 pub const SUBMIT_PORT: &str = "8669";
+/// Ledger port
+pub const LEDGER_PORT: &str = "8668";
 
 /// Sets the protocol and host.
 ///

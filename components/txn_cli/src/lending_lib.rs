@@ -11,7 +11,7 @@ use ledger::{des_fail, error_location, ser_fail};
 use rand_chacha::ChaChaRng;
 use rand_core::SeedableRng;
 use txn_builder::{BuildsTransactions, TransactionBuilder, TransferOperationBuilder};
-use utils::QUERY_PORT;
+use utils::LEDGER_PORT;
 use zei::api::anon_creds::ac_confidential_open_commitment;
 use zei::serialization::ZeiFromToBytes;
 use zei::xfr::asset_record::{open_blind_asset_record, AssetRecordType};
@@ -137,7 +137,7 @@ pub fn load_funds(data_dir: &str,
   // Submit transaction and get the new record
   let sid_new = submit_and_get_sids(protocol_host, txn_builder)?[0];
   let res_new = query(protocol_host,
-                      QUERY_PORT,
+                      LEDGER_PORT,
                       "utxo_sid",
                       &format!("{}", sid_new.0))?;
   let blind_asset_record_new =
@@ -146,7 +146,7 @@ pub fn load_funds(data_dir: &str,
   // Merge records
   let sid_merged = if let Some(sid_pre) = recipient.fiat_utxo {
     let res_pre = query(protocol_host,
-                        QUERY_PORT,
+                        LEDGER_PORT,
                         "utxo_sid",
                         &format!("{}", sid_pre.0))?;
     let blind_asset_record_pre =
@@ -458,14 +458,14 @@ pub fn fulfill_loan(data_dir: &str,
   let fiat_sid_merged = if let Some(sid_pre) = borrower.fiat_utxo {
     // Get the original fiat record
     let res_pre = query(protocol_host,
-                        QUERY_PORT,
+                        LEDGER_PORT,
                         "utxo_sid",
                         &format!("{}", sid_pre.0))?;
     let blind_asset_record_pre =
       serde_json::from_str::<BlindAssetRecord>(&res_pre).or_else(|_| Err(des_fail!()))?;
     // Get the new fiat record
     let res_new = query(protocol_host,
-                        QUERY_PORT,
+                        LEDGER_PORT,
                         "utxo_sid",
                         &format!("{}", sids_new[1].0))?;
     let blind_asset_record_new =
