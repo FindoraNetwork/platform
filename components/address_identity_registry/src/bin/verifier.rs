@@ -49,8 +49,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
   let air_result: AIRResult =
     reqwest::get(&format!("{}://{}:{}/air_address/{}",
                           protocol, host, LEDGER_PORT, &addr_and_pok.addr)).await?
-                                                                          .json::<AIRResult>()
-                                                                          .await?;
+                                                                           .json::<AIRResult>()
+                                                                           .await?;
 
   println!("Response from ledger is:\n{:?}", &air_result);
 

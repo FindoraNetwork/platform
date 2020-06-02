@@ -78,7 +78,8 @@ impl abci::Application for ABCISubmissionServer {
   fn check_tx(&mut self, req: &RequestCheckTx) -> ResponseCheckTx {
     // Get the Tx [u8] and convert to u64
     let mut resp = ResponseCheckTx::new();
-    info!("Transaction to check: \"{}\"", &std::str::from_utf8(req.get_tx()).unwrap_or("invalid format"));
+    info!("Transaction to check: \"{}\"",
+          &std::str::from_utf8(req.get_tx()).unwrap_or("invalid format"));
 
     if let Some(tx) = convert_tx(req.get_tx()) {
       if let Ok(la) = self.la.read() {
@@ -100,7 +101,8 @@ impl abci::Application for ABCISubmissionServer {
 
   fn deliver_tx(&mut self, req: &RequestDeliverTx) -> ResponseDeliverTx {
     // Get the Tx [u8]
-    info!("Transaction to cache: \"{}\"", &std::str::from_utf8(req.get_tx()).unwrap_or("invalid format"));
+    info!("Transaction to cache: \"{}\"",
+          &std::str::from_utf8(req.get_tx()).unwrap_or("invalid format"));
 
     let mut resp = ResponseDeliverTx::new();
     if let Some(tx) = convert_tx(req.get_tx()) {
