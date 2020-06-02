@@ -1,5 +1,6 @@
 #![deny(warnings)]
 use ledger::store::LedgerState;
+use ledger_api_service::MockLedgerClient;
 use log::{error, info};
 use query_api::QueryApi;
 use query_server::QueryServer;
@@ -10,12 +11,13 @@ use std::time;
 
 fn main() {
   let running = Arc::new(AtomicBool::new(true));
-  let query_server = QueryServer::new(Arc::new(RwLock::new(LedgerState::test_ledger())));
   let host = std::env::var_os("SERVER_HOST").filter(|x| !x.is_empty())
                                             .unwrap_or_else(|| "localhost".into());
   let query_port = std::env::var_os("QUERY_PORT").filter(|x| !x.is_empty())
                                                  .unwrap_or_else(|| "8667".into());
 
+  let rest_client = MockLedgerClient::new(&Arc::new(RwLock::new(LedgerState::test_ledger())));
+  let query_server = QueryServer::new(rest_client);
   let wrapped_server = Arc::new(RwLock::new(query_server));
   let query_api = QueryApi::create(wrapped_server.clone(),
                                    host.to_str().unwrap(),

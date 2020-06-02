@@ -11,6 +11,7 @@ path = "src/solvency.rs"
 bulletproofs = { version = "2.0.0",  package = "bulletproofs", git = "https://github.com/dalek-cryptography/bulletproofs", rev = "91218d4066af5d582631319c5ff0266402b9fff2", features = ["yoloproofs"]}
 curve25519-dalek = { version =  "2.0.0", features = ["serde"] }
 ledger = { path = "../../ledger" }
+ledger_api_service = { path = "../ledger_api_service" }
 ledger_standalone = { path = "../ledger_standalone" }
 linear-map = "1.2.0"
 network = { path = "../../libs/network" }

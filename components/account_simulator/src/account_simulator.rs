@@ -10,7 +10,8 @@ use ledger::data_model::errors::PlatformError;
 use ledger::data_model::*;
 use ledger::error_location;
 use ledger::store::*;
-use network::{MockRestClient, RestfulLedgerAccess, RestfulLedgerUpdate};
+use ledger_api_service::RestfulLedgerAccess;
+use network::MockLedgerStandalone;
 use rand_chacha::ChaChaRng;
 use rand_core::{RngCore, SeedableRng};
 use serde::{Deserialize, Serialize};
@@ -22,6 +23,7 @@ use std::path::PathBuf;
 use std::thread;
 use std::time;
 use structopt::StructOpt;
+use submission_api::RestfulLedgerUpdate;
 use submission_server::{TxnHandle, TxnStatus};
 use subprocess::Popen;
 #[cfg(test)]

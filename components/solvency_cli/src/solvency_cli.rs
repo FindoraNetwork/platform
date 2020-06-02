@@ -4,6 +4,8 @@ use curve25519_dalek::scalar::Scalar;
 use ledger::data_model::errors::PlatformError;
 use ledger::data_model::AssetTypeCode;
 use ledger::{des_fail, error_location};
+use ledger_api_service::RestfulLedgerAccess;
+use network::MockLedgerStandalone;
 use serde::{Deserialize, Serialize};
 use solvency::*;
 use std::fs;
@@ -67,7 +69,9 @@ fn parse_to_u64(val_str: &str) -> Result<u64, PlatformError> {
 }
 
 /// Processes input commands and arguments.
-fn process_inputs(inputs: clap::ArgMatches) -> Result<(), PlatformError> {
+fn process_inputs<T: RestfulLedgerAccess>(inputs: clap::ArgMatches,
+                                          rest_client: &T)
+                                          -> Result<(), PlatformError> {
   let dir = if let Some(d) = inputs.value_of("dir") {
     d
   } else {
@@ -132,8 +136,7 @@ fn process_inputs(inputs: clap::ArgMatches) -> Result<(), PlatformError> {
                                                code,
                                                blinds,
                                                utxo,
-                                               &ProtocolHost(PROTOCOL.to_owned(),
-                                                             HOST.to_owned()))?;
+                                               rest_client)?;
       store_data_to_file(dir, data)
     }
     ("prove_and_verify_solvency", Some(prove_and_verify_matches)) => {
@@ -272,7 +275,8 @@ fn main() -> Result<(), PlatformError> {
         .help("Serialized blinding values of liability amounts and codes.")))
     .get_matches();
 
-  process_inputs(inputs)
+  let rest_client = MockLedgerStandalone::new(1);
+  process_inputs(inputs, &rest_client)
 }
 
 #[cfg(test)]

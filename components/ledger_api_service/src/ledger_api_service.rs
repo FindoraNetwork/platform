@@ -5,12 +5,15 @@ extern crate ledger;
 extern crate serde_json;
 
 use actix_cors::Cors;
-use actix_web::{dev, error, middleware, web, App, HttpResponse, HttpServer};
+use actix_web::{dev, error, middleware, test, web, App, HttpResponse, HttpServer};
 use air::AIRResult;
 use cryptohash::sha256::Digest as BitDigest;
 use cryptohash::sha256::DIGESTBYTES;
+use ledger::data_model::errors::PlatformError;
 use ledger::data_model::*;
-use ledger::store::{ArchiveAccess, LedgerAccess};
+use ledger::store::{ArchiveAccess, LedgerAccess, LedgerState};
+use serde::Serialize;
+use sparse_merkle_tree::Key;
 use std::io;
 use std::marker::{Send, Sync};
 use std::sync::{Arc, RwLock};
@@ -435,11 +438,115 @@ impl RestfulApiService {
   }
 }
 
+pub trait RestfulLedgerAccess {
+  fn get_utxo(&self, addr: TxoSID) -> Result<Utxo, PlatformError>;
+
+  fn get_issuance_num(&self, code: &AssetTypeCode) -> Result<u64, PlatformError>;
+
+  fn get_asset_type(&self, code: &AssetTypeCode) -> Result<AssetType, PlatformError>;
+
+  fn get_state_commitment(&self)
+                          -> Result<(HashOf<Option<StateCommitmentData>>, u64), PlatformError>;
+
+  fn get_kv_entry(&self, addr: Key) -> Result<AuthenticatedKVLookup, PlatformError>;
+
+  fn public_key(&self) -> Result<XfrPublicKey, PlatformError>;
+
+  fn sign_message<T: Serialize + serde::de::DeserializeOwned>(
+    &self,
+    msg: &T)
+    -> Result<SignatureOf<T>, PlatformError>;
+}
+
+pub trait RestfulArchiveAccess {
+  fn get_blocks_since(&self,
+                      addr: BlockSID)
+                      -> Result<Vec<(usize, Vec<FinalizedTransaction>)>, PlatformError>;
+}
+
+impl RestfulArchiveAccess for MockLedgerClient {
+  fn get_blocks_since(&self,
+                      _addr: BlockSID)
+                      -> Result<Vec<(usize, Vec<FinalizedTransaction>)>, PlatformError> {
+    unimplemented!();
+  }
+}
+
+pub struct MockLedgerClient {
+  mock_ledger: Arc<RwLock<LedgerState>>,
+}
+
+impl MockLedgerClient {
+  pub fn new(state: &Arc<RwLock<LedgerState>>) -> Self {
+    MockLedgerClient { mock_ledger: Arc::clone(state) }
+  }
+}
+
+impl RestfulLedgerAccess for MockLedgerClient {
+  fn get_utxo(&self, addr: TxoSID) -> Result<Utxo, PlatformError> {
+    let mut app =
+      test::init_service(App::new().data(Arc::clone(&self.mock_ledger))
+                                   .route(&LedgerAccessRoutes::UtxoSid.with_arg_template("sid"),
+                                          web::get().to(query_utxo::<LedgerState>)));
+    let req = test::TestRequest::get().uri(&LedgerAccessRoutes::UtxoSid.with_arg(&addr.0))
+                                      .to_request();
+    Ok(test::read_response_json(&mut app, req))
+  }
+
+  fn get_issuance_num(&self, code: &AssetTypeCode) -> Result<u64, PlatformError> {
+    let mut app =
+      test::init_service(App::new().data(Arc::clone(&self.mock_ledger))
+                                   .route(&LedgerAccessRoutes::AssetIssuanceNum.with_arg_template("code"),
+                                          web::get().to(query_asset_issuance_num::<LedgerState>)));
+    let req =
+      test::TestRequest::get().uri(&LedgerAccessRoutes::AssetIssuanceNum.with_arg(&code.to_base64()))
+                              .to_request();
+    Ok(test::read_response_json(&mut app, req))
+  }
+
+  fn get_asset_type(&self, code: &AssetTypeCode) -> Result<AssetType, PlatformError> {
+    let mut app =
+      test::init_service(App::new().data(Arc::clone(&self.mock_ledger))
+                                   .route(&LedgerAccessRoutes::AssetToken.with_arg_template("code"),
+                                          web::get().to(query_asset::<LedgerState>)));
+    let req =
+      test::TestRequest::get().uri(&LedgerAccessRoutes::AssetToken.with_arg(&code.to_base64()))
+                              .to_request();
+    Ok(test::read_response_json(&mut app, req))
+  }
+
+  fn get_state_commitment(&self)
+                          -> Result<(HashOf<Option<StateCommitmentData>>, u64), PlatformError> {
+    let mut app =
+      test::init_service(App::new().data(Arc::clone(&self.mock_ledger))
+                                   .route(&LedgerAccessRoutes::GlobalState.route(),
+                                          web::get().to(query_global_state::<LedgerState>)));
+    let req = test::TestRequest::get().uri(&LedgerAccessRoutes::GlobalState.route())
+                                      .to_request();
+    Ok(test::read_response_json(&mut app, req))
+  }
+
+  fn get_kv_entry(&self, _addr: Key) -> Result<AuthenticatedKVLookup, PlatformError> {
+    unimplemented!();
+  }
+
+  fn public_key(&self) -> Result<XfrPublicKey, PlatformError> {
+    unimplemented!();
+  }
+
+  fn sign_message<T: Serialize + serde::de::DeserializeOwned>(
+    &self,
+    _msg: &T)
+    -> Result<SignatureOf<T>, PlatformError> {
+    unimplemented!();
+  }
+}
+
 #[cfg(test)]
 mod tests {
   use super::*;
   use actix_web::dev::Service;
-  use actix_web::{test, web, App};
+  use actix_web::{web, App};
   use ledger::data_model::{Operation, Transaction};
   use ledger::store::helpers::*;
   use ledger::store::{LedgerState, LedgerUpdate, TxnEffect};

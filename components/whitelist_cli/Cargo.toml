@@ -12,6 +12,7 @@ path = "src/whitelist_cli.rs"
 clap = "2.33.0"
 curve25519-dalek = { version =  "2.0.0", features = ["serde"] }
 ledger = { path = "../../ledger" }
+ledger_api_service = { path = "../ledger_api_service" }
 ledger_standalone = { path = "../ledger_standalone" }
 network = { path = "../../libs/network" }
 rand_chacha = "0.2"

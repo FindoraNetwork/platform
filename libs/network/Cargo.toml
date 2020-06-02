@@ -20,9 +20,9 @@ serde = { version = "1.0.99", features = ["derive"] }
 serde_derive = "^1.0.59"
 serde_json = "1.0"
 sparse_merkle_tree = { path = "../ads/sparse_merkle_tree" }
-submission_server = {path = "../../components/submission_server"}
-query_server = {path = "../../components/query_server"}
-submission_api = {path = "../../components/submission_api"}
+query_api = {path = "../../components/query_api"}
 ledger_api_service = {path = "../../components/ledger_api_service"}
+submission_api = {path = "../../components/submission_api"}
+submission_server = {path = "../../components/submission_server"}
 utils = { path = "../utils" }
 zei = { git = "ssh://git@github.com/findoraorg/zei", tag = "v0.0.2-4" }

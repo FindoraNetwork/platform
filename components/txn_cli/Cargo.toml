@@ -31,6 +31,9 @@ serde_derive = "1.0"
 serde_json = "1.0"
 shellexpand = "1.0.0"
 submission_server = { path = "../submission_server" }
+submission_api = { path = "../submission_api" }
+ledger_api_service = { path = "../ledger_api_service" }
+query_api = { path = "../query_api" }
 tempfile = "3.1.0"
 txn_builder = { path = "../txn_builder" }
 utils = { path = "../../libs/utils" }

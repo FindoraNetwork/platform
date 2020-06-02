@@ -1,17 +1,15 @@
 #![deny(warnings)]
 use ledger::data_model::errors::PlatformError;
 use ledger::data_model::{
-  FinalizedTransaction, KVBlind, KVHash, KVUpdate, Operation, TransferAsset, TxoRef, TxoSID,
-  XfrAddress,
+  BlockSID, FinalizedTransaction, KVBlind, KVHash, KVUpdate, Operation, TransferAsset, TxoRef,
+  TxoSID, XfrAddress,
 };
 use ledger::error_location;
 use ledger::store::*;
+use ledger_api_service::RestfulArchiveAccess;
 use log::info;
-use network::LedgerArchiveAccess;
-use rand_core::{CryptoRng, RngCore};
 use sparse_merkle_tree::Key;
 use std::collections::{HashMap, HashSet};
-use std::sync::{Arc, RwLock};
 
 macro_rules! fail {
   () => {
@@ -22,20 +20,24 @@ macro_rules! fail {
   };
 }
 
-pub struct QueryServer {
+pub struct QueryServer<T>
+  where T: RestfulArchiveAccess
+{
   committed_state: LedgerState,
   addresses_to_utxos: HashMap<XfrAddress, HashSet<TxoSID>>,
   utxos_to_map_index: HashMap<TxoSID, XfrAddress>,
   custom_data_store: HashMap<Key, (Vec<u8>, KVHash)>,
+  rest_client: T,
 }
 
-impl QueryServer {
-  pub fn new() -> QueryServer {
+impl<T> QueryServer<T> where T: RestfulArchiveAccess
+{
+  pub fn new(rest_client: T) -> QueryServer<T> {
     QueryServer { committed_state: LedgerState::test_ledger(),
                   addresses_to_utxos: HashMap::new(),
                   custom_data_store: HashMap::new(),
                   utxos_to_map_index: HashMap::new(),
-                  prng: PhantomData }
+                  rest_client }
   }
 
   // Fetch custom data at a given key
@@ -56,8 +58,7 @@ impl QueryServer {
                            blind: Option<&KVBlind>)
                            -> Result<(), PlatformError> {
     let hash = KVHash::new(data, blind);
-    let ledger = self.committed_state.read().unwrap();
-    let auth_entry = ledger.get_kv_entry(*key);
+    let auth_entry = self.committed_state.get_kv_entry(*key);
 
     let result =
       auth_entry.result
@@ -121,20 +122,21 @@ impl QueryServer {
   pub fn add_new_block(&mut self, block: &[FinalizedTransaction]) -> Result<(), PlatformError> {
     // First, we add block to local ledger state
     let finalized_block = {
-      let mut ledger = self.committed_state.write().unwrap();
-      let mut block_builder = ledger.start_block().unwrap();
+      let mut block_builder = self.committed_state.start_block().unwrap();
       for txn in block {
         let eff = TxnEffect::compute_effect(txn.txn.clone()).unwrap();
-        ledger.apply_transaction(&mut block_builder, eff).unwrap();
+        self.committed_state
+            .apply_transaction(&mut block_builder, eff)
+            .unwrap();
       }
 
-      ledger.finish_block(block_builder).unwrap()
+      self.committed_state.finish_block(block_builder).unwrap()
     };
     // Next, update ownership status
     for (_, (txn_sid, txo_sids)) in finalized_block.iter() {
       // get the transaction and ownership addresses associated with each transaction
       let (txn, addresses) = {
-        let ledger = self.committed_state.read().unwrap();
+        let ledger = &self.committed_state;
         let addresses: Vec<XfrAddress> =
           txo_sids.iter()
                   .map(|sid| XfrAddress { key: ledger.get_utxo(*sid).unwrap().0 .0.public_key })
@@ -164,33 +166,13 @@ impl QueryServer {
   }
 
   pub fn poll_new_blocks(&mut self) -> Result<(), PlatformError> {
-    let ledger_url =
-      std::env::var_os("LEDGER_URL").filter(|x| !x.is_empty())
-                                    .unwrap_or_else(|| format!("localhost:{}", PORT).into());
-    let protocol = std::env::var_os("LEDGER_PROTOCOL").filter(|x| !x.is_empty())
-                                                      .unwrap_or_else(|| "http".into());
-    let latest_block = {
-      let ledger = self.committed_state.read().unwrap();
-      (*ledger).get_block_count()
-    };
-    let new_blocks = match reqwest::get(&format!("{}://{}/{}/{}",
-                                                 protocol.to_str().unwrap(),
-                                                 ledger_url.to_str().unwrap(),
-                                                 "blocks_since",
-                                                 &latest_block))
-    {
+    let latest_block = self.committed_state.get_block_count();
+    let new_blocks = match self.rest_client.get_blocks_since(BlockSID(latest_block)) {
       Err(_) => {
         return Err(fail!("Cannot connect to ledger server"));
       }
 
-      Ok(mut bs) => match bs.json::<Vec<(usize, Vec<FinalizedTransaction>)>>() {
-        Err(e) => {
-          return Err(PlatformError::DeserializationError(format!("[{}]: {:?}",
-                                                                 &error_location!(),
-                                                                 e)));
-        }
-        Ok(bs) => bs,
-      },
+      Ok(blocks_and_sid) => blocks_and_sid,
     };
 
     for (bid, block) in new_blocks {
