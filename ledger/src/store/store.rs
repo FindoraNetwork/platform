@@ -12,7 +12,6 @@ use bitmap::{BitMap, SparseMap};
 use cryptohash::sha256::Digest as BitDigest;
 use log::info;
 use merkle_tree::append_only_merkle::AppendOnlyMerkle;
-use merkle_tree::logged_merkle::LoggedMerkle;
 use rand_chacha::ChaChaRng;
 use rand_core::{CryptoRng, RngCore, SeedableRng};
 use serde::{Deserialize, Serialize};
@@ -263,14 +262,14 @@ pub struct LedgerState {
 
   // Merkle tree tracking the sequence of transaction hashes in the block
   // Each appended hash is the hash of transactions in the same block
-  block_merkle: LoggedMerkle,
+  block_merkle: AppendOnlyMerkle,
 
   // Sparse Merkle Tree for Addres Identity Registry
   air: AIR,
 
   // Merkle tree tracking the sequence of all transaction hashes
   // Each appended hash is the hash of a transaction
-  txn_merkle: LoggedMerkle,
+  txn_merkle: AppendOnlyMerkle,
 
   // The `FinalizedTransaction`s consist of a Transaction and an index into
   // `merkle` representing its hash.
@@ -350,56 +349,58 @@ impl HasInvariants<PlatformError> for LedgerState {
         }
       }
     }
+    /* TODO: These tests of logging are unnecessary but are being left here as we decide what to do about logging, archival, etc.
+       See https://github.com/findoraorg/platform/issues/307
+        if let Some((_, txn_log_fd)) = &self.txn_log {
+          txn_log_fd.sync_data().unwrap();
+          let tmp_dir = utils::fresh_tmp_dir();
 
-    if let Some((_, txn_log_fd)) = &self.txn_log {
-      txn_log_fd.sync_data().unwrap();
-      let tmp_dir = utils::fresh_tmp_dir();
+          let other_block_merkle_buf = tmp_dir.join("test_block_merkle");
+          let other_block_merkle_path = other_block_merkle_buf.to_str().unwrap();
 
-      let other_block_merkle_buf = tmp_dir.join("test_block_merkle");
-      let other_block_merkle_path = other_block_merkle_buf.to_str().unwrap();
+          let other_air_buf = tmp_dir.join("test_air");
+          let other_air_path = other_air_buf.to_str().unwrap();
 
-      let other_air_buf = tmp_dir.join("test_air");
-      let other_air_path = other_air_buf.to_str().unwrap();
+          let other_txn_merkle_buf = tmp_dir.join("test_txn_merkle");
+          let other_txn_merkle_path = other_txn_merkle_buf.to_str().unwrap();
 
-      let other_txn_merkle_buf = tmp_dir.join("test_txn_merkle");
-      let other_txn_merkle_path = other_txn_merkle_buf.to_str().unwrap();
+          let other_txn_buf = tmp_dir.join("test_txnlog");
+          let other_txn_path = other_txn_buf.to_str().unwrap();
 
-      let other_txn_buf = tmp_dir.join("test_txnlog");
-      let other_txn_path = other_txn_buf.to_str().unwrap();
+          let other_utxo_map_buf = tmp_dir.join("test_utxo_map");
+          let other_utxo_map_path = other_utxo_map_buf.to_str().unwrap();
 
-      let other_utxo_map_buf = tmp_dir.join("test_utxo_map");
-      let other_utxo_map_path = other_utxo_map_buf.to_str().unwrap();
+          // dbg!(&self.status.txn_path);
+          // dbg!(std::fs::metadata(&self.status.txn_path).unwrap());
+          // dbg!(&other_txn_path);
+          std::fs::copy(&self.status.txn_path, &other_txn_path).unwrap();
+          std::fs::copy(&self.status.block_merkle_path, &other_block_merkle_path).unwrap();
+          std::fs::copy(&self.status.txn_merkle_path, &other_txn_merkle_path).unwrap();
+          std::fs::copy(&self.status.utxo_map_path, &other_utxo_map_path).unwrap();
 
-      // dbg!(&self.status.txn_path);
-      // dbg!(std::fs::metadata(&self.status.txn_path).unwrap());
-      // dbg!(&other_txn_path);
-      std::fs::copy(&self.status.txn_path, &other_txn_path).unwrap();
-      std::fs::copy(&self.status.block_merkle_path, &other_block_merkle_path).unwrap();
-      std::fs::copy(&self.status.txn_merkle_path, &other_txn_merkle_path).unwrap();
-      std::fs::copy(&self.status.utxo_map_path, &other_utxo_map_path).unwrap();
+          let state2 = Box::new(LedgerState::load_checked_from_log(&other_block_merkle_path,
+                                                                   &other_air_path,
+                                                                   &other_txn_merkle_path,
+                                                                   &other_txn_path,
+                                                                   &other_utxo_map_path,
+                                                                   None,
+                                                                   None).unwrap());
 
-      let state2 = Box::new(LedgerState::load_checked_from_log(&other_block_merkle_path,
-                                                               &other_air_path,
-                                                               &other_txn_merkle_path,
-                                                               &other_txn_path,
-                                                               &other_utxo_map_path,
-                                                               None,
-                                                               None).unwrap());
+          let mut status2 = Box::new(state2.status);
+          status2.block_merkle_path = self.status.block_merkle_path.clone();
+          status2.air_path = self.status.air_path.clone();
+          status2.txn_merkle_path = self.status.txn_merkle_path.clone();
+          status2.txn_path = self.status.txn_path.clone();
+          status2.utxo_map_path = self.status.utxo_map_path.clone();
+          status2.utxo_map_versions = self.status.utxo_map_versions.clone();
 
-      let mut status2 = Box::new(state2.status);
-      status2.block_merkle_path = self.status.block_merkle_path.clone();
-      status2.air_path = self.status.air_path.clone();
-      status2.txn_merkle_path = self.status.txn_merkle_path.clone();
-      status2.txn_path = self.status.txn_path.clone();
-      status2.utxo_map_path = self.status.utxo_map_path.clone();
-      status2.utxo_map_versions = self.status.utxo_map_versions.clone();
+          // dbg!(&status2);
+          // dbg!(&self.status);
+          assert!(*status2 == self.status);
 
-      // dbg!(&status2);
-      // dbg!(&self.status);
-      assert!(*status2 == self.status);
-
-      std::fs::remove_dir_all(tmp_dir).unwrap();
-    }
+          std::fs::remove_dir_all(tmp_dir).unwrap();
+        }
+    */
     Ok(())
   }
 }
@@ -1127,7 +1128,7 @@ impl LedgerUpdate<ChaChaRng> for LedgerState {
         // corruption and I/O failure, we don't have a good recovery story. Is
         // panicking acceptable?
         let merkle_id = self.txn_merkle
-                            .append(&txn.hash(txn_sid).0.hash.into())
+                            .append_hash(&txn.hash(txn_sid).0.hash.into())
                             .unwrap();
 
         tx_block.push(FinalizedTransaction { txn,
@@ -1499,7 +1500,7 @@ impl LedgerState {
     // 2. Append txns_in_block_hash to block_merkle
     //  2.1 Update the block Merkle tree
     let ret = self.block_merkle
-                  .append(&txns_in_block_hash.0.hash.into())
+                  .append_hash(&txns_in_block_hash.0.hash.into())
                   .unwrap();
     // dbg!(&block.txns);
     // dbg!(&txns_in_block_hash);
@@ -1536,7 +1537,7 @@ impl LedgerState {
   // Initialize a logged Merkle tree for the ledger.  We might
   // be creating a new tree or opening an existing one.  We
   // always start a new log file.
-  fn init_merkle_log(path: &str, create: bool) -> Result<LoggedMerkle, std::io::Error> {
+  fn init_merkle_log(path: &str, create: bool) -> Result<AppendOnlyMerkle, std::io::Error> {
     // Create a merkle tree or open an existing one.
     let result = if create {
       AppendOnlyMerkle::create(path)
@@ -1555,9 +1556,12 @@ impl LedgerState {
 
     // Create a log for the tree.  The tree size ("state") is appended to
     // the end of the path.
-    let next_id = tree.total_size();
-    let writer = LedgerState::create_merkle_log(path.to_owned(), next_id)?;
-    Ok(LoggedMerkle::new(tree, writer))
+    // TODO: START https://github.com/findoraorg/platform/issues/307
+    // let next_id = tree.total_size();
+    // let writer = LedgerState::create_merkle_log(path.to_owned(), next_id)?;
+    // TODO: END This is being disabled as we decide what to do about about logging, archival, etc
+    Ok(tree)
+    // Ok(LoggedMerkle::new(tree, writer))
   }
 
   fn init_air_log(path: &str, create: bool) -> Result<AIR, std::io::Error> {
@@ -1890,9 +1894,10 @@ impl LedgerState {
   // Snapshot the block ledger state
   pub fn snapshot_block(&mut self) -> Result<SnapshotId, std::io::Error> {
     let state = self.block_merkle.state();
-    let writer = LedgerState::create_merkle_log(self.status.block_merkle_path.clone(), state)?;
-    self.block_merkle.snapshot(writer)?;
-
+    // TODO: START https://github.com/findoraorg/platform/issues/307
+    // let writer = LedgerState::create_merkle_log(self.status.block_merkle_path.clone(), state)?;
+    // self.block_merkle.snapshot(writer)?;
+    // TODO: END This is being disabled as we decide what to do about about logging, archival, etc
     Ok(SnapshotId { id: state })
   }
 
@@ -1903,8 +1908,10 @@ impl LedgerState {
   // TODO(joe): Actually serialize the active ledger state.
   pub fn snapshot_txns(&mut self) -> Result<SnapshotId, std::io::Error> {
     let state = self.txn_merkle.state();
-    let writer = LedgerState::create_merkle_log(self.status.txn_merkle_path.clone(), state)?;
-    self.txn_merkle.snapshot(writer)?;
+    // TODO: START https://github.com/findoraorg/platform/issues/307
+    // let writer = LedgerState::create_merkle_log(self.status.txn_merkle_path.clone(), state)?;
+    // self.txn_merkle.snapshot(writer)?;
+    // TODO: END This is being disabled as we decide what to do about about logging, archival, etc
 
     Ok(SnapshotId { id: state })
   }
@@ -1919,8 +1926,10 @@ impl LedgerState {
     let merkle_id = self.compute_and_append_txns_hash(&block);
     self.compute_and_save_state_commitment_data();
     self.utxo_map.write().unwrap();
-    self.txn_merkle.flush().unwrap();
-    self.block_merkle.flush().unwrap();
+    // TODO: START https://github.com/findoraorg/platform/issues/307
+    // self.txn_merkle.flush().unwrap();
+    // self.block_merkle.flush().unwrap();
+    // TODO: END This is being disabled as we decide what to do about about logging, archival, etc
     merkle_id
   }
 
@@ -1929,6 +1938,7 @@ impl LedgerState {
   //
   //     <tree_path>-log-<Merkle tree state>
   //
+  /* TODO: Leaving this code here while https://github.com/findoraorg/platform/issues/307 gets worked out
   fn create_merkle_log(base_path: String, next_id: u64) -> Result<File, std::io::Error> {
     let log_path = base_path + "-log-" + &next_id.to_string();
     println!("merkle log:  {}", log_path);
@@ -1947,6 +1957,7 @@ impl LedgerState {
 
     Ok(file)
   }
+  */
 }
 
 impl LedgerStatus {
@@ -2273,7 +2284,7 @@ mod tests {
   };
   use rand_core::SeedableRng;
   use sparse_merkle_tree::helpers::l256;
-  use std::fs;
+  // use std::fs;
   use tempfile::tempdir;
   use zei::serialization::ZeiFromToBytes;
   use zei::setup::PublicParams;
@@ -2471,20 +2482,22 @@ mod tests {
                commitment2);
   }
 
-  #[test]
-  fn test_create_merkle_log() {
-    let tmp_dir = tempdir().unwrap();
-    let buf = tmp_dir.path().join("merkle_log");
-    let base_path = buf.to_str().unwrap();
+  /*
+    #[test]
+    fn test_create_merkle_log() {
+      let tmp_dir = tempdir().unwrap();
+      let buf = tmp_dir.path().join("merkle_log");
+      let base_path = buf.to_str().unwrap();
 
-    let result = LedgerState::create_merkle_log(base_path.to_string(), 0);
-    assert!(result.is_ok());
+      let result = LedgerState::create_merkle_log(base_path.to_string(), 0);
+      assert!(result.is_ok());
 
-    let path = base_path.to_owned() + "-log-0";
-    assert!(fs::metadata(path).is_ok());
+      let path = base_path.to_owned() + "-log-0";
+      assert!(fs::metadata(path).is_ok());
 
-    tmp_dir.close().unwrap();
-  }
+      tmp_dir.close().unwrap();
+    }
+  */
 
   #[test]
   fn test_asset_creation_valid() {

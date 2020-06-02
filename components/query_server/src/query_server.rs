@@ -1,12 +1,14 @@
 #![deny(warnings)]
 use ledger::data_model::errors::PlatformError;
 use ledger::data_model::{
-  FinalizedTransaction, Operation, TransferAsset, TxoRef, TxoSID, XfrAddress,
+  FinalizedTransaction, KVBlind, KVHash, KVUpdate, Operation, TransferAsset, TxoRef, TxoSID,
+  XfrAddress,
 };
 use ledger::error_location;
 use ledger::store::*;
 use log::info;
 use rand_core::{CryptoRng, RngCore};
+use sparse_merkle_tree::Key;
 use std::collections::{HashMap, HashSet};
 use std::marker::PhantomData;
 use std::sync::{Arc, RwLock};
@@ -29,6 +31,7 @@ pub struct QueryServer<RNG, LU>
   committed_state: Arc<RwLock<LU>>,
   addresses_to_utxos: HashMap<XfrAddress, HashSet<TxoSID>>,
   utxos_to_map_index: HashMap<TxoSID, XfrAddress>,
+  custom_data_store: HashMap<Key, (Vec<u8>, KVHash)>,
   prng: PhantomData<RNG>,
 }
 
@@ -39,19 +42,69 @@ impl<RNG, LU> QueryServer<RNG, LU>
   pub fn new(ledger_state: Arc<RwLock<LU>>) -> QueryServer<RNG, LU> {
     QueryServer { committed_state: ledger_state,
                   addresses_to_utxos: HashMap::new(),
+                  custom_data_store: HashMap::new(),
                   utxos_to_map_index: HashMap::new(),
                   prng: PhantomData }
+  }
+
+  // Fetch custom data at a given key
+  pub fn get_custom_data(&self, key: &Key) -> Option<&(Vec<u8>, KVHash)> {
+    self.custom_data_store.get(key)
   }
 
   pub fn get_address_of_sid(&self, txo_sid: TxoSID) -> Option<XfrAddress> {
     self.utxos_to_map_index.get(&txo_sid).cloned()
   }
 
+  // Attempt to add to data store at a given location
+  // Returns an error if the hash of the data doesn't match the hash stored by the
+  // ledger's arbitrary data store at the given key
+  pub fn add_to_data_store(&mut self,
+                           key: &Key,
+                           data: &dyn AsRef<[u8]>,
+                           blind: Option<&KVBlind>)
+                           -> Result<(), PlatformError> {
+    let hash = KVHash::new(data, blind);
+    let ledger = self.committed_state.read().unwrap();
+    let auth_entry = ledger.get_kv_entry(*key);
+
+    let result =
+      auth_entry.result
+                .ok_or_else(|| fail!("Nothing found in the custom data store at this key"))?;
+    let entry_hash = result.deserialize().1.ok_or_else(|| fail!("Nothing found in the custom data store at this key. A hash was once here, but has been removed"))?.1;
+
+    // Ensure that hash matches
+    if hash != entry_hash {
+      return Err(fail!("The hash of the data supplied does not match the hash stored by the ledger"));
+    }
+
+    // Hash matches, store data
+    self.custom_data_store
+        .insert(*key, (data.as_ref().into(), hash));
+    Ok(())
+  }
+
   pub fn get_owned_utxo_sids(&self, address: &XfrAddress) -> Option<HashSet<TxoSID>> {
     self.addresses_to_utxos.get(&address).cloned()
   }
 
-  pub fn remove_spent_utxos(&mut self, transfer: &TransferAsset) -> Result<(), PlatformError> {
+  // Remove data that may be outdated based on this kv_update
+  fn remove_stale_data(&mut self, kv_update: &KVUpdate) {
+    let key = kv_update.body.0;
+    let entry = kv_update.body.2.as_ref();
+    if let Some((_, curr_hash)) = self.custom_data_store.get(&key) {
+      // If hashes don't match, data is stale
+      if let Some(entry) = entry {
+        if entry.1 != *curr_hash {
+          self.custom_data_store.remove(&key);
+        }
+      } else {
+        self.custom_data_store.remove(&key);
+      }
+    }
+  }
+
+  fn remove_spent_utxos(&mut self, transfer: &TransferAsset) -> Result<(), PlatformError> {
     for input in &transfer.body.inputs {
       match input {
         TxoRef::Relative(_) => {} // Relative utxos were never cached so no need to do anything here
@@ -100,10 +153,13 @@ impl<RNG, LU> QueryServer<RNG, LU>
 
       // Remove spent utxos
       for op in &txn.body.operations {
-        if let Operation::TransferAsset(transfer_asset) = op {
-          self.remove_spent_utxos(&transfer_asset)?;
+        match op {
+          Operation::TransferAsset(transfer_asset) => self.remove_spent_utxos(&transfer_asset)?,
+          Operation::KVStoreUpdate(kv_update) => self.remove_stale_data(&kv_update),
+          _ => {}
         };
       }
+
       // Add new utxos (this handles both transfers and issuances)
       for (txo_sid, address) in txo_sids.iter().zip(addresses.iter()) {
         self.addresses_to_utxos
@@ -162,6 +218,8 @@ mod tests {
   use ledger::store::helpers::apply_transaction;
   use rand_chacha::ChaChaRng;
   use rand_core::SeedableRng;
+  use sparse_merkle_tree::helpers::l256;
+  use std::str;
   use txn_builder::{
     BuildsTransactions, PolicyChoice, TransactionBuilder, TransferOperationBuilder,
   };
@@ -171,7 +229,56 @@ mod tests {
   use zei::xfr::structs::AssetRecordTemplate;
 
   #[test]
-  pub fn test_query_server() {
+  pub fn test_custom_data_store() {
+    let query_server_ledger_state = LedgerState::test_ledger();
+    let mut ledger_state = LedgerState::test_ledger();
+    let mut prng = ChaChaRng::from_entropy();
+    let mut query_server = QueryServer::new(Arc::new(RwLock::new(query_server_ledger_state)));
+    let kp = XfrKeyPair::generate(&mut prng);
+
+    let data = "some_data";
+    let blind = KVBlind::gen_random();
+    let hash = KVHash::new(&data, Some(&blind));
+    let key = l256("01");
+
+    // Add hash to ledger and update query server
+    let mut builder = TransactionBuilder::default();
+    builder.add_operation_kv_update(&kp, &key, 0, Some(&hash))
+           .unwrap();
+    let update_kv_tx = builder.transaction();
+    apply_transaction(&mut ledger_state, update_kv_tx.clone());
+    let block = ledger_state.get_block(BlockSID(0)).unwrap();
+    query_server.add_new_block(&block.block.txns).unwrap();
+
+    // Add data to query server
+    let res = query_server.add_to_data_store(&key, &data, Some(&blind));
+    assert!(res.is_ok());
+
+    // Make sure data is there
+    let fetched_data = query_server.get_custom_data(&key).unwrap();
+    assert_eq!(str::from_utf8(&fetched_data.0).unwrap(), data);
+
+    // Add incorrect  data to query server
+    let wrong_data = "wrong_data";
+    let res = query_server.add_to_data_store(&key, &wrong_data, Some(&blind));
+    assert!(res.is_err());
+
+    // Replace commitment
+    let hash = KVHash::new(&String::from("new_data"), Some(&blind));
+    let mut builder = TransactionBuilder::default();
+    builder.add_operation_kv_update(&kp, &key, 1, Some(&hash))
+           .unwrap();
+    let update_kv_tx = builder.transaction();
+    apply_transaction(&mut ledger_state, update_kv_tx.clone());
+    let block = ledger_state.get_block(BlockSID(1)).unwrap();
+    query_server.add_new_block(&block.block.txns).unwrap();
+
+    // Ensure stale data is removed
+    assert!(query_server.get_custom_data(&key).is_none());
+  }
+
+  #[test]
+  pub fn test_sid_storage() {
     let query_server_ledger_state = LedgerState::test_ledger();
     let mut ledger_state = LedgerState::test_ledger();
     let mut prng = ChaChaRng::from_entropy();
