@@ -24,7 +24,7 @@ impl TxnForward for TendermintForward {
     let txn_json = serde_json::to_string(&txn)?;
     info!("raw txn: {}", &txn_json);
     let txn_b64 = base64::encode_config(&txn_json.as_str(), base64::URL_SAFE);
-    let json_rpc = format!("{{\"jsonrpc\":\"2.0\",\"id\":\"anything\",\"method\":\"broadcast_tx_sync\",\"params\": {{\"tx\": \"{}}}\"}}}}", &txn_b64);
+    let json_rpc = format!("{{\"jsonrpc\":\"2.0\",\"id\":\"anything\",\"method\":\"broadcast_tx_sync\",\"params\": {{\"tx\": \"{}\"}}}}", &txn_b64);
 
     info!("forward_txn: \'{}\'", &json_rpc);
     let client = reqwest::blocking::Client::new();
