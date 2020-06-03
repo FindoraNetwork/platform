@@ -189,10 +189,12 @@ mod tests {
   use super::*;
   use ledger::data_model::{AssetRules, AssetTypeCode, BlockSID, TransferType};
   use ledger::store::helpers::apply_transaction;
+  use ledger_api_service::MockLedgerClient;
   use rand_chacha::ChaChaRng;
   use rand_core::SeedableRng;
   use sparse_merkle_tree::helpers::l256;
   use std::str;
+  use std::sync::{Arc, RwLock};
   use txn_builder::{
     BuildsTransactions, PolicyChoice, TransactionBuilder, TransferOperationBuilder,
   };
@@ -203,10 +205,11 @@ mod tests {
 
   #[test]
   pub fn test_custom_data_store() {
-    let query_server_ledger_state = LedgerState::test_ledger();
+    // This isn't actually being used in the test, we just make a ledger client so we can compile
+    let client_ledger_state = Arc::new(RwLock::new(LedgerState::test_ledger()));
     let mut ledger_state = LedgerState::test_ledger();
     let mut prng = ChaChaRng::from_entropy();
-    let mut query_server = QueryServer::new(Arc::new(RwLock::new(query_server_ledger_state)));
+    let mut query_server = QueryServer::new(MockLedgerClient::new(&client_ledger_state));
     let kp = XfrKeyPair::generate(&mut prng);
 
     let data = "some_data";
@@ -252,10 +255,12 @@ mod tests {
 
   #[test]
   pub fn test_sid_storage() {
-    let query_server_ledger_state = LedgerState::test_ledger();
+    let rest_client_ledger_state = Arc::new(RwLock::new(LedgerState::test_ledger()));
     let mut ledger_state = LedgerState::test_ledger();
+    // This isn't actually being used in the test, we just make a ledger client so we can compile
+    let mock_ledger = MockLedgerClient::new(&Arc::clone(&rest_client_ledger_state));
     let mut prng = ChaChaRng::from_entropy();
-    let mut query_server = QueryServer::new(Arc::new(RwLock::new(query_server_ledger_state)));
+    let mut query_server = QueryServer::new(mock_ledger);
     let token_code = AssetTypeCode::gen_random();
     // Define keys
     let alice = XfrKeyPair::generate(&mut prng);

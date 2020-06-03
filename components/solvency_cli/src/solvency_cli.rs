@@ -283,7 +283,6 @@ fn main() -> Result<(), PlatformError> {
 mod tests {
   use super::*;
   use ledger::data_model::AssetRules;
-  use ledger_standalone::LedgerStandalone;
   use rand_chacha::ChaChaRng;
   use rand_core::{CryptoRng, RngCore, SeedableRng};
   use std::io::{self, Write};
@@ -312,7 +311,7 @@ mod tests {
                                                      recipient_key_pair: &XfrKeyPair,
                                                      codes: Vec<AssetTypeCode>,
                                                      prng: &mut R,
-                                                     ledger_standalone: &LedgerStandalone)
+                                                     ledger_standalone: &mut MockLedgerStandalone)
                                                      -> (Vec<String>, Vec<String>) {
     let mut utxos = Vec::new();
     let mut blinds = Vec::new();
@@ -452,8 +451,7 @@ mod tests {
     let dir = tmp_dir.path().to_str().unwrap();
 
     // Start the standalone ledger
-    let ledger_standalone = &LedgerStandalone::new();
-    ledger_standalone.poll_until_ready().unwrap();
+    let mut ledger_standalone = MockLedgerStandalone::new(1);
 
     // Generate asset codes and key pairs
     let codes = vec![AssetTypeCode::gen_random(),
@@ -467,7 +465,7 @@ mod tests {
       define_and_submit(&issuer_key_pair,
                         *code,
                         AssetRules::default(),
-                        ledger_standalone).unwrap();
+                        &mut ledger_standalone).unwrap();
     }
     let code_0 = &codes[0].to_base64();
     let code_1 = &codes[1].to_base64();
@@ -476,7 +474,7 @@ mod tests {
                                                   &recipient_key_pair,
                                                   codes.clone(),
                                                   &mut ChaChaRng::from_entropy(),
-                                                  ledger_standalone);
+                                                  &mut ledger_standalone);
 
     // Set asset conversion rates
     let output = set_rate_cmd(dir, code_0, "1").expect("Failed to set conversion rate.");

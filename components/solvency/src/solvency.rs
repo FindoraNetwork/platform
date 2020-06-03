@@ -246,18 +246,15 @@ impl SolvencyAudit {
 mod tests {
   use super::*;
   use ledger::data_model::{AssetRules, AssetTypeCode};
-  use ledger_standalone::LedgerStandalone;
+  use network::MockLedgerStandalone;
   use rand_chacha::ChaChaRng;
   use rand_core::{CryptoRng, RngCore, SeedableRng};
   use txn_cli::txn_lib::{define_and_submit, issue_transfer_and_get_utxo_and_blinds};
   use zei::xfr::asset_record::AssetRecordType;
   use zei::xfr::sig::XfrKeyPair;
 
-  const PROTOCOL: &str = "http";
-  const HOST: &str = "localhost";
-
   // Randomly generate a key pair and three asset codes
-  fn generate_key_pair_and_define_assets(ledger_standalone: &LedgerStandalone)
+  fn generate_key_pair_and_define_assets(ledger_standalone: &mut MockLedgerStandalone)
                                          -> (XfrKeyPair, Vec<AssetTypeCode>) {
     let codes = vec![AssetTypeCode::gen_random(),
                      AssetTypeCode::gen_random(),
@@ -275,7 +272,7 @@ mod tests {
                                                       account: &mut AssetAndLiabilityAccount,
                                                       codes: &Vec<AssetTypeCode>,
                                                       prng: &mut R,
-                                                      ledger_standalone: &LedgerStandalone)
+                                                      ledger_standalone: &mut MockLedgerStandalone)
                                                       -> Result<(), PlatformError> {
     let (utxo_0, amount_blinds_0, code_blind_0) =
       issue_transfer_and_get_utxo_and_blinds(issuer_key_pair,
@@ -302,25 +299,24 @@ mod tests {
                                                   0,prng,
                                                   ledger_standalone)?;
 
-    let protocol_host = &ProtocolHost(PROTOCOL.to_owned(), HOST.to_owned());
     account.update(AmountType::Asset,
                    100,
                    codes[0],
                    Some((amount_blinds_0, code_blind_0)),
                    utxo_0,
-                   protocol_host)?;
+                   ledger_standalone)?;
     account.update(AmountType::Asset,
                    200,
                    codes[1],
                    Some((amount_blinds_1, code_blind_1)),
                    utxo_1,
-                   protocol_host)?;
+                   ledger_standalone)?;
     account.update(AmountType::Asset,
                    300,
                    codes[2],
                    Some((amount_blinds_2, code_blind_2)),
                    utxo_2,
-                   protocol_host)?;
+                   ledger_standalone)?;
 
     Ok(())
   }
@@ -332,7 +328,7 @@ mod tests {
     account: &mut AssetAndLiabilityAccount,
     codes: &Vec<AssetTypeCode>,
     prng: &mut R,
-    ledger_standalone: &LedgerStandalone)
+    ledger_standalone: &mut MockLedgerStandalone)
     -> Result<(Vec<AmountAndCodeScalar>, Vec<AmountAndCodeBlinds>), PlatformError> {
     let (utxo_0, amount_blinds_0, code_blind_0) =
       issue_transfer_and_get_utxo_and_blinds(issuer_key_pair,
@@ -359,27 +355,26 @@ mod tests {
                                                   1,prng,
                                                   ledger_standalone)?;
 
-    let protocol_host = &ProtocolHost(PROTOCOL.to_owned(), HOST.to_owned());
     let (asset_0, blinds_0) = account.update(AmountType::Asset,
                                              10,
                                              codes[0],
                                              Some((amount_blinds_0, code_blind_0)),
                                              utxo_0,
-                                             protocol_host)?
+                                             ledger_standalone)?
                                      .unwrap();
     let (asset_1, blinds_1) = account.update(AmountType::Asset,
                                              20,
                                              codes[1],
                                              Some((amount_blinds_1, code_blind_1)),
                                              utxo_1,
-                                             protocol_host)?
+                                             ledger_standalone)?
                                      .unwrap();
     let (asset_2, blinds_2) = account.update(AmountType::Asset,
                                              30,
                                              codes[2],
                                              Some((amount_blinds_2, code_blind_2)),
                                              utxo_2,
-                                             protocol_host)?
+                                             ledger_standalone)?
                                      .unwrap();
 
     Ok((vec![asset_0, asset_1, asset_2], vec![blinds_0, blinds_1, blinds_2]))
@@ -391,7 +386,7 @@ mod tests {
                                                           account: &mut AssetAndLiabilityAccount,
                                                           codes: &Vec<AssetTypeCode>,
                                                           prng: &mut R,
-                                                          ledger_standalone: &LedgerStandalone)
+                                                          ledger_standalone: &mut MockLedgerStandalone)
                                                           -> Result<(), PlatformError> {
     let (utxo_0, amount_blinds_0, code_blind_0) =
       issue_transfer_and_get_utxo_and_blinds(issuer_key_pair,
@@ -418,25 +413,24 @@ mod tests {
                                                   2,prng,
                                                   ledger_standalone)?;
 
-    let protocol_host = &ProtocolHost(PROTOCOL.to_owned(), HOST.to_owned());
     account.update(AmountType::Liability,
                    100,
                    codes[0],
                    Some((amount_blinds_0, code_blind_0)),
                    utxo_0,
-                   protocol_host)?;
+                   ledger_standalone)?;
     account.update(AmountType::Liability,
                    200,
                    codes[1],
                    Some((amount_blinds_1, code_blind_1)),
                    utxo_1,
-                   protocol_host)?;
+                   ledger_standalone)?;
     account.update(AmountType::Liability,
                    200,
                    codes[2],
                    Some((amount_blinds_2, code_blind_2)),
                    utxo_2,
-                   protocol_host)?;
+                   ledger_standalone)?;
 
     Ok(())
   }
@@ -448,7 +442,7 @@ mod tests {
     account: &mut AssetAndLiabilityAccount,
     codes: &Vec<AssetTypeCode>,
     prng: &mut R,
-    ledger_standalone: &LedgerStandalone)
+    ledger_standalone: &mut MockLedgerStandalone)
     -> Result<(Vec<AmountAndCodeScalar>, Vec<AmountAndCodeBlinds>), PlatformError> {
     let (utxo_0, amount_blinds_0, code_blind_0) =
       issue_transfer_and_get_utxo_and_blinds(issuer_key_pair,
@@ -475,27 +469,26 @@ mod tests {
                                                   3,prng,
                                                   ledger_standalone)?;
 
-    let protocol_host = &ProtocolHost(PROTOCOL.to_owned(), HOST.to_owned());
     let (asset_0, blinds_0) = account.update(AmountType::Liability,
                                              10,
                                              codes[0],
                                              Some((amount_blinds_0, code_blind_0)),
                                              utxo_0,
-                                             protocol_host)?
+                                             ledger_standalone)?
                                      .unwrap();
     let (asset_1, blinds_1) = account.update(AmountType::Liability,
                                              20,
                                              codes[1],
                                              Some((amount_blinds_1, code_blind_1)),
                                              utxo_1,
-                                             protocol_host)?
+                                             ledger_standalone)?
                                      .unwrap();
     let (asset_2, blinds_2) = account.update(AmountType::Liability,
                                              20,
                                              codes[2],
                                              Some((amount_blinds_2, code_blind_2)),
                                              utxo_2,
-                                             protocol_host)?
+                                             ledger_standalone)?
                                      .unwrap();
 
     Ok((vec![asset_0, asset_1, asset_2], vec![blinds_0, blinds_1, blinds_2]))
@@ -508,7 +501,7 @@ mod tests {
     account: &mut AssetAndLiabilityAccount,
     codes: &Vec<AssetTypeCode>,
     prng: &mut R,
-    ledger_standalone: &LedgerStandalone)
+    ledger_standalone: &mut MockLedgerStandalone)
     -> Result<(Vec<AmountAndCodeScalar>, Vec<AmountAndCodeBlinds>), PlatformError> {
     let (utxo_0, amount_blinds_0, code_blind_0) =
       issue_transfer_and_get_utxo_and_blinds(issuer_key_pair,
@@ -535,27 +528,26 @@ mod tests {
                                                   4,prng,
                                                   ledger_standalone)?;
 
-    let protocol_host = &ProtocolHost(PROTOCOL.to_owned(), HOST.to_owned());
     let (asset_0, blinds_0) = account.update(AmountType::Liability,
                                              10,
                                              codes[0],
                                              Some((amount_blinds_0, code_blind_0)),
                                              utxo_0,
-                                             protocol_host)?
+                                             ledger_standalone)?
                                      .unwrap();
     let (asset_1, blinds_1) = account.update(AmountType::Liability,
                                              20,
                                              codes[1],
                                              Some((amount_blinds_1, code_blind_1)),
                                              utxo_1,
-                                             protocol_host)?
+                                             ledger_standalone)?
                                      .unwrap();
     let (asset_2, blinds_2) = account.update(AmountType::Liability,
                                              40,
                                              codes[2],
                                              Some((amount_blinds_2, code_blind_2)),
                                              utxo_2,
-                                             protocol_host)?
+                                             ledger_standalone)?
                                      .unwrap();
 
     Ok((vec![asset_0, asset_1, asset_2], vec![blinds_0, blinds_1, blinds_2]))
@@ -577,14 +569,13 @@ mod tests {
   #[ignore]
   fn test_prove_solvency_fail() {
     // Start the standalone ledger
-    let ledger_standalone = &LedgerStandalone::new();
-    ledger_standalone.poll_until_ready().unwrap();
+    let mut ledger_standalone = MockLedgerStandalone::new(1);
 
     // Start a solvency audit process
     let mut audit = SolvencyAudit::default();
 
     // Generate issuer key pair and define assets
-    let (issuer_key_pair, codes) = generate_key_pair_and_define_assets(ledger_standalone);
+    let (issuer_key_pair, codes) = generate_key_pair_and_define_assets(&mut ledger_standalone);
 
     // Set asset conversion rates, but miss one asset
     add_conversion_rates(&mut audit, vec![codes[0].clone(), codes[1].clone()]);
@@ -599,14 +590,14 @@ mod tests {
                                &mut account,
                                &codes,
                                prng,
-                               ledger_standalone).unwrap();
+                               &mut ledger_standalone).unwrap();
     let (mut hidden_liabilities, mut hidden_liabilities_blinds) =
       add_hidden_liability_amounts_smaller(&issuer_key_pair,
                                            recipient_key_pair,
                                            &mut account,
                                            &codes,
                                            prng,
-                                           ledger_standalone).unwrap();
+                                           &mut ledger_standalone).unwrap();
 
     // Prove the solvency
     // Should fail with ZeiError::SolvencyProveError
@@ -631,14 +622,13 @@ mod tests {
   #[ignore]
   fn test_verify_solvency_fail() {
     // Start the standalone ledger
-    let ledger_standalone = &LedgerStandalone::new();
-    ledger_standalone.poll_until_ready().unwrap();
+    let mut ledger_standalone = MockLedgerStandalone::new(1);
 
     // Start a solvency audit process
     let mut audit = SolvencyAudit::default();
 
     // Generate issuer key pair and define assets
-    let (issuer_key_pair, codes) = generate_key_pair_and_define_assets(ledger_standalone);
+    let (issuer_key_pair, codes) = generate_key_pair_and_define_assets(&mut ledger_standalone);
 
     // Set asset conversion rates
     add_conversion_rates(&mut audit, codes.clone());
@@ -652,13 +642,13 @@ mod tests {
                              &mut account,
                              &codes,
                              prng,
-                             ledger_standalone).unwrap();
+                             &mut ledger_standalone).unwrap();
     add_hidden_liability_amounts_smaller(&issuer_key_pair,
                                          recipient_key_pair,
                                          &mut account,
                                          &codes,
                                          prng,
-                                         ledger_standalone).unwrap();
+                                         &mut ledger_standalone).unwrap();
 
     // Verify the solvency without a proof
     // Should fail with InputsError
@@ -677,14 +667,13 @@ mod tests {
   #[ignore]
   fn test_prove_and_verify_solvency_fail() {
     // Start the standalone ledger
-    let ledger_standalone = &LedgerStandalone::new();
-    ledger_standalone.poll_until_ready().unwrap();
+    let mut ledger_standalone = MockLedgerStandalone::new(1);
 
     // Start a solvency audit process
     let mut audit = SolvencyAudit::default();
 
     // Generate issuer key pair and define assets
-    let (issuer_key_pair, codes) = generate_key_pair_and_define_assets(ledger_standalone);
+    let (issuer_key_pair, codes) = generate_key_pair_and_define_assets(&mut ledger_standalone);
 
     // Set asset conversion rates
     add_conversion_rates(&mut audit, codes.clone());
@@ -701,7 +690,7 @@ mod tests {
                                &mut account,
                                &codes,
                                prng,
-                               ledger_standalone).unwrap();
+                               &mut ledger_standalone).unwrap();
 
     // Adds hidden liabilities, with total value larger than hidden assets'
     let (mut hidden_liabilities, mut hidden_liabilities_blinds) =
@@ -710,7 +699,7 @@ mod tests {
                                           &mut account,
                                           &codes,
                                           prng,
-                                          ledger_standalone).unwrap();
+                                          &mut ledger_standalone).unwrap();
 
     // Prove the solvency
     audit.prove_solvency_and_store(&mut account,
@@ -739,8 +728,7 @@ mod tests {
   #[ignore]
   fn test_prove_and_verify_solvency_simple_pass() {
     // Start the standalone ledger
-    let ledger_standalone = &LedgerStandalone::new();
-    ledger_standalone.poll_until_ready().unwrap();
+    let mut ledger_standalone = MockLedgerStandalone::new(1);
 
     // Start a solvency audit process
     let mut audit = SolvencyAudit::default();
@@ -751,7 +739,7 @@ mod tests {
     define_and_submit(issuer_key_pair,
                       code,
                       AssetRules::default(),
-                      ledger_standalone).unwrap();
+                      &mut ledger_standalone).unwrap();
 
     // Set asset conversion rates
     audit.set_rate(code, 1);
@@ -768,14 +756,14 @@ mod tests {
                                            AssetRecordType::ConfidentialAmount_NonConfidentialAssetType,
                                            1,
                                            prng,
-                                           ledger_standalone).unwrap();
+                                           &mut ledger_standalone).unwrap();
 
     let (asset, blinds) = account.update(AmountType::Asset,
                                          10,
                                          code,
                                          Some((amount_blinds, code_blind)),
                                          utxo,
-                                         &ProtocolHost(PROTOCOL.to_owned(), HOST.to_owned()))
+                                         &mut ledger_standalone)
                                  .unwrap()
                                  .unwrap();
 
@@ -799,14 +787,13 @@ mod tests {
   #[ignore]
   fn test_prove_and_verify_solvency_complex_pass() {
     // Start the standalone ledger
-    let ledger_standalone = &LedgerStandalone::new();
-    ledger_standalone.poll_until_ready().unwrap();
+    let mut ledger_standalone = MockLedgerStandalone::new(1);
 
     // Start a solvency audit process
     let mut audit = SolvencyAudit::default();
 
     // Generate issuer key pair and define assets
-    let (issuer_key_pair, codes) = generate_key_pair_and_define_assets(ledger_standalone);
+    let (issuer_key_pair, codes) = generate_key_pair_and_define_assets(&mut ledger_standalone);
 
     // Set asset conversion rates
     add_conversion_rates(&mut audit, codes.clone());
@@ -820,27 +807,27 @@ mod tests {
                              &mut account,
                              &codes,
                              prng,
-                             ledger_standalone).unwrap();
+                             &mut ledger_standalone).unwrap();
     let (mut hidden_assets, mut hidden_assets_blinds) =
       add_hidden_asset_amounts(&issuer_key_pair,
                                recipient_key_pair,
                                &mut account,
                                &codes,
                                prng,
-                               ledger_standalone).unwrap();
+                               &mut ledger_standalone).unwrap();
     add_public_liability_amounts(&issuer_key_pair,
                                  recipient_key_pair,
                                  &mut account,
                                  &codes,
                                  prng,
-                                 ledger_standalone).unwrap();
+                                 &mut ledger_standalone).unwrap();
     let (mut hidden_liabilities, mut hidden_liabilities_blinds) =
       add_hidden_liability_amounts_smaller(&issuer_key_pair,
                                            recipient_key_pair,
                                            &mut account,
                                            &codes,
                                            prng,
-                                           ledger_standalone).unwrap();
+                                           &mut ledger_standalone).unwrap();
 
     // Prove the solvency
     audit.prove_solvency_and_store(&mut account,
@@ -862,14 +849,13 @@ mod tests {
   #[ignore]
   fn test_update_asset_and_verify_solvency_mixed() {
     // Start the standalone ledger
-    let ledger_standalone = &LedgerStandalone::new();
-    ledger_standalone.poll_until_ready().unwrap();
+    let mut ledger_standalone = MockLedgerStandalone::new(1);
 
     // Start a solvency audit process
     let mut audit = SolvencyAudit::default();
 
     // Generate issuer key pair and define assets
-    let (issuer_key_pair, codes) = generate_key_pair_and_define_assets(ledger_standalone);
+    let (issuer_key_pair, codes) = generate_key_pair_and_define_assets(&mut ledger_standalone);
 
     // Set asset conversion rates
     add_conversion_rates(&mut audit, codes.clone());
@@ -883,27 +869,27 @@ mod tests {
                              &mut account,
                              &codes,
                              prng,
-                             ledger_standalone).unwrap();
+                             &mut ledger_standalone).unwrap();
     let (mut hidden_assets, mut hidden_assets_blinds) =
       add_hidden_asset_amounts(&issuer_key_pair,
                                recipient_key_pair,
                                &mut account,
                                &codes,
                                prng,
-                               ledger_standalone).unwrap();
+                               &mut ledger_standalone).unwrap();
     add_public_liability_amounts(&issuer_key_pair,
                                  recipient_key_pair,
                                  &mut account,
                                  &codes,
                                  prng,
-                                 ledger_standalone).unwrap();
+                                 &mut ledger_standalone).unwrap();
     let (mut hidden_liabilities, mut hidden_liabilities_blinds) =
       add_hidden_liability_amounts_smaller(&issuer_key_pair,
                                            recipient_key_pair,
                                            &mut account,
                                            &codes,
                                            prng,
-                                           ledger_standalone).unwrap();
+                                           &mut ledger_standalone).unwrap();
 
     // Prove and verify the solvency
     audit.prove_solvency_and_store(&mut account,
@@ -922,13 +908,13 @@ mod tests {
                                                               AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
                                                               5,
                                                               prng,
-                                                              ledger_standalone).unwrap();
+                                                              &mut ledger_standalone).unwrap();
     account.update(AmountType::Liability,
                    40,
                    codes[0],
                    Some((amount_blinds, code_blind)),
                    utxo,
-                   &ProtocolHost(PROTOCOL.to_owned(), HOST.to_owned()))
+                   &mut ledger_standalone)
            .unwrap();
 
     // Verify the solvency without proving it again
@@ -957,14 +943,13 @@ mod tests {
   #[ignore]
   fn test_update_liability_and_verify_solvency_fail() {
     // Start the standalone ledger
-    let ledger_standalone = &LedgerStandalone::new();
-    ledger_standalone.poll_until_ready().unwrap();
+    let mut ledger_standalone = MockLedgerStandalone::new(1);
 
     // Start a solvency audit process
     let mut audit = SolvencyAudit::default();
 
     // Generate issuer key pair and define assets
-    let (issuer_key_pair, codes) = generate_key_pair_and_define_assets(ledger_standalone);
+    let (issuer_key_pair, codes) = generate_key_pair_and_define_assets(&mut ledger_standalone);
 
     // Set asset conversion rates
     add_conversion_rates(&mut audit, codes.clone());
@@ -978,27 +963,27 @@ mod tests {
                              &mut account,
                              &codes,
                              prng,
-                             ledger_standalone).unwrap();
+                             &mut ledger_standalone).unwrap();
     let (mut hidden_assets, mut hidden_assets_blinds) =
       add_hidden_asset_amounts(&issuer_key_pair,
                                recipient_key_pair,
                                &mut account,
                                &codes,
                                prng,
-                               ledger_standalone).unwrap();
+                               &mut ledger_standalone).unwrap();
     add_public_liability_amounts(&issuer_key_pair,
                                  recipient_key_pair,
                                  &mut account,
                                  &codes,
                                  prng,
-                                 ledger_standalone).unwrap();
+                                 &mut ledger_standalone).unwrap();
     let (mut hidden_liabilities, mut hidden_liabilities_blinds) =
       add_hidden_liability_amounts_smaller(&issuer_key_pair,
                                            recipient_key_pair,
                                            &mut account,
                                            &codes,
                                            prng,
-                                           ledger_standalone).unwrap();
+                                           &mut ledger_standalone).unwrap();
 
     // Prove and verify the solvency
     audit.prove_solvency_and_store(&mut account,
@@ -1016,13 +1001,13 @@ mod tests {
                                                                      codes[0],
                                                                      AssetRecordType::ConfidentialAmount_NonConfidentialAssetType,
                                                                      5,prng,
-                                                                     ledger_standalone).unwrap();
+                                                                     &mut ledger_standalone).unwrap();
     let (asset, blinds) = account.update(AmountType::Liability,
                                          4000,
                                          codes[0],
                                          Some((amount_blinds, code_blind)),
                                          utxo,
-                                         &ProtocolHost(PROTOCOL.to_owned(), HOST.to_owned()))
+                                         &mut ledger_standalone)
                                  .unwrap()
                                  .unwrap();
 

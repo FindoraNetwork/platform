@@ -138,7 +138,7 @@ mod tests {
   use super::*;
   use ledger::data_model::AssetRules;
   use ledger::ser_fail;
-  use ledger_standalone::LedgerStandalone;
+  use network::MockLedgerStandalone;
   use rand_chacha::ChaChaRng;
   use rand_core::SeedableRng;
   use std::io::{self, Write};
@@ -175,8 +175,7 @@ mod tests {
   #[test]
   fn test_cmd() {
     // Start the standalone ledger
-    let ledger_standalone = &LedgerStandalone::new();
-    ledger_standalone.poll_until_ready().unwrap();
+    let mut ledger_standalone = MockLedgerStandalone::new(1);
 
     // Generate asset codes and key pairs
     let codes = vec![AssetTypeCode::gen_random(),
@@ -195,7 +194,7 @@ mod tests {
                                                     *code,
                                                     AssetRules::default(),
                                                     AssetRecordType::NonConfidentialAmount_ConfidentialAssetType,
-                                                    &ledger_standalone,
+                                                    &mut ledger_standalone,
                                                     &mut ChaChaRng::from_entropy()).unwrap();
       let utxo_str = format!("{}", utxo);
       let blind_str = serde_json::to_string(&code_blind).or_else(|e| Err(ser_fail!(e)))

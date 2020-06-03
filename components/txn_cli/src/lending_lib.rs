@@ -636,12 +636,8 @@ AssetRecordTemplate::with_no_asset_tracking(borrower.balance - amount_to_spend,
 mod tests {
   use super::*;
   use ledger::data_model::TxoSID;
-  use ledger_standalone::LedgerStandalone;
+  use network::MockLedgerStandalone;
   use tempfile::tempdir;
-
-  const PROTOCOL: &str = "http";
-  const HOST: &str = "localhost";
-
   #[test]
   fn test_merge_records() {
     // Create key pair
@@ -678,17 +674,14 @@ mod tests {
   // TODO (keyao)
   // Test funds loading, loan request, fulfilling and repayment
   fn test_request_fulfill_and_pay_loan() {
-    let ledger_standalone = LedgerStandalone::new();
-    ledger_standalone.poll_until_ready().unwrap();
-
-    let protocol_host = &ProtocolHost(PROTOCOL.to_owned(), HOST.to_owned());
+    let mut ledger_standalone = MockLedgerStandalone::new(1);
 
     // Load funds
     let tmp_dir = tempdir().unwrap();
     let data_dir = tmp_dir.path().to_str().unwrap();
 
     let funds_amount = 1000;
-    load_funds(data_dir, 0, 0, funds_amount, protocol_host).unwrap();
+    load_funds(data_dir, 0, 0, funds_amount, &mut ledger_standalone).unwrap();
     let data = load_data(data_dir).unwrap();
 
     assert_eq!(data.borrowers[0].balance, funds_amount);
@@ -706,7 +699,7 @@ mod tests {
     assert_eq!(data.loans.len(), 1);
 
     // Fulfill the loan request
-    fulfill_loan(data_dir, 0, 0, None, protocol_host).unwrap();
+    fulfill_loan(data_dir, 0, 0, None, &mut ledger_standalone).unwrap();
     data = load_data(data_dir).unwrap();
 
     assert_eq!(data.loans[0].status, LoanStatus::Active);
@@ -714,7 +707,7 @@ mod tests {
 
     // Pay loan
     let payment_amount = 200;
-    pay_loan(data_dir, 0, payment_amount, protocol_host).unwrap();
+    pay_loan(data_dir, 0, payment_amount, &mut ledger_standalone).unwrap();
     data = load_data(data_dir).unwrap();
 
     assert_eq!(data.loans[0].payments, 1);
