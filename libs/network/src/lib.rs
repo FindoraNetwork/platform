@@ -16,7 +16,7 @@ use serde::Serialize;
 use sparse_merkle_tree::Key;
 use std::sync::{Arc, RwLock};
 use submission_api::{force_end_block, submit_transaction, txn_status, SubmissionRoutes};
-use submission_server::{SubmissionServer, TxnHandle, TxnStatus};
+use submission_server::{NoTF, SubmissionServer, TxnHandle, TxnStatus};
 use utils::{HashOf, NetworkRoute, SignatureOf};
 use zei::xfr::sig::XfrPublicKey;
 
@@ -53,7 +53,7 @@ pub trait RestfulLedgerAccess {
 
 /// Mock rest client that simulates http requests, no ports required
 pub struct MockRestClient {
-  mock_submission_server: Arc<RwLock<SubmissionServer<ChaChaRng, LedgerState>>>,
+  mock_submission_server: Arc<RwLock<SubmissionServer<ChaChaRng, LedgerState, NoTF>>>,
   mock_ledger: Arc<RwLock<LedgerState>>,
 }
 
@@ -79,7 +79,7 @@ impl RestfulLedgerUpdate for MockRestClient {
       test::init_service(App::new().data(Arc::clone(&self.mock_submission_server))
                                    .route(&route,
                                           web::post().to(submit_transaction::<rand_chacha::ChaChaRng,
-                                                                            LedgerState>)));
+                                                                            LedgerState, NoTF>)));
     let req = TestRequest::post().uri(&route).set_json(&txn).to_request();
     let handle: TxnHandle = test::read_response_json(&mut app, req);
     Ok(handle)
@@ -91,7 +91,7 @@ impl RestfulLedgerUpdate for MockRestClient {
       test::init_service(App::new().data(Arc::clone(&self.mock_submission_server))
                                    .route(&route,
                                           web::post().to(force_end_block::<rand_chacha::ChaChaRng,
-                                                                            LedgerState>)));
+                                                                            LedgerState, NoTF>)));
     let req = TestRequest::post().uri(&route).to_request();
     test::block_on(app.call(req)).unwrap();
     Ok(())
@@ -102,7 +102,7 @@ impl RestfulLedgerUpdate for MockRestClient {
       test::init_service(App::new().data(Arc::clone(&self.mock_submission_server))
                                    .route(&SubmissionRoutes::TxnStatus.with_arg_template("handle"),
                                           web::get().to(txn_status::<rand_chacha::ChaChaRng,
-                                                                   LedgerState>)));
+                                                                   LedgerState, NoTF>)));
     let req = test::TestRequest::get().uri(&SubmissionRoutes::TxnStatus.with_arg(&handle.0))
                                       .to_request();
     Ok(test::read_response_json(&mut app, req))

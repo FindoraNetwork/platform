@@ -103,7 +103,7 @@ impl NetworkRoute for SubmissionRoutes {
 impl SubmissionApi {
   pub fn create<RNG: 'static + RngCore + CryptoRng + Sync + Send,
                   LU: 'static + LedgerUpdate<RNG> + Sync + Send,
-                  TF: 'static + TxnForward + Sync + Send>(>(
+                  TF: 'static + TxnForward + Sync + Send>(
     submission_server: Arc<RwLock<SubmissionServer<RNG, LU, TF>>>,
     host: &str,
     port: &str)
