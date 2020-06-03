@@ -2,25 +2,25 @@
 use actix_cors::Cors;
 use actix_web::{error, middleware, web, App, HttpServer};
 use ledger::data_model::Transaction;
-use ledger::store::{ArchiveAccess, LedgerAccess, LedgerUpdate};
+use ledger::store::LedgerUpdate;
 use log::{error, info};
-use percent_encoding::percent_decode_str;
 use rand_core::{CryptoRng, RngCore};
 use std::io;
 use std::marker::{Send, Sync};
 use std::sync::{Arc, RwLock};
 use submission_server::{SubmissionServer, TxnForward, TxnHandle};
+use utils::NetworkRoute;
 
 // Ping route to check for liveness of API
 fn ping() -> actix_web::Result<String> {
   Ok("success".into())
 }
 
-fn submit_transaction<RNG, LU, TF>(data: web::Data<Arc<RwLock<SubmissionServer<RNG, LU, TF>>>>,
-                                   body: web::Json<Transaction>)
-                                   -> Result<web::Json<TxnHandle>, actix_web::error::Error>
+pub fn submit_transaction<RNG, LU, TF>(data: web::Data<Arc<RwLock<SubmissionServer<RNG, LU, TF>>>>,
+                                       body: web::Json<Transaction>)
+                                       -> Result<web::Json<TxnHandle>, actix_web::error::Error>
   where RNG: RngCore + CryptoRng,
-        LU: LedgerUpdate<RNG> + LedgerAccess + ArchiveAccess + Sync + Send,
+        LU: LedgerUpdate<RNG> + Sync + Send,
         TF: TxnForward + Sync + Send
 {
   let mut submission_server = data.write().unwrap();
@@ -37,31 +37,14 @@ fn submit_transaction<RNG, LU, TF>(data: web::Data<Arc<RwLock<SubmissionServer<R
   }
 }
 
-fn submit_transaction_wasm<RNG, LU, TF>(data: web::Data<Arc<RwLock<SubmissionServer<RNG,
-                                                                              LU,
-                                                                              TF>>>>,
-                                        info: web::Path<String>)
-                                        -> Result<web::Json<TxnHandle>, actix_web::error::Error>
-  where RNG: RngCore + CryptoRng,
-        LU: LedgerUpdate<RNG> + LedgerAccess + ArchiveAccess + Sync + Send,
-        TF: TxnForward + Sync + Send
-{
-  let mut submission_server = data.write().unwrap();
-  let uri_string = percent_decode_str(&*info).decode_utf8().unwrap();
-  let tx = serde_json::from_str(&uri_string).unwrap();
-  let handle = submission_server.handle_transaction(tx)
-                                .map_err(error::ErrorBadRequest)?;
-  Ok(web::Json(handle))
-}
-
 // Force the validator node to end the block. Useful for testing when it is desirable to commmit
 // txns to the ledger as soon as possible.
 //
 // When a block is successfully finalized, returns HashMap<TxnTempSID, (TxnSID, Vec<TxoSID>)>
-fn force_end_block<RNG, LU, TF>(data: web::Data<Arc<RwLock<SubmissionServer<RNG, LU, TF>>>>)
-                                -> Result<String, actix_web::error::Error>
+pub fn force_end_block<RNG, LU, TF>(data: web::Data<Arc<RwLock<SubmissionServer<RNG, LU, TF>>>>)
+                                    -> Result<String, actix_web::error::Error>
   where RNG: RngCore + CryptoRng,
-        LU: LedgerUpdate<RNG> + LedgerAccess + ArchiveAccess + Sync + Send,
+        LU: LedgerUpdate<RNG> + Sync + Send,
         TF: TxnForward + Sync + Send
 {
   let mut submission_server = data.write().unwrap();
@@ -74,11 +57,11 @@ fn force_end_block<RNG, LU, TF>(data: web::Data<Arc<RwLock<SubmissionServer<RNG,
 
 // Queries the status of a transaction by its handle. Returns either a not committed message or a
 // serialized TxnStatus.
-fn txn_status<RNG, LU, TF>(data: web::Data<Arc<RwLock<SubmissionServer<RNG, LU, TF>>>>,
+pub fn txn_status<RNG, LU, TF>(data: web::Data<Arc<RwLock<SubmissionServer<RNG, LU, TF>>>>,
                            info: web::Path<String>)
                            -> Result<String, actix_web::error::Error>
   where RNG: RngCore + CryptoRng,
-        LU: LedgerUpdate<RNG> + LedgerAccess + ArchiveAccess + Sync + Send,
+        LU: LedgerUpdate<RNG> + Sync + Send,
         TF: TxnForward + Sync + Send
 {
   let submission_server = data.write().unwrap();
@@ -90,6 +73,7 @@ fn txn_status<RNG, LU, TF>(data: web::Data<Arc<RwLock<SubmissionServer<RNG, LU, 
     res = format!("No transaction with handle {} found. Please retry with a new handle.",
                   &info);
   }
+
   Ok(res)
 }
 
@@ -97,10 +81,29 @@ pub struct SubmissionApi {
   web_runtime: actix_rt::SystemRunner,
 }
 
+pub enum SubmissionRoutes {
+  SubmitTransaction,
+  TxnStatus,
+  Ping,
+  ForceEndBlock,
+}
+
+impl NetworkRoute for SubmissionRoutes {
+  fn route(&self) -> String {
+    let endpoint = match *self {
+      SubmissionRoutes::SubmitTransaction => "submit_transaction",
+      SubmissionRoutes::TxnStatus => "txn_status",
+      SubmissionRoutes::Ping => "ping",
+      SubmissionRoutes::ForceEndBlock => "force_end_block",
+    };
+    "/".to_owned() + endpoint
+  }
+}
+
 impl SubmissionApi {
   pub fn create<RNG: 'static + RngCore + CryptoRng + Sync + Send,
-                  LU: 'static + LedgerUpdate<RNG> + LedgerAccess + ArchiveAccess + Sync + Send,
-                  TF: 'static + TxnForward + Sync + Send>(
+                  LU: 'static + LedgerUpdate<RNG> + Sync + Send,
+                  TF: 'static + TxnForward + Sync + Send>(>(
     submission_server: Arc<RwLock<SubmissionServer<RNG, LU, TF>>>,
     host: &str,
     port: &str)
@@ -111,14 +114,12 @@ impl SubmissionApi {
       App::new().wrap(middleware::Logger::default())
                 .wrap(Cors::new().supports_credentials())
                 .data(submission_server.clone())
-                .route("/submit_transaction",
+                .route(&SubmissionRoutes::SubmitTransaction.route(),
                        web::post().to(submit_transaction::<RNG, LU, TF>))
-                .route("/submit_transaction_wasm/{tx}",
-                       web::post().to(submit_transaction_wasm::<RNG, LU, TF>))
-                .route("/ping", web::get().to(ping))
-                .route("/txn_status/{handle}",
+                .route(&SubmissionRoutes::Ping.route(), web::get().to(ping))
+                .route(&SubmissionRoutes::TxnStatus.with_arg_template("handle"),
                        web::get().to(txn_status::<RNG, LU, TF>))
-                .route("/force_end_block",
+                .route(&SubmissionRoutes::ForceEndBlock.route(),
                        web::post().to(force_end_block::<RNG, LU, TF>))
     }).bind(&format!("{}:{}", host, port))?
       .start();

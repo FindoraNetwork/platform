@@ -408,6 +408,23 @@ impl<'a, T> Deserialize<'a> for SignatureOfBytes<T> {
   }
 }
 
+pub trait NetworkRoute {
+  fn route(&self) -> String;
+
+  fn with_arg(&self, arg: &dyn std::fmt::Display) -> String {
+    let mut endpoint = self.route();
+    endpoint += &("/".to_owned() + &arg.to_string());
+    endpoint
+  }
+
+  // e.g. SubmissionRoutes::TxnStatus.with_arg_template("str") = "/submit_transaction/{str}"
+  fn with_arg_template(&self, arg: &str) -> String {
+    let mut endpoint = self.route();
+    endpoint += &("/".to_owned() + &"{".to_owned() + arg + &"}".to_owned());
+    endpoint
+  }
+}
+
 #[cfg(test)]
 mod tests {
   use super::*;

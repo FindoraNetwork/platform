@@ -30,5 +30,6 @@ members = [
     "libs/bitmap",
     "libs/cryptohash",
     "libs/credentials",
+    "libs/network",
     "libs/utils",
 ]
