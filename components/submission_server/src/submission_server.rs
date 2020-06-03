@@ -51,11 +51,11 @@ pub enum CommitMode {
 
 pub struct SubmissionServer<RNG, LU>
   where RNG: RngCore + CryptoRng,
-        LU: LedgerUpdate<RNG> + LedgerAccess + ArchiveAccess
+        LU: LedgerUpdate<RNG>
 {
   committed_state: Arc<RwLock<LU>>,
   block: Option<LU::Block>,
-  pending_txns: Vec<(TxnTempSID, TxnHandle)>,
+  pending_txns: Vec<(TxnTempSID, TxnHandle, Transaction)>,
   txn_status: HashMap<TxnHandle, TxnStatus>,
   block_capacity: usize,
   prng: RNG,
@@ -64,7 +64,7 @@ pub struct SubmissionServer<RNG, LU>
 
 impl<RNG, LU> SubmissionServer<RNG, LU>
   where RNG: RngCore + CryptoRng,
-        LU: LedgerUpdate<RNG> + LedgerAccess + ArchiveAccess
+        LU: LedgerUpdate<RNG>
 {
   pub fn new(prng: RNG,
              ledger_state: Arc<RwLock<LU>>,
@@ -139,16 +139,12 @@ impl<RNG, LU> SubmissionServer<RNG, LU>
       let finalized_txns = ledger.finish_block(block)
                                  .expect("Ledger could not finish block");
       // Update status of all committed transactions
-      for (txn_temp_sid, handle) in self.pending_txns.drain(..) {
+      for (txn_temp_sid, handle, txn) in self.pending_txns.drain(..) {
         let committed_txn_info = finalized_txns.get(&txn_temp_sid).unwrap();
         self.txn_status
             .insert(handle, TxnStatus::Committed(committed_txn_info.clone()));
 
-        // Log txn details
-        txn_log_info(&ledger.get_transaction(committed_txn_info.0)
-                            .unwrap()
-                            .finalized_txn
-                            .txn);
+        txn_log_info(&txn);
       }
       info!("Block ended. Statuses of committed transactions are now updated");
       // Empty temp_sids after the block is finished
@@ -165,9 +161,9 @@ impl<RNG, LU> SubmissionServer<RNG, LU>
     if let Some(block) = &mut self.block {
       if let Ok(ledger) = self.committed_state.read() {
         let handle = TxnHandle::new(&txn);
-        let txn_effect = TxnEffect::compute_effect(txn)?;
+        let txn_effect = TxnEffect::compute_effect(txn.clone())?;
         self.pending_txns
-            .push((ledger.apply_transaction(block, txn_effect)?, handle.clone()));
+            .push((ledger.apply_transaction(block, txn_effect)?, handle.clone(), txn));
         self.txn_status.insert(handle.clone(), TxnStatus::Pending);
 
         return Ok(handle);
