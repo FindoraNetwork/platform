@@ -110,6 +110,7 @@ impl abci::Application for ABCISubmissionServer {
       }
     }
     resp.set_code(1);
+    resp.set_log(String::from("Failed to deliver transaction!"));
     resp
   }
 
@@ -123,7 +124,9 @@ impl abci::Application for ABCISubmissionServer {
   fn end_block(&mut self, _req: &RequestEndBlock) -> ResponseEndBlock {
     // TODO: this should propagate errors instead of panicking
     if let Ok(mut la) = self.la.write() {
-      la.end_block().unwrap();
+      if let Err(e) = la.end_block() {
+        info!("end_block failure: {:?}", e);
+      }
     }
     ResponseEndBlock::new()
   }
@@ -140,16 +143,9 @@ impl abci::Application for ABCISubmissionServer {
         error_commitment
       };
       la.end_commit();
-      r.data = commitment.0.as_ref().to_vec();
+      r.set_data(commitment.0.as_ref().to_vec());
     }
     r
-  }
-
-  fn query(&mut self, req: &RequestQuery) -> ResponseQuery {
-    println!("{:?}", &req);
-    let q = &req.data;
-    println!("Path = {}, data = {:?}", &req.path, q);
-    ResponseQuery::new()
   }
 }
 
@@ -169,7 +165,7 @@ fn main() {
                                                            .unwrap_or_else(|| "8669".into());
   let ledger_port = std::env::var_os("LEDGER_PORT").filter(|x| !x.is_empty())
                                                    .unwrap_or_else(|| "8668".into());
-  let submission_thread = thread::spawn(move || {
+  thread::spawn(move || {
     let submission_api = SubmissionApi::create(submission_server,
                                                host.to_str().unwrap(),
                                                submission_port.to_str().unwrap()).unwrap();
@@ -180,14 +176,14 @@ fn main() {
     }
   });
 
-  let query_thread = thread::spawn(move || {
+  thread::spawn(move || {
     let query_service = RestfulApiService::create(cloned_lock,
                                                   host2.to_str().unwrap(),
                                                   ledger_port.to_str().unwrap()).unwrap();
     println!("Starting ledger service");
     match query_service.run() {
-      Ok(_) => println!("Successfully ran standalone"),
-      Err(_) => println!("Error running standalone"),
+      Ok(_) => println!("Successfully ran validator"),
+      Err(_) => println!("Error running validator"),
     }
   });
 
@@ -200,7 +196,4 @@ fn main() {
 
   println!("Starting ABCI service");
   abci::run(addr, app);
-  submission_thread.join()
-                   .expect("The submission thread has panicked");
-  query_thread.join().expect("The query thread has panicked");
 }
