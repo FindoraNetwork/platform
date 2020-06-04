@@ -1,6 +1,5 @@
 #![deny(warnings)]
-use ledger::store::LedgerState;
-use ledger_api_service::MockLedgerClient;
+use ledger_api_service::ActixLedgerClient;
 use log::{error, info};
 use query_api::QueryApi;
 use query_server::QueryServer;
@@ -13,10 +12,20 @@ fn main() {
   let running = Arc::new(AtomicBool::new(true));
   let host = std::env::var_os("SERVER_HOST").filter(|x| !x.is_empty())
                                             .unwrap_or_else(|| "localhost".into());
+  let protocol = std::env::var_os("SERVER_PROTOCOL").filter(|x| !x.is_empty())
+                                                    .unwrap_or_else(|| "http".into());
   let query_port = std::env::var_os("QUERY_PORT").filter(|x| !x.is_empty())
                                                  .unwrap_or_else(|| "8667".into());
+  let ledger_port: usize = std::env::var_os("LEDGER_PORT").filter(|x| !x.is_empty())
+                                                          .unwrap_or_else(|| "8668".into())
+                                                          .to_str()
+                                                          .unwrap()
+                                                          .parse()
+                                                          .unwrap();
 
-  let rest_client = MockLedgerClient::new(&Arc::new(RwLock::new(LedgerState::test_ledger())));
+  let rest_client = ActixLedgerClient::new(ledger_port,
+                                           host.to_str().unwrap(),
+                                           protocol.to_str().unwrap());
   let query_server = QueryServer::new(rest_client);
   let wrapped_server = Arc::new(RwLock::new(query_server));
   let query_api = QueryApi::create(wrapped_server.clone(),

@@ -1,4 +1,4 @@
-#![deny(warnings)]
+//#![deny(warnings)]
 extern crate actix_rt;
 extern crate actix_web;
 extern crate ledger;
@@ -12,12 +12,13 @@ use cryptohash::sha256::DIGESTBYTES;
 use ledger::data_model::errors::PlatformError;
 use ledger::data_model::*;
 use ledger::store::{ArchiveAccess, LedgerAccess, LedgerState};
+use ledger::{error_location, inp_fail, ser_fail};
 use serde::Serialize;
 use sparse_merkle_tree::Key;
 use std::io;
 use std::marker::{Send, Sync};
 use std::sync::{Arc, RwLock};
-use utils::{HashOf, NetworkRoute, SignatureOf};
+use utils::{actix_get_request, actix_post_request, HashOf, NetworkRoute, SignatureOf};
 use zei::xfr::sig::XfrPublicKey;
 
 pub struct RestfulApiService {
@@ -539,6 +540,37 @@ impl RestfulLedgerAccess for MockLedgerClient {
     _msg: &T)
     -> Result<SignatureOf<T>, PlatformError> {
     unimplemented!();
+  }
+}
+
+pub struct ActixLedgerClient {
+  port: usize,
+  host: String,
+  protocol: String,
+  client: reqwest::Client,
+}
+
+impl ActixLedgerClient {
+  pub fn new(port: usize, host: &str, protocol: &str) -> Self {
+    ActixLedgerClient { port,
+                        host: String::from(host),
+                        protocol: String::from(protocol),
+                        client: reqwest::Client::new() }
+  }
+}
+
+impl RestfulArchiveAccess for ActixLedgerClient {
+  fn get_blocks_since(&self,
+                      addr: BlockSID)
+                      -> Result<Vec<(usize, Vec<FinalizedTransaction>)>, PlatformError> {
+    let query = format!("{}://{}:{}{}",
+                        self.protocol,
+                        self.host,
+                        self.port,
+                        LedgerArchiveRoutes::BlocksSince.with_arg(&addr.0));
+    dbg!(&query);
+    let text = actix_get_request(&self.client, &query).map_err(|_| inp_fail!())?;
+    Ok(serde_json::from_str::<Vec<(usize, Vec<FinalizedTransaction>)>>(&text).map_err(|_| ser_fail!())?)
   }
 }
 

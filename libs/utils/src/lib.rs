@@ -50,6 +50,23 @@ pub fn protocol_host() -> (&'static str, &'static str) {
    std::option_env!("SERVER_HOST").unwrap_or(SERVER_HOST))
 }
 
+pub fn actix_post_request<T: Serialize>(client: &reqwest::Client,
+                                        query: &str,
+                                        body: Option<T>)
+                                        -> Result<String, reqwest::Error> {
+  let mut req = client.post(query);
+
+  if let Some(body) = body {
+    req = req.json(&body);
+  }
+
+  Ok(req.send()?.error_for_status()?.text()?)
+}
+
+pub fn actix_get_request(client: &reqwest::Client, query: &str) -> Result<String, reqwest::Error> {
+  Ok(client.get(query).send()?.error_for_status()?.text()?)
+}
+
 pub fn fresh_tmp_dir() -> PathBuf {
   let base_dir = std::env::temp_dir();
   let base_dirname = "findora_ledger";

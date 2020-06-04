@@ -5,6 +5,8 @@ use actix_web::test::TestRequest;
 use actix_web::{error, middleware, test, web, App, HttpServer};
 use ledger::data_model::errors::PlatformError;
 use ledger::data_model::Transaction;
+use ledger::{error_location, inp_fail, ser_fail};
+
 use ledger::store::{LedgerState, LedgerUpdate};
 use log::{error, info};
 use rand_chacha::ChaChaRng;
@@ -14,7 +16,7 @@ use std::io;
 use std::marker::{Send, Sync};
 use std::sync::{Arc, RwLock};
 use submission_server::{SubmissionServer, TxnHandle, TxnStatus};
-use utils::NetworkRoute;
+use utils::{actix_get_request, actix_post_request, NetworkRoute};
 
 // Ping route to check for liveness of API
 fn ping() -> actix_web::Result<String> {
@@ -195,6 +197,55 @@ impl RestfulLedgerUpdate for MockLUClient {
     let req = test::TestRequest::get().uri(&SubmissionRoutes::TxnStatus.with_arg(&handle.0))
                                       .to_request();
     Ok(test::read_response_json(&mut app, req))
+  }
+}
+
+pub struct ActixLUClient {
+  port: usize,
+  host: String,
+  protocol: String,
+  client: reqwest::Client,
+}
+
+impl ActixLUClient {
+  pub fn new(port: usize, host: &str, protocol: &str) -> Self {
+    ActixLUClient { port,
+                    host: String::from(host),
+                    protocol: String::from(protocol),
+                    client: reqwest::Client::new() }
+  }
+}
+
+impl RestfulLedgerUpdate for ActixLUClient {
+  fn submit_transaction(&mut self, txn: &Transaction) -> Result<TxnHandle, PlatformError> {
+    let query = format!("{}://{}:{}{}",
+                        self.protocol,
+                        self.host,
+                        self.port,
+                        SubmissionRoutes::SubmitTransaction.route());
+    let text = actix_post_request(&self.client, &query, Some(&txn)).map_err(|_| inp_fail!())?;
+    Ok(serde_json::from_str::<TxnHandle>(&text).map_err(|_| ser_fail!())?)
+  }
+
+  fn force_end_block(&mut self) -> Result<(), PlatformError> {
+    let query = format!("{}://{}:{}{}",
+                        self.protocol,
+                        self.host,
+                        self.port,
+                        SubmissionRoutes::ForceEndBlock.route());
+    let opt: Option<u64> = None;
+    actix_post_request(&self.client, &query, opt).map_err(|_| inp_fail!())?;
+    Ok(())
+  }
+
+  fn txn_status(&self, handle: &TxnHandle) -> Result<TxnStatus, PlatformError> {
+    let query = format!("{}://{}:{}{}",
+                        self.protocol,
+                        self.host,
+                        self.port,
+                        SubmissionRoutes::TxnStatus.with_arg(&handle.0));
+    let text = actix_get_request(&self.client, &query).map_err(|_| inp_fail!())?;
+    Ok(serde_json::from_str::<TxnStatus>(&text).map_err(|_| ser_fail!())?)
   }
 }
 
