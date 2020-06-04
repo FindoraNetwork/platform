@@ -58,8 +58,8 @@ pub fn force_end_block<RNG, LU, TF>(data: web::Data<Arc<RwLock<SubmissionServer<
 // Queries the status of a transaction by its handle. Returns either a not committed message or a
 // serialized TxnStatus.
 pub fn txn_status<RNG, LU, TF>(data: web::Data<Arc<RwLock<SubmissionServer<RNG, LU, TF>>>>,
-                           info: web::Path<String>)
-                           -> Result<String, actix_web::error::Error>
+                               info: web::Path<String>)
+                               -> Result<String, actix_web::error::Error>
   where RNG: RngCore + CryptoRng,
         LU: LedgerUpdate<RNG> + Sync + Send,
         TF: TxnForward + Sync + Send
