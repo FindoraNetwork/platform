@@ -8,7 +8,7 @@ use rand_core::{CryptoRng, RngCore};
 use std::io;
 use std::marker::{Send, Sync};
 use std::sync::{Arc, RwLock};
-use submission_server::{SubmissionServer, TxnHandle};
+use submission_server::{SubmissionServer, TxnForward, TxnHandle};
 use utils::NetworkRoute;
 
 // Ping route to check for liveness of API
@@ -16,11 +16,12 @@ fn ping() -> actix_web::Result<String> {
   Ok("success".into())
 }
 
-pub fn submit_transaction<RNG, LU>(data: web::Data<Arc<RwLock<SubmissionServer<RNG, LU>>>>,
-                                   body: web::Json<Transaction>)
-                                   -> Result<web::Json<TxnHandle>, actix_web::error::Error>
+pub fn submit_transaction<RNG, LU, TF>(data: web::Data<Arc<RwLock<SubmissionServer<RNG, LU, TF>>>>,
+                                       body: web::Json<Transaction>)
+                                       -> Result<web::Json<TxnHandle>, actix_web::error::Error>
   where RNG: RngCore + CryptoRng,
-        LU: LedgerUpdate<RNG> + Sync + Send
+        LU: LedgerUpdate<RNG> + Sync + Send,
+        TF: TxnForward + Sync + Send
 {
   let mut submission_server = data.write().unwrap();
   let tx = body.into_inner();
@@ -40,10 +41,11 @@ pub fn submit_transaction<RNG, LU>(data: web::Data<Arc<RwLock<SubmissionServer<R
 // txns to the ledger as soon as possible.
 //
 // When a block is successfully finalized, returns HashMap<TxnTempSID, (TxnSID, Vec<TxoSID>)>
-pub fn force_end_block<RNG, LU>(data: web::Data<Arc<RwLock<SubmissionServer<RNG, LU>>>>)
-                                -> Result<String, actix_web::error::Error>
+pub fn force_end_block<RNG, LU, TF>(data: web::Data<Arc<RwLock<SubmissionServer<RNG, LU, TF>>>>)
+                                    -> Result<String, actix_web::error::Error>
   where RNG: RngCore + CryptoRng,
-        LU: LedgerUpdate<RNG> + Sync + Send
+        LU: LedgerUpdate<RNG> + Sync + Send,
+        TF: TxnForward + Sync + Send
 {
   let mut submission_server = data.write().unwrap();
   if submission_server.end_block().is_ok() {
@@ -55,11 +57,12 @@ pub fn force_end_block<RNG, LU>(data: web::Data<Arc<RwLock<SubmissionServer<RNG,
 
 // Queries the status of a transaction by its handle. Returns either a not committed message or a
 // serialized TxnStatus.
-pub fn txn_status<RNG, LU>(data: web::Data<Arc<RwLock<SubmissionServer<RNG, LU>>>>,
-                           info: web::Path<String>)
-                           -> Result<String, actix_web::error::Error>
+pub fn txn_status<RNG, LU, TF>(data: web::Data<Arc<RwLock<SubmissionServer<RNG, LU, TF>>>>,
+                               info: web::Path<String>)
+                               -> Result<String, actix_web::error::Error>
   where RNG: RngCore + CryptoRng,
-        LU: LedgerUpdate<RNG> + Sync + Send
+        LU: LedgerUpdate<RNG> + Sync + Send,
+        TF: TxnForward + Sync + Send
 {
   let submission_server = data.write().unwrap();
   let txn_status = submission_server.get_txn_status(&TxnHandle(info.clone()));
@@ -99,8 +102,9 @@ impl NetworkRoute for SubmissionRoutes {
 
 impl SubmissionApi {
   pub fn create<RNG: 'static + RngCore + CryptoRng + Sync + Send,
-                  LU: 'static + LedgerUpdate<RNG> + Sync + Send>(
-    submission_server: Arc<RwLock<SubmissionServer<RNG, LU>>>,
+                  LU: 'static + LedgerUpdate<RNG> + Sync + Send,
+                  TF: 'static + TxnForward + Sync + Send>(
+    submission_server: Arc<RwLock<SubmissionServer<RNG, LU, TF>>>,
     host: &str,
     port: &str)
     -> io::Result<SubmissionApi> {
@@ -111,12 +115,12 @@ impl SubmissionApi {
                 .wrap(Cors::new().supports_credentials())
                 .data(submission_server.clone())
                 .route(&SubmissionRoutes::SubmitTransaction.route(),
-                       web::post().to(submit_transaction::<RNG, LU>))
+                       web::post().to(submit_transaction::<RNG, LU, TF>))
                 .route(&SubmissionRoutes::Ping.route(), web::get().to(ping))
                 .route(&SubmissionRoutes::TxnStatus.with_arg_template("handle"),
-                       web::get().to(txn_status::<RNG, LU>))
+                       web::get().to(txn_status::<RNG, LU, TF>))
                 .route(&SubmissionRoutes::ForceEndBlock.route(),
-                       web::post().to(force_end_block::<RNG, LU>))
+                       web::post().to(force_end_block::<RNG, LU, TF>))
     }).bind(&format!("{}:{}", host, port))?
       .start();
 
@@ -140,13 +144,14 @@ mod tests {
   use ledger::store::helpers::*;
   use ledger::store::{LedgerAccess, LedgerState};
   use rand_core::SeedableRng;
+  use submission_server::NoTF;
 
   #[test]
   fn test_submit_transaction_standalone() {
     let mut prng = rand_chacha::ChaChaRng::from_entropy();
     let ledger_state = LedgerState::test_ledger();
     let submission_server =
-      Arc::new(RwLock::new(SubmissionServer::new(prng.clone(),
+      Arc::new(RwLock::new(SubmissionServer::<_, _, NoTF>::new(prng.clone(),
                                                  Arc::new(RwLock::new(ledger_state)),
                                                  8).unwrap()));
     let app_copy = Arc::clone(&submission_server);
@@ -169,10 +174,10 @@ mod tests {
       test::init_service(App::new().data(submission_server)
                                    .route("/submit_transaction",
                                           web::post().to(submit_transaction::<rand_chacha::ChaChaRng,
-                                                                            LedgerState>))
+                                                                            LedgerState, NoTF>))
                                   .route("/force_end_block",
                                           web::post().to(force_end_block::<rand_chacha::ChaChaRng,
-                                                                            LedgerState>)));
+                                                                            LedgerState, NoTF>)));
 
     let req = test::TestRequest::post().uri("/submit_transaction")
                                        .set_json(&tx)
