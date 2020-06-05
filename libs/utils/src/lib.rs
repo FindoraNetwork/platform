@@ -34,11 +34,11 @@ const PROTOCOL: &str = "http";
 const SERVER_HOST: &str = "localhost";
 
 /// Query server port
-pub const QUERY_PORT: &str = "8667";
+pub const QUERY_PORT: usize = 8667;
 /// Port for submitting transactions.
-pub const SUBMIT_PORT: &str = "8669";
+pub const SUBMIT_PORT: usize = 8669;
 /// Ledger port
-pub const LEDGER_PORT: &str = "8668";
+pub const LEDGER_PORT: usize = 8668;
 
 /// Sets the protocol and host.
 ///

@@ -5,7 +5,7 @@ use ledger::data_model::errors::PlatformError;
 use ledger::data_model::AssetTypeCode;
 use ledger::{des_fail, error_location};
 use ledger_api_service::RestfulLedgerAccess;
-use network::MockLedgerStandalone;
+use network::LedgerStandalone;
 use std::fs;
 use txn_cli::txn_lib::query_utxo_and_get_type_commitment;
 use whitelist::*;
@@ -100,7 +100,7 @@ fn process_inputs<T>(inputs: clap::ArgMatches, rest_client: &T) -> Result<(), Pl
 
 fn main() -> Result<(), PlatformError> {
   // TODO this lets us compile for now, swich out with real one later
-  let mock_rest_client = MockLedgerStandalone::new(1);
+  let mock_rest_client = LedgerStandalone::new_mock(1);
   let inputs = App::new("Solvency Proof").version("0.1.0").about("Copyright 2020 © Findora. All rights reserved.")
     .subcommand(SubCommand::with_name("add_member")
       .arg(Arg::with_name("code")

@@ -5,7 +5,7 @@ use ledger::data_model::errors::PlatformError;
 use ledger::data_model::AssetTypeCode;
 use ledger::{des_fail, error_location};
 use ledger_api_service::RestfulLedgerAccess;
-use network::MockLedgerStandalone;
+use network::LedgerStandalone;
 use serde::{Deserialize, Serialize};
 use solvency::*;
 use std::fs;
@@ -275,7 +275,7 @@ fn main() -> Result<(), PlatformError> {
         .help("Serialized blinding values of liability amounts and codes.")))
     .get_matches();
 
-  let rest_client = MockLedgerStandalone::new(1);
+  let rest_client = LedgerStandalone::new_mock(1);
   process_inputs(inputs, &rest_client)
 }
 

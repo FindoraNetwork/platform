@@ -568,9 +568,66 @@ impl RestfulArchiveAccess for ActixLedgerClient {
                         self.host,
                         self.port,
                         LedgerArchiveRoutes::BlocksSince.with_arg(&addr.0));
-    dbg!(&query);
     let text = actix_get_request(&self.client, &query).map_err(|_| inp_fail!())?;
     Ok(serde_json::from_str::<Vec<(usize, Vec<FinalizedTransaction>)>>(&text).map_err(|_| ser_fail!())?)
+  }
+}
+
+impl RestfulLedgerAccess for ActixLedgerClient {
+  fn get_utxo(&self, addr: TxoSID) -> Result<Utxo, PlatformError> {
+    let query = format!("{}://{}:{}{}",
+                        self.protocol,
+                        self.host,
+                        self.port,
+                        LedgerAccessRoutes::UtxoSid.with_arg(&addr.0));
+    let text = actix_get_request(&self.client, &query).map_err(|_| inp_fail!())?;
+    Ok(serde_json::from_str::<Utxo>(&text).map_err(|_| ser_fail!())?)
+  }
+
+  fn get_issuance_num(&self, code: &AssetTypeCode) -> Result<u64, PlatformError> {
+    let query = format!("{}://{}:{}{}",
+                        self.protocol,
+                        self.host,
+                        self.port,
+                        LedgerAccessRoutes::AssetIssuanceNum.with_arg(&code.to_base64()));
+    let text = actix_get_request(&self.client, &query).map_err(|_| inp_fail!())?;
+    Ok(serde_json::from_str::<u64>(&text).map_err(|_| ser_fail!())?)
+  }
+
+  fn get_asset_type(&self, code: &AssetTypeCode) -> Result<AssetType, PlatformError> {
+    let query = format!("{}://{}:{}{}",
+                        self.protocol,
+                        self.host,
+                        self.port,
+                        LedgerAccessRoutes::AssetToken.with_arg(&code.to_base64()));
+    let text = actix_get_request(&self.client, &query).map_err(|_| inp_fail!())?;
+    Ok(serde_json::from_str::<AssetType>(&text).map_err(|_| ser_fail!())?)
+  }
+
+  fn get_state_commitment(&self)
+                          -> Result<(HashOf<Option<StateCommitmentData>>, u64), PlatformError> {
+    let query = format!("{}://{}:{}{}",
+                        self.protocol,
+                        self.host,
+                        self.port,
+                        LedgerAccessRoutes::GlobalState.route());
+    let text = actix_get_request(&self.client, &query).map_err(|_| inp_fail!())?;
+    Ok(serde_json::from_str::<(HashOf<Option<StateCommitmentData>>, u64)>(&text).map_err(|_| ser_fail!())?)
+  }
+
+  fn get_kv_entry(&self, _addr: Key) -> Result<AuthenticatedKVLookup, PlatformError> {
+    unimplemented!();
+  }
+
+  fn public_key(&self) -> Result<XfrPublicKey, PlatformError> {
+    unimplemented!();
+  }
+
+  fn sign_message<T: Serialize + serde::de::DeserializeOwned>(
+    &self,
+    _msg: &T)
+    -> Result<SignatureOf<T>, PlatformError> {
+    unimplemented!();
   }
 }
 

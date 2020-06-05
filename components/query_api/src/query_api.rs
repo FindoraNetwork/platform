@@ -2,7 +2,8 @@
 use actix_cors::Cors;
 use actix_web::{error, middleware, web, App, HttpServer};
 use ledger::data_model::errors::PlatformError;
-use ledger::data_model::{b64dec, KVBlind, KVHash, TxoSID, XfrAddress};
+use ledger::data_model::{b64dec, b64enc, KVBlind, KVHash, TxoSID, XfrAddress};
+use ledger::{error_location, inp_fail, ser_fail};
 use ledger_api_service::RestfulArchiveAccess;
 use log::info;
 use query_server::QueryServer;
@@ -11,7 +12,7 @@ use std::collections::HashSet;
 use std::io;
 use std::marker::{Send, Sync};
 use std::sync::{Arc, RwLock};
-use utils::NetworkRoute;
+use utils::{actix_get_request, actix_post_request, NetworkRoute};
 use zei::serialization::ZeiFromToBytes;
 use zei::xfr::sig::XfrPublicKey;
 
@@ -162,9 +163,11 @@ pub trait RestfulQueryServerAccess {
   fn fetch_custom_data(&self, key: &Key) -> Result<Vec<u8>, PlatformError>;
 }
 
-pub struct ActixQueryServerClient();
+// Unimplemented until I can figure out a way to force the mock server to get new data (we can do
+// this with a new endpoint)
+pub struct MockQueryServerClient();
 
-impl RestfulQueryServerAccess for ActixQueryServerClient {
+impl RestfulQueryServerAccess for MockQueryServerClient {
   fn store_custom_data(&mut self,
                        data: &dyn AsRef<[u8]>,
                        key: &Key,
@@ -175,5 +178,50 @@ impl RestfulQueryServerAccess for ActixQueryServerClient {
 
   fn fetch_custom_data(&self, key: &Key) -> Result<Vec<u8>, PlatformError> {
     unimplemented!();
+  }
+}
+
+pub struct ActixQueryServerClient {
+  port: usize,
+  host: String,
+  protocol: String,
+  client: reqwest::Client,
+}
+
+impl ActixQueryServerClient {
+  pub fn new(port: usize, host: &str, protocol: &str) -> Self {
+    ActixQueryServerClient { port,
+                             host: String::from(host),
+                             protocol: String::from(protocol),
+                             client: reqwest::Client::new() }
+  }
+}
+
+impl RestfulQueryServerAccess for ActixQueryServerClient {
+  fn store_custom_data(&mut self,
+                       data: &dyn AsRef<[u8]>,
+                       key: &Key,
+                       blind: Option<KVBlind>)
+                       -> Result<(), PlatformError> {
+    let query = format!("{}://{}:{}{}",
+                        self.protocol,
+                        self.host,
+                        self.port,
+                        QueryServerRoutes::StoreCustomData.route());
+    actix_post_request(&self.client,
+                       &query,
+                       Some(&(key, data.as_ref().to_vec(), blind))).map_err(|_| inp_fail!())?;
+    Ok(())
+  }
+
+  fn fetch_custom_data(&self, key: &Key) -> Result<Vec<u8>, PlatformError> {
+    let b64key = b64enc(&key);
+    let query = format!("{}://{}:{}{}",
+                        self.protocol,
+                        self.host,
+                        self.port,
+                        QueryServerRoutes::GetCustomData.with_arg(&b64key));
+    let text = actix_get_request(&self.client, &query).map_err(|_| inp_fail!())?;
+    Ok(serde_json::from_str::<Vec<u8>>(&text).map_err(|_| ser_fail!())?)
   }
 }

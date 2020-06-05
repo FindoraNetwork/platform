@@ -8,7 +8,7 @@ use ledger::data_model::{
 };
 use ledger::{error_location, ser_fail};
 use ledger_api_service::RestfulLedgerAccess;
-use network::MockLedgerStandalone;
+use network::LedgerStandalone;
 use query_api::RestfulQueryServerAccess;
 use sparse_merkle_tree::{digest, Key};
 use std::env;
@@ -1839,7 +1839,7 @@ fn main() {
               .takes_value(false)
               .help("Specify that localhost, not testnet.findora.org should be used."))))
     .get_matches();
-  let mut rest_client = MockLedgerStandalone::new(1);
+  let mut rest_client = LedgerStandalone::new_mock(1);
   if let Err(error) = process_inputs(inputs, &mut rest_client) {
     match_error_and_exit(error);
   }

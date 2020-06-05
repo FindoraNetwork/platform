@@ -11,7 +11,7 @@ use ledger::data_model::*;
 use ledger::error_location;
 use ledger::store::*;
 use ledger_api_service::RestfulLedgerAccess;
-use network::MockLedgerStandalone;
+use network::LedgerStandalone;
 use rand_chacha::ChaChaRng;
 use rand_core::{RngCore, SeedableRng};
 use serde::{Deserialize, Serialize};
