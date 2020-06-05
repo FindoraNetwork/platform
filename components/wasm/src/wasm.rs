@@ -55,7 +55,7 @@ pub fn random_asset_type() -> String {
 /// @param {string} authenticated_txn - String representing the transaction.
 /// @see {@link get_transaction} for instructions on fetching a transaction from the ledger.
 /// @see {@link get_state_commitment} for instructions on fetching a ledger state commitment.
-/// @throws Will throw an error if the state commitment or the transaction fail to deserialize.
+/// @throws Will throw an error if the state commitment or the transaction fails to deserialize.
 pub fn verify_authenticated_txn(state_commitment: String,
                                 authenticated_txn: String)
                                 -> Result<bool, JsValue> {
@@ -871,7 +871,7 @@ fn create_query_promise(opts: &RequestInit,
 }
 
 /// Generates a new credential issuer key.
-/// @param {JsValue} attributes: Array of attribute types of the form `[{name: "credit_score",
+/// @param {JsValue} attributes - Array of attribute types of the form `[{name: "credit_score",
 /// size: 3}]'. The size refers to byte-size of the credential. In this case, the "credit_score"
 /// attribute is represented as a 3 byte string "760". `attributes` is the list of attribute types
 /// that the issuer can sign off on.
@@ -980,7 +980,6 @@ pub fn wasm_credential_reveal(user_sk: &CredUserSecretKey,
 
 /// Verifies revealed attributes from a commitment.
 /// @param {CredIssuerPublicKey} issuer_pub_key - Public key of credential issuer.
-/// @param {JsValue} reveal_fields - Array of string names representing credentials to reveal (i.e.
 /// @param {JsValue} attributes - Array of attribute assignments to check of the form `[{name: "credit_score",
 /// val: "760"}]'.
 /// `["credit_score"]`).

@@ -72,9 +72,9 @@ fn store_custom_data<RNG, LU>(data: web::Data<Arc<RwLock<QueryServer<RNG, LU>>>>
 }
 
 // Returns an array of the utxo sids currently spendable by a given address
-fn get_owned_txos<RNG, LU>(data: web::Data<Arc<RwLock<QueryServer<RNG, LU>>>>,
-                           info: web::Path<String>)
-                           -> actix_web::Result<web::Json<HashSet<TxoSID>>>
+fn get_owned_utxos<RNG, LU>(data: web::Data<Arc<RwLock<QueryServer<RNG, LU>>>>,
+                            info: web::Path<String>)
+                            -> actix_web::Result<web::Json<HashSet<TxoSID>>>
   where RNG: RngCore + CryptoRng,
         LU: LedgerUpdate<RNG> + LedgerAccess + ArchiveAccess + Sync + Send
 {
@@ -108,7 +108,7 @@ impl QueryApi {
                 .route("/get_address/{txo_sid}",
                        web::get().to(get_address::<RNG, LU>))
                 .route("/get_owned_utxos/{address}",
-                       web::get().to(get_owned_txos::<RNG, LU>))
+                       web::get().to(get_owned_utxos::<RNG, LU>))
                 .route("/store_custom_data",
                        web::post().to(store_custom_data::<RNG, LU>))
                 .route("/get_custom_data/{key}",
