@@ -224,7 +224,9 @@ impl RestfulLedgerUpdate for ActixLUClient {
                         self.port,
                         SubmissionRoutes::SubmitTransaction.route());
     let text = actix_post_request(&self.client, &query, Some(&txn)).map_err(|_| inp_fail!())?;
-    Ok(serde_json::from_str::<TxnHandle>(&text).map_err(|_| ser_fail!())?)
+    let handle = serde_json::from_str::<TxnHandle>(&text).map_err(|_| ser_fail!())?;
+    info!("Transaction submitted successfully");
+    Ok(handle)
   }
 
   fn force_end_block(&mut self) -> Result<(), PlatformError> {

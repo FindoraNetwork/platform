@@ -1268,6 +1268,9 @@ fn get_txn_cli_app<'a, 'b>() -> App<'a, 'b> {
       .value_name("PATH/TO/FILE")
       .help("Specify a custom config file (default: \"$FINDORA_DIR/config.toml\")")
       .takes_value(true))
+    .arg(Arg::with_name("local")
+      .long("local")
+      .help("If local flag is specified, transactions will be submitted to a local ledger"))
     .arg(Arg::with_name("dir")
       .short("d")
       .long("dir")
@@ -1838,17 +1841,22 @@ fn get_txn_cli_app<'a, 'b>() -> App<'a, 'b> {
               .help("Specify that localhost, not testnet.findora.org should be used."))))
 }
 
-fn get_matches() {
-  let app = get_txn_cli_app();
-  let inputs = app.get_matches();
-  let mut rest_client = LedgerStandalone::new_http(&HttpStandaloneConfig::testnet());
-  if let Err(error) = process_inputs(inputs, &mut rest_client) {
-    match_error_and_exit(error);
-  }
-}
-
 /// If `process_inputs` returns an error, calls `match_error_and_exit` and exits with appropriate code.
 fn main() {
   init_logging();
-  get_matches();
+  let app = get_txn_cli_app();
+  let inputs = app.get_matches();
+  let local = inputs.value_of("local").is_some();
+  let config = {
+    if local {
+      HttpStandaloneConfig::local()
+    } else {
+      HttpStandaloneConfig::testnet()
+    }
+  };
+
+  let mut rest_client = LedgerStandalone::new_http(&config);
+  if let Err(error) = process_inputs(inputs, &mut rest_client) {
+    match_error_and_exit(error);
+  }
 }

@@ -5,7 +5,7 @@ use ledger::data_model::errors::PlatformError;
 use ledger::data_model::AssetTypeCode;
 use ledger::{des_fail, error_location};
 use ledger_api_service::RestfulLedgerAccess;
-use network::LedgerStandalone;
+use network::{HttpStandaloneConfig, LedgerStandalone};
 use std::fs;
 use txn_cli::txn_lib::query_utxo_and_get_type_commitment;
 use whitelist::*;
@@ -100,8 +100,10 @@ fn process_inputs<T>(inputs: clap::ArgMatches, rest_client: &T) -> Result<(), Pl
 
 fn main() -> Result<(), PlatformError> {
   // TODO this lets us compile for now, swich out with real one later
-  let mock_rest_client = LedgerStandalone::new_mock(1);
   let inputs = App::new("Solvency Proof").version("0.1.0").about("Copyright 2020 © Findora. All rights reserved.")
+    .arg(Arg::with_name("local")
+      .long("local")
+      .help("If local flag is specified, data will be queried from a local ledger."))
     .subcommand(SubCommand::with_name("add_member")
       .arg(Arg::with_name("code")
         .short("c")
@@ -130,7 +132,18 @@ fn main() -> Result<(), PlatformError> {
         .help("Serialized blinding factor for the asset type code commitment.")))
     .get_matches();
 
-  process_inputs(inputs, &mock_rest_client)
+  let local = inputs.value_of("local").is_some();
+  let config = {
+    if local {
+      HttpStandaloneConfig::local()
+    } else {
+      HttpStandaloneConfig::testnet()
+    }
+  };
+
+  let rest_client = LedgerStandalone::new_http(&config);
+
+  process_inputs(inputs, &rest_client)
 }
 
 #[cfg(test)]
