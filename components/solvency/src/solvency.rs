@@ -569,7 +569,7 @@ mod tests {
   #[ignore]
   fn test_prove_solvency_fail() {
     // Start the standalone ledger
-    let mut ledger_standalone = MockLedgerStandalone::new(1);
+    let mut ledger_standalone = MockLedgerStandalone::new_mock(1);
 
     // Start a solvency audit process
     let mut audit = SolvencyAudit::default();
@@ -622,7 +622,7 @@ mod tests {
   #[ignore]
   fn test_verify_solvency_fail() {
     // Start the standalone ledger
-    let mut ledger_standalone = MockLedgerStandalone::new(1);
+    let mut ledger_standalone = MockLedgerStandalone::new_mock(1);
 
     // Start a solvency audit process
     let mut audit = SolvencyAudit::default();
@@ -667,7 +667,7 @@ mod tests {
   #[ignore]
   fn test_prove_and_verify_solvency_fail() {
     // Start the standalone ledger
-    let mut ledger_standalone = MockLedgerStandalone::new(1);
+    let mut ledger_standalone = MockLedgerStandalone::new_mock(1);
 
     // Start a solvency audit process
     let mut audit = SolvencyAudit::default();
@@ -728,7 +728,7 @@ mod tests {
   #[ignore]
   fn test_prove_and_verify_solvency_simple_pass() {
     // Start the standalone ledger
-    let mut ledger_standalone = MockLedgerStandalone::new(1);
+    let mut ledger_standalone = MockLedgerStandalone::new_mock(1);
 
     // Start a solvency audit process
     let mut audit = SolvencyAudit::default();
@@ -787,7 +787,7 @@ mod tests {
   #[ignore]
   fn test_prove_and_verify_solvency_complex_pass() {
     // Start the standalone ledger
-    let mut ledger_standalone = MockLedgerStandalone::new(1);
+    let mut ledger_standalone = MockLedgerStandalone::new_mock(1);
 
     // Start a solvency audit process
     let mut audit = SolvencyAudit::default();
@@ -849,7 +849,7 @@ mod tests {
   #[ignore]
   fn test_update_asset_and_verify_solvency_mixed() {
     // Start the standalone ledger
-    let mut ledger_standalone = MockLedgerStandalone::new(1);
+    let mut ledger_standalone = MockLedgerStandalone::new_mock(1);
 
     // Start a solvency audit process
     let mut audit = SolvencyAudit::default();
@@ -943,7 +943,7 @@ mod tests {
   #[ignore]
   fn test_update_liability_and_verify_solvency_fail() {
     // Start the standalone ledger
-    let mut ledger_standalone = MockLedgerStandalone::new(1);
+    let mut ledger_standalone = MockLedgerStandalone::new_mock(1);
 
     // Start a solvency audit process
     let mut audit = SolvencyAudit::default();

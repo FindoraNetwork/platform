@@ -387,7 +387,7 @@ fn test_view() {
   let tmp_dir = tempdir().unwrap();
   let dir = tmp_dir.path().to_str().unwrap();
 
-  let ledger_standalone = MockLedgerStandalone::new(1);
+  let ledger_standalone = MockLedgerStandalone::new_mock(1);
 
   // Add a credential
   create_or_overwrite_credential(dir, "0", "min_income", "1500").expect("Failed to create a credential");
@@ -524,7 +524,7 @@ fn test_view() {
 #[ignore]
 #[test]
 fn test_define_asset_simple_policies() {
-  let ledger_standalone = MockLedgerStandalone::new(1);
+  let ledger_standalone = MockLedgerStandalone::new_mock(1);
 
   let tmp_dir = tempdir().unwrap();
   let dir = tmp_dir.path().to_str().unwrap();
@@ -574,7 +574,7 @@ fn test_define_asset_simple_policies() {
 #[test]
 #[ignore]
 fn test_define_issue_transfer_and_submit_with_args() {
-  let ledger_standalone = MockLedgerStandalone::new(1);
+  let ledger_standalone = MockLedgerStandalone::new_mock(1);
 
   // Create users and files
   let tmp_dir = tempdir().unwrap();
@@ -673,7 +673,7 @@ fn test_issue_transfer_trace_and_submit_with_args() {
   let memo_buf = tmp_dir.path().join("memos_issue_transfer_and_submit");
   let memo_file = memo_buf.to_str().unwrap();
 
-  let ledger_standalone = MockLedgerStandalone::new(1);
+  let ledger_standalone = MockLedgerStandalone::new_mock(1);
 
   // Create txn builder and key pairs
   create_txn_builder_with_path(txn_builder_file).expect("Failed to create transaction builder");
@@ -748,7 +748,7 @@ fn test_air_assign() {
   air_assign(dir, txn_builder_file, "0", "666", "Hell").expect("Failed to assign to AIR");
 
   // Submit transaction
-  let ledger_standalone = MockLedgerStandalone::new(1);
+  let ledger_standalone = MockLedgerStandalone::new_mock(1);
   let output = submit(txn_builder_file).expect("Failed to submit transaction");
 
   io::stdout().write_all(&output.stdout).unwrap();
@@ -772,7 +772,7 @@ fn test_request_fulfill_and_pay_loan_with_args() {
   let memo_buf = tmp_dir.path().join("memo_fulfill_loan_args");
   let memo_file = memo_buf.to_str().unwrap();
 
-  let ledger_standalone = MockLedgerStandalone::new(1);
+  let ledger_standalone = MockLedgerStandalone::new_mock(1);
 
   // Load funds
   let output = load_funds(dir, "0", "0", "5000").expect("Failed to load funds");

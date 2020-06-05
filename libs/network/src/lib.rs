@@ -22,6 +22,9 @@ use submission_server::{TxnHandle, TxnStatus};
 use utils::{HashOf, NetworkRoute, SignatureOf, LEDGER_PORT, QUERY_PORT, SUBMIT_PORT};
 use zei::xfr::sig::XfrPublicKey;
 
+pub type MockLedgerStandalone =
+  LedgerStandalone<MockLUClient, MockLedgerClient, MockQueryServerClient>;
+
 pub struct LedgerStandalone<LU: RestfulLedgerUpdate,
  LA: RestfulLedgerAccess + RestfulArchiveAccess,
  Q: RestfulQueryServerAccess> {
@@ -172,7 +175,7 @@ mod tests {
   #[test]
   fn test_mock_client() {
     let tx = Transaction::default();
-    let mut mock_rest_client = LedgerStandalone::new(2);
+    let mut mock_rest_client = LedgerStandalone::new_mock(2);
     let handle = mock_rest_client.submit_transaction(&tx).unwrap();
     mock_rest_client.force_end_block().unwrap();
     let status = mock_rest_client.txn_status(&handle).unwrap();

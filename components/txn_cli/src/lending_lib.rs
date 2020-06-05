@@ -674,7 +674,7 @@ mod tests {
   // TODO (keyao)
   // Test funds loading, loan request, fulfilling and repayment
   fn test_request_fulfill_and_pay_loan() {
-    let mut ledger_standalone = MockLedgerStandalone::new(1);
+    let mut ledger_standalone = MockLedgerStandalone::new_mock(1);
 
     // Load funds
     let tmp_dir = tempdir().unwrap();

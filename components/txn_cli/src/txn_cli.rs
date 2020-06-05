@@ -8,7 +8,7 @@ use ledger::data_model::{
 };
 use ledger::{error_location, ser_fail};
 use ledger_api_service::RestfulLedgerAccess;
-use network::LedgerStandalone;
+use network::{HttpStandaloneConfig, LedgerStandalone};
 use query_api::RestfulQueryServerAccess;
 use sparse_merkle_tree::{digest, Key};
 use std::env;
@@ -1258,10 +1258,8 @@ pub(crate) fn process_custom_data_cmds<T: RestfulQueryServerAccess>(
   Ok(())
 }
 
-/// If `process_inputs` returns an error, calls `match_error_and_exit` and exits with appropriate code.
-fn main() {
-  init_logging();
-  let inputs = App::new("Transaction Builder")
+fn get_txn_cli_app<'a, 'b>() -> App<'a, 'b> {
+  App::new("Transaction Builder")
     .version("0.0.1")
     .about("Copyright 2019 © Findora. All rights reserved.")
     .arg(Arg::with_name("config")
@@ -1838,9 +1836,19 @@ fn main() {
               .long("localhost")
               .takes_value(false)
               .help("Specify that localhost, not testnet.findora.org should be used."))))
-    .get_matches();
-  let mut rest_client = LedgerStandalone::new_mock(1);
+}
+
+fn get_matches() {
+  let app = get_txn_cli_app();
+  let inputs = app.get_matches();
+  let mut rest_client = LedgerStandalone::new_http(&HttpStandaloneConfig::testnet());
   if let Err(error) = process_inputs(inputs, &mut rest_client) {
     match_error_and_exit(error);
   }
+}
+
+/// If `process_inputs` returns an error, calls `match_error_and_exit` and exits with appropriate code.
+fn main() {
+  init_logging();
+  get_matches();
 }

@@ -55,7 +55,7 @@ impl Whitelist {
 mod tests {
   use super::*;
   use ledger::data_model::AssetRules;
-  use network::MockLedgerStandalone;
+  use network::LedgerStandalone;
   use rand_chacha::ChaChaRng;
   use rand_core::SeedableRng;
   use txn_cli::txn_lib::{
@@ -74,7 +74,7 @@ mod tests {
   #[ignore]
   fn test_prove_membership_incorrect_index() {
     // Start the standalone ledger
-    let mut ledger_standalone = MockLedgerStandalone::new(1);
+    let mut ledger_standalone = LedgerStandalone::new_mock(1);
 
     // Generate asset codes and add codes to the whitelist
     let codes = vec![AssetTypeCode::gen_random(), AssetTypeCode::gen_random()];
@@ -111,7 +111,7 @@ mod tests {
   #[ignore]
   fn test_prove_membership_incorrect_utxo() {
     // Start the standalone ledger
-    let mut ledger_standalone = MockLedgerStandalone::new(1);
+    let mut ledger_standalone = LedgerStandalone::new_mock(1);
 
     // Generate asset codes and add codes to the whitelist
     let codes = vec![AssetTypeCode::gen_random(), AssetTypeCode::gen_random()];
@@ -157,7 +157,7 @@ mod tests {
   #[ignore]
   fn test_prove_membership_incorrect_blind() {
     // Start the standalone ledger
-    let mut ledger_standalone = MockLedgerStandalone::new(1);
+    let mut ledger_standalone = LedgerStandalone::new_mock(1);
 
     // Generate asset codes and add codes to the whitelist
     let codes = vec![AssetTypeCode::gen_random(), AssetTypeCode::gen_random()];
@@ -198,7 +198,7 @@ mod tests {
   // Redmine issue 38
   fn test_prove_and_verify_membership() {
     // Start the standalone ledger
-    let mut ledger_standalone = MockLedgerStandalone::new(1);
+    let mut ledger_standalone = LedgerStandalone::new_mock(1);
 
     // Generate key pair and asset codes
     let issuer_key_pair = XfrKeyPair::generate(&mut ChaChaRng::from_entropy());

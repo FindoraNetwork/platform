@@ -1707,7 +1707,7 @@ mod test {
     let mut active_ledger = if !with_standalone {
       None
     } else {
-      Some(Box::new(LedgerStandaloneAccounts { client: MockLedgerStandalone::new(1),
+      Some(Box::new(LedgerStandaloneAccounts { client: LedgerStandalone::new_mock(1),
                                                prng: rand_chacha::ChaChaRng::from_entropy(),
                                                accounts: HashMap::new(),
                                                utxos: HashMap::new(),

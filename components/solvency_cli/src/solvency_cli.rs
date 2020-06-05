@@ -5,7 +5,7 @@ use ledger::data_model::errors::PlatformError;
 use ledger::data_model::AssetTypeCode;
 use ledger::{des_fail, error_location};
 use ledger_api_service::RestfulLedgerAccess;
-use network::LedgerStandalone;
+use network::{LedgerStandalone, MockLedgerStandalone};
 use serde::{Deserialize, Serialize};
 use solvency::*;
 use std::fs;
@@ -451,7 +451,7 @@ mod tests {
     let dir = tmp_dir.path().to_str().unwrap();
 
     // Start the standalone ledger
-    let mut ledger_standalone = MockLedgerStandalone::new(1);
+    let mut ledger_standalone = MockLedgerStandalone::new_mock(1);
 
     // Generate asset codes and key pairs
     let codes = vec![AssetTypeCode::gen_random(),

@@ -138,7 +138,7 @@ mod tests {
   use super::*;
   use ledger::data_model::AssetRules;
   use ledger::ser_fail;
-  use network::MockLedgerStandalone;
+  use network::LedgerStandalone;
   use rand_chacha::ChaChaRng;
   use rand_core::SeedableRng;
   use std::io::{self, Write};
@@ -175,7 +175,7 @@ mod tests {
   #[test]
   fn test_cmd() {
     // Start the standalone ledger
-    let mut ledger_standalone = MockLedgerStandalone::new(1);
+    let mut ledger_standalone = LedgerStandalone::new_mock(1);
 
     // Generate asset codes and key pairs
     let codes = vec![AssetTypeCode::gen_random(),
