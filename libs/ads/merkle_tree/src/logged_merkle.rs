@@ -362,8 +362,6 @@ impl LoggedMerkle {
 
     // Loop reading buffers.  Return on EOF.  This code will
     // return an error on a partial buffer read, as well.
-    // Question:  Should we convert a partial buffer read into
-    // a warning of some sort?
     loop {
       if let Err(x) = file.read_exact(buffer.as_mut_bytes()) {
         // Exit if we reach the end of the file.
@@ -389,8 +387,6 @@ impl LoggedMerkle {
 
       // If there are entries in the current buffer that are not in
       // the tree, process them.
-      // Question:  Should we check any hashes that allegedly are in
-      // the tree to see that they match?
       let mut current = buffer.id;
 
       if current <= state && current + u64::from(buffer.valid) > state {
