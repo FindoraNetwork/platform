@@ -5,7 +5,7 @@ use ledger::data_model::errors::PlatformError;
 use ledger::data_model::AssetTypeCode;
 use ledger::{des_fail, error_location};
 use ledger_api_service::RestfulLedgerAccess;
-use network::{HttpStandaloneConfig, LedgerStandalone};
+use network::{HttpStandaloneConfig, LedgerStandalone, MockLedgerStandalone};
 use serde::{Deserialize, Serialize};
 use solvency::*;
 use std::fs;

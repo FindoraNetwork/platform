@@ -7,7 +7,7 @@ use std::path::Path;
 use std::sync::{Arc, RwLock};
 use std::thread;
 use submission_api::SubmissionApi;
-use submission_server::SubmissionServer;
+use submission_server::{NoTF, SubmissionServer};
 
 fn main() {
   let base_dir = std::env::var_os("LEDGER_DIR").filter(|x| !x.is_empty());
@@ -21,7 +21,7 @@ fn main() {
   let prng = ChaChaRng::from_entropy();
   let state_lock = Arc::new(RwLock::new(ledger_state));
   let cloned_lock = Arc::clone(&state_lock);
-  let submission_server = SubmissionServer::new(prng, state_lock, 1).unwrap();
+  let submission_server = SubmissionServer::<_, _, NoTF>::new(prng, state_lock, 1).unwrap();
   let host = std::env::var_os("SERVER_HOST").filter(|x| !x.is_empty())
                                             .unwrap_or_else(|| "localhost".into());
   let host2 = host.clone();
