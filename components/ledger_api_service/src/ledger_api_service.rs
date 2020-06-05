@@ -1,4 +1,4 @@
-//#![deny(warnings)]
+#![deny(warnings)]
 extern crate actix_rt;
 extern crate actix_web;
 extern crate ledger;
@@ -18,7 +18,7 @@ use sparse_merkle_tree::Key;
 use std::io;
 use std::marker::{Send, Sync};
 use std::sync::{Arc, RwLock};
-use utils::{actix_get_request, actix_post_request, HashOf, NetworkRoute, SignatureOf};
+use utils::{actix_get_request, HashOf, NetworkRoute, SignatureOf};
 use zei::xfr::sig::XfrPublicKey;
 
 pub struct RestfulApiService {

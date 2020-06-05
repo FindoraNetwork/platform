@@ -1,7 +1,4 @@
-//#![deny(warnings)]
-use actix_service::Service;
-use actix_web::test::TestRequest;
-use actix_web::{test, web, App};
+#![deny(warnings)]
 use ledger::data_model::errors::PlatformError;
 use ledger::data_model::{
   AssetType, AssetTypeCode, AuthenticatedKVLookup, BlockSID, FinalizedTransaction, KVBlind,
@@ -12,14 +9,12 @@ use ledger_api_service::{
   ActixLedgerClient, MockLedgerClient, RestfulArchiveAccess, RestfulLedgerAccess,
 };
 use query_api::{ActixQueryServerClient, MockQueryServerClient, RestfulQueryServerAccess};
-use rand_chacha::ChaChaRng;
-use rand_core::SeedableRng;
 use serde::Serialize;
 use sparse_merkle_tree::Key;
 use std::sync::{Arc, RwLock};
 use submission_api::{ActixLUClient, MockLUClient, RestfulLedgerUpdate};
 use submission_server::{TxnHandle, TxnStatus};
-use utils::{HashOf, NetworkRoute, SignatureOf, LEDGER_PORT, QUERY_PORT, SUBMIT_PORT};
+use utils::{HashOf, SignatureOf, LEDGER_PORT, QUERY_PORT, SUBMIT_PORT};
 use zei::xfr::sig::XfrPublicKey;
 
 pub type MockLedgerStandalone =
@@ -65,7 +60,7 @@ impl LedgerStandalone<MockLUClient, MockLedgerClient, MockQueryServerClient> {
     let ledger_state = LedgerState::test_ledger();
     let state_lock = Arc::new(RwLock::new(ledger_state));
     let ledger_client = MockLedgerClient::new(&state_lock);
-    let submission_server_client = MockLUClient::new(&state_lock, 1);
+    let submission_server_client = MockLUClient::new(&state_lock, block_capacity);
     let query_server_client = MockQueryServerClient();
 
     LedgerStandalone { submission_server_client,

@@ -1,4 +1,4 @@
-//#![deny(warnings)]
+#![deny(warnings)]
 use ledger::data_model::AssetTypeCode;
 use network::MockLedgerStandalone;
 use std::io::{self, Write};

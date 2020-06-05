@@ -1,4 +1,4 @@
-//#![deny(warnings)]
+#![deny(warnings)]
 use actix_cors::Cors;
 use actix_web::{error, middleware, web, App, HttpServer};
 use ledger::data_model::errors::PlatformError;
@@ -69,15 +69,6 @@ fn store_custom_data<T>(data: web::Data<Arc<RwLock<QueryServer<T>>>>,
               .map_err(|e| error::ErrorBadRequest(format!("{}", e)))?;
   Ok(())
 }
-// Forces the query server to fetch new blocks and cache new transaction data
-fn force_fetch_new_blocks<T>(_data: web::Data<Arc<RwLock<QueryServer<T>>>>)
-                             -> Result<(), actix_web::error::Error>
-  where T: RestfulArchiveAccess + Sync + Send
-{
-  //let mut query_server = data.write.unwrap();
-  unimplemented!();
-}
-
 // Returns an array of the utxo sids currently spendable by a given address
 fn get_owned_txos<T>(data: web::Data<Arc<RwLock<QueryServer<T>>>>,
                      info: web::Path<String>)
@@ -169,14 +160,14 @@ pub struct MockQueryServerClient();
 
 impl RestfulQueryServerAccess for MockQueryServerClient {
   fn store_custom_data(&mut self,
-                       data: &dyn AsRef<[u8]>,
-                       key: &Key,
-                       blind: Option<KVBlind>)
+                       _data: &dyn AsRef<[u8]>,
+                       _key: &Key,
+                       _blind: Option<KVBlind>)
                        -> Result<(), PlatformError> {
     unimplemented!();
   }
 
-  fn fetch_custom_data(&self, key: &Key) -> Result<Vec<u8>, PlatformError> {
+  fn fetch_custom_data(&self, _key: &Key) -> Result<Vec<u8>, PlatformError> {
     unimplemented!();
   }
 }
