@@ -234,7 +234,7 @@ impl TransactionBuilder {
   /// @param {string} code - Base64 string representing the token code of the asset to be issued.
   /// @param {BigInt} seq_num - Issuance sequence number. Every subsequent issuance of a given asset type must have a higher sequence number than before.
   /// @param {BigInt} amount - Amount to be issued.
-  /// @param {bool} conf_amount - Indicates whether the amount is confidential.
+  /// @param {bool} conf_amount - `true` means the asset amount is confidential, and `false` means it's nonconfidential.
   #[allow(clippy::too_many_arguments)]
   pub fn add_basic_issue_asset_with_tracking(mut self,
                                              key_pair: &XfrKeyPair,
@@ -275,7 +275,7 @@ impl TransactionBuilder {
   /// @param {string} code - Base64 string representing the token code of the asset to be issued.
   /// @param {BigInt} seq_num - Issuance sequence number. Every subsequent issuance of a given asset type must have a higher sequence number than before.
   /// @param {BigInt} amount - Amount to be issued.
-  /// @param {bool} conf_amount - Indicates whether the amount is confidential.
+  /// @param {bool} conf_amount - `true` means the asset amount is confidential, and `false` means it's nonconfidential.
   pub fn add_basic_issue_asset_without_tracking(mut self,
                                                 key_pair: &XfrKeyPair,
                                                 code: String,
@@ -530,13 +530,13 @@ impl TransferOperationBuilder {
 
   /// Wraps around TransferOperationBuilder to add an output to a transfer operation builder.
   ///
-  /// @param {BigInt} amount - amount to transfer to the recipient
-  /// @param {XfrPublicKey} recipient - public key of the recipient
+  /// @param {BigInt} amount - amount to transfer to the recipient.
+  /// @param {XfrPublicKey} recipient - public key of the recipient.
   /// @param tracing_key {AssetTracerKeyPair} - Optional tracing key, must be added to traced
   /// assets.
-  /// @param code {string} - String representation of the asset token code
-  /// @param conf_amount {bool} - Indicates whether output's amount is confidential
-  /// @param conf_type {bool} - Indicates whether output's asset type is confidential
+  /// @param code {string} - String representation of the asset token code.
+  /// @param conf_amount {bool} - `true` means the output's asset amount is confidential, and `false` means it's nonconfidential.
+  /// @param conf_type {bool} - `true` means the output's asset type is confidential, and `false` means it's nonconfidential.
   /// @throws Will throw an error if `code` fails to deserialize.
   pub fn add_output_with_tracking(self,
                                   amount: u64,
@@ -559,8 +559,8 @@ impl TransferOperationBuilder {
   /// @param {BigInt} amount - amount to transfer to the recipient
   /// @param {XfrPublicKey} recipient - public key of the recipient
   /// @param code {string} - String representaiton of the asset token code
-  /// @param conf_amount {bool} - Indicates whether output's amount is confidential
-  /// @param conf_type {bool} - Indicates whether output's asset type is confidential
+  /// @param conf_amount {bool} - `true` means the output's asset amount is confidential, and `false` means it's nonconfidential.
+  /// @param conf_type {bool} - `true` means the output's asset type is confidential, and `false` means it's nonconfidential.
   /// @throws Will throw an error if `code` fails to deserialize.
   pub fn add_output_no_tracking(self,
                                 amount: u64,
