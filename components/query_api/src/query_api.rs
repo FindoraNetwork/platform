@@ -95,7 +95,7 @@ fn get_issued_records<RNG, LU>(data: web::Data<Arc<RwLock<QueryServer<RNG, LU>>>
   where RNG: RngCore + CryptoRng,
         LU: LedgerUpdate<RNG> + LedgerAccess + ArchiveAccess + Sync + Send
 {
-  // Convert from basee64 representation
+  // Convert from base64 representation
   let key: XfrPublicKey =
     XfrPublicKey::zei_from_bytes(&b64dec(&*info).map_err(|_| {
                                     error::ErrorBadRequest("Could not deserialize public key")

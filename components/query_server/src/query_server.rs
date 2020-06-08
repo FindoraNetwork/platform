@@ -98,10 +98,9 @@ impl<RNG, LU> QueryServer<RNG, LU>
   pub fn cache_issuance(&mut self, issuance: &IssueAsset) {
     let issuer = issuance.pubkey;
     let mut new_records = issuance.body.records.clone();
-    let records = self.issuances.entry(issuer).or_insert(vec![]);
+    let records = self.issuances.entry(issuer).or_insert_with(Vec::new);
     info!("Issuance record cached for asset issuer key {}",
           b64enc(&issuer.key.as_bytes()));
-    dbg!(&b64enc(&issuer.key.as_bytes()));
     records.append(&mut new_records);
   }
 
