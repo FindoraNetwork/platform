@@ -624,25 +624,6 @@ impl LedgerStatus {
       }
     }
 
-    // Issuance tracing policies must has the asset_tracking flag consistent with the asset definition
-    for (code, tracing_policies) in txn.issuance_tracing_policies.iter() {
-      // dbg!(&(code, tracing_policy));
-      let traceability = self.asset_types
-                             .get(&code)
-                             .or_else(|| txn.new_asset_codes.get(&code))
-                             .ok_or_else(|| PlatformError::InputsError(error_location!()))?
-                             .properties
-                             .asset_rules
-                             .traceable;
-      if let Some((policy, _)) = tracing_policies {
-        if traceability != policy.asset_tracking {
-          return Err(PlatformError::InputsError(error_location!()));
-        }
-      } else if traceability {
-        return Err(PlatformError::InputsError(error_location!()));
-      }
-    }
-
     // Assets with cosignature requirements must have enough signatures
     for ((op_idx, input_idx), key_set) in txn.cosig_keys.iter() {
       let op = &txn.txn.body.operations[*op_idx];
@@ -686,6 +667,7 @@ impl LedgerStatus {
                    .get(&code)
                    .or_else(|| txn.issuance_tracing_policies.get(&code))
                    .ok_or_else(|| PlatformError::InputsError(error_location!()))?;
+            dbg!(&tracing_policies);
             match tracing_policies {
               Some((policy, _)) => {
                 match policy.identity_tracking {
@@ -824,6 +806,7 @@ impl LedgerStatus {
           }
         }
       }
+      dbg!(&transfer_input_policies);
       verify_xfr_body(&mut ChaChaRng::from_seed([1u8; 32]),
                       &xfr_body,
                       &transfer_input_policies[..],

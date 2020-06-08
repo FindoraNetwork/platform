@@ -15,8 +15,9 @@ use zei::serialization::ZeiFromToBytes;
 use zei::setup::PublicParams;
 use zei::xfr::asset_record::AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType;
 use zei::xfr::asset_record::{build_blind_asset_record, open_blind_asset_record, AssetRecordType};
+use zei::xfr::asset_tracer::gen_asset_tracer_keypair;
 use zei::xfr::sig::{XfrKeyPair, XfrPublicKey};
-use zei::xfr::structs::AssetRecordTemplate;
+use zei::xfr::structs::{AssetRecordTemplate, AssetTracingPolicy};
 
 pub fn apply_transaction(ledger: &mut LedgerState, tx: Transaction) -> (TxnSID, Vec<TxoSID>) {
   let effect = TxnEffect::compute_effect(tx).expect("compute effect failed");
@@ -38,10 +39,16 @@ fn test_create_asset() -> Result<(), PlatformError> {
   let keys = XfrKeyPair::generate(&mut prng);
   let mut builder = TransactionBuilder::default();
 
+  // Tracer kp
+  let tracer_kp = gen_asset_tracer_keypair(&mut prng);
+  let policy = AssetTracingPolicy { enc_keys: tracer_kp.enc_key.clone(),
+                                    asset_tracking: true,
+                                    identity_tracking: None };
+
   // Define
   let tx = builder.add_operation_create_asset(&keys,
                                               Some(code),
-                                              AssetRules::default(),
+                                              AssetRules::default().set_traceable(true).clone(),
                                               "test".into(),
                                               PolicyChoice::Fungible())?
                   .transaction();
@@ -52,13 +59,13 @@ fn test_create_asset() -> Result<(), PlatformError> {
   let mut builder = TransactionBuilder::default();
   let tx =
     builder.add_basic_issue_asset(&keys,
-                                  None,
+                                  Some(policy.clone()),
                                   &code,
                                   0,
                                   1000,
                                   AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType)?
            .add_basic_issue_asset(&keys,
-                                  None,
+                                  Some(policy.clone()),
                                   &code,
                                   1,
                                   500,
@@ -73,8 +80,8 @@ fn test_create_asset() -> Result<(), PlatformError> {
   let oar2 = open_blind_asset_record(&bar2, &None, keys.get_sk_ref()).unwrap();
 
   let op = TransferOperationBuilder::new().add_input(TxoRef::Absolute(txos[0]), oar1, None, None, 1000)?
-                                          .add_input(TxoRef::Absolute(txos[1]), oar2, None, None, 500)?
-                                          .add_output(&AssetRecordTemplate::with_no_asset_tracking(1500, code.val, NonConfidentialAmount_NonConfidentialAssetType, keys.get_pk()), None, None, None)?
+                                          .add_input(TxoRef::Absolute(txos[1]), oar2, Some(policy.clone()), None, 500)?
+                                          .add_output(&AssetRecordTemplate::with_asset_tracking(1500, code.val, NonConfidentialAmount_NonConfidentialAssetType, keys.get_pk(), policy.clone()), None, None, None)?
                                           .create(TransferType::Standard)?
                                           .sign(&keys)?
                                           .transaction()?;

@@ -18,7 +18,7 @@ use zei::xfr::asset_tracer::gen_asset_tracer_keypair;
 use zei::xfr::sig::XfrPublicKey;
 use zei::xfr::structs::{
   AssetTracerDecKeys, AssetTracerEncKeys, AssetTracerKeyPair as ZeiAssetTracerKeyPair,
-  BlindAssetRecord, OwnerMemo as ZeiOwnerMemo,
+  AssetTracingPolicy, BlindAssetRecord, OwnerMemo as ZeiOwnerMemo,
 };
 
 #[wasm_bindgen]
@@ -295,6 +295,31 @@ impl SignatureRules {
 
 #[wasm_bindgen]
 #[derive(Default)]
+pub struct TracingPolicy {
+  policy: AssetTracingPolicy,
+}
+
+#[wasm_bindgen]
+impl TracingPolicy {
+  pub fn new_with_tracking(tracing_key: &AssetTracerEncKey) -> Self {
+    let policy = AssetTracingPolicy { enc_keys: tracing_key.get_enc_key().clone(),
+                                      asset_tracking: true,
+                                      identity_tracking: None };
+    TracingPolicy { policy }
+  }
+
+  pub fn new_with_identity_tracking(tracing_key: &AssetTracerEncKey,
+                                    cred_issuer_key: &CredIssuerPublicKey,
+                                    reveal_map: JsValue,
+                                    tracking: bool)
+                                    -> Result<Self, JsValue> {
+    let reveal_map: Vec<bool> = reveal_map.into_serde().map_err(error_to_jsvalue)?;
+    let policy = AssetTracingPolicy {enc_keys: tracking_key.get_
+  }
+}
+
+#[wasm_bindgen]
+#[derive(Default)]
 pub struct AssetRules {
   pub(crate) rules: PlatformAssetRules,
 }
@@ -307,9 +332,9 @@ impl AssetRules {
   }
 
   /// Toggles asset traceability.
-  /// @param {bool} traceable - Boolean indicating whether asset can be traced by an issuer tracing key.
-  pub fn set_traceable(mut self, traceable: bool) -> AssetRules {
-    self.rules.traceable = traceable;
+  /// @param {TracingPolicy} policy - Tracing policy for the new asset.
+  pub fn set_tracing(mut self, policy: &TracingPolicy) -> AssetRules {
+    self.rules.traceable = Some(policy.get_policy_ref().clone());
     self
   }
 

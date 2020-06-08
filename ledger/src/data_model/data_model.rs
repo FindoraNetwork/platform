@@ -238,15 +238,15 @@ impl SignatureRules {
 /// 4) Max units: Optional limit on total issuance amount.
 /// 5) Transfer signature rules: Signature weights and threshold for a valid transfer.
 pub struct AssetRules {
-  pub traceable: bool,
   pub transferable: bool,
   pub updatable: bool,
   pub transfer_multisig_rules: Option<SignatureRules>,
+  pub tracing_policy: Option<AssetTracingPolicy>,
   pub max_units: Option<u64>,
 }
 impl Default for AssetRules {
   fn default() -> Self {
-    AssetRules { traceable: false,
+    AssetRules { tracing_policy: None,
                  transferable: true,
                  updatable: false,
                  max_units: None,
@@ -255,8 +255,8 @@ impl Default for AssetRules {
 }
 
 impl AssetRules {
-  pub fn set_traceable(&mut self, traceable: bool) -> &mut Self {
-    self.traceable = traceable;
+  pub fn set_tracing_policy(&mut self, policy: Option<AssetTracingPolicy>) -> &mut Self {
+    self.tracing_policy = policy;
     self
   }
 
