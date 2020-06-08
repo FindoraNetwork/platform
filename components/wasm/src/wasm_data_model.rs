@@ -4,8 +4,9 @@ use credentials::{
   CredCommitment, CredIssuerPublicKey, CredIssuerSecretKey, CredPoK, CredRevealSig, CredSignature,
   CredUserPublicKey, CredUserSecretKey, Credential as PlatformCredential,
 };
+use cryptohash::sha256::{Digest, DIGESTBYTES};
 use ledger::data_model::{
-  b64dec, AssetRules as PlatformAssetRules, KVBlind as PlatformKVBlind, KVHash as PlatformKVHash,
+  AssetRules as PlatformAssetRules, KVBlind as PlatformKVBlind, KVHash as PlatformKVHash,
   SignatureRules as PlatformSignatureRules, TransferType as PlatformTransferType, TxOutput,
   TxoRef as PlatformTxoRef, TxoSID,
 };
@@ -368,6 +369,28 @@ impl KVBlind {
 
 #[wasm_bindgen]
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+/// Key for hashes in the ledger's custom data store.
+pub struct Key(Digest);
+
+#[wasm_bindgen]
+impl Key {
+  /// Generate a random key.
+  pub fn gen_random() -> Self {
+    let mut small_rng = ChaChaRng::from_entropy();
+    let mut buf: [u8; DIGESTBYTES] = [0u8; DIGESTBYTES];
+    small_rng.fill_bytes(&mut buf);
+    Key(Digest::from_slice(&buf).unwrap())
+  }
+}
+
+impl Key {
+  pub fn get_ref(&self) -> &Digest {
+    &self.0
+  }
+}
+
+#[wasm_bindgen]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct KVHash {
   pub(crate) hash: PlatformKVHash,
 }
@@ -375,11 +398,11 @@ pub struct KVHash {
 #[wasm_bindgen]
 impl KVHash {
   pub fn new_no_blind(data: &str) -> Self {
-    KVHash { hash: PlatformKVHash(HashOf::new(&(b64dec(data).as_ref().unwrap().to_vec(), None))) }
+    KVHash { hash: PlatformKVHash(HashOf::new(&(data.as_bytes().to_vec(), None))) }
   }
 
   pub fn new_with_blind(data: &str, kv_blind: &KVBlind) -> Self {
-    KVHash { hash: PlatformKVHash(HashOf::new(&(b64dec(data).as_ref().unwrap().to_vec(),
+    KVHash { hash: PlatformKVHash(HashOf::new(&(data.as_bytes().to_vec(),
                                                 Some(kv_blind.get_blind_ref().clone())))) }
   }
 }
