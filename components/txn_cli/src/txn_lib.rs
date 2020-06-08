@@ -26,7 +26,9 @@ use zei::xfr::structs::{
 
 extern crate exitcode;
 
+#[allow(clippy::too_many_arguments)]
 pub fn air_assign(data_dir: &str,
+                  seq_id: u64,
                   issuer_id: u64,
                   address: &str,
                   data: &str,
@@ -36,7 +38,7 @@ pub fn air_assign(data_dir: &str,
                   -> Result<(), PlatformError> {
   let issuer_data = load_data(data_dir)?;
   let xfr_key_pair = issuer_data.get_asset_issuer_key_pair(issuer_id)?;
-  let mut txn_builder = TransactionBuilder::default();
+  let mut txn_builder = TransactionBuilder::from_seq_id(seq_id);
   let address = serde_json::from_str::<CredUserPublicKey>(address)?;
   let data = serde_json::from_str::<CredCommitment>(data)?;
   let issuer_pk = serde_json::from_str::<CredIssuerPublicKey>(issuer_pk)?;
@@ -57,7 +59,9 @@ pub fn air_assign(data_dir: &str,
 /// * `memo`: memo for defining the asset.
 /// * `asset_rules`: simple asset rules (e.g. traceable, transferable)
 /// * `txn_file`: path to store the transaction file.
+#[allow(clippy::too_many_arguments)]
 pub fn define_asset(data_dir: &str,
+                    seq_id: u64,
                     fiat_asset: bool,
                     issuer_key_pair: &XfrKeyPair,
                     token_code: AssetTypeCode,
@@ -65,7 +69,7 @@ pub fn define_asset(data_dir: &str,
                     asset_rules: AssetRules,
                     txn_file: Option<&str>)
                     -> Result<TransactionBuilder, PlatformError> {
-  let mut txn_builder = TransactionBuilder::default();
+  let mut txn_builder = TransactionBuilder::from_seq_id(seq_id);
   txn_builder.add_operation_create_asset(issuer_key_pair,
                                          Some(token_code),
                                          asset_rules,
@@ -92,8 +96,9 @@ pub fn define_and_submit(issuer_key_pair: &XfrKeyPair,
                          rules: AssetRules,
                          ledger_standalone: &LedgerStandalone)
                          -> Result<(), PlatformError> {
+  let (_, seq_id, _) = ledger_standalone.fetch_global_state();
   // Define the asset
-  let mut txn_builder = TransactionBuilder::default();
+  let mut txn_builder = TransactionBuilder::from_seq_id(seq_id);
   let txn = txn_builder.add_operation_create_asset(issuer_key_pair,
                                                    Some(code),
                                                    rules,
@@ -121,6 +126,7 @@ pub fn define_and_submit(issuer_key_pair: &XfrKeyPair,
 /// * `tracing_policy`: asset tracing policy, if any.
 #[allow(clippy::too_many_arguments)]
 pub fn issue_and_transfer_asset(data_dir: &str,
+                                seq_id: u64,
                                 issuer_key_pair: &XfrKeyPair,
                                 recipient_key_pair: &XfrKeyPair,
                                 amount: u64,
@@ -172,7 +178,7 @@ pub fn issue_and_transfer_asset(data_dir: &str,
                                                  .transaction()?;
 
   // Issue and Transfer transaction
-  let mut txn_builder = TransactionBuilder::default();
+  let mut txn_builder = TransactionBuilder::from_seq_id(seq_id);
   txn_builder.add_operation_issue_asset(issuer_key_pair,
                                         &token_code,
                                         get_and_update_sequence_number(data_dir)?,
@@ -224,7 +230,9 @@ pub fn issue_transfer_and_get_utxo_and_blinds<R: CryptoRng + RngCore>(
                                                 .sign(issuer_key_pair)?
                                                 .transaction()?;
 
-  let mut txn_builder = TransactionBuilder::default();
+  let (_, seq_id, _) = ledger_standalone.fetch_global_state();
+
+  let mut txn_builder = TransactionBuilder::from_seq_id(seq_id);
   let txn = txn_builder.add_operation_issue_asset(issuer_key_pair,
                                                   &code,
                                                   sequence_number,
@@ -286,9 +294,9 @@ pub fn query(protocol_host: &ProtocolHost,
              route: &str,
              value: &str)
              -> Result<String, PlatformError> {
-  let mut res = if let Ok(response) =
-    reqwest::get(&format!("{}://{}:{}/{}/{}",
-                          &protocol_host.0, &protocol_host.1, port, route, value))
+  let res = if let Ok(response) =
+    reqwest::blocking::get(&format!("{}://{}:{}/{}/{}",
+                                    &protocol_host.0, &protocol_host.1, port, route, value))
   {
     response
   } else {
@@ -353,9 +361,9 @@ pub fn submit(protocol_host: &ProtocolHost,
               txn_builder: TransactionBuilder)
               -> Result<(), PlatformError> {
   // Submit transaction
-  let client = reqwest::Client::new();
+  let client = reqwest::blocking::Client::new();
   let txn = txn_builder.transaction();
-  let mut res =
+  let res =
     client.post(&format!("{}://{}:{}/{}",
                          protocol_host.0, protocol_host.1, SUBMIT_PORT, "submit_transaction"))
           .json(&txn)
@@ -366,13 +374,14 @@ pub fn submit(protocol_host: &ProtocolHost,
                                                              &"Failed to submit.")))
           })?;
   // Log body
+  let status = &res.status();
   let txt = res.text().expect("no response");
   let handle = serde_json::from_str::<TxnHandle>(&txt).unwrap_or_else(|e| {
                                                         panic!("<Invalid JSON> ({}): \"{}\"",
                                                                &e, &txt)
                                                       });
   println!("Submission response: {}", handle);
-  println!("Submission status: {}", res.status());
+  println!("Submission status: {}", status);
   Ok(())
 }
 
@@ -394,9 +403,9 @@ pub fn submit_and_get_sids(protocol_host: &ProtocolHost,
                            txn_builder: TransactionBuilder)
                            -> Result<Vec<TxoSID>, PlatformError> {
   // Submit transaction
-  let client = reqwest::Client::new();
+  let client = reqwest::blocking::Client::new();
   let txn = txn_builder.transaction();
-  let mut res =
+  let res =
     client.post(&format!("{}://{}:{}/{}",
                          protocol_host.0, protocol_host.1, SUBMIT_PORT, "submit_transaction"))
           .json(&txn)
@@ -408,13 +417,14 @@ pub fn submit_and_get_sids(protocol_host: &ProtocolHost,
           })?;
 
   // Log body
+  let status = &res.status();
   let txt = res.text().expect("no response");
   let handle = serde_json::from_str::<TxnHandle>(&txt).unwrap_or_else(|e| {
                                                         panic!("<Invalid JSON> ({}): \"{}\"",
                                                                &e, &txt)
                                                       });
   println!("Submission response: {}", handle);
-  println!("Submission status: {}", res.status());
+  println!("Submission status: {}", status);
 
   // Return sid
   let res = query(protocol_host, SUBMIT_PORT, "txn_status", &handle.0)?;
@@ -503,7 +513,9 @@ mod tests {
     let issuer_key_pair = XfrKeyPair::generate(&mut prng);
 
     // Define asset
+    let seq_id = 0;
     let res = define_asset(data_dir,
+                           seq_id,
                            false,
                            &issuer_key_pair,
                            AssetTypeCode::gen_random(),
@@ -529,8 +541,10 @@ mod tests {
     // Issue and transfer asset
     let code = AssetTypeCode::gen_random();
     let amount = 1000;
+    let seq_id = 0;
     let res =
       issue_and_transfer_asset(data_dir,
+                               seq_id,
                                &issuer_key_pair,
                                &recipient_key_pair,
                                amount,

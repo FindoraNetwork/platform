@@ -24,13 +24,16 @@ use zei::xfr::structs::{
 /// Merges two asset records.
 /// # Arguments
 /// * `key_pair`: key pair of the two records.
+/// * `seq_id`: seq_id, currently the block_commit_count
 /// * `sid1`: SID of the first record.
 /// * `sid2`: SID of the second record.
 /// * `blind_asset_record1`: blind asset record of the first record.
 /// * `blind_asset_record2`: blind asset record of the second record.
 /// * `token_code`: asset token code of the two records.
 /// * `tracing_policy`: asset tracing policy, optional.
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn merge_records(key_pair: &XfrKeyPair,
+                            seq_id: u64,
                             sid1: TxoRef,
                             sid2: TxoRef,
                             blind_asset_record1: (BlindAssetRecord, Option<OwnerMemo>),
@@ -77,7 +80,7 @@ pub(crate) fn merge_records(key_pair: &XfrKeyPair,
                                               .transaction()?;
 
   // Merge records
-  let mut txn_builder = TransactionBuilder::default();
+  let mut txn_builder = TransactionBuilder::from_seq_id(seq_id);
   txn_builder.add_operation(xfr_op).transaction();
   Ok(txn_builder)
 }
@@ -91,6 +94,7 @@ pub(crate) fn merge_records(key_pair: &XfrKeyPair,
 /// * `protocol`: either `https` or `http`.
 /// * `host`: either `testnet.findora.org` or `localhost`.
 pub fn load_funds(data_dir: &str,
+                  seq_id: u64,
                   issuer_id: u64,
                   recipient_id: u64,
                   amount: u64,
@@ -108,6 +112,7 @@ pub fn load_funds(data_dir: &str,
   } else {
     let fiat_code = AssetTypeCode::gen_random();
     let txn_builder = define_asset(data_dir,
+                                   seq_id,
                                    true,
                                    issuer_key_pair,
                                    fiat_code,
@@ -124,6 +129,7 @@ pub fn load_funds(data_dir: &str,
   // Issue and transfer asset
   let txn_builder =
     issue_and_transfer_asset(data_dir,
+                             seq_id,
                              issuer_key_pair,
                              recipient_key_pair,
                              amount,
@@ -152,6 +158,7 @@ pub fn load_funds(data_dir: &str,
     let blind_asset_record_pre =
       serde_json::from_str::<BlindAssetRecord>(&res_pre).or_else(|_| Err(des_fail!()))?;
     let txn_builder = merge_records(recipient_key_pair,
+                                    seq_id,
                                     TxoRef::Absolute(sid_pre),
                                     TxoRef::Absolute(sid_new),
                                     (blind_asset_record_pre, None), // no associated owner memo with blind asset record
@@ -180,6 +187,7 @@ pub fn load_funds(data_dir: &str,
 ///   * protocol: either `https` or `http`.
 ///   * host: either `testnet.findora.org` or `locaohost`.
 pub fn fulfill_loan(data_dir: &str,
+                    seq_id: u64,
                     loan_id: u64,
                     issuer_id: u64,
                     memo_file: Option<&str>,
@@ -339,6 +347,7 @@ pub fn fulfill_loan(data_dir: &str,
   } else {
     let fiat_code = AssetTypeCode::gen_random();
     let txn_builder = define_asset(data_dir,
+                                   seq_id,
                                    true,
                                    issuer_key_pair,
                                    fiat_code,
@@ -365,6 +374,7 @@ pub fn fulfill_loan(data_dir: &str,
   let fiat_txn_file = &format!("{}/{}", data_dir, "fiat_txn_file");
   let txn_builder =
     issue_and_transfer_asset(data_dir,
+                             seq_id,
                              issuer_key_pair,
                              lender_key_pair,
                              amount,
@@ -389,6 +399,7 @@ pub fn fulfill_loan(data_dir: &str,
                         loan_amount: amount };
   let memo_str = serde_json::to_string(&memo).or_else(|_| Err(ser_fail!()))?;
   let txn_builder = define_asset(data_dir,
+                                 seq_id,
                                  false,
                                  borrower_key_pair,
                                  debt_code,
@@ -404,6 +415,7 @@ pub fn fulfill_loan(data_dir: &str,
   let debt_txn_file = "debt_txn_file";
   let txn_builder =
     issue_and_transfer_asset(data_dir,
+                             seq_id,
                              borrower_key_pair,
                              borrower_key_pair,
                              amount,
@@ -448,7 +460,7 @@ pub fn fulfill_loan(data_dir: &str,
                                               .sign(lender_key_pair)?
                                               .sign(borrower_key_pair)?
                                               .transaction()?;
-  let mut txn_builder = TransactionBuilder::default();
+  let mut txn_builder = TransactionBuilder::from_seq_id(seq_id);
   txn_builder.add_operation(xfr_op);
 
   // Submit transaction
@@ -471,6 +483,7 @@ pub fn fulfill_loan(data_dir: &str,
     let blind_asset_record_new =
       serde_json::from_str::<BlindAssetRecord>(&res_new).or_else(|_| Err(des_fail!()))?;
     let txn_builder = merge_records(borrower_key_pair,
+                                    seq_id,
                                     TxoRef::Absolute(sid_pre),
                                     TxoRef::Absolute(sids_new[1]),
                                     (blind_asset_record_pre, None),
@@ -504,6 +517,7 @@ pub fn fulfill_loan(data_dir: &str,
 ///   * protocol: either `https` or `http`.
 ///   * host: either `testnet.findora.org` or `localhost`.
 pub fn pay_loan(data_dir: &str,
+                seq_id: u64,
                 loan_id: u64,
                 amount: u64,
                 protocol_host: &ProtocolHost)
@@ -635,7 +649,7 @@ AssetRecordTemplate::with_no_asset_tracking(borrower.balance - amount_to_spend,
                                           .create(TransferType::DebtSwap)?
                                           .sign(borrower_key_pair)?
                                           .transaction()?;
-  let mut txn_builder = TransactionBuilder::default();
+  let mut txn_builder = TransactionBuilder::from_seq_id(seq_id);
   txn_builder.add_operation(op).transaction();
 
   // Submit transaction and update data
@@ -687,6 +701,7 @@ mod tests {
 
     // Merge records
     assert!(merge_records(&key_pair,
+                          0, // OK to use 0 for seq_id as this doesn't get submitted
                           TxoRef::Absolute(TxoSID(1)),
                           TxoRef::Absolute(TxoSID(2)),
                           (bar1, memo1),
@@ -711,7 +726,8 @@ mod tests {
     let data_dir = tmp_dir.path().to_str().unwrap();
 
     let funds_amount = 1000;
-    load_funds(data_dir, 0, 0, funds_amount, protocol_host).unwrap();
+    let (_, seq_id, _) = ledger_standalone.fetch_global_state();
+    load_funds(data_dir, seq_id, 0, 0, funds_amount, protocol_host).unwrap();
     let data = load_data(data_dir).unwrap();
 
     assert_eq!(data.borrowers[0].balance, funds_amount);
@@ -729,7 +745,8 @@ mod tests {
     assert_eq!(data.loans.len(), 1);
 
     // Fulfill the loan request
-    fulfill_loan(data_dir, 0, 0, None, protocol_host).unwrap();
+    let seq_id = 0; // OK
+    fulfill_loan(data_dir, seq_id, 0, 0, None, protocol_host).unwrap();
     data = load_data(data_dir).unwrap();
 
     assert_eq!(data.loans[0].status, LoanStatus::Active);
@@ -737,7 +754,7 @@ mod tests {
 
     // Pay loan
     let payment_amount = 200;
-    pay_loan(data_dir, 0, payment_amount, protocol_host).unwrap();
+    pay_loan(data_dir, seq_id, 0, payment_amount, protocol_host).unwrap();
     data = load_data(data_dir).unwrap();
 
     assert_eq!(data.loans[0].payments, 1);

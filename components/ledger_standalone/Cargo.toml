@@ -12,6 +12,7 @@ name = "ledger_standalone"
 path = "src/ledger_standalone.rs"
 
 [dependencies]
+cryptohash = { path = "../../libs/cryptohash" }
 flexi_logger = "0.15.2"
 ledger_api_service = { path = "../ledger_api_service" }
 ledger = { path = "../../ledger" }

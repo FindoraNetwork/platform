@@ -36,7 +36,7 @@ fn test_create_asset() -> Result<(), PlatformError> {
   let mut ledger = LedgerState::test_ledger();
   let code = AssetTypeCode { val: [1; 16] };
   let keys = XfrKeyPair::generate(&mut prng);
-  let mut builder = TransactionBuilder::default();
+  let mut builder = TransactionBuilder::from_seq_id(ledger.get_block_commit_count());
 
   // Define
   let tx = builder.add_operation_create_asset(&keys,
@@ -49,7 +49,7 @@ fn test_create_asset() -> Result<(), PlatformError> {
   assert!(ledger.get_asset_type(&code).is_some());
 
   // Issue
-  let mut builder = TransactionBuilder::default();
+  let mut builder = TransactionBuilder::from_seq_id(ledger.get_block_commit_count());
   let tx =
     builder.add_basic_issue_asset(&keys,
                                   None,
@@ -79,7 +79,7 @@ fn test_create_asset() -> Result<(), PlatformError> {
                                           .sign(&keys)?
                                           .transaction()?;
 
-  let mut builder = TransactionBuilder::default();
+  let mut builder = TransactionBuilder::from_seq_id(ledger.get_block_commit_count());
   let tx = builder.add_operation(op).transaction();
   apply_transaction(&mut ledger, tx.clone());
 
@@ -112,7 +112,7 @@ fn test_loan_repayment(loan_amount: u64,
   let burn_address = XfrPublicKey::zei_from_bytes(&[0; 32]);
 
   // Define assets
-  let mut builder = TransactionBuilder::default();
+  let mut builder = TransactionBuilder::from_seq_id(ledger.get_block_commit_count());
   let tx = builder.add_operation_create_asset(&fiat_issuer_keys,
                                               Some(fiat_code),
                                               AssetRules::default(),
@@ -150,7 +150,7 @@ fn test_loan_repayment(loan_amount: u64,
     open_blind_asset_record(&fiat_ba, &fiat_owner_memo, lender_keys.get_sk_ref()).unwrap();
 
   //  Mega transaction to do everything
-  let mut builder = TransactionBuilder::default();
+  let mut builder = TransactionBuilder::from_seq_id(ledger.get_block_commit_count());
   let tx = builder.add_operation_issue_asset(&fiat_issuer_keys,
                                              &fiat_code,
                                              0,

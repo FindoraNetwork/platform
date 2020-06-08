@@ -255,11 +255,13 @@ mod tests {
   use zei::xfr::sig::XfrKeyPair;
 
   #[test]
+  #[ignore]
   fn test_cache_transaction() {
     // Create a SubmissionServer
     let block_capacity = 8;
     let ledger_state = LedgerState::test_ledger();
     let mut prng = rand_chacha::ChaChaRng::from_entropy();
+    let block_commit_count = ledger_state.get_block_commit_count();
     let mut submission_server = SubmissionServer::new(prng.clone(),
                                                       Arc::new(RwLock::new(ledger_state)),
                                                       block_capacity).unwrap();
@@ -272,8 +274,8 @@ mod tests {
     let asset_token = AssetTypeCode::new_from_base64(&token_code).unwrap();
 
     // Build transactions
-    let mut txn_builder_0 = TransactionBuilder::default();
-    let mut txn_builder_1 = TransactionBuilder::default();
+    let mut txn_builder_0 = TransactionBuilder::from_seq_id(block_commit_count);
+    let mut txn_builder_1 = TransactionBuilder::from_seq_id(block_commit_count);
 
     txn_builder_0.add_operation_create_asset(&keypair,
                                              Some(asset_token),
@@ -309,12 +311,13 @@ mod tests {
     let block_capacity = 8;
     let ledger_state = LedgerState::test_ledger();
     let prng = rand_chacha::ChaChaRng::from_entropy();
+    let block_commit_count = ledger_state.get_block_commit_count();
     let mut submission_server =
       SubmissionServer::new(prng, Arc::new(RwLock::new(ledger_state)), block_capacity).unwrap();
 
     submission_server.begin_block();
 
-    let transaction = Transaction::default();
+    let transaction = Transaction::from_seq_id(block_commit_count);
 
     // Verify that it's ineligible to commit if #transactions < BLOCK_CAPACITY
     for _i in 0..(block_capacity - 1) {
@@ -332,12 +335,13 @@ mod tests {
   fn test_txn_status() {
     let block_capacity = 2;
     let ledger_state = LedgerState::test_ledger();
+    let block_commit_count = ledger_state.get_block_commit_count();
     let prng = rand_chacha::ChaChaRng::from_entropy();
     let mut submission_server =
       SubmissionServer::new(prng, Arc::new(RwLock::new(ledger_state)), block_capacity).unwrap();
 
     // Submit the first transcation. Ensure that the txn is pending.
-    let transaction = Transaction::default();
+    let transaction = Transaction::from_seq_id(block_commit_count);
     let txn_handle = submission_server.handle_transaction(transaction.clone())
                                       .unwrap();
     let status = submission_server.txn_status

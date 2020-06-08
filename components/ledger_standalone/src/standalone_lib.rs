@@ -1,4 +1,5 @@
 #![deny(warnings)]
+use cryptohash::sha256::Digest as BitDigest;
 use ledger::data_model::errors::PlatformError;
 use ledger::data_model::{Transaction, TxoSID};
 use ledger::error_location;
@@ -6,6 +7,7 @@ use std::ffi::OsString;
 use std::time::{Duration, SystemTime};
 use submission_server::{TxnHandle, TxnStatus};
 use subprocess::{Popen, PopenConfig};
+use zei::xfr::sig::XfrSignature;
 use zei::xfr::structs::BlindAssetRecord;
 
 macro_rules! fail {
@@ -164,5 +166,19 @@ impl LedgerStandalone {
                                                   .unwrap()
                                                   .text()
                                                   .unwrap()).unwrap()
+  }
+
+  // Fetch a blind asset record at a given index. Useful for building transfer operations.
+  pub fn fetch_global_state(&self) -> (BitDigest, u64, XfrSignature) {
+    let host = "localhost";
+    let query = format!("http://{}:{}/global_state", host, self.ledger_port);
+    serde_json::from_str::<(BitDigest, u64, XfrSignature)>(&self.client
+                                                                .get(&query)
+                                                                .send()
+                                                                .unwrap()
+                                                                .error_for_status()
+                                                                .unwrap()
+                                                                .text()
+                                                                .unwrap()).unwrap()
   }
 }

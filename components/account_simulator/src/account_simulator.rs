@@ -6,6 +6,7 @@ use std::iter::repeat;
 #[macro_use(quickcheck)]
 extern crate quickcheck_macros;
 
+use cryptohash::sha256::Digest as BitDigest;
 use ledger::data_model::errors::PlatformError;
 use ledger::data_model::*;
 use ledger::error_location;
@@ -30,7 +31,7 @@ use zei::api::anon_creds::ACCommitment;
 use zei::serialization::ZeiFromToBytes;
 use zei::setup::PublicParams;
 use zei::xfr::asset_record::{build_blind_asset_record, open_blind_asset_record, AssetRecordType};
-use zei::xfr::sig::XfrKeyPair;
+use zei::xfr::sig::{XfrKeyPair, XfrPublicKey, XfrSignature};
 use zei::xfr::structs::{
   AssetRecord, AssetRecordTemplate, AssetTracingPolicy, OpenAssetRecord, OwnerMemo,
 };
@@ -419,6 +420,7 @@ impl InterpretAccounts<PlatformError> for LedgerAccounts {
                                                         credentials: vec![],
                                                         memos: vec![],
                                                         policy_options: None },
+                                seq_id: self.ledger.get_block_commit_count(),
                                 signatures: vec![] };
 
         let eff = TxnEffect::compute_effect(txn).unwrap();
@@ -458,7 +460,7 @@ impl InterpretAccounts<PlatformError> for LedgerAccounts {
              .get_mut(unit)
              .unwrap() += amt;
 
-        let mut tx = Transaction::default();
+        let mut tx = Transaction::from_seq_id(self.ledger.get_block_commit_count());
 
         let ar = AssetRecordTemplate::with_no_asset_tracking(amt, code.val, iss_art, *pubkey);
         let params = PublicParams::new();
@@ -627,6 +629,7 @@ impl InterpretAccounts<PlatformError> for LedgerAccounts {
                                                         credentials: vec![],
                                                         memos: vec![],
                                                         policy_options: None },
+                                seq_id: self.ledger.get_block_commit_count(),
                                 signatures: vec![] };
 
         let effect = TxnEffect::compute_effect(txn).unwrap();
@@ -1035,18 +1038,24 @@ impl InterpretAccounts<PlatformError> for LedgerStandaloneAccounts {
 
         let op = DefineAsset::new(body, &IssuerKeyPair { keypair: &keypair }).unwrap();
 
-        let txn = Transaction { body: TransactionBody { operations:
-                                                          vec![Operation::DefineAsset(op)],
-                                                        credentials: vec![],
-                                                        memos: vec![],
-                                                        policy_options: None },
-                                signatures: vec![] };
-
         {
           // let serialize = serde_json::to_string(&tx).unwrap();
 
           let host = "localhost";
           let port = format!("{}", self.submit_port);
+          let global_state = &mut self.client
+                                      .get(&format!("http://{}:{}/global_state", host, port))
+                                      .send()
+                                      .unwrap();
+          let (_comm, seq_id, _sig): (BitDigest, u64, XfrSignature) =
+            serde_json::from_str(&global_state.text().unwrap()[..]).unwrap();
+          let txn = Transaction { body: TransactionBody { operations:
+                                                            vec![Operation::DefineAsset(op)],
+                                                          credentials: vec![],
+                                                          memos: vec![],
+                                                          policy_options: None },
+                                  seq_id,
+                                  signatures: vec![] };
           let query1 = format!("http://{}:{}/submit_transaction", host, port);
           let query2 = format!("http://{}:{}/force_end_block", host, port);
           // dbg!(&query1);
@@ -1097,9 +1106,9 @@ impl InterpretAccounts<PlatformError> for LedgerStandaloneAccounts {
                                  .get(unit)
                                  .ok_or_else(|| PlatformError::InputsError(error_location!()))?;
 
+        let host = "localhost";
+        let port = format!("{}", self.query_port);
         let new_seq_num = {
-          let host = "localhost";
-          let port = format!("{}", self.query_port);
           let query = format!("http://{}:{}/asset_issuance_num/{}",
                               host,
                               port,
@@ -1126,7 +1135,13 @@ impl InterpretAccounts<PlatformError> for LedgerStandaloneAccounts {
              .get_mut(unit)
              .unwrap() += amt;
 
-        let mut tx = Transaction::default();
+        let global_state = &mut self.client
+                                    .get(&format!("http://{}:{}/global_state", host, port))
+                                    .send()
+                                    .unwrap();
+        let (_comm, seq_id, _sig): (BitDigest, u64, XfrSignature) =
+          serde_json::from_str(&global_state.text().unwrap()[..]).unwrap();
+        let mut tx = Transaction::from_seq_id(seq_id);
 
         let ar = AssetRecordTemplate::with_no_asset_tracking(amt, code.val, iss_art, *pubkey);
         let params = PublicParams::new();
@@ -1322,11 +1337,19 @@ impl InterpretAccounts<PlatformError> for LedgerStandaloneAccounts {
 
         let transfer = TransferAsset { body: transfer_body,
                                        body_signatures: vec![transfer_sig] };
+        let mut global_state =
+          &mut self.client
+                   .get(&format!("http://localhost:{}/global_state", self.query_port))
+                   .send()
+                   .unwrap();
+        let (_comm, seq_id, _sig): (BitDigest, u64, XfrSignature) =
+          serde_json::from_str(&global_state.text().unwrap()[..]).unwrap();
         let txn = Transaction { body: TransactionBody { operations:
                                                           vec![Operation::TransferAsset(transfer)],
                                                         credentials: vec![],
                                                         memos: vec![],
                                                         policy_options: None },
+                                seq_id,
                                 signatures: vec![] };
 
         let txos = {
@@ -1824,7 +1847,7 @@ mod test {
                                                confidential_amounts: cmds.confidential_amounts,
                                                confidential_types: cmds.confidential_types });
     let mut big_txn = Box::new(OneBigTxnAccounts { base_ledger: LedgerState::test_ledger(),
-                                                   txn: Transaction::default(),
+                                                   txn: Transaction::from_seq_id(0), // Should be OK, starting with clean ledger
                                                    txos: Default::default(),
                                                    accounts: HashMap::new(),
                                                    utxos: HashMap::new(),

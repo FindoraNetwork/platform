@@ -417,7 +417,7 @@ pub trait BuildsTransactions {
   }
 }
 
-#[derive(Debug, Default, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct TransactionBuilder {
   txn: Transaction,
   owner_records: Vec<(TxOutput, Option<OwnerMemo>)>,
@@ -427,6 +427,12 @@ pub struct TransactionBuilder {
 impl TransactionBuilder {
   pub fn get_owner_record_and_memo(&self, idx: usize) -> Option<&(TxOutput, Option<OwnerMemo>)> {
     self.owner_records.get(idx)
+  }
+
+  pub fn from_seq_id(seq_id: u64) -> Self {
+    TransactionBuilder { txn: Transaction::from_seq_id(seq_id),
+                         owner_records: Vec::new(),
+                         outputs: 0 }
   }
 }
 
