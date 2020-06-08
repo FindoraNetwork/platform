@@ -762,6 +762,7 @@ impl LedgerStatus {
                      .get(&code)
                      .or_else(|| txn.issuance_tracing_policies.get(&code))
                      .ok_or_else(|| PlatformError::InputsError(error_location!()))?;
+              dbg!(&tracing_policies);
               match tracing_policies {
                 Some((policy, _)) => {
                   match policy.identity_tracking {
@@ -790,6 +791,7 @@ impl LedgerStatus {
                           return Err(PlatformError::InputsError(error_location!()));
                         }
                         None => {
+                          dbg!("what???");
                           transfer_output_policies.push(None);
                           transfer_output_commitments.push(None);
                         }
@@ -824,6 +826,7 @@ impl LedgerStatus {
           }
         }
       }
+      dbg!(&transfer_output_policies);
       verify_xfr_body(&mut ChaChaRng::from_seed([1u8; 32]),
                       &xfr_body,
                       &transfer_input_policies[..],

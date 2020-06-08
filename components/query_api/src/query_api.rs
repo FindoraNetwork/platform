@@ -1,7 +1,7 @@
 #![deny(warnings)]
 use actix_cors::Cors;
 use actix_web::{error, middleware, web, App, HttpServer};
-use ledger::data_model::{b64dec, KVBlind, KVHash, TxoSID, XfrAddress};
+use ledger::data_model::{b64dec, IssuerPublicKey, KVBlind, KVHash, TxOutput, TxoSID, XfrAddress};
 use ledger::store::{ArchiveAccess, LedgerAccess, LedgerUpdate};
 use log::info;
 use query_server::QueryServer;
@@ -88,6 +88,23 @@ fn get_owned_txos<RNG, LU>(data: web::Data<Arc<RwLock<QueryServer<RNG, LU>>>>,
   Ok(web::Json(sids.unwrap_or_default()))
 }
 
+// Returns the list of records issued by a public key
+fn get_issued_records<RNG, LU>(data: web::Data<Arc<RwLock<QueryServer<RNG, LU>>>>,
+                               info: web::Path<String>)
+                               -> actix_web::Result<web::Json<Vec<TxOutput>>>
+  where RNG: RngCore + CryptoRng,
+        LU: LedgerUpdate<RNG> + LedgerAccess + ArchiveAccess + Sync + Send
+{
+  // Convert from basee64 representation
+  let key: XfrPublicKey =
+    XfrPublicKey::zei_from_bytes(&b64dec(&*info).map_err(|_| {
+                                    error::ErrorBadRequest("Could not deserialize public key")
+                                  })?);
+  let query_server = data.read().unwrap();
+  let records = query_server.get_issued_records(&IssuerPublicKey { key });
+  Ok(web::Json(records.unwrap_or_default()))
+}
+
 pub struct QueryApi {
   web_runtime: actix_rt::SystemRunner,
 }
@@ -107,6 +124,8 @@ impl QueryApi {
                 .data(query_server.clone())
                 .route("/get_address/{txo_sid}",
                        web::get().to(get_address::<RNG, LU>))
+                .route("/get_issued_records/{key}",
+                       web::get().to(get_issued_records::<RNG, LU>))
                 .route("/get_owned_utxos/{address}",
                        web::get().to(get_owned_txos::<RNG, LU>))
                 .route("/store_custom_data",
