@@ -22,6 +22,7 @@ use zei::xfr::structs::{
 };
 
 #[wasm_bindgen]
+/// Indicates whether the TXO ref is an absolute or relative value.
 pub struct TxoRef {
   pub(crate) txo_ref: PlatformTxoRef,
 }
@@ -60,6 +61,7 @@ impl TxoRef {
 }
 
 #[wasm_bindgen]
+/// Indicates whether the transfer is a standard one, or a debt swap.
 pub struct TransferType {
   transfer_type: PlatformTransferType,
 }
@@ -86,12 +88,14 @@ impl TransferType {
 }
 
 #[wasm_bindgen]
+/// TXO of the client's asset record.
 pub struct ClientAssetRecord {
   pub(crate) output: TxOutput,
 }
 
 #[wasm_bindgen]
 #[derive(Serialize, Deserialize)]
+/// Key pair of the asset tracer.
 pub struct AssetTracerKeyPair {
   pub(crate) keypair: ZeiAssetTracerKeyPair,
 }
@@ -124,6 +128,7 @@ impl AssetTracerKeyPair {
 }
 
 #[wasm_bindgen]
+/// Asser owner memo.
 pub struct OwnerMemo {
   pub(crate) memo: ZeiOwnerMemo,
 }
@@ -163,6 +168,7 @@ pub(crate) struct AttributeAssignment {
 
 #[wasm_bindgen]
 #[derive(Serialize, Deserialize)]
+/// Key pair of a credential user.
 pub struct CredentialUserKeyPair {
   pub(crate) pk: CredUserPublicKey,
   pub(crate) sk: CredUserSecretKey,
@@ -177,18 +183,21 @@ pub struct CredentialIssuerKeyPair {
 
 #[wasm_bindgen]
 #[derive(Serialize, Deserialize)]
+/// Signature of a credential record.
 pub struct CredentialSignature {
   pub(crate) sig: CredSignature,
 }
 
 #[wasm_bindgen]
 #[derive(Serialize, Deserialize)]
+/// Reveal signature of a credential record.
 pub struct CredentialRevealSig {
   pub(crate) sig: CredRevealSig,
 }
 
 #[wasm_bindgen]
 #[derive(Serialize, Deserialize)]
+/// Commitment to a credential record.
 pub struct CredentialCommitment {
   pub(crate) commitment: CredCommitment,
   pub(crate) pok: CredPoK,
@@ -196,6 +205,10 @@ pub struct CredentialCommitment {
 
 #[wasm_bindgen]
 #[derive(Serialize, Deserialize)]
+/// Credential information containing:
+/// * Issuer public key.
+/// * Credential signature.
+/// * Credential attributes and associated values.
 pub struct Credential {
   pub(crate) credential: PlatformCredential,
 }
@@ -228,6 +241,7 @@ impl CredentialRevealSig {
 }
 
 #[wasm_bindgen]
+/// Key pair of a credential issuer
 impl CredentialIssuerKeyPair {
   pub fn get_pk(&self) -> CredIssuerPublicKey {
     self.pk.clone()
@@ -263,6 +277,7 @@ impl CredentialUserKeyPair {
 }
 
 #[wasm_bindgen]
+/// Stores threshold and weights for a multisignature requirement.
 pub struct SignatureRules {
   pub(crate) sig_rules: PlatformSignatureRules,
 }
@@ -295,6 +310,13 @@ impl SignatureRules {
 
 #[wasm_bindgen]
 #[derive(Default)]
+/// Simple asset rules:
+/// 1) Traceable: Records of traceable assets can be decrypted by a provided tracking key
+/// 2) Transferable: Non-transferable assets can only be transferred once from the issuer to
+///    another user.
+/// 3) Updatable: Whether the asset memo can be updated.
+/// 4) Transfer signature rules: Signature weights and threshold for a valid transfer.
+/// 5) Max units: Optional limit on total issuance amount.
 pub struct AssetRules {
   pub(crate) rules: PlatformAssetRules,
 }

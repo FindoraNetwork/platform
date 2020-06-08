@@ -70,9 +70,9 @@ fn store_custom_data<T>(data: web::Data<Arc<RwLock<QueryServer<T>>>>,
   Ok(())
 }
 // Returns an array of the utxo sids currently spendable by a given address
-fn get_owned_txos<T>(data: web::Data<Arc<RwLock<QueryServer<T>>>>,
-                     info: web::Path<String>)
-                     -> actix_web::Result<web::Json<HashSet<TxoSID>>>
+fn get_owned_utxos<T>(data: web::Data<Arc<RwLock<QueryServer<T>>>>,
+                      info: web::Path<String>)
+                      -> actix_web::Result<web::Json<HashSet<TxoSID>>>
   where T: RestfulArchiveAccess + Sync + Send
 {
   // Convert from basee64 representation
@@ -123,8 +123,8 @@ impl QueryApi {
                 .data(query_server.clone())
                 .route(&QueryServerRoutes::GetAddress.with_arg_template("txo_sid"),
                        web::get().to(get_address::<T>))
-                .route(&QueryServerRoutes::GetOwnedUtxos.with_arg_template("addr"),
-                       web::get().to(get_owned_txos::<T>))
+                .route(&QueryServerRoutes::GetOwnedUtxos.with_arg_template("address"),
+                       web::get().to(get_owned_utxos::<T>))
                 .route(&QueryServerRoutes::StoreCustomData.route(),
                        web::post().to(store_custom_data::<T>))
                 .route(&QueryServerRoutes::GetCustomData.with_arg_template("key"),

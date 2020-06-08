@@ -5,7 +5,7 @@ use ledger::data_model::errors::PlatformError;
 use ledger::data_model::AssetTypeCode;
 use ledger::{des_fail, error_location};
 use ledger_api_service::RestfulLedgerAccess;
-use network::{HttpStandaloneConfig, LedgerStandalone, MockLedgerStandalone};
+use network::{HttpStandaloneConfig, LedgerStandalone};
 use serde::{Deserialize, Serialize};
 use solvency::*;
 use std::fs;
@@ -298,6 +298,7 @@ fn main() -> Result<(), PlatformError> {
 mod tests {
   use super::*;
   use ledger::data_model::AssetRules;
+  use network::MockLedgerStandalone;
   use rand_chacha::ChaChaRng;
   use rand_core::{CryptoRng, RngCore, SeedableRng};
   use std::io::{self, Write};
