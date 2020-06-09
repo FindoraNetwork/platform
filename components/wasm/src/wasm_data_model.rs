@@ -375,6 +375,7 @@ pub struct Key(Digest);
 #[wasm_bindgen]
 impl Key {
   /// Generate a random key.
+  /// Figure out how to store prng ref in browser: https://bugtracker.findora.org/issues/63
   pub fn gen_random() -> Self {
     let mut small_rng = ChaChaRng::from_entropy();
     let mut buf: [u8; DIGESTBYTES] = [0u8; DIGESTBYTES];
