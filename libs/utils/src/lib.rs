@@ -49,7 +49,7 @@ pub fn protocol_host() -> (&'static str, &'static str) {
   (std::option_env!("PROTOCOL").unwrap_or(PROTOCOL),
    std::option_env!("SERVER_HOST").unwrap_or(SERVER_HOST))
 }
-
+#[cfg(not(target_arch = "wasm32"))]
 pub fn actix_post_request<T: Serialize>(client: &reqwest::Client,
                                         query: &str,
                                         body: Option<T>)
@@ -63,6 +63,7 @@ pub fn actix_post_request<T: Serialize>(client: &reqwest::Client,
   Ok(req.send()?.error_for_status()?.text()?)
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 pub fn actix_get_request(client: &reqwest::Client, query: &str) -> Result<String, reqwest::Error> {
   Ok(client.get(query).send()?.error_for_status()?.text()?)
 }
