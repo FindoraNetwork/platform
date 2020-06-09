@@ -226,11 +226,8 @@ pub struct LedgerStatus {
   // prevent replays, but (as far as I know -joe) need not be strictly
   // sequential.
   asset_types: HashMap<AssetTypeCode, AssetType>,
-  // We store two tracing policies for each asset type
-  // * The first policy contains the encryption keys, asset tracing flag, and identity tracing poicy
-  // * The second policy doesn't inclue an identity tracing policy
-  // This allows us to transfer an asset when there's no identity requirement
-  tracing_policies: HashMap<AssetTypeCode, Option<(AssetTracingPolicy, AssetTracingPolicy)>>,
+  // Tracing policy for each asset type
+  tracing_policies: HashMap<AssetTypeCode, Option<AssetTracingPolicy>>,
   issuance_num: HashMap<AssetTypeCode, u64>,
   // Issuance amounts for assets with limits
   issuance_amounts: HashMap<AssetTypeCode, u64>,
@@ -634,7 +631,7 @@ impl LedgerStatus {
                              .properties
                              .asset_rules
                              .traceable;
-      if let Some((policy, _)) = tracing_policies {
+      if let Some(policy) = tracing_policies {
         if traceability != policy.asset_tracking {
           return Err(PlatformError::InputsError(error_location!()));
         }
@@ -681,30 +678,32 @@ impl LedgerStatus {
           // If the asset is nonconfidential, get its tracing policy
           XfrAssetType::NonConfidential(asset_type) => {
             let code = AssetTypeCode { val: asset_type };
-            let tracing_policies =
+            let tracing_policy =
               &self.tracing_policies
                    .get(&code)
                    .or_else(|| txn.issuance_tracing_policies.get(&code))
                    .ok_or_else(|| PlatformError::InputsError(error_location!()))?;
-            match tracing_policies {
-              Some((policy, _)) => {
+            dbg!(&tracing_policy);
+            match tracing_policy {
+              Some(policy) => {
                 match policy.identity_tracking {
                   Some(_) => match input_commitment {
                     Some(_) => {
-                      transfer_input_policies.push(Some(&tracing_policies.clone()
-                                                                         .as_ref()
-                                                                         .unwrap()
-                                                                         .0));
+                      transfer_input_policies.push(Some(tracing_policy.clone().as_ref().unwrap()));
                       transfer_input_commitments.push(Some(input_commitment.as_ref()
                                                                            .clone()
                                                                            .unwrap()));
                     }
                     None => {
-                      transfer_input_policies.push(Some(&tracing_policies.clone()
-                                                                         .as_ref()
-                                                                         .unwrap()
-                                                                         .1));
-                      transfer_input_commitments.push(None);
+                      let issuer_key = txn.issuance_keys.get(&code).unwrap().key;
+                      // If the sender is an issuer, exclude the identity tracing.
+                      // Otherwise, an identity commitment is required.
+                      if input_blind_asset_record.public_key == issuer_key {
+                        transfer_input_policies.push(None);
+                        transfer_input_commitments.push(None);
+                      } else {
+                        return Err(PlatformError::InputsError(error_location!()));
+                      }
                     }
                   },
                   None => {
@@ -757,30 +756,33 @@ impl LedgerStatus {
             // If the asset is nonconfidential, get its tracing policy
             XfrAssetType::NonConfidential(asset_type) => {
               let code = AssetTypeCode { val: asset_type };
-              let tracing_policies =
+              let tracing_policy =
                 &self.tracing_policies
                      .get(&code)
                      .or_else(|| txn.issuance_tracing_policies.get(&code))
                      .ok_or_else(|| PlatformError::InputsError(error_location!()))?;
-              match tracing_policies {
-                Some((policy, _)) => {
+              match tracing_policy {
+                Some(policy) => {
                   match policy.identity_tracking {
                     Some(_) => match output_commitment {
                       Some(_) => {
-                        transfer_output_policies.push(Some(&tracing_policies.clone()
-                                                                            .as_ref()
-                                                                            .unwrap()
-                                                                            .0));
+                        transfer_output_policies.push(Some(tracing_policy.clone()
+                                                                         .as_ref()
+                                                                         .unwrap()));
                         transfer_output_commitments.push(Some(output_commitment.as_ref()
                                                                                .clone()
                                                                                .unwrap()));
                       }
                       None => {
-                        transfer_output_policies.push(Some(&tracing_policies.clone()
-                                                                            .as_ref()
-                                                                            .unwrap()
-                                                                            .1));
-                        transfer_output_commitments.push(None);
+                        let issuer_key = txn.issuance_keys.get(&code).unwrap().key;
+                        // If the sender is an issuer, exclude the identity tracing.
+                        // Otherwise, an identity commitment is required.
+                        if output_blind_asset_record.public_key == issuer_key {
+                          transfer_output_policies.push(None);
+                          transfer_output_commitments.push(None);
+                        } else {
+                          return Err(PlatformError::InputsError(error_location!()));
+                        }
                       }
                     },
                     None => {

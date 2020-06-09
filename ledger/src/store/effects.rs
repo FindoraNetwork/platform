@@ -38,12 +38,7 @@ pub struct TxnEffect {
   // if there is an issuance cap
   pub confidential_issuance_types: HashSet<AssetTypeCode>,
   // Which asset tracing policy is being used to issue each asset type
-  // We store two tracing policies for each asset type
-  // * The first policy contains the encryption keys, asset tracing flag, and identity tracing poicy
-  // * The second policy doesn't inclue an identity tracing policy
-  // This allows us to transfer an asset when there's no identity requirement
-  pub issuance_tracing_policies:
-    HashMap<AssetTypeCode, Option<(AssetTracingPolicy, AssetTracingPolicy)>>,
+  pub issuance_tracing_policies: HashMap<AssetTypeCode, Option<AssetTracingPolicy>>,
   // Mapping of (op index, xfr input idx) tuples to set of valid signature keys
   // i.e. (2, 1) -> { AlicePk, BobPk } means that Alice and Bob both have valid signatures on the 2nd input of the 1st
   // operation
@@ -86,8 +81,7 @@ impl TxnEffect {
     let mut new_issuance_nums: HashMap<AssetTypeCode, Vec<u64>> = HashMap::new();
     let mut issuance_keys: HashMap<AssetTypeCode, IssuerPublicKey> = HashMap::new();
     let mut issuance_amounts = HashMap::new();
-    let mut issuance_tracing_policies: HashMap<AssetTypeCode,
-                                               Option<(AssetTracingPolicy, AssetTracingPolicy)>> =
+    let mut issuance_tracing_policies: HashMap<AssetTypeCode, Option<AssetTracingPolicy>> =
       HashMap::new();
     let mut transfer_input_commitments = Vec::new();
     let mut transfer_output_commitments = Vec::new();
@@ -267,14 +261,11 @@ impl TxnEffect {
           }
 
           // (6)
-          let policies = match &iss.body.tracing_policy {
-            Some(policy) => Some((policy.clone(),
-                                  AssetTracingPolicy { enc_keys: policy.enc_keys.clone(),
-                                                       asset_tracking: policy.asset_tracking,
-                                                       identity_tracking: None })),
+          let policy = match &iss.body.tracing_policy {
+            Some(p) => Some(p.clone()),
             None => None,
           };
-          issuance_tracing_policies.insert(code, policies);
+          issuance_tracing_policies.insert(code, policy);
         }
 
         // An asset transfer is valid iff:
@@ -546,8 +537,7 @@ pub struct BlockEffect {
   // Which public key is being used to issue each asset type
   pub issuance_keys: HashMap<AssetTypeCode, IssuerPublicKey>,
   // Which new tracing policies are being added
-  pub new_tracing_policies:
-    HashMap<AssetTypeCode, Option<(AssetTracingPolicy, AssetTracingPolicy)>>,
+  pub new_tracing_policies: HashMap<AssetTypeCode, Option<AssetTracingPolicy>>,
   // Updates to the AIR
   pub air_updates: HashMap<String, String>,
   // User-provided Key-Value store updates
