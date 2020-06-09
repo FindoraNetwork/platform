@@ -172,6 +172,13 @@ pub struct IssuerPublicKey {
   // eg. encryption key
 }
 
+#[allow(clippy::derive_hash_xor_eq)]
+impl Hash for IssuerPublicKey {
+  fn hash<H: Hasher>(&self, state: &mut H) {
+    self.key.as_bytes().hash(state);
+  }
+}
+
 #[derive(Debug)]
 pub struct IssuerKeyPair<'a> {
   pub keypair: &'a XfrKeyPair,
