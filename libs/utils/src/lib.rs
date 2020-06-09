@@ -34,11 +34,11 @@ const PROTOCOL: &str = "http";
 const SERVER_HOST: &str = "localhost";
 
 /// Query server port
-pub const QUERY_PORT: &str = "8667";
+pub const QUERY_PORT: usize = 8667;
 /// Port for submitting transactions.
-pub const SUBMIT_PORT: &str = "8669";
+pub const SUBMIT_PORT: usize = 8669;
 /// Ledger port
-pub const LEDGER_PORT: &str = "8668";
+pub const LEDGER_PORT: usize = 8668;
 
 /// Sets the protocol and host.
 ///
@@ -48,6 +48,24 @@ pub const LEDGER_PORT: &str = "8668";
 pub fn protocol_host() -> (&'static str, &'static str) {
   (std::option_env!("PROTOCOL").unwrap_or(PROTOCOL),
    std::option_env!("SERVER_HOST").unwrap_or(SERVER_HOST))
+}
+#[cfg(not(target_arch = "wasm32"))]
+pub fn actix_post_request<T: Serialize>(client: &reqwest::Client,
+                                        query: &str,
+                                        body: Option<T>)
+                                        -> Result<String, reqwest::Error> {
+  let mut req = client.post(query);
+
+  if let Some(body) = body {
+    req = req.json(&body);
+  }
+
+  Ok(req.send()?.error_for_status()?.text()?)
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+pub fn actix_get_request(client: &reqwest::Client, query: &str) -> Result<String, reqwest::Error> {
+  Ok(client.get(query).send()?.error_for_status()?.text()?)
 }
 
 pub fn fresh_tmp_dir() -> PathBuf {

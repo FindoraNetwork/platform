@@ -7,16 +7,19 @@ use ledger::data_model::{
   TxoRef, TxoSID,
 };
 use ledger::{error_location, ser_fail};
+use ledger_api_service::RestfulLedgerAccess;
+use network::{HttpStandaloneConfig, LedgerStandalone};
+use query_api::RestfulQueryServerAccess;
 use sparse_merkle_tree::{digest, Key};
 use std::env;
+use submission_api::RestfulLedgerUpdate;
 use txn_builder::{BuildsTransactions, TransactionBuilder};
 use txn_cli::data_lib::*;
 use txn_cli::lending_lib::{fulfill_loan, load_funds, pay_loan};
 use txn_cli::txn_lib::{
-  air_assign, define_asset, init_logging, issue_and_transfer_asset, match_error_and_exit, query,
-  query_open_asset_record, submit, submit_and_get_sids, ProtocolHost,
+  air_assign, define_asset, init_logging, issue_and_transfer_asset, match_error_and_exit,
+  query_open_asset_record, submit_and_get_sids,
 };
-use utils::QUERY_PORT;
 use zei::xfr::asset_record::AssetRecordType;
 use zei::xfr::structs::AssetTracingPolicy;
 
@@ -584,28 +587,6 @@ pub(crate) fn process_asset_issuer_cmd(asset_issuer_matches: &clap::ArgMatches,
   }
 }
 
-/// Sets the protocol and host.
-///
-/// Environment variables `PROTOCOL` and `SERVER_HOST` set the protocol and host,
-/// which can be overwritten by CLI subcommands.
-///
-/// By default, the protocol is `https` and the host is `testnet.findora.org`.
-pub(crate) fn protocol_host(matches: &clap::ArgMatches) -> (&'static str, &'static str) {
-  let protocol = if matches.is_present("http") {
-    "http"
-  } else {
-    std::option_env!("PROTOCOL").unwrap_or("https")
-  };
-  let host = if matches.is_present("localhost") {
-    // Use localhost
-    "localhost"
-  } else {
-    // Default to testnet.findora.org
-    std::option_env!("SERVER_HOST").unwrap_or("testnet.findora.org")
-  };
-  (protocol, host)
-}
-
 /// Processes the `credential_issuer` subcommand.
 ///
 /// Subcommands under `credential_issuer`
@@ -643,9 +624,11 @@ pub(crate) fn process_credential_issuer_cmd(credential_issuer_matches: &clap::Ar
 ///
 /// # Arguments
 /// * `lender_matches`: subcommands and arguments under the `lender` subcommand.
-pub(crate) fn process_lender_cmd(lender_matches: &clap::ArgMatches,
-                                 data_dir: &str)
-                                 -> Result<(), PlatformError> {
+pub(crate) fn process_lender_cmd<T: RestfulLedgerAccess + RestfulLedgerUpdate>(
+  lender_matches: &clap::ArgMatches,
+  data_dir: &str,
+  rest_client: &mut T)
+  -> Result<(), PlatformError> {
   let mut data = load_data(data_dir)?;
   match lender_matches.subcommand() {
     ("sign_up", Some(sign_up_matches)) => {
@@ -744,12 +727,7 @@ pub(crate) fn process_lender_cmd(lender_matches: &clap::ArgMatches,
         return Err(PlatformError::InputsError(error_location!()));
       };
       let memo_file = fulfill_loan_matches.value_of("memo_file");
-      let (protocol, host) = protocol_host(fulfill_loan_matches);
-      fulfill_loan(data_dir,
-                   loan_id,
-                   issuer_id,
-                   memo_file,
-                   &ProtocolHost(protocol.to_owned(), host.to_owned()))
+      fulfill_loan(data_dir, loan_id, issuer_id, memo_file, rest_client)
     }
     ("create_or_overwrite_requirement", Some(create_or_overwrite_requirement_matches)) => {
       let lender_id = if let Some(id_arg) = lender_matches.value_of("id") {
@@ -802,9 +780,11 @@ pub(crate) fn process_lender_cmd(lender_matches: &clap::ArgMatches,
 ///
 /// # Arguments
 /// * `borrower_matches`: subcommands and arguments under the `borrower` subcommand.
-pub(crate) fn process_borrower_cmd(borrower_matches: &clap::ArgMatches,
-                                   data_dir: &str)
-                                   -> Result<(), PlatformError> {
+pub(crate) fn process_borrower_cmd<T: RestfulLedgerAccess + RestfulLedgerUpdate>(
+  borrower_matches: &clap::ArgMatches,
+  data_dir: &str,
+  rest_client: &mut T)
+  -> Result<(), PlatformError> {
   let mut data = load_data(data_dir)?;
   match borrower_matches.subcommand() {
     ("sign_up", Some(sign_up_matches)) => {
@@ -823,7 +803,7 @@ pub(crate) fn process_borrower_cmd(borrower_matches: &clap::ArgMatches,
         println!("Borrower id is required to load funds. Use borrower --id.");
         return Err(PlatformError::InputsError(error_location!()));
       };
-      process_load_funds_cmd(load_funds_matches, data_dir, borrower_id)
+      process_load_funds_cmd(load_funds_matches, data_dir, borrower_id, rest_client)
     }
     ("view_loan", Some(view_loan_matches)) => {
       let borrower_id = if let Some(id_arg) = borrower_matches.value_of("id") {
@@ -945,7 +925,7 @@ pub(crate) fn process_borrower_cmd(borrower_matches: &clap::ArgMatches,
         println!("Loan id is required to pay the loan.");
         return Err(PlatformError::InputsError(error_location!()));
       }
-      process_pay_loan_cmd(pay_loan_matches, data_dir)
+      process_pay_loan_cmd(pay_loan_matches, data_dir, rest_client)
     }
     ("view_credential", Some(view_credential_matches)) => {
       let borrower_id = if let Some(id_arg) = borrower_matches.value_of("id") {
@@ -1047,12 +1027,8 @@ pub(crate) fn process_borrower_cmd(borrower_matches: &clap::ArgMatches,
           return Err(PlatformError::InputsError(error_location!()));
         };
       // Get protocol and host.
-      let (protocol, host) = protocol_host(get_asset_record_matches);
-      let asset_record = query_open_asset_record(&ProtocolHost(protocol.to_owned(),
-                                                               host.to_owned()),
-                                                 sid,
-                                                 &key_pair,
-                                                 &tracer_and_owner_memos[0].1)?;
+      let asset_record =
+        query_open_asset_record(rest_client, sid, &key_pair, &tracer_and_owner_memos[0].1)?;
       println!("{} owns {} of asset {:?}.",
                borrower_name,
                asset_record.get_amount(),
@@ -1090,14 +1066,13 @@ pub(crate) fn process_create_txn_builder_cmd(create_matches: &clap::ArgMatches,
 /// # Arguments
 /// * `submit_matches`: subcommands and arguments under the `submit` subcommand.
 /// * `txn_file`: path to store the transaction file.
-pub(crate) fn process_submit_cmd(submit_matches: &clap::ArgMatches,
-                                 txn_file: &str)
-                                 -> Result<(), PlatformError> {
-  let (protocol, host) = protocol_host(submit_matches);
+pub(crate) fn process_submit_cmd<T: RestfulLedgerUpdate>(submit_matches: &clap::ArgMatches,
+                                                         txn_file: &str,
+                                                         rest_client: &mut T)
+                                                         -> Result<(), PlatformError> {
   let txn_builder = load_txn_from_file(txn_file)?;
   if submit_matches.is_present("get_sids") || submit_matches.is_present("sids_file") {
-    let sids = submit_and_get_sids(&ProtocolHost(protocol.to_owned(), host.to_owned()),
-                                   txn_builder)?;
+    let sids = submit_and_get_sids(rest_client, txn_builder)?;
     println!("Utxo: {:?}", sids);
     if let Some(path) = submit_matches.value_of("sids_file") {
       let mut sids_str = "".to_owned();
@@ -1108,8 +1083,8 @@ pub(crate) fn process_submit_cmd(submit_matches: &clap::ArgMatches,
     }
     Ok(())
   } else {
-    submit(&ProtocolHost(protocol.to_owned(), host.to_owned()),
-           txn_builder)
+    rest_client.submit_transaction(&txn_builder.transaction())?;
+    Ok(())
   }
 }
 
@@ -1117,10 +1092,12 @@ pub(crate) fn process_submit_cmd(submit_matches: &clap::ArgMatches,
 /// # Arguments
 /// * `borrower_id`: borrower ID.
 /// * `load_funds_matches`: subcommands and arguments under the `load_funds` subcommand.
-pub(crate) fn process_load_funds_cmd(load_funds_matches: &clap::ArgMatches,
-                                     data_dir: &str,
-                                     borrower_id: u64)
-                                     -> Result<(), PlatformError> {
+pub(crate) fn process_load_funds_cmd<T: RestfulLedgerAccess + RestfulLedgerUpdate>(
+  load_funds_matches: &clap::ArgMatches,
+  data_dir: &str,
+  borrower_id: u64,
+  rest_client: &mut T)
+  -> Result<(), PlatformError> {
   let issuer_id = if let Some(issuer_arg) = load_funds_matches.value_of("issuer") {
     if let Ok(id) = issuer_arg.parse::<u64>() {
       id
@@ -1138,20 +1115,17 @@ pub(crate) fn process_load_funds_cmd(load_funds_matches: &clap::ArgMatches,
     println!("Amount is required to load funds. Use --amount.");
     return Err(PlatformError::InputsError(error_location!()));
   };
-  let (protocol, host) = protocol_host(load_funds_matches);
-  load_funds(data_dir,
-             issuer_id,
-             borrower_id,
-             amount,
-             &ProtocolHost(protocol.to_owned(), host.to_owned()))
+  load_funds(data_dir, issuer_id, borrower_id, amount, rest_client)
 }
 
 /// Processes the `borrower pay_loan` subcommand.
 /// # Arguments
 /// * `pay_loan_matches`: subcommands and arguments under the `pay_loan` subcommand.
-pub(crate) fn process_pay_loan_cmd(pay_loan_matches: &clap::ArgMatches,
-                                   data_dir: &str)
-                                   -> Result<(), PlatformError> {
+pub(crate) fn process_pay_loan_cmd<T: RestfulLedgerAccess + RestfulLedgerUpdate>(
+  pay_loan_matches: &clap::ArgMatches,
+  data_dir: &str,
+  rest_client: &mut T)
+  -> Result<(), PlatformError> {
   let loan_id = if let Some(loan_arg) = pay_loan_matches.value_of("loan") {
     parse_to_u64(loan_arg)?
   } else {
@@ -1164,18 +1138,17 @@ pub(crate) fn process_pay_loan_cmd(pay_loan_matches: &clap::ArgMatches,
     println!("Amount is required to pay the loan. Use --amount.");
     return Err(PlatformError::InputsError(error_location!()));
   };
-  let (protocol, host) = protocol_host(pay_loan_matches);
 
-  pay_loan(data_dir,
-           loan_id,
-           amount,
-           &ProtocolHost(protocol.to_owned(), host.to_owned()))
+  pay_loan(data_dir, loan_id, amount, rest_client)
 }
 
 /// Processes input commands and arguments.
 /// # Arguments
 /// * `inputs`: input subcommands and arguments.
-pub fn process_inputs(inputs: clap::ArgMatches) -> Result<(), PlatformError> {
+pub fn process_inputs<T: RestfulQueryServerAccess + RestfulLedgerAccess + RestfulLedgerUpdate>(
+  inputs: clap::ArgMatches,
+  rest_client: &mut T)
+  -> Result<(), PlatformError> {
   let _config_file_path: String;
   let txn_file: String;
   let dir = if let Some(dir) = inputs.value_of("dir") {
@@ -1215,8 +1188,8 @@ pub fn process_inputs(inputs: clap::ArgMatches) -> Result<(), PlatformError> {
     ("credential_issuer", Some(credential_issuer_matches)) => {
       process_credential_issuer_cmd(credential_issuer_matches, &dir)
     }
-    ("lender", Some(issuer_matches)) => process_lender_cmd(issuer_matches, &dir),
-    ("borrower", Some(issuer_matches)) => process_borrower_cmd(issuer_matches, &dir),
+    ("lender", Some(issuer_matches)) => process_lender_cmd(issuer_matches, &dir, rest_client),
+    ("borrower", Some(issuer_matches)) => process_borrower_cmd(issuer_matches, &dir, rest_client),
     ("create_txn_builder", Some(create_txn_builder_matches)) => {
       process_create_txn_builder_cmd(create_txn_builder_matches, &txn_file)
     }
@@ -1243,8 +1216,10 @@ pub fn process_inputs(inputs: clap::ArgMatches) -> Result<(), PlatformError> {
       }
       Err(e) => Err(PlatformError::IoError(format!("Error deleting file: {:?} ", e))),
     },
-    ("submit", Some(submit_matches)) => process_submit_cmd(submit_matches, &txn_file),
-    ("custom_data", Some(custom_data_matches)) => process_custom_data_cmds(custom_data_matches),
+    ("submit", Some(submit_matches)) => process_submit_cmd(submit_matches, &txn_file, rest_client),
+    ("custom_data", Some(custom_data_matches)) => {
+      process_custom_data_cmds(custom_data_matches, rest_client)
+    }
     _ => {
       println!("Subcommand missing or not recognized. Try --help");
       Err(PlatformError::InputsError(error_location!()))
@@ -1252,18 +1227,18 @@ pub fn process_inputs(inputs: clap::ArgMatches) -> Result<(), PlatformError> {
   }
 }
 
-pub(crate) fn process_custom_data_cmds(custom_data_matches: &clap::ArgMatches)
-                                       -> Result<(), PlatformError> {
+pub(crate) fn process_custom_data_cmds<T: RestfulQueryServerAccess>(
+  custom_data_matches: &clap::ArgMatches,
+  rest_client: &mut T)
+  -> Result<(), PlatformError> {
   match custom_data_matches.subcommand() {
     ("fetch", Some(fetch_matches)) => {
-      let key = fetch_matches.value_of("key")
-                             .ok_or_else(|| PlatformError::InputsError(error_location!()))?;
-      let (protocol, host) = protocol_host(fetch_matches);
-      let res = query(&ProtocolHost(protocol.to_owned(), host.to_owned()),
-                      QUERY_PORT,
-                      "get_custom_data",
-                      key)?;
-      println!("Data is: {}", res);
+      let key = Key::from_slice(&b64dec(fetch_matches.value_of("key")
+          .ok_or_else(|| PlatformError::InputsError(error_location!()))?)
+          .map_err(|e| PlatformError::InputsError(format!("{}:{}",e,error_location!())))?)
+          .ok_or_else(|| PlatformError::InputsError(error_location!()))?;
+      let res = rest_client.fetch_custom_data(&key)?;
+      println!("Data is: {:?}", &res);
     }
     ("store", Some(store_matches)) => {
       let key = Key::from_slice(&b64dec(store_matches.value_of("key")
@@ -1271,24 +1246,8 @@ pub(crate) fn process_custom_data_cmds(custom_data_matches: &clap::ArgMatches)
           .map_err(|e| PlatformError::InputsError(format!("{}:{}",e,error_location!())))?)
           .ok_or_else(|| PlatformError::InputsError(error_location!()))?;
       let data = store_matches.value_of("data").unwrap();
-      let (protocol, host) = protocol_host(store_matches);
-      let client = reqwest::Client::new();
       let blind: Option<KVBlind> = None;
-      let res = client.post(&format!("{}://{}:{}/{}",
-                                     protocol, host, QUERY_PORT, "store_custom_data"))
-                      .json(&(key, data.as_bytes().to_vec(), blind))
-                      .send()
-                      .or_else(|_| {
-                        Err(PlatformError::QueryServerError(format!("[{}] {}",
-                                                                    &error_location!(),
-                                                                    &"Failed to submit.")))
-                      })?;
-      // Log body
-      if res.status() == reqwest::StatusCode::OK {
-        println!("Data stored successfuly!");
-      } else {
-        println!("Unable to store data. Please ensure query server is running and data matches the commitment stored in the ledger");
-      }
+      rest_client.store_custom_data(&data, &key, blind)?;
     }
     _ => {
       println!("Subcommand missing or not recognized. Try --help");
@@ -1299,10 +1258,8 @@ pub(crate) fn process_custom_data_cmds(custom_data_matches: &clap::ArgMatches)
   Ok(())
 }
 
-/// If `process_inputs` returns an error, calls `match_error_and_exit` and exits with appropriate code.
-fn main() {
-  init_logging();
-  let inputs = App::new("Transaction Builder")
+fn get_txn_cli_app<'a, 'b>() -> App<'a, 'b> {
+  App::new("Transaction Builder")
     .version("0.0.1")
     .about("Copyright 2019 © Findora. All rights reserved.")
     .arg(Arg::with_name("config")
@@ -1311,6 +1268,9 @@ fn main() {
       .value_name("PATH/TO/FILE")
       .help("Specify a custom config file (default: \"$FINDORA_DIR/config.toml\")")
       .takes_value(true))
+    .arg(Arg::with_name("local")
+      .long("local")
+      .help("If local flag is specified, transactions will be submitted to a local ledger"))
     .arg(Arg::with_name("dir")
       .short("d")
       .long("dir")
@@ -1879,8 +1839,24 @@ fn main() {
               .long("localhost")
               .takes_value(false)
               .help("Specify that localhost, not testnet.findora.org should be used."))))
-    .get_matches();
-  if let Err(error) = process_inputs(inputs) {
+}
+
+/// If `process_inputs` returns an error, calls `match_error_and_exit` and exits with appropriate code.
+fn main() {
+  init_logging();
+  let app = get_txn_cli_app();
+  let inputs = app.get_matches();
+  let local = inputs.value_of("local").is_some();
+  let config = {
+    if local {
+      HttpStandaloneConfig::local()
+    } else {
+      HttpStandaloneConfig::testnet()
+    }
+  };
+
+  let mut rest_client = LedgerStandalone::new_http(&config);
+  if let Err(error) = process_inputs(inputs, &mut rest_client) {
     match_error_and_exit(error);
   }
 }

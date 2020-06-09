@@ -10,9 +10,8 @@ use ledger::data_model::errors::PlatformError;
 use ledger::data_model::*;
 use ledger::error_location;
 use ledger::store::*;
-#[cfg(test)]
-use network::MockRestClient;
-use network::{RestfulLedgerAccess, RestfulLedgerUpdate};
+use ledger_api_service::RestfulLedgerAccess;
+use network::LedgerStandalone;
 use rand_chacha::ChaChaRng;
 use rand_core::{RngCore, SeedableRng};
 use serde::{Deserialize, Serialize};
@@ -24,6 +23,7 @@ use std::path::PathBuf;
 use std::thread;
 use std::time;
 use structopt::StructOpt;
+use submission_api::RestfulLedgerUpdate;
 use submission_server::{TxnHandle, TxnStatus};
 use subprocess::Popen;
 #[cfg(test)]
@@ -1707,7 +1707,7 @@ mod test {
     let mut active_ledger = if !with_standalone {
       None
     } else {
-      Some(Box::new(LedgerStandaloneAccounts { client: MockRestClient::new(1),
+      Some(Box::new(LedgerStandaloneAccounts { client: LedgerStandalone::new_mock(1),
                                                prng: rand_chacha::ChaChaRng::from_entropy(),
                                                accounts: HashMap::new(),
                                                utxos: HashMap::new(),
