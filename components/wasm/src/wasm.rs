@@ -11,7 +11,7 @@ use credentials::{
 };
 use cryptohash::sha256;
 use js_sys::Promise;
-use ledger::data_model::{b64dec, b64enc, AssetTypeCode, AuthenticatedTransaction, Operation};
+use ledger::data_model::{b64enc, AssetTypeCode, AuthenticatedTransaction, Operation};
 use ledger::policies::{DebtMemo, Fraction};
 use rand_chacha::ChaChaRng;
 use rand_core::SeedableRng;
@@ -321,14 +321,11 @@ impl TransactionBuilder {
   /// Adds an add kv update operation to a WasmTransactionBuilder instance without kv hash.
   pub fn add_operation_kv_update_no_hash(mut self,
                                          auth_key_pair: &XfrKeyPair,
-                                         index: &str,
+                                         key: &Key,
                                          seq_num: u64)
                                          -> Result<TransactionBuilder, JsValue> {
     self.get_builder_mut()
-        .add_operation_kv_update(auth_key_pair,
-                                 &sha256::Digest::from_slice(&b64dec(index).unwrap()).unwrap(),
-                                 seq_num,
-                                 None)
+        .add_operation_kv_update(auth_key_pair, key.get_ref(), seq_num, None)
         .map_err(error_to_jsvalue)?;
     Ok(self)
   }
@@ -336,13 +333,13 @@ impl TransactionBuilder {
   /// Adds an add kv update operation to a WasmTransactionBuilder instance with kv hash.
   pub fn add_operation_kv_update_with_hash(mut self,
                                            auth_key_pair: &XfrKeyPair,
-                                           index: &str,
+                                           key: &Key,
                                            seq_num: u64,
                                            kv_hash: KVHash)
                                            -> Result<TransactionBuilder, JsValue> {
     self.get_builder_mut()
         .add_operation_kv_update(auth_key_pair,
-                                 &sha256::Digest::from_slice(&b64dec(index).unwrap()).unwrap(),
+                                 key.get_ref(),
                                  seq_num,
                                  Some(&kv_hash.get_hash()))
         .map_err(error_to_jsvalue)?;
