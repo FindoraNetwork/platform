@@ -1,15 +1,22 @@
 #![deny(warnings)]
 use actix_cors::Cors;
-use actix_web::{error, middleware, web, App, HttpServer};
+use actix_service::Service;
+use actix_web::test::TestRequest;
+use actix_web::{error, middleware, test, web, App, HttpServer};
+use ledger::data_model::errors::PlatformError;
 use ledger::data_model::Transaction;
-use ledger::store::LedgerUpdate;
+use ledger::{error_location, inp_fail, ser_fail};
+
+use ledger::store::{LedgerState, LedgerUpdate};
 use log::{error, info};
+use rand_chacha::ChaChaRng;
+use rand_core::SeedableRng;
 use rand_core::{CryptoRng, RngCore};
 use std::io;
 use std::marker::{Send, Sync};
 use std::sync::{Arc, RwLock};
-use submission_server::{SubmissionServer, TxnForward, TxnHandle};
-use utils::NetworkRoute;
+use submission_server::{NoTF, SubmissionServer, TxnForward, TxnHandle, TxnStatus};
+use utils::{actix_get_request, actix_post_request, NetworkRoute};
 
 // Ping route to check for liveness of API
 fn ping() -> actix_web::Result<String> {
@@ -135,6 +142,119 @@ impl SubmissionApi {
   }
 }
 
+// Trait for rest clients that can submit transactions
+pub trait RestfulLedgerUpdate {
+  // Forward transaction to a transaction submission server, returning a handle to the transaction
+  fn submit_transaction(&mut self, txn: &Transaction) -> Result<TxnHandle, PlatformError>;
+  // Forces the the validator to end the block. Useful for testing when it is desirable to commit
+  // txns to the ledger as soon as possible
+  fn force_end_block(&mut self) -> Result<(), PlatformError>;
+  // Get txn status from a handle
+  fn txn_status(&self, handle: &TxnHandle) -> Result<TxnStatus, PlatformError>;
+}
+
+pub struct MockLUClient {
+  mock_submission_server: Arc<RwLock<SubmissionServer<ChaChaRng, LedgerState, NoTF>>>,
+}
+
+impl MockLUClient {
+  pub fn new(state: &Arc<RwLock<LedgerState>>, block_capacity: usize) -> Self {
+    let prng = ChaChaRng::from_entropy();
+    let state_lock = Arc::clone(state);
+    let mock_submission_server =
+      Arc::new(RwLock::new(SubmissionServer::new(prng, state_lock, block_capacity).unwrap()));
+    MockLUClient { mock_submission_server }
+  }
+}
+
+impl RestfulLedgerUpdate for MockLUClient {
+  fn submit_transaction(&mut self, txn: &Transaction) -> Result<TxnHandle, PlatformError> {
+    let route = SubmissionRoutes::SubmitTransaction.route();
+    let mut app =
+      test::init_service(App::new().data(Arc::clone(&self.mock_submission_server))
+                                   .route(&route,
+                                          web::post().to(submit_transaction::<rand_chacha::ChaChaRng,
+                                                                            LedgerState, NoTF>)));
+    let req = TestRequest::post().uri(&route).set_json(&txn).to_request();
+    let handle: TxnHandle = test::read_response_json(&mut app, req);
+    Ok(handle)
+  }
+
+  fn force_end_block(&mut self) -> Result<(), PlatformError> {
+    let route = SubmissionRoutes::ForceEndBlock.route();
+    let mut app =
+      test::init_service(App::new().data(Arc::clone(&self.mock_submission_server))
+                                   .route(&route,
+                                          web::post().to(force_end_block::<rand_chacha::ChaChaRng,
+                                                                            LedgerState, NoTF>)));
+    let req = TestRequest::post().uri(&route).to_request();
+    test::block_on(app.call(req)).unwrap();
+    Ok(())
+  }
+
+  fn txn_status(&self, handle: &TxnHandle) -> Result<TxnStatus, PlatformError> {
+    let mut app =
+      test::init_service(App::new().data(Arc::clone(&self.mock_submission_server))
+                                   .route(&SubmissionRoutes::TxnStatus.with_arg_template("handle"),
+                                          web::get().to(txn_status::<rand_chacha::ChaChaRng,
+                                                                   LedgerState, NoTF>)));
+    let req = test::TestRequest::get().uri(&SubmissionRoutes::TxnStatus.with_arg(&handle.0))
+                                      .to_request();
+    Ok(test::read_response_json(&mut app, req))
+  }
+}
+
+pub struct ActixLUClient {
+  port: usize,
+  host: String,
+  protocol: String,
+  client: reqwest::Client,
+}
+
+impl ActixLUClient {
+  pub fn new(port: usize, host: &str, protocol: &str) -> Self {
+    ActixLUClient { port,
+                    host: String::from(host),
+                    protocol: String::from(protocol),
+                    client: reqwest::Client::new() }
+  }
+}
+
+impl RestfulLedgerUpdate for ActixLUClient {
+  fn submit_transaction(&mut self, txn: &Transaction) -> Result<TxnHandle, PlatformError> {
+    let query = format!("{}://{}:{}{}",
+                        self.protocol,
+                        self.host,
+                        self.port,
+                        SubmissionRoutes::SubmitTransaction.route());
+    let text = actix_post_request(&self.client, &query, Some(&txn)).map_err(|_| inp_fail!())?;
+    let handle = serde_json::from_str::<TxnHandle>(&text).map_err(|_| ser_fail!())?;
+    info!("Transaction submitted successfully");
+    Ok(handle)
+  }
+
+  fn force_end_block(&mut self) -> Result<(), PlatformError> {
+    let query = format!("{}://{}:{}{}",
+                        self.protocol,
+                        self.host,
+                        self.port,
+                        SubmissionRoutes::ForceEndBlock.route());
+    let opt: Option<u64> = None;
+    actix_post_request(&self.client, &query, opt).map_err(|_| inp_fail!())?;
+    Ok(())
+  }
+
+  fn txn_status(&self, handle: &TxnHandle) -> Result<TxnStatus, PlatformError> {
+    let query = format!("{}://{}:{}{}",
+                        self.protocol,
+                        self.host,
+                        self.port,
+                        SubmissionRoutes::TxnStatus.with_arg(&handle.0));
+    let text = actix_get_request(&self.client, &query).map_err(|_| inp_fail!())?;
+    Ok(serde_json::from_str::<TxnStatus>(&text).map_err(|_| ser_fail!())?)
+  }
+}
+
 #[cfg(test)]
 mod tests {
   use super::*;
@@ -150,12 +270,13 @@ mod tests {
   fn test_submit_transaction_standalone() {
     let mut prng = rand_chacha::ChaChaRng::from_entropy();
     let ledger_state = LedgerState::test_ledger();
+    let block_commit_count = ledger_state.get_block_commit_count();
     let submission_server =
       Arc::new(RwLock::new(SubmissionServer::<_, _, NoTF>::new(prng.clone(),
                                                  Arc::new(RwLock::new(ledger_state)),
                                                  8).unwrap()));
     let app_copy = Arc::clone(&submission_server);
-    let mut tx = Transaction::default();
+    let mut tx = Transaction::from_seq_id(block_commit_count);
 
     let token_code1 = AssetTypeCode { val: [1; 16] };
     let keypair = build_keys(&mut prng);

@@ -11,7 +11,7 @@ use credentials::{
 };
 use cryptohash::sha256;
 use js_sys::Promise;
-use ledger::data_model::{b64dec, b64enc, AssetTypeCode, AuthenticatedTransaction, Operation};
+use ledger::data_model::{b64enc, AssetTypeCode, AuthenticatedTransaction, Operation};
 use ledger::policies::{DebtMemo, Fraction};
 use rand_chacha::ChaChaRng;
 use rand_core::SeedableRng;
@@ -142,7 +142,6 @@ pub fn create_debt_memo(ir_numerator: u64,
 
 #[wasm_bindgen]
 /// Structure that allows users to construct arbitrary transactions.
-#[derive(Default)]
 pub struct TransactionBuilder {
   transaction_builder: PlatformTransactionBuilder,
 }
@@ -160,8 +159,8 @@ impl TransactionBuilder {
 #[wasm_bindgen]
 impl TransactionBuilder {
   /// Create a new transaction builder.
-  pub fn new() -> Self {
-    Self::default()
+  pub fn new(seq_id: u64) -> Self {
+    TransactionBuilder { transaction_builder: PlatformTransactionBuilder::from_seq_id(seq_id) }
   }
 
   /// Wraps around TransactionBuilder to add an asset definition operation to a transaction builder instance.
@@ -321,14 +320,11 @@ impl TransactionBuilder {
   /// Adds an add kv update operation to a WasmTransactionBuilder instance without kv hash.
   pub fn add_operation_kv_update_no_hash(mut self,
                                          auth_key_pair: &XfrKeyPair,
-                                         index: &str,
+                                         key: &Key,
                                          seq_num: u64)
                                          -> Result<TransactionBuilder, JsValue> {
     self.get_builder_mut()
-        .add_operation_kv_update(auth_key_pair,
-                                 &sha256::Digest::from_slice(&b64dec(index).unwrap()).unwrap(),
-                                 seq_num,
-                                 None)
+        .add_operation_kv_update(auth_key_pair, key.get_ref(), seq_num, None)
         .map_err(error_to_jsvalue)?;
     Ok(self)
   }
@@ -336,13 +332,13 @@ impl TransactionBuilder {
   /// Adds an add kv update operation to a WasmTransactionBuilder instance with kv hash.
   pub fn add_operation_kv_update_with_hash(mut self,
                                            auth_key_pair: &XfrKeyPair,
-                                           index: &str,
+                                           key: &Key,
                                            seq_num: u64,
                                            kv_hash: KVHash)
                                            -> Result<TransactionBuilder, JsValue> {
     self.get_builder_mut()
         .add_operation_kv_update(auth_key_pair,
-                                 &sha256::Digest::from_slice(&b64dec(index).unwrap()).unwrap(),
+                                 key.get_ref(),
                                  seq_num,
                                  Some(&kv_hash.get_hash()))
         .map_err(error_to_jsvalue)?;
@@ -885,7 +881,7 @@ fn create_query_promise(opts: &RequestInit,
 
 /// Generates a new credential issuer key.
 /// @param {JsValue} attributes - Array of attribute types of the form `[{name: "credit_score",
-/// size: 3}]'. The size refers to byte-size of the credential. In this case, the "credit_score"
+/// size: 3}]`. The size refers to byte-size of the credential. In this case, the "credit_score"
 /// attribute is represented as a 3 byte string "760". `attributes` is the list of attribute types
 /// that the issuer can sign off on.
 #[wasm_bindgen]
@@ -914,7 +910,7 @@ pub fn wasm_credential_user_key_gen(issuer_pub_key: &CredIssuerPublicKey) -> Cre
 /// @param {CredIssuerSecretKey} issuer_secret_key - Secret key of credential issuer.
 /// @param {CredUserPublicKey} user_public_key - Public key of credential user.
 /// @param {JsValue} attributes - Array of attribute assignments of the form `[{name: "credit_score",
-/// val: "760"}]'.
+/// val: "760"}]`.
 /// @throws Will throw an error if the signature cannot be generated.
 #[wasm_bindgen]
 pub fn wasm_credential_sign(issuer_secret_key: &CredIssuerSecretKey,
@@ -994,8 +990,7 @@ pub fn wasm_credential_reveal(user_sk: &CredUserSecretKey,
 /// Verifies revealed attributes from a commitment.
 /// @param {CredIssuerPublicKey} issuer_pub_key - Public key of credential issuer.
 /// @param {JsValue} attributes - Array of attribute assignments to check of the form `[{name: "credit_score",
-/// val: "760"}]'.
-/// `["credit_score"]`).
+/// val: "760"}]`.
 /// @param {CredentialRevealSig} reveal_sig - Credential reveal signature.
 #[wasm_bindgen]
 pub fn wasm_credential_verify(issuer_pub_key: &CredIssuerPublicKey,

@@ -4,12 +4,11 @@ use curve25519_dalek::scalar::Scalar;
 use ledger::data_model::errors::PlatformError;
 use ledger::data_model::AssetTypeCode;
 use ledger::{des_fail, error_location};
+use ledger_api_service::RestfulLedgerAccess;
+use network::{HttpStandaloneConfig, LedgerStandalone};
 use std::fs;
-use txn_cli::txn_lib::{query_utxo_and_get_type_commitment, ProtocolHost};
+use txn_cli::txn_lib::query_utxo_and_get_type_commitment;
 use whitelist::*;
-
-const PROTOCOL: &str = "http";
-const HOST: &str = "localhost";
 
 /// Path to the data file.
 const WHITELIST_FILE: &str = "whitelist.json";
@@ -54,7 +53,9 @@ fn parse_to_u64(val_str: &str) -> Result<u64, PlatformError> {
 }
 
 /// Processes input commands and arguments.
-fn process_inputs(inputs: clap::ArgMatches) -> Result<(), PlatformError> {
+fn process_inputs<T>(inputs: clap::ArgMatches, rest_client: &T) -> Result<(), PlatformError>
+  where T: RestfulLedgerAccess
+{
   let mut whitelist = load_whitelist()?;
   match inputs.subcommand() {
     ("add_member", Some(add_matches)) => {
@@ -86,9 +87,7 @@ fn process_inputs(inputs: clap::ArgMatches) -> Result<(), PlatformError> {
         println!("Missing serialized blinding factor for the asset type code commitment. Use --blind.");
         return Err(PlatformError::InputsError(error_location!()));
       };
-      let commitment = query_utxo_and_get_type_commitment(utxo,
-                                                          &ProtocolHost(PROTOCOL.to_owned(),
-                                                                        HOST.to_owned()))?;
+      let commitment = query_utxo_and_get_type_commitment(utxo, rest_client)?;
       let proof = whitelist.prove_membership(index, commitment, blind)?;
       whitelist.verify_membership(commitment, proof)
     }
@@ -100,7 +99,11 @@ fn process_inputs(inputs: clap::ArgMatches) -> Result<(), PlatformError> {
 }
 
 fn main() -> Result<(), PlatformError> {
+  // TODO this lets us compile for now, swich out with real one later
   let inputs = App::new("Solvency Proof").version("0.1.0").about("Copyright 2020 © Findora. All rights reserved.")
+    .arg(Arg::with_name("local")
+      .long("local")
+      .help("If local flag is specified, data will be queried from a local ledger."))
     .subcommand(SubCommand::with_name("add_member")
       .arg(Arg::with_name("code")
         .short("c")
@@ -129,7 +132,18 @@ fn main() -> Result<(), PlatformError> {
         .help("Serialized blinding factor for the asset type code commitment.")))
     .get_matches();
 
-  process_inputs(inputs)
+  let local = inputs.value_of("local").is_some();
+  let config = {
+    if local {
+      HttpStandaloneConfig::local()
+    } else {
+      HttpStandaloneConfig::testnet()
+    }
+  };
+
+  let rest_client = LedgerStandalone::new_http(&config);
+
+  process_inputs(inputs, &rest_client)
 }
 
 #[cfg(test)]
@@ -137,7 +151,7 @@ mod tests {
   use super::*;
   use ledger::data_model::AssetRules;
   use ledger::ser_fail;
-  use ledger_standalone::LedgerStandalone;
+  use network::LedgerStandalone;
   use rand_chacha::ChaChaRng;
   use rand_core::SeedableRng;
   use std::io::{self, Write};
@@ -174,8 +188,7 @@ mod tests {
   #[test]
   fn test_cmd() {
     // Start the standalone ledger
-    let ledger_standalone = &LedgerStandalone::new();
-    ledger_standalone.poll_until_ready().unwrap();
+    let mut ledger_standalone = LedgerStandalone::new_mock(1);
 
     // Generate asset codes and key pairs
     let codes = vec![AssetTypeCode::gen_random(),
@@ -194,7 +207,7 @@ mod tests {
                                                     *code,
                                                     AssetRules::default(),
                                                     AssetRecordType::NonConfidentialAmount_ConfidentialAssetType,
-                                                    &ledger_standalone,
+                                                    &mut ledger_standalone,
                                                     &mut ChaChaRng::from_entropy()).unwrap();
       let utxo_str = format!("{}", utxo);
       let blind_str = serde_json::to_string(&code_blind).or_else(|e| Err(ser_fail!(e)))

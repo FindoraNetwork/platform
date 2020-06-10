@@ -4,11 +4,14 @@ use credentials::{
   credential_commit, credential_issuer_key_gen, credential_sign, credential_user_key_gen,
   CredCommitment, CredCommitmentKey, CredIssuerPublicKey, CredIssuerSecretKey, Credential,
 };
+use cryptohash::sha256::Digest as BitDigest;
 use rand_chacha::ChaChaRng;
 use rand_core::SeedableRng;
 use std::collections::HashMap;
+use std::error::Error;
 use txn_builder::{BuildsTransactions, TransactionBuilder};
-use zei::xfr::sig::XfrKeyPair;
+use utils::{protocol_host, LEDGER_PORT};
+use zei::xfr::sig::{XfrKeyPair, XfrSignature};
 
 /// Represents a file that can be searched
 
@@ -33,7 +36,7 @@ impl AIR {
   }
 
   /// Return a JSON txn corresponding to this request
-  pub fn make_assign_txn(&mut self) -> Option<String> {
+  pub fn make_assign_txn(&mut self, seq_id: u64) -> Option<String> {
     let (user_pk, user_sk) = credential_user_key_gen(&mut self.prng, &self.issuer_pk);
     let attr_vals: Vec<(String, &[u8])> = vec![(String::from("dob"), b"08221964"),
                                                (String::from("pob"), b"666"),
@@ -50,7 +53,7 @@ impl AIR {
                                                      &user_sk,
                                                      &credential,
                                                      xfr_key_pair.get_pk_ref().as_bytes()).unwrap();
-    let mut txn_builder = TransactionBuilder::default();
+    let mut txn_builder = TransactionBuilder::from_seq_id(seq_id);
     let user_pk_s = serde_json::to_string(&user_pk).unwrap();
     self.user_commitment
         .insert(user_pk_s, (commitment.clone(), key));
@@ -72,7 +75,7 @@ impl AIR {
 
 fn parse_args() -> ArgMatches<'static> {
   App::new("generate AIR assign transactions").version("0.1.0")
-                       .author("Brian Rogoff <brian@findora.org>")
+                       .author("Engineering <engineering@findora.org>")
                        .about("REPL with argument parsing")
                        .arg(Arg::with_name("num_txns").short("n")
                                                       .long("num_txns")
@@ -81,16 +84,23 @@ fn parse_args() -> ArgMatches<'static> {
                        .get_matches()
 }
 
-fn main() {
+fn main() -> Result<(), Box<dyn Error>> {
   let args = parse_args();
   let num_str = args.value_of("num_txns");
   let mut air = AIR::new();
+  let (protocol, host) = protocol_host();
+  let client = reqwest::blocking::Client::new();
+  let resp_gs = client.get(&format!("{}://{}:{}/global_state", protocol, host, LEDGER_PORT))
+                      .send()?;
+  let (_comm, seq_id, _sig): (BitDigest, u64, XfrSignature) =
+    serde_json::from_str(&resp_gs.text()?[..]).unwrap();
+
   match num_str {
     None => println!("Missing '--num_txns <number>'"),
     Some(s) => match s.parse::<usize>() {
       Ok(n) => {
         for _ in 0..n {
-          if let Some(txn) = air.make_assign_txn() {
+          if let Some(txn) = air.make_assign_txn(seq_id) {
             println!("{}", txn);
           }
         }
@@ -98,4 +108,5 @@ fn main() {
       Err(_) => println!("That's not a number! {}", s),
     },
   }
+  Ok(())
 }

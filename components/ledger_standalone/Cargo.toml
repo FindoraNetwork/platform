@@ -4,14 +4,12 @@ version = "0.1.0"
 authors = ["Engineering <engineering@findora.org>"]
 edition = "2018"
 
-[lib]
-path = "src/standalone_lib.rs"
-
 [[bin]]
 name = "ledger_standalone"
 path = "src/ledger_standalone.rs"
 
 [dependencies]
+cryptohash = { path = "../../libs/cryptohash" }
 flexi_logger = "0.15.2"
 ledger_api_service = { path = "../ledger_api_service" }
 ledger = { path = "../../ledger" }

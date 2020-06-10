@@ -9,24 +9,25 @@ use curve25519_dalek::scalar::Scalar;
 use ledger::data_model::errors::PlatformError;
 use ledger::data_model::{AssetRules, AssetTypeCode, TransferType, TxOutput, TxoRef, TxoSID};
 use ledger::{des_fail, error_location};
-use ledger_standalone::LedgerStandalone;
+use ledger_api_service::RestfulLedgerAccess;
 use rand_core::{CryptoRng, RngCore};
 use std::process::exit;
-use submission_server::{TxnHandle, TxnStatus};
+use submission_api::RestfulLedgerUpdate;
+use submission_server::TxnStatus;
 use txn_builder::{BuildsTransactions, PolicyChoice, TransactionBuilder, TransferOperationBuilder};
-use utils::{LEDGER_PORT, SUBMIT_PORT};
 use zei::api::anon_creds::Credential as ZeiCredential;
 use zei::setup::PublicParams;
 use zei::xfr::asset_record::{build_blind_asset_record, open_blind_asset_record, AssetRecordType};
 use zei::xfr::sig::XfrKeyPair;
 use zei::xfr::structs::{
-  AssetRecordTemplate, AssetTracingPolicy, BlindAssetRecord, OpenAssetRecord, OwnerMemo, XfrAmount,
-  XfrAssetType,
+  AssetRecordTemplate, AssetTracingPolicy, OpenAssetRecord, OwnerMemo, XfrAmount, XfrAssetType,
 };
 
 extern crate exitcode;
 
+#[allow(clippy::too_many_arguments)]
 pub fn air_assign(data_dir: &str,
+                  seq_id: u64,
                   issuer_id: u64,
                   address: &str,
                   data: &str,
@@ -36,7 +37,7 @@ pub fn air_assign(data_dir: &str,
                   -> Result<(), PlatformError> {
   let issuer_data = load_data(data_dir)?;
   let xfr_key_pair = issuer_data.get_asset_issuer_key_pair(issuer_id)?;
-  let mut txn_builder = TransactionBuilder::default();
+  let mut txn_builder = TransactionBuilder::from_seq_id(seq_id);
   let address = serde_json::from_str::<CredUserPublicKey>(address)?;
   let data = serde_json::from_str::<CredCommitment>(data)?;
   let issuer_pk = serde_json::from_str::<CredIssuerPublicKey>(issuer_pk)?;
@@ -57,7 +58,9 @@ pub fn air_assign(data_dir: &str,
 /// * `memo`: memo for defining the asset.
 /// * `asset_rules`: simple asset rules (e.g. traceable, transferable)
 /// * `txn_file`: path to store the transaction file.
+#[allow(clippy::too_many_arguments)]
 pub fn define_asset(data_dir: &str,
+                    seq_id: u64,
                     fiat_asset: bool,
                     issuer_key_pair: &XfrKeyPair,
                     token_code: AssetTypeCode,
@@ -65,7 +68,7 @@ pub fn define_asset(data_dir: &str,
                     asset_rules: AssetRules,
                     txn_file: Option<&str>)
                     -> Result<TransactionBuilder, PlatformError> {
-  let mut txn_builder = TransactionBuilder::default();
+  let mut txn_builder = TransactionBuilder::from_seq_id(seq_id);
   txn_builder.add_operation_create_asset(issuer_key_pair,
                                          Some(token_code),
                                          asset_rules,
@@ -86,14 +89,17 @@ pub fn define_asset(data_dir: &str,
   Ok(txn_builder)
 }
 
-/// Defines an asset and submits the transaction with the standalone ledger.
-pub fn define_and_submit(issuer_key_pair: &XfrKeyPair,
-                         code: AssetTypeCode,
-                         rules: AssetRules,
-                         ledger_standalone: &LedgerStandalone)
-                         -> Result<(), PlatformError> {
+/// Defines an asset and submits the transaction with an http client
+pub fn define_and_submit<T>(issuer_key_pair: &XfrKeyPair,
+                            code: AssetTypeCode,
+                            rules: AssetRules,
+                            rest_client: &mut T)
+                            -> Result<(), PlatformError>
+  where T: RestfulLedgerUpdate + RestfulLedgerAccess
+{
+  let (_, seq_id) = rest_client.get_state_commitment().unwrap();
   // Define the asset
-  let mut txn_builder = TransactionBuilder::default();
+  let mut txn_builder = TransactionBuilder::from_seq_id(seq_id);
   let txn = txn_builder.add_operation_create_asset(issuer_key_pair,
                                                    Some(code),
                                                    rules,
@@ -102,7 +108,7 @@ pub fn define_and_submit(issuer_key_pair: &XfrKeyPair,
                        .transaction();
 
   // Submit the transaction
-  ledger_standalone.submit_transaction(&txn);
+  rest_client.submit_transaction(&txn)?;
 
   Ok(())
 }
@@ -121,6 +127,7 @@ pub fn define_and_submit(issuer_key_pair: &XfrKeyPair,
 /// * `tracing_policy`: asset tracing policy, if any.
 #[allow(clippy::too_many_arguments)]
 pub fn issue_and_transfer_asset(data_dir: &str,
+                                seq_id: u64,
                                 issuer_key_pair: &XfrKeyPair,
                                 recipient_key_pair: &XfrKeyPair,
                                 amount: u64,
@@ -172,7 +179,7 @@ pub fn issue_and_transfer_asset(data_dir: &str,
                                                  .transaction()?;
 
   // Issue and Transfer transaction
-  let mut txn_builder = TransactionBuilder::default();
+  let mut txn_builder = TransactionBuilder::from_seq_id(seq_id);
   txn_builder.add_operation_issue_asset(issuer_key_pair,
                                         &token_code,
                                         get_and_update_sequence_number(data_dir)?,
@@ -190,7 +197,7 @@ pub fn issue_and_transfer_asset(data_dir: &str,
 
 /// Issues and transfers an asset, submits the transactio with the standalone ledger, and get the UTXO SID, amount blinds and type blind.
 #[allow(clippy::too_many_arguments)]
-pub fn issue_transfer_and_get_utxo_and_blinds<R: CryptoRng + RngCore>(
+pub fn issue_transfer_and_get_utxo_and_blinds<R: CryptoRng + RngCore, T>(
   issuer_key_pair: &XfrKeyPair,
   recipient_key_pair: &XfrKeyPair,
   amount: u64,
@@ -198,8 +205,10 @@ pub fn issue_transfer_and_get_utxo_and_blinds<R: CryptoRng + RngCore>(
   record_type: AssetRecordType,
   sequence_number: u64,
   mut prng: &mut R,
-  ledger_standalone: &LedgerStandalone)
-  -> Result<(u64, (Scalar, Scalar), Scalar), PlatformError> {
+  rest_client: &mut T)
+  -> Result<(u64, (Scalar, Scalar), Scalar), PlatformError>
+  where T: RestfulLedgerAccess + RestfulLedgerUpdate
+{
   // Issue and transfer the asset
   let pc_gens = PublicParams::new().pc_gens;
   let input_template = AssetRecordTemplate::with_no_asset_tracking(amount, code.val, AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType, issuer_key_pair.get_pk());
@@ -224,7 +233,9 @@ pub fn issue_transfer_and_get_utxo_and_blinds<R: CryptoRng + RngCore>(
                                                 .sign(issuer_key_pair)?
                                                 .transaction()?;
 
-  let mut txn_builder = TransactionBuilder::default();
+  let (_, seq_id) = rest_client.get_state_commitment().unwrap();
+
+  let mut txn_builder = TransactionBuilder::from_seq_id(seq_id);
   let txn = txn_builder.add_operation_issue_asset(issuer_key_pair,
                                                   &code,
                                                   sequence_number,
@@ -234,24 +245,32 @@ pub fn issue_transfer_and_get_utxo_and_blinds<R: CryptoRng + RngCore>(
                        .transaction();
 
   // Submit the transaction, and get the UTXO and asset type blind
-  Ok((ledger_standalone.submit_transaction_and_fetch_utxos(&txn)[0].0, blinds.0, blinds.1))
+  let handle = rest_client.submit_transaction(&txn)?;
+  let status = rest_client.txn_status(&handle)?;
+  let txos = match status {
+    TxnStatus::Committed((_sid, txos)) => txos,
+    _ => panic!("Failed to fetch UTXO SIDs"),
+  };
+  Ok((txos[0].0, blinds.0, blinds.1))
 }
 
 /// Defines, issues and transfers an asset, and submits the transactions with the standalone ledger.
 /// Returns the UTXO SID, the blinding factors for the asset amount, and the blinding factor for the asset type code.
 #[allow(clippy::too_many_arguments)]
-pub fn define_issue_transfer_and_get_utxo_and_blinds<R: CryptoRng + RngCore>(
+pub fn define_issue_transfer_and_get_utxo_and_blinds<T, R: CryptoRng + RngCore>(
   issuer_key_pair: &XfrKeyPair,
   recipient_key_pair: &XfrKeyPair,
   amount: u64,
   code: AssetTypeCode,
   rules: AssetRules,
   record_type: AssetRecordType,
-  ledger_standalone: &LedgerStandalone,
+  rest_client: &mut T,
   prng: &mut R)
-  -> Result<(u64, (Scalar, Scalar), Scalar), PlatformError> {
+  -> Result<(u64, (Scalar, Scalar), Scalar), PlatformError>
+  where T: RestfulLedgerAccess + RestfulLedgerUpdate
+{
   // Define the asset
-  define_and_submit(issuer_key_pair, code, rules, ledger_standalone)?;
+  define_and_submit(issuer_key_pair, code, rules, rest_client)?;
 
   // Issue and transfer the asset, and get the UTXO SID and asset type blind
   issue_transfer_and_get_utxo_and_blinds(issuer_key_pair,
@@ -261,62 +280,17 @@ pub fn define_issue_transfer_and_get_utxo_and_blinds<R: CryptoRng + RngCore>(
                                          record_type,
                                          1,
                                          prng,
-                                         ledger_standalone)
-}
-
-/// protocol and host information
-pub struct ProtocolHost(pub String, pub String);
-
-/// Queries a value.
-///
-/// # Arguments
-/// * `protocol_host`:
-///   * protocol: either `https` or `http`
-///   * host: either `testnet.findora.org` or `localhost`.
-/// * `port`: either `LEDGER_PORT` or `SUBMIT_PORT`.
-/// * `route`: route to query.
-/// * `value`: value to look up.
-///
-/// # Examples
-/// * To query the BlindAssetRecord with utxo_sid 100 from https://testnet.findora.org:
-/// use txn_cli::txn_lib::query;
-/// query("https", "testnet.findora.org", LEDGER_PORT, "utxo_sid", "100").unwrap();
-pub fn query(protocol_host: &ProtocolHost,
-             port: &str,
-             route: &str,
-             value: &str)
-             -> Result<String, PlatformError> {
-  let mut res = if let Ok(response) =
-    reqwest::get(&format!("{}://{}:{}/{}/{}",
-                          &protocol_host.0, &protocol_host.1, port, route, value))
-  {
-    response
-  } else {
-    return Err(PlatformError::SubmissionServerError(format!("[{}] {}",
-                                                            &error_location!(),
-                                                            &"Failed to query.")));
-  };
-
-  // Log body
-  println!("Querying status: {}", res.status());
-  let text = res.text().or_else(|_| {
-                          Err(PlatformError::SubmissionServerError(format!("[{}] {}",
-                                                                           &error_location!(),
-                                                                           &"Failed to query.")))
-                        })?;
-  println!("Querying result: {}", text);
-
-  Ok(text)
+                                         rest_client)
 }
 
 /// Queries the UTXO SID and gets the asset type commitment.
 /// Asset should be confidential, otherwise the commitmemt will be null.
-pub fn query_utxo_and_get_type_commitment(utxo: u64,
-                                          protocol_host: &ProtocolHost)
-                                          -> Result<CompressedRistretto, PlatformError> {
-  let res = query(protocol_host, LEDGER_PORT, "utxo_sid", &format!("{}", utxo))?;
-  let blind_asset_record =
-    serde_json::from_str::<BlindAssetRecord>(&res).or_else(|_| Err(des_fail!()))?;
+pub fn query_utxo_and_get_type_commitment<T>(utxo: u64,
+                                             rest_client: &T)
+                                             -> Result<CompressedRistretto, PlatformError>
+  where T: RestfulLedgerAccess
+{
+  let blind_asset_record = (rest_client.get_utxo(TxoSID(utxo))?.0).0;
   match blind_asset_record.asset_type {
     XfrAssetType::Confidential(commitment) => Ok(commitment),
     _ => {
@@ -327,53 +301,11 @@ pub fn query_utxo_and_get_type_commitment(utxo: u64,
 }
 
 /// Queries the UTXO SID to get the amount, either confidential or nonconfidential.
-pub fn query_utxo_and_get_amount(utxo: u64,
-                                 protocol_host: &ProtocolHost)
-                                 -> Result<XfrAmount, PlatformError> {
-  let res = query(protocol_host, LEDGER_PORT, "utxo_sid", &format!("{}", utxo))?;
-  let blind_asset_record =
-    serde_json::from_str::<BlindAssetRecord>(&res).or_else(|_| Err(des_fail!()))?;
+pub fn query_utxo_and_get_amount<T>(utxo: u64, rest_client: &T) -> Result<XfrAmount, PlatformError>
+  where T: RestfulLedgerAccess
+{
+  let blind_asset_record = (rest_client.get_utxo(TxoSID(utxo))?.0).0;
   Ok(blind_asset_record.amount)
-}
-
-/// Submits a transaction.
-///
-/// Either this function or `submit_and_get_sids` should be called after a transaction is composed by any of the following:
-/// * `air_assign`
-/// * `define_asset`
-/// * `issue_asset`
-/// * `transfer_asset`
-/// * `issue_and_transfer_asset`
-///
-/// # Arguments
-/// * `protocol`: either `https` or `http`.
-/// * `host`: either `testnet.findora.org` or `localhost`.
-/// * `txn_builder`: transation builder.
-pub fn submit(protocol_host: &ProtocolHost,
-              txn_builder: TransactionBuilder)
-              -> Result<(), PlatformError> {
-  // Submit transaction
-  let client = reqwest::Client::new();
-  let txn = txn_builder.transaction();
-  let mut res =
-    client.post(&format!("{}://{}:{}/{}",
-                         protocol_host.0, protocol_host.1, SUBMIT_PORT, "submit_transaction"))
-          .json(&txn)
-          .send()
-          .or_else(|_| {
-            Err(PlatformError::SubmissionServerError(format!("[{}] {}",
-                                                             &error_location!(),
-                                                             &"Failed to submit.")))
-          })?;
-  // Log body
-  let txt = res.text().expect("no response");
-  let handle = serde_json::from_str::<TxnHandle>(&txt).unwrap_or_else(|e| {
-                                                        panic!("<Invalid JSON> ({}): \"{}\"",
-                                                               &e, &txt)
-                                                      });
-  println!("Submission response: {}", handle);
-  println!("Submission status: {}", res.status());
-  Ok(())
 }
 
 /// Submits a transaction and gets the UTXO (unspent transaction output) SIDs.
@@ -386,39 +318,19 @@ pub fn submit(protocol_host: &ProtocolHost,
 /// * `issue_and_transfer_asset`
 ///
 /// # Arguments
-/// * `protocol_host`:
-///   * protocol: either `https` or `http`.
-///   * host: either `testnet.findora.org` or `localhost`.
-/// * `txn_builder`: transation builder.
-pub fn submit_and_get_sids(protocol_host: &ProtocolHost,
-                           txn_builder: TransactionBuilder)
-                           -> Result<Vec<TxoSID>, PlatformError> {
-  // Submit transaction
-  let client = reqwest::Client::new();
+/// * `txn_builder`: transaction builder.
+/// * `rest_client`: HTTP client.
+pub fn submit_and_get_sids<T>(rest_client: &mut T,
+                              txn_builder: TransactionBuilder)
+                              -> Result<Vec<TxoSID>, PlatformError>
+  where T: RestfulLedgerUpdate
+{
   let txn = txn_builder.transaction();
-  let mut res =
-    client.post(&format!("{}://{}:{}/{}",
-                         protocol_host.0, protocol_host.1, SUBMIT_PORT, "submit_transaction"))
-          .json(&txn)
-          .send()
-          .or_else(|_| {
-            Err(PlatformError::SubmissionServerError(format!("[{}] {}",
-                                                             &error_location!(),
-                                                             &"Failed to submit.")))
-          })?;
-
-  // Log body
-  let txt = res.text().expect("no response");
-  let handle = serde_json::from_str::<TxnHandle>(&txt).unwrap_or_else(|e| {
-                                                        panic!("<Invalid JSON> ({}): \"{}\"",
-                                                               &e, &txt)
-                                                      });
-  println!("Submission response: {}", handle);
-  println!("Submission status: {}", res.status());
-
+  let handle = rest_client.submit_transaction(&txn)?;
+  println!("Txn handle: {}", handle);
   // Return sid
-  let res = query(protocol_host, SUBMIT_PORT, "txn_status", &handle.0)?;
-  match serde_json::from_str::<TxnStatus>(&res).or_else(|_| Err(des_fail!()))? {
+  let status = rest_client.txn_status(&handle)?;
+  match status {
     TxnStatus::Committed((_sid, txos)) => Ok(txos),
     _ => Err(des_fail!()),
   }
@@ -429,17 +341,14 @@ pub fn submit_and_get_sids(protocol_host: &ProtocolHost,
 /// * `txn_file`: path to the transaction file.
 /// * `key_pair`: key pair of the asset record.
 /// * `owner_memo`: Memo associated with utxo.
-pub fn query_open_asset_record(protocol_host: &ProtocolHost,
-                               sid: TxoSID,
-                               key_pair: &XfrKeyPair,
-                               owner_memo: &Option<OwnerMemo>)
-                               -> Result<OpenAssetRecord, PlatformError> {
-  let res = query(protocol_host,
-                  LEDGER_PORT,
-                  "utxo_sid",
-                  &format!("{}", sid.0))?;
-  let blind_asset_record =
-    serde_json::from_str::<BlindAssetRecord>(&res).or_else(|_| Err(des_fail!()))?;
+pub fn query_open_asset_record<T>(rest_client: &T,
+                                  sid: TxoSID,
+                                  key_pair: &XfrKeyPair,
+                                  owner_memo: &Option<OwnerMemo>)
+                                  -> Result<OpenAssetRecord, PlatformError>
+  where T: RestfulLedgerAccess
+{
+  let blind_asset_record = (rest_client.get_utxo(sid)?.0).0;
   open_blind_asset_record(&blind_asset_record, owner_memo, key_pair.get_sk_ref()).or_else(|error| {
                                                 Err(PlatformError::ZeiError(error_location!(), error))
                                               })
@@ -503,7 +412,9 @@ mod tests {
     let issuer_key_pair = XfrKeyPair::generate(&mut prng);
 
     // Define asset
+    let seq_id = 0;
     let res = define_asset(data_dir,
+                           seq_id,
                            false,
                            &issuer_key_pair,
                            AssetTypeCode::gen_random(),
@@ -529,8 +440,10 @@ mod tests {
     // Issue and transfer asset
     let code = AssetTypeCode::gen_random();
     let amount = 1000;
+    let seq_id = 0;
     let res =
       issue_and_transfer_asset(data_dir,
+                               seq_id,
                                &issuer_key_pair,
                                &recipient_key_pair,
                                amount,
