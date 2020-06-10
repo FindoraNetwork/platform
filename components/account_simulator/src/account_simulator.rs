@@ -11,6 +11,9 @@ use ledger::data_model::errors::PlatformError;
 use ledger::data_model::*;
 use ledger::error_location;
 use ledger::store::*;
+#[cfg(test)]
+use network::MockRestClient;
+use network::{RestfulLedgerAccess, RestfulLedgerUpdate};
 use rand_chacha::ChaChaRng;
 use rand_core::{RngCore, SeedableRng};
 use serde::{Deserialize, Serialize};
@@ -967,12 +970,11 @@ impl InterpretAccounts<PlatformError> for OneBigTxnAccounts {
   }
 }
 
-struct LedgerStandaloneAccounts {
-  ledger: Popen,
-  submit_port: usize,
-  query_port: usize,
-  client: reqwest::Client,
+struct LedgerStandaloneAccounts<T>
+  where T: RestfulLedgerUpdate + RestfulLedgerAccess
+{
   prng: rand_chacha::ChaChaRng,
+  client: T,
   accounts: HashMap<UserName, XfrKeyPair>,
   balances: HashMap<UserName, HashMap<UnitName, u64>>,
   utxos: HashMap<UserName, VecDeque<TxoSID>>, // by account
@@ -983,36 +985,22 @@ struct LedgerStandaloneAccounts {
   confidential_types: bool,
 }
 
-impl Drop for LedgerStandaloneAccounts {
-  fn drop(&mut self) {
-    self.ledger.terminate().unwrap();
-    if self.ledger
-           .wait_timeout(time::Duration::from_millis(10))
-           .is_err()
-    {
-      self.ledger.kill().unwrap();
-    }
-    self.ledger.wait().unwrap();
+impl<T> LedgerStandaloneAccounts<T> where T: RestfulLedgerAccess + RestfulLedgerUpdate
+{
+  fn fetch_seq_id(&self) -> u64 {
+    let (_, seq_id) = self.client.get_state_commitment().unwrap();
+    seq_id
   }
 }
 
-fn fetch_seq_id(client: &mut reqwest::Client, host: &str, port: &str) -> u64 {
-  let global_state = &mut client.get(&format!("http://{}:{}/global_state", host, port))
-                                .send()
-                                .unwrap();
-  let (_comm, seq_id, _sig): (BitDigest, u64, XfrSignature) =
-    serde_json::from_str(&global_state.text().unwrap()[..]).unwrap();
-  seq_id
-}
-
-impl InterpretAccounts<PlatformError> for LedgerStandaloneAccounts {
+impl<T> InterpretAccounts<PlatformError> for LedgerStandaloneAccounts<T>
+  where T: RestfulLedgerAccess + RestfulLedgerUpdate
+{
   fn run_account_command(&mut self, cmd: &AccountsCommand) -> Result<(), PlatformError> {
     let conf_amts = self.confidential_amounts;
     let conf_types = self.confidential_types;
     let iss_art = AssetRecordType::from_booleans(conf_amts, false);
     let art = AssetRecordType::from_booleans(conf_amts, conf_types);
-    let host = "localhost";
-    let port = format!("{}", self.submit_port);
     match cmd {
       AccountsCommand::NewUser(name) => {
         let keypair = XfrKeyPair::generate(&mut self.prng);
@@ -1020,8 +1008,6 @@ impl InterpretAccounts<PlatformError> for LedgerStandaloneAccounts {
         self.accounts
             .get(name)
             .map_or_else(|| Ok(()), |_| Err(PlatformError::InputsError(error_location!())))?;
-
-        // dbg!("New user", &name, &keypair);
 
         self.accounts.insert(name.clone(), keypair);
         self.utxos.insert(name.clone(), VecDeque::new());
@@ -1049,7 +1035,7 @@ impl InterpretAccounts<PlatformError> for LedgerStandaloneAccounts {
         let op = DefineAsset::new(body, &IssuerKeyPair { keypair: &keypair }).unwrap();
 
         {
-          let seq_id = fetch_seq_id(&mut self.client, host, &port);
+          let seq_id = self.fetch_seq_id();
           let txn = Transaction { body: TransactionBody { operations:
                                                             vec![Operation::DefineAsset(op)],
                                                           credentials: vec![],
@@ -1057,40 +1043,10 @@ impl InterpretAccounts<PlatformError> for LedgerStandaloneAccounts {
                                                           policy_options: None },
                                   seq_id,
                                   signatures: vec![] };
-          let query1 = format!("http://{}:{}/submit_transaction", host, port);
-          let query2 = format!("http://{}:{}/force_end_block", host, port);
-          // dbg!(&query1);
-          // dbg!(&query2);
-          let h = serde_json::from_str::<TxnHandle>(&self.client
-                                                         .post(&query1)
-                                                         .json(&txn)
-                                                         .send()
-                                                         .unwrap()
-                                                         .error_for_status()
-                                                         .map_err(|x| {
-                                                           PlatformError::IoError(format!("{}", x))
-                                                         })?
-                                                         .text()
-                                                         .unwrap()).unwrap();
-          let query3 = format!("http://{}:{}/txn_status/{}", host, port, h.0);
-          self.client
-              .post(&query2)
-              .send()
-              .unwrap()
-              .error_for_status()
-              .unwrap()
-              .text()
-              .unwrap();
-          match serde_json::from_str::<TxnStatus>(&self.client
-                                                       .get(&query3)
-                                                       .send()
-                                                       .unwrap()
-                                                       .error_for_status()
-                                                       .unwrap()
-                                                       .text()
-                                                       .unwrap()).unwrap()
-          {
-            TxnStatus::Committed((_sid, _txos)) => {}
+          let txn_handle = self.client.submit_transaction(&txn).unwrap();
+          self.client.force_end_block().unwrap();
+          match self.client.txn_status(&txn_handle).unwrap() {
+            TxnStatus::Committed((_sid, txos)) => {}
             _ => panic!("Pending status found when Committed expected"),
           }
         }
@@ -1107,22 +1063,9 @@ impl InterpretAccounts<PlatformError> for LedgerStandaloneAccounts {
                                  .get(unit)
                                  .ok_or_else(|| PlatformError::InputsError(error_location!()))?;
 
-        let host = "localhost";
-        let port = format!("{}", self.query_port);
-        let new_seq_num = {
-          let query = format!("http://{}:{}/asset_issuance_num/{}",
-                              host,
-                              port,
-                              code.to_base64());
-          // dbg!(&query);
-          reqwest::get(&query).unwrap()
-                              .error_for_status()
-                              .unwrap()
-                              .text()
-                              .unwrap()
-        };
-        // dbg!(&new_seq_num);
-        let new_seq_num = serde_json::from_str::<u64>(&new_seq_num).unwrap();
+        let new_seq_num = self.client.get_issuance_num(&code).unwrap();
+        let seq_id = self.fetch_seq_id();
+
         let keypair = self.accounts
                           .get(issuer)
                           .ok_or_else(|| PlatformError::InputsError(error_location!()))?;
@@ -1135,7 +1078,6 @@ impl InterpretAccounts<PlatformError> for LedgerStandaloneAccounts {
              .get_mut(unit)
              .unwrap() += amt;
 
-        let seq_id = fetch_seq_id(&mut self.client, host, &port);
         let mut tx = Transaction::from_seq_id(seq_id);
 
         let ar = AssetRecordTemplate::with_no_asset_tracking(amt, code.val, iss_art, *pubkey);
@@ -1154,43 +1096,9 @@ impl InterpretAccounts<PlatformError> for LedgerStandaloneAccounts {
         tx.body.operations.push(issue_op);
 
         let txos = {
-          // let serialize = serde_json::to_string(&tx).unwrap();
-
-          let host = "localhost";
-          let port = format!("{}", self.submit_port);
-          let query1 = format!("http://{}:{}/submit_transaction", host, port);
-          let query2 = format!("http://{}:{}/force_end_block", host, port);
-          // dbg!(&query1);
-          // dbg!(&query2);
-          let h = serde_json::from_str::<TxnHandle>(&self.client
-                                                         .post(&query1)
-                                                         .json(&tx)
-                                                         .send()
-                                                         .unwrap()
-                                                         .error_for_status()
-                                                         .map_err(|x| {
-                                                           PlatformError::IoError(format!("{}", x))
-                                                         })?
-                                                         .text()
-                                                         .unwrap()).unwrap();
-          let query3 = format!("http://{}:{}/txn_status/{}", host, port, h.0);
-          self.client
-              .post(&query2)
-              .send()
-              .unwrap()
-              .error_for_status()
-              .unwrap()
-              .text()
-              .unwrap();
-          match serde_json::from_str::<TxnStatus>(&self.client
-                                                       .get(&query3)
-                                                       .send()
-                                                       .unwrap()
-                                                       .error_for_status()
-                                                       .unwrap()
-                                                       .text()
-                                                       .unwrap()).unwrap()
-          {
+          let txn_handle = self.client.submit_transaction(&tx).unwrap();
+          self.client.force_end_block().unwrap();
+          match self.client.txn_status(&txn_handle).unwrap() {
             TxnStatus::Committed((_sid, txos)) => txos,
             _ => panic!("Pending status found when Committed expected"),
           }
@@ -1235,11 +1143,7 @@ impl InterpretAccounts<PlatformError> for LedgerStandaloneAccounts {
 
         while total_sum < amt && !avail.is_empty() {
           let sid = avail.pop_front().unwrap();
-          let blind_rec = serde_json::from_str::<TxOutput>(&{
-            let host = "localhost";
-            let port = format!("{}",self.query_port);
-            reqwest::get(&format!("http://{}:{}/utxo_sid/{}",host,port,sid.0)).unwrap().error_for_status().unwrap().text().unwrap()
-          }).unwrap().0;
+          let blind_rec = (self.client.get_utxo(sid).unwrap().0).0;
           let memo = self.owner_memos.get(&sid).cloned();
           let open_rec = open_blind_asset_record(&blind_rec, &memo, &src_priv).unwrap();
           // dbg!(sid, open_rec.get_amount(), open_rec.get_asset_type());
@@ -1332,7 +1236,7 @@ impl InterpretAccounts<PlatformError> for LedgerStandaloneAccounts {
 
         let transfer = TransferAsset { body: transfer_body,
                                        body_signatures: vec![transfer_sig] };
-        let seq_id = fetch_seq_id(&mut self.client, host, &port);
+        let seq_id = self.fetch_seq_id();
         let txn = Transaction { body: TransactionBody { operations:
                                                           vec![Operation::TransferAsset(transfer)],
                                                         credentials: vec![],
@@ -1342,43 +1246,9 @@ impl InterpretAccounts<PlatformError> for LedgerStandaloneAccounts {
                                 signatures: vec![] };
 
         let txos = {
-          // let serialize = serde_json::to_string(&tx).unwrap();
-
-          let host = "localhost";
-          let port = format!("{}", self.submit_port);
-          let query1 = format!("http://{}:{}/submit_transaction", host, port);
-          let query2 = format!("http://{}:{}/force_end_block", host, port);
-          // dbg!(&query1);
-          // dbg!(&query2);
-          let h = serde_json::from_str::<TxnHandle>(&self.client
-                                                         .post(&query1)
-                                                         .json(&txn)
-                                                         .send()
-                                                         .unwrap()
-                                                         .error_for_status()
-                                                         .map_err(|x| {
-                                                           PlatformError::IoError(format!("{}", x))
-                                                         })?
-                                                         .text()
-                                                         .unwrap()).unwrap();
-          let query3 = format!("http://{}:{}/txn_status/{}", host, port, h.0);
-          self.client
-              .post(&query2)
-              .send()
-              .unwrap()
-              .error_for_status()
-              .unwrap()
-              .text()
-              .unwrap();
-          match serde_json::from_str::<TxnStatus>(&self.client
-                                                       .get(&query3)
-                                                       .send()
-                                                       .unwrap()
-                                                       .error_for_status()
-                                                       .unwrap()
-                                                       .text()
-                                                       .unwrap()).unwrap()
-          {
+          let txn_handle = self.client.submit_transaction(&txn).unwrap();
+          self.client.force_end_block().unwrap();
+          match self.client.txn_status(&txn_handle).unwrap() {
             TxnStatus::Committed((_sid, txos)) => txos,
             _ => panic!("Pending status found when Committed expected"),
           }
@@ -1849,24 +1719,15 @@ mod test {
     let mut active_ledger = if !with_standalone {
       None
     } else {
-      Some(Box::new(
-      LedgerStandaloneAccounts {
-        ledger: Popen::create(&["/usr/bin/env", "bash", "-c", "flock --no-fork .test_standalone_lock cargo run"],
-                  PopenConfig {
-                    cwd: Some(OsString::from("../ledger_standalone/")),
-                    ..Default::default()
-                  }).unwrap(),
-        submit_port: 8669,
-        query_port: 8668,
-        client: reqwest::Client::new(),
-        prng: rand_chacha::ChaChaRng::from_entropy(),
-        accounts: HashMap::new(),
-        utxos: HashMap::new(),
-        units: HashMap::new(),
-        balances: HashMap::new(),
-        owner_memos: HashMap::new(),
-        confidential_amounts: cmds.confidential_amounts,
-        confidential_types: cmds.confidential_types }))
+      Some(Box::new(LedgerStandaloneAccounts { client: MockRestClient::new(1),
+                                               prng: rand_chacha::ChaChaRng::from_entropy(),
+                                               accounts: HashMap::new(),
+                                               utxos: HashMap::new(),
+                                               units: HashMap::new(),
+                                               balances: HashMap::new(),
+                                               owner_memos: HashMap::new(),
+                                               confidential_amounts: cmds.confidential_amounts,
+                                               confidential_types: cmds.confidential_types }))
     };
 
     if with_standalone {
@@ -2063,14 +1924,11 @@ mod test {
   }
 
   #[test]
-  // This test passes individually, but we ignore it since it occasionally fails
-  // when run with other tests which also use the standalone ledger
-  // Redmine issue: #38
-  #[ignore]
   fn quickcheck_ledger_simulates() {
-    QuickCheck::new().tests(1)
-                     // .quickcheck(ledger_simulates_accounts_with_standalone
-                     .quickcheck(ledger_simulates_accounts_no_standalone
-                                 as fn(AccountsScenario) -> ());
+    QuickCheck::new().tests(1).quickcheck(
+                                          ledger_simulates_accounts_with_standalone
+                     //.quickcheck(ledger_simulates_accounts_no_standalone
+                                 as fn(AccountsScenario) -> (),
+    );
   }
 }

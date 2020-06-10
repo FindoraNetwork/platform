@@ -1,8 +1,8 @@
 #![deny(warnings)]
 use ledger::data_model::errors::PlatformError;
 use ledger::data_model::{
-  FinalizedTransaction, KVBlind, KVHash, KVUpdate, Operation, TransferAsset, TxoRef, TxoSID,
-  XfrAddress,
+  b64enc, FinalizedTransaction, IssueAsset, IssuerPublicKey, KVBlind, KVHash, KVUpdate, Operation,
+  TransferAsset, TxOutput, TxoRef, TxoSID, XfrAddress,
 };
 use ledger::error_location;
 use ledger::store::*;
@@ -30,6 +30,7 @@ pub struct QueryServer<RNG, LU>
 {
   committed_state: Arc<RwLock<LU>>,
   addresses_to_utxos: HashMap<XfrAddress, HashSet<TxoSID>>,
+  issuances: HashMap<IssuerPublicKey, Vec<TxOutput>>,
   utxos_to_map_index: HashMap<TxoSID, XfrAddress>,
   custom_data_store: HashMap<Key, (Vec<u8>, KVHash)>,
   prng: PhantomData<RNG>,
@@ -43,6 +44,7 @@ impl<RNG, LU> QueryServer<RNG, LU>
     QueryServer { committed_state: ledger_state,
                   addresses_to_utxos: HashMap::new(),
                   custom_data_store: HashMap::new(),
+                  issuances: HashMap::new(),
                   utxos_to_map_index: HashMap::new(),
                   prng: PhantomData }
   }
@@ -50,6 +52,14 @@ impl<RNG, LU> QueryServer<RNG, LU>
   // Fetch custom data at a given key
   pub fn get_custom_data(&self, key: &Key) -> Option<&(Vec<u8>, KVHash)> {
     self.custom_data_store.get(key)
+  }
+
+  pub fn get_issued_records(&self, issuer: &IssuerPublicKey) -> Option<Vec<TxOutput>> {
+    self.issuances.get(issuer).cloned()
+  }
+
+  pub fn get_owned_utxo_sids(&self, address: &XfrAddress) -> Option<HashSet<TxoSID>> {
+    self.addresses_to_utxos.get(&address).cloned()
   }
 
   pub fn get_address_of_sid(&self, txo_sid: TxoSID) -> Option<XfrAddress> {
@@ -84,8 +94,14 @@ impl<RNG, LU> QueryServer<RNG, LU>
     Ok(())
   }
 
-  pub fn get_owned_utxo_sids(&self, address: &XfrAddress) -> Option<HashSet<TxoSID>> {
-    self.addresses_to_utxos.get(&address).cloned()
+  // Cache issuance records
+  pub fn cache_issuance(&mut self, issuance: &IssueAsset) {
+    let issuer = issuance.pubkey;
+    let mut new_records = issuance.body.records.clone();
+    let records = self.issuances.entry(issuer).or_insert_with(Vec::new);
+    info!("Issuance record cached for asset issuer key {}",
+          b64enc(&issuer.key.as_bytes()));
+    records.append(&mut new_records);
   }
 
   // Remove data that may be outdated based on this kv_update
@@ -156,6 +172,7 @@ impl<RNG, LU> QueryServer<RNG, LU>
         match op {
           Operation::TransferAsset(transfer_asset) => self.remove_spent_utxos(&transfer_asset)?,
           Operation::KVStoreUpdate(kv_update) => self.remove_stale_data(&kv_update),
+          Operation::IssueAsset(issue_asset) => self.cache_issuance(&issue_asset),
           _ => {}
         };
       }
@@ -278,7 +295,7 @@ mod tests {
   }
 
   #[test]
-  pub fn test_sid_storage() {
+  pub fn test_record_storage() {
     let query_server_ledger_state = LedgerState::test_ledger();
     let mut ledger_state = LedgerState::test_ledger();
     let mut prng = ChaChaRng::from_entropy();
@@ -361,7 +378,11 @@ mod tests {
                                  .unwrap();
     let bob_sids = query_server.get_owned_utxo_sids(&XfrAddress { key: *bob.get_pk_ref() })
                                .unwrap();
+    let issuer_records = query_server.get_issued_records(&IssuerPublicKey { key: alice.get_pk()
+                                                                                      .clone() })
+                                     .unwrap();
 
+    assert!(issuer_records.len() == 3);
     assert!(!alice_sids.contains(&TxoSID(0)));
     assert!(bob_sids.contains(&TxoSID(3)));
   }

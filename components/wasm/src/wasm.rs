@@ -55,7 +55,7 @@ pub fn random_asset_type() -> String {
 /// @param {string} authenticated_txn - String representing the transaction.
 /// @see {@link get_transaction} for instructions on fetching a transaction from the ledger.
 /// @see {@link get_state_commitment} for instructions on fetching a ledger state commitment.
-/// @throws Will throw an error if the state commitment or the transaction fail to deserialize.
+/// @throws Will throw an error if the state commitment or the transaction fails to deserialize.
 pub fn verify_authenticated_txn(state_commitment: String,
                                 authenticated_txn: String)
                                 -> Result<bool, JsValue> {
@@ -233,6 +233,7 @@ impl TransactionBuilder {
   /// @param {string} code - Base64 string representing the token code of the asset to be issued.
   /// @param {BigInt} seq_num - Issuance sequence number. Every subsequent issuance of a given asset type must have a higher sequence number than before.
   /// @param {BigInt} amount - Amount to be issued.
+  /// @param {bool} conf_amount - `true` means the asset amount is confidential, and `false` means it's nonconfidential.
   #[allow(clippy::too_many_arguments)]
   pub fn add_basic_issue_asset_with_tracking(mut self,
                                              key_pair: &XfrKeyPair,
@@ -273,6 +274,7 @@ impl TransactionBuilder {
   /// @param {string} code - Base64 string representing the token code of the asset to be issued.
   /// @param {BigInt} seq_num - Issuance sequence number. Every subsequent issuance of a given asset type must have a higher sequence number than before.
   /// @param {BigInt} amount - Amount to be issued.
+  /// @param {bool} conf_amount - `true` means the asset amount is confidential, and `false` means it's nonconfidential.
   pub fn add_basic_issue_asset_without_tracking(mut self,
                                                 key_pair: &XfrKeyPair,
                                                 code: String,
@@ -476,11 +478,13 @@ impl TransferOperationBuilder {
 
   /// Wraps around TransferOperationBuilder to add an input to a transfer operation builder.
   /// @param {TxoRef} txo_ref - Absolute or relative utxo reference
-  /// @param {string} oar - Serialized opened asset record to serve as transfer input. This record must exist on the
-  /// ledger for the transfer to be valid
-  /// @param {BigInt} amount - Amount of input record to transfer
+  /// @param {string} asset_record - Serialized client asset record to serve as transfer input. This record must exist on the
+  /// ledger for the transfer to be valid.
+  /// @param {OwnerMemo} owner_memo - Opening parameters.
   /// @param tracing_key {AssetTracerKeyPair} - Tracing key, must be added to traceable
   /// assets.
+  /// @param {XfrKeyPair} key - Key pair associated with the input.
+  /// @param {BigInt} amount - Amount of input record to transfer.
   /// @see {@link create_absolute_txo_ref} or {@link create_relative_txo_ref} for details on txo
   /// references.
   /// @see {@link get_txo} for details on fetching blind asset records.
@@ -502,8 +506,10 @@ impl TransferOperationBuilder {
   }
   /// Wraps around TransferOperationBuilder to add an input to a transfer operation builder.
   /// @param {TxoRef} txo_ref - Absolute or relative utxo reference
-  /// @param {string} oar - Serialized opened asset record to serve as transfer input. This record must exist on the
+  /// @param {string} asset_record - Serialized client asset record to serve as transfer input. This record must exist on the
   /// ledger for the transfer to be valid
+  /// @param {OwnerMemo} owner_memo - Opening parameters.
+  /// @param {XfrKeyPair} key - Key pair associated with the input.
   /// @param {BigInt} amount - Amount of input record to transfer
   /// @see {@link create_absolute_txo_ref} or {@link create_relative_txo_ref} for details on txo
   /// references.
@@ -523,13 +529,13 @@ impl TransferOperationBuilder {
 
   /// Wraps around TransferOperationBuilder to add an output to a transfer operation builder.
   ///
-  /// @param {BigInt} amount - amount to transfer to the recipient
-  /// @param {XfrPublicKey} recipient - public key of the recipient
-  /// @param code {string} - String representaiton of the asset token code
-  /// @param conf_amount {bool} - Indicates whether output's amount is confidential
-  /// @param conf_type {bool} - Indicates whether output's asset type is confidential
+  /// @param {BigInt} amount - amount to transfer to the recipient.
+  /// @param {XfrPublicKey} recipient - public key of the recipient.
   /// @param tracing_key {AssetTracerKeyPair} - Optional tracing key, must be added to traced
   /// assets.
+  /// @param code {string} - String representation of the asset token code.
+  /// @param conf_amount {bool} - `true` means the output's asset amount is confidential, and `false` means it's nonconfidential.
+  /// @param conf_type {bool} - `true` means the output's asset type is confidential, and `false` means it's nonconfidential.
   /// @throws Will throw an error if `code` fails to deserialize.
   pub fn add_output_with_tracking(self,
                                   amount: u64,
@@ -552,8 +558,8 @@ impl TransferOperationBuilder {
   /// @param {BigInt} amount - amount to transfer to the recipient
   /// @param {XfrPublicKey} recipient - public key of the recipient
   /// @param code {string} - String representaiton of the asset token code
-  /// @param conf_amount {bool} - Indicates whether output's amount is confidential
-  /// @param conf_type {bool} - Indicates whether output's asset type is confidential
+  /// @param conf_amount {bool} - `true` means the output's asset amount is confidential, and `false` means it's nonconfidential.
+  /// @param conf_type {bool} - `true` means the output's asset type is confidential, and `false` means it's nonconfidential.
   /// @throws Will throw an error if `code` fails to deserialize.
   pub fn add_output_no_tracking(self,
                                 amount: u64,
@@ -597,6 +603,19 @@ impl TransferOperationBuilder {
   /// @param {XfrKeyPair} kp - key pair of one of the input owners.
   pub fn sign(mut self, kp: &XfrKeyPair) -> Result<TransferOperationBuilder, JsValue> {
     self.get_builder_mut().sign(&kp).map_err(error_to_jsvalue)?;
+    Ok(self)
+  }
+
+  /// Co-sign an input index
+  /// @param {XfrKeyPair} kp - Co-signature key.
+  /// @params {Number} input_idx - Input index to apply co-signature to.
+  pub fn add_cosignature(mut self,
+                         kp: &XfrKeyPair,
+                         input_idx: usize)
+                         -> Result<TransferOperationBuilder, JsValue> {
+    self.get_builder_mut()
+        .add_cosignature(kp, input_idx)
+        .map_err(error_to_jsvalue)?;
     Ok(self)
   }
 
@@ -745,7 +764,7 @@ pub fn get_tracked_amount(blind_asset_record: String,
 /// Contained in the response of `submit_transaction` is a `TransactionHandle` that can be used to
 /// query the status of the transaction.
 /// @param {string} path - Submission server path (e.g. `https://localhost:8669`)
-/// @param {transaction_str} - JSON-encoded transaction string.
+/// @param {string} transaction_str - JSON-encoded transaction string.
 ///
 /// @see {@link get_txn_status} for information about transaction statuses.
 // TODO Design and implement a notification mechanism.
@@ -864,7 +883,7 @@ fn create_query_promise(opts: &RequestInit,
 }
 
 /// Generates a new credential issuer key.
-/// @param {JsValue} attributes: Array of attribute types of the form `[{name: "credit_score",
+/// @param {JsValue} attributes - Array of attribute types of the form `[{name: "credit_score",
 /// size: 3}]'. The size refers to byte-size of the credential. In this case, the "credit_score"
 /// attribute is represented as a 3 byte string "760". `attributes` is the list of attribute types
 /// that the issuer can sign off on.
@@ -973,7 +992,6 @@ pub fn wasm_credential_reveal(user_sk: &CredUserSecretKey,
 
 /// Verifies revealed attributes from a commitment.
 /// @param {CredIssuerPublicKey} issuer_pub_key - Public key of credential issuer.
-/// @param {JsValue} reveal_fields - Array of string names representing credentials to reveal (i.e.
 /// @param {JsValue} attributes - Array of attribute assignments to check of the form `[{name: "credit_score",
 /// val: "760"}]'.
 /// `["credit_score"]`).

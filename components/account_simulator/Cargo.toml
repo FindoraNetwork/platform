@@ -15,6 +15,7 @@ actix-web = "1.0.8"
 cryptohash = { path = "../../libs/cryptohash" }
 lazy_static = "1.4.0"
 ledger = { path = "../../ledger", features = ["TESTING"] }
+network = { path = "../../libs/network" }
 percent-encoding = "2.1.0"
 quickcheck = "0.9"
 rand_chacha = "0.2.0"

@@ -14,7 +14,7 @@ use ledger::store::{ArchiveAccess, LedgerAccess};
 use std::io;
 use std::marker::{Send, Sync};
 use std::sync::{Arc, RwLock};
-use utils::{HashOf, SignatureOf};
+use utils::{HashOf, NetworkRoute, SignatureOf};
 use zei::xfr::sig::XfrPublicKey;
 
 pub struct RestfulApiService {
@@ -35,9 +35,9 @@ fn ping() -> actix_web::Result<String> {
 //   query_contract
 // If we add more functions with the similar pattern, it will be good to merge them
 
-fn query_utxo<LA>(data: web::Data<Arc<RwLock<LA>>>,
-                  info: web::Path<String>)
-                  -> actix_web::Result<web::Json<Utxo>>
+pub fn query_utxo<LA>(data: web::Data<Arc<RwLock<LA>>>,
+                      info: web::Path<String>)
+                      -> actix_web::Result<web::Json<Utxo>>
   where LA: LedgerAccess
 {
   let reader = data.read().unwrap();
@@ -52,9 +52,9 @@ fn query_utxo<LA>(data: web::Data<Arc<RwLock<LA>>>,
   }
 }
 
-fn query_asset_issuance_num<LA>(data: web::Data<Arc<RwLock<LA>>>,
-                                info: web::Path<String>)
-                                -> actix_web::Result<web::Json<u64>>
+pub fn query_asset_issuance_num<LA>(data: web::Data<Arc<RwLock<LA>>>,
+                                    info: web::Path<String>)
+                                    -> actix_web::Result<web::Json<u64>>
   where LA: LedgerAccess
 {
   let reader = data.read().unwrap();
@@ -69,9 +69,9 @@ fn query_asset_issuance_num<LA>(data: web::Data<Arc<RwLock<LA>>>,
   }
 }
 
-fn query_asset<LA>(data: web::Data<Arc<RwLock<LA>>>,
-                   info: web::Path<String>)
-                   -> actix_web::Result<web::Json<AssetType>>
+pub fn query_asset<LA>(data: web::Data<Arc<RwLock<LA>>>,
+                       info: web::Path<String>)
+                       -> actix_web::Result<web::Json<AssetType>>
   where LA: LedgerAccess
 {
   let reader = data.read().unwrap();
@@ -86,50 +86,9 @@ fn query_asset<LA>(data: web::Data<Arc<RwLock<LA>>>,
   }
 }
 
-#[allow(unused)]
-fn query_policy<LA>(data: web::Data<Arc<RwLock<LA>>>,
-                    info: web::Path<String>)
-                    -> actix_web::Result<web::Json<CustomAssetPolicy>>
-  where LA: LedgerAccess
-{
-  // TODO(joe?): Implement this
-  Err(actix_web::error::ErrorBadRequest("unimplemented"))
-  // let reader = data.read().unwrap();
-  // if let Ok(asset_policy_key) = AssetPolicyKey::new_from_base64(&*info) {
-  //   if let Some(policy) = reader.get_asset_policy(&asset_policy_key) {
-  //     Ok(web::Json(policy))
-  //   } else {
-  //     Err(actix_web::error::ErrorNotFound("Specified asset policy does not currently exist."))
-  //   }
-  // } else {
-  //   Err(actix_web::error::ErrorBadRequest("Invalid asset policy encoding."))
-  // }
-}
-
-#[allow(unused)]
-fn query_contract<LA>(data: web::Data<Arc<RwLock<LA>>>,
-                      info: web::Path<String>)
-                      -> actix_web::Result<web::Json<SmartContract>>
-  where LA: LedgerAccess
-{
-  // TODO(joe?): Implement this
-  Err(actix_web::error::ErrorBadRequest("unimplemented"))
-
-  // let reader = data.read().unwrap();
-  // if let Ok(smart_contract_key) = SmartContractKey::new_from_base64(&*info) {
-  //   if let Some(contract) = reader.get_smart_contract(&smart_contract_key) {
-  //     Ok(web::Json(contract))
-  //   } else {
-  //     Err(actix_web::error::ErrorNotFound("Specified smart contract does not currently exist."))
-  //   }
-  // } else {
-  //   Err(actix_web::error::ErrorBadRequest("Invalid smart contract encoding."))
-  // }
-}
-
-fn query_txn<AA>(data: web::Data<Arc<RwLock<AA>>>,
-                 info: web::Path<String>)
-                 -> actix_web::Result<String>
+pub fn query_txn<AA>(data: web::Data<Arc<RwLock<AA>>>,
+                     info: web::Path<String>)
+                     -> actix_web::Result<String>
   where AA: ArchiveAccess
 {
   let reader = data.read().unwrap();
@@ -144,7 +103,7 @@ fn query_txn<AA>(data: web::Data<Arc<RwLock<AA>>>,
   }
 }
 
-fn query_public_key<LA>(data: web::Data<Arc<RwLock<LA>>>) -> web::Json<XfrPublicKey>
+pub fn query_public_key<LA>(data: web::Data<Arc<RwLock<LA>>>) -> web::Json<XfrPublicKey>
   where LA: LedgerAccess
 {
   let reader = data.read().unwrap();
@@ -152,7 +111,7 @@ fn query_public_key<LA>(data: web::Data<Arc<RwLock<LA>>>) -> web::Json<XfrPublic
 }
 
 #[allow(clippy::type_complexity)]
-fn query_global_state<LA>(
+pub fn query_global_state<LA>(
   data: web::Data<Arc<RwLock<LA>>>)
   -> web::Json<(HashOf<Option<StateCommitmentData>>,
                 u64,
@@ -165,9 +124,9 @@ fn query_global_state<LA>(
   web::Json((hash, seq_id, sig))
 }
 
-fn query_global_state_version<AA>(data: web::Data<Arc<RwLock<AA>>>,
-                                  version: web::Path<u64>)
-                                  -> web::Json<Option<HashOf<Option<StateCommitmentData>>>>
+pub fn query_global_state_version<AA>(data: web::Data<Arc<RwLock<AA>>>,
+                                      version: web::Path<u64>)
+                                      -> web::Json<Option<HashOf<Option<StateCommitmentData>>>>
   where AA: ArchiveAccess
 {
   let reader = data.read().unwrap();
@@ -190,9 +149,9 @@ fn query_blocks_since<AA>(data: web::Data<Arc<RwLock<AA>>>,
   web::Json(ret)
 }
 
-fn query_air<AA>(data: web::Data<Arc<RwLock<AA>>>,
-                 addr: web::Path<String>)
-                 -> actix_web::Result<web::Json<AIRResult>>
+pub fn query_air<AA>(data: web::Data<Arc<RwLock<AA>>>,
+                     addr: web::Path<String>)
+                     -> actix_web::Result<web::Json<AIRResult>>
   where AA: ArchiveAccess
 {
   let reader = data.read().unwrap();
@@ -201,9 +160,9 @@ fn query_air<AA>(data: web::Data<Arc<RwLock<AA>>>,
   Ok(web::Json(air_result))
 }
 
-fn query_kv<LA>(data: web::Data<Arc<RwLock<LA>>>,
-                addr: web::Path<String>)
-                -> actix_web::Result<web::Json<AuthenticatedKVLookup>>
+pub fn query_kv<LA>(data: web::Data<Arc<RwLock<LA>>>,
+                    addr: web::Path<String>)
+                    -> actix_web::Result<web::Json<AuthenticatedKVLookup>>
   where LA: LedgerAccess
 {
   let reader = data.read().unwrap();
@@ -335,6 +294,56 @@ enum ServiceInterface {
   ArchiveAccess,
 }
 
+pub enum LedgerAccessRoutes {
+  UtxoSid,
+  AssetIssuanceNum,
+  AssetToken,
+  PublicKey,
+  GlobalState,
+  KVLookup,
+}
+
+impl NetworkRoute for LedgerAccessRoutes {
+  fn route(&self) -> String {
+    let endpoint = match *self {
+      LedgerAccessRoutes::UtxoSid => "utxo_sid",
+      LedgerAccessRoutes::AssetIssuanceNum => "asset_issuance_num",
+      LedgerAccessRoutes::AssetToken => "asset_token",
+      LedgerAccessRoutes::PublicKey => "public_key",
+      LedgerAccessRoutes::GlobalState => "global_state",
+      LedgerAccessRoutes::KVLookup => "kv_lookup",
+    };
+    "/".to_owned() + endpoint
+  }
+}
+
+pub enum LedgerArchiveRoutes {
+  TxnSid,
+  AirAddress,
+  BlockLog,
+  GlobalStateVersion,
+  BlocksSince,
+  UtxoMap,
+  UtxoMapChecksum,
+  UtxoPartialMap,
+}
+
+impl NetworkRoute for LedgerArchiveRoutes {
+  fn route(&self) -> String {
+    let endpoint = match *self {
+      LedgerArchiveRoutes::TxnSid => "txn_sid",
+      LedgerArchiveRoutes::AirAddress => "air_address",
+      LedgerArchiveRoutes::BlockLog => "block_log",
+      LedgerArchiveRoutes::BlocksSince => "blocks_since",
+      LedgerArchiveRoutes::GlobalStateVersion => "global_state_version",
+      LedgerArchiveRoutes::UtxoMap => "utxo_map",
+      LedgerArchiveRoutes::UtxoMapChecksum => "utxo_map_checksum",
+      LedgerArchiveRoutes::UtxoPartialMap => "utxo_partial_map",
+    };
+    "/".to_owned() + endpoint
+  }
+}
+
 trait Route {
   fn set_route<LA: 'static + LedgerAccess + ArchiveAccess + Sync + Send>(self,
                                                                          service_interface: ServiceInterface)
@@ -365,30 +374,37 @@ impl<T, B> Route for App<T, B>
 
   // Set routes for the LedgerAccess interface
   fn set_route_for_ledger_access<LA: 'static + LedgerAccess + Sync + Send>(self) -> Self {
-    self.route("/utxo_sid/{sid}", web::get().to(query_utxo::<LA>))
-        .route("/asset_issuance_num/{token}",
+    self.route(&LedgerAccessRoutes::UtxoSid.with_arg_template("sid"),
+               web::get().to(query_utxo::<LA>))
+        .route(&LedgerAccessRoutes::AssetIssuanceNum.with_arg_template("code"),
                web::get().to(query_asset_issuance_num::<LA>))
-        .route("/asset_token/{token}", web::get().to(query_asset::<LA>))
-        .route("/public_key", web::get().to(query_public_key::<LA>))
-        .route("/policy_key/{key}", web::get().to(query_policy::<LA>))
-        .route("/contract_key/{key}", web::get().to(query_contract::<LA>))
-        .route("/global_state", web::get().to(query_global_state::<LA>))
-        .route("/kv_lookup/{addr}", web::get().to(query_kv::<LA>))
+        .route(&LedgerAccessRoutes::AssetToken.with_arg_template("code"),
+               web::get().to(query_asset::<LA>))
+        .route(&LedgerAccessRoutes::PublicKey.route(),
+               web::get().to(query_public_key::<LA>))
+        .route(&LedgerAccessRoutes::GlobalState.route(),
+               web::get().to(query_global_state::<LA>))
+        .route(&LedgerAccessRoutes::KVLookup.with_arg_template("addr"),
+               web::get().to(query_kv::<LA>))
   }
 
   // Set routes for the ArchiveAccess interface
   fn set_route_for_archive_access<AA: 'static + ArchiveAccess + Sync + Send>(self) -> Self {
-    self.route("/txn_sid/{sid}", web::get().to(query_txn::<AA>))
-        .route("/air_address/{key}", web::get().to(query_air::<AA>))
-        .route("/block_log", web::get().to(query_block_log::<AA>))
-        .route("/global_state_version/{version}",
+    self.route(&LedgerArchiveRoutes::TxnSid.with_arg_template("sid"),
+               web::get().to(query_txn::<AA>))
+        .route(&LedgerArchiveRoutes::AirAddress.with_arg_template("key"),
+               web::get().to(query_air::<AA>))
+        .route(&LedgerArchiveRoutes::BlockLog.route(),
+               web::get().to(query_block_log::<AA>))
+        .route(&LedgerArchiveRoutes::GlobalStateVersion.with_arg_template("version"),
                web::get().to(query_global_state_version::<AA>))
-        .route("/blocks_since/{block_sid}",
+        .route(&LedgerArchiveRoutes::BlocksSince.with_arg_template("block_sid"),
                web::get().to(query_blocks_since::<AA>))
-        .route("/utxo_map", web::get().to(query_utxo_map::<AA>))
-        .route("/utxo_map_checksum",
+        .route(&LedgerArchiveRoutes::UtxoMap.route(),
+               web::get().to(query_utxo_map::<AA>))
+        .route(&LedgerArchiveRoutes::UtxoMapChecksum.route(),
                web::get().to(query_utxo_map_checksum::<AA>))
-        .route("/utxo_partial_map/{sidlist}",
+        .route(&LedgerArchiveRoutes::UtxoPartialMap.with_arg_template("sidlist"),
                web::get().to(query_utxo_partial_map::<AA>))
   }
 }

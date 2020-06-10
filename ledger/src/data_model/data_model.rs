@@ -172,6 +172,13 @@ pub struct IssuerPublicKey {
   // eg. encryption key
 }
 
+#[allow(clippy::derive_hash_xor_eq)]
+impl Hash for IssuerPublicKey {
+  fn hash<H: Hasher>(&self, state: &mut H) {
+    self.key.as_bytes().hash(state);
+  }
+}
+
 #[derive(Debug)]
 pub struct IssuerKeyPair<'a> {
   pub keypair: &'a XfrKeyPair,
@@ -232,11 +239,11 @@ impl SignatureRules {
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 /// Simple asset rules:
 /// 1) Traceable: Records of traceable assets can be decrypted by a provided tracking key
-/// 2) Identity traceable: Records of identity traceable assets can be decrypted by a provided tracking key
-/// 3) Transferable: Non-transferable assets can only be transferred once from the issuer to
+/// 2) Transferable: Non-transferable assets can only be transferred once from the issuer to
 ///    another user.
-/// 4) Max units: Optional limit on total issuance amount.
-/// 5) Transfer signature rules: Signature weights and threshold for a valid transfer.
+/// 3) Updatable: Whether the asset memo can be updated.
+/// 4) Transfer signature rules: Signature weights and threshold for a valid transfer.
+/// 5) Max units: Optional limit on total issuance amount.
 pub struct AssetRules {
   pub traceable: bool,
   pub transferable: bool,

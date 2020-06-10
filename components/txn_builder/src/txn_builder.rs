@@ -889,6 +889,20 @@ impl TransferOperationBuilder {
     Ok(self)
   }
 
+  // Add a co-signature for an input.
+  pub fn add_cosignature(&mut self,
+                         kp: &XfrKeyPair,
+                         input_idx: usize)
+                         -> Result<&mut Self, PlatformError> {
+    if self.transfer.is_none() {
+      return Err(inv_fail!("Transaction has not yet been finalized".to_string()));
+    }
+    let mut new_transfer = self.transfer.as_ref().unwrap().clone();
+    new_transfer.add_cosignature(&kp, input_idx);
+    self.transfer = Some(new_transfer);
+    Ok(self)
+  }
+
   // Return the transaction operation
   pub fn transaction(&self) -> Result<Operation, PlatformError> {
     if self.transfer.is_none() {
