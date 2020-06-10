@@ -881,7 +881,7 @@ fn create_query_promise(opts: &RequestInit,
 
 /// Generates a new credential issuer key.
 /// @param {JsValue} attributes - Array of attribute types of the form `[{name: "credit_score",
-/// size: 3}]'. The size refers to byte-size of the credential. In this case, the "credit_score"
+/// size: 3}]`. The size refers to byte-size of the credential. In this case, the "credit_score"
 /// attribute is represented as a 3 byte string "760". `attributes` is the list of attribute types
 /// that the issuer can sign off on.
 #[wasm_bindgen]
@@ -910,7 +910,7 @@ pub fn wasm_credential_user_key_gen(issuer_pub_key: &CredIssuerPublicKey) -> Cre
 /// @param {CredIssuerSecretKey} issuer_secret_key - Secret key of credential issuer.
 /// @param {CredUserPublicKey} user_public_key - Public key of credential user.
 /// @param {JsValue} attributes - Array of attribute assignments of the form `[{name: "credit_score",
-/// val: "760"}]'.
+/// val: "760"}]`.
 /// @throws Will throw an error if the signature cannot be generated.
 #[wasm_bindgen]
 pub fn wasm_credential_sign(issuer_secret_key: &CredIssuerSecretKey,
@@ -990,8 +990,7 @@ pub fn wasm_credential_reveal(user_sk: &CredUserSecretKey,
 /// Verifies revealed attributes from a commitment.
 /// @param {CredIssuerPublicKey} issuer_pub_key - Public key of credential issuer.
 /// @param {JsValue} attributes - Array of attribute assignments to check of the form `[{name: "credit_score",
-/// val: "760"}]'.
-/// `["credit_score"]`).
+/// val: "760"}]`.
 /// @param {CredentialRevealSig} reveal_sig - Credential reveal signature.
 #[wasm_bindgen]
 pub fn wasm_credential_verify(issuer_pub_key: &CredIssuerPublicKey,
