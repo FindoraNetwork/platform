@@ -1925,6 +1925,10 @@ mod test {
 
   #[test]
   #[ignore]
+  // (brian) Ignoring this because I see
+  // ---- test::quickcheck_ledger_simulates stdout ----
+  // thread 'test::quickcheck_ledger_simulates' panicked at 'read_response_json failed during deserialization', ...
+
   fn quickcheck_ledger_simulates() {
     QuickCheck::new().tests(1).quickcheck(
                                           ledger_simulates_accounts_with_standalone
