@@ -1924,6 +1924,7 @@ mod test {
   }
 
   #[test]
+  #[ignore]
   fn quickcheck_ledger_simulates() {
     QuickCheck::new().tests(1).quickcheck(
                                           ledger_simulates_accounts_with_standalone
