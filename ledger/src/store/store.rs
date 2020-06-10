@@ -447,11 +447,6 @@ impl LedgerStatus {
     self.check_txn_effects(txn)
   }
 
-  fn outside_sliding_window(&self, txn: &Transaction) -> bool {
-    txn.seq_id > self.block_commit_count
-    || txn.seq_id + TRANSACTION_WINDOW_WIDTH < self.block_commit_count
-  }
-
   // Check that `txn` can be safely applied to the current ledger.
   //
   // Returns the same TxnEffect (unchanged) if it is safe. Consumes `txn`
@@ -465,14 +460,14 @@ impl LedgerStatus {
   #[allow(clippy::cognitive_complexity)]
   fn check_txn_effects(&self, txn: TxnEffect) -> Result<TxnEffect, PlatformError> {
     // The current transactions seq_id must be within the sliding window over seq_ids
-    if self.outside_sliding_window(&txn.txn) {
-      let seq_id = &txn.txn.seq_id;
-      let block_count = self.block_commit_count;
-      return Err(PlatformError::InputsError(format!("loc={}, seq_id={}, block_count={}",
-                                                    error_location!(),
-                                                    seq_id,
-                                                    block_count)));
+    if txn.txn.seq_id > self.block_commit_count {
+      return Err(PlatformError::InputsError(format!("Transaction seq_id ahead of block_count: {}",
+                                                    error_location!())));
+    } else if txn.txn.seq_id + TRANSACTION_WINDOW_WIDTH < self.block_commit_count {
+      return Err(PlatformError::InputsError(format!("Transaction seq_id too far behind block_count: {}",
+                                                    error_location!())));
     }
+
     // Key-Value updates must be
     // 1. Signed by the previous owner of that key, if one exists
     // 2. The generation number starts at 0 or increments

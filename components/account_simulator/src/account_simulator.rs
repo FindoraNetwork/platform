@@ -996,13 +996,24 @@ impl Drop for LedgerStandaloneAccounts {
   }
 }
 
+fn fetch_seq_id(client: &mut reqwest::Client, host: &str, port: &str) -> u64 {
+  let global_state = &mut client
+    .get(&format!("http://{}:{}/global_state", host, port))
+    .send()
+    .unwrap();
+  let (_comm, seq_id, _sig): (BitDigest, u64, XfrSignature) =
+    serde_json::from_str(&global_state.text().unwrap()[..]).unwrap();
+  seq_id
+}
+
 impl InterpretAccounts<PlatformError> for LedgerStandaloneAccounts {
   fn run_account_command(&mut self, cmd: &AccountsCommand) -> Result<(), PlatformError> {
     let conf_amts = self.confidential_amounts;
     let conf_types = self.confidential_types;
     let iss_art = AssetRecordType::from_booleans(conf_amts, false);
     let art = AssetRecordType::from_booleans(conf_amts, conf_types);
-    // dbg!(cmd);
+    let host = "localhost";
+    let port = format!("{}", self.submit_port);
     match cmd {
       AccountsCommand::NewUser(name) => {
         let keypair = XfrKeyPair::generate(&mut self.prng);
@@ -1039,16 +1050,7 @@ impl InterpretAccounts<PlatformError> for LedgerStandaloneAccounts {
         let op = DefineAsset::new(body, &IssuerKeyPair { keypair: &keypair }).unwrap();
 
         {
-          // let serialize = serde_json::to_string(&tx).unwrap();
-
-          let host = "localhost";
-          let port = format!("{}", self.submit_port);
-          let global_state = &mut self.client
-                                      .get(&format!("http://{}:{}/global_state", host, port))
-                                      .send()
-                                      .unwrap();
-          let (_comm, seq_id, _sig): (BitDigest, u64, XfrSignature) =
-            serde_json::from_str(&global_state.text().unwrap()[..]).unwrap();
+          let seq_id = fetch_seq_id(&mut self.client, host, &port);
           let txn = Transaction { body: TransactionBody { operations:
                                                             vec![Operation::DefineAsset(op)],
                                                           credentials: vec![],
@@ -1122,7 +1124,6 @@ impl InterpretAccounts<PlatformError> for LedgerStandaloneAccounts {
         };
         // dbg!(&new_seq_num);
         let new_seq_num = serde_json::from_str::<u64>(&new_seq_num).unwrap();
-
         let keypair = self.accounts
                           .get(issuer)
                           .ok_or_else(|| PlatformError::InputsError(error_location!()))?;
@@ -1135,12 +1136,7 @@ impl InterpretAccounts<PlatformError> for LedgerStandaloneAccounts {
              .get_mut(unit)
              .unwrap() += amt;
 
-        let global_state = &mut self.client
-                                    .get(&format!("http://{}:{}/global_state", host, port))
-                                    .send()
-                                    .unwrap();
-        let (_comm, seq_id, _sig): (BitDigest, u64, XfrSignature) =
-          serde_json::from_str(&global_state.text().unwrap()[..]).unwrap();
+        let seq_id = fetch_seq_id(&mut self.client, host, &port);
         let mut tx = Transaction::from_seq_id(seq_id);
 
         let ar = AssetRecordTemplate::with_no_asset_tracking(amt, code.val, iss_art, *pubkey);
@@ -1337,13 +1333,7 @@ impl InterpretAccounts<PlatformError> for LedgerStandaloneAccounts {
 
         let transfer = TransferAsset { body: transfer_body,
                                        body_signatures: vec![transfer_sig] };
-        let mut global_state =
-          &mut self.client
-                   .get(&format!("http://localhost:{}/global_state", self.query_port))
-                   .send()
-                   .unwrap();
-        let (_comm, seq_id, _sig): (BitDigest, u64, XfrSignature) =
-          serde_json::from_str(&global_state.text().unwrap()[..]).unwrap();
+        let seq_id = fetch_seq_id(&mut self.client, host, &port);
         let txn = Transaction { body: TransactionBody { operations:
                                                           vec![Operation::TransferAsset(transfer)],
                                                         credentials: vec![],
