@@ -1509,7 +1509,6 @@ impl LedgerState {
                                                    .as_ref()
                                                    .unwrap()
                                                    .compute_commitment());
-    dbg!(&self.status.state_commitment_data);
     self.status.block_commit_count += 1;
   }
 
