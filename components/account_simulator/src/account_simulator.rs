@@ -997,10 +997,9 @@ impl Drop for LedgerStandaloneAccounts {
 }
 
 fn fetch_seq_id(client: &mut reqwest::Client, host: &str, port: &str) -> u64 {
-  let global_state = &mut client
-    .get(&format!("http://{}:{}/global_state", host, port))
-    .send()
-    .unwrap();
+  let global_state = &mut client.get(&format!("http://{}:{}/global_state", host, port))
+                                .send()
+                                .unwrap();
   let (_comm, seq_id, _sig): (BitDigest, u64, XfrSignature) =
     serde_json::from_str(&global_state.text().unwrap()[..]).unwrap();
   seq_id
