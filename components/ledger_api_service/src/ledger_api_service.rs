@@ -6,7 +6,6 @@ extern crate serde_json;
 
 use actix_cors::Cors;
 use actix_web::{dev, error, middleware, test, web, App, HttpResponse, HttpServer};
-use air::AIRResult;
 use cryptohash::sha256::Digest as BitDigest;
 use cryptohash::sha256::DIGESTBYTES;
 use ledger::data_model::errors::PlatformError;
@@ -155,7 +154,7 @@ fn query_blocks_since<AA>(data: web::Data<Arc<RwLock<AA>>>,
 
 pub fn query_air<AA>(data: web::Data<Arc<RwLock<AA>>>,
                      addr: web::Path<String>)
-                     -> actix_web::Result<web::Json<AIRResult>>
+                     -> actix_web::Result<web::Json<AuthenticatedAIRResult>>
   where AA: ArchiveAccess
 {
   let reader = data.read().unwrap();

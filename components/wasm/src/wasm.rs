@@ -4,10 +4,11 @@
 // To compile wasm package, run wasm-pack build in the wasm directory;
 #![deny(warnings)]
 use crate::wasm_data_model::*;
+use air::AIRResult;
 use credentials::{
   credential_commit, credential_issuer_key_gen, credential_reveal, credential_sign,
-  credential_user_key_gen, credential_verify, CredIssuerPublicKey, CredIssuerSecretKey,
-  CredUserPublicKey, CredUserSecretKey, Credential as PlatformCredential,
+  credential_user_key_gen, credential_verify, credential_verify_commitment, CredIssuerPublicKey,
+  CredIssuerSecretKey, CredUserPublicKey, CredUserSecretKey, Credential as PlatformCredential,
 };
 use cryptohash::sha256;
 use js_sys::Promise;
@@ -39,6 +40,12 @@ mod wasm_data_model;
 /////////// TRANSACTION BUILDING ////////////////
 
 //Random Helpers
+
+#[wasm_bindgen]
+pub fn deserialize(string: String) -> bool {
+  let t: Result<AIRResult, _> = serde_json::from_str(&string);
+  t.is_ok()
+}
 
 #[wasm_bindgen]
 /// Generates random base64 encoded asset type string. Used in asset definitions.
@@ -306,14 +313,15 @@ impl TransactionBuilder {
                                   key_pair: &XfrKeyPair,
                                   user_public_key: &CredUserPublicKey,
                                   issuer_public_key: &CredIssuerPublicKey,
-                                  commitment: &CredentialCommitment)
+                                  commitment: &CredentialCommitment,
+                                  pok: &CredentialPoK)
                                   -> Result<TransactionBuilder, JsValue> {
     self.get_builder_mut()
         .add_operation_air_assign(key_pair,
                                   user_public_key.clone(),
-                                  commitment.get_commitment_ref().clone(),
+                                  commitment.get_ref().clone(),
                                   issuer_public_key.clone(),
-                                  commitment.get_pok_ref().clone())
+                                  pok.get_ref().clone())
         .map_err(error_to_jsvalue)?;
     Ok(self)
   }
@@ -897,6 +905,28 @@ pub fn wasm_credential_issuer_key_gen(attributes: JsValue) -> CredentialIssuerKe
   CredentialIssuerKeyPair { pk, sk }
 }
 
+/// Verifies a credential commitment. Used to confirm that a credential is tied to a ledger
+/// address.
+/// @param {CredIssuerPublicKey} issuer_pub_key - The credential issuer that has attested to the
+/// credentials that have been committed to.
+/// @param {CredentialCommitment} Credential commitment
+/// @param {CredPoK} Proof of knowledge of the underlying commitmenttt
+/// @param {XfrPublicKey} Ledger address linked to this credential commitment.
+/// @throws Will throw an error during verification failure (i.e. the supplied ledger address is
+/// incorrect, the commitment is tied to a different credential issuer, or the proof of knowledge is
+/// invalid, etc.)
+#[wasm_bindgen]
+pub fn wasm_credential_verify_commitment(issuer_pub_key: &CredIssuerPublicKey,
+                                         commitment: &CredentialCommitment,
+                                         pok: &CredentialPoK,
+                                         xfr_pk: &XfrPublicKey)
+                                         -> Result<(), JsValue> {
+  credential_verify_commitment(issuer_pub_key,
+                               commitment.get_ref(),
+                               pok.get_ref(),
+                               xfr_pk.as_bytes()).map_err(error_to_jsvalue)
+}
+
 /// Generates a new credential user key.
 /// @param {CredIssuerPublicKey} issuer_pub_key - The credential issuer that can sign off on this
 /// user's attributes.
@@ -958,14 +988,15 @@ pub fn create_credential(issuer_public_key: &CredIssuerPublicKey,
 pub fn wasm_credential_commit(user_secret_key: &CredUserSecretKey,
                               user_public_key: &XfrPublicKey,
                               credential: &Credential)
-                              -> Result<CredentialCommitment, JsValue> {
+                              -> Result<CredentialCommitmentAndPoK, JsValue> {
   let mut prng = ChaChaRng::from_entropy();
   let (commitment, pok, _key) =
     credential_commit(&mut prng,
                       &user_secret_key,
                       credential.get_cred_ref(),
                       &user_public_key.as_bytes()).map_err(error_to_jsvalue)?;
-  Ok(CredentialCommitment { commitment, pok })
+  Ok(CredentialCommitmentAndPoK { commitment: CredentialCommitment { commitment },
+                                  pok: CredentialPoK { pok } })
 }
 
 /// Selectively reveals attributes committed to in a credential commitment

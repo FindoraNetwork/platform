@@ -423,11 +423,11 @@ impl TxnEffect {
                     .verify(&pk, &air_assign.body)
                     .map_err(|e| zei_fail!(e))?;
           // 2)
-          credential_verify_commitment(issuer_pk, commitment, pok, pk.as_bytes()).map_err(|e| {
-                                                                                   zei_fail!(e)
-                                                                                 })?;
+          credential_verify_commitment(issuer_pk, &commitment, pok, pk.as_bytes()).map_err(|e| {
+                                                                                    zei_fail!(e)
+                                                                                  })?;
           air_updates.insert(serde_json::to_string(&air_assign.body.addr)?,
-                             serde_json::to_string(commitment)?);
+                             serde_json::to_string(&commitment)?);
         }
         // A memo update is valid iff:
         // 1) The signature is valid.
