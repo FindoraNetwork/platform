@@ -267,11 +267,7 @@ impl AuthenticatedAIRResult {
 
   pub fn get_commitment(&self) -> Option<CredentialCommitment> {
     let commitment = self.get_ref().get_credential_commitment();
-    if let Some(commitment) = commitment {
-      return Some(CredentialCommitment { commitment });
-    } else {
-      return None;
-    }
+    commitment.map(|comm| CredentialCommitment { commitment: comm })
   }
 }
 

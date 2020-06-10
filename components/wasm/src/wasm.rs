@@ -4,7 +4,6 @@
 // To compile wasm package, run wasm-pack build in the wasm directory;
 #![deny(warnings)]
 use crate::wasm_data_model::*;
-use air::AIRResult;
 use credentials::{
   credential_commit, credential_issuer_key_gen, credential_reveal, credential_sign,
   credential_user_key_gen, credential_verify, credential_verify_commitment, CredIssuerPublicKey,
@@ -40,12 +39,6 @@ mod wasm_data_model;
 /////////// TRANSACTION BUILDING ////////////////
 
 //Random Helpers
-
-#[wasm_bindgen]
-pub fn deserialize(string: String) -> bool {
-  let t: Result<AIRResult, _> = serde_json::from_str(&string);
-  t.is_ok()
-}
 
 #[wasm_bindgen]
 /// Generates random base64 encoded asset type string. Used in asset definitions.
@@ -910,7 +903,7 @@ pub fn wasm_credential_issuer_key_gen(attributes: JsValue) -> CredentialIssuerKe
 /// @param {CredIssuerPublicKey} issuer_pub_key - The credential issuer that has attested to the
 /// credentials that have been committed to.
 /// @param {CredentialCommitment} Credential commitment
-/// @param {CredPoK} Proof of knowledge of the underlying commitmenttt
+/// @param {CredPoK} Proof of knowledge of the underlying commitment
 /// @param {XfrPublicKey} Ledger address linked to this credential commitment.
 /// @throws Will throw an error during verification failure (i.e. the supplied ledger address is
 /// incorrect, the commitment is tied to a different credential issuer, or the proof of knowledge is

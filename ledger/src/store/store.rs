@@ -2892,7 +2892,6 @@ mod tests {
     assert!(effect.is_err());
     let authenticated_air_res =
       ledger.get_air_data(&serde_json::to_string(&cred_user_key.0).unwrap());
-    dbg!(&authenticated_air_res);
     assert!(authenticated_air_res.is_valid(ledger.get_state_commitment().0));
   }
 
