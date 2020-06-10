@@ -270,12 +270,13 @@ mod tests {
   fn test_submit_transaction_standalone() {
     let mut prng = rand_chacha::ChaChaRng::from_entropy();
     let ledger_state = LedgerState::test_ledger();
+    let block_commit_count = ledger_state.get_block_commit_count();
     let submission_server =
       Arc::new(RwLock::new(SubmissionServer::<_, _, NoTF>::new(prng.clone(),
                                                  Arc::new(RwLock::new(ledger_state)),
                                                  8).unwrap()));
     let app_copy = Arc::clone(&submission_server);
-    let mut tx = Transaction::default();
+    let mut tx = Transaction::from_seq_id(block_commit_count);
 
     let token_code1 = AssetTypeCode { val: [1; 16] };
     let keypair = build_keys(&mut prng);

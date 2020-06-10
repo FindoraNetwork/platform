@@ -761,9 +761,10 @@ pub struct TransactionBody {
   pub memos: Vec<Memo>,
 }
 
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize, Default)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)] //, Default
 pub struct Transaction {
   pub body: TransactionBody,
+  pub seq_id: u64,
   #[serde(default)]
   #[serde(skip_serializing_if = "is_default")]
   pub signatures: Vec<SignatureOf<TransactionBody>>,
@@ -967,8 +968,14 @@ impl Transaction {
     HashOf::new(&(id, self.clone()))
   }
 
-  pub fn from_operation(op: Operation) -> Self {
-    let mut tx = Transaction::default();
+  pub fn from_seq_id(seq_id: u64) -> Self {
+    Transaction { body: TransactionBody::default(),
+                  seq_id,
+                  signatures: Vec::new() }
+  }
+
+  pub fn from_operation(op: Operation, seq_id: u64) -> Self {
+    let mut tx = Transaction::from_seq_id(seq_id);
     tx.add_operation(op);
     tx
   }
@@ -1137,8 +1144,9 @@ mod tests {
   //   DefineAsset::new
   #[test]
   fn test_add_operation() {
-    // Create values to be used to instantiate operations
-    let mut transaction: Transaction = Default::default();
+    // Create values to be used to instantiate operations. Just make up a seq_id, since
+    // it will never be sent to a real ledger
+    let mut transaction: Transaction = Transaction::from_seq_id(0);
 
     let mut prng = rand_chacha::ChaChaRng::from_entropy();
 

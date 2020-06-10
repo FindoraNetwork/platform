@@ -175,6 +175,7 @@ fn trace_credential(dir: &str,
 #[cfg(test)]
 fn air_assign(dir: &str,
               txn_builder_path: &str,
+              seq_id: &str,
               issuer_id: &str,
               address: &str,
               data: &str)
@@ -183,6 +184,7 @@ fn air_assign(dir: &str,
                        .args(&["--txn", txn_builder_path])
                        .args(&["asset_issuer", "--id", issuer_id])
                        .arg("air_assign")
+                       .args(&["--seq_id", seq_id])
                        .args(&["--address", address])
                        .args(&["--data", data])
                        .output()
@@ -736,7 +738,8 @@ fn test_air_assign() {
   create_txn_builder_with_path(txn_builder_file).expect("Failed to create transaction builder");
 
   // Air assigning
-  air_assign(dir, txn_builder_file, "0", "666", "Hell").expect("Failed to assign to AIR");
+  let seq_id = "0";
+  air_assign(dir, txn_builder_file, seq_id, "0", "666", "Hell").expect("Failed to assign to AIR");
 
   // Submit transaction
   let output = submit(txn_builder_file).expect("Failed to submit transaction");

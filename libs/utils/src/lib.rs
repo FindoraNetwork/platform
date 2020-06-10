@@ -9,6 +9,8 @@ use std::path::PathBuf;
 use zei::errors::ZeiError;
 use zei::xfr::sig::{XfrKeyPair, XfrPublicKey, XfrSignature};
 
+pub const TRANSACTION_WINDOW_WIDTH: u64 = 100;
+
 pub fn string_of_type<T>(_: &T) -> String {
   std::any::type_name::<T>().to_string()
 }

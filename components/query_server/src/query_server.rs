@@ -235,7 +235,7 @@ mod tests {
     let key = l256("01");
 
     // Add hash to ledger and update query server
-    let mut builder = TransactionBuilder::default();
+    let mut builder = TransactionBuilder::from_seq_id(ledger_state.get_block_commit_count());
     builder.add_operation_kv_update(&kp, &key, 0, Some(&hash))
            .unwrap();
     let update_kv_tx = builder.transaction();
@@ -258,7 +258,7 @@ mod tests {
 
     // Replace commitment
     let hash = KVHash::new(&String::from("new_data"), Some(&blind));
-    let mut builder = TransactionBuilder::default();
+    let mut builder = TransactionBuilder::from_seq_id(ledger_state.get_block_commit_count());
     builder.add_operation_kv_update(&kp, &key, 1, Some(&hash))
            .unwrap();
     let update_kv_tx = builder.transaction();
@@ -283,7 +283,7 @@ mod tests {
     let alice = XfrKeyPair::generate(&mut prng);
     let bob = XfrKeyPair::generate(&mut prng);
     // Define asset
-    let mut builder = TransactionBuilder::default();
+    let mut builder = TransactionBuilder::from_seq_id(ledger_state.get_block_commit_count());
     let define_tx = builder.add_operation_create_asset(&alice,
                                                        Some(token_code),
                                                        AssetRules::default(),
@@ -292,7 +292,7 @@ mod tests {
                            .unwrap()
                            .transaction();
 
-    let mut builder = TransactionBuilder::default();
+    let mut builder = TransactionBuilder::from_seq_id(ledger_state.get_block_commit_count());
 
     //Issuance txn
     let amt = 1000;
@@ -326,7 +326,7 @@ mod tests {
                             .unwrap()
                             .sign(&alice)
                             .unwrap();
-    let mut builder = TransactionBuilder::default();
+    let mut builder = TransactionBuilder::from_seq_id(ledger_state.get_block_commit_count());
     let xfr_txn = builder.add_operation(xfr_op.transaction().unwrap())
                          .transaction();
 

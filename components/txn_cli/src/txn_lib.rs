@@ -25,7 +25,9 @@ use zei::xfr::structs::{
 
 extern crate exitcode;
 
+#[allow(clippy::too_many_arguments)]
 pub fn air_assign(data_dir: &str,
+                  seq_id: u64,
                   issuer_id: u64,
                   address: &str,
                   data: &str,
@@ -35,7 +37,7 @@ pub fn air_assign(data_dir: &str,
                   -> Result<(), PlatformError> {
   let issuer_data = load_data(data_dir)?;
   let xfr_key_pair = issuer_data.get_asset_issuer_key_pair(issuer_id)?;
-  let mut txn_builder = TransactionBuilder::default();
+  let mut txn_builder = TransactionBuilder::from_seq_id(seq_id);
   let address = serde_json::from_str::<CredUserPublicKey>(address)?;
   let data = serde_json::from_str::<CredCommitment>(data)?;
   let issuer_pk = serde_json::from_str::<CredIssuerPublicKey>(issuer_pk)?;
@@ -56,7 +58,9 @@ pub fn air_assign(data_dir: &str,
 /// * `memo`: memo for defining the asset.
 /// * `asset_rules`: simple asset rules (e.g. traceable, transferable)
 /// * `txn_file`: path to store the transaction file.
+#[allow(clippy::too_many_arguments)]
 pub fn define_asset(data_dir: &str,
+                    seq_id: u64,
                     fiat_asset: bool,
                     issuer_key_pair: &XfrKeyPair,
                     token_code: AssetTypeCode,
@@ -64,7 +68,7 @@ pub fn define_asset(data_dir: &str,
                     asset_rules: AssetRules,
                     txn_file: Option<&str>)
                     -> Result<TransactionBuilder, PlatformError> {
-  let mut txn_builder = TransactionBuilder::default();
+  let mut txn_builder = TransactionBuilder::from_seq_id(seq_id);
   txn_builder.add_operation_create_asset(issuer_key_pair,
                                          Some(token_code),
                                          asset_rules,
@@ -91,10 +95,11 @@ pub fn define_and_submit<T>(issuer_key_pair: &XfrKeyPair,
                             rules: AssetRules,
                             rest_client: &mut T)
                             -> Result<(), PlatformError>
-  where T: RestfulLedgerUpdate
+  where T: RestfulLedgerUpdate + RestfulLedgerAccess
 {
+  let (_, seq_id) = rest_client.get_state_commitment().unwrap();
   // Define the asset
-  let mut txn_builder = TransactionBuilder::default();
+  let mut txn_builder = TransactionBuilder::from_seq_id(seq_id);
   let txn = txn_builder.add_operation_create_asset(issuer_key_pair,
                                                    Some(code),
                                                    rules,
@@ -122,6 +127,7 @@ pub fn define_and_submit<T>(issuer_key_pair: &XfrKeyPair,
 /// * `tracing_policy`: asset tracing policy, if any.
 #[allow(clippy::too_many_arguments)]
 pub fn issue_and_transfer_asset(data_dir: &str,
+                                seq_id: u64,
                                 issuer_key_pair: &XfrKeyPair,
                                 recipient_key_pair: &XfrKeyPair,
                                 amount: u64,
@@ -173,7 +179,7 @@ pub fn issue_and_transfer_asset(data_dir: &str,
                                                  .transaction()?;
 
   // Issue and Transfer transaction
-  let mut txn_builder = TransactionBuilder::default();
+  let mut txn_builder = TransactionBuilder::from_seq_id(seq_id);
   txn_builder.add_operation_issue_asset(issuer_key_pair,
                                         &token_code,
                                         get_and_update_sequence_number(data_dir)?,
@@ -227,7 +233,9 @@ pub fn issue_transfer_and_get_utxo_and_blinds<R: CryptoRng + RngCore, T>(
                                                 .sign(issuer_key_pair)?
                                                 .transaction()?;
 
-  let mut txn_builder = TransactionBuilder::default();
+  let (_, seq_id) = rest_client.get_state_commitment().unwrap();
+
+  let mut txn_builder = TransactionBuilder::from_seq_id(seq_id);
   let txn = txn_builder.add_operation_issue_asset(issuer_key_pair,
                                                   &code,
                                                   sequence_number,
@@ -320,7 +328,6 @@ pub fn submit_and_get_sids<T>(rest_client: &mut T,
   let txn = txn_builder.transaction();
   let handle = rest_client.submit_transaction(&txn)?;
   println!("Txn handle: {}", handle);
-
   // Return sid
   let status = rest_client.txn_status(&handle)?;
   match status {
@@ -405,7 +412,9 @@ mod tests {
     let issuer_key_pair = XfrKeyPair::generate(&mut prng);
 
     // Define asset
+    let seq_id = 0;
     let res = define_asset(data_dir,
+                           seq_id,
                            false,
                            &issuer_key_pair,
                            AssetTypeCode::gen_random(),
@@ -431,8 +440,10 @@ mod tests {
     // Issue and transfer asset
     let code = AssetTypeCode::gen_random();
     let amount = 1000;
+    let seq_id = 0;
     let res =
       issue_and_transfer_asset(data_dir,
+                               seq_id,
                                &issuer_key_pair,
                                &recipient_key_pair,
                                amount,

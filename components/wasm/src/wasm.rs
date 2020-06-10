@@ -142,7 +142,6 @@ pub fn create_debt_memo(ir_numerator: u64,
 
 #[wasm_bindgen]
 /// Structure that allows users to construct arbitrary transactions.
-#[derive(Default)]
 pub struct TransactionBuilder {
   transaction_builder: PlatformTransactionBuilder,
 }
@@ -160,8 +159,8 @@ impl TransactionBuilder {
 #[wasm_bindgen]
 impl TransactionBuilder {
   /// Create a new transaction builder.
-  pub fn new() -> Self {
-    Self::default()
+  pub fn new(seq_id: u64) -> Self {
+    TransactionBuilder { transaction_builder: PlatformTransactionBuilder::from_seq_id(seq_id) }
   }
 
   /// Wraps around TransactionBuilder to add an asset definition operation to a transaction builder instance.

@@ -169,7 +169,8 @@ mod tests {
   use super::*;
   #[test]
   fn test_mock_client() {
-    let tx = Transaction::default();
+    let tx = Transaction::from_seq_id(0);
+    let mut mock_rest_client = MockRestClient::new(2);
     let mut mock_rest_client = LedgerStandalone::new_mock(2);
     let handle = mock_rest_client.submit_transaction(&tx).unwrap();
     mock_rest_client.force_end_block().unwrap();
