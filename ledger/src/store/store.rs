@@ -227,7 +227,7 @@ pub struct LedgerStatus {
   // sequential.
   asset_types: HashMap<AssetTypeCode, AssetType>,
   // Tracing policy for each asset type
-  tracing_policies: HashMap<AssetTypeCode, Option<AssetTracingPolicy>>,
+  tracing_policies: HashMap<AssetTypeCode, AssetTracingPolicy>,
   issuance_num: HashMap<AssetTypeCode, u64>,
   // Issuance amounts for assets with limits
   issuance_amounts: HashMap<AssetTypeCode, u64>,
@@ -621,25 +621,6 @@ impl LedgerStatus {
       }
     }
 
-    // Issuance tracing policies must has the asset_tracking flag consistent with the asset definition
-    for (code, tracing_policies) in txn.issuance_tracing_policies.iter() {
-      // dbg!(&(code, tracing_policy));
-      let traceability = self.asset_types
-                             .get(&code)
-                             .or_else(|| txn.new_asset_codes.get(&code))
-                             .ok_or_else(|| PlatformError::InputsError(error_location!()))?
-                             .properties
-                             .asset_rules
-                             .traceable;
-      if let Some(policy) = tracing_policies {
-        if traceability != policy.asset_tracking {
-          return Err(PlatformError::InputsError(error_location!()));
-        }
-      } else if traceability {
-        return Err(PlatformError::InputsError(error_location!()));
-      }
-    }
-
     // Assets with cosignature requirements must have enough signatures
     for ((op_idx, input_idx), key_set) in txn.cosig_keys.iter() {
       let op = &txn.txn.body.operations[*op_idx];
@@ -678,24 +659,28 @@ impl LedgerStatus {
           // If the asset is nonconfidential, get its tracing policy
           XfrAssetType::NonConfidential(asset_type) => {
             let code = AssetTypeCode { val: asset_type };
-            let tracing_policy =
-              &self.tracing_policies
-                   .get(&code)
-                   .or_else(|| txn.issuance_tracing_policies.get(&code))
-                   .ok_or_else(|| PlatformError::InputsError(error_location!()))?;
-            dbg!(&tracing_policy);
+            let tracing_policy = self.tracing_policies
+                                     .get(&code)
+                                     .or_else(|| txn.issuance_tracing_policies.get(&code));
             match tracing_policy {
               Some(policy) => {
                 match policy.identity_tracking {
                   Some(_) => match input_commitment {
                     Some(_) => {
-                      transfer_input_policies.push(Some(tracing_policy.clone().as_ref().unwrap()));
+                      transfer_input_policies.push(Some(tracing_policy.clone().unwrap()));
                       transfer_input_commitments.push(Some(input_commitment.as_ref()
                                                                            .clone()
                                                                            .unwrap()));
                     }
                     None => {
-                      let issuer_key = txn.issuance_keys.get(&code).unwrap().key;
+                      let issuer_key =
+                        self.asset_types
+                            .get(&code)
+                            .or_else(|| txn.new_asset_codes.get(&code))
+                            .ok_or_else(|| PlatformError::InputsError(error_location!()))?
+                            .properties
+                            .issuer
+                            .key;
                       // If the sender is an issuer, exclude the identity tracing.
                       // Otherwise, an identity commitment is required.
                       if input_blind_asset_record.public_key == issuer_key {
@@ -756,25 +741,28 @@ impl LedgerStatus {
             // If the asset is nonconfidential, get its tracing policy
             XfrAssetType::NonConfidential(asset_type) => {
               let code = AssetTypeCode { val: asset_type };
-              let tracing_policy =
-                &self.tracing_policies
-                     .get(&code)
-                     .or_else(|| txn.issuance_tracing_policies.get(&code))
-                     .ok_or_else(|| PlatformError::InputsError(error_location!()))?;
+              let tracing_policy = self.tracing_policies
+                                       .get(&code)
+                                       .or_else(|| txn.issuance_tracing_policies.get(&code));
               match tracing_policy {
                 Some(policy) => {
                   match policy.identity_tracking {
                     Some(_) => match output_commitment {
                       Some(_) => {
-                        transfer_output_policies.push(Some(tracing_policy.clone()
-                                                                         .as_ref()
-                                                                         .unwrap()));
+                        transfer_output_policies.push(Some(tracing_policy.clone().unwrap()));
                         transfer_output_commitments.push(Some(output_commitment.as_ref()
                                                                                .clone()
                                                                                .unwrap()));
                       }
                       None => {
-                        let issuer_key = txn.issuance_keys.get(&code).unwrap().key;
+                        let issuer_key =
+                          self.asset_types
+                              .get(&code)
+                              .or_else(|| txn.new_asset_codes.get(&code))
+                              .ok_or_else(|| PlatformError::InputsError(error_location!()))?
+                              .properties
+                              .issuer
+                              .key;
                         // If the sender is an issuer, exclude the identity tracing.
                         // Otherwise, an identity commitment is required.
                         if output_blind_asset_record.public_key == issuer_key {

@@ -38,7 +38,7 @@ pub struct TxnEffect {
   // if there is an issuance cap
   pub confidential_issuance_types: HashSet<AssetTypeCode>,
   // Which asset tracing policy is being used to issue each asset type
-  pub issuance_tracing_policies: HashMap<AssetTypeCode, Option<AssetTracingPolicy>>,
+  pub issuance_tracing_policies: HashMap<AssetTypeCode, AssetTracingPolicy>,
   // Mapping of (op index, xfr input idx) tuples to set of valid signature keys
   // i.e. (2, 1) -> { AlicePk, BobPk } means that Alice and Bob both have valid signatures on the 2nd input of the 1st
   // operation
@@ -81,8 +81,7 @@ impl TxnEffect {
     let mut new_issuance_nums: HashMap<AssetTypeCode, Vec<u64>> = HashMap::new();
     let mut issuance_keys: HashMap<AssetTypeCode, IssuerPublicKey> = HashMap::new();
     let mut issuance_amounts = HashMap::new();
-    let mut issuance_tracing_policies: HashMap<AssetTypeCode, Option<AssetTracingPolicy>> =
-      HashMap::new();
+    let mut issuance_tracing_policies: HashMap<AssetTypeCode, AssetTracingPolicy> = HashMap::new();
     let mut transfer_input_commitments = Vec::new();
     let mut transfer_output_commitments = Vec::new();
     let mut transfer_body: Option<Box<XfrBody>> = None;
@@ -261,11 +260,12 @@ impl TxnEffect {
           }
 
           // (6)
-          let policy = match &iss.body.tracing_policy {
-            Some(p) => Some(p.clone()),
-            None => None,
-          };
-          issuance_tracing_policies.insert(code, policy);
+          match &iss.body.tracing_policy {
+            Some(policy) => {
+              issuance_tracing_policies.insert(code, policy.clone());
+            }
+            None => {}
+          }
         }
 
         // An asset transfer is valid iff:
@@ -537,7 +537,7 @@ pub struct BlockEffect {
   // Which public key is being used to issue each asset type
   pub issuance_keys: HashMap<AssetTypeCode, IssuerPublicKey>,
   // Which new tracing policies are being added
-  pub new_tracing_policies: HashMap<AssetTypeCode, Option<AssetTracingPolicy>>,
+  pub new_tracing_policies: HashMap<AssetTypeCode, AssetTracingPolicy>,
   // Updates to the AIR
   pub air_updates: HashMap<String, String>,
   // User-provided Key-Value store updates
@@ -639,17 +639,10 @@ impl BlockEffect {
       *issuance_amount += amount;
     }
 
-    for (type_code, tracing_policies) in txn.issuance_tracing_policies.iter() {
+    for (type_code, tracing_policy) in txn.issuance_tracing_policies.iter() {
       debug_assert!(!self.new_tracing_policies.contains_key(type_code));
-      match tracing_policies {
-        Some(_) => {
-          self.new_tracing_policies
-              .insert(*type_code, tracing_policies.clone());
-        }
-        None => {
-          self.new_tracing_policies.insert(*type_code, None);
-        }
-      }
+      self.new_tracing_policies
+          .insert(*type_code, tracing_policy.clone());
     }
 
     for (addr, data) in txn.air_updates {
