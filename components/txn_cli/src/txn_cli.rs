@@ -808,7 +808,11 @@ pub(crate) fn process_borrower_cmd<T: RestfulLedgerAccess + RestfulLedgerUpdate>
         println!("Borrower id is required to load funds. Use borrower --id.");
         return Err(PlatformError::InputsError(error_location!()));
       };
-      process_load_funds_cmd(load_funds_matches, data_dir, borrower_id, seq_id, rest_client)
+      process_load_funds_cmd(load_funds_matches,
+                             data_dir,
+                             borrower_id,
+                             seq_id,
+                             rest_client)
     }
     ("view_loan", Some(view_loan_matches)) => {
       let borrower_id = if let Some(id_arg) = borrower_matches.value_of("id") {
@@ -1122,7 +1126,12 @@ pub(crate) fn process_load_funds_cmd<T: RestfulLedgerAccess + RestfulLedgerUpdat
     println!("Amount is required to load funds. Use --amount.");
     return Err(PlatformError::InputsError(error_location!()));
   };
-  load_funds(data_dir, seq_id, issuer_id, borrower_id, amount, rest_client)
+  load_funds(data_dir,
+             seq_id,
+             issuer_id,
+             borrower_id,
+             amount,
+             rest_client)
 }
 
 /// Processes the `borrower pay_loan` subcommand.
@@ -1198,8 +1207,12 @@ pub fn process_inputs<T: RestfulQueryServerAccess + RestfulLedgerAccess + Restfu
     ("credential_issuer", Some(credential_issuer_matches)) => {
       process_credential_issuer_cmd(credential_issuer_matches, &dir)
     }
-    ("lender", Some(issuer_matches)) => process_lender_cmd(issuer_matches, &dir, seq_id, rest_client),
-    ("borrower", Some(issuer_matches)) => process_borrower_cmd(issuer_matches, &dir, seq_id, rest_client),
+    ("lender", Some(issuer_matches)) => {
+      process_lender_cmd(issuer_matches, &dir, seq_id, rest_client)
+    }
+    ("borrower", Some(issuer_matches)) => {
+      process_borrower_cmd(issuer_matches, &dir, seq_id, rest_client)
+    }
     ("create_txn_builder", Some(create_txn_builder_matches)) => {
       process_create_txn_builder_cmd(create_txn_builder_matches, seq_id, &txn_file)
     }
