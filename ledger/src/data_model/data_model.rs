@@ -800,7 +800,7 @@ impl AuthenticatedAIRResult {
         if state_commitment != HashOf::new(&None) {
           return false;
         }
-        if root != (BitDigest { 0: [0_u8; DIGESTBYTES] }) {
+        if root != ZERO_DIGEST {
           return false;
         }
       }
@@ -818,10 +818,10 @@ impl AuthenticatedAIRResult {
       return false;
     }
     let key = &self.air_result.key;
-    let value = &self.air_result.value;
+    let value = self.air_result.value.as_ref();
     let proof = &self.air_result.merkle_proof;
 
-    air_check_merkle_proof(&root, key, value.as_ref(), proof)
+    air_check_merkle_proof(&root, key, value, proof)
   }
 
   // Extract the credential commitment stored in this AIRResult
