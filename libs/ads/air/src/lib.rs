@@ -6,7 +6,7 @@ use std::io::Error;
 
 pub use sparse_merkle_tree::Digest;
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct AIR(SmtMap256<String>);
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct AIRMerkleProof(MerkleProof);
