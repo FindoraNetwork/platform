@@ -37,13 +37,6 @@ pub struct TxnEffect {
   // Asset types that have issuances with confidential outputs. Issuances cannot be confidential
   // if there is an issuance cap
   pub confidential_issuance_types: HashSet<AssetTypeCode>,
-  // Which asset tracing policy is being used to issue each asset type
-  // We store two tracing policies for each asset type
-  // * The first policy contains the encryption keys, asset tracing flag, and identity tracing poicy
-  // * The second policy doesn't inclue an identity tracing policy
-  // This allows us to transfer an asset when there's no identity requirement
-  pub issuance_tracing_policies:
-    HashMap<AssetTypeCode, Option<(AssetTracingPolicy, AssetTracingPolicy)>>,
   // Mapping of (op index, xfr input idx) tuples to set of valid signature keys
   // i.e. (2, 1) -> { AlicePk, BobPk } means that Alice and Bob both have valid signatures on the 2nd input of the 1st
   // operation
@@ -86,9 +79,6 @@ impl TxnEffect {
     let mut new_issuance_nums: HashMap<AssetTypeCode, Vec<u64>> = HashMap::new();
     let mut issuance_keys: HashMap<AssetTypeCode, IssuerPublicKey> = HashMap::new();
     let mut issuance_amounts = HashMap::new();
-    let mut issuance_tracing_policies: HashMap<AssetTypeCode,
-                                               Option<(AssetTracingPolicy, AssetTracingPolicy)>> =
-      HashMap::new();
     let mut transfer_input_commitments = Vec::new();
     let mut transfer_output_commitments = Vec::new();
     let mut transfer_body: Option<Box<XfrBody>> = None;
@@ -183,7 +173,7 @@ impl TxnEffect {
                           globals.rt_vars,
                           globals.amt_vars,
                           globals.frac_vars,
-                          &Transaction::default())?;
+                          &Transaction::from_seq_id(txn.seq_id))?;
           }
 
           issuance_keys.insert(code, token.properties.issuer);

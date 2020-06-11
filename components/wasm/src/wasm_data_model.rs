@@ -4,8 +4,9 @@ use credentials::{
   CredCommitment, CredIssuerPublicKey, CredIssuerSecretKey, CredPoK, CredRevealSig, CredSignature,
   CredUserPublicKey, CredUserSecretKey, Credential as PlatformCredential,
 };
+use cryptohash::sha256::{Digest, DIGESTBYTES};
 use ledger::data_model::{
-  b64dec, AssetRules as PlatformAssetRules, KVBlind as PlatformKVBlind, KVHash as PlatformKVHash,
+  AssetRules as PlatformAssetRules, KVBlind as PlatformKVBlind, KVHash as PlatformKVHash,
   SignatureRules as PlatformSignatureRules, TransferType as PlatformTransferType, TxOutput,
   TxoRef as PlatformTxoRef, TxoSID,
 };
@@ -18,10 +19,11 @@ use zei::xfr::asset_tracer::gen_asset_tracer_keypair;
 use zei::xfr::sig::XfrPublicKey;
 use zei::xfr::structs::{
   AssetTracerDecKeys, AssetTracerEncKeys, AssetTracerKeyPair as ZeiAssetTracerKeyPair,
-  AssetTracingPolicy, BlindAssetRecord, OwnerMemo as ZeiOwnerMemo,
+  AssetTracingPolicy, BlindAssetRecord, IdentityRevealPolicy, OwnerMemo as ZeiOwnerMemo,
 };
 
 #[wasm_bindgen]
+/// Indicates whether the TXO ref is an absolute or relative value.
 pub struct TxoRef {
   pub(crate) txo_ref: PlatformTxoRef,
 }
@@ -60,6 +62,7 @@ impl TxoRef {
 }
 
 #[wasm_bindgen]
+/// Indicates whether the transfer is a standard one, or a debt swap.
 pub struct TransferType {
   transfer_type: PlatformTransferType,
 }
@@ -86,12 +89,14 @@ impl TransferType {
 }
 
 #[wasm_bindgen]
+/// TXO of the client's asset record.
 pub struct ClientAssetRecord {
   pub(crate) output: TxOutput,
 }
 
 #[wasm_bindgen]
 #[derive(Serialize, Deserialize)]
+/// Key pair of the asset tracer.
 pub struct AssetTracerKeyPair {
   pub(crate) keypair: ZeiAssetTracerKeyPair,
 }
@@ -124,6 +129,7 @@ impl AssetTracerKeyPair {
 }
 
 #[wasm_bindgen]
+/// Asser owner memo.
 pub struct OwnerMemo {
   pub(crate) memo: ZeiOwnerMemo,
 }
@@ -163,6 +169,7 @@ pub(crate) struct AttributeAssignment {
 
 #[wasm_bindgen]
 #[derive(Serialize, Deserialize)]
+/// Key pair of a credential user.
 pub struct CredentialUserKeyPair {
   pub(crate) pk: CredUserPublicKey,
   pub(crate) sk: CredUserSecretKey,
@@ -177,18 +184,21 @@ pub struct CredentialIssuerKeyPair {
 
 #[wasm_bindgen]
 #[derive(Serialize, Deserialize)]
+/// Signature of a credential record.
 pub struct CredentialSignature {
   pub(crate) sig: CredSignature,
 }
 
 #[wasm_bindgen]
 #[derive(Serialize, Deserialize)]
+/// Reveal signature of a credential record.
 pub struct CredentialRevealSig {
   pub(crate) sig: CredRevealSig,
 }
 
 #[wasm_bindgen]
 #[derive(Serialize, Deserialize)]
+/// Commitment to a credential record.
 pub struct CredentialCommitment {
   pub(crate) commitment: CredCommitment,
   pub(crate) pok: CredPoK,
@@ -196,6 +206,10 @@ pub struct CredentialCommitment {
 
 #[wasm_bindgen]
 #[derive(Serialize, Deserialize)]
+/// Credential information containing:
+/// * Issuer public key.
+/// * Credential signature.
+/// * Credential attributes and associated values.
 pub struct Credential {
   pub(crate) credential: PlatformCredential,
 }
@@ -228,6 +242,7 @@ impl CredentialRevealSig {
 }
 
 #[wasm_bindgen]
+/// Key pair of a credential issuer
 impl CredentialIssuerKeyPair {
   pub fn get_pk(&self) -> CredIssuerPublicKey {
     self.pk.clone()
@@ -263,6 +278,7 @@ impl CredentialUserKeyPair {
 }
 
 #[wasm_bindgen]
+/// Stores threshold and weights for a multisignature requirement.
 pub struct SignatureRules {
   pub(crate) sig_rules: PlatformSignatureRules,
 }
@@ -294,32 +310,52 @@ impl SignatureRules {
 }
 
 #[wasm_bindgen]
-#[derive(Default)]
+/// Tracing policy for asset transfers. Can be configured to track credentials, the asset type and
+/// amount, or both.
 pub struct TracingPolicy {
-  policy: AssetTracingPolicy,
+  pub(crate) policy: AssetTracingPolicy,
 }
 
 #[wasm_bindgen]
 impl TracingPolicy {
-  pub fn new_with_tracking(tracing_key: &AssetTracerEncKey) -> Self {
+  pub fn new_with_tracking(tracing_key: &AssetTracerKeyPair) -> Self {
     let policy = AssetTracingPolicy { enc_keys: tracing_key.get_enc_key().clone(),
                                       asset_tracking: true,
                                       identity_tracking: None };
     TracingPolicy { policy }
   }
 
-  pub fn new_with_identity_tracking(tracing_key: &AssetTracerEncKey,
+  pub fn new_with_identity_tracking(tracing_key: &AssetTracerKeyPair,
                                     cred_issuer_key: &CredIssuerPublicKey,
                                     reveal_map: JsValue,
                                     tracking: bool)
-                                    -> Result<Self, JsValue> {
+                                    -> Result<TracingPolicy, JsValue> {
     let reveal_map: Vec<bool> = reveal_map.into_serde().map_err(error_to_jsvalue)?;
-    let policy = AssetTracingPolicy {enc_keys: tracking_key.get_
+    let identity_policy = IdentityRevealPolicy { cred_issuer_pub_key: cred_issuer_key.get_ref()
+                                                                                     .clone(),
+                                                 reveal_map };
+    let policy = AssetTracingPolicy { enc_keys: tracing_key.get_enc_key().clone(),
+                                      asset_tracking: tracking,
+                                      identity_tracking: Some(identity_policy) };
+    Ok(TracingPolicy { policy })
+  }
+}
+
+impl TracingPolicy {
+  pub fn get_ref(&self) -> &AssetTracingPolicy {
+    &self.policy
   }
 }
 
 #[wasm_bindgen]
 #[derive(Default)]
+/// Simple asset rules:
+/// 1) Traceable: Records and identities of traceable assets can be decrypted by a provided tracking key
+/// 2) Transferable: Non-transferable assets can only be transferred once from the issuer to
+///    another user.
+/// 3) Updatable: Whether the asset memo can be updated.
+/// 4) Transfer signature rules: Signature weights and threshold for a valid transfer.
+/// 5) Max units: Optional limit on total issuance amount.
 pub struct AssetRules {
   pub(crate) rules: PlatformAssetRules,
 }
@@ -334,7 +370,7 @@ impl AssetRules {
   /// Toggles asset traceability.
   /// @param {TracingPolicy} policy - Tracing policy for the new asset.
   pub fn set_tracing(mut self, policy: &TracingPolicy) -> AssetRules {
-    self.rules.traceable = Some(policy.get_policy_ref().clone());
+    self.rules.tracing_policy = Some(policy.get_ref().clone());
     self
   }
 
@@ -393,6 +429,29 @@ impl KVBlind {
 
 #[wasm_bindgen]
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+/// Key for hashes in the ledger's custom data store.
+pub struct Key(Digest);
+
+#[wasm_bindgen]
+impl Key {
+  /// Generate a random key.
+  /// Figure out how to store prng ref in browser: https://bugtracker.findora.org/issues/63
+  pub fn gen_random() -> Self {
+    let mut small_rng = ChaChaRng::from_entropy();
+    let mut buf: [u8; DIGESTBYTES] = [0u8; DIGESTBYTES];
+    small_rng.fill_bytes(&mut buf);
+    Key(Digest::from_slice(&buf).unwrap())
+  }
+}
+
+impl Key {
+  pub fn get_ref(&self) -> &Digest {
+    &self.0
+  }
+}
+
+#[wasm_bindgen]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct KVHash {
   pub(crate) hash: PlatformKVHash,
 }
@@ -400,11 +459,11 @@ pub struct KVHash {
 #[wasm_bindgen]
 impl KVHash {
   pub fn new_no_blind(data: &str) -> Self {
-    KVHash { hash: PlatformKVHash(HashOf::new(&(b64dec(data).as_ref().unwrap().to_vec(), None))) }
+    KVHash { hash: PlatformKVHash(HashOf::new(&(data.as_bytes().to_vec(), None))) }
   }
 
   pub fn new_with_blind(data: &str, kv_blind: &KVBlind) -> Self {
-    KVHash { hash: PlatformKVHash(HashOf::new(&(b64dec(data).as_ref().unwrap().to_vec(),
+    KVHash { hash: PlatformKVHash(HashOf::new(&(data.as_bytes().to_vec(),
                                                 Some(kv_blind.get_blind_ref().clone())))) }
   }
 }

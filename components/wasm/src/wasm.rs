@@ -11,7 +11,7 @@ use credentials::{
 };
 use cryptohash::sha256;
 use js_sys::Promise;
-use ledger::data_model::{b64dec, b64enc, AssetTypeCode, AuthenticatedTransaction, Operation};
+use ledger::data_model::{b64enc, AssetTypeCode, AuthenticatedTransaction, Operation};
 use ledger::policies::{DebtMemo, Fraction};
 use rand_chacha::ChaChaRng;
 use rand_core::SeedableRng;
@@ -55,7 +55,7 @@ pub fn random_asset_type() -> String {
 /// @param {string} authenticated_txn - String representing the transaction.
 /// @see {@link get_transaction} for instructions on fetching a transaction from the ledger.
 /// @see {@link get_state_commitment} for instructions on fetching a ledger state commitment.
-/// @throws Will throw an error if the state commitment or the transaction fail to deserialize.
+/// @throws Will throw an error if the state commitment or the transaction fails to deserialize.
 pub fn verify_authenticated_txn(state_commitment: String,
                                 authenticated_txn: String)
                                 -> Result<bool, JsValue> {
@@ -142,7 +142,6 @@ pub fn create_debt_memo(ir_numerator: u64,
 
 #[wasm_bindgen]
 /// Structure that allows users to construct arbitrary transactions.
-#[derive(Default)]
 pub struct TransactionBuilder {
   transaction_builder: PlatformTransactionBuilder,
 }
@@ -160,8 +159,8 @@ impl TransactionBuilder {
 #[wasm_bindgen]
 impl TransactionBuilder {
   /// Create a new transaction builder.
-  pub fn new() -> Self {
-    Self::default()
+  pub fn new(seq_id: u64) -> Self {
+    TransactionBuilder { transaction_builder: PlatformTransactionBuilder::from_seq_id(seq_id) }
   }
 
   /// Wraps around TransactionBuilder to add an asset definition operation to a transaction builder instance.
@@ -234,6 +233,7 @@ impl TransactionBuilder {
   /// @param {string} code - Base64 string representing the token code of the asset to be issued.
   /// @param {BigInt} seq_num - Issuance sequence number. Every subsequent issuance of a given asset type must have a higher sequence number than before.
   /// @param {BigInt} amount - Amount to be issued.
+  /// @param {bool} conf_amount - `true` means the asset amount is confidential, and `false` means it's nonconfidential.
   #[allow(clippy::too_many_arguments)]
   pub fn add_basic_issue_asset_with_tracking(mut self,
                                              key_pair: &XfrKeyPair,
@@ -274,6 +274,7 @@ impl TransactionBuilder {
   /// @param {string} code - Base64 string representing the token code of the asset to be issued.
   /// @param {BigInt} seq_num - Issuance sequence number. Every subsequent issuance of a given asset type must have a higher sequence number than before.
   /// @param {BigInt} amount - Amount to be issued.
+  /// @param {bool} conf_amount - `true` means the asset amount is confidential, and `false` means it's nonconfidential.
   pub fn add_basic_issue_asset_without_tracking(mut self,
                                                 key_pair: &XfrKeyPair,
                                                 code: String,
@@ -319,14 +320,11 @@ impl TransactionBuilder {
   /// Adds an add kv update operation to a WasmTransactionBuilder instance without kv hash.
   pub fn add_operation_kv_update_no_hash(mut self,
                                          auth_key_pair: &XfrKeyPair,
-                                         index: &str,
+                                         key: &Key,
                                          seq_num: u64)
                                          -> Result<TransactionBuilder, JsValue> {
     self.get_builder_mut()
-        .add_operation_kv_update(auth_key_pair,
-                                 &sha256::Digest::from_slice(&b64dec(index).unwrap()).unwrap(),
-                                 seq_num,
-                                 None)
+        .add_operation_kv_update(auth_key_pair, key.get_ref(), seq_num, None)
         .map_err(error_to_jsvalue)?;
     Ok(self)
   }
@@ -334,13 +332,13 @@ impl TransactionBuilder {
   /// Adds an add kv update operation to a WasmTransactionBuilder instance with kv hash.
   pub fn add_operation_kv_update_with_hash(mut self,
                                            auth_key_pair: &XfrKeyPair,
-                                           index: &str,
+                                           key: &Key,
                                            seq_num: u64,
                                            kv_hash: KVHash)
                                            -> Result<TransactionBuilder, JsValue> {
     self.get_builder_mut()
         .add_operation_kv_update(auth_key_pair,
-                                 &sha256::Digest::from_slice(&b64dec(index).unwrap()).unwrap(),
+                                 key.get_ref(),
                                  seq_num,
                                  Some(&kv_hash.get_hash()))
         .map_err(error_to_jsvalue)?;
@@ -477,11 +475,13 @@ impl TransferOperationBuilder {
 
   /// Wraps around TransferOperationBuilder to add an input to a transfer operation builder.
   /// @param {TxoRef} txo_ref - Absolute or relative utxo reference
-  /// @param {string} oar - Serialized opened asset record to serve as transfer input. This record must exist on the
-  /// ledger for the transfer to be valid
-  /// @param {BigInt} amount - Amount of input record to transfer
+  /// @param {string} asset_record - Serialized client asset record to serve as transfer input. This record must exist on the
+  /// ledger for the transfer to be valid.
+  /// @param {OwnerMemo} owner_memo - Opening parameters.
   /// @param tracing_key {AssetTracerKeyPair} - Tracing key, must be added to traceable
   /// assets.
+  /// @param {XfrKeyPair} key - Key pair associated with the input.
+  /// @param {BigInt} amount - Amount of input record to transfer.
   /// @see {@link create_absolute_txo_ref} or {@link create_relative_txo_ref} for details on txo
   /// references.
   /// @see {@link get_txo} for details on fetching blind asset records.
@@ -503,8 +503,10 @@ impl TransferOperationBuilder {
   }
   /// Wraps around TransferOperationBuilder to add an input to a transfer operation builder.
   /// @param {TxoRef} txo_ref - Absolute or relative utxo reference
-  /// @param {string} oar - Serialized opened asset record to serve as transfer input. This record must exist on the
+  /// @param {string} asset_record - Serialized client asset record to serve as transfer input. This record must exist on the
   /// ledger for the transfer to be valid
+  /// @param {OwnerMemo} owner_memo - Opening parameters.
+  /// @param {XfrKeyPair} key - Key pair associated with the input.
   /// @param {BigInt} amount - Amount of input record to transfer
   /// @see {@link create_absolute_txo_ref} or {@link create_relative_txo_ref} for details on txo
   /// references.
@@ -524,13 +526,13 @@ impl TransferOperationBuilder {
 
   /// Wraps around TransferOperationBuilder to add an output to a transfer operation builder.
   ///
-  /// @param {BigInt} amount - amount to transfer to the recipient
-  /// @param {XfrPublicKey} recipient - public key of the recipient
-  /// @param code {string} - String representaiton of the asset token code
-  /// @param conf_amount {bool} - Indicates whether output's amount is confidential
-  /// @param conf_type {bool} - Indicates whether output's asset type is confidential
+  /// @param {BigInt} amount - amount to transfer to the recipient.
+  /// @param {XfrPublicKey} recipient - public key of the recipient.
   /// @param tracing_key {AssetTracerKeyPair} - Optional tracing key, must be added to traced
   /// assets.
+  /// @param code {string} - String representation of the asset token code.
+  /// @param conf_amount {bool} - `true` means the output's asset amount is confidential, and `false` means it's nonconfidential.
+  /// @param conf_type {bool} - `true` means the output's asset type is confidential, and `false` means it's nonconfidential.
   /// @throws Will throw an error if `code` fails to deserialize.
   pub fn add_output_with_tracking(self,
                                   amount: u64,
@@ -553,8 +555,8 @@ impl TransferOperationBuilder {
   /// @param {BigInt} amount - amount to transfer to the recipient
   /// @param {XfrPublicKey} recipient - public key of the recipient
   /// @param code {string} - String representaiton of the asset token code
-  /// @param conf_amount {bool} - Indicates whether output's amount is confidential
-  /// @param conf_type {bool} - Indicates whether output's asset type is confidential
+  /// @param conf_amount {bool} - `true` means the output's asset amount is confidential, and `false` means it's nonconfidential.
+  /// @param conf_type {bool} - `true` means the output's asset type is confidential, and `false` means it's nonconfidential.
   /// @throws Will throw an error if `code` fails to deserialize.
   pub fn add_output_no_tracking(self,
                                 amount: u64,
@@ -759,7 +761,7 @@ pub fn get_tracked_amount(blind_asset_record: String,
 /// Contained in the response of `submit_transaction` is a `TransactionHandle` that can be used to
 /// query the status of the transaction.
 /// @param {string} path - Submission server path (e.g. `https://localhost:8669`)
-/// @param {transaction_str} - JSON-encoded transaction string.
+/// @param {string} transaction_str - JSON-encoded transaction string.
 ///
 /// @see {@link get_txn_status} for information about transaction statuses.
 // TODO Design and implement a notification mechanism.
@@ -878,8 +880,8 @@ fn create_query_promise(opts: &RequestInit,
 }
 
 /// Generates a new credential issuer key.
-/// @param {JsValue} attributes: Array of attribute types of the form `[{name: "credit_score",
-/// size: 3}]'. The size refers to byte-size of the credential. In this case, the "credit_score"
+/// @param {JsValue} attributes - Array of attribute types of the form `[{name: "credit_score",
+/// size: 3}]`. The size refers to byte-size of the credential. In this case, the "credit_score"
 /// attribute is represented as a 3 byte string "760". `attributes` is the list of attribute types
 /// that the issuer can sign off on.
 #[wasm_bindgen]
@@ -908,7 +910,7 @@ pub fn wasm_credential_user_key_gen(issuer_pub_key: &CredIssuerPublicKey) -> Cre
 /// @param {CredIssuerSecretKey} issuer_secret_key - Secret key of credential issuer.
 /// @param {CredUserPublicKey} user_public_key - Public key of credential user.
 /// @param {JsValue} attributes - Array of attribute assignments of the form `[{name: "credit_score",
-/// val: "760"}]'.
+/// val: "760"}]`.
 /// @throws Will throw an error if the signature cannot be generated.
 #[wasm_bindgen]
 pub fn wasm_credential_sign(issuer_secret_key: &CredIssuerSecretKey,
@@ -987,10 +989,8 @@ pub fn wasm_credential_reveal(user_sk: &CredUserSecretKey,
 
 /// Verifies revealed attributes from a commitment.
 /// @param {CredIssuerPublicKey} issuer_pub_key - Public key of credential issuer.
-/// @param {JsValue} reveal_fields - Array of string names representing credentials to reveal (i.e.
 /// @param {JsValue} attributes - Array of attribute assignments to check of the form `[{name: "credit_score",
-/// val: "760"}]'.
-/// `["credit_score"]`).
+/// val: "760"}]`.
 /// @param {CredentialRevealSig} reveal_sig - Credential reveal signature.
 #[wasm_bindgen]
 pub fn wasm_credential_verify(issuer_pub_key: &CredIssuerPublicKey,

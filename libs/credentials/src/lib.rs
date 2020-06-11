@@ -10,6 +10,7 @@ use zei::api::anon_creds::{
 };
 use zei::errors::ZeiError;
 
+/// Secret key of a credential issuer.
 #[wasm_bindgen]
 #[derive(Clone, Serialize, Deserialize, Debug, Eq, PartialEq)]
 pub struct CredIssuerSecretKey {
@@ -20,6 +21,7 @@ pub struct CredIssuerSecretKey {
 
 #[wasm_bindgen]
 #[derive(Clone, Serialize, Deserialize, Debug, Eq, PartialEq)]
+/// Public key of a credential issuer.
 pub struct CredIssuerPublicKey {
   ac_pub_key: ACIssuerPublicKey,
   map: LinearMap<String, ((usize, usize), usize)>, // key: (index, len in u32), len in bytes
@@ -32,10 +34,12 @@ pub type CredCommitment = ACCommitment;
 
 #[wasm_bindgen]
 #[derive(Clone, Serialize, Deserialize, Debug, Eq, PartialEq)]
+/// Public key of a credential user.
 pub struct CredUserPublicKey(ACUserPublicKey);
 
 #[wasm_bindgen]
 #[derive(Clone, Serialize, Deserialize, Debug, Eq, PartialEq)]
+/// Secret key of a credential user.
 pub struct CredUserSecretKey(ACUserSecretKey);
 
 impl CredIssuerPublicKey {
