@@ -650,6 +650,7 @@ pub fn open_client_asset_record(record: &ClientAssetRecord,
 pub fn get_pub_key_str(key_pair: &XfrKeyPair) -> String {
   serde_json::to_string(key_pair.get_pk_ref()).unwrap()
 }
+
 #[wasm_bindgen]
 /// Extracts the private key as a string from a transfer key pair.
 pub fn get_priv_key_str(key_pair: &XfrKeyPair) -> String {
@@ -779,6 +780,7 @@ pub fn submit_transaction(path: String, transaction_str: String) -> Result<Promi
 
 #[wasm_bindgen]
 /// Given a transaction ID, returns a promise for the transaction status.
+/// @param {string} path - Address of submission server. E.g. `https://localhost:8669`.
 pub fn get_txn_status(path: String, handle: String) -> Result<Promise, JsValue> {
   let mut opts = RequestInit::new();
   opts.method("GET");
@@ -795,17 +797,17 @@ pub fn get_txn_status(path: String, handle: String) -> Result<Promise, JsValue> 
 /// Otherwise, returns 'not found'. The request fails if the txo uid
 /// has been spent or the transaction index does not correspond to a
 /// transaction.
-/// @param {string} path - Address of ledger server.
-/// @param {BigInt} index - UTXO index.
+/// @param {string} path - Address of ledger server. E.g. `https://localhost:8668`.
+/// @param {BigInt} sid - UTXO SID.
 // TODO Provide an example (test case) that demonstrates how to
 // handle the error in the case of an invalid transaction index.
 // TODO Rename this function get_utxo
-pub fn get_txo(path: String, index: u64) -> Result<Promise, JsValue> {
+pub fn get_txo(path: String, sid: u64) -> Result<Promise, JsValue> {
   let mut opts = RequestInit::new();
   opts.method("GET");
   opts.mode(RequestMode::Cors);
 
-  let req_string = format!("{}/utxo_sid/{}", path, format!("{}", index));
+  let req_string = format!("{}/utxo_sid/{}", path, format!("{}", sid));
 
   create_query_promise(&opts, &req_string, false)
 }
@@ -813,20 +815,20 @@ pub fn get_txo(path: String, index: u64) -> Result<Promise, JsValue> {
 #[wasm_bindgen]
 /// If successful, returns a promise that will eventually provide a
 /// JsValue describing a transaction.
-/// Otherwise, returns 'not found'. The request fails if the transaction index does not correspond
+/// Otherwise, returns `not found`. The request fails if the transaction index does not correspond
 /// to a transaction.
 ///
-/// @param {String} path - Ledger server path.
-/// @param {BigInt} index - Transaction index.
+/// @param {String} path - Address of ledger server. E.g. `https://localhost:8668`.
+/// @param {BigInt} sid - Transaction SID.
 ///
 // TODO Provide an example (test case) that demonstrates how to
 // handle the error in the case of an invalid transaction index.
-pub fn get_transaction(path: String, index: u64) -> Result<Promise, JsValue> {
+pub fn get_transaction(path: String, sid: u64) -> Result<Promise, JsValue> {
   let mut opts = RequestInit::new();
   opts.method("GET");
   opts.mode(RequestMode::Cors);
 
-  let req_string = format!("{}/txn_sid/{}", path, format!("{}", index));
+  let req_string = format!("{}/txn_sid/{}", path, format!("{}", sid));
 
   create_query_promise(&opts, &req_string, false)
 }
@@ -834,6 +836,7 @@ pub fn get_transaction(path: String, index: u64) -> Result<Promise, JsValue> {
 #[wasm_bindgen]
 /// Returns a JSON-encoded version of the state commitment of a running ledger. This is used to
 /// check the authenticity of transactions and blocks.
+/// @param {string} path - Address of ledger server. E.g. `https://localhost:8668`.
 pub fn get_state_commitment(path: String) -> Result<Promise, JsValue> {
   let mut opts = RequestInit::new();
   opts.method("GET");
@@ -849,8 +852,8 @@ pub fn get_state_commitment(path: String) -> Result<Promise, JsValue> {
 /// JsValue describing an asset token. Otherwise, returns 'not found'.
 /// The request fails if the given asset name does not correspond to
 /// an asset.
-/// @param {string} path: Address of ledger server.
-/// @param {string} name: Base64-encoded asset token string.
+/// @param {string} path - Address of ledger server. E.g. `https://localhost:8668`.
+/// @param {string} name - Base64-encoded asset token string.
 ///
 // TODO Provide an example (test case) that demonstrates how to
 // handle the error in the case of an undefined asset.
@@ -1037,8 +1040,8 @@ pub fn wasm_credential_verify(issuer_pub_key: &CredIssuerPublicKey,
 
 #[wasm_bindgen]
 /// Returns information about traceable assets for a given transfer.
-/// @param {JsValue} xfr_note - JSON of a transfer note from a transfer operation.
-/// @param {AssetTracerKeyPair} - Asset tracer keypair.
+/// @param {JsValue} xfr_body - JSON of a transfer note from a transfer operation.
+/// @param {AssetTracerKeyPair} tracer_keypair - Asset tracer keypair.
 /// @param {JsValue} candidate_assets - List of asset types traced by the tracer keypair.
 pub fn trace_assets(xfr_body: JsValue,
                     tracer_keypair: &AssetTracerKeyPair,
