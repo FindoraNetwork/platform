@@ -2,7 +2,7 @@
 use ledger::data_model::errors::PlatformError;
 use ledger::data_model::{
   b64enc, BlockSID, FinalizedTransaction, IssueAsset, IssuerPublicKey, KVBlind, KVHash, KVUpdate,
-  Operation, TransferAsset, TxOutput, TxoRef, TxoSID, XfrAddress,
+  Operation, Transaction, TransferAsset, TxOutput, TxnSID, TxoRef, TxoSID, XfrAddress,
 };
 use ledger::error_location;
 use ledger::store::*;
@@ -25,6 +25,7 @@ pub struct QueryServer<T>
 {
   committed_state: LedgerState,
   addresses_to_utxos: HashMap<XfrAddress, HashSet<TxoSID>>,
+  related_transactions: HashMap<XfrAddress, HashSet<TxnSID>>, // Set of transactions related to a ledger address
   issuances: HashMap<IssuerPublicKey, Vec<TxOutput>>,
   utxos_to_map_index: HashMap<TxoSID, XfrAddress>,
   custom_data_store: HashMap<Key, (Vec<u8>, KVHash)>,
@@ -36,6 +37,7 @@ impl<T> QueryServer<T> where T: RestfulArchiveAccess
   pub fn new(rest_client: T) -> QueryServer<T> {
     QueryServer { committed_state: LedgerState::test_ledger(),
                   addresses_to_utxos: HashMap::new(),
+                  related_transactions: HashMap::new(),
                   custom_data_store: HashMap::new(),
                   issuances: HashMap::new(),
                   utxos_to_map_index: HashMap::new(),
@@ -49,6 +51,10 @@ impl<T> QueryServer<T> where T: RestfulArchiveAccess
 
   pub fn get_issued_records(&self, issuer: &IssuerPublicKey) -> Option<Vec<TxOutput>> {
     self.issuances.get(issuer).cloned()
+  }
+
+  pub fn get_related_transactions(&self, address: &XfrAddress) -> Option<HashSet<TxnSID>> {
+    self.related_transactions.get(&address).cloned()
   }
 
   pub fn get_owned_utxo_sids(&self, address: &XfrAddress) -> Option<HashSet<TxoSID>> {
@@ -160,6 +166,15 @@ impl<T> QueryServer<T> where T: RestfulArchiveAccess
         (ledger.get_transaction(*txn_sid).unwrap().finalized_txn.txn, addresses)
       };
 
+      // Update related addresses
+      let related_addresses = get_related_addresses(&txn);
+      for address in &related_addresses {
+        self.related_transactions
+            .entry(*address)
+            .or_insert_with(HashSet::new)
+            .insert(*txn_sid);
+      }
+
       // Remove spent utxos
       for op in &txn.body.operations {
         match op {
@@ -199,6 +214,47 @@ impl<T> QueryServer<T> where T: RestfulArchiveAccess
 
     Ok(())
   }
+}
+
+// An xfr address is related to a transaction if it is one of the following:
+// 1. Owner of a transfer output
+// 2. Transfer signer (owner of input or co-signer)
+// 3. Signer of a an issuance txn
+// 4. Signer of a kv_update txn
+// 5. Signer of a memo_update txn
+fn get_related_addresses(txn: &Transaction) -> HashSet<XfrAddress> {
+  let mut related_addresses = HashSet::new();
+  for op in &txn.body.operations {
+    match op {
+      Operation::TransferAsset(transfer) => {
+        for input in transfer.body.transfer.inputs.iter() {
+          related_addresses.insert(XfrAddress { key: input.public_key });
+        }
+
+        for output in transfer.body.transfer.inputs.iter() {
+          related_addresses.insert(XfrAddress { key: output.public_key });
+        }
+      }
+      Operation::IssueAsset(issue_asset) => {
+        related_addresses.insert(XfrAddress { key: issue_asset.pubkey.key });
+      }
+      Operation::DefineAsset(define_asset) => {
+        related_addresses.insert(XfrAddress { key: define_asset.pubkey.key });
+      }
+      Operation::UpdateMemo(update_memo) => {
+        related_addresses.insert(XfrAddress { key: update_memo.pubkey });
+      }
+      Operation::AIRAssign(air_assign) => {
+        related_addresses.insert(XfrAddress { key: air_assign.pubkey });
+      }
+      Operation::KVStoreUpdate(kv_store_update) => {
+        if let Some(entry) = &kv_store_update.body.2 {
+          related_addresses.insert(XfrAddress { key: entry.0 });
+        }
+      }
+    }
+  }
+  related_addresses
 }
 
 #[cfg(test)]
@@ -359,9 +415,13 @@ mod tests {
     let issuer_records = query_server.get_issued_records(&IssuerPublicKey { key: alice.get_pk()
                                                                                       .clone() })
                                      .unwrap();
+    let alice_related_txns =
+      query_server.get_related_transactions(&XfrAddress { key: *alice.get_pk_ref() })
+                  .unwrap();
 
     assert!(issuer_records.len() == 3);
     assert!(!alice_sids.contains(&TxoSID(0)));
+    assert!(alice_related_txns.contains(&TxnSID(0)));
     assert!(bob_sids.contains(&TxoSID(3)));
   }
 }
