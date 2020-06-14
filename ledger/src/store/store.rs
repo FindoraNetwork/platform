@@ -673,22 +673,11 @@ impl LedgerStatus {
           // If the asset is nonconfidential, get its tracing policy
           XfrAssetType::NonConfidential(asset_type) => {
             let code = AssetTypeCode { val: asset_type };
-<<<<<<< HEAD
-            let tracing_policies =
-              &self.tracing_policies
-                   .get(&code)
-                   .or_else(|| txn.issuance_tracing_policies.get(&code))
-                   .ok_or_else(|| PlatformError::InputsError(error_location!()))?;
-            dbg!(&tracing_policies);
-            match tracing_policies {
-              Some((policy, _)) => {
-=======
             let tracing_policy = self.tracing_policies
                                      .get(&code)
                                      .or_else(|| txn.issuance_tracing_policies.get(&code));
             match tracing_policy {
               Some(policy) => {
->>>>>>> master
                 match policy.identity_tracking {
                   Some(_) => match input_commitment {
                     Some(_) => {
