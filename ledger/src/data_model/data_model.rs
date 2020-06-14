@@ -2,6 +2,7 @@
 use super::errors;
 use crate::policy_script::{Policy, PolicyGlobals, TxnPolicyData};
 use crate::{error_location, zei_fail};
+use air::{check_merkle_proof as air_check_merkle_proof, AIRResult};
 use bitmap::SparseMap;
 use chrono::prelude::*;
 use credentials::{CredCommitment, CredIssuerPublicKey, CredPoK, CredUserPublicKey};
@@ -172,6 +173,13 @@ pub struct IssuerPublicKey {
   // eg. encryption key
 }
 
+#[allow(clippy::derive_hash_xor_eq)]
+impl Hash for IssuerPublicKey {
+  fn hash<H: Hasher>(&self, state: &mut H) {
+    self.key.as_bytes().hash(state);
+  }
+}
+
 #[derive(Debug)]
 pub struct IssuerKeyPair<'a> {
   pub keypair: &'a XfrKeyPair,
@@ -232,11 +240,11 @@ impl SignatureRules {
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 /// Simple asset rules:
 /// 1) Traceable: Records of traceable assets can be decrypted by a provided tracking key
-/// 2) Identity traceable: Records of identity traceable assets can be decrypted by a provided tracking key
-/// 3) Transferable: Non-transferable assets can only be transferred once from the issuer to
+/// 2) Transferable: Non-transferable assets can only be transferred once from the issuer to
 ///    another user.
-/// 4) Max units: Optional limit on total issuance amount.
-/// 5) Transfer signature rules: Signature weights and threshold for a valid transfer.
+/// 3) Updatable: Whether the asset memo can be updated.
+/// 4) Transfer signature rules: Signature weights and threshold for a valid transfer.
+/// 5) Max units: Optional limit on total issuance amount.
 pub struct AssetRules {
   pub transferable: bool,
   pub updatable: bool,
@@ -754,9 +762,10 @@ pub struct TransactionBody {
   pub memos: Vec<Memo>,
 }
 
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize, Default)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)] //, Default
 pub struct Transaction {
   pub body: TransactionBody,
+  pub seq_id: u64,
   #[serde(default)]
   #[serde(skip_serializing_if = "is_default")]
   pub signatures: Vec<SignatureOf<TransactionBody>>,
@@ -768,6 +777,62 @@ pub struct FinalizedTransaction {
   pub tx_id: TxnSID,
 
   pub merkle_id: u64,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct AuthenticatedAIRResult {
+  pub state_commitment_data: Option<StateCommitmentData>,
+  pub state_commitment: HashOf<Option<StateCommitmentData>>,
+  pub air_result: AIRResult,
+}
+
+impl AuthenticatedAIRResult {
+  // An authenticated air result is valid if
+  // 1) State commitment data hashes to the provided state commitment
+  // 2) The air root matches the root in state commitment data.
+  // 3) The air proof is valid.
+  pub fn is_valid(&self, state_commitment: HashOf<Option<StateCommitmentData>>) -> bool {
+    let root = self.air_result.merkle_root;
+    match &self.state_commitment_data {
+      None => {
+        if self.air_result.value.is_some() {
+          return false;
+        }
+        if state_commitment != HashOf::new(&None) {
+          return false;
+        }
+        if root != ZERO_DIGEST {
+          return false;
+        }
+      }
+      Some(comm_data) => {
+        if self.state_commitment != comm_data.compute_commitment() {
+          return false;
+        }
+
+        if comm_data.air_commitment != root {
+          return false;
+        }
+      }
+    }
+    if state_commitment != self.state_commitment {
+      return false;
+    }
+    let key = &self.air_result.key;
+    let value = self.air_result.value.as_ref();
+    let proof = &self.air_result.merkle_proof;
+
+    air_check_merkle_proof(&root, key, value, proof)
+  }
+
+  // Extract the credential commitment stored in this AIRResult
+  pub fn get_credential_commitment(&self) -> Option<CredCommitment> {
+    // This unwrap is safe because by design, AIR values can only be credential commitments
+    self.air_result
+        .value
+        .as_ref()
+        .map(|cred_str| serde_json::from_str(&cred_str).unwrap())
+  }
 }
 
 #[derive(Serialize, Deserialize)]
@@ -960,8 +1025,14 @@ impl Transaction {
     HashOf::new(&(id, self.clone()))
   }
 
-  pub fn from_operation(op: Operation) -> Self {
-    let mut tx = Transaction::default();
+  pub fn from_seq_id(seq_id: u64) -> Self {
+    Transaction { body: TransactionBody::default(),
+                  seq_id,
+                  signatures: Vec::new() }
+  }
+
+  pub fn from_operation(op: Operation, seq_id: u64) -> Self {
+    let mut tx = Transaction::from_seq_id(seq_id);
     tx.add_operation(op);
     tx
   }
@@ -1130,8 +1201,9 @@ mod tests {
   //   DefineAsset::new
   #[test]
   fn test_add_operation() {
-    // Create values to be used to instantiate operations
-    let mut transaction: Transaction = Default::default();
+    // Create values to be used to instantiate operations. Just make up a seq_id, since
+    // it will never be sent to a real ledger
+    let mut transaction: Transaction = Transaction::from_seq_id(0);
 
     let mut prng = rand_chacha::ChaChaRng::from_entropy();
 

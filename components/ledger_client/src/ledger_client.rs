@@ -1,12 +1,25 @@
 #![deny(warnings)]
+use cryptohash::sha256::Digest as BitDigest;
 use ledger::data_model::{AssetRules, AssetTypeCode, Operation, Transaction};
 use ledger::store::helpers::*;
 use rand_chacha::ChaChaRng;
 use rand_core::SeedableRng;
+use zei::xfr::sig::XfrSignature;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
+  let protocol = "http";
+  let host = "localhost";
+  let port = "8668";
+
+  let client = reqwest::Client::new();
+
+  let mut resp_gs = client.get(&format!("{}://{}:{}/global_state", protocol, host, port))
+                          .send()?;
+  let (_comm, seq_id, _sig): (BitDigest, u64, XfrSignature) =
+    serde_json::from_str(&resp_gs.text()?[..]).unwrap();
+
   let mut prng = ChaChaRng::from_entropy();
-  let mut tx = Transaction::default();
+  let mut tx = Transaction::from_seq_id(seq_id);
 
   let token_code1 = AssetTypeCode { val: [1; 16] };
   let keypair = build_keys(&mut prng);
@@ -23,13 +36,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
   // env_logger::init();
 
-  let client = reqwest::Client::new();
-
   let token_code_b64 = token_code1.to_base64();
   println!("\n\nQuery asset_token {:?}", &token_code1);
-
-  let host = "localhost";
-  let port = "8668";
 
   let mut res = reqwest::get(&format!("http://{}:{}/{}/{}",
                                       &host, &port, "asset_token", &token_code_b64))?;

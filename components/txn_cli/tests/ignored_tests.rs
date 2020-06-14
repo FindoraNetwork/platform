@@ -1,6 +1,5 @@
 #![deny(warnings)]
 use ledger::data_model::AssetTypeCode;
-use ledger_standalone::LedgerStandalone;
 use std::io::{self, Write};
 use std::process::{Command, Output};
 use std::str::from_utf8;
@@ -176,6 +175,7 @@ fn trace_credential(dir: &str,
 #[cfg(test)]
 fn air_assign(dir: &str,
               txn_builder_path: &str,
+              seq_id: &str,
               issuer_id: &str,
               address: &str,
               data: &str)
@@ -184,6 +184,7 @@ fn air_assign(dir: &str,
                        .args(&["--txn", txn_builder_path])
                        .args(&["asset_issuer", "--id", issuer_id])
                        .arg("air_assign")
+                       .args(&["--seq_id", seq_id])
                        .args(&["--address", address])
                        .args(&["--data", data])
                        .output()
@@ -260,15 +261,6 @@ fn issue_and_transfer_asset_confidential(txn_builder_path: &str,
                        .args(&["--confidential_amount", "--confidential_asset"])
                        .output()
 }
-
-// Helper functions: submit transaction
-// Note:
-// Since http://localhost is used instead of https://testnet.findora.org,
-// make sure the standalone ledger is running before calling a function that will submit a transaction:
-// ```
-// let ledger_standalone = LedgerStandalone::new();
-// ledger_standalone.poll_until_ready().unwrap();
-// ```
 
 #[cfg(test)]
 fn submit(txn_builder_path: &str) -> io::Result<Output> {
@@ -396,8 +388,6 @@ fn test_view() {
   let tmp_dir = tempdir().unwrap();
   let dir = tmp_dir.path().to_str().unwrap();
 
-  let ledger_standalone = LedgerStandalone::new();
-
   // Add a credential
   create_or_overwrite_credential(dir, "0", "min_income", "1500").expect("Failed to create a credential");
 
@@ -408,11 +398,8 @@ fn test_view() {
   request_loan(dir, "1", "0", "500", "300", "15").expect("Failed to request the loan");
 
   // Fulfill some of the loans
-  ledger_standalone.poll_until_ready().unwrap();
   fulfill_loan(dir, "0", "0", "0", None).expect("Failed to fulfill the loan");
-  ledger_standalone.poll_until_ready().unwrap();
   fulfill_loan(dir, "0", "1", "0", None).expect("Failed to fulfill the loan");
-  ledger_standalone.poll_until_ready().unwrap();
   fulfill_loan(dir, "1", "2", "0", None).expect("Failed to fulfill the loan");
 
   // View loans
@@ -536,8 +523,6 @@ fn test_view() {
 #[ignore]
 #[test]
 fn test_define_asset_simple_policies() {
-  let ledger_standalone = LedgerStandalone::new();
-
   let tmp_dir = tempdir().unwrap();
   let dir = tmp_dir.path().to_str().unwrap();
   let txn_builder_buf = tmp_dir.path().join("tb_define_policies");
@@ -569,7 +554,6 @@ fn test_define_asset_simple_policies() {
 
   assert!(output.status.success());
 
-  ledger_standalone.poll_until_ready().unwrap();
   let output = submit(txn_builder_file).expect("Failed to submit transaction");
 
   io::stdout().write_all(&output.stdout).unwrap();
@@ -587,8 +571,6 @@ fn test_define_asset_simple_policies() {
 #[test]
 #[ignore]
 fn test_define_issue_transfer_and_submit_with_args() {
-  let ledger_standalone = LedgerStandalone::new();
-
   // Create users and files
   let tmp_dir = tempdir().unwrap();
   let dir = tmp_dir.path().to_str().unwrap();
@@ -617,7 +599,6 @@ fn test_define_issue_transfer_and_submit_with_args() {
   assert!(output.status.success());
 
   // Submit transaction
-  ledger_standalone.poll_until_ready().unwrap();
   let output = submit(creation_txn_builder_file).expect("Failed to submit transaction");
 
   io::stdout().write_all(&output.stdout).unwrap();
@@ -639,7 +620,6 @@ fn test_define_issue_transfer_and_submit_with_args() {
   assert!(output.status.success());
 
   // Submit transaction
-  ledger_standalone.poll_until_ready().unwrap();
   let output =
     submit_and_store_sids(issuance_txn_builder_file, sids_file).expect("Failed to submit transaction");
 
@@ -664,7 +644,6 @@ fn test_define_issue_transfer_and_submit_with_args() {
   assert!(output.status.success());
 
   // Submit transaction
-  ledger_standalone.poll_until_ready().unwrap();
   let output = submit(transfer_txn_builder_file).expect("Failed to submit transaction");
 
   io::stdout().write_all(&output.stdout).unwrap();
@@ -689,8 +668,6 @@ fn test_issue_transfer_trace_and_submit_with_args() {
   let memo_buf = tmp_dir.path().join("memos_issue_transfer_and_submit");
   let memo_file = memo_buf.to_str().unwrap();
 
-  let ledger_standalone = LedgerStandalone::new();
-
   // Create txn builder and key pairs
   create_txn_builder_with_path(txn_builder_file).expect("Failed to create transaction builder");
 
@@ -703,7 +680,6 @@ fn test_issue_transfer_trace_and_submit_with_args() {
                "0",
                &token_code,
                "Define an asset").expect("Failed to define asset");
-  ledger_standalone.poll_until_ready().unwrap();
   submit(txn_builder_file).expect("Failed to submit transaction");
 
   // Issue and transfer
@@ -733,7 +709,6 @@ fn test_issue_transfer_trace_and_submit_with_args() {
   assert!(output.status.success());
 
   // Submit transaction
-  ledger_standalone.poll_until_ready().unwrap();
   let output = submit(txn_builder_file).expect("Failed to submit transaction");
 
   io::stdout().write_all(&output.stdout).unwrap();
@@ -763,11 +738,10 @@ fn test_air_assign() {
   create_txn_builder_with_path(txn_builder_file).expect("Failed to create transaction builder");
 
   // Air assigning
-  air_assign(dir, txn_builder_file, "0", "666", "Hell").expect("Failed to assign to AIR");
+  let seq_id = "0";
+  air_assign(dir, txn_builder_file, seq_id, "0", "666", "Hell").expect("Failed to assign to AIR");
 
   // Submit transaction
-  let ledger_standalone = LedgerStandalone::new();
-  ledger_standalone.poll_until_ready().unwrap();
   let output = submit(txn_builder_file).expect("Failed to submit transaction");
 
   io::stdout().write_all(&output.stdout).unwrap();
@@ -791,10 +765,7 @@ fn test_request_fulfill_and_pay_loan_with_args() {
   let memo_buf = tmp_dir.path().join("memo_fulfill_loan_args");
   let memo_file = memo_buf.to_str().unwrap();
 
-  let ledger_standalone = LedgerStandalone::new();
-
   // Load funds
-  ledger_standalone.poll_until_ready().unwrap();
   let output = load_funds(dir, "0", "0", "5000").expect("Failed to load funds");
 
   io::stdout().write_all(&output.stdout).unwrap();
@@ -822,13 +793,10 @@ fn test_request_fulfill_and_pay_loan_with_args() {
   // 1. First time:
   //    Add the credential proof, then successfully initiate the loan
   //    Trace the credential associated with the first loan
-  ledger_standalone.poll_until_ready().unwrap();
   let output_fulfill =
     fulfill_loan(dir, "0", "0", "0", Some(memo_file)).expect("Failed to initiate the loan");
-  ledger_standalone.poll_until_ready().unwrap();
   let output_trace_fail =
     trace_credential(dir, "0", memo_file, "min_income", "1000").expect("Failed to trace the credential");
-  ledger_standalone.poll_until_ready().unwrap();
   let output_trace_pass = trace_credential(dir, "0", memo_file, "min_credit_score", "650").expect("Failed to trace the credential");
 
   io::stdout().write_all(&output_fulfill.stdout).unwrap();
@@ -848,7 +816,6 @@ fn test_request_fulfill_and_pay_loan_with_args() {
 
   // 2. Second time:
   //    Fail because the loan has been fulfilled
-  ledger_standalone.poll_until_ready().unwrap();
   let output = fulfill_loan(dir, "0", "0", "0", None).expect("Failed to initiate the loan");
 
   io::stdout().write_all(&output.stdout).unwrap();
@@ -861,7 +828,6 @@ fn test_request_fulfill_and_pay_loan_with_args() {
   // Fulfill the second loan
   // 1. First time:
   //    Get the credential proof, then fail to initiate the loan because the requirement isn't met
-  ledger_standalone.poll_until_ready().unwrap();
   let output = fulfill_loan(dir, "1", "1", "0", None).expect("Failed to initiate the loan");
 
   io::stdout().write_all(&output.stdout).unwrap();
@@ -873,7 +839,6 @@ fn test_request_fulfill_and_pay_loan_with_args() {
 
   // 2. Second time:
   //    Fail because the loan has been declined
-  ledger_standalone.poll_until_ready().unwrap();
   let output = fulfill_loan(dir, "1", "1", "0", None).expect("Failed to initiate the loan");
 
   io::stdout().write_all(&output.stdout).unwrap();
@@ -886,7 +851,6 @@ fn test_request_fulfill_and_pay_loan_with_args() {
   // Pay loan
   // 1. First time:
   //    Burn part of the loan balance
-  ledger_standalone.poll_until_ready().unwrap();
   let output = pay_loan(dir, "0", "0", "300").expect("Failed to pay loan");
 
   io::stdout().write_all(&output.stdout).unwrap();
@@ -896,7 +860,6 @@ fn test_request_fulfill_and_pay_loan_with_args() {
 
   // 2. Second time
   //    Pay off the loan
-  ledger_standalone.poll_until_ready().unwrap();
   let output = pay_loan(dir, "0", "0", "2000").expect("Failed to pay loan");
 
   io::stdout().write_all(&output.stdout).unwrap();
@@ -906,7 +869,6 @@ fn test_request_fulfill_and_pay_loan_with_args() {
 
   // 3. Third time:
   //    Fail because the loan has been paid off
-  ledger_standalone.poll_until_ready().unwrap();
   let output = pay_loan(dir, "0", "0", "3000").expect("Failed to pay loan");
 
   io::stdout().write_all(&output.stdout).unwrap();

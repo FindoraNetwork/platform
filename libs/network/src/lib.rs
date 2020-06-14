@@ -1,171 +1,166 @@
 #![deny(warnings)]
-use actix_service::Service;
-use actix_web::test::TestRequest;
-use actix_web::{test, web, App};
 use ledger::data_model::errors::PlatformError;
 use ledger::data_model::{
-  AssetType, AssetTypeCode, AuthenticatedKVLookup, StateCommitmentData, Transaction, TxoSID, Utxo,
+  AssetType, AssetTypeCode, AuthenticatedKVLookup, BlockSID, FinalizedTransaction, KVBlind,
+  StateCommitmentData, Transaction, TxoSID, Utxo,
 };
 use ledger::store::LedgerState;
 use ledger_api_service::{
-  query_asset, query_asset_issuance_num, query_global_state, query_utxo, LedgerAccessRoutes,
+  ActixLedgerClient, MockLedgerClient, RestfulArchiveAccess, RestfulLedgerAccess,
 };
-use rand_chacha::ChaChaRng;
-use rand_core::SeedableRng;
+use query_api::{ActixQueryServerClient, MockQueryServerClient, RestfulQueryServerAccess};
 use serde::Serialize;
 use sparse_merkle_tree::Key;
 use std::sync::{Arc, RwLock};
-use submission_api::{force_end_block, submit_transaction, txn_status, SubmissionRoutes};
-use submission_server::{NoTF, SubmissionServer, TxnHandle, TxnStatus};
-use utils::{HashOf, NetworkRoute, SignatureOf};
+use submission_api::{ActixLUClient, MockLUClient, RestfulLedgerUpdate};
+use submission_server::{TxnHandle, TxnStatus};
+use utils::{HashOf, SignatureOf, LEDGER_PORT, QUERY_PORT, SUBMIT_PORT};
 use zei::xfr::sig::XfrPublicKey;
 
-// Trait for rest clients that can submit transactions
-pub trait RestfulLedgerUpdate {
-  // Forward transaction to a transaction submission server, returning a handle to the transaction
-  fn submit_transaction(&mut self, txn: &Transaction) -> Result<TxnHandle, PlatformError>;
-  // Forces the the validator to end the block. Useful for testing when it is desirable to commit
-  // txns to the ledger as soon as possible
-  fn force_end_block(&mut self) -> Result<(), PlatformError>;
-  // Get txn status from a handle
-  fn txn_status(&self, handle: &TxnHandle) -> Result<TxnStatus, PlatformError>;
+pub type MockLedgerStandalone =
+  LedgerStandalone<MockLUClient, MockLedgerClient, MockQueryServerClient>;
+
+pub struct LedgerStandalone<LU: RestfulLedgerUpdate,
+ LA: RestfulLedgerAccess + RestfulArchiveAccess,
+ Q: RestfulQueryServerAccess> {
+  submission_server_client: LU,
+  ledger_client: LA,
+  query_server_client: Q,
 }
 
-pub trait RestfulLedgerAccess {
-  fn get_utxo(&self, addr: TxoSID) -> Result<Utxo, PlatformError>;
-
-  fn get_issuance_num(&self, code: &AssetTypeCode) -> Result<u64, PlatformError>;
-
-  fn get_asset_type(&self, code: &AssetTypeCode) -> Result<AssetType, PlatformError>;
-
-  fn get_state_commitment(&self)
-                          -> Result<(HashOf<Option<StateCommitmentData>>, u64), PlatformError>;
-
-  fn get_kv_entry(&self, addr: Key) -> Result<AuthenticatedKVLookup, PlatformError>;
-
-  fn public_key(&self) -> Result<XfrPublicKey, PlatformError>;
-
-  fn sign_message<T: Serialize + serde::de::DeserializeOwned>(
-    &self,
-    msg: &T)
-    -> Result<SignatureOf<T>, PlatformError>;
+pub struct HttpStandaloneConfig {
+  ledger_port: usize,
+  submit_port: usize,
+  query_port: usize,
+  host: String,
+  protocol: String,
 }
 
-/// Mock rest client that simulates http requests, no ports required
-pub struct MockRestClient {
-  mock_submission_server: Arc<RwLock<SubmissionServer<ChaChaRng, LedgerState, NoTF>>>,
-  mock_ledger: Arc<RwLock<LedgerState>>,
+impl HttpStandaloneConfig {
+  pub fn testnet() -> Self {
+    HttpStandaloneConfig { ledger_port: LEDGER_PORT,
+                           submit_port: SUBMIT_PORT,
+                           query_port: QUERY_PORT,
+                           host: String::from("testnet.findora.org"),
+                           protocol: String::from("https") }
+  }
+
+  pub fn local() -> Self {
+    HttpStandaloneConfig { ledger_port: LEDGER_PORT,
+                           submit_port: SUBMIT_PORT,
+                           query_port: QUERY_PORT,
+                           host: String::from("localhost"),
+                           protocol: String::from("http") }
+  }
 }
 
-impl MockRestClient {
-  pub fn new(block_capacity: usize) -> Self {
-    let prng = ChaChaRng::from_entropy();
+impl LedgerStandalone<MockLUClient, MockLedgerClient, MockQueryServerClient> {
+  /// Creates a ledger standalone client that talks to fake servers, no ports required
+  pub fn new_mock(block_capacity: usize) -> Self {
     let ledger_state = LedgerState::test_ledger();
     let state_lock = Arc::new(RwLock::new(ledger_state));
-    let mock_ledger = Arc::clone(&state_lock);
+    let ledger_client = MockLedgerClient::new(&state_lock);
+    let submission_server_client = MockLUClient::new(&state_lock, block_capacity);
+    let query_server_client = MockQueryServerClient();
 
-    let mock_submission_server =
-      Arc::new(RwLock::new(SubmissionServer::new(prng, state_lock, block_capacity).unwrap()));
-
-    MockRestClient { mock_submission_server,
-                     mock_ledger }
+    LedgerStandalone { submission_server_client,
+                       query_server_client,
+                       ledger_client }
   }
 }
 
-impl RestfulLedgerUpdate for MockRestClient {
-  fn submit_transaction(&mut self, txn: &Transaction) -> Result<TxnHandle, PlatformError> {
-    let route = SubmissionRoutes::SubmitTransaction.route();
-    let mut app =
-      test::init_service(App::new().data(Arc::clone(&self.mock_submission_server))
-                                   .route(&route,
-                                          web::post().to(submit_transaction::<rand_chacha::ChaChaRng,
-                                                                            LedgerState, NoTF>)));
-    let req = TestRequest::post().uri(&route).set_json(&txn).to_request();
-    let handle: TxnHandle = test::read_response_json(&mut app, req);
-    Ok(handle)
-  }
+impl LedgerStandalone<ActixLUClient, ActixLedgerClient, ActixQueryServerClient> {
+  /// Creates a ledger standalone client that communicates with live Findora servers
+  pub fn new_http(config: &HttpStandaloneConfig) -> Self {
+    let ledger_client = ActixLedgerClient::new(config.ledger_port, &config.host, &config.protocol);
+    let submission_server_client =
+      ActixLUClient::new(config.submit_port, &config.host, &config.protocol);
+    let query_server_client =
+      ActixQueryServerClient::new(config.query_port, &config.host, &config.protocol);
 
-  fn force_end_block(&mut self) -> Result<(), PlatformError> {
-    let route = SubmissionRoutes::ForceEndBlock.route();
-    let mut app =
-      test::init_service(App::new().data(Arc::clone(&self.mock_submission_server))
-                                   .route(&route,
-                                          web::post().to(force_end_block::<rand_chacha::ChaChaRng,
-                                                                            LedgerState, NoTF>)));
-    let req = TestRequest::post().uri(&route).to_request();
-    test::block_on(app.call(req)).unwrap();
-    Ok(())
-  }
-
-  fn txn_status(&self, handle: &TxnHandle) -> Result<TxnStatus, PlatformError> {
-    let mut app =
-      test::init_service(App::new().data(Arc::clone(&self.mock_submission_server))
-                                   .route(&SubmissionRoutes::TxnStatus.with_arg_template("handle"),
-                                          web::get().to(txn_status::<rand_chacha::ChaChaRng,
-                                                                   LedgerState, NoTF>)));
-    let req = test::TestRequest::get().uri(&SubmissionRoutes::TxnStatus.with_arg(&handle.0))
-                                      .to_request();
-    Ok(test::read_response_json(&mut app, req))
+    LedgerStandalone { submission_server_client,
+                       query_server_client,
+                       ledger_client }
   }
 }
 
-impl RestfulLedgerAccess for MockRestClient {
+impl<LU: RestfulLedgerUpdate,
+      LA: RestfulLedgerAccess + RestfulArchiveAccess,
+      Q: RestfulQueryServerAccess> RestfulArchiveAccess for LedgerStandalone<LU, LA, Q>
+{
+  fn get_blocks_since(&self,
+                      addr: BlockSID)
+                      -> Result<Vec<(usize, Vec<FinalizedTransaction>)>, PlatformError> {
+    self.ledger_client.get_blocks_since(addr)
+  }
+}
+
+impl<LU: RestfulLedgerUpdate,
+      LA: RestfulLedgerAccess + RestfulArchiveAccess,
+      Q: RestfulQueryServerAccess> RestfulQueryServerAccess for LedgerStandalone<LU, LA, Q>
+{
+  fn store_custom_data(&mut self,
+                       data: &dyn AsRef<[u8]>,
+                       key: &Key,
+                       blind: Option<KVBlind>)
+                       -> Result<(), PlatformError> {
+    self.query_server_client.store_custom_data(data, key, blind)
+  }
+
+  fn fetch_custom_data(&self, key: &Key) -> Result<Vec<u8>, PlatformError> {
+    self.query_server_client.fetch_custom_data(key)
+  }
+}
+
+impl<LU: RestfulLedgerUpdate,
+      LA: RestfulLedgerAccess + RestfulArchiveAccess,
+      Q: RestfulQueryServerAccess> RestfulLedgerAccess for LedgerStandalone<LU, LA, Q>
+{
   fn get_utxo(&self, addr: TxoSID) -> Result<Utxo, PlatformError> {
-    let mut app =
-      test::init_service(App::new().data(Arc::clone(&self.mock_ledger))
-                                   .route(&LedgerAccessRoutes::UtxoSid.with_arg_template("sid"),
-                                          web::get().to(query_utxo::<LedgerState>)));
-    let req = test::TestRequest::get().uri(&LedgerAccessRoutes::UtxoSid.with_arg(&addr.0))
-                                      .to_request();
-    Ok(test::read_response_json(&mut app, req))
+    self.ledger_client.get_utxo(addr)
   }
 
   fn get_issuance_num(&self, code: &AssetTypeCode) -> Result<u64, PlatformError> {
-    let mut app =
-      test::init_service(App::new().data(Arc::clone(&self.mock_ledger))
-                                   .route(&LedgerAccessRoutes::AssetIssuanceNum.with_arg_template("code"),
-                                          web::get().to(query_asset_issuance_num::<LedgerState>)));
-    let req =
-      test::TestRequest::get().uri(&LedgerAccessRoutes::AssetIssuanceNum.with_arg(&code.to_base64()))
-                              .to_request();
-    Ok(test::read_response_json(&mut app, req))
+    self.ledger_client.get_issuance_num(code)
   }
 
   fn get_asset_type(&self, code: &AssetTypeCode) -> Result<AssetType, PlatformError> {
-    let mut app =
-      test::init_service(App::new().data(Arc::clone(&self.mock_ledger))
-                                   .route(&LedgerAccessRoutes::AssetToken.with_arg_template("code"),
-                                          web::get().to(query_asset::<LedgerState>)));
-    let req =
-      test::TestRequest::get().uri(&LedgerAccessRoutes::AssetToken.with_arg(&code.to_base64()))
-                              .to_request();
-    Ok(test::read_response_json(&mut app, req))
+    self.ledger_client.get_asset_type(code)
   }
 
   fn get_state_commitment(&self)
                           -> Result<(HashOf<Option<StateCommitmentData>>, u64), PlatformError> {
-    let mut app =
-      test::init_service(App::new().data(Arc::clone(&self.mock_ledger))
-                                   .route(&LedgerAccessRoutes::GlobalState.route(),
-                                          web::get().to(query_global_state::<LedgerState>)));
-    let req = test::TestRequest::get().uri(&LedgerAccessRoutes::GlobalState.route())
-                                      .to_request();
-    Ok(test::read_response_json(&mut app, req))
+    self.ledger_client.get_state_commitment()
   }
 
-  fn get_kv_entry(&self, _addr: Key) -> Result<AuthenticatedKVLookup, PlatformError> {
-    unimplemented!();
+  fn get_kv_entry(&self, addr: Key) -> Result<AuthenticatedKVLookup, PlatformError> {
+    self.ledger_client.get_kv_entry(addr)
   }
 
   fn public_key(&self) -> Result<XfrPublicKey, PlatformError> {
-    unimplemented!();
+    self.ledger_client.public_key()
   }
 
   fn sign_message<T: Serialize + serde::de::DeserializeOwned>(
     &self,
-    _msg: &T)
+    msg: &T)
     -> Result<SignatureOf<T>, PlatformError> {
-    unimplemented!();
+    self.ledger_client.sign_message(msg)
+  }
+}
+
+impl<LU: RestfulLedgerUpdate,
+      LA: RestfulLedgerAccess + RestfulArchiveAccess,
+      Q: RestfulQueryServerAccess> RestfulLedgerUpdate for LedgerStandalone<LU, LA, Q>
+{
+  fn submit_transaction(&mut self, txn: &Transaction) -> Result<TxnHandle, PlatformError> {
+    self.submission_server_client.submit_transaction(txn)
+  }
+  fn force_end_block(&mut self) -> Result<(), PlatformError> {
+    self.submission_server_client.force_end_block()
+  }
+  fn txn_status(&self, handle: &TxnHandle) -> Result<TxnStatus, PlatformError> {
+    self.submission_server_client.txn_status(handle)
   }
 }
 
@@ -174,8 +169,8 @@ mod tests {
   use super::*;
   #[test]
   fn test_mock_client() {
-    let tx = Transaction::default();
-    let mut mock_rest_client = MockRestClient::new(2);
+    let tx = Transaction::from_seq_id(0);
+    let mut mock_rest_client = LedgerStandalone::new_mock(2);
     let handle = mock_rest_client.submit_transaction(&tx).unwrap();
     mock_rest_client.force_end_block().unwrap();
     let status = mock_rest_client.txn_status(&handle).unwrap();
