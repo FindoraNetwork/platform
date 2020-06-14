@@ -675,7 +675,7 @@ impl LedgerStatus {
             let code = AssetTypeCode { val: asset_type };
             let tracing_policy = self.tracing_policies
                                      .get(&code)
-                                     .or_else(|| txn.issuance_tracing_policies.get(&code));
+                                     .or_else(|| txn.new_tracing_policies.get(&code));
             match tracing_policy {
               Some(policy) => {
                 match policy.identity_tracking {
@@ -757,7 +757,7 @@ impl LedgerStatus {
               let code = AssetTypeCode { val: asset_type };
               let tracing_policy = self.tracing_policies
                                        .get(&code)
-                                       .or_else(|| txn.issuance_tracing_policies.get(&code));
+                                       .or_else(|| txn.new_tracing_policies.get(&code));
               match tracing_policy {
                 Some(policy) => {
                   match policy.identity_tracking {

@@ -26,6 +26,8 @@ pub struct TxnEffect {
   pub internally_spent_txos: Vec<BlindAssetRecord>,
   // Which new asset types this defines
   pub new_asset_codes: HashMap<AssetTypeCode, AssetType>,
+  // Which tracing policy is being used for each new asset type
+  pub new_tracing_policies: HashMap<AssetTypeCode, AssetTracingPolicy>,
   // Which new TXO issuance sequence numbers are used, in sorted order
   // The vec should be nonempty unless this asset code is being created in
   // this transaction.
@@ -37,8 +39,6 @@ pub struct TxnEffect {
   // Asset types that have issuances with confidential outputs. Issuances cannot be confidential
   // if there is an issuance cap
   pub confidential_issuance_types: HashSet<AssetTypeCode>,
-  // Which asset tracing policy is being used to issue each asset type
-  pub issuance_tracing_policies: HashMap<AssetTypeCode, AssetTracingPolicy>,
   // Mapping of (op index, xfr input idx) tuples to set of valid signature keys
   // i.e. (2, 1) -> { AlicePk, BobPk } means that Alice and Bob both have valid signatures on the 2nd input of the 1st
   // operation
@@ -78,10 +78,10 @@ impl TxnEffect {
     let mut memo_updates = Vec::new();
     let mut new_asset_codes: HashMap<AssetTypeCode, AssetType> = HashMap::new();
     let mut cosig_keys = HashMap::new();
+    let mut new_tracing_policies: HashMap<AssetTypeCode, AssetTracingPolicy> = HashMap::new();
     let mut new_issuance_nums: HashMap<AssetTypeCode, Vec<u64>> = HashMap::new();
     let mut issuance_keys: HashMap<AssetTypeCode, IssuerPublicKey> = HashMap::new();
     let mut issuance_amounts = HashMap::new();
-    let mut issuance_tracing_policies: HashMap<AssetTypeCode, AssetTracingPolicy> = HashMap::new();
     let mut transfer_input_commitments = Vec::new();
     let mut transfer_output_commitments = Vec::new();
     let mut transfer_body: Option<Box<XfrBody>> = None;
@@ -182,6 +182,12 @@ impl TxnEffect {
           issuance_keys.insert(code, token.properties.issuer);
           new_asset_codes.insert(code, token);
           new_issuance_nums.insert(code, vec![]);
+          match &def.body.asset_rules.tracing_policy {
+            Some(policy) => {
+              new_tracing_policies.insert(code, policy.clone());
+            }
+            None => {}
+          }
         }
 
         // The asset issuance is valid iff:
@@ -196,9 +202,6 @@ impl TxnEffect {
         //      5) The assets in the TxOutputs have a non-confidential
         //         asset type which agrees with the stated asset type.
         //          - Fully checked here
-        //      6) The asset_tracking flag of the tracing policy in
-        //         IssueAssetBody agrees with the asset definition.
-        //          - Fully checked in check_txn_effects
         Operation::IssueAsset(iss) => {
           if iss.body.num_outputs != iss.body.records.len() {
             return Err(inp_fail!());
@@ -257,14 +260,6 @@ impl TxnEffect {
 
             txos.push(Some(output.clone()));
             txo_count += 1;
-          }
-
-          // (6)
-          match &iss.body.tracing_policy {
-            Some(policy) => {
-              issuance_tracing_policies.insert(code, policy.clone());
-            }
-            None => {}
           }
         }
 
@@ -443,13 +438,13 @@ impl TxnEffect {
                    cosig_keys,
                    internally_spent_txos,
                    new_asset_codes,
+                   new_tracing_policies,
                    new_issuance_nums,
                    memo_updates,
                    issuance_keys,
                    confidential_transfer_inputs,
                    issuance_amounts,
                    confidential_issuance_types,
-                   issuance_tracing_policies,
                    transfer_input_commitments,
                    transfer_output_commitments,
                    transfer_body,
@@ -639,7 +634,7 @@ impl BlockEffect {
       *issuance_amount += amount;
     }
 
-    for (type_code, tracing_policy) in txn.issuance_tracing_policies.iter() {
+    for (type_code, tracing_policy) in txn.new_tracing_policies.iter() {
       debug_assert!(!self.new_tracing_policies.contains_key(type_code));
       self.new_tracing_policies
           .insert(*type_code, tracing_policy.clone());

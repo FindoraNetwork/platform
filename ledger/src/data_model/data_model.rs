@@ -239,11 +239,11 @@ impl SignatureRules {
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 /// Simple asset rules:
-/// 1) Traceable: Records of traceable assets can be decrypted by a provided tracking key
-/// 2) Transferable: Non-transferable assets can only be transferred once from the issuer to
+/// 1) Transferable: Non-transferable assets can only be transferred once from the issuer to
 ///    another user.
-/// 3) Updatable: Whether the asset memo can be updated.
-/// 4) Transfer signature rules: Signature weights and threshold for a valid transfer.
+/// 2) Updatable: Whether the asset memo can be updated.
+/// 3) Transfer signature rules: Signature weights and threshold for a valid transfer.
+/// 4) Asset tracing policy: Asset tracer encryption keys, whether the asset is traceable, and whether the identity is traceable.
 /// 5) Max units: Optional limit on total issuance amount.
 pub struct AssetRules {
   pub transferable: bool,
