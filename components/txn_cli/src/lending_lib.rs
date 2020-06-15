@@ -665,7 +665,7 @@ mod tests {
     let data_dir = tmp_dir.path().to_str().unwrap();
 
     let funds_amount = 1000;
-    let (_, seq_id) = ledger_standalone.get_state_commitment().unwrap();
+    let (_, seq_id, _) = ledger_standalone.get_state_commitment().unwrap();
     load_funds(data_dir, seq_id, 0, 0, funds_amount, &mut ledger_standalone).unwrap();
     let data = load_data(data_dir).unwrap();
 
