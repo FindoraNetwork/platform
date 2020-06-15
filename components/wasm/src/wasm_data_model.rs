@@ -130,8 +130,8 @@ impl AssetTracerKeyPair {
 }
 
 #[wasm_bindgen]
-/// Asser owner memo. Contains information needed to decrypt an asset record.
-/// @see {@link ClientAssetRecord} for details asset records.
+/// Asset owner memo. Contains information needed to decrypt an asset record.
+/// @see {@link ClientAssetRecord} for more details about asset records.
 pub struct OwnerMemo {
   pub(crate) memo: ZeiOwnerMemo,
 }
@@ -201,7 +201,8 @@ pub struct CredentialRevealSig {
 
 #[wasm_bindgen]
 #[derive(Serialize, Deserialize)]
-/// Commitment to a credential record and proof of knowledge.
+/// Commitment to a credential record and proof that the commitment is a valid re-randomization of a
+/// commitment signed by a certain credential issuer.
 pub struct CredentialCommitmentAndPoK {
   pub(crate) commitment: CredentialCommitment,
   pub(crate) pok: CredentialPoK,
@@ -232,6 +233,8 @@ impl CredentialCommitment {
 
 #[wasm_bindgen]
 #[derive(Serialize, Deserialize, Clone)]
+/// Proof that a credential is a valid re-randomization of a credential signed by a certain asset
+/// issuer.
 pub struct CredentialPoK {
   pub(crate) pok: CredPoK,
 }
@@ -243,7 +246,7 @@ impl CredentialPoK {
 }
 
 #[wasm_bindgen]
-/// Authenticated address identity registary value. Contains a proof that the AIR result is stored
+/// Authenticated address identity registry value. Contains a proof that the AIR result is stored
 /// in the ledger.
 pub struct AuthenticatedAIRResult {
   pub(crate) result: PlatformAuthenticatedAIRResult,
@@ -263,7 +266,7 @@ impl AuthenticatedAIRResult {
     Ok(AuthenticatedAIRResult { result })
   }
 
-  /// Returns true if the authenticated AIR result proofs pass succesfully.
+  /// Returns true if the authenticated AIR result proofs verify succesfully.
   /// @param {string} state_commitment - String representing the ledger state commitment.
   pub fn is_valid(&self, state_commitment: String) -> Result<bool, JsValue> {
     let state_commitment = serde_json::from_str::<HashOf<_>>(&state_commitment).map_err(|_e| {
@@ -272,7 +275,7 @@ impl AuthenticatedAIRResult {
     Ok(self.get_ref().is_valid(state_commitment))
   }
 
-  /// Returns underlying credential commitment of the AIR result.
+  /// Returns the underlying credential commitment of the AIR result.
   pub fn get_commitment(&self) -> Option<CredentialCommitment> {
     let commitment = self.get_ref().get_credential_commitment();
     commitment.map(|comm| CredentialCommitment { commitment: comm })
