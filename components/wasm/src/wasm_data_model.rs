@@ -19,7 +19,7 @@ use zei::xfr::asset_tracer::gen_asset_tracer_keypair;
 use zei::xfr::sig::XfrPublicKey;
 use zei::xfr::structs::{
   AssetTracerDecKeys, AssetTracerEncKeys, AssetTracerKeyPair as ZeiAssetTracerKeyPair,
-  AssetTracingPolicy, BlindAssetRecord, OwnerMemo as ZeiOwnerMemo,
+  AssetTracingPolicy, BlindAssetRecord, IdentityRevealPolicy, OwnerMemo as ZeiOwnerMemo,
 };
 
 #[wasm_bindgen]
@@ -368,27 +368,36 @@ impl SignatureRules {
 }
 
 #[wasm_bindgen]
-#[derive(Default)]
 pub struct TracingPolicy {
   policy: AssetTracingPolicy,
 }
 
-#[wasm_bindgen]
 impl TracingPolicy {
-  pub fn new_with_tracking(tracing_key: &AssetTracerEncKey) -> Self {
-    let policy = AssetTracingPolicy { enc_keys: tracing_key.get_enc_key().clone(),
+  pub fn new_with_tracking(tracing_key: &AssetTracerEncKeys) -> TracingPolicy {
+    let policy = AssetTracingPolicy { enc_keys: tracing_key.clone(),
                                       asset_tracking: true,
                                       identity_tracking: None };
     TracingPolicy { policy }
   }
 
-  pub fn new_with_identity_tracking(tracing_key: &AssetTracerEncKey,
+  pub fn new_with_identity_tracking(tracing_key: &AssetTracerEncKeys,
                                     cred_issuer_key: &CredIssuerPublicKey,
                                     reveal_map: JsValue,
-                                    tracking: bool)
-                                    -> Result<Self, JsValue> {
+                                    asset_tracking: bool)
+                                    -> Result<TracingPolicy, JsValue> {
     let reveal_map: Vec<bool> = reveal_map.into_serde().map_err(error_to_jsvalue)?;
-    let policy = AssetTracingPolicy {enc_keys: tracking_key.get_
+    let policy = AssetTracingPolicy { enc_keys: tracing_key.clone(),
+                                      asset_tracking,
+                                      identity_tracking:
+                                        Some(IdentityRevealPolicy { cred_issuer_pub_key:
+                                                                      cred_issuer_key.get_ref()
+                                                                                     .clone(),
+                                                                    reveal_map }) };
+    Ok(TracingPolicy { policy })
+  }
+
+  pub fn get_policy_ref(&self) -> &AssetTracingPolicy {
+    &self.policy
   }
 }
 
@@ -412,10 +421,10 @@ impl AssetRules {
     AssetRules::default()
   }
 
-  /// Toggles asset traceability.
+  /// Sets asset tracing policy.
   /// @param {TracingPolicy} policy - Tracing policy for the new asset.
-  pub fn set_tracing(mut self, policy: &TracingPolicy) -> AssetRules {
-    self.rules.traceable = Some(policy.get_policy_ref().clone());
+  pub fn set_tracing_policy(mut self, policy: &TracingPolicy) -> AssetRules {
+    self.rules.tracing_policy = Some(policy.get_policy_ref().clone());
     self
   }
 

@@ -46,12 +46,14 @@ fn test_create_asset() -> Result<(), PlatformError> {
                                     identity_tracking: None };
 
   // Define
-  let tx = builder.add_operation_create_asset(&keys,
-                                              Some(code),
-                                              AssetRules::default().set_traceable(true).clone(),
-                                              "test".into(),
-                                              PolicyChoice::Fungible())?
-                  .transaction();
+  let tx =
+    builder.add_operation_create_asset(&keys,
+                                       Some(code),
+                                       AssetRules::default().set_tracing_policy(Some(policy))
+                                                            .clone(),
+                                       "test".into(),
+                                       PolicyChoice::Fungible())?
+           .transaction();
   apply_transaction(&mut ledger, tx.clone());
   assert!(ledger.get_asset_type(&code).is_some());
 

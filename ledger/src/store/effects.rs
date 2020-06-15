@@ -182,7 +182,7 @@ impl TxnEffect {
           issuance_keys.insert(code, token.properties.issuer);
           new_asset_codes.insert(code, token);
           new_issuance_nums.insert(code, vec![]);
-          match &def.body.asset_rules.tracing_policy {
+          match &def.body.asset.asset_rules.tracing_policy {
             Some(policy) => {
               new_tracing_policies.insert(code, policy.clone());
             }

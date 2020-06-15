@@ -133,13 +133,15 @@ pub(crate) fn process_asset_issuer_cmd(asset_issuer_matches: &clap::ArgMatches,
     ("define_asset", Some(define_asset_matches)) => {
       let fiat_asset = define_asset_matches.is_present("fiat");
       let data = load_data(data_dir)?;
-      let issuer_key_pair = if let Some(id_arg) = asset_issuer_matches.value_of("id") {
-        let issuer_id = parse_to_u64(id_arg)?;
-        data.get_asset_issuer_key_pair(issuer_id)?
-      } else {
-        println!("Asset issuer id is required to define an asset. Use asset_issuer --id.");
-        return Err(PlatformError::InputsError(error_location!()));
-      };
+      let (issuer_key_pair, tracer_enc_keys) =
+        if let Some(id_arg) = asset_issuer_matches.value_of("id") {
+          let issuer_id = parse_to_u64(id_arg)?;
+          (data.get_asset_issuer_key_pair(issuer_id)?,
+           data.get_asset_tracer_key_pair(issuer_id)?.enc_key)
+        } else {
+          println!("Asset issuer id is required to define an asset. Use asset_issuer --id.");
+          return Err(PlatformError::InputsError(error_location!()));
+        };
       let token_code = define_asset_matches.value_of("token_code");
       let memo = if let Some(memo) = define_asset_matches.value_of("memo") {
         memo
@@ -151,7 +153,10 @@ pub(crate) fn process_asset_issuer_cmd(asset_issuer_matches: &clap::ArgMatches,
       let mut asset_rules = AssetRules::default();
 
       if define_asset_matches.is_present("traceable") {
-        asset_rules.set_traceable(true);
+        let tracing_policy = AssetTracingPolicy { enc_keys: tracer_enc_keys,
+                                                  asset_tracking: true,
+                                                  identity_tracking: None };
+        asset_rules.set_tracing_policy(Some(tracing_policy));
       }
 
       if define_asset_matches.is_present("non_transferable") {

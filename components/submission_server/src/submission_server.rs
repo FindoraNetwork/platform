@@ -278,7 +278,9 @@ mod tests {
   use ledger::data_model::{AssetRules, AssetTypeCode};
   use rand_core::SeedableRng;
   use txn_builder::{BuildsTransactions, PolicyChoice, TransactionBuilder};
+  use zei::xfr::asset_tracer::gen_asset_tracer_keypair;
   use zei::xfr::sig::XfrKeyPair;
+  use zei::xfr::structs::AssetTracingPolicy;
 
   #[test]
   #[ignore]
@@ -300,20 +302,26 @@ mod tests {
     let token_code = "test";
     let asset_token = AssetTypeCode::new_from_base64(&token_code).unwrap();
 
+    // Tracer kp
+    let tracer_kp = gen_asset_tracer_keypair(&mut prng);
+    let policy = AssetTracingPolicy { enc_keys: tracer_kp.enc_key.clone(),
+                                      asset_tracking: true,
+                                      identity_tracking: None };
+
     // Build transactions
     let mut txn_builder_0 = TransactionBuilder::from_seq_id(block_commit_count);
     let mut txn_builder_1 = TransactionBuilder::from_seq_id(block_commit_count);
 
     txn_builder_0.add_operation_create_asset(&keypair,
                                              Some(asset_token),
-                                             AssetRules::default().set_traceable(true).clone(),
+                                             AssetRules::default().set_tracing_policy(Some(policy.clone())).clone(),
                                              &String::from("{}"),
                                              PolicyChoice::Fungible())
                  .unwrap();
 
     txn_builder_1.add_operation_create_asset(&keypair,
                                              None,
-                                             AssetRules::default().set_traceable(true).clone(),
+                                             AssetRules::default().set_tracing_policy(Some(policy)).clone(),
                                              "test",
                                              PolicyChoice::Fungible())
                  .unwrap();
