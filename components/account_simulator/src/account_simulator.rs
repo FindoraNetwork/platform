@@ -988,7 +988,7 @@ struct LedgerStandaloneAccounts<T>
 impl<T> LedgerStandaloneAccounts<T> where T: RestfulLedgerAccess + RestfulLedgerUpdate
 {
   fn fetch_seq_id(&self) -> u64 {
-    let (_, seq_id) = self.client.get_state_commitment().unwrap();
+    let (_, seq_id, _) = self.client.get_state_commitment().unwrap();
     seq_id
   }
 }

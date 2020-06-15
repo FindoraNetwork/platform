@@ -445,8 +445,13 @@ pub trait RestfulLedgerAccess {
 
   fn get_asset_type(&self, code: &AssetTypeCode) -> Result<AssetType, PlatformError>;
 
-  fn get_state_commitment(&self)
-                          -> Result<(HashOf<Option<StateCommitmentData>>, u64), PlatformError>;
+  #[allow(clippy::type_complexity)]
+  fn get_state_commitment(
+    &self)
+    -> Result<(HashOf<Option<StateCommitmentData>>,
+               u64,
+               SignatureOf<(HashOf<Option<StateCommitmentData>>, u64)>),
+              PlatformError>;
 
   fn get_kv_entry(&self, addr: Key) -> Result<AuthenticatedKVLookup, PlatformError>;
 
@@ -515,8 +520,13 @@ impl RestfulLedgerAccess for MockLedgerClient {
     Ok(test::read_response_json(&mut app, req))
   }
 
-  fn get_state_commitment(&self)
-                          -> Result<(HashOf<Option<StateCommitmentData>>, u64), PlatformError> {
+  #[allow(clippy::type_complexity)]
+  fn get_state_commitment(
+    &self)
+    -> Result<(HashOf<Option<StateCommitmentData>>,
+               u64,
+               SignatureOf<(HashOf<Option<StateCommitmentData>>, u64)>),
+              PlatformError> {
     let mut app =
       test::init_service(App::new().data(Arc::clone(&self.mock_ledger))
                                    .route(&LedgerAccessRoutes::GlobalState.route(),
@@ -603,15 +613,20 @@ impl RestfulLedgerAccess for ActixLedgerClient {
     Ok(serde_json::from_str::<AssetType>(&text).map_err(|_| ser_fail!())?)
   }
 
-  fn get_state_commitment(&self)
-                          -> Result<(HashOf<Option<StateCommitmentData>>, u64), PlatformError> {
+  #[allow(clippy::type_complexity)]
+  fn get_state_commitment(
+    &self)
+    -> Result<(HashOf<Option<StateCommitmentData>>,
+               u64,
+               SignatureOf<(HashOf<Option<StateCommitmentData>>, u64)>),
+              PlatformError> {
     let query = format!("{}://{}:{}{}",
                         self.protocol,
                         self.host,
                         self.port,
                         LedgerAccessRoutes::GlobalState.route());
     let text = actix_get_request(&self.client, &query).map_err(|_| inp_fail!())?;
-    Ok(serde_json::from_str::<(HashOf<Option<StateCommitmentData>>, u64)>(&text).map_err(|_| ser_fail!())?)
+    Ok(serde_json::from_str::<_>(&text).map_err(|_| ser_fail!())?)
   }
 
   fn get_kv_entry(&self, _addr: Key) -> Result<AuthenticatedKVLookup, PlatformError> {
