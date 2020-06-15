@@ -49,7 +49,7 @@ fn test_create_asset() -> Result<(), PlatformError> {
   let tx =
     builder.add_operation_create_asset(&keys,
                                        Some(code),
-                                       AssetRules::default().set_tracing_policy(Some(policy))
+                                       AssetRules::default().set_tracing_policy(Some(policy.clone()))
                                                             .clone(),
                                        "test".into(),
                                        PolicyChoice::Fungible())?
