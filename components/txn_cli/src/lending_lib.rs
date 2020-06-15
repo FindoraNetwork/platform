@@ -286,8 +286,7 @@ pub fn fulfill_loan<T>(data_dir: &str,
                                   &user_pk,
                                   &attributes).unwrap();
   let wrapper_credential = WrapperCredential { attributes: attibutes_with_value_as_vec,
-                                               issuer_pub_key:
-                                                 credential_issuer_public_key.clone(),
+                                               issuer_pub_key: credential_issuer_public_key,
                                                signature };
   let ac_credential =
     wrapper_credential.to_ac_credential()
@@ -308,7 +307,7 @@ pub fn fulfill_loan<T>(data_dir: &str,
                                             Err(PlatformError::ZeiError(error_location!(), e))
                                           })?
                                           .ctexts;
-    let tracer_memo = AssetTracerMemo { enc_key: tracer_enc_keys.clone(),
+    let tracer_memo = AssetTracerMemo { enc_key: tracer_enc_keys,
                                         lock_amount: None,
                                         lock_asset_type: None,
                                         lock_attributes: Some(ciphertext) };
