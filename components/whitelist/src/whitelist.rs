@@ -12,7 +12,7 @@ use zei::xfr::structs::asset_type_to_scalar;
 pub type WhiteListedCode = Scalar;
 
 /// Asset whitelist
-#[derive(Default, Deserialize, Serialize)]
+#[derive(Default, Deserialize, Serialize, Debug)]
 pub struct Whitelist {
   /// List of whitelisted asset codes
   // TODO (Keyao): Redmine issue #45: Allow storing whitelist members in a Merkle tree
@@ -35,6 +35,7 @@ impl Whitelist {
                           commitment: CompressedRistretto,
                           blind: Scalar)
                           -> Result<WhitelistProof, PlatformError> {
+    dbg!(&self);
     prove_array_membership(&self.members, index as usize, &commitment, &blind).or_else(|e| Err(PlatformError::ZeiError(error_location!(), e)))
   }
 
@@ -64,14 +65,8 @@ mod tests {
   use zei::xfr::asset_record::AssetRecordType;
   use zei::xfr::sig::XfrKeyPair;
 
-  // Ignoring this test due to race conditions.
-  // When running it together with test_prove_and_verify_membership, test_prove_and_verify_membership occasionally fails with SubmissionServerError.
-  // test_prove_and_verify_membership is a positive test while this test is expected to fail, so ignoring this one.
-  // GitHub issue: #335
-  // Redmine issue: #38
   #[should_panic(expected = "assertion failed: com_elem == *elem")]
   #[test]
-  #[ignore]
   fn test_prove_membership_incorrect_index() {
     // Start the standalone ledger
     let mut ledger_standalone = LedgerStandalone::new_mock(1);
@@ -101,14 +96,8 @@ mod tests {
              .unwrap();
   }
 
-  // Ignoring this test due to race conditions.
-  // When running it together with test_prove_and_verify_membership, test_prove_and_verify_membership occasionally fails with SubmissionServerError.
-  // test_prove_and_verify_membership is a positive test while this test is expected to fail, so ignoring this one.
-  // GitHub issue: #335
-  // Redmine issue: #38
   #[should_panic(expected = "assertion failed: com_elem == *elem")]
   #[test]
-  #[ignore]
   fn test_prove_membership_incorrect_utxo() {
     // Start the standalone ledger
     let mut ledger_standalone = LedgerStandalone::new_mock(1);
@@ -147,14 +136,8 @@ mod tests {
              .unwrap();
   }
 
-  // Ignoring this test due to race conditions.
-  // When running it together with test_prove_and_verify_membership, test_prove_and_verify_membership occasionally fails with SubmissionServerError.
-  // test_prove_and_verify_membership is a positive test while this test is expected to fail, so ignoring this one.
-  // GitHub issue: #335
-  // Redmine issue: #38
   #[should_panic(expected = "assertion failed: com_elem == *elem")]
   #[test]
-  #[ignore]
   fn test_prove_membership_incorrect_blind() {
     // Start the standalone ledger
     let mut ledger_standalone = LedgerStandalone::new_mock(1);
@@ -194,8 +177,6 @@ mod tests {
   }
 
   #[test]
-  #[ignore]
-  // Redmine issue 38
   fn test_prove_and_verify_membership() {
     // Start the standalone ledger
     let mut ledger_standalone = LedgerStandalone::new_mock(1);

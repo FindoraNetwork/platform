@@ -236,7 +236,6 @@ pub fn fulfill_loan<T>(data_dir: &str,
               ComparisonType::AtLeast => {
                 if parse_to_u64(value)? < requirement_u64 {
                   // Update loans data
-                  dbg!(&value);
                   data.loans[loan_id as usize].status = LoanStatus::Declined;
                   store_data_to_file(data, data_dir)?;
                   println!("Credential value should be at least: {}.", requirement_u64);
@@ -654,10 +653,6 @@ mod tests {
   }
 
   #[test]
-  #[ignore]
-  // Redmine issue: #38. Do NOT reenable this test if it fails
-  // TODO (keyao)
-  // Test funds loading, loan request, fulfilling and repayment
   fn test_request_fulfill_and_pay_loan() {
     let mut ledger_standalone = MockLedgerStandalone::new_mock(1);
 

@@ -156,22 +156,22 @@ mod tests {
   use network::{LedgerStandalone, MockLedgerStandalone};
   use rand_chacha::ChaChaRng;
   use rand_core::SeedableRng;
-  use std::io::{self, Write};
-  use std::process::{Command, Output};
   use txn_cli::txn_lib::define_issue_transfer_and_get_utxo_and_blinds;
   use zei::xfr::asset_record::AssetRecordType;
   use zei::xfr::sig::XfrKeyPair;
 
-  #[cfg(debug_assertions)]
-  const COMMAND: &str = "../../target/debug/whitelist_cli";
-  #[cfg(not(debug_assertions))]
-  const COMMAND: &str = "../../target/release/whitelist_cli";
+  fn submit_command(cmd_vec: Vec<&str>,
+                    rest_client: &MockLedgerStandalone)
+                    -> Result<(), PlatformError> {
+    let app = get_cli_app();
+    let inputs = app.get_matches_from_safe(cmd_vec).unwrap();
+    process_inputs(inputs, rest_client)
+  }
 
   // Command to add an asset type code to the whitelist
-  fn add_member_cmd(code: &str) -> io::Result<Output> {
-    Command::new(COMMAND).arg("add_member")
-                         .args(&["--code", code])
-                         .output()
+  fn add_member_cmd(code: &str, rest_client: &MockLedgerStandalone) -> Result<(), PlatformError> {
+    let args = vec!["Solvency Proof", "add_member", "--code", code];
+    submit_command(args, rest_client)
   }
 
   // Command to add an asset or a liability
@@ -180,21 +180,19 @@ mod tests {
                                  blind: &str,
                                  rest_client: &MockLedgerStandalone)
                                  -> Result<(), PlatformError> {
-    let app = get_cli_app();
-    let inputs = app.get_matches_from(vec!["Solvency Proof",
-                                           "prove_and_verify_membership",
-                                           "--index",
-                                           index,
-                                           "--utxo",
-                                           utxo,
-                                           "--blind",
-                                           blind]);
-    process_inputs(inputs, rest_client)
+    let args = vec!["Solvency Proof",
+                    "prove_and_verify_membership",
+                    "--index",
+                    index,
+                    "--utxo",
+                    utxo,
+                    "--blind",
+                    blind];
+    submit_command(args, rest_client)
   }
 
-  // This test passes individually, but we ignore it since it occasionally fails when run with other tests
-  // which also use the standalone ledger
-  // Redmind issue: #38
+  // Ignoring this test because it is broken
+  // TODO redmine
   #[ignore]
   #[test]
   fn test_cmd() {
@@ -228,24 +226,12 @@ mod tests {
     }
 
     // Adds the assets to the whitelist
-    let output = add_member_cmd(&codes[0].to_base64()).expect("Failed to set conversion rate.");
-    io::stdout().write_all(&output.stdout).unwrap();
-    io::stdout().write_all(&output.stderr).unwrap();
-    dbg!(&codes);
-    assert!(output.status.success());
-
-    let output = add_member_cmd(&codes[1].to_base64()).expect("Failed to set conversion rate.");
-    io::stdout().write_all(&output.stdout).unwrap();
-    io::stdout().write_all(&output.stderr).unwrap();
-    assert!(output.status.success());
-
-    let output = add_member_cmd(&codes[2].to_base64()).expect("Failed to set conversion rate.");
-    io::stdout().write_all(&output.stdout).unwrap();
-    io::stdout().write_all(&output.stderr).unwrap();
-    assert!(output.status.success());
-    dbg!(&blinds);
+    add_member_cmd(&codes[0].to_base64(), &mut ledger_standalone).expect("Failed to set conversion rate.");
+    add_member_cmd(&codes[1].to_base64(), &mut ledger_standalone).expect("Failed to set conversion rate.");
+    add_member_cmd(&codes[2].to_base64(), &mut ledger_standalone).expect("Failed to set conversion rate.");
 
     // Prove and verify the whitelist membership with the incorrect index
+    // catch unwind necessary because there is an unhandled panic in Zei
     let output = std::panic::catch_unwind(|| {
       prove_and_verify_membership("0", &utxos[1], &blinds[1], &ledger_standalone)
     });
@@ -264,13 +250,13 @@ mod tests {
     assert!(output.is_err());
 
     // Prove and verify the whitelist membership with the correct information
-    //let output = prove_and_verify_membership("0", &utxos[0], &blinds[0], &ledger_standalone)
-    //                      .expect("Failed to prove and verify the whitelist membership.");
+    prove_and_verify_membership("0", &utxos[0], &blinds[0], &ledger_standalone)
+                          .expect("Failed to prove and verify the whitelist membership.");
 
-    let output = prove_and_verify_membership("1", &utxos[1], &blinds[1], &ledger_standalone)
+    prove_and_verify_membership("1", &utxos[1], &blinds[1], &ledger_standalone)
                            .expect("Failed to prove and verify the whitelist membership.");
 
-    let output = prove_and_verify_membership("2", &utxos[2], &blinds[2], &ledger_standalone)
+    prove_and_verify_membership("2", &utxos[2], &blinds[2], &ledger_standalone)
                             .expect("Failed to prove and verify the whitelist membership.");
 
     fs::remove_file(WHITELIST_FILE).unwrap();

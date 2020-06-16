@@ -8,6 +8,15 @@ use txn_cli::txn_app::{get_cli_app, process_inputs};
 
 extern crate exitcode;
 
+#[cfg(test)]
+fn submit_command(cmd_vec: Vec<&str>,
+                  rest_client: &mut MockLedgerStandalone)
+                  -> Result<(), PlatformError> {
+  let app = get_cli_app();
+  let inputs = app.get_matches_from_safe(cmd_vec).unwrap();
+  process_inputs(inputs, 0, rest_client)
+}
+
 //
 // Helper functions: view records
 //
@@ -17,20 +26,14 @@ fn view_loan_all(dir: &str,
                  user_id: &str,
                  rest_client: &mut MockLedgerStandalone)
                  -> Result<(), PlatformError> {
-  let app = get_cli_app();
-  let inputs = app.get_matches_from_safe(vec!["Transaction Builder",
-                                              "--dir",
-                                              dir,
-                                              user_type,
-                                              "--id",
-                                              user_id,
-                                              "view_loan"])
-                  .unwrap();
-  process_inputs(inputs, 0, rest_client)
-  //Command::new(COMMAND).args(&["--dir", dir])
-  //                     .args(&[user_type, "--id", user_id])
-  //                     .arg("view_loan")
-  //                     .output()
+  let args = vec!["Transaction Builder",
+                  "--dir",
+                  dir,
+                  user_type,
+                  "--id",
+                  user_id,
+                  "view_loan"];
+  submit_command(args, rest_client)
 }
 
 #[cfg(test)]
@@ -40,18 +43,16 @@ fn view_loan_with_loan_id(dir: &str,
                           loan_id: &str,
                           rest_client: &mut MockLedgerStandalone)
                           -> Result<(), PlatformError> {
-  let app = get_cli_app();
-  let inputs = app.get_matches_from_safe(vec!["Transaction Builder",
-                                              "--dir",
-                                              dir,
-                                              user_type,
-                                              "--id",
-                                              user_id,
-                                              "view_loan",
-                                              "--loan",
-                                              loan_id])
-                  .unwrap();
-  process_inputs(inputs, 0, rest_client)
+  let args = vec!["Transaction Builder",
+                  "--dir",
+                  dir,
+                  user_type,
+                  "--id",
+                  user_id,
+                  "view_loan",
+                  "--loan",
+                  loan_id];
+  submit_command(args, rest_client)
 }
 
 #[cfg(test)]
@@ -61,32 +62,28 @@ fn view_loan_with_filter(dir: &str,
                          filter: &str,
                          rest_client: &mut MockLedgerStandalone)
                          -> Result<(), PlatformError> {
-  let app = get_cli_app();
-  let inputs = app.get_matches_from_safe(vec!["Transaction Builder",
-                                              "--dir",
-                                              dir,
-                                              user_type,
-                                              "--id",
-                                              user_id,
-                                              "view_loan",
-                                              "--filter",
-                                              filter])
-                  .unwrap();
-  process_inputs(inputs, 0, rest_client)
+  let args = vec!["Transaction Builder",
+                  "--dir",
+                  dir,
+                  user_type,
+                  "--id",
+                  user_id,
+                  "view_loan",
+                  "--filter",
+                  filter];
+  submit_command(args, rest_client)
 }
 
 #[cfg(test)]
 fn view_credential_all(borrower_id: &str,
                        rest_client: &mut MockLedgerStandalone)
                        -> Result<(), PlatformError> {
-  let app = get_cli_app();
-  let inputs = app.get_matches_from_safe(vec!["Transaction Builder",
-                                              "borrower",
-                                              "--id",
-                                              borrower_id,
-                                              "view_credential"])
-                  .unwrap();
-  process_inputs(inputs, 0, rest_client)
+  let args = vec!["Transaction Builder",
+                  "borrower",
+                  "--id",
+                  borrower_id,
+                  "view_credential"];
+  submit_command(args, rest_client)
 }
 
 #[cfg(test)]
@@ -94,16 +91,14 @@ fn view_credential_attribute(borrower_id: &str,
                              attribute: &str,
                              rest_client: &mut MockLedgerStandalone)
                              -> Result<(), PlatformError> {
-  let app = get_cli_app();
-  let inputs = app.get_matches_from_safe(vec!["Transaction Builder",
-                                              "borrower",
-                                              "--id",
-                                              borrower_id,
-                                              "view_credential",
-                                              "--attribute",
-                                              attribute])
-                  .unwrap();
-  process_inputs(inputs, 0, rest_client)
+  let args = vec!["Transaction Builder",
+                  "borrower",
+                  "--id",
+                  borrower_id,
+                  "view_credential",
+                  "--attribute",
+                  attribute];
+  submit_command(args, rest_client)
 }
 
 //
@@ -114,16 +109,14 @@ fn sign_up_borrower(dir: &str,
                     name: &str,
                     rest_client: &mut MockLedgerStandalone)
                     -> Result<(), PlatformError> {
-  let app = get_cli_app();
-  let inputs = app.get_matches_from_safe(vec!["Transaction Builder",
-                                              "--dir",
-                                              dir,
-                                              "borrower",
-                                              "sign_up",
-                                              "--name",
-                                              name])
-                  .unwrap();
-  process_inputs(inputs, 0, rest_client)
+  let args = vec!["Transaction Builder",
+                  "--dir",
+                  dir,
+                  "borrower",
+                  "sign_up",
+                  "--name",
+                  name];
+  submit_command(args, rest_client)
 }
 
 //
@@ -136,22 +129,20 @@ fn create_or_overwrite_credential(dir: &str,
                                   value: &str,
                                   rest_client: &mut MockLedgerStandalone)
                                   -> Result<(), PlatformError> {
-  let app = get_cli_app();
-  let inputs = app.get_matches_from_safe(vec!["Transaction Builder",
-                                              "--dir",
-                                              dir,
-                                              "borrower",
-                                              "--id",
-                                              id,
-                                              "create_or_overwrite_credential",
-                                              "--credential_issuer",
-                                              "0",
-                                              "--attribute",
-                                              attribute,
-                                              "--value",
-                                              value])
-                  .unwrap();
-  process_inputs(inputs, 0, rest_client)
+  let args = vec!["Transaction Builder",
+                  "--dir",
+                  dir,
+                  "borrower",
+                  "--id",
+                  id,
+                  "create_or_overwrite_credential",
+                  "--credential_issuer",
+                  "0",
+                  "--attribute",
+                  attribute,
+                  "--value",
+                  value];
+  submit_command(args, rest_client)
 }
 
 #[cfg(test)]
@@ -163,24 +154,22 @@ fn request_loan(dir: &str,
                 duration: &str,
                 rest_client: &mut MockLedgerStandalone)
                 -> Result<(), PlatformError> {
-  let app = get_cli_app();
-  let inputs = app.get_matches_from_safe(vec!["Transaction Builder",
-                                              "--dir",
-                                              dir,
-                                              "borrower",
-                                              "--id",
-                                              borrower,
-                                              "request_loan",
-                                              "--lender",
-                                              lender,
-                                              "--amount",
-                                              amount,
-                                              "--interest_per_mille",
-                                              interest_per_mille,
-                                              "--duration",
-                                              duration])
-                  .unwrap();
-  process_inputs(inputs, 0, rest_client)
+  let args = vec!["Transaction Builder",
+                  "--dir",
+                  dir,
+                  "borrower",
+                  "--id",
+                  borrower,
+                  "request_loan",
+                  "--lender",
+                  lender,
+                  "--amount",
+                  amount,
+                  "--interest_per_mille",
+                  interest_per_mille,
+                  "--duration",
+                  duration];
+  submit_command(args, rest_client)
 }
 
 //
@@ -190,11 +179,8 @@ fn request_loan(dir: &str,
 fn create_txn_builder_with_path(path: &str,
                                 rest_client: &mut MockLedgerStandalone)
                                 -> Result<(), PlatformError> {
-  let app = get_cli_app();
-  let inputs =
-    app.get_matches_from_safe(vec!["Transaction Builder", "create_txn_builder", "--name", path])
-       .unwrap();
-  process_inputs(inputs, 0, rest_client)
+  let arg_vec = vec!["Transaction Builder", "create_txn_builder", "--name", path];
+  submit_command(arg_vec, rest_client)
 }
 
 #[cfg(test)]
@@ -205,23 +191,21 @@ fn store_memos_with_confidential_amount(dir: &str,
                                         file: &str,
                                         rest_client: &mut MockLedgerStandalone)
                                         -> Result<(), PlatformError> {
-  let app = get_cli_app();
-  let inputs = app.get_matches_from_safe(vec!["Transaction Builder",
-                                              "--dir",
-                                              dir,
-                                              "asset_issuer",
-                                              "--id",
-                                              id,
-                                              "store_memos",
-                                              "--amount",
-                                              amount,
-                                              "--confidential_amount",
-                                              "--token_code",
-                                              token_code,
-                                              "--file",
-                                              file])
-                  .unwrap();
-  process_inputs(inputs, 0, rest_client)
+  let args = vec!["Transaction Builder",
+                  "--dir",
+                  dir,
+                  "asset_issuer",
+                  "--id",
+                  id,
+                  "store_memos",
+                  "--amount",
+                  amount,
+                  "--confidential_amount",
+                  "--token_code",
+                  token_code,
+                  "--file",
+                  file];
+  submit_command(args, rest_client)
 }
 
 #[cfg(test)]
@@ -231,20 +215,18 @@ fn trace_and_verify_asset(dir: &str,
                           expected_amount: &str,
                           rest_client: &mut MockLedgerStandalone)
                           -> Result<(), PlatformError> {
-  let app = get_cli_app();
-  let inputs = app.get_matches_from_safe(vec!["Transaction Builder",
-                                              "--dir",
-                                              dir,
-                                              "asset_issuer",
-                                              "--id",
-                                              id,
-                                              "trace_and_verify_asset",
-                                              "--memo_file",
-                                              memo_file,
-                                              "--expected_amount",
-                                              expected_amount])
-                  .unwrap();
-  process_inputs(inputs, 0, rest_client)
+  let args = vec!["Transaction Builder",
+                  "--dir",
+                  dir,
+                  "asset_issuer",
+                  "--id",
+                  id,
+                  "trace_and_verify_asset",
+                  "--memo_file",
+                  memo_file,
+                  "--expected_amount",
+                  expected_amount];
+  submit_command(args, rest_client)
 }
 
 #[cfg(test)]
@@ -255,22 +237,20 @@ fn trace_credential(dir: &str,
                     expected_value: &str,
                     rest_client: &mut MockLedgerStandalone)
                     -> Result<(), PlatformError> {
-  let app = get_cli_app();
-  let inputs = app.get_matches_from_safe(vec!["Transaction Builder",
-                                              "--dir",
-                                              dir,
-                                              "asset_issuer",
-                                              "--id",
-                                              id,
-                                              "trace_credential",
-                                              "--memo_file",
-                                              memo_file,
-                                              "--attribute",
-                                              attribute,
-                                              "--expected_value",
-                                              expected_value])
-                  .unwrap();
-  process_inputs(inputs, 0, rest_client)
+  let args = vec!["Transaction Builder",
+                  "--dir",
+                  dir,
+                  "asset_issuer",
+                  "--id",
+                  id,
+                  "trace_credential",
+                  "--memo_file",
+                  memo_file,
+                  "--attribute",
+                  attribute,
+                  "--expected_value",
+                  expected_value];
+  submit_command(args, rest_client)
 }
 
 //
@@ -286,23 +266,20 @@ fn air_assign(dir: &str,
               data: &str,
               rest_client: &mut MockLedgerStandalone)
               -> Result<(), PlatformError> {
-  let app = get_cli_app();
-  dbg!(&dir);
-  let inputs = app.get_matches_from_safe(vec!["Transaction Builder",
-                                              "--dir",
-                                              dir,
-                                              "--txn",
-                                              txn_builder_path,
-                                              "asset_issuer",
-                                              "--id",
-                                              issuer_id,
-                                              "air_assign",
-                                              "--address",
-                                              address,
-                                              "--data",
-                                              data])
-                  .unwrap();
-  process_inputs(inputs, 0, rest_client)
+  let args = vec!["Transaction Builder",
+                  "--dir",
+                  dir,
+                  "--txn",
+                  txn_builder_path,
+                  "asset_issuer",
+                  "--id",
+                  issuer_id,
+                  "air_assign",
+                  "--address",
+                  address,
+                  "--data",
+                  data];
+  submit_command(args, rest_client)
 }
 
 #[cfg(test)]
@@ -313,22 +290,20 @@ fn define_asset(dir: &str,
                 memo: &str,
                 rest_client: &mut MockLedgerStandalone)
                 -> Result<(), PlatformError> {
-  let app = get_cli_app();
-  let inputs = app.get_matches_from_safe(vec!["Transaction Builder",
-                                              "--dir",
-                                              dir,
-                                              "--txn",
-                                              txn_builder_path,
-                                              "asset_issuer",
-                                              "--id",
-                                              issuer_id,
-                                              "define_asset",
-                                              "--token_code",
-                                              token_code,
-                                              "--memo",
-                                              memo])
-                  .unwrap();
-  process_inputs(inputs, 0, rest_client)
+  let args = vec!["Transaction Builder",
+                  "--dir",
+                  dir,
+                  "--txn",
+                  txn_builder_path,
+                  "asset_issuer",
+                  "--id",
+                  issuer_id,
+                  "define_asset",
+                  "--token_code",
+                  token_code,
+                  "--memo",
+                  memo];
+  submit_command(args, rest_client)
 }
 
 #[cfg(test)]
@@ -339,23 +314,21 @@ fn issue_asset_with_confidential_amount(dir: &str,
                                         amount: &str,
                                         rest_client: &mut MockLedgerStandalone)
                                         -> Result<(), PlatformError> {
-  let app = get_cli_app();
-  let inputs = app.get_matches_from_safe(vec!["Transaction Builder",
-                                              "--dir",
-                                              dir,
-                                              "--txn",
-                                              txn_builder_path,
-                                              "asset_issuer",
-                                              "--id",
-                                              id,
-                                              "issue_asset",
-                                              "--token_code",
-                                              token_code,
-                                              "--amount",
-                                              amount,
-                                              "--confidential_amount"])
-                  .unwrap();
-  process_inputs(inputs, 0, rest_client)
+  let args = vec!["Transaction Builder",
+                  "--dir",
+                  dir,
+                  "--txn",
+                  txn_builder_path,
+                  "asset_issuer",
+                  "--id",
+                  id,
+                  "issue_asset",
+                  "--token_code",
+                  token_code,
+                  "--amount",
+                  amount,
+                  "--confidential_amount"];
+  submit_command(args, rest_client)
 }
 
 #[cfg(test)]
@@ -369,28 +342,26 @@ fn transfer_asset(dir: &str,
                   output_amounts: &str,
                   rest_client: &mut MockLedgerStandalone)
                   -> Result<(), PlatformError> {
-  let app = get_cli_app();
-  let inputs = app.get_matches_from_safe(vec!["Transaction Builder",
-                                              "--dir",
-                                              dir,
-                                              "--txn",
-                                              txn_builder_path,
-                                              "asset_issuer",
-                                              "--id",
-                                              issuer_id,
-                                              "transfer_asset",
-                                              "--recipients",
-                                              recipient_ids,
-                                              "--sids_file",
-                                              sids_file,
-                                              "--issuance_txn_files",
-                                              issuance_txn_files,
-                                              "--input_amounts",
-                                              input_amounts,
-                                              "--output_amounts",
-                                              output_amounts])
-                  .unwrap();
-  process_inputs(inputs, 0, rest_client)
+  let args = vec!["Transaction Builder",
+                  "--dir",
+                  dir,
+                  "--txn",
+                  txn_builder_path,
+                  "asset_issuer",
+                  "--id",
+                  issuer_id,
+                  "transfer_asset",
+                  "--recipients",
+                  recipient_ids,
+                  "--sids_file",
+                  sids_file,
+                  "--issuance_txn_files",
+                  issuance_txn_files,
+                  "--input_amounts",
+                  input_amounts,
+                  "--output_amounts",
+                  output_amounts];
+  submit_command(args, rest_client)
 }
 
 #[cfg(test)]
@@ -401,35 +372,30 @@ fn issue_and_transfer_asset_confidential(txn_builder_path: &str,
                                          token_code: &str,
                                          rest_client: &mut MockLedgerStandalone)
                                          -> Result<(), PlatformError> {
-  let app = get_cli_app();
-  let inputs = app.get_matches_from_safe(vec!["Transaction Builder",
-                                              "--txn",
-                                              txn_builder_path,
-                                              "asset_issuer",
-                                              "--id",
-                                              issuer_id,
-                                              "issue_and_transfer_asset",
-                                              "--recipient",
-                                              recipient_id,
-                                              "--amount",
-                                              amount,
-                                              "--token_code",
-                                              token_code,
-                                              "--confidential_amount",
-                                              "--confidential_asset"])
-                  .unwrap();
-  process_inputs(inputs, 0, rest_client)
+  let args = vec!["Transaction Builder",
+                  "--txn",
+                  txn_builder_path,
+                  "asset_issuer",
+                  "--id",
+                  issuer_id,
+                  "issue_and_transfer_asset",
+                  "--recipient",
+                  recipient_id,
+                  "--amount",
+                  amount,
+                  "--token_code",
+                  token_code,
+                  "--confidential_amount",
+                  "--confidential_asset"];
+  submit_command(args, rest_client)
 }
 
 #[cfg(test)]
 fn submit(txn_builder_path: &str,
           rest_client: &mut MockLedgerStandalone)
           -> Result<(), PlatformError> {
-  let app = get_cli_app();
-  let inputs =
-    app.get_matches_from_safe(vec!["Transaction Builder", "--txn", txn_builder_path, "submit"])
-       .unwrap();
-  process_inputs(inputs, 0, rest_client)
+  let arg_vec = vec!["Transaction Builder", "--txn", txn_builder_path, "submit"];
+  submit_command(arg_vec, rest_client)
 }
 
 #[cfg(test)]
@@ -437,15 +403,13 @@ fn submit_and_store_sids(txn_builder_path: &str,
                          sids_file: &str,
                          rest_client: &mut MockLedgerStandalone)
                          -> Result<(), PlatformError> {
-  let app = get_cli_app();
-  let inputs = app.get_matches_from_safe(vec!["Transaction Builder",
-                                              "--txn",
-                                              txn_builder_path,
-                                              "submit",
-                                              "--sids_file",
-                                              sids_file])
-                  .unwrap();
-  process_inputs(inputs, 0, rest_client)
+  let args = vec!["Transaction Builder",
+                  "--txn",
+                  txn_builder_path,
+                  "submit",
+                  "--sids_file",
+                  sids_file];
+  submit_command(args, rest_client)
 }
 
 // Helper function: load funds
@@ -456,20 +420,18 @@ fn load_funds(dir: &str,
               amount: &str,
               rest_client: &mut MockLedgerStandalone)
               -> Result<(), PlatformError> {
-  let app = get_cli_app();
-  let inputs = app.get_matches_from_safe(vec!["Transaction Builder",
-                                              "--dir",
-                                              dir,
-                                              "borrower",
-                                              "--id",
-                                              borrower_id,
-                                              "load_funds",
-                                              "--issuer",
-                                              issuer_id,
-                                              "--amount",
-                                              amount])
-                  .unwrap();
-  process_inputs(inputs, 0, rest_client)
+  let args = vec!["Transaction Builder",
+                  "--dir",
+                  dir,
+                  "borrower",
+                  "--id",
+                  borrower_id,
+                  "load_funds",
+                  "--issuer",
+                  issuer_id,
+                  "--amount",
+                  amount];
+  submit_command(args, rest_client)
 }
 
 // Helper functions: initiate and pay loan
@@ -481,7 +443,6 @@ fn fulfill_loan(dir: &str,
                 memo_file: Option<&str>,
                 rest_client: &mut MockLedgerStandalone)
                 -> Result<(), PlatformError> {
-  let app = get_cli_app();
   let arg_vec = if let Some(file) = memo_file {
     vec!["Transaction Builder",
          "--dir",
@@ -509,9 +470,7 @@ fn fulfill_loan(dir: &str,
          "--issuer",
          issuer_id]
   };
-  dbg!(&arg_vec);
-  let inputs = app.get_matches_from_safe(arg_vec).unwrap();
-  process_inputs(inputs, 0, rest_client)
+  submit_command(arg_vec, rest_client)
 }
 
 #[cfg(test)]
@@ -521,22 +480,18 @@ fn pay_loan(dir: &str,
             amount: &str,
             rest_client: &mut MockLedgerStandalone)
             -> Result<(), PlatformError> {
-  let app = get_cli_app();
-  let inputs = app.get_matches_from_safe(vec!["Transaction Builder",
-                                              "--dir",
-                                              dir,
-                                              "borrower",
-                                              "--id",
-                                              borrower_id,
-                                              "pay_loan",
-                                              "--loan",
-                                              loan_id,
-                                              "--amount",
-                                              amount,
-                                              "--http",
-                                              "--localhost"])
-                  .unwrap();
-  process_inputs(inputs, 0, rest_client)
+  let args = vec!["Transaction Builder",
+                  "--dir",
+                  dir,
+                  "borrower",
+                  "--id",
+                  borrower_id,
+                  "pay_loan",
+                  "--loan",
+                  loan_id,
+                  "--amount",
+                  amount];
+  submit_command(args, rest_client)
 }
 
 // This test passes individually, but we ignore it since it occasionally fails with SubmissionServerError when run with other tests
@@ -569,9 +524,8 @@ fn test_create_or_overwrite_credentials() {
 // Lender or borrower views loans or credentials
 //
 
-// This test is being ignored because it is broken.
-// GitHub issue: #324
-// Redmind issue: #38
+// This test is being ignored because it is broken (seems like a credential problem)
+// TODO redmine issue
 #[test]
 #[ignore]
 fn test_view() {
@@ -580,7 +534,7 @@ fn test_view() {
 
   let mut ledger_standalone = MockLedgerStandalone::new_mock(1);
   // Add a credential
-  create_or_overwrite_credential(dir, "0", "min_income", "1500", &mut ledger_standalone).expect("Failed to create a credential");
+  create_or_overwrite_credential(dir, "0", "credit_score", "1500", &mut ledger_standalone).expect("Failed to create a credential");
 
   // Create loans
   request_loan(dir, "0", "0", "100", "100", "3", &mut ledger_standalone).expect("Failed to request the loan");
@@ -843,10 +797,8 @@ fn test_air_assign() {
   tmp_dir.close().unwrap();
 }
 
-// This test passes individually, but we ignore it since it occasionally fails with SubmissionServerError when run with other tests
-// which also use the standalone ledger
-// GitHub issue: #324
-// Redmind issue: #38
+// Test is ignored because it is broken (seems like it is a credential issue)
+// TODO redmine
 #[test]
 #[ignore]
 // Test funds loading, loan request, fulfilling and repayment
