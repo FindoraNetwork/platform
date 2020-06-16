@@ -525,7 +525,7 @@ fn test_create_or_overwrite_credentials() {
 //
 
 // This test is being ignored because it is broken (seems like a credential problem)
-// TODO redmine issue
+// Redmine issue #69
 #[test]
 #[ignore]
 fn test_view() {
@@ -765,12 +765,8 @@ fn test_issue_transfer_trace_and_submit_with_args() {
   tmp_dir.close().unwrap();
 }
 
-//
-// Compose transaction and submit
-//
 // This test is broken - POK isn't being passed in
-// GitHub issue: #324
-// Redmind issue: #38
+// Redmine #70
 #[test]
 #[ignore]
 fn test_air_assign() {
@@ -798,7 +794,7 @@ fn test_air_assign() {
 }
 
 // Test is ignored because it is broken (seems like it is a credential issue)
-// TODO redmine
+// Redmine #71
 #[test]
 #[ignore]
 // Test funds loading, loan request, fulfilling and repayment

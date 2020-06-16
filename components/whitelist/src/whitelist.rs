@@ -35,7 +35,6 @@ impl Whitelist {
                           commitment: CompressedRistretto,
                           blind: Scalar)
                           -> Result<WhitelistProof, PlatformError> {
-    dbg!(&self);
     prove_array_membership(&self.members, index as usize, &commitment, &blind).or_else(|e| Err(PlatformError::ZeiError(error_location!(), e)))
   }
 

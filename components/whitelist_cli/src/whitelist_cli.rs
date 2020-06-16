@@ -192,7 +192,7 @@ mod tests {
   }
 
   // Ignoring this test because it is broken
-  // TODO redmine
+  // Redmine #68
   #[ignore]
   #[test]
   fn test_cmd() {
