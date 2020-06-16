@@ -712,7 +712,7 @@ impl LedgerStatus {
                         return Err(PlatformError::InputsError(error_location!()));
                       }
                       None => {
-                        transfer_input_policies.push(None);
+                        transfer_input_policies.push(Some(tracing_policy.clone().unwrap()));
                         transfer_input_commitments.push(None);
                       }
                     }
@@ -794,7 +794,7 @@ impl LedgerStatus {
                           return Err(PlatformError::InputsError(error_location!()));
                         }
                         None => {
-                          transfer_output_policies.push(None);
+                          transfer_output_policies.push(Some(tracing_policy.clone().unwrap()));
                           transfer_output_commitments.push(None);
                         }
                       }
@@ -829,6 +829,7 @@ impl LedgerStatus {
         }
       }
       dbg!(&transfer_input_policies);
+      dbg!(&transfer_output_policies);
       verify_xfr_body(&mut ChaChaRng::from_seed([1u8; 32]),
                       &xfr_body,
                       &transfer_input_policies[..],
@@ -2235,6 +2236,49 @@ pub mod helpers {
     (tx, ar)
   }
 
+  pub fn create_issue_and_transfer_txn_with_asset_tracing(ledger: &mut LedgerState,
+                                                          params: &PublicParams,
+                                                          code: &AssetTypeCode,
+                                                          amount: u64,
+                                                          issuer_keys: &XfrKeyPair,
+                                                          recipient_pk: &XfrPublicKey,
+                                                          seq_num: u64,
+                                                          tracing_policy: AssetTracingPolicy)
+                                                          -> (Transaction, AssetRecord) {
+    // issue operation
+    let ar_template = AssetRecordTemplate::with_asset_tracking(amount, code.val, AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType, issuer_keys.get_pk(), tracing_policy.clone());
+    let (ba, _tracer_memo, owner_memo) =
+      build_blind_asset_record(ledger.get_prng(), &params.pc_gens, &ar_template, None);
+
+    let asset_issuance_body = IssueAssetBody::new(&code,
+                                                  seq_num,
+                                                  &[TxOutput(ba.clone())],
+                                                  Some(tracing_policy.clone())).unwrap();
+    let asset_issuance_operation =
+      IssueAsset::new(asset_issuance_body,
+                      &IssuerKeyPair { keypair: &issuer_keys }).unwrap();
+
+    let issue_op = Operation::IssueAsset(asset_issuance_operation);
+
+    // transfer operation
+    let ar_template = AssetRecordTemplate::with_asset_tracking(amount, code.val, AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType, *recipient_pk, tracing_policy.clone());
+    let ar =
+      AssetRecord::from_template_no_identity_tracking(ledger.get_prng(), &ar_template).unwrap();
+    let mut transfer =
+TransferAsset::new(TransferAssetBody::new(ledger.get_prng(),
+             vec![TxoRef::Relative(0)],
+             &[AssetRecord::from_open_asset_record_with_asset_tracking_but_no_identity(open_blind_asset_record(&ba, &owner_memo, &issuer_keys.get_sk_ref()).unwrap(), tracing_policy.clone()).unwrap()],
+             vec![None],
+             &[ar.clone()],
+             vec![None],TransferType::Standard).unwrap()
+).unwrap();
+
+    transfer.sign(&issuer_keys);
+    let mut tx = Transaction::from_operation(issue_op, seq_num);
+    tx.add_operation(Operation::TransferAsset(transfer));
+    (tx, ar)
+  }
+
   pub fn create_issuance_txn(ledger: &mut LedgerState,
                              params: &PublicParams,
                              code: &AssetTypeCode,
@@ -2279,6 +2323,7 @@ mod tests {
   use zei::xfr::asset_record::{
     build_blind_asset_record, open_blind_asset_record, AssetRecordType,
   };
+  use zei::xfr::asset_tracer::gen_asset_tracer_keypair;
   use zei::xfr::sig::{XfrKeyPair, XfrPublicKey};
   use zei::xfr::structs::{AssetRecord, AssetRecordTemplate};
 
@@ -3021,6 +3066,75 @@ mod tests {
     let effect = TxnEffect::compute_effect(tx).unwrap();
     let res = ledger.apply_transaction(&mut block, effect);
     assert!(res.is_err());
+  }
+
+  #[test]
+  pub fn test_tracing_policy() {
+    let mut ledger = LedgerState::test_ledger();
+    let params = PublicParams::new();
+
+    let issuer = XfrKeyPair::generate(&mut ledger.get_prng());
+    let recipient = XfrKeyPair::generate(&mut ledger.get_prng());
+
+    // Set a tracing policies
+    let tracer_kp = gen_asset_tracer_keypair(&mut ledger.get_prng());
+    let tracing_policy = AssetTracingPolicy { enc_keys: tracer_kp.enc_key.clone(),
+                                              asset_tracking: true,
+                                              identity_tracking: None };
+    let unmatched_tracing_policy = AssetTracingPolicy { enc_keys: tracer_kp.enc_key.clone(),
+                                                        asset_tracking: false,
+                                                        identity_tracking: None };
+
+    // Define an asset with the tracing policy
+    let code = AssetTypeCode { val: [1; 16] };
+    let tx = create_definition_transaction(&code,
+                                           &issuer,
+                                           AssetRules::default().set_tracing_policy(Some(tracing_policy.clone())).clone(),
+                                           Some(Memo("test".to_string())),
+                                           ledger.get_block_commit_count()).unwrap();
+    apply_transaction(&mut ledger, tx);
+
+    // Issue and transfer the asset without a tracing policy
+    // Should fail
+    let (tx, _) = create_issue_and_transfer_txn(&mut ledger,
+                                                &params,
+                                                &code,
+                                                100,
+                                                &issuer,
+                                                recipient.get_pk_ref(),
+                                                0);
+    let effect = TxnEffect::compute_effect(tx.clone()).unwrap();
+    let mut block = ledger.start_block().unwrap();
+    let res = ledger.apply_transaction(&mut block, effect);
+    assert!(res.is_err());
+
+    // Issue and transfer the asset to with the unmatched tracing policy
+    // Should fail
+    let (tx, _) = create_issue_and_transfer_txn_with_asset_tracing(&mut ledger,
+                                                                   &params,
+                                                                   &code,
+                                                                   100,
+                                                                   &issuer,
+                                                                   recipient.get_pk_ref(),
+                                                                   0,
+                                                                   unmatched_tracing_policy);
+    let effect = TxnEffect::compute_effect(tx.clone()).unwrap();
+    let res = ledger.apply_transaction(&mut block, effect);
+    assert!(res.is_err());
+
+    // Issue and transfer the asset with the correct tracing policy
+    // Should pass
+    let (tx, _) = create_issue_and_transfer_txn_with_asset_tracing(&mut ledger,
+                                                                   &params,
+                                                                   &code,
+                                                                   100,
+                                                                   &issuer,
+                                                                   recipient.get_pk_ref(),
+                                                                   0,
+                                                                   tracing_policy);
+    let effect = TxnEffect::compute_effect(tx.clone()).unwrap();
+    let res = ledger.apply_transaction(&mut block, effect);
+    assert!(res.is_ok());
   }
 
   #[test]
