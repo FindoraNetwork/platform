@@ -1,4 +1,4 @@
-//#![deny(warnings)]
+#![deny(warnings)]
 use clap::{App, Arg, SubCommand};
 use curve25519_dalek::scalar::Scalar;
 use ledger::data_model::errors::PlatformError;
@@ -459,13 +459,6 @@ mod tests {
                                            "--utxo",
                                            utxo]);
     process_inputs(inputs, rest_client)
-    // Command::new(COMMAND).args(&["--dir", dir])
-    //                      .arg("add_asset_or_liability")
-    //                      .args(&["--type", amount_type])
-    //                      .args(&["--amount", amount])
-    //                      .args(&["--code", code])
-    //                      .args(&["--utxo", utxo])
-    //                      .output()
   }
 
   // Command to prove and verify solvency
