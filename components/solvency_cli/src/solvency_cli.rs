@@ -1,4 +1,4 @@
-#![deny(warnings)]
+//#![deny(warnings)]
 use clap::{App, Arg, SubCommand};
 use curve25519_dalek::scalar::Scalar;
 use ledger::data_model::errors::PlatformError;
@@ -407,16 +407,25 @@ mod tests {
                                              amount: &str,
                                              code: &str,
                                              blinds: &str,
-                                             utxo: &str)
-                                             -> io::Result<Output> {
-    Command::new(COMMAND).args(&["--dir", dir])
-                         .arg("add_asset_or_liability")
-                         .args(&["--type", amount_type])
-                         .args(&["--amount", amount])
-                         .args(&["--code", code])
-                         .args(&["--blinds", blinds])
-                         .args(&["--utxo", utxo])
-                         .output()
+                                             utxo: &str,
+                                             rest_client: &MockLedgerStandalone)
+                                             -> Result<(), PlatformError> {
+    let app = get_cli_app();
+    let inputs = app.get_matches_from(vec!["Solvency Proof",
+                                           "--dir",
+                                           dir,
+                                           "add_asset_or_liability",
+                                           "--type",
+                                           amount_type,
+                                           "--amount",
+                                           amount,
+                                           "--code",
+                                           code,
+                                           "--blinds",
+                                           blinds,
+                                           "--utxo",
+                                           utxo]);
+    process_inputs(inputs, rest_client)
   }
 
   // Command to add a nonconfidential asset or liability
@@ -424,15 +433,30 @@ mod tests {
                                                 amount_type: &str,
                                                 amount: &str,
                                                 code: &str,
-                                                utxo: &str)
-                                                -> io::Result<Output> {
-    Command::new(COMMAND).args(&["--dir", dir])
-                         .arg("add_asset_or_liability")
-                         .args(&["--type", amount_type])
-                         .args(&["--amount", amount])
-                         .args(&["--code", code])
-                         .args(&["--utxo", utxo])
-                         .output()
+                                                utxo: &str,
+                                                rest_client: &MockLedgerStandalone)
+                                                -> Result<(), PlatformError> {
+    let app = get_cli_app();
+    let inputs = app.get_matches_from(vec!["Solvency Proof",
+                                           "--dir",
+                                           dir,
+                                           "add_asset_or_liability",
+                                           "--type",
+                                           amount_type,
+                                           "--amount",
+                                           amount,
+                                           "--code",
+                                           code,
+                                           "--utxo",
+                                           utxo]);
+    process_inputs(inputs, rest_client)
+    // Command::new(COMMAND).args(&["--dir", dir])
+    //                      .arg("add_asset_or_liability")
+    //                      .args(&["--type", amount_type])
+    //                      .args(&["--amount", amount])
+    //                      .args(&["--code", code])
+    //                      .args(&["--utxo", utxo])
+    //                      .output()
   }
 
   // Command to prove and verify solvency
@@ -514,11 +538,7 @@ mod tests {
     let hidden_liabilities: &mut Vec<AmountAndCodeScalar> = &mut Vec::new();
     let hidden_liabilities_blinds: &mut Vec<AmountAndCodeBlinds> = &mut Vec::new();
 
-    let output =
-    add_nonconfidential_asset_or_liability_cmd(dir, "asset", "10", code_0, &utxos[0]).expect("Failed to add public asset.");
-    io::stdout().write_all(&output.stdout).unwrap();
-    io::stdout().write_all(&output.stderr).unwrap();
-    assert!(output.status.success());
+    add_nonconfidential_asset_or_liability_cmd(dir, "asset", "10", code_0, &utxos[0], &mut ledger_standalone).expect("Failed to add public asset.");
 
     let output =
       add_confidential_asset_or_liability_cmd(dir,
@@ -526,33 +546,19 @@ mod tests {
                                               "200",
                                               code_1,
                                               &blinds[0],
-                                              &utxos[1]).expect("Failed to add hidden asset.");
-    io::stdout().write_all(&output.stdout).unwrap();
-    io::stdout().write_all(&output.stderr).unwrap();
-    assert!(output.status.success());
+                                              &utxos[1], &mut ledger_standalone).expect("Failed to add hidden asset.");
 
-    let output =
-    add_confidential_asset_or_liability_cmd(dir, "asset", "3", code_2, &blinds[1], &utxos[2]).expect("Failed to add hidden asset.");
-    io::stdout().write_all(&output.stdout).unwrap();
-    io::stdout().write_all(&output.stderr).unwrap();
-    assert!(output.status.success());
+    add_confidential_asset_or_liability_cmd(dir, "asset", "3", code_2, &blinds[1], &utxos[2], &mut ledger_standalone).expect("Failed to add hidden asset.");
 
-    let output = add_nonconfidential_asset_or_liability_cmd(dir, "liability","40", code_0, &utxos[3])
+    let output = add_nonconfidential_asset_or_liability_cmd(dir, "liability","40", code_0, &utxos[3], &mut ledger_standalone)
                                       .expect("Failed to add public liability.");
-    io::stdout().write_all(&output.stdout).unwrap();
-    io::stdout().write_all(&output.stderr).unwrap();
-    assert!(output.status.success());
-
     let output =
       add_confidential_asset_or_liability_cmd(dir,
                                               "liability",
                                               "50",
                                               code_1,
                                               &blinds[2],
-                                              &utxos[4]).expect("Failed to add hidden liability.");
-    io::stdout().write_all(&output.stdout).unwrap();
-    io::stdout().write_all(&output.stderr).unwrap();
-    assert!(output.status.success());
+                                              &utxos[4], &mut ledger_standalone).expect("Failed to add hidden liability.");
 
     // Prove and verify solvency
     hidden_assets.push(get_amount_and_code_scalars(200, codes[1]));
@@ -573,26 +579,16 @@ mod tests {
                                               "150",
                                               code_1,
                                               &blinds[3],
-                                              &utxos[5]).expect("Failed to add hidden liability.");
-    io::stdout().write_all(&output.stdout).unwrap();
-    io::stdout().write_all(&output.stderr).unwrap();
-    assert!(output.status.success());
-
+                                              &utxos[5], &mut ledger_standalone).expect("Failed to add hidden liability.");
     // Prove and verify solvency
     // Should fail since total asset amount < total liabiliity amount
     hidden_liabilities.push(get_amount_and_code_scalars(150, codes[1]));
     hidden_liabilities_blinds.push(calculate_amount_and_code_blinds(&blinds[3]).unwrap());
     let output = prove_and_verify_solvency_cmd(dir, hidden_assets.to_vec(), hidden_assets_blinds.to_vec(), hidden_liabilities.to_vec(), hidden_liabilities_blinds.to_vec()).expect("Failed to prove and verify solvency.");
-    io::stdout().write_all(&output.stdout).unwrap();
-    io::stdout().write_all(&output.stderr).unwrap();
-    assert!(!output.status.success());
 
     // Add additional assets to make total asset amount > total liabiliity amount
     let output =
-    add_nonconfidential_asset_or_liability_cmd(dir, "asset", "30", code_0, &utxos[6]).expect("Failed to add public asset.");
-    io::stdout().write_all(&output.stdout).unwrap();
-    io::stdout().write_all(&output.stderr).unwrap();
-    assert!(output.status.success());
+    add_nonconfidential_asset_or_liability_cmd(dir, "asset", "30", code_0, &utxos[6], &mut ledger_standalone).expect("Failed to add public asset.");
 
     // Prove and verify solvency
     let output = prove_and_verify_solvency_cmd(dir, hidden_assets.to_vec(), hidden_assets_blinds.to_vec(), hidden_liabilities.to_vec(), hidden_liabilities_blinds.to_vec()).expect("Failed to prove and verify solvency.");

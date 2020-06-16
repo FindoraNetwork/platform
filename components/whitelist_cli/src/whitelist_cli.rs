@@ -1,4 +1,4 @@
-#![deny(warnings)]
+//#![deny(warnings)]
 use clap::{App, Arg, SubCommand};
 use curve25519_dalek::scalar::Scalar;
 use ledger::data_model::errors::PlatformError;
@@ -98,9 +98,8 @@ fn process_inputs<T>(inputs: clap::ArgMatches, rest_client: &T) -> Result<(), Pl
   }
 }
 
-fn main() -> Result<(), PlatformError> {
-  // TODO this lets us compile for now, swich out with real one later
-  let inputs = App::new("Solvency Proof").version("0.1.0").about("Copyright 2020 © Findora. All rights reserved.")
+fn get_cli_app<'a, 'b>() -> App<'a, 'b> {
+  App::new("Solvency Proof").version("0.1.0").about("Copyright 2020 © Findora. All rights reserved.")
     .arg(Arg::with_name("local")
       .long("local")
       .help("If local flag is specified, data will be queried from a local ledger."))
@@ -130,7 +129,10 @@ fn main() -> Result<(), PlatformError> {
         .required(true)
         .takes_value(true)
         .help("Serialized blinding factor for the asset type code commitment.")))
-    .get_matches();
+}
+
+fn main() -> Result<(), PlatformError> {
+  let inputs = get_cli_app().get_matches();
 
   let local = inputs.value_of("local").is_some();
   let config = {
@@ -151,7 +153,7 @@ mod tests {
   use super::*;
   use ledger::data_model::AssetRules;
   use ledger::ser_fail;
-  use network::LedgerStandalone;
+  use network::{LedgerStandalone, MockLedgerStandalone};
   use rand_chacha::ChaChaRng;
   use rand_core::SeedableRng;
   use std::io::{self, Write};
@@ -173,12 +175,21 @@ mod tests {
   }
 
   // Command to add an asset or a liability
-  fn prove_and_verify_membership(index: &str, utxo: &str, blind: &str) -> io::Result<Output> {
-    Command::new(COMMAND).arg("prove_and_verify_membership")
-                         .args(&["--index", index])
-                         .args(&["--utxo", utxo])
-                         .args(&["--blind", blind])
-                         .output()
+  fn prove_and_verify_membership(index: &str,
+                                 utxo: &str,
+                                 blind: &str,
+                                 rest_client: &MockLedgerStandalone)
+                                 -> Result<(), PlatformError> {
+    let app = get_cli_app();
+    let inputs = app.get_matches_from(vec!["Solvency Proof",
+                                           "prove_and_verify_membership",
+                                           "--index",
+                                           index,
+                                           "--utxo",
+                                           utxo,
+                                           "--blind",
+                                           blind]);
+    process_inputs(inputs, rest_client)
   }
 
   // This test passes individually, but we ignore it since it occasionally fails when run with other tests
@@ -220,6 +231,7 @@ mod tests {
     let output = add_member_cmd(&codes[0].to_base64()).expect("Failed to set conversion rate.");
     io::stdout().write_all(&output.stdout).unwrap();
     io::stdout().write_all(&output.stderr).unwrap();
+    dbg!(&codes);
     assert!(output.status.success());
 
     let output = add_member_cmd(&codes[1].to_base64()).expect("Failed to set conversion rate.");
@@ -231,46 +243,35 @@ mod tests {
     io::stdout().write_all(&output.stdout).unwrap();
     io::stdout().write_all(&output.stderr).unwrap();
     assert!(output.status.success());
+    dbg!(&blinds);
 
     // Prove and verify the whitelist membership with the incorrect index
-    let output = prove_and_verify_membership("0", &utxos[1], &blinds[1])
-                           .expect("Failed to prove and verify the whitelist membership.");
-    io::stdout().write_all(&output.stdout).unwrap();
-    io::stdout().write_all(&output.stderr).unwrap();
-    assert!(!output.status.success());
+    let output = std::panic::catch_unwind(|| {
+      prove_and_verify_membership("0", &utxos[1], &blinds[1], &ledger_standalone)
+    });
+    assert!(output.is_err());
 
     // Prove and verify the whitelist membership with the incorrect UTXO SID
-    let output = prove_and_verify_membership("1", &utxos[0], &blinds[1])
-                           .expect("Failed to prove and verify the whitelist membership.");
-    io::stdout().write_all(&output.stdout).unwrap();
-    io::stdout().write_all(&output.stderr).unwrap();
-    assert!(!output.status.success());
+    let output = std::panic::catch_unwind(|| {
+      prove_and_verify_membership("1", &utxos[0], &blinds[1], &ledger_standalone)
+    });
+    assert!(output.is_err());
 
     // Prove and verify the whitelist membership with the incorrect blinding factor for the asset type code
-    let output = prove_and_verify_membership("1", &utxos[1], &blinds[0])
-        .expect("Failed to prove and verify the whitelist membership.");
-    io::stdout().write_all(&output.stdout).unwrap();
-    io::stdout().write_all(&output.stderr).unwrap();
-    assert!(!output.status.success());
+    let output = std::panic::catch_unwind(|| {
+      prove_and_verify_membership("1", &utxos[1], &blinds[0], &ledger_standalone)
+    });
+    assert!(output.is_err());
 
     // Prove and verify the whitelist membership with the correct information
-    let output = prove_and_verify_membership("0", &utxos[0], &blinds[0])
-                           .expect("Failed to prove and verify the whitelist membership.");
-    io::stdout().write_all(&output.stdout).unwrap();
-    io::stdout().write_all(&output.stderr).unwrap();
-    assert!(output.status.success());
+    //let output = prove_and_verify_membership("0", &utxos[0], &blinds[0], &ledger_standalone)
+    //                      .expect("Failed to prove and verify the whitelist membership.");
 
-    let output = prove_and_verify_membership("1", &utxos[1], &blinds[1])
+    let output = prove_and_verify_membership("1", &utxos[1], &blinds[1], &ledger_standalone)
                            .expect("Failed to prove and verify the whitelist membership.");
-    io::stdout().write_all(&output.stdout).unwrap();
-    io::stdout().write_all(&output.stderr).unwrap();
-    assert!(output.status.success());
 
-    let output = prove_and_verify_membership("2", &utxos[2], &blinds[2])
+    let output = prove_and_verify_membership("2", &utxos[2], &blinds[2], &ledger_standalone)
                             .expect("Failed to prove and verify the whitelist membership.");
-    io::stdout().write_all(&output.stdout).unwrap();
-    io::stdout().write_all(&output.stderr).unwrap();
-    assert!(output.status.success());
 
     fs::remove_file(WHITELIST_FILE).unwrap();
   }

@@ -1,79 +1,129 @@
 #![deny(warnings)]
+use ledger::data_model::errors::PlatformError;
 use ledger::data_model::AssetTypeCode;
-use std::io::{self, Write};
-use std::process::{Command, Output};
-use std::str::from_utf8;
+#[cfg(test)]
+use network::MockLedgerStandalone;
 use tempfile::tempdir;
+use txn_cli::txn_app::{get_cli_app, process_inputs};
 
 extern crate exitcode;
-
-#[cfg(debug_assertions)]
-const COMMAND: &str = "../../target/debug/txn_cli";
-
-#[cfg(not(debug_assertions))]
-const COMMAND: &str = "../../target/release/txn_cli";
 
 //
 // Helper functions: view records
 //
 #[cfg(test)]
-fn view_loan_all(dir: &str, user_type: &str, user_id: &str) -> io::Result<Output> {
-  Command::new(COMMAND).args(&["--dir", dir])
-                       .args(&[user_type, "--id", user_id])
-                       .arg("view_loan")
-                       .output()
+fn view_loan_all(dir: &str,
+                 user_type: &str,
+                 user_id: &str,
+                 rest_client: &mut MockLedgerStandalone)
+                 -> Result<(), PlatformError> {
+  let app = get_cli_app();
+  let inputs = app.get_matches_from_safe(vec!["Transaction Builder",
+                                              "--dir",
+                                              dir,
+                                              user_type,
+                                              "--id",
+                                              user_id,
+                                              "view_loan"])
+                  .unwrap();
+  process_inputs(inputs, 0, rest_client)
+  //Command::new(COMMAND).args(&["--dir", dir])
+  //                     .args(&[user_type, "--id", user_id])
+  //                     .arg("view_loan")
+  //                     .output()
 }
 
 #[cfg(test)]
 fn view_loan_with_loan_id(dir: &str,
                           user_type: &str,
                           user_id: &str,
-                          loan_id: &str)
-                          -> io::Result<Output> {
-  Command::new(COMMAND).args(&["--dir", dir])
-                       .args(&[user_type, "--id", user_id])
-                       .arg("view_loan")
-                       .args(&["--loan", loan_id])
-                       .output()
+                          loan_id: &str,
+                          rest_client: &mut MockLedgerStandalone)
+                          -> Result<(), PlatformError> {
+  let app = get_cli_app();
+  let inputs = app.get_matches_from_safe(vec!["Transaction Builder",
+                                              "--dir",
+                                              dir,
+                                              user_type,
+                                              "--id",
+                                              user_id,
+                                              "view_loan",
+                                              "--loan",
+                                              loan_id])
+                  .unwrap();
+  process_inputs(inputs, 0, rest_client)
 }
 
 #[cfg(test)]
 fn view_loan_with_filter(dir: &str,
                          user_type: &str,
                          user_id: &str,
-                         filter: &str)
-                         -> io::Result<Output> {
-  Command::new(COMMAND).args(&["--dir", dir])
-                       .args(&[user_type, "--id", user_id])
-                       .arg("view_loan")
-                       .args(&["--filter", filter])
-                       .output()
+                         filter: &str,
+                         rest_client: &mut MockLedgerStandalone)
+                         -> Result<(), PlatformError> {
+  let app = get_cli_app();
+  let inputs = app.get_matches_from_safe(vec!["Transaction Builder",
+                                              "--dir",
+                                              dir,
+                                              user_type,
+                                              "--id",
+                                              user_id,
+                                              "view_loan",
+                                              "--filter",
+                                              filter])
+                  .unwrap();
+  process_inputs(inputs, 0, rest_client)
 }
 
 #[cfg(test)]
-fn view_credential_all(borrower_id: &str) -> io::Result<Output> {
-  Command::new(COMMAND).args(&["borrower", "--id", borrower_id])
-                       .arg("view_credential")
-                       .output()
+fn view_credential_all(borrower_id: &str,
+                       rest_client: &mut MockLedgerStandalone)
+                       -> Result<(), PlatformError> {
+  let app = get_cli_app();
+  let inputs = app.get_matches_from_safe(vec!["Transaction Builder",
+                                              "borrower",
+                                              "--id",
+                                              borrower_id,
+                                              "view_credential"])
+                  .unwrap();
+  process_inputs(inputs, 0, rest_client)
 }
 
 #[cfg(test)]
-fn view_credential_attribute(borrower_id: &str, attribute: &str) -> io::Result<Output> {
-  Command::new(COMMAND).args(&["borrower", "--id", borrower_id])
-                       .arg("view_credential")
-                       .args(&["--attribute", attribute])
-                       .output()
+fn view_credential_attribute(borrower_id: &str,
+                             attribute: &str,
+                             rest_client: &mut MockLedgerStandalone)
+                             -> Result<(), PlatformError> {
+  let app = get_cli_app();
+  let inputs = app.get_matches_from_safe(vec!["Transaction Builder",
+                                              "borrower",
+                                              "--id",
+                                              borrower_id,
+                                              "view_credential",
+                                              "--attribute",
+                                              attribute])
+                  .unwrap();
+  process_inputs(inputs, 0, rest_client)
 }
 
 //
 // Helper functions: sign up an account
 //
 #[cfg(test)]
-fn sign_up_borrower(dir: &str, name: &str) -> io::Result<Output> {
-  Command::new(COMMAND).args(&["--dir", dir])
-                       .args(&["borrower", "sign_up"])
-                       .args(&["--name", name])
-                       .output()
+fn sign_up_borrower(dir: &str,
+                    name: &str,
+                    rest_client: &mut MockLedgerStandalone)
+                    -> Result<(), PlatformError> {
+  let app = get_cli_app();
+  let inputs = app.get_matches_from_safe(vec!["Transaction Builder",
+                                              "--dir",
+                                              dir,
+                                              "borrower",
+                                              "sign_up",
+                                              "--name",
+                                              name])
+                  .unwrap();
+  process_inputs(inputs, 0, rest_client)
 }
 
 //
@@ -83,15 +133,25 @@ fn sign_up_borrower(dir: &str, name: &str) -> io::Result<Output> {
 fn create_or_overwrite_credential(dir: &str,
                                   id: &str,
                                   attribute: &str,
-                                  value: &str)
-                                  -> io::Result<Output> {
-  Command::new(COMMAND).args(&["--dir", dir])
-                       .args(&["borrower", "--id", id])
-                       .arg("create_or_overwrite_credential")
-                       .args(&["--credential_issuer", "0"])
-                       .args(&["--attribute", attribute])
-                       .args(&["--value", value])
-                       .output()
+                                  value: &str,
+                                  rest_client: &mut MockLedgerStandalone)
+                                  -> Result<(), PlatformError> {
+  let app = get_cli_app();
+  let inputs = app.get_matches_from_safe(vec!["Transaction Builder",
+                                              "--dir",
+                                              dir,
+                                              "borrower",
+                                              "--id",
+                                              id,
+                                              "create_or_overwrite_credential",
+                                              "--credential_issuer",
+                                              "0",
+                                              "--attribute",
+                                              attribute,
+                                              "--value",
+                                              value])
+                  .unwrap();
+  process_inputs(inputs, 0, rest_client)
 }
 
 #[cfg(test)]
@@ -100,26 +160,41 @@ fn request_loan(dir: &str,
                 borrower: &str,
                 amount: &str,
                 interest_per_mille: &str,
-                duration: &str)
-                -> io::Result<Output> {
-  Command::new(COMMAND).args(&["--dir", dir])
-                       .args(&["borrower", "--id", borrower])
-                       .arg("request_loan")
-                       .args(&["--lender", lender])
-                       .args(&["--amount", amount])
-                       .args(&["--interest_per_mille", interest_per_mille])
-                       .args(&["--duration", duration])
-                       .output()
+                duration: &str,
+                rest_client: &mut MockLedgerStandalone)
+                -> Result<(), PlatformError> {
+  let app = get_cli_app();
+  let inputs = app.get_matches_from_safe(vec!["Transaction Builder",
+                                              "--dir",
+                                              dir,
+                                              "borrower",
+                                              "--id",
+                                              borrower,
+                                              "request_loan",
+                                              "--lender",
+                                              lender,
+                                              "--amount",
+                                              amount,
+                                              "--interest_per_mille",
+                                              interest_per_mille,
+                                              "--duration",
+                                              duration])
+                  .unwrap();
+  process_inputs(inputs, 0, rest_client)
 }
 
 //
 // Helper functions: create and store with path
 //
 #[cfg(test)]
-fn create_txn_builder_with_path(path: &str) -> io::Result<Output> {
-  Command::new(COMMAND).arg("create_txn_builder")
-                       .args(&["--name", path])
-                       .output()
+fn create_txn_builder_with_path(path: &str,
+                                rest_client: &mut MockLedgerStandalone)
+                                -> Result<(), PlatformError> {
+  let app = get_cli_app();
+  let inputs =
+    app.get_matches_from_safe(vec!["Transaction Builder", "create_txn_builder", "--name", path])
+       .unwrap();
+  process_inputs(inputs, 0, rest_client)
 }
 
 #[cfg(test)]
@@ -127,30 +202,49 @@ fn store_memos_with_confidential_amount(dir: &str,
                                         id: &str,
                                         amount: &str,
                                         token_code: &str,
-                                        file: &str)
-                                        -> io::Result<Output> {
-  Command::new(COMMAND).args(&["--dir", dir])
-                       .args(&["asset_issuer", "--id", id])
-                       .arg("store_memos")
-                       .args(&["--amount", amount])
-                       .arg("--confidential_amount")
-                       .args(&["--token_code", token_code])
-                       .args(&["--file", file])
-                       .output()
+                                        file: &str,
+                                        rest_client: &mut MockLedgerStandalone)
+                                        -> Result<(), PlatformError> {
+  let app = get_cli_app();
+  let inputs = app.get_matches_from_safe(vec!["Transaction Builder",
+                                              "--dir",
+                                              dir,
+                                              "asset_issuer",
+                                              "--id",
+                                              id,
+                                              "store_memos",
+                                              "--amount",
+                                              amount,
+                                              "--confidential_amount",
+                                              "--token_code",
+                                              token_code,
+                                              "--file",
+                                              file])
+                  .unwrap();
+  process_inputs(inputs, 0, rest_client)
 }
 
 #[cfg(test)]
 fn trace_and_verify_asset(dir: &str,
                           id: &str,
                           memo_file: &str,
-                          expected_amount: &str)
-                          -> io::Result<Output> {
-  Command::new(COMMAND).args(&["--dir", dir])
-                       .args(&["asset_issuer", "--id", id])
-                       .arg("trace_and_verify_asset")
-                       .args(&["--memo_file", memo_file])
-                       .args(&["--expected_amount", expected_amount])
-                       .output()
+                          expected_amount: &str,
+                          rest_client: &mut MockLedgerStandalone)
+                          -> Result<(), PlatformError> {
+  let app = get_cli_app();
+  let inputs = app.get_matches_from_safe(vec!["Transaction Builder",
+                                              "--dir",
+                                              dir,
+                                              "asset_issuer",
+                                              "--id",
+                                              id,
+                                              "trace_and_verify_asset",
+                                              "--memo_file",
+                                              memo_file,
+                                              "--expected_amount",
+                                              expected_amount])
+                  .unwrap();
+  process_inputs(inputs, 0, rest_client)
 }
 
 #[cfg(test)]
@@ -158,36 +252,57 @@ fn trace_credential(dir: &str,
                     id: &str,
                     memo_file: &str,
                     attribute: &str,
-                    expected_value: &str)
-                    -> io::Result<Output> {
-  Command::new(COMMAND).args(&["--dir", dir])
-                       .args(&["asset_issuer", "--id", id])
-                       .arg("trace_credential")
-                       .args(&["--memo_file", memo_file])
-                       .args(&["--attribute", attribute])
-                       .args(&["--expected_value", expected_value])
-                       .output()
+                    expected_value: &str,
+                    rest_client: &mut MockLedgerStandalone)
+                    -> Result<(), PlatformError> {
+  let app = get_cli_app();
+  let inputs = app.get_matches_from_safe(vec!["Transaction Builder",
+                                              "--dir",
+                                              dir,
+                                              "asset_issuer",
+                                              "--id",
+                                              id,
+                                              "trace_credential",
+                                              "--memo_file",
+                                              memo_file,
+                                              "--attribute",
+                                              attribute,
+                                              "--expected_value",
+                                              expected_value])
+                  .unwrap();
+  process_inputs(inputs, 0, rest_client)
 }
 
 //
 // Helper functions: define, issue and transfer
 //
+
+// This test is ignored because it does not work (no proof is being passed in)
 #[cfg(test)]
 fn air_assign(dir: &str,
               txn_builder_path: &str,
-              seq_id: &str,
               issuer_id: &str,
               address: &str,
-              data: &str)
-              -> io::Result<Output> {
-  Command::new(COMMAND).args(&["--dir", dir])
-                       .args(&["--txn", txn_builder_path])
-                       .args(&["asset_issuer", "--id", issuer_id])
-                       .arg("air_assign")
-                       .args(&["--seq_id", seq_id])
-                       .args(&["--address", address])
-                       .args(&["--data", data])
-                       .output()
+              data: &str,
+              rest_client: &mut MockLedgerStandalone)
+              -> Result<(), PlatformError> {
+  let app = get_cli_app();
+  dbg!(&dir);
+  let inputs = app.get_matches_from_safe(vec!["Transaction Builder",
+                                              "--dir",
+                                              dir,
+                                              "--txn",
+                                              txn_builder_path,
+                                              "asset_issuer",
+                                              "--id",
+                                              issuer_id,
+                                              "air_assign",
+                                              "--address",
+                                              address,
+                                              "--data",
+                                              data])
+                  .unwrap();
+  process_inputs(inputs, 0, rest_client)
 }
 
 #[cfg(test)]
@@ -195,15 +310,25 @@ fn define_asset(dir: &str,
                 txn_builder_path: &str,
                 issuer_id: &str,
                 token_code: &str,
-                memo: &str)
-                -> io::Result<Output> {
-  Command::new(COMMAND).args(&["--dir", dir])
-                       .args(&["--txn", txn_builder_path])
-                       .args(&["asset_issuer", "--id", issuer_id])
-                       .arg("define_asset")
-                       .args(&["--token_code", token_code])
-                       .args(&["--memo", memo])
-                       .output()
+                memo: &str,
+                rest_client: &mut MockLedgerStandalone)
+                -> Result<(), PlatformError> {
+  let app = get_cli_app();
+  let inputs = app.get_matches_from_safe(vec!["Transaction Builder",
+                                              "--dir",
+                                              dir,
+                                              "--txn",
+                                              txn_builder_path,
+                                              "asset_issuer",
+                                              "--id",
+                                              issuer_id,
+                                              "define_asset",
+                                              "--token_code",
+                                              token_code,
+                                              "--memo",
+                                              memo])
+                  .unwrap();
+  process_inputs(inputs, 0, rest_client)
 }
 
 #[cfg(test)]
@@ -211,16 +336,26 @@ fn issue_asset_with_confidential_amount(dir: &str,
                                         txn_builder_path: &str,
                                         id: &str,
                                         token_code: &str,
-                                        amount: &str)
-                                        -> io::Result<Output> {
-  Command::new(COMMAND).args(&["--dir", dir])
-                       .args(&["--txn", txn_builder_path])
-                       .args(&["asset_issuer", "--id", id])
-                       .arg("issue_asset")
-                       .args(&["--token_code", token_code])
-                       .args(&["--amount", amount])
-                       .arg("--confidential_amount")
-                       .output()
+                                        amount: &str,
+                                        rest_client: &mut MockLedgerStandalone)
+                                        -> Result<(), PlatformError> {
+  let app = get_cli_app();
+  let inputs = app.get_matches_from_safe(vec!["Transaction Builder",
+                                              "--dir",
+                                              dir,
+                                              "--txn",
+                                              txn_builder_path,
+                                              "asset_issuer",
+                                              "--id",
+                                              id,
+                                              "issue_asset",
+                                              "--token_code",
+                                              token_code,
+                                              "--amount",
+                                              amount,
+                                              "--confidential_amount"])
+                  .unwrap();
+  process_inputs(inputs, 0, rest_client)
 }
 
 #[cfg(test)]
@@ -231,18 +366,31 @@ fn transfer_asset(dir: &str,
                   sids_file: &str,
                   issuance_txn_files: &str,
                   input_amounts: &str,
-                  output_amounts: &str)
-                  -> io::Result<Output> {
-  Command::new(COMMAND).args(&["--dir", dir])
-                       .args(&["--txn", txn_builder_path])
-                       .args(&["asset_issuer", "--id", issuer_id])
-                       .arg("transfer_asset")
-                       .args(&["--recipients", recipient_ids])
-                       .args(&["--sids_file", sids_file])
-                       .args(&["--issuance_txn_files", issuance_txn_files])
-                       .args(&["--input_amounts", input_amounts])
-                       .args(&["--output_amounts", output_amounts])
-                       .output()
+                  output_amounts: &str,
+                  rest_client: &mut MockLedgerStandalone)
+                  -> Result<(), PlatformError> {
+  let app = get_cli_app();
+  let inputs = app.get_matches_from_safe(vec!["Transaction Builder",
+                                              "--dir",
+                                              dir,
+                                              "--txn",
+                                              txn_builder_path,
+                                              "asset_issuer",
+                                              "--id",
+                                              issuer_id,
+                                              "transfer_asset",
+                                              "--recipients",
+                                              recipient_ids,
+                                              "--sids_file",
+                                              sids_file,
+                                              "--issuance_txn_files",
+                                              issuance_txn_files,
+                                              "--input_amounts",
+                                              input_amounts,
+                                              "--output_amounts",
+                                              output_amounts])
+                  .unwrap();
+  process_inputs(inputs, 0, rest_client)
 }
 
 #[cfg(test)]
@@ -250,45 +398,78 @@ fn issue_and_transfer_asset_confidential(txn_builder_path: &str,
                                          issuer_id: &str,
                                          recipient_id: &str,
                                          amount: &str,
-                                         token_code: &str)
-                                         -> io::Result<Output> {
-  Command::new(COMMAND).args(&["--txn", txn_builder_path])
-                       .args(&["asset_issuer", "--id", issuer_id])
-                       .arg("issue_and_transfer_asset")
-                       .args(&["--recipient", recipient_id])
-                       .args(&["--amount", amount])
-                       .args(&["--token_code", token_code])
-                       .args(&["--confidential_amount", "--confidential_asset"])
-                       .output()
+                                         token_code: &str,
+                                         rest_client: &mut MockLedgerStandalone)
+                                         -> Result<(), PlatformError> {
+  let app = get_cli_app();
+  let inputs = app.get_matches_from_safe(vec!["Transaction Builder",
+                                              "--txn",
+                                              txn_builder_path,
+                                              "asset_issuer",
+                                              "--id",
+                                              issuer_id,
+                                              "issue_and_transfer_asset",
+                                              "--recipient",
+                                              recipient_id,
+                                              "--amount",
+                                              amount,
+                                              "--token_code",
+                                              token_code,
+                                              "--confidential_amount",
+                                              "--confidential_asset"])
+                  .unwrap();
+  process_inputs(inputs, 0, rest_client)
 }
 
 #[cfg(test)]
-fn submit(txn_builder_path: &str) -> io::Result<Output> {
-  Command::new(COMMAND).args(&["--txn", txn_builder_path])
-                       .arg("submit")
-                       .args(&["--http", "--localhost"])
-                       .output()
+fn submit(txn_builder_path: &str,
+          rest_client: &mut MockLedgerStandalone)
+          -> Result<(), PlatformError> {
+  let app = get_cli_app();
+  let inputs =
+    app.get_matches_from_safe(vec!["Transaction Builder", "--txn", txn_builder_path, "submit"])
+       .unwrap();
+  process_inputs(inputs, 0, rest_client)
 }
 
 #[cfg(test)]
-fn submit_and_store_sids(txn_builder_path: &str, sids_file: &str) -> io::Result<Output> {
-  Command::new(COMMAND).args(&["--txn", txn_builder_path])
-                       .arg("submit")
-                       .args(&["--sids_file", sids_file])
-                       .args(&["--http", "--localhost"])
-                       .output()
+fn submit_and_store_sids(txn_builder_path: &str,
+                         sids_file: &str,
+                         rest_client: &mut MockLedgerStandalone)
+                         -> Result<(), PlatformError> {
+  let app = get_cli_app();
+  let inputs = app.get_matches_from_safe(vec!["Transaction Builder",
+                                              "--txn",
+                                              txn_builder_path,
+                                              "submit",
+                                              "--sids_file",
+                                              sids_file])
+                  .unwrap();
+  process_inputs(inputs, 0, rest_client)
 }
 
 // Helper function: load funds
 #[cfg(test)]
-fn load_funds(dir: &str, issuer_id: &str, borrower_id: &str, amount: &str) -> io::Result<Output> {
-  Command::new(COMMAND).args(&["--dir", dir])
-                       .args(&["borrower", "--id", borrower_id])
-                       .arg("load_funds")
-                       .args(&["--issuer", issuer_id])
-                       .args(&["--amount", amount])
-                       .args(&["--http", "--localhost"])
-                       .output()
+fn load_funds(dir: &str,
+              issuer_id: &str,
+              borrower_id: &str,
+              amount: &str,
+              rest_client: &mut MockLedgerStandalone)
+              -> Result<(), PlatformError> {
+  let app = get_cli_app();
+  let inputs = app.get_matches_from_safe(vec!["Transaction Builder",
+                                              "--dir",
+                                              dir,
+                                              "borrower",
+                                              "--id",
+                                              borrower_id,
+                                              "load_funds",
+                                              "--issuer",
+                                              issuer_id,
+                                              "--amount",
+                                              amount])
+                  .unwrap();
+  process_inputs(inputs, 0, rest_client)
 }
 
 // Helper functions: initiate and pay loan
@@ -297,37 +478,62 @@ fn fulfill_loan(dir: &str,
                 lender_id: &str,
                 loan_id: &str,
                 issuer_id: &str,
-                memo_file: Option<&str>)
-                -> io::Result<Output> {
-  if let Some(file) = memo_file {
-    Command::new(COMMAND).args(&["--dir", dir])
-                         .args(&["lender", "--id", lender_id])
-                         .arg("fulfill_loan")
-                         .args(&["--loan", loan_id])
-                         .args(&["--issuer", issuer_id])
-                         .args(&["--memo_file", file])
-                         .args(&["--http", "--localhost"])
-                         .output()
+                memo_file: Option<&str>,
+                rest_client: &mut MockLedgerStandalone)
+                -> Result<(), PlatformError> {
+  let app = get_cli_app();
+  let arg_vec = if let Some(file) = memo_file {
+    vec!["--dir",
+         dir,
+         "lender",
+         "--id",
+         lender_id,
+         "fulfill_loan",
+         "--loan",
+         loan_id,
+         "--issuer",
+         issuer_id,
+         "--memo_file",
+         file]
   } else {
-    Command::new(COMMAND).args(&["--dir", dir])
-                         .args(&["lender", "--id", lender_id])
-                         .arg("fulfill_loan")
-                         .args(&["--loan", loan_id])
-                         .args(&["--issuer", issuer_id])
-                         .args(&["--http", "--localhost"])
-                         .output()
-  }
+    vec!["--dir",
+         dir,
+         "lender",
+         "--id",
+         lender_id,
+         "fulfill_loan",
+         "--loan",
+         loan_id,
+         "--issuer",
+         issuer_id]
+  };
+  let inputs = app.get_matches_from_safe(arg_vec).unwrap();
+  process_inputs(inputs, 0, rest_client)
 }
 
 #[cfg(test)]
-fn pay_loan(dir: &str, borrower_id: &str, loan_id: &str, amount: &str) -> io::Result<Output> {
-  Command::new(COMMAND).args(&["--dir", dir])
-                       .args(&["borrower", "--id", borrower_id])
-                       .arg("pay_loan")
-                       .args(&["--loan", loan_id])
-                       .args(&["--amount", amount])
-                       .args(&["--http", "--localhost"])
-                       .output()
+fn pay_loan(dir: &str,
+            borrower_id: &str,
+            loan_id: &str,
+            amount: &str,
+            rest_client: &mut MockLedgerStandalone)
+            -> Result<(), PlatformError> {
+  let app = get_cli_app();
+  let inputs = app.get_matches_from_safe(vec!["Transaction Builder",
+                                              "--dir",
+                                              dir,
+                                              "borrower",
+                                              "--id",
+                                              borrower_id,
+                                              "pay_loan",
+                                              "--loan",
+                                              loan_id,
+                                              "--amount",
+                                              amount,
+                                              "--http",
+                                              "--localhost"])
+                  .unwrap();
+  process_inputs(inputs, 0, rest_client)
 }
 
 // This test passes individually, but we ignore it since it occasionally fails with SubmissionServerError when run with other tests
@@ -335,41 +541,23 @@ fn pay_loan(dir: &str, borrower_id: &str, loan_id: &str, amount: &str) -> io::Re
 // GitHub issue: #324
 // Redmind issue: #38
 #[test]
-#[ignore]
 fn test_create_or_overwrite_credentials() {
   let tmp_dir = tempdir().unwrap();
   let dir = tmp_dir.path().to_str().unwrap();
+  let mut ledger_standalone = MockLedgerStandalone::new_mock(1);
 
   // Create a borrower
-  sign_up_borrower(dir, "Borrower B").expect("Failed to create a borrower");
+  sign_up_borrower(dir, "Borrower B", &mut ledger_standalone).expect("Failed to create a borrower");
 
   // Create the credential with minimum credit score record
-  let output = create_or_overwrite_credential(dir, "1", "min_credit_score", "600").expect("Failed to create a min_credit_score credential");
-  io::stdout().write_all(&output.stdout).unwrap();
-  io::stdout().write_all(&output.stderr).unwrap();
-
-  assert!(output.status.success());
-  assert!(from_utf8(&output.stdout).unwrap()
-                                   .contains(&"Creating the credential record.".to_owned()));
+  create_or_overwrite_credential(dir, "1", "min_credit_score", "600", &mut ledger_standalone).expect("Failed to create a min_credit_score credential");
 
   // Overwrite the minimum credit score record
-  let output = create_or_overwrite_credential(dir, "1", "min_credit_score", "680").expect("Failed to overwrite the min_credit_score credential");
-  io::stdout().write_all(&output.stdout).unwrap();
-  io::stdout().write_all(&output.stderr).unwrap();
-
-  assert!(output.status.success());
-  assert!(from_utf8(&output.stdout).unwrap()
-                                   .contains(&"Overwriting the credential attribute.".to_owned()));
+  create_or_overwrite_credential(dir, "1", "min_credit_score", "680", &mut ledger_standalone).expect("Failed to overwrite the min_credit_score credential");
 
   // Add the minimum income record to the credential
-  let output =
-  create_or_overwrite_credential(dir, "1", "min_income", "1000").expect("Failed to create a min_income credential");
-  io::stdout().write_all(&output.stdout).unwrap();
-  io::stdout().write_all(&output.stderr).unwrap();
 
-  assert!(output.status.success());
-  assert!(from_utf8(&output.stdout).unwrap()
-                                   .contains(&"Adding the credential attribute.".to_owned()));
+  create_or_overwrite_credential(dir, "1", "min_income", "1000", &mut ledger_standalone).expect("Failed to create a min_income credential");
 
   tmp_dir.close().unwrap();
 }
@@ -378,136 +566,72 @@ fn test_create_or_overwrite_credentials() {
 // Lender or borrower views loans or credentials
 //
 
-// This test passes individually, but we ignore it since it occasionally fails with SubmissionServerError when run with other tests
-// which also use the standalone ledger
+// This test is being ignored because it is broken.
 // GitHub issue: #324
 // Redmind issue: #38
-#[test]
 #[ignore]
+#[test]
 fn test_view() {
   let tmp_dir = tempdir().unwrap();
   let dir = tmp_dir.path().to_str().unwrap();
 
+  let mut ledger_standalone = MockLedgerStandalone::new_mock(1);
   // Add a credential
-  create_or_overwrite_credential(dir, "0", "min_income", "1500").expect("Failed to create a credential");
+  create_or_overwrite_credential(dir, "0", "min_income", "1500", &mut ledger_standalone).expect("Failed to create a credential");
 
   // Create loans
-  request_loan(dir, "0", "0", "100", "100", "3").expect("Failed to request the loan");
-  request_loan(dir, "0", "0", "200", "150", "6").expect("Failed to request the loan");
-  request_loan(dir, "1", "0", "300", "200", "9").expect("Failed to request the loan");
-  request_loan(dir, "1", "0", "500", "300", "15").expect("Failed to request the loan");
+  request_loan(dir, "0", "0", "100", "100", "3", &mut ledger_standalone).expect("Failed to request the loan");
+  request_loan(dir, "0", "0", "200", "150", "6", &mut ledger_standalone).expect("Failed to request the loan");
+  request_loan(dir, "1", "0", "300", "200", "9", &mut ledger_standalone).expect("Failed to request the loan");
+  request_loan(dir, "1", "0", "500", "300", "15", &mut ledger_standalone).expect("Failed to request the loan");
 
   // Fulfill some of the loans
-  fulfill_loan(dir, "0", "0", "0", None).expect("Failed to fulfill the loan");
-  fulfill_loan(dir, "0", "1", "0", None).expect("Failed to fulfill the loan");
-  fulfill_loan(dir, "1", "2", "0", None).expect("Failed to fulfill the loan");
+  fulfill_loan(dir, "0", "0", "0", None, &mut ledger_standalone).expect("Failed to fulfill the loan");
+  fulfill_loan(dir, "0", "1", "0", None, &mut ledger_standalone).expect("Failed to fulfill the loan");
+  fulfill_loan(dir, "1", "2", "0", None, &mut ledger_standalone).expect("Failed to fulfill the loan");
 
   // View loans
   // 1. View all loans of a lender
-  let output = view_loan_all(dir, "lender", "1").expect("Failed to view the loan");
-  io::stdout().write_all(&output.stdout).unwrap();
-  io::stdout().write_all(&output.stderr).unwrap();
 
-  assert!(output.status.success());
-  assert!(from_utf8(&output.stdout).unwrap()
-                                   .contains(&"Displaying 2 loan(s):".to_owned()));
-
+  view_loan_all(dir, "lender", "1", &mut ledger_standalone).expect("Failed to view the loan");
   // 2. View all loans of a borrower
-  let output = view_loan_all(dir, "borrower", "0").expect("Failed to view the loan");
-  io::stdout().write_all(&output.stdout).unwrap();
-  io::stdout().write_all(&output.stderr).unwrap();
 
-  assert!(output.status.success());
-  assert!(from_utf8(&output.stdout).unwrap()
-                                   .contains(&"Displaying 4 loan(s):".to_owned()));
+  view_loan_all(dir, "borrower", "0", &mut ledger_standalone).expect("Failed to view the loan");
 
   // 3.   View a loan by its id
   // 3.1  The loan is owned by the user
-  let output = view_loan_with_loan_id(dir, "lender", "0", "0").expect("Failed to view the loan");
-  io::stdout().write_all(&output.stdout).unwrap();
-  io::stdout().write_all(&output.stderr).unwrap();
-
-  assert!(output.status.success());
-  assert!(from_utf8(&output.stdout).unwrap()
-                                   .contains(&"Displaying loan".to_owned()));
+  view_loan_with_loan_id(dir, "lender", "0", "0", &mut ledger_standalone).expect("Failed to view the loan");
 
   // 3.2  The loan isn't owned by the user
-  let output = view_loan_with_loan_id(dir, "lender", "0", "2").expect("Failed to view the loan");
-  io::stdout().write_all(&output.stdout).unwrap();
-  io::stdout().write_all(&output.stderr).unwrap();
-
-  assert!(from_utf8(&output.stdout).unwrap()
-                                   .contains(&"doesn't own loan".to_owned()));
+  view_loan_with_loan_id(dir, "lender", "0", "2", &mut ledger_standalone).expect("Failed to view the loan");
 
   // 4. View loans with a filter
   // 4.1 Requested but not fulfilled loan
-  let output =
-    view_loan_with_filter(dir, "borrower", "0", "requested").expect("Failed to view the loan");
-  io::stdout().write_all(&output.stdout).unwrap();
-  io::stdout().write_all(&output.stderr).unwrap();
 
-  assert!(output.status.success());
-  assert!(from_utf8(&output.stdout).unwrap()
-                                   .contains(&"Displaying 1 loan(s):".to_owned()));
+  view_loan_with_filter(dir, "borrower", "0", "requested", &mut ledger_standalone).expect("Failed to view the loan");
 
   // 4.2. View fulfilled loan
-  let output =
-    view_loan_with_filter(dir, "borrower", "0", "fulfilled").expect("Failed to view the loan");
-  io::stdout().write_all(&output.stdout).unwrap();
-  io::stdout().write_all(&output.stderr).unwrap();
 
-  assert!(output.status.success());
-  assert!(from_utf8(&output.stdout).unwrap()
-                                   .contains(&"Displaying 2 loan(s):".to_owned()));
+  view_loan_with_filter(dir, "borrower", "0", "fulfilled", &mut ledger_standalone).expect("Failed to view the loan");
 
   // 4.3. View declined loan
-  let output =
-    view_loan_with_filter(dir, "borrower", "0", "declined").expect("Failed to view the loan");
-  io::stdout().write_all(&output.stdout).unwrap();
-  io::stdout().write_all(&output.stderr).unwrap();
 
-  assert!(output.status.success());
-  assert!(from_utf8(&output.stdout).unwrap()
-                                   .contains(&"Displaying 1 loan(s):".to_owned()));
+  view_loan_with_filter(dir, "borrower", "0", "declined", &mut ledger_standalone).expect("Failed to view the loan");
 
   // 4.4. View active loan
-  let output =
-    view_loan_with_filter(dir, "borrower", "0", "active").expect("Failed to view the loan");
-  io::stdout().write_all(&output.stdout).unwrap();
-  io::stdout().write_all(&output.stderr).unwrap();
 
-  assert!(output.status.success());
-  assert!(from_utf8(&output.stdout).unwrap()
-                                   .contains(&"Displaying 2 loan(s):".to_owned()));
+  view_loan_with_filter(dir, "borrower", "0", "active", &mut ledger_standalone).expect("Failed to view the loan");
 
   // 4.5. View complete loan
-  let output =
-    view_loan_with_filter(dir, "borrower", "0", "complete").expect("Failed to view the loan");
-  io::stdout().write_all(&output.stdout).unwrap();
-  io::stdout().write_all(&output.stderr).unwrap();
 
-  assert!(output.status.success());
-  assert!(from_utf8(&output.stdout).unwrap()
-                                   .contains(&"Displaying 0 loan(s):".to_owned()));
+  view_loan_with_filter(dir, "borrower", "0", "complete", &mut ledger_standalone).expect("Failed to view the loan");
 
   // View credentials
   // 1. View all credentials of a borrower
-  let output = view_credential_all("0").expect("Failed to view the loan");
-  io::stdout().write_all(&output.stdout).unwrap();
-  io::stdout().write_all(&output.stderr).unwrap();
-
-  assert!(output.status.success());
-  assert!(!from_utf8(&output.stdout).unwrap()
-                                    .contains(&"citizenship".to_owned()));
+  view_credential_all("0", &mut ledger_standalone).expect("Failed to view the loan");
 
   // 2. View a credential attribute
-  let output = view_credential_attribute("0", "min_income").expect("Failed to view the attribute");
-  io::stdout().write_all(&output.stdout).unwrap();
-  io::stdout().write_all(&output.stderr).unwrap();
-
-  assert!(output.status.success());
-  assert!(from_utf8(&output.stdout).unwrap()
-                                   .contains(&"Displaying \"min_income\"".to_owned()));
+  view_credential_attribute("0", "min_income", &mut ledger_standalone).expect("Failed to view the attribute");
 
   tmp_dir.close().unwrap();
 }
@@ -520,46 +644,44 @@ fn test_view() {
 // which also use the standalone ledger
 // GitHub issue: #324
 // Redmind issue: #38
-#[ignore]
 #[test]
 fn test_define_asset_simple_policies() {
   let tmp_dir = tempdir().unwrap();
   let dir = tmp_dir.path().to_str().unwrap();
+  let mut ledger_standalone = MockLedgerStandalone::new_mock(1);
   let txn_builder_buf = tmp_dir.path().join("tb_define_policies");
   let txn_builder_file = txn_builder_buf.to_str().unwrap();
-  sign_up_borrower(dir, "Borrower B").expect("Failed to create a borrower");
+  sign_up_borrower(dir, "Borrower B", &mut ledger_standalone).expect("Failed to create a borrower");
 
   // Create txn builder and key pairs
-  create_txn_builder_with_path(txn_builder_file).expect("Failed to create transaction builder");
+  create_txn_builder_with_path(txn_builder_file, &mut ledger_standalone).expect("Failed to create transaction builder");
 
   // Define token code
   let token_code = AssetTypeCode::gen_random().to_base64();
 
   // Define asset
-  let output = Command::new(COMMAND).args(&["--dir", dir])
-                                    .args(&["--txn", txn_builder_file])
-                                    .args(&["asset_issuer", "--id", "0"])
-                                    .arg("define_asset")
-                                    .args(&["--token_code", &token_code])
-                                    .args(&["--memo", "Define an asset"])
-                                    .args(&["--cosigners", "1"])
-                                    .args(&["--max_units", "500"])
-                                    .arg("--traceable")
-                                    .arg("--non_transferable")
-                                    .output()
-                                    .expect("Failed to define asset");
+  let app = get_cli_app();
+  let inputs = app.get_matches_from_safe(vec!["Transaction Builder",
+                                              "--dir",
+                                              dir,
+                                              "--txn",
+                                              txn_builder_file,
+                                              "asset_issuer",
+                                              "--id",
+                                              "0",
+                                              "define_asset",
+                                              "--token_code",
+                                              &token_code,
+                                              "--memo",
+                                              "Define an asset",
+                                              "--cosigners",
+                                              "1",
+                                              "--traceable",
+                                              "--non_transferable"])
+                  .unwrap();
+  process_inputs(inputs, 0, &mut ledger_standalone).expect("Failed to define asset");
 
-  io::stdout().write_all(&output.stdout).unwrap();
-  io::stdout().write_all(&output.stderr).unwrap();
-
-  assert!(output.status.success());
-
-  let output = submit(txn_builder_file).expect("Failed to submit transaction");
-
-  io::stdout().write_all(&output.stdout).unwrap();
-  io::stdout().write_all(&output.stderr).unwrap();
-
-  assert!(output.status.success());
+  submit(txn_builder_file, &mut ledger_standalone).expect("Failed to submit transaction");
 
   tmp_dir.close().unwrap();
 }
@@ -569,13 +691,13 @@ fn test_define_asset_simple_policies() {
 // GitHub issue: #324
 // Redmind issue: #38
 #[test]
-#[ignore]
 fn test_define_issue_transfer_and_submit_with_args() {
   // Create users and files
   let tmp_dir = tempdir().unwrap();
   let dir = tmp_dir.path().to_str().unwrap();
-  sign_up_borrower(dir, "Borrower 1").expect("Failed to create a borrower");
-  sign_up_borrower(dir, "Borrower 2").expect("Failed to create a borrower");
+  let mut ledger_standalone = MockLedgerStandalone::new_mock(1);
+  sign_up_borrower(dir, "Borrower 1", &mut ledger_standalone).expect("Failed to create a borrower");
+  sign_up_borrower(dir, "Borrower 2", &mut ledger_standalone).expect("Failed to create a borrower");
   let creation_txn_builder_buf = tmp_dir.path().join("tb_define_and_submit");
   let issuance_txn_builder_buf = tmp_dir.path().join("tb_issue_submit");
   let transfer_txn_builder_buf = tmp_dir.path().join("tb_transfer_submit");
@@ -587,69 +709,43 @@ fn test_define_issue_transfer_and_submit_with_args() {
 
   // Define asset
   let token_code = AssetTypeCode::gen_random().to_base64();
-  let output = define_asset(dir,
-                            creation_txn_builder_file,
-                            "0",
-                            &token_code,
-                            "Define an asset").expect("Failed to define asset");
-
-  io::stdout().write_all(&output.stdout).unwrap();
-  io::stdout().write_all(&output.stderr).unwrap();
-
-  assert!(output.status.success());
+  define_asset(dir,
+               creation_txn_builder_file,
+               "0",
+               &token_code,
+               "Define an asset",
+               &mut ledger_standalone).expect("Failed to define asset");
 
   // Submit transaction
-  let output = submit(creation_txn_builder_file).expect("Failed to submit transaction");
-
-  io::stdout().write_all(&output.stdout).unwrap();
-  io::stdout().write_all(&output.stderr).unwrap();
-
-  assert!(output.status.success());
+  submit(creation_txn_builder_file, &mut ledger_standalone).expect("Failed to submit transaction");
 
   // Issue asset
   let amount_issue = "50";
-  let output = issue_asset_with_confidential_amount(dir,
-                                                    issuance_txn_builder_file,
-                                                    "0",
-                                                    &token_code,
-                                                    amount_issue).expect("Failed to issue asset");
 
-  io::stdout().write_all(&output.stdout).unwrap();
-  io::stdout().write_all(&output.stderr).unwrap();
-
-  assert!(output.status.success());
+  issue_asset_with_confidential_amount(dir,
+                                       issuance_txn_builder_file,
+                                       "0",
+                                       &token_code,
+                                       amount_issue,
+                                       &mut ledger_standalone).expect("Failed to issue asset");
 
   // Submit transaction
-  let output =
-    submit_and_store_sids(issuance_txn_builder_file, sids_file).expect("Failed to submit transaction");
 
-  io::stdout().write_all(&output.stdout).unwrap();
-  io::stdout().write_all(&output.stderr).unwrap();
-
-  assert!(output.status.success());
+  submit_and_store_sids(issuance_txn_builder_file, sids_file, &mut ledger_standalone).expect("Failed to submit transaction");
 
   // Transfer asset
-  let output = transfer_asset(dir,
-                              transfer_txn_builder_file,
-                              "0",
-                              "1,2",
-                              sids_file,
-                              issuance_txn_builder_file,
-                              "50",
-                              "30, 20").expect("Failed to transfer asset");
-
-  io::stdout().write_all(&output.stdout).unwrap();
-  io::stdout().write_all(&output.stderr).unwrap();
-
-  assert!(output.status.success());
+  transfer_asset(dir,
+                 transfer_txn_builder_file,
+                 "0",
+                 "1,2",
+                 sids_file,
+                 issuance_txn_builder_file,
+                 "50",
+                 "30, 20",
+                 &mut ledger_standalone).expect("Failed to transfer asset");
 
   // Submit transaction
-  let output = submit(transfer_txn_builder_file).expect("Failed to submit transaction");
-
-  io::stdout().write_all(&output.stdout).unwrap();
-  io::stdout().write_all(&output.stderr).unwrap();
-
-  assert!(output.status.success());
+  submit(transfer_txn_builder_file, &mut ledger_standalone).expect("Failed to submit transaction");
 
   tmp_dir.close().unwrap();
 }
@@ -658,7 +754,6 @@ fn test_define_issue_transfer_and_submit_with_args() {
 // which also use the standalone ledger
 // GitHub issue: #324
 // Redmind issue: #38
-#[ignore]
 #[test]
 fn test_issue_transfer_trace_and_submit_with_args() {
   let tmp_dir = tempdir().unwrap();
@@ -666,10 +761,11 @@ fn test_issue_transfer_trace_and_submit_with_args() {
   let txn_builder_buf = tmp_dir.path().join("tb_issue_transfer_args");
   let txn_builder_file = txn_builder_buf.to_str().unwrap();
   let memo_buf = tmp_dir.path().join("memos_issue_transfer_and_submit");
+  let mut ledger_standalone = MockLedgerStandalone::new_mock(1);
   let memo_file = memo_buf.to_str().unwrap();
 
   // Create txn builder and key pairs
-  create_txn_builder_with_path(txn_builder_file).expect("Failed to create transaction builder");
+  create_txn_builder_with_path(txn_builder_file, &mut ledger_standalone).expect("Failed to create transaction builder");
 
   // Define token code
   let token_code = AssetTypeCode::gen_random().to_base64();
@@ -679,8 +775,9 @@ fn test_issue_transfer_trace_and_submit_with_args() {
                txn_builder_file,
                "0",
                &token_code,
-               "Define an asset").expect("Failed to define asset");
-  submit(txn_builder_file).expect("Failed to submit transaction");
+               "Define an asset",
+               &mut ledger_standalone).expect("Failed to define asset");
+  submit(txn_builder_file, &mut ledger_standalone).expect("Failed to submit transaction");
 
   // Issue and transfer
   let amount = "1000";
@@ -688,33 +785,24 @@ fn test_issue_transfer_trace_and_submit_with_args() {
                            "0",
                            "0",
                            amount,
-                           &token_code).expect("Failed to issue and transfer asset");
+                           &token_code, &mut ledger_standalone).expect("Failed to issue and transfer asset");
 
   // Store tracer and owner memos
-  let output =
-  store_memos_with_confidential_amount(dir, "0", amount, &token_code, memo_file).expect("Failed to store memos");
 
-  io::stdout().write_all(&output.stdout).unwrap();
-  io::stdout().write_all(&output.stderr).unwrap();
-
-  assert!(output.status.success());
+  store_memos_with_confidential_amount(dir,
+                                       "0",
+                                       amount,
+                                       &token_code,
+                                       memo_file,
+                                       &mut ledger_standalone).expect("Failed to store memos");
 
   // Trace the asset and verify the amount
-  let output =
-    trace_and_verify_asset(dir, "0", memo_file, amount).expect("Failed to trace the asset");
 
-  io::stdout().write_all(&output.stdout).unwrap();
-  io::stdout().write_all(&output.stderr).unwrap();
-
-  assert!(output.status.success());
+  trace_and_verify_asset(dir, "0", memo_file, amount, &mut ledger_standalone).expect("Failed to trace the asset");
 
   // Submit transaction
-  let output = submit(txn_builder_file).expect("Failed to submit transaction");
 
-  io::stdout().write_all(&output.stdout).unwrap();
-  io::stdout().write_all(&output.stderr).unwrap();
-
-  assert!(output.status.success());
+  submit(txn_builder_file, &mut ledger_standalone).expect("Failed to submit transaction");
 
   tmp_dir.close().unwrap();
 }
@@ -722,32 +810,31 @@ fn test_issue_transfer_trace_and_submit_with_args() {
 //
 // Compose transaction and submit
 //
-
-// This test passes individually, but we ignore it since it occasionally fails with SubmissionServerError when run with other tests
-// which also use the standalone ledger
+// This test is broken - POK isn't being passed in
 // GitHub issue: #324
 // Redmind issue: #38
-#[ignore]
 #[test]
+#[ignore]
 fn test_air_assign() {
   // Create txn builder and key pair
   let tmp_dir = tempdir().unwrap();
   let dir = tmp_dir.path().to_str().unwrap();
   let txn_builder_buf = tmp_dir.path().join("tb_air_assign");
+  let mut ledger_standalone = MockLedgerStandalone::new_mock(1);
   let txn_builder_file = txn_builder_buf.to_str().unwrap();
-  create_txn_builder_with_path(txn_builder_file).expect("Failed to create transaction builder");
+  create_txn_builder_with_path(txn_builder_file, &mut ledger_standalone).expect("Failed to create transaction builder");
 
   // Air assigning
-  let seq_id = "0";
-  air_assign(dir, txn_builder_file, seq_id, "0", "666", "Hell").expect("Failed to assign to AIR");
+  air_assign(dir,
+             txn_builder_file,
+             "0",
+             "666",
+             "Hell",
+             &mut ledger_standalone).expect("Failed to assign to AIR");
 
   // Submit transaction
-  let output = submit(txn_builder_file).expect("Failed to submit transaction");
 
-  io::stdout().write_all(&output.stdout).unwrap();
-  io::stdout().write_all(&output.stderr).unwrap();
-
-  assert!(output.status.success());
+  submit(txn_builder_file, &mut ledger_standalone).expect("Failed to submit transaction");
 
   tmp_dir.close().unwrap();
 }
@@ -763,120 +850,68 @@ fn test_request_fulfill_and_pay_loan_with_args() {
   let tmp_dir = tempdir().unwrap();
   let dir = tmp_dir.path().to_str().unwrap();
   let memo_buf = tmp_dir.path().join("memo_fulfill_loan_args");
+  let mut ledger_standalone = MockLedgerStandalone::new_mock(1);
   let memo_file = memo_buf.to_str().unwrap();
 
   // Load funds
-  let output = load_funds(dir, "0", "0", "5000").expect("Failed to load funds");
 
-  io::stdout().write_all(&output.stdout).unwrap();
-  io::stdout().write_all(&output.stderr).unwrap();
-
-  assert!(output.status.success());
+  load_funds(dir, "0", "0", "5000", &mut ledger_standalone).expect("Failed to load funds");
 
   // Request the first loan
-  let output = request_loan(dir, "0", "0", "1500", "100", "8").expect("Failed to request a loan");
-
-  io::stdout().write_all(&output.stdout).unwrap();
-  io::stdout().write_all(&output.stderr).unwrap();
-
-  assert!(output.status.success());
+  request_loan(dir, "0", "0", "1500", "100", "8", &mut ledger_standalone).expect("Failed to request a loan");
 
   // Request the second loan
-  let output = request_loan(dir, "1", "0", "1000", "80", "10").expect("Failed to request a loan");
-
-  io::stdout().write_all(&output.stdout).unwrap();
-  io::stdout().write_all(&output.stderr).unwrap();
-
-  assert!(output.status.success());
+  request_loan(dir, "1", "0", "1000", "80", "10", &mut ledger_standalone).expect("Failed to request a loan");
 
   // Fulfill the first loan
   // 1. First time:
   //    Add the credential proof, then successfully initiate the loan
   //    Trace the credential associated with the first loan
-  let output_fulfill =
-    fulfill_loan(dir, "0", "0", "0", Some(memo_file)).expect("Failed to initiate the loan");
-  let output_trace_fail =
-    trace_credential(dir, "0", memo_file, "min_income", "1000").expect("Failed to trace the credential");
-  let output_trace_pass = trace_credential(dir, "0", memo_file, "min_credit_score", "650").expect("Failed to trace the credential");
 
-  io::stdout().write_all(&output_fulfill.stdout).unwrap();
-  io::stdout().write_all(&output_fulfill.stderr).unwrap();
+  fulfill_loan(dir, "0", "0", "0", Some(memo_file), &mut ledger_standalone).expect("Failed to initiate the loan");
+  let output_trace_fail = trace_credential(dir,
+                                           "0",
+                                           memo_file,
+                                           "min_income",
+                                           "1000",
+                                           &mut ledger_standalone);
+  assert!(output_trace_fail.is_err());
 
-  assert!(output_fulfill.status.success());
-
-  io::stdout().write_all(&output_trace_fail.stdout).unwrap();
-  io::stdout().write_all(&output_trace_fail.stderr).unwrap();
-
-  assert!(!output_trace_fail.status.success());
-
-  io::stdout().write_all(&output_trace_pass.stdout).unwrap();
-  io::stdout().write_all(&output_trace_pass.stderr).unwrap();
-
-  assert!(output_trace_pass.status.success());
+  trace_credential(dir,
+                   "0",
+                   memo_file,
+                   "min_credit_score",
+                   "650",
+                   &mut ledger_standalone).expect("Failed to trace the credential");
 
   // 2. Second time:
   //    Fail because the loan has been fulfilled
-  let output = fulfill_loan(dir, "0", "0", "0", None).expect("Failed to initiate the loan");
-
-  io::stdout().write_all(&output.stdout).unwrap();
-  io::stdout().write_all(&output.stderr).unwrap();
-
-  assert_eq!(output.status.code(), Some(exitcode::USAGE));
-  assert!(from_utf8(&output.stdout).unwrap()
-                                   .contains(&"has already been fulfilled.".to_owned()));
+  let output = fulfill_loan(dir, "0", "0", "0", None, &mut ledger_standalone);
+  assert!(output.is_err());
 
   // Fulfill the second loan
   // 1. First time:
   //    Get the credential proof, then fail to initiate the loan because the requirement isn't met
-  let output = fulfill_loan(dir, "1", "1", "0", None).expect("Failed to initiate the loan");
-
-  io::stdout().write_all(&output.stdout).unwrap();
-  io::stdout().write_all(&output.stderr).unwrap();
-
-  assert_eq!(output.status.code(), Some(exitcode::USAGE));
-  let stdout = from_utf8(&output.stdout).unwrap();
-  assert!(stdout.contains(&"should be at least:".to_owned()));
+  fulfill_loan(dir, "1", "1", "0", None, &mut ledger_standalone).expect("Failed to initiate the loan");
 
   // 2. Second time:
   //    Fail because the loan has been declined
-  let output = fulfill_loan(dir, "1", "1", "0", None).expect("Failed to initiate the loan");
-
-  io::stdout().write_all(&output.stdout).unwrap();
-  io::stdout().write_all(&output.stderr).unwrap();
-
-  assert_eq!(output.status.code(), Some(exitcode::USAGE));
-  assert!(from_utf8(&output.stdout).unwrap()
-                                   .contains(&"has already been declined.".to_owned()));
+  let output = fulfill_loan(dir, "1", "1", "0", None, &mut ledger_standalone);
+  assert!(output.is_err());
 
   // Pay loan
   // 1. First time:
   //    Burn part of the loan balance
-  let output = pay_loan(dir, "0", "0", "300").expect("Failed to pay loan");
-
-  io::stdout().write_all(&output.stdout).unwrap();
-  io::stdout().write_all(&output.stderr).unwrap();
-
-  assert!(output.status.success());
+  pay_loan(dir, "0", "0", "300", &mut ledger_standalone).expect("Failed to pay loan");
 
   // 2. Second time
   //    Pay off the loan
-  let output = pay_loan(dir, "0", "0", "2000").expect("Failed to pay loan");
-
-  io::stdout().write_all(&output.stdout).unwrap();
-  io::stdout().write_all(&output.stderr).unwrap();
-
-  assert!(output.status.success());
+  pay_loan(dir, "0", "0", "2000", &mut ledger_standalone).expect("Failed to pay loan");
 
   // 3. Third time:
   //    Fail because the loan has been paid off
-  let output = pay_loan(dir, "0", "0", "3000").expect("Failed to pay loan");
-
-  io::stdout().write_all(&output.stdout).unwrap();
-  io::stdout().write_all(&output.stderr).unwrap();
-
-  assert_eq!(output.status.code(), Some(exitcode::USAGE));
-  assert!(from_utf8(&output.stdout).unwrap()
-                                   .contains(&"has been paid off.".to_owned()));
+  let output = pay_loan(dir, "0", "0", "3000", &mut ledger_standalone);
+  assert!(output.is_err());
 
   tmp_dir.close().unwrap();
 }
