@@ -483,7 +483,8 @@ fn fulfill_loan(dir: &str,
                 -> Result<(), PlatformError> {
   let app = get_cli_app();
   let arg_vec = if let Some(file) = memo_file {
-    vec!["--dir",
+    vec!["Transaction Builder",
+         "--dir",
          dir,
          "lender",
          "--id",
@@ -496,7 +497,8 @@ fn fulfill_loan(dir: &str,
          "--memo_file",
          file]
   } else {
-    vec!["--dir",
+    vec!["Transaction Builder",
+         "--dir",
          dir,
          "lender",
          "--id",
@@ -507,6 +509,7 @@ fn fulfill_loan(dir: &str,
          "--issuer",
          issuer_id]
   };
+  dbg!(&arg_vec);
   let inputs = app.get_matches_from_safe(arg_vec).unwrap();
   process_inputs(inputs, 0, rest_client)
 }
@@ -569,8 +572,8 @@ fn test_create_or_overwrite_credentials() {
 // This test is being ignored because it is broken.
 // GitHub issue: #324
 // Redmind issue: #38
-#[ignore]
 #[test]
+#[ignore]
 fn test_view() {
   let tmp_dir = tempdir().unwrap();
   let dir = tmp_dir.path().to_str().unwrap();
@@ -661,24 +664,25 @@ fn test_define_asset_simple_policies() {
 
   // Define asset
   let app = get_cli_app();
-  let inputs = app.get_matches_from_safe(vec!["Transaction Builder",
-                                              "--dir",
-                                              dir,
-                                              "--txn",
-                                              txn_builder_file,
-                                              "asset_issuer",
-                                              "--id",
-                                              "0",
-                                              "define_asset",
-                                              "--token_code",
-                                              &token_code,
-                                              "--memo",
-                                              "Define an asset",
-                                              "--cosigners",
-                                              "1",
-                                              "--traceable",
-                                              "--non_transferable"])
-                  .unwrap();
+  let inputs_vec = vec!["Transaction Builder",
+                        "--dir",
+                        dir,
+                        "--txn",
+                        txn_builder_file,
+                        "asset_issuer",
+                        "--id",
+                        "0",
+                        "define_asset",
+                        "--token_code",
+                        &token_code,
+                        "--memo",
+                        "Define an asset",
+                        "--cosigners",
+                        "1",
+                        "--traceable",
+                        "--non_transferable"];
+  dbg!(&inputs_vec);
+  let inputs = app.get_matches_from_safe(inputs_vec).unwrap();
   process_inputs(inputs, 0, &mut ledger_standalone).expect("Failed to define asset");
 
   submit(txn_builder_file, &mut ledger_standalone).expect("Failed to submit transaction");

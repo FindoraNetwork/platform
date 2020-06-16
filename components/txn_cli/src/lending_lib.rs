@@ -236,6 +236,7 @@ pub fn fulfill_loan<T>(data_dir: &str,
               ComparisonType::AtLeast => {
                 if parse_to_u64(value)? < requirement_u64 {
                   // Update loans data
+                  dbg!(&value);
                   data.loans[loan_id as usize].status = LoanStatus::Declined;
                   store_data_to_file(data, data_dir)?;
                   println!("Credential value should be at least: {}.", requirement_u64);
