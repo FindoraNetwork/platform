@@ -580,7 +580,6 @@ impl TransferAsset {
   }
 }
 
-// TODO: Include mechanism for replay attacks
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct IssueAsset {
   pub body: IssueAssetBody,
