@@ -6,9 +6,9 @@ use credentials::{
 };
 use cryptohash::sha256::{Digest, DIGESTBYTES};
 use ledger::data_model::{
-  AssetRules as PlatformAssetRules, KVBlind as PlatformKVBlind, KVHash as PlatformKVHash,
-  SignatureRules as PlatformSignatureRules, TransferType as PlatformTransferType, TxOutput,
-  TxoRef as PlatformTxoRef, TxoSID,
+  AssetRules as PlatformAssetRules, AuthenticatedAIRResult as PlatformAuthenticatedAIRResult,
+  KVBlind as PlatformKVBlind, KVHash as PlatformKVHash, SignatureRules as PlatformSignatureRules,
+  TransferType as PlatformTransferType, TxOutput, TxoRef as PlatformTxoRef, TxoSID,
 };
 use rand_chacha::ChaChaRng;
 use rand_core::{RngCore, SeedableRng};
@@ -198,10 +198,77 @@ pub struct CredentialRevealSig {
 
 #[wasm_bindgen]
 #[derive(Serialize, Deserialize)]
+/// Commitment to a credential record and proof of knowledge
+pub struct CredentialCommitmentAndPoK {
+  pub(crate) commitment: CredentialCommitment,
+  pub(crate) pok: CredentialPoK,
+}
+
+#[wasm_bindgen]
+impl CredentialCommitmentAndPoK {
+  pub fn get_commitment(&self) -> CredentialCommitment {
+    self.commitment.clone()
+  }
+  pub fn get_pok(&self) -> CredentialPoK {
+    self.pok.clone()
+  }
+}
+
+#[wasm_bindgen]
+#[derive(Serialize, Deserialize, Clone)]
 /// Commitment to a credential record.
 pub struct CredentialCommitment {
   pub(crate) commitment: CredCommitment,
+}
+
+impl CredentialCommitment {
+  pub fn get_ref(&self) -> &CredCommitment {
+    &self.commitment
+  }
+}
+
+#[wasm_bindgen]
+#[derive(Serialize, Deserialize, Clone)]
+/// Commitment to a credential record.
+pub struct CredentialPoK {
   pub(crate) pok: CredPoK,
+}
+
+impl CredentialPoK {
+  pub fn get_ref(&self) -> &CredPoK {
+    &self.pok
+  }
+}
+
+#[wasm_bindgen]
+pub struct AuthenticatedAIRResult {
+  pub(crate) result: PlatformAuthenticatedAIRResult,
+}
+
+impl AuthenticatedAIRResult {
+  pub fn get_ref(&self) -> &PlatformAuthenticatedAIRResult {
+    &self.result
+  }
+}
+
+#[wasm_bindgen]
+impl AuthenticatedAIRResult {
+  pub fn from_json(json: &JsValue) -> Result<AuthenticatedAIRResult, JsValue> {
+    let result: PlatformAuthenticatedAIRResult = json.into_serde().map_err(error_to_jsvalue)?;
+    Ok(AuthenticatedAIRResult { result })
+  }
+
+  pub fn is_valid(&self, state_commitment: String) -> Result<bool, JsValue> {
+    let state_commitment = serde_json::from_str::<HashOf<_>>(&state_commitment).map_err(|_e| {
+                             JsValue::from_str("Could not deserialize state commitment")
+                           })?;
+    Ok(self.get_ref().is_valid(state_commitment))
+  }
+
+  pub fn get_commitment(&self) -> Option<CredentialCommitment> {
+    let commitment = self.get_ref().get_credential_commitment();
+    commitment.map(|comm| CredentialCommitment { commitment: comm })
+  }
 }
 
 #[wasm_bindgen]
@@ -212,15 +279,6 @@ pub struct CredentialCommitment {
 /// * Credential attributes and associated values.
 pub struct Credential {
   pub(crate) credential: PlatformCredential,
-}
-
-impl CredentialCommitment {
-  pub fn get_commitment_ref(&self) -> &CredCommitment {
-    &self.commitment
-  }
-  pub fn get_pok_ref(&self) -> &CredPoK {
-    &self.pok
-  }
 }
 
 impl CredentialSignature {

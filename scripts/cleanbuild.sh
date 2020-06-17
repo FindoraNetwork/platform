@@ -8,6 +8,7 @@ set -euo pipefail
 GIT_ROOT="$(git rev-parse --show-toplevel)"
 pushd $GIT_ROOT >/dev/null
 
+cargo clippy
 cargo clean
 cargo update
 cargo build

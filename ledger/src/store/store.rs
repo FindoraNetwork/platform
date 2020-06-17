@@ -168,7 +168,7 @@ pub trait ArchiveAccess {
                                           -> Option<HashOf<Option<StateCommitmentData>>>;
 
   // Key-value lookup in AIR
-  fn get_air_data(&self, address: &str) -> AIRResult;
+  fn get_air_data(&self, address: &str) -> AuthenticatedAIRResult;
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
@@ -250,6 +250,9 @@ pub struct LedgerStatus {
 
   // Hash of the transactions in the most recent block
   txns_in_block_hash: Option<HashOf<Vec<Transaction>>>,
+
+  // Sparse Merkle Tree for Address Identity Registry
+  air: AIR,
 }
 
 pub struct LedgerState {
@@ -265,10 +268,6 @@ pub struct LedgerState {
   // Merkle tree tracking the sequence of transaction hashes in the block
   // Each appended hash is the hash of transactions in the same block
   block_merkle: AppendOnlyMerkle,
-
-  // Sparse Merkle Tree for Addres Identity Registry
-  air: AIR,
-
   // Merkle tree tracking the sequence of all transaction hashes
   // Each appended hash is the hash of a transaction
   txn_merkle: AppendOnlyMerkle,
@@ -419,6 +418,7 @@ impl LedgerStatus {
     let ledger = LedgerStatus { block_merkle_path: block_merkle_path.to_owned(),
                                 air_path: air_path.to_owned(),
                                 txn_merkle_path: txn_merkle_path.to_owned(),
+                                air: LedgerState::init_air_log(air_path, true)?,
                                 txn_path: txn_path.to_owned(),
                                 utxo_map_path: utxo_map_path.to_owned(),
                                 utxos: HashMap::new(),
@@ -935,6 +935,23 @@ impl LedgerStatus {
       self.utxos.remove(&inp_sid);
     }
 
+    // Apply AIR updates
+    for (addr, data) in block.air_updates.drain() {
+      debug_assert!(self.air.get(&addr).is_none());
+      self.air.set(&addr, Some(data));
+    }
+
+    // Apply memo updates
+    for (code, memo) in block.memo_updates.drain() {
+      let mut asset = self.asset_types.get_mut(&code).unwrap();
+      (*asset).properties.memo = memo;
+    }
+
+    for (code, amount) in block.issuance_amounts.drain() {
+      let amt = self.issuance_amounts.entry(code).or_insert(0);
+      *amt += amount;
+    }
+
     // Add new UTXOs
     // Each transaction gets a TxnSID, and each of its unspent TXOs gets
     // a TxoSID. TxoSID assignments are based on the order TXOs appear in
@@ -990,9 +1007,6 @@ impl LedgerStatus {
       let mut def: BlockEffect = Default::default();
       def.txns = block.txns.clone();
       def.temp_sids = block.temp_sids.clone();
-      def.air_updates = block.air_updates.clone();
-      def.memo_updates = block.memo_updates.clone();
-      def.issuance_amounts = block.issuance_amounts.clone();
 
       def
     });
@@ -1158,25 +1172,6 @@ impl LedgerUpdate<ChaChaRng> for LedgerState {
                                         merkle_id: block_merkle_id });
     }
 
-    // Apply AIR updates
-    for (addr, data) in block.air_updates.drain() {
-      // Should we allow an address to get overwritten? At least during testing, yes.
-      self.air.set(&addr, Some(data));
-    }
-
-    // Apply memo updates
-    for (code, memo) in block.memo_updates.drain() {
-      let mut asset = self.status.asset_types.get_mut(&code).unwrap();
-      (*asset).properties.memo = memo;
-    }
-
-    for (code, amount) in block.issuance_amounts.drain() {
-      let amt = self.status.issuance_amounts.entry(code).or_insert(0);
-      *amt += amount;
-    }
-
-    // TODO(joe): asset tracing?
-
     debug_assert_eq!(block, Default::default());
 
     self.block_ctx = Some(block);
@@ -1266,23 +1261,6 @@ impl LedgerUpdate<ChaChaRng> for LedgerStateChecker {
     let block_id = self.0.blocks.len();
 
     let temp_sid_map = self.0.status.apply_block_effects(&mut block);
-
-    // Apply AIR updates
-    for (addr, data) in block.air_updates.drain() {
-      debug_assert!(self.0.air.get(&addr).is_none());
-      self.0.air.set(&addr, Some(data));
-    }
-
-    // Apply memo updates
-    for (code, memo) in block.memo_updates.drain() {
-      let mut asset = self.0.status.asset_types.get_mut(&code).unwrap();
-      (*asset).properties.memo = memo;
-    }
-
-    for (code, amount) in block.issuance_amounts.drain() {
-      let amt = self.0.status.issuance_amounts.entry(code).or_insert(0);
-      *amt += amount;
-    }
 
     {
       let mut tx_block = Vec::new();
@@ -1521,7 +1499,7 @@ impl LedgerState {
       Some(StateCommitmentData { bitmap: self.utxo_map.compute_checksum(),
                                  block_merkle: self.block_merkle.get_root_hash(),
                                  transaction_merkle_commitment: self.txn_merkle.get_root_hash(),
-                                 air_commitment: *self.air.merkle_root(),
+                                 air_commitment: *self.status.air.merkle_root(),
                                  txns_in_block_hash: self.status
                                                          .txns_in_block_hash
                                                          .as_ref()
@@ -1622,7 +1600,6 @@ impl LedgerState {
                                signing_key,
                                block_merkle: LedgerState::init_merkle_log(block_merkle_path,
                                                                           true)?,
-                               air: LedgerState::init_air_log(air_path, true)?,
                                txn_merkle: LedgerState::init_merkle_log(txn_merkle_path, true)?,
                                blocks: Vec::new(),
                                utxo_map: LedgerState::init_utxo_map(utxo_map_path, true)?,
@@ -1681,7 +1658,6 @@ impl LedgerState {
                                        signing_key,
                                        block_merkle:
                                          LedgerState::init_merkle_log(block_merkle_path, false)?,
-                                       air: LedgerState::init_air_log(air_path, true)?,
                                        txn_merkle:
                                          LedgerState::init_merkle_log(txn_merkle_path, false)?,
                                        blocks: Vec::new(),
@@ -1777,7 +1753,6 @@ impl LedgerState {
                     prng,
                     signing_key,
                     block_merkle: LedgerState::init_merkle_log(block_merkle_path, true)?,
-                    air: LedgerState::init_air_log(air_path, true)?,
                     txn_merkle: LedgerState::init_merkle_log(txn_merkle_path, true)?,
                     blocks: Vec::new(),
                     utxo_map: LedgerState::init_utxo_map(utxo_map_path, true)?,
@@ -2133,13 +2108,16 @@ impl ArchiveAccess for LedgerState {
         .cloned()
   }
 
-  fn get_air_data(&self, key: &str) -> AIRResult {
-    let merkle_root = self.air.merkle_root();
-    let (value, merkle_proof) = self.air.get_with_proof(key);
-    AIRResult { merkle_root: *merkle_root,
-                key: key.to_string(),
-                value: value.map(|s| s.to_string()),
-                merkle_proof }
+  fn get_air_data(&self, key: &str) -> AuthenticatedAIRResult {
+    let merkle_root = self.status.air.merkle_root();
+    let (value, merkle_proof) = self.status.air.get_with_proof(key);
+    let air_result = AIRResult { merkle_root: *merkle_root,
+                                 key: key.to_string(),
+                                 value: value.map(|s| s.to_string()),
+                                 merkle_proof };
+    AuthenticatedAIRResult { air_result,
+                             state_commitment_data: self.status.state_commitment_data.clone(),
+                             state_commitment: self.get_state_commitment().0 }
   }
 }
 
@@ -2345,7 +2323,7 @@ mod tests {
                             previous_state_commitment: HashOf::new(&None),
                             transaction_merkle_commitment: ledger_state.txn_merkle
                                                                        .get_root_hash(),
-                            air_commitment: *ledger_state.air.merkle_root(),
+                            air_commitment: *ledger_state.status.air.merkle_root(),
                             kv_store: *ledger_state.status.custom_data.merkle_root(),
                             txo_count: 0 };
 
@@ -2922,7 +2900,7 @@ mod tests {
                                                     &cred_user_key.1,
                                                     &credential,
                                                     user_kp.get_pk_ref().as_bytes()).unwrap();
-    let air_assign_op = AIRAssign::new(AIRAssignBody::new(cred_user_key.0,
+    let air_assign_op = AIRAssign::new(AIRAssignBody::new(cred_user_key.0.clone(),
                                                           commitment,
                                                           cred_issuer_key.0,
                                                           pok).unwrap(),
@@ -2936,6 +2914,9 @@ mod tests {
                                          ledger.get_block_commit_count());
     let effect = TxnEffect::compute_effect(tx);
     assert!(effect.is_err());
+    let authenticated_air_res =
+      ledger.get_air_data(&serde_json::to_string(&cred_user_key.0).unwrap());
+    assert!(authenticated_air_res.is_valid(ledger.get_state_commitment().0));
   }
 
   #[test]

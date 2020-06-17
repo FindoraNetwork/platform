@@ -97,7 +97,7 @@ pub fn define_and_submit<T>(issuer_key_pair: &XfrKeyPair,
                             -> Result<(), PlatformError>
   where T: RestfulLedgerUpdate + RestfulLedgerAccess
 {
-  let (_, seq_id) = rest_client.get_state_commitment().unwrap();
+  let (_, seq_id, _) = rest_client.get_state_commitment().unwrap();
   // Define the asset
   let mut txn_builder = TransactionBuilder::from_seq_id(seq_id);
   let txn = txn_builder.add_operation_create_asset(issuer_key_pair,
@@ -233,7 +233,7 @@ pub fn issue_transfer_and_get_utxo_and_blinds<R: CryptoRng + RngCore, T>(
                                                 .sign(issuer_key_pair)?
                                                 .transaction()?;
 
-  let (_, seq_id) = rest_client.get_state_commitment().unwrap();
+  let (_, seq_id, _) = rest_client.get_state_commitment().unwrap();
 
   let mut txn_builder = TransactionBuilder::from_seq_id(seq_id);
   let txn = txn_builder.add_operation_issue_asset(issuer_key_pair,

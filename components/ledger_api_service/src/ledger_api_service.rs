@@ -6,7 +6,6 @@ extern crate serde_json;
 
 use actix_cors::Cors;
 use actix_web::{dev, error, middleware, test, web, App, HttpResponse, HttpServer};
-use air::AIRResult;
 use cryptohash::sha256::Digest as BitDigest;
 use cryptohash::sha256::DIGESTBYTES;
 use ledger::data_model::errors::PlatformError;
@@ -155,7 +154,7 @@ fn query_blocks_since<AA>(data: web::Data<Arc<RwLock<AA>>>,
 
 pub fn query_air<AA>(data: web::Data<Arc<RwLock<AA>>>,
                      addr: web::Path<String>)
-                     -> actix_web::Result<web::Json<AIRResult>>
+                     -> actix_web::Result<web::Json<AuthenticatedAIRResult>>
   where AA: ArchiveAccess
 {
   let reader = data.read().unwrap();
@@ -446,8 +445,13 @@ pub trait RestfulLedgerAccess {
 
   fn get_asset_type(&self, code: &AssetTypeCode) -> Result<AssetType, PlatformError>;
 
-  fn get_state_commitment(&self)
-                          -> Result<(HashOf<Option<StateCommitmentData>>, u64), PlatformError>;
+  #[allow(clippy::type_complexity)]
+  fn get_state_commitment(
+    &self)
+    -> Result<(HashOf<Option<StateCommitmentData>>,
+               u64,
+               SignatureOf<(HashOf<Option<StateCommitmentData>>, u64)>),
+              PlatformError>;
 
   fn get_kv_entry(&self, addr: Key) -> Result<AuthenticatedKVLookup, PlatformError>;
 
@@ -516,8 +520,13 @@ impl RestfulLedgerAccess for MockLedgerClient {
     Ok(test::read_response_json(&mut app, req))
   }
 
-  fn get_state_commitment(&self)
-                          -> Result<(HashOf<Option<StateCommitmentData>>, u64), PlatformError> {
+  #[allow(clippy::type_complexity)]
+  fn get_state_commitment(
+    &self)
+    -> Result<(HashOf<Option<StateCommitmentData>>,
+               u64,
+               SignatureOf<(HashOf<Option<StateCommitmentData>>, u64)>),
+              PlatformError> {
     let mut app =
       test::init_service(App::new().data(Arc::clone(&self.mock_ledger))
                                    .route(&LedgerAccessRoutes::GlobalState.route(),
@@ -604,15 +613,20 @@ impl RestfulLedgerAccess for ActixLedgerClient {
     Ok(serde_json::from_str::<AssetType>(&text).map_err(|_| ser_fail!())?)
   }
 
-  fn get_state_commitment(&self)
-                          -> Result<(HashOf<Option<StateCommitmentData>>, u64), PlatformError> {
+  #[allow(clippy::type_complexity)]
+  fn get_state_commitment(
+    &self)
+    -> Result<(HashOf<Option<StateCommitmentData>>,
+               u64,
+               SignatureOf<(HashOf<Option<StateCommitmentData>>, u64)>),
+              PlatformError> {
     let query = format!("{}://{}:{}{}",
                         self.protocol,
                         self.host,
                         self.port,
                         LedgerAccessRoutes::GlobalState.route());
     let text = actix_get_request(&self.client, &query).map_err(|_| inp_fail!())?;
-    Ok(serde_json::from_str::<(HashOf<Option<StateCommitmentData>>, u64)>(&text).map_err(|_| ser_fail!())?)
+    Ok(serde_json::from_str::<_>(&text).map_err(|_| ser_fail!())?)
   }
 
   fn get_kv_entry(&self, _addr: Key) -> Result<AuthenticatedKVLookup, PlatformError> {
