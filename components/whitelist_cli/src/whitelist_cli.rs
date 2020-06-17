@@ -193,8 +193,10 @@ mod tests {
 
   // Ignoring this test because it is broken
   // Redmine #68
-  #[ignore]
-  #[test]
+  // #[ignore]
+  // #[test]
+  #[cfg(test)]
+  #[allow(unused)]
   fn test_cmd() {
     // Start the standalone ledger
     let mut ledger_standalone = LedgerStandalone::new_mock(1);
