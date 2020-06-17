@@ -649,8 +649,10 @@ fn test_define_asset_simple_policies() {
 // This test passes individually, but we ignore it since it occasionally fails with SubmissionServerError when run with other tests
 // which also use the standalone ledger
 // GitHub issue: #324
-// Redmind issue: #38
-#[test]
+// // Redmind issue: #38
+// #[test]
+#[cfg(test)]
+#[allow(unused)]
 fn test_define_issue_transfer_and_submit_with_args() {
   // Create users and files
   let tmp_dir = tempdir().unwrap();
