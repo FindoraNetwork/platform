@@ -10,5 +10,5 @@ cargo build --release --workspace
 cargo test --no-run
 cargo test --release --no-run
 cargo test --no-fail-fast
-cargo test --release --no-fail-fast -j1 -- --ignored --test-threads=1
+cargo test --release --no-fail-fast -- --ignored
 
