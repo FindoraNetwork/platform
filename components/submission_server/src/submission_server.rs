@@ -281,7 +281,6 @@ mod tests {
   use zei::xfr::sig::XfrKeyPair;
 
   #[test]
-  #[ignore]
   fn test_cache_transaction() {
     // Create a SubmissionServer
     let block_capacity = 8;

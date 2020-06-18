@@ -589,7 +589,7 @@ impl RestfulLedgerAccess for ActixLedgerClient {
                         self.host,
                         self.port,
                         LedgerAccessRoutes::UtxoSid.with_arg(&addr.0));
-    let text = actix_get_request(&self.client, &query).map_err(|_| inp_fail!())?;
+    let text = actix_get_request(&self.client, &query).map_err(|e| inp_fail!(e))?;
     Ok(serde_json::from_str::<Utxo>(&text).map_err(|_| ser_fail!())?)
   }
 

@@ -653,10 +653,6 @@ mod tests {
   }
 
   #[test]
-  #[ignore]
-  // Redmine issue: #38. Do NOT reenable this test if it fails
-  // TODO (keyao)
-  // Test funds loading, loan request, fulfilling and repayment
   fn test_request_fulfill_and_pay_loan() {
     let mut ledger_standalone = MockLedgerStandalone::new_mock(1);
 
