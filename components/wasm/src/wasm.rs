@@ -164,6 +164,12 @@ impl TransactionBuilder {
   }
 
   /// Wraps around TransactionBuilder to add an asset definition operation to a transaction builder instance.
+  /// @example <caption> Error handling </caption>
+  /// try {
+  ///     await wasm.add_operation_create_asset(wasm.new_keypair(), "test_memo", wasm.random_asset_type(), wasm.AssetRules.default());
+  /// } catch (err) {
+  ///     console.log(err)
+  /// }
   ///
   /// @param {XfrKeyPair} key_pair -  Issuer XfrKeyPair.
   /// @param {string} memo - Text field for asset definition.
@@ -709,48 +715,7 @@ pub fn sign(key_pair: &XfrKeyPair, message: String) -> Result<JsValue, JsValue> 
   smaller_signature.copy_from_slice(&signature.0.to_bytes()[0..32]);
   Ok(JsValue::from_serde(&smaller_signature).unwrap())
 }
-/*
-fn u8_littleendian_slice_to_u32(array: &[u8]) -> u32 {
-  u32::from(array[0])
-  | u32::from(array[1]) << 8
-  | u32::from(array[2]) << 16
-  | u32::from(array[3]) << 24
-}
 
-fn u32_pair_to_u64(x: (u32, u32)) -> u64 {
-  (x.1 as u64) << 32 ^ (x.0 as u64)
-}
-*/
-/*
-#[wasm_bindgen]
-pub fn get_tracked_amount(blind_asset_record: String,
-                          issuer_private_key_point: String)
-                          -> Result<String, JsValue> {
-  let pc_gens = PedersenGens::default();
-  let blind_asset_record = serde_json::from_str::<BlindAssetRecord>(&blind_asset_record).map_err(|_e| {
-                             JsValue::from_str("Could not deserialize blind asset record")
-                           })?;
-  let issuer_private_key = serde_json::from_str(&issuer_private_key_point).map_err(|_e| {
-                             JsValue::from_str("Could not deserialize issuer private key")
-                           })?;
-  if let Some(lock_amount) = blind_asset_record.issuer_lock_amount {
-    match (elgamal_decrypt(&RistrettoPoint(pc_gens.B), &(lock_amount.0), &issuer_private_key),
-           elgamal_decrypt(&RistrettoPoint(pc_gens.B), &(lock_amount.1), &issuer_private_key))
-    {
-      (Ok(s1), Ok(s2)) => {
-        let amount = u32_pair_to_u64((u8_littleendian_slice_to_u32(s1.0.as_bytes()),
-                                      u8_littleendian_slice_to_u32(s2.0.as_bytes())));
-        Ok(amount.to_string())
-      }
-      (_, _) => Err(JsValue::from_str("Unable to decrypt amount")),
-    }
-  } else {
-    Err(JsValue::from_str("Asset record does not contain decrypted lock amount"))
-  }
-}
-*/
-
-// Ensures that the transaction serialization is valid URI text
 #[wasm_bindgen]
 /// Submit a transaction to the ledger and return a promise for the
 /// ledger's eventual response. The transaction will be enqueued for
@@ -818,9 +783,14 @@ pub fn get_txo(path: String, sid: u64) -> Result<Promise, JsValue> {
 /// Otherwise, returns `not found`. The request fails if the transaction index does not correspond
 /// to a transaction.
 ///
+/// @example <caption> Error handling </caption>
+/// try {
+///     await wasm.get_transaction("http::localhost:8668", 1);
+/// } catch (err) {
+///     console.log(err)
+/// }
 /// @param {String} path - Address of ledger server. E.g. `https://localhost:8668`.
 /// @param {BigInt} sid - Transaction SID.
-///
 // TODO Provide an example (test case) that demonstrates how to
 // handle the error in the case of an invalid transaction index.
 pub fn get_transaction(path: String, sid: u64) -> Result<Promise, JsValue> {
@@ -852,11 +822,15 @@ pub fn get_state_commitment(path: String) -> Result<Promise, JsValue> {
 /// JsValue describing an asset token. Otherwise, returns 'not found'.
 /// The request fails if the given asset name does not correspond to
 /// an asset.
+/// @example <caption> Error handling </caption>
+/// try {
+///     await wasm.get_asset_token("http::localhost:8668", asset_name);
+/// } catch (err) {
+///     console.log(err)
+/// }
 /// @param {string} path - Address of ledger server. E.g. `https://localhost:8668`.
 /// @param {string} name - Base64-encoded asset token string.
 ///
-// TODO Provide an example (test case) that demonstrates how to
-// handle the error in the case of an undefined asset.
 pub fn get_asset_token(path: String, name: String) -> Result<Promise, JsValue> {
   let mut opts = RequestInit::new();
   opts.method("GET");
