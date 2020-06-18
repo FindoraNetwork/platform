@@ -401,12 +401,12 @@ pub enum TxoRef {
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct TransferAssetBody {
   pub inputs: Vec<TxoRef>, // Ledger address of inputs
-  // Input asset tracing policies and signature commitments
+  // Input signature commitments
   #[serde(default)]
   #[serde(skip_serializing_if = "is_default")]
   pub input_identity_commitments: Vec<Option<ACCommitment>>,
   pub num_outputs: usize, // How many output TXOs?
-  // Output asset tracing policies and signature commitments
+  // Output signature commitments
   #[serde(default)]
   #[serde(skip_serializing_if = "is_default")]
   pub output_identity_commitments: Vec<Option<ACCommitment>>,

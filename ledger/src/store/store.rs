@@ -3076,7 +3076,7 @@ mod tests {
     let issuer = XfrKeyPair::generate(&mut ledger.get_prng());
     let recipient = XfrKeyPair::generate(&mut ledger.get_prng());
 
-    // Set a tracing policies
+    // Set tracing policies
     let tracer_kp = gen_asset_tracer_keypair(&mut ledger.get_prng());
     let tracing_policy = AssetTracingPolicy { enc_keys: tracer_kp.enc_key.clone(),
                                               asset_tracking: true,
@@ -3085,6 +3085,29 @@ mod tests {
                                                         asset_tracking: false,
                                                         identity_tracking: None };
 
+    // Define an asset without a tracing policy
+    let code = AssetTypeCode { val: [0; 16] };
+    let tx = create_definition_transaction(&code,
+                                           &issuer,
+                                           AssetRules::default(),
+                                           Some(Memo("test".to_string())),
+                                           ledger.get_block_commit_count()).unwrap();
+    apply_transaction(&mut ledger, tx);
+
+    // Issue and transfer the asset without a tracing policy
+    // Should succeed
+    let (tx, _) = create_issue_and_transfer_txn(&mut ledger,
+                                                &params,
+                                                &code,
+                                                100,
+                                                &issuer,
+                                                recipient.get_pk_ref(),
+                                                0);
+    let effect = TxnEffect::compute_effect(tx.clone()).unwrap();
+    let mut block = ledger.start_block().unwrap();
+    let res = ledger.apply_transaction(&mut block, effect);
+    assert!(res.is_ok());
+
     // Define an asset with the tracing policy
     let code = AssetTypeCode { val: [1; 16] };
     let tx = create_definition_transaction(&code,
@@ -3092,7 +3115,9 @@ mod tests {
                                            AssetRules::default().set_tracing_policy(Some(tracing_policy.clone())).clone(),
                                            Some(Memo("test".to_string())),
                                            ledger.get_block_commit_count()).unwrap();
-    apply_transaction(&mut ledger, tx);
+    let effect = TxnEffect::compute_effect(tx.clone()).unwrap();
+    let res = ledger.apply_transaction(&mut block, effect);
+    assert!(res.is_ok());
 
     // Issue and transfer the asset without a tracing policy
     // Should fail
@@ -3104,7 +3129,6 @@ mod tests {
                                                 recipient.get_pk_ref(),
                                                 0);
     let effect = TxnEffect::compute_effect(tx.clone()).unwrap();
-    let mut block = ledger.start_block().unwrap();
     let res = ledger.apply_transaction(&mut block, effect);
     assert!(res.is_err());
 
