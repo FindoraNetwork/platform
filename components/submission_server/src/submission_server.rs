@@ -155,7 +155,6 @@ impl<RNG, LU, TF> SubmissionServer<RNG, LU, TF>
     std::mem::swap(&mut self.block, &mut block);
     if let Some(block) = block {
       let mut ledger = self.committed_state.write().unwrap();
-      // TODO(noah): is this unwrap reasonable?
       let finalized_txns = ledger.finish_block(block)
                                  .expect("Ledger could not finish block");
       // Update status of all committed transactions
