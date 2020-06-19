@@ -7,9 +7,11 @@ use crate::{error_location, inp_fail, inv_fail, zei_fail};
 use credentials::credential_verify_commitment;
 use rand_chacha::ChaChaRng;
 use rand_core::SeedableRng;
+use cryptohash::sha256;
+use cryptohash::sha256::Digest as BitDigest;
 use serde::Serialize;
 use sparse_merkle_tree::Key;
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use utils::{HasInvariants, HashOf, SignatureOf};
 use zei::serialization::ZeiFromToBytes;
 use zei::xfr::lib::verify_xfr_body;
@@ -58,6 +60,8 @@ pub struct TxnEffect {
   pub kv_updates: HashMap<Key, Vec<(KVEntrySignature, u64, Option<KVEntry>)>>,
   // Memo updates
   pub memo_updates: Vec<(AssetTypeCode, XfrPublicKey, Memo)>,
+  // Cryptograhic hashes of operations in txn
+  pub op_digests: Vec<BitDigest>,
 }
 
 // Internally validates the transaction as well.
@@ -71,6 +75,8 @@ impl TxnEffect {
     let mut txos: Vec<Option<TxOutput>> = Vec::new();
     let mut internally_spent_txos = Vec::new();
     let mut input_txos: HashMap<TxoSID, BlindAssetRecord> = HashMap::new();
+    let mut memo_updates = Vec::new();
+    let mut op_digests = Vec::new();
     let mut new_asset_codes: HashMap<AssetTypeCode, AssetType> = HashMap::new();
     let mut cosig_keys = HashMap::new();
     let mut memo_updates = Vec::new();
@@ -457,6 +463,8 @@ impl TxnEffect {
           memo_updates.push((update_memo.body.asset_type, pk, update_memo.body.new_memo.clone()));
         }
       } // end -- match op {
+      let op_hash = sha256::hash(&bincode::serialize(&op).unwrap());
+      op_digests.push(op_hash);
       op_idx += 1;
     } // end -- for op in txn.body.operations.iter() {
 
@@ -477,7 +485,8 @@ impl TxnEffect {
                    asset_types_involved,
                    custom_policy_asset_types,
                    air_updates,
-                   kv_updates })
+                   kv_updates,
+                   op_digests })
   }
 }
 
@@ -538,6 +547,8 @@ impl HasInvariants<PlatformError> for TxnEffect {
 pub struct BlockEffect {
   // All Transaction objects validated in this block
   pub txns: Vec<Transaction>,
+  // Digests of Operation paired with per-transaction seq id (block commit count)
+  pub opseqs: BTreeMap<BitDigest, u64>,
   // Identifiers within this block for each transaction
   // (currently just an index into `txns`)
   pub temp_sids: Vec<TxnTempSID>,
@@ -582,16 +593,24 @@ impl BlockEffect {
   //       new temp SID representing the transaction.
   //   Otherwise, Err(...)
   #[allow(clippy::cognitive_complexity)]
-  pub fn add_txn_effect(&mut self, txn: TxnEffect) -> Result<TxnTempSID, PlatformError> {
+  pub fn add_txn_effect(&mut self, txn_effect: TxnEffect) -> Result<TxnTempSID, PlatformError> {
+    // Check that no operations are duplicated as in a replay attack
+    // Note that we need to check here as well as in LedgerStatus::check_txn_effect
+    for digest in txn_effect.op_digests.iter() {
+      if self.opseqs.contains_key(&digest) {
+        return Err(PlatformError::InputsError(error_location!()));
+      }
+    }
+
     // Check that KV updates are independent
-    for (k, _) in txn.kv_updates.iter() {
+    for (k, _) in txn_effect.kv_updates.iter() {
       if self.kv_updates.contains_key(&k) {
         return Err(PlatformError::InputsError(error_location!()));
       }
     }
 
     // Check that no inputs are consumed twice
-    for (input_sid, _) in txn.input_txos.iter() {
+    for (input_sid, _) in txn_effect.input_txos.iter() {
       if self.input_txos.contains_key(&input_sid) {
         return Err(inp_fail!());
       }
@@ -600,7 +619,7 @@ impl BlockEffect {
     // Check that no AssetType is affected by both the block so far and
     // this transaction
     {
-      for (type_code, _) in txn.new_asset_codes.iter() {
+      for (type_code, _) in txn_effect.new_asset_codes.iter() {
         if self.new_asset_codes.contains_key(&type_code)
            || self.new_issuance_nums.contains_key(&type_code)
         {
@@ -608,7 +627,7 @@ impl BlockEffect {
         }
       }
 
-      for (type_code, nums) in txn.new_issuance_nums.iter() {
+      for (type_code, nums) in txn_effect.new_issuance_nums.iter() {
         if self.new_asset_codes.contains_key(&type_code)
            || self.new_issuance_nums.contains_key(&type_code)
         {
@@ -617,55 +636,66 @@ impl BlockEffect {
 
         // Debug-check that issued assets are registered in `issuance_keys`
         if !nums.is_empty() {
-          debug_assert!(txn.issuance_keys.contains_key(&type_code));
+          debug_assert!(txn_effect.issuance_keys.contains_key(&type_code));
         }
       }
       // Ensure that each asset's memo can only be updated once per block
-      for (type_code, _, _) in txn.memo_updates.iter() {
+      for (type_code, _, _) in txn_effect.memo_updates.iter() {
         if self.memo_updates.contains_key(&type_code) {
           return Err(inp_fail!());
         }
       }
     }
 
-    // == All validation done, apply `txn` to this block ==
-    for (k, update) in txn.kv_updates {
+    // == All validation done, apply `txn_effect` to this block ==
+    for (k, update) in txn_effect.kv_updates {
       self.kv_updates.insert(k, update);
     }
 
     let temp_sid = TxnTempSID(self.txns.len());
-    self.txns.push(txn.txn);
+    let seq_id = txn_effect.txn.seq_id;
+    self.txns.push(txn_effect.txn);
     self.temp_sids.push(temp_sid);
-    self.txos.push(txn.txos);
+    self.txos.push(txn_effect.txos);
 
-    for (input_sid, record) in txn.input_txos {
+    for (input_sid, record) in txn_effect.input_txos {
       // dbg!(&input_sid);
       debug_assert!(!self.input_txos.contains_key(&input_sid));
       self.input_txos.insert(input_sid, record);
     }
 
-    for (type_code, asset_type) in txn.new_asset_codes {
+    for (type_code, asset_type) in txn_effect.new_asset_codes {
       debug_assert!(!self.new_asset_codes.contains_key(&type_code));
       self.new_asset_codes.insert(type_code, asset_type);
     }
 
-    for (type_code, issuance_nums) in txn.new_issuance_nums {
+    for (type_code, issuance_nums) in txn_effect.new_issuance_nums {
       debug_assert!(!self.new_issuance_nums.contains_key(&type_code));
       self.new_issuance_nums.insert(type_code, issuance_nums);
     }
 
-    for (type_code, amount) in txn.issuance_amounts.iter() {
+    for (type_code, amount) in txn_effect.issuance_amounts.iter() {
       let issuance_amount = self.issuance_amounts.entry(*type_code).or_insert(0);
       *issuance_amount += amount;
     }
 
-    for (addr, data) in txn.air_updates {
+    for (type_code, tracing_policy) in txn_effect.issuance_tracing_policies.iter() {
+      debug_assert!(!self.new_tracing_policies.contains_key(type_code));
+      self.new_tracing_policies
+          .insert(*type_code, tracing_policy.clone());
+    }
+
+    for (addr, data) in txn_effect.air_updates {
       debug_assert!(!self.air_updates.contains_key(&addr));
       self.air_updates.insert(addr, data);
     }
 
-    for (code, _, memo) in txn.memo_updates {
+    for (code, _, memo) in txn_effect.memo_updates {
       self.memo_updates.insert(code, memo);
+    }
+
+    for digest in txn_effect.op_digests.iter() {
+      self.opseqs.insert(*digest, seq_id);
     }
 
     Ok(temp_sid)

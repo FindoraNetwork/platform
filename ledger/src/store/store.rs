@@ -15,6 +15,7 @@ use merkle_tree::append_only_merkle::AppendOnlyMerkle;
 use rand_chacha::ChaChaRng;
 use rand_core::{CryptoRng, RngCore, SeedableRng};
 use serde::{Deserialize, Serialize};
+use sliding_set::SlidingSet;
 use sparse_merkle_tree::{Key, SmtMap256};
 use std::collections::{HashMap, VecDeque};
 use std::fs::File;
@@ -267,6 +268,9 @@ pub struct LedgerStatus {
 
   // Sparse Merkle Tree for Address Identity Registry
   air: AIR,
+
+  // Sliding window of operations for replay attack prevention
+  ops_seen: SlidingSet,
 }
 
 pub struct LedgerState {
@@ -434,6 +438,7 @@ impl LedgerStatus {
                                 air_path: air_path.to_owned(),
                                 txn_merkle_path: txn_merkle_path.to_owned(),
                                 air: LedgerState::init_air_log(air_path, true)?,
+                                ops_seen: SlidingSet::new(0, 0, TRANSACTION_WINDOW_WIDTH),
                                 txn_path: txn_path.to_owned(),
                                 utxo_map_path: utxo_map_path.to_owned(),
                                 utxos: HashMap::new(),
@@ -455,6 +460,11 @@ impl LedgerStatus {
     Ok(ledger)
   }
 
+  pub fn incr_block_commit_count(&mut self) {
+    self.block_commit_count += 1;
+    self.ops_seen.incr_current();
+  }
+
   #[cfg(feature = "TESTING")]
   #[allow(non_snake_case)]
   pub fn TESTING_check_txn_effects(&self, txn: TxnEffect) -> Result<TxnEffect, PlatformError> {
@@ -472,14 +482,22 @@ impl LedgerStatus {
   //
   #[allow(clippy::clone_double_ref)]
   #[allow(clippy::cognitive_complexity)]
-  fn check_txn_effects(&self, txn: TxnEffect) -> Result<TxnEffect, PlatformError> {
+  fn check_txn_effects(&self, txn_effect: TxnEffect) -> Result<TxnEffect, PlatformError> {
     // The current transactions seq_id must be within the sliding window over seq_ids
-    if txn.txn.seq_id > self.block_commit_count {
+    if txn_effect.txn.seq_id > self.block_commit_count {
       return Err(PlatformError::InputsError(format!("Transaction seq_id ahead of block_count: {}",
                                                     error_location!())));
-    } else if txn.txn.seq_id + TRANSACTION_WINDOW_WIDTH < self.block_commit_count {
+    } else if txn_effect.txn.seq_id + TRANSACTION_WINDOW_WIDTH < self.block_commit_count {
       return Err(PlatformError::InputsError(format!("Transaction seq_id too far behind block_count: {}",
                                                     error_location!())));
+    } else {
+      // None of the operations in the current transaction have been seen before in the window
+      for op_digest in txn_effect.op_digests.iter() {
+        if self.ops_seen.contains_key(*op_digest) {
+          return Err(PlatformError::InputsError(format!("Operation seen before, possible replay: {}",
+                                                        error_location!())));
+        }
+      }
     }
 
     // Key-Value updates must be
@@ -488,7 +506,7 @@ impl LedgerStatus {
     // 3. Signed by the new owner of that key, if one exists
     // (2) is checked for all but the first value in local validation
     // (3) is already handled in local validation
-    for (k, update) in txn.kv_updates.iter() {
+    for (k, update) in txn_effect.kv_updates.iter() {
       let (sig, gen_num, update) = update.first().unwrap();
       if let Some(ent) = self.custom_data.get(&k) {
         let (prev_gen_num, ent) = ent.deserialize();
@@ -512,7 +530,7 @@ impl LedgerStatus {
 
     // 1. Each input must be unspent and correspond to the claimed record
     // 2. Inputs with transfer restrictions can only be owned by the asset issuer
-    for (inp_sid, inp_record) in txn.input_txos.iter() {
+    for (inp_sid, inp_record) in txn_effect.input_txos.iter() {
       // (1)
       let inp_utxo = self.utxos
                          .get(inp_sid)
@@ -528,7 +546,7 @@ impl LedgerStatus {
       {
         let asset_type = self.asset_types
                              .get(&code)
-                             .or_else(|| txn.new_asset_codes.get(&code))
+                             .or_else(|| txn_effect.new_asset_codes.get(&code))
                              .ok_or_else(|| PlatformError::InputsError(error_location!()))?;
         if !asset_type.properties.asset_rules.transferable
            && asset_type.properties.issuer.key != record.public_key
@@ -539,7 +557,7 @@ impl LedgerStatus {
     }
 
     // Internally spend inputs with transfer restrictions can only be owned by the asset issuer
-    for record in txn.internally_spent_txos.iter() {
+    for record in txn_effect.internally_spent_txos.iter() {
       if let Some(code) = record.asset_type
                                 .get_asset_type()
                                 .map(|v| AssetTypeCode { val: v })
@@ -547,7 +565,7 @@ impl LedgerStatus {
         // dbg!(&self.asset_types);
         let asset_type = self.asset_types
                              .get(&code)
-                             .or_else(|| txn.new_asset_codes.get(&code))
+                             .or_else(|| txn_effect.new_asset_codes.get(&code))
                              .ok_or_else(|| PlatformError::InputsError(error_location!()))?;
         if !asset_type.properties.asset_rules.transferable
            && asset_type.properties.issuer.key != record.public_key
@@ -560,14 +578,14 @@ impl LedgerStatus {
     // dbg!("records work");
 
     // New asset types must not already exist
-    for (code, _asset_type) in txn.new_asset_codes.iter() {
+    for (code, _asset_type) in txn_effect.new_asset_codes.iter() {
       if self.asset_types.contains_key(&code) {
         return Err(inp_fail!());
       }
       if self.issuance_num.contains_key(&code) {
         return Err(inp_fail!());
       }
-      debug_assert!(txn.new_issuance_nums.contains_key(&code));
+      debug_assert!(txn_effect.new_issuance_nums.contains_key(&code));
 
       // Asset issuance should match the currently registered key
     }
@@ -582,14 +600,14 @@ impl LedgerStatus {
     // (2) Must not be below the current asset cap
     //  - NOTE: this relies on the sequence numbers appearing in sorted
     //    order
-    for (code, seq_nums) in txn.new_issuance_nums.iter() {
-      debug_assert!(txn.issuance_keys.contains_key(&code));
+    for (code, seq_nums) in txn_effect.new_issuance_nums.iter() {
+      debug_assert!(txn_effect.issuance_keys.contains_key(&code));
       // dbg!(&(code, seq_nums));
 
-      let iss_key = txn.issuance_keys.get(&code).unwrap();
+      let iss_key = txn_effect.issuance_keys.get(&code).unwrap();
       let asset_type = self.asset_types
                            .get(&code)
-                           .or_else(|| txn.new_asset_codes.get(&code))
+                           .or_else(|| txn_effect.new_asset_codes.get(&code))
                            .ok_or_else(|| PlatformError::InputsError(error_location!()))?;
       let proper_key = asset_type.properties.issuer;
       if *iss_key != proper_key {
@@ -597,8 +615,8 @@ impl LedgerStatus {
       }
 
       if seq_nums.is_empty() {
-        if !txn.new_asset_codes.contains_key(&code) {
-          return Err(inp_fail!());
+        if !txn_effect.new_asset_codes.contains_key(&code) {
+          return Err(PlatformError::InputsError(error_location!()));
         }
       // We could re-check that self.issuance_num doesn't contain `code`,
       // but currently it's redundant with the new-asset-type checks
@@ -609,7 +627,7 @@ impl LedgerStatus {
                                      // However, if there is a bug elsewhere in validation, panicking
                                      // is better than allowing incorrect issuances to pass through.
                                      .or_else(|| {
-                                       assert!(txn.new_asset_codes.contains_key(&code));
+                                       assert!(txn_effect.new_asset_codes.contains_key(&code));
                                        Some(&0)
                                      })
                                      .unwrap();
@@ -623,10 +641,10 @@ impl LedgerStatus {
     // Asset Caps
     // (1) New issuance amounts cannot exceed asset cap
     // (2) No confidential issuances allowed for assets with issuance restrictions
-    for (code, amount) in txn.issuance_amounts.iter() {
+    for (code, amount) in txn_effect.issuance_amounts.iter() {
       let asset_type = self.asset_types
                            .get(&code)
-                           .or_else(|| txn.new_asset_codes.get(&code))
+                           .or_else(|| txn_effect.new_asset_codes.get(&code))
                            .ok_or_else(|| PlatformError::InputsError(error_location!()))?;
       // (1)
       if let Some(cap) = asset_type.properties.asset_rules.max_units {
@@ -644,10 +662,10 @@ impl LedgerStatus {
     }
 
     // (2)
-    for code in txn.confidential_issuance_types.iter() {
+    for code in txn_effect.confidential_issuance_types.iter() {
       let asset_type = self.asset_types
                            .get(&code)
-                           .or_else(|| txn.new_asset_codes.get(&code))
+                           .or_else(|| txn_effect.new_asset_codes.get(&code))
                            .ok_or_else(|| PlatformError::InputsError(error_location!()))?;
       if asset_type.has_issuance_restrictions() {
         return Err(inp_fail!());
@@ -655,15 +673,15 @@ impl LedgerStatus {
     }
 
     // Assets with cosignature requirements must have enough signatures
-    for ((op_idx, input_idx), key_set) in txn.cosig_keys.iter() {
-      let op = &txn.txn.body.operations[*op_idx];
+    for ((op_idx, input_idx), key_set) in txn_effect.cosig_keys.iter() {
+      let op = &txn_effect.txn.body.operations[*op_idx];
       if let Operation::TransferAsset(xfr) = op {
         if let XfrAssetType::NonConfidential(val) = xfr.body.transfer.inputs[*input_idx].asset_type
         {
           let code = AssetTypeCode { val };
           let signature_rules = &self.asset_types
                                      .get(&code)
-                                     .or_else(|| txn.new_asset_codes.get(&code))
+                                     .or_else(|| txn_effect.new_asset_codes.get(&code))
                                      .ok_or_else(|| PlatformError::InputsError(error_location!()))?
                                      .properties
                                      .asset_rules
@@ -679,10 +697,10 @@ impl LedgerStatus {
     }
 
     // Check that asset types were validated under the correct tracing policies
-    for (code, tracing_policies) in txn.tracing_policies.iter() {
+    for (code, tracing_policies) in txn_effect.tracing_policies.iter() {
       let definition_policies = &self.asset_types
                                      .get(&code)
-                                     .or_else(|| txn.new_asset_codes.get(&code))
+                                     .or_else(|| txn_effect.new_asset_codes.get(&code))
                                      .ok_or_else(|| PlatformError::InputsError(error_location!()))?
                                      .properties
                                      .asset_rules
@@ -696,11 +714,11 @@ impl LedgerStatus {
     // Debt swaps
     // (1) Fiat code must match debt asset memo
     // (2) fee must be correct
-    for (code, debt_swap_effects) in txn.debt_effects.iter() {
+    for (code, debt_swap_effects) in txn_effect.debt_effects.iter() {
       // dbg!(&(code, debt_swap_effects));
       let debt_type = &self.asset_types
                            .get(&code)
-                           .or_else(|| txn.new_asset_codes.get(&code))
+                           .or_else(|| txn_effect.new_asset_codes.get(&code))
                            .ok_or_else(|| PlatformError::InputsError(error_location!()))?
                            .properties;
 
@@ -717,7 +735,7 @@ impl LedgerStatus {
 
     // Memo updates
     // Multiple memo updates for the same asset are allowed, but only the last one will be applied.
-    for memo_update in txn.memo_updates.iter() {
+    for memo_update in txn_effect.memo_updates.iter() {
       let asset = self.asset_types
                       .get(&memo_update.0)
                       .ok_or_else(|| PlatformError::InputsError(error_location!()))?;
@@ -732,10 +750,10 @@ impl LedgerStatus {
     // Until we can distinguish assets that have policies that invoke transfer restrictions
     // from those that don't, prevent any non-confidential assets with transfer restrictions
     // from becoming confidnetial
-    for code in txn.confidential_transfer_inputs.iter() {
+    for code in txn_effect.confidential_transfer_inputs.iter() {
       let asset_type = self.asset_types
                            .get(&code)
-                           .or_else(|| txn.new_asset_codes.get(&code))
+                           .or_else(|| txn_effect.new_asset_codes.get(&code))
                            .ok_or_else(|| PlatformError::InputsError(error_location!()))?;
       if asset_type.has_transfer_restrictions() {
         PlatformError::InputsError(error_location!());
@@ -749,19 +767,19 @@ impl LedgerStatus {
     //   committed state. However, it may not always be that way, and this
     //   code will lead to erroneous validation failures when that change
     //   arrives.
-    for code in txn.asset_types_involved.iter() {
-      if txn.custom_policy_asset_types.contains_key(code) {
+    for code in txn_effect.asset_types_involved.iter() {
+      if txn_effect.custom_policy_asset_types.contains_key(code) {
         let asset = self.asset_types
                         .get(code)
                         .ok_or_else(|| PlatformError::InputsError(error_location!()))?;
         if let Some((ref pol, ref globals)) = asset.properties.policy {
           let globals = globals.clone();
-          policy_check_txn(code, globals, &pol, &txn.txn).map_err(add_location!())?;
+          policy_check_txn(code, globals, &pol, &txn_effect.txn).map_err(add_location!())?;
         }
       }
     }
 
-    Ok(txn)
+    Ok(txn_effect)
   }
 
   // This function assumes that `block` is COMPLETELY CONSISTENT with the
@@ -774,6 +792,11 @@ impl LedgerStatus {
   fn apply_block_effects(&mut self,
                          block: &mut BlockEffect)
                          -> HashMap<TxnTempSID, (TxnSID, Vec<TxoSID>)> {
+    for (digest, seq_id) in block.opseqs.iter() {
+      self.ops_seen.insert(*digest, *seq_id);
+    }
+    block.opseqs.clear();
+
     // KV updates
     for (k, ent) in block.kv_updates.drain() {
       // safe unwrap since entries in kv_updates should be non-empty
@@ -1423,7 +1446,7 @@ impl LedgerState {
                                                    .as_ref()
                                                    .unwrap()
                                                    .compute_commitment());
-    self.status.block_commit_count += 1;
+    self.status.incr_block_commit_count();
   }
 
   // Initialize a logged Merkle tree for the ledger.  We might
@@ -1598,8 +1621,7 @@ impl LedgerState {
             .state_commitment_versions
             .push(comm.compute_commitment());
       ledger.0.status.pulse_count = comm.pulse_count;
-      ledger.0.status.block_commit_count += 1;
-
+      ledger.0.status.incr_block_commit_count();
       ledger.0.status.state_commitment_data = Some(comm);
 
       let mut block_builder = ledger.start_block().unwrap();
@@ -2904,10 +2926,18 @@ mod tests {
                                                           pok).unwrap(),
                                        &user_kp).unwrap();
     let mut adversarial_op = air_assign_op.clone();
+    let air_assign_op2 = air_assign_op.clone();
     adversarial_op.pubkey = XfrKeyPair::generate(&mut ledger.get_prng()).get_pk();
     let tx = Transaction::from_operation(Operation::AIRAssign(air_assign_op),
                                          ledger.get_block_commit_count());
     apply_transaction(&mut ledger, tx);
+
+    let tx2 = Transaction::from_operation(Operation::AIRAssign(air_assign_op2),
+                                          ledger.get_block_commit_count());
+
+    let effect = TxnEffect::compute_effect(tx2).unwrap();
+    assert!(ledger.status.check_txn_effects(effect).is_err()); // This fails due to replay protection
+
     let tx = Transaction::from_operation(Operation::AIRAssign(adversarial_op),
                                          ledger.get_block_commit_count());
     let effect = TxnEffect::compute_effect(tx);
@@ -3308,6 +3338,7 @@ mod tests {
     memo_update.pubkey = creator.get_pk();
     let tx = Transaction::from_operation(Operation::UpdateMemo(memo_update.clone()),
                                          ledger.get_block_commit_count());
+    let tx_clone = tx.clone();
     let effect = TxnEffect::compute_effect(tx).unwrap();
     ledger.apply_transaction(&mut block, effect.clone())
           .unwrap();
@@ -3316,6 +3347,12 @@ mod tests {
 
     // Ensure memo is updated
     assert!(ledger.get_asset_type(&code).unwrap().properties.memo == new_memo);
+
+    // Test replay defense
+    let mut block2 = ledger.start_block().unwrap();
+    let effect2 = TxnEffect::compute_effect(tx_clone).unwrap();
+    assert!(ledger.apply_transaction(&mut block2, effect2).is_err());
+    ledger.finish_block(block2).unwrap();
   }
 
   #[test]
