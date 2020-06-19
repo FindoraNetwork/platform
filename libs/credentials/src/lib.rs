@@ -140,21 +140,33 @@ pub fn credential_sign<R: CryptoRng + RngCore>(prng: &mut R,
   if keys.len() != issuer_sec_key.map.len() {
     return Err(ZeiError::ParameterError);
   }
+  println!("here 141");
 
   // B build list of u32 parameters
   let n_u32_attrs = issuer_sec_key.num_internal_attrs;
   let mut attrs = vec![0u32; n_u32_attrs];
   for (attr_key, attr_value) in attributes {
+    println!("here 150");
+
     let ((index, u32_len), byte_len) = issuer_sec_key.map
                                                      .get(attr_key)
                                                      .ok_or(ZeiError::ParameterError)?; // A.2 field is contained in secret key
                                                                                         // C. check that attribute length matches secret key parameters
+    println!("here 155");
+
     if attr_value.len() != *byte_len {
+      println!("here attr_value.len():  {:?}", attr_value.len());
+      println!("here *byte_len:         {:?}", *byte_len);
+
       return Err(ZeiError::ParameterError);
     }
+    println!("here 160");
+
     let u32_attrs = u8_slice_to_u32_vec(attr_value, *u32_len); // attr_to_u32_array(*attr, *len);
     attrs[*index..*index + *u32_len].clone_from_slice(&u32_attrs);
   }
+  println!("here 162");
+
   ac_sign(prng,
           &issuer_sec_key.ac_sec_key,
           &user_pub_key.get_ref(),
