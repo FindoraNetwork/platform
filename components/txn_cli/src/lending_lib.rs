@@ -176,16 +176,19 @@ pub fn fulfill_loan<T>(data_dir: &str,
   // Check if loan has been fulfilled
   match loan.status {
     LoanStatus::Declined => {
-      println!("Loan {} has already been declined.", loan_id);
-      return Err(PlatformError::InputsError(error_location!()));
+      return Err(PlatformError::InputsError(format!("{}: Loan {} has been declined.",
+                                                    error_location!(),
+                                                    loan_id)));
     }
     LoanStatus::Active => {
-      println!("Loan {} has already been fulfilled.", loan_id);
-      return Err(PlatformError::InputsError(error_location!()));
+      return Err(PlatformError::InputsError(format!("{}: Loan {} has been fulfilled.",
+                                                    error_location!(),
+                                                    loan_id)));
     }
     LoanStatus::Complete => {
-      println!("Loan {} has already been paid off.", loan_id);
-      return Err(PlatformError::InputsError(error_location!()));
+      return Err(PlatformError::InputsError(format!("{}: Loan {} has been paid off.",
+                                                    error_location!(),
+                                                    loan_id)));
     }
     _ => {}
   }
@@ -238,8 +241,9 @@ pub fn fulfill_loan<T>(data_dir: &str,
                   // Update loans data
                   data.loans[loan_id as usize].status = LoanStatus::Declined;
                   store_data_to_file(data, data_dir)?;
-                  println!("Credential value should be at least: {}.", requirement_u64);
-                  return Err(PlatformError::InputsError(error_location!()));
+                  return Err(PlatformError::InputsError(format!("{}: Credential value should be at least: {}.",
+                                                                error_location!(),
+                                                                requirement_u64)));
                 }
               }
               _ => {
@@ -247,8 +251,9 @@ pub fn fulfill_loan<T>(data_dir: &str,
                   // Update loans data
                   data.loans[loan_id as usize].status = LoanStatus::Declined;
                   store_data_to_file(data, data_dir)?;
-                  println!("Credit score should be: {}.", requirement_u64);
-                  return Err(PlatformError::InputsError(error_location!()));
+                  return Err(PlatformError::InputsError(format!("{}: Credential value should be at least: {}.",
+                                                                error_location!(),
+                                                                requirement_u64)));
                 }
               }
             }
@@ -476,17 +481,19 @@ pub fn pay_loan<T>(data_dir: &str,
   // Check if it's valid to pay
   match loan.status {
     LoanStatus::Requested => {
-      println!("Loan {} hasn't been fulfilled yet. Use issuer fulfill_loan.",
-               loan_id);
-      return Err(PlatformError::InputsError(error_location!()));
+      return Err(PlatformError::InputsError(format!("{}: Loan {} hasn't been fulfilled yet. Use issuer fulfill_loan.",
+                                                    error_location!(),
+                                                    loan_id)));
     }
     LoanStatus::Declined => {
-      println!("Loan {} has been declined.", loan_id);
-      return Err(PlatformError::InputsError(error_location!()));
+      return Err(PlatformError::InputsError(format!("{}: Loan {} has been declined.",
+                                                    error_location!(),
+                                                    loan_id)));
     }
     LoanStatus::Complete => {
-      println!("Loan {} has been paid off.", loan_id);
-      return Err(PlatformError::InputsError(error_location!()));
+      return Err(PlatformError::InputsError(format!("{}: Loan {} has been paid off.",
+                                                    error_location!(),
+                                                    loan_id)));
     }
     _ => {}
   }
