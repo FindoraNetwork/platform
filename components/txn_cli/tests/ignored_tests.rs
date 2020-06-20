@@ -523,20 +523,15 @@ fn test_create_or_overwrite_credentials() {
 //
 // Lender or borrower views loans or credentials
 //
-
-// This test is being ignored because it is broken (seems like a credential problem)
-// Redmine issue #69
-// #[test]
-// #[ignore]
-#[cfg(test)]
-#[allow(unused)]
+#[test]
 fn test_view() {
   let tmp_dir = tempdir().unwrap();
   let dir = tmp_dir.path().to_str().unwrap();
 
   let mut ledger_standalone = MockLedgerStandalone::new_mock(1);
+
   // Add a credential
-  create_or_overwrite_credential(dir, "0", "credit_score", "1500", &mut ledger_standalone).expect("Failed to create a credential");
+  create_or_overwrite_credential(dir, "0", "min_credit_score", "550", &mut ledger_standalone).expect("Failed to create a credential");
 
   // Create loans
   request_loan(dir, "0", "0", "100", "100", "3", &mut ledger_standalone).expect("Failed to request the loan");
@@ -547,14 +542,18 @@ fn test_view() {
   // Fulfill some of the loans
   fulfill_loan(dir, "0", "0", "0", None, &mut ledger_standalone).expect("Failed to fulfill the loan");
   fulfill_loan(dir, "0", "1", "0", None, &mut ledger_standalone).expect("Failed to fulfill the loan");
-  fulfill_loan(dir, "1", "2", "0", None, &mut ledger_standalone).expect("Failed to fulfill the loan");
+  // Should fail with InputsError
+  match fulfill_loan(dir, "1", "2", "0", None, &mut ledger_standalone) {
+    Err(PlatformError::InputsError(_)) => {}
+    unexpected_result => {
+      panic!(format!("Expected InputsError, found {:?}.", unexpected_result));
+    }
+  }
 
   // View loans
   // 1. View all loans of a lender
-
   view_loan_all(dir, "lender", "1", &mut ledger_standalone).expect("Failed to view the loan");
   // 2. View all loans of a borrower
-
   view_loan_all(dir, "borrower", "0", &mut ledger_standalone).expect("Failed to view the loan");
 
   // 3.   View a loan by its id
@@ -562,27 +561,28 @@ fn test_view() {
   view_loan_with_loan_id(dir, "lender", "0", "0", &mut ledger_standalone).expect("Failed to view the loan");
 
   // 3.2  The loan isn't owned by the user
-  view_loan_with_loan_id(dir, "lender", "0", "2", &mut ledger_standalone).expect("Failed to view the loan");
+  // Should fail with InputsError
+  match view_loan_with_loan_id(dir, "lender", "0", "2", &mut ledger_standalone) {
+    Err(PlatformError::InputsError(_)) => {}
+    unexpected_result => {
+      panic!(format!("Expected InputsError, found {:?}.", unexpected_result));
+    }
+  }
 
   // 4. View loans with a filter
   // 4.1 Requested but not fulfilled loan
-
   view_loan_with_filter(dir, "borrower", "0", "requested", &mut ledger_standalone).expect("Failed to view the loan");
 
   // 4.2. View fulfilled loan
-
   view_loan_with_filter(dir, "borrower", "0", "fulfilled", &mut ledger_standalone).expect("Failed to view the loan");
 
   // 4.3. View declined loan
-
   view_loan_with_filter(dir, "borrower", "0", "declined", &mut ledger_standalone).expect("Failed to view the loan");
 
   // 4.4. View active loan
-
   view_loan_with_filter(dir, "borrower", "0", "active", &mut ledger_standalone).expect("Failed to view the loan");
 
   // 4.5. View complete loan
-
   view_loan_with_filter(dir, "borrower", "0", "complete", &mut ledger_standalone).expect("Failed to view the loan");
 
   // View credentials

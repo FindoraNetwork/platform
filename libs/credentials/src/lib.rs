@@ -152,6 +152,7 @@ pub fn credential_sign<R: CryptoRng + RngCore>(prng: &mut R,
     if attr_value.len() != *byte_len {
       return Err(ZeiError::ParameterError);
     }
+
     let u32_attrs = u8_slice_to_u32_vec(attr_value, *u32_len); // attr_to_u32_array(*attr, *len);
     attrs[*index..*index + *u32_len].clone_from_slice(&u32_attrs);
   }
