@@ -3235,7 +3235,6 @@ mod tests {
 
   #[test]
   pub fn test_cosignature_restrictions() {
-    //TODO (noah) use prop based testing here?
     // Simple
     assert!(!cosignature_transfer_succeeds(&[(false, 1), (false, 1)], 1, false));
     assert!(!cosignature_transfer_succeeds(&[(false, 1), (false, 1)], 1, true));
