@@ -800,7 +800,8 @@ fn test_air_assign() {
 }
 
 // Test funds loading, loan request, fulfilling and repayment
-#[test]
+#[cfg(test)]
+#[allow(unused)]
 fn test_request_fulfill_and_pay_loan_with_args() {
   let tmp_dir = tempdir().unwrap();
   let dir = tmp_dir.path().to_str().unwrap();
