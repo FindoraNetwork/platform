@@ -179,6 +179,12 @@ impl SolvencyAudit {
         .push((asset_type_to_scalar(&code.val), Scalar::from(rate)));
   }
 
+  // TODO (Keyao): Add verification that the assets used to generate the solvency proof are unspent
+  // Issue: https://bugtracker.findora.org/issues/88
+  //
+  // TODO (Keyao): Refactor the structure of storing and verifying the solvency proof
+  // Issue: https://bugtracker.findora.org/issues/89
+
   /// Proves the solvency and stores the proof.
   /// Must be used before `verify_solvency`.
   ///
