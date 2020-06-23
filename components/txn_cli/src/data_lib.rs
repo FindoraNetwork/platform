@@ -49,6 +49,9 @@ pub(crate) enum ComparisonType {
 
 #[derive(Clone, Copy, Deserialize, Debug, Eq, PartialEq, Serialize)]
 /// Credential attribute names and their corresponding indices in the credential's values data and lender's requirements data.
+///
+/// See `get_name_and_length` for the value length of each attribute.
+///
 /// # Examples
 /// * `"values": ["630", null, "1"]` in a credential's data indicates:
 ///   * Lower bound of the borrower's credit score is 630.

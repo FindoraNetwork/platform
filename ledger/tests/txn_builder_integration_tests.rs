@@ -48,7 +48,7 @@ fn test_create_asset() -> Result<(), PlatformError> {
   // Define
   let tx = builder.add_operation_create_asset(&keys,
                                               Some(code),
-                                              AssetRules::default().set_traceable(true).clone(),
+                                              AssetRules::default(),
                                               "test".into(),
                                               PolicyChoice::Fungible())?
                   .transaction();

@@ -1,4 +1,4 @@
-#![deny(warnings)]
+//#![deny(warnings)]
 use crate::data_model::errors::PlatformError;
 use crate::data_model::*;
 use crate::policies::{compute_debt_swap_effect, DebtSwapEffect};
@@ -12,7 +12,7 @@ use utils::{HasInvariants, HashOf, SignatureOf};
 use zei::api::anon_creds::ACCommitment;
 use zei::serialization::ZeiFromToBytes;
 use zei::xfr::sig::XfrPublicKey;
-use zei::xfr::structs::{AssetTracingPolicy, BlindAssetRecord, XfrAmount, XfrAssetType, XfrBody};
+use zei::xfr::structs::{AssetTracingPolicy, BlindAssetRecord, XfrAmount, XfrAssetType};
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct TxnEffect {
@@ -41,12 +41,6 @@ pub struct TxnEffect {
   // i.e. (2, 1) -> { AlicePk, BobPk } means that Alice and Bob both have valid signatures on the 2nd input of the 1st
   // operation
   pub cosig_keys: HashMap<(usize, usize), HashSet<Vec<u8>>>,
-  // Identity tracing commitments of transfer inputs
-  pub transfer_input_commitments: Vec<Option<ACCommitment>>,
-  // Identity tracing commitments of transfer outputs
-  pub transfer_output_commitments: Vec<Option<ACCommitment>>,
-  // Encrypted transfer body
-  pub transfer_body: Option<Box<XfrBody>>,
   // Debt swap information that must be externally validated
   pub debt_effects: HashMap<AssetTypeCode, DebtSwapEffect>,
   // Non-confidential asset types involved in confidential transfers
@@ -79,9 +73,6 @@ impl TxnEffect {
     let mut new_issuance_nums: HashMap<AssetTypeCode, Vec<u64>> = HashMap::new();
     let mut issuance_keys: HashMap<AssetTypeCode, IssuerPublicKey> = HashMap::new();
     let mut issuance_amounts = HashMap::new();
-    let mut transfer_input_commitments = Vec::new();
-    let mut transfer_output_commitments = Vec::new();
-    let mut transfer_body: Option<Box<XfrBody>> = None;
     let mut debt_effects: HashMap<AssetTypeCode, DebtSwapEffect> = HashMap::new();
     let mut asset_types_involved: HashSet<AssetTypeCode> = HashSet::new();
     let mut confidential_issuance_types = HashSet::new();
@@ -193,9 +184,6 @@ impl TxnEffect {
         //      5) The assets in the TxOutputs have a non-confidential
         //         asset type which agrees with the stated asset type.
         //          - Fully checked here
-        //      6) The asset_tracking flag of the tracing policy in
-        //         IssueAssetBody agrees with the asset definition.
-        //          - Fully checked in check_txn_effects
         Operation::IssueAsset(iss) => {
           if iss.body.num_outputs != iss.body.records.len() {
             return Err(inp_fail!());
@@ -255,16 +243,6 @@ impl TxnEffect {
             txos.push(Some(output.clone()));
             txo_count += 1;
           }
-
-          // (6)
-          let policies = match &iss.body.tracing_policy {
-            Some(policy) => Some((policy.clone(),
-                                  AssetTracingPolicy { enc_keys: policy.enc_keys.clone(),
-                                                       asset_tracking: policy.asset_tracking,
-                                                       identity_tracking: None })),
-            None => None,
-          };
-          issuance_tracing_policies.insert(code, policies);
         }
 
         // An asset transfer is valid iff:
@@ -332,10 +310,6 @@ impl TxnEffect {
           }
           // (3)
           // TODO: implement real policies
-          transfer_input_commitments = trn.body.input_identity_commitments.clone();
-          transfer_output_commitments = trn.body.output_identity_commitments.clone();
-          transfer_body = Some(trn.body.transfer.clone());
-
           let mut input_types = HashSet::new();
           for (inp, record) in trn.body.inputs.iter().zip(trn.body.transfer.inputs.iter()) {
             // NOTE: We assume that any confidential-type asset records
@@ -413,11 +387,11 @@ impl TxnEffect {
                     .verify(&pk, &air_assign.body)
                     .map_err(|e| zei_fail!(e))?;
           // 2)
-          credential_verify_commitment(issuer_pk, commitment, pok, pk.as_bytes()).map_err(|e| {
-                                                                                   zei_fail!(e)
-                                                                                 })?;
+          credential_verify_commitment(issuer_pk, &commitment, pok, pk.as_bytes()).map_err(|e| {
+                                                                                    zei_fail!(e)
+                                                                                  })?;
           air_updates.insert(serde_json::to_string(&air_assign.body.addr)?,
-                             serde_json::to_string(commitment)?);
+                             serde_json::to_string(&commitment)?);
         }
         // A memo update is valid iff:
         // 1) The signature is valid.
@@ -448,10 +422,6 @@ impl TxnEffect {
                    confidential_transfer_inputs,
                    issuance_amounts,
                    confidential_issuance_types,
-                   issuance_tracing_policies,
-                   transfer_input_commitments,
-                   transfer_output_commitments,
-                   transfer_body,
                    debt_effects,
                    asset_types_involved,
                    custom_policy_asset_types,
@@ -536,8 +506,7 @@ pub struct BlockEffect {
   // Which public key is being used to issue each asset type
   pub issuance_keys: HashMap<AssetTypeCode, IssuerPublicKey>,
   // Which new tracing policies are being added
-  pub new_tracing_policies:
-    HashMap<AssetTypeCode, Option<(AssetTracingPolicy, AssetTracingPolicy)>>,
+  pub new_tracing_policies: HashMap<AssetTypeCode, AssetTracingPolicy>,
   // Updates to the AIR
   pub air_updates: HashMap<String, String>,
   // User-provided Key-Value store updates
@@ -637,19 +606,6 @@ impl BlockEffect {
     for (type_code, amount) in txn.issuance_amounts.iter() {
       let issuance_amount = self.issuance_amounts.entry(*type_code).or_insert(0);
       *issuance_amount += amount;
-    }
-
-    for (type_code, tracing_policies) in txn.issuance_tracing_policies.iter() {
-      debug_assert!(!self.new_tracing_policies.contains_key(type_code));
-      match tracing_policies {
-        Some(_) => {
-          self.new_tracing_policies
-              .insert(*type_code, tracing_policies.clone());
-        }
-        None => {
-          self.new_tracing_policies.insert(*type_code, None);
-        }
-      }
     }
 
     for (addr, data) in txn.air_updates {

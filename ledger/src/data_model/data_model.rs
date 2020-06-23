@@ -2,6 +2,7 @@
 use super::errors;
 use crate::policy_script::{Policy, PolicyGlobals, TxnPolicyData};
 use crate::{error_location, zei_fail};
+use air::{check_merkle_proof as air_check_merkle_proof, AIRResult};
 use bitmap::SparseMap;
 use chrono::prelude::*;
 use credentials::{CredCommitment, CredIssuerPublicKey, CredPoK, CredUserPublicKey};
@@ -579,7 +580,6 @@ impl TransferAsset {
   }
 }
 
-// TODO: Include mechanism for replay attacks
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct IssueAsset {
   pub body: IssueAssetBody,
@@ -776,6 +776,62 @@ pub struct FinalizedTransaction {
   pub tx_id: TxnSID,
 
   pub merkle_id: u64,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct AuthenticatedAIRResult {
+  pub state_commitment_data: Option<StateCommitmentData>,
+  pub state_commitment: HashOf<Option<StateCommitmentData>>,
+  pub air_result: AIRResult,
+}
+
+impl AuthenticatedAIRResult {
+  // An authenticated air result is valid if
+  // 1) State commitment data hashes to the provided state commitment
+  // 2) The air root matches the root in state commitment data.
+  // 3) The air proof is valid.
+  pub fn is_valid(&self, state_commitment: HashOf<Option<StateCommitmentData>>) -> bool {
+    let root = self.air_result.merkle_root;
+    match &self.state_commitment_data {
+      None => {
+        if self.air_result.value.is_some() {
+          return false;
+        }
+        if state_commitment != HashOf::new(&None) {
+          return false;
+        }
+        if root != ZERO_DIGEST {
+          return false;
+        }
+      }
+      Some(comm_data) => {
+        if self.state_commitment != comm_data.compute_commitment() {
+          return false;
+        }
+
+        if comm_data.air_commitment != root {
+          return false;
+        }
+      }
+    }
+    if state_commitment != self.state_commitment {
+      return false;
+    }
+    let key = &self.air_result.key;
+    let value = self.air_result.value.as_ref();
+    let proof = &self.air_result.merkle_proof;
+
+    air_check_merkle_proof(&root, key, value, proof)
+  }
+
+  // Extract the credential commitment stored in this AIRResult
+  pub fn get_credential_commitment(&self) -> Option<CredCommitment> {
+    // This unwrap is safe because by design, AIR values can only be credential commitments
+    self.air_result
+        .value
+        .as_ref()
+        .map(|cred_str| serde_json::from_str(&cred_str).unwrap())
+  }
 }
 
 #[derive(Serialize, Deserialize)]

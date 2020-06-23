@@ -6,9 +6,9 @@ use credentials::{
 };
 use cryptohash::sha256::{Digest, DIGESTBYTES};
 use ledger::data_model::{
-  AssetRules as PlatformAssetRules, KVBlind as PlatformKVBlind, KVHash as PlatformKVHash,
-  SignatureRules as PlatformSignatureRules, TransferType as PlatformTransferType, TxOutput,
-  TxoRef as PlatformTxoRef, TxoSID,
+  AssetRules as PlatformAssetRules, AuthenticatedAIRResult as PlatformAuthenticatedAIRResult,
+  KVBlind as PlatformKVBlind, KVHash as PlatformKVHash, SignatureRules as PlatformSignatureRules,
+  TransferType as PlatformTransferType, TxOutput, TxoRef as PlatformTxoRef, TxoSID,
 };
 use rand_chacha::ChaChaRng;
 use rand_core::{RngCore, SeedableRng};
@@ -96,7 +96,8 @@ pub struct ClientAssetRecord {
 
 #[wasm_bindgen]
 #[derive(Serialize, Deserialize)]
-/// Key pair of the asset tracer.
+/// Key pair of the asset tracer. This key pair can be used to decrypt traced assets and
+/// identities.
 pub struct AssetTracerKeyPair {
   pub(crate) keypair: ZeiAssetTracerKeyPair,
 }
@@ -129,7 +130,8 @@ impl AssetTracerKeyPair {
 }
 
 #[wasm_bindgen]
-/// Asser owner memo.
+/// Asset owner memo. Contains information needed to decrypt an asset record.
+/// @see {@link ClientAssetRecord} for more details about asset records.
 pub struct OwnerMemo {
   pub(crate) memo: ZeiOwnerMemo,
 }
@@ -177,6 +179,7 @@ pub struct CredentialUserKeyPair {
 
 #[wasm_bindgen]
 #[derive(Serialize, Deserialize)]
+/// Key pair of a credential issuer.
 pub struct CredentialIssuerKeyPair {
   pub(crate) pk: CredIssuerPublicKey,
   pub(crate) sk: CredIssuerSecretKey,
@@ -198,10 +201,85 @@ pub struct CredentialRevealSig {
 
 #[wasm_bindgen]
 #[derive(Serialize, Deserialize)]
+/// Commitment to a credential record and proof that the commitment is a valid re-randomization of a
+/// commitment signed by a certain credential issuer.
+pub struct CredentialCommitmentAndPoK {
+  pub(crate) commitment: CredentialCommitment,
+  pub(crate) pok: CredentialPoK,
+}
+
+#[wasm_bindgen]
+impl CredentialCommitmentAndPoK {
+  pub fn get_commitment(&self) -> CredentialCommitment {
+    self.commitment.clone()
+  }
+  pub fn get_pok(&self) -> CredentialPoK {
+    self.pok.clone()
+  }
+}
+
+#[wasm_bindgen]
+#[derive(Serialize, Deserialize, Clone)]
 /// Commitment to a credential record.
 pub struct CredentialCommitment {
   pub(crate) commitment: CredCommitment,
+}
+
+impl CredentialCommitment {
+  pub fn get_ref(&self) -> &CredCommitment {
+    &self.commitment
+  }
+}
+
+#[wasm_bindgen]
+#[derive(Serialize, Deserialize, Clone)]
+/// Proof that a credential is a valid re-randomization of a credential signed by a certain asset
+/// issuer.
+pub struct CredentialPoK {
   pub(crate) pok: CredPoK,
+}
+
+impl CredentialPoK {
+  pub fn get_ref(&self) -> &CredPoK {
+    &self.pok
+  }
+}
+
+#[wasm_bindgen]
+/// Authenticated address identity registry value. Contains a proof that the AIR result is stored
+/// in the ledger.
+pub struct AuthenticatedAIRResult {
+  pub(crate) result: PlatformAuthenticatedAIRResult,
+}
+
+impl AuthenticatedAIRResult {
+  pub fn get_ref(&self) -> &PlatformAuthenticatedAIRResult {
+    &self.result
+  }
+}
+
+#[wasm_bindgen]
+impl AuthenticatedAIRResult {
+  /// Construct an AIRResult from the JSON-encoded value returned by the ledger.
+  pub fn from_json(json: &JsValue) -> Result<AuthenticatedAIRResult, JsValue> {
+    let result: PlatformAuthenticatedAIRResult = json.into_serde().map_err(error_to_jsvalue)?;
+    Ok(AuthenticatedAIRResult { result })
+  }
+
+  /// Returns true if the authenticated AIR result proofs verify succesfully.
+  /// @param {string} state_commitment - String representing the ledger state commitment.
+  pub fn is_valid(&self, state_commitment: String) -> Result<bool, JsValue> {
+    let state_commitment = serde_json::from_str::<HashOf<_>>(&state_commitment).map_err(|_e| {
+                             JsValue::from_str("Could not deserialize state commitment")
+                           })?;
+    Ok(self.get_ref().is_valid(state_commitment))
+  }
+
+  /// Returns the underlying credential commitment of the AIR result.
+  pub fn get_commitment(&self) -> Option<CredentialCommitment> {
+    let commitment = self.get_ref().get_credential_commitment();
+    commitment.map(|comm| CredentialCommitment { commitment: comm })
+  }
 }
 
 #[wasm_bindgen]
@@ -212,15 +290,6 @@ pub struct CredentialCommitment {
 /// * Credential attributes and associated values.
 pub struct Credential {
   pub(crate) credential: PlatformCredential,
-}
-
-impl CredentialCommitment {
-  pub fn get_commitment_ref(&self) -> &CredCommitment {
-    &self.commitment
-  }
-  pub fn get_pok_ref(&self) -> &CredPoK {
-    &self.pok
-  }
 }
 
 impl CredentialSignature {
@@ -244,15 +313,19 @@ impl CredentialRevealSig {
 #[wasm_bindgen]
 /// Key pair of a credential issuer
 impl CredentialIssuerKeyPair {
+  /// Returns the credential issuer's public key.
   pub fn get_pk(&self) -> CredIssuerPublicKey {
     self.pk.clone()
   }
+  /// Returns the credential issuer's secret key.
   pub fn get_sk(&self) -> CredIssuerSecretKey {
     self.sk.clone()
   }
+  /// Convert the key pair to a serialized value that can be used in the browser.
   pub fn to_jsvalue(&self) -> JsValue {
     JsValue::from_serde(&self).unwrap()
   }
+  /// Generate a key pair from a JSON-serialized JavaScript value.
   pub fn from_jsvalue(val: &JsValue) -> Self {
     val.into_serde().unwrap()
   }
@@ -260,18 +333,19 @@ impl CredentialIssuerKeyPair {
 
 #[wasm_bindgen]
 impl CredentialUserKeyPair {
+  /// Returns the credential issuer's public key.
   pub fn get_pk(&self) -> CredUserPublicKey {
     self.pk.clone()
   }
+  /// Returns the credential issuer's secret key.
   pub fn get_sk(&self) -> CredUserSecretKey {
     self.sk.clone()
   }
-  pub fn serialize(&self) -> String {
-    serde_json::to_string(&self).unwrap()
-  }
+  /// Convert the key pair to a serialized value that can be used in the browser.
   pub fn to_jsvalue(&self) -> JsValue {
     JsValue::from_serde(&self).unwrap()
   }
+  /// Generate a key pair from a JSON-serialized JavaScript value.
   pub fn from_jsvalue(val: &JsValue) -> Self {
     val.into_serde().unwrap()
   }
@@ -407,12 +481,15 @@ impl AssetRules {
 
 #[wasm_bindgen]
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+/// Blinding factor for a custom data operation. A blinding factor adds a random value to the
+/// custom data being hashed to make the hash hiding.
 pub struct KVBlind {
   pub(crate) blind: PlatformKVBlind,
 }
 
 #[wasm_bindgen]
 impl KVBlind {
+  /// Generate a random blinding factor.
   pub fn gen_random() -> Self {
     let mut small_rng = ChaChaRng::from_entropy();
     let mut buf: [u8; 16] = [0u8; 16];
@@ -452,16 +529,19 @@ impl Key {
 
 #[wasm_bindgen]
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+/// Hash that can be stored in the ledger's custom data store.
 pub struct KVHash {
   pub(crate) hash: PlatformKVHash,
 }
 
 #[wasm_bindgen]
 impl KVHash {
+  /// Generate a new custom data hash without a blinding factor.
   pub fn new_no_blind(data: &str) -> Self {
     KVHash { hash: PlatformKVHash(HashOf::new(&(data.as_bytes().to_vec(), None))) }
   }
 
+  /// Generate a new custom data hash with a blinding factor.
   pub fn new_with_blind(data: &str, kv_blind: &KVBlind) -> Self {
     KVHash { hash: PlatformKVHash(HashOf::new(&(data.as_bytes().to_vec(),
                                                 Some(kv_blind.get_blind_ref().clone())))) }

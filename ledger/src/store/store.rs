@@ -1,4 +1,4 @@
-#![deny(warnings)]
+//#![deny(warnings)]
 extern crate byteorder;
 extern crate tempdir;
 
@@ -168,7 +168,7 @@ pub trait ArchiveAccess {
                                           -> Option<HashOf<Option<StateCommitmentData>>>;
 
   // Key-value lookup in AIR
-  fn get_air_data(&self, address: &str) -> AIRResult;
+  fn get_air_data(&self, address: &str) -> AuthenticatedAIRResult;
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
@@ -231,11 +231,8 @@ pub struct LedgerStatus {
   // prevent replays, but (as far as I know -joe) need not be strictly
   // sequential.
   asset_types: HashMap<AssetTypeCode, AssetType>,
-  // We store two tracing policies for each asset type
-  // * The first policy contains the encryption keys, asset tracing flag, and identity tracing poicy
-  // * The second policy doesn't inclue an identity tracing policy
-  // This allows us to transfer an asset when there's no identity requirement
-  tracing_policies: HashMap<AssetTypeCode, Option<(AssetTracingPolicy, AssetTracingPolicy)>>,
+  // Tracing policy for each asset type
+  tracing_policies: HashMap<AssetTypeCode, AssetTracingPolicy>,
   issuance_num: HashMap<AssetTypeCode, u64>,
   // Issuance amounts for assets with limits
   issuance_amounts: HashMap<AssetTypeCode, u64>,
@@ -253,6 +250,9 @@ pub struct LedgerStatus {
 
   // Hash of the transactions in the most recent block
   txns_in_block_hash: Option<HashOf<Vec<Transaction>>>,
+
+  // Sparse Merkle Tree for Address Identity Registry
+  air: AIR,
 }
 
 pub struct LedgerState {
@@ -268,10 +268,6 @@ pub struct LedgerState {
   // Merkle tree tracking the sequence of transaction hashes in the block
   // Each appended hash is the hash of transactions in the same block
   block_merkle: AppendOnlyMerkle,
-
-  // Sparse Merkle Tree for Addres Identity Registry
-  air: AIR,
-
   // Merkle tree tracking the sequence of all transaction hashes
   // Each appended hash is the hash of a transaction
   txn_merkle: AppendOnlyMerkle,
@@ -422,6 +418,7 @@ impl LedgerStatus {
     let ledger = LedgerStatus { block_merkle_path: block_merkle_path.to_owned(),
                                 air_path: air_path.to_owned(),
                                 txn_merkle_path: txn_merkle_path.to_owned(),
+                                air: LedgerState::init_air_log(air_path, true)?,
                                 txn_path: txn_path.to_owned(),
                                 utxo_map_path: utxo_map_path.to_owned(),
                                 utxos: HashMap::new(),
@@ -662,175 +659,182 @@ impl LedgerStatus {
     }
 
     // Asset transfer body must be consistent with the tracing policies
-    let mut transfer_input_policies = Vec::new();
-    let mut transfer_input_commitments = Vec::new();
-    let mut transfer_output_policies = Vec::new();
-    let mut transfer_output_commitments = Vec::new();
-    if let Some(xfr_body) = txn.transfer_body.clone() {
-      for (input_blind_asset_record, input_commitment) in
-        xfr_body.inputs
-                .iter()
-                .zip(txn.transfer_input_commitments.iter())
-      {
-        match input_blind_asset_record.asset_type {
-          // If the asset is nonconfidential, get its tracing policy
-          XfrAssetType::NonConfidential(asset_type) => {
-            let code = AssetTypeCode { val: asset_type };
-            let tracing_policies =
-              &self.tracing_policies
-                   .get(&code)
-                   .or_else(|| txn.issuance_tracing_policies.get(&code))
-                   .ok_or_else(|| PlatformError::InputsError(error_location!()))?;
-            dbg!(&tracing_policies);
-            match tracing_policies {
-              Some((policy, _)) => {
-                match policy.identity_tracking {
-                  Some(_) => match input_commitment {
-                    Some(_) => {
-                      transfer_input_policies.push(Some(&tracing_policies.clone()
-                                                                         .as_ref()
-                                                                         .unwrap()
-                                                                         .0));
-                      transfer_input_commitments.push(Some(input_commitment.as_ref()
-                                                                           .clone()
-                                                                           .unwrap()));
-                    }
-                    None => {
-                      transfer_input_policies.push(Some(&tracing_policies.clone()
-                                                                         .as_ref()
-                                                                         .unwrap()
-                                                                         .1));
-                      transfer_input_commitments.push(None);
-                    }
-                  },
-                  None => {
-                    match input_commitment {
-                      // If the identity isn't traceable, there shouldn't be an identity commitment
-                      Some(_) => {
-                        return Err(PlatformError::InputsError(error_location!()));
-                      }
-                      None => {
-                        transfer_input_policies.push(None);
-                        transfer_input_commitments.push(None);
-                      }
-                    }
-                  }
-                }
-              }
-              None => {
-                match input_commitment {
-                  // If the asset isn't traceable, there shouldn't be an identity commitment
-                  Some(_) => {
-                    return Err(PlatformError::InputsError(error_location!()));
-                  }
-                  None => {
-                    transfer_input_policies.push(None);
-                    transfer_input_commitments.push(None);
-                  }
-                }
-              }
-            }
-          }
-          // Until we can support confidential issuance, tracing with confidential type isn't allowed
-          _ => match input_commitment {
-            Some(_) => {
-              return Err(PlatformError::InputsError(error_location!()));
-            }
-            None => {
-              transfer_input_policies.push(None);
-              transfer_input_commitments.push(None);
-            }
-          },
-        }
-      }
-      if let Some(xfr_body) = txn.transfer_body.clone() {
-        for (output_blind_asset_record, output_commitment) in
-          xfr_body.outputs
-                  .iter()
-                  .zip(txn.transfer_output_commitments.iter())
-        {
-          match output_blind_asset_record.asset_type {
-            // If the asset is nonconfidential, get its tracing policy
-            XfrAssetType::NonConfidential(asset_type) => {
-              let code = AssetTypeCode { val: asset_type };
-              let tracing_policies =
-                &self.tracing_policies
-                     .get(&code)
-                     .or_else(|| txn.issuance_tracing_policies.get(&code))
-                     .ok_or_else(|| PlatformError::InputsError(error_location!()))?;
-              match tracing_policies {
-                Some((policy, _)) => {
-                  match policy.identity_tracking {
-                    Some(_) => match output_commitment {
-                      Some(_) => {
-                        transfer_output_policies.push(Some(&tracing_policies.clone()
-                                                                            .as_ref()
-                                                                            .unwrap()
-                                                                            .0));
-                        transfer_output_commitments.push(Some(output_commitment.as_ref()
-                                                                               .clone()
-                                                                               .unwrap()));
-                      }
-                      None => {
-                        transfer_output_policies.push(Some(&tracing_policies.clone()
-                                                                            .as_ref()
-                                                                            .unwrap()
-                                                                            .1));
-                        transfer_output_commitments.push(None);
-                      }
-                    },
-                    None => {
-                      match output_commitment {
-                        // If the identity isn't traceable, there shouldn't be an identity commitment
-                        Some(_) => {
-                          return Err(PlatformError::InputsError(error_location!()));
-                        }
-                        None => {
-                          transfer_output_policies.push(None);
-                          transfer_output_commitments.push(None);
-                        }
-                      }
-                    }
-                  }
-                }
-                None => {
-                  match output_commitment {
-                    // If the asset isn't traceable, there shouldn't be an identity commitment
-                    Some(_) => {
-                      return Err(PlatformError::InputsError(error_location!()));
-                    }
-                    None => {
-                      transfer_output_policies.push(None);
-                      transfer_output_commitments.push(None);
-                    }
-                  }
-                }
-              }
-            }
-            // Until we can support confidential issuance, tracing with confidential type isn't allowed
-            _ => match output_commitment {
-              Some(_) => {
-                return Err(PlatformError::InputsError(error_location!()));
-              }
-              None => {
-                transfer_output_policies.push(None);
-                transfer_output_commitments.push(None);
-              }
-            },
-          }
-        }
-      }
-      dbg!(&transfer_input_policies);
-      verify_xfr_body(&mut ChaChaRng::from_seed([1u8; 32]),
-                      &xfr_body,
-                      &transfer_input_policies[..],
-                      &transfer_input_commitments[..],
-                      &transfer_output_policies[..],
-                      &transfer_output_commitments[..]).map_err(|e| {
-                                                         PlatformError::ZeiError(error_location!(),
-                                                                                 e)
-                                                       })?;
-    }
+    //let mut transfer_input_policies = Vec::new();
+    //let mut transfer_output_policies = Vec::new();
+    //if let Some(xfr_body) = txn.transfer_body.clone() {
+    //  for (input_blind_asset_record, input_commitment) in
+    //    xfr_body.inputs
+    //            .iter()
+    //            .zip(txn.transfer_input_commitments.iter())
+    //  {
+    //    match input_blind_asset_record.asset_type {
+    //      // If the asset is nonconfidential, get its tracing policy
+    //      XfrAssetType::NonConfidential(asset_type) => {
+    //        let code = AssetTypeCode { val: asset_type };
+    //        let tracing_policy = self.tracing_policies.get(&code);
+    //        match tracing_policy {
+    //          Some(policy) => {
+    //            match policy.identity_tracking {
+    //              Some(_) => match input_commitment {
+    //                Some(_) => {
+    //                  transfer_input_policies.push(Some(tracing_policy.clone().unwrap()));
+    //                  transfer_input_commitments.push(Some(input_commitment.as_ref()
+    //                                                                       .clone()
+    //                                                                       .unwrap()));
+    //                }
+    //                None => {
+    //                  let issuer_key =
+    //                    self.asset_types
+    //                        .get(&code)
+    //                        .or_else(|| txn.new_asset_codes.get(&code))
+    //                        .ok_or_else(|| PlatformError::InputsError(error_location!()))?
+    //                        .properties
+    //                        .issuer
+    //                        .key;
+    //                  // If the sender is an issuer, exclude the identity tracing.
+    //                  // Otherwise, an identity commitment is required.
+    //                  if input_blind_asset_record.public_key == issuer_key {
+    //                    transfer_input_policies.push(None);
+    //                    transfer_input_commitments.push(None);
+    //                  } else {
+    //                    return Err(PlatformError::InputsError(error_location!()));
+    //                  }
+    //                }
+    //              },
+    //              None => {
+    //                match input_commitment {
+    //                  // If the identity isn't traceable, there shouldn't be an identity commitment
+    //                  Some(_) => {
+    //                    return Err(PlatformError::InputsError(error_location!()));
+    //                  }
+    //                  None => {
+    //                    transfer_input_policies.push(None);
+    //                    transfer_input_commitments.push(None);
+    //                  }
+    //                }
+    //              }
+    //            }
+    //          }
+    //          None => {
+    //            match input_commitment {
+    //              // If the asset isn't traceable, there shouldn't be an identity commitment
+    //              Some(_) => {
+    //                return Err(PlatformError::InputsError(error_location!()));
+    //              }
+    //              None => {
+    //                transfer_input_policies.push(None);
+    //                transfer_input_commitments.push(None);
+    //              }
+    //            }
+    //          }
+    //        }
+    //      }
+    //      // Until we can support confidential issuance, tracing with confidential type isn't allowed
+    //      _ => match input_commitment {
+    //        Some(_) => {
+    //          return Err(PlatformError::InputsError(error_location!()));
+    //        }
+    //        None => {
+    //          transfer_input_policies.push(None);
+    //          transfer_input_commitments.push(None);
+    //        }
+    //      },
+    //    }
+    //  }
+    //  if let Some(xfr_body) = txn.transfer_body.clone() {
+    //    for (output_blind_asset_record, output_commitment) in
+    //      xfr_body.outputs
+    //              .iter()
+    //              .zip(txn.transfer_output_commitments.iter())
+    //    {
+    //      match output_blind_asset_record.asset_type {
+    //        // If the asset is nonconfidential, get its tracing policy
+    //        XfrAssetType::NonConfidential(asset_type) => {
+    //          let code = AssetTypeCode { val: asset_type };
+
+    //          // Look for new tracing policies too
+    //          let tracing_policy = self.tracing_policies.get(&code);
+    //          match tracing_policy {
+    //            Some(policy) => {
+    //              match policy.identity_tracking {
+    //                Some(_) => match output_commitment {
+    //                  Some(_) => {
+    //                    transfer_output_policies.push(Some(tracing_policy.clone().unwrap()));
+    //                    transfer_output_commitments.push(Some(output_commitment.as_ref()
+    //                                                                           .clone()
+    //                                                                           .unwrap()));
+    //                  }
+    //                  None => {
+    //                    let issuer_key =
+    //                      self.asset_types
+    //                          .get(&code)
+    //                          .or_else(|| txn.new_asset_codes.get(&code))
+    //                          .ok_or_else(|| PlatformError::InputsError(error_location!()))?
+    //                          .properties
+    //                          .issuer
+    //                          .key;
+    //                    // If the sender is an issuer, exclude the identity tracing.
+    //                    // Otherwise, an identity commitment is required.
+    //                    if output_blind_asset_record.public_key == issuer_key {
+    //                      transfer_output_policies.push(None);
+    //                      transfer_output_commitments.push(None);
+    //                    } else {
+    //                      return Err(PlatformError::InputsError(error_location!()));
+    //                    }
+    //                  }
+    //                },
+    //                None => {
+    //                  match output_commitment {
+    //                    // If the identity isn't traceable, there shouldn't be an identity commitment
+    //                    Some(_) => {
+    //                      return Err(PlatformError::InputsError(error_location!()));
+    //                    }
+    //                    None => {
+    //                      transfer_output_policies.push(None);
+    //                      transfer_output_commitments.push(None);
+    //                    }
+    //                  }
+    //                }
+    //              }
+    //            }
+    //            None => {
+    //              match output_commitment {
+    //                // If the asset isn't traceable, there shouldn't be an identity commitment
+    //                Some(_) => {
+    //                  return Err(PlatformError::InputsError(error_location!()));
+    //                }
+    //                None => {
+    //                  transfer_output_policies.push(None);
+    //                  transfer_output_commitments.push(None);
+    //                }
+    //              }
+    //            }
+    //          }
+    //        }
+    //        // Until we can support confidential issuance, tracing with confidential type isn't allowed
+    //        _ => match output_commitment {
+    //          Some(_) => {
+    //            return Err(PlatformError::InputsError(error_location!()));
+    //          }
+    //          None => {
+    //            transfer_output_policies.push(None);
+    //            transfer_output_commitments.push(None);
+    //          }
+    //        },
+    //      }
+    //    }
+    //  }
+    //  dbg!(&transfer_input_policies);
+    //  verify_xfr_body(&mut ChaChaRng::from_seed([1u8; 32]),
+    //                  &xfr_body,
+    //                  &transfer_input_policies[..],
+    //                  &transfer_input_commitments[..],
+    //                  &transfer_output_policies[..],
+    //                  &transfer_output_commitments[..]).map_err(|e| {
+    //                                                     PlatformError::ZeiError(error_location!(),
+    //                                                                             e)
+    //                                                   })?;
+    //}
 
     // Debt swaps
     // (1) Fiat code must match debt asset memo
@@ -928,6 +932,23 @@ impl LedgerStatus {
       self.utxos.remove(&inp_sid);
     }
 
+    // Apply AIR updates
+    for (addr, data) in block.air_updates.drain() {
+      debug_assert!(self.air.get(&addr).is_none());
+      self.air.set(&addr, Some(data));
+    }
+
+    // Apply memo updates
+    for (code, memo) in block.memo_updates.drain() {
+      let mut asset = self.asset_types.get_mut(&code).unwrap();
+      (*asset).properties.memo = memo;
+    }
+
+    for (code, amount) in block.issuance_amounts.drain() {
+      let amt = self.issuance_amounts.entry(code).or_insert(0);
+      *amt += amount;
+    }
+
     // Add new UTXOs
     // Each transaction gets a TxnSID, and each of its unspent TXOs gets
     // a TxoSID. TxoSID assignments are based on the order TXOs appear in
@@ -983,9 +1004,6 @@ impl LedgerStatus {
       let mut def: BlockEffect = Default::default();
       def.txns = block.txns.clone();
       def.temp_sids = block.temp_sids.clone();
-      def.air_updates = block.air_updates.clone();
-      def.memo_updates = block.memo_updates.clone();
-      def.issuance_amounts = block.issuance_amounts.clone();
 
       def
     });
@@ -1151,25 +1169,6 @@ impl LedgerUpdate<ChaChaRng> for LedgerState {
                                         merkle_id: block_merkle_id });
     }
 
-    // Apply AIR updates
-    for (addr, data) in block.air_updates.drain() {
-      // Should we allow an address to get overwritten? At least during testing, yes.
-      self.air.set(&addr, Some(data));
-    }
-
-    // Apply memo updates
-    for (code, memo) in block.memo_updates.drain() {
-      let mut asset = self.status.asset_types.get_mut(&code).unwrap();
-      (*asset).properties.memo = memo;
-    }
-
-    for (code, amount) in block.issuance_amounts.drain() {
-      let amt = self.status.issuance_amounts.entry(code).or_insert(0);
-      *amt += amount;
-    }
-
-    // TODO(joe): asset tracing?
-
     debug_assert_eq!(block, Default::default());
 
     self.block_ctx = Some(block);
@@ -1259,23 +1258,6 @@ impl LedgerUpdate<ChaChaRng> for LedgerStateChecker {
     let block_id = self.0.blocks.len();
 
     let temp_sid_map = self.0.status.apply_block_effects(&mut block);
-
-    // Apply AIR updates
-    for (addr, data) in block.air_updates.drain() {
-      debug_assert!(self.0.air.get(&addr).is_none());
-      self.0.air.set(&addr, Some(data));
-    }
-
-    // Apply memo updates
-    for (code, memo) in block.memo_updates.drain() {
-      let mut asset = self.0.status.asset_types.get_mut(&code).unwrap();
-      (*asset).properties.memo = memo;
-    }
-
-    for (code, amount) in block.issuance_amounts.drain() {
-      let amt = self.0.status.issuance_amounts.entry(code).or_insert(0);
-      *amt += amount;
-    }
 
     {
       let mut tx_block = Vec::new();
@@ -1514,7 +1496,7 @@ impl LedgerState {
       Some(StateCommitmentData { bitmap: self.utxo_map.compute_checksum(),
                                  block_merkle: self.block_merkle.get_root_hash(),
                                  transaction_merkle_commitment: self.txn_merkle.get_root_hash(),
-                                 air_commitment: *self.air.merkle_root(),
+                                 air_commitment: *self.status.air.merkle_root(),
                                  txns_in_block_hash: self.status
                                                          .txns_in_block_hash
                                                          .as_ref()
@@ -1615,7 +1597,6 @@ impl LedgerState {
                                signing_key,
                                block_merkle: LedgerState::init_merkle_log(block_merkle_path,
                                                                           true)?,
-                               air: LedgerState::init_air_log(air_path, true)?,
                                txn_merkle: LedgerState::init_merkle_log(txn_merkle_path, true)?,
                                blocks: Vec::new(),
                                utxo_map: LedgerState::init_utxo_map(utxo_map_path, true)?,
@@ -1674,7 +1655,6 @@ impl LedgerState {
                                        signing_key,
                                        block_merkle:
                                          LedgerState::init_merkle_log(block_merkle_path, false)?,
-                                       air: LedgerState::init_air_log(air_path, true)?,
                                        txn_merkle:
                                          LedgerState::init_merkle_log(txn_merkle_path, false)?,
                                        blocks: Vec::new(),
@@ -1770,7 +1750,6 @@ impl LedgerState {
                     prng,
                     signing_key,
                     block_merkle: LedgerState::init_merkle_log(block_merkle_path, true)?,
-                    air: LedgerState::init_air_log(air_path, true)?,
                     txn_merkle: LedgerState::init_merkle_log(txn_merkle_path, true)?,
                     blocks: Vec::new(),
                     utxo_map: LedgerState::init_utxo_map(utxo_map_path, true)?,
@@ -2126,13 +2105,16 @@ impl ArchiveAccess for LedgerState {
         .cloned()
   }
 
-  fn get_air_data(&self, key: &str) -> AIRResult {
-    let merkle_root = self.air.merkle_root();
-    let (value, merkle_proof) = self.air.get_with_proof(key);
-    AIRResult { merkle_root: *merkle_root,
-                key: key.to_string(),
-                value: value.map(|s| s.to_string()),
-                merkle_proof }
+  fn get_air_data(&self, key: &str) -> AuthenticatedAIRResult {
+    let merkle_root = self.status.air.merkle_root();
+    let (value, merkle_proof) = self.status.air.get_with_proof(key);
+    let air_result = AIRResult { merkle_root: *merkle_root,
+                                 key: key.to_string(),
+                                 value: value.map(|s| s.to_string()),
+                                 merkle_proof };
+    AuthenticatedAIRResult { air_result,
+                             state_commitment_data: self.status.state_commitment_data.clone(),
+                             state_commitment: self.get_state_commitment().0 }
   }
 }
 
@@ -2240,7 +2222,8 @@ pub mod helpers {
                                                 &[AssetRecord::from_open_asset_record_no_asset_tracking(open_blind_asset_record(&ba, &owner_memo, &issuer_keys.get_sk_ref()).unwrap())],
                                                 vec![None],
                                                 &[ar.clone()],
-                                                vec![None],TransferType::Standard).unwrap()
+                                                vec![None],
+                                                TransferType::Standard).unwrap()
                          ).unwrap();
 
     transfer.sign(&issuer_keys);
@@ -2338,7 +2321,7 @@ mod tests {
                             previous_state_commitment: HashOf::new(&None),
                             transaction_merkle_commitment: ledger_state.txn_merkle
                                                                        .get_root_hash(),
-                            air_commitment: *ledger_state.air.merkle_root(),
+                            air_commitment: *ledger_state.status.air.merkle_root(),
                             kv_store: *ledger_state.status.custom_data.merkle_root(),
                             txo_count: 0 };
 
@@ -2915,7 +2898,7 @@ mod tests {
                                                     &cred_user_key.1,
                                                     &credential,
                                                     user_kp.get_pk_ref().as_bytes()).unwrap();
-    let air_assign_op = AIRAssign::new(AIRAssignBody::new(cred_user_key.0,
+    let air_assign_op = AIRAssign::new(AIRAssignBody::new(cred_user_key.0.clone(),
                                                           commitment,
                                                           cred_issuer_key.0,
                                                           pok).unwrap(),
@@ -2929,6 +2912,9 @@ mod tests {
                                          ledger.get_block_commit_count());
     let effect = TxnEffect::compute_effect(tx);
     assert!(effect.is_err());
+    let authenticated_air_res =
+      ledger.get_air_data(&serde_json::to_string(&cred_user_key.0).unwrap());
+    assert!(authenticated_air_res.is_valid(ledger.get_state_commitment().0));
   }
 
   #[test]
@@ -3247,7 +3233,6 @@ mod tests {
 
   #[test]
   pub fn test_cosignature_restrictions() {
-    //TODO (noah) use prop based testing here?
     // Simple
     assert!(!cosignature_transfer_succeeds(&[(false, 1), (false, 1)], 1, false));
     assert!(!cosignature_transfer_succeeds(&[(false, 1), (false, 1)], 1, true));

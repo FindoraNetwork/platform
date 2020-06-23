@@ -128,8 +128,13 @@ impl<LU: RestfulLedgerUpdate,
     self.ledger_client.get_asset_type(code)
   }
 
-  fn get_state_commitment(&self)
-                          -> Result<(HashOf<Option<StateCommitmentData>>, u64), PlatformError> {
+  #[allow(clippy::type_complexity)]
+  fn get_state_commitment(
+    &self)
+    -> Result<(HashOf<Option<StateCommitmentData>>,
+               u64,
+               SignatureOf<(HashOf<Option<StateCommitmentData>>, u64)>),
+              PlatformError> {
     self.ledger_client.get_state_commitment()
   }
 

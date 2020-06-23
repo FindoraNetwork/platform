@@ -155,7 +155,6 @@ impl<RNG, LU, TF> SubmissionServer<RNG, LU, TF>
     std::mem::swap(&mut self.block, &mut block);
     if let Some(block) = block {
       let mut ledger = self.committed_state.write().unwrap();
-      // TODO(noah): is this unwrap reasonable?
       let finalized_txns = ledger.finish_block(block)
                                  .expect("Ledger could not finish block");
       // Update status of all committed transactions
@@ -281,7 +280,6 @@ mod tests {
   use zei::xfr::sig::XfrKeyPair;
 
   #[test]
-  #[ignore]
   fn test_cache_transaction() {
     // Create a SubmissionServer
     let block_capacity = 8;
@@ -306,14 +304,14 @@ mod tests {
 
     txn_builder_0.add_operation_create_asset(&keypair,
                                              Some(asset_token),
-                                             AssetRules::default().set_traceable(true).clone(),
+                                             AssetRules::default(),
                                              &String::from("{}"),
                                              PolicyChoice::Fungible())
                  .unwrap();
 
     txn_builder_1.add_operation_create_asset(&keypair,
                                              None,
-                                             AssetRules::default().set_traceable(true).clone(),
+                                             AssetRules::default(),
                                              "test",
                                              PolicyChoice::Fungible())
                  .unwrap();

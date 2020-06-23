@@ -179,6 +179,12 @@ impl SolvencyAudit {
         .push((asset_type_to_scalar(&code.val), Scalar::from(rate)));
   }
 
+  // TODO (Keyao): Add verification that the assets used to generate the solvency proof are unspent
+  // Issue: https://bugtracker.findora.org/issues/88
+  //
+  // TODO (Keyao): Refactor the structure of storing and verifying the solvency proof
+  // Issue: https://bugtracker.findora.org/issues/89
+
   /// Proves the solvency and stores the proof.
   /// Must be used before `verify_solvency`.
   ///
@@ -562,11 +568,7 @@ mod tests {
     }
   }
 
-  // This test passes individually, but we ignore it since it occasionally fails with SubmissionServerError
-  // when run with other tests which also use the standalone ledger
-  // Redmine issue: #38
   #[test]
-  #[ignore]
   fn test_prove_solvency_fail() {
     // Start the standalone ledger
     let mut ledger_standalone = MockLedgerStandalone::new_mock(1);
@@ -615,11 +617,7 @@ mod tests {
     }
   }
 
-  // This test passes individually, but we ignore it since it occasionally fails with SubmissionServerError
-  // when run with other tests which also use the standalone ledger
-  // Redmine issue: #38
   #[test]
-  #[ignore]
   fn test_verify_solvency_fail() {
     // Start the standalone ledger
     let mut ledger_standalone = MockLedgerStandalone::new_mock(1);
@@ -660,11 +658,7 @@ mod tests {
     }
   }
 
-  // This test passes individually, but we ignore it since it occasionally fails with SubmissionServerError
-  // when run with other tests which also use the standalone ledger
-  // Redmine issue: #38
   #[test]
-  #[ignore]
   fn test_prove_and_verify_solvency_fail() {
     // Start the standalone ledger
     let mut ledger_standalone = MockLedgerStandalone::new_mock(1);
@@ -721,11 +715,7 @@ mod tests {
     }
   }
 
-  // This test passes individually, but we ignore it since it occasionally fails with SubmissionServerError
-  // when run with other tests which also use the standalone ledger
-  // Redmine issue: #38
   #[test]
-  #[ignore]
   fn test_prove_and_verify_solvency_simple_pass() {
     // Start the standalone ledger
     let mut ledger_standalone = MockLedgerStandalone::new_mock(1);
@@ -780,11 +770,7 @@ mod tests {
     audit.verify_solvency(&account).unwrap();
   }
 
-  // This test passes individually, but we ignore it since it occasionally fails with SubmissionServerError
-  // when run with other tests which also use the standalone ledger
-  // Redmine issue: #38
   #[test]
-  #[ignore]
   fn test_prove_and_verify_solvency_complex_pass() {
     // Start the standalone ledger
     let mut ledger_standalone = MockLedgerStandalone::new_mock(1);
@@ -842,11 +828,7 @@ mod tests {
     audit.verify_solvency(&account).unwrap();
   }
 
-  // This test passes individually, but we ignore it since it occasionally fails with SubmissionServerError
-  // when run with other tests which also use the standalone ledger
-  // Redmine issue: #38
   #[test]
-  #[ignore]
   fn test_update_asset_and_verify_solvency_mixed() {
     // Start the standalone ledger
     let mut ledger_standalone = MockLedgerStandalone::new_mock(1);
@@ -936,11 +918,7 @@ mod tests {
     audit.verify_solvency(&account).unwrap();
   }
 
-  // This test passes individually, but we ignore it since it occasionally fails with SubmissionServerError
-  // when run with other tests which also use the standalone ledger
-  // Redmine issue: #38
   #[test]
-  #[ignore]
   fn test_update_liability_and_verify_solvency_fail() {
     // Start the standalone ledger
     let mut ledger_standalone = MockLedgerStandalone::new_mock(1);

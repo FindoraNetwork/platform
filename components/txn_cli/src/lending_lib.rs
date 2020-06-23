@@ -17,10 +17,7 @@ use zei::api::anon_creds::ac_confidential_open_commitment;
 use zei::serialization::ZeiFromToBytes;
 use zei::xfr::asset_record::{open_blind_asset_record, AssetRecordType};
 use zei::xfr::sig::{XfrKeyPair, XfrPublicKey};
-use zei::xfr::structs::{
-  AssetRecordTemplate, AssetTracerMemo, AssetTracingPolicy, BlindAssetRecord, IdentityRevealPolicy,
-  OwnerMemo,
-};
+use zei::xfr::structs::{AssetRecordTemplate, AssetTracerMemo, BlindAssetRecord, OwnerMemo};
 
 /// Merges two asset records.
 /// # Arguments
@@ -31,16 +28,13 @@ use zei::xfr::structs::{
 /// * `blind_asset_record1`: blind asset record of the first record.
 /// * `blind_asset_record2`: blind asset record of the second record.
 /// * `token_code`: asset token code of the two records.
-/// * `tracing_policy`: asset tracing policy, optional.
-#[allow(clippy::too_many_arguments)]
 pub(crate) fn merge_records(key_pair: &XfrKeyPair,
                             seq_id: u64,
                             sid1: TxoRef,
                             sid2: TxoRef,
                             blind_asset_record1: (BlindAssetRecord, Option<OwnerMemo>),
                             blind_asset_record2: (BlindAssetRecord, Option<OwnerMemo>),
-                            token_code: AssetTypeCode,
-                            tracing_policy: Option<AssetTracingPolicy>)
+                            token_code: AssetTypeCode)
                             -> Result<TransactionBuilder, PlatformError> {
   let oar1 =
     open_blind_asset_record(&blind_asset_record1.0,
@@ -61,18 +55,10 @@ pub(crate) fn merge_records(key_pair: &XfrKeyPair,
   let amount2 = *oar2.get_amount();
 
   // Transfer Operation
-  let template = if let Some(policy) = tracing_policy {
-    AssetRecordTemplate::with_asset_tracking(amount1 + amount2,
-                                             token_code.val,
-                                             oar1.get_record_type(),
-                                             key_pair.get_pk(),
-                                             policy)
-  } else {
-    AssetRecordTemplate::with_no_asset_tracking(amount1 + amount2,
-                                                token_code.val,
-                                                oar1.get_record_type(),
-                                                key_pair.get_pk())
-  };
+  let template = AssetRecordTemplate::with_no_asset_tracking(amount1 + amount2,
+                                                             token_code.val,
+                                                             oar1.get_record_type(),
+                                                             key_pair.get_pk());
   let xfr_op = TransferOperationBuilder::new().add_input(sid1, oar1, None, None, amount1)?
                                               .add_input(sid2, oar2, None, None, amount2)?
                                               .add_output(&template, None, None, None)?
@@ -154,8 +140,7 @@ pub fn load_funds<T>(data_dir: &str,
                                     TxoRef::Absolute(sid_new),
                                     (blind_asset_record_pre, None), // no associated owner memo with blind asset record
                                     (blind_asset_record_new, None), // no associated owner memo with blind asset record
-                                    token_code,
-                                    None)?;
+                                    token_code)?;
 
     submit_and_get_sids(rest_client, txn_builder)?[0]
   } else {
@@ -301,13 +286,12 @@ pub fn fulfill_loan<T>(data_dir: &str,
                                   &user_pk,
                                   &attributes).unwrap();
   let wrapper_credential = WrapperCredential { attributes: attibutes_with_value_as_vec,
-                                               issuer_pub_key:
-                                                 credential_issuer_public_key.clone(),
+                                               issuer_pub_key: credential_issuer_public_key,
                                                signature };
   let ac_credential =
     wrapper_credential.to_ac_credential()
                       .or_else(|e| Err(PlatformError::ZeiError(error_location!(), e)))?;
-  let (identity_commitment, _, commitment_key) =
+  let (_, _, commitment_key) =
     credential_commit(&mut prng, &user_secret_key, &wrapper_credential, b"").unwrap();
 
   // Store the tracer memo to file
@@ -323,7 +307,7 @@ pub fn fulfill_loan<T>(data_dir: &str,
                                             Err(PlatformError::ZeiError(error_location!(), e))
                                           })?
                                           .ctexts;
-    let tracer_memo = AssetTracerMemo { enc_key: tracer_enc_keys.clone(),
+    let tracer_memo = AssetTracerMemo { enc_key: tracer_enc_keys,
                                         lock_amount: None,
                                         lock_asset_type: None,
                                         lock_attributes: Some(ciphertext) };
@@ -351,16 +335,7 @@ pub fn fulfill_loan<T>(data_dir: &str,
     fiat_code
   };
 
-  // Get tracing policies
-  let identity_policy = IdentityRevealPolicy { cred_issuer_pub_key:
-                                                 credential_issuer_public_key.get_ref().clone(),
-                                               reveal_map };
-  let debt_tracing_policy = AssetTracingPolicy { enc_keys: tracer_enc_keys,
-                                                 asset_tracking: false,
-                                                 identity_tracking: Some(identity_policy) };
-
   // Issue and transfer fiat token
-  let credential_record = Some((&user_secret_key, &ac_credential, &commitment_key));
   let fiat_txn_file = &format!("{}/{}", data_dir, "fiat_txn_file");
   let txn_builder =
     issue_and_transfer_asset(data_dir,
@@ -410,21 +385,20 @@ pub fn fulfill_loan<T>(data_dir: &str,
                              amount,
                              debt_code,
                              AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
-                             credential_record,
+                             None,
                              Some(debt_txn_file),
-                             Some(debt_tracing_policy.clone()),
-                             Some(identity_commitment.clone()))?;
+                             None,
+                             None)?;
   let debt_sid = submit_and_get_sids(rest_client, txn_builder)?[0];
   println!("Debt sid: {}", debt_sid.0);
   let debt_open_asset_record = load_open_asset_record_from_file(debt_txn_file, borrower_key_pair)?;
 
   // Initiate loan
   let lender_template =
-      AssetRecordTemplate::with_asset_tracking(amount,
-                                               debt_code.val,
-                                               AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
-                                               lender_key_pair.get_pk(),
-                                               debt_tracing_policy.clone());
+      AssetRecordTemplate::with_no_asset_tracking(amount,
+                                                  debt_code.val,
+                                                  AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
+                                                  lender_key_pair.get_pk());
   let borrower_template =
       AssetRecordTemplate::with_no_asset_tracking(amount,
                                                   fiat_code.val,
@@ -440,10 +414,7 @@ pub fn fulfill_loan<T>(data_dir: &str,
                                                          None,
                                                          None,
                                                          amount)?
-                                              .add_output(&lender_template,
-                                                          Some(debt_tracing_policy),
-                                                          Some(identity_commitment),
-                                                          credential_record)?
+                                              .add_output(&lender_template, None, None, None)?
                                               .add_output(&borrower_template, None, None, None)?
                                               .create(TransferType::Standard)?
                                               .sign(lender_key_pair)?
@@ -465,8 +436,7 @@ pub fn fulfill_loan<T>(data_dir: &str,
                                     TxoRef::Absolute(sids_new[1]),
                                     (blind_asset_record_pre, None),
                                     (blind_asset_record_new, None),
-                                    fiat_code,
-                                    None)?;
+                                    fiat_code)?;
     submit_and_get_sids(rest_client, txn_builder)?[0]
   } else {
     sids_new[1]
@@ -679,15 +649,10 @@ mod tests {
                           TxoRef::Absolute(TxoSID(2)),
                           (bar1, memo1),
                           (bar2, memo2),
-                          code,
-                          None).is_ok());
+                          code).is_ok());
   }
 
   #[test]
-  #[ignore]
-  // Redmine issue: #38. Do NOT reenable this test if it fails
-  // TODO (keyao)
-  // Test funds loading, loan request, fulfilling and repayment
   fn test_request_fulfill_and_pay_loan() {
     let mut ledger_standalone = MockLedgerStandalone::new_mock(1);
 
@@ -696,7 +661,7 @@ mod tests {
     let data_dir = tmp_dir.path().to_str().unwrap();
 
     let funds_amount = 1000;
-    let (_, seq_id) = ledger_standalone.get_state_commitment().unwrap();
+    let (_, seq_id, _) = ledger_standalone.get_state_commitment().unwrap();
     load_funds(data_dir, seq_id, 0, 0, funds_amount, &mut ledger_standalone).unwrap();
     let data = load_data(data_dir).unwrap();
 
