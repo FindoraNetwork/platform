@@ -352,6 +352,22 @@ impl TransactionBuilder {
     Ok(self)
   }
 
+  /// Adds an `UpdateMemo` opration to a WasmTrasnactionBuilder with the given memo
+  pub fn add_operation_update_memo(mut self,
+                                   auth_key_pair: &XfrKeyPair,
+                                   code: String,
+                                   new_memo: String)
+                                   -> Result<TransactionBuilder, JsValue> {
+    // First, decode the asset code
+    let code = AssetTypeCode::new_from_base64(&code).map_err(|_| {
+                 JsValue::from_str(&format!("Could not deserialize asset type code: {}", code))
+               })?;
+
+    self.get_builder_mut()
+        .add_operation_update_memo(auth_key_pair, code, &new_memo);
+    Ok(self)
+  }
+
   /// Adds a serialized operation to a WasmTransactionBuilder instance
   /// @param {string} op -  a JSON-serialized operation (i.e. a transfer operation).
   /// @see {@link WasmTransferOperationBuilder} for details on constructing a transfer operation.
