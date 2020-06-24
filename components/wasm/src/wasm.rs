@@ -352,7 +352,7 @@ impl TransactionBuilder {
     Ok(self)
   }
 
-  /// Adds an `UpdateMemo` opration to a WasmTrasnactionBuilder with the given memo
+  /// Adds an `UpdateMemo` operation to a WasmTransactionBuilder with the given memo
   pub fn add_operation_update_memo(mut self,
                                    auth_key_pair: &XfrKeyPair,
                                    code: String,
