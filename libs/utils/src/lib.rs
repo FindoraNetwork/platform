@@ -9,6 +9,8 @@ use std::path::PathBuf;
 use zei::errors::ZeiError;
 use zei::xfr::sig::{XfrKeyPair, XfrPublicKey, XfrSignature};
 
+pub const TRANSACTION_WINDOW_WIDTH: u64 = 100;
+
 pub fn string_of_type<T>(_: &T) -> String {
   std::any::type_name::<T>().to_string()
 }
@@ -33,10 +35,12 @@ pub fn urlencode(input: &str) -> String {
 const PROTOCOL: &str = "http";
 const SERVER_HOST: &str = "localhost";
 
-/// Port for querying values.
-pub const QUERY_PORT: &str = "8668";
+/// Query server port
+pub const QUERY_PORT: usize = 8667;
 /// Port for submitting transactions.
-pub const SUBMIT_PORT: &str = "8669";
+pub const SUBMIT_PORT: usize = 8669;
+/// Ledger port
+pub const LEDGER_PORT: usize = 8668;
 
 /// Sets the protocol and host.
 ///
@@ -46,6 +50,24 @@ pub const SUBMIT_PORT: &str = "8669";
 pub fn protocol_host() -> (&'static str, &'static str) {
   (std::option_env!("PROTOCOL").unwrap_or(PROTOCOL),
    std::option_env!("SERVER_HOST").unwrap_or(SERVER_HOST))
+}
+#[cfg(not(target_arch = "wasm32"))]
+pub fn actix_post_request<T: Serialize>(client: &reqwest::Client,
+                                        query: &str,
+                                        body: Option<T>)
+                                        -> Result<String, reqwest::Error> {
+  let mut req = client.post(query);
+
+  if let Some(body) = body {
+    req = req.json(&body);
+  }
+
+  Ok(req.send()?.error_for_status()?.text()?)
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+pub fn actix_get_request(client: &reqwest::Client, query: &str) -> Result<String, reqwest::Error> {
+  Ok(client.get(query).send()?.error_for_status()?.text()?)
 }
 
 pub fn fresh_tmp_dir() -> PathBuf {
@@ -403,6 +425,23 @@ impl<'a, T> Deserialize<'a> for SignatureOfBytes<T> {
     // NOTE: doesn't guarantee that there *is* a T that this is a signature for
     XfrSignature::deserialize(deserializer).map(|sig| Self { sig,
                                                              phantom: PhantomData })
+  }
+}
+
+pub trait NetworkRoute {
+  fn route(&self) -> String;
+
+  fn with_arg(&self, arg: &dyn std::fmt::Display) -> String {
+    let mut endpoint = self.route();
+    endpoint += &("/".to_owned() + &arg.to_string());
+    endpoint
+  }
+
+  // e.g. SubmissionRoutes::TxnStatus.with_arg_template("str") = "/submit_transaction/{str}"
+  fn with_arg_template(&self, arg: &str) -> String {
+    let mut endpoint = self.route();
+    endpoint += &("/".to_owned() + &"{".to_owned() + arg + &"}".to_owned());
+    endpoint
   }
 }
 

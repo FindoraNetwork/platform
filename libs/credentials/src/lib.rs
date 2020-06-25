@@ -10,6 +10,7 @@ use zei::api::anon_creds::{
 };
 use zei::errors::ZeiError;
 
+/// Secret key of a credential issuer.
 #[wasm_bindgen]
 #[derive(Clone, Serialize, Deserialize, Debug, Eq, PartialEq)]
 pub struct CredIssuerSecretKey {
@@ -20,6 +21,7 @@ pub struct CredIssuerSecretKey {
 
 #[wasm_bindgen]
 #[derive(Clone, Serialize, Deserialize, Debug, Eq, PartialEq)]
+/// Public key of a credential issuer.
 pub struct CredIssuerPublicKey {
   ac_pub_key: ACIssuerPublicKey,
   map: LinearMap<String, ((usize, usize), usize)>, // key: (index, len in u32), len in bytes
@@ -32,10 +34,12 @@ pub type CredCommitment = ACCommitment;
 
 #[wasm_bindgen]
 #[derive(Clone, Serialize, Deserialize, Debug, Eq, PartialEq)]
+/// Public key of a credential user.
 pub struct CredUserPublicKey(ACUserPublicKey);
 
 #[wasm_bindgen]
 #[derive(Clone, Serialize, Deserialize, Debug, Eq, PartialEq)]
+/// Secret key of a credential user.
 pub struct CredUserSecretKey(ACUserSecretKey);
 
 impl CredIssuerPublicKey {
@@ -148,6 +152,7 @@ pub fn credential_sign<R: CryptoRng + RngCore>(prng: &mut R,
     if attr_value.len() != *byte_len {
       return Err(ZeiError::ParameterError);
     }
+
     let u32_attrs = u8_slice_to_u32_vec(attr_value, *u32_len); // attr_to_u32_array(*attr, *len);
     attrs[*index..*index + *u32_len].clone_from_slice(&u32_attrs);
   }

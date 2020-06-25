@@ -10,6 +10,7 @@ edition = "2018"
 air = { path = "../../libs/ads/air" }
 clap = "2.33.0"
 credentials = { path = "../../libs/credentials" }
+cryptohash = { path = "../../libs/cryptohash" }
 flexi_logger = "0.15.2"
 ledger = { path = "../../ledger" }
 log = "0.4.8"

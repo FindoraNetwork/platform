@@ -12,7 +12,7 @@ use zei::xfr::structs::asset_type_to_scalar;
 pub type WhiteListedCode = Scalar;
 
 /// Asset whitelist
-#[derive(Default, Deserialize, Serialize)]
+#[derive(Default, Deserialize, Serialize, Debug)]
 pub struct Whitelist {
   /// List of whitelisted asset codes
   // TODO (Keyao): Redmine issue #45: Allow storing whitelist members in a Merkle tree
@@ -55,29 +55,20 @@ impl Whitelist {
 mod tests {
   use super::*;
   use ledger::data_model::AssetRules;
-  use ledger_standalone::LedgerStandalone;
+  use network::LedgerStandalone;
   use rand_chacha::ChaChaRng;
   use rand_core::SeedableRng;
-  use txn_cli::txn_lib::define_issue_transfer_and_get_utxo_and_blinds;
-  use txn_cli::txn_lib::query_utxo_and_get_type_commitment;
+  use txn_cli::txn_lib::{
+    define_issue_transfer_and_get_utxo_and_blinds, query_utxo_and_get_type_commitment,
+  };
   use zei::xfr::asset_record::AssetRecordType;
   use zei::xfr::sig::XfrKeyPair;
 
-  const PROTOCOL: &str = "http";
-  const HOST: &str = "localhost";
-
-  // Ignoring this test due to race conditions.
-  // When running it together with test_prove_and_verify_membership, test_prove_and_verify_membership occasionally fails with SubmissionServerError.
-  // test_prove_and_verify_membership is a positive test while this test is expected to fail, so ignoring this one.
-  // GitHub issue: #335
-  // Redmine issue: #38
   #[should_panic(expected = "assertion failed: com_elem == *elem")]
   #[test]
-  #[ignore]
   fn test_prove_membership_incorrect_index() {
     // Start the standalone ledger
-    let ledger_standalone = &LedgerStandalone::new();
-    ledger_standalone.poll_until_ready().unwrap();
+    let mut ledger_standalone = LedgerStandalone::new_mock(1);
 
     // Generate asset codes and add codes to the whitelist
     let codes = vec![AssetTypeCode::gen_random(), AssetTypeCode::gen_random()];
@@ -94,9 +85,9 @@ mod tests {
                                                                       codes[1],
                                                                       AssetRules::default(),
                                                                       AssetRecordType::NonConfidentialAmount_ConfidentialAssetType,
-                                                                      ledger_standalone,
+                                                                      &mut ledger_standalone,
                                                                       prng).unwrap();
-    let commitment_1 = query_utxo_and_get_type_commitment(utxo_1, PROTOCOL, HOST).unwrap();
+    let commitment_1 = query_utxo_and_get_type_commitment(utxo_1, &ledger_standalone).unwrap();
 
     // Prove the whitelist memberships of the second asset with the incorrect index
     // Should panic
@@ -104,18 +95,11 @@ mod tests {
              .unwrap();
   }
 
-  // Ignoring this test due to race conditions.
-  // When running it together with test_prove_and_verify_membership, test_prove_and_verify_membership occasionally fails with SubmissionServerError.
-  // test_prove_and_verify_membership is a positive test while this test is expected to fail, so ignoring this one.
-  // GitHub issue: #335
-  // Redmine issue: #38
   #[should_panic(expected = "assertion failed: com_elem == *elem")]
   #[test]
-  #[ignore]
   fn test_prove_membership_incorrect_utxo() {
     // Start the standalone ledger
-    let ledger_standalone = &LedgerStandalone::new();
-    ledger_standalone.poll_until_ready().unwrap();
+    let mut ledger_standalone = LedgerStandalone::new_mock(1);
 
     // Generate asset codes and add codes to the whitelist
     let codes = vec![AssetTypeCode::gen_random(), AssetTypeCode::gen_random()];
@@ -133,16 +117,16 @@ mod tests {
     codes[0],
     AssetRules::default(),
     AssetRecordType::NonConfidentialAmount_ConfidentialAssetType,
-    ledger_standalone,
+    &mut ledger_standalone,
     prng).unwrap();
-    let commitment_0 = query_utxo_and_get_type_commitment(utxo_0, PROTOCOL, HOST).unwrap();
+    let commitment_0 = query_utxo_and_get_type_commitment(utxo_0, &ledger_standalone).unwrap();
     let (_, _, blind_1) = define_issue_transfer_and_get_utxo_and_blinds(&XfrKeyPair::generate(&mut ChaChaRng::from_entropy()),
                                                                       &XfrKeyPair::generate(&mut ChaChaRng::from_entropy()),
                                                                       10,
                                                                       codes[1],
                                                                       AssetRules::default(),
                                                                       AssetRecordType::NonConfidentialAmount_ConfidentialAssetType,
-                                                                      ledger_standalone,
+                                                                      &mut ledger_standalone,
                                                                       prng).unwrap();
 
     // Prove the whitelist memberships of the second asset with the incorrect UTXO SID
@@ -151,18 +135,11 @@ mod tests {
              .unwrap();
   }
 
-  // Ignoring this test due to race conditions.
-  // When running it together with test_prove_and_verify_membership, test_prove_and_verify_membership occasionally fails with SubmissionServerError.
-  // test_prove_and_verify_membership is a positive test while this test is expected to fail, so ignoring this one.
-  // GitHub issue: #335
-  // Redmine issue: #38
   #[should_panic(expected = "assertion failed: com_elem == *elem")]
   #[test]
-  #[ignore]
   fn test_prove_membership_incorrect_blind() {
     // Start the standalone ledger
-    let ledger_standalone = &LedgerStandalone::new();
-    ledger_standalone.poll_until_ready().unwrap();
+    let mut ledger_standalone = LedgerStandalone::new_mock(1);
 
     // Generate asset codes and add codes to the whitelist
     let codes = vec![AssetTypeCode::gen_random(), AssetTypeCode::gen_random()];
@@ -180,7 +157,7 @@ mod tests {
     codes[0],
     AssetRules::default(),
     AssetRecordType::NonConfidentialAmount_ConfidentialAssetType,
-    ledger_standalone,
+    &mut ledger_standalone,
     prng).unwrap();
     let (utxo_1, _, _) = define_issue_transfer_and_get_utxo_and_blinds(&XfrKeyPair::generate(&mut ChaChaRng::from_entropy()),
                                                                       &XfrKeyPair::generate(&mut ChaChaRng::from_entropy()),
@@ -188,9 +165,9 @@ mod tests {
                                                                       codes[1],
                                                                       AssetRules::default(),
                                                                       AssetRecordType::NonConfidentialAmount_ConfidentialAssetType,
-                                                                      ledger_standalone,
+                                                                      &mut ledger_standalone,
                                                                       prng).unwrap();
-    let commitment_1 = query_utxo_and_get_type_commitment(utxo_1, PROTOCOL, HOST).unwrap();
+    let commitment_1 = query_utxo_and_get_type_commitment(utxo_1, &ledger_standalone).unwrap();
 
     // Prove the whitelist memberships of the second asset with the incorrect UTXO SID
     // Should panic
@@ -201,8 +178,7 @@ mod tests {
   #[test]
   fn test_prove_and_verify_membership() {
     // Start the standalone ledger
-    let ledger_standalone = &LedgerStandalone::new();
-    ledger_standalone.poll_until_ready().unwrap();
+    let mut ledger_standalone = LedgerStandalone::new_mock(1);
 
     // Generate key pair and asset codes
     let issuer_key_pair = XfrKeyPair::generate(&mut ChaChaRng::from_entropy());
@@ -229,9 +205,9 @@ mod tests {
                                                                      codes[1],
                                                                      AssetRules::default(),
                                                                      AssetRecordType::NonConfidentialAmount_ConfidentialAssetType,
-                                                                     ledger_standalone,
+                                                                     &mut ledger_standalone,
                                                                      prng).unwrap();
-    let commitment_1 = query_utxo_and_get_type_commitment(utxo_1, PROTOCOL, HOST).unwrap();
+    let commitment_1 = query_utxo_and_get_type_commitment(utxo_1, &ledger_standalone).unwrap();
 
     let (utxo_2, _, blind_2) = define_issue_transfer_and_get_utxo_and_blinds(&issuer_key_pair,
                                                                       &recipient_key_pair,
@@ -239,9 +215,9 @@ mod tests {
                                                                       codes[2],
                                                                       AssetRules::default(),
                                                                       AssetRecordType::NonConfidentialAmount_ConfidentialAssetType,
-                                                                      ledger_standalone,
+                                                                      &mut ledger_standalone,
                                                                       prng).unwrap();
-    let commitment_2 = query_utxo_and_get_type_commitment(utxo_2, PROTOCOL, HOST).unwrap();
+    let commitment_2 = query_utxo_and_get_type_commitment(utxo_2, &ledger_standalone).unwrap();
 
     // Prove the whitelist memberships of the second and third assets
     let proof_1 = whitelist.prove_membership(1, commitment_1, blind_1);

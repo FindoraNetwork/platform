@@ -4,14 +4,15 @@ use credentials::{
   credential_commit, credential_issuer_key_gen, credential_sign, credential_user_key_gen,
   CredCommitment, CredCommitmentKey, CredIssuerPublicKey, CredIssuerSecretKey, Credential,
 };
+use cryptohash::sha256::Digest as BitDigest;
 use ledger::data_model::Transaction;
 use rand_chacha::ChaChaRng;
 use rand_core::SeedableRng;
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
 use txn_builder::{BuildsTransactions, TransactionBuilder};
-use utils::{protocol_host, SUBMIT_PORT};
-use zei::xfr::sig::XfrKeyPair;
+use utils::{protocol_host, LEDGER_PORT, SUBMIT_PORT};
+use zei::xfr::sig::{XfrKeyPair, XfrSignature};
 
 /// Represents a file that can be searched
 
@@ -67,7 +68,7 @@ impl AIR {
   }
 }
 
-fn run_txns(n: usize, batch_size: usize) -> Result<(), Box<dyn std::error::Error>> {
+fn run_txns(seq_id: u64, n: usize, batch_size: usize) -> Result<(), Box<dyn std::error::Error>> {
   let mut air = AIR::new();
   let client = reqwest::blocking::Client::new();
   let (protocol, host) = protocol_host();
@@ -75,7 +76,7 @@ fn run_txns(n: usize, batch_size: usize) -> Result<(), Box<dyn std::error::Error
   let mut max: Duration = Duration::new(0, 0);
   let mut total: Duration = Duration::new(0, 0);
   for i in 0..n {
-    let mut builder = TransactionBuilder::default();
+    let mut builder = TransactionBuilder::from_seq_id(seq_id);
     air.add_assign_txn(&mut builder);
     let txn = builder.transaction();
     let instant = Instant::now();
@@ -126,5 +127,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                      .map_or(1, |s| s.parse::<usize>().unwrap());
   let batch_size = args.value_of("batch_size")
                        .map_or(1, |s| s.parse::<usize>().unwrap());
-  run_txns(num_txns, batch_size)
+  let (protocol, host) = protocol_host();
+  let client = reqwest::blocking::Client::new();
+  let resp_gs = client.get(&format!("{}://{}:{}/global_state", protocol, host, LEDGER_PORT))
+                      .send()?;
+  let (_comm, seq_id, _sig): (BitDigest, u64, XfrSignature) =
+    serde_json::from_str(&resp_gs.text()?[..]).unwrap();
+  run_txns(seq_id, num_txns, batch_size)
 }

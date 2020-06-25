@@ -4,6 +4,8 @@ use curve25519_dalek::scalar::Scalar;
 use ledger::data_model::errors::PlatformError;
 use ledger::data_model::AssetTypeCode;
 use ledger::{des_fail, error_location};
+use ledger_api_service::RestfulLedgerAccess;
+use network::{HttpStandaloneConfig, LedgerStandalone};
 use serde::{Deserialize, Serialize};
 use solvency::*;
 use std::fs;
@@ -11,10 +13,6 @@ use zei::errors::ZeiError;
 
 /// Path to the data file.
 const DATA_FILE: &str = "solvency_data.json";
-// TODO (Keyao): Redmine issue #43: Support switching protocol and host in solvency_cli
-// We should support https://testnet.findora.org as well.
-const PROTOCOL: &str = "http";
-const HOST: &str = "localhost";
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 /// Information of assets, liabilities and conversion rates.
@@ -71,7 +69,9 @@ fn parse_to_u64(val_str: &str) -> Result<u64, PlatformError> {
 }
 
 /// Processes input commands and arguments.
-fn process_inputs(inputs: clap::ArgMatches) -> Result<(), PlatformError> {
+fn process_inputs<T: RestfulLedgerAccess>(inputs: clap::ArgMatches,
+                                          rest_client: &T)
+                                          -> Result<(), PlatformError> {
   let dir = if let Some(d) = inputs.value_of("dir") {
     d
   } else {
@@ -136,8 +136,7 @@ fn process_inputs(inputs: clap::ArgMatches) -> Result<(), PlatformError> {
                                                code,
                                                blinds,
                                                utxo,
-                                               PROTOCOL,
-                                               HOST)?;
+                                               rest_client)?;
       store_data_to_file(dir, data)
     }
     ("prove_and_verify_solvency", Some(prove_and_verify_matches)) => {
@@ -199,8 +198,8 @@ fn process_inputs(inputs: clap::ArgMatches) -> Result<(), PlatformError> {
   }
 }
 
-fn main() -> Result<(), PlatformError> {
-  let inputs = App::new("Solvency Proof").version("0.1.0").about("Copyright 2020 © Findora. All rights reserved.")
+fn get_cli_app<'a, 'b>() -> App<'a, 'b> {
+  App::new("Solvency Proof").version("0.1.0").about("Copyright 2020 © Findora. All rights reserved.")
     .arg(Arg::with_name("dir")
       .short("d")
       .long("dir")
@@ -208,6 +207,9 @@ fn main() -> Result<(), PlatformError> {
       .required(true)
       .takes_value(true)
       .help("Directory to store data"))
+    .arg(Arg::with_name("local")
+      .long("local")
+      .help("If local flag is specified, transactions will be submitted to a local ledger"))
     .subcommand(SubCommand::with_name("set_rate")
       .arg(Arg::with_name("code")
         .short("c")
@@ -274,37 +276,59 @@ fn main() -> Result<(), PlatformError> {
         .long("hidden_liabilities_blinds")
         .takes_value(true)
         .help("Serialized blinding values of liability amounts and codes.")))
-    .get_matches();
+}
 
-  process_inputs(inputs)
+fn main() -> Result<(), PlatformError> {
+  let app = get_cli_app();
+  let inputs = app.get_matches();
+  let local = inputs.value_of("local").is_some();
+  let config = {
+    if local {
+      HttpStandaloneConfig::local()
+    } else {
+      HttpStandaloneConfig::testnet()
+    }
+  };
+
+  let rest_client = LedgerStandalone::new_http(&config);
+  process_inputs(inputs, &rest_client)
 }
 
 #[cfg(test)]
 mod tests {
   use super::*;
   use ledger::data_model::AssetRules;
-  use ledger_standalone::LedgerStandalone;
+  use network::MockLedgerStandalone;
   use rand_chacha::ChaChaRng;
   use rand_core::{CryptoRng, RngCore, SeedableRng};
-  use std::io::{self, Write};
-  use std::process::{Command, Output};
   use tempfile::tempdir;
   use txn_cli::txn_lib::{define_and_submit, issue_transfer_and_get_utxo_and_blinds};
   use zei::xfr::asset_record::AssetRecordType;
   use zei::xfr::sig::XfrKeyPair;
 
-  #[cfg(debug_assertions)]
-  const COMMAND: &str = "../../target/debug/solvency_cli";
-  #[cfg(not(debug_assertions))]
-  const COMMAND: &str = "../../target/release/solvency_cli";
+  fn submit_command(cmd_vec: Vec<&str>,
+                    rest_client: &mut MockLedgerStandalone)
+                    -> Result<(), PlatformError> {
+    let app = get_cli_app();
+    let inputs = app.get_matches_from_safe(cmd_vec).unwrap();
+    process_inputs(inputs, rest_client)
+  }
 
   // Command to set asset conversion rates
-  fn set_rate_cmd(dir: &str, code: &str, rate: &str) -> io::Result<Output> {
-    Command::new(COMMAND).args(&["--dir", dir])
-                         .arg("set_rate")
-                         .args(&["--code", code])
-                         .args(&["--rate", rate])
-                         .output()
+  fn set_rate_cmd(dir: &str,
+                  code: &str,
+                  rate: &str,
+                  rest_client: &mut MockLedgerStandalone)
+                  -> Result<(), PlatformError> {
+    submit_command(vec!["Solvency Proof",
+                        "--dir",
+                        dir,
+                        "set_rate",
+                        "--code",
+                        code,
+                        "--rate",
+                        rate],
+                   rest_client)
   }
 
   // Issue and transfer assets, and get the serialized UTXOs and blinds
@@ -312,7 +336,7 @@ mod tests {
                                                      recipient_key_pair: &XfrKeyPair,
                                                      codes: Vec<AssetTypeCode>,
                                                      prng: &mut R,
-                                                     ledger_standalone: &LedgerStandalone)
+                                                     ledger_standalone: &mut MockLedgerStandalone)
                                                      -> (Vec<String>, Vec<String>) {
     let mut utxos = Vec::new();
     let mut blinds = Vec::new();
@@ -392,16 +416,25 @@ mod tests {
                                              amount: &str,
                                              code: &str,
                                              blinds: &str,
-                                             utxo: &str)
-                                             -> io::Result<Output> {
-    Command::new(COMMAND).args(&["--dir", dir])
-                         .arg("add_asset_or_liability")
-                         .args(&["--type", amount_type])
-                         .args(&["--amount", amount])
-                         .args(&["--code", code])
-                         .args(&["--blinds", blinds])
-                         .args(&["--utxo", utxo])
-                         .output()
+                                             utxo: &str,
+                                             rest_client: &MockLedgerStandalone)
+                                             -> Result<(), PlatformError> {
+    let app = get_cli_app();
+    let inputs = app.get_matches_from(vec!["Solvency Proof",
+                                           "--dir",
+                                           dir,
+                                           "add_asset_or_liability",
+                                           "--type",
+                                           amount_type,
+                                           "--amount",
+                                           amount,
+                                           "--code",
+                                           code,
+                                           "--blinds",
+                                           blinds,
+                                           "--utxo",
+                                           utxo]);
+    process_inputs(inputs, rest_client)
   }
 
   // Command to add a nonconfidential asset or liability
@@ -409,15 +442,23 @@ mod tests {
                                                 amount_type: &str,
                                                 amount: &str,
                                                 code: &str,
-                                                utxo: &str)
-                                                -> io::Result<Output> {
-    Command::new(COMMAND).args(&["--dir", dir])
-                         .arg("add_asset_or_liability")
-                         .args(&["--type", amount_type])
-                         .args(&["--amount", amount])
-                         .args(&["--code", code])
-                         .args(&["--utxo", utxo])
-                         .output()
+                                                utxo: &str,
+                                                rest_client: &MockLedgerStandalone)
+                                                -> Result<(), PlatformError> {
+    let app = get_cli_app();
+    let inputs = app.get_matches_from(vec!["Solvency Proof",
+                                           "--dir",
+                                           dir,
+                                           "add_asset_or_liability",
+                                           "--type",
+                                           amount_type,
+                                           "--amount",
+                                           amount,
+                                           "--code",
+                                           code,
+                                           "--utxo",
+                                           utxo]);
+    process_inputs(inputs, rest_client)
   }
 
   // Command to prove and verify solvency
@@ -425,35 +466,37 @@ mod tests {
                                    hidden_assets: Vec<AmountAndCodeScalar>,
                                    hidden_assets_blinds: Vec<AmountAndCodeBlinds>,
                                    hidden_liabilities: Vec<AmountAndCodeScalar>,
-                                   hidden_liabilities_blinds: Vec<AmountAndCodeBlinds>)
-                                   -> io::Result<Output> {
+                                   hidden_liabilities_blinds: Vec<AmountAndCodeBlinds>,
+                                   rest_client: &mut MockLedgerStandalone)
+                                   -> Result<(), PlatformError> {
     let hidden_assets_str = serde_json::to_string(&hidden_assets).unwrap();
     let hidden_assets_blinds_str = serde_json::to_string(&hidden_assets_blinds).unwrap();
     let hidden_liabilities_str = serde_json::to_string(&hidden_liabilities).unwrap();
     let hidden_liabilities_blinds_str = serde_json::to_string(&hidden_liabilities_blinds).unwrap();
 
-    Command::new(COMMAND).args(&["--dir", dir])
-                         .arg("prove_and_verify_solvency")
-                         .args(&["--hidden_assets", &hidden_assets_str])
-                         .args(&["--hidden_assets_blinds", &hidden_assets_blinds_str])
-                         .args(&["--hidden_liabilities", &hidden_liabilities_str])
-                         .args(&["--hidden_liabilities_blinds",
-                                 &hidden_liabilities_blinds_str])
-                         .output()
+    let args = vec!["Solvency Proof",
+                    "--dir",
+                    dir,
+                    "prove_and_verify_solvency",
+                    "--hidden_assets",
+                    &hidden_assets_str,
+                    "--hidden_assets_blinds",
+                    &hidden_assets_blinds_str,
+                    "--hidden_liabilities",
+                    &hidden_liabilities_str,
+                    "--hidden_liabilities_blinds",
+                    &hidden_liabilities_blinds_str];
+
+    submit_command(args, rest_client)
   }
 
-  // This test passes individually, but we ignore it since it occasionally fails with SubmissionServerError
-  // when run with other tests which also use the standalone ledger
-  // Redmine issue: #38
   #[test]
-  #[ignore]
   fn test_cmd() {
     let tmp_dir = tempdir().unwrap();
     let dir = tmp_dir.path().to_str().unwrap();
 
     // Start the standalone ledger
-    let ledger_standalone = &LedgerStandalone::new();
-    ledger_standalone.poll_until_ready().unwrap();
+    let mut ledger_standalone = MockLedgerStandalone::new_mock(1);
 
     // Generate asset codes and key pairs
     let codes = vec![AssetTypeCode::gen_random(),
@@ -467,7 +510,7 @@ mod tests {
       define_and_submit(&issuer_key_pair,
                         *code,
                         AssetRules::default(),
-                        ledger_standalone).unwrap();
+                        &mut ledger_standalone).unwrap();
     }
     let code_0 = &codes[0].to_base64();
     let code_1 = &codes[1].to_base64();
@@ -476,23 +519,12 @@ mod tests {
                                                   &recipient_key_pair,
                                                   codes.clone(),
                                                   &mut ChaChaRng::from_entropy(),
-                                                  ledger_standalone);
+                                                  &mut ledger_standalone);
 
     // Set asset conversion rates
-    let output = set_rate_cmd(dir, code_0, "1").expect("Failed to set conversion rate.");
-    io::stdout().write_all(&output.stdout).unwrap();
-    io::stdout().write_all(&output.stderr).unwrap();
-    assert!(output.status.success());
-
-    let output = set_rate_cmd(dir, code_1, "100").expect("Failed to set conversion rate.");
-    io::stdout().write_all(&output.stdout).unwrap();
-    io::stdout().write_all(&output.stderr).unwrap();
-    assert!(output.status.success());
-
-    let output = set_rate_cmd(dir, code_2, "1").expect("Failed to set conversion rate.");
-    io::stdout().write_all(&output.stdout).unwrap();
-    io::stdout().write_all(&output.stderr).unwrap();
-    assert!(output.status.success());
+    set_rate_cmd(dir, code_0, "1", &mut ledger_standalone).expect("Failed to set conversion rate.");
+    set_rate_cmd(dir, code_1, "100", &mut ledger_standalone).expect("Failed to set conversion rate.");
+    set_rate_cmd(dir, code_2, "1", &mut ledger_standalone).expect("Failed to set conversion rate.");
 
     // Add assets and liabilities such that total asset amount > total liabiliity amount
     let hidden_assets: &mut Vec<AmountAndCodeScalar> = &mut Vec::new();
@@ -500,45 +532,26 @@ mod tests {
     let hidden_liabilities: &mut Vec<AmountAndCodeScalar> = &mut Vec::new();
     let hidden_liabilities_blinds: &mut Vec<AmountAndCodeBlinds> = &mut Vec::new();
 
-    let output =
-    add_nonconfidential_asset_or_liability_cmd(dir, "asset", "10", code_0, &utxos[0]).expect("Failed to add public asset.");
-    io::stdout().write_all(&output.stdout).unwrap();
-    io::stdout().write_all(&output.stderr).unwrap();
-    assert!(output.status.success());
+    add_nonconfidential_asset_or_liability_cmd(dir, "asset", "10", code_0, &utxos[0], &mut ledger_standalone).expect("Failed to add public asset.");
 
-    let output =
-      add_confidential_asset_or_liability_cmd(dir,
+    add_confidential_asset_or_liability_cmd(dir,
                                               "asset",
                                               "200",
                                               code_1,
                                               &blinds[0],
-                                              &utxos[1]).expect("Failed to add hidden asset.");
-    io::stdout().write_all(&output.stdout).unwrap();
-    io::stdout().write_all(&output.stderr).unwrap();
-    assert!(output.status.success());
+                                              &utxos[1], &mut ledger_standalone).expect("Failed to add hidden asset.");
 
-    let output =
-    add_confidential_asset_or_liability_cmd(dir, "asset", "3", code_2, &blinds[1], &utxos[2]).expect("Failed to add hidden asset.");
-    io::stdout().write_all(&output.stdout).unwrap();
-    io::stdout().write_all(&output.stderr).unwrap();
-    assert!(output.status.success());
+    add_confidential_asset_or_liability_cmd(dir, "asset", "3", code_2, &blinds[1], &utxos[2], &mut ledger_standalone).expect("Failed to add hidden asset.");
 
-    let output = add_nonconfidential_asset_or_liability_cmd(dir, "liability","40", code_0, &utxos[3])
+    add_nonconfidential_asset_or_liability_cmd(dir, "liability","40", code_0, &utxos[3], &mut ledger_standalone)
                                       .expect("Failed to add public liability.");
-    io::stdout().write_all(&output.stdout).unwrap();
-    io::stdout().write_all(&output.stderr).unwrap();
-    assert!(output.status.success());
 
-    let output =
-      add_confidential_asset_or_liability_cmd(dir,
+    add_confidential_asset_or_liability_cmd(dir,
                                               "liability",
                                               "50",
                                               code_1,
                                               &blinds[2],
-                                              &utxos[4]).expect("Failed to add hidden liability.");
-    io::stdout().write_all(&output.stdout).unwrap();
-    io::stdout().write_all(&output.stderr).unwrap();
-    assert!(output.status.success());
+                                              &utxos[4], &mut ledger_standalone).expect("Failed to add hidden liability.");
 
     // Prove and verify solvency
     hidden_assets.push(get_amount_and_code_scalars(200, codes[1]));
@@ -547,44 +560,31 @@ mod tests {
     hidden_assets_blinds.push(calculate_amount_and_code_blinds(&blinds[1]).unwrap());
     hidden_liabilities.push(get_amount_and_code_scalars(50, codes[1]));
     hidden_liabilities_blinds.push(calculate_amount_and_code_blinds(&blinds[2]).unwrap());
-    let output = prove_and_verify_solvency_cmd(dir, hidden_assets.to_vec(), hidden_assets_blinds.to_vec(), hidden_liabilities.to_vec(), hidden_liabilities_blinds.to_vec()).expect("Failed to prove and verify solvency.");
-    io::stdout().write_all(&output.stdout).unwrap();
-    io::stdout().write_all(&output.stderr).unwrap();
-    assert!(output.status.success());
+    prove_and_verify_solvency_cmd(dir, hidden_assets.to_vec(), hidden_assets_blinds.to_vec(), hidden_liabilities.to_vec(), hidden_liabilities_blinds.to_vec(), &mut ledger_standalone).expect("Failed to prove and verify solvency.");
 
     // Add additional liabilities to make total asset amount < total liabiliity amount
-    let output =
-      add_confidential_asset_or_liability_cmd(dir,
+    add_confidential_asset_or_liability_cmd(dir,
                                               "liability",
                                               "150",
                                               code_1,
                                               &blinds[3],
-                                              &utxos[5]).expect("Failed to add hidden liability.");
-    io::stdout().write_all(&output.stdout).unwrap();
-    io::stdout().write_all(&output.stderr).unwrap();
-    assert!(output.status.success());
-
+                                              &utxos[5], &mut ledger_standalone).expect("Failed to add hidden liability.");
     // Prove and verify solvency
     // Should fail since total asset amount < total liabiliity amount
     hidden_liabilities.push(get_amount_and_code_scalars(150, codes[1]));
     hidden_liabilities_blinds.push(calculate_amount_and_code_blinds(&blinds[3]).unwrap());
-    let output = prove_and_verify_solvency_cmd(dir, hidden_assets.to_vec(), hidden_assets_blinds.to_vec(), hidden_liabilities.to_vec(), hidden_liabilities_blinds.to_vec()).expect("Failed to prove and verify solvency.");
-    io::stdout().write_all(&output.stdout).unwrap();
-    io::stdout().write_all(&output.stderr).unwrap();
-    assert!(!output.status.success());
+    let res = prove_and_verify_solvency_cmd(dir,
+                                            hidden_assets.to_vec(),
+                                            hidden_assets_blinds.to_vec(),
+                                            hidden_liabilities.to_vec(),
+                                            hidden_liabilities_blinds.to_vec(),
+                                            &mut ledger_standalone);
 
-    // Add additional assets to make total asset amount > total liabiliity amount
-    let output =
-    add_nonconfidential_asset_or_liability_cmd(dir, "asset", "30", code_0, &utxos[6]).expect("Failed to add public asset.");
-    io::stdout().write_all(&output.stdout).unwrap();
-    io::stdout().write_all(&output.stderr).unwrap();
-    assert!(output.status.success());
+    assert!(res.is_err());
+    add_nonconfidential_asset_or_liability_cmd(dir, "asset", "30", code_0, &utxos[6], &mut ledger_standalone).expect("Failed to add public asset.");
 
     // Prove and verify solvency
-    let output = prove_and_verify_solvency_cmd(dir, hidden_assets.to_vec(), hidden_assets_blinds.to_vec(), hidden_liabilities.to_vec(), hidden_liabilities_blinds.to_vec()).expect("Failed to prove and verify solvency.");
-    io::stdout().write_all(&output.stdout).unwrap();
-    io::stdout().write_all(&output.stderr).unwrap();
-    assert!(output.status.success());
+    prove_and_verify_solvency_cmd(dir, hidden_assets.to_vec(), hidden_assets_blinds.to_vec(), hidden_liabilities.to_vec(), hidden_liabilities_blinds.to_vec(), &mut ledger_standalone).expect("Failed to prove and verify solvency.");
 
     tmp_dir.close().unwrap();
   }
