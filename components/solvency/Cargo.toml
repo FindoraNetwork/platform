@@ -8,7 +8,7 @@ edition = "2018"
 path = "src/solvency.rs"
 
 [dependencies]
-bulletproofs = { version = "2.0.0",  package = "bulletproofs", git = "https://github.com/dalek-cryptography/bulletproofs", rev = "91218d4066af5d582631319c5ff0266402b9fff2", features = ["yoloproofs"]}
+bulletproofs = { package = "bulletproofs", git = "ssh://git@github.com/findoraorg/bulletproofs", branch = "batch_verification", features = ["yoloproofs"] }
 curve25519-dalek = { version =  "2.0.0", features = ["serde"] }
 ledger = { path = "../../ledger" }
 ledger_api_service = { path = "../ledger_api_service" }
@@ -23,4 +23,4 @@ serde_json = "1.0"
 submission_server = { path = "../submission_server" }
 txn_builder = { path = "../txn_builder" }
 txn_cli = { path = "../txn_cli" }
-zei = { git = "ssh://git@github.com/findoraorg/zei", tag = "v0.0.2-4" }
+zei = { git = "ssh://git@github.com/findoraorg/zei", tag = "v0.0.3" }

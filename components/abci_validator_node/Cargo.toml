@@ -26,4 +26,4 @@ serde_json = "1.0.40"
 submission_api = { path = "../submission_api" }
 submission_server = { path = "../submission_server" }
 utils = { path = "../../libs/utils" }
-zei = { git = "ssh://git@github.com/findoraorg/zei", tag = "v0.0.2-4" }
+zei = { git = "ssh://git@github.com/findoraorg/zei", tag = "v0.0.3" }

@@ -29,8 +29,8 @@ use zei::xfr::asset_record::{
 };
 use zei::xfr::sig::{XfrKeyPair, XfrPublicKey};
 use zei::xfr::structs::{
-  AssetRecord, AssetRecordTemplate, AssetTracingPolicy, BlindAssetRecord, OpenAssetRecord,
-  OwnerMemo,
+  AssetRecord, AssetRecordTemplate, AssetTracingPolicies, AssetTracingPolicy, BlindAssetRecord,
+  OpenAssetRecord, OwnerMemo,
 };
 
 #[derive(Deserialize, Serialize, PartialEq)]
@@ -303,18 +303,17 @@ pub trait BuildsTransactions {
                            -> Result<&mut Self, PlatformError> {
     let mut prng = ChaChaRng::from_entropy();
     let params = PublicParams::new();
-    let ar = match tracing_policy.clone() {
-      Some(policy) => AssetRecordTemplate::with_asset_tracking(amount,
-                                                               token_code.val,
-                                                               confidentiality_flags,
-                                                               key_pair.get_pk(),
-                                                               policy),
-      None => AssetRecordTemplate::with_no_asset_tracking(amount,
-                                                          token_code.val,
-                                                          confidentiality_flags,
-                                                          key_pair.get_pk()),
-    };
-    let (ba, _, owner_memo) = build_blind_asset_record(&mut prng, &params.pc_gens, &ar, None);
+    let mut policies = AssetTracingPolicies::new();
+    if let Some(x) = tracing_policy.as_ref() {
+      policies.add(x.clone());
+    }
+    let ar = AssetRecordTemplate::with_asset_tracking(amount,
+                                                      token_code.val,
+                                                      confidentiality_flags,
+                                                      key_pair.get_pk(),
+                                                      policies);
+
+    let (ba, _, owner_memo) = build_blind_asset_record(&mut prng, &params.pc_gens, &ar, vec![]);
     self.add_operation_issue_asset(key_pair,
                                    token_code,
                                    seq_num,
@@ -363,17 +362,15 @@ pub trait BuildsTransactions {
       if input_amount > oar.get_amount() {
         return Err(PlatformError::InputsError(error_location!()));
       } else if input_amount < oar.get_amount() {
-        let ar = match input_tracing_policy {
-          Some(policy) => AssetRecordTemplate::with_asset_tracking(oar.get_amount() - input_amount,
-                                                                   *oar.get_asset_type(),
-                                                                   oar.get_record_type(),
-                                                                   *oar.get_pub_key(),
-                                                                   policy.clone()),
-          _ => AssetRecordTemplate::with_no_asset_tracking(oar.get_amount() - input_amount,
-                                                           *oar.get_asset_type(),
-                                                           oar.get_record_type(),
-                                                           *oar.get_pub_key()),
-        };
+        let mut policies = AssetTracingPolicies::new();
+        if let Some(policy) = &input_tracing_policy {
+          policies.add(policy.clone());
+        }
+        let ar = AssetRecordTemplate::with_asset_tracking(oar.get_amount() - input_amount,
+                                                          *oar.get_asset_type(),
+                                                          oar.get_record_type(),
+                                                          *oar.get_pub_key(),
+                                                          policies);
         partially_consumed_inputs.push(ar);
       }
     }
@@ -387,17 +384,15 @@ pub trait BuildsTransactions {
     for ((amount, ref addr), output_tracing_policy) in
       transfer_to.iter().zip(output_tracing_policies.iter())
     {
-      let template = match output_tracing_policy {
-        Some(policy) => AssetRecordTemplate::with_asset_tracking(*amount,
-                                                                 *asset_type,
-                                                                 asset_record_type,
-                                                                 addr.key,
-                                                                 policy.clone()),
-        _ => AssetRecordTemplate::with_no_asset_tracking(*amount,
-                                                         *asset_type,
-                                                         asset_record_type,
-                                                         addr.key),
-      };
+      let mut policies = AssetTracingPolicies::new();
+      if let Some(policy) = output_tracing_policy {
+        policies.add(policy.clone())
+      }
+      let template = AssetRecordTemplate::with_asset_tracking(*amount,
+                                                              *asset_type,
+                                                              asset_record_type,
+                                                              addr.key,
+                                                              policies);
       output_ars_templates.push(template);
     }
     output_ars_templates.append(&mut partially_consumed_inputs);
@@ -512,11 +507,15 @@ impl BuildsTransactions for TransactionBuilder {
     prng = ChaChaRng::from_entropy();
     let mut input_asset_records = vec![];
     for (oar, tracing_policy) in input_records.iter().zip(input_tracing_policies.iter()) {
+      let mut policies = AssetTracingPolicies::new();
       if let Some(policy) = tracing_policy {
-        input_asset_records.push(AssetRecord::from_open_asset_record_with_asset_tracking_but_no_identity(oar.clone(), policy.clone()).map_err(|e| PlatformError::ZeiError(error_location!(), e))?)
-      } else {
-        input_asset_records.push(AssetRecord::from_open_asset_record_no_asset_tracking(oar.clone()))
+        policies.add(policy.clone());
       }
+      input_asset_records.push(AssetRecord::from_open_asset_record_with_asset_tracking_but_no_identity(
+        oar.clone(),
+        policies,
+
+      ).map_err(|e| PlatformError::ZeiError(error_location!(), e))?);
     }
 
     let mut xfr = TransferAsset::new(TransferAssetBody::new(&mut prng,
@@ -609,15 +608,21 @@ pub(crate) fn build_record_and_get_blinds<R: CryptoRng + RngCore>(
   // - if no policy, then no identity proof needed
   // - if policy and identity tracking, then identity proof is needed
   // - if policy but no identity tracking, then no identity proof is needed
-  if template.asset_tracking.is_none() && identity_proof.is_some()
-     || template.asset_tracking.is_some()
-        && (template.asset_tracking
+  // TODO (fernando) this code does not handle more than one policy, hence the following assert
+  // REDMINE #104
+  assert!(template.asset_tracing_policies.len() <= 1);
+  let asset_tracing = !template.asset_tracing_policies.is_empty();
+  if !asset_tracing && identity_proof.is_some()
+     || asset_tracing
+        && (template.asset_tracing_policies
+                    .get_policy(0)
                     .as_ref()
                     .unwrap()
                     .identity_tracking
                     .is_some()
             && identity_proof.is_none()
-            || template.asset_tracking
+            || template.asset_tracing_policies
+                       .get_policy(0)
                        .as_ref()
                        .unwrap()
                        .identity_tracking
@@ -636,16 +641,21 @@ pub(crate) fn build_record_and_get_blinds<R: CryptoRng + RngCore>(
     }
   };
   // 2. Use record template and ciphertexts to build open asset record
-  let (open_asset_record, asset_tracing_memo, owner_memo) =
-    build_open_asset_record(prng, &pc_gens, template, attr_ctext);
+  let (open_asset_record, asset_tracing_memos, owner_memo) =
+    build_open_asset_record(prng, &pc_gens, template, vec![attr_ctext]);
   // 3. Return record input containing open asset record, tracking policy, identity reveal proof,
   //    asset_tracer_memo, and owner_memo
 
+  let mut identity_proofs = vec![];
+  if reveal_proof.is_some() {
+    identity_proofs.push(reveal_proof);
+  }
+
   Ok((AssetRecord { open_asset_record: open_asset_record.clone(),
-                    tracking_policy: template.asset_tracking.clone(),
-                    identity_proof: reveal_proof,
-                    asset_tracer_memo: asset_tracing_memo,
-                    owner_memo },
+                    tracking_policies: template.asset_tracing_policies.clone(),
+                    identity_proofs,
+                    owner_memo,
+                    asset_tracers_memos: asset_tracing_memos },
       open_asset_record.amount_blinds,
       open_asset_record.type_blind))
 }
@@ -701,12 +711,16 @@ impl TransferOperationBuilder {
     if self.transfer.is_some() {
       return Err(inv_fail!("Cannot mutate a transfer that has been signed".to_string()));
     }
-    let asset_record = if let Some(policy) = tracing_policy.clone() {
-      AssetRecord::from_open_asset_record_with_asset_tracking_but_no_identity(open_ar,
-                                                                              policy).map_err(|e| PlatformError::ZeiError(error_location!(), e))?
-    } else {
-      AssetRecord::from_open_asset_record_no_asset_tracking(open_ar)
-    };
+    let mut policies = AssetTracingPolicies::new();
+    if let Some(policy) = tracing_policy.as_ref() {
+      policies.add(policy.clone());
+    }
+
+    let asset_record =
+      AssetRecord::from_open_asset_record_with_asset_tracking_but_no_identity(
+        open_ar,
+        policies)
+        .map_err(|e| PlatformError::ZeiError(error_location!(), e))?;
     self.input_sids.push(txo_sid);
     self.input_records.push(asset_record);
     self.input_tracing_policies.push(tracing_policy);
@@ -755,9 +769,9 @@ impl TransferOperationBuilder {
     }
     let (ar, amount_blinds, type_blind) =
       if let Some((user_secret_key, credential, commitment_key)) = credential_record {
-        match &asset_record_template.asset_tracking {
-          // identity tracking must have asset_tracking policy
+        match asset_record_template.asset_tracing_policies.get_policy(0) {
           None => {
+            // identity tracking must have asset_tracking policy
             return Err(PlatformError::InputsError(error_location!()));
           }
           Some(policy) => {
@@ -784,7 +798,7 @@ impl TransferOperationBuilder {
           }
         }
       } else {
-        if let Some(policy) = &asset_record_template.asset_tracking {
+        if let Some(policy) = asset_record_template.asset_tracing_policies.get_policy(0) {
           if policy.identity_tracking.is_some() {
             return Err(PlatformError::InputsError(error_location!()));
           }
@@ -822,18 +836,15 @@ impl TransferOperationBuilder {
           let asset_type = *ar.open_asset_record.get_asset_type();
           let record_type = ar.open_asset_record.get_record_type();
           let recipient = *ar.open_asset_record.get_pub_key();
-          let ar_template = if let Some(policy) = tracking_policy {
-            AssetRecordTemplate::with_asset_tracking(amt - spend_amount,
-                                                     asset_type,
-                                                     record_type,
-                                                     recipient,
-                                                     policy.clone())
-          } else {
-            AssetRecordTemplate::with_no_asset_tracking(amt - spend_amount,
-                                                        asset_type,
-                                                        record_type,
-                                                        recipient)
-          };
+          let mut policies = AssetTracingPolicies::new();
+          if let Some(policy) = tracking_policy {
+            policies.add(policy.clone());
+          }
+          let ar_template = AssetRecordTemplate::with_asset_tracking(amt - spend_amount,
+                                                                     asset_type,
+                                                                     record_type,
+                                                                     recipient,
+                                                                     policies);
           let ar =
             AssetRecord::from_template_no_identity_tracking(&mut prng, &ar_template).unwrap();
           partially_consumed_inputs.push(ar);
@@ -987,8 +998,8 @@ mod tests {
                                                   code_2.val,
                                                   NonConfidentialAmount_NonConfidentialAssetType,
                                                   bob.get_pk());
-    let (ba_1, _, memo1) = build_blind_asset_record(&mut prng, &params.pc_gens, &ar_1, None);
-    let (ba_2, _, memo2) = build_blind_asset_record(&mut prng, &params.pc_gens, &ar_2, None);
+    let (ba_1, _, memo1) = build_blind_asset_record(&mut prng, &params.pc_gens, &ar_1, vec![]);
+    let (ba_2, _, memo2) = build_blind_asset_record(&mut prng, &params.pc_gens, &ar_2, vec![]);
 
     // Attempt to spend too much
     let mut invalid_outputs_transfer_op = TransferOperationBuilder::new();

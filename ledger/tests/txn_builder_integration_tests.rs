@@ -141,9 +141,9 @@ fn test_loan_repayment(loan_amount: u64,
                                                 NonConfidentialAmount_NonConfidentialAssetType,
                                                 fiat_issuer_keys.get_pk());
   let (debt_ba, _, debt_owner_memo) =
-    build_blind_asset_record(ledger.get_prng(), &params.pc_gens, &debt_ar, None);
+    build_blind_asset_record(ledger.get_prng(), &params.pc_gens, &debt_ar, vec![]);
   let (fiat_ba, _, fiat_owner_memo) =
-    build_blind_asset_record(ledger.get_prng(), &params.pc_gens, &fiat_ar, None);
+    build_blind_asset_record(ledger.get_prng(), &params.pc_gens, &fiat_ar, vec![]);
   let debt_oar =
     open_blind_asset_record(&debt_ba, &debt_owner_memo, borrower_keys.get_sk_ref()).unwrap();
   let fiat_oar =

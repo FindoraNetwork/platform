@@ -10,7 +10,7 @@ air = { path = "../libs/ads/air" }
 base64 = "0.10"
 bitmap = { path = "../libs/bitmap" }
 blake2 = "0.8.0"
-bulletproofs =  { version = "2.0.0" }
+bulletproofs = { package = "bulletproofs", git = "ssh://git@github.com/findoraorg/bulletproofs", branch = "batch_verification", features = ["yoloproofs"] }
 byteorder = "1.0.0"
 chrono = "0.4"
 cryptohash = { path = "../libs/cryptohash" }
@@ -37,7 +37,7 @@ time = "0.1"
 tiny-keccak = "1.4.2"
 utils = { path = "../libs/utils" }
 wasm-bindgen = { version = "0.2.50", features = ["serde-serialize"]  }
-zei = { git = "ssh://git@github.com/findoraorg/zei", tag = "v0.0.2-4" }
+zei = { git = "ssh://git@github.com/findoraorg/zei", tag = "v0.0.3" }
 sparse_merkle_tree = { path = "../libs/ads/sparse_merkle_tree" }
 
 [features]

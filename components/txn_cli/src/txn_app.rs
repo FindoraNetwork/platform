@@ -517,7 +517,7 @@ pub(crate) fn process_asset_issuer_cmd(asset_issuer_matches: &clap::ArgMatches,
           println!("Owner memo is required to trace the asset. Use --memo_file.");
           return Err(PlatformError::InputsError(error_location!()));
         };
-      let tracer_memo = if let Some(memo) = tracer_and_owner_memos[0].clone().0 {
+      let tracer_memo = if let Some(memo) = tracer_and_owner_memos[0].0.get(0) {
         memo
       } else {
         println!("The asset isn't traceable.");

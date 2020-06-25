@@ -25,4 +25,4 @@ ledger_api_service = {path = "../../components/ledger_api_service"}
 submission_api = {path = "../../components/submission_api"}
 submission_server = {path = "../../components/submission_server"}
 utils = { path = "../utils" }
-zei = { git = "ssh://git@github.com/findoraorg/zei", tag = "v0.0.2-4" }
+zei = { git = "ssh://git@github.com/findoraorg/zei", tag = "v0.0.3" }

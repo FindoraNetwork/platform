@@ -9,6 +9,7 @@ use ledger_api_service::RestfulLedgerAccess;
 use linear_map::LinearMap;
 use serde::{Deserialize, Serialize};
 use txn_cli::txn_lib::query_utxo_and_get_amount;
+use zei::crypto::bp_circuits::cloak::{CloakCommitment, CloakValue};
 use zei::crypto::solvency::{prove_solvency, verify_solvency};
 use zei::errors::ZeiError;
 use zei::setup::PublicParams;
@@ -23,11 +24,11 @@ use zei::xfr::structs::{asset_type_to_scalar, XfrAmount};
 // higher-level API.
 
 /// Scalar values of the amount and type code of an asset or liability.
-pub type AmountAndCodeScalar = (Scalar, Scalar);
+pub type AmountAndCodeScalar = CloakValue;
 /// Commitment to the amount and associated type code of an asset or liability.
-pub(crate) type AmountAndCodeCommitment = (CompressedRistretto, CompressedRistretto);
+pub(crate) type AmountAndCodeCommitment = CloakCommitment;
 /// Blinding values of the amount and type code of a hidden asset of liability.
-pub type AmountAndCodeBlinds = (Scalar, Scalar);
+pub type AmountAndCodeBlinds = CloakValue;
 /// Type code and associated conversion rate.
 pub(crate) type CodeAndRate = (Scalar, Scalar);
 
@@ -39,14 +40,14 @@ pub enum AmountType {
 
 pub(crate) fn get_decompressed_commitment(commitment: CompressedRistretto)
                                           -> Result<RistrettoPoint, PlatformError> {
-  match commitment.decompress() {
-    Some(decompressed_commitment) => Ok(decompressed_commitment),
-    _ => Err(PlatformError::ZeiError(error_location!(), ZeiError::DecompressElementError)),
-  }
+  commitment.decompress()
+            .ok_or_else(|| {
+              PlatformError::ZeiError(error_location!(), ZeiError::DecompressElementError)
+            })
 }
 
 pub fn get_amount_and_code_scalars(amount: u64, code: AssetTypeCode) -> AmountAndCodeScalar {
-  (Scalar::from(amount), asset_type_to_scalar(&code.val))
+  CloakValue::new(Scalar::from(amount), asset_type_to_scalar(&code.val))
 }
 
 /// Calculate amount blinds = amount_blind_low + POW_2_32 * amount_blind_high.
@@ -59,7 +60,8 @@ pub fn calculate_amount_and_code_blinds(blinds_str: &str)
                                         -> Result<AmountAndCodeBlinds, PlatformError> {
   let ((amount_blind_low, amount_blind_high), code_blind) =
     serde_json::from_str::<((Scalar, Scalar), Scalar)>(&blinds_str).or_else(|e| Err(des_fail!(e)))?;
-  Ok((amount_blind_low + Scalar::from(1u64 << 32) * amount_blind_high, code_blind))
+  Ok(CloakValue::new(amount_blind_low + Scalar::from(1u64 << 32) * amount_blind_high,
+                     code_blind))
 }
 
 /// Amounts and codes of public assets and liabilities, commitments to hidden assets and liabilities, and solvency proof if exists
@@ -124,11 +126,12 @@ impl AssetAndLiabilityAccount {
         }
         match amount_type {
           AmountType::Asset => {
-            self.public_assets.push((Scalar::from(amount), code_scalar));
+            self.public_assets
+                .push(AmountAndCodeScalar::new(Scalar::from(amount), code_scalar));
           }
           _ => {
             self.public_liabilities
-                .push((Scalar::from(amount), code_scalar));
+                .push(AmountAndCodeScalar::new(Scalar::from(amount), code_scalar));
           }
         }
         Ok(None)
@@ -142,14 +145,16 @@ impl AssetAndLiabilityAccount {
         };
         let amount_and_code = get_amount_and_code_scalars(amount, code);
         let amount_and_code_blinds =
-          (calculate_amount_blinds(amount_blind_low, amount_blind_high), code_blind);
+          AmountAndCodeBlinds::new(calculate_amount_blinds(amount_blind_low, amount_blind_high),
+                                   code_blind);
         let amount_commitment = (get_decompressed_commitment(amount_commitment_low)?
                                  + get_decompressed_commitment(amount_commitment_high)?
                                    * Scalar::from(1u64 << 32)).compress();
         let code_commitment = PublicParams::new().pc_gens
                                                  .commit(code_scalar, code_blind)
                                                  .compress();
-        let commitment = (amount_commitment, code_commitment);
+        let commitment = AmountAndCodeCommitment { amount: amount_commitment,
+                                                   asset_type: code_commitment };
         match amount_type {
           AmountType::Asset => {
             self.hidden_assets_commitments.push(commitment);
@@ -212,8 +217,10 @@ impl SolvencyAudit {
       rates.insert(code, rate);
     }
 
+    let params = PublicParams::new();
     let proof =
-      prove_solvency(hidden_assets,
+      prove_solvency(&params,
+                     hidden_assets,
                      hidden_assets_blinds,
                      &account.public_assets,
                      hidden_liabilities,
@@ -239,7 +246,9 @@ impl SolvencyAudit {
     for (code, rate) in self.conversion_rates.clone() {
       rates.insert(code, rate);
     }
-    verify_solvency(&account.hidden_assets_commitments,
+    let params = PublicParams::new();
+    verify_solvency(&params,
+                    &account.hidden_assets_commitments,
                     &account.public_assets,
                     &account.hidden_liabilities_commitments,
                     &account.public_liabilities,

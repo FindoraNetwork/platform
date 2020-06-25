@@ -15,8 +15,8 @@ use zei::xfr::asset_record::{build_blind_asset_record, open_blind_asset_record, 
 use zei::xfr::asset_tracer::gen_asset_tracer_keypair;
 use zei::xfr::sig::{XfrKeyPair, XfrPublicKey};
 use zei::xfr::structs::{
-  AssetRecordTemplate, AssetTracerKeyPair, AssetTracerMemo, AssetTracingPolicy, BlindAssetRecord,
-  OpenAssetRecord, OwnerMemo,
+  AssetRecordTemplate, AssetTracerKeyPair, AssetTracerMemo, AssetTracingPolicies,
+  AssetTracingPolicy, BlindAssetRecord, OpenAssetRecord, OwnerMemo,
 };
 
 /// Path to the initial data when the program starts.
@@ -32,9 +32,9 @@ const BACKUP_COUNT_MAX: i32 = 10000;
 
 /// Tuple of blind asset record and associated tracer and owner memos. Memos are optional.
 pub(crate) type BlindAssetRecordAndMemos =
-  (BlindAssetRecord, Option<AssetTracerMemo>, Option<OwnerMemo>);
+  (BlindAssetRecord, Vec<AssetTracerMemo>, Option<OwnerMemo>);
 /// Tuple of tracer and owner memos, optional.
-pub(crate) type TracerAndOwnerMemos = (Option<AssetTracerMemo>, Option<OwnerMemo>);
+pub(crate) type TracerAndOwnerMemos = (Vec<AssetTracerMemo>, Option<OwnerMemo>);
 
 //
 // Credentials
@@ -800,18 +800,18 @@ pub fn get_blind_asset_record_and_memos(pub_key: XfrPublicKey,
                                         asset_record_type: AssetRecordType,
                                         tracing_policy: Option<AssetTracingPolicy>)
                                         -> Result<BlindAssetRecordAndMemos, PlatformError> {
-  let template = if let Some(policy) = tracing_policy {
-    AssetRecordTemplate::with_asset_tracking(amount,
-                                             token_code.val,
-                                             asset_record_type,
-                                             pub_key,
-                                             policy)
-  } else {
-    AssetRecordTemplate::with_no_asset_tracking(amount, token_code.val, asset_record_type, pub_key)
-  };
+  let mut policies = AssetTracingPolicies::new();
+  if let Some(policy) = tracing_policy {
+    policies.add(policy);
+  }
+  let template = AssetRecordTemplate::with_asset_tracking(amount,
+                                                          token_code.val,
+                                                          asset_record_type,
+                                                          pub_key,
+                                                          policies);
   let mut prng = ChaChaRng::from_entropy();
   let params = PublicParams::new();
-  Ok(build_blind_asset_record(&mut prng, &params.pc_gens, &template, None))
+  Ok(build_blind_asset_record(&mut prng, &params.pc_gens, &template, vec![None]))
 }
 
 /// Gets and stores tracer and owner memos to file.
