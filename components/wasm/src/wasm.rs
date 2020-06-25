@@ -30,8 +30,8 @@ use web_sys::{Request, RequestInit, RequestMode};
 use zei::serialization::ZeiFromToBytes;
 use zei::xfr::asset_record::{open_blind_asset_record as open_bar, AssetRecordType};
 use zei::xfr::lib::trace_assets as zei_trace_assets;
-use zei::xfr::sig::{XfrKeyPair, XfrMultiSig, XfrPublicKey};
-use zei::xfr::structs::{AssetRecordTemplate, AssetTracingPolicy, XfrBody, XfrNote};
+use zei::xfr::sig::{XfrKeyPair, XfrPublicKey};
+use zei::xfr::structs::{AssetRecordTemplate, AssetTracingPolicies, AssetTracingPolicy, XfrBody};
 
 mod util;
 mod wasm_data_model;
@@ -451,14 +451,15 @@ impl TransferOperationBuilder {
     let asset_record_type = AssetRecordType::from_booleans(conf_amount, conf_type);
     // TODO (noah/keyao) support identity tracing (issue #298)
     let template = if let Some(key) = tracing_key {
+      let mut policies = AssetTracingPolicies::new();
+      policies.add(AssetTracingPolicy { enc_keys: key.get_enc_key().clone(),
+                                        asset_tracking: true,
+                                        identity_tracking: None });
       AssetRecordTemplate::with_asset_tracking(amount,
                                                code.val,
                                                asset_record_type,
                                                *recipient,
-                                               AssetTracingPolicy { enc_keys: key.get_enc_key()
-                                                                                 .clone(),
-                                                                    asset_tracking: true,
-                                                                    identity_tracking: None })
+                                               policies)
     } else {
       AssetRecordTemplate::with_no_asset_tracking(amount, code.val, asset_record_type, *recipient)
     };
@@ -1029,8 +1030,7 @@ pub fn trace_assets(xfr_body: JsValue,
                       AssetTypeCode::new_from_str(&asset_type_str.to_string()).val
                     })
                     .collect();
-  let record_data = zei_trace_assets(&XfrNote { body: xfr_body,
-                                                multisig: XfrMultiSig::default() },
+  let record_data = zei_trace_assets(&xfr_body,
                                      tracer_keypair.get_keys(),
                                      &candidate_assets).map_err(error_to_jsvalue)?;
   let record_data: Vec<(u64, String)> = record_data.iter()

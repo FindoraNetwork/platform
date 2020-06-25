@@ -468,7 +468,7 @@ impl InterpretAccounts<PlatformError> for LedgerAccounts {
         let ar = AssetRecordTemplate::with_no_asset_tracking(amt, code.val, iss_art, *pubkey);
         let params = PublicParams::new();
         let (ba, _, owner_memo) =
-          build_blind_asset_record(self.ledger.get_prng(), &params.pc_gens, &ar, None);
+          build_blind_asset_record(self.ledger.get_prng(), &params.pc_gens, &ar, vec![]);
 
         let asset_issuance_body =
           IssueAssetBody::new(&code, new_seq_num, &[TxOutput(ba)], None).unwrap();
@@ -768,7 +768,7 @@ impl InterpretAccounts<PlatformError> for OneBigTxnAccounts {
         let ar = AssetRecordTemplate::with_no_asset_tracking(amt, code.val, iss_art, *pubkey);
         let params = PublicParams::new();
         let (ba, _, owner_memo) =
-          build_blind_asset_record(self.base_ledger.get_prng(), &params.pc_gens, &ar, None);
+          build_blind_asset_record(self.base_ledger.get_prng(), &params.pc_gens, &ar, vec![]);
 
         let asset_issuance_body =
           IssueAssetBody::new(&code, new_seq_num, &[TxOutput(ba)], None).unwrap();
@@ -1083,7 +1083,7 @@ impl<T> InterpretAccounts<PlatformError> for LedgerStandaloneAccounts<T>
         let ar = AssetRecordTemplate::with_no_asset_tracking(amt, code.val, iss_art, *pubkey);
         let params = PublicParams::new();
         let (ba, _, owner_memo) =
-          build_blind_asset_record(&mut self.prng, &params.pc_gens, &ar, None);
+          build_blind_asset_record(&mut self.prng, &params.pc_gens, &ar, vec![]);
 
         let asset_issuance_body =
           IssueAssetBody::new(&code, new_seq_num, &[TxOutput(ba)], None).unwrap();

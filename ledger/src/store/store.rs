@@ -25,9 +25,9 @@ use std::path::PathBuf;
 use std::u64;
 use utils::HasInvariants;
 use utils::{HashOf, ProofOf, Serialized, SignatureOf};
-use zei::xfr::lib::verify_xfr_body;
+use zei::xfr::lib::{verify_xfr_body, XfrNotePolicies};
 use zei::xfr::sig::{XfrKeyPair, XfrPublicKey};
-use zei::xfr::structs::{AssetTracingPolicy, XfrAssetType};
+use zei::xfr::structs::{AssetTracingPolicies, AssetTracingPolicy, XfrAssetType};
 
 use super::effects::*;
 
@@ -660,7 +660,9 @@ impl LedgerStatus {
 
     // Asset transfer body must be consistent with the tracing policies
     //let mut transfer_input_policies = Vec::new();
+    //let mut transfer_input_commitments = Vec::new();
     //let mut transfer_output_policies = Vec::new();
+    //let mut transfer_output_commitments = Vec::new();
     //if let Some(xfr_body) = txn.transfer_body.clone() {
     //  for (input_blind_asset_record, input_commitment) in
     //    xfr_body.inputs
@@ -671,13 +673,15 @@ impl LedgerStatus {
     //      // If the asset is nonconfidential, get its tracing policy
     //      XfrAssetType::NonConfidential(asset_type) => {
     //        let code = AssetTypeCode { val: asset_type };
-    //        let tracing_policy = self.tracing_policies.get(&code);
+    //        let tracing_policy = self.tracing_policies
+    //                                 .get(&code)
+    //                                 .or_else(|| txn.issuance_tracing_policies.get(&code));
     //        match tracing_policy {
     //          Some(policy) => {
     //            match policy.identity_tracking {
     //              Some(_) => match input_commitment {
     //                Some(_) => {
-    //                  transfer_input_policies.push(Some(tracing_policy.clone().unwrap()));
+    //                  transfer_input_policies.push(AssetTracingPolicies::from_policy(policy.clone()));
     //                  transfer_input_commitments.push(Some(input_commitment.as_ref()
     //                                                                       .clone()
     //                                                                       .unwrap()));
@@ -694,7 +698,7 @@ impl LedgerStatus {
     //                  // If the sender is an issuer, exclude the identity tracing.
     //                  // Otherwise, an identity commitment is required.
     //                  if input_blind_asset_record.public_key == issuer_key {
-    //                    transfer_input_policies.push(None);
+    //                    transfer_input_policies.push(Default::default());
     //                    transfer_input_commitments.push(None);
     //                  } else {
     //                    return Err(PlatformError::InputsError(error_location!()));
@@ -708,7 +712,7 @@ impl LedgerStatus {
     //                    return Err(PlatformError::InputsError(error_location!()));
     //                  }
     //                  None => {
-    //                    transfer_input_policies.push(None);
+    //                    transfer_input_policies.push(Default::default());
     //                    transfer_input_commitments.push(None);
     //                  }
     //                }
@@ -722,7 +726,7 @@ impl LedgerStatus {
     //                return Err(PlatformError::InputsError(error_location!()));
     //              }
     //              None => {
-    //                transfer_input_policies.push(None);
+    //                transfer_input_policies.push(Default::default());
     //                transfer_input_commitments.push(None);
     //              }
     //            }
@@ -735,7 +739,7 @@ impl LedgerStatus {
     //          return Err(PlatformError::InputsError(error_location!()));
     //        }
     //        None => {
-    //          transfer_input_policies.push(None);
+    //          transfer_input_policies.push(Default::default());
     //          transfer_input_commitments.push(None);
     //        }
     //      },
@@ -751,15 +755,15 @@ impl LedgerStatus {
     //        // If the asset is nonconfidential, get its tracing policy
     //        XfrAssetType::NonConfidential(asset_type) => {
     //          let code = AssetTypeCode { val: asset_type };
-
-    //          // Look for new tracing policies too
-    //          let tracing_policy = self.tracing_policies.get(&code);
+    //          let tracing_policy = self.tracing_policies
+    //                                   .get(&code)
+    //                                   .or_else(|| txn.issuance_tracing_policies.get(&code));
     //          match tracing_policy {
     //            Some(policy) => {
     //              match policy.identity_tracking {
     //                Some(_) => match output_commitment {
     //                  Some(_) => {
-    //                    transfer_output_policies.push(Some(tracing_policy.clone().unwrap()));
+    //                    transfer_output_policies.push(AssetTracingPolicies::from_policy(policy.clone()));
     //                    transfer_output_commitments.push(Some(output_commitment.as_ref()
     //                                                                           .clone()
     //                                                                           .unwrap()));
@@ -776,7 +780,7 @@ impl LedgerStatus {
     //                    // If the sender is an issuer, exclude the identity tracing.
     //                    // Otherwise, an identity commitment is required.
     //                    if output_blind_asset_record.public_key == issuer_key {
-    //                      transfer_output_policies.push(None);
+    //                      transfer_output_policies.push(Default::default());
     //                      transfer_output_commitments.push(None);
     //                    } else {
     //                      return Err(PlatformError::InputsError(error_location!()));
@@ -790,7 +794,7 @@ impl LedgerStatus {
     //                      return Err(PlatformError::InputsError(error_location!()));
     //                    }
     //                    None => {
-    //                      transfer_output_policies.push(None);
+    //                      transfer_output_policies.push(Default::default());
     //                      transfer_output_commitments.push(None);
     //                    }
     //                  }
@@ -804,7 +808,7 @@ impl LedgerStatus {
     //                  return Err(PlatformError::InputsError(error_location!()));
     //                }
     //                None => {
-    //                  transfer_output_policies.push(None);
+    //                  transfer_output_policies.push(Default::default());
     //                  transfer_output_commitments.push(None);
     //                }
     //              }
@@ -817,23 +821,22 @@ impl LedgerStatus {
     //            return Err(PlatformError::InputsError(error_location!()));
     //          }
     //          None => {
-    //            transfer_output_policies.push(None);
+    //            transfer_output_policies.push(Default::default());
     //            transfer_output_commitments.push(None);
     //          }
     //        },
     //      }
     //    }
     //  }
-    //  dbg!(&transfer_input_policies);
+    //  let mut params = zei::setup::PublicParams::new();
+    //  let policies = XfrNotePolicies::new(transfer_input_policies.iter().map(|v| v).collect(),
+    //                                      transfer_input_commitments,
+    //                                      transfer_output_policies.iter().map(|v| v).collect(),
+    //                                      transfer_output_commitments);
     //  verify_xfr_body(&mut ChaChaRng::from_seed([1u8; 32]),
+    //                  &mut params,
     //                  &xfr_body,
-    //                  &transfer_input_policies[..],
-    //                  &transfer_input_commitments[..],
-    //                  &transfer_output_policies[..],
-    //                  &transfer_output_commitments[..]).map_err(|e| {
-    //                                                     PlatformError::ZeiError(error_location!(),
-    //                                                                             e)
-    //                                                   })?;
+    //                  &policies).map_err(|e| PlatformError::ZeiError(error_location!(), e))?;
     //}
 
     // Debt swaps
@@ -2202,7 +2205,7 @@ pub mod helpers {
     // issue operation
     let ar_template = AssetRecordTemplate::with_no_asset_tracking(amount, code.val, AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType, issuer_keys.get_pk());
     let (ba, _tracer_memo, owner_memo) =
-      build_blind_asset_record(ledger.get_prng(), &params.pc_gens, &ar_template, None);
+      build_blind_asset_record(ledger.get_prng(), &params.pc_gens, &ar_template, vec![]);
 
     let asset_issuance_body =
       IssueAssetBody::new(&code, seq_num, &[TxOutput(ba.clone())], None).unwrap();
@@ -2246,7 +2249,7 @@ pub mod helpers {
                                                                   record_type,
                                                                   issuer_keys.get_pk());
     let (ba, _tracer_memo, _owner_memo) =
-      build_blind_asset_record(ledger.get_prng(), &params.pc_gens, &ar_template, None);
+      build_blind_asset_record(ledger.get_prng(), &params.pc_gens, &ar_template, vec![]);
 
     let asset_issuance_body = IssueAssetBody::new(&code, seq_num, &[TxOutput(ba)], None).unwrap();
     let asset_issuance_operation =
@@ -2636,7 +2639,8 @@ mod tests {
     let art = AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType;
     let template =
       AssetRecordTemplate::with_no_asset_tracking(100, code.val, art, key_pair.get_pk());
-    let (ba, _, _) = build_blind_asset_record(ledger.get_prng(), &params.pc_gens, &template, None);
+    let (ba, _, _) =
+      build_blind_asset_record(ledger.get_prng(), &params.pc_gens, &template, vec![]);
     let second_ba = ba.clone();
 
     let asset_issuance_body =
@@ -2775,7 +2779,7 @@ mod tests {
     let ar =
       AssetRecordTemplate::with_no_asset_tracking(100, token_code1.val, art, *keypair.get_pk_ref());
 
-    let (ba, _, _) = build_blind_asset_record(ledger.get_prng(), &params.pc_gens, &ar, None);
+    let (ba, _, _) = build_blind_asset_record(ledger.get_prng(), &params.pc_gens, &ar, vec![]);
     let asset_issuance_body = IssueAssetBody::new(&token_code1, 0, &[TxOutput(ba)], None).unwrap();
     let asset_issuance_operation =
       IssueAsset::new(asset_issuance_body, &IssuerKeyPair { keypair: &keypair }).unwrap();
@@ -3129,7 +3133,8 @@ mod tests {
       AssetRecordType::NonConfidentialAmount_ConfidentialAssetType
     };
     let template = AssetRecordTemplate::with_no_asset_tracking(100, code.val, AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType, alice.get_pk());
-    let (ba, _, _) = build_blind_asset_record(ledger.get_prng(), &params.pc_gens, &template, None);
+    let (ba, _, _) =
+      build_blind_asset_record(ledger.get_prng(), &params.pc_gens, &template, vec![]);
 
     let asset_issuance_body = IssueAssetBody::new(&code, 0, &[TxOutput(ba)], None).unwrap();
     let asset_issuance_operation =

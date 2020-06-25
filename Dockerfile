@@ -1,15 +1,15 @@
-FROM nexus.findora.org/zei:v0.0.2-4 as zei
+FROM nexus.findora.org/zei:v0.0.3-1 as zei
 FROM nexus.findora.org/rust:2020-03-11 as builder
 RUN cargo install cargo-audit
 RUN cargo install wasm-pack
 RUN mkdir /app
 WORKDIR /app/
 COPY --from=zei /app /src/zei
-COPY --from=zei /src/zcash-bn-fork /src/zcash-bn-fork
+COPY --from=zei /src/bulletproofs /src/bulletproofs
 COPY . /app/
 RUN cargo audit
 RUN cargo build --release
-RUN cargo test --release --no-fail-fast --workspace
+RUN cargo test --no-fail-fast --release -j1 -- --ignored --test-threads=1
 RUN cargo fmt -- --check
 #Disabled because it triggers a compile and also tests dependencies
 #RUN cargo clippy -- -D warnings
