@@ -390,7 +390,6 @@ pub struct TracingPolicy {
   pub(crate) policy: AssetTracingPolicy,
 }
 
-#[wasm_bindgen]
 impl TracingPolicy {
   pub fn new_with_tracking(tracing_key: &AssetTracerKeyPair) -> Self {
     let policy = AssetTracingPolicy { enc_keys: tracing_key.get_enc_key().clone(),
@@ -441,7 +440,7 @@ impl AssetRules {
     AssetRules::default()
   }
 
-  /// Toggles asset traceability.
+  /// Sets asset tracing policy.
   /// @param {TracingPolicy} policy - Tracing policy for the new asset.
   pub fn add_tracing_policy(mut self, policy: &TracingPolicy) -> AssetRules {
     self.rules.tracing_policies.add(policy.get_ref().clone());
