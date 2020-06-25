@@ -288,6 +288,12 @@ pub trait BuildsTransactions {
                              seq_num: u64,
                              data: Option<&KVHash>)
                              -> Result<&mut Self, PlatformError>;
+  fn add_operation_update_memo(&mut self,
+                               auth_key_pair: &XfrKeyPair,
+                               asset_code: AssetTypeCode,
+                               new_memo: &str)
+                               -> &mut Self;
+
   fn serialize(&self) -> Result<Vec<u8>, PlatformError>;
   fn serialize_str(&self) -> Result<String, PlatformError>;
 
@@ -468,6 +474,7 @@ impl BuildsTransactions for TransactionBuilder {
     let pol = policy_from_choice(&token_code, key_pair.get_pk_ref(), policy_choice);
     let iss_keypair = IssuerKeyPair { keypair: &key_pair };
     self.txn.add_operation(Operation::DefineAsset(DefineAsset::new(DefineAssetBody::new(&token_code, &IssuerPublicKey { key: *key_pair.get_pk_ref() }, asset_rules, Some(Memo(memo.into())), Some(ConfidentialMemo {}), pol)?, &iss_keypair)?));
+
     Ok(self)
   }
   fn add_operation_issue_asset(&mut self,
@@ -559,6 +566,20 @@ impl BuildsTransactions for TransactionBuilder {
     let xfr = AIRAssign::new(AIRAssignBody::new(addr, data, issuer_pk, pok)?, key_pair)?;
     self.txn.add_operation(Operation::AIRAssign(xfr));
     Ok(self)
+  }
+
+  fn add_operation_update_memo(&mut self,
+                               auth_key_pair: &XfrKeyPair,
+                               asset_code: AssetTypeCode,
+                               new_memo: &str)
+                               -> &mut Self {
+    let new_memo = Memo(new_memo.into());
+    let memo_update = UpdateMemo::new(UpdateMemoBody { new_memo,
+                                                       asset_type: asset_code },
+                                      auth_key_pair);
+    let op = Operation::UpdateMemo(memo_update);
+    self.add_operation(op);
+    self
   }
 
   fn add_operation(&mut self, op: Operation) -> &mut Self {
