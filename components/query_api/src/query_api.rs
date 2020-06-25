@@ -3,7 +3,7 @@ use actix_cors::Cors;
 use actix_web::{error, middleware, web, App, HttpServer};
 use ledger::data_model::errors::PlatformError;
 use ledger::data_model::{
-  b64dec, b64enc, IssuerPublicKey, KVBlind, KVHash, TxOutput, TxoSID, XfrAddress,
+  b64dec, b64enc, IssuerPublicKey, KVBlind, KVHash, TxOutput, TxnSID, TxoSID, XfrAddress,
 };
 use ledger::{error_location, inp_fail, ser_fail};
 use ledger_api_service::RestfulArchiveAccess;
@@ -93,12 +93,14 @@ pub enum QueryServerRoutes {
   StoreCustomData,
   GetCustomData,
   GetIssuedRecords,
+  GetRelatedTxns,
 }
 
 impl NetworkRoute for QueryServerRoutes {
   fn route(&self) -> String {
     let endpoint = match *self {
       QueryServerRoutes::GetAddress => "get_address",
+      QueryServerRoutes::GetRelatedTxns => "get_related_txns",
       QueryServerRoutes::GetOwnedUtxos => "get_owned_utxos",
       QueryServerRoutes::StoreCustomData => "store_custom_data",
       QueryServerRoutes::GetCustomData => "get_custom_data",
@@ -123,6 +125,22 @@ fn get_issued_records<T>(data: web::Data<Arc<RwLock<QueryServer<T>>>>,
   Ok(web::Json(records.unwrap_or_default()))
 }
 
+// Returns the list of transations associated with a given ledger address
+fn get_related_txns<T>(data: web::Data<Arc<RwLock<QueryServer<T>>>>,
+                       info: web::Path<String>)
+                       -> actix_web::Result<web::Json<HashSet<TxnSID>>>
+  where T: RestfulArchiveAccess + Sync + Send
+{
+  // Convert from base64 representation
+  let key: XfrPublicKey =
+    XfrPublicKey::zei_from_bytes(&b64dec(&*info).map_err(|_| {
+                                    error::ErrorBadRequest("Could not deserialize public key")
+                                  })?);
+  let query_server = data.read().unwrap();
+  let records = query_server.get_related_transactions(&XfrAddress { key });
+  Ok(web::Json(records.unwrap_or_default()))
+}
+
 pub struct QueryApi {
   web_runtime: actix_rt::SystemRunner,
 }
@@ -144,6 +162,8 @@ impl QueryApi {
                        web::get().to(get_address::<T>))
                 .route(&QueryServerRoutes::GetOwnedUtxos.with_arg_template("address"),
                        web::get().to(get_owned_utxos::<T>))
+                .route(&QueryServerRoutes::GetRelatedTxns.with_arg_template("address"),
+                       web::get().to(get_related_txns::<T>))
                 .route(&QueryServerRoutes::GetIssuedRecords.with_arg_template("address"),
                        web::get().to(get_issued_records::<T>))
                 .route(&QueryServerRoutes::StoreCustomData.route(),

@@ -2,7 +2,7 @@
 use ledger::data_model::errors::PlatformError;
 use ledger::data_model::{
   b64enc, BlockSID, FinalizedTransaction, IssueAsset, IssuerPublicKey, KVBlind, KVHash, KVUpdate,
-  Operation, TransferAsset, TxOutput, TxoRef, TxoSID, XfrAddress,
+  Operation, Transaction, TransferAsset, TxOutput, TxnSID, TxoRef, TxoSID, XfrAddress,
 };
 use ledger::error_location;
 use ledger::store::*;
@@ -25,6 +25,7 @@ pub struct QueryServer<T>
 {
   committed_state: LedgerState,
   addresses_to_utxos: HashMap<XfrAddress, HashSet<TxoSID>>,
+  related_transactions: HashMap<XfrAddress, HashSet<TxnSID>>, // Set of transactions related to a ledger address
   issuances: HashMap<IssuerPublicKey, Vec<TxOutput>>,
   utxos_to_map_index: HashMap<TxoSID, XfrAddress>,
   custom_data_store: HashMap<Key, (Vec<u8>, KVHash)>,
@@ -36,6 +37,7 @@ impl<T> QueryServer<T> where T: RestfulArchiveAccess
   pub fn new(rest_client: T) -> QueryServer<T> {
     QueryServer { committed_state: LedgerState::test_ledger(),
                   addresses_to_utxos: HashMap::new(),
+                  related_transactions: HashMap::new(),
                   custom_data_store: HashMap::new(),
                   issuances: HashMap::new(),
                   utxos_to_map_index: HashMap::new(),
@@ -49,6 +51,10 @@ impl<T> QueryServer<T> where T: RestfulArchiveAccess
 
   pub fn get_issued_records(&self, issuer: &IssuerPublicKey) -> Option<Vec<TxOutput>> {
     self.issuances.get(issuer).cloned()
+  }
+
+  pub fn get_related_transactions(&self, address: &XfrAddress) -> Option<HashSet<TxnSID>> {
+    self.related_transactions.get(&address).cloned()
   }
 
   pub fn get_owned_utxo_sids(&self, address: &XfrAddress) -> Option<HashSet<TxoSID>> {
@@ -164,6 +170,15 @@ impl<T> QueryServer<T> where T: RestfulArchiveAccess
         (ledger.get_transaction(*txn_sid).unwrap().finalized_txn.txn, addresses)
       };
 
+      // Update related addresses
+      let related_addresses = get_related_addresses(&txn);
+      for address in &related_addresses {
+        self.related_transactions
+            .entry(*address)
+            .or_insert_with(HashSet::new)
+            .insert(*txn_sid);
+      }
+
       // Remove spent utxos
       for op in &txn.body.operations {
         match op {
@@ -205,11 +220,55 @@ impl<T> QueryServer<T> where T: RestfulArchiveAccess
   }
 }
 
+// An xfr address is related to a transaction if it is one of the following:
+// 1. Owner of a transfer output
+// 2. Transfer signer (owner of input or co-signer)
+// 3. Signer of a an issuance txn
+// 4. Signer of a kv_update txn
+// 5. Signer of a memo_update txn
+fn get_related_addresses(txn: &Transaction) -> HashSet<XfrAddress> {
+  let mut related_addresses = HashSet::new();
+  for op in &txn.body.operations {
+    match op {
+      Operation::TransferAsset(transfer) => {
+        for input in transfer.body.transfer.inputs.iter() {
+          related_addresses.insert(XfrAddress { key: input.public_key });
+        }
+
+        for output in transfer.body.transfer.inputs.iter() {
+          related_addresses.insert(XfrAddress { key: output.public_key });
+        }
+      }
+      Operation::IssueAsset(issue_asset) => {
+        related_addresses.insert(XfrAddress { key: issue_asset.pubkey.key });
+      }
+      Operation::DefineAsset(define_asset) => {
+        related_addresses.insert(XfrAddress { key: define_asset.pubkey.key });
+      }
+      Operation::UpdateMemo(update_memo) => {
+        related_addresses.insert(XfrAddress { key: update_memo.pubkey });
+      }
+      Operation::AIRAssign(air_assign) => {
+        related_addresses.insert(XfrAddress { key: air_assign.pubkey });
+      }
+      Operation::KVStoreUpdate(kv_store_update) => {
+        if let Some(entry) = &kv_store_update.body.2 {
+          related_addresses.insert(XfrAddress { key: entry.0 });
+        }
+      }
+    }
+  }
+  related_addresses
+}
+
 #[cfg(test)]
 mod tests {
   use super::*;
-  use ledger::data_model::{AssetRules, AssetTypeCode, BlockSID, TransferType};
-  use ledger::store::helpers::apply_transaction;
+  use ledger::data_model::{
+    AssetRules, AssetTypeCode, BlockSID, KVHash, KVUpdate, Memo, TransferType, UpdateMemo,
+    UpdateMemoBody,
+  };
+  use ledger::store::helpers::{apply_transaction, create_definition_transaction};
   use ledger_api_service::MockLedgerClient;
   use rand_chacha::ChaChaRng;
   use rand_core::SeedableRng;
@@ -363,9 +422,98 @@ mod tests {
     let issuer_records = query_server.get_issued_records(&IssuerPublicKey { key: alice.get_pk()
                                                                                       .clone() })
                                      .unwrap();
+    let alice_related_txns =
+      query_server.get_related_transactions(&XfrAddress { key: *alice.get_pk_ref() })
+                  .unwrap();
 
     assert!(issuer_records.len() == 3);
     assert!(!alice_sids.contains(&TxoSID(0)));
+    assert!(alice_related_txns.contains(&TxnSID(0)));
     assert!(bob_sids.contains(&TxoSID(3)));
+  }
+  #[test]
+  fn test_related_txns_memo_update() {
+    let rest_client_ledger_state = Arc::new(RwLock::new(LedgerState::test_ledger()));
+    let mut ledger_state = LedgerState::test_ledger();
+    // This isn't actually being used in the test, we just make a ledger client so we can compile
+    let mock_ledger = MockLedgerClient::new(&Arc::clone(&rest_client_ledger_state));
+    let mut query_server = QueryServer::new(mock_ledger);
+    let code = AssetTypeCode { val: [1; 16] };
+    let creator = XfrKeyPair::generate(&mut ledger_state.get_prng());
+    let tx = create_definition_transaction(&code,
+                                           &creator,
+                                           AssetRules::default().set_updatable(true).clone(),
+                                           Some(Memo("test".to_string())),
+                                           ledger_state.get_block_commit_count()).unwrap();
+    apply_transaction(&mut ledger_state, tx);
+
+    // Change memo
+    let new_memo = Memo("new_memo".to_string());
+    let memo_update = UpdateMemo::new(UpdateMemoBody { new_memo: new_memo.clone(),
+                                                       asset_type: code },
+                                      &creator);
+    let tx = Transaction::from_operation(Operation::UpdateMemo(memo_update),
+                                         ledger_state.get_block_commit_count());
+    apply_transaction(&mut ledger_state, tx);
+
+    let block0 = ledger_state.get_block(BlockSID(0)).unwrap();
+    let block1 = ledger_state.get_block(BlockSID(1)).unwrap();
+    query_server.add_new_block(&block0.block.txns).unwrap();
+    query_server.add_new_block(&block1.block.txns).unwrap();
+    let related_txns =
+      query_server.get_related_transactions(&XfrAddress { key: *creator.get_pk_ref() })
+                  .unwrap();
+    assert!(related_txns.contains(&TxnSID(1)));
+  }
+  #[test]
+  fn test_related_txns_define_asset() {
+    let rest_client_ledger_state = Arc::new(RwLock::new(LedgerState::test_ledger()));
+    let mut ledger_state = LedgerState::test_ledger();
+    // This isn't actually being used in the test, we just make a ledger client so we can compile
+    let mock_ledger = MockLedgerClient::new(&Arc::clone(&rest_client_ledger_state));
+    let mut query_server = QueryServer::new(mock_ledger);
+    let code = AssetTypeCode { val: [1; 16] };
+    let creator = XfrKeyPair::generate(&mut ledger_state.get_prng());
+    let tx = create_definition_transaction(&code,
+                                           &creator,
+                                           AssetRules::default(),
+                                           Some(Memo("test".to_string())),
+                                           ledger_state.get_block_commit_count()).unwrap();
+    apply_transaction(&mut ledger_state, tx);
+    let block0 = ledger_state.get_block(BlockSID(0)).unwrap();
+    query_server.add_new_block(&block0.block.txns).unwrap();
+    let related_txns =
+      query_server.get_related_transactions(&XfrAddress { key: *creator.get_pk_ref() })
+                  .unwrap();
+    assert!(related_txns.contains(&TxnSID(0)));
+  }
+  #[test]
+  fn test_related_txns_kv_store_update() {
+    let rest_client_ledger_state = Arc::new(RwLock::new(LedgerState::test_ledger()));
+    let mut ledger_state = LedgerState::test_ledger();
+    // This isn't actually being used in the test, we just make a ledger client so we can compile
+    let mock_ledger = MockLedgerClient::new(&Arc::clone(&rest_client_ledger_state));
+    let mut prng = ChaChaRng::from_entropy();
+    let kp = XfrKeyPair::generate(&mut prng);
+    let mut query_server = QueryServer::new(mock_ledger);
+
+    // KV update txn
+    let data = [0u8, 16];
+    let key = l256("01");
+    let hash = KVHash::new(&data, None);
+    let update = KVUpdate::new((key, Some(hash)), 0, &kp);
+
+    // Submit
+    let tx = Transaction::from_operation(Operation::KVStoreUpdate(update.clone()),
+                                         ledger_state.get_block_commit_count());
+    apply_transaction(&mut ledger_state, tx);
+
+    // Check related txns
+    let block0 = ledger_state.get_block(BlockSID(0)).unwrap();
+    query_server.add_new_block(&block0.block.txns).unwrap();
+    let related_txns = query_server.get_related_transactions(&XfrAddress { key:
+                                                                             *kp.get_pk_ref() })
+                                   .unwrap();
+    assert!(related_txns.contains(&TxnSID(0)));
   }
 }
