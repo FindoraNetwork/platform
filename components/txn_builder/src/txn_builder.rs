@@ -262,8 +262,7 @@ pub trait BuildsTransactions {
                                key_pair: &XfrKeyPair,
                                token_code: &AssetTypeCode,
                                seq_num: u64,
-                               records: &[(TxOutput, Option<OwnerMemo>)],
-                               tracing_policy: Option<AssetTracingPolicy>)
+                               records: &[(TxOutput, Option<OwnerMemo>)])
                                -> Result<&mut Self, PlatformError>;
   #[allow(clippy::too_many_arguments)]
   fn add_operation_transfer_asset(&mut self,
@@ -295,7 +294,6 @@ pub trait BuildsTransactions {
 
   fn add_basic_issue_asset(&mut self,
                            key_pair: &XfrKeyPair,
-                           tracing_policy: Option<AssetTracingPolicy>,
                            token_code: &AssetTypeCode,
                            seq_num: u64,
                            amount: u64,
@@ -303,22 +301,13 @@ pub trait BuildsTransactions {
                            -> Result<&mut Self, PlatformError> {
     let mut prng = ChaChaRng::from_entropy();
     let params = PublicParams::new();
-    let mut policies = AssetTracingPolicies::new();
-    if let Some(x) = tracing_policy.as_ref() {
-      policies.add(x.clone());
-    }
-    let ar = AssetRecordTemplate::with_asset_tracking(amount,
-                                                      token_code.val,
-                                                      confidentiality_flags,
-                                                      key_pair.get_pk(),
-                                                      policies);
+    let ar = AssetRecordTemplate::with_no_asset_tracking(amount,
+                                                         token_code.val,
+                                                         confidentiality_flags,
+                                                         key_pair.get_pk());
 
     let (ba, _, owner_memo) = build_blind_asset_record(&mut prng, &params.pc_gens, &ar, vec![]);
-    self.add_operation_issue_asset(key_pair,
-                                   token_code,
-                                   seq_num,
-                                   &[(TxOutput(ba), owner_memo)],
-                                   tracing_policy)
+    self.add_operation_issue_asset(key_pair, token_code, seq_num, &[(TxOutput(ba), owner_memo)])
   }
 
   #[allow(clippy::comparison_chain)]
@@ -474,8 +463,7 @@ impl BuildsTransactions for TransactionBuilder {
                                key_pair: &XfrKeyPair,
                                token_code: &AssetTypeCode,
                                seq_num: u64,
-                               records_and_memos: &[(TxOutput, Option<OwnerMemo>)],
-                               tracing_policy: Option<AssetTracingPolicy>)
+                               records_and_memos: &[(TxOutput, Option<OwnerMemo>)])
                                -> Result<&mut Self, PlatformError> {
     let iss_keypair = IssuerKeyPair { keypair: &key_pair };
 
@@ -487,8 +475,7 @@ impl BuildsTransactions for TransactionBuilder {
     self.txn
         .add_operation(Operation::IssueAsset(IssueAsset::new(IssueAssetBody::new(token_code,
                                                                                  seq_num,
-                                                                                 &records,
-                                                                                 tracing_policy)?,
+                                                                                 &records)?,
                                                              &iss_keypair)?));
     Ok(self)
   }
@@ -498,9 +485,9 @@ impl BuildsTransactions for TransactionBuilder {
                                   input_sids: Vec<TxoRef>,
                                   input_records: &[OpenAssetRecord],
                                   input_tracing_policies: Vec<Option<AssetTracingPolicy>>,
-                                  input_identity_commitments: Vec<Option<ACCommitment>>,
+                                  _input_identity_commitments: Vec<Option<ACCommitment>>,
                                   output_records: &[AssetRecord],
-                                  output_identity_commitments: Vec<Option<ACCommitment>>)
+                                  _output_identity_commitments: Vec<Option<ACCommitment>>)
                                   -> Result<&mut Self, PlatformError> {
     // TODO(joe/noah): keep a prng around somewhere?
     let mut prng: ChaChaRng;
@@ -521,9 +508,8 @@ impl BuildsTransactions for TransactionBuilder {
     let mut xfr = TransferAsset::new(TransferAssetBody::new(&mut prng,
                                                             input_sids,
                                                             &input_asset_records[..],
-                                                            input_identity_commitments,
                                                             output_records,
-                                                            output_identity_commitments,
+                                                            None,
                                                             TransferType::Standard)?)?;
     xfr.sign(&keys);
 
@@ -871,9 +857,8 @@ impl TransferOperationBuilder {
     let body = TransferAssetBody::new(&mut prng,
                                       self.input_sids.clone(),
                                       &self.input_records,
-                                      self.input_identity_commitments.clone(),
                                       &self.output_records,
-                                      self.output_identity_commitments.clone(),
+                                      None,
                                       transfer_type)?;
     self.transfer = Some(TransferAsset::new(body)?);
     Ok(self)

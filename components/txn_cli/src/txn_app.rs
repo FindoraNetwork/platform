@@ -259,7 +259,7 @@ pub(crate) fn process_asset_issuer_cmd(asset_issuer_matches: &clap::ArgMatches,
     }
     ("issue_asset", Some(issue_asset_matches)) => {
       let data = load_data(data_dir)?;
-      let (key_pair, tracer_enc_keys) = if let Some(id_arg) = asset_issuer_matches.value_of("id") {
+      let (key_pair, _) = if let Some(id_arg) = asset_issuer_matches.value_of("id") {
         let issuer_id = parse_to_u64(id_arg)?;
         (data.get_asset_issuer_key_pair(issuer_id)?,
          data.get_asset_tracer_key_pair(issuer_id)?.enc_key)
@@ -281,16 +281,8 @@ pub(crate) fn process_asset_issuer_cmd(asset_issuer_matches: &clap::ArgMatches,
       };
       let confidential_amount = issue_asset_matches.is_present("confidential_amount");
       let mut txn_builder = TransactionBuilder::from_seq_id(seq_id);
-      let policy = if issue_asset_matches.is_present("traceable") {
-        Some(AssetTracingPolicy { enc_keys: tracer_enc_keys,
-                                  asset_tracking: true,
-                                  identity_tracking: None })
-      } else {
-        None
-      };
       if let Err(e) =
         txn_builder.add_basic_issue_asset(&key_pair,
-                                          policy,
                                           &token_code,
                                           get_and_update_sequence_number(data_dir)?,
                                           amount,
@@ -1418,10 +1410,6 @@ pub fn get_cli_app<'a, 'b>() -> App<'a, 'b> {
           .required(true)
           .takes_value(true)
           .help("Token code of the asset to be issued. The transaction will fail if no asset with the token code exists."))
-        .arg(Arg::with_name("traceable")
-          .short("t")
-          .long("traceable")
-          .help("If specified, the asset will be traceable."))
         .arg(Arg::with_name("amount")
           .short("amt")
           .long("amount")

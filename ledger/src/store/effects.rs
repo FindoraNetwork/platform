@@ -1,18 +1,22 @@
 //#![deny(warnings)]
+#![feature(let_chains)]
 use crate::data_model::errors::PlatformError;
 use crate::data_model::*;
 use crate::policies::{compute_debt_swap_effect, DebtSwapEffect};
 use crate::policy_script::{run_txn_check, TxnCheckInputs, TxnPolicyData};
 use crate::{error_location, inp_fail, inv_fail, zei_fail};
 use credentials::credential_verify_commitment;
+use rand_chacha::ChaChaRng;
+use rand_core::{CryptoRng, RngCore, SeedableRng};
 use serde::Serialize;
 use sparse_merkle_tree::Key;
 use std::collections::{HashMap, HashSet};
 use utils::{HasInvariants, HashOf, SignatureOf};
 use zei::api::anon_creds::ACCommitment;
 use zei::serialization::ZeiFromToBytes;
+use zei::xfr::lib::{verify_xfr_body, XfrNotePolicies};
 use zei::xfr::sig::XfrPublicKey;
-use zei::xfr::structs::{AssetTracingPolicy, BlindAssetRecord, XfrAmount, XfrAssetType};
+use zei::xfr::structs::{AssetTracingPolicies, BlindAssetRecord, XfrAmount, XfrAssetType};
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct TxnEffect {
@@ -45,6 +49,8 @@ pub struct TxnEffect {
   pub debt_effects: HashMap<AssetTypeCode, DebtSwapEffect>,
   // Non-confidential asset types involved in confidential transfers
   pub confidential_transfer_inputs: HashSet<AssetTypeCode>,
+  // Tracing policies that input/outputs types were validated under
+  pub tracing_policies: HashMap<AssetTypeCode, AssetTracingPolicies>,
 
   pub asset_types_involved: HashSet<AssetTypeCode>,
   pub custom_policy_asset_types: HashMap<AssetTypeCode, TxnCheckInputs>,
@@ -67,13 +73,14 @@ impl TxnEffect {
     let mut txos: Vec<Option<TxOutput>> = Vec::new();
     let mut internally_spent_txos = Vec::new();
     let mut input_txos: HashMap<TxoSID, BlindAssetRecord> = HashMap::new();
-    let mut memo_updates = Vec::new();
     let mut new_asset_codes: HashMap<AssetTypeCode, AssetType> = HashMap::new();
     let mut cosig_keys = HashMap::new();
+    let mut memo_updates = Vec::new();
     let mut new_issuance_nums: HashMap<AssetTypeCode, Vec<u64>> = HashMap::new();
     let mut issuance_keys: HashMap<AssetTypeCode, IssuerPublicKey> = HashMap::new();
     let mut issuance_amounts = HashMap::new();
     let mut debt_effects: HashMap<AssetTypeCode, DebtSwapEffect> = HashMap::new();
+    let mut tracing_policies: HashMap<AssetTypeCode, AssetTracingPolicies> = HashMap::new();
     let mut asset_types_involved: HashSet<AssetTypeCode> = HashSet::new();
     let mut confidential_issuance_types = HashSet::new();
     let mut kv_updates =
@@ -89,6 +96,8 @@ impl TxnEffect {
                                        .collect::<HashMap<_, _>>();
 
     let mut air_updates: HashMap<String, String> = HashMap::new();
+    let mut params = zei::setup::PublicParams::new(); // TODO pass these in
+    let mut prng = ChaChaRng::from_entropy();
 
     // Sequentially go through the operations, validating intrinsic or
     // local-to-the-transaction properties, then recording effects and
@@ -306,6 +315,38 @@ impl TxnEffect {
                 cosig_keys.entry((op_idx, input_idx))
                           .or_insert_with(HashSet::new);
               }
+
+              let policies = XfrNotePolicies::from_policies_no_ref(&trn.body.policies);
+              verify_xfr_body(&mut prng,
+                              &mut params,
+                              &trn.body.transfer,
+                              &policies).map_err(|e| {
+                                          PlatformError::ZeiError(error_location!(), e)
+                                        })?;
+
+              // Track policies that each asset was validated under
+              for (input_policies, record) in trn.body
+                                                 .policies
+                                                 .inputs_tracking_policies
+                                                 .iter()
+                                                 .zip(trn.body.transfer.inputs.iter())
+                                                 .chain(trn.body
+                                                           .policies
+                                                           .outputs_tracking_policies
+                                                           .iter()
+                                                           .zip(trn.body.transfer.outputs.iter()))
+              {
+                // Only non-confidential assets can be traced
+                if let Some(inp_code) = record.asset_type.get_asset_type() {
+                  let prev_policies = tracing_policies.insert(AssetTypeCode { val: inp_code },
+                                                              input_policies.clone());
+
+                  // Tracing policies must be consistent w.r.t asset type (cant change)
+                  if prev_policies.is_some() && prev_policies.unwrap() != *input_policies {
+                    return Err(inp_fail!());
+                  }
+                }
+              }
             }
           }
           // (3)
@@ -415,6 +456,7 @@ impl TxnEffect {
                    input_txos,
                    cosig_keys,
                    internally_spent_txos,
+                   tracing_policies,
                    new_asset_codes,
                    new_issuance_nums,
                    memo_updates,
@@ -505,8 +547,6 @@ pub struct BlockEffect {
   pub issuance_amounts: HashMap<AssetTypeCode, u64>,
   // Which public key is being used to issue each asset type
   pub issuance_keys: HashMap<AssetTypeCode, IssuerPublicKey>,
-  // Which new tracing policies are being added
-  pub new_tracing_policies: HashMap<AssetTypeCode, AssetTracingPolicy>,
   // Updates to the AIR
   pub air_updates: HashMap<String, String>,
   // User-provided Key-Value store updates

@@ -443,8 +443,8 @@ impl AssetRules {
 
   /// Toggles asset traceability.
   /// @param {TracingPolicy} policy - Tracing policy for the new asset.
-  pub fn set_tracing(mut self, policy: &TracingPolicy) -> AssetRules {
-    self.rules.tracing_policy = Some(policy.get_ref().clone());
+  pub fn add_tracing_policy(mut self, policy: &TracingPolicy) -> AssetRules {
+    self.rules.tracing_policies.add(policy.get_ref().clone());
     self
   }
 
