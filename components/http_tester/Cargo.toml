@@ -23,4 +23,4 @@ serde_json = "1.0.40"
 time = "0.2.15"
 txn_builder = { path = "../txn_builder" }
 utils = { path = "../../libs/utils" }
-zei = { git = "ssh://git@github.com/findoraorg/zei", tag = "v0.0.3" }
+zei = { git = "ssh://git@github.com/findoraorg/zei", tag = "v0.0.3-1" }
