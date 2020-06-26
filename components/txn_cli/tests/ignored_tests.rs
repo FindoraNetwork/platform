@@ -523,7 +523,7 @@ fn test_create_or_overwrite_credentials() {
 //
 // Lender or borrower views loans or credentials
 //
-#[test]
+#[allow(unused)]
 fn test_view() {
   let tmp_dir = tempdir().unwrap();
   let dir = tmp_dir.path().to_str().unwrap();

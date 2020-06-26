@@ -153,7 +153,7 @@ impl Credential {
 //
 // Users
 //
-#[derive(Clone, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 /// Asset issuer's account information.
 pub(crate) struct AssetIssuer {
   /// AssetIssuer ID
@@ -180,7 +180,7 @@ impl AssetIssuer {
     Ok(AssetIssuer { id: id as u64,
                      name,
                      key_pair: key_pair_str,
-                     tracer_key_pair: hex::encode(tracer_key_pair_str) })
+                     tracer_key_pair: tracer_key_pair_str })
   }
 }
 
@@ -405,9 +405,9 @@ impl Data {
 
   pub fn get_asset_tracer_key_pair(&self, id: u64) -> Result<AssetTracerKeyPair, PlatformError> {
     let tracer_key_pair_str = &self.asset_issuers[id as usize].tracer_key_pair;
-    let tracer_key_pair_decode = hex::decode(tracer_key_pair_str).or_else(|e| Err(des_fail!(e)))?;
+    dbg!(&self.asset_issuers);
     let tracer_key_pair =
-      serde_json::from_slice(&tracer_key_pair_decode).or_else(|e| Err(des_fail!(e)))?;
+      serde_json::from_str(&tracer_key_pair_str).or_else(|e| Err(des_fail!(e)))?;
     Ok(tracer_key_pair)
   }
 
@@ -580,6 +580,15 @@ pub fn load_data(data_dir: &str) -> Result<Data, PlatformError> {
     Ok(data) => serde_json::from_str::<Data>(&data).or_else(|e| Err(des_fail!(e))),
     Err(_) => match fs::read_to_string(INIT_DATA_PATH) {
       Ok(init_data) => {
+        //let tracer_key_pair = gen_asset_tracer_keypair(&mut ChaChaRng::from_entropy());
+        //dbg!(&tracer_key_pair);
+        //let tracer_key_pair_str =
+        //  serde_json::to_string(&tracer_key_pair).or_else(|e| Err(ser_fail!(e)))?;
+        //dbg!(&tracer_key_pair_str);
+        //let tracer_key_pair_decode =
+        //  hex::decode(tracer_key_pair_str).or_else(|e| Err(des_fail!(e)))?;
+        //dbg!(&tracer_key_pair_decode);
+        dbg!("LOADING INITIAL DATA");
         let data = serde_json::from_str::<Data>(&init_data).or_else(|e| Err(des_fail!(e)))?;
         store_data_to_file(data.clone(), data_dir)?;
         Ok(data)
