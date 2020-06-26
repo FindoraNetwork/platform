@@ -339,6 +339,10 @@ impl AssetType {
     };
     self.properties != simple_asset
   }
+
+  pub fn get_tracing_policies_ref(&self) -> &AssetTracingPolicies {
+    &self.properties.asset_rules.tracing_policies
+  }
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, Serialize)]
@@ -423,7 +427,7 @@ impl TransferAssetBody {
                                      transfer_type: TransferType)
                                      -> Result<TransferAssetBody, errors::PlatformError> {
     let num_inputs = input_records.len();
-    let num_outputs = input_records.len();
+    let num_outputs = output_records.len();
 
     if num_inputs == 0 {
       return Err(PlatformError::InputsError(error_location!()));
@@ -433,8 +437,8 @@ impl TransferAssetBody {
     let policies = policies.unwrap_or_else(|| {
                              let no_policies = AssetTracingPolicies::new();
                              XfrNotePoliciesNoRef::new(vec![no_policies.clone(); num_inputs],
-                                                       vec![None; num_outputs],
-                                                       vec![no_policies; num_inputs],
+                                                       vec![None; num_inputs],
+                                                       vec![no_policies; num_outputs],
                                                        vec![None; num_outputs])
                            });
 
@@ -1220,7 +1224,6 @@ mod tests {
 
     let keypair = XfrKeyPair::generate(&mut prng);
 
-    // Instantiate an TransferAsset operation
     let xfr_note = XfrBody { inputs: Vec::new(),
                              outputs: Vec::new(),
                              proofs: XfrProofs { asset_type_and_amount_proof:
@@ -1229,15 +1232,21 @@ mod tests {
                              asset_tracing_memos: vec![],
                              owners_memos: vec![] };
 
-    let assert_transfer_body = TransferAssetBody { inputs: Vec::new(),
-                                                   input_identity_commitments: Vec::new(),
-                                                   num_outputs: 0,
-                                                   output_identity_commitments: Vec::new(),
-                                                   transfer: Box::new(xfr_note),
-                                                   transfer_type: TransferType::Standard };
+    let no_policies = AssetTracingPolicies::new();
+
+    let policies = XfrNotePoliciesNoRef::new(vec![no_policies.clone()],
+                                             vec![None],
+                                             vec![no_policies],
+                                             vec![None]);
+
+    let asset_transfer_body = TransferAssetBody { inputs: Vec::new(),
+                                                  policies,
+                                                  num_outputs: 0,
+                                                  transfer: Box::new(xfr_note),
+                                                  transfer_type: TransferType::Standard };
 
     let asset_transfer = {
-      let mut ret = TransferAsset::new(assert_transfer_body).unwrap();
+      let mut ret = TransferAsset::new(asset_transfer_body).unwrap();
       ret.sign(&keypair);
       ret
     };
@@ -1248,8 +1257,7 @@ mod tests {
     let asset_issuance_body = IssueAssetBody { code: Default::default(),
                                                seq_num: 0,
                                                num_outputs: 0,
-                                               records: Vec::new(),
-                                               tracing_policy: None };
+                                               records: Vec::new() };
 
     let asset_issuance =
       IssueAsset::new(asset_issuance_body, &IssuerKeyPair { keypair: &keypair }).unwrap();

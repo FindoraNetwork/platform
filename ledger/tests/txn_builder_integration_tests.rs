@@ -15,9 +15,8 @@ use zei::serialization::ZeiFromToBytes;
 use zei::setup::PublicParams;
 use zei::xfr::asset_record::AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType;
 use zei::xfr::asset_record::{build_blind_asset_record, open_blind_asset_record, AssetRecordType};
-use zei::xfr::asset_tracer::gen_asset_tracer_keypair;
 use zei::xfr::sig::{XfrKeyPair, XfrPublicKey};
-use zei::xfr::structs::{AssetRecordTemplate, AssetTracingPolicy};
+use zei::xfr::structs::AssetRecordTemplate;
 
 pub fn apply_transaction(ledger: &mut LedgerState, tx: Transaction) -> (TxnSID, Vec<TxoSID>) {
   let effect = TxnEffect::compute_effect(tx).expect("compute effect failed");
@@ -39,35 +38,24 @@ fn test_create_asset() -> Result<(), PlatformError> {
   let keys = XfrKeyPair::generate(&mut prng);
   let mut builder = TransactionBuilder::from_seq_id(ledger.get_block_commit_count());
 
-  // Tracer kp
-  let tracer_kp = gen_asset_tracer_keypair(&mut prng);
-  let policy = AssetTracingPolicy { enc_keys: tracer_kp.enc_key.clone(),
-                                    asset_tracking: true,
-                                    identity_tracking: None };
-
   // Define
-  let tx =
-    builder.add_operation_create_asset(&keys,
-                                       Some(code),
-                                       AssetRules::default().set_tracing_policy(Some(policy.clone()))
-                                                            .clone(),
-                                       "test".into(),
-                                       PolicyChoice::Fungible())?
-           .transaction();
+  let tx = builder.add_operation_create_asset(&keys,
+                                              Some(code),
+                                              AssetRules::default(),
+                                              "test".into(),
+                                              PolicyChoice::Fungible())?
+                  .transaction();
   apply_transaction(&mut ledger, tx.clone());
-  assert!(ledger.get_asset_type(&code).is_some());
 
   // Issue
   let mut builder = TransactionBuilder::from_seq_id(ledger.get_block_commit_count());
   let tx =
     builder.add_basic_issue_asset(&keys,
-                                  Some(policy.clone()),
                                   &code,
                                   0,
                                   1000,
                                   AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType)?
            .add_basic_issue_asset(&keys,
-                                  Some(policy.clone()),
                                   &code,
                                   1,
                                   500,
@@ -82,8 +70,8 @@ fn test_create_asset() -> Result<(), PlatformError> {
   let oar2 = open_blind_asset_record(&bar2, &None, keys.get_sk_ref()).unwrap();
 
   let op = TransferOperationBuilder::new().add_input(TxoRef::Absolute(txos[0]), oar1, None, None, 1000)?
-                                          .add_input(TxoRef::Absolute(txos[1]), oar2, Some(policy.clone()), None, 500)?
-                                          .add_output(&AssetRecordTemplate::with_asset_tracking(1500, code.val, NonConfidentialAmount_NonConfidentialAssetType, keys.get_pk(), policy.clone()), None, None, None)?
+                                          .add_input(TxoRef::Absolute(txos[1]), oar2, None, None, 500)?
+                                          .add_output(&AssetRecordTemplate::with_no_asset_tracking(1500, code.val, NonConfidentialAmount_NonConfidentialAssetType, keys.get_pk()), None, None, None)?
                                           .create(TransferType::Standard)?
                                           .sign(&keys)?
                                           .transaction()?;
@@ -163,13 +151,11 @@ fn test_loan_repayment(loan_amount: u64,
   let tx = builder.add_operation_issue_asset(&fiat_issuer_keys,
                                              &fiat_code,
                                              0,
-                                             &[(TxOutput(fiat_ba.clone()), fiat_owner_memo)],
-                                             None)?
+                                             &[(TxOutput(fiat_ba.clone()), fiat_owner_memo)])?
                   .add_operation_issue_asset(&borrower_keys,
                                              &debt_code,
                                              0,
-                                             &[(TxOutput(debt_ba.clone()), debt_owner_memo)],
-                                             None)?;
+                                             &[(TxOutput(debt_ba.clone()), debt_owner_memo)])?;
   let mut xfr_builder = TransferOperationBuilder::new();
   let output_template =
     AssetRecordTemplate::with_no_asset_tracking(loan_amount,

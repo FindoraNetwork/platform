@@ -317,6 +317,8 @@ impl TxnEffect {
               }
 
               let policies = XfrNotePolicies::from_policies_no_ref(&trn.body.policies);
+              dbg!(&trn.body.policies);
+              dbg!(&trn.body.transfer);
               verify_xfr_body(&mut prng,
                               &mut params,
                               &trn.body.transfer,

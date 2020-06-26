@@ -19,7 +19,8 @@ use zei::xfr::asset_tracer::gen_asset_tracer_keypair;
 use zei::xfr::sig::XfrPublicKey;
 use zei::xfr::structs::{
   AssetTracerDecKeys, AssetTracerEncKeys, AssetTracerKeyPair as ZeiAssetTracerKeyPair,
-  AssetTracingPolicy, BlindAssetRecord, IdentityRevealPolicy, OwnerMemo as ZeiOwnerMemo,
+  AssetTracingPolicies, AssetTracingPolicy, BlindAssetRecord, IdentityRevealPolicy,
+  OwnerMemo as ZeiOwnerMemo,
 };
 
 #[wasm_bindgen]
@@ -380,6 +381,19 @@ impl SignatureRules {
              .collect::<Result<Vec<(XfrPublicKey, u64)>, JsValue>>()?;
     let sig_rules = PlatformSignatureRules { threshold, weights };
     Ok(SignatureRules { sig_rules })
+  }
+}
+
+#[wasm_bindgen]
+/// A collection of tracing policies.
+/// TODO figure out how to construct this
+pub struct TracingPolicies {
+  pub(crate) policies: AssetTracingPolicies,
+}
+
+impl TracingPolicies {
+  pub fn get_policies_ref(&self) -> &AssetTracingPolicies {
+    &self.policies
   }
 }
 

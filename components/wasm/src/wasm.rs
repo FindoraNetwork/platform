@@ -31,7 +31,7 @@ use zei::serialization::ZeiFromToBytes;
 use zei::xfr::asset_record::{open_blind_asset_record as open_bar, AssetRecordType};
 use zei::xfr::lib::trace_assets as zei_trace_assets;
 use zei::xfr::sig::{XfrKeyPair, XfrPublicKey};
-use zei::xfr::structs::{AssetRecordTemplate, AssetTracingPolicies, AssetTracingPolicy, XfrBody};
+use zei::xfr::structs::{AssetRecordTemplate, XfrBody};
 
 mod util;
 mod wasm_data_model;
@@ -374,7 +374,7 @@ impl TransferOperationBuilder {
                    txo_ref: TxoRef,
                    asset_record: ClientAssetRecord,
                    owner_memo: Option<OwnerMemo>,
-                   tracing_key: Option<&AssetTracerKeyPair>,
+                   tracing_policies: Option<&TracingPolicies>,
                    key: &XfrKeyPair,
                    amount: u64)
                    -> Result<TransferOperationBuilder, JsValue> {
@@ -385,10 +385,7 @@ impl TransferOperationBuilder {
     self.get_builder_mut()
         .add_input(*txo_ref.get_txo(),
                    oar,
-                   tracing_key.map(|key| AssetTracingPolicy { enc_keys: key.get_enc_key()
-                                                                           .clone(),
-                                                              asset_tracking: true,
-                                                              identity_tracking: None }),
+                   tracing_policies.map(|policies| policies.get_policies_ref().clone()),
                    None,
                    amount)
         .map_err(error_to_jsvalue)?;
@@ -398,7 +395,7 @@ impl TransferOperationBuilder {
   pub fn add_output(mut self,
                     amount: u64,
                     recipient: &XfrPublicKey,
-                    tracing_key: Option<&AssetTracerKeyPair>,
+                    tracing_policies: Option<&TracingPolicies>,
                     code: String,
                     conf_amount: bool,
                     conf_type: bool)
@@ -407,16 +404,12 @@ impl TransferOperationBuilder {
 
     let asset_record_type = AssetRecordType::from_booleans(conf_amount, conf_type);
     // TODO (noah/keyao) support identity tracing (issue #298)
-    let template = if let Some(key) = tracing_key {
-      let mut policies = AssetTracingPolicies::new();
-      policies.add(AssetTracingPolicy { enc_keys: key.get_enc_key().clone(),
-                                        asset_tracking: true,
-                                        identity_tracking: None });
+    let template = if let Some(policies) = tracing_policies {
       AssetRecordTemplate::with_asset_tracking(amount,
                                                code.val,
                                                asset_record_type,
                                                *recipient,
-                                               policies)
+                                               policies.get_policies_ref().clone())
     } else {
       AssetRecordTemplate::with_no_asset_tracking(amount, code.val, asset_record_type, *recipient)
     };
@@ -455,14 +448,14 @@ impl TransferOperationBuilder {
                                  txo_ref: TxoRef,
                                  asset_record: ClientAssetRecord,
                                  owner_memo: Option<OwnerMemo>,
-                                 tracing_key: &AssetTracerKeyPair,
+                                 tracing_policies: &TracingPolicies,
                                  key: &XfrKeyPair,
                                  amount: u64)
                                  -> Result<TransferOperationBuilder, JsValue> {
     self.add_input(txo_ref,
                    asset_record,
                    owner_memo,
-                   Some(tracing_key),
+                   Some(tracing_policies),
                    key,
                    amount)
   }
@@ -502,14 +495,14 @@ impl TransferOperationBuilder {
   pub fn add_output_with_tracking(self,
                                   amount: u64,
                                   recipient: &XfrPublicKey,
-                                  tracing_key: &AssetTracerKeyPair,
+                                  tracing_policies: &TracingPolicies,
                                   code: String,
                                   conf_amount: bool,
                                   conf_type: bool)
                                   -> Result<TransferOperationBuilder, JsValue> {
     self.add_output(amount,
                     recipient,
-                    Some(&tracing_key),
+                    Some(&tracing_policies),
                     code,
                     conf_amount,
                     conf_type)

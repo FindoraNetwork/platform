@@ -526,6 +526,7 @@ impl LedgerStatus {
                                 .get_asset_type()
                                 .map(|v| AssetTypeCode { val: v })
       {
+        dbg!(&self.asset_types);
         let asset_type = self.asset_types
                              .get(&code)
                              .or_else(|| txn.new_asset_codes.get(&code))
@@ -2077,7 +2078,7 @@ pub mod helpers {
                                                       vec![tracing_policies.clone()],
                                                       vec![None]);
     // issue operation
-    let ar_template = AssetRecordTemplate::with_asset_tracking(amount, code.val, AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType, issuer_keys.get_pk(), tracing_policies.clone());
+    let ar_template = AssetRecordTemplate::with_asset_tracking(amount, code.val, AssetRecordType::ConfidentialAmount_NonConfidentialAssetType, issuer_keys.get_pk(), tracing_policies.clone());
     let (ba, _tracer_memo, owner_memo) =
       build_blind_asset_record(ledger.get_prng(), &params.pc_gens, &ar_template, vec![None]);
 
@@ -2089,7 +2090,7 @@ pub mod helpers {
     let issue_op = Operation::IssueAsset(asset_issuance_operation);
 
     // transfer operation
-    let ar_template = AssetRecordTemplate::with_asset_tracking(amount, code.val, AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType, *recipient_pk, tracing_policies.clone());
+    let ar_template = AssetRecordTemplate::with_asset_tracking(amount, code.val, AssetRecordType::ConfidentialAmount_NonConfidentialAssetType, *recipient_pk, tracing_policies.clone());
     let ar =
       AssetRecord::from_template_no_identity_tracking(ledger.get_prng(), &ar_template).unwrap();
     let mut transfer =
@@ -2103,6 +2104,7 @@ TransferAsset::new(TransferAssetBody::new(ledger.get_prng(),
     transfer.sign(&issuer_keys);
     let mut tx = Transaction::from_operation(issue_op, seq_num);
     tx.add_operation(Operation::TransferAsset(transfer));
+    dbg!(&tx);
     (tx, ar)
   }
 
@@ -2516,7 +2518,7 @@ mod tests {
     let second_ba = ba.clone();
 
     let asset_issuance_body =
-      IssueAssetBody::new(&code, 0, &[TxOutput(ba), TxOutput(second_ba)], None).unwrap();
+      IssueAssetBody::new(&code, 0, &[TxOutput(ba), TxOutput(second_ba)]).unwrap();
     let asset_issuance_operation =
       IssueAsset::new(asset_issuance_body, &IssuerKeyPair { keypair: &key_pair }).unwrap();
 
@@ -2651,7 +2653,7 @@ mod tests {
       AssetRecordTemplate::with_no_asset_tracking(100, token_code1.val, art, *keypair.get_pk_ref());
 
     let (ba, _, _) = build_blind_asset_record(ledger.get_prng(), &params.pc_gens, &ar, vec![]);
-    let asset_issuance_body = IssueAssetBody::new(&token_code1, 0, &[TxOutput(ba)], None).unwrap();
+    let asset_issuance_body = IssueAssetBody::new(&token_code1, 0, &[TxOutput(ba)]).unwrap();
     let asset_issuance_operation =
       IssueAsset::new(asset_issuance_body, &IssuerKeyPair { keypair: &keypair }).unwrap();
 
@@ -2927,21 +2929,16 @@ mod tests {
                                                 &issuer,
                                                 recipient.get_pk_ref(),
                                                 0);
-    let effect = TxnEffect::compute_effect(tx.clone()).unwrap();
-    let mut block = ledger.start_block().unwrap();
-    let res = ledger.apply_transaction(&mut block, effect);
-    assert!(res.is_ok());
+    apply_transaction(&mut ledger, tx);
 
     // Define an asset with the tracing policy
     let code = AssetTypeCode { val: [1; 16] };
     let tx = create_definition_transaction(&code,
                                            &issuer,
-                                           AssetRules::default().set_tracing_policy(Some(tracing_policy.clone())).clone(),
+                                           AssetRules::default().add_tracing_policy(tracing_policy.clone()).clone(),
                                            Some(Memo("test".to_string())),
                                            ledger.get_block_commit_count()).unwrap();
-    let effect = TxnEffect::compute_effect(tx.clone()).unwrap();
-    let res = ledger.apply_transaction(&mut block, effect);
-    assert!(res.is_ok());
+    apply_transaction(&mut ledger, tx);
 
     // Issue and transfer the asset without a tracing policy
     // Should fail
@@ -2952,6 +2949,7 @@ mod tests {
                                                 &issuer,
                                                 recipient.get_pk_ref(),
                                                 0);
+    let mut block = ledger.start_block().unwrap();
     let effect = TxnEffect::compute_effect(tx.clone()).unwrap();
     let res = ledger.apply_transaction(&mut block, effect);
     assert!(res.is_err());
@@ -2982,6 +2980,7 @@ mod tests {
                                                                    tracing_policy);
     let effect = TxnEffect::compute_effect(tx.clone()).unwrap();
     let res = ledger.apply_transaction(&mut block, effect);
+    dbg!(&res);
     assert!(res.is_ok());
   }
 
@@ -3097,7 +3096,7 @@ mod tests {
     let (ba, _, _) =
       build_blind_asset_record(ledger.get_prng(), &params.pc_gens, &template, vec![]);
 
-    let asset_issuance_body = IssueAssetBody::new(&code, 0, &[TxOutput(ba)], None).unwrap();
+    let asset_issuance_body = IssueAssetBody::new(&code, 0, &[TxOutput(ba)]).unwrap();
     let asset_issuance_operation =
       IssueAsset::new(asset_issuance_body, &IssuerKeyPair { keypair: &alice }).unwrap();
 
