@@ -1,8 +1,9 @@
 #![deny(warnings)]
 use ledger::data_model::errors::PlatformError;
 use ledger::data_model::{
-  b64enc, BlockSID, FinalizedTransaction, IssueAsset, IssuerPublicKey, KVBlind, KVHash, KVUpdate,
-  Operation, Transaction, TransferAsset, TxOutput, TxnSID, TxoRef, TxoSID, XfrAddress,
+  b64enc, AssetTypeCode, BlockSID, DefineAsset, FinalizedTransaction, IssueAsset, IssuerPublicKey,
+  KVBlind, KVHash, KVUpdate, Operation, Transaction, TransferAsset, TxOutput, TxnSID, TxoRef,
+  TxoSID, XfrAddress,
 };
 use ledger::error_location;
 use ledger::store::*;
@@ -26,6 +27,7 @@ pub struct QueryServer<T>
   committed_state: LedgerState,
   addresses_to_utxos: HashMap<XfrAddress, HashSet<TxoSID>>,
   related_transactions: HashMap<XfrAddress, HashSet<TxnSID>>, // Set of transactions related to a ledger address
+  created_assets: HashMap<IssuerPublicKey, Vec<AssetTypeCode>>,
   issuances: HashMap<IssuerPublicKey, Vec<TxOutput>>,
   utxos_to_map_index: HashMap<TxoSID, XfrAddress>,
   custom_data_store: HashMap<Key, (Vec<u8>, KVHash)>,
@@ -38,15 +40,20 @@ impl<T> QueryServer<T> where T: RestfulArchiveAccess
     QueryServer { committed_state: LedgerState::test_ledger(),
                   addresses_to_utxos: HashMap::new(),
                   related_transactions: HashMap::new(),
-                  custom_data_store: HashMap::new(),
+                  created_assets: HashMap::new(),
                   issuances: HashMap::new(),
                   utxos_to_map_index: HashMap::new(),
+                  custom_data_store: HashMap::new(),
                   rest_client }
   }
 
   // Fetch custom data at a given key
   pub fn get_custom_data(&self, key: &Key) -> Option<&(Vec<u8>, KVHash)> {
     self.custom_data_store.get(key)
+  }
+
+  pub fn get_created_assets(&self, issuer: &IssuerPublicKey) -> Option<Vec<AssetTypeCode>> {
+    self.created_assets.get(issuer).cloned()
   }
 
   pub fn get_issued_records(&self, issuer: &IssuerPublicKey) -> Option<Vec<TxOutput>> {
@@ -90,6 +97,16 @@ impl<T> QueryServer<T> where T: RestfulArchiveAccess
     self.custom_data_store
         .insert(*key, (data.as_ref().into(), hash));
     Ok(())
+  }
+
+  // Add created asset
+  pub fn add_created_asset(&mut self, creation: &DefineAsset) {
+    let issuer = creation.pubkey;
+    let new_asset_code = creation.body.asset.code;
+    self.created_assets
+        .entry(issuer)
+        .or_insert_with(Vec::new)
+        .push(new_asset_code);
   }
 
   // Cache issuance records
@@ -175,12 +192,13 @@ impl<T> QueryServer<T> where T: RestfulArchiveAccess
             .insert(*txn_sid);
       }
 
-      // Remove spent utxos
+      // Add created asset and remove spent utxos
       for op in &txn.body.operations {
         match op {
+          Operation::DefineAsset(define_asset) => self.add_created_asset(&define_asset),
+          Operation::IssueAsset(issue_asset) => self.cache_issuance(&issue_asset),
           Operation::TransferAsset(transfer_asset) => self.remove_spent_utxos(&transfer_asset)?,
           Operation::KVStoreUpdate(kv_update) => self.remove_stale_data(&kv_update),
-          Operation::IssueAsset(issue_asset) => self.cache_issuance(&issue_asset),
           _ => {}
         };
       }
