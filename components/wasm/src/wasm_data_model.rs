@@ -6,8 +6,9 @@ use credentials::{
 };
 use cryptohash::sha256::{Digest, DIGESTBYTES};
 use ledger::data_model::{
-  AssetRules as PlatformAssetRules, AuthenticatedAIRResult as PlatformAuthenticatedAIRResult,
-  KVBlind as PlatformKVBlind, KVHash as PlatformKVHash, SignatureRules as PlatformSignatureRules,
+  AssetRules as PlatformAssetRules, AssetType as PlatformAssetType,
+  AuthenticatedAIRResult as PlatformAuthenticatedAIRResult, KVBlind as PlatformKVBlind,
+  KVHash as PlatformKVHash, SignatureRules as PlatformSignatureRules,
   TransferType as PlatformTransferType, TxOutput, TxoRef as PlatformTxoRef, TxoSID,
 };
 use rand_chacha::ChaChaRng;
@@ -260,6 +261,31 @@ impl AuthenticatedAIRResult {
 }
 
 #[wasm_bindgen]
+/// Object representing an asset definition. Used to fetch tracing policies and any other
+/// information that may be required to construct a valid transfer or issuance.
+pub struct AssetType {
+  pub(crate) asset_type: PlatformAssetType,
+}
+
+#[wasm_bindgen]
+impl AssetType {
+  /// Construct an AssetType from the JSON-encoded value returned by the ledger.
+  pub fn from_json(json: &JsValue) -> Result<AssetType, JsValue> {
+    let asset_type: PlatformAssetType = json.into_serde().map_err(error_to_jsvalue)?;
+    Ok(AssetType { asset_type })
+  }
+
+  /// Fetch the tracing policies from the asset definition.
+  pub fn get_tracing_policies(&self) -> TracingPolicies {
+    TracingPolicies { policies: self.asset_type
+                                    .properties
+                                    .asset_rules
+                                    .tracing_policies
+                                    .clone() }
+  }
+}
+
+#[wasm_bindgen]
 impl AuthenticatedAIRResult {
   /// Construct an AIRResult from the JSON-encoded value returned by the ledger.
   pub fn from_json(json: &JsValue) -> Result<AuthenticatedAIRResult, JsValue> {
@@ -385,8 +411,8 @@ impl SignatureRules {
 }
 
 #[wasm_bindgen]
-/// A collection of tracing policies.
-/// TODO figure out how to construct this
+/// A collection of tracing policies. Use this object when constructing asset transfers to generate
+/// the correct tracing proofs for traceable assets.
 pub struct TracingPolicies {
   pub(crate) policies: AssetTracingPolicies,
 }
@@ -404,6 +430,7 @@ pub struct TracingPolicy {
   pub(crate) policy: AssetTracingPolicy,
 }
 
+#[wasm_bindgen]
 impl TracingPolicy {
   pub fn new_with_tracking(tracing_key: &AssetTracerKeyPair) -> Self {
     let policy = AssetTracingPolicy { enc_keys: tracing_key.get_enc_key().clone(),

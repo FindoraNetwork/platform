@@ -414,7 +414,10 @@ impl TransferOperationBuilder {
       AssetRecordTemplate::with_no_asset_tracking(amount, code.val, asset_record_type, *recipient)
     };
     self.get_builder_mut()
-        .add_output(&template, None, None, None)
+        .add_output(&template,
+                    tracing_policies.map(|policies| policies.get_policies_ref().clone()),
+                    None,
+                    None)
         .map_err(error_to_jsvalue)?;
     Ok(self)
   }
@@ -502,7 +505,7 @@ impl TransferOperationBuilder {
                                   -> Result<TransferOperationBuilder, JsValue> {
     self.add_output(amount,
                     recipient,
-                    Some(&tracing_policies),
+                    Some(tracing_policies),
                     code,
                     conf_amount,
                     conf_type)
