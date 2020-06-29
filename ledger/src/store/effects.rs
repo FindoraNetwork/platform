@@ -1,5 +1,4 @@
-//#![deny(warnings)]
-#![feature(let_chains)]
+#![deny(warnings)]
 use crate::data_model::errors::PlatformError;
 use crate::data_model::*;
 use crate::policies::{compute_debt_swap_effect, DebtSwapEffect};
@@ -7,12 +6,11 @@ use crate::policy_script::{run_txn_check, TxnCheckInputs, TxnPolicyData};
 use crate::{error_location, inp_fail, inv_fail, zei_fail};
 use credentials::credential_verify_commitment;
 use rand_chacha::ChaChaRng;
-use rand_core::{CryptoRng, RngCore, SeedableRng};
+use rand_core::SeedableRng;
 use serde::Serialize;
 use sparse_merkle_tree::Key;
 use std::collections::{HashMap, HashSet};
 use utils::{HasInvariants, HashOf, SignatureOf};
-use zei::api::anon_creds::ACCommitment;
 use zei::serialization::ZeiFromToBytes;
 use zei::xfr::lib::{verify_xfr_body, XfrNotePolicies};
 use zei::xfr::sig::XfrPublicKey;
@@ -317,8 +315,6 @@ impl TxnEffect {
               }
 
               let policies = XfrNotePolicies::from_policies_no_ref(&trn.body.policies);
-              dbg!(&trn.body.policies);
-              dbg!(&trn.body.transfer);
               verify_xfr_body(&mut prng,
                               &mut params,
                               &trn.body.transfer,

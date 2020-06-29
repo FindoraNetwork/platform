@@ -698,7 +698,7 @@ impl TransferOperationBuilder {
     if self.transfer.is_some() {
       return Err(inv_fail!("Cannot mutate a transfer that has been signed".to_string()));
     }
-    let policies = tracing_policies.unwrap_or(AssetTracingPolicies::new());
+    let policies = tracing_policies.unwrap_or_default();
 
     let asset_record =
       AssetRecord::from_open_asset_record_with_asset_tracking_but_no_identity(
@@ -725,7 +725,7 @@ impl TransferOperationBuilder {
     if self.transfer.is_some() {
       return Err(inv_fail!("Cannot mutate a transfer that has been signed".to_string()));
     }
-    let policies = tracing_policies.unwrap_or(AssetTracingPolicies::new());
+    let policies = tracing_policies.unwrap_or_default();
     let ar = if let Some((user_secret_key, credential, commitment_key)) = credential_record {
       AssetRecord::from_template_with_identity_tracking(prng,
                                                         asset_record_template,

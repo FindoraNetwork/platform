@@ -169,7 +169,7 @@ pub fn issue_and_transfer_asset(data_dir: &str,
                                               None,
                                               amount)?
                                    .add_output(&output_template,
-                                               tracing_policy.map(|policy| AssetTracingPolicies::from_policy(policy.clone())),
+                                               tracing_policy.map(AssetTracingPolicies::from_policy),
                                                identity_commitment,
                                                credential_record)?
                                    .balance()?

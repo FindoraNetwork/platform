@@ -25,7 +25,7 @@ use std::path::PathBuf;
 use std::u64;
 use utils::HasInvariants;
 use utils::{HashOf, ProofOf, Serialized, SignatureOf};
-use zei::xfr::lib::{verify_xfr_body, XfrNotePolicies, XfrNotePoliciesNoRef};
+use zei::xfr::lib::XfrNotePoliciesNoRef;
 use zei::xfr::sig::{XfrKeyPair, XfrPublicKey};
 use zei::xfr::structs::{AssetTracingPolicies, AssetTracingPolicy, XfrAssetType};
 
@@ -2063,6 +2063,7 @@ pub mod helpers {
     (tx, ar)
   }
 
+  #[allow(clippy::too_many_arguments)]
   pub fn create_issue_and_transfer_txn_with_asset_tracing(ledger: &mut LedgerState,
                                                           params: &PublicParams,
                                                           code: &AssetTypeCode,
@@ -2096,7 +2097,7 @@ pub mod helpers {
     let mut transfer =
 TransferAsset::new(TransferAssetBody::new(ledger.get_prng(),
              vec![TxoRef::Relative(0)],
-             &[AssetRecord::from_open_asset_record_with_asset_tracking_but_no_identity(open_blind_asset_record(&ba, &owner_memo, &issuer_keys.get_sk_ref()).unwrap(), tracing_policies.clone()).unwrap()],
+             &[AssetRecord::from_open_asset_record_with_asset_tracking_but_no_identity(open_blind_asset_record(&ba, &owner_memo, &issuer_keys.get_sk_ref()).unwrap(), tracing_policies).unwrap()],
              &[ar.clone()],
              Some(xfr_note_policies), TransferType::Standard).unwrap()
 ).unwrap();
@@ -2104,7 +2105,6 @@ TransferAsset::new(TransferAssetBody::new(ledger.get_prng(),
     transfer.sign(&issuer_keys);
     let mut tx = Transaction::from_operation(issue_op, seq_num);
     tx.add_operation(Operation::TransferAsset(transfer));
-    dbg!(&tx);
     (tx, ar)
   }
 
