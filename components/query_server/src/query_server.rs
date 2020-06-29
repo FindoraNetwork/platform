@@ -530,4 +530,42 @@ mod tests {
                                    .unwrap();
     assert!(related_txns.contains(&TxnSID(0)));
   }
+
+  #[test]
+  fn test_created_assets() {
+    let rest_client_ledger_state = Arc::new(RwLock::new(LedgerState::test_ledger()));
+    let mut ledger_state = LedgerState::test_ledger();
+    // This isn't actually being used in the test, we just make a ledger client so we can compile
+    let mock_ledger = MockLedgerClient::new(&Arc::clone(&rest_client_ledger_state));
+    let mut query_server = QueryServer::new(mock_ledger);
+    let creator = XfrKeyPair::generate(&mut ledger_state.get_prng());
+
+    // Create the first asset
+    let code1 = AssetTypeCode { val: [1; 16] };
+    let tx1 = create_definition_transaction(&code1,
+                                            &creator,
+                                            AssetRules::default(),
+                                            Some(Memo("test".to_string())),
+                                            ledger_state.get_block_commit_count()).unwrap();
+    apply_transaction(&mut ledger_state, tx1);
+    let block1 = ledger_state.get_block(BlockSID(0)).unwrap();
+    query_server.add_new_block(&block1.block.txns).unwrap();
+
+    // Create the second asset
+    let code2 = AssetTypeCode { val: [2; 16] };
+    let tx2 = create_definition_transaction(&code2,
+                                            &creator,
+                                            AssetRules::default(),
+                                            Some(Memo("test".to_string())),
+                                            ledger_state.get_block_commit_count()).unwrap();
+    apply_transaction(&mut ledger_state, tx2);
+    let block2 = ledger_state.get_block(BlockSID(1)).unwrap();
+    query_server.add_new_block(&block2.block.txns).unwrap();
+
+    // Verify the created assets
+    let created_assets =
+      query_server.get_created_assets(&IssuerPublicKey { key: *creator.get_pk_ref() })
+                  .unwrap();
+    assert_eq!(created_assets, vec![code1, code2]);
+  }
 }
