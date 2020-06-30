@@ -45,8 +45,13 @@ fn io_error(msg: &str) -> Result<(), PlatformError> {
 /// * `txn_file`: path to store the transaction file.
 pub(crate) fn process_asset_issuer_cmd(asset_issuer_matches: &clap::ArgMatches,
                                        data_dir: &str,
+<<<<<<< HEAD
                                        txn_file: Option<&str>,
                                        seq_id: u64)
+=======
+                                       txn_file: &str,
+                                       no_replay_token: NoReplayToken)
+>>>>>>> 324ae4f7... Change seq_id to no_replay_token
                                        -> Result<(), PlatformError> {
   match asset_issuer_matches.subcommand() {
     ("sign_up", Some(sign_up_matches)) => {
@@ -122,6 +127,35 @@ pub(crate) fn process_asset_issuer_cmd(asset_issuer_matches: &clap::ArgMatches,
                                   record_type,
                                   Some(policy))
     }
+<<<<<<< HEAD
+=======
+    ("air_assign", Some(air_assign_matches)) => {
+      let issuer_id = if let Some(id_arg) = asset_issuer_matches.value_of("id") {
+        parse_to_u64(id_arg)?
+      } else {
+        println!("Asset issuer id is required for AIR assigning. Use asset_issuer --id.");
+        return Err(PlatformError::InputsError(error_location!()));
+      };
+      match (air_assign_matches.value_of("address"),
+             air_assign_matches.value_of("data"),
+             air_assign_matches.value_of("issuer_pk"),
+             air_assign_matches.value_of("pok"))
+      {
+        (Some(address), Some(data), Some(issuer_pk), Some(pok)) => air_assign(data_dir,
+                                                                              no_replay_token,
+                                                                              issuer_id,
+                                                                              address,
+                                                                              data,
+                                                                              issuer_pk,
+                                                                              pok,
+                                                                              txn_file),
+        (_, _, _, _) => {
+          println!("Missing address, data, issuer_pk, or proof.");
+          Err(PlatformError::InputsError(error_location!()))
+        }
+      }
+    }
+>>>>>>> 324ae4f7... Change seq_id to no_replay_token
     ("define_asset", Some(define_asset_matches)) => {
       let fiat_asset = define_asset_matches.is_present("fiat");
       let data = load_data(data_dir)?;
@@ -207,7 +241,7 @@ pub(crate) fn process_asset_issuer_cmd(asset_issuer_matches: &clap::ArgMatches,
                  asset_token.val);
       }
       match define_asset(data_dir,
-                         seq_id,
+                         no_replay_token,
                          fiat_asset,
                          &issuer_key_pair,
                          asset_token,
@@ -231,7 +265,7 @@ pub(crate) fn process_asset_issuer_cmd(asset_issuer_matches: &clap::ArgMatches,
           .map_err(|e| PlatformError::InputsError(format!("{}:{}",e,error_location!())))?;
       let value = kv_matches.value_of("value")
                             .ok_or_else(|| PlatformError::InputsError(error_location!()))?;
-      let mut txn_builder = TransactionBuilder::from_seq_id(seq_id);
+      let mut txn_builder = TransactionBuilder::from_token(no_replay_token);
       let hash = KVHash::new(&value, None);
       txn_builder.add_operation_kv_update(&key_pair, &key, gen, Some(&hash))?;
       println!("Hash of data will be stored at key {}", key.to_base64());
@@ -252,7 +286,7 @@ pub(crate) fn process_asset_issuer_cmd(asset_issuer_matches: &clap::ArgMatches,
       let gen = parse_to_u64(kv_matches.value_of("gen")
           .ok_or_else(|| PlatformError::InputsError(error_location!()))?)
           .map_err(|e| PlatformError::InputsError(format!("{}:{}",e,error_location!())))?;
-      let mut txn_builder = TransactionBuilder::from_seq_id(seq_id);
+      let mut txn_builder = TransactionBuilder::from_token(no_replay_token);
 
       txn_builder.add_operation_kv_update(&key_pair, &key, gen, None)?;
       if let Some(txn_file) = txn_file {
@@ -287,8 +321,19 @@ pub(crate) fn process_asset_issuer_cmd(asset_issuer_matches: &clap::ArgMatches,
         return Err(PlatformError::InputsError(error_location!()));
       };
       let confidential_amount = issue_asset_matches.is_present("confidential_amount");
+<<<<<<< HEAD
       let mut txn_builder = TransactionBuilder::from_seq_id(seq_id);
       let params = PublicParams::new();
+=======
+      let mut txn_builder = TransactionBuilder::from_token(no_replay_token);
+      let policy = if issue_asset_matches.is_present("traceable") {
+        Some(AssetTracingPolicy { enc_keys: tracer_enc_keys,
+                                  asset_tracking: true,
+                                  identity_tracking: None })
+      } else {
+        None
+      };
+>>>>>>> 324ae4f7... Change seq_id to no_replay_token
       if let Err(e) =
         txn_builder.add_basic_issue_asset(&key_pair,
                                           &token_code,
@@ -450,7 +495,7 @@ pub(crate) fn process_asset_issuer_cmd(asset_issuer_matches: &clap::ArgMatches,
       }
 
       // Transfer asset
-      let mut txn_builder = TransactionBuilder::from_seq_id(seq_id);
+      let mut txn_builder = TransactionBuilder::from_token(no_replay_token);
       if let Err(e) = txn_builder.add_basic_transfer_asset(&issuer_key_pair,
                                                            &transfer_from[..],
                                                            input_tracing_policies,
@@ -504,7 +549,7 @@ pub(crate) fn process_asset_issuer_cmd(asset_issuer_matches: &clap::ArgMatches,
       let memo_file = issue_and_transfer_matches.value_of("memo_file");
 
       issue_and_transfer_asset(data_dir,
-                               seq_id,
+                               no_replay_token,
                                &issuer_key_pair,
                                &recipient_key_pair,
                                amount,
@@ -656,7 +701,7 @@ pub(crate) fn process_credential_issuer_cmd(credential_issuer_matches: &clap::Ar
 pub(crate) fn process_lender_cmd<T: RestfulLedgerAccess + RestfulLedgerUpdate>(
   lender_matches: &clap::ArgMatches,
   data_dir: &str,
-  seq_id: u64,
+  no_replay_token: NoReplayToken,
   rest_client: &mut T)
   -> Result<(), PlatformError> {
   let mut data = load_data(data_dir)?;
@@ -757,7 +802,12 @@ pub(crate) fn process_lender_cmd<T: RestfulLedgerAccess + RestfulLedgerUpdate>(
         return Err(PlatformError::InputsError(error_location!()));
       };
       let memo_file = fulfill_loan_matches.value_of("memo_file");
-      fulfill_loan(data_dir, seq_id, loan_id, issuer_id, memo_file, rest_client)
+      fulfill_loan(data_dir,
+                   no_replay_token,
+                   loan_id,
+                   issuer_id,
+                   memo_file,
+                   rest_client)
     }
     ("create_or_overwrite_requirement", Some(create_or_overwrite_requirement_matches)) => {
       let lender_id = if let Some(id_arg) = lender_matches.value_of("id") {
@@ -815,7 +865,7 @@ pub(crate) fn process_borrower_cmd<T: RestfulQueryServerAccess
                                      + RestfulLedgerUpdate>(
   borrower_matches: &clap::ArgMatches,
   data_dir: &str,
-  seq_id: u64,
+  no_replay_token: NoReplayToken,
   rest_client: &mut T)
   -> Result<(), PlatformError> {
   let mut data = load_data(data_dir)?;
@@ -839,7 +889,7 @@ pub(crate) fn process_borrower_cmd<T: RestfulQueryServerAccess
       process_load_funds_cmd(load_funds_matches,
                              data_dir,
                              borrower_id,
-                             seq_id,
+                             no_replay_token,
                              rest_client)
     }
     ("view_loan", Some(view_loan_matches)) => {
@@ -963,7 +1013,7 @@ pub(crate) fn process_borrower_cmd<T: RestfulQueryServerAccess
         eprintln!("Loan id is required to pay the loan.");
         return Err(PlatformError::InputsError(error_location!()));
       }
-      process_pay_loan_cmd(pay_loan_matches, data_dir, seq_id, rest_client)
+      process_pay_loan_cmd(pay_loan_matches, data_dir, no_replay_token, rest_client)
     }
     ("view_credential", Some(view_credential_matches)) => {
       let borrower_id = if let Some(id_arg) = borrower_matches.value_of("id") {
@@ -1077,7 +1127,7 @@ pub(crate) fn process_borrower_cmd<T: RestfulQueryServerAccess
 /// * `create_matches`: subcommands and arguments under the `create_txn_builder` subcommand.
 /// * `txn_file`: path to store the transaction file.
 pub(crate) fn process_create_txn_builder_cmd(create_matches: &clap::ArgMatches,
-                                             seq_id: u64,
+                                             no_replay_token: NoReplayToken,
                                              txn_file: &str)
                                              -> Result<(), PlatformError> {
   let name = create_matches.value_of("name");
@@ -1089,7 +1139,7 @@ pub(crate) fn process_create_txn_builder_cmd(create_matches: &clap::ArgMatches,
   };
   let expand_str = shellexpand::tilde(&file_str).to_string();
   create_directory_and_rename_path(&expand_str, overwrite)?;
-  let txn_builder = TransactionBuilder::from_seq_id(seq_id);
+  let txn_builder = TransactionBuilder::from_token(no_replay_token);
   store_txn_to_file(&expand_str, &txn_builder)
 }
 
@@ -1132,7 +1182,7 @@ pub(crate) fn process_load_funds_cmd<T: RestfulLedgerAccess + RestfulLedgerUpdat
   load_funds_matches: &clap::ArgMatches,
   data_dir: &str,
   borrower_id: u64,
-  seq_id: u64,
+  no_replay_token: NoReplayToken,
   rest_client: &mut T)
   -> Result<(), PlatformError> {
   let issuer_id = if let Some(issuer_arg) = load_funds_matches.value_of("issuer") {
@@ -1153,7 +1203,7 @@ pub(crate) fn process_load_funds_cmd<T: RestfulLedgerAccess + RestfulLedgerUpdat
     return Err(PlatformError::InputsError(error_location!()));
   };
   load_funds(data_dir,
-             seq_id,
+             no_replay_token,
              issuer_id,
              borrower_id,
              amount,
@@ -1167,7 +1217,7 @@ pub(crate) fn process_load_funds_cmd<T: RestfulLedgerAccess + RestfulLedgerUpdat
 pub(crate) fn process_pay_loan_cmd<T: RestfulLedgerAccess + RestfulLedgerUpdate>(
   pay_loan_matches: &clap::ArgMatches,
   data_dir: &str,
-  seq_id: u64,
+  no_replay_token: NoReplayToken,
   rest_client: &mut T)
   -> Result<(), PlatformError> {
   let loan_id = if let Some(loan_arg) = pay_loan_matches.value_of("loan") {
@@ -1183,7 +1233,7 @@ pub(crate) fn process_pay_loan_cmd<T: RestfulLedgerAccess + RestfulLedgerUpdate>
     return Err(PlatformError::InputsError(error_location!()));
   };
 
-  pay_loan(data_dir, seq_id, loan_id, amount, rest_client)
+  pay_loan(data_dir, no_replay_token, loan_id, amount, rest_client)
 }
 
 /// Processes input commands and arguments.
@@ -1191,7 +1241,7 @@ pub(crate) fn process_pay_loan_cmd<T: RestfulLedgerAccess + RestfulLedgerUpdate>
 /// * `inputs`: input subcommands and arguments.
 pub fn process_inputs<T: RestfulQueryServerAccess + RestfulLedgerAccess + RestfulLedgerUpdate>(
   inputs: clap::ArgMatches,
-  seq_id: u64,
+  no_replay_token: NoReplayToken,
   rest_client: &mut T)
   -> Result<(), PlatformError> {
   let dir = if let Some(dir) = inputs.value_of("dir") {
@@ -1214,25 +1264,33 @@ pub fn process_inputs<T: RestfulQueryServerAccess + RestfulLedgerAccess + Restfu
 
   match inputs.subcommand() {
     ("asset_issuer", Some(asset_issuer_matches)) => {
+<<<<<<< HEAD
       let txn_file_opt = inputs.value_of("txn");
       process_asset_issuer_cmd(asset_issuer_matches, &dir, txn_file_opt, seq_id)
+=======
+      process_asset_issuer_cmd(asset_issuer_matches, &dir, &txn_file, no_replay_token)
+>>>>>>> 324ae4f7... Change seq_id to no_replay_token
     }
     ("credential_issuer", Some(credential_issuer_matches)) => {
       process_credential_issuer_cmd(credential_issuer_matches, &dir)
     }
     ("lender", Some(issuer_matches)) => {
-      process_lender_cmd(issuer_matches, &dir, seq_id, rest_client)
+      process_lender_cmd(issuer_matches, &dir, no_replay_token, rest_client)
     }
     ("borrower", Some(issuer_matches)) => {
-      process_borrower_cmd(issuer_matches, &dir, seq_id, rest_client)
+      process_borrower_cmd(issuer_matches, &dir, no_replay_token, rest_client)
     }
     ("create_txn_builder", Some(create_txn_builder_matches)) => {
+<<<<<<< HEAD
       if let Some(txn_file) = create_txn_builder_matches.value_of("name") {
         process_create_txn_builder_cmd(create_txn_builder_matches, seq_id, &txn_file)
       } else {
         eprintln!("Missing --name <filename>");
         inputs_error(&format!("Missing --name <filename> at {}", error_location!()))
       }
+=======
+      process_create_txn_builder_cmd(create_txn_builder_matches, no_replay_token, &txn_file)
+>>>>>>> 324ae4f7... Change seq_id to no_replay_token
     }
     ("serialize", Some(_serialize_matches)) => {
       if let Some(txn_file) = inputs.value_of("txn") {

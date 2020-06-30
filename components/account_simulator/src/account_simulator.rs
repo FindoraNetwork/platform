@@ -418,12 +418,13 @@ impl InterpretAccounts<PlatformError> for LedgerAccounts {
 
         let op = DefineAsset::new(body, &IssuerKeyPair { keypair: &keypair }).unwrap();
 
-        let txn = Transaction { body: TransactionBody { operations:
+        let txn = Transaction { body: TransactionBody { no_replay_token:
+                                                          self.ledger.get_no_replay_token(),
+                                                        operations:
                                                           vec![Operation::DefineAsset(op)],
                                                         credentials: vec![],
                                                         memos: vec![],
                                                         policy_options: None },
-                                seq_id: self.ledger.get_block_commit_count(),
                                 signatures: vec![] };
 
         let eff = TxnEffect::compute_effect(txn).unwrap();
@@ -463,7 +464,7 @@ impl InterpretAccounts<PlatformError> for LedgerAccounts {
              .get_mut(unit)
              .unwrap() += amt;
 
-        let mut tx = Transaction::from_seq_id(self.ledger.get_block_commit_count());
+        let mut tx = Transaction::from_token(self.ledger.get_no_replay_token());
 
         let ar = AssetRecordTemplate::with_no_asset_tracking(amt, code.val, iss_art, *pubkey);
         let params = PublicParams::new();
@@ -622,12 +623,13 @@ impl InterpretAccounts<PlatformError> for LedgerAccounts {
 
         let transfer = TransferAsset { body: transfer_body,
                                        body_signatures: vec![transfer_sig] };
-        let txn = Transaction { body: TransactionBody { operations:
+        let txn = Transaction { body: TransactionBody { no_replay_token:
+                                                          self.ledger.get_no_replay_token(),
+                                                        operations:
                                                           vec![Operation::TransferAsset(transfer)],
                                                         credentials: vec![],
                                                         memos: vec![],
                                                         policy_options: None },
-                                seq_id: self.ledger.get_block_commit_count(),
                                 signatures: vec![] };
 
         let effect = TxnEffect::compute_effect(txn).unwrap();
@@ -977,9 +979,8 @@ struct LedgerStandaloneAccounts<T>
 
 impl<T> LedgerStandaloneAccounts<T> where T: RestfulLedgerAccess + RestfulLedgerUpdate
 {
-  fn fetch_seq_id(&self) -> u64 {
-    let (_, seq_id, _) = self.client.get_state_commitment().unwrap();
-    seq_id
+  fn fetch_no_replay_token(&mut self) -> NoReplayToken {
+    self.client.get_no_replay_token().unwrap()
   }
 }
 
@@ -1025,13 +1026,13 @@ impl<T> InterpretAccounts<PlatformError> for LedgerStandaloneAccounts<T>
         let op = DefineAsset::new(body, &IssuerKeyPair { keypair: &keypair }).unwrap();
 
         {
-          let seq_id = self.fetch_seq_id();
-          let txn = Transaction { body: TransactionBody { operations:
+          let no_replay_token = self.fetch_no_replay_token();
+          let txn = Transaction { body: TransactionBody { no_replay_token,
+                                                          operations:
                                                             vec![Operation::DefineAsset(op)],
                                                           credentials: vec![],
                                                           memos: vec![],
                                                           policy_options: None },
-                                  seq_id,
                                   signatures: vec![] };
           let txn_handle = self.client.submit_transaction(&txn).unwrap();
           self.client.force_end_block().unwrap();
@@ -1048,13 +1049,13 @@ impl<T> InterpretAccounts<PlatformError> for LedgerStandaloneAccounts<T>
         }
       }
       AccountsCommand::Mint(amt, unit) => {
+        let no_replay_token = self.fetch_no_replay_token();
         let amt = *amt as u64;
         let (issuer, code) = self.units
                                  .get(unit)
                                  .ok_or_else(|| PlatformError::InputsError(error_location!()))?;
 
         let new_seq_num = self.client.get_issuance_num(&code).unwrap();
-        let seq_id = self.fetch_seq_id();
 
         let keypair = self.accounts
                           .get(issuer)
@@ -1068,7 +1069,7 @@ impl<T> InterpretAccounts<PlatformError> for LedgerStandaloneAccounts<T>
              .get_mut(unit)
              .unwrap() += amt;
 
-        let mut tx = Transaction::from_seq_id(seq_id);
+        let mut tx = Transaction::from_token(no_replay_token);
 
         let ar = AssetRecordTemplate::with_no_asset_tracking(amt, code.val, iss_art, *pubkey);
         let params = PublicParams::new();
@@ -1221,13 +1222,13 @@ impl<T> InterpretAccounts<PlatformError> for LedgerStandaloneAccounts<T>
 
         let transfer = TransferAsset { body: transfer_body,
                                        body_signatures: vec![transfer_sig] };
-        let seq_id = self.fetch_seq_id();
-        let txn = Transaction { body: TransactionBody { operations:
+        let no_replay_token = self.fetch_no_replay_token();
+        let txn = Transaction { body: TransactionBody { no_replay_token,
+                                                        operations:
                                                           vec![Operation::TransferAsset(transfer)],
                                                         credentials: vec![],
                                                         memos: vec![],
                                                         policy_options: None },
-                                seq_id,
                                 signatures: vec![] };
 
         let txos = {

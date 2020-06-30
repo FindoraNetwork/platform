@@ -7,7 +7,9 @@ use credentials::{
 use curve25519_dalek::ristretto::CompressedRistretto;
 use curve25519_dalek::scalar::Scalar;
 use ledger::data_model::errors::PlatformError;
-use ledger::data_model::{AssetRules, AssetTypeCode, TransferType, TxOutput, TxoRef, TxoSID};
+use ledger::data_model::{
+  AssetRules, AssetTypeCode, NoReplayToken, TransferType, TxOutput, TxoRef, TxoSID,
+};
 use ledger::{des_fail, error_location};
 use ledger_api_service::RestfulLedgerAccess;
 use log::info;
@@ -29,7 +31,7 @@ extern crate exitcode;
 
 #[allow(clippy::too_many_arguments)]
 pub fn air_assign(data_dir: &str,
-                  seq_id: u64,
+                  no_replay_token: NoReplayToken,
                   issuer_id: u64,
                   address: &str,
                   data: &str,
@@ -39,12 +41,17 @@ pub fn air_assign(data_dir: &str,
                   -> Result<(), PlatformError> {
   let issuer_data = load_data(data_dir)?;
   let xfr_key_pair = issuer_data.get_asset_issuer_key_pair(issuer_id)?;
-  let mut txn_builder = TransactionBuilder::from_seq_id(seq_id);
+  let mut txn_builder = TransactionBuilder::from_token(no_replay_token);
   let address = serde_json::from_str::<CredUserPublicKey>(address)?;
   let data = serde_json::from_str::<CredCommitment>(data)?;
   let issuer_pk = serde_json::from_str::<CredIssuerPublicKey>(issuer_pk)?;
   let pok = serde_json::from_str::<CredPoK>(pok)?;
-  txn_builder.add_operation_air_assign(&xfr_key_pair, address, data, issuer_pk, pok)?;
+  txn_builder.add_operation_air_assign(&xfr_key_pair,
+                                       address,
+                                       data,
+                                       issuer_pk,
+                                       pok,
+                                       no_replay_token)?;
   store_txn_to_file(&txn_file, &txn_builder)?;
   Ok(())
 }
@@ -62,7 +69,7 @@ pub fn air_assign(data_dir: &str,
 /// * `txn_file`: path to store the transaction file.
 #[allow(clippy::too_many_arguments)]
 pub fn define_asset(data_dir: &str,
-                    seq_id: u64,
+                    no_replay_token: NoReplayToken,
                     fiat_asset: bool,
                     issuer_key_pair: &XfrKeyPair,
                     token_code: AssetTypeCode,
@@ -70,7 +77,7 @@ pub fn define_asset(data_dir: &str,
                     asset_rules: AssetRules,
                     txn_file: Option<&str>)
                     -> Result<TransactionBuilder, PlatformError> {
-  let mut txn_builder = TransactionBuilder::from_seq_id(seq_id);
+  let mut txn_builder = TransactionBuilder::from_token(no_replay_token);
   txn_builder.add_operation_create_asset(issuer_key_pair,
                                          Some(token_code),
                                          asset_rules,
@@ -99,9 +106,9 @@ pub fn define_and_submit<T>(issuer_key_pair: &XfrKeyPair,
                             -> Result<(), PlatformError>
   where T: RestfulLedgerUpdate + RestfulLedgerAccess
 {
-  let (_, seq_id, _) = rest_client.get_state_commitment().unwrap();
+  let no_replay_token = rest_client.get_no_replay_token().unwrap();
   // Define the asset
-  let mut txn_builder = TransactionBuilder::from_seq_id(seq_id);
+  let mut txn_builder = TransactionBuilder::from_token(no_replay_token);
   let txn = txn_builder.add_operation_create_asset(issuer_key_pair,
                                                    Some(code),
                                                    rules,
@@ -129,7 +136,7 @@ pub fn define_and_submit<T>(issuer_key_pair: &XfrKeyPair,
 /// * `tracing_policy`: asset tracing policy, if any.
 #[allow(clippy::too_many_arguments)]
 pub fn issue_and_transfer_asset(data_dir: &str,
-                                seq_id: u64,
+                                no_replay_token: NoReplayToken,
                                 issuer_key_pair: &XfrKeyPair,
                                 recipient_key_pair: &XfrKeyPair,
                                 amount: u64,
@@ -180,7 +187,7 @@ pub fn issue_and_transfer_asset(data_dir: &str,
                                    .transaction()?;
 
   // Issue and Transfer transaction
-  let mut txn_builder = TransactionBuilder::from_seq_id(seq_id);
+  let mut txn_builder = TransactionBuilder::from_token(no_replay_token);
   txn_builder.add_operation_issue_asset(issuer_key_pair,
                                         &token_code,
                                         get_and_update_sequence_number(data_dir)?,
@@ -237,9 +244,9 @@ pub fn issue_transfer_and_get_utxo_and_blinds<R: CryptoRng + RngCore, T>(
                                                 .sign(issuer_key_pair)?
                                                 .transaction()?;
 
-  let (_, seq_id, _) = rest_client.get_state_commitment().unwrap();
+  let no_replay_token = rest_client.get_no_replay_token().unwrap();
 
-  let mut txn_builder = TransactionBuilder::from_seq_id(seq_id);
+  let mut txn_builder = TransactionBuilder::from_token(no_replay_token);
   let txn = txn_builder.add_operation_issue_asset(issuer_key_pair,
                                                   &code,
                                                   sequence_number,

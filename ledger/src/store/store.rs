@@ -32,8 +32,6 @@ use zei::xfr::structs::{AssetTracingPolicies, AssetTracingPolicy, XfrAssetType};
 
 use super::effects::*;
 
-const TRANSACTION_WINDOW_WIDTH: u64 = 128;
-
 pub struct SnapshotId {
   pub id: u64,
 }
@@ -51,6 +49,9 @@ pub trait LedgerAccess {
 
   // Get the sequence number of the most recent checkpoint.
   fn get_block_commit_count(&self) -> u64;
+
+  // Get NoReplayToken
+  fn get_no_replay_token(&mut self) -> NoReplayToken;
 
   // Get the hash of the most recent checkpoint, and its sequence number.
   fn get_state_commitment(&self) -> (HashOf<Option<StateCommitmentData>>, u64);
@@ -484,10 +485,12 @@ impl LedgerStatus {
   #[allow(clippy::cognitive_complexity)]
   fn check_txn_effects(&self, txn_effect: TxnEffect) -> Result<TxnEffect, PlatformError> {
     // The current transactions seq_id must be within the sliding window over seq_ids
-    if txn_effect.txn.seq_id > self.block_commit_count {
+    if txn_effect.txn.body.no_replay_token.get_seq_id() > self.block_commit_count {
       return Err(PlatformError::InputsError(format!("Transaction seq_id ahead of block_count: {}",
                                                     error_location!())));
-    } else if txn_effect.txn.seq_id + TRANSACTION_WINDOW_WIDTH < self.block_commit_count {
+    } else if txn_effect.txn.body.no_replay_token.get_seq_id() + TRANSACTION_WINDOW_WIDTH
+              < self.block_commit_count
+    {
       return Err(PlatformError::InputsError(format!("Transaction seq_id too far behind block_count: {}",
                                                     error_location!())));
     } else {
@@ -1936,6 +1939,10 @@ impl LedgerAccess for LedgerState {
     self.status.block_commit_count
   }
 
+  fn get_no_replay_token(&mut self) -> NoReplayToken {
+    NoReplayToken::new(&mut self.prng, self.status.block_commit_count)
+  }
+
   fn get_state_commitment(&self) -> (HashOf<Option<StateCommitmentData>>, u64) {
     let block_count = self.status.block_commit_count;
     let commitment = self.status
@@ -2103,13 +2110,14 @@ pub mod helpers {
                                        keypair: &XfrKeyPair,
                                        asset_rules: AssetRules,
                                        memo: Option<Memo>,
-                                       seq_id: u64)
+                                       no_replay_token: NoReplayToken)
                                        -> Result<Transaction, PlatformError> {
     let issuer_key = IssuerPublicKey { key: *keypair.get_pk_ref() };
-    let asset_body = DefineAssetBody::new(&code, &issuer_key, asset_rules, memo, None, None).map_err(add_location!())?;
+    let asset_body =
+      DefineAssetBody::new(&code, &issuer_key, asset_rules, memo, None, None).map_err(add_location!())?;
     let asset_create =
       DefineAsset::new(asset_body, &IssuerKeyPair { keypair: &keypair }).map_err(add_location!())?;
-    Ok(Transaction::from_operation(Operation::DefineAsset(asset_create), seq_id))
+    Ok(Transaction::from_operation(Operation::DefineAsset(asset_create), no_replay_token))
   }
 
   pub fn build_keys<R: CryptoRng + RngCore>(prng: &mut R) -> XfrKeyPair {
@@ -2162,13 +2170,15 @@ pub mod helpers {
           .unwrap()
   }
 
+  #[allow(clippy::too_many_arguments)]
   pub fn create_issue_and_transfer_txn(ledger: &mut LedgerState,
                                        params: &PublicParams,
                                        code: &AssetTypeCode,
                                        amount: u64,
                                        issuer_keys: &XfrKeyPair,
                                        recipient_pk: &XfrPublicKey,
-                                       seq_num: u64)
+                                       seq_num: u64,
+                                       no_replay_token: NoReplayToken)
                                        -> (Transaction, AssetRecord) {
     // issue operation
     let ar_template = AssetRecordTemplate::with_no_asset_tracking(amount, code.val, AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType, issuer_keys.get_pk());
@@ -2197,7 +2207,7 @@ pub mod helpers {
                          ).unwrap();
 
     transfer.sign(&issuer_keys);
-    let mut tx = Transaction::from_operation(issue_op, seq_num);
+    let mut tx = Transaction::from_operation(issue_op, no_replay_token);
     tx.add_operation(Operation::TransferAsset(transfer));
     (tx, ar)
   }
@@ -2270,7 +2280,7 @@ TransferAsset::new(TransferAssetBody::new(ledger.get_prng(),
                       &IssuerKeyPair { keypair: &issuer_keys }).unwrap();
 
     let issue_op = Operation::IssueAsset(asset_issuance_operation);
-    Transaction::from_operation(issue_op, seq_num)
+    Transaction::from_operation(issue_op, NoReplayToken::default())
   }
 }
 

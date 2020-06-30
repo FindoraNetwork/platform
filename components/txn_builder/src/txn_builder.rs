@@ -286,7 +286,8 @@ pub trait BuildsTransactions {
                               addr: CredUserPublicKey,
                               data: CredCommitment,
                               issuer_pk: CredIssuerPublicKey,
-                              pok: CredPoK)
+                              pok: CredPoK,
+                              no_replay_token: NoReplayToken)
                               -> Result<&mut Self, PlatformError>;
   fn add_operation_kv_update(&mut self,
                              auth_key_pair: &XfrKeyPair,
@@ -429,8 +430,9 @@ impl TransactionBuilder {
     self.txn.get_outputs_ref(true)[idx]
   }
 
-  pub fn from_seq_id(seq_id: u64) -> Self {
-    TransactionBuilder { txn: Transaction::from_seq_id(seq_id),
+  pub fn from_token(no_replay_token: NoReplayToken) -> Self {
+    TransactionBuilder { txn: Transaction::from_token(no_replay_token),
+                         owner_records: Vec::new(),
                          outputs: 0 }
   }
 }
@@ -542,9 +544,11 @@ impl BuildsTransactions for TransactionBuilder {
                               addr: CredUserPublicKey,
                               data: CredCommitment,
                               issuer_pk: CredIssuerPublicKey,
-                              pok: CredPoK)
+                              pok: CredPoK,
+                              no_replay_token: NoReplayToken)
                               -> Result<&mut Self, PlatformError> {
-    let xfr = AIRAssign::new(AIRAssignBody::new(addr, data, issuer_pk, pok)?, key_pair)?;
+    let xfr = AIRAssign::new(AIRAssignBody::new(addr, data, issuer_pk, pok, no_replay_token)?,
+                             key_pair)?;
     self.txn.add_operation(Operation::AIRAssign(xfr));
     Ok(self)
   }

@@ -4,14 +4,14 @@ use credentials::{
   credential_commit, credential_issuer_key_gen, credential_sign, credential_user_key_gen,
   CredCommitment, CredCommitmentKey, CredIssuerPublicKey, CredIssuerSecretKey, Credential,
 };
-use cryptohash::sha256::Digest as BitDigest;
+use ledger::data_model::NoReplayToken;
 use rand_chacha::ChaChaRng;
 use rand_core::SeedableRng;
 use std::collections::HashMap;
 use std::error::Error;
 use txn_builder::{BuildsTransactions, TransactionBuilder};
 use utils::{protocol_host, LEDGER_PORT};
-use zei::xfr::sig::{XfrKeyPair, XfrSignature};
+use zei::xfr::sig::XfrKeyPair;
 
 /// Represents a file that can be searched
 
@@ -36,7 +36,7 @@ impl AIR {
   }
 
   /// Return a JSON txn corresponding to this request
-  pub fn make_assign_txn(&mut self, seq_id: u64) -> Option<String> {
+  pub fn make_assign_txn(&mut self, no_replay_token: NoReplayToken) -> Option<String> {
     let (user_pk, user_sk) = credential_user_key_gen(&mut self.prng, &self.issuer_pk);
     let attr_vals: Vec<(String, &[u8])> = vec![(String::from("dob"), b"08221964"),
                                                (String::from("pob"), b"666"),
@@ -53,7 +53,7 @@ impl AIR {
                                                      &user_sk,
                                                      &credential,
                                                      xfr_key_pair.get_pk_ref().as_bytes()).unwrap();
-    let mut txn_builder = TransactionBuilder::from_seq_id(seq_id);
+    let mut txn_builder = TransactionBuilder::from_token(no_replay_token);
     let user_pk_s = serde_json::to_string(&user_pk).unwrap();
     self.user_commitment
         .insert(user_pk_s, (commitment.clone(), key));
@@ -61,7 +61,8 @@ impl AIR {
                                                          user_pk,
                                                          commitment,
                                                          self.issuer_pk.clone(),
-                                                         proof)
+                                                         proof,
+                                                         no_replay_token)
     {
       println!("add_operation_air_assign failed with {:?}", e);
       None
@@ -90,17 +91,16 @@ fn main() -> Result<(), Box<dyn Error>> {
   let mut air = AIR::new();
   let (protocol, host) = protocol_host();
   let client = reqwest::blocking::Client::new();
-  let resp_gs = client.get(&format!("{}://{}:{}/global_state", protocol, host, LEDGER_PORT))
+  let resp_gs = client.get(&format!("{}://{}:{}/no_replay_token", protocol, host, LEDGER_PORT))
                       .send()?;
-  let (_comm, seq_id, _sig): (BitDigest, u64, XfrSignature) =
-    serde_json::from_str(&resp_gs.text()?[..]).unwrap();
+  let no_replay_token: NoReplayToken = serde_json::from_str(&resp_gs.text()?[..]).unwrap();
 
   match num_str {
     None => println!("Missing '--num_txns <number>'"),
     Some(s) => match s.parse::<usize>() {
       Ok(n) => {
         for _ in 0..n {
-          if let Some(txn) = air.make_assign_txn(seq_id) {
+          if let Some(txn) = air.make_assign_txn(no_replay_token) {
             println!("{}", txn);
           }
         }

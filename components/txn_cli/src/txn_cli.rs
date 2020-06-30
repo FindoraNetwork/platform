@@ -1,3 +1,4 @@
+use ledger::data_model::NoReplayToken;
 use log::debug;
 use network::{HttpStandaloneConfig, LedgerStandalone};
 use txn_cli::txn_app::{get_cli_app, process_inputs};
@@ -18,9 +19,8 @@ fn main() {
     }
   };
 
-  let seq_id = 0;
   let mut rest_client = LedgerStandalone::new_http(&config);
-  if let Err(error) = process_inputs(inputs, seq_id, &mut rest_client) {
+  if let Err(error) = process_inputs(inputs, NoReplayToken::default(), &mut rest_client) {
     match_error_and_exit(error);
   }
 }

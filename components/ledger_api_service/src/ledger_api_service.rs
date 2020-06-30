@@ -135,6 +135,15 @@ pub fn query_global_state<LA>(
   web::Json((hash, seq_id, sig))
 }
 
+#[allow(clippy::type_complexity)]
+pub fn query_no_replay_token<LA>(data: web::Data<Arc<RwLock<LA>>>) -> web::Json<NoReplayToken>
+  where LA: LedgerAccess
+{
+  let mut writer = data.write().unwrap();
+  let no_replay_token = writer.get_no_replay_token();
+  web::Json(no_replay_token)
+}
+
 pub fn query_global_state_version<AA>(data: web::Data<Arc<RwLock<AA>>>,
                                       version: web::Path<u64>)
                                       -> web::Json<Option<HashOf<Option<StateCommitmentData>>>>
@@ -306,6 +315,7 @@ pub enum LedgerAccessRoutes {
   AssetToken,
   PublicKey,
   GlobalState,
+  NoReplayToken,
   KVLookup,
 }
 
@@ -317,6 +327,7 @@ impl NetworkRoute for LedgerAccessRoutes {
       LedgerAccessRoutes::AssetToken => "asset_token",
       LedgerAccessRoutes::PublicKey => "public_key",
       LedgerAccessRoutes::GlobalState => "global_state",
+      LedgerAccessRoutes::NoReplayToken => "no_replay_token",
       LedgerAccessRoutes::KVLookup => "kv_lookup",
     };
     "/".to_owned() + endpoint
@@ -390,6 +401,8 @@ impl<T, B> Route for App<T, B>
                web::get().to(query_public_key::<LA>))
         .route(&LedgerAccessRoutes::GlobalState.route(),
                web::get().to(query_global_state::<LA>))
+        .route(&LedgerAccessRoutes::NoReplayToken.route(),
+               web::get().to(query_no_replay_token::<LA>))
         .route(&LedgerAccessRoutes::KVLookup.with_arg_template("addr"),
                web::get().to(query_kv::<LA>))
   }
@@ -457,7 +470,12 @@ pub trait RestfulLedgerAccess {
                SignatureOf<(HashOf<Option<StateCommitmentData>>, u64)>),
               PlatformError>;
 
+<<<<<<< HEAD
   // fn get_state_commitment_data(&self) -> Result<StateCommitmentData, PlatformError>;
+=======
+  #[allow(clippy::type_complexity)]
+  fn get_no_replay_token(&mut self) -> Result<NoReplayToken, PlatformError>;
+>>>>>>> 324ae4f7... Change seq_id to no_replay_token
 
   fn get_kv_entry(&self, addr: Key) -> Result<AuthenticatedKVLookup, PlatformError>;
 
@@ -543,6 +561,17 @@ impl RestfulLedgerAccess for MockLedgerClient {
       test::init_service(App::new().data(Arc::clone(&self.mock_ledger))
                                    .route(&LedgerAccessRoutes::GlobalState.route(),
                                           web::get().to(query_global_state::<LedgerState>)));
+    let req = test::TestRequest::get().uri(&LedgerAccessRoutes::GlobalState.route())
+                                      .to_request();
+    Ok(test::read_response_json(&mut app, req))
+  }
+
+  #[allow(clippy::type_complexity)]
+  fn get_no_replay_token(&mut self) -> Result<NoReplayToken, PlatformError> {
+    let mut app =
+      test::init_service(App::new().data(Arc::clone(&self.mock_ledger))
+                                   .route(&LedgerAccessRoutes::GlobalState.route(),
+                                          web::get().to(query_no_replay_token::<LedgerState>)));
     let req = test::TestRequest::get().uri(&LedgerAccessRoutes::GlobalState.route())
                                       .to_request();
     Ok(test::read_response_json(&mut app, req))
@@ -643,6 +672,17 @@ impl RestfulLedgerAccess for ActixLedgerClient {
                         LedgerAccessRoutes::GlobalState.route());
     let text = actix_get_request(&self.client, &query).map_err(|e| inp_fail!(e))?;
     Ok(serde_json::from_str::<_>(&text).map_err(|e| ser_fail!(e))?)
+  }
+
+  #[allow(clippy::type_complexity)]
+  fn get_no_replay_token(&mut self) -> Result<NoReplayToken, PlatformError> {
+    let query = format!("{}://{}:{}{}",
+                        self.protocol,
+                        self.host,
+                        self.port,
+                        LedgerAccessRoutes::NoReplayToken.route());
+    let text = actix_get_request(&self.client, &query).map_err(|_| inp_fail!())?;
+    Ok(serde_json::from_str::<_>(&text).map_err(|_| ser_fail!())?)
   }
 
   fn get_kv_entry(&self, _addr: Key) -> Result<AuthenticatedKVLookup, PlatformError> {

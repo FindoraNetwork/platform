@@ -3,7 +3,7 @@
 mod shared;
 
 use credentials::{credential_commit, credential_user_key_gen, CredSignature, Credential};
-use cryptohash::sha256::Digest as BitDigest;
+use ledger::data_model::NoReplayToken;
 use rand_chacha::ChaChaRng;
 use rand_core::SeedableRng;
 use serde::{Deserialize, Serialize};
@@ -12,7 +12,7 @@ use txn_builder::{BuildsTransactions, TransactionBuilder};
 use utils::{protocol_host, urlencode, LEDGER_PORT, SUBMIT_PORT};
 use warp::Filter;
 use zei::serialization::ZeiFromToBytes;
-use zei::xfr::sig::{XfrKeyPair, XfrSignature};
+use zei::xfr::sig::XfrKeyPair;
 
 // From txn_cli: need a working key pair String
 const KEY_PAIR_STR: &str = "76b8e0ada0f13d90405d6ae55386bd28bdd219b8a08ded1aa836efcc8b770dc720fdbac9b10b7587bba7b5bc163bce69e796d71e4ed44c10fcb4488689f7a144";
@@ -72,20 +72,20 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Build the transaction
 
     let (protocol, host) = protocol_host();
-    let resp_txt =
-      reqwest::get(&format!("{}://{}:{}/global_state", protocol, host, LEDGER_PORT)).await?
-                                                                                    .text()
-                                                                                    .await?;
-    let (_comm, seq_id, _sig): (BitDigest, u64, XfrSignature) =
-      serde_json::from_str(&resp_txt[..]).unwrap();
+    let resp_gs =
+      reqwest::get(&format!("{}://{}:{}/no_replay_token", protocol, host, LEDGER_PORT)).await?
+                                                                                       .text()
+                                                                                       .await?;
+    let no_replay_token: NoReplayToken = serde_json::from_str(&resp_gs[..]).unwrap();
 
-    let mut txn_builder = TransactionBuilder::from_seq_id(seq_id);
+    let mut txn_builder = TransactionBuilder::from_token(no_replay_token);
 
     txn_builder.add_operation_air_assign(&xfr_key_pair,
                                          user_pk.clone(),
                                          commitment,
                                          resp1.issuer_pk.clone(),
-                                         proof)?;
+                                         proof,
+                                         no_replay_token)?;
 
     // Submit to ledger
     let txn = txn_builder.transaction();

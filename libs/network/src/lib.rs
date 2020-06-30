@@ -2,7 +2,8 @@
 use ledger::data_model::errors::PlatformError;
 use ledger::data_model::{
   AssetType, AssetTypeCode, AuthenticatedKVLookup, AuthenticatedUtxo, BlockSID,
-  FinalizedTransaction, KVBlind, StateCommitmentData, Transaction, TxoSID,
+  FinalizedTransaction, KVBlind, NoReplayToken, StateCommitmentData, Transaction,
+  TxoSID, Utxo
 };
 use ledger::store::LedgerState;
 use ledger_api_service::{
@@ -145,6 +146,11 @@ impl<LU: RestfulLedgerUpdate,
                SignatureOf<(HashOf<Option<StateCommitmentData>>, u64)>),
               PlatformError> {
     self.ledger_client.get_state_commitment()
+  }
+
+  #[allow(clippy::type_complexity)]
+  fn get_no_replay_token(&mut self) -> Result<NoReplayToken, PlatformError> {
+    self.ledger_client.get_no_replay_token()
   }
 
   fn get_kv_entry(&self, addr: Key) -> Result<AuthenticatedKVLookup, PlatformError> {

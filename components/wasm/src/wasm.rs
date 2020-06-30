@@ -48,6 +48,9 @@ pub fn build_id() -> String {
 
 /////////// TRANSACTION BUILDING ////////////////
 
+#[wasm_bindgen]
+pub struct NoReplayToken(ledger::data_model::NoReplayToken);
+
 //Random Helpers
 
 #[wasm_bindgen]
@@ -204,8 +207,9 @@ impl TransactionBuilder {
 #[wasm_bindgen]
 impl TransactionBuilder {
   /// Create a new transaction builder.
-  pub fn new(seq_id: u64) -> Self {
-    TransactionBuilder { transaction_builder: PlatformTransactionBuilder::from_seq_id(seq_id) }
+  pub fn new(no_replay_token: NoReplayToken) -> Self {
+    TransactionBuilder { transaction_builder:
+                           PlatformTransactionBuilder::from_token(no_replay_token.0) }
   }
 
   /// Wraps around TransactionBuilder to add an asset definition operation to a transaction builder instance.
@@ -329,14 +333,16 @@ impl TransactionBuilder {
                                   user_public_key: &CredUserPublicKey,
                                   issuer_public_key: &CredIssuerPublicKey,
                                   commitment: &CredentialCommitment,
-                                  pok: &CredentialPoK)
+                                  pok: &CredentialPoK,
+                                  no_replay_token: NoReplayToken)
                                   -> Result<TransactionBuilder, JsValue> {
     self.get_builder_mut()
         .add_operation_air_assign(key_pair,
                                   user_public_key.clone(),
                                   commitment.get_ref().clone(),
                                   issuer_public_key.clone(),
-                                  pok.get_ref().clone())
+                                  pok.get_ref().clone(),
+                                  no_replay_token.0)
         .map_err(error_to_jsvalue)?;
     Ok(self)
   }

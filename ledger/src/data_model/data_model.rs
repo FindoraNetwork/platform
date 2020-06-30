@@ -28,6 +28,8 @@ use zei::xfr::structs::{
   BlindAssetRecord, OwnerMemo, XfrBody, ASSET_TYPE_LENGTH,
 };
 
+pub const TRANSACTION_WINDOW_WIDTH: u64 = 128;
+
 pub fn b64enc<T: ?Sized + AsRef<[u8]>>(input: &T) -> String {
   base64::encode_config(input, base64::URL_SAFE)
 }
@@ -443,6 +445,23 @@ pub enum TxoRef {
   Absolute(TxoSID),
 }
 
+#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+pub struct NoReplayToken(pub u64, pub u64);
+
+impl NoReplayToken {
+  pub fn new<R: RngCore>(prng: &mut R, seq_id: u64) -> Self {
+    NoReplayToken(prng.next_u64(), seq_id)
+  }
+
+  pub fn get_seq_id(&self) -> u64 {
+    self.1
+  }
+
+  pub fn get_rand(&self) -> u64 {
+    self.0
+  }
+}
+
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct TransferAssetBody {
   pub inputs: Vec<TxoRef>, // Ledger address of inputs
@@ -583,6 +602,7 @@ pub struct UpdateMemoBody {
   #[serde(default)]
   #[serde(skip_serializing_if = "is_default")]
   pub asset_type: AssetTypeCode,
+  pub no_replay_token: NoReplayToken,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -591,18 +611,21 @@ pub struct AIRAssignBody {
   pub data: CredCommitment,
   pub issuer_pk: CredIssuerPublicKey,
   pub pok: CredPoK,
+  pub no_replay_token: NoReplayToken,
 }
 
 impl AIRAssignBody {
   pub fn new(addr: CredUserPublicKey,
              data: CredCommitment,
              issuer_pk: CredIssuerPublicKey,
-             pok: CredPoK)
+             pok: CredPoK,
+             no_replay_token: NoReplayToken)
              -> Result<AIRAssignBody, errors::PlatformError> {
     Ok(AIRAssignBody { addr,
                        data,
                        issuer_pk,
-                       pok })
+                       pok,
+                       no_replay_token })
   }
 }
 
@@ -855,6 +878,7 @@ pub struct TimeBounds {
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize, Default)]
 pub struct TransactionBody {
+  pub no_replay_token: NoReplayToken,
   pub operations: Vec<Operation>,
   #[serde(default)]
   #[serde(skip_serializing_if = "is_default")]
@@ -867,10 +891,17 @@ pub struct TransactionBody {
   pub memos: Vec<Memo>,
 }
 
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)] //, Default
+impl TransactionBody {
+  fn from_token(no_replay_token: NoReplayToken) -> Self {
+    let mut result = TransactionBody::default();
+    result.no_replay_token = no_replay_token;
+    result
+  }
+}
+
+#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 pub struct Transaction {
   pub body: TransactionBody,
-  pub seq_id: u64,
   #[serde(default)]
   #[serde(skip_serializing_if = "is_default")]
   pub signatures: Vec<SignatureOf<TransactionBody>>,
@@ -1189,14 +1220,13 @@ impl Transaction {
     HashOf::new(&(id, self.clone()))
   }
 
-  pub fn from_seq_id(seq_id: u64) -> Self {
-    Transaction { body: TransactionBody::default(),
-                  seq_id,
+  pub fn from_token(no_replay_token: NoReplayToken) -> Self {
+    Transaction { body: TransactionBody::from_token(no_replay_token),
                   signatures: Vec::new() }
   }
 
-  pub fn from_operation(op: Operation, seq_id: u64) -> Self {
-    let mut tx = Transaction::from_seq_id(seq_id);
+  pub fn from_operation(op: Operation, no_replay_token: NoReplayToken) -> Self {
+    let mut tx = Transaction::from_token(no_replay_token);
     tx.add_operation(op);
     tx
   }
@@ -1419,7 +1449,7 @@ mod tests {
   fn test_add_operation() {
     // Create values to be used to instantiate operations. Just make up a seq_id, since
     // it will never be sent to a real ledger
-    let mut transaction: Transaction = Transaction::from_seq_id(0);
+    let mut transaction: Transaction = Transaction::from_token(NoReplayToken::default());
 
     let mut prng = rand_chacha::ChaChaRng::from_entropy();
 

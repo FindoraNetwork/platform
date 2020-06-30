@@ -177,7 +177,7 @@ impl TxnEffect {
                           globals.rt_vars,
                           globals.amt_vars,
                           globals.frac_vars,
-                          &Transaction::from_seq_id(txn.seq_id))?;
+                          &Transaction::from_token(txn.body.no_replay_token))?;
           }
 
           issuance_keys.insert(code, token.properties.issuer);
@@ -438,6 +438,9 @@ impl TxnEffect {
           let issuer_pk = &air_assign.body.issuer_pk;
           let pok = &air_assign.body.pok;
           let pk = &air_assign.pubkey;
+          if txn.body.no_replay_token != air_assign.body.no_replay_token {
+            return Err(inp_fail!());
+          }
           // 1)
           air_assign.signature
                     .verify(&pk, &air_assign.body)
@@ -455,6 +458,9 @@ impl TxnEffect {
         // 3) The signing key is the asset issuer key (checked later).
         Operation::UpdateMemo(update_memo) => {
           let pk = update_memo.pubkey;
+          if txn.body.no_replay_token != update_memo.body.no_replay_token {
+            return Err(inp_fail!());
+          }
           // 1)
           update_memo.signature
                      .verify(&pk, &update_memo.body)
@@ -653,7 +659,7 @@ impl BlockEffect {
     }
 
     let temp_sid = TxnTempSID(self.txns.len());
-    let seq_id = txn_effect.txn.seq_id;
+    let no_replay_token = txn_effect.txn.body.no_replay_token;
     self.txns.push(txn_effect.txn);
     self.temp_sids.push(temp_sid);
     self.txos.push(txn_effect.txos);
@@ -695,7 +701,7 @@ impl BlockEffect {
     }
 
     for digest in txn_effect.op_digests.iter() {
-      self.opseqs.insert(*digest, seq_id);
+      self.opseqs.insert(*digest, no_replay_token.get_seq_id());
     }
 
     Ok(temp_sid)
