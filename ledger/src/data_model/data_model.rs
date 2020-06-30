@@ -244,7 +244,8 @@ impl SignatureRules {
 ///    another user.
 /// 2) Updatable: Whether the asset memo can be updated.
 /// 3) Transfer signature rules: Signature weights and threshold for a valid transfer.
-/// 4) Asset tracing policy: Asset tracer encryption keys, whether the asset is traceable, and whether the identity is traceable.
+/// 4) Asset tracing policies: A bundle of tracing policies specifying the tracing proofs that
+///    constitute a valid transfer.
 /// 5) Max units: Optional limit on total issuance amount.
 pub struct AssetRules {
   pub transferable: bool,
@@ -406,7 +407,6 @@ pub enum TxoRef {
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct TransferAssetBody {
   pub inputs: Vec<TxoRef>, // Ledger address of inputs
-  // Input signature commitments
   #[serde(default)]
   #[serde(skip_serializing_if = "is_default")]
   pub policies: XfrNotePoliciesNoRef,

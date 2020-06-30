@@ -481,7 +481,7 @@ impl AssetRules {
     AssetRules::default()
   }
 
-  /// Sets asset tracing policy.
+  /// Adds an asset tracing policy.
   /// @param {TracingPolicy} policy - Tracing policy for the new asset.
   pub fn add_tracing_policy(mut self, policy: &TracingPolicy) -> AssetRules {
     self.rules.tracing_policies.add(policy.get_ref().clone());
