@@ -1699,16 +1699,16 @@ mod test {
                                                owner_memos: HashMap::new(),
                                                confidential_amounts: cmds.confidential_amounts,
                                                confidential_types: cmds.confidential_types });
-    let mut big_txn = Box::new(OneBigTxnAccounts { base_ledger: LedgerState::test_ledger(),
-                                                   txn: Transaction::from_seq_id(0), // Should be OK, starting with clean ledger
-                                                   txos: Default::default(),
-                                                   accounts: HashMap::new(),
-                                                   utxos: HashMap::new(),
-                                                   units: HashMap::new(),
-                                                   balances: HashMap::new(),
-                                                   confidential_amounts:
-                                                     cmds.confidential_amounts,
-                                                   confidential_types: cmds.confidential_types });
+    let mut big_txn =
+      Box::new(OneBigTxnAccounts { base_ledger: LedgerState::test_ledger(),
+                                   txn: Transaction::from_token(NoReplayToken::default()), // Should be OK, starting with clean ledger
+                                   txos: Default::default(),
+                                   accounts: HashMap::new(),
+                                   utxos: HashMap::new(),
+                                   units: HashMap::new(),
+                                   balances: HashMap::new(),
+                                   confidential_amounts: cmds.confidential_amounts,
+                                   confidential_types: cmds.confidential_types });
 
     let mut active_ledger = if !with_standalone {
       None

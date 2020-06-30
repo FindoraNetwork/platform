@@ -397,7 +397,8 @@ impl TransactionBuilder {
   pub fn add_operation_update_memo(mut self,
                                    auth_key_pair: &XfrKeyPair,
                                    code: String,
-                                   new_memo: String)
+                                   new_memo: String,
+                                   no_replay_token: NoReplayToken)
                                    -> Result<TransactionBuilder, JsValue> {
     // First, decode the asset code
     let code = AssetTypeCode::new_from_base64(&code).map_err(|_| {
@@ -405,7 +406,7 @@ impl TransactionBuilder {
                })?;
 
     self.get_builder_mut()
-        .add_operation_update_memo(auth_key_pair, code, &new_memo);
+        .add_operation_update_memo(auth_key_pair, code, &new_memo, no_replay_token.0);
     Ok(self)
   }
 

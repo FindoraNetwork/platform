@@ -353,7 +353,7 @@ mod tests {
     let key = Key::gen_random(&mut prng);
 
     // Add hash to ledger and update query server
-    let mut builder = TransactionBuilder::from_seq_id(ledger_state.get_block_commit_count());
+    let mut builder = TransactionBuilder::from_token(ledger_state.get_no_replay_token());
     builder.add_operation_kv_update(&kp, &key, 0, Some(&hash))
            .unwrap();
     let update_kv_tx = builder.transaction();
@@ -376,7 +376,7 @@ mod tests {
 
     // Replace commitment
     let hash = KVHash::new(&String::from("new_data"), Some(&blind));
-    let mut builder = TransactionBuilder::from_seq_id(ledger_state.get_block_commit_count());
+    let mut builder = TransactionBuilder::from_token(ledger_state.get_no_replay_token());
     builder.add_operation_kv_update(&kp, &key, 1, Some(&hash))
            .unwrap();
     let update_kv_tx = builder.transaction();
@@ -481,7 +481,7 @@ mod tests {
     let alice = XfrKeyPair::generate(&mut prng);
     let bob = XfrKeyPair::generate(&mut prng);
     // Define asset
-    let mut builder = TransactionBuilder::from_seq_id(ledger_state.get_block_commit_count());
+    let mut builder = TransactionBuilder::from_token(ledger_state.get_no_replay_token());
     let define_tx = builder.add_operation_create_asset(&alice,
                                                        Some(token_code),
                                                        AssetRules::default(),
@@ -490,7 +490,7 @@ mod tests {
                            .unwrap()
                            .transaction();
 
-    let mut builder = TransactionBuilder::from_seq_id(ledger_state.get_block_commit_count());
+    let mut builder = TransactionBuilder::from_token(ledger_state.get_no_replay_token());
 
     //Issuance txn
     let amt = 1000;
@@ -524,7 +524,7 @@ mod tests {
                             .unwrap()
                             .sign(&alice)
                             .unwrap();
-    let mut builder = TransactionBuilder::from_seq_id(ledger_state.get_block_commit_count());
+    let mut builder = TransactionBuilder::from_token(ledger_state.get_no_replay_token());
     let xfr_txn = builder.add_operation(xfr_op.transaction().unwrap())
                          .transaction();
 
@@ -579,16 +579,18 @@ mod tests {
                                            &creator,
                                            AssetRules::default().set_updatable(true).clone(),
                                            Some(Memo("test".to_string())),
-                                           ledger_state.get_block_commit_count()).unwrap();
+                                           ledger_state.get_no_replay_token()).unwrap();
     apply_transaction(&mut ledger_state, tx);
 
     // Change memo
     let new_memo = Memo("new_memo".to_string());
-    let memo_update = UpdateMemo::new(UpdateMemoBody { new_memo: new_memo.clone(),
+    let memo_update = UpdateMemo::new(UpdateMemoBody { no_replay_token:
+                                                         ledger_state.get_no_replay_token(),
+                                                       new_memo: new_memo.clone(),
                                                        asset_type: code },
                                       &creator);
     let tx = Transaction::from_operation(Operation::UpdateMemo(memo_update),
-                                         ledger_state.get_block_commit_count());
+                                         ledger_state.get_no_replay_token());
     apply_transaction(&mut ledger_state, tx);
 
     let block0 = ledger_state.get_block(BlockSID(0)).unwrap();
@@ -613,7 +615,7 @@ mod tests {
                                            &creator,
                                            AssetRules::default(),
                                            Some(Memo("test".to_string())),
-                                           ledger_state.get_block_commit_count()).unwrap();
+                                           ledger_state.get_no_replay_token()).unwrap();
     apply_transaction(&mut ledger_state, tx);
     let block0 = ledger_state.get_block(BlockSID(0)).unwrap();
     query_server.add_new_block(&block0.block.txns).unwrap();
@@ -640,7 +642,7 @@ mod tests {
 
     // Submit
     let tx = Transaction::from_operation(Operation::KVStoreUpdate(update.clone()),
-                                         ledger_state.get_block_commit_count());
+                                         ledger_state.get_no_replay_token());
     apply_transaction(&mut ledger_state, tx);
 
     // Check related txns

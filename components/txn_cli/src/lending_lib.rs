@@ -672,8 +672,13 @@ mod tests {
     let data_dir = tmp_dir.path().to_str().unwrap();
 
     let funds_amount = 1000;
-    let (_, seq_id, _) = ledger_standalone.get_state_commitment().unwrap();
-    load_funds(data_dir, seq_id, 0, 0, funds_amount, &mut ledger_standalone).unwrap();
+    let no_replay_token = ledger_standalone.get_no_replay_token().unwrap();
+    load_funds(data_dir,
+               no_replay_token,
+               0,
+               0,
+               funds_amount,
+               &mut ledger_standalone).unwrap();
     let data = load_data(data_dir).unwrap();
 
     assert_eq!(data.borrowers[0].balance, funds_amount);
@@ -691,8 +696,12 @@ mod tests {
     assert_eq!(data.loans.len(), 1);
 
     // Fulfill the loan request
-    let seq_id = 0; // OK
-    fulfill_loan(data_dir, seq_id, 0, 0, None, &mut ledger_standalone).unwrap();
+    fulfill_loan(data_dir,
+                 no_replay_token,
+                 0,
+                 0,
+                 None,
+                 &mut ledger_standalone).unwrap();
     data = load_data(data_dir).unwrap();
 
     assert_eq!(data.loans[0].status, LoanStatus::Active);
@@ -700,7 +709,11 @@ mod tests {
 
     // Pay loan
     let payment_amount = 200;
-    pay_loan(data_dir, seq_id, 0, payment_amount, &mut ledger_standalone).unwrap();
+    pay_loan(data_dir,
+             no_replay_token,
+             0,
+             payment_amount,
+             &mut ledger_standalone).unwrap();
     data = load_data(data_dir).unwrap();
 
     assert_eq!(data.loans[0].payments, 1);

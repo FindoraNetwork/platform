@@ -298,7 +298,8 @@ pub trait BuildsTransactions {
   fn add_operation_update_memo(&mut self,
                                auth_key_pair: &XfrKeyPair,
                                asset_code: AssetTypeCode,
-                               new_memo: &str)
+                               new_memo: &str,
+                               no_replay_token: NoReplayToken)
                                -> &mut Self;
 
   fn serialize(&self) -> Vec<u8>;
@@ -556,11 +557,13 @@ impl BuildsTransactions for TransactionBuilder {
   fn add_operation_update_memo(&mut self,
                                auth_key_pair: &XfrKeyPair,
                                asset_code: AssetTypeCode,
-                               new_memo: &str)
+                               new_memo: &str,
+                               no_replay_token: NoReplayToken)
                                -> &mut Self {
     let new_memo = Memo(new_memo.into());
     let memo_update = UpdateMemo::new(UpdateMemoBody { new_memo,
-                                                       asset_type: asset_code },
+                                                       asset_type: asset_code,
+                                                       no_replay_token },
                                       auth_key_pair);
     let op = Operation::UpdateMemo(memo_update);
     self.add_operation(op);

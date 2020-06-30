@@ -432,9 +432,9 @@ mod tests {
     let issuer_key_pair = XfrKeyPair::generate(&mut prng);
 
     // Define asset
-    let seq_id = 0;
+    let no_replay_token = NoReplayToken::default();
     let res = define_asset(data_dir,
-                           seq_id,
+                           no_replay_token,
                            false,
                            &issuer_key_pair,
                            AssetTypeCode::gen_random(),
@@ -460,10 +460,10 @@ mod tests {
     // Issue and transfer asset
     let code = AssetTypeCode::gen_random();
     let amount = 1000;
-    let seq_id = 0;
+    let no_replay_token = NoReplayToken::default();
     let res =
       issue_and_transfer_asset(data_dir,
-                               seq_id,
+                               no_replay_token,
                                &issuer_key_pair,
                                &recipient_key_pair,
                                amount,

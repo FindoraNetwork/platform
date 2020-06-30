@@ -194,7 +194,7 @@ mod tests {
 
   #[test]
   fn test_mock_client() {
-    let tx = Transaction::from_seq_id(0);
+    let tx = Transaction::from_token(NoReplayToken::default());
     let mut mock_rest_client = LedgerStandalone::new_mock(2);
     let handle = mock_rest_client.submit_transaction(&tx).unwrap();
     mock_rest_client.force_end_block().unwrap();

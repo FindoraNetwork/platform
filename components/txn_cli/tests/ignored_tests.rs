@@ -1,6 +1,6 @@
 #![deny(warnings)]
 use ledger::data_model::errors::PlatformError;
-use ledger::data_model::AssetTypeCode;
+use ledger::data_model::{AssetTypeCode, NoReplayToken};
 #[cfg(test)]
 use network::MockLedgerStandalone;
 use tempfile::tempdir;
@@ -14,7 +14,7 @@ fn submit_command(cmd_vec: Vec<&str>,
                   -> Result<(), PlatformError> {
   let app = get_cli_app();
   let inputs = app.get_matches_from_safe(cmd_vec).unwrap();
-  process_inputs(inputs, 0, rest_client)
+  process_inputs(inputs, NoReplayToken::default(), rest_client)
 }
 
 //
@@ -658,7 +658,7 @@ fn test_define_asset_simple_policies() {
                         "--non_transferable"];
   // dbg!(&inputs_vec);
   let inputs = app.get_matches_from_safe(inputs_vec).unwrap();
-  process_inputs(inputs, 0, &mut ledger_standalone).expect("Failed to define asset");
+  process_inputs(inputs, NoReplayToken::default(), &mut ledger_standalone).expect("Failed to define asset");
 
   submit(txn_builder_file, &mut ledger_standalone).expect("Failed to submit transaction");
 

@@ -2525,7 +2525,7 @@ mod tests {
                                          None);
     let asset_create = asset_creation_operation(&asset_body, &keypair);
     let tx = Transaction::from_operation(Operation::DefineAsset(asset_create),
-                                         state.get_block_commit_count());
+                                         state.get_no_replay_token());
 
     let effect = TxnEffect::compute_effect(tx).unwrap();
     {
@@ -2556,7 +2556,7 @@ mod tests {
     let hash = KVHash::new(&data1, None);
     let update = KVUpdate::new((key1, Some(hash)), 0, &kp1);
     let tx = Transaction::from_operation(Operation::KVStoreUpdate(update.clone()),
-                                         ledger.get_block_commit_count());
+                                         ledger.get_no_replay_token());
 
     {
       let effect = TxnEffect::compute_effect(tx).unwrap();
@@ -2574,11 +2574,11 @@ mod tests {
     // Assert that nobody else can update that key and that reply isn't possible
     let bad_seq_update = KVUpdate::new((key1, None), 0, &kp1);
     let bad_seq_tx = Transaction::from_operation(Operation::KVStoreUpdate(bad_seq_update.clone()),
-                                                 ledger.get_block_commit_count());
+                                                 ledger.get_no_replay_token());
     let wrong_key_update = KVUpdate::new((key1, None), 1, &kp2);
     let wrong_key_tx =
       Transaction::from_operation(Operation::KVStoreUpdate(wrong_key_update.clone()),
-                                  ledger.get_block_commit_count());
+                                  ledger.get_no_replay_token());
 
     let mut block = ledger.start_block().unwrap();
     {
@@ -2596,7 +2596,7 @@ mod tests {
     let hash = KVHash::new(&data2, Some(&KVBlind::gen_random()));
     let update = KVUpdate::new((key1, Some(hash)), 1, &kp1);
     let tx = Transaction::from_operation(Operation::KVStoreUpdate(update.clone()),
-                                         ledger.get_block_commit_count());
+                                         ledger.get_no_replay_token());
 
     {
       let effect = TxnEffect::compute_effect(tx).unwrap();
@@ -2630,7 +2630,8 @@ mod tests {
     let keypair = build_keys(&mut prng);
 
     asset_create.pubkey.key = *keypair.get_pk_ref();
-    let tx = Transaction::from_operation(Operation::DefineAsset(asset_create), 0);
+    let tx = Transaction::from_operation(Operation::DefineAsset(asset_create),
+                                         NoReplayToken::default());
 
     assert!(TxnEffect::compute_effect(tx).is_err());
   }
@@ -2649,7 +2650,7 @@ mod tests {
                                            &key_pair,
                                            AssetRules::default(),
                                            None,
-                                           ledger.get_block_commit_count()).unwrap();
+                                           ledger.get_no_replay_token()).unwrap();
 
     let effect = TxnEffect::compute_effect(tx).unwrap();
     {
@@ -2675,7 +2676,7 @@ mod tests {
 
     let issue_op = Operation::IssueAsset(asset_issuance_operation);
 
-    let tx = Transaction::from_operation(issue_op, ledger.get_block_commit_count());
+    let tx = Transaction::from_operation(issue_op, ledger.get_no_replay_token());
 
     // Commit issuance to block
     let effect = TxnEffect::compute_effect(tx).unwrap();
@@ -2723,7 +2724,7 @@ mod tests {
     let mut second_transfer = transfer.clone();
     transfer.sign(&key_pair);
     let tx = Transaction::from_operation(Operation::TransferAsset(transfer),
-                                         ledger.get_block_commit_count());
+                                         ledger.get_no_replay_token());
 
     // Commit first transfer
     let effect = TxnEffect::compute_effect(tx).unwrap();
@@ -2747,7 +2748,7 @@ mod tests {
     // Submit spend of same asset at second sid without signature
     second_transfer.body_signatures = Vec::new();
     let tx = Transaction::from_operation(Operation::TransferAsset(second_transfer),
-                                         ledger.get_block_commit_count());
+                                         ledger.get_no_replay_token());
 
     let effect = TxnEffect::compute_effect(tx);
     assert!(effect.is_err());
@@ -2774,7 +2775,8 @@ mod tests {
     let keypair2 = build_keys(&mut prng);
 
     asset_create.pubkey.key = *keypair2.get_pk_ref();
-    let tx = Transaction::from_operation(Operation::DefineAsset(asset_create), 0); // OK because no ledger interaction
+    let tx = Transaction::from_operation(Operation::DefineAsset(asset_create),
+                                         NoReplayToken::default()); // OK because no ledger interaction
 
     assert!(TxnEffect::compute_effect(tx).is_err());
   }
@@ -2793,7 +2795,7 @@ mod tests {
                                            &keypair,
                                            AssetRules::default(),
                                            None,
-                                           ledger.get_block_commit_count()).unwrap();
+                                           ledger.get_no_replay_token()).unwrap();
 
     let effect = TxnEffect::compute_effect(tx).unwrap();
     {
@@ -2814,7 +2816,7 @@ mod tests {
 
     let issue_op = Operation::IssueAsset(asset_issuance_operation);
 
-    let tx = Transaction::from_operation(issue_op, ledger.get_block_commit_count());
+    let tx = Transaction::from_operation(issue_op, ledger.get_no_replay_token());
     let second_tx = tx.clone();
 
     let effect = TxnEffect::compute_effect(tx).unwrap();
@@ -2933,23 +2935,24 @@ mod tests {
     let air_assign_op = AIRAssign::new(AIRAssignBody::new(cred_user_key.0.clone(),
                                                           commitment,
                                                           cred_issuer_key.0,
-                                                          pok).unwrap(),
+                                                          pok,
+                                                          ledger.get_no_replay_token()).unwrap(),
                                        &user_kp).unwrap();
     let mut adversarial_op = air_assign_op.clone();
     let air_assign_op2 = air_assign_op.clone();
     adversarial_op.pubkey = XfrKeyPair::generate(&mut ledger.get_prng()).get_pk();
     let tx = Transaction::from_operation(Operation::AIRAssign(air_assign_op),
-                                         ledger.get_block_commit_count());
+                                         ledger.get_no_replay_token());
     apply_transaction(&mut ledger, tx);
 
     let tx2 = Transaction::from_operation(Operation::AIRAssign(air_assign_op2),
-                                          ledger.get_block_commit_count());
+                                          ledger.get_no_replay_token());
 
     let effect = TxnEffect::compute_effect(tx2).unwrap();
     assert!(ledger.status.check_txn_effects(effect).is_err()); // This fails due to replay protection
 
     let tx = Transaction::from_operation(Operation::AIRAssign(adversarial_op),
-                                         ledger.get_block_commit_count());
+                                         ledger.get_no_replay_token());
     let effect = TxnEffect::compute_effect(tx);
     assert!(effect.is_err());
     let authenticated_air_res =
@@ -2961,7 +2964,6 @@ mod tests {
   pub fn test_transferable() {
     let mut ledger = LedgerState::test_ledger();
     let params = PublicParams::new();
-
     let issuer = XfrKeyPair::generate(&mut ledger.get_prng());
     let alice = XfrKeyPair::generate(&mut ledger.get_prng());
     let bob = XfrKeyPair::generate(&mut ledger.get_prng());
@@ -2972,15 +2974,17 @@ mod tests {
                                            &issuer,
                                            AssetRules::default().set_transferable(false).clone(),
                                            Some(Memo("test".to_string())),
-                                           ledger.get_block_commit_count()).unwrap();
+                                           ledger.get_no_replay_token()).unwrap();
     apply_transaction(&mut ledger, tx);
+    let no_replay_token = ledger.get_no_replay_token();
     let (tx, _) = create_issue_and_transfer_txn(&mut ledger,
                                                 &params,
                                                 &code,
                                                 100,
                                                 &issuer,
                                                 alice.get_pk_ref(),
-                                                0);
+                                                0,
+                                                no_replay_token);
     let (_, sids) = apply_transaction(&mut ledger, tx);
     let sid = sids[0];
 
@@ -3001,8 +3005,7 @@ mod tests {
                                                                  None, TransferType::Standard).unwrap()
                                           ).unwrap();
     transfer.sign(&alice);
-    let tx = Transaction::from_operation(Operation::TransferAsset(transfer),
-                                         ledger.get_block_commit_count());
+    let tx = Transaction::from_operation(Operation::TransferAsset(transfer), no_replay_token);
     let effect = TxnEffect::compute_effect(tx.clone()).unwrap();
 
     let mut block = ledger.start_block().unwrap();
@@ -3022,8 +3025,7 @@ mod tests {
                              &[record.clone()],
                              None, TransferType::Standard).unwrap()).unwrap();
     transfer.sign(&alice);
-    let tx = Transaction::from_operation(Operation::TransferAsset(transfer),
-                                         ledger.get_block_commit_count());
+    let tx = Transaction::from_operation(Operation::TransferAsset(transfer), no_replay_token);
     let effect = TxnEffect::compute_effect(tx.clone()).unwrap();
 
     let res = ledger.apply_transaction(&mut block, effect);
@@ -3036,14 +3038,16 @@ mod tests {
                                                                               AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
                                                                               bob.get_pk_ref().clone());
     let second_record = AssetRecord::from_template_no_identity_tracking(ledger.get_prng(),
-                                                                  &second_transfer_template).unwrap();
+                                                                        &second_transfer_template).unwrap();
+    let no_replay_token = ledger.get_no_replay_token();
     let (mut tx, ar) = create_issue_and_transfer_txn(&mut ledger,
                                                      &params,
                                                      &code,
                                                      100,
                                                      &issuer,
                                                      alice.get_pk_ref(),
-                                                     1);
+                                                     1,
+                                                     no_replay_token);
     let mut transfer = TransferAsset::new(TransferAssetBody::new(ledger.get_prng(),
                                                                  vec![TxoRef::Relative(0)],
                                                                  &[AssetRecord::from_open_asset_record_no_asset_tracking(ar.open_asset_record)],
@@ -3160,7 +3164,7 @@ mod tests {
                                            &issuer,
                                            AssetRules::default().set_max_units(Some(100)).clone(),
                                            Some(Memo("test".to_string())),
-                                           ledger.get_block_commit_count()).unwrap();
+                                           ledger.get_no_replay_token()).unwrap();
     apply_transaction(&mut ledger, tx);
     let tx = create_issuance_txn(&mut ledger,
                                  &params,
@@ -3240,7 +3244,7 @@ mod tests {
                                     &alice,
                                     AssetRules::default().set_transfer_multisig_rules(Some(sig_rules))
                                                          .clone(),
-                                    None, ledger.get_block_commit_count()).unwrap();
+                                    None, ledger.get_no_replay_token()).unwrap();
 
     let effect = TxnEffect::compute_effect(tx).unwrap();
     {
@@ -3265,7 +3269,7 @@ mod tests {
 
     let issue_op = Operation::IssueAsset(asset_issuance_operation);
 
-    let tx = Transaction::from_operation(issue_op, ledger.get_block_commit_count());
+    let tx = Transaction::from_operation(issue_op, ledger.get_no_replay_token());
 
     // Commit issuance to block
     let effect = TxnEffect::compute_effect(tx).unwrap();
@@ -3303,7 +3307,7 @@ mod tests {
       }
     }
     let tx = Transaction::from_operation(Operation::TransferAsset(transfer),
-                                         ledger.get_block_commit_count());
+                                         ledger.get_no_replay_token());
     let effect = TxnEffect::compute_effect(tx).unwrap();
     ledger.apply_transaction(&mut block, effect).is_ok()
   }
@@ -3322,32 +3326,36 @@ mod tests {
                                            &creator,
                                            AssetRules::default().set_updatable(true).clone(),
                                            Some(Memo("test".to_string())),
-                                           ledger.get_block_commit_count()).unwrap();
+                                           ledger.get_no_replay_token()).unwrap();
     apply_transaction(&mut ledger, tx);
     let mut block = ledger.start_block().unwrap();
     let new_memo = Memo("new_memo".to_string());
-    let mut memo_update = UpdateMemo::new(UpdateMemoBody { new_memo: new_memo.clone(),
+    let mut memo_update = UpdateMemo::new(UpdateMemoBody { no_replay_token:
+                                                             ledger.get_no_replay_token(),
+                                                           new_memo: new_memo.clone(),
                                                            asset_type: code },
                                           &creator);
     // Ensure that invalid signature fails
     memo_update.pubkey = adversary.get_pk();
     let tx = Transaction::from_operation(Operation::UpdateMemo(memo_update.clone()),
-                                         ledger.get_block_commit_count());
+                                         ledger.get_no_replay_token());
     assert!(TxnEffect::compute_effect(tx).is_err());
 
     // Only the asset creator can change the memo
-    let memo_update_wrong_creator = UpdateMemo::new(UpdateMemoBody { new_memo: new_memo.clone(),
+    let memo_update_wrong_creator = UpdateMemo::new(UpdateMemoBody { no_replay_token:
+                                                                       ledger.get_no_replay_token(),
+                                                                     new_memo: new_memo.clone(),
                                                                      asset_type: code },
                                                     &adversary);
     let tx = Transaction::from_operation(Operation::UpdateMemo(memo_update_wrong_creator),
-                                         ledger.get_block_commit_count());
+                                         ledger.get_no_replay_token());
     let effect = TxnEffect::compute_effect(tx).unwrap();
     assert!(ledger.apply_transaction(&mut block, effect).is_err());
 
     // Cant change memo more than once in the same block
     memo_update.pubkey = creator.get_pk();
     let tx = Transaction::from_operation(Operation::UpdateMemo(memo_update.clone()),
-                                         ledger.get_block_commit_count());
+                                         ledger.get_no_replay_token());
     let tx_clone = tx.clone();
     let effect = TxnEffect::compute_effect(tx).unwrap();
     ledger.apply_transaction(&mut block, effect.clone())
@@ -3426,7 +3434,7 @@ mod tests {
                                            &fiat_issuer_key_pair,
                                            AssetRules::default(),
                                            Some(Memo("fiat".to_string())),
-                                           ledger.get_block_commit_count()).unwrap();
+                                           ledger.get_no_replay_token()).unwrap();
     apply_transaction(&mut ledger, tx);
 
     // Define debt token
@@ -3438,29 +3446,33 @@ mod tests {
                                            &borrower_key_pair,
                                            AssetRules::default(),
                                            Some(Memo(serde_json::to_string(&debt_memo).unwrap())),
-                                           ledger.get_block_commit_count()).unwrap();
+                                           ledger.get_no_replay_token()).unwrap();
     apply_transaction(&mut ledger, tx);
 
     // Issue and transfer fiat tokens to lender
+    let no_replay_token = ledger.get_no_replay_token();
     let (tx, _) = create_issue_and_transfer_txn(&mut ledger,
                                                 &params,
                                                 &fiat_code,
                                                 fiat_amount,
                                                 &fiat_issuer_key_pair,
                                                 lender_key_pair.get_pk_ref(),
-                                                0);
+                                                0,
+                                                no_replay_token);
 
     let (_txn_sid, txo_sids) = apply_transaction(&mut ledger, tx);
     let fiat_sid = txo_sids[0];
 
     // Issue and transfer debt tokens to borrower
+    let no_replay_token = ledger.get_no_replay_token();
     let (tx, _) = create_issue_and_transfer_txn(&mut ledger,
                                                 &params,
                                                 &debt_code,
                                                 loan_amount,
                                                 &borrower_key_pair,
                                                 borrower_key_pair.get_pk_ref(),
-                                                0);
+                                                0,
+                                                no_replay_token);
     let (_txn_sid, txo_sids) = apply_transaction(&mut ledger, tx);
     let debt_sid = txo_sids[0];
 
@@ -3492,7 +3504,7 @@ mod tests {
     transfer.sign(&lender_key_pair);
     transfer.sign(&borrower_key_pair);
     let tx = Transaction::from_operation(Operation::TransferAsset(transfer),
-                                         ledger.get_block_commit_count());
+                                         ledger.get_no_replay_token());
 
     let (_txn_sid, txo_sids) = apply_transaction(&mut ledger, tx);
     let fiat_sid = txo_sids[0];
@@ -3561,7 +3573,7 @@ mod tests {
                              None,
                                                         TransferType::DebtSwap).unwrap();
 
-    let tx = Transaction::from_operation(Operation::TransferAsset(TransferAsset::new(transfer_body).unwrap()), ledger.get_block_commit_count());
+    let tx = Transaction::from_operation(Operation::TransferAsset(TransferAsset::new(transfer_body).unwrap()), ledger.get_no_replay_token());
 
     let effect = TxnEffect::compute_effect(tx).unwrap();
     let result = ledger.apply_transaction(&mut block, effect);

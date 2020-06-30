@@ -37,7 +37,7 @@ fn test_create_asset() -> Result<(), PlatformError> {
   let mut ledger = LedgerState::test_ledger();
   let code = AssetTypeCode::from_identical_byte(1);
   let keys = XfrKeyPair::generate(&mut prng);
-  let mut builder = TransactionBuilder::from_seq_id(ledger.get_block_commit_count());
+  let mut builder = TransactionBuilder::from_token(ledger.get_no_replay_token());
   let params = PublicParams::new();
 
   // Define
@@ -50,7 +50,7 @@ fn test_create_asset() -> Result<(), PlatformError> {
   apply_transaction(&mut ledger, tx.clone());
 
   // Issue
-  let mut builder = TransactionBuilder::from_seq_id(ledger.get_block_commit_count());
+  let mut builder = TransactionBuilder::from_token(ledger.get_no_replay_token());
   let tx =
     builder.add_basic_issue_asset(&keys,
                                   &code,
@@ -88,7 +88,7 @@ fn test_create_asset() -> Result<(), PlatformError> {
   builder.attach_signature(input_sig).unwrap();
   let op = builder.transaction()?;
 
-  let mut builder = TransactionBuilder::from_seq_id(ledger.get_block_commit_count());
+  let mut builder = TransactionBuilder::from_token(ledger.get_no_replay_token());
   let tx = builder.add_operation(op).transaction();
   apply_transaction(&mut ledger, tx.clone());
 
@@ -124,7 +124,7 @@ fn test_loan_repayment(loan_amount: u64,
                                           })?;
 
   // Define assets
-  let mut builder = TransactionBuilder::from_seq_id(ledger.get_block_commit_count());
+  let mut builder = TransactionBuilder::from_token(ledger.get_no_replay_token());
   let tx = builder.add_operation_create_asset(&fiat_issuer_keys,
                                               Some(fiat_code),
                                               AssetRules::default(),
@@ -162,7 +162,7 @@ fn test_loan_repayment(loan_amount: u64,
     open_blind_asset_record(&fiat_ba, &fiat_owner_memo, lender_keys.get_sk_ref()).unwrap();
 
   //  Mega transaction to do everything
-  let mut builder = TransactionBuilder::from_seq_id(ledger.get_block_commit_count());
+  let mut builder = TransactionBuilder::from_token(ledger.get_no_replay_token());
   let tx = builder.add_operation_issue_asset(&fiat_issuer_keys,
                                              &fiat_code,
                                              0,
@@ -269,7 +269,7 @@ fn test_update_memo() -> Result<(), PlatformError> {
   let mut ledger = LedgerState::test_ledger();
   let code = AssetTypeCode::from_identical_byte(1);
   let keys = XfrKeyPair::generate(&mut prng);
-  let mut builder = TransactionBuilder::from_seq_id(ledger.get_block_commit_count());
+  let mut builder = TransactionBuilder::from_token(ledger.get_no_replay_token());
 
   // Define the asset and verify
   let mut asset_rules = AssetRules::default();
@@ -286,8 +286,8 @@ fn test_update_memo() -> Result<(), PlatformError> {
   assert!(ledger.get_asset_type(&code).is_some());
 
   // Define a transaction to update the memo
-  let mut builder = TransactionBuilder::from_seq_id(ledger.get_block_commit_count());
-  let tx = builder.add_operation_update_memo(&keys, code, "changed")
+  let mut builder = TransactionBuilder::from_token(ledger.get_no_replay_token());
+  let tx = builder.add_operation_update_memo(&keys, code, "changed", ledger.get_no_replay_token())
                   .transaction();
   apply_transaction(&mut ledger, tx.clone());
 

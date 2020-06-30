@@ -470,12 +470,8 @@ pub trait RestfulLedgerAccess {
                SignatureOf<(HashOf<Option<StateCommitmentData>>, u64)>),
               PlatformError>;
 
-<<<<<<< HEAD
-  // fn get_state_commitment_data(&self) -> Result<StateCommitmentData, PlatformError>;
-=======
   #[allow(clippy::type_complexity)]
   fn get_no_replay_token(&mut self) -> Result<NoReplayToken, PlatformError>;
->>>>>>> 324ae4f7... Change seq_id to no_replay_token
 
   fn get_kv_entry(&self, addr: Key) -> Result<AuthenticatedKVLookup, PlatformError>;
 
