@@ -237,7 +237,7 @@ impl TxnEffect {
           }
           // Increment amounts
           txos.reserve(iss.body.records.len());
-          for output in iss.body.records.iter() {
+          for (output, _) in iss.body.records.iter() {
             // (4)
             if (output.0).public_key != iss.pubkey.key {
               return Err(inp_fail!());

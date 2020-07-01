@@ -23,7 +23,7 @@ use utils::{HashOf, ProofOf, Serialized, SignatureOf};
 use zei::api::anon_creds::ACCommitment;
 use zei::xfr::lib::gen_xfr_body;
 use zei::xfr::sig::{XfrKeyPair, XfrPublicKey};
-use zei::xfr::structs::{AssetRecord, AssetTracingPolicy, BlindAssetRecord, XfrBody};
+use zei::xfr::structs::{AssetRecord, AssetTracingPolicy, BlindAssetRecord, OwnerMemo, XfrBody};
 
 pub fn b64enc<T: ?Sized + AsRef<[u8]>>(input: &T) -> String {
   base64::encode_config(input, base64::URL_SAFE)
@@ -462,7 +462,7 @@ pub struct IssueAssetBody {
   pub code: AssetTypeCode,
   pub seq_num: u64,
   pub num_outputs: usize,
-  pub records: Vec<TxOutput>,
+  pub records: Vec<(TxOutput, Option<OwnerMemo>)>,
   /// Asset tracing policy, null iff the asset is not traceable
   #[serde(default)]
   #[serde(skip_serializing_if = "is_default")]
@@ -472,7 +472,7 @@ pub struct IssueAssetBody {
 impl IssueAssetBody {
   pub fn new(token_code: &AssetTypeCode,
              seq_num: u64,
-             records: &[TxOutput],
+             records: &[(TxOutput, Option<OwnerMemo>)],
              tracing_policy: Option<AssetTracingPolicy>)
              -> Result<IssueAssetBody, PlatformError> {
     Ok(IssueAssetBody { code: *token_code,
@@ -578,6 +578,15 @@ impl TransferAsset {
     self.body_signatures
         .push(self.body.compute_body_signature(&keypair, Some(input_idx)))
   }
+
+  pub fn get_owner_memos_ref(&self) -> Vec<Option<&OwnerMemo>> {
+    self.body
+        .transfer
+        .owners_memos
+        .iter()
+        .map(|mem| mem.as_ref())
+        .collect()
+  }
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -595,6 +604,14 @@ impl IssueAsset {
     Ok(IssueAsset { body: issuance_body,
                     pubkey: IssuerPublicKey { key: *keypair.keypair.get_pk_ref() },
                     signature })
+  }
+
+  pub fn get_owner_memos_ref(&self) -> Vec<Option<&OwnerMemo>> {
+    self.body
+        .records
+        .iter()
+        .map(|(_, memo)| memo.as_ref())
+        .collect()
   }
 }
 

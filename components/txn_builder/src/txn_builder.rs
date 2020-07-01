@@ -486,15 +486,10 @@ impl BuildsTransactions for TransactionBuilder {
                                -> Result<&mut Self, PlatformError> {
     let iss_keypair = IssuerKeyPair { keypair: &key_pair };
 
-    let mut records = vec![];
-    for (output, memo) in records_and_memos {
-      records.push(output.clone());
-      self.owner_records.push((output.clone(), memo.clone()));
-    }
     self.txn
         .add_operation(Operation::IssueAsset(IssueAsset::new(IssueAssetBody::new(token_code,
                                                                                  seq_num,
-                                                                                 &records,
+                                                                                 &records_and_memos,
                                                                                  tracing_policy)?,
                                                              &iss_keypair)?));
     Ok(self)
