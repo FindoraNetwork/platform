@@ -523,7 +523,8 @@ fn test_create_or_overwrite_credentials() {
 //
 // Lender or borrower views loans or credentials
 //
-#[allow(unused)]
+// #[allow(unused)]
+#[test]
 fn test_view() {
   let tmp_dir = tempdir().unwrap();
   let dir = tmp_dir.path().to_str().unwrap();
@@ -800,8 +801,8 @@ fn test_air_assign() {
 }
 
 // Test funds loading, loan request, fulfilling and repayment
-#[cfg(test)]
-#[allow(unused)]
+#[test]
+// #[allow(unused)]
 fn test_request_fulfill_and_pay_loan_with_args() {
   let tmp_dir = tempdir().unwrap();
   let dir = tmp_dir.path().to_str().unwrap();
