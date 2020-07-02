@@ -249,7 +249,7 @@ fn get_related_addresses(txn: &Transaction) -> HashSet<XfrAddress> {
           related_addresses.insert(XfrAddress { key: input.public_key });
         }
 
-        for output in transfer.body.transfer.inputs.iter() {
+        for output in transfer.body.transfer.outputs.iter() {
           related_addresses.insert(XfrAddress { key: output.public_key });
         }
       }
