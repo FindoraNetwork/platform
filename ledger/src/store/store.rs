@@ -2279,8 +2279,7 @@ TransferAsset::new(TransferAssetBody::new(ledger.get_prng(),
       IssueAsset::new(asset_issuance_body,
                       &IssuerKeyPair { keypair: &issuer_keys }).unwrap();
 
-    let issue_op = Operation::IssueAsset(asset_issuance_operation);
-    Transaction::from_operation(issue_op, NoReplayToken::default())
+    Transaction::from_operation(Operation::IssueAsset(asset_issuance_operation), NoReplayToken::default())
   }
 }
 
@@ -2932,27 +2931,28 @@ mod tests {
                                                     &cred_user_key.1,
                                                     &credential,
                                                     user_kp.get_pk_ref().as_bytes()).unwrap();
+    let no_replay_token = ledger.get_no_replay_token();
     let air_assign_op = AIRAssign::new(AIRAssignBody::new(cred_user_key.0.clone(),
                                                           commitment,
                                                           cred_issuer_key.0,
                                                           pok,
-                                                          ledger.get_no_replay_token()).unwrap(),
+                                                          no_replay_token).unwrap(),
                                        &user_kp).unwrap();
     let mut adversarial_op = air_assign_op.clone();
     let air_assign_op2 = air_assign_op.clone();
     adversarial_op.pubkey = XfrKeyPair::generate(&mut ledger.get_prng()).get_pk();
     let tx = Transaction::from_operation(Operation::AIRAssign(air_assign_op),
-                                         ledger.get_no_replay_token());
+                                         no_replay_token);
     apply_transaction(&mut ledger, tx);
 
     let tx2 = Transaction::from_operation(Operation::AIRAssign(air_assign_op2),
-                                          ledger.get_no_replay_token());
+                                          no_replay_token);
 
     let effect = TxnEffect::compute_effect(tx2).unwrap();
     assert!(ledger.status.check_txn_effects(effect).is_err()); // This fails due to replay protection
 
     let tx = Transaction::from_operation(Operation::AIRAssign(adversarial_op),
-                                         ledger.get_no_replay_token());
+                                         no_replay_token);
     let effect = TxnEffect::compute_effect(tx);
     assert!(effect.is_err());
     let authenticated_air_res =
@@ -3342,24 +3342,24 @@ mod tests {
     assert!(TxnEffect::compute_effect(tx).is_err());
 
     // Only the asset creator can change the memo
-    let memo_update_wrong_creator = UpdateMemo::new(UpdateMemoBody { no_replay_token:
-                                                                       ledger.get_no_replay_token(),
+    let no_replay_token = ledger.get_no_replay_token();
+    let memo_update_wrong_creator = UpdateMemo::new(UpdateMemoBody { no_replay_token,
                                                                      new_memo: new_memo.clone(),
                                                                      asset_type: code },
                                                     &adversary);
     let tx = Transaction::from_operation(Operation::UpdateMemo(memo_update_wrong_creator),
-                                         ledger.get_no_replay_token());
+                                         no_replay_token);
     let effect = TxnEffect::compute_effect(tx).unwrap();
     assert!(ledger.apply_transaction(&mut block, effect).is_err());
 
     // Cant change memo more than once in the same block
     memo_update.pubkey = creator.get_pk();
     let tx = Transaction::from_operation(Operation::UpdateMemo(memo_update.clone()),
-                                         ledger.get_no_replay_token());
+                                         memo_update.body.no_replay_token);
     let tx_clone = tx.clone();
     let effect = TxnEffect::compute_effect(tx).unwrap();
     ledger.apply_transaction(&mut block, effect.clone())
-          .unwrap();
+      .unwrap();
     assert!(ledger.apply_transaction(&mut block, effect).is_err());
     ledger.finish_block(block).unwrap();
 
