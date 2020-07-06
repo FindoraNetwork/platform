@@ -467,12 +467,18 @@ pub trait RestfulArchiveAccess {
   fn get_blocks_since(&self,
                       addr: BlockSID)
                       -> Result<Vec<(usize, Vec<FinalizedTransaction>)>, PlatformError>;
+  // For debug purposes. Returns the location of ledger being communicated with.
+  fn get_source(&self) -> String;
 }
 
 impl RestfulArchiveAccess for MockLedgerClient {
   fn get_blocks_since(&self,
                       _addr: BlockSID)
                       -> Result<Vec<(usize, Vec<FinalizedTransaction>)>, PlatformError> {
+    unimplemented!();
+  }
+
+  fn get_source(&self) -> String {
     unimplemented!();
   }
 }
@@ -579,6 +585,10 @@ impl RestfulArchiveAccess for ActixLedgerClient {
                         LedgerArchiveRoutes::BlocksSince.with_arg(&addr.0));
     let text = actix_get_request(&self.client, &query).map_err(|_| inp_fail!())?;
     Ok(serde_json::from_str::<Vec<(usize, Vec<FinalizedTransaction>)>>(&text).map_err(|_| ser_fail!())?)
+  }
+
+  fn get_source(&self) -> String {
+    format!("{}://{}:{}", self.protocol, self.host, self.port)
   }
 }
 
