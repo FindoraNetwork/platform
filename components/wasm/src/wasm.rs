@@ -694,6 +694,15 @@ pub fn new_keypair() -> XfrKeyPair {
 }
 
 #[wasm_bindgen]
+/// Generates a new keypair deterministically from a seed string and an optional name.
+pub fn new_keypair_from_seed(seed_str: String, name: Option<String>) -> XfrKeyPair {
+  let seed_str = seed_str + &name.unwrap_or_default();
+  let hash = sha256::hash(&seed_str.as_bytes());
+  let mut prng = ChaChaRng::from_seed(hash.0);
+  XfrKeyPair::generate(&mut prng)
+}
+
+#[wasm_bindgen]
 /// Returns base64 encoded representation of an XfrPublicKey.
 pub fn public_key_to_base64(key: &XfrPublicKey) -> String {
   b64enc(&XfrPublicKey::zei_to_bytes(&key))
