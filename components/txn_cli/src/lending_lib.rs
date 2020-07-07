@@ -659,8 +659,8 @@ mod tests {
                           code).is_ok());
   }
 
-  #[test]
-  #[ignore]
+  #[cfg(test)]
+  #[allow(unused)]
   fn test_request_fulfill_and_pay_loan() {
     let mut ledger_standalone = MockLedgerStandalone::new_mock(1);
 

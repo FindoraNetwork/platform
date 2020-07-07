@@ -8,7 +8,7 @@ use ledger::data_model::{
 use ledger::error_location;
 use ledger::store::*;
 use ledger_api_service::RestfulArchiveAccess;
-use log::info;
+use log::{error, info};
 use sparse_merkle_tree::Key;
 use std::collections::{HashMap, HashSet};
 use zei::xfr::structs::OwnerMemo;
@@ -250,6 +250,8 @@ impl<T> QueryServer<T> where T: RestfulArchiveAccess
     let latest_block = self.committed_state.get_block_count();
     let new_blocks = match self.rest_client.get_blocks_since(BlockSID(latest_block)) {
       Err(_) => {
+        error!("Could not connect to ledger at {}",
+               self.rest_client.get_source());
         return Err(fail!("Cannot connect to ledger server"));
       }
 
