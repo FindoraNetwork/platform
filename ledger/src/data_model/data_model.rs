@@ -1285,7 +1285,6 @@ mod tests {
     let asset_transfer_body = TransferAssetBody { inputs: Vec::new(),
                                                   outputs: Vec::new(),
                                                   policies,
-                                                  num_outputs: 0,
                                                   transfer: Box::new(xfr_note),
                                                   transfer_type: TransferType::Standard };
 

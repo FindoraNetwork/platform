@@ -409,9 +409,9 @@ mod tests {
     let amt = 1000;
     let confidentiality_flag = ConfidentialAmount_NonConfidentialAssetType;
     let issuance_tx =
-      builder.add_basic_issue_asset(&alice, None, &token_code, 0, amt, confidentiality_flag)
+      builder.add_basic_issue_asset(&alice, &token_code, 0, amt, confidentiality_flag)
              .unwrap()
-             .add_basic_issue_asset(&alice, None, &token_code, 1, amt, confidentiality_flag)
+             .add_basic_issue_asset(&alice, &token_code, 1, amt, confidentiality_flag)
              .unwrap()
              .transaction();
 
