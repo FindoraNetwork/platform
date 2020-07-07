@@ -1,6 +1,5 @@
 #![deny(warnings)]
 use actix_cors::Cors;
-use actix_service::Service;
 use actix_web::test::TestRequest;
 use actix_web::{error, middleware, test, web, App, HttpServer};
 use ledger::data_model::errors::PlatformError;
@@ -175,9 +174,18 @@ impl RestfulLedgerUpdate for MockLUClient {
                                    .route(&route,
                                           web::post().to(submit_transaction::<rand_chacha::ChaChaRng,
                                                                             LedgerState, NoTF>)));
-    let req = TestRequest::post().uri(&route).set_json(&txn).to_request();
-    let handle: TxnHandle = test::read_response_json(&mut app, req);
-    Ok(handle)
+    let req = TestRequest::post().uri(&route).set_json(&txn);
+    let req = req.to_request();
+    let resp = test::call_service(&mut app, req);
+    let status = resp.status();
+    let body = test::read_body(resp);
+    let result = std::str::from_utf8(&body).unwrap();
+    if status != 200 {
+      return Err(PlatformError::InputsError(result.to_string()));
+    } else {
+      let handle = serde_json::from_str(&result).unwrap();
+      Ok(handle)
+    }
   }
 
   fn force_end_block(&mut self) -> Result<(), PlatformError> {
@@ -188,8 +196,15 @@ impl RestfulLedgerUpdate for MockLUClient {
                                           web::post().to(force_end_block::<rand_chacha::ChaChaRng,
                                                                             LedgerState, NoTF>)));
     let req = TestRequest::post().uri(&route).to_request();
-    test::block_on(app.call(req)).unwrap();
-    Ok(())
+    let resp = test::call_service(&mut app, req);
+    let status = resp.status();
+    let body = test::read_body(resp);
+    let result = std::str::from_utf8(&body).unwrap();
+    if status != 200 {
+      return Err(PlatformError::InputsError(result.to_string()));
+    } else {
+      Ok(())
+    }
   }
 
   fn txn_status(&self, handle: &TxnHandle) -> Result<TxnStatus, PlatformError> {
@@ -200,7 +215,16 @@ impl RestfulLedgerUpdate for MockLUClient {
                                                                    LedgerState, NoTF>)));
     let req = test::TestRequest::get().uri(&SubmissionRoutes::TxnStatus.with_arg(&handle.0))
                                       .to_request();
-    Ok(test::read_response_json(&mut app, req))
+    let resp = test::call_service(&mut app, req);
+    let status = resp.status();
+    let body = test::read_body(resp);
+    let result = std::str::from_utf8(&body).unwrap();
+    if status != 200 {
+      return Err(PlatformError::InputsError(result.to_string()));
+    } else {
+      let handle = serde_json::from_str(&result).unwrap();
+      Ok(handle)
+    }
   }
 }
 
