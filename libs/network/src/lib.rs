@@ -93,6 +93,10 @@ impl<LU: RestfulLedgerUpdate,
                       -> Result<Vec<(usize, Vec<FinalizedTransaction>)>, PlatformError> {
     self.ledger_client.get_blocks_since(addr)
   }
+
+  fn get_source(&self) -> String {
+    self.ledger_client.get_source()
+  }
 }
 
 impl<LU: RestfulLedgerUpdate,
