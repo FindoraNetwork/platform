@@ -197,13 +197,19 @@ pub struct CredentialIssuer {
 
 impl CredentialIssuer {
   /// Conpub(crate) structs a credential issuer for the credit score attribute.
-  pub fn new(id: usize, name: String) -> Result<Self, PlatformError> {
+  pub fn new(id: usize,
+             name: String,
+             attributes: Vec<CredentialIndex>)
+             -> Result<Self, PlatformError> {
+    let mut attribute_names_and_sizes = Vec::new();
+    for attribute in attributes {
+      attribute_names_and_sizes.push(attribute.get_name_and_length());
+    }
+
     let key_pair =
-      credential_issuer_key_gen(&mut ChaChaRng::from_entropy(),
-                                &[CredentialIndex::MinCreditScore.get_name_and_length(),
-                                  CredentialIndex::MinIncome.get_name_and_length(),
-                                  CredentialIndex::Citizenship.get_name_and_length()]);
-    let key_pair_str = serde_json::to_vec(&key_pair).or_else(|e| Err(ser_fail!(e)))?;
+      credential_issuer_key_gen(&mut ChaChaRng::from_entropy(), &attribute_names_and_sizes);
+    let key_pair_str = serde_json::to_string(&key_pair).or_else(|e| Err(ser_fail!(e)))?;
+
     Ok(CredentialIssuer { id: id as u64,
                           name,
                           key_pair: hex::encode(key_pair_str) })
@@ -412,11 +418,12 @@ impl Data {
 
   pub fn add_credential_issuer(&mut self,
                                data_dir: &str,
-                               name: String)
+                               name: String,
+                               attributes: Vec<CredentialIndex>)
                                -> Result<(), PlatformError> {
     let id = self.credential_issuers.len();
     self.credential_issuers
-        .push(CredentialIssuer::new(id, name.clone())?);
+        .push(CredentialIssuer::new(id, name.clone(), attributes)?);
     println!("{}'s id is {}.", name, id);
     store_data_to_file(self.clone(), data_dir)
   }
@@ -426,8 +433,7 @@ impl Data {
     id: u64)
     -> Result<(CredIssuerPublicKey, CredIssuerSecretKey), PlatformError> {
     let key_pair_str = &self.credential_issuers[id as usize].key_pair;
-    let key_pair_decode = hex::decode(key_pair_str).or_else(|e| Err(des_fail!(e)))?;
-    let key_pair = serde_json::from_slice(&key_pair_decode).or_else(|e| Err(des_fail!(e)))?;
+    let key_pair = serde_json::from_str(&key_pair_str).or_else(|e| Err(des_fail!(e)))?;
     Ok(key_pair)
   }
 
