@@ -181,7 +181,7 @@ impl RestfulLedgerUpdate for MockLUClient {
     let body = test::read_body(resp);
     let result = std::str::from_utf8(&body).unwrap();
     if status != 200 {
-      return Err(PlatformError::InputsError(result.to_string()));
+      Err(PlatformError::InputsError(result.to_string()))
     } else {
       let handle = serde_json::from_str(&result).unwrap();
       Ok(handle)
@@ -201,7 +201,7 @@ impl RestfulLedgerUpdate for MockLUClient {
     let body = test::read_body(resp);
     let result = std::str::from_utf8(&body).unwrap();
     if status != 200 {
-      return Err(PlatformError::InputsError(result.to_string()));
+      Err(PlatformError::InputsError(result.to_string()))
     } else {
       Ok(())
     }
@@ -220,7 +220,7 @@ impl RestfulLedgerUpdate for MockLUClient {
     let body = test::read_body(resp);
     let result = std::str::from_utf8(&body).unwrap();
     if status != 200 {
-      return Err(PlatformError::InputsError(result.to_string()));
+      Err(PlatformError::InputsError(result.to_string()))
     } else {
       let handle = serde_json::from_str(&result).unwrap();
       Ok(handle)
