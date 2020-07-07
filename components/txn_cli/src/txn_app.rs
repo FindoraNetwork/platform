@@ -594,8 +594,18 @@ pub(crate) fn process_credential_issuer_cmd(credential_issuer_matches: &clap::Ar
         println!("Name is required to sign up a credential issuer account. Use --name.");
         return Err(PlatformError::InputsError(error_location!()));
       };
+      let mut attributes = Vec::new();
+      if sign_up_matches.is_present("min_credit_score") {
+        attributes.push(CredentialIndex::MinCreditScore);
+      }
+      if sign_up_matches.is_present("min_income") {
+        attributes.push(CredentialIndex::MinIncome);
+      }
+      if sign_up_matches.is_present("citizenship") {
+        attributes.push(CredentialIndex::Citizenship);
+      }
       let mut data = load_data(data_dir)?;
-      data.add_credential_issuer(data_dir, name)
+      data.add_credential_issuer(data_dir, name, attributes)
     }
     _ => {
       println!("Subcommand missing or not recognized. Try credential_issuer --help");
