@@ -246,3 +246,42 @@ fn test_loan_repayments() -> Result<(), PlatformError> {
   test_loan_repayment(500, 3, 1, 25)?;
   Ok(())
 }
+
+#[test]
+fn test_update_memo() -> Result<(), PlatformError> {
+  // Generate the ledger and the things we need to define an asset
+  let mut prng = ChaChaRng::from_entropy();
+  let mut ledger = LedgerState::test_ledger();
+  let code = AssetTypeCode { val: [1; 16] };
+  let keys = XfrKeyPair::generate(&mut prng);
+  let mut builder = TransactionBuilder::from_seq_id(ledger.get_block_commit_count());
+
+  // Define the asset and verify
+  let mut asset_rules = AssetRules::default();
+  // The asset must be up updatable in order to change the memo later
+  asset_rules.updatable = true;
+  // Cerate an asset with the memo defined as "test"
+  let tx = builder.add_operation_create_asset(&keys,
+                                              Some(code),
+                                              asset_rules,
+                                              "test".into(),
+                                              PolicyChoice::Fungible())?
+                  .transaction();
+  apply_transaction(&mut ledger, tx.clone());
+  assert!(ledger.get_asset_type(&code).is_some());
+
+  // Define a transaction to update the memo
+  let mut builder = TransactionBuilder::from_seq_id(ledger.get_block_commit_count());
+  let tx = builder.add_operation_update_memo(&keys, code, "changed")
+                  .transaction();
+  apply_transaction(&mut ledger, tx.clone());
+
+  // Attempt to get the changed memo, and verify it has been changed correctly
+  let asset = ledger.get_asset_type(&code)
+                    .expect("The asset disappeared after updating the memo.");
+
+  let new_memo = asset.properties.memo.0.as_str();
+  assert_eq!(new_memo, "changed");
+
+  Ok(())
+}

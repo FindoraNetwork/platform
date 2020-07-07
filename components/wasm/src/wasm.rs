@@ -309,6 +309,22 @@ impl TransactionBuilder {
     Ok(self)
   }
 
+  /// Adds an `UpdateMemo` operation to a WasmTransactionBuilder with the given memo
+  pub fn add_operation_update_memo(mut self,
+                                   auth_key_pair: &XfrKeyPair,
+                                   code: String,
+                                   new_memo: String)
+                                   -> Result<TransactionBuilder, JsValue> {
+    // First, decode the asset code
+    let code = AssetTypeCode::new_from_base64(&code).map_err(|_| {
+                 JsValue::from_str(&format!("Could not deserialize asset type code: {}", code))
+               })?;
+
+    self.get_builder_mut()
+        .add_operation_update_memo(auth_key_pair, code, &new_memo);
+    Ok(self)
+  }
+
   /// Adds a serialized operation to a WasmTransactionBuilder instance
   /// @param {string} op -  a JSON-serialized operation (i.e. a transfer operation).
   /// @see {@link WasmTransferOperationBuilder} for details on constructing a transfer operation.
@@ -590,17 +606,23 @@ impl TransferOperationBuilder {
 
 ///////////// CRYPTO //////////////////////
 #[wasm_bindgen]
-/// Returns a JsValue containing decrypted owner record information.
-/// @param {ClientAssetRecord} record - Ownership record.
-/// @param {OwnerMemo} owner_memo - Opening parameters.
-/// @param {XfrKeyPair} key - Key of asset owner that is used to open the record.
+/// Returns a JsValue containing decrypted owner record information,
+/// where `amount` is the decrypted asset amount, and `asset_type` is the decrypted asset type code.
+///
+/// @param {ClientAssetRecord} record - Owner record.
+/// @see {@link ClientAssetRecord#from_json_record} for information about fetching the asset record.
+///
+/// @param {OwnerMemo} owner_memo - Owner memo of the associated record.
+/// TODO (Redmine issue #126): Unable to get owner memo.
+///
+/// @param {XfrKeyPair} keypair - Keypair of asset owner.
 pub fn open_client_asset_record(record: &ClientAssetRecord,
                                 owner_memo: Option<OwnerMemo>,
-                                key: &XfrKeyPair)
+                                keypair: &XfrKeyPair)
                                 -> Result<JsValue, JsValue> {
   Ok(JsValue::from_serde(&open_bar(record.get_bar_ref(),
                              &owner_memo.map(|memo| memo.get_memo_ref().clone()),
-                             key.get_sk_ref()).map_err(|_e| {
+                             keypair.get_sk_ref()).map_err(|_e| {
                                                 JsValue::from_str("Could not open asset record")
                                               })?).unwrap())
 }

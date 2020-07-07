@@ -1890,6 +1890,9 @@ mod test {
   }
 
   #[test]
+  // This test passes, but we ignore it since it's slow
+  // Redmine issue: #47
+  #[ignore]
   fn regression_quickcheck_found_no_standalone() {
     regression_quickcheck_found(false)
   }

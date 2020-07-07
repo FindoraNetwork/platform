@@ -96,6 +96,22 @@ pub struct ClientAssetRecord {
   pub(crate) output: TxOutput,
 }
 
+impl ClientAssetRecord {
+  pub fn get_bar_ref(&self) -> &BlindAssetRecord {
+    &self.output.0
+  }
+}
+
+#[wasm_bindgen]
+impl ClientAssetRecord {
+  /// Builds a client record from an asset record fetched from the ledger server.
+  /// @param {record} - JSON asset record fetched from ledger server with the `utxo_sid/{sid}` route,
+  /// where `sid` can be fetched from the query server with the `get_owned_utxos/{address}` route.
+  pub fn from_json_record(record: &JsValue) -> Self {
+    ClientAssetRecord { output: TxOutput(record.into_serde().unwrap()) }
+  }
+}
+
 #[wasm_bindgen]
 #[derive(Serialize, Deserialize)]
 /// Key pair of the asset tracer. This key pair can be used to decrypt traced assets and
@@ -136,21 +152,6 @@ impl AssetTracerKeyPair {
 /// @see {@link ClientAssetRecord} for more details about asset records.
 pub struct OwnerMemo {
   pub(crate) memo: ZeiOwnerMemo,
-}
-
-impl ClientAssetRecord {
-  pub fn get_bar_ref(&self) -> &BlindAssetRecord {
-    &self.output.0
-  }
-}
-
-#[wasm_bindgen]
-impl ClientAssetRecord {
-  /// Builds a client record from an asset record fetched from the ledger server.
-  /// @param {record} - JSON asset record fetched from server.
-  pub fn from_json_record(record: &JsValue) -> Self {
-    ClientAssetRecord { output: TxOutput(record.into_serde().unwrap()) }
-  }
 }
 
 impl OwnerMemo {
