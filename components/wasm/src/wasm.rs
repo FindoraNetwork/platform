@@ -350,22 +350,16 @@ impl TransactionBuilder {
 
   /// Fetches a client record from a transaction.
   /// @param {number} idx - Record to fetch. Records are added to the transaction builder sequentially.
-  pub fn get_owner_record(&self, idx: usize) -> Result<ClientAssetRecord, JsValue> {
-    Ok(self.get_builder()
-           .get_owner_record_and_memo(idx)
-           .cloned()
-           .map(|(output, _)| ClientAssetRecord { output })
-           .ok_or_else(|| JsValue::from_str("Index out of range"))?)
+  pub fn get_owner_record(&self, idx: usize) -> ClientAssetRecord {
+    ClientAssetRecord { output: self.get_builder().get_output_ref(idx).clone() }
   }
 
   /// Fetches an owner memo from a transaction
   /// @param {number} idx - Record to fetch. Records are added to the transaction builder sequentially.
-  pub fn get_owner_memo(&self, idx: usize) -> Result<Option<OwnerMemo>, JsValue> {
-    Ok(self.get_builder()
-           .get_owner_record_and_memo(idx)
-           .cloned()
-           .map(|(_, memo)| (memo.map(|memo| OwnerMemo { memo })))
-           .ok_or_else(|| JsValue::from_str("Index out of range"))?)
+  pub fn get_owner_memo(&self, idx: usize) -> Option<OwnerMemo> {
+    self.get_builder()
+        .get_owner_memo_ref(idx)
+        .map(|memo| OwnerMemo { memo: memo.clone() })
   }
 }
 #[wasm_bindgen]
@@ -644,6 +638,15 @@ pub fn get_priv_key_str(key_pair: &XfrKeyPair) -> String {
 pub fn new_keypair() -> XfrKeyPair {
   let mut small_rng = rand::thread_rng();
   XfrKeyPair::generate(&mut small_rng)
+}
+
+#[wasm_bindgen]
+/// Generates a new keypair deterministically from a seed string and an optional name.
+pub fn new_keypair_from_seed(seed_str: String, name: Option<String>) -> XfrKeyPair {
+  let seed_str = seed_str + &name.unwrap_or_default();
+  let hash = sha256::hash(&seed_str.as_bytes());
+  let mut prng = ChaChaRng::from_seed(hash.0);
+  XfrKeyPair::generate(&mut prng)
 }
 
 #[wasm_bindgen]

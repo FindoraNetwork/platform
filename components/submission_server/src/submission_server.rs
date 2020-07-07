@@ -249,7 +249,7 @@ pub fn txn_log_info(txn: &Transaction) {
       Operation::TransferAsset(xfr_asset_op) => {
         info!("Asset Transfer: Transfer with {} inputs and {} outputs",
               xfr_asset_op.body.inputs.len(),
-              xfr_asset_op.body.num_outputs);
+              xfr_asset_op.body.outputs.len());
       }
       Operation::AIRAssign(air_assign_op) => {
         info!("Assigning to AIR: AIR[{}] <- {:?}",

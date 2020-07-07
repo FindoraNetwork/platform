@@ -23,7 +23,7 @@ use utils::{HashOf, ProofOf, Serialized, SignatureOf};
 use zei::xfr::lib::{gen_xfr_body, XfrNotePoliciesNoRef};
 use zei::xfr::sig::{XfrKeyPair, XfrPublicKey};
 use zei::xfr::structs::{
-  AssetRecord, AssetTracingPolicies, AssetTracingPolicy, BlindAssetRecord, XfrBody,
+  AssetRecord, AssetTracingPolicies, AssetTracingPolicy, BlindAssetRecord, OwnerMemo, XfrBody,
 };
 
 pub fn b64enc<T: ?Sized + AsRef<[u8]>>(input: &T) -> String {
@@ -400,7 +400,7 @@ pub struct TransferAssetBody {
   #[serde(default)]
   #[serde(skip_serializing_if = "is_default")]
   pub policies: XfrNotePoliciesNoRef,
-  pub num_outputs: usize, // How many output TXOs?
+  pub outputs: Vec<TxOutput>,
   // TODO(joe): we probably don't need the whole XfrNote with input records
   // once it's on the chain
   pub transfer: Box<XfrBody>, // Encrypted transfer note
@@ -443,9 +443,12 @@ impl TransferAssetBody {
 
     let note = Box::new(gen_xfr_body(prng, input_records, output_records)
         .map_err(|e| PlatformError::ZeiError(error_location!(),e))?);
-
+    let outputs = note.outputs
+                      .iter()
+                      .map(|rec| TxOutput(rec.clone()))
+                      .collect();
     Ok(TransferAssetBody { inputs: input_refs,
-                           num_outputs: output_records.len(),
+                           outputs,
                            policies,
                            transfer: note,
                            transfer_type })
@@ -474,13 +477,13 @@ pub struct IssueAssetBody {
   pub code: AssetTypeCode,
   pub seq_num: u64,
   pub num_outputs: usize,
-  pub records: Vec<TxOutput>,
+  pub records: Vec<(TxOutput, Option<OwnerMemo>)>,
 }
 
 impl IssueAssetBody {
   pub fn new(token_code: &AssetTypeCode,
              seq_num: u64,
-             records: &[TxOutput])
+             records: &[(TxOutput, Option<OwnerMemo>)])
              -> Result<IssueAssetBody, PlatformError> {
     Ok(IssueAssetBody { code: *token_code,
                         seq_num,
@@ -583,6 +586,19 @@ impl TransferAsset {
     self.body_signatures
         .push(self.body.compute_body_signature(&keypair, Some(input_idx)))
   }
+
+  pub fn get_owner_memos_ref(&self) -> Vec<Option<&OwnerMemo>> {
+    self.body
+        .transfer
+        .owners_memos
+        .iter()
+        .map(|mem| mem.as_ref())
+        .collect()
+  }
+
+  pub fn get_outputs_ref(&self) -> Vec<&TxOutput> {
+    self.body.outputs.iter().collect()
+  }
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -600,6 +616,17 @@ impl IssueAsset {
     Ok(IssueAsset { body: issuance_body,
                     pubkey: IssuerPublicKey { key: *keypair.keypair.get_pk_ref() },
                     signature })
+  }
+
+  pub fn get_owner_memos_ref(&self) -> Vec<Option<&OwnerMemo>> {
+    self.body
+        .records
+        .iter()
+        .map(|(_, memo)| memo.as_ref())
+        .collect()
+  }
+  pub fn get_outputs_ref(&self) -> Vec<&TxOutput> {
+    self.body.records.iter().map(|rec| &rec.0).collect()
   }
 }
 
@@ -1053,6 +1080,38 @@ impl Transaction {
     Ok(())
   }
 
+  pub fn get_owner_memos_ref(&self) -> Vec<Option<&OwnerMemo>> {
+    let mut memos = vec![];
+    for op in self.body.operations.iter() {
+      match op {
+        Operation::TransferAsset(xfr_asset) => {
+          memos.append(&mut xfr_asset.get_owner_memos_ref());
+        }
+        Operation::IssueAsset(issue_asset) => {
+          memos.append(&mut issue_asset.get_owner_memos_ref());
+        }
+        _ => {}
+      }
+    }
+    memos
+  }
+
+  pub fn get_outputs_ref(&self) -> Vec<&TxOutput> {
+    let mut outputs = vec![];
+    for op in self.body.operations.iter() {
+      match op {
+        Operation::TransferAsset(xfr_asset) => {
+          outputs.append(&mut xfr_asset.get_outputs_ref());
+        }
+        Operation::IssueAsset(issue_asset) => {
+          outputs.append(&mut issue_asset.get_outputs_ref());
+        }
+        _ => {}
+      }
+    }
+    outputs
+  }
+
   /// NOTE: this does *not* guarantee that a private key affiliated with
   /// `public_key` has signed this transaction! If `public_key` is derived
   /// from `self` somehow, then it is infeasible for someone to forge a
@@ -1224,6 +1283,7 @@ mod tests {
                                              vec![None]);
 
     let asset_transfer_body = TransferAssetBody { inputs: Vec::new(),
+                                                  outputs: Vec::new(),
                                                   policies,
                                                   num_outputs: 0,
                                                   transfer: Box::new(xfr_note),

@@ -411,18 +411,20 @@ pub trait BuildsTransactions {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct TransactionBuilder {
   txn: Transaction,
-  owner_records: Vec<(TxOutput, Option<OwnerMemo>)>,
   outputs: u64,
 }
 
 impl TransactionBuilder {
-  pub fn get_owner_record_and_memo(&self, idx: usize) -> Option<&(TxOutput, Option<OwnerMemo>)> {
-    self.owner_records.get(idx)
+  pub fn get_owner_memo_ref(&self, idx: usize) -> Option<&OwnerMemo> {
+    self.txn.get_owner_memos_ref()[idx]
+  }
+
+  pub fn get_output_ref(&self, idx: usize) -> &TxOutput {
+    self.txn.get_outputs_ref()[idx]
   }
 
   pub fn from_seq_id(seq_id: u64) -> Self {
     TransactionBuilder { txn: Transaction::from_seq_id(seq_id),
-                         owner_records: Vec::new(),
                          outputs: 0 }
   }
 }
@@ -475,15 +477,10 @@ impl BuildsTransactions for TransactionBuilder {
                                -> Result<&mut Self, PlatformError> {
     let iss_keypair = IssuerKeyPair { keypair: &key_pair };
 
-    let mut records = vec![];
-    for (output, memo) in records_and_memos {
-      records.push(output.clone());
-      self.owner_records.push((output.clone(), memo.clone()));
-    }
     self.txn
         .add_operation(Operation::IssueAsset(IssueAsset::new(IssueAssetBody::new(token_code,
                                                                                  seq_num,
-                                                                                 &records)?,
+                                                                                 &records_and_memos)?,
                                                              &iss_keypair)?));
     Ok(self)
   }
@@ -521,15 +518,6 @@ impl BuildsTransactions for TransactionBuilder {
                                                             TransferType::Standard)?)?;
     xfr.sign(&keys);
 
-    for (output, memo) in xfr.body
-                             .transfer
-                             .outputs
-                             .iter()
-                             .zip(xfr.body.transfer.owners_memos.iter())
-    {
-      self.owner_records
-          .push((TxOutput(output.clone()), memo.clone()));
-    }
     self.txn.add_operation(Operation::TransferAsset(xfr));
     Ok(self)
   }
@@ -570,18 +558,6 @@ impl BuildsTransactions for TransactionBuilder {
   }
 
   fn add_operation(&mut self, op: Operation) -> &mut Self {
-    if let Operation::TransferAsset(xfr) = op.clone() {
-      for (output, memo) in xfr.body
-                               .transfer
-                               .outputs
-                               .iter()
-                               .zip(xfr.body.transfer.owners_memos.iter())
-      {
-        self.owner_records
-            .push((TxOutput(output.clone()), memo.clone()));
-      }
-    }
-
     self.txn.add_operation(op);
     self
   }
