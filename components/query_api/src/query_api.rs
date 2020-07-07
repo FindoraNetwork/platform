@@ -3,7 +3,8 @@ use actix_cors::Cors;
 use actix_web::{error, middleware, web, App, HttpServer};
 use ledger::data_model::errors::PlatformError;
 use ledger::data_model::{
-  b64dec, b64enc, IssuerPublicKey, KVBlind, KVHash, TxOutput, TxnSID, TxoSID, XfrAddress,
+  b64dec, b64enc, AssetTypeCode, IssuerPublicKey, KVBlind, KVHash, TxOutput, TxnSID, TxoSID,
+  XfrAddress,
 };
 use ledger::{error_location, inp_fail, ser_fail};
 use ledger_api_service::RestfulArchiveAccess;
@@ -104,6 +105,7 @@ pub enum QueryServerRoutes {
   GetOwnedUtxos,
   StoreCustomData,
   GetCustomData,
+  GetCreatedAssets,
   GetIssuedRecords,
   GetRelatedTxns,
 }
@@ -117,11 +119,29 @@ impl NetworkRoute for QueryServerRoutes {
       QueryServerRoutes::GetOwnerMemo => "get_owner_memo",
       QueryServerRoutes::StoreCustomData => "store_custom_data",
       QueryServerRoutes::GetCustomData => "get_custom_data",
+      QueryServerRoutes::GetCreatedAssets => "get_created_assets",
       QueryServerRoutes::GetIssuedRecords => "get_issued_records",
     };
     "/".to_owned() + endpoint
   }
 }
+
+// Returns the list of assets created by a public key
+fn get_created_assets<T>(data: web::Data<Arc<RwLock<QueryServer<T>>>>,
+                         info: web::Path<String>)
+                         -> actix_web::Result<web::Json<Vec<AssetTypeCode>>>
+  where T: RestfulArchiveAccess + Sync + Send
+{
+  // Convert from base64 representation
+  let key: XfrPublicKey =
+    XfrPublicKey::zei_from_bytes(&b64dec(&*info).map_err(|_| {
+                                    error::ErrorBadRequest("Could not deserialize public key")
+                                  })?);
+  let query_server = data.read().unwrap();
+  let assets = query_server.get_created_assets(&IssuerPublicKey { key });
+  Ok(web::Json(assets.cloned().unwrap_or_default()))
+}
+
 // Returns the list of records issued by a public key
 fn get_issued_records<T>(data: web::Data<Arc<RwLock<QueryServer<T>>>>,
                          info: web::Path<String>)
@@ -179,6 +199,8 @@ impl QueryApi {
                        web::get().to(get_owner_memo::<T>))
                 .route(&QueryServerRoutes::GetRelatedTxns.with_arg_template("address"),
                        web::get().to(get_related_txns::<T>))
+                .route(&QueryServerRoutes::GetCreatedAssets.with_arg_template("address"),
+                       web::get().to(get_created_assets::<T>))
                 .route(&QueryServerRoutes::GetIssuedRecords.with_arg_template("address"),
                        web::get().to(get_issued_records::<T>))
                 .route(&QueryServerRoutes::StoreCustomData.route(),

@@ -1,8 +1,9 @@
 #![deny(warnings)]
 use ledger::data_model::errors::PlatformError;
 use ledger::data_model::{
-  b64enc, BlockSID, FinalizedTransaction, IssueAsset, IssuerPublicKey, KVBlind, KVHash, KVUpdate,
-  Operation, Transaction, TransferAsset, TxOutput, TxnSID, TxoRef, TxoSID, XfrAddress,
+  b64enc, AssetTypeCode, BlockSID, DefineAsset, FinalizedTransaction, IssueAsset, IssuerPublicKey,
+  KVBlind, KVHash, KVUpdate, Operation, Transaction, TransferAsset, TxOutput, TxnSID, TxoRef,
+  TxoSID, XfrAddress,
 };
 use ledger::error_location;
 use ledger::store::*;
@@ -27,6 +28,7 @@ pub struct QueryServer<T>
   committed_state: LedgerState,
   addresses_to_utxos: HashMap<XfrAddress, HashSet<TxoSID>>,
   related_transactions: HashMap<XfrAddress, HashSet<TxnSID>>, // Set of transactions related to a ledger address
+  created_assets: HashMap<IssuerPublicKey, Vec<AssetTypeCode>>,
   issuances: HashMap<IssuerPublicKey, Vec<TxOutput>>,
   owner_memos: HashMap<TxoSID, OwnerMemo>,
   utxos_to_map_index: HashMap<TxoSID, XfrAddress>,
@@ -41,9 +43,10 @@ impl<T> QueryServer<T> where T: RestfulArchiveAccess
                   addresses_to_utxos: HashMap::new(),
                   related_transactions: HashMap::new(),
                   owner_memos: HashMap::new(),
-                  custom_data_store: HashMap::new(),
+                  created_assets: HashMap::new(),
                   issuances: HashMap::new(),
                   utxos_to_map_index: HashMap::new(),
+                  custom_data_store: HashMap::new(),
                   rest_client }
   }
 
@@ -55,6 +58,10 @@ impl<T> QueryServer<T> where T: RestfulArchiveAccess
   // Returns the set of records issued by a certain key.
   pub fn get_issued_records(&self, issuer: &IssuerPublicKey) -> Option<&Vec<TxOutput>> {
     self.issuances.get(issuer)
+  }
+
+  pub fn get_created_assets(&self, issuer: &IssuerPublicKey) -> Option<&Vec<AssetTypeCode>> {
+    self.created_assets.get(issuer)
   }
 
   // Returns the set of transactions that are in some way related to a given ledger address.
@@ -108,6 +115,16 @@ impl<T> QueryServer<T> where T: RestfulArchiveAccess
     self.custom_data_store
         .insert(*key, (data.as_ref().into(), hash));
     Ok(())
+  }
+
+  // Add created asset
+  pub fn add_created_asset(&mut self, creation: &DefineAsset) {
+    let issuer = creation.pubkey;
+    let new_asset_code = creation.body.asset.code;
+    self.created_assets
+        .entry(issuer)
+        .or_insert_with(Vec::new)
+        .push(new_asset_code);
   }
 
   // Cache issuance records
@@ -201,12 +218,13 @@ impl<T> QueryServer<T> where T: RestfulArchiveAccess
             .insert(*txn_sid);
       }
 
-      // Remove spent utxos
+      // Add created asset and remove spent utxos
       for op in &curr_txn.body.operations {
         match op {
+          Operation::DefineAsset(define_asset) => self.add_created_asset(&define_asset),
+          Operation::IssueAsset(issue_asset) => self.cache_issuance(&issue_asset),
           Operation::TransferAsset(transfer_asset) => self.remove_spent_utxos(&transfer_asset)?,
           Operation::KVStoreUpdate(kv_update) => self.remove_stale_data(&kv_update),
-          Operation::IssueAsset(issue_asset) => self.cache_issuance(&issue_asset),
           _ => {}
         };
       }
@@ -262,7 +280,7 @@ fn get_related_addresses(txn: &Transaction) -> HashSet<XfrAddress> {
           related_addresses.insert(XfrAddress { key: input.public_key });
         }
 
-        for output in transfer.body.transfer.inputs.iter() {
+        for output in transfer.body.transfer.outputs.iter() {
           related_addresses.insert(XfrAddress { key: output.public_key });
         }
       }
@@ -622,5 +640,43 @@ mod tests {
                                                                              *kp.get_pk_ref() })
                                    .unwrap();
     assert!(related_txns.contains(&TxnSID(0)));
+  }
+
+  #[test]
+  fn test_created_assets() {
+    let rest_client_ledger_state = Arc::new(RwLock::new(LedgerState::test_ledger()));
+    let mut ledger_state = LedgerState::test_ledger();
+    // This isn't actually being used in the test, we just make a ledger client so we can compile
+    let mock_ledger = MockLedgerClient::new(&Arc::clone(&rest_client_ledger_state));
+    let mut query_server = QueryServer::new(mock_ledger);
+    let creator = XfrKeyPair::generate(&mut ledger_state.get_prng());
+
+    // Create the first asset
+    let code1 = AssetTypeCode { val: [1; 16] };
+    let tx1 = create_definition_transaction(&code1,
+                                            &creator,
+                                            AssetRules::default(),
+                                            Some(Memo("test".to_string())),
+                                            ledger_state.get_block_commit_count()).unwrap();
+    apply_transaction(&mut ledger_state, tx1);
+    let block1 = ledger_state.get_block(BlockSID(0)).unwrap();
+    query_server.add_new_block(&block1.block.txns).unwrap();
+
+    // Create the second asset
+    let code2 = AssetTypeCode { val: [2; 16] };
+    let tx2 = create_definition_transaction(&code2,
+                                            &creator,
+                                            AssetRules::default(),
+                                            Some(Memo("test".to_string())),
+                                            ledger_state.get_block_commit_count()).unwrap();
+    apply_transaction(&mut ledger_state, tx2);
+    let block2 = ledger_state.get_block(BlockSID(1)).unwrap();
+    query_server.add_new_block(&block2.block.txns).unwrap();
+
+    // Verify the created assets
+    let created_assets =
+      query_server.get_created_assets(&IssuerPublicKey { key: *creator.get_pk_ref() })
+                  .unwrap();
+    assert_eq!(created_assets, &vec![code1, code2]);
   }
 }

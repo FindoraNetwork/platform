@@ -145,7 +145,6 @@ pub struct AssetDigest {
   pub val: [u8; 32],
 }
 
-// TODO: Define Memo
 #[derive(Clone, Debug, Default, Deserialize, Eq, Hash, PartialEq, Serialize)]
 pub struct Memo(pub String);
 #[derive(Clone, Copy, Debug, Default, Deserialize, Eq, Hash, PartialEq, Serialize)]
@@ -165,12 +164,9 @@ impl Hash for XfrAddress {
   }
 }
 
-// TODO(joe): Better name! There's more than one thing that gets issued.
 #[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 pub struct IssuerPublicKey {
   pub key: XfrPublicKey,
-  // TODO(joe): possibly include other keys, pending zei interface updates.
-  // eg. encryption key
 }
 
 #[allow(clippy::derive_hash_xor_eq)]
@@ -382,12 +378,6 @@ pub enum UtxoStatus {
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct Utxo(pub TxOutput);
-// TODO(joe): the digest is currently unused -- should it be put back?
-// pub struct Utxo {
-//   // digest is a hash of the TxoSID and the operation output
-//   pub digest: [u8; 32],
-//   pub output: TxOutput,
-// }
 
 #[derive(Copy, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub enum TxoRef {
@@ -410,8 +400,6 @@ pub struct TransferAssetBody {
   #[serde(default)]
   #[serde(skip_serializing_if = "is_default")]
   pub output_identity_commitments: Vec<Option<ACCommitment>>,
-  // TODO(joe): we probably don't need the whole XfrNote with input records
-  // once it's on the chain
   pub transfer: Box<XfrBody>, // Encrypted transfer note
 
   pub transfer_type: TransferType,
@@ -433,7 +421,7 @@ impl TransferAssetBody {
         .map_err(|e| PlatformError::ZeiError(error_location!(),e))?);
     let outputs = note.outputs
                       .iter()
-                      .map(|bar| TxOutput(bar.clone()))
+                      .map(|rec| TxOutput(rec.clone()))
                       .collect();
     Ok(TransferAssetBody { inputs: input_refs,
                            input_identity_commitments,
@@ -494,7 +482,7 @@ pub struct DefineAssetBody {
 
 impl DefineAssetBody {
   pub fn new(token_code: &AssetTypeCode,
-             issuer_key: &IssuerPublicKey, // TODO: require private key check somehow?
+             issuer_key: &IssuerPublicKey,
              asset_rules: AssetRules,
              memo: Option<Memo>,
              confidential_memo: Option<ConfidentialMemo>,
@@ -560,7 +548,6 @@ impl Default for TransferType {
   }
 }
 
-// TODO: UTXO Addresses must be included in Transfer Signature
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct TransferAsset {
   pub body: TransferAssetBody,
@@ -631,10 +618,6 @@ impl IssueAsset {
 pub struct DefineAsset {
   pub body: DefineAssetBody,
 
-  // TODO(joe?): Why is there a distinct public key used for signing?
-  // Should this be the same as the issuer key in `body`? Is it *dangerous*
-  // to have a distinct public key for this? Is it *beneficial* to have a
-  // distinct public key?
   pub pubkey: IssuerPublicKey,
   pub signature: SignatureOf<DefineAssetBody>,
 }
@@ -892,7 +875,6 @@ impl AuthenticatedTransaction {
     }
 
     //3)
-    // TODO (jonathan/noah) we should be using digest everywhere
     if self.state_commitment_data.transaction_merkle_commitment
        != self.txn_inclusion_proof.0.proof.root_hash
     {
