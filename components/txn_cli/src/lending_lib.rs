@@ -661,7 +661,6 @@ mod tests {
 
   #[cfg(test)]
   #[allow(unused)]
-  // This test fails a clean build on master
   fn test_request_fulfill_and_pay_loan() {
     let mut ledger_standalone = MockLedgerStandalone::new_mock(1);
 

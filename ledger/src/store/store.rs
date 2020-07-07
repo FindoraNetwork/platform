@@ -2208,7 +2208,7 @@ pub mod helpers {
       build_blind_asset_record(ledger.get_prng(), &params.pc_gens, &ar_template, vec![]);
 
     let asset_issuance_body =
-      IssueAssetBody::new(&code, seq_num, &[TxOutput(ba.clone())], None).unwrap();
+      IssueAssetBody::new(&code, seq_num, &[(TxOutput(ba.clone()), None)], None).unwrap();
     let asset_issuance_operation =
       IssueAsset::new(asset_issuance_body,
                       &IssuerKeyPair { keypair: &issuer_keys }).unwrap();
@@ -2250,7 +2250,8 @@ pub mod helpers {
     let (ba, _tracer_memo, _owner_memo) =
       build_blind_asset_record(ledger.get_prng(), &params.pc_gens, &ar_template, vec![]);
 
-    let asset_issuance_body = IssueAssetBody::new(&code, seq_num, &[TxOutput(ba)], None).unwrap();
+    let asset_issuance_body =
+      IssueAssetBody::new(&code, seq_num, &[(TxOutput(ba), None)], None).unwrap();
     let asset_issuance_operation =
       IssueAsset::new(asset_issuance_body,
                       &IssuerKeyPair { keypair: &issuer_keys }).unwrap();
@@ -2642,8 +2643,11 @@ mod tests {
       build_blind_asset_record(ledger.get_prng(), &params.pc_gens, &template, vec![]);
     let second_ba = ba.clone();
 
-    let asset_issuance_body =
-      IssueAssetBody::new(&code, 0, &[TxOutput(ba), TxOutput(second_ba)], None).unwrap();
+    let asset_issuance_body = IssueAssetBody::new(&code,
+                                                  0,
+                                                  &[(TxOutput(ba), None),
+                                                    (TxOutput(second_ba), None)],
+                                                  None).unwrap();
     let asset_issuance_operation =
       IssueAsset::new(asset_issuance_body, &IssuerKeyPair { keypair: &key_pair }).unwrap();
 
@@ -2779,7 +2783,8 @@ mod tests {
       AssetRecordTemplate::with_no_asset_tracking(100, token_code1.val, art, *keypair.get_pk_ref());
 
     let (ba, _, _) = build_blind_asset_record(ledger.get_prng(), &params.pc_gens, &ar, vec![]);
-    let asset_issuance_body = IssueAssetBody::new(&token_code1, 0, &[TxOutput(ba)], None).unwrap();
+    let asset_issuance_body =
+      IssueAssetBody::new(&token_code1, 0, &[(TxOutput(ba), None)], None).unwrap();
     let asset_issuance_operation =
       IssueAsset::new(asset_issuance_body, &IssuerKeyPair { keypair: &keypair }).unwrap();
 
@@ -3135,7 +3140,7 @@ mod tests {
     let (ba, _, _) =
       build_blind_asset_record(ledger.get_prng(), &params.pc_gens, &template, vec![]);
 
-    let asset_issuance_body = IssueAssetBody::new(&code, 0, &[TxOutput(ba)], None).unwrap();
+    let asset_issuance_body = IssueAssetBody::new(&code, 0, &[(TxOutput(ba), None)], None).unwrap();
     let asset_issuance_operation =
       IssueAsset::new(asset_issuance_body, &IssuerKeyPair { keypair: &alice }).unwrap();
 
