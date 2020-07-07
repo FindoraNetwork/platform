@@ -405,7 +405,7 @@ pub struct TransferAssetBody {
   #[serde(default)]
   #[serde(skip_serializing_if = "is_default")]
   pub input_identity_commitments: Vec<Option<ACCommitment>>,
-  pub num_outputs: usize, // How many output TXOs?
+  pub outputs: Vec<TxOutput>,
   // Output asset tracing policies and signature commitments
   #[serde(default)]
   #[serde(skip_serializing_if = "is_default")]
@@ -431,10 +431,14 @@ impl TransferAssetBody {
     }
     let note = Box::new(gen_xfr_body(prng, input_records, output_records)
         .map_err(|e| PlatformError::ZeiError(error_location!(),e))?);
+    let outputs = note.outputs
+                      .iter()
+                      .map(|bar| TxOutput(bar.clone()))
+                      .collect();
     Ok(TransferAssetBody { inputs: input_refs,
                            input_identity_commitments,
-                           num_outputs: output_records.len(),
                            output_identity_commitments,
+                           outputs,
                            transfer: note,
                            transfer_type })
   }
@@ -587,6 +591,10 @@ impl TransferAsset {
         .map(|mem| mem.as_ref())
         .collect()
   }
+
+  pub fn get_outputs_ref(&self) -> Vec<&TxOutput> {
+    self.body.outputs.iter().collect()
+  }
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -612,6 +620,9 @@ impl IssueAsset {
         .iter()
         .map(|(_, memo)| memo.as_ref())
         .collect()
+  }
+  pub fn get_outputs_ref(&self) -> Vec<&TxOutput> {
+    self.body.records.iter().map(|rec| &rec.0).collect()
   }
 }
 
@@ -1070,6 +1081,38 @@ impl Transaction {
     Ok(())
   }
 
+  pub fn get_owner_memos_ref(&self) -> Vec<Option<&OwnerMemo>> {
+    let mut memos = vec![];
+    for op in self.body.operations.iter() {
+      match op {
+        Operation::TransferAsset(xfr_asset) => {
+          memos.append(&mut xfr_asset.get_owner_memos_ref());
+        }
+        Operation::IssueAsset(issue_asset) => {
+          memos.append(&mut issue_asset.get_owner_memos_ref());
+        }
+        _ => {}
+      }
+    }
+    memos
+  }
+
+  pub fn get_outputs_ref(&self) -> Vec<&TxOutput> {
+    let mut outputs = vec![];
+    for op in self.body.operations.iter() {
+      match op {
+        Operation::TransferAsset(xfr_asset) => {
+          outputs.append(&mut xfr_asset.get_outputs_ref());
+        }
+        Operation::IssueAsset(issue_asset) => {
+          outputs.append(&mut issue_asset.get_outputs_ref());
+        }
+        _ => {}
+      }
+    }
+    outputs
+  }
+
   /// NOTE: this does *not* guarantee that a private key affiliated with
   /// `public_key` has signed this transaction! If `public_key` is derived
   /// from `self` somehow, then it is infeasible for someone to forge a
@@ -1236,7 +1279,7 @@ mod tests {
 
     let assert_transfer_body = TransferAssetBody { inputs: Vec::new(),
                                                    input_identity_commitments: Vec::new(),
-                                                   num_outputs: 0,
+                                                   outputs: Vec::new(),
                                                    output_identity_commitments: Vec::new(),
                                                    transfer: Box::new(xfr_note),
                                                    transfer_type: TransferType::Standard };

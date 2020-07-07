@@ -187,7 +187,7 @@ impl<T> QueryServer<T> where T: RestfulArchiveAccess
                   .map(|sid| XfrAddress { key: ledger.get_utxo(*sid).unwrap().0 .0.public_key })
                   .collect();
 
-        let owner_memos = extract_owner_memos_from_txn(&curr_txn);
+        let owner_memos = curr_txn.get_owner_memos_ref();
 
         (addresses, owner_memos)
       };
@@ -245,23 +245,6 @@ impl<T> QueryServer<T> where T: RestfulArchiveAccess
 
     Ok(())
   }
-}
-
-// Returns an (optional) memo for each output of a transaction
-fn extract_owner_memos_from_txn(txn: &Transaction) -> Vec<Option<&OwnerMemo>> {
-  let mut memos = vec![];
-  for op in txn.body.operations.iter() {
-    match op {
-      Operation::TransferAsset(xfr_asset) => {
-        memos.append(&mut xfr_asset.get_owner_memos_ref());
-      }
-      Operation::IssueAsset(issue_asset) => {
-        memos.append(&mut issue_asset.get_owner_memos_ref());
-      }
-      _ => {}
-    }
-  }
-  memos
 }
 
 // An xfr address is related to a transaction if it is one of the following:

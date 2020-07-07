@@ -281,11 +281,22 @@ impl TxnEffect {
           if trn.body.inputs.len() != trn.body.transfer.inputs.len() {
             return Err(inp_fail!());
           }
-          if trn.body.num_outputs != trn.body.transfer.outputs.len() {
+          if trn.body.outputs.len() != trn.body.transfer.outputs.len() {
             return Err(inp_fail!());
           }
           assert!(trn.body.inputs.len() == trn.body.transfer.inputs.len());
-          assert!(trn.body.num_outputs == trn.body.transfer.outputs.len());
+          assert!(trn.body.outputs.len() == trn.body.transfer.outputs.len());
+
+          // Transfer outputs must match outputs zei transaction
+          for (output, record) in trn.body
+                                     .outputs
+                                     .iter()
+                                     .zip(trn.body.transfer.outputs.iter())
+          {
+            if output.0 != *record {
+              return Err(inp_fail!());
+            }
+          }
 
           match trn.body.transfer_type {
             TransferType::DebtSwap => {

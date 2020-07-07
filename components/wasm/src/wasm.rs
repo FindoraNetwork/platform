@@ -393,22 +393,16 @@ impl TransactionBuilder {
 
   /// Fetches a client record from a transaction.
   /// @param {number} idx - Record to fetch. Records are added to the transaction builder sequentially.
-  pub fn get_owner_record(&self, idx: usize) -> Result<ClientAssetRecord, JsValue> {
-    Ok(self.get_builder()
-           .get_owner_record_and_memo(idx)
-           .cloned()
-           .map(|(output, _)| ClientAssetRecord { output })
-           .ok_or_else(|| JsValue::from_str("Index out of range"))?)
+  pub fn get_owner_record(&self, idx: usize) -> ClientAssetRecord {
+    ClientAssetRecord { output: self.get_builder().get_output_ref(idx).clone() }
   }
 
   /// Fetches an owner memo from a transaction
   /// @param {number} idx - Record to fetch. Records are added to the transaction builder sequentially.
-  pub fn get_owner_memo(&self, idx: usize) -> Result<Option<OwnerMemo>, JsValue> {
-    Ok(self.get_builder()
-           .get_owner_record_and_memo(idx)
-           .cloned()
-           .map(|(_, memo)| (memo.map(|memo| OwnerMemo { memo })))
-           .ok_or_else(|| JsValue::from_str("Index out of range"))?)
+  pub fn get_owner_memo(&self, idx: usize) -> Option<OwnerMemo> {
+    self.get_builder()
+        .get_owner_memo_ref(idx)
+        .map(|memo| OwnerMemo { memo: memo.clone() })
   }
 }
 #[wasm_bindgen]
