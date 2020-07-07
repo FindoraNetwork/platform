@@ -490,8 +490,8 @@ mod tests {
     submit_command(args, rest_client)
   }
 
-  #[test]
-  #[ignore]
+  #[cfg(test)]
+  #[allow(unused)]
   // This test fails a clean build on master
   // See https://bugtracker.findora.org/issues/130
   fn test_cmd() {

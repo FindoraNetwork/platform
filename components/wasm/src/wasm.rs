@@ -653,17 +653,23 @@ impl TransferOperationBuilder {
 
 ///////////// CRYPTO //////////////////////
 #[wasm_bindgen]
-/// Returns a JsValue containing decrypted owner record information.
-/// @param {ClientAssetRecord} record - Ownership record.
-/// @param {OwnerMemo} owner_memo - Opening parameters.
-/// @param {XfrKeyPair} key - Key of asset owner that is used to open the record.
+/// Returns a JsValue containing decrypted owner record information,
+/// where `amount` is the decrypted asset amount, and `asset_type` is the decrypted asset type code.
+///
+/// @param {ClientAssetRecord} record - Owner record.
+/// @see {@link ClientAssetRecord#from_json_record} for information about fetching the asset record.
+///
+/// @param {OwnerMemo} owner_memo - Owner memo of the associated record.
+/// TODO (Redmine issue #126): Unable to get owner memo.
+///
+/// @param {XfrKeyPair} keypair - Keypair of asset owner.
 pub fn open_client_asset_record(record: &ClientAssetRecord,
                                 owner_memo: Option<OwnerMemo>,
-                                key: &XfrKeyPair)
+                                keypair: &XfrKeyPair)
                                 -> Result<JsValue, JsValue> {
   Ok(JsValue::from_serde(&open_bar(record.get_bar_ref(),
                              &owner_memo.map(|memo| memo.get_memo_ref().clone()),
-                             key.get_sk_ref()).map_err(|_e| {
+                             keypair.get_sk_ref()).map_err(|_e| {
                                                 JsValue::from_str("Could not open asset record")
                                               })?).unwrap())
 }
