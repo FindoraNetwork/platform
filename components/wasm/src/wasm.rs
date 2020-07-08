@@ -846,23 +846,23 @@ pub fn get_state_commitment(path: String) -> Result<Promise, JsValue> {
 #[wasm_bindgen]
 /// If successful, returns a promise that will eventually provide a
 /// JsValue describing an asset token. Otherwise, returns 'not found'.
-/// The request fails if the given asset name does not correspond to
+/// The request fails if the given token code does not correspond to
 /// an asset.
 /// @example <caption> Error handling </caption>
 /// try {
-///     await wasm.get_asset_token("http::localhost:8668", asset_name);
+///     await wasm.get_asset_token("http::localhost:8668", code);
 /// } catch (err) {
 ///     console.log(err)
 /// }
 /// @param {string} path - Address of ledger server. E.g. `https://localhost:8668`.
-/// @param {string} name - Base64-encoded asset token string.
+/// @param {string} code - Base64-encoded asset token string.
 ///
-pub fn get_asset_token(path: String, name: String) -> Result<Promise, JsValue> {
+pub fn get_asset_token(path: String, code: String) -> Result<Promise, JsValue> {
   let mut opts = RequestInit::new();
   opts.method("GET");
   opts.mode(RequestMode::Cors);
 
-  let req_string = format!("{}/asset_token/{}", path, name);
+  let req_string = format!("{}/asset_token/{}", path, code);
 
   create_query_promise(&opts, &req_string, false)
 }
