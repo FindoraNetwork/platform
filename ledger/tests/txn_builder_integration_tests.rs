@@ -46,19 +46,16 @@ fn test_create_asset() -> Result<(), PlatformError> {
                                               PolicyChoice::Fungible())?
                   .transaction();
   apply_transaction(&mut ledger, tx.clone());
-  assert!(ledger.get_asset_type(&code).is_some());
 
   // Issue
   let mut builder = TransactionBuilder::from_seq_id(ledger.get_block_commit_count());
   let tx =
     builder.add_basic_issue_asset(&keys,
-                                  None,
                                   &code,
                                   0,
                                   1000,
                                   AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType)?
            .add_basic_issue_asset(&keys,
-                                  None,
                                   &code,
                                   1,
                                   500,
@@ -154,13 +151,11 @@ fn test_loan_repayment(loan_amount: u64,
   let tx = builder.add_operation_issue_asset(&fiat_issuer_keys,
                                              &fiat_code,
                                              0,
-                                             &[(TxOutput(fiat_ba.clone()), fiat_owner_memo)],
-                                             None)?
+                                             &[(TxOutput(fiat_ba.clone()), fiat_owner_memo)])?
                   .add_operation_issue_asset(&borrower_keys,
                                              &debt_code,
                                              0,
-                                             &[(TxOutput(debt_ba.clone()), debt_owner_memo)],
-                                             None)?;
+                                             &[(TxOutput(debt_ba.clone()), debt_owner_memo)])?;
   let mut xfr_builder = TransferOperationBuilder::new();
   let output_template =
     AssetRecordTemplate::with_no_asset_tracking(loan_amount,

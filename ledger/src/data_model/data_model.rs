@@ -20,10 +20,11 @@ use std::collections::{HashMap, HashSet};
 use std::convert::TryFrom;
 use std::hash::{Hash, Hasher};
 use utils::{HashOf, ProofOf, Serialized, SignatureOf};
-use zei::api::anon_creds::ACCommitment;
-use zei::xfr::lib::gen_xfr_body;
+use zei::xfr::lib::{gen_xfr_body, XfrNotePoliciesNoRef};
 use zei::xfr::sig::{XfrKeyPair, XfrPublicKey};
-use zei::xfr::structs::{AssetRecord, AssetTracingPolicy, BlindAssetRecord, OwnerMemo, XfrBody};
+use zei::xfr::structs::{
+  AssetRecord, AssetTracingPolicies, AssetTracingPolicy, BlindAssetRecord, OwnerMemo, XfrBody,
+};
 
 pub fn b64enc<T: ?Sized + AsRef<[u8]>>(input: &T) -> String {
   base64::encode_config(input, base64::URL_SAFE)
@@ -235,22 +236,23 @@ impl SignatureRules {
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 /// Simple asset rules:
-/// 1) Traceable: Records of traceable assets can be decrypted by a provided tracking key
-/// 2) Transferable: Non-transferable assets can only be transferred once from the issuer to
+/// 1) Transferable: Non-transferable assets can only be transferred once from the issuer to
 ///    another user.
-/// 3) Updatable: Whether the asset memo can be updated.
-/// 4) Transfer signature rules: Signature weights and threshold for a valid transfer.
+/// 2) Updatable: Whether the asset memo can be updated.
+/// 3) Transfer signature rules: Signature weights and threshold for a valid transfer.
+/// 4) Asset tracing policies: A bundle of tracing policies specifying the tracing proofs that
+///    constitute a valid transfer.
 /// 5) Max units: Optional limit on total issuance amount.
 pub struct AssetRules {
-  pub traceable: bool,
   pub transferable: bool,
   pub updatable: bool,
   pub transfer_multisig_rules: Option<SignatureRules>,
+  pub tracing_policies: AssetTracingPolicies,
   pub max_units: Option<u64>,
 }
 impl Default for AssetRules {
   fn default() -> Self {
-    AssetRules { traceable: false,
+    AssetRules { tracing_policies: AssetTracingPolicies::new(),
                  transferable: true,
                  updatable: false,
                  max_units: None,
@@ -259,8 +261,8 @@ impl Default for AssetRules {
 }
 
 impl AssetRules {
-  pub fn set_traceable(&mut self, traceable: bool) -> &mut Self {
-    self.traceable = traceable;
+  pub fn add_tracing_policy(&mut self, policy: AssetTracingPolicy) -> &mut Self {
+    self.tracing_policies.add(policy);
     self
   }
 
@@ -334,6 +336,10 @@ impl AssetType {
     };
     self.properties != simple_asset
   }
+
+  pub fn get_tracing_policies_ref(&self) -> &AssetTracingPolicies {
+    &self.properties.asset_rules.tracing_policies
+  }
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, Serialize)]
@@ -391,15 +397,12 @@ pub enum TxoRef {
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct TransferAssetBody {
   pub inputs: Vec<TxoRef>, // Ledger address of inputs
-  // Input asset tracing policies and signature commitments
   #[serde(default)]
   #[serde(skip_serializing_if = "is_default")]
-  pub input_identity_commitments: Vec<Option<ACCommitment>>,
+  pub policies: XfrNotePoliciesNoRef,
   pub outputs: Vec<TxOutput>,
-  // Output asset tracing policies and signature commitments
-  #[serde(default)]
-  #[serde(skip_serializing_if = "is_default")]
-  pub output_identity_commitments: Vec<Option<ACCommitment>>,
+  // TODO(joe): we probably don't need the whole XfrNote with input records
+  // once it's on the chain
   pub transfer: Box<XfrBody>, // Encrypted transfer note
 
   pub transfer_type: TransferType,
@@ -409,14 +412,35 @@ impl TransferAssetBody {
   pub fn new<R: CryptoRng + RngCore>(prng: &mut R,
                                      input_refs: Vec<TxoRef>,
                                      input_records: &[AssetRecord],
-                                     input_identity_commitments: Vec<Option<ACCommitment>>,
                                      output_records: &[AssetRecord],
-                                     output_identity_commitments: Vec<Option<ACCommitment>>,
+                                     policies: Option<XfrNotePoliciesNoRef>,
                                      transfer_type: TransferType)
                                      -> Result<TransferAssetBody, errors::PlatformError> {
-    if input_records.is_empty() {
+    let num_inputs = input_records.len();
+    let num_outputs = output_records.len();
+
+    if num_inputs == 0 {
       return Err(PlatformError::InputsError(error_location!()));
     }
+
+    // If no policies specified, construct set of empty policies
+    let policies = policies.unwrap_or_else(|| {
+                             let no_policies = AssetTracingPolicies::new();
+                             XfrNotePoliciesNoRef::new(vec![no_policies.clone(); num_inputs],
+                                                       vec![None; num_inputs],
+                                                       vec![no_policies; num_outputs],
+                                                       vec![None; num_outputs])
+                           });
+
+    // Verify that for each input and output, there is a corresponding policy and credential commitment
+    if num_inputs != policies.inputs_tracking_policies.len()
+       || num_inputs != policies.inputs_sig_commitments.len()
+       || num_outputs != policies.outputs_tracking_policies.len()
+       || num_outputs != policies.outputs_sig_commitments.len()
+    {
+      return Err(PlatformError::InputsError(error_location!()));
+    }
+
     let note = Box::new(gen_xfr_body(prng, input_records, output_records)
         .map_err(|e| PlatformError::ZeiError(error_location!(),e))?);
     let outputs = note.outputs
@@ -424,9 +448,8 @@ impl TransferAssetBody {
                       .map(|rec| TxOutput(rec.clone()))
                       .collect();
     Ok(TransferAssetBody { inputs: input_refs,
-                           input_identity_commitments,
-                           output_identity_commitments,
                            outputs,
+                           policies,
                            transfer: note,
                            transfer_type })
   }
@@ -455,23 +478,17 @@ pub struct IssueAssetBody {
   pub seq_num: u64,
   pub num_outputs: usize,
   pub records: Vec<(TxOutput, Option<OwnerMemo>)>,
-  /// Asset tracing policy, null iff the asset is not traceable
-  #[serde(default)]
-  #[serde(skip_serializing_if = "is_default")]
-  pub tracing_policy: Option<AssetTracingPolicy>,
 }
 
 impl IssueAssetBody {
   pub fn new(token_code: &AssetTypeCode,
              seq_num: u64,
-             records: &[(TxOutput, Option<OwnerMemo>)],
-             tracing_policy: Option<AssetTracingPolicy>)
+             records: &[(TxOutput, Option<OwnerMemo>)])
              -> Result<IssueAssetBody, PlatformError> {
     Ok(IssueAssetBody { code: *token_code,
                         seq_num,
                         num_outputs: records.len(),
-                        records: records.to_vec(),
-                        tracing_policy })
+                        records: records.to_vec() })
   }
 }
 
@@ -1250,7 +1267,6 @@ mod tests {
 
     let keypair = XfrKeyPair::generate(&mut prng);
 
-    // Instantiate an TransferAsset operation
     let xfr_note = XfrBody { inputs: Vec::new(),
                              outputs: Vec::new(),
                              proofs: XfrProofs { asset_type_and_amount_proof:
@@ -1259,15 +1275,21 @@ mod tests {
                              asset_tracing_memos: vec![],
                              owners_memos: vec![] };
 
-    let assert_transfer_body = TransferAssetBody { inputs: Vec::new(),
-                                                   input_identity_commitments: Vec::new(),
-                                                   outputs: Vec::new(),
-                                                   output_identity_commitments: Vec::new(),
-                                                   transfer: Box::new(xfr_note),
-                                                   transfer_type: TransferType::Standard };
+    let no_policies = AssetTracingPolicies::new();
+
+    let policies = XfrNotePoliciesNoRef::new(vec![no_policies.clone()],
+                                             vec![None],
+                                             vec![no_policies],
+                                             vec![None]);
+
+    let asset_transfer_body = TransferAssetBody { inputs: Vec::new(),
+                                                  outputs: Vec::new(),
+                                                  policies,
+                                                  transfer: Box::new(xfr_note),
+                                                  transfer_type: TransferType::Standard };
 
     let asset_transfer = {
-      let mut ret = TransferAsset::new(assert_transfer_body).unwrap();
+      let mut ret = TransferAsset::new(asset_transfer_body).unwrap();
       ret.sign(&keypair);
       ret
     };
@@ -1278,8 +1300,7 @@ mod tests {
     let asset_issuance_body = IssueAssetBody { code: Default::default(),
                                                seq_num: 0,
                                                num_outputs: 0,
-                                               records: Vec::new(),
-                                               tracing_policy: None };
+                                               records: Vec::new() };
 
     let asset_issuance =
       IssueAsset::new(asset_issuance_body, &IssuerKeyPair { keypair: &keypair }).unwrap();
