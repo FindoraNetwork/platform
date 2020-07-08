@@ -130,6 +130,10 @@ pub trait LedgerUpdate<RNG: RngCore + CryptoRng> {
   fn finish_block(&mut self,
                   block: Self::Block)
                   -> Result<HashMap<TxnTempSID, (TxnSID, Vec<TxoSID>)>, std::io::Error>;
+
+  // kludge for consensus with heartbeat
+  fn pulse_block(block: &mut Self::Block) -> u64;
+  fn block_pulse_count(block: &Self::Block) -> u64;
 }
 
 // TODO(joe/keyao): which of these methods should be in `LedgerAccess`?
@@ -247,6 +251,7 @@ pub struct LedgerStatus {
   // such checkpoint.
   state_commitment_data: Option<StateCommitmentData>,
   block_commit_count: u64,
+  pulse_count: u64,
 
   // Hash of the transactions in the most recent block
   txns_in_block_hash: Option<HashOf<Vec<Transaction>>>,
@@ -433,7 +438,8 @@ impl LedgerStatus {
                                 next_txo: TxoSID(0),
                                 txns_in_block_hash: None,
                                 state_commitment_data: None,
-                                block_commit_count: 0 };
+                                block_commit_count: 0,
+                                pulse_count: 0 };
 
     Ok(ledger)
   }
@@ -1153,6 +1159,15 @@ impl LedgerUpdate<ChaChaRng> for LedgerState {
                                              tx_id: txn_sid,
                                              merkle_id });
       }
+      // this feels like the wrong place for this, but there's no other good place unless
+      // we move the pulse into the StateCommitment, which seems like the wrong answer to
+      // a consensus-specific hack.
+      // The entirety of the checkpoint function seems wrong, though, because the BlockEffect is
+      // applied to the LedgerState in a way that renders the BlockEffect obsolete, without
+      // moving it.
+      self.status.pulse_count += block.pulse_count;
+      block.pulse_count = 0;
+
       // Checkpoint
       let block_merkle_id = self.checkpoint(&block);
       block.temp_sids.clear();
@@ -1177,6 +1192,12 @@ impl LedgerUpdate<ChaChaRng> for LedgerState {
     self.block_ctx = Some(block);
 
     Ok(temp_sid_map)
+  }
+  fn pulse_block(block: &mut BlockEffect) -> u64 {
+    block.add_pulse()
+  }
+  fn block_pulse_count(block: &Self::Block) -> u64 {
+    block.get_pulse_count()
   }
 }
 
@@ -1289,6 +1310,12 @@ impl LedgerUpdate<ChaChaRng> for LedgerStateChecker {
     self.0.block_ctx = Some(block);
 
     Ok(temp_sid_map)
+  }
+  fn pulse_block(block: &mut BlockEffect) -> u64 {
+    block.add_pulse()
+  }
+  fn block_pulse_count(block: &Self::Block) -> u64 {
+    block.get_pulse_count()
   }
 }
 
@@ -1507,6 +1534,7 @@ impl LedgerState {
                                                          .unwrap(),
                                  previous_state_commitment: prev_commitment,
                                  txo_count: self.status.next_txo.0,
+                                 pulse_count: self.status.pulse_count,
                                  kv_store: *self.status.custom_data.merkle_root() });
     self.status.state_commitment_versions.push(self.status
                                                    .state_commitment_data
@@ -1684,6 +1712,7 @@ impl LedgerState {
             .status
             .state_commitment_versions
             .push(comm.compute_commitment());
+      ledger.0.status.pulse_count = comm.pulse_count;
       ledger.0.status.block_commit_count += 1;
 
       ledger.0.status.state_commitment_data = Some(comm);
@@ -1769,6 +1798,7 @@ impl LedgerState {
         ledger.apply_transaction(&mut block_builder, eff)
               .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
       }
+      ledger.status.pulse_count = logged_block.state.pulse_count;
       ledger.finish_block(block_builder).unwrap();
     }
 
@@ -1937,6 +1967,10 @@ impl LedgerState {
     Ok(file)
   }
   */
+
+  pub fn get_pulse_count(&self) -> u64 {
+    self.status.pulse_count
+  }
 }
 
 impl LedgerStatus {

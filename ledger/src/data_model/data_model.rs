@@ -1064,6 +1064,7 @@ pub struct StateCommitmentData {
   pub transaction_merkle_commitment: HashValue, // The root hash of the transaction Merkle tree
   pub air_commitment: BitDigest, // The root hash of the AIR sparse Merkle tree
   pub txo_count: u64, // Number of transaction outputs. Used to provide proof that a utxo does not exist
+  pub pulse_count: u64,
   #[serde(default = "default_digest")]
   #[serde(skip_serializing_if = "is_default_digest")]
   pub kv_store: BitDigest, // The root hash of the KV Store SMT

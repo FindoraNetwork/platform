@@ -544,6 +544,8 @@ pub struct BlockEffect {
   pub kv_updates: HashMap<Key, Vec<(KVEntrySignature, u64, Option<KVEntry>)>>,
   // Memo updates
   pub memo_updates: HashMap<AssetTypeCode, Memo>,
+  // counter for consensus integration
+  pub pulse_count: u64,
 }
 
 impl BlockEffect {
@@ -657,6 +659,14 @@ impl BlockEffect {
     Ok(temp_sid)
   }
 
+  pub fn get_pulse_count(&self) -> u64 {
+    self.pulse_count
+  }
+
+  pub fn add_pulse(&mut self) -> u64 {
+    self.pulse_count += 1;
+    self.pulse_count
+  }
   pub fn compute_txns_in_block_hash(&self) -> HashOf<Vec<Transaction>> {
     HashOf::new(&self.txns)
   }
