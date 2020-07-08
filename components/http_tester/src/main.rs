@@ -36,9 +36,7 @@ impl AIR {
   }
 
   /// Return a JSON txn corresponding to this request
-  pub fn add_assign_txn(&mut self,
-                        builder: &mut TransactionBuilder,
-                        no_replay_token: NoReplayToken) {
+  pub fn add_assign_txn(&mut self, builder: &mut TransactionBuilder) {
     let (user_pk, user_sk) = credential_user_key_gen(&mut self.prng, &self.issuer_pk);
     let attr_vals: Vec<(String, &[u8])> = vec![(String::from("dob"), b"08221964"),
                                                (String::from("pob"), b"666"),
@@ -62,8 +60,7 @@ impl AIR {
                                                      user_pk,
                                                      commitment,
                                                      self.issuer_pk.clone(),
-                                                     proof,
-                                                     no_replay_token)
+                                                     proof)
     {
       panic!(format!("Something went wrong: {:#?}", e));
     }
@@ -82,7 +79,7 @@ fn run_txns(no_replay_token: NoReplayToken,
   let mut total: Duration = Duration::new(0, 0);
   for i in 0..n {
     let mut builder = TransactionBuilder::from_token(no_replay_token);
-    air.add_assign_txn(&mut builder, no_replay_token);
+    air.add_assign_txn(&mut builder);
     let txn = builder.transaction();
     let instant = Instant::now();
     let _ = client.post(&format!("{}://{}:{}/submit_transaction", protocol, host, SUBMIT_PORT))

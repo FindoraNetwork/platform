@@ -11,7 +11,7 @@ path = "src/account_simulator.rs"
 [dependencies]
 actix-rt = "0.2"
 actix-service = "0.4.2"
-actix-web = "1.0.8"
+actix-web = "1.0.5"
 cryptohash = { path = "../../libs/cryptohash" }
 lazy_static = "1.4.0"
 ledger = { path = "../../ledger", features = ["TESTING"] }

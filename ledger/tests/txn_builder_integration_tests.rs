@@ -288,7 +288,7 @@ fn test_update_memo() -> Result<(), PlatformError> {
   // Define a transaction to update the memo
   let no_replay_token = ledger.get_no_replay_token();
   let mut builder = TransactionBuilder::from_token(no_replay_token);
-  let tx = builder.add_operation_update_memo(&keys, code, "changed", no_replay_token)
+  let tx = builder.add_operation_update_memo(&keys, code, "changed")
                   .transaction();
   apply_transaction(&mut ledger, tx.clone());
 

@@ -46,12 +46,7 @@ pub fn air_assign(data_dir: &str,
   let data = serde_json::from_str::<CredCommitment>(data)?;
   let issuer_pk = serde_json::from_str::<CredIssuerPublicKey>(issuer_pk)?;
   let pok = serde_json::from_str::<CredPoK>(pok)?;
-  txn_builder.add_operation_air_assign(&xfr_key_pair,
-                                       address,
-                                       data,
-                                       issuer_pk,
-                                       pok,
-                                       no_replay_token)?;
+  txn_builder.add_operation_air_assign(&xfr_key_pair, address, data, issuer_pk, pok)?;
   store_txn_to_file(&txn_file, &txn_builder)?;
   Ok(())
 }

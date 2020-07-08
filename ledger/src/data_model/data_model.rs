@@ -874,7 +874,7 @@ fn set_no_replay_token(op: &mut Operation, no_replay_token: NoReplayToken) {
   match op {
     Operation::UpdateMemo(um) => um.body.no_replay_token = no_replay_token,
     Operation::AIRAssign(aa) => aa.body.no_replay_token = no_replay_token,
-    _ => ()
+    _ => (),
   }
 }
 
@@ -1244,7 +1244,7 @@ impl Transaction {
     set_no_replay_token(&mut mutable_op, self.body.no_replay_token);
     self.body.operations.push(mutable_op);
   }
-  
+
   pub fn sign(&mut self, keypair: &XfrKeyPair) {
     self.signatures.push(SignatureOf::new(keypair, &self.body));
   }

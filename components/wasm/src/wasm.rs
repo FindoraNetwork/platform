@@ -333,16 +333,14 @@ impl TransactionBuilder {
                                   user_public_key: &CredUserPublicKey,
                                   issuer_public_key: &CredIssuerPublicKey,
                                   commitment: &CredentialCommitment,
-                                  pok: &CredentialPoK,
-                                  no_replay_token: NoReplayToken)
+                                  pok: &CredentialPoK)
                                   -> Result<TransactionBuilder, JsValue> {
     self.get_builder_mut()
         .add_operation_air_assign(key_pair,
                                   user_public_key.clone(),
                                   commitment.get_ref().clone(),
                                   issuer_public_key.clone(),
-                                  pok.get_ref().clone(),
-                                  no_replay_token.0)
+                                  pok.get_ref().clone())
         .map_err(error_to_jsvalue)?;
     Ok(self)
   }
@@ -397,8 +395,7 @@ impl TransactionBuilder {
   pub fn add_operation_update_memo(mut self,
                                    auth_key_pair: &XfrKeyPair,
                                    code: String,
-                                   new_memo: String,
-                                   no_replay_token: NoReplayToken)
+                                   new_memo: String)
                                    -> Result<TransactionBuilder, JsValue> {
     // First, decode the asset code
     let code = AssetTypeCode::new_from_base64(&code).map_err(|_| {
@@ -406,7 +403,7 @@ impl TransactionBuilder {
                })?;
 
     self.get_builder_mut()
-        .add_operation_update_memo(auth_key_pair, code, &new_memo, no_replay_token.0);
+        .add_operation_update_memo(auth_key_pair, code, &new_memo);
     Ok(self)
   }
 

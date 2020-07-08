@@ -84,8 +84,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                          user_pk.clone(),
                                          commitment,
                                          resp1.issuer_pk.clone(),
-                                         proof,
-                                         no_replay_token)?;
+                                         proof)?;
 
     // Submit to ledger
     let txn = txn_builder.transaction();

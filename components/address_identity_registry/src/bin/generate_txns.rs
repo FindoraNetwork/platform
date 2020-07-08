@@ -61,8 +61,7 @@ impl AIR {
                                                          user_pk,
                                                          commitment,
                                                          self.issuer_pk.clone(),
-                                                         proof,
-                                                         no_replay_token)
+                                                         proof)
     {
       println!("add_operation_air_assign failed with {:?}", e);
       None

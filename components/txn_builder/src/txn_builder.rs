@@ -286,8 +286,7 @@ pub trait BuildsTransactions {
                               addr: CredUserPublicKey,
                               data: CredCommitment,
                               issuer_pk: CredIssuerPublicKey,
-                              pok: CredPoK,
-                              no_replay_token: NoReplayToken)
+                              pok: CredPoK)
                               -> Result<&mut Self, PlatformError>;
   fn add_operation_kv_update(&mut self,
                              auth_key_pair: &XfrKeyPair,
@@ -298,8 +297,7 @@ pub trait BuildsTransactions {
   fn add_operation_update_memo(&mut self,
                                auth_key_pair: &XfrKeyPair,
                                asset_code: AssetTypeCode,
-                               new_memo: &str,
-                               no_replay_token: NoReplayToken)
+                               new_memo: &str)
                                -> &mut Self;
 
   fn serialize(&self) -> Vec<u8>;
@@ -545,10 +543,13 @@ impl BuildsTransactions for TransactionBuilder {
                               addr: CredUserPublicKey,
                               data: CredCommitment,
                               issuer_pk: CredIssuerPublicKey,
-                              pok: CredPoK,
-                              no_replay_token: NoReplayToken)
+                              pok: CredPoK)
                               -> Result<&mut Self, PlatformError> {
-    let xfr = AIRAssign::new(AIRAssignBody::new(addr, data, issuer_pk, pok, no_replay_token)?,
+    let xfr = AIRAssign::new(AIRAssignBody::new(addr,
+                                                data,
+                                                issuer_pk,
+                                                pok,
+                                                self.txn.body.no_replay_token)?,
                              key_pair)?;
     self.txn.add_operation(Operation::AIRAssign(xfr));
     Ok(self)
@@ -557,16 +558,16 @@ impl BuildsTransactions for TransactionBuilder {
   fn add_operation_update_memo(&mut self,
                                auth_key_pair: &XfrKeyPair,
                                asset_code: AssetTypeCode,
-                               new_memo: &str,
-                               no_replay_token: NoReplayToken)
+                               new_memo: &str)
                                -> &mut Self {
     let new_memo = Memo(new_memo.into());
-    let memo_update = UpdateMemo::new(UpdateMemoBody { new_memo,
-                                                       asset_type: asset_code,
-                                                       no_replay_token },
-                                      auth_key_pair);
+    let memo_update =
+      UpdateMemo::new(UpdateMemoBody { new_memo,
+                                       asset_type: asset_code,
+                                       no_replay_token: self.txn.body.no_replay_token },
+                      auth_key_pair);
     let op = Operation::UpdateMemo(memo_update);
-    self.add_operation(op);
+    self.txn.add_operation(op);
     self
   }
 

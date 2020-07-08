@@ -589,8 +589,7 @@ mod tests {
                                                        new_memo: new_memo.clone(),
                                                        asset_type: code },
                                       &creator);
-    let tx = Transaction::from_operation(Operation::UpdateMemo(memo_update),
-                                         no_replay_token);
+    let tx = Transaction::from_operation(Operation::UpdateMemo(memo_update), no_replay_token);
     apply_transaction(&mut ledger_state, tx);
 
     let block0 = ledger_state.get_block(BlockSID(0)).unwrap();

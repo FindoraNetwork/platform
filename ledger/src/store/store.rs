@@ -2279,7 +2279,8 @@ TransferAsset::new(TransferAssetBody::new(ledger.get_prng(),
       IssueAsset::new(asset_issuance_body,
                       &IssuerKeyPair { keypair: &issuer_keys }).unwrap();
 
-    Transaction::from_operation(Operation::IssueAsset(asset_issuance_operation), NoReplayToken::default())
+    Transaction::from_operation(Operation::IssueAsset(asset_issuance_operation),
+                                NoReplayToken::default())
   }
 }
 
@@ -2941,18 +2942,15 @@ mod tests {
     let mut adversarial_op = air_assign_op.clone();
     let air_assign_op2 = air_assign_op.clone();
     adversarial_op.pubkey = XfrKeyPair::generate(&mut ledger.get_prng()).get_pk();
-    let tx = Transaction::from_operation(Operation::AIRAssign(air_assign_op),
-                                         no_replay_token);
+    let tx = Transaction::from_operation(Operation::AIRAssign(air_assign_op), no_replay_token);
     apply_transaction(&mut ledger, tx);
 
-    let tx2 = Transaction::from_operation(Operation::AIRAssign(air_assign_op2),
-                                          no_replay_token);
+    let tx2 = Transaction::from_operation(Operation::AIRAssign(air_assign_op2), no_replay_token);
 
     let effect = TxnEffect::compute_effect(tx2).unwrap();
     assert!(ledger.status.check_txn_effects(effect).is_err()); // This fails due to replay protection
 
-    let tx = Transaction::from_operation(Operation::AIRAssign(adversarial_op),
-                                         no_replay_token);
+    let tx = Transaction::from_operation(Operation::AIRAssign(adversarial_op), no_replay_token);
     let effect = TxnEffect::compute_effect(tx);
     assert!(effect.is_err());
     let authenticated_air_res =
@@ -3359,7 +3357,7 @@ mod tests {
     let tx_clone = tx.clone();
     let effect = TxnEffect::compute_effect(tx).unwrap();
     ledger.apply_transaction(&mut block, effect.clone())
-      .unwrap();
+          .unwrap();
     assert!(ledger.apply_transaction(&mut block, effect).is_err());
     ledger.finish_block(block).unwrap();
 
