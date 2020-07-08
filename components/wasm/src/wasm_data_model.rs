@@ -146,6 +146,7 @@ impl AssetTracerKeyPair {
 }
 
 #[wasm_bindgen]
+#[derive(Deserialize)]
 /// Asset owner memo. Contains information needed to decrypt an asset record.
 /// @see {@link ClientAssetRecord} for more details about asset records.
 pub struct OwnerMemo {
@@ -155,6 +156,11 @@ pub struct OwnerMemo {
 impl OwnerMemo {
   pub fn get_memo_ref(&self) -> &ZeiOwnerMemo {
     &self.memo
+  }
+
+  /// Generate an owner memo from a JSON-serialized JavaScript value.
+  pub fn from_jsvalue(val: &JsValue) -> Self {
+    val.into_serde().unwrap()
   }
 }
 
