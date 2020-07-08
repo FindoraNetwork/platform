@@ -201,11 +201,10 @@ mod tests {
     let new_memo = Memo("new_memo".to_string());
     let mut prng = ChaChaRng::from_entropy();
     let creator = XfrKeyPair::generate(&mut prng);
-    let adversary = XfrKeyPair::generate(&mut prng);
-    let mut memo_update = UpdateMemo::new(UpdateMemoBody { new_memo: new_memo.clone(),
-                                                           asset_type: code },
-                                          &creator);
-    let tx = Transaction::from_operation(Operation::UpdateMemo(memo_update.clone()), 0);
+    let memo_update = UpdateMemo::new(UpdateMemoBody { new_memo: new_memo.clone(),
+                                                       asset_type: code },
+                                      &creator);
+    let tx = Transaction::from_operation(Operation::UpdateMemo(memo_update), 0);
     let mut mock_rest_client = LedgerStandalone::new_mock(2);
     assert!(mock_rest_client.submit_transaction(&tx).is_err());
   }
