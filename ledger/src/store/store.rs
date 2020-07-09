@@ -990,10 +990,10 @@ impl LedgerUpdate<ChaChaRng> for LedgerState {
                                              tx_id: txn_sid,
                                              merkle_id });
 
-        let outputs = txn.get_unspent_outputs_ref();
+        let outputs = txn.get_outputs_ref(false);
         debug_assert!(txo_sids.len() == outputs.len());
 
-        for (sid, position) in txo_sids.iter().zip(0..txo_sids.len()) {
+        for (position, sid) in txo_sids.iter().enumerate() {
           self.status
               .txo_to_txn_location
               .insert(*sid, (txn_sid, OutputPosition(position)));
@@ -1803,18 +1803,18 @@ impl LedgerAccess for LedgerState {
   fn get_utxo(&mut self, addr: TxoSID) -> Option<AuthenticatedUtxo> {
     let utxo = self.status.get_utxo(addr);
     if let Some(utxo) = utxo.cloned() {
-      let txn_location = self.status.txo_to_txn_location.get(&addr).unwrap().clone();
+      let txn_location = *self.status.txo_to_txn_location.get(&addr).unwrap();
       let authenticated_txn = self.get_transaction(txn_location.0).unwrap();
       let authenticated_spent_status = self.get_utxo_status(addr);
       let state_commitment_data = self.status.state_commitment_data.as_ref().unwrap().clone();
       let utxo_location = txn_location.1;
-      return Some(AuthenticatedUtxo { utxo,
-                                      authenticated_txn,
-                                      authenticated_spent_status,
-                                      state_commitment_data,
-                                      utxo_location });
+      Some(AuthenticatedUtxo { utxo,
+                               authenticated_txn,
+                               authenticated_spent_status,
+                               state_commitment_data,
+                               utxo_location })
     } else {
-      return None;
+      None
     }
   }
 

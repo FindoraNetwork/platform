@@ -909,8 +909,7 @@ impl AuthenticatedUtxo {
 
     //3)
     if self.authenticated_spent_status.status != UtxoStatus::Unspent
-       || !self.authenticated_spent_status
-               .is_valid(state_commitment.clone())
+       || !self.authenticated_spent_status.is_valid(state_commitment)
     {
       return false;
     }
@@ -919,7 +918,7 @@ impl AuthenticatedUtxo {
     let outputs = self.authenticated_txn
                       .finalized_txn
                       .txn
-                      .get_unspent_outputs_ref();
+                      .get_outputs_ref(false);
     let output = outputs.get(self.utxo_location.0);
 
     if output.is_none() {
@@ -1173,54 +1172,34 @@ impl Transaction {
     memos
   }
 
-  /// Returns the true outputs of a transaction (i.e. outputs that aren't spent internally by the
-  /// transaction. At some point, it may be nice to consolidate this with get_outputs_ref somehow.
+  /// Returns the outputs of a transaction. Internally spent outputs can be optionally included.
   /// This will never panic on a well formed transaction, but may panic on a malformed one.
-  pub fn get_unspent_outputs_ref(&self) -> Vec<&TxOutput> {
-    let mut unspent_outputs = vec![];
+  pub fn get_outputs_ref(&self, include_spent: bool) -> Vec<&TxOutput> {
+    let mut outputs = vec![];
     let mut spent_indices = vec![];
-    dbg!(&self);
     for op in self.body.operations.iter() {
       match op {
         Operation::TransferAsset(xfr_asset) => {
           for txo_ref in &xfr_asset.body.inputs {
             match txo_ref {
               TxoRef::Relative(offset) => {
-                // Input is internally spent, remove it from the vector
-                dbg!(unspent_outputs.len());
-                dbg!(&offset);
-                dbg!(&unspent_outputs);
-                let idx = (unspent_outputs.len() as u64) - *offset - 1;
+                let idx = (outputs.len() as u64) - *offset - 1;
                 spent_indices.push(idx);
               }
               TxoRef::Absolute(_) => {}
             };
           }
-          unspent_outputs.append(&mut xfr_asset.get_outputs_ref());
-        }
-        Operation::IssueAsset(issue_asset) => {
-          unspent_outputs.append(&mut issue_asset.get_outputs_ref());
-        }
-        _ => {}
-      }
-    }
-    for idx in spent_indices {
-      unspent_outputs.remove(idx.try_into().unwrap());
-    }
-    unspent_outputs
-  }
-
-  pub fn get_outputs_ref(&self) -> Vec<&TxOutput> {
-    let mut outputs = vec![];
-    for op in self.body.operations.iter() {
-      match op {
-        Operation::TransferAsset(xfr_asset) => {
           outputs.append(&mut xfr_asset.get_outputs_ref());
         }
         Operation::IssueAsset(issue_asset) => {
           outputs.append(&mut issue_asset.get_outputs_ref());
         }
         _ => {}
+      }
+    }
+    if !include_spent {
+      for idx in spent_indices {
+        outputs.remove(idx.try_into().unwrap());
       }
     }
     outputs

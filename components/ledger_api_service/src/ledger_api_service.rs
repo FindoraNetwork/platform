@@ -440,7 +440,7 @@ impl RestfulApiService {
 }
 
 pub trait RestfulLedgerAccess {
-  fn get_utxo(&self, addr: TxoSID) -> Result<Utxo, PlatformError>;
+  fn get_utxo(&self, addr: TxoSID) -> Result<AuthenticatedUtxo, PlatformError>;
 
   fn get_issuance_num(&self, code: &AssetTypeCode) -> Result<u64, PlatformError>;
 
@@ -495,7 +495,7 @@ impl MockLedgerClient {
 }
 
 impl RestfulLedgerAccess for MockLedgerClient {
-  fn get_utxo(&self, addr: TxoSID) -> Result<Utxo, PlatformError> {
+  fn get_utxo(&self, addr: TxoSID) -> Result<AuthenticatedUtxo, PlatformError> {
     let mut app =
       test::init_service(App::new().data(Arc::clone(&self.mock_ledger))
                                    .route(&LedgerAccessRoutes::UtxoSid.with_arg_template("sid"),
@@ -594,14 +594,14 @@ impl RestfulArchiveAccess for ActixLedgerClient {
 }
 
 impl RestfulLedgerAccess for ActixLedgerClient {
-  fn get_utxo(&self, addr: TxoSID) -> Result<Utxo, PlatformError> {
+  fn get_utxo(&self, addr: TxoSID) -> Result<AuthenticatedUtxo, PlatformError> {
     let query = format!("{}://{}:{}{}",
                         self.protocol,
                         self.host,
                         self.port,
                         LedgerAccessRoutes::UtxoSid.with_arg(&addr.0));
     let text = actix_get_request(&self.client, &query).map_err(|e| inp_fail!(e))?;
-    Ok(serde_json::from_str::<Utxo>(&text).map_err(|_| ser_fail!())?)
+    Ok(serde_json::from_str::<AuthenticatedUtxo>(&text).map_err(|_| ser_fail!())?)
   }
 
   fn get_issuance_num(&self, code: &AssetTypeCode) -> Result<u64, PlatformError> {

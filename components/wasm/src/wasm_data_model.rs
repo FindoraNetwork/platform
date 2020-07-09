@@ -7,8 +7,8 @@ use credentials::{
 use cryptohash::sha256::{Digest, DIGESTBYTES};
 use ledger::data_model::{
   AssetRules as PlatformAssetRules, AssetType as PlatformAssetType,
-  AuthenticatedAIRResult as PlatformAuthenticatedAIRResult, KVBlind as PlatformKVBlind,
-  KVHash as PlatformKVHash, SignatureRules as PlatformSignatureRules,
+  AuthenticatedAIRResult as PlatformAuthenticatedAIRResult, AuthenticatedUtxo,
+  KVBlind as PlatformKVBlind, KVHash as PlatformKVHash, SignatureRules as PlatformSignatureRules,
   TransferType as PlatformTransferType, TxOutput, TxoRef as PlatformTxoRef, TxoSID,
 };
 use rand_chacha::ChaChaRng;
@@ -105,10 +105,11 @@ impl ClientAssetRecord {
 #[wasm_bindgen]
 impl ClientAssetRecord {
   /// Builds a client record from an asset record fetched from the ledger server.
-  /// @param {record} - JSON asset record fetched from ledger server with the `utxo_sid/{sid}` route,
+  /// @param {record} - JSON-encoded autehtnicated asset record fetched from ledger server with the `utxo_sid/{sid}` route,
   /// where `sid` can be fetched from the query server with the `get_owned_utxos/{address}` route.
   pub fn from_json_record(record: &JsValue) -> Self {
-    ClientAssetRecord { output: TxOutput(record.into_serde().unwrap()) }
+    let auth_utxo: AuthenticatedUtxo = record.into_serde().unwrap();
+    ClientAssetRecord { output: TxOutput((auth_utxo.utxo.0).0) }
   }
 }
 
