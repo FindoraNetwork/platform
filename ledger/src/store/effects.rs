@@ -544,7 +544,7 @@ pub struct BlockEffect {
   pub kv_updates: HashMap<Key, Vec<(KVEntrySignature, u64, Option<KVEntry>)>>,
   // Memo updates
   pub memo_updates: HashMap<AssetTypeCode, Memo>,
-  // counter for consensus integration
+  // counter for consensus integration; will add to a running count when applied.
   pub pulse_count: u64,
 }
 

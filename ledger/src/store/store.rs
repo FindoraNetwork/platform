@@ -251,6 +251,12 @@ pub struct LedgerStatus {
   // such checkpoint.
   state_commitment_data: Option<StateCommitmentData>,
   block_commit_count: u64,
+
+  // cumulative consensus specific counter, up to the current block.
+  // Updated when applying next block. Always 0 if consensus does not need it,
+  // for tendermint with no empty blocks flag, it will go up by exactly 1
+  // each time there is a lull in transactions. For tendermint without the flag,
+  // it will go up by 1 once a second (by default) unless there is a transaction.
   pulse_count: u64,
 
   // Hash of the transactions in the most recent block
