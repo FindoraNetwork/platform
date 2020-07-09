@@ -206,14 +206,14 @@ mod tests {
                      AssetTypeCode::gen_random(),
                      AssetTypeCode::gen_random()];
     let issuer_key_pair = &XfrKeyPair::generate(&mut ChaChaRng::from_entropy());
-    let receipient_key_pair = XfrKeyPair::generate(&mut ChaChaRng::from_entropy());
+    let recipient_key_pair = XfrKeyPair::generate(&mut ChaChaRng::from_entropy());
 
     // Define, issue and transfer assets
     let mut utxos = Vec::new();
     let mut blinds = Vec::new();
     for code in codes.iter() {
       let (utxo, _, code_blind) = define_issue_transfer_and_get_utxo_and_blinds(&issuer_key_pair,
-                                                    &receipient_key_pair,
+                                                    &recipient_key_pair,
                                                     10,
                                                     *code,
                                                     AssetRules::default(),

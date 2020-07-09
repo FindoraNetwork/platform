@@ -6,8 +6,9 @@ use credentials::{
 };
 use cryptohash::sha256::{Digest, DIGESTBYTES};
 use ledger::data_model::{
-  AssetRules as PlatformAssetRules, AuthenticatedAIRResult as PlatformAuthenticatedAIRResult,
-  KVBlind as PlatformKVBlind, KVHash as PlatformKVHash, SignatureRules as PlatformSignatureRules,
+  AssetRules as PlatformAssetRules, AssetType as PlatformAssetType,
+  AuthenticatedAIRResult as PlatformAuthenticatedAIRResult, KVBlind as PlatformKVBlind,
+  KVHash as PlatformKVHash, SignatureRules as PlatformSignatureRules,
   TransferType as PlatformTransferType, TxOutput, TxoRef as PlatformTxoRef, TxoSID,
 };
 use rand_chacha::ChaChaRng;
@@ -19,7 +20,8 @@ use zei::xfr::asset_tracer::gen_asset_tracer_keypair;
 use zei::xfr::sig::XfrPublicKey;
 use zei::xfr::structs::{
   AssetTracerDecKeys, AssetTracerEncKeys, AssetTracerKeyPair as ZeiAssetTracerKeyPair,
-  BlindAssetRecord, OwnerMemo as ZeiOwnerMemo,
+  AssetTracingPolicies, AssetTracingPolicy, BlindAssetRecord, IdentityRevealPolicy,
+  OwnerMemo as ZeiOwnerMemo,
 };
 
 #[wasm_bindgen]
@@ -275,6 +277,31 @@ impl AuthenticatedAIRResult {
 }
 
 #[wasm_bindgen]
+/// Object representing an asset definition. Used to fetch tracing policies and any other
+/// information that may be required to construct a valid transfer or issuance.
+pub struct AssetType {
+  pub(crate) asset_type: PlatformAssetType,
+}
+
+#[wasm_bindgen]
+impl AssetType {
+  /// Construct an AssetType from the JSON-encoded value returned by the ledger.
+  pub fn from_json(json: &JsValue) -> Result<AssetType, JsValue> {
+    let asset_type: PlatformAssetType = json.into_serde().map_err(error_to_jsvalue)?;
+    Ok(AssetType { asset_type })
+  }
+
+  /// Fetch the tracing policies from the asset definition.
+  pub fn get_tracing_policies(&self) -> TracingPolicies {
+    TracingPolicies { policies: self.asset_type
+                                    .properties
+                                    .asset_rules
+                                    .tracing_policies
+                                    .clone() }
+  }
+}
+
+#[wasm_bindgen]
 impl AuthenticatedAIRResult {
   /// Construct an AIRResult from the JSON-encoded value returned by the ledger.
   pub fn from_json(json: &JsValue) -> Result<AuthenticatedAIRResult, JsValue> {
@@ -400,9 +427,60 @@ impl SignatureRules {
 }
 
 #[wasm_bindgen]
+/// A collection of tracing policies. Use this object when constructing asset transfers to generate
+/// the correct tracing proofs for traceable assets.
+pub struct TracingPolicies {
+  pub(crate) policies: AssetTracingPolicies,
+}
+
+impl TracingPolicies {
+  pub fn get_policies_ref(&self) -> &AssetTracingPolicies {
+    &self.policies
+  }
+}
+
+#[wasm_bindgen]
+/// Tracing policy for asset transfers. Can be configured to track credentials, the asset type and
+/// amount, or both.
+pub struct TracingPolicy {
+  pub(crate) policy: AssetTracingPolicy,
+}
+
+#[wasm_bindgen]
+impl TracingPolicy {
+  pub fn new_with_tracking(tracing_key: &AssetTracerKeyPair) -> Self {
+    let policy = AssetTracingPolicy { enc_keys: tracing_key.get_enc_key().clone(),
+                                      asset_tracking: true,
+                                      identity_tracking: None };
+    TracingPolicy { policy }
+  }
+
+  pub fn new_with_identity_tracking(tracing_key: &AssetTracerKeyPair,
+                                    cred_issuer_key: &CredIssuerPublicKey,
+                                    reveal_map: JsValue,
+                                    tracking: bool)
+                                    -> Result<TracingPolicy, JsValue> {
+    let reveal_map: Vec<bool> = reveal_map.into_serde().map_err(error_to_jsvalue)?;
+    let identity_policy = IdentityRevealPolicy { cred_issuer_pub_key: cred_issuer_key.get_ref()
+                                                                                     .clone(),
+                                                 reveal_map };
+    let policy = AssetTracingPolicy { enc_keys: tracing_key.get_enc_key().clone(),
+                                      asset_tracking: tracking,
+                                      identity_tracking: Some(identity_policy) };
+    Ok(TracingPolicy { policy })
+  }
+}
+
+impl TracingPolicy {
+  pub fn get_ref(&self) -> &AssetTracingPolicy {
+    &self.policy
+  }
+}
+
+#[wasm_bindgen]
 #[derive(Default)]
 /// Simple asset rules:
-/// 1) Traceable: Records of traceable assets can be decrypted by a provided tracking key
+/// 1) Traceable: Records and identities of traceable assets can be decrypted by a provided tracking key
 /// 2) Transferable: Non-transferable assets can only be transferred once from the issuer to
 ///    another user.
 /// 3) Updatable: Whether the asset memo can be updated.
@@ -419,10 +497,10 @@ impl AssetRules {
     AssetRules::default()
   }
 
-  /// Toggles asset traceability.
-  /// @param {bool} traceable - Boolean indicating whether asset can be traced by an issuer tracing key.
-  pub fn set_traceable(mut self, traceable: bool) -> AssetRules {
-    self.rules.traceable = traceable;
+  /// Adds an asset tracing policy.
+  /// @param {TracingPolicy} policy - Tracing policy for the new asset.
+  pub fn add_tracing_policy(mut self, policy: &TracingPolicy) -> AssetRules {
+    self.rules.tracing_policies.add(policy.get_ref().clone());
     self
   }
 
