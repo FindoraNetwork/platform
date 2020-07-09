@@ -40,13 +40,14 @@ fn ping() -> actix_web::Result<String> {
 
 pub fn query_utxo<LA>(data: web::Data<Arc<RwLock<LA>>>,
                       info: web::Path<String>)
-                      -> actix_web::Result<web::Json<Utxo>>
+                      -> actix_web::Result<web::Json<AuthenticatedUtxo>>
   where LA: LedgerAccess
 {
-  let reader = data.read().unwrap();
+  // TODO noah figure out how to make bitmap serialization not require a mutable ref
+  let mut writer = data.write().unwrap();
   if let Ok(txo_sid) = info.parse::<u64>() {
-    if let Some(txo) = reader.get_utxo(TxoSID(txo_sid)) {
-      Ok(web::Json(txo.clone()))
+    if let Some(txo) = writer.get_utxo(TxoSID(txo_sid)) {
+      Ok(web::Json(txo))
     } else {
       Err(actix_web::error::ErrorNotFound("Specified txo does not currently exist."))
     }

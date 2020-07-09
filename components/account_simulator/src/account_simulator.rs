@@ -528,7 +528,7 @@ impl InterpretAccounts<PlatformError> for LedgerAccounts {
 
         while total_sum < amt && !avail.is_empty() {
           let sid = avail.pop_front().unwrap();
-          let blind_rec = &(self.ledger.get_utxo(sid).unwrap().0).0;
+          let blind_rec = &(self.ledger.get_utxo(sid).unwrap().utxo.0).0;
           let memo = self.owner_memos.get(&sid).cloned();
           let open_rec = open_blind_asset_record(&blind_rec, &memo, &src_priv).unwrap();
           // dbg!(sid, open_rec.get_amount(), open_rec.get_asset_type());

@@ -362,6 +362,9 @@ pub struct SmartContract;
 pub struct TxoSID(pub u64);
 
 #[derive(Clone, Copy, Debug, Default, Deserialize, Eq, Hash, PartialEq, Serialize)]
+pub struct OutputPosition(pub usize);
+
+#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, Hash, PartialEq, Serialize)]
 pub struct TxnSID(pub usize);
 
 #[derive(Clone, Copy, Debug, Default, Deserialize, Eq, Hash, PartialEq, Serialize)]
@@ -375,7 +378,7 @@ pub struct TxnTempSID(pub usize);
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct TxOutput(pub BlindAssetRecord);
 
-#[derive(Eq, PartialEq, Debug)]
+#[derive(Eq, Clone, PartialEq, Debug, Serialize, Deserialize)]
 pub enum UtxoStatus {
   Spent,
   Unspent,
@@ -565,6 +568,12 @@ impl Default for TransferType {
   }
 }
 
+/// Enum indicating whether an output appearning in transaction is internally spent
+pub enum OutputSpentStatus {
+  Spent,
+  Unspent,
+}
+
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct TransferAsset {
   pub body: TransferAssetBody,
@@ -595,6 +604,11 @@ impl TransferAsset {
         .map(|mem| mem.as_ref())
         .collect()
   }
+
+  //pub fn get_outputs_spent_status(&self) -> Vec<OutputSpentStatus> {
+  //  let outputs = self.get_outputs_ref();
+  //  let spent_statuses = vec![OutputSpentStatus::Unspent; outputs.len()];
+  //}
 
   pub fn get_outputs_ref(&self) -> Vec<&TxOutput> {
     self.body.outputs.iter().collect()
@@ -862,7 +876,59 @@ impl AuthenticatedAIRResult {
   }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
+pub struct AuthenticatedUtxo {
+  pub utxo: Utxo,                                          // Utxo to authenticate
+  pub authenticated_txn: AuthenticatedTransaction, // Merkle proof that transaction containing the utxo exists on the ledger
+  pub authenticated_spent_status: AuthenticatedUtxoStatus, // Bitmap proof that the utxo is unspent
+  pub utxo_location: OutputPosition,
+  pub state_commitment_data: StateCommitmentData,
+}
+
+impl AuthenticatedUtxo {
+  // An authenticated utxo result is valid iff
+  // 1) The state commitment data used during verification hashes to the provided state commitment
+  // 2) The authenticated transaction proof is valid
+  // 3) The spent status proof is valid and denotes the utxo as unspent
+  // 4) The utxo appears in one of the outputs of the transaction (i.e. the output at (op_index,
+  //    output_index) is the candidate utxo)
+  pub fn is_valid(&self, state_commitment: HashOf<Option<StateCommitmentData>>) -> bool {
+    //1)
+    if state_commitment != self.state_commitment_data.compute_commitment() {
+      return false;
+    }
+
+    //2)
+
+    if !self.authenticated_txn.is_valid(state_commitment.clone()) {
+      return false;
+    }
+
+    //3)
+    if self.authenticated_spent_status.status != UtxoStatus::Unspent
+       || !self.authenticated_spent_status
+               .is_valid(state_commitment.clone())
+    {
+      return false;
+    }
+
+    //4)
+    let outputs = self.authenticated_txn.finalized_txn.txn.get_outputs_ref();
+    let output = outputs.get(self.utxo_location.0);
+
+    if output.is_none() {
+      return false;
+    }
+
+    if **output.unwrap() != self.utxo.0 {
+      return false;
+    }
+
+    true
+  }
+}
+
+#[derive(Serialize, Deserialize, Clone)]
 pub struct AuthenticatedTransaction {
   pub finalized_txn: FinalizedTransaction,
   pub txn_inclusion_proof: ProofOf<(TxnSID, Transaction)>,
@@ -987,11 +1053,14 @@ impl AuthenticatedKVLookup {
   }
 }
 
+pub type SparseMapBytes = Vec<u8>;
+
+#[derive(Serialize, Clone, Deserialize)]
 pub struct AuthenticatedUtxoStatus {
   pub status: UtxoStatus,
   pub utxo_sid: TxoSID,
   pub state_commitment_data: StateCommitmentData,
-  pub utxo_map: Option<SparseMap>, // BitMap only needed for proof if the txo_sid exists
+  pub utxo_map_bytes: Option<SparseMapBytes>, // BitMap only needed for proof if the txo_sid exists
   pub state_commitment: HashOf<Option<StateCommitmentData>>,
 }
 
@@ -999,9 +1068,9 @@ impl AuthenticatedUtxoStatus {
   // An authenticated utxo status is valid (for txos that exist) if
   // 1) The state commitment of the proof matches the state commitment passed in
   // 2) The state commitment data hashes to the state commitment
-  // 3) The status matches the bit stored in the bitmap
-  // 4) The bitmap checksum matches digest in state commitment data
-  // 5) For txos that don't exist, simply show that the utxo_sid greater than max_sid
+  // 3) For txos that don't exist, simply show that the utxo_sid greater than max_sid
+  // 4) The status matches the bit stored in the bitmap
+  // 5) The bitmap checksum matches digest in state commitment data
   pub fn is_valid(&self, state_commitment: HashOf<Option<StateCommitmentData>>) -> bool {
     let state_commitment_data = &self.state_commitment_data;
     let utxo_sid = self.utxo_sid.0;
@@ -1011,23 +1080,25 @@ impl AuthenticatedUtxoStatus {
     {
       return false;
     }
+
+    if self.status == UtxoStatus::Nonexistent {
+      // 3)
+      return utxo_sid >= state_commitment_data.txo_count;
+    }
+
     // If the txo exists, the proof must also contain a bitmap
-    let utxo_map = self.utxo_map.as_ref().unwrap();
-    // 3) The status matches the bit stored in the bitmap
+    let utxo_map = SparseMap::new(&self.utxo_map_bytes.as_ref().unwrap()).unwrap();
+    // 4) The status matches the bit stored in the bitmap
     let spent = !utxo_map.query(utxo_sid).unwrap();
+
     if (self.status == UtxoStatus::Spent && !spent) || (self.status == UtxoStatus::Unspent && spent)
     {
       return false;
     }
-    // 4)
+    // 5)
     if utxo_map.checksum() != self.state_commitment_data.bitmap {
       println!("failed at bitmap checksum");
       return false;
-    }
-
-    if self.status == UtxoStatus::Nonexistent {
-      // 5)
-      return utxo_sid >= state_commitment_data.txo_count;
     }
 
     true
@@ -1101,7 +1172,9 @@ impl Transaction {
     for op in self.body.operations.iter() {
       match op {
         Operation::TransferAsset(xfr_asset) => {
+          dbg!(&outputs);
           outputs.append(&mut xfr_asset.get_outputs_ref());
+          dbg!(&outputs);
         }
         Operation::IssueAsset(issue_asset) => {
           outputs.append(&mut issue_asset.get_outputs_ref());

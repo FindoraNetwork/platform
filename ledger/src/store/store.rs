@@ -39,7 +39,7 @@ pub struct SnapshotId {
 
 pub trait LedgerAccess {
   // Look up a currently unspent TXO
-  fn get_utxo(&self, addr: TxoSID) -> Option<&Utxo>;
+  fn get_utxo(&mut self, addr: TxoSID) -> Option<AuthenticatedUtxo>;
 
   // The most recently-issued sequence number for the `code`-labelled asset
   // type
@@ -198,6 +198,9 @@ pub struct LedgerStatus {
 
   // All currently-unspent TXOs
   utxos: HashMap<TxoSID, Utxo>,
+
+  // Map a TXO to its output position in a transaction
+  txo_to_txn_location: HashMap<TxoSID, (TxnSID, OutputPosition)>,
 
   // Digests of the UTXO bitmap to (I think -joe) track recent states of
   // the UTXO map
@@ -423,6 +426,7 @@ impl LedgerStatus {
                                 utxo_map_path: utxo_map_path.to_owned(),
                                 utxos: HashMap::new(),
                                 custom_data: SmtMap256::new(),
+                                txo_to_txn_location: HashMap::new(),
                                 issuance_amounts: HashMap::new(),
                                 utxo_map_versions: VecDeque::new(),
                                 state_commitment_versions: Vec::new(),
@@ -968,9 +972,12 @@ impl LedgerUpdate<ChaChaRng> for LedgerState {
       // TODO(joe/keyao): reorder these so that we can drain things
 
       // Update the transaction Merkle tree and transaction log
+      // Store the location of each utxo so we can create authenticated utxo proofs
       for (tmp_sid, txn) in block.temp_sids.iter().zip(block.txns.iter()) {
         let txn = txn.clone();
-        let txn_sid = temp_sid_map.get(&tmp_sid).unwrap().0;
+        let txo_sid_map = temp_sid_map.get(&tmp_sid).unwrap();
+        let txn_sid = txo_sid_map.0;
+        let txo_sids = &txo_sid_map.1;
 
         // TODO(joe/jonathan): Since errors in the merkle tree are things like
         // corruption and I/O failure, we don't have a good recovery story. Is
@@ -979,9 +986,20 @@ impl LedgerUpdate<ChaChaRng> for LedgerState {
                             .append_hash(&txn.hash(txn_sid).0.hash.into())
                             .unwrap();
 
-        tx_block.push(FinalizedTransaction { txn,
+        tx_block.push(FinalizedTransaction { txn: txn.clone(),
                                              tx_id: txn_sid,
                                              merkle_id });
+
+        let outputs = txn.get_outputs_ref();
+        dbg!(&outputs);
+        dbg!(&txo_sids);
+        debug_assert!(txo_sids.len() == outputs.len());
+
+        for (sid, position) in txo_sids.iter().zip(0..txo_sids.len()) {
+          self.status
+              .txo_to_txn_location
+              .insert(*sid, (txn_sid, OutputPosition(position)));
+        }
       }
       // Checkpoint
       let block_merkle_id = self.checkpoint(&block);
@@ -1784,8 +1802,22 @@ impl LedgerStatus {
 }
 
 impl LedgerAccess for LedgerState {
-  fn get_utxo(&self, addr: TxoSID) -> Option<&Utxo> {
-    self.status.get_utxo(addr)
+  fn get_utxo(&mut self, addr: TxoSID) -> Option<AuthenticatedUtxo> {
+    let utxo = self.status.get_utxo(addr);
+    if let Some(utxo) = utxo.cloned() {
+      let txn_location = self.status.txo_to_txn_location.get(&addr).unwrap().clone();
+      let authenticated_txn = self.get_transaction(txn_location.0).unwrap();
+      let authenticated_spent_status = self.get_utxo_status(addr);
+      let state_commitment_data = self.status.state_commitment_data.as_ref().unwrap().clone();
+      let utxo_location = txn_location.1;
+      return Some(AuthenticatedUtxo { utxo,
+                                      authenticated_txn,
+                                      authenticated_spent_status,
+                                      state_commitment_data,
+                                      utxo_location });
+    } else {
+      return None;
+    }
   }
 
   fn get_issuance_num(&self, code: &AssetTypeCode) -> Option<u64> {
@@ -1820,25 +1852,26 @@ impl LedgerAccess for LedgerState {
 
   fn get_utxo_status(&mut self, addr: TxoSID) -> AuthenticatedUtxoStatus {
     let state_commitment_data = self.status.state_commitment_data.as_ref().unwrap();
-    let utxo_map: Option<SparseMap>;
+    let utxo_map_bytes: Option<SparseMapBytes>;
     let status;
     if addr.0 < state_commitment_data.txo_count {
-      utxo_map = Some(SparseMap::new(&self.utxo_map.serialize(0)).unwrap());
-      status = if utxo_map.as_ref().unwrap().query(addr.0).unwrap() {
+      utxo_map_bytes = Some(self.utxo_map.serialize(0));
+      let utxo_map = SparseMap::new(&utxo_map_bytes.as_ref().unwrap().clone()).unwrap();
+      status = if utxo_map.query(addr.0).unwrap() {
         UtxoStatus::Unspent
       } else {
         UtxoStatus::Spent
       };
     } else {
       status = UtxoStatus::Nonexistent;
-      utxo_map = None;
+      utxo_map_bytes = None;
     }
 
     AuthenticatedUtxoStatus { status,
                               state_commitment_data: state_commitment_data.clone(),
                               state_commitment: state_commitment_data.compute_commitment(),
                               utxo_sid: addr,
-                              utxo_map }
+                              utxo_map_bytes }
   }
 
   fn get_kv_entry(&self, addr: Key) -> AuthenticatedKVLookup {
@@ -2554,8 +2587,10 @@ mod tests {
     let second_txo_id = txos[1];
 
     // Construct transfer operation
-    let input_bar = ((ledger.get_utxo(txo_sid).unwrap().0).0).clone();
+    let input_bar_proof = ledger.get_utxo(txo_sid).unwrap();
+    let input_bar = (input_bar_proof.clone().utxo.0).0;
     let input_oar = open_blind_asset_record(&input_bar, &None, &key_pair.get_sk_ref()).unwrap();
+    assert!(input_bar_proof.is_valid(state_commitment.clone()));
 
     let output_template =
       AssetRecordTemplate::with_no_asset_tracking(100, code.val, art, key_pair_adversary.get_pk());
@@ -2588,7 +2623,8 @@ mod tests {
     // Ensure that previous txo is now spent
     let state_commitment = ledger.get_state_commitment().0;
     let utxo_status = ledger.get_utxo_status(TxoSID(0));
-    assert!(utxo_status.is_valid(state_commitment));
+    assert!(utxo_status.is_valid(state_commitment.clone()));
+    assert!(!input_bar_proof.is_valid(state_commitment));
     assert!(utxo_status.status == UtxoStatus::Spent);
 
     // Adversary will attempt to spend the same blind asset record at another index
@@ -2826,7 +2862,7 @@ mod tests {
     let (_, sids) = apply_transaction(&mut ledger, tx);
     let sid = sids[0];
 
-    let bar = ((ledger.get_utxo(sid).unwrap().0).0).clone();
+    let bar = ((ledger.get_utxo(sid).unwrap().utxo.0).0).clone();
 
     let transfer_template= AssetRecordTemplate::with_no_asset_tracking(100,
                                                                              code.val,
@@ -3123,7 +3159,7 @@ mod tests {
 
     // Construct transfer operation
     let mut block = ledger.start_block().unwrap();
-    let input_bar = ((ledger.get_utxo(txo_sid).unwrap().0).0).clone();
+    let input_bar = ((ledger.get_utxo(txo_sid).unwrap().utxo.0).0).clone();
     let input_oar = open_blind_asset_record(&input_bar, &None, &alice.get_sk_ref()).unwrap();
 
     let output_template =
@@ -3314,8 +3350,8 @@ mod tests {
     let fiat_transfer_record = AssetRecord::from_template_no_identity_tracking(
       ledger.get_prng(), &fiat_transfer_template).unwrap();
 
-    let fiat_bar = ((ledger.get_utxo(fiat_sid).unwrap().0).0).clone();
-    let debt_bar = ((ledger.get_utxo(debt_sid).unwrap().0).0).clone();
+    let fiat_bar = ((ledger.get_utxo(fiat_sid).unwrap().utxo.0).0).clone();
+    let debt_bar = ((ledger.get_utxo(debt_sid).unwrap().utxo.0).0).clone();
 
     let mut transfer = TransferAsset::new(TransferAssetBody::new(ledger.get_prng(),
                                           vec![TxoRef::Absolute(fiat_sid), TxoRef::Absolute(debt_sid)],
@@ -3336,8 +3372,8 @@ mod tests {
     // Attempt to pay off debt with correct interest payment
     let null_public_key = XfrPublicKey::zei_from_bytes(&[0; 32]);
     let mut block = ledger.start_block().unwrap();
-    let fiat_bar = ((ledger.get_utxo(fiat_sid).unwrap().0).0).clone();
-    let debt_bar = ((ledger.get_utxo(debt_sid).unwrap().0).0).clone();
+    let fiat_bar = ((ledger.get_utxo(fiat_sid).unwrap().utxo.0).0).clone();
+    let debt_bar = ((ledger.get_utxo(debt_sid).unwrap().utxo.0).0).clone();
 
     let payment_template = AssetRecordTemplate::with_no_asset_tracking(
       payment_amount,
