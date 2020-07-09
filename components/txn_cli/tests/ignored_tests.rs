@@ -598,11 +598,6 @@ fn test_view() {
 //
 // Compose transaction and submit
 //
-
-// This test passes individually, but we ignore it since it occasionally fails when run with other tests
-// which also use the standalone ledger
-// GitHub issue: #324
-// Redmind issue: #38
 #[test]
 fn test_define_asset_simple_policies() {
   let tmp_dir = tempdir().unwrap();
@@ -646,13 +641,7 @@ fn test_define_asset_simple_policies() {
   tmp_dir.close().unwrap();
 }
 
-// This test passes individually, but we ignore it since it occasionally fails with SubmissionServerError when run with other tests
-// which also use the standalone ledger
-// GitHub issue: #324
-// // Redmind issue: #38
-// #[test]
-#[cfg(test)]
-#[allow(unused)]
+#[test]
 fn test_define_issue_transfer_and_submit_with_args() {
   // Create users and files
   let tmp_dir = tempdir().unwrap();
@@ -712,12 +701,7 @@ fn test_define_issue_transfer_and_submit_with_args() {
   tmp_dir.close().unwrap();
 }
 
-// This test passes individually, but we ignore it since it occasionally fails when run with other tests
-// which also use the standalone ledger
-// GitHub issue: #324
-// Redmind issue: #38
-#[cfg(test)]
-#[allow(unused)]
+#[test]
 // This test fails a clean build on master
 fn test_issue_transfer_trace_and_submit_with_args() {
   let tmp_dir = tempdir().unwrap();
@@ -803,7 +787,6 @@ fn test_air_assign() {
 
 // Test funds loading, loan request, fulfilling and repayment
 #[test]
-// #[allow(unused)]
 fn test_request_fulfill_and_pay_loan_with_args() {
   let tmp_dir = tempdir().unwrap();
   let dir = tmp_dir.path().to_str().unwrap();
