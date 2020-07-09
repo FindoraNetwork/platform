@@ -18,6 +18,7 @@ use sparse_merkle_tree::{check_merkle_proof, Key, MerkleProof};
 use std::boxed::Box;
 use std::collections::{HashMap, HashSet};
 use std::convert::TryFrom;
+use std::convert::TryInto;
 use std::hash::{Hash, Hasher};
 use utils::{HashOf, ProofOf, Serialized, SignatureOf};
 use zei::xfr::lib::{gen_xfr_body, XfrNotePoliciesNoRef};
@@ -913,7 +914,10 @@ impl AuthenticatedUtxo {
     }
 
     //4)
-    let outputs = self.authenticated_txn.finalized_txn.txn.get_outputs_ref();
+    let outputs = self.authenticated_txn
+                      .finalized_txn
+                      .txn
+                      .get_unspent_outputs_ref();
     let output = outputs.get(self.utxo_location.0);
 
     if output.is_none() {
@@ -1167,14 +1171,49 @@ impl Transaction {
     memos
   }
 
+  /// Returns the true outputs of a transaction (i.e. outputs that aren't spent internally by the
+  /// transaction. At some point, it may be nice to consolidate this with get_outputs_ref somehow.
+  /// This will never panic on a well formed transaction, but may panic on a malformed one.
+  pub fn get_unspent_outputs_ref(&self) -> Vec<&TxOutput> {
+    let mut unspent_outputs = vec![];
+    let mut spent_indices = vec![];
+    dbg!(&self);
+    for op in self.body.operations.iter() {
+      match op {
+        Operation::TransferAsset(xfr_asset) => {
+          for txo_ref in &xfr_asset.body.inputs {
+            match txo_ref {
+              TxoRef::Relative(offset) => {
+                // Input is internally spent, remove it from the vector
+                dbg!(unspent_outputs.len());
+                dbg!(&offset);
+                dbg!(&unspent_outputs);
+                let idx = (unspent_outputs.len() as u64) - *offset - 1;
+                spent_indices.push(idx);
+              }
+              TxoRef::Absolute(_) => {}
+            };
+          }
+          unspent_outputs.append(&mut xfr_asset.get_outputs_ref());
+        }
+        Operation::IssueAsset(issue_asset) => {
+          unspent_outputs.append(&mut issue_asset.get_outputs_ref());
+        }
+        _ => {}
+      }
+    }
+    for idx in spent_indices {
+      unspent_outputs.remove(idx.try_into().unwrap());
+    }
+    unspent_outputs
+  }
+
   pub fn get_outputs_ref(&self) -> Vec<&TxOutput> {
     let mut outputs = vec![];
     for op in self.body.operations.iter() {
       match op {
         Operation::TransferAsset(xfr_asset) => {
-          dbg!(&outputs);
           outputs.append(&mut xfr_asset.get_outputs_ref());
-          dbg!(&outputs);
         }
         Operation::IssueAsset(issue_asset) => {
           outputs.append(&mut issue_asset.get_outputs_ref());

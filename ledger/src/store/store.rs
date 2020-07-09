@@ -990,9 +990,7 @@ impl LedgerUpdate<ChaChaRng> for LedgerState {
                                              tx_id: txn_sid,
                                              merkle_id });
 
-        let outputs = txn.get_outputs_ref();
-        dbg!(&outputs);
-        dbg!(&txo_sids);
+        let outputs = txn.get_unspent_outputs_ref();
         debug_assert!(txo_sids.len() == outputs.len());
 
         for (sid, position) in txo_sids.iter().zip(0..txo_sids.len()) {
