@@ -103,10 +103,10 @@ impl ClientAssetRecord {
 #[wasm_bindgen]
 impl ClientAssetRecord {
   /// Builds a client record from an asset record fetched from the ledger server.
-  /// @param {record} - JSON asset record fetched from ledger server with the `utxo_sid/{sid}` route,
+  /// @param {JsValue} val - JSON asset record fetched from ledger server with the `utxo_sid/{sid}` route,
   /// where `sid` can be fetched from the query server with the `get_owned_utxos/{address}` route.
-  pub fn from_json_record(record: &JsValue) -> Self {
-    ClientAssetRecord { output: TxOutput(record.into_serde().unwrap()) }
+  pub fn from_jsvalue(val: &JsValue) -> Self {
+    ClientAssetRecord { output: TxOutput(val.into_serde().unwrap()) }
   }
 }
 
@@ -153,14 +153,23 @@ pub struct OwnerMemo {
   pub(crate) memo: ZeiOwnerMemo,
 }
 
+#[wasm_bindgen]
+impl OwnerMemo {
+  /// Generate an owner memo from a JSON-serialized JavaScript value.
+  ///
+  /// Builds a client record from an asset record fetched from the ledger server.
+  /// @param {JsValue} val - JSON asset record fetched from ledger server with the `utxo_sid/{sid}` route,
+  /// where `sid` can be fetched from the query server with the `get_owned_utxos/{address}` route.
+  pub fn from_jsvalue(val: &JsValue) -> Self {
+    let zei_owner_memo: ZeiOwnerMemo = val.into_serde().unwrap();
+    OwnerMemo { memo: ZeiOwnerMemo { blind_share: zei_owner_memo.blind_share,
+                                     lock: zei_owner_memo.lock } }
+  }
+}
+
 impl OwnerMemo {
   pub fn get_memo_ref(&self) -> &ZeiOwnerMemo {
     &self.memo
-  }
-
-  /// Generate an owner memo from a JSON-serialized JavaScript value.
-  pub fn from_jsvalue(val: &JsValue) -> Self {
-    val.into_serde().unwrap()
   }
 }
 
