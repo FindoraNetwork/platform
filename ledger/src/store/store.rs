@@ -2359,7 +2359,8 @@ mod tests {
                                                                        .get_root_hash(),
                             air_commitment: *ledger_state.status.air.merkle_root(),
                             kv_store: *ledger_state.status.custom_data.merkle_root(),
-                            txo_count: 0 };
+                            txo_count: 0,
+                            pulse_count: 0 };
 
     dbg!(&data);
     let count_original = ledger_state.status.block_commit_count;
