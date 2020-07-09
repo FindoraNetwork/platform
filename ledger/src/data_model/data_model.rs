@@ -248,6 +248,8 @@ pub struct AssetRules {
   pub transferable: bool,
   pub updatable: bool,
   pub transfer_multisig_rules: Option<SignatureRules>,
+  #[serde(default)]
+  #[serde(skip_serializing_if = "is_default")]
   pub tracing_policies: AssetTracingPolicies,
   pub max_units: Option<u64>,
 }
