@@ -119,7 +119,9 @@ impl abci::Application for ABCISubmissionServer {
     if let Ok(mut la) = self.la.write() {
       if !la.all_commited() {
         assert!(la.block_pulse_count() > 0);
+        info!("begin_block: continuation, block pulse count is {}", la.block_pulse_count());
       } else {
+        info!("begin_block: new block");
         la.begin_block();
       }
     }
@@ -129,10 +131,14 @@ impl abci::Application for ABCISubmissionServer {
   fn end_block(&mut self, _req: &RequestEndBlock) -> ResponseEndBlock {
     // TODO: this should propagate errors instead of panicking
     if let Ok(mut la) = self.la.write() {
-      if !la.all_commited() && la.block_txn_count() > 0 {
+      if la.block_txn_count() == 0 {
+        info!("end_block: pulsing block");
         la.pulse_block();
-      } else if let Err(e) = la.end_block() {
-        info!("end_block failure: {:?}", e);
+      } else if !la.all_commited() {
+        info!("end_block: ending block");
+        if let Err(e) = la.end_block() {
+          info!("end_block failure: {:?}", e);
+        }
       }
     }
     ResponseEndBlock::new()
@@ -150,6 +156,7 @@ impl abci::Application for ABCISubmissionServer {
         error_commitment
       };
       la.end_commit();
+      info!("commit: hash is {:?}", commitment.0.as_ref());
       r.set_data(commitment.0.as_ref().to_vec());
     }
     r
