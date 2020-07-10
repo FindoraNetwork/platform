@@ -16,6 +16,7 @@ use rand_core::{RngCore, SeedableRng};
 use serde::{Deserialize, Serialize};
 use utils::HashOf;
 use wasm_bindgen::prelude::*;
+use zei::setup::PublicParams as ZeiPublicParams;
 use zei::xfr::asset_tracer::gen_asset_tracer_keypair;
 use zei::xfr::sig::XfrPublicKey;
 use zei::xfr::structs::{
@@ -23,6 +24,28 @@ use zei::xfr::structs::{
   AssetTracingPolicies, AssetTracingPolicy, BlindAssetRecord, IdentityRevealPolicy,
   OwnerMemo as ZeiOwnerMemo,
 };
+
+#[wasm_bindgen]
+/// Public parameters necessary for generating asset records. Generating this is expensive and
+/// should be done as infrequently as possible.
+/// @see {@link TransactionBuilder#add_basic_issue_asset}
+pub struct PublicParams {
+  pub(crate) params: ZeiPublicParams,
+}
+
+#[wasm_bindgen]
+impl PublicParams {
+  /// Generates a new set of parameters.
+  pub fn new() -> PublicParams {
+    PublicParams { params: ZeiPublicParams::new() }
+  }
+}
+
+impl PublicParams {
+  pub fn get_ref(&self) -> &ZeiPublicParams {
+    &self.params
+  }
+}
 
 #[wasm_bindgen]
 /// Indicates whether the TXO ref is an absolute or relative value.
