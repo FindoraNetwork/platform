@@ -239,12 +239,14 @@ impl TransactionBuilder {
   /// @param {BigInt} seq_num - Issuance sequence number. Every subsequent issuance of a given asset type must have a higher sequence number than before.
   /// @param {BigInt} amount - Amount to be issued.
   /// @param {bool} conf_amount - `true` means the asset amount is confidential, and `false` means it's nonconfidential.
+  /// @param {PublicParams} zei_params - Public parameters necessary to generate asset records.
   pub fn add_basic_issue_asset(mut self,
                                key_pair: &XfrKeyPair,
                                code: String,
                                seq_num: u64,
                                amount: u64,
-                               conf_amount: bool)
+                               conf_amount: bool,
+                               zei_params: &PublicParams)
                                -> Result<TransactionBuilder, JsValue> {
     let asset_token = AssetTypeCode::new_from_base64(&code)
              .map_err(|_e| JsValue::from_str("Could not deserialize asset token code"))?;
@@ -258,7 +260,8 @@ impl TransactionBuilder {
                                &asset_token,
                                seq_num,
                                amount,
-                               confidentiality_flags)
+                               confidentiality_flags,
+                               zei_params.get_ref())
         .map_err(error_to_jsvalue)?;
     Ok(self)
   }

@@ -37,6 +37,7 @@ fn test_create_asset() -> Result<(), PlatformError> {
   let code = AssetTypeCode { val: [1; 16] };
   let keys = XfrKeyPair::generate(&mut prng);
   let mut builder = TransactionBuilder::from_seq_id(ledger.get_block_commit_count());
+  let params = PublicParams::new();
 
   // Define
   let tx = builder.add_operation_create_asset(&keys,
@@ -54,12 +55,14 @@ fn test_create_asset() -> Result<(), PlatformError> {
                                   &code,
                                   0,
                                   1000,
-                                  AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType)?
+                                  AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
+                                  &params)?
            .add_basic_issue_asset(&keys,
                                   &code,
                                   1,
                                   500,
-                                  AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType)?
+                                  AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
+                                  &params)?
            .transaction();
   let (_, txos) = apply_transaction(&mut ledger, tx.clone());
 

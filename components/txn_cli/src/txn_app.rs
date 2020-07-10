@@ -18,6 +18,7 @@ use sparse_merkle_tree::{digest, Key};
 use std::env;
 use submission_api::RestfulLedgerUpdate;
 use txn_builder::{BuildsTransactions, TransactionBuilder};
+use zei::setup::PublicParams;
 use zei::xfr::asset_record::AssetRecordType;
 use zei::xfr::structs::AssetTracingPolicy;
 
@@ -281,13 +282,15 @@ pub(crate) fn process_asset_issuer_cmd(asset_issuer_matches: &clap::ArgMatches,
       };
       let confidential_amount = issue_asset_matches.is_present("confidential_amount");
       let mut txn_builder = TransactionBuilder::from_seq_id(seq_id);
+      let params = PublicParams::new();
       if let Err(e) =
         txn_builder.add_basic_issue_asset(&key_pair,
                                           &token_code,
                                           get_and_update_sequence_number(data_dir)?,
                                           amount,
                                           AssetRecordType::from_booleans(confidential_amount,
-                                                                         false))
+                                                                         false),
+                                          &params)
       {
         println!("Failed to add basic issue asset.");
         return Err(e);
