@@ -5,11 +5,13 @@ fn main() {
   init_logging();
   let app = get_cli_app();
   let inputs = app.get_matches();
-  let local = inputs.value_of("local").is_some();
+  let local = inputs.is_present("local");
   let config = {
     if local {
+      println!("LOCAL");
       HttpStandaloneConfig::local()
     } else {
+      println!("TESTNET");
       HttpStandaloneConfig::testnet()
     }
   };
