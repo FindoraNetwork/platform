@@ -33,6 +33,7 @@ pub struct PublicParams {
   pub(crate) params: ZeiPublicParams,
 }
 
+#[allow(clippy::new_without_default)]
 #[wasm_bindgen]
 impl PublicParams {
   /// Generates a new set of parameters.
