@@ -27,7 +27,7 @@ use zei::setup::PublicParams;
 use zei::xfr::asset_record::{
   build_blind_asset_record, build_open_asset_record, open_blind_asset_record, AssetRecordType,
 };
-use zei::xfr::lib::XfrNotePoliciesNoRef;
+use zei::xfr::lib::XfrNotePolicies;
 use zei::xfr::sig::{XfrKeyPair, XfrPublicKey};
 use zei::xfr::structs::{
   AssetRecord, AssetRecordTemplate, AssetTracingPolicies, AssetTracingPolicy, BlindAssetRecord,
@@ -849,10 +849,10 @@ impl TransferOperationBuilder {
     let mut prng = ChaChaRng::from_entropy();
     let num_inputs = self.input_records.len();
     let num_outputs = self.output_records.len();
-    let xfr_policies = XfrNotePoliciesNoRef::new(self.inputs_tracing_policies.clone(),
-                                                 vec![None; num_inputs],
-                                                 self.outputs_tracing_policies.clone(),
-                                                 vec![None; num_outputs]);
+    let xfr_policies = XfrNotePolicies::new(self.inputs_tracing_policies.clone(),
+                                            vec![None; num_inputs],
+                                            self.outputs_tracing_policies.clone(),
+                                            vec![None; num_outputs]);
     let body = TransferAssetBody::new(&mut prng,
                                       self.input_sids.clone(),
                                       &self.input_records,

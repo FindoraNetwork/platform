@@ -568,7 +568,7 @@ mod tests {
     // This isn't actually being used in the test, we just make a ledger client so we can compile
     let mock_ledger = MockLedgerClient::new(&Arc::clone(&rest_client_ledger_state));
     let mut query_server = QueryServer::new(mock_ledger);
-    let code = AssetTypeCode { val: [1; 16] };
+    let code = AssetTypeCode::from_identical_byte(1);
     let creator = XfrKeyPair::generate(&mut ledger_state.get_prng());
     let tx = create_definition_transaction(&code,
                                            &creator,
@@ -602,7 +602,7 @@ mod tests {
     // This isn't actually being used in the test, we just make a ledger client so we can compile
     let mock_ledger = MockLedgerClient::new(&Arc::clone(&rest_client_ledger_state));
     let mut query_server = QueryServer::new(mock_ledger);
-    let code = AssetTypeCode { val: [1; 16] };
+    let code = AssetTypeCode::from_identical_byte(1);
     let creator = XfrKeyPair::generate(&mut ledger_state.get_prng());
     let tx = create_definition_transaction(&code,
                                            &creator,
@@ -657,7 +657,7 @@ mod tests {
     let creator = XfrKeyPair::generate(&mut ledger_state.get_prng());
 
     // Create the first asset
-    let code1 = AssetTypeCode { val: [1; 16] };
+    let code1 = AssetTypeCode::from_identical_byte(1);
     let tx1 = create_definition_transaction(&code1,
                                             &creator,
                                             AssetRules::default(),
@@ -668,7 +668,7 @@ mod tests {
     query_server.add_new_block(&block1.block.txns).unwrap();
 
     // Create the second asset
-    let code2 = AssetTypeCode { val: [2; 16] };
+    let code2 = AssetTypeCode::from_identical_byte(2);
     let tx2 = create_definition_transaction(&code2,
                                             &creator,
                                             AssetRules::default(),

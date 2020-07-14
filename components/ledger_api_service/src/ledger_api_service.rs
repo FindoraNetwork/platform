@@ -687,7 +687,7 @@ mod tests {
     let mut state = LedgerState::test_ledger();
     let mut tx = Transaction::from_seq_id(state.get_block_commit_count());
 
-    let token_code1 = AssetTypeCode { val: [1; 16] };
+    let token_code1 = AssetTypeCode::from_identical_byte(1);
     let keypair = build_keys(&mut prng);
 
     let asset_body = asset_creation_body(&token_code1,
@@ -742,7 +742,7 @@ mod tests {
 
     let orig_key = state.public_key().clone();
 
-    let token_code1 = AssetTypeCode { val: [1; 16] };
+    let token_code1 = AssetTypeCode::from_identical_byte(1);
     let keypair = build_keys(&mut prng);
 
     let asset_body = asset_creation_body(&token_code1,
@@ -793,7 +793,7 @@ mod tests {
     let mut state = LedgerState::test_ledger();
     let mut tx = Transaction::from_seq_id(state.get_block_commit_count());
 
-    let token_code1 = AssetTypeCode { val: [1; 16] };
+    let token_code1 = AssetTypeCode::from_identical_byte(1);
     let keypair = build_keys(&mut prng);
 
     let asset_body = asset_creation_body(&token_code1,
