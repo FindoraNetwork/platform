@@ -1,4 +1,4 @@
-FROM nexus.findora.org/zei:v0.0.3-1 as zei
+FROM nexus.findora.org/zei:v0.0.3-2 as zei
 FROM nexus.findora.org/rust:2020-05-15 as builder
 RUN cargo install cargo-audit
 RUN cargo install wasm-pack
