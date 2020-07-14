@@ -139,16 +139,16 @@ impl ClientAssetRecord {
   /// * If the amount is nonconfidential, returns the amount.
   /// * Otherwise, returns null.
   /// @see {@open_client_asset_record} for information about decrypting the confidential record.
-  pub fn get_asset_amount(&self) -> Option<u64> {
-    self.get_bar_ref().amount.get_amount()
+  pub fn get_asset_amount(record: &ClientAssetRecord) -> Option<u64> {
+    record.get_bar_ref().amount.get_amount()
   }
 
   /// Returns the asset type associated with an asset record.
   /// * If the type is nonconfidential, returns a base64 string representing the type.
   /// * Otherwise, returns null.
   /// @see {@open_client_asset_record} for information about decrypting the confidential record.
-  pub fn get_asset_type(&self) -> Option<String> {
-    let code = self.get_bar_ref().asset_type.get_asset_type();
+  pub fn get_asset_type(record: &ClientAssetRecord) -> Option<String> {
+    let code = record.get_bar_ref().asset_type.get_asset_type();
     match code {
       Some(c) => Some((AssetTypeCode { val: c }).to_base64()),
       None => None,
