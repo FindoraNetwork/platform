@@ -260,20 +260,23 @@ pub(crate) fn process_asset_issuer_cmd(asset_issuer_matches: &clap::ArgMatches,
     }
     ("issue_asset", Some(issue_asset_matches)) => {
       let data = load_data(data_dir)?;
-      let (key_pair, _) = if let Some(id_arg) = asset_issuer_matches.value_of("id") {
+      println!("issue_asset: entering");
+      let key_pair = if let Some(id_arg) = asset_issuer_matches.value_of("id") {
         let issuer_id = parse_to_u64(id_arg)?;
-        (data.get_asset_issuer_key_pair(issuer_id)?,
-         data.get_asset_tracer_key_pair(issuer_id)?.enc_key)
+        println!("issue_asset: issuer_id={:?}", issuer_id);
+        data.get_asset_issuer_key_pair(issuer_id)?
       } else {
         println!("Asset issuer id is required to issue asset. Use asset_issuer --id.");
         return Err(PlatformError::InputsError(error_location!()));
       };
+      println!("issue_asset: key_pair={:?}", &key_pair);
       let token_code = if let Some(token_code_arg) = issue_asset_matches.value_of("token_code") {
         AssetTypeCode::new_from_base64(token_code_arg)?
       } else {
         println!("Token code is required to issue asset. Use --token_code.");
         return Err(PlatformError::InputsError(error_location!()));
       };
+      println!("issue_asset: token_code={:?}", &token_code);
       let amount = if let Some(amount_arg) = issue_asset_matches.value_of("amount") {
         parse_to_u64(amount_arg)?
       } else {
@@ -295,6 +298,8 @@ pub(crate) fn process_asset_issuer_cmd(asset_issuer_matches: &clap::ArgMatches,
         println!("Failed to add basic issue asset.");
         return Err(e);
       }
+
+      println!("txn_file={:?}, txn_builder={:?}", &txn_file, &txn_builder);
       store_txn_to_file(&txn_file, &txn_builder)
     }
     ("transfer_asset", Some(transfer_asset_matches)) => {
