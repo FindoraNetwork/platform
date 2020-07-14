@@ -51,8 +51,8 @@ pub fn random_asset_type() -> String {
 #[wasm_bindgen]
 /// Generates a base64 encoded asset type string from a JSON-serialized JavaScript value.
 pub fn asset_type_from_jsvalue(val: &JsValue) -> Result<String, JsValue> {
-  let asset_type_str: String = val.into_serde().map_err(error_to_jsvalue)?;
-  Ok(AssetTypeCode::new_from_str(&asset_type_str).to_base64())
+  let code: [u8; 16] = val.into_serde().map_err(error_to_jsvalue)?;
+  Ok(AssetTypeCode { val: code }.to_base64())
 }
 
 #[wasm_bindgen]
