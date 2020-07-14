@@ -20,7 +20,8 @@ use zei::setup::PublicParams;
 use zei::xfr::asset_record::{build_blind_asset_record, open_blind_asset_record, AssetRecordType};
 use zei::xfr::sig::XfrKeyPair;
 use zei::xfr::structs::{
-  AssetRecordTemplate, AssetTracingPolicy, OpenAssetRecord, OwnerMemo, XfrAmount, XfrAssetType,
+  AssetRecordTemplate, AssetTracingPolicies, AssetTracingPolicy, OpenAssetRecord, OwnerMemo,
+  XfrAmount, XfrAssetType,
 };
 
 extern crate exitcode;
@@ -149,34 +150,32 @@ pub fn issue_and_transfer_asset(data_dir: &str,
                                        tracing_policy.clone())?;
 
   // Transfer Operation
-  let output_template = if let Some(policy) = tracing_policy.clone() {
-    AssetRecordTemplate::with_asset_tracking(amount,
-                                             token_code.val,
-                                             record_type,
-                                             recipient_key_pair.get_pk(),
-                                             policy)
-  } else {
-    AssetRecordTemplate::with_no_asset_tracking(amount,
-                                                token_code.val,
-                                                record_type,
-                                                recipient_key_pair.get_pk())
-  };
-
-  let xfr_op = TransferOperationBuilder::new().add_input(TxoRef::Relative(0),
-                                                          open_blind_asset_record(&blind_asset_record,
-                                                                                  &owner_memo,
-                                                                                  issuer_key_pair.get_sk_ref()).map_err(|e| PlatformError::ZeiError(error_location!(),e))?,
-                                                          None,
-                                                          None,
-                                                          amount)?
-                                                 .add_output(&output_template,
-                                                             tracing_policy.clone(),
-                                                             identity_commitment,
-                                                             credential_record)?
-                                                 .balance()?
-                                                 .create(TransferType::Standard)?
-                                                 .sign(issuer_key_pair)?
-                                                 .transaction()?;
+  let mut policies = AssetTracingPolicies::new();
+  if let Some(x) = tracing_policy.as_ref() {
+    policies.add(x.clone());
+  }
+  let output_template = AssetRecordTemplate::with_asset_tracking(amount,
+                                                                 token_code.val,
+                                                                 record_type,
+                                                                 recipient_key_pair.get_pk(),
+                                                                 policies);
+  let xfr_op =
+    TransferOperationBuilder::new().add_input(TxoRef::Relative(0),
+                                              open_blind_asset_record(&blind_asset_record,
+                                                                &owner_memo,
+                                                                issuer_key_pair.get_sk_ref())
+                                              .map_err(|e| PlatformError::ZeiError(error_location!(),e))?,
+                                              None,
+                                              None,
+                                              amount)?
+                                   .add_output(&output_template,
+                                               tracing_policy.map(AssetTracingPolicies::from_policy),
+                                               identity_commitment,
+                                               credential_record)?
+                                   .balance()?
+                                   .create(TransferType::Standard)?
+                                   .sign(issuer_key_pair)?
+                                   .transaction()?;
 
   // Issue and Transfer transaction
   let mut txn_builder = TransactionBuilder::from_seq_id(seq_id);
@@ -185,8 +184,7 @@ pub fn issue_and_transfer_asset(data_dir: &str,
                                         get_and_update_sequence_number(data_dir)?,
                                         &[(TxOutput { record: blind_asset_record,
                                                       lien: None },
-                                           owner_memo)],
-                                        tracing_policy)?
+                                           owner_memo)])?
              .add_operation(xfr_op)
              .transaction();
 
@@ -215,7 +213,7 @@ pub fn issue_transfer_and_get_utxo_and_blinds<R: CryptoRng + RngCore, T>(
   let pc_gens = PublicParams::new().pc_gens;
   let input_template = AssetRecordTemplate::with_no_asset_tracking(amount, code.val, AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType, issuer_key_pair.get_pk());
   let input_blind_asset_record =
-    build_blind_asset_record(&mut prng, &pc_gens, &input_template, None).0;
+    build_blind_asset_record(&mut prng, &pc_gens, &input_template, vec![]).0;
   let output_template = AssetRecordTemplate::with_no_asset_tracking(amount,
                                                                     code.val,
                                                                     record_type,
@@ -244,8 +242,7 @@ pub fn issue_transfer_and_get_utxo_and_blinds<R: CryptoRng + RngCore, T>(
                                                   &[(TxOutput { record:
                                                                   input_blind_asset_record,
                                                                 lien: None },
-                                                     None)],
-                                                  None)?
+                                                     None)])?
                        .add_operation(xfr_op)
                        .transaction();
 

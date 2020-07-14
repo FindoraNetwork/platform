@@ -598,11 +598,6 @@ fn test_view() {
 //
 // Compose transaction and submit
 //
-
-// This test passes individually, but we ignore it since it occasionally fails when run with other tests
-// which also use the standalone ledger
-// GitHub issue: #324
-// Redmind issue: #38
 #[test]
 fn test_define_asset_simple_policies() {
   let tmp_dir = tempdir().unwrap();
@@ -646,13 +641,7 @@ fn test_define_asset_simple_policies() {
   tmp_dir.close().unwrap();
 }
 
-// This test passes individually, but we ignore it since it occasionally fails with SubmissionServerError when run with other tests
-// which also use the standalone ledger
-// GitHub issue: #324
-// // Redmind issue: #38
-// #[test]
-#[cfg(test)]
-#[allow(unused)]
+#[test]
 fn test_define_issue_transfer_and_submit_with_args() {
   // Create users and files
   let tmp_dir = tempdir().unwrap();
@@ -712,11 +701,8 @@ fn test_define_issue_transfer_and_submit_with_args() {
   tmp_dir.close().unwrap();
 }
 
-// This test passes individually, but we ignore it since it occasionally fails when run with other tests
-// which also use the standalone ledger
-// GitHub issue: #324
-// Redmind issue: #38
 #[test]
+// This test fails a clean build on master
 fn test_issue_transfer_trace_and_submit_with_args() {
   let tmp_dir = tempdir().unwrap();
   let dir = tmp_dir.path().to_str().unwrap();
@@ -799,13 +785,8 @@ fn test_air_assign() {
   tmp_dir.close().unwrap();
 }
 
-// Test is ignored because it is broken (seems like it is a credential issue)
-// Redmine #71
-// #[test]
-// #[ignore]
 // Test funds loading, loan request, fulfilling and repayment
-#[cfg(test)]
-#[allow(unused)]
+#[test]
 fn test_request_fulfill_and_pay_loan_with_args() {
   let tmp_dir = tempdir().unwrap();
   let dir = tmp_dir.path().to_str().unwrap();
@@ -827,7 +808,6 @@ fn test_request_fulfill_and_pay_loan_with_args() {
   // 1. First time:
   //    Add the credential proof, then successfully initiate the loan
   //    Trace the credential associated with the first loan
-
   fulfill_loan(dir, "0", "0", "0", Some(memo_file), &mut ledger_standalone).expect("Failed to initiate the loan");
   let output_trace_fail = trace_credential(dir,
                                            "0",
@@ -851,13 +831,24 @@ fn test_request_fulfill_and_pay_loan_with_args() {
 
   // Fulfill the second loan
   // 1. First time:
-  //    Get the credential proof, then fail to initiate the loan because the requirement isn't met
-  fulfill_loan(dir, "1", "1", "0", None, &mut ledger_standalone).expect("Failed to initiate the loan");
+  //    Should fail with InputsError because the requirement isn't met
+  match fulfill_loan(dir, "1", "1", "0", None, &mut ledger_standalone) {
+    Err(PlatformError::InputsError(msg)) => {
+      assert!(msg.contains("Credential value should be at least"))
+    }
+    unexpected_result => {
+      panic!(format!("Expected InputsError, found {:?}.", unexpected_result));
+    }
+  }
 
   // 2. Second time:
-  //    Fail because the loan has been declined
-  let output = fulfill_loan(dir, "1", "1", "0", None, &mut ledger_standalone);
-  assert!(output.is_err());
+  //    Should fail because the loan has been declined
+  match fulfill_loan(dir, "1", "1", "0", None, &mut ledger_standalone) {
+    Err(PlatformError::InputsError(msg)) => assert!(msg.contains("has been declined")),
+    unexpected_result => {
+      panic!(format!("Expected InputsError, found {:?}.", unexpected_result));
+    }
+  }
 
   // Pay loan
   // 1. First time:
@@ -869,9 +860,12 @@ fn test_request_fulfill_and_pay_loan_with_args() {
   pay_loan(dir, "0", "0", "2000", &mut ledger_standalone).expect("Failed to pay loan");
 
   // 3. Third time:
-  //    Fail because the loan has been paid off
-  let output = pay_loan(dir, "0", "0", "3000", &mut ledger_standalone);
-  assert!(output.is_err());
-
+  //    Should fail because the loan has been paid off
+  match pay_loan(dir, "0", "0", "3000", &mut ledger_standalone) {
+    Err(PlatformError::InputsError(msg)) => assert!(msg.contains("has been paid off")),
+    unexpected_result => {
+      panic!(format!("Expected InputsError, found {:?}.", unexpected_result));
+    }
+  }
   tmp_dir.close().unwrap();
 }

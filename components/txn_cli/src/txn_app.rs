@@ -18,6 +18,7 @@ use sparse_merkle_tree::{digest, Key};
 use std::env;
 use submission_api::RestfulLedgerUpdate;
 use txn_builder::{BuildsTransactions, TransactionBuilder};
+use zei::setup::PublicParams;
 use zei::xfr::asset_record::AssetRecordType;
 use zei::xfr::structs::AssetTracingPolicy;
 
@@ -148,10 +149,6 @@ pub(crate) fn process_asset_issuer_cmd(asset_issuer_matches: &clap::ArgMatches,
       // Define asset rules
       let mut asset_rules = AssetRules::default();
 
-      if define_asset_matches.is_present("traceable") {
-        asset_rules.set_traceable(true);
-      }
-
       if define_asset_matches.is_present("non_transferable") {
         asset_rules.set_transferable(false);
       }
@@ -263,7 +260,7 @@ pub(crate) fn process_asset_issuer_cmd(asset_issuer_matches: &clap::ArgMatches,
     }
     ("issue_asset", Some(issue_asset_matches)) => {
       let data = load_data(data_dir)?;
-      let (key_pair, tracer_enc_keys) = if let Some(id_arg) = asset_issuer_matches.value_of("id") {
+      let (key_pair, _) = if let Some(id_arg) = asset_issuer_matches.value_of("id") {
         let issuer_id = parse_to_u64(id_arg)?;
         (data.get_asset_issuer_key_pair(issuer_id)?,
          data.get_asset_tracer_key_pair(issuer_id)?.enc_key)
@@ -285,21 +282,15 @@ pub(crate) fn process_asset_issuer_cmd(asset_issuer_matches: &clap::ArgMatches,
       };
       let confidential_amount = issue_asset_matches.is_present("confidential_amount");
       let mut txn_builder = TransactionBuilder::from_seq_id(seq_id);
-      let policy = if issue_asset_matches.is_present("traceable") {
-        Some(AssetTracingPolicy { enc_keys: tracer_enc_keys,
-                                  asset_tracking: true,
-                                  identity_tracking: None })
-      } else {
-        None
-      };
+      let params = PublicParams::new();
       if let Err(e) =
         txn_builder.add_basic_issue_asset(&key_pair,
-                                          policy,
                                           &token_code,
                                           get_and_update_sequence_number(data_dir)?,
                                           amount,
                                           AssetRecordType::from_booleans(confidential_amount,
-                                                                         false))
+                                                                         false),
+                                          &params)
       {
         println!("Failed to add basic issue asset.");
         return Err(e);
@@ -517,7 +508,7 @@ pub(crate) fn process_asset_issuer_cmd(asset_issuer_matches: &clap::ArgMatches,
           println!("Owner memo is required to trace the asset. Use --memo_file.");
           return Err(PlatformError::InputsError(error_location!()));
         };
-      let tracer_memo = if let Some(memo) = tracer_and_owner_memos[0].clone().0 {
+      let tracer_memo = if let Some(memo) = tracer_and_owner_memos[0].0.get(0) {
         memo
       } else {
         println!("The asset isn't traceable.");
@@ -606,8 +597,18 @@ pub(crate) fn process_credential_issuer_cmd(credential_issuer_matches: &clap::Ar
         println!("Name is required to sign up a credential issuer account. Use --name.");
         return Err(PlatformError::InputsError(error_location!()));
       };
+      let mut attributes = Vec::new();
+      if sign_up_matches.is_present("min_credit_score") {
+        attributes.push(CredentialIndex::MinCreditScore);
+      }
+      if sign_up_matches.is_present("min_income") {
+        attributes.push(CredentialIndex::MinIncome);
+      }
+      if sign_up_matches.is_present("citizenship") {
+        attributes.push(CredentialIndex::Citizenship);
+      }
       let mut data = load_data(data_dir)?;
-      data.add_credential_issuer(data_dir, name)
+      data.add_credential_issuer(data_dir, name, attributes)
     }
     _ => {
       println!("Subcommand missing or not recognized. Try credential_issuer --help");
@@ -1422,10 +1423,6 @@ pub fn get_cli_app<'a, 'b>() -> App<'a, 'b> {
           .required(true)
           .takes_value(true)
           .help("Token code of the asset to be issued. The transaction will fail if no asset with the token code exists."))
-        .arg(Arg::with_name("traceable")
-          .short("t")
-          .long("traceable")
-          .help("If specified, the asset will be traceable."))
         .arg(Arg::with_name("amount")
           .short("amt")
           .long("amount")

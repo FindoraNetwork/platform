@@ -3,7 +3,8 @@ use actix_cors::Cors;
 use actix_web::{error, middleware, web, App, HttpServer};
 use ledger::data_model::errors::PlatformError;
 use ledger::data_model::{
-  b64dec, b64enc, IssuerPublicKey, KVBlind, KVHash, TxOutput, TxnSID, TxoSID, XfrAddress,
+  b64dec, b64enc, AssetTypeCode, IssuerPublicKey, KVBlind, KVHash, TxOutput, TxnSID, TxoSID,
+  XfrAddress,
 };
 use ledger::{error_location, inp_fail, ser_fail};
 use ledger_api_service::RestfulArchiveAccess;
@@ -17,6 +18,7 @@ use std::sync::{Arc, RwLock};
 use utils::{actix_get_request, actix_post_request, NetworkRoute};
 use zei::serialization::ZeiFromToBytes;
 use zei::xfr::sig::XfrPublicKey;
+use zei::xfr::structs::OwnerMemo;
 
 // Queries the status of a transaction by its handle. Returns either a not committed message or a
 // serialized TxnStatus.
@@ -58,6 +60,16 @@ fn get_custom_data<T>(
   Ok(web::Json(query_server.get_custom_data(&key).cloned()))
 }
 
+// Returns the owner memo required to decrypt the asset record stored at given index, if it exists.
+fn get_owner_memo<T>(data: web::Data<Arc<RwLock<QueryServer<T>>>>,
+                     info: web::Path<u64>)
+                     -> actix_web::Result<web::Json<Option<OwnerMemo>>, actix_web::error::Error>
+  where T: RestfulArchiveAccess
+{
+  let query_server = data.read().unwrap();
+  Ok(web::Json(query_server.get_owner_memo(TxoSID(*info)).cloned()))
+}
+
 // Submits custom data to be stored by the query server. The request will fail if the hash of the
 // data doesn't match the commitment stored by the ledger.
 fn store_custom_data<T>(data: web::Data<Arc<RwLock<QueryServer<T>>>>,
@@ -84,14 +96,16 @@ fn get_owned_utxos<T>(data: web::Data<Arc<RwLock<QueryServer<T>>>>,
                                   })?);
   let query_server = data.read().unwrap();
   let sids = query_server.get_owned_utxo_sids(&XfrAddress { key });
-  Ok(web::Json(sids.unwrap_or_default()))
+  Ok(web::Json(sids.cloned().unwrap_or_default()))
 }
 
 pub enum QueryServerRoutes {
   GetAddress,
+  GetOwnerMemo,
   GetOwnedUtxos,
   StoreCustomData,
   GetCustomData,
+  GetCreatedAssets,
   GetIssuedRecords,
   GetRelatedTxns,
 }
@@ -102,13 +116,32 @@ impl NetworkRoute for QueryServerRoutes {
       QueryServerRoutes::GetAddress => "get_address",
       QueryServerRoutes::GetRelatedTxns => "get_related_txns",
       QueryServerRoutes::GetOwnedUtxos => "get_owned_utxos",
+      QueryServerRoutes::GetOwnerMemo => "get_owner_memo",
       QueryServerRoutes::StoreCustomData => "store_custom_data",
       QueryServerRoutes::GetCustomData => "get_custom_data",
+      QueryServerRoutes::GetCreatedAssets => "get_created_assets",
       QueryServerRoutes::GetIssuedRecords => "get_issued_records",
     };
     "/".to_owned() + endpoint
   }
 }
+
+// Returns the list of assets created by a public key
+fn get_created_assets<T>(data: web::Data<Arc<RwLock<QueryServer<T>>>>,
+                         info: web::Path<String>)
+                         -> actix_web::Result<web::Json<Vec<AssetTypeCode>>>
+  where T: RestfulArchiveAccess + Sync + Send
+{
+  // Convert from base64 representation
+  let key: XfrPublicKey =
+    XfrPublicKey::zei_from_bytes(&b64dec(&*info).map_err(|_| {
+                                    error::ErrorBadRequest("Could not deserialize public key")
+                                  })?);
+  let query_server = data.read().unwrap();
+  let assets = query_server.get_created_assets(&IssuerPublicKey { key });
+  Ok(web::Json(assets.cloned().unwrap_or_default()))
+}
+
 // Returns the list of records issued by a public key
 fn get_issued_records<T>(data: web::Data<Arc<RwLock<QueryServer<T>>>>,
                          info: web::Path<String>)
@@ -122,7 +155,7 @@ fn get_issued_records<T>(data: web::Data<Arc<RwLock<QueryServer<T>>>>,
                                   })?);
   let query_server = data.read().unwrap();
   let records = query_server.get_issued_records(&IssuerPublicKey { key });
-  Ok(web::Json(records.unwrap_or_default()))
+  Ok(web::Json(records.cloned().unwrap_or_default()))
 }
 
 // Returns the list of transations associated with a given ledger address
@@ -138,7 +171,7 @@ fn get_related_txns<T>(data: web::Data<Arc<RwLock<QueryServer<T>>>>,
                                   })?);
   let query_server = data.read().unwrap();
   let records = query_server.get_related_transactions(&XfrAddress { key });
-  Ok(web::Json(records.unwrap_or_default()))
+  Ok(web::Json(records.cloned().unwrap_or_default()))
 }
 
 pub struct QueryApi {
@@ -162,8 +195,12 @@ impl QueryApi {
                        web::get().to(get_address::<T>))
                 .route(&QueryServerRoutes::GetOwnedUtxos.with_arg_template("address"),
                        web::get().to(get_owned_utxos::<T>))
+                .route(&QueryServerRoutes::GetOwnerMemo.with_arg_template("txo_sid"),
+                       web::get().to(get_owner_memo::<T>))
                 .route(&QueryServerRoutes::GetRelatedTxns.with_arg_template("address"),
                        web::get().to(get_related_txns::<T>))
+                .route(&QueryServerRoutes::GetCreatedAssets.with_arg_template("address"),
+                       web::get().to(get_created_assets::<T>))
                 .route(&QueryServerRoutes::GetIssuedRecords.with_arg_template("address"),
                        web::get().to(get_issued_records::<T>))
                 .route(&QueryServerRoutes::StoreCustomData.route(),

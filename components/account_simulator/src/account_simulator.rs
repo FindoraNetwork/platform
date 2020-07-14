@@ -468,13 +468,13 @@ impl InterpretAccounts<PlatformError> for LedgerAccounts {
         let ar = AssetRecordTemplate::with_no_asset_tracking(amt, code.val, iss_art, *pubkey);
         let params = PublicParams::new();
         let (ba, _, owner_memo) =
-          build_blind_asset_record(self.ledger.get_prng(), &params.pc_gens, &ar, None);
+          build_blind_asset_record(self.ledger.get_prng(), &params.pc_gens, &ar, vec![]);
 
         let asset_issuance_body = IssueAssetBody::new(&code,
                                                       new_seq_num,
-                                                      &[TxOutput { record: ba,
-                                                                   lien: None }],
-                                                      None).unwrap();
+                                                      &[(TxOutput { record: ba,
+                                                                    lien: None },
+                                                         owner_memo.clone())]).unwrap();
 
         let asset_issuance_operation =
           IssueAsset::new(asset_issuance_body, &IssuerKeyPair { keypair: &keypair }).unwrap();
@@ -524,7 +524,6 @@ impl InterpretAccounts<PlatformError> for LedgerAccounts {
         *self.balances.get_mut(dst).unwrap().get_mut(unit).unwrap() += amt;
 
         let mut src_records: Vec<OpenAssetRecord> = Vec::new();
-        let mut input_identity_commitments: Vec<Option<ACCommitment>> = Vec::new();
         let mut total_sum = 0u64;
         let avail = self.utxos.get_mut(src).unwrap();
         let mut to_use: Vec<TxoSID> = Vec::new();
@@ -545,7 +544,6 @@ impl InterpretAccounts<PlatformError> for LedgerAccounts {
           to_use.push(sid);
           total_sum += *open_rec.get_amount();
           src_records.push(open_rec);
-          input_identity_commitments.push(None);
         }
         // dbg!(&to_skip, &to_use);
         avail.extend(to_skip.into_iter());
@@ -555,7 +553,6 @@ impl InterpretAccounts<PlatformError> for LedgerAccounts {
         let mut src_outputs: Vec<AssetRecord> = Vec::new();
         let mut dst_outputs: Vec<AssetRecord> = Vec::new();
         let mut all_outputs: Vec<AssetRecord> = Vec::new();
-        let mut output_identity_commitments: Vec<Option<ACCommitment>> = Vec::new();
         {
           // Simple output to dst
           let template =
@@ -569,7 +566,6 @@ impl InterpretAccounts<PlatformError> for LedgerAccounts {
           let ar = AssetRecord::from_template_no_identity_tracking(self.ledger.get_prng(),
                                                                    &template).unwrap();
           all_outputs.push(ar);
-          output_identity_commitments.push(None);
         }
 
         if total_sum > amt {
@@ -589,7 +585,6 @@ impl InterpretAccounts<PlatformError> for LedgerAccounts {
           let ar = AssetRecord::from_template_no_identity_tracking(self.ledger.get_prng(),
                                                                    &template).unwrap();
           all_outputs.push(ar);
-          output_identity_commitments.push(None);
         }
 
         let src_outputs = src_outputs;
@@ -619,9 +614,8 @@ impl InterpretAccounts<PlatformError> for LedgerAccounts {
           TransferAssetBody::new(self.ledger.get_prng(),
                                  to_use.iter().cloned().map(TxoRef::Absolute).collect(),
                                  src_records.as_slice(),
-                                 input_identity_commitments,
                                  all_outputs.as_slice(),
-                                 output_identity_commitments,
+                                 None,
                                  vec![],
                                  TransferType::Standard).unwrap();
 
@@ -772,13 +766,13 @@ impl InterpretAccounts<PlatformError> for OneBigTxnAccounts {
         let ar = AssetRecordTemplate::with_no_asset_tracking(amt, code.val, iss_art, *pubkey);
         let params = PublicParams::new();
         let (ba, _, owner_memo) =
-          build_blind_asset_record(self.base_ledger.get_prng(), &params.pc_gens, &ar, None);
+          build_blind_asset_record(self.base_ledger.get_prng(), &params.pc_gens, &ar, vec![]);
 
         let asset_issuance_body = IssueAssetBody::new(&code,
                                                       new_seq_num,
-                                                      &[TxOutput { record: ba,
-                                                                   lien: None }],
-                                                      None).unwrap();
+                                                      &[(TxOutput { record: ba,
+                                                                    lien: None },
+                                                         owner_memo.clone())]).unwrap();
 
         let asset_issuance_operation =
           IssueAsset::new(asset_issuance_body, &IssuerKeyPair { keypair: &keypair }).unwrap();
@@ -825,7 +819,6 @@ impl InterpretAccounts<PlatformError> for OneBigTxnAccounts {
         *self.balances.get_mut(dst).unwrap().get_mut(unit).unwrap() += amt;
 
         let mut src_records: Vec<OpenAssetRecord> = Vec::new();
-        let mut input_identity_commitments: Vec<Option<ACCommitment>> = Vec::new();
         let mut total_sum = 0u64;
         let avail = self.utxos.get_mut(src).unwrap();
         let mut to_use: Vec<usize> = Vec::new();
@@ -846,7 +839,6 @@ impl InterpretAccounts<PlatformError> for OneBigTxnAccounts {
           to_use.push(self.txos.len() - 1 - sid);
           total_sum += *open_rec.get_amount();
           src_records.push(open_rec);
-          input_identity_commitments.push(None);
         }
         // dbg!(&to_skip, &to_use);
         avail.extend(to_skip.into_iter());
@@ -856,7 +848,6 @@ impl InterpretAccounts<PlatformError> for OneBigTxnAccounts {
         let mut src_outputs: Vec<AssetRecord> = Vec::new();
         let mut dst_outputs: Vec<AssetRecord> = Vec::new();
         let mut all_outputs: Vec<AssetRecord> = Vec::new();
-        let mut output_identity_commitments: Vec<Option<ACCommitment>> = Vec::new();
 
         {
           // Simple output to dst
@@ -869,7 +860,6 @@ impl InterpretAccounts<PlatformError> for OneBigTxnAccounts {
           let ar = AssetRecord::from_template_no_identity_tracking(self.base_ledger.get_prng(),
                                                                    &ar).unwrap();
           all_outputs.push(ar);
-          output_identity_commitments.push(None);
         }
 
         if total_sum > amt {
@@ -889,7 +879,6 @@ impl InterpretAccounts<PlatformError> for OneBigTxnAccounts {
           let ar = AssetRecord::from_template_no_identity_tracking(self.base_ledger.get_prng(),
                                                                    &ar).unwrap();
           all_outputs.push(ar);
-          output_identity_commitments.push(None);
         }
 
         let src_outputs = src_outputs;
@@ -921,9 +910,8 @@ impl InterpretAccounts<PlatformError> for OneBigTxnAccounts {
                                                          .map(|x| TxoRef::Relative(x as u64))
                                                          .collect(),
                                                    src_records.as_slice(),
-                                                   input_identity_commitments,
                                                    all_outputs.as_slice(),
-                                                   output_identity_commitments,
+                                                   None,
                                                    vec![],
                                                    TransferType::Standard).unwrap();
         let owners_memos = transfer_body.note.owners_memos.clone();
@@ -1091,13 +1079,13 @@ impl<T> InterpretAccounts<PlatformError> for LedgerStandaloneAccounts<T>
         let ar = AssetRecordTemplate::with_no_asset_tracking(amt, code.val, iss_art, *pubkey);
         let params = PublicParams::new();
         let (ba, _, owner_memo) =
-          build_blind_asset_record(&mut self.prng, &params.pc_gens, &ar, None);
+          build_blind_asset_record(&mut self.prng, &params.pc_gens, &ar, vec![]);
 
         let asset_issuance_body = IssueAssetBody::new(&code,
                                                       new_seq_num,
-                                                      &[TxOutput { record: ba,
-                                                                   lien: None }],
-                                                      None).unwrap();
+                                                      &[(TxOutput { record: ba,
+                                                                    lien: None },
+                                                         owner_memo.clone())]).unwrap();
 
         let asset_issuance_operation =
           IssueAsset::new(asset_issuance_body, &IssuerKeyPair { keypair: &keypair }).unwrap();
@@ -1146,7 +1134,6 @@ impl<T> InterpretAccounts<PlatformError> for LedgerStandaloneAccounts<T>
         *self.balances.get_mut(dst).unwrap().get_mut(unit).unwrap() += amt;
 
         let mut src_records: Vec<OpenAssetRecord> = Vec::new();
-        let mut input_identity_commitments: Vec<Option<ACCommitment>> = Vec::new();
         let mut total_sum = 0u64;
         let avail = self.utxos.get_mut(src).unwrap();
         let mut to_use: Vec<TxoSID> = Vec::new();
@@ -1167,7 +1154,6 @@ impl<T> InterpretAccounts<PlatformError> for LedgerStandaloneAccounts<T>
           to_use.push(sid);
           total_sum += *open_rec.get_amount();
           src_records.push(open_rec);
-          input_identity_commitments.push(None);
         }
         // dbg!(&to_skip, &to_use);
         avail.extend(to_skip.into_iter());
@@ -1177,7 +1163,6 @@ impl<T> InterpretAccounts<PlatformError> for LedgerStandaloneAccounts<T>
         let mut src_outputs: Vec<AssetRecord> = Vec::new();
         let mut dst_outputs: Vec<AssetRecord> = Vec::new();
         let mut all_outputs: Vec<AssetRecord> = Vec::new();
-        let mut output_identity_commitments: Vec<Option<ACCommitment>> = Vec::new();
 
         {
           // Simple output to dst
@@ -1188,7 +1173,6 @@ impl<T> InterpretAccounts<PlatformError> for LedgerStandaloneAccounts<T>
           let ar = AssetRecordTemplate::with_no_asset_tracking(amt, unit_code.val, art, *dst_pub);
           let ar = AssetRecord::from_template_no_identity_tracking(&mut self.prng, &ar).unwrap();
           all_outputs.push(ar);
-          output_identity_commitments.push(None);
         }
 
         if total_sum > amt {
@@ -1206,7 +1190,6 @@ impl<T> InterpretAccounts<PlatformError> for LedgerStandaloneAccounts<T>
                                                                *src_pub);
           let ar = AssetRecord::from_template_no_identity_tracking(&mut self.prng, &ar).unwrap();
           all_outputs.push(ar);
-          output_identity_commitments.push(None);
         }
 
         let src_outputs = src_outputs;
@@ -1236,9 +1219,8 @@ impl<T> InterpretAccounts<PlatformError> for LedgerStandaloneAccounts<T>
           TransferAssetBody::new(&mut self.prng,
                                  to_use.iter().cloned().map(TxoRef::Absolute).collect(),
                                  src_records.as_slice(),
-                                 input_identity_commitments,
                                  all_outputs.as_slice(),
-                                 output_identity_commitments,
+                                 None,
                                  vec![],
                                  TransferType::Standard).unwrap();
 
@@ -1923,6 +1905,9 @@ mod test {
   }
 
   #[test]
+  // This test passes, but we ignore it since it's slow
+  // Redmine issue: #47
+  #[ignore]
   fn regression_quickcheck_found_no_standalone() {
     regression_quickcheck_found(false)
   }

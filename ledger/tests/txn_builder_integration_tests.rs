@@ -37,6 +37,7 @@ fn test_create_asset() -> Result<(), PlatformError> {
   let code = AssetTypeCode { val: [1; 16] };
   let keys = XfrKeyPair::generate(&mut prng);
   let mut builder = TransactionBuilder::from_seq_id(ledger.get_block_commit_count());
+  let params = PublicParams::new();
 
   // Define
   let tx = builder.add_operation_create_asset(&keys,
@@ -46,23 +47,22 @@ fn test_create_asset() -> Result<(), PlatformError> {
                                               PolicyChoice::Fungible())?
                   .transaction();
   apply_transaction(&mut ledger, tx.clone());
-  assert!(ledger.get_asset_type(&code).is_some());
 
   // Issue
   let mut builder = TransactionBuilder::from_seq_id(ledger.get_block_commit_count());
   let tx =
     builder.add_basic_issue_asset(&keys,
-                                  None,
                                   &code,
                                   0,
                                   1000,
-                                  AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType)?
+                                  AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
+                                  &params)?
            .add_basic_issue_asset(&keys,
-                                  None,
                                   &code,
                                   1,
                                   500,
-                                  AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType)?
+                                  AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
+                                  &params)?
            .transaction();
   let (_, txos) = apply_transaction(&mut ledger, tx.clone());
 
@@ -141,9 +141,9 @@ fn test_loan_repayment(loan_amount: u64,
                                                 NonConfidentialAmount_NonConfidentialAssetType,
                                                 fiat_issuer_keys.get_pk());
   let (debt_ba, _, debt_owner_memo) =
-    build_blind_asset_record(ledger.get_prng(), &params.pc_gens, &debt_ar, None);
+    build_blind_asset_record(ledger.get_prng(), &params.pc_gens, &debt_ar, vec![]);
   let (fiat_ba, _, fiat_owner_memo) =
-    build_blind_asset_record(ledger.get_prng(), &params.pc_gens, &fiat_ar, None);
+    build_blind_asset_record(ledger.get_prng(), &params.pc_gens, &fiat_ar, vec![]);
   let debt_oar =
     open_blind_asset_record(&debt_ba, &debt_owner_memo, borrower_keys.get_sk_ref()).unwrap();
   let fiat_oar =
@@ -156,15 +156,13 @@ fn test_loan_repayment(loan_amount: u64,
                                              0,
                                              &[(TxOutput { record: fiat_ba.clone(),
                                                            lien: None },
-                                                fiat_owner_memo)],
-                                             None)?
+                                                fiat_owner_memo)])?
                   .add_operation_issue_asset(&borrower_keys,
                                              &debt_code,
                                              0,
                                              &[(TxOutput { record: debt_ba.clone(),
                                                            lien: None },
-                                                debt_owner_memo)],
-                                             None)?;
+                                                debt_owner_memo)])?;
   let mut xfr_builder = TransferOperationBuilder::new();
   let output_template =
     AssetRecordTemplate::with_no_asset_tracking(loan_amount,
@@ -253,5 +251,44 @@ fn test_loan_repayment(loan_amount: u64,
 fn test_loan_repayments() -> Result<(), PlatformError> {
   test_loan_repayment(1000, 100, 1, 10)?;
   test_loan_repayment(500, 3, 1, 25)?;
+  Ok(())
+}
+
+#[test]
+fn test_update_memo() -> Result<(), PlatformError> {
+  // Generate the ledger and the things we need to define an asset
+  let mut prng = ChaChaRng::from_entropy();
+  let mut ledger = LedgerState::test_ledger();
+  let code = AssetTypeCode { val: [1; 16] };
+  let keys = XfrKeyPair::generate(&mut prng);
+  let mut builder = TransactionBuilder::from_seq_id(ledger.get_block_commit_count());
+
+  // Define the asset and verify
+  let mut asset_rules = AssetRules::default();
+  // The asset must be up updatable in order to change the memo later
+  asset_rules.updatable = true;
+  // Cerate an asset with the memo defined as "test"
+  let tx = builder.add_operation_create_asset(&keys,
+                                              Some(code),
+                                              asset_rules,
+                                              "test".into(),
+                                              PolicyChoice::Fungible())?
+                  .transaction();
+  apply_transaction(&mut ledger, tx.clone());
+  assert!(ledger.get_asset_type(&code).is_some());
+
+  // Define a transaction to update the memo
+  let mut builder = TransactionBuilder::from_seq_id(ledger.get_block_commit_count());
+  let tx = builder.add_operation_update_memo(&keys, code, "changed")
+                  .transaction();
+  apply_transaction(&mut ledger, tx.clone());
+
+  // Attempt to get the changed memo, and verify it has been changed correctly
+  let asset = ledger.get_asset_type(&code)
+                    .expect("The asset disappeared after updating the memo.");
+
+  let new_memo = asset.properties.memo.0.as_str();
+  assert_eq!(new_memo, "changed");
+
   Ok(())
 }
