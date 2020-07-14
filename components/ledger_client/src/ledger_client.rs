@@ -21,7 +21,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
   let mut prng = ChaChaRng::from_entropy();
   let mut tx = Transaction::from_seq_id(seq_id);
 
-  let token_code1 = AssetTypeCode { val: [1; 16] };
+  let token_code1 = AssetTypeCode::from_identical_byte(1);
   let keypair = build_keys(&mut prng);
 
   let asset_body = asset_creation_body(&token_code1,

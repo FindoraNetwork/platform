@@ -21,10 +21,11 @@ use std::convert::TryFrom;
 use std::convert::TryInto;
 use std::hash::{Hash, Hasher};
 use utils::{HashOf, ProofOf, Serialized, SignatureOf};
-use zei::xfr::lib::{gen_xfr_body, XfrNotePoliciesNoRef};
+use zei::xfr::lib::{gen_xfr_body, XfrNotePolicies};
 use zei::xfr::sig::{XfrKeyPair, XfrPublicKey};
 use zei::xfr::structs::{
-  AssetRecord, AssetTracingPolicies, AssetTracingPolicy, BlindAssetRecord, OwnerMemo, XfrBody,
+  AssetRecord, AssetTracingPolicies, AssetTracingPolicy, AssetType as ZeiAssetType,
+  BlindAssetRecord, OwnerMemo, XfrBody, ASSET_TYPE_LENGTH,
 };
 
 pub fn b64enc<T: ?Sized + AsRef<[u8]>>(input: &T) -> String {
@@ -55,7 +56,46 @@ fn is_default<T: Default + PartialEq>(x: &T) -> bool {
   x == &T::default()
 }
 
-pub type AssetTypeCode = Code;
+#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, Hash, PartialEq, Serialize)]
+pub struct AssetTypeCode {
+  pub val: ZeiAssetType,
+}
+
+impl AssetTypeCode {
+  /// Helper function to generate an asset type with identical value in each byte
+  pub fn from_identical_byte(byte: u8) -> Self {
+    Self { val: ZeiAssetType::from_identical_byte(byte) }
+  }
+  pub fn gen_random() -> Self {
+    let mut small_rng = ChaChaRng::from_entropy();
+    let mut buf: [u8; ASSET_TYPE_LENGTH] = [0u8; ASSET_TYPE_LENGTH];
+    small_rng.fill_bytes(&mut buf);
+    Self { val: ZeiAssetType(buf) }
+  }
+  pub fn gen_random_with_rng<R: Rng>(mut prng: R) -> Self {
+    let val: [u8; ASSET_TYPE_LENGTH] = prng.gen();
+    Self { val: ZeiAssetType(val) }
+  }
+  pub fn new_from_str(s: &str) -> Self {
+    let mut as_vec = s.to_string().into_bytes();
+    as_vec.resize(ASSET_TYPE_LENGTH, 0u8);
+    let buf = <[u8; ASSET_TYPE_LENGTH]>::try_from(as_vec.as_slice()).unwrap();
+    Self { val: ZeiAssetType(buf) }
+  }
+  pub fn new_from_base64(b64: &str) -> Result<Self, PlatformError> {
+    if let Ok(mut bin) = b64dec(b64) {
+      bin.resize(ASSET_TYPE_LENGTH, 0u8);
+      let buf = <[u8; ASSET_TYPE_LENGTH]>::try_from(bin.as_slice()).unwrap();
+      Ok(Self { val: ZeiAssetType(buf) })
+    } else {
+      Err(PlatformError::DeserializationError(error_location!()))
+    }
+  }
+  pub fn to_base64(&self) -> String {
+    b64enc(&self.val.0)
+  }
+}
+
 pub type AssetPolicyKey = Code;
 pub type SmartContractKey = Code;
 
@@ -294,6 +334,8 @@ impl AssetRules {
 
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 pub struct Asset {
+  #[serde(default)]
+  #[serde(skip_serializing_if = "is_default")]
   pub code: AssetTypeCode,
   pub issuer: IssuerPublicKey,
   #[serde(default)]
@@ -405,7 +447,7 @@ pub struct TransferAssetBody {
   pub inputs: Vec<TxoRef>, // Ledger address of inputs
   #[serde(default)]
   #[serde(skip_serializing_if = "is_default")]
-  pub policies: XfrNotePoliciesNoRef,
+  pub policies: XfrNotePolicies,
   pub outputs: Vec<TxOutput>,
   // TODO(joe): we probably don't need the whole XfrNote with input records
   // once it's on the chain
@@ -419,7 +461,7 @@ impl TransferAssetBody {
                                      input_refs: Vec<TxoRef>,
                                      input_records: &[AssetRecord],
                                      output_records: &[AssetRecord],
-                                     policies: Option<XfrNotePoliciesNoRef>,
+                                     policies: Option<XfrNotePolicies>,
                                      transfer_type: TransferType)
                                      -> Result<TransferAssetBody, errors::PlatformError> {
     let num_inputs = input_records.len();
@@ -432,10 +474,10 @@ impl TransferAssetBody {
     // If no policies specified, construct set of empty policies
     let policies = policies.unwrap_or_else(|| {
                              let no_policies = AssetTracingPolicies::new();
-                             XfrNotePoliciesNoRef::new(vec![no_policies.clone(); num_inputs],
-                                                       vec![None; num_inputs],
-                                                       vec![no_policies; num_outputs],
-                                                       vec![None; num_outputs])
+                             XfrNotePolicies::new(vec![no_policies.clone(); num_inputs],
+                                                  vec![None; num_inputs],
+                                                  vec![no_policies; num_outputs],
+                                                  vec![None; num_outputs])
                            });
 
     // Verify that for each input and output, there is a corresponding policy and credential commitment
@@ -1271,7 +1313,7 @@ mod tests {
       let code = AssetTypeCode::gen_random_with_rng(rng.clone());
       let mut failed = true;
 
-      for byte in code.val.iter() {
+      for byte in code.val.0.iter() {
         if *byte != 0 {
           failed = false;
         }
@@ -1305,13 +1347,13 @@ mod tests {
       let code = AssetTypeCode::new_from_str(&input);
       let mut checked = 0;
 
-      for j in 0..min(i, code.val.len()) {
-        assert!(code.val[j] == value.as_bytes()[0]);
+      for j in 0..min(i, code.val.0.len()) {
+        assert!(code.val.0[j] == value.as_bytes()[0]);
         checked = checked + 1;
       }
 
       for j in i..code.val.len() {
-        assert!(code.val[j] == 0);
+        assert!(code.val.0[j] == 0);
         checked = checked + 1;
       }
 
@@ -1365,10 +1407,10 @@ mod tests {
 
     let no_policies = AssetTracingPolicies::new();
 
-    let policies = XfrNotePoliciesNoRef::new(vec![no_policies.clone()],
-                                             vec![None],
-                                             vec![no_policies],
-                                             vec![None]);
+    let policies = XfrNotePolicies::new(vec![no_policies.clone()],
+                                        vec![None],
+                                        vec![no_policies],
+                                        vec![None]);
 
     let asset_transfer_body = TransferAssetBody { inputs: Vec::new(),
                                                   outputs: Vec::new(),

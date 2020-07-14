@@ -14,6 +14,7 @@ flexi_logger = "0.15.2"
 futures = "0.3"
 itertools = "0.8.0"
 json = "0.12.4"
+ledger = { path = "../../ledger" }
 libp2p = "0.16.2"
 libp2p-secio = "0.16.1"
 log = "0.4.8"
