@@ -49,11 +49,14 @@ actual subcommands.
 * By default, all the generated files will be stored in `~./findora`, unless specified otherwise. For example, if the current directory is `platform/target/debug`, running `txn_cli keygen` will put the generated key pair in ~./findora, but `txn_cli keygen --name keys/key_pair` will store the key pair to `$PWD/keys/key_pair`.
 * Examples below are assuming that `txn_cli` is in the `$PATH`. Typically it resides in either `platform/target/debug` or `platform/target/release`.
 
-## Asset issuer account
-### Sign up an asset issuer account
-In the initial data, there's one asset issuer, Izzie. To sign up a new asset issuer account:
+## Examples
+The following commands are meant to be executed in order by you the user.
+
+We assume that the file `~/.findora/data.json` is the same as `init_data.json` in this directory.
+In the initial data, there's one asset issuer, Izzie, with *id* = 0. If you wish to sign up (create) a new asset issuer account, you'd 
+do:
 ```
-txn_cli asset_issuer sign_up --name 'Issuer Name'
+txn_cli asset_issuer sign_up --name 'AssetIssuer' (FIXME 01: Doesn't create file if ~/.findora/data.json does not exist)
 ```
 
 ### Define an asset
@@ -65,7 +68,21 @@ txn_cli create_txn_builder --name txn_define
 ```
 txn_cli --txn txn_define asset_issuer --id 0 define_asset --memo 'Define an asset.'
 ```
-By default, a randomly generated token code will be used. To specify a code, use `--token_code`.
+In your output you should see a line like
+```
+yourname@yourhost: Creating asset with token code "KgiiRiHhkYdZ6FLFmM6FrQ==": [42, 8, 162, 70, 33, 225, 145, 135, 89, 232, 82, 197, 152, 206, 133, 173]
+```
+
+Save this token code for later use. By default, a randomly generated token code will be used.
+
+If you wish to have `txn_cli` use a user supplied token code, use the `--token_code <token_code>` argument.
+
+```
+txn_cli --txn txn_define asset_issuer --id 0 define_asset --memo 'Define an asset.' --token_code 23
+```
+
+(FIXME 02: supplying `token_code` breaks the `define_asset` call)
+
 To define a fiat asset, add `--fiat`.
 To allow update or tracing, add `--updatable` or `--traceable`, respectively.
 
@@ -80,9 +97,9 @@ After an asset is defined and the transaction is submitted:
 ```
 txn_cli create_txn_builder --name txn_issue
 ```
-2) Issue the asset (FIXME 01: this doesn't change `txn_issue`) 
+2) Issue the asset 
 ```
-txn_cli --txn txn_issue asset_issuer --id 0 issue_asset --token_code ibIaBlHV-PdQkvSuEg6YSA== --amount 100
+txn_cli --txn txn_issue asset_issuer --id 0 issue_asset --token_code <token_code> --amount 100
 ```
 To make the token amount confidential, add `--confidential_amount`.
 3) Submit the transaction
@@ -90,7 +107,9 @@ To make the token amount confidential, add `--confidential_amount`.
 txn_cli --txn txn_issue submit
 ```
 To display the utxo sids, add `--get_sids`. To store the sids to a file, use `--sids_file`.
-
+```
+txn_cli --txn txn_issue submit --get_sids --sids_file sids_file
+```
 
 ### Transfer units of an asset. See `txn_cli add transfer_asset`.
 After an asset is defined and issued, transactions are submitted, and utxo sids are stored:
@@ -98,11 +117,13 @@ After an asset is defined and issued, transactions are submitted, and utxo sids 
 ```
 txn_cli create_txn_builder --name txn_transfer
 ```
-2) Transfer (FIXME 02: this doesn't change `txn_transfer`) 
+2) Transfer 
 After blind asset record and associated memos are stored:
 ```
-txn_cli --txn txn_transfer asset_issuer --id 0 transfer_asset --sids_file s --recipients 0,1 --issuance_txn_files txn_issue --input_amounts 45 --output_amounts 10,35
+txn_cli --txn txn_transfer asset_issuer --id 0 transfer_asset --sids_file sids_file --recipients 0,1 --issuance_txn_files txn_issue --input_amounts 45 --output_amounts 10,35
 ```
+(FIXME 03: thread 'main' panicked at 'index out of bounds: the len is 1 but the index is 1', components/txn_cli/src/data_lib.rs:486:25)
+
 3) Submit the transaction
 ```
 txn_cli --txn txn_transfer submit
@@ -116,11 +137,11 @@ txn_cli create_txn_builder --name txn_issue_and_transfer
 ```
 2) Issue and transfer the asset
 ```
-txn_cli --txn txn_issue_and_transfer asset_issuer --id 0 issue_and_transfer_asset --recipient 0 --amount 1000 --token_code ibIaBlHV-PdQkvSuEg6YSA==
+txn_cli --txn txn_issue_and_transfer asset_issuer --id 0 issue_and_transfer_asset --recipient 0 --amount 1000 --token_code 23
 ```
 To make the token amount confidential, add `--confidential_amount`.
-To store the asset tracer memo and owner memo, use `--memo_file`.
-3) Submit the transaction (FIXME 03: error in check_txn_effects `transaction invalid: Error at: ledger/src/store/store.rs:533:72`)
+
+3) Submit the transaction
 ```
 txn_cli --txn txn_issue_and_transfer submit
 ```
@@ -140,12 +161,12 @@ txn_cli asset_issuer store_sids --file sids_file --indices 1,2,3
 ### Store asset tracer memo and owner memo (FIXME 04: No file, no error message)
 Asset tracer memo and owner memo are necessary for asset tracing. To store them:
 ```
-txn_cli asset_issuer --id 0 store_memo --file memo_file --amount 100 --token_code ibIaBlHV-PdQkvSuEg6YSA==
+txn_cli asset_issuer --id 0 store_memos --file memo_file --amount 100 --token_code <token_code>
 ```
 For confidential token amount, add `--confidential_amount`.
 
 ### Trace and verify an asset
-After the asset tracer memo and owner memo are stored by `store_memo` or `issue_and_transfer_asset --memo_file`, trace the asset and verify the token amount.
+After the asset tracer memo and owner memo are stored by `store_memos` or `issue_and_transfer_asset --memo_file`, trace the asset and verify the token amount.
 ```
 txn_cli asset_issuer --id 0 trace_and_verify_asset --memo_file memos --expected_amount 50
 ```
