@@ -5,6 +5,7 @@ use ledger::data_model::errors::PlatformError;
 use ledger::data_model::{
   AssetRules, AssetTypeCode, Transaction, TransferType, TxOutput, TxnSID, TxoRef, TxoSID,
 };
+use ledger::error_location;
 use ledger::policies::{calculate_fee, DebtMemo, Fraction};
 use ledger::store::LedgerState;
 use ledger::store::*;
@@ -114,7 +115,10 @@ fn test_loan_repayment(loan_amount: u64,
   let fiat_issuer_keys = XfrKeyPair::generate(&mut prng);
   let lender_keys = XfrKeyPair::generate(&mut prng);
   let borrower_keys = XfrKeyPair::generate(&mut prng);
-  let burn_address = XfrPublicKey::zei_from_bytes(&[0; 32]);
+  let burn_address =
+    XfrPublicKey::zei_from_bytes(&[0; 32]).map_err(|e| {
+                                            PlatformError::ZeiError(error_location!(), e)
+                                          })?;
 
   // Define assets
   let mut builder = TransactionBuilder::from_seq_id(ledger.get_block_commit_count());

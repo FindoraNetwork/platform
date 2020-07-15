@@ -522,6 +522,8 @@ impl TransferAssetBody {
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct IssueAssetBody {
+  #[serde(default)]
+  #[serde(skip_serializing_if = "is_default")]
   pub code: AssetTypeCode,
   pub seq_num: u64,
   pub num_outputs: usize,
@@ -577,6 +579,8 @@ impl DefineAssetBody {
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct UpdateMemoBody {
   pub new_memo: Memo,
+  #[serde(default)]
+  #[serde(skip_serializing_if = "is_default")]
   pub asset_type: AssetTypeCode,
 }
 
@@ -1352,12 +1356,12 @@ mod tests {
         checked = checked + 1;
       }
 
-      for j in i..code.val.len() {
+      for j in i..code.val.0.len() {
         assert!(code.val.0[j] == 0);
         checked = checked + 1;
       }
 
-      assert!(checked == code.val.len());
+      assert!(checked == code.val.0.len());
       input = input + &value;
     }
   }
