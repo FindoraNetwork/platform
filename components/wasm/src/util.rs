@@ -9,5 +9,5 @@ pub(crate) fn error_to_jsvalue<T: Display>(e: T) -> JsValue {
 }
 
 pub(crate) fn public_key_from_base64(key_pair: String) -> Result<XfrPublicKey, JsValue> {
-  Ok(XfrPublicKey::zei_from_bytes(&b64dec(&key_pair).map_err(error_to_jsvalue)?))
+  XfrPublicKey::zei_from_bytes(&b64dec(&key_pair).map_err(error_to_jsvalue)?).map_err(error_to_jsvalue)
 }

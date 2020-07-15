@@ -2107,9 +2107,9 @@ pub mod helpers {
                                                           -> (Transaction, AssetRecord) {
     let tracing_policies = AssetTracingPolicies::from_policy(tracing_policy);
     let xfr_note_policies = XfrNotePolicies::new(vec![tracing_policies.clone()],
-                                                      vec![None],
-                                                      vec![tracing_policies.clone()],
-                                                      vec![None]);
+                                                 vec![None],
+                                                 vec![tracing_policies.clone()],
+                                                 vec![None]);
     // issue operation
     let ar_template = AssetRecordTemplate::with_asset_tracking(amount, code.val, AssetRecordType::ConfidentialAmount_NonConfidentialAssetType, issuer_keys.get_pk(), tracing_policies.clone());
     let (ba, _tracer_memo, owner_memo) =

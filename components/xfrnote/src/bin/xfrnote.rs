@@ -35,7 +35,7 @@
 use async_std::{io, task};
 use futures::{future, prelude::*};
 use itertools::Itertools;
-use ledger::data_model::ssetTypeCode;
+use ledger::data_model::AssetTypeCode;
 use libp2p::{
   floodsub::{self, Floodsub, FloodsubEvent},
   identity,
@@ -78,7 +78,7 @@ pub fn make_xfr_note() -> XfrNote {
   for x in inputs_amounts.iter() {
     let keypair = XfrKeyPair::generate(&mut prng);
     let asset_record = AssetRecordTemplate::with_no_asset_tracking(x.0,
-                                                                   x.1,
+                                                                   (x.1).val,
                                                                    asset_record_type,
                                                                    *keypair.get_pk_ref());
 
@@ -92,7 +92,7 @@ pub fn make_xfr_note() -> XfrNote {
     let keypair = XfrKeyPair::generate(&mut prng);
 
     let ar = AssetRecordTemplate::with_no_asset_tracking(x.0,
-                                                         x.1,
+                                                         (x.1).val,
                                                          asset_record_type,
                                                          *keypair.get_pk_ref());
     let output = AssetRecord::from_template_no_identity_tracking(&mut prng, &ar).unwrap();
