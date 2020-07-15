@@ -3334,7 +3334,7 @@ mod tests {
     let debt_sid = txo_sids[1];
 
     // Attempt to pay off debt with correct interest payment
-    let null_public_key = XfrPublicKey::zei_from_bytes(&[0; 32]);
+    let null_public_key = XfrPublicKey::zei_from_bytes(&[0; 32]).unwrap();
     let mut block = ledger.start_block().unwrap();
     let fiat_bar = ((ledger.get_utxo(fiat_sid).unwrap().0).0).clone();
     let debt_bar = ((ledger.get_utxo(debt_sid).unwrap().0).0).clone();
