@@ -6,7 +6,7 @@ use credentials::{
 };
 use cryptohash::sha256::{Digest, DIGESTBYTES};
 use ledger::data_model::{
-  AssetRules as PlatformAssetRules, AssetType as PlatformAssetType,
+  AssetRules as PlatformAssetRules, AssetType as PlatformAssetType, AssetTypeCode,
   AuthenticatedAIRResult as PlatformAuthenticatedAIRResult, KVBlind as PlatformKVBlind,
   KVHash as PlatformKVHash, SignatureRules as PlatformSignatureRules,
   TransferType as PlatformTransferType, TxOutput, TxoRef as PlatformTxoRef, TxoSID,
@@ -133,6 +133,26 @@ impl ClientAssetRecord {
   /// where `sid` can be fetched from the query server with the `get_owned_utxos/{address}` route.
   pub fn from_jsvalue(val: &JsValue) -> Self {
     ClientAssetRecord { output: TxOutput(val.into_serde().unwrap()) }
+  }
+
+  /// Returns the asset amount associated with an asset record.
+  /// * If the amount is nonconfidential, returns the amount.
+  /// * Otherwise, returns null.
+  /// @see {@open_client_asset_record} for information about decrypting the confidential record.
+  pub fn get_asset_amount(record: &ClientAssetRecord) -> Option<u64> {
+    record.get_bar_ref().amount.get_amount()
+  }
+
+  /// Returns the asset type associated with an asset record.
+  /// * If the type is nonconfidential, returns a base64 string representing the type.
+  /// * Otherwise, returns null.
+  /// @see {@open_client_asset_record} for information about decrypting the confidential record.
+  pub fn get_asset_type(record: &ClientAssetRecord) -> Option<String> {
+    let code = record.get_bar_ref().asset_type.get_asset_type();
+    match code {
+      Some(c) => Some((AssetTypeCode { val: c }).to_base64()),
+      None => None,
+    }
   }
 }
 
