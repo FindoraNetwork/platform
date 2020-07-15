@@ -44,6 +44,7 @@ pub fn query_utxo<LA>(data: web::Data<Arc<RwLock<LA>>>,
   where LA: LedgerAccess
 {
   // TODO noah figure out how to make bitmap serialization not require a mutable ref
+  // https://bugtracker.findora.org/issues/165
   let mut writer = data.write().unwrap();
   if let Ok(txo_sid) = info.parse::<u64>() {
     if let Some(txo) = writer.get_utxo(TxoSID(txo_sid)) {

@@ -135,7 +135,7 @@ impl AuthenticatedAssetRecord {
   /// asset record contained in this structure exists on the ledger and is unspent.
   /// @param {string} state_commitment - String representing the state commitment.
   /// @see {@link network#get_state_commitment} for instructions on fetching a ledger state commitment.
-  /// @throws Will throw an error if the state commitment or the authenticated utxo fails to deserialize.
+  /// @throws Will throw an error if the state commitment fails to deserialize.
   pub fn is_valid(&self, state_commitment: String) -> Result<bool, JsValue> {
     let state_commitment = serde_json::from_str::<HashOf<_>>(&state_commitment).map_err(|_e| {
                              JsValue::from_str("Could not deserialize state commitment")

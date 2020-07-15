@@ -608,11 +608,6 @@ impl TransferAsset {
         .collect()
   }
 
-  //pub fn get_outputs_spent_status(&self) -> Vec<OutputSpentStatus> {
-  //  let outputs = self.get_outputs_ref();
-  //  let spent_statuses = vec![OutputSpentStatus::Unspent; outputs.len()];
-  //}
-
   pub fn get_outputs_ref(&self) -> Vec<&TxOutput> {
     self.body.outputs.iter().collect()
   }
@@ -893,8 +888,8 @@ impl AuthenticatedUtxo {
   // 1) The state commitment data used during verification hashes to the provided state commitment
   // 2) The authenticated transaction proof is valid
   // 3) The spent status proof is valid and denotes the utxo as unspent
-  // 4) The utxo appears in one of the outputs of the transaction (i.e. the output at (op_index,
-  //    output_index) is the candidate utxo)
+  // 4) The utxo appears in one of the outputs of the transaction (i.e. the output at
+  //    OutputPosition)
   pub fn is_valid(&self, state_commitment: HashOf<Option<StateCommitmentData>>) -> bool {
     //1)
     if state_commitment != self.state_commitment_data.compute_commitment() {
