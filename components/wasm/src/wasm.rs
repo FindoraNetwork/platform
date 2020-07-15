@@ -11,9 +11,7 @@ use credentials::{
 };
 use cryptohash::sha256;
 use js_sys::Promise;
-use ledger::data_model::{
-  b64enc, AssetTypeCode, AuthenticatedTransaction, AuthenticatedUtxo, Operation,
-};
+use ledger::data_model::{b64enc, AssetTypeCode, AuthenticatedTransaction, Operation};
 use ledger::policies::{DebtMemo, Fraction};
 use rand_chacha::ChaChaRng;
 use rand_core::SeedableRng;
@@ -51,22 +49,10 @@ pub fn random_asset_type() -> String {
 }
 
 #[wasm_bindgen]
-/// Given a serialized state commitment and an authenticated utxo, returns true if the
-/// authenticated utxo proofs validate correctly and false otherwise.
-/// @param {string} state_commitment - String representing the state commitment.
-/// @param {string} authenticated_utxo - String representing an authenticated transaction.
-/// @see {@link Network#get_utxo} for instructions on fetching an authenticated from the ledger.
-/// @see {@link Network#get_state_commitment} for instructions on fetching a ledger state commitment.
-/// @throws Will throw an error if the state commitment or the authenticated utxo fails to deserialize.
-pub fn verify_authenticated_utxo(state_commitment: String,
-                                 authenticated_utxo: String)
-                                 -> Result<bool, JsValue> {
-  let authenticated_utxo = serde_json::from_str::<AuthenticatedUtxo>(&authenticated_utxo)
-        .map_err(|_e| JsValue::from_str("Could not deserialize transaction"))?;
-  let state_commitment = serde_json::from_str::<HashOf<_>>(&state_commitment).map_err(|_e| {
-                           JsValue::from_str("Could not deserialize state commitment")
-                         })?;
-  Ok(authenticated_utxo.is_valid(state_commitment))
+/// Generates a base64 encoded asset type string from a JSON-serialized JavaScript value.
+pub fn asset_type_from_jsvalue(val: &JsValue) -> Result<String, JsValue> {
+  let code: [u8; 16] = val.into_serde().map_err(error_to_jsvalue)?;
+  Ok(AssetTypeCode { val: code }.to_base64())
 }
 
 #[wasm_bindgen]
@@ -375,7 +361,7 @@ impl TransactionBuilder {
   /// Fetches a client record from a transaction.
   /// @param {number} idx - Record to fetch. Records are added to the transaction builder sequentially.
   pub fn get_owner_record(&self, idx: usize) -> ClientAssetRecord {
-    ClientAssetRecord { output: self.get_builder().get_output_ref(idx).clone() }
+    ClientAssetRecord { txo: self.get_builder().get_output_ref(idx).clone() }
   }
 
   /// Fetches an owner memo from a transaction
