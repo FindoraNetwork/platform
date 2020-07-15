@@ -23,5 +23,5 @@ subprocess = "0.1.18"
 submission_api = { path = "../submission_api" }
 submission_server = { path = "../submission_server" }
 utils = { path = "../../libs/utils" }
-zei = { git = "ssh://git@github.com/findoraorg/zei", tag = "v0.0.3-2" }
+zei = { git = "ssh://git@github.com/findoraorg/zei", tag = "v0.0.3-3" }
 

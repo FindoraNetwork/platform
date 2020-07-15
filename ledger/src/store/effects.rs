@@ -12,7 +12,7 @@ use sparse_merkle_tree::Key;
 use std::collections::{HashMap, HashSet};
 use utils::{HasInvariants, HashOf, SignatureOf};
 use zei::serialization::ZeiFromToBytes;
-use zei::xfr::lib::{verify_xfr_body, XfrNotePolicies};
+use zei::xfr::lib::verify_xfr_body;
 use zei::xfr::sig::XfrPublicKey;
 use zei::xfr::structs::{AssetTracingPolicies, BlindAssetRecord, XfrAmount, XfrAssetType};
 
@@ -325,7 +325,7 @@ impl TxnEffect {
                           .or_insert_with(HashSet::new);
               }
 
-              let policies = XfrNotePolicies::from_policies_no_ref(&trn.body.policies);
+              let policies = trn.body.policies.to_ref();
               verify_xfr_body(&mut prng,
                               &mut params,
                               &trn.body.transfer,

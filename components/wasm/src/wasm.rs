@@ -31,9 +31,7 @@ use zei::serialization::ZeiFromToBytes;
 use zei::xfr::asset_record::{open_blind_asset_record as open_bar, AssetRecordType};
 use zei::xfr::lib::trace_assets as zei_trace_assets;
 use zei::xfr::sig::{XfrKeyPair, XfrPublicKey};
-use zei::xfr::structs::{
-  AssetRecordTemplate, AssetType as ZeiAssetType, XfrBody, ASSET_TYPE_LENGTH,
-};
+use zei::xfr::structs::{AssetRecordTemplate, AssetType as ZeiAssetType, XfrBody};
 
 mod util;
 mod wasm_data_model;
@@ -89,7 +87,7 @@ pub fn calculate_fee(ir_numerator: u64, ir_denominator: u64, outstanding_balance
 /// Returns an address to use for cancelling debt tokens in a debt swap.
 /// @ignore
 pub fn get_null_pk() -> XfrPublicKey {
-  XfrPublicKey::zei_from_bytes(&[0; 32])
+  XfrPublicKey::zei_from_bytes(&[0; 32]).unwrap()
 }
 
 #[wasm_bindgen]
@@ -677,7 +675,7 @@ pub fn keypair_to_str(key_pair: &XfrKeyPair) -> String {
 /// Constructs a transfer key pair from a hex-encoded string.
 /// The encode a key pair, use `keypair_to_str` function.
 pub fn keypair_from_str(str: String) -> XfrKeyPair {
-  XfrKeyPair::zei_from_bytes(&hex::decode(str).unwrap())
+  XfrKeyPair::zei_from_bytes(&hex::decode(str).unwrap()).unwrap()
 }
 
 #[wasm_bindgen]

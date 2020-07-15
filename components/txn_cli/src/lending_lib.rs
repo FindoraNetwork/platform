@@ -575,7 +575,8 @@ AssetRecordTemplate::with_no_asset_tracking(amount_to_spend,
 AssetRecordTemplate::with_no_asset_tracking(amount_to_burn,
                              debt_code.val,
                              AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
-                             XfrPublicKey::zei_from_bytes(&[0; 32]));
+                             XfrPublicKey::zei_from_bytes(&[0; 32])
+                                              .map_err(|e| PlatformError::ZeiError(error_location!(), e))?);
   let lender_template =
 AssetRecordTemplate::with_no_asset_tracking(loan.balance - amount_to_burn,
                              debt_code.val,

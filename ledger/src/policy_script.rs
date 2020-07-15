@@ -521,7 +521,10 @@ pub fn run_txn_check(check: &TxnCheck,
               out_ix += 1;
             }
           } else {
-            let null_public_key = XfrPublicKey::zei_from_bytes(&[0; 32]);
+            let null_public_key =
+              XfrPublicKey::zei_from_bytes(&[0; 32]).map_err(|e| {
+                                                      PlatformError::ZeiError(error_location!(), e)
+                                                    })?;
             let out_txo = trn.body
                              .transfer
                              .outputs

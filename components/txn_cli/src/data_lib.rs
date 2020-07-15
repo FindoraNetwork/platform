@@ -406,7 +406,8 @@ impl Data {
 
   pub fn get_asset_issuer_key_pair(&self, id: u64) -> Result<XfrKeyPair, PlatformError> {
     let key_pair_str = &self.asset_issuers[id as usize].key_pair;
-    Ok(XfrKeyPair::zei_from_bytes(&hex::decode(key_pair_str).or_else(|e| Err(ser_fail!(e)))?))
+    XfrKeyPair::zei_from_bytes(&hex::decode(key_pair_str).or_else(|e| Err(ser_fail!(e)))?)
+      .map_err(|e| PlatformError::ZeiError(error_location!(), e))
   }
 
   pub fn get_asset_tracer_key_pair(&self, id: u64) -> Result<AssetTracerKeyPair, PlatformError> {
@@ -446,7 +447,8 @@ impl Data {
 
   pub(crate) fn get_lender_key_pair(&self, id: u64) -> Result<XfrKeyPair, PlatformError> {
     let key_pair_str = &self.lenders[id as usize].key_pair;
-    Ok(XfrKeyPair::zei_from_bytes(&hex::decode(key_pair_str).or_else(|e| Err(des_fail!(e)))?))
+    XfrKeyPair::zei_from_bytes(&hex::decode(key_pair_str).or_else(|e| Err(des_fail!(e)))?)
+      .map_err(|e| PlatformError::ZeiError(error_location!(), e))
   }
 
   /// Creates or overwrites a credential requirement.
@@ -484,7 +486,8 @@ impl Data {
 
   pub fn get_borrower_key_pair(&self, id: u64) -> Result<XfrKeyPair, PlatformError> {
     let key_pair_str = &self.borrowers[id as usize].key_pair;
-    Ok(XfrKeyPair::zei_from_bytes(&hex::decode(key_pair_str).or_else(|e| Err(des_fail!(e)))?))
+    XfrKeyPair::zei_from_bytes(&hex::decode(key_pair_str).or_else(|e| Err(des_fail!(e)))?)
+      .map_err(|e| PlatformError::ZeiError(error_location!(), e))
   }
 
   /// Creates or overwrites a credential data.
