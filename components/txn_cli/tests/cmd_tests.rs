@@ -160,6 +160,7 @@ fn test_create_txn_builder_no_path() {
 // Note: Not all cases are tested
 //
 #[test]
+#[ignore]
 fn test_call_no_args() {
   let output = Command::new(COMMAND).output()
                                     .expect("failed to execute process");
