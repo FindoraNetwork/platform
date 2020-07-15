@@ -304,16 +304,16 @@ pub trait BuildsTransactions {
                            token_code: &AssetTypeCode,
                            seq_num: u64,
                            amount: u64,
-                           confidentiality_flags: AssetRecordType)
+                           confidentiality_flags: AssetRecordType,
+                           zei_params: &PublicParams)
                            -> Result<&mut Self, PlatformError> {
     let mut prng = ChaChaRng::from_entropy();
-    let params = PublicParams::new();
     let ar = AssetRecordTemplate::with_no_asset_tracking(amount,
                                                          token_code.val,
                                                          confidentiality_flags,
                                                          key_pair.get_pk());
 
-    let (ba, _, owner_memo) = build_blind_asset_record(&mut prng, &params.pc_gens, &ar, vec![]);
+    let (ba, _, owner_memo) = build_blind_asset_record(&mut prng, &zei_params.pc_gens, &ar, vec![]);
     self.add_operation_issue_asset(key_pair, token_code, seq_num, &[(TxOutput(ba), owner_memo)])
   }
 
@@ -616,7 +616,6 @@ pub(crate) fn build_record_and_get_blinds<R: CryptoRng + RngCore>(
     return Err(PlatformError::InputsError(error_location!()));
   }
   // 1. get ciphertext and proofs from identity proof structure
-  let pc_gens = PublicParams::new().pc_gens;
   let (attr_ctext, reveal_proof) = match identity_proof {
     None => (None, None),
     Some(conf_ac) => {
@@ -625,8 +624,9 @@ pub(crate) fn build_record_and_get_blinds<R: CryptoRng + RngCore>(
     }
   };
   // 2. Use record template and ciphertexts to build open asset record
+  let params = PublicParams::new();
   let (open_asset_record, asset_tracing_memos, owner_memo) =
-    build_open_asset_record(prng, &pc_gens, template, vec![attr_ctext]);
+    build_open_asset_record(prng, &params.pc_gens, template, vec![attr_ctext]);
   // 3. Return record input containing open asset record, tracking policy, identity reveal proof,
   //    asset_tracer_memo, and owner_memo
 

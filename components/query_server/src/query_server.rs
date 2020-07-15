@@ -331,6 +331,7 @@ mod tests {
   use txn_builder::{
     BuildsTransactions, PolicyChoice, TransactionBuilder, TransferOperationBuilder,
   };
+  use zei::setup::PublicParams;
   use zei::xfr::asset_record::open_blind_asset_record;
   use zei::xfr::asset_record::AssetRecordType::{
     ConfidentialAmount_NonConfidentialAssetType, NonConfidentialAmount_NonConfidentialAssetType,
@@ -393,6 +394,7 @@ mod tests {
     let rest_client_ledger_state = Arc::new(RwLock::new(LedgerState::test_ledger()));
     let mut ledger_state = LedgerState::test_ledger();
     let mock_ledger = MockLedgerClient::new(&Arc::clone(&rest_client_ledger_state));
+    let params = PublicParams::new();
     let mut prng = ChaChaRng::from_entropy();
     let mut query_server = QueryServer::new(mock_ledger);
     let token_code = AssetTypeCode::gen_random();
@@ -415,9 +417,9 @@ mod tests {
     let amt = 1000;
     let confidentiality_flag = ConfidentialAmount_NonConfidentialAssetType;
     let issuance_tx =
-      builder.add_basic_issue_asset(&alice, &token_code, 0, amt, confidentiality_flag)
+      builder.add_basic_issue_asset(&alice, &token_code, 0, amt, confidentiality_flag, &params)
              .unwrap()
-             .add_basic_issue_asset(&alice, &token_code, 1, amt, confidentiality_flag)
+             .add_basic_issue_asset(&alice, &token_code, 1, amt, confidentiality_flag, &params)
              .unwrap()
              .transaction();
 
@@ -474,6 +476,7 @@ mod tests {
     let mock_ledger = MockLedgerClient::new(&Arc::clone(&rest_client_ledger_state));
     let mut prng = ChaChaRng::from_entropy();
     let mut query_server = QueryServer::new(mock_ledger);
+    let params = PublicParams::new();
     let token_code = AssetTypeCode::gen_random();
     // Define keys
     let alice = XfrKeyPair::generate(&mut prng);
@@ -494,11 +497,11 @@ mod tests {
     let amt = 1000;
     let confidentiality_flag = NonConfidentialAmount_NonConfidentialAssetType;
     let issuance_tx =
-      builder.add_basic_issue_asset(&alice, &token_code, 0, amt, confidentiality_flag)
+      builder.add_basic_issue_asset(&alice, &token_code, 0, amt, confidentiality_flag, &params)
              .unwrap()
-             .add_basic_issue_asset(&alice, &token_code, 1, amt, confidentiality_flag)
+             .add_basic_issue_asset(&alice, &token_code, 1, amt, confidentiality_flag, &params)
              .unwrap()
-             .add_basic_issue_asset(&alice, &token_code, 2, amt, confidentiality_flag)
+             .add_basic_issue_asset(&alice, &token_code, 2, amt, confidentiality_flag, &params)
              .unwrap()
              .transaction();
 

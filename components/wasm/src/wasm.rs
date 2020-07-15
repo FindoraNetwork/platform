@@ -260,12 +260,14 @@ impl TransactionBuilder {
   /// @param {BigInt} seq_num - Issuance sequence number. Every subsequent issuance of a given asset type must have a higher sequence number than before.
   /// @param {BigInt} amount - Amount to be issued.
   /// @param {bool} conf_amount - `true` means the asset amount is confidential, and `false` means it's nonconfidential.
+  /// @param {PublicParams} zei_params - Public parameters necessary to generate asset records.
   pub fn add_basic_issue_asset(mut self,
                                key_pair: &XfrKeyPair,
                                code: String,
                                seq_num: u64,
                                amount: u64,
-                               conf_amount: bool)
+                               conf_amount: bool,
+                               zei_params: &PublicParams)
                                -> Result<TransactionBuilder, JsValue> {
     let asset_token = AssetTypeCode::new_from_base64(&code)
              .map_err(|_e| JsValue::from_str("Could not deserialize asset token code"))?;
@@ -279,7 +281,8 @@ impl TransactionBuilder {
                                &asset_token,
                                seq_num,
                                amount,
-                               confidentiality_flags)
+                               confidentiality_flags,
+                               zei_params.get_ref())
         .map_err(error_to_jsvalue)?;
     Ok(self)
   }
@@ -820,23 +823,23 @@ pub fn get_state_commitment(path: String) -> Result<Promise, JsValue> {
 #[wasm_bindgen]
 /// If successful, returns a promise that will eventually provide a
 /// JsValue describing an asset token. Otherwise, returns 'not found'.
-/// The request fails if the given asset name does not correspond to
+/// The request fails if the given token code does not correspond to
 /// an asset.
 /// @example <caption> Error handling </caption>
 /// try {
-///     await wasm.get_asset_token("http::localhost:8668", asset_name);
+///     await wasm.get_asset_token("http::localhost:8668", code);
 /// } catch (err) {
 ///     console.log(err)
 /// }
 /// @param {string} path - Address of ledger server. E.g. `https://localhost:8668`.
-/// @param {string} name - Base64-encoded asset token string.
+/// @param {string} code - Base64-encoded asset token string.
 ///
-pub fn get_asset_token(path: String, name: String) -> Result<Promise, JsValue> {
+pub fn get_asset_token(path: String, code: String) -> Result<Promise, JsValue> {
   let mut opts = RequestInit::new();
   opts.method("GET");
   opts.mode(RequestMode::Cors);
 
-  let req_string = format!("{}/asset_token/{}", path, name);
+  let req_string = format!("{}/asset_token/{}", path, code);
 
   create_query_promise(&opts, &req_string, false)
 }

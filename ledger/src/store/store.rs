@@ -1577,7 +1577,7 @@ impl LedgerState {
 
                serde_json::to_writer::<&mut BufWriter<File>, XfrKeyPair>(&mut writer, &key)
               .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other,e))
-              .and_then(|_| Ok(key))
+              .map(|_| key)
              })
              .map_err(|e| {
                PlatformError::SerializationError(format!("[{}]: {:?}", &error_location!(), e))
