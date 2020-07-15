@@ -1016,7 +1016,7 @@ impl BitMap {
   }
 
   /// Serialize the entire bit map to a compressed representation.
-  pub fn serialize(&mut self, version: usize) -> Vec<u8> {
+  pub fn serialize(&self, version: usize) -> Vec<u8> {
     assert!(self.validate(false));
     // Reserve space for the version number as a u64.
     let mut bytes = DESCRIPTOR_SIZE;
@@ -1028,7 +1028,11 @@ impl BitMap {
 
     let mut result = Vec::new();
     result.reserve(bytes);
-    self.append_descriptor(version as u64, &mut result);
+
+    // Manually append the version and checksum, to avoid the mutating digest update in the
+    // append_descriptor method
+    result.extend_from_slice(&version.to_le_bytes());
+    result.extend_from_slice(&self.checksum[..]);
 
     for i in 0..self.blocks.len() {
       self.serialize_block(i, &mut result, INCLUDE_BITS);
