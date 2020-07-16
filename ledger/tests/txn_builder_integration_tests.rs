@@ -67,10 +67,15 @@ fn test_create_asset() -> Result<(), PlatformError> {
   let (_, txos) = apply_transaction(&mut ledger, tx.clone());
 
   // Basic transfer
-  let bar1 = ((ledger.get_utxo(txos[0]).unwrap().0).0).clone();
-  let bar2 = ((ledger.get_utxo(txos[1]).unwrap().0).0).clone();
+  let state_comm1 = ledger.get_state_commitment().0;
+  let bar1_proof = ledger.get_utxo(txos[0]).unwrap();
+  let bar2_proof = ledger.get_utxo(txos[1]).unwrap();
+  let bar1 = (bar1_proof.utxo.0).0.clone();
+  let bar2 = (bar2_proof.utxo.0).0.clone();
   let oar1 = open_blind_asset_record(&bar1, &None, keys.get_sk_ref()).unwrap();
   let oar2 = open_blind_asset_record(&bar2, &None, keys.get_sk_ref()).unwrap();
+  assert!(bar1_proof.is_valid(state_comm1.clone()));
+  assert!(bar2_proof.is_valid(state_comm1.clone()));
 
   let op = TransferOperationBuilder::new().add_input(TxoRef::Absolute(txos[0]), oar1, None, None, 1000)?
                                           .add_input(TxoRef::Absolute(txos[1]), oar2, None, None, 500)?

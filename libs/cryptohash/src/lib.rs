@@ -110,7 +110,7 @@ impl From<sha256::Digest> for HashValue {
 /// * hashes    the set of hashes up the tree
 ///
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct Proof {
   pub version: u64,
   pub ledger: String,

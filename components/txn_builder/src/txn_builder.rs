@@ -420,7 +420,7 @@ impl TransactionBuilder {
   }
 
   pub fn get_output_ref(&self, idx: usize) -> &TxOutput {
-    self.txn.get_outputs_ref()[idx]
+    self.txn.get_outputs_ref(true)[idx]
   }
 
   pub fn from_seq_id(seq_id: u64) -> Self {

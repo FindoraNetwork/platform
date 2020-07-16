@@ -7,8 +7,8 @@ use credentials::{
 use cryptohash::sha256::{Digest, DIGESTBYTES};
 use ledger::data_model::{
   AssetRules as PlatformAssetRules, AssetType as PlatformAssetType, AssetTypeCode,
-  AuthenticatedAIRResult as PlatformAuthenticatedAIRResult, KVBlind as PlatformKVBlind,
-  KVHash as PlatformKVHash, SignatureRules as PlatformSignatureRules,
+  AuthenticatedAIRResult as PlatformAuthenticatedAIRResult, AuthenticatedUtxo,
+  KVBlind as PlatformKVBlind, KVHash as PlatformKVHash, SignatureRules as PlatformSignatureRules,
   TransferType as PlatformTransferType, TxOutput, TxoRef as PlatformTxoRef, TxoSID,
 };
 use rand_chacha::ChaChaRng;
@@ -114,41 +114,76 @@ impl TransferType {
   }
 }
 
+/// Object representing an authenticable asset record. Clients can validate authentication proofs
+/// against a ledger state commitment.
+/// @see {@link Network#get_state_commitment} for instructions on fetching a ledger state commitment.
+#[wasm_bindgen]
+pub struct AuthenticatedAssetRecord {
+  pub(crate) authenticated_record: AuthenticatedUtxo,
+}
+
+impl AuthenticatedAssetRecord {
+  pub fn get_auth_record_ref(&self) -> &AuthenticatedUtxo {
+    &self.authenticated_record
+  }
+}
+
+#[wasm_bindgen]
+impl AuthenticatedAssetRecord {
+  /// Given a serialized state commitment, returns true if the
+  /// authenticated utxo proofs validate correctly and false otherwise. If the proofs validate, the
+  /// asset record contained in this structure exists on the ledger and is unspent.
+  /// @param {string} state_commitment - String representing the state commitment.
+  /// @see {@link network#get_state_commitment} for instructions on fetching a ledger state commitment.
+  /// @throws Will throw an error if the state commitment fails to deserialize.
+  pub fn is_valid(&self, state_commitment: String) -> Result<bool, JsValue> {
+    let state_commitment = serde_json::from_str::<HashOf<_>>(&state_commitment).map_err(|_e| {
+                             JsValue::from_str("Could not deserialize state commitment")
+                           })?;
+    Ok(self.authenticated_record.is_valid(state_commitment))
+  }
+
+  pub fn from_json_record(record: &JsValue) -> Result<AuthenticatedAssetRecord, JsValue> {
+    Ok(AuthenticatedAssetRecord { authenticated_record: record.into_serde()
+                                                              .map_err(error_to_jsvalue)? })
+  }
+}
+
 #[wasm_bindgen]
 /// TXO of the client's asset record.
 pub struct ClientAssetRecord {
-  pub(crate) output: TxOutput,
+  pub(crate) txo: TxOutput,
 }
 
 impl ClientAssetRecord {
   pub fn get_bar_ref(&self) -> &BlindAssetRecord {
-    &self.output.0
+    &self.txo.0
   }
 }
 
 #[wasm_bindgen]
 impl ClientAssetRecord {
   /// Builds a client record from an asset record fetched from the ledger server.
-  /// @param {JsValue} val - JSON asset record fetched from ledger server with the `utxo_sid/{sid}` route,
+  /// @param {record} - JSON-encoded autehtnicated asset record fetched from ledger server with the `utxo_sid/{sid}` route,
   /// where `sid` can be fetched from the query server with the `get_owned_utxos/{address}` route.
-  pub fn from_jsvalue(val: &JsValue) -> Self {
-    ClientAssetRecord { output: TxOutput(val.into_serde().unwrap()) }
+  pub fn from_json_record(record: &JsValue) -> Self {
+    ClientAssetRecord { txo: record.into_serde().unwrap() }
   }
 
   /// Returns the asset amount associated with an asset record.
   /// * If the amount is nonconfidential, returns the amount.
   /// * Otherwise, returns null.
   /// @see {@open_client_asset_record} for information about decrypting the confidential record.
-  pub fn get_asset_amount(record: &ClientAssetRecord) -> Option<u64> {
-    record.get_bar_ref().amount.get_amount()
+  pub fn get_asset_amount(&self) -> Option<u64> {
+    self.get_bar_ref().amount.get_amount()
   }
 
   /// Returns the asset type associated with an asset record.
   /// * If the type is nonconfidential, returns a base64 string representing the type.
   /// * Otherwise, returns null.
   /// @see {@open_client_asset_record} for information about decrypting the confidential record.
-  pub fn get_asset_type(record: &ClientAssetRecord) -> Option<String> {
-    let code = record.get_bar_ref().asset_type.get_asset_type();
+  pub fn get_asset_type(&self) -> Option<String> {
+    let code = self.get_bar_ref().asset_type.get_asset_type();
     match code {
       Some(c) => Some((AssetTypeCode { val: c }).to_base64()),
       None => None,
