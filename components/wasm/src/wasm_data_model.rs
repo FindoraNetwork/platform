@@ -7,8 +7,8 @@ use credentials::{
 use cryptohash::sha256::{Digest, DIGESTBYTES};
 use ledger::data_model::{
   AssetRules as PlatformAssetRules, AssetType as PlatformAssetType,
-  AuthenticatedAIRResult as PlatformAuthenticatedAIRResult, KVBlind as PlatformKVBlind,
-  KVHash as PlatformKVHash, SignatureRules as PlatformSignatureRules,
+  AuthenticatedAIRResult as PlatformAuthenticatedAIRResult, AuthenticatedUtxo,
+  KVBlind as PlatformKVBlind, KVHash as PlatformKVHash, SignatureRules as PlatformSignatureRules,
   TransferType as PlatformTransferType, TxOutput, TxoRef as PlatformTxoRef, TxoSID,
 };
 use rand_chacha::ChaChaRng;
@@ -114,28 +114,63 @@ impl TransferType {
   }
 }
 
+/// Object representing an authenticable asset record. Clients can validate authentication proofs
+/// against a ledger state commitment.
+/// @see {@link Network#get_state_commitment} for instructions on fetching a ledger state commitment.
+#[wasm_bindgen]
+pub struct AuthenticatedAssetRecord {
+  pub(crate) authenticated_record: AuthenticatedUtxo,
+}
+
+impl AuthenticatedAssetRecord {
+  pub fn get_auth_record_ref(&self) -> &AuthenticatedUtxo {
+    &self.authenticated_record
+  }
+}
+
+#[wasm_bindgen]
+impl AuthenticatedAssetRecord {
+  /// Given a serialized state commitment, returns true if the
+  /// authenticated utxo proofs validate correctly and false otherwise. If the proofs validate, the
+  /// asset record contained in this structure exists on the ledger and is unspent.
+  /// @param {string} state_commitment - String representing the state commitment.
+  /// @see {@link network#get_state_commitment} for instructions on fetching a ledger state commitment.
+  /// @throws Will throw an error if the state commitment fails to deserialize.
+  pub fn is_valid(&self, state_commitment: String) -> Result<bool, JsValue> {
+    let state_commitment = serde_json::from_str::<HashOf<_>>(&state_commitment).map_err(|_e| {
+                             JsValue::from_str("Could not deserialize state commitment")
+                           })?;
+    Ok(self.authenticated_record.is_valid(state_commitment))
+  }
+
+  pub fn from_json_record(record: &JsValue) -> Result<AuthenticatedAssetRecord, JsValue> {
+    Ok(AuthenticatedAssetRecord { authenticated_record: record.into_serde()
+                                                              .map_err(error_to_jsvalue)? })
+  }
+}
+
 #[wasm_bindgen]
 /// TXO of the client's asset record.
 pub struct ClientAssetRecord {
-  pub(crate) output: TxOutput,
+  pub(crate) txo: TxOutput,
 }
 
 impl ClientAssetRecord {
   pub fn get_bar_ref(&self) -> &BlindAssetRecord {
-    &self.output.0
+    &self.txo.0
   }
 }
 
 #[wasm_bindgen]
 impl ClientAssetRecord {
   /// Builds a client record from a JSON-serialized JavaScript value.
-  /// @param {JsValue} val - JSON asset record fetched from ledger server with the `utxo_sid/{sid}` route,
+  /// @param {JsValue} val - JSON-encoded autehtnicated asset record fetched from ledger server with the `utxo_sid/{sid}` route,
   /// where `sid` can be fetched from the query server with the `get_owned_utxos/{address}` route.
   /// * E.g.: `{"amount":{"NonConfidential":1000},
   /// "asset_type":{"NonConfidential":[2,14,75,187,192,9,69,242,30,9,18,203,193,227,148,56]},
   /// "public_key":"vmGHutHEUGVL24SZMfkadu-9u7RcIARSlQB-rVHOnEM="}`.
   pub fn from_json(val: &JsValue) -> Self {
-    ClientAssetRecord { output: TxOutput(val.into_serde().unwrap()) }
+    ClientAssetRecord { txo: val.into_serde().unwrap() }
   }
 }
 
