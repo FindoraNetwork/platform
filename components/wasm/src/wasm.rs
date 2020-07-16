@@ -31,7 +31,9 @@ use zei::serialization::ZeiFromToBytes;
 use zei::xfr::asset_record::{open_blind_asset_record as open_bar, AssetRecordType};
 use zei::xfr::lib::trace_assets as zei_trace_assets;
 use zei::xfr::sig::{XfrKeyPair, XfrPublicKey};
-use zei::xfr::structs::{AssetRecordTemplate, AssetType as ZeiAssetType, XfrBody};
+use zei::xfr::structs::{
+  AssetRecordTemplate, AssetType as ZeiAssetType, XfrBody, ASSET_TYPE_LENGTH,
+};
 
 mod util;
 mod wasm_data_model;
@@ -51,8 +53,8 @@ pub fn random_asset_type() -> String {
 #[wasm_bindgen]
 /// Generates a base64 encoded asset type string from a JSON-serialized JavaScript value.
 pub fn asset_type_from_jsvalue(val: &JsValue) -> Result<String, JsValue> {
-  let code: [u8; 16] = val.into_serde().map_err(error_to_jsvalue)?;
-  Ok(AssetTypeCode { val: code }.to_base64())
+  let code: [u8; ASSET_TYPE_LENGTH] = val.into_serde().map_err(error_to_jsvalue)?;
+  Ok(AssetTypeCode { val: ZeiAssetType(code) }.to_base64())
 }
 
 #[wasm_bindgen]
