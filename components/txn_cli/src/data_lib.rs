@@ -116,7 +116,7 @@ impl CredentialIndex {
   }
 }
 
-#[derive(Clone, Deserialize, Debug, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 /// Borrower's credential records.
 pub struct Credential {
   /// Credential ID
@@ -184,7 +184,7 @@ impl AssetIssuer {
   }
 }
 
-#[derive(Clone, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 /// Credential issuer's account information.
 pub struct CredentialIssuer {
   /// Credential issuer ID
@@ -216,7 +216,7 @@ impl CredentialIssuer {
   }
 }
 
-#[derive(Clone, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 /// Lender's account information.
 pub struct Lender {
   /// Lender ID
@@ -249,7 +249,7 @@ impl Lender {
   }
 }
 
-#[derive(Clone, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 /// Borrower's account information.
 pub struct Borrower {
   /// Borrower ID
@@ -288,7 +288,7 @@ impl Borrower {
 //
 // Loan
 //
-#[derive(Clone, Deserialize, Debug, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 /// Loan statuses.
 pub enum LoanStatus {
   /// The borrower has requested the loan, but the lender hasn't fulfill it
@@ -301,7 +301,7 @@ pub enum LoanStatus {
   Complete,
 }
 
-#[derive(Clone, Deserialize, Debug, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 /// Loan information.
 pub struct Loan {
   /// Loan ID
@@ -358,7 +358,7 @@ impl Loan {
 //
 // Data
 //
-#[derive(Clone, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 /// Information of users, loans, fiat token code, and sequence number.
 pub struct Data {
   /// List of user records
@@ -749,8 +749,10 @@ pub fn store_txn_to_file(path_str: &str, txn: &TransactionBuilder) -> Result<(),
       return Err(PlatformError::IoError(format!("Failed to create file {}: {}.",
                                                 path_str, error)));
     };
+    Ok(())
+  } else {
+    Err(PlatformError::IoError(format!("Error converting {:?} to json", txn)))
   }
-  Ok(())
 }
 
 /// Stores SIDs to file.

@@ -49,6 +49,13 @@ pub fn random_asset_type() -> String {
 }
 
 #[wasm_bindgen]
+/// Generates a base64 encoded asset type string from a JSON-serialized JavaScript value.
+pub fn asset_type_from_jsvalue(val: &JsValue) -> Result<String, JsValue> {
+  let code: [u8; 16] = val.into_serde().map_err(error_to_jsvalue)?;
+  Ok(AssetTypeCode { val: code }.to_base64())
+}
+
+#[wasm_bindgen]
 /// Given a serialized state commitment and transaction, returns true if the transaction correctly
 /// hashes up to the state commitment and false otherwise.
 /// @param {string} state_commitment - String representing the state commitment.
@@ -354,7 +361,7 @@ impl TransactionBuilder {
   /// Fetches a client record from a transaction.
   /// @param {number} idx - Record to fetch. Records are added to the transaction builder sequentially.
   pub fn get_owner_record(&self, idx: usize) -> ClientAssetRecord {
-    ClientAssetRecord { output: self.get_builder().get_output_ref(idx).clone() }
+    ClientAssetRecord { txo: self.get_builder().get_output_ref(idx).clone() }
   }
 
   /// Fetches an owner memo from a transaction
