@@ -37,6 +37,7 @@ fn test_create_asset() -> Result<(), PlatformError> {
   let code = AssetTypeCode { val: [1; 16] };
   let keys = XfrKeyPair::generate(&mut prng);
   let mut builder = TransactionBuilder::from_seq_id(ledger.get_block_commit_count());
+  let params = PublicParams::new();
 
   // Define
   let tx = builder.add_operation_create_asset(&keys,
@@ -46,31 +47,35 @@ fn test_create_asset() -> Result<(), PlatformError> {
                                               PolicyChoice::Fungible())?
                   .transaction();
   apply_transaction(&mut ledger, tx.clone());
-  assert!(ledger.get_asset_type(&code).is_some());
 
   // Issue
   let mut builder = TransactionBuilder::from_seq_id(ledger.get_block_commit_count());
   let tx =
     builder.add_basic_issue_asset(&keys,
-                                  None,
                                   &code,
                                   0,
                                   1000,
-                                  AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType)?
+                                  AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
+                                  &params)?
            .add_basic_issue_asset(&keys,
-                                  None,
                                   &code,
                                   1,
                                   500,
-                                  AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType)?
+                                  AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
+                                  &params)?
            .transaction();
   let (_, txos) = apply_transaction(&mut ledger, tx.clone());
 
   // Basic transfer
-  let bar1 = ((ledger.get_utxo(txos[0]).unwrap().0).0).clone();
-  let bar2 = ((ledger.get_utxo(txos[1]).unwrap().0).0).clone();
+  let state_comm1 = ledger.get_state_commitment().0;
+  let bar1_proof = ledger.get_utxo(txos[0]).unwrap();
+  let bar2_proof = ledger.get_utxo(txos[1]).unwrap();
+  let bar1 = (bar1_proof.utxo.0).0.clone();
+  let bar2 = (bar2_proof.utxo.0).0.clone();
   let oar1 = open_blind_asset_record(&bar1, &None, keys.get_sk_ref()).unwrap();
   let oar2 = open_blind_asset_record(&bar2, &None, keys.get_sk_ref()).unwrap();
+  assert!(bar1_proof.is_valid(state_comm1.clone()));
+  assert!(bar2_proof.is_valid(state_comm1.clone()));
 
   let op = TransferOperationBuilder::new().add_input(TxoRef::Absolute(txos[0]), oar1, None, None, 1000)?
                                           .add_input(TxoRef::Absolute(txos[1]), oar2, None, None, 500)?
@@ -154,13 +159,11 @@ fn test_loan_repayment(loan_amount: u64,
   let tx = builder.add_operation_issue_asset(&fiat_issuer_keys,
                                              &fiat_code,
                                              0,
-                                             &[(TxOutput(fiat_ba.clone()), fiat_owner_memo)],
-                                             None)?
+                                             &[(TxOutput(fiat_ba.clone()), fiat_owner_memo)])?
                   .add_operation_issue_asset(&borrower_keys,
                                              &debt_code,
                                              0,
-                                             &[(TxOutput(debt_ba.clone()), debt_owner_memo)],
-                                             None)?;
+                                             &[(TxOutput(debt_ba.clone()), debt_owner_memo)])?;
   let mut xfr_builder = TransferOperationBuilder::new();
   let output_template =
     AssetRecordTemplate::with_no_asset_tracking(loan_amount,

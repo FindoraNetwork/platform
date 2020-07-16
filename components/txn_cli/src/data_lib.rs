@@ -116,7 +116,7 @@ impl CredentialIndex {
   }
 }
 
-#[derive(Clone, Deserialize, Debug, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 /// Borrower's credential records.
 pub struct Credential {
   /// Credential ID
@@ -153,7 +153,7 @@ impl Credential {
 //
 // Users
 //
-#[derive(Clone, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 /// Asset issuer's account information.
 pub(crate) struct AssetIssuer {
   /// AssetIssuer ID
@@ -180,11 +180,11 @@ impl AssetIssuer {
     Ok(AssetIssuer { id: id as u64,
                      name,
                      key_pair: key_pair_str,
-                     tracer_key_pair: hex::encode(tracer_key_pair_str) })
+                     tracer_key_pair: tracer_key_pair_str })
   }
 }
 
-#[derive(Clone, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 /// Credential issuer's account information.
 pub struct CredentialIssuer {
   /// Credential issuer ID
@@ -197,20 +197,26 @@ pub struct CredentialIssuer {
 
 impl CredentialIssuer {
   /// Conpub(crate) structs a credential issuer for the credit score attribute.
-  pub fn new(id: usize, name: String) -> Result<Self, PlatformError> {
+  pub fn new(id: usize,
+             name: String,
+             attributes: Vec<CredentialIndex>)
+             -> Result<Self, PlatformError> {
+    let mut attribute_names_and_sizes = Vec::new();
+    for attribute in attributes {
+      attribute_names_and_sizes.push(attribute.get_name_and_length());
+    }
+
     let key_pair =
-      credential_issuer_key_gen(&mut ChaChaRng::from_entropy(),
-                                &[CredentialIndex::MinCreditScore.get_name_and_length(),
-                                  CredentialIndex::MinIncome.get_name_and_length(),
-                                  CredentialIndex::Citizenship.get_name_and_length()]);
-    let key_pair_str = serde_json::to_vec(&key_pair).or_else(|e| Err(ser_fail!(e)))?;
+      credential_issuer_key_gen(&mut ChaChaRng::from_entropy(), &attribute_names_and_sizes);
+    let key_pair_str = serde_json::to_string(&key_pair).or_else(|e| Err(ser_fail!(e)))?;
+
     Ok(CredentialIssuer { id: id as u64,
                           name,
                           key_pair: hex::encode(key_pair_str) })
   }
 }
 
-#[derive(Clone, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 /// Lender's account information.
 pub struct Lender {
   /// Lender ID
@@ -243,7 +249,7 @@ impl Lender {
   }
 }
 
-#[derive(Clone, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 /// Borrower's account information.
 pub struct Borrower {
   /// Borrower ID
@@ -282,7 +288,7 @@ impl Borrower {
 //
 // Loan
 //
-#[derive(Clone, Deserialize, Debug, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 /// Loan statuses.
 pub enum LoanStatus {
   /// The borrower has requested the loan, but the lender hasn't fulfill it
@@ -295,7 +301,7 @@ pub enum LoanStatus {
   Complete,
 }
 
-#[derive(Clone, Deserialize, Debug, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 /// Loan information.
 pub struct Loan {
   /// Loan ID
@@ -352,7 +358,7 @@ impl Loan {
 //
 // Data
 //
-#[derive(Clone, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 /// Information of users, loans, fiat token code, and sequence number.
 pub struct Data {
   /// List of user records
@@ -405,19 +411,19 @@ impl Data {
 
   pub fn get_asset_tracer_key_pair(&self, id: u64) -> Result<AssetTracerKeyPair, PlatformError> {
     let tracer_key_pair_str = &self.asset_issuers[id as usize].tracer_key_pair;
-    let tracer_key_pair_decode = hex::decode(tracer_key_pair_str).or_else(|e| Err(des_fail!(e)))?;
     let tracer_key_pair =
-      serde_json::from_slice(&tracer_key_pair_decode).or_else(|e| Err(des_fail!(e)))?;
+      serde_json::from_str(&tracer_key_pair_str).or_else(|e| Err(des_fail!(e)))?;
     Ok(tracer_key_pair)
   }
 
   pub fn add_credential_issuer(&mut self,
                                data_dir: &str,
-                               name: String)
+                               name: String,
+                               attributes: Vec<CredentialIndex>)
                                -> Result<(), PlatformError> {
     let id = self.credential_issuers.len();
     self.credential_issuers
-        .push(CredentialIssuer::new(id, name.clone())?);
+        .push(CredentialIssuer::new(id, name.clone(), attributes)?);
     println!("{}'s id is {}.", name, id);
     store_data_to_file(self.clone(), data_dir)
   }
@@ -427,8 +433,7 @@ impl Data {
     id: u64)
     -> Result<(CredIssuerPublicKey, CredIssuerSecretKey), PlatformError> {
     let key_pair_str = &self.credential_issuers[id as usize].key_pair;
-    let key_pair_decode = hex::decode(key_pair_str).or_else(|e| Err(des_fail!(e)))?;
-    let key_pair = serde_json::from_slice(&key_pair_decode).or_else(|e| Err(des_fail!(e)))?;
+    let key_pair = serde_json::from_str(&key_pair_str).or_else(|e| Err(des_fail!(e)))?;
     Ok(key_pair)
   }
 
@@ -641,8 +646,9 @@ pub(crate) fn load_blind_asset_record_and_owner_memo_from_file(
   let _ = fs::remove_file(file_path);
   println!("Parsing builder from file contents: \"{}\"", &txn);
   match serde_json::from_str::<TransactionBuilder>(&txn) {
-    Ok(builder) => Ok(((builder.get_owner_record_and_memo(0).unwrap().0.clone()).0,
-                       builder.get_owner_record_and_memo(0).unwrap().1.clone())),
+    Ok(builder) => {
+      Ok((builder.get_output_ref(0).0.clone(), builder.get_owner_memo_ref(0).cloned()))
+    }
     Err(e) => Err(des_fail!(e)),
   }
 }
@@ -740,8 +746,10 @@ pub fn store_txn_to_file(path_str: &str, txn: &TransactionBuilder) -> Result<(),
       return Err(PlatformError::IoError(format!("Failed to create file {}: {}.",
                                                 path_str, error)));
     };
+    Ok(())
+  } else {
+    Err(PlatformError::IoError(format!("Error converting {:?} to json", txn)))
   }
-  Ok(())
 }
 
 /// Stores SIDs to file.

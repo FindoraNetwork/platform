@@ -450,9 +450,11 @@ pub fn run_txn_check(check: &TxnCheck,
           return Err(fail!());
         }
 
-        res_vars.extend(outs.iter()
-                            .map(|(_, rv)| *rv)
-                            .zip(iss.body.records.iter().cloned()));
+        res_vars.extend(outs.iter().map(|(_, rv)| *rv).zip(iss.body
+                                                              .records
+                                                              .iter()
+                                                              .map(|(rec, _)| rec)
+                                                              .cloned()));
         res_totals.extend(outs.iter().map(|(amt, rv)| (*rv, vec![*amt])));
       }
       (RealTxnOp::Transfer(transfers), Operation::TransferAsset(trn)) => {

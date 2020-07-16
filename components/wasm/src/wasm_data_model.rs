@@ -6,7 +6,8 @@ use credentials::{
 };
 use cryptohash::sha256::{Digest, DIGESTBYTES};
 use ledger::data_model::{
-  AssetRules as PlatformAssetRules, AuthenticatedAIRResult as PlatformAuthenticatedAIRResult,
+  AssetRules as PlatformAssetRules, AssetType as PlatformAssetType, AssetTypeCode,
+  AuthenticatedAIRResult as PlatformAuthenticatedAIRResult, AuthenticatedUtxo,
   KVBlind as PlatformKVBlind, KVHash as PlatformKVHash, SignatureRules as PlatformSignatureRules,
   TransferType as PlatformTransferType, TxOutput, TxoRef as PlatformTxoRef, TxoSID,
 };
@@ -15,12 +16,37 @@ use rand_core::{RngCore, SeedableRng};
 use serde::{Deserialize, Serialize};
 use utils::HashOf;
 use wasm_bindgen::prelude::*;
+use zei::setup::PublicParams as ZeiPublicParams;
 use zei::xfr::asset_tracer::gen_asset_tracer_keypair;
 use zei::xfr::sig::XfrPublicKey;
 use zei::xfr::structs::{
   AssetTracerDecKeys, AssetTracerEncKeys, AssetTracerKeyPair as ZeiAssetTracerKeyPair,
-  BlindAssetRecord, OwnerMemo as ZeiOwnerMemo,
+  AssetTracingPolicies, AssetTracingPolicy, BlindAssetRecord, IdentityRevealPolicy,
+  OwnerMemo as ZeiOwnerMemo,
 };
+
+#[wasm_bindgen]
+/// Public parameters necessary for generating asset records. Generating this is expensive and
+/// should be done as infrequently as possible.
+/// @see {@link TransactionBuilder#add_basic_issue_asset}
+pub struct PublicParams {
+  pub(crate) params: ZeiPublicParams,
+}
+
+#[allow(clippy::new_without_default)]
+#[wasm_bindgen]
+impl PublicParams {
+  /// Generates a new set of parameters.
+  pub fn new() -> PublicParams {
+    PublicParams { params: ZeiPublicParams::new() }
+  }
+}
+
+impl PublicParams {
+  pub fn get_ref(&self) -> &ZeiPublicParams {
+    &self.params
+  }
+}
 
 #[wasm_bindgen]
 /// Indicates whether the TXO ref is an absolute or relative value.
@@ -88,10 +114,81 @@ impl TransferType {
   }
 }
 
+/// Object representing an authenticable asset record. Clients can validate authentication proofs
+/// against a ledger state commitment.
+/// @see {@link Network#get_state_commitment} for instructions on fetching a ledger state commitment.
+#[wasm_bindgen]
+pub struct AuthenticatedAssetRecord {
+  pub(crate) authenticated_record: AuthenticatedUtxo,
+}
+
+impl AuthenticatedAssetRecord {
+  pub fn get_auth_record_ref(&self) -> &AuthenticatedUtxo {
+    &self.authenticated_record
+  }
+}
+
+#[wasm_bindgen]
+impl AuthenticatedAssetRecord {
+  /// Given a serialized state commitment, returns true if the
+  /// authenticated utxo proofs validate correctly and false otherwise. If the proofs validate, the
+  /// asset record contained in this structure exists on the ledger and is unspent.
+  /// @param {string} state_commitment - String representing the state commitment.
+  /// @see {@link network#get_state_commitment} for instructions on fetching a ledger state commitment.
+  /// @throws Will throw an error if the state commitment fails to deserialize.
+  pub fn is_valid(&self, state_commitment: String) -> Result<bool, JsValue> {
+    let state_commitment = serde_json::from_str::<HashOf<_>>(&state_commitment).map_err(|_e| {
+                             JsValue::from_str("Could not deserialize state commitment")
+                           })?;
+    Ok(self.authenticated_record.is_valid(state_commitment))
+  }
+
+  pub fn from_json_record(record: &JsValue) -> Result<AuthenticatedAssetRecord, JsValue> {
+    Ok(AuthenticatedAssetRecord { authenticated_record: record.into_serde()
+                                                              .map_err(error_to_jsvalue)? })
+  }
+}
+
 #[wasm_bindgen]
 /// TXO of the client's asset record.
 pub struct ClientAssetRecord {
-  pub(crate) output: TxOutput,
+  pub(crate) txo: TxOutput,
+}
+
+impl ClientAssetRecord {
+  pub fn get_bar_ref(&self) -> &BlindAssetRecord {
+    &self.txo.0
+  }
+}
+
+#[wasm_bindgen]
+impl ClientAssetRecord {
+  /// Builds a client record from an asset record fetched from the ledger server.
+  /// @param {record} - JSON-encoded autehtnicated asset record fetched from ledger server with the `utxo_sid/{sid}` route,
+  /// where `sid` can be fetched from the query server with the `get_owned_utxos/{address}` route.
+  pub fn from_json_record(record: &JsValue) -> Self {
+    ClientAssetRecord { txo: record.into_serde().unwrap() }
+  }
+
+  /// Returns the asset amount associated with an asset record.
+  /// * If the amount is nonconfidential, returns the amount.
+  /// * Otherwise, returns null.
+  /// @see {@open_client_asset_record} for information about decrypting the confidential record.
+  pub fn get_asset_amount(&self) -> Option<u64> {
+    self.get_bar_ref().amount.get_amount()
+  }
+
+  /// Returns the asset type associated with an asset record.
+  /// * If the type is nonconfidential, returns a base64 string representing the type.
+  /// * Otherwise, returns null.
+  /// @see {@open_client_asset_record} for information about decrypting the confidential record.
+  pub fn get_asset_type(&self) -> Option<String> {
+    let code = self.get_bar_ref().asset_type.get_asset_type();
+    match code {
+      Some(c) => Some((AssetTypeCode { val: c }).to_base64()),
+      None => None,
+    }
+  }
 }
 
 #[wasm_bindgen]
@@ -130,24 +227,24 @@ impl AssetTracerKeyPair {
 }
 
 #[wasm_bindgen]
+#[derive(Deserialize)]
 /// Asset owner memo. Contains information needed to decrypt an asset record.
 /// @see {@link ClientAssetRecord} for more details about asset records.
 pub struct OwnerMemo {
   pub(crate) memo: ZeiOwnerMemo,
 }
 
-impl ClientAssetRecord {
-  pub fn get_bar_ref(&self) -> &BlindAssetRecord {
-    &self.output.0
-  }
-}
-
 #[wasm_bindgen]
-impl ClientAssetRecord {
-  /// Builds a client record from an asset record fetched from the ledger server.
-  /// @param {record} - JSON asset record fetched from server.
-  pub fn from_json_record(record: &JsValue) -> Self {
-    ClientAssetRecord { output: TxOutput(record.into_serde().unwrap()) }
+impl OwnerMemo {
+  /// Generate an owner memo from a JSON-serialized JavaScript value.
+  ///
+  /// Builds a client record from an owner memo fetched from the ledger server.
+  /// @param {JsValue} val - JSON owner memo fetched from ledger server with the `owner_memo/{sid}` route,
+  /// where `sid` can be fetched from the query server with the `get_owned_utxos/{address}` route.
+  pub fn from_jsvalue(val: &JsValue) -> Self {
+    let zei_owner_memo: ZeiOwnerMemo = val.into_serde().unwrap();
+    OwnerMemo { memo: ZeiOwnerMemo { blind_share: zei_owner_memo.blind_share,
+                                     lock: zei_owner_memo.lock } }
   }
 }
 
@@ -255,6 +352,31 @@ pub struct AuthenticatedAIRResult {
 impl AuthenticatedAIRResult {
   pub fn get_ref(&self) -> &PlatformAuthenticatedAIRResult {
     &self.result
+  }
+}
+
+#[wasm_bindgen]
+/// Object representing an asset definition. Used to fetch tracing policies and any other
+/// information that may be required to construct a valid transfer or issuance.
+pub struct AssetType {
+  pub(crate) asset_type: PlatformAssetType,
+}
+
+#[wasm_bindgen]
+impl AssetType {
+  /// Construct an AssetType from the JSON-encoded value returned by the ledger.
+  pub fn from_json(json: &JsValue) -> Result<AssetType, JsValue> {
+    let asset_type: PlatformAssetType = json.into_serde().map_err(error_to_jsvalue)?;
+    Ok(AssetType { asset_type })
+  }
+
+  /// Fetch the tracing policies from the asset definition.
+  pub fn get_tracing_policies(&self) -> TracingPolicies {
+    TracingPolicies { policies: self.asset_type
+                                    .properties
+                                    .asset_rules
+                                    .tracing_policies
+                                    .clone() }
   }
 }
 
@@ -384,9 +506,60 @@ impl SignatureRules {
 }
 
 #[wasm_bindgen]
+/// A collection of tracing policies. Use this object when constructing asset transfers to generate
+/// the correct tracing proofs for traceable assets.
+pub struct TracingPolicies {
+  pub(crate) policies: AssetTracingPolicies,
+}
+
+impl TracingPolicies {
+  pub fn get_policies_ref(&self) -> &AssetTracingPolicies {
+    &self.policies
+  }
+}
+
+#[wasm_bindgen]
+/// Tracing policy for asset transfers. Can be configured to track credentials, the asset type and
+/// amount, or both.
+pub struct TracingPolicy {
+  pub(crate) policy: AssetTracingPolicy,
+}
+
+#[wasm_bindgen]
+impl TracingPolicy {
+  pub fn new_with_tracking(tracing_key: &AssetTracerKeyPair) -> Self {
+    let policy = AssetTracingPolicy { enc_keys: tracing_key.get_enc_key().clone(),
+                                      asset_tracking: true,
+                                      identity_tracking: None };
+    TracingPolicy { policy }
+  }
+
+  pub fn new_with_identity_tracking(tracing_key: &AssetTracerKeyPair,
+                                    cred_issuer_key: &CredIssuerPublicKey,
+                                    reveal_map: JsValue,
+                                    tracking: bool)
+                                    -> Result<TracingPolicy, JsValue> {
+    let reveal_map: Vec<bool> = reveal_map.into_serde().map_err(error_to_jsvalue)?;
+    let identity_policy = IdentityRevealPolicy { cred_issuer_pub_key: cred_issuer_key.get_ref()
+                                                                                     .clone(),
+                                                 reveal_map };
+    let policy = AssetTracingPolicy { enc_keys: tracing_key.get_enc_key().clone(),
+                                      asset_tracking: tracking,
+                                      identity_tracking: Some(identity_policy) };
+    Ok(TracingPolicy { policy })
+  }
+}
+
+impl TracingPolicy {
+  pub fn get_ref(&self) -> &AssetTracingPolicy {
+    &self.policy
+  }
+}
+
+#[wasm_bindgen]
 #[derive(Default)]
 /// Simple asset rules:
-/// 1) Traceable: Records of traceable assets can be decrypted by a provided tracking key
+/// 1) Traceable: Records and identities of traceable assets can be decrypted by a provided tracking key
 /// 2) Transferable: Non-transferable assets can only be transferred once from the issuer to
 ///    another user.
 /// 3) Updatable: Whether the asset memo can be updated.
@@ -403,10 +576,10 @@ impl AssetRules {
     AssetRules::default()
   }
 
-  /// Toggles asset traceability.
-  /// @param {bool} traceable - Boolean indicating whether asset can be traced by an issuer tracing key.
-  pub fn set_traceable(mut self, traceable: bool) -> AssetRules {
-    self.rules.traceable = traceable;
+  /// Adds an asset tracing policy.
+  /// @param {TracingPolicy} policy - Tracing policy for the new asset.
+  pub fn add_tracing_policy(mut self, policy: &TracingPolicy) -> AssetRules {
+    self.rules.tracing_policies.add(policy.get_ref().clone());
     self
   }
 

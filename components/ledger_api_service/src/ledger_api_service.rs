@@ -40,13 +40,15 @@ fn ping() -> actix_web::Result<String> {
 
 pub fn query_utxo<LA>(data: web::Data<Arc<RwLock<LA>>>,
                       info: web::Path<String>)
-                      -> actix_web::Result<web::Json<Utxo>>
+                      -> actix_web::Result<web::Json<AuthenticatedUtxo>>
   where LA: LedgerAccess
 {
-  let reader = data.read().unwrap();
+  // TODO noah figure out how to make bitmap serialization not require a mutable ref
+  // https://bugtracker.findora.org/issues/165
+  let mut writer = data.write().unwrap();
   if let Ok(txo_sid) = info.parse::<u64>() {
-    if let Some(txo) = reader.get_utxo(TxoSID(txo_sid)) {
-      Ok(web::Json(txo.clone()))
+    if let Some(txo) = writer.get_utxo(TxoSID(txo_sid)) {
+      Ok(web::Json(txo))
     } else {
       Err(actix_web::error::ErrorNotFound("Specified txo does not currently exist."))
     }
@@ -439,7 +441,7 @@ impl RestfulApiService {
 }
 
 pub trait RestfulLedgerAccess {
-  fn get_utxo(&self, addr: TxoSID) -> Result<Utxo, PlatformError>;
+  fn get_utxo(&self, addr: TxoSID) -> Result<AuthenticatedUtxo, PlatformError>;
 
   fn get_issuance_num(&self, code: &AssetTypeCode) -> Result<u64, PlatformError>;
 
@@ -467,12 +469,18 @@ pub trait RestfulArchiveAccess {
   fn get_blocks_since(&self,
                       addr: BlockSID)
                       -> Result<Vec<(usize, Vec<FinalizedTransaction>)>, PlatformError>;
+  // For debug purposes. Returns the location of ledger being communicated with.
+  fn get_source(&self) -> String;
 }
 
 impl RestfulArchiveAccess for MockLedgerClient {
   fn get_blocks_since(&self,
                       _addr: BlockSID)
                       -> Result<Vec<(usize, Vec<FinalizedTransaction>)>, PlatformError> {
+    unimplemented!();
+  }
+
+  fn get_source(&self) -> String {
     unimplemented!();
   }
 }
@@ -488,7 +496,7 @@ impl MockLedgerClient {
 }
 
 impl RestfulLedgerAccess for MockLedgerClient {
-  fn get_utxo(&self, addr: TxoSID) -> Result<Utxo, PlatformError> {
+  fn get_utxo(&self, addr: TxoSID) -> Result<AuthenticatedUtxo, PlatformError> {
     let mut app =
       test::init_service(App::new().data(Arc::clone(&self.mock_ledger))
                                    .route(&LedgerAccessRoutes::UtxoSid.with_arg_template("sid"),
@@ -580,17 +588,21 @@ impl RestfulArchiveAccess for ActixLedgerClient {
     let text = actix_get_request(&self.client, &query).map_err(|_| inp_fail!())?;
     Ok(serde_json::from_str::<Vec<(usize, Vec<FinalizedTransaction>)>>(&text).map_err(|_| ser_fail!())?)
   }
+
+  fn get_source(&self) -> String {
+    format!("{}://{}:{}", self.protocol, self.host, self.port)
+  }
 }
 
 impl RestfulLedgerAccess for ActixLedgerClient {
-  fn get_utxo(&self, addr: TxoSID) -> Result<Utxo, PlatformError> {
+  fn get_utxo(&self, addr: TxoSID) -> Result<AuthenticatedUtxo, PlatformError> {
     let query = format!("{}://{}:{}{}",
                         self.protocol,
                         self.host,
                         self.port,
                         LedgerAccessRoutes::UtxoSid.with_arg(&addr.0));
     let text = actix_get_request(&self.client, &query).map_err(|e| inp_fail!(e))?;
-    Ok(serde_json::from_str::<Utxo>(&text).map_err(|_| ser_fail!())?)
+    Ok(serde_json::from_str::<AuthenticatedUtxo>(&text).map_err(|_| ser_fail!())?)
   }
 
   fn get_issuance_num(&self, code: &AssetTypeCode) -> Result<u64, PlatformError> {

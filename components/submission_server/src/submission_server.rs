@@ -267,7 +267,7 @@ pub fn txn_log_info(txn: &Transaction) {
       Operation::TransferAsset(xfr_asset_op) => {
         info!("Asset Transfer: Transfer with {} inputs and {} outputs",
               xfr_asset_op.body.inputs.len(),
-              xfr_asset_op.body.num_outputs);
+              xfr_asset_op.body.outputs.len());
       }
       Operation::AIRAssign(air_assign_op) => {
         info!("Assigning to AIR: AIR[{}] <- {:?}",
@@ -322,14 +322,14 @@ mod tests {
 
     txn_builder_0.add_operation_create_asset(&keypair,
                                              Some(asset_token),
-                                             AssetRules::default().set_traceable(true).clone(),
+                                             AssetRules::default(),
                                              &String::from("{}"),
                                              PolicyChoice::Fungible())
                  .unwrap();
 
     txn_builder_1.add_operation_create_asset(&keypair,
                                              None,
-                                             AssetRules::default().set_traceable(true).clone(),
+                                             AssetRules::default(),
                                              "test",
                                              PolicyChoice::Fungible())
                  .unwrap();

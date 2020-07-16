@@ -1,8 +1,8 @@
 #![deny(warnings)]
 use ledger::data_model::errors::PlatformError;
 use ledger::data_model::{
-  AssetType, AssetTypeCode, AuthenticatedKVLookup, BlockSID, FinalizedTransaction, KVBlind,
-  StateCommitmentData, Transaction, TxoSID, Utxo,
+  AssetType, AssetTypeCode, AuthenticatedKVLookup, AuthenticatedUtxo, BlockSID,
+  FinalizedTransaction, KVBlind, StateCommitmentData, Transaction, TxoSID,
 };
 use ledger::store::LedgerState;
 use ledger_api_service::{
@@ -93,6 +93,10 @@ impl<LU: RestfulLedgerUpdate,
                       -> Result<Vec<(usize, Vec<FinalizedTransaction>)>, PlatformError> {
     self.ledger_client.get_blocks_since(addr)
   }
+
+  fn get_source(&self) -> String {
+    self.ledger_client.get_source()
+  }
 }
 
 impl<LU: RestfulLedgerUpdate,
@@ -116,7 +120,7 @@ impl<LU: RestfulLedgerUpdate,
       LA: RestfulLedgerAccess + RestfulArchiveAccess,
       Q: RestfulQueryServerAccess> RestfulLedgerAccess for LedgerStandalone<LU, LA, Q>
 {
-  fn get_utxo(&self, addr: TxoSID) -> Result<Utxo, PlatformError> {
+  fn get_utxo(&self, addr: TxoSID) -> Result<AuthenticatedUtxo, PlatformError> {
     self.ledger_client.get_utxo(addr)
   }
 
@@ -172,6 +176,11 @@ impl<LU: RestfulLedgerUpdate,
 #[cfg(test)]
 mod tests {
   use super::*;
+  use ledger::data_model::{Memo, Operation, UpdateMemo, UpdateMemoBody};
+  use rand_chacha::ChaChaRng;
+  use rand_core::SeedableRng;
+  use zei::xfr::sig::XfrKeyPair;
+
   #[test]
   fn test_mock_client() {
     let tx = Transaction::from_seq_id(0);
@@ -184,5 +193,19 @@ mod tests {
     } else {
       assert!(false);
     }
+  }
+
+  #[test]
+  fn test_mock_client_failure() {
+    let code = AssetTypeCode { val: [1; 16] };
+    let new_memo = Memo("new_memo".to_string());
+    let mut prng = ChaChaRng::from_entropy();
+    let creator = XfrKeyPair::generate(&mut prng);
+    let memo_update = UpdateMemo::new(UpdateMemoBody { new_memo: new_memo.clone(),
+                                                       asset_type: code },
+                                      &creator);
+    let tx = Transaction::from_operation(Operation::UpdateMemo(memo_update), 0);
+    let mut mock_rest_client = LedgerStandalone::new_mock(2);
+    assert!(mock_rest_client.submit_transaction(&tx).is_err());
   }
 }

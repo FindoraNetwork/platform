@@ -1,15 +1,19 @@
+use log::debug;
 use network::{HttpStandaloneConfig, LedgerStandalone};
 use txn_cli::txn_app::{get_cli_app, process_inputs};
 use txn_cli::txn_lib::{init_logging, match_error_and_exit};
+
 fn main() {
   init_logging();
   let app = get_cli_app();
   let inputs = app.get_matches();
-  let local = inputs.value_of("local").is_some();
+  let local = inputs.is_present("local");
   let config = {
     if local {
+      debug!("LOCAL");
       HttpStandaloneConfig::local()
     } else {
+      debug!("TESTNET");
       HttpStandaloneConfig::testnet()
     }
   };

@@ -18,12 +18,14 @@ use sparse_merkle_tree::{check_merkle_proof, Key, MerkleProof};
 use std::boxed::Box;
 use std::collections::{HashMap, HashSet};
 use std::convert::TryFrom;
+use std::convert::TryInto;
 use std::hash::{Hash, Hasher};
 use utils::{HashOf, ProofOf, Serialized, SignatureOf};
-use zei::api::anon_creds::ACCommitment;
-use zei::xfr::lib::gen_xfr_body;
+use zei::xfr::lib::{gen_xfr_body, XfrNotePoliciesNoRef};
 use zei::xfr::sig::{XfrKeyPair, XfrPublicKey};
-use zei::xfr::structs::{AssetRecord, AssetTracingPolicy, BlindAssetRecord, XfrBody};
+use zei::xfr::structs::{
+  AssetRecord, AssetTracingPolicies, AssetTracingPolicy, BlindAssetRecord, OwnerMemo, XfrBody,
+};
 
 pub fn b64enc<T: ?Sized + AsRef<[u8]>>(input: &T) -> String {
   base64::encode_config(input, base64::URL_SAFE)
@@ -235,22 +237,25 @@ impl SignatureRules {
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 /// Simple asset rules:
-/// 1) Traceable: Records of traceable assets can be decrypted by a provided tracking key
-/// 2) Transferable: Non-transferable assets can only be transferred once from the issuer to
+/// 1) Transferable: Non-transferable assets can only be transferred once from the issuer to
 ///    another user.
-/// 3) Updatable: Whether the asset memo can be updated.
-/// 4) Transfer signature rules: Signature weights and threshold for a valid transfer.
+/// 2) Updatable: Whether the asset memo can be updated.
+/// 3) Transfer signature rules: Signature weights and threshold for a valid transfer.
+/// 4) Asset tracing policies: A bundle of tracing policies specifying the tracing proofs that
+///    constitute a valid transfer.
 /// 5) Max units: Optional limit on total issuance amount.
 pub struct AssetRules {
-  pub traceable: bool,
   pub transferable: bool,
   pub updatable: bool,
   pub transfer_multisig_rules: Option<SignatureRules>,
+  #[serde(default)]
+  #[serde(skip_serializing_if = "is_default")]
+  pub tracing_policies: AssetTracingPolicies,
   pub max_units: Option<u64>,
 }
 impl Default for AssetRules {
   fn default() -> Self {
-    AssetRules { traceable: false,
+    AssetRules { tracing_policies: AssetTracingPolicies::new(),
                  transferable: true,
                  updatable: false,
                  max_units: None,
@@ -259,8 +264,8 @@ impl Default for AssetRules {
 }
 
 impl AssetRules {
-  pub fn set_traceable(&mut self, traceable: bool) -> &mut Self {
-    self.traceable = traceable;
+  pub fn add_tracing_policy(&mut self, policy: AssetTracingPolicy) -> &mut Self {
+    self.tracing_policies.add(policy);
     self
   }
 
@@ -334,6 +339,10 @@ impl AssetType {
     };
     self.properties != simple_asset
   }
+
+  pub fn get_tracing_policies_ref(&self) -> &AssetTracingPolicies {
+    &self.properties.asset_rules.tracing_policies
+  }
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, Serialize)]
@@ -356,6 +365,9 @@ pub struct SmartContract;
 pub struct TxoSID(pub u64);
 
 #[derive(Clone, Copy, Debug, Default, Deserialize, Eq, Hash, PartialEq, Serialize)]
+pub struct OutputPosition(pub usize);
+
+#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, Hash, PartialEq, Serialize)]
 pub struct TxnSID(pub usize);
 
 #[derive(Clone, Copy, Debug, Default, Deserialize, Eq, Hash, PartialEq, Serialize)]
@@ -369,7 +381,7 @@ pub struct TxnTempSID(pub usize);
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct TxOutput(pub BlindAssetRecord);
 
-#[derive(Eq, PartialEq, Debug)]
+#[derive(Eq, Clone, PartialEq, Debug, Serialize, Deserialize)]
 pub enum UtxoStatus {
   Spent,
   Unspent,
@@ -391,15 +403,12 @@ pub enum TxoRef {
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct TransferAssetBody {
   pub inputs: Vec<TxoRef>, // Ledger address of inputs
-  // Input asset tracing policies and signature commitments
   #[serde(default)]
   #[serde(skip_serializing_if = "is_default")]
-  pub input_identity_commitments: Vec<Option<ACCommitment>>,
-  pub num_outputs: usize, // How many output TXOs?
-  // Output asset tracing policies and signature commitments
-  #[serde(default)]
-  #[serde(skip_serializing_if = "is_default")]
-  pub output_identity_commitments: Vec<Option<ACCommitment>>,
+  pub policies: XfrNotePoliciesNoRef,
+  pub outputs: Vec<TxOutput>,
+  // TODO(joe): we probably don't need the whole XfrNote with input records
+  // once it's on the chain
   pub transfer: Box<XfrBody>, // Encrypted transfer note
 
   pub transfer_type: TransferType,
@@ -409,20 +418,44 @@ impl TransferAssetBody {
   pub fn new<R: CryptoRng + RngCore>(prng: &mut R,
                                      input_refs: Vec<TxoRef>,
                                      input_records: &[AssetRecord],
-                                     input_identity_commitments: Vec<Option<ACCommitment>>,
                                      output_records: &[AssetRecord],
-                                     output_identity_commitments: Vec<Option<ACCommitment>>,
+                                     policies: Option<XfrNotePoliciesNoRef>,
                                      transfer_type: TransferType)
                                      -> Result<TransferAssetBody, errors::PlatformError> {
-    if input_records.is_empty() {
+    let num_inputs = input_records.len();
+    let num_outputs = output_records.len();
+
+    if num_inputs == 0 {
       return Err(PlatformError::InputsError(error_location!()));
     }
+
+    // If no policies specified, construct set of empty policies
+    let policies = policies.unwrap_or_else(|| {
+                             let no_policies = AssetTracingPolicies::new();
+                             XfrNotePoliciesNoRef::new(vec![no_policies.clone(); num_inputs],
+                                                       vec![None; num_inputs],
+                                                       vec![no_policies; num_outputs],
+                                                       vec![None; num_outputs])
+                           });
+
+    // Verify that for each input and output, there is a corresponding policy and credential commitment
+    if num_inputs != policies.inputs_tracking_policies.len()
+       || num_inputs != policies.inputs_sig_commitments.len()
+       || num_outputs != policies.outputs_tracking_policies.len()
+       || num_outputs != policies.outputs_sig_commitments.len()
+    {
+      return Err(PlatformError::InputsError(error_location!()));
+    }
+
     let note = Box::new(gen_xfr_body(prng, input_records, output_records)
         .map_err(|e| PlatformError::ZeiError(error_location!(),e))?);
+    let outputs = note.outputs
+                      .iter()
+                      .map(|rec| TxOutput(rec.clone()))
+                      .collect();
     Ok(TransferAssetBody { inputs: input_refs,
-                           input_identity_commitments,
-                           num_outputs: output_records.len(),
-                           output_identity_commitments,
+                           outputs,
+                           policies,
                            transfer: note,
                            transfer_type })
   }
@@ -450,24 +483,18 @@ pub struct IssueAssetBody {
   pub code: AssetTypeCode,
   pub seq_num: u64,
   pub num_outputs: usize,
-  pub records: Vec<TxOutput>,
-  /// Asset tracing policy, null iff the asset is not traceable
-  #[serde(default)]
-  #[serde(skip_serializing_if = "is_default")]
-  pub tracing_policy: Option<AssetTracingPolicy>,
+  pub records: Vec<(TxOutput, Option<OwnerMemo>)>,
 }
 
 impl IssueAssetBody {
   pub fn new(token_code: &AssetTypeCode,
              seq_num: u64,
-             records: &[TxOutput],
-             tracing_policy: Option<AssetTracingPolicy>)
+             records: &[(TxOutput, Option<OwnerMemo>)])
              -> Result<IssueAssetBody, PlatformError> {
     Ok(IssueAssetBody { code: *token_code,
                         seq_num,
                         num_outputs: records.len(),
-                        records: records.to_vec(),
-                        tracing_policy })
+                        records: records.to_vec() })
   }
 }
 
@@ -544,6 +571,12 @@ impl Default for TransferType {
   }
 }
 
+/// Enum indicating whether an output appearning in transaction is internally spent
+pub enum OutputSpentStatus {
+  Spent,
+  Unspent,
+}
+
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct TransferAsset {
   pub body: TransferAssetBody,
@@ -565,6 +598,19 @@ impl TransferAsset {
     self.body_signatures
         .push(self.body.compute_body_signature(&keypair, Some(input_idx)))
   }
+
+  pub fn get_owner_memos_ref(&self) -> Vec<Option<&OwnerMemo>> {
+    self.body
+        .transfer
+        .owners_memos
+        .iter()
+        .map(|mem| mem.as_ref())
+        .collect()
+  }
+
+  pub fn get_outputs_ref(&self) -> Vec<&TxOutput> {
+    self.body.outputs.iter().collect()
+  }
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -582,6 +628,17 @@ impl IssueAsset {
     Ok(IssueAsset { body: issuance_body,
                     pubkey: IssuerPublicKey { key: *keypair.keypair.get_pk_ref() },
                     signature })
+  }
+
+  pub fn get_owner_memos_ref(&self) -> Vec<Option<&OwnerMemo>> {
+    self.body
+        .records
+        .iter()
+        .map(|(_, memo)| memo.as_ref())
+        .collect()
+  }
+  pub fn get_outputs_ref(&self) -> Vec<&TxOutput> {
+    self.body.records.iter().map(|rec| &rec.0).collect()
   }
 }
 
@@ -817,7 +874,61 @@ impl AuthenticatedAIRResult {
   }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
+pub struct AuthenticatedUtxo {
+  pub utxo: Utxo,                                          // Utxo to authenticate
+  pub authenticated_txn: AuthenticatedTransaction, // Merkle proof that transaction containing the utxo exists on the ledger
+  pub authenticated_spent_status: AuthenticatedUtxoStatus, // Bitmap proof that the utxo is unspent
+  pub utxo_location: OutputPosition,
+  pub state_commitment_data: StateCommitmentData,
+}
+
+impl AuthenticatedUtxo {
+  // An authenticated utxo result is valid iff
+  // 1) The state commitment data used during verification hashes to the provided state commitment
+  // 2) The authenticated transaction proof is valid
+  // 3) The spent status proof is valid and denotes the utxo as unspent
+  // 4) The utxo appears in one of the outputs of the transaction (i.e. the output at
+  //    OutputPosition)
+  pub fn is_valid(&self, state_commitment: HashOf<Option<StateCommitmentData>>) -> bool {
+    //1)
+    if state_commitment != self.state_commitment_data.compute_commitment() {
+      return false;
+    }
+
+    //2)
+
+    if !self.authenticated_txn.is_valid(state_commitment.clone()) {
+      return false;
+    }
+
+    //3)
+    if self.authenticated_spent_status.status != UtxoStatus::Unspent
+       || !self.authenticated_spent_status.is_valid(state_commitment)
+    {
+      return false;
+    }
+
+    //4)
+    let outputs = self.authenticated_txn
+                      .finalized_txn
+                      .txn
+                      .get_outputs_ref(false);
+    let output = outputs.get(self.utxo_location.0);
+
+    if output.is_none() {
+      return false;
+    }
+
+    if **output.unwrap() != self.utxo.0 {
+      return false;
+    }
+
+    true
+  }
+}
+
+#[derive(Serialize, Deserialize, Clone)]
 pub struct AuthenticatedTransaction {
   pub finalized_txn: FinalizedTransaction,
   pub txn_inclusion_proof: ProofOf<(TxnSID, Transaction)>,
@@ -942,11 +1053,14 @@ impl AuthenticatedKVLookup {
   }
 }
 
+pub type SparseMapBytes = Vec<u8>;
+
+#[derive(Serialize, Clone, Deserialize)]
 pub struct AuthenticatedUtxoStatus {
   pub status: UtxoStatus,
   pub utxo_sid: TxoSID,
   pub state_commitment_data: StateCommitmentData,
-  pub utxo_map: Option<SparseMap>, // BitMap only needed for proof if the txo_sid exists
+  pub utxo_map_bytes: Option<SparseMapBytes>, // BitMap only needed for proof if the txo_sid exists
   pub state_commitment: HashOf<Option<StateCommitmentData>>,
 }
 
@@ -954,9 +1068,9 @@ impl AuthenticatedUtxoStatus {
   // An authenticated utxo status is valid (for txos that exist) if
   // 1) The state commitment of the proof matches the state commitment passed in
   // 2) The state commitment data hashes to the state commitment
-  // 3) The status matches the bit stored in the bitmap
-  // 4) The bitmap checksum matches digest in state commitment data
-  // 5) For txos that don't exist, simply show that the utxo_sid greater than max_sid
+  // 3) For txos that don't exist, simply show that the utxo_sid greater than max_sid
+  // 4) The status matches the bit stored in the bitmap
+  // 5) The bitmap checksum matches digest in state commitment data
   pub fn is_valid(&self, state_commitment: HashOf<Option<StateCommitmentData>>) -> bool {
     let state_commitment_data = &self.state_commitment_data;
     let utxo_sid = self.utxo_sid.0;
@@ -966,23 +1080,25 @@ impl AuthenticatedUtxoStatus {
     {
       return false;
     }
+
+    if self.status == UtxoStatus::Nonexistent {
+      // 3)
+      return utxo_sid >= state_commitment_data.txo_count;
+    }
+
     // If the txo exists, the proof must also contain a bitmap
-    let utxo_map = self.utxo_map.as_ref().unwrap();
-    // 3) The status matches the bit stored in the bitmap
+    let utxo_map = SparseMap::new(&self.utxo_map_bytes.as_ref().unwrap()).unwrap();
+    // 4) The status matches the bit stored in the bitmap
     let spent = !utxo_map.query(utxo_sid).unwrap();
+
     if (self.status == UtxoStatus::Spent && !spent) || (self.status == UtxoStatus::Unspent && spent)
     {
       return false;
     }
-    // 4)
+    // 5)
     if utxo_map.checksum() != self.state_commitment_data.bitmap {
       println!("failed at bitmap checksum");
       return false;
-    }
-
-    if self.status == UtxoStatus::Nonexistent {
-      // 5)
-      return utxo_sid >= state_commitment_data.txo_count;
     }
 
     true
@@ -1033,6 +1149,55 @@ impl Transaction {
     sig.verify(public_key, &self.body)
        .map_err(|e| PlatformError::ZeiError(error_location!(), e))?;
     Ok(())
+  }
+
+  pub fn get_owner_memos_ref(&self) -> Vec<Option<&OwnerMemo>> {
+    let mut memos = vec![];
+    for op in self.body.operations.iter() {
+      match op {
+        Operation::TransferAsset(xfr_asset) => {
+          memos.append(&mut xfr_asset.get_owner_memos_ref());
+        }
+        Operation::IssueAsset(issue_asset) => {
+          memos.append(&mut issue_asset.get_owner_memos_ref());
+        }
+        _ => {}
+      }
+    }
+    memos
+  }
+
+  /// Returns the outputs of a transaction. Internally spent outputs can be optionally included.
+  /// This will never panic on a well formed transaction, but may panic on a malformed one.
+  pub fn get_outputs_ref(&self, include_spent: bool) -> Vec<&TxOutput> {
+    let mut outputs = vec![];
+    let mut spent_indices = vec![];
+    for op in self.body.operations.iter() {
+      match op {
+        Operation::TransferAsset(xfr_asset) => {
+          for txo_ref in &xfr_asset.body.inputs {
+            match txo_ref {
+              TxoRef::Relative(offset) => {
+                let idx = (outputs.len() as u64) - *offset - 1;
+                spent_indices.push(idx);
+              }
+              TxoRef::Absolute(_) => {}
+            };
+          }
+          outputs.append(&mut xfr_asset.get_outputs_ref());
+        }
+        Operation::IssueAsset(issue_asset) => {
+          outputs.append(&mut issue_asset.get_outputs_ref());
+        }
+        _ => {}
+      }
+    }
+    if !include_spent {
+      for idx in spent_indices {
+        outputs.remove(idx.try_into().unwrap());
+      }
+    }
+    outputs
   }
 
   /// NOTE: this does *not* guarantee that a private key affiliated with
@@ -1193,7 +1358,6 @@ mod tests {
 
     let keypair = XfrKeyPair::generate(&mut prng);
 
-    // Instantiate an TransferAsset operation
     let xfr_note = XfrBody { inputs: Vec::new(),
                              outputs: Vec::new(),
                              proofs: XfrProofs { asset_type_and_amount_proof:
@@ -1202,15 +1366,21 @@ mod tests {
                              asset_tracing_memos: vec![],
                              owners_memos: vec![] };
 
-    let assert_transfer_body = TransferAssetBody { inputs: Vec::new(),
-                                                   input_identity_commitments: Vec::new(),
-                                                   num_outputs: 0,
-                                                   output_identity_commitments: Vec::new(),
-                                                   transfer: Box::new(xfr_note),
-                                                   transfer_type: TransferType::Standard };
+    let no_policies = AssetTracingPolicies::new();
+
+    let policies = XfrNotePoliciesNoRef::new(vec![no_policies.clone()],
+                                             vec![None],
+                                             vec![no_policies],
+                                             vec![None]);
+
+    let asset_transfer_body = TransferAssetBody { inputs: Vec::new(),
+                                                  outputs: Vec::new(),
+                                                  policies,
+                                                  transfer: Box::new(xfr_note),
+                                                  transfer_type: TransferType::Standard };
 
     let asset_transfer = {
-      let mut ret = TransferAsset::new(assert_transfer_body).unwrap();
+      let mut ret = TransferAsset::new(asset_transfer_body).unwrap();
       ret.sign(&keypair);
       ret
     };
@@ -1221,8 +1391,7 @@ mod tests {
     let asset_issuance_body = IssueAssetBody { code: Default::default(),
                                                seq_num: 0,
                                                num_outputs: 0,
-                                               records: Vec::new(),
-                                               tracing_policy: None };
+                                               records: Vec::new() };
 
     let asset_issuance =
       IssueAsset::new(asset_issuance_body, &IssuerKeyPair { keypair: &keypair }).unwrap();

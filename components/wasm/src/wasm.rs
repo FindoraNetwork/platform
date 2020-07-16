@@ -31,7 +31,7 @@ use zei::serialization::ZeiFromToBytes;
 use zei::xfr::asset_record::{open_blind_asset_record as open_bar, AssetRecordType};
 use zei::xfr::lib::trace_assets as zei_trace_assets;
 use zei::xfr::sig::{XfrKeyPair, XfrPublicKey};
-use zei::xfr::structs::{AssetRecordTemplate, AssetTracingPolicies, AssetTracingPolicy, XfrBody};
+use zei::xfr::structs::{AssetRecordTemplate, XfrBody};
 
 mod util;
 mod wasm_data_model;
@@ -46,6 +46,13 @@ mod wasm_data_model;
 /// asset type
 pub fn random_asset_type() -> String {
   AssetTypeCode::gen_random().to_base64()
+}
+
+#[wasm_bindgen]
+/// Generates a base64 encoded asset type string from a JSON-serialized JavaScript value.
+pub fn asset_type_from_jsvalue(val: &JsValue) -> Result<String, JsValue> {
+  let code: [u8; 16] = val.into_serde().map_err(error_to_jsvalue)?;
+  Ok(AssetTypeCode { val: code }.to_base64())
 }
 
 #[wasm_bindgen]
@@ -234,60 +241,20 @@ impl TransactionBuilder {
   /// Use this function for simple one-shot issuances.
   ///
   /// @param {XfrKeyPair} key_pair  - Issuer XfrKeyPair.
-  /// @param {AssetTracerKeyPair} tracer keypair - Tracking public key. Used to decrypt amounts
   /// and types of traced assets.
   /// @param {string} code - Base64 string representing the token code of the asset to be issued.
   /// @param {BigInt} seq_num - Issuance sequence number. Every subsequent issuance of a given asset type must have a higher sequence number than before.
   /// @param {BigInt} amount - Amount to be issued.
   /// @param {bool} conf_amount - `true` means the asset amount is confidential, and `false` means it's nonconfidential.
-  #[allow(clippy::too_many_arguments)]
-  pub fn add_basic_issue_asset_with_tracking(mut self,
-                                             key_pair: &XfrKeyPair,
-                                             tracing_key: &AssetTracerKeyPair,
-                                             code: String,
-                                             seq_num: u64,
-                                             amount: u64,
-                                             conf_amount: bool)
-                                             -> Result<TransactionBuilder, JsValue> {
-    let asset_token = AssetTypeCode::new_from_base64(&code)
-             .map_err(|_e| JsValue::from_str("Could not deserialize asset token code"))?;
-
-    // TODO: (keyao/noah) enable client support for identity
-    // tracking?
-    // Redmine issue: #44
-    let tracing_policy = Some(AssetTracingPolicy { enc_keys: tracing_key.get_enc_key().clone(),
-                                                   asset_tracking: true,
-                                                   identity_tracking: None });
-
-    let confidentiality_flags = AssetRecordType::from_booleans(conf_amount, false);
-    self.get_builder_mut()
-        .add_basic_issue_asset(&key_pair,
-                               tracing_policy,
-                               &asset_token,
-                               seq_num,
-                               amount,
-                               confidentiality_flags)
-        .map_err(error_to_jsvalue)?;
-    Ok(self)
-  }
-
-  /// Wraps around TransactionBuilder to add an asset issuance to a transaction builder instance.
-  ///
-  /// Use this function for simple one-shot issuances.
-  ///
-  /// @param {XfrKeyPair} key_pair  - Issuer XfrKeyPair.
-  /// and types of traced assets.
-  /// @param {string} code - Base64 string representing the token code of the asset to be issued.
-  /// @param {BigInt} seq_num - Issuance sequence number. Every subsequent issuance of a given asset type must have a higher sequence number than before.
-  /// @param {BigInt} amount - Amount to be issued.
-  /// @param {bool} conf_amount - `true` means the asset amount is confidential, and `false` means it's nonconfidential.
-  pub fn add_basic_issue_asset_without_tracking(mut self,
-                                                key_pair: &XfrKeyPair,
-                                                code: String,
-                                                seq_num: u64,
-                                                amount: u64,
-                                                conf_amount: bool)
-                                                -> Result<TransactionBuilder, JsValue> {
+  /// @param {PublicParams} zei_params - Public parameters necessary to generate asset records.
+  pub fn add_basic_issue_asset(mut self,
+                               key_pair: &XfrKeyPair,
+                               code: String,
+                               seq_num: u64,
+                               amount: u64,
+                               conf_amount: bool,
+                               zei_params: &PublicParams)
+                               -> Result<TransactionBuilder, JsValue> {
     let asset_token = AssetTypeCode::new_from_base64(&code)
              .map_err(|_e| JsValue::from_str("Could not deserialize asset token code"))?;
 
@@ -297,11 +264,11 @@ impl TransactionBuilder {
     let confidentiality_flags = AssetRecordType::from_booleans(conf_amount, false);
     self.get_builder_mut()
         .add_basic_issue_asset(&key_pair,
-                               None,
                                &asset_token,
                                seq_num,
                                amount,
-                               confidentiality_flags)
+                               confidentiality_flags,
+                               zei_params.get_ref())
         .map_err(error_to_jsvalue)?;
     Ok(self)
   }
@@ -393,22 +360,16 @@ impl TransactionBuilder {
 
   /// Fetches a client record from a transaction.
   /// @param {number} idx - Record to fetch. Records are added to the transaction builder sequentially.
-  pub fn get_owner_record(&self, idx: usize) -> Result<ClientAssetRecord, JsValue> {
-    Ok(self.get_builder()
-           .get_owner_record_and_memo(idx)
-           .cloned()
-           .map(|(output, _)| ClientAssetRecord { output })
-           .ok_or_else(|| JsValue::from_str("Index out of range"))?)
+  pub fn get_owner_record(&self, idx: usize) -> ClientAssetRecord {
+    ClientAssetRecord { txo: self.get_builder().get_output_ref(idx).clone() }
   }
 
   /// Fetches an owner memo from a transaction
   /// @param {number} idx - Record to fetch. Records are added to the transaction builder sequentially.
-  pub fn get_owner_memo(&self, idx: usize) -> Result<Option<OwnerMemo>, JsValue> {
-    Ok(self.get_builder()
-           .get_owner_record_and_memo(idx)
-           .cloned()
-           .map(|(_, memo)| (memo.map(|memo| OwnerMemo { memo })))
-           .ok_or_else(|| JsValue::from_str("Index out of range"))?)
+  pub fn get_owner_memo(&self, idx: usize) -> Option<OwnerMemo> {
+    self.get_builder()
+        .get_owner_memo_ref(idx)
+        .map(|memo| OwnerMemo { memo: memo.clone() })
   }
 }
 #[wasm_bindgen]
@@ -433,7 +394,7 @@ impl TransferOperationBuilder {
                    txo_ref: TxoRef,
                    asset_record: ClientAssetRecord,
                    owner_memo: Option<OwnerMemo>,
-                   tracing_key: Option<&AssetTracerKeyPair>,
+                   tracing_policies: Option<&TracingPolicies>,
                    key: &XfrKeyPair,
                    amount: u64)
                    -> Result<TransferOperationBuilder, JsValue> {
@@ -444,10 +405,7 @@ impl TransferOperationBuilder {
     self.get_builder_mut()
         .add_input(*txo_ref.get_txo(),
                    oar,
-                   tracing_key.map(|key| AssetTracingPolicy { enc_keys: key.get_enc_key()
-                                                                           .clone(),
-                                                              asset_tracking: true,
-                                                              identity_tracking: None }),
+                   tracing_policies.map(|policies| policies.get_policies_ref().clone()),
                    None,
                    amount)
         .map_err(error_to_jsvalue)?;
@@ -457,7 +415,7 @@ impl TransferOperationBuilder {
   pub fn add_output(mut self,
                     amount: u64,
                     recipient: &XfrPublicKey,
-                    tracing_key: Option<&AssetTracerKeyPair>,
+                    tracing_policies: Option<&TracingPolicies>,
                     code: String,
                     conf_amount: bool,
                     conf_type: bool)
@@ -466,21 +424,20 @@ impl TransferOperationBuilder {
 
     let asset_record_type = AssetRecordType::from_booleans(conf_amount, conf_type);
     // TODO (noah/keyao) support identity tracing (issue #298)
-    let template = if let Some(key) = tracing_key {
-      let mut policies = AssetTracingPolicies::new();
-      policies.add(AssetTracingPolicy { enc_keys: key.get_enc_key().clone(),
-                                        asset_tracking: true,
-                                        identity_tracking: None });
+    let template = if let Some(policies) = tracing_policies {
       AssetRecordTemplate::with_asset_tracking(amount,
                                                code.val,
                                                asset_record_type,
                                                *recipient,
-                                               policies)
+                                               policies.get_policies_ref().clone())
     } else {
       AssetRecordTemplate::with_no_asset_tracking(amount, code.val, asset_record_type, *recipient)
     };
     self.get_builder_mut()
-        .add_output(&template, None, None, None)
+        .add_output(&template,
+                    tracing_policies.map(|policies| policies.get_policies_ref().clone()),
+                    None,
+                    None)
         .map_err(error_to_jsvalue)?;
     Ok(self)
   }
@@ -514,14 +471,14 @@ impl TransferOperationBuilder {
                                  txo_ref: TxoRef,
                                  asset_record: ClientAssetRecord,
                                  owner_memo: Option<OwnerMemo>,
-                                 tracing_key: &AssetTracerKeyPair,
+                                 tracing_policies: &TracingPolicies,
                                  key: &XfrKeyPair,
                                  amount: u64)
                                  -> Result<TransferOperationBuilder, JsValue> {
     self.add_input(txo_ref,
                    asset_record,
                    owner_memo,
-                   Some(tracing_key),
+                   Some(tracing_policies),
                    key,
                    amount)
   }
@@ -561,14 +518,14 @@ impl TransferOperationBuilder {
   pub fn add_output_with_tracking(self,
                                   amount: u64,
                                   recipient: &XfrPublicKey,
-                                  tracing_key: &AssetTracerKeyPair,
+                                  tracing_policies: &TracingPolicies,
                                   code: String,
                                   conf_amount: bool,
                                   conf_type: bool)
                                   -> Result<TransferOperationBuilder, JsValue> {
     self.add_output(amount,
                     recipient,
-                    Some(&tracing_key),
+                    Some(tracing_policies),
                     code,
                     conf_amount,
                     conf_type)
@@ -653,17 +610,23 @@ impl TransferOperationBuilder {
 
 ///////////// CRYPTO //////////////////////
 #[wasm_bindgen]
-/// Returns a JsValue containing decrypted owner record information.
-/// @param {ClientAssetRecord} record - Ownership record.
-/// @param {OwnerMemo} owner_memo - Opening parameters.
-/// @param {XfrKeyPair} key - Key of asset owner that is used to open the record.
+/// Returns a JsValue containing decrypted owner record information,
+/// where `amount` is the decrypted asset amount, and `asset_type` is the decrypted asset type code.
+///
+/// @param {ClientAssetRecord} record - Owner record.
+/// @see {@link ClientAssetRecord#from_json_record} for information about fetching the asset record.
+///
+/// @param {OwnerMemo} owner_memo - Owner memo of the associated record.
+/// TODO (Redmine issue #126): Unable to get owner memo.
+///
+/// @param {XfrKeyPair} keypair - Keypair of asset owner.
 pub fn open_client_asset_record(record: &ClientAssetRecord,
                                 owner_memo: Option<OwnerMemo>,
-                                key: &XfrKeyPair)
+                                keypair: &XfrKeyPair)
                                 -> Result<JsValue, JsValue> {
   Ok(JsValue::from_serde(&open_bar(record.get_bar_ref(),
                              &owner_memo.map(|memo| memo.get_memo_ref().clone()),
-                             key.get_sk_ref()).map_err(|_e| {
+                             keypair.get_sk_ref()).map_err(|_e| {
                                                 JsValue::from_str("Could not open asset record")
                                               })?).unwrap())
 }
@@ -685,6 +648,15 @@ pub fn get_priv_key_str(key_pair: &XfrKeyPair) -> String {
 pub fn new_keypair() -> XfrKeyPair {
   let mut small_rng = rand::thread_rng();
   XfrKeyPair::generate(&mut small_rng)
+}
+
+#[wasm_bindgen]
+/// Generates a new keypair deterministically from a seed string and an optional name.
+pub fn new_keypair_from_seed(seed_str: String, name: Option<String>) -> XfrKeyPair {
+  let seed_str = seed_str + &name.unwrap_or_default();
+  let hash = sha256::hash(&seed_str.as_bytes());
+  let mut prng = ChaChaRng::from_seed(hash.0);
+  XfrKeyPair::generate(&mut prng)
 }
 
 #[wasm_bindgen]
@@ -837,23 +809,23 @@ pub fn get_state_commitment(path: String) -> Result<Promise, JsValue> {
 #[wasm_bindgen]
 /// If successful, returns a promise that will eventually provide a
 /// JsValue describing an asset token. Otherwise, returns 'not found'.
-/// The request fails if the given asset name does not correspond to
+/// The request fails if the given token code does not correspond to
 /// an asset.
 /// @example <caption> Error handling </caption>
 /// try {
-///     await wasm.get_asset_token("http::localhost:8668", asset_name);
+///     await wasm.get_asset_token("http::localhost:8668", code);
 /// } catch (err) {
 ///     console.log(err)
 /// }
 /// @param {string} path - Address of ledger server. E.g. `https://localhost:8668`.
-/// @param {string} name - Base64-encoded asset token string.
+/// @param {string} code - Base64-encoded asset token string.
 ///
-pub fn get_asset_token(path: String, name: String) -> Result<Promise, JsValue> {
+pub fn get_asset_token(path: String, code: String) -> Result<Promise, JsValue> {
   let mut opts = RequestInit::new();
   opts.method("GET");
   opts.mode(RequestMode::Cors);
 
-  let req_string = format!("{}/asset_token/{}", path, name);
+  let req_string = format!("{}/asset_token/{}", path, code);
 
   create_query_promise(&opts, &req_string, false)
 }
