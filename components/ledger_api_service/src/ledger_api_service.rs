@@ -226,9 +226,7 @@ fn query_block_log<AA>(data: web::Data<Arc<RwLock<AA>>>) -> impl actix_web::Resp
                     .body(res)
 }
 
-fn query_utxo_map<AA>(data: web::Data<Arc<RwLock<AA>>>,
-                      _info: web::Path<String>)
-                      -> actix_web::Result<String>
+fn query_utxo_map<AA>(data: web::Data<Arc<RwLock<AA>>>) -> actix_web::Result<String>
   where AA: ArchiveAccess
 {
   let mut reader = data.write().unwrap();
