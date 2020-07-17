@@ -10,7 +10,6 @@ pushd $GIT_ROOT >/dev/null
 
 cargo clippy
 cargo clean
-cargo update
 cargo build
 cargo test
 # return to original working directory
