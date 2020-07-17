@@ -5,6 +5,7 @@ use ledger::data_model::errors::PlatformError;
 use ledger::data_model::{
   AssetRules, AssetTypeCode, Transaction, TransferType, TxOutput, TxnSID, TxoRef, TxoSID,
 };
+use ledger::error_location;
 use ledger::policies::{calculate_fee, DebtMemo, Fraction};
 use ledger::store::LedgerState;
 use ledger::store::*;
@@ -34,7 +35,7 @@ pub fn apply_transaction(ledger: &mut LedgerState, tx: Transaction) -> (TxnSID, 
 fn test_create_asset() -> Result<(), PlatformError> {
   let mut prng = ChaChaRng::from_entropy();
   let mut ledger = LedgerState::test_ledger();
-  let code = AssetTypeCode { val: [1; 16] };
+  let code = AssetTypeCode::from_identical_byte(1);
   let keys = XfrKeyPair::generate(&mut prng);
   let mut builder = TransactionBuilder::from_seq_id(ledger.get_block_commit_count());
   let params = PublicParams::new();
@@ -101,8 +102,8 @@ fn test_loan_repayment(loan_amount: u64,
   let params = PublicParams::new();
 
   // Asset Info
-  let fiat_code = AssetTypeCode { val: [0; 16] };
-  let debt_code = AssetTypeCode { val: [1; 16] };
+  let fiat_code = AssetTypeCode::from_identical_byte(0);
+  let debt_code = AssetTypeCode::from_identical_byte(1);
   let interest_rate = Fraction::new(interest_num, interest_denom); // Interest rate interest_num/interest_denom
   let debt_memo = DebtMemo { interest_rate,
                              fiat_code,
@@ -114,7 +115,10 @@ fn test_loan_repayment(loan_amount: u64,
   let fiat_issuer_keys = XfrKeyPair::generate(&mut prng);
   let lender_keys = XfrKeyPair::generate(&mut prng);
   let borrower_keys = XfrKeyPair::generate(&mut prng);
-  let burn_address = XfrPublicKey::zei_from_bytes(&[0; 32]);
+  let burn_address =
+    XfrPublicKey::zei_from_bytes(&[0; 32]).map_err(|e| {
+                                            PlatformError::ZeiError(error_location!(), e)
+                                          })?;
 
   // Define assets
   let mut builder = TransactionBuilder::from_seq_id(ledger.get_block_commit_count());
@@ -260,7 +264,7 @@ fn test_update_memo() -> Result<(), PlatformError> {
   // Generate the ledger and the things we need to define an asset
   let mut prng = ChaChaRng::from_entropy();
   let mut ledger = LedgerState::test_ledger();
-  let code = AssetTypeCode { val: [1; 16] };
+  let code = AssetTypeCode::from_identical_byte(1);
   let keys = XfrKeyPair::generate(&mut prng);
   let mut builder = TransactionBuilder::from_seq_id(ledger.get_block_commit_count());
 

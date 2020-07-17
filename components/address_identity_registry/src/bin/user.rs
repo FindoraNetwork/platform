@@ -58,7 +58,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
   for attr in attrs {
     map.push((attr.0, attr.1.as_bytes().to_vec()));
   }
-  let xfr_key_pair = XfrKeyPair::zei_from_bytes(&hex::decode(KEY_PAIR_STR)?);
+  let xfr_key_pair = XfrKeyPair::zei_from_bytes(&hex::decode(KEY_PAIR_STR)?)?;
   let credential = Credential { signature: sig.clone(),
                                 attributes: map,
                                 issuer_pub_key: resp1.issuer_pk.clone() };

@@ -31,7 +31,9 @@ use zei::serialization::ZeiFromToBytes;
 use zei::xfr::asset_record::{open_blind_asset_record as open_bar, AssetRecordType};
 use zei::xfr::lib::trace_assets as zei_trace_assets;
 use zei::xfr::sig::{XfrKeyPair, XfrPublicKey};
-use zei::xfr::structs::{AssetRecordTemplate, XfrBody};
+use zei::xfr::structs::{
+  AssetRecordTemplate, AssetType as ZeiAssetType, XfrBody, ASSET_TYPE_LENGTH,
+};
 
 mod util;
 mod wasm_data_model;
@@ -51,8 +53,8 @@ pub fn random_asset_type() -> String {
 #[wasm_bindgen]
 /// Generates a base64 encoded asset type string from a JSON-serialized JavaScript value.
 pub fn asset_type_from_jsvalue(val: &JsValue) -> Result<String, JsValue> {
-  let code: [u8; 16] = val.into_serde().map_err(error_to_jsvalue)?;
-  Ok(AssetTypeCode { val: code }.to_base64())
+  let code: [u8; ASSET_TYPE_LENGTH] = val.into_serde().map_err(error_to_jsvalue)?;
+  Ok(AssetTypeCode { val: ZeiAssetType(code) }.to_base64())
 }
 
 #[wasm_bindgen]
@@ -94,7 +96,7 @@ pub fn calculate_fee(ir_numerator: u64, ir_denominator: u64, outstanding_balance
 /// Returns an address to use for cancelling debt tokens in a debt swap.
 /// @ignore
 pub fn get_null_pk() -> XfrPublicKey {
-  XfrPublicKey::zei_from_bytes(&[0; 32])
+  XfrPublicKey::zei_from_bytes(&[0; 32]).unwrap()
 }
 
 #[wasm_bindgen]
@@ -682,7 +684,7 @@ pub fn keypair_to_str(key_pair: &XfrKeyPair) -> String {
 /// Constructs a transfer key pair from a hex-encoded string.
 /// The encode a key pair, use `keypair_to_str` function.
 pub fn keypair_from_str(str: String) -> XfrKeyPair {
-  XfrKeyPair::zei_from_bytes(&hex::decode(str).unwrap())
+  XfrKeyPair::zei_from_bytes(&hex::decode(str).unwrap()).unwrap()
 }
 
 #[wasm_bindgen]
@@ -1012,7 +1014,7 @@ pub fn trace_assets(xfr_body: JsValue,
                     -> Result<JsValue, JsValue> {
   let candidate_assets: Vec<String> = candidate_assets.into_serde().map_err(error_to_jsvalue)?;
   let xfr_body: XfrBody = xfr_body.into_serde().map_err(error_to_jsvalue)?;
-  let candidate_assets: Vec<[u8; 16]> =
+  let candidate_assets: Vec<ZeiAssetType> =
     candidate_assets.iter()
                     .map(|asset_type_str| {
                       AssetTypeCode::new_from_str(&asset_type_str.to_string()).val
