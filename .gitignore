@@ -3,7 +3,6 @@
 **/*.rs.bk
 **/target
 **/release
-**/Cargo.lock
 .DS_Store
 **/*~
 **/.vscode

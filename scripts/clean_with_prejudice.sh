@@ -17,10 +17,6 @@ pushd $GIT_ROOT >/dev/null
 # optimistic about linux and MacOS having `bash` versions that handle
 # NUL-characters exactly the same, so we just run `find` twice.
 
-# Delete all files named 'Cargo.lock' in the tree below
-if [[ -n "$(find . -type f -name 'Cargo.lock')" ]]; then
-  find . -type f -name 'Cargo.lock' -print0 | xargs -n 1 -0 rm -v
-fi
 # Delete all directories named 'target' in the tree below
 # Sorting in reverse order suppresses error messages by deleting
 #   .../target/.../target before .../target
