@@ -731,10 +731,14 @@ pub fn load_tracer_and_owner_memos_from_files(
 pub(crate) fn store_data_to_file(data: Data, data_dir: &str) -> Result<(), PlatformError> {
   let data_file_path = format!("{}/{}", data_dir, DATA_FILE);
   if let Ok(as_json) = serde_json::to_string(&data) {
-    if let Err(error) = fs::write(data_file_path, &as_json) {
-      return Err(PlatformError::IoError(format!("Failed to create file {}: {}.",
-                                                DATA_FILE, error)));
-    };
+    if let Ok(()) = fs::create_dir_all(&data_dir) {
+      if let Err(error) = fs::write(data_file_path, &as_json) {
+        return Err(PlatformError::IoError(format!("Failed to write to file {}: {}.",
+                                                  DATA_FILE, error)));
+      }
+    } else {
+      return Err(PlatformError::IoError(format!("Failed to create file {}", DATA_FILE)));
+    }
   }
   Ok(())
 }
