@@ -1,9 +1,7 @@
 #![deny(warnings)]
 use std::fs;
 use std::io::{self, Write};
-use std::path::Path;
 use std::process::{Command, Output};
-use std::str::from_utf8;
 use tempfile::tempdir;
 
 extern crate exitcode;
@@ -61,21 +59,6 @@ fn create_txn_builder_no_path() -> io::Result<Output> {
   Command::new(COMMAND).arg("create_txn_builder").output()
 }
 
-#[cfg(test)]
-fn get_findora_dir() -> String {
-  let findora_dir = {
-    let home_dir = dirs::home_dir().unwrap_or_else(|| Path::new(".").to_path_buf());
-    format!("{}/.findora", home_dir.to_str().unwrap_or("./.findora"))
-  };
-
-  findora_dir
-}
-
-#[cfg(test)]
-fn remove_txn_dir() {
-  fs::remove_dir_all(format!("{}/txn", get_findora_dir())).unwrap();
-}
-
 //
 // Helper functions: create and store with path
 //
@@ -115,7 +98,7 @@ fn test_create_users() {
   io::stdout().write_all(&output.stdout).unwrap();
   io::stdout().write_all(&output.stderr).unwrap();
 
-  assert!(output.status.success());
+  assert_eq!(output.status.code(), Some(exitcode::USAGE));
 
   // Create a credential issuer
   let output =
@@ -150,9 +133,7 @@ fn test_create_txn_builder_no_path() {
   io::stdout().write_all(&output.stdout).unwrap();
   io::stdout().write_all(&output.stderr).unwrap();
 
-  assert!(output.status.success());
-
-  remove_txn_dir();
+  assert_eq!(output.status.code(), Some(exitcode::USAGE));
 }
 
 //
@@ -160,7 +141,6 @@ fn test_create_txn_builder_no_path() {
 // Note: Not all cases are tested
 //
 #[test]
-#[ignore]
 fn test_call_no_args() {
   let output = Command::new(COMMAND).output()
                                     .expect("failed to execute process");
@@ -169,7 +149,6 @@ fn test_call_no_args() {
   io::stdout().write_all(&output.stderr).unwrap();
 
   assert_eq!(output.status.code(), Some(exitcode::USAGE));
-  assert!(from_utf8(&output.stderr).unwrap().contains(&"Subcommand missing or not recognized. Try --help".to_owned()));
 }
 
 //
@@ -260,8 +239,6 @@ fn test_invalid_valid_overwrite_and_rename_path() {
   io::stdout().write_all(&output.stderr).unwrap();
 
   assert_eq!(output.status.code(), Some(exitcode::USAGE));
-  assert!(from_utf8(&output.stdout).unwrap()
-                                   .contains(&"Is directory".to_owned()));
 
   // Valid path
   let path = "valid_path";
@@ -287,7 +264,6 @@ fn test_invalid_valid_overwrite_and_rename_path() {
   io::stdout().write_all(&output.stderr).unwrap();
 
   assert!(output.status.success());
-
   fs::remove_file("valid_path").unwrap();
   fs::remove_file("valid_path.0").unwrap();
 }
@@ -301,14 +277,15 @@ fn test_create_txn_builder_with_name() {
   io::stdout().write_all(&output.stdout).unwrap();
   io::stdout().write_all(&output.stderr).unwrap();
 
-  fs::remove_file("txn_builder").unwrap();
   assert!(output.status.success());
+  fs::remove_file("txn_builder").unwrap();
 }
 
 //
 // Store sids
 //
 #[test]
+// The user is given no information. These will be replaced with panic!
 fn test_store_sids_with_path() {
   // Store sids
   let output = store_sids_with_path("sids", "1,2,4").expect("Failed to store sids");
@@ -316,6 +293,5 @@ fn test_store_sids_with_path() {
   io::stdout().write_all(&output.stdout).unwrap();
   io::stdout().write_all(&output.stderr).unwrap();
 
-  fs::remove_file("sids").unwrap();
-  assert!(output.status.success());
+  assert_eq!(output.status.code(), Some(exitcode::USAGE));
 }

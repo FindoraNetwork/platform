@@ -1101,21 +1101,26 @@ pub(crate) fn process_submit_cmd<T: RestfulLedgerUpdate>(submit_matches: &clap::
                                                          txn_file: &str,
                                                          rest_client: &mut T)
                                                          -> Result<(), PlatformError> {
-  let txn_builder = load_txn_from_file(txn_file)?;
-  if submit_matches.is_present("get_sids") || submit_matches.is_present("sids_file") {
-    let sids = submit_and_get_sids(rest_client, txn_builder)?;
-    info!("Utxo: {:?}", sids);
-    if let Some(path) = submit_matches.value_of("sids_file") {
-      let mut sids_str = "".to_owned();
-      for sid in sids {
-        sids_str.push_str(&format!("{},", sid.0));
+  if let Ok(txn_builder) = load_txn_from_file(txn_file) {
+    if submit_matches.is_present("get_sids") || submit_matches.is_present("sids_file") {
+      let sids = submit_and_get_sids(rest_client, txn_builder)?;
+      info!("Utxo: {:?}", sids);
+      if let Some(path) = submit_matches.value_of("sids_file") {
+        let mut sids_str = "".to_owned();
+        for sid in sids {
+          sids_str.push_str(&format!("{},", sid.0));
+        }
+        store_sids_to_file(path, &sids_str)?;
       }
-      store_sids_to_file(path, &sids_str)?;
+      Ok(())
+    } else {
+      rest_client.submit_transaction(&txn_builder.transaction())?;
+      Ok(())
     }
-    Ok(())
   } else {
-    rest_client.submit_transaction(&txn_builder.transaction())?;
-    Ok(())
+    let msg = format!("couldn't load transaction from {}", txn_file);
+    error!("couldn't load transaction from {}", txn_file);
+    io_error(&msg)
   }
 }
 
@@ -1181,6 +1186,14 @@ pub(crate) fn process_pay_loan_cmd<T: RestfulLedgerAccess + RestfulLedgerUpdate>
   pay_loan(data_dir, seq_id, loan_id, amount, rest_client)
 }
 
+fn inputs_error(msg: &str) -> Result<(), PlatformError> {
+  Err(PlatformError::InputsError(msg.to_owned()))
+}
+
+fn io_error(msg: &str) -> Result<(), PlatformError> {
+  Err(PlatformError::IoError(msg.to_owned()))
+}
+
 /// Processes input commands and arguments.
 /// # Arguments
 /// * `inputs`: input subcommands and arguments.
@@ -1189,8 +1202,6 @@ pub fn process_inputs<T: RestfulQueryServerAccess + RestfulLedgerAccess + Restfu
   seq_id: u64,
   rest_client: &mut T)
   -> Result<(), PlatformError> {
-  let _config_file_path: String;
-  let txn_file: String;
   let dir = if let Some(dir) = inputs.value_of("dir") {
     dir.to_string()
   } else if let Ok(dir) = env::var("FINDORA_DIR") {
@@ -1209,21 +1220,14 @@ pub fn process_inputs<T: RestfulQueryServerAccess + RestfulLedgerAccess + Restfu
     format!("{}/.findora", dir_str)
   };
 
-  if let Some(cfg) = inputs.value_of("config") {
-    _config_file_path = cfg.to_string();
-  } else {
-    _config_file_path = format!("{}/config.toml", dir);
-  }
-
-  if let Some(txn_store) = inputs.value_of("txn") {
-    txn_file = txn_store.to_string();
-  } else {
-    txn_file = format!("{}/txn/default.txn", dir);
-  }
-
   match inputs.subcommand() {
     ("asset_issuer", Some(asset_issuer_matches)) => {
-      process_asset_issuer_cmd(asset_issuer_matches, &dir, &txn_file, seq_id)
+      if let Some(txn_file) = inputs.value_of("txn") {
+        process_asset_issuer_cmd(asset_issuer_matches, &dir, &txn_file, seq_id)
+      } else {
+        error!("Missing --txn <filename>");
+        inputs_error(&error_location!())
+      }
     }
     ("credential_issuer", Some(credential_issuer_matches)) => {
       process_credential_issuer_cmd(credential_issuer_matches, &dir)
@@ -1235,32 +1239,56 @@ pub fn process_inputs<T: RestfulQueryServerAccess + RestfulLedgerAccess + Restfu
       process_borrower_cmd(issuer_matches, &dir, seq_id, rest_client)
     }
     ("create_txn_builder", Some(create_txn_builder_matches)) => {
-      process_create_txn_builder_cmd(create_txn_builder_matches, seq_id, &txn_file)
+      if let Some(txn_file) = create_txn_builder_matches.value_of("name") {
+        process_create_txn_builder_cmd(create_txn_builder_matches, seq_id, &txn_file)
+      } else {
+        error!("Missing --name <filename>");
+        inputs_error(&error_location!())
+      }
     }
     ("serialize", Some(_serialize_matches)) => {
-      let txn_builder = load_txn_from_file(&txn_file).or_else(|e| {
-                          error!("Failed to load txn builder from file {}.", txn_file);
-                          Err(e)
-                        })?;
-      match serde_json::to_string(txn_builder.transaction()) {
-        Ok(as_json) => {
-          info!("{}", as_json);
-          Ok(())
+      if let Some(txn_file) = inputs.value_of("txn") {
+        let txn_builder = load_txn_from_file(&txn_file).or_else(|e| {
+                            error!("Failed to load txn builder from file {}.", txn_file);
+                            Err(e)
+                          })?;
+        match serde_json::to_string(txn_builder.transaction()) {
+          Ok(as_json) => {
+            info!("{}", as_json);
+            Ok(())
+          }
+          Err(_) => {
+            error!("Failed to serialize txn.");
+            Err(ser_fail!())
+          }
         }
-        Err(_) => {
-          error!("Failed to serialize txn.");
-          Err(ser_fail!())
-        }
+      } else {
+        error!("Missing --txn <filename>");
+        inputs_error(&error_location!())
       }
     }
-    ("drop", Some(_drop_matches)) => match std::fs::remove_file(&txn_file) {
-      Ok(_) => {
-        info!("Deleted transaction file {}", txn_file);
-        Ok(())
+    ("drop", Some(_drop_matches)) => {
+      if let Some(txn_file) = inputs.value_of("txn") {
+        match std::fs::remove_file(&txn_file) {
+          Ok(_) => {
+            info!("Deleted transaction file {}", txn_file);
+            Ok(())
+          }
+          Err(e) => Err(PlatformError::IoError(format!("Error deleting file: {:?} ", e))),
+        }
+      } else {
+        error!("Missing --txn <filename>");
+        inputs_error(&error_location!())
       }
-      Err(e) => Err(PlatformError::IoError(format!("Error deleting file: {:?} ", e))),
-    },
-    ("submit", Some(submit_matches)) => process_submit_cmd(submit_matches, &txn_file, rest_client),
+    }
+    ("submit", Some(submit_matches)) => {
+      if let Some(txn_file) = inputs.value_of("txn") {
+        process_submit_cmd(submit_matches, &txn_file, rest_client)
+      } else {
+        error!("Missing --txn <filename>");
+        inputs_error(&error_location!())
+      }
+    }
     ("custom_data", Some(custom_data_matches)) => {
       process_custom_data_cmds(custom_data_matches, rest_client)
     }
