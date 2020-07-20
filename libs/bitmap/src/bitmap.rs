@@ -1044,7 +1044,7 @@ impl BitMap {
     // Manually append the version and checksum, to avoid the mutating digest update in the
     // append_descriptor method
     result.extend_from_slice(&version.to_le_bytes());
-    result.extend_from_slice(&self.checksum[..]);
+    result.extend_from_slice(&self.checksum[0..]);
 
     for i in 0..self.blocks.len() {
       self.serialize_block(i, &mut result, INCLUDE_BITS);
