@@ -358,7 +358,7 @@ impl Loan {
 //
 // Data
 //
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
 /// Information of users, loans, fiat token code, and sequence number.
 pub struct Data {
   /// List of user records
@@ -584,7 +584,7 @@ pub fn parse_to_u64_vec(vals_str: &str) -> Result<Vec<u64>, PlatformError> {
 /// * Otherwise, loads the initial data.
 pub fn load_data(data_dir: &str) -> Result<Data, PlatformError> {
   let data_file_path = format!("{}/{}", data_dir, DATA_FILE);
-  match fs::read_to_string(data_file_path) {
+  match fs::read_to_string(&data_file_path) {
     Ok(data) => serde_json::from_str::<Data>(&data).or_else(|e| Err(des_fail!(e))),
     Err(_) => match fs::read_to_string(INIT_DATA_PATH) {
       Ok(init_data) => {
@@ -592,7 +592,8 @@ pub fn load_data(data_dir: &str) -> Result<Data, PlatformError> {
         store_data_to_file(data.clone(), data_dir)?;
         Ok(data)
       }
-      Err(_) => Err(PlatformError::IoError(format!("Failed to read file: {}", INIT_DATA_PATH))),
+      Err(_) => Err(PlatformError::IoError(format!("Failed to read both {} and {}",
+                                                   &data_file_path, INIT_DATA_PATH))),
     },
   }
 }
