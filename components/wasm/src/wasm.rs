@@ -1,4 +1,5 @@
 // Interface for issuing transactions that can be compiled to Wasm.
+/// @see {@link TracingPolicies} for more information about tracing policies.
 // Allows web clients to issue transactions from a browser contexts.
 // For now, forwards transactions to a ledger hosted locally.
 // To compile wasm package, run wasm-pack build in the wasm directory;
@@ -247,7 +248,7 @@ impl TransactionBuilder {
   /// @param {string} code - Base64 string representing the token code of the asset to be issued.
   /// @param {BigInt} seq_num - Issuance sequence number. Every subsequent issuance of a given asset type must have a higher sequence number than before.
   /// @param {BigInt} amount - Amount to be issued.
-  /// @param {bool} conf_amount - `true` means the asset amount is confidential, and `false` means it's nonconfidential.
+  /// @param {boolean} conf_amount - `true` means the asset amount is confidential, and `false` means it's nonconfidential.
   /// @param {PublicParams} zei_params - Public parameters necessary to generate asset records.
   pub fn add_basic_issue_asset(mut self,
                                key_pair: &XfrKeyPair,
@@ -514,8 +515,8 @@ impl TransferOperationBuilder {
   /// @param tracing_key {AssetTracerKeyPair} - Optional tracing key, must be added to traced
   /// assets.
   /// @param code {string} - String representation of the asset token code.
-  /// @param conf_amount {bool} - `true` means the output's asset amount is confidential, and `false` means it's nonconfidential.
-  /// @param conf_type {bool} - `true` means the output's asset type is confidential, and `false` means it's nonconfidential.
+  /// @param conf_amount {boolean} - `true` means the output's asset amount is confidential, and `false` means it's nonconfidential.
+  /// @param conf_type {boolean} - `true` means the output's asset type is confidential, and `false` means it's nonconfidential.
   /// @throws Will throw an error if `code` fails to deserialize.
   pub fn add_output_with_tracking(self,
                                   amount: u64,
@@ -538,8 +539,8 @@ impl TransferOperationBuilder {
   /// @param {BigInt} amount - amount to transfer to the recipient
   /// @param {XfrPublicKey} recipient - public key of the recipient
   /// @param code {string} - String representaiton of the asset token code
-  /// @param conf_amount {bool} - `true` means the output's asset amount is confidential, and `false` means it's nonconfidential.
-  /// @param conf_type {bool} - `true` means the output's asset type is confidential, and `false` means it's nonconfidential.
+  /// @param conf_amount {boolean} - `true` means the output's asset amount is confidential, and `false` means it's nonconfidential.
+  /// @param conf_type {boolean} - `true` means the output's asset type is confidential, and `false` means it's nonconfidential.
   /// @throws Will throw an error if `code` fails to deserialize.
   pub fn add_output_no_tracking(self,
                                 amount: u64,
@@ -612,16 +613,14 @@ impl TransferOperationBuilder {
 
 ///////////// CRYPTO //////////////////////
 #[wasm_bindgen]
-/// Returns a JsValue containing decrypted owner record information,
+/// Returns a JavaScript object containing decrypted owner record information,
 /// where `amount` is the decrypted asset amount, and `asset_type` is the decrypted asset type code.
 ///
 /// @param {ClientAssetRecord} record - Owner record.
-/// @see {@link ClientAssetRecord#from_json_record} for information about fetching the asset record.
-///
 /// @param {OwnerMemo} owner_memo - Owner memo of the associated record.
-/// TODO (Redmine issue #126): Unable to get owner memo.
-///
 /// @param {XfrKeyPair} keypair - Keypair of asset owner.
+/// @see {@link ClientAssetRecord#from_json_record} for information about how to construct an asset record object
+/// from a JSON result returned from the ledger server.
 pub fn open_client_asset_record(record: &ClientAssetRecord,
                                 owner_memo: Option<OwnerMemo>,
                                 keypair: &XfrKeyPair)

@@ -150,7 +150,9 @@ impl AuthenticatedAssetRecord {
 }
 
 #[wasm_bindgen]
-/// TXO of the client's asset record.
+/// This object represents an asset record owned by a ledger key pair.
+/// @see {@link open_client_asset_record} for information about how to decrypt an encrypted asset
+/// record.
 pub struct ClientAssetRecord {
   pub(crate) txo: TxOutput,
 }
@@ -164,7 +166,7 @@ impl ClientAssetRecord {
 #[wasm_bindgen]
 impl ClientAssetRecord {
   /// Builds a client record from a JSON-serialized JavaScript value.
-  /// @param {JsValue} val - JSON-encoded autehtnicated asset record fetched from ledger server with the `utxo_sid/{sid}` route,
+  /// @param {JsValue} val - JSON-encoded authenticated asset record fetched from ledger server with the `utxo_sid/{sid}` route,
   /// where `sid` can be fetched from the query server with the `get_owned_utxos/{address}` route.
   /// * E.g.: `{"amount":{"NonConfidential":1000},
   /// "asset_type":{"NonConfidential":[2,14,75,187,192,9,69,242,30,9,18,203,193,227,148,56]},
@@ -176,14 +178,19 @@ impl ClientAssetRecord {
 
 #[wasm_bindgen]
 #[derive(Serialize, Deserialize)]
-/// Key pair of the asset tracer. This key pair can be used to decrypt traced assets and
-/// identities.
+/// This is the key pair used by asset tracers to decrypt asset amounts, types, and identity
+/// commitments associated with traceable asset transfers.
+/// @see {@link TracingPolicy} for information about tracing policies.
+/// @see {@link AssetRules#add_tracing_policy} for information about how to add a tracing policy to
+/// an asset definition.
 pub struct AssetTracerKeyPair {
   pub(crate) keypair: ZeiAssetTracerKeyPair,
 }
 
 #[wasm_bindgen]
 impl AssetTracerKeyPair {
+  /// Creates a new tracer key pair.
+  /// @constructor
   pub fn new() -> Self {
     let mut small_rng = ChaChaRng::from_entropy();
     AssetTracerKeyPair { keypair: gen_asset_tracer_keypair(&mut small_rng) }
@@ -379,7 +386,8 @@ impl AuthenticatedAIRResult {
     Ok(AuthenticatedAIRResult { result })
   }
 
-  /// Returns true if the authenticated AIR result proofs verify succesfully.
+  /// Returns true if the authenticated AIR result proofs verify succesfully. If the proofs are
+  /// valid, the identity commitment contained in the AIR result is a valid part of the ledger.
   /// @param {string} state_commitment - String representing the ledger state commitment.
   pub fn is_valid(&self, state_commitment: String) -> Result<bool, JsValue> {
     let state_commitment = serde_json::from_str::<HashOf<_>>(&state_commitment).map_err(|_e| {
@@ -550,19 +558,26 @@ impl TracingPolicy {
 #[wasm_bindgen]
 #[derive(Default)]
 /// Simple asset rules:
-/// 1) Traceable: Records and identities of traceable assets can be decrypted by a provided tracking key
-/// 2) Transferable: Non-transferable assets can only be transferred once from the issuer to
-///    another user.
-/// 3) Updatable: Whether the asset memo can be updated.
-/// 4) Transfer signature rules: Signature weights and threshold for a valid transfer.
-/// 5) Max units: Optional limit on total issuance amount.
+/// 1. **Traceable**: Records and identities of traceable assets can be decrypted by a provided tracking key. Defaults to no tracing policies.
+/// 2. **Transferable**: Non-transferable assets can only be transferred once from the issuer to another user. By default, assets are transferable.
+/// 3. **Updatable**: Whether the asset memo can be updated. By default, assets are not updatable.
+/// 4. **Transfer signature rules**: Signature weights and threshold for a valid transfer. By
+///    default, there are no special signature requirements.
+/// 5. **Max units**: Optional limit on the total number of units of this asset that can be issued.
+///    By default, there is no issuance cap.
+/// @see {@link TracingPolicies} for more information about tracing policies.
+/// @see {@link TransactionBuilder#add_operation_update_memo} for more information about how to add
+/// a memo update operation to a transaction.
+/// @see {@link SignatureRules} for more information about co-signatures.
+/// @see {@link TransactionBuilder#add_operation_create_asset} for information about how to add asset rules to an asset definition.
 pub struct AssetRules {
   pub(crate) rules: PlatformAssetRules,
 }
 
 #[wasm_bindgen]
 impl AssetRules {
-  /// Create a default set of asset rules.
+  /// Create a default set of asset rules. See class description for defaults.
+  /// @constructor
   pub fn new() -> AssetRules {
     AssetRules::default()
   }
@@ -583,14 +598,16 @@ impl AssetRules {
 
   /// Transferability toggle. Assets that are not transferable can only be transferred by the asset
   /// issuer.
-  /// @param {bool} transferable - Boolean indicating whether asset can be transferred.
+  /// @param {boolean} transferable - Boolean indicating whether asset can be transferred.
   pub fn set_transferable(mut self, transferable: bool) -> AssetRules {
     self.rules.transferable = transferable;
     self
   }
 
   /// The updatable flag determines whether the asset memo can be updated after issuance.
-  /// @param {bool} updatable - Boolean indicating whether asset memo can be updated.
+  /// @param {boolean} updatable - Boolean indicating whether asset memo can be updated.
+  /// @see {@link TransactionBuilder#add_operation_update_memo} for more information about how to add
+  /// a memo update operation to a transaction.
   pub fn set_updatable(mut self, updatable: bool) -> AssetRules {
     self.rules.updatable = updatable;
     self
