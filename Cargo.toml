@@ -33,3 +33,7 @@ members = [
     "libs/network",
     "libs/utils",
 ]
+
+[profile.dev.package.curve25519-dalek]
+    opt-level = 1
+    overflow-checks = false

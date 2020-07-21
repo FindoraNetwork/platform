@@ -13,7 +13,7 @@ use std::collections::{HashMap, HashSet};
 // use std::iter::once;
 use utils::{HasInvariants, HashOf, SignatureOf};
 use zei::serialization::ZeiFromToBytes;
-use zei::xfr::lib::{verify_xfr_body, XfrNotePolicies};
+use zei::xfr::lib::verify_xfr_body;
 use zei::xfr::sig::XfrPublicKey;
 // use zei::xfr::structs::{AssetTracingPolicies, BlindAssetRecord, XfrAmount, XfrAssetType};
 use zei::xfr::structs::{AssetTracingPolicies, XfrAmount, XfrAssetType};
@@ -277,17 +277,21 @@ impl TxnEffect {
         //          - For simplicity, only Standard transfers are allowed
         //            to have lien assignments
         Operation::TransferAsset(trn) => {
-          if trn.body.inputs.len() != trn.body.note.inputs.len() {
+          if trn.body.inputs.len() != trn.body.transfer.inputs.len() {
             return Err(inp_fail!());
           }
-          if trn.body.outputs.len() != trn.body.note.outputs.len() {
+          if trn.body.outputs.len() != trn.body.transfer.outputs.len() {
             return Err(inp_fail!());
           }
-          assert!(trn.body.inputs.len() == trn.body.note.inputs.len());
-          assert!(trn.body.outputs.len() == trn.body.note.outputs.len());
+          assert!(trn.body.inputs.len() == trn.body.transfer.inputs.len());
+          assert!(trn.body.outputs.len() == trn.body.transfer.outputs.len());
 
           // Transfer outputs must match outputs zei transaction
-          for (output, record) in trn.body.outputs.iter().zip(trn.body.note.outputs.iter()) {
+          for (output, record) in trn.body
+                                     .outputs
+                                     .iter()
+                                     .zip(trn.body.transfer.outputs.iter())
+          {
             if output.record != *record {
               return Err(inp_fail!());
             }
@@ -301,13 +305,13 @@ impl TxnEffect {
           }
           let (lien_inputs, lien_outputs) = {
             let mut inps = trn.body
-                              .note
+                              .transfer
                               .inputs
                               .iter()
                               .map(|_| None)
                               .collect::<Vec<_>>();
             let mut outs = trn.body
-                              .note
+                              .transfer
                               .outputs
                               .iter()
                               .map(|_| None)
@@ -329,7 +333,7 @@ impl TxnEffect {
 
           match trn.body.transfer_type {
             TransferType::DebtSwap => {
-              let (debt_type, debt_swap_effect) = compute_debt_swap_effect(&trn.body.note)?;
+              let (debt_type, debt_swap_effect) = compute_debt_swap_effect(&trn.body.transfer)?;
 
               if debt_effects.contains_key(&debt_type) {
                 return Err(inp_fail!());
@@ -354,7 +358,7 @@ impl TxnEffect {
 
               // (1b) all input record owners (for non-custom-policy
               //      assets) have signed
-              for (input_idx, record) in trn.body.note.inputs.iter().enumerate() {
+              for (input_idx, record) in trn.body.transfer.inputs.iter().enumerate() {
                 // skip signature checking for custom-policy assets
                 if let Some(inp_code) = record.asset_type.get_asset_type() {
                   if custom_policy_asset_types.get(&AssetTypeCode { val: inp_code })
@@ -370,10 +374,10 @@ impl TxnEffect {
                           .or_insert_with(HashSet::new);
               }
 
-              let policies = XfrNotePolicies::from_policies_no_ref(&trn.body.policies);
+              let policies = trn.body.policies.to_ref();
               verify_xfr_body(&mut prng,
                               &mut params,
-                              &trn.body.note,
+                              &trn.body.transfer,
                               &policies).map_err(|e| {
                                           PlatformError::ZeiError(error_location!(), e)
                                         })?;
@@ -383,12 +387,12 @@ impl TxnEffect {
                                                  .policies
                                                  .inputs_tracking_policies
                                                  .iter()
-                                                 .zip(trn.body.note.inputs.iter())
+                                                 .zip(trn.body.transfer.inputs.iter())
                                                  .chain(trn.body
                                                            .policies
                                                            .outputs_tracking_policies
                                                            .iter()
-                                                           .zip(trn.body.note.outputs.iter()))
+                                                           .zip(trn.body.transfer.outputs.iter()))
               {
                 // Only non-confidential assets can be traced
                 if let Some(inp_code) = record.asset_type.get_asset_type() {
@@ -408,7 +412,7 @@ impl TxnEffect {
           for ((inp, record), lien) in trn.body
                                           .inputs
                                           .iter()
-                                          .zip(trn.body.note.inputs.iter())
+                                          .zip(trn.body.transfer.inputs.iter())
                                           .zip(lien_inputs)
           {
             // NOTE: We assume that any confidential-type asset records
@@ -456,9 +460,9 @@ impl TxnEffect {
             }
           }
 
-          txos.reserve(trn.body.note.outputs.len());
+          txos.reserve(trn.body.transfer.outputs.len());
           let mut conf_transfer = false;
-          for (out, lien) in trn.body.note.outputs.iter().zip(lien_outputs) {
+          for (out, lien) in trn.body.transfer.outputs.iter().zip(lien_outputs) {
             if let XfrAssetType::Confidential(_) = out.asset_type {
               conf_transfer = true;
             }
@@ -535,21 +539,21 @@ impl TxnEffect {
         Operation::BindAssets(_bind_assets) => {
           unimplemented!();
 
-          //if 1 + bind_assets.body.inputs.len() != bind_assets.body.note.inputs.len() {
+          //if 1 + bind_assets.body.inputs.len() != bind_assets.body.transfer.inputs.len() {
           //  return Err(inp_fail!());
           //}
-          //if bind_assets.body.note.outputs.len() != 1 {
+          //if bind_assets.body.transfer.outputs.len() != 1 {
           //  return Err(inp_fail!());
           //}
-          //assert!(1 + bind_assets.body.inputs.len() == bind_assets.body.note.inputs.len());
-          //assert!(1 == bind_assets.body.note.outputs.len());
+          //assert!(1 + bind_assets.body.inputs.len() == bind_assets.body.transfer.inputs.len());
+          //assert!(1 == bind_assets.body.transfer.outputs.len());
 
           //// 2(b)
-          //if bind_assets.body.note.inputs[0].asset_type
+          //if bind_assets.body.transfer.inputs[0].asset_type
           //                                  .get_asset_type()
           //                                  .is_none()
-          //   || bind_assets.body.note.inputs[0].asset_type
-          //      != bind_assets.body.note.outputs[0].asset_type
+          //   || bind_assets.body.transfer.inputs[0].asset_type
+          //      != bind_assets.body.transfer.outputs[0].asset_type
           //{
           //  return Err(inp_fail!());
           //}
@@ -558,7 +562,7 @@ impl TxnEffect {
           //// NOTE: `lien_inputs` doesn't include the contract
           //let lien_inputs = {
           //  let mut inps = bind_assets.body
-          //                            .note
+          //                            .transfer
           //                            .inputs
           //                            .iter()
           //                            .skip(1)
@@ -597,7 +601,7 @@ impl TxnEffect {
 
           //// (1b) all input record owners (for non-custom-policy
           ////      assets) have signed
-          //for (input_idx, record) in bind_assets.body.note.inputs.iter().enumerate() {
+          //for (input_idx, record) in bind_assets.body.transfer.inputs.iter().enumerate() {
           //  // skip signature checking for custom-policy assets
           //  if let Some(inp_code) = record.asset_type.get_asset_type() {
           //    if custom_policy_asset_types.get(&AssetTypeCode { val: inp_code })
@@ -621,12 +625,12 @@ impl TxnEffect {
           //// (3)
           //// TODO(joe): support identity tracing in Bind/Release
           //// TODO: implement real policies
-          //verify_xfr_body_no_policies(&mut prng, &bind_assets.body.note)
+          //verify_xfr_body_no_policies(&mut prng, &bind_assets.body.transfer)
           //  .map_err(|e| PlatformError::ZeiError(error_location!(),e))?;
 
           //// The vec of TxOutputs corresponding to the lien
           //let bound_inputs = bind_assets.body
-          //                              .note
+          //                              .transfer
           //                              .inputs
           //                              .iter()
           //                              .zip(lien_inputs.iter())
@@ -640,7 +644,7 @@ impl TxnEffect {
           //let mut input_types = HashSet::new();
           //for ((inp, record), lien) in
           //  once(&bind_assets.body.contract).chain(bind_assets.body.inputs.iter())
-          //                                  .zip(bind_assets.body.note.inputs.iter())
+          //                                  .zip(bind_assets.body.transfer.inputs.iter())
           //                                  .zip(once(None).chain(lien_inputs.into_iter()))
           //{
           //  // NOTE: We assume that any confidential-type asset records
@@ -690,12 +694,12 @@ impl TxnEffect {
 
           //// A bind has exactly one output: the lien
           //txos.reserve(1);
-          //assert_eq!(bind_assets.body.note.outputs.len(), 1);
+          //assert_eq!(bind_assets.body.transfer.outputs.len(), 1);
 
           //{
-          //  assert_eq!(bind_assets.body.note.inputs[0].asset_type,
-          //             bind_assets.body.note.outputs[0].asset_type);
-          //  let (out, lien) = (&bind_assets.body.note.outputs[0], Some(HashOf::new(&bound_inputs)));
+          //  assert_eq!(bind_assets.body.transfer.inputs[0].asset_type,
+          //             bind_assets.body.transfer.outputs[0].asset_type);
+          //  let (out, lien) = (&bind_assets.body.transfer.outputs[0], Some(HashOf::new(&bound_inputs)));
           //  asset_types_involved.insert(AssetTypeCode { val: out.asset_type
           //                                                      .get_asset_type()
           //                                                      .unwrap() });
@@ -729,25 +733,25 @@ impl TxnEffect {
         Operation::ReleaseAssets(_release_assets) => {
           unimplemented!();
 
-          //if release_assets.body.note.inputs.is_empty() {
+          //if release_assets.body.transfer.inputs.is_empty() {
           //  return Err(inp_fail!());
           //}
-          //if release_assets.body.num_outputs != release_assets.body.note.outputs.len() {
+          //if release_assets.body.num_outputs != release_assets.body.transfer.outputs.len() {
           //  return Err(inp_fail!());
           //}
-          //assert!(!release_assets.body.note.inputs.is_empty());
-          //assert!(release_assets.body.num_outputs == release_assets.body.note.outputs.len());
+          //assert!(!release_assets.body.transfer.inputs.is_empty());
+          //assert!(release_assets.body.num_outputs == release_assets.body.transfer.outputs.len());
 
           //// setup for (2)
           //let (lien_inputs, lien_outputs) = {
           //  let mut inps = release_assets.body
-          //                               .note
+          //                               .transfer
           //                               .inputs
           //                               .iter()
           //                               .map(|_| None)
           //                               .collect::<Vec<_>>();
           //  let mut outs = release_assets.body
-          //                               .note
+          //                               .transfer
           //                               .outputs
           //                               .iter()
           //                               .map(|_| None)
@@ -771,7 +775,7 @@ impl TxnEffect {
           //  (inps, outs)
           //};
 
-          //assert!(lien_inputs.len() == release_assets.body.note.inputs.len());
+          //assert!(lien_inputs.len() == release_assets.body.transfer.inputs.len());
 
           //// TODO(joe): Can this safely be removed?
           ////  - It *SHOULD* be enforced by BindAssets validation
@@ -780,7 +784,7 @@ impl TxnEffect {
           ////    behavior?
           ////  - Rejecting later transactions that use such a lien seems
           ////    like a "fail-safe" option -- is that right?
-          //if release_assets.body.note.inputs[0].asset_type
+          //if release_assets.body.transfer.inputs[0].asset_type
           //                                     .get_asset_type()
           //                                     .is_none()
           //{
@@ -804,7 +808,7 @@ impl TxnEffect {
 
           //// (1b) the contract input record owners (for non-custom-policy
           ////      assets) have signed
-          //for (input_idx, record) in once(&release_assets.body.note.inputs[0]).enumerate() {
+          //for (input_idx, record) in once(&release_assets.body.transfer.inputs[0]).enumerate() {
           //  // skip signature checking for custom-policy assets
           //  if let Some(inp_code) = record.asset_type.get_asset_type() {
           //    if custom_policy_asset_types.get(&AssetTypeCode { val: inp_code })
@@ -825,12 +829,12 @@ impl TxnEffect {
           //// (3)
           //// TODO: implement real policies
           //// patch for https://github.com/findoraorg/platform/issues/363
-          //verify_xfr_body_no_policies(&mut prng, &release_assets.body.note)
+          //verify_xfr_body_no_policies(&mut prng, &release_assets.body.transfer)
           //  .map_err(|e| PlatformError::ZeiError(error_location!(),e))?;
 
           //// The vec of TxOutputs corresponding to the lien
           //let bound_inputs = release_assets.body
-          //                                 .note
+          //                                 .transfer
           //                                 .inputs
           //                                 .iter()
           //                                 .zip(lien_inputs.iter().skip(1))
@@ -841,7 +845,7 @@ impl TxnEffect {
           //                                 .collect::<Vec<_>>();
 
           //let mut input_types = HashSet::new();
-          //for record in release_assets.body.note.inputs.iter() {
+          //for record in release_assets.body.transfer.inputs.iter() {
           //  // NOTE: We assume that any confidential-type asset records
           //  // have no atypical transfer restrictions. Be careful!
           //  if let Some(inp_code) = record.asset_type.get_asset_type() {
@@ -852,7 +856,7 @@ impl TxnEffect {
 
           //{
           //  let (inp, record) =
-          //    (&release_assets.body.contract, &release_assets.body.note.inputs[0]);
+          //    (&release_assets.body.contract, &release_assets.body.transfer.inputs[0]);
           //  let lien = Some(HashOf::new(&bound_inputs));
 
           //  // (2), checking within this transaction and recording
@@ -893,9 +897,9 @@ impl TxnEffect {
           //  }
           //}
 
-          //txos.reserve(release_assets.body.note.outputs.len());
+          //txos.reserve(release_assets.body.transfer.outputs.len());
           //let mut conf_transfer = false;
-          //for (out, lien) in release_assets.body.note.outputs.iter().zip(lien_outputs) {
+          //for (out, lien) in release_assets.body.transfer.outputs.iter().zip(lien_outputs) {
           //  if let XfrAssetType::Confidential(_) = out.asset_type {
           //    conf_transfer = true;
           //  }
@@ -952,10 +956,10 @@ impl HasInvariants<PlatformError> for TxnEffect {
       let mut found = false;
       for op in self.txn.body.operations.iter() {
         if let Operation::TransferAsset(trn) = op {
-          if trn.body.inputs.len() != trn.body.note.inputs.len() {
+          if trn.body.inputs.len() != trn.body.transfer.inputs.len() {
             return Err(inv_fail!());
           }
-          for (ix, inp_record) in trn.body.inputs.iter().zip(trn.body.note.inputs.iter()) {
+          for (ix, inp_record) in trn.body.inputs.iter().zip(trn.body.transfer.inputs.iter()) {
             if let TxoRef::Absolute(input_tid) = ix {
               if input_tid == txo_sid {
                 if inp_record != &record.record {

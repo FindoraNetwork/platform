@@ -27,7 +27,7 @@ use zei::setup::PublicParams;
 use zei::xfr::asset_record::{
   build_blind_asset_record, build_open_asset_record, open_blind_asset_record, AssetRecordType,
 };
-use zei::xfr::lib::XfrNotePoliciesNoRef;
+use zei::xfr::lib::XfrNotePolicies;
 use zei::xfr::sig::{XfrKeyPair, XfrPublicKey};
 use zei::xfr::structs::{
   AssetRecord, AssetRecordTemplate, AssetTracingPolicies, AssetTracingPolicy, BlindAssetRecord,
@@ -425,7 +425,7 @@ impl TransactionBuilder {
   }
 
   pub fn get_output_ref(&self, idx: usize) -> &TxOutput {
-    self.txn.get_outputs_ref()[idx]
+    self.txn.get_outputs_ref(true)[idx]
   }
 
   pub fn from_seq_id(seq_id: u64) -> Self {
@@ -855,10 +855,10 @@ impl TransferOperationBuilder {
     let mut prng = ChaChaRng::from_entropy();
     let num_inputs = self.input_records.len();
     let num_outputs = self.output_records.len();
-    let xfr_policies = XfrNotePoliciesNoRef::new(self.inputs_tracing_policies.clone(),
-                                                 vec![None; num_inputs],
-                                                 self.outputs_tracing_policies.clone(),
-                                                 vec![None; num_outputs]);
+    let xfr_policies = XfrNotePolicies::new(self.inputs_tracing_policies.clone(),
+                                            vec![None; num_inputs],
+                                            self.outputs_tracing_policies.clone(),
+                                            vec![None; num_outputs]);
     let body = TransferAssetBody::new(&mut prng,
                                       self.input_sids.clone(),
                                       &self.input_records,
@@ -871,7 +871,13 @@ impl TransferOperationBuilder {
   }
 
   pub fn get_output_record(&self, idx: usize) -> Option<BlindAssetRecord> {
-    self.transfer.as_ref()?.body.note.outputs.get(idx).cloned()
+    self.transfer
+        .as_ref()?
+        .body
+        .transfer
+        .outputs
+        .get(idx)
+        .cloned()
   }
 
   // All input owners must sign eventually for the transaction to be valid.
@@ -922,7 +928,7 @@ impl TransferOperationBuilder {
       sig_keys.insert(sig.address.key.zei_to_bytes());
     }
 
-    for record in &trn.body.note.inputs {
+    for record in &trn.body.transfer.inputs {
       if !sig_keys.contains(&record.public_key.zei_to_bytes()) {
         return Err(inv_fail!("Not all signatures present".to_string()));
       }

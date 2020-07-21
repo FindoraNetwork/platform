@@ -251,7 +251,7 @@ impl<T> AsRef<[u8]> for HashOf<T> {
   }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProofOf<T>(pub ProofOfBytes<Serialized<T>>);
 
 impl<T> ProofOf<T> where T: Serialize + serde::de::DeserializeOwned
@@ -271,7 +271,7 @@ pub struct HashOfBytes<T> {
   phantom: PhantomData<T>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ProofOfBytes<T> {
   pub proof: Proof,
   phantom: PhantomData<T>,

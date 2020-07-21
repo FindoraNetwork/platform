@@ -532,7 +532,7 @@ impl InterpretAccounts<PlatformError> for LedgerAccounts {
 
         while total_sum < amt && !avail.is_empty() {
           let sid = avail.pop_front().unwrap();
-          let blind_rec = &(self.ledger.get_utxo(sid).unwrap().0).record;
+          let blind_rec = &(self.ledger.get_utxo(sid).unwrap().utxo.0).record;
           let memo = self.owner_memos.get(&sid).cloned();
           let open_rec = open_blind_asset_record(&blind_rec, &memo, &src_priv).unwrap();
           // dbg!(sid, open_rec.get_amount(), open_rec.get_asset_type());
@@ -603,7 +603,8 @@ impl InterpretAccounts<PlatformError> for LedgerAccounts {
         let mut sig_keys: Vec<XfrKeyPair> = Vec::new();
 
         for _ in to_use.iter() {
-          sig_keys.push(XfrKeyPair::zei_from_bytes(&src_keypair.zei_to_bytes()));
+          sig_keys.push(XfrKeyPair::zei_from_bytes(&src_keypair.zei_to_bytes())
+            .map_err(|e| PlatformError::ZeiError(error_location!(), e))?);
         }
 
         let src_records: Vec<AssetRecord> =
@@ -620,7 +621,7 @@ impl InterpretAccounts<PlatformError> for LedgerAccounts {
                                  vec![],
                                  TransferType::Standard).unwrap();
 
-        let mut owners_memos = transfer_body.note.owners_memos.clone();
+        let mut owners_memos = transfer_body.transfer.owners_memos.clone();
         // dbg!(&transfer_body);
         let transfer_sig = transfer_body.compute_body_signature(&src_keypair, None);
 
@@ -1150,7 +1151,7 @@ impl InterpretAccounts<PlatformError> for LienAccounts {
                                  vec![],
                                  TransferType::Standard).unwrap();
 
-        let mut owners_memos = transfer_body.note.owners_memos.clone();
+        let mut owners_memos = transfer_body.transfer.owners_memos.clone();
         // dbg!(&transfer_body);
         let transfer_sig = transfer_body.compute_body_signature(&src_keypair, None);
 
@@ -1429,7 +1430,8 @@ impl InterpretAccounts<PlatformError> for OneBigTxnAccounts {
         let mut sig_keys: Vec<XfrKeyPair> = Vec::new();
 
         for _ in to_use.iter() {
-          sig_keys.push(XfrKeyPair::zei_from_bytes(&src_keypair.zei_to_bytes()));
+          sig_keys.push(XfrKeyPair::zei_from_bytes(&src_keypair.zei_to_bytes())
+            .map_err(|e| PlatformError::ZeiError(error_location!(), e))?);
         }
 
         let src_records: Vec<AssetRecord> =
@@ -1447,7 +1449,7 @@ impl InterpretAccounts<PlatformError> for OneBigTxnAccounts {
                                                    None,
                                                    vec![],
                                                    TransferType::Standard).unwrap();
-        let owners_memos = transfer_body.note.owners_memos.clone();
+        let owners_memos = transfer_body.transfer.owners_memos.clone();
         // dbg!(&transfer_body);
         let transfer_sig = transfer_body.compute_body_signature(&src_keypair, None);
 
@@ -1675,7 +1677,7 @@ impl<T> InterpretAccounts<PlatformError> for LedgerStandaloneAccounts<T>
 
         while total_sum < amt && !avail.is_empty() {
           let sid = avail.pop_front().unwrap();
-          let blind_rec = (self.client.get_utxo(sid).unwrap().0).record;
+          let blind_rec = (self.client.get_utxo(sid).unwrap().utxo.0).record;
           let memo = self.owner_memos.get(&sid).cloned();
           let open_rec = open_blind_asset_record(&blind_rec, &memo, &src_priv).unwrap();
           // dbg!(sid, open_rec.get_amount(), open_rec.get_asset_type());
@@ -1741,7 +1743,8 @@ impl<T> InterpretAccounts<PlatformError> for LedgerStandaloneAccounts<T>
         let mut sig_keys: Vec<XfrKeyPair> = Vec::new();
 
         for _ in to_use.iter() {
-          sig_keys.push(XfrKeyPair::zei_from_bytes(&src_keypair.zei_to_bytes()));
+          sig_keys.push(XfrKeyPair::zei_from_bytes(&src_keypair.zei_to_bytes())
+            .map_err(|e| PlatformError::ZeiError(error_location!(), e))?);
         }
 
         let src_records: Vec<AssetRecord> =
@@ -1758,7 +1761,7 @@ impl<T> InterpretAccounts<PlatformError> for LedgerStandaloneAccounts<T>
                                  vec![],
                                  TransferType::Standard).unwrap();
 
-        let mut owners_memos = transfer_body.note.owners_memos.clone();
+        let mut owners_memos = transfer_body.transfer.owners_memos.clone();
         // dbg!(&transfer_body);
         let transfer_sig = transfer_body.compute_body_signature(&src_keypair, None);
 

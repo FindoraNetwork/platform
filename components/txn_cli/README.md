@@ -1,16 +1,35 @@
 # Transaction Builder Command Line Interface
 
-The `txn_cli` application is intended to help one experiment with the RESTful API and access the Ledger from scripts. The `txn_cli` provides a command line interface for constructing and submitting requests to the Ledger. The `txn_cli` application creates transactions and submits them to the ledger server.
+The `txn_cli` application is intended to help one experiment with the RESTful API and access the Ledger from scripts. It provides a command line interface for constructing and submitting a `transaction` to the Ledger. Each `transaction` contains a sequence of operations which will be performed on the ledger.
 
-The typical workflow of P2P lending is as follows
-* Create a new empty transaction. See `txn_cli create_txn_builder`.
-* Create new users. See `txn_cli asset_issuer sign_up`, `txn_cli credential_issuer sign_up`, `txn_cli lender sign_up` and `txn_cli borrower sign_up`.
-* Borrower: adds or updates a credential record. See `txn_cli borrower create_or_overwrite_credential`.
-* Borrower: requests a loan. See `txn_cli borrower request_loan`.
-* Lender: fulfills the loan. See `txn_cli lender fulfill_loan`.
-* Borrower: loads funds. See `txn_cli borrower load_funds`.
-* Borrower: pays off the loan. See `txn_cli borrower pay_loan`.
-* Query the ledger with the transaction ID to see if the transaction was committed using a web browser or command line tool.
+Transactions are built by first creating an empty transaction with `txn_cli create_txn_builder --name <filename>`, and then filling the newly created transaction with operations. In the following, we'll typically add just one operation to the transaction. Once completed, the transaction is then submitted to the testnet ledger `https://testnet.findora.org`, with
+```
+txn_cli --txn <filename> submit
+```
+or to the standalone ledger at `http://localhost` with
+```
+txn_cli --local --txn <filename> submit
+```
+## The different kinds of Users
+There are four User roles available; and each has an associated `sign_up` command in `txn_cli`. This command adds
+an entry to a JSON file ~/.findora/data.json. An example file can be found here.
+
+1. Asset Issuer: `txn_cli asset_issuer sign_up`.
+   * `store_sids`
+   * `define_asset`
+   * `issue_asset`
+   * `transfer_asset`
+   * `issue_and_transfer_asset`
+2. Credential Issuer: `txn_cli credential_issuer sign_up`
+3. Borrower: `txn_cli borrower sign_up` 
+   * requests a loan: `txn_cli borrower request_loan`
+   * loads funds: `txn_cli borrower load_funds`
+   * pays down the loan: `txn_cli borrower pay_loan`
+   * adds or updates a credential record: `txn_cli borrower create_or_overwrite_credential`
+4. Lender: `txn_cli lender sign_up`:
+   * fulfills the loan: `txn_cli lender fulfill_loan`
+
+The Ledger supports a querying with the transaction ID to see if the transaction was committed using a web browser or command line tool.
 
 ## Command help
 
@@ -25,57 +44,19 @@ txn_cli asset_issuer define_asset --help
 ```
 
 **Note**:
-* Even if the subcommand is unique, it is still necessary to
-supply the command name as well. This is true for both help and the
+* Even if the subcommand is unique, it is still necessary to supply the command name as well. This is true for both help and the
 actual subcommands.
-* By default, all the generated files will be stored in `~./findora`, unless specified otherwise. For example, if the current directory is `platform/target/debug`, running `txn_cli keygen` will put the generated key pair in ~./findora, but `txn_cli keygen --name keys/key_pair` will store the key pair to `platform/target/debug/keys/key_pair`.
+* By default, all the generated files will be stored in `~./findora`, unless specified otherwise. For example, if the current directory is `platform/target/debug`, running `txn_cli keygen` will put the generated key pair in ~./findora, but `txn_cli keygen --name keys/key_pair` will store the key pair to `$PWD/keys/key_pair`.
 * Examples below are assuming that `txn_cli` is in the `$PATH`. Typically it resides in either `platform/target/debug` or `platform/target/release`.
 
-## Submit a transaction
-After a transaction `tb` is composed by `air_assign`, `define_asset`, `issue_asset`, `transfer_asset`, or `issue_and_transfer_asset`, we can submit it like so:
-```
-txn_cli --txn tb submit
-```
-By default, `https://testnet.findora.org` is used. To switch to `http://localhost`, run
-```
-txn_cli --local --txn tb submit
-```
+## Examples
+The following commands are meant to be executed in order by you the user.
 
-## Asset issuer account
-### Sign up an asset issuer account
-In the initial data, there's one asset issuer, Izzie. To sign up a new asset issuer account:
+We assume that the file `~/.findora/data.json` is the same as `init_data.json` in this directory.
+In the initial data, there's one asset issuer, Izzie, with *id* = 0. If you wish to sign up (create) a new asset issuer account, you'd 
+do:
 ```
-txn_cli asset_issuer sign_up --name 'Issuer Name'
-```
-
-### Store sids to file
-If only one utxo sid is needed for an asset transfer, there's no need to use the `store_sids` subcommand. When submitting the asset issuing transaction, simply use `--sids_file` to specify a file to store the utxo sid.
-
-Otherwise, add `--get_sids` when submitting asset issuing transactions, and note the utxo sids shown in the outputs. After all the transactions needed are submitted, store all the utxo sids to one file:
-```
-txn_cli asset_issuer store_sids --file sids_file --indices 1,2,3
-```
-
-### Store asset tracer memo and owner memo
-Asset tracer memo and owner memo are necessary for asset tracing. To store them:
-```
-txn_cli asset_issuer --id 0 store_memo --file memo_file --amount 100 --token_code ibIaBlHV-PdQkvSuEg6YSA==
-```
-For confidential token amount, add `--confidential_amount`.
-
-### Assign to AIR (Address Identity Registry)
-1) Create an empty transaction named `txn_air` in the current directory
-```
-txn_cli create_txn_builder --name txn_air
-```
-2) Assign to AIR
-```
-txn_cli --txn txn_air asset_issuer --id 0 air_assign --address air_key --data 'Some data.'
-```
-
-3) Submit the transaction
-```
-txn_cli --txn txn_air submit
+txn_cli asset_issuer sign_up --name 'AssetIssuer' (FIXME 01: Doesn't create file if ~/.findora/data.json does not exist)
 ```
 
 ### Define an asset
@@ -87,7 +68,21 @@ txn_cli create_txn_builder --name txn_define
 ```
 txn_cli --txn txn_define asset_issuer --id 0 define_asset --memo 'Define an asset.'
 ```
-By default, a randomly generated token code will be used. To specify a code, use `--token_code`.
+In your output you should see a line like
+```
+yourname@yourhost: Creating asset with token code "KgiiRiHhkYdZ6FLFmM6FrQ==": [42, 8, 162, 70, 33, 225, 145, 135, 89, 232, 82, 197, 152, 206, 133, 173]
+```
+
+Save this token code for later use. By default, a randomly generated token code will be used.
+
+If you wish to have `txn_cli` use a user supplied token code, use the `--token_code <token_code>` argument.
+
+```
+txn_cli --txn txn_define asset_issuer --id 0 define_asset --memo 'Define an asset.' --token_code 23
+```
+
+(FIXME 02: supplying `token_code` breaks the `define_asset` call)
+
 To define a fiat asset, add `--fiat`.
 To allow update or tracing, add `--updatable` or `--traceable`, respectively.
 
@@ -98,13 +93,13 @@ txn_cli --txn txn_define submit
 
 ### Issue units of an asset
 After an asset is defined and the transaction is submitted:
-1) Create an empty transaction
+1) Create another empty transaction
 ```
 txn_cli create_txn_builder --name txn_issue
 ```
-2) Issue the asset (FIXME: this makesdoesn't change `txn_issue`) 
+2) Issue the asset 
 ```
-txn_cli --txn txn_issue asset_issuer --id 0 issue_asset --token_code ibIaBlHV-PdQkvSuEg6YSA== --amount 100
+txn_cli --txn txn_issue asset_issuer --id 0 issue_asset --token_code <token_code> --amount 100
 ```
 To make the token amount confidential, add `--confidential_amount`.
 3) Submit the transaction
@@ -112,6 +107,9 @@ To make the token amount confidential, add `--confidential_amount`.
 txn_cli --txn txn_issue submit
 ```
 To display the utxo sids, add `--get_sids`. To store the sids to a file, use `--sids_file`.
+```
+txn_cli --txn txn_issue submit --get_sids --sids_file sids_file
+```
 
 ### Transfer units of an asset. See `txn_cli add transfer_asset`.
 After an asset is defined and issued, transactions are submitted, and utxo sids are stored:
@@ -119,11 +117,13 @@ After an asset is defined and issued, transactions are submitted, and utxo sids 
 ```
 txn_cli create_txn_builder --name txn_transfer
 ```
-2) Transfer (FIXME: this doesn't change `txn_transfer`) 
+2) Transfer 
 After blind asset record and associated memos are stored:
 ```
-txn_cli --txn txn_transfer asset_issuer --id 0 transfer_asset --sids_file s --recipients 0,1 --issuance_txn_files txn_issue --input_amounts 45 --output_amounts 10,35
+txn_cli --txn txn_transfer asset_issuer --id 0 transfer_asset --sids_file sids_file --recipients 0,1 --issuance_txn_files txn_issue --input_amounts 45 --output_amounts 10,35
 ```
+(FIXME 03: thread 'main' panicked at 'index out of bounds: the len is 1 but the index is 1', components/txn_cli/src/data_lib.rs:486:25)
+
 3) Submit the transaction
 ```
 txn_cli --txn txn_transfer submit
@@ -137,18 +137,36 @@ txn_cli create_txn_builder --name txn_issue_and_transfer
 ```
 2) Issue and transfer the asset
 ```
-txn_cli --txn txn_issue_and_transfer asset_issuer --id 0 issue_and_transfer_asset --recipient 0 --amount 1000 --token_code ibIaBlHV-PdQkvSuEg6YSA==
+txn_cli --txn txn_issue_and_transfer asset_issuer --id 0 issue_and_transfer_asset --recipient 0 --amount 1000 --token_code 23
 ```
 To make the token amount confidential, add `--confidential_amount`.
-To store the asset tracer memo and owner memo, use `--memo_file`.
-3) Submit the transaction (FIXME: error in check_txn_effects `transaction invalid: Error at: ledger/src/store/store.rs:533:72`)
+
+3) Submit the transaction
 ```
 txn_cli --txn txn_issue_and_transfer submit
 ```
 To get the utxo sids, add `--get_sids`.
 
+### Store sids to file
+If only one utxo sid is needed for an asset transfer, there's no need
+to use the `store_sids` subcommand. When submitting the asset issuing
+transaction, simply use `--sids_file` to specify a file to store the
+utxo sid.
+
+Otherwise, add `--get_sids` when submitting asset issuing transactions, and note the utxo sids shown in the outputs. After all the transactions needed are submitted, store all the utxo sids to one file:
+```
+txn_cli asset_issuer store_sids --file sids_file --indices 1,2,3
+```
+
+### Store asset tracer memo and owner memo (FIXME 04: No file, no error message)
+Asset tracer memo and owner memo are necessary for asset tracing. To store them:
+```
+txn_cli asset_issuer --id 0 store_memos --file memo_file --amount 100 --token_code <token_code>
+```
+For confidential token amount, add `--confidential_amount`.
+
 ### Trace and verify an asset
-After the asset tracer memo and owner memo are stored by `store_memo` or `issue_and_transfer_asset --memo_file`, trace the asset and verify the token amount.
+After the asset tracer memo and owner memo are stored by `store_memos` or `issue_and_transfer_asset --memo_file`, trace the asset and verify the token amount.
 ```
 txn_cli asset_issuer --id 0 trace_and_verify_asset --memo_file memos --expected_amount 50
 ```
@@ -285,6 +303,21 @@ After the owner memo is stored:
 txn_cli borrower --id 0 get_asset_record --sid 1 --memo_file m_file
 ```
 By default, `https://testnet.findora.org` is used. To switch to `http://localhost`, add `--http --localhost`.
+
+### Assign to AIR (Address Identity Registry)
+1) Create an empty transaction named `txn_air` in the current directory
+```
+txn_cli create_txn_builder --name txn_air
+```
+2) Assign to AIR
+```
+txn_cli --txn txn_air asset_issuer --id 0 air_assign --address air_key --data 'Some data.'
+```
+
+3) Submit the transaction
+```
+txn_cli --txn txn_air submit
+```
 
 ## Querying the ledger server
 

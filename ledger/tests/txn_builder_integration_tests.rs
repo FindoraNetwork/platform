@@ -5,6 +5,7 @@ use ledger::data_model::errors::PlatformError;
 use ledger::data_model::{
   AssetRules, AssetTypeCode, Transaction, TransferType, TxOutput, TxnSID, TxoRef, TxoSID,
 };
+use ledger::error_location;
 use ledger::policies::{calculate_fee, DebtMemo, Fraction};
 use ledger::store::LedgerState;
 use ledger::store::*;
@@ -34,7 +35,7 @@ pub fn apply_transaction(ledger: &mut LedgerState, tx: Transaction) -> (TxnSID, 
 fn test_create_asset() -> Result<(), PlatformError> {
   let mut prng = ChaChaRng::from_entropy();
   let mut ledger = LedgerState::test_ledger();
-  let code = AssetTypeCode { val: [1; 16] };
+  let code = AssetTypeCode::from_identical_byte(1);
   let keys = XfrKeyPair::generate(&mut prng);
   let mut builder = TransactionBuilder::from_seq_id(ledger.get_block_commit_count());
   let params = PublicParams::new();
@@ -67,10 +68,15 @@ fn test_create_asset() -> Result<(), PlatformError> {
   let (_, txos) = apply_transaction(&mut ledger, tx.clone());
 
   // Basic transfer
-  let bar1 = ((ledger.get_utxo(txos[0]).unwrap().0).record).clone();
-  let bar2 = ((ledger.get_utxo(txos[1]).unwrap().0).record).clone();
+  let state_comm1 = ledger.get_state_commitment().0;
+  let bar1_proof = ledger.get_utxo(txos[0]).unwrap();
+  let bar2_proof = ledger.get_utxo(txos[1]).unwrap();
+  let bar1 = (bar1_proof.utxo.0).record.clone();
+  let bar2 = (bar2_proof.utxo.0).record.clone();
   let oar1 = open_blind_asset_record(&bar1, &None, keys.get_sk_ref()).unwrap();
   let oar2 = open_blind_asset_record(&bar2, &None, keys.get_sk_ref()).unwrap();
+  assert!(bar1_proof.is_valid(state_comm1.clone()));
+  assert!(bar2_proof.is_valid(state_comm1.clone()));
 
   let op = TransferOperationBuilder::new().add_input(TxoRef::Absolute(txos[0]), oar1, None, None, 1000)?
                                           .add_input(TxoRef::Absolute(txos[1]), oar2, None, None, 500)?
@@ -96,8 +102,8 @@ fn test_loan_repayment(loan_amount: u64,
   let params = PublicParams::new();
 
   // Asset Info
-  let fiat_code = AssetTypeCode { val: [0; 16] };
-  let debt_code = AssetTypeCode { val: [1; 16] };
+  let fiat_code = AssetTypeCode::from_identical_byte(0);
+  let debt_code = AssetTypeCode::from_identical_byte(1);
   let interest_rate = Fraction::new(interest_num, interest_denom); // Interest rate interest_num/interest_denom
   let debt_memo = DebtMemo { interest_rate,
                              fiat_code,
@@ -109,7 +115,10 @@ fn test_loan_repayment(loan_amount: u64,
   let fiat_issuer_keys = XfrKeyPair::generate(&mut prng);
   let lender_keys = XfrKeyPair::generate(&mut prng);
   let borrower_keys = XfrKeyPair::generate(&mut prng);
-  let burn_address = XfrPublicKey::zei_from_bytes(&[0; 32]);
+  let burn_address =
+    XfrPublicKey::zei_from_bytes(&[0; 32]).map_err(|e| {
+                                            PlatformError::ZeiError(error_location!(), e)
+                                          })?;
 
   // Define assets
   let mut builder = TransactionBuilder::from_seq_id(ledger.get_block_commit_count());
@@ -259,7 +268,7 @@ fn test_update_memo() -> Result<(), PlatformError> {
   // Generate the ledger and the things we need to define an asset
   let mut prng = ChaChaRng::from_entropy();
   let mut ledger = LedgerState::test_ledger();
-  let code = AssetTypeCode { val: [1; 16] };
+  let code = AssetTypeCode::from_identical_byte(1);
   let keys = XfrKeyPair::generate(&mut prng);
   let mut builder = TransactionBuilder::from_seq_id(ledger.get_block_commit_count());
 

@@ -130,10 +130,10 @@ pub fn load_funds<T>(data_dir: &str,
 
   // Submit transaction and get the new record
   let sid_new = submit_and_get_sids(rest_client, txn_builder)?[0];
-  let blind_asset_record_new = (rest_client.get_utxo(sid_new).unwrap().0).record;
+  let blind_asset_record_new = (rest_client.get_utxo(sid_new).unwrap().utxo.0).record;
   // Merge records
   let sid_merged = if let Some(sid_pre) = recipient.fiat_utxo {
-    let blind_asset_record_pre = (rest_client.get_utxo(sid_pre).unwrap().0).record;
+    let blind_asset_record_pre = (rest_client.get_utxo(sid_pre).unwrap().utxo.0).record;
     let txn_builder = merge_records(recipient_key_pair,
                                     seq_id,
                                     TxoRef::Absolute(sid_pre),
@@ -433,8 +433,8 @@ pub fn fulfill_loan<T>(data_dir: &str,
 
   // Merge records
   let fiat_sid_merged = if let Some(sid_pre) = borrower.fiat_utxo {
-    let blind_asset_record_pre = (rest_client.get_utxo(sid_pre)?.0).record;
-    let blind_asset_record_new = (rest_client.get_utxo(sids_new[1])?.0).record;
+    let blind_asset_record_pre = (rest_client.get_utxo(sid_pre)?.utxo.0).record;
+    let blind_asset_record_new = (rest_client.get_utxo(sids_new[1])?.utxo.0).record;
     let txn_builder = merge_records(borrower_key_pair,
                                     seq_id,
                                     TxoRef::Absolute(sid_pre),
@@ -575,7 +575,8 @@ AssetRecordTemplate::with_no_asset_tracking(amount_to_spend,
 AssetRecordTemplate::with_no_asset_tracking(amount_to_burn,
                              debt_code.val,
                              AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
-                             XfrPublicKey::zei_from_bytes(&[0; 32]));
+                             XfrPublicKey::zei_from_bytes(&[0; 32])
+                                              .map_err(|e| PlatformError::ZeiError(error_location!(), e))?);
   let lender_template =
 AssetRecordTemplate::with_no_asset_tracking(loan.balance - amount_to_burn,
                              debt_code.val,

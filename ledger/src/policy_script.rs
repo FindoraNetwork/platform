@@ -478,7 +478,11 @@ pub fn run_txn_check(check: &TxnCheck,
           } else {
             debug_assert!(!res_totals.contains_key(inp));
 
-            let inp_txo = trn.body.note.inputs.get(inp_ix).ok_or_else(|| fail!())?;
+            let inp_txo = trn.body
+                             .transfer
+                             .inputs
+                             .get(inp_ix)
+                             .ok_or_else(|| fail!())?;
             asset_type = inp_txo.asset_type.get_asset_type().ok_or_else(|| fail!())?;
 
             res_vars.insert(*inp,
@@ -503,7 +507,11 @@ pub fn run_txn_check(check: &TxnCheck,
             } else {
               debug_assert!(!res_totals.contains_key(out_res));
 
-              let out_txo = trn.body.note.outputs.get(out_ix).ok_or_else(|| fail!())?;
+              let out_txo = trn.body
+                               .transfer
+                               .outputs
+                               .get(out_ix)
+                               .ok_or_else(|| fail!())?;
 
               if asset_type != out_txo.asset_type.get_asset_type().ok_or_else(|| fail!())? {
                 return Err(fail!());
@@ -517,8 +525,15 @@ pub fn run_txn_check(check: &TxnCheck,
               out_ix += 1;
             }
           } else {
-            let null_public_key = XfrPublicKey::zei_from_bytes(&[0; 32]);
-            let out_txo = trn.body.note.outputs.get(out_ix).ok_or_else(|| fail!())?;
+            let null_public_key =
+              XfrPublicKey::zei_from_bytes(&[0; 32]).map_err(|e| {
+                                                      PlatformError::ZeiError(error_location!(), e)
+                                                    })?;
+            let out_txo = trn.body
+                             .transfer
+                             .outputs
+                             .get(out_ix)
+                             .ok_or_else(|| fail!())?;
 
             // TODO(joe): maybe move this later?
             if out_txo.asset_type.get_asset_type().ok_or_else(|| fail!())? != asset_type {
@@ -533,10 +548,10 @@ pub fn run_txn_check(check: &TxnCheck,
           }
         }
 
-        if inp_ix < trn.body.note.inputs.len() {
+        if inp_ix < trn.body.transfer.inputs.len() {
           return Err(fail!());
         }
-        if out_ix < trn.body.note.outputs.len() {
+        if out_ix < trn.body.transfer.outputs.len() {
           return Err(fail!());
         }
       }

@@ -195,17 +195,15 @@ impl<T> QueryServer<T> where T: RestfulArchiveAccess
     };
     // Next, update ownership status
     for (_, (txn_sid, txo_sids)) in finalized_block.iter() {
-      let ledger = &self.committed_state;
+      let ledger = &mut self.committed_state;
       let curr_txn = ledger.get_transaction(*txn_sid).unwrap().finalized_txn.txn;
       // get the transaction, ownership addresses, and memos associated with each transaction
       let (addresses, owner_memos) = {
         let addresses: Vec<XfrAddress> =
           txo_sids.iter()
-                  .map(|sid| XfrAddress { key: ledger.get_utxo(*sid)
-                                                     .unwrap()
-                                                     .0
-                                                     .record
-                                                     .public_key })
+                  .map(|sid| XfrAddress { key:
+                                            ((ledger.get_utxo(*sid).unwrap().utxo).0).record
+                                                                                     .public_key })
                   .collect();
 
         let owner_memos = curr_txn.get_owner_memos_ref();
@@ -282,11 +280,11 @@ fn get_related_addresses(txn: &Transaction) -> HashSet<XfrAddress> {
   for op in &txn.body.operations {
     match op {
       Operation::TransferAsset(transfer) => {
-        for input in transfer.body.note.inputs.iter() {
+        for input in transfer.body.transfer.inputs.iter() {
           related_addresses.insert(XfrAddress { key: input.public_key });
         }
 
-        for output in transfer.body.note.outputs.iter() {
+        for output in transfer.body.transfer.outputs.iter() {
           related_addresses.insert(XfrAddress { key: output.public_key });
         }
       }
@@ -439,7 +437,7 @@ mod tests {
 
     // Transfer first record to Bob
     let transfer_sid = TxoSID(0);
-    let bar = &(ledger_state.get_utxo(transfer_sid).unwrap().0).record;
+    let bar = &(ledger_state.get_utxo(transfer_sid).unwrap().utxo.0).record;
     let alice_memo = query_server.get_owner_memo(TxoSID(0));
     let oar = open_blind_asset_record(&bar, &alice_memo.cloned(), alice.get_sk_ref()).unwrap();
     let mut xfr_builder = TransferOperationBuilder::new();
@@ -468,7 +466,7 @@ mod tests {
 
     // Ensure that query server returns correct memos
     let bob_memo = query_server.get_owner_memo(TxoSID(2));
-    let bar = &(ledger_state.get_utxo(TxoSID(2)).unwrap().0).record;
+    let bar = &(ledger_state.get_utxo(TxoSID(2)).unwrap().utxo.0).record;
     open_blind_asset_record(&bar, &bob_memo.cloned(), alice.get_sk_ref()).unwrap();
   }
 
@@ -514,7 +512,7 @@ mod tests {
 
     // Transfer to Bob
     let transfer_sid = TxoSID(0);
-    let bar = &(ledger_state.get_utxo(transfer_sid).unwrap().0).record;
+    let bar = &(ledger_state.get_utxo(transfer_sid).unwrap().utxo.0).record;
     let oar = open_blind_asset_record(&bar, &None, alice.get_sk_ref()).unwrap();
     let mut xfr_builder = TransferOperationBuilder::new();
     let out_template = AssetRecordTemplate::with_no_asset_tracking(amt,
@@ -578,7 +576,7 @@ mod tests {
     // This isn't actually being used in the test, we just make a ledger client so we can compile
     let mock_ledger = MockLedgerClient::new(&Arc::clone(&rest_client_ledger_state));
     let mut query_server = QueryServer::new(mock_ledger);
-    let code = AssetTypeCode { val: [1; 16] };
+    let code = AssetTypeCode::from_identical_byte(1);
     let creator = XfrKeyPair::generate(&mut ledger_state.get_prng());
     let tx = create_definition_transaction(&code,
                                            &creator,
@@ -612,7 +610,7 @@ mod tests {
     // This isn't actually being used in the test, we just make a ledger client so we can compile
     let mock_ledger = MockLedgerClient::new(&Arc::clone(&rest_client_ledger_state));
     let mut query_server = QueryServer::new(mock_ledger);
-    let code = AssetTypeCode { val: [1; 16] };
+    let code = AssetTypeCode::from_identical_byte(1);
     let creator = XfrKeyPair::generate(&mut ledger_state.get_prng());
     let tx = create_definition_transaction(&code,
                                            &creator,
@@ -667,7 +665,7 @@ mod tests {
     let creator = XfrKeyPair::generate(&mut ledger_state.get_prng());
 
     // Create the first asset
-    let code1 = AssetTypeCode { val: [1; 16] };
+    let code1 = AssetTypeCode::from_identical_byte(1);
     let tx1 = create_definition_transaction(&code1,
                                             &creator,
                                             AssetRules::default(),
@@ -678,7 +676,7 @@ mod tests {
     query_server.add_new_block(&block1.block.txns).unwrap();
 
     // Create the second asset
-    let code2 = AssetTypeCode { val: [2; 16] };
+    let code2 = AssetTypeCode::from_identical_byte(2);
     let tx2 = create_definition_transaction(&code2,
                                             &creator,
                                             AssetRules::default(),

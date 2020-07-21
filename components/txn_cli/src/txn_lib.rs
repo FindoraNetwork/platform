@@ -10,6 +10,7 @@ use ledger::data_model::errors::PlatformError;
 use ledger::data_model::{AssetRules, AssetTypeCode, TransferType, TxOutput, TxoRef, TxoSID};
 use ledger::{des_fail, error_location};
 use ledger_api_service::RestfulLedgerAccess;
+use log::error;
 use rand_core::{CryptoRng, RngCore};
 use std::process::exit;
 use submission_api::RestfulLedgerUpdate;
@@ -292,7 +293,7 @@ pub fn query_utxo_and_get_type_commitment<T>(utxo: u64,
                                              -> Result<CompressedRistretto, PlatformError>
   where T: RestfulLedgerAccess
 {
-  let blind_asset_record = (rest_client.get_utxo(TxoSID(utxo))?.0).record;
+  let blind_asset_record = (rest_client.get_utxo(TxoSID(utxo))?.utxo.0).record;
   match blind_asset_record.asset_type {
     XfrAssetType::Confidential(commitment) => Ok(commitment),
     _ => {
@@ -306,7 +307,7 @@ pub fn query_utxo_and_get_type_commitment<T>(utxo: u64,
 pub fn query_utxo_and_get_amount<T>(utxo: u64, rest_client: &T) -> Result<XfrAmount, PlatformError>
   where T: RestfulLedgerAccess
 {
-  let blind_asset_record = (rest_client.get_utxo(TxoSID(utxo))?.0).record;
+  let blind_asset_record = (rest_client.get_utxo(TxoSID(utxo))?.utxo.0).record;
   Ok(blind_asset_record.amount)
 }
 
@@ -350,7 +351,7 @@ pub fn query_open_asset_record<T>(rest_client: &T,
                                   -> Result<OpenAssetRecord, PlatformError>
   where T: RestfulLedgerAccess
 {
-  let blind_asset_record = (rest_client.get_utxo(sid)?.0).record;
+  let blind_asset_record = (rest_client.get_utxo(sid)?.utxo.0).record;
   open_blind_asset_record(&blind_asset_record, owner_memo, key_pair.get_sk_ref()).or_else(|error| {
                                                 Err(PlatformError::ZeiError(error_location!(), error))
                                               })
@@ -382,9 +383,16 @@ pub fn init_logging() {
 /// * Otherwise: exits with code `USAGE`.
 pub fn match_error_and_exit(error: PlatformError) {
   match error {
-    PlatformError::SerializationError(_) => exit(exitcode::DATAERR),
-    PlatformError::DeserializationError(_) => exit(exitcode::DATAERR),
+    PlatformError::SerializationError(e) => {
+      error!("SerializationError: {}", e);
+      exit(exitcode::DATAERR);
+    }
+    PlatformError::DeserializationError(e) => {
+      error!("Deserializationerror: {}", e);
+      exit(exitcode::DATAERR);
+    }
     PlatformError::IoError(io_error) => {
+      error!("IoError: {}", io_error);
       if io_error.contains("File doesn't exist:") || io_error.contains("Failed to read") {
         exit(exitcode::NOINPUT)
       }
@@ -393,7 +401,10 @@ pub fn match_error_and_exit(error: PlatformError) {
       }
       exit(exitcode::IOERR)
     }
-    _ => exit(exitcode::USAGE),
+    e => {
+      error!("Error: {}", e);
+      exit(exitcode::USAGE);
+    }
   }
 }
 

@@ -13,6 +13,7 @@ use ledger::data_model::{
 };
 use ledger::{error_location, ser_fail};
 use ledger_api_service::RestfulLedgerAccess;
+use log::{debug, error, info};
 use query_api::RestfulQueryServerAccess;
 use sparse_merkle_tree::{digest, Key};
 use std::env;
@@ -45,7 +46,7 @@ pub(crate) fn process_asset_issuer_cmd(asset_issuer_matches: &clap::ArgMatches,
       let name = if let Some(name_arg) = sign_up_matches.value_of("name") {
         name_arg.to_owned()
       } else {
-        println!("Name is required to sign up an asset issuer account. Use --name.");
+        error!("Name is required to sign up an asset issuer account. Use --name.");
         return Err(PlatformError::InputsError(error_location!()));
       };
       let mut data = load_data(data_dir)?;
@@ -55,52 +56,58 @@ pub(crate) fn process_asset_issuer_cmd(asset_issuer_matches: &clap::ArgMatches,
       let file = if let Some(file_arg) = store_sids_matches.value_of("file") {
         file_arg
       } else {
-        println!("Path is required to store the sids. Use --path.");
+        error!("Path is required to store the sids. Use --path.");
         return Err(PlatformError::InputsError(error_location!()));
       };
       let sids = if let Some(indices_arg) = store_sids_matches.value_of("indices") {
         indices_arg
       } else {
-        println!("Indices are required to store the sids. Use --indices.");
+        error!("Indices are required to store the sids. Use --indices.");
         return Err(PlatformError::InputsError(error_location!()));
       };
       store_sids_to_file(file, sids)
     }
     ("store_memos", Some(store_bar_and_memos_matches)) => {
+      info!("store_memos: entering");
       let data = load_data(data_dir)?;
       let (issuer_pub_key, policy) = if let Some(id_arg) = asset_issuer_matches.value_of("id") {
         let issuer_id = parse_to_u64(id_arg)?;
+        info!("store_memos: got issuer_id={}", issuer_id);
         let issuer_pub_key = data.get_asset_issuer_key_pair(issuer_id)?.get_pk();
+        info!("store_memos: got issuer_pub_key={:?}", &issuer_pub_key);
         let tracer_enc_keys = data.get_asset_tracer_key_pair(issuer_id)?.enc_key;
+        info!("store_memos: got tracer_enc_keys={:?}", &tracer_enc_keys);
         let policy = AssetTracingPolicy { enc_keys: tracer_enc_keys,
                                           asset_tracking: true,
                                           identity_tracking: None };
         (issuer_pub_key, policy)
       } else {
-        println!("Asset issuer id is required to store the tracer and owner memos. Use asset_issuer --id.");
+        error!("Asset issuer id is required to store the tracer and owner memos. Use asset_issuer --id.");
         return Err(PlatformError::InputsError(error_location!()));
       };
       let amount = if let Some(amount_arg) = store_bar_and_memos_matches.value_of("amount") {
         parse_to_u64(amount_arg)?
       } else {
-        println!("Asset amount is required to store the tracer and owner memos. Use --amount.");
+        error!("Asset amount is required to store the tracer and owner memos. Use --amount.");
         return Err(PlatformError::InputsError(error_location!()));
       };
       let confidential_amount = store_bar_and_memos_matches.is_present("confidential_amount");
       let record_type = AssetRecordType::from_booleans(confidential_amount, false);
+      info!("store_memos: about to get token code");
       let token_code = if let Some(token_code) = store_bar_and_memos_matches.value_of("token_code")
       {
         AssetTypeCode::new_from_base64(token_code)?
       } else {
-        println!("Asset token code is required to store the tracer and owner memos. Use --token_code.");
+        error!("Asset token code is required to store the tracer and owner memos. Use --token_code.");
         return Err(PlatformError::InputsError(error_location!()));
       };
       let file = if let Some(file_arg) = store_bar_and_memos_matches.value_of("file") {
         file_arg
       } else {
-        println!("Path is required to store the tracer and owner memos. Use --path.");
+        error!("Path is required to store the tracer and owner memos. Use --path.");
         return Err(PlatformError::InputsError(error_location!()));
       };
+      info!("store_memos: about to call get_and_store_memos_to_file");
       get_and_store_memos_to_file(file,
                                   issuer_pub_key,
                                   amount,
@@ -112,7 +119,7 @@ pub(crate) fn process_asset_issuer_cmd(asset_issuer_matches: &clap::ArgMatches,
       let issuer_id = if let Some(id_arg) = asset_issuer_matches.value_of("id") {
         parse_to_u64(id_arg)?
       } else {
-        println!("Asset issuer id is required for AIR assigning. Use asset_issuer --id.");
+        error!("Asset issuer id is required for AIR assigning. Use asset_issuer --id.");
         return Err(PlatformError::InputsError(error_location!()));
       };
       match (air_assign_matches.value_of("address"),
@@ -124,7 +131,7 @@ pub(crate) fn process_asset_issuer_cmd(asset_issuer_matches: &clap::ArgMatches,
           air_assign(data_dir, seq_id, issuer_id, address, data, issuer_pk, pok, txn_file)
         }
         (_, _, _, _) => {
-          println!("Missing address, data, issuer_pk, or proof.");
+          error!("Missing address, data, issuer_pk, or proof.");
           Err(PlatformError::InputsError(error_location!()))
         }
       }
@@ -136,7 +143,7 @@ pub(crate) fn process_asset_issuer_cmd(asset_issuer_matches: &clap::ArgMatches,
         let issuer_id = parse_to_u64(id_arg)?;
         data.get_asset_issuer_key_pair(issuer_id)?
       } else {
-        println!("Asset issuer id is required to define an asset. Use asset_issuer --id.");
+        error!("Asset issuer id is required to define an asset. Use asset_issuer --id.");
         return Err(PlatformError::InputsError(error_location!()));
       };
       let token_code = define_asset_matches.value_of("token_code");
@@ -205,9 +212,9 @@ pub(crate) fn process_asset_issuer_cmd(asset_issuer_matches: &clap::ArgMatches,
         asset_token = AssetTypeCode::new_from_base64(token_code)?;
       } else {
         asset_token = AssetTypeCode::gen_random();
-        println!("Creating asset with token code {:?}: {:?}",
-                 asset_token.to_base64(),
-                 asset_token.val);
+        info!("Creating asset with token code {:?}: {:?}",
+              asset_token.to_base64(),
+              asset_token.val);
       }
       match define_asset(data_dir,
                          seq_id,
@@ -237,7 +244,7 @@ pub(crate) fn process_asset_issuer_cmd(asset_issuer_matches: &clap::ArgMatches,
       let mut txn_builder = TransactionBuilder::from_seq_id(seq_id);
       let hash = KVHash::new(&value, None);
       txn_builder.add_operation_kv_update(&key_pair, &key, gen, Some(&hash))?;
-      println!("Hash of data will be stored at key {}", b64enc(&key));
+      info!("Hash of data will be stored at key {}", b64enc(&key));
       store_txn_to_file(&txn_file, &txn_builder)
     }
     ("clear_kv", Some(kv_matches)) => {
@@ -260,24 +267,27 @@ pub(crate) fn process_asset_issuer_cmd(asset_issuer_matches: &clap::ArgMatches,
     }
     ("issue_asset", Some(issue_asset_matches)) => {
       let data = load_data(data_dir)?;
+      info!("issue_asset: entering");
       let (key_pair, _) = if let Some(id_arg) = asset_issuer_matches.value_of("id") {
         let issuer_id = parse_to_u64(id_arg)?;
         (data.get_asset_issuer_key_pair(issuer_id)?,
          data.get_asset_tracer_key_pair(issuer_id)?.enc_key)
       } else {
-        println!("Asset issuer id is required to issue asset. Use asset_issuer --id.");
+        error!("Asset issuer id is required to issue asset. Use asset_issuer --id.");
         return Err(PlatformError::InputsError(error_location!()));
       };
+      info!("issue_asset: key_pair={:?}", &key_pair);
       let token_code = if let Some(token_code_arg) = issue_asset_matches.value_of("token_code") {
         AssetTypeCode::new_from_base64(token_code_arg)?
       } else {
-        println!("Token code is required to issue asset. Use --token_code.");
+        error!("Token code is required to issue asset. Use --token_code.");
         return Err(PlatformError::InputsError(error_location!()));
       };
+      info!("issue_asset: token_code={:?}", &token_code);
       let amount = if let Some(amount_arg) = issue_asset_matches.value_of("amount") {
         parse_to_u64(amount_arg)?
       } else {
-        println!("Amount is required to issue asset. Use --amount.");
+        error!("Amount is required to issue asset. Use --amount.");
         return Err(PlatformError::InputsError(error_location!()));
       };
       let confidential_amount = issue_asset_matches.is_present("confidential_amount");
@@ -292,42 +302,52 @@ pub(crate) fn process_asset_issuer_cmd(asset_issuer_matches: &clap::ArgMatches,
                                                                          false),
                                           &params)
       {
-        println!("Failed to add basic issue asset.");
+        error!("Failed to add basic issue asset.");
         return Err(e);
       }
+      info!("txn_file={:?}, txn_builder={:?}", &txn_file, &txn_builder);
       store_txn_to_file(&txn_file, &txn_builder)
     }
     ("transfer_asset", Some(transfer_asset_matches)) => {
       // TODO (redmine issue #36) to support co-signatures we need to use
       // TransferOperationBuilder
       let data = load_data(data_dir)?;
+      debug!("transfer_asset: entering");
       let (issuer_key_pair, tracer_enc_keys) =
         if let Some(id_arg) = asset_issuer_matches.value_of("id") {
           let issuer_id = parse_to_u64(id_arg)?;
           (data.get_asset_issuer_key_pair(issuer_id)?,
            data.get_asset_tracer_key_pair(issuer_id)?.enc_key)
         } else {
-          println!("Asset issuer id is required to transfer asset. Use asset_issuer --id.");
+          error!("Asset issuer id is required to transfer asset. Use asset_issuer --id.");
           return Err(PlatformError::InputsError(error_location!()));
         };
       // Compose transfer_from for add_basic_transfer_asset
+      debug!("transfer_asset: got keys");
       let mut txo_refs = Vec::new();
       if let Some(sids_file_arg) = transfer_asset_matches.value_of("sids_file") {
-        for sid in load_sids_from_file(sids_file_arg)? {
-          txo_refs.push(TxoRef::Absolute(TxoSID(sid)));
+        match load_sids_from_file(sids_file_arg) {
+          Ok(sids) => {
+            for sid in sids {
+              txo_refs.push(TxoRef::Absolute(TxoSID(sid)));
+            }
+          }
+          Err(e) => panic!("load_sids_from_file: err={:?}", e),
         }
       } else {
-        println!("Sids are required to transfer asset. Use --sids_file.");
+        error!("Sids are required to transfer asset. Use --sids_file.");
         return Err(PlatformError::InputsError(error_location!()));
       }
+      debug!("transfer_asset: got txo_refs");
       let bars_and_owner_memos = if let Some(issuance_txn_files_arg) =
         transfer_asset_matches.value_of("issuance_txn_files")
       {
         load_blind_asset_records_and_owner_memos_from_files(issuance_txn_files_arg)?
       } else {
-        println!("Blind asset records and associated memos are required to transfer asset. Use --issuance_txn_files.");
+        error!("Blind asset records and associated memos are required to transfer asset. Use --issuance_txn_files.");
         return Err(PlatformError::InputsError(error_location!()));
       };
+      debug!("transfer_asset: got bars_and_owner_memos");
       let tracing_policy = if transfer_asset_matches.is_present("traceable") {
         Some(AssetTracingPolicy { enc_keys: tracer_enc_keys,
                                   asset_tracking: true,
@@ -339,14 +359,15 @@ pub(crate) fn process_asset_issuer_cmd(asset_issuer_matches: &clap::ArgMatches,
         if let Some(input_amounts_arg) = transfer_asset_matches.value_of("input_amounts") {
           parse_to_u64_vec(input_amounts_arg)?
         } else {
-          println!("Input amounts are required to transfer asset. Use --input_amounts.");
+          error!("Input amounts are required to transfer asset. Use --input_amounts.");
           return Err(PlatformError::InputsError(error_location!()));
         };
       let mut count = txo_refs.len();
       if input_amounts.len() != count || bars_and_owner_memos.len() != count {
-        println!("Size of input sids and input amounts should match.");
+        error!("Size of input sids and input amounts should match.");
         return Err(PlatformError::InputsError(error_location!()));
       }
+      debug!("transfer_asset: got input_amounts");
       let mut transfer_from = Vec::new();
       let mut txo_refs_iter = txo_refs.iter();
       let mut bars_and_owner_memos_iter = bars_and_owner_memos.iter();
@@ -357,20 +378,20 @@ pub(crate) fn process_asset_issuer_cmd(asset_issuer_matches: &clap::ArgMatches,
         let txo_refs_next = if let Some(txo_ref) = txo_refs_iter.next() {
           txo_ref
         } else {
-          println!("More txo ref expected.");
+          error!("More txo ref expected.");
           return Err(PlatformError::InputsError(error_location!()));
         };
         let (blind_asset_record_next, owner_memo_next) =
           if let Some(bar_and_owner_memo) = bars_and_owner_memos_iter.next() {
             bar_and_owner_memo
           } else {
-            println!("More blind asset record and owner memo expected.");
+            error!("More blind asset record and owner memo expected.");
             return Err(PlatformError::InputsError(error_location!()));
           };
         let input_amount_next = if let Some(input_amount) = input_amounts_iter.next() {
           *input_amount
         } else {
-          println!("More input amount expected.");
+          error!("More input amount expected.");
           return Err(PlatformError::InputsError(error_location!()));
         };
         let transfer_from_next =
@@ -390,19 +411,19 @@ pub(crate) fn process_asset_issuer_cmd(asset_issuer_matches: &clap::ArgMatches,
           recipient_addresses.push(AccountAddress { key: recipient_pub_key });
         }
       } else {
-        println!("Recipient ids are required to transfer asset. Use --recipients.");
+        error!("Recipient ids are required to transfer asset. Use --recipients.");
         return Err(PlatformError::InputsError(error_location!()));
       }
       let output_amounts =
         if let Some(output_amounts_arg) = transfer_asset_matches.value_of("output_amounts") {
           parse_to_u64_vec(output_amounts_arg)?
         } else {
-          println!("Output amounts are required to transfer asset. Use --output_amounts.");
+          error!("Output amounts are required to transfer asset. Use --output_amounts.");
           return Err(PlatformError::InputsError(error_location!()));
         };
       let mut count = output_amounts.len();
       if recipient_addresses.len() != count {
-        println!("Size of output amounts and addresses should match.");
+        error!("Size of output amounts and addresses should match.");
         return Err(PlatformError::InputsError(error_location!()));
       }
       let mut transfer_to = Vec::new();
@@ -414,13 +435,13 @@ pub(crate) fn process_asset_issuer_cmd(asset_issuer_matches: &clap::ArgMatches,
         let output_amount_next = if let Some(output_amount) = output_amounts_iter.next() {
           *output_amount
         } else {
-          println!("More output amount expected.");
+          error!("More output amount expected.");
           return Err(PlatformError::InputsError(error_location!()));
         };
         let address_next = if let Some(address) = addresses_iter.next() {
           address
         } else {
-          println!("More address expected.");
+          error!("More address expected.");
           return Err(PlatformError::InputsError(error_location!()));
         };
         transfer_to.push((output_amount_next, address_next));
@@ -439,9 +460,10 @@ pub(crate) fn process_asset_issuer_cmd(asset_issuer_matches: &clap::ArgMatches,
                                                            output_tracing_policies,
                                                            output_identity_commitments)
       {
-        println!("Failed to add operation to transaction.");
+        error!("Failed to add operation to transaction.");
         return Err(e);
       };
+      debug!("transfer_asset: about to store file");
       store_txn_to_file(&txn_file, &txn_builder)
     }
     ("issue_and_transfer_asset", Some(issue_and_transfer_matches)) => {
@@ -450,7 +472,7 @@ pub(crate) fn process_asset_issuer_cmd(asset_issuer_matches: &clap::ArgMatches,
         let issuer_id = parse_to_u64(id_arg)?;
         data.get_asset_issuer_key_pair(issuer_id)?
       } else {
-        println!("Asset issuer id is required to issue and transfer asset. Use asset_issuer --id.");
+        error!("Asset issuer id is required to issue and transfer asset. Use asset_issuer --id.");
         return Err(PlatformError::InputsError(error_location!()));
       };
       let recipient_key_pair =
@@ -458,20 +480,20 @@ pub(crate) fn process_asset_issuer_cmd(asset_issuer_matches: &clap::ArgMatches,
           let recipient_id = parse_to_u64(id_arg)?;
           data.get_borrower_key_pair(recipient_id)?
         } else {
-          println!("Recipient id is required to issue and transfer asset. Use --recipient.");
+          error!("Recipient id is required to issue and transfer asset. Use --recipient.");
           return Err(PlatformError::InputsError(error_location!()));
         };
       let amount = if let Some(amount_arg) = issue_and_transfer_matches.value_of("amount") {
         parse_to_u64(amount_arg)?
       } else {
-        println!("Amount is required to issue and transfer asset. Use --amount.");
+        error!("Amount is required to issue and transfer asset. Use --amount.");
         return Err(PlatformError::InputsError(error_location!()));
       };
       let token_code =
         if let Some(token_code_arg) = issue_and_transfer_matches.value_of("token_code") {
           AssetTypeCode::new_from_base64(token_code_arg)?
         } else {
-          println!("Token code is required to issue asset. Use --token_code.");
+          error!("Token code is required to issue asset. Use --token_code.");
           return Err(PlatformError::InputsError(error_location!()));
         };
       let confidential_amount = issue_and_transfer_matches.is_present("confidential_amount");
@@ -498,20 +520,20 @@ pub(crate) fn process_asset_issuer_cmd(asset_issuer_matches: &clap::ArgMatches,
             .dec_key
             .record_data_dec_key
       } else {
-        println!("Asset issuer id is required to trace the asset. Use asset_issuer --id.");
+        error!("Asset issuer id is required to trace the asset. Use asset_issuer --id.");
         return Err(PlatformError::InputsError(error_location!()));
       };
       let tracer_and_owner_memos =
         if let Some(memo_file_arg) = trace_and_verify_asset_matches.value_of("memo_file") {
           load_tracer_and_owner_memos_from_files(memo_file_arg)?
         } else {
-          println!("Owner memo is required to trace the asset. Use --memo_file.");
+          error!("Owner memo is required to trace the asset. Use --memo_file.");
           return Err(PlatformError::InputsError(error_location!()));
         };
       let tracer_memo = if let Some(memo) = tracer_and_owner_memos[0].0.get(0) {
         memo
       } else {
-        println!("The asset isn't traceable.");
+        error!("The asset isn't traceable.");
         return Err(PlatformError::InputsError(error_location!()));
       };
       let expected_amount = if let Some(expected_amount_arg) =
@@ -519,7 +541,7 @@ pub(crate) fn process_asset_issuer_cmd(asset_issuer_matches: &clap::ArgMatches,
       {
         parse_to_u64(expected_amount_arg)?
       } else {
-        println!("Expected amount is required to verify the asset. Use --expected_amount.");
+        error!("Expected amount is required to verify the asset. Use --expected_amount.");
         return Err(PlatformError::InputsError(error_location!()));
       };
       tracer_memo.verify_amount(&tracer_dec_keys, expected_amount)
@@ -532,14 +554,14 @@ pub(crate) fn process_asset_issuer_cmd(asset_issuer_matches: &clap::ArgMatches,
         let asset_tracer_key_pair = data.get_asset_tracer_key_pair(issuer_id)?;
         asset_tracer_key_pair.dec_key.attrs_dec_key
       } else {
-        println!("Asset issuer id is required to trace the asset. Use asset_issuer --id.");
+        error!("Asset issuer id is required to trace the asset. Use asset_issuer --id.");
         return Err(PlatformError::InputsError(error_location!()));
       };
       let tracer_memo = if let Some(memo_file_arg) = trace_credential_matches.value_of("memo_file")
       {
         load_tracer_memo_from_file(memo_file_arg)?
       } else {
-        println!("Tracer memo is required to trace the credential. Use --memo_file.");
+        error!("Tracer memo is required to trace the credential. Use --memo_file.");
         return Err(PlatformError::InputsError(error_location!()));
       };
       let len = if let Some(attribute_arg) = trace_credential_matches.value_of("attribute") {
@@ -549,22 +571,22 @@ pub(crate) fn process_asset_issuer_cmd(asset_issuer_matches: &clap::ArgMatches,
                                       Err(PlatformError::ZeiError(error_location!(), e))
                                     })?
       } else {
-        println!("Credential attribute is required to verify the credential. Use --attribute.");
+        error!("Credential attribute is required to verify the credential. Use --attribute.");
         return Err(PlatformError::InputsError(error_location!()));
       };
       let expected_value =
         if let Some(expected_value_arg) = trace_credential_matches.value_of("expected_value") {
           u8_slice_to_u32_vec(expected_value_arg.as_bytes(), len)
         } else {
-          println!("Expected value is required to verify the credential. Use --expected_value.");
+          error!("Expected value is required to verify the credential. Use --expected_value.");
           return Err(PlatformError::InputsError(error_location!()));
         };
       match tracer_memo.verify_identity_attributes(&attrs_dec_key, &expected_value) {
         Ok(res) => {
           if res[0] {
-            println!("Credential verification succeeded.");
+            info!("Credential verification succeeded.");
           } else {
-            println!("Credential value isn't as expected.");
+            error!("Credential value isn't as expected.");
             return Err(PlatformError::InputsError(error_location!()));
           }
           Ok(())
@@ -573,7 +595,7 @@ pub(crate) fn process_asset_issuer_cmd(asset_issuer_matches: &clap::ArgMatches,
       }
     }
     _ => {
-      println!("Subcommand missing or not recognized. Try asset_issuer --help");
+      error!("Subcommand missing or not recognized. Try asset_issuer --help");
       Err(PlatformError::InputsError(error_location!()))
     }
   }
@@ -594,7 +616,7 @@ pub(crate) fn process_credential_issuer_cmd(credential_issuer_matches: &clap::Ar
       let name = if let Some(name_arg) = sign_up_matches.value_of("name") {
         name_arg.to_owned()
       } else {
-        println!("Name is required to sign up a credential issuer account. Use --name.");
+        error!("Name is required to sign up a credential issuer account. Use --name.");
         return Err(PlatformError::InputsError(error_location!()));
       };
       let mut attributes = Vec::new();
@@ -611,7 +633,7 @@ pub(crate) fn process_credential_issuer_cmd(credential_issuer_matches: &clap::Ar
       data.add_credential_issuer(data_dir, name, attributes)
     }
     _ => {
-      println!("Subcommand missing or not recognized. Try credential_issuer --help");
+      error!("Subcommand missing or not recognized. Try credential_issuer --help");
       Err(PlatformError::InputsError(error_location!()))
     }
   }
@@ -638,7 +660,7 @@ pub(crate) fn process_lender_cmd<T: RestfulLedgerAccess + RestfulLedgerUpdate>(
       let name = if let Some(name_arg) = sign_up_matches.value_of("name") {
         name_arg.to_owned()
       } else {
-        println!("Name is required to sign up a lender account. Use --name.");
+        error!("Name is required to sign up a lender account. Use --name.");
         return Err(PlatformError::InputsError(error_location!()));
       };
       data.add_lender(data_dir, name)
@@ -647,17 +669,17 @@ pub(crate) fn process_lender_cmd<T: RestfulLedgerAccess + RestfulLedgerUpdate>(
       let lender_id = if let Some(id_arg) = lender_matches.value_of("id") {
         parse_to_u64(id_arg)?
       } else {
-        println!("Lender id is required to get loan information. Use lender --id.");
+        error!("Lender id is required to get loan information. Use lender --id.");
         return Err(PlatformError::InputsError(error_location!()));
       };
       if let Some(loan_arg) = view_loan_matches.value_of("loan") {
         let loan_id = parse_to_u64(loan_arg)?;
         let loan = data.loans[loan_id as usize].clone();
         if loan.lender != lender_id {
-          println!("Lender {} doesn't own loan {}.", lender_id, loan_id);
+          error!("Lender {} doesn't own loan {}.", lender_id, loan_id);
           return Err(PlatformError::InputsError(error_location!()));
         }
-        println!("Displaying loan {}: {:?}.", loan_id, loan);
+        info!("Displaying loan {}: {:?}.", loan_id, loan);
         return Ok(());
       }
       let mut loans = Vec::new();
@@ -702,31 +724,31 @@ pub(crate) fn process_lender_cmd<T: RestfulLedgerAccess + RestfulLedgerUpdate>(
           loans.push(data.loans[id as usize].clone());
         }
       }
-      println!("Displaying {} loan(s): {:?}", loans.len(), loans);
+      info!("Displaying {} loan(s): {:?}", loans.len(), loans);
       Ok(())
     }
     ("fulfill_loan", Some(fulfill_loan_matches)) => {
       let loan_id = if let Some(loan_arg) = fulfill_loan_matches.value_of("loan") {
         parse_to_u64(loan_arg)?
       } else {
-        println!("Loan id is required to fulfill the loan. Use --loan.");
+        error!("Loan id is required to fulfill the loan. Use --loan.");
         return Err(PlatformError::InputsError(error_location!()));
       };
       if let Some(id_arg) = lender_matches.value_of("id") {
         let lender_id = parse_to_u64(id_arg)?;
         let loan = data.loans[loan_id as usize].clone();
         if loan.lender != lender_id {
-          println!("Lender {} doesn't own loan {}.", lender_id, loan_id);
+          error!("Lender {} doesn't own loan {}.", lender_id, loan_id);
           return Err(PlatformError::InputsError(error_location!()));
         }
       } else {
-        println!("Lender id is required to fulfill a loan. Use lender --id.");
+        error!("Lender id is required to fulfill a loan. Use lender --id.");
         return Err(PlatformError::InputsError(error_location!()));
       };
       let issuer_id = if let Some(issuer_arg) = fulfill_loan_matches.value_of("issuer") {
         parse_to_u64(issuer_arg)?
       } else {
-        println!("Asset issuer id is required to fulfill the loan. Use --issuer.");
+        error!("Asset issuer id is required to fulfill the loan. Use --issuer.");
         return Err(PlatformError::InputsError(error_location!()));
       };
       let memo_file = fulfill_loan_matches.value_of("memo_file");
@@ -736,7 +758,7 @@ pub(crate) fn process_lender_cmd<T: RestfulLedgerAccess + RestfulLedgerUpdate>(
       let lender_id = if let Some(id_arg) = lender_matches.value_of("id") {
         parse_to_u64(id_arg)?
       } else {
-        println!("Lender id is required to get credential requirement information. Use lender --id.");
+        error!("Lender id is required to get credential requirement information. Use lender --id.");
         return Err(PlatformError::InputsError(error_location!()));
       };
       let attribute = if let Some(attribute_arg) =
@@ -748,7 +770,7 @@ pub(crate) fn process_lender_cmd<T: RestfulLedgerAccess + RestfulLedgerUpdate>(
           _ => CredentialIndex::Citizenship,
         }
       } else {
-        println!("Credential attribute is required to create or overwrite the credential requirement. Use --attribute.");
+        error!("Credential attribute is required to create or overwrite the credential requirement. Use --attribute.");
         return Err(PlatformError::InputsError(error_location!()));
       };
       let requirement = if let Some(requirement_arg) =
@@ -756,14 +778,14 @@ pub(crate) fn process_lender_cmd<T: RestfulLedgerAccess + RestfulLedgerUpdate>(
       {
         requirement_arg
       } else {
-        println!("Credential value is required to create or overwrite the credential requirement. Use --requirement.");
+        error!("Credential value is required to create or overwrite the credential requirement. Use --requirement.");
         return Err(PlatformError::InputsError(error_location!()));
       };
       let mut data = load_data(data_dir)?;
       data.create_or_overwrite_requirement(data_dir, lender_id, attribute, requirement)
     }
     _ => {
-      println!("Subcommand missing or not recognized. Try lender --help");
+      error!("Subcommand missing or not recognized. Try lender --help");
       Err(PlatformError::InputsError(error_location!()))
     }
   }
@@ -795,7 +817,7 @@ pub(crate) fn process_borrower_cmd<T: RestfulLedgerAccess + RestfulLedgerUpdate>
       let name = if let Some(name_arg) = sign_up_matches.value_of("name") {
         name_arg.to_owned()
       } else {
-        println!("Name is required to sign up a lender account. Use --name.");
+        error!("Name is required to sign up a lender account. Use --name.");
         return Err(PlatformError::InputsError(error_location!()));
       };
       data.add_borrower(data_dir, name)
@@ -804,7 +826,7 @@ pub(crate) fn process_borrower_cmd<T: RestfulLedgerAccess + RestfulLedgerUpdate>
       let borrower_id = if let Some(id_arg) = borrower_matches.value_of("id") {
         parse_to_u64(id_arg)?
       } else {
-        println!("Borrower id is required to load funds. Use borrower --id.");
+        error!("Borrower id is required to load funds. Use borrower --id.");
         return Err(PlatformError::InputsError(error_location!()));
       };
       process_load_funds_cmd(load_funds_matches,
@@ -817,17 +839,17 @@ pub(crate) fn process_borrower_cmd<T: RestfulLedgerAccess + RestfulLedgerUpdate>
       let borrower_id = if let Some(id_arg) = borrower_matches.value_of("id") {
         parse_to_u64(id_arg)?
       } else {
-        println!("Borrower id is required to get loan information. Use borrower --id.");
+        error!("Borrower id is required to get loan information. Use borrower --id.");
         return Err(PlatformError::InputsError(error_location!()));
       };
       if let Some(loan_arg) = view_loan_matches.value_of("loan") {
         let loan_id = parse_to_u64(loan_arg)?;
         let loan = data.loans[loan_id as usize].clone();
         if loan.borrower != borrower_id {
-          println!("Borrower {} doesn't own loan {}.", borrower_id, loan_id);
+          error!("Borrower {} doesn't own loan {}.", borrower_id, loan_id);
           return Err(PlatformError::InputsError(error_location!()));
         }
-        println!("Displaying loan {}: {:?}.", loan_id, loan);
+        info!("Displaying loan {}: {:?}.", loan_id, loan);
         return Ok(());
       }
       let mut loans = Vec::new();
@@ -872,39 +894,39 @@ pub(crate) fn process_borrower_cmd<T: RestfulLedgerAccess + RestfulLedgerUpdate>
           loans.push(data.loans[id as usize].clone());
         }
       }
-      println!("Displaying {} loan(s): {:?}", loans.len(), loans);
+      info!("Displaying {} loan(s): {:?}", loans.len(), loans);
       Ok(())
     }
     ("request_loan", Some(request_loan_matches)) => {
       let borrower_id = if let Some(id_arg) = borrower_matches.value_of("id") {
         parse_to_u64(id_arg)?
       } else {
-        println!("Borrower id is required to request a loan. Use borrower --id.");
+        error!("Borrower id is required to request a loan. Use borrower --id.");
         return Err(PlatformError::InputsError(error_location!()));
       };
       let lender_id = if let Some(lender_arg) = request_loan_matches.value_of("lender") {
         parse_to_u64(lender_arg)?
       } else {
-        println!("Lender id is required to request the loan. Use --lender.");
+        error!("Lender id is required to request the loan. Use --lender.");
         return Err(PlatformError::InputsError(error_location!()));
       };
       let amount = if let Some(amount_arg) = request_loan_matches.value_of("amount") {
         parse_to_u64(amount_arg)?
       } else {
-        println!("Amount is required to request the loan. Use --amount.");
+        error!("Amount is required to request the loan. Use --amount.");
         return Err(PlatformError::InputsError(error_location!()));
       };
       let interest_per_mille =
         if let Some(interest_per_mille_arg) = request_loan_matches.value_of("interest_per_mille") {
           parse_to_u64(interest_per_mille_arg)?
         } else {
-          println!("Interest per mille is required to request the loan. Use --interest_per_mille.");
+          error!("Interest per mille is required to request the loan. Use --interest_per_mille.");
           return Err(PlatformError::InputsError(error_location!()));
         };
       let duration = if let Some(duration_arg) = request_loan_matches.value_of("duration") {
         parse_to_u64(duration_arg)?
       } else {
-        println!("Duration is required to request the loan. Use --amount.");
+        error!("Duration is required to request the loan. Use --amount.");
         return Err(PlatformError::InputsError(error_location!()));
       };
       let mut data = load_data(data_dir)?;
@@ -919,18 +941,18 @@ pub(crate) fn process_borrower_cmd<T: RestfulLedgerAccess + RestfulLedgerUpdate>
       let borrower_id = if let Some(id_arg) = borrower_matches.value_of("id") {
         parse_to_u64(id_arg)?
       } else {
-        println!("Borrower id is required to pay off the loan. Use borrower --id.");
+        error!("Borrower id is required to pay off the loan. Use borrower --id.");
         return Err(PlatformError::InputsError(error_location!()));
       };
       if let Some(loan_arg) = pay_loan_matches.value_of("loan") {
         let loan_id = parse_to_u64(loan_arg)?;
         let loan = data.loans[loan_id as usize].clone();
         if loan.borrower != borrower_id {
-          println!("Borrower {} doesn't own loan {}.", borrower_id, loan_id);
+          error!("Borrower {} doesn't own loan {}.", borrower_id, loan_id);
           return Err(PlatformError::InputsError(error_location!()));
         }
       } else {
-        println!("Loan id is required to pay the loan.");
+        error!("Loan id is required to pay the loan.");
         return Err(PlatformError::InputsError(error_location!()));
       }
       process_pay_loan_cmd(pay_loan_matches, data_dir, seq_id, rest_client)
@@ -939,13 +961,13 @@ pub(crate) fn process_borrower_cmd<T: RestfulLedgerAccess + RestfulLedgerUpdate>
       let borrower_id = if let Some(id_arg) = borrower_matches.value_of("id") {
         parse_to_u64(id_arg)?
       } else {
-        println!("Borrower id is required to get credential information. Use borrower --id.");
+        error!("Borrower id is required to get credential information. Use borrower --id.");
         return Err(PlatformError::InputsError(error_location!()));
       };
       let credential_id = if let Some(id) = data.borrowers[borrower_id as usize].credentials {
         id
       } else {
-        println!("No credential is found. Use create_or_overwrite_credential to create a credential record.");
+        info!("No credential is found. Use create_or_overwrite_credential to create a credential record.");
         return Ok(());
       };
       if let Some(attribute_arg) = view_credential_matches.value_of("attribute") {
@@ -955,16 +977,16 @@ pub(crate) fn process_borrower_cmd<T: RestfulLedgerAccess + RestfulLedgerUpdate>
           _ => CredentialIndex::Citizenship,
         };
         let value = data.credentials[credential_id as usize].values[attribute as usize].clone();
-        println!("Displaying {:?}: {:?}", attribute.get_name(), value);
+        info!("Displaying {:?}: {:?}", attribute.get_name(), value);
       } else {
-        println!("Displaying credentials:");
+        info!("Displaying credentials:");
         let values = data.credentials[credential_id as usize].values.clone();
         for attribute in [CredentialIndex::MinCreditScore,
                           CredentialIndex::MinIncome,
                           CredentialIndex::Citizenship].iter()
         {
           if let Some(value) = values[*attribute as usize].clone() {
-            println!("{}: {}.", attribute.get_name(), value);
+            info!("{}: {}.", attribute.get_name(), value);
           }
         }
       };
@@ -974,7 +996,7 @@ pub(crate) fn process_borrower_cmd<T: RestfulLedgerAccess + RestfulLedgerUpdate>
       let borrower_id = if let Some(id_arg) = borrower_matches.value_of("id") {
         parse_to_u64(id_arg)?
       } else {
-        println!("Borrower id is required to get credential information. Use borrower --id.");
+        error!("Borrower id is required to get credential information. Use borrower --id.");
         return Err(PlatformError::InputsError(error_location!()));
       };
       let credential_issuer_id = if let Some(credential_issuer_arg) =
@@ -982,7 +1004,7 @@ pub(crate) fn process_borrower_cmd<T: RestfulLedgerAccess + RestfulLedgerUpdate>
       {
         parse_to_u64(credential_issuer_arg)?
       } else {
-        println!("Credential issuer id is required to get credential information. Use --credential_issuer.");
+        error!("Credential issuer id is required to get credential information. Use --credential_issuer.");
         return Err(PlatformError::InputsError(error_location!()));
       };
       let attribute = if let Some(attribute_arg) =
@@ -994,14 +1016,14 @@ pub(crate) fn process_borrower_cmd<T: RestfulLedgerAccess + RestfulLedgerUpdate>
           _ => CredentialIndex::Citizenship,
         }
       } else {
-        println!("Credential attribute is required to create or overwrite the credential. Use --attribute.");
+        error!("Credential attribute is required to create or overwrite the credential. Use --attribute.");
         return Err(PlatformError::InputsError(error_location!()));
       };
       let value = if let Some(value_arg) = create_or_overwrite_credential_matches.value_of("value")
       {
         value_arg
       } else {
-        println!("Credential value is required to create or overwrite the credential. Use --value.");
+        error!("Credential value is required to create or overwrite the credential. Use --value.");
         return Err(PlatformError::InputsError(error_location!()));
       };
       let mut data = load_data(data_dir)?;
@@ -1015,7 +1037,7 @@ pub(crate) fn process_borrower_cmd<T: RestfulLedgerAccess + RestfulLedgerUpdate>
       let borrower_id = if let Some(id_arg) = borrower_matches.value_of("id") {
         parse_to_u64(id_arg)?
       } else {
-        println!("Borrower id is required to get the asset record. Use borrower --id.");
+        error!("Borrower id is required to get the asset record. Use borrower --id.");
         return Err(PlatformError::InputsError(error_location!()));
       };
       let data = load_data(data_dir)?;
@@ -1024,27 +1046,27 @@ pub(crate) fn process_borrower_cmd<T: RestfulLedgerAccess + RestfulLedgerUpdate>
       let sid = if let Some(sid_arg) = get_asset_record_matches.value_of("sid") {
         TxoSID(parse_to_u64(sid_arg)?)
       } else {
-        println!("Sid is required to get the asset record. Use borrower --sid.");
+        error!("Sid is required to get the asset record. Use borrower --sid.");
         return Err(PlatformError::InputsError(error_location!()));
       };
       let tracer_and_owner_memos =
         if let Some(memo_file_arg) = get_asset_record_matches.value_of("memo_file") {
           load_tracer_and_owner_memos_from_files(memo_file_arg)?
         } else {
-          println!("Owner memo is required to get the asset record. Use --memo_file.");
+          error!("Owner memo is required to get the asset record. Use --memo_file.");
           return Err(PlatformError::InputsError(error_location!()));
         };
       // Get protocol and host.
       let asset_record =
         query_open_asset_record(rest_client, sid, &key_pair, &tracer_and_owner_memos[0].1)?;
-      println!("{} owns {} of asset {:?}.",
-               borrower_name,
-               asset_record.get_amount(),
-               asset_record.get_asset_type());
+      info!("{} owns {} of asset {:?}.",
+            borrower_name,
+            asset_record.get_amount(),
+            asset_record.get_asset_type());
       Ok(())
     }
     _ => {
-      println!("Subcommand missing or not recognized. Try borrower --help");
+      error!("Subcommand missing or not recognized. Try borrower --help");
       Err(PlatformError::InputsError(error_location!()))
     }
   }
@@ -1079,21 +1101,26 @@ pub(crate) fn process_submit_cmd<T: RestfulLedgerUpdate>(submit_matches: &clap::
                                                          txn_file: &str,
                                                          rest_client: &mut T)
                                                          -> Result<(), PlatformError> {
-  let txn_builder = load_txn_from_file(txn_file)?;
-  if submit_matches.is_present("get_sids") || submit_matches.is_present("sids_file") {
-    let sids = submit_and_get_sids(rest_client, txn_builder)?;
-    println!("Utxo: {:?}", sids);
-    if let Some(path) = submit_matches.value_of("sids_file") {
-      let mut sids_str = "".to_owned();
-      for sid in sids {
-        sids_str.push_str(&format!("{},", sid.0));
+  if let Ok(txn_builder) = load_txn_from_file(txn_file) {
+    if submit_matches.is_present("get_sids") || submit_matches.is_present("sids_file") {
+      let sids = submit_and_get_sids(rest_client, txn_builder)?;
+      info!("Utxo: {:?}", sids);
+      if let Some(path) = submit_matches.value_of("sids_file") {
+        let mut sids_str = "".to_owned();
+        for sid in sids {
+          sids_str.push_str(&format!("{},", sid.0));
+        }
+        store_sids_to_file(path, &sids_str)?;
       }
-      store_sids_to_file(path, &sids_str)?;
+      Ok(())
+    } else {
+      rest_client.submit_transaction(&txn_builder.transaction())?;
+      Ok(())
     }
-    Ok(())
   } else {
-    rest_client.submit_transaction(&txn_builder.transaction())?;
-    Ok(())
+    let msg = format!("couldn't load transaction from {}", txn_file);
+    error!("couldn't load transaction from {}", txn_file);
+    io_error(&msg)
   }
 }
 
@@ -1112,17 +1139,17 @@ pub(crate) fn process_load_funds_cmd<T: RestfulLedgerAccess + RestfulLedgerUpdat
     if let Ok(id) = issuer_arg.parse::<u64>() {
       id
     } else {
-      println!("Improperly formatted issuer id.");
+      error!("Improperly formatted issuer id.");
       return Err(PlatformError::InputsError(error_location!()));
     }
   } else {
-    println!("Asset issuer id is required to load funds. Use --issuer.");
+    error!("Asset issuer id is required to load funds. Use --issuer.");
     return Err(PlatformError::InputsError(error_location!()));
   };
   let amount = if let Some(amount_arg) = load_funds_matches.value_of("amount") {
     parse_to_u64(amount_arg)?
   } else {
-    println!("Amount is required to load funds. Use --amount.");
+    error!("Amount is required to load funds. Use --amount.");
     return Err(PlatformError::InputsError(error_location!()));
   };
   load_funds(data_dir,
@@ -1146,17 +1173,25 @@ pub(crate) fn process_pay_loan_cmd<T: RestfulLedgerAccess + RestfulLedgerUpdate>
   let loan_id = if let Some(loan_arg) = pay_loan_matches.value_of("loan") {
     parse_to_u64(loan_arg)?
   } else {
-    println!("Loan id is required to pay the loan. Use --loan.");
+    error!("Loan id is required to pay the loan. Use --loan.");
     return Err(PlatformError::InputsError(error_location!()));
   };
   let amount = if let Some(amount_arg) = pay_loan_matches.value_of("amount") {
     parse_to_u64(amount_arg)?
   } else {
-    println!("Amount is required to pay the loan. Use --amount.");
+    error!("Amount is required to pay the loan. Use --amount.");
     return Err(PlatformError::InputsError(error_location!()));
   };
 
   pay_loan(data_dir, seq_id, loan_id, amount, rest_client)
+}
+
+fn inputs_error(msg: &str) -> Result<(), PlatformError> {
+  Err(PlatformError::InputsError(msg.to_owned()))
+}
+
+fn io_error(msg: &str) -> Result<(), PlatformError> {
+  Err(PlatformError::IoError(msg.to_owned()))
 }
 
 /// Processes input commands and arguments.
@@ -1167,8 +1202,6 @@ pub fn process_inputs<T: RestfulQueryServerAccess + RestfulLedgerAccess + Restfu
   seq_id: u64,
   rest_client: &mut T)
   -> Result<(), PlatformError> {
-  let _config_file_path: String;
-  let txn_file: String;
   let dir = if let Some(dir) = inputs.value_of("dir") {
     dir.to_string()
   } else if let Ok(dir) = env::var("FINDORA_DIR") {
@@ -1187,21 +1220,14 @@ pub fn process_inputs<T: RestfulQueryServerAccess + RestfulLedgerAccess + Restfu
     format!("{}/.findora", dir_str)
   };
 
-  if let Some(cfg) = inputs.value_of("config") {
-    _config_file_path = cfg.to_string();
-  } else {
-    _config_file_path = format!("{}/config.toml", dir);
-  }
-
-  if let Some(txn_store) = inputs.value_of("txn") {
-    txn_file = txn_store.to_string();
-  } else {
-    txn_file = format!("{}/txn/default.txn", dir);
-  }
-
   match inputs.subcommand() {
     ("asset_issuer", Some(asset_issuer_matches)) => {
-      process_asset_issuer_cmd(asset_issuer_matches, &dir, &txn_file, seq_id)
+      if let Some(txn_file) = inputs.value_of("txn") {
+        process_asset_issuer_cmd(asset_issuer_matches, &dir, &txn_file, seq_id)
+      } else {
+        error!("Missing --txn <filename>");
+        inputs_error(&error_location!())
+      }
     }
     ("credential_issuer", Some(credential_issuer_matches)) => {
       process_credential_issuer_cmd(credential_issuer_matches, &dir)
@@ -1213,37 +1239,61 @@ pub fn process_inputs<T: RestfulQueryServerAccess + RestfulLedgerAccess + Restfu
       process_borrower_cmd(issuer_matches, &dir, seq_id, rest_client)
     }
     ("create_txn_builder", Some(create_txn_builder_matches)) => {
-      process_create_txn_builder_cmd(create_txn_builder_matches, seq_id, &txn_file)
+      if let Some(txn_file) = create_txn_builder_matches.value_of("name") {
+        process_create_txn_builder_cmd(create_txn_builder_matches, seq_id, &txn_file)
+      } else {
+        error!("Missing --name <filename>");
+        inputs_error(&error_location!())
+      }
     }
     ("serialize", Some(_serialize_matches)) => {
-      let txn_builder = load_txn_from_file(&txn_file).or_else(|e| {
-                          println!("Failed to load txn builder from file {}.", txn_file);
-                          Err(e)
-                        })?;
-      match serde_json::to_string(txn_builder.transaction()) {
-        Ok(as_json) => {
-          println!("{}", as_json);
-          Ok(())
+      if let Some(txn_file) = inputs.value_of("txn") {
+        let txn_builder = load_txn_from_file(&txn_file).or_else(|e| {
+                            error!("Failed to load txn builder from file {}.", txn_file);
+                            Err(e)
+                          })?;
+        match serde_json::to_string(txn_builder.transaction()) {
+          Ok(as_json) => {
+            info!("{}", as_json);
+            Ok(())
+          }
+          Err(_) => {
+            error!("Failed to serialize txn.");
+            Err(ser_fail!())
+          }
         }
-        Err(_) => {
-          println!("Failed to serialize txn.");
-          Err(ser_fail!())
-        }
+      } else {
+        error!("Missing --txn <filename>");
+        inputs_error(&error_location!())
       }
     }
-    ("drop", Some(_drop_matches)) => match std::fs::remove_file(&txn_file) {
-      Ok(_) => {
-        println!("Deleted transaction file {}", txn_file);
-        Ok(())
+    ("drop", Some(_drop_matches)) => {
+      if let Some(txn_file) = inputs.value_of("txn") {
+        match std::fs::remove_file(&txn_file) {
+          Ok(_) => {
+            info!("Deleted transaction file {}", txn_file);
+            Ok(())
+          }
+          Err(e) => Err(PlatformError::IoError(format!("Error deleting file: {:?} ", e))),
+        }
+      } else {
+        error!("Missing --txn <filename>");
+        inputs_error(&error_location!())
       }
-      Err(e) => Err(PlatformError::IoError(format!("Error deleting file: {:?} ", e))),
-    },
-    ("submit", Some(submit_matches)) => process_submit_cmd(submit_matches, &txn_file, rest_client),
+    }
+    ("submit", Some(submit_matches)) => {
+      if let Some(txn_file) = inputs.value_of("txn") {
+        process_submit_cmd(submit_matches, &txn_file, rest_client)
+      } else {
+        error!("Missing --txn <filename>");
+        inputs_error(&error_location!())
+      }
+    }
     ("custom_data", Some(custom_data_matches)) => {
       process_custom_data_cmds(custom_data_matches, rest_client)
     }
     _ => {
-      println!("Subcommand missing or not recognized. Try --help");
+      error!("Subcommand missing or not recognized. Try --help");
       Err(PlatformError::InputsError(error_location!()))
     }
   }
@@ -1260,7 +1310,7 @@ pub(crate) fn process_custom_data_cmds<T: RestfulQueryServerAccess>(
           .map_err(|e| PlatformError::InputsError(format!("{}:{}",e,error_location!())))?)
           .ok_or_else(|| PlatformError::InputsError(error_location!()))?;
       let res = rest_client.fetch_custom_data(&key)?;
-      println!("Data is: {:?}", &res);
+      info!("Data is: {:?}", &res);
     }
     ("store", Some(store_matches)) => {
       let key = Key::from_slice(&b64dec(store_matches.value_of("key")
@@ -1272,7 +1322,7 @@ pub(crate) fn process_custom_data_cmds<T: RestfulQueryServerAccess>(
       rest_client.store_custom_data(&data, &key, blind)?;
     }
     _ => {
-      println!("Subcommand missing or not recognized. Try --help");
+      error!("Subcommand missing or not recognized. Try --help");
       return Err(PlatformError::InputsError(error_location!()));
     }
   }

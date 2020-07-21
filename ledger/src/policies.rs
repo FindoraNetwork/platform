@@ -82,7 +82,10 @@ pub fn compute_debt_swap_effect(transfer: &XfrBody)
   }
 
   // TODO: (noah) figure out how to safely increment lender public key for null pk
-  let null_public_key = XfrPublicKey::zei_from_bytes(&[0; 32]);
+  let null_public_key =
+    XfrPublicKey::zei_from_bytes(&[0; 32]).map_err(|e| {
+                                            PlatformError::ZeiError(error_location!(), e)
+                                          })?;
 
   // Debt tokens must be burned and payment must go to owner of the debt
   if burned_debt_output.public_key != null_public_key

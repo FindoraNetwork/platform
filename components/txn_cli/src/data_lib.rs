@@ -116,7 +116,7 @@ impl CredentialIndex {
   }
 }
 
-#[derive(Clone, Deserialize, Debug, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 /// Borrower's credential records.
 pub struct Credential {
   /// Credential ID
@@ -184,7 +184,7 @@ impl AssetIssuer {
   }
 }
 
-#[derive(Clone, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 /// Credential issuer's account information.
 pub struct CredentialIssuer {
   /// Credential issuer ID
@@ -216,7 +216,7 @@ impl CredentialIssuer {
   }
 }
 
-#[derive(Clone, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 /// Lender's account information.
 pub struct Lender {
   /// Lender ID
@@ -249,7 +249,7 @@ impl Lender {
   }
 }
 
-#[derive(Clone, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 /// Borrower's account information.
 pub struct Borrower {
   /// Borrower ID
@@ -288,7 +288,7 @@ impl Borrower {
 //
 // Loan
 //
-#[derive(Clone, Deserialize, Debug, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 /// Loan statuses.
 pub enum LoanStatus {
   /// The borrower has requested the loan, but the lender hasn't fulfill it
@@ -301,7 +301,7 @@ pub enum LoanStatus {
   Complete,
 }
 
-#[derive(Clone, Deserialize, Debug, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 /// Loan information.
 pub struct Loan {
   /// Loan ID
@@ -358,7 +358,7 @@ impl Loan {
 //
 // Data
 //
-#[derive(Clone, Deserialize, Serialize)]
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
 /// Information of users, loans, fiat token code, and sequence number.
 pub struct Data {
   /// List of user records
@@ -406,7 +406,8 @@ impl Data {
 
   pub fn get_asset_issuer_key_pair(&self, id: u64) -> Result<XfrKeyPair, PlatformError> {
     let key_pair_str = &self.asset_issuers[id as usize].key_pair;
-    Ok(XfrKeyPair::zei_from_bytes(&hex::decode(key_pair_str).or_else(|e| Err(ser_fail!(e)))?))
+    XfrKeyPair::zei_from_bytes(&hex::decode(key_pair_str).or_else(|e| Err(ser_fail!(e)))?)
+      .map_err(|e| PlatformError::ZeiError(error_location!(), e))
   }
 
   pub fn get_asset_tracer_key_pair(&self, id: u64) -> Result<AssetTracerKeyPair, PlatformError> {
@@ -446,7 +447,8 @@ impl Data {
 
   pub(crate) fn get_lender_key_pair(&self, id: u64) -> Result<XfrKeyPair, PlatformError> {
     let key_pair_str = &self.lenders[id as usize].key_pair;
-    Ok(XfrKeyPair::zei_from_bytes(&hex::decode(key_pair_str).or_else(|e| Err(des_fail!(e)))?))
+    XfrKeyPair::zei_from_bytes(&hex::decode(key_pair_str).or_else(|e| Err(des_fail!(e)))?)
+      .map_err(|e| PlatformError::ZeiError(error_location!(), e))
   }
 
   /// Creates or overwrites a credential requirement.
@@ -484,7 +486,8 @@ impl Data {
 
   pub fn get_borrower_key_pair(&self, id: u64) -> Result<XfrKeyPair, PlatformError> {
     let key_pair_str = &self.borrowers[id as usize].key_pair;
-    Ok(XfrKeyPair::zei_from_bytes(&hex::decode(key_pair_str).or_else(|e| Err(des_fail!(e)))?))
+    XfrKeyPair::zei_from_bytes(&hex::decode(key_pair_str).or_else(|e| Err(des_fail!(e)))?)
+      .map_err(|e| PlatformError::ZeiError(error_location!(), e))
   }
 
   /// Creates or overwrites a credential data.
@@ -581,7 +584,7 @@ pub fn parse_to_u64_vec(vals_str: &str) -> Result<Vec<u64>, PlatformError> {
 /// * Otherwise, loads the initial data.
 pub fn load_data(data_dir: &str) -> Result<Data, PlatformError> {
   let data_file_path = format!("{}/{}", data_dir, DATA_FILE);
-  match fs::read_to_string(data_file_path) {
+  match fs::read_to_string(&data_file_path) {
     Ok(data) => serde_json::from_str::<Data>(&data).or_else(|e| Err(des_fail!(e))),
     Err(_) => match fs::read_to_string(INIT_DATA_PATH) {
       Ok(init_data) => {
@@ -589,7 +592,8 @@ pub fn load_data(data_dir: &str) -> Result<Data, PlatformError> {
         store_data_to_file(data.clone(), data_dir)?;
         Ok(data)
       }
-      Err(_) => Err(PlatformError::IoError(format!("Failed to read file: {}", INIT_DATA_PATH))),
+      Err(_) => Err(PlatformError::IoError(format!("Failed to read both {} and {}",
+                                                   &data_file_path, INIT_DATA_PATH))),
     },
   }
 }
@@ -728,10 +732,14 @@ pub fn load_tracer_and_owner_memos_from_files(
 pub(crate) fn store_data_to_file(data: Data, data_dir: &str) -> Result<(), PlatformError> {
   let data_file_path = format!("{}/{}", data_dir, DATA_FILE);
   if let Ok(as_json) = serde_json::to_string(&data) {
-    if let Err(error) = fs::write(data_file_path, &as_json) {
-      return Err(PlatformError::IoError(format!("Failed to create file {}: {}.",
-                                                DATA_FILE, error)));
-    };
+    if let Ok(()) = fs::create_dir_all(&data_dir) {
+      if let Err(error) = fs::write(data_file_path, &as_json) {
+        return Err(PlatformError::IoError(format!("Failed to write to file {}: {}.",
+                                                  DATA_FILE, error)));
+      }
+    } else {
+      return Err(PlatformError::IoError(format!("Failed to create file {}", DATA_FILE)));
+    }
   }
   Ok(())
 }
@@ -746,8 +754,10 @@ pub fn store_txn_to_file(path_str: &str, txn: &TransactionBuilder) -> Result<(),
       return Err(PlatformError::IoError(format!("Failed to create file {}: {}.",
                                                 path_str, error)));
     };
+    Ok(())
+  } else {
+    Err(PlatformError::IoError(format!("Error converting {:?} to json", txn)))
   }
-  Ok(())
 }
 
 /// Stores SIDs to file.
