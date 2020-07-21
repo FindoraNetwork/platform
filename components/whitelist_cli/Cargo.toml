@@ -3,6 +3,7 @@ name = "whitelist_cli"
 version = "0.1.0"
 authors = ["Engineering <engineering@findora.org>"]
 edition = "2018"
+build = "build.rs"
 
 [[bin]]
 name = "whitelist_cli"
@@ -22,3 +23,6 @@ serde_json = "1.0"
 txn_cli = { path = "../txn_cli" }
 whitelist = { path = "../whitelist" }
 zei = { git = "ssh://git@github.com/findoraorg/zei", tag = "v0.0.3-3" }
+
+[build-dependencies]
+vergen = "3.1.0"

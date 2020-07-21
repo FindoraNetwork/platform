@@ -3,6 +3,7 @@ name = "query_api"
 version = "0.1.0"
 authors = ["Noah Golub <noah@findora.org>"]
 edition = "2018"
+build = "build.rs"
 
 [lib]
 name = "query_api"
@@ -30,3 +31,6 @@ serde_json = "1.0"
 sparse_merkle_tree = { path = "../../libs/ads/sparse_merkle_tree" }
 utils = { path = "../../libs/utils" }
 zei = { git = "ssh://git@github.com/findoraorg/zei", tag = "v0.0.3-3" }
+
+[build-dependencies]
+vergen = "3.1.0"

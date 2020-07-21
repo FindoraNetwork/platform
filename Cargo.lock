@@ -38,6 +38,7 @@ dependencies = [
  "submission_api",
  "submission_server",
  "utils",
+ "vergen",
  "zei",
 ]
 
@@ -2341,6 +2342,7 @@ dependencies = [
  "tiny-keccak",
  "txn_builder",
  "utils",
+ "vergen",
  "wasm-bindgen",
  "zei",
 ]
@@ -2368,6 +2370,7 @@ dependencies = [
  "sparse_merkle_tree",
  "submission_server",
  "utils",
+ "vergen",
  "zei",
 ]
 
@@ -3795,6 +3798,7 @@ dependencies = [
  "serde_json",
  "sparse_merkle_tree",
  "utils",
+ "vergen",
  "zei",
 ]
 
@@ -4781,6 +4785,7 @@ dependencies = [
  "solvency",
  "tempfile",
  "txn_cli",
+ "vergen",
  "zei",
 ]
 
@@ -4941,6 +4946,7 @@ dependencies = [
  "serde_json",
  "submission_server",
  "utils",
+ "vergen",
 ]
 
 [[package]]
@@ -5628,6 +5634,7 @@ dependencies = [
  "tempfile",
  "txn_builder",
  "utils",
+ "vergen",
  "wasm",
  "zei",
 ]
@@ -5802,6 +5809,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f1bddf1187be692e79c5ffeab891132dfb0f236ed36a43c7ed39f1165ee20191"
 
 [[package]]
+name = "vergen"
+version = "3.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4ce50d8996df1f85af15f2cd8d33daae6e479575123ef4314a51a70a230739cb"
+dependencies = [
+ "bitflags",
+ "chrono",
+]
+
+[[package]]
 name = "version_check"
 version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5909,6 +5926,7 @@ dependencies = [
  "serde_json",
  "txn_builder",
  "utils",
+ "vergen",
  "wasm-bindgen",
  "wasm-bindgen-futures 0.3.27",
  "wasm-bindgen-test",
@@ -6126,6 +6144,7 @@ dependencies = [
  "serde",
  "serde_json",
  "txn_cli",
+ "vergen",
  "whitelist",
  "zei",
 ]
