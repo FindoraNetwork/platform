@@ -285,13 +285,13 @@ impl TransactionBuilder {
     Ok(self)
   }
 
-  /// Adds an operation to the transaction builder to append a credential commitment to the address
+  /// Adds an operation to the transaction builder that appends a credential commitment to the address
   /// identity registry.
-  /// @param {XfrKeyPair} Ledger key that is tied to the credential.
-  /// @param {CredUserPublicKey} Public key of the credential user.
-  /// @param {CredIssuerPublicKey} Public key of the credential issuer.
-  /// @param {CredentialCommitment} Credential commitment to add to the address identity registry.
-  /// @param {CredPoK} Proof that a credential commitment is a valid re-randomization.
+  /// @param {XfrKeyPair} key_pair - Ledger key that is tied to the credential.
+  /// @param {CredUserPublicKey} user_public_key - Public key of the credential user.
+  /// @param {CredIssuerPublicKey} issuer_public_key - Public key of the credential issuer.
+  /// @param {CredentialCommitment} commitment - Credential commitment to add to the address identity registry.
+  /// @param {CredPoK} pok- Proof that a credential commitment is a valid re-randomization.
   /// @see {@link wasm_credential_commit} for information about how to generate a credential
   /// commitment.
   pub fn add_operation_air_assign(mut self,
@@ -311,7 +311,13 @@ impl TransactionBuilder {
     Ok(self)
   }
 
-  /// Adds an add kv update operation to a TransactionBuilder instance without kv hash.
+  /// Adds an operation to the transaction builder that removes a hash from ledger's custom data
+  /// store.
+  /// @param {XfrKeyPair} auth_key_pair - Key pair that is authorized to delete the hash at the
+  /// provided key.
+  /// @param {Key} key - The key of the custom data store whose value will be cleared if the
+  /// transaction validates.
+  /// @param {BigInt} seq_num - Nonce to prevent replays.
   pub fn add_operation_kv_update_no_hash(mut self,
                                          auth_key_pair: &XfrKeyPair,
                                          key: &Key,
@@ -323,7 +329,14 @@ impl TransactionBuilder {
     Ok(self)
   }
 
-  /// Adds an add kv update operation to a WasmTransactionBuilder instance with kv hash.
+  /// Adds an operation to the transaction builder that adds a hash to the ledger's custom data
+  /// store.
+  /// @param {XfrKeyPair} auth_key_pair - Key pair that is authorized to add the hash at the
+  /// provided key.
+  /// @param {Key} key - The key of the custom data store the value will be added to if the
+  /// transaction validates.
+  /// @param {KVHash} hash - The hash to add to the custom data store.
+  /// @param {BigInt} seq_num - Nonce to prevent replays.
   pub fn add_operation_kv_update_with_hash(mut self,
                                            auth_key_pair: &XfrKeyPair,
                                            key: &Key,
@@ -339,7 +352,14 @@ impl TransactionBuilder {
     Ok(self)
   }
 
-  /// Adds an `UpdateMemo` operation to a WasmTransactionBuilder with the given memo.
+  /// Adds an operation to the transaction builder that adds a hash to the ledger's custom data
+  /// store.
+  /// @param {XfrKeyPair} auth_key_pair - Asset creator key pair.
+  /// @param {String} key - The base64-encoded token code of the asset whose memo will be updated.
+  /// transaction validates.
+  /// @param {String} new_memo - The new asset memo.
+  /// @see {@link AssetRules#set_updatable|AssetRules.set_updatable} for more information about how
+  /// to define an updatable asset.
   pub fn add_operation_update_memo(mut self,
                                    auth_key_pair: &XfrKeyPair,
                                    code: String,
@@ -355,11 +375,11 @@ impl TransactionBuilder {
     Ok(self)
   }
 
-  /// Adds a serialized operation to a WasmTransactionBuilder instance
-  /// @param {string} op -  a JSON-serialized operation (i.e. a transfer operation).
-  /// @see {@link WasmTransferOperationBuilder} for details on constructing a transfer operation.
+  /// Adds a serialized transfer asset operation to a transaction builder instance.
+  /// @param {string} op - a JSON-serialized transfer operation.
+  /// @see {@link TransferOperationBuilder} for details on constructing a transfer operation.
   /// @throws Will throw an error if `op` fails to deserialize.
-  pub fn add_operation(mut self, op: String) -> Result<TransactionBuilder, JsValue> {
+  pub fn add_transfer_operation(mut self, op: String) -> Result<TransactionBuilder, JsValue> {
     let op = serde_json::from_str::<Operation>(&op).map_err(error_to_jsvalue)?;
     self.get_builder_mut().add_operation(op);
     Ok(self)
@@ -385,7 +405,7 @@ impl TransactionBuilder {
   }
 
   /// Fetches an owner memo from a transaction
-  /// @param {number} idx - Record to fetch. Records are added to the transaction builder sequentially.
+  /// @param {number} idx - Owner memo to fetch. Owner memos are added to the transaction builder sequentially.
   pub fn get_owner_memo(&self, idx: usize) -> Option<OwnerMemo> {
     self.get_builder()
         .get_owner_memo_ref(idx)
