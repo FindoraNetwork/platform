@@ -1,8 +1,43 @@
 # Transaction Builder Command Line Interface
+1. [Overview](#overview)
+2. [Example of confidential transfer](#example-of-confidential-transfer)
+3. [Commands](#commands)
+   1. [Asset Issuer](#asset-issuer)
+       * [Asset Issuer Sign Up](#asset-issuer-sign-up)
+       * [Asset definition](#define-an-asset)
+       * [Asset issuance](#issue-units-of-an-asset)
+       * [Asset transfer](#transfer-units-of-an-asset)
+       * [Asset issue and transfer](#issue-and-transfer-units-of-an-asset)
+       * [Store sids](#store-sids-to-file)
+   2. [Credential Issuer](#credential-issuer)
+       * [Credential Issuer Sign Up](#credential-issuer-sign-up)
+   3. [Borrower](#borrower)
+       * [Borrower Sign Up](#borrower-sign-up)
+       * [Borrower requests a loan](#request-a-loan)
+       * [Borrower load funds](#borrower-load-funds)
+       * [Borrower view loans](#borrower-view-loans)
+       * [Borrower add or update credential record](#create-or-overwrite-a-credential)
+       * [Borrower get asset record](#get-asset-record)
+   4. [Lender](#lender)
+       * [Lender Sign Up](#lender-sign-up)
+       * [Lender fulfills the loan](#fulfill-a-loan)
+       * [Lender view all loans](#view-all-loans) 
+       * [Lender view a specific loan](#view-a-specific-loan)
 
-The `txn_cli` application is intended to help one experiment with the RESTful API and access the Ledger from scripts. It provides a command line interface for constructing and submitting a `transaction` to the Ledger. Each `transaction` contains a sequence of operations which will be performed on the ledger.
+## Overview
+The `txn_cli` application is intended to help one experiment with the
+RESTful API and access the Ledger from scripts. It provides a command
+line interface for constructing and submitting a `transaction` to the
+Ledger. Each `transaction` contains a sequence of operations which
+will be performed on the ledger.
 
-Transactions are built by first creating an empty transaction with `txn_cli create_txn_builder --name <filename>`, and then filling the newly created transaction with operations. In the following, we'll typically add just one operation to the transaction. Once completed, the transaction is then submitted to the testnet ledger `https://testnet.findora.org`, with
+Transactions are built by first creating an empty transaction with
+`txn_cli create_txn_builder --name <filename>`, and then filling the
+newly created transaction with operations. In the following, we'll
+typically add just one operation to the transaction. Once completed,
+the transaction is then submitted to the testnet ledger
+`https://testnet.findora.org`, with
+
 ```
 txn_cli --txn <filename> submit
 ```
@@ -11,31 +46,13 @@ or to the standalone ledger at `http://localhost` with
 txn_cli --local --txn <filename> submit
 ```
 
-## The different kinds of Users
-There are four User roles available; and each has an associated `sign_up` command in `txn_cli`, which adds
-an entry to a JSON file ~/.findora/data.json.
-
-1. [Asset Issuer](#asset-issuer): 
-   * [Asset Issuer Sign Up](#asset-issuer-sign-up)
-   * [Asset definition](#define-an-asset)
-   * [Asset issuance](#issue-units-of-an-asset)
-   * [Asset transfer](#transfer-units-of-an-asset)
-   * [Asset issue and transfer](#issue-and-transfer-units-of-an-asset)
-   * [Store sids](#store-sids-to-file)
-2. [Credential Issuer](#credential-issuer):
-   * [Credential Issuer Sign Up](#credential-issuer-sign-up)
-3. [Borrower](#borrower):
-   * [Borrower Sign Up](#borrower-sign-up)
-   * [Borrower requests a loan](#request-a-loan)
-   * [Borrower load funds](#borrower-load-funds)
-   * [Borrower view loans](#borrower-view-loans)
-   * [Borrower add or update credential record](#create-or-overwrite-a-credential)
-   * [Borrower get asset record](#get-asset-record)
-4. [Lender](#lender):
-   * [Lender Sign Up](#lender-sign-up)
-   * [Lender fulfills the loan](#fulfill-a-loan)
-   * [Lender view all loans](#view-all-loans) 
-   * [Lender view a specific loan](#view-a-specific-loan)
+There are four User roles available; and each has an associated
+`sign_up` command in `txn_cli`, which adds an entry to a JSON file
+~/.findora/data.json.
+1. Asset Issuer
+2. Credential Issuer
+3. Borrower
+4. Lender
 
 The Ledger supports a querying with the transaction ID to see if the transaction was committed using a web browser or command line tool.
 
@@ -52,15 +69,96 @@ txn_cli asset_issuer define_asset --help
 ```
 
 **Note**:
-* Even if the subcommand is unique, it is still necessary to supply the command name as well. This is true for both help and the
-actual subcommands.
-* By default, all the generated files will be stored in `~./findora`, unless specified otherwise. For example, if the current directory is `platform/target/debug`, running `txn_cli keygen` will put the generated key pair in ~./findora, but `txn_cli keygen --name keys/key_pair` will store the key pair to `$PWD/keys/key_pair`.
-* Examples below are assuming that `txn_cli` is in the `$PATH`. Typically it resides in either `platform/target/debug` or `platform/target/release`.
+* Even if the subcommand is unique, it is still necessary to supply
+  the command name as well. This is true for both help and the actual
+  subcommands.
+* By default, all the generated files will be stored in `~./findora`,
+  unless specified otherwise. For example, if the current directory is
+  `platform/target/debug`, running `txn_cli keygen` will put the
+  generated key pair in ~./findora, but `txn_cli keygen --name
+  keys/key_pair` will store the key pair to `$PWD/keys/key_pair`.
+* Examples below are assuming that `txn_cli` is in the `$PATH`.
+  Typically it resides in either `platform/target/debug` or
+  `platform/target/release`.
 
-## Examples
+## Example of confidential transfer
+
 The following commands are meant to be executed in order by you the user.
 
 We assume that the file `~/.findora/data.json` is the same as `init_data.json` in this directory.
+
+## Sign up an asset issuer account for Ian
+```
+txn_cli asset_issuer sign_up --name Ian
+```
+Note from the output that Ian's id is `1`: 
+```
+Ian's id is 1.
+```
+
+## Sign up a borrower account for Bill
+```
+txn_cli borrower sign_up --name Bill
+```
+Note from the output that Bill's id is `1`:
+```
+Bill's id is 1.
+```
+
+## Ian: defines an asset
+### Create an empty transaction
+```
+txn_cli create_txn_builder --name txn_define
+```
+
+### Define an asset
+```
+txn_cli --txn txn_define asset_issuer --id 1 define_asset --memo 'Define an asset.'
+```
+Note from the output that the asset token code is `7hAA3TTJQHhDGs-_mpP12Q==`, or `[238, 16, 0, 221, 52, 201, 64, 120, 67, 26, 207, 191, 154, 147, 245, 217]`:
+```
+Creating asset with token code "7hAA3TTJQHhDGs-_mpP12Q==": [238, 16, 0, 221, 52, 201, 64, 120, 67, 26, 207, 191, 154, 147, 245, 217]
+```
+
+### Submit the transaction
+```
+txn_cli --txn txn_define submit
+```
+
+## Ian: issues and transfers the asset confidentially to Bill
+### Create an empty transaction
+```
+txn_cli create_txn_builder --name txn_issue_and_transfer
+```
+
+### Issue and transfer the asset (FIXME: Is there supposed to be a memo_file? This command doesn't take one!)
+```
+txn_cli --txn txn_issue_and_transfer asset_issuer --id 1 issue_and_transfer_asset --recipient 1 --amount 100 --token_code 7hAA3TTJQHhDGs-_mpP12Q== --confidential_amount
+```
+
+### Submit the transaction and get the utxo
+```
+txn_cli --txn txn_issue_and_transfer submit --get_sids
+```
+Note from the last line of the output that the utxo is `429`:
+```
+Utxo: [TxoSID(429)]
+```
+
+## Trace and verify the asset
+### Bill: verifies the received asset (FIXME: Expected a memo_file, error if none)
+```
+txn_cli borrower --id 1 get_asset_record --sid 429 --memo_file memo
+```
+Note from the last line of the output that the asset token code is indeed `[238, 16, 0, 221, 52, 201, 64, 120, 67, 26, 207, 191, 154, 147, 245, 217]`, and the amount Bill owns is `100`.
+```
+Bill owns 100 of asset [238, 16, 0, 221, 52, 201, 64, 120, 67, 26, 207, 191, 154, 147, 245, 217].
+```
+
+### Ian: traces the asset transferred to Bill and verifies the amount
+```
+txn_cli asset_issuer --id 1 trace_and_verify_asset --memo_file memo --expected_amount 100
+```
 
 ## Asset Issuer
 ### Asset Issuer Sign Up
@@ -358,76 +456,3 @@ $ curl https://testnet.findora.org:8669/block_log
 ```
 ![Table of blocks](./doc/block_log.png)
 
-# Example of confidential transfer
-## Sign up an asset issuer account for Ian
-```
-txn_cli asset_issuer sign_up --name Ian
-```
-Note from the output that Ian's id is `1`: 
-```
-Ian's id is 1.
-```
-
-## Sign up a borrower account for Bill
-```
-txn_cli borrower sign_up --name Bill
-```
-Note from the output that Bill's id is `1`:
-```
-Bill's id is 1.
-```
-
-## Ian: defines an asset
-### Create an empty transaction
-```
-txn_cli create_txn_builder --name txn_define
-```
-
-### Define an asset
-```
-txn_cli --txn txn_define asset_issuer --id 1 define_asset --memo 'Define an asset.'
-```
-Note from the output that the asset token code is `7hAA3TTJQHhDGs-_mpP12Q==`, or `[238, 16, 0, 221, 52, 201, 64, 120, 67, 26, 207, 191, 154, 147, 245, 217]`:
-```
-Creating asset with token code "7hAA3TTJQHhDGs-_mpP12Q==": [238, 16, 0, 221, 52, 201, 64, 120, 67, 26, 207, 191, 154, 147, 245, 217]
-```
-
-### Submit the transaction
-```
-txn_cli --txn txn_define submit
-```
-
-## Ian: issues and transfers the asset confidentially to Bill
-### Create an empty transaction
-```
-txn_cli create_txn_builder --name txn_issue_and_transfer
-```
-
-### Issue and transfer the asset (FIXME: Is there supposed to be a memo_file? This command doesn't take one!)
-```
-txn_cli --txn txn_issue_and_transfer asset_issuer --id 1 issue_and_transfer_asset --recipient 1 --amount 100 --token_code 7hAA3TTJQHhDGs-_mpP12Q== --confidential_amount
-```
-
-### Submit the transaction and get the utxo
-```
-txn_cli --txn txn_issue_and_transfer submit --get_sids
-```
-Note from the last line of the output that the utxo is `429`:
-```
-Utxo: [TxoSID(429)]
-```
-
-## Trace and verify the asset
-### Bill: verifies the received asset (FIXME: Expected a memo_file, error if none)
-```
-txn_cli borrower --id 1 get_asset_record --sid 429 --memo_file memo
-```
-Note from the last line of the output that the asset token code is indeed `[238, 16, 0, 221, 52, 201, 64, 120, 67, 26, 207, 191, 154, 147, 245, 217]`, and the amount Bill owns is `100`.
-```
-Bill owns 100 of asset [238, 16, 0, 221, 52, 201, 64, 120, 67, 26, 207, 191, 154, 147, 245, 217].
-```
-
-### Ian: traces the asset transferred to Bill and verifies the amount
-```
-txn_cli asset_issuer --id 1 trace_and_verify_asset --memo_file memo --expected_amount 100
-```
