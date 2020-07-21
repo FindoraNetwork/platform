@@ -197,7 +197,7 @@ mod tests {
 
   #[test]
   fn test_mock_client_failure() {
-    let code = AssetTypeCode { val: [1; 16] };
+    let code = AssetTypeCode::from_identical_byte(1);
     let new_memo = Memo("new_memo".to_string());
     let mut prng = ChaChaRng::from_entropy();
     let creator = XfrKeyPair::generate(&mut prng);

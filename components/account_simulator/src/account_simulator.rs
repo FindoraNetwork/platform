@@ -599,7 +599,8 @@ impl InterpretAccounts<PlatformError> for LedgerAccounts {
         let mut sig_keys: Vec<XfrKeyPair> = Vec::new();
 
         for _ in to_use.iter() {
-          sig_keys.push(XfrKeyPair::zei_from_bytes(&src_keypair.zei_to_bytes()));
+          sig_keys.push(XfrKeyPair::zei_from_bytes(&src_keypair.zei_to_bytes())
+            .map_err(|e| PlatformError::ZeiError(error_location!(), e))?);
         }
 
         let src_records: Vec<AssetRecord> =
@@ -889,7 +890,8 @@ impl InterpretAccounts<PlatformError> for OneBigTxnAccounts {
         let mut sig_keys: Vec<XfrKeyPair> = Vec::new();
 
         for _ in to_use.iter() {
-          sig_keys.push(XfrKeyPair::zei_from_bytes(&src_keypair.zei_to_bytes()));
+          sig_keys.push(XfrKeyPair::zei_from_bytes(&src_keypair.zei_to_bytes())
+            .map_err(|e| PlatformError::ZeiError(error_location!(), e))?);
         }
 
         let src_records: Vec<AssetRecord> =
@@ -1196,7 +1198,8 @@ impl<T> InterpretAccounts<PlatformError> for LedgerStandaloneAccounts<T>
         let mut sig_keys: Vec<XfrKeyPair> = Vec::new();
 
         for _ in to_use.iter() {
-          sig_keys.push(XfrKeyPair::zei_from_bytes(&src_keypair.zei_to_bytes()));
+          sig_keys.push(XfrKeyPair::zei_from_bytes(&src_keypair.zei_to_bytes())
+            .map_err(|e| PlatformError::ZeiError(error_location!(), e))?);
         }
 
         let src_records: Vec<AssetRecord> =

@@ -25,7 +25,7 @@ use std::path::PathBuf;
 use std::u64;
 use utils::HasInvariants;
 use utils::{HashOf, ProofOf, Serialized, SignatureOf};
-use zei::xfr::lib::XfrNotePoliciesNoRef;
+use zei::xfr::lib::XfrNotePolicies;
 use zei::xfr::sig::{XfrKeyPair, XfrPublicKey};
 use zei::xfr::structs::{AssetTracingPolicies, AssetTracingPolicy, XfrAssetType};
 
@@ -2146,10 +2146,10 @@ pub mod helpers {
                                                           tracing_policy: AssetTracingPolicy)
                                                           -> (Transaction, AssetRecord) {
     let tracing_policies = AssetTracingPolicies::from_policy(tracing_policy);
-    let xfr_note_policies = XfrNotePoliciesNoRef::new(vec![tracing_policies.clone()],
-                                                      vec![None],
-                                                      vec![tracing_policies.clone()],
-                                                      vec![None]);
+    let xfr_note_policies = XfrNotePolicies::new(vec![tracing_policies.clone()],
+                                                 vec![None],
+                                                 vec![tracing_policies.clone()],
+                                                 vec![None]);
     // issue operation
     let ar_template = AssetRecordTemplate::with_asset_tracking(amount, code.val, AssetRecordType::ConfidentialAmount_NonConfidentialAssetType, issuer_keys.get_pk(), tracing_policies.clone());
     let (ba, _tracer_memo, owner_memo) =
@@ -2440,7 +2440,7 @@ mod tests {
     let mut prng = ChaChaRng::from_entropy();
     let mut state = LedgerState::test_ledger();
 
-    let token_code1 = AssetTypeCode { val: [1; 16] };
+    let token_code1 = AssetTypeCode::from_identical_byte(1);
     let keypair = build_keys(&mut prng);
 
     let asset_body = asset_creation_body(&token_code1,
@@ -2540,7 +2540,7 @@ mod tests {
   #[test]
   fn test_asset_creation_invalid_public_key() {
     // Create a valid asset creation operation.
-    let token_code1 = AssetTypeCode { val: [1; 16] };
+    let token_code1 = AssetTypeCode::from_identical_byte(1);
     let mut prng = ChaChaRng::from_entropy();
     let keypair = build_keys(&mut prng);
     let asset_body = asset_creation_body(&token_code1,
@@ -2565,7 +2565,7 @@ mod tests {
     let mut ledger = LedgerState::test_ledger();
     let params = PublicParams::new();
 
-    let code = AssetTypeCode { val: [1; 16] };
+    let code = AssetTypeCode::from_identical_byte(1);
     let mut prng = ChaChaRng::from_entropy();
     let key_pair = XfrKeyPair::generate(&mut prng);
     let key_pair_adversary = XfrKeyPair::generate(ledger.get_prng());
@@ -2682,7 +2682,7 @@ mod tests {
   #[test]
   fn test_asset_creation_invalid_signature() {
     // Create a valid operation.
-    let token_code1 = AssetTypeCode { val: [1; 16] };
+    let token_code1 = AssetTypeCode::from_identical_byte(1);
 
     let mut prng = ChaChaRng::from_entropy();
     let keypair1 = build_keys(&mut prng);
@@ -2711,7 +2711,7 @@ mod tests {
     let params = PublicParams::new();
 
     assert!(ledger.get_state_commitment() == (HashOf::new(&None), 0));
-    let token_code1 = AssetTypeCode { val: [1; 16] };
+    let token_code1 = AssetTypeCode::from_identical_byte(1);
     let keypair = build_keys(&mut ledger.get_prng());
 
     let tx = create_definition_transaction(&token_code1,
@@ -2884,7 +2884,7 @@ mod tests {
     let bob = XfrKeyPair::generate(&mut ledger.get_prng());
 
     // Define fiat token
-    let code = AssetTypeCode { val: [1; 16] };
+    let code = AssetTypeCode::from_identical_byte(1);
     let tx = create_definition_transaction(&code,
                                            &issuer,
                                            AssetRules::default().set_transferable(false).clone(),
@@ -2992,7 +2992,7 @@ mod tests {
                                                         identity_tracking: None };
 
     // Define an asset without a tracing policy
-    let code = AssetTypeCode { val: [0; 16] };
+    let code = AssetTypeCode::from_identical_byte(0);
     let tx = create_definition_transaction(&code,
                                            &issuer,
                                            AssetRules::default(),
@@ -3012,7 +3012,7 @@ mod tests {
     apply_transaction(&mut ledger, tx);
 
     // Define an asset with the tracing policy
-    let code = AssetTypeCode { val: [1; 16] };
+    let code = AssetTypeCode::from_identical_byte(1);
     let tx = create_definition_transaction(&code,
                                            &issuer,
                                            AssetRules::default().add_tracing_policy(tracing_policy.clone()).clone(),
@@ -3072,7 +3072,7 @@ mod tests {
     let issuer = XfrKeyPair::generate(&mut ledger.get_prng());
 
     // Define fiat token
-    let code = AssetTypeCode { val: [1; 16] };
+    let code = AssetTypeCode::from_identical_byte(1);
     let tx = create_definition_transaction(&code,
                                            &issuer,
                                            AssetRules::default().set_max_units(Some(100)).clone(),
@@ -3138,7 +3138,7 @@ mod tests {
     let mut ledger = LedgerState::test_ledger();
     let params = PublicParams::new();
 
-    let code = AssetTypeCode { val: [1; 16] };
+    let code = AssetTypeCode::from_identical_byte(1);
     let mut prng = ChaChaRng::from_entropy();
     let keys: Vec<XfrKeyPair> = (0..co_signers.len()).map(|_| XfrKeyPair::generate(&mut prng))
                                                      .collect();
@@ -3234,7 +3234,7 @@ mod tests {
     let adversary = XfrKeyPair::generate(&mut ledger.get_prng());
 
     // Define fiat token
-    let code = AssetTypeCode { val: [1; 16] };
+    let code = AssetTypeCode::from_identical_byte(1);
     let tx = create_definition_transaction(&code,
                                            &creator,
                                            AssetRules::default().set_updatable(true).clone(),
@@ -3331,7 +3331,7 @@ mod tests {
     let lender_key_pair = XfrKeyPair::generate(&mut ledger.get_prng());
 
     // Define fiat token
-    let fiat_code = AssetTypeCode { val: [1; 16] };
+    let fiat_code = AssetTypeCode::from_identical_byte(1);
     let tx = create_definition_transaction(&fiat_code,
                                            &fiat_issuer_key_pair,
                                            AssetRules::default(),
@@ -3340,7 +3340,7 @@ mod tests {
     apply_transaction(&mut ledger, tx);
 
     // Define debt token
-    let debt_code = AssetTypeCode { val: [2; 16] };
+    let debt_code = AssetTypeCode::from_identical_byte(2);
     let debt_memo = DebtMemo { interest_rate,
                                fiat_code,
                                loan_amount: loan_amount as u64 };
@@ -3409,7 +3409,7 @@ mod tests {
     let debt_sid = txo_sids[1];
 
     // Attempt to pay off debt with correct interest payment
-    let null_public_key = XfrPublicKey::zei_from_bytes(&[0; 32]);
+    let null_public_key = XfrPublicKey::zei_from_bytes(&[0; 32]).unwrap();
     let mut block = ledger.start_block().unwrap();
     let fiat_bar = ((ledger.get_utxo(fiat_sid).unwrap().utxo.0).0).clone();
     let debt_bar = ((ledger.get_utxo(debt_sid).unwrap().utxo.0).0).clone();

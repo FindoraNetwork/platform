@@ -6,7 +6,7 @@ use credentials::{
 };
 use cryptohash::sha256::{Digest, DIGESTBYTES};
 use ledger::data_model::{
-  AssetRules as PlatformAssetRules, AssetType as PlatformAssetType, AssetTypeCode,
+  AssetRules as PlatformAssetRules, AssetType as PlatformAssetType,
   AuthenticatedAIRResult as PlatformAuthenticatedAIRResult, AuthenticatedUtxo,
   KVBlind as PlatformKVBlind, KVHash as PlatformKVHash, SignatureRules as PlatformSignatureRules,
   TransferType as PlatformTransferType, TxOutput, TxoRef as PlatformTxoRef, TxoSID,
@@ -163,31 +163,14 @@ impl ClientAssetRecord {
 
 #[wasm_bindgen]
 impl ClientAssetRecord {
-  /// Builds a client record from an asset record fetched from the ledger server.
-  /// @param {record} - JSON-encoded autehtnicated asset record fetched from ledger server with the `utxo_sid/{sid}` route,
+  /// Builds a client record from a JSON-serialized JavaScript value.
+  /// @param {JsValue} val - JSON-encoded autehtnicated asset record fetched from ledger server with the `utxo_sid/{sid}` route,
   /// where `sid` can be fetched from the query server with the `get_owned_utxos/{address}` route.
-  pub fn from_json_record(record: &JsValue) -> Self {
-    ClientAssetRecord { txo: record.into_serde().unwrap() }
-  }
-
-  /// Returns the asset amount associated with an asset record.
-  /// * If the amount is nonconfidential, returns the amount.
-  /// * Otherwise, returns null.
-  /// @see {@open_client_asset_record} for information about decrypting the confidential record.
-  pub fn get_asset_amount(&self) -> Option<u64> {
-    self.get_bar_ref().amount.get_amount()
-  }
-
-  /// Returns the asset type associated with an asset record.
-  /// * If the type is nonconfidential, returns a base64 string representing the type.
-  /// * Otherwise, returns null.
-  /// @see {@open_client_asset_record} for information about decrypting the confidential record.
-  pub fn get_asset_type(&self) -> Option<String> {
-    let code = self.get_bar_ref().asset_type.get_asset_type();
-    match code {
-      Some(c) => Some((AssetTypeCode { val: c }).to_base64()),
-      None => None,
-    }
+  /// * E.g.: `{"amount":{"NonConfidential":1000},
+  /// "asset_type":{"NonConfidential":[2,14,75,187,192,9,69,242,30,9,18,203,193,227,148,56]},
+  /// "public_key":"vmGHutHEUGVL24SZMfkadu-9u7RcIARSlQB-rVHOnEM="}`.
+  pub fn from_json(val: &JsValue) -> Self {
+    ClientAssetRecord { txo: val.into_serde().unwrap() }
   }
 }
 
@@ -236,12 +219,12 @@ pub struct OwnerMemo {
 
 #[wasm_bindgen]
 impl OwnerMemo {
-  /// Generate an owner memo from a JSON-serialized JavaScript value.
-  ///
-  /// Builds a client record from an owner memo fetched from the ledger server.
-  /// @param {JsValue} val - JSON owner memo fetched from ledger server with the `owner_memo/{sid}` route,
+  /// Builds an owner memo from a JSON-serialized JavaScript value.
+  /// @param {JsValue} val - JSON owner memo fetched from query server with the `get_owner_memo/{sid}` route,
   /// where `sid` can be fetched from the query server with the `get_owned_utxos/{address}` route.
-  pub fn from_jsvalue(val: &JsValue) -> Self {
+  /// * E.g.: `{"blind_share":[91,251,44,28,7,221,67,155,175,213,25,183,70,90,119,232,212,238,226,142,159,200,54,19,60,115,38,221,248,202,74,248],
+  /// "lock":{"ciphertext":[119,54,117,136,125,133,112,193],"encoded_rand":"8KDql2JphPB5WLd7-aYE1bxTQAcweFSmrqymLvPDntM="}}`.
+  pub fn from_json(val: &JsValue) -> Self {
     let zei_owner_memo: ZeiOwnerMemo = val.into_serde().unwrap();
     OwnerMemo { memo: ZeiOwnerMemo { blind_share: zei_owner_memo.blind_share,
                                      lock: zei_owner_memo.lock } }
@@ -364,7 +347,15 @@ pub struct AssetType {
 
 #[wasm_bindgen]
 impl AssetType {
-  /// Construct an AssetType from the JSON-encoded value returned by the ledger.
+  /// Builds an asset type from a JSON-serialized JavaScript value.
+  /// @param {JsValue} val - JSON asset type fetched from ledger server with the `asset_token/{code}` route.
+  /// * E.g.: `{"properties":{"code":"Zz2BfXev5V1yLxeyBWii3g==",
+  /// "issuer":{"key":"Re_gz_oihZoXkfs2ebyQqSlURLGEE6DLWNqKbV5qk7k="},
+  /// "memo":"test memo",
+  /// "asset_rules":{"transferable":false,"updatable":false,"transfer_multisig_rules":null,"max_units":null}},
+  /// "digest":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+  /// "units":0,
+  /// "confidential_units":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]}`.
   pub fn from_json(json: &JsValue) -> Result<AssetType, JsValue> {
     let asset_type: PlatformAssetType = json.into_serde().map_err(error_to_jsvalue)?;
     Ok(AssetType { asset_type })
@@ -444,11 +435,11 @@ impl CredentialIssuerKeyPair {
     self.sk.clone()
   }
   /// Convert the key pair to a serialized value that can be used in the browser.
-  pub fn to_jsvalue(&self) -> JsValue {
+  pub fn to_json(&self) -> JsValue {
     JsValue::from_serde(&self).unwrap()
   }
   /// Generate a key pair from a JSON-serialized JavaScript value.
-  pub fn from_jsvalue(val: &JsValue) -> Self {
+  pub fn from_json(val: &JsValue) -> Self {
     val.into_serde().unwrap()
   }
 }
@@ -464,11 +455,11 @@ impl CredentialUserKeyPair {
     self.sk.clone()
   }
   /// Convert the key pair to a serialized value that can be used in the browser.
-  pub fn to_jsvalue(&self) -> JsValue {
+  pub fn to_json(&self) -> JsValue {
     JsValue::from_serde(&self).unwrap()
   }
   /// Generate a key pair from a JSON-serialized JavaScript value.
-  pub fn from_jsvalue(val: &JsValue) -> Self {
+  pub fn from_json(val: &JsValue) -> Self {
     val.into_serde().unwrap()
   }
 }

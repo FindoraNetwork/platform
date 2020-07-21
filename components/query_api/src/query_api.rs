@@ -93,7 +93,9 @@ fn get_owned_utxos<T>(data: web::Data<Arc<RwLock<QueryServer<T>>>>,
   let key: XfrPublicKey =
     XfrPublicKey::zei_from_bytes(&b64dec(&*info).map_err(|_| {
                                     error::ErrorBadRequest("Could not deserialize public key")
-                                  })?);
+                                  })?).map_err(|_| {
+                                        error::ErrorBadRequest("Could not deserialize public key")
+                                      })?;
   let query_server = data.read().unwrap();
   let sids = query_server.get_owned_utxo_sids(&XfrAddress { key });
   Ok(web::Json(sids.cloned().unwrap_or_default()))
@@ -136,7 +138,9 @@ fn get_created_assets<T>(data: web::Data<Arc<RwLock<QueryServer<T>>>>,
   let key: XfrPublicKey =
     XfrPublicKey::zei_from_bytes(&b64dec(&*info).map_err(|_| {
                                     error::ErrorBadRequest("Could not deserialize public key")
-                                  })?);
+                                  })?).map_err(|_| {
+                                        error::ErrorBadRequest("Could not deserialize public key")
+                                      })?;
   let query_server = data.read().unwrap();
   let assets = query_server.get_created_assets(&IssuerPublicKey { key });
   Ok(web::Json(assets.cloned().unwrap_or_default()))
@@ -152,7 +156,9 @@ fn get_issued_records<T>(data: web::Data<Arc<RwLock<QueryServer<T>>>>,
   let key: XfrPublicKey =
     XfrPublicKey::zei_from_bytes(&b64dec(&*info).map_err(|_| {
                                     error::ErrorBadRequest("Could not deserialize public key")
-                                  })?);
+                                  })?).map_err(|_| {
+                                        error::ErrorBadRequest("Could not deserialize public key")
+                                      })?;
   let query_server = data.read().unwrap();
   let records = query_server.get_issued_records(&IssuerPublicKey { key });
   Ok(web::Json(records.cloned().unwrap_or_default()))
@@ -168,7 +174,9 @@ fn get_related_txns<T>(data: web::Data<Arc<RwLock<QueryServer<T>>>>,
   let key: XfrPublicKey =
     XfrPublicKey::zei_from_bytes(&b64dec(&*info).map_err(|_| {
                                     error::ErrorBadRequest("Could not deserialize public key")
-                                  })?);
+                                  })?).map_err(|_| {
+                                        error::ErrorBadRequest("Could not deserialize public key")
+                                      })?;
   let query_server = data.read().unwrap();
   let records = query_server.get_related_transactions(&XfrAddress { key });
   Ok(web::Json(records.cloned().unwrap_or_default()))
