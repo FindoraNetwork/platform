@@ -64,7 +64,7 @@ impl TxoRef {
   /// transaction containing both an issuance and a transfer).
   ///
   /// # Arguments
-  /// @param {BigInt} idx -  Relative Txo (transaction output) SID.
+  /// @param {BigInt} idx -  Relative TXO (transaction output) SID.
   pub fn relative(idx: u64) -> Self {
     TxoRef { txo_ref: PlatformTxoRef::Relative(idx) }
   }
@@ -87,36 +87,8 @@ impl TxoRef {
   }
 }
 
-#[wasm_bindgen]
-/// Indicates whether the transfer is a standard one, or a debt swap.
-pub struct TransferType {
-  transfer_type: PlatformTransferType,
-}
-
-#[wasm_bindgen]
-impl TransferType {
-  /// Standard TransferType variant for txn builder.
-  /// Returns a token as a string signifying that the Standard policy should be used when evaluating the transaction.
-  pub fn standard_transfer_type() -> Self {
-    TransferType { transfer_type: PlatformTransferType::Standard }
-  }
-
-  /// Debt swap TransferType variant for txn builder.
-  /// Returns a token as a string signifying that the DebtSwap policy should be used when evaluating the transaction.
-  pub fn debt_transfer_type() -> Self {
-    TransferType { transfer_type: PlatformTransferType::DebtSwap }
-  }
-}
-
-impl TransferType {
-  pub fn get_type(&self) -> &PlatformTransferType {
-    &self.transfer_type
-  }
-}
-
 /// Object representing an authenticable asset record. Clients can validate authentication proofs
 /// against a ledger state commitment.
-/// @see {@link Network#get_state_commitment} for instructions on fetching a ledger state commitment.
 #[wasm_bindgen]
 pub struct AuthenticatedAssetRecord {
   pub(crate) authenticated_record: AuthenticatedUtxo,
@@ -131,10 +103,10 @@ impl AuthenticatedAssetRecord {
 #[wasm_bindgen]
 impl AuthenticatedAssetRecord {
   /// Given a serialized state commitment, returns true if the
-  /// authenticated utxo proofs validate correctly and false otherwise. If the proofs validate, the
+  /// authenticated UTXO proofs validate correctly and false otherwise. If the proofs validate, the
   /// asset record contained in this structure exists on the ledger and is unspent.
   /// @param {string} state_commitment - String representing the state commitment.
-  /// @see {@link network#get_state_commitment} for instructions on fetching a ledger state commitment.
+  /// @see {@link Network#getStateCommitment|Network.getStateCommitment} for instructions on fetching a ledger state commitment.
   /// @throws Will throw an error if the state commitment fails to deserialize.
   pub fn is_valid(&self, state_commitment: String) -> Result<bool, JsValue> {
     let state_commitment = serde_json::from_str::<HashOf<_>>(&state_commitment).map_err(|_e| {
@@ -143,6 +115,11 @@ impl AuthenticatedAssetRecord {
     Ok(self.authenticated_record.is_valid(state_commitment))
   }
 
+  /// Builds an AuthenticatedAssetRecord from a JSON-encoded asset record returned from the ledger
+  /// server.
+  /// @param {JsValue} val - JSON-encoded asset record fetched from ledger server.
+  /// @see {@link Network#getUtxo|Network.getUtxo} for information about how to
+  /// fetch an asset record from the ledger server.
   pub fn from_json_record(record: &JsValue) -> Result<AuthenticatedAssetRecord, JsValue> {
     Ok(AuthenticatedAssetRecord { authenticated_record: record.into_serde()
                                                               .map_err(error_to_jsvalue)? })
@@ -165,12 +142,10 @@ impl ClientAssetRecord {
 
 #[wasm_bindgen]
 impl ClientAssetRecord {
-  /// Builds a client record from a JSON-serialized JavaScript value.
-  /// @param {JsValue} val - JSON-encoded authenticated asset record fetched from ledger server with the `utxo_sid/{sid}` route,
-  /// where `sid` can be fetched from the query server with the `get_owned_utxos/{address}` route.
-  /// * E.g.: `{"amount":{"NonConfidential":1000},
-  /// "asset_type":{"NonConfidential":[2,14,75,187,192,9,69,242,30,9,18,203,193,227,148,56]},
-  /// "public_key":"vmGHutHEUGVL24SZMfkadu-9u7RcIARSlQB-rVHOnEM="}`.
+  /// Builds a client record from a JSON-encodedJavaScript value.
+  /// @param {JsValue} val - JSON-encoded authenticated asset record fetched from ledger server.
+  /// @see {@link Network#getUtxo|Network.getUtxo} for information about how to
+  /// fetch an asset record from the ledger server.
   pub fn from_json(val: &JsValue) -> Self {
     ClientAssetRecord { txo: val.into_serde().unwrap() }
   }
@@ -178,7 +153,7 @@ impl ClientAssetRecord {
 
 #[wasm_bindgen]
 #[derive(Serialize, Deserialize)]
-/// This is the key pair used by asset tracers to decrypt asset amounts, types, and identity
+/// Key pair used by asset tracers to decrypt asset amounts, types, and identity
 /// commitments associated with traceable asset transfers.
 /// @see {@link TracingPolicy} for information about tracing policies.
 /// @see {@link AssetRules#add_tracing_policy} for information about how to add a tracing policy to
@@ -190,7 +165,6 @@ pub struct AssetTracerKeyPair {
 #[wasm_bindgen]
 impl AssetTracerKeyPair {
   /// Creates a new tracer key pair.
-  /// @constructor
   pub fn new() -> Self {
     let mut small_rng = ChaChaRng::from_entropy();
     AssetTracerKeyPair { keypair: gen_asset_tracer_keypair(&mut small_rng) }
@@ -297,9 +271,15 @@ pub struct CredentialCommitmentAndPoK {
 
 #[wasm_bindgen]
 impl CredentialCommitmentAndPoK {
+  /// Returns the underlying credential commitment.
+  /// @see {@link wasm_credential_verify_commitment} for information about how to verify a
+  /// credential commitment.
   pub fn get_commitment(&self) -> CredentialCommitment {
     self.commitment.clone()
   }
+  /// Returns the underlying proof of knowledge that the credential is a valid re-randomization.
+  /// @see {@link wasm_credential_verify_commitment} for information about how to verify a
+  /// credential commitment.
   pub fn get_pok(&self) -> CredentialPoK {
     self.pok.clone()
   }
@@ -308,6 +288,8 @@ impl CredentialCommitmentAndPoK {
 #[wasm_bindgen]
 #[derive(Serialize, Deserialize, Clone)]
 /// Commitment to a credential record.
+/// @see {@link wasm_credential_verify_commitment} for information about how to verify a
+/// credential commitment.
 pub struct CredentialCommitment {
   pub(crate) commitment: CredCommitment,
 }
@@ -322,6 +304,8 @@ impl CredentialCommitment {
 #[derive(Serialize, Deserialize, Clone)]
 /// Proof that a credential is a valid re-randomization of a credential signed by a certain asset
 /// issuer.
+/// @see {@link wasm_credential_verify_commitment} for information about how to verify a
+/// credential commitment.
 pub struct CredentialPoK {
   pub(crate) pok: CredPoK,
 }
@@ -334,7 +318,7 @@ impl CredentialPoK {
 
 #[wasm_bindgen]
 /// Authenticated address identity registry value. Contains a proof that the AIR result is stored
-/// in the ledger.
+/// on the ledger.
 pub struct AuthenticatedAIRResult {
   pub(crate) result: PlatformAuthenticatedAIRResult,
 }
@@ -354,21 +338,16 @@ pub struct AssetType {
 
 #[wasm_bindgen]
 impl AssetType {
-  /// Builds an asset type from a JSON-serialized JavaScript value.
-  /// @param {JsValue} val - JSON asset type fetched from ledger server with the `asset_token/{code}` route.
-  /// * E.g.: `{"properties":{"code":"Zz2BfXev5V1yLxeyBWii3g==",
-  /// "issuer":{"key":"Re_gz_oihZoXkfs2ebyQqSlURLGEE6DLWNqKbV5qk7k="},
-  /// "memo":"test memo",
-  /// "asset_rules":{"transferable":false,"updatable":false,"transfer_multisig_rules":null,"max_units":null}},
-  /// "digest":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
-  /// "units":0,
-  /// "confidential_units":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]}`.
+  /// Builds an asset type from a JSON-encoded JavaScript value.
+  /// @param {JsValue} val - JSON-encoded asset type fetched from ledger server.
+  /// @see {@link Network#getAssetProperties|Network.getAsset} for information about how to
+  /// fetch an asset type from the ledger server.
   pub fn from_json(json: &JsValue) -> Result<AssetType, JsValue> {
     let asset_type: PlatformAssetType = json.into_serde().map_err(error_to_jsvalue)?;
     Ok(AssetType { asset_type })
   }
 
-  /// Fetch the tracing policies from the asset definition.
+  /// Fetch the tracing policies associated with this asset type.
   pub fn get_tracing_policies(&self) -> TracingPolicies {
     TracingPolicies { policies: self.asset_type
                                     .properties
@@ -381,6 +360,8 @@ impl AssetType {
 #[wasm_bindgen]
 impl AuthenticatedAIRResult {
   /// Construct an AIRResult from the JSON-encoded value returned by the ledger.
+  /// @see {@link Network#getAIRResult|Network.getAIRResult} for information about how to fetch a
+  /// value from the address identity registry.
   pub fn from_json(json: &JsValue) -> Result<AuthenticatedAIRResult, JsValue> {
     let result: PlatformAuthenticatedAIRResult = json.into_serde().map_err(error_to_jsvalue)?;
     Ok(AuthenticatedAIRResult { result })
@@ -405,10 +386,10 @@ impl AuthenticatedAIRResult {
 
 #[wasm_bindgen]
 #[derive(Serialize, Deserialize)]
-/// Credential information containing:
-/// * Issuer public key.
-/// * Credential signature.
-/// * Credential attributes and associated values.
+/// A user credential that can be used to selectively reveal credential attributes.
+/// @see {@link wasm_credential_commit} for information about how to commit to a credential.
+/// @see {@link wasm_credential_reveal} for information about how to selectively reveal credential
+/// attributes.
 pub struct Credential {
   pub(crate) credential: PlatformCredential,
 }
@@ -558,18 +539,19 @@ impl TracingPolicy {
 #[wasm_bindgen]
 #[derive(Default)]
 /// Simple asset rules:
-/// 1. **Traceable**: Records and identities of traceable assets can be decrypted by a provided tracking key. Defaults to no tracing policies.
+/// 1. **Traceable**: Records and identities of traceable assets can be decrypted by a provided tracking key. By defaults, assets do not have
+/// any tracing policies.
 /// 2. **Transferable**: Non-transferable assets can only be transferred once from the issuer to another user. By default, assets are transferable.
 /// 3. **Updatable**: Whether the asset memo can be updated. By default, assets are not updatable.
 /// 4. **Transfer signature rules**: Signature weights and threshold for a valid transfer. By
 ///    default, there are no special signature requirements.
 /// 5. **Max units**: Optional limit on the total number of units of this asset that can be issued.
-///    By default, there is no issuance cap.
+///    By default, assets do not have issuance caps.
 /// @see {@link TracingPolicies} for more information about tracing policies.
-/// @see {@link TransactionBuilder#add_operation_update_memo} for more information about how to add
+/// @see {@link TransactionBuilder#add_operation_update_memo|add_operation_update_memo} for more information about how to add
 /// a memo update operation to a transaction.
 /// @see {@link SignatureRules} for more information about co-signatures.
-/// @see {@link TransactionBuilder#add_operation_create_asset} for information about how to add asset rules to an asset definition.
+/// @see {@link TransactionBuilder#add_operation_create_asset|add_operation_create_asset} for information about how to add asset rules to an asset definition.
 pub struct AssetRules {
   pub(crate) rules: PlatformAssetRules,
 }
@@ -577,7 +559,6 @@ pub struct AssetRules {
 #[wasm_bindgen]
 impl AssetRules {
   /// Create a default set of asset rules. See class description for defaults.
-  /// @constructor
   pub fn new() -> AssetRules {
     AssetRules::default()
   }

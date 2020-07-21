@@ -1,5 +1,4 @@
 // Interface for issuing transactions that can be compiled to Wasm.
-/// @see {@link TracingPolicies} for more information about tracing policies.
 // Allows web clients to issue transactions from a browser contexts.
 // For now, forwards transactions to a ledger hosted locally.
 // To compile wasm package, run wasm-pack build in the wasm directory;
@@ -45,7 +44,7 @@ mod wasm_data_model;
 
 #[wasm_bindgen]
 /// Generates random base64 encoded asset type string. Used in asset definitions.
-/// @see {@link WasmTransactionBuilder#add_operation_create_asset} for instructions on how to define an asset with a new
+/// @see {@link TransactionBuilder#add_operation_create_asset} for instructions on how to define an asset with a new
 /// asset type
 pub fn random_asset_type() -> String {
   AssetTypeCode::gen_random().to_base64()
@@ -94,6 +93,7 @@ pub fn calculate_fee(ir_numerator: u64, ir_denominator: u64, outstanding_balance
 }
 
 #[wasm_bindgen]
+// Testnet will not support direct API access to hardcoded debt policy.
 /// Returns an address to use for cancelling debt tokens in a debt swap.
 /// @ignore
 pub fn get_null_pk() -> XfrPublicKey {
@@ -101,6 +101,8 @@ pub fn get_null_pk() -> XfrPublicKey {
 }
 
 #[wasm_bindgen]
+// Testnet will not support Discret policies.
+/// @ignore
 pub fn create_default_policy_info() -> String {
   serde_json::to_string(&PolicyChoice::Fungible()).unwrap() // should never fail
 }
@@ -115,6 +117,8 @@ pub fn create_default_policy_info() -> String {
 /// * `ir_denominator`- interest rate denominator
 /// * `fiat_code` - base64 string representing asset type used to pay off the loan
 /// * `amount` - loan amount
+/// @ignore
+// Testnet will not support Discret policies.
 pub fn create_debt_policy_info(ir_numerator: u64,
                                ir_denominator: u64,
                                fiat_code: String,
@@ -137,6 +141,7 @@ pub fn create_debt_policy_info(ir_numerator: u64,
 /// @param {BigInt} loan_amount - Loan amount.
 /// @throws Will throw an error if `fiat_code` fails to deserialize.
 /// @ignore
+// Testnet will not support Discret policies.
 pub fn create_debt_memo(ir_numerator: u64,
                         ir_denominator: u64,
                         fiat_code: String,
@@ -183,10 +188,10 @@ impl TransactionBuilder {
   ///
   /// @param {XfrKeyPair} key_pair -  Issuer XfrKeyPair.
   /// @param {string} memo - Text field for asset definition.
-  /// @param {string} token_code - Optional Base64 string representing the token code of the asset to be issued
+  /// @param {string} token_code - Optional Base64 string representing the token code of the asset to be issued.
+  /// If empty, a token code will be chosen at random.
   /// @param {AssetRules} asset_rules - Asset rules object specifying which simple policies apply
   /// to the asset.
-  /// If empty, a token code will be chosen at random.
   pub fn add_operation_create_asset(self,
                                     key_pair: &XfrKeyPair,
                                     memo: String,
@@ -200,6 +205,8 @@ impl TransactionBuilder {
                                                 asset_rules)
   }
 
+  /// @ignore
+  // Testnet will not support Discret policies.
   pub fn add_operation_create_asset_with_policy(mut self,
                                                 key_pair: &XfrKeyPair,
                                                 memo: String,
@@ -226,6 +233,8 @@ impl TransactionBuilder {
     Ok(self)
   }
 
+  /// @ignore
+  // Testnet will not support Discret policies.
   pub fn add_policy_option(mut self,
                            token_code: String,
                            which_check: String)
@@ -276,7 +285,15 @@ impl TransactionBuilder {
     Ok(self)
   }
 
-  /// Adds an add air assign operation to a WasmTransactionBuilder instance.
+  /// Adds an operation to the transaction builder to append a credential commitment to the address
+  /// identity registry.
+  /// @param {XfrKeyPair} Ledger key that is tied to the credential.
+  /// @param {CredUserPublicKey} Public key of the credential user.
+  /// @param {CredIssuerPublicKey} Public key of the credential issuer.
+  /// @param {CredentialCommitment} Credential commitment to add to the address identity registry.
+  /// @param {CredPoK} Proof that a credential commitment is a valid re-randomization.
+  /// @see {@link wasm_credential_commit} for information about how to generate a credential
+  /// commitment.
   pub fn add_operation_air_assign(mut self,
                                   key_pair: &XfrKeyPair,
                                   user_public_key: &CredUserPublicKey,
@@ -294,7 +311,7 @@ impl TransactionBuilder {
     Ok(self)
   }
 
-  /// Adds an add kv update operation to a WasmTransactionBuilder instance without kv hash.
+  /// Adds an add kv update operation to a TransactionBuilder instance without kv hash.
   pub fn add_operation_kv_update_no_hash(mut self,
                                          auth_key_pair: &XfrKeyPair,
                                          key: &Key,
@@ -311,7 +328,7 @@ impl TransactionBuilder {
                                            auth_key_pair: &XfrKeyPair,
                                            key: &Key,
                                            seq_num: u64,
-                                           kv_hash: KVHash)
+                                           kv_hash: &KVHash)
                                            -> Result<TransactionBuilder, JsValue> {
     self.get_builder_mut()
         .add_operation_kv_update(auth_key_pair,
@@ -322,7 +339,7 @@ impl TransactionBuilder {
     Ok(self)
   }
 
-  /// Adds an `UpdateMemo` operation to a WasmTransactionBuilder with the given memo
+  /// Adds an `UpdateMemo` operation to a WasmTransactionBuilder with the given memo.
   pub fn add_operation_update_memo(mut self,
                                    auth_key_pair: &XfrKeyPair,
                                    code: String,
@@ -453,6 +470,8 @@ impl TransferOperationBuilder {
     Self::default()
   }
 
+  // Debug function that does not need to go into the docs.
+  /// @ignore
   pub fn debug(&self) -> String {
     serde_json::to_string(&self.op_builder).unwrap()
   }
@@ -684,167 +703,6 @@ pub fn keypair_to_str(key_pair: &XfrKeyPair) -> String {
 /// The encode a key pair, use `keypair_to_str` function.
 pub fn keypair_from_str(str: String) -> XfrKeyPair {
   XfrKeyPair::zei_from_bytes(&hex::decode(str).unwrap()).unwrap()
-}
-
-#[wasm_bindgen]
-/// Returns the SHA256 signature of the given string as a hex-encoded
-/// string.
-/// @ignore
-pub fn sha256str(str: &str) -> String {
-  let digest = sha256::hash(&str.as_bytes());
-  hex::encode(digest)
-}
-
-#[wasm_bindgen]
-/// Signs the given message using the given transfer key pair.
-/// @ignore
-pub fn sign(key_pair: &XfrKeyPair, message: String) -> Result<JsValue, JsValue> {
-  let signature = key_pair.get_sk_ref()
-                          .sign(&message.as_bytes(), key_pair.get_pk_ref());
-  let mut smaller_signature: [u8; 32] = Default::default();
-  smaller_signature.copy_from_slice(&signature.0.to_bytes()[0..32]);
-  Ok(JsValue::from_serde(&smaller_signature).unwrap())
-}
-
-#[wasm_bindgen]
-/// Submit a transaction to the ledger and return a promise for the
-/// ledger's eventual response. The transaction will be enqueued for
-/// validation. If it is valid, it will eventually be committed to the
-/// ledger.
-///
-/// To determine whether or not the transaction has been committed to the ledger,
-/// query the ledger by transaction handle.
-///
-/// Contained in the response of `submit_transaction` is a `TransactionHandle` that can be used to
-/// query the status of the transaction.
-/// @param {string} path - Submission server path (e.g. `https://localhost:8669`)
-/// @param {string} transaction_str - JSON-encoded transaction string.
-///
-/// @see {@link get_txn_status} for information about transaction statuses.
-// TODO Design and implement a notification mechanism.
-pub fn submit_transaction(path: String, transaction_str: String) -> Result<Promise, JsValue> {
-  let mut opts = RequestInit::new();
-  opts.method("POST");
-  opts.mode(RequestMode::Cors);
-  opts.body(Some(&JsValue::from_str(&transaction_str)));
-
-  let req_string = format!("{}/submit_transaction", path);
-
-  create_query_promise(&opts, &req_string, true)
-}
-
-#[wasm_bindgen]
-/// Given a transaction ID, returns a promise for the transaction status.
-/// @param {string} path - Address of submission server. E.g. `https://localhost:8669`.
-pub fn get_txn_status(path: String, handle: String) -> Result<Promise, JsValue> {
-  let mut opts = RequestInit::new();
-  opts.method("GET");
-  opts.mode(RequestMode::Cors);
-
-  let req_string = format!("{}/txn_status/{}", path, handle);
-
-  create_query_promise(&opts, &req_string, false)
-}
-
-#[wasm_bindgen]
-/// If successful, returns a promise that will eventually provide a
-/// JsValue describing an unspent transaction output (UTXO).
-/// Otherwise, returns 'not found'. The request fails if the txo uid
-/// has been spent or the transaction index does not correspond to a
-/// transaction.
-/// @param {string} path - Address of ledger server. E.g. `https://localhost:8668`.
-/// @param {BigInt} sid - UTXO SID.
-// TODO Provide an example (test case) that demonstrates how to
-// handle the error in the case of an invalid transaction index.
-// TODO Rename this function get_utxo
-pub fn get_txo(path: String, sid: u64) -> Result<Promise, JsValue> {
-  let mut opts = RequestInit::new();
-  opts.method("GET");
-  opts.mode(RequestMode::Cors);
-
-  let req_string = format!("{}/utxo_sid/{}", path, format!("{}", sid));
-
-  create_query_promise(&opts, &req_string, false)
-}
-
-#[wasm_bindgen]
-/// If successful, returns a promise that will eventually provide a
-/// JsValue describing a transaction.
-/// Otherwise, returns `not found`. The request fails if the transaction index does not correspond
-/// to a transaction.
-///
-/// @example <caption> Error handling </caption>
-/// try {
-///     await wasm.get_transaction("http::localhost:8668", 1);
-/// } catch (err) {
-///     console.log(err)
-/// }
-/// @param {String} path - Address of ledger server. E.g. `https://localhost:8668`.
-/// @param {BigInt} sid - Transaction SID.
-// TODO Provide an example (test case) that demonstrates how to
-// handle the error in the case of an invalid transaction index.
-pub fn get_transaction(path: String, sid: u64) -> Result<Promise, JsValue> {
-  let mut opts = RequestInit::new();
-  opts.method("GET");
-  opts.mode(RequestMode::Cors);
-
-  let req_string = format!("{}/txn_sid/{}", path, format!("{}", sid));
-
-  create_query_promise(&opts, &req_string, false)
-}
-
-#[wasm_bindgen]
-/// Returns a JSON-encoded version of the state commitment of a running ledger. This is used to
-/// check the authenticity of transactions and blocks.
-/// @param {string} path - Address of ledger server. E.g. `https://localhost:8668`.
-pub fn get_state_commitment(path: String) -> Result<Promise, JsValue> {
-  let mut opts = RequestInit::new();
-  opts.method("GET");
-  opts.mode(RequestMode::Cors);
-
-  let req_string = format!("{}/state_commitment", path);
-
-  create_query_promise(&opts, &req_string, false)
-}
-
-#[wasm_bindgen]
-/// If successful, returns a promise that will eventually provide a
-/// JsValue describing an asset token. Otherwise, returns 'not found'.
-/// The request fails if the given token code does not correspond to
-/// an asset.
-/// @example <caption> Error handling </caption>
-/// try {
-///     await wasm.get_asset_token("http::localhost:8668", code);
-/// } catch (err) {
-///     console.log(err)
-/// }
-/// @param {string} path - Address of ledger server. E.g. `https://localhost:8668`.
-/// @param {string} code - Base64-encoded asset token string.
-///
-pub fn get_asset_token(path: String, code: String) -> Result<Promise, JsValue> {
-  let mut opts = RequestInit::new();
-  opts.method("GET");
-  opts.mode(RequestMode::Cors);
-
-  let req_string = format!("{}/asset_token/{}", path, code);
-
-  create_query_promise(&opts, &req_string, false)
-}
-
-// Given a request string and a request init object, constructs
-// the JS promise to be returned to the client.
-/// @ignore
-fn create_query_promise(opts: &RequestInit,
-                        req_string: &str,
-                        is_json: bool)
-                        -> Result<Promise, JsValue> {
-  let request = Request::new_with_str_and_init(&req_string, &opts)?;
-  if is_json {
-    request.headers().set("content-type", "application/json")?;
-  }
-  let window = web_sys::window().unwrap();
-  let request_promise = window.fetch_with_request(&request);
-  Ok(future_to_promise(JsFuture::from(request_promise)))
 }
 
 /// Generates a new credential issuer key.
