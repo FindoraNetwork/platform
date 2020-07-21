@@ -10,8 +10,9 @@ use credentials::{
   CredIssuerSecretKey, CredUserPublicKey, CredUserSecretKey, Credential as PlatformCredential,
 };
 use cryptohash::sha256;
-use js_sys::Promise;
-use ledger::data_model::{b64enc, AssetTypeCode, AuthenticatedTransaction, Operation};
+use ledger::data_model::{
+  b64enc, AssetTypeCode, AuthenticatedTransaction, Operation, TransferType,
+};
 use ledger::policies::{DebtMemo, Fraction};
 use rand_chacha::ChaChaRng;
 use rand_core::SeedableRng;
@@ -23,9 +24,6 @@ use txn_builder::{
 use util::error_to_jsvalue;
 use utils::HashOf;
 use wasm_bindgen::prelude::*;
-use wasm_bindgen_futures::future_to_promise;
-use wasm_bindgen_futures::JsFuture;
-use web_sys::{Request, RequestInit, RequestMode};
 
 use zei::serialization::ZeiFromToBytes;
 use zei::xfr::asset_record::{open_blind_asset_record as open_bar, AssetRecordType};
@@ -343,11 +341,9 @@ impl TransactionBuilder {
                                            seq_num: u64,
                                            kv_hash: &KVHash)
                                            -> Result<TransactionBuilder, JsValue> {
+    let hash = kv_hash.get_hash().clone();
     self.get_builder_mut()
-        .add_operation_kv_update(auth_key_pair,
-                                 key.get_ref(),
-                                 seq_num,
-                                 Some(&kv_hash.get_hash()))
+        .add_operation_kv_update(auth_key_pair, key.get_ref(), seq_num, Some(&hash))
         .map_err(error_to_jsvalue)?;
     Ok(self)
   }
@@ -603,15 +599,11 @@ impl TransferOperationBuilder {
 
   /// Wraps around TransferOperationBuilder to finalize the transaction.
   ///
-  /// @param {TransferType} transfer_type - Transfer operation type.
-  /// @throws Will throw an error if `transfer_type` fails to deserialize.
   /// @throws Will throw an error if input and output amounts do not add up.
   /// @throws Will throw an error if not all record owners have signed the transaction.
-  pub fn create(mut self,
-                transfer_type: TransferType)
-                -> Result<TransferOperationBuilder, JsValue> {
+  pub fn create(mut self) -> Result<TransferOperationBuilder, JsValue> {
     self.get_builder_mut()
-        .create(*transfer_type.get_type())
+        .create(TransferType::Standard)
         .map_err(error_to_jsvalue)?;
     Ok(self)
   }

@@ -9,7 +9,7 @@ use ledger::data_model::{
   AssetRules as PlatformAssetRules, AssetType as PlatformAssetType,
   AuthenticatedAIRResult as PlatformAuthenticatedAIRResult, AuthenticatedUtxo,
   KVBlind as PlatformKVBlind, KVHash as PlatformKVHash, SignatureRules as PlatformSignatureRules,
-  TransferType as PlatformTransferType, TxOutput, TxoRef as PlatformTxoRef, TxoSID,
+  TxOutput, TxoRef as PlatformTxoRef, TxoSID,
 };
 use rand_chacha::ChaChaRng;
 use rand_core::{RngCore, SeedableRng};
@@ -673,7 +673,7 @@ impl KVHash {
 }
 
 impl KVHash {
-  pub fn get_hash(self) -> PlatformKVHash {
-    self.hash
+  pub fn get_hash(&self) -> &PlatformKVHash {
+    &self.hash
   }
 }
