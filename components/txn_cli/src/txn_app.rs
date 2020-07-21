@@ -13,7 +13,7 @@ use ledger::data_model::{
 };
 use ledger::{error_location, ser_fail};
 use ledger_api_service::RestfulLedgerAccess;
-use log::{debug, error, info};
+use log::{debug, error};
 use query_api::RestfulQueryServerAccess;
 use sparse_merkle_tree::{digest, Key};
 use std::env;
@@ -76,15 +76,15 @@ pub(crate) fn process_asset_issuer_cmd(asset_issuer_matches: &clap::ArgMatches,
       store_sids_to_file(file, sids)
     }
     ("store_memos", Some(store_bar_and_memos_matches)) => {
-      info!("store_memos: entering");
+      debug!("store_memos: entering");
       let data = load_data(data_dir)?;
       let (issuer_pub_key, policy) = if let Some(id_arg) = asset_issuer_matches.value_of("id") {
         let issuer_id = parse_to_u64(id_arg)?;
-        info!("store_memos: got issuer_id={}", issuer_id);
+        debug!("store_memos: got issuer_id={}", issuer_id);
         let issuer_pub_key = data.get_asset_issuer_key_pair(issuer_id)?.get_pk();
-        info!("store_memos: got issuer_pub_key={:?}", &issuer_pub_key);
+        debug!("store_memos: got issuer_pub_key={:?}", &issuer_pub_key);
         let tracer_enc_keys = data.get_asset_tracer_key_pair(issuer_id)?.enc_key;
-        info!("store_memos: got tracer_enc_keys={:?}", &tracer_enc_keys);
+        debug!("store_memos: got tracer_enc_keys={:?}", &tracer_enc_keys);
         let policy = AssetTracingPolicy { enc_keys: tracer_enc_keys,
                                           asset_tracking: true,
                                           identity_tracking: None };
@@ -101,7 +101,7 @@ pub(crate) fn process_asset_issuer_cmd(asset_issuer_matches: &clap::ArgMatches,
       };
       let confidential_amount = store_bar_and_memos_matches.is_present("confidential_amount");
       let record_type = AssetRecordType::from_booleans(confidential_amount, false);
-      info!("store_memos: about to get token code");
+      debug!("store_memos: about to get token code");
       let token_code = if let Some(token_code) = store_bar_and_memos_matches.value_of("token_code")
       {
         AssetTypeCode::new_from_base64(token_code)?
@@ -115,7 +115,7 @@ pub(crate) fn process_asset_issuer_cmd(asset_issuer_matches: &clap::ArgMatches,
         error!("Path is required to store the tracer and owner memos. Use --path.");
         return Err(PlatformError::InputsError(error_location!()));
       };
-      info!("store_memos: about to call get_and_store_memos_to_file");
+      debug!("store_memos: about to call get_and_store_memos_to_file");
       get_and_store_memos_to_file(file,
                                   issuer_pub_key,
                                   amount,
@@ -288,7 +288,7 @@ pub(crate) fn process_asset_issuer_cmd(asset_issuer_matches: &clap::ArgMatches,
     }
     ("issue_asset", Some(issue_asset_matches)) => {
       let data = load_data(data_dir)?;
-      info!("issue_asset: entering");
+      debug!("issue_asset: entering");
       let (key_pair, _) = if let Some(id_arg) = asset_issuer_matches.value_of("id") {
         let issuer_id = parse_to_u64(id_arg)?;
         (data.get_asset_issuer_key_pair(issuer_id)?,
@@ -297,14 +297,14 @@ pub(crate) fn process_asset_issuer_cmd(asset_issuer_matches: &clap::ArgMatches,
         error!("Asset issuer id is required to issue asset. Use asset_issuer --id.");
         return Err(PlatformError::InputsError(error_location!()));
       };
-      info!("issue_asset: key_pair={:?}", &key_pair);
+      debug!("issue_asset: key_pair={:?}", &key_pair);
       let token_code = if let Some(token_code_arg) = issue_asset_matches.value_of("token_code") {
         AssetTypeCode::new_from_base64(token_code_arg)?
       } else {
         error!("Token code is required to issue asset. Use --token_code.");
         return Err(PlatformError::InputsError(error_location!()));
       };
-      info!("issue_asset: token_code={:?}", &token_code);
+      debug!("issue_asset: token_code={:?}", &token_code);
       let amount = if let Some(amount_arg) = issue_asset_matches.value_of("amount") {
         parse_to_u64(amount_arg)?
       } else {
@@ -612,7 +612,7 @@ pub(crate) fn process_asset_issuer_cmd(asset_issuer_matches: &clap::ArgMatches,
       match tracer_memo.verify_identity_attributes(&attrs_dec_key, &expected_value) {
         Ok(res) => {
           if res[0] {
-            info!("Credential verification succeeded.");
+            debug!("Credential verification succeeded.");
           } else {
             error!("Credential value isn't as expected.");
             return Err(PlatformError::InputsError(error_location!()));
@@ -707,7 +707,7 @@ pub(crate) fn process_lender_cmd<T: RestfulLedgerAccess + RestfulLedgerUpdate>(
           error!("Lender {} doesn't own loan {}.", lender_id, loan_id);
           return Err(PlatformError::InputsError(error_location!()));
         }
-        info!("Displaying loan {}: {:?}.", loan_id, loan);
+        debug!("Displaying loan {}: {:?}.", loan_id, loan);
         return Ok(());
       }
       let mut loans = Vec::new();
@@ -752,7 +752,7 @@ pub(crate) fn process_lender_cmd<T: RestfulLedgerAccess + RestfulLedgerUpdate>(
           loans.push(data.loans[id as usize].clone());
         }
       }
-      info!("Displaying {} loan(s): {:?}", loans.len(), loans);
+      debug!("Displaying {} loan(s): {:?}", loans.len(), loans);
       Ok(())
     }
     ("fulfill_loan", Some(fulfill_loan_matches)) => {
@@ -877,7 +877,7 @@ pub(crate) fn process_borrower_cmd<T: RestfulLedgerAccess + RestfulLedgerUpdate>
           error!("Borrower {} doesn't own loan {}.", borrower_id, loan_id);
           return Err(PlatformError::InputsError(error_location!()));
         }
-        info!("Displaying loan {}: {:?}.", loan_id, loan);
+        debug!("Displaying loan {}: {:?}.", loan_id, loan);
         return Ok(());
       }
       let mut loans = Vec::new();
@@ -922,7 +922,7 @@ pub(crate) fn process_borrower_cmd<T: RestfulLedgerAccess + RestfulLedgerUpdate>
           loans.push(data.loans[id as usize].clone());
         }
       }
-      info!("Displaying {} loan(s): {:?}", loans.len(), loans);
+      debug!("Displaying {} loan(s): {:?}", loans.len(), loans);
       Ok(())
     }
     ("request_loan", Some(request_loan_matches)) => {
@@ -995,7 +995,7 @@ pub(crate) fn process_borrower_cmd<T: RestfulLedgerAccess + RestfulLedgerUpdate>
       let credential_id = if let Some(id) = data.borrowers[borrower_id as usize].credentials {
         id
       } else {
-        info!("No credential is found. Use create_or_overwrite_credential to create a credential record.");
+        debug!("No credential is found. Use create_or_overwrite_credential to create a credential record.");
         return Ok(());
       };
       if let Some(attribute_arg) = view_credential_matches.value_of("attribute") {
@@ -1005,16 +1005,16 @@ pub(crate) fn process_borrower_cmd<T: RestfulLedgerAccess + RestfulLedgerUpdate>
           _ => CredentialIndex::Citizenship,
         };
         let value = data.credentials[credential_id as usize].values[attribute as usize].clone();
-        info!("Displaying {:?}: {:?}", attribute.get_name(), value);
+        debug!("Displaying {:?}: {:?}", attribute.get_name(), value);
       } else {
-        info!("Displaying credentials:");
+        debug!("Displaying credentials:");
         let values = data.credentials[credential_id as usize].values.clone();
         for attribute in [CredentialIndex::MinCreditScore,
                           CredentialIndex::MinIncome,
                           CredentialIndex::Citizenship].iter()
         {
           if let Some(value) = values[*attribute as usize].clone() {
-            info!("{}: {}.", attribute.get_name(), value);
+            debug!("{}: {}.", attribute.get_name(), value);
           }
         }
       };
@@ -1087,10 +1087,10 @@ pub(crate) fn process_borrower_cmd<T: RestfulLedgerAccess + RestfulLedgerUpdate>
       // Get protocol and host.
       let asset_record =
         query_open_asset_record(rest_client, sid, &key_pair, &tracer_and_owner_memos[0].1)?;
-      info!("{} owns {} of asset {:?}.",
-            borrower_name,
-            asset_record.get_amount(),
-            asset_record.get_asset_type());
+      println!("{} owns {} of asset {:?}.",
+               borrower_name,
+               asset_record.get_amount(),
+               asset_record.get_asset_type());
       Ok(())
     }
     _ => {
@@ -1132,7 +1132,7 @@ pub(crate) fn process_submit_cmd<T: RestfulLedgerUpdate>(submit_matches: &clap::
   if let Ok(txn_builder) = load_txn_from_file(txn_file) {
     if submit_matches.is_present("get_sids") || submit_matches.is_present("sids_file") {
       let sids = submit_and_get_sids(rest_client, txn_builder)?;
-      info!("Utxo: {:?}", sids);
+      println!("Utxo: {:?}", sids);
       if let Some(path) = submit_matches.value_of("sids_file") {
         let mut sids_str = "".to_owned();
         for sid in sids {
@@ -1270,7 +1270,7 @@ pub fn process_inputs<T: RestfulQueryServerAccess + RestfulLedgerAccess + Restfu
                           })?;
         match serde_json::to_string(txn_builder.transaction()) {
           Ok(as_json) => {
-            info!("{}", as_json);
+            debug!("{}", as_json);
             Ok(())
           }
           Err(_) => {
@@ -1287,7 +1287,7 @@ pub fn process_inputs<T: RestfulQueryServerAccess + RestfulLedgerAccess + Restfu
       if let Some(txn_file) = inputs.value_of("txn") {
         match std::fs::remove_file(&txn_file) {
           Ok(_) => {
-            info!("Deleted transaction file {}", txn_file);
+            debug!("Deleted transaction file {}", txn_file);
             Ok(())
           }
           Err(e) => Err(PlatformError::IoError(format!("Error deleting file: {:?} ", e))),
@@ -1327,7 +1327,7 @@ pub(crate) fn process_custom_data_cmds<T: RestfulQueryServerAccess>(
           .map_err(|e| PlatformError::InputsError(format!("{}:{}",e,error_location!())))?)
           .ok_or_else(|| PlatformError::InputsError(error_location!()))?;
       let res = rest_client.fetch_custom_data(&key)?;
-      info!("Data is: {:?}", &res);
+      debug!("Data is: {:?}", &res);
     }
     ("store", Some(store_matches)) => {
       let key = Key::from_slice(&b64dec(store_matches.value_of("key")

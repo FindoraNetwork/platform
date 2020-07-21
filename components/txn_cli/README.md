@@ -1,6 +1,10 @@
 # Transaction Builder Command Line Interface
 1. [Overview](#overview)
 2. [Example of confidential transfer](#example-of-confidential-transfer)
+   1. [Sign up new asset issuer](#sign-up-an-asset-issuer-account-for-ian)
+   2. [Sign up new borrower](#sign-up-a-borrower-account-for-bill)
+   3. [Define a new asset](#ian-defines-an-asset)
+   4. [Issue and transfer the asset confidentially](#ian-issues-and-transfers-the-asset-confidentially-to-bill)
 3. [Commands](#commands)
    1. [Asset Issuer](#asset-issuer)
        * [Asset Issuer sign up](#asset-issuer-sign-up)
@@ -88,7 +92,7 @@ The following commands are meant to be executed in order by you the user.
 
 We assume that the file `~/.findora/data.json` is the same as `init_data.json` in this directory.
 
-## Sign up an asset issuer account for Ian
+### Sign up an asset issuer account for Ian
 ```
 txn_cli asset_issuer sign_up --name Ian
 ```
@@ -97,7 +101,7 @@ Note from the output that Ian's id is `1`:
 Ian's id is 1.
 ```
 
-## Sign up a borrower account for Bill
+### Sign up a borrower account for Bill
 ```
 txn_cli borrower sign_up --name Bill
 ```
@@ -106,57 +110,65 @@ Note from the output that Bill's id is `1`:
 Bill's id is 1.
 ```
 
-## Ian: defines an asset
-### Create an empty transaction
+### Ian defines an asset
+#### Create an empty transaction
 ```
 txn_cli create_txn_builder --name txn_define
 ```
 
-### Define an asset
+#### Define an asset
 ```
 txn_cli --txn txn_define asset_issuer --id 1 define_asset --memo 'Define an asset.'
 ```
-Note from the output that the asset token code is `7hAA3TTJQHhDGs-_mpP12Q==`, or `[238, 16, 0, 221, 52, 201, 64, 120, 67, 26, 207, 191, 154, 147, 245, 217]`:
+The output looks like the following, with an asset token code embedded:
 ```
 Creating asset with token code "7hAA3TTJQHhDGs-_mpP12Q==": [238, 16, 0, 221, 52, 201, 64, 120, 67, 26, 207, 191, 154, 147, 245, 217]
 ```
 
-### Submit the transaction
+Store the asset token code. We'll refer to it as `<token_code>` in the following.
+
+#### Submit the transaction
 ```
 txn_cli --txn txn_define submit
 ```
 
-## Ian: issues and transfers the asset confidentially to Bill
-### Create an empty transaction
+### Ian issues and transfers the asset confidentially to Bill
+#### Create an empty transaction
 ```
 txn_cli create_txn_builder --name txn_issue_and_transfer
 ```
 
-### Issue and transfer the asset (FIXME: Is there supposed to be a memo_file? This command doesn't take one!)
+#### Issue and transfer the asset
 ```
-txn_cli --txn txn_issue_and_transfer asset_issuer --id 1 issue_and_transfer_asset --recipient 1 --amount 100 --token_code 7hAA3TTJQHhDGs-_mpP12Q== --confidential_amount
+txn_cli --txn txn_issue_and_transfer asset_issuer --id 1 issue_and_transfer_asset --recipient 1 --amount 100 --token_code <token_code> --confidential_amount
 ```
 
-### Submit the transaction and get the utxo
+#### Store asset tracer memo and owner memo
+Asset tracer memo and owner memo are necessary for asset tracing. To store them:
+```
+txn_cli asset_issuer --id 1 store_memos --file memo_file --amount 100 --token_code <token_code> --confidential_amount
+```
+
+#### Submit the transaction and get the utxo
 ```
 txn_cli --txn txn_issue_and_transfer submit --get_sids
 ```
-Note from the last line of the output that the utxo is `429`:
+Note from the last line of the output that the utxo is `1`:
 ```
-Utxo: [TxoSID(429)]
+Utxo: [TxoSID(1)]
 ```
 
-## Trace and verify the asset
-### Bill: verifies the received asset (FIXME: Expected a memo_file, error if none)
+### Trace and verify the asset
+#### Bill: verifies the received asset
 ```
-txn_cli borrower --id 1 get_asset_record --sid 429 --memo_file memo
+txn_cli borrower --id 1 get_asset_record --sid 1 --memo_file memo_file
 ```
 Note from the last line of the output that the asset token code is indeed `[238, 16, 0, 221, 52, 201, 64, 120, 67, 26, 207, 191, 154, 147, 245, 217]`, and the amount Bill owns is `100`.
 ```
 Bill owns 100 of asset [238, 16, 0, 221, 52, 201, 64, 120, 67, 26, 207, 191, 154, 147, 245, 217].
 ```
 
-### Ian: traces the asset transferred to Bill and verifies the amount
+#### Ian: traces the asset transferred to Bill and verifies the amount
 ```
 txn_cli asset_issuer --id 1 trace_and_verify_asset --memo_file memo --expected_amount 100
 ```
@@ -167,7 +179,7 @@ txn_cli asset_issuer --id 1 trace_and_verify_asset --memo_file memo --expected_a
 In the initial data, there's one asset issuer, Izzie, with *id* = 0. If you wish to sign up (create) a new asset issuer account, you'd 
 do:
 ```
-txn_cli asset_issuer sign_up --name 'AssetIssuer' (FIXME 01: Doesn't create file if ~/.findora/data.json does not exist)
+txn_cli asset_issuer sign_up --name 'AssetIssuer'
 ```
 
 #### Define an asset

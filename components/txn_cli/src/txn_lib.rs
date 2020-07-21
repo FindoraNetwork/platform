@@ -10,7 +10,6 @@ use ledger::data_model::errors::PlatformError;
 use ledger::data_model::{AssetRules, AssetTypeCode, TransferType, TxOutput, TxoRef, TxoSID};
 use ledger::{des_fail, error_location};
 use ledger_api_service::RestfulLedgerAccess;
-use log::error;
 use rand_core::{CryptoRng, RngCore};
 use std::process::exit;
 use submission_api::RestfulLedgerUpdate;
@@ -379,15 +378,15 @@ pub fn init_logging() {
 pub fn match_error_and_exit(error: PlatformError) {
   match error {
     PlatformError::SerializationError(e) => {
-      error!("SerializationError: {}", e);
+      eprintln!("SerializationError: {}", e);
       exit(exitcode::DATAERR);
     }
     PlatformError::DeserializationError(e) => {
-      error!("Deserializationerror: {}", e);
+      eprintln!("Deserializationerror: {}", e);
       exit(exitcode::DATAERR);
     }
     PlatformError::IoError(io_error) => {
-      error!("IoError: {}", io_error);
+      eprintln!("IoError: {}", io_error);
       if io_error.contains("File doesn't exist:") || io_error.contains("Failed to read") {
         exit(exitcode::NOINPUT)
       }
@@ -397,7 +396,7 @@ pub fn match_error_and_exit(error: PlatformError) {
       exit(exitcode::IOERR)
     }
     e => {
-      error!("Error: {}", e);
+      eprintln!("Error: {}", e);
       exit(exitcode::USAGE);
     }
   }
