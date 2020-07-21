@@ -199,16 +199,12 @@ impl<T> QueryServer<T> where T: RestfulArchiveAccess
       let curr_txn = ledger.get_transaction(*txn_sid).unwrap().finalized_txn.txn;
       // get the transaction, ownership addresses, and memos associated with each transaction
       let (addresses, owner_memos) = {
-        let addresses: Vec<XfrAddress> = txo_sids.iter()
-                                                 .map(|sid| {
-                                                   XfrAddress { key: ((ledger.get_utxo(*sid)
-                                                                             .unwrap()
-                                                                             .utxo)
-                                                                                   .0)
-                                                                                      .0
-                                                                                      .public_key }
-                                                 })
-                                                 .collect();
+        let addresses: Vec<XfrAddress> =
+          txo_sids.iter()
+                  .map(|sid| XfrAddress { key:
+                                            ((ledger.get_utxo(*sid).unwrap().utxo).0).record
+                                                                                     .public_key })
+                  .collect();
 
         let owner_memos = curr_txn.get_owner_memos_ref();
 
@@ -435,7 +431,7 @@ mod tests {
 
     // Transfer first record to Bob
     let transfer_sid = TxoSID(0);
-    let bar = &(ledger_state.get_utxo(transfer_sid).unwrap().utxo.0).0;
+    let bar = &(ledger_state.get_utxo(transfer_sid).unwrap().utxo.0).record;
     let alice_memo = query_server.get_owner_memo(TxoSID(0));
     let oar = open_blind_asset_record(&bar, &alice_memo.cloned(), alice.get_sk_ref()).unwrap();
     let mut xfr_builder = TransferOperationBuilder::new();
@@ -464,7 +460,7 @@ mod tests {
 
     // Ensure that query server returns correct memos
     let bob_memo = query_server.get_owner_memo(TxoSID(2));
-    let bar = &(ledger_state.get_utxo(TxoSID(2)).unwrap().utxo.0).0;
+    let bar = &(ledger_state.get_utxo(TxoSID(2)).unwrap().utxo.0).record;
     open_blind_asset_record(&bar, &bob_memo.cloned(), alice.get_sk_ref()).unwrap();
   }
 
@@ -510,7 +506,7 @@ mod tests {
 
     // Transfer to Bob
     let transfer_sid = TxoSID(0);
-    let bar = &(ledger_state.get_utxo(transfer_sid).unwrap().utxo.0).0;
+    let bar = &(ledger_state.get_utxo(transfer_sid).unwrap().utxo.0).record;
     let oar = open_blind_asset_record(&bar, &None, alice.get_sk_ref()).unwrap();
     let mut xfr_builder = TransferOperationBuilder::new();
     let out_template = AssetRecordTemplate::with_no_asset_tracking(amt,
