@@ -10,24 +10,32 @@ or to the standalone ledger at `http://localhost` with
 ```
 txn_cli --local --txn <filename> submit
 ```
-## The different kinds of Users
-There are four User roles available; and each has an associated `sign_up` command in `txn_cli`. This command adds
-an entry to a JSON file ~/.findora/data.json. An example file can be found here.
 
-1. Asset Issuer: `txn_cli asset_issuer sign_up`.
-   * `store_sids`
-   * `define_asset`
-   * `issue_asset`
-   * `transfer_asset`
-   * `issue_and_transfer_asset`
-2. Credential Issuer: `txn_cli credential_issuer sign_up`
-3. Borrower: `txn_cli borrower sign_up` 
-   * requests a loan: `txn_cli borrower request_loan`
-   * loads funds: `txn_cli borrower load_funds`
-   * pays down the loan: `txn_cli borrower pay_loan`
-   * adds or updates a credential record: `txn_cli borrower create_or_overwrite_credential`
-4. Lender: `txn_cli lender sign_up`:
-   * fulfills the loan: `txn_cli lender fulfill_loan`
+## The different kinds of Users
+There are four User roles available; and each has an associated `sign_up` command in `txn_cli`, which adds
+an entry to a JSON file ~/.findora/data.json.
+
+1. [Asset Issuer](#asset-issuer): 
+   * [Asset Issuer Sign Up](#asset-issuer-sign-up)
+   * [Asset definition](#define-an-asset)
+   * [Asset issuance](#issue-units-of-an-asset)
+   * [Asset transfer](#transfer-units-of-an-asset)
+   * [Asset issue and transfer](#issue-and-transfer-units-of-an-asset)
+   * [Store sids](#store-sids-to-file)
+2. [Credential Issuer](#credential-issuer):
+   * [Credential Issuer Sign Up](#credential-issuer-sign-up)
+3. [Borrower](#borrower):
+   * [Borrower Sign Up](#borrower-sign-up)
+   * [Borrower requests a loan](#request-a-loan)
+   * [Borrower load funds](#borrower-load-funds)
+   * [Borrower view loans](#borrower-view-loans)
+   * [Borrower add or update credential record](#create-or-overwrite-a-credential)
+   * [Borrower get asset record](#get-asset-record)
+4. [Lender](#lender):
+   * [Lender Sign Up](#lender-sign-up)
+   * [Lender fulfills the loan](#fulfill-a-loan)
+   * [Lender view all loans](#view-all-loans) 
+   * [Lender view a specific loan](#view-a-specific-loan)
 
 The Ledger supports a querying with the transaction ID to see if the transaction was committed using a web browser or command line tool.
 
@@ -53,6 +61,9 @@ actual subcommands.
 The following commands are meant to be executed in order by you the user.
 
 We assume that the file `~/.findora/data.json` is the same as `init_data.json` in this directory.
+
+## Asset Issuer
+### Asset Issuer Sign Up
 In the initial data, there's one asset issuer, Izzie, with *id* = 0. If you wish to sign up (create) a new asset issuer account, you'd 
 do:
 ```
@@ -111,7 +122,7 @@ To display the utxo sids, add `--get_sids`. To store the sids to a file, use `--
 txn_cli --txn txn_issue submit --get_sids --sids_file sids_file
 ```
 
-### Transfer units of an asset. See `txn_cli add transfer_asset`.
+### Transfer units of an asset
 After an asset is defined and issued, transactions are submitted, and utxo sids are stored:
 1) Create an empty transaction
 ```
@@ -171,25 +182,40 @@ After the asset tracer memo and owner memo are stored by `store_memos` or `issue
 txn_cli asset_issuer --id 0 trace_and_verify_asset --memo_file memos --expected_amount 50
 ```
 
-## Credential issuer account
+## Credential issuer
+Currently, the credential is fixed, with three attributes
+* `min_credit_score`
+* `max_credit_score`
+* `citizenship`
+
 ### Sign up a credential issuer account
 In the initial data, there's one credential issuer, Ivy. To sign up a new credential issuer account:
 ```
 txn_cli credential_issuer sign_up --name 'Issuer Name'
 ```
 
-## Lender account
+## Lender
 ### Sign up a lender account
 In the initial data, there are two issuers, Lenny and Luna. To sign up a new lender account:
 ```
 txn_cli lender sign_up --name 'Lender Name'
 ```
+### Fulfill a loan
+* Create an empty transaction
+```
+txn_cli create_txn_builder --name txn_fulfill
+```
+* Fulfill the loan
+```
+txn_cli --txn txn_fulfill lender --id 0 fulfill_loan --loan 0 --issuer 0
+```
 
-### View loans
+### View all loans
 * View all loans of a lender
 ```
 txn_cli lender --id 0 view_loan
 ```
+### View a specific loan
 * View a specific loan
 ```
 txn_cli lender --id 0 view_loan --loan 0
@@ -207,17 +233,6 @@ For example:
 txn_cli lender --id 0 view_loan --filter active
 ```
 
-### Fulfill a loan
-* Create an empty transaction
-```
-txn_cli create_txn_builder --name txn_fulfill
-```
-* Fulfill the loan
-```
-txn_cli --txn txn_fulfill lender --id 0 fulfill_loan --loan 0 --issuer 0
-```
-By default, `https://testnet.findora.org` is used. To switch to `http://localhost`, add `--http --localhost`.
-
 ### Create or overwrite credential requirement
 Currently supported attributes are min_credit_score, min_income and citizenship.
 For example, to create a requirement on min_credit_score:
@@ -227,13 +242,18 @@ txn_cli lender --id 0 create_or_overwrite_requirement --attribute min_credit_sco
 If the requirement already exists, the previous value will be overwritten.
 
 ## Borrower account
-### Sign up a borrower account
+### Borrower sign up
 In the initial data, there's one borrower, Ben. To sign up a new borrower account:
 ```
 txn_cli borrower sign_up --name 'Borrower Name'
 ```
 
-### Load funds
+### Request a loan
+```
+txn_cli borrower --id 0 request_loan --lender 0 --amount 500 --interest_per_mille 80 --duration 5
+```
+
+### Borrower load funds
 * Create an empty transaction
 ```
 txn_cli create_txn_builder --name txn_load
@@ -242,10 +262,9 @@ txn_cli create_txn_builder --name txn_load
 ```
 txn_cli --txn txn_load borrower --id 0 load_funds --issuer 0 --amount 500
 ```
-By default, `https://testnet.findora.org` is used. To switch to `http://localhost`, add `--http --localhost`.
 To store the asset tracer memo and owner memo, use `--memo_file`.
 
-### View loans
+### Borrower view loans
 * View all loans of a borrower
 ```
 txn_cli borrower --id 0 view_loan
@@ -267,12 +286,7 @@ For example:
 txn_cli borrower --id 0 view_loan --filter active
 ```
 
-### Request a loan
-```
-txn_cli borrower --id 0 request_loan --lender 0 --amount 500 --interest_per_mille 80 --duration 5
-```
-
-### Pay off a loan
+### Pay down a loan
 * Create an empty transaction
 ```
 txn_cli create_txn_builder --name txn_pay
@@ -304,21 +318,6 @@ txn_cli borrower --id 0 get_asset_record --sid 1 --memo_file m_file
 ```
 By default, `https://testnet.findora.org` is used. To switch to `http://localhost`, add `--http --localhost`.
 
-### Assign to AIR (Address Identity Registry)
-1) Create an empty transaction named `txn_air` in the current directory
-```
-txn_cli create_txn_builder --name txn_air
-```
-2) Assign to AIR
-```
-txn_cli --txn txn_air asset_issuer --id 0 air_assign --address air_key --data 'Some data.'
-```
-
-3) Submit the transaction
-```
-txn_cli --txn txn_air submit
-```
-
 ## Querying the ledger server
 
 The ledger server provides a [RESTful
@@ -347,6 +346,10 @@ $ curl https://testnet.findora.org:8668/blocks_since/0
 This looks nicer in a web browser that formats JSON nicely such as Firefox.
 ![Expanding outline](./doc/ledger_json.png)
 
+or by using the `jq` command, as 
+```
+$ curl https://testnet.findora.org:8668/blocks_since/0 | jq "."
+```
 
 The `block_log` route returns all the transactions as tabular HTML.
 
@@ -400,9 +403,9 @@ txn_cli --txn txn_define submit
 txn_cli create_txn_builder --name txn_issue_and_transfer
 ```
 
-### Issue and transfer the asset
+### Issue and transfer the asset (FIXME: Is there supposed to be a memo_file? This command doesn't take one!)
 ```
-txn_cli --txn txn_issue_and_transfer asset_issuer --id 1 issue_and_transfer_asset --recipient 1 --amount 100 --token_code 7hAA3TTJQHhDGs-_mpP12Q== --confidential_amount --memo_file memo
+txn_cli --txn txn_issue_and_transfer asset_issuer --id 1 issue_and_transfer_asset --recipient 1 --amount 100 --token_code 7hAA3TTJQHhDGs-_mpP12Q== --confidential_amount
 ```
 
 ### Submit the transaction and get the utxo
@@ -415,7 +418,7 @@ Utxo: [TxoSID(429)]
 ```
 
 ## Trace and verify the asset
-### Bill: verifies the received asset
+### Bill: verifies the received asset (FIXME: Expected a memo_file, error if none)
 ```
 txn_cli borrower --id 1 get_asset_record --sid 429 --memo_file memo
 ```

@@ -23,6 +23,14 @@ use zei::setup::PublicParams;
 use zei::xfr::asset_record::AssetRecordType;
 use zei::xfr::structs::AssetTracingPolicy;
 
+fn inputs_error(msg: &str) -> Result<(), PlatformError> {
+  Err(PlatformError::InputsError(msg.to_owned()))
+}
+
+fn io_error(msg: &str) -> Result<(), PlatformError> {
+  Err(PlatformError::IoError(msg.to_owned()))
+}
+
 /// Processes the `asset_issuer` subcommand.
 ///
 /// Subcommands under `asset_issuer`
@@ -38,7 +46,7 @@ use zei::xfr::structs::AssetTracingPolicy;
 /// * `txn_file`: path to store the transaction file.
 pub(crate) fn process_asset_issuer_cmd(asset_issuer_matches: &clap::ArgMatches,
                                        data_dir: &str,
-                                       txn_file: &str,
+                                       txn_file: Option<&str>,
                                        seq_id: u64)
                                        -> Result<(), PlatformError> {
   match asset_issuer_matches.subcommand() {
@@ -122,18 +130,23 @@ pub(crate) fn process_asset_issuer_cmd(asset_issuer_matches: &clap::ArgMatches,
         error!("Asset issuer id is required for AIR assigning. Use asset_issuer --id.");
         return Err(PlatformError::InputsError(error_location!()));
       };
-      match (air_assign_matches.value_of("address"),
-             air_assign_matches.value_of("data"),
-             air_assign_matches.value_of("issuer_pk"),
-             air_assign_matches.value_of("pok"))
-      {
-        (Some(address), Some(data), Some(issuer_pk), Some(pok)) => {
-          air_assign(data_dir, seq_id, issuer_id, address, data, issuer_pk, pok, txn_file)
+      if let Some(txn_file) = txn_file {
+        match (air_assign_matches.value_of("address"),
+               air_assign_matches.value_of("data"),
+               air_assign_matches.value_of("issuer_pk"),
+               air_assign_matches.value_of("pok"))
+        {
+          (Some(address), Some(data), Some(issuer_pk), Some(pok)) => {
+            air_assign(data_dir, seq_id, issuer_id, address, data, issuer_pk, pok, txn_file)
+          }
+          (_, _, _, _) => {
+            error!("Missing address, data, issuer_pk, or proof.");
+            Err(PlatformError::InputsError(error_location!()))
+          }
         }
-        (_, _, _, _) => {
-          error!("Missing address, data, issuer_pk, or proof.");
-          Err(PlatformError::InputsError(error_location!()))
-        }
+      } else {
+        eprintln!("Missing --name <filename>");
+        inputs_error(&format!("Missing --txn <filename> at {}", error_location!()))
       }
     }
     ("define_asset", Some(define_asset_matches)) => {
@@ -212,9 +225,9 @@ pub(crate) fn process_asset_issuer_cmd(asset_issuer_matches: &clap::ArgMatches,
         asset_token = AssetTypeCode::new_from_base64(token_code)?;
       } else {
         asset_token = AssetTypeCode::gen_random();
-        info!("Creating asset with token code {:?}: {:?}",
-              asset_token.to_base64(),
-              asset_token.val);
+        println!("Creating asset with token code {:?}: {:?}",
+                 asset_token.to_base64(),
+                 asset_token.val);
       }
       match define_asset(data_dir,
                          seq_id,
@@ -223,7 +236,7 @@ pub(crate) fn process_asset_issuer_cmd(asset_issuer_matches: &clap::ArgMatches,
                          asset_token,
                          &memo,
                          asset_rules,
-                         Some(txn_file))
+                         txn_file)
       {
         Ok(_) => Ok(()),
         Err(error) => Err(error),
@@ -244,8 +257,12 @@ pub(crate) fn process_asset_issuer_cmd(asset_issuer_matches: &clap::ArgMatches,
       let mut txn_builder = TransactionBuilder::from_seq_id(seq_id);
       let hash = KVHash::new(&value, None);
       txn_builder.add_operation_kv_update(&key_pair, &key, gen, Some(&hash))?;
-      info!("Hash of data will be stored at key {}", b64enc(&key));
-      store_txn_to_file(&txn_file, &txn_builder)
+      println!("Hash of data will be stored at key {}", b64enc(&key));
+      if let Some(txn_file) = txn_file {
+        store_txn_to_file(&txn_file, &txn_builder)
+      } else {
+        inputs_error("Missing --txn <filename>")
+      }
     }
     ("clear_kv", Some(kv_matches)) => {
       let data = load_data(data_dir)?;
@@ -263,7 +280,11 @@ pub(crate) fn process_asset_issuer_cmd(asset_issuer_matches: &clap::ArgMatches,
       let mut txn_builder = TransactionBuilder::from_seq_id(seq_id);
 
       txn_builder.add_operation_kv_update(&key_pair, &key, gen, None)?;
-      store_txn_to_file(&txn_file, &txn_builder)
+      if let Some(txn_file) = txn_file {
+        store_txn_to_file(&txn_file, &txn_builder)
+      } else {
+        inputs_error("Missing --txn <filename>")
+      }
     }
     ("issue_asset", Some(issue_asset_matches)) => {
       let data = load_data(data_dir)?;
@@ -305,8 +326,11 @@ pub(crate) fn process_asset_issuer_cmd(asset_issuer_matches: &clap::ArgMatches,
         error!("Failed to add basic issue asset.");
         return Err(e);
       }
-      info!("txn_file={:?}, txn_builder={:?}", &txn_file, &txn_builder);
-      store_txn_to_file(&txn_file, &txn_builder)
+      if let Some(txn_file) = txn_file {
+        store_txn_to_file(&txn_file, &txn_builder)
+      } else {
+        inputs_error("Missing --txn <filename>")
+      }
     }
     ("transfer_asset", Some(transfer_asset_matches)) => {
       // TODO (redmine issue #36) to support co-signatures we need to use
@@ -464,7 +488,11 @@ pub(crate) fn process_asset_issuer_cmd(asset_issuer_matches: &clap::ArgMatches,
         return Err(e);
       };
       debug!("transfer_asset: about to store file");
-      store_txn_to_file(&txn_file, &txn_builder)
+      if let Some(txn_file) = txn_file {
+        store_txn_to_file(&txn_file, &txn_builder)
+      } else {
+        inputs_error("Missing --txn <filename>")
+      }
     }
     ("issue_and_transfer_asset", Some(issue_and_transfer_matches)) => {
       let data = load_data(data_dir)?;
@@ -507,7 +535,7 @@ pub(crate) fn process_asset_issuer_cmd(asset_issuer_matches: &clap::ArgMatches,
                                token_code,
                                record_type,
                                None,
-                               Some(txn_file),
+                               txn_file,
                                None,
                                None)?;
       Ok(())
@@ -1186,14 +1214,6 @@ pub(crate) fn process_pay_loan_cmd<T: RestfulLedgerAccess + RestfulLedgerUpdate>
   pay_loan(data_dir, seq_id, loan_id, amount, rest_client)
 }
 
-fn inputs_error(msg: &str) -> Result<(), PlatformError> {
-  Err(PlatformError::InputsError(msg.to_owned()))
-}
-
-fn io_error(msg: &str) -> Result<(), PlatformError> {
-  Err(PlatformError::IoError(msg.to_owned()))
-}
-
 /// Processes input commands and arguments.
 /// # Arguments
 /// * `inputs`: input subcommands and arguments.
@@ -1222,12 +1242,8 @@ pub fn process_inputs<T: RestfulQueryServerAccess + RestfulLedgerAccess + Restfu
 
   match inputs.subcommand() {
     ("asset_issuer", Some(asset_issuer_matches)) => {
-      if let Some(txn_file) = inputs.value_of("txn") {
-        process_asset_issuer_cmd(asset_issuer_matches, &dir, &txn_file, seq_id)
-      } else {
-        error!("Missing --txn <filename>");
-        inputs_error(&error_location!())
-      }
+      let txn_file_opt = inputs.value_of("txn");
+      process_asset_issuer_cmd(asset_issuer_matches, &dir, txn_file_opt, seq_id)
     }
     ("credential_issuer", Some(credential_issuer_matches)) => {
       process_credential_issuer_cmd(credential_issuer_matches, &dir)
@@ -1242,8 +1258,8 @@ pub fn process_inputs<T: RestfulQueryServerAccess + RestfulLedgerAccess + Restfu
       if let Some(txn_file) = create_txn_builder_matches.value_of("name") {
         process_create_txn_builder_cmd(create_txn_builder_matches, seq_id, &txn_file)
       } else {
-        error!("Missing --name <filename>");
-        inputs_error(&error_location!())
+        eprintln!("Missing --name <filename>");
+        inputs_error(&format!("Missing --txn <filename> at {}", error_location!()))
       }
     }
     ("serialize", Some(_serialize_matches)) => {
@@ -1263,8 +1279,8 @@ pub fn process_inputs<T: RestfulQueryServerAccess + RestfulLedgerAccess + Restfu
           }
         }
       } else {
-        error!("Missing --txn <filename>");
-        inputs_error(&error_location!())
+        eprintln!("Missing --txn <filename>");
+        inputs_error(&format!("Missing --txn <filename> at {}", error_location!()))
       }
     }
     ("drop", Some(_drop_matches)) => {
@@ -1277,24 +1293,25 @@ pub fn process_inputs<T: RestfulQueryServerAccess + RestfulLedgerAccess + Restfu
           Err(e) => Err(PlatformError::IoError(format!("Error deleting file: {:?} ", e))),
         }
       } else {
-        error!("Missing --txn <filename>");
-        inputs_error(&error_location!())
+        eprintln!("Missing --txn <filename>");
+        inputs_error(&format!("Missing --txn <filename> at {}", error_location!()))
       }
     }
     ("submit", Some(submit_matches)) => {
       if let Some(txn_file) = inputs.value_of("txn") {
         process_submit_cmd(submit_matches, &txn_file, rest_client)
       } else {
-        error!("Missing --txn <filename>");
-        inputs_error(&error_location!())
+        eprintln!("Missing --txn <filename>");
+        inputs_error(&format!("Missing --txn <filename> at {}", error_location!()))
       }
     }
     ("custom_data", Some(custom_data_matches)) => {
       process_custom_data_cmds(custom_data_matches, rest_client)
     }
     _ => {
-      error!("Subcommand missing or not recognized. Try --help");
-      Err(PlatformError::InputsError(error_location!()))
+      eprintln!("Subcommand missing or not recognized. Try --help");
+      inputs_error(&format!("Subcommand missing or not recognized at {}",
+                            error_location!()))
     }
   }
 }
@@ -1322,8 +1339,9 @@ pub(crate) fn process_custom_data_cmds<T: RestfulQueryServerAccess>(
       rest_client.store_custom_data(&data, &key, blind)?;
     }
     _ => {
-      error!("Subcommand missing or not recognized. Try --help");
-      return Err(PlatformError::InputsError(error_location!()));
+      eprintln!("Subcommand missing or not recognized. Try --help");
+      return inputs_error(&format!("Subcommand missing or not recognized at {}",
+                                   error_location!()));
     }
   }
 
@@ -1583,7 +1601,7 @@ pub fn get_cli_app<'a, 'b>() -> App<'a, 'b> {
           .takes_value(false)
           .help("If specified, the asset transfer will be confidential.")))
       .subcommand(SubCommand::with_name("trace_and_verify_asset")
-        .arg(Arg::with_name("memo_file")
+        .arg(Arg::with_name("memo_file<")
           .short("f")
           .long("memo_file")
           .required(true)
