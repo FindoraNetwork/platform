@@ -3,26 +3,27 @@
 2. [Example of confidential transfer](#example-of-confidential-transfer)
 3. [Commands](#commands)
    1. [Asset Issuer](#asset-issuer)
-       * [Asset Issuer Sign Up](#asset-issuer-sign-up)
+       * [Asset Issuer sign up](#asset-issuer-sign-up)
        * [Asset definition](#define-an-asset)
        * [Asset issuance](#issue-units-of-an-asset)
        * [Asset transfer](#transfer-units-of-an-asset)
        * [Asset issue and transfer](#issue-and-transfer-units-of-an-asset)
        * [Store sids](#store-sids-to-file)
    2. [Credential Issuer](#credential-issuer)
-       * [Credential Issuer Sign Up](#credential-issuer-sign-up)
+       * [Credential Issuer sign up](#credential-issuer-sign-up)
    3. [Borrower](#borrower)
-       * [Borrower Sign Up](#borrower-sign-up)
+       * [Borrower sign up](#borrower-sign-up)
        * [Borrower requests a loan](#request-a-loan)
        * [Borrower load funds](#borrower-load-funds)
        * [Borrower view loans](#borrower-view-loans)
        * [Borrower add or update credential record](#create-or-overwrite-a-credential)
        * [Borrower get asset record](#get-asset-record)
    4. [Lender](#lender)
-       * [Lender Sign Up](#lender-sign-up)
+       * [Lender sign up](#sign-up-a-lender-account)
        * [Lender fulfills the loan](#fulfill-a-loan)
        * [Lender view all loans](#view-all-loans) 
        * [Lender view a specific loan](#view-a-specific-loan)
+4. [Querying the ledger server](#querying-the-ledger-server)
 
 ## Overview
 The `txn_cli` application is intended to help one experiment with the
@@ -160,15 +161,16 @@ Bill owns 100 of asset [238, 16, 0, 221, 52, 201, 64, 120, 67, 26, 207, 191, 154
 txn_cli asset_issuer --id 1 trace_and_verify_asset --memo_file memo --expected_amount 100
 ```
 
-## Asset Issuer
-### Asset Issuer Sign Up
+## Commands
+### Asset Issuer
+#### Asset Issuer sign up
 In the initial data, there's one asset issuer, Izzie, with *id* = 0. If you wish to sign up (create) a new asset issuer account, you'd 
 do:
 ```
 txn_cli asset_issuer sign_up --name 'AssetIssuer' (FIXME 01: Doesn't create file if ~/.findora/data.json does not exist)
 ```
 
-### Define an asset
+#### Define an asset
 1) Create an empty transaction
 ```
 txn_cli create_txn_builder --name txn_define
@@ -200,7 +202,7 @@ To allow update or tracing, add `--updatable` or `--traceable`, respectively.
 txn_cli --txn txn_define submit
 ```
 
-### Issue units of an asset
+#### Issue units of an asset
 After an asset is defined and the transaction is submitted:
 1) Create another empty transaction
 ```
@@ -220,7 +222,7 @@ To display the utxo sids, add `--get_sids`. To store the sids to a file, use `--
 txn_cli --txn txn_issue submit --get_sids --sids_file sids_file
 ```
 
-### Transfer units of an asset
+#### Transfer units of an asset
 After an asset is defined and issued, transactions are submitted, and utxo sids are stored:
 1) Create an empty transaction
 ```
@@ -238,7 +240,7 @@ txn_cli --txn txn_transfer asset_issuer --id 0 transfer_asset --sids_file sids_f
 txn_cli --txn txn_transfer submit
 ```
 
-### Issue and transfer units of an asset
+#### Issue and transfer units of an asset
 After an asset is defined and the transaction is submitted:
 1) Create an empty transaction
 ```
@@ -256,7 +258,7 @@ txn_cli --txn txn_issue_and_transfer submit
 ```
 To get the utxo sids, add `--get_sids`.
 
-### Store sids to file
+#### Store sids to file
 If only one utxo sid is needed for an asset transfer, there's no need
 to use the `store_sids` subcommand. When submitting the asset issuing
 transaction, simply use `--sids_file` to specify a file to store the
@@ -267,38 +269,38 @@ Otherwise, add `--get_sids` when submitting asset issuing transactions, and note
 txn_cli asset_issuer store_sids --file sids_file --indices 1,2,3
 ```
 
-### Store asset tracer memo and owner memo (FIXME 04: No file, no error message)
+#### Store asset tracer memo and owner memo (FIXME 04: No file, no error message)
 Asset tracer memo and owner memo are necessary for asset tracing. To store them:
 ```
 txn_cli asset_issuer --id 0 store_memos --file memo_file --amount 100 --token_code <token_code>
 ```
 For confidential token amount, add `--confidential_amount`.
 
-### Trace and verify an asset
+#### Trace and verify an asset
 After the asset tracer memo and owner memo are stored by `store_memos` or `issue_and_transfer_asset --memo_file`, trace the asset and verify the token amount.
 ```
 txn_cli asset_issuer --id 0 trace_and_verify_asset --memo_file memos --expected_amount 50
 ```
 
-## Credential issuer
+### Credential issuer
 Currently, the credential is fixed, with three attributes
 * `min_credit_score`
 * `max_credit_score`
 * `citizenship`
 
-### Sign up a credential issuer account
+#### Sign up a credential issuer account
 In the initial data, there's one credential issuer, Ivy. To sign up a new credential issuer account:
 ```
 txn_cli credential_issuer sign_up --name 'Issuer Name'
 ```
 
-## Lender
-### Sign up a lender account
+### Lender
+#### Sign up a lender account
 In the initial data, there are two issuers, Lenny and Luna. To sign up a new lender account:
 ```
 txn_cli lender sign_up --name 'Lender Name'
 ```
-### Fulfill a loan
+#### Fulfill a loan
 * Create an empty transaction
 ```
 txn_cli create_txn_builder --name txn_fulfill
@@ -308,12 +310,12 @@ txn_cli create_txn_builder --name txn_fulfill
 txn_cli --txn txn_fulfill lender --id 0 fulfill_loan --loan 0 --issuer 0
 ```
 
-### View all loans
+#### View all loans
 * View all loans of a lender
 ```
 txn_cli lender --id 0 view_loan
 ```
-### View a specific loan
+#### View a specific loan
 * View a specific loan
 ```
 txn_cli lender --id 0 view_loan --loan 0
@@ -331,7 +333,7 @@ For example:
 txn_cli lender --id 0 view_loan --filter active
 ```
 
-### Create or overwrite credential requirement
+#### Create or overwrite credential requirement
 Currently supported attributes are min_credit_score, min_income and citizenship.
 For example, to create a requirement on min_credit_score:
 ```
@@ -339,19 +341,19 @@ txn_cli lender --id 0 create_or_overwrite_requirement --attribute min_credit_sco
 ```
 If the requirement already exists, the previous value will be overwritten.
 
-## Borrower account
-### Borrower sign up
+### Borrower
+#### Borrower sign up
 In the initial data, there's one borrower, Ben. To sign up a new borrower account:
 ```
 txn_cli borrower sign_up --name 'Borrower Name'
 ```
 
-### Request a loan
+#### Request a loan
 ```
 txn_cli borrower --id 0 request_loan --lender 0 --amount 500 --interest_per_mille 80 --duration 5
 ```
 
-### Borrower load funds
+#### Borrower load funds
 * Create an empty transaction
 ```
 txn_cli create_txn_builder --name txn_load
@@ -362,7 +364,7 @@ txn_cli --txn txn_load borrower --id 0 load_funds --issuer 0 --amount 500
 ```
 To store the asset tracer memo and owner memo, use `--memo_file`.
 
-### Borrower view loans
+#### Borrower view loans
 * View all loans of a borrower
 ```
 txn_cli borrower --id 0 view_loan
@@ -384,7 +386,7 @@ For example:
 txn_cli borrower --id 0 view_loan --filter active
 ```
 
-### Pay down a loan
+#### Pay down a loan
 * Create an empty transaction
 ```
 txn_cli create_txn_builder --name txn_pay
@@ -395,13 +397,13 @@ txn_cli --txn txn_pay borrower --id 0 pay_loan --loan 0 --amount 200
 ```
 By default, `https://testnet.findora.org` is used. To switch to `http://localhost`, add `--http --localhost`.
 
-### View credentials
+#### View credentials
 ```
 txn_cli borrower --id 0 view_credential
 ```
 To viea a specific credential attribute, use `--attribute`.
 
-### Create or overwrite a credential
+#### Create or overwrite a credential
 Currently supported attributes are min_credit_score, min_income and citizenship.
 For example, to create a min_credit_score credential:
 ```
@@ -409,7 +411,7 @@ txn_cli borrower --id 0 create_or_overwrite_credential --attribute min_credit_sc
 ```
 If the credential already exists, the original record will be overwritten.
 
-### Get asset record
+#### Get asset record
 After the owner memo is stored:
 ```
 txn_cli borrower --id 0 get_asset_record --sid 1 --memo_file m_file
@@ -428,7 +430,7 @@ $ curl https://testnet.findora.org:8669/txn_status/4977619fd7c7dd1c6b917ced37abc
 {"Committed":[0,[]]}
 ```
 
-### Listing blocks
+#### Listing blocks
 
 It is possible to list all the transaction blocks since a given
 block sequence number. The `blocks_since` route takes a
