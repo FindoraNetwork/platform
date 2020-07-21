@@ -166,9 +166,17 @@ impl ClientAssetRecord {
   /// Builds a client record from a JSON-serialized JavaScript value.
   /// @param {JsValue} val - JSON-encoded autehtnicated asset record fetched from ledger server with the `utxo_sid/{sid}` route,
   /// where `sid` can be fetched from the query server with the `get_owned_utxos/{address}` route.
-  /// * E.g.: `{"amount":{"NonConfidential":1000},
-  /// "asset_type":{"NonConfidential":[2,14,75,187,192,9,69,242,30,9,18,203,193,227,148,56]},
-  /// "public_key":"vmGHutHEUGVL24SZMfkadu-9u7RcIARSlQB-rVHOnEM="}`.
+  ///
+  /// Note: The first field of an asset record is `utxo`. E.g.:
+  // `"utxo":{
+  //   "amount":{
+  //     "NonConfidential":5
+  //   },
+  //   "asset_type":{
+  //     "NonConfidential":[113,168,158,149,55,64,18,189,88,156,133,204,156,46,106,46,232,62,69,233,157,112,240,132,164,120,4,110,14,247,109,127]
+  //   },
+  //   "public_key":"Glf8dKF6jAPYHzR_PYYYfzaWqpYcMvnrIcazxsilmlA="
+  // }`.
   pub fn from_json(val: &JsValue) -> Self {
     ClientAssetRecord { txo: val.into_serde().unwrap() }
   }
@@ -349,13 +357,26 @@ pub struct AssetType {
 impl AssetType {
   /// Builds an asset type from a JSON-serialized JavaScript value.
   /// @param {JsValue} val - JSON asset type fetched from ledger server with the `asset_token/{code}` route.
-  /// * E.g.: `{"properties":{"code":"Zz2BfXev5V1yLxeyBWii3g==",
-  /// "issuer":{"key":"Re_gz_oihZoXkfs2ebyQqSlURLGEE6DLWNqKbV5qk7k="},
-  /// "memo":"test memo",
-  /// "asset_rules":{"transferable":false,"updatable":false,"transfer_multisig_rules":null,"max_units":null}},
-  /// "digest":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
-  /// "units":0,
-  /// "confidential_units":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]}`.
+  ///
+  /// Note: The first field of an asset type is `properties`. E.g.:
+  /// `"properties": {
+  ///   "code": {
+  ///     "val": [
+  ///       151,   8, 106,  38, 126, 101, 250, 236,
+  ///       134,  77,  83, 180,  43, 152,  47,  57,
+  ///       83,  30,  60,   8, 132, 218,  48,  52,
+  ///       167, 167, 190, 244,  34,  45,  78,  80
+  ///     ]
+  ///   },
+  ///   "issuer": { "key": 'iFW4jY_DQVSGED05kTseBBn0BllPB9Q9escOJUpf4DY=' },
+  ///   "memo": 'test memo',
+  ///   "asset_rules": {
+  ///     "transferable": true,
+  ///     "updatable": false,
+  ///     "transfer_multisig_rules": null,
+  ///     "max_units": 5000
+  ///   }
+  /// }`.
   pub fn from_json(json: &JsValue) -> Result<AssetType, JsValue> {
     let asset_type: PlatformAssetType = json.into_serde().map_err(error_to_jsvalue)?;
     Ok(AssetType { asset_type })

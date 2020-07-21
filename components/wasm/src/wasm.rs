@@ -616,7 +616,7 @@ impl TransferOperationBuilder {
 /// where `amount` is the decrypted asset amount, and `asset_type` is the decrypted asset type code.
 ///
 /// @param {ClientAssetRecord} record - Owner record.
-/// @see {@link ClientAssetRecord#from_json_record} for information about fetching the asset record.
+/// @see {@link ClientAssetRecord#from_json} for information about fetching the asset record.
 ///
 /// @param {OwnerMemo} owner_memo - Owner memo of the associated record.
 /// TODO (Redmine issue #126): Unable to get owner memo.
