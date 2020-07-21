@@ -413,7 +413,7 @@ impl InterpretAccounts<PlatformError> for LedgerAccounts {
         let mut properties: Asset = Default::default();
         properties.code = code;
         properties.issuer.key = *pubkey;
-        properties.memo.0 = format!("asset '{}' issued by '{}'",name,issuer);
+        properties.memo.0 = format!("asset '{:?}' issued by '{:?}'", name, issuer);
 
         let body = DefineAssetBody { asset: Box::new(properties) };
 
@@ -673,6 +673,7 @@ impl InterpretAccounts<PlatformError> for LedgerAccounts {
   }
 }
 
+/*
 // TODO(joe): OneBigLienAccounts, since you can have liens of liens
 // It *should* behave the same if there is only ever exactly one UTXO on the ledger, with each
 // user's "owning lien" as one of the bound inputs of the top-level lien.
@@ -713,7 +714,7 @@ impl InterpretAccounts<PlatformError> for LienAccounts {
                 let mut properties: Asset = Default::default();
                 properties.code = code;
                 properties.issuer.key = *pubkey;
-                properties.memo.0 = format!("lien contract for '{}'",name);
+                properties.memo.0 = format!("lien contract for '{:?}'",name);
 
                 let body = DefineAssetBody { asset: Box::new(properties) };
 
@@ -792,7 +793,7 @@ impl InterpretAccounts<PlatformError> for LienAccounts {
         let mut properties: Asset = Default::default();
         properties.code = code;
         properties.issuer.key = *pubkey;
-        properties.memo.0 = format!("asset '{}' issued by '{}'",name,issuer);
+        properties.memo.0 = format!("asset '{:?}' issued by '{:?}'",name,issuer);
 
         let body = DefineAssetBody { asset: Box::new(properties) };
 
@@ -1201,7 +1202,7 @@ impl InterpretAccounts<PlatformError> for LienAccounts {
     Ok(())
   }
 }
-
+*/
 
 struct OneBigTxnAccounts {
   base_ledger: LedgerState,
@@ -1253,7 +1254,7 @@ impl InterpretAccounts<PlatformError> for OneBigTxnAccounts {
         let mut properties: Asset = Default::default();
         properties.code = code;
         properties.issuer.key = *pubkey;
-        properties.memo.0 = format!("asset '{}' issued by '{}'",name,issuer);
+        properties.memo.0 = format!("asset '{:?}' issued by '{:?}'", name, issuer);
 
         let body = DefineAssetBody { asset: Box::new(properties) };
 
@@ -1557,7 +1558,7 @@ impl<T> InterpretAccounts<PlatformError> for LedgerStandaloneAccounts<T>
         let mut properties: Asset = Default::default();
         properties.code = code;
         properties.issuer.key = *pubkey;
-        properties.memo.0 = format!("asset '{}' issued by '{}'",name,issuer);
+        properties.memo.0 = format!("asset '{:?}' issued by '{:?}'", name, issuer);
 
         let body = DefineAssetBody { asset: Box::new(properties) };
 
