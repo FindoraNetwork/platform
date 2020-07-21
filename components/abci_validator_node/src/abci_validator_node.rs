@@ -119,7 +119,8 @@ impl abci::Application for ABCISubmissionServer {
     if let Ok(mut la) = self.la.write() {
       if !la.all_commited() {
         assert!(la.block_pulse_count() > 0);
-        info!("begin_block: continuation, block pulse count is {}", la.block_pulse_count());
+        info!("begin_block: continuation, block pulse count is {}",
+              la.block_pulse_count());
       } else {
         info!("begin_block: new block");
         la.begin_block();
