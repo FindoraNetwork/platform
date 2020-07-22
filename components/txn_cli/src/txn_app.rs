@@ -1325,7 +1325,7 @@ pub(crate) fn process_custom_data_cmds<T: RestfulQueryServerAccess>(
 
 pub fn get_cli_app<'a, 'b>() -> App<'a, 'b> {
   App::new("Transaction Builder")
-    .version("0.0.1")
+    .version(concat!("0.0.1 Build: ",env!("VERGEN_SHA_SHORT")," ", env!("VERGEN_COMMIT_DATE")))
     .about("Copyright 2019 © Findora. All rights reserved.")
     .arg(Arg::with_name("config")
       .short("c")

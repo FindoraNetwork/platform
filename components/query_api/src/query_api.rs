@@ -19,6 +19,14 @@ use zei::serialization::ZeiFromToBytes;
 use zei::xfr::sig::XfrPublicKey;
 use zei::xfr::structs::OwnerMemo;
 
+/// Returns the git commit hash and commit date of this build
+fn version() -> actix_web::Result<String> {
+  Ok(concat!("Build: ",
+             env!("VERGEN_SHA_SHORT"),
+             " ",
+             env!("VERGEN_COMMIT_DATE")).into())
+}
+
 // Queries the status of a transaction by its handle. Returns either a not committed message or a
 // serialized TxnStatus.
 fn get_address<T>(data: web::Data<Arc<RwLock<QueryServer<T>>>>,
@@ -106,6 +114,7 @@ pub enum QueryServerRoutes {
   GetCreatedAssets,
   GetIssuedRecords,
   GetRelatedTxns,
+  Version,
 }
 
 impl NetworkRoute for QueryServerRoutes {
@@ -119,6 +128,7 @@ impl NetworkRoute for QueryServerRoutes {
       QueryServerRoutes::GetCustomData => "get_custom_data",
       QueryServerRoutes::GetCreatedAssets => "get_created_assets",
       QueryServerRoutes::GetIssuedRecords => "get_issued_records",
+      QueryServerRoutes::Version => "version",
     };
     "/".to_owned() + endpoint
   }
@@ -211,6 +221,7 @@ impl QueryApi {
                        web::post().to(store_custom_data::<T>))
                 .route(&QueryServerRoutes::GetCustomData.with_arg_template("key"),
                        web::get().to(get_custom_data::<T>))
+                .route(&QueryServerRoutes::Version.route(), web::get().to(version))
     }).bind(&format!("{}:{}", host, port))?
       .start();
 

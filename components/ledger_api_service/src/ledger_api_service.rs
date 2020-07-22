@@ -27,6 +27,14 @@ fn ping() -> actix_web::Result<String> {
   Ok("success".into())
 }
 
+/// Returns the git commit hash and commit date of this build
+fn version() -> actix_web::Result<String> {
+  Ok(concat!("Build: ",
+             env!("VERGEN_SHA_SHORT"),
+             " ",
+             env!("VERGEN_COMMIT_DATE")).into())
+}
+
 // Future refactor:
 // Merge query functions
 //
@@ -420,6 +428,7 @@ impl RestfulApiService {
                 .wrap(Cors::new().supports_credentials())
                 .data(ledger_access.clone())
                 .route("/ping", web::get().to(ping))
+                .route("/version", web::get().to(version))
                 .set_route::<LA>(ServiceInterface::LedgerAccess)
                 .set_route::<LA>(ServiceInterface::ArchiveAccess)
     }).bind(&format!("{}:{}", host, port))?
