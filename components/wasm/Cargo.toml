@@ -3,6 +3,7 @@ name = "wasm"
 version = "0.1.0"
 authors = ["ngolub <ngolub@stanford.edu>"]
 edition = "2018"
+build = "build.rs"
 
 # wasm-opt has a segfaulting issue. Disabling for now
 [package.metadata.wasm-pack.profile.release]
@@ -49,6 +50,7 @@ features = [
 [build-dependencies]
 serde = "1.0.101"
 serde_json = "1.0.41"
+vergen = "3.1.0"
 wasm-bindgen = { version = "0.2.50", features = ["serde-serialize"]  }
 
 #features = ["stdweb", "wasm-bindgen"]

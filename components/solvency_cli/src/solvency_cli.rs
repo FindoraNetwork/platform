@@ -199,7 +199,9 @@ fn process_inputs<T: RestfulLedgerAccess>(inputs: clap::ArgMatches,
 }
 
 fn get_cli_app<'a, 'b>() -> App<'a, 'b> {
-  App::new("Solvency Proof").version("0.1.0").about("Copyright 2020 © Findora. All rights reserved.")
+  App::new("Solvency Proof")
+    .version(concat!("0.0.1 Build: ",env!("VERGEN_SHA_SHORT")," ", env!("VERGEN_COMMIT_DATE")))
+    .about("Copyright 2020 © Findora. All rights reserved.")
     .arg(Arg::with_name("dir")
       .short("d")
       .long("dir")

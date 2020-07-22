@@ -3,6 +3,7 @@ name = "abci_validator_node"
 version = "0.0.1"
 authors = ["Engineering <engineering@findora.org>"]
 edition = "2018"
+build = "build.rs"
 
 [[bin]]
 name = "abci_validator_node"
@@ -27,3 +28,6 @@ submission_api = { path = "../submission_api" }
 submission_server = { path = "../submission_server" }
 utils = { path = "../../libs/utils" }
 zei = { git = "ssh://git@github.com/findoraorg/zei", tag = "v0.0.3-3" }
+
+[build-dependencies]
+vergen = "3.1.0"
