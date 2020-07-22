@@ -12,7 +12,7 @@ use credentials::{
 use cryptohash::sha256;
 use js_sys::Promise;
 use ledger::data_model::{
-  b64enc, AssetTypeCode, AuthenticatedKVLookup, AuthenticatedTransaction, KVBlind, Operation,
+  b64enc, AssetTypeCode, AuthenticatedKVLookup, AuthenticatedTransaction, Operation,
 };
 use ledger::policies::{DebtMemo, Fraction};
 use rand_chacha::ChaChaRng;
@@ -53,14 +53,6 @@ pub fn random_asset_type() -> String {
 }
 
 #[wasm_bindgen]
-pub fn create_custom_data_thing() -> JsValue {
-  let kv_blind = KVBlind::gen_random();
-  let vec: Vec<u8> = vec![0x41u8, 0x41u8];
-  let res = (String::from("test"), vec, Some(kv_blind));
-  JsValue::from_serde(&res).unwrap()
-}
-
-#[wasm_bindgen]
 /// Generates a base64 encoded asset type string from a JSON-serialized JavaScript value.
 pub fn asset_type_from_jsvalue(val: &JsValue) -> Result<String, JsValue> {
   let code: [u8; ASSET_TYPE_LENGTH] = val.into_serde().map_err(error_to_jsvalue)?;
@@ -87,12 +79,18 @@ pub fn verify_authenticated_txn(state_commitment: String,
 }
 
 #[wasm_bindgen]
+/// Given a serialized state commitment and an authenticated custom data result, returns true if the custom data result correctly
+/// hashes up to the state commitment and false otherwise.
+/// @param {string} state_commitment - String representing the state commitment.
+/// @param {JsValue} authenticated_txn - JSON-encoded value representing the authenticated custom
+/// data result.
+/// @throws Will throw an error if the state commitment or the authenticated result fail to deserialize.
 pub fn verify_authenticated_custom_data_result(state_commitment: String,
                                                authenticated_res: JsValue)
                                                -> Result<bool, JsValue> {
   let authenticated_res: AuthenticatedKVLookup =
     authenticated_res.into_serde()
-                     .map_err(|_| JsValue::from_str("couldn't deserialize the auth lookup"))?;
+                     .map_err(|_| JsValue::from_str("couldn't deserialize the authenticated custom data lookup"))?;
   let state_commitment = serde_json::from_str::<HashOf<_>>(&state_commitment).map_err(|_e| {
                            JsValue::from_str("Could not deserialize state commitment")
                          })?;

@@ -623,10 +623,12 @@ impl KVBlind {
     KVBlind { blind: PlatformKVBlind(buf) }
   }
 
+  /// Convert the key pair to a JSON-encoded value that can be used in the browser.
   pub fn to_json(&self) -> JsValue {
     JsValue::from_serde(&self.blind).unwrap()
   }
 
+  /// Create a KVBlind from a JSON-encoded value.
   pub fn from_json(val: &JsValue) -> Result<KVBlind, JsValue> {
     let blind: PlatformKVBlind = val.into_serde().map_err(error_to_jsvalue)?;
     Ok(KVBlind { blind })

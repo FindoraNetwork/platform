@@ -13,12 +13,12 @@ use std::io::Error;
 
 pub use sha256::Digest;
 
-const ZERO_256: [u8; DIGESTBYTES] = [0; DIGESTBYTES];
-const ZERO_DIGEST: Digest = Digest { 0: ZERO_256 };
-
 pub fn digest(value: impl AsRef<[u8]>) -> Digest {
   sha256::hash(value.as_ref())
 }
+
+const ZERO_256: [u8; DIGESTBYTES] = [0; DIGESTBYTES];
+const ZERO_DIGEST: Digest = Digest { 0: ZERO_256 };
 
 // Compute the hash of two hashes.  This Merkle tree is a binary
 // representation, so this is a common operation.
