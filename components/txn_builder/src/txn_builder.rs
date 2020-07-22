@@ -294,8 +294,8 @@ pub trait BuildsTransactions {
                                new_memo: &str)
                                -> &mut Self;
 
-  fn serialize(&self) -> Result<Vec<u8>, PlatformError>;
-  fn serialize_str(&self) -> Result<String, PlatformError>;
+  fn serialize(&self) -> Vec<u8>;
+  fn serialize_str(&self) -> String;
 
   fn add_operation(&mut self, op: Operation) -> &mut Self;
 
@@ -567,17 +567,13 @@ impl BuildsTransactions for TransactionBuilder {
     self
   }
 
-  fn serialize(&self) -> Result<Vec<u8>, PlatformError> {
-    let j = serde_json::to_string(&self.txn)?;
-    Ok(j.as_bytes().to_vec())
+  fn serialize(&self) -> Vec<u8> {
+    let j = serde_json::to_string(&self.txn).unwrap();
+    j.as_bytes().to_vec()
   }
 
-  fn serialize_str(&self) -> Result<String, PlatformError> {
-    serde_json::to_string(&self.txn).map_err(|e| {
-                                      PlatformError::SerializationError(format!("[{}]: {:?}",
-                                                                                &error_location!(),
-                                                                                e))
-                                    })
+  fn serialize_str(&self) -> String {
+    serde_json::to_string(&self.txn).unwrap()
   }
 }
 

@@ -538,7 +538,8 @@ impl TracingPolicy {
 
 #[wasm_bindgen]
 #[derive(Default)]
-/// Simple asset rules:
+/// When an asset is defined, several options governing the assets must be
+/// specified:
 /// 1. **Traceable**: Records and identities of traceable assets can be decrypted by a provided tracking key. By defaults, assets do not have
 /// any tracing policies.
 /// 2. **Transferable**: Non-transferable assets can only be transferred once from the issuer to another user. By default, assets are transferable.
