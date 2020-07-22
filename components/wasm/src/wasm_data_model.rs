@@ -680,14 +680,19 @@ pub struct KVHash {
 #[wasm_bindgen]
 impl KVHash {
   /// Generate a new custom data hash without a blinding factor.
-  pub fn new_no_blind(data: &str) -> Self {
-    KVHash { hash: PlatformKVHash(HashOf::new(&(data.as_bytes().to_vec(), None))) }
+  /// @param {JsValue} data - Data to hash. Must be an array of bytes.
+  pub fn new_no_blind(data: &JsValue) -> Result<KVHash, JsValue> {
+    let data = data.into_serde().map_err(error_to_jsvalue)?;
+    Ok(KVHash { hash: PlatformKVHash(HashOf::new(&(data, None))) })
   }
 
   /// Generate a new custom data hash with a blinding factor.
-  pub fn new_with_blind(data: &str, kv_blind: &KVBlind) -> Self {
-    KVHash { hash: PlatformKVHash(HashOf::new(&(data.as_bytes().to_vec(),
-                                                Some(kv_blind.get_blind_ref().clone())))) }
+  /// @param {JsValue} data - Data to hash. Must be an array of bytes.
+  /// @param {KVBlind} kv_blind - Optional blinding factor.
+  pub fn new_with_blind(data: &JsValue, kv_blind: &KVBlind) -> Result<KVHash, JsValue> {
+    let data = data.into_serde().map_err(error_to_jsvalue)?;
+    Ok(KVHash { hash: PlatformKVHash(HashOf::new(&(data,
+                                                   Some(kv_blind.get_blind_ref().clone())))) })
   }
 }
 

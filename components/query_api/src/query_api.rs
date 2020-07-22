@@ -71,6 +71,7 @@ fn store_custom_data<T>(data: web::Data<Arc<RwLock<QueryServer<T>>>>,
   where T: RestfulArchiveAccess + Sync + Send
 {
   let (key, custom_data, blind) = body.into_inner();
+  dbg!(&key);
   let key = Key::from_base64(&key).map_err(|_| {
                                     actix_web::error::ErrorBadRequest("Could not deserialize Key")
                                   })?;
