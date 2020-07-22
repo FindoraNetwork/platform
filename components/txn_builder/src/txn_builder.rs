@@ -568,11 +568,13 @@ impl BuildsTransactions for TransactionBuilder {
   }
 
   fn serialize(&self) -> Vec<u8> {
+    // Unwrap is safe beacuse the underlying transaction is guaranteed to be serializable.
     let j = serde_json::to_string(&self.txn).unwrap();
     j.as_bytes().to_vec()
   }
 
   fn serialize_str(&self) -> String {
+    // Unwrap is safe because the underlying transaction is guaranteed to be serializable.
     serde_json::to_string(&self.txn).unwrap()
   }
 }
