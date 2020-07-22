@@ -637,8 +637,8 @@ impl RestfulLedgerAccess for ActixLedgerClient {
                         self.host,
                         self.port,
                         LedgerAccessRoutes::GlobalState.route());
-    let text = actix_get_request(&self.client, &query).map_err(|_| inp_fail!())?;
-    Ok(serde_json::from_str::<_>(&text).map_err(|_| ser_fail!())?)
+    let text = actix_get_request(&self.client, &query).map_err(|e| inp_fail!(e))?;
+    Ok(serde_json::from_str::<_>(&text).map_err(|e| ser_fail!(e))?)
   }
 
   fn get_kv_entry(&self, _addr: Key) -> Result<AuthenticatedKVLookup, PlatformError> {
@@ -646,7 +646,13 @@ impl RestfulLedgerAccess for ActixLedgerClient {
   }
 
   fn public_key(&self) -> Result<XfrPublicKey, PlatformError> {
-    unimplemented!();
+    let query = format!("{}://{}:{}{}",
+                        self.protocol,
+                        self.host,
+                        self.port,
+                        LedgerAccessRoutes::PublicKey.route());
+    let text = actix_get_request(&self.client, &query).map_err(|e| inp_fail!(e))?;
+    Ok(serde_json::from_str::<_>(&text).map_err(|e| ser_fail!(e))?)
   }
 
   fn sign_message<T: Serialize + serde::de::DeserializeOwned>(

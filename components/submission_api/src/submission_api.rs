@@ -251,8 +251,8 @@ impl RestfulLedgerUpdate for ActixLUClient {
                         self.host,
                         self.port,
                         SubmissionRoutes::SubmitTransaction.route());
-    let text = actix_post_request(&self.client, &query, Some(&txn)).map_err(|_| inp_fail!())?;
-    let handle = serde_json::from_str::<TxnHandle>(&text).map_err(|_| ser_fail!())?;
+    let text = actix_post_request(&self.client, &query, Some(&txn)).map_err(|e| inp_fail!(e))?;
+    let handle = serde_json::from_str::<TxnHandle>(&text).map_err(|e| ser_fail!(e))?;
     info!("Transaction submitted successfully");
     Ok(handle)
   }
@@ -264,7 +264,7 @@ impl RestfulLedgerUpdate for ActixLUClient {
                         self.port,
                         SubmissionRoutes::ForceEndBlock.route());
     let opt: Option<u64> = None;
-    actix_post_request(&self.client, &query, opt).map_err(|_| inp_fail!())?;
+    actix_post_request(&self.client, &query, opt).map_err(|e| inp_fail!(e))?;
     Ok(())
   }
 
@@ -274,8 +274,8 @@ impl RestfulLedgerUpdate for ActixLUClient {
                         self.host,
                         self.port,
                         SubmissionRoutes::TxnStatus.with_arg(&handle.0));
-    let text = actix_get_request(&self.client, &query).map_err(|_| inp_fail!())?;
-    Ok(serde_json::from_str::<TxnStatus>(&text).map_err(|_| ser_fail!())?)
+    let text = actix_get_request(&self.client, &query).map_err(|e| inp_fail!(e))?;
+    Ok(serde_json::from_str::<TxnStatus>(&text).map_err(|e| ser_fail!(e))?)
   }
 }
 
