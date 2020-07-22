@@ -5907,6 +5907,7 @@ dependencies = [
  "serde",
  "serde_derive",
  "serde_json",
+ "sparse_merkle_tree",
  "txn_builder",
  "utils",
  "wasm-bindgen",

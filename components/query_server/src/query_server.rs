@@ -325,7 +325,6 @@ mod tests {
   use ledger_api_service::MockLedgerClient;
   use rand_chacha::ChaChaRng;
   use rand_core::SeedableRng;
-  use sparse_merkle_tree::helpers::l256;
   use std::str;
   use std::sync::{Arc, RwLock};
   use txn_builder::{
@@ -351,7 +350,7 @@ mod tests {
     let data = "some_data";
     let blind = KVBlind::gen_random();
     let hash = KVHash::new(&data, Some(&blind));
-    let key = l256("01");
+    let key = Key::gen_random(&mut prng);
 
     // Add hash to ledger and update query server
     let mut builder = TransactionBuilder::from_seq_id(ledger_state.get_block_commit_count());
@@ -635,7 +634,7 @@ mod tests {
 
     // KV update txn
     let data = [0u8, 16];
-    let key = l256("01");
+    let key = Key::gen_random(&mut prng);
     let hash = KVHash::new(&data, None);
     let update = KVUpdate::new((key, Some(hash)), 0, &kp);
 

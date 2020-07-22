@@ -11,7 +11,9 @@ use credentials::{
 };
 use cryptohash::sha256;
 use js_sys::Promise;
-use ledger::data_model::{b64enc, AssetTypeCode, AuthenticatedTransaction, Operation};
+use ledger::data_model::{
+  b64enc, AssetTypeCode, AuthenticatedKVLookup, AuthenticatedTransaction, KVBlind, Operation,
+};
 use ledger::policies::{DebtMemo, Fraction};
 use rand_chacha::ChaChaRng;
 use rand_core::SeedableRng;
@@ -51,6 +53,14 @@ pub fn random_asset_type() -> String {
 }
 
 #[wasm_bindgen]
+pub fn create_custom_data_thing() -> JsValue {
+  let kv_blind = KVBlind::gen_random();
+  let vec: Vec<u8> = vec![0x41u8, 0x41u8];
+  let res = (String::from("test"), vec, Some(kv_blind));
+  JsValue::from_serde(&res).unwrap()
+}
+
+#[wasm_bindgen]
 /// Generates a base64 encoded asset type string from a JSON-serialized JavaScript value.
 pub fn asset_type_from_jsvalue(val: &JsValue) -> Result<String, JsValue> {
   let code: [u8; ASSET_TYPE_LENGTH] = val.into_serde().map_err(error_to_jsvalue)?;
@@ -74,6 +84,19 @@ pub fn verify_authenticated_txn(state_commitment: String,
                            JsValue::from_str("Could not deserialize state commitment")
                          })?;
   Ok(authenticated_txn.is_valid(state_commitment))
+}
+
+#[wasm_bindgen]
+pub fn verify_authenticated_custom_data_result(state_commitment: String,
+                                               authenticated_res: JsValue)
+                                               -> Result<bool, JsValue> {
+  let authenticated_res: AuthenticatedKVLookup =
+    authenticated_res.into_serde()
+                     .map_err(|_| JsValue::from_str("couldn't deserialize the auth lookup"))?;
+  let state_commitment = serde_json::from_str::<HashOf<_>>(&state_commitment).map_err(|_e| {
+                           JsValue::from_str("Could not deserialize state commitment")
+                         })?;
+  Ok(authenticated_res.is_valid(state_commitment))
 }
 
 #[wasm_bindgen]

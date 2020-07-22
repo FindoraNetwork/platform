@@ -4,7 +4,6 @@ use credentials::{
   CredCommitment, CredIssuerPublicKey, CredIssuerSecretKey, CredPoK, CredRevealSig, CredSignature,
   CredUserPublicKey, CredUserSecretKey, Credential as PlatformCredential,
 };
-use cryptohash::sha256::{Digest, DIGESTBYTES};
 use ledger::data_model::{
   AssetRules as PlatformAssetRules, AssetType as PlatformAssetType,
   AuthenticatedAIRResult as PlatformAuthenticatedAIRResult, AuthenticatedUtxo,
@@ -14,6 +13,7 @@ use ledger::data_model::{
 use rand_chacha::ChaChaRng;
 use rand_core::{RngCore, SeedableRng};
 use serde::{Deserialize, Serialize};
+use sparse_merkle_tree::Key as SmtKey;
 use utils::HashOf;
 use wasm_bindgen::prelude::*;
 use zei::setup::PublicParams as ZeiPublicParams;
@@ -622,6 +622,15 @@ impl KVBlind {
     small_rng.fill_bytes(&mut buf);
     KVBlind { blind: PlatformKVBlind(buf) }
   }
+
+  pub fn to_json(&self) -> JsValue {
+    JsValue::from_serde(&self.blind).unwrap()
+  }
+
+  pub fn from_json(val: &JsValue) -> Result<KVBlind, JsValue> {
+    let blind: PlatformKVBlind = val.into_serde().map_err(error_to_jsvalue)?;
+    Ok(KVBlind { blind })
+  }
 }
 
 impl KVBlind {
@@ -633,7 +642,7 @@ impl KVBlind {
 #[wasm_bindgen]
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 /// Key for hashes in the ledger's custom data store.
-pub struct Key(Digest);
+pub struct Key(SmtKey);
 
 #[wasm_bindgen]
 impl Key {
@@ -641,14 +650,22 @@ impl Key {
   /// Figure out how to store prng ref in browser: https://bugtracker.findora.org/issues/63
   pub fn gen_random() -> Self {
     let mut small_rng = ChaChaRng::from_entropy();
-    let mut buf: [u8; DIGESTBYTES] = [0u8; DIGESTBYTES];
-    small_rng.fill_bytes(&mut buf);
-    Key(Digest::from_slice(&buf).unwrap())
+    Key(SmtKey::gen_random(&mut small_rng))
+  }
+
+  /// Returns a base64 encoded version of the Key.
+  pub fn to_base64(&self) -> String {
+    self.0.to_base64()
+  }
+
+  /// Generates a Key from a base64-encoded String.
+  pub fn from_base64(string: &str) -> Result<Key, JsValue> {
+    Ok(Key(SmtKey::from_base64(string).map_err(error_to_jsvalue)?))
   }
 }
 
 impl Key {
-  pub fn get_ref(&self) -> &Digest {
+  pub fn get_ref(&self) -> &SmtKey {
     &self.0
   }
 }
