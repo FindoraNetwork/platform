@@ -37,7 +37,7 @@ pub fn submit_transaction<RNG, LU, TF>(data: web::Data<Arc<RwLock<SubmissionServ
   match handle_res {
     Ok(handle) => Ok(web::Json(handle)),
     Err(e) => {
-      error!("Transaction invalid");
+      error!("Transaction invalid: {}", e);
       Err(error::ErrorBadRequest(format!("{}", e)))
     }
   }

@@ -73,6 +73,16 @@ macro_rules! inp_fail {
 }
 
 #[macro_export]
+macro_rules! sub_fail {
+  () => {
+    PlatformError::SubmissionServerError(error_location!())
+  };
+  ($s:expr) => {
+    PlatformError::SubmissionServerError(format!("[{}] {}", &error_location!(), &$s))
+  };
+}
+
+#[macro_export]
 macro_rules! ser_fail {
   () => {
     PlatformError::SerializationError(error_location!())

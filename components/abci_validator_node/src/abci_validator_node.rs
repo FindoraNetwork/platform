@@ -2,8 +2,8 @@
 use abci::*;
 use ledger::data_model::errors::PlatformError;
 use ledger::data_model::Transaction;
-use ledger::error_location;
 use ledger::store::*;
+use ledger::{error_location, sub_fail};
 use ledger_api_service::RestfulApiService;
 use log::info;
 use rand_chacha::ChaChaRng;
@@ -17,7 +17,9 @@ use submission_server::{convert_tx, SubmissionServer, TxnForward};
 use utils::HashOf;
 
 #[derive(Default)]
-pub struct TendermintForward;
+pub struct TendermintForward {
+  tendermint_reply: String,
+}
 
 impl TxnForward for TendermintForward {
   fn forward_txn(&self, txn: Transaction) -> Result<(), PlatformError> {
@@ -28,11 +30,11 @@ impl TxnForward for TendermintForward {
 
     info!("forward_txn: \'{}\'", &json_rpc);
     let client = reqwest::blocking::Client::new();
-    let _response =
-      client.post("http://localhost:26657")
-            .body(json_rpc)
-            .send()
-            .or_else(|_| Err(PlatformError::SubmissionServerError(error_location!())))?;
+    let _response = client.post(&format!("http://{}", self.tendermint_reply))
+                          .body(json_rpc)
+                          .header(reqwest::header::CONTENT_TYPE, "application/json")
+                          .send()
+                          .or_else(|e| Err(sub_fail!(e)))?;
     Ok(())
   }
 }
@@ -42,7 +44,10 @@ struct ABCISubmissionServer {
 }
 
 impl ABCISubmissionServer {
-  fn new(base_dir: Option<&Path>) -> Result<ABCISubmissionServer, PlatformError> {
+  fn new(base_dir: Option<&Path>,
+         tendermint_reply: String)
+         -> Result<ABCISubmissionServer, PlatformError> {
+    info!("tendermint reply url: {}", &tendermint_reply);
     let ledger_state = match base_dir {
       None => LedgerState::test_ledger(),
       Some(base_dir) => LedgerState::load_or_init(base_dir).unwrap(),
@@ -51,7 +56,7 @@ impl ABCISubmissionServer {
     Ok(ABCISubmissionServer { la:
                                 Arc::new(RwLock::new(SubmissionServer::new_no_auto_commit(prng,
                                                                      Arc::new(RwLock::new(ledger_state)),
-                                                                     Some(TendermintForward::default()))?)) })
+                                                                     Some(TendermintForward { tendermint_reply }))?)) })
   }
 }
 
@@ -169,7 +174,16 @@ fn main() {
   flexi_logger::Logger::with_env().start().unwrap();
   let base_dir = std::env::var_os("LEDGER_DIR").filter(|x| !x.is_empty());
   let base_dir = base_dir.as_ref().map(Path::new);
-  let app = ABCISubmissionServer::new(base_dir).unwrap();
+
+  let tendermint_port = std::env::var_os("TENDERMINT_PORT").filter(|x| !x.is_empty());
+  let tendermint_port = tendermint_port.and_then(|x| x.into_string().ok())
+                                       .unwrap_or_else(|| "26657".into());
+
+  let tendermint_host = std::env::var_os("TENDERMINT_HOST").filter(|x| !x.is_empty());
+  let tendermint_host = tendermint_host.and_then(|x| x.into_string().ok())
+                                       .unwrap_or_else(|| "localhost".into());
+
+  let app = ABCISubmissionServer::new(base_dir, format!("{}:{}",tendermint_host,tendermint_port)).unwrap();
   let submission_server = Arc::clone(&app.la);
   let cloned_lock = Arc::clone(&submission_server.read().unwrap().borrowable_ledger_state());
 
@@ -202,8 +216,12 @@ fn main() {
     }
   });
 
-  let abci_host = std::option_env!("ABCI_HOST").unwrap_or("0.0.0.0");
-  let abci_port = std::option_env!("ABCI_PORT").unwrap_or("26658");
+  let abci_host = std::env::var_os("ABCI_HOST").filter(|x| !x.is_empty());
+  let abci_host = abci_host.and_then(|x| x.into_string().ok())
+                           .unwrap_or_else(|| "0.0.0.0".into());
+  let abci_port = std::env::var_os("ABCI_PORT").filter(|x| !x.is_empty());
+  let abci_port = abci_port.and_then(|x| x.into_string().ok())
+                           .unwrap_or_else(|| "26658".into());
 
   // TODO: pass the address and port in on the command line
   let addr_str = format!("{}:{}", abci_host, abci_port);

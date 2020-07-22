@@ -54,7 +54,7 @@ fn run_log_against<LU, LA>(submit: &mut LU,
     let (comm, block) = (logged_block.state, logged_block.block);
 
     let (prev_comm, prev_count, prev_sig) = access.get_state_commitment().unwrap();
-    prev_sig.verify(&access_key, &(prev_comm.clone(), prev_count.clone()))
+    prev_sig.verify(&access_key, &(prev_comm.clone(), prev_count))
             .unwrap();
 
     if prev_count != ix as u64 {
@@ -83,7 +83,7 @@ fn run_log_against<LU, LA>(submit: &mut LU,
   }
 
   let (final_comm, final_count, final_sig) = access.get_state_commitment().unwrap();
-  final_sig.verify(&access_key, &(final_comm.clone(), final_count.clone()))
+  final_sig.verify(&access_key, &(final_comm.clone(), final_count))
            .unwrap();
 
   let final_comm = (final_comm, final_count);
