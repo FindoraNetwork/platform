@@ -191,7 +191,7 @@ impl AssetTracerKeyPair {
 }
 
 #[wasm_bindgen]
-#[derive(Deserialize)]
+#[derive(Deserialize, Clone)]
 /// Asset owner memo. Contains information needed to decrypt an asset record.
 /// @see {@link ClientAssetRecord} for more details about asset records.
 pub struct OwnerMemo {
@@ -209,6 +209,11 @@ impl OwnerMemo {
     let zei_owner_memo: ZeiOwnerMemo = val.into_serde().unwrap();
     OwnerMemo { memo: ZeiOwnerMemo { blind_share: zei_owner_memo.blind_share,
                                      lock: zei_owner_memo.lock } }
+  }
+
+  /// Creates a clone of the owner memo.
+  pub fn clone(&self) -> Self {
+    OwnerMemo { memo: self.memo.clone() }
   }
 }
 
