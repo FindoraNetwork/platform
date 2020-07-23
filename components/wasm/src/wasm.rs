@@ -415,11 +415,8 @@ impl TransactionBuilder {
   }
 
   /// Extracts the serialized form of a transaction.
-  // TODO Develop standard terminology for Javascript functions that may throw errors.
-  pub fn transaction(&self) -> Result<String, JsValue> {
-    Ok(self.get_builder()
-           .serialize_str()
-           .map_err(error_to_jsvalue)?)
+  pub fn transaction(&self) -> String {
+    self.get_builder().serialize_str()
   }
 
   /// Fetches a client record from a transaction.
