@@ -402,7 +402,7 @@ mod tests {
                                       .unwrap();
     let status = submission_server.txn_status
                                   .get(&txn_handle)
-                                  .expect("handle should be in map")
+                                  .expect("The handle should be in map by now.")
                                   .clone();
     match status {
       TxnStatus::Rejected(_) => {}
