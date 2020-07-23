@@ -104,9 +104,8 @@ impl abci::Application for ABCISubmissionServer {
     let mut resp = ResponseDeliverTx::new();
     if let Some(tx) = convert_tx(req.get_tx()) {
       if let Ok(mut la) = self.la.write() {
-        if la.cache_transaction(tx).is_ok() {
-          return resp;
-        }
+        la.cache_transaction(tx);
+        return resp;
       }
     }
     resp.set_code(1);
