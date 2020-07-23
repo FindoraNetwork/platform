@@ -56,7 +56,7 @@ pub fn protocol_host() -> (String, String) {
                                   .unwrap_or_else(|| SERVER_HOST.to_string()))
 }
 #[cfg(not(target_arch = "wasm32"))]
-pub fn actix_post_request<T: Serialize>(client: &reqwest::Client,
+pub fn actix_post_request<T: Serialize>(client: &reqwest::blocking::Client,
                                         query: &str,
                                         body: Option<T>)
                                         -> Result<String, reqwest::Error> {
@@ -70,7 +70,9 @@ pub fn actix_post_request<T: Serialize>(client: &reqwest::Client,
 }
 
 #[cfg(not(target_arch = "wasm32"))]
-pub fn actix_get_request(client: &reqwest::Client, query: &str) -> Result<String, reqwest::Error> {
+pub fn actix_get_request(client: &reqwest::blocking::Client,
+                         query: &str)
+                         -> Result<String, reqwest::Error> {
   Ok(client.get(query).send()?.error_for_status()?.text()?)
 }
 

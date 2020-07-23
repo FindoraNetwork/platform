@@ -455,6 +455,8 @@ pub trait RestfulLedgerAccess {
                SignatureOf<(HashOf<Option<StateCommitmentData>>, u64)>),
               PlatformError>;
 
+  // fn get_state_commitment_data(&self) -> Result<StateCommitmentData, PlatformError>;
+
   fn get_kv_entry(&self, addr: Key) -> Result<AuthenticatedKVLookup, PlatformError>;
 
   fn public_key(&self) -> Result<XfrPublicKey, PlatformError>;
@@ -564,7 +566,7 @@ pub struct ActixLedgerClient {
   port: usize,
   host: String,
   protocol: String,
-  client: reqwest::Client,
+  client: reqwest::blocking::Client,
 }
 
 impl ActixLedgerClient {
@@ -572,7 +574,7 @@ impl ActixLedgerClient {
     ActixLedgerClient { port,
                         host: String::from(host),
                         protocol: String::from(protocol),
-                        client: reqwest::Client::new() }
+                        client: reqwest::blocking::Client::new() }
   }
 }
 

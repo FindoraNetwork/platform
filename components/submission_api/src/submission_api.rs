@@ -232,7 +232,7 @@ pub struct ActixLUClient {
   port: usize,
   host: String,
   protocol: String,
-  client: reqwest::Client,
+  client: reqwest::blocking::Client,
 }
 
 impl ActixLUClient {
@@ -240,7 +240,7 @@ impl ActixLUClient {
     ActixLUClient { port,
                     host: String::from(host),
                     protocol: String::from(protocol),
-                    client: reqwest::Client::new() }
+                    client: reqwest::blocking::Client::builder().build().unwrap() }
   }
 }
 

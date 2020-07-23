@@ -29,7 +29,9 @@ impl TxnForward for TendermintForward {
     let json_rpc = format!("{{\"jsonrpc\":\"2.0\",\"id\":\"anything\",\"method\":\"broadcast_tx_sync\",\"params\": {{\"tx\": \"{}\"}}}}", &txn_b64);
 
     info!("forward_txn: \'{}\'", &json_rpc);
-    let client = reqwest::blocking::Client::new();
+    let client = reqwest::blocking::Client::builder().timeout(None)
+                                                     .build()
+                                                     .unwrap();
     let _response = client.post(&format!("http://{}", self.tendermint_reply))
                           .body(json_rpc)
                           .header(reqwest::header::CONTENT_TYPE, "application/json")
@@ -85,15 +87,12 @@ impl abci::Application for ABCISubmissionServer {
           &std::str::from_utf8(req.get_tx()).unwrap_or("invalid format"));
 
     if let Some(tx) = convert_tx(req.get_tx()) {
-      if let Ok(la) = self.la.read() {
-        if la.get_committed_state().write().is_ok() && TxnEffect::compute_effect(tx).is_err() {
-          resp.set_code(1);
-          resp.set_log(String::from("Check failed"));
-        }
-      } else {
+      info!("converted: {:?}", tx);
+      if TxnEffect::compute_effect(tx).is_err() {
         resp.set_code(1);
-        resp.set_log(String::from("Could not access ledger"));
+        resp.set_log(String::from("Check failed"));
       }
+      info!("done check_tx");
     } else {
       resp.set_code(1);
       resp.set_log(String::from("Could not unpack transaction"));
@@ -109,8 +108,11 @@ impl abci::Application for ABCISubmissionServer {
 
     let mut resp = ResponseDeliverTx::new();
     if let Some(tx) = convert_tx(req.get_tx()) {
+      info!("converted: {:?}", tx);
       if let Ok(mut la) = self.la.write() {
+        info!("locked for write");
         if la.cache_transaction(tx).is_ok() {
+          info!("cached");
           return resp;
         }
       }
@@ -185,7 +187,7 @@ fn main() {
 
   let app = ABCISubmissionServer::new(base_dir, format!("{}:{}",tendermint_host,tendermint_port)).unwrap();
   let submission_server = Arc::clone(&app.la);
-  let cloned_lock = Arc::clone(&submission_server.read().unwrap().borrowable_ledger_state());
+  let cloned_lock = { Arc::clone(&submission_server.read().unwrap().borrowable_ledger_state()) };
 
   let host = std::env::var_os("SERVER_HOST").filter(|x| !x.is_empty())
                                             .unwrap_or_else(|| "localhost".into());
