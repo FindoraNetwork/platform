@@ -138,11 +138,12 @@ pub fn issue_and_transfer_asset(data_dir: &str,
                                         &ZeiCredential,
                                         &CredCommitmentKey)>,
                                 txn_file: Option<&str>,
+                                memo_file: Option<&str>,
                                 tracing_policy: Option<AssetTracingPolicy>,
                                 identity_commitment: Option<CredCommitment>)
                                 -> Result<TransactionBuilder, PlatformError> {
   // Asset issuance is always nonconfidential
-  let (blind_asset_record, _, owner_memo) =
+  let (blind_asset_record, tracer_memos, owner_memo) =
       get_blind_asset_record_and_memos(issuer_key_pair.get_pk(),
                                        amount,
                                        token_code,
@@ -182,12 +183,16 @@ pub fn issue_and_transfer_asset(data_dir: &str,
   txn_builder.add_operation_issue_asset(issuer_key_pair,
                                         &token_code,
                                         get_and_update_sequence_number(data_dir)?,
-                                        &[(TxOutput(blind_asset_record), owner_memo)])?
+                                        &[(TxOutput(blind_asset_record), owner_memo.clone())])?
              .add_operation(xfr_op)
              .transaction();
 
   if let Some(file) = txn_file {
     store_txn_to_file(file, &txn_builder)?;
+  }
+
+  if let Some(file) = memo_file {
+    store_tracer_and_owner_memos_to_file(file, (tracer_memos, owner_memo))?;
   }
 
   Ok(txn_builder)
@@ -346,9 +351,11 @@ pub fn query_open_asset_record<T>(rest_client: &T,
   where T: RestfulLedgerAccess
 {
   let blind_asset_record = (rest_client.get_utxo(sid)?.utxo.0).0;
-  open_blind_asset_record(&blind_asset_record, owner_memo, key_pair.get_sk_ref()).or_else(|error| {
-                                                Err(PlatformError::ZeiError(error_location!(), error))
-                                              })
+  open_blind_asset_record(&blind_asset_record,
+                          owner_memo,
+                          key_pair.get_sk_ref()).or_else(|error| {
+                            Err(PlatformError::ZeiError(error_location!(), error))
+                          })
 }
 
 /// Uses environment variable RUST_LOG to select log level and filters output by module or regex.
@@ -456,6 +463,7 @@ mod tests {
                                amount,
                                code,
                                AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
+                               None,
                                None,
                                None,
                                None,

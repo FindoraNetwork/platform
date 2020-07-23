@@ -794,6 +794,8 @@ pub(crate) fn store_tracer_memo_to_file(path_str: &str,
 pub fn store_tracer_and_owner_memos_to_file(path_str: &str,
                                             tracer_and_owner_memos: TracerAndOwnerMemos)
                                             -> Result<(), PlatformError> {
+  debug!("store_tracer_and_owner_memos_to_file: path_str = {}, tracer_and_owner_memos = {:?}",
+         path_str, &tracer_and_owner_memos);
   if let Ok(as_json) = serde_json::to_string(&tracer_and_owner_memos) {
     if let Err(error) = fs::write(path_str, &as_json) {
       return Err(PlatformError::IoError(format!("Failed to create file {}: {}.",

@@ -98,7 +98,7 @@ fn test_create_users() {
   io::stdout().write_all(&output.stdout).unwrap();
   io::stdout().write_all(&output.stderr).unwrap();
 
-  assert_eq!(output.status.code(), Some(exitcode::USAGE));
+  assert!(output.status.success());
 
   // Create a credential issuer
   let output =
@@ -285,7 +285,6 @@ fn test_create_txn_builder_with_name() {
 // Store sids
 //
 #[test]
-// The user is given no information. These will be replaced with panic!
 fn test_store_sids_with_path() {
   // Store sids
   let output = store_sids_with_path("sids", "1,2,4").expect("Failed to store sids");
@@ -293,5 +292,5 @@ fn test_store_sids_with_path() {
   io::stdout().write_all(&output.stdout).unwrap();
   io::stdout().write_all(&output.stderr).unwrap();
 
-  assert_eq!(output.status.code(), Some(exitcode::USAGE));
+  assert!(output.status.success());
 }

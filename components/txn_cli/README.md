@@ -139,14 +139,15 @@ txn_cli create_txn_builder --name txn_issue_and_transfer
 ```
 
 #### Issue and transfer the asset
-```
-txn_cli --txn txn_issue_and_transfer asset_issuer --id 1 issue_and_transfer_asset --recipient 1 --amount 100 --token_code <token_code> --confidential_amount
-```
+Asset tracer memo and owner memo are necessary for asset tracing, so we need a *memo_file* argument.
 
-#### Store asset tracer memo and owner memo
-Asset tracer memo and owner memo are necessary for asset tracing. To store them:
 ```
-txn_cli asset_issuer --id 1 store_memos --file memo_file --amount 100 --token_code <token_code> --confidential_amount
+txn_cli --txn txn_issue_and_transfer asset_issuer --id 1 issue_and_transfer_asset
+    --recipient 1
+    --amount 100
+    --token_code <token_code>
+    --memo_file memo_file
+    --confidential_amount
 ```
 
 #### Submit the transaction and get the utxo
@@ -201,10 +202,10 @@ Save this token code for later use. By default, a randomly generated token code 
 If you wish to have `txn_cli` use a user supplied token code, use the `--token_code <token_code>` argument.
 
 ```
-txn_cli --txn txn_define asset_issuer --id 0 define_asset --memo 'Define an asset.' --token_code 23
+txn_cli --txn txn_define asset_issuer --id 0 define_asset --memo 'Define an asset.' --token_code <token_code>
 ```
 
-(FIXME 02: supplying `token_code` breaks the `define_asset` call)
+*<token_code>* is supposed to be a 44 character base 64 string.
 
 To define a fiat asset, add `--fiat`.
 To allow update or tracing, add `--updatable` or `--traceable`, respectively.
@@ -215,8 +216,9 @@ txn_cli --txn txn_define submit
 ```
 
 #### Issue units of an asset
-After an asset is defined and the transaction is submitted:
+After an asset is defined and the transaction is submitted
 1) Create another empty transaction
+
 ```
 txn_cli create_txn_builder --name txn_issue
 ```
@@ -224,7 +226,8 @@ txn_cli create_txn_builder --name txn_issue
 ```
 txn_cli --txn txn_issue asset_issuer --id 0 issue_asset --token_code <token_code> --amount 100
 ```
-To make the token amount confidential, add `--confidential_amount`.
+To make the token amount confidential, add `--confidential_amount`
+
 3) Submit the transaction
 ```
 txn_cli --txn txn_issue submit
