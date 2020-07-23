@@ -4,7 +4,6 @@ use credentials::{
   CredCommitment, CredIssuerPublicKey, CredIssuerSecretKey, CredPoK, CredRevealSig, CredSignature,
   CredUserPublicKey, CredUserSecretKey, Credential as PlatformCredential,
 };
-use cryptohash::sha256::{Digest, DIGESTBYTES};
 use ledger::data_model::{
   AssetRules as PlatformAssetRules, AssetType as PlatformAssetType,
   AuthenticatedAIRResult as PlatformAuthenticatedAIRResult, AuthenticatedUtxo,
@@ -14,6 +13,7 @@ use ledger::data_model::{
 use rand_chacha::ChaChaRng;
 use rand_core::{RngCore, SeedableRng};
 use serde::{Deserialize, Serialize};
+use sparse_merkle_tree::Key as SmtKey;
 use utils::HashOf;
 use wasm_bindgen::prelude::*;
 use zei::setup::PublicParams as ZeiPublicParams;
@@ -620,6 +620,17 @@ impl KVBlind {
     small_rng.fill_bytes(&mut buf);
     KVBlind { blind: PlatformKVBlind(buf) }
   }
+
+  /// Convert the key pair to a JSON-encoded value that can be used in the browser.
+  pub fn to_json(&self) -> JsValue {
+    JsValue::from_serde(&self.blind).unwrap()
+  }
+
+  /// Create a KVBlind from a JSON-encoded value.
+  pub fn from_json(val: &JsValue) -> Result<KVBlind, JsValue> {
+    let blind: PlatformKVBlind = val.into_serde().map_err(error_to_jsvalue)?;
+    Ok(KVBlind { blind })
+  }
 }
 
 impl KVBlind {
@@ -631,7 +642,7 @@ impl KVBlind {
 #[wasm_bindgen]
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 /// Key for hashes in the ledger's custom data store.
-pub struct Key(Digest);
+pub struct Key(SmtKey);
 
 #[wasm_bindgen]
 impl Key {
@@ -639,14 +650,22 @@ impl Key {
   /// Figure out how to store prng ref in browser: https://bugtracker.findora.org/issues/63
   pub fn gen_random() -> Self {
     let mut small_rng = ChaChaRng::from_entropy();
-    let mut buf: [u8; DIGESTBYTES] = [0u8; DIGESTBYTES];
-    small_rng.fill_bytes(&mut buf);
-    Key(Digest::from_slice(&buf).unwrap())
+    Key(SmtKey::gen_random(&mut small_rng))
+  }
+
+  /// Returns a base64 encoded version of the Key.
+  pub fn to_base64(&self) -> String {
+    self.0.to_base64()
+  }
+
+  /// Generates a Key from a base64-encoded String.
+  pub fn from_base64(string: &str) -> Result<Key, JsValue> {
+    Ok(Key(SmtKey::from_base64(string).map_err(error_to_jsvalue)?))
   }
 }
 
 impl Key {
-  pub fn get_ref(&self) -> &Digest {
+  pub fn get_ref(&self) -> &SmtKey {
     &self.0
   }
 }
@@ -661,14 +680,19 @@ pub struct KVHash {
 #[wasm_bindgen]
 impl KVHash {
   /// Generate a new custom data hash without a blinding factor.
-  pub fn new_no_blind(data: &str) -> Self {
-    KVHash { hash: PlatformKVHash(HashOf::new(&(data.as_bytes().to_vec(), None))) }
+  /// @param {JsValue} data - Data to hash. Must be an array of bytes.
+  pub fn new_no_blind(data: &JsValue) -> Result<KVHash, JsValue> {
+    let data = data.into_serde().map_err(error_to_jsvalue)?;
+    Ok(KVHash { hash: PlatformKVHash(HashOf::new(&(data, None))) })
   }
 
   /// Generate a new custom data hash with a blinding factor.
-  pub fn new_with_blind(data: &str, kv_blind: &KVBlind) -> Self {
-    KVHash { hash: PlatformKVHash(HashOf::new(&(data.as_bytes().to_vec(),
-                                                Some(kv_blind.get_blind_ref().clone())))) }
+  /// @param {JsValue} data - Data to hash. Must be an array of bytes.
+  /// @param {KVBlind} kv_blind - Optional blinding factor.
+  pub fn new_with_blind(data: &JsValue, kv_blind: &KVBlind) -> Result<KVHash, JsValue> {
+    let data = data.into_serde().map_err(error_to_jsvalue)?;
+    Ok(KVHash { hash: PlatformKVHash(HashOf::new(&(data,
+                                                   Some(kv_blind.get_blind_ref().clone())))) })
   }
 }
 

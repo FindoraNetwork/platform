@@ -11,7 +11,7 @@ use credentials::{
 };
 use cryptohash::sha256;
 use ledger::data_model::{
-  b64enc, AssetTypeCode, AuthenticatedTransaction, Operation, TransferType,
+  b64enc, AssetTypeCode, AuthenticatedKVLookup, AuthenticatedTransaction, Operation, TransferType,
 };
 use ledger::policies::{DebtMemo, Fraction};
 use rand_chacha::ChaChaRng;
@@ -81,6 +81,25 @@ pub fn verify_authenticated_txn(state_commitment: String,
                            JsValue::from_str("Could not deserialize state commitment")
                          })?;
   Ok(authenticated_txn.is_valid(state_commitment))
+}
+
+#[wasm_bindgen]
+/// Given a serialized state commitment and an authenticated custom data result, returns true if the custom data result correctly
+/// hashes up to the state commitment and false otherwise.
+/// @param {string} state_commitment - String representing the state commitment.
+/// @param {JsValue} authenticated_txn - JSON-encoded value representing the authenticated custom
+/// data result.
+/// @throws Will throw an error if the state commitment or the authenticated result fail to deserialize.
+pub fn verify_authenticated_custom_data_result(state_commitment: String,
+                                               authenticated_res: JsValue)
+                                               -> Result<bool, JsValue> {
+  let authenticated_res: AuthenticatedKVLookup =
+    authenticated_res.into_serde()
+                     .map_err(|_| JsValue::from_str("couldn't deserialize the authenticated custom data lookup"))?;
+  let state_commitment = serde_json::from_str::<HashOf<_>>(&state_commitment).map_err(|_e| {
+                           JsValue::from_str("Could not deserialize state commitment")
+                         })?;
+  Ok(authenticated_res.is_valid(state_commitment))
 }
 
 #[wasm_bindgen]

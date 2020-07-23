@@ -8,14 +8,13 @@ use clap::{App, Arg, SubCommand};
 use credentials::u8_slice_to_u32_vec;
 use ledger::data_model::errors::PlatformError;
 use ledger::data_model::{
-  b64dec, b64enc, AccountAddress, AssetRules, AssetTypeCode, KVBlind, KVHash, SignatureRules,
-  TxoRef, TxoSID,
+  AccountAddress, AssetRules, AssetTypeCode, KVBlind, KVHash, SignatureRules, TxoRef, TxoSID,
 };
 use ledger::{error_location, ser_fail};
 use ledger_api_service::RestfulLedgerAccess;
 use log::{debug, error, info};
 use query_api::RestfulQueryServerAccess;
-use sparse_merkle_tree::{digest, Key};
+use sparse_merkle_tree::Key;
 use std::env;
 use submission_api::RestfulLedgerUpdate;
 use txn_builder::{BuildsTransactions, TransactionBuilder};
@@ -235,7 +234,7 @@ pub(crate) fn process_asset_issuer_cmd(asset_issuer_matches: &clap::ArgMatches,
           parse_to_u64(asset_issuer_matches.value_of("id")
                                  .ok_or_else(|| PlatformError::InputsError(error_location!()))?)?;
       let key_pair = data.get_asset_issuer_key_pair(issuer_id)?;
-      let key = digest(kv_matches.value_of("key").unwrap());
+      let key = Key::hash(kv_matches.value_of("key").unwrap());
       let gen = parse_to_u64(kv_matches.value_of("gen")
           .ok_or_else(|| PlatformError::InputsError(error_location!()))?)
           .map_err(|e| PlatformError::InputsError(format!("{}:{}",e,error_location!())))?;
@@ -244,7 +243,7 @@ pub(crate) fn process_asset_issuer_cmd(asset_issuer_matches: &clap::ArgMatches,
       let mut txn_builder = TransactionBuilder::from_seq_id(seq_id);
       let hash = KVHash::new(&value, None);
       txn_builder.add_operation_kv_update(&key_pair, &key, gen, Some(&hash))?;
-      info!("Hash of data will be stored at key {}", b64enc(&key));
+      info!("Hash of data will be stored at key {}", key.to_base64());
       store_txn_to_file(&txn_file, &txn_builder)
     }
     ("clear_kv", Some(kv_matches)) => {
@@ -252,10 +251,8 @@ pub(crate) fn process_asset_issuer_cmd(asset_issuer_matches: &clap::ArgMatches,
       let issuer_id =
           parse_to_u64(asset_issuer_matches.value_of("id")
                                            .ok_or_else(|| PlatformError::InputsError(error_location!()))?)?;
-      let key = Key::from_slice(&b64dec(kv_matches.value_of("key")
-          .ok_or_else(|| PlatformError::InputsError(error_location!()))?)
-          .map_err(|e| PlatformError::InputsError(format!("{}:{}",e,error_location!())))?)
-          .ok_or_else(|| PlatformError::InputsError(error_location!()))?;
+      let key = Key::from_base64(kv_matches.value_of("key").unwrap())
+          .map_err(|e| PlatformError::InputsError(format!("{}:{}",e,error_location!())))?;
       let key_pair = data.get_asset_issuer_key_pair(issuer_id)?;
       let gen = parse_to_u64(kv_matches.value_of("gen")
           .ok_or_else(|| PlatformError::InputsError(error_location!()))?)
@@ -1305,18 +1302,14 @@ pub(crate) fn process_custom_data_cmds<T: RestfulQueryServerAccess>(
   -> Result<(), PlatformError> {
   match custom_data_matches.subcommand() {
     ("fetch", Some(fetch_matches)) => {
-      let key = Key::from_slice(&b64dec(fetch_matches.value_of("key")
-          .ok_or_else(|| PlatformError::InputsError(error_location!()))?)
-          .map_err(|e| PlatformError::InputsError(format!("{}:{}",e,error_location!())))?)
-          .ok_or_else(|| PlatformError::InputsError(error_location!()))?;
+      let key = Key::from_base64(fetch_matches.value_of("key").unwrap())
+          .map_err(|e| PlatformError::InputsError(format!("{}:{}",e,error_location!())))?;
       let res = rest_client.fetch_custom_data(&key)?;
       info!("Data is: {:?}", &res);
     }
     ("store", Some(store_matches)) => {
-      let key = Key::from_slice(&b64dec(store_matches.value_of("key")
-          .ok_or_else(|| PlatformError::InputsError(error_location!()))?)
-          .map_err(|e| PlatformError::InputsError(format!("{}:{}",e,error_location!())))?)
-          .ok_or_else(|| PlatformError::InputsError(error_location!()))?;
+      let key = Key::from_base64(store_matches.value_of("key").unwrap())
+          .map_err(|e| PlatformError::InputsError(format!("{}:{}",e,error_location!())))?;
       let data = store_matches.value_of("data").unwrap();
       let blind: Option<KVBlind> = None;
       rest_client.store_custom_data(&data, &key, blind)?;
