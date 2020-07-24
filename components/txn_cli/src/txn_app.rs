@@ -260,7 +260,7 @@ pub(crate) fn process_asset_issuer_cmd(asset_issuer_matches: &clap::ArgMatches,
       let mut txn_builder = TransactionBuilder::from_seq_id(seq_id);
       let hash = KVHash::new(&value, None);
       txn_builder.add_operation_kv_update(&key_pair, &key, gen, Some(&hash))?;
-      println!("Hash of data will be stored at key {}", b64enc(&key));
+      println!("Hash of data will be stored at key {}", key.to_base64());
       if let Some(txn_file) = txn_file {
         store_txn_to_file(&txn_file, &txn_builder)
       } else {
