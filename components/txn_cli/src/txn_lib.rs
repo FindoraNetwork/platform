@@ -347,8 +347,8 @@ pub fn query_open_asset_record<T>(rest_client: &T,
   where T: RestfulLedgerAccess
 {
   let blind_asset_record = (rest_client.get_utxo(sid)?.utxo.0).0;
-  open_blind_asset_record(&blind_asset_record, owner_memo, key_pair.get_sk_ref()).or_else(|error| {
-                                                Err(PlatformError::ZeiError(error_location!(), error))
+  open_blind_asset_record(&blind_asset_record, owner_memo, key_pair.get_sk_ref()).map_err(|error| {
+                                                PlatformError::ZeiError(error_location!(), error)
                                               })
 }
 
