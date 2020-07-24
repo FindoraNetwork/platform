@@ -1263,7 +1263,7 @@ pub fn process_inputs<T: RestfulQueryServerAccess + RestfulLedgerAccess + Restfu
     ("serialize", Some(_serialize_matches)) => {
       if let Some(txn_file) = inputs.value_of("txn") {
         let txn_builder = load_txn_from_file(&txn_file).map_err(|e| {
-                            error!("Failed to load txn builder from file {}.", txn_file);
+                            eprintln!("Failed to load txn builder from file {}.", txn_file);
                             e
                           })?;
         match serde_json::to_string(txn_builder.transaction()) {
