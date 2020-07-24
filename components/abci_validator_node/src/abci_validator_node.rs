@@ -26,7 +26,7 @@ impl TxnForward for TendermintForward {
     let txn_json = serde_json::to_string(&txn)?;
     info!("raw txn: {}", &txn_json);
     let txn_b64 = base64::encode_config(&txn_json.as_str(), base64::URL_SAFE);
-    let json_rpc = format!("{{\"jsonrpc\":\"2.0\",\"id\":\"anything\",\"method\":\"broadcast_tx_sync\",\"params\": {{\"tx\": \"{}\"}}}}", &txn_b64);
+    let json_rpc = format!("{{\"jsonrpc\":\"2.0\",\"id\":\"anything\",\"method\":\"broadcast_tx_async\",\"params\": {{\"tx\": \"{}\"}}}}", &txn_b64);
 
     info!("forward_txn: \'{}\'", &json_rpc);
     let client = reqwest::blocking::Client::builder().timeout(None)
@@ -66,7 +66,9 @@ impl ABCISubmissionServer {
 impl abci::Application for ABCISubmissionServer {
   fn info(&mut self, _req: &RequestInfo) -> ResponseInfo {
     let mut resp = ResponseInfo::new();
+    info!("locking for read");
     if let Ok(la) = self.la.read() {
+      info!("locking state for read");
       if let Ok(state) = la.get_committed_state().read() {
         let commitment = state.get_state_commitment();
         if commitment.1 > 0 {
@@ -75,7 +77,9 @@ impl abci::Application for ABCISubmissionServer {
           resp.set_last_block_app_hash(commitment.0.as_ref().to_vec());
         }
         info!("app hash: {:?}", resp.get_last_block_app_hash());
+        info!("unlocking state for read");
       }
+      info!("unlocking for read");
     }
     resp
   }
@@ -109,12 +113,14 @@ impl abci::Application for ABCISubmissionServer {
     let mut resp = ResponseDeliverTx::new();
     if let Some(tx) = convert_tx(req.get_tx()) {
       info!("converted: {:?}", tx);
+      info!("locking for write");
       if let Ok(mut la) = self.la.write() {
         info!("locked for write");
         if la.cache_transaction(tx).is_ok() {
           info!("cached");
           return resp;
         }
+        info!("unlocking for write");
       }
     }
     resp.set_code(1);
@@ -123,6 +129,7 @@ impl abci::Application for ABCISubmissionServer {
   }
 
   fn begin_block(&mut self, _req: &RequestBeginBlock) -> ResponseBeginBlock {
+    info!("locking for write");
     if let Ok(mut la) = self.la.write() {
       if !la.all_commited() {
         assert!(la.block_pulse_count() > 0);
@@ -132,6 +139,7 @@ impl abci::Application for ABCISubmissionServer {
         info!("begin_block: new block");
         la.begin_block();
       }
+      info!("unlocking for write");
     }
     ResponseBeginBlock::new()
   }
@@ -156,16 +164,21 @@ impl abci::Application for ABCISubmissionServer {
     // Tendermint does not accept an error return type here.
     let error_commitment = (HashOf::new(&None), 0);
     let mut r = ResponseCommit::new();
-    if let Ok(mut la) = self.la.write() {
-      la.begin_commit();
+    info!("locking for read");
+    if let Ok(la) = self.la.read() {
+      // la.begin_commit();
+      info!("locking state for read");
       let commitment = if let Ok(state) = la.get_committed_state().read() {
-        state.get_state_commitment()
+        let ret = state.get_state_commitment();
+        info!("unlocking state for read");
+        ret
       } else {
         error_commitment
       };
-      la.end_commit();
+      // la.end_commit();
       info!("commit: hash is {:?}", commitment.0.as_ref());
       r.set_data(commitment.0.as_ref().to_vec());
+      info!("unlocking for read");
     }
     r
   }
@@ -187,7 +200,7 @@ fn main() {
 
   let app = ABCISubmissionServer::new(base_dir, format!("{}:{}",tendermint_host,tendermint_port)).unwrap();
   let submission_server = Arc::clone(&app.la);
-  let cloned_lock = { Arc::clone(&submission_server.read().unwrap().borrowable_ledger_state()) };
+  let cloned_lock = { submission_server.read().unwrap().borrowable_ledger_state() };
 
   let host = std::env::var_os("SERVER_HOST").filter(|x| !x.is_empty())
                                             .unwrap_or_else(|| "localhost".into());

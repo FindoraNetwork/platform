@@ -4,7 +4,7 @@ use actix_web::test::TestRequest;
 use actix_web::{error, middleware, test, web, App, HttpServer};
 use ledger::data_model::errors::PlatformError;
 use ledger::data_model::Transaction;
-use ledger::{error_location, inp_fail, ser_fail};
+use ledger::{error_location, inp_fail, des_fail};
 
 use ledger::store::{LedgerState, LedgerUpdate};
 use log::{error, info};
@@ -252,7 +252,7 @@ impl RestfulLedgerUpdate for ActixLUClient {
                         self.port,
                         SubmissionRoutes::SubmitTransaction.route());
     let text = actix_post_request(&self.client, &query, Some(&txn)).map_err(|e| inp_fail!(e))?;
-    let handle = serde_json::from_str::<TxnHandle>(&text).map_err(|e| ser_fail!(e))?;
+    let handle = serde_json::from_str::<TxnHandle>(&text).map_err(|e| des_fail!(e))?;
     info!("Transaction submitted successfully");
     Ok(handle)
   }
@@ -275,7 +275,7 @@ impl RestfulLedgerUpdate for ActixLUClient {
                         self.port,
                         SubmissionRoutes::TxnStatus.with_arg(&handle.0));
     let text = actix_get_request(&self.client, &query).map_err(|e| inp_fail!(e))?;
-    Ok(serde_json::from_str::<TxnStatus>(&text).map_err(|e| ser_fail!(e))?)
+    Ok(serde_json::from_str::<TxnStatus>(&text).map_err(|e| des_fail!(e))?)
   }
 }
 
