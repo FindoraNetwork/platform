@@ -295,7 +295,7 @@ pub fn fulfill_loan<T>(data_dir: &str,
                                                signature };
   let ac_credential =
     wrapper_credential.to_ac_credential()
-                      .or_else(|e| Err(PlatformError::ZeiError(error_location!(), e)))?;
+                      .map_err(|e| PlatformError::ZeiError(error_location!(), e))?;
   let (_, _, commitment_key) =
     credential_commit(&mut prng, &user_secret_key, &wrapper_credential, b"").unwrap();
 
@@ -308,8 +308,8 @@ pub fn fulfill_loan<T>(data_dir: &str,
                                       &commitment_key,
                                       &tracer_enc_keys.attrs_enc_key,
                                       &reveal_map,
-                                      &[]).or_else(|e| {
-                                            Err(PlatformError::ZeiError(error_location!(), e))
+                                      &[]).map_err(|e| {
+                                            PlatformError::ZeiError(error_location!(), e)
                                           })?
                                           .ctexts;
     let tracer_memo = AssetTracerMemo { enc_key: tracer_enc_keys,
@@ -363,11 +363,11 @@ pub fn fulfill_loan<T>(data_dir: &str,
   // Define debt asset
   let debt_code = AssetTypeCode::gen_random();
   println!("Generated debt code: {}",
-           serde_json::to_string(&debt_code.val).or_else(|_| { Err(ser_fail!()) })?);
+           serde_json::to_string(&debt_code.val).map_err(|_| { ser_fail!() })?);
   let memo = DebtMemo { interest_rate: Fraction::new(loan.interest_per_mille, 1000),
                         fiat_code,
                         loan_amount: amount };
-  let memo_str = serde_json::to_string(&memo).or_else(|_| Err(ser_fail!()))?;
+  let memo_str = serde_json::to_string(&memo).map_err(|_| ser_fail!())?;
   let txn_builder = define_asset(data_dir,
                                  seq_id,
                                  false,

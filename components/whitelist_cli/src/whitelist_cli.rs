@@ -42,14 +42,14 @@ fn load_whitelist() -> Result<Whitelist, PlatformError> {
     }
   };
 
-  serde_json::from_str::<Whitelist>(&whitelist).or_else(|e| Err(des_fail!(e)))
+  serde_json::from_str::<Whitelist>(&whitelist).map_err(|e| des_fail!(e))
 }
 
 /// Parses a string to u64.
 fn parse_to_u64(val_str: &str) -> Result<u64, PlatformError> {
   val_str.trim()
          .parse::<u64>()
-         .or_else(|_| Err(PlatformError::InputsError(error_location!())))
+         .map_err(|_| PlatformError::InputsError(error_location!()))
 }
 
 /// Processes input commands and arguments.
@@ -82,7 +82,7 @@ fn process_inputs<T>(inputs: clap::ArgMatches, rest_client: &T) -> Result<(), Pl
         return Err(PlatformError::InputsError(error_location!()));
       };
       let blind = if let Some(blind_arg) = prove_and_verify_matches.value_of("blind") {
-        serde_json::from_str::<Scalar>(&blind_arg).or_else(|e| Err(des_fail!(e)))?
+        serde_json::from_str::<Scalar>(&blind_arg).map_err(|e| des_fail!(e))?
       } else {
         println!("Missing serialized blinding factor for the asset type code commitment. Use --blind.");
         return Err(PlatformError::InputsError(error_location!()));
@@ -223,7 +223,7 @@ mod tests {
                                                     &mut ledger_standalone,
                                                     &mut ChaChaRng::from_entropy()).unwrap();
       let utxo_str = format!("{}", utxo);
-      let blind_str = serde_json::to_string(&code_blind).or_else(|e| Err(ser_fail!(e)))
+      let blind_str = serde_json::to_string(&code_blind).map_err(|e| ser_fail!(e))
                                                         .unwrap();
       utxos.push(utxo_str);
       blinds.push(blind_str);

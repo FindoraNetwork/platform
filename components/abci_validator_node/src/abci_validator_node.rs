@@ -28,11 +28,10 @@ impl TxnForward for TendermintForward {
 
     info!("forward_txn: \'{}\'", &json_rpc);
     let client = reqwest::blocking::Client::new();
-    let _response =
-      client.post("http://localhost:26657")
-            .body(json_rpc)
-            .send()
-            .or_else(|_| Err(PlatformError::SubmissionServerError(error_location!())))?;
+    let _response = client.post("http://localhost:26657")
+                          .body(json_rpc)
+                          .send()
+                          .map_err(|_| PlatformError::SubmissionServerError(error_location!()))?;
     Ok(())
   }
 }
