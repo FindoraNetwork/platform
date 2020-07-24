@@ -1,6 +1,7 @@
+#![deny(warnings)]
 #![allow(dead_code)]
 use serde::{Deserialize, Serialize};
-use sparse_merkle_tree::{check_merkle_proof as smt_check_proof, digest, MerkleProof, SmtMap256};
+use sparse_merkle_tree::{check_merkle_proof as smt_check_proof, Key, MerkleProof, SmtMap256};
 use std::fs;
 use std::io::Error;
 
@@ -25,22 +26,22 @@ impl Default for AIR {
 }
 
 impl AIR {
-  pub fn key_of_byteref(key: impl AsRef<[u8]>) -> Digest {
-    digest(key.as_ref())
+  pub fn key_of_byteref(key: impl AsRef<[u8]>) -> Key {
+    Key::hash(key)
   }
 
   pub fn set(&mut self, key: impl AsRef<[u8]>, value: Option<String>) -> Option<String> {
-    let hashed_key = digest(key.as_ref());
+    let hashed_key = Key::hash(key);
     self.0.set(&hashed_key, value)
   }
 
   pub fn get(&self, key: impl AsRef<[u8]>) -> Option<&String> {
-    let hashed_key = digest(key.as_ref());
+    let hashed_key = Key::hash(key);
     self.0.get(&hashed_key)
   }
 
   pub fn get_with_proof(&self, key: impl AsRef<[u8]>) -> (Option<&String>, MerkleProof) {
-    let hashed_key = digest(key.as_ref());
+    let hashed_key = Key::hash(key);
     self.0.get_with_proof(&hashed_key)
   }
 
@@ -53,7 +54,7 @@ impl AIR {
                             value: Option<&String>,
                             proof: &MerkleProof)
                             -> bool {
-    let hashed_key = digest(key.as_ref());
+    let hashed_key = Key::hash(key.as_ref());
     self.0.check_merkle_proof(&hashed_key, value, proof)
   }
 }
@@ -63,7 +64,7 @@ pub fn check_merkle_proof<String: AsRef<[u8]>>(merkle_root: &Digest,
                                                value: Option<&String>,
                                                proof: &MerkleProof)
                                                -> bool {
-  let hashed_key = digest(key.as_ref());
+  let hashed_key = Key::hash(key.as_ref());
   smt_check_proof(merkle_root, &hashed_key, value, proof)
 }
 

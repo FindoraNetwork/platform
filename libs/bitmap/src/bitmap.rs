@@ -1016,8 +1016,20 @@ impl BitMap {
   }
 
   /// Serialize the entire bit map to a compressed representation.
-  pub fn serialize(&mut self, version: usize) -> Vec<u8> {
+  ///
+  /// This method must only be called in cases where the cached checksum would be up to date.
+  ///
+  /// # Panics
+  ///
+  /// Will panic if the cached checksum can not be used, such as if the Bitmap has
+  /// been modified since the last checksum-updating operation
+  pub fn serialize(&self, version: usize) -> Vec<u8> {
     assert!(self.validate(false));
+    // Verify usability of cached checksum
+    // Borrowing the logic from the compute_checksum method
+    assert!(self.first_invalid >= self.blocks.len(),
+            "Bitmap::serialize was called on a bitmap whose checksum was not up to date.\
+             Ensure that the bitmap has not been changed since the last checksum updating operation.");
     // Reserve space for the version number as a u64.
     let mut bytes = DESCRIPTOR_SIZE;
 
@@ -1028,7 +1040,11 @@ impl BitMap {
 
     let mut result = Vec::new();
     result.reserve(bytes);
-    self.append_descriptor(version as u64, &mut result);
+
+    // Manually append the version and checksum, to avoid the mutating digest update in the
+    // append_descriptor method
+    result.extend_from_slice(&version.to_le_bytes());
+    result.extend_from_slice(&self.checksum[0..]);
 
     for i in 0..self.blocks.len() {
       self.serialize_block(i, &mut result, INCLUDE_BITS);
