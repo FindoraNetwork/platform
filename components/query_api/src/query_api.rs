@@ -238,6 +238,8 @@ pub trait RestfulQueryServerAccess {
                        -> Result<(), PlatformError>;
 
   fn fetch_custom_data(&self, key: &Key) -> Result<Vec<u8>, PlatformError>;
+
+  fn get_owner_memo(&self, txo_sid: u64) -> Result<Option<OwnerMemo>, PlatformError>;
 }
 
 // Unimplemented until I can figure out a way to force the mock server to get new data (we can do
@@ -254,6 +256,10 @@ impl RestfulQueryServerAccess for MockQueryServerClient {
   }
 
   fn fetch_custom_data(&self, _key: &Key) -> Result<Vec<u8>, PlatformError> {
+    unimplemented!();
+  }
+
+  fn get_owner_memo(&self, _txo_sid: u64) -> Result<Option<OwnerMemo>, PlatformError> {
     unimplemented!();
   }
 }
@@ -300,5 +306,15 @@ impl RestfulQueryServerAccess for ActixQueryServerClient {
                         QueryServerRoutes::GetCustomData.with_arg(&b64key));
     let text = actix_get_request(&self.client, &query).map_err(|_| inp_fail!())?;
     Ok(serde_json::from_str::<Vec<u8>>(&text).map_err(|_| ser_fail!())?)
+  }
+
+  fn get_owner_memo(&self, txo_sid: u64) -> Result<Option<OwnerMemo>, PlatformError> {
+    let query = format!("{}://{}:{}{}",
+                        self.protocol,
+                        self.host,
+                        self.port,
+                        QueryServerRoutes::GetOwnerMemo.with_arg(&txo_sid));
+    let text = actix_get_request(&self.client, &query).map_err(|_| inp_fail!())?;
+    Ok(serde_json::from_str::<Option<OwnerMemo>>(&text).map_err(|_| ser_fail!())?)
   }
 }

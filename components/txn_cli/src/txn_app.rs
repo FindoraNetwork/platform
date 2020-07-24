@@ -112,7 +112,7 @@ pub(crate) fn process_asset_issuer_cmd(asset_issuer_matches: &clap::ArgMatches,
       let file = if let Some(file_arg) = store_bar_and_memos_matches.value_of("file") {
         file_arg
       } else {
-        eprintln!("Path is required to store the tracer and owner memos. Use --path.");
+        eprintln!("Path is required to store the tracer and owner memos. Use --file.");
         return Err(PlatformError::InputsError(error_location!()));
       };
       debug!("store_memos: about to call get_and_store_memos_to_file");
@@ -841,7 +841,9 @@ pub(crate) fn process_lender_cmd<T: RestfulLedgerAccess + RestfulLedgerUpdate>(
 ///
 /// # Arguments
 /// * `borrower_matches`: subcommands and arguments under the `borrower` subcommand.
-pub(crate) fn process_borrower_cmd<T: RestfulLedgerAccess + RestfulLedgerUpdate>(
+pub(crate) fn process_borrower_cmd<T: RestfulQueryServerAccess
+                                     + RestfulLedgerAccess
+                                     + RestfulLedgerUpdate>(
   borrower_matches: &clap::ArgMatches,
   data_dir: &str,
   seq_id: u64,
@@ -1086,16 +1088,8 @@ pub(crate) fn process_borrower_cmd<T: RestfulLedgerAccess + RestfulLedgerUpdate>
         eprintln!("Sid is required to get the asset record. Use borrower --sid.");
         return Err(PlatformError::InputsError(error_location!()));
       };
-      let tracer_and_owner_memos =
-        if let Some(memo_file_arg) = get_asset_record_matches.value_of("memo_file") {
-          load_tracer_and_owner_memos_from_files(memo_file_arg)?
-        } else {
-          eprintln!("Owner memo is required to get the asset record. Use --memo_file.");
-          return Err(PlatformError::InputsError(error_location!()));
-        };
-      // Get protocol and host.
-      let asset_record =
-        query_open_asset_record(rest_client, sid, &key_pair, &tracer_and_owner_memos[0].1)?;
+      let owner_memo = rest_client.get_owner_memo(sid.0)?;
+      let asset_record = query_open_asset_record(rest_client, sid, &key_pair, &owner_memo)?;
       println!("{} owns {} of asset {:?}.",
                borrower_name,
                asset_record.get_amount(),
@@ -1857,7 +1851,6 @@ pub fn get_cli_app<'a, 'b>() -> App<'a, 'b> {
         .arg(Arg::with_name("memo_file")
           .short("f")
           .long("memo_file")
-          .required(true)
           .takes_value(true)
           .help("Path to the tracer and owner memos."))
         .arg(Arg::with_name("http")

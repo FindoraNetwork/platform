@@ -1,10 +1,10 @@
 # Transaction Builder Command Line Interface
 1. [Overview](#overview)
-2. [Example of confidential transfer](#example-of-confidential-transfer)
+2. [Example of asset transfer](#example-of-asset-transfer)
    1. [Sign up new asset issuer](#sign-up-an-asset-issuer-account-for-ian)
    2. [Sign up new borrower](#sign-up-a-borrower-account-for-bill)
    3. [Define a new asset](#ian-defines-an-asset)
-   4. [Issue and transfer the asset confidentially](#ian-issues-and-transfers-the-asset-confidentially-to-bill)
+   4. [Issue and transfer the asset](#ian-issues-and-transfers-the-asset-to-bill)
 3. [Commands](#commands)
    1. [Asset Issuer](#asset-issuer)
        * [Asset Issuer sign up](#asset-issuer-sign-up)
@@ -86,7 +86,7 @@ txn_cli asset_issuer define_asset --help
   Typically it resides in either `platform/target/debug` or
   `platform/target/release`.
 
-## Example of confidential transfer
+## Example of asset transfer
 
 The following commands are meant to be executed in order by you the user.
 
@@ -132,7 +132,7 @@ Store the asset token code. We'll refer to it as `<token_code>` in the following
 txn_cli --txn txn_define submit
 ```
 
-### Ian issues and transfers the asset confidentially to Bill
+### Ian issues and transfers the asset to Bill
 #### Create an empty transaction
 ```
 txn_cli create_txn_builder --name txn_issue_and_transfer
@@ -146,9 +146,9 @@ txn_cli --txn txn_issue_and_transfer asset_issuer --id 1 issue_and_transfer_asse
     --recipient 1
     --amount 100
     --token_code <token_code>
-    --memo_file memo_file
-    --confidential_amount
 ```
+
+NB: *-confidential* for confidential transfers. There are issues that need to be addressed for confidential transfer in the txn_cli
 
 #### Submit the transaction and get the utxo
 ```
@@ -162,7 +162,7 @@ Utxo: [TxoSID(1)]
 ### Trace and verify the asset
 #### Bill: verifies the received asset
 ```
-txn_cli borrower --id 1 get_asset_record --sid 1 --memo_file memo_file
+txn_cli borrower --id 1 get_asset_record --sid 1
 ```
 Note from the last line of the output that the asset token code is indeed `[238, 16, 0, 221, 52, 201, 64, 120, 67, 26, 207, 191, 154, 147, 245, 217]`, and the amount Bill owns is `100`.
 ```
@@ -170,6 +170,7 @@ Bill owns 100 of asset [238, 16, 0, 221, 52, 201, 64, 120, 67, 26, 207, 191, 154
 ```
 
 #### Ian: traces the asset transferred to Bill and verifies the amount
+
 ```
 txn_cli asset_issuer --id 1 trace_and_verify_asset --memo_file memo --expected_amount 100
 ```
@@ -248,8 +249,6 @@ After blind asset record and associated memos are stored:
 ```
 txn_cli --txn txn_transfer asset_issuer --id 0 transfer_asset --sids_file sids_file --recipients 0,1 --issuance_txn_files txn_issue --input_amounts 45 --output_amounts 10,35
 ```
-(FIXME 03: thread 'main' panicked at 'index out of bounds: the len is 1 but the index is 1', components/txn_cli/src/data_lib.rs:486:25)
-
 3) Submit the transaction
 ```
 txn_cli --txn txn_transfer submit
@@ -284,7 +283,7 @@ Otherwise, add `--get_sids` when submitting asset issuing transactions, and note
 txn_cli asset_issuer store_sids --file sids_file --indices 1,2,3
 ```
 
-#### Store asset tracer memo and owner memo (FIXME 04: No file, no error message)
+#### Store asset tracer memo and owner memo
 Asset tracer memo and owner memo are necessary for asset tracing. To store them:
 ```
 txn_cli asset_issuer --id 0 store_memos --file memo_file --amount 100 --token_code <token_code>
