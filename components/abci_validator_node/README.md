@@ -17,7 +17,13 @@ It requires docker and docker-compose to be installed.
 ./manage-tendermint reset
 ```
 
-If you are testing a locally built instance, you'll want to put your version of `abci_validator_node` in each container. The easiest way to do this would be build the docker using the dockerfile included in the above files. Just change the abci_validator_node copy directive to pull the file from your system.
+Note for MacOS X developers testing locally: by default, docker on darwin does not recognize `/var` as an exported mount point.
+To use these commands successfully on MacOS X, add the line `export TM_DOCKER_ROOT=$HOME/var` (or any other valid mount point) to your `.profile`.
+
+If you are testing a locally built instance, you'll want to put your version of `abci_validator_node` in each container.
+The easiest way to do this would be build the docker using the dockerfile included in the above files.
+Just change the abci_validator_node copy directive to pull the file from your system.
+
 ```
 #Change from
 COPY --from=platform /app/abci_validator_node /usr/bin/abci_validator_node
