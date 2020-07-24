@@ -578,7 +578,7 @@ pub(crate) fn process_asset_issuer_cmd(asset_issuer_matches: &clap::ArgMatches,
         return Err(PlatformError::InputsError(error_location!()));
       };
       tracer_memo.verify_amount(&tracer_dec_keys, expected_amount)
-                 .or_else(|error| Err(PlatformError::ZeiError(error_location!(), error)))
+                 .map_err(|error| PlatformError::ZeiError(error_location!(), error))
     }
     ("trace_credential", Some(trace_credential_matches)) => {
       let data = load_data(data_dir)?;
@@ -600,9 +600,7 @@ pub(crate) fn process_asset_issuer_cmd(asset_issuer_matches: &clap::ArgMatches,
       let len = if let Some(attribute_arg) = trace_credential_matches.value_of("attribute") {
         let credential_issuer_public_key = data.get_credential_issuer_key_pair(0)?.0;
         credential_issuer_public_key.get_len(attribute_arg)
-                                    .or_else(|e| {
-                                      Err(PlatformError::ZeiError(error_location!(), e))
-                                    })?
+                                    .map_err(|e| PlatformError::ZeiError(error_location!(), e))?
       } else {
         eprintln!("Credential attribute is required to verify the credential. Use --attribute.");
         return Err(PlatformError::InputsError(error_location!()));
@@ -1264,9 +1262,9 @@ pub fn process_inputs<T: RestfulQueryServerAccess + RestfulLedgerAccess + Restfu
     }
     ("serialize", Some(_serialize_matches)) => {
       if let Some(txn_file) = inputs.value_of("txn") {
-        let txn_builder = load_txn_from_file(&txn_file).or_else(|e| {
-                            eprintln!("Failed to load txn builder from file {}.", txn_file);
-                            Err(e)
+        let txn_builder = load_txn_from_file(&txn_file).map_err(|e| {
+                            error!("Failed to load txn builder from file {}.", txn_file);
+                            e
                           })?;
         match serde_json::to_string(txn_builder.transaction()) {
           Ok(as_json) => {

@@ -59,7 +59,7 @@ pub fn calculate_amount_blinds(amount_blind_low: Scalar, amount_blind_high: Scal
 pub fn calculate_amount_and_code_blinds(blinds_str: &str)
                                         -> Result<AmountAndCodeBlinds, PlatformError> {
   let ((amount_blind_low, amount_blind_high), code_blind) =
-    serde_json::from_str::<((Scalar, Scalar), Scalar)>(&blinds_str).or_else(|e| Err(des_fail!(e)))?;
+    serde_json::from_str::<((Scalar, Scalar), Scalar)>(&blinds_str).map_err(|e| des_fail!(e))?;
   Ok(CloakValue::new(amount_blind_low + Scalar::from(1u64 << 32) * amount_blind_high,
                      code_blind))
 }
@@ -218,15 +218,14 @@ impl SolvencyAudit {
     }
 
     let params = PublicParams::new();
-    let proof =
-      prove_solvency(&params,
-                     hidden_assets,
-                     hidden_assets_blinds,
-                     &account.public_assets,
-                     hidden_liabilities,
-                     hidden_liabilities_blinds,
-                     &account.public_liabilities,
-                     &rates).or_else(|e| Err(PlatformError::ZeiError(error_location!(), e)))?;
+    let proof = prove_solvency(&params,
+                               hidden_assets,
+                               hidden_assets_blinds,
+                               &account.public_assets,
+                               hidden_liabilities,
+                               hidden_liabilities_blinds,
+                               &account.public_liabilities,
+                               &rates).map_err(|e| PlatformError::ZeiError(error_location!(), e))?;
 
     // Update data
     account.proof = Some(proof.to_bytes());
@@ -237,7 +236,7 @@ impl SolvencyAudit {
   /// Must not be used before `prove_solvency_and_store`.
   pub fn verify_solvency(&self, account: &AssetAndLiabilityAccount) -> Result<(), PlatformError> {
     let proof = if let Some(p) = &account.proof {
-      R1CSProof::from_bytes(p).or_else(|e| Err(des_fail!(e)))?
+      R1CSProof::from_bytes(p).map_err(|e| des_fail!(e))?
     } else {
       println!("Prove the solvency first.");
       return Err(PlatformError::InputsError(error_location!()));
@@ -253,7 +252,7 @@ impl SolvencyAudit {
                     &account.hidden_liabilities_commitments,
                     &account.public_liabilities,
                     &rates,
-                    &proof).or_else(|e| Err(PlatformError::ZeiError(error_location!(), e)))
+                    &proof).map_err(|e| PlatformError::ZeiError(error_location!(), e))
   }
 }
 

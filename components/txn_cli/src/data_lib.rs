@@ -174,8 +174,7 @@ impl AssetIssuer {
 
     // Generate asset tracer key pair
     let tracer_key_pair = gen_asset_tracer_keypair(&mut ChaChaRng::from_entropy());
-    let tracer_key_pair_str =
-      serde_json::to_string(&tracer_key_pair).or_else(|e| Err(ser_fail!(e)))?;
+    let tracer_key_pair_str = serde_json::to_string(&tracer_key_pair).map_err(|e| ser_fail!(e))?;
 
     Ok(AssetIssuer { id: id as u64,
                      name,
@@ -208,7 +207,7 @@ impl CredentialIssuer {
 
     let key_pair =
       credential_issuer_key_gen(&mut ChaChaRng::from_entropy(), &attribute_names_and_sizes);
-    let key_pair_str = serde_json::to_string(&key_pair).or_else(|e| Err(ser_fail!(e)))?;
+    let key_pair_str = serde_json::to_string(&key_pair).map_err(|e| ser_fail!(e))?;
 
     Ok(CredentialIssuer { id: id as u64,
                           name,
@@ -406,14 +405,13 @@ impl Data {
 
   pub fn get_asset_issuer_key_pair(&self, id: u64) -> Result<XfrKeyPair, PlatformError> {
     let key_pair_str = &self.asset_issuers[id as usize].key_pair;
-    XfrKeyPair::zei_from_bytes(&hex::decode(key_pair_str).or_else(|e| Err(ser_fail!(e)))?)
+    XfrKeyPair::zei_from_bytes(&hex::decode(key_pair_str).map_err(|e| ser_fail!(e))?)
       .map_err(|e| PlatformError::ZeiError(error_location!(), e))
   }
 
   pub fn get_asset_tracer_key_pair(&self, id: u64) -> Result<AssetTracerKeyPair, PlatformError> {
     let tracer_key_pair_str = &self.asset_issuers[id as usize].tracer_key_pair;
-    let tracer_key_pair =
-      serde_json::from_str(&tracer_key_pair_str).or_else(|e| Err(des_fail!(e)))?;
+    let tracer_key_pair = serde_json::from_str(&tracer_key_pair_str).map_err(|e| des_fail!(e))?;
     Ok(tracer_key_pair)
   }
 
@@ -434,7 +432,7 @@ impl Data {
     id: u64)
     -> Result<(CredIssuerPublicKey, CredIssuerSecretKey), PlatformError> {
     let key_pair_str = &self.credential_issuers[id as usize].key_pair;
-    let key_pair = serde_json::from_str(&key_pair_str).or_else(|e| Err(des_fail!(e)))?;
+    let key_pair = serde_json::from_str(&key_pair_str).map_err(|e| des_fail!(e))?;
     Ok(key_pair)
   }
 
@@ -447,7 +445,7 @@ impl Data {
 
   pub(crate) fn get_lender_key_pair(&self, id: u64) -> Result<XfrKeyPair, PlatformError> {
     let key_pair_str = &self.lenders[id as usize].key_pair;
-    XfrKeyPair::zei_from_bytes(&hex::decode(key_pair_str).or_else(|e| Err(des_fail!(e)))?)
+    XfrKeyPair::zei_from_bytes(&hex::decode(key_pair_str).map_err(|e| des_fail!(e))?)
       .map_err(|e| PlatformError::ZeiError(error_location!(), e))
   }
 
@@ -486,7 +484,7 @@ impl Data {
 
   pub fn get_borrower_key_pair(&self, id: u64) -> Result<XfrKeyPair, PlatformError> {
     let key_pair_str = &self.borrowers[id as usize].key_pair;
-    XfrKeyPair::zei_from_bytes(&hex::decode(key_pair_str).or_else(|e| Err(des_fail!(e)))?)
+    XfrKeyPair::zei_from_bytes(&hex::decode(key_pair_str).map_err(|e| des_fail!(e))?)
       .map_err(|e| PlatformError::ZeiError(error_location!(), e))
   }
 
@@ -585,10 +583,10 @@ pub fn parse_to_u64_vec(vals_str: &str) -> Result<Vec<u64>, PlatformError> {
 pub fn load_data(data_dir: &str) -> Result<Data, PlatformError> {
   let data_file_path = format!("{}/{}", data_dir, DATA_FILE);
   match fs::read_to_string(&data_file_path) {
-    Ok(data) => serde_json::from_str::<Data>(&data).or_else(|e| Err(des_fail!(e))),
+    Ok(data) => serde_json::from_str::<Data>(&data).map_err(|e| des_fail!(e)),
     Err(_) => match fs::read_to_string(INIT_DATA_PATH) {
       Ok(init_data) => {
-        let data = serde_json::from_str::<Data>(&init_data).or_else(|e| Err(des_fail!(e)))?;
+        let data = serde_json::from_str::<Data>(&init_data).map_err(|e| des_fail!(e))?;
         store_data_to_file(data.clone(), data_dir)?;
         Ok(data)
       }
@@ -602,10 +600,11 @@ pub fn load_data(data_dir: &str) -> Result<Data, PlatformError> {
 /// # Arguments
 /// * `file_path`: file path.
 pub fn load_txn_from_file(file_path: &str) -> Result<TransactionBuilder, PlatformError> {
-  let txn = fs::read_to_string(file_path).or_else(|_| {
-              Err(PlatformError::IoError(format!("Failed to read file: {}", file_path)))
-            })?;
+let txn = fs::read_to_string(file_path).map_err(|_| {
+                                           PlatformError::IoError(format!("Failed to read file: {}",
+                                                                  file_path))
   debug!("Parsing builder from file contents: \"{}\"", &txn);
+                                         })?;
   match serde_json::from_str(&txn) {
     Ok(builder) => Ok(builder),
     Err(e) => Err(des_fail!(e)),
@@ -623,8 +622,8 @@ pub fn split_arg(string: &str) -> Vec<&str> {
 /// # Arguments
 /// * `file_path`: file path
 pub fn load_sids_from_file(file_path: &str) -> Result<Vec<u64>, PlatformError> {
-  let sids_str = fs::read_to_string(file_path).or_else(|_| {
-                   Err(PlatformError::IoError(format!("Failed to read file: {}", file_path)))
+  let sids_str = fs::read_to_string(file_path).map_err(|_| {
+                   PlatformError::IoError(format!("Failed to read file: {}", file_path))
                  })?;
 
   let mut sids = Vec::new();
@@ -644,9 +643,10 @@ pub fn load_sids_from_file(file_path: &str) -> Result<Vec<u64>, PlatformError> {
 pub(crate) fn load_blind_asset_record_and_owner_memo_from_file(
   file_path: &str)
   -> Result<(BlindAssetRecord, Option<OwnerMemo>), PlatformError> {
-  let txn = fs::read_to_string(file_path).or_else(|_| {
-              Err(PlatformError::IoError(format!("Failed to read file: {}", file_path)))
-            })?;
+  let txn = fs::read_to_string(file_path).map_err(|_| {
+                                           PlatformError::IoError(format!("Failed to read file: {}",
+                                                                  file_path))
+                                         })?;
   let _ = fs::remove_file(file_path);
   debug!("Parsing builder from file contents: \"{}\"", &txn);
   match serde_json::from_str::<TransactionBuilder>(&txn) {
@@ -681,8 +681,8 @@ pub(crate) fn load_open_asset_record_from_file(file_path: &str,
                                                -> Result<OpenAssetRecord, PlatformError> {
   let (blind_asset_record, owner_memo) =
     load_blind_asset_record_and_owner_memo_from_file(file_path)?;
-  open_blind_asset_record(&blind_asset_record, &owner_memo, key_pair.get_sk_ref()).or_else(|error| {
-                                                                            Err(PlatformError::ZeiError(error_location!(), error))
+  open_blind_asset_record(&blind_asset_record, &owner_memo, key_pair.get_sk_ref()).map_err(|error| {
+                                                                            PlatformError::ZeiError(error_location!(), error)
                                                                           })
 }
 
@@ -690,12 +690,12 @@ pub(crate) fn load_open_asset_record_from_file(file_path: &str,
 /// # Arguments
 /// * `file_path`: file path to the tracer memo.
 pub fn load_tracer_memo_from_file(file_path: &str) -> Result<AssetTracerMemo, PlatformError> {
-  let tracer_memo = fs::read_to_string(file_path).or_else(|_| {
-                      Err(PlatformError::IoError(format!("Failed to read file: {}", file_path)))
+  let tracer_memo = fs::read_to_string(file_path).map_err(|_| {
+                      PlatformError::IoError(format!("Failed to read file: {}", file_path))
                     })?;
   debug!("Parsing tracer memo from file contents: \"{}\"",
          &tracer_memo);
-  serde_json::from_str::<AssetTracerMemo>(&tracer_memo).or_else(|e| Err(des_fail!(e)))
+  serde_json::from_str::<AssetTracerMemo>(&tracer_memo).map_err(|e| des_fail!(e))
 }
 
 /// Loads tracer and owner memos from memo files
@@ -706,8 +706,8 @@ pub fn load_tracer_and_owner_memos_from_files(
   -> Result<Vec<TracerAndOwnerMemos>, PlatformError> {
   let mut tracer_and_owner_memos = Vec::new();
   for file_path in split_arg(file_paths) {
-    let memos = fs::read_to_string(file_path).or_else(|_| {
-                  Err(PlatformError::IoError(format!("Failed to read file: {}", file_path)))
+    let memos = fs::read_to_string(file_path).map_err(|_| {
+                  PlatformError::IoError(format!("Failed to read file: {}", file_path))
                 })?;
     debug!("Parsing tracer and owner memos from file contents: \"{}\"",
            &memos);
