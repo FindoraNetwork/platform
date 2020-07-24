@@ -206,6 +206,12 @@ mod tests {
                                       &creator);
     let tx = Transaction::from_operation(Operation::UpdateMemo(memo_update), 0);
     let mut mock_rest_client = LedgerStandalone::new_mock(2);
-    assert!(mock_rest_client.submit_transaction(&tx).is_err());
+    let handle = mock_rest_client.submit_transaction(&tx).unwrap();
+    let status = mock_rest_client.txn_status(&handle).unwrap();
+    if let TxnStatus::Rejected(_) = status {
+      assert!(true);
+    } else {
+      assert!(false);
+    }
   }
 }
