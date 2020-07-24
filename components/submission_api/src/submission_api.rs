@@ -4,7 +4,7 @@ use actix_web::test::TestRequest;
 use actix_web::{error, middleware, test, web, App, HttpServer};
 use ledger::data_model::errors::PlatformError;
 use ledger::data_model::Transaction;
-use ledger::{error_location, inp_fail, des_fail};
+use ledger::{des_fail, error_location, inp_fail};
 
 use ledger::store::{LedgerState, LedgerUpdate};
 use log::{error, info};

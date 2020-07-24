@@ -32,11 +32,16 @@ impl TxnForward for TendermintForward {
     let client = reqwest::blocking::Client::builder().timeout(None)
                                                      .build()
                                                      .unwrap();
-    let _response = client.post(&format!("http://{}", self.tendermint_reply))
-                          .body(json_rpc)
-                          .header(reqwest::header::CONTENT_TYPE, "application/json")
-                          .send()
-                          .or_else(|e| Err(sub_fail!(e)))?;
+    let tendermint_reply = format!("http://{}", self.tendermint_reply);
+    thread::spawn(move || {
+      let _response = client.post(&tendermint_reply)
+                            .body(json_rpc)
+                            .header(reqwest::header::CONTENT_TYPE, "application/json")
+                            .send()
+                            .or_else(|e| Err(sub_fail!(e)))
+                            .unwrap();
+    });
+    info!("forward_txn call complete");
     Ok(())
   }
 }
@@ -66,9 +71,9 @@ impl ABCISubmissionServer {
 impl abci::Application for ABCISubmissionServer {
   fn info(&mut self, _req: &RequestInfo) -> ResponseInfo {
     let mut resp = ResponseInfo::new();
-    info!("locking for read");
+    info!("locking for read: {}", error_location!());
     if let Ok(la) = self.la.read() {
-      info!("locking state for read");
+      info!("locking state for read: {}", error_location!());
       if let Ok(state) = la.get_committed_state().read() {
         let commitment = state.get_state_commitment();
         if commitment.1 > 0 {
@@ -77,9 +82,9 @@ impl abci::Application for ABCISubmissionServer {
           resp.set_last_block_app_hash(commitment.0.as_ref().to_vec());
         }
         info!("app hash: {:?}", resp.get_last_block_app_hash());
-        info!("unlocking state for read");
+        info!("unlocking state for read: {}", error_location!());
       }
-      info!("unlocking for read");
+      info!("unlocking for read: {}", error_location!());
     }
     resp
   }
@@ -113,14 +118,15 @@ impl abci::Application for ABCISubmissionServer {
     let mut resp = ResponseDeliverTx::new();
     if let Some(tx) = convert_tx(req.get_tx()) {
       info!("converted: {:?}", tx);
-      info!("locking for write");
+      info!("locking for write: {}", error_location!());
       if let Ok(mut la) = self.la.write() {
         info!("locked for write");
         if la.cache_transaction(tx).is_ok() {
           info!("cached");
+          info!("unlocking for write: {}", error_location!());
           return resp;
         }
-        info!("unlocking for write");
+        info!("unlocking for write: {}", error_location!());
       }
     }
     resp.set_code(1);
@@ -129,7 +135,7 @@ impl abci::Application for ABCISubmissionServer {
   }
 
   fn begin_block(&mut self, _req: &RequestBeginBlock) -> ResponseBeginBlock {
-    info!("locking for write");
+    info!("locking for write: {}", error_location!());
     if let Ok(mut la) = self.la.write() {
       if !la.all_commited() {
         assert!(la.block_pulse_count() > 0);
@@ -139,7 +145,7 @@ impl abci::Application for ABCISubmissionServer {
         info!("begin_block: new block");
         la.begin_block();
       }
-      info!("unlocking for write");
+      info!("unlocking for write: {}", error_location!());
     }
     ResponseBeginBlock::new()
   }
@@ -164,13 +170,13 @@ impl abci::Application for ABCISubmissionServer {
     // Tendermint does not accept an error return type here.
     let error_commitment = (HashOf::new(&None), 0);
     let mut r = ResponseCommit::new();
-    info!("locking for read");
+    info!("locking for read: {}", error_location!());
     if let Ok(la) = self.la.read() {
       // la.begin_commit();
-      info!("locking state for read");
+      info!("locking state for read: {}", error_location!());
       let commitment = if let Ok(state) = la.get_committed_state().read() {
         let ret = state.get_state_commitment();
-        info!("unlocking state for read");
+        info!("unlocking state for read: {}", error_location!());
         ret
       } else {
         error_commitment
@@ -178,7 +184,7 @@ impl abci::Application for ABCISubmissionServer {
       // la.end_commit();
       info!("commit: hash is {:?}", commitment.0.as_ref());
       r.set_data(commitment.0.as_ref().to_vec());
-      info!("unlocking for read");
+      info!("unlocking for read: {}", error_location!());
     }
     r
   }

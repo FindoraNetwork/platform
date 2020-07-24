@@ -89,11 +89,12 @@ fn run_log_against<LU, LA>(submit: &mut LU,
 
     if prev_comm != comm.previous_state_commitment {
       info!("{:?}\n{:?}\n!=\n{:?}",
-             PlatformError::CheckedReplayError(format!("{}:{}:{}",
-                                                       std::file!(),
-                                                       std::line!(),
-                                                       std::column!())),
-             prev_comm, comm.previous_state_commitment);
+            PlatformError::CheckedReplayError(format!("{}:{}:{}",
+                                                      std::file!(),
+                                                      std::line!(),
+                                                      std::column!())),
+            prev_comm,
+            comm.previous_state_commitment);
     }
 
     let mut handles = vec![];
@@ -118,7 +119,7 @@ fn run_log_against<LU, LA>(submit: &mut LU,
 
     for h in handles {
       match submit.txn_status(&h) {
-        Ok(TxnStatus::Committed((_txnsid,txo_sids))) => {
+        Ok(TxnStatus::Committed((_txnsid, txo_sids))) => {
           for txo in txo_sids {
             assert!(access1.get_utxo(txo).unwrap().is_valid(new_comm.0.clone()));
             if let Some(access2) = access2 {
@@ -126,7 +127,7 @@ fn run_log_against<LU, LA>(submit: &mut LU,
             }
           }
         }
-        err => panic!("uncommitted handle {}: {:?}",h,err),
+        err => panic!("uncommitted handle {}: {:?}", h, err),
       }
     }
   }
@@ -261,7 +262,12 @@ fn main() {
       let access1 = ActixLedgerClient::new(accport1, &accurl1, &protocol);
       let access2 = ActixLedgerClient::new(accport2, &accurl2, &protocol);
 
-      run_log_against(&mut submit, &access1, Some(&access2), logfile, outfile, expected_file);
+      run_log_against(&mut submit,
+                      &access1,
+                      Some(&access2),
+                      logfile,
+                      outfile,
+                      expected_file);
     }
     x => panic!("expected 4 or 9 arguments, got {}", x),
   }
