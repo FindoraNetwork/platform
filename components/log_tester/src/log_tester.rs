@@ -23,7 +23,7 @@ fn run_log_against<LU, LA>(submit: &mut LU,
   where LU: RestfulLedgerUpdate,
         LA: RestfulLedgerAccess
 {
-  let wait_time = time::Duration::from_millis(1000);
+  let wait_time = time::Duration::from_millis(100);
 
   // Check that we're starting from an empty ledger
   let init_comm = access1.get_state_commitment().unwrap();
@@ -100,9 +100,13 @@ fn run_log_against<LU, LA>(submit: &mut LU,
     let mut handles = vec![];
     for txn in block {
       let handle = submit.submit_transaction(&txn).unwrap();
+      let mut i = 0;
       while let Err(e) = submit.txn_status(&handle) {
-        info!("Waiting for {}: {}", handle, e);
+        if i % 10 == 0 {
+          info!("Waiting for {}: {}", handle, e);
+        }
         thread::sleep(wait_time);
+        i += 1;
       }
       handles.push(handle);
     }
