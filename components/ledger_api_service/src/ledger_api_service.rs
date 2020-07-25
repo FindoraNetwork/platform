@@ -6,8 +6,6 @@ extern crate serde_json;
 
 use actix_cors::Cors;
 use actix_web::{dev, error, middleware, test, web, App, HttpResponse, HttpServer};
-use cryptohash::sha256::Digest as BitDigest;
-use cryptohash::sha256::DIGESTBYTES;
 use ledger::data_model::errors::PlatformError;
 use ledger::data_model::*;
 use ledger::store::{ArchiveAccess, LedgerAccess, LedgerState};
@@ -27,6 +25,14 @@ pub struct RestfulApiService {
 // Ping route to check for liveness of API
 fn ping() -> actix_web::Result<String> {
   Ok("success".into())
+}
+
+/// Returns the git commit hash and commit date of this build
+fn version() -> actix_web::Result<String> {
+  Ok(concat!("Build: ",
+             env!("VERGEN_SHA_SHORT"),
+             " ",
+             env!("VERGEN_COMMIT_DATE")).into())
 }
 
 // Future refactor:
@@ -171,15 +177,10 @@ pub fn query_kv<LA>(data: web::Data<Arc<RwLock<LA>>>,
   where LA: LedgerAccess
 {
   let reader = data.read().unwrap();
-  let mut key = BitDigest { 0: [0u8; DIGESTBYTES] };
-  let key_str = b64dec(&addr.into_inner()).map_err(actix_web::error::ErrorBadRequest)?;
-  if key.0.len() != key_str.len() {
-    return Err(actix_web::error::ErrorBadRequest(format!("KV keys must be {} bytes.",
-                                                         key.0.len())));
-  }
-
-  key.0.clone_from_slice(&key_str);
-
+  let key =
+    Key::from_base64(&*addr).map_err(|_| {
+                              actix_web::error::ErrorBadRequest("Could not deserialize Key.")
+                            })?;
   let result = reader.get_kv_entry(key);
   Ok(web::Json(result))
 }
@@ -427,6 +428,7 @@ impl RestfulApiService {
                 .wrap(Cors::new().supports_credentials())
                 .data(ledger_access.clone())
                 .route("/ping", web::get().to(ping))
+                .route("/version", web::get().to(version))
                 .set_route::<LA>(ServiceInterface::LedgerAccess)
                 .set_route::<LA>(ServiceInterface::ArchiveAccess)
     }).bind(&format!("{}:{}", host, port))?

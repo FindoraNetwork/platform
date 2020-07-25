@@ -3,6 +3,7 @@ name = "ledger"
 version = "0.1.0"
 authors = ["Brian Rogoff <brian@findora.org", "Nathan Yospe <nathan@eian.io>, Kevin Foley <kevin@eian.io>, Ajinkya Nene <ajinkya@eian.io>"]
 edition = "2018"
+build = "build.rs"
 
 [dependencies]
 arrayref = "0.3.5"
@@ -50,7 +51,10 @@ txn_builder = { path = "../components/txn_builder" }
 version = "0.4.6"
 features = ["f16", "serde"]
 
-[target.'cfg(not(target_arch = "wasm32"))'. dependencies]
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 sodiumoxide = "0.2.1"
 fs2 = "0.4"
+
+[build-dependencies]
+vergen = "3.1.0"
 

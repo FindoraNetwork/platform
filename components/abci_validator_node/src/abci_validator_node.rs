@@ -121,12 +121,9 @@ impl abci::Application for ABCISubmissionServer {
       info!("locking for write: {}", error_location!());
       if let Ok(mut la) = self.la.write() {
         info!("locked for write");
-        if la.cache_transaction(tx).is_ok() {
-          info!("cached");
-          info!("unlocking for write: {}", error_location!());
-          return resp;
-        }
+        la.cache_transaction(tx);
         info!("unlocking for write: {}", error_location!());
+        return resp;
       }
     }
     resp.set_code(1);
@@ -193,6 +190,10 @@ impl abci::Application for ABCISubmissionServer {
 fn main() {
   // Tendermint ABCI port
   flexi_logger::Logger::with_env().start().unwrap();
+  info!(concat!("Build: ",
+                env!("VERGEN_SHA_SHORT"),
+                " ",
+                env!("VERGEN_COMMIT_DATE")));
   let base_dir = std::env::var_os("LEDGER_DIR").filter(|x| !x.is_empty());
   let base_dir = base_dir.as_ref().map(Path::new);
 

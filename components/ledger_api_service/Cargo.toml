@@ -3,6 +3,7 @@ name = "ledger_api_service"
 version = "0.1.0"
 authors = ["Nathan Yospe <nathan@eian.io>"]
 edition = "2018"
+build = "build.rs"
 
 [lib]
 path = "src/ledger_api_service.rs"
@@ -30,3 +31,6 @@ utils = { path = "../../libs/utils" }
 [dev-dependencies]
 quickcheck = "0.8"
 quickcheck_macros = "0.8"
+
+[build-dependencies]
+vergen = "3.1.0"

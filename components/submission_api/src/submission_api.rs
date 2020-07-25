@@ -22,6 +22,14 @@ fn ping() -> actix_web::Result<String> {
   Ok("success".into())
 }
 
+/// Returns the git commit hash and commit date of this build
+fn version() -> actix_web::Result<String> {
+  Ok(concat!("Build: ",
+             env!("VERGEN_SHA_SHORT"),
+             " ",
+             env!("VERGEN_COMMIT_DATE")).into())
+}
+
 pub fn submit_transaction<RNG, LU, TF>(data: web::Data<Arc<RwLock<SubmissionServer<RNG, LU, TF>>>>,
                                        body: web::Json<Transaction>)
                                        -> Result<web::Json<TxnHandle>, actix_web::error::Error>
@@ -92,6 +100,7 @@ pub enum SubmissionRoutes {
   TxnStatus,
   Ping,
   ForceEndBlock,
+  Version,
 }
 
 impl NetworkRoute for SubmissionRoutes {
@@ -101,6 +110,7 @@ impl NetworkRoute for SubmissionRoutes {
       SubmissionRoutes::TxnStatus => "txn_status",
       SubmissionRoutes::Ping => "ping",
       SubmissionRoutes::ForceEndBlock => "force_end_block",
+      SubmissionRoutes::Version => "version",
     };
     "/".to_owned() + endpoint
   }
@@ -123,6 +133,7 @@ impl SubmissionApi {
                 .route(&SubmissionRoutes::SubmitTransaction.route(),
                        web::post().to(submit_transaction::<RNG, LU, TF>))
                 .route(&SubmissionRoutes::Ping.route(), web::get().to(ping))
+                .route(&SubmissionRoutes::Version.route(), web::get().to(version))
                 .route(&SubmissionRoutes::TxnStatus.with_arg_template("handle"),
                        web::get().to(txn_status::<RNG, LU, TF>))
                 .route(&SubmissionRoutes::ForceEndBlock.route(),
