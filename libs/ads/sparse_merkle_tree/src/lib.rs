@@ -1,9 +1,9 @@
+#![deny(warnings)]
 //! # An authenticated key value store mapping SHA-256 keys to values implemented
 //! # as a Sparse Merkle Tree
 //!
 //!
 use cryptohash::sha256;
-use rand::prelude::thread_rng;
 use rand::Rng;
 use serde::{Deserialize, Serialize};
 use sha256::DIGESTBYTES;
@@ -54,12 +54,42 @@ pub fn flip_bit(b: &mut [u8; 32], index: usize) {
 // 256 bit values are used both as keys, and as per node hashes. To avoid confusion,
 // we've given different types to these.
 
-pub type Key = Digest; // [u8; DIGESTBYTES];
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug, Serialize, Deserialize)]
+pub struct Key(Digest); // [u8; DIGESTBYTES];
 
-// Method to generate a random key by hashing some random bits
-pub fn random_key() -> Key {
-  let rand = thread_rng().gen::<u64>();
-  digest(rand.to_be_bytes())
+impl Key {
+  // Method to generate a random key by hashing some random bits
+  pub fn gen_random<R: Rng>(prng: &mut R) -> Key {
+    let rand = prng.gen::<u64>();
+    Key::hash(rand.to_be_bytes())
+  }
+
+  // Method to convert the Key to a base64-encoded string
+  pub fn to_base64(&self) -> String {
+    base64::encode_config(&self.0, base64::URL_SAFE)
+  }
+
+  // Method to create a Key from a base64-encoded string
+  pub fn from_base64(input: &str) -> Result<Key, base64::DecodeError> {
+    let digest = Digest::from_slice(&base64::decode_config(input, base64::URL_SAFE)?).ok_or_else(|| base64::DecodeError::InvalidLength)?;
+    //.map_err(|_| base64::DecodeError::InvalidLength)?;
+    Ok(Key(digest))
+  }
+
+  // Returns the underlying digest of the key
+  pub fn get_digest(&self) -> &Digest {
+    &self.0
+  }
+
+  // Returns the underlying digest of the key
+  pub fn get_digest_mut(&mut self) -> &mut Digest {
+    &mut self.0
+  }
+
+  // Generates a key by hashing anything represented a a byte array
+  pub fn hash(value: impl AsRef<[u8]>) -> Key {
+    Key(digest(value.as_ref()))
+  }
 }
 
 // We apply the following optimization. Assuming 'H' is our hash function, we set H(leaf) = 0u256
@@ -79,14 +109,14 @@ struct TreeNodeIndex {
 
 impl TreeNodeIndex {
   /// Get a new TreeNodeIndex of the leaf corresponding to the given key.
-  fn leaf(key: Digest) -> Self {
+  fn leaf(key: Key) -> Self {
     Self { bit_path: key,
            depth: 256 }
   }
 
   /// Index of the root.
   fn root() -> Self {
-    Self { bit_path: ZERO_DIGEST,
+    Self { bit_path: Key(ZERO_DIGEST),
            depth: 0 }
   }
 
@@ -97,7 +127,7 @@ impl TreeNodeIndex {
 
   /// Whether this is a left subnode.
   fn is_left(&self) -> bool {
-    self.depth > 0 && !get_bit(&self.bit_path.0, self.depth - 1)
+    self.depth > 0 && !get_bit(&self.bit_path.get_digest().0, self.depth - 1)
   }
 
   /// Returns the index of the sibling of this node. Returns `None` if `self`
@@ -108,14 +138,14 @@ impl TreeNodeIndex {
     }
 
     let mut result = self.clone();
-    flip_bit(&mut result.bit_path.0, result.depth - 1);
+    flip_bit(&mut result.bit_path.get_digest_mut().0, result.depth - 1);
     Some(result)
   }
 
   /// Change `self` to the index of its parent node. Panics if `self` is the root.
   fn move_up(&mut self) {
     assert!(self.depth > 0, "Cannot move up from the root");
-    clear_bit(&mut self.bit_path.0, self.depth - 1);
+    clear_bit(&mut self.bit_path.get_digest_mut().0, self.depth - 1);
     self.depth -= 1;
   }
 }
@@ -246,7 +276,7 @@ pub fn check_merkle_proof<Value: AsRef<[u8]>>(merkle_root: &Digest,
     };
 
     let depth = 256 - i;
-    hash = if get_bit(&key.0, depth - 1) {
+    hash = if get_bit(&key.get_digest().0, depth - 1) {
       // sibling is at left
       hash_pair(sibling_hash, &hash)
     } else {
@@ -408,21 +438,21 @@ mod tests {
 
   #[test]
   fn test_tree_node_index() {
-    let mut index = TreeNodeIndex::leaf(r256("1234567890abcdef1234567890abcdef"));
+    let mut index = TreeNodeIndex::leaf(Key(r256("1234567890abcdef1234567890abcdef")));
     assert!(!index.is_left());
     for _ in 0..3 {
       index.move_up();
     }
     assert!(index.is_left());
     assert_eq!(index,
-               TreeNodeIndex { bit_path: r256("1234567890abcdef1234567890abcd0f"),
+               TreeNodeIndex { bit_path: Key(r256("1234567890abcdef1234567890abcd0f")),
                                depth: 256 - 3 });
     assert_eq!(index.sibling().unwrap(),
-               TreeNodeIndex { bit_path: r256("1234567890abcdef1234567890abcd1f"),
+               TreeNodeIndex { bit_path: Key(r256("1234567890abcdef1234567890abcd1f")),
                                depth: 256 - 3 });
 
     // Climb up from the left-most leaf.
-    let mut index = TreeNodeIndex::leaf(ZERO_DIGEST);
+    let mut index = TreeNodeIndex::leaf(Key(ZERO_DIGEST));
     for depth in (1..=256).rev() {
       assert_eq!(index.depth, depth);
       assert!(index.is_left());
@@ -435,11 +465,11 @@ mod tests {
       assert_eq!(index, sibling);
     }
     assert!(index.is_root());
-    assert_eq!(index.bit_path, ZERO_DIGEST);
+    assert_eq!(index.bit_path, Key(ZERO_DIGEST));
     assert_eq!(index.sibling(), None);
 
     // Climb up from the right-most leaf.
-    let mut index = TreeNodeIndex::leaf(max256());
+    let mut index = TreeNodeIndex::leaf(Key(max256()));
     for depth in (1..=256).rev() {
       assert_eq!(index.depth, depth);
       assert!(!index.is_left());
@@ -452,7 +482,7 @@ mod tests {
       assert_eq!(index, sibling);
     }
     assert!(index.is_root());
-    assert_eq!(index.bit_path, ZERO_DIGEST);
+    assert_eq!(index.bit_path, Key(ZERO_DIGEST));
     assert_eq!(index.sibling(), None);
   }
 
@@ -461,9 +491,9 @@ mod tests {
     let mut smt = SmtMap256::new();
     let merkle_root: Digest = *(&smt).merkle_root();
 
-    assert_eq!(smt.get(&ZERO_DIGEST), None);
+    assert_eq!(smt.get(&Key(ZERO_DIGEST)), None);
 
-    let key = b256("1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef");
+    let key = Key(b256("1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"));
     assert_eq!(smt.get(&key), None); // [0; 32]);
 
     let value1 = Some("ffeebbaa99887766554433221100");
@@ -481,11 +511,11 @@ mod tests {
     assert_eq!(merkle_root, *(&smt).merkle_root());
     println!("retrieved value {:?} associated with key {:?}",
              &value3.unwrap(),
-             to_hex(&key.0));
+             to_hex(&key.get_digest().0));
 
     fn prop(x0: u64, x1: u64, x2: u64, x3: u64, s: String) -> TestResult {
       let mut smt = SmtMap256::new();
-      let (key, value) = (make_digest(x0, x1, x2, x3), Some(s.clone()));
+      let (key, value) = (Key(make_digest(x0, x1, x2, x3)), Some(s.clone()));
       let prev = smt.set(&key, value);
       match prev {
         Some(_) => TestResult::failed(),
@@ -513,7 +543,7 @@ mod tests {
     let mut smt = SmtMap256::new();
 
     // Verify proof of `key` when the values of all keys are default.
-    let key = r256("C0");
+    let key = Key(r256("C0"));
     let (value, proof) = smt.get_with_proof(&key);
     println!("test_smt_map_256_merkle_proof: key={:?}, value={:?}, proof={:?}",
              &key, &value, &proof);
@@ -525,7 +555,7 @@ mod tests {
     assert!(check_merkle_proof(smt.merkle_root(), &key, value, &proof));
 
     // Verify the merkle proof of `key` when key 0x00 has a non-default value.
-    smt.set(&ZERO_DIGEST, Some(r256("AA")));
+    smt.set(&Key(ZERO_DIGEST), Some(r256("AA")));
     let (value, proof) = smt.get_with_proof(&key);
     assert_eq!(value, None); // [0; 32]);
     assert_eq!(
@@ -541,7 +571,7 @@ mod tests {
     assert!(check_merkle_proof(smt.merkle_root(), &key, value, &proof));
 
     // Verify the merkle proof of `key` again after setting a value at the max key (0xFF..FF).
-    smt.set(&max256(), Some(r256("1234")));
+    smt.set(&Key(max256()), Some(r256("1234")));
     let (value, proof) = smt.get_with_proof(&key);
     assert_eq!(value, None); // [0; 32]);
     assert_eq!(
@@ -578,7 +608,7 @@ mod tests {
                b256("ada8f75819448c00025257d17bfd78c821487e60f9b31340bcf393e9c6acefa2"));
 
     // Reset the value of key 0x00..00 to the default, and verify the merkle proof of `key`.
-    smt.set(&ZERO_DIGEST, None); // [0; 32]);
+    smt.set(&Key(ZERO_DIGEST), None); // [0; 32]);
     let (value, proof) = smt.get_with_proof(&key);
     assert_eq!(value, value2.as_ref());
     assert_eq!(
@@ -594,7 +624,7 @@ mod tests {
                b256("46b50abc16c1f97e918186a18397082e02adb1f38dd79c765da71f37501f9277"));
 
     // Reset the value of the max key to the default, and verify the merkle proof of `key`.
-    smt.set(&max256(), None); // [0; 32]);
+    smt.set(&Key(max256()), None); // [0; 32]);
     let (value, proof) = smt.get_with_proof(&key);
     assert_eq!(value, value2.as_ref());
     assert_eq!(proof,
@@ -616,10 +646,10 @@ mod tests {
   #[test]
   fn test_smt_map_256_merkle_proof_negative_cases() {
     let mut smt = SmtMap256::new();
-    let (key, value) = (r256("C0"), Some(r256("0100000000000000000000000000000000")));
+    let (key, value) = (Key(r256("C0")), Some(r256("0100000000000000000000000000000000")));
     smt.set(&key, value);
-    smt.set(&ZERO_DIGEST, Some(r256("AA")));
-    smt.set(&max256(), Some(r256("1234")));
+    smt.set(&Key(ZERO_DIGEST), Some(r256("AA")));
+    smt.set(&Key(max256()), Some(r256("1234")));
 
     let (v, p) = smt.get_with_proof(&key);
     // The correct merkle proof:

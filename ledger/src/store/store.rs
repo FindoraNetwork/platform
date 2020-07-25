@@ -2217,8 +2217,6 @@ mod tests {
     Credential,
   };
   use rand_core::SeedableRng;
-  use sparse_merkle_tree::helpers::l256;
-  // use std::fs;
   use tempfile::tempdir;
   use zei::serialization::ZeiFromToBytes;
   use zei::setup::PublicParams;
@@ -2476,7 +2474,7 @@ mod tests {
 
     let data1 = [0u8, 16];
 
-    let key1 = l256("01");
+    let key1 = Key::gen_random(&mut prng);
 
     let hash = KVHash::new(&data1, None);
     let update = KVUpdate::new((key1, Some(hash)), 0, &kp1);
