@@ -2,7 +2,7 @@ use credentials::{credential_issuer_key_gen, CredIssuerPublicKey, CredIssuerSecr
 use ledger::data_model::errors::PlatformError;
 use ledger::data_model::{AssetTypeCode, TxoSID};
 use ledger::{des_fail, error_location, ser_fail};
-use log::trace; // Other options: debug, info, warn
+use log::{debug, trace}; // Other options: debug, info, warn
 use rand_chacha::ChaChaRng;
 use rand_core::SeedableRng;
 use serde::{Deserialize, Serialize};
@@ -600,11 +600,10 @@ pub fn load_data(data_dir: &str) -> Result<Data, PlatformError> {
 /// # Arguments
 /// * `file_path`: file path.
 pub fn load_txn_from_file(file_path: &str) -> Result<TransactionBuilder, PlatformError> {
-  let txn = fs::read_to_string(file_path).map_err(|_| {
-                                           PlatformError::IoError(format!("Failed to read file: {}",
-                                                                  file_path))
-                                         })?;
-  println!("Parsing builder from file contents: \"{}\"", &txn);
+  let txn = fs::read_to_string(file_path).or_else(|_| {
+              Err(PlatformError::IoError(format!("Failed to read file: {}", file_path)))
+            })?;
+  debug!("Parsing builder from file contents: \"{}\"", &txn);
   match serde_json::from_str(&txn) {
     Ok(builder) => Ok(builder),
     Err(e) => Err(des_fail!(e)),
@@ -648,7 +647,7 @@ pub(crate) fn load_blind_asset_record_and_owner_memo_from_file(
                                                                   file_path))
                                          })?;
   let _ = fs::remove_file(file_path);
-  println!("Parsing builder from file contents: \"{}\"", &txn);
+  debug!("Parsing builder from file contents: \"{}\"", &txn);
   match serde_json::from_str::<TransactionBuilder>(&txn) {
     Ok(builder) => {
       Ok((builder.get_output_ref(0).0.clone(), builder.get_owner_memo_ref(0).cloned()))
@@ -693,8 +692,8 @@ pub fn load_tracer_memo_from_file(file_path: &str) -> Result<AssetTracerMemo, Pl
   let tracer_memo = fs::read_to_string(file_path).map_err(|_| {
                       PlatformError::IoError(format!("Failed to read file: {}", file_path))
                     })?;
-  println!("Parsing tracer memo from file contents: \"{}\"",
-           &tracer_memo);
+  debug!("Parsing tracer memo from file contents: \"{}\"",
+         &tracer_memo);
   serde_json::from_str::<AssetTracerMemo>(&tracer_memo).map_err(|e| des_fail!(e))
 }
 
@@ -709,8 +708,8 @@ pub fn load_tracer_and_owner_memos_from_files(
     let memos = fs::read_to_string(file_path).map_err(|_| {
                   PlatformError::IoError(format!("Failed to read file: {}", file_path))
                 })?;
-    println!("Parsing tracer and owner memos from file contents: \"{}\"",
-             &memos);
+    debug!("Parsing tracer and owner memos from file contents: \"{}\"",
+           &memos);
     match serde_json::from_str::<TracerAndOwnerMemos>(&memos) {
       Ok(memos) => {
         tracer_and_owner_memos.push(memos);
@@ -794,6 +793,8 @@ pub(crate) fn store_tracer_memo_to_file(path_str: &str,
 pub fn store_tracer_and_owner_memos_to_file(path_str: &str,
                                             tracer_and_owner_memos: TracerAndOwnerMemos)
                                             -> Result<(), PlatformError> {
+  debug!("store_tracer_and_owner_memos_to_file: path_str = {}, tracer_and_owner_memos = {:?}",
+         path_str, &tracer_and_owner_memos);
   if let Ok(as_json) = serde_json::to_string(&tracer_and_owner_memos) {
     if let Err(error) = fs::write(path_str, &as_json) {
       return Err(PlatformError::IoError(format!("Failed to create file {}: {}.",

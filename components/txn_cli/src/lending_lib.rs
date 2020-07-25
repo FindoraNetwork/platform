@@ -126,6 +126,7 @@ pub fn load_funds<T>(data_dir: &str,
                              None,
                              None,
                              None,
+                             None,
                              None)?;
 
   // Submit transaction and get the new record
@@ -353,6 +354,7 @@ pub fn fulfill_loan<T>(data_dir: &str,
                              None,
                              Some(fiat_txn_file),
                              None,
+                             None,
                              None)?;
   let fiat_sid = submit_and_get_sids(rest_client, txn_builder)?[0];
   println!("Fiat sid: {}", fiat_sid.0);
@@ -392,6 +394,7 @@ pub fn fulfill_loan<T>(data_dir: &str,
                              AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
                              None,
                              Some(debt_txn_file),
+                             None,
                              None,
                              None)?;
   let debt_sid = submit_and_get_sids(rest_client, txn_builder)?[0];

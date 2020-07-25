@@ -16,6 +16,7 @@ use submission_api::{ActixLUClient, MockLUClient, RestfulLedgerUpdate};
 use submission_server::{TxnHandle, TxnStatus};
 use utils::{HashOf, SignatureOf, LEDGER_PORT, QUERY_PORT, SUBMIT_PORT};
 use zei::xfr::sig::XfrPublicKey;
+use zei::xfr::structs::OwnerMemo;
 
 pub type MockLedgerStandalone =
   LedgerStandalone<MockLUClient, MockLedgerClient, MockQueryServerClient>;
@@ -113,6 +114,10 @@ impl<LU: RestfulLedgerUpdate,
 
   fn fetch_custom_data(&self, key: &Key) -> Result<Vec<u8>, PlatformError> {
     self.query_server_client.fetch_custom_data(key)
+  }
+
+  fn get_owner_memo(&self, txo_sid: u64) -> Result<Option<OwnerMemo>, PlatformError> {
+    self.query_server_client.get_owner_memo(txo_sid)
   }
 }
 
