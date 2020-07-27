@@ -6,7 +6,7 @@ use crate::data_model::errors::PlatformError;
 use crate::data_model::*;
 use crate::policies::{calculate_fee, DebtMemo};
 use crate::policy_script::policy_check_txn;
-use crate::{error_location, inp_fail, inv_fail};
+use crate::{add_location, error_location, inp_fail, inv_fail};
 use air::{AIRResult, AIR};
 use bitmap::{BitMap, SparseMap};
 use cryptohash::sha256::Digest as BitDigest;
@@ -310,7 +310,7 @@ impl HasInvariants<PlatformError> for LedgerStatus {
   }
 
   fn deep_invariant_check(&self) -> Result<(), PlatformError> {
-    self.fast_invariant_check()?;
+    self.fast_invariant_check().map_err(add_location!())?;
     Ok(())
   }
 }
@@ -318,13 +318,17 @@ impl HasInvariants<PlatformError> for LedgerStatus {
 // TODO(joe): fill these in
 impl HasInvariants<PlatformError> for LedgerState {
   fn fast_invariant_check(&self) -> Result<(), PlatformError> {
-    self.status.fast_invariant_check()?;
+    self.status
+        .fast_invariant_check()
+        .map_err(add_location!())?;
     Ok(())
   }
 
   fn deep_invariant_check(&self) -> Result<(), PlatformError> {
-    self.fast_invariant_check()?;
-    self.status.deep_invariant_check()?;
+    self.fast_invariant_check().map_err(add_location!())?;
+    self.status
+        .deep_invariant_check()
+        .map_err(add_location!())?;
     let mut txn_sid = 0;
     for (ix, block) in self.blocks.iter().enumerate() {
       let fin_txns = block.txns.to_vec();
@@ -486,7 +490,8 @@ impl LedgerStatus {
         if let Some(ent) = ent {
           // (1)
           KVUpdate { body: (*k, *gen_num, update.clone()),
-                     signature: sig.clone() }.check_signature(&ent.0)?;
+                     signature: sig.clone() }.check_signature(&ent.0)
+                                             .map_err(add_location!())?;
         }
       } else {
         // (2)
@@ -655,7 +660,8 @@ impl LedgerStatus {
                                      .asset_rules
                                      .transfer_multisig_rules;
           if let Some(rules) = signature_rules {
-            rules.check_signature_set(key_set)?;
+            rules.check_signature_set(key_set)
+                 .map_err(add_location!())?;
           }
         }
       } else {
@@ -689,7 +695,7 @@ impl LedgerStatus {
                            .ok_or_else(|| PlatformError::InputsError(error_location!()))?
                            .properties;
 
-      let debt_memo = serde_json::from_str::<DebtMemo>(&debt_type.memo.0)?;
+      let debt_memo = serde_json::from_str::<DebtMemo>(&debt_type.memo.0).map_err(add_location!())?;
       let correct_fee = calculate_fee(debt_swap_effects.initial_balance, debt_memo.interest_rate);
 
       // (1), (2)
@@ -741,7 +747,7 @@ impl LedgerStatus {
                         .ok_or_else(|| PlatformError::InputsError(error_location!()))?;
         if let Some((ref pol, ref globals)) = asset.properties.policy {
           let globals = globals.clone();
-          policy_check_txn(code, globals, &pol, &txn.txn)?;
+          policy_check_txn(code, globals, &pol, &txn.txn).map_err(add_location!())?;
         }
       }
     }
@@ -870,7 +876,9 @@ impl LedgerUpdate<ChaChaRng> for LedgerState {
                        block: &mut BlockEffect,
                        txn: TxnEffect)
                        -> Result<TxnTempSID, PlatformError> {
-    block.add_txn_effect(self.status.check_txn_effects(txn)?)
+    block.add_txn_effect(self.status
+                             .check_txn_effects(txn)
+                             .map_err(add_location!())?)
   }
 
   fn abort_block(&mut self, block: BlockEffect) -> HashMap<TxnTempSID, Transaction> {
@@ -1055,7 +1063,10 @@ impl LedgerUpdate<ChaChaRng> for LedgerStateChecker {
 
     // internally-spent outputs must be listed as spent
     for (ix, txo) in txn.txos.iter().enumerate() {
-      let live = self.0.utxo_map.query((base_ix + (ix as u64)) as usize)?;
+      let live = self.0
+                     .utxo_map
+                     .query((base_ix + (ix as u64)) as usize)
+                     .map_err(add_location!())?;
       if txo.is_none() && live {
         return Err(PlatformError::CheckedReplayError(format!("{}:{}:{}",
                                                              std::file!(),
@@ -1080,8 +1091,10 @@ impl LedgerUpdate<ChaChaRng> for LedgerStateChecker {
 
     // The transaction must match its spot in the txn merkle tree
     let txn_sid = self.0.status.next_txn.0 + block.txns.len();
-    let proof =
-      ProofOf::<(TxnSID, Transaction)>::new(self.0.txn_merkle.get_proof(txn_sid as u64, 0)?);
+    let proof = ProofOf::<(TxnSID, Transaction)>::new(self.0
+                                                          .txn_merkle
+                                                          .get_proof(txn_sid as u64, 0)
+                                                          .map_err(add_location!())?);
 
     if !proof.0.verify(txn.txn.hash(TxnSID(txn_sid)).0) {
       return Err(PlatformError::CheckedReplayError(format!("{}:{}:{}",
@@ -1140,8 +1153,13 @@ impl LedgerUpdate<ChaChaRng> for LedgerStateChecker {
 
 impl LedgerStateChecker {
   pub fn check_block(self, ix: u64, block: &BlockEffect) -> Result<Self, PlatformError> {
+    log::debug!("Checking block {}", ix);
+
     // The block must match its spot in the block merkle tree
-    let proof = ProofOf::<Vec<Transaction>>::new(self.0.block_merkle.get_proof(ix, 0)?);
+    let proof = ProofOf::<Vec<Transaction>>::new(self.0
+                                                     .block_merkle
+                                                     .get_proof(ix, 0)
+                                                     .map_err(add_location!())?);
 
     let block = block;
 
@@ -1182,7 +1200,10 @@ impl LedgerStateChecker {
     // level state commitment.
 
     for (ix, _) in self.0.status.utxos.iter() {
-      let live = self.0.utxo_map.query(ix.0 as usize)?;
+      let live = self.0
+                     .utxo_map
+                     .query(ix.0 as usize)
+                     .map_err(add_location!())?;
       if !live {
         return Err(PlatformError::CheckedReplayError(format!("{}:{}:{}",
                                                              std::file!(),
@@ -1286,11 +1307,11 @@ impl LedgerState {
   // TODO(joe): Make this an iterator of some sort so that we don't have to load the whole log
   // into memory
   fn load_transaction_log(path: &str) -> Result<Vec<LoggedBlock>, PlatformError> {
-    let file = File::open(path)?;
+    let file = File::open(path).map_err(add_location!())?;
     let reader = BufReader::new(file);
     let mut v = Vec::new();
     for l in reader.lines() {
-      let l = l?;
+      let l = l.map_err(add_location!())?;
       match serde_json::from_str::<LoggedBlock>(&l) {
         Ok(next_block) => {
           v.push(next_block);
@@ -1473,42 +1494,45 @@ impl LedgerState {
     let signing_key = match signing_key_path {
       Some(path) => {
         let ret = {
-          let file = File::open(path)?;
+          let file = File::open(path).map_err(add_location!())?;
           let mut reader = BufReader::new(file);
           serde_json::from_reader::<&mut BufReader<File>, XfrKeyPair>(&mut reader)
         };
         ret.or_else::<PlatformError,_>(|_| {
           let key = XfrKeyPair::generate(&mut prng);
-          let file = File::create(path)?;
+          let file = File::create(path).map_err(add_location!())?;
           let mut writer = BufWriter::new(file);
 
           serde_json::to_writer::<&mut BufWriter<File>, XfrKeyPair>(&mut writer, &key)
             .map_err(|e| PlatformError::SerializationError(format!("[{}]: {:?}",&error_location!(),e)))?;
           Ok(key)
-        })?
+        }).map_err(add_location!())?
       }
       None => XfrKeyPair::generate(&mut prng),
     };
 
-    let blocks = LedgerState::load_transaction_log(txn_path)?;
+    let blocks = LedgerState::load_transaction_log(txn_path).map_err(add_location!())?;
     // dbg!(&blocks);
-    let txn_log = (txn_path.into(), std::fs::OpenOptions::new().append(true).open(txn_path)?);
+    let txn_log = (txn_path.into(),
+                   std::fs::OpenOptions::new().append(true)
+                                              .open(txn_path)
+                                              .map_err(add_location!())?);
     // dbg!(&txn_log);
     let mut ledger =
       LedgerStateChecker(LedgerState { status: LedgerStatus::new(block_merkle_path,
                                                                  air_path,
                                                                  txn_merkle_path,
                                                                  txn_path,
-                                                                 utxo_map_path)?,
+                                                                 utxo_map_path).map_err(add_location!())?,
                                        prng,
                                        signing_key,
                                        block_merkle:
-                                         LedgerState::init_merkle_log(block_merkle_path, false)?,
+                                         LedgerState::init_merkle_log(block_merkle_path, false).map_err(add_location!())?,
                                        txn_merkle:
-                                         LedgerState::init_merkle_log(txn_merkle_path, false)?,
+                                         LedgerState::init_merkle_log(txn_merkle_path, false).map_err(add_location!())?,
                                        blocks: Vec::new(),
                                        utxo_map: LedgerState::init_utxo_map(utxo_map_path,
-                                                                            false)?,
+                                                                            false).map_err(add_location!())?,
                                        txn_log: None,
                                        block_ctx: Some(BlockEffect::new()) });
 
@@ -1538,14 +1562,17 @@ impl LedgerState {
       for txn in block {
         let eff = TxnEffect::compute_effect(txn).map_err(|e| {
                                                   std::io::Error::new(std::io::ErrorKind::Other, e)
-                                                })?;
+                                                })
+                                                .map_err(add_location!())?;
         ledger.apply_transaction(&mut block_builder, eff)
-              .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
+              .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))
+              .map_err(add_location!())?;
       }
-      ledger = ledger.check_block(ix as u64, &block_builder)?;
+      ledger = ledger.check_block(ix as u64, &block_builder)
+                     .map_err(add_location!())?;
       ledger.finish_block(block_builder).unwrap();
 
-      ledger.0.fast_invariant_check()?;
+      ledger.0.fast_invariant_check().map_err(add_location!())?;
     }
 
     ledger.0.txn_log = Some(txn_log);
@@ -1583,25 +1610,29 @@ impl LedgerState {
                PlatformError::SerializationError(format!("[{}]: {:?}", &error_location!(), e))
              })
            })
-           .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?
+           .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))
+           .map_err(add_location!())?
       }
       None => XfrKeyPair::generate(&mut prng),
     };
 
-    let blocks = LedgerState::load_transaction_log(txn_path)?;
-    let txn_log = (txn_path.into(), std::fs::OpenOptions::new().append(true).open(txn_path)?);
+    let blocks = LedgerState::load_transaction_log(txn_path).map_err(add_location!())?;
+    let txn_log = (txn_path.into(),
+                   std::fs::OpenOptions::new().append(true)
+                                              .open(txn_path)
+                                              .map_err(add_location!())?);
     let mut ledger =
       LedgerState { status: LedgerStatus::new(block_merkle_path,
                                               air_path,
                                               txn_merkle_path,
                                               txn_path,
-                                              utxo_map_path)?,
+                                              utxo_map_path).map_err(add_location!())?,
                     prng,
                     signing_key,
-                    block_merkle: LedgerState::init_merkle_log(block_merkle_path, true)?,
-                    txn_merkle: LedgerState::init_merkle_log(txn_merkle_path, true)?,
+                    block_merkle: LedgerState::init_merkle_log(block_merkle_path, true).map_err(add_location!())?,
+                    txn_merkle: LedgerState::init_merkle_log(txn_merkle_path, true).map_err(add_location!())?,
                     blocks: Vec::new(),
-                    utxo_map: LedgerState::init_utxo_map(utxo_map_path, true)?,
+                    utxo_map: LedgerState::init_utxo_map(utxo_map_path, true).map_err(add_location!())?,
                     txn_log: None,
                     block_ctx: Some(BlockEffect::new()) };
 
@@ -1611,15 +1642,17 @@ impl LedgerState {
       for txn in block {
         let eff = TxnEffect::compute_effect(txn).map_err(|e| {
                                                   std::io::Error::new(std::io::ErrorKind::Other, e)
-                                                })?;
+                                                })
+                                                .map_err(add_location!())?;
         ledger.apply_transaction(&mut block_builder, eff)
-              .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
+              .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))
+              .map_err(add_location!())?;
       }
       ledger.finish_block(block_builder).unwrap();
     }
 
     ledger.txn_log = Some(txn_log);
-    ledger.fast_invariant_check()?;
+    ledger.fast_invariant_check().map_err(add_location!())?;
 
     Ok(ledger)
   }
@@ -1654,10 +1687,10 @@ impl LedgerState {
     }).or_else(|e| {
         log::info!("Checking log against merkle trees failed: {}",e);
         let ret = LedgerState::new(&block_merkle, &air, &txn_merkle, &txn_log,
-            &utxo_map, None, None)?;
+            &utxo_map, None, None).map_err(add_location!())?;
 
         {
-            let file = File::create(sig_key_file)?;
+            let file = File::create(sig_key_file).map_err(add_location!())?;
             let mut writer = BufWriter::new(file);
 
             serde_json::to_writer::<&mut BufWriter<File>, XfrKeyPair>(&mut writer, &ret.signing_key)
@@ -1751,6 +1784,8 @@ impl LedgerState {
     let merkle_id = self.compute_and_append_txns_hash(&block);
     self.compute_and_save_state_commitment_data();
     self.utxo_map.write().unwrap();
+    self.txn_merkle.write().unwrap();
+    self.block_merkle.write().unwrap();
     // TODO: START https://github.com/findoraorg/platform/issues/307
     // self.txn_merkle.flush().unwrap();
     // self.block_merkle.flush().unwrap();
@@ -2000,8 +2035,9 @@ pub mod helpers {
                                        seq_id: u64)
                                        -> Result<Transaction, PlatformError> {
     let issuer_key = IssuerPublicKey { key: *keypair.get_pk_ref() };
-    let asset_body = DefineAssetBody::new(&code, &issuer_key, asset_rules, memo, None, None)?;
-    let asset_create = DefineAsset::new(asset_body, &IssuerKeyPair { keypair: &keypair })?;
+    let asset_body = DefineAssetBody::new(&code, &issuer_key, asset_rules, memo, None, None).map_err(add_location!())?;
+    let asset_create =
+      DefineAsset::new(asset_body, &IssuerKeyPair { keypair: &keypair }).map_err(add_location!())?;
     Ok(Transaction::from_operation(Operation::DefineAsset(asset_create), seq_id))
   }
 
