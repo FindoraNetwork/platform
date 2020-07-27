@@ -58,14 +58,14 @@ fn load_data(data_dir: &str) -> Result<AssetLiabilityAndRateData, PlatformError>
     }
   };
 
-  serde_json::from_str::<AssetLiabilityAndRateData>(&data).or_else(|e| Err(des_fail!(e)))
+  serde_json::from_str::<AssetLiabilityAndRateData>(&data).map_err(|e| des_fail!(e))
 }
 
 /// Parses a string to u64.
 fn parse_to_u64(val_str: &str) -> Result<u64, PlatformError> {
   val_str.trim()
          .parse::<u64>()
-         .or_else(|_| Err(PlatformError::InputsError(error_location!())))
+         .map_err(|_| PlatformError::InputsError(error_location!()))
 }
 
 /// Processes input commands and arguments.
@@ -119,8 +119,8 @@ fn process_inputs<T: RestfulLedgerAccess>(inputs: clap::ArgMatches,
         return Err(PlatformError::InputsError(error_location!()));
       };
       let blinds = if let Some(blinds_arg) = add_matches.value_of("blinds") {
-        Some(serde_json::from_str::<((Scalar, Scalar), Scalar)>(&blinds_arg).or_else(|e| {
-                                                                              Err(des_fail!(e))
+        Some(serde_json::from_str::<((Scalar, Scalar), Scalar)>(&blinds_arg).map_err(|e| {
+                                                                              des_fail!(e)
                                                                             })?)
       } else {
         None
@@ -142,8 +142,8 @@ fn process_inputs<T: RestfulLedgerAccess>(inputs: clap::ArgMatches,
     ("prove_and_verify_solvency", Some(prove_and_verify_matches)) => {
       let mut hidden_assets =
         if let Some(hidden_assets_arg) = prove_and_verify_matches.value_of("hidden_assets") {
-          serde_json::from_str::<Vec<AmountAndCodeScalar>>(&hidden_assets_arg).or_else(|e| {
-                                                                                Err(des_fail!(e))
+          serde_json::from_str::<Vec<AmountAndCodeScalar>>(&hidden_assets_arg).map_err(|e| {
+                                                                                des_fail!(e)
                                                                               })?
         } else {
           Vec::new()
@@ -151,15 +151,17 @@ fn process_inputs<T: RestfulLedgerAccess>(inputs: clap::ArgMatches,
       let mut hidden_assets_blinds = if let Some(hidden_assets_blinds_arg) =
         prove_and_verify_matches.value_of("hidden_assets_blinds")
       {
-        serde_json::from_str::<Vec<AmountAndCodeBlinds>>(&hidden_assets_blinds_arg).or_else(|e| Err(des_fail!(e)))?
+        serde_json::from_str::<Vec<AmountAndCodeBlinds>>(&hidden_assets_blinds_arg).map_err(|e| {
+                                                                                     des_fail!(e)
+                                                                                   })?
       } else {
         Vec::new()
       };
       let mut hidden_liabilities = if let Some(hidden_liabilities_arg) =
         prove_and_verify_matches.value_of("hidden_liabilities")
       {
-        serde_json::from_str::<Vec<AmountAndCodeScalar>>(&hidden_liabilities_arg).or_else(|e| {
-                                                                                   Err(des_fail!(e))
+        serde_json::from_str::<Vec<AmountAndCodeScalar>>(&hidden_liabilities_arg).map_err(|e| {
+                                                                                   des_fail!(e)
                                                                                  })?
       } else {
         Vec::new()
@@ -167,7 +169,7 @@ fn process_inputs<T: RestfulLedgerAccess>(inputs: clap::ArgMatches,
       let mut hidden_liabilities_blinds = if let Some(hidden_liabilities_blinds_arg) =
         prove_and_verify_matches.value_of("hidden_liabilities_blinds")
       {
-        serde_json::from_str::<Vec<AmountAndCodeBlinds>>(&hidden_liabilities_blinds_arg).or_else(|e| Err(des_fail!(e)))?
+        serde_json::from_str::<Vec<AmountAndCodeBlinds>>(&hidden_liabilities_blinds_arg).map_err(|e| des_fail!(e))?
       } else {
         Vec::new()
       };

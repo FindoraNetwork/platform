@@ -38,7 +38,7 @@ impl TxnForward for TendermintForward {
                             .body(json_rpc)
                             .header(reqwest::header::CONTENT_TYPE, "application/json")
                             .send()
-                            .or_else(|e| Err(sub_fail!(e)))
+                            .map_err(|e| sub_fail!(e))
                             .unwrap();
     });
     info!("forward_txn call complete");

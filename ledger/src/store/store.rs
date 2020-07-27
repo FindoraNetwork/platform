@@ -542,7 +542,7 @@ impl LedgerStatus {
                                 .get_asset_type()
                                 .map(|v| AssetTypeCode { val: v })
       {
-        dbg!(&self.asset_types);
+        // dbg!(&self.asset_types);
         let asset_type = self.asset_types
                              .get(&code)
                              .or_else(|| txn.new_asset_codes.get(&code))
@@ -2274,7 +2274,7 @@ mod tests {
                             txo_count: 0,
                             pulse_count: 0 };
 
-    dbg!(&data);
+    // dbg!(&data);
     let count_original = ledger_state.status.block_commit_count;
 
     let b = ledger_state.start_block().unwrap();
@@ -2283,7 +2283,7 @@ mod tests {
 
     let first_hash = data.compute_commitment();
 
-    dbg!(&ledger_state.status.state_commitment_data);
+    // dbg!(&ledger_state.status.state_commitment_data);
 
     assert_eq!(ledger_state.status
                            .state_commitment_data
@@ -3058,7 +3058,7 @@ mod tests {
                                                                    tracing_policy);
     let effect = TxnEffect::compute_effect(tx.clone()).unwrap();
     let res = ledger.apply_transaction(&mut block, effect);
-    dbg!(&res);
+    // dbg!(&res);
     assert!(res.is_ok());
   }
 
