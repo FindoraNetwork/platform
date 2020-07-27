@@ -357,58 +357,55 @@ impl HasInvariants<PlatformError> for LedgerState {
         }
       }
     }
-    /* TODO: These tests of logging are unnecessary but are being left here as we decide what to do about logging, archival, etc.
-       See https://github.com/findoraorg/platform/issues/307
-        if let Some((_, txn_log_fd)) = &self.txn_log {
-          txn_log_fd.sync_data().unwrap();
-          let tmp_dir = utils::fresh_tmp_dir();
+    if let Some((_, txn_log_fd)) = &self.txn_log {
+      txn_log_fd.sync_data().unwrap();
+      let tmp_dir = utils::fresh_tmp_dir();
 
-          let other_block_merkle_buf = tmp_dir.join("test_block_merkle");
-          let other_block_merkle_path = other_block_merkle_buf.to_str().unwrap();
+      let other_block_merkle_buf = tmp_dir.join("test_block_merkle");
+      let other_block_merkle_path = other_block_merkle_buf.to_str().unwrap();
 
-          let other_air_buf = tmp_dir.join("test_air");
-          let other_air_path = other_air_buf.to_str().unwrap();
+      let other_air_buf = tmp_dir.join("test_air");
+      let other_air_path = other_air_buf.to_str().unwrap();
 
-          let other_txn_merkle_buf = tmp_dir.join("test_txn_merkle");
-          let other_txn_merkle_path = other_txn_merkle_buf.to_str().unwrap();
+      let other_txn_merkle_buf = tmp_dir.join("test_txn_merkle");
+      let other_txn_merkle_path = other_txn_merkle_buf.to_str().unwrap();
 
-          let other_txn_buf = tmp_dir.join("test_txnlog");
-          let other_txn_path = other_txn_buf.to_str().unwrap();
+      let other_txn_buf = tmp_dir.join("test_txnlog");
+      let other_txn_path = other_txn_buf.to_str().unwrap();
 
-          let other_utxo_map_buf = tmp_dir.join("test_utxo_map");
-          let other_utxo_map_path = other_utxo_map_buf.to_str().unwrap();
+      let other_utxo_map_buf = tmp_dir.join("test_utxo_map");
+      let other_utxo_map_path = other_utxo_map_buf.to_str().unwrap();
 
-          // dbg!(&self.status.txn_path);
-          // dbg!(std::fs::metadata(&self.status.txn_path).unwrap());
-          // dbg!(&other_txn_path);
-          std::fs::copy(&self.status.txn_path, &other_txn_path).unwrap();
-          std::fs::copy(&self.status.block_merkle_path, &other_block_merkle_path).unwrap();
-          std::fs::copy(&self.status.txn_merkle_path, &other_txn_merkle_path).unwrap();
-          std::fs::copy(&self.status.utxo_map_path, &other_utxo_map_path).unwrap();
+      // dbg!(&self.status.txn_path);
+      // dbg!(std::fs::metadata(&self.status.txn_path).unwrap());
+      // dbg!(&other_txn_path);
+      std::fs::copy(&self.status.txn_path, &other_txn_path).unwrap();
+      std::fs::copy(&self.status.block_merkle_path, &other_block_merkle_path).unwrap();
+      std::fs::copy(&self.status.txn_merkle_path, &other_txn_merkle_path).unwrap();
+      std::fs::copy(&self.status.utxo_map_path, &other_utxo_map_path).unwrap();
 
-          let state2 = Box::new(LedgerState::load_checked_from_log(&other_block_merkle_path,
-                                                                   &other_air_path,
-                                                                   &other_txn_merkle_path,
-                                                                   &other_txn_path,
-                                                                   &other_utxo_map_path,
-                                                                   None,
-                                                                   None).unwrap());
+      let state2 = Box::new(LedgerState::load_checked_from_log(&other_block_merkle_path,
+                                                               &other_air_path,
+                                                               &other_txn_merkle_path,
+                                                               &other_txn_path,
+                                                               &other_utxo_map_path,
+                                                               None,
+                                                               None).unwrap());
 
-          let mut status2 = Box::new(state2.status);
-          status2.block_merkle_path = self.status.block_merkle_path.clone();
-          status2.air_path = self.status.air_path.clone();
-          status2.txn_merkle_path = self.status.txn_merkle_path.clone();
-          status2.txn_path = self.status.txn_path.clone();
-          status2.utxo_map_path = self.status.utxo_map_path.clone();
-          status2.utxo_map_versions = self.status.utxo_map_versions.clone();
+      let mut status2 = Box::new(state2.status);
+      status2.block_merkle_path = self.status.block_merkle_path.clone();
+      status2.air_path = self.status.air_path.clone();
+      status2.txn_merkle_path = self.status.txn_merkle_path.clone();
+      status2.txn_path = self.status.txn_path.clone();
+      status2.utxo_map_path = self.status.utxo_map_path.clone();
+      status2.utxo_map_versions = self.status.utxo_map_versions.clone();
 
-          // dbg!(&status2);
-          // dbg!(&self.status);
-          assert!(*status2 == self.status);
+      // dbg!(&status2);
+      // dbg!(&self.status);
+      assert!(*status2 == self.status);
 
-          std::fs::remove_dir_all(tmp_dir).unwrap();
-        }
-    */
+      std::fs::remove_dir_all(tmp_dir).unwrap();
+    }
     Ok(())
   }
 }
