@@ -1,4 +1,4 @@
-// #![deny(warnings)]
+#![deny(warnings)]
 use ledger::data_model::errors::PlatformError;
 use ledger::data_model::AssetTypeCode;
 #[cfg(test)]
@@ -737,7 +737,8 @@ fn test_issue_transfer_trace_and_submit_with_args() {
   let memo_file = memo_buf.to_str().unwrap();
 
   // Create txn builder and key pairs
-  create_txn_builder_with_path(txn_builder_file, &mut ledger_standalone).expect("Failed to create transaction builder");
+  create_txn_builder_with_path(txn_builder_file,
+                               &mut ledger_standalone).expect("Failed to create transaction builder");
 
   // Define token code
   let token_code = AssetTypeCode::gen_random().to_base64();
@@ -769,15 +770,13 @@ fn test_issue_transfer_trace_and_submit_with_args() {
                                        memo_file,
                                        &mut ledger_standalone).expect("Failed to store memos");
 
-  // Trace the asset and verify the amount
-  /* FIXME
   trace_and_verify_asset(dir,
                          txn_builder_file,
                          "0",
                          memo_file,
                          amount,
                          &mut ledger_standalone).expect("Failed to trace the asset");
-   */
+
   // Submit transaction
 
   submit(txn_builder_file, &mut ledger_standalone).expect("Failed to submit transaction");
@@ -816,7 +815,7 @@ fn test_air_assign() {
 
 // Test funds loading, loan request, fulfilling and repayment
 #[test]
-#[ignore] // FIXME: txn_cli no longer supports implicit txn files
+#[ignore]
 fn test_request_fulfill_and_pay_loan_with_args() {
   let tmp_dir = tempdir().unwrap();
   let dir = tmp_dir.path().to_str().unwrap();
