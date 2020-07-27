@@ -2,13 +2,13 @@
 use crate::data_lib::*;
 use crate::lending_lib::{fulfill_loan, load_funds, pay_loan};
 use crate::txn_lib::{
-  air_assign, define_asset, issue_and_transfer_asset, query_open_asset_record, submit_and_get_sids,
+  define_asset, issue_and_transfer_asset, query_open_asset_record, submit_and_get_sids,
 };
 use clap::{App, Arg, SubCommand};
 use credentials::u8_slice_to_u32_vec;
 use ledger::data_model::errors::PlatformError;
 use ledger::data_model::{
-  AccountAddress, AssetRules, AssetTypeCode, KVBlind, KVHash, SignatureRules, TxoRef, TxoSID,
+  AccountAddress, AssetRules, AssetTypeCode, KVHash, SignatureRules, TxoRef, TxoSID,
 };
 use ledger::{error_location, ser_fail};
 use ledger_api_service::RestfulLedgerAccess;
@@ -121,32 +121,6 @@ pub(crate) fn process_asset_issuer_cmd(asset_issuer_matches: &clap::ArgMatches,
                                   token_code,
                                   record_type,
                                   Some(policy))
-    }
-    ("air_assign", Some(air_assign_matches)) => {
-      let issuer_id = if let Some(id_arg) = asset_issuer_matches.value_of("id") {
-        parse_to_u64(id_arg)?
-      } else {
-        eprintln!("Asset issuer id is required for AIR assigning. Use asset_issuer --id.");
-        return Err(PlatformError::InputsError(error_location!()));
-      };
-      if let Some(txn_file) = txn_file {
-        match (air_assign_matches.value_of("address"),
-               air_assign_matches.value_of("data"),
-               air_assign_matches.value_of("issuer_pk"),
-               air_assign_matches.value_of("pok"))
-        {
-          (Some(address), Some(data), Some(issuer_pk), Some(pok)) => {
-            air_assign(data_dir, seq_id, issuer_id, address, data, issuer_pk, pok, txn_file)
-          }
-          (_, _, _, _) => {
-            eprintln!("Missing address, data, issuer_pk, or proof.");
-            Err(PlatformError::InputsError(error_location!()))
-          }
-        }
-      } else {
-        eprintln!("Missing --name <filename>");
-        inputs_error(&format!("Missing --txn <filename> at {}", error_location!()))
-      }
     }
     ("define_asset", Some(define_asset_matches)) => {
       let fiat_asset = define_asset_matches.is_present("fiat");
@@ -626,7 +600,7 @@ pub(crate) fn process_asset_issuer_cmd(asset_issuer_matches: &clap::ArgMatches,
       }
     }
     _ => {
-      eprintln!("Subcommand missing or not recognized. Try asset_issuer --help");
+      eprintln!("Subcommand missing or not recognized. Try \"txn_cli asset_issuer --help\"");
       Err(PlatformError::InputsError(error_location!()))
     }
   }
@@ -664,7 +638,7 @@ pub(crate) fn process_credential_issuer_cmd(credential_issuer_matches: &clap::Ar
       data.add_credential_issuer(data_dir, name, attributes)
     }
     _ => {
-      eprintln!("Subcommand missing or not recognized. Try credential_issuer --help");
+      eprintln!("Subcommand missing or not recognized. Try \"txn_cli credential_issuer --help\"");
       Err(PlatformError::InputsError(error_location!()))
     }
   }
@@ -816,7 +790,7 @@ pub(crate) fn process_lender_cmd<T: RestfulLedgerAccess + RestfulLedgerUpdate>(
       data.create_or_overwrite_requirement(data_dir, lender_id, attribute, requirement)
     }
     _ => {
-      eprintln!("Subcommand missing or not recognized. Try lender --help");
+      eprintln!("Subcommand missing or not recognized. Try \"txn_cli lender --help\"");
       Err(PlatformError::InputsError(error_location!()))
     }
   }
@@ -1092,7 +1066,7 @@ pub(crate) fn process_borrower_cmd<T: RestfulQueryServerAccess
       Ok(())
     }
     _ => {
-      eprintln!("Subcommand missing or not recognized. Try borrower --help");
+      eprintln!("Subcommand missing or not recognized. Try \"txn_cli borrower --help\"");
       Err(PlatformError::InputsError(error_location!()))
     }
   }
@@ -1257,13 +1231,13 @@ pub fn process_inputs<T: RestfulQueryServerAccess + RestfulLedgerAccess + Restfu
         process_create_txn_builder_cmd(create_txn_builder_matches, seq_id, &txn_file)
       } else {
         eprintln!("Missing --name <filename>");
-        inputs_error(&format!("Missing --txn <filename> at {}", error_location!()))
+        inputs_error(&format!("Missing --name <filename> at {}", error_location!()))
       }
     }
     ("serialize", Some(_serialize_matches)) => {
       if let Some(txn_file) = inputs.value_of("txn") {
         let txn_builder = load_txn_from_file(&txn_file).map_err(|e| {
-                            eprintln!("Failed to load txn builder from file {}.", txn_file);
+                            eprintln!("File {} is not a valid transaction file.", txn_file);
                             e
                           })?;
         match serde_json::to_string(txn_builder.transaction()) {
@@ -1281,20 +1255,6 @@ pub fn process_inputs<T: RestfulQueryServerAccess + RestfulLedgerAccess + Restfu
         inputs_error(&format!("Missing --txn <filename> at {}", error_location!()))
       }
     }
-    ("drop", Some(_drop_matches)) => {
-      if let Some(txn_file) = inputs.value_of("txn") {
-        match std::fs::remove_file(&txn_file) {
-          Ok(_) => {
-            debug!("Deleted transaction file {}", txn_file);
-            Ok(())
-          }
-          Err(e) => Err(PlatformError::IoError(format!("Error deleting file: {:?} ", e))),
-        }
-      } else {
-        eprintln!("Missing --txn <filename>");
-        inputs_error(&format!("Missing --txn <filename> at {}", error_location!()))
-      }
-    }
     ("submit", Some(submit_matches)) => {
       if let Some(txn_file) = inputs.value_of("txn") {
         process_submit_cmd(submit_matches, &txn_file, rest_client)
@@ -1303,49 +1263,23 @@ pub fn process_inputs<T: RestfulQueryServerAccess + RestfulLedgerAccess + Restfu
         inputs_error(&format!("Missing --txn <filename> at {}", error_location!()))
       }
     }
-    ("custom_data", Some(custom_data_matches)) => {
-      process_custom_data_cmds(custom_data_matches, rest_client)
-    }
     _ => {
-      eprintln!("Subcommand missing or not recognized. Try --help");
+      eprintln!("Subcommand missing or not recognized. Try \"txn_cli --help\"");
       inputs_error(&format!("Subcommand missing or not recognized at {}",
                             error_location!()))
     }
   }
 }
 
-pub(crate) fn process_custom_data_cmds<T: RestfulQueryServerAccess>(
-  custom_data_matches: &clap::ArgMatches,
-  rest_client: &mut T)
-  -> Result<(), PlatformError> {
-  match custom_data_matches.subcommand() {
-    ("fetch", Some(fetch_matches)) => {
-      let key = Key::from_base64(fetch_matches.value_of("key").unwrap())
-          .map_err(|e| PlatformError::InputsError(format!("{}:{}",e,error_location!())))?;
-      let res = rest_client.fetch_custom_data(&key)?;
-      debug!("Data is: {:?}", &res);
-    }
-    ("store", Some(store_matches)) => {
-      let key = Key::from_base64(store_matches.value_of("key").unwrap())
-          .map_err(|e| PlatformError::InputsError(format!("{}:{}",e,error_location!())))?;
-      let data = store_matches.value_of("data").unwrap();
-      let blind: Option<KVBlind> = None;
-      rest_client.store_custom_data(&data, &key, blind)?;
-    }
-    _ => {
-      eprintln!("Subcommand missing or not recognized. Try --help");
-      return inputs_error(&format!("Subcommand missing or not recognized at {}",
-                                   error_location!()));
-    }
-  }
-
-  Ok(())
-}
-
 pub fn get_cli_app<'a, 'b>() -> App<'a, 'b> {
   App::new("Transaction Builder")
-    .version(concat!("0.0.1 Build: ",env!("VERGEN_SHA_SHORT")," ", env!("VERGEN_COMMIT_DATE")))
-    .about("Copyright 2019 © Findora. All rights reserved.")
+    .version(concat!("0.0.1 Build: ",
+                     env!("VERGEN_SHA_SHORT"),
+                     " ",
+                     env!("VERGEN_COMMIT_DATE"),
+                     "\n",
+                     "Copyright 2020 © Findora. All rights reserved."))
+    .about("Command line tool for interacting with Findora ledger")
     .arg(Arg::with_name("config")
       .short("c")
       .long("config")
@@ -1365,7 +1299,7 @@ pub fn get_cli_app<'a, 'b>() -> App<'a, 'b> {
     .arg(Arg::with_name("txn")
       .long("txn")
       .value_name("FILE")
-      .help("Use a name transaction file (will always be under findora_dir)")
+      .help("Use named transaction file (will always be under findora_dir)")
       .takes_value(true))
     .subcommand(SubCommand::with_name("asset_issuer")
       .subcommand(SubCommand::with_name("sign_up")
@@ -1417,17 +1351,6 @@ pub fn get_cli_app<'a, 'b>() -> App<'a, 'b> {
           .required(true)
           .takes_value(true)
           .help("Asset token code.")))
-      .subcommand(SubCommand::with_name("air_assign")
-        .arg(Arg::with_name("address")
-          .short("k")
-          .long("address")
-          .help("Required: address or key of AIR entry")
-          .takes_value(true))
-        .arg(Arg::with_name("data")
-          .short("v")
-          .long("data")
-          .takes_value(true)
-          .help("Required: Data to be stored. The transaction will fail if no asset with the token code exists.")))
       .subcommand(SubCommand::with_name("define_asset")
         .arg(Arg::with_name("fiat")
           .short("f")
@@ -1866,7 +1789,6 @@ pub fn get_cli_app<'a, 'b>() -> App<'a, 'b> {
         .short("f")
         .help("If specified, the existing file with the same name will be overwritten.")))
     .subcommand(SubCommand::with_name("serialize"))
-    .subcommand(SubCommand::with_name("drop"))
     .subcommand(SubCommand::with_name("submit")
       .arg(Arg::with_name("get_sids")
         .long("get_sids")
@@ -1886,41 +1808,4 @@ pub fn get_cli_app<'a, 'b>() -> App<'a, 'b> {
         .long("localhost")
         .takes_value(false)
         .help("Specify that localhost, not testnet.findora.org should be used.")))
-    .subcommand(SubCommand::with_name("custom_data")
-        .subcommand(SubCommand::with_name("store")
-            .arg(Arg::with_name("key")
-               .long("key")
-               .short("k")
-               .required(true)
-               .takes_value(true)
-               .help("Key specifying location to store data at (base64 encoded)."))
-            .arg(Arg::with_name("data")
-               .long("data")
-               .short("d")
-               .required(true)
-               .takes_value(true)
-               .help("Custom data to store in query server."))
-            .arg(Arg::with_name("http")
-              .long("http")
-              .takes_value(false)
-              .help("Specify that http, not https should be used."))
-            .arg(Arg::with_name("localhost")
-              .long("localhost")
-              .takes_value(false)
-              .help("Specify that localhost, not testnet.findora.org should be used.")))
-        .subcommand(SubCommand::with_name("fetch")
-            .arg(Arg::with_name("key")
-               .long("key")
-               .short("k")
-               .required(true)
-               .takes_value(true)
-               .help("Key specifying location of data to fetch (base64 encoded)."))
-            .arg(Arg::with_name("http")
-              .long("http")
-              .takes_value(false)
-              .help("Specify that http, not https should be used."))
-            .arg(Arg::with_name("localhost")
-              .long("localhost")
-              .takes_value(false)
-              .help("Specify that localhost, not testnet.findora.org should be used."))))
 }

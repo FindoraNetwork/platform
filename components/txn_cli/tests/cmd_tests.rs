@@ -293,4 +293,5 @@ fn test_store_sids_with_path() {
   io::stdout().write_all(&output.stderr).unwrap();
 
   assert!(output.status.success());
+  fs::remove_file("sids").unwrap();
 }
