@@ -656,7 +656,7 @@ fn test_define_asset_simple_policies() {
                         "1",
                         "--traceable",
                         "--non_transferable"];
-  dbg!(&inputs_vec);
+  // dbg!(&inputs_vec);
   let inputs = app.get_matches_from_safe(inputs_vec).unwrap();
   process_inputs(inputs, 0, &mut ledger_standalone).expect("Failed to define asset");
 
