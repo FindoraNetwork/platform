@@ -231,16 +231,16 @@ impl TxnEffect {
           txos.reserve(iss.body.records.len());
           for (output, _) in iss.body.records.iter() {
             // (4)
-            if output.record.public_key != iss.pubkey.key {
+            if (output.0).public_key != iss.pubkey.key {
               return Err(inp_fail!());
             }
 
             // (5)
-            if output.record.asset_type != XfrAssetType::NonConfidential(code.val) {
+            if (output.0).asset_type != XfrAssetType::NonConfidential(code.val) {
               return Err(inp_fail!());
             }
 
-            if let XfrAmount::NonConfidential(amt) = output.record.amount {
+            if let XfrAmount::NonConfidential(amt) = (output.0).amount {
               let issuance_amount = issuance_amounts.entry(code).or_insert(0);
               *issuance_amount += amt;
             } else {
@@ -277,7 +277,7 @@ impl TxnEffect {
                                      .iter()
                                      .zip(trn.body.transfer.outputs.iter())
           {
-            if output.record != *record {
+            if output.0 != *record {
               return Err(inp_fail!());
             }
           }
@@ -382,7 +382,7 @@ impl TxnEffect {
                   None => {
                     return Err(inp_fail!());
                   }
-                  Some(TxOutput { record: inp_record }) => {
+                  Some(TxOutput(inp_record)) => {
                     // (2).(b)
                     if inp_record != record {
                       return Err(inp_fail!());
@@ -412,7 +412,7 @@ impl TxnEffect {
             if let Some(out_code) = out.asset_type.get_asset_type() {
               asset_types_involved.insert(AssetTypeCode { val: out_code });
             }
-            txos.push(Some(TxOutput { record: out.clone() }));
+            txos.push(Some(TxOutput(out.clone())));
             txo_count += 1;
           }
           // Until we can distinguish assets that have policies that invoke transfer restrictions

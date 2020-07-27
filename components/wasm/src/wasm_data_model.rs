@@ -136,7 +136,7 @@ pub struct ClientAssetRecord {
 
 impl ClientAssetRecord {
   pub fn get_bar_ref(&self) -> &BlindAssetRecord {
-    &self.txo.record
+    &self.txo.0
   }
 }
 

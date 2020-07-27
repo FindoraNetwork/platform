@@ -183,7 +183,7 @@ pub fn issue_and_transfer_asset(data_dir: &str,
   txn_builder.add_operation_issue_asset(issuer_key_pair,
                                         &token_code,
                                         get_and_update_sequence_number(data_dir)?,
-                                        &[(TxOutput { record: blind_asset_record }, owner_memo)])?
+                                        &[(TxOutput(blind_asset_record), owner_memo)])?
              .add_operation(xfr_op)
              .transaction();
 
@@ -238,9 +238,7 @@ pub fn issue_transfer_and_get_utxo_and_blinds<R: CryptoRng + RngCore, T>(
   let txn = txn_builder.add_operation_issue_asset(issuer_key_pair,
                                                   &code,
                                                   sequence_number,
-                                                  &[(TxOutput { record:
-                                                                  input_blind_asset_record },
-                                                     None)])?
+                                                  &[(TxOutput(input_blind_asset_record), None)])?
                        .add_operation(xfr_op)
                        .transaction();
 
@@ -290,7 +288,7 @@ pub fn query_utxo_and_get_type_commitment<T>(utxo: u64,
                                              -> Result<CompressedRistretto, PlatformError>
   where T: RestfulLedgerAccess
 {
-  let blind_asset_record = (rest_client.get_utxo(TxoSID(utxo))?.utxo.0).record;
+  let blind_asset_record = (rest_client.get_utxo(TxoSID(utxo))?.utxo.0).0;
   match blind_asset_record.asset_type {
     XfrAssetType::Confidential(commitment) => Ok(commitment),
     _ => {
@@ -304,7 +302,7 @@ pub fn query_utxo_and_get_type_commitment<T>(utxo: u64,
 pub fn query_utxo_and_get_amount<T>(utxo: u64, rest_client: &T) -> Result<XfrAmount, PlatformError>
   where T: RestfulLedgerAccess
 {
-  let blind_asset_record = (rest_client.get_utxo(TxoSID(utxo))?.utxo.0).record;
+  let blind_asset_record = (rest_client.get_utxo(TxoSID(utxo))?.utxo.0).0;
   Ok(blind_asset_record.amount)
 }
 
@@ -348,7 +346,7 @@ pub fn query_open_asset_record<T>(rest_client: &T,
                                   -> Result<OpenAssetRecord, PlatformError>
   where T: RestfulLedgerAccess
 {
-  let blind_asset_record = (rest_client.get_utxo(sid)?.utxo.0).record;
+  let blind_asset_record = (rest_client.get_utxo(sid)?.utxo.0).0;
   open_blind_asset_record(&blind_asset_record, owner_memo, key_pair.get_sk_ref()).or_else(|error| {
                                                 Err(PlatformError::ZeiError(error_location!(), error))
                                               })

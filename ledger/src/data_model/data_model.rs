@@ -421,9 +421,7 @@ pub struct BlockSID(pub usize);
 pub struct TxnTempSID(pub usize);
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct TxOutput {
-  pub record: BlindAssetRecord,
-}
+pub struct TxOutput(pub BlindAssetRecord);
 
 #[derive(Eq, Clone, PartialEq, Debug, Serialize, Deserialize)]
 pub enum UtxoStatus {
@@ -495,7 +493,7 @@ impl TransferAssetBody {
         .map_err(|e| PlatformError::ZeiError(error_location!(),e))?);
     let outputs = note.outputs
                       .iter()
-                      .map(|rec| TxOutput { record: rec.clone() })
+                      .map(|rec| TxOutput(rec.clone()))
                       .collect();
     Ok(TransferAssetBody { inputs: input_refs,
                            outputs,
