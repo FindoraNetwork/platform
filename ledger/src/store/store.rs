@@ -400,8 +400,8 @@ impl HasInvariants<PlatformError> for LedgerState {
       status2.utxo_map_path = self.status.utxo_map_path.clone();
       status2.utxo_map_versions = self.status.utxo_map_versions.clone();
 
-      // dbg!(&status2);
-      // dbg!(&self.status);
+      dbg!(&status2);
+      dbg!(&self.status);
       assert!(*status2 == self.status);
 
       std::fs::remove_dir_all(tmp_dir).unwrap();
@@ -1126,7 +1126,19 @@ impl LedgerUpdate<ChaChaRng> for LedgerStateChecker {
       // Update the transaction Merkle tree and transaction log
       for (tmp_sid, txn) in block.temp_sids.iter().zip(block.txns.iter()) {
         let txn = txn.clone();
-        let txn_sid = temp_sid_map.get(&tmp_sid).unwrap().0;
+        let txo_sid_map = temp_sid_map.get(&tmp_sid).unwrap();
+        let txn_sid = txo_sid_map.0;
+        let txo_sids = &txo_sid_map.1;
+
+        let outputs = txn.get_outputs_ref(false);
+        debug_assert!(txo_sids.len() == outputs.len());
+
+        for (position, sid) in txo_sids.iter().enumerate() {
+          self.0
+              .status
+              .txo_to_txn_location
+              .insert(*sid, (txn_sid, OutputPosition(position)));
+        }
 
         tx_block.push(FinalizedTransaction { txn,
                                              tx_id: txn_sid,
