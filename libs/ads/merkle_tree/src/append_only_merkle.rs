@@ -1048,6 +1048,11 @@ impl AppendOnlyMerkle {
       match self.read_block(level, i, last_block) {
         Ok(block) => {
           last_block_full = block.full();
+          debug!("Block {}/{} at level {}: {} valid leaves",
+                 i,
+                 block_count,
+                 level,
+                 block.valid_leaves());
           entries += block.valid_leaves();
 
           // If we are above level zero, check that the hashes we
