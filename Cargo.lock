@@ -990,6 +990,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "cli2"
+version = "0.1.0"
+dependencies = [
+ "cryptohash",
+ "ledger",
+ "ledger_api_service",
+ "network",
+ "reqwest 0.9.24",
+ "serde",
+ "serde_derive",
+ "serde_json",
+ "structopt",
+ "utils",
+ "zei",
+]
+
+[[package]]
 name = "cloudabi"
 version = "0.0.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
