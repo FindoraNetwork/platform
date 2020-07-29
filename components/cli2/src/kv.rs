@@ -207,7 +207,8 @@ impl KVStore {
   }
 
   /// Deletes all occurrences of a key
-  pub fn delete<T: HasTable>(&self, key: &T::Key) -> Result<()> {
+  pub fn delete<T: HasTable>(&self, key: &T::Key) -> Result<Option<T>> {
+    let current = self.get(key)?;
     let delete_query = format!("delete from {} where key = (?)", T::TABLE_NAME);
     let mut stmt = self.db
                        .prepare(&delete_query)
@@ -217,7 +218,7 @@ impl KVStore {
 
     stmt.execute(params![&key_string]).context(InternalSQL)?;
 
-    Ok(())
+    Ok(current)
   }
 }
 
