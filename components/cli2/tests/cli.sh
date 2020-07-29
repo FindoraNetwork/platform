@@ -2,7 +2,7 @@
 FINDORA_STORE_FILE=~/.findora/cli2_data.sqlite
 
 # Start from a fresh state
-rm $FINDORA_STORE_FILE
+rm -f $FINDORA_STORE_FILE
 
 @test "key generation" {
   run $CLI2 key-gen alice
