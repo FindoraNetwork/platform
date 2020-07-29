@@ -24,4 +24,6 @@ txn_builder = { path = "../txn_builder" }
 dirs = "2.0.2"
 submission_api = { path = "../submission_api" }
 submission_server = { path = "../submission_server" }
+rand = "0.7.3"
+promptly = "0.3.0"
 

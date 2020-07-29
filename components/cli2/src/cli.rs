@@ -13,6 +13,7 @@ use submission_server::{TxnHandle, TxnStatus};
 use txn_builder::{BuildsTransactions, TransactionBuilder};
 use zei::xfr::structs::OpenAssetRecord;
 // use std::rc::Rc;
+use promptly::prompt_default;
 use utils::Serialized;
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize, Default)]
@@ -86,8 +87,10 @@ trait CliDataStore {
 
   fn get_keypairs(&self) -> Result<HashMap<KeypairName, XfrKeyPair>, CliError>;
   fn get_keypair(&self, k: &KeypairName) -> Result<Option<XfrKeyPair>, CliError>;
+  fn delete_keypair(&mut self, k: &KeypairName) -> Result<Option<XfrKeyPair>, CliError>;
   fn get_pubkeys(&self) -> Result<HashMap<PubkeyName, XfrPublicKey>, CliError>;
   fn get_pubkey(&self, k: &PubkeyName) -> Result<Option<XfrPublicKey>, CliError>;
+  fn delete_pubkey(&mut self, k: &PubkeyName) -> Result<Option<XfrPublicKey>, CliError>;
   fn add_key_pair(&mut self, k: &KeypairName, kp: XfrKeyPair) -> Result<(), CliError>;
   fn add_public_key(&mut self, k: &PubkeyName, pk: XfrPublicKey) -> Result<(), CliError>;
 
@@ -189,6 +192,20 @@ impl CliDataStore for SimpleCliDataStore {
 
   fn get_pubkey(&self, k: &PubkeyName) -> Result<Option<XfrPublicKey>, CliError> {
     Ok(self.read_data()?.pubkeys.get(k).cloned())
+  }
+
+  fn delete_keypair(&mut self, k: &KeypairName) -> Result<Option<XfrKeyPair>, CliError> {
+    let mut dat = self.read_data()?;
+    let ret = dat.keypairs.remove(k).map(|x| x.deserialize());
+    self.write_data(dat)?;
+    Ok(ret)
+  }
+
+  fn delete_pubkey(&mut self, k: &PubkeyName) -> Result<Option<XfrPublicKey>, CliError> {
+    let mut dat = self.read_data()?;
+    let ret = dat.pubkeys.remove(k);
+    self.write_data(dat)?;
+    Ok(ret)
   }
 
   fn add_key_pair(&mut self, k: &KeypairName, kp: XfrKeyPair) -> Result<(), CliError> {
@@ -318,24 +335,53 @@ impl CliDataStore for SimpleCliDataStore {
 #[structopt(about = "Build and manage transactions and assets on a findora ledger",
             rename_all = "kebab-case")]
 enum Actions {
+  /// Run integrity checks of the local database
+  CheckDb {},
+
+  /// Generate a new key pair for <nick>
   KeyGen {
     /// Identity nickname
     nick: String,
   },
-  LoadKeyPair {
+
+  /// Load an existing key pair for <nick>
+  LoadKeypair {
     /// Identity nickname
     nick: String,
-    /// Keypair file
-    #[structopt(parse(from_os_str))]
-    kp_file: PathBuf,
   },
-  AddPublicKey {
+
+  /// Load a public key for <nick>
+  LoadPublicKey {
     /// Identity nickname
     nick: String,
-    /// public key file
-    #[structopt(parse(from_os_str))]
-    key_file: PathBuf,
   },
+
+  ListKeys {},
+
+  /// Display information about the public key for <nick>
+  ListPublicKey {
+    /// Identity nickname
+    nick: String,
+  },
+
+  /// Display information about the key pair for <nick>
+  ListKeypair {
+    /// Identity nickname
+    nick: String,
+  },
+
+  /// Permanently delete the key pair for <nick>
+  DeleteKeypair {
+    /// Identity nickname
+    nick: String,
+  },
+
+  /// Permanently delete the public key for <nick>
+  DeletePublicKey {
+    /// Identity nickname
+    nick: String,
+  },
+
   PrepareTransaction {
     /// Optional transaction name
     nick: Option<String>,
@@ -404,6 +450,77 @@ fn run_action<S: CliDataStore>(action: Actions, store: &mut S) {
          conf.open_count += 1;
        })
        .unwrap();
+
+  use Actions::*;
+  match action {
+    KeyGen { nick } => {
+      let kp = XfrKeyPair::generate(&mut rand::thread_rng());
+      store.add_public_key(&PubkeyName(nick.to_string()), *kp.get_pk_ref())
+           .unwrap();
+      store.add_key_pair(&KeypairName(nick.to_string()), kp)
+           .unwrap();
+      println!("New key added for `{}`", nick);
+    }
+    ListKeypair { nick } => {
+      let kp = store.get_keypair(&KeypairName(nick.to_string())).unwrap();
+      let kp = kp.map(|x| serde_json::to_string(&x).unwrap())
+                 .unwrap_or(format!("No keypair with name `{}` found", nick));
+      println!("{}", kp);
+    }
+    ListPublicKey { nick } => {
+      let kp = store.get_pubkey(&PubkeyName(nick.to_string())).unwrap();
+      let kp = kp.map(|x| serde_json::to_string(&x).unwrap())
+                 .unwrap_or(format!("No public key with name {} found", nick));
+      println!("{}", kp);
+    }
+    DeleteKeypair { nick } => {
+      let kp = store.get_keypair(&KeypairName(nick.to_string())).unwrap();
+      match kp {
+        None => {
+          eprintln!("No keypair with name `{}` found", nick);
+          std::process::exit(-1);
+        }
+        Some(_) => {
+          if prompt_default(format!("Are you sure you want to delete keypair `{}`?", nick),
+                            false).unwrap()
+          {
+            // TODO: do this atomically?
+            store.delete_keypair(&KeypairName(nick.to_string()))
+                 .unwrap();
+            store.delete_pubkey(&PubkeyName(nick.to_string())).unwrap();
+            println!("Keypair `{}` deleted", nick);
+          }
+        }
+      }
+    }
+
+    DeletePublicKey { nick } => {
+      let pk = store.get_pubkey(&PubkeyName(nick.to_string())).unwrap();
+      let kp = store.get_keypair(&KeypairName(nick.to_string())).unwrap();
+      match (pk, kp) {
+        (None, _) => {
+          eprintln!("No public key with name `{}` found", nick);
+          std::process::exit(-1);
+        }
+        (Some(_), Some(_)) => {
+          eprintln!("`{}` is a keypair. Please use delete-keypair instead.",
+                    nick);
+          std::process::exit(-1);
+        }
+        (Some(_), None) => {
+          if prompt_default(format!("Are you sure you want to delete public key `{}`?", nick),
+                            false).unwrap()
+          {
+            store.delete_pubkey(&PubkeyName(nick.to_string())).unwrap();
+            println!("Public key `{}` deleted", nick);
+          }
+        }
+      }
+    }
+    _ => {
+      unimplemented!();
+    }
+  }
 }
 
 fn main() {

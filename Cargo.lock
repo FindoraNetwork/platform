@@ -998,6 +998,8 @@ dependencies = [
  "ledger",
  "ledger_api_service",
  "network",
+ "promptly",
+ "rand 0.7.3",
  "reqwest 0.9.24",
  "serde",
  "serde_derive",
@@ -3708,6 +3710,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "beae6331a816b1f65d04c45b078fd8e6c93e8071771f41b8163255bbd8d7c8fa"
 dependencies = [
  "unicode-xid 0.2.1",
+]
+
+[[package]]
+name = "promptly"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b99cfb0289110d969dd21637cfbc922584329bc9e5037c5e576325c615658509"
+dependencies = [
+ "rustyline",
 ]
 
 [[package]]
