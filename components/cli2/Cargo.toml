@@ -28,4 +28,5 @@ snafu = { version = "0.6.8", features = ["backtraces"] }
 structopt = { version = "0.3" }
 utils = { path = "../../libs/utils" }
 zei = { git = "ssh://git@github.com/findoraorg/zei", tag = "v0.0.3-3" }
+rustyline = "6.2.0"
 

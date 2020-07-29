@@ -1,7 +1,9 @@
 #!/usr/bin/env bats
+FINDORA_STORE_FILE=~/.findora/cli2_data.json
+TEST_STORE_FILE=tests/cli2_data.json
 
 # Start from a fresh state
-rm -f ~/.findora/cli2_data.json
+cp $TEST_STORE_FILE $FINDORA_STORE_FILE
 
 @test "key generation" {
   run $CLI2 key-gen alice

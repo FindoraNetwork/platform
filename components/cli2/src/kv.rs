@@ -6,7 +6,7 @@ use std::hash::Hash;
 use std::path::{Path, PathBuf};
 use txn_builder::{BuildsTransactions, TransactionBuilder};
 
-use crate::{CliDataStore, CliError};
+use crate::{CliDataStore, CliError, TxnBuilderEntry};
 
 /// Possible errors encountered when dealing with a KVStore
 #[derive(Debug, Snafu)]
@@ -295,17 +295,19 @@ impl CliDataStore for KVStore {
     -> Result<Option<(ledger::data_model::Transaction, crate::TxnMetadata)>, CliError> {
     Ok(self.get(k)?)
   }
-  fn build_transaction(&mut self,
-                       k_orig: &crate::TxnBuilderName,
-                       k_new: &crate::TxnName)
-                       -> Result<ledger::data_model::Transaction, CliError> {
-    let builder = self.delete::<TransactionBuilder>(k_orig)?.ok_or_else(|| {
-                                                               KVError::WithInvalidKey{
+
+  fn build_transaction(
+    &mut self,
+    k_orig: &crate::TxnBuilderName,
+    k_new: &crate::TxnName)
+    -> Result<(ledger::data_model::Transaction, crate::TxnMetadata), CliError> {
+    let builder = self.delete::<TxnBuilderEntry>(k_orig)?.ok_or_else(|| {
+                                                            KVError::WithInvalidKey{
               backtrace: Backtrace::generate(),
               key: serde_json::to_string(k_orig).expect("JSON serialization failed")}
-                                                             })?;
-    let ret = builder.transaction().clone();
-    self.set(k_new, (ret.clone(), Default::default()))?;
+                                                          })?;
+    let ret = (builder.builder.transaction().clone(), Default::default());
+    self.set(k_new, ret.clone())?;
     Ok(ret)
   }
   fn update_txn_metadata<F: FnOnce(&mut crate::TxnMetadata)>(&mut self,
@@ -320,18 +322,19 @@ impl CliDataStore for KVStore {
                          k: &crate::TxnBuilderName,
                          seq_id: u64)
                          -> Result<(), CliError> {
-    Ok(self.set(k, TransactionBuilder::from_seq_id(seq_id))
+    Ok(self.set(k,
+                TxnBuilderEntry { builder: TransactionBuilder::from_seq_id(seq_id) })
            .map(|_| ())?)
   }
   fn get_txn_builder(&self,
                      k: &crate::TxnBuilderName)
-                     -> Result<Option<TransactionBuilder>, CliError> {
+                     -> Result<Option<TxnBuilderEntry>, CliError> {
     Ok(self.get(k)?)
   }
-  fn with_txn_builder<F: FnOnce(&mut TransactionBuilder)>(&mut self,
-                                                          k: &crate::TxnBuilderName,
-                                                          f: F)
-                                                          -> Result<(), CliError> {
+  fn with_txn_builder<F: FnOnce(&mut TxnBuilderEntry)>(&mut self,
+                                                       k: &crate::TxnBuilderName,
+                                                       f: F)
+                                                       -> Result<(), CliError> {
     Ok(self.with(k, f)?)
   }
   fn get_cached_txos(&self) -> Result<HashMap<crate::TxoName, crate::TxoCacheEntry>, CliError> {

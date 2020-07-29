@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 use std::fs;
 use submission_server::{TxnHandle, TxnStatus};
 use txn_builder::TransactionBuilder;
-use zei::xfr::structs::OpenAssetRecord;
+use zei::xfr::structs::{OpenAssetRecord, OwnerMemo};
 // use std::rc::Rc;
 use promptly::{prompt, prompt_default};
 //use utils::Serialized;
@@ -18,8 +18,19 @@ pub mod kv;
 
 use kv::{HasTable, KVError, KVStore};
 
+fn default_sub_server() -> String {
+  "https://testnet.findora.org/submit_server".to_string()
+}
+
+fn default_ledger_server() -> String {
+  "https://testnet.findora.org/query_server".to_string()
+}
+
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize, Default)]
 struct CliConfig {
+  #[serde(default = "default_sub_server")]
+  pub submission_server: String,
+  #[serde(default = "default_ledger_server")]
   pub ledger_server: String,
   pub open_count: u64,
 }
@@ -56,7 +67,7 @@ impl HasTable for (Transaction, TxnMetadata) {
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize, Hash, Default)]
 pub struct TxnBuilderName(pub String);
 
-impl HasTable for TransactionBuilder {
+impl HasTable for TxnBuilderEntry {
   const TABLE_NAME: &'static str = "transaction_builders";
   type Key = TxnBuilderName;
 }
@@ -77,6 +88,12 @@ enum CliError {
 
 impl std::convert::From<std::io::Error> for CliError {
   fn from(error: std::io::Error) -> Self {
+    CliError::OtherError(format!("{:?}", &error))
+  }
+}
+
+impl std::convert::From<rustyline::error::ReadlineError> for CliError {
+  fn from(error: rustyline::error::ReadlineError) -> Self {
     CliError::OtherError(format!("{:?}", &error))
   }
 }
@@ -114,8 +131,14 @@ struct TxnMetadata {
 struct TxoCacheEntry {
   sid: TxoSID,
   record: TxOutput,
+  owner_memo: Option<OwnerMemo>,
   opened_record: Option<OpenAssetRecord>,
   unspent: bool,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+struct TxnBuilderEntry {
+  builder: TransactionBuilder,
 }
 
 trait CliDataStore {
@@ -139,18 +162,18 @@ trait CliDataStore {
   fn build_transaction(&mut self,
                        k_orig: &TxnBuilderName,
                        k_new: &TxnName)
-                       -> Result<Transaction, CliError>;
+                       -> Result<(Transaction, TxnMetadata), CliError>;
   fn update_txn_metadata<F: FnOnce(&mut TxnMetadata)>(&mut self,
                                                       k: &TxnName,
                                                       f: F)
                                                       -> Result<(), CliError>;
 
   fn prepare_transaction(&mut self, k: &TxnBuilderName, seq_id: u64) -> Result<(), CliError>;
-  fn get_txn_builder(&self, k: &TxnBuilderName) -> Result<Option<TransactionBuilder>, CliError>;
-  fn with_txn_builder<F: FnOnce(&mut TransactionBuilder)>(&mut self,
-                                                          k: &TxnBuilderName,
-                                                          f: F)
-                                                          -> Result<(), CliError>;
+  fn get_txn_builder(&self, k: &TxnBuilderName) -> Result<Option<TxnBuilderEntry>, CliError>;
+  fn with_txn_builder<F: FnOnce(&mut TxnBuilderEntry)>(&mut self,
+                                                       k: &TxnBuilderName,
+                                                       f: F)
+                                                       -> Result<(), CliError>;
 
   fn get_cached_txos(&self) -> Result<HashMap<TxoName, TxoCacheEntry>, CliError>;
   fn get_cached_txo(&self, k: &TxoName) -> Result<Option<TxoCacheEntry>, CliError>;
@@ -158,10 +181,25 @@ trait CliDataStore {
   fn cache_txo(&mut self, k: &TxoName, ent: TxoCacheEntry) -> Result<(), CliError>;
 }
 
+fn prompt_for_config(prev_conf: Option<CliConfig>) -> Result<CliConfig, CliError> {
+  let default_sub_server = prev_conf.as_ref()
+                                    .map(|x| x.submission_server.clone())
+                                    .unwrap_or_else(default_sub_server);
+  let default_ledger_server = prev_conf.as_ref()
+                                       .map(|x| x.ledger_server.clone())
+                                       .unwrap_or_else(default_ledger_server);
+  Ok(CliConfig { submission_server: prompt_default("Submission Server?", default_sub_server)?,
+                 ledger_server: prompt_default("Ledger Access Server?", default_ledger_server)?,
+                 open_count: 0 })
+}
+
 #[derive(StructOpt, Debug)]
 #[structopt(about = "Build and manage transactions and assets on a findora ledger",
             rename_all = "kebab-case")]
 enum Actions {
+  /// Initialize or change your local database configuration
+  Setup {},
+
   /// Run integrity checks of the local database
   CheckDb {},
 
@@ -260,6 +298,7 @@ enum Actions {
     /// Which txn?
     txn: String,
   },
+
   ListUtxos {
     #[structopt(short, long, default_value = "http://localhost:8669")]
     /// Base URL for the submission server
@@ -272,14 +311,14 @@ enum Actions {
 fn run_action<S: CliDataStore>(action: Actions, store: &mut S) {
   // println!("{:?}", action);
 
-  store.update_config(|conf| {
-         // println!("Opened {} times before", conf.open_count);
-         conf.open_count += 1;
-       })
-       .unwrap();
-
   use Actions::*;
   match action {
+    Setup {} => {
+      store.update_config(|conf| {
+        *conf = prompt_for_config(Some(conf.clone())).unwrap();
+      }).unwrap();
+    }
+
     KeyGen { nick } => {
       let kp = XfrKeyPair::generate(&mut rand::thread_rng());
       store.add_public_key(&PubkeyName(nick.to_string()), *kp.get_pk_ref())
@@ -379,6 +418,11 @@ fn run_action<S: CliDataStore>(action: Actions, store: &mut S) {
       unimplemented!();
     }
   }
+  store.update_config(|conf| {
+         // println!("Opened {} times before", conf.open_count);
+         conf.open_count += 1;
+       })
+       .unwrap();
 }
 
 fn main() -> Result<(), CliError> {
@@ -389,7 +433,7 @@ fn main() -> Result<(), CliError> {
   let mut home = dirs::home_dir().ok_or_else(|| CliError::OtherError(error_location!()))?;
   home.push(".findora");
   fs::create_dir_all(&home)?;
-  home.push("cli2_data.json");
+  home.push("cli2_data.sqlite");
   run_action(action, &mut KVStore::open(home)?);
   Ok(())
 }
