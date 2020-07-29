@@ -30,6 +30,7 @@ stdenv.mkDerivation {
     zlib
     pkgconfig openssl binutils-unwrapped
     protobuf
+    sqlite
 
     wasm-pack
 
