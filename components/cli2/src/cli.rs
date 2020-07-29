@@ -1,27 +1,25 @@
 #![deny(warnings)]
 use ledger::data_model::*;
-use std::collections::HashMap;
-use std::path::PathBuf;
-use structopt::StructOpt;
-use zei::xfr::sig::{XfrKeyPair, XfrPublicKey};
-// use txn_builder::{BuildsTransactions, PolicyChoice, TransactionBuilder, TransferOperationBuilder};
-use ledger::error_location;
 use serde::{Deserialize, Serialize};
+use snafu::{OptionExt, ResultExt, Snafu};
+use std::collections::HashMap;
 use std::fs;
-use std::path::Path; //PathBuf;
+use structopt::StructOpt;
 use submission_server::{TxnHandle, TxnStatus};
-use txn_builder::{BuildsTransactions, TransactionBuilder};
+use txn_builder::TransactionBuilder;
+use zei::xfr::sig::{XfrKeyPair, XfrPublicKey};
 use zei::xfr::structs::{OpenAssetRecord, OwnerMemo};
 // use std::rc::Rc;
 use ledger_api_service::LedgerAccessRoutes;
 use promptly::{prompt, prompt_default};
 use std::process::exit;
 use utils::NetworkRoute;
-use utils::Serialized;
+// use utils::Serialized;
+// use txn_builder::{BuildsTransactions, PolicyChoice, TransactionBuilder, TransferOperationBuilder};
 
 pub mod kv;
 
-use kv::{HasTable, KVError};
+use kv::{HasTable, KVError, KVStore};
 
 pub struct FreshNamer {
   base: String,
@@ -67,14 +65,19 @@ struct CliConfig {
 
 impl HasTable for CliConfig {
   const TABLE_NAME: &'static str = "config";
-  type Key = ();
+  type Key = String;
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize, Hash, Default)]
+pub struct AssetTypeName(pub String);
+
+impl HasTable for AssetTypeEntry {
+  const TABLE_NAME: &'static str = "asset_types";
+  type Key = AssetTypeName;
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize, Hash, Default)]
 pub struct KeypairName(pub String);
-
-#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize, Hash, Default)]
-pub struct AssetTypeName(pub String);
 
 impl HasTable for XfrKeyPair {
   const TABLE_NAME: &'static str = "key_pairs";
@@ -113,36 +116,22 @@ impl HasTable for TxoCacheEntry {
   type Key = TxoName;
 }
 
-#[derive(Debug)]
+#[derive(Snafu, Debug)]
 enum CliError {
-  OtherError(String),
-  AlreadyExists(String),
-  KeyNotFound(String),
-  KV(KVError),
-}
-
-impl std::convert::From<std::io::Error> for CliError {
-  fn from(error: std::io::Error) -> Self {
-    CliError::OtherError(format!("{:?}", &error))
-  }
-}
-
-impl std::convert::From<rustyline::error::ReadlineError> for CliError {
-  fn from(error: rustyline::error::ReadlineError) -> Self {
-    CliError::OtherError(format!("{:?}", &error))
-  }
-}
-
-impl std::convert::From<serde_json::error::Error> for CliError {
-  fn from(error: serde_json::error::Error) -> Self {
-    CliError::OtherError(format!("{:?}", &error))
-  }
-}
-
-impl std::convert::From<KVError> for CliError {
-  fn from(error: KVError) -> Self {
-    CliError::KV(error)
-  }
+  #[snafu(context(false))]
+  KV { source: KVError },
+  #[snafu(context(false))]
+  #[snafu(display("Error reading user input: {}", source))]
+  RustyLine {
+    source: rustyline::error::ReadlineError,
+  },
+  #[snafu(display("Error creating user directory or file at {}: {}", file.display(), source))]
+  UserFile {
+    source: std::io::Error,
+    file: std::path::PathBuf,
+  },
+  #[snafu(display("Failed to locate user's home directory"))]
+  HomeDir,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize, Default)]
@@ -242,21 +231,6 @@ trait CliDataStore {
   fn add_asset_type(&self, k: &AssetTypeName, ent: AssetTypeEntry) -> Result<(), CliError>;
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize, Default)]
-struct SimpleCliData {
-  pub config: CliConfig,
-  pub keypairs: HashMap<KeypairName, Serialized<XfrKeyPair>>,
-  pub pubkeys: HashMap<PubkeyName, XfrPublicKey>,
-  pub built_txns: HashMap<TxnName, (Transaction, TxnMetadata)>,
-  pub builders: HashMap<TxnBuilderName, TxnBuilderEntry>,
-  pub txos: HashMap<TxoName, TxoCacheEntry>,
-  pub asset_types: HashMap<AssetTypeName, AssetTypeEntry>,
-}
-
-struct SimpleCliDataStore {
-  pub filepath: PathBuf,
-}
-
 fn prompt_for_config(prev_conf: Option<CliConfig>) -> Result<CliConfig, CliError> {
   let default_sub_server = prev_conf.as_ref()
                                     .map(|x| x.submission_server.clone())
@@ -267,251 +241,6 @@ fn prompt_for_config(prev_conf: Option<CliConfig>) -> Result<CliConfig, CliError
   Ok(CliConfig { submission_server: prompt_default("Submission Server?", default_sub_server)?,
                  ledger_server: prompt_default("Ledger Access Server?", default_ledger_server)?,
                  open_count: 0 })
-}
-
-impl SimpleCliDataStore {
-  fn new() -> Result<Self, CliError> {
-    let mut home = (|| {
-      let base_dir = std::env::var_os("FINDORA_HOME").filter(|x| !x.is_empty());
-      let base_dir = base_dir.as_ref().map(PathBuf::from);
-      base_dir.map::<Result<_, CliError>, _>(Ok)
-              .unwrap_or_else(|| {
-                let mut ret =
-                  dirs::home_dir().ok_or_else(|| CliError::OtherError(error_location!()))?;
-                ret.push(".findora");
-                Ok(ret)
-              })
-    })()?;
-    fs::create_dir_all(&home)?;
-    home.push("cli2_data.json");
-    let ret = Self { filepath: home };
-    let _ = ret.read_data()?;
-    Ok(ret)
-  }
-
-  fn read_data(&self) -> Result<SimpleCliData, CliError> {
-    if !Path::exists(&self.filepath) {
-      println!("No config found at {:?} -- triggering first-time setup",
-               &self.filepath);
-      let ret = SimpleCliData { config: prompt_for_config(None)?,
-                                ..Default::default() };
-      self.write_data(ret.clone())?;
-      Ok(ret)
-    } else {
-      let f = fs::OpenOptions::new().read(true).open(&self.filepath)?;
-      Ok(serde_json::from_reader(f)?)
-    }
-  }
-
-  fn write_data(&self, dat: SimpleCliData) -> Result<(), CliError> {
-    let file = fs::OpenOptions::new().create(true)
-                                     .truncate(true)
-                                     .write(true)
-                                     .open(&self.filepath)?;
-    Ok(serde_json::to_writer(file, &dat)?)
-  }
-}
-
-impl CliDataStore for SimpleCliDataStore {
-  fn get_config(&self) -> Result<CliConfig, CliError> {
-    Ok(self.read_data()?.config)
-  }
-  fn update_config<F: FnOnce(&mut CliConfig)>(&mut self, f: F) -> Result<(), CliError> {
-    let mut dat = self.read_data()?;
-    f(&mut dat.config);
-    self.write_data(dat)
-  }
-
-  fn get_keypairs(&self) -> Result<HashMap<KeypairName, XfrKeyPair>, CliError> {
-    Ok(self.read_data()?
-           .keypairs
-           .into_iter()
-           .map(|(k, v)| (k, v.deserialize()))
-           .collect())
-  }
-
-  fn get_keypair(&self, k: &KeypairName) -> Result<Option<XfrKeyPair>, CliError> {
-    Ok(self.read_data()?.keypairs.get(k).map(|x| x.deserialize()))
-  }
-
-  fn get_pubkeys(&self) -> Result<HashMap<PubkeyName, XfrPublicKey>, CliError> {
-    Ok(self.read_data()?.pubkeys)
-  }
-
-  fn get_pubkey(&self, k: &PubkeyName) -> Result<Option<XfrPublicKey>, CliError> {
-    Ok(self.read_data()?.pubkeys.get(k).cloned())
-  }
-
-  fn delete_keypair(&mut self, k: &KeypairName) -> Result<Option<XfrKeyPair>, CliError> {
-    let mut dat = self.read_data()?;
-    let ret = dat.keypairs.remove(k).map(|x| x.deserialize());
-    self.write_data(dat)?;
-    Ok(ret)
-  }
-
-  fn delete_pubkey(&mut self, k: &PubkeyName) -> Result<Option<XfrPublicKey>, CliError> {
-    let mut dat = self.read_data()?;
-    let ret = dat.pubkeys.remove(k);
-    self.write_data(dat)?;
-    Ok(ret)
-  }
-
-  fn add_key_pair(&mut self, k: &KeypairName, kp: XfrKeyPair) -> Result<(), CliError> {
-    use CliError::*;
-    let mut dat = self.read_data()?;
-    match dat.keypairs.entry(k.clone()) {
-      e @ std::collections::hash_map::Entry::Vacant(_) => {
-        e.or_insert_with(|| Serialized::new(&kp));
-      }
-      _ => {
-        return Err(AlreadyExists(error_location!()));
-      }
-    }
-    self.write_data(dat)
-  }
-
-  fn add_public_key(&mut self, k: &PubkeyName, pk: XfrPublicKey) -> Result<(), CliError> {
-    use CliError::*;
-    let mut dat = self.read_data()?;
-    match dat.pubkeys.entry(k.clone()) {
-      e @ std::collections::hash_map::Entry::Vacant(_) => {
-        e.or_insert(pk);
-      }
-      _ => {
-        return Err(AlreadyExists(error_location!()));
-      }
-    }
-    self.write_data(dat)
-  }
-
-  fn get_built_transactions(&self)
-                            -> Result<HashMap<TxnName, (Transaction, TxnMetadata)>, CliError> {
-    Ok(self.read_data()?.built_txns)
-  }
-
-  fn get_built_transaction(&self,
-                           k: &TxnName)
-                           -> Result<Option<(Transaction, TxnMetadata)>, CliError> {
-    Ok(self.read_data()?.built_txns.get(k).cloned())
-  }
-
-  fn build_transaction(&mut self,
-                       k_orig: &TxnBuilderName,
-                       k_new: &TxnName)
-                       -> Result<(Transaction, TxnMetadata), CliError> {
-    use CliError::*;
-    let mut dat = self.read_data()?;
-    let builder = dat.builders
-                     .remove(k_orig)
-                     .ok_or_else(|| KeyNotFound(error_location!()))?;
-    // TODO: use TxnBuilder metadata to build txn metadata
-    let ret = (builder.builder.transaction().clone(), Default::default());
-    dat.built_txns
-       .insert(k_new.clone(), ret.clone())
-       .map(|x| Err(AlreadyExists(format!("[{}] {:?}", error_location!(), x))))
-       .unwrap_or(Ok(()))?;
-    self.write_data(dat)?;
-    Ok(ret)
-  }
-
-  fn update_txn_metadata<F: FnOnce(&mut TxnMetadata)>(&mut self,
-                                                      k: &TxnName,
-                                                      f: F)
-                                                      -> Result<(), CliError> {
-    use CliError::*;
-    let mut dat = self.read_data()?;
-    f(&mut dat.built_txns
-              .get_mut(k)
-              .ok_or_else(|| KeyNotFound(error_location!()))?
-              .1);
-    self.write_data(dat)
-  }
-
-  fn prepare_transaction(&mut self, k: &TxnBuilderName, seq_id: u64) -> Result<(), CliError> {
-    use CliError::*;
-    let mut dat = self.read_data()?;
-    dat.builders
-       .insert(k.clone(),
-               TxnBuilderEntry { builder: TransactionBuilder::from_seq_id(seq_id) })
-       .map(|x| Err(AlreadyExists(format!("[{}] {:?}", error_location!(), x))))
-       .unwrap_or(Ok(()))?;
-    self.write_data(dat)
-  }
-
-  fn get_txn_builder(&self, k: &TxnBuilderName) -> Result<Option<TxnBuilderEntry>, CliError> {
-    Ok(self.read_data()?.builders.get(k).cloned())
-  }
-
-  fn with_txn_builder<F: FnOnce(&mut TxnBuilderEntry)>(&mut self,
-                                                       k: &TxnBuilderName,
-                                                       f: F)
-                                                       -> Result<(), CliError> {
-    use CliError::*;
-    let mut dat = self.read_data()?;
-    f(dat.builders
-         .get_mut(k)
-         .ok_or_else(|| KeyNotFound(error_location!()))?);
-    self.write_data(dat)
-  }
-
-  fn get_cached_txos(&self) -> Result<HashMap<TxoName, TxoCacheEntry>, CliError> {
-    Ok(self.read_data()?.txos)
-  }
-  fn get_cached_txo(&self, k: &TxoName) -> Result<Option<TxoCacheEntry>, CliError> {
-    Ok(self.read_data()?.txos.get(k).cloned())
-  }
-
-  fn delete_cached_txo(&mut self, k: &TxoName) -> Result<(), CliError> {
-    use CliError::*;
-    let mut dat = self.read_data()?;
-    let _ = dat.txos
-               .remove(k)
-               .ok_or_else(|| KeyNotFound(error_location!()))?;
-    self.write_data(dat)
-  }
-
-  fn cache_txo(&mut self, k: &TxoName, ent: TxoCacheEntry) -> Result<(), CliError> {
-    use CliError::*;
-    let mut dat = self.read_data()?;
-    dat.txos
-       .insert(k.clone(), ent)
-       .map(|x| Err(AlreadyExists(format!("[{}] {:?}", error_location!(), x))))
-       .unwrap_or(Ok(()))?;
-    self.write_data(dat)
-  }
-
-  fn get_asset_types(&self) -> Result<HashMap<AssetTypeName, AssetTypeEntry>, CliError> {
-    Ok(self.read_data()?.asset_types)
-  }
-  fn get_asset_type(&self, k: &AssetTypeName) -> Result<Option<AssetTypeEntry>, CliError> {
-    Ok(self.read_data()?.asset_types.get(k).cloned())
-  }
-  fn update_asset_type<F: FnOnce(&mut AssetTypeEntry)>(&mut self,
-                                                       k: &AssetTypeName,
-                                                       f: F)
-                                                       -> Result<(), CliError> {
-    use CliError::*;
-    let mut dat = self.read_data()?;
-    f(dat.asset_types
-         .get_mut(k)
-         .ok_or_else(|| KeyNotFound(error_location!()))?);
-    self.write_data(dat)
-  }
-  fn delete_asset_type(&self, k: &AssetTypeName) -> Result<Option<AssetTypeEntry>, CliError> {
-    let mut dat = self.read_data()?;
-    let ret = dat.asset_types.remove(k);
-    self.write_data(dat)?;
-    Ok(ret)
-  }
-  fn add_asset_type(&self, k: &AssetTypeName, ent: AssetTypeEntry) -> Result<(), CliError> {
-    use CliError::*;
-    let mut dat = self.read_data()?;
-    dat.asset_types
-       .insert(k.clone(), ent)
-       .map(|x| Err(AlreadyExists(format!("[{}] {:?}", error_location!(), x))))
-       .unwrap_or(Ok(()))?;
-    self.write_data(dat)
-  }
 }
 
 #[derive(StructOpt, Debug)]
@@ -804,10 +533,26 @@ fn run_action<S: CliDataStore>(action: Actions, store: &mut S) {
        .unwrap();
 }
 
-fn main() {
+fn main() -> Result<(), CliError> {
   let action = Actions::from_args();
 
   // use Actions::*;
 
-  run_action(action, &mut SimpleCliDataStore::new().unwrap());
+  let mut home = dirs::home_dir().context(HomeDir)?;
+  home.push(".findora");
+  fs::create_dir_all(&home).with_context(|| UserFile { file: home.clone() })?;
+  home.push("cli2_data.sqlite");
+  let first_time = !std::path::Path::exists(&home);
+  let mut db = KVStore::open(home.clone())?;
+  if first_time {
+    println!("No config found at {:?} -- triggering first-time setup",
+             &home);
+    db.update_config(|conf| {
+        *conf = prompt_for_config(None).unwrap();
+      })
+      .unwrap();
+  }
+
+  run_action(action, &mut db);
+  Ok(())
 }

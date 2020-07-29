@@ -36,7 +36,7 @@ pub enum KVError {
     backtrace: Backtrace,
   },
   #[snafu(display("Attempted to call KVStore::with on a key that doesn't exist: {}", key))]
-  WithInvailidKey { backtrace: Backtrace, key: String },
+  WithInvalidKey { backtrace: Backtrace, key: String },
 }
 
 type Result<T, E = KVError> = std::result::Result<T, E>;
@@ -98,7 +98,6 @@ impl KVStore {
   pub fn get<T: HasTable>(&self, id: &T::Key) -> Result<Option<T>> {
     // Check if the table exists
     let table = T::TABLE_NAME.to_string();
-    println!("{}", table);
     if !self.table_exists::<T>()? {
       return Ok(None);
     }
@@ -205,8 +204,8 @@ impl KVStore {
       Ok(())
     } else {
       let key_string = serde_json::to_string(&key).expect("JSON serialization failed");
-      Err(KVError::WithInvailidKey { backtrace: Backtrace::generate(),
-                                     key: key_string })
+      Err(KVError::WithInvalidKey { backtrace: Backtrace::generate(),
+                                    key: key_string })
     }
   }
 
@@ -228,15 +227,21 @@ impl KVStore {
 
 impl CliDataStore for KVStore {
   fn get_config(&self) -> Result<crate::CliConfig, CliError> {
-    let config = self.get(&())?;
+    let config = self.get(&String::from("config"))?;
     if let Some(config) = config {
       Ok(config)
     } else {
-      Ok(crate::CliConfig::default())
+      self.set(&String::from("config"), crate::CliConfig::default())?;
+      Ok(self.get(&String::from("config"))?
+             .ok_or(KVError::WithInvalidKey { backtrace: Backtrace::generate(),
+                                              key: "config".to_string() })?)
     }
   }
   fn update_config<F: FnOnce(&mut crate::CliConfig)>(&mut self, f: F) -> Result<(), CliError> {
-    Ok(self.with(&(), f)?)
+    let mut current = self.get_config()?;
+    f(&mut current);
+    self.set(&String::from("config"), current)?;
+    Ok(())
   }
   fn get_keypairs(&self)
                   -> Result<HashMap<crate::KeypairName, zei::xfr::sig::XfrKeyPair>, CliError> {
@@ -290,13 +295,14 @@ impl CliDataStore for KVStore {
     -> Result<Option<(ledger::data_model::Transaction, crate::TxnMetadata)>, CliError> {
     Ok(self.get(k)?)
   }
+
   fn build_transaction(
     &mut self,
     k_orig: &crate::TxnBuilderName,
     k_new: &crate::TxnName)
     -> Result<(ledger::data_model::Transaction, crate::TxnMetadata), CliError> {
     let builder = self.delete::<TxnBuilderEntry>(k_orig)?.ok_or_else(|| {
-                                                            KVError::WithInvailidKey{
+                                                            KVError::WithInvalidKey{
               backtrace: Backtrace::generate(),
               key: serde_json::to_string(k_orig).expect("JSON serialization failed")}
                                                           })?;
@@ -344,28 +350,23 @@ impl CliDataStore for KVStore {
     Ok(self.set(k, ent).map(|_| ())?)
   }
 
-  #[allow(unused_variables)]
   fn get_asset_types(&self) -> Result<HashMap<AssetTypeName, AssetTypeEntry>, CliError> {
-    unimplemented!();
+    Ok(self.get_all()?)
   }
-  #[allow(unused_variables)]
   fn get_asset_type(&self, k: &AssetTypeName) -> Result<Option<AssetTypeEntry>, CliError> {
-    unimplemented!();
+    Ok(self.get(k)?)
   }
-  #[allow(unused_variables)]
   fn update_asset_type<F: FnOnce(&mut AssetTypeEntry)>(&mut self,
                                                        k: &AssetTypeName,
                                                        f: F)
                                                        -> Result<(), CliError> {
-    unimplemented!();
+    Ok(self.with(k, f)?)
   }
-  #[allow(unused_variables)]
   fn delete_asset_type(&self, k: &AssetTypeName) -> Result<Option<AssetTypeEntry>, CliError> {
-    unimplemented!();
+    Ok(self.delete::<crate::AssetTypeEntry>(k)?)
   }
-  #[allow(unused_variables)]
   fn add_asset_type(&self, k: &AssetTypeName, ent: AssetTypeEntry) -> Result<(), CliError> {
-    unimplemented!();
+    Ok(self.set(k, ent).map(|_| ())?)
   }
 }
 
