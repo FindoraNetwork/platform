@@ -1,6 +1,5 @@
 use rusqlite::{params, Connection};
 use serde::{de::DeserializeOwned, Serialize};
-use serde_json;
 use snafu::{Backtrace, ResultExt, Snafu};
 use std::collections::HashMap;
 use std::hash::Hash;

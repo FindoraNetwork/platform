@@ -33,6 +33,8 @@ stdenv.mkDerivation {
 
     wasm-pack
 
+    sqlite
+
   ] ++ stdenv.lib.optionals stdenv.isDarwin [
         darwin.apple_sdk.frameworks.Security
       ];
