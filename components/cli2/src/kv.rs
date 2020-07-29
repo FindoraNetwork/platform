@@ -1,9 +1,12 @@
 use rusqlite::{params, Connection};
 use serde::{de::DeserializeOwned, Serialize};
-use snafu::{Backtrace, ResultExt, Snafu};
+use snafu::{Backtrace, GenerateBacktrace, ResultExt, Snafu};
 use std::collections::HashMap;
 use std::hash::Hash;
 use std::path::{Path, PathBuf};
+use txn_builder::{BuildsTransactions, TransactionBuilder};
+
+use crate::{CliDataStore, CliError};
 
 /// Possible errors encountered when dealing with a KVStore
 #[derive(Debug, Snafu)]
@@ -33,7 +36,7 @@ pub enum KVError {
     backtrace: Backtrace,
   },
   #[snafu(display("Attempted to call KVStore::with on a key that doesn't exist: {}", key))]
-  WithInvailidKey { key: String },
+  WithInvailidKey { backtrace: Backtrace, key: String },
 }
 
 type Result<T, E = KVError> = std::result::Result<T, E>;
@@ -202,7 +205,8 @@ impl KVStore {
       Ok(())
     } else {
       let key_string = serde_json::to_string(&key).expect("JSON serialization failed");
-      Err(KVError::WithInvailidKey { key: key_string })
+      Err(KVError::WithInvailidKey { backtrace: Backtrace::generate(),
+                                     key: key_string })
     }
   }
 
@@ -219,6 +223,123 @@ impl KVStore {
     stmt.execute(params![&key_string]).context(InternalSQL)?;
 
     Ok(current)
+  }
+}
+
+impl CliDataStore for KVStore {
+  fn get_config(&self) -> Result<crate::CliConfig, CliError> {
+    let config = self.get(&())?;
+    if let Some(config) = config {
+      Ok(config)
+    } else {
+      Ok(crate::CliConfig::default())
+    }
+  }
+  fn update_config<F: FnOnce(&mut crate::CliConfig)>(&mut self, f: F) -> Result<(), CliError> {
+    Ok(self.with(&(), f)?)
+  }
+  fn get_keypairs(&self)
+                  -> Result<HashMap<crate::KeypairName, zei::xfr::sig::XfrKeyPair>, CliError> {
+    Ok(self.get_all()?)
+  }
+  fn get_keypair(&self,
+                 k: &crate::KeypairName)
+                 -> Result<Option<zei::xfr::sig::XfrKeyPair>, CliError> {
+    Ok(self.get(k)?)
+  }
+  fn delete_keypair(&mut self,
+                    k: &crate::KeypairName)
+                    -> Result<Option<zei::xfr::sig::XfrKeyPair>, CliError> {
+    Ok(self.delete(k)?)
+  }
+  fn get_pubkeys(&self)
+                 -> Result<HashMap<crate::PubkeyName, zei::xfr::sig::XfrPublicKey>, CliError> {
+    Ok(self.get_all()?)
+  }
+  fn get_pubkey(&self,
+                k: &crate::PubkeyName)
+                -> Result<Option<zei::xfr::sig::XfrPublicKey>, CliError> {
+    Ok(self.get(k)?)
+  }
+  fn delete_pubkey(&mut self,
+                   k: &crate::PubkeyName)
+                   -> Result<Option<zei::xfr::sig::XfrPublicKey>, CliError> {
+    Ok(self.delete(k)?)
+  }
+  fn add_key_pair(&mut self,
+                  k: &crate::KeypairName,
+                  kp: zei::xfr::sig::XfrKeyPair)
+                  -> Result<(), CliError> {
+    Ok(self.set(k, kp).map(|_| ())?)
+  }
+  fn add_public_key(&mut self,
+                    k: &crate::PubkeyName,
+                    pk: zei::xfr::sig::XfrPublicKey)
+                    -> Result<(), CliError> {
+    Ok(self.set(k, pk).map(|_| ())?)
+  }
+  fn get_built_transactions(
+    &self)
+    -> Result<HashMap<crate::TxnName, (ledger::data_model::Transaction, crate::TxnMetadata)>,
+              CliError> {
+    Ok(self.get_all()?)
+  }
+  fn get_built_transaction(
+    &self,
+    k: &crate::TxnName)
+    -> Result<Option<(ledger::data_model::Transaction, crate::TxnMetadata)>, CliError> {
+    Ok(self.get(k)?)
+  }
+  fn build_transaction(&mut self,
+                       k_orig: &crate::TxnBuilderName,
+                       k_new: &crate::TxnName)
+                       -> Result<ledger::data_model::Transaction, CliError> {
+    let builder = self.delete::<TransactionBuilder>(k_orig)?.ok_or_else(|| {
+                                                               KVError::WithInvailidKey{
+              backtrace: Backtrace::generate(),
+              key: serde_json::to_string(k_orig).expect("JSON serialization failed")}
+                                                             })?;
+    let ret = builder.transaction().clone();
+    self.set(k_new, (ret.clone(), Default::default()))?;
+    Ok(ret)
+  }
+  fn update_txn_metadata<F: FnOnce(&mut crate::TxnMetadata)>(&mut self,
+                                                             k: &crate::TxnName,
+                                                             f: F)
+                                                             -> Result<(), CliError> {
+    Ok(self.with(k, |x: &mut (crate::Transaction, crate::TxnMetadata)| {
+             f(&mut x.1)
+           })?)
+  }
+  fn prepare_transaction(&mut self,
+                         k: &crate::TxnBuilderName,
+                         seq_id: u64)
+                         -> Result<(), CliError> {
+    Ok(self.set(k, TransactionBuilder::from_seq_id(seq_id))
+           .map(|_| ())?)
+  }
+  fn get_txn_builder(&self,
+                     k: &crate::TxnBuilderName)
+                     -> Result<Option<TransactionBuilder>, CliError> {
+    Ok(self.get(k)?)
+  }
+  fn with_txn_builder<F: FnOnce(&mut TransactionBuilder)>(&mut self,
+                                                          k: &crate::TxnBuilderName,
+                                                          f: F)
+                                                          -> Result<(), CliError> {
+    Ok(self.with(k, f)?)
+  }
+  fn get_cached_txos(&self) -> Result<HashMap<crate::TxoName, crate::TxoCacheEntry>, CliError> {
+    Ok(self.get_all()?)
+  }
+  fn get_cached_txo(&self, k: &crate::TxoName) -> Result<Option<crate::TxoCacheEntry>, CliError> {
+    Ok(self.get(k)?)
+  }
+  fn delete_cached_txo(&mut self, k: &crate::TxoName) -> Result<(), CliError> {
+    Ok(self.delete::<crate::TxoCacheEntry>(k).map(|_| ())?)
+  }
+  fn cache_txo(&mut self, k: &crate::TxoName, ent: crate::TxoCacheEntry) -> Result<(), CliError> {
+    Ok(self.set(k, ent).map(|_| ())?)
   }
 }
 
