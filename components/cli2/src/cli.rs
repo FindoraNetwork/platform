@@ -1,18 +1,18 @@
 #![deny(warnings)]
 use ledger::data_model::*;
-use std::collections::HashMap;
-use structopt::StructOpt;
-use zei::xfr::sig::{XfrKeyPair, XfrPublicKey};
-// use txn_builder::{BuildsTransactions, PolicyChoice, TransactionBuilder, TransferOperationBuilder};
-use ledger::error_location;
+use promptly::{prompt, prompt_default};
 use serde::{Deserialize, Serialize};
+use snafu::{OptionExt, ResultExt, Snafu};
+use std::collections::HashMap;
 use std::fs;
+use structopt::StructOpt;
 use submission_server::{TxnHandle, TxnStatus};
 use txn_builder::TransactionBuilder;
+use zei::xfr::sig::{XfrKeyPair, XfrPublicKey};
 use zei::xfr::structs::{OpenAssetRecord, OwnerMemo};
 // use std::rc::Rc;
-use promptly::{prompt, prompt_default};
-//use utils::Serialized;
+// use utils::Serialized;
+// use txn_builder::{BuildsTransactions, PolicyChoice, TransactionBuilder, TransferOperationBuilder};
 
 pub mod kv;
 
@@ -80,46 +80,23 @@ impl HasTable for TxoCacheEntry {
   type Key = TxoName;
 }
 
-#[derive(Debug)]
+#[derive(Snafu, Debug)]
 enum CliError {
-  OtherError(String),
-  KV(KVError),
+  #[snafu(context(false))]
+  KV { source: KVError },
+  #[snafu(context(false))]
+  #[snafu(display("Error reading user input: {}", source))]
+  RustyLine {
+    source: rustyline::error::ReadlineError,
+  },
+  #[snafu(display("Error creating user directory or file at {}: {}", file.display(), source))]
+  UserFile {
+    source: std::io::Error,
+    file: std::path::PathBuf,
+  },
+  #[snafu(display("Failed to locate user's home directory"))]
+  HomeDir,
 }
-
-impl std::convert::From<std::io::Error> for CliError {
-  fn from(error: std::io::Error) -> Self {
-    CliError::OtherError(format!("{:?}", &error))
-  }
-}
-
-impl std::convert::From<rustyline::error::ReadlineError> for CliError {
-  fn from(error: rustyline::error::ReadlineError) -> Self {
-    CliError::OtherError(format!("{:?}", &error))
-  }
-}
-
-impl std::convert::From<serde_json::error::Error> for CliError {
-  fn from(error: serde_json::error::Error) -> Self {
-    CliError::OtherError(format!("{:?}", &error))
-  }
-}
-
-impl std::convert::From<KVError> for CliError {
-  fn from(error: KVError) -> Self {
-    CliError::KV(error)
-  }
-}
-
-// impl std::convert::From<std::option::NoneError> for CliError {
-//     fn from(error: std::option::NoneError) -> Self {
-//         CliError::OtherError(format!("{:?}", &error))
-//     }
-// }
-// impl<T> From<T: std::error::Error> for CliError {
-//   fn from(error: T) -> Self {
-//     CliError::OtherError(format!("{:?}", &error))
-//   }
-// }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize, Default)]
 struct TxnMetadata {
@@ -430,9 +407,9 @@ fn main() -> Result<(), CliError> {
 
   // use Actions::*;
 
-  let mut home = dirs::home_dir().ok_or_else(|| CliError::OtherError(error_location!()))?;
+  let mut home = dirs::home_dir().context(HomeDir)?;
   home.push(".findora");
-  fs::create_dir_all(&home)?;
+  fs::create_dir_all(&home).with_context(|| UserFile { file: home.clone() })?;
   home.push("cli2_data.sqlite");
   run_action(action, &mut KVStore::open(home)?);
   Ok(())
