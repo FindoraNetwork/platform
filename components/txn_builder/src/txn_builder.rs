@@ -408,7 +408,7 @@ pub trait BuildsTransactions {
   }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TransactionBuilder {
   txn: Transaction,
   outputs: u64,

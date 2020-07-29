@@ -215,10 +215,17 @@ impl Commas for i8 {
 }
 
 // Wrapper around a serialized variable that maintains type semantics.
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct Serialized<T> {
   pub val: String,
   phantom: PhantomData<T>,
+}
+
+impl<T> Clone for Serialized<T> {
+  fn clone(&self) -> Self {
+    Self { val: self.val.clone(),
+           phantom: PhantomData }
+  }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]

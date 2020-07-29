@@ -994,6 +994,7 @@ name = "cli2"
 version = "0.1.0"
 dependencies = [
  "cryptohash",
+ "dirs",
  "ledger",
  "ledger_api_service",
  "network",
@@ -1002,6 +1003,9 @@ dependencies = [
  "serde_derive",
  "serde_json",
  "structopt",
+ "submission_api",
+ "submission_server",
+ "txn_builder",
  "utils",
  "zei",
 ]
