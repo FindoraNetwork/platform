@@ -2,6 +2,8 @@ use rusqlite::{params, Connection};
 use serde::{de::DeserializeOwned, Serialize};
 use serde_json;
 use snafu::{Backtrace, ResultExt, Snafu};
+use std::collections::HashMap;
+use std::hash::Hash;
 use std::path::{Path, PathBuf};
 
 /// Possible errors encountered when dealing with a KVStore
@@ -38,7 +40,7 @@ type Result<T, E = KVError> = std::result::Result<T, E>;
 /// Internal trait for mapping types to their tables
 pub trait HasTable: Serialize + DeserializeOwned {
   const TABLE_NAME: &'static str;
-  type Key: Serialize + DeserializeOwned;
+  type Key: Serialize + DeserializeOwned + Hash + Eq;
 }
 
 /// Implements a view over a sqlite database as a KV store, where each type has its
@@ -143,6 +145,49 @@ impl KVStore {
         .context(InternalSQL)?;
     Ok(old_value)
   }
+
+  /// Returns all the Key/Value pairs for a type
+  pub fn get_all<T: HasTable>(&self) -> Result<HashMap<T::Key, T>> {
+    // Check if the table exists, and exit early with an empty map if it doesn't
+    if !self.table_exists::<T>()? {
+      return Ok(HashMap::new());
+    }
+    // Get ourself a fresh hashmap to put our K/Vs in
+    let mut ret = HashMap::new();
+    // Grab our rows from the db
+    let get_all_query = format!("select * from {};", T::TABLE_NAME);
+    let mut stmt = self.db
+                       .prepare(&get_all_query)
+                       .context(Prepare { statement: get_all_query })?;
+    let rows = stmt.query_map(params![], |row| {
+                     let x = row.get(0);
+                     let y = row.get(1);
+                     if let Ok(x_value) = x {
+                       if let Ok(y_value) = y {
+                         Ok((x_value, y_value))
+                       } else {
+                         Err(y.unwrap_err())
+                       }
+                     } else {
+                       Err(y.unwrap_err())
+                     }
+                   })
+                   .context(InternalSQL)?
+                   .map(|x| x.context(InternalSQL))
+                   .collect::<Result<Vec<(String, String)>>>()?;
+    for (key, value) in rows {
+      let key =
+        serde_json::from_str(&key).with_context(|| Deserialization { table:
+                                                                       T::TABLE_NAME.to_string(),
+                                                                     json: key })?;
+      let value =
+        serde_json::from_str(&value).with_context(|| Deserialization { table:
+                                                                         T::TABLE_NAME.to_string(),
+                                                                       json: value })?;
+      ret.insert(key, value);
+    }
+    Ok(ret)
+  }
 }
 
 #[cfg(test)]
@@ -195,6 +240,28 @@ mod tests {
     let value1 = TypeB("test_value_b".to_string());
     assert!(kv.set(key1.clone(), value1.clone())?.is_none());
     assert!(kv.get(&key1)? == Some(value1.clone()));
+    Ok(())
+  }
+
+  #[test]
+  fn get_all() -> Result<()> {
+    // Generate some K/V Pairs
+    let mut pairs = HashMap::new();
+    for i in 0..10 {
+      let k = TypeAKey(format!("key-{}", i));
+      let v = TypeA(format!("value-{}", i));
+      pairs.insert(k, v);
+    }
+    // Open our db
+    let kv = KVStore::open_in_memory()?;
+    for (k, v) in &pairs {
+      // Insert an invalid value first, so we can test for any negative interaction with updates
+      kv.set(k.clone(), TypeA("INVALID".to_string()))?;
+      // Insert the correct value
+      kv.set(k.clone(), v.clone())?;
+    }
+    // Make sure things match up
+    assert!(kv.get_all::<TypeA>()? == pairs);
     Ok(())
   }
 }
