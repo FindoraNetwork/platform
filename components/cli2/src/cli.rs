@@ -21,6 +21,21 @@ struct CliConfig {
   pub open_count: u64,
 }
 
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize, Hash, Default)]
+pub struct KeypairName(pub String);
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize, Hash, Default)]
+pub struct PubkeyName(pub String);
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize, Hash, Default)]
+pub struct TxnName(pub String);
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize, Hash, Default)]
+pub struct TxnBuilderName(pub String);
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize, Hash, Default)]
+pub struct TxoName(pub String);
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 enum CliError {
   OtherError(String),
@@ -69,43 +84,48 @@ trait CliDataStore {
   fn get_config(&self) -> Result<CliConfig, CliError>;
   fn update_config<F: FnOnce(&mut CliConfig)>(&mut self, f: F) -> Result<(), CliError>;
 
-  fn get_keypairs(&self) -> Result<HashMap<String, XfrKeyPair>, CliError>;
-  fn get_keypair(&self, k: &str) -> Result<Option<XfrKeyPair>, CliError>;
-  fn get_pubkeys(&self) -> Result<HashMap<String, XfrPublicKey>, CliError>;
-  fn get_pubkey(&self, k: &str) -> Result<Option<XfrPublicKey>, CliError>;
-  fn add_key_pair(&mut self, k: &str, kp: XfrKeyPair) -> Result<(), CliError>;
-  fn add_public_key(&mut self, k: &str, pk: XfrPublicKey) -> Result<(), CliError>;
+  fn get_keypairs(&self) -> Result<HashMap<KeypairName, XfrKeyPair>, CliError>;
+  fn get_keypair(&self, k: &KeypairName) -> Result<Option<XfrKeyPair>, CliError>;
+  fn get_pubkeys(&self) -> Result<HashMap<PubkeyName, XfrPublicKey>, CliError>;
+  fn get_pubkey(&self, k: &PubkeyName) -> Result<Option<XfrPublicKey>, CliError>;
+  fn add_key_pair(&mut self, k: &KeypairName, kp: XfrKeyPair) -> Result<(), CliError>;
+  fn add_public_key(&mut self, k: &PubkeyName, pk: XfrPublicKey) -> Result<(), CliError>;
 
   fn get_built_transactions(&self)
-                            -> Result<HashMap<String, (Transaction, TxnMetadata)>, CliError>;
-  fn get_built_transaction(&self, k: &str) -> Result<Option<(Transaction, TxnMetadata)>, CliError>;
-  fn build_transaction(&mut self, k: &str) -> Result<Transaction, CliError>;
+                            -> Result<HashMap<TxnName, (Transaction, TxnMetadata)>, CliError>;
+  fn get_built_transaction(&self,
+                           k: &TxnName)
+                           -> Result<Option<(Transaction, TxnMetadata)>, CliError>;
+  fn build_transaction(&mut self,
+                       k_orig: &TxnBuilderName,
+                       k_new: &TxnName)
+                       -> Result<Transaction, CliError>;
   fn update_txn_metadata<F: FnOnce(&mut TxnMetadata)>(&mut self,
-                                                      k: &str,
+                                                      k: &TxnName,
                                                       f: F)
                                                       -> Result<(), CliError>;
 
-  fn prepare_transaction(&mut self, k: &str, seq_id: u64) -> Result<(), CliError>;
-  fn get_txn_builder(&self, k: &str) -> Result<Option<TransactionBuilder>, CliError>;
+  fn prepare_transaction(&mut self, k: &TxnBuilderName, seq_id: u64) -> Result<(), CliError>;
+  fn get_txn_builder(&self, k: &TxnBuilderName) -> Result<Option<TransactionBuilder>, CliError>;
   fn with_txn_builder<F: FnOnce(&mut TransactionBuilder)>(&mut self,
-                                                          k: &str,
+                                                          k: &TxnBuilderName,
                                                           f: F)
                                                           -> Result<(), CliError>;
 
-  fn get_cached_txos(&self) -> Result<HashMap<String, TxoCacheEntry>, CliError>;
-  fn get_cached_txo(&self, k: &str) -> Result<Option<TxoCacheEntry>, CliError>;
-  fn delete_cached_txo(&mut self, k: &str) -> Result<(), CliError>;
-  fn cache_txo(&mut self, k: &str, ent: TxoCacheEntry) -> Result<(), CliError>;
+  fn get_cached_txos(&self) -> Result<HashMap<TxoName, TxoCacheEntry>, CliError>;
+  fn get_cached_txo(&self, k: &TxoName) -> Result<Option<TxoCacheEntry>, CliError>;
+  fn delete_cached_txo(&mut self, k: &TxoName) -> Result<(), CliError>;
+  fn cache_txo(&mut self, k: &TxoName, ent: TxoCacheEntry) -> Result<(), CliError>;
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, Default)]
 struct SimpleCliData {
   pub config: CliConfig,
-  pub keypairs: HashMap<String, Serialized<XfrKeyPair>>,
-  pub pubkeys: HashMap<String, XfrPublicKey>,
-  pub built_txns: HashMap<String, (Transaction, TxnMetadata)>,
-  pub builders: HashMap<String, TransactionBuilder>,
-  pub txos: HashMap<String, TxoCacheEntry>,
+  pub keypairs: HashMap<KeypairName, Serialized<XfrKeyPair>>,
+  pub pubkeys: HashMap<PubkeyName, XfrPublicKey>,
+  pub built_txns: HashMap<TxnName, (Transaction, TxnMetadata)>,
+  pub builders: HashMap<TxnBuilderName, TransactionBuilder>,
+  pub txos: HashMap<TxoName, TxoCacheEntry>,
 }
 
 struct SimpleCliDataStore {
@@ -151,7 +171,7 @@ impl CliDataStore for SimpleCliDataStore {
     self.write_data(dat)
   }
 
-  fn get_keypairs(&self) -> Result<HashMap<String, XfrKeyPair>, CliError> {
+  fn get_keypairs(&self) -> Result<HashMap<KeypairName, XfrKeyPair>, CliError> {
     Ok(self.read_data()?
            .keypairs
            .into_iter()
@@ -159,24 +179,24 @@ impl CliDataStore for SimpleCliDataStore {
            .collect())
   }
 
-  fn get_keypair(&self, k: &str) -> Result<Option<XfrKeyPair>, CliError> {
+  fn get_keypair(&self, k: &KeypairName) -> Result<Option<XfrKeyPair>, CliError> {
     Ok(self.read_data()?.keypairs.get(k).map(|x| x.deserialize()))
   }
 
-  fn get_pubkeys(&self) -> Result<HashMap<String, XfrPublicKey>, CliError> {
+  fn get_pubkeys(&self) -> Result<HashMap<PubkeyName, XfrPublicKey>, CliError> {
     Ok(self.read_data()?.pubkeys)
   }
 
-  fn get_pubkey(&self, k: &str) -> Result<Option<XfrPublicKey>, CliError> {
+  fn get_pubkey(&self, k: &PubkeyName) -> Result<Option<XfrPublicKey>, CliError> {
     Ok(self.read_data()?.pubkeys.get(k).cloned())
   }
 
-  fn add_key_pair(&mut self, k: &str, kp: XfrKeyPair) -> Result<(), CliError> {
+  fn add_key_pair(&mut self, k: &KeypairName, kp: XfrKeyPair) -> Result<(), CliError> {
     use CliError::*;
     let mut dat = self.read_data()?;
-    match dat.keypairs.entry(k.to_string()) {
+    match dat.keypairs.entry(k.clone()) {
       e @ std::collections::hash_map::Entry::Vacant(_) => {
-        e.or_insert(Serialized::new(&kp));
+        e.or_insert_with(|| Serialized::new(&kp));
       }
       _ => {
         return Err(AlreadyExists(error_location!()));
@@ -185,10 +205,10 @@ impl CliDataStore for SimpleCliDataStore {
     self.write_data(dat)
   }
 
-  fn add_public_key(&mut self, k: &str, pk: XfrPublicKey) -> Result<(), CliError> {
+  fn add_public_key(&mut self, k: &PubkeyName, pk: XfrPublicKey) -> Result<(), CliError> {
     use CliError::*;
     let mut dat = self.read_data()?;
-    match dat.pubkeys.entry(k.to_string()) {
+    match dat.pubkeys.entry(k.clone()) {
       e @ std::collections::hash_map::Entry::Vacant(_) => {
         e.or_insert(pk);
       }
@@ -200,23 +220,28 @@ impl CliDataStore for SimpleCliDataStore {
   }
 
   fn get_built_transactions(&self)
-                            -> Result<HashMap<String, (Transaction, TxnMetadata)>, CliError> {
+                            -> Result<HashMap<TxnName, (Transaction, TxnMetadata)>, CliError> {
     Ok(self.read_data()?.built_txns)
   }
 
-  fn get_built_transaction(&self, k: &str) -> Result<Option<(Transaction, TxnMetadata)>, CliError> {
+  fn get_built_transaction(&self,
+                           k: &TxnName)
+                           -> Result<Option<(Transaction, TxnMetadata)>, CliError> {
     Ok(self.read_data()?.built_txns.get(k).cloned())
   }
 
-  fn build_transaction(&mut self, k: &str) -> Result<Transaction, CliError> {
+  fn build_transaction(&mut self,
+                       k_orig: &TxnBuilderName,
+                       k_new: &TxnName)
+                       -> Result<Transaction, CliError> {
     use CliError::*;
     let mut dat = self.read_data()?;
     let builder = dat.builders
-                     .remove(k)
+                     .remove(k_orig)
                      .ok_or_else(|| KeyNotFound(error_location!()))?;
     let ret = builder.transaction().clone();
     dat.built_txns
-       .insert(k.to_string(), (ret.clone(), Default::default()))
+       .insert(k_new.clone(), (ret.clone(), Default::default()))
        .map(|x| Err(AlreadyExists(format!("[{}] {:?}", error_location!(), x))))
        .unwrap_or(Ok(()))?;
     self.write_data(dat)?;
@@ -224,7 +249,7 @@ impl CliDataStore for SimpleCliDataStore {
   }
 
   fn update_txn_metadata<F: FnOnce(&mut TxnMetadata)>(&mut self,
-                                                      k: &str,
+                                                      k: &TxnName,
                                                       f: F)
                                                       -> Result<(), CliError> {
     use CliError::*;
@@ -236,22 +261,22 @@ impl CliDataStore for SimpleCliDataStore {
     self.write_data(dat)
   }
 
-  fn prepare_transaction(&mut self, k: &str, seq_id: u64) -> Result<(), CliError> {
+  fn prepare_transaction(&mut self, k: &TxnBuilderName, seq_id: u64) -> Result<(), CliError> {
     use CliError::*;
     let mut dat = self.read_data()?;
     dat.builders
-       .insert(k.to_string(), TransactionBuilder::from_seq_id(seq_id))
+       .insert(k.clone(), TransactionBuilder::from_seq_id(seq_id))
        .map(|x| Err(AlreadyExists(format!("[{}] {:?}", error_location!(), x))))
        .unwrap_or(Ok(()))?;
     self.write_data(dat)
   }
 
-  fn get_txn_builder(&self, k: &str) -> Result<Option<TransactionBuilder>, CliError> {
+  fn get_txn_builder(&self, k: &TxnBuilderName) -> Result<Option<TransactionBuilder>, CliError> {
     Ok(self.read_data()?.builders.get(k).cloned())
   }
 
   fn with_txn_builder<F: FnOnce(&mut TransactionBuilder)>(&mut self,
-                                                          k: &str,
+                                                          k: &TxnBuilderName,
                                                           f: F)
                                                           -> Result<(), CliError> {
     use CliError::*;
@@ -262,14 +287,14 @@ impl CliDataStore for SimpleCliDataStore {
     self.write_data(dat)
   }
 
-  fn get_cached_txos(&self) -> Result<HashMap<String, TxoCacheEntry>, CliError> {
-    Ok(self.read_data()?.txos.clone())
+  fn get_cached_txos(&self) -> Result<HashMap<TxoName, TxoCacheEntry>, CliError> {
+    Ok(self.read_data()?.txos)
   }
-  fn get_cached_txo(&self, k: &str) -> Result<Option<TxoCacheEntry>, CliError> {
+  fn get_cached_txo(&self, k: &TxoName) -> Result<Option<TxoCacheEntry>, CliError> {
     Ok(self.read_data()?.txos.get(k).cloned())
   }
 
-  fn delete_cached_txo(&mut self, k: &str) -> Result<(), CliError> {
+  fn delete_cached_txo(&mut self, k: &TxoName) -> Result<(), CliError> {
     use CliError::*;
     let mut dat = self.read_data()?;
     let _ = dat.txos
@@ -278,11 +303,11 @@ impl CliDataStore for SimpleCliDataStore {
     self.write_data(dat)
   }
 
-  fn cache_txo(&mut self, k: &str, ent: TxoCacheEntry) -> Result<(), CliError> {
+  fn cache_txo(&mut self, k: &TxoName, ent: TxoCacheEntry) -> Result<(), CliError> {
     use CliError::*;
     let mut dat = self.read_data()?;
     dat.txos
-       .insert(k.to_string(), ent)
+       .insert(k.clone(), ent)
        .map(|x| Err(AlreadyExists(format!("[{}] {:?}", error_location!(), x))))
        .unwrap_or(Ok(()))?;
     self.write_data(dat)
