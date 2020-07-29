@@ -18,7 +18,7 @@ use utils::Serialized;
 
 pub mod kv;
 
-use kv::HasTable;
+use kv::{HasTable, KVError};
 
 fn default_sub_server() -> String {
   "https://testnet.findora.org/submit_server".to_string()
@@ -35,6 +35,11 @@ struct CliConfig {
   #[serde(default = "default_ledger_server")]
   pub ledger_server: String,
   pub open_count: u64,
+}
+
+impl HasTable for CliConfig {
+  const TABLE_NAME: &'static str = "config";
+  type Key = ();
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize, Hash, Default)]
@@ -77,11 +82,12 @@ impl HasTable for TxoCacheEntry {
   type Key = TxoName;
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Debug)]
 enum CliError {
   OtherError(String),
   AlreadyExists(String),
   KeyNotFound(String),
+  KV(KVError),
 }
 
 impl std::convert::From<std::io::Error> for CliError {
@@ -99,6 +105,12 @@ impl std::convert::From<rustyline::error::ReadlineError> for CliError {
 impl std::convert::From<serde_json::error::Error> for CliError {
   fn from(error: serde_json::error::Error) -> Self {
     CliError::OtherError(format!("{:?}", &error))
+  }
+}
+
+impl std::convert::From<KVError> for CliError {
+  fn from(error: KVError) -> Self {
+    CliError::KV(error)
   }
 }
 
