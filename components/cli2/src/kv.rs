@@ -323,8 +323,13 @@ impl CliDataStore for KVStore {
                          seq_id: u64)
                          -> Result<(), CliError> {
     Ok(self.set(k,
-                TxnBuilderEntry { builder: TransactionBuilder::from_seq_id(seq_id) })
+                TxnBuilderEntry { builder: TransactionBuilder::from_seq_id(seq_id),
+                                  new_asset_types: Default::default(),
+                                  operations: Default::default() })
            .map(|_| ())?)
+  }
+  fn get_txn_builders(&self) -> Result<HashMap<crate::TxnBuilderName, TxnBuilderEntry>, CliError> {
+    Ok(self.get_all()?)
   }
   fn get_txn_builder(&self,
                      k: &crate::TxnBuilderName)

@@ -165,14 +165,50 @@ struct AssetTypeEntry {
   issuer_nick: Option<String>,
 }
 
-fn display_asset_type(indent_level: u64, ent: &AssetTypeEntry) {
-  let ind = {
-    let mut ret: String = Default::default();
-    for _ in 0..indent_level {
-      ret = format!("{}{}", ret, " ");
+fn indent_of(indent_level: u64) -> String {
+  let mut ret: String = Default::default();
+  for _ in 0..indent_level {
+    ret = format!("{}{}", ret, " ");
+  }
+  ret
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+enum OpMetadata {
+  DefineAsset {
+    issuer_nick: String,
+    asset_nick: String,
+  },
+}
+
+fn display_op_metadata(indent_level: u64, ent: &OpMetadata) {
+  let ind = indent_of(indent_level);
+  match ent {
+    OpMetadata::DefineAsset { asset_nick,
+                              issuer_nick, } => {
+      println!("{}DefineAsset `{}`", ind, asset_nick);
+      println!("{} issued by `{}`", ind, issuer_nick);
     }
-    ret
-  };
+  }
+}
+
+fn display_txn_builder(indent_level: u64, ent: &TxnBuilderEntry) {
+  let ind = indent_of(indent_level);
+  println!("{}Operations:", ind);
+
+  for op in ent.operations.iter() {
+    display_op_metadata(indent_level + 1, op);
+  }
+
+  println!("{}New asset types defined:", ind);
+  for (nick, asset_ent) in ent.new_asset_types.iter() {
+    println!("{} {}:", ind, nick);
+    display_asset_type(indent_level + 2, asset_ent);
+  }
+}
+
+fn display_asset_type(indent_level: u64, ent: &AssetTypeEntry) {
+  let ind = indent_of(indent_level);
   println!("{}issuer nickname: {}",
            ind,
            ent.issuer_nick
@@ -187,6 +223,10 @@ fn display_asset_type(indent_level: u64, ent: &AssetTypeEntry) {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 struct TxnBuilderEntry {
   builder: TransactionBuilder,
+  #[serde(default)]
+  operations: Vec<OpMetadata>,
+  #[serde(default)]
+  new_asset_types: HashMap<String, AssetTypeEntry>,
 }
 
 trait CliDataStore {
@@ -218,6 +258,7 @@ trait CliDataStore {
 
   fn prepare_transaction(&mut self, k: &TxnBuilderName, seq_id: u64) -> Result<(), CliError>;
   fn get_txn_builder(&self, k: &TxnBuilderName) -> Result<Option<TxnBuilderEntry>, CliError>;
+  fn get_txn_builders(&self) -> Result<HashMap<TxnBuilderName, TxnBuilderEntry>, CliError>;
   fn with_txn_builder<F: FnOnce(&mut TxnBuilderEntry)>(&mut self,
                                                        k: &TxnBuilderName,
                                                        f: F)
@@ -328,10 +369,25 @@ enum Actions {
     code: String,
   },
 
+  /// Initialize a transaction builder
   PrepareTransaction {
     /// Optional transaction name
-    nick: Option<String>,
+    #[structopt(default_value = "txn")]
+    nick: String,
+    /// Force the transaction's name to be <nick>, instead of the first free <nick>.<n>
+    #[structopt(short, long)]
+    exact: bool,
   },
+
+  /// List the transaction builders which are in progress
+  ListTxnBuilders {},
+
+  /// List the details of a transaction builder
+  ListTxnBuilder {
+    /// Which transaction?
+    nick: String,
+  },
+
   DefineAsset {
     #[structopt(short, long)]
     /// Which txn?
@@ -339,7 +395,7 @@ enum Actions {
     /// Issuer key
     key_nick: String,
     /// Name for the asset type
-    asset_name: String,
+    asset_nick: String,
   },
   IssueAsset {
     #[structopt(short, long)]
@@ -357,11 +413,11 @@ enum Actions {
     /// Which txn?
     txn: Option<String>,
   },
-  ListTransaction {
+  ListBuiltTransaction {
     /// txn id
     txn: Option<String>,
   },
-  ListTransactions {
+  ListBuiltTransactions {
     // TODO: options?
   },
   Submit {
@@ -631,6 +687,55 @@ fn run_action<S: CliDataStore>(action: Actions, store: &mut S) {
         let ret = AssetTypeEntry { asset: resp, issuer_nick: None };
         store.add_asset_type(&AssetTypeName(nick.clone()),ret).unwrap();
         println!("Asset type `{}` saved as `{}`", code_b64, nick);
+    }
+
+    PrepareTransaction { nick, exact } => {
+        let seq_id = match store.get_config().unwrap().ledger_state {
+            None => {
+                eprintln!(concat!("I don't know what block ID the ledger is on!\n",
+                                  "Please run query-ledger-state first."));
+                exit(-1);
+            }
+            Some(s) => s.1
+        };
+
+        let mut nick = nick;
+        if store.get_txn_builder(&TxnBuilderName(nick.clone())).unwrap().is_some() {
+            if exact {
+                eprintln!("Transaction builder with the name `{}` already exists.",nick);
+                exit(-1);
+            }
+
+            for n in FreshNamer::new(nick.clone(),".".to_string()) {
+                if store.get_txn_builder(&TxnBuilderName(n.clone())).unwrap().is_none() {
+                    nick = n;
+                    break;
+                }
+            }
+        }
+
+        println!("Preparing transaction `{}` for block id `{}`...",nick,seq_id);
+        store.prepare_transaction(&TxnBuilderName(nick),seq_id).unwrap();
+        println!("Done.");
+    }
+
+    ListTxnBuilders {} => {
+      for (nick,builder) in store.get_txn_builders().unwrap() {
+        println!("{}:",nick.0);
+        display_txn_builder(1,&builder);
+      }
+    }
+
+    ListTxnBuilder { nick } => {
+      let builder = match store.get_txn_builder(&TxnBuilderName(nick.clone())).unwrap() {
+        None => {
+            eprintln!("No txn builder `{}` found.",nick);
+            exit(-1);
+        }
+        Some(s) => s
+      };
+
+      display_txn_builder(0,&builder);
     }
 
     _ => {
