@@ -18,6 +18,8 @@ use utils::Serialized;
 
 pub mod kv;
 
+use kv::HasTable;
+
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize, Default)]
 struct CliConfig {
   pub ledger_server: String,
@@ -27,17 +29,42 @@ struct CliConfig {
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize, Hash, Default)]
 pub struct KeypairName(pub String);
 
+impl HasTable for XfrKeyPair {
+  const TABLE_NAME: &'static str = "key_pairs";
+  type Key = KeypairName;
+}
+
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize, Hash, Default)]
 pub struct PubkeyName(pub String);
+
+impl HasTable for XfrPublicKey {
+  const TABLE_NAME: &'static str = "public_keys";
+  type Key = PubkeyName;
+}
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize, Hash, Default)]
 pub struct TxnName(pub String);
 
+impl HasTable for (Transaction, TxnMetadata) {
+  const TABLE_NAME: &'static str = "transactions";
+  type Key = TxnName;
+}
+
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize, Hash, Default)]
 pub struct TxnBuilderName(pub String);
 
+impl HasTable for TransactionBuilder {
+  const TABLE_NAME: &'static str = "transaction_builders";
+  type Key = TxnBuilderName;
+}
+
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize, Hash, Default)]
 pub struct TxoName(pub String);
+
+impl HasTable for TxoCacheEntry {
+  const TABLE_NAME: &'static str = "txo_cache";
+  type Key = TxoName;
+}
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 enum CliError {
