@@ -33,6 +33,8 @@ pub enum KVError {
     json: String,
     backtrace: Backtrace,
   },
+  #[snafu(display("Attempted to call KVStore::with on a key that doesn't exist: {}", key))]
+  WithInvailidKey { key: String },
 }
 
 type Result<T, E = KVError> = std::result::Result<T, E>;
@@ -128,7 +130,7 @@ impl KVStore {
   /// Attempts to set a key to a value, returning the previous value if there was one
   ///
   /// Will create the required table if it does not exist
-  pub fn set<T: HasTable>(&self, key: T::Key, value: T) -> Result<Option<T>> {
+  pub fn set<T: HasTable>(&self, key: &T::Key, value: T) -> Result<Option<T>> {
     // First, create the table if it does not exist
     self.create_table::<T>()?;
     // Look up the old value, if any
@@ -188,6 +190,22 @@ impl KVStore {
     }
     Ok(ret)
   }
+
+  /// Modifies a value "in place"
+  pub fn with<T: HasTable, F: FnOnce(&mut T)>(&self, key: &T::Key, f: F) -> Result<()> {
+    // Attempt to get the value
+    let value: Option<T> = self.get(key)?;
+    if let Some(mut value) = value {
+      // Do the callers thing to the value
+      f(&mut value);
+      // Shove it back into the store
+      self.set(key, value)?;
+      Ok(())
+    } else {
+      let key_string = serde_json::to_string(&key).expect("JSON serialization failed");
+      Err(KVError::WithInvailidKey { key: key_string })
+    }
+  }
 }
 
 #[cfg(test)]
@@ -221,12 +239,12 @@ mod tests {
     // Try to set a KV pair for TypeA
     let key1 = TypeAKey("test_keg".to_string());
     let value1 = TypeA("test_value".to_string());
-    assert!(kv.set(key1.clone(), value1.clone())?.is_none());
+    assert!(kv.set(&key1, value1.clone())?.is_none());
     // Verify the results
     assert!(kv.get(&key1)? == Some(value1.clone()));
     // Update the value
     let value2 = TypeA("Changed Value!".to_string());
-    assert!(kv.set(key1.clone(), value2.clone())? == Some(value1));
+    assert!(kv.set(&key1, value2.clone())? == Some(value1));
     // Verify results
     assert!(kv.get(&key1)? == Some(value2));
 
@@ -238,7 +256,7 @@ mod tests {
     // This tests implicit table creation
     let key1 = TypeBKey("test_key_b".to_string());
     let value1 = TypeB("test_value_b".to_string());
-    assert!(kv.set(key1.clone(), value1.clone())?.is_none());
+    assert!(kv.set(&key1, value1.clone())?.is_none());
     assert!(kv.get(&key1)? == Some(value1.clone()));
     Ok(())
   }
@@ -256,12 +274,23 @@ mod tests {
     let kv = KVStore::open_in_memory()?;
     for (k, v) in &pairs {
       // Insert an invalid value first, so we can test for any negative interaction with updates
-      kv.set(k.clone(), TypeA("INVALID".to_string()))?;
+      kv.set(k, TypeA("INVALID".to_string()))?;
       // Insert the correct value
-      kv.set(k.clone(), v.clone())?;
+      kv.set(k, v.clone())?;
     }
     // Make sure things match up
     assert!(kv.get_all::<TypeA>()? == pairs);
+    Ok(())
+  }
+  #[test]
+  fn with() -> Result<()> {
+    let kv = KVStore::open_in_memory()?;
+    let key1 = TypeAKey("key-1".to_string());
+    let value1 = TypeA("value-1".to_string());
+    kv.set(&key1, value1.clone())?;
+    // Mutate value1 inside the store
+    kv.with::<TypeA, _>(&key1, |x| x.0 = "value-2".to_string())?;
+    assert!(kv.get(&key1)? == Some(TypeA("value-2".to_string())));
     Ok(())
   }
 }
