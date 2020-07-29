@@ -146,8 +146,10 @@ impl ClientAssetRecord {
   ///
   /// @param {JsValue} val - JSON-encoded autehtnicated asset record fetched from ledger server with the `utxo_sid/{sid}` route,
   /// where `sid` can be fetched from the query server with the `get_owned_utxos/{address}` route.
-  /// Note: The first field of an asset record is `utxo`. E.g.:
-  /// `"utxo":{
+  /// Note: The first field of an asset record is `utxo`. See the example below.
+  ///
+  /// @example
+  /// "utxo":{
   ///   "amount":{
   ///     "NonConfidential":5
   ///   },
@@ -155,7 +157,7 @@ impl ClientAssetRecord {
   ///     "NonConfidential":[113,168,158,149,55,64,18,189,88,156,133,204,156,46,106,46,232,62,69,233,157,112,240,132,164,120,4,110,14,247,109,127]
   ///   },
   ///   "public_key":"Glf8dKF6jAPYHzR_PYYYfzaWqpYcMvnrIcazxsilmlA="
-  /// }`.
+  /// }
   ///
   /// @see {@link Network#getUtxo|Network.getUtxo} for information about how to
   /// fetch an asset record from the ledger server.
@@ -215,9 +217,13 @@ pub struct OwnerMemo {
 impl OwnerMemo {
   /// Builds an owner memo from a JSON-serialized JavaScript value.
   /// @param {JsValue} val - JSON owner memo fetched from query server with the `get_owner_memo/{sid}` route,
-  /// where `sid` can be fetched from the query server with the `get_owned_utxos/{address}` route.
-  /// * E.g.: `{"blind_share":[91,251,44,28,7,221,67,155,175,213,25,183,70,90,119,232,212,238,226,142,159,200,54,19,60,115,38,221,248,202,74,248],
-  /// "lock":{"ciphertext":[119,54,117,136,125,133,112,193],"encoded_rand":"8KDql2JphPB5WLd7-aYE1bxTQAcweFSmrqymLvPDntM="}}`.
+  /// where `sid` can be fetched from the query server with the `get_owned_utxos/{address}` route. See the example below.
+  ///
+  /// @example
+  /// {
+  ///   "blind_share":[91,251,44,28,7,221,67,155,175,213,25,183,70,90,119,232,212,238,226,142,159,200,54,19,60,115,38,221,248,202,74,248],
+  ///   "lock":{"ciphertext":[119,54,117,136,125,133,112,193],"encoded_rand":"8KDql2JphPB5WLd7-aYE1bxTQAcweFSmrqymLvPDntM="}
+  /// }
   pub fn from_json(val: &JsValue) -> Self {
     let zei_owner_memo: ZeiOwnerMemo = val.into_serde().unwrap();
     OwnerMemo { memo: ZeiOwnerMemo { blind_share: zei_owner_memo.blind_share,
@@ -358,26 +364,22 @@ pub struct AssetType {
 impl AssetType {
   /// Builds an asset type from a JSON-encoded JavaScript value.
   /// @param {JsValue} val - JSON-encoded asset type fetched from ledger server with the `asset_token/{code}` route.
+  /// Note: The first field of an asset type is `properties`. See the example below.
   ///
-  /// Note: The first field of an asset type is `properties`. E.g.:
-  /// `"properties": {
-  ///   "code": {
-  ///     "val": [
-  ///       151,   8, 106,  38, 126, 101, 250, 236,
-  ///       134,  77,  83, 180,  43, 152,  47,  57,
-  ///       83,  30,  60,   8, 132, 218,  48,  52,
-  ///       167, 167, 190, 244,  34,  45,  78,  80
-  ///     ]
+  /// @example
+  /// "properties":{
+  ///   "code":{
+  ///     "val":[151,8,106,38,126,101,250,236,134,77,83,180,43,152,47,57,83,30,60,8,132,218,48,52,167,167,190,244,34,45,78,80]
   ///   },
-  ///   "issuer": { "key": 'iFW4jY_DQVSGED05kTseBBn0BllPB9Q9escOJUpf4DY=' },
-  ///   "memo": 'test memo',
-  ///   "asset_rules": {
-  ///     "transferable": true,
-  ///     "updatable": false,
-  ///     "transfer_multisig_rules": null,
-  ///     "max_units": 5000
+  ///   "issuer":{"key":“iFW4jY_DQVSGED05kTseBBn0BllPB9Q9escOJUpf4DY=”},
+  ///   "memo":“test memo”,
+  ///   "asset_rules":{
+  ///     "transferable":true,
+  ///     "updatable":false,
+  ///     "transfer_multisig_rules":null,
+  ///     "max_units":5000
   ///   }
-  /// }`.
+  /// }
   ///
   /// @see {@link Network#getAssetProperties|Network.getAsset} for information about how to
   /// fetch an asset type from the ledger server.
