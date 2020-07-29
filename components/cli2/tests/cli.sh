@@ -1,8 +1,11 @@
 #!/usr/bin/env bats
 FINDORA_STORE_FILE=~/.findora/cli2_data.sqlite
 
-# Start from a fresh state
-rm -f $FINDORA_STORE_FILE
+setup() {
+  # Start from a fresh state
+  rm -f $FINDORA_STORE_FILE
+  bash -c '{ echo; echo; } | $CLI2 setup'
+}
 
 @test "key generation" {
   run $CLI2 key-gen alice
@@ -17,7 +20,7 @@ rm -f $FINDORA_STORE_FILE
 }
 
 @test "issue an asset" {
-   skip "Not implemented yet"
+  skip "Not implemented yet"
   run $CLI2 issue-asset alice AliceCoin 20
   [ "$status" -eq 0 ]
   [ "${lines[0]}" = '' ]
