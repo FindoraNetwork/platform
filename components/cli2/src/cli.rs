@@ -1,4 +1,5 @@
 #![deny(warnings)]
+#![allow(clippy::type_complexity)]
 use ledger::data_model::*;
 use serde::{Deserialize, Serialize};
 use snafu::{OptionExt, ResultExt, Snafu};
@@ -13,7 +14,7 @@ use zei::xfr::structs::{OpenAssetRecord, OwnerMemo};
 use ledger_api_service::LedgerAccessRoutes;
 use promptly::{prompt, prompt_default};
 use std::process::exit;
-use utils::NetworkRoute;
+use utils::{HashOf, NetworkRoute, SignatureOf};
 // use utils::Serialized;
 // use txn_builder::{BuildsTransactions, PolicyChoice, TransactionBuilder, TransferOperationBuilder};
 
@@ -54,13 +55,19 @@ fn default_ledger_server() -> String {
   "https://testnet.findora.org/query_server".to_string()
 }
 
-#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize, Default)]
+#[derive(Clone, Debug, Serialize, Deserialize, Default)]
 struct CliConfig {
   #[serde(default = "default_sub_server")]
   pub submission_server: String,
   #[serde(default = "default_ledger_server")]
   pub ledger_server: String,
   pub open_count: u64,
+  #[serde(default)]
+  pub ledger_sig_key: Option<XfrPublicKey>,
+  #[serde(default)]
+  pub ledger_state: Option<(HashOf<Option<StateCommitmentData>>,
+                            u64,
+                            SignatureOf<(HashOf<Option<StateCommitmentData>>, u64)>)>,
 }
 
 impl HasTable for CliConfig {
@@ -240,7 +247,9 @@ fn prompt_for_config(prev_conf: Option<CliConfig>) -> Result<CliConfig, CliError
                                        .unwrap_or_else(default_ledger_server);
   Ok(CliConfig { submission_server: prompt_default("Submission Server?", default_sub_server)?,
                  ledger_server: prompt_default("Ledger Access Server?", default_ledger_server)?,
-                 open_count: 0 })
+                 open_count: 0,
+                 ledger_sig_key: prev_conf.as_ref().and_then(|x| x.ledger_sig_key),
+                 ledger_state: prev_conf.as_ref().and_then(|x| x.ledger_state.clone()) })
 }
 
 #[derive(StructOpt, Debug)]
@@ -250,8 +259,18 @@ enum Actions {
   /// Initialize or change your local database configuration
   Setup {},
 
+  /// Display the current configuration and ledger state
+  ListConfig {},
+
   /// Run integrity checks of the local database
   CheckDb {},
+
+  /// Get the latest state commitment data from the ledger
+  QueryLedgerState {
+    /// Whether to forget the old ledger public key
+    #[structopt(short, long)]
+    forget_old_key: bool,
+  },
 
   /// Generate a new key pair for <nick>
   KeyGen {
@@ -370,6 +389,25 @@ enum Actions {
   },
 }
 
+fn print_conf(conf: &CliConfig) {
+  println!("Submission server: {}", conf.submission_server);
+  println!("Ledger access server: {}", conf.ledger_server);
+  println!("Ledger public signing key: {}",
+           conf.ledger_sig_key
+               .map(|x| serde_json::to_string(&x).unwrap())
+               .unwrap_or_else(|| "<UNKNOWN>".to_string()));
+  println!("Ledger state commitment: {}",
+           conf.ledger_state
+               .as_ref()
+               .map(|x| b64enc(&(x.0).0.hash))
+               .unwrap_or_else(|| "<UNKNOWN>".to_string()));
+  println!("Ledger block idx: {}",
+           conf.ledger_state
+               .as_ref()
+               .map(|x| format!("{}", x.1))
+               .unwrap_or_else(|| "<UNKNOWN>".to_string()));
+}
+
 fn run_action<S: CliDataStore>(action: Actions, store: &mut S) {
   // println!("{:?}", action);
 
@@ -378,6 +416,79 @@ fn run_action<S: CliDataStore>(action: Actions, store: &mut S) {
     Setup {} => {
       store.update_config(|conf| {
         *conf = prompt_for_config(Some(conf.clone())).unwrap();
+      }).unwrap();
+    }
+
+    ListConfig {} => {
+      let conf = store.get_config().unwrap();
+      print_conf(&conf);
+    }
+
+    QueryLedgerState { forget_old_key } => {
+      store.update_config(|conf| {
+        let mut new_key = forget_old_key;
+        if !new_key && conf.ledger_sig_key.is_none() {
+          println!("No signature key found for `{}`.", conf.ledger_server);
+          new_key = new_key || prompt_default(" Retrieve a new one?", false).unwrap();
+          if !new_key {
+            eprintln!("Cannot check ledger state validity without a signature key.");
+            exit(-1);
+          }
+        }
+
+        if new_key {
+          let query = format!("{}{}",conf.ledger_server,LedgerAccessRoutes::PublicKey.route());
+          let resp: XfrPublicKey;
+          match reqwest::blocking::get(&query) {
+              Err(e) => {
+                  eprintln!("Request `{}` failed: {}",query,e);
+                  exit(-1);
+              }
+              Ok(v) => match v.json::<XfrPublicKey>() {
+                  Err(e) => {
+                      eprintln!("Failed to parse response: {}",e);
+                      exit(-1);
+                  }
+                  Ok(v) => { resp = v; }
+              }
+          }
+
+          println!("Saving ledger signing key `{}`",serde_json::to_string(&resp).unwrap());
+          conf.ledger_sig_key = Some(resp);
+        }
+
+        assert!(conf.ledger_sig_key.is_some());
+
+        let query = format!("{}{}",conf.ledger_server,LedgerAccessRoutes::GlobalState.route());
+        let resp: (HashOf<Option<StateCommitmentData>>,
+                u64,
+                SignatureOf<(HashOf<Option<StateCommitmentData>>, u64)>);
+        match reqwest::blocking::get(&query) {
+            Err(e) => {
+                eprintln!("Request `{}` failed: {}",query,e);
+                exit(-1);
+            }
+            Ok(v) => match v.json::<_>() {
+                Err(e) => {
+                    eprintln!("Failed to parse response: {}",e);
+                    exit(-1);
+                }
+                Ok(v) => { resp = v; }
+            }
+        }
+
+        if let Err(e) = resp.2.verify(&conf.ledger_sig_key.unwrap(), &(resp.0.clone(),resp.1)) {
+            eprintln!("Ledger responded with invalid signature: {}",e);
+            exit(-1);
+        }
+
+        conf.ledger_state = Some(resp);
+
+        assert!(conf.ledger_state.is_some());
+
+        println!("New state retrieved.");
+
+        print_conf(&conf);
       }).unwrap();
     }
 
