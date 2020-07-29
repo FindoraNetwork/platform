@@ -31,10 +31,7 @@ stdenv.mkDerivation {
     pkgconfig openssl binutils-unwrapped
     protobuf
     sqlite
-
     wasm-pack
-
-    sqlite
 
   ] ++ stdenv.lib.optionals stdenv.isDarwin [
         darwin.apple_sdk.frameworks.Security
@@ -45,5 +42,11 @@ stdenv.mkDerivation {
   LD_LIBRARY_PATH = "${zlib}/lib";
   PROTOC          = "${protobuf}/bin/protoc";
   PROTOC_INCLUDE  = "${protobuf}/include";
+
+  # Environement Variables for the CLI2
+  shellHook = ''
+    export LOCAL=`pwd`;
+    export CLI2="$LOCAL/target/debug/cli";
+  '';
 }
 
