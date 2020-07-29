@@ -1,3 +1,6 @@
+export FINDORA_HOME=$(mktemp -d)
+echo "FINDORA_HOME: ${FINDORA_HOME}"
+
 # build the executable
 cargo build
 

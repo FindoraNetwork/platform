@@ -7,15 +7,15 @@ use std::collections::HashMap;
 use std::fs;
 use structopt::StructOpt;
 use submission_server::{TxnHandle, TxnStatus};
-use txn_builder::TransactionBuilder;
+use txn_builder::{BuildsTransactions, PolicyChoice, TransactionBuilder};
 use zei::xfr::sig::{XfrKeyPair, XfrPublicKey};
 use zei::xfr::structs::{OpenAssetRecord, OwnerMemo};
 // use std::rc::Rc;
 use ledger_api_service::LedgerAccessRoutes;
 use promptly::{prompt, prompt_default};
 use std::process::exit;
+use utils::Serialized;
 use utils::{HashOf, NetworkRoute, SignatureOf};
-// use utils::Serialized;
 // use txn_builder::{BuildsTransactions, PolicyChoice, TransactionBuilder, TransferOperationBuilder};
 
 pub mod kv;
@@ -68,6 +68,8 @@ struct CliConfig {
   pub ledger_state: Option<(HashOf<Option<StateCommitmentData>>,
                             u64,
                             SignatureOf<(HashOf<Option<StateCommitmentData>>, u64)>)>,
+  #[serde(default)]
+  pub active_txn: Option<TxnBuilderName>,
 }
 
 impl HasTable for CliConfig {
@@ -145,7 +147,7 @@ enum CliError {
 struct TxnMetadata {
   handle: Option<TxnHandle>,
   status: Option<TxnStatus>,
-  new_asset_types: HashMap<String, AssetTypeEntry>,
+  new_asset_types: HashMap<AssetTypeName, AssetTypeEntry>,
   // new_txos: HashMap<String, TxoCacheEntry>,
   // spent_txos: HashMap<String>,
 }
@@ -161,8 +163,8 @@ struct TxoCacheEntry {
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 struct AssetTypeEntry {
-  asset: AssetType,
-  issuer_nick: Option<String>,
+  asset: Asset,
+  issuer_nick: Option<KeypairName>,
 }
 
 fn indent_of(indent_level: u64) -> String {
@@ -176,8 +178,8 @@ fn indent_of(indent_level: u64) -> String {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 enum OpMetadata {
   DefineAsset {
-    issuer_nick: String,
-    asset_nick: String,
+    issuer_nick: KeypairName,
+    asset_nick: AssetTypeName,
   },
 }
 
@@ -186,8 +188,8 @@ fn display_op_metadata(indent_level: u64, ent: &OpMetadata) {
   match ent {
     OpMetadata::DefineAsset { asset_nick,
                               issuer_nick, } => {
-      println!("{}DefineAsset `{}`", ind, asset_nick);
-      println!("{} issued by `{}`", ind, issuer_nick);
+      println!("{}DefineAsset `{}`", ind, asset_nick.0);
+      println!("{} issued by `{}`", ind, issuer_nick.0);
     }
   }
 }
@@ -202,7 +204,7 @@ fn display_txn_builder(indent_level: u64, ent: &TxnBuilderEntry) {
 
   println!("{}New asset types defined:", ind);
   for (nick, asset_ent) in ent.new_asset_types.iter() {
-    println!("{} {}:", ind, nick);
+    println!("{} {}:", ind, nick.0);
     display_asset_type(indent_level + 2, asset_ent);
   }
 }
@@ -212,12 +214,14 @@ fn display_asset_type(indent_level: u64, ent: &AssetTypeEntry) {
   println!("{}issuer nickname: {}",
            ind,
            ent.issuer_nick
-              .clone()
+              .as_ref()
+              .map(|x| x.0.clone())
               .unwrap_or_else(|| "<UNKNOWN>".to_string()));
   println!("{}issuer public key: {}",
            ind,
-           serde_json::to_string(&ent.asset.properties.issuer.key).unwrap());
-  println!("{}code: {}", ind, ent.asset.properties.code.to_base64());
+           serde_json::to_string(&ent.asset.issuer.key).unwrap());
+  println!("{}code: {}", ind, ent.asset.code.to_base64());
+  println!("{}memo: `{}`", ind, ent.asset.memo.0);
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -226,7 +230,9 @@ struct TxnBuilderEntry {
   #[serde(default)]
   operations: Vec<OpMetadata>,
   #[serde(default)]
-  new_asset_types: HashMap<String, AssetTypeEntry>,
+  new_asset_types: HashMap<AssetTypeName, AssetTypeEntry>,
+  #[serde(default)]
+  signers: HashMap<KeypairName, Serialized<XfrKeyPair>>,
 }
 
 trait CliDataStore {
@@ -290,7 +296,8 @@ fn prompt_for_config(prev_conf: Option<CliConfig>) -> Result<CliConfig, CliError
                  ledger_server: prompt_default("Ledger Access Server?", default_ledger_server)?,
                  open_count: 0,
                  ledger_sig_key: prev_conf.as_ref().and_then(|x| x.ledger_sig_key),
-                 ledger_state: prev_conf.as_ref().and_then(|x| x.ledger_state.clone()) })
+                 ledger_state: prev_conf.as_ref().and_then(|x| x.ledger_state.clone()),
+                 active_txn: prev_conf.as_ref().and_then(|x| x.active_txn.clone()) })
 }
 
 #[derive(StructOpt, Debug)]
@@ -462,6 +469,11 @@ fn print_conf(conf: &CliConfig) {
                .as_ref()
                .map(|x| format!("{}", x.1))
                .unwrap_or_else(|| "<UNKNOWN>".to_string()));
+  println!("Current target transaction: {}",
+           conf.active_txn
+               .as_ref()
+               .map(|x| x.0.clone())
+               .unwrap_or_else(|| "<NONE>".to_string()));
 }
 
 fn run_action<S: CliDataStore>(action: Actions, store: &mut S) {
@@ -670,7 +682,7 @@ fn run_action<S: CliDataStore>(action: Actions, store: &mut S) {
         let code_b64 = code.clone();
         let _ = AssetTypeCode::new_from_base64(&code).unwrap();
         let query = format!("{}{}/{}",conf.ledger_server,LedgerAccessRoutes::AssetToken.route(),code_b64);
-        let resp: AssetType;
+        let resp: Asset;
         match reqwest::blocking::get(&query) {
             Err(e) => {
                 eprintln!("Request `{}` failed: {}",query,e);
@@ -681,7 +693,7 @@ fn run_action<S: CliDataStore>(action: Actions, store: &mut S) {
                     eprintln!("Failed to parse response: {}",e);
                     exit(-1);
                 }
-                Ok(v) => { resp = v; }
+                Ok(v) => { resp = v.properties; }
             }
         }
         let ret = AssetTypeEntry { asset: resp, issuer_nick: None };
@@ -715,7 +727,10 @@ fn run_action<S: CliDataStore>(action: Actions, store: &mut S) {
         }
 
         println!("Preparing transaction `{}` for block id `{}`...",nick,seq_id);
-        store.prepare_transaction(&TxnBuilderName(nick),seq_id).unwrap();
+        store.prepare_transaction(&TxnBuilderName(nick.clone()),seq_id).unwrap();
+        store.update_config(|conf| {
+            conf.active_txn = Some(TxnBuilderName(nick));
+        }).unwrap();
         println!("Done.");
     }
 
@@ -736,6 +751,51 @@ fn run_action<S: CliDataStore>(action: Actions, store: &mut S) {
       };
 
       display_txn_builder(0,&builder);
+    }
+
+    DefineAsset { txn, key_nick, asset_nick, } => {
+        let key_nick = KeypairName(key_nick);
+        let kp = match store.get_keypair(&key_nick).unwrap() {
+            None => {
+                eprintln!("No key pair `{}` found.",key_nick.0);
+                exit(-1);
+            }
+            Some(s) => s
+        };
+        let txn_opt = txn.map(TxnBuilderName).or_else(|| store.get_config().unwrap().active_txn);
+        let txn;
+        match txn_opt {
+            None => {
+                eprintln!("I don't know which transaction to use!");
+                exit(-1);
+            }
+            Some(t) => { txn = t; }
+        }
+
+        store.with_txn_builder(&txn, |builder| {
+            builder.builder.add_operation_create_asset(
+                &kp,
+                None,
+                Default::default(),
+                &prompt::<String,_>("memo?").unwrap(),
+                PolicyChoice::Fungible()).unwrap();
+            match builder.builder.transaction().body.operations.last() {
+                Some(Operation::DefineAsset(def)) => {
+                    builder.new_asset_types.insert(
+                        AssetTypeName(asset_nick.clone()),
+                        AssetTypeEntry {
+                            asset: def.body.asset.clone(),
+                            issuer_nick: Some(key_nick.clone()),
+                        });
+                }
+                _ => { panic!("The transaction builder doesn't include our operation!"); }
+            }
+            builder.signers.insert(key_nick.clone(),Serialized::new(&kp));
+            builder.operations.push(OpMetadata::DefineAsset {
+                issuer_nick: key_nick.clone(),
+                asset_nick: AssetTypeName(asset_nick.clone()) });
+        }).unwrap();
+
     }
 
     _ => {

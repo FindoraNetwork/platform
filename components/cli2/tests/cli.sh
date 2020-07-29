@@ -1,5 +1,5 @@
 #!/usr/bin/env bats
-FINDORA_STORE_FILE=~/.findora/cli2_data.sqlite
+FINDORA_STORE_FILE=${FINDORA_HOME:-${HOME}/.findora}/cli2_data.sqlite
 
 setup() {
   # Start from a fresh state
