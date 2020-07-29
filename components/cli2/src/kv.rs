@@ -205,6 +205,20 @@ impl KVStore {
       Err(KVError::WithInvailidKey { key: key_string })
     }
   }
+
+  /// Deletes all occurrences of a key
+  pub fn delete<T: HasTable>(&self, key: &T::Key) -> Result<()> {
+    let delete_query = format!("delete from {} where key = (?)", T::TABLE_NAME);
+    let mut stmt = self.db
+                       .prepare(&delete_query)
+                       .context(Prepare { statement: delete_query })?;
+
+    let key_string = serde_json::to_string(key).expect("JSON Serialization failed");
+
+    stmt.execute(params![&key_string]).context(InternalSQL)?;
+
+    Ok(())
+  }
 }
 
 #[cfg(test)]
@@ -290,6 +304,22 @@ mod tests {
     // Mutate value1 inside the store
     kv.with::<TypeA, _>(&key1, |x| x.0 = "value-2".to_string())?;
     assert!(kv.get(&key1)? == Some(TypeA("value-2".to_string())));
+    Ok(())
+  }
+
+  #[test]
+  fn delete() -> Result<()> {
+    let kv = KVStore::open_in_memory()?;
+    // Add the same key a bunch of times
+    let key1 = TypeAKey("key-1".to_string());
+    for i in 0..10 {
+      kv.set(&key1, TypeA(format!("{}", i)))?;
+    }
+    // Delete the key
+    kv.delete::<TypeA>(&key1)?;
+    // Make sure its gone
+    assert_eq!(kv.get::<TypeA>(&key1)?, None);
+
     Ok(())
   }
 }
