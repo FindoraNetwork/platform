@@ -3,6 +3,7 @@ name = "txn_cli"
 version = "0.1.0"
 authors = ["Engineering <engineering@findora.org>"]
 edition = "2018"
+build = "build.rs"
 
 [lib]
 path = "src/lib.rs"
@@ -46,4 +47,7 @@ zei = { git = "ssh://git@github.com/findoraorg/zei", tag = "v0.0.3-3" }
 [dev-dependencies]
 quickcheck = "0.8"
 quickcheck_macros = "0.8"
+
+[build-dependencies]
+vergen = "3.1.0"
 

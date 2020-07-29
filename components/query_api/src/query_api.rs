@@ -3,8 +3,7 @@ use actix_cors::Cors;
 use actix_web::{error, middleware, web, App, HttpServer};
 use ledger::data_model::errors::PlatformError;
 use ledger::data_model::{
-  b64dec, b64enc, AssetTypeCode, IssuerPublicKey, KVBlind, KVHash, TxOutput, TxnSID, TxoSID,
-  XfrAddress,
+  b64dec, AssetTypeCode, IssuerPublicKey, KVBlind, KVHash, TxOutput, TxnSID, TxoSID, XfrAddress,
 };
 use ledger::{error_location, inp_fail, ser_fail};
 use ledger_api_service::RestfulArchiveAccess;
@@ -19,6 +18,14 @@ use utils::{actix_get_request, actix_post_request, NetworkRoute};
 use zei::serialization::ZeiFromToBytes;
 use zei::xfr::sig::XfrPublicKey;
 use zei::xfr::structs::OwnerMemo;
+
+/// Returns the git commit hash and commit date of this build
+fn version() -> actix_web::Result<String> {
+  Ok(concat!("Build: ",
+             env!("VERGEN_SHA_SHORT"),
+             " ",
+             env!("VERGEN_COMMIT_DATE")).into())
+}
 
 // Queries the status of a transaction by its handle. Returns either a not committed message or a
 // serialized TxnStatus.
@@ -38,14 +45,6 @@ fn get_address<T>(data: web::Data<Arc<RwLock<QueryServer<T>>>>,
   Ok(res)
 }
 
-fn key_from_base64(b64_str: &str) -> Result<Key, actix_web::error::Error> {
-  Ok(Key::from_slice(&b64dec(b64_str).map_err(|_| {
-                        actix_web::error::ErrorBadRequest("Could not deserialize key(1)")
-                      })?).ok_or_else(|| {
-                            actix_web::error::ErrorBadRequest("Could not deserialize key")
-                          })?)
-}
-
 type CustomDataResult = (Vec<u8>, KVHash);
 
 // Returns custom data at a given location
@@ -56,7 +55,9 @@ fn get_custom_data<T>(
   where T: RestfulArchiveAccess
 {
   let query_server = data.read().unwrap();
-  let key = key_from_base64(&*info)?;
+  let key = Key::from_base64(&*info).map_err(|_| {
+                                      actix_web::error::ErrorBadRequest("Could not deserialize Key")
+                                    })?;
   Ok(web::Json(query_server.get_custom_data(&key).cloned()))
 }
 
@@ -73,11 +74,14 @@ fn get_owner_memo<T>(data: web::Data<Arc<RwLock<QueryServer<T>>>>,
 // Submits custom data to be stored by the query server. The request will fail if the hash of the
 // data doesn't match the commitment stored by the ledger.
 fn store_custom_data<T>(data: web::Data<Arc<RwLock<QueryServer<T>>>>,
-                        body: web::Json<(Key, Vec<u8>, Option<KVBlind>)>)
+                        body: web::Json<(String, Vec<u8>, Option<KVBlind>)>)
                         -> actix_web::Result<(), actix_web::error::Error>
   where T: RestfulArchiveAccess + Sync + Send
 {
   let (key, custom_data, blind) = body.into_inner();
+  let key = Key::from_base64(&key).map_err(|_| {
+                                    actix_web::error::ErrorBadRequest("Could not deserialize Key")
+                                  })?;
   let mut query_server = data.write().unwrap();
   query_server.add_to_data_store(&key, &custom_data, blind.as_ref())
               .map_err(|e| error::ErrorBadRequest(format!("{}", e)))?;
@@ -110,6 +114,7 @@ pub enum QueryServerRoutes {
   GetCreatedAssets,
   GetIssuedRecords,
   GetRelatedTxns,
+  Version,
 }
 
 impl NetworkRoute for QueryServerRoutes {
@@ -123,6 +128,7 @@ impl NetworkRoute for QueryServerRoutes {
       QueryServerRoutes::GetCustomData => "get_custom_data",
       QueryServerRoutes::GetCreatedAssets => "get_created_assets",
       QueryServerRoutes::GetIssuedRecords => "get_issued_records",
+      QueryServerRoutes::Version => "version",
     };
     "/".to_owned() + endpoint
   }
@@ -215,6 +221,7 @@ impl QueryApi {
                        web::post().to(store_custom_data::<T>))
                 .route(&QueryServerRoutes::GetCustomData.with_arg_template("key"),
                        web::get().to(get_custom_data::<T>))
+                .route(&QueryServerRoutes::Version.route(), web::get().to(version))
     }).bind(&format!("{}:{}", host, port))?
       .start();
 
@@ -238,6 +245,8 @@ pub trait RestfulQueryServerAccess {
                        -> Result<(), PlatformError>;
 
   fn fetch_custom_data(&self, key: &Key) -> Result<Vec<u8>, PlatformError>;
+
+  fn get_owner_memo(&self, txo_sid: u64) -> Result<Option<OwnerMemo>, PlatformError>;
 }
 
 // Unimplemented until I can figure out a way to force the mock server to get new data (we can do
@@ -254,6 +263,10 @@ impl RestfulQueryServerAccess for MockQueryServerClient {
   }
 
   fn fetch_custom_data(&self, _key: &Key) -> Result<Vec<u8>, PlatformError> {
+    unimplemented!();
+  }
+
+  fn get_owner_memo(&self, _txo_sid: u64) -> Result<Option<OwnerMemo>, PlatformError> {
     unimplemented!();
   }
 }
@@ -292,7 +305,7 @@ impl RestfulQueryServerAccess for ActixQueryServerClient {
   }
 
   fn fetch_custom_data(&self, key: &Key) -> Result<Vec<u8>, PlatformError> {
-    let b64key = b64enc(&key);
+    let b64key = key.to_base64();
     let query = format!("{}://{}:{}{}",
                         self.protocol,
                         self.host,
@@ -300,5 +313,15 @@ impl RestfulQueryServerAccess for ActixQueryServerClient {
                         QueryServerRoutes::GetCustomData.with_arg(&b64key));
     let text = actix_get_request(&self.client, &query).map_err(|_| inp_fail!())?;
     Ok(serde_json::from_str::<Vec<u8>>(&text).map_err(|_| ser_fail!())?)
+  }
+
+  fn get_owner_memo(&self, txo_sid: u64) -> Result<Option<OwnerMemo>, PlatformError> {
+    let query = format!("{}://{}:{}{}",
+                        self.protocol,
+                        self.host,
+                        self.port,
+                        QueryServerRoutes::GetOwnerMemo.with_arg(&txo_sid));
+    let text = actix_get_request(&self.client, &query).map_err(|_| inp_fail!())?;
+    Ok(serde_json::from_str::<Option<OwnerMemo>>(&text).map_err(|_| ser_fail!())?)
   }
 }

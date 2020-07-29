@@ -221,12 +221,12 @@ pub fn run_txn_check(check: &TxnCheck,
                      mut frac_vars: Vec<Fraction>,
                      txn: &Transaction)
                      -> Result<(), PlatformError> {
-  dbg!(check);
-  dbg!(&id_vars);
-  dbg!(&rt_vars);
-  dbg!(&amt_vars);
-  dbg!(&frac_vars);
-  dbg!(txn);
+  // dbg!(check);
+  // dbg!(&id_vars);
+  // dbg!(&rt_vars);
+  // dbg!(&amt_vars);
+  // dbg!(&frac_vars);
+  // dbg!(txn);
 
   /*
    * To convert the TxnOps into RealTxnOps, we need to:
@@ -268,7 +268,7 @@ pub fn run_txn_check(check: &TxnCheck,
   let mut used_resources = HashSet::<ResourceVar>::new();
   let mut real_ops = Vec::<RealTxnOp>::new();
   for op in check.txn_template.iter() {
-    dbg!(&pending_op);
+    // dbg!(&pending_op);
     debug_assert!(pending_inputs.is_disjoint(&used_resources));
     debug_assert!(pending_inputs.is_disjoint(&pending_outputs));
     debug_assert!(pending_outputs.is_disjoint(&used_resources));
@@ -382,7 +382,7 @@ pub fn run_txn_check(check: &TxnCheck,
       }
     }
   }
-  dbg!(&pending_op);
+  // dbg!(&pending_op);
 
   debug_assert!(pending_inputs.is_disjoint(&used_resources));
   debug_assert!(pending_inputs.is_disjoint(&pending_outputs));
@@ -397,7 +397,7 @@ pub fn run_txn_check(check: &TxnCheck,
     pending_op = None;
   }
 
-  dbg!("Built txn template");
+  // dbg!("Built txn template");
 
   debug_assert!(pending_op.is_none());
   debug_assert!(num_inputs + num_outputs == used_resources.len() as u64);
@@ -405,7 +405,7 @@ pub fn run_txn_check(check: &TxnCheck,
     return Err(fail!());
   }
 
-  dbg!("Resource check");
+  // dbg!("Resource check");
   // check that all resources in the index range are used
   for ix in 0..used_resources.len().try_into().map_err(|_| fail!())? {
     if !used_resources.contains(&ResourceVar(ix)) {
@@ -437,10 +437,10 @@ pub fn run_txn_check(check: &TxnCheck,
   res_vars.reserve(used_resources.len());
   let mut res_totals = HashMap::<ResourceVar, Vec<AmountVar>>::new();
 
-  dbg!(&real_ops);
+  // dbg!(&real_ops);
 
   for (target, real) in real_ops.iter().zip(txn.body.operations.iter()) {
-    dbg!("Txn match step");
+    // dbg!("Txn match step");
     match (target, real) {
       (RealTxnOp::Issue(_, outs), Operation::IssueAsset(iss)) => {
         debug_assert!(!outs.is_empty());
@@ -561,7 +561,7 @@ pub fn run_txn_check(check: &TxnCheck,
   let res_vars = res_vars;
   let res_totals = res_totals;
 
-  dbg!(&res_vars);
+  // dbg!(&res_vars);
 
   /*
    * AT THIS POINT we should know:
@@ -578,7 +578,7 @@ pub fn run_txn_check(check: &TxnCheck,
 
   /* Step 1: calculate resource type vars */
   for rt_op in check.rt_ops.iter() {
-    dbg!("RT op");
+    // dbg!("RT op");
     rt_vars.push(match rt_op {
                    ResourceTypeOp::Var(rv) => {
                      let ix: usize = rv.0.try_into().map_err(|_| fail!())?;
@@ -592,13 +592,13 @@ pub fn run_txn_check(check: &TxnCheck,
                                                                       .get_asset_type()
                                                                       .ok_or_else(|| fail!())?,
                  });
-    dbg!(rt_vars.len());
-    dbg!(rt_vars.last());
+    // dbg!(rt_vars.len());
+    // dbg!(rt_vars.last());
   }
 
   /* Step 2: Calculate identity ops */
   for id_op in check.id_ops.iter() {
-    dbg!("ID op");
+    // dbg!("ID op");
     id_vars.push(match id_op {
                    IdOp::Var(iv) => {
                      let ix: usize = iv.0.try_into().map_err(|_| fail!())?;
@@ -635,16 +635,16 @@ pub fn run_txn_check(check: &TxnCheck,
       debug_assert!(needed_amt_ix == 0
                     || needed_amt_ix < amt_vars.len() + (check.amount_ops.len() - amt_ix));
 
-      dbg!(&phase);
-      dbg!(&needed_frac_ix);
-      dbg!(&needed_amt_ix);
-      dbg!(&amt_vars.len());
-      dbg!(&frac_vars.len());
+      // dbg!(&phase);
+      // dbg!(&needed_frac_ix);
+      // dbg!(&needed_amt_ix);
+      // dbg!(&amt_vars.len());
+      // dbg!(&frac_vars.len());
 
       match phase {
         FracAmtPhase::Amt => {
-          dbg!("Amount op");
-          dbg!(check.amount_ops.get(amt_ix));
+          // dbg!("Amount op");
+          // dbg!(check.amount_ops.get(amt_ix));
           match check.amount_ops.get(amt_ix) {
             None => {
               phase = FracAmtPhase::Frac;
@@ -699,8 +699,8 @@ pub fn run_txn_check(check: &TxnCheck,
             }
             Some(AmountOp::Round(round_ix)) => {
               let round_ix = round_ix.0.try_into().map_err(|_| fail!())?;
-              dbg!(&round_ix);
-              dbg!(frac_vars.get(round_ix));
+              // dbg!(&round_ix);
+              // dbg!(frac_vars.get(round_ix));
               match frac_vars.get(round_ix) {
                 Some(fv) => {
                   let fv: &Fraction = fv;
@@ -729,12 +729,12 @@ pub fn run_txn_check(check: &TxnCheck,
               }
             }
           }
-          dbg!(amt_vars.len());
-          dbg!(amt_vars.last());
+          // dbg!(amt_vars.len());
+          // dbg!(amt_vars.last());
         }
         FracAmtPhase::Frac => {
-          dbg!("Frac op");
-          dbg!(check.fraction_ops.get(frac_ix));
+          // dbg!("Frac op");
+          // dbg!(check.fraction_ops.get(frac_ix));
           match check.fraction_ops.get(frac_ix) {
             None => {
               phase = FracAmtPhase::Amt;
@@ -826,8 +826,8 @@ pub fn run_txn_check(check: &TxnCheck,
               }
             }
           }
-          dbg!(frac_vars.len());
-          dbg!(frac_vars.last());
+          // dbg!(frac_vars.len());
+          // dbg!(frac_vars.last());
         }
       }
     }
@@ -845,7 +845,7 @@ pub fn run_txn_check(check: &TxnCheck,
   let mut bool_vars = Vec::<bool>::new();
 
   for op in check.bool_ops.iter() {
-    dbg!("Bool op");
+    // dbg!("Bool op");
     match op {
       BoolOp::Const(v) => {
         bool_vars.push(*v);
@@ -912,7 +912,7 @@ pub fn run_txn_check(check: &TxnCheck,
 
   /* Step 5: check assertions */
   for bv in check.assertions.iter() {
-    dbg!("assertion");
+    // dbg!("assertion");
     let bv: usize = bv.0.try_into().map_err(|_| fail!())?;
     let v: &bool = bool_vars.get(bv).ok_or_else(|| fail!())?;
     if !*v {
@@ -922,11 +922,11 @@ pub fn run_txn_check(check: &TxnCheck,
 
   /* Step 6: check for signatures */
   for iv in check.required_signatures.iter() {
-    dbg!("signature");
+    // dbg!("signature");
     let iv: usize = iv.0.try_into().map_err(|_| fail!())?;
     let v: &XfrPublicKey = id_vars.get(iv).ok_or_else(|| fail!())?;
-    dbg!("has signature?");
-    dbg!(v);
+    // dbg!("has signature?");
+    // dbg!(v);
     txn.check_has_signature(v).map_err(|_| fail!())?;
   }
 
@@ -938,7 +938,7 @@ pub fn run_txn_check(check: &TxnCheck,
 
   // (a), (b)
   for op in real_ops.iter() {
-    dbg!("op check");
+    // dbg!("op check");
     match op {
       // (a)
       RealTxnOp::Issue(rt_ix, outs) => {
@@ -990,7 +990,7 @@ pub fn run_txn_check(check: &TxnCheck,
 
   // (c)
   for (rv, tot_vars) in res_totals.iter() {
-    dbg!("total check");
+    // dbg!("total check");
     if tot_vars.is_empty() {
       return Err(fail!());
     }

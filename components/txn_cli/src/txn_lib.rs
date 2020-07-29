@@ -10,7 +10,7 @@ use ledger::data_model::errors::PlatformError;
 use ledger::data_model::{AssetRules, AssetTypeCode, TransferType, TxOutput, TxoRef, TxoSID};
 use ledger::{des_fail, error_location};
 use ledger_api_service::RestfulLedgerAccess;
-use log::error;
+use log::info;
 use rand_core::{CryptoRng, RngCore};
 use std::process::exit;
 use submission_api::RestfulLedgerUpdate;
@@ -139,11 +139,12 @@ pub fn issue_and_transfer_asset(data_dir: &str,
                                         &ZeiCredential,
                                         &CredCommitmentKey)>,
                                 txn_file: Option<&str>,
+                                memo_file: Option<&str>,
                                 tracing_policy: Option<AssetTracingPolicy>,
                                 identity_commitment: Option<CredCommitment>)
                                 -> Result<TransactionBuilder, PlatformError> {
   // Asset issuance is always nonconfidential
-  let (blind_asset_record, _, owner_memo) =
+  let (blind_asset_record, tracer_memos, owner_memo) =
       get_blind_asset_record_and_memos(issuer_key_pair.get_pk(),
                                        amount,
                                        token_code,
@@ -183,12 +184,16 @@ pub fn issue_and_transfer_asset(data_dir: &str,
   txn_builder.add_operation_issue_asset(issuer_key_pair,
                                         &token_code,
                                         get_and_update_sequence_number(data_dir)?,
-                                        &[(TxOutput(blind_asset_record), owner_memo)])?
+                                        &[(TxOutput(blind_asset_record), owner_memo.clone())])?
              .add_operation(xfr_op)
              .transaction();
 
   if let Some(file) = txn_file {
     store_txn_to_file(file, &txn_builder)?;
+  }
+
+  if let Some(file) = memo_file {
+    store_tracer_and_owner_memos_to_file(file, (tracer_memos, owner_memo))?;
   }
 
   Ok(txn_builder)
@@ -347,8 +352,8 @@ pub fn query_open_asset_record<T>(rest_client: &T,
   where T: RestfulLedgerAccess
 {
   let blind_asset_record = (rest_client.get_utxo(sid)?.utxo.0).0;
-  open_blind_asset_record(&blind_asset_record, owner_memo, key_pair.get_sk_ref()).or_else(|error| {
-                                                Err(PlatformError::ZeiError(error_location!(), error))
+  open_blind_asset_record(&blind_asset_record, owner_memo, key_pair.get_sk_ref()).map_err(|error| {
+                                                PlatformError::ZeiError(error_location!(), error)
                                               })
 }
 
@@ -379,15 +384,15 @@ pub fn init_logging() {
 pub fn match_error_and_exit(error: PlatformError) {
   match error {
     PlatformError::SerializationError(e) => {
-      error!("SerializationError: {}", e);
+      info!("SerializationError: {}", e);
       exit(exitcode::DATAERR);
     }
     PlatformError::DeserializationError(e) => {
-      error!("Deserializationerror: {}", e);
+      info!("Deserializationerror: {}", e);
       exit(exitcode::DATAERR);
     }
     PlatformError::IoError(io_error) => {
-      error!("IoError: {}", io_error);
+      info!("IoError: {}", io_error);
       if io_error.contains("File doesn't exist:") || io_error.contains("Failed to read") {
         exit(exitcode::NOINPUT)
       }
@@ -397,7 +402,7 @@ pub fn match_error_and_exit(error: PlatformError) {
       exit(exitcode::IOERR)
     }
     e => {
-      error!("Error: {}", e);
+      info!("Error: {}", e);
       exit(exitcode::USAGE);
     }
   }
@@ -457,6 +462,7 @@ mod tests {
                                amount,
                                code,
                                AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
+                               None,
                                None,
                                None,
                                None,

@@ -35,7 +35,7 @@ impl Whitelist {
                           commitment: CompressedRistretto,
                           blind: Scalar)
                           -> Result<WhitelistProof, PlatformError> {
-    prove_array_membership(&self.members, index as usize, &commitment, &blind).or_else(|e| Err(PlatformError::ZeiError(error_location!(), e)))
+    prove_array_membership(&self.members, index as usize, &commitment, &blind).map_err(|e| PlatformError::ZeiError(error_location!(), e))
   }
 
   /// Verifies the whitelist membership of a confidential asset transferred in a transaction.
@@ -47,7 +47,7 @@ impl Whitelist {
                            commitment: CompressedRistretto,
                            proof: WhitelistProof)
                            -> Result<(), PlatformError> {
-    verify_array_membership(&self.members, &commitment, &proof).or_else(|e| Err(PlatformError::ZeiError(error_location!(), e)))
+    verify_array_membership(&self.members, &commitment, &proof).map_err(|e| PlatformError::ZeiError(error_location!(), e))
   }
 }
 

@@ -28,11 +28,10 @@ impl TxnForward for TendermintForward {
 
     info!("forward_txn: \'{}\'", &json_rpc);
     let client = reqwest::blocking::Client::new();
-    let _response =
-      client.post("http://localhost:26657")
-            .body(json_rpc)
-            .send()
-            .or_else(|_| Err(PlatformError::SubmissionServerError(error_location!())))?;
+    let _response = client.post("http://localhost:26657")
+                          .body(json_rpc)
+                          .send()
+                          .map_err(|_| PlatformError::SubmissionServerError(error_location!()))?;
     Ok(())
   }
 }
@@ -104,9 +103,8 @@ impl abci::Application for ABCISubmissionServer {
     let mut resp = ResponseDeliverTx::new();
     if let Some(tx) = convert_tx(req.get_tx()) {
       if let Ok(mut la) = self.la.write() {
-        if la.cache_transaction(tx).is_ok() {
-          return resp;
-        }
+        la.cache_transaction(tx);
+        return resp;
       }
     }
     resp.set_code(1);
@@ -152,6 +150,10 @@ impl abci::Application for ABCISubmissionServer {
 fn main() {
   // Tendermint ABCI port
   flexi_logger::Logger::with_env().start().unwrap();
+  info!(concat!("Build: ",
+                env!("VERGEN_SHA_SHORT"),
+                " ",
+                env!("VERGEN_COMMIT_DATE")));
   let base_dir = std::env::var_os("LEDGER_DIR").filter(|x| !x.is_empty());
   let base_dir = base_dir.as_ref().map(Path::new);
   let app = ABCISubmissionServer::new(base_dir).unwrap();
