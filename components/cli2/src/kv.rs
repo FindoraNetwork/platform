@@ -36,7 +36,7 @@ pub enum KVError {
     backtrace: Backtrace,
   },
   #[snafu(display("Attempted to call KVStore::with on a key that doesn't exist: {}", key))]
-  WithInvailidKey { backtrace: Backtrace, key: String },
+  WithInvalidKey { backtrace: Backtrace, key: String },
 }
 
 type Result<T, E = KVError> = std::result::Result<T, E>;
@@ -98,7 +98,6 @@ impl KVStore {
   pub fn get<T: HasTable>(&self, id: &T::Key) -> Result<Option<T>> {
     // Check if the table exists
     let table = T::TABLE_NAME.to_string();
-    println!("{}", table);
     if !self.table_exists::<T>()? {
       return Ok(None);
     }
@@ -205,8 +204,8 @@ impl KVStore {
       Ok(())
     } else {
       let key_string = serde_json::to_string(&key).expect("JSON serialization failed");
-      Err(KVError::WithInvailidKey { backtrace: Backtrace::generate(),
-                                     key: key_string })
+      Err(KVError::WithInvalidKey { backtrace: Backtrace::generate(),
+                                    key: key_string })
     }
   }
 
@@ -228,15 +227,21 @@ impl KVStore {
 
 impl CliDataStore for KVStore {
   fn get_config(&self) -> Result<crate::CliConfig, CliError> {
-    let config = self.get(&())?;
+    let config = self.get(&String::from("config"))?;
     if let Some(config) = config {
       Ok(config)
     } else {
-      Ok(crate::CliConfig::default())
+      self.set(&String::from("config"), crate::CliConfig::default())?;
+      Ok(self.get(&String::from("config"))?
+             .ok_or(KVError::WithInvalidKey { backtrace: Backtrace::generate(),
+                                              key: "config".to_string() })?)
     }
   }
   fn update_config<F: FnOnce(&mut crate::CliConfig)>(&mut self, f: F) -> Result<(), CliError> {
-    Ok(self.with(&(), f)?)
+    let mut current = self.get_config()?;
+    f(&mut current);
+    self.set(&String::from("config"), current)?;
+    Ok(())
   }
   fn get_keypairs(&self)
                   -> Result<HashMap<crate::KeypairName, zei::xfr::sig::XfrKeyPair>, CliError> {
@@ -295,7 +300,7 @@ impl CliDataStore for KVStore {
                        k_new: &crate::TxnName)
                        -> Result<ledger::data_model::Transaction, CliError> {
     let builder = self.delete::<TransactionBuilder>(k_orig)?.ok_or_else(|| {
-                                                               KVError::WithInvailidKey{
+                                                               KVError::WithInvalidKey{
               backtrace: Backtrace::generate(),
               key: serde_json::to_string(k_orig).expect("JSON serialization failed")}
                                                              })?;
