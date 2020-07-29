@@ -662,6 +662,10 @@ fn main() -> Result<(), CliError> {
         *conf = prompt_for_config(None).unwrap();
       })
       .unwrap();
+
+    if let Actions::Setup { .. } = action {
+      return Ok(());
+    }
   }
 
   run_action(action, &mut db);
