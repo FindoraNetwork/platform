@@ -69,7 +69,7 @@ impl HasTable for (Transaction, TxnMetadata) {
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize, Hash, Default)]
 pub struct TxnBuilderName(pub String);
 
-impl HasTable for TransactionBuilder {
+impl HasTable for TxnBuilderEntry {
   const TABLE_NAME: &'static str = "transaction_builders";
   type Key = TxnBuilderName;
 }
