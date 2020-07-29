@@ -13,7 +13,7 @@ use submission_server::{TxnHandle, TxnStatus};
 use txn_builder::{BuildsTransactions, TransactionBuilder};
 use zei::xfr::structs::OpenAssetRecord;
 // use std::rc::Rc;
-use promptly::prompt_default;
+use promptly::{prompt, prompt_default};
 use utils::Serialized;
 
 pub mod kv;
@@ -472,10 +472,10 @@ enum Actions {
 }
 
 fn run_action<S: CliDataStore>(action: Actions, store: &mut S) {
-  println!("{:?}", action);
+  // println!("{:?}", action);
 
   store.update_config(|conf| {
-         println!("Opened {} times before", conf.open_count);
+         // println!("Opened {} times before", conf.open_count);
          conf.open_count += 1;
        })
        .unwrap();
@@ -488,8 +488,9 @@ fn run_action<S: CliDataStore>(action: Actions, store: &mut S) {
            .unwrap();
       store.add_key_pair(&KeypairName(nick.to_string()), kp)
            .unwrap();
-      println!("New key added for `{}`", nick);
+      println!("New key pair added for `{}`", nick);
     }
+
     ListKeypair { nick } => {
       let kp = store.get_keypair(&KeypairName(nick.to_string())).unwrap();
       let kp = kp.map(|x| serde_json::to_string(&x).unwrap())
@@ -497,11 +498,41 @@ fn run_action<S: CliDataStore>(action: Actions, store: &mut S) {
       println!("{}", kp);
     }
     ListPublicKey { nick } => {
-      let kp = store.get_pubkey(&PubkeyName(nick.to_string())).unwrap();
-      let kp = kp.map(|x| serde_json::to_string(&x).unwrap())
+      let pk = store.get_pubkey(&PubkeyName(nick.to_string())).unwrap();
+      let pk = pk.map(|x| serde_json::to_string(&x).unwrap())
                  .unwrap_or(format!("No public key with name {} found", nick));
-      println!("{}", kp);
+      println!("{}", pk);
     }
+
+    LoadKeypair { nick } => {
+      match serde_json::from_str::<XfrKeyPair>(&prompt::<String,_>(format!("Please paste in the key pair for `{}`",nick)).unwrap()) {
+        Err(e) => {
+          eprintln!("Could not parse key pair: {}",e);
+          std::process::exit(-1);
+        }
+        Ok(kp) => {
+          store.add_public_key(&PubkeyName(nick.to_string()), *kp.get_pk_ref())
+            .unwrap();
+          store.add_key_pair(&KeypairName(nick.to_string()), kp)
+              .unwrap();
+          println!("New key pair added for `{}`", nick);
+        }
+      }
+    }
+    LoadPublicKey { nick } => {
+      match serde_json::from_str(&prompt::<String,_>(format!("Please paste in the public key for `{}`",nick)).unwrap()) {
+        Err(e) => {
+          eprintln!("Could not parse key pair: {}",e);
+          std::process::exit(-1);
+        }
+        Ok(pk) => {
+          store.add_public_key(&PubkeyName(nick.to_string()), pk)
+            .unwrap();
+          println!("New public key added for `{}`", nick);
+        }
+      }
+    }
+
     DeleteKeypair { nick } => {
       let kp = store.get_keypair(&KeypairName(nick.to_string())).unwrap();
       match kp {
