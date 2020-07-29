@@ -16,6 +16,8 @@ use zei::xfr::structs::OpenAssetRecord;
 use promptly::prompt_default;
 use utils::Serialized;
 
+pub mod kv;
+
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize, Default)]
 struct CliConfig {
   pub ledger_server: String,
