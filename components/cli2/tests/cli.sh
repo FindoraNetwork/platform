@@ -15,3 +15,10 @@ rm -f $FINDORA_STORE_FILE
   [ "$status" -eq 0 ]
   [ "${lines[0]}" = 'New public key added for `bob`' ]
 }
+
+@test "issue an asset" {
+   skip "Not implemented yet"
+  run $CLI2 issue-asset alice AliceCoin 20
+  [ "$status" -eq 0 ]
+  [ "${lines[0]}" = '' ]
+}
