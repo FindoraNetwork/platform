@@ -13,12 +13,40 @@ use submission_server::{TxnHandle, TxnStatus};
 use txn_builder::{BuildsTransactions, TransactionBuilder};
 use zei::xfr::structs::{OpenAssetRecord, OwnerMemo};
 // use std::rc::Rc;
+use ledger_api_service::LedgerAccessRoutes;
 use promptly::{prompt, prompt_default};
+use std::process::exit;
+use utils::NetworkRoute;
 use utils::Serialized;
 
 pub mod kv;
 
 use kv::{HasTable, KVError};
+
+pub struct FreshNamer {
+  base: String,
+  i: u64,
+  delim: String,
+}
+
+impl FreshNamer {
+  pub fn new(base: String, delim: String) -> Self {
+    Self { base, i: 0, delim }
+  }
+}
+
+impl Iterator for FreshNamer {
+  type Item = String;
+  fn next(&mut self) -> Option<String> {
+    let ret = if self.i == 0 {
+      self.base.clone()
+    } else {
+      format!("{}{}{}", self.base, self.delim, self.i - 1)
+    };
+    self.i += 1;
+    Some(ret)
+  }
+}
 
 fn default_sub_server() -> String {
   "https://testnet.findora.org/submit_server".to_string()
@@ -44,6 +72,9 @@ impl HasTable for CliConfig {
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize, Hash, Default)]
 pub struct KeypairName(pub String);
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize, Hash, Default)]
+pub struct AssetTypeName(pub String);
 
 impl HasTable for XfrKeyPair {
   const TABLE_NAME: &'static str = "key_pairs";
@@ -114,30 +145,47 @@ impl std::convert::From<KVError> for CliError {
   }
 }
 
-// impl std::convert::From<std::option::NoneError> for CliError {
-//     fn from(error: std::option::NoneError) -> Self {
-//         CliError::OtherError(format!("{:?}", &error))
-//     }
-// }
-// impl<T> From<T: std::error::Error> for CliError {
-//   fn from(error: T) -> Self {
-//     CliError::OtherError(format!("{:?}", &error))
-//   }
-// }
-
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize, Default)]
 struct TxnMetadata {
   handle: Option<TxnHandle>,
   status: Option<TxnStatus>,
+  new_asset_types: HashMap<String, AssetTypeEntry>,
+  // new_txos: HashMap<String, TxoCacheEntry>,
+  // spent_txos: HashMap<String>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 struct TxoCacheEntry {
-  sid: TxoSID,
+  sid: Option<TxoSID>,
   record: TxOutput,
   owner_memo: Option<OwnerMemo>,
   opened_record: Option<OpenAssetRecord>,
   unspent: bool,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+struct AssetTypeEntry {
+  asset: AssetType,
+  issuer_nick: Option<String>,
+}
+
+fn display_asset_type(indent_level: u64, ent: &AssetTypeEntry) {
+  let ind = {
+    let mut ret: String = Default::default();
+    for _ in 0..indent_level {
+      ret = format!("{}{}", ret, " ");
+    }
+    ret
+  };
+  println!("{}issuer nickname: {}",
+           ind,
+           ent.issuer_nick
+              .clone()
+              .unwrap_or_else(|| "<UNKNOWN>".to_string()));
+  println!("{}issuer public key: {}",
+           ind,
+           serde_json::to_string(&ent.asset.properties.issuer.key).unwrap());
+  println!("{}code: {}", ind, ent.asset.properties.code.to_base64());
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -183,6 +231,15 @@ trait CliDataStore {
   fn get_cached_txo(&self, k: &TxoName) -> Result<Option<TxoCacheEntry>, CliError>;
   fn delete_cached_txo(&mut self, k: &TxoName) -> Result<(), CliError>;
   fn cache_txo(&mut self, k: &TxoName, ent: TxoCacheEntry) -> Result<(), CliError>;
+
+  fn get_asset_types(&self) -> Result<HashMap<AssetTypeName, AssetTypeEntry>, CliError>;
+  fn get_asset_type(&self, k: &AssetTypeName) -> Result<Option<AssetTypeEntry>, CliError>;
+  fn update_asset_type<F: FnOnce(&mut AssetTypeEntry)>(&mut self,
+                                                       k: &AssetTypeName,
+                                                       f: F)
+                                                       -> Result<(), CliError>;
+  fn delete_asset_type(&self, k: &AssetTypeName) -> Result<Option<AssetTypeEntry>, CliError>;
+  fn add_asset_type(&self, k: &AssetTypeName, ent: AssetTypeEntry) -> Result<(), CliError>;
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, Default)]
@@ -193,6 +250,7 @@ struct SimpleCliData {
   pub built_txns: HashMap<TxnName, (Transaction, TxnMetadata)>,
   pub builders: HashMap<TxnBuilderName, TxnBuilderEntry>,
   pub txos: HashMap<TxoName, TxoCacheEntry>,
+  pub asset_types: HashMap<AssetTypeName, AssetTypeEntry>,
 }
 
 struct SimpleCliDataStore {
@@ -421,6 +479,39 @@ impl CliDataStore for SimpleCliDataStore {
        .unwrap_or(Ok(()))?;
     self.write_data(dat)
   }
+
+  fn get_asset_types(&self) -> Result<HashMap<AssetTypeName, AssetTypeEntry>, CliError> {
+    Ok(self.read_data()?.asset_types)
+  }
+  fn get_asset_type(&self, k: &AssetTypeName) -> Result<Option<AssetTypeEntry>, CliError> {
+    Ok(self.read_data()?.asset_types.get(k).cloned())
+  }
+  fn update_asset_type<F: FnOnce(&mut AssetTypeEntry)>(&mut self,
+                                                       k: &AssetTypeName,
+                                                       f: F)
+                                                       -> Result<(), CliError> {
+    use CliError::*;
+    let mut dat = self.read_data()?;
+    f(dat.asset_types
+         .get_mut(k)
+         .ok_or_else(|| KeyNotFound(error_location!()))?);
+    self.write_data(dat)
+  }
+  fn delete_asset_type(&self, k: &AssetTypeName) -> Result<Option<AssetTypeEntry>, CliError> {
+    let mut dat = self.read_data()?;
+    let ret = dat.asset_types.remove(k);
+    self.write_data(dat)?;
+    Ok(ret)
+  }
+  fn add_asset_type(&self, k: &AssetTypeName, ent: AssetTypeEntry) -> Result<(), CliError> {
+    use CliError::*;
+    let mut dat = self.read_data()?;
+    dat.asset_types
+       .insert(k.clone(), ent)
+       .map(|x| Err(AlreadyExists(format!("[{}] {:?}", error_location!(), x))))
+       .unwrap_or(Ok(()))?;
+    self.write_data(dat)
+  }
 }
 
 #[derive(StructOpt, Debug)]
@@ -475,6 +566,18 @@ enum Actions {
   DeletePublicKey {
     /// Identity nickname
     nick: String,
+  },
+
+  ListAssetTypes {},
+  ListAssetType {
+    /// Asset type nickname
+    nick: String,
+  },
+  QueryAssetType {
+    /// Asset type nickname
+    nick: String,
+    /// Asset type code (b64)
+    code: String,
   },
 
   PrepareTransaction {
@@ -575,7 +678,7 @@ fn run_action<S: CliDataStore>(action: Actions, store: &mut S) {
       match serde_json::from_str::<XfrKeyPair>(&prompt::<String,_>(format!("Please paste in the key pair for `{}`",nick)).unwrap()) {
         Err(e) => {
           eprintln!("Could not parse key pair: {}",e);
-          std::process::exit(-1);
+          exit(-1);
         }
         Ok(kp) => {
           store.add_public_key(&PubkeyName(nick.to_string()), *kp.get_pk_ref())
@@ -590,7 +693,7 @@ fn run_action<S: CliDataStore>(action: Actions, store: &mut S) {
       match serde_json::from_str(&prompt::<String,_>(format!("Please paste in the public key for `{}`",nick)).unwrap()) {
         Err(e) => {
           eprintln!("Could not parse key pair: {}",e);
-          std::process::exit(-1);
+          exit(-1);
         }
         Ok(pk) => {
           store.add_public_key(&PubkeyName(nick.to_string()), pk)
@@ -605,7 +708,7 @@ fn run_action<S: CliDataStore>(action: Actions, store: &mut S) {
       match kp {
         None => {
           eprintln!("No keypair with name `{}` found", nick);
-          std::process::exit(-1);
+          exit(-1);
         }
         Some(_) => {
           if prompt_default(format!("Are you sure you want to delete keypair `{}`?", nick),
@@ -627,12 +730,12 @@ fn run_action<S: CliDataStore>(action: Actions, store: &mut S) {
       match (pk, kp) {
         (None, _) => {
           eprintln!("No public key with name `{}` found", nick);
-          std::process::exit(-1);
+          exit(-1);
         }
         (Some(_), Some(_)) => {
           eprintln!("`{}` is a keypair. Please use delete-keypair instead.",
                     nick);
-          std::process::exit(-1);
+          exit(-1);
         }
         (Some(_), None) => {
           if prompt_default(format!("Are you sure you want to delete public key `{}`?", nick),
@@ -644,6 +747,52 @@ fn run_action<S: CliDataStore>(action: Actions, store: &mut S) {
         }
       }
     }
+
+    ListAssetTypes {} => {
+        for (nick,a) in store.get_asset_types().unwrap().into_iter() {
+            println!("Asset `{}`",nick.0);
+            display_asset_type(1,&a);
+        }
+    }
+
+    ListAssetType { nick } => {
+        let a = store.get_asset_type(&AssetTypeName(nick.clone())).unwrap();
+        match a {
+            None => {
+                eprintln!("`{}` does not refer to any known asset type",
+                            nick);
+                exit(-1);
+            }
+            Some(a) => {
+                display_asset_type(0,&a);
+            }
+        }
+    }
+
+    QueryAssetType { nick, code } => {
+        let conf = store.get_config().unwrap();
+        let code_b64 = code.clone();
+        let _ = AssetTypeCode::new_from_base64(&code).unwrap();
+        let query = format!("{}{}/{}",conf.ledger_server,LedgerAccessRoutes::AssetToken.route(),code_b64);
+        let resp: AssetType;
+        match reqwest::blocking::get(&query) {
+            Err(e) => {
+                eprintln!("Request `{}` failed: {}",query,e);
+                exit(-1);
+            }
+            Ok(v) => match v.json::<AssetType>() {
+                Err(e) => {
+                    eprintln!("Failed to parse response: {}",e);
+                    exit(-1);
+                }
+                Ok(v) => { resp = v; }
+            }
+        }
+        let ret = AssetTypeEntry { asset: resp, issuer_nick: None };
+        store.add_asset_type(&AssetTypeName(nick.clone()),ret).unwrap();
+        println!("Asset type `{}` saved as `{}`", code_b64, nick);
+    }
+
     _ => {
       unimplemented!();
     }

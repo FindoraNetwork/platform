@@ -19,7 +19,7 @@ submission_api = { path = "../submission_api" }
 submission_server = { path = "../submission_server" }
 rand = "0.7.3"
 promptly = "0.3.0"
-reqwest = "0.9.24"
+reqwest = { version = "0.10", features = ["blocking", "json"] }
 rusqlite = { version = "0.23.1", features = ["bundled"] }
 serde = "1.0.114"
 serde_derive = "1.0"

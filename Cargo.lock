@@ -1000,7 +1000,7 @@ dependencies = [
  "network",
  "promptly",
  "rand 0.7.3",
- "reqwest 0.9.24",
+ "reqwest 0.10.6",
  "rusqlite",
  "rustyline",
  "serde",

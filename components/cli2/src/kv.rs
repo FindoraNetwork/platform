@@ -6,7 +6,7 @@ use std::hash::Hash;
 use std::path::{Path, PathBuf};
 use txn_builder::{BuildsTransactions, TransactionBuilder};
 
-use crate::{CliDataStore, CliError, TxnBuilderEntry};
+use crate::{AssetTypeEntry, AssetTypeName, CliDataStore, CliError, TxnBuilderEntry};
 
 /// Possible errors encountered when dealing with a KVStore
 #[derive(Debug, Snafu)]
@@ -342,6 +342,30 @@ impl CliDataStore for KVStore {
   }
   fn cache_txo(&mut self, k: &crate::TxoName, ent: crate::TxoCacheEntry) -> Result<(), CliError> {
     Ok(self.set(k, ent).map(|_| ())?)
+  }
+
+  #[allow(unused_variables)]
+  fn get_asset_types(&self) -> Result<HashMap<AssetTypeName, AssetTypeEntry>, CliError> {
+    unimplemented!();
+  }
+  #[allow(unused_variables)]
+  fn get_asset_type(&self, k: &AssetTypeName) -> Result<Option<AssetTypeEntry>, CliError> {
+    unimplemented!();
+  }
+  #[allow(unused_variables)]
+  fn update_asset_type<F: FnOnce(&mut AssetTypeEntry)>(&mut self,
+                                                       k: &AssetTypeName,
+                                                       f: F)
+                                                       -> Result<(), CliError> {
+    unimplemented!();
+  }
+  #[allow(unused_variables)]
+  fn delete_asset_type(&self, k: &AssetTypeName) -> Result<Option<AssetTypeEntry>, CliError> {
+    unimplemented!();
+  }
+  #[allow(unused_variables)]
+  fn add_asset_type(&self, k: &AssetTypeName, ent: AssetTypeEntry) -> Result<(), CliError> {
+    unimplemented!();
   }
 }
 
