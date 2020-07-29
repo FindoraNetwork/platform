@@ -13,8 +13,6 @@ pub enum KVError {
     path: PathBuf,
     backtrace: Backtrace,
   },
-  #[snafu(display("Table {} has not yet been created", table))]
-  NoSuchTable { table: String },
   #[snafu(display("Failed preparing SQL statement \"{}\": {}", statement, source))]
   Prepare {
     source: rusqlite::Error,
@@ -96,7 +94,7 @@ impl KVStore {
     let table = T::TABLE_NAME.to_string();
     println!("{}", table);
     if !self.table_exists::<T>()? {
-      return Err(KVError::NoSuchTable { table });
+      return Ok(None);
     }
     // Stringify the key
     // TODO(Nathan M): Should we handle the case where serialization fails? That should
