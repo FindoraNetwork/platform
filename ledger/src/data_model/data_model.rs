@@ -353,6 +353,7 @@ pub struct Asset {
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+// Note: if the properties field of this struct is changed, update the comment for AssetType::from_json in wasm_data_model.rs as well.
 pub struct AssetType {
   pub properties: Asset,
   pub digest: [u8; 32],
@@ -921,6 +922,7 @@ impl AuthenticatedAIRResult {
 }
 
 #[derive(Clone, Serialize, Deserialize)]
+// Note: if the utxo field of this struct is changed, update the comment for ClientAssetRecord::from_json in wasm_data_model.rs as well.
 pub struct AuthenticatedUtxo {
   pub utxo: Utxo,                                          // Utxo to authenticate
   pub authenticated_txn: AuthenticatedTransaction, // Merkle proof that transaction containing the utxo exists on the ledger

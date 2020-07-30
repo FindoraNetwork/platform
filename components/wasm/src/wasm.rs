@@ -51,7 +51,9 @@ pub fn build_id() -> String {
 
 #[wasm_bindgen]
 /// Generates random base64 encoded asset type string. Used in asset definitions.
-/// @see {@link TransactionBuilder#add_operation_create_asset} for instructions on how to define an asset with a new
+/// @see {@link
+/// module:Findora-Wasm~TransactionBuilder#add_operation_create_asset|add_operation_create_asset}
+/// for instructions on how to define an asset with a new
 /// asset type
 pub fn random_asset_type() -> String {
   AssetTypeCode::gen_random().to_base64()
@@ -69,8 +71,9 @@ pub fn asset_type_from_jsvalue(val: &JsValue) -> Result<String, JsValue> {
 /// hashes up to the state commitment and false otherwise.
 /// @param {string} state_commitment - String representing the state commitment.
 /// @param {string} authenticated_txn - String representing the transaction.
-/// @see {@link get_transaction} for instructions on fetching a transaction from the ledger.
-/// @see {@link get_state_commitment} for instructions on fetching a ledger state commitment.
+/// @see {@link module:Network~Network#getTxn|Network.getTxn} for instructions on fetching a transaction from the ledger.
+/// @see {@link module:Network~Network#getStateCommitment|Network.getStateCommitment}
+/// for instructions on fetching a ledger state commitment.
 /// @throws Will throw an error if the state commitment or the transaction fails to deserialize.
 pub fn verify_authenticated_txn(state_commitment: String,
                                 authenticated_txn: String)
@@ -318,7 +321,7 @@ impl TransactionBuilder {
   /// @param {CredIssuerPublicKey} issuer_public_key - Public key of the credential issuer.
   /// @param {CredentialCommitment} commitment - Credential commitment to add to the address identity registry.
   /// @param {CredPoK} pok- Proof that a credential commitment is a valid re-randomization.
-  /// @see {@link wasm_credential_commit} for information about how to generate a credential
+  /// @see {@link module:Findora-Wasm.wasm_credential_commit|wasm_credential_commit} for information about how to generate a credential
   /// commitment.
   pub fn add_operation_air_assign(mut self,
                                   key_pair: &XfrKeyPair,
@@ -382,7 +385,7 @@ impl TransactionBuilder {
   /// @param {String} key - The base64-encoded token code of the asset whose memo will be updated.
   /// transaction validates.
   /// @param {String} new_memo - The new asset memo.
-  /// @see {@link AssetRules#set_updatable|AssetRules.set_updatable} for more information about how
+  /// @see {@link module:Findora-Wasm~AssetRules#set_updatable|AssetRules.set_updatable} for more information about how
   /// to define an updatable asset.
   pub fn add_operation_update_memo(mut self,
                                    auth_key_pair: &XfrKeyPair,
@@ -401,7 +404,7 @@ impl TransactionBuilder {
 
   /// Adds a serialized transfer asset operation to a transaction builder instance.
   /// @param {string} op - a JSON-serialized transfer operation.
-  /// @see {@link TransferOperationBuilder} for details on constructing a transfer operation.
+  /// @see {@link module:Findora-Wasm~TransferOperationBuilder} for details on constructing a transfer operation.
   /// @throws Will throw an error if `op` fails to deserialize.
   pub fn add_transfer_operation(mut self, op: String) -> Result<TransactionBuilder, JsValue> {
     let op = serde_json::from_str::<Operation>(&op).map_err(error_to_jsvalue)?;
@@ -526,9 +529,10 @@ impl TransferOperationBuilder {
   /// assets.
   /// @param {XfrKeyPair} key - Key pair associated with the input.
   /// @param {BigInt} amount - Amount of input record to transfer.
-  /// @see {@link create_absolute_txo_ref} or {@link create_relative_txo_ref} for details on txo
+  /// @see {@link module:Findora-Wasm~TxoRef#create_absolute_txo_ref|TxoRef.create_absolute_txo_ref}
+  /// or {@link module:Findora-Wasm~TxoRef#create_relative_txo_ref|TxoRef.create_relative_txo_ref} for details on txo
   /// references.
-  /// @see {@link get_txo} for details on fetching blind asset records.
+  /// @see {@link module:Findora-Network~Network#getUtxo|Network.getUtxo} for details on fetching blind asset records.
   /// @throws Will throw an error if `oar` or `txo_ref` fail to deserialize.
   pub fn add_input_with_tracking(self,
                                  txo_ref: TxoRef,
@@ -552,9 +556,9 @@ impl TransferOperationBuilder {
   /// @param {OwnerMemo} owner_memo - Opening parameters.
   /// @param {XfrKeyPair} key - Key pair associated with the input.
   /// @param {BigInt} amount - Amount of input record to transfer
-  /// @see {@link create_absolute_txo_ref} or {@link create_relative_txo_ref} for details on txo
+  /// or {@link module:Findora-Wasm~TxoRef#create_relative_txo_ref|TxoRef.create_relative_txo_ref} for details on txo
   /// references.
-  /// @see {@link get_txo} for details on fetching blind asset records.
+  /// @see {@link module:Findora-Network~Network#getUtxo|Network.getUtxo} for details on fetching blind asset records.
   /// @throws Will throw an error if `oar` or `txo_ref` fail to deserialize.
   // Note: these two functions are necessary because Wasm cannot handle optional references and I
   // don't want any of the functions to take ownership of the tracing key.
@@ -675,7 +679,7 @@ impl TransferOperationBuilder {
 /// @param {ClientAssetRecord} record - Owner record.
 /// @param {OwnerMemo} owner_memo - Owner memo of the associated record.
 /// @param {XfrKeyPair} keypair - Keypair of asset owner.
-/// @see {@link ClientAssetRecord#from_json_record} for information about how to construct an asset record object
+/// @see {@link module:Findora-Wasm~ClientAssetRecord#from_json_record|ClientAssetRecord.from_json_record} for information about how to construct an asset record object
 /// from a JSON result returned from the ledger server.
 pub fn open_client_asset_record(record: &ClientAssetRecord,
                                 owner_memo: Option<OwnerMemo>,
