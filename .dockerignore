@@ -1,6 +1,6 @@
 .dockerignore
 .DS_Store
-.git
+.git/objects/*
 .gitignore
 Dockerfile
 Jenkinsfile
