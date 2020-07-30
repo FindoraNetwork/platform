@@ -1,7 +1,7 @@
 use rusqlite::{params, Connection};
 use serde::{de::DeserializeOwned, Serialize};
 use snafu::{Backtrace, GenerateBacktrace, ResultExt, Snafu};
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 use std::hash::Hash;
 use std::path::{Path, PathBuf};
 use txn_builder::{BuildsTransactions, TransactionBuilder};
@@ -49,7 +49,7 @@ type Result<T, E = KVError> = std::result::Result<T, E>;
 /// Internal trait for mapping types to their tables
 pub trait HasTable: Serialize + DeserializeOwned {
   const TABLE_NAME: &'static str;
-  type Key: Serialize + DeserializeOwned + Hash + Eq;
+  type Key: Serialize + DeserializeOwned + Hash + Ord + PartialOrd + Eq;
 }
 
 /// Implements a view over a sqlite database as a KV store, where each type has its
@@ -155,13 +155,13 @@ impl KVStore {
   }
 
   /// Returns all the Key/Value pairs for a type
-  pub fn get_all<T: HasTable>(&self) -> Result<HashMap<T::Key, T>> {
+  pub fn get_all<T: HasTable>(&self) -> Result<BTreeMap<T::Key, T>> {
     // Check if the table exists, and exit early with an empty map if it doesn't
     if !self.table_exists::<T>()? {
-      return Ok(HashMap::new());
+      return Ok(BTreeMap::new());
     }
     // Get ourself a fresh hashmap to put our K/Vs in
-    let mut ret = HashMap::new();
+    let mut ret = BTreeMap::new();
     // Grab our rows from the db
     let get_all_query = format!("select * from {};", T::TABLE_NAME);
     let mut stmt = self.db
@@ -262,7 +262,7 @@ impl CliDataStore for KVStore {
     Ok(())
   }
   fn get_keypairs(&self)
-                  -> Result<HashMap<crate::KeypairName, zei::xfr::sig::XfrKeyPair>, CliError> {
+                  -> Result<BTreeMap<crate::KeypairName, zei::xfr::sig::XfrKeyPair>, CliError> {
     Ok(self.get_all()?)
   }
   fn get_keypair(&self,
@@ -276,7 +276,7 @@ impl CliDataStore for KVStore {
     Ok(self.delete(k)?)
   }
   fn get_pubkeys(&self)
-                 -> Result<HashMap<crate::PubkeyName, zei::xfr::sig::XfrPublicKey>, CliError> {
+                 -> Result<BTreeMap<crate::PubkeyName, zei::xfr::sig::XfrPublicKey>, CliError> {
     Ok(self.get_all()?)
   }
   fn get_pubkey(&self,
@@ -303,7 +303,7 @@ impl CliDataStore for KVStore {
   }
   fn get_built_transactions(
     &self)
-    -> Result<HashMap<crate::TxnName, (ledger::data_model::Transaction, crate::TxnMetadata)>,
+    -> Result<BTreeMap<crate::TxnName, (ledger::data_model::Transaction, crate::TxnMetadata)>,
               CliError> {
     Ok(self.get_all()?)
   }
@@ -350,7 +350,7 @@ impl CliDataStore for KVStore {
                                   signers: Default::default() })
            .map(|_| ())?)
   }
-  fn get_txn_builders(&self) -> Result<HashMap<crate::TxnBuilderName, TxnBuilderEntry>, CliError> {
+  fn get_txn_builders(&self) -> Result<BTreeMap<crate::TxnBuilderName, TxnBuilderEntry>, CliError> {
     Ok(self.get_all()?)
   }
   fn get_txn_builder(&self,
@@ -366,7 +366,7 @@ impl CliDataStore for KVStore {
     -> Result<(), CliError> {
     Ok(self.with(k, f)?)
   }
-  fn get_cached_txos(&self) -> Result<HashMap<crate::TxoName, crate::TxoCacheEntry>, CliError> {
+  fn get_cached_txos(&self) -> Result<BTreeMap<crate::TxoName, crate::TxoCacheEntry>, CliError> {
     Ok(self.get_all()?)
   }
   fn get_cached_txo(&self, k: &crate::TxoName) -> Result<Option<crate::TxoCacheEntry>, CliError> {
@@ -379,7 +379,7 @@ impl CliDataStore for KVStore {
     Ok(self.set(k, ent).map(|_| ())?)
   }
 
-  fn get_asset_types(&self) -> Result<HashMap<AssetTypeName, AssetTypeEntry>, CliError> {
+  fn get_asset_types(&self) -> Result<BTreeMap<AssetTypeName, AssetTypeEntry>, CliError> {
     Ok(self.get_all()?)
   }
   fn get_asset_type(&self, k: &AssetTypeName) -> Result<Option<AssetTypeEntry>, CliError> {
@@ -408,7 +408,7 @@ mod tests {
   // Define a few test types
   #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize, Hash, Default)]
   struct TypeA(String);
-  #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize, Hash, Default)]
+  #[derive(Ord, PartialOrd, Clone, Debug, Eq, PartialEq, Serialize, Deserialize, Hash, Default)]
   struct TypeAKey(String);
   impl HasTable for TypeA {
     const TABLE_NAME: &'static str = "type_a";
@@ -417,7 +417,7 @@ mod tests {
 
   #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize, Hash, Default)]
   struct TypeB(String);
-  #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize, Hash, Default)]
+  #[derive(Ord, PartialOrd, Clone, Debug, Eq, PartialEq, Serialize, Deserialize, Hash, Default)]
   struct TypeBKey(String);
   impl HasTable for TypeB {
     const TABLE_NAME: &'static str = "type_b";
@@ -457,7 +457,7 @@ mod tests {
   #[test]
   fn get_all() -> Result<()> {
     // Generate some K/V Pairs
-    let mut pairs = HashMap::new();
+    let mut pairs = BTreeMap::new();
     for i in 0..10 {
       let k = TypeAKey(format!("key-{}", i));
       let v = TypeA(format!("value-{}", i));

@@ -3,7 +3,7 @@
 use ledger::data_model::*;
 use serde::{Deserialize, Serialize};
 use snafu::{Backtrace, OptionExt, ResultExt, Snafu};
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 use std::env;
 use std::fs;
 use structopt::StructOpt;
@@ -80,7 +80,7 @@ impl HasTable for CliConfig {
   type Key = String;
 }
 
-#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize, Hash, Default)]
+#[derive(Ord, PartialOrd, Clone, Debug, Eq, PartialEq, Serialize, Deserialize, Hash, Default)]
 pub struct AssetTypeName(pub String);
 
 impl HasTable for AssetTypeEntry {
@@ -88,7 +88,7 @@ impl HasTable for AssetTypeEntry {
   type Key = AssetTypeName;
 }
 
-#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize, Hash, Default)]
+#[derive(Ord, PartialOrd, Clone, Debug, Eq, PartialEq, Serialize, Deserialize, Hash, Default)]
 pub struct KeypairName(pub String);
 
 impl HasTable for XfrKeyPair {
@@ -96,7 +96,7 @@ impl HasTable for XfrKeyPair {
   type Key = KeypairName;
 }
 
-#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize, Hash, Default)]
+#[derive(Ord, PartialOrd, Clone, Debug, Eq, PartialEq, Serialize, Deserialize, Hash, Default)]
 pub struct PubkeyName(pub String);
 
 impl HasTable for XfrPublicKey {
@@ -104,7 +104,7 @@ impl HasTable for XfrPublicKey {
   type Key = PubkeyName;
 }
 
-#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize, Hash, Default)]
+#[derive(Ord, PartialOrd, Clone, Debug, Eq, PartialEq, Serialize, Deserialize, Hash, Default)]
 pub struct TxnName(pub String);
 
 impl HasTable for (Transaction, TxnMetadata) {
@@ -112,7 +112,7 @@ impl HasTable for (Transaction, TxnMetadata) {
   type Key = TxnName;
 }
 
-#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize, Hash, Default)]
+#[derive(Ord, PartialOrd, Clone, Debug, Eq, PartialEq, Serialize, Deserialize, Hash, Default)]
 pub struct TxnBuilderName(pub String);
 
 impl HasTable for TxnBuilderEntry {
@@ -120,7 +120,7 @@ impl HasTable for TxnBuilderEntry {
   type Key = TxnBuilderName;
 }
 
-#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize, Hash, Default)]
+#[derive(Ord, PartialOrd, Clone, Debug, Eq, PartialEq, Serialize, Deserialize, Hash, Default)]
 pub struct TxoName(pub String);
 
 impl HasTable for TxoCacheEntry {
@@ -159,7 +159,7 @@ enum CliError {
 struct TxnMetadata {
   handle: Option<TxnHandle>,
   status: Option<TxnStatus>,
-  new_asset_types: HashMap<AssetTypeName, AssetTypeEntry>,
+  new_asset_types: BTreeMap<AssetTypeName, AssetTypeEntry>,
   #[serde(default)]
   operations: Vec<OpMetadata>,
   #[serde(default)]
@@ -168,7 +168,7 @@ struct TxnMetadata {
   // #[serde(default)]
   // new_txos: Vec<(String, TxoCacheEntry)>,
   // #[serde(default)]
-  // spent_txos: HashMap<String>,
+  // spent_txos: BTreeMap<String>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
@@ -194,11 +194,22 @@ fn indent_of(indent_level: u64) -> String {
   ret
 }
 
+#[allow(clippy::enum_variant_names)]
 #[derive(Clone, Debug, Serialize, Deserialize)]
 enum OpMetadata {
   DefineAsset {
     issuer_nick: PubkeyName,
     asset_nick: AssetTypeName,
+  },
+  IssueAsset {
+    issuer_nick: PubkeyName,
+    asset_nick: AssetTypeName,
+    output_name: String,
+    output_amt: u64,
+  },
+  TransferAsset {
+    inputs: Vec<(String, TxoCacheEntry)>,
+    outputs: Vec<(String, TxoCacheEntry)>,
   },
 }
 
@@ -210,10 +221,16 @@ fn display_op_metadata(indent_level: u64, ent: &OpMetadata) {
       println!("{}DefineAsset `{}`", ind, asset_nick.0);
       println!("{} issued by `{}`", ind, issuer_nick.0);
     }
+    OpMetadata::IssueAsset { .. } => {
+      unimplemented!();
+    }
+    OpMetadata::TransferAsset { .. } => {
+      unimplemented!();
+    }
   }
 }
 
-fn display_asset_type_defs(indent_level: u64, ent: &HashMap<AssetTypeName, AssetTypeEntry>) {
+fn display_asset_type_defs(indent_level: u64, ent: &BTreeMap<AssetTypeName, AssetTypeEntry>) {
   let ind = indent_of(indent_level);
   for (nick, asset_ent) in ent.iter() {
     println!("{}{}:", ind, nick.0);
@@ -286,31 +303,31 @@ struct TxnBuilderEntry {
   #[serde(default)]
   operations: Vec<OpMetadata>,
   #[serde(default)]
-  new_asset_types: HashMap<AssetTypeName, AssetTypeEntry>,
+  new_asset_types: BTreeMap<AssetTypeName, AssetTypeEntry>,
   #[serde(default)]
-  signers: HashMap<KeypairName, Serialized<XfrKeyPair>>,
+  signers: BTreeMap<KeypairName, Serialized<XfrKeyPair>>,
   // TODO
   // #[serde(default)]
   // new_txos: Vec<(String, TxoCacheEntry)>,
   // #[serde(default)]
-  // spent_txos: HashMap<String>,
+  // spent_txos: BTreeMap<String>,
 }
 
 trait CliDataStore {
   fn get_config(&self) -> Result<CliConfig, CliError>;
   fn update_config<F: FnOnce(&mut CliConfig)>(&mut self, f: F) -> Result<(), CliError>;
 
-  fn get_keypairs(&self) -> Result<HashMap<KeypairName, XfrKeyPair>, CliError>;
+  fn get_keypairs(&self) -> Result<BTreeMap<KeypairName, XfrKeyPair>, CliError>;
   fn get_keypair(&self, k: &KeypairName) -> Result<Option<XfrKeyPair>, CliError>;
   fn delete_keypair(&mut self, k: &KeypairName) -> Result<Option<XfrKeyPair>, CliError>;
-  fn get_pubkeys(&self) -> Result<HashMap<PubkeyName, XfrPublicKey>, CliError>;
+  fn get_pubkeys(&self) -> Result<BTreeMap<PubkeyName, XfrPublicKey>, CliError>;
   fn get_pubkey(&self, k: &PubkeyName) -> Result<Option<XfrPublicKey>, CliError>;
   fn delete_pubkey(&mut self, k: &PubkeyName) -> Result<Option<XfrPublicKey>, CliError>;
   fn add_key_pair(&mut self, k: &KeypairName, kp: XfrKeyPair) -> Result<(), CliError>;
   fn add_public_key(&mut self, k: &PubkeyName, pk: XfrPublicKey) -> Result<(), CliError>;
 
   fn get_built_transactions(&self)
-                            -> Result<HashMap<TxnName, (Transaction, TxnMetadata)>, CliError>;
+                            -> Result<BTreeMap<TxnName, (Transaction, TxnMetadata)>, CliError>;
   fn get_built_transaction(&self,
                            k: &TxnName)
                            -> Result<Option<(Transaction, TxnMetadata)>, CliError>;
@@ -328,7 +345,7 @@ trait CliDataStore {
 
   fn prepare_transaction(&mut self, k: &TxnBuilderName, seq_id: u64) -> Result<(), CliError>;
   fn get_txn_builder(&self, k: &TxnBuilderName) -> Result<Option<TxnBuilderEntry>, CliError>;
-  fn get_txn_builders(&self) -> Result<HashMap<TxnBuilderName, TxnBuilderEntry>, CliError>;
+  fn get_txn_builders(&self) -> Result<BTreeMap<TxnBuilderName, TxnBuilderEntry>, CliError>;
   fn with_txn_builder<E: std::error::Error + 'static,
                         F: FnOnce(&mut TxnBuilderEntry) -> Result<(), E>>(
     &mut self,
@@ -336,12 +353,12 @@ trait CliDataStore {
     f: F)
     -> Result<(), CliError>;
 
-  fn get_cached_txos(&self) -> Result<HashMap<TxoName, TxoCacheEntry>, CliError>;
+  fn get_cached_txos(&self) -> Result<BTreeMap<TxoName, TxoCacheEntry>, CliError>;
   fn get_cached_txo(&self, k: &TxoName) -> Result<Option<TxoCacheEntry>, CliError>;
   fn delete_cached_txo(&mut self, k: &TxoName) -> Result<(), CliError>;
   fn cache_txo(&mut self, k: &TxoName, ent: TxoCacheEntry) -> Result<(), CliError>;
 
-  fn get_asset_types(&self) -> Result<HashMap<AssetTypeName, AssetTypeEntry>, CliError>;
+  fn get_asset_types(&self) -> Result<BTreeMap<AssetTypeName, AssetTypeEntry>, CliError>;
   fn get_asset_type(&self, k: &AssetTypeName) -> Result<Option<AssetTypeEntry>, CliError>;
   fn update_asset_type<E: std::error::Error + 'static,
                          F: FnOnce(&mut AssetTypeEntry) -> Result<(), E>>(
@@ -495,7 +512,7 @@ enum Actions {
     /// Issuer key
     key_nick: String,
     /// Name for the asset type
-    asset_name: String,
+    asset_nick: String,
     /// Amount to issue
     amount: u64,
   },
@@ -940,6 +957,14 @@ fn run_action<S: CliDataStore>(action: Actions, store: &mut S) -> Result<(), Cli
         Some(s) => s,
       };
       display_txn(0, &txn);
+      Ok(())
+    }
+
+    ListBuiltTransactions {} => {
+      for (nick, txn) in store.get_built_transactions()?.into_iter() {
+        println!("{}:", nick.0);
+        display_txn(1, &txn);
+      }
       Ok(())
     }
 
