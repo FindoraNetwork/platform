@@ -1,12 +1,4 @@
 #!/usr/bin/env bats
-set -euo pipefail
-
-#FILE=delete_findora_home.txt
-#if test -f "$FILE"; then
-#    FINDORA_STORE_FILE="~/.findora/cli2_data.sqlite";
-#else
-#    FINDORA_STORE_FILE=${FINDORA_HOME:-${HOME}/.findora}/cli2_data.sqlite
-#fi
 
 FINDORA_STORE_FILE=${FINDORA_HOME:-${HOME}/.findora}/cli2_data.sqlite
 

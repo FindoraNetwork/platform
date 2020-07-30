@@ -1,3 +1,5 @@
+set -euo pipefail
+
 export FINDORA_HOME=$(mktemp -d)
 echo "FINDORA_HOME: ${FINDORA_HOME}"
 
