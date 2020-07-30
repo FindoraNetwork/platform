@@ -12,14 +12,39 @@ setup() {
 @test "list config" {
   run $CLI2 list-config
   [ "$status" -eq 0 ]
-  echo "${lines[0]}"
-  echo "${lines[1]}"
   [ "${lines[0]}" = 'Submission server: https://testnet.findora.org/submit_server' ]
   [ "${lines[1]}" = 'Ledger access server: https://testnet.findora.org/query_server' ]
   [ "${lines[2]:0:26}" = 'Ledger public signing key:' ]
   [ "${lines[3]:0:24}" = 'Ledger state commitment:' ]
   [ "${lines[4]:0:17}" = 'Ledger block idx:' ]
   [ "${lines[5]}" = 'Current target transaction: <NONE>' ]
+}
+
+@test "query ledger state" {
+
+  # TODO using true or false does not change the result. Is that OK?
+
+  run $CLI2 query-ledger-state --forget-old-key=true
+  [ "$status" -eq 0 ]
+  [ "${lines[0]:0:25}" = "Saving ledger signing key" ]
+  [ "${lines[1]}" = 'New state retrieved.' ]
+  [ "${lines[2]}" = 'Submission server: https://testnet.findora.org/submit_server' ]
+  [ "${lines[3]}" = 'Ledger access server: https://testnet.findora.org/query_server' ]
+  [ "${lines[4]:0:26}" = 'Ledger public signing key:' ]
+  [ "${lines[5]:0:24}" = 'Ledger state commitment:' ]
+  [ "${lines[6]:0:17}" = 'Ledger block idx:' ]
+  [ "${lines[7]}" = 'Current target transaction: <NONE>' ]
+
+  run $CLI2 query-ledger-state --forget-old-key=false
+  [ "$status" -eq 0 ]
+  [ "${lines[0]:0:25}" = "Saving ledger signing key" ]
+  [ "${lines[1]}" = 'New state retrieved.' ]
+  [ "${lines[2]}" = 'Submission server: https://testnet.findora.org/submit_server' ]
+  [ "${lines[3]}" = 'Ledger access server: https://testnet.findora.org/query_server' ]
+  [ "${lines[4]:0:26}" = 'Ledger public signing key:' ]
+  [ "${lines[5]:0:24}" = 'Ledger state commitment:' ]
+  [ "${lines[6]:0:17}" = 'Ledger block idx:' ]
+  [ "${lines[7]}" = 'Current target transaction: <NONE>' ]
 }
 
 @test "key generation" {
