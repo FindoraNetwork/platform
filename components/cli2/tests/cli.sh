@@ -19,9 +19,11 @@ setup() {
   [ "${lines[0]}" = 'New public key added for `bob`' ]
 }
 
-@test "issue an asset" {
-  skip "Not implemented yet"
-  run $CLI2 issue-asset alice AliceCoin 20
+@test "list the key pairs" {
+  run bash -c '$CLI2 key-gen bob; $CLI2 list-keypair bob'
   [ "$status" -eq 0 ]
-  [ "${lines[0]}" = '' ]
+  echo ${lines[1]};
+  [ "${lines[1]:0:10}" = '{"pub_key"' ]
+  [ "${lines[1]:58:9}" = '"sec_key"' ]
 }
+
