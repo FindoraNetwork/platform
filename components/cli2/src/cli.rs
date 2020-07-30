@@ -14,6 +14,7 @@ use zei::xfr::structs::{OpenAssetRecord, OwnerMemo};
 use ledger_api_service::LedgerAccessRoutes;
 use promptly::{prompt, prompt_default};
 use std::process::exit;
+use submission_api::SubmissionRoutes;
 use utils::Serialized;
 use utils::{HashOf, NetworkRoute, SignatureOf};
 // use txn_builder::{BuildsTransactions, PolicyChoice, TransactionBuilder, TransferOperationBuilder};
@@ -237,10 +238,6 @@ fn display_txn(indent_level: u64, ent: &(Transaction, TxnMetadata)) {
            serialize_or_str(&ent.1.status, "<UNKNOWN>"));
   println!("{}Operations:", ind);
   display_operations(indent_level + 1, &ent.1.operations);
-
-  for op in ent.1.operations.iter() {
-    display_op_metadata(indent_level + 1, op);
-  }
 
   println!("{}New asset types defined:", ind);
   for (nick, asset_ent) in ent.1.new_asset_types.iter() {
@@ -885,6 +882,8 @@ fn run_action<S: CliDataStore>(action: Actions, store: &mut S) {
             builder.operations.push(OpMetadata::DefineAsset {
                 issuer_nick: key_nick.clone(),
                 asset_nick: AssetTypeName(asset_nick.clone()) });
+            println!("{}:", asset_nick);
+            display_asset_type(1, builder.new_asset_types.get(&AssetTypeName(asset_nick.clone())).unwrap());
         }).unwrap();
 
     }
@@ -904,12 +903,17 @@ fn run_action<S: CliDataStore>(action: Actions, store: &mut S) {
             Some(t) => { nick = t; }
         }
 
-        let txn_nick = TxnName(txn_nick.unwrap_or_else(|| nick.0.clone()));
+        let mut txn_nick = TxnName(txn_nick.unwrap_or_else(|| nick.0.clone()));
 
         if store.get_built_transaction(&txn_nick).unwrap().is_some() {
-            eprintln!("Transaction with the name `{}` already exists.",txn_nick.0);
-            exit(-1);
+            for n in FreshNamer::new(txn_nick.0.clone(),".".to_string()) {
+                if store.get_built_transaction(&TxnName(n.clone())).unwrap().is_none() {
+                    txn_nick = TxnName(n);
+                    break;
+                }
+            }
         }
+        println!("Submitting `{}` as `{}`...",nick.0,txn_nick.0);
 
         let mut metadata: TxnMetadata = Default::default();
         store.with_txn_builder(&nick, |builder| {
@@ -932,29 +936,62 @@ fn run_action<S: CliDataStore>(action: Actions, store: &mut S) {
         println!("Built transaction `{}` from builder `{}`.",txn_nick.0,nick.0);
     }
 
-    // Submit { nick, } {
-    //     let txn = store.get_built_transaction(&TxnName(nick.clone()));
-    //     let conf = store.get_built_transaction(&TxnName(nick.clone()));
-    //       let query = format!("{}{}",conf.ledger_server,LedgerAccessRoutes::PublicKey.route());
-    //       let resp: XfrPublicKey;
-    //       match reqwest::blocking::get(&query) {
-    //           Err(e) => {
-    //               eprintln!("Request `{}` failed: {}",query,e);
-    //               exit(-1);
-    //           }
-    //           Ok(v) => match v.json::<XfrPublicKey>() {
-    //               Err(e) => {
-    //                   eprintln!("Failed to parse response: {}",e);
-    //                   exit(-1);
-    //               }
-    //               Ok(v) => { resp = v; }
-    //           }
-    //       }
+    Submit { nick, } => {
+        let (txn,metadata) = store.get_built_transaction(&TxnName(nick.clone()))
+              .unwrap().unwrap_or_else(|| {
+            eprintln!("No transaction `{}` found.", nick);
+            exit(-1);
+        });
+        if let Some(h) = metadata.handle {
+          eprintln!("Transaction `{}` has already been submitted. Its handle is: `{}`",
+            nick, h.0);
+          exit(-1);
+        }
 
-    //       println!("Saving ledger signing key `{}`",serde_json::to_string(&resp).unwrap());
-    //       conf.ledger_sig_key = Some(resp);
+        let conf = store.get_config().unwrap();
+        let query = format!("{}{}",conf.submission_server,
+          SubmissionRoutes::SubmitTransaction.route());
 
-    // }
+        let client = reqwest::blocking::Client::builder().build().unwrap();
+        let resp = client.post(&query).json(&txn).send().unwrap()
+                         .error_for_status().unwrap()
+                         .text().unwrap();
+        let handle = serde_json::from_str::<TxnHandle>(&resp).unwrap();
+
+        for (nick,ent) in metadata.new_asset_types.iter() {
+          store.add_asset_type(&nick,ent.clone()).unwrap();
+        }
+        store.update_txn_metadata(&TxnName(nick.clone()),|metadata| {
+          metadata.handle = Some(handle.clone());
+        }).unwrap();
+        println!("Submitted `{}`: got handle `{}`", nick, &handle.0);
+
+        if prompt_default("Retrieve its status?",true).unwrap() {
+          let query = format!("{}{}/{}",conf.submission_server,
+            SubmissionRoutes::TxnStatus.route(),
+            &handle.0);
+          let resp;
+          match reqwest::blocking::get(&query) {
+              Err(e) => {
+                  eprintln!("Request `{}` failed: {}",query,e);
+                  exit(-1);
+              }
+              Ok(v) => match v.json::<TxnStatus>() {
+                  Err(e) => {
+                      eprintln!("Failed to parse response: `{}`",e);
+                      exit(-1);
+                  }
+                  Ok(v) => { resp = v; }
+              }
+          }
+
+          println!("Got status: {}",serde_json::to_string(&resp).unwrap());
+          // TODO: do something if it's committed
+          store.update_txn_metadata(&TxnName(nick),|metadata| {
+            metadata.status = Some(resp);
+          }).unwrap();
+        }
+    }
 
     _ => {
       unimplemented!();
