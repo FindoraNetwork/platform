@@ -71,6 +71,13 @@ setup() {
   [ "${lines[0]}" = 'No public key with name plato found' ]
 }
 
+@test "list keys" {
+  run bash -c '$CLI2 key-gen alice; $CLI2 key-gen bob; $CLI2 list-keys'
+  [ "$status" -eq 0 ]
+  [ "${lines[2]:0:14}" = 'keypair alice:' ]
+  [ "${lines[3]:0:12}" = 'keypair bob:' ]
+}
+
 @test "delete public key" {
   run bash -c 'echo "\"i4-1NC50E4omcPdO4N28v7cBvp0pnPOFp6Jvyu4G3J4=\"" | $CLI2 load-public-key bob'
   run bash -c 'echo y | $CLI2 delete-public-key bob'
