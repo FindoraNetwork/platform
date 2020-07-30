@@ -164,7 +164,10 @@ struct TxnMetadata {
   operations: Vec<OpMetadata>,
   #[serde(default)]
   signers: Vec<KeypairName>,
-  // new_txos: HashMap<String, TxoCacheEntry>,
+  // TODO
+  // #[serde(default)]
+  // new_txos: Vec<(String, TxoCacheEntry)>,
+  // #[serde(default)]
   // spent_txos: HashMap<String>,
 }
 
@@ -180,7 +183,7 @@ struct TxoCacheEntry {
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 struct AssetTypeEntry {
   asset: Asset,
-  issuer_nick: Option<KeypairName>,
+  issuer_nick: Option<PubkeyName>,
 }
 
 fn indent_of(indent_level: u64) -> String {
@@ -194,7 +197,7 @@ fn indent_of(indent_level: u64) -> String {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 enum OpMetadata {
   DefineAsset {
-    issuer_nick: KeypairName,
+    issuer_nick: PubkeyName,
     asset_nick: AssetTypeName,
   },
 }
@@ -286,6 +289,11 @@ struct TxnBuilderEntry {
   new_asset_types: HashMap<AssetTypeName, AssetTypeEntry>,
   #[serde(default)]
   signers: HashMap<KeypairName, Serialized<XfrKeyPair>>,
+  // TODO
+  // #[serde(default)]
+  // new_txos: Vec<(String, TxoCacheEntry)>,
+  // #[serde(default)]
+  // spent_txos: HashMap<String>,
 }
 
 trait CliDataStore {
@@ -434,6 +442,9 @@ enum Actions {
     nick: String,
   },
   QueryAssetType {
+    /// Replace the existing asset type entry (if it exists)
+    #[structopt(short, long)]
+    replace: bool,
     /// Asset type nickname
     nick: String,
     /// Asset type code (b64)
@@ -726,6 +737,12 @@ fn run_action<S: CliDataStore>(action: Actions, store: &mut S) -> Result<(), Cli
           exit(-1);
         }
         Ok(pk) => {
+          for (n,n_pk) in store.get_pubkeys()? {
+              if pk == n_pk {
+                  eprintln!("This public key is already registered as `{}`",n.0);
+                  exit(-1);
+              }
+          }
           store.add_public_key(&PubkeyName(nick.to_string()), pk)
             ?;
           println!("New public key added for `{}`", nick);
@@ -802,9 +819,12 @@ fn run_action<S: CliDataStore>(action: Actions, store: &mut S) -> Result<(), Cli
       Ok(())
     }
 
-    QueryAssetType { nick, code } => {
-      if store.get_asset_type(&AssetTypeName(nick.clone()))?
-              .is_some()
+    QueryAssetType { replace,
+                     nick,
+                     code, } => {
+      if !replace
+         && store.get_asset_type(&AssetTypeName(nick.clone()))?
+                 .is_some()
       {
         eprintln!("Asset type with the nickname `{}` already exists.", nick);
         exit(-1);
@@ -833,8 +853,19 @@ fn run_action<S: CliDataStore>(action: Actions, store: &mut S) -> Result<(), Cli
           }
         },
       }
+
+      let issuer_nick = {
+        let mut ret = None;
+        for (n, pk) in store.get_pubkeys()?.into_iter() {
+          if pk == resp.issuer.key {
+            ret = Some(n);
+            break;
+          }
+        }
+        ret
+      };
       let ret = AssetTypeEntry { asset: resp,
-                                 issuer_nick: None };
+                                 issuer_nick };
       store.add_asset_type(&AssetTypeName(nick.clone()), ret)?;
       println!("Asset type `{}` saved as `{}`", code_b64, nick);
       Ok(())
@@ -953,7 +984,8 @@ fn run_action<S: CliDataStore>(action: Actions, store: &mut S) -> Result<(), Cli
                  builder.new_asset_types
                         .insert(AssetTypeName(asset_nick.clone()),
                                 AssetTypeEntry { asset: def.body.asset.clone(),
-                                                 issuer_nick: Some(key_nick.clone()) });
+                                                 issuer_nick:
+                                                   Some(PubkeyName(key_nick.0.clone())) });
                }
                _ => {
                  panic!("The transaction builder doesn't include our operation!");
@@ -962,7 +994,7 @@ fn run_action<S: CliDataStore>(action: Actions, store: &mut S) -> Result<(), Cli
              builder.signers
                     .insert(key_nick.clone(), Serialized::new(&kp));
              builder.operations
-                    .push(OpMetadata::DefineAsset { issuer_nick: key_nick.clone(),
+                    .push(OpMetadata::DefineAsset { issuer_nick: PubkeyName(key_nick.0.clone()),
                                                     asset_nick:
                                                       AssetTypeName(asset_nick.clone()) });
              println!("{}:", asset_nick);
