@@ -623,15 +623,23 @@ fn run_action<S: CliDataStore>(action: Actions, store: &mut S) -> Result<(), Cli
                    eprintln!("Request `{}` failed: {}", query, e);
                    exit(-1);
                  }
-                 Ok(v) => match v.json::<XfrPublicKey>() {
-                   Err(e) => {
-                     eprintln!("Failed to parse response: {}", e);
-                     exit(-1);
+                 Ok(v) => {
+                   match v.text()
+                          .map(|x| serde_json::from_str::<XfrPublicKey>(&x).map_err(|e| (x, e)))
+                   {
+                     Err(e) => {
+                       eprintln!("Failed to decode response: {}", e);
+                       exit(-1);
+                     }
+                     Ok(Err((x, e))) => {
+                       eprintln!("Failed to parse response `{}`: {}", x, e);
+                       exit(-1);
+                     }
+                     Ok(Ok(v)) => {
+                       resp = v;
+                     }
                    }
-                   Ok(v) => {
-                     resp = v;
-                   }
-                 },
+                 }
                }
 
                println!("Saving ledger signing key `{}`",
@@ -652,12 +660,18 @@ fn run_action<S: CliDataStore>(action: Actions, store: &mut S) -> Result<(), Cli
                  eprintln!("Request `{}` failed: {}", query, e);
                  exit(-1);
                }
-               Ok(v) => match v.json::<_>() {
+               Ok(v) => match v.text()
+                               .map(|x| serde_json::from_str::<_>(&x).map_err(|e| (x, e)))
+               {
                  Err(e) => {
-                   eprintln!("Failed to parse response: {}", e);
+                   eprintln!("Failed to decode response: {}", e);
                    exit(-1);
                  }
-                 Ok(v) => {
+                 Ok(Err((x, e))) => {
+                   eprintln!("Failed to parse response `{}`: {}", x, e);
+                   exit(-1);
+                 }
+                 Ok(Ok(v)) => {
                    resp = v;
                  }
                },
@@ -860,12 +874,18 @@ fn run_action<S: CliDataStore>(action: Actions, store: &mut S) -> Result<(), Cli
           eprintln!("Request `{}` failed: {}", query, e);
           exit(-1);
         }
-        Ok(v) => match v.json::<AssetType>() {
+        Ok(v) => match v.text()
+                        .map(|x| serde_json::from_str::<AssetType>(&x).map_err(|e| (x, e)))
+        {
           Err(e) => {
-            eprintln!("Failed to parse response: {}", e);
+            eprintln!("Failed to decode response: {}", e);
             exit(-1);
           }
-          Ok(v) => {
+          Ok(Err((x, e))) => {
+            eprintln!("Failed to parse response `{}`: {}", x, e);
+            exit(-1);
+          }
+          Ok(Ok(v)) => {
             resp = v.properties;
           }
         },
@@ -965,6 +985,79 @@ fn run_action<S: CliDataStore>(action: Actions, store: &mut S) -> Result<(), Cli
         println!("{}:", nick.0);
         display_txn(1, &txn);
       }
+      Ok(())
+    }
+
+    Status { txn } => {
+      let txn = match store.get_built_transaction(&TxnName(txn.clone()))? {
+        None => {
+          eprintln!("No txn `{}` found.", txn);
+          exit(-1);
+        }
+        Some(s) => s,
+      };
+      println!("handle {}: {}",
+               serialize_or_str(&txn.1.handle, "<UNKNOWN>"),
+               serialize_or_str(&txn.1.status, "<UNKNOWN>"));
+      Ok(())
+    }
+
+    StatusCheck { txn } => {
+      let conf = store.get_config()?;
+      let txn_nick = txn.clone();
+      let txn = match store.get_built_transaction(&TxnName(txn.clone()))? {
+        None => {
+          eprintln!("No txn `{}` found.", txn);
+          exit(-1);
+        }
+        Some(s) => s,
+      };
+
+      let handle;
+      match txn.1.handle.as_ref() {
+        None => {
+          eprintln!("No handle for txn `{}` found. Have you submitted it?",
+                    txn_nick);
+          exit(-1);
+        }
+        Some(h) => {
+          handle = h;
+        }
+      }
+
+      let query = format!("{}{}/{}",
+                          conf.submission_server,
+                          SubmissionRoutes::TxnStatus.route(),
+                          handle.0);
+      let resp;
+      match reqwest::blocking::get(&query) {
+        Err(e) => {
+          eprintln!("Request `{}` failed: {}", query, e);
+          exit(-1);
+        }
+        Ok(v) => match v.text()
+                        .map(|x| serde_json::from_str::<TxnStatus>(&x).map_err(|e| (x, e)))
+        {
+          Err(e) => {
+            eprintln!("Failed to decode `{}` response: {}", query, e);
+            exit(-1);
+          }
+          Ok(Err((x, e))) => {
+            eprintln!("Failed to parse `{}` response to `{}`: {}", query, x, e);
+            exit(-1);
+          }
+          Ok(Ok(v)) => {
+            resp = v;
+          }
+        },
+      }
+
+      println!("Got status: {}", serde_json::to_string(&resp)?);
+      // TODO: do something if it's committed
+      store.update_txn_metadata::<std::convert::Infallible, _>(&TxnName(txn_nick), |metadata| {
+             metadata.status = Some(resp);
+             Ok(())
+           })?;
       Ok(())
     }
 
@@ -1133,12 +1226,18 @@ fn run_action<S: CliDataStore>(action: Actions, store: &mut S) -> Result<(), Cli
             eprintln!("Request `{}` failed: {}", query, e);
             exit(-1);
           }
-          Ok(v) => match v.json::<TxnStatus>() {
+          Ok(v) => match v.text()
+                          .map(|x| serde_json::from_str::<TxnStatus>(&x).map_err(|e| (x, e)))
+          {
             Err(e) => {
-              eprintln!("Failed to parse response: `{}`", e);
+              eprintln!("Failed to decode response: {}", e);
               exit(-1);
             }
-            Ok(v) => {
+            Ok(Err((x, e))) => {
+              eprintln!("Failed to parse response `{}`: {}", x, e);
+              exit(-1);
+            }
+            Ok(Ok(v)) => {
               resp = v;
             }
           },
