@@ -22,8 +22,15 @@ setup() {
 @test "list the key pairs" {
   run bash -c '$CLI2 key-gen bob; $CLI2 list-keypair bob'
   [ "$status" -eq 0 ]
-  echo ${lines[1]};
   [ "${lines[1]:0:10}" = '{"pub_key"' ]
   [ "${lines[1]:58:9}" = '"sec_key"' ]
+}
+
+@test "prepare transaction" {
+  run bash -c '$CLI2 key-gen alice; echo y | $CLI2 query-ledger-state; $CLI2 prepare-transaction 0;$CLI2 list-txn-builders;'
+  echo ${lines[6]};
+  [ "$status" -eq 0 ]
+  [ "${lines[6]:0:16}" = 'Ledger block idx' ]
+  [ "${lines[9]}" = 'Done.' ]
 }
 
