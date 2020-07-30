@@ -143,11 +143,15 @@ enum CliError {
   HomeDir,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize, Default)]
+#[derive(Clone, Debug, Serialize, Deserialize, Default)]
 struct TxnMetadata {
   handle: Option<TxnHandle>,
   status: Option<TxnStatus>,
   new_asset_types: HashMap<AssetTypeName, AssetTypeEntry>,
+  #[serde(default)]
+  operations: Vec<OpMetadata>,
+  #[serde(default)]
+  signers: Vec<KeypairName>,
   // new_txos: HashMap<String, TxoCacheEntry>,
   // spent_txos: HashMap<String>,
 }
@@ -194,18 +198,59 @@ fn display_op_metadata(indent_level: u64, ent: &OpMetadata) {
   }
 }
 
+fn display_asset_type_defs(indent_level: u64, ent: &HashMap<AssetTypeName, AssetTypeEntry>) {
+  let ind = indent_of(indent_level);
+  for (nick, asset_ent) in ent.iter() {
+    println!("{}{}:", ind, nick.0);
+    display_asset_type(indent_level + 1, asset_ent);
+  }
+}
+
+fn display_operations(indent_level: u64, operations: &[OpMetadata]) {
+  for op in operations.iter() {
+    display_op_metadata(indent_level, op);
+  }
+}
+
 fn display_txn_builder(indent_level: u64, ent: &TxnBuilderEntry) {
   let ind = indent_of(indent_level);
   println!("{}Operations:", ind);
+  display_operations(indent_level + 1, &ent.operations);
 
-  for op in ent.operations.iter() {
+  println!("{}New asset types defined:", ind);
+  display_asset_type_defs(indent_level + 1, &ent.new_asset_types);
+
+  println!("{}Signers:", ind);
+  for (nick, _) in ent.signers.iter() {
+    println!("{} - `{}`", ind, nick.0);
+  }
+}
+
+fn display_txn(indent_level: u64, ent: &(Transaction, TxnMetadata)) {
+  let ind = indent_of(indent_level);
+  println!("{}seq_id: {}", ind, ent.0.seq_id);
+  println!("{}Handle: {}",
+           ind,
+           serialize_or_str(&ent.1.handle, "<UNKNOWN>"));
+  println!("{}Status: {}",
+           ind,
+           serialize_or_str(&ent.1.status, "<UNKNOWN>"));
+  println!("{}Operations:", ind);
+  display_operations(indent_level + 1, &ent.1.operations);
+
+  for op in ent.1.operations.iter() {
     display_op_metadata(indent_level + 1, op);
   }
 
   println!("{}New asset types defined:", ind);
-  for (nick, asset_ent) in ent.new_asset_types.iter() {
+  for (nick, asset_ent) in ent.1.new_asset_types.iter() {
     println!("{} {}:", ind, nick.0);
     display_asset_type(indent_level + 2, asset_ent);
+  }
+
+  println!("{}Signers:", ind);
+  for nick in ent.1.signers.iter() {
+    println!("{} - `{}`", ind, nick.0);
   }
 }
 
@@ -255,7 +300,8 @@ trait CliDataStore {
                            -> Result<Option<(Transaction, TxnMetadata)>, CliError>;
   fn build_transaction(&mut self,
                        k_orig: &TxnBuilderName,
-                       k_new: &TxnName)
+                       k_new: &TxnName,
+                       metadata: TxnMetadata)
                        -> Result<(Transaction, TxnMetadata), CliError>;
   fn update_txn_metadata<F: FnOnce(&mut TxnMetadata)>(&mut self,
                                                       k: &TxnName,
@@ -395,6 +441,15 @@ enum Actions {
     nick: String,
   },
 
+  /// Finalize a transaction, preparing it for submission
+  BuildTransaction {
+    /// Which transaction builder?
+    #[structopt(short, long)]
+    txn: Option<String>,
+    /// Name for the built transaction (defaults to <nick>)
+    txn_nick: Option<String>,
+  },
+
   DefineAsset {
     #[structopt(short, long)]
     /// Which txn?
@@ -421,23 +476,25 @@ enum Actions {
     txn: Option<String>,
   },
   ListBuiltTransaction {
-    /// txn id
-    txn: Option<String>,
+    /// Nickname of the transaction
+    nick: String,
   },
   ListBuiltTransactions {
     // TODO: options?
   },
+
   Submit {
-    #[structopt(short, long, default_value = "http://localhost:8669")]
-    /// Base URL for the submission server
-    server: String,
+    /// Which txn?
+    nick: String,
+  },
+
+  Status {
+    // TODO: how are we indexing in-flight transactions?
     /// Which txn?
     txn: String,
   },
-  Status {
-    #[structopt(short, long, default_value = "http://localhost:8669")]
-    /// Base URL for the submission server
-    server: String,
+
+  StatusCheck {
     // TODO: how are we indexing in-flight transactions?
     /// Which txn?
     txn: String,
@@ -452,13 +509,17 @@ enum Actions {
   },
 }
 
+fn serialize_or_str<T: Serialize>(x: &Option<T>, s: &str) -> String {
+  x.as_ref()
+   .map(|x| serde_json::to_string(&x).unwrap())
+   .unwrap_or_else(|| s.to_string())
+}
+
 fn print_conf(conf: &CliConfig) {
   println!("Submission server: {}", conf.submission_server);
   println!("Ledger access server: {}", conf.ledger_server);
   println!("Ledger public signing key: {}",
-           conf.ledger_sig_key
-               .map(|x| serde_json::to_string(&x).unwrap())
-               .unwrap_or_else(|| "<UNKNOWN>".to_string()));
+           serialize_or_str(&conf.ledger_sig_key, "<UNKNOWN>"));
   println!("Ledger state commitment: {}",
            conf.ledger_state
                .as_ref()
@@ -678,6 +739,11 @@ fn run_action<S: CliDataStore>(action: Actions, store: &mut S) {
     }
 
     QueryAssetType { nick, code } => {
+        if store.get_asset_type(&AssetTypeName(nick.clone())).unwrap().is_some() {
+            eprintln!("Asset type with the nickname `{}` already exists.",nick);
+            exit(-1);
+        }
+
         let conf = store.get_config().unwrap();
         let code_b64 = code.clone();
         let _ = AssetTypeCode::new_from_base64(&code).unwrap();
@@ -741,6 +807,14 @@ fn run_action<S: CliDataStore>(action: Actions, store: &mut S) {
       }
     }
 
+    ListBuiltTransactions { } => {
+      for (nick,txn) in store.get_built_transactions().unwrap() {
+        println!("{}:",nick.0);
+        display_txn(1,&txn);
+      }
+
+    }
+
     ListTxnBuilder { nick } => {
       let builder = match store.get_txn_builder(&TxnBuilderName(nick.clone())).unwrap() {
         None => {
@@ -752,6 +826,18 @@ fn run_action<S: CliDataStore>(action: Actions, store: &mut S) {
 
       display_txn_builder(0,&builder);
     }
+
+    ListBuiltTransaction { nick } => {
+      let txn = match store.get_built_transaction(&TxnName(nick.clone())).unwrap() {
+        None => {
+            eprintln!("No txn `{}` found.",nick);
+            exit(-1);
+        }
+        Some(s) => s
+      };
+      display_txn(0,&txn);
+    }
+
 
     DefineAsset { txn, key_nick, asset_nick, } => {
         let key_nick = KeypairName(key_nick);
@@ -770,6 +856,11 @@ fn run_action<S: CliDataStore>(action: Actions, store: &mut S) {
                 exit(-1);
             }
             Some(t) => { txn = t; }
+        }
+
+        if store.get_txn_builder(&txn).unwrap().is_none() {
+            eprintln!("Transaction builder `{}` not found.",txn.0);
+            exit(-1);
         }
 
         store.with_txn_builder(&txn, |builder| {
@@ -797,6 +888,73 @@ fn run_action<S: CliDataStore>(action: Actions, store: &mut S) {
         }).unwrap();
 
     }
+
+    BuildTransaction { txn, txn_nick } => {
+        let mut used_default = false;
+        let txn_opt = txn.map(TxnBuilderName).or_else(|| {
+            used_default = true;
+            store.get_config().unwrap().active_txn
+        });
+        let nick;
+        match txn_opt {
+            None => {
+                eprintln!("I don't know which transaction to use!");
+                exit(-1);
+            }
+            Some(t) => { nick = t; }
+        }
+
+        let txn_nick = TxnName(txn_nick.unwrap_or_else(|| nick.0.clone()));
+
+        if store.get_built_transaction(&txn_nick).unwrap().is_some() {
+            eprintln!("Transaction with the name `{}` already exists.",txn_nick.0);
+            exit(-1);
+        }
+
+        let mut metadata: TxnMetadata = Default::default();
+        store.with_txn_builder(&nick, |builder| {
+            for (_,kp) in builder.signers.iter() {
+                builder.builder.sign(&kp.deserialize());
+            }
+            std::mem::swap(&mut metadata.new_asset_types, &mut builder.new_asset_types);
+            let mut signers = Default::default();
+            std::mem::swap(&mut signers, &mut builder.signers);
+            metadata.signers.extend(signers.into_iter().map(|(k,_)| k));
+            std::mem::swap(&mut metadata.operations, &mut builder.operations);
+        }).unwrap();
+        store.build_transaction(&nick,&txn_nick,metadata).unwrap();
+        if used_default {
+            store.update_config(|conf| {
+                conf.active_txn = None;
+            }).unwrap();
+        }
+
+        println!("Built transaction `{}` from builder `{}`.",txn_nick.0,nick.0);
+    }
+
+    // Submit { nick, } {
+    //     let txn = store.get_built_transaction(&TxnName(nick.clone()));
+    //     let conf = store.get_built_transaction(&TxnName(nick.clone()));
+    //       let query = format!("{}{}",conf.ledger_server,LedgerAccessRoutes::PublicKey.route());
+    //       let resp: XfrPublicKey;
+    //       match reqwest::blocking::get(&query) {
+    //           Err(e) => {
+    //               eprintln!("Request `{}` failed: {}",query,e);
+    //               exit(-1);
+    //           }
+    //           Ok(v) => match v.json::<XfrPublicKey>() {
+    //               Err(e) => {
+    //                   eprintln!("Failed to parse response: {}",e);
+    //                   exit(-1);
+    //               }
+    //               Ok(v) => { resp = v; }
+    //           }
+    //       }
+
+    //       println!("Saving ledger signing key `{}`",serde_json::to_string(&resp).unwrap());
+    //       conf.ledger_sig_key = Some(resp);
+
+    // }
 
     _ => {
       unimplemented!();

@@ -299,14 +299,15 @@ impl CliDataStore for KVStore {
   fn build_transaction(
     &mut self,
     k_orig: &crate::TxnBuilderName,
-    k_new: &crate::TxnName)
+    k_new: &crate::TxnName,
+    metadata: crate::TxnMetadata)
     -> Result<(ledger::data_model::Transaction, crate::TxnMetadata), CliError> {
     let builder = self.delete::<TxnBuilderEntry>(k_orig)?.ok_or_else(|| {
                                                             KVError::WithInvalidKey{
               backtrace: Backtrace::generate(),
               key: serde_json::to_string(k_orig).expect("JSON serialization failed")}
                                                           })?;
-    let ret = (builder.builder.transaction().clone(), Default::default());
+    let ret = (builder.builder.transaction().clone(), metadata);
     self.set(k_new, ret.clone())?;
     Ok(ret)
   }
