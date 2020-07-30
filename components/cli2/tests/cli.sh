@@ -30,9 +30,14 @@ setup() {
 
 @test "prepare transaction" {
   run bash -c '$CLI2 key-gen alice; echo y | $CLI2 query-ledger-state; $CLI2 prepare-transaction 0;$CLI2 list-txn-builders;'
-  echo ${lines[6]};
   [ "$status" -eq 0 ]
-  [ "${lines[6]:0:16}" = 'Ledger block idx' ]
-  [ "${lines[9]}" = 'Done.' ]
+  [ "${lines[9]}" = 'Done.' ] # TODO better capture of output
 }
 
+@test "define asset" {
+  run bash -c '$CLI2 key-gen alice; echo y | $CLI2 query-ledger-state; $CLI2 prepare-transaction 0;echo memo0 | $CLI2 define-asset alice AliceCoin --txn 0;'
+  [ "$status" -eq 0 ]
+  $CLI2 list-txn-builders;
+  [ "$status" -eq 0 ]
+  [ "${lines[9]}" = 'Done.' ] #TODO better capture of output
+}
