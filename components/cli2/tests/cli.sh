@@ -9,6 +9,44 @@ setup() {
   bash -c '{ echo; echo; } | $CLI2 setup'
 }
 
+@test "list config" {
+  run $CLI2 list-config
+  [ "$status" -eq 0 ]
+  [ "${lines[0]}" = 'Submission server: https://testnet.findora.org/submit_server' ]
+  [ "${lines[1]}" = 'Ledger access server: https://testnet.findora.org/query_server' ]
+  [ "${lines[2]:0:26}" = 'Ledger public signing key:' ]
+  [ "${lines[3]:0:24}" = 'Ledger state commitment:' ]
+  [ "${lines[4]:0:17}" = 'Ledger block idx:' ]
+  [ "${lines[5]}" = 'Current target transaction: <NONE>' ]
+}
+
+@test "query ledger state" {
+
+  # TODO using true or false does not change the result. Is that OK?
+
+  run $CLI2 query-ledger-state --forget-old-key=true
+  [ "$status" -eq 0 ]
+  [ "${lines[0]:0:25}" = "Saving ledger signing key" ]
+  [ "${lines[1]}" = 'New state retrieved.' ]
+  [ "${lines[2]}" = 'Submission server: https://testnet.findora.org/submit_server' ]
+  [ "${lines[3]}" = 'Ledger access server: https://testnet.findora.org/query_server' ]
+  [ "${lines[4]:0:26}" = 'Ledger public signing key:' ]
+  [ "${lines[5]:0:24}" = 'Ledger state commitment:' ]
+  [ "${lines[6]:0:17}" = 'Ledger block idx:' ]
+  [ "${lines[7]}" = 'Current target transaction: <NONE>' ]
+
+  run $CLI2 query-ledger-state --forget-old-key=false
+  [ "$status" -eq 0 ]
+  [ "${lines[0]:0:25}" = "Saving ledger signing key" ]
+  [ "${lines[1]}" = 'New state retrieved.' ]
+  [ "${lines[2]}" = 'Submission server: https://testnet.findora.org/submit_server' ]
+  [ "${lines[3]}" = 'Ledger access server: https://testnet.findora.org/query_server' ]
+  [ "${lines[4]:0:26}" = 'Ledger public signing key:' ]
+  [ "${lines[5]:0:24}" = 'Ledger state commitment:' ]
+  [ "${lines[6]:0:17}" = 'Ledger block idx:' ]
+  [ "${lines[7]}" = 'Current target transaction: <NONE>' ]
+}
+
 @test "key generation" {
   run $CLI2 key-gen alice
   [ "$status" -eq 0 ]
@@ -21,7 +59,7 @@ setup() {
   [ "${lines[0]}" = 'New public key added for `bob`' ]
 }
 
-@test "list public keys" {
+@test "list public key" {
   run bash -c 'echo "\"i4-1NC50E4omcPdO4N28v7cBvp0pnPOFp6Jvyu4G3J4=\"" | $CLI2 load-public-key bob'
   run bash -c 'echo "\"CaOPNpTSFitNXoyxpsfL-amF_lHanegLIAUTkNsA2yw==\"" | $CLI2 load-public-key greg'
   run $CLI2 list-public-key bob
@@ -39,14 +77,14 @@ setup() {
   [ "$status" -eq 0 ]
 }
 
-@test "list the key pairs" {
+@test "list the key pair" {
   run bash -c '$CLI2 key-gen bob; $CLI2 list-keypair -s bob'
   [ "$status" -eq 0 ]
   [ "${lines[1]:0:10}" = '{"pub_key"' ]
   [ "${lines[1]:58:9}" = '"sec_key"' ]
 }
 
-@test "delete key pairs" {
+@test "delete key pair" {
   run bash -c '$CLI2 key-gen bob;echo y | $CLI2 delete-keypair bob'
   [ "$status" -eq 0 ]
 }
