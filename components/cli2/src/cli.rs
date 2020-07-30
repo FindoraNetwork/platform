@@ -2,8 +2,9 @@
 #![allow(clippy::type_complexity)]
 use ledger::data_model::*;
 use serde::{Deserialize, Serialize};
-use snafu::{Backtrace, OptionExt, ResultExt, Snafu};
+use snafu::{Backtrace, ResultExt, Snafu};
 use std::collections::HashMap;
+use std::env;
 use std::fs;
 use structopt::StructOpt;
 use submission_server::{TxnHandle, TxnStatus};
@@ -18,6 +19,7 @@ use submission_api::SubmissionRoutes;
 use utils::Serialized;
 use utils::{HashOf, NetworkRoute, SignatureOf};
 // use txn_builder::{BuildsTransactions, PolicyChoice, TransactionBuilder, TransferOperationBuilder};
+use std::path::PathBuf;
 
 pub mod kv;
 
@@ -1080,7 +1082,8 @@ fn main() {
 
     // use Actions::*;
 
-    let mut home = dirs::home_dir().context(HomeDir)?;
+    let mut home = PathBuf::new();
+    home.push(env::var("FINDORA_HOME").unwrap().as_str());
     home.push(".findora");
     fs::create_dir_all(&home).with_context(|| UserFile { file: home.clone() })?;
     home.push("cli2_data.sqlite");
