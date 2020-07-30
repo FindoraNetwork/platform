@@ -37,6 +37,11 @@ pub enum KVError {
   },
   #[snafu(display("Attempted to call KVStore::with on a key that doesn't exist: {}", key))]
   WithInvalidKey { backtrace: Backtrace, key: String },
+  #[snafu(display("Closure passed to a `with` method errored out. Context: {}", source))]
+  ClosureError {
+    backtrace: Backtrace,
+    source: Box<dyn std::error::Error>,
+  },
 }
 
 type Result<T, E = KVError> = std::result::Result<T, E>;
@@ -192,16 +197,29 @@ impl KVStore {
     Ok(ret)
   }
 
-  /// Modifies a value "in place"
-  pub fn with<T: HasTable, F: FnOnce(&mut T)>(&self, key: &T::Key, f: F) -> Result<()> {
+  pub fn with<T: HasTable, E: std::error::Error + 'static, F: FnOnce(&mut T) -> Result<(), E>>(
+    &self,
+    key: &T::Key,
+    f: F)
+    -> Result<()> {
     // Attempt to get the value
     let value: Option<T> = self.get(key)?;
     if let Some(mut value) = value {
       // Do the callers thing to the value
-      f(&mut value);
-      // Shove it back into the store
-      self.set(key, value)?;
-      Ok(())
+      let result = f(&mut value);
+
+      match result {
+        Ok(()) => {
+          // Shove it back into the store
+          self.set(key, value)?;
+          Ok(())
+        }
+        Err(e) => {
+          let e = Box::new(e) as Box<dyn std::error::Error>;
+          Err(KVError::ClosureError { backtrace: Backtrace::generate(),
+                                      source: e })
+        }
+      }
     } else {
       let key_string = serde_json::to_string(&key).expect("JSON serialization failed");
       Err(KVError::WithInvalidKey { backtrace: Backtrace::generate(),
@@ -311,10 +329,12 @@ impl CliDataStore for KVStore {
     self.set(k_new, ret.clone())?;
     Ok(ret)
   }
-  fn update_txn_metadata<F: FnOnce(&mut crate::TxnMetadata)>(&mut self,
-                                                             k: &crate::TxnName,
-                                                             f: F)
-                                                             -> Result<(), CliError> {
+  fn update_txn_metadata<E: std::error::Error + 'static,
+                           F: FnOnce(&mut crate::TxnMetadata) -> Result<(), E>>(
+    &mut self,
+    k: &crate::TxnName,
+    f: F)
+    -> Result<(), CliError> {
     Ok(self.with(k, |x: &mut (crate::Transaction, crate::TxnMetadata)| {
              f(&mut x.1)
            })?)
@@ -338,10 +358,12 @@ impl CliDataStore for KVStore {
                      -> Result<Option<TxnBuilderEntry>, CliError> {
     Ok(self.get(k)?)
   }
-  fn with_txn_builder<F: FnOnce(&mut TxnBuilderEntry)>(&mut self,
-                                                       k: &crate::TxnBuilderName,
-                                                       f: F)
-                                                       -> Result<(), CliError> {
+  fn with_txn_builder<E: std::error::Error + 'static,
+                        F: FnOnce(&mut TxnBuilderEntry) -> Result<(), E>>(
+    &mut self,
+    k: &crate::TxnBuilderName,
+    f: F)
+    -> Result<(), CliError> {
     Ok(self.with(k, f)?)
   }
   fn get_cached_txos(&self) -> Result<HashMap<crate::TxoName, crate::TxoCacheEntry>, CliError> {
@@ -363,10 +385,12 @@ impl CliDataStore for KVStore {
   fn get_asset_type(&self, k: &AssetTypeName) -> Result<Option<AssetTypeEntry>, CliError> {
     Ok(self.get(k)?)
   }
-  fn update_asset_type<F: FnOnce(&mut AssetTypeEntry)>(&mut self,
-                                                       k: &AssetTypeName,
-                                                       f: F)
-                                                       -> Result<(), CliError> {
+  fn update_asset_type<E: std::error::Error + 'static,
+                         F: FnOnce(&mut AssetTypeEntry) -> Result<(), E>>(
+    &mut self,
+    k: &AssetTypeName,
+    f: F)
+    -> Result<(), CliError> {
     Ok(self.with(k, f)?)
   }
   fn delete_asset_type(&self, k: &AssetTypeName) -> Result<Option<AssetTypeEntry>, CliError> {
@@ -458,7 +482,10 @@ mod tests {
     let value1 = TypeA("value-1".to_string());
     kv.set(&key1, value1.clone())?;
     // Mutate value1 inside the store
-    kv.with::<TypeA, _>(&key1, |x| x.0 = "value-2".to_string())?;
+    kv.with::<TypeA, std::convert::Infallible, _>(&key1, |x| {
+        x.0 = "value-2".to_string();
+        Ok(())
+      })?;
     assert!(kv.get(&key1)? == Some(TypeA("value-2".to_string())));
     Ok(())
   }

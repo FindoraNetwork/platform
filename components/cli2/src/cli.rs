@@ -309,18 +309,22 @@ trait CliDataStore {
                        k_new: &TxnName,
                        metadata: TxnMetadata)
                        -> Result<(Transaction, TxnMetadata), CliError>;
-  fn update_txn_metadata<F: FnOnce(&mut TxnMetadata)>(&mut self,
-                                                      k: &TxnName,
-                                                      f: F)
-                                                      -> Result<(), CliError>;
+  fn update_txn_metadata<E: std::error::Error + 'static,
+                           F: FnOnce(&mut TxnMetadata) -> Result<(), E>>(
+    &mut self,
+    k: &TxnName,
+    f: F)
+    -> Result<(), CliError>;
 
   fn prepare_transaction(&mut self, k: &TxnBuilderName, seq_id: u64) -> Result<(), CliError>;
   fn get_txn_builder(&self, k: &TxnBuilderName) -> Result<Option<TxnBuilderEntry>, CliError>;
   fn get_txn_builders(&self) -> Result<HashMap<TxnBuilderName, TxnBuilderEntry>, CliError>;
-  fn with_txn_builder<F: FnOnce(&mut TxnBuilderEntry)>(&mut self,
-                                                       k: &TxnBuilderName,
-                                                       f: F)
-                                                       -> Result<(), CliError>;
+  fn with_txn_builder<E: std::error::Error + 'static,
+                        F: FnOnce(&mut TxnBuilderEntry) -> Result<(), E>>(
+    &mut self,
+    k: &TxnBuilderName,
+    f: F)
+    -> Result<(), CliError>;
 
   fn get_cached_txos(&self) -> Result<HashMap<TxoName, TxoCacheEntry>, CliError>;
   fn get_cached_txo(&self, k: &TxoName) -> Result<Option<TxoCacheEntry>, CliError>;
@@ -329,10 +333,12 @@ trait CliDataStore {
 
   fn get_asset_types(&self) -> Result<HashMap<AssetTypeName, AssetTypeEntry>, CliError>;
   fn get_asset_type(&self, k: &AssetTypeName) -> Result<Option<AssetTypeEntry>, CliError>;
-  fn update_asset_type<F: FnOnce(&mut AssetTypeEntry)>(&mut self,
-                                                       k: &AssetTypeName,
-                                                       f: F)
-                                                       -> Result<(), CliError>;
+  fn update_asset_type<E: std::error::Error + 'static,
+                         F: FnOnce(&mut AssetTypeEntry) -> Result<(), E>>(
+    &mut self,
+    k: &AssetTypeName,
+    f: F)
+    -> Result<(), CliError>;
   fn delete_asset_type(&self, k: &AssetTypeName) -> Result<Option<AssetTypeEntry>, CliError>;
   fn add_asset_type(&self, k: &AssetTypeName, ent: AssetTypeEntry) -> Result<(), CliError>;
 }
@@ -874,7 +880,8 @@ fn run_action<S: CliDataStore>(action: Actions, store: &mut S) -> Result<(), Cli
 
     DefineAsset { txn,
                   key_nick,
-                  asset_nick, } => {
+                  asset_nick,
+                  .. } => {
       let key_nick = KeypairName(key_nick);
       let kp = match store.get_keypair(&key_nick)? {
         None => {
@@ -901,14 +908,12 @@ fn run_action<S: CliDataStore>(action: Actions, store: &mut S) -> Result<(), Cli
         exit(-1);
       }
 
-      store.with_txn_builder(&txn, |builder| {
-             builder.builder
-                    .add_operation_create_asset(&kp,
-                                                None,
-                                                Default::default(),
-                                                &prompt::<String, _>("memo?").unwrap(),
-                                                PolicyChoice::Fungible())
-                    .unwrap();
+      store.with_txn_builder::<ledger::data_model::errors::PlatformError, _>(&txn, |builder| {
+             builder.builder.add_operation_create_asset(&kp,
+                                                         None,
+                                                         Default::default(),
+                                                         &prompt::<String, _>("memo?").unwrap(),
+                                                         PolicyChoice::Fungible())?;
              match builder.builder.transaction().body.operations.last() {
                Some(Operation::DefineAsset(def)) => {
                  builder.new_asset_types
@@ -931,6 +936,7 @@ fn run_action<S: CliDataStore>(action: Actions, store: &mut S) -> Result<(), Cli
                                 builder.new_asset_types
                                        .get(&AssetTypeName(asset_nick.clone()))
                                        .unwrap());
+             Ok(())
            })?;
       Ok(())
     }
@@ -974,6 +980,8 @@ fn run_action<S: CliDataStore>(action: Actions, store: &mut S) -> Result<(), Cli
              std::mem::swap(&mut signers, &mut builder.signers);
              metadata.signers.extend(signers.into_iter().map(|(k, _)| k));
              std::mem::swap(&mut metadata.operations, &mut builder.operations);
+             let ret: Result<(), std::convert::Infallible> = Ok(());
+             ret
            })?;
       store.build_transaction(&nick, &txn_nick, metadata)?;
       if used_default {
@@ -1015,9 +1023,12 @@ fn run_action<S: CliDataStore>(action: Actions, store: &mut S) -> Result<(), Cli
       for (nick, ent) in metadata.new_asset_types.iter() {
         store.add_asset_type(&nick, ent.clone())?;
       }
-      store.update_txn_metadata(&TxnName(nick.clone()), |metadata| {
-             metadata.handle = Some(handle.clone());
-           })?;
+      store.update_txn_metadata::<std::convert::Infallible, _>(&TxnName(nick.clone()),
+                                                               |metadata| {
+                                                                 metadata.handle =
+                                                                   Some(handle.clone());
+                                                                 Ok(())
+                                                               })?;
       println!("Submitted `{}`: got handle `{}`", nick, &handle.0);
 
       if prompt_default("Retrieve its status?", true)? {
@@ -1044,8 +1055,9 @@ fn run_action<S: CliDataStore>(action: Actions, store: &mut S) -> Result<(), Cli
 
         println!("Got status: {}", serde_json::to_string(&resp)?);
         // TODO: do something if it's committed
-        store.update_txn_metadata(&TxnName(nick), |metadata| {
+        store.update_txn_metadata::<std::convert::Infallible, _>(&TxnName(nick), |metadata| {
                metadata.status = Some(resp);
+               Ok(())
              })?;
       }
       Ok(())
