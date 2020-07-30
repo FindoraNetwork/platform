@@ -275,7 +275,7 @@ pub struct ActixQueryServerClient {
   port: usize,
   host: String,
   protocol: String,
-  client: reqwest::Client,
+  client: reqwest::blocking::Client,
 }
 
 impl ActixQueryServerClient {
@@ -283,7 +283,7 @@ impl ActixQueryServerClient {
     ActixQueryServerClient { port,
                              host: String::from(host),
                              protocol: String::from(protocol),
-                             client: reqwest::Client::new() }
+                             client: reqwest::blocking::Client::new() }
   }
 }
 
