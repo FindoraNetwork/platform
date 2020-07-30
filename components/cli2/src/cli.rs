@@ -2,7 +2,7 @@
 #![allow(clippy::type_complexity)]
 use ledger::data_model::*;
 use serde::{Deserialize, Serialize};
-use snafu::{OptionExt, ResultExt, Snafu};
+use snafu::{Backtrace, OptionExt, ResultExt, Snafu};
 use std::collections::HashMap;
 use std::fs;
 use structopt::StructOpt;
@@ -128,7 +128,10 @@ impl HasTable for TxoCacheEntry {
 #[derive(Snafu, Debug)]
 enum CliError {
   #[snafu(context(false))]
-  KV { source: KVError },
+  KV {
+    backtrace: Backtrace,
+    source: KVError,
+  },
   #[snafu(context(false))]
   #[snafu(display("Error reading user input: {}", source))]
   RustyLine {
@@ -537,110 +540,125 @@ fn print_conf(conf: &CliConfig) {
                .unwrap_or_else(|| "<NONE>".to_string()));
 }
 
-fn run_action<S: CliDataStore>(action: Actions, store: &mut S) {
+fn run_action<S: CliDataStore>(action: Actions, store: &mut S) -> Result<(), CliError> {
   // println!("{:?}", action);
 
   use Actions::*;
-  match action {
+  let ret = match action {
     Setup {} => {
       store.update_config(|conf| {
-        *conf = prompt_for_config(Some(conf.clone())).unwrap();
-      }).unwrap();
+             *conf = prompt_for_config(Some(conf.clone())).unwrap();
+           })?;
+      Ok(())
     }
 
     ListConfig {} => {
-      let conf = store.get_config().unwrap();
+      let conf = store.get_config()?;
       print_conf(&conf);
+      Ok(())
     }
 
     QueryLedgerState { forget_old_key } => {
       store.update_config(|conf| {
-        let mut new_key = forget_old_key;
-        if !new_key && conf.ledger_sig_key.is_none() {
-          println!("No signature key found for `{}`.", conf.ledger_server);
-          new_key = new_key || prompt_default(" Retrieve a new one?", false).unwrap();
-          if !new_key {
-            eprintln!("Cannot check ledger state validity without a signature key.");
-            exit(-1);
-          }
-        }
+             let mut new_key = forget_old_key;
+             if !new_key && conf.ledger_sig_key.is_none() {
+               println!("No signature key found for `{}`.", conf.ledger_server);
+               new_key = new_key || prompt_default(" Retrieve a new one?", false).unwrap();
+               if !new_key {
+                 eprintln!("Cannot check ledger state validity without a signature key.");
+                 exit(-1);
+               }
+             }
 
-        if new_key {
-          let query = format!("{}{}",conf.ledger_server,LedgerAccessRoutes::PublicKey.route());
-          let resp: XfrPublicKey;
-          match reqwest::blocking::get(&query) {
-              Err(e) => {
-                  eprintln!("Request `{}` failed: {}",query,e);
-                  exit(-1);
-              }
-              Ok(v) => match v.json::<XfrPublicKey>() {
-                  Err(e) => {
-                      eprintln!("Failed to parse response: {}",e);
-                      exit(-1);
-                  }
-                  Ok(v) => { resp = v; }
-              }
-          }
+             if new_key {
+               let query = format!("{}{}",
+                                   conf.ledger_server,
+                                   LedgerAccessRoutes::PublicKey.route());
+               let resp: XfrPublicKey;
+               match reqwest::blocking::get(&query) {
+                 Err(e) => {
+                   eprintln!("Request `{}` failed: {}", query, e);
+                   exit(-1);
+                 }
+                 Ok(v) => match v.json::<XfrPublicKey>() {
+                   Err(e) => {
+                     eprintln!("Failed to parse response: {}", e);
+                     exit(-1);
+                   }
+                   Ok(v) => {
+                     resp = v;
+                   }
+                 },
+               }
 
-          println!("Saving ledger signing key `{}`",serde_json::to_string(&resp).unwrap());
-          conf.ledger_sig_key = Some(resp);
-        }
+               println!("Saving ledger signing key `{}`",
+                        serde_json::to_string(&resp).unwrap());
+               conf.ledger_sig_key = Some(resp);
+             }
 
-        assert!(conf.ledger_sig_key.is_some());
+             assert!(conf.ledger_sig_key.is_some());
 
-        let query = format!("{}{}",conf.ledger_server,LedgerAccessRoutes::GlobalState.route());
-        let resp: (HashOf<Option<StateCommitmentData>>,
-                u64,
-                SignatureOf<(HashOf<Option<StateCommitmentData>>, u64)>);
-        match reqwest::blocking::get(&query) {
-            Err(e) => {
-                eprintln!("Request `{}` failed: {}",query,e);
-                exit(-1);
-            }
-            Ok(v) => match v.json::<_>() {
-                Err(e) => {
-                    eprintln!("Failed to parse response: {}",e);
-                    exit(-1);
-                }
-                Ok(v) => { resp = v; }
-            }
-        }
+             let query = format!("{}{}",
+                                 conf.ledger_server,
+                                 LedgerAccessRoutes::GlobalState.route());
+             let resp: (HashOf<Option<StateCommitmentData>>,
+                        u64,
+                        SignatureOf<(HashOf<Option<StateCommitmentData>>, u64)>);
+             match reqwest::blocking::get(&query) {
+               Err(e) => {
+                 eprintln!("Request `{}` failed: {}", query, e);
+                 exit(-1);
+               }
+               Ok(v) => match v.json::<_>() {
+                 Err(e) => {
+                   eprintln!("Failed to parse response: {}", e);
+                   exit(-1);
+                 }
+                 Ok(v) => {
+                   resp = v;
+                 }
+               },
+             }
 
-        if let Err(e) = resp.2.verify(&conf.ledger_sig_key.unwrap(), &(resp.0.clone(),resp.1)) {
-            eprintln!("Ledger responded with invalid signature: {}",e);
-            exit(-1);
-        }
+             if let Err(e) = resp.2
+                                 .verify(&conf.ledger_sig_key.unwrap(), &(resp.0.clone(), resp.1))
+             {
+               eprintln!("Ledger responded with invalid signature: {}", e);
+               exit(-1);
+             }
 
-        conf.ledger_state = Some(resp);
+             conf.ledger_state = Some(resp);
 
-        assert!(conf.ledger_state.is_some());
+             assert!(conf.ledger_state.is_some());
 
-        println!("New state retrieved.");
+             println!("New state retrieved.");
 
-        print_conf(&conf);
-      }).unwrap();
+             print_conf(&conf);
+           })?;
+      Ok(())
     }
 
     KeyGen { nick } => {
       let kp = XfrKeyPair::generate(&mut rand::thread_rng());
-      store.add_public_key(&PubkeyName(nick.to_string()), *kp.get_pk_ref())
-           .unwrap();
-      store.add_key_pair(&KeypairName(nick.to_string()), kp)
-           .unwrap();
+      store.add_public_key(&PubkeyName(nick.to_string()), *kp.get_pk_ref())?;
+      store.add_key_pair(&KeypairName(nick.to_string()), kp)?;
       println!("New key pair added for `{}`", nick);
+      Ok(())
     }
 
     ListKeypair { nick } => {
-      let kp = store.get_keypair(&KeypairName(nick.to_string())).unwrap();
+      let kp = store.get_keypair(&KeypairName(nick.to_string()))?;
       let kp = kp.map(|x| serde_json::to_string(&x).unwrap())
                  .unwrap_or(format!("No keypair with name `{}` found", nick));
       println!("{}", kp);
+      Ok(())
     }
     ListPublicKey { nick } => {
-      let pk = store.get_pubkey(&PubkeyName(nick.to_string())).unwrap();
+      let pk = store.get_pubkey(&PubkeyName(nick.to_string()))?;
       let pk = pk.map(|x| serde_json::to_string(&x).unwrap())
                  .unwrap_or(format!("No public key with name {} found", nick));
       println!("{}", pk);
+      Ok(())
     }
 
     LoadKeypair { nick } => {
@@ -651,29 +669,31 @@ fn run_action<S: CliDataStore>(action: Actions, store: &mut S) {
         }
         Ok(kp) => {
           store.add_public_key(&PubkeyName(nick.to_string()), *kp.get_pk_ref())
-            .unwrap();
+            ?;
           store.add_key_pair(&KeypairName(nick.to_string()), kp)
-              .unwrap();
+              ?;
           println!("New key pair added for `{}`", nick);
         }
       }
+      Ok(())
     }
     LoadPublicKey { nick } => {
-      match serde_json::from_str(&prompt::<String,_>(format!("Please paste in the public key for `{}`",nick)).unwrap()) {
+      match serde_json::from_str(&prompt::<String,_>(format!("Please paste in the public key for `{}`",nick))?) {
         Err(e) => {
           eprintln!("Could not parse key pair: {}",e);
           exit(-1);
         }
         Ok(pk) => {
           store.add_public_key(&PubkeyName(nick.to_string()), pk)
-            .unwrap();
+            ?;
           println!("New public key added for `{}`", nick);
         }
       }
+      Ok(())
     }
 
     DeleteKeypair { nick } => {
-      let kp = store.get_keypair(&KeypairName(nick.to_string())).unwrap();
+      let kp = store.get_keypair(&KeypairName(nick.to_string()))?;
       match kp {
         None => {
           eprintln!("No keypair with name `{}` found", nick);
@@ -681,21 +701,21 @@ fn run_action<S: CliDataStore>(action: Actions, store: &mut S) {
         }
         Some(_) => {
           if prompt_default(format!("Are you sure you want to delete keypair `{}`?", nick),
-                            false).unwrap()
+                            false)?
           {
             // TODO: do this atomically?
-            store.delete_keypair(&KeypairName(nick.to_string()))
-                 .unwrap();
-            store.delete_pubkey(&PubkeyName(nick.to_string())).unwrap();
+            store.delete_keypair(&KeypairName(nick.to_string()))?;
+            store.delete_pubkey(&PubkeyName(nick.to_string()))?;
             println!("Keypair `{}` deleted", nick);
           }
         }
       }
+      Ok(())
     }
 
     DeletePublicKey { nick } => {
-      let pk = store.get_pubkey(&PubkeyName(nick.to_string())).unwrap();
-      let kp = store.get_keypair(&KeypairName(nick.to_string())).unwrap();
+      let pk = store.get_pubkey(&PubkeyName(nick.to_string()))?;
+      let kp = store.get_keypair(&KeypairName(nick.to_string()))?;
       match (pk, kp) {
         (None, _) => {
           eprintln!("No public key with name `{}` found", nick);
@@ -708,228 +728,250 @@ fn run_action<S: CliDataStore>(action: Actions, store: &mut S) {
         }
         (Some(_), None) => {
           if prompt_default(format!("Are you sure you want to delete public key `{}`?", nick),
-                            false).unwrap()
+                            false)?
           {
-            store.delete_pubkey(&PubkeyName(nick.to_string())).unwrap();
+            store.delete_pubkey(&PubkeyName(nick.to_string()))?;
             println!("Public key `{}` deleted", nick);
           }
         }
       }
+      Ok(())
     }
 
     ListAssetTypes {} => {
-        for (nick,a) in store.get_asset_types().unwrap().into_iter() {
-            println!("Asset `{}`",nick.0);
-            display_asset_type(1,&a);
-        }
+      for (nick, a) in store.get_asset_types()?.into_iter() {
+        println!("Asset `{}`", nick.0);
+        display_asset_type(1, &a);
+      }
+      Ok(())
     }
 
     ListAssetType { nick } => {
-        let a = store.get_asset_type(&AssetTypeName(nick.clone())).unwrap();
-        match a {
-            None => {
-                eprintln!("`{}` does not refer to any known asset type",
-                            nick);
-                exit(-1);
-            }
-            Some(a) => {
-                display_asset_type(0,&a);
-            }
+      let a = store.get_asset_type(&AssetTypeName(nick.clone()))?;
+      match a {
+        None => {
+          eprintln!("`{}` does not refer to any known asset type", nick);
+          exit(-1);
         }
+        Some(a) => {
+          display_asset_type(0, &a);
+        }
+      }
+      Ok(())
     }
 
     QueryAssetType { nick, code } => {
-        if store.get_asset_type(&AssetTypeName(nick.clone())).unwrap().is_some() {
-            eprintln!("Asset type with the nickname `{}` already exists.",nick);
-            exit(-1);
-        }
+      if store.get_asset_type(&AssetTypeName(nick.clone()))?
+              .is_some()
+      {
+        eprintln!("Asset type with the nickname `{}` already exists.", nick);
+        exit(-1);
+      }
 
-        let conf = store.get_config().unwrap();
-        let code_b64 = code.clone();
-        let _ = AssetTypeCode::new_from_base64(&code).unwrap();
-        let query = format!("{}{}/{}",conf.ledger_server,LedgerAccessRoutes::AssetToken.route(),code_b64);
-        let resp: Asset;
-        match reqwest::blocking::get(&query) {
-            Err(e) => {
-                eprintln!("Request `{}` failed: {}",query,e);
-                exit(-1);
-            }
-            Ok(v) => match v.json::<AssetType>() {
-                Err(e) => {
-                    eprintln!("Failed to parse response: {}",e);
-                    exit(-1);
-                }
-                Ok(v) => { resp = v.properties; }
-            }
+      let conf = store.get_config()?;
+      let code_b64 = code.clone();
+      let _ = AssetTypeCode::new_from_base64(&code).unwrap();
+      let query = format!("{}{}/{}",
+                          conf.ledger_server,
+                          LedgerAccessRoutes::AssetToken.route(),
+                          code_b64);
+      let resp: Asset;
+      match reqwest::blocking::get(&query) {
+        Err(e) => {
+          eprintln!("Request `{}` failed: {}", query, e);
+          exit(-1);
         }
-        let ret = AssetTypeEntry { asset: resp, issuer_nick: None };
-        store.add_asset_type(&AssetTypeName(nick.clone()),ret).unwrap();
-        println!("Asset type `{}` saved as `{}`", code_b64, nick);
+        Ok(v) => match v.json::<AssetType>() {
+          Err(e) => {
+            eprintln!("Failed to parse response: {}", e);
+            exit(-1);
+          }
+          Ok(v) => {
+            resp = v.properties;
+          }
+        },
+      }
+      let ret = AssetTypeEntry { asset: resp,
+                                 issuer_nick: None };
+      store.add_asset_type(&AssetTypeName(nick.clone()), ret)?;
+      println!("Asset type `{}` saved as `{}`", code_b64, nick);
+      Ok(())
     }
 
     PrepareTransaction { nick, exact } => {
-        let seq_id = match store.get_config().unwrap().ledger_state {
-            None => {
-                eprintln!(concat!("I don't know what block ID the ledger is on!\n",
-                                  "Please run query-ledger-state first."));
-                exit(-1);
-            }
-            Some(s) => s.1
-        };
+      let seq_id = match store.get_config()?.ledger_state {
+        None => {
+          eprintln!(concat!("I don't know what block ID the ledger is on!\n",
+                            "Please run query-ledger-state first."));
+          exit(-1);
+        }
+        Some(s) => s.1,
+      };
 
-        let mut nick = nick;
-        if store.get_txn_builder(&TxnBuilderName(nick.clone())).unwrap().is_some() {
-            if exact {
-                eprintln!("Transaction builder with the name `{}` already exists.",nick);
-                exit(-1);
-            }
-
-            for n in FreshNamer::new(nick.clone(),".".to_string()) {
-                if store.get_txn_builder(&TxnBuilderName(n.clone())).unwrap().is_none() {
-                    nick = n;
-                    break;
-                }
-            }
+      let mut nick = nick;
+      if store.get_txn_builder(&TxnBuilderName(nick.clone()))?
+              .is_some()
+      {
+        if exact {
+          eprintln!("Transaction builder with the name `{}` already exists.",
+                    nick);
+          exit(-1);
         }
 
-        println!("Preparing transaction `{}` for block id `{}`...",nick,seq_id);
-        store.prepare_transaction(&TxnBuilderName(nick.clone()),seq_id).unwrap();
-        store.update_config(|conf| {
-            conf.active_txn = Some(TxnBuilderName(nick));
-        }).unwrap();
-        println!("Done.");
+        for n in FreshNamer::new(nick.clone(), ".".to_string()) {
+          if store.get_txn_builder(&TxnBuilderName(n.clone()))?.is_none() {
+            nick = n;
+            break;
+          }
+        }
+      }
+
+      println!("Preparing transaction `{}` for block id `{}`...",
+               nick, seq_id);
+      store.prepare_transaction(&TxnBuilderName(nick.clone()), seq_id)?;
+      store.update_config(|conf| {
+             conf.active_txn = Some(TxnBuilderName(nick));
+           })?;
+      println!("Done.");
+      Ok(())
     }
 
     ListTxnBuilders {} => {
-      for (nick,builder) in store.get_txn_builders().unwrap() {
-        println!("{}:",nick.0);
-        display_txn_builder(1,&builder);
+      for (nick, builder) in store.get_txn_builders()? {
+        println!("{}:", nick.0);
+        display_txn_builder(1, &builder);
       }
-    }
-
-    ListBuiltTransactions { } => {
-      for (nick,txn) in store.get_built_transactions().unwrap() {
-        println!("{}:",nick.0);
-        display_txn(1,&txn);
-      }
-
+      Ok(())
     }
 
     ListTxnBuilder { nick } => {
-      let builder = match store.get_txn_builder(&TxnBuilderName(nick.clone())).unwrap() {
+      let builder = match store.get_txn_builder(&TxnBuilderName(nick.clone()))? {
         None => {
-            eprintln!("No txn builder `{}` found.",nick);
-            exit(-1);
+          eprintln!("No txn builder `{}` found.", nick);
+          exit(-1);
         }
-        Some(s) => s
+        Some(s) => s,
       };
 
-      display_txn_builder(0,&builder);
+      display_txn_builder(0, &builder);
+      Ok(())
     }
 
     ListBuiltTransaction { nick } => {
-      let txn = match store.get_built_transaction(&TxnName(nick.clone())).unwrap() {
+      let txn = match store.get_built_transaction(&TxnName(nick.clone()))? {
         None => {
-            eprintln!("No txn `{}` found.",nick);
-            exit(-1);
+          eprintln!("No txn `{}` found.", nick);
+          exit(-1);
         }
-        Some(s) => s
+        Some(s) => s,
       };
-      display_txn(0,&txn);
+      display_txn(0, &txn);
+      Ok(())
     }
 
-
-    DefineAsset { txn, key_nick, asset_nick, } => {
-        let key_nick = KeypairName(key_nick);
-        let kp = match store.get_keypair(&key_nick).unwrap() {
-            None => {
-                eprintln!("No key pair `{}` found.",key_nick.0);
-                exit(-1);
-            }
-            Some(s) => s
-        };
-        let txn_opt = txn.map(TxnBuilderName).or_else(|| store.get_config().unwrap().active_txn);
-        let txn;
-        match txn_opt {
-            None => {
-                eprintln!("I don't know which transaction to use!");
-                exit(-1);
-            }
-            Some(t) => { txn = t; }
+    DefineAsset { txn,
+                  key_nick,
+                  asset_nick, } => {
+      let key_nick = KeypairName(key_nick);
+      let kp = match store.get_keypair(&key_nick)? {
+        None => {
+          eprintln!("No key pair `{}` found.", key_nick.0);
+          exit(-1);
         }
-
-        if store.get_txn_builder(&txn).unwrap().is_none() {
-            eprintln!("Transaction builder `{}` not found.",txn.0);
-            exit(-1);
+        Some(s) => s,
+      };
+      let txn_opt = txn.map(TxnBuilderName)
+                       .or_else(|| store.get_config().unwrap().active_txn);
+      let txn;
+      match txn_opt {
+        None => {
+          eprintln!("I don't know which transaction to use!");
+          exit(-1);
         }
+        Some(t) => {
+          txn = t;
+        }
+      }
 
-        store.with_txn_builder(&txn, |builder| {
-            builder.builder.add_operation_create_asset(
-                &kp,
-                None,
-                Default::default(),
-                &prompt::<String,_>("memo?").unwrap(),
-                PolicyChoice::Fungible()).unwrap();
-            match builder.builder.transaction().body.operations.last() {
-                Some(Operation::DefineAsset(def)) => {
-                    builder.new_asset_types.insert(
-                        AssetTypeName(asset_nick.clone()),
-                        AssetTypeEntry {
-                            asset: def.body.asset.clone(),
-                            issuer_nick: Some(key_nick.clone()),
-                        });
-                }
-                _ => { panic!("The transaction builder doesn't include our operation!"); }
-            }
-            builder.signers.insert(key_nick.clone(),Serialized::new(&kp));
-            builder.operations.push(OpMetadata::DefineAsset {
-                issuer_nick: key_nick.clone(),
-                asset_nick: AssetTypeName(asset_nick.clone()) });
-        }).unwrap();
+      if store.get_txn_builder(&txn)?.is_none() {
+        eprintln!("Transaction builder `{}` not found.", txn.0);
+        exit(-1);
+      }
 
+      store.with_txn_builder(&txn, |builder| {
+             builder.builder
+                    .add_operation_create_asset(&kp,
+                                                None,
+                                                Default::default(),
+                                                &prompt::<String, _>("memo?").unwrap(),
+                                                PolicyChoice::Fungible())
+                    .unwrap();
+             match builder.builder.transaction().body.operations.last() {
+               Some(Operation::DefineAsset(def)) => {
+                 builder.new_asset_types
+                        .insert(AssetTypeName(asset_nick.clone()),
+                                AssetTypeEntry { asset: def.body.asset.clone(),
+                                                 issuer_nick: Some(key_nick.clone()) });
+               }
+               _ => {
+                 panic!("The transaction builder doesn't include our operation!");
+               }
+             }
+             builder.signers
+                    .insert(key_nick.clone(), Serialized::new(&kp));
+             builder.operations
+                    .push(OpMetadata::DefineAsset { issuer_nick: key_nick.clone(),
+                                                    asset_nick:
+                                                      AssetTypeName(asset_nick.clone()) });
+           })?;
+      Ok(())
     }
 
     BuildTransaction { txn, txn_nick } => {
-        let mut used_default = false;
-        let txn_opt = txn.map(TxnBuilderName).or_else(|| {
-            used_default = true;
-            store.get_config().unwrap().active_txn
-        });
-        let nick;
-        match txn_opt {
-            None => {
-                eprintln!("I don't know which transaction to use!");
-                exit(-1);
-            }
-            Some(t) => { nick = t; }
+      let mut used_default = false;
+      let txn_opt = txn.map(TxnBuilderName).or_else(|| {
+                                             used_default = true;
+                                             store.get_config().unwrap().active_txn
+                                           });
+      let nick;
+      match txn_opt {
+        None => {
+          eprintln!("I don't know which transaction to use!");
+          exit(-1);
         }
-
-        let txn_nick = TxnName(txn_nick.unwrap_or_else(|| nick.0.clone()));
-
-        if store.get_built_transaction(&txn_nick).unwrap().is_some() {
-            eprintln!("Transaction with the name `{}` already exists.",txn_nick.0);
-            exit(-1);
+        Some(t) => {
+          nick = t;
         }
+      }
 
-        let mut metadata: TxnMetadata = Default::default();
-        store.with_txn_builder(&nick, |builder| {
-            for (_,kp) in builder.signers.iter() {
-                builder.builder.sign(&kp.deserialize());
-            }
-            std::mem::swap(&mut metadata.new_asset_types, &mut builder.new_asset_types);
-            let mut signers = Default::default();
-            std::mem::swap(&mut signers, &mut builder.signers);
-            metadata.signers.extend(signers.into_iter().map(|(k,_)| k));
-            std::mem::swap(&mut metadata.operations, &mut builder.operations);
-        }).unwrap();
-        store.build_transaction(&nick,&txn_nick,metadata).unwrap();
-        if used_default {
-            store.update_config(|conf| {
-                conf.active_txn = None;
-            }).unwrap();
-        }
+      let txn_nick = TxnName(txn_nick.unwrap_or_else(|| nick.0.clone()));
 
-        println!("Built transaction `{}` from builder `{}`.",txn_nick.0,nick.0);
+      if store.get_built_transaction(&txn_nick)?.is_some() {
+        eprintln!("Transaction with the name `{}` already exists.", txn_nick.0);
+        exit(-1);
+      }
+
+      let mut metadata: TxnMetadata = Default::default();
+      store.with_txn_builder(&nick, |builder| {
+             for (_, kp) in builder.signers.iter() {
+               builder.builder.sign(&kp.deserialize());
+             }
+             std::mem::swap(&mut metadata.new_asset_types, &mut builder.new_asset_types);
+             let mut signers = Default::default();
+             std::mem::swap(&mut signers, &mut builder.signers);
+             metadata.signers.extend(signers.into_iter().map(|(k, _)| k));
+             std::mem::swap(&mut metadata.operations, &mut builder.operations);
+           })?;
+      store.build_transaction(&nick, &txn_nick, metadata)?;
+      if used_default {
+        store.update_config(|conf| {
+               conf.active_txn = None;
+             })?;
+      }
+
+      println!("Built transaction `{}` from builder `{}`.",
+               txn_nick.0, nick.0);
+      Ok(())
     }
 
     // Submit { nick, } {
@@ -955,42 +997,58 @@ fn run_action<S: CliDataStore>(action: Actions, store: &mut S) {
     //       conf.ledger_sig_key = Some(resp);
 
     // }
-
     _ => {
       unimplemented!();
     }
-  }
+  };
   store.update_config(|conf| {
          // println!("Opened {} times before", conf.open_count);
          conf.open_count += 1;
-       })
-       .unwrap();
+       })?;
+  ret
 }
 
-fn main() -> Result<(), CliError> {
-  let action = Actions::from_args();
+fn main() {
+  fn inner_main() -> Result<(), CliError> {
+    let action = Actions::from_args();
 
-  // use Actions::*;
+    // use Actions::*;
 
-  let mut home = dirs::home_dir().context(HomeDir)?;
-  home.push(".findora");
-  fs::create_dir_all(&home).with_context(|| UserFile { file: home.clone() })?;
-  home.push("cli2_data.sqlite");
-  let first_time = !std::path::Path::exists(&home);
-  let mut db = KVStore::open(home.clone())?;
-  if first_time {
-    println!("No config found at {:?} -- triggering first-time setup",
-             &home);
-    db.update_config(|conf| {
-        *conf = prompt_for_config(None).unwrap();
-      })
-      .unwrap();
+    let mut home = dirs::home_dir().context(HomeDir)?;
+    home.push(".findora");
+    fs::create_dir_all(&home).with_context(|| UserFile { file: home.clone() })?;
+    home.push("cli2_data.sqlite");
+    let first_time = !std::path::Path::exists(&home);
+    let mut db = KVStore::open(home.clone())?;
+    if first_time {
+      println!("No config found at {:?} -- triggering first-time setup",
+               &home);
+      db.update_config(|conf| {
+          *conf = prompt_for_config(None).unwrap();
+        })?;
 
-    if let Actions::Setup { .. } = action {
-      return Ok(());
+      if let Actions::Setup { .. } = action {
+        return Ok(());
+      }
     }
-  }
 
-  run_action(action, &mut db);
-  Ok(())
+    run_action(action, &mut db)?;
+    Ok(())
+  }
+  let ret = inner_main();
+  if let Err(x) = ret {
+    use snafu::ErrorCompat;
+    use std::error::Error;
+    let backtrace = ErrorCompat::backtrace(&x);
+    println!("Error: {}", x);
+    let mut current = &x as &dyn Error;
+    while let Some(next) = current.source() {
+      println!("   Caused by: {}", next);
+      current = next;
+    }
+    if let Some(backtrace) = backtrace {
+      println!("Backtrace: \n{}", backtrace);
+    }
+    std::process::exit(1);
+  }
 }
