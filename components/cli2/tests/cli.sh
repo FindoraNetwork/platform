@@ -5,7 +5,7 @@ FINDORA_STORE_FILE=${FINDORA_HOME:-${HOME}/.findora}/cli2_data.sqlite
 setup() {
   # Start from a fresh state
   echo "Deleting $FINDORA_STORE_FILE..."
-  rm  -f $FINDORA_STORE_FILE
+  rm  -f $FINDORA_STORE_FILE || true
   bash -c '{ echo; echo; } | $CLI2 setup'
 }
 
@@ -40,7 +40,7 @@ setup() {
 }
 
 @test "list the key pairs" {
-  run bash -c '$CLI2 key-gen bob; $CLI2 list-keypair bob'
+  run bash -c '$CLI2 key-gen bob; $CLI2 list-keypair -s bob'
   [ "$status" -eq 0 ]
   [ "${lines[1]:0:10}" = '{"pub_key"' ]
   [ "${lines[1]:58:9}" = '"sec_key"' ]
@@ -61,9 +61,9 @@ setup() {
 @test "define asset" {
   run bash -c '$CLI2 key-gen alice; echo y | $CLI2 query-ledger-state; $CLI2 prepare-transaction 0;echo memo0 | $CLI2 define-asset alice AliceCoin --txn 0;'
   [ "$status" -eq 0 ]
-  $CLI2 list-txn-builders;
+  run $CLI2 list-txn-builders;
   [ "$status" -eq 0 ]
-  [ "${lines[9]}" = 'Done.' ] #TODO better capture of output
+  [ "${lines[12]}" = 'Done.' ] #TODO better capture of output
   run bash -c
 }
 

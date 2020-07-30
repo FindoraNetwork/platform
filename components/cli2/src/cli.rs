@@ -2,7 +2,7 @@
 #![allow(clippy::type_complexity)]
 use ledger::data_model::*;
 use serde::{Deserialize, Serialize};
-use snafu::{Backtrace, ResultExt, Snafu};
+use snafu::{Backtrace, OptionExt, ResultExt, Snafu};
 use std::collections::HashMap;
 use std::env;
 use std::fs;
@@ -410,6 +410,10 @@ enum Actions {
   ListKeypair {
     /// Identity nickname
     nick: String,
+
+    /// Also display the secret key
+    #[structopt(short, long)]
+    show_secret: bool,
   },
 
   /// Permanently delete the key pair for <nick>
@@ -657,13 +661,40 @@ fn run_action<S: CliDataStore>(action: Actions, store: &mut S) -> Result<(), Cli
       Ok(())
     }
 
-    ListKeypair { nick } => {
-      let kp = store.get_keypair(&KeypairName(nick.to_string()))?;
-      let kp = kp.map(|x| serde_json::to_string(&x).unwrap())
-                 .unwrap_or(format!("No keypair with name `{}` found", nick));
-      println!("{}", kp);
+    ListKeys {} => {
+      let kps = store.get_keypairs()?;
+      let pks = store.get_pubkeys()?
+                     .into_iter()
+                     .map(|(k, pk)| (k.0, pk))
+                     .filter(|(k, _)| !kps.contains_key(&KeypairName(k.clone())))
+                     .map(|x| (x, false))
+                     .collect::<Vec<_>>();
+      let kps = kps.into_iter()
+                   .map(|(k, kp)| (k.0, *kp.get_pk_ref()))
+                   .map(|x| (x, true));
+      for ((n, k), pair) in kps.chain(pks.into_iter()) {
+        println!("{} {}: `{}`",
+                 if pair { "keypair" } else { "public key" },
+                 n,
+                 serde_json::to_string(&k).unwrap());
+      }
       Ok(())
     }
+
+    ListKeypair { nick, show_secret } => {
+      let kp = store.get_keypair(&KeypairName(nick.to_string()))?;
+      if show_secret {
+        let kp = kp.map(|x| serde_json::to_string(&x).unwrap())
+                   .unwrap_or(format!("No keypair with name `{}` found", nick));
+        println!("{}", kp);
+      } else {
+        let pk = kp.map(|x| serde_json::to_string(x.get_pk_ref()).unwrap())
+                   .unwrap_or(format!("No keypair with name `{}` found", nick));
+        println!("{}", pk);
+      }
+      Ok(())
+    }
+
     ListPublicKey { nick } => {
       let pk = store.get_pubkey(&PubkeyName(nick.to_string()))?;
       let pk = pk.map(|x| serde_json::to_string(&x).unwrap())
@@ -852,6 +883,7 @@ fn run_action<S: CliDataStore>(action: Actions, store: &mut S) -> Result<(), Cli
         println!("{}:", nick.0);
         display_txn_builder(1, &builder);
       }
+      println!("Done.");
       Ok(())
     }
 
@@ -1083,8 +1115,15 @@ fn main() {
     // use Actions::*;
 
     let mut home = PathBuf::new();
-    home.push(env::var("FINDORA_HOME").unwrap().as_str());
-    home.push(".findora");
+    match env::var("FINDORA_HOME") {
+      Ok(fin_home) => {
+        home.push(fin_home);
+      }
+      Err(_) => {
+        home.push(dirs::home_dir().context(HomeDir)?);
+        home.push(".findora");
+      }
+    }
     fs::create_dir_all(&home).with_context(|| UserFile { file: home.clone() })?;
     home.push("cli2_data.sqlite");
     let first_time = !std::path::Path::exists(&home);
