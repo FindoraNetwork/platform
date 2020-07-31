@@ -10,5 +10,5 @@ cargo build
 cargo test
 
 #  black box tests written in shell
-$BATS tests/hello_world.sh
-$BATS tests/cli.sh
+$BATS tests/advanced-cli.sh
+$BATS tests/simple-cli.sh

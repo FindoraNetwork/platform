@@ -452,6 +452,7 @@ fn prompt_for_config(prev_conf: Option<CliConfig>) -> Result<CliConfig, CliError
 #[structopt(about = "Build and manage transactions and assets on a findora ledger",
             rename_all = "kebab-case")]
 enum Actions {
+  //////////////////// Simple API  /////////////////////////////////////////////////////////////////
   /// Initialize or change your local database configuration
   Setup {},
 
@@ -516,7 +517,17 @@ enum Actions {
     nick: String,
   },
 
+  /// Define an asset in a single step
+  SimpleDefineAsset {
+    /// Issuer key
+    issuer_nick: String,
+    /// Name for the asset type
+    asset_nick: String,
+  },
+
+  //////////////////// Advanced API  ///////////////////////////////////////////////////////////////
   ListAssetTypes {},
+
   ListAssetType {
     /// Asset type nickname
     nick: String,
@@ -571,6 +582,7 @@ enum Actions {
     /// Name for the asset type
     asset_nick: String,
   },
+
   IssueAsset {
     #[structopt(short, long)]
     /// Which builder?
@@ -582,15 +594,18 @@ enum Actions {
     /// Amount to issue
     amount: u64,
   },
+
   TransferAsset {
     #[structopt(short, long)]
     /// Which builder?
     builder: Option<String>,
   },
+
   ListBuiltTransaction {
     /// Nickname of the transaction
     nick: String,
   },
+
   ListBuiltTransactions {
     // TODO: options?
   },
@@ -894,6 +909,7 @@ fn run_action<S: CliDataStore>(action: Actions, store: &mut S) -> Result<(), Cli
       Ok(())
     }
 
+    //////////////////// Advanced API  ///////////////////////////////////////////////////////////////
     ListAssetTypes {} => {
       for (nick, a) in store.get_asset_types()?.into_iter() {
         println!("Asset `{}`", nick.0);
