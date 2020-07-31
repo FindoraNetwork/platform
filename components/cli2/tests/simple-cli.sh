@@ -50,7 +50,7 @@ source "tests/common.sh"
 @test "load key pair" {
   run bash -c 'echo "{\"pub_key\":\"iAnNs_n9HLzdpOYM1cxCOVapua-jS59j1j92lRPe64E=\",\"sec_key\":\"Au3s9u8TdPWX36X-j_9xvMud0DOKrYK1x39imArYI9g=\"}" | $CLI2 load-keypair bob'
   [ "$status" -eq 0 ]
-  check_line 0 'New key pair added for `bob`' ]
+  check_line 0 'New key pair added for `bob`'
 }
 
 @test "delete key pair" {
