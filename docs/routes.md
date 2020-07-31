@@ -50,9 +50,6 @@
 
 # Findora Submission Server Routes
 
-``force_end_block`` [POST]
-: Normally, transactions are posted to the Ledger in batches. To aid development, this route causes the block in progress to be posted immediately, even if it is not full.
-
 ``ping``
 : a value indicating that the Submission Server is up and responding
 
