@@ -891,7 +891,7 @@ impl TransferOperationBuilder {
                                 -> Result<TransferBodySignature, PlatformError> {
     let sig = self.transfer
                   .as_ref()
-                  .ok_or(no_transfer_err!())?
+                  .ok_or_else(|| no_transfer_err!())?
                   .create_input_signature(keypair);
     Ok(sig)
   }
@@ -902,7 +902,7 @@ impl TransferOperationBuilder {
                             -> Result<TransferBodySignature, PlatformError> {
     let sig = self.transfer
                   .as_ref()
-                  .ok_or(no_transfer_err!())?
+                  .ok_or_else(|| no_transfer_err!())?
                   .create_cosignature(keypair, input_idx);
     Ok(sig)
   }
@@ -912,7 +912,7 @@ impl TransferOperationBuilder {
                           -> Result<&mut Self, PlatformError> {
     self.transfer
         .as_mut()
-        .ok_or(no_transfer_err!())?
+        .ok_or_else(|| no_transfer_err!())?
         .attach_signature(sig)?;
     Ok(self)
   }
@@ -922,7 +922,10 @@ impl TransferOperationBuilder {
                           kp: &XfrKeyPair,
                           input_idx: usize)
                           -> Result<&mut Self, PlatformError> {
-    let mut new_transfer = self.transfer.as_mut().ok_or(no_transfer_err!())?.clone();
+    let mut new_transfer = self.transfer
+                               .as_mut()
+                               .ok_or_else(|| no_transfer_err!())?
+                               .clone();
     new_transfer.sign_cosignature(&kp, input_idx);
     Ok(self)
   }
