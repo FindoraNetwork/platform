@@ -32,6 +32,7 @@ stdenv.mkDerivation {
     protobuf
     sqlite
     nodejs # This is because we use a shell testing framework https://github.com/bats-core/bats-core
+    shellcheck
     wasm-pack
 
   ] ++ stdenv.lib.optionals stdenv.isDarwin [
