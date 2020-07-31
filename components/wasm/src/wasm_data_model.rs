@@ -349,8 +349,7 @@ impl CredentialPoK {
 
 #[wasm_bindgen]
 #[derive(Serialize, Deserialize, Clone)]
-/// Proof that a credential is a valid re-randomization of a credential signed by a certain asset
-/// issuer.
+/// Key used to generate a credential commitment.
 /// @see {@link module:Findora-Wasm.wasm_credential_open_commitment|wasm_credential_open_commitment} for information about how to
 /// open a credential commitment.
 pub struct CredentialCommitmentKey {
