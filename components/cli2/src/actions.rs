@@ -1,7 +1,8 @@
 use crate::{
   display_asset_type, display_txn, display_txn_builder, print_conf, prompt_for_config,
   serialize_or_str, AssetTypeEntry, AssetTypeName, CliDataStore, CliError, FreshNamer, KeypairName,
-  OpMetadata, PubkeyName, TxnBuilderName, TxnMetadata, TxnName, TxoCacheEntry,
+  LedgerStateCommitment, OpMetadata, PubkeyName, TxnBuilderName, TxnMetadata, TxnName,
+  TxoCacheEntry,
 };
 
 use ledger::data_model::*;
@@ -345,7 +346,7 @@ pub fn prepare_transaction<S: CliDataStore>(store: &mut S,
                         "Please run query-ledger-state first."));
       exit(-1);
     }
-    Some(s) => s.1,
+    Some(s) => (s.0).1,
   };
 
   let mut nick = nick;
@@ -648,6 +649,8 @@ pub fn issue_asset<S: CliDataStore>(store: &mut S,
                       TxoCacheEntry { sid: None,
                                       record: txo.clone(),
                                       owner_memo: memo.clone(),
+                        ledger_state: None,
+                        owner: Some(PubkeyName(issuer_nick.0.clone())),
                                       opened_record:
                                         Some(open_blind_asset_record(&txo.0,
                                                                      &memo,

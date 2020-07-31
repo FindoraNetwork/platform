@@ -757,121 +757,9 @@ fn run_action<S: CliDataStore>(action: Actions, store: &mut S) -> Result<(), Cli
       Ok(())
     }
 
-    ListAssetType { nick } => { list_asset_type(store, nick)}
+    ListTxnBuilders {} => list_txn_builders(store),
 
-    QueryAssetType { replace,
-                     nick,
-                     code, } => {
-      if !replace
-         && store.get_asset_type(&AssetTypeName(nick.clone()))?
-                 .is_some()
-      {
-        eprintln!("Asset type with the nickname `{}` already exists.", nick);
-        exit(-1);
-      }
-
-      let conf = store.get_config()?;
-      let code_b64 = code.clone();
-      let _ = AssetTypeCode::new_from_base64(&code).unwrap();
-      let query = format!("{}{}/{}",
-                          conf.ledger_server,
-                          LedgerAccessRoutes::AssetToken.route(),
-                          code_b64);
-      let resp: Asset;
-      match reqwest::blocking::get(&query) {
-        Err(e) => {
-          eprintln!("Request `{}` failed: {}", query, e);
-          exit(-1);
-        }
-        Ok(v) => match v.text()
-                        .map(|x| serde_json::from_str::<AssetType>(&x).map_err(|e| (x, e)))
-        {
-          Err(e) => {
-            eprintln!("Failed to decode response: {}", e);
-            exit(-1);
-          }
-          Ok(Err((x, e))) => {
-            eprintln!("Failed to parse response `{}`: {}", x, e);
-            exit(-1);
-          }
-          Ok(Ok(v)) => {
-            resp = v.properties;
-          }
-        },
-      }
-
-      let issuer_nick = {
-        let mut ret = None;
-        for (n, pk) in store.get_pubkeys()?.into_iter() {
-          if pk == resp.issuer.key {
-            ret = Some(n);
-            break;
-          }
-        }
-        ret
-      };
-      let ret = AssetTypeEntry { asset: resp,
-                                 issuer_nick };
-      store.add_asset_type(&AssetTypeName(nick.clone()), ret)?;
-      println!("Asset type `{}` saved as `{}`", code_b64, nick);
-      Ok(())
-    }
-
-    PrepareTransaction { nick, exact } => {
-      let seq_id = match store.get_config()?.ledger_state {
-        None => {
-          eprintln!(concat!("I don't know what block ID the ledger is on!\n",
-                            "Please run query-ledger-state first."));
-          exit(-1);
-        }
-        Some(s) => (s.0).1,
-      };
-
-      let mut nick = nick;
-      if store.get_txn_builder(&TxnBuilderName(nick.clone()))?
-              .is_some()
-      {
-        if exact {
-          eprintln!("Transaction builder with the name `{}` already exists.",
-                    nick);
-          exit(-1);
-        }
-
-        for n in FreshNamer::new(nick.clone(), ".".to_string()) {
-          if store.get_txn_builder(&TxnBuilderName(n.clone()))?.is_none() {
-            nick = n;
-            break;
-          }
-        }
-      }
-
-      println!("Preparing transaction `{}` for block id `{}`...",
-               nick, seq_id);
-      store.prepare_transaction(&TxnBuilderName(nick.clone()), seq_id)?;
-      store.update_config(|conf| {
-             conf.active_txn = Some(TxnBuilderName(nick));
-           })?;
-      println!("Done.");
-      Ok(())
-    }
-
-    ListTxnBuilders {} => {
-      for (nick, builder) in store.get_txn_builders()? {
-        println!("{}:", nick.0);
-        display_txn_builder(1, &builder);
-      }
-      println!("Done.");
-      Ok(())
-    }
-
-    ListTxnBuilder { nick } => {
-      let builder = match store.get_txn_builder(&TxnBuilderName(nick.clone()))? {
-        None => {
-          eprintln!("No txn builder `{}` found.", nick);
-          exit(-1);
-        }
-        Some(s) => s,
-      };
+    ListTxnBuilder { nick } => list_txn_builder(store, nick),
 
     ListAssetTypes {} => list_asset_types(store),
 
@@ -882,10 +770,6 @@ fn run_action<S: CliDataStore>(action: Actions, store: &mut S) -> Result<(), Cli
                      code, } => query_asset_type(store, replace, nick, code),
 
     PrepareTransaction { nick, exact } => prepare_transaction(store, nick, exact),
-
-    ListTxnBuilders {} => list_txn_builders(store),
-
-    ListTxnBuilder { nick } => list_txn_builder(store, nick),
 
     ListBuiltTransaction { nick } => list_built_transaction(store, nick),
 
@@ -903,7 +787,6 @@ fn run_action<S: CliDataStore>(action: Actions, store: &mut S) -> Result<(), Cli
                  asset_nick,
                  issue_seq_num,
                  amount, } => issue_asset(store, builder, asset_nick, issue_seq_num, amount),
-
 
     BuildTransaction { builder,
                        txn_nick,
