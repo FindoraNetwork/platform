@@ -100,7 +100,7 @@ fn process_inputs<T>(inputs: clap::ArgMatches, rest_client: &T) -> Result<(), Pl
 
 fn get_cli_app<'a, 'b>() -> App<'a, 'b> {
   App::new("Solvency Proof")
-    .version(concat!("0.0.1 Build: ",env!("VERGEN_SHA_SHORT")," ", env!("VERGEN_COMMIT_DATE")))
+    .version(concat!("0.0.1 Build: ",env!("VERGEN_SHA_SHORT")," ", env!("VERGEN_BUILD_DATE")))
     .about("Copyright 2020 © Findora. All rights reserved.")
     .arg(Arg::with_name("local")
       .long("local")

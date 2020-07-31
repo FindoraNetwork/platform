@@ -24,7 +24,7 @@ fn version() -> actix_web::Result<String> {
   Ok(concat!("Build: ",
              env!("VERGEN_SHA_SHORT"),
              " ",
-             env!("VERGEN_COMMIT_DATE")).into())
+             env!("VERGEN_BUILD_DATE")).into())
 }
 
 // Queries the status of a transaction by its handle. Returns either a not committed message or a

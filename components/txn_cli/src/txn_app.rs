@@ -1276,7 +1276,7 @@ pub fn get_cli_app<'a, 'b>() -> App<'a, 'b> {
     .version(concat!("0.0.1 Build: ",
                      env!("VERGEN_SHA_SHORT"),
                      " ",
-                     env!("VERGEN_COMMIT_DATE"),
+                     env!("VERGEN_BUILD_DATE"),
                      "\n",
                      "Copyright 2020 © Findora. All rights reserved."))
     .about("Command line tool for interacting with Findora ledger")

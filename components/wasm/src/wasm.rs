@@ -37,7 +37,7 @@ mod wasm_data_model;
 
 /// Constant defining the git commit hash and commit date of the commit this library was built
 /// against.
-const BUILD_ID: &str = concat!(env!("VERGEN_SHA_SHORT"), " ", env!("VERGEN_COMMIT_DATE"));
+const BUILD_ID: &str = concat!(env!("VERGEN_SHA_SHORT"), " ", env!("VERGEN_BUILD_DATE"));
 
 /// Returns the git commit hash and commit date of the commit this library was built against.
 #[wasm_bindgen]
