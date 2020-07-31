@@ -177,6 +177,24 @@ impl<RNG, LU, TF> SubmissionServer<RNG, LU, TF>
     Err(fail!("Cannot finish block because there are no pending txns"))
   }
 
+  pub fn block_pulse_count(&self) -> u64 {
+    if let Some(block) = &self.block {
+      LU::block_pulse_count(&block)
+    } else {
+      0
+    }
+  }
+
+  pub fn block_txn_count(&self) -> usize {
+    self.pending_txns.len()
+  }
+
+  pub fn pulse_block(&mut self) {
+    if let Some(block) = &mut self.block {
+      LU::pulse_block(block);
+    }
+  }
+
   pub fn cache_transaction(&mut self, txn: Transaction) -> TxnHandle {
     // Begin a block if the previous one has been commited
     if self.all_commited() {

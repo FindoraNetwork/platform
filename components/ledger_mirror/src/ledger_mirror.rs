@@ -53,17 +53,17 @@ fn main() {
       let ledger = state_lock.read().unwrap();
       (*ledger).get_block_count()
     };
-    let new_blocks = match reqwest::get(&format!("http://{}/{}/{}",
-                                                 ledger_url.to_str().unwrap(),
-                                                 "blocks_since",
-                                                 &latest_block))
+    let new_blocks = match reqwest::blocking::get(&format!("http://{}/{}/{}",
+                                                           ledger_url.to_str().unwrap(),
+                                                           "blocks_since",
+                                                           &latest_block))
     {
       Err(e) => {
         error!("HTTP Request failed {}", e);
         continue;
       }
 
-      Ok(mut bs) => match bs.json::<Vec<(usize, Vec<FinalizedTransaction>)>>() {
+      Ok(bs) => match bs.json::<Vec<(usize, Vec<FinalizedTransaction>)>>() {
         Err(e) => {
           error!("JSON deserialization failed {}", e);
           continue;
