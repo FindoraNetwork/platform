@@ -1,30 +1,30 @@
 #![deny(warnings)]
 #![allow(clippy::type_complexity)]
 use ledger::data_model::*;
+use ledger_api_service::LedgerAccessRoutes;
+use promptly::{prompt, prompt_default};
 use serde::{Deserialize, Serialize};
 use snafu::{Backtrace, OptionExt, ResultExt, Snafu};
 use std::collections::BTreeMap;
 use std::env;
 use std::fs;
+use std::path::PathBuf;
+use std::process::exit;
 use structopt::StructOpt;
+use submission_api::SubmissionRoutes;
 use submission_server::{TxnHandle, TxnStatus};
 use txn_builder::{BuildsTransactions, PolicyChoice, TransactionBuilder};
-use zei::xfr::sig::{XfrKeyPair, XfrPublicKey};
-use zei::xfr::structs::{OpenAssetRecord, OwnerMemo}; //, BlindAssetRecord};
-                                                     // use std::rc::Rc;
-use ledger_api_service::LedgerAccessRoutes;
-use promptly::{prompt, prompt_default};
-use std::process::exit;
-use submission_api::SubmissionRoutes;
 use utils::Serialized;
 use utils::{HashOf, NetworkRoute, SignatureOf};
-// use txn_builder::{BuildsTransactions, PolicyChoice, TransactionBuilder, TransferOperationBuilder};
-use std::path::PathBuf;
 use zei::setup::PublicParams;
 use zei::xfr::asset_record::{open_blind_asset_record, AssetRecordType};
+use zei::xfr::sig::{XfrKeyPair, XfrPublicKey};
+use zei::xfr::structs::{OpenAssetRecord, OwnerMemo};
 
+pub mod actions;
 pub mod kv;
 
+use crate::actions::query_ledger_state;
 use kv::{HasTable, KVError, KVStore};
 
 pub struct FreshNamer {
@@ -61,7 +61,7 @@ fn default_ledger_server() -> String {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, Default)]
-struct CliConfig {
+pub struct CliConfig {
   #[serde(default = "default_sub_server")]
   pub submission_server: String,
   #[serde(default = "default_ledger_server")]
@@ -131,7 +131,7 @@ impl HasTable for TxoCacheEntry {
 }
 
 #[derive(Snafu, Debug)]
-enum CliError {
+pub enum CliError {
   #[snafu(context(false))]
   KV {
     backtrace: Backtrace,
@@ -158,7 +158,7 @@ enum CliError {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, Default)]
-struct TxnMetadata {
+pub struct TxnMetadata {
   handle: Option<TxnHandle>,
   status: Option<TxnStatus>,
   new_asset_types: BTreeMap<AssetTypeName, AssetTypeEntry>,
@@ -174,7 +174,7 @@ struct TxnMetadata {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
-struct TxoCacheEntry {
+pub struct TxoCacheEntry {
   sid: Option<TxoSID>,
   record: TxOutput,
   owner_memo: Option<OwnerMemo>,
@@ -183,7 +183,7 @@ struct TxoCacheEntry {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
-struct AssetTypeEntry {
+pub struct AssetTypeEntry {
   asset: Asset,
   issuer_nick: Option<PubkeyName>,
 }
@@ -361,7 +361,7 @@ fn display_asset_type(indent_level: u64, ent: &AssetTypeEntry) {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-struct TxnBuilderEntry {
+pub struct TxnBuilderEntry {
   builder: TransactionBuilder,
   #[serde(default)]
   operations: Vec<OpMetadata>,
@@ -376,7 +376,7 @@ struct TxnBuilderEntry {
   // spent_txos: BTreeMap<String>,
 }
 
-trait CliDataStore {
+pub trait CliDataStore {
   fn get_config(&self) -> Result<CliConfig, CliError>;
   fn update_config<F: FnOnce(&mut CliConfig)>(&mut self, f: F) -> Result<(), CliError>;
 
@@ -682,99 +682,7 @@ fn run_action<S: CliDataStore>(action: Actions, store: &mut S) -> Result<(), Cli
       Ok(())
     }
 
-    QueryLedgerState { forget_old_key } => {
-      store.update_config(|conf| {
-             let mut new_key = forget_old_key;
-             if !new_key && conf.ledger_sig_key.is_none() {
-               println!("No signature key found for `{}`.", conf.ledger_server);
-               new_key = new_key || prompt_default(" Retrieve a new one?", false).unwrap();
-               if !new_key {
-                 eprintln!("Cannot check ledger state validity without a signature key.");
-                 exit(-1);
-               }
-             }
-
-             if new_key {
-               let query = format!("{}{}",
-                                   conf.ledger_server,
-                                   LedgerAccessRoutes::PublicKey.route());
-               let resp: XfrPublicKey;
-               match reqwest::blocking::get(&query) {
-                 Err(e) => {
-                   eprintln!("Request `{}` failed: {}", query, e);
-                   exit(-1);
-                 }
-                 Ok(v) => {
-                   match v.text()
-                          .map(|x| serde_json::from_str::<XfrPublicKey>(&x).map_err(|e| (x, e)))
-                   {
-                     Err(e) => {
-                       eprintln!("Failed to decode response: {}", e);
-                       exit(-1);
-                     }
-                     Ok(Err((x, e))) => {
-                       eprintln!("Failed to parse response `{}`: {}", x, e);
-                       exit(-1);
-                     }
-                     Ok(Ok(v)) => {
-                       resp = v;
-                     }
-                   }
-                 }
-               }
-
-               println!("Saving ledger signing key `{}`",
-                        serde_json::to_string(&resp).unwrap());
-               conf.ledger_sig_key = Some(resp);
-             }
-
-             assert!(conf.ledger_sig_key.is_some());
-
-             let query = format!("{}{}",
-                                 conf.ledger_server,
-                                 LedgerAccessRoutes::GlobalState.route());
-             let resp: (HashOf<Option<StateCommitmentData>>,
-                        u64,
-                        SignatureOf<(HashOf<Option<StateCommitmentData>>, u64)>);
-             match reqwest::blocking::get(&query) {
-               Err(e) => {
-                 eprintln!("Request `{}` failed: {}", query, e);
-                 exit(-1);
-               }
-               Ok(v) => match v.text()
-                               .map(|x| serde_json::from_str::<_>(&x).map_err(|e| (x, e)))
-               {
-                 Err(e) => {
-                   eprintln!("Failed to decode response: {}", e);
-                   exit(-1);
-                 }
-                 Ok(Err((x, e))) => {
-                   eprintln!("Failed to parse response `{}`: {}", x, e);
-                   exit(-1);
-                 }
-                 Ok(Ok(v)) => {
-                   resp = v;
-                 }
-               },
-             }
-
-             if let Err(e) = resp.2
-                                 .verify(&conf.ledger_sig_key.unwrap(), &(resp.0.clone(), resp.1))
-             {
-               eprintln!("Ledger responded with invalid signature: {}", e);
-               exit(-1);
-             }
-
-             conf.ledger_state = Some(resp);
-
-             assert!(conf.ledger_state.is_some());
-
-             println!("New state retrieved.");
-
-             print_conf(&conf);
-           })?;
-      Ok(())
-    }
+    QueryLedgerState { forget_old_key } => query_ledger_state(store, forget_old_key),
 
     KeyGen { nick } => {
       let kp = XfrKeyPair::generate(&mut rand::thread_rng());
@@ -906,6 +814,18 @@ fn run_action<S: CliDataStore>(action: Actions, store: &mut S) -> Result<(), Cli
           }
         }
       }
+      Ok(())
+    }
+
+    SimpleDefineAsset { issuer_nick,
+                        asset_nick, } => {
+      println!("{} {}", issuer_nick, asset_nick);
+      // echo y | $CLI2 query-ledger-state; \
+      // $CLI2 prepare-transaction -e 0; \
+      // echo memo_alice | $CLI2 define-asset alice AliceCoin --builder 0; \
+      // $CLI2 build-transaction 0; \
+      // { echo; echo Y; } | $CLI2 submit 0;"
+
       Ok(())
     }
 

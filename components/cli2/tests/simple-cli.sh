@@ -57,3 +57,15 @@ source "tests/common.sh"
   run bash -c '$CLI2 key-gen bob;echo y | $CLI2 delete-keypair bob'
   [ "$status" -eq 0 ]
 }
+
+@test "define, publish and list asset type(s)" {
+  skip "Not implemented yet"
+  run  bash -c "$CLI2 key-gen alice; \
+                echo memo_alice | $CLI2 simple-define-asset alice AliceCoin;"
+  debug_lines
+  [ "$status" -eq 0 ]
+  run $CLI2 list-asset-type AliceCoin
+  debug_lines
+  [ "$status" -eq 0 ]
+  check_line 0 'issuer nickname: alice'
+}
