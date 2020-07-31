@@ -188,18 +188,19 @@ DEFINE_ASSET_TYPE_COMMANDS="  $CLI2 key-gen alice; \
 
   [ "$status" -eq 0 ]
   debug_lines
-  check_line 21 "Submitting to `https://testnet.findora.org/submit_server/submit_transaction`"
+  check_line 21 'Submitting to `https://testnet.findora.org/submit_server/submit_transaction`'
   check_line 22 " seq_id:"
-  check_line 26 "  DefineAsset `TheBestAliceCoinsOnEarthV2`"
-  check_line 27 "   issued by `alice`"
-  check_line 28 "  IssueAsset 10000 of `TheBestAliceCoinsOnEarthV2`"
-  check_line 39 '   Record Type: "NonConfidentialAmount_NonConfidentialAssetType"'
-  check_line 40 '   Amount: 10000'
-  check_line 41 "   Type:"
-  check_line 42 "   Decrypted Amount: 10000"
-  check_line 46 " Signers:"
-  check_line 47 "  - `alice`"
-  check_line 48 "Submitted"
-  check_line 49 'Got status: {"Committed":'
+  check_line 26 '  DefineAsset `TheBestAliceCoinsOnEarthV2`'
+  check_line 27 '   issued by `alice`'
+  check_line 28 '  IssueAsset 10000 of `TheBestAliceCoinsOnEarthV2`'
+  check_line 39 '   Owned by: "'
+  check_line 40 '   Record Type: "NonConfidentialAmount_NonConfidentialAssetType"'
+  check_line 41 '   Amount: 10000'
+  check_line 42 "   Type:"
+  check_line 43 "   Decrypted Amount: 10000"
+  check_line 47 " Signers:"
+  check_line 48 '  - `alice`'
+  check_line 49 "Submitted"
+  check_line 50 'Got status: {"Committed":'
 }
 

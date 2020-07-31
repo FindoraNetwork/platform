@@ -27,6 +27,11 @@ pub mod kv;
 
 use kv::{HasTable, KVError, KVStore};
 
+#[derive(Clone, Debug, Serialize, Deserialize)]
+struct LedgerStateCommitment(pub  (HashOf<Option<StateCommitmentData>>,
+                                   u64,
+                                   SignatureOf<(HashOf<Option<StateCommitmentData>>, u64)>));
+
 pub struct FreshNamer {
   base: String,
   i: u64,
@@ -70,9 +75,7 @@ struct CliConfig {
   #[serde(default)]
   pub ledger_sig_key: Option<XfrPublicKey>,
   #[serde(default)]
-  pub ledger_state: Option<(HashOf<Option<StateCommitmentData>>,
-                            u64,
-                            SignatureOf<(HashOf<Option<StateCommitmentData>>, u64)>)>,
+  pub ledger_state: Option<LedgerStateCommitment>,
   #[serde(default)]
   pub active_txn: Option<TxnBuilderName>,
 }
@@ -170,12 +173,15 @@ struct TxnMetadata {
   #[serde(default)]
   new_txos: Vec<(String, TxoCacheEntry)>,
   // #[serde(default)]
-  // spent_txos: BTreeMap<String>,
+  // spent_txos: Vec<TxoName>,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 struct TxoCacheEntry {
   sid: Option<TxoSID>,
+  owner: Option<PubkeyName>,
+  // What has this Txo been authenticated against?
+  ledger_state: Option<LedgerStateCommitment>,
   record: TxOutput,
   owner_memo: Option<OwnerMemo>,
   opened_record: Option<OpenAssetRecord>,
@@ -256,6 +262,14 @@ fn display_operations(indent_level: u64, operations: &[OpMetadata]) {
 fn display_txo_entry(indent_level: u64, txo: &TxoCacheEntry) {
   let ind = indent_of(indent_level);
   println!("{}sid: {}", ind, serialize_or_str(&txo.sid, "<UNKNOWN>"));
+  println!("{}Owned by: {}{}",
+           ind,
+           serde_json::to_string(&txo.record.0.public_key).unwrap(),
+           if let Some(o) = txo.owner.as_ref() {
+             format!(" ({})", o.0)
+           } else {
+             "".to_string()
+           });
   println!("{}Record Type: {}",
            ind,
            serde_json::to_string(&txo.record.0.get_record_type()).unwrap());
@@ -373,7 +387,7 @@ struct TxnBuilderEntry {
   #[serde(default)]
   new_txos: Vec<(String, TxoCacheEntry)>,
   // #[serde(default)]
-  // spent_txos: BTreeMap<String>,
+  // spent_txos: Vec<TxoName>,
 }
 
 trait CliDataStore {
@@ -612,12 +626,26 @@ enum Actions {
     txn: String,
   },
 
-  ListUtxos {
-    #[structopt(short, long, default_value = "http://localhost:8669")]
-    /// Base URL for the submission server
-    server: String,
+  ListTxo {
+    /// nickname
+    id: String,
+  },
+  ListTxos {
+    /// Only unspent?
+    #[structopt(short, long)]
+    unspent: bool,
+  },
+
+  ListOwnedUtxos {
     /// Whose UTXOs?
-    id: Option<String>,
+    id: String,
+  },
+
+  QueryTxo {
+    /// Local nickname?
+    nick: String,
+    /// Which SID?
+    sid: u64,
   },
 }
 
@@ -635,12 +663,12 @@ fn print_conf(conf: &CliConfig) {
   println!("Ledger state commitment: {}",
            conf.ledger_state
                .as_ref()
-               .map(|x| b64enc(&(x.0).0.hash))
+               .map(|x| b64enc(&((x.0).0).0.hash))
                .unwrap_or_else(|| "<UNKNOWN>".to_string()));
   println!("Ledger block idx: {}",
            conf.ledger_state
                .as_ref()
-               .map(|x| format!("{}", x.1))
+               .map(|x| format!("{}", (x.0).1))
                .unwrap_or_else(|| "<UNKNOWN>".to_string()));
   println!("Current focused transaction builder: {}",
            conf.active_txn
@@ -750,7 +778,7 @@ fn run_action<S: CliDataStore>(action: Actions, store: &mut S) -> Result<(), Cli
                exit(-1);
              }
 
-             conf.ledger_state = Some(resp);
+             conf.ledger_state = Some(LedgerStateCommitment(resp));
 
              assert!(conf.ledger_state.is_some());
 
@@ -902,6 +930,18 @@ fn run_action<S: CliDataStore>(action: Actions, store: &mut S) -> Result<(), Cli
       Ok(())
     }
 
+    ListTxos { unspent } => {
+      for (nick, txo) in store.get_cached_txos()?.into_iter() {
+        if !txo.unspent && unspent {
+          continue;
+        }
+        println!("TXO `{}`", nick.0);
+        display_txo_entry(1, &txo);
+      }
+      println!("Done.");
+      Ok(())
+    }
+
     ListAssetType { nick } => {
       let a = store.get_asset_type(&AssetTypeName(nick.clone()))?;
       match a {
@@ -981,7 +1021,7 @@ fn run_action<S: CliDataStore>(action: Actions, store: &mut S) -> Result<(), Cli
                             "Please run query-ledger-state first."));
           exit(-1);
         }
-        Some(s) => s.1,
+        Some(s) => (s.0).1,
       };
 
       let mut nick = nick;
@@ -1277,6 +1317,8 @@ fn run_action<S: CliDataStore>(action: Actions, store: &mut S) -> Result<(), Cli
                   .push((out_name.clone(),
                           TxoCacheEntry {
                             sid: None,
+                            ledger_state: None,
+                            owner: Some(PubkeyName(issuer_nick.0.clone())),
                             record: txo.clone(),
                             owner_memo: memo.clone(),
                             opened_record: Some(open_blind_asset_record(&txo.0, &memo, iss_kp.get_sk_ref()).unwrap()),
