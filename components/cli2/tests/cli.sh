@@ -160,7 +160,6 @@ DEFINE_ASSET_TYPE_COMMANDS="  $CLI2 key-gen alice; \
   [ "$status" -eq 0 ]
   run $CLI2 list-asset-types
   [ "$status" -eq 0 ]
-  echo "${lines[0]}"
   check_line 0 'Asset `AliceCoin`'
   run $CLI2 list-asset-type AliceCoin
   [ "$status" -eq 0 ]
@@ -177,14 +176,30 @@ DEFINE_ASSET_TYPE_COMMANDS="  $CLI2 key-gen alice; \
   check_line 43 'Asset `AliceCoin2`'
 }
 
-
 @test "issue asset" {
-  skip "Not implemented"
+
   run bash -c "$CLI2 key-gen alice; \
-              echo y | $CLI2 query-ledger-state; \
-              $CLI2 prepare-transaction 0; \
-              echo memo0 | $CLI2 define-asset alice AliceCoin --builder 0;"
+               echo y | $CLI2 query-ledger-state; \
+               $CLI2 prepare-transaction -e 0; \
+               echo memo_alice | $CLI2 define-asset alice TheBestAliceCoinsOnEarthV2 --builder 0; \
+               $CLI2 issue-asset TheBestAliceCoinsOnEarthV2 0 10000; \
+               $CLI2 build-transaction 0; \
+               { echo; echo Y; } | $CLI2 submit 0;"
+
   [ "$status" -eq 0 ]
-  run $CLI2 issue-asset --builder=0 alice AliceCoin 1000
-  [ "$status" -eq 0 ]
+  debug_lines
+  check_line 21 "Submitting to `https://testnet.findora.org/submit_server/submit_transaction`"
+  check_line 22 " seq_id:"
+  check_line 26 "  DefineAsset `TheBestAliceCoinsOnEarthV2`"
+  check_line 27 "   issued by `alice`"
+  check_line 28 "  IssueAsset 10000 of `TheBestAliceCoinsOnEarthV2`"
+  check_line 39 '   Record Type: "NonConfidentialAmount_NonConfidentialAssetType"'
+  check_line 40 '   Amount: 10000'
+  check_line 41 "   Type:"
+  check_line 42 "   Decrypted Amount: 10000"
+  check_line 46 " Signers:"
+  check_line 47 "  - `alice`"
+  check_line 48 "Submitted"
+  check_line 49 'Got status: {"Committed":'
 }
+
