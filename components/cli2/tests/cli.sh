@@ -118,6 +118,14 @@ setup() {
   run bash -c
 }
 
+
+@test "list asset types" {
+  run bash -c '$CLI2 key-gen alice; echo y | $CLI2 query-ledger-state; $CLI2 prepare-transaction 0;echo memo0 | $CLI2 define-asset alice AliceCoin --txn 0; $CLI2 list-asset-types'
+  [ "$status" -eq 0 ]
+  [ "${lines[12]}" = 'AliceCoin:' ]
+}
+
+
 @test "submit (define asset) transaction" {
    run bash -c '$CLI2 key-gen alice; echo y | $CLI2 query-ledger-state; $CLI2 prepare-transaction 0;echo memo0 | $CLI2 define-asset alice AliceCoin --txn 0; $CLI2 build-transaction 0; echo Y | $CLI2 submit 0'
    [ "$status" -eq 0 ]
