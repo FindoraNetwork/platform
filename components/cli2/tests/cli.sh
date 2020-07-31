@@ -17,7 +17,7 @@ setup() {
   [ "${lines[2]:0:26}" = 'Ledger public signing key:' ]
   [ "${lines[3]:0:24}" = 'Ledger state commitment:' ]
   [ "${lines[4]:0:17}" = 'Ledger block idx:' ]
-  [ "${lines[5]}" = 'Current target transaction: <NONE>' ]
+  [ "${lines[5]}" = 'Current focused transaction builder: <NONE>' ]
 }
 
 @test "query ledger state" {
@@ -33,7 +33,7 @@ setup() {
   [ "${lines[4]:0:26}" = 'Ledger public signing key:' ]
   [ "${lines[5]:0:24}" = 'Ledger state commitment:' ]
   [ "${lines[6]:0:17}" = 'Ledger block idx:' ]
-  [ "${lines[7]}" = 'Current target transaction: <NONE>' ]
+  [ "${lines[7]}" = 'Current focused transaction builder: <NONE>' ]
 
   run $CLI2 query-ledger-state --forget-old-key=false
   [ "$status" -eq 0 ]
@@ -44,7 +44,7 @@ setup() {
   [ "${lines[4]:0:26}" = 'Ledger public signing key:' ]
   [ "${lines[5]:0:24}" = 'Ledger state commitment:' ]
   [ "${lines[6]:0:17}" = 'Ledger block idx:' ]
-  [ "${lines[7]}" = 'Current target transaction: <NONE>' ]
+  [ "${lines[7]}" = 'Current focused transaction builder: <NONE>' ]
 }
 
 @test "key generation" {
@@ -103,24 +103,24 @@ setup() {
 }
 
 @test "define asset" {
-  run bash -c '$CLI2 key-gen alice; echo y | $CLI2 query-ledger-state; $CLI2 prepare-transaction 0;echo memo0 | $CLI2 define-asset alice AliceCoin --txn 0;'
+  run bash -c '$CLI2 key-gen alice; echo y | $CLI2 query-ledger-state; $CLI2 prepare-transaction 0;echo memo0 | $CLI2 define-asset alice AliceCoin --builder 0;'
   [ "$status" -eq 0 ]
   run $CLI2 list-txn-builders;
   [ "$status" -eq 0 ]
-  [ "${lines[12]}" = 'Done.' ] #TODO better capture of output
+  [ "${lines[13]}" = 'Done.' ] #TODO better capture of output
   run bash -c
 }
 
 @test "submit (define asset) transaction" {
-   run bash -c '$CLI2 key-gen alice; echo y | $CLI2 query-ledger-state; $CLI2 prepare-transaction 0;echo memo0 | $CLI2 define-asset alice AliceCoin --txn 0; $CLI2 build-transaction 0; echo Y | $CLI2 submit 0'
+   run bash -c 'set -euo pipefail; $CLI2 key-gen alice; echo y | $CLI2 query-ledger-state; $CLI2 prepare-transaction 0;echo memo0 | $CLI2 define-asset alice AliceCoin --builder 0; $CLI2 build-transaction 0; { echo; echo Y; } | $CLI2 submit 0'
    [ "$status" -eq 0 ]
    [ "${lines[-1]:0:26}" = 'Got status: {"Committed":[' ]
 }
 
 @test "issue asset" {
   skip "Not implemented"
-  run bash -c '$CLI2 key-gen alice; echo y | $CLI2 query-ledger-state; $CLI2 prepare-transaction 0;echo memo0 | $CLI2 define-asset alice AliceCoin --txn 0;'
+  run bash -c '$CLI2 key-gen alice; echo y | $CLI2 query-ledger-state; $CLI2 prepare-transaction 0;echo memo0 | $CLI2 define-asset alice AliceCoin --builder 0;'
   [ "$status" -eq 0 ]
-  $CLI2 issue-asset --txn=0 alice AliceCoin 1000
+  run $CLI2 issue-asset --builder=0 alice AliceCoin 1000
   [ "$status" -eq 0 ]
 }

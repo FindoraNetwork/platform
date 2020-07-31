@@ -10,8 +10,8 @@ use structopt::StructOpt;
 use submission_server::{TxnHandle, TxnStatus};
 use txn_builder::{BuildsTransactions, PolicyChoice, TransactionBuilder};
 use zei::xfr::sig::{XfrKeyPair, XfrPublicKey};
-use zei::xfr::structs::{OpenAssetRecord, OwnerMemo};
-// use std::rc::Rc;
+use zei::xfr::structs::{OpenAssetRecord, OwnerMemo}; //, BlindAssetRecord};
+                                                     // use std::rc::Rc;
 use ledger_api_service::LedgerAccessRoutes;
 use promptly::{prompt, prompt_default};
 use std::process::exit;
@@ -20,6 +20,8 @@ use utils::Serialized;
 use utils::{HashOf, NetworkRoute, SignatureOf};
 // use txn_builder::{BuildsTransactions, PolicyChoice, TransactionBuilder, TransferOperationBuilder};
 use std::path::PathBuf;
+use zei::setup::PublicParams;
+use zei::xfr::asset_record::{open_blind_asset_record, AssetRecordType};
 
 pub mod kv;
 
@@ -165,8 +167,8 @@ struct TxnMetadata {
   #[serde(default)]
   signers: Vec<KeypairName>,
   // TODO
-  // #[serde(default)]
-  // new_txos: Vec<(String, TxoCacheEntry)>,
+  #[serde(default)]
+  new_txos: Vec<(String, TxoCacheEntry)>,
   // #[serde(default)]
   // spent_txos: BTreeMap<String>,
 }
@@ -206,6 +208,7 @@ enum OpMetadata {
     asset_nick: AssetTypeName,
     output_name: String,
     output_amt: u64,
+    issue_seq_num: u64,
   },
   TransferAsset {
     inputs: Vec<(String, TxoCacheEntry)>,
@@ -221,8 +224,14 @@ fn display_op_metadata(indent_level: u64, ent: &OpMetadata) {
       println!("{}DefineAsset `{}`", ind, asset_nick.0);
       println!("{} issued by `{}`", ind, issuer_nick.0);
     }
-    OpMetadata::IssueAsset { .. } => {
-      unimplemented!();
+    OpMetadata::IssueAsset { issuer_nick,
+                             asset_nick,
+                             output_name,
+                             output_amt,
+                             issue_seq_num, } => {
+      println!("{}IssueAsset {} of `{}`", ind, output_amt, asset_nick.0);
+      println!("{} issued to `{}` as issuance #{} named `{}`",
+               ind, issuer_nick.0, issue_seq_num, output_name);
     }
     OpMetadata::TransferAsset { .. } => {
       unimplemented!();
@@ -244,6 +253,54 @@ fn display_operations(indent_level: u64, operations: &[OpMetadata]) {
   }
 }
 
+fn display_txo_entry(indent_level: u64, txo: &TxoCacheEntry) {
+  let ind = indent_of(indent_level);
+  println!("{}sid: {}", ind, serialize_or_str(&txo.sid, "<UNKNOWN>"));
+  println!("{}Record Type: {}",
+           ind,
+           serde_json::to_string(&txo.record.0.get_record_type()).unwrap());
+  println!("{}Amount: {}",
+           ind,
+           txo.record
+              .0
+              .amount
+              .get_amount()
+              .map(|x| format!("{}", x))
+              .unwrap_or_else(|| "<SECRET>".to_string()));
+  println!("{}Type: {}",
+           ind,
+           txo.record
+              .0
+              .asset_type
+              .get_asset_type()
+              .map(|x| AssetTypeCode { val: x }.to_base64())
+              .unwrap_or_else(|| "<SECRET>".to_string()));
+  if let Some(open_ar) = txo.opened_record.as_ref() {
+    println!("{}Decrypted Amount: {}", ind, open_ar.amount);
+    println!("{}Decrypted Type: {}",
+             ind,
+             AssetTypeCode { val: open_ar.asset_type }.to_base64());
+  }
+  println!("{}Spent? {}",
+           ind,
+           if txo.unspent { "Unspent" } else { "Spent" });
+  println!("{}Have owner memo? {}",
+           ind,
+           if txo.owner_memo.is_some() {
+             "Yes"
+           } else {
+             "No"
+           });
+}
+
+fn display_txos(indent_level: u64, txos: &[(String, TxoCacheEntry)]) {
+  let ind = indent_of(indent_level);
+  for (nick, txo) in txos.iter() {
+    println!("{}{}:", ind, nick);
+    display_txo_entry(indent_level + 1, txo);
+  }
+}
+
 fn display_txn_builder(indent_level: u64, ent: &TxnBuilderEntry) {
   let ind = indent_of(indent_level);
   println!("{}Operations:", ind);
@@ -251,6 +308,9 @@ fn display_txn_builder(indent_level: u64, ent: &TxnBuilderEntry) {
 
   println!("{}New asset types defined:", ind);
   display_asset_type_defs(indent_level + 1, &ent.new_asset_types);
+
+  println!("{}New asset records:", ind);
+  display_txos(indent_level + 1, &ent.new_txos);
 
   println!("{}Signers:", ind);
   for (nick, _) in ent.signers.iter() {
@@ -275,6 +335,9 @@ fn display_txn(indent_level: u64, ent: &(Transaction, TxnMetadata)) {
     println!("{} {}:", ind, nick.0);
     display_asset_type(indent_level + 2, asset_ent);
   }
+
+  println!("{}New asset records:", ind);
+  display_txos(indent_level + 1, &ent.1.new_txos);
 
   println!("{}Signers:", ind);
   for nick in ent.1.signers.iter() {
@@ -307,8 +370,8 @@ struct TxnBuilderEntry {
   #[serde(default)]
   signers: BTreeMap<KeypairName, Serialized<XfrKeyPair>>,
   // TODO
-  // #[serde(default)]
-  // new_txos: Vec<(String, TxoCacheEntry)>,
+  #[serde(default)]
+  new_txos: Vec<(String, TxoCacheEntry)>,
   // #[serde(default)]
   // spent_txos: BTreeMap<String>,
 }
@@ -483,43 +546,46 @@ enum Actions {
 
   /// List the details of a transaction builder
   ListTxnBuilder {
-    /// Which transaction?
+    /// Which builder?
     nick: String,
   },
 
   /// Finalize a transaction, preparing it for submission
   BuildTransaction {
+    #[structopt(short, long)]
+    /// Force the transaction's name to be <txn-nick>, instead of the first free <txn-nick>.<n>
+    exact: bool,
     /// Which transaction builder?
     #[structopt(short, long)]
-    txn: Option<String>,
-    /// Name for the built transaction (defaults to <nick>)
+    builder: Option<String>,
+    /// Name for the built transaction (defaults to <builder>)
     txn_nick: Option<String>,
   },
 
   DefineAsset {
     #[structopt(short, long)]
-    /// Which txn?
-    txn: Option<String>,
+    /// Which builder?
+    builder: Option<String>,
     /// Issuer key
-    key_nick: String,
+    issuer_nick: String,
     /// Name for the asset type
     asset_nick: String,
   },
   IssueAsset {
     #[structopt(short, long)]
-    /// Which txn?
-    txn: Option<String>,
-    /// Issuer key
-    key_nick: String,
+    /// Which builder?
+    builder: Option<String>,
     /// Name for the asset type
     asset_nick: String,
+    /// Sequence number of this issuance
+    issue_seq_num: u64,
     /// Amount to issue
     amount: u64,
   },
   TransferAsset {
     #[structopt(short, long)]
-    /// Which txn?
-    txn: Option<String>,
+    /// Which builder?
+    builder: Option<String>,
   },
   ListBuiltTransaction {
     /// Nickname of the transaction
@@ -576,7 +642,7 @@ fn print_conf(conf: &CliConfig) {
                .as_ref()
                .map(|x| format!("{}", x.1))
                .unwrap_or_else(|| "<UNKNOWN>".to_string()));
-  println!("Current target transaction: {}",
+  println!("Current focused transaction builder: {}",
            conf.active_txn
                .as_ref()
                .map(|x| x.0.clone())
@@ -1061,78 +1127,194 @@ fn run_action<S: CliDataStore>(action: Actions, store: &mut S) -> Result<(), Cli
       Ok(())
     }
 
-    DefineAsset { txn,
-                  key_nick,
-                  asset_nick,
-                  .. } => {
-      let key_nick = KeypairName(key_nick);
-      let kp = match store.get_keypair(&key_nick)? {
+    DefineAsset { builder,
+                  issuer_nick,
+                  asset_nick, } => {
+      let issuer_nick = KeypairName(issuer_nick);
+      let kp = match store.get_keypair(&issuer_nick)? {
         None => {
-          eprintln!("No key pair `{}` found.", key_nick.0);
+          eprintln!("No key pair `{}` found.", issuer_nick.0);
           exit(-1);
         }
         Some(s) => s,
       };
-      let txn_opt = txn.map(TxnBuilderName)
-                       .or_else(|| store.get_config().unwrap().active_txn);
-      let txn;
-      match txn_opt {
+      let builder_opt = builder.map(TxnBuilderName)
+                               .or_else(|| store.get_config().unwrap().active_txn);
+      let builder;
+      match builder_opt {
         None => {
           eprintln!("I don't know which transaction to use!");
           exit(-1);
         }
         Some(t) => {
-          txn = t;
+          builder = t;
         }
       }
 
-      if store.get_txn_builder(&txn)?.is_none() {
-        eprintln!("Transaction builder `{}` not found.", txn.0);
+      if store.get_txn_builder(&builder)?.is_none() {
+        eprintln!("Transaction builder `{}` not found.", builder.0);
         exit(-1);
       }
 
-      store.with_txn_builder::<ledger::data_model::errors::PlatformError, _>(&txn, |builder| {
-             builder.builder.add_operation_create_asset(&kp,
-                                                         None,
-                                                         Default::default(),
-                                                         &prompt::<String, _>("memo?").unwrap(),
-                                                         PolicyChoice::Fungible())?;
-             match builder.builder.transaction().body.operations.last() {
-               Some(Operation::DefineAsset(def)) => {
-                 builder.new_asset_types
-                        .insert(AssetTypeName(asset_nick.clone()),
-                                AssetTypeEntry { asset: def.body.asset.clone(),
-                                                 issuer_nick:
-                                                   Some(PubkeyName(key_nick.0.clone())) });
+      store.with_txn_builder::<ledger::data_model::errors::PlatformError, _>(&builder, |builder| {
+        builder.builder.add_operation_create_asset(&kp,
+                                                    None,
+                                                    Default::default(),
+                                                    &prompt::<String, _>("memo?").unwrap(),
+                                                    PolicyChoice::Fungible())?;
+        match builder.builder.transaction().body.operations.last() {
+          Some(Operation::DefineAsset(def)) => {
+            builder.new_asset_types
+                   .insert(AssetTypeName(asset_nick.clone()),
+                           AssetTypeEntry { asset: def.body.asset.clone(),
+                                            issuer_nick: Some(PubkeyName(issuer_nick.0
+                                                                                    .clone())) });
+          }
+          _ => {
+            panic!("The transaction builder doesn't include our operation!");
+          }
+        }
+        builder.signers
+               .insert(issuer_nick.clone(), Serialized::new(&kp));
+        builder.operations
+               .push(OpMetadata::DefineAsset { issuer_nick: PubkeyName(issuer_nick.0.clone()),
+                                               asset_nick: AssetTypeName(asset_nick.clone()) });
+        println!("{}:", asset_nick);
+        display_asset_type(1,
+                           builder.new_asset_types
+                                  .get(&AssetTypeName(asset_nick.clone()))
+                                  .unwrap());
+        Ok(())
+      })?;
+      Ok(())
+    }
+
+    IssueAsset { builder,
+                 asset_nick,
+                 issue_seq_num,
+                 amount, } => {
+      let builder_opt = builder.map(TxnBuilderName)
+                               .or_else(|| store.get_config().unwrap().active_txn);
+      let builder_nick;
+      match builder_opt {
+        None => {
+          eprintln!("I don't know which transaction to use!");
+          exit(-1);
+        }
+        Some(t) => {
+          builder_nick = t;
+        }
+      }
+
+      let builder_opt = store.get_txn_builder(&builder_nick)?;
+      let builder;
+      match builder_opt {
+        None => {
+          eprintln!("Transaction builder `{}` not found.", builder_nick.0);
+          exit(-1);
+        }
+        Some(b) => {
+          builder = b;
+        }
+      }
+
+      let asset_nick = AssetTypeName(asset_nick);
+      let asset;
+      match store.get_asset_type(&asset_nick)?
+                 .or_else(|| builder.new_asset_types.get(&asset_nick).cloned())
+      {
+        None => {
+          eprintln!("No asset type with name `{}` found", asset_nick.0);
+          exit(-1);
+        }
+        Some(a) => {
+          asset = a;
+        }
+      }
+
+      let issuer_nick;
+      match asset.issuer_nick.as_ref() {
+        None => {
+          eprintln!("I don't know an identity for public key `{}`",
+                    serde_json::to_string(&asset.asset.issuer.key).unwrap());
+          exit(-1);
+        }
+        Some(nick) => {
+          issuer_nick = KeypairName(nick.0.clone());
+        }
+      }
+
+      let iss_kp;
+      match store.get_keypair(&issuer_nick)? {
+        None => {
+          eprintln!("No keypair nicknamed `{}` found.", issuer_nick.0);
+          exit(-1);
+        }
+        Some(kp) => {
+          iss_kp = kp;
+        }
+      }
+
+      println!("IssueAsset: {} of `{}` ({}), authorized by `{}`",
+               amount,
+               asset.asset.code.to_base64(),
+               asset_nick.0,
+               issuer_nick.0);
+
+      store.with_txn_builder::<errors::PlatformError, _>(&builder_nick, |builder| {
+             builder.builder.add_basic_issue_asset(
+               &iss_kp, &asset.asset.code, issue_seq_num, amount,
+               AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
+               &PublicParams::new())?;
+
+            let out_name = format!("utxo{}",builder.new_txos.len());
+
+            match builder.builder.transaction().body.operations.last() {
+              Some(Operation::IssueAsset(iss)) => {
+                assert_eq!(iss.body.records.len(),1);
+                let (txo,memo) = iss.body.records[0].clone();
+                builder.new_txos
+                  .push((out_name.clone(),
+                          TxoCacheEntry {
+                            sid: None,
+                            record: txo.clone(),
+                            owner_memo: memo.clone(),
+                            opened_record: Some(open_blind_asset_record(&txo.0, &memo, iss_kp.get_sk_ref()).unwrap()),
+                            unspent: true,
+                          }));
                }
                _ => {
                  panic!("The transaction builder doesn't include our operation!");
                }
              }
              builder.signers
-                    .insert(key_nick.clone(), Serialized::new(&kp));
+                    .insert(issuer_nick.clone(), Serialized::new(&iss_kp));
              builder.operations
-                    .push(OpMetadata::DefineAsset { issuer_nick: PubkeyName(key_nick.0.clone()),
-                                                    asset_nick:
-                                                      AssetTypeName(asset_nick.clone()) });
-             println!("{}:", asset_nick);
-             display_asset_type(1,
-                                builder.new_asset_types
-                                       .get(&AssetTypeName(asset_nick.clone()))
-                                       .unwrap());
+                    .push(OpMetadata::IssueAsset {
+                      issuer_nick: PubkeyName(issuer_nick.0.clone()),
+                      asset_nick: asset_nick.clone(),
+                      output_name: out_name,
+                      output_amt: amount,
+                      issue_seq_num
+                    });
              Ok(())
            })?;
+
+      println!("Successfully added to `{}`", builder_nick.0);
+
       Ok(())
     }
 
-    BuildTransaction { txn, txn_nick } => {
+    BuildTransaction { builder,
+                       txn_nick,
+                       exact, } => {
       let mut used_default = false;
-      let txn_opt = txn.map(TxnBuilderName).or_else(|| {
-                                             used_default = true;
-                                             store.get_config().unwrap().active_txn
-                                           });
+      let builder_opt = builder.map(TxnBuilderName).or_else(|| {
+                                                     used_default = true;
+                                                     store.get_config().unwrap().active_txn
+                                                   });
       let nick;
-      match txn_opt {
+      match builder_opt {
         None => {
           eprintln!("I don't know which transaction to use!");
           exit(-1);
@@ -1145,11 +1327,16 @@ fn run_action<S: CliDataStore>(action: Actions, store: &mut S) -> Result<(), Cli
       let mut txn_nick = TxnName(txn_nick.unwrap_or_else(|| nick.0.clone()));
 
       if store.get_built_transaction(&txn_nick)?.is_some() {
-        for n in FreshNamer::new(txn_nick.0.clone(), ".".to_string()) {
-          if store.get_built_transaction(&TxnName(n.clone()))?.is_none() {
-            txn_nick = TxnName(n);
-            break;
+        if !exact {
+          for n in FreshNamer::new(txn_nick.0.clone(), ".".to_string()) {
+            if store.get_built_transaction(&TxnName(n.clone()))?.is_none() {
+              txn_nick = TxnName(n);
+              break;
+            }
           }
+        } else {
+          eprintln!("A txn with nickname `{}` already exists", txn_nick.0);
+          exit(-1);
         }
       }
       println!("Building `{}` as `{}`...", nick.0, txn_nick.0);
@@ -1160,6 +1347,7 @@ fn run_action<S: CliDataStore>(action: Actions, store: &mut S) -> Result<(), Cli
                builder.builder.sign(&kp.deserialize());
              }
              std::mem::swap(&mut metadata.new_asset_types, &mut builder.new_asset_types);
+             std::mem::swap(&mut metadata.new_txos, &mut builder.new_txos);
              let mut signers = Default::default();
              std::mem::swap(&mut signers, &mut builder.signers);
              metadata.signers.extend(signers.into_iter().map(|(k, _)| k));
@@ -1195,6 +1383,14 @@ fn run_action<S: CliDataStore>(action: Actions, store: &mut S) -> Result<(), Cli
       let query = format!("{}{}",
                           conf.submission_server,
                           SubmissionRoutes::SubmitTransaction.route());
+
+      println!("Submitting to `{}`:", query);
+      display_txn(1, &(txn.clone(), metadata.clone()));
+
+      if !prompt_default("Is this correct?", true)? {
+        println!("Exiting.");
+        return Ok(());
+      }
 
       let client = reqwest::blocking::Client::builder().build()?;
       let resp = client.post(&query)
