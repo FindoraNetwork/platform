@@ -103,14 +103,20 @@ setup() {
 }
 
 @test "prepare transaction" {
-  run bash -c '$CLI2 key-gen alice; echo y | $CLI2 query-ledger-state; $CLI2 prepare-transaction 0;$CLI2 list-txn-builders;'
+  run bash -c " $CLI2 key-gen alice;
+                echo y | $CLI2 query-ledger-state; \
+                $CLI2 prepare-transaction 0; \
+                $CLI2 list-txn-builders;"
   [ "$status" -eq 0 ]
   # TODO better capture of output
   #[ "${lines[9]}" = 'Done.' ]
 }
 
 @test "define asset" {
-  run bash -c '$CLI2 key-gen alice; echo y | $CLI2 query-ledger-state; $CLI2 prepare-transaction 0;echo memo0 | $CLI2 define-asset alice AliceCoin --txn 0;'
+  run bash -c "$CLI2 key-gen alice; \
+               echo y | $CLI2 query-ledger-state; \
+              $CLI2 prepare-transaction 0; \
+              echo memo0 | $CLI2 define-asset alice AliceCoin --txn 0;"
   [ "$status" -eq 0 ]
   run $CLI2 list-txn-builders;
   [ "$status" -eq 0 ]
@@ -118,23 +124,47 @@ setup() {
   run bash -c
 }
 
+@test "submit (define asset) transaction" {
+   run bash -c "$CLI2 key-gen alice; \
+                echo y | $CLI2 query-ledger-state; \
+                $CLI2 prepare-transaction 0; \
+                echo memo0 | $CLI2 define-asset alice AliceCoin --txn 0; \
+                $CLI2 build-transaction 0; \
+                echo Y | $CLI2 submit 0"
+   [ "$status" -eq 0 ]
+   [ "${lines[-1]:0:26}" = 'Got status: {"Committed":[' ]
+}
+
+# TODO looks like there is a problem with this command
+#@test "list asset type" {
+#  run bash -c "$CLI2 key-gen alice; \
+#                echo y | $CLI2 query-ledger-state; \
+#                $CLI2 prepare-transaction 0; \
+#                echo memo0 | $CLI2 define-asset alice AliceCoin --txn 0; \
+#                $CLI2 build-transaction 0; \
+#                echo Y | $CLI2 submit 0; \
+#
+#                $CLI2 list-asset-type AliceCoin;"
+#  [ "$status" -eq 0 ]
+#}
 
 @test "list asset types" {
-  run bash -c '$CLI2 key-gen alice; echo y | $CLI2 query-ledger-state; $CLI2 prepare-transaction 0;echo memo0 | $CLI2 define-asset alice AliceCoin --txn 0; $CLI2 list-asset-types'
+  run bash -c "$CLI2 key-gen alice; \
+              echo y | $CLI2 query-ledger-state; \
+              $CLI2 prepare-transaction 0; \
+              echo memo0 | $CLI2 define-asset alice AliceCoin --txn 0; \
+              $CLI2 list-asset-types"
   [ "$status" -eq 0 ]
   [ "${lines[12]}" = 'AliceCoin:' ]
 }
 
 
-@test "submit (define asset) transaction" {
-   run bash -c '$CLI2 key-gen alice; echo y | $CLI2 query-ledger-state; $CLI2 prepare-transaction 0;echo memo0 | $CLI2 define-asset alice AliceCoin --txn 0; $CLI2 build-transaction 0; echo Y | $CLI2 submit 0'
-   [ "$status" -eq 0 ]
-   [ "${lines[-1]:0:26}" = 'Got status: {"Committed":[' ]
-}
-
 @test "issue asset" {
   skip "Not implemented"
-  run bash -c '$CLI2 key-gen alice; echo y | $CLI2 query-ledger-state; $CLI2 prepare-transaction 0;echo memo0 | $CLI2 define-asset alice AliceCoin --txn 0;'
+  run bash -c "$CLI2 key-gen alice; \
+              echo y | $CLI2 query-ledger-state; \
+              $CLI2 prepare-transaction 0; \
+              echo memo0 | $CLI2 define-asset alice AliceCoin --txn 0;"
   [ "$status" -eq 0 ]
   $CLI2 issue-asset --txn=0 alice AliceCoin 1000
   [ "$status" -eq 0 ]
