@@ -2,6 +2,8 @@
 
 FINDORA_STORE_FILE=${FINDORA_HOME:-${HOME}/.findora}/cli2_data.sqlite
 
+############################## Helper functions ########################################################################
+
 setup() {
   # Start from a fresh state
   echo "Deleting $FINDORA_STORE_FILE..."
@@ -21,15 +23,28 @@ debug_array() {
     done
 }
 
+debug_lines(){
+  debug_array "${lines[@]}"
+}
+
+check_line() {
+  line_number="$1"
+  command_str="$2"
+  command_str_length=`expr length "$command_str"`
+  [ "${lines[$line_number]:0:$command_str_length}" = "$command_str" ]
+}
+
+################################ Tests #################################################################################
+
 @test "list config" {
   run $CLI2 list-config
   [ "$status" -eq 0 ]
-  [ "${lines[0]}" = 'Submission server: https://testnet.findora.org/submit_server' ]
-  [ "${lines[1]}" = 'Ledger access server: https://testnet.findora.org/query_server' ]
-  [ "${lines[2]:0:26}" = 'Ledger public signing key:' ]
-  [ "${lines[3]:0:24}" = 'Ledger state commitment:' ]
-  [ "${lines[4]:0:17}" = 'Ledger block idx:' ]
-  [ "${lines[5]}" = 'Current target transaction: <NONE>' ]
+  check_line 0 'Submission server: https://testnet.findora.org/submit_server'
+  check_line 1 'Ledger access server: https://testnet.findora.org/query_server'
+  check_line 2 'Ledger public signing key:'
+  check_line 3 'Ledger state commitment:'
+  check_line 4 'Ledger block idx:'
+  check_line 5 'Current target transaction: <NONE>'
 }
 
 @test "query ledger state" {
@@ -38,37 +53,37 @@ debug_array() {
 
   run $CLI2 query-ledger-state --forget-old-key=true
   [ "$status" -eq 0 ]
-  [ "${lines[0]:0:25}" = "Saving ledger signing key" ]
-  [ "${lines[1]}" = 'New state retrieved.' ]
-  [ "${lines[2]}" = 'Submission server: https://testnet.findora.org/submit_server' ]
-  [ "${lines[3]}" = 'Ledger access server: https://testnet.findora.org/query_server' ]
-  [ "${lines[4]:0:26}" = 'Ledger public signing key:' ]
-  [ "${lines[5]:0:24}" = 'Ledger state commitment:' ]
-  [ "${lines[6]:0:17}" = 'Ledger block idx:' ]
-  [ "${lines[7]}" = 'Current target transaction: <NONE>' ]
+  check_line 0  "Saving ledger signing key"
+  check_line 1  'New state retrieved.'
+  check_line 2 'Submission server: https://testnet.findora.org/submit_server'
+  check_line 3 'Ledger access server: https://testnet.findora.org/query_server'
+  check_line 4 'Ledger public signing key:'
+  check_line 5 'Ledger state commitment:'
+  check_line 6 'Ledger block idx:'
+  check_line 7 'Current target transaction: <NONE>'
 
   run $CLI2 query-ledger-state --forget-old-key=false
   [ "$status" -eq 0 ]
-  [ "${lines[0]:0:25}" = "Saving ledger signing key" ]
-  [ "${lines[1]}" = 'New state retrieved.' ]
-  [ "${lines[2]}" = 'Submission server: https://testnet.findora.org/submit_server' ]
-  [ "${lines[3]}" = 'Ledger access server: https://testnet.findora.org/query_server' ]
-  [ "${lines[4]:0:26}" = 'Ledger public signing key:' ]
-  [ "${lines[5]:0:24}" = 'Ledger state commitment:' ]
-  [ "${lines[6]:0:17}" = 'Ledger block idx:' ]
-  [ "${lines[7]}" = 'Current target transaction: <NONE>' ]
+  check_line 0  "Saving ledger signing key"
+  check_line 1  'New state retrieved.'
+  check_line 2 'Submission server: https://testnet.findora.org/submit_server'
+  check_line 3 'Ledger access server: https://testnet.findora.org/query_server'
+  check_line 4 'Ledger public signing key:'
+  check_line 5 'Ledger state commitment:'
+  check_line 6 'Ledger block idx:'
+  check_line 7 'Current target transaction: <NONE>'
 }
 
 @test "key generation" {
   run $CLI2 key-gen alice
   [ "$status" -eq 0 ]
-  [ "${lines[0]}" = 'New key pair added for `alice`' ]
+  check_line 0 'New key pair added for `alice`'
 }
 
 @test "add bob's public key" {
   run bash -c 'echo "\"i4-1NC50E4omcPdO4N28v7cBvp0pnPOFp6Jvyu4G3J4=\"" | $CLI2 load-public-key bob'
   [ "$status" -eq 0 ]
-  [ "${lines[0]}" = 'New public key added for `bob`' ]
+  check_line 0 'New public key added for `bob`' ]
 }
 
 @test "list public key" {
@@ -80,14 +95,14 @@ debug_array() {
   [ "$status" -eq 0 ]
   run $CLI2 list-public-key plato
   [ "$status" -eq 0 ]
-  [ "${lines[0]}" = 'No public key with name plato found' ]
+  check_line 0 'No public key with name plato found'
 }
 
 @test "list keys" {
   run bash -c '$CLI2 key-gen alice; $CLI2 key-gen bob; $CLI2 list-keys'
   [ "$status" -eq 0 ]
-  [ "${lines[2]:0:14}" = 'keypair alice:' ]
-  [ "${lines[3]:0:12}" = 'keypair bob:' ]
+  check_line 2 'keypair alice:'
+  check_line 3 'keypair bob:'
 }
 
 @test "delete public key" {
@@ -106,7 +121,7 @@ debug_array() {
 @test "load key pair" {
   run bash -c 'echo "{\"pub_key\":\"iAnNs_n9HLzdpOYM1cxCOVapua-jS59j1j92lRPe64E=\",\"sec_key\":\"Au3s9u8TdPWX36X-j_9xvMud0DOKrYK1x39imArYI9g=\"}" | $CLI2 load-keypair bob'
   [ "$status" -eq 0 ]
-  [ "${lines[0]}" = 'New key pair added for `bob`' ]
+  check_line 0 'New key pair added for `bob`' ]
 }
 
 @test "delete key pair" {
@@ -121,33 +136,47 @@ debug_array() {
                 $CLI2 list-txn-builders
                 "
   [ "$status" -eq 0 ]
-  [ "${lines[-1]}" = 'Done.' ]
+  check_line -1 'Done.'
 
-  debug_array "${lines[@]}"
+  debug_lines
 
-  [ "${lines[12]}" = '0:' ]
-  [ "${lines[13]}" = ' Operations:' ]
-  [ "${lines[14]}" = ' New asset types defined:' ]
-  [ "${lines[15]}" = ' Signers:' ]
-  [ "${lines[16]}" = 'Done.' ]
+  check_line 12 '0:'
+  check_line 13 ' Operations:'
+  check_line 14 ' New asset types defined:'
+  check_line 15 ' Signers:'
+  check_line 16 'Done.'
 }
 
-@test "define, publish and list asset(s)" {
-  run  bash -c "  $CLI2 key-gen alice; \
-                  echo y | $CLI2 query-ledger-state; \
-                  $CLI2 prepare-transaction -e 0; \
-                  echo memo_alice | $CLI2 define-asset alice AliceCoin --txn 0; \
-                  $CLI2 build-transaction 0; \
-                  echo Y | $CLI2 submit 0"
+DEFINE_ASSET_TYPE_COMMANDS="  $CLI2 key-gen alice; \
+                              echo y | $CLI2 query-ledger-state; \
+                              $CLI2 prepare-transaction -e 0; \
+                              echo memo_alice | $CLI2 define-asset alice AliceCoin --txn 0; \
+                              $CLI2 build-transaction 0; \
+                              echo Y | $CLI2 submit 0;"
+
+@test "define, publish and list asset type(s)" {
+  run  bash -c "$DEFINE_ASSET_TYPE_COMMANDS"
   [ "$status" -eq 0 ]
   run $CLI2 list-asset-types
   [ "$status" -eq 0 ]
   echo "${lines[0]}"
-  [ "${lines[0]}" = 'Asset `AliceCoin`' ]
+  check_line 0 'Asset `AliceCoin`'
   run $CLI2 list-asset-type AliceCoin
   [ "$status" -eq 0 ]
-  [ "${lines[0]}" = 'issuer nickname: alice' ]
+  check_line 0 'issuer nickname: alice'
 }
+
+@test "query asset type" {
+  run  bash -c "  $DEFINE_ASSET_TYPE_COMMANDS \
+                  $CLI2 query-asset-type --replace=true AliceCoin2 kt2_x12-CiMz802pkydMrNsSqLEAplDUgKTgzLtprnk=
+                  $CLI2 list-asset-types
+                  "
+  debug_lines
+  [ "$status" -eq 0 ]
+  check_line 27 'Asset `AliceCoin2`'
+
+}
+
 
 @test "issue asset" {
   skip "Not implemented"
