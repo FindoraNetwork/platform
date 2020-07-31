@@ -268,6 +268,22 @@ pub struct CredentialRevealSig {
 }
 
 #[wasm_bindgen]
+impl CredentialRevealSig {
+  /// Returns the underlying credential commitment.
+  /// @see {@link module:Findora-Wasm.wasm_credential_verify_commitment|wasm_credential_verify_commitment} for information about how to verify a
+  /// credential commitment.
+  pub fn get_commitment(&self) -> CredentialCommitment {
+    CredentialCommitment { commitment: self.sig.sig_commitment.clone() }
+  }
+  /// Returns the underlying proof of knowledge that the credential is valid.
+  /// @see {@link module:Findora-Wasm.wasm_credential_verify_commitment|wasm_credential_verify_commitment} for information about how to verify a
+  /// credential commitment.
+  pub fn get_pok(&self) -> CredentialPoK {
+    CredentialPoK { pok: self.sig.pok.clone() }
+  }
+}
+
+#[wasm_bindgen]
 #[derive(Serialize, Deserialize)]
 /// Commitment to a credential record, proof that the commitment is a valid re-randomization of a
 /// commitment signed by a certain credential issuer, and credential key that can be used
@@ -286,11 +302,18 @@ impl CredentialCommitmentData {
   pub fn get_commitment(&self) -> CredentialCommitment {
     self.commitment.clone()
   }
-  /// Returns the underlying proof of knowledge that the credential is a valid re-randomization.
+  /// Returns the underlying proof of knowledge that the credential is valid.
   /// @see {@link module:Findora-Wasm.wasm_credential_verify_commitment|wasm_credential_verify_commitment} for information about how to verify a
   /// credential commitment.
   pub fn get_pok(&self) -> CredentialPoK {
     self.pok.clone()
+  }
+
+  /// Returns the key used to generate the commitment.
+  /// @see {@link module:Findora-Wasm.wasm_credential_open_commitment|wasm_credential_open_commitment} for information about how to verify a
+  /// credential commitment.
+  pub fn get_commit_key(&self) -> CredentialCommitmentKey {
+    self.commitment_key.clone()
   }
 }
 
