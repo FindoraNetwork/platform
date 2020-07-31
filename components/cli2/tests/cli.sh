@@ -10,14 +10,15 @@ setup() {
 }
 
 debug_array() {
-  counter=0
+
   echo "Debugging array..."
-  arr=$1
-  for each in "${arr[@]}"
-  do
-    echo "[$ounter] $each"
-    counter=$((counter+1))
-  done
+  arr=("$@")
+  COUNTER=0
+  for i in "${arr[@]}";
+    do
+        echo "[$COUNTER]$i"
+        COUNTER=$((COUNTER+1))
+    done
 }
 
 @test "list config" {
@@ -117,19 +118,18 @@ debug_array() {
   run bash -c " $CLI2 key-gen alice; \
                 echo y | $CLI2 query-ledger-state; \
                 $CLI2 prepare-transaction -e 0;
+                $CLI2 list-txn-builders
                 "
   [ "$status" -eq 0 ]
   [ "${lines[-1]}" = 'Done.' ]
-  $CLI2 list-txn-builders
-  [ "$status" -eq 0 ]
 
-  #debug_array $lines
-  # TODO
-  #  [ "${lines[13]}" = '0:' ]
-  #  [ "${lines[14]}" = ' Operations:' ]
-  #  [ "${lines[15]}" = 'New asset types defined:' ]
-  #  [ "${lines[16]}" = 'Signers:' ]
-  #  [ "${lines[17]}" = 'Done.' ]
+  debug_array "${lines[@]}"
+
+  [ "${lines[12]}" = '0:' ]
+  [ "${lines[13]}" = ' Operations:' ]
+  [ "${lines[14]}" = ' New asset types defined:' ]
+  [ "${lines[15]}" = ' Signers:' ]
+  [ "${lines[16]}" = 'Done.' ]
 }
 
 @test "define, publish and list asset(s)" {
