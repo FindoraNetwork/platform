@@ -172,6 +172,8 @@ pub struct TxnMetadata {
   // TODO
   #[serde(default)]
   new_txos: Vec<(String, TxoCacheEntry)>,
+  #[serde(default)]
+  finalized_txos: Option<Vec<TxoName>>,
   // #[serde(default)]
   // spent_txos: Vec<TxoName>,
 }
@@ -180,6 +182,8 @@ pub struct TxnMetadata {
 pub struct TxoCacheEntry {
   sid: Option<TxoSID>,
   owner: Option<PubkeyName>,
+  #[serde(default)]
+  asset_type: Option<AssetTypeName>,
   // What has this Txo been authenticated against?
   ledger_state: Option<LedgerStateCommitment>,
   record: TxOutput,
@@ -307,10 +311,16 @@ fn display_txo_entry(indent_level: u64, txo: &TxoCacheEntry) {
            });
 }
 
-fn display_txos(indent_level: u64, txos: &[(String, TxoCacheEntry)]) {
+fn display_txos(indent_level: u64,
+                txos: &[(String, TxoCacheEntry)],
+                finalized_names: &Option<Vec<TxoName>>) {
   let ind = indent_of(indent_level);
-  for (nick, txo) in txos.iter() {
-    println!("{}{}:", ind, nick);
+  for (i, (nick, txo)) in txos.iter().enumerate() {
+    let fin = finalized_names.as_ref()
+                             .and_then(|x| x.get(i))
+                             .map(|x| x.0.to_string())
+                             .unwrap_or_else(|| "Not finalized".to_string());
+    println!("{}{} ({}):", ind, nick, fin);
     display_txo_entry(indent_level + 1, txo);
   }
 }
@@ -324,7 +334,7 @@ fn display_txn_builder(indent_level: u64, ent: &TxnBuilderEntry) {
   display_asset_type_defs(indent_level + 1, &ent.new_asset_types);
 
   println!("{}New asset records:", ind);
-  display_txos(indent_level + 1, &ent.new_txos);
+  display_txos(indent_level + 1, &ent.new_txos, &None);
 
   println!("{}Signers:", ind);
   for (nick, _) in ent.signers.iter() {
@@ -351,7 +361,7 @@ fn display_txn(indent_level: u64, ent: &(Transaction, TxnMetadata)) {
   }
 
   println!("{}New asset records:", ind);
-  display_txos(indent_level + 1, &ent.1.new_txos);
+  display_txos(indent_level + 1, &ent.1.new_txos, &ent.1.finalized_txos);
 
   println!("{}Signers:", ind);
   for nick in ent.1.signers.iter() {
@@ -878,6 +888,159 @@ fn run_action<S: CliDataStore>(action: Actions, store: &mut S) -> Result<(), Cli
       Ok(())
     }
 
+    ListTxo { id } => {
+      let txo = match store.get_cached_txo(&TxoName(id.clone()))? {
+        None => {
+          eprintln!("No txo `{}` found.", id);
+          exit(-1);
+        }
+        Some(s) => s,
+      };
+      display_txo_entry(0, &txo);
+      Ok(())
+    }
+
+    QueryTxo { nick, sid } => {
+      let nick = TxoName(nick);
+      if let Some(orig_ent) = store.get_cached_txo(&nick)? {
+        if orig_ent.sid.is_some() && orig_ent.sid != Some(TxoSID(sid)) {
+          eprintln!("TXO nicknamed `{}` refers to SID {}", nick.0, sid);
+          exit(-1);
+        }
+      }
+      let conf = store.get_config()?;
+      let ledger_state = match conf.ledger_state.as_ref() {
+        None => {
+          eprintln!(concat!("I don't know what the ledger's state is!\n",
+                            "Please run query-ledger-state first."));
+          exit(-1);
+        }
+        Some(s) => s.clone(),
+      };
+
+      let query = format!("{}{}/{}",
+                          conf.ledger_server,
+                          LedgerAccessRoutes::UtxoSid.route(),
+                          sid);
+
+      let resp: AuthenticatedUtxo;
+      match reqwest::blocking::get(&query) {
+        Err(e) => {
+          eprintln!("Request `{}` failed: {}", query, e);
+          exit(-1);
+        }
+        Ok(v) => match v.text()
+                        .map(|x| serde_json::from_str::<AuthenticatedUtxo>(&x).map_err(|e| (x, e)))
+        {
+          Err(e) => {
+            eprintln!("Failed to decode response: {}", e);
+            exit(-1);
+          }
+          Ok(Err((x, e))) => {
+            eprintln!("Failed to parse response `{}`: {}", x, e);
+            exit(-1);
+          }
+          Ok(Ok(v)) => {
+            let resp_comm = HashOf::new(&Some(v.state_commitment_data.clone()));
+            let curr_comm = (ledger_state.0).0.clone();
+            if resp_comm != curr_comm {
+              eprintln!("Server responded with authentication relative to `{}`!",
+                        b64enc(&resp_comm.0.hash));
+              eprintln!("The most recent ledger state I have is `{}`.",
+                        b64enc(&curr_comm.0.hash));
+              eprintln!("Please run query-ledger-state then rerun this command.");
+              exit(-1);
+            }
+
+            // TODO: this needs better direct authentication
+            if v.authenticated_spent_status.utxo_sid != TxoSID(sid) {
+              eprintln!("!!!!! ERROR !!!!!!");
+              eprintln!("The server responded with a different UTXO sid.");
+              eprintln!("This could indicate a faulty server, or a man-in-the-middle!");
+              eprintln!("\nFor safety, refusing to update.");
+              exit(-1);
+            }
+
+            if !v.is_valid((ledger_state.0).0.clone()) {
+              eprintln!("!!!!! ERROR !!!!!!");
+              eprintln!("The server responded with an invalid authentication proof.");
+              eprintln!("This could indicate a faulty server, or a man-in-the-middle!");
+              eprintln!("\nFor safety, refusing to update.");
+              exit(-1);
+            }
+
+            resp = v;
+          }
+        },
+      }
+
+      // TODO: do something better to ensure that we pull any existsing
+      // things from orig_ent
+      let mut ent = TxoCacheEntry { sid: Some(TxoSID(sid)),
+                                    owner: None,
+                                    asset_type: None,
+                                    ledger_state: Some(ledger_state),
+                                    record: resp.utxo.0,
+                                    owner_memo: None,
+                                    opened_record: None,
+                                    unspent: true };
+
+      if let Some(orig_ent) = store.get_cached_txo(&nick)? {
+        if orig_ent.sid.is_some() {
+          assert_eq!(orig_ent.sid, ent.sid);
+        }
+        assert!(orig_ent.unspent);
+        assert_eq!(ent.record, orig_ent.record);
+        ent.owner_memo = orig_ent.owner_memo;
+        ent.opened_record = orig_ent.opened_record;
+        if let Some(orig_state) = orig_ent.ledger_state {
+          assert!((orig_state.0).1 <= (ent.ledger_state.as_ref().unwrap().0).1);
+        }
+        ent.owner = orig_ent.owner;
+        ent.asset_type = orig_ent.asset_type;
+      }
+
+      if ent.owner.is_none() {
+        for (n, pk) in store.get_pubkeys()?.into_iter() {
+          if pk == ent.record.0.public_key {
+            ent.owner = Some(n);
+            break;
+          }
+        }
+      }
+
+      if ent.asset_type.is_none() {
+        if let Some(tp) = ent.record.0.asset_type.get_asset_type() {
+          let tp = AssetTypeCode { val: tp };
+          for (n, asset) in store.get_asset_types()?.into_iter() {
+            if tp == asset.asset.code {
+              ent.asset_type = Some(n);
+              break;
+            }
+          }
+        }
+      }
+
+      println!("TXO entry {} updated:", nick.0);
+      display_txo_entry(1, &ent);
+
+      store.cache_txo(&nick, ent)?;
+
+      // TODO: this is... jank as hell.
+      for (n, (_, meta)) in store.get_built_transactions()? {
+        if let Some(fin) = meta.finalized_txos.as_ref() {
+          if let Some(i) = fin.iter().position(|x| x == &nick) {
+            store.update_txn_metadata::<CliError, _>(&n, |meta| {
+                   (meta.new_txos[i].1).sid = Some(TxoSID(sid));
+                   Ok(())
+                 })?;
+          }
+        }
+      }
+
+      Ok(())
+    }
+
     ListAssetType { nick } => {
       let a = store.get_asset_type(&AssetTypeName(nick.clone()))?;
       match a {
@@ -1255,6 +1418,7 @@ fn run_action<S: CliDataStore>(action: Actions, store: &mut S) -> Result<(), Cli
                             sid: None,
                             ledger_state: None,
                             owner: Some(PubkeyName(issuer_nick.0.clone())),
+                            asset_type: Some(asset_nick.clone()),
                             record: txo.clone(),
                             owner_memo: memo.clone(),
                             opened_record: Some(open_blind_asset_record(&txo.0, &memo, iss_kp.get_sk_ref()).unwrap()),
@@ -1418,11 +1582,54 @@ fn run_action<S: CliDataStore>(action: Actions, store: &mut S) -> Result<(), Cli
         }
 
         println!("Got status: {}", serde_json::to_string(&resp)?);
-        // TODO: do something if it's committed
-        store.update_txn_metadata::<std::convert::Infallible, _>(&TxnName(nick), |metadata| {
-               metadata.status = Some(resp);
-               Ok(())
-             })?;
+        store.update_txn_metadata::<std::convert::Infallible, _>(&TxnName(nick.clone()),
+                                                                 |metadata| {
+                                                                   metadata.status =
+                                                                     Some(resp.clone());
+                                                                   Ok(())
+                                                                 })?;
+
+        if let TxnStatus::Committed((_, txo_sids)) = resp {
+          if let Some(TxnStatus::Committed(_)) = metadata.status {
+          } else {
+            // TODO: internally-spent TXOs
+            assert_eq!(metadata.new_txos.len(), txo_sids.len());
+            for pref in FreshNamer::new(nick.clone(), ".".to_string()) {
+              let mut entries = vec![];
+              let mut bad = false;
+              for ((n, txo), sid) in metadata.new_txos.iter().zip(txo_sids.iter()) {
+                let mut txo = txo.clone();
+                let n = format!("{}:{}", pref, n);
+
+                if store.get_cached_txo(&TxoName(n.clone()))?.is_some() {
+                  bad = true;
+                  break;
+                }
+
+                txo.sid = Some(*sid);
+                entries.push((TxoName(n), txo));
+              }
+
+              if !bad {
+                let mut finalized = vec![];
+                for (k, v) in entries {
+                  println!("Caching TXO `{}`:", k.0);
+                  display_txo_entry(1, &v);
+                  store.cache_txo(&k, v)?;
+                  finalized.push(k);
+                }
+
+                store.update_txn_metadata::<std::convert::Infallible, _>(&TxnName(nick), |metadata| {
+                      assert!(metadata.finalized_txos.is_none());
+                      metadata.finalized_txos = Some(finalized);
+                      Ok(())
+                    })?;
+                break;
+              }
+            }
+            println!("Done caching TXOs.");
+          }
+        }
       }
       Ok(())
     }

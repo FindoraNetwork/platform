@@ -85,7 +85,7 @@ DEFINE_ASSET_TYPE_COMMANDS="  $CLI2 key-gen alice; \
                   "
   debug_lines
   [ "$status" -eq 0 ]
-  check_line 43 'Asset `AliceCoin2`'
+  check_line 44 'Asset `AliceCoin2`'
 }
 
 @test "issue asset" {
