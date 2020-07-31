@@ -285,8 +285,7 @@ impl CredentialRevealSig {
 
 #[wasm_bindgen]
 #[derive(Serialize, Deserialize)]
-/// Commitment to a credential record, proof that the commitment is a valid re-randomization of a
-/// commitment signed by a certain credential issuer, and credential key that can be used
+/// Commitment to a credential record, proof that the commitment is valid, and credential key that can be used
 /// to open a commitment.
 pub struct CredentialCommitmentData {
   pub(crate) commitment: CredentialCommitment,
@@ -310,7 +309,7 @@ impl CredentialCommitmentData {
   }
 
   /// Returns the key used to generate the commitment.
-  /// @see {@link module:Findora-Wasm.wasm_credential_open_commitment|wasm_credential_open_commitment} for information about how to verify a
+  /// @see {@link module:Findora-Wasm.wasm_credential_open_commitment|wasm_credential_open_commitment} for information about how to open a
   /// credential commitment.
   pub fn get_commit_key(&self) -> CredentialCommitmentKey {
     self.commitment_key.clone()
