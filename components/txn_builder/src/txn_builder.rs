@@ -34,6 +34,12 @@ use zei::xfr::structs::{
   OpenAssetRecord, OwnerMemo,
 };
 
+macro_rules! no_transfer_err {
+  () => {
+    inv_fail!("Transaction has not yet been finalized".to_string())
+  };
+}
+
 #[derive(Deserialize, Serialize, PartialEq)]
 pub enum PolicyChoice {
   Fungible(),
@@ -874,32 +880,57 @@ impl TransferOperationBuilder {
   // All input owners must sign eventually for the transaction to be valid.
   pub fn sign(&mut self, kp: &XfrKeyPair) -> Result<&mut Self, PlatformError> {
     if self.transfer.is_none() {
-      return Err(inv_fail!("Transaction has not yet been finalized".to_string()));
+      return Err(no_transfer_err!());
     }
-    let mut new_transfer = self.transfer.as_ref().unwrap().clone();
-    new_transfer.sign(&kp);
-    self.transfer = Some(new_transfer);
+    self.transfer.as_mut().unwrap().sign(&kp);
+    Ok(self)
+  }
+
+  pub fn create_input_signature(&self,
+                                keypair: &XfrKeyPair)
+                                -> Result<TransferBodySignature, PlatformError> {
+    let sig = self.transfer
+                  .as_ref()
+                  .ok_or(no_transfer_err!())?
+                  .create_input_signature(keypair);
+    Ok(sig)
+  }
+
+  pub fn create_cosignature(&self,
+                            keypair: &XfrKeyPair,
+                            input_idx: usize)
+                            -> Result<TransferBodySignature, PlatformError> {
+    let sig = self.transfer
+                  .as_ref()
+                  .ok_or(no_transfer_err!())?
+                  .create_cosignature(keypair, input_idx);
+    Ok(sig)
+  }
+
+  pub fn attach_signature(&mut self,
+                          sig: TransferBodySignature)
+                          -> Result<&mut Self, PlatformError> {
+    self.transfer
+        .as_mut()
+        .ok_or(no_transfer_err!())?
+        .attach_signature(sig)?;
     Ok(self)
   }
 
   // Add a co-signature for an input.
-  pub fn add_cosignature(&mut self,
-                         kp: &XfrKeyPair,
-                         input_idx: usize)
-                         -> Result<&mut Self, PlatformError> {
-    if self.transfer.is_none() {
-      return Err(inv_fail!("Transaction has not yet been finalized".to_string()));
-    }
-    let mut new_transfer = self.transfer.as_ref().unwrap().clone();
-    new_transfer.add_cosignature(&kp, input_idx);
-    self.transfer = Some(new_transfer);
+  pub fn sign_cosignature(&mut self,
+                          kp: &XfrKeyPair,
+                          input_idx: usize)
+                          -> Result<&mut Self, PlatformError> {
+    let mut new_transfer = self.transfer.as_mut().ok_or(no_transfer_err!())?.clone();
+    new_transfer.sign_cosignature(&kp, input_idx);
     Ok(self)
   }
 
   // Return the transaction operation
   pub fn transaction(&self) -> Result<Operation, PlatformError> {
     if self.transfer.is_none() {
-      return Err(inv_fail!("Must create transfer".to_string()));
+      return Err(no_transfer_err!());
     }
     Ok(Operation::TransferAsset(self.transfer.clone().unwrap()))
   }
@@ -907,7 +938,7 @@ impl TransferOperationBuilder {
   // Checks to see whether all necessary signatures are present and valid
   pub fn validate_signatures(&mut self) -> Result<&mut Self, PlatformError> {
     if self.transfer.is_none() {
-      return Err(inv_fail!("Transaction has not yet been finalized".to_string()));
+      return Err(no_transfer_err!());
     }
 
     let trn = self.transfer.as_ref().unwrap();

@@ -650,12 +650,12 @@ impl TransferOperationBuilder {
   /// Co-sign an input index
   /// @param {XfrKeyPair} kp - Co-signature key.
   /// @params {Number} input_idx - Input index to apply co-signature to.
-  pub fn add_cosignature(mut self,
-                         kp: &XfrKeyPair,
-                         input_idx: usize)
-                         -> Result<TransferOperationBuilder, JsValue> {
+  pub fn sign_cosignature(mut self,
+                          kp: &XfrKeyPair,
+                          input_idx: usize)
+                          -> Result<TransferOperationBuilder, JsValue> {
     self.get_builder_mut()
-        .add_cosignature(kp, input_idx)
+        .sign_cosignature(kp, input_idx)
         .map_err(error_to_jsvalue)?;
     Ok(self)
   }
