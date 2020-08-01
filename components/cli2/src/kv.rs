@@ -197,6 +197,35 @@ impl KVStore {
     Ok(ret)
   }
 
+  // TODO: unify these
+  pub fn with_opt<T: HasTable,
+                    E: std::error::Error + 'static,
+                    F: FnOnce(Option<&mut T>) -> Result<(), E>>(
+    &self,
+    key: &T::Key,
+    f: F)
+    -> Result<()> {
+    // Attempt to get the value
+    let mut value: Option<T> = self.get(key)?;
+    // Do the callers thing to the value
+    let result = f(value.as_mut());
+
+    match result {
+      Ok(()) => {
+        if let Some(value) = value {
+          // Shove it back into the store
+          self.set(key, value)?;
+        }
+        Ok(())
+      }
+      Err(e) => {
+        let e = Box::new(e) as Box<dyn std::error::Error>;
+        Err(KVError::ClosureError { backtrace: Backtrace::generate(),
+                                    source: e })
+      }
+    }
+  }
+
   pub fn with<T: HasTable, E: std::error::Error + 'static, F: FnOnce(&mut T) -> Result<(), E>>(
     &self,
     key: &T::Key,
@@ -261,14 +290,21 @@ impl CliDataStore for KVStore {
     self.set(&String::from("config"), current)?;
     Ok(())
   }
-  fn get_keypairs(&self)
-                  -> Result<BTreeMap<crate::KeypairName, zei::xfr::sig::XfrKeyPair>, CliError> {
-    Ok(self.get_all()?)
+  fn get_keypairs(&self) -> Result<Vec<crate::KeypairName>, CliError> {
+    Ok(self.get_all::<zei::xfr::sig::XfrKeyPair>()?
+           .into_iter()
+           .map(|(k, _)| k)
+           .collect())
   }
-  fn get_keypair(&self,
-                 k: &crate::KeypairName)
-                 -> Result<Option<zei::xfr::sig::XfrKeyPair>, CliError> {
-    Ok(self.get(k)?)
+  fn with_keypair<E: std::error::Error + 'static,
+                    F: FnOnce(Option<&zei::xfr::sig::XfrKeyPair>) -> Result<(), E>>(
+    &mut self,
+    k: &crate::KeypairName,
+    f: F)
+    -> Result<(), CliError> {
+    Ok(self.with_opt(k, |x: Option<&mut zei::xfr::sig::XfrKeyPair>| {
+             f(x.map(|v| &*v))
+           })?)
   }
   fn delete_keypair(&mut self,
                     k: &crate::KeypairName)

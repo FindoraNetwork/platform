@@ -19,6 +19,7 @@ use rand_core::{CryptoRng, RngCore, SeedableRng};
 use sparse_merkle_tree::Key;
 use std::cmp::Ordering;
 use std::collections::HashSet;
+use utils::SignatureOf;
 use zei::api::anon_creds::{
   ac_confidential_open_commitment, ACCommitment, ACCommitmentKey, ConfidentialAC, Credential,
 };
@@ -255,6 +256,10 @@ fn policy_from_choice(code: &AssetTypeCode,
 pub trait BuildsTransactions {
   fn transaction(&self) -> &Transaction;
   fn sign(&mut self, kp: &XfrKeyPair) -> &mut Self;
+  fn add_signature(&mut self,
+                   pk: &XfrPublicKey,
+                   sig: SignatureOf<TransactionBody>)
+                   -> Result<&mut Self, PlatformError>;
   fn add_memo(&mut self, memo: Memo) -> &mut Self;
   fn add_policy_option(&mut self, token_code: AssetTypeCode, which_check: String) -> &mut Self;
   #[allow(clippy::too_many_arguments)]
@@ -571,6 +576,15 @@ impl BuildsTransactions for TransactionBuilder {
   fn sign(&mut self, kp: &XfrKeyPair) -> &mut Self {
     self.txn.sign(kp);
     self
+  }
+
+  fn add_signature(&mut self,
+                   pk: &XfrPublicKey,
+                   sig: SignatureOf<TransactionBody>)
+                   -> Result<&mut Self, PlatformError> {
+    self.txn.check_signature(pk, &sig)?;
+    self.txn.signatures.push(sig);
+    Ok(self)
   }
 
   fn serialize(&self) -> Vec<u8> {

@@ -14,7 +14,6 @@ use submission_server::{TxnHandle, TxnStatus};
 use txn_builder::BuildsTransactions;
 use txn_builder::PolicyChoice;
 use utils::NetworkRoute;
-use utils::Serialized;
 use utils::{HashOf, SignatureOf};
 use zei::setup::PublicParams;
 use zei::xfr::asset_record::{open_blind_asset_record, AssetRecordType};
@@ -42,12 +41,23 @@ pub fn list_keys<S: CliDataStore>(store: &mut S) -> Result<(), CliError> {
   let pks = store.get_pubkeys()?
                  .into_iter()
                  .map(|(k, pk)| (k.0, pk))
-                 .filter(|(k, _)| !kps.contains_key(&KeypairName(k.clone())))
+                 .filter(|(k, _)| !kps.contains(&KeypairName(k.clone())))
                  .map(|x| (x, false))
                  .collect::<Vec<_>>();
-  let kps = kps.into_iter()
-               .map(|(k, kp)| (k.0, *kp.get_pk_ref()))
-               .map(|x| (x, true));
+  let kps = kps.into_iter();
+  let mut new_kps = vec![];
+  for k in kps {
+    let mut pk = None;
+    store.with_keypair::<std::convert::Infallible, _>(&k, |kp| match kp {
+           None => panic!("A key disappeared from the database! {}", k.0),
+           Some(kp) => {
+             pk = Some(*kp.get_pk_ref());
+             Ok(())
+           }
+         })?;
+    new_kps.push((k, pk.unwrap()));
+  }
+  let kps = new_kps.into_iter().map(|(k, pk)| ((k.0, pk), true));
   for ((n, k), pair) in kps.chain(pks.into_iter()) {
     println!("{} {}: `{}`",
              if pair { "keypair" } else { "public key" },
@@ -61,16 +71,22 @@ pub fn list_keypair<S: CliDataStore>(store: &mut S,
                                      nick: String,
                                      show_secret: bool)
                                      -> Result<(), CliError> {
-  let kp = store.get_keypair(&KeypairName(nick.to_string()))?;
-  if show_secret {
-    let kp = kp.map(|x| serde_json::to_string(&x).unwrap())
-               .unwrap_or(format!("No keypair with name `{}` found", nick));
-    println!("{}", kp);
-  } else {
-    let pk = kp.map(|x| serde_json::to_string(x.get_pk_ref()).unwrap())
-               .unwrap_or(format!("No keypair with name `{}` found", nick));
-    println!("{}", pk);
-  }
+  store.with_keypair::<CliError, _>(&KeypairName(nick.to_string()), |kp| match kp {
+         None => {
+           eprintln!("No keypair with name `{}` found", nick);
+           exit(-1);
+         }
+         Some(kp) => {
+           if show_secret {
+             let kp = serde_json::to_string(&kp)?;
+             println!("{}", kp);
+           } else {
+             let pk = serde_json::to_string(kp.get_pk_ref())?;
+             println!("{}", pk);
+           }
+           Ok(())
+         }
+       })?;
   Ok(())
 }
 
@@ -113,40 +129,42 @@ pub fn load_public_key<S: CliDataStore>(store: &mut S, nick: String) -> Result<(
 }
 
 pub fn delete_keypair<S: CliDataStore>(store: &mut S, nick: String) -> Result<(), CliError> {
-  let kp = store.get_keypair(&KeypairName(nick.to_string()))?;
-  match kp {
-    None => {
-      eprintln!("No keypair with name `{}` found", nick);
-      exit(-1);
-    }
-    Some(_) => {
-      if prompt_default(format!("Are you sure you want to delete keypair `{}`?", nick),
-                        false)?
-      {
-        // TODO: do this atomically?
-        store.delete_keypair(&KeypairName(nick.to_string()))?;
-        store.delete_pubkey(&PubkeyName(nick.to_string()))?;
-        println!("Keypair `{}` deleted", nick);
-      }
-    }
+  store.with_keypair::<CliError, _>(&KeypairName(nick.to_string()), |kp| {
+         if kp.is_none() {
+           eprintln!("No keypair with name `{}` found", nick);
+           exit(-1);
+         }
+         Ok(())
+       })?;
+  if prompt_default(format!("Are you sure you want to delete keypair `{}`?", nick),
+                    false)?
+  {
+    // TODO: do this atomically?
+    store.delete_keypair(&KeypairName(nick.to_string()))?;
+    store.delete_pubkey(&PubkeyName(nick.to_string()))?;
+    println!("Keypair `{}` deleted", nick);
   }
   Ok(())
 }
 
 pub fn delete_public_key<S: CliDataStore>(store: &mut S, nick: String) -> Result<(), CliError> {
   let pk = store.get_pubkey(&PubkeyName(nick.to_string()))?;
-  let kp = store.get_keypair(&KeypairName(nick.to_string()))?;
-  match (pk, kp) {
+  let mut has_kp = false;
+  store.with_keypair::<std::convert::Infallible, _>(&KeypairName(nick.to_string()), |kp| {
+         has_kp = kp.is_some();
+         Ok(())
+       })?;
+  match (pk, has_kp) {
     (None, _) => {
       eprintln!("No public key with name `{}` found", nick);
       exit(-1);
     }
-    (Some(_), Some(_)) => {
+    (Some(_), true) => {
       eprintln!("`{}` is a keypair. Please use delete-keypair instead.",
                 nick);
       exit(-1);
     }
-    (Some(_), None) => {
+    (Some(_), false) => {
       if prompt_default(format!("Are you sure you want to delete public key `{}`?", nick),
                         false)?
       {
@@ -665,61 +683,70 @@ pub fn define_asset<S: CliDataStore>(store: &mut S,
                                      asset_nick: String)
                                      -> Result<(), CliError> {
   let issuer_nick = KeypairName(issuer_nick);
-  let kp = match store.get_keypair(&issuer_nick)? {
-    None => {
-      eprintln!("No key pair `{}` found.", issuer_nick.0);
-      exit(-1);
-    }
-    Some(s) => s,
-  };
   let builder_opt = builder.map(TxnBuilderName)
                            .or_else(|| store.get_config().unwrap().active_txn);
-  let builder;
+  let builder_name;
   match builder_opt {
     None => {
       eprintln!("I don't know which transaction to use!");
       exit(-1);
     }
     Some(t) => {
-      builder = t;
+      builder_name = t;
     }
   }
 
-  if store.get_txn_builder(&builder)?.is_none() {
-    eprintln!("Transaction builder `{}` not found.", builder.0);
-    exit(-1);
+  let mut new_builder;
+  match store.get_txn_builder(&builder_name)? {
+    None => {
+      eprintln!("Transaction builder `{}` not found.", builder_name.0);
+      exit(-1);
+    }
+    Some(b) => {
+      new_builder = b;
+    }
   }
+  store.with_keypair::<ledger::data_model::errors::PlatformError, _>(&issuer_nick, |kp| match kp {
+    None => {
+      eprintln!("No key pair `{}` found.", issuer_nick.0);
+      exit(-1);
+    }
+    Some(kp) => {
+      new_builder.builder.add_operation_create_asset(&kp,
+                                                      None,
+                                                      Default::default(),
+                                                      &prompt::<String, _>("memo?").unwrap(),
+                                                      PolicyChoice::Fungible())?;
+      Ok(())
+    }
+  })?;
 
-  store.with_txn_builder::<ledger::data_model::errors::PlatformError, _>(&builder, |builder| {
-         builder.builder.add_operation_create_asset(&kp,
-                                                     None,
-                                                     Default::default(),
-                                                     &prompt::<String, _>("memo?").unwrap(),
-                                                     PolicyChoice::Fungible())?;
-         match builder.builder.transaction().body.operations.last() {
-           Some(Operation::DefineAsset(def)) => {
-             builder.new_asset_types
-                    .insert(AssetTypeName(asset_nick.clone()),
-                            AssetTypeEntry { asset: def.body.asset.clone(),
-                                             issuer_nick: Some(PubkeyName(issuer_nick.0
-                                                                                     .clone())) });
-           }
-           _ => {
-             panic!("The transaction builder doesn't include our operation!");
-           }
-         }
-         builder.signers
-                .insert(issuer_nick.clone(), Serialized::new(&kp));
-         builder.operations
-                .push(OpMetadata::DefineAsset { issuer_nick: PubkeyName(issuer_nick.0.clone()),
-                                                asset_nick: AssetTypeName(asset_nick.clone()) });
-         println!("{}:", asset_nick);
-         display_asset_type(1,
-                            builder.new_asset_types
-                                   .get(&AssetTypeName(asset_nick.clone()))
-                                   .unwrap());
-         Ok(())
-       })?;
+  store.with_txn_builder::<ledger::data_model::errors::PlatformError, _>(&builder_name, |builder| {
+    *builder = new_builder;
+    match builder.builder.transaction().body.operations.last() {
+      Some(Operation::DefineAsset(def)) => {
+        builder.new_asset_types
+               .insert(AssetTypeName(asset_nick.clone()),
+                       AssetTypeEntry { asset: def.body.asset.clone(),
+                                        issuer_nick: Some(PubkeyName(issuer_nick.0.clone())) });
+      }
+      _ => {
+        panic!("The transaction builder doesn't include our operation!");
+      }
+    }
+    if !builder.signers.contains(&issuer_nick) {
+      builder.signers.push(issuer_nick.clone());
+    }
+    builder.operations
+           .push(OpMetadata::DefineAsset { issuer_nick: PubkeyName(issuer_nick.0.clone()),
+                                           asset_nick: AssetTypeName(asset_nick.clone()) });
+    println!("{}:", asset_nick);
+    display_asset_type(1,
+                       builder.new_asset_types
+                              .get(&AssetTypeName(asset_nick.clone()))
+                              .unwrap());
+    Ok(())
+  })?;
   Ok(())
 }
 
@@ -743,7 +770,7 @@ pub fn issue_asset<S: CliDataStore>(store: &mut S,
   }
 
   let builder_opt = store.get_txn_builder(&builder_nick)?;
-  let builder;
+  let mut builder;
   match builder_opt {
     None => {
       eprintln!("Transaction builder `{}` not found.", builder_nick.0);
@@ -780,61 +807,59 @@ pub fn issue_asset<S: CliDataStore>(store: &mut S,
     }
   }
 
-  let iss_kp;
-  match store.get_keypair(&issuer_nick)? {
-    None => {
-      eprintln!("No keypair nicknamed `{}` found.", issuer_nick.0);
-      exit(-1);
-    }
-    Some(kp) => {
-      iss_kp = kp;
-    }
-  }
-
-  println!("IssueAsset: {} of `{}` ({}), authorized by `{}`",
-           amount,
-           asset.asset.code.to_base64(),
-           asset_nick.0,
-           issuer_nick.0);
-
-  store.with_txn_builder::<errors::PlatformError, _>(&builder_nick, |builder| {
-         builder.builder.add_basic_issue_asset(
-      &iss_kp, &asset.asset.code, issue_seq_num, amount,
-      AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
-      &PublicParams::new())?;
-
-         let out_name = format!("utxo{}", builder.new_txos.len());
-
-         match builder.builder.transaction().body.operations.last() {
-           Some(Operation::IssueAsset(iss)) => {
-             assert_eq!(iss.body.records.len(), 1);
-             let (txo, memo) = iss.body.records[0].clone();
-             builder.new_txos
-               .push((out_name.clone(),
-                      TxoCacheEntry { sid: None,
-                            asset_type: Some(asset_nick.clone()),
-                                      record: txo.clone(),
-                                      owner_memo: memo.clone(),
-                        ledger_state: None,
-                        owner: Some(PubkeyName(issuer_nick.0.clone())),
-                                      opened_record:
-                                        Some(open_blind_asset_record(&txo.0,
-                                                                     &memo,
-                                                                     iss_kp.get_sk_ref()).unwrap()),
-                                      unspent: true }));
-           }
-           _ => {
-             panic!("The transaction builder doesn't include our operation!");
-           }
+  store.with_keypair::<errors::PlatformError, _>(&issuer_nick, |iss_kp| match iss_kp {
+         None => {
+           eprintln!("No keypair nicknamed `{}` found.", issuer_nick.0);
+           exit(-1);
          }
-         builder.signers
-                .insert(issuer_nick.clone(), Serialized::new(&iss_kp));
-         builder.operations
-                .push(OpMetadata::IssueAsset { issuer_nick: PubkeyName(issuer_nick.0.clone()),
-                                               asset_nick: asset_nick.clone(),
-                                               output_name: out_name,
-                                               output_amt: amount,
-                                               issue_seq_num });
+         Some(iss_kp) => {
+           println!("IssueAsset: {} of `{}` ({}), authorized by `{}`",
+                    amount,
+                    asset.asset.code.to_base64(),
+                    asset_nick.0,
+                    issuer_nick.0);
+
+           builder.builder.add_basic_issue_asset(
+        iss_kp, &asset.asset.code, issue_seq_num, amount,
+        AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
+        &PublicParams::new())?;
+
+           let out_name = format!("utxo{}", builder.new_txos.len());
+
+           match builder.builder.transaction().body.operations.last() {
+             Some(Operation::IssueAsset(iss)) => {
+               assert_eq!(iss.body.records.len(), 1);
+               let (txo, memo) = iss.body.records[0].clone();
+               builder.new_txos
+            .push((out_name.clone(),
+              TxoCacheEntry {
+                  sid: None, asset_type: Some(asset_nick.clone()), record: txo.clone(),
+                  owner_memo: memo.clone(), ledger_state: None,
+                  owner: Some(PubkeyName(issuer_nick.0.clone())),
+                  opened_record:
+                    Some(open_blind_asset_record(&txo.0,
+                          &memo, iss_kp.get_sk_ref()).unwrap()),
+                  unspent: true }));
+             }
+             _ => {
+               panic!("The transaction builder doesn't include our operation!");
+             }
+           }
+           if !builder.signers.contains(&issuer_nick) {
+             builder.signers.push(issuer_nick.clone());
+           }
+           builder.operations
+                  .push(OpMetadata::IssueAsset { issuer_nick: PubkeyName(issuer_nick.0.clone()),
+                                                 asset_nick: asset_nick.clone(),
+                                                 output_name: out_name,
+                                                 output_amt: amount,
+                                                 issue_seq_num });
+           Ok(())
+         }
+       })?;
+
+  store.with_txn_builder::<errors::PlatformError, _>(&builder_nick, |the_builder| {
+         *the_builder = builder;
          Ok(())
        })?;
 
@@ -882,19 +907,47 @@ pub fn build_transaction<S: CliDataStore>(store: &mut S,
   println!("Building `{}` as `{}`...", nick.0, txn_nick.0);
 
   let mut metadata: TxnMetadata = Default::default();
-  store.with_txn_builder(&nick, |builder| {
-         for (_, kp) in builder.signers.iter() {
-           builder.builder.sign(&kp.deserialize());
+  let builder = match store.get_txn_builder(&nick)? {
+    None => {
+      eprintln!("No txn builder `{}` found.", nick.0);
+      exit(-1);
+    }
+    Some(b) => b,
+  };
+
+  let sigs = {
+    let mut sigs = vec![];
+    for kp_name in builder.signers.iter() {
+      store.with_keypair::<std::convert::Infallible, _>(&kp_name, |kp| match kp {
+             None => {
+               eprintln!("Could not find keypair for required signer `{}`.",
+                         kp_name.0);
+               exit(-1);
+             }
+             Some(kp) => {
+               sigs.push((*kp.get_pk_ref(),
+                          SignatureOf::new(kp, &builder.builder.transaction().body)));
+               Ok(())
+             }
+           })?;
+    }
+    sigs
+  };
+
+  store.with_txn_builder::<errors::PlatformError, _>(&nick, |builder| {
+         for (pk, sig) in sigs {
+           builder.builder.add_signature(&pk, sig)?;
          }
+
          std::mem::swap(&mut metadata.new_asset_types, &mut builder.new_asset_types);
          std::mem::swap(&mut metadata.new_txos, &mut builder.new_txos);
          let mut signers = Default::default();
          std::mem::swap(&mut signers, &mut builder.signers);
-         metadata.signers.extend(signers.into_iter().map(|(k, _)| k));
+         metadata.signers.extend(signers.into_iter());
          std::mem::swap(&mut metadata.operations, &mut builder.operations);
-         let ret: Result<(), std::convert::Infallible> = Ok(());
-         ret
+         Ok(())
        })?;
+
   store.build_transaction(&nick, &txn_nick, metadata)?;
   if used_default {
     store.update_config(|conf| {

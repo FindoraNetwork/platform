@@ -13,7 +13,6 @@ use structopt::StructOpt;
 
 use submission_server::{TxnHandle, TxnStatus};
 use txn_builder::TransactionBuilder;
-use utils::Serialized;
 use utils::{HashOf, SignatureOf};
 use zei::xfr::sig::{XfrKeyPair, XfrPublicKey};
 use zei::xfr::structs::{OpenAssetRecord, OwnerMemo};
@@ -334,7 +333,7 @@ fn display_txn_builder(indent_level: u64, ent: &TxnBuilderEntry) {
   display_txos(indent_level + 1, &ent.new_txos, &None);
 
   println!("{}Signers:", ind);
-  for (nick, _) in ent.signers.iter() {
+  for nick in ent.signers.iter() {
     println!("{} - `{}`", ind, nick.0);
   }
 }
@@ -389,7 +388,7 @@ pub struct TxnBuilderEntry {
   #[serde(default)]
   new_asset_types: BTreeMap<AssetTypeName, AssetTypeEntry>,
   #[serde(default)]
-  signers: BTreeMap<KeypairName, Serialized<XfrKeyPair>>,
+  signers: Vec<KeypairName>,
   // TODO
   #[serde(default)]
   new_txos: Vec<(String, TxoCacheEntry)>,
@@ -401,9 +400,13 @@ pub trait CliDataStore {
   fn get_config(&self) -> Result<CliConfig, CliError>;
   fn update_config<F: FnOnce(&mut CliConfig)>(&mut self, f: F) -> Result<(), CliError>;
 
-  fn get_keypairs(&self) -> Result<BTreeMap<KeypairName, XfrKeyPair>, CliError>;
-  fn get_keypair(&self, k: &KeypairName) -> Result<Option<XfrKeyPair>, CliError>;
+  fn get_keypairs(&self) -> Result<Vec<KeypairName>, CliError>;
   fn delete_keypair(&mut self, k: &KeypairName) -> Result<Option<XfrKeyPair>, CliError>;
+  fn with_keypair<E: std::error::Error + 'static, F: FnOnce(Option<&XfrKeyPair>) -> Result<(), E>>(
+    &mut self,
+    k: &KeypairName,
+    f: F)
+    -> Result<(), CliError>;
   fn get_pubkeys(&self) -> Result<BTreeMap<PubkeyName, XfrPublicKey>, CliError>;
   fn get_pubkey(&self, k: &PubkeyName) -> Result<Option<XfrPublicKey>, CliError>;
   fn delete_pubkey(&mut self, k: &PubkeyName) -> Result<Option<XfrPublicKey>, CliError>;
