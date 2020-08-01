@@ -32,6 +32,12 @@ pub fn setup<S: CliDataStore>(store: &mut S) -> Result<(), CliError> {
   Ok(())
 }
 
+pub fn list_config<S: CliDataStore>(store: &mut S) -> Result<(), CliError> {
+  let conf = store.get_config()?;
+  print_conf(&conf);
+  Ok(())
+}
+
 pub fn key_gen<S: CliDataStore>(store: &mut S, nick: String) -> Result<(), CliError> {
   let kp = XfrKeyPair::generate(&mut rand::thread_rng());
   store.add_public_key(&PubkeyName(nick.to_string()), *kp.get_pk_ref())?;
@@ -169,8 +175,7 @@ pub fn simple_define_asset<S: CliDataStore>(store: &mut S,
 
   let nick_tx = rand::thread_rng().sample_iter(&Alphanumeric)
                                   .take(10)
-                                  .collect::<String>()
-                                  .to_string();
+                                  .collect::<String>();
 
   prepare_transaction(store, nick_tx.clone(), true)?;
 
@@ -180,6 +185,14 @@ pub fn simple_define_asset<S: CliDataStore>(store: &mut S,
 
   submit(store, nick_tx)?;
 
+  Ok(())
+}
+
+pub fn list_public_key<S: CliDataStore>(store: &mut S, nick: String) -> Result<(), CliError> {
+  let pk = store.get_pubkey(&PubkeyName(nick.to_string()))?;
+  let pk = pk.map(|x| serde_json::to_string(&x).unwrap())
+             .unwrap_or(format!("No public key with name {} found", nick));
+  println!("{}", pk);
   Ok(())
 }
 

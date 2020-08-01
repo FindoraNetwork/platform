@@ -707,11 +707,7 @@ fn run_action<S: CliDataStore>(action: Actions, store: &mut S) -> Result<(), Cli
     //////////////////// Simple API  ///////////////////////////////////////////////////////////////
     Setup {} => setup(store),
 
-    ListConfig {} => {
-      let conf = store.get_config()?;
-      print_conf(&conf);
-      Ok(())
-    }
+    ListConfig {} => list_config(store),
 
     KeyGen { nick } => key_gen(store, nick),
 
@@ -719,13 +715,7 @@ fn run_action<S: CliDataStore>(action: Actions, store: &mut S) -> Result<(), Cli
 
     ListKeypair { nick, show_secret } => list_keypair(store, nick, show_secret),
 
-    ListPublicKey { nick } => {
-      let pk = store.get_pubkey(&PubkeyName(nick.to_string()))?;
-      let pk = pk.map(|x| serde_json::to_string(&x).unwrap())
-                 .unwrap_or(format!("No public key with name {} found", nick));
-      println!("{}", pk);
-      Ok(())
-    }
+    ListPublicKey { nick } => list_public_key(store, nick),
 
     LoadKeypair { nick } => load_key_pair(store, nick),
 
