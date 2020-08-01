@@ -270,6 +270,8 @@ pub fn query_ledger_state<S: CliDataStore>(store: &mut S,
          let resp: (HashOf<Option<StateCommitmentData>>,
                     u64,
                     SignatureOf<(HashOf<Option<StateCommitmentData>>, u64)>);
+
+         // TODO refactor
          match reqwest::blocking::get(&query) {
            Err(e) => {
              eprintln!("Request `{}` failed: {}", query, e);
@@ -310,9 +312,7 @@ pub fn query_ledger_state<S: CliDataStore>(store: &mut S,
   Ok(())
 }
 
-pub fn query_asset_issuance_num<S: CliDataStore>(store: &mut S,
-                                                 nick: String)
-                                                 -> Result<(), CliError> {
+fn query_asset_issuance_num<S: CliDataStore>(store: &mut S, nick: String) -> Result<u64, CliError> {
   // Fetch and store Asset issuance sequence number
   let asset: AssetTypeEntry;
   match store.get_asset_type(&AssetTypeName(nick.clone()))? {
@@ -330,8 +330,31 @@ pub fn query_asset_issuance_num<S: CliDataStore>(store: &mut S,
   let query = format!("{}{}",
                       conf.ledger_server,
                       LedgerAccessRoutes::AssetIssuanceNum.with_arg(&codeb64));
-  println!("Query asset issuance number: {}", query);
-  Ok(())
+
+  let resp: u64;
+  match reqwest::blocking::get(&query) {
+    Err(e) => {
+      eprintln!("Request `{}` failed: {}", query, e);
+      exit(-1);
+    }
+    Ok(v) => match v.text()
+                    .map(|x| serde_json::from_str::<_>(&x).map_err(|e| (x, e)))
+    {
+      Err(e) => {
+        eprintln!("Failed to decode response: {}", e);
+        exit(-1);
+      }
+      Ok(Err((x, e))) => {
+        eprintln!("Failed to parse response `{}`: {}", x, e);
+        exit(-1);
+      }
+      Ok(Ok(v)) => {
+        resp = v;
+      }
+    },
+  }
+
+  Ok(resp)
 }
 
 pub fn list_txos<S: CliDataStore>(store: &mut S, unspent: bool) -> Result<(), CliError> {
@@ -542,6 +565,8 @@ pub fn query_asset_type<S: CliDataStore>(store: &mut S,
                       LedgerAccessRoutes::AssetToken.route(),
                       code_b64);
   let resp: Asset;
+
+  // TODO refactor
   match reqwest::blocking::get(&query) {
     Err(e) => {
       eprintln!("Request `{}` failed: {}", query, e);
@@ -574,8 +599,13 @@ pub fn query_asset_type<S: CliDataStore>(store: &mut S,
     }
     ret
   };
+
+  let issue_seq_number = query_asset_issuance_num(store, nick.clone())?;
+  println!("issue_seq_number: {}", issue_seq_number);
+
   let ret = AssetTypeEntry { asset: resp,
-                             issuer_nick };
+                             issuer_nick,
+                             issue_seq_num: issue_seq_number };
   store.add_asset_type(&AssetTypeName(nick.clone()), ret)?;
   println!("Asset type `{}` saved as `{}`", code_b64, nick);
   Ok(())
@@ -790,7 +820,8 @@ pub fn define_asset<S: CliDataStore>(store: &mut S,
         builder.new_asset_types
                .insert(AssetTypeName(asset_nick.clone()),
                        AssetTypeEntry { asset: def.body.asset.clone(),
-                                        issuer_nick: Some(PubkeyName(issuer_nick.0.clone())) });
+                                        issuer_nick: Some(PubkeyName(issuer_nick.0.clone())),
+                                        issue_seq_num: 0_u64 });
       }
       _ => {
         panic!("The transaction builder doesn't include our operation!");

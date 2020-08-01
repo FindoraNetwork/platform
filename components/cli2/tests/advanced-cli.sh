@@ -79,13 +79,19 @@ DEFINE_ASSET_TYPE_COMMANDS="  $CLI2 key-gen alice; \
 }
 
 @test "query asset type" {
-  run  bash -c "  $DEFINE_ASSET_TYPE_COMMANDS \
-                  $CLI2 query-asset-type --replace=true AliceCoin2 kt2_x12-CiMz802pkydMrNsSqLEAplDUgKTgzLtprnk=
-                  $CLI2 list-asset-types
-                  "
+  run  bash -c "  $DEFINE_ASSET_TYPE_COMMANDS"
+  run $CLI2 query-asset-type --replace=false AliceCoin kt2_x12-CiMz802pkydMrNsSqLEAplDUgKTgzLtprnk=
+  check_line 0 "issue_seq_number: 0"
+  [ "$status" -eq 0 ]
+  run $CLI2 list-asset-types
   debug_lines
   [ "$status" -eq 0 ]
-  check_line 44 'Asset `AliceCoin2`'
+  check_line 0 "Asset `AliceCoin`"
+  check_line 1 " issuer nickname: <UNKNOWN>"
+  check_line 2 " issuer public key:"
+  check_line 3 " code: kt2_x12-CiMz802pkydMrNsSqLEAplDUgKTgzLtprnk="
+  check_line 4 " memo: `memo_alice`"
+  check_line 5 " issue_seq_number: 0"
 }
 
 @test "issue asset" {
@@ -99,30 +105,27 @@ DEFINE_ASSET_TYPE_COMMANDS="  $CLI2 key-gen alice; \
                { echo; echo Y; } | $CLI2 submit 0;"
 
   [ "$status" -eq 0 ]
-  debug_lines
-  check_line 21 'Submitting to `https://testnet.findora.org/submit_server/submit_transaction`'
-  check_line 22 " seq_id:"
-  check_line 26 '  DefineAsset `TheBestAliceCoinsOnEarthV2`'
-  check_line 27 '   issued by `alice`'
-  check_line 28 '  IssueAsset 10000 of `TheBestAliceCoinsOnEarthV2`'
-  check_line 39 '   Owned by: "'
-  check_line 40 '   Record Type: "NonConfidentialAmount_NonConfidentialAssetType"'
-  check_line 41 '   Amount: 10000'
-  check_line 42 "   Type:"
-  check_line 43 "   Decrypted Amount: 10000"
-  check_line 47 " Signers:"
-  check_line 48 '  - `alice`'
-  check_line 49 "Submitted"
-  check_line 50 'Got status: {"Committed":'
-}
+  check_line 22 'Submitting to `https://testnet.findora.org/submit_server/submit_transaction`'
+  check_line 23 " seq_id:"
+  check_line 27 '  DefineAsset `TheBestAliceCoinsOnEarthV2`'
+  check_line 28 '   issued by `alice`'
+  check_line 29 '  IssueAsset 10000 of `TheBestAliceCoinsOnEarthV2`'
+  check_line 37 '   issue_seq_number: 0'
+  check_line 41 '   Owned by: "'
+  check_line 42 '   Record Type: "NonConfidentialAmount_NonConfidentialAssetType"'
+  check_line 43 '   Amount: 10000'
+  check_line 44 "   Type:"
+  check_line 45 "   Decrypted Amount: 10000"
+  check_line 49 " Signers:"
+  check_line 50 '  - `alice`'
+  check_line 51 "Submitted"
+  check_line 52 'Got status: {"Committed":'
 
-
-# TODO finish this => we must store the asset issuance number
-@test "query asset type issuance number" {
-  run  bash -c "$CLI2 key-gen alice; \
-                echo -e 'memo_alice \n y \n' | $CLI2 simple-define-asset alice AliceCoin;\
-                $CLI2 query-asset-issuance-num AliceCoin;"
+  # We query the asset type to check the issue_seq_number has been incremented
+  run $CLI2 query-asset-type --replace=false TheBestAliceCoinsOnEarthV2 5lS9ivI6WXJSOpDvzhYmM-iKIxF2dQjoCRcsEMnN9s4=
   debug_lines
   [ "$status" -eq 0 ]
-  check_line 37 "Query asset issuance number: https://testnet.findora.org/query_server/asset_issuance_num"
+  check_line 0 "issue_seq_number: 1"
+
+
 }

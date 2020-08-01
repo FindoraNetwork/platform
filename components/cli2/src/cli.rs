@@ -192,6 +192,7 @@ pub struct TxoCacheEntry {
 pub struct AssetTypeEntry {
   asset: Asset,
   issuer_nick: Option<PubkeyName>,
+  issue_seq_num: u64,
 }
 
 fn indent_of(indent_level: u64) -> String {
@@ -378,6 +379,7 @@ fn display_asset_type(indent_level: u64, ent: &AssetTypeEntry) {
            serde_json::to_string(&ent.asset.issuer.key).unwrap());
   println!("{}code: {}", ind, ent.asset.code.to_base64());
   println!("{}memo: `{}`", ind, ent.asset.memo.0);
+  println!("{}issue_seq_number: {}", ind, ent.issue_seq_num);
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -755,8 +757,6 @@ fn run_action<S: CliDataStore>(action: Actions, store: &mut S) -> Result<(), Cli
     QueryAssetType { replace,
                      nick,
                      code, } => query_asset_type(store, replace, nick, code),
-    // TODO merge with above ?
-    QueryAssetIssuanceNum { nick } => query_asset_issuance_num(store, nick),
 
     PrepareTransaction { nick, exact } => prepare_transaction(store, nick, exact),
 
