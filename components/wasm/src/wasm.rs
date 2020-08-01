@@ -656,7 +656,7 @@ impl TransferOperationBuilder {
                          input_idx: usize)
                          -> Result<TransferOperationBuilder, JsValue> {
     self.get_builder_mut()
-        .add_cosignature(kp, input_idx)
+        .sign_cosignature(kp, input_idx)
         .map_err(error_to_jsvalue)?;
     Ok(self)
   }

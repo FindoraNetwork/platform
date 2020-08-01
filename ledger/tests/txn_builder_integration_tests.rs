@@ -78,12 +78,15 @@ fn test_create_asset() -> Result<(), PlatformError> {
   assert!(bar1_proof.is_valid(state_comm1.clone()));
   assert!(bar2_proof.is_valid(state_comm1.clone()));
 
-  let op = TransferOperationBuilder::new().add_input(TxoRef::Absolute(txos[0]), oar1, None, None, 1000)?
+  let mut builder = TransferOperationBuilder::new();
+  builder.add_input(TxoRef::Absolute(txos[0]), oar1, None, None, 1000)?
                                           .add_input(TxoRef::Absolute(txos[1]), oar2, None, None, 500)?
                                           .add_output(&AssetRecordTemplate::with_no_asset_tracking(1500, code.val, NonConfidentialAmount_NonConfidentialAssetType, keys.get_pk()), None, None, None)?
-                                          .create(TransferType::Standard)?
-                                          .sign(&keys)?
-                                          .transaction()?;
+                                          .create(TransferType::Standard)?;
+
+  let input_sig = builder.create_input_signature(&keys).unwrap();
+  builder.attach_signature(input_sig).unwrap();
+  let op = builder.transaction()?;
 
   let mut builder = TransactionBuilder::from_seq_id(ledger.get_block_commit_count());
   let tx = builder.add_operation(op).transaction();
