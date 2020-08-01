@@ -310,6 +310,30 @@ pub fn query_ledger_state<S: CliDataStore>(store: &mut S,
   Ok(())
 }
 
+pub fn query_asset_issuance_num<S: CliDataStore>(store: &mut S,
+                                                 nick: String)
+                                                 -> Result<(), CliError> {
+  // Fetch and store Asset issuance sequence number
+  let asset: AssetTypeEntry;
+  match store.get_asset_type(&AssetTypeName(nick.clone()))? {
+    None => {
+      eprintln!("No asset type with name `{}` found", nick);
+      exit(-1);
+    }
+    Some(a) => {
+      asset = a;
+    }
+  }
+
+  let conf = store.get_config()?;
+  let codeb64 = asset.asset.code.to_base64();
+  let query = format!("{}{}",
+                      conf.ledger_server,
+                      LedgerAccessRoutes::AssetIssuanceNum.with_arg(&codeb64));
+  println!("Query asset issuance number: {}", query);
+  Ok(())
+}
+
 pub fn list_txos<S: CliDataStore>(store: &mut S, unspent: bool) -> Result<(), CliError> {
   for (nick, txo) in store.get_cached_txos()?.into_iter() {
     if !txo.unspent && unspent {

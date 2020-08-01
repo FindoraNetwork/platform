@@ -116,3 +116,13 @@ DEFINE_ASSET_TYPE_COMMANDS="  $CLI2 key-gen alice; \
   check_line 50 'Got status: {"Committed":'
 }
 
+
+# TODO finish this => we must store the asset issuance number
+@test "query asset type issuance number" {
+  run  bash -c "$CLI2 key-gen alice; \
+                echo -e 'memo_alice \n y \n' | $CLI2 simple-define-asset alice AliceCoin;\
+                $CLI2 query-asset-issuance-num AliceCoin;"
+  debug_lines
+  [ "$status" -eq 0 ]
+  check_line 37 "Query asset issuance number: https://testnet.findora.org/query_server/asset_issuance_num"
+}

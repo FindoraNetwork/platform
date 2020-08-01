@@ -566,6 +566,10 @@ enum Actions {
     code: String,
   },
 
+  QueryAssetIssuanceNum {
+    nick: String,
+  },
+
   /// Initialize a transaction builder
   PrepareTransaction {
     /// Optional transaction name
@@ -751,6 +755,8 @@ fn run_action<S: CliDataStore>(action: Actions, store: &mut S) -> Result<(), Cli
     QueryAssetType { replace,
                      nick,
                      code, } => query_asset_type(store, replace, nick, code),
+    // TODO merge with above ?
+    QueryAssetIssuanceNum { nick } => query_asset_issuance_num(store, nick),
 
     PrepareTransaction { nick, exact } => prepare_transaction(store, nick, exact),
 
