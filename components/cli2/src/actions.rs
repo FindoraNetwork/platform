@@ -19,12 +19,21 @@ use zei::setup::PublicParams;
 use zei::xfr::asset_record::{open_blind_asset_record, AssetRecordType};
 use zei::xfr::sig::{XfrKeyPair, XfrPublicKey};
 
+use rand::distributions::Alphanumeric;
+use rand::Rng;
+
 //////////////////// Simple API  ///////////////////////////////////////////////////////////////
 
 pub fn setup<S: CliDataStore>(store: &mut S) -> Result<(), CliError> {
   store.update_config(|conf| {
          *conf = prompt_for_config(Some(conf.clone())).unwrap();
        })?;
+  Ok(())
+}
+
+pub fn list_config<S: CliDataStore>(store: &mut S) -> Result<(), CliError> {
+  let conf = store.get_config()?;
+  print_conf(&conf);
   Ok(())
 }
 
@@ -173,6 +182,35 @@ pub fn delete_public_key<S: CliDataStore>(store: &mut S, nick: String) -> Result
       }
     }
   }
+  Ok(())
+}
+
+pub fn simple_define_asset<S: CliDataStore>(store: &mut S,
+                                            issuer_nick: String,
+                                            asset_nick: String)
+                                            -> Result<(), CliError> {
+  query_ledger_state(store, true)?; // TODO Why true?
+
+  let nick_tx = rand::thread_rng().sample_iter(&Alphanumeric)
+                                  .take(10)
+                                  .collect::<String>();
+
+  prepare_transaction(store, nick_tx.clone(), true)?;
+
+  define_asset(store, Some(nick_tx.clone()), issuer_nick, asset_nick)?;
+
+  build_transaction(store, Some(nick_tx.clone()), Some(nick_tx.clone()), true)?;
+
+  submit(store, nick_tx)?;
+
+  Ok(())
+}
+
+pub fn list_public_key<S: CliDataStore>(store: &mut S, nick: String) -> Result<(), CliError> {
+  let pk = store.get_pubkey(&PubkeyName(nick.to_string()))?;
+  let pk = pk.map(|x| serde_json::to_string(&x).unwrap())
+             .unwrap_or(format!("No public key with name {} found", nick));
+  println!("{}", pk);
   Ok(())
 }
 
