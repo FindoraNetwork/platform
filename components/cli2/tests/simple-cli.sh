@@ -58,14 +58,24 @@ source "tests/common.sh"
   [ "$status" -eq 0 ]
 }
 
-@test "define, publish and list asset type(s)" {
-  skip "Not implemented yet"
+@test "simple asset type definition" {
   run  bash -c "$CLI2 key-gen alice; \
-                echo memo_alice | $CLI2 simple-define-asset alice AliceCoin;"
+                echo -e 'memo_alice \n y \n' | $CLI2 simple-define-asset alice AliceCoin;"
   debug_lines
   [ "$status" -eq 0 ]
+  check_line 18 "Submitting to `https://testnet.findora.org/submit_server/submit_transaction`"
+  check_line 23 "  DefineAsset `AliceCoin`"
+  check_line 27 "   issuer nickname: alice"
+  check_line 30 "   memo: `memo_alice`"
+  check_line 34 "Submitted"
+  check_line 35 "Got status: {\"Committed\""
+  check_line 36 "Done caching TXOs."
+
   run $CLI2 list-asset-type AliceCoin
-  debug_lines
   [ "$status" -eq 0 ]
-  check_line 0 'issuer nickname: alice'
+  check_line 0 "issuer nickname: alice"
+  check_line 1 "issuer public key:"
+  check_line 2 "code:"
+  check_line 3 "memo: `memo_alice`"
+
 }

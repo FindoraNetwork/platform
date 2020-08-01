@@ -736,16 +736,7 @@ fn run_action<S: CliDataStore>(action: Actions, store: &mut S) -> Result<(), Cli
     DeletePublicKey { nick } => delete_public_key(store, nick),
 
     SimpleDefineAsset { issuer_nick,
-                        asset_nick, } => {
-      println!("{} {}", issuer_nick, asset_nick);
-      // echo y | $CLI2 query-ledger-state; \
-      // $CLI2 prepare-transaction -e 0; \
-      // echo memo_alice | $CLI2 define-asset alice AliceCoin --builder 0; \
-      // $CLI2 build-transaction 0; \
-      // { echo; echo Y; } | $CLI2 submit 0;"
-
-      Ok(())
-    }
+                        asset_nick, } => simple_define_asset(store, issuer_nick, asset_nick),
 
     //////////////////// Advanced API  /////////////////////////////////////////////////////////////
     QueryLedgerState { forget_old_key } => query_ledger_state(store, forget_old_key),
