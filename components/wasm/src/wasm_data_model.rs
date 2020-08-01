@@ -1,8 +1,9 @@
 #![deny(warnings)]
 use crate::util::error_to_jsvalue;
 use credentials::{
-  CredCommitment, CredIssuerPublicKey, CredIssuerSecretKey, CredPoK, CredRevealSig, CredSignature,
-  CredUserPublicKey, CredUserSecretKey, Credential as PlatformCredential,
+  CredCommitment, CredCommitmentKey, CredIssuerPublicKey, CredIssuerSecretKey, CredPoK,
+  CredRevealSig, CredSignature, CredUserPublicKey, CredUserSecretKey,
+  Credential as PlatformCredential,
 };
 use ledger::data_model::{
   AssetRules as PlatformAssetRules, AssetType as PlatformAssetType,
@@ -286,27 +287,51 @@ pub struct CredentialRevealSig {
 }
 
 #[wasm_bindgen]
-#[derive(Serialize, Deserialize)]
-/// Commitment to a credential record and proof that the commitment is a valid re-randomization of a
-/// commitment signed by a certain credential issuer.
-pub struct CredentialCommitmentAndPoK {
-  pub(crate) commitment: CredentialCommitment,
-  pub(crate) pok: CredentialPoK,
+impl CredentialRevealSig {
+  /// Returns the underlying credential commitment.
+  /// @see {@link module:Findora-Wasm.wasm_credential_verify_commitment|wasm_credential_verify_commitment} for information about how to verify a
+  /// credential commitment.
+  pub fn get_commitment(&self) -> CredentialCommitment {
+    CredentialCommitment { commitment: self.sig.sig_commitment.clone() }
+  }
+  /// Returns the underlying proof of knowledge that the credential is valid.
+  /// @see {@link module:Findora-Wasm.wasm_credential_verify_commitment|wasm_credential_verify_commitment} for information about how to verify a
+  /// credential commitment.
+  pub fn get_pok(&self) -> CredentialPoK {
+    CredentialPoK { pok: self.sig.pok.clone() }
+  }
 }
 
 #[wasm_bindgen]
-impl CredentialCommitmentAndPoK {
+#[derive(Serialize, Deserialize)]
+/// Commitment to a credential record, proof that the commitment is valid, and credential key that can be used
+/// to open a commitment.
+pub struct CredentialCommitmentData {
+  pub(crate) commitment: CredentialCommitment,
+  pub(crate) pok: CredentialPoK,
+  pub(crate) commitment_key: CredentialCommitmentKey,
+}
+
+#[wasm_bindgen]
+impl CredentialCommitmentData {
   /// Returns the underlying credential commitment.
   /// @see {@link module:Findora-Wasm.wasm_credential_verify_commitment|wasm_credential_verify_commitment} for information about how to verify a
   /// credential commitment.
   pub fn get_commitment(&self) -> CredentialCommitment {
     self.commitment.clone()
   }
-  /// Returns the underlying proof of knowledge that the credential is a valid re-randomization.
+  /// Returns the underlying proof of knowledge that the credential is valid.
   /// @see {@link module:Findora-Wasm.wasm_credential_verify_commitment|wasm_credential_verify_commitment} for information about how to verify a
   /// credential commitment.
   pub fn get_pok(&self) -> CredentialPoK {
     self.pok.clone()
+  }
+
+  /// Returns the key used to generate the commitment.
+  /// @see {@link module:Findora-Wasm.wasm_credential_open_commitment|wasm_credential_open_commitment} for information about how to open a
+  /// credential commitment.
+  pub fn get_commit_key(&self) -> CredentialCommitmentKey {
+    self.commitment_key.clone()
   }
 }
 
@@ -338,6 +363,21 @@ pub struct CredentialPoK {
 impl CredentialPoK {
   pub fn get_ref(&self) -> &CredPoK {
     &self.pok
+  }
+}
+
+#[wasm_bindgen]
+#[derive(Serialize, Deserialize, Clone)]
+/// Key used to generate a credential commitment.
+/// @see {@link module:Findora-Wasm.wasm_credential_open_commitment|wasm_credential_open_commitment} for information about how to
+/// open a credential commitment.
+pub struct CredentialCommitmentKey {
+  pub(crate) key: CredCommitmentKey,
+}
+
+impl CredentialCommitmentKey {
+  pub fn get_ref(&self) -> &CredCommitmentKey {
+    &self.key
   }
 }
 

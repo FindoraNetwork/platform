@@ -3259,7 +3259,7 @@ mod tests {
     transfer.sign(&alice);
     for (i, (signs, _)) in co_signers.iter().enumerate() {
       if *signs {
-        transfer.add_cosignature(&keys[i], 0);
+        transfer.sign_cosignature(&keys[i], 0);
       }
     }
     let tx = Transaction::from_operation(Operation::TransferAsset(transfer),

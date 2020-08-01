@@ -637,13 +637,32 @@ impl TransferAsset {
   }
 
   pub fn sign(&mut self, keypair: &XfrKeyPair) {
-    self.body_signatures
-        .push(self.body.compute_body_signature(&keypair, None))
+    let sig = self.create_input_signature(keypair);
+    self.attach_signature(sig).unwrap()
   }
 
-  pub fn add_cosignature(&mut self, keypair: &XfrKeyPair, input_idx: usize) {
-    self.body_signatures
-        .push(self.body.compute_body_signature(&keypair, Some(input_idx)))
+  pub fn sign_cosignature(&mut self, keypair: &XfrKeyPair, input_idx: usize) {
+    let sig = self.create_cosignature(keypair, input_idx);
+    self.attach_signature(sig).unwrap()
+  }
+
+  pub fn attach_signature(&mut self, sig: TransferBodySignature) -> Result<(), PlatformError> {
+    if !sig.verify(&self.body) {
+      return Err(PlatformError::InputsError(error_location!()));
+    }
+    self.body_signatures.push(sig);
+    Ok(())
+  }
+
+  pub fn create_input_signature(&self, keypair: &XfrKeyPair) -> TransferBodySignature {
+    self.body.compute_body_signature(keypair, None)
+  }
+
+  pub fn create_cosignature(&self,
+                            keypair: &XfrKeyPair,
+                            input_idx: usize)
+                            -> TransferBodySignature {
+    self.body.compute_body_signature(keypair, Some(input_idx))
   }
 
   pub fn get_owner_memos_ref(&self) -> Vec<Option<&OwnerMemo>> {

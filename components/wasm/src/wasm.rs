@@ -5,9 +5,10 @@
 #![deny(warnings)]
 use crate::wasm_data_model::*;
 use credentials::{
-  credential_commit, credential_issuer_key_gen, credential_reveal, credential_sign,
-  credential_user_key_gen, credential_verify, credential_verify_commitment, CredIssuerPublicKey,
-  CredIssuerSecretKey, CredUserPublicKey, CredUserSecretKey, Credential as PlatformCredential,
+  credential_commit, credential_issuer_key_gen, credential_open_commitment, credential_reveal,
+  credential_sign, credential_user_key_gen, credential_verify, credential_verify_commitment,
+  CredIssuerPublicKey, CredIssuerSecretKey, CredUserPublicKey, CredUserSecretKey,
+  Credential as PlatformCredential,
 };
 use cryptohash::sha256;
 use ledger::data_model::{
@@ -37,7 +38,7 @@ mod wasm_data_model;
 
 /// Constant defining the git commit hash and commit date of the commit this library was built
 /// against.
-const BUILD_ID: &str = concat!(env!("VERGEN_SHA_SHORT"), " ", env!("VERGEN_COMMIT_DATE"));
+const BUILD_ID: &str = concat!(env!("VERGEN_SHA_SHORT"), " ", env!("VERGEN_BUILD_DATE"));
 
 /// Returns the git commit hash and commit date of the commit this library was built against.
 #[wasm_bindgen]
@@ -320,7 +321,7 @@ impl TransactionBuilder {
   /// @param {CredUserPublicKey} user_public_key - Public key of the credential user.
   /// @param {CredIssuerPublicKey} issuer_public_key - Public key of the credential issuer.
   /// @param {CredentialCommitment} commitment - Credential commitment to add to the address identity registry.
-  /// @param {CredPoK} pok- Proof that a credential commitment is a valid re-randomization.
+  /// @param {CredPoK} pok- Proof that the credential commitment is valid.
   /// @see {@link module:Findora-Wasm.wasm_credential_commit|wasm_credential_commit} for information about how to generate a credential
   /// commitment.
   pub fn add_operation_air_assign(mut self,
@@ -655,7 +656,7 @@ impl TransferOperationBuilder {
                          input_idx: usize)
                          -> Result<TransferOperationBuilder, JsValue> {
     self.get_builder_mut()
-        .add_cosignature(kp, input_idx)
+        .sign_cosignature(kp, input_idx)
         .map_err(error_to_jsvalue)?;
     Ok(self)
   }
@@ -785,6 +786,29 @@ pub fn wasm_credential_verify_commitment(issuer_pub_key: &CredIssuerPublicKey,
                                xfr_pk.as_bytes()).map_err(error_to_jsvalue)
 }
 
+/// Generates a new reveal proof from a credential commitment key.
+/// @param {CredUserSecretKey} user_secret_key - Secret key of the credential user who owns
+/// the credentials.
+/// @param {Credential} credential - Credential whose attributes will be revealed.
+/// @param {JsValue} reveal_fields - Array of strings representing attribute fields to reveal.
+/// @throws Will throw an error if a reveal proof cannot be generated from the credential
+/// or ```reveal_fields``` fails to deserialize.
+#[wasm_bindgen]
+pub fn wasm_credential_open_commitment(user_secret_key: &CredUserSecretKey,
+                                       credential: &Credential,
+                                       key: &CredentialCommitmentKey,
+                                       reveal_fields: JsValue)
+                                       -> Result<CredentialPoK, JsValue> {
+  let mut prng = ChaChaRng::from_entropy();
+  let reveal_fields: Vec<String> = reveal_fields.into_serde().map_err(|_e| JsValue::from("Could not deserialize reveal fields. Please ensure that reveal fields are of the form [String]"))?;
+  let pok = credential_open_commitment(&mut prng,
+                                       user_secret_key,
+                                       credential.get_cred_ref(),
+                                       key.get_ref(),
+                                       &reveal_fields).map_err(error_to_jsvalue)?;
+  Ok(CredentialPoK { pok })
+}
+
 /// Generates a new credential user key.
 /// @param {CredIssuerPublicKey} issuer_pub_key - The credential issuer that can sign off on this
 /// user's attributes.
@@ -846,15 +870,16 @@ pub fn create_credential(issuer_public_key: &CredIssuerPublicKey,
 pub fn wasm_credential_commit(user_secret_key: &CredUserSecretKey,
                               user_public_key: &XfrPublicKey,
                               credential: &Credential)
-                              -> Result<CredentialCommitmentAndPoK, JsValue> {
+                              -> Result<CredentialCommitmentData, JsValue> {
   let mut prng = ChaChaRng::from_entropy();
-  let (commitment, pok, _key) =
+  let (commitment, pok, key) =
     credential_commit(&mut prng,
                       &user_secret_key,
                       credential.get_cred_ref(),
                       &user_public_key.as_bytes()).map_err(error_to_jsvalue)?;
-  Ok(CredentialCommitmentAndPoK { commitment: CredentialCommitment { commitment },
-                                  pok: CredentialPoK { pok } })
+  Ok(CredentialCommitmentData { commitment: CredentialCommitment { commitment },
+                                pok: CredentialPoK { pok },
+                                commitment_key: CredentialCommitmentKey { key } })
 }
 
 /// Selectively reveals attributes committed to in a credential commitment
@@ -881,11 +906,14 @@ pub fn wasm_credential_reveal(user_sk: &CredUserSecretKey,
 /// @param {CredIssuerPublicKey} issuer_pub_key - Public key of credential issuer.
 /// @param {JsValue} attributes - Array of attribute assignments to check of the form `[{name: "credit_score",
 /// val: "760"}]`.
-/// @param {CredentialRevealSig} reveal_sig - Credential reveal signature.
+/// @param {CredentialCommitment} commitment - Commitment to the credential.
+/// @param {CredentialPoK} pok - Proof that the credential commitment is valid and commits
+/// to the attribute values being revealed.
 #[wasm_bindgen]
 pub fn wasm_credential_verify(issuer_pub_key: &CredIssuerPublicKey,
                               attributes: JsValue,
-                              reveal_sig: &CredentialRevealSig)
+                              commitment: &CredentialCommitment,
+                              pok: &CredentialPoK)
                               -> Result<(), JsValue> {
   let attributes: Vec<AttributeAssignment> = attributes.into_serde().unwrap();
   let attributes: Vec<(String, &[u8])> =
@@ -894,8 +922,8 @@ pub fn wasm_credential_verify(issuer_pub_key: &CredIssuerPublicKey,
               .collect();
   credential_verify(issuer_pub_key,
                     &attributes,
-                    &reveal_sig.get_sig_ref().sig_commitment,
-                    &reveal_sig.get_sig_ref().pok).map_err(error_to_jsvalue)?;
+                    commitment.get_ref(),
+                    pok.get_ref()).map_err(error_to_jsvalue)?;
   Ok(())
 }
 

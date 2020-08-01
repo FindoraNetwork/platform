@@ -193,7 +193,7 @@ fn main() {
   info!(concat!("Build: ",
                 env!("VERGEN_SHA_SHORT"),
                 " ",
-                env!("VERGEN_COMMIT_DATE")));
+                env!("VERGEN_BUILD_DATE")));
   let base_dir = std::env::var_os("LEDGER_DIR").filter(|x| !x.is_empty());
   let base_dir = base_dir.as_ref().map(Path::new);
 

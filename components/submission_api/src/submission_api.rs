@@ -27,7 +27,7 @@ fn version() -> actix_web::Result<String> {
   Ok(concat!("Build: ",
              env!("VERGEN_SHA_SHORT"),
              " ",
-             env!("VERGEN_COMMIT_DATE")).into())
+             env!("VERGEN_BUILD_DATE")).into())
 }
 
 pub fn submit_transaction<RNG, LU, TF>(data: web::Data<Arc<RwLock<SubmissionServer<RNG, LU, TF>>>>,
