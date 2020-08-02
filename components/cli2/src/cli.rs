@@ -553,6 +553,14 @@ enum Actions {
     asset_nick: String,
   },
 
+  /// Issue an asset in a single step
+  SimpleIssueAsset {
+    /// Name for the asset type
+    asset_nick: String,
+    /// Number of coins to issue
+    amount: u64,
+  },
+
   //////////////////// Advanced API  ///////////////////////////////////////////////////////////////
   ListAssetTypes {},
 
@@ -738,6 +746,8 @@ fn run_action<S: CliDataStore>(action: Actions, store: &mut S) -> Result<(), Cli
 
     SimpleDefineAsset { issuer_nick,
                         asset_nick, } => simple_define_asset(store, issuer_nick, asset_nick),
+
+    SimpleIssueAsset { asset_nick, amount } => simple_issue_asset(store, asset_nick, amount),
 
     //////////////////// Advanced API  /////////////////////////////////////////////////////////////
     QueryLedgerState { forget_old_key } => query_ledger_state(store, forget_old_key),

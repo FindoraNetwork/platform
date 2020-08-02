@@ -82,3 +82,20 @@ source "tests/common.sh"
   check_line 4 "issue_seq_number: 0"
 
 }
+
+@test "simple asset issuance" {
+  # Define the asset
+  run  bash -c "$CLI2 key-gen alice; \
+                echo -e 'memo_alice \n y \n' | $CLI2 simple-define-asset alice AliceCoin;"
+  [ "$status" -eq 0 ]
+
+  # Issue the asset
+  run $CLI2 simple-issue-asset AliceCoin 10000
+  debug_lines
+  [ "$status" -eq 0 ]
+  check_line 0 "Preparing transaction"
+  check_line 1 "Done."
+  check_line 2 "IssueAsset: 10000 of"
+  check_line 3 "Successfully added to"
+
+}

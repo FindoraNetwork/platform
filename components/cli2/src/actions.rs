@@ -19,10 +19,9 @@ use zei::setup::PublicParams;
 use zei::xfr::asset_record::{open_blind_asset_record, AssetRecordType};
 use zei::xfr::sig::{XfrKeyPair, XfrPublicKey};
 
+use crate::helpers::{do_request, do_request_asset, do_request_authenticated_utxo};
 use rand::distributions::Alphanumeric;
 use rand::Rng;
-
-use crate::helpers::{do_request, do_request_asset, do_request_authenticated_utxo};
 
 type GlobalState = (HashOf<Option<StateCommitmentData>>,
                     u64,
@@ -191,15 +190,19 @@ pub fn delete_public_key<S: CliDataStore>(store: &mut S, nick: String) -> Result
   Ok(())
 }
 
+pub fn pic_random_txn_number() -> String {
+  rand::thread_rng().sample_iter(&Alphanumeric)
+                    .take(10)
+                    .collect::<String>()
+}
+
 pub fn simple_define_asset<S: CliDataStore>(store: &mut S,
                                             issuer_nick: String,
                                             asset_nick: String)
                                             -> Result<(), CliError> {
   query_ledger_state(store, true)?; // TODO Why true?
 
-  let nick_tx = rand::thread_rng().sample_iter(&Alphanumeric)
-                                  .take(10)
-                                  .collect::<String>();
+  let nick_tx = pic_random_txn_number();
 
   prepare_transaction(store, nick_tx.clone(), true)?;
 
@@ -208,6 +211,21 @@ pub fn simple_define_asset<S: CliDataStore>(store: &mut S,
   build_transaction(store, Some(nick_tx.clone()), Some(nick_tx.clone()), true)?;
 
   submit(store, nick_tx)?;
+
+  Ok(())
+}
+
+pub fn simple_issue_asset<S: CliDataStore>(store: &mut S,
+                                           asset_nick: String,
+                                           amount: u64)
+                                           -> Result<(), CliError> {
+  let nick_tx = pic_random_txn_number();
+
+  prepare_transaction(store, nick_tx.clone(), true)?;
+
+  let seq_issue_number = query_asset_issuance_num(store, asset_nick.clone())?;
+
+  issue_asset(store, Some(nick_tx), asset_nick, seq_issue_number, amount)?;
 
   Ok(())
 }
