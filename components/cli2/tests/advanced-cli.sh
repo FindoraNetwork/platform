@@ -58,25 +58,53 @@ source "tests/common.sh"
   check_line 17 'Done.'
 }
 
+DEFINE_ASSET_TYPE_AND_BUILD_COMMANDS="$CLI2 key-gen alice; \
+                                     echo y | $CLI2 query-ledger-state; \
+                                     $CLI2 prepare-transaction -e 0; \
+                                     echo memo_alice | $CLI2 define-asset alice TheBestAliceCoinsOnEarthV2 --builder 0; \
+                                     $CLI2 issue-asset TheBestAliceCoinsOnEarthV2 0 10000; \
+                                     $CLI2 build-transaction 0;"
+
 @test "list-built-transactions" {
-  run bash -c "$CLI2 key-gen alice; \
-               echo y | $CLI2 query-ledger-state; \
-               $CLI2 prepare-transaction -e 0; \
-               echo memo_alice | $CLI2 define-asset alice TheBestAliceCoinsOnEarthV2 --builder 0; \
-               $CLI2 issue-asset TheBestAliceCoinsOnEarthV2 0 10000; \
-               $CLI2 build-transaction 0; \
-               $CLI2 list-built-transactions;"
+  run bash -c "$DEFINE_ASSET_TYPE_AND_BUILD_COMMANDS"
+
+  run $CLI2 list-built-transactions
   debug_lines
   [ "$status" -eq 0 ]
 
-  check_line 21 'Built transaction `0` from builder `0`.'
-  check_line 23 " seq_id:"
-  check_line 27 '  DefineAsset `TheBestAliceCoinsOnEarthV2`'
-  check_line 28 '   issued by `alice`'
-  check_line 39 "  utxo0 (Not finalized):"
+  check_line 1 " seq_id:"
+  check_line 5 '  DefineAsset `TheBestAliceCoinsOnEarthV2`'
+  check_line 6 '   issued by `alice`'
+  check_line 17 "  utxo0 (Not finalized):"
 }
 
-DEFINE_ASSET_TYPE_COMMANDS="  $CLI2 key-gen alice; \
+
+@test "list-built-transaction" {
+
+  run bash -c "$DEFINE_ASSET_TYPE_AND_BUILD_COMMANDS"
+  run $CLI2 list-built-transaction 0
+
+  [ "$status" -eq 0 ]
+
+  check_line 0 "seq_id:"
+  check_line 1 "Handle: <UNKNOWN>"
+  check_line 2 "Status: <UNKNOWN>"
+  check_line 15 "New asset records:"
+  check_line 16 " utxo0 (Not finalized):"
+  check_line 17 "  sid: <UNKNOWN>"
+  check_line 18 "  Owned by: "
+  check_line 19 "  Record Type: \"NonConfidentialAmount_NonConfidentialAssetType\""
+  check_line 20 "  Amount: 10000"
+  check_line 21 "  Type:"
+  check_line 22 "  Decrypted Amount: 10000"
+  check_line 24 "  Spent? Unspent"
+  check_line 25 "  Have owner memo? No"
+  check_line 26 "Signers:"
+  check_line 27  ' - `alice`'
+}
+
+
+DEFINE_ASSET_TYPE_AND_SUBMIT_COMMANDS="  $CLI2 key-gen alice; \
                               echo y | $CLI2 query-ledger-state; \
                               $CLI2 prepare-transaction -e 0; \
                               echo memo_alice | $CLI2 define-asset alice AliceCoin --builder 0; \
@@ -84,7 +112,7 @@ DEFINE_ASSET_TYPE_COMMANDS="  $CLI2 key-gen alice; \
                               { echo; echo Y; } | $CLI2 submit 0;"
 
 @test "define, publish and list asset type(s)" {
-  run  bash -c "$DEFINE_ASSET_TYPE_COMMANDS"
+  run  bash -c "$DEFINE_ASSET_TYPE_AND_SUBMIT_COMMANDS"
   [ "$status" -eq 0 ]
   run $CLI2 list-asset-types
   [ "$status" -eq 0 ]
@@ -95,7 +123,7 @@ DEFINE_ASSET_TYPE_COMMANDS="  $CLI2 key-gen alice; \
 }
 
 @test "query asset type" {
-  run  bash -c "  $DEFINE_ASSET_TYPE_COMMANDS"
+  run  bash -c "  $DEFINE_ASSET_TYPE_AND_SUBMIT_COMMANDS"
   run $CLI2 query-asset-type --replace=false AliceCoin kt2_x12-CiMz802pkydMrNsSqLEAplDUgKTgzLtprnk=
   check_line 0 "issue_seq_number: 0"
   [ "$status" -eq 0 ]
@@ -142,6 +170,5 @@ DEFINE_ASSET_TYPE_COMMANDS="  $CLI2 key-gen alice; \
   debug_lines
   [ "$status" -eq 0 ]
   check_line 0 "issue_seq_number: 1"
-
 
 }
