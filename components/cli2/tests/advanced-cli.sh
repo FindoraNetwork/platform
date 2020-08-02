@@ -50,14 +50,30 @@ source "tests/common.sh"
   [ "$status" -eq 0 ]
   check_line -1 'Done.'
 
-  debug_lines
-
   check_line 12 '0:'
   check_line 13 ' Operations:'
   check_line 14 ' New asset types defined:'
   check_line 15 ' New asset records:'
   check_line 16 ' Signers:'
   check_line 17 'Done.'
+}
+
+@test "list-built-transactions" {
+  run bash -c "$CLI2 key-gen alice; \
+               echo y | $CLI2 query-ledger-state; \
+               $CLI2 prepare-transaction -e 0; \
+               echo memo_alice | $CLI2 define-asset alice TheBestAliceCoinsOnEarthV2 --builder 0; \
+               $CLI2 issue-asset TheBestAliceCoinsOnEarthV2 0 10000; \
+               $CLI2 build-transaction 0; \
+               $CLI2 list-built-transactions;"
+  debug_lines
+  [ "$status" -eq 0 ]
+
+  check_line 21 'Built transaction `0` from builder `0`.'
+  check_line 23 " seq_id:"
+  check_line 27 '  DefineAsset `TheBestAliceCoinsOnEarthV2`'
+  check_line 28 '   issued by `alice`'
+  check_line 39 "  utxo0 (Not finalized):"
 }
 
 DEFINE_ASSET_TYPE_COMMANDS="  $CLI2 key-gen alice; \
