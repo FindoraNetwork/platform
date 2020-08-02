@@ -22,6 +22,12 @@ use zei::xfr::sig::{XfrKeyPair, XfrPublicKey};
 use rand::distributions::Alphanumeric;
 use rand::Rng;
 
+use crate::helpers::{do_request, do_request_asset, do_request_authenticated_utxo};
+
+type GlobalState = (HashOf<Option<StateCommitmentData>>,
+                    u64,
+                    SignatureOf<(HashOf<Option<StateCommitmentData>>, u64)>);
+
 //////////////////// Simple API  ///////////////////////////////////////////////////////////////
 
 pub fn setup<S: CliDataStore>(store: &mut S) -> Result<(), CliError> {
@@ -234,28 +240,7 @@ pub fn query_ledger_state<S: CliDataStore>(store: &mut S,
            let query = format!("{}{}",
                                conf.ledger_server,
                                LedgerAccessRoutes::PublicKey.route());
-           let resp: XfrPublicKey;
-           match reqwest::blocking::get(&query) {
-             Err(e) => {
-               eprintln!("Request `{}` failed: {}", query, e);
-               exit(-1);
-             }
-             Ok(v) => match v.text()
-                             .map(|x| serde_json::from_str::<XfrPublicKey>(&x).map_err(|e| (x, e)))
-             {
-               Err(e) => {
-                 eprintln!("Failed to decode response: {}", e);
-                 exit(-1);
-               }
-               Ok(Err((x, e))) => {
-                 eprintln!("Failed to parse response `{}`: {}", x, e);
-                 exit(-1);
-               }
-               Ok(Ok(v)) => {
-                 resp = v;
-               }
-             },
-           }
+           let resp: XfrPublicKey = do_request::<XfrPublicKey>(&query);
 
            println!("Saving ledger signing key `{}`",
                     serde_json::to_string(&resp).unwrap());
@@ -267,32 +252,7 @@ pub fn query_ledger_state<S: CliDataStore>(store: &mut S,
          let query = format!("{}{}",
                              conf.ledger_server,
                              LedgerAccessRoutes::GlobalState.route());
-         let resp: (HashOf<Option<StateCommitmentData>>,
-                    u64,
-                    SignatureOf<(HashOf<Option<StateCommitmentData>>, u64)>);
-
-         // TODO refactor
-         match reqwest::blocking::get(&query) {
-           Err(e) => {
-             eprintln!("Request `{}` failed: {}", query, e);
-             exit(-1);
-           }
-           Ok(v) => match v.text()
-                           .map(|x| serde_json::from_str::<_>(&x).map_err(|e| (x, e)))
-           {
-             Err(e) => {
-               eprintln!("Failed to decode response: {}", e);
-               exit(-1);
-             }
-             Ok(Err((x, e))) => {
-               eprintln!("Failed to parse response `{}`: {}", x, e);
-               exit(-1);
-             }
-             Ok(Ok(v)) => {
-               resp = v;
-             }
-           },
-         }
+         let resp: GlobalState = do_request::<GlobalState>(&query);
 
          if let Err(e) = resp.2
                              .verify(&conf.ledger_sig_key.unwrap(), &(resp.0.clone(), resp.1))
@@ -331,28 +291,7 @@ fn query_asset_issuance_num<S: CliDataStore>(store: &mut S, nick: String) -> Res
                       conf.ledger_server,
                       LedgerAccessRoutes::AssetIssuanceNum.with_arg(&codeb64));
 
-  let resp: u64;
-  match reqwest::blocking::get(&query) {
-    Err(e) => {
-      eprintln!("Request `{}` failed: {}", query, e);
-      exit(-1);
-    }
-    Ok(v) => match v.text()
-                    .map(|x| serde_json::from_str::<_>(&x).map_err(|e| (x, e)))
-    {
-      Err(e) => {
-        eprintln!("Failed to decode response: {}", e);
-        exit(-1);
-      }
-      Ok(Err((x, e))) => {
-        eprintln!("Failed to parse response `{}`: {}", x, e);
-        exit(-1);
-      }
-      Ok(Ok(v)) => {
-        resp = v;
-      }
-    },
-  }
+  let resp: u64 = do_request::<u64>(&query);
 
   Ok(resp)
 }
@@ -404,58 +343,9 @@ pub fn query_txo<S: CliDataStore>(store: &mut S, nick: String, sid: u64) -> Resu
                       LedgerAccessRoutes::UtxoSid.route(),
                       sid);
 
-  let resp: AuthenticatedUtxo;
-  match reqwest::blocking::get(&query) {
-    Err(e) => {
-      eprintln!("Request `{}` failed: {}", query, e);
-      exit(-1);
-    }
-    Ok(v) => match v.text()
-                    .map(|x| serde_json::from_str::<AuthenticatedUtxo>(&x).map_err(|e| (x, e)))
-    {
-      Err(e) => {
-        eprintln!("Failed to decode response: {}", e);
-        exit(-1);
-      }
-      Ok(Err((x, e))) => {
-        eprintln!("Failed to parse response `{}`: {}", x, e);
-        exit(-1);
-      }
-      Ok(Ok(v)) => {
-        let resp_comm = HashOf::new(&Some(v.state_commitment_data.clone()));
-        let curr_comm = (ledger_state.0).0.clone();
-        if resp_comm != curr_comm {
-          eprintln!("Server responded with authentication relative to `{}`!",
-                    b64enc(&resp_comm.0.hash));
-          eprintln!("The most recent ledger state I have is `{}`.",
-                    b64enc(&curr_comm.0.hash));
-          eprintln!("Please run query-ledger-state then rerun this command.");
-          exit(-1);
-        }
+  let resp: AuthenticatedUtxo = do_request_authenticated_utxo(&query, sid, &ledger_state);
 
-        // TODO: this needs better direct authentication
-        if v.authenticated_spent_status.utxo_sid != TxoSID(sid) {
-          eprintln!("!!!!! ERROR !!!!!!");
-          eprintln!("The server responded with a different UTXO sid.");
-          eprintln!("This could indicate a faulty server, or a man-in-the-middle!");
-          eprintln!("\nFor safety, refusing to update.");
-          exit(-1);
-        }
-
-        if !v.is_valid((ledger_state.0).0.clone()) {
-          eprintln!("!!!!! ERROR !!!!!!");
-          eprintln!("The server responded with an invalid authentication proof.");
-          eprintln!("This could indicate a faulty server, or a man-in-the-middle!");
-          eprintln!("\nFor safety, refusing to update.");
-          exit(-1);
-        }
-
-        resp = v;
-      }
-    },
-  }
-
-  // TODO: do something better to ensure that we pull any existsing
+  // TODO: do something better to ensure that we pull any existing
   // things from orig_ent
   let mut ent = TxoCacheEntry { sid: Some(TxoSID(sid)),
                                 owner: None,
@@ -564,30 +454,7 @@ pub fn query_asset_type<S: CliDataStore>(store: &mut S,
                       conf.ledger_server,
                       LedgerAccessRoutes::AssetToken.route(),
                       code_b64);
-  let resp: Asset;
-
-  // TODO refactor
-  match reqwest::blocking::get(&query) {
-    Err(e) => {
-      eprintln!("Request `{}` failed: {}", query, e);
-      exit(-1);
-    }
-    Ok(v) => match v.text()
-                    .map(|x| serde_json::from_str::<AssetType>(&x).map_err(|e| (x, e)))
-    {
-      Err(e) => {
-        eprintln!("Failed to decode response: {}", e);
-        exit(-1);
-      }
-      Ok(Err((x, e))) => {
-        eprintln!("Failed to parse response `{}`: {}", x, e);
-        exit(-1);
-      }
-      Ok(Ok(v)) => {
-        resp = v.properties;
-      }
-    },
-  }
+  let resp = do_request_asset(&query);
 
   let issuer_nick = {
     let mut ret = None;
@@ -737,28 +604,7 @@ pub fn status_check<S: CliDataStore>(store: &mut S, txn: String) -> Result<(), C
                       conf.submission_server,
                       SubmissionRoutes::TxnStatus.route(),
                       handle.0);
-  let resp;
-  match reqwest::blocking::get(&query) {
-    Err(e) => {
-      eprintln!("Request `{}` failed: {}", query, e);
-      exit(-1);
-    }
-    Ok(v) => match v.text()
-                    .map(|x| serde_json::from_str::<TxnStatus>(&x).map_err(|e| (x, e)))
-    {
-      Err(e) => {
-        eprintln!("Failed to decode `{}` response: {}", query, e);
-        exit(-1);
-      }
-      Ok(Err((x, e))) => {
-        eprintln!("Failed to parse `{}` response to `{}`: {}", query, x, e);
-        exit(-1);
-      }
-      Ok(Ok(v)) => {
-        resp = v;
-      }
-    },
-  }
+  let resp = do_request::<TxnStatus>(&query);
 
   println!("Got status: {}", serde_json::to_string(&resp)?);
   // TODO: do something if it's committed
@@ -1100,28 +946,7 @@ pub fn submit<S: CliDataStore>(store: &mut S, nick: String) -> Result<(), CliErr
                         conf.submission_server,
                         SubmissionRoutes::TxnStatus.route(),
                         &handle.0);
-    let resp;
-    match reqwest::blocking::get(&query) {
-      Err(e) => {
-        eprintln!("Request `{}` failed: {}", query, e);
-        exit(-1);
-      }
-      Ok(v) => match v.text()
-                      .map(|x| serde_json::from_str::<TxnStatus>(&x).map_err(|e| (x, e)))
-      {
-        Err(e) => {
-          eprintln!("Failed to decode response: {}", e);
-          exit(-1);
-        }
-        Ok(Err((x, e))) => {
-          eprintln!("Failed to parse response `{}`: {}", x, e);
-          exit(-1);
-        }
-        Ok(Ok(v)) => {
-          resp = v;
-        }
-      },
-    }
+    let resp = do_request::<TxnStatus>(&query);
 
     println!("Got status: {}", serde_json::to_string(&resp)?);
     // TODO: do something if it's committed

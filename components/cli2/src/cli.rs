@@ -1,3 +1,4 @@
+#![feature(in_band_lifetimes)]
 #![deny(warnings)]
 #![allow(clippy::type_complexity)]
 use ledger::data_model::*;
@@ -18,6 +19,7 @@ use zei::xfr::sig::{XfrKeyPair, XfrPublicKey};
 use zei::xfr::structs::{OpenAssetRecord, OwnerMemo};
 
 pub mod actions;
+pub mod helpers;
 pub mod kv;
 
 use crate::actions::*;
