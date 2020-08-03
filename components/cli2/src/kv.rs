@@ -8,6 +8,9 @@ use txn_builder::{BuildsTransactions, TransactionBuilder};
 
 use crate::{AssetTypeEntry, AssetTypeName, CliDataStore, CliError, TxnBuilderEntry};
 
+pub mod crypto;
+pub use crypto::{EncryptedKey, Key, Pair};
+
 /// Possible errors encountered when dealing with a KVStore
 #[derive(Debug, Snafu)]
 pub enum KVError {
@@ -42,6 +45,11 @@ pub enum KVError {
     backtrace: Backtrace,
     source: Box<dyn std::error::Error>,
   },
+  #[snafu(display("Failed to decrypt key with the provided password"))]
+  KeyDecryptionError {
+    source: crypto::CryptoError,
+    backtrace: Backtrace,
+  },
 }
 
 type Result<T, E = KVError> = std::result::Result<T, E>;
@@ -50,6 +58,14 @@ type Result<T, E = KVError> = std::result::Result<T, E>;
 pub trait HasTable: Serialize + DeserializeOwned {
   const TABLE_NAME: &'static str;
   type Key: Serialize + DeserializeOwned + Hash + Ord + PartialOrd + Eq;
+}
+
+/// Internal trait for mapping types to encrypted tables
+pub trait HasEncryptedTable: Serialize + DeserializeOwned {
+  const TABLE_NAME: &'static str;
+  type Key: Serialize + DeserializeOwned + Hash + Ord + PartialOrd + Eq;
+  /// The cleartext component of the internal `Pair`
+  type Clear: Serialize + DeserializeOwned + 'static;
 }
 
 /// Implements a view over a sqlite database as a KV store, where each type has its
@@ -86,8 +102,34 @@ impl KVStore {
     Ok(rows.next().context(InternalSQL)?.is_some())
   }
 
+  /// Checks to see if the table for an encrypted type exists
+  fn encrypted_table_exists<T: HasEncryptedTable>(&self) -> Result<bool> {
+    let table = T::TABLE_NAME.to_string();
+    let name_query = format!("select name from sqlite_master WHERE type='table' AND name='{}';",
+                             table);
+    let mut stmt = self.db
+                       .prepare(&name_query)
+                       .with_context(|| Prepare { statement: name_query.to_string() })?;
+    let mut rows = stmt.query(params![]).context(InternalSQL)?;
+    // Attempt to get the first row, if it is none, our table does not exist
+    Ok(rows.next().context(InternalSQL)?.is_some())
+  }
+
   /// Creates a table for a type, if it does not exist
   pub fn create_table<T: HasTable>(&self) -> Result<()> {
+    let create_query = format!("create table if not exists {} ( \
+                                    key text NOT NULL, \
+                                    value text NOT NULL \
+                                    );",
+                               T::TABLE_NAME);
+    self.db
+        .execute(&create_query, rusqlite::NO_PARAMS)
+        .context(InternalSQL)?;
+    Ok(())
+  }
+
+  /// Creates a table for an encrypted type, if it does not exist
+  pub fn create_encrypted_table<T: HasEncryptedTable>(&self) -> Result<()> {
     let create_query = format!("create table if not exists {} ( \
                                     key text NOT NULL, \
                                     value text NOT NULL \
@@ -133,6 +175,41 @@ impl KVStore {
     Ok(Some(data))
   }
 
+  /// Attempts to get an encrypted value from the key store
+  pub fn get_encrypted_raw<T: HasEncryptedTable>(&self,
+                                                 id: &T::Key)
+                                                 -> Result<Option<Pair<T::Clear, T>>> {
+    // Check if the table exists
+    let table = T::TABLE_NAME.to_string();
+    if !self.encrypted_table_exists::<T>()? {
+      return Ok(None);
+    }
+    // Stringify the key
+    // TODO(Nathan M): Should we handle the case where serialization fails? That should
+    // only really be possible in cases where the type being serialized contains a
+    // Mutex that is poisoned or the like.
+    let key = serde_json::to_string(id).expect("JSON serialization failed");
+    // Look up our key
+    let get_query = format!("select * from {} where key = (?);", table);
+    let mut stmt = self.db
+                       .prepare(&get_query)
+                       .context(Prepare { statement: get_query })?;
+    let rows = stmt.query_map(&[&key], |row| row.get::<_, String>(1))
+                   .context(InternalSQL)?;
+    // If there are multiple values for the key, use the last/most up to date one
+
+    let mut values = rows.map(|x| x.context(InternalSQL))
+                         .collect::<Result<Vec<_>>>()?;
+    let data_json = if let Some(x) = values.pop() {
+      x
+    } else {
+      return Ok(None);
+    };
+
+    let data = serde_json::from_str(&data_json).context(Deserialization { table,
+                                                                          json: data_json })?;
+    Ok(Some(data))
+  }
   /// Attempts to set a key to a value, returning the previous value if there was one
   ///
   /// Will create the required table if it does not exist
@@ -154,10 +231,80 @@ impl KVStore {
     Ok(old_value)
   }
 
+  /// Attempts to set a key to a value in an encrypted table, returning the previous
+  /// value if there was one
+  ///
+  /// Will create the required table if it does not exist
+  pub fn set_encrypted_raw<T: HasEncryptedTable>(&self,
+                                                 key: &T::Key,
+                                                 value: Pair<T::Clear, T>)
+                                                 -> Result<Option<Pair<T::Clear, T>>> {
+    // First, create the table if it does not exist
+    self.create_encrypted_table::<T>()?;
+    // Look up the old value, if any
+    let old_value = self.get_encrypted_raw::<T>(&key)?;
+    // Prepare the new key and value
+    let key_string = serde_json::to_string(&key).expect("JSON Serialization failed");
+    let value_string = serde_json::to_string(&value).expect("JSON Serialization failed");
+    // TODO(Nathan M): Use some conditional logic here to use an update when practical
+    let set_query = format!("insert into {} (key, value) values (?, ?)", T::TABLE_NAME);
+    let mut stmt = self.db
+                       .prepare(&set_query)
+                       .context(Prepare { statement: set_query })?;
+    stmt.execute(&[&key_string, &value_string])
+        .context(InternalSQL)?;
+    Ok(old_value)
+  }
+
   /// Returns all the Key/Value pairs for a type
   pub fn get_all<T: HasTable>(&self) -> Result<BTreeMap<T::Key, T>> {
     // Check if the table exists, and exit early with an empty map if it doesn't
     if !self.table_exists::<T>()? {
+      return Ok(BTreeMap::new());
+    }
+    // Get ourself a fresh hashmap to put our K/Vs in
+    let mut ret = BTreeMap::new();
+    // Grab our rows from the db
+    let get_all_query = format!("select * from {};", T::TABLE_NAME);
+    let mut stmt = self.db
+                       .prepare(&get_all_query)
+                       .context(Prepare { statement: get_all_query })?;
+    let rows = stmt.query_map(params![], |row| {
+                     let x = row.get(0);
+                     let y = row.get(1);
+                     if let Ok(x_value) = x {
+                       if let Ok(y_value) = y {
+                         Ok((x_value, y_value))
+                       } else {
+                         Err(y.unwrap_err())
+                       }
+                     } else {
+                       Err(y.unwrap_err())
+                     }
+                   })
+                   .context(InternalSQL)?
+                   .map(|x| x.context(InternalSQL))
+                   .collect::<Result<Vec<(String, String)>>>()?;
+    for (key, value) in rows {
+      let key =
+        serde_json::from_str(&key).with_context(|| Deserialization { table:
+                                                                       T::TABLE_NAME.to_string(),
+                                                                     json: key })?;
+      let value =
+        serde_json::from_str(&value).with_context(|| Deserialization { table:
+                                                                         T::TABLE_NAME.to_string(),
+                                                                       json: value })?;
+      ret.insert(key, value);
+    }
+    Ok(ret)
+  }
+
+  /// Returns all the Key/Value pairs for an encrypted type
+  pub fn get_all_encrypted_raw<T: HasEncryptedTable>(
+    &self)
+    -> Result<BTreeMap<T::Key, Pair<T::Clear, T>>> {
+    // Check if the table exists, and exit early with an empty map if it doesn't
+    if !self.encrypted_table_exists::<T>()? {
       return Ok(BTreeMap::new());
     }
     // Get ourself a fresh hashmap to put our K/Vs in

@@ -9,25 +9,29 @@ name = "findora"
 path = "src/cli.rs"
 
 [dependencies]
+blake2 = "0.9.0"
+chacha20poly1305 = "0.5.1"
+clap = { version = "2.33", default-features = false }
 cryptohash = { path = "../../libs/cryptohash" }
+dirs = "2.0.2"
 ledger = { path = "../../ledger", features = ["TESTING"] }
 ledger_api_service = { path = "../ledger_api_service" }
 network = { path = "../../libs/network" }
-txn_builder = { path = "../txn_builder" }
-dirs = "2.0.2"
-submission_api = { path = "../submission_api" }
-submission_server = { path = "../submission_server" }
-rand = "0.7.3"
 promptly = "0.3.0"
+rand = "0.7.3"
 reqwest = { version = "0.10", features = ["blocking", "json"] }
-clap = { version = "2.33", default-features = false }
 rusqlite = { version = "0.23.1", features = ["bundled"] }
+rust-argon2 = "0.8.2"
+rustyline = "6.2.0"
 serde = "1.0.114"
 serde_derive = "1.0"
 serde_json = "1.0.57"
 snafu = { version = "0.6.8", features = ["backtraces"] }
 structopt = { version = "0.3" }
+submission_api = { path = "../submission_api" }
+submission_server = { path = "../submission_server" }
+txn_builder = { path = "../txn_builder" }
 utils = { path = "../../libs/utils" }
 zei = { git = "ssh://git@github.com/findoraorg/zei", tag = "v0.0.3-3" }
-rustyline = "6.2.0"
+zeroize = "1.1.0"
 
