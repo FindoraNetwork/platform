@@ -48,7 +48,7 @@ stdenv.mkDerivation {
   # Environement Variables for the CLI2
   shellHook = ''
     export LOCAL=`pwd`;
-    export CLI2="$LOCAL/target/debug/cli";
+    export CLI2="$LOCAL/target/debug/findora";
     npm install bats
     export BATS="$LOCAL/node_modules/bats/bin/bats"
   '';
