@@ -5,7 +5,7 @@ authors = ["Engineering <engineering@findora.org>"]
 edition = "2018"
 
 [[bin]]
-name = "cli"
+name = "findora"
 path = "src/cli.rs"
 
 [dependencies]
