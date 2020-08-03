@@ -4,7 +4,7 @@
 use ledger::data_model::*;
 use promptly::prompt_default;
 use serde::{Deserialize, Serialize};
-use snafu::{Backtrace, OptionExt, ResultExt, Snafu};
+use snafu::{Backtrace, GenerateBacktrace, OptionExt, ResultExt, Snafu};
 use std::collections::BTreeMap;
 use std::env;
 use std::fs;
@@ -917,6 +917,34 @@ fn main() {
     run_action(action, &mut db)?;
     Ok(())
   }
+
+  // Provide a bit of a prettier error message in the event a panic occurs, make the
+  // user aware that this is a bug, direct them to the bug tracker, and display a
+  // backtrace.
+  std::panic::set_hook(Box::new(|panic_info| {
+                         // TODO(Nathan M): Add a link to the bug tracker with prefilled information
+
+                         println!("An unknown error occurred, this is a bug, please help us fix it by \
+                                   reporting it at: ");
+                         println!("https://bugtracker.findora.org/projects/testnet/issues/new");
+                         println!("Please copy and paste this entire error message, as well as any preceding \
+                                   output into the \ndescription field of the bug report.\n");
+                         println!("Here is what context is available:");
+                         let payload = panic_info.payload();
+                         if let Some(s) = payload.downcast_ref::<&str>() {
+                           println!("  {}", s);
+                         } else if let Some(s) = payload.downcast_ref::<String>() {
+                           println!("  {}", s);
+                         }
+
+                         if let Some(location) = panic_info.location() {
+                           println!("Error occurred at: {}", location);
+                         }
+
+                         println!("\n\n Information for Developers:");
+                         println!("{}", Backtrace::generate());
+                       }));
+
   let ret = inner_main();
   if let Err(x) = ret {
     use snafu::ErrorCompat;
