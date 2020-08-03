@@ -489,14 +489,20 @@ enum Actions {
     /// Output directory
     #[structopt(parse(from_os_str))]
     outdir: PathBuf,
+    /// bash
     #[structopt(long)]
     bash: bool,
+    /// zsh
     #[structopt(long)]
     zsh: bool,
+    /// fish
     #[structopt(long)]
+    /// pow
     fish: bool,
+    /// poweshell
     #[structopt(long)]
     powershell: bool,
+    /// elvish
     #[structopt(long)]
     elvish: bool,
   },
@@ -532,6 +538,7 @@ enum Actions {
     nick: String,
   },
 
+  /// List all the key pairs present in the database.
   ListKeys {},
 
   /// Display information about the public key for <nick>
@@ -579,6 +586,7 @@ enum Actions {
   },
 
   //////////////////// Advanced API  ///////////////////////////////////////////////////////////////
+  /// List all the asset types
   ListAssetTypes {},
 
   ListAssetType {
@@ -595,7 +603,9 @@ enum Actions {
     code: String,
   },
 
+  /// Query the asset issuance sequence number
   QueryAssetIssuanceNum {
+    /// Asset type nickname
     nick: String,
   },
 
@@ -630,6 +640,7 @@ enum Actions {
     txn_nick: Option<String>,
   },
 
+  /// Create the definition of an asset and put it in a transaction builder
   DefineAsset {
     #[structopt(short, long)]
     /// Which builder?
@@ -640,6 +651,7 @@ enum Actions {
     asset_nick: String,
   },
 
+  /// Create a transaction part corresponding to the issuance of an asset
   IssueAsset {
     #[structopt(short, long)]
     /// Which builder?
@@ -652,53 +664,64 @@ enum Actions {
     amount: u64,
   },
 
+  /// Create a transaction part corresponding to the transfer of an asset
   TransferAsset {
     #[structopt(short, long)]
     /// Which builder?
     builder: Option<String>,
   },
 
+  /// Show the details of a built transaction
   ListBuiltTransaction {
     /// Nickname of the transaction
     nick: String,
   },
 
+  /// Show the details of all built transactions
   ListBuiltTransactions {
     // TODO: options?
   },
 
+  /// Submit a built transaction
   Submit {
     /// Which txn?
     nick: String,
   },
 
+  /// Show the status of a submitted transaction
   Status {
     // TODO: how are we indexing in-flight transactions?
     /// Which txn?
     txn: String,
   },
 
+  // TODO doc
   StatusCheck {
     // TODO: how are we indexing in-flight transactions?
     /// Which txn?
     txn: String,
   },
 
+  // TODO doc
   ListTxo {
     /// nickname
     id: String,
   },
+
+  // TODO doc
   ListTxos {
     /// Only unspent?
     #[structopt(short, long)]
     unspent: bool,
   },
 
+  // TODO doc
   ListOwnedUtxos {
     /// Whose UTXOs?
     id: String,
   },
 
+  // TODO doc
   QueryTxo {
     /// Local nickname?
     nick: String,

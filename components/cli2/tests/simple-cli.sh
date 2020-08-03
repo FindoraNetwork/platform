@@ -81,6 +81,15 @@ source "tests/common.sh"
   check_line 3 "memo: `memo_alice`"
   check_line 4 "issue_seq_number: 0"
 
+  run $CLI2 list-asset-types
+  debug_lines
+  [ "$status" -eq 0 ]
+  check_line 0 "Asset `AliceCoin`"
+  check_line 1 " issuer nickname: alice"
+  check_line 2 ' issuer public key:'
+  check_line 3 " code:"
+  check_line 4 " memo: `memo_alice`"
+  check_line 5 " issue_seq_number: 0"
 }
 
 @test "simple asset issuance" {
