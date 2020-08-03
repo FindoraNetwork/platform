@@ -992,6 +992,7 @@ dependencies = [
 name = "cli2"
 version = "0.1.0"
 dependencies = [
+ "clap",
  "cryptohash",
  "dirs",
  "ledger",

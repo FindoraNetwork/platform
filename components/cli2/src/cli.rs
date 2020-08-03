@@ -484,6 +484,23 @@ enum Actions {
   /// Initialize or change your local database configuration
   Setup {},
 
+  /// Generate bash/zsh/fish/powershell completion files for this CLI
+  GenCompletions {
+    /// Output directory
+    #[structopt(parse(from_os_str))]
+    outdir: PathBuf,
+    #[structopt(long)]
+    bash: bool,
+    #[structopt(long)]
+    zsh: bool,
+    #[structopt(long)]
+    fish: bool,
+    #[structopt(long)]
+    powershell: bool,
+    #[structopt(long)]
+    elvish: bool,
+  },
+
   /// Display the current configuration and ledger state
   ListConfig {},
 
@@ -726,6 +743,8 @@ fn run_action<S: CliDataStore>(action: Actions, store: &mut S) -> Result<(), Cli
     //////////////////// Simple API  ///////////////////////////////////////////////////////////////
     Setup {} => setup(store),
 
+    GenCompletions { .. } => panic!("GenCompletions should've been handle already!"),
+
     ListConfig {} => list_config(store),
 
     KeyGen { nick } => key_gen(store, nick),
@@ -809,6 +828,40 @@ fn run_action<S: CliDataStore>(action: Actions, store: &mut S) -> Result<(), Cli
 fn main() {
   fn inner_main() -> Result<(), CliError> {
     let action = Actions::from_args();
+
+    if let Actions::GenCompletions { outdir,
+                                     bash,
+                                     zsh,
+                                     fish,
+                                     powershell,
+                                     elvish, } = action
+    {
+      fs::create_dir_all(&outdir).with_context(|| UserFile { file: outdir.clone() })?;
+
+      let bin_name = std::env::args().next().unwrap();
+
+      let mut shells = vec![];
+      if bash {
+        shells.push(clap::Shell::Bash);
+      }
+      if zsh {
+        shells.push(clap::Shell::Zsh);
+      }
+      if fish {
+        shells.push(clap::Shell::Fish);
+      }
+      if powershell {
+        shells.push(clap::Shell::PowerShell);
+      }
+      if elvish {
+        shells.push(clap::Shell::Elvish);
+      }
+
+      for s in shells {
+        Actions::clap().gen_completions(&bin_name, s, &outdir);
+      }
+      return Ok(());
+    }
 
     // use Actions::*;
 

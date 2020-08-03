@@ -20,6 +20,7 @@ submission_server = { path = "../submission_server" }
 rand = "0.7.3"
 promptly = "0.3.0"
 reqwest = { version = "0.10", features = ["blocking", "json"] }
+clap = { version = "2.33", default-features = false }
 rusqlite = { version = "0.23.1", features = ["bundled"] }
 serde = "1.0.114"
 serde_derive = "1.0"
