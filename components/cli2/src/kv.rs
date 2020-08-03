@@ -14,13 +14,13 @@ pub use crypto::{EncryptedKey, Key, Pair};
 /// Possible errors encountered when dealing with a KVStore
 #[derive(Debug, Snafu)]
 pub enum KVError {
-  #[snafu(display("Could not open KVStore at {}: {}", path.display(), source))]
+  #[snafu(display("Could not open KVStore at {}", path.display()))]
   Open {
     source: rusqlite::Error,
     path: PathBuf,
     backtrace: Backtrace,
   },
-  #[snafu(display("Failed preparing SQL statement \"{}\": {}", statement, source))]
+  #[snafu(display("Failed preparing SQL statement \"{}\"", statement))]
   Prepare {
     source: rusqlite::Error,
     statement: String,
@@ -40,7 +40,7 @@ pub enum KVError {
   },
   #[snafu(display("Attempted to call KVStore::with on a key that doesn't exist: {}", key))]
   WithInvalidKey { backtrace: Backtrace, key: String },
-  #[snafu(display("Closure passed to a `with` method errored out. Context: {}", source))]
+  #[snafu(display("Closure passed to a `with` method errored out."))]
   ClosureError {
     backtrace: Backtrace,
     source: Box<dyn std::error::Error>,

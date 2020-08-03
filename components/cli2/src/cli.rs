@@ -135,24 +135,32 @@ impl HasTable for TxoCacheEntry {
 pub enum CliError {
   #[snafu(context(false))]
   KV {
-    backtrace: Backtrace,
+    #[snafu(backtrace)]
     source: KVError,
   },
   #[snafu(context(false))]
-  #[snafu(display("Error performing HTTP request: {}", source))]
-  Reqwest { source: reqwest::Error },
+  #[snafu(display("Error performing HTTP request"))]
+  Reqwest {
+    source: reqwest::Error,
+    backtrace: Backtrace,
+  },
   #[snafu(context(false))]
-  #[snafu(display("Error (de)serialization: {}", source))]
-  Serialization { source: serde_json::error::Error },
+  #[snafu(display("Error during (de)serialization"))]
+  Serialization {
+    source: serde_json::error::Error,
+    backtrace: Backtrace,
+  },
   #[snafu(context(false))]
-  #[snafu(display("Error reading user input: {}", source))]
+  #[snafu(display("Error reading user input"))]
   RustyLine {
     source: rustyline::error::ReadlineError,
+    backtrace: Backtrace,
   },
-  #[snafu(display("Error creating user directory or file at {}: {}", file.display(), source))]
+  #[snafu(display("Error creating user directory or file at {}", file.display()))]
   UserFile {
     source: std::io::Error,
     file: std::path::PathBuf,
+    backtrace: Backtrace,
   },
   #[snafu(display("Failed to locate user's home directory"))]
   HomeDir,
@@ -945,6 +953,14 @@ fn main() {
                          println!("{}", Backtrace::generate());
                        }));
 
+  // Custom error handler logic.
+  //
+  // If the call to `inner_main` encountered an error, display the error it
+  // encountered, then make repeated calls to `Error::source` to walk the source
+  // list, displaying each error in the chain, in order.
+  //
+  // Finally, check to see if the error encountered has an associated backtrace, and,
+  // if so, display it.
   let ret = inner_main();
   if let Err(x) = ret {
     use snafu::ErrorCompat;
