@@ -172,3 +172,4 @@ DEFINE_ASSET_TYPE_AND_SUBMIT_COMMANDS="  $CLI2 key-gen alice; \
   check_line 0 "issue_seq_number: 1"
 
 }
+
