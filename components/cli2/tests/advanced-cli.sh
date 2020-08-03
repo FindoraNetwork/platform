@@ -2,7 +2,21 @@
 
 source "tests/common.sh"
 
-@test "list config" {
+DEFINE_ASSET_TYPE_AND_BUILD_COMMANDS="$CLI2 key-gen alice; \
+                                     echo y | $CLI2 query-ledger-state; \
+                                     $CLI2 prepare-transaction -e 0; \
+                                     echo memo_alice | $CLI2 define-asset alice TheBestAliceCoinsOnEarthV2 --builder 0; \
+                                     $CLI2 issue-asset TheBestAliceCoinsOnEarthV2 0 10000; \
+                                     $CLI2 build-transaction 0;"
+
+DEFINE_ASSET_TYPE_AND_SUBMIT_COMMANDS="  $CLI2 key-gen alice; \
+                              echo y | $CLI2 query-ledger-state; \
+                              $CLI2 prepare-transaction -e 0; \
+                              echo memo_alice | $CLI2 define-asset alice AliceCoin --builder 0; \
+                              $CLI2 build-transaction 0; \
+                              { echo; echo Y; } | $CLI2 submit 0;"
+
+@test "list-config" {
   run $CLI2 list-config
   [ "$status" -eq 0 ]
   check_line 0 'Submission server: https://testnet.findora.org/submit_server'
@@ -13,7 +27,7 @@ source "tests/common.sh"
   check_line 5 'Current focused transaction builder: <NONE>'
 }
 
-@test "query ledger state" {
+@test "query-ledger-state" {
 
   # TODO using true or false does not change the result. Is that OK?
 
@@ -41,7 +55,7 @@ source "tests/common.sh"
 }
 
 
-@test "prepare transaction" {
+@test "prepare-transaction" {
   run bash -c " $CLI2 key-gen alice; \
                 echo y | $CLI2 query-ledger-state; \
                 $CLI2 prepare-transaction -e 0;
@@ -58,12 +72,6 @@ source "tests/common.sh"
   check_line 17 'Done.'
 }
 
-DEFINE_ASSET_TYPE_AND_BUILD_COMMANDS="$CLI2 key-gen alice; \
-                                     echo y | $CLI2 query-ledger-state; \
-                                     $CLI2 prepare-transaction -e 0; \
-                                     echo memo_alice | $CLI2 define-asset alice TheBestAliceCoinsOnEarthV2 --builder 0; \
-                                     $CLI2 issue-asset TheBestAliceCoinsOnEarthV2 0 10000; \
-                                     $CLI2 build-transaction 0;"
 
 @test "list-built-transactions" {
   run bash -c "$DEFINE_ASSET_TYPE_AND_BUILD_COMMANDS"
@@ -104,12 +112,6 @@ DEFINE_ASSET_TYPE_AND_BUILD_COMMANDS="$CLI2 key-gen alice; \
 }
 
 
-DEFINE_ASSET_TYPE_AND_SUBMIT_COMMANDS="  $CLI2 key-gen alice; \
-                              echo y | $CLI2 query-ledger-state; \
-                              $CLI2 prepare-transaction -e 0; \
-                              echo memo_alice | $CLI2 define-asset alice AliceCoin --builder 0; \
-                              $CLI2 build-transaction 0; \
-                              { echo; echo Y; } | $CLI2 submit 0;"
 
 @test "define, publish and list asset type(s)" {
   run  bash -c "$DEFINE_ASSET_TYPE_AND_SUBMIT_COMMANDS"
@@ -122,7 +124,7 @@ DEFINE_ASSET_TYPE_AND_SUBMIT_COMMANDS="  $CLI2 key-gen alice; \
   check_line 0 'issuer nickname: alice'
 }
 
-@test "query asset type" {
+@test "query-asset-type" {
   run  bash -c "  $DEFINE_ASSET_TYPE_AND_SUBMIT_COMMANDS"
   run $CLI2 query-asset-type --replace=false AliceCoin kt2_x12-CiMz802pkydMrNsSqLEAplDUgKTgzLtprnk=
   check_line 0 "issue_seq_number: 0"
@@ -138,7 +140,7 @@ DEFINE_ASSET_TYPE_AND_SUBMIT_COMMANDS="  $CLI2 key-gen alice; \
   check_line 5 " issue_seq_number: 0"
 }
 
-@test "issue asset" {
+@test "issue-asset" {
 
   run bash -c "$CLI2 key-gen alice; \
                echo y | $CLI2 query-ledger-state; \
@@ -173,3 +175,50 @@ DEFINE_ASSET_TYPE_AND_SUBMIT_COMMANDS="  $CLI2 key-gen alice; \
 
 }
 
+@test "list-txn-builder(s)" {
+  run bash -c "     $CLI2 key-gen alice; \
+                    echo y | $CLI2 query-ledger-state; \
+                    $CLI2 prepare-transaction 0; \
+                    echo memo_alice | $CLI2 define-asset alice AliceCoin --builder 0; \
+                    $CLI2 issue-asset AliceCoin 0 10000; \
+                    $CLI2 prepare-transaction 3; \
+                    echo memo_alice | $CLI2 define-asset alice AliceCoin3 --builder 3; \
+                    $CLI2 issue-asset AliceCoin3 0 10000;"
+
+  debug_lines
+  [ "$status" -eq 0 ]
+
+  run $CLI2 list-txn-builders
+  debug_lines
+  [ "$status" -eq 0 ]
+  check_line 0  "0:"
+  check_line 2  "  DefineAsset `AliceCoin`"
+  check_line 26 "3:"
+  check_line 28 "  DefineAsset `AliceCoin3`"
+  check_line 50 " Signers:"
+  check_line 51 "  - `alice`"
+
+  # Building the transactions removes them from the builder list
+  run $CLI2 build-transaction 0
+  #run $CLI2 build-transaction 3
+  [ "$status" -eq 0 ]
+  # TODO why all txn builders have disappeared?
+  run $CLI2 list-txn-builders
+  debug_lines
+  [ "$status" -eq 0 ]
+  check_line 26  "Done."
+
+}
+
+@test "list-txo(s)" {
+  skip "TODO"
+  $CLI2 run list-txo 11111
+}
+
+@test "status" {
+  run bash -c "$DEFINE_ASSET_TYPE_AND_SUBMIT_COMMANDS"
+  run $CLI2 status 0
+  debug_lines
+  [ "$status" -eq 0 ]
+  check_line 0 "handle"
+}

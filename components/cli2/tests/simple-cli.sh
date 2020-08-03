@@ -58,7 +58,7 @@ source "tests/common.sh"
   [ "$status" -eq 0 ]
 }
 
-@test "simple asset type definition" {
+@test "simple-define-asset" {
   run  bash -c "$CLI2 key-gen alice; \
                 echo -e 'memo_alice \n y \n' | $CLI2 simple-define-asset alice AliceCoin;"
   debug_lines
@@ -92,7 +92,7 @@ source "tests/common.sh"
   check_line 5 " issue_seq_number: 0"
 }
 
-@test "simple asset issuance" {
+@test "simple-issue-asset" {
   # Define the asset
   run  bash -c "$CLI2 key-gen alice; \
                 echo -e 'memo_alice \n y \n' | $CLI2 simple-define-asset alice AliceCoin;"
