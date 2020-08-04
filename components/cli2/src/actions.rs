@@ -50,8 +50,9 @@ pub fn list_config<S: CliDataStore>(store: &mut S) -> Result<(), CliError> {
 
 pub fn key_gen<S: CliDataStore>(store: &mut S, nick: String) -> Result<(), CliError> {
   let kp = XfrKeyPair::generate(&mut rand::thread_rng());
-  store.add_public_key(&PubkeyName(nick.to_string()), *kp.get_pk_ref())?;
+  let pk = *kp.get_pk_ref();
   store.add_key_pair(&KeypairName(nick.to_string()), kp)?;
+  store.add_public_key(&PubkeyName(nick.to_string()), pk)?;
   println!("New key pair added for `{}`", nick);
   Ok(())
 }
@@ -163,11 +164,8 @@ pub fn delete_keypair<S: CliDataStore>(store: &mut S, nick: String) -> Result<()
 
 pub fn delete_public_key<S: CliDataStore>(store: &mut S, nick: String) -> Result<(), CliError> {
   let pk = store.get_pubkey(&PubkeyName(nick.to_string()))?;
-  let mut has_kp = false;
-  store.with_keypair::<std::convert::Infallible, _>(&KeypairName(nick.to_string()), |kp| {
-         has_kp = kp.is_some();
-         Ok(())
-       })?;
+  let has_kp = store.get_keypair_pubkey(&KeypairName(nick.to_string()))?
+                    .is_some();
   match (pk, has_kp) {
     (None, _) => {
       eprintln!("No public key with name `{}` found", nick);
