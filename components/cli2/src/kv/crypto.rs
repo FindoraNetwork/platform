@@ -77,7 +77,7 @@ pub struct Pair<Clear, Encrypted> {
   clear_phantom: PhantomData<Clear>,
   encrypted: Vec<u8>,
   encrypted_phantom: PhantomData<Encrypted>,
-  hmac_nonce: [u8; 12],
+  chacha_nonce: [u8; 12],
   salt: [u8; 32],
   /// Due to serde derive limitations, this needs to be a `Vec<u8>`, but it is
   /// effectively a `[u8;64]`.
@@ -95,7 +95,7 @@ impl<Clear, Encrypted> Pair<Clear, Encrypted>
     let mut hasher = Blake2b::new_varkey(&key.hmac[..]).unwrap();
     hasher.update(self.clear.as_bytes());
     hasher.update(&self.encrypted[..]);
-    hasher.update(&self.hmac_nonce[..]);
+    hasher.update(&self.chacha_nonce[..]);
     hasher.verify(&self.hmac[..]).is_ok()
   }
 
@@ -118,7 +118,7 @@ impl<Clear, Encrypted> Pair<Clear, Encrypted>
            clear_phantom: PhantomData,
            encrypted,
            encrypted_phantom: PhantomData,
-           hmac_nonce: nonce,
+           chacha_nonce: nonce,
            salt,
            hmac: hmac.to_vec() }
   }
@@ -143,7 +143,7 @@ impl<Clear, Encrypted> Pair<Clear, Encrypted>
       let key = Key::from_password(password, &self.salt[..]);
       let encryption_key = chacha20poly1305::Key::from_slice(&key.encryption[..]);
       let cipher = ChaCha20Poly1305::new(encryption_key);
-      let plaintext = Zeroizing::new(cipher.decrypt(Nonce::from_slice(&self.hmac_nonce[..]),
+      let plaintext = Zeroizing::new(cipher.decrypt(Nonce::from_slice(&self.chacha_nonce[..]),
                                                     &self.encrypted[..])
                                            .map_err(|_| CryptoError::DecryptionError)?);
       serde_json::from_slice(&plaintext[..]).context(Deserialization { component: "ciphertext" })
