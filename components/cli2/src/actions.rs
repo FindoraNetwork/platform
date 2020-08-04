@@ -618,7 +618,7 @@ pub fn status<S: CliDataStore>(store: &mut S, txn: String) -> Result<(), CliErro
   Ok(())
 }
 
-pub fn status_check<S: CliDataStore>(store: &mut S, txn: String) -> Result<(), CliError> {
+fn get_status<S: CliDataStore>(store: &mut S, txn: String) -> Result<TxnStatus, CliError> {
   let conf = store.get_config()?;
   let txn_nick = txn.clone();
   let txn = match store.get_built_transaction(&TxnName(txn.clone()))? {
@@ -646,8 +646,20 @@ pub fn status_check<S: CliDataStore>(store: &mut S, txn: String) -> Result<(), C
                       SubmissionRoutes::TxnStatus.route(),
                       handle.0);
   let resp = do_request::<TxnStatus>(&query);
+  Ok(resp)
+}
+
+pub fn status_check<S: CliDataStore>(store: &mut S, txn_nick: String) -> Result<(), CliError> {
+  let resp = get_status(store, txn_nick.clone())?;
 
   println!("Got status: {}", serde_json::to_string(&resp)?);
+  let txn = match store.get_built_transaction(&TxnName(txn_nick.clone()))? {
+    None => {
+      eprintln!("No txn `{}` found.", txn_nick);
+      exit(-1);
+    }
+    Some(s) => s,
+  };
   let metadata = txn.1;
   update_if_committed(store, resp.clone(), metadata, txn_nick.clone())?;
   store.update_txn_metadata::<std::convert::Infallible, _>(&TxnName(txn_nick), |metadata| {
@@ -1428,6 +1440,19 @@ pub fn submit<S: CliDataStore>(store: &mut S, nick: String) -> Result<(), CliErr
          Ok(())
        })?;
   println!("Submitted `{}`: got handle `{}`", nick, &handle.0);
+
+  // Wait for the transaction to be committed
+  // TODO add timeout
+  let mut committed = false;
+  while !committed {
+    let txn_status = get_status(store, nick.clone());
+    if !txn_status.is_err() {
+      committed = match txn_status.unwrap() {
+        TxnStatus::Committed((_, _)) => true,
+        _ => false,
+      }
+    }
+  }
 
   if prompt_default("Retrieve its status?", true)? {
     let query = format!("{}{}/{}",

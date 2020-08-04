@@ -2,7 +2,6 @@
 
 source "tests/common.sh"
 
-
 @test "key generation" {
   run $CLI2 key-gen alice
   [ "$status" -eq 0 ]
@@ -60,19 +59,21 @@ source "tests/common.sh"
 
 @test "simple-define-asset" {
   run  bash -c "$CLI2 key-gen alice; \
-                echo -e 'memo_alice \n y \n' | $CLI2 simple-define-asset alice AliceCoin;"
-  debug_lines
+                echo -e 'memo_alice \n y \n' | $CLI2 simple-define-asset alice AliceCoin; \
+                "
   [ "$status" -eq 0 ]
+
   check_line 19 "Submitting to `https://testnet.findora.org:8669/submit_transaction`"
   check_line 24 "  DefineAsset `AliceCoin`"
   check_line 28 "   issuer nickname: alice"
   check_line 31 "   memo: `memo_alice`"
   check_line 32 "   issue_seq_number: 0"
-  check_line 36 "Submitted"
-  
+  check_line 37 "Submitted"
+
   run $CLI2 list-asset-type AliceCoin
-  debug_lines
+
   [ "$status" -eq 0 ]
+
   check_line 0 "issuer nickname: alice"
   check_line 1 "issuer public key:"
   check_line 2 "code:"
@@ -80,7 +81,7 @@ source "tests/common.sh"
   check_line 4 "issue_seq_number: 0"
 
   run $CLI2 list-asset-types
-  debug_lines
+
   [ "$status" -eq 0 ]
   check_line 0 "Asset `AliceCoin`"
   check_line 1 " issuer nickname: alice"
@@ -94,11 +95,14 @@ source "tests/common.sh"
   # Define the asset
   run  bash -c "$CLI2 key-gen alice; \
                 echo -e 'memo_alice \n y \n' | $CLI2 simple-define-asset alice AliceCoin;"
+  debug_lines
   [ "$status" -eq 0 ]
 
   # Issue the asset
   run $CLI2 simple-issue-asset AliceCoin 10000
+
   debug_lines
+
   [ "$status" -eq 0 ]
   check_line 0 "Preparing transaction"
   check_line 1 "Done."

@@ -105,9 +105,7 @@ DEFINE_ASSET_TYPE_AND_SUBMIT_COMMANDS="  set -x; $CLI2 key-gen alice; \
                               $CLI2 prepare-transaction -e 0; \
                               echo memo_alice | $CLI2 define-asset alice AliceCoin --builder 0; \
                               $CLI2 build-transaction 0; \
-                              { echo; echo Y; } | $CLI2 submit 0; \
-                  while ! $CLI2 status 0 |  grep Committed; do \
-                    $CLI2 status-check 0 || true; sleep 1s; done"
+                              { echo; echo Y; } | $CLI2 submit 0;"
 
 @test "define, publish and list asset type(s)" {
   run  bash -c "$DEFINE_ASSET_TYPE_AND_SUBMIT_COMMANDS"
@@ -149,10 +147,7 @@ DEFINE_ASSET_TYPE_AND_SUBMIT_COMMANDS="  set -x; $CLI2 key-gen alice; \
                $CLI2 build-transaction 0; \
                { echo; echo Y; } | $CLI2 submit 0; \
                $CLI2 list-built-transaction 0; \
-               $CLI2 status 0; \
-               while ! $CLI2 status 0 | grep Committed; do \
-                 $CLI2 status-check 0 || true; sleep 1s; done; \
-                $CLI2 status-check 0 "
+               $CLI2 status-check 0 "
 
   debug_lines
   [ "$status" -eq 0 ]
