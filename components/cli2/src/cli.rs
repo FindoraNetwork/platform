@@ -871,8 +871,8 @@ fn run_action<S: CliDataStore>(action: Actions, store: &mut S) -> Result<(), Cli
   };
   store.update_config(|conf| {
          // println!("Opened {} times before", conf.open_count);
-      conf.open_count += 1;
-      Ok(())
+         conf.open_count += 1;
+         Ok(())
        })?;
   ret
 }
@@ -995,7 +995,12 @@ fn main() {
       current = next;
     }
     if let Some(backtrace) = backtrace {
-      println!("Backtrace: \n{}", backtrace);
+      // On a normal error, only print the backtrace if RUST_BACKTRACE is setup
+      if std::env::var_os("RUST_BACKTRACE").is_some() {
+        println!("Backtrace: \n{}", backtrace);
+      } else {
+        println!("Rerun with \"env RUST_BACKTRACE=1\" to print a backtrace.");
+      }
     }
     std::process::exit(1);
   }
