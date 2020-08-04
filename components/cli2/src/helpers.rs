@@ -2,6 +2,8 @@ use crate::LedgerStateCommitment;
 use ledger::data_model::{b64enc, Asset, AssetType, AuthenticatedUtxo, TxoSID};
 use serde::de::DeserializeOwned;
 use std::process::exit;
+use structopt::clap::Error;
+use structopt::clap::ErrorKind;
 use utils::HashOf;
 
 pub fn do_request_asset(query: &str) -> Asset {
@@ -30,7 +32,7 @@ pub fn do_request_asset(query: &str) -> Asset {
   resp
 }
 
-pub fn do_request<T: DeserializeOwned>(query: &str) -> T {
+pub fn do_request<T: DeserializeOwned>(query: &str) -> Result<T, Error> {
   let resp: T;
 
   match reqwest::blocking::get(query) {
@@ -43,11 +45,13 @@ pub fn do_request<T: DeserializeOwned>(query: &str) -> T {
     {
       Err(e) => {
         eprintln!("Failed to decode response: {}", e);
-        exit(-1);
+        return Err(Error::with_description(format!("Failed to decode response: {}", e).as_str(),
+                                           ErrorKind::Io));
       }
       Ok(Err((x, e))) => {
         eprintln!("Failed to parse response `{}`: {}", x, e);
-        exit(-1);
+        return Err(Error::with_description(format!("Failed to parse response `{}`: {}", x, e).as_str(),
+                                       ErrorKind::Io));
       }
       Ok(Ok(v)) => {
         resp = v;
@@ -55,7 +59,7 @@ pub fn do_request<T: DeserializeOwned>(query: &str) -> T {
     },
   }
 
-  resp
+  Ok(resp)
 }
 
 pub fn do_request_authenticated_utxo(query: &str,

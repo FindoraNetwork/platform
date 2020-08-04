@@ -1,13 +1,14 @@
 use crate::{
   display_asset_type, display_op_metadata, display_txn, display_txn_builder, display_txo_entry,
   print_conf, prompt_for_config, serialize_or_str, AssetTypeEntry, AssetTypeName, CliDataStore,
-  CliError, FreshNamer, KeypairName, LedgerStateCommitment, OpMetadata, PubkeyName, TxnBuilderName,
-  TxnMetadata, TxnName, TxoCacheEntry, TxoName,
+  CliError, FreshNamer, KeypairName, LedgerStateCommitment, NewPublicKeyFetch, OpMetadata,
+  PubkeyName, TxnBuilderName, TxnMetadata, TxnName, TxoCacheEntry, TxoName,
 };
 
 use ledger::data_model::*;
 use ledger_api_service::LedgerAccessRoutes;
 use promptly::{prompt, prompt_default, prompt_opt};
+use snafu::ResultExt;
 use std::collections::BTreeMap;
 use std::process::exit;
 use submission_api::SubmissionRoutes;
@@ -34,6 +35,7 @@ type GlobalState = (HashOf<Option<StateCommitmentData>>,
 pub fn setup<S: CliDataStore>(store: &mut S) -> Result<(), CliError> {
   store.update_config(|conf| {
          *conf = prompt_for_config(Some(conf.clone())).unwrap();
+         Ok(())
        })?;
   Ok(())
 }
@@ -260,7 +262,7 @@ pub fn query_ledger_state<S: CliDataStore>(store: &mut S,
            let query = format!("{}{}",
                                conf.ledger_server,
                                LedgerAccessRoutes::PublicKey.route());
-           let resp: XfrPublicKey = do_request::<XfrPublicKey>(&query);
+           let resp: XfrPublicKey = do_request::<XfrPublicKey>(&query).context(NewPublicKeyFetch)?;
 
            println!("Saving ledger signing key `{}`",
                     serde_json::to_string(&resp).unwrap());
@@ -272,7 +274,7 @@ pub fn query_ledger_state<S: CliDataStore>(store: &mut S,
          let query = format!("{}{}",
                              conf.ledger_server,
                              LedgerAccessRoutes::GlobalState.route());
-         let resp: GlobalState = do_request::<GlobalState>(&query);
+         let resp: GlobalState = do_request::<GlobalState>(&query).unwrap();
 
          if let Err(e) = resp.2
                              .verify(&conf.ledger_sig_key.unwrap(), &(resp.0.clone(), resp.1))
@@ -288,6 +290,7 @@ pub fn query_ledger_state<S: CliDataStore>(store: &mut S,
          println!("New state retrieved.");
 
          print_conf(&conf);
+         Ok(())
        })?;
   Ok(())
 }
@@ -311,7 +314,7 @@ fn query_asset_issuance_num<S: CliDataStore>(store: &mut S, nick: String) -> Res
                       conf.ledger_server,
                       LedgerAccessRoutes::AssetIssuanceNum.with_arg(&codeb64));
 
-  let resp: u64 = do_request::<u64>(&query);
+  let resp: u64 = do_request::<u64>(&query).unwrap();
 
   Ok(resp)
 }
@@ -555,6 +558,7 @@ pub fn prepare_transaction<S: CliDataStore>(store: &mut S,
   store.prepare_transaction(&TxnBuilderName(nick.clone()), seq_id)?;
   store.update_config(|conf| {
          conf.active_txn = Some(TxnBuilderName(nick));
+         Ok(())
        })?;
   println!("Done.");
   Ok(())
@@ -618,7 +622,7 @@ pub fn status<S: CliDataStore>(store: &mut S, txn: String) -> Result<(), CliErro
   Ok(())
 }
 
-pub fn status_check<S: CliDataStore>(store: &mut S, txn: String) -> Result<(), CliError> {
+fn get_status<S: CliDataStore>(store: &mut S, txn: String) -> Result<TxnStatus, CliError> {
   let conf = store.get_config()?;
   let txn_nick = txn.clone();
   let txn = match store.get_built_transaction(&TxnName(txn.clone()))? {
@@ -647,7 +651,23 @@ pub fn status_check<S: CliDataStore>(store: &mut S, txn: String) -> Result<(), C
                       handle.0);
   let resp = do_request::<TxnStatus>(&query);
 
+  match resp {
+    Ok(res) => Ok(res),
+    _ => Err(CliError::Misc),
+  }
+}
+
+pub fn status_check<S: CliDataStore>(store: &mut S, txn_nick: String) -> Result<(), CliError> {
+  let resp = get_status(store, txn_nick.clone())?;
+
   println!("Got status: {}", serde_json::to_string(&resp)?);
+  let txn = match store.get_built_transaction(&TxnName(txn_nick.clone()))? {
+    None => {
+      eprintln!("No txn `{}` found.", txn_nick);
+      exit(-1);
+    }
+    Some(s) => s,
+  };
   let metadata = txn.1;
   update_if_committed(store, resp.clone(), metadata, txn_nick.clone())?;
   store.update_txn_metadata::<std::convert::Infallible, _>(&TxnName(txn_nick), |metadata| {
@@ -1374,6 +1394,7 @@ pub fn build_transaction<S: CliDataStore>(store: &mut S,
   if used_default {
     store.update_config(|conf| {
            conf.active_txn = None;
+           Ok(())
          })?;
   }
 
@@ -1429,6 +1450,20 @@ pub fn submit<S: CliDataStore>(store: &mut S, nick: String) -> Result<(), CliErr
        })?;
   println!("Submitted `{}`: got handle `{}`", nick, &handle.0);
 
+  // Wait for the transaction to be committed
+  // TODO add timeout
+  let mut committed = false;
+  while !committed {
+    let txn_status = get_status(store, nick.clone());
+
+    if let Ok(res) = txn_status {
+      committed = match res {
+        TxnStatus::Committed((_, _)) => true,
+        _ => false,
+      }
+    }
+  }
+
   if prompt_default("Retrieve its status?", true)? {
     let query = format!("{}{}/{}",
                         conf.submission_server,
@@ -1436,14 +1471,19 @@ pub fn submit<S: CliDataStore>(store: &mut S, nick: String) -> Result<(), CliErr
                         &handle.0);
     let resp = do_request::<TxnStatus>(&query);
 
-    println!("Got status: {}", serde_json::to_string(&resp)?);
+    match resp {
+      Ok(v) => {
+        println!("Got status: {:?}", serde_json::to_string(&v));
 
-    update_if_committed(store, resp.clone(), metadata, nick.clone())?;
+        update_if_committed(store, v.clone(), metadata, nick.clone())?;
 
-    store.update_txn_metadata::<std::convert::Infallible, _>(&TxnName(nick), |metadata| {
-           metadata.status = Some(resp);
-           Ok(())
-         })?;
+        store.update_txn_metadata::<std::convert::Infallible, _>(&TxnName(nick), |metadata| {
+               metadata.status = Some(v);
+               Ok(())
+             })?;
+      }
+      _ => return Err(CliError::Misc),
+    }
   }
   Ok(())
 }
