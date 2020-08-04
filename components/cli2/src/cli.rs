@@ -23,7 +23,7 @@ pub mod helpers;
 pub mod kv;
 
 use crate::actions::*;
-use kv::{HasTable, KVError, KVStore};
+use kv::{HasEncryptedTable, HasTable, KVError, KVStore};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct LedgerStateCommitment(pub  (HashOf<Option<StateCommitmentData>>,
@@ -94,9 +94,18 @@ impl HasTable for AssetTypeEntry {
 #[derive(Ord, PartialOrd, Clone, Debug, Eq, PartialEq, Serialize, Deserialize, Hash, Default)]
 pub struct KeypairName(pub String);
 
-impl HasTable for XfrKeyPair {
-  const TABLE_NAME: &'static str = "key_pairs";
+// impl HasTable for XfrKeyPair {
+//   const TABLE_NAME: &'static str = "key_pairs";
+//   type Key = KeypairName;
+// }
+
+// TODO(Nathan M): I was unable to find a method in zei for recombining key pairs,
+// so this sort of doesn't take really advantage of the backend stuff mixed
+// plaintext/cleartext for now
+impl HasEncryptedTable for XfrKeyPair {
+  const TABLE_NAME: &'static str = "enc_key_pairs";
   type Key = KeypairName;
+  type Clear = XfrPublicKey;
 }
 
 #[derive(Ord, PartialOrd, Clone, Debug, Eq, PartialEq, Serialize, Deserialize, Hash, Default)]
@@ -168,6 +177,11 @@ pub enum CliError {
   NewPublicKeyFetch {
     source: structopt::clap::Error,
     backtrace: Backtrace,
+  },
+  #[snafu(display("Failed to read password"))]
+  Password {
+    #[snafu(backtrace)]
+    source: helpers::PasswordReadError,
   },
 
   #[snafu(display("Misc"))] // TODO remove that with something more informative
@@ -439,7 +453,8 @@ pub trait CliDataStore {
                                                                       -> Result<(), CliError>;
 
   fn get_keypairs(&self) -> Result<Vec<KeypairName>, CliError>;
-  fn delete_keypair(&mut self, k: &KeypairName) -> Result<Option<XfrKeyPair>, CliError>;
+  fn get_keypair_pubkey(&self, k: &KeypairName) -> Result<Option<XfrPublicKey>, CliError>;
+  fn delete_keypair(&mut self, k: &KeypairName) -> Result<(), CliError>;
   fn with_keypair<E: std::error::Error + 'static, F: FnOnce(Option<&XfrKeyPair>) -> Result<(), E>>(
     &mut self,
     k: &KeypairName,

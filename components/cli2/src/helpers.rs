@@ -1,10 +1,12 @@
 use crate::LedgerStateCommitment;
 use ledger::data_model::{b64enc, Asset, AssetType, AuthenticatedUtxo, TxoSID};
 use serde::de::DeserializeOwned;
+use snafu::{ensure, Backtrace, ResultExt, Snafu};
 use std::process::exit;
 use structopt::clap::Error;
 use structopt::clap::ErrorKind;
 use utils::HashOf;
+use zeroize::Zeroizing;
 
 pub fn do_request_asset(query: &str) -> Asset {
   let resp: Asset;
@@ -119,4 +121,50 @@ pub fn do_request_authenticated_utxo(query: &str,
   }
 
   resp
+}
+
+#[derive(Snafu, Debug)]
+pub enum PasswordReadError {
+  #[snafu(display("Entered passwords did not match."))]
+  DidNotMatch { backtrace: Backtrace },
+  #[snafu(display("Failed getting user input."))]
+  UserInput {
+    source: std::io::Error,
+    backtrace: Backtrace,
+  },
+}
+
+/// Reads a user's password without confirming
+///
+/// Optionally takes a string describing what the password is for
+pub fn prompt_password(description: Option<&str>) -> Result<Zeroizing<String>, PasswordReadError> {
+  let prompt = if let Some(s) = description {
+    format!("Enter password for {}: ", s)
+  } else {
+    "Enter Password: ".to_string()
+  };
+
+  rpassword::prompt_password_stdout(&prompt).context(UserInput)
+                                            .map(Zeroizing::new)
+}
+
+/// Reads a password from the user twice, and confirms that they match
+///
+/// Optionally takes a string describing what the password is for
+pub fn prompt_password_confirming(description: Option<&str>)
+                                  -> Result<Zeroizing<String>, PasswordReadError> {
+  let first_prompt = if let Some(s) = description {
+    format!("Enter password for {}: ", s)
+  } else {
+    "Enter Password: ".to_string()
+  };
+
+  let first = rpassword::prompt_password_stdout(&first_prompt).context(UserInput)
+                                                              .map(Zeroizing::new)?;
+
+  let second = rpassword::prompt_password_stdout("Enter password again:").context(UserInput)
+                                                                         .map(Zeroizing::new)?;
+  // Return an error if the entered passwords did not match
+  ensure!(first == second, DidNotMatch);
+  Ok(first)
 }
