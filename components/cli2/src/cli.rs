@@ -534,9 +534,6 @@ enum Actions {
   /// Display the current configuration and ledger state
   ListConfig {},
 
-  /// Run integrity checks of the local database
-  CheckDb {},
-
   /// Get the latest state commitment data from the ledger
   QueryLedgerState {
     /// Whether to forget the old ledger public key
@@ -627,12 +624,11 @@ enum Actions {
     code: String,
   },
 
-  /// Query the asset issuance sequence number
-  QueryAssetIssuanceNum {
-    /// Asset type nickname
-    nick: String,
-  },
-
+  //   /// Query the asset issuance sequence number
+  //   QueryAssetIssuanceNum {
+  //     /// Asset type nickname
+  //     nick: String,
+  //   },
   /// Initialize a transaction builder
   PrepareTransaction {
     /// Optional transaction name
@@ -739,11 +735,11 @@ enum Actions {
     unspent: bool,
   },
 
-  // TODO doc
-  ListOwnedUtxos {
-    /// Whose UTXOs?
-    id: String,
-  },
+  // // TODO doc
+  // ListOwnedUtxos {
+  //   /// Whose UTXOs?
+  //   id: String,
+  // },
 
   // TODO doc
   QueryTxo {
@@ -862,10 +858,6 @@ fn run_action<S: CliDataStore>(action: Actions, store: &mut S) -> Result<(), Cli
                        exact, } => build_transaction(store, builder, txn_nick, exact),
 
     Submit { nick } => submit(store, nick),
-
-    _ => {
-      unimplemented!();
-    }
   };
   store.update_config(|conf| {
          // println!("Opened {} times before", conf.open_count);
