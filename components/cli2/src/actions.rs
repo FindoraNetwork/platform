@@ -67,15 +67,9 @@ pub fn list_keys<S: CliDataStore>(store: &mut S) -> Result<(), CliError> {
   let kps = kps.into_iter();
   let mut new_kps = vec![];
   for k in kps {
-    let mut pk = None;
-    store.with_keypair::<std::convert::Infallible, _>(&k, |kp| match kp {
-           None => panic!("A key disappeared from the database! {}", k.0),
-           Some(kp) => {
-             pk = Some(*kp.get_pk_ref());
-             Ok(())
-           }
-         })?;
-    new_kps.push((k, pk.unwrap()));
+    let pk = store.get_keypair_pubkey(&k)?
+                  .expect("A public key disappeared from the database.");
+    new_kps.push((k, pk));
   }
   let kps = new_kps.into_iter().map(|(k, pk)| ((k.0, pk), true));
   for ((n, k), pair) in kps.chain(pks.into_iter()) {
