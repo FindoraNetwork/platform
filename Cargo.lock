@@ -1061,6 +1061,7 @@ dependencies = [
  "submission_server",
  "txn_builder",
  "utils",
+ "vergen",
  "zei",
  "zeroize",
 ]

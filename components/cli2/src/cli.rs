@@ -530,9 +530,16 @@ fn prompt_for_config(prev_conf: Option<CliConfig>) -> Result<CliConfig, CliError
                  active_txn: prev_conf.as_ref().and_then(|x| x.active_txn.clone()) })
 }
 
+const VERSION: &str = concat!(env!("VERGEN_SEMVER"),
+                              "-",
+                              env!("VERGEN_SHA_SHORT"),
+                              " ",
+                              env!("VERGEN_BUILD_DATE"),);
+
 #[derive(StructOpt, Debug)]
 #[structopt(about = "Build and manage transactions and assets on a findora ledger",
-            rename_all = "kebab-case")]
+            rename_all = "kebab-case",
+            version = VERSION)]
 enum Actions {
   //////////////////// Simple API  /////////////////////////////////////////////////////////////////
   /// Initialize or change your local database configuration
@@ -1000,6 +1007,8 @@ fn main() {
                          }
 
                          println!("\n\n Information for Developers:");
+                         println!("Version: {}", VERSION);
+                         println!("Backtrace: ");
                          println!("{}", Backtrace::generate());
                        }));
 
@@ -1024,7 +1033,7 @@ fn main() {
     }
     if let Some(backtrace) = backtrace {
       // On a normal error, only print the backtrace if RUST_BACKTRACE is setup
-      if std::env::var_os("RUST_BACKTRACE").is_some() {
+      if std::env::var("RUST_BACKTRACE") == Ok("1".to_string()) {
         println!("Backtrace: \n{}", backtrace);
       } else {
         println!("Rerun with \"env RUST_BACKTRACE=1\" to print a backtrace.");
