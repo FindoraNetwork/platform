@@ -146,9 +146,9 @@ impl<Clear, Encrypted> Pair<Clear, Encrypted>
   }
 
   /// Produces a new, packed, `Pair` with the provided data and key.
-  pub fn pack(clear: Clear, encrypted: Encrypted, key: &Key) -> Self {
+  pub fn pack(clear: Clear, encrypted: &Encrypted, key: &Key) -> Self {
     let clear = serde_json::to_string(&clear).expect("JSON serialization failed");
-    let encrypted = serde_json::to_string(&encrypted).expect("JSON serialization failed");
+    let encrypted = serde_json::to_string(encrypted).expect("JSON serialization failed");
     let mut nonce = [0_u8; 12];
     thread_rng().fill(&mut nonce[..]);
 

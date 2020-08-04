@@ -20,6 +20,7 @@ network = { path = "../../libs/network" }
 promptly = "0.3.0"
 rand = "0.7.3"
 reqwest = { version = "0.10", features = ["blocking", "json"] }
+rpassword = "4.0.5"
 rusqlite = { version = "0.23.1", features = ["bundled"] }
 rust-argon2 = "0.8.2"
 rustyline = "6.2.0"

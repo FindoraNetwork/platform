@@ -1,6 +1,6 @@
 use rusqlite::{params, Connection};
 use serde::{de::DeserializeOwned, Serialize};
-use snafu::{Backtrace, GenerateBacktrace, ResultExt, Snafu};
+use snafu::{Backtrace, GenerateBacktrace, OptionExt, ResultExt, Snafu};
 use std::collections::BTreeMap;
 use std::hash::Hash;
 use std::path::{Path, PathBuf};
@@ -45,10 +45,17 @@ pub enum KVError {
     backtrace: Backtrace,
     source: Box<dyn std::error::Error>,
   },
-  #[snafu(display("Failed to decrypt key with the provided password"))]
+  #[snafu(display("Failed to decrypt key for {} with the provided password", name))]
   KeyDecryptionError {
     source: crypto::CryptoError,
     backtrace: Backtrace,
+    name: String,
+  },
+  #[snafu(display("Failed to deserialize public key for {}", name))]
+  PubKeyDeserialization {
+    source: crypto::CryptoError,
+    backtrace: Backtrace,
+    name: String,
   },
 }
 
@@ -417,6 +424,23 @@ impl KVStore {
 
     Ok(current)
   }
+
+  /// Deletes all occurrences of a key in an encrypted table
+  pub fn delete_encrypted<T: HasEncryptedTable>(&self,
+                                                key: &T::Key)
+                                                -> Result<Option<Pair<T::Clear, T>>> {
+    let current = self.get_encrypted_raw(key)?;
+    let delete_query = format!("delete from {} where key = (?)", T::TABLE_NAME);
+    let mut stmt = self.db
+                       .prepare(&delete_query)
+                       .context(Prepare { statement: delete_query })?;
+
+    let key_string = serde_json::to_string(key).expect("JSON Serialization failed");
+
+    stmt.execute(params![&key_string]).context(InternalSQL)?;
+
+    Ok(current)
+  }
 }
 
 impl CliDataStore for KVStore {
@@ -441,10 +465,23 @@ impl CliDataStore for KVStore {
     Ok(())
   }
   fn get_keypairs(&self) -> Result<Vec<crate::KeypairName>, CliError> {
-    Ok(self.get_all::<zei::xfr::sig::XfrKeyPair>()?
-           .into_iter()
-           .map(|(k, _)| k)
-           .collect())
+    let keys = self.get_all_encrypted_raw::<zei::xfr::sig::XfrKeyPair>()?
+                   .into_iter()
+                   .map(|(x, _)| x)
+                   .collect();
+    Ok(keys)
+  }
+  fn get_keypair_pubkey(&self,
+                        k: &crate::KeypairName)
+                        -> Result<Option<zei::xfr::sig::XfrPublicKey>, CliError> {
+    let pair = self.get_encrypted_raw::<zei::xfr::sig::XfrKeyPair>(k)?;
+    if let Some(pair) = pair {
+      let public = pair.clear_no_verify()
+                       .with_context(|| PubKeyDeserialization { name: k.0.clone() })?;
+      Ok(Some(public))
+    } else {
+      Ok(None)
+    }
   }
   fn with_keypair<E: std::error::Error + 'static,
                     F: FnOnce(Option<&zei::xfr::sig::XfrKeyPair>) -> Result<(), E>>(
@@ -452,14 +489,35 @@ impl CliDataStore for KVStore {
     k: &crate::KeypairName,
     f: F)
     -> Result<(), CliError> {
-    Ok(self.with_opt(k, |x: Option<&mut zei::xfr::sig::XfrKeyPair>| {
-             f(x.map(|v| &*v))
-           })?)
+    //TODO(Nathan M): Make less... Ugly. Needs some helpers inside KVStore
+    let password = crate::helpers::prompt_password(Some(&k.0)).context(crate::Password)?;
+    let key_name = crypto::KeyName(k.0.clone());
+    let enc_key = self.get::<EncryptedKey>(&key_name)?
+                      .with_context(|| WithInvalidKey { key: k.0.clone() })?;
+    let key = enc_key.decrypt(password.as_bytes())
+                     .with_context(|| KeyDecryptionError { name: k.0.clone() })?;
+    let pair = self.get_encrypted_raw::<zei::xfr::sig::XfrKeyPair>(k)
+                   .map_err(|_| KVError::WithInvalidKey { backtrace: Backtrace::generate(),
+                                                          key: k.0.clone() })?;
+
+    let pair = pair.with_context(|| WithInvalidKey { key: k.0.clone() })?;
+
+    let keypair = pair.encrypted(&key)
+                      .with_context(|| KeyDecryptionError { name: k.0.clone() })?;
+    let result = f(Some(&keypair));
+
+    if let Err(e) = result {
+      let e = Box::new(e) as Box<dyn std::error::Error>;
+      Err(KVError::ClosureError { backtrace: Backtrace::generate(),
+                                  source: e })?
+    } else {
+      Ok(())
+    }
   }
-  fn delete_keypair(&mut self,
-                    k: &crate::KeypairName)
-                    -> Result<Option<zei::xfr::sig::XfrKeyPair>, CliError> {
-    Ok(self.delete(k)?)
+  fn delete_keypair(&mut self, k: &crate::KeypairName) -> Result<(), CliError> {
+    self.delete_encrypted::<zei::xfr::sig::XfrKeyPair>(k)
+        .map(|_| ())?;
+    Ok(())
   }
   fn get_pubkeys(&self)
                  -> Result<BTreeMap<crate::PubkeyName, zei::xfr::sig::XfrPublicKey>, CliError> {
@@ -479,7 +537,17 @@ impl CliDataStore for KVStore {
                   k: &crate::KeypairName,
                   kp: zei::xfr::sig::XfrKeyPair)
                   -> Result<(), CliError> {
-    Ok(self.set(k, kp).map(|_| ())?)
+    use super::Password;
+    let pubkey = kp.get_pk();
+    let password = crate::helpers::prompt_password_confirming(Some(&k.0)).context(Password)?;
+    let key = Key::random();
+    let encrypted_key = key.encrypt(password.as_bytes());
+    let pair = Pair::pack(pubkey, &kp, &key);
+    let key_name = crypto::KeyName(k.0.clone());
+
+    self.set(&key_name, encrypted_key)?;
+
+    Ok(self.set_encrypted_raw(k, pair).map(|_| ())?)
   }
   fn add_public_key(&mut self,
                     k: &crate::PubkeyName,
