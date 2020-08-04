@@ -640,41 +640,21 @@ enum Actions {
   //     nick: String,
   //   },
   /// Initialize a transaction builder
-  PrepareTransaction {
+  InitializeTransaction {
     /// Optional transaction name
-    #[structopt(default_value = "txn")]
-    nick: String,
-    /// Force the transaction's name to be <nick>, instead of the first free <nick>.<n>
-    #[structopt(short, long)]
-    exact: bool,
-  },
-
-  /// List the transaction builders which are in progress
-  ListTxnBuilders {},
-
-  /// List the details of a transaction builder
-  ListTxnBuilder {
-    /// Which builder?
     nick: String,
   },
 
-  /// Finalize a transaction, preparing it for submission
-  BuildTransaction {
-    #[structopt(short, long)]
-    /// Force the transaction's name to be <txn-nick>, instead of the first free <txn-nick>.<n>
-    exact: bool,
-    /// Which transaction builder?
-    #[structopt(short, long)]
-    builder: Option<String>,
-    /// Name for the built transaction (defaults to <builder>)
-    txn_nick: Option<String>,
-  },
+  /// List the details of the current transaction
+  ListTxn {},
+
+  /// Finalize the current transaction, preparing it for submission
+  BuildTransaction {},
 
   /// Create the definition of an asset and put it in a transaction builder
   DefineAsset {
-    #[structopt(short, long)]
-    /// Which builder?
-    builder: Option<String>,
+    /// Which transaction?
+    txn_nick: String,
     /// Issuer key
     issuer_nick: String,
     /// Name for the asset type
@@ -683,9 +663,8 @@ enum Actions {
 
   /// Create a transaction part corresponding to the issuance of an asset
   IssueAsset {
-    #[structopt(short, long)]
-    /// Which builder?
-    builder: Option<String>,
+    /// Which transaction?
+    txn_nick: String,
     /// Name for the asset type
     asset_nick: String,
     /// Sequence number of this issuance
@@ -830,9 +809,10 @@ fn run_action<S: CliDataStore>(action: Actions, store: &mut S) -> Result<(), Cli
 
     QueryTxo { nick, sid } => query_txo(store, nick, sid),
 
-    ListTxnBuilders {} => list_txn_builders(store),
+    // ListTxnBuilders {} => list_txn_builders(store),
 
-    ListTxnBuilder { nick } => list_txn_builder(store, nick),
+    //ListTxnBuilder { nick } => list_txn_builder(store, nick),
+    ListTxn {} => list_txn(store),
 
     ListAssetTypes {} => list_asset_types(store),
 
@@ -842,7 +822,7 @@ fn run_action<S: CliDataStore>(action: Actions, store: &mut S) -> Result<(), Cli
                      nick,
                      code, } => query_asset_type(store, replace, nick, code),
 
-    PrepareTransaction { nick, exact } => prepare_transaction(store, nick, exact),
+    InitializeTransaction { nick } => prepare_transaction(store, nick),
 
     ListBuiltTransaction { nick } => list_built_transaction(store, nick),
 
@@ -852,20 +832,18 @@ fn run_action<S: CliDataStore>(action: Actions, store: &mut S) -> Result<(), Cli
 
     StatusCheck { txn } => status_check(store, txn),
 
-    DefineAsset { builder,
+    DefineAsset { txn_nick,
                   issuer_nick,
-                  asset_nick, } => define_asset(store, builder, issuer_nick, asset_nick),
+                  asset_nick, } => define_asset(store, txn_nick, issuer_nick, asset_nick),
 
-    IssueAsset { builder,
+    IssueAsset { txn_nick: builder,
                  asset_nick,
                  issue_seq_num,
                  amount, } => issue_asset(store, builder, asset_nick, issue_seq_num, amount),
 
     TransferAssets { builder } => transfer_assets(store, builder),
 
-    BuildTransaction { builder,
-                       txn_nick,
-                       exact, } => build_transaction(store, builder, txn_nick, exact),
+    BuildTransaction {} => build_transaction(store),
 
     Submit { nick } => submit(store, nick),
   };
