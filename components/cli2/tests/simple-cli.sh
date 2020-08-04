@@ -63,14 +63,13 @@ source "tests/common.sh"
                 echo -e 'memo_alice \n y \n' | $CLI2 simple-define-asset alice AliceCoin;"
   debug_lines
   [ "$status" -eq 0 ]
-  check_line 19 "Submitting to `https://testnet.findora.org/submit_server/submit_transaction`"
+  check_line 19 "Submitting to `https://testnet.findora.org:8669/submit_transaction`"
   check_line 24 "  DefineAsset `AliceCoin`"
   check_line 28 "   issuer nickname: alice"
   check_line 31 "   memo: `memo_alice`"
   check_line 32 "   issue_seq_number: 0"
   check_line 36 "Submitted"
-  check_line 37 "Got status: {\"Committed\""
-  check_line 38 "Done caching TXOs."
+  check_line 37 'Got status: "Pending"'
 
   run $CLI2 list-asset-type AliceCoin
   debug_lines
