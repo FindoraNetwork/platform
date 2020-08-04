@@ -145,7 +145,7 @@ pub fn prompt_password(description: Option<&str>) -> Result<Zeroizing<String>, P
   };
 
   rpassword::prompt_password_stdout(&prompt).context(UserInput)
-                                            .map(|x| Zeroizing::new(x))
+                                            .map(Zeroizing::new)
 }
 
 /// Reads a password from the user twice, and confirms that they match
@@ -160,11 +160,10 @@ pub fn prompt_password_confirming(description: Option<&str>)
   };
 
   let first = rpassword::prompt_password_stdout(&first_prompt).context(UserInput)
-                                                              .map(|x| Zeroizing::new(x))?;
+                                                              .map(Zeroizing::new)?;
 
-  let second =
-    rpassword::prompt_password_stdout("Enter password again:").context(UserInput)
-                                                              .map(|x| Zeroizing::new(x))?;
+  let second = rpassword::prompt_password_stdout("Enter password again:").context(UserInput)
+                                                                         .map(Zeroizing::new)?;
   // Return an error if the entered passwords did not match
   ensure!(first == second, DidNotMatch);
   Ok(first)

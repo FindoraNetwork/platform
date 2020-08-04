@@ -9,7 +9,7 @@ use txn_builder::{BuildsTransactions, TransactionBuilder};
 use crate::{AssetTypeEntry, AssetTypeName, CliDataStore, CliError, TxnBuilderEntry};
 
 pub mod crypto;
-pub use crypto::{EncryptedKey, Key, Pair};
+pub use crypto::Pair;
 
 /// Possible errors encountered when dealing with a KVStore
 #[derive(Debug, Snafu)]
@@ -491,25 +491,20 @@ impl CliDataStore for KVStore {
     -> Result<(), CliError> {
     //TODO(Nathan M): Make less... Ugly. Needs some helpers inside KVStore
     let password = crate::helpers::prompt_password(Some(&k.0)).context(crate::Password)?;
-    let key_name = crypto::KeyName(k.0.clone());
-    let enc_key = self.get::<EncryptedKey>(&key_name)?
-                      .with_context(|| WithInvalidKey { key: k.0.clone() })?;
-    let key = enc_key.decrypt(password.as_bytes())
-                     .with_context(|| KeyDecryptionError { name: k.0.clone() })?;
     let pair = self.get_encrypted_raw::<zei::xfr::sig::XfrKeyPair>(k)
                    .map_err(|_| KVError::WithInvalidKey { backtrace: Backtrace::generate(),
                                                           key: k.0.clone() })?;
 
     let pair = pair.with_context(|| WithInvalidKey { key: k.0.clone() })?;
 
-    let keypair = pair.encrypted(&key)
+    let keypair = pair.encrypted(password.as_bytes())
                       .with_context(|| KeyDecryptionError { name: k.0.clone() })?;
     let result = f(Some(&keypair));
 
     if let Err(e) = result {
       let e = Box::new(e) as Box<dyn std::error::Error>;
       Err(KVError::ClosureError { backtrace: Backtrace::generate(),
-                                  source: e })?
+                                  source: e }.into())
     } else {
       Ok(())
     }
@@ -540,12 +535,7 @@ impl CliDataStore for KVStore {
     use super::Password;
     let pubkey = kp.get_pk();
     let password = crate::helpers::prompt_password_confirming(Some(&k.0)).context(Password)?;
-    let key = Key::random();
-    let encrypted_key = key.encrypt(password.as_bytes());
-    let pair = Pair::pack(pubkey, &kp, &key);
-    let key_name = crypto::KeyName(k.0.clone());
-
-    self.set(&key_name, encrypted_key)?;
+    let pair = Pair::pack(pubkey, &kp, password.as_bytes());
 
     Ok(self.set_encrypted_raw(k, pair).map(|_| ())?)
   }
