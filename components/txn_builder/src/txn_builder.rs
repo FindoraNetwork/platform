@@ -682,7 +682,7 @@ pub(crate) fn build_record_and_get_blinds<R: CryptoRng + RngCore>(
 //                            .create(TransferType::Standard)?
 //                            .sign(&alice)?;
 //
-#[derive(Serialize, Deserialize, Default)]
+#[derive(Clone, Serialize, Deserialize, Default)]
 pub struct TransferOperationBuilder {
   input_sids: Vec<TxoRef>,
   spend_amounts: Vec<u64>, // Amount of each input record to spend, the rest will be refunded if user calls balance

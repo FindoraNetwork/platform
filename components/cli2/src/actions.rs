@@ -1,23 +1,25 @@
 use crate::{
-  display_asset_type, display_txn, display_txn_builder, display_txo_entry, print_conf,
-  prompt_for_config, serialize_or_str, AssetTypeEntry, AssetTypeName, CliDataStore, CliError,
-  FreshNamer, KeypairName, LedgerStateCommitment, OpMetadata, PubkeyName, TxnBuilderName,
+  display_asset_type, display_op_metadata, display_txn, display_txn_builder, display_txo_entry,
+  print_conf, prompt_for_config, serialize_or_str, AssetTypeEntry, AssetTypeName, CliDataStore,
+  CliError, FreshNamer, KeypairName, LedgerStateCommitment, OpMetadata, PubkeyName, TxnBuilderName,
   TxnMetadata, TxnName, TxoCacheEntry, TxoName,
 };
 
 use ledger::data_model::*;
 use ledger_api_service::LedgerAccessRoutes;
-use promptly::{prompt, prompt_default};
+use promptly::{prompt, prompt_default, prompt_opt};
+use std::collections::BTreeMap;
 use std::process::exit;
 use submission_api::SubmissionRoutes;
 use submission_server::{TxnHandle, TxnStatus};
-use txn_builder::BuildsTransactions;
 use txn_builder::PolicyChoice;
+use txn_builder::{BuildsTransactions, TransferOperationBuilder};
 use utils::NetworkRoute;
 use utils::{HashOf, SignatureOf};
 use zei::setup::PublicParams;
 use zei::xfr::asset_record::{open_blind_asset_record, AssetRecordType};
 use zei::xfr::sig::{XfrKeyPair, XfrPublicKey};
+use zei::xfr::structs::AssetRecordTemplate;
 
 use crate::helpers::{do_request, do_request_asset, do_request_authenticated_utxo};
 use rand::distributions::Alphanumeric;
@@ -338,14 +340,35 @@ pub fn list_txo<S: CliDataStore>(store: &mut S, id: String) -> Result<(), CliErr
   Ok(())
 }
 
-pub fn query_txo<S: CliDataStore>(store: &mut S, nick: String, sid: u64) -> Result<(), CliError> {
+pub fn query_txo<S: CliDataStore>(store: &mut S,
+                                  nick: String,
+                                  sid: Option<u64>)
+                                  -> Result<(), CliError> {
   let nick = TxoName(nick);
+  let mut sid = sid;
   if let Some(orig_ent) = store.get_cached_txo(&nick)? {
-    if orig_ent.sid.is_some() && orig_ent.sid != Some(TxoSID(sid)) {
-      eprintln!("TXO nicknamed `{}` refers to SID {}", nick.0, sid);
-      exit(-1);
+    if let Some(orig_sid) = orig_ent.sid {
+      if let Some(new_sid) = sid {
+        if orig_sid.0 != new_sid {
+          eprintln!("TXO nicknamed `{}` refers to SID {}, not {}",
+                    nick.0, orig_sid.0, new_sid);
+          exit(-1);
+        }
+      } else {
+        println!("TXO nicknamed `{}` refers to SID {}.", nick.0, orig_sid.0);
+        sid = Some(orig_sid.0);
+      }
     }
   }
+
+  let sid = match sid {
+    None => {
+      eprintln!("No TXO nicknamed `{}` found and no SID given!", nick.0);
+      exit(-1);
+    }
+    Some(s) => s,
+  };
+
   let conf = store.get_config()?;
   let ledger_state = match conf.ledger_state.as_ref() {
     None => {
@@ -625,11 +648,82 @@ pub fn status_check<S: CliDataStore>(store: &mut S, txn: String) -> Result<(), C
   let resp = do_request::<TxnStatus>(&query);
 
   println!("Got status: {}", serde_json::to_string(&resp)?);
-  // TODO: do something if it's committed
+  let metadata = txn.1;
+  update_if_committed(store, resp.clone(), metadata, txn_nick.clone())?;
   store.update_txn_metadata::<std::convert::Infallible, _>(&TxnName(txn_nick), |metadata| {
          metadata.status = Some(resp);
          Ok(())
        })?;
+  Ok(())
+}
+
+pub fn update_if_committed<S: CliDataStore>(store: &mut S,
+                                            resp: TxnStatus,
+                                            metadata: TxnMetadata,
+                                            nick: String)
+                                            -> Result<(), CliError> {
+  if let TxnStatus::Committed((_, txo_sids)) = resp {
+    println!("Committed!");
+    if let Some(TxnStatus::Committed(_)) = metadata.status {
+      println!("Not updating, status is {:?}", &metadata.status);
+    } else {
+      println!("Updating, status is {:?}", &metadata.status);
+      for nick in metadata.spent_txos.iter() {
+        println!("Spending TXO `{}`...", nick.0);
+        let mut txo = store.get_cached_txo(nick)?.unwrap();
+        assert!(txo.unspent);
+        txo.unspent = false;
+        store.cache_txo(nick, txo)?;
+      }
+
+      for (nick, ent) in metadata.new_asset_types.iter() {
+        println!("New asset type `{}`...", nick.0);
+        store.add_asset_type(&nick, ent.clone())?;
+      }
+
+      let new_txos = metadata.new_txos
+                             .iter()
+                             .filter(|x| x.1.unspent)
+                             .collect::<Vec<_>>();
+      assert_eq!(new_txos.len(), txo_sids.len());
+      for pref in FreshNamer::new(nick.clone(), ".".to_string()) {
+        let mut entries = vec![];
+        let mut bad = false;
+        for ((n, txo), sid) in new_txos.iter().zip(txo_sids.iter()) {
+          let mut txo = txo.clone();
+          let n = format!("{}:{}", pref, n);
+
+          if store.get_cached_txo(&TxoName(n.clone()))?.is_some() {
+            bad = true;
+            break;
+          }
+
+          txo.sid = Some(*sid);
+          entries.push((TxoName(n), txo));
+        }
+
+        if !bad {
+          let mut finalized = vec![];
+          for (k, v) in entries {
+            println!("Caching TXO `{}`:", k.0);
+            display_txo_entry(1, &v);
+            store.cache_txo(&k, v)?;
+            finalized.push(k);
+          }
+
+          store.update_txn_metadata::<std::convert::Infallible, _>(&TxnName(nick), |metadata| {
+                 assert!(metadata.finalized_txos.is_none());
+                 metadata.finalized_txos = Some(finalized);
+                 Ok(())
+               })?;
+          break;
+        }
+      }
+      println!("Done caching TXOs.");
+    }
+  } else {
+    println!("NOT: {:?}", resp);
+  }
   Ok(())
 }
 
@@ -798,8 +892,9 @@ pub fn issue_asset<S: CliDataStore>(store: &mut S,
                           &memo, iss_kp.get_sk_ref()).unwrap()),
                   unspent: true }));
              }
-             _ => {
-               panic!("The transaction builder doesn't include our operation!");
+             x => {
+               panic!("The transaction builder doesn't include our operation! Got {:?}",
+                      x);
              }
            }
            if !builder.signers.contains(&issuer_nick) {
@@ -814,6 +909,375 @@ pub fn issue_asset<S: CliDataStore>(store: &mut S,
            Ok(())
          }
        })?;
+
+  store.with_txn_builder::<errors::PlatformError, _>(&builder_nick, |the_builder| {
+         *the_builder = builder;
+         Ok(())
+       })?;
+
+  println!("Successfully added to `{}`", builder_nick.0);
+
+  Ok(())
+}
+
+pub fn transfer_assets<S: CliDataStore>(store: &mut S,
+                                        builder: Option<String>)
+                                        -> Result<(), CliError> {
+  let builder_opt = builder.map(TxnBuilderName)
+                           .or_else(|| store.get_config().unwrap().active_txn);
+  let builder_nick;
+  match builder_opt {
+    None => {
+      eprintln!("I don't know which transaction to use!");
+      exit(-1);
+    }
+    Some(t) => {
+      builder_nick = t;
+    }
+  }
+
+  let builder_opt = store.get_txn_builder(&builder_nick)?;
+  let mut builder;
+  match builder_opt {
+    None => {
+      eprintln!("Transaction builder `{}` not found.", builder_nick.0);
+      exit(-1);
+    }
+    Some(b) => {
+      builder = b;
+    }
+  }
+
+  let mut txn_utxos = builder.new_txos
+                             .clone()
+                             .into_iter()
+                             .filter(|(_, ent)| ent.unspent)
+                             .collect::<BTreeMap<_, _>>();
+
+  let txos = store.get_cached_txos()?;
+  let mut utxos = BTreeMap::new();
+
+  for (n, ent) in txos.into_iter() {
+    if builder.spent_txos.contains(&n) {
+      continue;
+    }
+    let orig_ent = ent.clone();
+    match (ent.unspent, ent.sid, ent.opened_record, ent.owner, ent.asset_type) {
+      (true, Some(sid), Some(opened), Some(owner), Some(asset_type)) => {
+        utxos.insert(n, (orig_ent, sid, opened, owner, asset_type));
+      }
+      _ => {
+        continue;
+      }
+    }
+  }
+
+  let mut trn_builder = TransferOperationBuilder::new();
+  let mut trn_signers = vec![];
+  let mut asset_types = BTreeMap::new();
+  let mut inp_amounts = BTreeMap::new();
+  let mut out_txos = vec![];
+  let mut out_tps: Vec<(String, PubkeyName, TxoName)> = vec![];
+  let mut trn_inps = vec![];
+  let mut trn_outs = vec![];
+
+  {
+    let mut first = true;
+
+    while (!utxos.is_empty() || !txn_utxos.is_empty())
+          && ({
+            let prev = first;
+            first = false;
+            prev
+          } || prompt_default("Add another input?", true)?)
+    {
+      println!("TXOs from this transaction:");
+      for (k, v) in txn_utxos.iter() {
+        println!(" {}: {} ({}) of `{}` ({}) owned by `{}`",
+                 k,
+                 v.opened_record.as_ref().unwrap().amount,
+                 if v.record.0.amount.is_confidential() {
+                   "SECRET"
+                 } else {
+                   "PUBLIC"
+                 },
+                 v.asset_type.as_ref().unwrap().0,
+                 if v.record.0.asset_type.is_confidential() {
+                   "SECRET"
+                 } else {
+                   "PUBLIC"
+                 },
+                 v.owner.as_ref().unwrap().0);
+      }
+
+      println!("Other TXOs:");
+      for (k, (ent, sid, opened, owner, asset_type)) in utxos.iter() {
+        println!(" {} (SID {}): {} ({}) of `{}` ({}) owned by `{}`",
+                 k.0,
+                 sid.0,
+                 opened.amount,
+                 if ent.record.0.amount.is_confidential() {
+                   "SECRET"
+                 } else {
+                   "PUBLIC"
+                 },
+                 asset_type.0,
+                 if ent.record.0.asset_type.is_confidential() {
+                   "SECRET"
+                 } else {
+                   "PUBLIC"
+                 },
+                 owner.0);
+      }
+
+      if let Some(inp) = prompt_opt::<String, _>("Which input would you like?")? {
+        let local_val = match (txn_utxos.contains_key(&inp),
+                               utxos.contains_key(&TxoName(inp.clone())))
+        {
+          (true, false) => true,
+          (false, true) => false,
+          (true, true) => {
+            prompt_default(format!("`{}` is ambiguous -- choose the `{}` from this transaction?",
+                                   inp, inp),
+                           false)?
+          }
+          (false, false) => {
+            eprintln!("No TXO with name `{}` found", inp);
+            continue;
+          }
+        };
+
+        let (txo_ref, ent) = if local_val {
+          let i = builder.new_txos
+                         .iter()
+                         .position(|(x, _)| x == &inp)
+                         .unwrap();
+          builder.new_txos[i].1.unspent = false;
+          (TxoRef::Relative((builder.new_txos.len() - 1 - i) as u64),
+           txn_utxos.remove(&inp).unwrap())
+        } else {
+          let inp_k = TxoName(inp.clone());
+          let (ent, sid, _, _, _) = utxos.remove(&inp_k).unwrap();
+          builder.spent_txos.push(inp_k);
+          (TxoRef::Absolute(sid), ent)
+        };
+        // from now on unwraps on ent's relevant fields should be safe.
+
+        println!(" Adding {}: {} ({}) of `{}` ({}) owned by `{}`",
+                 inp,
+                 ent.opened_record.as_ref().unwrap().amount,
+                 if ent.record.0.amount.is_confidential() {
+                   "SECRET"
+                 } else {
+                   "PUBLIC"
+                 },
+                 ent.asset_type.as_ref().unwrap().0,
+                 if ent.record.0.asset_type.is_confidential() {
+                   "SECRET"
+                 } else {
+                   "PUBLIC"
+                 },
+                 ent.owner.as_ref().unwrap().0);
+
+        let tp = ent.asset_type.as_ref().unwrap().0.clone();
+        let amt = ent.opened_record.as_ref().unwrap().amount;
+
+        *inp_amounts.entry(tp.clone()).or_insert(0) += amt;
+        asset_types.insert(tp,
+                           (ent.asset_type.clone().unwrap(),
+                            ent.opened_record.as_ref().unwrap().asset_type));
+
+        trn_inps.push((inp.clone(), ent.clone()));
+
+        trn_signers.push((ent.owner.clone().unwrap(), inp.clone(), ent.clone()));
+        // TODO: shouldn't unwrap
+        trn_builder.add_input(txo_ref,
+                              ent.opened_record.unwrap(),
+                              /* TODO: tracing policies */ None,
+                              /* TODO: identity */ None,
+                              amt)
+                   .unwrap();
+      }
+    }
+  }
+
+  {
+    let mut first = true;
+
+    while (!inp_amounts.is_empty())
+          && ({
+            let prev = first;
+            first = false;
+            prev
+          } || prompt_default("Add another output?", true)?)
+    {
+      println!("Remaining to spend:");
+      for (k, v) in inp_amounts.iter() {
+        println!(" {} of `{}`", v, k);
+      }
+
+      if let Some(inp) = if inp_amounts.len() == 1 {
+        Some(inp_amounts.iter().next().unwrap().0.clone())
+      } else {
+        prompt_opt::<String, _>("Which type of output?")?
+      } {
+        let amt_remaining = match inp_amounts.get_mut(&inp) {
+          None => {
+            eprintln!("No asset type with name `{}` found", inp);
+            continue;
+          }
+          Some(x) => x,
+        };
+        let amt = prompt(format!("How much `{}`? ({} available)", inp, *amt_remaining))?;
+        if amt == 0 {
+          eprintln!("Amount must be nonzero.");
+          continue;
+        }
+        if amt > *amt_remaining {
+          eprintln!("Only {} available.", *amt_remaining);
+          continue;
+        }
+        let conf_amt = prompt_default("Secret amount?", true)?;
+
+        let conf_tp = prompt_default("Secret asset type?", true)?;
+        let receiver = prompt::<String, _>("For whom?")?;
+        let receiver = PubkeyName(receiver);
+
+        let pubkey = match store.get_pubkey(&receiver)? {
+          None => {
+            eprintln!("No public key with name `{}` found", receiver.0);
+            continue;
+          }
+          Some(pk) => pk,
+        };
+
+        let art = AssetRecordType::from_booleans(conf_amt, conf_tp);
+        let template =
+          AssetRecordTemplate::with_no_asset_tracking(amt,
+                                                      asset_types.get(&inp).unwrap().1,
+                                                      art,
+                                                      pubkey);
+
+        // TODO: don't unwrap!
+        trn_builder.add_output(&template, /* TODO: tracing */ None,
+                               /* TODO: identity */ None, /* TODO: credential */ None)
+                   .unwrap();
+
+        // TODO: this doesn't fail gracefully :(
+        let txo_name = TxoName(format!("utxo{}", builder.new_txos.len() + out_tps.len()));
+        assert!(!builder.new_txos
+                        .iter()
+                        .map(|(x, _)| x.clone())
+                        .chain(out_tps.iter().map(|(_, _, x)| x.0.clone()))
+                        .any(|x| x == txo_name.0));
+
+        out_tps.push((inp.clone(), receiver.clone(), txo_name.clone()));
+
+        *amt_remaining -= amt;
+        if *amt_remaining == 0 {
+          inp_amounts.remove(&inp);
+        }
+      }
+    }
+  }
+
+  trn_builder.create(TransferType::Standard).unwrap();
+
+  let trn = match trn_builder.transaction().unwrap() {
+    Operation::TransferAsset(trn) => trn,
+    x => {
+      panic!("The transfer builder doesn't include our operation! Got {:?}",
+             x);
+    }
+  };
+  let outputs = trn.get_outputs_ref()
+                   .into_iter()
+                   .zip(trn.get_owner_memos_ref());
+
+  for ((inp, receiver, txo_name), (out_record, out_memo)) in out_tps.into_iter().zip(outputs) {
+    let mut txo = TxoCacheEntry { sid: None,
+                                  asset_type: Some(AssetTypeName(inp.clone())),
+                                  record: out_record.clone(),
+                                  owner_memo: out_memo.cloned(),
+                                  ledger_state: None,
+                                  owner: Some(receiver.clone()),
+                                  opened_record: None,
+                                  unspent: true };
+
+    if store.get_keypairs()?
+            .contains(&KeypairName(receiver.0.clone()))
+    {
+      println!("Recipient `{}` is a local keypair.", receiver.0);
+      if prompt_default("Unlock this output?", true)? {
+        store.with_keypair::<std::convert::Infallible, _>(
+                                                          &KeypairName(receiver.0.clone()),
+                                                          |kp| {
+                                                            txo.opened_record
+            = Some(open_blind_asset_record(&txo.record.0,
+                    &txo.owner_memo, kp.unwrap().get_sk_ref()).unwrap());
+                                                            Ok(())
+                                                          },
+        )?;
+      }
+    }
+
+    trn_outs.push((txo_name.0.clone(), txo.clone()));
+    out_txos.push((txo_name.0, txo));
+  }
+
+  let mut sig_keys = vec![];
+  let mut sigs = vec![];
+  for (ix, (s, inp, ent)) in trn_signers.into_iter().enumerate() {
+    assert_eq!(Some(s.clone()), ent.owner);
+    println!("Signing for input #{} ({}): {} ({}) of `{}` ({}) owned by `{}`",
+             ix + 1,
+             inp,
+             ent.opened_record.as_ref().unwrap().amount,
+             if ent.record.0.amount.is_confidential() {
+               "SECRET"
+             } else {
+               "PUBLIC"
+             },
+             ent.asset_type.as_ref().unwrap().0,
+             if ent.record.0.asset_type.is_confidential() {
+               "SECRET"
+             } else {
+               "PUBLIC"
+             },
+             ent.owner.as_ref().unwrap().0);
+
+    if sig_keys.contains(&s.0) {
+      println!("`{}` has already signed.", s.0);
+      continue;
+    }
+    sig_keys.push(s.0.clone());
+
+    store.with_keypair::<errors::PlatformError, _>(&KeypairName(s.0.clone()), |kp| match kp {
+           None => {
+             eprintln!("No keypair nicknamed `{}` found.", s.0);
+             exit(-1);
+           }
+           Some(kp) => {
+             sigs.push(trn_builder.create_input_signature(kp)?);
+             Ok(())
+           }
+         })?;
+  }
+
+  for s in sigs {
+    trn_builder.attach_signature(s).unwrap();
+  }
+
+  builder.builder
+         .add_operation(trn_builder.transaction().unwrap());
+  builder.new_txos.extend(out_txos);
+
+  println!("Adding Transfer:");
+  let trn_op = OpMetadata::TransferAssets { inputs: trn_inps,
+                                            outputs: trn_outs };
+  display_op_metadata(1, &trn_op);
+
+  builder.operations.push(trn_op);
 
   store.with_txn_builder::<errors::PlatformError, _>(&builder_nick, |the_builder| {
          *the_builder = builder;
@@ -898,6 +1362,7 @@ pub fn build_transaction<S: CliDataStore>(store: &mut S,
 
          std::mem::swap(&mut metadata.new_asset_types, &mut builder.new_asset_types);
          std::mem::swap(&mut metadata.new_txos, &mut builder.new_txos);
+         std::mem::swap(&mut metadata.spent_txos, &mut builder.spent_txos);
          let mut signers = Default::default();
          std::mem::swap(&mut signers, &mut builder.signers);
          metadata.signers.extend(signers.into_iter());
@@ -923,6 +1388,14 @@ pub fn submit<S: CliDataStore>(store: &mut S, nick: String) -> Result<(), CliErr
                                eprintln!("No transaction `{}` found.", nick);
                                exit(-1);
                              });
+
+  for (nick, _) in metadata.new_asset_types.iter() {
+    if store.get_asset_type(&nick)?.is_some() {
+      eprintln!("Asset type `{}` already exists!", nick.0);
+      exit(-1);
+    }
+  }
+
   if let Some(h) = metadata.handle {
     eprintln!("Transaction `{}` has already been submitted. Its handle is: `{}`",
               nick, h.0);
@@ -950,9 +1423,6 @@ pub fn submit<S: CliDataStore>(store: &mut S, nick: String) -> Result<(), CliErr
                    .text()?;
   let handle = serde_json::from_str::<TxnHandle>(&resp)?;
 
-  for (nick, ent) in metadata.new_asset_types.iter() {
-    store.add_asset_type(&nick, ent.clone())?;
-  }
   store.update_txn_metadata::<std::convert::Infallible, _>(&TxnName(nick.clone()), |metadata| {
          metadata.handle = Some(handle.clone());
          Ok(())
@@ -967,53 +1437,13 @@ pub fn submit<S: CliDataStore>(store: &mut S, nick: String) -> Result<(), CliErr
     let resp = do_request::<TxnStatus>(&query);
 
     println!("Got status: {}", serde_json::to_string(&resp)?);
-    // TODO: do something if it's committed
-    store.update_txn_metadata::<std::convert::Infallible, _>(&TxnName(nick.clone()), |metadata| {
-           metadata.status = Some(resp.clone());
+
+    update_if_committed(store, resp.clone(), metadata, nick.clone())?;
+
+    store.update_txn_metadata::<std::convert::Infallible, _>(&TxnName(nick), |metadata| {
+           metadata.status = Some(resp);
            Ok(())
          })?;
-
-    if let TxnStatus::Committed((_, txo_sids)) = resp {
-      if let Some(TxnStatus::Committed(_)) = metadata.status {
-      } else {
-        // TODO: internally-spent TXOs
-        assert_eq!(metadata.new_txos.len(), txo_sids.len());
-        for pref in FreshNamer::new(nick.clone(), ".".to_string()) {
-          let mut entries = vec![];
-          let mut bad = false;
-          for ((n, txo), sid) in metadata.new_txos.iter().zip(txo_sids.iter()) {
-            let mut txo = txo.clone();
-            let n = format!("{}:{}", pref, n);
-
-            if store.get_cached_txo(&TxoName(n.clone()))?.is_some() {
-              bad = true;
-              break;
-            }
-
-            txo.sid = Some(*sid);
-            entries.push((TxoName(n), txo));
-          }
-
-          if !bad {
-            let mut finalized = vec![];
-            for (k, v) in entries {
-              println!("Caching TXO `{}`:", k.0);
-              display_txo_entry(1, &v);
-              store.cache_txo(&k, v)?;
-              finalized.push(k);
-            }
-
-            store.update_txn_metadata::<std::convert::Infallible, _>(&TxnName(nick), |metadata| {
-                   assert!(metadata.finalized_txos.is_none());
-                   metadata.finalized_txos = Some(finalized);
-                   Ok(())
-                 })?;
-            break;
-          }
-        }
-        println!("Done caching TXOs.");
-      }
-    }
   }
   Ok(())
 }

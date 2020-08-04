@@ -56,11 +56,11 @@ impl Iterator for FreshNamer {
 }
 
 fn default_sub_server() -> String {
-  "https://testnet.findora.org/submit_server".to_string()
+  "https://testnet.findora.org:8669".to_string()
 }
 
 fn default_ledger_server() -> String {
-  "https://testnet.findora.org/query_server".to_string()
+  "https://testnet.findora.org:8668".to_string()
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, Default)]
@@ -172,8 +172,8 @@ pub struct TxnMetadata {
   new_txos: Vec<(String, TxoCacheEntry)>,
   #[serde(default)]
   finalized_txos: Option<Vec<TxoName>>,
-  // #[serde(default)]
-  // spent_txos: Vec<TxoName>,
+  #[serde(default)]
+  spent_txos: Vec<TxoName>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -219,7 +219,7 @@ enum OpMetadata {
     output_amt: u64,
     issue_seq_num: u64,
   },
-  TransferAsset {
+  TransferAssets {
     inputs: Vec<(String, TxoCacheEntry)>,
     outputs: Vec<(String, TxoCacheEntry)>,
   },
@@ -242,8 +242,12 @@ fn display_op_metadata(indent_level: u64, ent: &OpMetadata) {
       println!("{} issued to `{}` as issuance #{} named `{}`",
                ind, issuer_nick.0, issue_seq_num, output_name);
     }
-    OpMetadata::TransferAsset { .. } => {
-      unimplemented!();
+    OpMetadata::TransferAssets { inputs, outputs } => {
+      println!("{}TransferAssets:", ind);
+      println!("{} Inputs:", ind);
+      display_txos(indent_level + 1, &inputs, &None);
+      println!("{} Outputs:", ind);
+      display_txos(indent_level + 1, &outputs, &None);
     }
   }
 }
@@ -339,6 +343,12 @@ fn display_txn_builder(indent_level: u64, ent: &TxnBuilderEntry) {
   for nick in ent.signers.iter() {
     println!("{} - `{}`", ind, nick.0);
   }
+
+  print!("{}Consuming TXOs:", ind);
+  for n in ent.spent_txos.iter() {
+    print!(" {}", n.0);
+  }
+  println!();
 }
 
 fn display_txn(indent_level: u64, ent: &(Transaction, TxnMetadata)) {
@@ -366,6 +376,12 @@ fn display_txn(indent_level: u64, ent: &(Transaction, TxnMetadata)) {
   for nick in ent.1.signers.iter() {
     println!("{} - `{}`", ind, nick.0);
   }
+
+  print!("{}Consuming TXOs:", ind);
+  for n in ent.1.spent_txos.iter() {
+    print!(" {}", n.0);
+  }
+  println!();
 }
 
 fn display_asset_type(indent_level: u64, ent: &AssetTypeEntry) {
@@ -396,8 +412,8 @@ pub struct TxnBuilderEntry {
   // TODO
   #[serde(default)]
   new_txos: Vec<(String, TxoCacheEntry)>,
-  // #[serde(default)]
-  // spent_txos: Vec<TxoName>,
+  #[serde(default)]
+  spent_txos: Vec<TxoName>,
 }
 
 pub trait CliDataStore {
@@ -665,7 +681,7 @@ enum Actions {
   },
 
   /// Create a transaction part corresponding to the transfer of an asset
-  TransferAsset {
+  TransferAssets {
     #[structopt(short, long)]
     /// Which builder?
     builder: Option<String>,
@@ -726,7 +742,7 @@ enum Actions {
     /// Local nickname?
     nick: String,
     /// Which SID?
-    sid: u64,
+    sid: Option<u64>,
   },
 }
 
@@ -830,6 +846,8 @@ fn run_action<S: CliDataStore>(action: Actions, store: &mut S) -> Result<(), Cli
                  asset_nick,
                  issue_seq_num,
                  amount, } => issue_asset(store, builder, asset_nick, issue_seq_num, amount),
+
+    TransferAssets { builder } => transfer_assets(store, builder),
 
     BuildTransaction { builder,
                        txn_nick,

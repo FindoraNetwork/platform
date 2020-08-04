@@ -531,7 +531,8 @@ impl CliDataStore for KVStore {
                                   new_asset_types: Default::default(),
                                   operations: Default::default(),
                                   signers: Default::default(),
-                                  new_txos: Default::default() })
+                                  new_txos: Default::default(),
+                                  spent_txos: Default::default() })
            .map(|_| ())?)
   }
   fn get_txn_builders(&self) -> Result<BTreeMap<crate::TxnBuilderName, TxnBuilderEntry>, CliError> {
