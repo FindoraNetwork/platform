@@ -210,11 +210,11 @@ pub fn simple_define_asset<S: CliDataStore>(store: &mut S,
 
   let nick_tx = pic_random_txn_number();
 
-  prepare_transaction(store, nick_tx.clone(), true)?;
+  prepare_transaction(store, nick_tx.clone())?;
 
-  define_asset(store, Some(nick_tx.clone()), issuer_nick, asset_nick)?;
+  define_asset(store, nick_tx.clone(), issuer_nick, asset_nick)?;
 
-  build_transaction(store, Some(nick_tx.clone()), Some(nick_tx.clone()), true)?;
+  build_transaction(store)?;
 
   submit(store, nick_tx)?;
 
@@ -227,11 +227,11 @@ pub fn simple_issue_asset<S: CliDataStore>(store: &mut S,
                                            -> Result<(), CliError> {
   let nick_tx = pic_random_txn_number();
 
-  prepare_transaction(store, nick_tx.clone(), true)?;
+  prepare_transaction(store, nick_tx.clone())?;
 
   let seq_issue_number = query_asset_issuance_num(store, asset_nick.clone())?;
 
-  issue_asset(store, Some(nick_tx), asset_nick, seq_issue_number, amount)?;
+  issue_asset(store, nick_tx, asset_nick, seq_issue_number, amount)?;
 
   Ok(())
 }
@@ -602,10 +602,7 @@ pub fn query_asset_type<S: CliDataStore>(store: &mut S,
   Ok(())
 }
 
-pub fn prepare_transaction<S: CliDataStore>(store: &mut S,
-                                            nick: String,
-                                            exact: bool)
-                                            -> Result<(), CliError> {
+pub fn prepare_transaction<S: CliDataStore>(store: &mut S, nick: String) -> Result<(), CliError> {
   let seq_id = match store.get_config()?.ledger_state {
     None => {
       eprintln!(concat!("I don't know what block ID the ledger is on!\n",
@@ -615,22 +612,12 @@ pub fn prepare_transaction<S: CliDataStore>(store: &mut S,
     Some(s) => (s.0).1,
   };
 
-  let mut nick = nick;
   if store.get_txn_builder(&TxnBuilderName(nick.clone()))?
           .is_some()
   {
-    if exact {
-      eprintln!("Transaction builder with the name `{}` already exists.",
-                nick);
-      exit(-1);
-    }
-
-    for n in FreshNamer::new(nick.clone(), ".".to_string()) {
-      if store.get_txn_builder(&TxnBuilderName(n.clone()))?.is_none() {
-        nick = n;
-        break;
-      }
-    }
+    eprintln!("Transaction builder with the name `{}` already exists.",
+              nick);
+    exit(-1);
   }
 
   println!("Preparing transaction `{}` for block id `{}`...",
@@ -644,19 +631,13 @@ pub fn prepare_transaction<S: CliDataStore>(store: &mut S,
   Ok(())
 }
 
-pub fn list_txn_builders<S: CliDataStore>(store: &mut S) -> Result<(), CliError> {
-  for (nick, builder) in store.get_txn_builders()? {
-    println!("{}:", nick.0);
-    display_txn_builder(1, &builder);
-  }
-  println!("Done.");
-  Ok(())
-}
+pub fn list_txn<S: CliDataStore>(store: &mut S) -> Result<(), CliError> {
+  // Fetch the name of the current transaction
+  let nick = store.get_config().unwrap().active_txn.unwrap();
 
-pub fn list_txn_builder<S: CliDataStore>(store: &mut S, nick: String) -> Result<(), CliError> {
-  let builder = match store.get_txn_builder(&TxnBuilderName(nick.clone()))? {
+  let builder = match store.get_txn_builder(&TxnBuilderName(nick.0.clone()))? {
     None => {
-      eprintln!("No txn builder `{}` found.", nick);
+      eprintln!("No txn builder `{}` found.", nick.0);
       exit(-1);
     }
     Some(s) => s,
@@ -828,13 +809,13 @@ pub fn update_if_committed<S: CliDataStore>(store: &mut S,
 }
 
 pub fn define_asset<S: CliDataStore>(store: &mut S,
-                                     builder: Option<String>,
+                                     txn_nick: String,
                                      issuer_nick: String,
                                      asset_nick: String)
                                      -> Result<(), CliError> {
   let issuer_nick = KeypairName(issuer_nick);
-  let builder_opt = builder.map(TxnBuilderName)
-                           .or_else(|| store.get_config().unwrap().active_txn);
+  let builder_opt = Some(txn_nick).map(TxnBuilderName)
+                                  .or_else(|| store.get_config().unwrap().active_txn);
   let builder_name;
   match builder_opt {
     None => {
@@ -904,13 +885,13 @@ pub fn define_asset<S: CliDataStore>(store: &mut S,
 }
 
 pub fn issue_asset<S: CliDataStore>(store: &mut S,
-                                    builder: Option<String>,
+                                    txn_nick: String,
                                     asset_nick: String,
                                     issue_seq_num: u64,
                                     amount: u64)
                                     -> Result<(), CliError> {
-  let builder_opt = builder.map(TxnBuilderName)
-                           .or_else(|| store.get_config().unwrap().active_txn);
+  let builder_opt = Some(txn_nick).map(TxnBuilderName)
+                                  .or_else(|| store.get_config().unwrap().active_txn);
   let builder_nick;
   match builder_opt {
     None => {
@@ -1391,16 +1372,9 @@ pub fn transfer_assets<S: CliDataStore>(store: &mut S,
   Ok(())
 }
 
-pub fn build_transaction<S: CliDataStore>(store: &mut S,
-                                          builder: Option<String>,
-                                          txn_nick: Option<String>,
-                                          exact: bool)
-                                          -> Result<(), CliError> {
-  let mut used_default = false;
-  let builder_opt = builder.map(TxnBuilderName).or_else(|| {
-                                                 used_default = true;
-                                                 store.get_config().unwrap().active_txn
-                                               });
+pub fn build_transaction<S: CliDataStore>(store: &mut S) -> Result<(), CliError> {
+  let builder_opt = store.get_config().unwrap().active_txn;
+
   let nick;
   match builder_opt {
     None => {
@@ -1412,27 +1386,18 @@ pub fn build_transaction<S: CliDataStore>(store: &mut S,
     }
   }
 
-  let mut txn_nick = TxnName(txn_nick.unwrap_or_else(|| nick.0.clone()));
+  let txn_nick = TxnName(nick.0.clone());
 
   if store.get_built_transaction(&txn_nick)?.is_some() {
-    if !exact {
-      for n in FreshNamer::new(txn_nick.0.clone(), ".".to_string()) {
-        if store.get_built_transaction(&TxnName(n.clone()))?.is_none() {
-          txn_nick = TxnName(n);
-          break;
-        }
-      }
-    } else {
-      eprintln!("A txn with nickname `{}` already exists", txn_nick.0);
-      exit(-1);
-    }
+    eprintln!("A txn with nickname `{}` already exists", txn_nick.0);
+    exit(-1);
   }
-  println!("Building `{}` as `{}`...", nick.0, txn_nick.0);
+  println!("Building `{}`", nick.0);
 
   let mut metadata: TxnMetadata = Default::default();
   let builder = match store.get_txn_builder(&nick)? {
     None => {
-      eprintln!("No txn builder `{}` found.", nick.0);
+      eprintln!("No txn builder `{}` found.", nick.0); // TODO do we need this?
       exit(-1);
     }
     Some(b) => b,
@@ -1473,15 +1438,13 @@ pub fn build_transaction<S: CliDataStore>(store: &mut S,
        })?;
 
   store.build_transaction(&nick, &txn_nick, metadata)?;
-  if used_default {
-    store.update_config(|conf| {
-           conf.active_txn = None;
-           Ok(())
-         })?;
-  }
 
-  println!("Built transaction `{}` from builder `{}`.",
-           txn_nick.0, nick.0);
+  store.update_config(|conf| {
+         conf.active_txn = None;
+         Ok(())
+       })?;
+
+  println!("Built transaction `{}`", txn_nick.0);
   Ok(())
 }
 
