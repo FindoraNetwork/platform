@@ -164,6 +164,9 @@ pub enum CliError {
   },
   #[snafu(display("Failed to locate user's home directory"))]
   HomeDir,
+
+  #[snafu(display("Misc"))] // TODO remove that with something more informative
+  Misc,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, Default)]

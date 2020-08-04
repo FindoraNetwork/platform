@@ -260,7 +260,7 @@ pub fn query_ledger_state<S: CliDataStore>(store: &mut S,
            let query = format!("{}{}",
                                conf.ledger_server,
                                LedgerAccessRoutes::PublicKey.route());
-           let resp: XfrPublicKey = do_request::<XfrPublicKey>(&query);
+           let resp: XfrPublicKey = do_request::<XfrPublicKey>(&query).unwrap();
 
            println!("Saving ledger signing key `{}`",
                     serde_json::to_string(&resp).unwrap());
@@ -272,7 +272,7 @@ pub fn query_ledger_state<S: CliDataStore>(store: &mut S,
          let query = format!("{}{}",
                              conf.ledger_server,
                              LedgerAccessRoutes::GlobalState.route());
-         let resp: GlobalState = do_request::<GlobalState>(&query);
+         let resp: GlobalState = do_request::<GlobalState>(&query).unwrap();
 
          if let Err(e) = resp.2
                              .verify(&conf.ledger_sig_key.unwrap(), &(resp.0.clone(), resp.1))
@@ -311,7 +311,7 @@ fn query_asset_issuance_num<S: CliDataStore>(store: &mut S, nick: String) -> Res
                       conf.ledger_server,
                       LedgerAccessRoutes::AssetIssuanceNum.with_arg(&codeb64));
 
-  let resp: u64 = do_request::<u64>(&query);
+  let resp: u64 = do_request::<u64>(&query).unwrap();
 
   Ok(resp)
 }
@@ -646,7 +646,11 @@ fn get_status<S: CliDataStore>(store: &mut S, txn: String) -> Result<TxnStatus, 
                       SubmissionRoutes::TxnStatus.route(),
                       handle.0);
   let resp = do_request::<TxnStatus>(&query);
-  Ok(resp)
+  if resp.is_err() {
+    Err(CliError::Misc)
+  } else {
+    Ok(resp.unwrap())
+  }
 }
 
 pub fn status_check<S: CliDataStore>(store: &mut S, txn_nick: String) -> Result<(), CliError> {
@@ -1460,15 +1464,19 @@ pub fn submit<S: CliDataStore>(store: &mut S, nick: String) -> Result<(), CliErr
                         SubmissionRoutes::TxnStatus.route(),
                         &handle.0);
     let resp = do_request::<TxnStatus>(&query);
+    if resp.is_err() {
+      return Err(CliError::Misc);
+    } else {
+      let resp = resp.unwrap();
+      println!("Got status: {:?}", serde_json::to_string(&resp));
 
-    println!("Got status: {}", serde_json::to_string(&resp)?);
+      update_if_committed(store, resp.clone(), metadata, nick.clone())?;
 
-    update_if_committed(store, resp.clone(), metadata, nick.clone())?;
-
-    store.update_txn_metadata::<std::convert::Infallible, _>(&TxnName(nick), |metadata| {
-           metadata.status = Some(resp);
-           Ok(())
-         })?;
+      store.update_txn_metadata::<std::convert::Infallible, _>(&TxnName(nick), |metadata| {
+             metadata.status = Some(resp);
+             Ok(())
+           })?;
+    }
   }
   Ok(())
 }
