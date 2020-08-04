@@ -1290,174 +1290,163 @@ pub fn transfer_assets<S: CliDataStore>(store: &mut S,
   Ok(())
 }
 
-pub fn build_transaction<S: CliDataStore>(store: &mut S,
-                                          builder: Option<String>,
-                                          txn_nick: Option<String>,
-                                          exact: bool)
-                                          -> Result<(), CliError> {
-  let mut used_default = false;
-  let builder_opt = builder.map(TxnBuilderName).or_else(|| {
-                                                 used_default = true;
-                                                 store.get_config().unwrap().active_txn
-                                               });
+pub fn build_transaction<S: CliDataStore>(store: &mut S) -> Result<(), CliError> {
+  let builder_opt = store.get_config().unwrap().active_txn;
 
-  pub fn build_transaction<S: CliDataStore>(store: &mut S) -> Result<(), CliError> {
-    let builder_opt = store.get_config().unwrap().active_txn;
-
-    let nick;
-    match builder_opt {
-      None => {
-        eprintln!("I don't know which transaction to use!");
-        exit(-1);
-      }
-      Some(t) => {
-        nick = t;
-      }
-    }
-
-    let txn_nick = TxnName(nick.0.clone());
-
-    if store.get_built_transaction(&txn_nick)?.is_some() {
-      eprintln!("A txn with nickname `{}` already exists", txn_nick.0);
+  let nick;
+  match builder_opt {
+    None => {
+      eprintln!("I don't know which transaction to use!");
       exit(-1);
     }
-    println!("Building `{}`", nick.0);
+    Some(t) => {
+      nick = t;
+    }
+  }
 
-    let mut metadata: TxnMetadata = Default::default();
-    let builder = match store.get_txn_builder(&nick)? {
-      None => {
-        eprintln!("No txn builder `{}` found.", nick.0); // TODO do we need this?
-        exit(-1);
+  let txn_nick = TxnName(nick.0.clone());
+
+  if store.get_built_transaction(&txn_nick)?.is_some() {
+    eprintln!("A txn with nickname `{}` already exists", txn_nick.0);
+    exit(-1);
+  }
+  println!("Building `{}`", nick.0);
+
+  let mut metadata: TxnMetadata = Default::default();
+  let builder = match store.get_txn_builder(&nick)? {
+    None => {
+      eprintln!("No txn builder `{}` found.", nick.0); // TODO do we need this?
+      exit(-1);
+    }
+    Some(b) => b,
+  };
+
+  let sigs = {
+    let mut sigs = vec![];
+    for kp_name in builder.signers.iter() {
+      store.with_keypair::<std::convert::Infallible, _>(&kp_name, |kp| match kp {
+             None => {
+               eprintln!("Could not find keypair for required signer `{}`.",
+                         kp_name.0);
+               exit(-1);
+             }
+             Some(kp) => {
+               sigs.push((*kp.get_pk_ref(),
+                          SignatureOf::new(kp, &builder.builder.transaction().body)));
+               Ok(())
+             }
+           })?;
+    }
+    sigs
+  };
+
+  store.with_txn_builder::<errors::PlatformError, _>(&nick, |builder| {
+         for (pk, sig) in sigs {
+           builder.builder.add_signature(&pk, sig)?;
+         }
+
+         std::mem::swap(&mut metadata.new_asset_types, &mut builder.new_asset_types);
+         std::mem::swap(&mut metadata.new_txos, &mut builder.new_txos);
+         std::mem::swap(&mut metadata.spent_txos, &mut builder.spent_txos);
+         let mut signers = Default::default();
+         std::mem::swap(&mut signers, &mut builder.signers);
+         metadata.signers.extend(signers.into_iter());
+         std::mem::swap(&mut metadata.operations, &mut builder.operations);
+         Ok(())
+       })?;
+
+  store.build_transaction(&nick, &txn_nick, metadata)?;
+
+  store.update_config(|conf| {
+         conf.active_txn = None;
+         Ok(())
+       })?;
+
+  println!("Built transaction `{}`", txn_nick.0);
+  Ok(())
+}
+
+pub fn submit<S: CliDataStore>(store: &mut S, nick: String) -> Result<(), CliError> {
+  let (txn, metadata) = store.get_built_transaction(&TxnName(nick.clone()))?
+                             .unwrap_or_else(|| {
+                               eprintln!("No transaction `{}` found.", nick);
+                               exit(-1);
+                             });
+
+  for (nick, _) in metadata.new_asset_types.iter() {
+    if store.get_asset_type(&nick)?.is_some() {
+      eprintln!("Asset type `{}` already exists!", nick.0);
+      exit(-1);
+    }
+  }
+
+  if let Some(h) = metadata.handle {
+    eprintln!("Transaction `{}` has already been submitted. Its handle is: `{}`",
+              nick, h.0);
+    exit(-1);
+  }
+
+  let conf = store.get_config()?;
+  let query = format!("{}{}",
+                      conf.submission_server,
+                      SubmissionRoutes::SubmitTransaction.route());
+
+  println!("Submitting to `{}`:", query);
+  display_txn(1, &(txn.clone(), metadata.clone()));
+
+  if !prompt_default("Is this correct?", true)? {
+    println!("Exiting.");
+    return Ok(());
+  }
+
+  let client = reqwest::blocking::Client::builder().build()?;
+  let resp = client.post(&query)
+                   .json(&txn)
+                   .send()?
+                   .error_for_status()?
+                   .text()?;
+  let handle = serde_json::from_str::<TxnHandle>(&resp)?;
+
+  store.update_txn_metadata::<std::convert::Infallible, _>(&TxnName(nick.clone()), |metadata| {
+         metadata.handle = Some(handle.clone());
+         Ok(())
+       })?;
+  println!("Submitted `{}`: got handle `{}`", nick, &handle.0);
+
+  // Wait for the transaction to be committed
+  // TODO add timeout
+  let mut committed = false;
+  while !committed {
+    let txn_status = get_status(store, nick.clone());
+
+    if let Ok(res) = txn_status {
+      committed = match res {
+        TxnStatus::Committed((_, _)) => true,
+        _ => false,
       }
-      Some(b) => b,
-    };
+    }
+  }
 
-    let sigs = {
-      let mut sigs = vec![];
-      for kp_name in builder.signers.iter() {
-        store.with_keypair::<std::convert::Infallible, _>(&kp_name, |kp| match kp {
-               None => {
-                 eprintln!("Could not find keypair for required signer `{}`.",
-                           kp_name.0);
-                 exit(-1);
-               }
-               Some(kp) => {
-                 sigs.push((*kp.get_pk_ref(),
-                            SignatureOf::new(kp, &builder.builder.transaction().body)));
-                 Ok(())
-               }
+  if prompt_default("Retrieve its status?", true)? {
+    let query = format!("{}{}/{}",
+                        conf.submission_server,
+                        SubmissionRoutes::TxnStatus.route(),
+                        &handle.0);
+    let resp = do_request::<TxnStatus>(&query);
+
+    match resp {
+      Ok(v) => {
+        println!("Got status: {:?}", serde_json::to_string(&v));
+
+        update_if_committed(store, v.clone(), metadata, nick.clone())?;
+
+        store.update_txn_metadata::<std::convert::Infallible, _>(&TxnName(nick), |metadata| {
+               metadata.status = Some(v);
+               Ok(())
              })?;
       }
-      sigs
-    };
-
-    store.with_txn_builder::<errors::PlatformError, _>(&nick, |builder| {
-           for (pk, sig) in sigs {
-             builder.builder.add_signature(&pk, sig)?;
-           }
-
-           std::mem::swap(&mut metadata.new_asset_types, &mut builder.new_asset_types);
-           std::mem::swap(&mut metadata.new_txos, &mut builder.new_txos);
-           std::mem::swap(&mut metadata.spent_txos, &mut builder.spent_txos);
-           let mut signers = Default::default();
-           std::mem::swap(&mut signers, &mut builder.signers);
-           metadata.signers.extend(signers.into_iter());
-           std::mem::swap(&mut metadata.operations, &mut builder.operations);
-           Ok(())
-         })?;
-
-    store.build_transaction(&nick, &txn_nick, metadata)?;
-
-    store.update_config(|conf| {
-           conf.active_txn = None;
-         })?;
-
-    println!("Built transaction `{}`", txn_nick.0);
-    Ok(())
+      _ => return Err(CliError::Misc),
+    }
   }
-
-  pub fn submit<S: CliDataStore>(store: &mut S, nick: String) -> Result<(), CliError> {
-    let (txn, metadata) = store.get_built_transaction(&TxnName(nick.clone()))?
-                               .unwrap_or_else(|| {
-                                 eprintln!("No transaction `{}` found.", nick);
-                                 exit(-1);
-                               });
-
-    for (nick, _) in metadata.new_asset_types.iter() {
-      if store.get_asset_type(&nick)?.is_some() {
-        eprintln!("Asset type `{}` already exists!", nick.0);
-        exit(-1);
-      }
-    }
-
-    if let Some(h) = metadata.handle {
-      eprintln!("Transaction `{}` has already been submitted. Its handle is: `{}`",
-                nick, h.0);
-      exit(-1);
-    }
-
-    let conf = store.get_config()?;
-    let query = format!("{}{}",
-                        conf.submission_server,
-                        SubmissionRoutes::SubmitTransaction.route());
-
-    println!("Submitting to `{}`:", query);
-    display_txn(1, &(txn.clone(), metadata.clone()));
-
-    if !prompt_default("Is this correct?", true)? {
-      println!("Exiting.");
-      return Ok(());
-    }
-
-    let client = reqwest::blocking::Client::builder().build()?;
-    let resp = client.post(&query)
-                     .json(&txn)
-                     .send()?
-                     .error_for_status()?
-                     .text()?;
-    let handle = serde_json::from_str::<TxnHandle>(&resp)?;
-
-    store.update_txn_metadata::<std::convert::Infallible, _>(&TxnName(nick.clone()), |metadata| {
-           metadata.handle = Some(handle.clone());
-           Ok(())
-         })?;
-    println!("Submitted `{}`: got handle `{}`", nick, &handle.0);
-
-    // Wait for the transaction to be committed
-    // TODO add timeout
-    let mut committed = false;
-    while !committed {
-      let txn_status = get_status(store, nick.clone());
-
-      if let Ok(res) = txn_status {
-        committed = match res {
-          TxnStatus::Committed((_, _)) => true,
-          _ => false,
-        }
-      }
-    }
-
-    if prompt_default("Retrieve its status?", true)? {
-      let query = format!("{}{}/{}",
-                          conf.submission_server,
-                          SubmissionRoutes::TxnStatus.route(),
-                          &handle.0);
-      let resp = do_request::<TxnStatus>(&query);
-
-      match resp {
-        Ok(v) => {
-          println!("Got status: {:?}", serde_json::to_string(&v));
-
-          update_if_committed(store, v.clone(), metadata, nick.clone())?;
-
-          store.update_txn_metadata::<std::convert::Infallible, _>(&TxnName(nick), |metadata| {
-                 metadata.status = Some(v);
-                 Ok(())
-               })?;
-        }
-        _ => return Err(CliError::Misc),
-      }
-    }
-    Ok(())
-  }
+  Ok(())
 }

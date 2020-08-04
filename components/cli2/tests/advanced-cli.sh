@@ -143,7 +143,7 @@ DEFINE_ASSET_TYPE_AND_SUBMIT_COMMANDS="  set -x; $CLI2 key-gen alice; \
                echo memo_alice | $CLI2 define-asset 0 alice TheBestAliceCoinsOnEarthV2;\
                $CLI2 issue-asset 0 TheBestAliceCoinsOnEarthV2 0 10000; \
                $CLI2 build-transaction; \
-               { echo; sleep 3s; echo Y; } | $CLI2 submit 0;" # TODO sleep 3s is because we use Tendermint. We should loop over some status-check command
+               { echo; echo Y; } | $CLI2 submit 0;"
 
   debug_lines
   [ "$status" -eq 0 ]

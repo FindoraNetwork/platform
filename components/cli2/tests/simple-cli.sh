@@ -59,8 +59,8 @@ source "tests/common.sh"
 
 @test "simple-define-asset" {
   run  bash -c "$CLI2 key-gen alice; \
-                sleep 3s;echo -e 'memo_alice \n y \n' | $CLI2 simple-define-asset alice AliceCoin;" # TODO sleep 3s is because we use Tendermint.
-                                                                                                    # TODO We should loop over some status-check command
+                echo -e 'memo_alice \n y \n' | $CLI2 simple-define-asset alice AliceCoin;"
+
   debug_lines
 
   [ "$status" -eq 0 ]
