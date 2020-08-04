@@ -646,10 +646,10 @@ fn get_status<S: CliDataStore>(store: &mut S, txn: String) -> Result<TxnStatus, 
                       SubmissionRoutes::TxnStatus.route(),
                       handle.0);
   let resp = do_request::<TxnStatus>(&query);
-  if resp.is_err() {
-    Err(CliError::Misc)
-  } else {
-    Ok(resp.unwrap())
+
+  match resp {
+    Ok(res) => Ok(res),
+    _ => Err(CliError::Misc),
   }
 }
 
@@ -1450,8 +1450,9 @@ pub fn submit<S: CliDataStore>(store: &mut S, nick: String) -> Result<(), CliErr
   let mut committed = false;
   while !committed {
     let txn_status = get_status(store, nick.clone());
-    if !txn_status.is_err() {
-      committed = match txn_status.unwrap() {
+
+    if let Ok(res) = txn_status {
+      committed = match res {
         TxnStatus::Committed((_, _)) => true,
         _ => false,
       }
@@ -1464,18 +1465,19 @@ pub fn submit<S: CliDataStore>(store: &mut S, nick: String) -> Result<(), CliErr
                         SubmissionRoutes::TxnStatus.route(),
                         &handle.0);
     let resp = do_request::<TxnStatus>(&query);
-    if resp.is_err() {
-      return Err(CliError::Misc);
-    } else {
-      let resp = resp.unwrap();
-      println!("Got status: {:?}", serde_json::to_string(&resp));
 
-      update_if_committed(store, resp.clone(), metadata, nick.clone())?;
+    match resp {
+      Ok(v) => {
+        println!("Got status: {:?}", serde_json::to_string(&v));
 
-      store.update_txn_metadata::<std::convert::Infallible, _>(&TxnName(nick), |metadata| {
-             metadata.status = Some(resp);
-             Ok(())
-           })?;
+        update_if_committed(store, v.clone(), metadata, nick.clone())?;
+
+        store.update_txn_metadata::<std::convert::Infallible, _>(&TxnName(nick), |metadata| {
+               metadata.status = Some(v);
+               Ok(())
+             })?;
+      }
+      _ => return Err(CliError::Misc),
     }
   }
   Ok(())
