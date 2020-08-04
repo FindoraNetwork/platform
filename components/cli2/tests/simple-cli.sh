@@ -69,8 +69,7 @@ source "tests/common.sh"
   check_line 31 "   memo: `memo_alice`"
   check_line 32 "   issue_seq_number: 0"
   check_line 36 "Submitted"
-  check_line 37 'Got status: "Pending"'
-
+  
   run $CLI2 list-asset-type AliceCoin
   debug_lines
   [ "$status" -eq 0 ]
