@@ -44,7 +44,8 @@ impl Key {
     let mut config = Config::default();
     config.hash_length = 64;
 
-    let hash = argon2::hash_raw(password, salt, &config).expect("Failure Hashing Password");
+    let hash =
+      Zeroizing::new(argon2::hash_raw(password, salt, &config).expect("Failure Hashing Password"));
 
     let mut key = Key { encryption: [0; 32],
                         hmac: [0; 32] };
