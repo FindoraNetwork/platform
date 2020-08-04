@@ -431,9 +431,12 @@ impl CliDataStore for KVStore {
                                               key: "config".to_string() })?)
     }
   }
-  fn update_config<F: FnOnce(&mut crate::CliConfig)>(&mut self, f: F) -> Result<(), CliError> {
+  fn update_config<F: FnOnce(&mut crate::CliConfig) -> Result<(), CliError>>(
+    &mut self,
+    f: F)
+    -> Result<(), CliError> {
     let mut current = self.get_config()?;
-    f(&mut current);
+    f(&mut current)?;
     self.set(&String::from("config"), current)?;
     Ok(())
   }

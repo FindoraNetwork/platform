@@ -1,13 +1,14 @@
 use crate::{
   display_asset_type, display_op_metadata, display_txn, display_txn_builder, display_txo_entry,
   print_conf, prompt_for_config, serialize_or_str, AssetTypeEntry, AssetTypeName, CliDataStore,
-  CliError, FreshNamer, KeypairName, LedgerStateCommitment, OpMetadata, PubkeyName, TxnBuilderName,
-  TxnMetadata, TxnName, TxoCacheEntry, TxoName,
+  CliError, FreshNamer, KeypairName, LedgerStateCommitment, NewPublicKeyFetch, OpMetadata,
+  PubkeyName, TxnBuilderName, TxnMetadata, TxnName, TxoCacheEntry, TxoName,
 };
 
 use ledger::data_model::*;
 use ledger_api_service::LedgerAccessRoutes;
 use promptly::{prompt, prompt_default, prompt_opt};
+use snafu::ResultExt;
 use std::collections::BTreeMap;
 use std::process::exit;
 use submission_api::SubmissionRoutes;
@@ -34,6 +35,7 @@ type GlobalState = (HashOf<Option<StateCommitmentData>>,
 pub fn setup<S: CliDataStore>(store: &mut S) -> Result<(), CliError> {
   store.update_config(|conf| {
          *conf = prompt_for_config(Some(conf.clone())).unwrap();
+         Ok(())
        })?;
   Ok(())
 }
@@ -260,7 +262,7 @@ pub fn query_ledger_state<S: CliDataStore>(store: &mut S,
            let query = format!("{}{}",
                                conf.ledger_server,
                                LedgerAccessRoutes::PublicKey.route());
-           let resp: XfrPublicKey = do_request::<XfrPublicKey>(&query).unwrap();
+           let resp: XfrPublicKey = do_request::<XfrPublicKey>(&query).context(NewPublicKeyFetch)?;
 
            println!("Saving ledger signing key `{}`",
                     serde_json::to_string(&resp).unwrap());
@@ -288,6 +290,7 @@ pub fn query_ledger_state<S: CliDataStore>(store: &mut S,
          println!("New state retrieved.");
 
          print_conf(&conf);
+         Ok(())
        })?;
   Ok(())
 }
@@ -555,6 +558,7 @@ pub fn prepare_transaction<S: CliDataStore>(store: &mut S,
   store.prepare_transaction(&TxnBuilderName(nick.clone()), seq_id)?;
   store.update_config(|conf| {
          conf.active_txn = Some(TxnBuilderName(nick));
+         Ok(())
        })?;
   println!("Done.");
   Ok(())
@@ -1390,6 +1394,7 @@ pub fn build_transaction<S: CliDataStore>(store: &mut S,
   if used_default {
     store.update_config(|conf| {
            conf.active_txn = None;
+           Ok(())
          })?;
   }
 

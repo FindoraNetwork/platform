@@ -164,6 +164,11 @@ pub enum CliError {
   },
   #[snafu(display("Failed to locate user's home directory"))]
   HomeDir,
+  #[snafu(display("Failed to fetch new public key from server"))]
+  NewPublicKeyFetch {
+    source: structopt::clap::Error,
+    backtrace: Backtrace,
+  },
 
   #[snafu(display("Misc"))] // TODO remove that with something more informative
   Misc,
@@ -429,7 +434,9 @@ pub struct TxnBuilderEntry {
 
 pub trait CliDataStore {
   fn get_config(&self) -> Result<CliConfig, CliError>;
-  fn update_config<F: FnOnce(&mut CliConfig)>(&mut self, f: F) -> Result<(), CliError>;
+  fn update_config<F: FnOnce(&mut CliConfig) -> Result<(), CliError>>(&mut self,
+                                                                      f: F)
+                                                                      -> Result<(), CliError>;
 
   fn get_keypairs(&self) -> Result<Vec<KeypairName>, CliError>;
   fn delete_keypair(&mut self, k: &KeypairName) -> Result<Option<XfrKeyPair>, CliError>;
@@ -872,7 +879,8 @@ fn run_action<S: CliDataStore>(action: Actions, store: &mut S) -> Result<(), Cli
   };
   store.update_config(|conf| {
          // println!("Opened {} times before", conf.open_count);
-         conf.open_count += 1;
+      conf.open_count += 1;
+      Ok(())
        })?;
   ret
 }
@@ -936,6 +944,7 @@ fn main() {
                &home);
       db.update_config(|conf| {
           *conf = prompt_for_config(None).unwrap();
+          Ok(())
         })?;
 
       if let Actions::Setup { .. } = action {
