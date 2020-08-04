@@ -23,6 +23,8 @@ use zei::xfr::sig::{XfrKeyPair, XfrPublicKey};
 use zei::xfr::structs::AssetRecordTemplate;
 
 use crate::helpers::{do_request, do_request_asset, do_request_authenticated_utxo};
+use ledger::data_model::errors::PlatformError;
+use ledger::{error_location, zei_fail};
 use rand::distributions::Alphanumeric;
 use rand::Rng;
 
@@ -340,6 +342,84 @@ pub fn list_txo<S: CliDataStore>(store: &mut S, id: String) -> Result<(), CliErr
     Some(s) => s,
   };
   display_txo_entry(0, &txo);
+  Ok(())
+}
+
+pub fn show_owner_memo<S: CliDataStore>(store: &mut S, id: String) -> Result<(), CliError> {
+  match store.get_cached_txo(&TxoName(id.clone()))? {
+    None => {
+      eprintln!("No txo `{}` found.", id);
+      exit(-1);
+    }
+    Some(txo) => {
+      println!("{}", serde_json::to_string(&txo.owner_memo)?);
+    }
+  };
+  Ok(())
+}
+
+pub fn load_owner_memo<S: CliDataStore>(store: &mut S,
+                                        overwrite: bool,
+                                        id: String)
+                                        -> Result<(), CliError> {
+  match store.get_cached_txo(&TxoName(id.clone()))? {
+    None => {
+      eprintln!("No txo `{}` found.", id);
+      exit(-1);
+    }
+    Some(mut txo) => {
+      if !overwrite && txo.owner_memo.is_some() {
+        eprintln!("Txo `{}` already has an owner memo!", id);
+        exit(-1);
+      }
+      txo.owner_memo = serde_json::from_str(&prompt::<String, _>("Owner memo?")?)?;
+      store.cache_txo(&TxoName(id), txo)?;
+    }
+  }
+  Ok(())
+}
+
+pub fn unlock_txo<S: CliDataStore>(store: &mut S, id: String) -> Result<(), CliError> {
+  let mut txo = match store.get_cached_txo(&TxoName(id.clone()))? {
+    None => {
+      eprintln!("No txo `{}` found.", id);
+      exit(-1);
+    }
+    Some(s) => s,
+  };
+  if txo.opened_record.is_some() {
+    eprintln!("Txo `{}` is already open.", id);
+    return Ok(());
+  }
+
+  match txo.owner.clone() {
+    None => {
+      eprintln!("I don't know who owns `{}`!", id);
+      exit(-1);
+    }
+    Some(owner) => {
+      let owner = KeypairName(owner.0);
+      store.with_keypair::<PlatformError, _>(&owner, |kp| match kp {
+             None => {
+               eprintln!("No keypair found for `{}`.", owner.0);
+               exit(-1);
+             }
+             Some(kp) => {
+               txo.opened_record = Some(open_blind_asset_record(&txo.record.0,
+                                                                &txo.owner_memo,
+                                                                kp.get_sk_ref()).map_err(|x| {
+                                                                                  zei_fail!(x)
+                                                                                })?);
+               println!("Opened `{}`:", id);
+               display_txo_entry(1, &txo);
+               Ok(())
+             }
+           })?;
+    }
+  }
+
+  store.cache_txo(&TxoName(id), txo)?;
+
   Ok(())
 }
 
@@ -776,48 +856,50 @@ pub fn define_asset<S: CliDataStore>(store: &mut S,
       new_builder = b;
     }
   }
-  store.with_keypair::<ledger::data_model::errors::PlatformError, _>(&issuer_nick, |kp| match kp {
-    None => {
-      eprintln!("No key pair `{}` found.", issuer_nick.0);
-      exit(-1);
-    }
-    Some(kp) => {
-      new_builder.builder.add_operation_create_asset(&kp,
-                                                      None,
-                                                      Default::default(),
-                                                      &prompt::<String, _>("memo?").unwrap(),
-                                                      PolicyChoice::Fungible())?;
-      Ok(())
-    }
-  })?;
+  store.with_keypair::<PlatformError, _>(&issuer_nick, |kp| match kp {
+         None => {
+           eprintln!("No key pair `{}` found.", issuer_nick.0);
+           exit(-1);
+         }
+         Some(kp) => {
+           new_builder.builder
+                      .add_operation_create_asset(&kp,
+                                                  None,
+                                                  Default::default(),
+                                                  &prompt::<String, _>("memo?").unwrap(),
+                                                  PolicyChoice::Fungible())?;
+           Ok(())
+         }
+       })?;
 
-  store.with_txn_builder::<ledger::data_model::errors::PlatformError, _>(&builder_name, |builder| {
-    *builder = new_builder;
-    match builder.builder.transaction().body.operations.last() {
-      Some(Operation::DefineAsset(def)) => {
-        builder.new_asset_types
-               .insert(AssetTypeName(asset_nick.clone()),
-                       AssetTypeEntry { asset: def.body.asset.clone(),
-                                        issuer_nick: Some(PubkeyName(issuer_nick.0.clone())),
-                                        issue_seq_num: 0_u64 });
-      }
-      _ => {
-        panic!("The transaction builder doesn't include our operation!");
-      }
-    }
-    if !builder.signers.contains(&issuer_nick) {
-      builder.signers.push(issuer_nick.clone());
-    }
-    builder.operations
-           .push(OpMetadata::DefineAsset { issuer_nick: PubkeyName(issuer_nick.0.clone()),
-                                           asset_nick: AssetTypeName(asset_nick.clone()) });
-    println!("{}:", asset_nick);
-    display_asset_type(1,
-                       builder.new_asset_types
-                              .get(&AssetTypeName(asset_nick.clone()))
-                              .unwrap());
-    Ok(())
-  })?;
+  store.with_txn_builder::<PlatformError, _>(&builder_name, |builder| {
+         *builder = new_builder;
+         match builder.builder.transaction().body.operations.last() {
+           Some(Operation::DefineAsset(def)) => {
+             builder.new_asset_types
+                    .insert(AssetTypeName(asset_nick.clone()),
+                            AssetTypeEntry { asset: def.body.asset.clone(),
+                                             issuer_nick: Some(PubkeyName(issuer_nick.0
+                                                                                     .clone())),
+                                             issue_seq_num: 0_u64 });
+           }
+           _ => {
+             panic!("The transaction builder doesn't include our operation!");
+           }
+         }
+         if !builder.signers.contains(&issuer_nick) {
+           builder.signers.push(issuer_nick.clone());
+         }
+         builder.operations
+                .push(OpMetadata::DefineAsset { issuer_nick: PubkeyName(issuer_nick.0.clone()),
+                                                asset_nick: AssetTypeName(asset_nick.clone()) });
+         println!("{}:", asset_nick);
+         display_asset_type(1,
+                            builder.new_asset_types
+                                   .get(&AssetTypeName(asset_nick.clone()))
+                                   .unwrap());
+         Ok(())
+       })?;
   Ok(())
 }
 
@@ -878,7 +960,7 @@ pub fn issue_asset<S: CliDataStore>(store: &mut S,
     }
   }
 
-  store.with_keypair::<errors::PlatformError, _>(&issuer_nick, |iss_kp| match iss_kp {
+  store.with_keypair::<PlatformError, _>(&issuer_nick, |iss_kp| match iss_kp {
          None => {
            eprintln!("No keypair nicknamed `{}` found.", issuer_nick.0);
            exit(-1);
@@ -930,7 +1012,7 @@ pub fn issue_asset<S: CliDataStore>(store: &mut S,
          }
        })?;
 
-  store.with_txn_builder::<errors::PlatformError, _>(&builder_nick, |the_builder| {
+  store.with_txn_builder::<PlatformError, _>(&builder_nick, |the_builder| {
          *the_builder = builder;
          Ok(())
        })?;
@@ -1272,7 +1354,7 @@ pub fn transfer_assets<S: CliDataStore>(store: &mut S,
     }
     sig_keys.push(s.0.clone());
 
-    store.with_keypair::<errors::PlatformError, _>(&KeypairName(s.0.clone()), |kp| match kp {
+    store.with_keypair::<PlatformError, _>(&KeypairName(s.0.clone()), |kp| match kp {
            None => {
              eprintln!("No keypair nicknamed `{}` found.", s.0);
              exit(-1);
@@ -1299,7 +1381,7 @@ pub fn transfer_assets<S: CliDataStore>(store: &mut S,
 
   builder.operations.push(trn_op);
 
-  store.with_txn_builder::<errors::PlatformError, _>(&builder_nick, |the_builder| {
+  store.with_txn_builder::<PlatformError, _>(&builder_nick, |the_builder| {
          *the_builder = builder;
          Ok(())
        })?;
@@ -1375,7 +1457,7 @@ pub fn build_transaction<S: CliDataStore>(store: &mut S,
     sigs
   };
 
-  store.with_txn_builder::<errors::PlatformError, _>(&nick, |builder| {
+  store.with_txn_builder::<PlatformError, _>(&nick, |builder| {
          for (pk, sig) in sigs {
            builder.builder.add_signature(&pk, sig)?;
          }

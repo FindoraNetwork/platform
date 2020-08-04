@@ -738,6 +738,27 @@ enum Actions {
     id: String,
   },
 
+  /// Unlock a TXO for its owner
+  UnlockTxo {
+    /// nickname
+    id: String,
+  },
+
+  /// Display a serialized owner memo for a TXO
+  ShowOwnerMemo {
+    /// TXO nickname
+    id: String,
+  },
+
+  /// Display a serialized owner memo for a TXO
+  LoadOwnerMemo {
+    /// Overwrite an existing owner memo we have?
+    #[structopt(short, long)]
+    overwrite: bool,
+    /// TXO nickname
+    id: String,
+  },
+
   // TODO doc
   ListTxos {
     /// Only unspent?
@@ -828,6 +849,12 @@ fn run_action<S: CliDataStore>(action: Actions, store: &mut S) -> Result<(), Cli
 
     ListTxo { id } => list_txo(store, id),
 
+    UnlockTxo { id } => unlock_txo(store, id),
+
+    ShowOwnerMemo { id } => show_owner_memo(store, id),
+
+    LoadOwnerMemo { overwrite, id } => load_owner_memo(store, overwrite, id),
+
     QueryTxo { nick, sid } => query_txo(store, nick, sid),
 
     ListTxnBuilders {} => list_txn_builders(store),
@@ -871,8 +898,8 @@ fn run_action<S: CliDataStore>(action: Actions, store: &mut S) -> Result<(), Cli
   };
   store.update_config(|conf| {
          // println!("Opened {} times before", conf.open_count);
-      conf.open_count += 1;
-      Ok(())
+         conf.open_count += 1;
+         Ok(())
        })?;
   ret
 }
