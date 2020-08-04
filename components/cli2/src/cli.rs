@@ -642,7 +642,6 @@ enum Actions {
   /// Initialize a transaction builder
   InitializeTransaction {
     /// Optional transaction name
-    #[structopt(default_value = "txn")]
     nick: String,
   },
 
@@ -654,9 +653,8 @@ enum Actions {
 
   /// Create the definition of an asset and put it in a transaction builder
   DefineAsset {
-    #[structopt(short, long)]
-    /// Which builder?
-    builder: Option<String>,
+    /// Which transaction?
+    txn_nick: String,
     /// Issuer key
     issuer_nick: String,
     /// Name for the asset type
@@ -665,9 +663,8 @@ enum Actions {
 
   /// Create a transaction part corresponding to the issuance of an asset
   IssueAsset {
-    #[structopt(short, long)]
-    /// Which builder?
-    builder: Option<String>,
+    /// Which transaction?
+    txn_nick: String,
     /// Name for the asset type
     asset_nick: String,
     /// Sequence number of this issuance
@@ -835,11 +832,11 @@ fn run_action<S: CliDataStore>(action: Actions, store: &mut S) -> Result<(), Cli
 
     StatusCheck { txn } => status_check(store, txn),
 
-    DefineAsset { builder,
+    DefineAsset { txn_nick,
                   issuer_nick,
-                  asset_nick, } => define_asset(store, builder, issuer_nick, asset_nick),
+                  asset_nick, } => define_asset(store, txn_nick, issuer_nick, asset_nick),
 
-    IssueAsset { builder,
+    IssueAsset { txn_nick: builder,
                  asset_nick,
                  issue_seq_num,
                  amount, } => issue_asset(store, builder, asset_nick, issue_seq_num, amount),

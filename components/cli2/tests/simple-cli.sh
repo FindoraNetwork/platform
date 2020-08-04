@@ -59,8 +59,10 @@ source "tests/common.sh"
 
 @test "simple-define-asset" {
   run  bash -c "$CLI2 key-gen alice; \
-                echo -e 'memo_alice \n y \n' | $CLI2 simple-define-asset alice AliceCoin; \
-                "
+                sleep 3s;echo -e 'memo_alice \n y \n' | $CLI2 simple-define-asset alice AliceCoin;" # TODO sleep 3s is because we use Tendermint.
+                                                                                                    # TODO We should loop over some status-check command
+  debug_lines
+
   [ "$status" -eq 0 ]
 
   check_line 19 "Submitting to `https://testnet.findora.org:8669/submit_transaction`"
@@ -95,7 +97,6 @@ source "tests/common.sh"
   # Define the asset
   run  bash -c "$CLI2 key-gen alice; \
                 echo -e 'memo_alice \n y \n' | $CLI2 simple-define-asset alice AliceCoin;"
-  debug_lines
   [ "$status" -eq 0 ]
 
   # Issue the asset

@@ -210,7 +210,7 @@ pub fn simple_define_asset<S: CliDataStore>(store: &mut S,
 
   prepare_transaction(store, nick_tx.clone())?;
 
-  define_asset(store, Some(nick_tx.clone()), issuer_nick, asset_nick)?;
+  define_asset(store, nick_tx.clone(), issuer_nick, asset_nick)?;
 
   build_transaction(store)?;
 
@@ -229,7 +229,7 @@ pub fn simple_issue_asset<S: CliDataStore>(store: &mut S,
 
   let seq_issue_number = query_asset_issuance_num(store, asset_nick.clone())?;
 
-  issue_asset(store, Some(nick_tx), asset_nick, seq_issue_number, amount)?;
+  issue_asset(store, nick_tx, asset_nick, seq_issue_number, amount)?;
 
   Ok(())
 }
@@ -729,13 +729,13 @@ pub fn update_if_committed<S: CliDataStore>(store: &mut S,
 }
 
 pub fn define_asset<S: CliDataStore>(store: &mut S,
-                                     builder: Option<String>,
+                                     txn_nick: String,
                                      issuer_nick: String,
                                      asset_nick: String)
                                      -> Result<(), CliError> {
   let issuer_nick = KeypairName(issuer_nick);
-  let builder_opt = builder.map(TxnBuilderName)
-                           .or_else(|| store.get_config().unwrap().active_txn);
+  let builder_opt = Some(txn_nick).map(TxnBuilderName)
+                                  .or_else(|| store.get_config().unwrap().active_txn);
   let builder_name;
   match builder_opt {
     None => {
@@ -803,13 +803,13 @@ pub fn define_asset<S: CliDataStore>(store: &mut S,
 }
 
 pub fn issue_asset<S: CliDataStore>(store: &mut S,
-                                    builder: Option<String>,
+                                    txn_nick: String,
                                     asset_nick: String,
                                     issue_seq_num: u64,
                                     amount: u64)
                                     -> Result<(), CliError> {
-  let builder_opt = builder.map(TxnBuilderName)
-                           .or_else(|| store.get_config().unwrap().active_txn);
+  let builder_opt = Some(txn_nick).map(TxnBuilderName)
+                                  .or_else(|| store.get_config().unwrap().active_txn);
   let builder_nick;
   match builder_opt {
     None => {
