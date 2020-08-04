@@ -72,7 +72,7 @@ fn hmac_pair(clear: &[u8], encrypted: &[u8], nonce: &[u8], key: &Key) -> [u8; 64
 }
 
 #[derive(Serialize, Deserialize)]
-pub struct Pair<Clear, Encrypted> {
+pub struct MixedPair<Clear, Encrypted> {
   clear: String,
   clear_phantom: PhantomData<Clear>,
   encrypted: Vec<u8>,
@@ -84,7 +84,7 @@ pub struct Pair<Clear, Encrypted> {
   hmac: Vec<u8>,
 }
 
-impl<Clear, Encrypted> Pair<Clear, Encrypted>
+impl<Clear, Encrypted> MixedPair<Clear, Encrypted>
   where Clear: Serialize + DeserializeOwned + 'static,
         Encrypted: Serialize + DeserializeOwned + 'static
 {
@@ -114,13 +114,13 @@ impl<Clear, Encrypted> Pair<Clear, Encrypted>
 
     let hmac = hmac_pair(clear.as_bytes(), &encrypted[..], &nonce[..], &key);
 
-    Pair { clear,
-           clear_phantom: PhantomData,
-           encrypted,
-           encrypted_phantom: PhantomData,
-           chacha_nonce: nonce,
-           salt,
-           hmac: hmac.to_vec() }
+    MixedPair { clear,
+                clear_phantom: PhantomData,
+                encrypted,
+                encrypted_phantom: PhantomData,
+                chacha_nonce: nonce,
+                salt,
+                hmac: hmac.to_vec() }
   }
 
   /// Returns the clear-text component, without verifying the hmac
@@ -158,16 +158,16 @@ mod tests {
   use super::*;
   #[test]
   fn pack_and_verify() {
-    let pair = Pair::pack("Clear".to_string(),
-                          &"Encrypted".to_string(),
-                          "password".as_bytes());
+    let pair = MixedPair::pack("Clear".to_string(),
+                               &"Encrypted".to_string(),
+                               "password".as_bytes());
     assert!(pair.verify("password".as_bytes()));
   }
   #[test]
   fn pack_unpack() -> Result<()> {
     let clear = "Clear".to_string();
     let encrypted = "Encrypted".to_string();
-    let pair = Pair::pack(clear.clone(), &encrypted, "password".as_bytes());
+    let pair = MixedPair::pack(clear.clone(), &encrypted, "password".as_bytes());
 
     assert!(pair.clear("password".as_bytes())? == clear);
     assert!(pair.encrypted("password".as_bytes())? == encrypted);

@@ -9,7 +9,7 @@ use txn_builder::{BuildsTransactions, TransactionBuilder};
 use crate::{AssetTypeEntry, AssetTypeName, CliDataStore, CliError, TxnBuilderEntry};
 
 pub mod crypto;
-pub use crypto::Pair;
+pub use crypto::MixedPair;
 
 /// Possible errors encountered when dealing with a KVStore
 #[derive(Debug, Snafu)]
@@ -71,7 +71,7 @@ pub trait HasTable: Serialize + DeserializeOwned {
 pub trait HasEncryptedTable: Serialize + DeserializeOwned {
   const TABLE_NAME: &'static str;
   type Key: Serialize + DeserializeOwned + Hash + Ord + PartialOrd + Eq;
-  /// The cleartext component of the internal `Pair`
+  /// The cleartext component of the internal `MixedPair`
   type Clear: Serialize + DeserializeOwned + 'static;
 }
 
@@ -185,7 +185,7 @@ impl KVStore {
   /// Attempts to get an encrypted value from the key store
   pub fn get_encrypted_raw<T: HasEncryptedTable>(&self,
                                                  id: &T::Key)
-                                                 -> Result<Option<Pair<T::Clear, T>>> {
+                                                 -> Result<Option<MixedPair<T::Clear, T>>> {
     // Check if the table exists
     let table = T::TABLE_NAME.to_string();
     if !self.encrypted_table_exists::<T>()? {
@@ -244,8 +244,8 @@ impl KVStore {
   /// Will create the required table if it does not exist
   pub fn set_encrypted_raw<T: HasEncryptedTable>(&self,
                                                  key: &T::Key,
-                                                 value: Pair<T::Clear, T>)
-                                                 -> Result<Option<Pair<T::Clear, T>>> {
+                                                 value: MixedPair<T::Clear, T>)
+                                                 -> Result<Option<MixedPair<T::Clear, T>>> {
     // First, create the table if it does not exist
     self.create_encrypted_table::<T>()?;
     // Look up the old value, if any
@@ -309,7 +309,7 @@ impl KVStore {
   /// Returns all the Key/Value pairs for an encrypted type
   pub fn get_all_encrypted_raw<T: HasEncryptedTable>(
     &self)
-    -> Result<BTreeMap<T::Key, Pair<T::Clear, T>>> {
+    -> Result<BTreeMap<T::Key, MixedPair<T::Clear, T>>> {
     // Check if the table exists, and exit early with an empty map if it doesn't
     if !self.encrypted_table_exists::<T>()? {
       return Ok(BTreeMap::new());
@@ -428,7 +428,7 @@ impl KVStore {
   /// Deletes all occurrences of a key in an encrypted table
   pub fn delete_encrypted<T: HasEncryptedTable>(&self,
                                                 key: &T::Key)
-                                                -> Result<Option<Pair<T::Clear, T>>> {
+                                                -> Result<Option<MixedPair<T::Clear, T>>> {
     let current = self.get_encrypted_raw(key)?;
     let delete_query = format!("delete from {} where key = (?)", T::TABLE_NAME);
     let mut stmt = self.db
@@ -474,10 +474,10 @@ impl CliDataStore for KVStore {
   fn get_keypair_pubkey(&self,
                         k: &crate::KeypairName)
                         -> Result<Option<zei::xfr::sig::XfrPublicKey>, CliError> {
-    let pair = self.get_encrypted_raw::<zei::xfr::sig::XfrKeyPair>(k)?;
-    if let Some(pair) = pair {
-      let public = pair.clear_no_verify()
-                       .with_context(|| PubKeyDeserialization { name: k.0.clone() })?;
+    let mixed_pair = self.get_encrypted_raw::<zei::xfr::sig::XfrKeyPair>(k)?;
+    if let Some(mixed_pair) = mixed_pair {
+      let public = mixed_pair.clear_no_verify()
+                             .with_context(|| PubKeyDeserialization { name: k.0.clone() })?;
       Ok(Some(public))
     } else {
       Ok(None)
@@ -491,14 +491,14 @@ impl CliDataStore for KVStore {
     -> Result<(), CliError> {
     //TODO(Nathan M): Make less... Ugly. Needs some helpers inside KVStore
     let password = crate::helpers::prompt_password(Some(&k.0)).context(crate::Password)?;
-    let pair = self.get_encrypted_raw::<zei::xfr::sig::XfrKeyPair>(k)
-                   .map_err(|_| KVError::WithInvalidKey { backtrace: Backtrace::generate(),
-                                                          key: k.0.clone() })?;
+    let mixed_pair = self.get_encrypted_raw::<zei::xfr::sig::XfrKeyPair>(k)
+                         .map_err(|_| KVError::WithInvalidKey { backtrace: Backtrace::generate(),
+                                                                key: k.0.clone() })?;
 
-    let pair = pair.with_context(|| WithInvalidKey { key: k.0.clone() })?;
+    let mixed_pair = mixed_pair.with_context(|| WithInvalidKey { key: k.0.clone() })?;
 
-    let keypair = pair.encrypted(password.as_bytes())
-                      .with_context(|| KeyDecryptionError { name: k.0.clone() })?;
+    let keypair = mixed_pair.encrypted(password.as_bytes())
+                            .with_context(|| KeyDecryptionError { name: k.0.clone() })?;
     let result = f(Some(&keypair));
 
     if let Err(e) = result {
@@ -535,9 +535,9 @@ impl CliDataStore for KVStore {
     use super::Password;
     let pubkey = kp.get_pk();
     let password = crate::helpers::prompt_password_confirming(Some(&k.0)).context(Password)?;
-    let pair = Pair::pack(pubkey, &kp, password.as_bytes());
+    let mixed_pair = MixedPair::pack(pubkey, &kp, password.as_bytes());
 
-    Ok(self.set_encrypted_raw(k, pair).map(|_| ())?)
+    Ok(self.set_encrypted_raw(k, mixed_pair).map(|_| ())?)
   }
   fn add_public_key(&mut self,
                     k: &crate::PubkeyName,
