@@ -34,12 +34,12 @@ source "tests/common.sh"
   check_line 3 'keypair bob:'
 }
 
-#@test "delete public key" {
-#  run bash -c 'echo "\"i4-1NC50E4omcPdO4N28v7cBvp0pnPOFp6Jvyu4G3J4=\"" | $CLI2 load-public-key bob'
-#  run bash -c '$SIMPLE_CONFIRM_WITH_PROMPT | $CLI2 delete-public-key bob'
-#  debug_lines
-#  [ "$status" -eq 0 ]
-#}
+@test "delete public key" {
+  run bash -c 'echo "\"i4-1NC50E4omcPdO4N28v7cBvp0pnPOFp6Jvyu4G3J4=\"" | $CLI2 load-public-key bob'
+  run bash -c 'echo y | $CLI2 delete-public-key bob'
+  debug_lines
+  [ "$status" -eq 0 ]
+}
 
 @test "list the key pair" {
   run bash -c '$PASSWORD_PROMPT | $CLI2 key-gen bob; $PASSWORD_PROMPT | $CLI2 list-keypair -s bob'
@@ -56,11 +56,14 @@ source "tests/common.sh"
   check_line 0 'Enter password for bob: Enter password again:New key pair added for `bob`'
 }
 
-#@test "delete key pair" {
-#  run bash -c 'set -x;$PASSWORD_PROMPT | $CLI2 key-gen bob; $SIMPLE_PASSWORD_PROMPT | $CLI2 delete-keypair bob'
-#  debug_lines
-#  [ "$status" -eq 0 ]
-#}
+@test "delete key pair" {
+  run bash -c 'echo -e "hi\nhi" | $CLI2 key-gen bob;'
+  [ "$status" -eq 0 ]
+  check_line 0 'Enter password for bob: Enter password again:New key pair added for `bob`'
+  run bash -c 'echo -e "hi\ny" | $CLI2 delete-keypair bob;'
+  debug_lines
+  [ "$status" -eq 0 ]
+}
 
 MEMO_ALICE_WITH_SEVERAL_PROMPTS="echo -e 'password\nmemo_alice\npassword\npassword\npassword\nY\n'"
 @test "simple-define-asset" {

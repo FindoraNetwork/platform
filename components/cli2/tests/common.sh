@@ -30,8 +30,8 @@ check_line() {
   [ "${lines[$line_number]:0:$command_str_length}" = "$command_str" ]
 }
 
-PASSWORD_PROMPT="echo -e 'password\npassword\n'"
-SIMPLE_CONFIRM_WITH_PROMPT="echo -e 'password\ny\n'"
-SIMPLE_PASSWORD_PROMPT="echo -e 'password\n'"
+PASSWORD_PROMPT="echo -e 'password\npassword'"
+SIMPLE_CONFIRM_WITH_PROMPT="echo -e 'password\ny'"
+SIMPLE_PASSWORD_PROMPT="echo -e 'password'"
 DOUBLE_CONFIRM_WITH_PROMPT="echo -e 'password\npassword\n\nY'"
 MEMO_ALICE_WITH_PROMPT="echo -e 'password\nmemo_alice\n'"
