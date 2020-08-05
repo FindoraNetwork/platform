@@ -9,7 +9,7 @@ use zeroize::Zeroizing;
 
 /// Computes a http client with a specific timeout
 fn get_client() -> Result<reqwest::blocking::Client, reqwest::Error> {
-  const TIMEOUT: u64 = 3;
+  const TIMEOUT: u64 = 20;
   let client = reqwest::blocking::Client::builder().timeout(Duration::from_secs(TIMEOUT))
                                                    .build()?;
   Ok(client)
@@ -18,12 +18,18 @@ fn get_client() -> Result<reqwest::blocking::Client, reqwest::Error> {
 pub fn do_request_asset(query: &str) -> Result<Asset, CliError> {
   let client = get_client().unwrap();
 
-  let resp = match client.get(query).send()?.json::<AssetType>() {
+  let resp = match client.get(query).send() {
     Err(e) => {
       eprintln!("Request `{}` failed: {}", query, e);
       exit(-1);
     }
-    Ok(v) => v.properties,
+    Ok(resp) => match resp.json::<AssetType>() {
+      Err(e) => {
+        eprintln!("Problem parsing response {}, {}", query, e);
+        return Err(CliError::Misc); // TODO find a more informative error
+      }
+      Ok(v) => v.properties,
+    },
   };
 
   Ok(resp)
@@ -32,12 +38,18 @@ pub fn do_request_asset(query: &str) -> Result<Asset, CliError> {
 pub fn do_request<T: DeserializeOwned>(query: &str) -> Result<T, CliError> {
   let client = get_client().unwrap();
 
-  let resp: T = match client.get(query).send()?.json::<T>() {
+  let resp: T = match client.get(query).send() {
     Err(e) => {
       eprintln!("Request `{}` failed: {}", query, e);
       exit(-1);
     }
-    Ok(v) => v,
+    Ok(resp) => match resp.json::<T>() {
+      Err(e) => {
+        eprintln!("Problem parsing response {}, {}", query, e);
+        return Err(CliError::Misc); // TODO find a more informative error
+      }
+      Ok(v) => v,
+    },
   };
 
   Ok(resp)
@@ -49,40 +61,47 @@ pub fn do_request_authenticated_utxo(query: &str,
                                      -> Result<AuthenticatedUtxo, CliError> {
   let client = get_client().unwrap();
 
-  let resp: AuthenticatedUtxo = match client.get(query).send()?.json::<AuthenticatedUtxo>() {
+  let resp: AuthenticatedUtxo = match client.get(query).send() {
     Err(e) => {
       eprintln!("Request `{}` failed: {}", query, e);
       exit(-1);
     }
-    Ok(v) => {
-      let resp_comm = HashOf::new(&Some(v.state_commitment_data.clone()));
-      let curr_comm = (ledger_state.0).0.clone();
-      if resp_comm != curr_comm {
-        eprintln!("Server responded with authentication relative to `{}`!",
-                  b64enc(&resp_comm.0.hash));
-        eprintln!("The most recent ledger state I have is `{}`.",
-                  b64enc(&curr_comm.0.hash));
-        eprintln!("Please run query-ledger-state then rerun this command.");
-        exit(-1);
+    Ok(resp) => match resp.json::<AuthenticatedUtxo>() {
+      Err(e) => {
+        eprintln!("Problem parsing response {}, {}", query, e);
+        return Err(CliError::Misc); // TODO find a more informative error
       }
 
-      // TODO: this needs better direct authentication
-      if v.authenticated_spent_status.utxo_sid != TxoSID(sid) {
-        eprintln!("!!!!! ERROR !!!!!!");
-        eprintln!("The server responded with a different UTXO sid.");
-        eprintln!("This could indicate a faulty server, or a man-in-the-middle!");
-        eprintln!("\nFor safety, refusing to update.");
-        exit(-1);
+      Ok(v) => {
+        let resp_comm = HashOf::new(&Some(v.state_commitment_data.clone()));
+        let curr_comm = (ledger_state.0).0.clone();
+        if resp_comm != curr_comm {
+          eprintln!("Server responded with authentication relative to `{}`!",
+                    b64enc(&resp_comm.0.hash));
+          eprintln!("The most recent ledger state I have is `{}`.",
+                    b64enc(&curr_comm.0.hash));
+          eprintln!("Please run query-ledger-state then rerun this command.");
+          exit(-1); // TODO return some error
+        }
+
+        // TODO: this needs better direct authentication
+        if v.authenticated_spent_status.utxo_sid != TxoSID(sid) {
+          eprintln!("!!!!! ERROR !!!!!!");
+          eprintln!("The server responded with a different UTXO sid.");
+          eprintln!("This could indicate a faulty server, or a man-in-the-middle!");
+          eprintln!("\nFor safety, refusing to update.");
+          exit(-1); // TODO return some error
+        }
+        if !v.is_valid((ledger_state.0).0.clone()) {
+          eprintln!("!!!!! ERROR !!!!!!");
+          eprintln!("The server responded with an invalid authentication proof.");
+          eprintln!("This could indicate a faulty server, or a man-in-the-middle!");
+          eprintln!("\nFor safety, refusing to update.");
+          exit(-1); // TODO return some error
+        }
+        v
       }
-      if !v.is_valid((ledger_state.0).0.clone()) {
-        eprintln!("!!!!! ERROR !!!!!!");
-        eprintln!("The server responded with an invalid authentication proof.");
-        eprintln!("This could indicate a faulty server, or a man-in-the-middle!");
-        eprintln!("\nFor safety, refusing to update.");
-        exit(-1);
-      }
-      v
-    }
+    },
   };
   Ok(resp)
 }
