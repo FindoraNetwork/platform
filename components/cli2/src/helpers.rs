@@ -1,65 +1,44 @@
-use crate::LedgerStateCommitment;
+use crate::{CliError, LedgerStateCommitment};
 use ledger::data_model::{b64enc, Asset, AssetType, AuthenticatedUtxo, TxoSID};
 use serde::de::DeserializeOwned;
 use snafu::{ensure, Backtrace, ResultExt, Snafu};
 use std::process::exit;
-use structopt::clap::Error;
-use structopt::clap::ErrorKind;
+use std::time::Duration;
 use utils::HashOf;
 use zeroize::Zeroizing;
 
-pub fn do_request_asset(query: &str) -> Asset {
-  let resp: Asset;
-
-  match reqwest::blocking::get(query) {
-    Err(e) => {
-      eprintln!("Request `{}` failed: {}", query, e);
-      exit(-1);
-    }
-    Ok(v) => match v.text()
-                    .map(|x| serde_json::from_str::<AssetType>(&x).map_err(|e| (x, e)))
-    {
-      Err(e) => {
-        eprintln!("Failed to decode response: {}", e);
-        exit(-1);
-      }
-      Ok(Err((x, e))) => {
-        eprintln!("Failed to parse response `{}`: {}", x, e);
-        exit(-1);
-      }
-      Ok(Ok(v)) => resp = v.properties,
-    },
-  };
-
-  resp
+/// Computes a http client with a specific timeout
+fn get_client() -> Result<reqwest::blocking::Client, reqwest::Error> {
+  const TIMEOUT: u64 = 3;
+  let client = reqwest::blocking::Client::builder().timeout(Duration::from_secs(TIMEOUT))
+                                                   .build()?;
+  Ok(client)
 }
 
-pub fn do_request<T: DeserializeOwned>(query: &str) -> Result<T, Error> {
-  let resp: T;
+pub fn do_request_asset(query: &str) -> Result<Asset, CliError> {
+  let client = get_client().unwrap();
 
-  match reqwest::blocking::get(query) {
+  let resp = match client.get(query).send()?.json::<AssetType>() {
     Err(e) => {
       eprintln!("Request `{}` failed: {}", query, e);
       exit(-1);
     }
-    Ok(v) => match v.text()
-                    .map(|x| serde_json::from_str::<T>(&x).map_err(|e| (x, e)))
-    {
-      Err(e) => {
-        eprintln!("Failed to decode response: {}", e);
-        return Err(Error::with_description(format!("Failed to decode response: {}", e).as_str(),
-                                           ErrorKind::Io));
-      }
-      Ok(Err((x, e))) => {
-        eprintln!("Failed to parse response `{}`: {}", x, e);
-        return Err(Error::with_description(format!("Failed to parse response `{}`: {}", x, e).as_str(),
-                                       ErrorKind::Io));
-      }
-      Ok(Ok(v)) => {
-        resp = v;
-      }
-    },
-  }
+    Ok(v) => v.properties,
+  };
+
+  Ok(resp)
+}
+
+pub fn do_request<T: DeserializeOwned>(query: &str) -> Result<T, CliError> {
+  let client = get_client().unwrap();
+
+  let resp: T = match client.get(query).send()?.json::<T>() {
+    Err(e) => {
+      eprintln!("Request `{}` failed: {}", query, e);
+      exit(-1);
+    }
+    Ok(v) => v,
+  };
 
   Ok(resp)
 }
@@ -67,60 +46,45 @@ pub fn do_request<T: DeserializeOwned>(query: &str) -> Result<T, Error> {
 pub fn do_request_authenticated_utxo(query: &str,
                                      sid: u64,
                                      ledger_state: &LedgerStateCommitment)
-                                     -> AuthenticatedUtxo {
-  let resp: AuthenticatedUtxo;
+                                     -> Result<AuthenticatedUtxo, CliError> {
+  let client = get_client().unwrap();
 
-  match reqwest::blocking::get(query) {
+  let resp: AuthenticatedUtxo = match client.get(query).send()?.json::<AuthenticatedUtxo>() {
     Err(e) => {
       eprintln!("Request `{}` failed: {}", query, e);
       exit(-1);
     }
-    Ok(v) => match v.text()
-                    .map(|x| serde_json::from_str::<AuthenticatedUtxo>(&x).map_err(|e| (x, e)))
-    {
-      Err(e) => {
-        eprintln!("Failed to decode response: {}", e);
+    Ok(v) => {
+      let resp_comm = HashOf::new(&Some(v.state_commitment_data.clone()));
+      let curr_comm = (ledger_state.0).0.clone();
+      if resp_comm != curr_comm {
+        eprintln!("Server responded with authentication relative to `{}`!",
+                  b64enc(&resp_comm.0.hash));
+        eprintln!("The most recent ledger state I have is `{}`.",
+                  b64enc(&curr_comm.0.hash));
+        eprintln!("Please run query-ledger-state then rerun this command.");
         exit(-1);
       }
-      Ok(Err((x, e))) => {
-        eprintln!("Failed to parse response `{}`: {}", x, e);
+
+      // TODO: this needs better direct authentication
+      if v.authenticated_spent_status.utxo_sid != TxoSID(sid) {
+        eprintln!("!!!!! ERROR !!!!!!");
+        eprintln!("The server responded with a different UTXO sid.");
+        eprintln!("This could indicate a faulty server, or a man-in-the-middle!");
+        eprintln!("\nFor safety, refusing to update.");
         exit(-1);
       }
-      Ok(Ok(v)) => {
-        let resp_comm = HashOf::new(&Some(v.state_commitment_data.clone()));
-        let curr_comm = (ledger_state.0).0.clone();
-        if resp_comm != curr_comm {
-          eprintln!("Server responded with authentication relative to `{}`!",
-                    b64enc(&resp_comm.0.hash));
-          eprintln!("The most recent ledger state I have is `{}`.",
-                    b64enc(&curr_comm.0.hash));
-          eprintln!("Please run query-ledger-state then rerun this command.");
-          exit(-1);
-        }
-
-        // TODO: this needs better direct authentication
-        if v.authenticated_spent_status.utxo_sid != TxoSID(sid) {
-          eprintln!("!!!!! ERROR !!!!!!");
-          eprintln!("The server responded with a different UTXO sid.");
-          eprintln!("This could indicate a faulty server, or a man-in-the-middle!");
-          eprintln!("\nFor safety, refusing to update.");
-          exit(-1);
-        }
-
-        if !v.is_valid((ledger_state.0).0.clone()) {
-          eprintln!("!!!!! ERROR !!!!!!");
-          eprintln!("The server responded with an invalid authentication proof.");
-          eprintln!("This could indicate a faulty server, or a man-in-the-middle!");
-          eprintln!("\nFor safety, refusing to update.");
-          exit(-1);
-        }
-
-        resp = v;
+      if !v.is_valid((ledger_state.0).0.clone()) {
+        eprintln!("!!!!! ERROR !!!!!!");
+        eprintln!("The server responded with an invalid authentication proof.");
+        eprintln!("This could indicate a faulty server, or a man-in-the-middle!");
+        eprintln!("\nFor safety, refusing to update.");
+        exit(-1);
       }
-    },
-  }
-
-  resp
+      v
+    }
+  };
+  Ok(resp)
 }
 
 #[derive(Snafu, Debug)]
