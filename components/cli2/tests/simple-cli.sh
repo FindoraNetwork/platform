@@ -34,7 +34,6 @@ source "tests/common.sh"
   check_line 3 'keypair bob:'
 }
 
-
 #@test "delete public key" {
 #  run bash -c 'echo "\"i4-1NC50E4omcPdO4N28v7cBvp0pnPOFp6Jvyu4G3J4=\"" | $CLI2 load-public-key bob'
 #  run bash -c '$SIMPLE_CONFIRM_WITH_PROMPT | $CLI2 delete-public-key bob'
@@ -57,18 +56,17 @@ source "tests/common.sh"
   check_line 0 'Enter password for bob: Enter password again:New key pair added for `bob`'
 }
 
-@test "delete key pair" {
-  run bash -c 'set -x;$PASSWORD_PROMPT | $CLI2 key-gen bob; $SIMPLE_CONFIRM_WITH_PROMPT | $CLI2 delete-keypair bob'
-  debug_lines
-  [ "$status" -eq 0 ]
-}
+#@test "delete key pair" {
+#  run bash -c 'set -x;$PASSWORD_PROMPT | $CLI2 key-gen bob; $SIMPLE_PASSWORD_PROMPT | $CLI2 delete-keypair bob'
+#  debug_lines
+#  [ "$status" -eq 0 ]
+#}
 
+MEMO_ALICE_WITH_SEVERAL_PROMPTS="echo -e 'password\nmemo_alice\npassword\npassword\npassword\nY\n'"
 @test "simple-define-asset" {
   run  bash -c "$PASSWORD_PROMPT | $CLI2 key-gen alice; \
-                $MEMO_ALICE_WITH_PROMPT | $CLI2 simple-define-asset alice AliceCoin;"
-
+                $MEMO_ALICE_WITH_SEVERAL_PROMPTS | $CLI2 simple-define-asset alice AliceCoin;"
   debug_lines
-
   [ "$status" -eq 0 ]
 
   check_line 19 "Submitting to `https://testnet.findora.org:8669/submit_transaction`"
@@ -76,7 +74,7 @@ source "tests/common.sh"
   check_line 28 "   issuer nickname: alice"
   check_line 31 "   memo: `memo_alice`"
   check_line 32 "   issue_seq_number: 0"
-  check_line 37 "Submitted"
+  check_line 39 "Submitted"
 
   run $CLI2 list-asset-type AliceCoin
 
@@ -99,21 +97,23 @@ source "tests/common.sh"
   check_line 5 " issue_seq_number: 0"
 }
 
+
 @test "simple-issue-asset" {
   # Define the asset
-  run  bash -c "$CLI2 key-gen alice; \
-                echo -e 'memo_alice \n y \n' | $CLI2 simple-define-asset alice AliceCoin;"
+  run  bash -c "$PASSWORD_PROMPT | $CLI2 key-gen alice; \
+                $MEMO_ALICE_WITH_SEVERAL_PROMPTS | $CLI2 simple-define-asset alice AliceCoin;"
+  debug_lines
   [ "$status" -eq 0 ]
 
   # Issue the asset
-  run $CLI2 simple-issue-asset AliceCoin 10000
+  run bash -c "$MEMO_ALICE_WITH_SEVERAL_PROMPTS | $CLI2 simple-issue-asset AliceCoin 10000"
 
   debug_lines
 
   [ "$status" -eq 0 ]
   check_line 0 "Preparing transaction"
   check_line 1 "Done."
-  check_line 2 "IssueAsset: 10000 of"
+  check_line 2 "Enter password for alice: IssueAsset: 10000"
   check_line 3 "Successfully added to"
 
 }

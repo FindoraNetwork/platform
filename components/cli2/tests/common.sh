@@ -32,9 +32,6 @@ check_line() {
 
 PASSWORD_PROMPT="echo -e 'password\npassword\n'"
 SIMPLE_CONFIRM_WITH_PROMPT="echo -e 'password\ny\n'"
+SIMPLE_PASSWORD_PROMPT="echo -e 'password\n'"
 DOUBLE_CONFIRM_WITH_PROMPT="echo -e 'password\npassword\n\nY'"
-
-get_echo_with_password_prompt() {
-  echo "echo -e 'password\npassword\n$1\n'"
-}
-MEMO_ALICE_WITH_PROMPT=$(get_echo_with_password_prompt memo_alice)
+MEMO_ALICE_WITH_PROMPT="echo -e 'password\nmemo_alice\n'"
