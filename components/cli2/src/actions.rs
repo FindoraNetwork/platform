@@ -27,6 +27,7 @@ use ledger::data_model::errors::PlatformError;
 use ledger::{error_location, zei_fail};
 use rand::distributions::Alphanumeric;
 use rand::Rng;
+use std::convert::Infallible;
 
 type GlobalState = (HashOf<Option<StateCommitmentData>>,
                     u64,
@@ -379,10 +380,10 @@ pub fn unlock_txo<S: CliDataStore>(store: &mut S, id: String) -> Result<(), CliE
     }
     Some(s) => s,
   };
-  if txo.opened_record.is_some() {
-    eprintln!("Txo `{}` is already open.", id);
-    return Ok(());
-  }
+  // if txo.opened_record.is_some() {
+  //   eprintln!("Txo `{}` is already open.", id);
+  //   return Ok(());
+  // }
 
   match txo.owner.clone() {
     None => {
@@ -391,17 +392,29 @@ pub fn unlock_txo<S: CliDataStore>(store: &mut S, id: String) -> Result<(), CliE
     }
     Some(owner) => {
       let owner = KeypairName(owner.0);
+      let asset_types = store.get_asset_types()?.into_iter();
       store.with_keypair::<PlatformError, _>(&owner, |kp| match kp {
              None => {
                eprintln!("No keypair found for `{}`.", owner.0);
                exit(-1);
              }
              Some(kp) => {
-               txo.opened_record = Some(open_blind_asset_record(&txo.record.0,
-                                                                &txo.owner_memo,
-                                                                kp.get_sk_ref()).map_err(|x| {
-                                                                                  zei_fail!(x)
-                                                                                })?);
+               let open_rec = open_blind_asset_record(&txo.record.0,
+                                                      &txo.owner_memo,
+                                                      kp.get_sk_ref()).map_err(|x| zei_fail!(x))?;
+               let tp = open_rec.asset_type;
+               txo.opened_record = Some(open_rec);
+
+               if txo.asset_type.is_none() {
+                 let tp = AssetTypeCode { val: tp };
+                 for (n, asset) in asset_types {
+                   if tp == asset.asset.code {
+                     txo.asset_type = Some(n);
+                     break;
+                   }
+                 }
+               }
+
                println!("Opened `{}`:", id);
                display_txo_entry(1, &txo);
                Ok(())
@@ -412,6 +425,16 @@ pub fn unlock_txo<S: CliDataStore>(store: &mut S, id: String) -> Result<(), CliE
 
   store.cache_txo(&TxoName(id), txo)?;
 
+  Ok(())
+}
+
+pub fn query_txos<S: CliDataStore>(store: &mut S) -> Result<(), CliError> {
+  let txos = store.get_cached_txos()?;
+  for (n, txo) in txos {
+    if let Some(sid) = txo.sid {
+      query_txo(store, n.0, Some(sid.0))?;
+    }
+  }
   Ok(())
 }
 
@@ -583,13 +606,30 @@ pub fn query_asset_type<S: CliDataStore>(store: &mut S,
     ret
   };
 
-  let issue_seq_number = query_asset_issuance_num(store, nick.clone())?;
-  println!("issue_seq_number: {}", issue_seq_number);
-
+  let asset_code = resp.code.val;
   let ret = AssetTypeEntry { asset: resp,
                              issuer_nick,
-                             issue_seq_num: issue_seq_number };
+                             issue_seq_num: 0 };
   store.add_asset_type(&AssetTypeName(nick.clone()), ret)?;
+
+  let issue_seq_number = query_asset_issuance_num(store, nick.clone())?;
+  println!("issue_seq_number: {}", issue_seq_number);
+  store.update_asset_type::<Infallible, _>(&AssetTypeName(nick.clone()), |a| {
+         a.issue_seq_num = issue_seq_number;
+         Ok(())
+       })?;
+
+  for (n, mut txo) in store.get_cached_txos()? {
+    if txo.asset_type.is_none() {
+      if let Some(open_rec) = txo.opened_record.as_ref() {
+        if open_rec.asset_type == asset_code {
+          txo.asset_type = Some(AssetTypeName(nick.clone()));
+          store.cache_txo(&n, txo)?;
+        }
+      }
+    }
+  }
+
   println!("Asset type `{}` saved as `{}`", code_b64, nick);
   Ok(())
 }

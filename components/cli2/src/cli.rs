@@ -318,14 +318,19 @@ fn display_txo_entry(indent_level: u64, txo: &TxoCacheEntry) {
               .get_amount()
               .map(|x| format!("{}", x))
               .unwrap_or_else(|| "<SECRET>".to_string()));
-  println!("{}Type: {}",
+  println!("{}Type: {}{}",
            ind,
            txo.record
               .0
               .asset_type
               .get_asset_type()
               .map(|x| AssetTypeCode { val: x }.to_base64())
-              .unwrap_or_else(|| "<SECRET>".to_string()));
+              .unwrap_or_else(|| "<SECRET>".to_string()),
+           if let Some(o) = txo.asset_type.as_ref() {
+             format!(" ({})", o.0)
+           } else {
+             "".to_string()
+           });
   if let Some(open_ar) = txo.opened_record.as_ref() {
     println!("{}Decrypted Amount: {}", ind, open_ar.amount);
     println!("{}Decrypted Type: {}",
@@ -773,6 +778,8 @@ enum Actions {
     /// Which SID?
     sid: Option<u64>,
   },
+
+  QueryTxos {},
 }
 
 fn serialize_or_str<T: Serialize>(x: &Option<T>, s: &str) -> String {
@@ -850,6 +857,7 @@ fn run_action<S: CliDataStore>(action: Actions, store: &mut S) -> Result<(), Cli
     LoadOwnerMemo { overwrite, id } => load_owner_memo(store, overwrite, id),
 
     QueryTxo { nick, sid } => query_txo(store, nick, sid),
+    QueryTxos {} => query_txos(store),
 
     // ListTxnBuilders {} => list_txn_builders(store),
 
