@@ -3,9 +3,10 @@
 source "tests/common.sh"
 
 @test "key generation" {
-  run $CLI2 key-gen alice
+  run bash -c "$PASSWORD_PROMPT |$CLI2 key-gen alice"
+  debug_lines
   [ "$status" -eq 0 ]
-  check_line 0 'New key pair added for `alice`'
+  check_line 0 'Enter password for alice: Enter password again:New key pair added for `alice`'
 }
 
 @test "add bob's public key" {
@@ -27,39 +28,44 @@ source "tests/common.sh"
 }
 
 @test "list keys" {
-  run bash -c '$CLI2 key-gen alice; $CLI2 key-gen bob; $CLI2 list-keys'
+  run bash -c '$PASSWORD_PROMPT | $CLI2 key-gen alice; $PASSWORD_PROMPT | $CLI2 key-gen bob; $CLI2 list-keys'
   [ "$status" -eq 0 ]
   check_line 2 'keypair alice:'
   check_line 3 'keypair bob:'
 }
 
-@test "delete public key" {
-  run bash -c 'echo "\"i4-1NC50E4omcPdO4N28v7cBvp0pnPOFp6Jvyu4G3J4=\"" | $CLI2 load-public-key bob'
-  run bash -c 'echo y | $CLI2 delete-public-key bob'
-  [ "$status" -eq 0 ]
-}
+
+#@test "delete public key" {
+#  run bash -c 'echo "\"i4-1NC50E4omcPdO4N28v7cBvp0pnPOFp6Jvyu4G3J4=\"" | $CLI2 load-public-key bob'
+#  run bash -c '$SIMPLE_CONFIRM_WITH_PROMPT | $CLI2 delete-public-key bob'
+#  debug_lines
+#  [ "$status" -eq 0 ]
+#}
 
 @test "list the key pair" {
-  run bash -c '$CLI2 key-gen bob; $CLI2 list-keypair -s bob'
+  run bash -c '$PASSWORD_PROMPT | $CLI2 key-gen bob; $PASSWORD_PROMPT | $CLI2 list-keypair -s bob'
+  debug_lines
   [ "$status" -eq 0 ]
-  [ "${lines[1]:0:10}" = '{"pub_key"' ]
-  [ "${lines[1]:58:9}" = '"sec_key"' ]
+  [ "${lines[1]:24:10}" = '{"pub_key"' ]
+  [ "${lines[1]:82:9}" = '"sec_key"' ]
 }
 
 @test "load key pair" {
   run bash -c 'echo "{\"pub_key\":\"iAnNs_n9HLzdpOYM1cxCOVapua-jS59j1j92lRPe64E=\",\"sec_key\":\"Au3s9u8TdPWX36X-j_9xvMud0DOKrYK1x39imArYI9g=\"}" | $CLI2 load-keypair bob'
+  debug_lines
   [ "$status" -eq 0 ]
-  check_line 0 'New key pair added for `bob`'
+  check_line 0 'Enter password for bob: Enter password again:New key pair added for `bob`'
 }
 
 @test "delete key pair" {
-  run bash -c '$CLI2 key-gen bob;echo y | $CLI2 delete-keypair bob'
+  run bash -c 'set -x;$PASSWORD_PROMPT | $CLI2 key-gen bob; $SIMPLE_CONFIRM_WITH_PROMPT | $CLI2 delete-keypair bob'
+  debug_lines
   [ "$status" -eq 0 ]
 }
 
 @test "simple-define-asset" {
-  run  bash -c "$CLI2 key-gen alice; \
-                echo -e 'memo_alice \n y \n' | $CLI2 simple-define-asset alice AliceCoin;"
+  run  bash -c "$PASSWORD_PROMPT | $CLI2 key-gen alice; \
+                $MEMO_ALICE_WITH_PROMPT | $CLI2 simple-define-asset alice AliceCoin;"
 
   debug_lines
 

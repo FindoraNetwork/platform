@@ -29,3 +29,12 @@ check_line() {
   command_str_length=`expr length "$command_str"`
   [ "${lines[$line_number]:0:$command_str_length}" = "$command_str" ]
 }
+
+PASSWORD_PROMPT="echo -e 'password\npassword\n'"
+SIMPLE_CONFIRM_WITH_PROMPT="echo -e 'password\ny\n'"
+DOUBLE_CONFIRM_WITH_PROMPT="echo -e 'password\npassword\n\nY'"
+
+get_echo_with_password_prompt() {
+  echo "echo -e 'password\npassword\n$1\n'"
+}
+MEMO_ALICE_WITH_PROMPT=$(get_echo_with_password_prompt memo_alice)

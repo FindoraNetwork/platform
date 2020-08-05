@@ -2,19 +2,19 @@
 set -euo pipefail
 source "tests/common.sh"
 
-DEFINE_AND_ISSUE_ASSET_TYPE_WITH_BUILD="$CLI2 key-gen alice; \
+DEFINE_AND_ISSUE_ASSET_TYPE_WITH_BUILD="$PASSWORD_PROMPT |$CLI2 key-gen alice; \
                                      echo y | $CLI2 query-ledger-state; \
                                      $CLI2 initialize-transaction 0;\
-                                     echo memo_alice | $CLI2 define-asset 0 alice TheBestAliceCoinsOnEarthV2; \
-                                     $CLI2 issue-asset 0 TheBestAliceCoinsOnEarthV2 0 10000; \
-                                     $CLI2 build-transaction;"
+                                     $MEMO_ALICE_WITH_PROMPT | $CLI2 define-asset 0 alice TheBestAliceCoinsOnEarthV2; \
+                                     $PASSWORD_PROMPT | $CLI2 issue-asset 0 TheBestAliceCoinsOnEarthV2 0 10000; \
+                                     $PASSWORD_PROMPT | $CLI2 build-transaction;"
 
-DEFINE_ASSET_TYPE_WITH_SUBMIT_COMMANDS="  $CLI2 key-gen alice; \
+DEFINE_ASSET_TYPE_WITH_SUBMIT_COMMANDS="$PASSWORD_PROMPT | $CLI2 key-gen alice; \
                               echo y | $CLI2 query-ledger-state; \
                               $CLI2 initialize-transaction 0; \
-                              echo memo_alice | $CLI2 define-asset 0 alice AliceCoin; \
-                              $CLI2 build-transaction; \
-                              { echo; echo Y; } | $CLI2 submit 0;"
+                              $MEMO_ALICE_WITH_PROMPT | $CLI2 define-asset 0 alice AliceCoin; \
+                              $PASSWORD_PROMPT | $CLI2 build-transaction; \
+                              $DOUBLE_CONFIRM_WITH_PROMPT | $CLI2 submit 0;"
 
 @test "list-config" {
   run $CLI2 list-config
@@ -43,14 +43,12 @@ DEFINE_ASSET_TYPE_WITH_SUBMIT_COMMANDS="  $CLI2 key-gen alice; \
 }
 
 @test "initialize-transaction" {
-  run bash -c " $CLI2 key-gen alice; \
+  run bash -c "$PASSWORD_PROMPT | $CLI2 key-gen alice;
                 echo y | $CLI2 query-ledger-state; \
                 $CLI2 initialize-transaction 0;
                 $CLI2 list-txn"
-
-  debug_lines
   [ "$status" -eq 0 ]
-  check_line 0 "New key pair added for `alice`"
+  check_line 0 "Enter password for alice: Enter password again:New key pair added for `alice`"
   check_line 10 'Preparing transaction `0` for block id'
   check_line 11 "Done."
 
@@ -96,12 +94,7 @@ DEFINE_ASSET_TYPE_WITH_SUBMIT_COMMANDS="  $CLI2 key-gen alice; \
 }
 
 
-DEFINE_ASSET_TYPE_AND_SUBMIT_COMMANDS="  set -x; $CLI2 key-gen alice; \
-                              echo y | $CLI2 query-ledger-state; \
-                              $CLI2 prepare-transaction -e 0; \
-                              echo memo_alice | $CLI2 define-asset alice AliceCoin --builder 0; \
-                              $CLI2 build-transaction 0; \
-                              { echo; echo Y; } | $CLI2 submit 0;"
+
 
 @test "define, publish and list asset type(s)" {
   run  bash -c "$DEFINE_ASSET_TYPE_WITH_SUBMIT_COMMANDS"
@@ -136,14 +129,13 @@ DEFINE_ASSET_TYPE_AND_SUBMIT_COMMANDS="  set -x; $CLI2 key-gen alice; \
 
 @test "issue-asset" {
 
-  run bash -c "$CLI2 key-gen alice; \
+  run bash -c "$PASSWORD_PROMPT | $CLI2 key-gen alice; \
                echo y | $CLI2 query-ledger-state; \
-
                $CLI2 initialize-transaction 0; \
-               echo memo_alice | $CLI2 define-asset 0 alice TheBestAliceCoinsOnEarthV2;\
-               $CLI2 issue-asset 0 TheBestAliceCoinsOnEarthV2 0 10000; \
-               $CLI2 build-transaction; \
-               { echo; echo Y; } | $CLI2 submit 0;"
+               $MEMO_ALICE_WITH_PROMPT | $CLI2 define-asset 0 alice TheBestAliceCoinsOnEarthV2;\
+               $PASSWORD_PROMPT | $CLI2 issue-asset 0 TheBestAliceCoinsOnEarthV2 0 10000; \
+               $PASSWORD_PROMPT | $CLI2 build-transaction; \
+               $DOUBLE_CONFIRM_WITH_PROMPT | $CLI2 submit 0;"
 
   debug_lines
   [ "$status" -eq 0 ]
@@ -160,7 +152,7 @@ DEFINE_ASSET_TYPE_AND_SUBMIT_COMMANDS="  set -x; $CLI2 key-gen alice; \
   check_line 45 "   Decrypted Amount: 10000"
   check_line 49 " Signers:"
   check_line 50 '  - `alice`'
-  check_line 52 "Submitted"
+  check_line 54 "Submitted"
 
   # We query the asset type to check the issue_seq_number has been incremented
   debug_lines
