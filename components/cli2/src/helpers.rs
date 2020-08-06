@@ -20,10 +20,11 @@ pub fn do_request_asset(query: &str) -> Result<Asset, Error> {
   // TODO Phlippe how to avoid code duplication for obtaining the http client?
   let client_res = get_client();
   let client: reqwest::blocking::Client;
-  if client_res.is_err() {
-    return Err(Error::with_description("Unable to establish connection.", ErrorKind::Io));
-  } else {
-    client = client_res.unwrap();
+  match client_res {
+    Err(_e) => {
+      return Err(Error::with_description("Unable to establish connection.", ErrorKind::Io))
+    }
+    _ => client = client_res.unwrap(),
   }
 
   let resp = match client.get(query).send() {
@@ -48,10 +49,11 @@ pub fn do_request<T: DeserializeOwned>(query: &str) -> Result<T, Error> {
   // TODO see above
   let client_res = get_client();
   let client: reqwest::blocking::Client;
-  if client_res.is_err() {
-    return Err(Error::with_description("Unable to establish connection.", ErrorKind::Io));
-  } else {
-    client = client_res.unwrap();
+  match client_res {
+    Err(_e) => {
+      return Err(Error::with_description("Unable to establish connection.", ErrorKind::Io))
+    }
+    _ => client = client_res.unwrap(),
   }
 
   let resp: T = match client.get(query).send() {
@@ -79,16 +81,17 @@ pub fn do_request_authenticated_utxo(query: &str,
   // TODO: see above
   let client_res = get_client();
   let client: reqwest::blocking::Client;
-  if client_res.is_err() {
-    return Err(Error::with_description("Unable to establish connection.", ErrorKind::Io));
-  } else {
-    client = client_res.unwrap();
+  match client_res {
+    Err(_e) => {
+      return Err(Error::with_description("Unable to establish connection.", ErrorKind::Io))
+    }
+    _ => client = client_res.unwrap(),
   }
 
   let resp = match client.get(query).send() {
     Err(e) => {
       eprintln!("Request `{}` failed: {}", query, e);
-      exit(-1);
+      exit(-1); // TODO Philippe
     }
     Ok(resp) => match resp.json::<AuthenticatedUtxo>() {
       Err(e) => {

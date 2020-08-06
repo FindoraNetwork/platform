@@ -928,13 +928,13 @@ pub fn define_asset<S: CliDataStore>(store: &mut S,
          let asset_type = builder.new_asset_types
                                  .get(&AssetTypeName(asset_nick.clone()));
 
-         // TODO Philippe is there a more rust idiomatic way to do this?
-         if asset_type.is_none() {
-           Err(PlatformError::InputsError(format!("Asset type with name {:?} is None.",
-                                                  &AssetTypeName(asset_nick.clone()))))
-         } else {
-           display_asset_type(1, asset_type.unwrap()); // Safe unwrap()
-           Ok(())
+         match asset_type {
+           None => Err(PlatformError::InputsError(format!("Asset type with name {:?} is None.",
+                                                          &AssetTypeName(asset_nick.clone())))),
+           _ => {
+             display_asset_type(1, asset_type.unwrap()); // Safe unwrap()
+             Ok(())
+           }
          }
        })?;
   Ok(())
@@ -1025,8 +1025,8 @@ pub fn issue_asset<S: CliDataStore>(store: &mut S,
                builder.new_txos.push((out_name.clone(),
                                       TxoCacheEntry { sid: None,
                                                       asset_type: Some(asset_nick.clone()),
-                                                      record: txo.clone(),
-                                                      owner_memo: memo.clone(),
+                                                      record: txo,
+                                                      owner_memo: memo,
                                                       ledger_state: None,
                                                       owner:
                                                         Some(PubkeyName(issuer_nick.0.clone())),
@@ -1299,7 +1299,7 @@ pub fn transfer_assets<S: CliDataStore>(store: &mut S,
                    .chain(out_tps.iter().map(|(_, _, x)| x.0.clone()))
                    .any(|x| x == txo_name.0)
         {
-          return Err(CliError::FindoraPlatformError {msg: format!("Problem trying to build transaction for asset transfer.")});
+          return Err(CliError::FindoraPlatformError {msg: "Problem trying to build transaction for asset transfer.".to_string()});
         };
 
         out_tps.push((inp.clone(), receiver.clone(), txo_name.clone()));
