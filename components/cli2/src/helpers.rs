@@ -1,9 +1,10 @@
-use crate::{CliError, LedgerStateCommitment};
+use crate::LedgerStateCommitment;
 use ledger::data_model::{b64enc, Asset, AssetType, AuthenticatedUtxo, TxoSID};
 use serde::de::DeserializeOwned;
 use snafu::{ensure, Backtrace, ResultExt, Snafu};
 use std::process::exit;
 use std::time::Duration;
+use structopt::clap::{Error, ErrorKind};
 use utils::HashOf;
 use zeroize::Zeroizing;
 
@@ -15,7 +16,7 @@ fn get_client() -> Result<reqwest::blocking::Client, reqwest::Error> {
   Ok(client)
 }
 
-pub fn do_request_asset(query: &str) -> Result<Asset, CliError> {
+pub fn do_request_asset(query: &str) -> Result<Asset, Error> {
   let client = get_client().unwrap();
 
   let resp = match client.get(query).send() {
@@ -26,7 +27,8 @@ pub fn do_request_asset(query: &str) -> Result<Asset, CliError> {
     Ok(resp) => match resp.json::<AssetType>() {
       Err(e) => {
         eprintln!("Problem parsing response {}, {}", query, e);
-        return Err(CliError::Misc); // TODO find a more informative error
+        return Err(Error::with_description("Problem parsing json", ErrorKind::Format));
+        // TODO find a more informative error
       }
       Ok(v) => v.properties,
     },
@@ -35,7 +37,7 @@ pub fn do_request_asset(query: &str) -> Result<Asset, CliError> {
   Ok(resp)
 }
 
-pub fn do_request<T: DeserializeOwned>(query: &str) -> Result<T, CliError> {
+pub fn do_request<T: DeserializeOwned>(query: &str) -> Result<T, Error> {
   let client = get_client().unwrap();
 
   let resp: T = match client.get(query).send() {
@@ -46,7 +48,8 @@ pub fn do_request<T: DeserializeOwned>(query: &str) -> Result<T, CliError> {
     Ok(resp) => match resp.json::<T>() {
       Err(e) => {
         eprintln!("Problem parsing response {}, {}", query, e);
-        return Err(CliError::Misc); // TODO find a more informative error
+        return Err(Error::with_description("Problem parsing json", ErrorKind::Format));
+        // TODO find a more informative error
       }
       Ok(v) => v,
     },
@@ -58,7 +61,7 @@ pub fn do_request<T: DeserializeOwned>(query: &str) -> Result<T, CliError> {
 pub fn do_request_authenticated_utxo(query: &str,
                                      sid: u64,
                                      ledger_state: &LedgerStateCommitment)
-                                     -> Result<AuthenticatedUtxo, CliError> {
+                                     -> Result<AuthenticatedUtxo, Error> {
   let client = get_client().unwrap();
 
   let resp: AuthenticatedUtxo = match client.get(query).send() {
@@ -69,7 +72,8 @@ pub fn do_request_authenticated_utxo(query: &str,
     Ok(resp) => match resp.json::<AuthenticatedUtxo>() {
       Err(e) => {
         eprintln!("Problem parsing response {}, {}", query, e);
-        return Err(CliError::Misc); // TODO find a more informative error
+        return Err(Error::with_description("Problem parsing json", ErrorKind::Format));
+        // TODO find a more informative error
       }
 
       Ok(v) => {

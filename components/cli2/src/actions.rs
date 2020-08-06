@@ -3,14 +3,14 @@ use crate::display_functions::{
 };
 use crate::{
   print_conf, prompt_for_config, serialize_or_str, AssetTypeEntry, AssetTypeName, CliDataStore,
-  CliError, FreshNamer, KeypairName, LedgerStateCommitment, OpMetadata, PubkeyName, TxnBuilderName,
-  TxnMetadata, TxnName, TxoCacheEntry, TxoName,
+  CliError, FreshNamer, KeypairName, LedgerStateCommitment, NewPublicKeyFetch, OpMetadata,
+  PubkeyName, TxnBuilderName, TxnMetadata, TxnName, TxoCacheEntry, TxoName,
 };
 
 use ledger::data_model::*;
 use ledger_api_service::LedgerAccessRoutes;
 use promptly::{prompt, prompt_default, prompt_opt};
-// use snafu::ResultExt;
+use snafu::ResultExt;
 use std::collections::BTreeMap;
 use std::process::exit;
 use submission_api::SubmissionRoutes;
@@ -30,7 +30,6 @@ use ledger::{error_location, zei_fail};
 use rand::distributions::Alphanumeric;
 use rand::Rng;
 use std::convert::Infallible;
-// use crate::CliError::NewPublicKeyFetch;
 
 type GlobalState = (HashOf<Option<StateCommitmentData>>,
                     u64,
@@ -260,8 +259,7 @@ pub fn query_ledger_state<S: CliDataStore>(store: &mut S,
            let query = format!("{}{}",
                                conf.ledger_server,
                                LedgerAccessRoutes::PublicKey.route());
-           let resp: XfrPublicKey = do_request::<XfrPublicKey>(&query)?;
-           //let resp: XfrPublicKey = do_request::<XfrPublicKey>(&query).context(NewPublicKeyFetch )?;
+           let resp: XfrPublicKey = do_request::<XfrPublicKey>(&query).context(NewPublicKeyFetch)?;
 
            println!("Saving ledger signing key `{}`",
                     serde_json::to_string(&resp).unwrap());
@@ -597,7 +595,7 @@ pub fn query_asset_type<S: CliDataStore>(store: &mut S,
                       conf.ledger_server,
                       LedgerAccessRoutes::AssetToken.route(),
                       code_b64);
-  let resp = do_request_asset(&query)?;
+  let resp = do_request_asset(&query).unwrap(); // TODO convert clap::Error to CliError
 
   let issuer_nick = {
     let mut ret = None;
