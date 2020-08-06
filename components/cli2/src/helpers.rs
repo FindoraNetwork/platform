@@ -62,7 +62,7 @@ pub fn do_request<T: DeserializeOwned>(query: &str) -> Result<T, Error> {
     Ok(resp) => match resp.json::<T>() {
       Err(e) => {
         eprintln!("Problem parsing response {}, {}", query, e);
-        return Err(Error::with_description("Problem parsing json", ErrorKind::Format));
+        return Err(Error::with_description("Problem parsing json", ErrorKind::Io));
         // TODO find a more informative error
       }
       Ok(v) => v,
@@ -93,7 +93,7 @@ pub fn do_request_authenticated_utxo(query: &str,
     Ok(resp) => match resp.json::<AuthenticatedUtxo>() {
       Err(e) => {
         eprintln!("Problem parsing response {}, {}", query, e);
-        return Err(Error::with_description("Problem parsing json", ErrorKind::Format));
+        return Err(Error::with_description("Problem parsing json", ErrorKind::Io));
         // TODO Philippe find a more informative error
       }
 

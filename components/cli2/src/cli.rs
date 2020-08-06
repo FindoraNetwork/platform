@@ -1,6 +1,7 @@
 #![deny(warnings)]
 #![allow(clippy::type_complexity)]
 #![feature(try_trait)]
+#![feature(backtrace)]
 
 use ledger::data_model::*;
 use promptly::prompt_default;
@@ -189,11 +190,17 @@ pub enum CliError {
     source: helpers::PasswordReadError,
   },
 
-  #[snafu(display("Misc"))] // TODO remove that with something more informative
-  Misc,
-
   #[snafu(display("Cannot handle None value"))]
   NoneValue,
+
+  #[snafu(display("Platform error"))]
+  FindoraPlatformError { msg: String },
+
+  #[snafu(display("IO error"))]
+  IOError { msg: String },
+
+  #[snafu(display("Unknown error"))]
+  UnknownError,
 }
 
 impl From<NoneError> for CliError {
@@ -205,15 +212,15 @@ impl From<NoneError> for CliError {
 impl From<Error> for CliError {
   fn from(error: Error) -> Self {
     match error.kind {
-      ErrorKind::Format => CliError::Misc,
-      _ => CliError::Misc, // TODO change
+      ErrorKind::Io => CliError::IOError { msg: error.message },
+      _ => CliError::UnknownError,
     }
   }
 }
 
 impl From<PlatformError> for CliError {
-  fn from(_error: PlatformError) -> Self {
-    CliError::Misc //TODO Change
+  fn from(error: PlatformError) -> Self {
+    CliError::FindoraPlatformError { msg: error.to_string() }
   }
 }
 

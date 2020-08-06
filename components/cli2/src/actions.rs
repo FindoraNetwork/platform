@@ -748,7 +748,7 @@ fn get_status<S: CliDataStore>(store: &mut S, txn: String) -> Result<TxnStatus, 
 
   match resp {
     Ok(res) => Ok(res),
-    _ => Err(CliError::Misc),
+    _ => Err(CliError::IOError { msg: format!("Error with http request to {}", query) }),
   }
 }
 
@@ -787,7 +787,7 @@ pub fn update_if_committed<S: CliDataStore>(store: &mut S,
         println!("Spending TXO `{}`...", nick.0);
         let txo = store.get_cached_txo(nick)?; //
         if txo.is_none() {
-          return Err(CliError::Misc); // TODO Philippe more specific error
+          return Err(CliError::FindoraPlatformError{ msg: format!("Problem trying to obtain txo with nick {:?}", nick)});
         }
         let mut txo = txo.unwrap(); // Safe unwrap()
         assert!(txo.unspent);
@@ -1299,7 +1299,7 @@ pub fn transfer_assets<S: CliDataStore>(store: &mut S,
                    .chain(out_tps.iter().map(|(_, _, x)| x.0.clone()))
                    .any(|x| x == txo_name.0)
         {
-          return Err(CliError::Misc); // TODO
+          return Err(CliError::FindoraPlatformError {msg: format!("Problem trying to build transaction for asset transfer.")});
         };
 
         out_tps.push((inp.clone(), receiver.clone(), txo_name.clone()));
@@ -1576,7 +1576,10 @@ pub fn submit<S: CliDataStore>(store: &mut S, nick: String) -> Result<(), CliErr
                Ok(())
              })?;
       }
-      _ => return Err(CliError::Misc),
+      _ => {
+        return Err(CliError::IOError { msg: format!("Problem with http request with query {}",
+                                                    query) })
+      }
     }
   }
   Ok(())
