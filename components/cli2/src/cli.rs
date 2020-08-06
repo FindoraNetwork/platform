@@ -744,7 +744,8 @@ fn main() {
                                      powershell,
                                      elvish, } = action
     {
-      let bin_name = std::env::args().next().unwrap();
+      let bin_path = PathBuf::from(std::env::args().next().unwrap());
+      let bin_name = String::from(bin_path.file_name().unwrap().to_string_lossy());
 
       let mut shells = vec![];
       if bash {
@@ -776,10 +777,7 @@ fn main() {
           Actions::clap().gen_completions(&bin_name, s, &outdir);
         }
       } else if shells.len() == 1 {
-        let bin_path = PathBuf::from(bin_name);
-        let bin_name = bin_path.file_name().unwrap().to_string_lossy();
-
-        Actions::clap().gen_completions_to(bin_name, shells[0], &mut std::io::stdout());
+        Actions::clap().gen_completions_to(&bin_name, shells[0], &mut std::io::stdout());
       } else {
         println!("Please select exactly one shell to print to stdout, or provide an output directory.");
         std::process::exit(-1);
