@@ -60,7 +60,7 @@ impl Key {
 /// Provides the HMAC of two concatenated byte strings.
 fn hmac_pair(clear: &[u8], encrypted: &[u8], nonce: &[u8], key: &Key) -> [u8; 64] {
   assert!(nonce.len() == 12);
-  let mut hasher = Blake2b::new_varkey(&key.hmac[..]).unwrap();
+  let mut hasher = Blake2b::new_varkey(&key.hmac[..]).unwrap(); // Safe unwrap due to the asset above
   hasher.update(clear);
   hasher.update(encrypted);
   hasher.update(nonce);
@@ -93,7 +93,7 @@ impl<Clear, Encrypted> MixedPair<Clear, Encrypted>
   pub fn verify(&self, password: &[u8]) -> bool {
     let key = Key::from_password(password, &self.salt[..]);
     assert!(self.hmac.len() == 64);
-    let mut hasher = Blake2b::new_varkey(&key.hmac[..]).unwrap();
+    let mut hasher = Blake2b::new_varkey(&key.hmac[..]).unwrap(); // Safe unwrap due to the asset above
     hasher.update(self.clear.as_bytes());
     hasher.update(&self.encrypted[..]);
     hasher.update(&self.chacha_nonce[..]);

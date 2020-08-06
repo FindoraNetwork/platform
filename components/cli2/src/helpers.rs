@@ -17,7 +17,14 @@ fn get_client() -> Result<reqwest::blocking::Client, reqwest::Error> {
 }
 
 pub fn do_request_asset(query: &str) -> Result<Asset, Error> {
-  let client = get_client().unwrap();
+  // TODO Phlippe how to avoid code duplication for obtaining the http client?
+  let client_res = get_client();
+  let client: reqwest::blocking::Client;
+  if client_res.is_err() {
+    return Err(Error::with_description("Unable to establish connection.", ErrorKind::Io));
+  } else {
+    client = client_res.unwrap();
+  }
 
   let resp = match client.get(query).send() {
     Err(e) => {
@@ -38,7 +45,14 @@ pub fn do_request_asset(query: &str) -> Result<Asset, Error> {
 }
 
 pub fn do_request<T: DeserializeOwned>(query: &str) -> Result<T, Error> {
-  let client = get_client().unwrap();
+  // TODO see above
+  let client_res = get_client();
+  let client: reqwest::blocking::Client;
+  if client_res.is_err() {
+    return Err(Error::with_description("Unable to establish connection.", ErrorKind::Io));
+  } else {
+    client = client_res.unwrap();
+  }
 
   let resp: T = match client.get(query).send() {
     Err(e) => {
@@ -62,7 +76,14 @@ pub fn do_request_authenticated_utxo(query: &str,
                                      sid: u64,
                                      ledger_state: &LedgerStateCommitment)
                                      -> Result<AuthenticatedUtxo, Error> {
-  let client = get_client().unwrap();
+  // TODO: see above
+  let client_res = get_client();
+  let client: reqwest::blocking::Client;
+  if client_res.is_err() {
+    return Err(Error::with_description("Unable to establish connection.", ErrorKind::Io));
+  } else {
+    client = client_res.unwrap();
+  }
 
   let resp = match client.get(query).send() {
     Err(e) => {
@@ -73,7 +94,7 @@ pub fn do_request_authenticated_utxo(query: &str,
       Err(e) => {
         eprintln!("Problem parsing response {}, {}", query, e);
         return Err(Error::with_description("Problem parsing json", ErrorKind::Format));
-        // TODO find a more informative error
+        // TODO Philippe find a more informative error
       }
 
       Ok(v) => {
@@ -85,7 +106,7 @@ pub fn do_request_authenticated_utxo(query: &str,
           eprintln!("The most recent ledger state I have is `{}`.",
                     b64enc(&curr_comm.0.hash));
           eprintln!("Please run query-ledger-state then rerun this command.");
-          exit(-1); // TODO return some error
+          exit(-1); // TODO Philippe return some error
         }
 
         // TODO: this needs better direct authentication
@@ -94,14 +115,14 @@ pub fn do_request_authenticated_utxo(query: &str,
           eprintln!("The server responded with a different UTXO sid.");
           eprintln!("This could indicate a faulty server, or a man-in-the-middle!");
           eprintln!("\nFor safety, refusing to update.");
-          exit(-1); // TODO return some error
+          exit(-1); // TODO  Philippe return some error
         }
         if !v.is_valid((ledger_state.0).0.clone()) {
           eprintln!("!!!!! ERROR !!!!!!");
           eprintln!("The server responded with an invalid authentication proof.");
           eprintln!("This could indicate a faulty server, or a man-in-the-middle!");
           eprintln!("\nFor safety, refusing to update.");
-          exit(-1); // TODO return some error
+          exit(-1); // TODO Philippe return some error
         }
         v
       }

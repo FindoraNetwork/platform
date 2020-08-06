@@ -179,7 +179,7 @@ pub fn display_asset_type(indent_level: u64, ent: &AssetTypeEntry) {
               .unwrap_or_else(|| "<UNKNOWN>".to_string()));
   println!("{}issuer public key: {}",
            ind,
-           serde_json::to_string(&ent.asset.issuer.key).unwrap());
+           serde_json::to_string(&ent.asset.issuer.key).unwrap()); // TODO Philippe is this unwrap safe?
   println!("{}code: {}", ind, ent.asset.code.to_base64());
   println!("{}memo: `{}`", ind, ent.asset.memo.0);
   println!("{}issue_seq_number: {}", ind, ent.issue_seq_num);
