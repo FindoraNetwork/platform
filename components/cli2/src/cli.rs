@@ -763,8 +763,15 @@ fn main() {
         shells.push(clap::Shell::Elvish);
       }
 
+      if shells.is_empty() {
+        println!("Please specify one or more shells to generate completions for.");
+        println!("See `findora gen-completions --help` for supported options.");
+        std::process::exit(-1);
+      }
+
       if let Some(outdir) = outdir {
         fs::create_dir_all(&outdir).with_context(|| UserFile { file: outdir.clone() })?;
+
         for s in shells {
           Actions::clap().gen_completions(&bin_name, s, &outdir);
         }
