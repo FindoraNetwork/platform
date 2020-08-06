@@ -39,7 +39,7 @@ type GlobalState = (HashOf<Option<StateCommitmentData>>,
 
 pub fn setup<S: CliDataStore>(store: &mut S) -> Result<(), CliError> {
   store.update_config(|conf| {
-         *conf = prompt_for_config(Some(conf.clone())).unwrap();
+         *conf = prompt_for_config(Some(conf.clone()))?;
          Ok(())
        })?;
   Ok(())
@@ -80,7 +80,7 @@ pub fn list_keys<S: CliDataStore>(store: &mut S) -> Result<(), CliError> {
     println!("{} {}: `{}`",
              if pair { "keypair" } else { "public key" },
              n,
-             serde_json::to_string(&k).unwrap());
+             serde_json::to_string(&k)?);
   }
   Ok(())
 }
@@ -109,7 +109,7 @@ pub fn list_keypair<S: CliDataStore>(store: &mut S,
 }
 
 pub fn load_key_pair<S: CliDataStore>(store: &mut S, nick: String) -> Result<(), CliError> {
-  match serde_json::from_str::<XfrKeyPair>(&prompt::<String,_>(format!("Please paste in the key pair for `{}`",nick)).unwrap()) {
+  match serde_json::from_str::<XfrKeyPair>(&prompt::<String,_>(format!("Please paste in the key pair for `{}`",nick))?) {
     Err(e) => {
       eprintln!("Could not parse key pair: {}",e);
       exit(-1);
@@ -233,7 +233,7 @@ pub fn simple_issue_asset<S: CliDataStore>(store: &mut S,
 
 pub fn list_public_key<S: CliDataStore>(store: &mut S, nick: String) -> Result<(), CliError> {
   let pk = store.get_pubkey(&PubkeyName(nick.to_string()))?;
-  let pk = pk.map(|x| serde_json::to_string(&x).unwrap())
+  let pk = pk.map(|x| serde_json::to_string(&x).unwrap()) // TODO Philippe is this unwrap safe?
              .unwrap_or(format!("No public key with name {} found", nick));
   println!("{}", pk);
   Ok(())
@@ -248,7 +248,7 @@ pub fn query_ledger_state<S: CliDataStore>(store: &mut S,
          let mut new_key = forget_old_key;
          if !new_key && conf.ledger_sig_key.is_none() {
            println!("No signature key found for `{}`.", conf.ledger_server);
-           new_key = new_key || prompt_default(" Retrieve a new one?", false).unwrap();
+           new_key = new_key || prompt_default(" Retrieve a new one?", false)?;
            if !new_key {
              eprintln!("Cannot check ledger state validity without a signature key.");
              exit(-1);
@@ -262,7 +262,7 @@ pub fn query_ledger_state<S: CliDataStore>(store: &mut S,
            let resp: XfrPublicKey = do_request::<XfrPublicKey>(&query).context(NewPublicKeyFetch)?;
 
            println!("Saving ledger signing key `{}`",
-                    serde_json::to_string(&resp).unwrap());
+                    serde_json::to_string(&resp)?);
            conf.ledger_sig_key = Some(resp);
          }
 
@@ -271,10 +271,10 @@ pub fn query_ledger_state<S: CliDataStore>(store: &mut S,
          let query = format!("{}{}",
                              conf.ledger_server,
                              LedgerAccessRoutes::GlobalState.route());
-         let resp: GlobalState = do_request::<GlobalState>(&query).unwrap();
+         let resp: GlobalState = do_request::<GlobalState>(&query)?;
 
          if let Err(e) = resp.2
-                             .verify(&conf.ledger_sig_key.unwrap(), &(resp.0.clone(), resp.1))
+                             .verify(&conf.ledger_sig_key?, &(resp.0.clone(), resp.1))
          {
            eprintln!("Ledger responded with invalid signature: {}", e);
            exit(-1);
@@ -311,7 +311,7 @@ fn query_asset_issuance_num<S: CliDataStore>(store: &mut S, nick: String) -> Res
                       conf.ledger_server,
                       LedgerAccessRoutes::AssetIssuanceNum.with_arg(&codeb64));
 
-  let resp: u64 = do_request::<u64>(&query).unwrap();
+  let resp: u64 = do_request::<u64>(&query)?;
 
   Ok(resp)
 }
@@ -484,7 +484,7 @@ pub fn query_txo<S: CliDataStore>(store: &mut S,
                       LedgerAccessRoutes::UtxoSid.route(),
                       sid);
 
-  let resp: AuthenticatedUtxo = do_request_authenticated_utxo(&query, sid, &ledger_state).unwrap();
+  let resp: AuthenticatedUtxo = do_request_authenticated_utxo(&query, sid, &ledger_state)?;
 
   // TODO: do something better to ensure that we pull any existing
   // things from orig_ent
@@ -506,7 +506,7 @@ pub fn query_txo<S: CliDataStore>(store: &mut S,
     ent.owner_memo = orig_ent.owner_memo;
     ent.opened_record = orig_ent.opened_record;
     if let Some(orig_state) = orig_ent.ledger_state {
-      assert!((orig_state.0).1 <= (ent.ledger_state.as_ref().unwrap().0).1);
+      assert!((orig_state.0).1 <= (ent.ledger_state.as_ref()?.0).1);
     }
     ent.owner = orig_ent.owner;
     ent.asset_type = orig_ent.asset_type;
@@ -590,12 +590,12 @@ pub fn query_asset_type<S: CliDataStore>(store: &mut S,
 
   let conf = store.get_config()?;
   let code_b64 = code.clone();
-  let _ = AssetTypeCode::new_from_base64(&code).unwrap();
+  let _ = AssetTypeCode::new_from_base64(&code)?;
   let query = format!("{}{}/{}",
                       conf.ledger_server,
                       LedgerAccessRoutes::AssetToken.route(),
                       code_b64);
-  let resp = do_request_asset(&query).unwrap(); // TODO convert clap::Error to CliError
+  let resp = do_request_asset(&query)?;
 
   let issuer_nick = {
     let mut ret = None;
@@ -667,7 +667,7 @@ pub fn prepare_transaction<S: CliDataStore>(store: &mut S, nick: String) -> Resu
 
 pub fn list_txn<S: CliDataStore>(store: &mut S) -> Result<(), CliError> {
   // Fetch the name of the current transaction
-  let nick = store.get_config().unwrap().active_txn.unwrap();
+  let nick = store.get_config()?.active_txn?;
 
   let builder = match store.get_txn_builder(&TxnBuilderName(nick.0.clone()))? {
     None => {
@@ -785,7 +785,11 @@ pub fn update_if_committed<S: CliDataStore>(store: &mut S,
       println!("Updating, status is {:?}", &metadata.status);
       for nick in metadata.spent_txos.iter() {
         println!("Spending TXO `{}`...", nick.0);
-        let mut txo = store.get_cached_txo(nick)?.unwrap();
+        let txo = store.get_cached_txo(nick)?; //
+        if txo.is_none() {
+          return Err(CliError::Misc); // TODO Philippe more specific error
+        }
+        let mut txo = txo.unwrap(); // Safe unwrap()
         assert!(txo.unspent);
         txo.unspent = false;
         store.cache_txo(nick, txo)?;
@@ -849,7 +853,10 @@ pub fn define_asset<S: CliDataStore>(store: &mut S,
                                      -> Result<(), CliError> {
   let issuer_nick = KeypairName(issuer_nick);
   let builder_opt = Some(txn_nick).map(TxnBuilderName)
-                                  .or_else(|| store.get_config().unwrap().active_txn);
+                                  .or_else(|| match store.get_config() {
+                                    Ok(v) => v.active_txn,
+                                    Err(_e) => None,
+                                  });
   let builder_name;
   match builder_opt {
     None => {
@@ -877,13 +884,21 @@ pub fn define_asset<S: CliDataStore>(store: &mut S,
            exit(-1);
          }
          Some(kp) => {
-           new_builder.builder
-                      .add_operation_create_asset(&kp,
-                                                  None,
-                                                  Default::default(),
-                                                  &prompt::<String, _>("memo?").unwrap(),
-                                                  PolicyChoice::Fungible())?;
-           Ok(())
+           let memo = match prompt::<String, _>("memo?") {
+             Ok(v) => Some(v),
+             Err(_) => None,
+           };
+
+           if memo.is_none() {
+             Err(PlatformError::IoError(String::from("It was not possible to read the memo.")))
+           } else {
+             new_builder.builder.add_operation_create_asset(&kp,
+                                                             None,
+                                                             Default::default(),
+                                                             &memo.unwrap(), // Safe unwrap()
+                                                             PolicyChoice::Fungible())?;
+             Ok(())
+           }
          }
        })?;
 
@@ -909,11 +924,18 @@ pub fn define_asset<S: CliDataStore>(store: &mut S,
                 .push(OpMetadata::DefineAsset { issuer_nick: PubkeyName(issuer_nick.0.clone()),
                                                 asset_nick: AssetTypeName(asset_nick.clone()) });
          println!("{}:", asset_nick);
-         display_asset_type(1,
-                            builder.new_asset_types
-                                   .get(&AssetTypeName(asset_nick.clone()))
-                                   .unwrap());
-         Ok(())
+
+         let asset_type = builder.new_asset_types
+                                 .get(&AssetTypeName(asset_nick.clone()));
+
+         // TODO Philippe is there a more rust idiomatic way to do this?
+         if asset_type.is_none() {
+           Err(PlatformError::InputsError(format!("Asset type with name {:?} is None.",
+                                                  &AssetTypeName(asset_nick.clone()))))
+         } else {
+           display_asset_type(1, asset_type.unwrap()); // Safe unwrap()
+           Ok(())
+         }
        })?;
   Ok(())
 }
@@ -925,7 +947,7 @@ pub fn issue_asset<S: CliDataStore>(store: &mut S,
                                     amount: u64)
                                     -> Result<(), CliError> {
   let builder_opt = Some(txn_nick).map(TxnBuilderName)
-                                  .or_else(|| store.get_config().unwrap().active_txn);
+                                  .or_else(|| store.get_config().ok()?.active_txn);
   let builder_nick;
   match builder_opt {
     None => {
@@ -967,7 +989,7 @@ pub fn issue_asset<S: CliDataStore>(store: &mut S,
   match asset.issuer_nick.as_ref() {
     None => {
       eprintln!("I don't know an identity for public key `{}`",
-                serde_json::to_string(&asset.asset.issuer.key).unwrap());
+                serde_json::to_string(&asset.asset.issuer.key)?);
       exit(-1);
     }
     Some(nick) => {
@@ -998,16 +1020,18 @@ pub fn issue_asset<S: CliDataStore>(store: &mut S,
              Some(Operation::IssueAsset(iss)) => {
                assert_eq!(iss.body.records.len(), 1);
                let (txo, memo) = iss.body.records[0].clone();
-               builder.new_txos
-            .push((out_name.clone(),
-              TxoCacheEntry {
-                  sid: None, asset_type: Some(asset_nick.clone()), record: txo.clone(),
-                  owner_memo: memo.clone(), ledger_state: None,
-                  owner: Some(PubkeyName(issuer_nick.0.clone())),
-                  opened_record:
-                    Some(open_blind_asset_record(&txo.0,
-                          &memo, iss_kp.get_sk_ref()).unwrap()),
-                  unspent: true }));
+               let oar = open_blind_asset_record(&txo.0, &memo, iss_kp.get_sk_ref())?;
+
+               builder.new_txos.push((out_name.clone(),
+                                      TxoCacheEntry { sid: None,
+                                                      asset_type: Some(asset_nick.clone()),
+                                                      record: txo.clone(),
+                                                      owner_memo: memo.clone(),
+                                                      ledger_state: None,
+                                                      owner:
+                                                        Some(PubkeyName(issuer_nick.0.clone())),
+                                                      opened_record: Some(oar),
+                                                      unspent: true }));
              }
              x => {
                panic!("The transaction builder doesn't include our operation! Got {:?}",
@@ -1041,7 +1065,7 @@ pub fn transfer_assets<S: CliDataStore>(store: &mut S,
                                         builder: Option<String>)
                                         -> Result<(), CliError> {
   let builder_opt = builder.map(TxnBuilderName)
-                           .or_else(|| store.get_config().unwrap().active_txn);
+                           .or_else(|| store.get_config().ok()?.active_txn);
   let builder_nick;
   match builder_opt {
     None => {
@@ -1112,19 +1136,19 @@ pub fn transfer_assets<S: CliDataStore>(store: &mut S,
       for (k, v) in txn_utxos.iter() {
         println!(" {}: {} ({}) of `{}` ({}) owned by `{}`",
                  k,
-                 v.opened_record.as_ref().unwrap().amount,
+                 v.opened_record.as_ref()?.amount,
                  if v.record.0.amount.is_confidential() {
                    "SECRET"
                  } else {
                    "PUBLIC"
                  },
-                 v.asset_type.as_ref().unwrap().0,
+                 v.asset_type.as_ref()?.0,
                  if v.record.0.asset_type.is_confidential() {
                    "SECRET"
                  } else {
                    "PUBLIC"
                  },
-                 v.owner.as_ref().unwrap().0);
+                 v.owner.as_ref()?.0);
       }
 
       println!("Other TXOs:");
@@ -1165,55 +1189,48 @@ pub fn transfer_assets<S: CliDataStore>(store: &mut S,
         };
 
         let (txo_ref, ent) = if local_val {
-          let i = builder.new_txos
-                         .iter()
-                         .position(|(x, _)| x == &inp)
-                         .unwrap();
+          let i = builder.new_txos.iter().position(|(x, _)| x == &inp)?;
           builder.new_txos[i].1.unspent = false;
-          (TxoRef::Relative((builder.new_txos.len() - 1 - i) as u64),
-           txn_utxos.remove(&inp).unwrap())
+          (TxoRef::Relative((builder.new_txos.len() - 1 - i) as u64), txn_utxos.remove(&inp)?)
         } else {
           let inp_k = TxoName(inp.clone());
-          let (ent, sid, _, _, _) = utxos.remove(&inp_k).unwrap();
+          let (ent, sid, _, _, _) = utxos.remove(&inp_k)?;
           builder.spent_txos.push(inp_k);
           (TxoRef::Absolute(sid), ent)
         };
-        // from now on unwraps on ent's relevant fields should be safe.
 
         println!(" Adding {}: {} ({}) of `{}` ({}) owned by `{}`",
                  inp,
-                 ent.opened_record.as_ref().unwrap().amount,
+                 ent.opened_record.as_ref()?.amount,
                  if ent.record.0.amount.is_confidential() {
                    "SECRET"
                  } else {
                    "PUBLIC"
                  },
-                 ent.asset_type.as_ref().unwrap().0,
+                 ent.asset_type.as_ref()?.0,
                  if ent.record.0.asset_type.is_confidential() {
                    "SECRET"
                  } else {
                    "PUBLIC"
                  },
-                 ent.owner.as_ref().unwrap().0);
+                 ent.owner.as_ref()?.0);
 
-        let tp = ent.asset_type.as_ref().unwrap().0.clone();
-        let amt = ent.opened_record.as_ref().unwrap().amount;
+        let tp = ent.asset_type.as_ref()?.0.clone();
+        let amt = ent.opened_record.as_ref()?.amount;
 
         *inp_amounts.entry(tp.clone()).or_insert(0) += amt;
         asset_types.insert(tp,
-                           (ent.asset_type.clone().unwrap(),
-                            ent.opened_record.as_ref().unwrap().asset_type));
+                           (ent.asset_type.clone()?, ent.opened_record.as_ref()?.asset_type));
 
         trn_inps.push((inp.clone(), ent.clone()));
 
-        trn_signers.push((ent.owner.clone().unwrap(), inp.clone(), ent.clone()));
-        // TODO: shouldn't unwrap
+        trn_signers.push((ent.owner.clone()?, inp.clone(), ent.clone()));
+
         trn_builder.add_input(txo_ref,
-                              ent.opened_record.unwrap(),
+                              ent.opened_record?,
                               /* TODO: tracing policies */ None,
                               /* TODO: identity */ None,
-                              amt)
-                   .unwrap();
+                              amt)?;
       }
     }
   }
@@ -1234,7 +1251,7 @@ pub fn transfer_assets<S: CliDataStore>(store: &mut S,
       }
 
       if let Some(inp) = if inp_amounts.len() == 1 {
-        Some(inp_amounts.iter().next().unwrap().0.clone())
+        Some(inp_amounts.iter().next()?.0.clone())
       } else {
         prompt_opt::<String, _>("Which type of output?")?
       } {
@@ -1270,23 +1287,20 @@ pub fn transfer_assets<S: CliDataStore>(store: &mut S,
 
         let art = AssetRecordType::from_booleans(conf_amt, conf_tp);
         let template =
-          AssetRecordTemplate::with_no_asset_tracking(amt,
-                                                      asset_types.get(&inp).unwrap().1,
-                                                      art,
-                                                      pubkey);
+          AssetRecordTemplate::with_no_asset_tracking(amt, asset_types.get(&inp)?.1, art, pubkey);
 
-        // TODO: don't unwrap!
         trn_builder.add_output(&template, /* TODO: tracing */ None,
-                               /* TODO: identity */ None, /* TODO: credential */ None)
-                   .unwrap();
+                               /* TODO: identity */ None, /* TODO: credential */ None)?;
 
-        // TODO: this doesn't fail gracefully :(
         let txo_name = TxoName(format!("utxo{}", builder.new_txos.len() + out_tps.len()));
-        assert!(!builder.new_txos
-                        .iter()
-                        .map(|(x, _)| x.clone())
-                        .chain(out_tps.iter().map(|(_, _, x)| x.0.clone()))
-                        .any(|x| x == txo_name.0));
+        if !builder.new_txos
+                   .iter()
+                   .map(|(x, _)| x.clone())
+                   .chain(out_tps.iter().map(|(_, _, x)| x.0.clone()))
+                   .any(|x| x == txo_name.0)
+        {
+          return Err(CliError::Misc); // TODO
+        };
 
         out_tps.push((inp.clone(), receiver.clone(), txo_name.clone()));
 
@@ -1298,9 +1312,9 @@ pub fn transfer_assets<S: CliDataStore>(store: &mut S,
     }
   }
 
-  trn_builder.create(TransferType::Standard).unwrap();
+  trn_builder.create(TransferType::Standard)?;
 
-  let trn = match trn_builder.transaction().unwrap() {
+  let trn = match trn_builder.transaction()? {
     Operation::TransferAsset(trn) => trn,
     x => {
       panic!("The transfer builder doesn't include our operation! Got {:?}",
@@ -1327,11 +1341,13 @@ pub fn transfer_assets<S: CliDataStore>(store: &mut S,
       println!("Recipient `{}` is a local keypair.", receiver.0);
       if prompt_default("Unlock this output?", true)? {
         store.with_keypair::<std::convert::Infallible, _>(
+                                                          // TODO Philippe Infallible => does this mean unwrap are ok in this code portion?
                                                           &KeypairName(receiver.0.clone()),
                                                           |kp| {
+                                                            let sk = kp.unwrap().get_sk_ref();
                                                             txo.opened_record
             = Some(open_blind_asset_record(&txo.record.0,
-                    &txo.owner_memo, kp.unwrap().get_sk_ref()).unwrap());
+                    &txo.owner_memo, sk).unwrap()); // TODO Philippe is this unwrap safe?
                                                             Ok(())
                                                           },
         )?;
@@ -1349,19 +1365,19 @@ pub fn transfer_assets<S: CliDataStore>(store: &mut S,
     println!("Signing for input #{} ({}): {} ({}) of `{}` ({}) owned by `{}`",
              ix + 1,
              inp,
-             ent.opened_record.as_ref().unwrap().amount,
+             ent.opened_record.as_ref()?.amount,
              if ent.record.0.amount.is_confidential() {
                "SECRET"
              } else {
                "PUBLIC"
              },
-             ent.asset_type.as_ref().unwrap().0,
+             ent.asset_type.as_ref()?.0,
              if ent.record.0.asset_type.is_confidential() {
                "SECRET"
              } else {
                "PUBLIC"
              },
-             ent.owner.as_ref().unwrap().0);
+             ent.owner.as_ref()?.0);
 
     if sig_keys.contains(&s.0) {
       println!("`{}` has already signed.", s.0);
@@ -1382,11 +1398,10 @@ pub fn transfer_assets<S: CliDataStore>(store: &mut S,
   }
 
   for s in sigs {
-    trn_builder.attach_signature(s).unwrap();
+    trn_builder.attach_signature(s)?;
   }
 
-  builder.builder
-         .add_operation(trn_builder.transaction().unwrap());
+  builder.builder.add_operation(trn_builder.transaction()?);
   builder.new_txos.extend(out_txos);
 
   println!("Adding Transfer:");
@@ -1407,7 +1422,7 @@ pub fn transfer_assets<S: CliDataStore>(store: &mut S,
 }
 
 pub fn build_transaction<S: CliDataStore>(store: &mut S) -> Result<(), CliError> {
-  let builder_opt = store.get_config().unwrap().active_txn;
+  let builder_opt = store.get_config().ok()?.active_txn;
 
   let nick;
   match builder_opt {

@@ -1,5 +1,7 @@
 #![deny(warnings)]
 #![allow(clippy::type_complexity)]
+#![feature(try_trait)]
+
 use ledger::data_model::*;
 use promptly::prompt_default;
 use serde::{Deserialize, Serialize};
@@ -7,6 +9,7 @@ use snafu::{Backtrace, GenerateBacktrace, OptionExt, ResultExt, Snafu};
 use std::collections::BTreeMap;
 use std::env;
 use std::fs;
+use std::option::NoneError;
 use std::path::PathBuf;
 
 use structopt::StructOpt;
@@ -24,6 +27,8 @@ pub mod kv;
 
 use crate::actions::*;
 use kv::{HasEncryptedTable, HasTable, KVError, KVStore};
+use ledger::data_model::errors::PlatformError;
+use structopt::clap::{Error, ErrorKind};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct LedgerStateCommitment(pub  (HashOf<Option<StateCommitmentData>>,
@@ -186,6 +191,30 @@ pub enum CliError {
 
   #[snafu(display("Misc"))] // TODO remove that with something more informative
   Misc,
+
+  #[snafu(display("Cannot handle None value"))]
+  NoneValue,
+}
+
+impl From<NoneError> for CliError {
+  fn from(_error: NoneError) -> Self {
+    CliError::NoneValue
+  }
+}
+
+impl From<Error> for CliError {
+  fn from(error: Error) -> Self {
+    match error.kind {
+      ErrorKind::Format => CliError::Misc,
+      _ => CliError::Misc, // TODO change
+    }
+  }
+}
+
+impl From<PlatformError> for CliError {
+  fn from(_error: PlatformError) -> Self {
+    CliError::Misc //TODO Change
+  }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, Default)]
@@ -805,7 +834,7 @@ fn main() {
       println!("No config found at {:?} -- triggering first-time setup",
                &home);
       db.update_config(|conf| {
-          *conf = prompt_for_config(None).unwrap();
+          *conf = prompt_for_config(None)?;
           Ok(())
         })?;
 

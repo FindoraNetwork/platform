@@ -64,7 +64,7 @@ pub fn do_request_authenticated_utxo(query: &str,
                                      -> Result<AuthenticatedUtxo, Error> {
   let client = get_client().unwrap();
 
-  let resp: AuthenticatedUtxo = match client.get(query).send() {
+  let resp = match client.get(query).send() {
     Err(e) => {
       eprintln!("Request `{}` failed: {}", query, e);
       exit(-1);
