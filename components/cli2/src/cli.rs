@@ -370,7 +370,7 @@ enum Actions {
   GenCompletions {
     /// Output directory
     #[structopt(parse(from_os_str))]
-    outdir: PathBuf,
+    outdir: Option<PathBuf>,
     /// bash
     #[structopt(long)]
     bash: bool,
@@ -744,8 +744,6 @@ fn main() {
                                      powershell,
                                      elvish, } = action
     {
-      fs::create_dir_all(&outdir).with_context(|| UserFile { file: outdir.clone() })?;
-
       let bin_name = std::env::args().next().unwrap();
 
       let mut shells = vec![];
@@ -765,9 +763,21 @@ fn main() {
         shells.push(clap::Shell::Elvish);
       }
 
-      for s in shells {
-        Actions::clap().gen_completions(&bin_name, s, &outdir);
+      if let Some(outdir) = outdir {
+        fs::create_dir_all(&outdir).with_context(|| UserFile { file: outdir.clone() })?;
+        for s in shells {
+          Actions::clap().gen_completions(&bin_name, s, &outdir);
+        }
+      } else if shells.len() == 1 {
+        let bin_path = PathBuf::from(bin_name);
+        let bin_name = bin_path.file_name().unwrap().to_string_lossy();
+
+        Actions::clap().gen_completions_to(bin_name, shells[0], &mut std::io::stdout());
+      } else {
+        println!("Please select exactly one shell to print to stdout, or provide an output directory.");
+        std::process::exit(-1);
       }
+
       return Ok(());
     }
 
