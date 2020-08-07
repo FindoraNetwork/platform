@@ -17,16 +17,8 @@ fn get_client() -> Result<reqwest::blocking::Client, reqwest::Error> {
 }
 
 pub fn do_request_asset(query: &str) -> Result<Asset, CliError> {
-  // TODO Phlippe how to avoid code duplication for obtaining the http client?
-  let client_res = get_client();
-  let client: reqwest::blocking::Client;
-  match client_res {
-    Err(e) => {
-      return Err(CliError::Reqwest { source: e,
-                                     backtrace: Backtrace::generate() })
-    }
-    _ => client = client_res.unwrap(),
-  }
+  let client = get_client().map_err(|e| CliError::Reqwest { source: e,
+                                                            backtrace: Backtrace::generate() })?;
 
   let resp = match client.get(query).send() {
     Err(e) => {
@@ -48,15 +40,10 @@ pub fn do_request_asset(query: &str) -> Result<Asset, CliError> {
 }
 
 pub fn do_request<T: DeserializeOwned>(query: &str) -> Result<T, Error> {
-  // TODO see above
-  let client_res = get_client();
-  let client: reqwest::blocking::Client;
-  match client_res {
-    Err(_e) => {
-      return Err(Error::with_description("Unable to establish connection.", ErrorKind::Io))
-    }
-    _ => client = client_res.unwrap(),
-  }
+  let client = get_client().map_err(|_| {
+                             Error::with_description("The http client failed being initialized.",
+                                                     ErrorKind::Io)
+                           })?;
 
   let resp: T = match client.get(query).send() {
     Err(e) => {
@@ -80,16 +67,8 @@ pub fn do_request_authenticated_utxo(query: &str,
                                      sid: u64,
                                      ledger_state: &LedgerStateCommitment)
                                      -> Result<AuthenticatedUtxo, CliError> {
-  // TODO: see above
-  let client_res = get_client();
-  let client: reqwest::blocking::Client;
-  match client_res {
-    Err(e) => {
-      return Err(CliError::Reqwest { source: e,
-                                     backtrace: Backtrace::generate() })
-    }
-    _ => client = client_res.unwrap(),
-  }
+  let client = get_client().map_err(|e| CliError::Reqwest { source: e,
+                                                            backtrace: Backtrace::generate() })?;
 
   let resp = match client.get(query).send() {
     Err(e) => {
