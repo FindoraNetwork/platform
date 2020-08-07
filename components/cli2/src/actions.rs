@@ -896,40 +896,35 @@ pub fn define_asset<S: CliDataStore>(store: &mut S,
   })?;
 
   store.with_txn_builder::<PlatformError, _>(&builder_name, |builder| {
-         *builder = new_builder;
-         match builder.builder.transaction().body.operations.last() {
-           Some(Operation::DefineAsset(def)) => {
-             builder.new_asset_types
-                    .insert(AssetTypeName(asset_nick.clone()),
-                            AssetTypeEntry { asset: def.body.asset.clone(),
-                                             issuer_nick: Some(PubkeyName(issuer_nick.0
-                                                                                     .clone())),
-                                             issue_seq_num: 0_u64 });
-           }
-           _ => {
-             panic!("The transaction builder doesn't include our operation!");
-           }
-         }
-         if !builder.signers.contains(&issuer_nick) {
-           builder.signers.push(issuer_nick.clone());
-         }
-         builder.operations
-                .push(OpMetadata::DefineAsset { issuer_nick: PubkeyName(issuer_nick.0.clone()),
-                                                asset_nick: AssetTypeName(asset_nick.clone()) });
-         println!("{}:", asset_nick);
+    *builder = new_builder;
+    match builder.builder.transaction().body.operations.last() {
+     Some(Operation::DefineAsset(def)) => {
+       builder.new_asset_types
+              .insert(AssetTypeName(asset_nick.clone()),
+                      AssetTypeEntry { asset: def.body.asset.clone(),
+                                       issuer_nick: Some(PubkeyName(issuer_nick.0
+                                                                               .clone())),
+                                       issue_seq_num: 0_u64 });
+     }
+     _ => {
+       panic!("The transaction builder doesn't include our operation!");
+     }
+    }
+    if !builder.signers.contains(&issuer_nick) {
+     builder.signers.push(issuer_nick.clone());
+    }
+    builder.operations
+            .push(OpMetadata::DefineAsset { issuer_nick: PubkeyName(issuer_nick.0.clone()),
+                                            asset_nick: AssetTypeName(asset_nick.clone()) });
+    println!("{}:", asset_nick);
 
-         let asset_type = builder.new_asset_types
-                                 .get(&AssetTypeName(asset_nick.clone()));
+    Ok(display_asset_type(1,
+                       builder.new_asset_types
+                         .get(&AssetTypeName(asset_nick.clone()))
+                         .ok_or(PlatformError::InputsError(format!("Asset type with name {:?} is None.",
+                                                                   &AssetTypeName(asset_nick.clone()))))?))
 
-         match asset_type {
-           None => Err(PlatformError::InputsError(format!("Asset type with name {:?} is None.",
-                                                          &AssetTypeName(asset_nick.clone())))),
-           _ => {
-             display_asset_type(1, asset_type.unwrap()); // Safe unwrap()
-             Ok(())
-           }
-         }
-       })?;
+  })?;
   Ok(())
 }
 
