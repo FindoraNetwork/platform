@@ -879,27 +879,21 @@ pub fn define_asset<S: CliDataStore>(store: &mut S,
   }
   store.with_keypair::<PlatformError, _>(&issuer_nick, |kp| match kp {
          None => {
-           eprintln!("No key pair `{}` found.", issuer_nick.0);
-           exit(-1);
+           let err_msg = format!("No key pair `{}` found.", issuer_nick.0);
+           eprintln!("{}",err_msg);
+           return Err(PlatformError::IoError(err_msg));
          }
          Some(kp) => {
-           let memo = match prompt::<String, _>("memo?") {
-             Ok(v) => Some(v),
-             Err(_) => None,
-           };
-
-           if memo.is_none() {
-             Err(PlatformError::IoError(String::from("It was not possible to read the memo.")))
-           } else {
-             new_builder.builder.add_operation_create_asset(&kp,
-                                                             None,
-                                                             Default::default(),
-                                                             &memo.unwrap(), // Safe unwrap()
-                                                             PolicyChoice::Fungible())?;
-             Ok(())
-           }
+           new_builder.builder
+             .add_operation_create_asset(&kp,
+                                         None,
+                                         Default::default(),
+                                         &prompt::<String, _>("memo?")
+                                           .map_err(|_| PlatformError::IoError(String::from("It was not possible to read the memo.")))?,
+                                         PolicyChoice::Fungible())?;
+           Ok(())
          }
-       })?;
+  })?;
 
   store.with_txn_builder::<PlatformError, _>(&builder_name, |builder| {
          *builder = new_builder;
