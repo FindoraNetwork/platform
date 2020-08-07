@@ -233,7 +233,7 @@ pub fn simple_issue_asset<S: CliDataStore>(store: &mut S,
 
 pub fn list_public_key<S: CliDataStore>(store: &mut S, nick: String) -> Result<(), CliError> {
   let pk = store.get_pubkey(&PubkeyName(nick.to_string()))?;
-  let pk = pk.map(|x| serde_json::to_string(&x).unwrap()) // TODO Philippe is this unwrap safe?
+  let pk = pk.map(|x| serde_json::to_string(&x).unwrap()) 
              .unwrap_or(format!("No public key with name {} found", nick));
   println!("{}", pk);
   Ok(())
