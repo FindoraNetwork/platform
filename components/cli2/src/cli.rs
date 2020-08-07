@@ -1,7 +1,6 @@
 #![deny(warnings)]
 #![allow(clippy::type_complexity)]
 #![feature(try_trait)]
-#![feature(backtrace)]
 
 use ledger::data_model::*;
 use promptly::prompt_default;
