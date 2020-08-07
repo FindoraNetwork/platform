@@ -114,7 +114,7 @@ pub fn do_request_authenticated_utxo(query: &str,
             eprintln!("The most recent ledger state I have is `{}`.",
                       b64enc(&curr_comm.0.hash));
             eprintln!("Please run query-ledger-state then rerun this command.");
-            return Err(CliError::FindoraPlatformError {msg: "Inconsistent state for ledger.".to_string()});
+            return Err(CliError::InconsistentLedger);
           }
 
           // TODO: this needs better direct authentication
@@ -123,14 +123,14 @@ pub fn do_request_authenticated_utxo(query: &str,
             eprintln!("The server responded with a different UTXO sid.");
             eprintln!("This could indicate a faulty server, or a man-in-the-middle!");
             eprintln!("\nFor safety, refusing to update.");
-            return Err(CliError::FindoraPlatformError {msg: "Inconsistent state for ledger.".to_string()});
+            return Err(CliError::InconsistentLedger);
           }
           if !v.is_valid((ledger_state.0).0.clone()) {
             eprintln!("!!!!! ERROR !!!!!!");
             eprintln!("The server responded with an invalid authentication proof.");
             eprintln!("This could indicate a faulty server, or a man-in-the-middle!");
             eprintln!("\nFor safety, refusing to update.");
-            return Err(CliError::FindoraPlatformError {msg: "Inconsistent state for ledger.".to_string()});
+            return Err(CliError::InconsistentLedger);
           }
           v
         }

@@ -787,7 +787,7 @@ pub fn update_if_committed<S: CliDataStore>(store: &mut S,
         println!("Spending TXO `{}`...", nick.0);
         let txo = store.get_cached_txo(nick)?; //
         if txo.is_none() {
-          return Err(CliError::FindoraPlatformError{ msg: format!("Problem trying to obtain txo with nick {:?}", nick)});
+          return Err(CliError::FindoraPlatformError{ source: PlatformError::SubmissionServerError(format!("Problem trying to obtain txo with nick {:?}", nick)) });
         }
         let mut txo = txo.unwrap(); // Safe unwrap()
         assert!(txo.unspent);
@@ -1292,7 +1292,7 @@ pub fn transfer_assets<S: CliDataStore>(store: &mut S,
                    .chain(out_tps.iter().map(|(_, _, x)| x.0.clone()))
                    .any(|x| x == txo_name.0)
         {
-          return Err(CliError::FindoraPlatformError {msg: "Problem trying to build transaction for asset transfer.".to_string()});
+          return Err(CliError::FindoraPlatformError{ source: PlatformError::IoError ("Problem trying to build transaction for asset transfer.".to_string()) });
         };
 
         out_tps.push((inp.clone(), receiver.clone(), txo_name.clone()));

@@ -193,10 +193,14 @@ pub enum CliError {
   NoneValue,
 
   #[snafu(display("Platform error"))]
-  FindoraPlatformError { msg: String },
+  #[snafu(context(false))]
+  FindoraPlatformError { source: PlatformError },
 
   #[snafu(display("IO error"))]
   IOError { msg: String },
+
+  #[snafu(display("The ledger is in an inconsistent state."))]
+  InconsistentLedger,
 
   #[snafu(display("Unknown error"))]
   UnknownError,
@@ -214,12 +218,6 @@ impl From<Error> for CliError {
       ErrorKind::Io => CliError::IOError { msg: error.message },
       _ => CliError::UnknownError,
     }
-  }
-}
-
-impl From<PlatformError> for CliError {
-  fn from(error: PlatformError) -> Self {
-    CliError::FindoraPlatformError { msg: error.to_string() }
   }
 }
 
