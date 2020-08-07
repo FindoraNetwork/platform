@@ -1,4 +1,3 @@
-#![feature(in_band_lifetimes)]
 #![deny(warnings)]
 #![allow(clippy::type_complexity)]
 use ledger::data_model::*;
