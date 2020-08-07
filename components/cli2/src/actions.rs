@@ -1545,7 +1545,6 @@ pub fn submit<S: CliDataStore>(store: &mut S, nick: String) -> Result<(), CliErr
   println!("Submitted `{}`: got handle `{}`", nick, &handle.0);
 
   // Wait for the transaction to be committed
-  // TODO add timeout
   let mut committed = false;
   while !committed {
     let txn_status = get_status(store, nick.clone());
