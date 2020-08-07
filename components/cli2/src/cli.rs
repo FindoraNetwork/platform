@@ -1,6 +1,5 @@
 #![deny(warnings)]
 #![allow(clippy::type_complexity)]
-#![feature(try_trait)]
 
 use ledger::data_model::*;
 use promptly::prompt_default;
@@ -9,11 +8,8 @@ use snafu::{Backtrace, GenerateBacktrace, OptionExt, ResultExt, Snafu};
 use std::collections::BTreeMap;
 use std::env;
 use std::fs;
-use std::option::NoneError;
 use std::path::PathBuf;
-
 use structopt::StructOpt;
-
 use submission_server::{TxnHandle, TxnStatus};
 use txn_builder::TransactionBuilder;
 use utils::{HashOf, SignatureOf};
@@ -204,12 +200,6 @@ pub enum CliError {
 
   #[snafu(display("Unknown error"))]
   UnknownError,
-}
-
-impl From<NoneError> for CliError {
-  fn from(_error: NoneError) -> Self {
-    CliError::NoneValue
-  }
 }
 
 impl From<Error> for CliError {
