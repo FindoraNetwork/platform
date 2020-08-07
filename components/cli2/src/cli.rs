@@ -24,7 +24,6 @@ pub mod kv;
 use crate::actions::*;
 use kv::{HasEncryptedTable, HasTable, KVError, KVStore};
 use ledger::data_model::errors::PlatformError;
-use structopt::clap::{Error, ErrorKind};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct LedgerStateCommitment(pub  (HashOf<Option<StateCommitmentData>>,
@@ -200,15 +199,6 @@ pub enum CliError {
 
   #[snafu(display("Unknown error"))]
   UnknownError,
-}
-
-impl From<Error> for CliError {
-  fn from(error: Error) -> Self {
-    match error.kind {
-      ErrorKind::Io => CliError::IOError { msg: error.message },
-      _ => CliError::UnknownError,
-    }
-  }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, Default)]

@@ -271,8 +271,7 @@ pub fn query_ledger_state<S: CliDataStore>(store: &mut S,
          let query = format!("{}{}",
                              conf.ledger_server,
                              LedgerAccessRoutes::GlobalState.route());
-         let resp: GlobalState = do_request::<GlobalState>(&query)?;
-
+         let resp: GlobalState = do_request::<GlobalState>(&query).map_err(|_| CliError::IOError { msg: format!("Error with http request to {}", query) })?;
          if let Err(e) = resp.2
                              .verify(&conf.ledger_sig_key.ok_or_else(|| PlatformError::IoError("ledger signing key not available.".to_string()))?,
                                      &(resp.0.clone(), resp.1))
@@ -312,7 +311,11 @@ fn query_asset_issuance_num<S: CliDataStore>(store: &mut S, nick: String) -> Res
                       conf.ledger_server,
                       LedgerAccessRoutes::AssetIssuanceNum.with_arg(&codeb64));
 
-  let resp: u64 = do_request::<u64>(&query)?;
+  let resp: u64 =
+    do_request::<u64>(&query).map_err(|_| {
+                               CliError::IOError { msg: format!("Error with http request to {}",
+                                                                query) }
+                             })?;
 
   Ok(resp)
 }
