@@ -233,7 +233,7 @@ pub fn simple_issue_asset<S: CliDataStore>(store: &mut S,
 
 pub fn list_public_key<S: CliDataStore>(store: &mut S, nick: String) -> Result<(), CliError> {
   let pk = store.get_pubkey(&PubkeyName(nick.to_string()))?;
-  let pk = pk.map(|x| serde_json::to_string(&x).unwrap()) 
+  let pk = pk.map(|x| serde_json::to_string(&x).unwrap())
              .unwrap_or(format!("No public key with name {} found", nick));
   println!("{}", pk);
   Ok(())
@@ -852,11 +852,10 @@ pub fn define_asset<S: CliDataStore>(store: &mut S,
                                      asset_nick: String)
                                      -> Result<(), CliError> {
   let issuer_nick = KeypairName(issuer_nick);
-  let builder_opt = Some(txn_nick).map(TxnBuilderName)
-                                  .or_else(|| match store.get_config() {
-                                    Ok(v) => v.active_txn,
-                                    Err(_e) => None,
-                                  });
+  let builder_opt =
+    Some(txn_nick).map(TxnBuilderName)
+                  .or_else(|| store.get_config().map(|v| v.active_txn).ok()?);
+
   let builder_name;
   match builder_opt {
     None => {
